@@ -55,7 +55,7 @@ import { INFERNO_CHAT_CHANNEL } from "../../../config/ChatConfig.js";
 import { finaliseBeforeLoad } from "../../../services/base/finaliseAttack.js";
 import { infernoConfig } from "../../../config/InfernoConfig.js";
 import { closeInfernoPlayerAttacksOf } from "../../../services/inferno/infernoPlayerFinalise.js";
-import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
+import { combatCellHeight, combatLandFeature } from "../../../services/base/combat/cellHeight.js";
 import type { DefenderForces } from "../../../game-rules/combat/index.js";
 import type { AcademyLevels, AcademyRanks, ChampionBrains, ChampionHealth } from "../../../services/base/attackSession.js";
 import { touchLastSeen } from "../../../services/user/lastSeen.js";
@@ -207,6 +207,8 @@ export const baseLoad: KoaController = async (ctx) => {
   const ownOutpostBuild = isOwner && type === BaseMode.BUILD && baseSave.type === BaseType.OUTPOST;
   const cellHeight =
     attacking || ownOutpostBuild ? await combatCellHeight(baseSave) : undefined;
+  // Its land feature the same way, for the range rings (`combatLandFeature`).
+  const landFeature = attacking || ownOutpostBuild ? await combatLandFeature(baseSave) : 0;
 
   // The owner opening their own main yard: finish whatever ended while they
   // were away and write it, before anything below reads the yard
@@ -496,6 +498,7 @@ export const baseLoad: KoaController = async (ctx) => {
     ...(isOwner && !isInferno && type === BaseMode.BUILD && { onboarding: onboardingSummary(user.save!) }),
     ...(achievements.length > 0 && { achievements }),
     ...(cellHeight !== undefined && { cellheight: cellHeight }),
+    ...(landFeature !== 0 && { landfeature: landFeature }),
     ...(defenderForces && { defenderforces: defenderForces }),
     ...(championBrains && { attackerbrains: championBrains }),
     ...(championHealth && { attackerhealth: championHealth }),

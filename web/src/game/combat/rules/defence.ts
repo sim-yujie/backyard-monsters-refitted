@@ -10,6 +10,7 @@ import {
 } from "./engine.js";
 import { championByType, CHAMPION_MAX_FOOD_BONUS, CHAMPION_MAX_POWER_LEVEL } from "./stats.js";
 import { MAX_RANK } from "./specialMoves.js";
+import { combineDefenceBonus, landDefenceBonus, landFeatureOf } from "./landFeatures.js";
 import type { CombatBuildingDataMap, MonsterLevels, MonsterRanks, Roster } from "./types.js";
 
 /**
@@ -48,6 +49,12 @@ export interface DefenderForces {
    * it always was.
    */
   readonly neighbours?: number;
+  /**
+   * The defending cell's Map Room 2 land feature (`landFeatures.ts`), 1 to 7,
+   * as the attack load froze it with the land switch on. Absent: open
+   * ground, the battle as it always was.
+   */
+  readonly land?: number;
 }
 
 /**
@@ -322,6 +329,7 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
   }
   const buffs = parseBattleBuffs(value.buffs);
   const neighbours = typeof value.neighbours === "number" ? value.neighbours : undefined;
+  const land = landFeatureOf(value.land);
   // A session stored before issue #310 holds one `defenderChampion`.
   const champions = Array.isArray(value.defenderChampions)
     ? value.defenderChampions
@@ -340,6 +348,7 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
     ),
     ...(buffs && { buffs }),
     ...(neighbours !== undefined && neighbourDefenceBonus(neighbours) && { neighbours }),
+    ...(land !== 0 && { land }),
   };
 };
 
@@ -368,7 +377,11 @@ export const battleDefence = (
   const hasLevels = Object.keys(forces.defenderLevels).length > 0;
   const hasRanks = Object.keys(forces.defenderRanks ?? {}).length > 0;
   const hasBuffs = Boolean(forces.buffs && (forces.buffs.attacker || forces.buffs.defender));
-  const defenceBonus = neighbourDefenceBonus(forces.neighbours);
+  // The neighbour bonus and the land feature multiply (`combineDefenceBonus`).
+  const defenceBonus = combineDefenceBonus(
+    neighbourDefenceBonus(forces.neighbours),
+    landDefenceBonus(forces.land),
+  );
   return {
     ...(hasBunkers ? { bunkers: forces.bunkers } : {}),
     ...(hasBunkers || hasChampions || hasLevels ? { defenderLevels: forces.defenderLevels } : {}),

@@ -29,7 +29,8 @@ export const RANGE_EDGE_ALPHA = 0.25;
 export const RANGE_COLOUR = 0xffffff;
 
 /** What the yard knows that decides whether, and how far, an oval is drawn. */
-export type RangeHoverYard = Pick<Yard, "foreign" | "kind" | "cellHeight">;
+export type RangeHoverYard = Pick<Yard, "foreign" | "kind" | "cellHeight"> &
+  Partial<Pick<Yard, "landRangePct">>;
 
 /**
  * The range, in yard units, to show for `building`, or null for no oval.
@@ -52,7 +53,7 @@ export const hoverRange = (building: YardBuilding, yard: RangeHoverYard): number
 
   const range = isBunker(building.type)
     ? towerStats(building.type, building.level, yard.kind)?.range
-    : towerRange(building.type, building.level, yard.kind, yard.cellHeight);
+    : towerRange(building.type, building.level, yard.kind, yard.cellHeight, yard.landRangePct);
   return range !== undefined && range > 0 ? range : null;
 };
 

@@ -777,6 +777,13 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   cellheight?: number;
   /**
+   * Map Room 2 attack loads and the owner's own outpost build load, with the
+   * land switch on: the target cell's land feature (`landFeatures.ts`), for
+   * the range rings. Absent on open ground. The battle reads the copy in the
+   * defence (`defenderforces.land`).
+   */
+  landfeature?: number;
+  /**
    * On an attack load: the defence the battle is fought against, as the
    * server keeps it for its replay (issue #195): each bunker's garrison, the
    * defender's academy levels and the champion in its cage. Read with
@@ -867,7 +874,10 @@ export interface WildMonsterCell {
   /** Damage percent 0..100. */
   dm: number;
   /** 1 once damage >= 90. */
-  d: number;  /**
+  d: number;
+  /** The cell's land feature (`landFeatures.ts`), with the server's land switch on; absent on open ground. */
+  lf?: number;
+  /**
    * Map Room 2's neighbour defence bonus (`docs/mr2-neighbours.md`): the
    * friendly cells around this one, 1 to 6, counted as the attack load counts
    * them. Sent only with the switch on and at least one friend.
@@ -883,6 +893,8 @@ export interface PlayerCell {
   bid: string;
   /** Owner's alliance id. */
   aid: number | null;
+  /** The cell's land feature (`landFeatures.ts`), with the server's land switch on; absent on open ground. */
+  lf?: number;
   /** Owner username. */
   n: string;
   /** Owner's base level. */

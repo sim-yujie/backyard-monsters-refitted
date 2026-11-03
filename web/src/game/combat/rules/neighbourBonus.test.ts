@@ -79,7 +79,7 @@ describe("switched off: the battle as it always was", () => {
   it.each<[string, BattleOptions["defenceBonus"]]>([
     ["an empty bonus", {}],
     ["a bonus of nothing", { hp: 0, damage: 0 }],
-    ["a negative bonus, which is ignored", { hp: -0.5, damage: -0.5 }],
+    ["a bonus of -100% or less, which is ignored", { hp: -1, damage: -1.5 }],
   ])("plays the Cannon battle exactly as before with %s", (_name, defenceBonus) => {
     expect(checkpointAfter(CANNON, { defenceBonus: defenceBonus! }, 1500)).toEqual(checkpointAfter(CANNON, {}, 1500));
   });
