@@ -650,6 +650,9 @@ void main() {
   float riverWet = 0.0;
   if (river.y > -RIVER_EDGE_RANGE + 0.002) {
     float seaShare = wWater / max(wWater + landSum, 1e-5);
+    // Along a coast the river turns into its plume at the painted waterline, not where the cells blend.
+    float coastBlend = c.both ? smoothstep(0.004, 0.05, min(c.land, c.water)) : 0.0;
+    seaShare = mix(seaShare, smoothstep(-0.02, 0.03, dist), coastBlend);
     // Fog and cells not yet loaded hide the river too: a river running into the fog fades with it.
     vec3 hidden = vec3(g.x >= ${Ground.FOG} ? 1.0 : 0.0, g.y >= ${Ground.FOG} ? 1.0 : 0.0, g.z >= ${Ground.FOG} ? 1.0 : 0.0);
     float shown = 1.0 - smoothstep(0.15, 0.85, dot(w, hidden));
@@ -753,8 +756,8 @@ void main() {
     float broken = smoothstep(0.15, 0.55, valueNoise(h * 3.7 + 7.0 + uTime * 0.05));
     float lines = crest * reachOut * broken * smoothstep(0.04, 0.09, dist);
     float foam = clamp(edge * (0.8 + 0.2 * white) + lines * (0.8 + 0.2 * white), 0.0, 1.0) * coastMask;
-    // The surf breaks where a river comes in.
-    foam *= 1.0 - 0.85 * smoothstep(-0.04, 0.0, river.y);
+    // The surf breaks where the river's water comes in, and wraps round its sides.
+    foam *= 1.0 - 0.75 * smoothstep(-0.01, 0.02, river.y);
     colour = mix(colour, FOAM_WHITE, foam * 0.97);
   }
 
@@ -768,6 +771,7 @@ void main() {
     }
     meadow *= smoothstep(70.0, 130.0, cellPixels) * (uQuality > 1.5 ? 1.0 : 0.6);
     if (coastMask > 0.0) meadow *= smoothstep(0.9, 1.5, -dist);
+    meadow *= smoothstep(0.0, 0.04, -river.y); // none in a river or on its banks
     if (cliff.on) meadow *= 1.0 - step(-0.4, cliffDist) * step(cliffDist, CLIFF_CLEAR_LOW) * cliff.mask;
     if (meadow > 0.01) colour = drawFlowers(colour, vWorld, meadow);
   }
