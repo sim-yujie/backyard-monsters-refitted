@@ -11,7 +11,7 @@
 import { changeUsername, fetchAccount, setShinyLocked, type AccountInfo } from "@/api/account";
 import { fetchBlocked, setPrivacy, unblockPlayer, type BlockedPlayer, type PrivacySettings } from "@/api/privacy";
 import { setCountry, type CountrySettings } from "@/api/country";
-import { countryLabel } from "@/game/account/countries";
+import { countryLabelNodes } from "@/ui/countryFlag";
 import { worldChat } from "@/game/chat/chatSession";
 import { CountryPicker } from "@/ui/CountryPicker";
 import { ApiError, NetworkError } from "@/api/http";
@@ -272,7 +272,8 @@ const countrySection = (stored: CountrySettings): HTMLElement => {
   hint.setAttribute("aria-live", "polite");
 
   const show = (settings: CountrySettings): void => {
-    now.textContent = settings.country ? countryLabel(settings.country) : SETTINGS_TEXT.countryNotSet;
+    if (settings.country) now.replaceChildren(...countryLabelNodes(settings.country));
+    else now.textContent = SETTINGS_TEXT.countryNotSet;
     hint.textContent = settings.countryChannel ? SETTINGS_TEXT.countryRoom : SETTINGS_TEXT.countryHint;
     hint.classList.remove("field__hint--error");
   };

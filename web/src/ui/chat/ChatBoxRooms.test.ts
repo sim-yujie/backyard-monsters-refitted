@@ -2,7 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatApi, ChatLineWire } from "@/api/chat";
 import { ChatSession, type ChatSocket } from "@/game/chat/chatSession";
-import { countryFlag } from "@/game/account/countries";
 import { ChatBox, GLOBAL_LABEL } from "./ChatBox";
 
 /**
@@ -79,7 +78,10 @@ describe("with a country room", () => {
     expect(rooms().hidden).toBe(true);
     box.setOpen(true);
     expect(rooms().hidden).toBe(false);
-    expect(tabs().map((tab) => tab.textContent)).toEqual([GLOBAL_LABEL, `${countryFlag("PH")} Philippines`]);
+    expect(tabs().map((tab) => tab.textContent)).toEqual([GLOBAL_LABEL, "Philippines"]);
+    const flag = tabs()[1]!.querySelector("img")!;
+    expect(flag.getAttribute("src")).toBe("/flags/ph.svg");
+    expect(flag.alt).toBe("PH");
     expect(tabs().map((tab) => tab.getAttribute("aria-selected"))).toEqual(["true", "false"]);
     expect(lineTexts()).toEqual(["[12] p5hello all"]);
   });

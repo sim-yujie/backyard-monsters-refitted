@@ -3,6 +3,7 @@ import {
   COUNTRY_CODES,
   allCountries,
   countryFlag,
+  countryFlagUrl,
   countryLabel,
   countryName,
   isCountryCode,
@@ -25,6 +26,8 @@ describe("the country list", () => {
     expect(countryFlag("PH")).toBe("\u{1F1F5}\u{1F1ED}");
     expect(countryFlag("nope")).toBe("");
     expect(countryLabel("PH")).toBe("\u{1F1F5}\u{1F1ED} Philippines");
+    expect(countryFlagUrl("PH")).toBe("/flags/ph.svg");
+    expect(countryFlagUrl("nope")).toBe("");
   });
 
   it("is sorted by name", () => {
