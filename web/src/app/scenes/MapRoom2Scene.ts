@@ -663,6 +663,7 @@ export class MapRoom2Scene implements Scene {
 
     this.renderer.draw(this.range, this.camera.zoom);
     if (this.tilt && this.tiltView && this.context) {
+      if (this.renderer.paintedStepped) this.tiltView.invalidate();
       this.tiltView.render(this.context.renderer, this.renderer.root, this.tilt, this.camera.zoom, this.camera.position);
     }
     this.ui?.drawMinimap();

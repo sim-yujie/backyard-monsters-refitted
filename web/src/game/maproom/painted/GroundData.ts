@@ -1,7 +1,11 @@
 import { BufferImageSource } from "pixi.js";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import type { ZoneRecord } from "../ZoneStore";
+import type { CellRange } from "../zones";
 import { Ground, encodeCell } from "./groundKinds";
+
+/** At most about this many cells are looked at when asking whether water is in sight. */
+const WATER_PROBES = 4096;
 
 /**
  * The painted ground's data texture: one texel per cell, the whole world (`groundKinds.ts`
@@ -46,6 +50,27 @@ export class GroundData {
   /** The ground a cell has been given, for tests. */
   groundAt(x: number, y: number): number {
     return this.bytes[(y * this.width + x) * 4 + 3]! & 15;
+  }
+
+  /**
+   * Whether any water cell lies in this range (so the water clock needs to run). A large range is
+   * probed on a sparser grid, which can miss a lone water cell far out; that only stills its surf.
+   */
+  hasWater(range: CellRange): boolean {
+    const x0 = Math.max(0, Math.floor(range.minCol));
+    const x1 = Math.min(this.width - 1, Math.ceil(range.maxCol));
+    const y0 = Math.max(0, Math.floor(range.minRow));
+    const y1 = Math.min(this.height - 1, Math.ceil(range.maxRow));
+    if (x1 < x0 || y1 < y0) return false;
+    const cells = (x1 - x0 + 1) * (y1 - y0 + 1);
+    const stride = Math.max(1, Math.ceil(Math.sqrt(cells / WATER_PROBES)));
+    for (let y = y0; y <= y1; y += stride) {
+      for (let x = x0; x <= x1; x += stride) {
+        const ground = this.bytes[(y * this.width + x) * 4 + 3]! & 15;
+        if (ground === Ground.SHALLOWS || ground === Ground.DEEP) return true;
+      }
+    }
+    return false;
   }
 
   /** Back to fog everywhere (the player's sight changed; `TerrainRaster.reset`). */

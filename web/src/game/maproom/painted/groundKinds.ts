@@ -36,11 +36,14 @@ export const SHADER_TEXTURES: readonly GroundTexture[] = [
   GroundTexture.MEADOW_PLAIN,
   GroundTexture.SHALLOWS,
   GroundTexture.DEEP,
+  GroundTexture.WET_SAND,
+  GroundTexture.FOAM,
 ];
 
 /**
  * A cell's ground, by sampler index in {@link SHADER_TEXTURES} (0..9), plus two flat colours the
- * shader paints itself: fog (out of sight) and not loaded yet.
+ * shader paints itself: fog (out of sight) and not loaded yet. Samplers 10 and 11 (wet sand, foam)
+ * are the coast's (plan step 3): no cell wears them.
  */
 export const Ground = {
   MEADOW: 0,
@@ -98,8 +101,18 @@ export const groundOf = (cell: MapCell | undefined): Ground => {
 };
 
 /**
+ * The data texel's flag for a cell that shows a camp, yard or outpost picture in its middle: the
+ * ground details (flowers, tufts, pebbles) keep clear of it.
+ */
+export const OCCUPIED_FLAG = 16;
+
+/** Whether a cell shows a picture in its middle (a wild camp, a yard or an outpost). */
+export const isOccupied = (cell: MapCell | undefined): boolean =>
+  cell !== undefined && !isFogCell(cell) && (cell as { b?: unknown }).b !== undefined;
+
+/**
  * One cell's texel in the data texture: R height (0..255), G land feature, B river edge bits (plan
- * step 7, 0 for now), A the ground (low 4 bits).
+ * step 7, 0 for now), A the ground (low 4 bits) plus {@link OCCUPIED_FLAG}.
  */
 export const encodeCell = (cell: MapCell | undefined, out: Uint8Array, offset: number): void => {
   const ground = groundOf(cell);
@@ -107,5 +120,5 @@ export const encodeCell = (cell: MapCell | undefined, out: Uint8Array, offset: n
   out[offset] = known ? Math.max(0, Math.min(255, Math.round(cell.i))) : 0;
   out[offset + 1] = known ? ((cell as { lf?: number }).lf ?? 0) : 0;
   out[offset + 2] = 0;
-  out[offset + 3] = ground;
+  out[offset + 3] = ground | (isOccupied(cell) ? OCCUPIED_FLAG : 0);
 };

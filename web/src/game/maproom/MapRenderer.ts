@@ -102,6 +102,11 @@ export class MapRenderer {
   private atlas: MapAtlas | null = null;
   /** Map Room 2's painted look (`painted/`, MR2_PAINTED_MAP), in place of the tiles; null when off. */
   private painted: PaintedGround | null = null;
+  /**
+   * Whether the last `draw` stepped the painted water, so a tilted view must redraw its picture
+   * (`TiltView.invalidate`): the step only changes a shader uniform, which Pixi's change lists miss.
+   */
+  paintedStepped = false;
   private webGL2 = false;
 
   private lastRange: CellRange | null = null;
@@ -250,6 +255,7 @@ export class MapRenderer {
   draw(range: CellRange, zoom: number): boolean {
     this.raster.flush();
     this.painted?.flush();
+    this.paintedStepped = this.painted?.animate(performance.now(), range) ?? false;
     this.range.flush();
     const atlas = this.atlas;
     if (!atlas) return false;
