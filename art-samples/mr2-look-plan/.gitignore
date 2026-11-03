@@ -1,0 +1,5 @@
+# Keep the Codex prompts and the two desk sheets; the textures, tiles and patches are made by work/run.sh and compose.py.
+!work/*/prompt.txt
+!work/*/inputs.txt
+!desk-main.jpg
+!side-by-side.jpg
