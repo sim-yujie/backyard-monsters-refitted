@@ -25,25 +25,35 @@ type Row = Record<string, unknown>;
 let tables: Map<unknown, Row[]>;
 let sight: { sv: string; sources: Row[]; revealed: Row[] };
 
+const remove = mock((_row: Row) => {});
 const em = {
   findOne: async (entity: unknown, where: Row) =>
     (tables.get(entity) ?? []).find((row) => matchesWhere(row, where)) ?? null,
-  remove: () => {},
+  create: (_entity: unknown, data: Row) => ({ ...data }),
+  remove,
   flush: async () => {},
 };
 
-mock.module("../../../../server.js", () => ({ postgres: { em } }));
+/** Redis, in memory: where an attack's session and checkpoint are kept. */
+const redisStore = new Map<string, string>();
+const redis = { get: async (key: string) => redisStore.get(key) ?? null };
+
+mock.module("../../../../server.js", () => ({ postgres: { em }, redis }));
 mock.module("../../../../services/maproom/sight/sightService.js", () => ({
   getPlayerSight: async () => sight,
 }));
 
 const { baseModeView } = await import("./baseModeView.js");
+const { attackSessionKey } = await import("../../../../services/base/attackSession.js");
+const { attackCheckpointKey } = await import("../../../../services/base/attackCheckpoint.js");
 
 const WORLD = "world-a";
 const VIEWER = { userid: 1, alliance_id: null } as unknown as User;
 
 beforeEach(() => {
   tables = new Map();
+  redisStore.clear();
+  remove.mockClear();
   // No sight at all, unless a test says otherwise.
   sight = { sv: "0", sources: [], revealed: [] };
 });
@@ -121,5 +131,54 @@ describe("baseModeView: Map Room 1 and 3 never run the gate", () => {
     const result = await baseModeView("mr3-base", MapRoomVersion.V3, WORLD, VIEWER);
 
     expect(result).toMatchObject({ baseid: "mr3-base" });
+  });
+});
+
+/**
+ * A wild camp past its 12 hours regrows when opened: its row goes and a fresh
+ * one takes its place. Not while an attack is on it (live: the attack's save
+ * then found no row and answered 500, its result lost). A camp first attacked
+ * keeps its template's old `savetime` until that attack's save, so every
+ * attack on a fresh camp was exposed to this for its whole length.
+ */
+describe("baseModeView: a camp under attack does not regrow", () => {
+  const CAMP = "1000241208";
+  const campRow = () => ({ baseid: CAMP, basesaveid: 50, wmid: 11, savetime: 0, attackid: 7, attacks: [] });
+
+  beforeEach(() => {
+    devConfig.disableFogOfWar = true;
+  });
+
+  test("an attack session open on the row keeps it", async () => {
+    const row = campRow();
+    tables.set(Save, [row]);
+    redisStore.set(attackSessionKey(50), JSON.stringify({ attackerid: 2, attackid: 7, startedat: 1 }));
+
+    const result = await baseModeView(CAMP, MapRoomVersion.V2, WORLD, VIEWER);
+
+    expect(result).toBe(row as never);
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  test("an attack left to the finaliser (a checkpoint) keeps it", async () => {
+    const row = campRow();
+    tables.set(Save, [row]);
+    redisStore.set(attackCheckpointKey(50), JSON.stringify({ attackerid: 2, attackid: 7 }));
+
+    const result = await baseModeView(CAMP, MapRoomVersion.V2, WORLD, VIEWER);
+
+    expect(result).toBe(row as never);
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  test("with no attack on it, an expired camp still regrows", async () => {
+    const row = campRow();
+    tables.set(Save, [row]);
+
+    const result = await baseModeView(CAMP, MapRoomVersion.V2, WORLD, VIEWER);
+
+    expect(remove).toHaveBeenCalledWith(row);
+    expect(result).not.toBe(row as never);
+    expect(result).toMatchObject({ baseid: CAMP, wmid: 11 });
   });
 });
