@@ -9,7 +9,7 @@ import { hexZoom } from "../lod";
 import { destroyLiveArt, loadLiveArt, type LiveTextures } from "./liveArt";
 import { LiveChunk, type LiveChunkLayer, type LiveSource } from "./LiveChunk";
 import { liveLevelFor, planFor, type LivePlan } from "./liveLevel";
-import { SkyLayer, type ViewRect } from "./SkyLayer";
+import { PAINTED_SHADOW_STRENGTH, SkyLayer, type ViewRect } from "./SkyLayer";
 import { WaterLayer } from "./WaterLayer";
 import { WaterSheet } from "./WaterSheet";
 
@@ -208,7 +208,8 @@ export class LiveMap {
       }
       this.layers = layers;
       if (art.clouds.length > 0 || art.bird) {
-        this.sky = new SkyLayer(art.clouds, art.bird, this.plan.birds);
+        const shadowStrength = this.paintedWater ? PAINTED_SHADOW_STRENGTH : 1;
+        this.sky = new SkyLayer(art.clouds, art.bird, this.plan.birds, shadowStrength);
         // Shadows under the chunks' overlays; clouds and birds over everything.
         this.overlay.addChildAt(this.sky.shadows, 0);
         this.overlay.addChild(this.sky.above);
