@@ -7,7 +7,7 @@ Each folder here (deck, banks) holds prompt.txt and the picture Codex painted fr
 
 - deck: a seamless square of solid, sunlit cumulus seen from above (Civ V's unexplored clouds were the
   owner's reference, 3 Nov), the painted fog (`painted/cloudShader.ts`). Graded on the way (`grade`):
-  the shade in the creases is turned from Codex's sky blue towards a cool neutral grey.
+  the shade in the creases is turned from Codex's sky blue towards a cool neutral grey and lifted.
     web/public/maproom/painted/cloud-deck@4x.webp   1024 px (Quality High)
     web/public/maproom/painted/cloud-deck@2x.webp   512 px (Medium)
     web/public/maproom/painted/cloud-deck.webp      256 px (Low)
@@ -92,15 +92,19 @@ def pack_grid(parts: list[np.ndarray], height: int) -> tuple[np.ndarray, list[tu
 # The deck's shade: this share of each pixel's colour away from its own grey is kept (Codex paints
 # the creases a strong sky blue; Civ-like cloud shade is a cool, nearly neutral grey), and the grey
 # is tinted this cool.
-DECK_SATURATION = 0.55
-DECK_COOL = np.array([0.97, 0.99, 1.04], np.float32)
+DECK_SATURATION = 0.45
+DECK_COOL = np.array([0.98, 0.99, 1.02], np.float32)
+# Then lifted (1 - (1 - c) ** DECK_LIFT): sunlit tops nearer white and the creases a lighter grey, so the
+# sea reads sunny beside the bright map, not overcast.
+DECK_LIFT = 1.25
 
 
 def grade(rgb: np.ndarray) -> np.ndarray:
     """Calms the deck's blue shade to a cool grey, keeping its light and dark."""
     luma = rgb @ np.array([0.299, 0.587, 0.114], np.float32)
     grey = luma[..., None] * DECK_COOL
-    return np.clip(grey + (rgb - luma[..., None]) * DECK_SATURATION, 0, 1)
+    calm = np.clip(grey + (rgb - luma[..., None]) * DECK_SATURATION, 0, 1)
+    return 1 - (1 - calm) ** DECK_LIFT
 
 
 def main() -> None:

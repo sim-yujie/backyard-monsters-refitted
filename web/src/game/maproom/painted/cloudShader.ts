@@ -73,12 +73,15 @@ const float EDGE_HIGH = ${CLOUD_EDGE_HIGH.toFixed(4)};
 // heap is a cell or more across, as in Civ V, not a pebble on the land.
 const float DECK_PIXELS = ${DECK_PIXELS.toFixed(1)};
 const float DECK_MIN_CELLS = ${DECK_MIN_CELLS.toFixed(1)};
+// The two repeat sizes cross-fade only in the middle of each doubling (two pictures laid over each other
+// read as mush), so at most zooms the heaps are one crisp picture.
+const float DECK_FADE_FROM = 0.3;
 // Big masses of cloud under the heaps, MASS_REPEATS repeats of the picture across: lit on their
 // sunward side, shaded on the far side, the dips between them deeper and cooler (Medium and High).
 // They give the sea depth and hide the picture's repeat.
 const float MASS_REPEATS = 2.3;
-const float MASS_LIGHT = 0.16;
-const vec3 MASS_DIP = vec3(0.80, 0.84, 0.90);
+const float MASS_LIGHT = 0.1;
+const vec3 MASS_DIP = vec3(0.88, 0.91, 0.95);
 // The low cloud's fringe thins into streaky wisps over this much depth (cells) inside its edge, so
 // the bank still reaches as far over the seen land but ends in wisps, not a cut-out edge.
 const float WISP_DEPTH = 0.13;
@@ -100,10 +103,10 @@ const float LAND_SHADOW_ALPHA = 0.32;
 const float BANK_SHADOW = 0.12;
 const vec3 SHADOW_COLOUR = vec3(0.08, 0.12, 0.22);
 // The low cloud between the land and the high bank is in the bank's shade: bluer and darker.
-const vec3 LOW_SHADE = vec3(0.93, 0.94, 0.96);
+const vec3 LOW_SHADE = vec3(0.96, 0.97, 0.98);
 // The bank's underside and side wall along its edge (a cool neutral grey, not lavender), the sun,
 // and the way a tilted camera looks (its side walls show on edges facing down the screen).
-const vec3 UNDERSIDE = vec3(0.66, 0.71, 0.79);
+const vec3 UNDERSIDE = vec3(0.76, 0.80, 0.86);
 const vec2 VIEW = vec2(0.0, 1.0);
 const vec2 SUN = vec2(-0.7071, -0.7071);
 
@@ -255,7 +258,7 @@ vec3 deckAt(vec2 p, float cellPixels, vec2 shift) {
   vec3 a = texture(uDeck, (p - drift) / span0 + shift).rgb;
   if (uQuality < 0.5) return a;
   vec3 b = texture(uDeck, (p - drift * 0.6) / (span0 * 2.0) + shift + 0.37).rgb;
-  return mix(a, b, smoothstep(0.0, 1.0, level - base));
+  return mix(a, b, smoothstep(DECK_FADE_FROM, 1.0 - DECK_FADE_FROM, level - base));
 }
 
 void main() {
@@ -269,7 +272,8 @@ void main() {
   float eLow = depth - lowEdge(h, stir);
   float eHigh = depth - highEdge(h, upper, stir);
   float softLow = max(fwidth(eLow) * 0.8, 0.02);
-  float softHigh = max(fwidth(eHigh) * 0.8, 0.05 + 0.04 * upper);
+  // The bank's edge is fairly crisp: a wide fade lays the two layers' heaps over each other as mush.
+  float softHigh = max(fwidth(eHigh) * 1.2, 0.02 + 0.012 * upper);
   float low = smoothstep(-softLow, softLow, eLow);
   float high = smoothstep(-softHigh, softHigh, eHigh);
   // Which way the bank lies (worked out here: derivatives are undefined inside branches).
@@ -319,14 +323,14 @@ void main() {
     vec3 lowColour = deckAt(vWorld, cellPixels, vec2(0.0)) * LOW_SHADE * mix(vec3(1.0), UNDERSIDE, 0.75 * bankShadow);
     // Its puffs round over at the edge of sight too.
     float rimLow = 1.0 - smoothstep(0.0, 0.22, eLow);
-    float shadeLow = clamp(0.3 - 0.35 * facingLow + 0.3 * wallLow, 0.0, 0.75);
+    float shadeLow = clamp(0.25 - 0.3 * facingLow + 0.25 * wallLow, 0.0, 0.55);
     lowColour = mix(lowColour, lowColour * UNDERSIDE, rimLow * shadeLow);
     lowColour += rimLow * max(facingLow, 0.0) * 0.08;
     // The high bank: its own heaps (the picture shifted), rounding over along its edge, lit where
     // it faces the sun, its underside in the shade.
     vec3 highColour = deckAt(vWorld, cellPixels, vec2(0.43, 0.21));
     float rim = 1.0 - smoothstep(0.0, 0.3 * upper + 0.12, eHigh);
-    float shade = clamp(0.3 - 0.35 * facing + 0.35 * wallHigh, 0.0, 0.8);
+    float shade = clamp(0.25 - 0.3 * facing + 0.3 * wallHigh, 0.0, 0.6);
     highColour = mix(highColour, highColour * UNDERSIDE, rim * shade);
     highColour += rim * max(facing, 0.0) * 0.09;
     colour = mix(lowColour, highColour, high);

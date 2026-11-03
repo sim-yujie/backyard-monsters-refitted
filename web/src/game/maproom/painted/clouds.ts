@@ -200,7 +200,7 @@ export const fogDepth = (
  * `DECK_MIN_CELLS` cells, so close up its biggest heaps (a third of it) are a cell or more across,
  * as Civ V's are, not pebbles on the land.
  */
-export const DECK_PIXELS = 520;
+export const DECK_PIXELS = 640;
 export const DECK_MIN_CELLS = 4;
 
 /**
