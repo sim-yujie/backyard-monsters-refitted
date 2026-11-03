@@ -7,7 +7,8 @@ import { Filter as BadWords } from "bad-words";
  *
  * Only clear swear words and their usual run-together spellings: words that
  * are also ordinary Tagalog ("ina", mother; "tae", "tanga", "bobo", "suso")
- * stay out, so normal talk is never masked. The filter matches whole words,
+ * stay out, and so do words that are also ordinary English ("puke"), so
+ * normal talk is never masked. The filter matches whole words,
  * so "putang ina" is caught by "putang" alone.
  */
 export const FILIPINO_BAD_WORDS: readonly string[] = [
@@ -39,7 +40,6 @@ export const FILIPINO_BAD_WORDS: readonly string[] = [
   "hinayupak",
   "hindot",
   "pokpok",
-  "puke",
   "kantot",
   "kantutan",
   "jakol",
