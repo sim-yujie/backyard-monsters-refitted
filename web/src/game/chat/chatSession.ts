@@ -170,6 +170,12 @@ export class ChatSession {
   private listeners = new Set<(state: ChatState) => void>();
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  /**
+   * Mutes and unmutes the server has not confirmed yet: a change made while
+   * the socket was down (or mid-close) would otherwise be lost, and the
+   * server's old list would bring a lifted mute back on the next connect.
+   */
+  private pendingMutes = new Map<number, boolean>();
   private retries = 0;
   private nextId = 1;
   /** The last line said, for `bounced` if the server turns it away. */
@@ -323,6 +329,11 @@ export class ChatSession {
     if (muted) next.add(userId);
     else next.delete(userId);
     this.update({ muted: next });
+    this.pendingMutes.set(userId, muted);
+    this.sendMute(userId, muted);
+  }
+
+  private sendMute(userId: number, muted: boolean): void {
     this.sendRaw({ type: muted ? "ignore" : "unignore", targetId: String(userId) });
   }
 
@@ -406,6 +417,7 @@ export class ChatSession {
       case "auth_ok": {
         this.update({ self: { userId: message.userId, name: message.displayName } });
         for (const room of this.state.rooms) this.sendRaw({ type: "join", channel: room.channel });
+        for (const [userId, muted] of this.pendingMutes) this.sendMute(userId, muted);
         this.sendRaw({ type: "getignore" });
         this.pingTimer = setInterval(() => this.sendRaw({ type: "ping" }), PING_INTERVAL_MS);
         return;
@@ -439,15 +451,21 @@ export class ChatSession {
           this.update({ self: { userId: message.userId, name: message.displayName } });
         }
         return;
-      case "ignore_list":
-        this.update({
-          muted: new Set(
-            (Array.isArray(message.list) ? message.list : [])
-              .map((entry) => Number(entry.target))
-              .filter((id) => Number.isInteger(id)),
-          ),
-        });
+      case "ignore_list": {
+        const muted = new Set(
+          (Array.isArray(message.list) ? message.list : [])
+            .map((entry) => Number(entry.target))
+            .filter((id) => Number.isInteger(id)),
+        );
+        // A change the server has not taken yet still wins; one it has is settled.
+        for (const [userId, want] of this.pendingMutes) {
+          if (muted.has(userId) === want) this.pendingMutes.delete(userId);
+          else if (want) muted.add(userId);
+          else muted.delete(userId);
+        }
+        this.update({ muted });
         return;
+      }
       case "error":
         if (message.code === "rate_limited") {
           this.update({ bounced: this.lastSaid });
