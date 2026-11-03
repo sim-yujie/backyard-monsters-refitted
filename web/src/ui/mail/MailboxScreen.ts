@@ -504,21 +504,32 @@ export class MailboxScreen {
   private renderThread(thread: MailThread, items: readonly MailItem[]): void {
     const head = make("header", "mail-pane__head");
     const titles = make("div", "mail-pane__titles");
-    titles.append(make("h3", "mail-pane__name", thread.otherName), make("p", "mail-pane__subject", thread.subject));
-    head.append(this.backButton(), titles);
+    // A name too long for the pane is cut with "…"; the whole of it shows on hover.
+    const name = make("h3", "mail-pane__name mail-pane__name--thread", thread.otherName);
+    name.title = thread.otherName;
+    titles.append(name, make("p", "mail-pane__subject", thread.subject));
+    const main = make("div", "mail-pane__main");
+    main.append(titles);
+    head.append(this.backButton(), main);
     const now = this.now();
     const state = truceState(thread.truce, now);
     // The thread's truce belongs to its last request, which carries the card.
     const request = state === null ? -1 : requestIndex(items);
     const until = thread.truce?.until ?? null;
-    if (!thread.notice && !thread.team && canPropose(state, until, items[request]?.mine ?? false, now)) {
-      head.append(
-        buttonOf("btn btn--outline mail-pane__truce", "Propose truce", () =>
-          this.showTruceForm({ userid: thread.otherId, name: thread.otherName }, thread),
-        ),
-      );
+    // Propose truce and Block player keep to a row of their own, which goes
+    // under the name and subject when the pane has no room beside them.
+    if (!thread.notice && !thread.team) {
+      const actions = make("div", "mail-pane__actions");
+      if (canPropose(state, until, items[request]?.mine ?? false, now)) {
+        actions.append(
+          buttonOf("btn btn--outline mail-pane__truce", "Propose truce", () =>
+            this.showTruceForm({ userid: thread.otherId, name: thread.otherName }, thread),
+          ),
+        );
+      }
+      actions.append(this.blockControl(thread));
+      main.append(actions);
     }
-    if (!thread.notice && !thread.team) head.append(this.blockControl(thread));
 
     // Likewise the thread's latest invitation to move (#205).
     const invitation = inviteIndex(items);
