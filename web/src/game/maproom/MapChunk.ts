@@ -39,6 +39,7 @@ import type { ZoneStore } from "./ZoneStore";
 import { cellLift, paintOrder } from "./ground";
 import { GROUND_ANCHOR_X, groundAnchorY, type GroundArt } from "./groundArt";
 import type { ConstructionBadge } from "./constructionBadge";
+import { MarkerPins } from "./markerPins";
 
 /**
  * One 10 x 10 block of the map, built once as sprites.
@@ -195,6 +196,13 @@ export class MapChunk {
   /** The rounded bars behind players' names, sized when their text is laid out. */
   private readonly plates = new Container();
   private readonly labels: LabelLayer;
+  /**
+   * Every marker above with its cell's foot, so the renderer can stand them
+   * upright on the tilted map (`markerPins.ts`) and put them back for the flat
+   * one. Each cell's markers share one foot: a camp's portrait's, a player's
+   * tower's.
+   */
+  readonly pins = new MarkerPins();
 
   /** This chunk's tiles, water and hairlines, which live in the shared ground layer. */
   private readonly groundSprites: Sprite[] = [];
@@ -375,6 +383,7 @@ export class MapChunk {
     this.groundSprites.length = 0;
     this.outlineSprites.length = 0;
     this.hasPortraits = false;
+    this.pins.clear("body");
     this.clearPlates();
     for (const layer of [
       this.tents,
@@ -387,7 +396,9 @@ export class MapChunk {
     }
   }
 
+  /** Drops the plates; the text goes back to the pool with them, so both leave the pins. */
   private clearPlates(): void {
+    this.pins.clear("text");
     this.plates.removeChildren().forEach(destroyChild);
   }
 
@@ -399,6 +410,8 @@ export class MapChunk {
     const destroyed = appearance.marker === CellMarker.CAMP_DESTROYED;
     if (appearance.marker !== CellMarker.CAMP && !destroyed) return;
     const alpha = appearance.dimmed ? DIMMED_ALPHA : 1;
+    // Where the camp stands: the portrait's foot. Its tent, cross and badge go with it.
+    const foot = { x, y: y + AVATAR_BASE_Y };
 
     const tent = place(
       new Sprite(destroyed ? this.atlas.tentDestroyed : this.atlas.tent),
@@ -409,8 +422,9 @@ export class MapChunk {
     tent.scale.set(GLYPH_SCALE);
     tent.alpha = alpha;
     this.tents.addChild(tent);
+    this.pins.add(foot, tent);
 
-    const portrait = this.addPortrait(appearance, x, y, destroyed, alpha);
+    const portrait = this.addPortrait(appearance, foot, destroyed, alpha);
 
     if (destroyed) {
       // The cross sits on the picture the close tiers show, or on the tent.
@@ -423,6 +437,7 @@ export class MapChunk {
       cross.scale.set(GLYPH_SCALE);
       cross.alpha = alpha;
       this.details.addChild(cross);
+      this.pins.add(foot, cross);
     }
 
     if (appearance.badge === "") return;
@@ -433,6 +448,8 @@ export class MapChunk {
     badgeDisc.alpha = alpha;
     badgeRing.alpha = alpha;
     this.badgeDiscs.addChild(badgeDisc, badgeRing);
+    this.pins.add(foot, badgeDisc);
+    this.pins.add(foot, badgeRing);
     this.requests.push({
       text: appearance.badge,
       x: bx,
@@ -440,6 +457,7 @@ export class MapChunk {
       size: BADGE_TEXT_SIZE,
       maxWidth: BADGE_RADIUS * 1.6,
       alpha,
+      placed: (text) => this.pins.add(foot, text, "text"),
     });
   }
 
@@ -452,8 +470,7 @@ export class MapChunk {
    */
   private addPortrait(
     appearance: CellAppearance,
-    x: number,
-    y: number,
+    foot: { x: number; y: number },
     destroyed: boolean,
     alpha: number,
   ): boolean {
@@ -463,10 +480,11 @@ export class MapChunk {
     const sprite = new Sprite(texture);
     sprite.anchor.set(0.5, 1);
     sprite.setSize((AVATAR_HEIGHT * texture.width) / texture.height, AVATAR_HEIGHT);
-    sprite.position.set(x, y + AVATAR_BASE_Y);
+    sprite.position.set(foot.x, foot.y);
     sprite.tint = destroyed ? AVATAR_DESTROYED_TINT : 0xffffff;
     sprite.alpha = (destroyed ? AVATAR_DESTROYED_ALPHA : 1) * alpha;
     this.portraits.addChild(sprite);
+    this.pins.add(foot, sprite);
     return true;
   }
 
@@ -491,6 +509,7 @@ export class MapChunk {
     const outpost = appearance.marker === CellMarker.OUTPOST;
     const footX = x;
     const footY = y + FOOT_Y;
+    const foot = { x: footX, y: footY };
     const flashScale = BUILDING_HEIGHT / FLASH_TOWER_HEIGHT;
 
     const texture = this.buildings.textureFor(
@@ -507,6 +526,7 @@ export class MapChunk {
       }
       sprite.alpha = alpha;
       this.bases.addChild(sprite);
+      this.pins.add(foot, sprite);
 
       if (appearance.protected) {
         const dome = new Sprite(this.atlas.protectionDome);
@@ -518,6 +538,7 @@ export class MapChunk {
         dome.position.set(footX, footY);
         dome.alpha = alpha;
         this.bases.addChild(dome);
+        this.pins.add(foot, dome);
       }
 
       if (appearance.truce) {
@@ -527,6 +548,7 @@ export class MapChunk {
         tick.position.set(footX + sprite.width * 0.5, footY - sprite.height * 0.8);
         tick.alpha = alpha;
         this.bases.addChild(tick);
+        this.pins.add(foot, tick);
       }
 
       if (appearance.idleWorker) {
@@ -536,6 +558,7 @@ export class MapChunk {
         worker.position.set(footX + (DOME_WIDTH / 2) * flashScale, footY - DOME_ABOVE_FOOT * flashScale * WORKER_Y_FRACTION);
         worker.alpha = alpha;
         this.bases.addChild(worker);
+        this.pins.add(foot, worker);
       }
 
       const badgeTexture = appearance.underConstruction ? this.constructionBadge.texture : null;
@@ -548,6 +571,7 @@ export class MapChunk {
         badge.position.set(footX + (DOME_WIDTH / 2) * flashScale, footY - DOME_ABOVE_FOOT * flashScale * WORKER_Y_FRACTION);
         badge.alpha = alpha;
         this.bases.addChild(badge);
+        this.pins.add(foot, badge);
       }
     }
 
@@ -560,6 +584,7 @@ export class MapChunk {
       envelope.rotation = 0.2; // Flash tilts it a little clockwise
       envelope.alpha = alpha;
       this.bases.addChild(envelope);
+      this.pins.add(foot, envelope);
     }
 
     // The gold level star every player cell wears (#334).
@@ -569,6 +594,7 @@ export class MapChunk {
     const star = icon(this.atlas.star, starX, starY, starRadius, STAR_COLOUR);
     star.alpha = alpha;
     this.badgeDiscs.addChild(star);
+    this.pins.add(foot, star);
     this.requests.push({
       text: appearance.star,
       x: starX,
@@ -576,6 +602,7 @@ export class MapChunk {
       size: STAR_TEXT_SIZE * STAR_SCALE,
       maxWidth: starRadius * 1.6,
       alpha,
+      placed: (text) => this.pins.add(foot, text, "text"),
     });
 
     if (appearance.plate === "") return;
@@ -595,12 +622,14 @@ export class MapChunk {
       alpha,
       light: true,
       dark: whiteLabel ? LABEL_DARK_TEXT : gold ? OWN_PLATE_TEXT_COLOUR : 0xffffff,
-      measured: (width) => this.addLabel(x, py, width, maxTotalWidth, appearance, alpha),
+      placed: (text) => this.pins.add(foot, text, "text"),
+      measured: (width) => this.addLabel(foot, x, py, width, maxTotalWidth, appearance, alpha),
     });
   }
 
   /** The thin rectangle behind a name: white for others, the relation colour otherwise. */
   private addLabel(
+    foot: { x: number; y: number },
     x: number,
     y: number,
     textWidth: number,
@@ -623,6 +652,7 @@ export class MapChunk {
     plate.tint = appearance.plateColour === RELATION_OTHER_COLOUR ? 0xffffff : appearance.plateColour;
     plate.alpha = (appearance.own ? 1 : PLATE_ALPHA) * alpha;
     this.plates.addChild(plate);
+    this.pins.add(foot, plate, "text");
   }
 }
 
