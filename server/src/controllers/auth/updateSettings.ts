@@ -23,7 +23,7 @@ export const settingsOf = (user: User) => ({
   mapHexShape: mr2HexShape(),
   // The player's country (owner 3 Nov 2026): null until picked. `countryAsked`
   // says the one-time prompt was answered or put off; `countryChannel` is the
-  // country's chat room when it has one (`CHAT_COUNTRY_ROOMS`), else null.
+  // country's chat room (every country has one), null while no country is set.
   country: user.country ?? null,
   countryAsked: user.country_asked || !!user.country,
   countryChannel: countryChannelFor(user.country),

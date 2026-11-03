@@ -41,7 +41,7 @@ export const SETTINGS_TEXT = {
   chatHint: "Off hides the chat box and stops chat messages.",
   countryTitle: "Country",
   countryNotSet: "Not set",
-  countryHint: "Some countries have their own chat room beside Global.",
+  countryHint: "Pick your country to get its own chat room beside Global.",
   countryRoom: "Your country has its own chat room, next to Global in the chat box.",
   countryFailed: "Could not save your country. Try again.",
   blockedTitle: "Blocked players",

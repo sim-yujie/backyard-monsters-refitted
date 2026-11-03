@@ -298,13 +298,13 @@ describe("AccountSettings", () => {
       expect(now()).toContain("Philippines");
     });
 
-    it("moving to a country without a room takes the country room away", async () => {
-      countryApi.setCountry.mockResolvedValue({ country: "SG", countryAsked: true, countryChannel: null });
+    it("moving to Singapore swaps the Philippines room for the Singapore room", async () => {
+      countryApi.setCountry.mockResolvedValue({ country: "SG", countryAsked: true, countryChannel: "chat:country:SG" });
       await open({ country: { country: "PH", countryAsked: true, countryChannel: "chat:country:PH" } });
       pick("Singapore").click();
       await settle();
-      expect(chat.worldChat.setCountryRoom).toHaveBeenCalledWith(null, "SG");
-      expect(document.querySelector("#settings-country-hint")?.textContent).toBe(SETTINGS_TEXT.countryHint);
+      expect(chat.worldChat.setCountryRoom).toHaveBeenCalledWith("chat:country:SG", "SG");
+      expect(document.querySelector("#settings-country-hint")?.textContent).toBe(SETTINGS_TEXT.countryRoom);
     });
 
     it("Not set clears it", async () => {
@@ -314,6 +314,8 @@ describe("AccountSettings", () => {
       await settle();
       expect(countryApi.setCountry).toHaveBeenCalledWith(null);
       expect(now()).toBe(SETTINGS_TEXT.countryNotSet);
+      expect(chat.worldChat.setCountryRoom).toHaveBeenCalledWith(null, null);
+      expect(document.querySelector("#settings-country-hint")?.textContent).toBe(SETTINGS_TEXT.countryHint);
     });
 
     it("says so and keeps the old country when the save fails", async () => {

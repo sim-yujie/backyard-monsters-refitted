@@ -786,7 +786,7 @@ export interface BaseLoadResponse extends ApiEnvelope {
   chattoken?: string;
   chatchannel?: string;
   /**
-   * The owner's loads, when the player's country has its own chat room
+   * The owner's loads, when the player has picked a country (every country has its own chat room)
    * (owner 3 Nov 2026): the room's key (`chat:country:PH`) and the country.
    */
   chatcountrychannel?: string;
