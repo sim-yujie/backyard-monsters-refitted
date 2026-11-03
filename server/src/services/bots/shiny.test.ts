@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
 import { mulberry32 } from "../../game-rules/combat/rng.js";
-import { BOT_MAX_LEVEL, BOT_MIN_LEVEL } from "./factory.js";
+import { LOWEST_BOT_FLOOR_LEVEL } from "../../config/BotConfig.js";
+import { BOT_MAX_LEVEL } from "./factory.js";
 import { drawShiny, LEGACY_BOT_SHINY, shinyBand, shinyForSeed, SHINY_DRIFT_MAX, tendShiny } from "./shiny.js";
 
 /** A bot's Shiny (owner decision on #245's leak audit): random, in a band that grows with level. */
 
-const LEVELS = Array.from({ length: BOT_MAX_LEVEL - BOT_MIN_LEVEL + 1 }, (_, index) => BOT_MIN_LEVEL + index);
+/** Every level a bot can stand on at the lowest floor. */
+const LEVELS = Array.from({ length: BOT_MAX_LEVEL - LOWEST_BOT_FLOOR_LEVEL + 1 }, (_, index) => LOWEST_BOT_FLOOR_LEVEL + index);
 
 const inBand = (amount: number, level: number) => {
   const band = shinyBand(level);

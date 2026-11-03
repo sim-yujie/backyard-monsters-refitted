@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { useBotFloor } from "../../testing/botFloor.js";
 import { MikroORM } from "@mikro-orm/postgresql";
 
 import ormConfig from "../../mikro-orm.config.js";
@@ -29,6 +30,9 @@ const HOUR = 60 * MINUTE;
 const at = (seconds: number) => new Date(seconds * 1000);
 
 describe.skipIf(!dbName)("the revenge job on a real database (issue #244)", () => {
+  // Written for bots from level 15; the floor of 25 has its own tests (`useBotFloor`).
+  useBotFloor(15);
+
   let orm: MikroORM;
   let bot = 0;
   let otherBot = 0;

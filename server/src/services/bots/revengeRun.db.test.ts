@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { useBotFloor } from "../../testing/botFloor.js";
 import { RedisClient } from "bun";
 import { MikroORM } from "@mikro-orm/postgresql";
 
@@ -42,6 +43,9 @@ const redis = enabled ? new RedisClient(redisUrl) : (null as unknown as RedisCli
 if (enabled) mock.module("../../server.js", () => ({ postgres, redis }));
 
 describe.skipIf(!enabled)("a bot's revenge fought for real (issue #244)", () => {
+  // Written for bots from level 15; the floor of 25 has its own tests (`useBotFloor`).
+  useBotFloor(15);
+
   let orm: MikroORM;
   let bot = 0;
   let secondBot = 0;

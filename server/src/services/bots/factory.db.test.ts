@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { useBotFloor } from "../../testing/botFloor.js";
 import { MikroORM } from "@mikro-orm/postgresql";
 
 import ormConfig from "../../mikro-orm.config.js";
@@ -32,6 +33,9 @@ const T = 3;
 const TAKEN_PREFIX = "wp6t";
 
 describe.skipIf(!dbName)("the bot factory on a real database (issue #239)", () => {
+  // Written for bots from level 15; the floor of 25 has its own tests (`useBotFloor`).
+  useBotFloor(15);
+
   let orm: MikroORM;
   const sandbox = devConfig.devSandbox;
 

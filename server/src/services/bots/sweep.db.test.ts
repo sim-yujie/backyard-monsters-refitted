@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { useBotFloor } from "../../testing/botFloor.js";
 import { MikroORM } from "@mikro-orm/postgresql";
 
 import ormConfig from "../../mikro-orm.config.js";
@@ -32,6 +33,9 @@ const NOW = ((now) => (now % DAY > 21 * HOUR ? now - 3 * HOUR : now))(Math.floor
 const T = 3;
 
 describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => {
+  // Written for bots from level 15; the floor of 25 has its own tests (`useBotFloor`).
+  useBotFloor(15);
+
   let orm: MikroORM;
 
   const sql = <R = Record<string, any>>(query: string, params: unknown[] = []) => orm.em.fork().execute<R[]>(query, params);
@@ -479,6 +483,53 @@ describe.skipIf(!dbName)("the bot sweep on a real database (issue #240)", () => 
     expect(next.report.rebalanced).toBe(true);
     expect(next.report.born).toEqual([]);
     expect(next.report.retired).toEqual([]);
+  }, 60_000);
+
+  test("at the floor of 25 the rebalance retires every bot below it, jobs and revenge gone, rows kept; new bots only at 25 and up", async () => {
+    // Made while the floor is still 15, as live bots on 20 and 24 were.
+    const [low, justBelow, atFloor, high] = await make([20, 24, 25, 30]);
+    await bookFirstGrows(orm.em.fork(), NOW + 2 * DAY);
+    await sql(
+      `INSERT INTO bym.bot_job (bot_userid, kind, target_userid, due_at, giveup_at) VALUES (?, 'revenge', ?, ?, ?)`,
+      [justBelow!.userid, high!.userid, new Date((NOW + DAY) * 1000), new Date((NOW + 3 * DAY) * 1000)]
+    );
+    expect((await jobs(justBelow!.userid)).map((job) => job.kind).sort()).toEqual(["grow", "revenge"]);
+
+    const before = process.env.BOTS_FLOOR_LEVEL;
+    process.env.BOTS_FLOOR_LEVEL = "25";
+    try {
+      // Two a level over 25-40; revenge on (no runner given), so booked revenge is kept unless retired.
+      const rules = config(32);
+      const floor25 = () => ({ ...rules(), revenge: true, levelSlack: 0, newPerDay: 3 });
+      const { report } = await pass(NOW, 32, { config: floor25 });
+
+      expect(report.rebalanced).toBe(true);
+      expect([...report.retired].sort()).toEqual([low!.userid, justBelow!.userid].sort());
+      for (const bot of [low!, justBelow!]) {
+        const row = await botRow(bot.userid);
+        expect(row).toBeDefined();
+        expect(row.state).toBe("retired");
+        expect(row.retired_at).not.toBeNull();
+        const save = await saveRow(bot.userid);
+        expect(save).toBeDefined();
+        expect(save.mapversion).toBe(2);
+        expect(save.worldid).toBeNull();
+        expect(await jobs(bot.userid)).toEqual([]);
+      }
+      for (const bot of [atFloor!, high!]) {
+        expect((await botRow(bot.userid)).state).toBe("active");
+        expect((await saveRow(bot.userid)).mapversion).not.toBe(2);
+      }
+
+      expect(report.replaced).toHaveLength(3);
+      const levels = await Promise.all(report.replaced.map(async (userid) => Number((await botRow(userid)).level)));
+      for (const level of levels) expect(level).toBeGreaterThanOrEqual(25);
+      const active = await sql<{ level: number }>(`SELECT level FROM bym.bot WHERE state = 'active'`);
+      for (const row of active) expect(Number(row.level)).toBeGreaterThanOrEqual(25);
+    } finally {
+      if (before === undefined) delete process.env.BOTS_FLOOR_LEVEL;
+      else process.env.BOTS_FLOOR_LEVEL = before;
+    }
   }, 60_000);
 
   test("a quiet bot stands still while still tended; a bot that climbs may go quiet", async () => {

@@ -9,6 +9,7 @@ import {
   type BotNeighbourCandidate,
   findBotCandidates,
   FLOOR_REACH,
+  showsBots,
   pickBotNeighbours,
 } from "./botNeighbours.js";
 
@@ -122,17 +123,38 @@ describe("pickBotNeighbours (issue #236)", () => {
   });
 });
 
-describe("botLevelWindow (no bot below level 15, owner 2026-10-23)", () => {
-  test("a new player under level 15 gets the nearest bots, 15-17; higher players keep their window from the floor up", () => {
-    // Level 3: the window is 1-10, with no bot in it.
-    expect(botLevelWindow(neighbourLevelWindow(3))).toEqual({ min: 15, max: 17 });
-    expect(botLevelWindow(neighbourLevelWindow(1))).toEqual({ min: 15, max: 17 });
-    // Level 10: 3-17.
-    expect(botLevelWindow(neighbourLevelWindow(10))).toEqual({ min: 15, max: 17 });
-    // Level 14: 7-21.
-    expect(botLevelWindow(neighbourLevelWindow(14))).toEqual({ min: 15, max: 21 });
-    // Level 25: 18-32, as before.
-    expect(botLevelWindow(neighbourLevelWindow(25))).toEqual({ min: 18, max: 32 });
+describe("botLevelWindow (no bot below the floor: 25 by default, owner 3 Nov 2026)", () => {
+  test("a player from 15 up but below the floor gets the nearest bots, 25-27; higher players keep their window from the floor up", () => {
+    // Level 15: the window is 8-22, with no bot in it.
+    expect(botLevelWindow(neighbourLevelWindow(15))).toEqual({ min: 25, max: 27 });
+    // Level 20: 13-27.
+    expect(botLevelWindow(neighbourLevelWindow(20))).toEqual({ min: 25, max: 27 });
+    // Level 24: 17-31.
+    expect(botLevelWindow(neighbourLevelWindow(24))).toEqual({ min: 25, max: 31 });
+    // Level 30: 23-37.
+    expect(botLevelWindow(neighbourLevelWindow(30))).toEqual({ min: 25, max: 37 });
+    // Level 35: 28-42, as before.
+    expect(botLevelWindow(neighbourLevelWindow(35))).toEqual({ min: 28, max: 42 });
     expect(FLOOR_REACH).toBe(2);
+  });
+
+  test("follows BOTS_FLOOR_LEVEL, or the floor given", () => {
+    expect(botLevelWindow(neighbourLevelWindow(3), 15)).toEqual({ min: 15, max: 17 });
+    expect(botLevelWindow(neighbourLevelWindow(25), 15)).toEqual({ min: 18, max: 32 });
+    const before = process.env.BOTS_FLOOR_LEVEL;
+    try {
+      process.env.BOTS_FLOOR_LEVEL = "30";
+      expect(botLevelWindow(neighbourLevelWindow(20))).toEqual({ min: 30, max: 32 });
+    } finally {
+      if (before === undefined) delete process.env.BOTS_FLOOR_LEVEL;
+      else process.env.BOTS_FLOOR_LEVEL = before;
+    }
+  });
+});
+
+describe("showsBots (owner 3 Nov 2026)", () => {
+  test("players under level 15 are shown no bots; from 15 up they are", () => {
+    for (const level of [1, 5, 10, 14]) expect(showsBots(level)).toBe(false);
+    for (const level of [15, 20, 24, 25, 40, 50]) expect(showsBots(level)).toBe(true);
   });
 });

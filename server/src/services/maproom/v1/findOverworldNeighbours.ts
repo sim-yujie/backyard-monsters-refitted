@@ -6,7 +6,7 @@ import { BaseType } from "../../../enums/Base.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { experiencePoints } from "../../../game-data/stats/experiencePoints.js";
 import { botConfig } from "../../../config/BotConfig.js";
-import { botLevelWindow, findBotCandidates, pickBotNeighbours } from "../../bots/botNeighbours.js";
+import { botLevelWindow, findBotCandidates, pickBotNeighbours, showsBots } from "../../bots/botNeighbours.js";
 import { calculateBaseLevel } from "../../base/calculateBaseLevel.js";
 import { shuffle } from "../../../utils/shuffle.js";
 import { createNeighbourData } from "../createNeighbourData.js";
@@ -132,9 +132,11 @@ export interface FindNeighboursOptions {
  *
  * Up to 25 players within 7 levels either way. Real players seen in the last
  * 30 days take places first; with `BOTS_FILL` on, bots fill the rest (bots
- * attackable now first, spread across the levels). No bot stands below level
- * 15, so a player under it gets the nearest bots, levels 15-17
- * (`botLevelWindow`). With it off the list holds
+ * attackable now first, spread across the levels). A player under level 15
+ * is shown no bots at all, only real players (`showsBots`, owner 3 Nov
+ * 2026). No bot stands below the level floor (`BOTS_FLOOR_LEVEL`, 25 by
+ * default), so a player from 15 up but below it gets the nearest bots,
+ * levels 25-27 (`botLevelWindow`). With it off the list holds
  * real players only, and bots never appear.
  *
  * Bot entries are built exactly as real ones, and the list is shuffled, so
@@ -157,7 +159,8 @@ export const findOverworldNeighbours = async (
   const random = options.random ?? Math.random;
   const exclude = options.exclude ?? [];
 
-  const levels = neighbourLevelWindow(calculateBaseLevel(save.points, save.basevalue));
+  const level = calculateBaseLevel(save.points, save.basevalue);
+  const levels = neighbourLevelWindow(level);
   const seenSince = new Date(now.getTime() - ACTIVE_PLAYER_DAYS * 24 * 60 * 60 * 1000);
 
   const reals = await findRealNeighbours(em, user.userid, levels, seenSince, exclude);
@@ -172,7 +175,7 @@ export const findOverworldNeighbours = async (
 
   const empty = NEIGHBOUR_LIMIT - neighbours.length;
 
-  if (fill && empty > 0) {
+  if (fill && empty > 0 && showsBots(level)) {
     const taken = new Set([...neighbours.map((neighbour) => neighbour.userid), ...exclude]);
     const candidates = await findBotCandidates(
       em,
