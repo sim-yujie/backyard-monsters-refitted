@@ -59,8 +59,8 @@ export const recordChatReport = async (
   const message = (line ? line.body : input.message).slice(0, CHAT_REPORT_MAX_TEXT);
 
   const rows = await em.execute<{ id: number }[]>(
-    `INSERT INTO bym.chat_report (reporter_id, reported_id, channel, message, message_ts, verified)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO bym.chat_report (reporter_id, reported_id, channel, message, message_ts, verified, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, now())
      ON CONFLICT DO NOTHING RETURNING id`,
     [input.reporter, input.reported, input.channel, message, input.ts, verified],
   );
