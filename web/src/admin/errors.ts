@@ -1,4 +1,10 @@
-import { fetchErrors, type DailyStat, type ErrorGroup, type ErrorSource } from "./api";
+import {
+  fetchErrors,
+  type DailyStat,
+  type ErrorGroup,
+  type ErrorReporter,
+  type ErrorSource,
+} from "./api";
 import { h, replace } from "./dom";
 import { ago, count, dateTime, plural } from "./format";
 import { icon } from "./icons";
@@ -7,7 +13,8 @@ import { chartCard, series, total } from "./sections";
 /**
  * The errors section: the game's errors grouped by kind, from players'
  * browsers and from the server, with how often, and when first and last seen.
- * Tap one for where it happened and its stack.
+ * Tap one for where it happened, who hit it (name, account number and
+ * address: shown here only, never anywhere players see) and its stack.
  */
 
 const SOURCES: readonly [ErrorSource | "all", string][] = [
@@ -22,6 +29,16 @@ const SORTS: readonly ["last" | "count", string][] = [
 ];
 
 const SOURCE_WORD: Record<ErrorSource, string> = { browser: "Browser", server: "Server" };
+
+/** One sender: `Name #12 · 203.0.113.7 · 2 h ago`, or `Signed out · address · when`. */
+const reporterLine = (reporter: ErrorReporter): string =>
+  [
+    reporter.userid === null ? "Signed out" : `${reporter.username || "?"} #${reporter.userid}`,
+    reporter.ip || null,
+    ago(reporter.lastSeen),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
 export class ErrorsView {
   readonly element = h("div", { class: "errors" });
@@ -103,7 +120,22 @@ export class ErrorsView {
                   h(
                     "span",
                     { class: "row-main" },
-                    h("span", { class: "row-title code-ish" }, group.message),
+                    h(
+                      "span",
+                      { class: "row-title code-ish" },
+                      group.thirdParty
+                        ? h(
+                            "span",
+                            {
+                              class: "chip chip-warn",
+                              attrs: { title: "Its stack names none of the game's code" },
+                            },
+                            "Third-party",
+                          )
+                        : null,
+                      group.thirdParty ? " " : null,
+                      group.message,
+                    ),
                     h(
                       "span",
                       { class: "row-meta" },
@@ -134,8 +166,18 @@ export class ErrorsView {
                     group.gameVersion ? h("dd", {}, group.gameVersion) : null,
                     group.screen ? h("dt", {}, "Screen") : null,
                     group.screen ? h("dd", {}, group.screen) : null,
-                    group.userids.length ? h("dt", {}, "Players") : null,
-                    group.userids.length
+                    group.reporters.length ? h("dt", {}, "Who") : null,
+                    group.reporters.length
+                      ? h(
+                          "dd",
+                          { class: "reporters" },
+                          ...group.reporters.map((r) => h("div", {}, reporterLine(r))),
+                        )
+                      : null,
+                    !group.reporters.length && group.userids.length
+                      ? h("dt", {}, "Players")
+                      : null,
+                    !group.reporters.length && group.userids.length
                       ? h("dd", {}, group.userids.map((id) => `#${id}`).join(", "))
                       : null,
                   ),

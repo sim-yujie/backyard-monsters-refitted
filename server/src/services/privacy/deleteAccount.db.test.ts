@@ -246,6 +246,11 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     store.sets.set(`chat-ignore:${p}`, new Set([String(q)]));
     store.sets.set("stats:active:2026-10-22", new Set([String(p), "77"]));
     await sql(`INSERT INTO bym.app_error (source, fingerprint, message, userids) VALUES ('browser', 'zz-del-fp', 'x', ARRAY[?, 77]::int[])`, [p]);
+    await sql(
+      `INSERT INTO bym.app_error_reporter (error_id, userid, username, ip)
+       SELECT id, u, n, '203.0.113.7' FROM bym.app_error, (VALUES (?::int, 'zz_del_p'), (77, 'other')) AS v (u, n) WHERE fingerprint = 'zz-del-fp'`,
+      [p]
+    );
 
     return { p, q, r, allianceId, pq, qr, pr, notice };
   };
@@ -410,6 +415,10 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     expect(store.sets.has(`chat-ignore:${p}`)).toBe(false);
     expect([...store.sets.get("stats:active:2026-10-22")!]).toEqual(["77"]);
     expect((await one(`SELECT userids FROM bym.app_error WHERE fingerprint = 'zz-del-fp'`))!.userids).toEqual([77]);
+    const senders = await sql<{ userid: number }>(
+      `SELECT r.userid FROM bym.app_error_reporter r JOIN bym.app_error e ON e.id = r.error_id WHERE e.fingerprint = 'zz-del-fp'`
+    );
+    expect(senders.map((row) => Number(row.userid))).toEqual([77]);
   });
 
   test("a kept thread goes once the player on its other side is deleted too", async () => {

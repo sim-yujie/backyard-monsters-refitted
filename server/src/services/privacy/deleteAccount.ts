@@ -202,6 +202,7 @@ const deleteSteps = (u: number): DeleteStep[] => [
   { label: "Inferno progress", table: "inferno_progress", where: `userid = ?`, params: [u] },
   { label: "Shiny the game team gave them", table: "shiny_award", where: `userid = ?`, params: [u] },
   { label: "bug reports they sent", table: "bug_report", where: `userid = ?`, params: [u] },
+  { label: "the dashboard's error senders (name and address)", table: "app_error_reporter", where: `userid = ?`, params: [u] },
   { label: "announcements they pressed \"Got it\" on", table: "announcement_dismissal", where: `userid = ?`, params: [u] },
   { label: "map cells (home and outposts)", table: "world_map_cell", where: `uid = ?`, params: [u] },
   { label: "account (login and email)", table: `"user"`, where: `userid = ?`, params: [u] },

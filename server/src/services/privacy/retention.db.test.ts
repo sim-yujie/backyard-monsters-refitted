@@ -237,6 +237,26 @@ describe.skipIf(!dbName)("the daily privacy clean-up (retention.ts)", () => {
     expect(left.map((row) => row.fingerprint)).toEqual(["zz-ret-29", "zz-ret-0"]);
   });
 
+  test("an error's senders (name and address) go 30 days after they last hit it, even while the error stays", async () => {
+    await sql(`INSERT INTO bym.app_error (source, fingerprint, message) VALUES ('browser', 'zz-ret-senders', 'x')`);
+    for (const days of [45, 31, 29, 0]) {
+      await sql(
+        `INSERT INTO bym.app_error_reporter (error_id, userid, username, ip, last_seen)
+         SELECT id, ?, 'zz', '203.0.113.7', ? FROM bym.app_error WHERE fingerprint = 'zz-ret-senders'`,
+        [days, ago(days)]
+      );
+    }
+
+    const result = await run();
+
+    expect(result).toMatchObject({ appErrorReporters: 2 });
+    const left = await sql<{ userid: number }>(
+      `SELECT r.userid FROM bym.app_error_reporter r JOIN bym.app_error e ON e.id = r.error_id
+        WHERE e.fingerprint = 'zz-ret-senders' ORDER BY r.userid DESC`
+    );
+    expect(left.map((row) => Number(row.userid))).toEqual([29, 0]);
+  });
+
   test("each limit is its own setting", async () => {
     await thread(990005, 40);
     await attackLog(40);
