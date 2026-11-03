@@ -470,3 +470,96 @@ export const fetchAnnouncementImage = async (id: number): Promise<string> => {
   if (!response.ok) throw new Error(`The picture could not be loaded (${response.status}).`);
   return URL.createObjectURL(await response.blob());
 };
+
+/**
+ * Moderation (server `services/admin/moderation.ts`): warn, pause chat
+ * (mute), ban, and lifting a ban or pause; a player's log; chat reports.
+ */
+export type ModerationKind = "warn" | "mute" | "unmute" | "ban" | "unban";
+
+/** The longest reason the server keeps (`MAX_MODERATION_REASON`). */
+export const MAX_MODERATION_REASON = 300;
+
+/** One step in a player's moderation log. */
+export interface ModerationEntry {
+  id: number;
+  action: ModerationKind;
+  reason: string;
+  /** A ban's or mute's end; null for good (a ban) or no end (the rest). */
+  until: string | null;
+  by: number;
+  byName: string | null;
+  chatReportId: number | null;
+  /** When the player closed the pop-up (warnings and mutes). */
+  seenAt: string | null;
+  at: string;
+}
+
+/** A player as the moderation view shows them. */
+export interface PlayerModeration {
+  userid: number;
+  username: string;
+  lastSeenAt: string | null;
+  banned: boolean;
+  /** Null while `banned`: for good. */
+  banUntil: string | null;
+  banReason: string | null;
+  /** Only while the pause lasts. */
+  muteUntil: string | null;
+  /** A game team account: cannot be warned, paused or banned. */
+  gameTeam: boolean;
+  reportsAgainst: number;
+  log: ModerationEntry[];
+}
+
+/** One chat report, newest first in the list. */
+export interface ChatReportView {
+  id: number;
+  reporter: { userid: number; username: string | null };
+  reported: { userid: number; username: string | null; banned: boolean; muted: boolean };
+  channel: string;
+  message: string;
+  /** When the line was said (ms). */
+  messageTs: number;
+  /** The words match the chat server's own copy of the line. */
+  verified: boolean;
+  reportsAgainst: number;
+  /** The steps taken from this report, oldest first. */
+  actions: ModerationKind[];
+  at: string;
+}
+
+/** What a moderation step sends: a reason, and a ban's days (null for good) or a mute's hours. */
+export interface ModerationBody {
+  reason?: string;
+  days?: number | null;
+  hours?: number;
+  chatReportId?: number;
+}
+
+/** The chat panel's sign-in: the chat server, the owner's chat token and the rooms to join. */
+export interface AdminChatSession {
+  server: string;
+  userId: number;
+  token: string;
+  rooms: { channel: string; label: string }[];
+}
+
+export const fetchChatReports = (
+  before?: number,
+): Promise<Envelope<{ reports: ChatReportView[]; nextBefore: number | null }>> =>
+  adminGet(`${ADMIN}/chatreports`, { before, limit: 30 });
+
+export const fetchPlayerModeration = (
+  id: number,
+): Promise<Envelope<{ player: PlayerModeration }>> => adminGet(`${ADMIN}/players/${id}/moderation`);
+
+export const moderatePlayer = (
+  id: number,
+  kind: ModerationKind,
+  body: ModerationBody,
+): Promise<Envelope<{ player: PlayerModeration }>> =>
+  adminPost(`${ADMIN}/players/${id}/${kind}`, { ...body });
+
+export const fetchChatSession = (): Promise<Envelope<AdminChatSession>> =>
+  adminPost(`${ADMIN}/chat/session`, {});

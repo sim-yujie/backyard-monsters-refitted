@@ -35,6 +35,8 @@ export interface ChatLine {
   readonly ts: number;
   /** Said by this player. */
   readonly own: boolean;
+  /** Said by the game team (the server's mark). */
+  readonly gm: boolean;
 }
 
 /** A word from the client itself, such as "slow down". */
@@ -131,6 +133,28 @@ const NORMAL_CLOSURE = 1000;
 export const RATE_LIMITED_TEXT = "Easy there! Wait a moment before sending another message.";
 export const UNAVAILABLE_TEXT = "World chat is not available right now.";
 
+/** What a muted player is told when a line is turned away. */
+export const mutedText = (until: number | undefined): string => {
+  if (!until || !Number.isFinite(until)) return "Your chat is paused by the game team.";
+  const when = new Date(until).toLocaleString(undefined, {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `Your chat is paused until ${when}.`;
+};
+
+/** Word from the game team on the chat connection: a ban (signed out), or a warning to show. */
+export type TeamEvent =
+  | {
+      readonly kind: "banned";
+      readonly text: string;
+      readonly until: number | null;
+      /** The game team's reason alone. */
+      readonly reason: string;
+    }
+  | { readonly kind: "notice" };
+
 /** Visible lines: everything but the muted players' lines. */
 export const visibleEntries = (state: ChatState): ChatEntry[] =>
   state.entries.filter((entry) => entry.kind === "notice" || !state.muted.has(entry.userId));
@@ -168,8 +192,15 @@ export class ChatSession {
   private config: ChatConfig | null = null;
   private socket: ChatSocket | null = null;
   private listeners = new Set<(state: ChatState) => void>();
+  private teamListeners = new Set<(event: TeamEvent) => void>();
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  /**
+   * Mutes and unmutes the server has not confirmed yet: a change made while
+   * the socket was down (or mid-close) would otherwise be lost, and the
+   * server's old list would bring a lifted mute back on the next connect.
+   */
+  private pendingMutes = new Map<number, boolean>();
   private retries = 0;
   private nextId = 1;
   /** The last line said, for `bounced` if the server turns it away. */
@@ -201,6 +232,14 @@ export class ChatSession {
     listener(this.state);
     return () => {
       this.listeners.delete(listener);
+    };
+  }
+
+  /** Calls `listener` on each word from the game team (ban, warning); returns the way to stop. */
+  onTeam(listener: (event: TeamEvent) => void): () => void {
+    this.teamListeners.add(listener);
+    return () => {
+      this.teamListeners.delete(listener);
     };
   }
 
@@ -323,6 +362,11 @@ export class ChatSession {
     if (muted) next.add(userId);
     else next.delete(userId);
     this.update({ muted: next });
+    this.pendingMutes.set(userId, muted);
+    this.sendMute(userId, muted);
+  }
+
+  private sendMute(userId: number, muted: boolean): void {
     this.sendRaw({ type: muted ? "ignore" : "unignore", targetId: String(userId) });
   }
 
@@ -406,6 +450,7 @@ export class ChatSession {
       case "auth_ok": {
         this.update({ self: { userId: message.userId, name: message.displayName } });
         for (const room of this.state.rooms) this.sendRaw({ type: "join", channel: room.channel });
+        for (const [userId, muted] of this.pendingMutes) this.sendMute(userId, muted);
         this.sendRaw({ type: "getignore" });
         this.pingTimer = setInterval(() => this.sendRaw({ type: "ping" }), PING_INTERVAL_MS);
         return;
@@ -439,22 +484,46 @@ export class ChatSession {
           this.update({ self: { userId: message.userId, name: message.displayName } });
         }
         return;
-      case "ignore_list":
-        this.update({
-          muted: new Set(
-            (Array.isArray(message.list) ? message.list : [])
-              .map((entry) => Number(entry.target))
-              .filter((id) => Number.isInteger(id)),
-          ),
-        });
+      case "ignore_list": {
+        const muted = new Set(
+          (Array.isArray(message.list) ? message.list : [])
+            .map((entry) => Number(entry.target))
+            .filter((id) => Number.isInteger(id)),
+        );
+        // A change the server has not taken yet still wins; one it has is settled.
+        for (const [userId, want] of this.pendingMutes) {
+          if (muted.has(userId) === want) this.pendingMutes.delete(userId);
+          else if (want) muted.add(userId);
+          else muted.delete(userId);
+        }
+        this.update({ muted });
         return;
+      }
       case "error":
         if (message.code === "rate_limited") {
           this.update({ bounced: this.lastSaid });
           this.notice(RATE_LIMITED_TEXT);
         } else if (message.code === "invalid_channel") {
           this.refused();
+        } else if (message.code === "muted") {
+          this.update({ bounced: this.lastSaid });
+          this.notice(mutedText(message.until));
         }
+        return;
+      case "kicked": {
+        this.drop();
+        this.update({ status: ChatStatus.SIGNED_OUT });
+        const event: TeamEvent = {
+          kind: "banned",
+          text: String(message.text ?? ""),
+          until: typeof message.until === "number" ? message.until : null,
+          reason: String(message.banReason ?? ""),
+        };
+        for (const listener of [...this.teamListeners]) listener(event);
+        return;
+      }
+      case "notice":
+        for (const listener of [...this.teamListeners]) listener({ kind: "notice" });
         return;
       default:
         return;
@@ -471,6 +540,7 @@ export class ChatSession {
       body: String(wire.body ?? ""),
       ts: Number(wire.ts) || 0,
       own: this.state.self?.userId === userId,
+      gm: wire.gm === true,
     };
   }
 

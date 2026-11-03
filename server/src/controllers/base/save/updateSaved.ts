@@ -3,7 +3,7 @@ import z from "zod";
 import { getFlags } from "../../../game-data/flags.js";
 import { BaseMode, BaseType } from "../../../enums/Base.js";
 import { Status } from "../../../enums/StatusCodes.js";
-import { saveFailureErr } from "../../../errors/errors.js";
+import { refuseMissingBase } from "../../../services/base/missingBase.js";
 import { Save } from "../../../database/models/save.model.js";
 import { User } from "../../../database/models/user.model.js";
 import { postgres, redis } from "../../../server.js";
@@ -57,7 +57,9 @@ export const updateSaved: KoaController = async (ctx) => {
       break;
   }
 
-  if (!baseSave) throw saveFailureErr();
+  // Nothing to show: an own yard that is not there, or a base gone or out of
+  // sight. Refused and logged as `/base/save` refuses one (`missingBase.ts`).
+  if (!baseSave) return refuseMissingBase(ctx, user, { baseid, saveType: `updatesaved ${type}` });
 
   const isOwner = user.userid === baseSave.userid;
   const isInferno = baseSave.type === BaseType.INFERNO;

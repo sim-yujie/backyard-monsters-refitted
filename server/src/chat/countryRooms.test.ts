@@ -30,8 +30,15 @@ mock.module("../server.js", () => ({
       },
     },
   },
-  redis: {},
+  redis: {
+    setex: async (...args: unknown[]) => {
+      lastActionWrites.push(args);
+    },
+  },
 }));
+
+/** Any real-action write a line makes (`services/user/online.ts`): none. */
+const lastActionWrites: unknown[] = [];
 
 mock.module("./chatTransport.js", () => ({
   publishToChannel: (channel: string, payload: string) => {
@@ -142,6 +149,20 @@ describe("postMessage in a country room", () => {
       channel: "chat:country:PH",
       body: "kumusta",
     });
+  });
+
+  // Security review, 3 Nov: a chat line keeps a player connected (it is
+  // input) but does not renew their attack protection, or chatting alone
+  // would keep a yard safe for ever, past the bot-pattern watch.
+  test("a line said does not write a real game action", async () => {
+    const client = fakeClient();
+    joinChannel(client, "chat:country:PH", { type: ChannelType.Country, country: "PH" });
+    lastActionWrites.length = 0;
+
+    await postMessage(client, "chat:country:PH", "kumusta");
+
+    expect(pushed).toHaveLength(1);
+    expect(lastActionWrites).toEqual([]);
   });
 
   test("the rate limit is shared with Global", async () => {

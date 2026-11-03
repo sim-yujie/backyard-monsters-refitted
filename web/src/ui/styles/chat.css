@@ -22,6 +22,7 @@
   --chat-text: var(--colour-text-strong);
   --chat-name: var(--colour-accent);
   --chat-own: var(--colour-warning-bright);
+  --chat-gm: var(--colour-success);
   color: var(--chat-text);
   pointer-events: none;
 }
@@ -32,6 +33,7 @@
   --chat-text: #ffffff;
   --chat-name: #7fe4f8;
   --chat-own: #ffe2a8;
+  --chat-gm: #9fe0b0;
 }
 
 .chat-box[hidden] {
@@ -212,6 +214,30 @@ button.chat-line__name {
 
 .chat-line--own .chat-line__name {
   color: var(--chat-own);
+}
+
+/* The game team's lines: a GM badge, the name in green, a bar down the side. */
+.chat-line--gm {
+  border-left: 3px solid var(--chat-gm);
+}
+
+.chat-line--gm .chat-line__name {
+  color: var(--chat-gm);
+}
+
+.chat-line__gm {
+  display: inline-block;
+  margin-right: 0.35em;
+  padding: 0 0.35em;
+  border-radius: var(--radius-sm, 3px);
+  background: var(--chat-gm);
+  color: #0d2416;
+  font-size: 0.75em;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  text-shadow: none;
+  vertical-align: 0.1em;
 }
 
 .chat-line--notice {

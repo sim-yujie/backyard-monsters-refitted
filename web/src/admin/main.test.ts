@@ -134,6 +134,10 @@ describe("the owner's first look", () => {
     await settle();
     expect(document.querySelector(".nav a[href='#shiny']")?.textContent).toBe("Shiny");
     expect(document.getElementById("shiny")?.querySelector("#player-search")).not.toBeNull();
+    expect(document.querySelector(".nav a[href='#moderation']")?.textContent).toBe("Moderation");
+    expect(document.getElementById("moderation")?.querySelector("#mod-search")).not.toBeNull();
+    expect(document.querySelector(".nav a[href='#chat']")?.textContent).toBe("Chat");
+    expect(document.getElementById("chat")?.textContent).toContain("Join chat");
     const select = document.querySelector<HTMLSelectElement>(".top .theme-pick select")!;
     expect([...select.options].map((o) => o.value)).toEqual(["auto", "light", "dark"]);
     expect(select.value).toBe("auto");

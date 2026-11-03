@@ -6,7 +6,7 @@ import { SceneManager, type SceneFactory } from "./SceneManager";
 import { withHold, withPresence, withProtection } from "./presenceScene";
 import { withIdle } from "./idleScene";
 import { withMusic } from "./musicScene";
-import { IdleWatch, idleDurationText, idleTimingsFor } from "@/game/presence/idleWatch";
+import { type DisconnectReason, IdleWatch, idleDurationText, idleTimingsFor } from "@/game/presence/idleWatch";
 import { IdleWarning } from "@/ui/IdleWarning";
 import { getAuthToken, onAnswer } from "@/api/http";
 import { stayProtected } from "@/api/presence";
@@ -18,13 +18,17 @@ import { answerBotCheck, fetchBotCheck, forceBotCheck } from "@/api/botCheck";
 import { BotCheckWatch } from "@/game/presence/botCheckWatch";
 import { BotCheckCard } from "@/ui/BotCheckCard";
 import { BootScene } from "./scenes/BootScene";
+import { logout } from "@/api/auth";
+import { banWords } from "@/api/moderation";
+import { worldChat } from "@/game/chat/chatSession";
+import { setSignInNotice } from "./signInNotice";
 import { LoginScene } from "./scenes/LoginScene";
 import { MapGateScene } from "./scenes/MapGateScene";
 import { MapRoom1Scene } from "./scenes/MapRoom1Scene";
 import { MapRoom2Scene } from "./scenes/MapRoom2Scene";
 import { YardScene } from "./scenes/YardScene";
 import { AttackScene } from "./scenes/AttackScene";
-import { AwayScene } from "./scenes/AwayScene";
+import { AwayScene, awayText } from "./scenes/AwayScene";
 import { SceneName } from "./sceneName";
 import { guardTick } from "./guardedTick";
 import { BAITER_PLUGINS, BAITER_REPLAY_PLUGINS } from "@/game/baiter/baiterPlugin";
@@ -70,6 +74,7 @@ export class App {
   private botCheck: BotCheckWatch | null = null;
   private botCheckCard: BotCheckCard | null = null;
   private stopHearing: (() => void) | null = null;
+  private stopTeam: (() => void) | null = null;
 
   constructor(private readonly host: HTMLElement) {
     this.pixi = new Application();
@@ -202,6 +207,8 @@ export class App {
     // Its "Still there?" comes first: "Stay protected?" waits while it is up,
     // and its button answers both when both are due.
     const scenes = this.scenes;
+    // What the away screen says: idle input, or the protection run out (3 Nov).
+    let awayReason: DisconnectReason = "idle";
     const warning = new IdleWarning(this.host, Date.now, () => {
       if (protection.due) protection.stay().catch(() => {});
     });
@@ -217,7 +224,8 @@ export class App {
         warning.hide();
         holdBack();
       },
-      onDisconnect: () => {
+      onDisconnect: (reason) => {
+        awayReason = reason;
         protection.stop();
         botCheck.stop();
         scenes.goTo(SceneName.AWAY);
@@ -271,7 +279,19 @@ export class App {
     );
     register(SceneName.WATCH, game(() => new AttackScene(WATCH_PLUGINS, { watch: true }), true));
     register(SceneName.RAID, game(() => new AttackScene(RAID_PLUGINS, { raid: true }), true));
-    register(SceneName.AWAY, () => new AwayScene(idleDurationText(idle.timings.disconnectMs), this.halt));
+    register(
+      SceneName.AWAY,
+      () =>
+        new AwayScene(
+          awayText(
+            awayReason,
+            idleDurationText(
+              awayReason === "protection" ? protection.timings.windowMs : idle.timings.disconnectMs,
+            ),
+          ),
+          this.halt,
+        ),
+    );
 
     // Pixi's renderer resize fires on the window; mirror it to the scenes.
     this.pixi.renderer.on("resize", this.handleResize);
@@ -287,10 +307,23 @@ export class App {
     const tick = guardTick((deltaSeconds) => this.scenes?.tick(deltaSeconds));
     this.pixi.ticker.add((ticker) => tick.run(ticker.deltaMS / 1000));
 
+    // A ban from the game team signs the player out at once, saying why and
+    // until when (the chat connection carries it, `game/chat/chatSession.ts`).
+    this.stopTeam = worldChat.onTeam((event) => {
+      if (event.kind !== "banned") return;
+      protection.stop();
+      botCheck.stop();
+      logout();
+      setSignInNotice(banWords(event.until, event.reason));
+      scenes.goTo(SceneName.LOGIN);
+    });
+
     await this.scenes.start(SceneName.BOOT);
   }
 
   destroy(): void {
+    this.stopTeam?.();
+    this.stopTeam = null;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.idle?.destroy();

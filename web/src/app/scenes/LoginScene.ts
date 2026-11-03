@@ -3,6 +3,8 @@ import { ApiError, NetworkError } from "@/api/http";
 import { unlockInbox } from "@/game/achievements/unlockInbox";
 import { clearTestHistory } from "@/game/baiter/testHistory";
 import { worldChat } from "@/game/chat/chatSession";
+import { banRefusal } from "@/api/moderation";
+import { takeSignInNotice } from "@/app/signInNotice";
 import { CREDITS_URL, DISCORD_URL, PATREON_URL, PRIVACY_URL, TERMS_URL, TURNSTILE_SITE_KEY } from "@/config";
 import { openBugReport } from "@/ui/bugReport/BugReportDialog";
 import { modalLayer } from "@/ui/events/WhatsNewDialog";
@@ -317,7 +319,7 @@ export class LoginScene implements Scene {
     const error = document.createElement("p");
     error.className = "form-error";
     error.setAttribute("role", "alert");
-    error.textContent = carried.notice ?? "";
+    error.textContent = carried.notice ?? takeSignInNotice() ?? "";
 
     const submit = primaryButton("Play");
 
@@ -708,6 +710,8 @@ export class LoginScene implements Scene {
 
 /** Turns a thrown value into something worth showing a player. */
 const describe = (caught: unknown): string => {
+  const banned = banRefusal(caught);
+  if (banned) return banned;
   if (caught instanceof NetworkError) {
     return "Could not reach the server. Check that it is running, then try again.";
   }

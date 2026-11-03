@@ -23,6 +23,7 @@ let visibility: DocumentVisibilityState;
 let input: EventTarget;
 let events: string[];
 let warnedUntil: number | null;
+let reason: string | null;
 let watch: IdleWatch;
 
 const setVisibility = (state: DocumentVisibilityState): void => {
@@ -40,6 +41,7 @@ beforeEach(() => {
   input = new EventTarget();
   events = [];
   warnedUntil = null;
+  reason = null;
   watch = new IdleWatch({
     input,
     onWarn: (at) => {
@@ -47,7 +49,10 @@ beforeEach(() => {
       events.push("warn");
     },
     onCancelWarn: () => events.push("cancel"),
-    onDisconnect: () => events.push("disconnect"),
+    onDisconnect: (why) => {
+      reason = why;
+      events.push("disconnect");
+    },
   });
 });
 
@@ -76,6 +81,7 @@ describe("IdleWatch", () => {
     vi.advanceTimersByTime(1);
     expect(events).toEqual(["warn", "cancel", "disconnect"]);
     expect(watch.state).toBe(IdleState.DISCONNECTED);
+    expect(reason).toBe("idle");
   });
 
   it.each(IDLE_INPUT_EVENTS)("counts %s as input", (type) => {
@@ -146,6 +152,18 @@ describe("IdleWatch", () => {
     expect(events).toEqual([]);
     undefer();
     expect(events).toEqual(["disconnect"]);
+    // 3 Nov: the screen said "without any input" to a player who had just moved the mouse.
+    expect(reason).toBe("protection");
+  });
+
+  it("says idle when the ten minutes without input are up as the protection runs out", () => {
+    watch.hold();
+    vi.advanceTimersByTime(disconnectMs - 1);
+    const undefer = watch.defer();
+    vi.advanceTimersByTime(1);
+    watch.lapse(true);
+    undefer();
+    expect(reason).toBe("idle");
   });
 
   it("stays connected when a real action renews the protection first", () => {
