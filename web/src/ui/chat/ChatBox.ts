@@ -11,6 +11,7 @@ import {
   type ChatState,
 } from "@/game/chat/chatSession";
 import { countryLabel, countryName } from "@/game/account/countries";
+import { countryLabelNodes } from "@/ui/countryFlag";
 import { icon } from "@/ui/icons";
 import "@/ui/styles/chat.css";
 
@@ -281,7 +282,12 @@ export class ChatBox {
     const country = state.rooms.find((room) => room.kind === "country") ?? null;
     const inCountry = shown?.kind === "country" && !!shown.country;
 
-    this.tabLabel.textContent = inCountry && shown?.country ? countryLabel(shown.country) : "World chat";
+    const labelKey = inCountry && shown?.country ? shown.country : "";
+    if (this.tabLabel.dataset["country"] !== labelKey) {
+      this.tabLabel.dataset["country"] = labelKey;
+      if (labelKey) this.tabLabel.replaceChildren(...countryLabelNodes(labelKey));
+      else this.tabLabel.textContent = "World chat";
+    }
     this.element.dataset["unread"] = state.unread.size > 0 ? "true" : "false";
 
     const two = state.rooms.length > 1;
@@ -297,7 +303,10 @@ export class ChatBox {
             button.className = "chat-box__room";
             button.setAttribute("role", "tab");
             button.dataset["room"] = room.channel;
-            button.textContent = roomLabel(room);
+            if (room.kind === "country" && room.country) {
+              button.replaceChildren(...countryLabelNodes(room.country));
+              button.title = countryName(room.country);
+            } else button.textContent = roomLabel(room);
             return button;
           }),
         );

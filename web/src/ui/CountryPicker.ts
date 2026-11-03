@@ -1,4 +1,5 @@
 import { searchCountries } from "@/game/account/countries";
+import { countryFlagImage } from "@/ui/countryFlag";
 import "@/ui/styles/country.css";
 
 /**
@@ -87,9 +88,9 @@ export class CountryPicker {
     const query = this.search.value;
     const items: HTMLLIElement[] = [];
     if ((this.options.notSet ?? true) && !query.trim()) {
-      items.push(this.item("", "\u{2014}", PICKER_TEXT.notSet));
+      items.push(this.item("", PICKER_TEXT.notSet));
     }
-    for (const country of searchCountries(query)) items.push(this.item(country.code, country.flag, country.name));
+    for (const country of searchCountries(query)) items.push(this.item(country.code, country.name));
     if (items.length === 0) {
       const empty = document.createElement("li");
       empty.className = "country-picker__none";
@@ -99,7 +100,7 @@ export class CountryPicker {
     this.list.replaceChildren(...items);
   }
 
-  private item(code: string, flag: string, name: string): HTMLLIElement {
+  private item(code: string, name: string): HTMLLIElement {
     const item = document.createElement("li");
     const button = document.createElement("button");
     button.type = "button";
@@ -111,7 +112,8 @@ export class CountryPicker {
     button.setAttribute("aria-selected", String(selected));
     const mark = document.createElement("span");
     mark.className = "country-picker__flag";
-    mark.textContent = flag;
+    if (code) mark.append(countryFlagImage(code));
+    else mark.textContent = "\u{2014}";
     mark.setAttribute("aria-hidden", "true");
     const words = document.createElement("span");
     words.className = "country-picker__name";

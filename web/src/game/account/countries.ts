@@ -25,6 +25,13 @@ export const countryFlag = (code: string): string =>
     ? String.fromCodePoint(...[...code].map((letter) => 0x1f1e6 + letter.charCodeAt(0) - 65))
     : "";
 
+/**
+ * The flag picture, for systems that draw the emoji as two letters (Windows):
+ * the 4x3 flags of the MIT-licensed `flag-icons` set, kept in `public/flags`.
+ */
+export const countryFlagUrl = (code: string): string =>
+  isCountryCode(code) ? `${import.meta.env.BASE_URL}flags/${code.toLowerCase()}.svg` : "";
+
 let names: Intl.DisplayNames | null | undefined;
 
 /** "Philippines" for `PH`, in the browser's language; the code itself where the browser cannot name it. */

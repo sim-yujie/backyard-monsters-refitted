@@ -64,9 +64,36 @@
 
 .country-picker__flag {
   flex: none;
+  display: inline-flex;
+  justify-content: center;
   width: 1.6em;
-  font-size: 1.2em;
   text-align: center;
+}
+
+.country-picker__flag .country-flag {
+  margin-right: 0;
+}
+
+/* ── A country's flag picture (flag-icons, public/flags) ───────────── */
+
+.country-flag {
+  display: inline-block;
+  flex: none;
+  width: 1.34em;
+  height: 1em;
+  margin-right: 0.35em;
+  vertical-align: -0.15em;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.25);
+  object-fit: cover;
+}
+
+.country-flag--letters {
+  width: auto;
+  height: auto;
+  box-shadow: none;
+  font-size: 0.85em;
+  font-weight: 700;
 }
 
 .country-picker__none {

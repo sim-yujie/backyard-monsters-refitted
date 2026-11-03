@@ -392,6 +392,10 @@ button.chat-line__name {
     font-size: 0;
   }
 
+  .chat-box:not(.chat-box--open) .chat-box__tab-label .country-flag {
+    display: none;
+  }
+
   .chat-box:not(.chat-box--open) .chat-box__tab-label::after {
     content: "Chat";
     font-size: var(--text-sm);
