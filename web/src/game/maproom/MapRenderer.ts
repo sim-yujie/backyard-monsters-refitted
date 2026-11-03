@@ -16,6 +16,7 @@ import { MapChunk, TextLevel, type ChunkView } from "./MapChunk";
 import { BuildingAvatars } from "./buildingAvatars";
 import { cellLift, liftCorners } from "./ground";
 import { GroundArt } from "./groundArt";
+import { LandSprites } from "./landSprites";
 import { ConstructionBadge } from "./constructionBadge";
 import { RangeOverlay } from "./RangeOverlay";
 import type { Sight } from "./Sight";
@@ -86,6 +87,11 @@ export class MapRenderer {
   private readonly buildings = new BuildingAvatars();
   /** Flash's ground tiles, fetched the same way; flat hexes until they land. */
   private readonly groundArt = new GroundArt();
+  /**
+   * The land features' painted props (Modern look only), fetched the first time
+   * a chunk holds a feature: with the server's land switch off nothing is.
+   */
+  private readonly landSprites = new LandSprites(() => this.rebuildAll());
   private readonly constructionBadge = new ConstructionBadge();
   private readonly chunks = new Map<number, MapChunk>();
   private readonly residency = new ChunkResidency({
@@ -293,6 +299,7 @@ export class MapRenderer {
     this.avatars.destroy();
     this.buildings.destroy();
     this.groundArt.destroy();
+    this.landSprites.destroy();
     this.constructionBadge.destroy();
     this.atlas?.destroy();
     this.atlas = null;
@@ -340,6 +347,7 @@ export class MapRenderer {
             this.ground,
             this.groundArt,
             this.constructionBadge,
+            this.landSprites,
           );
           this.chunks.set(ref.id, chunk);
           this.world.addChild(chunk.container);
