@@ -48,7 +48,7 @@ TEXTURE_ORDER: list[tuple[str, str, int | None, tuple[int, int, int, int] | None
     ("lush", "ground-a", 1, (1000, 780, 1150, 860)),
     ("sand", "ground-a", 2, (200, 760, 260, 920)),
     ("rock", "ground-a", 3, None),
-    ("marsh", "ground-b", 0, None),
+    ("marsh", "ground-b", 0, (1300, 800, 1700, 1050)),
     ("forest-floor", "ground-b", 1, None),
     ("snow", "ground-b", 2, None),
     ("meadow-plain", "ground-b", 3, (600, 660, 800, 760)),
@@ -61,8 +61,8 @@ TEXTURE_ORDER: list[tuple[str, str, int | None, tuple[int, int, int, int] | None
 ATLAS_COLUMNS = 4
 # How far each texture moves to its mock-up B colour (default 0.5). The meadows went further after
 # the first in-game look: they came out greener and darker than mock-up B (hue 82 against 66);
-# the sand came out darker.
-MATCH_STRENGTH = {"meadow": 0.9, "lush": 0.8, "meadow-plain": 0.9, "sand": 0.8}
+# the sand came out darker; the marsh came out brown mud where mock-up B has dark wet green.
+MATCH_STRENGTH = {"meadow": 0.9, "lush": 0.8, "meadow-plain": 0.9, "sand": 0.8, "marsh": 0.7}
 
 
 def take() -> None:

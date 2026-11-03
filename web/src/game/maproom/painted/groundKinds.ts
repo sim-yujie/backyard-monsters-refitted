@@ -59,9 +59,9 @@ export const Ground = {
 export type Ground = (typeof Ground)[keyof typeof Ground];
 
 /**
- * Map Room 2's land feature codes (`lf`, branch feat/mr2-land, `landFeature.ts`): 1 forest,
- * 2 rocks, 3 marsh; the rest (resource nodes) stand on open ground. Absent until that branch
- * merges, so today every land cell takes its ground from its height alone.
+ * Map Room 2's land feature codes (`lf`, server `game-rules/combat/landFeatures.ts`): 1 forest,
+ * 2 rocks, 3 marsh; the rest (resource nodes) stand on open ground. Sent only with the server's
+ * `MR2_LAND_FEATURES` switch on; without it every land cell takes its ground from its height.
  */
 const LAND_FEATURE_GROUND: Record<number, Ground> = {
   1: Ground.FOREST_FLOOR,
