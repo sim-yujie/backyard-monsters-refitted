@@ -469,6 +469,12 @@ export class MapRoom2Scene implements Scene {
     this.input.attach();
 
     if (import.meta.env.DEV) {
+      // The camera and the tilted picture's redraw count, for samples and the speed check.
+      (globalThis as Record<string, unknown>)["__bymrMr2TiltDebug"] = {
+        camera: this.camera,
+        draws: () => this.tiltView?.draws ?? 0,
+        resolution: () => this.tiltView?.textureResolution ?? 0,
+      };
       // Switches the tilt live at any strength, for the owner's samples (not saved).
       (globalThis as Record<string, unknown>)["__bymrMr2Tilt"] = (strength: TiltStrength) => {
         if (classicLook() || !TILT_STRENGTHS.includes(strength)) return this.tiltStrength;
@@ -515,7 +521,10 @@ export class MapRoom2Scene implements Scene {
     this.tiltView?.destroy();
     this.tiltView = null;
     this.tilt = null;
-    if (import.meta.env.DEV) delete (globalThis as Record<string, unknown>)["__bymrMr2Tilt"];
+    if (import.meta.env.DEV) {
+      delete (globalThis as Record<string, unknown>)["__bymrMr2Tilt"];
+      delete (globalThis as Record<string, unknown>)["__bymrMr2TiltDebug"];
+    }
 
     window.removeEventListener("focus", this.handleFocus);
     document.removeEventListener("visibilitychange", this.handleFocus);

@@ -54,6 +54,8 @@ export class TiltView {
   /** What the last picture was drawn for; a different key redraws it. */
   private viewKey = "";
   private drawnAt = 0;
+  /** How many times the picture was redrawn, for the speed check (`__bymrMr2TiltDebug`). */
+  draws = 0;
 
   constructor(
     private readonly resolution: number,
@@ -90,6 +92,7 @@ export class TiltView {
     if (still && !mapChanged(root)) return false;
     this.viewKey = viewKey;
     this.drawnAt = nowMs;
+    this.draws += 1;
 
     root.scale.set(zoom);
     root.position.set(-position.x * zoom - left, -position.y * zoom - top);
@@ -105,7 +108,16 @@ export class TiltView {
     return true;
   }
 
-  /** Makes the next `render` draw even if nothing seems to have changed. */
+  /** The picture's resolution (pixels per CSS pixel): half on Quality Low. */
+  get textureResolution(): number {
+    return this.texture?.source.resolution ?? 0;
+  }
+
+  /**
+   * Makes the next `render` draw even if nothing seems to have changed. A layer
+   * that animates without touching Pixi's scene (a shader's time uniform, such
+   * as painted water) must call this on each step it wants seen.
+   */
   invalidate(): void {
     this.viewKey = "";
   }
