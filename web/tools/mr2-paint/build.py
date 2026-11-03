@@ -45,7 +45,7 @@ JOBS = ["ground-a", "ground-b", "sea", "canopy", "decals", "sea-rocks", "cliff",
 # (sheet, quadrant 0..3 row by row or None for the whole square, mock-up B box to match or None)
 TEXTURE_ORDER: list[tuple[str, str, int | None, tuple[int, int, int, int] | None]] = [
     ("meadow", "ground-a", 0, (600, 660, 800, 760)),
-    ("lush", "ground-a", 1, None),
+    ("lush", "ground-a", 1, (1000, 780, 1150, 860)),
     ("sand", "ground-a", 2, (200, 760, 260, 920)),
     ("rock", "ground-a", 3, None),
     ("marsh", "ground-b", 0, None),
@@ -59,6 +59,10 @@ TEXTURE_ORDER: list[tuple[str, str, int | None, tuple[int, int, int, int] | None
     ("canopy", "canopy", None, (1250, 200, 1500, 400)),
 ]
 ATLAS_COLUMNS = 4
+# How far each texture moves to its mock-up B colour (default 0.5). The meadows went further after
+# the first in-game look: they came out greener and darker than mock-up B (hue 82 against 66);
+# the sand came out darker.
+MATCH_STRENGTH = {"meadow": 0.9, "lush": 0.8, "meadow-plain": 0.9, "sand": 0.8}
 
 
 def take() -> None:
@@ -116,7 +120,7 @@ def build_textures() -> None:
         if not (SOURCE / f"{sheet}.webp").exists():
             print(f"texture {index:2} {name}: no sheet yet")
             continue
-        square = match_colour(seamless(cut_texture(sheet, quadrant), index), box)
+        square = match_colour(seamless(cut_texture(sheet, quadrant), index), box, MATCH_STRENGTH.get(name, 0.5))
         tile = Image.fromarray(square.round().astype(np.uint8), "RGB")
         atlas.paste(tile, ((index % ATLAS_COLUMNS) * TEXTURE, (index // ATLAS_COLUMNS) * TEXTURE))
         print(f"texture {index:2} {name}")

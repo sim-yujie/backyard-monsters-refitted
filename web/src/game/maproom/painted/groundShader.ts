@@ -4,16 +4,17 @@ import { Ground, SHADER_TEXTURES } from "./groundKinds";
  * The painted ground's WebGL2 shader (Map Room 2 Modern look, plan step 2).
  *
  * One quad over the world. Per pixel it finds its hex (`cellShape.ts` is the TypeScript twin of
- * these sums), reads the cell and the cell across its nearest side from the data texture
- * (`GroundData.ts`), and paints their ground textures sampled in world position, so neighbours
- * with the same ground join with no seam. The point used to pick the cell is pushed about by
- * smooth noise, so where two grounds meet the line wanders across the hex sides instead of
- * following them, and a fine noise breaks the meeting line into a painted, ragged edge. Last, the
- * faint hex lines (mock-up B strength: light cream, about 30%, 1-2 screen pixels) are drawn by the
- * true (un-pushed) point's distance to its hex side.
+ * these sums) and the two neighbours it leans towards; the three cell centres make a triangle, and
+ * the point's place in it weighs the three cells' grounds (data texture, `GroundData.ts`). Ground
+ * textures are sampled in world position, so neighbours with the same ground join with no seam.
+ * The point is pushed about by smooth noise first, and each cell's claim is roughened by a noise of
+ * its own, so where two grounds meet the line wanders across the hex sides as a painted edge
+ * instead of following them. Every weight changes smoothly, so there are no seams at hex corners.
+ * Last, the faint hex lines (mock-up B strength: light cream, about 30%, 1-2 screen pixels) are
+ * drawn by the true (un-pushed) point's distance to its hex side.
  *
  * Quality: High blends two lookups of each texture at different scales (hides the repeat) and
- * varies the light; Medium one lookup; Low no wandering edge and only the cell's own ground.
+ * varies the light; Medium one lookup; Low no edge noise and a short plain fade.
  */
 export const GROUND_VERTEX = `#version 300 es
 in vec2 aPosition;
@@ -114,6 +115,31 @@ float nearestSide(vec2 d, out vec2 normal) {
   return best;
 }
 
+// The six neighbours in axial steps (the same for both hex shapes).
+const vec2 NEIGHBOURS[6] = vec2[6](
+  vec2(1.0, 0.0), vec2(1.0, -1.0), vec2(0.0, -1.0), vec2(-1.0, 0.0), vec2(-1.0, 1.0), vec2(0.0, 1.0));
+
+// Ground blending, in hex units (corner radius 1): how far the noise pushes the point, the edge
+// noise's size and strength, and the fade width on Medium/High and on Low.
+const float WARP = 0.6;
+const float EDGE_FREQ = 2.2;
+const float EDGE_NOISE = 0.8;
+const float BAND = 0.08;
+const float BAND_LOW = 0.05;
+
+// The weights of p in the triangle (0, b, c).
+vec3 barycentric(vec2 p, vec2 b, vec2 c) {
+  float d00 = dot(b, b);
+  float d01 = dot(b, c);
+  float d11 = dot(c, c);
+  float d20 = dot(p, b);
+  float d21 = dot(p, c);
+  float den = d00 * d11 - d01 * d01;
+  float v = (d11 * d20 - d01 * d21) / den;
+  float w = (d00 * d21 - d01 * d20) / den;
+  return vec3(1.0 - v - w, v, w);
+}
+
 int groundAt(ivec2 cell) {
   ivec2 size = ivec2(uWorldCells);
   if (cell.x < 0 || cell.y < 0 || cell.x >= size.x || cell.y >= size.y) return ${Ground.UNLOADED};
@@ -150,49 +176,78 @@ void main() {
   vec2 dx = dFdx(uv);
   vec2 dy = dFdy(uv);
 
-  // The cell whose ground this pixel shows: the point is pushed about by smooth noise first, so
-  // grounds wander across the hex sides (not on Low).
-  vec2 hp = h;
-  if (uQuality > 0.5) {
-    hp += 0.32 * (vec2(fbm(h * 0.9), fbm(h * 0.9 + 19.7)) - 0.5) * 2.0;
-  }
+  // The point is pushed about by smooth noise first, so grounds wander across the hex sides (on
+  // Low too: it is a little arithmetic and no texture reads, and without it Low looked like tiles).
+  vec2 hp = h + WARP * (vec2(fbm(h * 0.6), fbm(h * 0.6 + 19.7)) - 0.5) * 2.0;
+
+  // The three cells round this point: its own hex and the two neighbours it leans towards. Their
+  // centres make the triangle the point sits in, and the point's place in that triangle weighs the
+  // three grounds. Weights only ever change smoothly, so there are no seams where the neighbours
+  // change (the earlier one-neighbour blend left straight steps at the hex corners).
   vec2 qr = roundAxial(axialOf(hp));
   vec2 centre = centreOf(qr);
-  vec2 normal;
-  float side = nearestSide(hp - centre, normal);
-  float inset = max(0.0, 1.0 - side / APOTHEM);
-  ivec2 cellA = toOffset(qr);
-  int gA = groundAt(cellA);
-  vec3 colour;
-  if (uQuality < 0.5) {
-    colour = paint(gA, uv, dx, dy);
-  } else {
-    ivec2 cellB = toOffset(roundAxial(axialOf(centre + normal * 2.0 * APOTHEM)));
-    int gB = groundAt(cellB);
-    colour = paint(gA, uv, dx, dy);
-    if (gB != gA) {
-      // Own weight 1 inside, 0.5 on the side; a fine noise roughens the meeting line, with its
-      // sign fixed by the cells' order so both sides of a side agree.
-      float own = 0.5 + 0.5 * smoothstep(0.0, 0.5, inset);
-      float rough = (valueNoise(vWorld / (uTexScale.x * 0.025)) - 0.5) * 0.9;
-      bool first = cellA.y < cellB.y || (cellA.y == cellB.y && cellA.x < cellB.x);
-      float w = clamp((own - 0.5 + (first ? rough : -rough)) * 2.5 + 0.5, 0.0, 1.0);
-      if (w < 0.999) colour = mix(paint(gB, uv, dx, dy), colour, w);
-    }
+  vec2 d = hp - centre;
+  vec2 dir1 = vec2(0.0);
+  vec2 dir2 = vec2(0.0);
+  float best1 = -1e9;
+  float best2 = -1e9;
+  for (int k = 0; k < 6; k++) {
+    float along = dot(d, centreOf(NEIGHBOURS[k]));
+    if (along > best1) { best2 = best1; dir2 = dir1; best1 = along; dir1 = NEIGHBOURS[k]; }
+    else if (along > best2) { best2 = along; dir2 = NEIGHBOURS[k]; }
+  }
+  vec3 bary = clamp(barycentric(d, centreOf(dir1), centreOf(dir2)), 0.0, 1.0);
+  ivec2 cell0 = toOffset(qr);
+  ivec2 cell1 = toOffset(qr + dir1);
+  ivec2 cell2 = toOffset(qr + dir2);
+  int g0 = groundAt(cell0);
+  int g1 = groundAt(cell1);
+  int g2 = groundAt(cell2);
+
+  // Each cell's claim: its weight, roughened by a noise of its own (continuous, as it hangs on the
+  // cell and the world position only). The strongest claim wins; claims within BAND of it share,
+  // which gives a short painted fade instead of a cut.
+  vec3 claim = bary;
+  float band = BAND_LOW;
+  if (uQuality > 0.5) {
+    vec2 p = h * EDGE_FREQ;
+    claim += EDGE_NOISE * (vec3(
+      fbm(p + vec2(cell0) * 0.37),
+      fbm(p + vec2(cell1) * 0.37),
+      fbm(p + vec2(cell2) * 0.37)) - 0.5);
+    band = BAND;
+  }
+  float top = max(claim.x, max(claim.y, claim.z));
+  vec3 w = max(claim - (top - band), 0.0);
+  w /= max(w.x + w.y + w.z, 1e-5);
+  // The same ground twice is one texture read.
+  if (g1 == g0) { w.x += w.y; w.y = 0.0; }
+  if (g2 == g0) { w.x += w.z; w.z = 0.0; }
+  else if (g2 == g1) { w.y += w.z; w.z = 0.0; }
+
+  vec3 colour = vec3(0.0);
+  if (w.x > 0.002) colour += w.x * paint(g0, uv, dx, dy);
+  if (w.y > 0.002) colour += w.y * paint(g1, uv, dx, dy);
+  if (w.z > 0.002) colour += w.z * paint(g2, uv, dx, dy);
+  colour /= max(w.x * step(0.002, w.x) + w.y * step(0.002, w.y) + w.z * step(0.002, w.z), 1e-5);
+
+  if (uQuality > 0.5) {
     if (uQuality > 1.5) {
       // Soft light and shade drifting over the land, as in a painting.
       colour *= 0.94 + 0.12 * valueNoise(vWorld / (uTexScale * 2.3) + 5.0);
     }
   }
 
-  // Faint hex lines by the true point's distance to its side, in screen pixels; they fade out
-  // when cells get too small to read.
+  // Faint hex lines by the true point's distance to its side, in screen pixels. Each cell draws
+  // half the line; the whole line is about 1% of a cell wide like mock-up B's (1.2 to 3 pixels),
+  // and it fades out when cells get too small to read.
   vec2 qr0 = roundAxial(axialOf(h));
   vec2 n0;
   float edge = APOTHEM - nearestSide(h - centreOf(qr0), n0);
   float pixels = edge / max(fwidth(edge), 1e-6);
-  float line = 1.0 - smoothstep(0.6, 1.6, pixels);
   float cellPixels = 1.0 / max(length(fwidth(h)), 1e-6);
+  float halfWidth = clamp(0.008 * cellPixels, 0.6, 1.5);
+  float line = 1.0 - smoothstep(halfWidth, halfWidth + 1.0, pixels);
   line *= smoothstep(5.0, 12.0, cellPixels);
   colour = mix(colour, uLine.rgb, uLine.a * line);
 
