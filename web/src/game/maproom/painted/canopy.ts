@@ -62,13 +62,13 @@ export const ROCK_FADE: readonly [number, number] = [0.3, 0.72];
 export const MARSH_FADE: readonly [number, number] = [0.45, 0.85];
 
 /**
- * The marsh's goo pools: small and scattered, the noise's tops ({@link GOO_LEVEL} and above of an fbm
- * at {@link GOO_SCALE} per hex unit, about 4% of a marsh's middle), inside its murky puddles.
+ * The marsh's goo pools: a few small rounded pools, the tops ({@link GOO_LEVEL} and above, about 7% of
+ * a marsh's middle) of a smooth noise at {@link GOO_SCALE} per hex unit (pools about 0.3 across).
  */
-export const GOO_SCALE = 2.6;
-export const GOO_LEVEL = 0.72;
-/** How much of a marsh's middle is murky water: the fbm over this level (about a third). */
-export const MURK_LEVEL = 0.56;
+export const GOO_SCALE = 1.8;
+export const GOO_LEVEL = 0.77;
+/** Its murky puddles: the same kind of noise (2.2 per hex unit) over this level, about two fifths of it. */
+export const MURK_LEVEL = 0.55;
 
 /**
  * Edge trees, pines, boulders, goo pools and reeds: the share of their grid squares kept at each

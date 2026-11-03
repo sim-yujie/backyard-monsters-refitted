@@ -151,10 +151,12 @@ describe("rock fields and marsh", () => {
     expect(smooth(MARSH_FADE[0], MARSH_FADE[1], at(SQRT3 * 0.8, 0, lone).marsh + 0.2)).toBe(0);
   });
 
-  it("makes the goo small scattered pools inside murky puddles, not wide strips", () => {
-    // A finer noise than the puddles (1.9 a hex unit) and only its tops (an fbm's 95th percentile is about 0.72).
-    expect(GOO_SCALE).toBeGreaterThan(1.9);
-    expect(GOO_LEVEL).toBeGreaterThanOrEqual(0.72);
+  it("makes the goo small scattered pools, rarer than the murky puddles, not wide strips", () => {
+    // Blobs about 0.3 hex units across (a noise at 1.5-4 a hex unit), only its tops (the smooth
+    // noise's 93rd percentile is about 0.77, so about 7% of a marsh's middle), well above the puddles' level.
+    expect(GOO_SCALE).toBeGreaterThanOrEqual(1.5);
+    expect(GOO_SCALE).toBeLessThanOrEqual(4);
+    expect(GOO_LEVEL).toBeGreaterThanOrEqual(0.75);
     expect(GOO_LEVEL).toBeGreaterThan(MURK_LEVEL + 0.1);
   });
 });

@@ -52,10 +52,12 @@ const float MURK_LEVEL = ${f(MURK_LEVEL)};
 const float FEATURE_GRID = 0.13;
 // The canopy's shadow on the meadow: cast down and right (the sun is top-left), hex units.
 const vec2 CANOPY_SHADOW = vec2(0.1, 0.16);
+const float CANOPY_SCALE = 0.62;
 // The marsh's murky water and its bright goo.
-const vec3 MURK = vec3(0.19, 0.25, 0.16);
-const vec3 GOO = vec3(0.56, 0.9, 0.12);
-const vec3 GOO_LIGHT = vec3(0.86, 1.0, 0.45);
+const vec3 MURK = vec3(0.27, 0.37, 0.19);
+const vec3 WATER_LIGHT = vec3(0.4, 0.5, 0.34);
+const vec3 GOO = vec3(0.55, 0.88, 0.1);
+const vec3 GOO_LIGHT = vec3(0.72, 0.97, 0.32);
 
 struct Features {
   vec3 share;     // forest, rocks, marsh (0..1)
@@ -129,7 +131,10 @@ float canopyEdge(vec2 h, Features fe) {
 // The canopy's colour: its texture (one lookup, so its crowns stay crisp), patches of lighter
 // yellow-green and deeper green across the mass, and the crowns darker towards its edge.
 vec3 canopyColour(vec2 uv, vec2 dx, vec2 dy, vec2 h, float e) {
-  vec3 c = sampleGround(${Ground.CANOPY}, uv, dx, dy);
+  // Drawn at 1.6x the ground's scale: mock-up B's crowns are about a third of a cell wide.
+  vec3 c = sampleGround(${Ground.CANOPY}, uv * CANOPY_SCALE, dx * CANOPY_SCALE, dy * CANOPY_SCALE);
+  // Deeper mids and a touch less red: mock-up B's forest is deeper and greener than the meadow.
+  c = pow(c, vec3(1.22, 1.12, 1.0)) * 0.88;
   float patchy = valueNoise(h * 0.55 + 3.0);
   c *= mix(vec3(0.78, 0.86, 0.88), vec3(1.04, 1.04, 0.97), smoothstep(0.2, 0.8, patchy));
   float dome = crowns(h * 1.0 + 0.37);
@@ -138,20 +143,32 @@ vec3 canopyColour(vec2 uv, vec2 dx, vec2 dy, vec2 h, float e) {
   return c;
 }
 
-// The marsh (mock-up B): wet mossy grass (the land half-way to the mud texture) with murky puddles of
-// dark water, and small scattered goo pools in the puddles. deep is how far inside the marsh (0 at its
+// A smooth two-octave noise for the marsh's puddles and goo: rounded blobs, not ragged ones.
+float marshNoise(vec2 p) {
+  return 0.7 * valueNoise(p) + 0.3 * valueNoise(p * 2.1 + 5.0);
+}
+
+// The marsh (mock-up B): wet mossy grass (the land part-way to the mud texture) with murky puddles
+// of olive water catching a little light, ringed by wet brown mud, and a few small goo pools (a thin
+// dark ring, a pale lime outline, a glossy lime middle). deep is how far inside the marsh (0 at its
 // fading edge, 1 well in), so the puddles and pools keep off its edge.
 vec3 marshColour(vec3 land, vec3 mud, vec2 h, float deep) {
-  vec3 c = mix(land, mud, 0.55);
-  float n = fbm(h * 1.9 + 77.0) + 0.1 * (deep - 1.0);
-  float murk = smoothstep(MURK_LEVEL, MURK_LEVEL + 0.05, n);
-  c = mix(c, MURK, murk * 0.8);
-  // Goo: the tops of a finer noise inside the puddles, a thin dark rim round a glossy lime middle.
-  float m = fbm(h * GOO_SCALE + 131.0) + 0.18 * (deep - 1.0) + 0.05 * (murk - 1.0);
-  float rim = smoothstep(GOO_LEVEL - 0.03, GOO_LEVEL - 0.015, m);
-  float goo = smoothstep(GOO_LEVEL - 0.012, GOO_LEVEL, m);
-  c = mix(c, MURK * 0.7, rim * (1.0 - goo));
-  vec3 g = mix(GOO, GOO_LIGHT, smoothstep(GOO_LEVEL + 0.02, GOO_LEVEL + 0.07, m) * 0.7);
+  vec3 c = mix(land, mud, 0.45) * vec3(0.84, 0.92, 0.8);
+  float n = marshNoise(h * 2.2 + 77.0) + 0.12 * (deep - 1.0);
+  float bank = smoothstep(MURK_LEVEL - 0.035, MURK_LEVEL - 0.01, n);
+  float murk = smoothstep(MURK_LEVEL - 0.005, MURK_LEVEL + 0.015, n);
+  c = mix(c, c * vec3(0.78, 0.7, 0.55), bank * (1.0 - murk) * 0.7);
+  float sheen = smoothstep(0.55, 0.85, valueNoise(h * vec2(5.0, 12.0) + 19.0));
+  vec3 water = mix(MURK, WATER_LIGHT, 0.3 * sheen + 0.3 * smoothstep(MURK_LEVEL, MURK_LEVEL + 0.15, n));
+  c = mix(c, water, murk * 0.9);
+  // Goo: the tops of its own noise, about one pool in every second marsh cell's worth of ground.
+  float m = marshNoise(h * GOO_SCALE + 131.0) + 0.18 * (deep - 1.0);
+  float ring = smoothstep(GOO_LEVEL - 0.016, GOO_LEVEL - 0.006, m);
+  float goo = smoothstep(GOO_LEVEL - 0.006, GOO_LEVEL, m);
+  c = mix(c, MURK * 0.55, ring * (1.0 - goo));
+  float body = smoothstep(GOO_LEVEL + 0.001, GOO_LEVEL + 0.008, m);
+  vec3 g = mix(GOO_LIGHT, GOO, body);
+  g = mix(g, GOO_LIGHT, body * smoothstep(GOO_LEVEL + 0.04, GOO_LEVEL + 0.08, m) * 0.5);
   return mix(c, g, goo);
 }
 
@@ -188,7 +205,7 @@ vec3 drawFeatures(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float trees, float ne
         float e = canopyEdge(fh, fe);
         bool clear = occupied && length(off) < CLEARING_OUTER + 0.12;
         if (e > 0.1) {
-          if (roll < 0.09) { frame = ${PINE_FRAME} + int(kind * 4.0); cut = 0.7; size = 0.95; fade = trees; }
+          if (roll < 0.14) { frame = ${PINE_FRAME} + int(kind * 4.0); cut = 0.7; size = 0.95; fade = trees; }
         } else if (e < -0.005 && e > -0.12 && !clear) {
           if (roll < 0.8) { frame = kind < 0.75 ? ${TREE_FRAME} + int(kind / 0.75 * 4.0) : ${PINE_FRAME} + int((kind - 0.75) * 16.0); fade = trees; }
         } else if (e <= -0.12 && e > -0.34 && !clear) {
@@ -202,11 +219,11 @@ vec3 drawFeatures(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float trees, float ne
       }
       if (frame < 0 && fe.share.z > 0.2 && !(occupied && length(off) < 0.45)) {
         float wet = smoothstep(0.25, 0.75, fe.share.z);
-        // About 2 goo pools, 15 reed clumps, a log and 3 stones a marsh cell (mock-up B; 6 pools were too many).
+        // About 2 goo pools, 20 reed clumps, a log and 3 stones a marsh cell (mock-up B; 6 pools were too many).
         if (fe.share.z > 0.6 && roll < 0.04) { frame = ${GOO_FRAME} + int(kind * 4.0); size = 0.8; }
-        else if (roll < 0.04 + 0.3 * wet) { frame = ${REED_FRAME} + int(kind * 3.0); size = 0.7 + 0.3 * hash12(id + 2.2); }
-        else if (fe.share.z > 0.7 && roll < 0.36) { frame = ${LOG_FRAME}; }
-        else if (roll < 0.36 + 0.06 * wet) { frame = ${BOULDER_FRAME} + int(kind * 4.0); size = 0.6; }
+        else if (roll < 0.04 + 0.4 * wet) { frame = ${REED_FRAME} + int(kind * 3.0); size = 0.85 + 0.15 * hash12(id + 2.2); }
+        else if (fe.share.z > 0.7 && roll < 0.46) { frame = ${LOG_FRAME}; }
+        else if (roll < 0.46 + 0.06 * wet) { frame = ${BOULDER_FRAME} + int(kind * 4.0); size = 0.6; }
       }
       if (frame < 0 || fade <= 0.0) continue;
       // A smaller piece keeps its foot where it was; it shrinks inside the same frame.
