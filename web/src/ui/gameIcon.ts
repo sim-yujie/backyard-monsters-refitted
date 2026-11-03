@@ -41,6 +41,11 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * Map Room 2's neighbour defence bonus (`art-samples/mr2-bonus5/icon`): the
  * teal shield with linked cells and two up arrows (`neighbours`); `neighbours2`
  * is the hex shield with friends either side, the other option.
+ *
+ * Map Room 2's "Tilted map" button (`ui/maproom/TiltToggle.ts`,
+ * `art-samples/mr2-markers/icon`): a grass slab with hex tiles, a tree and a
+ * flag, seen at an angle (`maptilt`) while the map is tilted and from above
+ * (`mapflat`) while it is flat.
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -69,6 +74,8 @@ export const GAME_ICONS = {
   height: "Height",
   neighbours: "Neighbour defence bonus",
   neighbours2: "Neighbour defence bonus",
+  maptilt: "Tilted map",
+  mapflat: "Flat map",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;
