@@ -47,6 +47,7 @@ interface GroundUniforms {
   uCliffsReady: number;
   uRiverOn: number;
   uRiverRect: Float32Array;
+  uFog: Float32Array;
 }
 
 const QUALITY_LEVEL: Record<Quality, number> = { high: 2, medium: 1, low: 0 };
@@ -88,7 +89,15 @@ const solidSource = (css: string): CanvasSource => {
  * Without that the map stays on today's tiles by itself (plan step 2: "if the shader fails on a
  * GPU, the map falls back to tiles"). `gl` is for tests; the default makes a throwaway context.
  */
-export const groundShaderCompiles = (gl?: WebGL2RenderingContext | null): boolean => {
+export const groundShaderCompiles = (gl?: WebGL2RenderingContext | null): boolean =>
+  shaderCompiles(GROUND_VERTEX, GROUND_FRAGMENT, gl);
+
+/** Whether this browser compiles and links this WebGL2 program (`groundShaderCompiles`). */
+export const shaderCompiles = (
+  vertexSource: string,
+  fragmentSource: string,
+  gl?: WebGL2RenderingContext | null,
+): boolean => {
   let context = gl;
   if (context === undefined) {
     try {
@@ -107,8 +116,8 @@ export const groundShaderCompiles = (gl?: WebGL2RenderingContext | null): boolea
       context!.compileShader(shader);
       return context!.getShaderParameter(shader, context!.COMPILE_STATUS) ? shader : null;
     };
-    const vertex = compile(context.VERTEX_SHADER, GROUND_VERTEX.replace("in vec2 aPosition;", "precision highp float;\nin vec2 aPosition;"));
-    const fragment = compile(context.FRAGMENT_SHADER, GROUND_FRAGMENT);
+    const vertex = compile(context.VERTEX_SHADER, vertexSource.replace("in vec2 aPosition;", "precision highp float;\nin vec2 aPosition;"));
+    const fragment = compile(context.FRAGMENT_SHADER, fragmentSource);
     if (!vertex || !fragment) return false;
     const program = context.createProgram();
     if (!program) return false;
@@ -223,6 +232,16 @@ export class PaintedGround {
     uniforms.uRiverOn = on ? 1 : 0;
     uniforms.uRiverRect.set(rect);
     return true;
+  }
+
+  /** The cells' data texture, which the painted fog (`CloudLayer`) reads too. */
+  get groundData(): GroundData {
+    return this.data;
+  }
+
+  /** The colour fog cells are painted (under the painted fog's clouds, the cloud's own shade). */
+  setFogColour(colour: number): void {
+    this.uniforms.uFog.set(rgb(colour));
   }
 
   /** A zone arrived: the rivers are rebuilt on the next `updateRivers`. */
