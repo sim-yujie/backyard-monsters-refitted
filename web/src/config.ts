@@ -82,6 +82,13 @@ export const CELL_WIDTH = 150;
 export const CELL_HEIGHT = 75;
 
 /**
+ * Pointy-top cells (`MR2_HEX_SHAPE=pointy`, MR2 look plan step 1): the same
+ * 150 wide and the same 75 row step, so a cell is 100 tall from point to
+ * point (row step = 3/4 of the height) and keeps today's 3/4 view.
+ */
+export const POINTY_CELL_HEIGHT = 100;
+
+/**
  * Camera zoom limits. 1 renders cell art at its native size.
  *
  * MIN_ZOOM is set so the whole world fits a 1080p viewport. The grid is

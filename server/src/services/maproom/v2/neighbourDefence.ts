@@ -3,6 +3,8 @@ import { Tribes } from "../../../enums/Tribes.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { postgres } from "../../../server.js";
 import { generateNoise, getTerrainHeight } from "./generateMap.js";
+import { mr2HexShape } from "../../../config/MapRoom2Config.js";
+import { type HexShape, hexNeighbours } from "../../../game-rules/maproom/range.js";
 
 /**
  * Map Room 2's neighbour defence bonus (`docs/mr2-neighbours.md`): how many
@@ -10,9 +12,11 @@ import { generateNoise, getTerrainHeight } from "./generateMap.js";
  *
  * - A player's cell (main yard or outpost) counts that player's own cells.
  * - A wild monster camp counts the camps of its own tribe. A camp's tribe is
- *   `(x + y) % 4` (`wildMonsterCell.ts`), and on Map Room 2's odd-q grid only
- *   one of the six neighbours shares that sum, so a camp has at most one
- *   same-tribe neighbour: 0 when that cell is water or a player's.
+ *   `(x + y) % 4` (`wildMonsterCell.ts`), and on Map Room 2's grid only one
+ *   of the six neighbours shares that sum (flat-top odd-q: the one beside it
+ *   a row up or down; pointy-top odd-r: (x-1, y+1) on even rows, (x+1, y-1)
+ *   on odd rows), so a camp has at most one same-tribe neighbour: 0 when
+ *   that cell is water or a player's.
  *
  * The bonus each count gives is the combat rules' `neighbourDefenceBonus`.
  */
@@ -44,8 +48,13 @@ const wrap = (value: number, size: number): number => ((value % size) + size) % 
  * and the one a row up (even column) or down (odd column). The same adjacency
  * as `isAdjacentToMainYard` (`PopupTakeover.as:62-75`). The world is 800 wide,
  * an even number, so a wrapped column keeps its parity.
+ *
+ * With `MR2_HEX_SHAPE=pointy` the grid is odd-r pointy-top, and the six are the
+ * shared rules' `hexNeighbours` (`game-rules/maproom/range.ts`), the same cells
+ * the range check puts one step away.
  */
-export const mr2NeighbourCoords = (x: number, y: number): CellAt[] => {
+export const mr2NeighbourCoords = (x: number, y: number, shape: HexShape = mr2HexShape()): CellAt[] => {
+  if (shape === "pointy") return hexNeighbours(x, y, shape);
   const side = x % 2 === 0 ? y - 1 : y + 1;
   return [
     [x, y - 1],

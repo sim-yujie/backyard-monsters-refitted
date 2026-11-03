@@ -87,4 +87,14 @@ describe("the tilted map setting", () => {
     process.env.MR2_TILT = "off";
     expect(settingsOf(account() as never).mapTiltAllowed).toBe(false);
   });
+
+  test("says the world's hex shape (MR2_HEX_SHAPE, flat by default)", () => {
+    delete process.env.MR2_HEX_SHAPE;
+    expect(settingsOf(account() as never).mapHexShape).toBe("flat");
+    process.env.MR2_HEX_SHAPE = " Pointy ";
+    expect(settingsOf(account() as never).mapHexShape).toBe("pointy");
+    process.env.MR2_HEX_SHAPE = "round";
+    expect(settingsOf(account() as never).mapHexShape).toBe("flat");
+    delete process.env.MR2_HEX_SHAPE;
+  });
 });
