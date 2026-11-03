@@ -1,7 +1,7 @@
 import { LockMode } from "@mikro-orm/core";
 import type { EntityManager } from "@mikro-orm/postgresql";
 
-import { seededYardsOn, type Pace } from "../../config/BotConfig.js";
+import { LOWEST_BOT_FLOOR_LEVEL, seededYardsOn, type Pace } from "../../config/BotConfig.js";
 import { Bot } from "../../database/models/bot.model.js";
 import { Save } from "../../database/models/save.model.js";
 import { BaseType } from "../../enums/Base.js";
@@ -10,7 +10,7 @@ import type { Rng } from "../../game-rules/combat/rng.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
 import { catchUpYard } from "../yard/catchUp.js";
 import { STARTER_BUILDINGS } from "../yard/starterBase.js";
-import { BATCH_SIZE, BOT_MAX_LEVEL, BOT_MIN_LEVEL, botYardSlices, drawBot, fillPlan } from "./factory.js";
+import { BATCH_SIZE, BOT_MAX_LEVEL, botYardSlices, drawBot, fillPlan } from "./factory.js";
 import type { Persona } from "./progression.js";
 import { BOT_YARD_VERSION } from "./yardGenerator.js";
 
@@ -25,7 +25,10 @@ import { BOT_YARD_VERSION } from "./yardGenerator.js";
  *    ({@link seededYardsOn}): the seed scripts refuse, the sweep leaves
  *    seeded rows alone and an attack books them nothing.
  * 2. **The bots' yard generator**, with the levels spread over 15-40 the way
- *    the bots are (`fillPlan`), drawn exactly as the factory draws a bot.
+ *    the bots were (`fillPlan`), drawn exactly as the factory draws a bot.
+ *    They keep the lowest floor, 15 ({@link SEEDED_FLOOR}), when the bots'
+ *    floor rises (`BOTS_FLOOR_LEVEL`, owner 3 Nov 2026): they are the dev
+ *    world map, not neighbours.
  * 3. **They repair and grow like the Map Room 1 bots**, by the bot sweep's
  *    own `grow` and `repair` jobs. Each player gets a `bym.bot` row in state
  *    `seeded`, which keeps them out of everything that reads bots
@@ -41,6 +44,9 @@ import { BOT_YARD_VERSION } from "./yardGenerator.js";
  * {@link giveSeededYards} is idempotent, so it also fixes a database seeded
  * before this existed (`bun run db:seed:mr2:yards`).
  */
+
+/** Seeded players' lowest level: the lowest bot floor, whatever `BOTS_FLOOR_LEVEL` says (decision 2 above). */
+export const SEEDED_FLOOR = LOWEST_BOT_FLOOR_LEVEL;
 
 const STARTER_TYPES = new Set(STARTER_BUILDINGS.map((building) => building.t));
 
@@ -69,8 +75,8 @@ export const isBlankSeedYard = (buildingdata: BuildingDataMap | null | undefined
  */
 export const planSeededLevels = (count: number, seededByLevel: Readonly<Record<number, number>>, rng: Rng): number[] => {
   const already = Object.values(seededByLevel).reduce((sum, have) => sum + have, 0);
-  const levels = fillPlan(already + count, seededByLevel, count);
-  while (levels.length < count) levels.push(BOT_MIN_LEVEL + rng.int(BOT_MAX_LEVEL - BOT_MIN_LEVEL + 1));
+  const levels = fillPlan(already + count, seededByLevel, count, SEEDED_FLOOR);
+  while (levels.length < count) levels.push(SEEDED_FLOOR + rng.int(BOT_MAX_LEVEL - SEEDED_FLOOR + 1));
   for (let index = levels.length - 1; index > 0; index--) {
     const other = rng.int(index + 1);
     [levels[index], levels[other]] = [levels[other]!, levels[index]!];
@@ -154,7 +160,7 @@ export const giveSeededYards = async (
 
   for (let start = 0; start < blank.length; start += BATCH_SIZE) {
     const batch = blank.slice(start, start + BATCH_SIZE);
-    const drawn = batch.map((_, index) => drawBot(rng, levels[start + index]!, now, pace));
+    const drawn = batch.map((_, index) => drawBot(rng, levels[start + index]!, now, pace, false, SEEDED_FLOOR));
 
     const batchGiven = await em.fork().transactional(async (tx) => {
       const done: SeededYard[] = [];

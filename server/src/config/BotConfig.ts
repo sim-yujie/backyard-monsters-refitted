@@ -10,7 +10,17 @@ import { Env } from "../enums/Env.js";
  * - `BOTS_BRAIN`   — `on`: the bot sweep runs (grow, repair, rebalance).
  * - `BOTS_REVENGE` — `on`: an attacked bot may attack back. Off stops new
  *                    revenge and cancels pending jobs.
- * - `BOTS_TOTAL`        — how many active bots to keep (default 500).
+ * - `BOTS_FLOOR_LEVEL`  — no active bot stands below this level, and new
+ *                         bots start there (default
+ *                         {@link DEFAULT_BOTS_FLOOR_LEVEL}, a whole number
+ *                         {@link LOWEST_BOT_FLOOR_LEVEL}-{@link BOT_TOP_LEVEL};
+ *                         anything else reads as the default). Raising it
+ *                         retires the bots below it on the next daily
+ *                         rebalance ({@link botFloorLevel}).
+ * - `BOTS_TOTAL`        — how many active bots to keep (default
+ *                         {@link defaultBotsTotal}: {@link DEFAULT_BOTS_PER_LEVEL}
+ *                         for each level from the floor to 40, 185 at the
+ *                         default floor).
  * - `BOTS_PACE_SCALE`   — stretches the growth pace, {@link DAYS_ON_LEVEL}
  *                         (default 1; 0.1 grows ten times as fast, for dev).
  * - `BOTS_QUIET_RATE`   — the chance, each level a bot gains, that it goes
@@ -28,7 +38,7 @@ import { Env } from "../enums/Env.js";
  *                         rebalance on levels short of their share (default
  *                         {@link DEFAULT_BOTS_NEW_PER_DAY}).
  * - `BOTS_FRESH_PER_DAY` — how many new bots a day, on average, start at
- *                         the bottom of the level floor ({@link BOT_FLOOR_LEVEL})
+ *                         the bottom of the level floor (`BOTS_FLOOR_LEVEL`)
  *                         and grow (and quit) like players from there; each
  *                         takes the place of a quiet bot on the most crowded
  *                         level once the total is full (default
@@ -39,8 +49,8 @@ import { Env } from "../enums/Env.js";
  *                         rebalance acts: more retires its extra bots, fewer
  *                         makes new ones (default {@link DEFAULT_BOTS_LEVEL_SLACK}).
  *
- * Each level's share of the total is {@link LEVEL_WEIGHTS}: even over
- * {@link BOT_FLOOR_LEVEL}-40, none below.
+ * Each level's share of the total is {@link levelWeights}: even from the
+ * floor to 40, none below.
  *
  * Not a switch: `seeded` is whether the sweep may tend the seeded Map Room 2
  * dev players' yards (issue #233, `services/bots/seededPlayers.ts`), true
@@ -49,7 +59,6 @@ import { Env } from "../enums/Env.js";
  * Read on each call rather than once at import, so tests can flip them.
  */
 
-export const DEFAULT_BOTS_TOTAL = 500;
 /** `[PLACEHOLDER]` defaults, from the population simulation (`population.test.ts`). */
 export const DEFAULT_BOTS_GROWING_FLOW = 0.3;
 /** `[PLACEHOLDER]`: halved from 0.1 so more bots started at level 1 grow on through levels 5-30 (owner, 2026-10-23). */
@@ -61,19 +70,57 @@ export const DEFAULT_BOTS_NEW_PER_DAY = 8;
 export const DEFAULT_BOTS_FRESH_PER_DAY = 3;
 export const DEFAULT_BOTS_LEVEL_SLACK = 2;
 
+/** The top level a bot stands on; past it a bot retires (decision 17). */
+export const BOT_TOP_LEVEL = 40;
+
 /**
- * No bot stands below this level (owner, 2026-10-23). The smallest yard a
- * bot shows (`MINIMUM_YARD`, `progression.ts`: Town Hall 2, every resource
- * building and tower it allows, Housing with an army) comes at level 10-15,
- * so the floor is 15 and a bot keeps building until it has both.
+ * The lowest level `BOTS_FLOOR_LEVEL` takes (owner, 2026-10-23). The smallest
+ * yard a bot shows (`MINIMUM_YARD`, `progression.ts`: Town Hall 2, every
+ * resource building and tower it allows, Housing with an army) comes at
+ * level 10-15, so no floor goes below 15, and a bot made on the floor keeps
+ * building until it has both.
  */
-export const BOT_FLOOR_LEVEL = 15;
+export const LOWEST_BOT_FLOOR_LEVEL = 15;
+
+/**
+ * No active bot stands below this level unless `BOTS_FLOOR_LEVEL` says
+ * otherwise (owner 3 Nov 2026, was 15 from 2026-10-23): enough real players
+ * now stand on the lower levels, so the bots below 25 retire and the higher
+ * ones stay.
+ */
+export const DEFAULT_BOTS_FLOOR_LEVEL = 25;
+
+/**
+ * Players under this level are shown no bots, only real players (owner 3 Nov
+ * 2026). From it up a list takes bots from the floor up
+ * (`botLevelWindow`, `services/bots/botNeighbours.ts`).
+ */
+export const BOTS_SHOWN_FROM_LEVEL = 15;
+
+/**
+ * Active bots kept on each level from the floor up when `BOTS_TOTAL` is not
+ * set: the 300 live bots over levels 15-40 before the floor rose (owner 3 Nov
+ * 2026), so each level keeps about as many bots when the floor moves.
+ */
+export const DEFAULT_BOTS_PER_LEVEL = 300 / 26;
+
+/** The level floor as `BOTS_FLOOR_LEVEL` sets it now: a whole number 15-40, else {@link DEFAULT_BOTS_FLOOR_LEVEL}. */
+export const botFloorLevel = (raw: string | undefined = process.env.BOTS_FLOOR_LEVEL): number => {
+  const value = Number(raw?.trim());
+  return raw?.trim() && Number.isInteger(value) && value >= LOWEST_BOT_FLOOR_LEVEL && value <= BOT_TOP_LEVEL
+    ? value
+    : DEFAULT_BOTS_FLOOR_LEVEL;
+};
+
+/** `BOTS_TOTAL`'s default for a floor: {@link DEFAULT_BOTS_PER_LEVEL} on each level from it to 40, rounded. */
+export const defaultBotsTotal = (floor: number = botFloorLevel()): number =>
+  Math.round(DEFAULT_BOTS_PER_LEVEL * (BOT_TOP_LEVEL - floor + 1));
 
 /**
  * Days a bot grows on each level, index 1-40 (index 0 is unused): a real
- * player's climb (`docs/design/bot-neighbours.md` §4.4). Bots start at
- * {@link BOT_FLOOR_LEVEL}, so only levels 15-40 are walked: a bot started
- * there takes as long from 15 up as a real player does.
+ * player's climb (`docs/design/bot-neighbours.md` §4.4). Bots start at the
+ * floor (`BOTS_FLOOR_LEVEL`), so only the levels from it to 40 are walked: a
+ * bot started there takes as long from the floor up as a real player does.
  *
  * Source: the live game's 24 real players on 2026-10-23, all under 13 days
  * old (the owner's query; a player's age is an upper bound on how long they
@@ -99,12 +146,11 @@ export const DAYS_ON_LEVEL: readonly number[] = Object.freeze([
 
 /**
  * How much of the total each level 1-40 holds, index 0 is level 1
- * `[PLACEHOLDER]`: even over {@link BOT_FLOOR_LEVEL}-40, so every level there
- * has neighbours (decision 4), and none below the floor (owner, 2026-10-23).
+ * `[PLACEHOLDER]`: even from `floor` to 40, so every level there has
+ * neighbours (decision 4), and none below the floor (owner, 2026-10-23).
  */
-export const LEVEL_WEIGHTS: readonly number[] = Object.freeze(
-  Array.from({ length: 40 }, (_, index) => (index + 1 >= BOT_FLOOR_LEVEL ? 1 : 0))
-);
+export const levelWeights = (floor: number = botFloorLevel()): readonly number[] =>
+  Array.from({ length: BOT_TOP_LEVEL }, (_, index) => (index + 1 >= floor ? 1 : 0));
 
 /** Days a bot grows on each level: one number for every level (tests), or a table as {@link DAYS_ON_LEVEL}. */
 export type Pace = number | readonly number[];
@@ -136,7 +182,7 @@ export interface BotConfig {
   readonly growingFlow: number;
   /** At most this many new bots a day. */
   readonly newPerDay: number;
-  /** New growing bots a day, on average, started at the bottom of {@link BOT_FLOOR_LEVEL}; absent reads as 0. */
+  /** New growing bots a day, on average, started at the bottom of the floor level; absent reads as 0. */
   readonly freshPerDay?: number;
   /** Bots a level may sit off its share before the rebalance acts. */
   readonly levelSlack: number;
@@ -186,7 +232,7 @@ export const botConfig = (): BotConfig => ({
   fill: isSwitchOn(process.env.BOTS_FILL),
   brain: isSwitchOn(process.env.BOTS_BRAIN),
   revenge: isSwitchOn(process.env.BOTS_REVENGE),
-  total: Math.floor(positiveNumber(process.env.BOTS_TOTAL, DEFAULT_BOTS_TOTAL)) || DEFAULT_BOTS_TOTAL,
+  total: Math.floor(positiveNumber(process.env.BOTS_TOTAL, defaultBotsTotal())) || defaultBotsTotal(),
   pace: scaledPace(positiveNumber(process.env.BOTS_PACE_SCALE, 1)),
   quietRate: zeroToOne(process.env.BOTS_QUIET_RATE, DEFAULT_BOTS_QUIET_RATE),
   quietOnline: zeroToOne(process.env.BOTS_QUIET_ONLINE, DEFAULT_BOTS_QUIET_ONLINE),

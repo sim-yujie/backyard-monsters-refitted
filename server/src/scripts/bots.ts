@@ -3,13 +3,12 @@ import mikroOrmConfig from "../mikro-orm.config.js";
 import { randomBytes } from "node:crypto";
 import { MikroORM, type EntityManager } from "@mikro-orm/postgresql";
 
-import { botConfig } from "../config/BotConfig.js";
+import { botConfig, botFloorLevel } from "../config/BotConfig.js";
 import { Env } from "../enums/Env.js";
 import { mulberry32 } from "../game-rules/combat/rng.js";
 import {
   activeBotsByLevel,
   BOT_MAX_LEVEL,
-  BOT_MIN_LEVEL,
   botsMadeSince,
   botStatus,
   createBots,
@@ -18,7 +17,8 @@ import {
   fillPlan,
   retireAllBots,
 } from "../services/bots/factory.js";
-import { bornQuietShare } from "../services/bots/population.js";
+import { bornQuietShare, type RebalanceBot } from "../services/bots/population.js";
+import { planTodaysRebalance, type TodaysRebalance } from "../services/bots/sweep.js";
 
 /**
  * Makes and removes Map Room 1 bots (issue #239, `docs/design/bot-neighbours.md`
@@ -26,15 +26,17 @@ import { bornQuietShare } from "../services/bots/population.js";
  * names (`server/.env`, or `DB_NAME=... bun ...` to point it elsewhere).
  *
  *   bun src/scripts/bots.ts create --target N [--per-day N] [--dry-run]
- *       Tops the active bots up to N, spread evenly over levels 15-40, lowest
+ *       Tops the active bots up to N, spread evenly from the level floor
+ *       (`BOTS_FLOOR_LEVEL`, default 25) to 40, lowest
  *       levels first. Idempotent: it counts the bots there are and makes only
  *       the difference. --per-day caps the bots made in any 24 hours (run it
  *       daily to spread a live rollout over a few days). Each level starts
  *       with the mix of quiet and growing bots it holds once settled
  *       (`bornQuietShare`, `services/bots/population.ts`).
  *   bun src/scripts/bots.ts create --fill [--per-day N] [--dry-run]
- *       The same, up to BOTS_TOTAL (default 500).
- *   bun src/scripts/bots.ts create --levels 5,15,25 [--count N] [--dry-run]
+ *       The same, up to BOTS_TOTAL (default about 11.5 a level from the floor
+ *       to 40: 185 at floor 25).
+ *   bun src/scripts/bots.ts create --levels 25,30,35 [--count N] [--dry-run]
  *       Makes N more bots on the levels given, taken in turn (N defaults to one
  *       per level listed), whatever the target. For a few test bots; they
  *       all grow.
@@ -43,6 +45,13 @@ import { bornQuietShare } from "../services/bots/population.js";
  *       target (BOTS_TOTAL when none is given), lowest levels first.
  *   bun src/scripts/bots.ts status
  *       Active and retired bots, active bots per level, pending jobs.
+ *   bun src/scripts/bots.ts rebalance --dry-run [--seed N]
+ *       What the sweep's next daily rebalance would do with the settings as
+ *       they are now (`BOTS_FLOOR_LEVEL`, `BOTS_TOTAL`, ...): every bot it
+ *       would retire (userid, name, level, why) and how many new bots it
+ *       would make on each level. Writes nothing; the sweep runs the real
+ *       one, so only --dry-run is taken. A bot locked or under attack at the
+ *       time is left for another day, so the real one can retire fewer.
  *   bun src/scripts/bots.ts retire-all [--dry-run]
  *       The kill switch: moves every active bot off Map Room 1 at once.
  *   bun src/scripts/bots.ts delete-retired [--dry-run]
@@ -61,9 +70,10 @@ import { bornQuietShare } from "../services/bots/population.js";
 const USAGE = `Usage: bun src/scripts/bots.ts <command> [options]
   create --target N [--per-day N] [--dry-run]
   create --fill [--per-day N] [--dry-run]
-  create --levels 5,15,25 [--count N] [--dry-run]
+  create --levels 25,30,35 [--count N] [--dry-run]
   create --count N [--target N | --fill] [--dry-run]
   status
+  rebalance --dry-run [--seed N]
   retire-all [--dry-run]
   delete-retired [--dry-run]
   remove-all --yes [--dry-run]       (dev only)
@@ -113,8 +123,9 @@ export const parseArgs = (argv: readonly string[]): BotsArgs => {
         const raw = rest[++i] ?? "";
         args.levels = raw.split(",").map((part) => {
           const level = Number(part.trim());
-          if (!Number.isInteger(level) || level < BOT_MIN_LEVEL || level > BOT_MAX_LEVEL) {
-            throw new Error(`--levels takes levels ${BOT_MIN_LEVEL}-${BOT_MAX_LEVEL}, got "${part}"`);
+          const floor = botFloorLevel();
+          if (!Number.isInteger(level) || level < floor || level > BOT_MAX_LEVEL) {
+            throw new Error(`--levels takes levels ${floor}-${BOT_MAX_LEVEL}, got "${part}"`);
           }
           return level;
         });
@@ -210,6 +221,67 @@ const runCreate = async (em: EntityManager, args: BotsArgs) => {
   console.log(`Made ${made.length} bot(s).`);
 };
 
+/** One retired bot as the dry run prints it. */
+export interface RetireLine {
+  userid: number;
+  username: string;
+  level: number;
+}
+
+/**
+ * What `rebalance --dry-run` prints for a planned rebalance: the settings,
+ * each bot to retire (below the floor or off a crowded level) and the new
+ * bots per level.
+ *
+ * @param {TodaysRebalance} today - The plan (`planTodaysRebalance`)
+ * @param {Map<number, string>} names - Usernames by userid
+ * @param {number} total - `BOTS_TOTAL`
+ * @returns {string[]} The lines
+ */
+export const describeRebalance = (today: TodaysRebalance, names: ReadonlyMap<number, string>, total: number): string[] => {
+  const { bots, share, floor, plan } = today;
+  const byId = new Map<number, RebalanceBot>(bots.map((bot) => [bot.userid, bot]));
+  const retired = plan.retire.map((userid): RetireLine => ({
+    userid,
+    username: names.get(userid) ?? "?",
+    level: byId.get(userid)?.level ?? 0,
+  }));
+  const below = retired.filter((bot) => bot.level < floor);
+  const crowded = retired.filter((bot) => bot.level >= floor);
+  const made = [...Array<number>(plan.born).fill(floor), ...plan.make];
+  const left = bots.filter((bot) => !plan.retire.includes(bot.userid)).map((bot) => Math.min(bot.level, share.length));
+  const lines = [
+    `Floor: level ${floor}. Total: ${total} (${Math.min(...share.slice(floor - 1))}-${Math.max(...share)} a level from ${floor} to ${share.length}).`,
+    `Active bots now: ${bots.length}: ${histogram(bots.map((bot) => bot.level)) || "none"}`,
+    `Would retire ${retired.length}: ${below.length} below the floor, ${crowded.length} off crowded levels.`,
+    ...retired.map((bot) => `  retire ${bot.userid} ${bot.username} level ${bot.level}${bot.level < floor ? " (below the floor)" : " (crowded level)"}`),
+    `Would make ${made.length} new: ${plan.born} at the bottom of level ${floor}, ${plan.make.length} on short levels${made.length ? `: ${histogram(made)}` : ""}.`,
+    `Active after: ${left.length + made.length}: ${histogram([...left, ...made]) || "none"}`,
+  ];
+  const short = share.flatMap((want, index) => {
+    const have = left.filter((level) => level === index + 1).length + made.filter((level) => level === index + 1).length;
+    return want - have > 0 ? [`L${index + 1}:${want - have}`] : [];
+  });
+  if (short.length > 0) lines.push(`Still short of their share after today (later days make them, at most BOTS_NEW_PER_DAY a day): ${short.join(" ")}`);
+  lines.push("Dry run: nothing written.");
+  return lines;
+};
+
+const runRebalance = async (em: EntityManager, args: BotsArgs) => {
+  const config = botConfig();
+  const seed = args.seed ?? randomBytes(4).readUInt32LE(0);
+  const rng = mulberry32(seed);
+  const today = await planTodaysRebalance(em, Math.floor(Date.now() / 1000), config, () => rng.float());
+  const rows = today.plan.retire.length
+    ? await em.execute<{ userid: number; username: string }[]>(
+        `SELECT userid, username FROM bym."user" WHERE userid IN (${today.plan.retire.map(() => "?").join(", ")})`,
+        today.plan.retire
+      )
+    : [];
+  const names = new Map(rows.map((row) => [Number(row.userid), row.username]));
+  for (const line of describeRebalance(today, names, config.total)) console.log(line);
+};
+
 const runStatus = async (em: EntityManager) => {
   const status = await botStatus(em, new Date());
   console.log(`Active: ${status.active}  Retired: ${status.retired}  Made in the last 24 hours: ${status.madeToday}`);
@@ -219,14 +291,18 @@ const runStatus = async (em: EntityManager) => {
   console.log(`Pending jobs: ${jobs.length ? jobs.map(([kind, count]) => `${kind}:${count}`).join(" ") : "none"}`);
 };
 
-const run = async (args: BotsArgs) => {
+/** Runs one command (see the file comment). */
+export const run = async (args: BotsArgs) => {
   if (args.command === "remove-all" && process.env.ENV === Env.PROD) {
     throw new Error("remove-all is for dev databases only (ENV is production). Use retire-all, then delete-retired.");
   }
   if (args.command === "remove-all" && !args.yes && !args.dryRun) {
     throw new Error("remove-all deletes every bot and its mail. Add --yes to go ahead.");
   }
-  if (!["create", "status", "retire-all", "delete-retired", "remove-all"].includes(args.command)) {
+  if (args.command === "rebalance" && !args.dryRun) {
+    throw new Error("rebalance only takes --dry-run: the bot sweep runs the real one each day.");
+  }
+  if (!["create", "status", "rebalance", "retire-all", "delete-retired", "remove-all"].includes(args.command)) {
     throw new Error(`Unknown command "${args.command}"`);
   }
 
@@ -241,6 +317,9 @@ const run = async (args: BotsArgs) => {
         break;
       case "status":
         await runStatus(em);
+        break;
+      case "rebalance":
+        await runRebalance(em, args);
         break;
       case "retire-all":
       case "delete-retired":

@@ -5,28 +5,40 @@ import { MapRoomVersion } from "../../enums/MapRoom.js";
 import type { AttackDetails } from "../../controllers/base/load/modes/baseModeAttack.js";
 import { ATTACK_TIMEOUT } from "../base/isAttackActive.js";
 import { shuffle } from "../../utils/shuffle.js";
-import { BOT_FLOOR_LEVEL } from "../../config/BotConfig.js";
+import { botFloorLevel, BOTS_SHOWN_FROM_LEVEL } from "../../config/BotConfig.js";
 
 /**
  * How many levels above the floor a list always reaches for bots, so a
- * player under level 15 still gets the nearest bots: levels 15-17, about 57
- * bots at the even spread, enough for 25 places with most attackable.
+ * player below the floor still gets the nearest bots: levels 25-27 at the
+ * default floor, about 35 bots at the even spread, enough for 25 places with
+ * most attackable.
  */
 export const FLOOR_REACH = 2;
 
 /**
+ * Whether a player of `level` is shown bots at all: not under
+ * {@link BOTS_SHOWN_FROM_LEVEL} (15), where enough real players stand now
+ * (owner 3 Nov 2026).
+ */
+export const showsBots = (level: number): boolean => level >= BOTS_SHOWN_FROM_LEVEL;
+
+/**
  * The levels to take bots from for a player's neighbour window: the window,
- * but never below the floor (no bot stands there, owner 2026-10-23) and
- * always reaching at least {@link FLOOR_REACH} levels above it, so a new
- * player (levels 1-14) gets the nearest bots, 15-17, alongside the real
- * players of their own window.
+ * but never below the floor (`BOTS_FLOOR_LEVEL`, no bot stands there) and
+ * always reaching at least {@link FLOOR_REACH} levels above it, so a player
+ * below the floor (from level 15, {@link showsBots}) gets the nearest bots,
+ * 25-27 at the default floor, alongside the real players of their own window.
  *
  * @param {{ min: number; max: number }} levels - The player's neighbour window
+ * @param {number} [floor] - The level floor, `BOTS_FLOOR_LEVEL` by default
  * @returns {{ min: number; max: number }} The bots' window
  */
-export const botLevelWindow = (levels: { min: number; max: number }): { min: number; max: number } => ({
-  min: Math.max(levels.min, BOT_FLOOR_LEVEL),
-  max: Math.max(levels.max, BOT_FLOOR_LEVEL + FLOOR_REACH),
+export const botLevelWindow = (
+  levels: { min: number; max: number },
+  floor: number = botFloorLevel()
+): { min: number; max: number } => ({
+  min: Math.max(levels.min, floor),
+  max: Math.max(levels.max, floor + FLOOR_REACH),
 });
 
 /**
@@ -66,7 +78,7 @@ interface BotRow {
  * each can be attacked now (issue #236, `docs/design/bot-neighbours.md` §4.3
  * step 2). Retired bots and bots off Map Room 1 are never candidates. One
  * query on `bot_state_level`; the window holds a few hundred bots at most
- * (500 spread over levels 15-40).
+ * (`BOTS_TOTAL` spread from the floor to 40).
  *
  * @param {EntityManager} em - The entity manager to read with
  * @param {number} forUserid - The player the list is for, never their own neighbour

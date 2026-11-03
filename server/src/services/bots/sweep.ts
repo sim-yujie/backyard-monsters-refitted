@@ -1,7 +1,7 @@
 import { LockMode } from "@mikro-orm/core";
 import type { EntityManager } from "@mikro-orm/postgresql";
 
-import { botConfig, DEFAULT_BOTS_QUIET_ONLINE, type BotConfig } from "../../config/BotConfig.js";
+import { botConfig, botFloorLevel, DEFAULT_BOTS_QUIET_ONLINE, type BotConfig } from "../../config/BotConfig.js";
 import type { BotPersona } from "../../database/models/bot.model.js";
 import type { BotJobKind } from "../../database/models/botjob.model.js";
 import { Save } from "../../database/models/save.model.js";
@@ -27,7 +27,7 @@ import {
   targetAt,
   tendChampion,
 } from "./brain.js";
-import { BOT_MIN_LEVEL, createBots, evenSpread } from "./factory.js";
+import { createBots, evenSpread } from "./factory.js";
 import {
   anchorFor,
   birthsToday,
@@ -39,6 +39,8 @@ import {
   planRebalance,
   RETIRE_POSITION,
   SPREAD_TOLERANCE,
+  type RebalanceBot,
+  type RebalancePlan,
 } from "./population.js";
 import {
   giveupOf,
@@ -70,8 +72,9 @@ import { BOT_YARD_VERSION, generateBotYard } from "./yardGenerator.js";
  *    claimed in `bym.job_run` (`job = 'bots-rebalance'`, as
  *    `scripts/monthly-shiny.ts` claims its month), so one server runs it.
  *    It is not a `bot_job`: it belongs to no bot. It retires the bots of
- *    crowded levels and every bot below the level 15 floor, starts about
- *    `BOTS_FRESH_PER_DAY` new bots at the bottom of level 15 and makes new
+ *    crowded levels and every bot below the level floor (`BOTS_FLOOR_LEVEL`,
+ *    25 by default), starts about `BOTS_FRESH_PER_DAY` new bots at the
+ *    bottom of the floor level and makes new
  *    bots on short levels (`planRebalance`, `population.ts`),
  *    at most `BOTS_NEW_PER_DAY` in all.
  * 3. **Runs due jobs**, at most {@link JOBS_PER_PASS}, each in its own
@@ -238,7 +241,7 @@ export interface SweepReport {
   failed: number;
   dropped: number;
   retired: number[];
-  /** New bots made by the rebalance: those started at the floor (level 15) and those on short levels. */
+  /** New bots made by the rebalance: those started at the floor and those on short levels. */
   replaced: number[];
   /** Of `replaced`, those started at the floor. */
   born: number[];
@@ -709,19 +712,65 @@ const runOneJob = async (
 /** Today's UTC date, the rebalance's period. */
 export const rebalancePeriod = (now: number): string => at(now).toISOString().slice(0, 10);
 
+/** The active bots, their levels' shares and today's rebalance plan, from {@link planTodaysRebalance}. */
+export interface TodaysRebalance {
+  bots: RebalanceBot[];
+  /** Bots each level should hold, index 0 is level 1. */
+  share: number[];
+  floor: number;
+  plan: RebalancePlan;
+}
+
+/**
+ * Reads the active bots and plans the daily rebalance (`planRebalance`) for
+ * `config` and the level floor (`BOTS_FLOOR_LEVEL`). Writes nothing: the
+ * sweep's rebalance acts on it, `bots.ts rebalance --dry-run` prints it.
+ */
+export const planTodaysRebalance = async (
+  em: EntityManager,
+  now: number,
+  config: BotConfig,
+  rng: () => number
+): Promise<TodaysRebalance> => {
+  const rows = await em.execute<{ userid: number; level: number; level_since: Date; quiet_since: Date | null }[]>(
+    `SELECT userid, level, level_since, quiet_since FROM bym.bot WHERE state = 'active'`
+  );
+  const bots = rows.map((row) => ({
+    userid: Number(row.userid),
+    level: Number(row.level),
+    level_since: new Date(row.level_since),
+    quiet_since: row.quiet_since ? new Date(row.quiet_since) : null,
+  }));
+  const floor = botFloorLevel();
+  const share = evenSpread(config.total, floor);
+  const plan = planRebalance(
+    bots,
+    {
+      share,
+      total: config.total,
+      slack: config.levelSlack,
+      newPerDay: config.newPerDay,
+      births: birthsToday(config.freshPerDay ?? 0, rng),
+      floor,
+    },
+    now
+  );
+  return { bots, share, floor, plan };
+};
+
 /**
  * The daily rebalance (step 2 of a pass): claims the day, retires the bots
- * `planRebalance` picks off crowded levels in the same transaction, and
- * returns those retired and the levels to make new bots on; null when the day was already
- * claimed. A picked bot that is locked or under attack is left for another
- * day.
+ * `planRebalance` picks off crowded levels and below the floor in the same
+ * transaction, and returns those retired, how many to start at the floor and
+ * the levels to make new bots on; null when the day was already claimed. A
+ * picked bot that is locked or under attack is left for another day.
  */
 const rebalance = async (
   em: EntityManager,
   now: number,
   config: BotConfig,
   rng: () => number
-): Promise<{ retired: number[]; born: number; make: number[] } | null> =>
+): Promise<{ retired: number[]; born: number; make: number[]; floor: number } | null> =>
   em.fork().transactional(async (tx) => {
     const claimed = await tx.execute<{ job: string }[]>(
       `INSERT INTO bym.job_run (job, period, ran_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING RETURNING job`,
@@ -729,27 +778,7 @@ const rebalance = async (
     );
     if (claimed.length === 0) return null;
 
-    const rows = await tx.execute<{ userid: number; level: number; level_since: Date; quiet_since: Date | null }[]>(
-      `SELECT userid, level, level_since, quiet_since FROM bym.bot WHERE state = 'active'`
-    );
-    const bots = rows.map((row) => ({
-      userid: Number(row.userid),
-      level: Number(row.level),
-      level_since: new Date(row.level_since),
-      quiet_since: row.quiet_since ? new Date(row.quiet_since) : null,
-    }));
-    const share = evenSpread(config.total);
-    const plan = planRebalance(
-      bots,
-      {
-        share,
-        total: config.total,
-        slack: config.levelSlack,
-        newPerDay: config.newPerDay,
-        births: birthsToday(config.freshPerDay ?? 0, rng),
-      },
-      now
-    );
+    const { bots, share, floor, plan } = await planTodaysRebalance(tx, now, config, rng);
 
     const retired: number[] = [];
     for (const userid of plan.retire) {
@@ -777,7 +806,7 @@ const rebalance = async (
 
     const counts = share.map(() => 0);
     for (const bot of bots) if (!retired.includes(bot.userid)) counts[Math.min(bot.level, share.length) - 1]!++;
-    counts[BOT_MIN_LEVEL - 1]! += plan.born;
+    counts[floor - 1]! += plan.born;
     for (const level of plan.make) counts[level - 1]!++;
     const drifted = share.flatMap((want, index) =>
       Math.abs(counts[index]! - want) > SPREAD_TOLERANCE ? [`level ${index + 1}: ${counts[index]} of ${want}`] : []
@@ -788,7 +817,7 @@ const rebalance = async (
         drifted: drifted.join(", "),
       });
     }
-    return { retired, born: plan.born, make: plan.make };
+    return { retired, born: plan.born, make: plan.make, floor };
   });
 
 /**
@@ -868,7 +897,7 @@ export const runBotSweep = async (deps: SweepDeps): Promise<SweepReport | null> 
   if (rebalanced !== null) {
     report.rebalanced = true;
     report.retired.push(...rebalanced.retired);
-    const born = await makeBots(em, Array<number>(rebalanced.born).fill(BOT_MIN_LEVEL), now, context, true);
+    const born = await makeBots(em, Array<number>(rebalanced.born).fill(rebalanced.floor), now, context, true);
     report.born.push(...born);
     report.replaced.push(...born, ...(await makeBots(em, rebalanced.make, now, context)));
   }
