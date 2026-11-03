@@ -84,7 +84,7 @@ export type ServerMessage =
   | { type: ServerMessageType.IgnoreList; list: IgnoreEntry[] }
   | { type: ServerMessageType.Error; code: Exclude<ErrorCode, ErrorCode.Muted> }
   | { type: ServerMessageType.Error; code: ErrorCode.Muted; until: number }
-  | { type: ServerMessageType.Kicked; reason: "banned"; until: number | null; text: string }
+  | { type: ServerMessageType.Kicked; reason: "banned"; until: number | null; text: string; banReason: string }
   | { type: ServerMessageType.Notice };
 
 interface Sender { send(data: string): void; }

@@ -46,7 +46,7 @@ describe.skipIf(!dbName)("the dashboard's moderation on a real database", () => 
   const calls: string[] = [];
   const effects: ModerationEffects = {
     endSessions: async (user) => void calls.push(`endSessions ${user.userid} ${user.email}`),
-    kickFromChat: async (userid, until, text) => void calls.push(`kick ${userid} ${until} ${text}`),
+    kickFromChat: async (userid, until, text, reason) => void calls.push(`kick ${userid} ${until} ${text} | ${reason}`),
     muteInChat: async (userid, until) => void calls.push(`mute ${userid} ${until}`),
     nudge: async (userid) => void calls.push(`nudge ${userid}`),
   };
@@ -145,7 +145,7 @@ describe.skipIf(!dbName)("the dashboard's moderation on a real database", () => 
     expect(new Date((await account(PLAYER)).ban_until!).getTime()).toBe(until.getTime());
     expect(calls).toEqual([
       `endSessions ${PLAYER} modtest_${PLAYER}@test.invalid`,
-      `kick ${PLAYER} ${until.getTime()} Your account is banned until 2026-11-07 10:00 UTC. Reason: Swearing in chat`,
+      `kick ${PLAYER} ${until.getTime()} Your account is banned until 2026-11-07 10:00 UTC. Reason: Swearing in chat | Swearing in chat`,
     ]);
     expect(await mailTo(PLAYER)).toEqual([]);
 

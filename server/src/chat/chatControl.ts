@@ -19,6 +19,8 @@ export type ChatControlMessage =
       until: number | null;
       /** What the player is told. */
       text: string;
+      /** The owner's reason alone, for the game to word in the player's own time. */
+      banReason: string;
     }
   | { type: ChatControlType.Notice; userId: number }
   | {

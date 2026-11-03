@@ -170,9 +170,21 @@ describe("a ban", () => {
     clients.set(PLAYER, client);
     joinChannel(client, GLOBAL, { type: ChannelType.Global });
 
-    applyModeration({ type: ChatControlType.Kick, userId: PLAYER, until: null, text: "Your account is banned for good." });
+    applyModeration({
+      type: ChatControlType.Kick,
+      userId: PLAYER,
+      until: null,
+      text: "Your account is banned for good.",
+      banReason: "",
+    });
 
-    expect(sent).toContainEqual({ type: "kicked", reason: "banned", until: null, text: "Your account is banned for good." });
+    expect(sent).toContainEqual({
+      type: "kicked",
+      reason: "banned",
+      until: null,
+      text: "Your account is banned for good.",
+      banReason: "",
+    });
     expect(closed()).toBe(true);
     expect(clients.has(PLAYER)).toBe(false);
     expect(client.channels.size).toBe(0);

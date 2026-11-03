@@ -108,7 +108,7 @@ export interface ModerationEffects {
   /** Signs the account out everywhere (`services/auth/sessions.ts` `endAllSessions`). */
   endSessions(user: { email: string; userid: number }): Promise<void>;
   /** Closes the player's chat connection, telling them why. */
-  kickFromChat(userid: number, until: number | null, text: string): Promise<void>;
+  kickFromChat(userid: number, until: number | null, text: string, reason: string): Promise<void>;
   /** Sets the player's mute on their open chat connection (0 lifts it). */
   muteInChat(userid: number, until: number): Promise<void>;
   /** Tells the player's game there is a warning or mute to show. */
@@ -212,7 +212,7 @@ export const moderate = async (
   switch (request.kind) {
     case "ban":
       await effects.endSessions({ email: target.email, userid });
-      await effects.kickFromChat(userid, until?.getTime() ?? null, banText(until, request.reason));
+      await effects.kickFromChat(userid, until?.getTime() ?? null, banText(until, request.reason), request.reason);
       break;
     case "mute":
       await effects.muteInChat(userid, until!.getTime());

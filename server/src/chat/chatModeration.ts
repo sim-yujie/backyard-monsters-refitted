@@ -25,7 +25,7 @@ export const applyModeration = (message: ChatControlMessage): boolean => {
 
   switch (message.type) {
     case ChatControlType.Kick:
-      send(client.ws, { type: ServerMessageType.Kicked, reason: "banned", until: message.until, text: message.text });
+      send(client.ws, { type: ServerMessageType.Kicked, reason: "banned", until: message.until, text: message.text, banReason: message.banReason });
       leaveAllChannels(client);
       clients.delete(client.userId);
       client.ws.close();

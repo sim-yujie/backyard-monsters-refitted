@@ -101,7 +101,8 @@ const MODERATION_REFUSAL_WORDS = {
 /** What a ban, mute or warning does outside the database. */
 const moderationEffects: ModerationEffects = {
   endSessions: endAllSessions,
-  kickFromChat: (userId, until, text) => publishModeration({ type: ChatControlType.Kick, userId, until, text }),
+  kickFromChat: (userId, until, text, banReason) =>
+    publishModeration({ type: ChatControlType.Kick, userId, until, text, banReason }),
   muteInChat: (userId, until) => publishModeration({ type: ChatControlType.Mute, userId, until }),
   nudge: (userId) => publishModeration({ type: ChatControlType.Notice, userId }),
 };
