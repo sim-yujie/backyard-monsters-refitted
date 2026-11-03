@@ -387,7 +387,7 @@ class Menu {
       const anchor = this.element.getBoundingClientRect();
       this.list.style.setProperty("--menu-top", `${anchor.bottom}px`);
       this.list.style.setProperty("--menu-left", `${anchor.left}px`);
-      // Low on the screen (Align in a phone's building sheet, #45) it opens
+      // Low on the screen (Align in a phone's More sheet, #45) it opens
       // upward, or it would hang off the bottom of the screen.
       this.list.style.setProperty("--menu-bottom", `${window.innerHeight - anchor.top}px`);
       this.list.classList.toggle("planner-menu__list--up", anchor.bottom > window.innerHeight / 2);
@@ -1305,13 +1305,6 @@ export class PlannerBar {
   }
 
   /**
-   * How many buildings are in the plan but nowhere on the plot.
-   *
-   * Hidden at zero: an untouched plan should not carry a count of nothing.
-   * Apply is hard-blocked while it is not zero (§8, Q4), so the cell is the
-   * bar's standing answer to "why is Apply refusing me".
-   */
-  /**
    * The share of the plot the towers reach, land and air (#55): "Land 87% ·
    * Air 41%", or "No towers" when none is placed.
    */
@@ -1336,6 +1329,13 @@ export class PlannerBar {
     );
   }
 
+  /**
+   * How many buildings are in the plan but nowhere on the plot.
+   *
+   * Hidden at zero: an untouched plan should not carry a count of nothing.
+   * Apply is hard-blocked while it is not zero (§8, Q4), so the cell is the
+   * bar's standing answer to "why is Apply refusing me".
+   */
   setUnplaced(count: number): void {
     this.unplacedCell.element.hidden = count === 0;
     this.unplacedCell.set(

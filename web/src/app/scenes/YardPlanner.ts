@@ -1456,7 +1456,7 @@ export class YardPlanner {
   /**
    * Shows one sheet on a phone: More while it is open, else the one raised
    * last if it has anything in it, else whichever does. The stylesheet hides
-   * the rest; nothing is closed, so a drawer under the building sheet keeps
+   * the rest; nothing is closed, so a drawer under the coverage panel keeps
    * its search and its folds.
    */
   private applySheet(): void {

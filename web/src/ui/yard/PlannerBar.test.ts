@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PlannerTool, type PlannerState } from "@/game/yard/planner/PlannerSession";
-import type { ApplyPreview, PlanTotals } from "@/game/yard/planner/upgrades";
+import type { SelectionSummary } from "@/game/yard/planner/summary";
 import { YardView } from "@/game/yard/YardRenderer";
 import { PlannerBar, type PlannerBarActions } from "./PlannerBar";
 import { PlannerLayout } from "./plannerLayout";
@@ -42,7 +42,6 @@ const stateOf = (overrides: Partial<PlannerState> = {}): PlannerState => ({
   tool: PlannerTool.SELECT,
   selectionCount: 0,
   movedCount: 0,
-  plannedCount: 0,
   dirty: false,
   canUndo: false,
   canRedo: false,
@@ -139,13 +138,12 @@ const resourceValues = (bar: PlannerBar): string[] =>
     .slice(0, 4)
     .map((element) => element.querySelector(".planner-cost__value")?.textContent ?? "");
 
-/** A plan's totals, in the shape `planTotals` returns. */
-const totalsOf = (over: Partial<PlanTotals> = {}): PlanTotals => ({
+/** A selection summary, in the shape `summarise` returns. */
+const summaryOf = (over: Partial<SelectionSummary> = {}): SelectionSummary => ({
   needed: { r1: 20_000, r2: 15_000, r3: 5_000, r4: 0 },
   held: { r1: 50_000, r2: 1_000, r3: 5_000, r4: 0 },
   shortfall: { r1: 0, r2: 14_000, r3: 0, r4: 0 },
   seconds: 1_800,
-  longest: 900,
   shiny: 42,
   byType: [
     {
@@ -155,21 +153,7 @@ const totalsOf = (over: Partial<PlanTotals> = {}): PlanTotals => ({
       needed: { r1: 20_000, r2: 15_000, r3: 5_000, r4: 0 },
     },
   ],
-  steps: 2,
-  planned: 2,
-  ...over,
-});
-
-/** An Apply preview with nothing in it, for the cases that only need counts. */
-const previewOf = (over: Partial<ApplyPreview> = {}): ApplyPreview => ({
-  started: [],
-  finished: [],
-  waiting: [],
-  skipped: [],
-  cost: { r1: 0, r2: 0, r3: 0, r4: 0 },
-  points: 0,
-  workers: { total: 5, busyBefore: 0, busyAfter: 0 },
-  remaining: { r1: 0, r2: 0, r3: 0, r4: 0 },
+  maxed: 0,
   ...over,
 });
 
@@ -199,10 +183,10 @@ describe("the editing bar", () => {
   });
 });
 
-describe("the plan cells", () => {
-  it("reads needed against held, and marks a resource the plan is short of", () => {
+describe("the cost cells", () => {
+  it("reads needed against held, and marks a resource the selection is short of", () => {
     const bar = mount();
-    bar.setPlanSummary(totalsOf(), 5);
+    bar.setSummary(summaryOf());
 
     expect(resourceValues(bar)).toEqual(["20,000 / 50,000", "15,000 / 1,000", "5,000 / 5,000", "0 / 0"]);
 
@@ -212,42 +196,12 @@ describe("the plan cells", () => {
     expect((short[0] as HTMLElement).title).toContain("14,000 short");
   });
 
-  it("shows worker seconds, with the wall-clock lower bound in the tooltip", () => {
+  it("counts the free workers, and never promises to start anything", () => {
     const bar = mount();
-    bar.setPlanSummary(totalsOf(), 2);
-
-    const time = cell(bar, "time");
-    expect(time?.querySelector(".planner-cost__value")?.textContent).toBe("30m 0s");
-    // max(longest 900, ceil(1800 / 2)) is 900 seconds either way.
-    expect(time?.title).toContain("At least 15m 0s");
-    expect(time?.title).toContain("2 free workers");
-    expect(time?.title).toContain("lower bound");
-  });
-
-  it("counts the free workers and says what Apply would do with them", () => {
-    const bar = mount();
-    bar.setWorkers(
-      { total: 5, busy: 1 },
-      previewOf({
-        started: [{ id: 1, t: 20, from: 1, to: 2, seconds: 900, cost: { r1: 0, r2: 0, r3: 0, r4: 0 } }],
-        waiting: [{ id: 2, t: 20, from: 1, to: 2, reason: "workers" }],
-      }),
-    );
+    bar.setWorkers({ total: 5, busy: 1 });
 
     const workers = cell(bar, "workers");
     expect(workers?.querySelector(".planner-cost__value")?.textContent).toBe("4 free / 5");
-    expect(workers?.title).toContain("1 would start on Apply");
-    expect(workers?.title).toContain("1 would wait for a worker");
-    // Something waiting is a shortfall of workers, marked like any other.
-    expect(workers?.classList.contains("planner-cost__cell--short")).toBe(true);
-  });
-
-  it("keeps the workers cell plain when nothing is planned", () => {
-    const bar = mount();
-    bar.setWorkers({ total: 5, busy: 0 }, null);
-
-    const workers = cell(bar, "workers");
-    expect(workers?.querySelector(".planner-cost__value")?.textContent).toBe("5 free / 5");
     expect(workers?.title).not.toContain("would start");
     expect(workers?.classList.contains("planner-cost__cell--short")).toBe(false);
   });
@@ -264,16 +218,10 @@ describe("the plan cells", () => {
     expect(unplaced?.title).toContain("Apply is blocked");
   });
 
-  it("counts the plan in the summary sentence, and leaves it out at zero", () => {
+  it("says what is selected and moved, with no planned count", () => {
     const bar = mount();
-    const sentence = (): string =>
-      bar.actionBar.querySelector(".planner-bar__summary")?.textContent ?? "";
-
-    bar.update(stateOf({ selectionCount: 1, plannedCount: 6 }));
-    expect(sentence()).toBe("1 selected · 0 moved · 6 planned");
-
-    bar.update(stateOf({ selectionCount: 1, plannedCount: 0 }));
-    expect(sentence()).toBe("1 selected · 0 moved");
+    bar.update(stateOf({ selectionCount: 1 }));
+    expect(bar.actionBar.querySelector(".planner-bar__summary")?.textContent).toBe("1 selected · 0 moved");
   });
 });
 
@@ -988,7 +936,7 @@ describe("the phone layout (#45)", () => {
     bar.setCoverage({ towers: 6, land: 0.26, air: 0.2 });
     expect(line.textContent).toBe("Land 26% · Air 20%▾");
 
-    bar.setPlanSummary(totalsOf(), 5);
+    bar.setSummary(summaryOf());
     expect([...line.querySelectorAll(".planner-bar__cost-part")].map((part) => part.textContent)).toEqual([
       "20.0K",
       "15.0K",
@@ -1003,16 +951,47 @@ describe("the phone layout (#45)", () => {
     expect(line.getAttribute("aria-expanded")).toBe("true");
   });
 
-  it("lends Mirror, Align and Distribute to the building sheet and takes them back", () => {
+  it("lends Mirror, Align and Distribute to the selection row and takes them back", () => {
     const { bar } = phone(PlannerLayout.PORTRAIT);
     const host = document.createElement("div");
     bar.lendArrange(host);
     expect(texts(host)).toEqual(expect.arrayContaining(["Mirror ↔", "Mirror ↕", "Align ▾", "Distribute ▾"]));
     expect(mirrorButtons(bar)).toHaveLength(0);
+    // Lent, Align and Distribute show their rows in place: a menu inside a
+    // sheet that closes on any press would close before it opened.
+    expect(host.querySelectorAll(".planner-menu--inline")).toHaveLength(2);
 
     bar.setLayout(PlannerLayout.DESKTOP, false);
     expect(host.childElementCount).toBe(0);
     expect(mirrorButtons(bar)).toHaveLength(2);
+  });
+
+  it("puts the selection row at the top of More, and follows its hidden flag", () => {
+    const { bar, container } = phone(PlannerLayout.PORTRAIT);
+    const section = container.querySelector<HTMLElement>(".planner-more__section--selection")!;
+    expect(section.hidden).toBe(true);
+
+    const tools = document.createElement("div");
+    tools.append(Object.assign(document.createElement("button"), { textContent: "Select all" }));
+    bar.setSelectionTools(tools);
+    expect(section.hidden).toBe(false);
+    expect(texts(section)).toContain("Select all");
+
+    tools.hidden = true;
+    bar.setSelectionTools(tools);
+    expect(section.hidden).toBe(true);
+
+    bar.setSelectionTools(null);
+    expect(section.hidden).toBe(true);
+    expect(texts(section)).not.toContain("Select all");
+  });
+
+  it("keeps the selection section hidden off a phone", () => {
+    const { bar, container } = phone(PlannerLayout.PORTRAIT);
+    bar.setLayout(PlannerLayout.DESKTOP, false);
+    bar.setSelectionTools(document.createElement("div"));
+    const section = container.querySelector<HTMLElement>(".planner-more__section--selection");
+    expect(section?.hidden ?? true).toBe(true);
   });
 
   it("speaks of taps on a touched screen", () => {
