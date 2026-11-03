@@ -32,7 +32,7 @@ const float CLIFF_DROP = ${CLIFF_DROP.toFixed(1)};
 const float FACE = 1.5;
 const float FACE_BACK = 0.3;
 const float FACE_REPEAT = 4.5;
-const float LIP = 0.11;
+const float LIP = 0.08;
 // The third cell keeps a cliff going (instead of tapering it off) when it stands this share of
 // CLIFF_DROP above the low cell: runs of cliff read as one long rock face, as in mock-up B.
 const float CLIFF_CARRY = 0.6;
@@ -166,7 +166,7 @@ vec3 drawCliff(vec3 colour, Cliff c, vec2 h, vec2 hdx, vec2 hdy) {
   // The shadow the high ground throws on the low side's foot (and below a lip).
   float foot = depth * (1.0 - FACE_BACK);
   float shadow = (1.0 - smoothstep(foot, foot + SHADE_REACH, down)) * step(-0.02, dist);
-  colour *= 1.0 - 0.22 * shadow * c.mask;
+  colour *= 1.0 - 0.22 * shadow * c.mask * smoothstep(0.2, 0.6, facing);
 
   // The rocky lip where the face looks away: a band of rock on the high side's rim, ragged at
   // its top where the grass hangs over.
@@ -176,7 +176,7 @@ vec3 drawCliff(vec3 colour, Cliff c, vec2 h, vec2 hdx, vec2 hdy) {
     float v = 0.35 + 0.5 * clamp(-dist / ragged, 0.0, 1.0);
     vec4 rock = stripSample(0, u, v, vec2(gu.x, 0.0), vec2(gu.y, 0.0));
     vec3 lipColour = rock.a > 0.01 ? rock.rgb / rock.a : colour;
-    colour = mix(colour, lipColour * 0.92, inLip * lipShare * c.mask * rock.a);
+    colour = mix(colour, lipColour * 1.05, 0.55 * inLip * lipShare * c.mask * rock.a);
   }
 
   // The face itself.
@@ -189,6 +189,10 @@ vec3 drawCliff(vec3 colour, Cliff c, vec2 h, vec2 hdx, vec2 hdy) {
       // Lit a little by which way it faces (the strips carry their own top-left light).
       float lit = dot(normalize(vec3(n, 0.5)), normalize(HILL_SUN));
       face.rgb *= clamp(0.98 + 0.25 * lit, 0.82, 1.08);
+      // The strips' grassy tops are a bright lime: take most of their colour from the ground they
+      // hang from, so the rim reads as that ground's edge (meadow, forest floor or gravel).
+      float grassy = 1.0 - smoothstep(0.1, 0.26, v);
+      face.rgb = mix(face.rgb, colour * face.a, 0.6 * grassy);
       face *= c.mask;
       colour = colour * (1.0 - face.a) + face.rgb;
     }
