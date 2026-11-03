@@ -188,9 +188,9 @@ describe.each(SHAPES)("a world's rivers on %s-top hexes", (shape) => {
 
   test("a few rivers a world: not everywhere, not nowhere", () => {
     for (const network of networks) {
-      // Measured: about 1,300 rivers on 800 x 800 cells, two or three on a 36 x 27 screen.
-      expect(network.sources.length).toBeGreaterThan(600);
-      expect(network.sources.length).toBeLessThan(2_500);
+      // Measured: about 2,600 rivers on 800 x 800 cells, about four on a 36 x 27 screen.
+      expect(network.sources.length).toBeGreaterThan(1_500);
+      expect(network.sources.length).toBeLessThan(4_000);
       let edges = 0;
       for (const rv of network.rv) for (let d = 0; d < 3; d++) if ((rv >> (2 * d)) & 3) edges += 1;
       // Under one cell edge in fifty.

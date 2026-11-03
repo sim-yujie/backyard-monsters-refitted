@@ -48,9 +48,9 @@ export const SOURCE_MIN_HEIGHT = 150;
 /** Share of high corners the hash offers as a source (most are then too near a river). */
 export const SOURCE_SHARE = 0.02;
 /** A new source is at least this many corner steps from every river already made. */
-export const SOURCE_SPACING = 8;
+export const SOURCE_SPACING = 7;
 /** A river with fewer edges than this, before it reaches water or another river, is dropped. */
-export const MIN_RIVER_EDGES = 8;
+export const MIN_RIVER_EDGES = 6;
 /** Edges upstream (itself included) up to which a river edge is a stream, then a river. */
 export const STREAM_MAX_FLOW = 8;
 export const RIVER_MAX_FLOW = 24;
