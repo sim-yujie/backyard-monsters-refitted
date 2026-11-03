@@ -193,3 +193,19 @@ export const fogDepth = (
   }
   return total > 0 ? sum / total : 0;
 };
+
+/**
+ * The cloud picture's repeat on screen (`cloudShader.ts` `deckLevel`): about `DECK_PIXELS` screen
+ * pixels across when zoomed out, so the far sea's heaps stay a steady size, but never fewer than
+ * `DECK_MIN_CELLS` cells, so close up its biggest heaps (a third of it) are a cell or more across,
+ * as Civ V's are, not pebbles on the land.
+ */
+export const DECK_PIXELS = 520;
+export const DECK_MIN_CELLS = 4;
+
+/**
+ * log2 of the picture's repeat in cells at this zoom (a cell `cellPixels` pixels wide). The shader
+ * draws the repeat at 2^floor and twice that, cross-fading by the fraction, so it never jumps.
+ */
+export const deckLevel = (cellPixels: number): number =>
+  Math.log2(Math.max(DECK_PIXELS / Math.max(cellPixels, 1e-3), DECK_MIN_CELLS));

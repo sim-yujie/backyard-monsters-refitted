@@ -7,18 +7,18 @@ import { CLOUD_FRAGMENT, CLOUD_VERTEX } from "./cloudShader";
 import { cloudTime, fogDistances, fogInRange } from "./clouds";
 import type { GroundData } from "./GroundData";
 
-/** Codex's seamless cloud tops (`web/tools/mr2-cloud-kit`), 512 / 256 / 128 px by Quality. */
+/** Codex's seamless cloud tops (`web/tools/mr2-cloud-kit`), 1024 / 512 / 256 px by Quality. */
 const DECK_URL = `${import.meta.env.BASE_URL}maproom/painted/cloud-deck@4x.webp`;
 
 /** The cloud picture's average colour, drawn until it lands. */
-const DECK_COLOUR = [0.9, 0.89, 0.92] as const;
+const DECK_COLOUR = [0.75, 0.78, 0.85] as const;
 
 /**
  * The colour the painted ground gives fog cells while the clouds cover them: the cloud's own shade,
  * so wherever the cloud's soft edge thins over a fog cell it shows cloud, not the dark fog of the
  * tile map (`PaintedGround.setFogColour`).
  */
-export const FOG_UNDER_CLOUD = 0xd9d8e6;
+export const FOG_UNDER_CLOUD = 0xc4ccd9;
 
 const QUALITY_LEVEL: Record<Quality, number> = { high: 2, medium: 1, low: 0 };
 

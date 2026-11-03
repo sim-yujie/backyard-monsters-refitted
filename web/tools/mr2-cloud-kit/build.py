@@ -5,10 +5,12 @@ Each folder here (deck, banks) holds prompt.txt and the picture Codex painted fr
 (`bash run.sh <folder>`; the game's own clouds are attached with -i so the style matches).
 `--take` copies each art.png into source/ as a quality-95 webp (committed); the build reads source/.
 
-- deck: a seamless square of cloud tops seen from above, the painted fog (`painted/cloudShader.ts`):
-    web/public/maproom/painted/cloud-deck@4x.webp   512 px (Quality High)
-    web/public/maproom/painted/cloud-deck@2x.webp   256 px (Medium)
-    web/public/maproom/painted/cloud-deck.webp      128 px (Low)
+- deck: a seamless square of solid, sunlit cumulus seen from above (Civ V's unexplored clouds were the
+  owner's reference, 3 Nov), the painted fog (`painted/cloudShader.ts`). Graded on the way (`grade`):
+  the shade in the creases is turned from Codex's sky blue towards a cool neutral grey.
+    web/public/maproom/painted/cloud-deck@4x.webp   1024 px (Quality High)
+    web/public/maproom/painted/cloud-deck@2x.webp   512 px (Medium)
+    web/public/maproom/painted/cloud-deck.webp      256 px (Low)
 - banks: four long cloud banks painted on black, cut out (alpha from brightness, like mr2-live's
   clouds) into a sheet of two rows, two banks a row, 192 px tall, for the edge of sight (High only, like `clouds.webp`):
     web/public/maproom/live/cloud-banks.webp
@@ -87,10 +89,26 @@ def pack_grid(parts: list[np.ndarray], height: int) -> tuple[np.ndarray, list[tu
     return sheet, frames
 
 
+# The deck's shade: this share of each pixel's colour away from its own grey is kept (Codex paints
+# the creases a strong sky blue; Civ-like cloud shade is a cool, nearly neutral grey), and the grey
+# is tinted this cool.
+DECK_SATURATION = 0.55
+DECK_COOL = np.array([0.97, 0.99, 1.04], np.float32)
+
+
+def grade(rgb: np.ndarray) -> np.ndarray:
+    """Calms the deck's blue shade to a cool grey, keeping its light and dark."""
+    luma = rgb @ np.array([0.299, 0.587, 0.114], np.float32)
+    grey = luma[..., None] * DECK_COOL
+    return np.clip(grey + (rgb - luma[..., None]) * DECK_SATURATION, 0, 1)
+
+
 def main() -> None:
-    deck = Image.open(SOURCE / "deck.webp").convert("RGB")
+    graded = grade(np.asarray(Image.open(SOURCE / "deck.webp").convert("RGB")).astype(np.float32) / 255)
+    deck = Image.fromarray((graded * 255 + 0.5).astype(np.uint8), "RGB")
+    print("deck average colour", np.round(graded.mean(axis=(0, 1)), 3))
     PAINTED.mkdir(parents=True, exist_ok=True)
-    for suffix, size in (("@4x", 512), ("@2x", 256), ("", 128)):
+    for suffix, size in (("@4x", 1024), ("@2x", 512), ("", 256)):
         path = PAINTED / f"cloud-deck{suffix}.webp"
         deck.resize((size, size), Image.LANCZOS).save(path, quality=86, method=6)
         print(path.name, size, path.stat().st_size // 1024, "KB")

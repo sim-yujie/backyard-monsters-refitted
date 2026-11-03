@@ -1,4 +1,11 @@
-import { CLOUD_EDGE_HIGH, CLOUD_EDGE_LOW, CLOUD_KERNEL_RADIUS, FOG_DISTANCE_CAP } from "./clouds";
+import {
+  CLOUD_EDGE_HIGH,
+  CLOUD_EDGE_LOW,
+  CLOUD_KERNEL_RADIUS,
+  DECK_MIN_CELLS,
+  DECK_PIXELS,
+  FOG_DISTANCE_CAP,
+} from "./clouds";
 
 /**
  * The painted fog (Map Room 2 Modern look, plan step 9): one quad over the world, drawn over the
@@ -61,8 +68,20 @@ const float KERNEL_R2 = ${(CLOUD_KERNEL_RADIUS * CLOUD_KERNEL_RADIUS).toFixed(4)
 const float DISTANCE_CAP = ${FOG_DISTANCE_CAP.toFixed(1)};
 const float EDGE_LOW = ${CLOUD_EDGE_LOW.toFixed(4)};
 const float EDGE_HIGH = ${CLOUD_EDGE_HIGH.toFixed(4)};
-// The heaps' size on screen: one repeat of the cloud picture is about this many pixels across.
-const float DECK_PIXELS = 520.0;
+// The heaps' size on screen: one repeat of the cloud picture is about this many pixels across (its
+// biggest heaps are about a third of it), but never fewer than DECK_MIN_CELLS cells, so close up a
+// heap is a cell or more across, as in Civ V, not a pebble on the land.
+const float DECK_PIXELS = ${DECK_PIXELS.toFixed(1)};
+const float DECK_MIN_CELLS = ${DECK_MIN_CELLS.toFixed(1)};
+// Big masses of cloud under the heaps, MASS_REPEATS repeats of the picture across: lit on their
+// sunward side, shaded on the far side, the dips between them deeper and cooler (Medium and High).
+// They give the sea depth and hide the picture's repeat.
+const float MASS_REPEATS = 2.3;
+const float MASS_LIGHT = 0.16;
+const vec3 MASS_DIP = vec3(0.80, 0.84, 0.90);
+// The low cloud's fringe thins into streaky wisps over this much depth (cells) inside its edge, so
+// the bank still reaches as far over the seen land but ends in wisps, not a cut-out edge.
+const float WISP_DEPTH = 0.13;
 // The high bank stands back from the edge of sight by up to this many screen pixels (at least
 // UPPER_MIN and at most UPPER_MAX cells), in lobes about UPPER_LOBE times that size.
 const float UPPER_PIXELS = 45.0;
@@ -79,11 +98,13 @@ const vec2 SHADOW_DIR = vec2(0.6, 0.8);
 const float LAND_SHADOW = 0.3;
 const float LAND_SHADOW_ALPHA = 0.32;
 const float BANK_SHADOW = 0.12;
-const vec3 SHADOW_COLOUR = vec3(0.10, 0.14, 0.30);
+const vec3 SHADOW_COLOUR = vec3(0.08, 0.12, 0.22);
 // The low cloud between the land and the high bank is in the bank's shade: bluer and darker.
-const vec3 LOW_SHADE = vec3(0.94, 0.94, 0.98);
-// The bank's underside along its edge, and the sun.
-const vec3 UNDERSIDE = vec3(0.74, 0.76, 0.90);
+const vec3 LOW_SHADE = vec3(0.93, 0.94, 0.96);
+// The bank's underside and side wall along its edge (a cool neutral grey, not lavender), the sun,
+// and the way a tilted camera looks (its side walls show on edges facing down the screen).
+const vec3 UNDERSIDE = vec3(0.66, 0.71, 0.79);
+const vec2 VIEW = vec2(0.0, 1.0);
 const vec2 SUN = vec2(-0.7071, -0.7071);
 
 float hash12(vec2 p) {
@@ -202,11 +223,32 @@ float highEdge(vec2 h, float upper, vec2 stir) {
   return EDGE_HIGH + upper * (1.0 - puffsAtSize(h, upper * UPPER_LOBE * SQRT3, stir * 0.5));
 }
 
+// The cloud picture's repeat for this zoom, as log2 of cells (clouds.ts deckRepeatCells).
+float deckLevel(float cellPixels) {
+  return log2(max(DECK_PIXELS / max(cellPixels, 1e-3), DECK_MIN_CELLS));
+}
+
+// Two octaves of soft noise, 0..1.
+float fbm2(vec2 p) {
+  return 0.65 * valueNoise(p) + 0.35 * valueNoise(p * 2.03 + 17.1);
+}
+
+// How high the big cloud masses are at h (0 a dip, 1 a top), at sizes that follow the deck's, cross-
+// fading the same way so zooming does not make them swim.
+float massAt(vec2 h, float cellPixels, vec2 stir) {
+  float level = deckLevel(cellPixels);
+  float base = floor(level);
+  // Hex units per mass at the two sizes.
+  float span = exp2(base) * MASS_REPEATS * SQRT3;
+  float a = fbm2(h / span + stir * 0.2);
+  float b = fbm2(h / (span * 2.0) + 7.3 + stir * 0.1);
+  return mix(a, b, smoothstep(0.0, 1.0, level - base));
+}
+
 // The cloud picture at world point p, at the repeat size for this zoom (two sizes cross-fading).
 vec3 deckAt(vec2 p, float cellPixels, vec2 shift) {
   if (uDeckReady < 0.5) return uDeckColour;
-  float repeatCells = DECK_PIXELS / max(cellPixels, 1e-3);
-  float level = log2(max(repeatCells, 1.0));
+  float level = deckLevel(cellPixels);
   float base = floor(level);
   vec2 drift = WIND * uTime * uCellPoints;
   vec2 span0 = vec2(1.0, uAspect) * uCellPoints * exp2(base);
@@ -226,7 +268,7 @@ void main() {
   float depth = fogDepth(h);
   float eLow = depth - lowEdge(h, stir);
   float eHigh = depth - highEdge(h, upper, stir);
-  float softLow = max(fwidth(eLow) * 0.8, 0.012);
+  float softLow = max(fwidth(eLow) * 0.8, 0.02);
   float softHigh = max(fwidth(eHigh) * 0.8, 0.05 + 0.04 * upper);
   float low = smoothstep(-softLow, softLow, eLow);
   float high = smoothstep(-softHigh, softHigh, eHigh);
@@ -235,6 +277,27 @@ void main() {
   float facing = length(g) > 1e-9 ? dot(-normalize(g), SUN) : 0.0;
   vec2 gLow = vec2(dFdx(eLow), dFdy(eLow));
   float facingLow = length(gLow) > 1e-9 ? dot(-normalize(gLow), SUN) : 0.0;
+  // Edges facing down the screen show the cloud's side wall to a tilted camera.
+  float wallLow = length(gLow) > 1e-9 ? max(dot(-normalize(gLow), VIEW), 0.0) : 0.0;
+  float wallHigh = length(g) > 1e-9 ? max(dot(-normalize(g), VIEW), 0.0) : 0.0;
+
+  // The big masses (Medium and High): their height, and its slope (per mass) from the derivatives,
+  // for light from the sun. Worked out here, outside any branch, for the derivatives' sake.
+  float mass = 0.5;
+  float massSlope = 0.0;
+  if (uQuality > 0.5) {
+    mass = massAt(h, cellPixels, stir);
+    vec2 dh = vec2(dFdx(h.x), dFdy(h.y));
+    vec2 gm = vec2(dFdx(mass), dFdy(mass)) * sign(dh) / max(abs(dh), vec2(1e-6));
+    float span = exp2(floor(deckLevel(cellPixels))) * MASS_REPEATS * SQRT3;
+    massSlope = dot(gm * span, SUN);
+  }
+  // The fringe's wisps: streaks along the wind, thinning the low cloud's last WISP_DEPTH.
+  if (uQuality > 0.5) {
+    float streak = valueNoise(vec2(h.x * 0.9 + h.y * 0.35, h.y * 3.2 - h.x * 0.6) * 2.2 + stir * 3.0);
+    float fringe = smoothstep(0.0, WISP_DEPTH, eLow);
+    low *= mix(0.25 + 0.75 * streak, 1.0, fringe);
+  }
 
   // Shadows (Medium and High): the low cloud's on the land, the high bank's on the low cloud.
   float landShadow = 0.0;
@@ -255,18 +318,23 @@ void main() {
     // The low cloud: in the bank's shade, darker still where the bank's shadow falls.
     vec3 lowColour = deckAt(vWorld, cellPixels, vec2(0.0)) * LOW_SHADE * mix(vec3(1.0), UNDERSIDE, 0.75 * bankShadow);
     // Its puffs round over at the edge of sight too.
-    float rimLow = 1.0 - smoothstep(0.0, 0.18, eLow);
-    lowColour = mix(lowColour, lowColour * UNDERSIDE, rimLow * (0.35 - 0.35 * facingLow));
-    lowColour += rimLow * max(facingLow, 0.0) * 0.05;
+    float rimLow = 1.0 - smoothstep(0.0, 0.22, eLow);
+    float shadeLow = clamp(0.3 - 0.35 * facingLow + 0.3 * wallLow, 0.0, 0.75);
+    lowColour = mix(lowColour, lowColour * UNDERSIDE, rimLow * shadeLow);
+    lowColour += rimLow * max(facingLow, 0.0) * 0.08;
     // The high bank: its own heaps (the picture shifted), rounding over along its edge, lit where
     // it faces the sun, its underside in the shade.
     vec3 highColour = deckAt(vWorld, cellPixels, vec2(0.43, 0.21));
-    float rim = 1.0 - smoothstep(0.0, 0.25 * upper + 0.1, eHigh);
-    highColour = mix(highColour, highColour * UNDERSIDE, rim * (0.3 - 0.3 * facing));
-    highColour += rim * max(facing, 0.0) * 0.06;
+    float rim = 1.0 - smoothstep(0.0, 0.3 * upper + 0.12, eHigh);
+    float shade = clamp(0.3 - 0.35 * facing + 0.35 * wallHigh, 0.0, 0.8);
+    highColour = mix(highColour, highColour * UNDERSIDE, rim * shade);
+    highColour += rim * max(facing, 0.0) * 0.09;
     colour = mix(lowColour, highColour, high);
-    // Big soft light and shade across the cloud sea, so the far view is not one even sheet.
-    if (uQuality > 0.5) colour *= 0.93 + 0.1 * valueNoise(h * 0.09 + stir * 0.5);
+    // The big masses: lit on the side towards the sun, cooler and darker in the dips between them.
+    if (uQuality > 0.5) {
+      colour *= mix(MASS_DIP, vec3(1.0), smoothstep(0.15, 0.7, mass));
+      colour *= 1.0 - clamp(massSlope * MASS_LIGHT, -0.12, 0.2);
+    }
   }
 
   // Premultiplied: the cloud over its shadow on the land.
