@@ -35,6 +35,8 @@ export interface ChatLine {
   readonly ts: number;
   /** Said by this player. */
   readonly own: boolean;
+  /** Said by the game team (the server's mark). */
+  readonly gm: boolean;
 }
 
 /** A word from the client itself, such as "slow down". */
@@ -131,6 +133,28 @@ const NORMAL_CLOSURE = 1000;
 export const RATE_LIMITED_TEXT = "Easy there! Wait a moment before sending another message.";
 export const UNAVAILABLE_TEXT = "World chat is not available right now.";
 
+/** What a muted player is told when a line is turned away. */
+export const mutedText = (until: number | undefined): string => {
+  if (!until || !Number.isFinite(until)) return "Your chat is paused by the game team.";
+  const when = new Date(until).toLocaleString(undefined, {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `Your chat is paused until ${when}.`;
+};
+
+/** Word from the game team on the chat connection: a ban (signed out), or a warning to show. */
+export type TeamEvent =
+  | {
+      readonly kind: "banned";
+      readonly text: string;
+      readonly until: number | null;
+      /** The game team's reason alone. */
+      readonly reason: string;
+    }
+  | { readonly kind: "notice" };
+
 /** Visible lines: everything but the muted players' lines. */
 export const visibleEntries = (state: ChatState): ChatEntry[] =>
   state.entries.filter((entry) => entry.kind === "notice" || !state.muted.has(entry.userId));
@@ -168,6 +192,7 @@ export class ChatSession {
   private config: ChatConfig | null = null;
   private socket: ChatSocket | null = null;
   private listeners = new Set<(state: ChatState) => void>();
+  private teamListeners = new Set<(event: TeamEvent) => void>();
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   /**
@@ -207,6 +232,14 @@ export class ChatSession {
     listener(this.state);
     return () => {
       this.listeners.delete(listener);
+    };
+  }
+
+  /** Calls `listener` on each word from the game team (ban, warning); returns the way to stop. */
+  onTeam(listener: (event: TeamEvent) => void): () => void {
+    this.teamListeners.add(listener);
+    return () => {
+      this.teamListeners.delete(listener);
     };
   }
 
@@ -472,7 +505,25 @@ export class ChatSession {
           this.notice(RATE_LIMITED_TEXT);
         } else if (message.code === "invalid_channel") {
           this.refused();
+        } else if (message.code === "muted") {
+          this.update({ bounced: this.lastSaid });
+          this.notice(mutedText(message.until));
         }
+        return;
+      case "kicked": {
+        this.drop();
+        this.update({ status: ChatStatus.SIGNED_OUT });
+        const event: TeamEvent = {
+          kind: "banned",
+          text: String(message.text ?? ""),
+          until: typeof message.until === "number" ? message.until : null,
+          reason: String(message.banReason ?? ""),
+        };
+        for (const listener of [...this.teamListeners]) listener(event);
+        return;
+      }
+      case "notice":
+        for (const listener of [...this.teamListeners]) listener({ kind: "notice" });
         return;
       default:
         return;
@@ -489,6 +540,7 @@ export class ChatSession {
       body: String(wire.body ?? ""),
       ts: Number(wire.ts) || 0,
       own: this.state.self?.userId === userId,
+      gm: wire.gm === true,
     };
   }
 

@@ -12,6 +12,7 @@ import {
   validateChannel,
 } from "./chatChannels.js";
 import { getHistory, pushMessage } from "./chatHistory.js";
+import { markGameTeam, refuseIfMuted } from "./chatGameTeam.js";
 import { takeAllianceLine } from "./chatLimits.js";
 import {
   ErrorCode,
@@ -171,10 +172,10 @@ export const leaveAllChannels = (client: ChatClient) => {
  * @returns {Promise<HistoryEntry[]>} Entries ordered oldest to newest.
  */
 export const getChannelHistory = async (channel: string, info: ChannelInfo): Promise<HistoryEntry[]> => {
-  if (info.type !== ChannelType.Alliance) return await getHistory(channel);
+  if (info.type !== ChannelType.Alliance) return markGameTeam(await getHistory(channel));
 
   const em = postgres.orm.em.fork();
-  return await getAllianceMessages(info.allianceId, em);
+  return markGameTeam(await getAllianceMessages(info.allianceId, em));
 };
 
 /**
@@ -205,6 +206,8 @@ export const postMessage = async (client: ChatClient, channel: string, body: str
 
   client.lastMsgAt = now;
 
+  if (refuseIfMuted(client, now)) return;
+
   const messageBody = filter.clean(body.slice(0, MAX_MSG_LEN).trim());
 
   if (!messageBody) return;
@@ -221,6 +224,7 @@ export const postMessage = async (client: ChatClient, channel: string, body: str
     allianceImage: null,
     body: messageBody,
     messageType: AllianceMessageType.MESSAGE,
+    ...(client.gm && { gm: true }),
   };
 
   let entry: HistoryEntry;

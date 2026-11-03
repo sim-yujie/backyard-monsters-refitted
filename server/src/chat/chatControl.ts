@@ -11,6 +11,23 @@ export type ChatControlMessage =
       userId: number;
       /** The room the player's new country gives them, left alone; null leaves every country room. */
       keep: string | null;
+    }
+  | {
+      type: ChatControlType.Kick;
+      userId: number;
+      /** When the ban ends (ms), null for good. */
+      until: number | null;
+      /** What the player is told. */
+      text: string;
+      /** The owner's reason alone, for the game to word in the player's own time. */
+      banReason: string;
+    }
+  | { type: ChatControlType.Notice; userId: number }
+  | {
+      type: ChatControlType.Mute;
+      userId: number;
+      /** No lines before this (ms); 0 lifts the mute. */
+      until: number;
     };
 
 /**
@@ -47,4 +64,19 @@ export const disconnectCountryChat = async (userId: number, keep: string | null)
   await redis
     .publish(CHAT_CONTROL_CHANNEL, JSON.stringify(message))
     .catch((err) => logger.error(`Chat control publish failed for user ${userId}: ${err}`));
+};
+
+/**
+ * Tells the chat gateway about a moderation step from the dashboard
+ * (`services/admin/moderation.ts`): a ban closes the player's chat connection
+ * with the reason, a mute is applied to the open connection at once, and a
+ * warning or mute nudges their game to show its pop-up. A player with no
+ * open connection is simply not found by the gateway.
+ *
+ * @param {ChatControlMessage} message - A Kick, Notice or Mute.
+ */
+export const publishModeration = async (message: ChatControlMessage) => {
+  await redis
+    .publish(CHAT_CONTROL_CHANNEL, JSON.stringify(message))
+    .catch((err) => logger.error(`Chat control publish failed for user ${message.userId}: ${err}`));
 };

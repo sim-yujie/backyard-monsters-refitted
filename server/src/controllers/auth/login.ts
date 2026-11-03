@@ -10,6 +10,7 @@ import {
   emailPasswordErr,
   discordVerifyErr,
   userPermaBannedErr,
+  userBannedErr,
   tokenAuthFailureErr,
   loginBackoffErr,
 } from "../../errors/errors.js";
@@ -29,6 +30,7 @@ import {
   recordLoginFailure,
   rememberAddress,
 } from "../../services/auth/loginBackoff.js";
+import { banAtSignIn, banText } from "../../services/admin/moderation.js";
 
 type SessionLifetime = NonNullable<SignOptions["expiresIn"]>;
 
@@ -111,7 +113,13 @@ export const login: KoaController = async (ctx) => {
   // password, so the refusal does not say the account is a bot.
   if (await isBot(user.userid)) throw emailPasswordErr();
 
-  if (user.banned) throw userPermaBannedErr();
+  // A ban for some days lifts itself at the first sign-in after it ends
+  // (`services/admin/moderation.ts`); the anticheat's have no end or reason.
+  if (user.banned) {
+    const ban = await banAtSignIn(postgres.em.fork(), user.userid);
+    if (ban) throw ban.until || ban.reason ? userBannedErr(ban, banText(ban.until, ban.reason)) : userPermaBannedErr();
+    user.banned = false;
+  }
 
   // Generate and set the token
   const sessionLifeTime = process.env.SESSION_LIFETIME || "30d";

@@ -24,6 +24,20 @@ import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { adminHealthReport } from "../../services/health/adminHealth.js";
 import { daysBetween, readDailyStats, statsOverview, type StatsDeps } from "../../services/stats/dailyStats.js";
 import { LOG_BASE, LOG_DIR, logger } from "../../utils/logger.js";
+import { getOrCreateChatToken } from "../../chat/chatChannels.js";
+import { publishModeration } from "../../chat/chatControl.js";
+import { CHANNELS, INFERNO_CHAT_CHANNEL, countryChannelFor } from "../../config/ChatConfig.js";
+import { ChatControlType } from "../../enums/Chat.js";
+import { MapRoomVersion } from "../../enums/MapRoom.js";
+import { endAllSessions } from "../../services/auth/sessions.js";
+import {
+  listChatReports,
+  moderate,
+  parseModeration,
+  playerModeration,
+  type ModerationEffects,
+  type ModerationKind,
+} from "../../services/admin/moderation.js";
 
 /**
  * The owner's dashboard API (`docs/design/admin-dashboard-api.md`); every
@@ -75,6 +89,40 @@ const MAX_DAYS = 400;
 const intOf = (raw: unknown): number | undefined => {
   const value = Number(Array.isArray(raw) ? raw[0] : raw);
   return Number.isSafeInteger(value) ? value : undefined;
+};
+
+const MODERATION_REFUSAL_WORDS = {
+  noPlayer: "There is no such player.",
+  gameTeam: "That is a game team account.",
+  notBanned: "This player is not banned.",
+  notMuted: "This player is not muted.",
+} as const;
+
+/** What a ban, mute or warning does outside the database. */
+const moderationEffects: ModerationEffects = {
+  endSessions: endAllSessions,
+  kickFromChat: (userId, until, text, banReason) =>
+    publishModeration({ type: ChatControlType.Kick, userId, until, text, banReason }),
+  muteInChat: (userId, until) => publishModeration({ type: ChatControlType.Mute, userId, until }),
+  nudge: (userId) => publishModeration({ type: ChatControlType.Notice, userId }),
+};
+
+/** The dashboard chat panel's rooms: every world room, and the owner's country room. */
+const GLOBAL_ROOMS: readonly { channel: string; label: string }[] = [
+  { channel: CHANNELS[MapRoomVersion.V2]!, label: "Map Room 2" },
+  { channel: CHANNELS[MapRoomVersion.V3]!, label: "Map Room 3" },
+  { channel: CHANNELS[MapRoomVersion.V1]!, label: "Map Room 1" },
+  { channel: INFERNO_CHAT_CHANNEL, label: "Inferno" },
+];
+
+/** The player id in the path, or null after answering 404. */
+const playerId = (ctx: Context): number | null => {
+  const id = intOf(ctx.params.id);
+  if (id === undefined || id < 1) {
+    refuse(ctx, Status.NOT_FOUND, MODERATION_REFUSAL_WORDS.noPlayer, "noPlayer");
+    return null;
+  }
+  return id;
 };
 
 /** The report id in the path, or null after answering 404. */
@@ -192,6 +240,50 @@ export const mountAdminRoutes = (router: Router): void => {
       award: done.award,
       already: done.outcome === "already",
       ...(fromReport !== null && { report: await getBugReport(em, fromReport) }),
+    });
+  });
+
+  // Moderation (services/admin/moderation.ts): chat reports, a player's log,
+  // warn, mute and ban, and the chat panel's sign-in to the chat server.
+  router.get(`${admin}/chatreports`, apiVersion, adminOnly, async (ctx) => {
+    ok(ctx, { ...(await listChatReports(postgres.em.fork(), { before: intOf(ctx.query.before), limit: intOf(ctx.query.limit) })) });
+  });
+
+  router.get(`${admin}/players/:id/moderation`, apiVersion, adminOnly, async (ctx) => {
+    const id = playerId(ctx);
+    if (id === null) return;
+    const player = await playerModeration(postgres.em.fork(), id);
+    if (!player) return refuse(ctx, Status.NOT_FOUND, MODERATION_REFUSAL_WORDS.noPlayer, "noPlayer");
+    ok(ctx, { player });
+  });
+
+  router.post(`${admin}/players/:id/:kind`, apiVersion, adminOnly, async (ctx) => {
+    const id = playerId(ctx);
+    if (id === null) return;
+    const kind = ctx.params.kind as ModerationKind;
+    if (!["warn", "mute", "unmute", "ban", "unban"].includes(kind)) {
+      return refuse(ctx, Status.NOT_FOUND, "There is no such step.", "notFound");
+    }
+    const request = parseModeration(kind, ctx.request.body);
+    if (!request.ok) return refuse(ctx, Status.BAD_REQUEST, request.message, "badRequest");
+    const em = postgres.em.fork();
+    const done = await moderate(em, id, request.value, ctx.authUser.userid, moderationEffects);
+    if (done.outcome !== "done") {
+      const status = done.outcome === "noPlayer" ? Status.NOT_FOUND : Status.CONFLICT;
+      return refuse(ctx, status, MODERATION_REFUSAL_WORDS[done.outcome], done.outcome);
+    }
+    ok(ctx, { player: await playerModeration(em, id) });
+  });
+
+  router.post(`${admin}/chat/session`, apiVersion, adminOnly, async (ctx) => {
+    const server = process.env.CHAT_WS_HOST;
+    if (!server) return refuse(ctx, Status.CONFLICT, "Chat is switched off on this server.", "noChat");
+    const country = countryChannelFor(ctx.authUser.country);
+    ok(ctx, {
+      server,
+      userId: ctx.authUser.userid,
+      token: await getOrCreateChatToken(ctx.authUser.userid),
+      rooms: [...GLOBAL_ROOMS, ...(country ? [{ channel: country, label: ctx.authUser.country! }] : [])],
     });
   });
 

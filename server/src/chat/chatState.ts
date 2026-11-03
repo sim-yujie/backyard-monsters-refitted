@@ -32,6 +32,10 @@ export interface ChatClient {
   picSquare: string | null;
   channels: Map<string, ChannelInfo>;
   lastMsgAt: number;
+  /** One of `ADMIN_USER_IDS`: their lines carry the game team's mark (`gm`). */
+  gm?: boolean;
+  /** No lines accepted before this time (ms since the epoch); 0 or absent when not muted. */
+  mutedUntil?: number;
 }
 
 /**
