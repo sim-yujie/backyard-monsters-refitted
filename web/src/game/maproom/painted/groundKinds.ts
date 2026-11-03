@@ -31,7 +31,7 @@ export const SHADER_TEXTURES: readonly GroundTexture[] = [
   GroundTexture.SAND,
   GroundTexture.ROCK,
   GroundTexture.MARSH,
-  GroundTexture.FOREST_FLOOR,
+  GroundTexture.CANOPY,
   GroundTexture.SNOW,
   GroundTexture.MEADOW_PLAIN,
   GroundTexture.SHALLOWS,
@@ -43,7 +43,9 @@ export const SHADER_TEXTURES: readonly GroundTexture[] = [
 /**
  * A cell's ground, by sampler index in {@link SHADER_TEXTURES} (0..9), plus two flat colours the
  * shader paints itself: fog (out of sight) and not loaded yet. Samplers 10 and 11 (wet sand, foam)
- * are the coast's (plan step 3): no cell wears them.
+ * are the coast's (plan step 3): no cell wears them. Samplers 4 and 5 (marsh mud, canopy) are the
+ * land features' (plan step 6, `canopy.ts`): no cell wears them either; the shader lays them over
+ * the feature cells' own ground by the features' smooth share, so they blend into the meadow.
  */
 export const Ground = {
   MEADOW: 0,
@@ -51,7 +53,7 @@ export const Ground = {
   SAND: 2,
   ROCK: 3,
   MARSH: 4,
-  FOREST_FLOOR: 5,
+  CANOPY: 5,
   SNOW: 6,
   MEADOW_PLAIN: 7,
   SHALLOWS: 8,
@@ -60,17 +62,6 @@ export const Ground = {
   UNLOADED: 15,
 } as const;
 export type Ground = (typeof Ground)[keyof typeof Ground];
-
-/**
- * Map Room 2's land feature codes (`lf`, server `game-rules/combat/landFeatures.ts`): 1 forest,
- * 2 rocks, 3 marsh; the rest (resource nodes) stand on open ground. Sent only with the server's
- * `MR2_LAND_FEATURES` switch on; without it every land cell takes its ground from its height.
- */
-const LAND_FEATURE_GROUND: Record<number, Ground> = {
-  1: Ground.FOREST_FLOOR,
-  2: Ground.ROCK,
-  3: Ground.MARSH,
-};
 
 /**
  * Ground by height, the server's terrain bands (`cellVisuals.ts` `TERRAIN_BANDS`): water up to
@@ -87,17 +78,25 @@ export const groundOfHeight = (height: number): Ground => {
   return Ground.SNOW;
 };
 
-/** A cell's ground: fog, not loaded, its land feature, or its height band. */
+/**
+ * Map Room 2's land feature codes (`lf`, server `game-rules/combat/landFeatures.ts`): 1 forest,
+ * 2 rocks, 3 marsh; the rest (resource nodes) stand on open ground. Sent only with the server's
+ * `MR2_LAND_FEATURES` switch on. The feature travels in the texel's own channel; the shader paints
+ * the canopy, rocky ground and marsh over the cell's ground (`canopy.ts`).
+ */
+export const LandFeature = { FOREST: 1, ROCKS: 2, MARSH: 3 } as const;
+
+/**
+ * A cell's ground: fog, not loaded, or its height band. A forest's ground (seen in a camp's
+ * clearing and where the canopy's edge wanders) is lush meadow, unless the cell is high rock or snow.
+ */
 export const groundOf = (cell: MapCell | undefined): Ground => {
   if (cell === undefined) return Ground.UNLOADED;
   if (isFogCell(cell)) return Ground.FOG;
-  const height = cell.i;
-  const water = height <= 99;
+  const ground = groundOfHeight(cell.i);
   const feature = (cell as { lf?: number }).lf;
-  if (!water && feature !== undefined && LAND_FEATURE_GROUND[feature] !== undefined) {
-    return LAND_FEATURE_GROUND[feature]!;
-  }
-  return groundOfHeight(height);
+  if (feature === LandFeature.FOREST && (ground === Ground.SAND || ground === Ground.MEADOW)) return Ground.LUSH;
+  return ground;
 };
 
 /**
