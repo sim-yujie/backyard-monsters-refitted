@@ -329,6 +329,7 @@ export class MapRenderer {
     }
     const painted = this.painted !== null;
     setFlatGround(painted);
+    this.live.setPaintedWater(painted);
     this.raster.sprite.visible = !painted;
     if (this.lastTier !== null && this.lastTier !== LodTier.RASTER) this.ground.visible = !painted;
     this.range.invalidate();

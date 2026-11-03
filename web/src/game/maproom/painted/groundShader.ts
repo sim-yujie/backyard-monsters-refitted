@@ -150,7 +150,7 @@ const float BAND_LOW = 0.05;
 // Coast and sea (hex units unless said): the beach's width on the land side; how far into the sea
 // the turquoise reaches (as the land's share of the weights); the plain sea's mix towards the
 // shallows colour before it deepens; the surf lines' spacing and speed (lines a second).
-const float BEACH = 0.65;
+const float BEACH = 0.8;
 const float SHALLOWS_REACH = 0.38;
 const float MID_SEA = 0.5;
 const float SURF_SPACING = 0.2;
@@ -163,16 +163,23 @@ const vec3 FOAM_WHITE = vec3(0.97, 0.99, 1.0);
 // grid squares with a rock near the coast and further out, and of details on Medium.
 const float DECAL_GRID = 0.21;
 const float DECAL_SIZE = 0.18;
-const float ROCK_GRID = 0.4;
+const float ROCK_GRID = 0.45;
 const float ROCK_SIZE = 0.3;
 const float SPRITE_ROWS = 5.0;
-const float CLEAR = 0.66;
-const float DECAL_MARGIN = 0.22;
-const float DECAL_SHORE = 0.45;
+const float CLEAR = 0.45;
+const float DECAL_MARGIN = 0.1;
+const float DECAL_SHORE = 0.75;
 const float ROCK_OFFSHORE = 0.4;
 const float ROCKS_NEAR = 0.6;
 const float ROCKS_FAR = 0.07;
 const float DECALS_MEDIUM = 0.45;
+// Stones and sea rocks darkened towards mock-up B's grey (a power on the colour keeps the white
+// foam white); the bigger mossy stones' size; the turquoise pool and foam ring round a rock's foot.
+const float STONE_GAMMA = 1.45;
+const float ROCK_GAMMA = 1.6;
+const float BOULDER_SIZE = 1.3;
+const float BOULDER_SHARE = 0.3;
+const vec3 POOL = vec3(0.24, 0.74, 0.8);
 
 // The weights of p in the triangle (0, b, c).
 vec3 barycentric(vec2 p, vec2 b, vec2 c) {
@@ -338,14 +345,20 @@ vec4 trueCellAt(vec2 hh, out vec2 offset) {
   return cellAt(toOffset(qr));
 }
 
+// A premultiplied sprite's colour raised to a power: greys go darker, white foam stays white.
+vec3 darken(vec4 sprite, float power) {
+  if (sprite.a < 0.004) return sprite.rgb;
+  return pow(sprite.rgb / sprite.a, vec3(power)) * sprite.a;
+}
+
 // Which ground detail (sprite frame 0..8) a ground wears for hash r, or -1 for none: 0 1 2
 // flower patches, 3 tall tuft, 4 tuft, 5 seed tuft, 6 pebbles, 7 sand slabs, 8 mossy stone.
 int decalFrame(int g, float r) {
   if (g == ${Ground.MEADOW} || g == ${Ground.MEADOW_PLAIN}) {
-    return r < 0.17 ? 0 : r < 0.31 ? 1 : r < 0.46 ? 2 : r < 0.63 ? 4 : r < 0.74 ? 3 : r < 0.84 ? 5 : r < 0.93 ? 6 : 8;
+    return r < 0.15 ? 0 : r < 0.27 ? 1 : r < 0.4 ? 2 : r < 0.54 ? 4 : r < 0.63 ? 3 : r < 0.71 ? 5 : r < 0.83 ? 6 : 8;
   }
   if (g == ${Ground.LUSH}) return r < 0.3 ? 4 : r < 0.5 ? 3 : r < 0.64 ? 0 : r < 0.78 ? 2 : r < 0.9 ? 5 : 8;
-  if (g == ${Ground.SAND}) return r < 0.25 ? 7 : r < 0.7 ? 6 : r < 0.9 ? 8 : 4;
+  if (g == ${Ground.SAND}) return r < 0.18 ? 7 : r < 0.55 ? 6 : r < 0.92 ? 8 : 4;
   if (g == ${Ground.ROCK}) return r < 0.5 ? 6 : r < 0.85 ? 8 : 4;
   if (g == ${Ground.MARSH}) return r < 0.45 ? 3 : r < 0.8 ? 5 : 4;
   if (g == ${Ground.FOREST_FLOOR}) return r < 0.5 ? 4 : r < 0.8 ? 3 : 8;
@@ -358,7 +371,7 @@ float decalDensity(int g) {
   if (g == ${Ground.MEADOW_PLAIN} || g == ${Ground.LUSH}) return 0.45;
   if (g == ${Ground.ROCK} || g == ${Ground.MARSH}) return 0.4;
   if (g == ${Ground.FOREST_FLOOR}) return 0.3;
-  if (g == ${Ground.SAND}) return 0.32;
+  if (g == ${Ground.SAND}) return 0.5;
   return 0.0;
 }
 
@@ -374,8 +387,12 @@ vec3 drawDecals(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float fade) {
       vec2 id = first + vec2(float(i), float(j));
       float pick = hash12(id * 1.13 + 0.71);
       if (pick > 0.55 * density) continue;
-      vec2 foot = (id + vec2(hash12(id + 17.3), hash12(id + 41.9))) * grid;
-      float s = base * (0.85 + 0.3 * hash12(id + 5.17));
+      // Some squares hold a bigger boulder: its foot stays near the square's middle, so the
+      // boulder never reaches past the two squares each way this pixel looks at.
+      bool boulder = hash12(id + 88.8) < BOULDER_SHARE;
+      vec2 jitter = vec2(hash12(id + 17.3), hash12(id + 41.9));
+      vec2 foot = (id + (boulder ? 0.5 + (jitter - 0.5) * vec2(0.6, 0.35) : jitter)) * grid;
+      float s = base * (0.85 + 0.3 * hash12(id + 5.17)) * (boulder ? BOULDER_SIZE : 1.0);
       vec2 local = (p - foot) / s + vec2(0.5, 1.0);
       if (local.x < 0.0 || local.x > 1.0 || local.y < 0.0 || local.y > 1.0) continue;
       vec2 off;
@@ -384,20 +401,26 @@ vec3 drawDecals(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float fade) {
       if (occupiedOf(t) && length(off) < CLEAR) continue;
       Blend fb = blendAt(foot / uUnit);
       Coast fc = coastOf(fb);
-      if (!fc.known || (fc.both && fc.s > -0.12)) continue;
+      if (!fc.known || (fc.both && fc.s > -0.16)) continue;
       int k = fb.claim.x >= fb.claim.y && fb.claim.x >= fb.claim.z ? 0 : fb.claim.y >= fb.claim.z ? 1 : 2;
       int g = fb.g[k];
-      // On the beach band, beach details (pebbles, stones, sand slabs) whatever the ground.
-      if (fc.both && fc.s > -DECAL_SHORE) g = ${Ground.SAND};
-      float other = -9.0;
-      for (int m = 0; m < 3; m++) {
-        if (fb.g[m] != fb.g[k]) other = max(other, fb.claim[m]);
+      // On the beach band, beach details (pebbles, stones, sand slabs) whatever the ground;
+      // elsewhere the foot must be a little inside its ground.
+      if (fc.both && fc.s > -DECAL_SHORE) {
+        g = ${Ground.SAND};
+      } else {
+        float other = -9.0;
+        for (int m = 0; m < 3; m++) {
+          if (fb.g[m] != fb.g[k]) other = max(other, fb.claim[m]);
+        }
+        if (fb.claim[k] - other < DECAL_MARGIN) continue;
       }
-      if (fb.claim[k] - other < DECAL_MARGIN) continue;
       if (pick > decalDensity(g) * density) continue;
       int frame = decalFrame(g, hash12(id + 63.1));
+      if (boulder) frame = g == ${Ground.MARSH} ? -1 : 8;
       if (frame < 0) continue;
       vec4 sprite = spriteSample(frame, p, foot, s, hash12(id + 9.9) < 0.5, wdx, wdy) * fade;
+      if (frame == 6 || frame == 8) sprite.rgb = darken(sprite, STONE_GAMMA);
       colour = colour * (1.0 - sprite.a) + sprite.rgb;
     }
   }
@@ -409,7 +432,8 @@ vec3 drawDecals(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float fade) {
 vec3 drawRocks(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float fade) {
   float grid = ROCK_GRID * uCellPoints;
   float base = ROCK_SIZE * uCellPoints;
-  vec2 first = floor(vec2(p.x / grid - 0.5, p.y / grid));
+  // Rows from a little above the pixel: the pool reaches a little below a rock's foot.
+  vec2 first = floor(vec2(p.x / grid - 0.5, p.y / grid - 0.15));
   for (int j = 0; j < 2; j++) {
     for (int i = 0; i < 2; i++) {
       vec2 id = first + vec2(float(i), float(j));
@@ -418,7 +442,10 @@ vec3 drawRocks(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float fade) {
       vec2 foot = (id + vec2(hash12(id + 2.9), hash12(id + 8.1))) * grid;
       float s = base * (0.8 + 0.35 * hash12(id + 6.6));
       vec2 local = (p - foot) / s + vec2(0.5, 1.0);
-      if (local.x < 0.0 || local.x > 1.0 || local.y < 0.0 || local.y > 1.0) continue;
+      // The pool round the foot: an ellipse a little wider than the sprite's own foam.
+      float pool = length((p - foot + vec2(0.0, 0.08 * s)) / (vec2(0.55, 0.2) * s));
+      bool inFrame = local.x >= 0.0 && local.x <= 1.0 && local.y >= 0.0 && local.y <= 1.0;
+      if (!inFrame && pool > 1.15) continue;
       vec2 off;
       vec2 footHex = foot / uUnit;
       vec2 footCell = roundAxial(axialOf(footHex));
@@ -439,7 +466,15 @@ vec3 drawRocks(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float fade) {
       int frame = near
         ? (r < 0.2 ? 0 : r < 0.38 ? 1 : r < 0.54 ? 2 : r < 0.68 ? 6 : r < 0.8 ? 3 : r < 0.9 ? 7 : r < 0.95 ? 4 : 5)
         : (r < 0.35 ? 3 : r < 0.6 ? 6 : r < 0.8 ? 4 : 5);
+      // Seated in the sea: lighter turquoise water round the foot and a broken foam ring.
+      float wob = valueNoise(p / s * 3.0 + vec2(uTime * 0.4, 0.0));
+      float lit = (1.0 - smoothstep(0.5, 1.2, pool)) * fade;
+      colour = mix(colour, POOL, lit * 0.6);
+      float ring = smoothstep(0.52, 0.74, pool) * (1.0 - smoothstep(0.92, 1.12, pool)) * smoothstep(0.08, 0.4, wob);
+      colour = mix(colour, FOAM_WHITE, ring * 0.95 * fade);
+      if (!inFrame) continue;
       vec4 sprite = spriteSample(12 + frame, p, foot, s, hash12(id + 4.4) < 0.5, wdx, wdy) * fade;
+      sprite.rgb = darken(sprite, ROCK_GAMMA);
       colour = colour * (1.0 - sprite.a) + sprite.rgb;
     }
   }
@@ -515,7 +550,7 @@ void main() {
     vec3 foamTexture = sampleGround(${FOAM}, uv * 1.7 + uTime * vec2(0.012, 0.0), dx * 1.7, dy * 1.7);
     float white = smoothstep(0.55, 0.9, dot(foamTexture, vec3(0.299, 0.587, 0.114)));
     float wobble = valueNoise(h * 4.5 + vec2(uTime * 0.35, 0.0));
-    float edgeWidth = 0.07 + 0.07 * wobble;
+    float edgeWidth = 0.11 + 0.09 * wobble;
     float edge = smoothstep(-0.05, -0.005, dist) * (1.0 - smoothstep(edgeWidth * 0.4, edgeWidth, dist));
     float phase = fract(dist / SURF_SPACING + uTime * SURF_SPEED + 0.7 * valueNoise(h * 1.6 + 3.0));
     float crest = smoothstep(0.0, 0.1, phase) * (1.0 - smoothstep(0.18, 0.4, phase));
@@ -523,7 +558,7 @@ void main() {
     float broken = smoothstep(0.15, 0.55, valueNoise(h * 3.7 + 7.0 + uTime * 0.05));
     float lines = crest * reachOut * broken * smoothstep(0.04, 0.09, dist);
     float foam = clamp(edge * (0.8 + 0.2 * white) + lines * (0.8 + 0.2 * white), 0.0, 1.0) * coastMask;
-    colour = mix(colour, FOAM_WHITE, foam * 0.92);
+    colour = mix(colour, FOAM_WHITE, foam * 0.97);
   }
 
   // Ground details and sea rocks, once their sheet is in; details fade out as cells get small.

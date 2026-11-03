@@ -48,6 +48,8 @@ export class LiveMap {
   private art: LiveTextures | null = null;
   private renderer: Renderer | null = null;
   private plan: LivePlan;
+  /** The painted ground (`../painted/`) draws its own water and surf: no glints or foam then. */
+  private paintedWater = false;
   /** Bumped whenever the plan changes, so art that lands for an old plan is dropped. */
   private generation = 0;
   private readonly unsubscribe: () => void;
@@ -168,6 +170,17 @@ export class LiveMap {
     this.overlay.destroy({ children: true });
   }
 
+  /**
+   * The painted ground is on (it paints the sea itself) or off: the water sheet and its sprites
+   * are neither downloaded nor built while it is on. The renderer rebuilds its chunks after.
+   */
+  setPaintedWater(on: boolean): void {
+    if (on === this.paintedWater) return;
+    this.paintedWater = on;
+    this.stop();
+    this.start();
+  }
+
   private setQuality(level: Quality): void {
     const plan = planFor(liveLevelFor(classicLook(), level));
     if (plan.level === this.plan.level) return;
@@ -180,7 +193,8 @@ export class LiveMap {
   private start(): void {
     if (!this.active || !this.renderer) return;
     const generation = ++this.generation;
-    void loadLiveArt(this.plan).then((art) => {
+    const plan = this.paintedWater ? { ...this.plan, water: false, foam: false } : this.plan;
+    void loadLiveArt(plan).then((art) => {
       if (generation !== this.generation) {
         destroyLiveArt(art);
         return;
