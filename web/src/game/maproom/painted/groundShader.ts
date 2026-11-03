@@ -143,15 +143,28 @@ const vec2 NEIGHBOURS[6] = vec2[6](
 // Ground blending, in hex units (corner radius 1): how far the noise pushes the point, the edge
 // noise's size and strength, and the fade width on Medium/High and on Low.
 const float WARP = 0.6;
+const float BEND = 0.3;
+const float BEND_FREQ = 1.3;
 const float EDGE_FREQ = 2.2;
 const float EDGE_NOISE = 0.8;
 const float BAND = 0.08;
 const float BAND_LOW = 0.05;
+// The weight over which a cell's edge noise fades in (from 0, where it joins or leaves the three).
+const float CLAIM_FADE = 0.3;
+
+// A cell's own seed in the edge noise: far apart for neighbours, so their noises are unrelated.
+vec2 cellSeed(ivec2 cell) {
+  vec2 c = vec2(cell);
+  return vec2(hash12(c + 0.5), hash12(c.yx + 17.3)) * 173.0;
+}
 
 // Coast and sea (hex units unless said): the beach's width on the land side; how far into the sea
 // the turquoise reaches (as the land's share of the weights); the plain sea's mix towards the
 // shallows colour before it deepens; the surf lines' spacing and speed (lines a second).
-const float BEACH = 0.8;
+// The beach: it reaches inland to where the water's share round a point (waterNear) falls to
+// between BEACH_FAR (where the beach is widest) and BEACH_NEAR (narrowest), about 0.5-1 hex units.
+const float BEACH_FAR = 0.05;
+const float BEACH_NEAR = 0.2;
 const float SHALLOWS_REACH = 0.38;
 const float MID_SEA = 0.5;
 const float SURF_SPACING = 0.2;
@@ -160,7 +173,8 @@ const vec3 FOAM_WHITE = vec3(0.97, 0.99, 1.0);
 
 // Sprites: grid squares and frame sizes as shares of a cell's width; the sheet's rows; the hex
 // distance round an occupied cell's middle kept clear of details; how far (claim units) a detail's
-// foot must be inside its ground and inland of the coast, and a rock's out from it; the share of
+// foot must be inside its ground; the share of the beach's end (beachEnd) from which a foot wears
+// beach details; how far (claim units) a rock's foot must be out from the coast; the share of
 // grid squares with a rock near the coast and further out, and of details on Medium.
 const float DECAL_GRID = 0.21;
 const float DECAL_SIZE = 0.18;
@@ -169,7 +183,7 @@ const float ROCK_SIZE = 0.3;
 const float SPRITE_ROWS = 5.0;
 const float CLEAR = 0.45;
 const float DECAL_MARGIN = 0.1;
-const float DECAL_SHORE = 0.75;
+const float DECAL_SHORE = 0.8;
 const float ROCK_OFFSHORE = 0.4;
 const float ROCKS_NEAR = 0.6;
 const float ROCKS_FAR = 0.07;
@@ -247,7 +261,10 @@ Blend blendAt(vec2 h) {
   Blend b;
   // The point is pushed about by smooth noise first, so grounds wander across the hex sides (on
   // Low too: it is a little arithmetic and no texture reads, and without it Low looked like tiles).
-  vec2 hp = h + WARP * (vec2(fbm(h * 0.6), fbm(h * 0.6 + 19.7)) - 0.5) * 2.0;
+  // A second, quicker push bends each hex side along its length, so no edge runs straight for a
+  // whole side (with the slow push alone a side only moved over, still straight).
+  vec2 hp = h + WARP * (vec2(fbm(h * 0.6), fbm(h * 0.6 + 19.7)) - 0.5) * 2.0
+    + BEND * (vec2(valueNoise(h * BEND_FREQ + 41.3), valueNoise(h * BEND_FREQ + 77.9)) - 0.5) * 2.0;
 
   // The three cells round this point: its own hex and the two neighbours it leans towards. Their
   // centres make the triangle the point sits in, and the point's place in that triangle weighs the
@@ -279,14 +296,18 @@ Blend blendAt(vec2 h) {
   b.height = vec3(t0.r, t1.r, t2.r) * 255.0;
 
   // Each cell's claim: its weight, roughened by a noise of its own (continuous, as it hangs on the
-  // cell and the world position only).
+  // cell and the world position only). Each cell reads the noise at its own far-off seed, so two
+  // neighbours' noises are unrelated and their edge wanders well off the hex side (seeds a small
+  // step apart gave nearly the same noise, which cancelled out: long straight edges on the hex
+  // sides). The noise fades in from a cell's zero weight, so a cell leaving the three never holds
+  // a claim (no straight cut where the three change).
   b.claim = b.bary;
   if (uQuality > 0.5) {
     vec2 p = h * EDGE_FREQ;
-    b.claim += EDGE_NOISE * (vec3(
-      fbm(p + vec2(cell0) * 0.37),
-      fbm(p + vec2(cell1) * 0.37),
-      fbm(p + vec2(cell2) * 0.37)) - 0.5);
+    b.claim += EDGE_NOISE * smoothstep(0.0, CLAIM_FADE, b.bary) * (vec3(
+      fbm(p + cellSeed(cell0)),
+      fbm(p + cellSeed(cell1)),
+      fbm(p + cellSeed(cell2))) - 0.5);
   }
   return b;
 }
@@ -317,6 +338,31 @@ Coast coastOf(Blend b) {
   c.s = c.both ? waterTop - landTop : (waterTop > -8.0 ? 1.0 : -1.0);
   return c;
 }
+
+// The water's share of the cells round hex point h, smooth over two hex units (a bump round each
+// cell like hillAt's, which reaches 0 before the cells this point does not look at): about 0.5 on
+// the coast, falling to 0 a cell inland. Unlike the coast's three cells it never stops at a line.
+float waterNear(vec2 h) {
+  vec2 qr = roundAxial(axialOf(h));
+  float sw = 0.0;
+  float sWater = 0.0;
+  for (int k = 0; k < 7; k++) {
+    vec2 cell = k == 6 ? qr : qr + NEIGHBOURS[k];
+    vec2 d = h - centreOf(cell);
+    float r2 = dot(d, d) * 0.25;
+    if (r2 >= 1.0) continue;
+    int g = groundOf(cellAt(toOffset(cell)));
+    if (g >= ${Ground.FOG}) continue;
+    float u = 1.0 - r2;
+    float w = u * u * u;
+    sw += w;
+    if (isWater(g)) sWater += w;
+  }
+  return sw > 1e-4 ? sWater / sw : 0.0;
+}
+
+// The water's share where the beach ends inland, ragged along the coast (h, the true point).
+float beachEnd(vec2 h) { return mix(BEACH_NEAR, BEACH_FAR, valueNoise(h * 2.3 + 31.0)); }
 
 ${HILLS_GLSL}
 // The sea: shallows and deep as one water, deepening by the three cells' heights (land counts as
@@ -421,7 +467,7 @@ vec3 drawDecals(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float fade) {
       int g = fb.g[k];
       // On the beach band, beach details (pebbles, stones, sand slabs) whatever the ground;
       // elsewhere the foot must be a little inside its ground.
-      if (fc.both && fc.s > -DECAL_SHORE) {
+      if (waterNear(fb.hp) > beachEnd(foot / uUnit) * DECAL_SHORE) {
         g = ${Ground.SAND};
       } else {
         float other = -9.0;
@@ -579,10 +625,13 @@ void main() {
   if (wl.z > 0.002) { land += wl.z * paint(g.z, uv, dx, dy); landSum += wl.z; }
   land /= max(landSum, 1e-5);
 
-  // A sand beach along the land side of the coast, wet sand at the water's edge.
-  if (landSum > 0.002 && coastMask > 0.0) {
-    float reach = BEACH * (0.65 + 0.7 * valueNoise(h * 2.3 + 31.0));
-    float beach = (1.0 - smoothstep(reach * 0.55, reach, -dist)) * coastMask;
+  // A sand beach along the land side of the coast, wet sand at the water's edge. Its width comes
+  // from the cells all round (waterNear), not the coast's three: measured from the coast line it
+  // was cut off along the straight line where the water cell stopped being one of the three.
+  float nearWater = landSum > 0.002 ? waterNear(b.hp) : 0.0;
+  float beachEdge = beachEnd(h);
+  float beach = smoothstep(beachEdge * 0.6, beachEdge, nearWater);
+  if (landSum > 0.002) {
     if (beach > 0.002) {
       land = mix(land, paint(${Ground.SAND}, uv, dx, dy), beach);
       float damp = (1.0 - smoothstep(0.015, 0.08, -dist)) * coastMask;
@@ -625,7 +674,8 @@ void main() {
     float crest = smoothstep(0.0, 0.1, phase) * (1.0 - smoothstep(0.18, 0.4, phase));
     float reachOut = 1.0 - smoothstep(0.2, 0.6, dist);
     float broken = smoothstep(0.15, 0.55, valueNoise(h * 3.7 + 7.0 + uTime * 0.05));
-    float lines = crest * reachOut * broken * smoothstep(0.04, 0.09, dist);
+    // The lines thin out as the land cell leaves the three (no straight end where it leaves).
+    float lines = crest * reachOut * broken * smoothstep(0.04, 0.09, dist) * smoothstep(0.0, 0.3, c.land);
     float foam = clamp(edge * (0.8 + 0.2 * white) + lines * (0.8 + 0.2 * white), 0.0, 1.0) * coastMask;
     colour = mix(colour, FOAM_WHITE, foam * 0.97);
   }
@@ -639,7 +689,7 @@ void main() {
       meadow += wl[k] * (gk == ${Ground.MEADOW} ? 1.0 : gk == ${Ground.LUSH} ? 0.55 : gk == ${Ground.MEADOW_PLAIN} ? 0.45 : 0.0);
     }
     meadow *= smoothstep(70.0, 130.0, cellPixels) * (uQuality > 1.5 ? 1.0 : 0.6);
-    if (coastMask > 0.0) meadow *= smoothstep(0.9, 1.5, -dist);
+    meadow *= 1.0 - smoothstep(beachEdge * 0.2, beachEdge * 0.5, nearWater);
     if (cliff.on) meadow *= 1.0 - step(-0.4, cliffDist) * step(cliffDist, CLIFF_CLEAR_LOW) * cliff.mask;
     if (meadow > 0.01) colour = drawFlowers(colour, vWorld, meadow);
   }
