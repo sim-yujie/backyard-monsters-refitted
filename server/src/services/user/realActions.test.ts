@@ -12,6 +12,7 @@ mock.module("../../server.js", () => ({ postgres: { em: {} }, redis: {} }));
 
 const { yardRoutes } = await import("../../controllers/yard/index.js");
 const {
+  NOT_REAL_ACTION_ROUTES,
   NOT_REAL_ACTION_YARD_PATHS,
   REAL_ACTION_ROUTES,
   REAL_ACTION_YARD_PATHS,
@@ -21,6 +22,16 @@ const {
 } = await import("./realActions.js");
 
 const routesFile = readFileSync(new URL("../../app.routes.ts", import.meta.url), "utf8");
+const friendsFile = readFileSync(new URL("../../controllers/friends/routes.ts", import.meta.url), "utf8");
+/** Every POST, PUT and DELETE route mounted, as "METHOD pattern". */
+const written = [
+  ...[...routesFile.matchAll(/router\.(post|put|delete)\(\s*[`"]([^`"]+)[`"]/g)].map(
+    ([, m, p]) => `${m!.toUpperCase()} ${p!.replace("${path}", "")}`
+  ),
+  ...[...friendsFile.matchAll(/router\.(post|put|delete)\(\s*`\$\{api\}([^`]+)`/g)].map(
+    ([, m, p]) => `${m!.toUpperCase()} /api/:apiVersion${p}`
+  ),
+];
 const ctxOf = (method: string, body: unknown = {}) => ({ method, request: { body } }) as unknown as Context;
 
 describe("REAL_ACTION_ROUTES", () => {
@@ -35,11 +46,40 @@ describe("REAL_ACTION_ROUTES", () => {
   });
 
   test("every other route on it is mounted by app.routes.ts with that method", () => {
+    const mounted = new Set(written);
     for (const { method, path } of REAL_ACTION_ROUTES) {
       if (path.startsWith(YARD_ROUTE_PREFIX)) continue;
-      const registered = `router.${method.toLowerCase()}("${path}"`;
-      expect([registered, routesFile.includes(registered)]).toEqual([registered, true]);
+      const registered = `${method} ${path}`;
+      expect([registered, mounted.has(registered)]).toEqual([registered, true]);
     }
+  });
+
+  // 3 Nov: players were disconnected while playing, because routes added
+  // after #271 (the Inferno, Layout saves, friends) never joined the list.
+  test("every write route is either a real action or listed as not one, never both", () => {
+    expect(written.length).toBeGreaterThan(60);
+    const real = new Set(REAL_ACTION_ROUTES.map(({ method, path }) => `${method} ${path}`));
+    const notReal = new Set(NOT_REAL_ACTION_ROUTES);
+    for (const route of written) {
+      if (route.startsWith(`POST ${YARD_ROUTE_PREFIX}`)) continue;
+      expect([route, real.has(route) !== notReal.has(route)]).toEqual([route, true]);
+    }
+    const mounted = new Set(written);
+    for (const route of notReal) expect([route, mounted.has(route)]).toEqual([route, true]);
+  });
+
+  test.each([
+    ["POST", "/api/:apiVersion/bm/inferno/attack/start"],
+    ["POST", "/api/:apiVersion/bm/inferno/transfer"],
+    ["PUT", "/api/:apiVersion/bm/yardplanner/layouts/:slot"],
+    ["POST", "/api/:apiVersion/bm/yardplanner/savetemplate"],
+    ["POST", "/api/:apiVersion/player/sendmessage"],
+    ["POST", "/api/:apiVersion/player/requesttruce"],
+    ["POST", "/api/:apiVersion/bm/friends/help"],
+    ["POST", "/api/:apiVersion/bm/friends/gifts/collect"],
+    ["POST", "/alliance/requestjoin"],
+  ])("%s %s is a real action (3 Nov)", (method, route) => {
+    expect(isRealActionRequest(ctxOf(method), route)).toBe(true);
   });
 
   test.each([
@@ -52,7 +92,7 @@ describe("REAL_ACTION_ROUTES", () => {
     ["POST", "/base/updatesaved"],
     ["GET", "/api/:apiVersion/bm/notifications/unread"],
     ["POST", "/api/:apiVersion/bm/yard/state"],
-    ["POST", "/api/:apiVersion/player/sendmessage"],
+    ["POST", "/api/:apiVersion/player/getmessagethread"],
   ])("%s %s is not a real action", (method, route) => {
     expect(isRealActionRequest(ctxOf(method), route)).toBe(false);
   });

@@ -144,6 +144,35 @@ describe("postMessage in a country room", () => {
     });
   });
 
+  // Owner, 3 Nov: chatting is playing, so a line said keeps the player
+  // protected and connected, as a real game action does.
+  test("a line said is a real game action; a refused one is not", async () => {
+    const client = fakeClient();
+    joinChannel(client, "chat:country:PH", { type: ChannelType.Country, country: "PH" });
+    const recorded: number[] = [];
+    const record = async (userid: number) => {
+      recorded.push(userid);
+    };
+
+    await postMessage(client, "chat:country:PH", "kumusta", record);
+    await postMessage(client, "chat:country:PH", "too soon", record);
+    await postMessage(client, "chat:country:XX", "not in it", record);
+
+    expect(recorded).toEqual([USERID]);
+  });
+
+  test("a line still goes out when its action cannot be written", async () => {
+    const client = fakeClient();
+    joinChannel(client, "chat:country:PH", { type: ChannelType.Country, country: "PH" });
+    published.length = 0;
+
+    await postMessage(client, "chat:country:PH", "kumusta", async () => {
+      throw new Error("redis down");
+    });
+
+    expect(published).toHaveLength(1);
+  });
+
   test("the rate limit is shared with Global", async () => {
     const client = fakeClient();
     joinChannel(client, "chat:mr2-global", { type: ChannelType.Global });
