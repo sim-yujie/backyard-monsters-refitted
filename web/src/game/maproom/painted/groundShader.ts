@@ -679,6 +679,9 @@ void main() {
   float nearWater = landSum > 0.002 ? waterNear(b.hp) : 0.0;
   float beachEdge = beachEnd(h);
   float beach = smoothstep(beachEdge * 0.6, beachEdge, nearWater);
+  // Only real land turns to sand: fog and cells not yet loaded keep their own look.
+  float hiddenLand = dot(wl, vec3(isLand(g.x) ? 0.0 : 1.0, isLand(g.y) ? 0.0 : 1.0, isLand(g.z) ? 0.0 : 1.0));
+  beach *= 1.0 - hiddenLand / max(landSum, 1e-5);
   if (landSum > 0.002) {
     if (beach > 0.002) {
       land = mix(land, paint(${Ground.SAND}, uv, dx, dy), beach);
