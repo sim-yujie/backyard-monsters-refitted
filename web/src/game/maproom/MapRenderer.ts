@@ -13,8 +13,9 @@ import { TextPool } from "./LabelLayer";
 import { LodTier, sameView, tierForZoom, viewFor } from "./lod";
 import { MapAtlas } from "./mapAtlas";
 import { MapChunk, TextLevel, type ChunkView } from "./MapChunk";
+import { PaintedGround, groundShaderCompiles } from "./painted/PaintedGround";
 import { BuildingAvatars } from "./buildingAvatars";
-import { cellLift, liftCorners } from "./ground";
+import { cellLift, liftCorners, setFlatGround } from "./ground";
 import { GroundArt } from "./groundArt";
 import { LiveMap } from "./live/LiveMap";
 import { ConstructionBadge } from "./constructionBadge";
@@ -107,6 +108,14 @@ export class MapRenderer {
   private readonly dirty = new Set<number>();
 
   private atlas: MapAtlas | null = null;
+  /** Map Room 2's painted look (`painted/`, MR2_PAINTED_MAP), in place of the tiles; null when off. */
+  private painted: PaintedGround | null = null;
+  /**
+   * Whether the last `draw` stepped the painted water, so a tilted view must redraw its picture
+   * (`TiltView.invalidate`): the step only changes a shader uniform, which Pixi's change lists miss.
+   */
+  paintedStepped = false;
+  private webGL2 = false;
 
   private lastRange: CellRange | null = null;
   private lastTier: LodTier | null = null;
@@ -200,6 +209,7 @@ export class MapRenderer {
    */
   resetSight(): void {
     this.raster.reset();
+    this.painted?.reset();
     this.rebuildAll();
   }
 
@@ -215,6 +225,7 @@ export class MapRenderer {
     this.range.fitGrid();
     this.atlas?.destroy();
     this.atlas = new MapAtlas(renderer);
+    this.webGL2 = (renderer as { context?: { webGLVersion?: number } }).context?.webGLVersion === 2;
     this.live.attach(renderer);
     this.dropAllChunks();
     this.lastRange = null;
@@ -223,6 +234,7 @@ export class MapRenderer {
   /** Feeds a freshly loaded zone into the raster and invalidates its chunk. */
   applyZone(zone: ZoneRecord): void {
     this.raster.applyZone(zone);
+    this.painted?.applyZone(zone);
     if (this.chunks.has(zone.id)) this.dirty.add(zone.id);
     this.live.zoneArrived(zone.id);
     this.rivers.invalidate();
@@ -270,6 +282,8 @@ export class MapRenderer {
    */
   draw(range: CellRange, zoom: number): boolean {
     this.raster.flush();
+    this.painted?.flush();
+    this.paintedStepped = this.painted?.animate(performance.now(), range) ?? false;
     this.range.flush();
     const atlas = this.atlas;
     if (!atlas) return false;
@@ -304,7 +318,8 @@ export class MapRenderer {
       return changed;
     }
 
-    this.ground.visible = true;
+    // The painted look draws its own ground and hex lines: the tiles stay hidden.
+    this.ground.visible = this.painted === null;
     this.world.visible = true;
     this.worldTop.visible = true;
     if (
@@ -327,7 +342,39 @@ export class MapRenderer {
     return true;
   }
 
+  /**
+   * Turns Map Room 2's painted look on or off (`painted/paintedSwitch.ts` decides). On, the painted
+   * ground replaces the tiles, the raster and the hex outline sprites, and cells stop rising to
+   * their height. It stays off where the shader cannot run (no WebGL2, or it does not compile).
+   * Returns whether it is on.
+   */
+  setPaintedMap(on: boolean): boolean {
+    if (on && this.painted === null && this.webGL2 && groundShaderCompiles()) {
+      this.painted = new PaintedGround();
+      this.root.addChildAt(this.painted.mesh, this.root.getChildIndex(this.raster.sprite) + 1);
+      for (const zone of this.store.loadedZoneRefs()) this.painted.applyZone(zone);
+      void this.painted.load();
+    } else if (!on && this.painted !== null) {
+      this.painted.destroy();
+      this.painted = null;
+    } else {
+      return this.painted !== null;
+    }
+    const painted = this.painted !== null;
+    setFlatGround(painted);
+    this.live.setPaintedWater(painted);
+    this.raster.sprite.visible = !painted;
+    if (this.lastTier !== null && this.lastTier !== LodTier.RASTER) this.ground.visible = !painted;
+    this.range.invalidate();
+    this.drawHighlight();
+    this.rebuildAll();
+    return painted;
+  }
+
   destroy(): void {
+    this.painted?.destroy();
+    this.painted = null;
+    setFlatGround(false);
     this.dropAllChunks();
     this.live.destroy();
     this.rivers.destroy();
