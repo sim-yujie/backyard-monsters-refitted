@@ -41,7 +41,9 @@ export const levelLabel = (tribe: EditorTribe, level: number): string => {
   if (tribe.saved.includes(level)) return `Level ${level} (saved)`;
   if (tribe.originals.includes(level)) return `Level ${level} (original yard)`;
   const below = [...tribe.saved, ...tribe.originals].filter((one) => one < level).sort((a, b) => b - a)[0];
-  return below === undefined ? `Level ${level}` : `Level ${level} (uses ${below})`;
+  if (below === undefined) return `Level ${level}`;
+  // An original yard may stand at a level no camp has (Kozu 29), so name it, not its level.
+  return tribe.saved.includes(below) ? `Level ${level} (uses ${below})` : `Level ${level} (original yard)`;
 };
 
 export interface TribePickerOptions {

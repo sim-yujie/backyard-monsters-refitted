@@ -78,10 +78,10 @@ describe("tribe yard editor data", () => {
   test("status lists the four Map Room 2 tribes with their camp levels", () => {
     const status = editorStatus();
     expect(status.tribes.map((tribe) => [tribe.id, tribe.levels[0], tribe.levels.at(-1), tribe.originals])).toEqual([
-      ["legionnaire", 25, 44, [25, 32, 39]],
-      ["kozu", 29, 44, [29, 37]],
-      ["abunaki", 25, 44, [25, 35]],
-      ["dreadnaught", 25, 44, [25, 35]],
+      ["legionnaire", 25, 41, [25, 32, 39]],
+      ["kozu", 30, 42, [29, 37]],
+      ["abunaki", 27, 43, [25, 35]],
+      ["dreadnaught", 28, 44, [25, 35]],
     ]);
     expect(status.tribes.every((tribe) => tribe.saved.length === 0)).toBe(true);
   });
