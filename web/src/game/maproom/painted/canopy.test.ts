@@ -1,23 +1,33 @@
 import { describe, expect, it } from "vitest";
 import {
   BOULDER_FRAME,
+  CATTAIL_FRAME,
   CLEARING_INNER,
   CLEARING_OUTER,
   FEATURE_DENSITY,
-  GOO_FRAME,
-  GOO_LEVEL,
-  GOO_SCALE,
+  GOO_CHANCE,
+  GOO_GRID,
+  GOO_SIZE,
+  ISLET_INNER,
+  ISLET_OUTER,
+  LILY_FRAME,
+  LOW_REEDS_FRAME,
   MARSH_FADE,
-  MURK_LEVEL,
+  MARSH_GRID,
+  MARSH_PIECES,
+  MARSH_WATER_LEVEL,
   ROCK_FADE,
   LOG_FRAME,
   PINE_FRAME,
-  REED_FRAME,
+  REED_TUFT_FRAME,
   SPRITE_ROWS,
   TREE_FRAME,
+  WET_ROCK_FRAME,
   canopyAt,
   canopyEdge,
   featureShares,
+  gooPool,
+  marshWaterLevel,
   type FeatureCell,
 } from "./canopy";
 import { GROUND_FRAGMENT } from "./groundShader";
@@ -151,26 +161,95 @@ describe("rock fields and marsh", () => {
     expect(smooth(MARSH_FADE[0], MARSH_FADE[1], at(SQRT3 * 0.8, 0, lone).marsh + 0.2)).toBe(0);
   });
 
-  it("makes the goo small scattered pools, rarer than the murky puddles, not wide strips", () => {
-    // Blobs about 0.3 hex units across (a noise at 1.5-4 a hex unit), only its tops (the smooth
-    // noise's 93rd percentile is about 0.77, so about 7% of a marsh's middle), well above the puddles' level.
-    expect(GOO_SCALE).toBeGreaterThanOrEqual(1.5);
-    expect(GOO_SCALE).toBeLessThanOrEqual(4);
-    expect(GOO_LEVEL).toBeGreaterThanOrEqual(0.75);
-    expect(GOO_LEVEL).toBeGreaterThan(MURK_LEVEL + 0.1);
+  it("makes the marsh mostly water inside, with only a few puddles at its fading edge", () => {
+    // The water noise runs about 0.2..0.8 (middle 0.5): well inside, its level is under the middle, so
+    // most of the ground is water (mock-up B); at the edge it is near the noise's top, a few puddles.
+    expect(marshWaterLevel(1, 0)).toBeLessThan(0.45);
+    expect(marshWaterLevel(0, 0)).toBeGreaterThan(0.62);
+    expect(marshWaterLevel(0.5, 0)).toBeLessThan(marshWaterLevel(0, 0));
+    expect(MARSH_WATER_LEVEL[0]).toBeGreaterThan(MARSH_WATER_LEVEL[1]);
+  });
+
+  it("keeps a mossy island round a camp on a marsh cell, and only there", () => {
+    const camp = (q: number, r: number): Kind => (q === 0 && r === 0 ? { feature: 3, occupied: true } : MARSH);
+    // Dry at the camp: the level is past the noise's top (about 0.8), even deep in the marsh.
+    expect(at(0, 0, camp).islet).toBe(1);
+    expect(marshWaterLevel(1, at(0, 0, camp).islet)).toBeGreaterThan(0.85);
+    expect(marshWaterLevel(1, at(ISLET_INNER * 0.9, 0, camp).islet)).toBeGreaterThan(0.85);
+    // Gone by the island's outer edge, well inside the camp's own cell (its sides are 0.87 out).
+    expect(at(ISLET_OUTER + 0.01, 0, camp).islet).toBe(0);
+    expect(ISLET_OUTER).toBeLessThan(0.87);
+    // A camp on a forest or meadow cell makes no island, and a forest camp's clearing is not one.
+    const meadowCamp = (q: number, r: number): Kind => (q === 0 && r === 0 ? { feature: 0, occupied: true } : MARSH);
+    expect(at(0.2, 0, meadowCamp).islet).toBe(0);
+  });
+
+  it("makes the goo a few wide rounded pools, one blob each with no thin tails, inside its own square", () => {
+    // Mock-up B's pools are about half a cell wide (a cell is 2 hex units across): 0.5..1.1 hex units.
+    const rolls = [0, 0.25, 0.5, 0.75, 0.999];
+    for (const a of rolls) {
+      for (const b of [0, 0.999]) {
+        for (const d of rolls) {
+          const lobes = gooPool([a, b, 1 - b, d, a]);
+          const main = lobes[0]!;
+          const sides = lobes.slice(1);
+          expect(main.rx * 2).toBeGreaterThanOrEqual(0.4);
+          expect(main.rx * 2).toBeLessThanOrEqual(0.7);
+          expect(main.ry).toBeLessThan(main.rx); // wide and flat, as the slanted camera sees it
+          let left = main.x - main.rx;
+          let right = main.x + main.rx;
+          for (const lobe of sides) {
+            // Each side oval's middle lies inside the main one, so the pool is one blob, not a strip
+            // or a tail, and each side oval is a good part of the main one's size.
+            expect(Math.hypot((lobe.x - main.x) / main.rx, (lobe.y - main.y) / main.ry)).toBeLessThan(0.8);
+            expect(lobe.rx / main.rx).toBeGreaterThan(0.35);
+            left = Math.min(left, lobe.x - lobe.rx);
+            right = Math.max(right, lobe.x + lobe.rx);
+          }
+          // Its body stays in its own grid square (the shader reads the four squares nearest a point).
+          expect(left).toBeGreaterThanOrEqual(-1e-9);
+          expect(right).toBeLessThanOrEqual(GOO_GRID + 1e-9);
+          expect(right - left).toBeLessThan(1.2);
+        }
+      }
+    }
+    // A pool in about every second square (a square is about 0.75 of a cell): a pool or so a marsh cell.
+    expect(GOO_GRID * GOO_GRID * GOO_CHANCE).toBeGreaterThan(0.6);
+    expect(GOO_GRID * GOO_GRID * GOO_CHANCE).toBeLessThan(1.6);
+    expect(GOO_SIZE[1]).toBeGreaterThan(GOO_SIZE[0]);
+  });
+
+  it("stands mock-up B's cattail clumps, a third of a cell tall, mostly reeds, few logs", () => {
+    // A piece is 1.6..2 grid squares tall (the most the shader's 3 x 3 look-up can show).
+    expect(MARSH_GRID * 1.6).toBeGreaterThan(0.28);
+    expect(MARSH_GRID * 2).toBeLessThan(0.42);
+    expect(MARSH_PIECES.reeds).toBeGreaterThan(MARSH_PIECES.lilies);
+    expect(MARSH_PIECES.lilies).toBeGreaterThan(MARSH_PIECES.rocks);
+    expect(MARSH_PIECES.rocks).toBeGreaterThan(MARSH_PIECES.log);
+    const total = MARSH_PIECES.reeds + MARSH_PIECES.lilies + MARSH_PIECES.rocks + MARSH_PIECES.log;
+    // Even with the most reeds (by the water's edge, 1.45x) the kinds' shares stay under the whole square.
+    expect(total + 0.45 * MARSH_PIECES.reeds).toBeLessThan(1);
+    // Grid squares in a cell (about 0.87 of a cell-width square) x the reeds' share: 5 to 12 clumps a cell.
+    const squares = 0.87 / (MARSH_GRID * MARSH_GRID);
+    expect(squares * MARSH_PIECES.reeds).toBeGreaterThan(5);
+    expect(squares * MARSH_PIECES.reeds).toBeLessThan(12);
   });
 });
 
 describe("the shader's sheet and budget", () => {
-  it("joins ten sprite rows and numbers this step's pieces after the details and sea rocks", () => {
-    expect(SPRITE_ROWS).toBe(10);
+  it("joins eleven sprite rows and numbers this step's pieces after the details and sea rocks", () => {
+    expect(SPRITE_ROWS).toBe(11);
     expect(TREE_FRAME).toBe(20);
     expect(PINE_FRAME).toBe(24);
     expect(BOULDER_FRAME).toBe(28);
-    expect(GOO_FRAME).toBe(32);
-    expect(REED_FRAME).toBe(36);
-    expect(LOG_FRAME).toBe(39);
-    expect(LOG_FRAME).toBeLessThan(SPRITE_ROWS * 4);
+    // The marsh sheet's 12 pieces, in the order build.py cuts them (row by row).
+    expect(CATTAIL_FRAME).toBe(32);
+    expect(REED_TUFT_FRAME).toBe(38);
+    expect(LOW_REEDS_FRAME).toBe(39);
+    expect(LILY_FRAME).toBe(40);
+    expect(LOG_FRAME).toBe(42);
+    expect(WET_ROCK_FRAME).toBe(43);
+    expect(WET_ROCK_FRAME).toBe(SPRITE_ROWS * 4 - 1);
   });
 
   it("keeps fewer pieces on Medium and Low (plan budget 600 / 300 / 120)", () => {
@@ -183,7 +262,9 @@ describe("the shader's sheet and budget", () => {
     expect(GROUND_FRAGMENT).toContain("canopyColour(");
     expect(GROUND_FRAGMENT).toContain("marshColour(");
     expect(GROUND_FRAGMENT).toContain("drawFeatures(");
-    expect(GROUND_FRAGMENT).toContain("const float SPRITE_ROWS = 10.0;");
+    expect(GROUND_FRAGMENT).toContain("drawMarsh(");
+    expect(GROUND_FRAGMENT).toContain("gooNear(");
+    expect(GROUND_FRAGMENT).toContain("const float SPRITE_ROWS = 11.0;");
     expect(GROUND_FRAGMENT).not.toContain("${");
   });
 });

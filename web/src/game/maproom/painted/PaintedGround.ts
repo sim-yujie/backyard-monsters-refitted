@@ -18,8 +18,8 @@ const ATLAS_COLUMNS = 4;
 
 /**
  * The sprite sheets the shader places (plan steps 2, 3 and 6): ground details (3 rows), sea rocks
- * (2 rows), edge trees and pines (2 rows), boulders, goo pools and reeds (3 rows), 4 frames a row,
- * joined into one 4 x 10 sheet on load so they take one sampler (`canopy.ts` `SPRITE_SHEET_ROWS`).
+ * (2 rows), edge trees and pines (2 rows), boulders and the marsh pieces (4 rows), 4 frames a row,
+ * joined into one 4 x 11 sheet on load so they take one sampler (`canopy.ts` `SPRITE_SHEET_ROWS`).
  */
 const DECALS_URL = `${import.meta.env.BASE_URL}maproom/painted/decals@4x.webp`;
 const SPRITE_SHEETS: readonly { url: string; rows: number }[] = [
@@ -286,7 +286,7 @@ export class PaintedGround {
     return true;
   }
 
-  /** Fetches the sprite sheets and joins them into the shader's one 4 x 10 sheet. */
+  /** Fetches the sprite sheets and joins them into the shader's one 4 x 11 sheet. */
   private async loadSprites(level: Quality): Promise<boolean> {
     const decalsUrl = sheetAtQuality(DECALS_URL, level);
     if (decalsUrl === this.spritesUrl) return true;

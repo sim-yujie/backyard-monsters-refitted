@@ -77,7 +77,7 @@ uniform float uQuality;    // 2 High, 1 Medium, 0 Low
 uniform vec4 uLine;        // hex line colour and strength
 uniform vec3 uFog;
 uniform vec3 uUnloaded;
-uniform sampler2D uSprites; // details (rows 0..2), sea rocks (3..4), forest (5..6), marsh and rocks (7..9); 4 frames a row
+uniform sampler2D uSprites; // details (rows 0..2), sea rocks (3..4), forest (5..6), boulders (7), marsh (8..10); 4 frames a row
 uniform float uSpritesReady; // 1 once the sprite sheet has loaded
 uniform float uCellPoints;  // a cell's width, world points (sprite sizes follow it)
 uniform float uTime;        // seconds of water motion (still on Low)
@@ -687,7 +687,7 @@ void main() {
     marshCover = smoothstep(MARSH_FADE.x, MARSH_FADE.y, feat.share.z + 0.4 * ragged) * featShown;
     if (rockCover > 0.002) land = mix(land, paint(${Ground.ROCK}, uv, dx, dy), rockCover);
     if (marshCover > 0.002) {
-      vec3 mud = marshColour(land, paint(${Ground.MARSH}, uv, dx, dy), h, smoothstep(0.55, 0.95, feat.share.z + 0.3 * ragged));
+      vec3 mud = marshColour(land, paint(${Ground.MARSH}, uv, dx, dy), h, marshDeep(feat.share.z, ragged), feat.islet);
       land = mix(land, mud, marshCover);
     }
   }
@@ -885,11 +885,13 @@ void main() {
     if (uQuality > 0.5 && decalFade > 0.0 && landSum > 0.002) {
       colour = drawDecals(colour, vWorld, wdx, wdy, decalFade);
     }
-    // Edge trees, pines, boulders, goo pools and reeds; only near a feature (any share round here).
+    // Edge trees, pines and boulders; only near a feature (any share round here).
     float treeFade = smoothstep(9.0, 20.0, cellPixels) * featShown;
     if (treeFade > 0.0 && max(feat.share.x, max(feat.share.y, feat.share.z)) > 0.001) {
       float density = uQuality > 1.5 ? ${FEATURE_DENSITY.high.toFixed(2)} : uQuality > 0.5 ? ${FEATURE_DENSITY.medium.toFixed(2)} : ${FEATURE_DENSITY.low.toFixed(2)};
       colour = drawFeatures(colour, vWorld, wdx, wdy, treeFade, detailFade * featShown, density);
+      // The marsh's cattails, lily pads, log and wet rocks (mr2-marsh), on their own larger grid.
+      if (feat.share.z > 0.01) colour = drawMarsh(colour, vWorld, wdx, wdy, detailFade * featShown, density);
     }
     float rockFade = smoothstep(7.0, 16.0, cellPixels);
     if (rockFade > 0.0) colour = drawRocks(colour, vWorld, wdx, wdy, rockFade);

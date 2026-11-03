@@ -40,7 +40,8 @@ MOCKUP = Path("C:/Coding/BYMR/worktrees/mr2-mockup2/art-samples/mr2-mockup2/vari
 TEXTURE = 512
 FRAME = 256
 KEY = np.array([255.0, 0.0, 255.0])
-JOBS = ["ground-a", "ground-b", "sea", "canopy", "decals", "sea-rocks", "cliff", "forest-bits", "marsh-rocks"]
+JOBS = ["ground-a", "ground-b", "sea", "canopy", "decals", "sea-rocks", "cliff", "forest-bits", "marsh-rocks",
+        "marsh-pieces", "marsh-water"]
 
 # (sheet, quadrant 0..3 row by row or None for the whole square, mock-up B box to match or None)
 TEXTURE_ORDER: list[tuple[str, str, int | None, tuple[int, int, int, int] | None]] = [
@@ -48,7 +49,8 @@ TEXTURE_ORDER: list[tuple[str, str, int | None, tuple[int, int, int, int] | None
     ("lush", "ground-a", 1, (1000, 780, 1150, 860)),
     ("sand", "ground-a", 2, (200, 760, 260, 920)),
     ("rock", "ground-a", 3, (300, 500, 700, 700)),
-    ("marsh", "ground-b", 0, (1300, 800, 1700, 1050)),
+    # mr2-marsh: the marsh's texture is now its shallow dark-green water (the banks are the land, darkened).
+    ("marsh", "marsh-water", None, (1400, 850, 1480, 880)),
     ("forest-floor", "ground-b", 1, (1000, 780, 1150, 860)),
     ("snow", "ground-b", 2, None),
     ("meadow-plain", "ground-b", 3, (600, 660, 800, 760)),
@@ -192,6 +194,10 @@ def build_sprites() -> None:
         if not path.exists():
             continue
         found = pieces(Image.open(path))
+        if family == "marsh-rocks" and (SOURCE / "marsh-pieces.webp").exists():
+            # mr2-marsh: keep the rock fields' four boulders; the marsh's pieces are the new sheet's
+            # 12 (six tall cattail clumps, a reed tuft, low reeds, two lily pad clusters, a log, a wet rock).
+            found = found[:4] + pieces(Image.open(SOURCE / "marsh-pieces.webp"))
         print(f"{family}: {len(found)} pieces")
         write_copies(framed(found, 4), family)
 
