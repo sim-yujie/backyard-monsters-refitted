@@ -239,6 +239,8 @@ struct Blend {
   vec3 bary;   // their smooth weights (0 where a cell stops being one of the three)
   vec3 claim;  // the weights roughened by each cell's own noise: the strongest claim wins
   vec3 height; // their heights
+  vec2 hp;     // the point after the noise push (the cells were picked here)
+  vec2 cen[3]; // their centres, regular-hex units
 };
 
 Blend blendAt(vec2 h) {
@@ -263,6 +265,10 @@ Blend blendAt(vec2 h) {
     else if (along > best2) { best2 = along; dir2 = NEIGHBOURS[k]; }
   }
   b.bary = clamp(barycentric(d, centreOf(dir1), centreOf(dir2)), 0.0, 1.0);
+  b.hp = hp;
+  b.cen[0] = centreOf(qr);
+  b.cen[1] = centreOf(qr + dir1);
+  b.cen[2] = centreOf(qr + dir2);
   ivec2 cell0 = toOffset(qr);
   ivec2 cell1 = toOffset(qr + dir1);
   ivec2 cell2 = toOffset(qr + dir2);
@@ -601,16 +607,11 @@ void main() {
 
   // Cliffs where neighbours' heights drop a lot: a signed distance to the rim like the coast's.
   Cliff cliff = cliffOf(b);
-  float cliffS = cliff.on ? cliff.s : 0.0;
-  vec2 cliffSlope = vec2(dFdx(cliffS) / max(abs(dFdx(h.x)), 1e-6), dFdy(cliffS) / max(abs(dFdy(h.y)), 1e-6));
-  float cliffDist = cliffS / max(length(cliffSlope), 0.6);
-  vec2 cliffN = length(cliffSlope) > 1e-5 ? normalize(cliffSlope) : vec2(0.0, 1.0);
-  float cliffDdx = dFdx(cliffDist);
-  float cliffDdy = dFdy(cliffDist);
+  float cliffDist = cliff.on ? cliff.s : 0.0;
   vec2 hdx = dFdx(h);
   vec2 hdy = dFdy(h);
   if (landSum > 0.002) {
-    colour = drawCliff(colour, cliff, cliffDist, cliffN, h, hdx, hdy, cliffDdx, cliffDdy);
+    colour = drawCliff(colour, cliff, h, hdx, hdy);
   }
 
   // Surf: white foam on the water's edge and broken lines rolling in towards it.
@@ -639,7 +640,7 @@ void main() {
     }
     meadow *= smoothstep(70.0, 130.0, cellPixels) * (uQuality > 1.5 ? 1.0 : 0.6);
     if (coastMask > 0.0) meadow *= smoothstep(0.9, 1.5, -dist);
-    if (cliff.on) meadow *= 1.0 - step(-0.4, cliffDist) * step(cliffDist, 0.85) * cliff.mask;
+    if (cliff.on) meadow *= 1.0 - step(-0.4, cliffDist) * step(cliffDist, CLIFF_CLEAR_LOW) * cliff.mask;
     if (meadow > 0.01) colour = drawFlowers(colour, vWorld, meadow);
   }
 

@@ -29,15 +29,18 @@ const float CLIFF_DROP = ${CLIFF_DROP.toFixed(1)};
 // A full face's depth (hex units, along the drop) for the tallest strip; the share of it drawn into
 // the high cell (the rim sits that far back from the claims' line); the strip's repeat along the
 // cliff (hex units); the lip's width and the shadow's reach where the face looks away.
-const float FACE = 0.95;
+const float FACE = 1.5;
 const float FACE_BACK = 0.3;
 const float FACE_REPEAT = 4.5;
 const float LIP = 0.11;
+// The third cell keeps a cliff going (instead of tapering it off) when it stands this share of
+// CLIFF_DROP above the low cell: runs of cliff read as one long rock face, as in mock-up B.
+const float CLIFF_CARRY = 0.6;
 const float SHADE_REACH = 0.32;
 // The claim gaps (about hex units) round the rim kept clear of ground details: into the high
 // ground, and down the low side to the face's foot.
 const float CLIFF_CLEAR_HIGH = 0.35;
-const float CLIFF_CLEAR_LOW = 0.7;
+const float CLIFF_CLEAR_LOW = 0.9;
 // The three strips' rows in the sheet (top, height, as shares of the sheet's height) and depths.
 const vec4 STRIP_ROWS[3] = vec4[3](
   vec4(${CLIFF_STRIPS[0]!.top.toFixed(5)}, ${CLIFF_STRIPS[0]!.height.toFixed(5)}, ${CLIFF_STRIPS[0]!.depth.toFixed(3)}, 0.0),
@@ -84,10 +87,12 @@ float hillShade(vec2 slope) {
 }
 
 // The cliff round a point, from its three cells (Blend): the strongest pair of a high and a low cell
-// CLIFF_DROP or more apart, and the signed claim gap to the line between them (> 0 on the low side).
+// CLIFF_DROP or more apart. The rim is the line half way between their centres (in the pushed
+// point's space, so it wanders with the grounds' edges), straight and exact: no screen derivatives.
 struct Cliff {
   bool on;
-  float s;      // the low cell's claim minus the high cell's
+  float s;      // signed distance to the rim (hex units), > 0 on the low side
+  vec2 n;       // unit direction from the high cell to the low one
   float drop;   // the height between them
   float mask;   // fades the cliff out where either cell stops being one of the three
   float pick;   // 0..1, which strip
@@ -97,6 +102,7 @@ Cliff cliffOf(Blend b) {
   Cliff c;
   c.on = false;
   c.s = 0.0;
+  c.n = vec2(0.0, 1.0);
   c.drop = 0.0;
   c.mask = 0.0;
   c.pick = 0.0;
@@ -112,13 +118,16 @@ Cliff cliffOf(Blend b) {
   if (m < 0) return c;
   int j = 3 - k - m;
   bool kHigh = b.height[k] > b.height[m];
+  vec2 high = kHigh ? b.cen[k] : b.cen[m];
+  vec2 low = kHigh ? b.cen[m] : b.cen[k];
   c.on = true;
-  c.s = kHigh ? b.claim[m] - b.claim[k] : b.claim[k] - b.claim[m];
+  c.n = normalize(low - high);
+  c.s = dot(b.hp - 0.5 * (high + low), c.n);
   c.drop = abs(b.height[k] - b.height[m]);
-  c.mask = smoothstep(0.0, 0.06, min(b.bary[k], b.bary[m]));
+  c.mask = smoothstep(0.0, 0.14, min(b.bary[k], b.bary[m]));
   // The third cell carries the cliff on when it stands on the winner's side of the same drop;
   // otherwise the face tapers off before the line between the winner and it.
-  bool carries = isLand(b.g[j]) && abs(b.height[j] - b.height[m]) >= CLIFF_DROP
+  bool carries = isLand(b.g[j]) && abs(b.height[j] - b.height[m]) >= CLIFF_DROP * CLIFF_CARRY
     && (b.height[j] > b.height[m]) == kHigh;
   if (!carries) c.mask *= smoothstep(0.0, 0.16, b.claim[k] - b.claim[j]);
   c.pick = fract((b.height[m] + b.height[k]) * 0.6180339);
@@ -134,21 +143,29 @@ vec4 stripSample(int strip, float u, float v, vec2 gx, vec2 gy) {
   return c;
 }
 
-// The cliff's face, lip and shadows over the ground colour. dist is the signed distance (hex
-// units) to the claims' line, > 0 on the low side; n the unit direction from high to low; h the
-// hex point; hdx, hdy its screen derivatives; ddx, ddy dist's.
-vec3 drawCliff(vec3 colour, Cliff c, float dist, vec2 n, vec2 h, vec2 hdx, vec2 hdy, float ddx, float ddy) {
+// The cliff's face, lip and shadows over the ground colour. h is the hex point, hdx and hdy its
+// screen derivatives.
+vec3 drawCliff(vec3 colour, Cliff c, vec2 h, vec2 hdx, vec2 hdy) {
   if (!c.on || c.mask <= 0.0) return colour;
+  vec2 n = c.n;
+  float dist = c.s;
   // How much of the face the camera sees: all of it when the high ground is up the screen.
   float facing = clamp(n.y * 0.85 + 0.35, 0.0, 1.0);
-  int strip = c.drop >= CLIFF_DROP + 8.0 ? 0 : c.pick < 0.5 ? 1 : 2;
+  int strip = c.drop >= CLIFF_DROP + 12.0 || c.pick < 0.4 ? 0 : c.pick < 0.7 ? 1 : 2;
   float tall = mix(0.85, 1.15, smoothstep(CLIFF_DROP, CLIFF_DROP + 30.0, c.drop));
   float depth = FACE * STRIP_ROWS[strip].z * tall * facing;
   float lipShare = 1.0 - smoothstep(0.1, 0.5, facing);
+  // The face hangs straight down the screen from the rim: how far below the rim this point is.
+  float ny = max(n.y, 0.3);
+  float down = dist / ny;
+  // Along the rim (the strip's u), and its screen derivatives.
+  vec2 along = vec2(n.y, -n.x) / FACE_REPEAT;
+  float u = dot(h, along);
+  vec2 gu = vec2(dot(hdx, along), dot(hdy, along));
 
   // The shadow the high ground throws on the low side's foot (and below a lip).
   float foot = depth * (1.0 - FACE_BACK);
-  float shadow = (1.0 - smoothstep(foot, foot + SHADE_REACH, dist)) * step(-0.02, dist);
+  float shadow = (1.0 - smoothstep(foot, foot + SHADE_REACH, down)) * step(-0.02, dist);
   colour *= 1.0 - 0.22 * shadow * c.mask;
 
   // The rocky lip where the face looks away: a band of rock on the high side's rim, ragged at
@@ -157,28 +174,18 @@ vec3 drawCliff(vec3 colour, Cliff c, float dist, vec2 n, vec2 h, vec2 hdx, vec2 
     float ragged = LIP * (0.7 + 0.6 * valueNoise(h * 6.0 + 3.1));
     float inLip = 1.0 - smoothstep(ragged * 0.85, ragged, -dist);
     float v = 0.35 + 0.5 * clamp(-dist / ragged, 0.0, 1.0);
-    vec4 rock = stripSample(0, h.x / FACE_REPEAT, v, hdx / FACE_REPEAT, hdy / FACE_REPEAT);
+    vec4 rock = stripSample(0, u, v, vec2(gu.x, 0.0), vec2(gu.y, 0.0));
     vec3 lipColour = rock.a > 0.01 ? rock.rgb / rock.a : colour;
     colour = mix(colour, lipColour * 0.92, inLip * lipShare * c.mask * rock.a);
   }
 
-  // The face itself, hung from the rim down the screen.
+  // The face itself.
   if (depth > 0.03 && uCliffsReady > 0.5) {
     float top = -FACE_BACK * depth;
-    float v = (dist - top) / depth;
+    float v = (down - top) / depth;
     if (v > -0.01 && v < 1.01) {
-      vec2 gv = vec2(ddx, ddy) / depth;
-      // Along the cliff: world x where it runs across the screen, world y where it runs up it.
-      float across = uQuality > 0.5 ? smoothstep(0.3, 0.7, abs(n.y)) : step(0.5, abs(n.y));
-      vec4 face = vec4(0.0);
-      if (across > 0.0) {
-        face += across * stripSample(strip, h.x / FACE_REPEAT, v,
-          vec2(hdx.x / FACE_REPEAT, gv.x), vec2(hdy.x / FACE_REPEAT, gv.y));
-      }
-      if (across < 1.0) {
-        face += (1.0 - across) * stripSample(strip, h.y / FACE_REPEAT, v,
-          vec2(hdx.y / FACE_REPEAT, gv.x), vec2(hdy.y / FACE_REPEAT, gv.y));
-      }
+      vec2 gv = vec2(dot(hdx, n), dot(hdy, n)) / (ny * depth);
+      vec4 face = stripSample(strip, u, v, vec2(gu.x, gv.x), vec2(gu.y, gv.y));
       // Lit a little by which way it faces (the strips carry their own top-left light).
       float lit = dot(normalize(vec3(n, 0.5)), normalize(HILL_SUN));
       face.rgb *= clamp(0.98 + 0.25 * lit, 0.82, 1.08);

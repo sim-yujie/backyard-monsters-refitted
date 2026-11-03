@@ -11,13 +11,14 @@ export const HILL_RADIUS = 2;
  * change by about 9 between neighbours (median) and 22 in the steepest tenth, so most slopes shade
  * by 5-15% and the steep ones by up to the shader's clamp.
  */
-export const HILL_LIGHT = 0.03;
+export const HILL_LIGHT = 0.045;
 
 /**
  * A cliff stands between two land neighbours this many height units apart (the server's heights
- * run 100..192 on land; about one neighbour pair in sixty is this steep).
+ * run 100..192 on land; about one neighbour pair in forty is this steep, often several in a row,
+ * which the shader joins into one rock face).
  */
-export const CLIFF_DROP = 32;
+export const CLIFF_DROP = 26;
 
 /** Where the cliff sheet (`cliffs@4x.webp`, `web/tools/mr2-paint/build.py`) keeps its strips. */
 export interface CliffStrip {
