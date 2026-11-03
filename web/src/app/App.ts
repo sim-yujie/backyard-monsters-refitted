@@ -6,7 +6,7 @@ import { SceneManager, type SceneFactory } from "./SceneManager";
 import { withHold, withPresence, withProtection } from "./presenceScene";
 import { withIdle } from "./idleScene";
 import { withMusic } from "./musicScene";
-import { IdleWatch, idleDurationText, idleTimingsFor } from "@/game/presence/idleWatch";
+import { type DisconnectReason, IdleWatch, idleDurationText, idleTimingsFor } from "@/game/presence/idleWatch";
 import { IdleWarning } from "@/ui/IdleWarning";
 import { getAuthToken, onAnswer } from "@/api/http";
 import { stayProtected } from "@/api/presence";
@@ -24,7 +24,7 @@ import { MapRoom1Scene } from "./scenes/MapRoom1Scene";
 import { MapRoom2Scene } from "./scenes/MapRoom2Scene";
 import { YardScene } from "./scenes/YardScene";
 import { AttackScene } from "./scenes/AttackScene";
-import { AwayScene } from "./scenes/AwayScene";
+import { AwayScene, awayText } from "./scenes/AwayScene";
 import { SceneName } from "./sceneName";
 import { guardTick } from "./guardedTick";
 import { BAITER_PLUGINS, BAITER_REPLAY_PLUGINS } from "@/game/baiter/baiterPlugin";
@@ -202,6 +202,8 @@ export class App {
     // Its "Still there?" comes first: "Stay protected?" waits while it is up,
     // and its button answers both when both are due.
     const scenes = this.scenes;
+    // What the away screen says: idle input, or the protection run out (3 Nov).
+    let awayReason: DisconnectReason = "idle";
     const warning = new IdleWarning(this.host, Date.now, () => {
       if (protection.due) protection.stay().catch(() => {});
     });
@@ -217,7 +219,8 @@ export class App {
         warning.hide();
         holdBack();
       },
-      onDisconnect: () => {
+      onDisconnect: (reason) => {
+        awayReason = reason;
         protection.stop();
         botCheck.stop();
         scenes.goTo(SceneName.AWAY);
@@ -271,7 +274,19 @@ export class App {
     );
     register(SceneName.WATCH, game(() => new AttackScene(WATCH_PLUGINS, { watch: true }), true));
     register(SceneName.RAID, game(() => new AttackScene(RAID_PLUGINS, { raid: true }), true));
-    register(SceneName.AWAY, () => new AwayScene(idleDurationText(idle.timings.disconnectMs), this.halt));
+    register(
+      SceneName.AWAY,
+      () =>
+        new AwayScene(
+          awayText(
+            awayReason,
+            idleDurationText(
+              awayReason === "protection" ? protection.timings.windowMs : idle.timings.disconnectMs,
+            ),
+          ),
+          this.halt,
+        ),
+    );
 
     // Pixi's renderer resize fires on the window; mirror it to the scenes.
     this.pixi.renderer.on("resize", this.handleResize);
