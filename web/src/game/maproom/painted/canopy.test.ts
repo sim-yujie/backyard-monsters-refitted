@@ -185,7 +185,7 @@ describe("rock fields and marsh", () => {
   });
 
   it("makes the goo a few wide rounded pools, one blob each with no thin tails, inside its own square", () => {
-    // Mock-up B's pools are about half a cell wide (a cell is 2 hex units across): 0.5..1.1 hex units.
+    // Mock-up B's pools are a quarter to half a cell wide (a cell is about 1.7 hex units across).
     const rolls = [0, 0.25, 0.5, 0.75, 0.999];
     for (const a of rolls) {
       for (const b of [0, 0.999]) {
@@ -193,7 +193,7 @@ describe("rock fields and marsh", () => {
           const lobes = gooPool([a, b, 1 - b, d, a]);
           const main = lobes[0]!;
           const sides = lobes.slice(1);
-          expect(main.rx * 2).toBeGreaterThanOrEqual(0.4);
+          expect(main.rx * 2).toBeGreaterThanOrEqual(0.3);
           expect(main.rx * 2).toBeLessThanOrEqual(0.7);
           expect(main.ry).toBeLessThan(main.rx); // wide and flat, as the slanted camera sees it
           let left = main.x - main.rx;
@@ -201,7 +201,7 @@ describe("rock fields and marsh", () => {
           for (const lobe of sides) {
             // Each side oval's middle lies inside the main one, so the pool is one blob, not a strip
             // or a tail, and each side oval is a good part of the main one's size.
-            expect(Math.hypot((lobe.x - main.x) / main.rx, (lobe.y - main.y) / main.ry)).toBeLessThan(0.8);
+            expect(Math.hypot((lobe.x - main.x) / main.rx, (lobe.y - main.y) / main.ry)).toBeLessThan(1);
             expect(lobe.rx / main.rx).toBeGreaterThan(0.35);
             left = Math.min(left, lobe.x - lobe.rx);
             right = Math.max(right, lobe.x + lobe.rx);

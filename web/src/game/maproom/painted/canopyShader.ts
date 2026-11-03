@@ -78,6 +78,9 @@ const float CANOPY_SCALE = 0.62;
 const vec3 MARSH_BANK = vec3(0.37, 0.5, 0.27);
 const vec3 MARSH_MUD = vec3(0.25, 0.26, 0.14);
 const vec3 MARSH_SHALLOW = vec3(0.42, 0.52, 0.3);
+const vec3 MARSH_WATER = vec3(0.27, 0.36, 0.15);
+const vec3 MARSH_WATER_TEX = vec3(0.286, 0.38, 0.184);
+const vec3 MARSH_REFLECT = vec3(0.47, 0.56, 0.42);
 const vec3 GOO_EDGE = vec3(0.47, 0.78, 0.03);
 const vec3 GOO = vec3(0.64, 0.93, 0.04);
 const vec3 GOO_LIGHT = vec3(0.86, 1.0, 0.42);
@@ -195,7 +198,7 @@ float gooSquare(vec2 id, vec2 h, out vec2 centre) {
   centre = vec2(1e4);
   if (hash12(id + 71.3) > GOO_CHANCE) return 1e4;
   float rx = mix(GOO_SIZE.x, GOO_SIZE.y, hash12(id + 1.7));
-  float room = max(0.0, GOO_GRID * 0.5 - 1.5 * rx);
+  float room = max(0.0, GOO_GRID * 0.5 - 1.7 * rx);
   centre = (id + 0.5) * GOO_GRID + room * (2.0 * vec2(hash12(id + 2.9), hash12(id + 4.3)) - 1.0) * vec2(1.0, 0.6);
   vec2 q = (h - centre) * vec2(1.0, 1.0 / GOO_FLAT);
   float dist = length(q) - rx;
@@ -204,11 +207,12 @@ float gooSquare(vec2 id, vec2 h, out vec2 centre) {
   for (int k = 0; k < 2; k++) {
     float angle = turn + (k == 0 ? 0.0 : side);
     float r = rx * (0.55 + 0.15 * cos(angle * 3.0));
-    float lobe = length(q - vec2(cos(angle), sin(angle)) * rx * 0.75) - r;
+    float lobe = length(q - vec2(cos(angle), sin(angle)) * rx * 0.95) - r;
     float m = clamp(0.5 + 0.5 * (lobe - dist) / 0.08, 0.0, 1.0);
     dist = mix(lobe, dist, m) - 0.08 * m * (1.0 - m);
   }
-  return dist;
+  // A slow wobble on the edge, so no pool is a clean oval.
+  return dist + 0.05 * (valueNoise(q * 5.0 + id * 3.7) - 0.5);
 }
 
 // The nearest goo pool round h: the pools of the four grid squares nearest it (a pool's body stays in
@@ -244,23 +248,29 @@ vec3 marshColour(vec3 land, vec3 water, vec2 h, float deep, float islet) {
   float inWater = smoothstep(-aw, aw, wet);
   float rim = smoothstep(-0.07, -0.01, wet) * (1.0 - inWater);
   c = mix(c, MARSH_MUD, 0.65 * rim);
-  vec3 w = water * vec3(0.92, 0.95, 0.9);
+  // The water texture is soft; mock-up B's water swings from near-black green to pale sky reflections.
+  vec3 w = MARSH_WATER + clamp((water - MARSH_WATER_TEX) * 2.2, vec3(-0.2), vec3(0.1));
+  float sky = smoothstep(0.55, 0.85, valueNoise(h * vec2(0.9, 2.4) + 41.0));
+  w = mix(w, MARSH_REFLECT, 0.4 * sky);
   w = mix(w, MARSH_SHALLOW, 0.55 * (1.0 - smoothstep(0.0, 0.07, wet)));
   w *= 1.0 - 0.28 * (1.0 - smoothstep(0.0, 0.02, wet));
   c = mix(c, w, inWater);
   float ag = min(max(fwidth(goo), 1e-4), 0.05);
   if (goo > 0.4) return c;
   float outside = max(goo, 0.0);
-  c = mix(c, GOO_GLOW, 0.42 * exp(-outside / 0.05) * smoothstep(-ag, ag, goo));
+  c = mix(c, GOO_GLOW, 0.3 * exp(-outside / 0.05) * smoothstep(-ag, ag, goo));
   float broken = smoothstep(0.25, 0.6, valueNoise(h * 4.0 + 17.0));
   float rings = (1.0 - smoothstep(0.0, 0.008 + ag, abs(goo - 0.07))) * 0.5
     + (1.0 - smoothstep(0.0, 0.008 + ag, abs(goo - 0.15))) * 0.3 * broken;
   c = mix(c, GOO_LIGHT * 0.85, rings * smoothstep(0.0, 0.02, goo));
   float inner = -min(goo, 0.0);
   vec3 body = mix(GOO_EDGE, GOO, smoothstep(0.0, 0.08, inner));
+  // Lighter swirls following the pool's shape (inner contours, broken up) and a wet glint.
   float swirl = valueNoise((h - pc) * vec2(5.0, 9.0) + pc * 3.0);
-  float streak = smoothstep(0.55, 0.62, swirl) * (1.0 - smoothstep(0.66, 0.74, swirl));
-  body = mix(body, GOO_LIGHT, 0.7 * streak * smoothstep(0.02, 0.06, inner));
+  float contour = (1.0 - smoothstep(0.0, 0.01 + ag, abs(inner - 0.05 - 0.03 * swirl)))
+    + 0.8 * (1.0 - smoothstep(0.0, 0.01 + ag, abs(inner - 0.12 - 0.05 * swirl)));
+  body = mix(body, GOO_LIGHT, 0.75 * contour * smoothstep(0.3, 0.6, swirl));
+  body = mix(body, vec3(0.95, 1.0, 0.7), 0.6 * smoothstep(0.72, 0.8, swirl) * smoothstep(0.06, 0.1, inner));
   body = mix(GOO_RIM, body, smoothstep(0.004, 0.022 + ag, inner));
   return mix(c, body, smoothstep(ag, -ag, goo));
 }
@@ -361,13 +371,16 @@ vec3 drawMarsh(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float near, float densit
       if (roll < reeds) {
         frame = kind < 0.78 ? ${CATTAIL_FRAME} + int(kind / 0.78 * 6.0) : kind < 0.9 ? ${REED_TUFT_FRAME} : ${LOW_REEDS_FRAME};
         size = 0.82 + 0.18 * hash12(id + 2.2);
-      } else if (roll < lilies && wet > 0.03) {
+      } else if (roll < lilies) {
+        if (wet <= 0.03) continue;
         frame = ${LILY_FRAME} + (kind < 0.5 ? 0 : 1);
         size = 0.62;
-      } else if (roll < rocks && abs(wet) < 0.09) {
+      } else if (roll < rocks) {
+        if (abs(wet) >= 0.09) continue;
         frame = kind < 0.6 ? ${WET_ROCK_FRAME} : ${BOULDER_FRAME} + int(kind * 7.0) % 4;
         size = 0.55;
-      } else if (roll < logs && wet > 0.0 && deep > 0.5) {
+      } else if (roll < logs) {
+        if (wet <= 0.0 || deep <= 0.5) continue;
         frame = ${LOG_FRAME};
         size = 0.95;
       }

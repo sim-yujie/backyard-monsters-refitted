@@ -75,8 +75,8 @@ export const MARSH_WATER_LEVEL: readonly [number, number] = [0.68, 0.4];
  * A camp, yard or outpost on a marsh cell stands on a mossy island: the water level is raised by
  * {@link ISLET_LIFT} within {@link ISLET_INNER} hex units of the cell's middle, fading by {@link ISLET_OUTER}.
  */
-export const ISLET_INNER = 0.3;
-export const ISLET_OUTER = 0.6;
+export const ISLET_INNER = 0.2;
+export const ISLET_OUTER = 0.42;
 export const ISLET_LIFT = 0.6;
 
 /**
@@ -86,9 +86,9 @@ export const ISLET_LIFT = 0.6;
  * marsh. A pool is a main oval and two smaller ovals overlapping it (one rounded blob, no thin tails).
  */
 export const GOO_GRID = 1.4;
-export const GOO_CHANCE = 0.55;
+export const GOO_CHANCE = 0.4;
 /** The main oval's half-width (hex units) and its height against its width (the camera looks down at a slant). */
-export const GOO_SIZE: readonly [number, number] = [0.2, 0.34];
+export const GOO_SIZE: readonly [number, number] = [0.17, 0.34];
 export const GOO_FLAT = 0.55;
 /** How deep into the marsh (0..1) a pool's middle must be. */
 export const GOO_DEEP = 0.6;
@@ -109,7 +109,7 @@ export const gooPool = (rolls: readonly [number, number, number, number, number]
   const [a, b, c, d, e] = rolls;
   const rx = GOO_SIZE[0] + (GOO_SIZE[1] - GOO_SIZE[0]) * a;
   const ry = rx * GOO_FLAT;
-  const reach = 1.5 * rx; // the farthest a side oval's edge gets from the middle
+  const reach = 1.7 * rx; // the farthest a side oval's edge gets from the middle
   const room = Math.max(0, GOO_GRID / 2 - reach);
   const cx = GOO_GRID / 2 + room * (2 * b - 1);
   const cy = GOO_GRID / 2 + room * (2 * c - 1) * 0.6;
@@ -119,8 +119,8 @@ export const gooPool = (rolls: readonly [number, number, number, number, number]
     const angle = turn + side;
     const r = rx * (0.55 + 0.15 * Math.cos(angle * 3));
     lobes.push({
-      x: cx + Math.cos(angle) * rx * 0.75,
-      y: cy + Math.sin(angle) * ry * 0.75,
+      x: cx + Math.cos(angle) * rx * 0.95,
+      y: cy + Math.sin(angle) * ry * 0.95,
       rx: r,
       ry: r * GOO_FLAT,
     });
