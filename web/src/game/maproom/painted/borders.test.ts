@@ -6,6 +6,7 @@ import { PULSE_STEP_MS, pulseAt } from "./BorderLayer";
 import { BORDER_FRAGMENT } from "./borderShader";
 import { BorderData, BorderRelation, borderDistance, borderRelationOf, borderSides, sideEnds } from "./borders";
 import { cellCentre, flatTopShape, pointyTopShape, type CellShape } from "./cellShape";
+import { PAINTED_TAG_COLOUR, PAINTED_TAG_TEXT, TILE_TAG_STYLE, tagStyle } from "./markerStyle";
 
 const player = (uid: number, extra: Partial<PlayerCell> = {}): PlayerCell => ({
   uid,
@@ -154,5 +155,18 @@ describe("border pulse and shader", () => {
     expect(BORDER_FRAGMENT).toContain(
       "vec2(1.0, 0.0), vec2(1.0, -1.0), vec2(0.0, -1.0), vec2(-1.0, 0.0), vec2(-1.0, 1.0), vec2(0.0, 1.0)",
     );
+  });
+});
+
+describe("name tags on the painted map", () => {
+  it("keep today's plates on the tile map and take mock-up B's parchment tag on the painted one", () => {
+    expect(tagStyle(false, "pointy")).toEqual(TILE_TAG_STYLE);
+    expect(tagStyle(false, "flat")).toEqual(TILE_TAG_STYLE);
+    const pointy = tagStyle(true, "pointy");
+    expect(pointy.plate).toBe(PAINTED_TAG_COLOUR);
+    expect(pointy.text).toBe(PAINTED_TAG_TEXT);
+    // Bigger on the tall pointy-top cell than on the flat one, which has less room.
+    expect(pointy.scale).toBeGreaterThan(tagStyle(true, "flat").scale);
+    expect(tagStyle(true, "flat").scale).toBeGreaterThan(1);
   });
 });

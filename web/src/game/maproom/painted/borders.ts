@@ -18,6 +18,8 @@ import { cellCentre, locateCell, type CellShape, type CellShapeKind } from "./ce
  * This file keeps the facts the border shader (`borderShader.ts`) reads, one texel per cell:
  *   R  relation code (`BorderRelation`), 0 = no border at all
  *   G  which of the cell's six sides are borders, bit k = the side towards `HexGrid.neighbours`[k]
+ *   A  always 255: the texture is uploaded unpremultiplied, but a zero alpha would still let a
+ *      driver or a later Pixi default wipe the colour bytes.
  * and `borderDistance`, the TypeScript twin of the shader's distance sum, for the tests.
  */
 export const BorderRelation = {
@@ -94,11 +96,14 @@ export class BorderData {
   ) {
     this.bytes = new Uint8Array(width * height * 4);
     this.owners = new Int32Array(width * height);
+    this.clear();
     this.source = new BufferImageSource({
       resource: this.bytes,
       width,
       height,
       format: "rgba8unorm",
+      // Raw facts, not colours: never premultiplied on upload.
+      alphaMode: "no-premultiply-alpha",
       scaleMode: "nearest",
       autoGenerateMipmaps: false,
     });
@@ -176,9 +181,14 @@ export class BorderData {
 
   /** No owners anywhere (the player's sight changed). */
   reset(): void {
-    this.bytes.fill(0);
+    this.clear();
     this.owners.fill(0);
     this.dirty = true;
+  }
+
+  private clear(): void {
+    this.bytes.fill(0);
+    for (let offset = 3; offset < this.bytes.length; offset += 4) this.bytes[offset] = 255;
   }
 
   /** Uploads pending writes; returns whether it did (a tilted view must then redraw). */

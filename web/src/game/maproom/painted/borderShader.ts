@@ -34,10 +34,10 @@ const float SQRT3 = 1.7320508;
 
 // Shares of a cell's width: the line's distance in from the edge, its half width, the glow's
 // reach either side of it, and how far the haze fades in.
-const float LINE_INSET = 0.034;
-const float LINE_HALF = 0.0075;
-const float GLOW = 0.03;
-const float HAZE = 0.2;
+const float LINE_INSET = 0.04;
+const float LINE_HALF = 0.013;
+const float GLOW = 0.05;
+const float HAZE = 0.22;
 
 const vec2 STEPS[6] = vec2[6](
   vec2(1.0, 0.0), vec2(1.0, -1.0), vec2(0.0, -1.0), vec2(-1.0, 0.0), vec2(-1.0, 1.0), vec2(0.0, 1.0));
@@ -103,17 +103,17 @@ void main() {
   // The line: at least about one pixel wide however far out the camera is.
   float pixel = max(fwidth(d), 1e-4);
   float fromLine = abs(d - LINE_INSET * cellPts);
-  float half_ = max(LINE_HALF * cellPts, 0.6 * pixel);
+  float half_ = max(LINE_HALF * cellPts, 0.9 * pixel);
   float line = 1.0 - smoothstep(half_ - 0.5 * pixel, half_ + 0.75 * pixel, fromLine);
   float glow = exp(-pow(fromLine / max(glowReach, pixel), 2.0) * 2.2);
-  float hazeA = haze > 0.0 ? (1.0 - smoothstep(0.0, haze, d)) * 0.16 : 0.0;
+  float hazeA = haze > 0.0 ? (1.0 - smoothstep(0.0, haze, d)) * 0.2 : 0.0;
 
   float pulse = 1.0 + 0.22 * (uPulse - 0.5) * 2.0 * step(1.5, uQuality);
   vec3 colour = relation == 1 ? uYou : relation == 2 ? uAlliance : relation == 3 ? uOther : uAttacker;
-  float glowA = clamp(glow * 0.55 * pulse, 0.0, 1.0);
+  float glowA = clamp(glow * 0.75 * pulse, 0.0, 1.0);
   float a = max(max(line, glowA), hazeA);
   // The middle of the line runs towards white, as a glowing tube does.
-  vec3 rgb = mix(colour, mix(colour, vec3(1.0), 0.55), line);
+  vec3 rgb = mix(colour, mix(colour, vec3(1.0), 0.4), line);
   finalColor = vec4(rgb * a, a);
 }
 `;

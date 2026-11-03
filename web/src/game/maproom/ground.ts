@@ -43,6 +43,9 @@ export const setFlatGround = (flat: boolean): void => {
   flatGround = flat;
 };
 
+/** Whether the ground is drawn flat, i.e. the painted look is on. */
+export const isFlatGround = (): boolean => flatGround;
+
 /** A cell's lift, or 0 for one the viewer cannot see or has not loaded (or on flat ground). */
 export const cellLift = (cell: MapCell | undefined): number =>
   flatGround || cell === undefined || isFogCell(cell) ? 0 : groundLift(cell.i);
