@@ -160,8 +160,10 @@ the lower bots go and the higher ones stay.
 34. **The total follows the floor.** With `BOTS_TOTAL` unset the total is about 11.5 bots a level
     (`DEFAULT_BOTS_PER_LEVEL`: the 300 live bots over 15-40) times the levels from the floor to 40:
     185 at 25 (`defaultBotsTotal`). A server that sets `BOTS_TOTAL` keeps its own number, spread
-    over fewer levels. `bun src/scripts/bots.ts rebalance --dry-run` prints which bots the next
-    rebalance would retire and how many it would make on each level, writing nothing.
+    over fewer levels. `bun src/scripts/bots.ts rebalance --dry-run` prints, per level, the bots
+    now, the level's share, how many the next rebalance would retire (below the floor or off a
+    crowded level) and make, and the smallest `BOTS_TOTAL` that keeps every bot at or above the
+    floor, writing nothing.
 
 ## 3. What already exists
 
@@ -968,9 +970,11 @@ Three switches in `server/.env`, all off by default: `BOTS_FILL` (neighbour fill
 5. Switch on `BOTS_REVENGE`.
 
 **Raising the floor** (owner 3 Nov 2026, decision 32): set `BOTS_FLOOR_LEVEL` and restart; check
-`BOTS_TOTAL` (unset follows the floor). `bots.ts rebalance --dry-run` lists the bots the next daily
-rebalance would retire (userid, name, level, below the floor or crowded) and the new bots per
-level, writing nothing; run it on a copy of the live data first.
+`BOTS_TOTAL` (unset follows the floor). `bots.ts rebalance --dry-run` prints a table per level
+(bots now, share, retired below the floor, retired off a crowded level, new, after), how many bots
+at or above the floor would retire and the smallest `BOTS_TOTAL` that keeps them all, then each bot
+to retire (userid, name, level, why), writing nothing; run it on a copy of the live data first.
+If the higher bots should stay, set `BOTS_TOTAL` to at least that number.
 
 **Kill switch:** `bots.ts retire-all` moves every bot off Map Room 1 at once; every list drops them
 on its next read. `bots.ts delete-retired` removes retired bots and their jobs (only when nothing in

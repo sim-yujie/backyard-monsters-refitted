@@ -17,7 +17,7 @@ import {
   fillPlan,
   retireAllBots,
 } from "../services/bots/factory.js";
-import { bornQuietShare, type RebalanceBot } from "../services/bots/population.js";
+import { bornQuietShare, planRebalance, type RebalanceBot, type RebalanceRules } from "../services/bots/population.js";
 import { planTodaysRebalance, type TodaysRebalance } from "../services/bots/sweep.js";
 
 /**
@@ -229,17 +229,49 @@ export interface RetireLine {
 }
 
 /**
- * What `rebalance --dry-run` prints for a planned rebalance: the settings,
- * each bot to retire (below the floor or off a crowded level) and the new
- * bots per level.
+ * The smallest `BOTS_TOTAL` at which today's rebalance would retire no bot at
+ * or above the floor (only those below it), with the other settings as they
+ * are and no fresh births; null when none up to `limit` does.
+ */
+export const totalKeepingAll = (
+  bots: readonly RebalanceBot[],
+  rules: Omit<RebalanceRules, "share" | "total" | "births">,
+  now: number,
+  limit = 5000
+): number | null => {
+  const floor = rules.floor ?? botFloorLevel();
+  const levelOf = new Map(bots.map((bot) => [bot.userid, bot.level]));
+  const atOrAbove = bots.filter((bot) => bot.level >= floor).length;
+  for (let total = Math.max(1, atOrAbove); total <= limit; total++) {
+    const plan = planRebalance(bots, { ...rules, share: evenSpread(total, floor), total, births: 0, floor }, now);
+    if (plan.retire.every((userid) => (levelOf.get(userid) ?? 0) < floor)) return total;
+  }
+  return null;
+};
+
+const pad = (value: string | number, width: number): string => String(value).padStart(width);
+
+/**
+ * What `rebalance --dry-run` prints for a planned rebalance: the settings, a
+ * table per level (bots now, the level's share, how many would retire below
+ * the floor or off a crowded level, new bots, bots after), the bots at or
+ * above the floor it would retire, then each bot to retire.
  *
  * @param {TodaysRebalance} today - The plan (`planTodaysRebalance`)
  * @param {Map<number, string>} names - Usernames by userid
  * @param {number} total - `BOTS_TOTAL`
+ * @param {number | null} keepsAll - {@link totalKeepingAll}, when worked out
  * @returns {string[]} The lines
  */
-export const describeRebalance = (today: TodaysRebalance, names: ReadonlyMap<number, string>, total: number): string[] => {
+export const describeRebalance = (
+  today: TodaysRebalance,
+  names: ReadonlyMap<number, string>,
+  total: number,
+  keepsAll?: number | null
+): string[] => {
   const { bots, share, floor, plan } = today;
+  const levels = share.length;
+  const levelOf = (level: number) => Math.min(Math.max(level, 1), levels);
   const byId = new Map<number, RebalanceBot>(bots.map((bot) => [bot.userid, bot]));
   const retired = plan.retire.map((userid): RetireLine => ({
     userid,
@@ -249,20 +281,68 @@ export const describeRebalance = (today: TodaysRebalance, names: ReadonlyMap<num
   const below = retired.filter((bot) => bot.level < floor);
   const crowded = retired.filter((bot) => bot.level >= floor);
   const made = [...Array<number>(plan.born).fill(floor), ...plan.make];
-  const left = bots.filter((bot) => !plan.retire.includes(bot.userid)).map((bot) => Math.min(bot.level, share.length));
+  const left = bots.filter((bot) => !plan.retire.includes(bot.userid)).map((bot) => levelOf(bot.level));
+  const count = (list: readonly number[], level: number) => list.filter((one) => levelOf(one) === level).length;
+  const highNow = bots.filter((bot) => bot.level >= floor).length;
+  const nowLevels = bots.map((bot) => bot.level);
+  const belowLevels = below.map((bot) => bot.level);
+  const crowdedLevels = crowded.map((bot) => bot.level);
+
   const lines = [
-    `Floor: level ${floor}. Total: ${total} (${Math.min(...share.slice(floor - 1))}-${Math.max(...share)} a level from ${floor} to ${share.length}).`,
-    `Active bots now: ${bots.length}: ${histogram(bots.map((bot) => bot.level)) || "none"}`,
-    `Would retire ${retired.length}: ${below.length} below the floor, ${crowded.length} off crowded levels.`,
-    ...retired.map((bot) => `  retire ${bot.userid} ${bot.username} level ${bot.level}${bot.level < floor ? " (below the floor)" : " (crowded level)"}`),
-    `Would make ${made.length} new: ${plan.born} at the bottom of level ${floor}, ${plan.make.length} on short levels${made.length ? `: ${histogram(made)}` : ""}.`,
-    `Active after: ${left.length + made.length}: ${histogram([...left, ...made]) || "none"}`,
+    `Floor: level ${floor}. Total: ${total} (${Math.min(...share.slice(floor - 1))}-${Math.max(...share)} a level from ${floor} to ${levels}).`,
+    `Active bots now: ${bots.length} (${bots.length - highNow} below the floor, ${highNow} at or above it).`,
+    `Would retire ${retired.length}: ${below.length} below the floor, ${crowded.length} at or above the floor off crowded levels.`,
+    `Would make ${made.length} new: ${plan.born} at the bottom of level ${floor}, ${plan.make.length} on short levels.`,
+    `Active after: ${left.length + made.length}.`,
+    "",
+    "Per level (share: bots the level should hold at this total):",
+    " level   now share | retire:below retire:crowded |  new after",
   ];
+  const totals = { now: 0, share: 0, below: 0, crowded: 0, made: 0, after: 0 };
+  for (let level = 1; level <= levels; level++) {
+    const row = {
+      now: count(nowLevels, level),
+      share: share[level - 1] ?? 0,
+      below: level < floor ? count(belowLevels, level) : 0,
+      crowded: level >= floor ? count(crowdedLevels, level) : 0,
+      made: count(made, level),
+      after: count(left, level) + count(made, level),
+    };
+    for (const key of Object.keys(totals) as (keyof typeof totals)[]) totals[key] += row[key];
+    if (row.now + row.share + row.made === 0) continue;
+    const mark = row.crowded > 0 ? "  <- trims bots at or above the floor" : row.after < row.share ? "  (short)" : "";
+    lines.push(
+      `${pad(`L${level}`, 6)} ${pad(row.now, 5)} ${pad(row.share, 5)} | ${pad(row.below, 12)} ${pad(row.crowded, 14)} | ${pad(row.made, 4)} ${pad(row.after, 5)}${mark}`
+    );
+  }
+  lines.push(
+    `${pad("all", 6)} ${pad(totals.now, 5)} ${pad(totals.share, 5)} | ${pad(totals.below, 12)} ${pad(totals.crowded, 14)} | ${pad(totals.made, 4)} ${pad(totals.after, 5)}`,
+    ""
+  );
+
+  lines.push(
+    crowded.length > 0
+      ? `At or above the floor: ${crowded.length} of ${highNow} bots would retire off crowded levels (${histogram(crowdedLevels)}).`
+      : `At or above the floor: none of ${highNow} bots would retire.`
+  );
+  if (keepsAll !== undefined) {
+    lines.push(
+      keepsAll === null
+        ? "No BOTS_TOTAL up to 5000 keeps every bot at or above the floor."
+        : `To keep every bot at or above the floor today, set BOTS_TOTAL to at least ${keepsAll}${keepsAll <= total ? " (this total does)" : ""}.`
+    );
+  }
   const short = share.flatMap((want, index) => {
-    const have = left.filter((level) => level === index + 1).length + made.filter((level) => level === index + 1).length;
+    const have = count(left, index + 1) + count(made, index + 1);
     return want - have > 0 ? [`L${index + 1}:${want - have}`] : [];
   });
   if (short.length > 0) lines.push(`Still short of their share after today (later days make them, at most BOTS_NEW_PER_DAY a day): ${short.join(" ")}`);
+  if (retired.length > 0) {
+    lines.push("", "Bots to retire:");
+    lines.push(
+      ...retired.map((bot) => `  retire ${bot.userid} ${bot.username} level ${bot.level}${bot.level < floor ? " (below the floor)" : " (crowded level)"}`)
+    );
+  }
   lines.push("Dry run: nothing written.");
   return lines;
 };
@@ -279,7 +359,12 @@ const runRebalance = async (em: EntityManager, args: BotsArgs) => {
       )
     : [];
   const names = new Map(rows.map((row) => [Number(row.userid), row.username]));
-  for (const line of describeRebalance(today, names, config.total)) console.log(line);
+  const keepsAll = totalKeepingAll(
+    today.bots,
+    { slack: config.levelSlack, newPerDay: config.newPerDay, floor: today.floor },
+    Math.floor(Date.now() / 1000)
+  );
+  for (const line of describeRebalance(today, names, config.total, keepsAll)) console.log(line);
 };
 
 const runStatus = async (em: EntityManager) => {

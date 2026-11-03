@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 
 import { evenSpread } from "../services/bots/factory.js";
 import type { TodaysRebalance } from "../services/bots/sweep.js";
-import { createPlan, describeRebalance, parseArgs } from "./bots.js";
+import { planRebalance } from "../services/bots/population.js";
+import { createPlan, describeRebalance, parseArgs, totalKeepingAll } from "./bots.js";
 
 /** The bots CLI (issue #239, `docs/design/bot-neighbours.md` §10). */
 
@@ -105,15 +106,56 @@ describe("rebalance --dry-run (owner 3 Nov 2026)", () => {
       [2, "Fenwick"],
       [5, "Sludge"],
     ]);
-    const lines = describeRebalance(today(), names, 16);
+    const lines = describeRebalance(today(), names, 16, 20);
     expect(lines[0]).toBe("Floor: level 25. Total: 16 (1-1 a level from 25 to 40).");
-    expect(lines).toContain("Would retire 3: 2 below the floor, 1 off crowded levels.");
+    expect(lines).toContain("Active bots now: 5 (2 below the floor, 3 at or above it).");
+    expect(lines).toContain("Would retire 3: 2 below the floor, 1 at or above the floor off crowded levels.");
+    expect(lines).toContain("Would make 3 new: 1 at the bottom of level 25, 2 on short levels.");
+    expect(lines).toContain("Active after: 5.");
     expect(lines).toContain("  retire 1 MossyGoblin level 16 (below the floor)");
     expect(lines).toContain("  retire 2 Fenwick level 24 (below the floor)");
     expect(lines).toContain("  retire 5 Sludge level 30 (crowded level)");
-    expect(lines).toContain("Would make 3 new: 1 at the bottom of level 25, 2 on short levels: L25:1 L26:1 L27:1.");
-    expect(lines).toContain("Active after: 5: L25:2 L26:1 L27:1 L30:1");
     expect(lines.at(-1)).toBe("Dry run: nothing written.");
+  });
+
+  test("a table per level: now, share, retired below the floor or off a crowded level, new, after", () => {
+    const lines = describeRebalance(today(), new Map(), 16, 20);
+    const row = (level: string) => lines.find((line) => line.trimStart().startsWith(`${level} `))?.trim().split(/[\s|]+/);
+    expect(lines).toContain(" level   now share | retire:below retire:crowded |  new after");
+    expect(row("L16")?.slice(0, 7)).toEqual(["L16", "1", "0", "1", "0", "0", "0"]);
+    expect(row("L24")?.slice(0, 7)).toEqual(["L24", "1", "0", "1", "0", "0", "0"]);
+    expect(row("L25")?.slice(0, 7)).toEqual(["L25", "1", "1", "0", "0", "1", "2"]);
+    expect(row("L28")).toEqual(["L28", "0", "1", "0", "0", "0", "0", "(short)"]);
+    expect(row("L30")?.slice(0, 7)).toEqual(["L30", "2", "1", "0", "1", "0", "1"]);
+    expect(lines.find((line) => line.trimStart().startsWith("L30 "))).toContain("<- trims bots at or above the floor");
+    // Levels with no bots, no share and nothing new are left out.
+    expect(row("L20")).toBeUndefined();
+    expect(row("all")).toEqual(["all", "5", "16", "2", "1", "3", "5"]);
+    expect(lines).toContain("At or above the floor: 1 of 3 bots would retire off crowded levels (L30:1).");
+    expect(lines).toContain("To keep every bot at or above the floor today, set BOTS_TOTAL to at least 20.");
+    expect(describeRebalance(today(), new Map(), 16, 12)).toContain(
+      "To keep every bot at or above the floor today, set BOTS_TOTAL to at least 12 (this total does)."
+    );
+    expect(describeRebalance(today(), new Map(), 16)).not.toContain(expect.stringContaining("set BOTS_TOTAL"));
+  });
+
+  test("the smallest total that keeps every bot at or above the floor", () => {
+    const { bots } = today();
+    // Four on level 30: no slack, so level 30's share must reach four.
+    const crowded = [...bots, ...[6, 7].map((userid) => ({ userid, level: 30, level_since: date(2), quiet_since: null }))];
+    const rules = { slack: 0, newPerDay: 3, floor: 25 };
+    const now = Date.UTC(2026, 10, 3) / 1000;
+    const keeps = totalKeepingAll(crowded, rules, now)!;
+    const highRetired = (total: number) =>
+      planRebalance(crowded, { ...rules, share: evenSpread(total, 25), total }, now).retire.filter(
+        (userid) => crowded.find((bot) => bot.userid === userid)!.level >= 25
+      );
+    expect(evenSpread(keeps, 25)[29]).toBeGreaterThanOrEqual(4);
+    expect(highRetired(keeps)).toEqual([]);
+    expect(highRetired(keeps - 1).length).toBeGreaterThan(0);
+    // Bots below the floor still retire at that total.
+    const plan = planRebalance(crowded, { ...rules, share: evenSpread(keeps, 25), total: keeps }, now);
+    expect(plan.retire).toEqual(expect.arrayContaining([1, 2]));
   });
 
   test("the rebalance command takes only --dry-run", async () => {
