@@ -108,6 +108,8 @@ interface Harness {
   readonly nearby: () => ReadonlySet<number>;
   /** How many times the session asked its owner to open the search box. */
   readonly finds: () => number;
+  /** How many taps the session reported to its owner (F14). */
+  readonly taps: () => number;
   /** Where the renderer has each building drawn, in yard units. */
   readonly placements: ReadonlyMap<number, Point>;
   /**
@@ -225,6 +227,7 @@ const planner = (
   const states: PlannerState[] = [];
   const groups: GroupOutcome[] = [];
   let finds = 0;
+  let taps = 0;
   let faulted: ReadonlySet<number> = new Set<number>();
   let nearby: ReadonlySet<number> = new Set<number>();
 
@@ -246,6 +249,9 @@ const planner = (
       finds++;
     },
     onGroup: (outcome) => groups.push(outcome),
+    onTap: () => {
+      taps++;
+    },
     ...(options.readOnly === undefined ? {} : { readOnly: options.readOnly }),
   });
   session.attach();
@@ -274,6 +280,7 @@ const planner = (
     faulted: () => faulted,
     nearby: () => nearby,
     finds: () => finds,
+    taps: () => taps,
     placements,
     hidden,
     view: () => view,
@@ -1278,6 +1285,22 @@ describe("touch gestures", () => {
     expect(state.carrying).toBe(false);
     expect(state.movedCount).toBe(0);
     expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(harness.session.selectedIds()).toEqual([1]);
+  });
+
+  it("tells its owner about a tap, but not about a long press or a drop", () => {
+    // The scene keeps a phone's sheets off the yard during a move and brings
+    // them back on a tap (a player could not line a building up under its sheet).
+    const harness = planner();
+    harness.press(ONE, finger(1));
+    vi.advanceTimersByTime(400);
+    harness.drag(by(ONE, 100, 0));
+    harness.release(by(ONE, 100, 0), finger(1));
+    expect(harness.taps()).toBe(0);
+
+    harness.press(by(ONE, 100, 0), finger(1));
+    harness.release(by(ONE, 100, 0), finger(1));
+    expect(harness.taps()).toBe(1);
     expect(harness.session.selectedIds()).toEqual([1]);
   });
 

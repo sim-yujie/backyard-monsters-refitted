@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { costLineParts, isPhone, PlannerLayout, plannerLayout, undoName } from "./plannerLayout";
+import { costLineParts, isPhone, PlannerLayout, plannerLayout, shownSheet, type SheetChoice, undoName } from "./plannerLayout";
 
 describe("plannerLayout", () => {
   it("lays a phone held upright out as a phone", () => {
@@ -57,5 +57,44 @@ describe("undoName", () => {
   it("names the key on a keyboard and the button on a touched screen", () => {
     expect(undoName(false)).toBe("Ctrl+Z");
     expect(undoName(true)).toBe("Undo");
+  });
+});
+
+describe("shownSheet", () => {
+  const choice = (over: Partial<SheetChoice> = {}): SheetChoice => ({
+    layout: PlannerLayout.PORTRAIT,
+    moreOpen: false,
+    raised: "inspector",
+    dockFilled: false,
+    inspectorFilled: true,
+    yardClear: false,
+    ...over,
+  });
+
+  it("shows the building sheet for a selection on a phone", () => {
+    expect(shownSheet(choice())).toBe("inspector");
+    expect(shownSheet(choice({ layout: PlannerLayout.LANDSCAPE }))).toBe("inspector");
+  });
+
+  // The player's report: a sheet opened over the yard while they lined a building up.
+  it("shows no sheet while the yard is kept clear for a move, upright or sideways", () => {
+    expect(shownSheet(choice({ yardClear: true }))).toBe("none");
+    expect(shownSheet(choice({ layout: PlannerLayout.LANDSCAPE, yardClear: true }))).toBe("none");
+    expect(shownSheet(choice({ yardClear: true, raised: "dock", dockFilled: true }))).toBe("none");
+  });
+
+  it("still opens More when the player asks for it", () => {
+    expect(shownSheet(choice({ yardClear: true, moreOpen: true }))).toBe("more");
+  });
+
+  it("leaves a desktop's panels alone", () => {
+    expect(shownSheet(choice({ layout: PlannerLayout.DESKTOP }))).toBeNull();
+    expect(shownSheet(choice({ layout: PlannerLayout.DESKTOP, yardClear: true }))).toBeNull();
+  });
+
+  it("shows the docked panel the player raised last, else whichever has something", () => {
+    expect(shownSheet(choice({ raised: "dock", dockFilled: true }))).toBe("dock");
+    expect(shownSheet(choice({ raised: "dock", dockFilled: false }))).toBe("inspector");
+    expect(shownSheet(choice({ inspectorFilled: false }))).toBe("dock");
   });
 });

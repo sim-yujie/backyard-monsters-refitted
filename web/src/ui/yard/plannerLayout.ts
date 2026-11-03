@@ -38,6 +38,51 @@ export const plannerLayout = (width: number, height: number, coarse: boolean): P
 /** True for either phone shape. */
 export const isPhone = (layout: PlannerLayout): boolean => layout !== PlannerLayout.DESKTOP;
 
+/**
+ * The three things that can fill a phone's one sheet slot (#45): the building
+ * sheet, a docked panel (the drawer, the checklist, Find, Layouts, a dialog)
+ * and the More sheet.
+ */
+export type PhoneSheet = "inspector" | "dock" | "more";
+
+/** What `shownSheet` decides from. */
+export interface SheetChoice {
+  readonly layout: PlannerLayout;
+  /** The More sheet is open. */
+  readonly moreOpen: boolean;
+  /** The sheet the player raised last. */
+  readonly raised: PhoneSheet;
+  /** Something is docked in the panel slot. */
+  readonly dockFilled: boolean;
+  /** The building sheet has something in it. */
+  readonly inspectorFilled: boolean;
+  /**
+   * The yard is being kept clear for a move: a building is in hand, or was put
+   * down and the player has not tapped or opened anything since.
+   */
+  readonly yardClear: boolean;
+}
+
+/**
+ * Which sheet a phone shows: null off a phone, where every panel shows as it
+ * always has, and "none" while the yard is kept clear for a move.
+ *
+ * A phone's sheet covers half the yard: the bottom half upright, the right half
+ * on its side. A player reported that picking a building up opened its sheet
+ * there, over the spot they were trying to line it up on. So while a building
+ * is in hand no sheet shows, and after the drop the yard stays clear until the
+ * player taps (which brings the building sheet back) or opens something. More
+ * still opens on request, since only the player opens it.
+ */
+export const shownSheet = (choice: SheetChoice): PhoneSheet | "none" | null => {
+  if (!isPhone(choice.layout)) return null;
+  if (choice.moreOpen) return "more";
+  if (choice.yardClear) return "none";
+  if (choice.raised === "dock" && choice.dockFilled) return "dock";
+  if (choice.inspectorFilled) return "inspector";
+  return "dock";
+};
+
 /** The four pool resources, which is what a cost is made of. */
 type PoolKey = (typeof RESOURCE_KEYS)[number];
 

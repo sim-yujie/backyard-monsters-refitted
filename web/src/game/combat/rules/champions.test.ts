@@ -263,7 +263,9 @@ describe("Fomor (issue #222)", () => {
     fling(battle, 140, { C1: 10 });
     let enragedDefender = false;
     watch(battle, 400, (_event, current) => {
-      if (current.creeps().some((creep) => creep.friendly && !creep.champion && creep.enraged)) {
+      if (
+        current.creeps().some((creep) => creep.friendly && !creep.champion && creep.enraged)
+      ) {
         enragedDefender = true;
       }
     });
@@ -349,6 +351,91 @@ describe("Fomor (issue #222)", () => {
     const { crossedIntact, flying } = acrossTheWall(3);
     expect(flying).toBe(true);
     expect(crossedIntact).toBe(true);
+  });
+
+  /**
+   * A camp walled in all round: a square of walls 600 across with a harvester
+   * and a Cannon Tower in the middle, some 300 from the walls. A walking
+   * Fomor lands outside the north wall, a Pokey pack inside under the tower,
+   * which wounds them, so they are the allies Fomor follows and the camp's
+   * buildings theirs. There is no way in but through a wall.
+   */
+  const walledCamp = (seed: number) => {
+    const buildings: Record<string, CombatBuildingDataMap[string]> = {
+      "1": { id: 1, t: 1, l: 1, X: -30, Y: -30, st: 100_000 },
+      "2": { id: 2, t: 20, l: 1, X: 60, Y: -30 },
+    };
+    const placed = new Set<string>();
+    let id = 100;
+    for (let along = -300; along <= 300; along += 20) {
+      for (const [x, y] of [
+        [along, -300],
+        [along, 300],
+        [-300, along],
+        [300, along],
+      ] as const) {
+        if (placed.has(`${x},${y}`)) continue;
+        placed.add(`${x},${y}`);
+        buildings[String(id)] = { id, t: 17, l: 1, X: x, Y: y };
+        id += 1;
+      }
+    }
+    const yard = yardOf(buildings);
+    const battle = createBattle(yard, { seed, levels: { C6: 10 } });
+    battle.apply({
+      kind: "fling",
+      t: 0,
+      x: 0,
+      y: -420,
+      r: 5,
+      monsters: {},
+      champion: { t: 3, l: 1 },
+    });
+    battle.apply({ kind: "fling", t: 0, x: 0, y: 80, r: 20, monsters: { C6: 3 } });
+    return { yard, battle };
+  };
+
+  it("shoots the wall in its way when its ally's building is behind it, on foot", () => {
+    // The player's report (2 Nov 2026): a level 1 Fomor beside a Kozu camp's
+    // walled Town Hall the whole attack, never firing. Following its ally, it
+    // was routed to the wall in its way but aimed only at the ally's building,
+    // out of its 140 from there, so it planned its way again and shot neither.
+    for (const seed of [3, 5, 9]) {
+      const { yard, battle } = walledCamp(seed);
+      const walls = new Set(
+        yard.buildings.filter((building) => building.type === 17).map((one) => one.id),
+      );
+      let followedAt = -1;
+      let shotsWhileFollowing = 0;
+      let walking = false;
+      let cameIn = false;
+      watch(battle, 1500, (event, current) => {
+        const fomor = championOf(current, false);
+        if (!fomor) return;
+        walking = !fomor.flying;
+        if (Math.abs(fomor.ix) < 280 && Math.abs(fomor.iy) < 280) cameIn = true;
+        // Following, it takes on its ally's building, inside the walls.
+        if (followedAt < 0 && (fomor.targetBuilding === 1 || fomor.targetBuilding === 2)) {
+          followedAt = current.tick;
+        }
+        if (
+          followedAt >= 0 &&
+          event.kind === "hit" &&
+          event.creepId === fomor.id &&
+          event.tick > followedAt
+        ) {
+          shotsWhileFollowing += 1;
+        }
+      });
+      expect(walking).toBe(true);
+      expect(followedAt).toBeGreaterThan(0);
+      expect(shotsWhileFollowing).toBeGreaterThan(0);
+      // It broke a wall and walked in.
+      expect(
+        yard.buildings.some((building) => walls.has(building.id) && building.hp <= 0),
+      ).toBe(true);
+      expect(cameIn).toBe(true);
+    }
   });
 });
 
@@ -457,7 +544,9 @@ describe("a champion's start frame (issue #222)", () => {
       fling(battle, -80, {}, champion);
       const after = battle.state().rngDraws;
       // The drop point's own draws, the same for the same seed and spot.
-      const bare = createBattle(yardOf({ "1": { id: 1, t: 14, l: 10, X: 0, Y: 0 } }), { seed: 11 });
+      const bare = createBattle(yardOf({ "1": { id: 1, t: 14, l: 10, X: 0, Y: 0 } }), {
+        seed: 11,
+      });
       fling(bare, -80, { C1: 1 });
       return after - before - bare.state().rngDraws;
     };
