@@ -34,6 +34,18 @@ describe("chatConfigFrom", () => {
       userId: 2505,
       token: "tok",
       channel: "chat:mr2-global",
+      countryChannel: null,
+      country: null,
+    });
+  });
+
+  it("reads the player's country room when the load names one", () => {
+    expect(
+      chatConfigFrom({ ...load, chatcountrychannel: "chat:country:PH", chatcountry: "PH" }, 2505, false),
+    ).toMatchObject({ channel: "chat:mr2-global", countryChannel: "chat:country:PH", country: "PH" });
+    expect(chatConfigFrom({ ...load, chatcountrychannel: "chat:country:PH" }, 2505, false)).toMatchObject({
+      countryChannel: null,
+      country: null,
     });
   });
 

@@ -51,7 +51,7 @@ import { getChatChannel, getOrCreateChatToken } from "../../../chat/chatChannels
 import { getAllianceData } from "../../../services/alliance/allianceData.js";
 import { runningPowerups } from "../../../services/alliance/powerups.js";
 import { cellRelationship, findRelationships } from "../../../services/alliance/relationships.js";
-import { INFERNO_CHAT_CHANNEL } from "../../../config/ChatConfig.js";
+import { INFERNO_CHAT_CHANNEL, countryChannelFor } from "../../../config/ChatConfig.js";
 import { finaliseBeforeLoad } from "../../../services/base/finaliseAttack.js";
 import { infernoConfig } from "../../../config/InfernoConfig.js";
 import { closeInfernoPlayerAttacksOf } from "../../../services/inferno/infernoPlayerFinalise.js";
@@ -433,10 +433,14 @@ export const baseLoad: KoaController = async (ctx) => {
   const avatar = baseOwner?.pic_square;
   let chattoken: string | undefined;
   let chatchannel: string | undefined;
+  // The player's country room beside Global (owner 3 Nov 2026), when their
+  // stored country has one; the chat server checks it again on join.
+  let chatcountrychannel: string | null = null;
 
   if (isOwner) {
     chattoken = await getOrCreateChatToken(user.userid);
     chatchannel = isInferno ? INFERNO_CHAT_CHANNEL : getChatChannel(userSave.mapversion);
+    chatcountrychannel = countryChannelFor(user.country);
   }
 
   const isOwnMainYard = isOwner && !isInferno;
@@ -513,6 +517,10 @@ export const baseLoad: KoaController = async (ctx) => {
       chatenabled: 1,
       chattoken,
       chatchannel,
+      ...(chatcountrychannel && { chatcountrychannel, chatcountry: user.country }),
+      // The one-time "Where are you playing from?" prompt, until it is answered or put off.
+      // Only on the own main yard, once the new-player tutorial is over (stage 205).
+      ...(isOwnMainYard && Number(isTutorialEnabled) >= 205 && !user.country && !user.country_asked && { countryask: 1 }),
       ...(alliance && { alliancedata: alliance }),
       powerups,
     }),
