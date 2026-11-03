@@ -13,9 +13,11 @@ afterEach(() => {
 });
 
 describe("stayProtectedText", () => {
-  it("counts down to the end of the protection, then says it is over", () => {
-    expect(stayProtectedText(60_000)).toEqual({ line: "Other players can attack your yard in 1:00.", over: false });
-    expect(stayProtectedText(0)).toEqual({ line: "Other players can attack your yard now.", over: true });
+  // 3 Nov: it spoke only of attacks, so a player who did not mind one let it
+  // run out and was disconnected without being told that would happen.
+  it("counts down to the disconnect, then asks for the tap now", () => {
+    expect(stayProtectedText(60_000)).toEqual({ line: "Tap within 1:00 to stay connected.", over: false });
+    expect(stayProtectedText(0)).toEqual({ line: "Tap now to stay connected.", over: true });
   });
 });
 
@@ -29,9 +31,9 @@ describe("StayProtectedPrompt", () => {
     const prompt = new StayProtectedPrompt(host, onStay);
     prompt.show(Date.now() + 60_000);
     expect(host.textContent).toContain("Stay protected?");
-    expect(host.textContent).toContain("in 1:00");
+    expect(host.textContent).toContain("within 1:00");
     vi.advanceTimersByTime(61_000);
-    expect(host.textContent).toContain("attack your yard now");
+    expect(host.textContent).toContain("Tap now to stay connected");
     expect(host.querySelector(".stay-protected--over")).not.toBeNull();
 
     fail = true;

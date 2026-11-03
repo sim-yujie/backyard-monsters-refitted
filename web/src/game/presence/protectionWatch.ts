@@ -26,6 +26,11 @@
  * "Still there?" countdown comes first: while it is up this prompt waits
  * (`suppress`), and once input takes the countdown down this one shows if it
  * is still due. After the idle disconnect it never shows again (`stop`).
+ *
+ * The lapse that disconnects never comes before the prompt has been up on a
+ * visible tab for its whole minute (3 Nov): a page loaded, or a tab come back
+ * to, seconds before the ten minutes end used to disconnect at once, before
+ * the prompt could be seen. Such a player gets the minute from when it shows.
  */
 
 /** The two times, in milliseconds. */
@@ -130,6 +135,14 @@ export class ProtectionWatch {
   /** No {@link active} tap before this, a browser-clock time: the last one failed. */
   private activeRetryAt = 0;
   private shown = false;
+  /** The end of the countdown on show, a browser-clock time. */
+  private shownEndsAt = 0;
+  /**
+   * When the lapse comes, a browser-clock time: set when the prompt first
+   * shows on a visible tab, at least {@link ProtectionTimings.warningMs}
+   * after; null until then, and again once a real action moves the clock.
+   */
+  private deadline: number | null = null;
   private lapsed = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -261,22 +274,24 @@ export class ProtectionWatch {
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
     const promptAt = this.promptAt();
+    const now = this.now();
+    // A real action moved the clock: the next prompt starts afresh.
+    if (promptAt === null || now < promptAt) this.deadline = null;
     if (this.stopped || this.holders === 0 || promptAt === null) {
       this.setShown(false);
       this.setLapsed(false);
       return;
     }
-    const now = this.now();
     const endAt = promptAt + this.timings.warningMs;
     const showAt = Math.max(promptAt, this.resumeAt);
-    this.setLapsed(now >= endAt);
-    if (now < showAt) {
-      this.setShown(false);
-      this.timer = setTimeout(this.schedule, (now < endAt ? Math.min(showAt, endAt) : showAt) - now);
-      return;
+    const show = now >= showAt && !this.suppressed;
+    if (show && this.deadline === null && document.visibilityState !== "hidden") {
+      this.deadline = Math.max(endAt, now + this.timings.warningMs);
     }
-    this.setShown(!this.suppressed);
-    if (now < endAt) this.timer = setTimeout(this.schedule, endAt - now);
+    this.setLapsed(this.deadline !== null && now >= this.deadline);
+    this.setShown(show);
+    if (now < showAt) this.timer = setTimeout(this.schedule, showAt - now);
+    else if (this.deadline !== null && now < this.deadline) this.timer = setTimeout(this.schedule, this.deadline - now);
   };
 
   private setLapsed(on: boolean): void {
@@ -285,12 +300,16 @@ export class ProtectionWatch {
     this.onLapse?.(on);
   }
 
+  /** Shows or hides the prompt; shown again when its countdown's end moves. */
   private setShown(on: boolean): void {
-    if (on === this.shown) return;
-    this.shown = on;
     const promptAt = this.promptAt();
-    if (on && promptAt !== null) this.onShow(promptAt + this.timings.warningMs);
-    else this.onHide();
+    const endsAt = this.deadline ?? (promptAt === null ? 0 : promptAt + this.timings.warningMs);
+    if (on === this.shown && (!on || endsAt === this.shownEndsAt)) return;
+    this.shown = on;
+    if (on && promptAt !== null) {
+      this.shownEndsAt = endsAt;
+      this.onShow(endsAt);
+    } else this.onHide();
   }
 }
 
