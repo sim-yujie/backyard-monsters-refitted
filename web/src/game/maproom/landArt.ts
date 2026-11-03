@@ -6,8 +6,7 @@ import { sheetAtQuality } from "@/game/quality";
  *
  * Each feature has a painted icon for the cell pop-up
  * (`public/maproom/land/<key>-icon@4x.webp`, 112 px for a 28 px picture; the
- * Quality setting takes the @2x or 1x copy) and painted map props
- * (`landSprites.ts`, placed by `landProps.ts`). Built from the Codex sheets by
+ * Quality setting takes the @2x or 1x copy), built from the Codex sheet by
  * `web/tools/land-art/build.py`. Painted with Codex in the style of the Map Room 2
  * study's Codex mock-ups (`docs/mr2-civ-study.md` section 6).
  */

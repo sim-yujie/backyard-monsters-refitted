@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
-"""Build the Map Room 2 land feature pictures from the Codex sheets in `source/`.
+"""Build the Map Room 2 land feature pop-up pictures from the Codex sheet in `source/`.
 
-The sheets were painted by Codex (codex exec, image tool; prompts `source/prompt-c*.txt`) on flat
+The sheet was painted by Codex (codex exec, image tool; prompt `source/prompt-c4.txt`) on flat
 magenta, each picture in its own grid cell. This keys the magenta out (glows and soft edges
 un-mixed from it, not cut), trims each picture and writes:
 
-  web/public/maproom/land/land-props@4x.webp   the map props, 8 x 4 frames of 192 px (48 points),
-  web/public/maproom/land/land-props@2x.webp   each prop's foot at the bottom centre of its frame
-  web/public/maproom/land/land-props.webp      (Quality High / Medium / Low, `game/quality.ts`)
   web/public/maproom/land/<key>-icon@4x.webp   the pop-up pictures, 112 px (28 points)
-  web/public/maproom/land/<key>-icon@2x.webp
+  web/public/maproom/land/<key>-icon@2x.webp   (Quality High / Medium / Low, `game/quality.ts`)
   web/public/maproom/land/<key>-icon.webp
 
-Frame order matches `PROP_FRAMES` in `web/src/game/maproom/landProps.ts`.
+(The map props once built here were dropped by the owner: the land features get painted into the
+map's landscape later.)
 
   python web/tools/land-art/build.py
 """
@@ -26,9 +24,6 @@ HERE = Path(__file__).resolve().parent
 SOURCE = HERE / "source"
 OUT = HERE.parents[1] / "public" / "maproom" / "land"
 
-FRAME = 192  # px at @4x = 48 points
-COLUMNS, ROWS = 8, 4
-FOOT_MARGIN = 4
 ICON = 112
 KEY = np.array([255.0, 0.0, 255.0])
 
@@ -121,29 +116,6 @@ def scaled(picture: Image.Image, factor: float) -> Image.Image:
     return picture.resize(size, Image.LANCZOS)
 
 
-def build_props() -> None:
-    trees = cells("forest", 4, 3, top_sliver=True)
-    rocks_marsh = cells("rocks-marsh", 4, 3)
-    nodes = cells("nodes", 4, 2, violet=(2, 6), glow=(0, 1, 3, 4, 5, 7))
-    # One scale per sheet keeps each sheet's own sizes; numbers chosen for a 150 x 75 point hex.
-    props = (
-        [scaled(p, 0.6) for p in trees]  # 0-11
-        + [scaled(p, 0.5) for p in rocks_marsh[:8]]  # rocks 12-19
-        + [scaled(p, 0.46) for p in rocks_marsh[8:10]]  # puddles 20-21
-        + [scaled(p, 0.5) for p in rocks_marsh[10:12]]  # reeds 22-23
-        + [scaled(p, 0.50) for p in nodes]  # nodes 24-27, small ones 28-31
-    )
-    assert len(props) == COLUMNS * ROWS, len(props)
-    sheet = Image.new("RGBA", (COLUMNS * FRAME, ROWS * FRAME), (0, 0, 0, 0))
-    for index, prop in enumerate(props):
-        if prop.width > FRAME or prop.height > FRAME - FOOT_MARGIN:
-            prop = scaled(prop, min(FRAME / prop.width, (FRAME - FOOT_MARGIN) / prop.height))
-        x = (index % COLUMNS) * FRAME + (FRAME - prop.width) // 2
-        y = (index // COLUMNS) * FRAME + FRAME - FOOT_MARGIN - prop.height
-        sheet.alpha_composite(prop, (x, y))
-    write_copies(sheet, "land-props")
-
-
 def build_icons() -> None:
     icons = cells("icons", 4, 2, violet=(6,), glow=(4, 5, 6, 7))
     keys = ["forest", "rocks", "marsh", "open", "node-twigs", "node-pebbles", "node-putty", "node-goo"]
@@ -164,7 +136,6 @@ def write_copies(picture: Image.Image, name: str) -> None:
 
 
 if __name__ == "__main__":
-    build_props()
     build_icons()
     for path in sorted(OUT.glob("*.webp")):
         print(f"{path.name:28} {path.stat().st_size // 1024:5} KB")

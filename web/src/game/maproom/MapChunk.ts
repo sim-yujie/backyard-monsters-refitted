@@ -39,8 +39,6 @@ import type { ZoneStore } from "./ZoneStore";
 import { cellLift, paintOrder } from "./ground";
 import { GROUND_ANCHOR_X, GROUND_ANCHOR_Y, type GroundArt } from "./groundArt";
 import type { ConstructionBadge } from "./constructionBadge";
-import { landProps } from "./landProps";
-import { PROP_ANCHOR_X, PROP_ANCHOR_Y, type LandSprites } from "./landSprites";
 
 /**
  * One 10 x 10 block of the map, built once as sprites.
@@ -185,14 +183,6 @@ export class MapChunk {
    */
   readonly top = new Container();
 
-  /**
-   * The land features' painted props (trees, rocks, goo pools and reeds,
-   * resource piles) over each hex but its middle, one sprite each, under the
-   * camps (`landProps.ts`). Modern look and the near tiers only; empty with the
-   * server's land switch off. Its own layer so the map's animation can find
-   * and move the props.
-   */
-  readonly features = new Container();
   /** Camp tents. Swapped out wholesale for `portraits` at the close tiers. */
   private readonly tents = new Container();
   /** Camp portraits, present only when the art had arrived by build time. */
@@ -233,15 +223,11 @@ export class MapChunk {
     private readonly ground: Container,
     private readonly groundArt: GroundArt,
     private readonly constructionBadge: ConstructionBadge,
-    private readonly landSprites: LandSprites | null = null,
   ) {
     this.labels = new LabelLayer(pool);
     this.container.interactiveChildren = false;
     this.top.interactiveChildren = false;
-    // Props of neighbouring cells overlap: the one further down the screen goes in front.
-    this.features.sortableChildren = true;
     this.container.addChild(
-      this.features,
       this.tents,
       this.portraits,
       // Crosses go over whichever of the two is showing.
@@ -314,10 +300,6 @@ export class MapChunk {
         this.outlineSprites.push(outline);
         this.addGround(outline, order + 0.25);
 
-        if (height !== null && height > WATER_MAX_HEIGHT && cell && "lf" in cell) {
-          this.addLandProps(cell.lf, col, row, centre.x, centre.y);
-        }
-
         if (appearance.marker === CellMarker.YARD || appearance.marker === CellMarker.OUTPOST) {
           this.addPlayer(appearance, centre.x, centre.y);
         } else {
@@ -328,29 +310,6 @@ export class MapChunk {
 
     this.outlineTexture = this.atlas.outlineFine;
     this.showGround();
-  }
-
-  /** A land feature's props on the hex at (x, y) (`landProps.ts`). */
-  private addLandProps(feature: number | undefined, col: number, row: number, x: number, y: number): void {
-    const sprites = this.landSprites;
-    if (!sprites) return;
-    const props = landProps(feature, col, row);
-    if (props.length === 0) return;
-    if (!sprites.ready) {
-      // First feature on screen: fetch the sheet; the renderer rebuilds this chunk when it lands.
-      void sprites.load();
-      return;
-    }
-    for (const prop of props) {
-      const texture = sprites.frame(prop.frame);
-      if (!texture) continue;
-      const sprite = new Sprite(texture);
-      sprite.anchor.set(PROP_ANCHOR_X, PROP_ANCHOR_Y);
-      sprite.position.set(x + prop.x, y + prop.y);
-      sprite.scale.set(prop.flip ? -prop.scale : prop.scale, prop.scale);
-      sprite.zIndex = sprite.y;
-      this.features.addChild(sprite);
-    }
   }
 
   private addGround(sprite: Sprite, order: number): void {
@@ -397,8 +356,6 @@ export class MapChunk {
     this.tents.visible = view.details && !portraits;
     this.portraits.visible = view.details && portraits;
     this.details.visible = view.details;
-    // The props are a few pixels tall below the portrait tier: only clutter there.
-    this.features.visible = view.avatars;
     this.badgeDiscs.visible = view.badges;
     this.plates.visible = view.badges;
     this.labels.badges.visible = view.badges;
@@ -420,7 +377,6 @@ export class MapChunk {
     this.hasPortraits = false;
     this.clearPlates();
     for (const layer of [
-      this.features,
       this.tents,
       this.portraits,
       this.details,
