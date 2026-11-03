@@ -80,6 +80,7 @@ import { academyLevel } from "@/game/monsters/housing";
 import { housingSpace } from "@/game/monsters/monsterCatalogue";
 import { takenOverResources, type TakeoverCandidate } from "@/game/maproom/takeover";
 import { MapInput } from "@/game/maproom/MapInput";
+import { paintedMapOn } from "@/game/maproom/painted/paintedSwitch";
 import { MapRenderer } from "@/game/maproom/MapRenderer";
 import { classicLook } from "@/game/classicLook";
 import {
@@ -686,6 +687,7 @@ export class MapRoom2Scene implements Scene {
 
     this.renderer.draw(this.range, this.camera.zoom);
     if (this.tilt && this.tiltView && this.context) {
+      if (this.renderer.paintedStepped) this.tiltView.invalidate();
       this.tiltView.render(this.context.renderer, this.renderer.root, this.tilt, this.camera.zoom, this.camera.position);
     }
     this.ui?.drawMinimap();
@@ -728,6 +730,8 @@ export class MapRoom2Scene implements Scene {
       // The load that chose this map, when there was one (issue #162).
       const base = takePrimedOwnYard() ?? (await loadOwnYard());
       this.ownSave = base;
+      // Map Room 2's painted look (MR2_PAINTED_MAP), never in Classic.
+      this.renderer.setPaintedMap(paintedMapOn({ serverFlag: base.flags?.["mr2painted"] }));
       this.income = new IncomePrediction(base.buildingresources, base.resources);
       this.incomeCap = storageCapOf(base);
       this.clockOffset = base.currenttime - Date.now() / 1000;

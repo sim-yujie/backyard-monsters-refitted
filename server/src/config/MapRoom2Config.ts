@@ -56,6 +56,33 @@ export const mr2NeighbourBonusMode = (
 export const mr2NeighbourBonusEnabled = (env: Record<string, string | undefined> = process.env): boolean =>
   mr2NeighbourBonusMode(env) !== "off";
 
+/** Who sees Map Room 2's painted look (Modern look plan step 2). */
+export type Mr2PaintedMapMode = "off" | "staff" | "on";
+
+/**
+ * Map Room 2's painted look switch, `MR2_PAINTED_MAP` (`docs/mr2-modern-look-plan.md` section 4):
+ * `on` (or `true`) for every Modern player, `staff` for the accounts in `MR2_STAFF_USER_IDS`
+ * (comma separated `user.userid`s; `ADMIN_USER_IDS` when that is unset), off for anything else,
+ * the default, which is today's tile map. Classic players never get it (the client decides that).
+ * Read on each base load, so tests can flip it.
+ */
+export const mr2PaintedMapMode = (env: Record<string, string | undefined> = process.env): Mr2PaintedMapMode => {
+  if (isSwitchOn(env.MR2_PAINTED_MAP)) return "on";
+  return env.MR2_PAINTED_MAP?.trim().toLowerCase() === "staff" ? "staff" : "off";
+};
+
+/** Whether this account gets the painted look (sent as `flags.mr2painted` with the base load). */
+export const mr2PaintedMapFor = (userid: unknown, env: Record<string, string | undefined> = process.env): boolean => {
+  const mode = mr2PaintedMapMode(env);
+  if (mode !== "staff") return mode === "on";
+  if (typeof userid !== "number") return false;
+  const list = env.MR2_STAFF_USER_IDS?.trim() ? env.MR2_STAFF_USER_IDS : env.ADMIN_USER_IDS;
+  return (list ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .some((part) => /^\d+$/.test(part) && Number(part) === userid);
+};
+
 /**
  * Map Room 2's tilted camera (`docs/mr2-modern-look-plan.md` step 4): `MR2_TILT`
  * `on` (or `true`) lets Modern players see the map tilted, on by default and
