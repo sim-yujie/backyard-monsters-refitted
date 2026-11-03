@@ -4,6 +4,9 @@ import {
   CLOUD_EDGE_HIGH,
   CLOUD_EDGE_LOW,
   cloudTime,
+  DECK_MIN_CELLS,
+  DECK_PIXELS,
+  deckLevel,
   FOG_DISTANCE_CAP,
   fogDepth,
   fogDistances,
@@ -137,5 +140,34 @@ describe("painted fog helpers", () => {
     expect(cloudTime(1000 + 130, 1000, "medium")).toBe(0);
     expect(cloudTime(1000 + 260, 1000, "medium")).toBeCloseTo(0.25, 9);
     expect(cloudTime(1000 + 99999, 1000, "low")).toBe(0);
+  });
+});
+
+describe("the cloud picture's repeat (Civ-sized heaps)", () => {
+  const repeatCells = (cellPixels: number) => 2 ** Math.floor(deckLevel(cellPixels));
+
+  it("never repeats in fewer than DECK_MIN_CELLS cells, so a big heap (a third of it) is over a cell close up", () => {
+    for (const cellPixels of [40, 130, 200, 400, 1000]) {
+      expect(repeatCells(cellPixels)).toBeGreaterThanOrEqual(DECK_MIN_CELLS);
+      expect(repeatCells(cellPixels) / 3).toBeGreaterThan(1);
+    }
+  });
+
+  it("keeps the far sea's repeat between half and all of DECK_PIXELS on screen", () => {
+    for (const cellPixels of [0.5, 1, 2.7, 6, 13, 30, 60, 100]) {
+      const pixels = repeatCells(cellPixels) * cellPixels;
+      expect(pixels).toBeGreaterThan(DECK_PIXELS / 2 - 1e-6);
+      expect(pixels).toBeLessThanOrEqual(DECK_PIXELS + 1e-6);
+    }
+  });
+
+  it("changes smoothly with the zoom (no jump the cross-fade could not hide)", () => {
+    let previous = deckLevel(0.5);
+    for (let cellPixels = 0.5; cellPixels < 600; cellPixels *= 1.01) {
+      const level = deckLevel(cellPixels);
+      expect(Math.abs(level - previous)).toBeLessThan(0.02);
+      expect(level).toBeLessThanOrEqual(previous + 1e-9);
+      previous = level;
+    }
   });
 });
