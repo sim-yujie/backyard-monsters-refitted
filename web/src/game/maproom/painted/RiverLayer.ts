@@ -39,6 +39,8 @@ export class RiverLayer {
     width: 1,
     height: 1,
     format: "rgba8unorm",
+    // Data, not colour: Pixi would otherwise multiply the alpha (the half width) into the others.
+    alphaMode: "no-premultiply-alpha",
     scaleMode: "linear",
     autoGenerateMipmaps: false,
   });
@@ -48,6 +50,8 @@ export class RiverLayer {
   private builtQuality: Quality | null = null;
   private stale = true;
   private anyRiver = false;
+  /** Pictures replaced by a bigger or smaller one, destroyed once the shader holds the new one. */
+  private retired: BufferImageSource[] = [];
 
   /** A zone arrived (new rivers or heights): rebuilt on the next `update`. */
   invalidate(): void {
@@ -103,7 +107,14 @@ export class RiverLayer {
     return true;
   }
 
+  /** Destroys the pictures the shader no longer holds (call after handing it the new one). */
+  releaseRetired(): void {
+    for (const source of this.retired) source.destroy();
+    this.retired = [];
+  }
+
   destroy(): void {
+    this.releaseRetired();
     this.source.destroy();
   }
 
@@ -112,16 +123,16 @@ export class RiverLayer {
       (this.source.resource as Uint8Array).set(mask.bytes);
       this.source.update();
     } else {
-      const old = this.source;
+      this.retired.push(this.source);
       this.source = new BufferImageSource({
         resource: mask.bytes,
         width: mask.width,
         height: mask.height,
         format: "rgba8unorm",
+        alphaMode: "no-premultiply-alpha",
         scaleMode: "linear",
         autoGenerateMipmaps: false,
       });
-      old.destroy();
     }
     const { x0, y0, x1, y1 } = mask.rect;
     this.rect.set([x0, y0, 1 / Math.max(1e-6, x1 - x0), 1 / Math.max(1e-6, y1 - y0)]);

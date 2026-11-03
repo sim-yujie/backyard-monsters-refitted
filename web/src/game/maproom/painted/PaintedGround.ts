@@ -37,6 +37,15 @@ const STAND_INS = [
   "#4f6a26", "#e9eef4", "#a2c040", "#3cc4d4", "#1f62b8", "#d9a85a", "#3f8fd8",
 ];
 
+/** The ground shader's uniforms this class changes after it is made. */
+interface GroundUniformValues {
+  uQuality: number;
+  uTime: number;
+  uSpritesReady: number;
+  uRiverOn: number;
+  uRiverRect: Float32Array;
+}
+
 const QUALITY_LEVEL: Record<Quality, number> = { high: 2, medium: 1, low: 0 };
 
 /**
@@ -155,7 +164,7 @@ export class PaintedGround {
         uSpritesReady: { value: 0, type: "f32" },
         uCellPoints: { value: shape.cellWidth, type: "f32" },
         uTime: { value: 0, type: "f32" },
-        uRiverRect: { value: this.rivers.uniforms.rect, type: "vec4<f32>" },
+        uRiverRect: { value: new Float32Array([0, 0, 1, 1]), type: "vec4<f32>" },
         uRiverOn: { value: 0, type: "f32" },
       },
       uData: this.data.source,
@@ -189,12 +198,8 @@ export class PaintedGround {
     });
   }
 
-  private get uniforms(): { uQuality: number; uTime: number; uSpritesReady: number; uRiverOn: number } {
-    return (
-      this.shader.resources.groundUniforms as {
-        uniforms: { uQuality: number; uTime: number; uSpritesReady: number; uRiverOn: number };
-      }
-    ).uniforms;
+  private get uniforms(): GroundUniformValues {
+    return (this.shader.resources.groundUniforms as { uniforms: GroundUniformValues }).uniforms;
   }
 
   /**
@@ -204,11 +209,12 @@ export class PaintedGround {
   updateRivers(range: CellRange, shown: boolean, cells: RiverCells): boolean {
     const changed = this.rivers.update(range, shown, cells);
     if (!changed) return false;
-    const { source, on } = this.rivers.uniforms;
+    const { source, rect, on } = this.rivers.uniforms;
     if (this.shader.resources.uRiver !== source) this.shader.resources.uRiver = source;
-    this.uniforms.uRiverOn = on ? 1 : 0;
-    // The rectangle is the same array the uniform holds; mark the group changed so it is uploaded.
-    (this.shader.resources.groundUniforms as { update(): void }).update();
+    this.rivers.releaseRetired();
+    const uniforms = this.uniforms;
+    uniforms.uRiverOn = on ? 1 : 0;
+    uniforms.uRiverRect.set(rect);
     return true;
   }
 
