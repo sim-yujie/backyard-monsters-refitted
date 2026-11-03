@@ -37,6 +37,10 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * `range2` is the cannonball and target), income the mixed resource pile,
  * height the hill with a flag. None carries an arrow, as its number can be a
  * gain or a loss.
+ *
+ * Map Room 2's neighbour defence bonus (`art-samples/mr2-bonus5/icon`): the
+ * teal shield with linked cells and two up arrows (`neighbours`); `neighbours2`
+ * is the hex shield with friends either side, the other option.
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -63,6 +67,8 @@ export const GAME_ICONS = {
   range2: "Tower range",
   income: "Income",
   height: "Height",
+  neighbours: "Neighbour defence bonus",
+  neighbours2: "Neighbour defence bonus",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;

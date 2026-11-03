@@ -53,12 +53,13 @@ export interface DefenderForces {
 /**
  * What each count of friendly neighbours adds to a Map Room 2 cell's defence
  * (`docs/mr2-neighbours.md`), as fractions: index 1 is one neighbour. Both
- * stats rise together, by less for each further neighbour: +8% for the first,
- * then +6, +4 and +2 each for the fourth to sixth, so a cell ringed by six
- * friends has +24% building health and +24% tower damage.
+ * stats rise together, by less for each further neighbour: +5% for the first,
+ * then +4, +2, +2 and +1 each for the fifth and sixth, so a cell ringed by six
+ * friends has +15% building health and +15% tower damage. The owner's ladder
+ * (3 Nov): the first +8, +6, +4, +2, +2, +2 scaled by 5/8 and rounded.
  */
 export const NEIGHBOUR_DEFENCE_BONUS: readonly number[] = [
-  0, 0.08, 0.14, 0.18, 0.2, 0.22, 0.24,
+  0, 0.05, 0.09, 0.11, 0.13, 0.14, 0.15,
 ];
 
 /** The battle's defence bonus for `neighbours` friendly cells; none for 0 or a bad count. */

@@ -8,6 +8,8 @@ import type { BaseLoadResponse, Resources } from "@/api/types";
 import { clockReading, formatClock } from "@/game/attack/attackClock";
 import { withLoot } from "@/game/attack/attackerPool";
 import { boostSummary, loadBoosts } from "@/game/attack/boostSummary";
+import { neighbourBonusChip } from "@/ui/maproom/neighbourBonusChip";
+import { loadNeighbours } from "@/game/maproom/neighbourBonus";
 import { attackYardHandlers } from "@/game/attack/AttackInput";
 import { AttackPresentation } from "@/game/attack/attackPresentation";
 import {
@@ -946,6 +948,7 @@ export class AttackScene implements Scene {
     const load = this.session?.attackLoad();
     if (this.boostsShown || !chip || !load) return;
     this.boostsShown = true;
+    this.showNeighbourBonus(chip, load);
     const side = this.raiding || isDefenceWatch(this.watchRun) ? "defender" : "attacker";
     const summary = boostSummary(loadBoosts(load), side);
     if (!summary) return;
@@ -955,6 +958,16 @@ export class AttackScene implements Scene {
     chip.setAttribute("aria-label", `${summary.label}. ${summary.lines.join(". ")}`);
     chip.setAttribute("role", "note");
     chip.hidden = false;
+  }
+
+  /**
+   * Map Room 2's neighbour defence bonus on the target, beside the boosts
+   * chip: the count the server froze into the load for this battle, so the
+   * number shown is the one fought (`docs/mr2-neighbours.md`).
+   */
+  private showNeighbourBonus(boosts: HTMLElement, load: { readonly defenderforces?: unknown }): void {
+    const chip = neighbourBonusChip(loadNeighbours(load), "attack-strip__neighbours");
+    if (chip) boosts.after(chip);
   }
 
   /** A Housing destroyed in the battle takes its monsters with it (`BUILDING15.as:93-104`). */
