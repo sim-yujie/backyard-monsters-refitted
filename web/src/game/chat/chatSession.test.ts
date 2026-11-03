@@ -254,6 +254,33 @@ describe("mute", () => {
     expect(latest().sent.at(-1)).toEqual({ type: "unignore", targetId: "77" });
     expect(visibleEntries(session.current)).toHaveLength(2);
   });
+
+  it("an unmute made while chat is down reaches the server on reconnect, and the old list does not bring the mute back", () => {
+    const session = joined();
+    latest().hear({ type: "ignore_list", list: [{ target: "77", displayname: "" }] });
+    latest().drop();
+    session.unmute(77);
+    expect(session.current.muted.has(77)).toBe(false);
+
+    vi.advanceTimersByTime(FIRST_RETRY_MS);
+    latest().open();
+    latest().hear({ type: "auth_ok", ...ME });
+    const sent = latest().sent;
+    const unignoreAt = sent.findIndex(
+      (m) => JSON.stringify(m) === JSON.stringify({ type: "unignore", targetId: "77" }),
+    );
+    const getAt = sent.findIndex((m) => (m as { type: string }).type === "getignore");
+    expect(unignoreAt).toBeGreaterThan(-1);
+    expect(unignoreAt).toBeLessThan(getAt);
+
+    // The server's answer to a request sent before it took the unmute still lists 77.
+    latest().hear({ type: "ignore_list", list: [{ target: "77", displayname: "" }] });
+    expect(session.current.muted.has(77)).toBe(false);
+    // Once the server agrees, its list is followed again.
+    latest().hear({ type: "ignore_list", list: [] });
+    latest().hear({ type: "ignore_list", list: [{ target: "77", displayname: "" }] });
+    expect(session.current.muted.has(77)).toBe(true);
+  });
 });
 
 describe("reconnecting", () => {
