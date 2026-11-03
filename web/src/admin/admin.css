@@ -2645,3 +2645,17 @@ tbody th {
   flex: 1;
   min-width: 0;
 }
+
+.mod-quote {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--line-strong);
+  background: var(--surface-2);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.mod-sees[hidden] {
+  display: none;
+}

@@ -219,9 +219,12 @@ export const actionForm = (options: ActionFormOptions): HTMLFormElement => {
     h("p", { class: "note" }, PLAYER_SEES.ban),
     h("div", { class: "actions" }, back, yes),
   );
+  const sees = h("p", { class: "note mod-sees" }, PLAYER_SEES[kind]);
   const setConfirming = (on: boolean) => {
     confirm.hidden = !on;
     submitRow.hidden = on;
+    // The question says it again.
+    sees.hidden = on;
   };
   changed();
 
@@ -278,7 +281,7 @@ export const actionForm = (options: ActionFormOptions): HTMLFormElement => {
       reason,
       counter,
     ),
-    h("p", { class: "note mod-sees" }, PLAYER_SEES[kind]),
+    sees,
     problem,
     submitRow,
     confirm,
@@ -559,7 +562,7 @@ export class ModerationView {
     if (!this.current) return;
     this.current.form = kind;
     this.renderCard();
-    this.picked.querySelector<HTMLElement>(".mod-form textarea, .mod-form .seg")?.focus();
+    this.picked.querySelector<HTMLElement>(".mod-form textarea")?.focus();
   }
 
   private renderCard(): void {
@@ -569,6 +572,7 @@ export class ModerationView {
       return;
     }
     const { player, chatReportId, form } = current;
+    const fromReport = chatReportId ? this.reportList.find((r) => r.id === chatReportId) : undefined;
     const banned = banStatus(player);
     const chips: Child[] = [
       banned ? h("span", { class: "chip chip-bad" }, banned) : null,
@@ -659,6 +663,14 @@ export class ModerationView {
             "Close",
           ),
         ),
+        fromReport
+          ? h(
+              "blockquote",
+              { class: "mod-quote" },
+              h("span", { class: "hint" }, `Reported line, ${roomLabel(fromReport.channel)}:`),
+              h("span", { class: "chat-quote" }, `“${fromReport.message}”`),
+            )
+          : null,
         h("div", { class: "mod-status" }, ...chips),
         player.gameTeam
           ? h("p", { class: "note" }, "A game team account cannot be warned, paused or banned.")

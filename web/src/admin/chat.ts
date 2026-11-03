@@ -1,6 +1,7 @@
 import { chatSocketUrl, type ChatLineWire, type ChatServerMessage } from "@/api/chat";
 import { fetchChatSession, type AdminChatSession } from "./api";
 import { h, replace } from "./dom";
+import { roomLabel } from "./moderation";
 import { errorWords } from "./shiny";
 
 /**
@@ -146,8 +147,8 @@ export class ChatPanel {
       h(
         "p",
         { class: "lede" },
-        "Chat as the game team: your lines carry the GM badge. " +
-          "Joining here closes the chat in your own game, as one account has one chat at a time.",
+        "Your lines carry the GM badge. Joining here closes the chat in your own game: " +
+          "one account has one chat at a time. Click a name to open that player in Moderation.",
       ),
       h(
         "div",
@@ -177,7 +178,8 @@ export class ChatPanel {
     const known = new Map(this.rooms.map((room) => [room.channel, room]));
     this.rooms = this.session.rooms.map((room) => ({
       channel: room.channel,
-      label: room.label,
+      // A country room's label is its code ("PH"): show the country's name.
+      label: room.channel.startsWith("chat:country:") ? roomLabel(room.channel) : room.label,
       lines: known.get(room.channel)?.lines ?? [],
       joined: false,
       unread: 0,

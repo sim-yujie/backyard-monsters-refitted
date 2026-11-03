@@ -112,7 +112,7 @@ describe("the chat panel", () => {
     ]);
     expect(view.element.textContent).toContain("In chat as the game team");
     const tabs = [...view.element.querySelectorAll(".chat-tab")].map((t) => t.textContent);
-    expect(tabs).toEqual(["Map Room 2", "PH"]);
+    expect(tabs).toEqual(["Map Room 2", "Philippines"]);
     expect(view.element.querySelector(".chat-line")?.textContent).toContain("MonsterMash");
     expect(view.element.querySelector(".chat-line")?.textContent).toContain("hello all");
   });
