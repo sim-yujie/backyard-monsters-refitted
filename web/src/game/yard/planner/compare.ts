@@ -3,7 +3,6 @@ import { readYard, type Yard } from "../yardModel";
 import { computeCoverage, coverageTowers } from "./coverage";
 import { Plan } from "./plan";
 import { isDecoration, type PlanNode, type PlotBounds } from "./placement";
-import { planTotals } from "./upgrades";
 
 /**
  * Comparing the plan on screen with a saved layout (issue #9, design
@@ -16,7 +15,7 @@ import { planTotals } from "./upgrades";
  * Decisions of 2026-09-29 (#9): the plan on screen, unsaved edits included,
  * against one saved slot; two views side by side with pan and zoom kept in
  * step; a slot's levels are read as Load reads them, the yard's current
- * levels plus the slot's plans; "moved" is the same building id at another
+ * levels; "moved" is the same building id at another
  * spot, and a building on one side only is highlighted there; a better figure
  * is green with a ▲.
  */
@@ -39,18 +38,6 @@ export const slotSave = (save: BaseLoadResponse, layout: Layout): BaseLoadRespon
   return { ...save, buildingdata };
 };
 
-/**
- * The slot as a plan: its yard, with the slot's planned upgrades set wherever
- * this yard can still do them (the rule Load applies, `Plan.setPlan`).
- */
-export const slotPlan = (yard: Yard, layout: Layout): Plan => {
-  const plan = Plan.fromYard(yard);
-  for (const node of layout.nodes) {
-    if (node.plan) plan.setPlan(node.id, node.plan.level);
-  }
-  return plan;
-};
-
 /** Both sides of a comparison, ready to draw. */
 export interface SlotView {
   readonly yard: Yard;
@@ -59,7 +46,7 @@ export interface SlotView {
 
 export const slotView = (save: BaseLoadResponse, layout: Layout): SlotView => {
   const yard = readYard(slotSave(save, layout));
-  return { yard, plan: slotPlan(yard, layout) };
+  return { yard, plan: Plan.fromYard(yard) };
 };
 
 /** One side's figures. */
@@ -69,12 +56,8 @@ export interface SideStats {
   readonly air: number;
   readonly landDeadZones: number;
   readonly airDeadZones: number;
-  /** Every building's level added up, a planned level counting as reached. */
+  /** Every building's level added up. */
   readonly levels: number;
-  /** Every resource the planned upgrades cost, added up. */
-  readonly cost: number;
-  /** Worker seconds of the planned upgrades. */
-  readonly seconds: number;
   /** Buildings with no spot: the drawer's, or the ones the slot does not name. */
   readonly unplaced: number;
 }
@@ -88,17 +71,14 @@ export const sideStats = (
 ): SideStats => {
   const placed = nodes.filter((node) => !node.fixed && !node.stored);
   const coverage = computeCoverage(coverageTowers(placed, yard.kind, yard.cellHeight), plot);
-  const totals = planTotals(placed, yard);
   let levels = 0;
-  for (const node of placed) levels += node.plan?.level ?? node.level;
+  for (const node of placed) levels += node.level;
   return {
     land: coverage.land.share,
     air: coverage.air.share,
     landDeadZones: coverage.land.deadZones.length,
     airDeadZones: coverage.air.deadZones.length,
     levels,
-    cost: totals.needed.r1 + totals.needed.r2 + totals.needed.r3 + totals.needed.r4,
-    seconds: totals.seconds,
     unplaced,
   };
 };
@@ -168,8 +148,6 @@ const ROWS: readonly (readonly [key: keyof SideStats, label: string, higherIsBet
   ["landDeadZones", "Land dead zones", false],
   ["airDeadZones", "Air dead zones", false],
   ["levels", "Building levels", true],
-  ["cost", "Planned upgrades cost", false],
-  ["seconds", "Planned upgrades time", false],
   ["unplaced", "Unplaced buildings", false],
 ];
 

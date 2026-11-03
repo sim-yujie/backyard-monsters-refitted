@@ -16,7 +16,6 @@ import {
   type BuildingDataMap,
   type MushroomSave,
   type Resources,
-  type UpgradeReport,
 } from "@/api/types";
 import { bankActions } from "@/api/yardBank";
 import { buildActions } from "@/api/yardBuild";
@@ -128,7 +127,6 @@ import { MAP_ROOM_TYPE } from "@/ui/yard/buildingActions";
 import { BuildMenu, PlacementBar, spotSentence } from "@/ui/yard/BuildMenu";
 import { bankFloat, showBankResult } from "@/ui/yard/CollectAll";
 import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
-import { describeUpgradeReport } from "@/ui/yard/upgradeText";
 import { FriendsBar } from "@/ui/friends/FriendsBar";
 import { HelpPanel } from "@/ui/friends/HelpPanel";
 import { YardDock, type YardDockOptions } from "@/ui/yard/YardDock";
@@ -2056,8 +2054,8 @@ export class YardScene implements Scene {
       ...(this.save?.firedtraps ? { firedtraps: this.save.firedtraps } : {}),
       // An outpost's Apply and batch actions act on it (outposts WP3).
       ...(this.store?.baseid !== undefined ? { baseid: this.store.baseid } : {}),
-      onApplied: (buildingdata, moved, resources, upgrades, storage) =>
-        this.onApplied(buildingdata, moved, resources, upgrades, storage),
+      onApplied: (buildingdata, moved, resources, storage) =>
+        this.onApplied(buildingdata, moved, resources, storage),
       onYardChanged: (buildingdata, resources, mushrooms) =>
         this.onYardChanged(buildingdata, resources, mushrooms),
       onView: (view) => this.setView(view),
@@ -2178,7 +2176,6 @@ export class YardScene implements Scene {
       moved: new Set(),
       invalid: new Set(),
       marquee: null,
-      planned: visuals.planned,
       diff: visuals.diff,
     });
   }
@@ -2252,7 +2249,6 @@ export class YardScene implements Scene {
     buildingdata: BuildingDataMap,
     moved: number,
     resources: Resources | undefined,
-    upgrades: UpgradeReport | null,
     storage: AppliedStorage,
   ): void {
     const store = this.store;
@@ -2260,10 +2256,9 @@ export class YardScene implements Scene {
 
     this.closePlanner();
 
-    // The pool comes back charged whenever Apply started anything, so it is
-    // taken from the response rather than subtracted here: the server owns
-    // what an upgrade cost, and the walk it ran is partial by design
-    // (`docs/design/planner-upgrades.md` §5.5).
+    // The pool is taken from the response rather than kept as it was: Apply
+    // can put resources into storage or take them out (#128), and the server
+    // owns the result.
     store.mergeWrite({
       buildingdata,
       ...(resources ? { resources } : {}),
@@ -2282,11 +2277,7 @@ export class YardScene implements Scene {
     ]
       .filter(Boolean)
       .join(" ");
-    this.notices.show(
-      "yard-applied",
-      upgrades ? `${moveText} ${describeUpgradeReport(upgrades)}` : moveText,
-      { level: "info", timeoutMs: upgrades ? 12_000 : 5_000 },
-    );
+    this.notices.show("yard-applied", moveText, { level: "info", timeoutMs: 5_000 });
   }
 
   /**

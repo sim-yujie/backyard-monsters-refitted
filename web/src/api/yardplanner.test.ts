@@ -137,47 +137,25 @@ describe("applyLayout", () => {
   const payload = {
     version: LAYOUT_VERSION,
     expansion: 6,
-    nodes: [{ id: 32, t: 20, x: 180, y: -480, plan: { level: 3, order: 0 } }],
+    nodes: [{ id: 32, t: 20, x: 180, y: -480 }],
   };
 
-  it("posts the layout as a JSON string and nothing else by default", async () => {
+  it("posts the layout as a JSON string and nothing else", async () => {
     stubFetch({ moved: 1, buildingdata: {} });
     await applyLayout(payload);
 
     const call = sent[0]!;
     expect(call.url).toContain("/bm/yardplanner/apply");
     expect(JSON.parse(String(call.body.get("data")))).toEqual(payload);
-    // Absent, not "0": a server that predates planned upgrades must read this
-    // request exactly as it read yesterday's.
+    // Apply only moves: there is no way to ask it to start upgrades.
     expect(call.body.has("startUpgrades")).toBe(false);
   });
 
-  it("asks for the upgrade walk with the flag the server reads", async () => {
-    stubFetch({ moved: 0, buildingdata: {}, upgrades: null });
-    await applyLayout(payload, { startUpgrades: true });
+  it("hands back the resources the server returned", async () => {
+    stubFetch({ moved: 0, buildingdata: {}, resources: { r1: 10 } });
 
-    expect(sent[0]!.body.get("startUpgrades")).toBe("1");
-  });
-
-  it("hands back the resources and the report the walk returned", async () => {
-    stubFetch({
-      moved: 0,
-      buildingdata: {},
-      resources: { r1: 10 },
-      upgrades: {
-        started: [{ id: 32, t: 20, from: 1, to: 2, seconds: 900, cost: { r1: 1, r2: 0, r3: 0, r4: 0 } }],
-        finished: [],
-        waiting: [],
-        skipped: [],
-        cost: { r1: 1, r2: 0, r3: 0, r4: 0 },
-        points: 0,
-        workers: { total: 5, busyBefore: 0, busyAfter: 1 },
-      },
-    });
-
-    const response = await applyLayout(payload, { startUpgrades: true });
+    const response = await applyLayout(payload);
     expect(response.resources).toEqual({ r1: 10 });
-    expect(response.upgrades?.started[0]?.seconds).toBe(900);
   });
 });
 
