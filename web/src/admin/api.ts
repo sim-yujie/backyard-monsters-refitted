@@ -561,5 +561,94 @@ export const moderatePlayer = (
 ): Promise<Envelope<{ player: PlayerModeration }>> =>
   adminPost(`${ADMIN}/players/${id}/${kind}`, { ...body });
 
+/**
+ * Automatic chat flags and the chat log (server
+ * `services/admin/chatWatchAdmin.ts`): lines the word filter caught, one row
+ * per player, with the player's own words.
+ */
+export type FlagSeverity = "slur" | "swear";
+
+/** One flagged line. */
+export interface FlagLine {
+  id: number;
+  channel: string;
+  /** The player's own words. */
+  message: string;
+  /** What other players saw. */
+  shown: string;
+  words: string[];
+  severity: FlagSeverity;
+  at: string;
+}
+
+/** A flagged player: open flags counted, newest lines first. */
+export interface FlaggedPlayer {
+  userid: number;
+  username: string | null;
+  banned: boolean;
+  muted: boolean;
+  count: number;
+  slurs: number;
+  /** Dismissing up to this id leaves any flag that came in since. */
+  lastId: number;
+  latestAt: string;
+  lines: FlagLine[];
+}
+
+export type FlagSort = "latest" | "serious";
+
+export const fetchChatFlags = (
+  options: { sort?: FlagSort; slursOnly?: boolean; userid?: number; offset?: number | undefined } = {},
+): Promise<Envelope<{ players: FlaggedPlayer[]; nextOffset: number | null }>> =>
+  adminGet(`${ADMIN}/chatflags`, {
+    sort: options.sort,
+    slurs: options.slursOnly ? "1" : undefined,
+    userid: options.userid,
+    offset: options.offset,
+    limit: 30,
+  });
+
+export const dismissChatFlags = (userid: number, upTo: number): Promise<Envelope<{ dismissed: number }>> =>
+  adminPost(`${ADMIN}/chatflags/${userid}/dismiss`, { upTo });
+
+/** One line of the chat log. */
+export interface ChatLogEntry {
+  id: number;
+  userid: number;
+  username: string | null;
+  channel: string;
+  message: string;
+  shown: string;
+  flagged: FlagSeverity | null;
+  at: string;
+}
+
+export interface ChatLogQuery {
+  userid?: number;
+  /** A player's whole name, any case. */
+  player?: string;
+  /** Words in the line. */
+  q?: string;
+  channel?: string;
+  /** Lines said at or before this time (ms). */
+  until?: number;
+  flagged?: boolean;
+  before?: number | undefined;
+}
+
+export const fetchChatLog = (
+  query: ChatLogQuery,
+): Promise<Envelope<{ lines: ChatLogEntry[]; nextBefore: number | null }>> =>
+  adminGet(`${ADMIN}/chatlog`, {
+    userid: query.userid,
+    player: query.player,
+    q: query.q,
+    channel: query.channel,
+    until: query.until,
+    flagged: query.flagged ? "1" : undefined,
+    before: query.before,
+    limit: 30,
+  });
+
 export const fetchChatSession = (): Promise<Envelope<AdminChatSession>> =>
   adminPost(`${ADMIN}/chat/session`, {});

@@ -2659,3 +2659,101 @@ tbody th {
 .mod-sees[hidden] {
   display: none;
 }
+
+/* ---- Chat flags and the chat log ---- */
+
+.flag-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.flag-dismiss {
+  margin: 12px 12px 0 0;
+  gap: 6px;
+}
+
+.flag-lines {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flag-line {
+  display: grid;
+  gap: 2px;
+}
+
+.flag-word {
+  padding: 0 2px;
+  border-radius: 4px;
+  background: var(--bad-soft);
+  color: var(--bad-text);
+  font-weight: 700;
+}
+
+.chip-icon {
+  gap: 4px;
+  padding-left: 7px;
+}
+
+.flag-views {
+  justify-self: start;
+  flex-wrap: wrap;
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.chatlog-line {
+  display: grid;
+  gap: 2px;
+  padding: 10px 16px;
+}
+
+.chatlog-line.is-flagged {
+  background: var(--surface-2);
+}
+
+.chatlog-text {
+  overflow-wrap: anywhere;
+}
+
+.chatlog-find {
+  display: grid;
+  gap: 8px;
+}
+
+.chatlog-find .segmented {
+  justify-self: start;
+}
+
+.chatlog-find-row {
+  display: flex;
+  gap: 8px;
+}
+
+.chatlog-find-row .field-input {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 599px) {
+  .flag-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .flag-dismiss {
+    margin: 0 12px 12px;
+    justify-self: start;
+  }
+}
