@@ -96,3 +96,68 @@ describe("sight, outposts and attackers (#331)", () => {
     minimap.destroy();
   });
 });
+
+describe("Minimap view box with the tilted map (MR2 look plan step 4)", () => {
+  /** A context that writes down the calls that draw lines. */
+  const recording = () => {
+    const calls: string[] = [];
+    const context = new Proxy(
+      {},
+      {
+        get: (_target, name) => (...args: number[]) => {
+          if (["moveTo", "lineTo", "strokeRect", "closePath"].includes(String(name))) {
+            calls.push(`${String(name)}(${args.map((n) => Math.round(n * 10) / 10).join(",")})`);
+          }
+        },
+        set: () => true,
+      },
+    );
+    vi.mocked(HTMLCanvasElement.prototype.getContext).mockReturnValueOnce(context as never);
+    return calls;
+  };
+
+  it("draws the trapezoid instead of the rectangle while one is set, and the rectangle again after", () => {
+    const calls = recording();
+    const minimap = new Minimap({ onJump: () => {} }).mount(document.body);
+    minimap.setViewport({ minCol: 100, maxCol: 300, minRow: 100, maxRow: 200 });
+    minimap.setViewShape([
+      { col: 100, row: 100 },
+      { col: 300, row: 100 },
+      { col: 250, row: 200 },
+      { col: 150, row: 200 },
+    ]);
+    calls.length = 0;
+    minimap.draw();
+    // 176 px for 800 cells: 0.22 px a cell.
+    expect(calls).toContain("moveTo(22,22)");
+    expect(calls).toContain("lineTo(66,22)");
+    expect(calls).toContain("lineTo(55,44)");
+    expect(calls).toContain("lineTo(33,44)");
+    expect(calls).toContain("closePath()");
+    // Only the minimap's own frame is a rectangle now.
+    expect(calls.filter((call) => call.startsWith("strokeRect"))).toHaveLength(1);
+
+    minimap.setViewShape(null);
+    calls.length = 0;
+    minimap.draw();
+    expect(calls.filter((call) => call.startsWith("strokeRect"))).toHaveLength(2);
+    expect(calls.some((call) => call.startsWith("lineTo"))).toBe(false);
+    minimap.destroy();
+  });
+
+  it("keeps a corner beyond the world on the minimap's edge", () => {
+    const calls = recording();
+    const minimap = new Minimap({ onJump: () => {} }).mount(document.body);
+    minimap.setViewShape([
+      { col: -40, row: -10 },
+      { col: 900, row: -10 },
+      { col: 500, row: 100 },
+      { col: 300, row: 100 },
+    ]);
+    calls.length = 0;
+    minimap.draw();
+    expect(calls).toContain("moveTo(0.8,0.8)");
+    expect(calls).toContain("lineTo(175.3,0.8)");
+    minimap.destroy();
+  });
+});

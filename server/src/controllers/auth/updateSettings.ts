@@ -3,6 +3,7 @@ import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { UpdateSettingsSchema } from "../../schemas/AuthSchemas.js";
+import { mr2TiltEnabled } from "../../config/MapRoom2Config.js";
 
 /** The account's settings block, as `/player/settings` and `/player/account` send it. */
 export const settingsOf = (user: User) => ({
@@ -10,6 +11,10 @@ export const settingsOf = (user: User) => ({
   // The privacy part (`docs/design/friends.md` §3.6, issue #368).
   hideOnline: user.hide_online,
   friendRequests: !user.friend_requests_off,
+  // Map Room 2's tilted camera (MR2 look plan step 4): whether the server
+  // lets the map tilt at all, and the player's own choice (on by default).
+  mapTiltAllowed: mr2TiltEnabled(),
+  tiltedMap: !user.map_flat,
 });
 
 /**
@@ -27,11 +32,12 @@ export const settingsOf = (user: User) => ({
  */
 export const updateSettings: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  const { shinyLocked, hideOnline, friendRequests } = UpdateSettingsSchema.parse(ctx.request.body);
+  const { shinyLocked, hideOnline, friendRequests, tiltedMap } = UpdateSettingsSchema.parse(ctx.request.body);
 
   if (shinyLocked !== undefined) user.shiny_locked = shinyLocked;
   if (hideOnline !== undefined) user.hide_online = hideOnline;
   if (friendRequests !== undefined) user.friend_requests_off = !friendRequests;
+  if (tiltedMap !== undefined) user.map_flat = !tiltedMap;
   await postgres.em.flush();
 
   ctx.status = Status.OK;

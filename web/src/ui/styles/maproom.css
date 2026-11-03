@@ -407,6 +407,18 @@
   color: var(--colour-accent);
 }
 
+/* The "Tilted map" button beside the zoom (MR2 look plan step 4): icon only,
+   as tall as the zoom box beside it. */
+.mr2-tool.mr2-tilt-toggle {
+  justify-content: center;
+  width: 52px;
+  padding: 0;
+}
+
+.mr2-tool.mr2-tilt-toggle[hidden] {
+  display: none;
+}
+
 /* The kit filter (#334): a compact row of pill buttons, smaller than .mr2-tool. */
 .mr2-kit-filter {
   display: flex;

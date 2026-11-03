@@ -122,6 +122,8 @@ export const UpdateSettingsSchema = z.object({
   hideOnline: z.boolean().optional(),
   /** Accept friend requests; false refuses them with `requestsOff` (§3.6). */
   friendRequests: z.boolean().optional(),
+  /** Map Room 2 drawn through the tilted camera; false draws it flat (`user.map_flat`). */
+  tiltedMap: z.boolean().optional(),
 });
 
 /**

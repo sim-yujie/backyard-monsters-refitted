@@ -36,6 +36,12 @@ export interface MapInputOptions {
    * on the raised or sunken face it hits. Flat when absent.
    */
   liftOf?: (col: number, row: number) => number;
+  /**
+   * Undoes the tilted camera (MR2_TILT, `tilt.ts`): a canvas point to where
+   * it would be on the flat map's screen. Left alone when absent. Read on
+   * every pointer event, so the tilt can change while the map is open.
+   */
+  screenToFlat?: () => ((point: { x: number; y: number }) => { x: number; y: number }) | null;
 }
 
 export class MapInput {
@@ -81,10 +87,10 @@ export class MapInput {
   /** The cell under a pointer event, or null when it is off the world. */
   cellAt(event: { clientX: number; clientY: number }): OffsetCell | null {
     const rect = this.options.canvas.getBoundingClientRect();
-    const world = this.options.camera.screenToWorld({
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-    });
+    const local = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    const toFlat = this.options.screenToFlat?.() ?? null;
+    // Two steps, kept apart: undo the tilt, then today's hex rule on the world point.
+    const world = this.options.camera.screenToWorld(toFlat ? toFlat(local) : local);
     const cell = pickCell(world.x, world.y, this.options.liftOf ?? flat);
     return inWorld(cell.col, cell.row) ? cell : null;
   }

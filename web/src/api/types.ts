@@ -109,7 +109,15 @@ export interface AccountResponse extends ApiEnvelope {
   username: string;
   canChangeUsername: boolean;
   nextChangeAt: string | null;
-  settings?: { shinyLocked?: boolean; hideOnline?: boolean; friendRequests?: boolean };
+  settings?: {
+    shinyLocked?: boolean;
+    hideOnline?: boolean;
+    friendRequests?: boolean;
+    /** The server's MR2_TILT switch lets Map Room 2 tilt (MR2 look plan step 4). */
+    mapTiltAllowed?: boolean;
+    /** The player's own choice: Map Room 2 tilted (default) or flat. */
+    tiltedMap?: boolean;
+  };
 }
 
 /** `POST /api/:apiVersion/player/changeusername`. */
@@ -122,7 +130,7 @@ export interface ChangeUsernameResponse extends ApiEnvelope {
 /** `POST /api/:apiVersion/player/settings`. */
 export interface SettingsResponse extends ApiEnvelope {
   error: number;
-  settings: { shinyLocked: boolean };
+  settings: { shinyLocked: boolean; mapTiltAllowed?: boolean; tiltedMap?: boolean };
 }
 
 /* ── Base / yard ────────────────────────────────────────────────────────── */
