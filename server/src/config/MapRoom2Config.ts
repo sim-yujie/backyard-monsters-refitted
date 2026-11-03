@@ -54,3 +54,13 @@ export const mr2NeighbourBonusMode = (
 /** Whether the neighbour bonus is on for any cell at all. */
 export const mr2NeighbourBonusEnabled = (env: Record<string, string | undefined> = process.env): boolean =>
   mr2NeighbourBonusMode(env) !== "off";
+
+/**
+ * Map Room 2's tilted camera (`docs/mr2-modern-look-plan.md` step 4): `MR2_TILT`
+ * `on` (or `true`) lets Modern players see the map tilted, on by default and
+ * switched flat per account (`user.map_flat`); anything else, the default,
+ * keeps every map flat as before. Sent to the web client in the settings
+ * block, so it is read on each request and tests can flip it.
+ */
+export const mr2TiltEnabled = (env: Record<string, string | undefined> = process.env): boolean =>
+  isSwitchOn(env.MR2_TILT);

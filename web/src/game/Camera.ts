@@ -225,17 +225,34 @@ export class Camera {
   private clampPosition(x: number, y: number): Point {
     if (!this.bounds) return { x, y };
 
-    const viewWorldWidth = this.viewportWidth / this.zoom;
-    const viewWorldHeight = this.viewportHeight / this.zoom;
-
-    const maxX = this.bounds.width - viewWorldWidth;
-    const maxY = this.bounds.height - viewWorldHeight;
+    // What the screen shows, in this camera's screen pixels: the viewport, or
+    // the larger area a tilted view sees (`setViewExtent`).
+    const seen = this.viewExtent ?? { left: 0, top: 0, right: this.viewportWidth, bottom: this.viewportHeight };
+    const axis = (at: number, low: number, high: number, size: number): number => {
+      const min = (0 - low) / this.zoom;
+      const max = size - high / this.zoom;
+      return max <= min ? (min + max) / 2 : clamp(at, min, max);
+    };
 
     return {
-      x: maxX <= 0 ? maxX / 2 : clamp(x, 0, maxX),
-      y: maxY <= 0 ? maxY / 2 : clamp(y, 0, maxY),
+      x: axis(x, seen.left, seen.right, this.bounds.width),
+      y: axis(y, seen.top, seen.bottom, this.bounds.height),
     };
   }
+
+  /**
+   * The area of this camera's screen that is really on show, when it is not
+   * just the viewport: the tilted map (`maproom/tilt.ts`) sees more than the
+   * viewport at the top, so the edge limits keep all of that inside the
+   * bounds, and no empty space shows beyond the world's edge. Null for the
+   * viewport itself.
+   */
+  setViewExtent(extent: { left: number; top: number; right: number; bottom: number } | null): void {
+    this.viewExtent = extent;
+    this.setPosition(this.position.x, this.position.y);
+  }
+
+  private viewExtent: { left: number; top: number; right: number; bottom: number } | null = null;
 
   /* ── Input ──────────────────────────────────────────────────────────── */
 

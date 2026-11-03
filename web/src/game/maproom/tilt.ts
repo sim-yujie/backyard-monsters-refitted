@@ -1,8 +1,11 @@
 import type { Point } from "@/game/HexGrid";
+import type { Quality } from "@/game/quality";
 
 /**
  * The tilted camera for Modern Map Room 2 (owner, 3 Nov 2026: "like Civ V",
- * the same tilt at every zoom). A prototype behind the MR2_TILT switch.
+ * the same tilt at every zoom). On by default in Modern at the medium strength
+ * when the server's MR2_TILT switch allows it; each player can switch their
+ * map flat (an account setting, `tiltSetting.ts`). Classic is always flat.
  *
  * The map is still drawn flat, exactly as without the tilt, into a texture
  * (`TiltView.ts`); that picture is then laid on the ground plane and seen
@@ -116,22 +119,29 @@ export class Tilt {
 export const tiltFor = (strength: TiltStrength, width: number, height: number): Tilt | null =>
   strength === "off" ? null : new Tilt(TILT_PITCH_DEG[strength], width, height);
 
-/** Where this browser remembers the switch, for testing: "light", "medium" or "strong". */
+/**
+ * The owner's pick (3 Nov 2026): medium, camera 32° from straight down, far
+ * cells about two thirds the width of near ones. What "tilted" means for a
+ * player; the other strengths stay for samples and tests.
+ */
+export const DEFAULT_TILT: Exclude<TiltStrength, "off"> = "medium";
+
+/** Where this browser keeps a strength for testing: "off", "light", "medium" or "strong". */
 export const MR2_TILT_KEY = "bymr.mr2Tilt";
 
 const isStrength = (value: unknown): value is TiltStrength =>
   typeof value === "string" && (TILT_STRENGTHS as readonly string[]).includes(value);
 
 /**
- * Reads the MR2_TILT switch: `?mr2tilt=` on the page address, then this
- * browser's `bymr.mr2Tilt`, then the build's `VITE_MR2_TILT`. Off unless one
- * of them names a strength. The scene also turns it off in Classic.
+ * A strength forced for testing and samples, over the account's choice:
+ * `?mr2tilt=` on the page address, then this browser's `bymr.mr2Tilt`, then
+ * the build's `VITE_MR2_TILT`. Null when none of them names a strength.
  */
-export const readMr2Tilt = (
+export const readTiltOverride = (
   search: string = typeof location === "object" ? location.search : "",
   store: Pick<Storage, "getItem"> | null = safeStorage(),
   build: string | undefined = import.meta.env.VITE_MR2_TILT,
-): TiltStrength => {
+): TiltStrength | null => {
   const asked = new URLSearchParams(search).get("mr2tilt");
   if (isStrength(asked)) return asked;
   let kept: string | null = null;
@@ -141,8 +151,59 @@ export const readMr2Tilt = (
     kept = null;
   }
   if (isStrength(kept)) return kept;
-  return isStrength(build) ? build : "off";
+  return isStrength(build) ? build : null;
 };
+
+/** The account's side of the switch (`tiltSetting.ts`). */
+export interface TiltChoice {
+  /** The server's MR2_TILT switch lets the map tilt at all. */
+  readonly allowed: boolean;
+  /** The player's own choice: tilted unless they switched the map flat. */
+  readonly tilted: boolean;
+}
+
+/**
+ * The strength the map opens at (MR2 look plan step 4, owner 3 Nov 2026:
+ * opt-out). Classic is always flat, whatever else says; then a testing
+ * override; then the server must allow it and the player must not have
+ * switched it off, which gives the medium tilt.
+ */
+export const decideTilt = (options: {
+  classic: boolean;
+  override: TiltStrength | null;
+  choice: TiltChoice;
+}): TiltStrength => {
+  if (options.classic) return "off";
+  if (options.override) return options.override;
+  return options.choice.allowed && options.choice.tilted ? DEFAULT_TILT : "off";
+};
+
+/**
+ * The furthest the tilted map may zoom out: the whole flat area the tilted
+ * screen shows (wider than the screen at the top) must still fit inside the
+ * world, so the top of the screen and its corners never show empty space
+ * beyond the map. Never below the flat map's own floor.
+ */
+export const tiltMinZoom = (tilt: Tilt, world: { width: number; height: number }, floor: number): number => {
+  const seen = tilt.flatBounds();
+  return Math.max(floor, (seen.right - seen.left) / world.width, (seen.bottom - seen.top) / world.height);
+};
+
+/** Quality Low draws the tilted picture at half resolution (owner, question 2); High and Medium in full. */
+export const tiltTextureResolution = (base: number, level: Quality): number => (level === "low" ? base / 2 : base);
+
+/**
+ * The four corners of the tilted screen on the map, clockwise from top-left:
+ * the minimap's view box, a trapezoid wider at the top. `flatToWorld` is the
+ * camera's `screenToWorld`.
+ */
+export const tiltViewQuad = (tilt: Tilt, flatToWorld: (flat: Point) => Point): Point[] =>
+  [
+    { x: 0, y: 0 },
+    { x: tilt.width, y: 0 },
+    { x: tilt.width, y: tilt.height },
+    { x: 0, y: tilt.height },
+  ].map((corner) => flatToWorld(tilt.toFlat(corner)));
 
 const safeStorage = (): Storage | null => {
   try {

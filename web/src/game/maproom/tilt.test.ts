@@ -1,12 +1,23 @@
 // @vitest-environment jsdom
 import { compute2DProjection } from "pixi.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
+import { DEFAULT_ZOOM, MIN_ZOOM, WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import { Camera } from "@/game/Camera";
 import { mapRoomGrid } from "@/game/HexGrid";
 import { pickCell } from "./ground";
 import { MapInput } from "./MapInput";
-import { MR2_TILT_KEY, readMr2Tilt, Tilt, tiltFor, type TiltStrength } from "./tilt";
+import {
+  decideTilt,
+  DEFAULT_TILT,
+  MR2_TILT_KEY,
+  readTiltOverride,
+  Tilt,
+  tiltFor,
+  tiltMinZoom,
+  tiltTextureResolution,
+  tiltViewQuad,
+  type TiltStrength,
+} from "./tilt";
 
 const W = 1600;
 const H = 900;
@@ -172,20 +183,135 @@ describe("MapInput with the tilt", () => {
   });
 });
 
-describe("the MR2_TILT switch", () => {
+describe("the testing override (?mr2tilt=, bymr.mr2Tilt, VITE_MR2_TILT)", () => {
   const store = (value: string | null) => ({ getItem: (key: string) => (key === MR2_TILT_KEY ? value : null) });
 
-  it("is off by default", () => {
-    expect(readMr2Tilt("", store(null), undefined)).toBe("off");
+  it("is absent by default", () => {
+    expect(readTiltOverride("", store(null), undefined)).toBeNull();
   });
 
   it("reads the page address first, then this browser, then the build", () => {
-    expect(readMr2Tilt("?mr2tilt=light", store("strong"), "medium")).toBe("light");
-    expect(readMr2Tilt("", store("strong"), "medium")).toBe("strong");
-    expect(readMr2Tilt("", store(null), "medium")).toBe("medium");
+    expect(readTiltOverride("?mr2tilt=light", store("strong"), "medium")).toBe("light");
+    expect(readTiltOverride("", store("strong"), "medium")).toBe("strong");
+    expect(readTiltOverride("", store(null), "medium")).toBe("medium");
+    expect(readTiltOverride("?mr2tilt=off", store("strong"), "medium")).toBe("off");
   });
 
   it("ignores names it does not know", () => {
-    expect(readMr2Tilt("?mr2tilt=huge", store("yes"), "1")).toBe("off");
+    expect(readTiltOverride("?mr2tilt=huge", store("yes"), "1")).toBeNull();
+  });
+});
+
+describe("which tilt the map opens at (opt-out, owner 3 Nov 2026)", () => {
+  const allowed = { allowed: true, tilted: true };
+
+  it("is the medium tilt when the server allows it and the player has not switched it off", () => {
+    expect(DEFAULT_TILT).toBe("medium");
+    expect(decideTilt({ classic: false, override: null, choice: allowed })).toBe("medium");
+  });
+
+  it("is flat when the player switched the map flat", () => {
+    expect(decideTilt({ classic: false, override: null, choice: { allowed: true, tilted: false } })).toBe("off");
+  });
+
+  it("is flat while the server's switch is off, whatever the player chose", () => {
+    expect(decideTilt({ classic: false, override: null, choice: { allowed: false, tilted: true } })).toBe("off");
+  });
+
+  it("is always flat in Classic, even with a testing override", () => {
+    expect(decideTilt({ classic: true, override: null, choice: allowed })).toBe("off");
+    expect(decideTilt({ classic: true, override: "strong", choice: allowed })).toBe("off");
+  });
+
+  it("lets a testing override win over the account in Modern", () => {
+    expect(decideTilt({ classic: false, override: "strong", choice: { allowed: false, tilted: false } })).toBe("strong");
+    expect(decideTilt({ classic: false, override: "off", choice: allowed })).toBe("off");
+  });
+});
+
+describe("the tilted camera's edge limits and zoom floor", () => {
+  const world = mapRoomGrid.worldBounds(WORLD_WIDTH, WORLD_HEIGHT);
+  const tilt = tiltFor("medium", W, H)!;
+
+  /** A camera set up the way the scene sets it for the tilt. */
+  const tiltedCamera = (zoom: number): Camera => {
+    const camera = new Camera({ bounds: world, zoom });
+    camera.resize(W, H);
+    camera.setMinZoom(tiltMinZoom(tilt, world, MIN_ZOOM));
+    camera.setViewExtent(tilt.flatBounds());
+    return camera;
+  };
+
+  /** The world point seen at a real screen point. */
+  const seenAt = (camera: Camera, x: number, y: number) => camera.screenToWorld(tilt.toFlat({ x, y }));
+
+  const insideWorld = (point: { x: number; y: number }): boolean =>
+    point.x >= -0.01 && point.y >= -0.01 && point.x <= world.width + 0.01 && point.y <= world.height + 0.01;
+
+  it("shows no empty space above the world's top edge", () => {
+    const camera = tiltedCamera(0.6);
+    camera.setPosition(5000, -10_000);
+    // Flat, the top of the screen would sit on the world's top edge; tilted
+    // it sees further, so the camera stops lower.
+    expect(seenAt(camera, W / 2, 0).y).toBeCloseTo(0, 6);
+    for (const [x, y] of [[0, 0], [W, 0], [W / 2, 0]] as const) {
+      expect(insideWorld(seenAt(camera, x, y))).toBe(true);
+    }
+  });
+
+  it("keeps all four screen corners on the map at every world edge", () => {
+    const camera = tiltedCamera(0.6);
+    for (const [px, py] of [[-1e6, -1e6], [1e6, -1e6], [1e6, 1e6], [-1e6, 1e6]] as const) {
+      camera.setPosition(px, py);
+      for (const [x, y] of [[0, 0], [W, 0], [W, H], [0, H]] as const) {
+        expect(insideWorld(seenAt(camera, x, y))).toBe(true);
+      }
+    }
+  });
+
+  it("stops zooming out before the far edge would leave the world (no empty band at the top)", () => {
+    const floor = tiltMinZoom(tilt, world, MIN_ZOOM);
+    expect(floor).toBeGreaterThan(MIN_ZOOM);
+    const camera = tiltedCamera(DEFAULT_ZOOM);
+    camera.zoomAt(MIN_ZOOM, { x: W / 2, y: H / 2 });
+    expect(camera.zoom).toBeCloseTo(floor, 9);
+    for (const [x, y] of [[0, 0], [W, 0], [W, H], [0, H]] as const) {
+      expect(insideWorld(seenAt(camera, x, y))).toBe(true);
+    }
+  });
+
+  it("leaves the flat camera's limits as they were", () => {
+    const camera = new Camera({ bounds: world, zoom: 0.6 });
+    camera.resize(W, H);
+    camera.setPosition(-500, -500);
+    expect(camera.position).toEqual({ x: 0, y: 0 });
+    camera.setViewExtent({ left: -100, top: -100, right: W, bottom: H });
+    expect(camera.position.x).toBeCloseTo(100 / 0.6, 9);
+    camera.setViewExtent(null);
+    camera.setPosition(-500, -500);
+    expect(camera.position).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe("the minimap's view box when tilted", () => {
+  it("is a trapezoid, wider at the far top than at the near bottom", () => {
+    const camera = cameraAt(0.6);
+    const tilt = tiltFor("medium", W, H)!;
+    const [topLeft, topRight, bottomRight, bottomLeft] = tiltViewQuad(tilt, (flat) => camera.screenToWorld(flat));
+    const top = topRight!.x - topLeft!.x;
+    const bottom = bottomRight!.x - bottomLeft!.x;
+    expect(top).toBeGreaterThan(bottom * 1.3);
+    expect(topLeft!.y).toBeCloseTo(topRight!.y, 6);
+    expect(bottomLeft!.y).toBeCloseTo(bottomRight!.y, 6);
+    // It sees further up than the flat screen's own top.
+    expect(topLeft!.y).toBeLessThan(camera.screenToWorld({ x: 0, y: 0 }).y);
+  });
+});
+
+describe("the tilted picture's resolution", () => {
+  it("is halved on Quality Low only", () => {
+    expect(tiltTextureResolution(2, "high")).toBe(2);
+    expect(tiltTextureResolution(2, "medium")).toBe(2);
+    expect(tiltTextureResolution(2, "low")).toBe(1);
   });
 });

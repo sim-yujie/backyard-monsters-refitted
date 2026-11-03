@@ -77,6 +77,15 @@ export class User {
   @Property({ type: "boolean", default: false })
   friend_requests_off: Opt<boolean> = false;
 
+  /**
+   * The player switched Map Room 2's tilted camera off: the map is drawn flat
+   * (`docs/mr2-modern-look-plan.md` step 4, owner 3 Nov 2026: the tilt is on
+   * by default in the Modern look, opt-out). Set from the map's tilt button
+   * through `/player/settings`; only read by the web client.
+   */
+  @Property({ type: "boolean", default: false })
+  map_flat: Opt<boolean> = false;
+
   @Property({ type: "string", unique: true })
   @FrontendKey
   email!: string;
