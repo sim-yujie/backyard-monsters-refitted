@@ -15,8 +15,10 @@ import {
 } from "./api";
 import { AnnouncementsView } from "./announcements";
 import { BugsView } from "./bugs";
+import { ChatPanel } from "./chat";
 import { h, replace } from "./dom";
 import { ErrorsView } from "./errors";
+import { ModerationView } from "./moderation";
 import { count, dateTime } from "./format";
 import { icon } from "./icons";
 import { topItems, verdict, type TopItem } from "./problems";
@@ -42,6 +44,9 @@ import { applyTheme, readTheme, themePicker } from "./theme";
  * The Shiny section (`#shiny`) gives Shiny to a player and lists every gift.
  * The Announcements section (`#announcements`) writes the pop-ups players
  * see in the game.
+ * The Moderation section (`#moderation`) warns, pauses chat for, or bans a
+ * player, and lists chat reports; the Chat section (`#chat`) chats as the
+ * game team.
  * The top answers "is anything wrong, and what do I do?" in one sentence,
  * then each problem with its fix; the sections below are ordered by how often
  * they need the owner (bug reports first, server internals last).
@@ -54,6 +59,8 @@ import { applyTheme, readTheme, themePicker } from "./theme";
 
 const SECTIONS = [
   ["bugs", "Bug reports"],
+  ["moderation", "Moderation"],
+  ["chat", "Chat"],
   ["shiny", "Shiny"],
   ["announcements", "Announcements"],
   ["players", "Players"],
@@ -155,6 +162,11 @@ class Dashboard {
     openReport: (id) => this.openBug(id),
     say: (message) => this.say(message),
   });
+  private readonly moderation = new ModerationView({ say: (message) => this.say(message) });
+  private readonly chat = new ChatPanel({
+    openPlayer: (userid) => this.openPlayer(userid),
+    say: (message) => this.say(message),
+  });
   private readonly announcements = new AnnouncementsView({ say: (message) => this.say(message) });
   private readonly errors = new ErrorsView((message) => this.say(message));
   private readonly sections: Record<SectionId, Section>;
@@ -225,6 +237,8 @@ class Dashboard {
     };
     this.sections = {
       bugs: section("bugs", "Bug reports"),
+      moderation: section("moderation", "Moderation"),
+      chat: section("chat", "Chat as the game team"),
       shiny: section("shiny", "Give Shiny"),
       announcements: section("announcements", "Announcements"),
       players: section("players", "Players", rangeButtons),
@@ -234,6 +248,8 @@ class Dashboard {
       backups: section("backups", "Backups"),
     };
     replace(this.sections.bugs.body, this.bugs.element);
+    replace(this.sections.moderation.body, this.moderation.element);
+    replace(this.sections.chat.body, this.chat.element);
     replace(this.sections.shiny.body, this.shiny.element);
     replace(this.sections.announcements.body, this.announcements.element);
     replace(this.sections.errors.body, this.errors.element);
@@ -306,6 +322,7 @@ class Dashboard {
       this.loadHealth(),
       this.loadStats(),
       this.bugs.show(route.bug),
+      this.moderation.refresh(),
       this.shiny.refresh(),
       this.announcements.refresh(),
     ]);
@@ -351,6 +368,7 @@ class Dashboard {
       this.loadHealth(),
       this.loadStats(),
       this.bugs.refresh(),
+      this.moderation.refresh(),
       this.shiny.refresh(),
     ]);
     this.refreshButton.classList.remove("is-busy");
@@ -370,6 +388,12 @@ class Dashboard {
       id === null ? `${location.pathname}#bugs` : `${location.pathname}?bug=${id}#bugs`;
     history.pushState(null, "", url);
     void this.bugs.show(id).then(() => this.sections.bugs.element.scrollIntoView());
+  }
+
+  /** Opens a player in the Moderation section (a name clicked in the chat panel). */
+  private openPlayer(userid: number): void {
+    this.sections.moderation.element.scrollIntoView();
+    void this.moderation.open(userid);
   }
 
   private async setRange(days: number): Promise<void> {
@@ -476,7 +500,12 @@ class Dashboard {
     for (const [id] of SECTIONS) {
       const { state, link } = this.sections[id];
       const level =
-        id === "players" || id === "activity" || id === "shiny" || id === "announcements"
+        id === "players" ||
+        id === "activity" ||
+        id === "shiny" ||
+        id === "announcements" ||
+        id === "moderation" ||
+        id === "chat"
           ? undefined
           : levels[id];
       const badge = link.querySelector(".nav-state")!;
