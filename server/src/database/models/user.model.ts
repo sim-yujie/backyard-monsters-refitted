@@ -89,8 +89,8 @@ export class User {
   /**
    * The player's country, ISO 3166-1 alpha-2 (`PH`), or null when not set
    * (owner 3 Nov 2026). Chosen in Account settings or the one-time prompt
-   * after login (`/player/settings`). A country listed in `CHAT_COUNTRY_ROOMS`
-   * gives the player that country's chat room beside Global
+   * after login (`/player/settings`). Any country gives the player that
+   * country's chat room beside Global
    * (`chat/chatRooms.ts` `authorizeJoin`).
    */
   @Property({ type: "string", length: 2, nullable: true })
