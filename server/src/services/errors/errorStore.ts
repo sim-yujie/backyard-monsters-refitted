@@ -1,9 +1,10 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
 
-import { takeCapturedErrors } from "../../utils/errorCapture.js";
+import { REPORTERS_KEPT, takeCapturedErrors, type ErrorReporter } from "../../utils/errorCapture.js";
 import { logger } from "../../utils/logger.js";
 import { noteServerErrors } from "../alerts/errorRate.js";
 import { noteErrors, type ErrorSource } from "../stats/activity.js";
+import { isThirdPartyError } from "./errorText.js";
 
 /**
  * Errors for the owner's dashboard (`bym.app_error`, migration
@@ -15,8 +16,14 @@ import { noteErrors, type ErrorSource } from "../stats/activity.js";
  * One row per kind of error (`errorText.ts`: same source, message and place,
  * numbers and build hashes aside) with how many times it happened and when
  * it was first and last seen. The words are scrubbed of emails, addresses
- * and tokens before they get here; the only thing kept about players is a
- * few recent account numbers ({@link USERIDS_KEPT}).
+ * and tokens before they get here. What is kept about players: a few recent
+ * account numbers ({@link USERIDS_KEPT}), and in `bym.app_error_reporter`
+ * (migration `20261103_CreateAppErrorReporterTable.ts`) the last few senders
+ * of each kind ({@link REPORTERS_KEPT}): account number and name when signed
+ * in, and address, as the server read them from the request, never from what
+ * the request says. They are shown only on the owner's dashboard; a sender
+ * goes {@link ERROR_RETENTION_DAYS} days after it last hit the error, and with
+ * its account when the account is deleted.
  *
  * At most {@link ERROR_GROUPS_MAX} kinds are kept: when full, new kinds are
  * dropped and only the ones already there keep counting. The daily clean-up
@@ -41,7 +48,29 @@ export interface ErrorEntry {
   readonly gameVersion?: string;
   readonly screen?: string;
   readonly userid?: number | null;
+  /** Who hit it (`utils/errorCapture.ts`), most recent first. */
+  readonly reporters?: readonly ErrorReporter[];
 }
+
+/** Adds the kind's senders, keeping only its {@link REPORTERS_KEPT} most recent. */
+const recordReporters = async (em: EntityManager, errorId: number | string, reporters: readonly ErrorReporter[]): Promise<void> => {
+  if (reporters.length === 0) return;
+  for (const reporter of reporters.slice(0, REPORTERS_KEPT)) {
+    await em.execute(
+      `INSERT INTO bym.app_error_reporter AS r (error_id, userid, username, ip, last_seen)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (error_id, userid, ip) DO UPDATE SET
+         username  = EXCLUDED.username,
+         last_seen = GREATEST(r.last_seen, EXCLUDED.last_seen)`,
+      [errorId, reporter.userid ?? 0, reporter.username.slice(0, 64), reporter.ip.slice(0, 64), reporter.at]
+    );
+  }
+  await em.execute(
+    `DELETE FROM bym.app_error_reporter WHERE error_id = ? AND id NOT IN (
+       SELECT id FROM bym.app_error_reporter WHERE error_id = ? ORDER BY last_seen DESC, id DESC LIMIT ${REPORTERS_KEPT})`,
+    [errorId, errorId]
+  );
+};
 
 /**
  * Adds each entry to its kind's row, making the row when there is room.
@@ -84,7 +113,9 @@ export const recordErrors = async (em: EntityManager, entries: readonly ErrorEnt
         ERROR_GROUPS_MAX,
       ]
     );
-    if (rows.length > 0) kept += 1;
+    if (rows.length === 0) continue;
+    kept += 1;
+    await recordReporters(em, rows[0]!.id, entry.reporters ?? []);
   }
   return kept;
 };
@@ -101,6 +132,17 @@ export interface ErrorGroup {
   readonly gameVersion: string;
   readonly screen: string;
   readonly userids: readonly number[];
+  /** The last few senders, newest first: owner's dashboard only (their addresses go nowhere else). */
+  readonly reporters: readonly ErrorGroupReporter[];
+  /** A browser error whose stack names none of the game's own code (an extension, an injected script). */
+  readonly thirdParty: boolean;
+}
+
+export interface ErrorGroupReporter {
+  readonly userid: number | null;
+  readonly username: string;
+  readonly ip: string;
+  readonly lastSeen: string;
 }
 
 export interface ErrorListQuery {
@@ -124,6 +166,7 @@ interface ErrorRow {
   game_version: string;
   screen: string;
   userids: number[] | string | null;
+  reporters: { userid: number; username: string; ip: string; last_seen: string }[] | string | null;
 }
 
 /** Postgres arrays may come back as `{1,2}` text, depending on the driver's mood. */
@@ -134,6 +177,16 @@ const idsOf = (raw: ErrorRow["userids"]): number[] => {
 };
 
 const iso = (raw: Date | string): string => new Date(raw).toISOString();
+
+const reportersOf = (raw: ErrorRow["reporters"]): ErrorGroupReporter[] => {
+  const list = typeof raw === "string" ? (JSON.parse(raw) as Exclude<ErrorRow["reporters"], string>) : raw;
+  return (list ?? []).map((r) => ({
+    userid: Number(r.userid) || null,
+    username: r.username ?? "",
+    ip: r.ip ?? "",
+    lastSeen: iso(r.last_seen),
+  }));
+};
 
 /** The kept kinds of error, newest or most frequent first (at most 200). */
 export const listErrors = async (em: EntityManager, query: ErrorListQuery = {}): Promise<ErrorGroup[]> => {
@@ -150,8 +203,11 @@ export const listErrors = async (em: EntityManager, query: ErrorListQuery = {}):
   }
   const order = query.sort === "count" ? "count DESC, last_seen DESC" : "last_seen DESC";
   const rows = await em.execute<ErrorRow[]>(
-    `SELECT id, source, message, place, stack, count, first_seen, last_seen, game_version, screen, userids
-       FROM bym.app_error ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+    `SELECT id, source, message, place, stack, count, first_seen, last_seen, game_version, screen, userids,
+            (SELECT coalesce(json_agg(json_build_object('userid', r.userid, 'username', r.username, 'ip', r.ip, 'last_seen', r.last_seen)
+                                      ORDER BY r.last_seen DESC, r.id DESC), '[]'::json)
+               FROM bym.app_error_reporter r WHERE r.error_id = e.id) AS reporters
+       FROM bym.app_error e ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
       ORDER BY ${order}, id DESC LIMIT ${limit}`,
     params
   );
@@ -167,6 +223,8 @@ export const listErrors = async (em: EntityManager, query: ErrorListQuery = {}):
     gameVersion: row.game_version,
     screen: row.screen,
     userids: idsOf(row.userids),
+    reporters: reportersOf(row.reporters),
+    thirdParty: row.source === "browser" && isThirdPartyError(row.place, row.stack),
   }));
 };
 
@@ -201,7 +259,12 @@ export const flushServerErrors = async (em: EntityManager): Promise<number> => {
   try {
     return await recordErrors(
       em,
-      entries.map((entry) => ({ ...entry, source: "server" as const, at: new Date(entry.at) }))
+      entries.map((entry) => ({
+        ...entry,
+        source: "server" as const,
+        at: new Date(entry.at),
+        userid: entry.reporters.find((r) => r.userid !== null)?.userid ?? null,
+      }))
     );
   } catch (err) {
     logger.warn(`Dashboard: ${entries.length} kind(s) of server error could not be saved: ${err}`);
