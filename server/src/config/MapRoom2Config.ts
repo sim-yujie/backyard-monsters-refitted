@@ -91,3 +91,13 @@ export const mr2LandFeaturesEnabled = (env: Record<string, string | undefined> =
  */
 export const mr2HexShape = (env: Record<string, string | undefined> = process.env): HexShape =>
   hexShapeOf(env.MR2_HEX_SHAPE);
+
+/**
+ * Map Room 2's rivers (`docs/mr2-modern-look-plan.md` step 7): `MR2_RIVERS`
+ * `on` (or `true`) sends each land cell's river edges (`rv`) with the map so
+ * the Modern map can draw rivers along cell edges. Look only: rivers change
+ * no number anywhere. Anything else, the default, sends nothing new, so the
+ * map is exactly as before. Read on each use, so tests can flip it.
+ */
+export const mr2RiversEnabled = (env: Record<string, string | undefined> = process.env): boolean =>
+  isSwitchOn(env.MR2_RIVERS);
