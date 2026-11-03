@@ -14,6 +14,7 @@ import { LodTier, sameView, tierForZoom, viewFor } from "./lod";
 import { MapAtlas } from "./mapAtlas";
 import { MapChunk, TextLevel, type ChunkView } from "./MapChunk";
 import type { Projector } from "./markerPins";
+import { BorderLayer } from "./painted/BorderLayer";
 import { PaintedGround, groundShaderCompiles } from "./painted/PaintedGround";
 import { BuildingAvatars } from "./buildingAvatars";
 import { cellLift, liftCorners, setFlatGround } from "./ground";
@@ -115,6 +116,8 @@ export class MapRenderer {
   private atlas: MapAtlas | null = null;
   /** Map Room 2's painted look (`painted/`, MR2_PAINTED_MAP), in place of the tiles; null when off. */
   private painted: PaintedGround | null = null;
+  /** The glowing borders round players' land (plan step 8); with the painted look only. */
+  private borders: BorderLayer | null = null;
   /**
    * Whether the last `draw` stepped the painted water, so a tilted view must redraw its picture
    * (`TiltView.invalidate`): the step only changes a shader uniform, which Pixi's change lists miss.
@@ -179,8 +182,8 @@ export class MapRenderer {
       if (tilted) {
         this.markers.addChild(this.world, this.worldTop);
       } else {
-        // Back in the flat map's order: over the ground, and the badges over the range.
-        this.root.addChildAt(this.world, this.root.getChildIndex(this.ground) + 1);
+        // Back in the flat map's order: over the ground (and the borders), and the badges over the range.
+        this.root.addChildAt(this.world, this.root.getChildIndex(this.range.container));
         this.root.addChildAt(this.worldTop, this.root.getChildIndex(this.range.container) + 1);
       }
     }
@@ -238,6 +241,7 @@ export class MapRenderer {
   setMyAlliance(id: number | null): void {
     if (id === this.myAlliance) return;
     this.myAlliance = id;
+    this.borders?.setMyAlliance(id, this.store.loadedZoneRefs());
     this.rebuildAll();
   }
 
@@ -258,6 +262,7 @@ export class MapRenderer {
   resetSight(): void {
     this.raster.reset();
     this.painted?.reset();
+    this.borders?.reset();
     this.rebuildAll();
   }
 
@@ -283,6 +288,7 @@ export class MapRenderer {
   applyZone(zone: ZoneRecord): void {
     this.raster.applyZone(zone);
     this.painted?.applyZone(zone);
+    this.borders?.applyZone(zone);
     if (this.chunks.has(zone.id)) this.dirty.add(zone.id);
     this.live.zoneArrived(zone.id);
     // The range and the highlight stand on the cells, which now have their heights.
@@ -317,7 +323,11 @@ export class MapRenderer {
   draw(range: CellRange, zoom: number): boolean {
     this.raster.flush();
     this.painted?.flush();
-    this.paintedStepped = this.painted?.animate(performance.now(), range) ?? false;
+    const bordersChanged = this.borders?.flush() ?? false;
+    const nowPaint = performance.now();
+    const waterStepped = this.painted?.animate(nowPaint, range) ?? false;
+    const pulseStepped = this.borders?.animate(nowPaint, range) ?? false;
+    this.paintedStepped = waterStepped || pulseStepped || bordersChanged;
     this.range.flush();
     const atlas = this.atlas;
     if (!atlas) return false;
@@ -383,9 +393,18 @@ export class MapRenderer {
       this.root.addChildAt(this.painted.mesh, this.root.getChildIndex(this.raster.sprite) + 1);
       for (const zone of this.store.loadedZoneRefs()) this.painted.applyZone(zone);
       void this.painted.load();
+      this.borders = new BorderLayer();
+      this.borders.setMyAlliance(this.myAlliance, []);
+      // Over the ground (and rivers), under the cells' markers; with the markers standing upright
+      // (tilt) they live outside the root, and the borders go under the attack range instead.
+      const above = this.world.parent === this.root ? this.world : this.range.container;
+      this.root.addChildAt(this.borders.mesh, this.root.getChildIndex(above));
+      for (const zone of this.store.loadedZoneRefs()) this.borders.applyZone(zone);
     } else if (!on && this.painted !== null) {
       this.painted.destroy();
       this.painted = null;
+      this.borders?.destroy();
+      this.borders = null;
     } else {
       return this.painted !== null;
     }
@@ -403,6 +422,8 @@ export class MapRenderer {
   destroy(): void {
     this.painted?.destroy();
     this.painted = null;
+    this.borders?.destroy();
+    this.borders = null;
     setFlatGround(false);
     this.dropAllChunks();
     this.live.destroy();

@@ -1,7 +1,7 @@
 import { Container, NineSliceSprite, Sprite, type Texture } from "pixi.js";
 import { isFogCell } from "@/api/types";
 import { CELL_HEIGHT, CELL_WIDTH, WATER_MAX_HEIGHT } from "@/config";
-import { mapRoomGrid } from "@/game/HexGrid";
+import { hexShape, mapRoomGrid } from "@/game/HexGrid";
 import { chunkCells, type ChunkRef } from "./chunks";
 import {
   CellMarker,
@@ -36,7 +36,8 @@ import {
 import { BuildingKind, type BuildingAvatars } from "./buildingAvatars";
 import type { TribeAvatars } from "./tribeAvatars";
 import type { ZoneStore } from "./ZoneStore";
-import { cellLift, paintOrder } from "./ground";
+import { cellLift, isFlatGround, paintOrder } from "./ground";
+import { tagStyle, type TagStyle } from "./painted/markerStyle";
 import { GROUND_ANCHOR_X, groundAnchorY, type GroundArt } from "./groundArt";
 import type { ConstructionBadge } from "./constructionBadge";
 import { MarkerPins } from "./markerPins";
@@ -587,8 +588,10 @@ export class MapChunk {
       this.pins.add(foot, envelope);
     }
 
+    // The tag and star grow and turn to mock-up B's parchment on the painted map (plan step 8).
+    const style = tagStyle(isFlatGround(), hexShape());
     // The gold level star every player cell wears (#334).
-    const starRadius = STAR_RADIUS * STAR_SCALE;
+    const starRadius = STAR_RADIUS * STAR_SCALE * style.starScale;
     const starX = footX - BUILDING_HEIGHT * 0.3;
     const starY = footY - BUILDING_HEIGHT * 0.82;
     const star = icon(this.atlas.star, starX, starY, starRadius, STAR_COLOUR);
@@ -599,31 +602,34 @@ export class MapChunk {
       text: appearance.star,
       x: starX,
       y: starY,
-      size: STAR_TEXT_SIZE * STAR_SCALE,
+      size: STAR_TEXT_SIZE * STAR_SCALE * style.starScale,
       maxWidth: starRadius * 1.6,
       alpha,
       placed: (text) => this.pins.add(foot, text, "text"),
     });
 
     if (appearance.plate === "") return;
-    const py = y + LABEL_Y;
-    const height = SLIM_PLATE_HALF_HEIGHT * 2;
+    const halfHeight = SLIM_PLATE_HALF_HEIGHT * style.scale;
+    // A larger tag hangs a little lower, its top where today's tag's top is.
+    const py = y + LABEL_Y + (halfHeight - SLIM_PLATE_HALF_HEIGHT);
+    const height = halfHeight * 2;
     // Capped to the hex's width at the label's lower edge, so it never spills into a neighbour.
-    const maxTotalWidth = hexWidthAt(py - y + SLIM_PLATE_HALF_HEIGHT * 0.5);
+    const maxTotalWidth = hexWidthAt(py - y + halfHeight * 0.5);
     const whiteLabel = appearance.plateColour === RELATION_OTHER_COLOUR;
     const gold = appearance.plateColour === GOLD_PLATE;
     this.requests.push({
       text: appearance.plate,
       x,
       y: py,
-      size: LABEL_TEXT_SIZE,
-      minSize: LABEL_TEXT_SIZE * 0.7,
-      maxWidth: Math.max(maxTotalWidth - LABEL_PADDING * 2, height),
+      size: LABEL_TEXT_SIZE * style.scale,
+      minSize: LABEL_TEXT_SIZE * 0.7 * style.scale,
+      maxWidth: Math.max(maxTotalWidth - LABEL_PADDING * style.scale * 2, height),
       alpha,
-      light: true,
-      dark: whiteLabel ? LABEL_DARK_TEXT : gold ? OWN_PLATE_TEXT_COLOUR : 0xffffff,
+      // The painted tag's bold dark words (the plain face), like mock-up B's.
+      light: style.text === null,
+      dark: style.text ?? (whiteLabel ? LABEL_DARK_TEXT : gold ? OWN_PLATE_TEXT_COLOUR : 0xffffff),
       placed: (text) => this.pins.add(foot, text, "text"),
-      measured: (width) => this.addLabel(foot, x, py, width, maxTotalWidth, appearance, alpha),
+      measured: (width) => this.addLabel(foot, x, py, width, maxTotalWidth, appearance, alpha, style),
     });
   }
 
@@ -636,9 +642,11 @@ export class MapChunk {
     maxTotalWidth: number,
     appearance: CellAppearance,
     alpha: number,
+    style: TagStyle,
   ): void {
-    const height = SLIM_PLATE_HALF_HEIGHT * 2;
-    const total = Math.min(Math.max(textWidth + LABEL_PADDING * 2, height * 1.5), maxTotalWidth);
+    const halfHeight = SLIM_PLATE_HALF_HEIGHT * style.scale;
+    const height = halfHeight * 2;
+    const total = Math.min(Math.max(textWidth + LABEL_PADDING * style.scale * 2, height * 1.5), maxTotalWidth);
     const plate = new NineSliceSprite({
       texture: this.atlas.plateRect,
       leftWidth: SLIM_PLATE_HALF_HEIGHT,
@@ -648,9 +656,9 @@ export class MapChunk {
     });
     plate.width = total;
     plate.height = height;
-    plate.position.set(x - total / 2, y - SLIM_PLATE_HALF_HEIGHT);
-    plate.tint = appearance.plateColour === RELATION_OTHER_COLOUR ? 0xffffff : appearance.plateColour;
-    plate.alpha = (appearance.own ? 1 : PLATE_ALPHA) * alpha;
+    plate.position.set(x - total / 2, y - halfHeight);
+    plate.tint = style.plate ?? (appearance.plateColour === RELATION_OTHER_COLOUR ? 0xffffff : appearance.plateColour);
+    plate.alpha = (style.plateAlpha ?? (appearance.own ? 1 : PLATE_ALPHA)) * alpha;
     this.plates.addChild(plate);
     this.pins.add(foot, plate, "text");
   }
