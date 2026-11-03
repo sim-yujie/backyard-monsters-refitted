@@ -7,7 +7,7 @@
 export enum ChannelType {
   Alliance = "alliance",
   Global = "global",
-  /** A country's room (`CHAT_COUNTRY_ROOMS`): stored and named like Global, joined only from the player's stored country. */
+  /** A country's room (every country has one): stored and named like Global, joined only from the player's stored country. */
   Country = "country",
 }
 

@@ -47,7 +47,6 @@ const call = async (body: unknown, user: Row) => {
 };
 
 beforeEach(() => {
-  delete process.env.CHAT_COUNTRY_ROOMS;
   flushes = 0;
   published.length = 0;
 });
@@ -65,8 +64,8 @@ describe("settingsOf: the country", () => {
     });
   });
 
-  test("a country without a room in the config opens none", () => {
-    expect(settingsOf(account("SG") as never)).toMatchObject({ country: "SG", countryChannel: null });
+  test("every country opens its own room, Singapore too", () => {
+    expect(settingsOf(account("SG") as never)).toMatchObject({ country: "SG", countryChannel: "chat:country:SG" });
   });
 });
 
@@ -88,13 +87,13 @@ describe("updateSettings: the country", () => {
     });
   });
 
-  test("moving away from the Philippines closes its room (keep is null)", async () => {
+  test("moving from the Philippines to Singapore swaps rooms (keep is the new one)", async () => {
     const user = account("PH", true);
     const body = await call({ country: "SG" }, user);
 
     expect(user.country).toBe("SG");
-    expect(body).toMatchObject({ settings: { country: "SG", countryChannel: null } });
-    expect(JSON.parse(published[0]!.payload)).toMatchObject({ type: "country_evict", keep: null });
+    expect(body).toMatchObject({ settings: { country: "SG", countryChannel: "chat:country:SG" } });
+    expect(JSON.parse(published[0]!.payload)).toMatchObject({ type: "country_evict", keep: "chat:country:SG" });
   });
 
   test("Not set clears the country", async () => {

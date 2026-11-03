@@ -16,7 +16,7 @@ import "@/ui/styles/country.css";
 export const PROMPT_TEXT = {
   // Short, so it fits the popup's title plate (the longer question was cut off).
   title: "Your country",
-  line: "\u{1F4AC} Where do you play from? Some countries have their own chat room. You can change this any time in Account settings.",
+  line: "\u{1F4AC} Where do you play from? Every country has its own chat room. You can change this any time in Account settings.",
   notNow: "Not now",
   failed: "Could not save that. Try again.",
 } as const;

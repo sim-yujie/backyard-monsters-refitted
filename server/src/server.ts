@@ -7,6 +7,7 @@ import { RedisClient } from "bun";
 import { MikroORM, RequestContext } from "@mikro-orm/core";
 import { EntityManager, PostgreSqlDriver } from "@mikro-orm/postgresql";
 import { LOG_BASE, LOG_DIR, logger } from "./utils/logger.js";
+import { errorRequestScope } from "./utils/errorCapture.js";
 import { ascii_node } from "./utils/ascii_art.js";
 import { ErrorInterceptor } from "./middleware/clientSafeError.js";
 import { onAppError } from "./middleware/appErrors.js";
@@ -88,6 +89,8 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   startChatServer();
 
   app.use(clientIp());
+  // A server error logged during a request keeps who sent it (`utils/errorCapture.ts`).
+  app.use((ctx, next) => errorRequestScope(ctx, next));
   app.use(corsCacheControl);
   // 2 MB, and 8 MB only on the routes that carry pictures (`bodyLimits.ts`).
   app.use(bodyParsers());
