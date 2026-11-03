@@ -1,7 +1,8 @@
 import { LockMode, type Transaction } from "@mikro-orm/core";
 
 import { Save } from "../../database/models/save.model.js";
-import { saveFailureErr } from "../../errors/errors.js";
+import { baseGoneErr } from "../../errors/errors.js";
+import { logger } from "../../utils/logger.js";
 import { postgres } from "../../server.js";
 import type { OutpostOwnerSave } from "./getOutpostOwnerSave.js";
 
@@ -30,7 +31,7 @@ import type { OutpostOwnerSave } from "./getOutpostOwnerSave.js";
  * already holds these rows, so they are refreshed in place. Whether the row
  * is still the attack's is the caller's to check, under the lock.
  *
- * @throws {ClientSafeError} `saveFailureErr` when a row has gone.
+ * @throws {ClientSafeError} `baseGoneErr` when a row has gone.
  */
 export const beginAttackLanding = async (
   attackerSave: Save,
@@ -60,7 +61,15 @@ export const beginAttackLanding = async (
             refresh: true,
           })
         : await postgres.em.findOne(Save, where, { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true });
-    if (!locked) throw saveFailureErr();
+    if (!locked) {
+      logger.warn("Attack landing refused: row {basesaveid} is gone", {
+        event: "save-base-gone",
+        basesaveid: row.basesaveid,
+        baseid: row.baseid,
+        cause: "goneDuringLanding",
+      });
+      throw baseGoneErr("goneDuringLanding");
+    }
   }
 };
 

@@ -1,6 +1,6 @@
 import type { Context } from "koa";
 import type { TypeOf } from "zod";
-import { attackNotBoundErr, saveFailureErr } from "../../../errors/errors.js";
+import { attackNotBoundErr, baseGoneErr } from "../../../errors/errors.js";
 import { Maproom } from "../../../database/models/maproom.model.js";
 import { Save } from "../../../database/models/save.model.js";
 import { User } from "../../../database/models/user.model.js";
@@ -89,7 +89,18 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
 
   const existingTribe = maproom.tribedata.find((tribe) => tribe.baseid === saveData.baseid);
 
-  if (!existingTribe) throw saveFailureErr();
+  // Its entry is gone from the player's Map Room since the attack began.
+  if (!existingTribe) {
+    logger.warn("Save refused for {username} (userid {userid}): attack on base {baseid} gone", {
+      event: "save-base-gone",
+      userid: user.userid,
+      username: user.username,
+      baseid: saveData.baseid,
+      saveType: "attack",
+      cause: "tribeGone",
+    });
+    throw baseGoneErr("tribeGone");
+  }
 
   const tribeData = MR1_TRIBES_MAP.get(saveData.baseid);
 
