@@ -9,10 +9,9 @@ import { ATTACK_MODES } from "../../enums/Base.js";
  * done one of these in the last ten minutes (`online.ts`). The owner's rule:
  * real server-side game actions count (collect, build, upgrade, hatch,
  * attack, planner apply and the like); being there does not. Since 3 Nov
- * every deliberate player action counts (owner: an active player must never
- * be disconnected): Layout saves, the Inferno's attacks and transfers, mail,
- * world chat (`chat/chatRooms.ts`), friends' help and gifts, alliance work
- * and Map Room bookmarks too. None of these count
+ * every action that changes the game counts (owner: an active player must
+ * never be disconnected): the Inferno's attacks and transfers, mail and
+ * truces, and friends' help and gifts too. None of these count
  * ({@link NOT_REAL_ACTION_ROUTES}):
  *
  * - the `/presence` ping, and every load or poll a client sends while it sits
@@ -21,7 +20,12 @@ import { ATTACK_MODES } from "../../enums/Base.js";
  * - an attack's `/base/checkpoint`, sent by itself every few seconds (the
  *   attack's start and its save count);
  * - reading (a mail thread, another yard), marking something seen, reports,
- *   tutorial tips, and the account's own settings and sign-in.
+ *   tutorial tips, and the account's own settings and sign-in;
+ * - writes that change no game state and so could be repeated for nothing
+ *   (security review, 3 Nov): saved layouts and templates, Map Room
+ *   bookmarks, alliance work, friend requests, and world chat (not an HTTP
+ *   route at all). They keep the player connected, as they are input, but
+ *   do not renew the protection.
  *
  * A test holds every write route in `app.routes.ts` and the friends routes
  * to one list or the other, so a new feature's actions cannot be left out
@@ -130,21 +134,6 @@ export const NOT_REAL_ACTION_YARD_PATHS: readonly string[] = [
   "events/calendar/claim",
 ];
 
-/** The alliance routes that are real actions, `POST /alliance/<name>`. */
-const ALLIANCE_ACTIONS: readonly string[] = [
-  "createalliance",
-  "editalliance",
-  "leavealliance",
-  "requestjoin",
-  "inviteuser",
-  "activatepowerup",
-  "purchasepowerup",
-  "changeinvitestatus",
-  "kickmember",
-  "promotemember",
-  "changerelationship",
-];
-
 /** An in-game check's answer (#273) counts only when it was right. */
 const isSolvedCheck = (ctx: Context): boolean => (ctx.body as { solved?: unknown } | undefined)?.solved === true;
 
@@ -170,30 +159,20 @@ export const REAL_ACTION_ROUTES: readonly RealActionRoute[] = [
   { method: "POST", path: "/worldmapv2/declinetakeover" },
   { method: "POST", path: "/worldmapv2/autoattack" },
   { method: "POST", path: "/worldmapv2/transferassets" },
-  // The Yard Planner's writes to the yard, and its saved layouts and templates.
+  // The Yard Planner's writes to the yard.
   { method: "POST", path: "/api/:apiVersion/bm/yardplanner/apply" },
   { method: "POST", path: "/api/:apiVersion/bm/yardplanner/walls/upgrade" },
   { method: "POST", path: "/api/:apiVersion/bm/yardplanner/traps/rearm" },
-  { method: "PUT", path: "/api/:apiVersion/bm/yardplanner/layouts/:slot" },
-  { method: "DELETE", path: "/api/:apiVersion/bm/yardplanner/layouts/:slot" },
-  { method: "POST", path: "/api/:apiVersion/bm/yardplanner/savetemplate" },
-  { method: "POST", path: "/api/:apiVersion/bm/yardplanner/deletetemplate" },
   // The Inferno: an attack's start (its save is /base/save) and sending monsters down.
   { method: "POST", path: "/api/:apiVersion/bm/inferno/attack/start" },
   { method: "POST", path: "/api/:apiVersion/bm/inferno/transfer" },
-  // Mail and truces (owner, 3 Nov). World chat counts in `chat/chatRooms.ts`.
+  // Mail and truces (owner, 3 Nov): rate-limited, and bot-watched as any action.
   { method: "POST", path: "/api/:apiVersion/player/sendmessage" },
   { method: "POST", path: "/api/:apiVersion/player/requesttruce" },
-  // Friends: help in their yard, gifts, requests.
+  // Friends: help in their yard, and gifts.
   { method: "POST", path: "/api/:apiVersion/bm/friends/help" },
   { method: "POST", path: "/api/:apiVersion/bm/friends/gift" },
   { method: "POST", path: "/api/:apiVersion/bm/friends/gifts/collect" },
-  { method: "POST", path: "/api/:apiVersion/bm/friends/request" },
-  { method: "POST", path: "/api/:apiVersion/bm/friends/request/answer" },
-  // Map Room bookmarks.
-  { method: "POST", path: "/api/:apiVersion/player/savebookmarks" },
-  // Alliance work.
-  ...ALLIANCE_ACTIONS.map((name): RealActionRoute => ({ method: "POST", path: `/alliance/${name}` })),
   // The "Stay protected?" prompt's tap (#275): the player said they are there.
   { method: "POST", path: "/api/:apiVersion/bm/presence/stay" },
   // A wild monster raid on the player's yard (#226): every answer to it, so watching one keeps them online.
@@ -231,8 +210,29 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /api/:apiVersion/player/avatar",
   "POST /api/:apiVersion/player/block",
   "POST /api/:apiVersion/player/unblock",
-  "POST /api/:apiVersion/bm/friends/remove",
+  // Writes that change no game state, so a script could repeat them for
+  // nothing (security review, 3 Nov): they keep the player connected, as
+  // input does, but do not renew the protection.
+  "PUT /api/:apiVersion/bm/yardplanner/layouts/:slot",
+  "DELETE /api/:apiVersion/bm/yardplanner/layouts/:slot",
+  "POST /api/:apiVersion/bm/yardplanner/savetemplate",
+  "POST /api/:apiVersion/bm/yardplanner/deletetemplate",
+  "POST /api/:apiVersion/player/savebookmarks",
+  "POST /api/:apiVersion/bm/friends/request",
+  "POST /api/:apiVersion/bm/friends/request/answer",
   "POST /api/:apiVersion/bm/friends/request/cancel",
+  "POST /api/:apiVersion/bm/friends/remove",
+  "POST /alliance/createalliance",
+  "POST /alliance/editalliance",
+  "POST /alliance/leavealliance",
+  "POST /alliance/requestjoin",
+  "POST /alliance/inviteuser",
+  "POST /alliance/activatepowerup",
+  "POST /alliance/purchasepowerup",
+  "POST /alliance/changeinvitestatus",
+  "POST /alliance/kickmember",
+  "POST /alliance/promotemember",
+  "POST /alliance/changerelationship",
   "POST /alliance/deletemessages",
   // Reads, looks and polls a client sends while the player sits still.
   "POST /base/updatesaved",

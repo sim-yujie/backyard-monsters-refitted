@@ -71,15 +71,28 @@ describe("REAL_ACTION_ROUTES", () => {
   test.each([
     ["POST", "/api/:apiVersion/bm/inferno/attack/start"],
     ["POST", "/api/:apiVersion/bm/inferno/transfer"],
-    ["PUT", "/api/:apiVersion/bm/yardplanner/layouts/:slot"],
-    ["POST", "/api/:apiVersion/bm/yardplanner/savetemplate"],
     ["POST", "/api/:apiVersion/player/sendmessage"],
     ["POST", "/api/:apiVersion/player/requesttruce"],
     ["POST", "/api/:apiVersion/bm/friends/help"],
     ["POST", "/api/:apiVersion/bm/friends/gifts/collect"],
-    ["POST", "/alliance/requestjoin"],
   ])("%s %s is a real action (3 Nov)", (method, route) => {
     expect(isRealActionRequest(ctxOf(method), route)).toBe(true);
+  });
+
+  // Security review, 3 Nov: writes that change no game state could be
+  // repeated by a script to keep a yard safe; they keep the player connected
+  // (they are input) but do not renew the protection.
+  test.each([
+    ["PUT", "/api/:apiVersion/bm/yardplanner/layouts/:slot"],
+    ["DELETE", "/api/:apiVersion/bm/yardplanner/layouts/:slot"],
+    ["POST", "/api/:apiVersion/bm/yardplanner/savetemplate"],
+    ["POST", "/api/:apiVersion/bm/yardplanner/deletetemplate"],
+    ["POST", "/api/:apiVersion/player/savebookmarks"],
+    ["POST", "/api/:apiVersion/bm/friends/request"],
+    ["POST", "/alliance/requestjoin"],
+    ["POST", "/alliance/editalliance"],
+  ])("%s %s does not renew the protection", (method, route) => {
+    expect(isRealActionRequest(ctxOf(method), route)).toBe(false);
   });
 
   test.each([

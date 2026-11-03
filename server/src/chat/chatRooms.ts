@@ -2,9 +2,6 @@ import { Filter as BadWords } from "bad-words";
 
 import { User } from "../database/models/user.model.js";
 import { postgres } from "../server.js";
-import { recordRealAction } from "../services/user/online.js";
-import { getCurrentDateTime } from "../utils/getCurrentDateTime.js";
-import { logger } from "../utils/logger.js";
 import {
   addAllianceMessage,
   getAllianceMessages,
@@ -190,16 +187,8 @@ export const getChannelHistory = async (channel: string, info: ChannelInfo): Pro
  * @param {ChatClient} client - The client sending the message.
  * @param {string} channel - The channel to post into.
  * @param {string} body - The raw message text as sent by the client.
- * @param {Function} record - Writes the line as a real game action (owner,
- *   3 Nov: chatting is playing, so it keeps the player protected and
- *   connected, `services/user/realActions.ts`); `recordRealAction` by default.
  */
-export const postMessage = async (
-  client: ChatClient,
-  channel: string,
-  body: string,
-  record: (userid: number, now: number) => Promise<void> = recordRealAction
-) => {
+export const postMessage = async (client: ChatClient, channel: string, body: string) => {
   const info = client.channels.get(channel);
 
   if (!info) {
@@ -257,13 +246,6 @@ export const postMessage = async (
   };
 
   publishToChannel(channel, JSON.stringify(outgoing));
-
-  try {
-    await record(client.userId, getCurrentDateTime());
-  } catch (err) {
-    // The line is said; a lost mark only lets the player read as away sooner.
-    logger.warn(`last-action not written for chat line by user ${client.userId}: ${err}`);
-  }
 };
 
 /**
