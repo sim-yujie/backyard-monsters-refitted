@@ -102,10 +102,11 @@
   color: var(--colour-text-secondary);
 }
 
+/* Top right like the edit bar, clear of the global chat on the left (owner 3 Nov). */
 .tribe-editor-open {
   position: fixed;
-  left: var(--space-4);
-  top: 180px;
+  top: calc(var(--hud-height, 64px) + var(--space-4));
+  right: calc(var(--space-4) + 58px + var(--space-3));
   z-index: 15;
 }
 

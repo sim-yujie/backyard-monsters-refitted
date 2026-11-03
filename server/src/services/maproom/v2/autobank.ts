@@ -4,6 +4,8 @@ import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { BaseType } from "../../../enums/Base.js";
 import { AUTOBANK_TICK, autobankTicks } from "../../../game-rules/maproom/autobank.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
+import { LandFeature, landIncome } from "../../../game-rules/combat/index.js";
+import { activeLandFeature } from "./landFeature.js";
 import { productionOf } from "../../../game-data/buildingCosts.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../../types/BuildingData.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
@@ -120,7 +122,8 @@ export const incomeHeight = (terrainHeight: number | null | undefined): number =
 export const harvesterIncome = (
   building: BuildingData,
   health: number | undefined,
-  height: number
+  height: number,
+  land: number = LandFeature.OPEN
 ): number => {
   const type = Number(building.t);
   if (!isOutpostHarvester(type)) return 0;
@@ -128,7 +131,8 @@ export const harvesterIncome = (
 
   const level = levelOf(building) + (Number(building.cU) > 0 ? 1 : 0);
   const produce = Math.trunc(Number(productionOf(type, "outpost")?.produce[level - 1] ?? 0));
-  return Math.max(Math.trunc((produce * AVERAGE_ALTITUDE) / height), 1);
+  // The height rule, then the cell's land feature for this resource (`landIncome`).
+  return landIncome(Math.max(Math.trunc((produce * AVERAGE_ALTITUDE) / height), 1), land, type);
 };
 
 /**
@@ -138,7 +142,11 @@ export const harvesterIncome = (
  * @param outpost - The outpost's buildings and their health.
  * @param height - The outpost cell's height ({@link incomeHeight}).
  */
-export const outpostIncome = (outpost: OutpostIncomeSave, height: number): ResourceAmounts => {
+export const outpostIncome = (
+  outpost: OutpostIncomeSave,
+  height: number,
+  land: number = LandFeature.OPEN
+): ResourceAmounts => {
   const rate = noAmounts();
   for (const [key, building] of Object.entries(outpost.buildingdata ?? {})) {
     if (!building) continue;
@@ -147,7 +155,8 @@ export const outpostIncome = (outpost: OutpostIncomeSave, height: number): Resou
     rate[`r${type}` as ResourceKey] += harvesterIncome(
       building,
       harvesterHealth(outpost, key, building),
-      height
+      height,
+      land
     );
   }
   return rate;
@@ -272,12 +281,22 @@ export const outpostIncomes = async (
   const cells = await em.find(
     WorldMapCell,
     { baseid: { $in: outposts.map((row) => row.baseid) }, map_version: MapRoomVersion.V2 },
-    { fields: ["baseid", "terrainHeight"] }
+    { fields: ["baseid", "terrainHeight", "x", "y", "world"] }
   );
   const heights = new Map(cells.map((cell) => [String(cell.baseid), cell.terrainHeight]));
+  // Each cell's land feature (`landFeature.ts`), open with the switch off.
+  const lands = new Map(
+    cells.map((cell) => [
+      String(cell.baseid),
+      cell.world?.uuid ? activeLandFeature(cell.world.uuid, cell.x, cell.y, cell.terrainHeight) : 0,
+    ])
+  );
 
   return Object.fromEntries(
-    outposts.map((row) => [row.baseid, outpostIncome(row, incomeHeight(heights.get(row.baseid)))])
+    outposts.map((row) => [
+      row.baseid,
+      outpostIncome(row, incomeHeight(heights.get(row.baseid)), lands.get(row.baseid) ?? 0),
+    ])
   );
 };
 

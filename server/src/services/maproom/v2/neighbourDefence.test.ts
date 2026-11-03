@@ -16,7 +16,13 @@ mock.module("../../../server.js", () => ({
   redis: {},
 }));
 
-const { friendlyNeighbourCount, loadFriendlyNeighbourCount, mr2NeighbourCoords } = await import(
+const {
+  areaNeighbourCounts,
+  friendlyNeighbourCount,
+  loadAreaNeighbourCounts,
+  loadFriendlyNeighbourCount,
+  mr2NeighbourCoords,
+} = await import(
   "./neighbourDefence.js"
 );
 const { mr2NeighbourBonusEnabled, mr2NeighbourBonusMode } = await import("../../../config/MapRoom2Config.js");
@@ -158,6 +164,56 @@ describe("loadFriendlyNeighbourCount", () => {
     queries.length = 0;
     const count = await loadFriendlyNeighbourCount({ x: 10, y: 20, uid: 0, base_type: MapRoomCell.WM }, "w-1", true);
     expect(count).toBe(0);
+    expect(queries).toHaveLength(0);
+  });
+});
+
+describe("the map's counts (cell pop-up)", () => {
+  const area = [
+    { x: 10, y: 20, uid: 7, base_type: MapRoomCell.OUTPOST },
+    { x: 10, y: 19, uid: 7, base_type: MapRoomCell.HOMECELL },
+    { x: 30, y: 40, uid: 0, base_type: MapRoomCell.WM },
+    { x: 31, y: 40, uid: 0, base_type: MapRoomCell.WM },
+  ];
+  const stored = [
+    { x: 10, y: 19, uid: 7, base_type: MapRoomCell.HOMECELL, terrainHeight: LAND },
+    { x: 10, y: 20, uid: 7, base_type: MapRoomCell.OUTPOST, terrainHeight: LAND },
+    { x: 10, y: 21, uid: 7, base_type: MapRoomCell.OUTPOST, terrainHeight: LAND },
+  ];
+
+  test("gives every cell exactly the count the attack load stores", () => {
+    const counts = areaNeighbourCounts(area, stored, land);
+    for (const cell of area) {
+      const battle = friendlyNeighbourCount(cell, stored, land);
+      expect(counts.get(`${cell.x},${cell.y}`) ?? 0).toBe(battle);
+    }
+    expect(counts.get("10,20")).toBe(2);
+    expect(counts.get("10,19")).toBe(1);
+    expect(counts.get("30,40")).toBe(1);
+  });
+
+  test("players only: camps get none", () => {
+    const counts = areaNeighbourCounts(area, stored, land, true);
+    expect(counts.has("30,40")).toBe(false);
+    expect(counts.get("10,20")).toBe(2);
+  });
+
+  test("reads the area's stored cells in one query", async () => {
+    found.length = 0;
+    queries.length = 0;
+    found.push(...stored);
+    const counts = await loadAreaNeighbourCounts(area, "w-1", land);
+    expect(queries).toHaveLength(1);
+    expect(counts.get("10,20")).toBe(2);
+    const where = queries[0] as Record<string, unknown>;
+    expect(where["world"]).toBe("w-1");
+    expect(where["map_version"]).toBe(2);
+  });
+
+  test("players only with no player's cell asks nothing", async () => {
+    queries.length = 0;
+    const counts = await loadAreaNeighbourCounts(area.slice(2), "w-1", land, true);
+    expect(counts.size).toBe(0);
     expect(queries).toHaveLength(0);
   });
 });

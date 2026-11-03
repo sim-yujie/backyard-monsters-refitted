@@ -719,7 +719,12 @@ export class BuildingPanel {
   private renderInfo(building: YardBuilding): void {
     // Every row tells the level, on a foreign yard a level the server made up.
     const { rows, list } = this.yard
-      ? buildingInfo(building, this.yard.store.kind, this.yard.store.yard.cellHeight)
+      ? buildingInfo(
+          building,
+          this.yard.store.kind,
+          this.yard.store.yard.cellHeight,
+          this.yard.store.yard.landRangePct,
+        )
       : { rows: [], list: null };
     // With an upgrade to offer, what it changes sits beside the Upgrade
     // button instead (`upgradeGains`); these rows then read as they are now.
