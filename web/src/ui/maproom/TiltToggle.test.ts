@@ -21,7 +21,12 @@ describe("TiltToggle", () => {
     toggle.set({ available: true, tilted: false });
     expect(toggle.element.getAttribute("aria-pressed")).toBe("false");
     expect(toggle.element.title).toBe(TILT_TOGGLE_TEXT.flat);
-    expect(toggle.element.querySelector("svg")).not.toBeNull();
+    // Painted pictures, not line icons: the slab from above while flat, at an angle while tilted.
+    expect(toggle.element.querySelector("svg")).toBeNull();
+    expect(toggle.element.querySelector("img")?.dataset["icon"]).toBe("mapflat");
+    toggle.set({ available: true, tilted: true });
+    expect(toggle.element.querySelector("img")?.dataset["icon"]).toBe("maptilt");
+    expect(toggle.element.querySelector("img")?.getAttribute("aria-hidden")).toBe("true");
   });
 
   it("asks for the other state on a press, and leaves the state to the scene", () => {

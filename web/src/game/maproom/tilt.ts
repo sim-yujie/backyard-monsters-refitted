@@ -109,6 +109,11 @@ export class Tilt {
     return { left: topLeft.x, right: topRight.x, top: topLeft.y, bottom: bottom.y };
   }
 
+  /** How much the ground is squashed top to bottom at the middle of the screen: cos(pitch). */
+  get squash(): number {
+    return this.c;
+  }
+
   /** How many screen pixels one flat pixel covers at a screen height, horizontally. */
   scaleAt(screenY: number): number {
     return 1 + this.k * (screenY - this.cy);

@@ -110,6 +110,8 @@ export interface LabelRequest {
   measured?: (width: number) => void;
   /** Faded alongside its sprites when the kit filter dims this cell (#334). Default 1. */
   alpha?: number;
+  /** Hears the text object once it is placed, so the chunk can stand it upright on the tilted map. */
+  placed?: (text: BitmapText) => void;
 }
 
 /**
@@ -161,6 +163,8 @@ export class TextPool {
     text.text = "";
     text.tint = 0xffffff;
     text.alpha = 1;
+    // The tilted map's marker layer may have hidden it off screen (`markerPins.ts`).
+    text.visible = true;
     this.idle.push(text);
   }
 
@@ -226,6 +230,7 @@ export class LabelLayer {
 
     text.position.set(item.x, item.y);
     this.badges.addChild(text);
+    item.placed?.(text);
     item.measured?.(text.width);
   }
 }
