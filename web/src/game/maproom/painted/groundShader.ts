@@ -163,8 +163,8 @@ vec2 cellSeed(ivec2 cell) {
 // shallows colour before it deepens; the surf lines' spacing and speed (lines a second).
 // The beach: it reaches inland to where the water's share round a point (waterNear) falls to
 // between BEACH_FAR (where the beach is widest) and BEACH_NEAR (narrowest), about 0.5-1 hex units.
-const float BEACH_FAR = 0.05;
-const float BEACH_NEAR = 0.2;
+const float BEACH_FAR = 0.035;
+const float BEACH_NEAR = 0.15;
 const float SHALLOWS_REACH = 0.38;
 const float MID_SEA = 0.5;
 const float SURF_SPACING = 0.2;

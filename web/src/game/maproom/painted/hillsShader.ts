@@ -165,7 +165,8 @@ vec3 drawCliff(vec3 colour, Cliff c, vec2 h, vec2 hdx, vec2 hdy) {
 
   // The shadow the high ground throws on the low side's foot (and below a lip).
   float foot = depth * (1.0 - FACE_BACK);
-  float shadow = (1.0 - smoothstep(foot, foot + SHADE_REACH, down)) * step(-0.02, dist);
+  // It starts softly at the rim (a hard step there drew a straight dark line along the hex side).
+  float shadow = (1.0 - smoothstep(foot, foot + SHADE_REACH, down)) * smoothstep(-0.08, 0.0, dist);
   colour *= 1.0 - 0.22 * shadow * c.mask * smoothstep(0.2, 0.6, facing);
 
   // The rocky lip where the face looks away: a band of rock on the high side's rim, ragged at
