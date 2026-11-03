@@ -306,6 +306,10 @@ export class MapRenderer {
       const cell = this.store.getCell(col, row);
       return cell !== undefined && !isFogCell(cell) && cell.i <= WATER_MAX_HEIGHT;
     },
+    isKnown: (col: number, row: number): boolean => {
+      const cell = this.store.getCell(col, row);
+      return cell !== undefined && !isFogCell(cell);
+    },
     liftOf: this.liftAt,
   };
 

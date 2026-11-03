@@ -62,14 +62,19 @@ export interface RiverCells {
   rvAt(col: number, row: number): number;
   /** Whether the cell is water (sea or lake). */
   isWater(col: number, row: number): boolean;
+  /**
+   * Whether the cell is loaded and out of the fog (left out: every cell is). A river whose end
+   * touches a cell that is not known runs on under the fog instead of ending in a source.
+   */
+  isKnown?(col: number, row: number): boolean;
   /** How far the cell is drawn from its spot on the grid (`ground.ts` lift), 0 on flat ground. */
   liftOf?(col: number, row: number): number;
 }
 
 /** Half the water's width for river widths 1, 2, 3, as a share of the cell width. */
 export const HALF_WIDTH_SHARE = [0, 0.05, 0.074, 0.1] as const;
-/** How much the width wanders with the place (0.3 = up to 30% wider or narrower). */
-const WIDTH_WANDER = 0.3;
+/** How much the width wanders with the place (0.4 = up to 40% wider or narrower). */
+const WIDTH_WANDER = 0.4;
 /** The bulge to one side, at most this share of the edge's length, and the S-bend on top of it. */
 const BULGE_SHARE = 0.11;
 const S_BEND_SHARE = 0.07;
@@ -83,9 +88,14 @@ const MOUTH_REACH = 0.9;
 const MOUTH_FLARE = 2.6;
 /** The river widens by this much over its last edge on land, into an estuary. */
 const ESTUARY_FLARE = 1.6;
-/** A source starts at this share of its width and reaches its full width over this many edges. */
-const SOURCE_TAPER = 0.3;
+/** A source starts as a trickle, this share of its width, and reaches its full width over this many edges. */
+const SOURCE_TAPER = 0.1;
 const SOURCE_EDGES = 2;
+/**
+ * Where a river runs into the fog (or past the loaded cells) it goes on this far, in cell widths,
+ * towards the hidden cells, so the painted ground's fog fades it out rather than it stopping short.
+ */
+const FOG_REACH = 0.55;
 /** A lift step between two corners bigger than this (world pixels) is a fall (the waterfall hook). */
 const FALL_MIN = 0.5;
 
@@ -95,6 +105,8 @@ interface Corner {
   y: number;
   lift: number;
   water: boolean;
+  /** The middle of the cells round the corner that are not known (fog or not loaded), if any. */
+  hidden: Point | null;
   links: { key: string; width: number }[];
 }
 
@@ -152,7 +164,17 @@ export const riverPaths = (
       // On raised tiles the river lies at the foot of the highest of its
       // land cells' sides: the lowest land around the corner.
       const lifts = three.filter((one) => !cells.isWater(one.col, one.row)).map(lift);
-      corner = { key, x, y, lift: lifts.length > 0 ? Math.max(...lifts) : 0, water, links: [] };
+      const unknown = cells.isKnown ? three.filter((one) => !cells.isKnown!(one.col, one.row)) : [];
+      let hidden: Point | null = null;
+      if (unknown.length > 0) {
+        hidden = { x: 0, y: 0 };
+        for (const one of unknown) {
+          const centre = grid.cellToPixel(one.col, one.row);
+          hidden.x += centre.x / unknown.length;
+          hidden.y += centre.y / unknown.length;
+        }
+      }
+      corner = { key, x, y, lift: lifts.length > 0 ? Math.max(...lifts) : 0, water, hidden, links: [] };
       corners.set(key, corner);
     }
     return corner;
@@ -275,12 +297,17 @@ export const riverPaths = (
     }
     points.push(lastPoint(to, from));
     // Both ends, always (a path can have a mouth at one end and a source at the other).
-    const wetStart = finishEnd(points, start, true);
-    const wetEnd = finishEnd(points, to, false);
-    paths.push({ points, mouth: wetStart + wetEnd > 0, wetStart, wetEnd, falls: falls.map((index) => index + wetStart) });
+    const addedStart = finishEnd(points, start, true);
+    const addedEnd = finishEnd(points, to, false);
+    const wetStart = start.water ? addedStart : 0;
+    const wetEnd = to.water ? addedEnd : 0;
+    paths.push({ points, mouth: wetStart + wetEnd > 0, wetStart, wetEnd, falls: falls.map((index) => index + addedStart) });
   };
 
-  /** Flares a mouth into the water or narrows a source; returns the points added in the water. */
+  /**
+   * Flares a mouth into the water, runs a river on under the fog, or narrows a source; returns the
+   * points added beyond the end.
+   */
   const finishEnd = (points: RiverPoint[], corner: Corner, atStart: boolean): number => {
     if (points.length < 2 || (!corner.water && corner.links.length !== 1)) return 0;
     const end = atStart ? points[0]! : points[points.length - 1]!;
@@ -314,7 +341,31 @@ export const riverPaths = (
       else points.push(...extra);
       return count;
     }
-    // A source: narrow over the first edges, easing into the full width.
+    if (corner.hidden) {
+      // Into the fog: on towards the hidden cells, a little narrower, for the fog to fade out.
+      const inX = end.x - inner.x;
+      const inY = end.y - inner.y;
+      const inLength = Math.hypot(inX, inY) || 1;
+      const fogX = corner.hidden.x - corner.x;
+      const fogY = corner.hidden.y - corner.y;
+      const fogLength = Math.hypot(fogX, fogY) || 1;
+      let dirX = inX / inLength + (1.5 * fogX) / fogLength;
+      let dirY = inY / inLength + (1.5 * fogY) / fogLength;
+      const dirLength = Math.hypot(dirX, dirY) || 1;
+      dirX /= dirLength;
+      dirY /= dirLength;
+      const reach = FOG_REACH * grid.cellWidth;
+      const extra: RiverPoint[] = [];
+      const count = 5;
+      for (let i = 1; i <= count; i++) {
+        const share = i / count;
+        extra.push({ x: end.x + dirX * reach * share, y: end.y + dirY * reach * share, half: end.half * (1 - 0.35 * share), mouth: 0 });
+      }
+      if (atStart) points.unshift(...extra.reverse());
+      else points.push(...extra);
+      return count;
+    }
+    // A source: a trickle widening over the first edges into the full width.
     const count = Math.min(STEPS_PER_EDGE * SOURCE_EDGES, points.length);
     for (let i = 0; i < count; i++) {
       const point = atStart ? points[i]! : points[points.length - 1 - i]!;

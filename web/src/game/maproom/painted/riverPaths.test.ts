@@ -118,6 +118,34 @@ describe.each<HexShape>(["pointy", "flat"])("river shapes on %s-top hexes", (sha
     expect(order[coast]!.half).toBeGreaterThan(order[Math.max(0, coast - 10)]!.half);
   });
 
+  it("starts a source as a trickle but runs on under the fog at full width", () => {
+    setHexShape(shape);
+    // One river along cell (6,6)'s edges 0 and 1; its end corners are 5 and 1.
+    const rv = { [key(6, 6)]: 3 | (3 << 2) };
+    const full = 0.1 * mapRoomGrid.cellWidth;
+    const ends = (paths: ReturnType<typeof riverPaths>) => {
+      const points = paths[0]!.points;
+      return [points[0]!, points[points.length - 1]!];
+    };
+    // All known: both ends are sources, a trickle well under a fifth of the river's width.
+    const sources = riverPaths(range(0, 12, 0, 12), world(rv));
+    expect(sources).toHaveLength(1);
+    for (const end of ends(sources)) expect(end.half).toBeLessThan(full * 0.2);
+    // The cell past corner 1 (neighbour 2 is round it) in the fog: that end goes on towards it.
+    const hiddenCell = HexGrid.neighbours(6, 6)[2]!;
+    const fogged: RiverCells = { ...world(rv), isKnown: (col, row) => col !== hiddenCell.col || row !== hiddenCell.row };
+    const paths = riverPaths(range(0, 12, 0, 12), fogged);
+    expect(paths[0]!.mouth).toBe(false);
+    const corner = cornerAt(6, 6, 1);
+    const centre = mapRoomGrid.cellToPixel(hiddenCell.col, hiddenCell.row);
+    const fogEnd = ends(paths).reduce((p, q) =>
+      Math.hypot(p.x - centre.x, p.y - centre.y) < Math.hypot(q.x - centre.x, q.y - centre.y) ? p : q,
+    );
+    // Past the corner, nearer the hidden cell's middle, and still wide.
+    expect(Math.hypot(fogEnd.x - centre.x, fogEnd.y - centre.y)).toBeLessThan(Math.hypot(corner.x - centre.x, corner.y - centre.y));
+    expect(fogEnd.half).toBeGreaterThan(full * 0.4);
+  });
+
   it("marks a fall where the river steps down (the waterfall hook)", () => {
     const rv = rivers();
     const flat = riverPaths(range(0, 12, 0, 12), world(rv));

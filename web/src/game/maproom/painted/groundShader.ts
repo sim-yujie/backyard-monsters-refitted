@@ -197,8 +197,8 @@ const vec3 POOL = vec3(0.24, 0.74, 0.8);
 // widths (thin ones are painted lighter, with less wobble on their banks).
 const float RIVER_EDGE_RANGE = ${EDGE_RANGE.toFixed(4)};
 const float RIVER_HALF_RANGE = ${HALF_RANGE.toFixed(4)};
-const float RIVER_BANK = 0.028;
-const float RIVER_BANK_SHARE = 0.45;
+const float RIVER_BANK = 0.02;
+const float RIVER_BANK_SHARE = 0.35;
 const float RIVER_THIN = 0.012;
 const float RIVER_WIDE = 0.06;
 
@@ -584,24 +584,48 @@ void main() {
   vec4 river = riverAt(vWorld);
   // Its edge's anti-aliasing, worked out here: derivatives are undefined inside the branch below.
   float riverAA = max(fwidth(river.y) * 0.75, 1e-4);
+  // Which way the land lies from the water (+y is down the screen), to shade the water under its banks.
+  vec2 riverSlope = vec2(dFdx(river.y), dFdy(river.y));
+  vec2 towardsLand = -riverSlope / max(length(riverSlope), 1e-6);
   float riverWet = 0.0;
   if (river.y > -RIVER_EDGE_RANGE + 0.002) {
     float seaShare = wWater / max(wWater + landSum, 1e-5);
-    float landHere = 1.0 - seaShare;
+    // Fog and cells not yet loaded hide the river too: a river running into the fog fades with it.
+    vec3 hidden = vec3(g.x >= ${Ground.FOG} ? 1.0 : 0.0, g.y >= ${Ground.FOG} ? 1.0 : 0.0, g.z >= ${Ground.FOG} ? 1.0 : 0.0);
+    float shown = 1.0 - smoothstep(0.15, 0.85, dot(w, hidden));
+    float landHere = (1.0 - seaShare) * shown;
+    seaShare *= shown;
     float wide = smoothstep(RIVER_THIN, RIVER_WIDE, river.w);
     float e = river.y;
     if (uQuality > 0.5) e += (0.003 + 0.01 * wide) * (fbm(h * 5.0 + 23.0) - 0.5) * 2.0;
-    float bankWidth = riverBankWidth(river) * (uQuality > 0.5 ? 0.7 + 0.6 * valueNoise(h * 3.1 + 5.0) : 1.0);
+    float bankWidth = riverBankWidth(river);
+    // Banks are not an even band: on Medium and High they come and go along the river, so the grass
+    // reaches the water in places and the earth shows in others.
+    float patchy = 0.75;
+    float sandy = 0.0;
+    float lush = 0.6;
+    if (uQuality > 0.5) {
+      bankWidth *= 0.6 + 0.8 * valueNoise(h * 3.1 + 5.0);
+      patchy = mix(0.2, 1.25, smoothstep(0.3, 0.7, valueNoise(h * 2.5 + 9.0)));
+      sandy = smoothstep(0.58, 0.82, valueNoise(h * 1.7 + 13.0)) * 0.55;
+      lush = 0.35 + 0.65 * valueNoise(h * 4.3 + 2.0);
+    }
     if (landHere > 0.002 && e < 0.0) {
-      // The grass shades down towards the river, then a damp sandy bank meets the water.
-      float shade = 1.0 - smoothstep(bankWidth, bankWidth * 2.4, -e);
-      colour *= 1.0 - 0.13 * shade * landHere;
-      float bank = 1.0 - smoothstep(bankWidth * 0.5, bankWidth, -e);
+      // Snow keeps cool, grey banks rather than green and brown ones.
+      float snowy = smoothstep(0.62, 0.8, min(land.r, min(land.g, land.b)));
+      // The grass grows lusher and darker towards the water...
+      float near = 1.0 - smoothstep(bankWidth * 0.6, bankWidth * 2.8, -e);
+      colour = mix(colour, colour * mix(vec3(0.78, 0.88, 0.7), vec3(0.88, 0.91, 0.96), snowy), near * lush * landHere);
+      // ...then damp earth in places (a little sand or gravel here and there), wet where it meets the water.
+      float bankReach = bankWidth * patchy;
+      float bank = 1.0 - smoothstep(bankReach * 0.35, bankReach, -e);
       if (bank > 0.002) {
-        float damp = 1.0 - smoothstep(0.0, bankWidth * 0.55, -e);
-        vec3 dry = paint(${Ground.SAND}, uv, dx, dy) * vec3(0.9, 0.88, 0.8);
-        vec3 bankColour = mix(dry, paint(${WET_SAND}, uv, dx, dy), damp);
-        colour = mix(colour, bankColour, bank * 0.88 * landHere);
+        float damp = 1.0 - smoothstep(0.0, bankReach * 0.6, -e);
+        vec3 earth = land * mix(vec3(0.7, 0.64, 0.48), vec3(0.74, 0.78, 0.84), snowy);
+        earth = mix(earth, paint(${Ground.SAND}, uv, dx, dy) * vec3(0.82, 0.78, 0.68), sandy * (1.0 - snowy));
+        vec3 wetEarth = mix(earth * 0.72, paint(${WET_SAND}, uv, dx, dy) * 0.8, 0.35 * (1.0 - snowy));
+        vec3 bankColour = mix(earth, wetEarth, damp);
+        colour = mix(colour, bankColour, bank * (0.55 + 0.3 * patchy) * landHere);
       }
     }
     float water = smoothstep(-riverAA, riverAA, e);
@@ -615,6 +639,16 @@ void main() {
       vec3 stream = mix(shallow, deep, depth);
       // Lighter, turquoise water over the shallow edges.
       stream = mix(stream, POOL, (1.0 - smoothstep(0.0, 0.35, river.x)) * 0.35);
+      // Shallow at its edges, where the river bed shows through; the bank above shades the water under
+      // it and the water catches the light along the bank below, so the river lies in the ground.
+      float inland = 1.0 - river.z;
+      float edge = 1.0 - smoothstep(0.0, 0.014 + 0.014 * wide, e);
+      float bedShows = uQuality > 0.5 ? 0.35 + 0.4 * valueNoise(h * 6.0 + 17.0) : 0.5;
+      stream = mix(stream, land * vec3(0.5, 0.52, 0.4), edge * bedShows * inland);
+      float under = (1.0 - smoothstep(0.0, 0.03, e)) * max(0.0, -towardsLand.y);
+      stream *= 1.0 - 0.3 * under * inland;
+      float lip = (1.0 - smoothstep(0.0, 0.012, e)) * max(0.0, towardsLand.y);
+      stream = mix(stream, FOAM_WHITE, 0.22 * lip * inland);
       float bar = 0.0;
       if (uQuality > 0.5) {
         // Sand bars where the river widens into its mouth.
