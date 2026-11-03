@@ -10,9 +10,10 @@ import { hexDistance, hexNeighbours } from "./maproom/rules/range";
  */
 
 const SHAPES: HexShape[] = ["flat", "pointy"];
-const grids: Record<HexShape, HexGrid> = {
+const grids: Record<HexShape | "classic", HexGrid> = {
   flat: new HexGrid(150, 75, "flat"),
-  pointy: new HexGrid(150, 100, "pointy"),
+  pointy: new HexGrid(150, 150, "pointy"),
+  classic: new HexGrid(150, 100, "pointy"),
 };
 
 /** Odd-r reference table: even rows, then odd rows, in axial order E, NE, NW, W, SW, SE. */
@@ -63,8 +64,9 @@ describe("pointy-top offset conversion", () => {
   });
 });
 
-describe.each(SHAPES)("%s grid", (shape) => {
-  const grid = grids[shape];
+describe.each(["flat", "pointy", "classic"] as const)("%s grid", (name) => {
+  const shape: HexShape = name === "flat" ? "flat" : "pointy";
+  const grid = grids[name];
 
   it("neighbours are symmetric and one step away", () => {
     for (let col = 2; col < 12; col++) {
@@ -178,8 +180,8 @@ describe.each(SHAPES)("%s grid", (shape) => {
   });
 });
 
-describe("pointy-top geometry", () => {
-  const grid = grids.pointy;
+describe("pointy-top geometry (Classic, 150 x 100)", () => {
+  const grid = grids.classic;
 
   it("steps a column by the full width and a row by three quarters of the height", () => {
     expect(grid.cellToPixel(1, 0)).toEqual({ x: 150, y: 0 });
@@ -210,8 +212,12 @@ describe("setHexShape", () => {
     expect(setHexShape("pointy")).toBe(true);
     expect(setHexShape("pointy")).toBe(false);
     expect(hexShape()).toBe("pointy");
-    expect(mapRoomGrid.cellHeight).toBe(100);
+    expect(mapRoomGrid.cellHeight).toBe(150);
     expect(mapRoomGrid.colStep).toBe(150);
+    expect(mapRoomGrid.rowStep).toBe(112.5);
+    // Classic keeps Flash's 3/4 view: 100 tall, row step 75.
+    expect(setHexShape("pointy", true)).toBe(true);
+    expect(mapRoomGrid.cellHeight).toBe(100);
     expect(mapRoomGrid.rowStep).toBe(75);
     expect(HexGrid.neighbours(4, 4)).toEqual(HexGrid.neighbours(4, 4, "pointy"));
     setHexShape("flat");

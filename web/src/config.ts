@@ -82,11 +82,20 @@ export const CELL_WIDTH = 150;
 export const CELL_HEIGHT = 75;
 
 /**
- * Pointy-top cells (`MR2_HEX_SHAPE=pointy`, MR2 look plan step 1): the same
- * 150 wide and the same 75 row step, so a cell is 100 tall from point to
- * point (row step = 3/4 of the height) and keeps today's 3/4 view.
+ * Pointy-top cells (`MR2_HEX_SHAPE=pointy`, MR2 look plan step 1), 150 wide,
+ * row step = 3/4 of the height. The world grid's size is picked once when the
+ * map opens; the rules never read it, so both looks share the same
+ * neighbours.
+ *
+ * - Modern (tilted or not, painted or tiles): top-down, 150 tall, the
+ *   painted ground's cell (`maproom/painted/cellShape.ts`); the real tilt does
+ *   the squashing (medium tilt: about 150 x 127 on screen). The one number to
+ *   tune against the mock-up side-by-side.
+ * - Classic (never tilted): 100 tall, row step 75 like today, because Flash's
+ *   tiles have the 3/4 view baked in.
  */
-export const POINTY_CELL_HEIGHT = 100;
+export const POINTY_CELL_HEIGHT = 150;
+export const CLASSIC_POINTY_CELL_HEIGHT = 100;
 
 /**
  * Camera zoom limits. 1 renders cell art at its native size.

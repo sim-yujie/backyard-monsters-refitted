@@ -1,4 +1,4 @@
-import { CELL_HEIGHT, CELL_WIDTH, POINTY_CELL_HEIGHT } from "@/config";
+import { CELL_HEIGHT, CELL_WIDTH, CLASSIC_POINTY_CELL_HEIGHT, POINTY_CELL_HEIGHT } from "@/config";
 import { type HexShape, axialQ, axialR } from "@/game/maproom/rules/range";
 
 export type { HexShape };
@@ -298,25 +298,37 @@ const roundAxial = (q: number, r: number): AxialCell => {
 };
 
 /**
- * The world's grid: the game's 150 x 75 flat-top cell art, or 150 x 100
- * pointy-top cells once `setHexShape("pointy")` has run. One object, changed
- * in place, so every module holding it sees the shape the map opened with.
+ * The world's grid: the game's 150 x 75 flat-top cell art, or pointy-top cells
+ * (150 x 150 Modern, 150 x 100 Classic) once `setHexShape("pointy")` has run.
+ * One object, changed in place, so every module holding it sees the shape the
+ * map opened with.
  */
 export const mapRoomGrid = new HexGrid();
 
-/** The cell size the tile map uses for each shape. */
-export const cellSizeFor = (shape: HexShape): { width: number; height: number } =>
-  shape === "pointy" ? { width: CELL_WIDTH, height: POINTY_CELL_HEIGHT } : { width: CELL_WIDTH, height: CELL_HEIGHT };
+/**
+ * The world grid's cell size for a shape and look (`config.ts`): flat-top is
+ * always Flash's 150 x 75; pointy-top is top-down 150 x 150 in Modern (the
+ * tilt squashes it) and 150 x 100 in Classic (never tilted, Flash's 3/4 tiles).
+ */
+export const cellSizeFor = (shape: HexShape, classic = false): { width: number; height: number } => {
+  if (shape === "flat") return { width: CELL_WIDTH, height: CELL_HEIGHT };
+  return { width: CELL_WIDTH, height: classic ? CLASSIC_POINTY_CELL_HEIGHT : POINTY_CELL_HEIGHT };
+};
 
 /**
- * Sets the world's hex shape, as the server's settings block names it, before
- * the map draws or picks a cell. Returns whether it changed, so a caller
- * holding shape-built caches (atlas, chunks) knows to drop them.
+ * Sets the world's hex shape, as the server's settings block names it, and
+ * the look's cell size, before the map draws or picks a cell. Returns whether
+ * the grid changed, so a caller holding grid-built caches knows to drop them.
  */
-export const setHexShape = (shape: HexShape): boolean => {
-  if (shape === currentShape && mapRoomGrid.shape === shape) return false;
+export const setHexShape = (shape: HexShape, classic = false): boolean => {
+  const size = cellSizeFor(shape, classic);
+  const same =
+    shape === currentShape &&
+    mapRoomGrid.shape === shape &&
+    mapRoomGrid.cellWidth === size.width &&
+    mapRoomGrid.cellHeight === size.height;
   currentShape = shape;
-  const size = cellSizeFor(shape);
+  if (same) return false;
   mapRoomGrid.reshape(shape, size.width, size.height);
   return true;
 };
