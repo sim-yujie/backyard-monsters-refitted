@@ -1,3 +1,5 @@
+import { FEATURE_DENSITY, SPRITE_ROWS } from "./canopy";
+import { CANOPY_GLSL } from "./canopyShader";
 import { Ground, GroundTexture, OCCUPIED_FLAG, SHADER_TEXTURES } from "./groundKinds";
 import { HILLS_GLSL } from "./hillsShader";
 import { EDGE_RANGE, HALF_RANGE } from "./riverMask";
@@ -75,7 +77,7 @@ uniform float uQuality;    // 2 High, 1 Medium, 0 Low
 uniform vec4 uLine;        // hex line colour and strength
 uniform vec3 uFog;
 uniform vec3 uUnloaded;
-uniform sampler2D uSprites; // ground details (rows 0..2) and sea rocks (rows 3..4), 4 frames a row
+uniform sampler2D uSprites; // details (rows 0..2), sea rocks (3..4), forest (5..6), boulders (7), marsh (8..10); 4 frames a row
 uniform float uSpritesReady; // 1 once the sprite sheet has loaded
 uniform float uCellPoints;  // a cell's width, world points (sprite sizes follow it)
 uniform float uTime;        // seconds of water motion (still on Low)
@@ -193,7 +195,7 @@ const float DECAL_GRID = 0.21;
 const float DECAL_SIZE = 0.18;
 const float ROCK_GRID = 0.45;
 const float ROCK_SIZE = 0.3;
-const float SPRITE_ROWS = 5.0;
+const float SPRITE_ROWS = ${SPRITE_ROWS.toFixed(1)};
 const float CLEAR = 0.45;
 const float DECAL_MARGIN = 0.1;
 const float DECAL_SHORE = 0.8;
@@ -451,8 +453,6 @@ int decalFrame(int g, float r) {
   if (g == ${Ground.LUSH}) return r < 0.3 ? 4 : r < 0.5 ? 3 : r < 0.64 ? 0 : r < 0.78 ? 2 : r < 0.9 ? 5 : 8;
   if (g == ${Ground.SAND}) return r < 0.18 ? 7 : r < 0.55 ? 6 : r < 0.92 ? 8 : 4;
   if (g == ${Ground.ROCK}) return r < 0.5 ? 6 : r < 0.85 ? 8 : 4;
-  if (g == ${Ground.MARSH}) return r < 0.45 ? 3 : r < 0.8 ? 5 : 4;
-  if (g == ${Ground.FOREST_FLOOR}) return r < 0.5 ? 4 : r < 0.8 ? 3 : 8;
   return -1;
 }
 
@@ -460,8 +460,7 @@ int decalFrame(int g, float r) {
 float decalDensity(int g) {
   if (g == ${Ground.MEADOW}) return 0.55;
   if (g == ${Ground.MEADOW_PLAIN} || g == ${Ground.LUSH}) return 0.45;
-  if (g == ${Ground.ROCK} || g == ${Ground.MARSH}) return 0.4;
-  if (g == ${Ground.FOREST_FLOOR}) return 0.3;
+  if (g == ${Ground.ROCK}) return 0.4;
   if (g == ${Ground.SAND}) return 0.5;
   return 0.0;
 }
@@ -624,6 +623,7 @@ vec3 drawRocks(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float fade) {
   return colour;
 }
 
+${CANOPY_GLSL}
 void main() {
   vec2 h = vWorld / uUnit;
   vec2 uv = vWorld / uTexScale;
@@ -672,6 +672,25 @@ void main() {
   if (wl.y > 0.002) { land += wl.y * paint(g.y, uv, dx, dy); landSum += wl.y; }
   if (wl.z > 0.002) { land += wl.z * paint(g.z, uv, dx, dy); landSum += wl.z; }
   land /= max(landSum, 1e-5);
+
+  // Land features (plan step 6, canopy.ts): their smooth shares round the point. Rocky ground and
+  // marsh mud are laid over the cells' own ground through a wide, ragged fade, so they melt into the
+  // meadow; fog and cells not loaded yet hide them, as they hide a river.
+  Features feat = featuresNear(h);
+  vec3 hiddenG = vec3(g.x >= ${Ground.FOG} ? 1.0 : 0.0, g.y >= ${Ground.FOG} ? 1.0 : 0.0, g.z >= ${Ground.FOG} ? 1.0 : 0.0);
+  float featShown = 1.0 - smoothstep(0.15, 0.85, dot(w, hiddenG));
+  float rockCover = 0.0;
+  float marshCover = 0.0;
+  if (landSum > 0.002 && (feat.share.y > 0.05 || feat.share.z > 0.05)) {
+    float ragged = (uQuality > 0.5 ? fbm(h * 1.3 + 5.0) : valueNoise(h * 1.3 + 5.0)) - 0.5;
+    rockCover = smoothstep(ROCK_FADE.x, ROCK_FADE.y, feat.share.y + 0.45 * ragged) * featShown;
+    marshCover = smoothstep(MARSH_FADE.x, MARSH_FADE.y, feat.share.z + 0.4 * ragged) * featShown;
+    if (rockCover > 0.002) land = mix(land, paint(${Ground.ROCK}, uv, dx, dy), rockCover);
+    if (marshCover > 0.002) {
+      vec3 mud = marshColour(land, paint(${Ground.MARSH}, uv, dx, dy), h, marshDeep(feat.share.z, ragged), feat.islet);
+      land = mix(land, mud, marshCover);
+    }
+  }
 
   // A sand beach along the land side of the coast, wet sand at the water's edge. Its width comes
   // from the cells all round (waterNear), not the coast's three: measured from the coast line it
@@ -790,6 +809,26 @@ void main() {
     }
   }
 
+  // The forest canopy (plan step 6): one solid mass of treetops over every forest cell, its edge
+  // scalloped by rounded crowns, keeping off the beach, the rivers and a camp's clearing, with its
+  // shadow cast on the meadow below and to the right.
+  float canopyCover = 0.0;
+  if (feat.share.x > 0.02 && landSum > 0.002) {
+    float e = canopyEdge(h, feat);
+    e -= 1.5 * (1.0 - smoothstep(0.0, 0.07, -river.y));
+    float aa = 1.2 / max(cellPixels, 1.0);
+    canopyCover = smoothstep(-aa, aa, e) * featShown;
+    if (uQuality > 0.5 && canopyCover < 0.99) {
+      vec2 back = h - CANOPY_SHADOW;
+      float shade = smoothstep(-0.03, 0.05, canopyEdge(back, featuresNear(back)));
+      colour *= 1.0 - 0.38 * shade * (1.0 - canopyCover) * featShown;
+    }
+    if (canopyCover > 0.002) {
+      vec3 crown = canopyColour(uv, dx, dy, h, e) * hillShade(hill.yz);
+      colour = mix(colour, crown, canopyCover);
+    }
+  }
+
   if (uQuality > 1.5) {
     // Soft light and shade drifting over the land, as in a painting.
     colour *= 0.94 + 0.12 * valueNoise(vWorld / (uTexScale * 2.3) + 5.0);
@@ -834,6 +873,7 @@ void main() {
     meadow *= smoothstep(70.0, 130.0, cellPixels) * (uQuality > 1.5 ? 1.0 : 0.6);
     meadow *= 1.0 - smoothstep(beachEdge * 0.2, beachEdge * 0.5, nearWater);
     meadow *= smoothstep(0.0, 0.04, -river.y); // none in a river or on its banks
+    meadow *= 1.0 - max(canopyCover, max(marshCover, 0.75 * rockCover));
     if (cliff.on) meadow *= 1.0 - step(-0.4, cliffDist) * step(cliffDist, CLIFF_CLEAR_LOW) * cliff.mask;
     if (meadow > 0.01) colour = drawFlowers(colour, vWorld, meadow);
   }
@@ -841,8 +881,19 @@ void main() {
   // Ground details and sea rocks, once their sheet is in; details fade out as cells get small.
   if (uSpritesReady > 0.5) {
     float detailFade = smoothstep(26.0, 60.0, cellPixels);
-    if (uQuality > 0.5 && detailFade > 0.0 && landSum > 0.002) {
-      colour = drawDecals(colour, vWorld, wdx, wdy, detailFade);
+    float decalFade = detailFade * (1.0 - max(canopyCover, 0.85 * marshCover));
+    if (uQuality > 0.5 && decalFade > 0.0 && landSum > 0.002) {
+      colour = drawDecals(colour, vWorld, wdx, wdy, decalFade);
+    }
+    // Edge trees, pines and boulders; only near a feature (any share round here).
+    float treeFade = smoothstep(9.0, 20.0, cellPixels) * featShown;
+    if (treeFade > 0.0 && max(feat.share.x, max(feat.share.y, feat.share.z)) > 0.001) {
+      float density = uQuality > 1.5 ? ${FEATURE_DENSITY.high.toFixed(2)} : uQuality > 0.5 ? ${FEATURE_DENSITY.medium.toFixed(2)} : ${FEATURE_DENSITY.low.toFixed(2)};
+      colour = drawFeatures(colour, vWorld, wdx, wdy, treeFade, detailFade * featShown, density);
+      // The marsh's cattails, lily pads, log and wet rocks (mr2-marsh), on their own larger grid; big
+      // enough to stay until cells are about as small as the trees' (mock-up B's marsh reads by them).
+      float marshFade = smoothstep(12.0, 28.0, cellPixels) * featShown;
+      if (feat.share.z > 0.01 && marshFade > 0.0) colour = drawMarsh(colour, vWorld, wdx, wdy, marshFade, density);
     }
     float rockFade = smoothstep(7.0, 16.0, cellPixels);
     if (rockFade > 0.0) colour = drawRocks(colour, vWorld, wdx, wdy, rockFade);

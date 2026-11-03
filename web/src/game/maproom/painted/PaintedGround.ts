@@ -5,6 +5,7 @@ import { FOG_COLOUR, LOADING_COLOUR } from "../cellVisuals";
 import type { ZoneRecord } from "../ZoneStore";
 import type { CellRange } from "../zones";
 import { cellCentre, paintedCellShape, textureAspect, type CellShape } from "./cellShape";
+import { SPRITE_ROWS, SPRITE_SHEET_ROWS } from "./canopy";
 import { GroundData } from "./GroundData";
 import { SHADER_TEXTURES } from "./groundKinds";
 import { GROUND_FRAGMENT, GROUND_VERTEX } from "./groundShader";
@@ -16,16 +17,20 @@ const ATLAS_URL = `${import.meta.env.BASE_URL}maproom/painted/ground@4x.webp`;
 const ATLAS_COLUMNS = 4;
 
 /**
- * The sprite sheets the shader places (plan steps 2 and 3): ground details (3 rows) and sea rocks
- * (2 rows), 4 frames a row, joined into one 4 x 5 sheet on load so they take one sampler.
+ * The sprite sheets the shader places (plan steps 2, 3 and 6): ground details (3 rows), sea rocks
+ * (2 rows), edge trees and pines (2 rows), boulders and the marsh pieces (4 rows), 4 frames a row,
+ * joined into one 4 x 11 sheet on load so they take one sampler (`canopy.ts` `SPRITE_SHEET_ROWS`).
  */
 const DECALS_URL = `${import.meta.env.BASE_URL}maproom/painted/decals@4x.webp`;
-const SEA_ROCKS_URL = `${import.meta.env.BASE_URL}maproom/painted/sea-rocks@4x.webp`;
+const SPRITE_SHEETS: readonly { url: string; rows: number }[] = [
+  { url: DECALS_URL, rows: SPRITE_SHEET_ROWS.decals },
+  { url: `${import.meta.env.BASE_URL}maproom/painted/sea-rocks@4x.webp`, rows: SPRITE_SHEET_ROWS.seaRocks },
+  { url: `${import.meta.env.BASE_URL}maproom/painted/forest-bits-pieces@4x.webp`, rows: SPRITE_SHEET_ROWS.forest },
+  { url: `${import.meta.env.BASE_URL}maproom/painted/marsh-rocks@4x.webp`, rows: SPRITE_SHEET_ROWS.marshRocks },
+];
 const SPRITE_COLUMNS = 4;
 /** The cliff faces and their pieces (plan step 5, `hills.ts` says where each strip sits). */
 const CLIFFS_URL = `${import.meta.env.BASE_URL}maproom/painted/cliffs@4x.webp`;
-const DECAL_ROWS = 3;
-const SPRITE_ROWS = 5;
 
 /** World points one texture repeat covers across: two cells. */
 const TEXTURE_CELLS = 2;
@@ -36,7 +41,7 @@ const LINE_COLOUR = [1.0, 0.97, 0.86, 0.3] as const;
 /** Flat stand-ins until the atlas lands, by sampler: the textures' average colours. */
 const STAND_INS = [
   "#9cc63a", "#6fae2a", "#e7b860", "#7f725e", "#4c4a2c",
-  "#4f6a26", "#e9eef4", "#a2c040", "#3cc4d4", "#1f62b8", "#d9a85a", "#3f8fd8",
+  "#5e8a2c", "#e9eef4", "#a2c040", "#3cc4d4", "#1f62b8", "#d9a85a", "#3f8fd8",
 ];
 
 /** The ground shader's uniforms this class changes after it is made. */
@@ -300,27 +305,28 @@ export class PaintedGround {
     return true;
   }
 
-  /** Fetches the details and sea rocks and joins them into the shader's one 4 x 5 sheet. */
+  /** Fetches the sprite sheets and joins them into the shader's one 4 x 11 sheet. */
   private async loadSprites(level: Quality): Promise<boolean> {
     const decalsUrl = sheetAtQuality(DECALS_URL, level);
     if (decalsUrl === this.spritesUrl) return true;
-    let decals: CanvasImageSource & { width: number; height: number };
-    let rocks: CanvasImageSource & { width: number; height: number };
+    let sheets: (CanvasImageSource & { width: number; height: number })[];
     try {
-      const [a, b] = await Promise.all([Assets.load(decalsUrl), Assets.load(sheetAtQuality(SEA_ROCKS_URL, level))]);
-      decals = a.source.resource;
-      rocks = b.source.resource;
+      const loaded = await Promise.all(SPRITE_SHEETS.map(({ url }) => Assets.load(sheetAtQuality(url, level))));
+      sheets = loaded.map((texture) => texture.source.resource);
     } catch {
       return false;
     }
     if (this.destroyed) return false;
-    const frame = decals.width / SPRITE_COLUMNS;
+    const frame = sheets[0]!.width / SPRITE_COLUMNS;
     const canvas = document.createElement("canvas");
     canvas.width = frame * SPRITE_COLUMNS;
     canvas.height = frame * SPRITE_ROWS;
     const context = canvas.getContext("2d")!;
-    context.drawImage(decals, 0, 0, canvas.width, frame * DECAL_ROWS);
-    context.drawImage(rocks, 0, frame * DECAL_ROWS, canvas.width, frame * (SPRITE_ROWS - DECAL_ROWS));
+    let row = 0;
+    SPRITE_SHEETS.forEach(({ rows }, index) => {
+      context.drawImage(sheets[index]!, 0, frame * row, canvas.width, frame * rows);
+      row += rows;
+    });
     const source = new CanvasSource({
       resource: canvas,
       scaleMode: "linear",

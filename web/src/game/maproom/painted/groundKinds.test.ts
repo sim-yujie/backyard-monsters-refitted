@@ -22,18 +22,30 @@ describe("painted ground kinds", () => {
     expect(groundOf({ fog: 1 } as unknown as MapCell)).toBe(Ground.FOG);
   });
 
-  it("a land feature (feat/mr2-land's lf) picks forest floor, rock or marsh on land only", () => {
-    expect(groundOf(land(130, { lf: 1 }))).toBe(Ground.FOREST_FLOOR);
-    expect(groundOf(land(130, { lf: 2 }))).toBe(Ground.ROCK);
-    expect(groundOf(land(130, { lf: 3 }))).toBe(Ground.MARSH);
+  it("a land feature (feat/mr2-land's lf) keeps the cell's own ground; forests stand on lush meadow", () => {
+    expect(groundOf(land(130, { lf: 1 }))).toBe(Ground.LUSH);
+    expect(groundOf(land(105, { lf: 1 }))).toBe(Ground.LUSH);
+    expect(groundOf(land(175, { lf: 1 }))).toBe(Ground.ROCK);
+    expect(groundOf(land(130, { lf: 2 }))).toBe(Ground.MEADOW);
+    expect(groundOf(land(150, { lf: 3 }))).toBe(Ground.LUSH);
     expect(groundOf(land(130, { lf: 5 }))).toBe(Ground.MEADOW);
     expect(groundOf(land(80, { lf: 1 }))).toBe(Ground.DEEP);
+  });
+
+  it("binds the canopy and marsh mud textures for the features' overlays, which no cell wears", () => {
+    expect(SHADER_TEXTURES[Ground.CANOPY]).toBe(GroundTexture.CANOPY);
+    expect(SHADER_TEXTURES[Ground.MARSH]).toBe(GroundTexture.MARSH);
+    for (const lf of [0, 1, 2, 3, 4]) {
+      for (const height of [100, 120, 150, 175, 190]) {
+        expect([Ground.CANOPY, Ground.MARSH]).not.toContain(groundOf(land(height, { lf })));
+      }
+    }
   });
 
   it("packs height, feature and ground into one texel", () => {
     const out = new Uint8Array(8);
     encodeCell(land(300, { lf: 3 }), out, 4);
-    expect([...out.slice(4)]).toEqual([255, 3, 0, Ground.MARSH]);
+    expect([...out.slice(4)]).toEqual([255, 3, 0, Ground.SNOW]);
     encodeCell(undefined, out, 0);
     expect([...out.slice(0, 4)]).toEqual([0, 0, 0, Ground.UNLOADED]);
   });

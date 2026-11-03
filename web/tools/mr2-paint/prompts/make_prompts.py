@@ -178,6 +178,39 @@ JOBS: dict[str, tuple[list[str], str, list[str]]] = {
             "reeds with a lily pad, a fallen mossy log.",
         ],
     ),
+    # mr2-marsh (marsh redo): mock-up B's marsh is shallow dark-green water with tall cattail clumps,
+    # lily pads, a log and stones; the goo pools are drawn by the shader (glowing, with soft rings).
+    "marsh-pieces": (
+        ["marsh"],
+        WIDE,
+        [
+            "THE PICTURE: a sheet of 12 pieces in a 4 x 3 grid, each centred in its own cell with plenty of "
+            f"empty space round it, {MAGENTA}, seen from the tilted top-down camera of the attached crop, "
+            "each standing in a small ring of dark green marsh water at its foot (the ring fades out at its edge).",
+            "- Row 1: four TALL CATTAIL CLUMPS exactly like the attached crop's: dense bunches of tall thin "
+            "yellow-green and green reed blades, some bending, with 4 to 7 brown cattail heads on thin stalks "
+            "above them; each clump a little different (wide, narrow, leaning left, leaning right).",
+            "- Row 2: two more tall cattail clumps (one with a round green lily pad at its foot), a short reed "
+            "tuft with two cattail heads, a shorter wide clump of grass-like marsh reeds.",
+            "- Row 3: a cluster of 4 round green LILY PADS floating flat on the water (one with a small pink "
+            "water-lily flower), a cluster of 2 small lily pads, a FALLEN DEAD LOG lying diagonally half in "
+            "the water (brown bark, broken end, a little moss), a grey ROCK half sunk in the water with moss.",
+        ],
+    ),
+    "marsh-water": (
+        ["marsh"],
+        SQUARE,
+        [
+            "THE PICTURE: ONE square SEAMLESS TILEABLE TEXTURE filling the whole image, seen from STRAIGHT "
+            "ABOVE (top-down, no horizon, no perspective): the SHALLOW MURKY MARSH WATER of the attached "
+            "crop: dark olive-green and teal-green still water with soft painted lighter reflections of the "
+            "sky, faint small ripple lines, tiny floating duckweed specks and a few very small floating leaves. "
+            "No reeds, no lily pads, no rocks, no goo, no mud, no shore, no big single objects. Its left edge "
+            "continues into its right edge and its top edge into its bottom edge, so copies laid side by side "
+            "show no seam. The detail is even all over the square (no vignette, no darker or lighter corners, "
+            "no centre spot), small, at the scale of the attached crop.",
+        ],
+    ),
 }
 
 if __name__ == "__main__":

@@ -40,7 +40,8 @@ MOCKUP = Path("C:/Coding/BYMR/worktrees/mr2-mockup2/art-samples/mr2-mockup2/vari
 TEXTURE = 512
 FRAME = 256
 KEY = np.array([255.0, 0.0, 255.0])
-JOBS = ["ground-a", "ground-b", "sea", "canopy", "decals", "sea-rocks", "cliff", "forest-bits", "marsh-rocks"]
+JOBS = ["ground-a", "ground-b", "sea", "canopy", "decals", "sea-rocks", "cliff", "forest-bits", "marsh-rocks",
+        "marsh-pieces", "marsh-water"]
 
 # (sheet, quadrant 0..3 row by row or None for the whole square, mock-up B box to match or None)
 TEXTURE_ORDER: list[tuple[str, str, int | None, tuple[int, int, int, int] | None]] = [
@@ -48,7 +49,8 @@ TEXTURE_ORDER: list[tuple[str, str, int | None, tuple[int, int, int, int] | None
     ("lush", "ground-a", 1, (1000, 780, 1150, 860)),
     ("sand", "ground-a", 2, (200, 760, 260, 920)),
     ("rock", "ground-a", 3, (300, 500, 700, 700)),
-    ("marsh", "ground-b", 0, (1300, 800, 1700, 1050)),
+    # mr2-marsh: the marsh's texture is now its shallow dark-green water (the banks are the land, darkened).
+    ("marsh", "marsh-water", None, (1400, 850, 1480, 880)),
     ("forest-floor", "ground-b", 1, (1000, 780, 1150, 860)),
     ("snow", "ground-b", 2, None),
     ("meadow-plain", "ground-b", 3, (600, 660, 800, 760)),
@@ -67,7 +69,10 @@ ATLAS_COLUMNS = 4
 # moves most of the way to mock-up B's lush grass; the rock ground was brown dirt where mock-up B's
 # rocky ground is grass with grey stones, so it moves half-way to mock-up B's open land.
 MATCH_STRENGTH = {"meadow": 0.9, "lush": 0.8, "meadow-plain": 0.9, "sand": 0.8, "marsh": 0.7,
-                  "forest-floor": 0.75, "rock": 0.5}
+                  "forest-floor": 0.75, "rock": 0.5,
+                  # Step 6 (mr2-canopy2): the canopy was re-painted in mid and deep greens (the first one
+                  # was yellow); it moves most of the way to mock-up B's forest, which is a little warmer.
+                  "canopy": 0.7}
 
 
 def take() -> None:
@@ -189,6 +194,10 @@ def build_sprites() -> None:
         if not path.exists():
             continue
         found = pieces(Image.open(path))
+        if family == "marsh-rocks" and (SOURCE / "marsh-pieces.webp").exists():
+            # mr2-marsh: keep the rock fields' four boulders; the marsh's pieces are the new sheet's
+            # 12 (six tall cattail clumps, a reed tuft, low reeds, two lily pad clusters, a log, a wet rock).
+            found = found[:4] + pieces(Image.open(SOURCE / "marsh-pieces.webp"))
         print(f"{family}: {len(found)} pieces")
         write_copies(framed(found, 4), family)
 
