@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { buildChecklist } from "./checklist";
 import { InvalidReason, type PlacementResult, type PlanNode } from "./placement";
-import type { ApplyPreview } from "./upgrades";
 
 /**
  * The pre-Apply checklist (design §3, F17).
  *
- * Three blocking rows about placement and, once anything is planned, three
- * warning rows about the upgrade walk. What matters here is which rows refuse
+ * Three blocking rows about placement and a warning row for decorations
+ * going into storage. What matters here is which rows refuse
  * and which only report: a warning counted as a refusal would put a red badge
  * on a plan that is perfectly fine, and a refusal counted as a warning would
  * let Apply through onto a yard the server is about to reject.
@@ -25,7 +24,6 @@ const node = (over: Partial<PlanNode> & { id: number }): PlanNode => ({
   decoration: false,
   fixed: false,
   stored: false,
-  plan: null,
   busy: false,
   damaged: false,
   ...over,
@@ -38,19 +36,6 @@ const VALID: PlacementResult = { valid: true, issues: [] };
 
 const rowOf = (checklist: ReturnType<typeof buildChecklist>, key: string) =>
   checklist.rows.find((row) => row.key === key);
-
-/** An Apply preview with nothing in it, for the rows that only need counts. */
-const previewOf = (over: Partial<ApplyPreview> = {}): ApplyPreview => ({
-  started: [],
-  finished: [],
-  waiting: [],
-  skipped: [],
-  cost: { r1: 0, r2: 0, r3: 0, r4: 0 },
-  points: 0,
-  workers: { total: 5, busyBefore: 0, busyAfter: 0 },
-  remaining: { r1: 0, r2: 0, r3: 0, r4: 0 },
-  ...over,
-});
 
 describe("buildChecklist", () => {
   it("passes a plan with everything placed and nothing overlapping", () => {
@@ -117,22 +102,5 @@ describe("buildChecklist", () => {
     const labels = rowOf(checklist, "bounds")?.items.map((item) => item.label);
     expect(labels?.[0]).toContain("outside the yard");
     expect(labels?.[1]).toBe("Australian Flag is outside the yard");
-  });
-
-  it("leaves the upgrade rows out when nothing is planned", () => {
-    const checklist = buildChecklist(index(node({ id: 1 })), VALID, [], previewOf());
-    expect(checklist.rows).toHaveLength(3);
-  });
-
-  it("reports a job with no worker rather than refusing the Apply", () => {
-    const preview = previewOf({ waiting: [{ id: 1, t: 20, from: 1, to: 2, reason: "workers" }] });
-    const checklist = buildChecklist(index(node({ id: 1 })), VALID, [], preview);
-    const row = rowOf(checklist, "upgradeWorkers");
-
-    expect(row?.ok).toBe(false);
-    expect(row?.warning).toBe(true);
-    // A warning is not a refusal, and it puts no red outline on anything.
-    expect(checklist.ok).toBe(true);
-    expect(checklist.faulted.size).toBe(0);
   });
 });

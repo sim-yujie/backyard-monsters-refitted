@@ -161,14 +161,14 @@ const HINT_ROWS: readonly HintRow[] = [
  * The same moves, for a finger (#45).
  *
  * A phone has no Shift, no second button, no Esc and no keyboard, and its
- * controls are not where a desktop's are (Mirror and its kin are in the
- * building sheet, Find and the overlays under More), so the card says how to do
+ * controls are not where a desktop's are (Mirror and its kin are under
+ * More ▸ Selection, Find and the overlays under More), so the card says how to do
  * each thing there rather than leaving half its lines untrue.
  */
 const TOUCH_HINT_ROWS: readonly HintRow[] = [
   {
     demo: "select",
-    text: "Tap a building to select it. Its panel has Select all, to take every one of that type.",
+    text: "Tap a building to select it. More ▸ Selection has Select all, to take every one of that type.",
   },
   {
     demo: "boxSelect",
@@ -184,7 +184,7 @@ const TOUCH_HINT_ROWS: readonly HintRow[] = [
   },
   {
     demo: "mirrorH",
-    text: "Mirror, Align and Distribute are in the building panel when two or more are selected.",
+    text: "Mirror, Align and Distribute are under More ▸ Selection when two or more are selected.",
   },
   {
     demo: "store",

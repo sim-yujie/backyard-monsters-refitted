@@ -1,7 +1,6 @@
 import type { LayoutDiff, StatRow } from "@/game/yard/planner/compare";
 import { STACK_BELOW } from "@/game/yard/CompareView";
 import { percentText } from "@/game/yard/planner/coverage";
-import { formatCompact, formatCountdown } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
 
 /**
@@ -33,10 +32,6 @@ export const statText = (key: string, value: number): string => {
     case "land":
     case "air":
       return percentText(value);
-    case "cost":
-      return value === 0 ? "—" : formatCompact(value);
-    case "seconds":
-      return value === 0 ? "—" : formatCountdown(value);
     default:
       return String(value);
   }

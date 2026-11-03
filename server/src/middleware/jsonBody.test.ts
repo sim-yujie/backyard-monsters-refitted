@@ -62,7 +62,7 @@ describe("normaliseJsonBody", () => {
     const payload = {
       version: 2 as const,
       expansion: 3,
-      nodes: [{ id: 1, t: 4, x: 10, y: 12, plan: { level: 2, order: 0 } }],
+      nodes: [{ id: 1, t: 4, x: 10, y: 12, fort: 1 }],
     };
 
     const fromJson = SaveLayoutSchema.parse(

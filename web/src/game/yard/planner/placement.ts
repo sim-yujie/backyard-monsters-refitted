@@ -63,22 +63,9 @@ const BLOCK_COLUMNS = Math.ceil(GRID_COLUMNS / BLOCK);
 const BLOCK_ROWS = Math.ceil(GRID_ROWS / BLOCK);
 
 /**
- * A planned upgrade on one node (`docs/design/planner-upgrades.md` §2.1).
- *
- * Immutable, so the undo stack can hold the value that was there before an
- * edit rather than a copy of it. `level` is the target the player wants and
- * `order` their place in the queue: Apply walks plans in ascending `order`,
- * ties broken by id, so the order they planned in is the order they get.
- */
-export interface NodePlan {
-  readonly level: number;
-  readonly order: number;
-}
-
-/**
  * One building in the plan.
  *
- * Positions, level, fortification and the planned upgrade are mutable;
+ * Positions, level and fortification are mutable;
  * identity and footprint are not. The level moves because a batch action can
  * change it under the plan — `Plan.absorb` takes the server's word for it
  * after a wall upgrade rather than rebuilding the plan and losing every drag
@@ -114,8 +101,8 @@ export interface PlanNode {
    * The building has been lifted off the plot and into the planner's drawer.
    *
    * A stored node holds no cells, is drawn nowhere, and is not written into a
-   * layout. It is still in the plan — it keeps its id, its level and its
-   * planned upgrade — because storing has to be undoable and because the
+   * layout. It is still in the plan — it keeps its id and its level —
+   * because storing has to be undoable and because the
    * checklist names it by type when it blocks Apply
    * (`docs/design/yard-planner-redesign.md` §8, Q4).
    *
@@ -124,20 +111,12 @@ export interface PlanNode {
    */
   stored: boolean;
   /**
-   * The upgrade the player has planned for this building, or null.
-   *
-   * Carried on the node rather than in a side table because every path that
-   * reads a plan — the save, the load, the badge, the bar's totals, the Apply
-   * preview — already has the node in hand.
-   */
-  plan: NodePlan | null;
-  /**
    * A build, upgrade or fortify countdown is running on this building.
    *
    * One of the two facts about the yard the placement layer carries, because
-   * F1 rule 3 refuses to plan an upgrade on a busy building and the Apply walk
-   * skips one (`docs/design/planner-upgrades.md` §3.4). A rebuild does not
-   * count: it holds no worker (spec `docs/specs/base-building.md:784-786`).
+   * the building panel's ladder (`upgrades.ts`, `ladderFor`) refuses to offer
+   * an upgrade on a busy building. A rebuild does not count: it holds no
+   * worker (spec `docs/specs/base-building.md:784-786`).
    */
   busy: boolean;
   /**

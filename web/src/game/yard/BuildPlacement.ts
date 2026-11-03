@@ -85,7 +85,6 @@ const nodeOf = (id: number, type: number, x: number, y: number, kind: YardKind =
     decoration: false,
     fixed: false,
     stored: false,
-    plan: null,
     busy: false,
     damaged: false,
   };

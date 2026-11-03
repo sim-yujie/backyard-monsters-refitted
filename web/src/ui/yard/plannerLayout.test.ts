@@ -71,7 +71,7 @@ describe("shownSheet", () => {
     ...over,
   });
 
-  it("shows the building sheet for a selection on a phone", () => {
+  it("shows the coverage panel (the \"inspector\" sheet) when it is raised on a phone", () => {
     expect(shownSheet(choice())).toBe("inspector");
     expect(shownSheet(choice({ layout: PlannerLayout.LANDSCAPE }))).toBe("inspector");
   });

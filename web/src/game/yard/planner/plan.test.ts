@@ -378,7 +378,7 @@ const asLayout = (nodes: Layout["nodes"], expansion: number): Layout => ({
   nodes,
 });
 
-/* ── Planned upgrades ─────────────────────────────────────────────────────── */
+/* ── Rebasing ─────────────────────────────────────────────────────── */
 
 /** The captured yard with a few building rows patched, as a fresh `Yard`. */
 const yardWith = (changes: Record<number, Record<string, unknown>>): Yard => {
@@ -390,173 +390,15 @@ const yardWith = (changes: Record<number, Record<string, unknown>>): Yard => {
   return readYard(copy as unknown as BaseLoadResponse);
 };
 
-describe("Plan.setPlan", () => {
-  it("plans an upgrade and hands back what changed", () => {
-    const plan = freshPlan();
-    const [tower] = cannonIds(plan);
-
-    expect(plan.setPlan(tower!, 3)).toEqual({
-      id: tower,
-      before: null,
-      after: { level: 3, order: 0 },
-    });
-    expect(plan.get(tower!)!.plan).toEqual({ level: 3, order: 0 });
-  });
-
-  it("refuses anything fixed, and an id the plan does not hold", () => {
-    const plan = Plan.fromYard(yardWith({}));
-    for (const node of plan.all()) {
-      if (node.fixed) expect(plan.setPlan(node.id, 2)).toBeNull();
-    }
-    expect(plan.setPlan(1_000_099, 2)).toBeNull();
-  });
-
-  it("refuses a level the building is already at or past", () => {
-    const plan = freshPlan();
-    const [tower] = cannonIds(plan);
-    expect(plan.setPlan(tower!, 1)).toBeNull();
-    expect(plan.setPlan(tower!, 0)).toBeNull();
-  });
-
-  it("refuses a level past the top of the ladder", () => {
-    const plan = freshPlan();
-    const [tower] = cannonIds(plan);
-    // Cannon Towers stop at 10; a Booby Trap has one level and no ladder.
-    expect(plan.setPlan(tower!, 11)).toBeNull();
-    const trap = plan.buildings().find((node) => node.type === 24)!;
-    expect(plan.setPlan(trap.id, 2)).toBeNull();
-  });
-
-  it("refuses a busy building and a damaged one", () => {
-    const plan = freshPlan();
-    const [busy, hurt] = cannonIds(plan);
-    plan.get(busy!)!.busy = true;
-    plan.get(hurt!)!.damaged = true;
-
-    expect(plan.setPlan(busy!, 2)).toBeNull();
-    expect(plan.setPlan(hurt!, 2)).toBeNull();
-  });
-
-  it("numbers plans in the order they were made", () => {
-    const plan = freshPlan();
-    const [first, second, third] = cannonIds(plan);
-    plan.setPlan(first!, 2);
-    plan.setPlan(second!, 2);
-    plan.setPlan(third!, 2);
-
-    expect(plan.get(third!)!.plan!.order).toBe(2);
-  });
-
-  it("keeps a plan's place in the queue when only its level changes", () => {
-    const plan = freshPlan();
-    const [first, second] = cannonIds(plan);
-    plan.setPlan(first!, 2);
-    plan.setPlan(second!, 2);
-
-    expect(plan.setPlan(first!, 5)).toEqual({
-      id: first,
-      before: { level: 2, order: 0 },
-      after: { level: 5, order: 0 },
-    });
-  });
-
-  it("says nothing changed when the level is the one already planned", () => {
-    const plan = freshPlan();
-    const [tower] = cannonIds(plan);
-    plan.setPlan(tower!, 4);
-    expect(plan.setPlan(tower!, 4)).toBeNull();
-  });
-
-  it("clears a plan and reports the value it had", () => {
-    const plan = freshPlan();
-    const [tower] = cannonIds(plan);
-    plan.setPlan(tower!, 4);
-
-    expect(plan.setPlan(tower!, null)).toEqual({
-      id: tower,
-      before: { level: 4, order: 0 },
-      after: null,
-    });
-    expect(plan.get(tower!)!.plan).toBeNull();
-    // Nothing to clear is not a change.
-    expect(plan.setPlan(tower!, null)).toBeNull();
-  });
-
-  it("reuses the order a cleared plan gave up", () => {
-    const plan = freshPlan();
-    const [first, second] = cannonIds(plan);
-    plan.setPlan(first!, 2);
-    plan.setPlan(first!, null);
-    plan.setPlan(second!, 2);
-
-    expect(plan.get(second!)!.plan!.order).toBe(0);
-  });
-});
-
-describe("Plan.plannedNodes", () => {
-  it("lists plans in the order Apply will walk them, ties broken by id", () => {
-    const plan = freshPlan();
-    const [a, b, c] = cannonIds(plan);
-    plan.setPlan(c!, 2);
-    plan.setPlan(a!, 2);
-    plan.setPlan(b!, 2);
-
-    expect(plan.plannedNodes().map((node) => node.id)).toEqual([c, a, b]);
-    expect(plan.plannedCount).toBe(3);
-    expect(plan.plannedLevels()).toEqual(
-      new Map([
-        [a!, 2],
-        [b!, 2],
-        [c!, 2],
-      ]),
-    );
-  });
-
-  it("holds nothing at all before anything is planned", () => {
-    const plan = freshPlan();
-    expect(plan.plannedNodes()).toEqual([]);
-    expect(plan.plannedCount).toBe(0);
-  });
-});
-
-describe("Plan.setPlans", () => {
-  it("puts a plan back exactly as undo needs it to", () => {
-    const plan = freshPlan();
-    const [tower] = cannonIds(plan);
-    const first = plan.setPlan(tower!, 3)!;
-    const second = plan.setPlan(tower!, 6)!;
-
-    plan.setPlans([second], true);
-    expect(plan.get(tower!)!.plan).toEqual({ level: 3, order: 0 });
-    plan.setPlans([first], true);
-    expect(plan.get(tower!)!.plan).toBeNull();
-    plan.setPlans([first, second], false);
-    expect(plan.get(tower!)!.plan).toEqual({ level: 6, order: 0 });
-  });
-
-  it("skips an id the plan no longer has, as a move does", () => {
-    const plan = freshPlan();
-    expect(() =>
-      plan.setPlans([{ id: 987_654, before: null, after: { level: 2, order: 0 } }], false),
-    ).not.toThrow();
-  });
-});
-
 describe("Plan.absorb", () => {
-  it("drops a plan the yard has caught up with and names it", () => {
+  it("takes the yard's new levels and names what changed", () => {
     const plan = freshPlan();
-    const [caught, ahead] = cannonIds(plan);
-    plan.setPlan(caught!, 2);
-    plan.setPlan(ahead!, 5);
+    const [tower] = cannonIds(plan);
 
-    const result = plan.absorb(yardWith({ [caught!]: { l: 2 }, [ahead!]: { l: 3 } }));
+    const result = plan.absorb(yardWith({ [tower!]: { l: 3 } }));
 
-    expect(result.plansDropped).toEqual([caught]);
-    expect(plan.get(caught!)!.plan).toBeNull();
-    // The one the yard has not reached keeps its plan, at its new level.
-    expect(plan.get(ahead!)!.plan).toEqual({ level: 5, order: 1 });
-    expect(plan.get(ahead!)!.level).toBe(3);
-    expect(result.changed).toContain(ahead);
+    expect(plan.get(tower!)!.level).toBe(3);
+    expect(result.changed).toContain(tower);
   });
 
   it("takes the yard's word for busy and damaged", () => {
@@ -570,13 +412,8 @@ describe("Plan.absorb", () => {
     expect(plan.get(tower!)!.damaged).toBe(true);
   });
 
-  it("reports nothing dropped when no plan was reached", () => {
-    const plan = freshPlan();
-    const [tower] = cannonIds(plan);
-    plan.setPlan(tower!, 4);
-
-    expect(plan.absorb(yardWith({})).plansDropped).toEqual([]);
-    expect(plan.get(tower!)!.plan).toEqual({ level: 4, order: 0 });
+  it("reports nothing changed when the yard is the same", () => {
+    expect(freshPlan().absorb(yardWith({})).changed).toEqual([]);
   });
 });
 
@@ -656,21 +493,6 @@ describe("Plan.store", () => {
 
     expect(plan.hasMoved(tower!)).toBe(false);
     expect(plan.movedIds()).not.toContain(tower);
-  });
-
-  it("leaves a stored building out of what Apply would upgrade", () => {
-    const plan = freshPlan();
-    const [tower] = cannonIds(plan);
-    plan.setPlan(tower!, 3);
-    expect(plan.plannedCount).toBe(1);
-
-    plan.store([tower!]);
-
-    expect(plan.plannedCount).toBe(0);
-    expect(plan.plannedNodes()).toEqual([]);
-    expect(plan.plannedLevels().has(tower!)).toBe(false);
-    // The plan itself is kept, so undoing the store brings it back with it.
-    expect(plan.get(tower!)!.plan).toEqual({ level: 3, order: 0 });
   });
 });
 
