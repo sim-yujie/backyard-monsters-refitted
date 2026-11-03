@@ -119,6 +119,11 @@ export interface AccountResponse extends ApiEnvelope {
     tiltedMap?: boolean;
     /** The server's MR2_HEX_SHAPE switch: Map Room 2's hexes flat-top (default) or pointy-top. */
     mapHexShape?: "flat" | "pointy";
+    /** The player's country (ISO 3166-1 alpha-2), null when not set. */
+    country?: string | null;
+    countryAsked?: boolean;
+    /** The country's chat room, when it has one. */
+    countryChannel?: string | null;
   };
 }
 
@@ -780,6 +785,14 @@ export interface BaseLoadResponse extends ApiEnvelope {
   chatservers?: string[];
   chattoken?: string;
   chatchannel?: string;
+  /**
+   * The owner's loads, when the player's country has its own chat room
+   * (owner 3 Nov 2026): the room's key (`chat:country:PH`) and the country.
+   */
+  chatcountrychannel?: string;
+  chatcountry?: string;
+  /** The owner's loads, until answered or put off: ask once where the player is from. */
+  countryask?: number;
   /**
    * Map Room 2 attack loads only: the target cell's height, `i`, which
    * stretches an outpost's tower range (`BTOWER.as:80-85`). The server's loot

@@ -1,0 +1,98 @@
+/*
+ * The country list (ui/CountryPicker.ts) and the one-time "Where are you
+ * playing from?" prompt (ui/chat/CountryPrompt.ts); country chat rooms, owner
+ * 3 Nov 2026.
+ */
+
+.country-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.country-picker__search {
+  width: 100%;
+}
+
+.country-picker__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 240px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+}
+
+.country-picker--busy .country-picker__list {
+  opacity: 0.6;
+}
+
+.country-picker__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 36px;
+  padding: 4px var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--colour-text-strong);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.country-picker__option:hover,
+.country-picker__option:focus-visible {
+  outline: none;
+  background: var(--colour-surface-control-hover);
+}
+
+.country-picker__option[aria-selected="true"] {
+  background: var(--colour-shade);
+  font-weight: 700;
+}
+
+.country-picker__option[aria-selected="true"]::after {
+  content: "\2713";
+  margin-left: auto;
+  color: var(--colour-accent);
+}
+
+.country-picker__flag {
+  flex: none;
+  width: 1.6em;
+  font-size: 1.2em;
+  text-align: center;
+}
+
+.country-picker__none {
+  padding: var(--space-3);
+  color: var(--colour-text-muted);
+}
+
+/* ── The one-time prompt ───────────────────────────────────────────── */
+
+.country-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(360px, calc(100vw - 2 * var(--space-4)));
+}
+
+.country-prompt__line {
+  margin: 0;
+}
+
+.country-prompt__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.account-settings__country-now {
+  margin: 0 0 var(--space-2);
+  font-weight: 700;
+}

@@ -1,6 +1,7 @@
 import { avatarPath, type AvatarId } from "@/game/avatars";
 import { setSessionPicSquare, setSessionUsername } from "./auth";
 import { get, post, postJson } from "./http";
+import { countryOf, type CountrySettings } from "./country";
 import { privacyOf, type PrivacySettings } from "./privacy";
 import { hexShapeOf, type HexShape } from "@/game/maproom/rules/range";
 import type { AccountResponse, ChangeUsernameResponse, SetAvatarResponse, SettingsResponse } from "./types";
@@ -35,6 +36,8 @@ export interface AccountInfo {
   readonly shinyLocked: boolean;
   /** The privacy switches (friends WP9). */
   readonly privacy: PrivacySettings;
+  /** The player's country and the chat room it opens (owner 3 Nov 2026). */
+  readonly country: CountrySettings;
 }
 
 export const fetchAccount = async (): Promise<AccountInfo> => {
@@ -45,6 +48,7 @@ export const fetchAccount = async (): Promise<AccountInfo> => {
     nextChangeAt: response.nextChangeAt,
     shinyLocked: response.settings?.shinyLocked === true,
     privacy: privacyOf(response.settings),
+    country: countryOf(response.settings),
   };
 };
 

@@ -89,6 +89,83 @@
   background: var(--colour-online);
 }
 
+/* ── Rooms: Global and the player's country room (owner 3 Nov 2026) ── */
+
+.chat-box__rooms {
+  display: flex;
+  gap: var(--space-1);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--colour-border);
+}
+
+.chat-box__rooms[hidden] {
+  display: none;
+}
+
+.chat-box__room {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 30px;
+  padding: 2px var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--colour-text-muted);
+  font: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.chat-box__room:hover {
+  background: var(--colour-shade);
+}
+
+.chat-box__room:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.chat-box__room--on {
+  border-color: var(--colour-border);
+  background: var(--colour-surface-control-hover);
+  color: var(--colour-text-strong);
+}
+
+/* New lines in the room not shown: a small amber dot on its tab. */
+.chat-box__room--unread::after,
+.chat-box:not(.chat-box--open)[data-unread="true"] .chat-box__tab::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--colour-warning-bright);
+}
+
+.chat-box__tab {
+  position: relative;
+}
+
+/* Global's one line of manners: English here. */
+.chat-box__rule {
+  margin: 0;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--colour-shade);
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.chat-box__rule[hidden] {
+  display: none;
+}
+
 /* ── The lines ─────────────────────────────────────────────────────── */
 
 .chat-box__lines {
