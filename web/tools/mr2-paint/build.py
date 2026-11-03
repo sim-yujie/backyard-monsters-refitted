@@ -22,7 +22,7 @@ piece in its own 256 px frame (High; 128 / 64 px Medium / Low), foot at the bott
 
 Strips (cliff faces, canopy edge) keep their full width and are made to repeat sideways.
 
-  python web/tools/mr2-paint/build.py [--take]
+  python web/tools/mr2-paint/build.py [--take] [--textures] [--cliffs]   (either flag: only those)
 """
 import sys
 from pathlib import Path
@@ -47,9 +47,9 @@ TEXTURE_ORDER: list[tuple[str, str, int | None, tuple[int, int, int, int] | None
     ("meadow", "ground-a", 0, (600, 660, 800, 760)),
     ("lush", "ground-a", 1, (1000, 780, 1150, 860)),
     ("sand", "ground-a", 2, (200, 760, 260, 920)),
-    ("rock", "ground-a", 3, None),
+    ("rock", "ground-a", 3, (300, 500, 700, 700)),
     ("marsh", "ground-b", 0, (1300, 800, 1700, 1050)),
-    ("forest-floor", "ground-b", 1, None),
+    ("forest-floor", "ground-b", 1, (1000, 780, 1150, 860)),
     ("snow", "ground-b", 2, None),
     ("meadow-plain", "ground-b", 3, (600, 660, 800, 760)),
     ("shallows", "sea", 0, None),
@@ -62,7 +62,12 @@ ATLAS_COLUMNS = 4
 # How far each texture moves to its mock-up B colour (default 0.5). The meadows went further after
 # the first in-game look: they came out greener and darker than mock-up B (hue 82 against 66);
 # the sand came out darker; the marsh came out brown mud where mock-up B has dark wet green.
-MATCH_STRENGTH = {"meadow": 0.9, "lush": 0.8, "meadow-plain": 0.9, "sand": 0.8, "marsh": 0.7}
+# Round 4 (mr2-hills): the forest floor (forest cells until step 6's canopy covers them) was the
+# darkest ground on screen, a dark mossy green (lightness 0.25 against the meadows' 0.43), so it
+# moves most of the way to mock-up B's lush grass; the rock ground was brown dirt where mock-up B's
+# rocky ground is grass with grey stones, so it moves half-way to mock-up B's open land.
+MATCH_STRENGTH = {"meadow": 0.9, "lush": 0.8, "meadow-plain": 0.9, "sand": 0.8, "marsh": 0.7,
+                  "forest-floor": 0.75, "rock": 0.5}
 
 
 def take() -> None:
@@ -226,6 +231,24 @@ def build_strips() -> None:
         write_copies(framed(rest, 4), f"{family}-pieces")
 
 
+# The cliff sheet the ground shader reads (plan step 5): the three face strips stacked in the top
+# half with clear rows between them, the scree and peak pieces (4 frames a row) in the bottom half.
+# The rows must match `CLIFF_STRIP_PIXELS` / `CLIFF_PIECES_TOP` in web/src/game/maproom/painted/hills.ts.
+CLIFF_STRIP_TOPS = [8, 238, 361]
+CLIFF_PIECES_TOP = 512
+
+
+def build_cliff_sheet() -> None:
+    sheet = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
+    for index, top in enumerate(CLIFF_STRIP_TOPS):
+        strip = Image.open(OUT / f"cliff-strip{index + 1}@4x.webp").convert("RGBA")
+        sheet.alpha_composite(strip, (0, top))
+        print(f"cliff strip {index + 1}: rows {top}..{top + strip.height}")
+    pieces_sheet = Image.open(OUT / "cliff-pieces@4x.webp").convert("RGBA")
+    sheet.alpha_composite(pieces_sheet, (0, CLIFF_PIECES_TOP))
+    write_copies(sheet, "cliffs")
+
+
 def write_copies(picture: Image.Image, name: str, quality: int = 90) -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for suffix, factor in (("@4x", 1), ("@2x", 2), ("", 4)):
@@ -240,9 +263,14 @@ def write_copies(picture: Image.Image, name: str, quality: int = 90) -> None:
 if __name__ == "__main__":
     if "--take" in sys.argv:
         take()
-    build_textures()
-    build_sprites()
-    build_strips()
+    only = {flag for flag in ("--textures", "--cliffs") if flag in sys.argv}
+    if not only or "--textures" in only:
+        build_textures()
+    if not only:
+        build_sprites()
+        build_strips()
+    if not only or "--cliffs" in only:
+        build_cliff_sheet()
     totals = {"@4x": 0, "@2x": 0, "": 0}
     for path in sorted(OUT.glob("*.webp")):
         size = path.stat().st_size

@@ -22,6 +22,8 @@ const ATLAS_COLUMNS = 4;
 const DECALS_URL = `${import.meta.env.BASE_URL}maproom/painted/decals@4x.webp`;
 const SEA_ROCKS_URL = `${import.meta.env.BASE_URL}maproom/painted/sea-rocks@4x.webp`;
 const SPRITE_COLUMNS = 4;
+/** The cliff faces and their pieces (plan step 5, `hills.ts` says where each strip sits). */
+const CLIFFS_URL = `${import.meta.env.BASE_URL}maproom/painted/cliffs@4x.webp`;
 const DECAL_ROWS = 3;
 const SPRITE_ROWS = 5;
 
@@ -38,10 +40,11 @@ const STAND_INS = [
 ];
 
 /** The ground shader's uniforms this class changes after it is made. */
-interface GroundUniformValues {
+interface GroundUniforms {
   uQuality: number;
   uTime: number;
   uSpritesReady: number;
+  uCliffsReady: number;
   uRiverOn: number;
   uRiverRect: Float32Array;
 }
@@ -140,6 +143,8 @@ export class PaintedGround {
   private sprites: TextureSource | null = null;
   private spritesUrl: string | null = null;
   private readonly spriteStandIn: CanvasSource;
+  private cliffs: TextureSource | null = null;
+  private cliffsUrl: string | null = null;
   private readonly startMs = performance.now();
   /** The rivers' distance picture (look plan step 7), painted by the shader with the sea's water. */
   private readonly rivers = new RiverLayer();
@@ -164,11 +169,13 @@ export class PaintedGround {
         uSpritesReady: { value: 0, type: "f32" },
         uCellPoints: { value: shape.cellWidth, type: "f32" },
         uTime: { value: 0, type: "f32" },
+        uCliffsReady: { value: 0, type: "f32" },
         uRiverRect: { value: new Float32Array([0, 0, 1, 1]), type: "vec4<f32>" },
         uRiverOn: { value: 0, type: "f32" },
       },
       uData: this.data.source,
       uSprites: this.spriteStandIn,
+      uCliffs: this.spriteStandIn,
       uRiver: this.rivers.uniforms.source,
     };
     SHADER_TEXTURES.forEach((_, index) => {
@@ -198,8 +205,8 @@ export class PaintedGround {
     });
   }
 
-  private get uniforms(): GroundUniformValues {
-    return (this.shader.resources.groundUniforms as { uniforms: GroundUniformValues }).uniforms;
+  private get uniforms(): GroundUniforms {
+    return (this.shader.resources.groundUniforms as { uniforms: GroundUniforms }).uniforms;
   }
 
   /**
@@ -239,8 +246,39 @@ export class PaintedGround {
 
   /** Fetches the ground atlas and the sprite sheet at this Quality. */
   async load(level: Quality = quality()): Promise<boolean> {
-    const [ground] = await Promise.all([this.loadGround(level), this.loadSprites(level)]);
+    const [ground] = await Promise.all([this.loadGround(level), this.loadSprites(level), this.loadCliffs(level)]);
     return ground;
+  }
+
+  /** Fetches the cliff sheet (faces repeat sideways); until it lands, hills show no cliffs. */
+  private async loadCliffs(level: Quality): Promise<boolean> {
+    const url = sheetAtQuality(CLIFFS_URL, level);
+    if (url === this.cliffsUrl) return true;
+    let image: CanvasImageSource & { width: number; height: number };
+    try {
+      image = (await Assets.load(url)).source.resource;
+    } catch {
+      return false;
+    }
+    if (this.destroyed) return false;
+    const canvas = document.createElement("canvas");
+    canvas.width = image.width;
+    canvas.height = image.height;
+    canvas.getContext("2d")!.drawImage(image, 0, 0);
+    const source = new CanvasSource({
+      resource: canvas,
+      addressMode: "repeat",
+      scaleMode: "linear",
+      mipmapFilter: "linear",
+      autoGenerateMipmaps: true,
+    });
+    const old = this.cliffs;
+    this.shader.resources.uCliffs = source;
+    this.cliffs = source;
+    this.cliffsUrl = url;
+    this.uniforms.uCliffsReady = 1;
+    old?.destroy();
+    return true;
   }
 
   /** Fetches the details and sea rocks and joins them into the shader's one 4 x 5 sheet. */
@@ -346,5 +384,6 @@ export class PaintedGround {
     this.rivers.destroy();
     for (const source of [...this.textures, ...this.standIns, this.spriteStandIn]) source.destroy();
     this.sprites?.destroy();
+    this.cliffs?.destroy();
   }
 }

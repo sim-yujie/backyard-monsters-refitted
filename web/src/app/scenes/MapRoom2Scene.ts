@@ -505,6 +505,7 @@ export class MapRoom2Scene implements Scene {
       // The camera and the tilted picture's redraw count, for samples and the speed check.
       (globalThis as Record<string, unknown>)["__bymrMr2TiltDebug"] = {
         camera: this.camera,
+        renderer: this.renderer,
         draws: () => this.tiltView?.draws ?? 0,
         resolution: () => this.tiltView?.textureResolution ?? 0,
         markers: () => ({ count: this.renderer.markerCount, ms: this.markerMs }),

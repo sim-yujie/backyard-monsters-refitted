@@ -5,6 +5,16 @@ import { heightBonus } from "@/game/maproom/heightBonus";
 /** What the ground does, said once for whoever hovers it. */
 export const GROUND_BONUS_TITLE = "Higher ground: towers reach farther, income is lower. Lower ground: the other way round.";
 
+/** A cell's height for the pop-up, as metres above the base: "+48 m" (plan step 5). */
+export const heightLabel = (height: number): string => {
+  const metres = heightBonus(height).metres;
+  return `${metres < 0 ? "−" : "+"}${Math.abs(metres)} m`;
+};
+
+/** The painted map's height chip: the hill-with-flag icon and the height, e.g. "+48 m". */
+export const heightIcon = (height: number): HTMLElement =>
+  iconAmount("height", heightLabel(height), { size: 24, className: "ground-bonus" });
+
 const changeOf = (percent: number): AmountChange | undefined =>
   percent > 0 ? "gain" : percent < 0 ? "loss" : undefined;
 
