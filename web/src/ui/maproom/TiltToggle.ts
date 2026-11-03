@@ -1,3 +1,4 @@
+import { gameIcon } from "@/ui/gameIcon";
 import { button } from "@/ui/maproom1/icons";
 
 /**
@@ -17,37 +18,15 @@ export const TILT_TOGGLE_TEXT = {
   flat: "Tilted map: off. Press to tilt the map.",
 } as const;
 
-const SVG_NS = "http://www.w3.org/2000/svg";
-
 /**
- * The icon: the ground seen at an angle, a grid narrower at the far edge,
- * when tilted; the same grid seen from straight above when flat.
+ * The painted icon (owner: icons are painted, not line drawings): the map's
+ * ground seen at an angle while tilted, from straight above while flat. The
+ * button's own label says what it does, so the picture is decorative.
  */
-const ICON_PATHS = {
-  tilted: ["M7 6h10l4 13H3z", "M12 6v13", "M5 12.5h14"],
-  flat: ["M4 4h16v16H4z", "M12 4v16", "M4 12h16"],
-} as const;
+const ICON_SIZE = 32;
 
-const drawIcon = (shape: keyof typeof ICON_PATHS): SVGSVGElement => {
-  const svg = document.createElementNS(SVG_NS, "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("width", "22");
-  svg.setAttribute("height", "22");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("stroke-width", "2");
-  svg.setAttribute("stroke-linecap", "round");
-  svg.setAttribute("stroke-linejoin", "round");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("focusable", "false");
-  svg.setAttribute("class", "map-icon");
-  for (const d of ICON_PATHS[shape]) {
-    const path = document.createElementNS(SVG_NS, "path");
-    path.setAttribute("d", d);
-    svg.append(path);
-  }
-  return svg;
-};
+const drawIcon = (tilted: boolean): HTMLImageElement =>
+  gameIcon(tilted ? "maptilt" : "mapflat", { size: ICON_SIZE, decorative: true });
 
 export class TiltToggle {
   readonly element: HTMLButtonElement;
@@ -77,6 +56,6 @@ export class TiltToggle {
     this.element.setAttribute("aria-pressed", String(this.tilted));
     this.element.setAttribute("aria-label", text);
     this.element.title = text;
-    this.element.replaceChildren(drawIcon(this.tilted ? "tilted" : "flat"));
+    this.element.replaceChildren(drawIcon(this.tilted));
   }
 }

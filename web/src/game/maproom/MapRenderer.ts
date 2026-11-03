@@ -13,6 +13,7 @@ import { TextPool } from "./LabelLayer";
 import { LodTier, sameView, tierForZoom, viewFor } from "./lod";
 import { MapAtlas } from "./mapAtlas";
 import { MapChunk, TextLevel, type ChunkView } from "./MapChunk";
+import type { Projector } from "./markerPins";
 import { PaintedGround, groundShaderCompiles } from "./painted/PaintedGround";
 import { BuildingAvatars } from "./buildingAvatars";
 import { cellLift, liftCorners, setFlatGround } from "./ground";
@@ -81,6 +82,18 @@ export class MapRenderer {
    * Look only; drawn only with the painted look on.
    */
   private readonly rivers = new RiverLayer();
+  /**
+   * The upright marker layer for the tilted map (`markerPins.ts`): while the
+   * tilt is on, `world` and `worldTop` leave `root` (so they are not drawn
+   * into the warped picture) and live here, in screen pixels, over it. The
+   * scene puts this on the stage above the tilted picture. Empty when flat.
+   * Its own render group, so markers coming on and off screen as the map
+   * pans rebuild only this layer's draw list, not the whole stage's.
+   */
+  readonly markers = new Container({ isRenderGroup: true });
+  /** How the markers stand on the tilted screen, or null on the flat map. */
+  private projector: Projector | null = null;
+  private projectorKey = "";
   /** The player's attack range (#177), over the cells and under the highlight. */
   private readonly range = new RangeOverlay();
 
@@ -144,6 +157,8 @@ export class MapRenderer {
     this.ground.interactiveChildren = false;
     this.world.interactiveChildren = false;
     this.worldTop.interactiveChildren = false;
+    this.markers.interactiveChildren = false;
+    this.markers.eventMode = "none";
     this.range.liftOf = this.liftAt;
     // The raster stays under the chunks at every tier, so a chunk that has not
     // been built yet shows the world at one texel per cell instead of nothing.
@@ -157,6 +172,48 @@ export class MapRenderer {
       this.live.overlay,
       this.highlight,
     );
+  }
+
+  /**
+   * Stands the markers upright on the tilted screen (`project` from
+   * `markerPins.uprightProjector`, `key` naming the camera and tilt it was
+   * made for), or puts them back into the flat map for null. Cheap to call
+   * every frame: chunks re-place only when the key or their markers changed.
+   */
+  setMarkerProjector(project: Projector | null, key: string): void {
+    const tilted = project !== null;
+    const wasTilted = this.projector !== null;
+    // The flat map stays exactly as it always was: nothing to do.
+    if (!tilted && !wasTilted) return;
+    if (tilted !== wasTilted) {
+      if (tilted) {
+        this.markers.addChild(this.world, this.worldTop);
+      } else {
+        // Back in the flat map's order: over the ground and rivers, and the badges over the range.
+        this.root.addChildAt(this.world, this.root.getChildIndex(this.rivers.container) + 1);
+        this.root.addChildAt(this.worldTop, this.root.getChildIndex(this.range.container) + 1);
+      }
+    }
+    this.projector = project;
+    this.projectorKey = key;
+    this.placeMarkers();
+  }
+
+  /** How many markers the chunks on screen carry, for the speed readout. */
+  get markerCount(): number {
+    let count = 0;
+    for (const id of this.visibleIds) count += this.chunks.get(id)?.pins.size ?? 0;
+    return count;
+  }
+
+  /** Places the markers of every chunk on screen for the current projector. */
+  private placeMarkers(): void {
+    if (!this.projector) {
+      // Chunks that stood on the tilted screen go back, once; the rest are untouched.
+      for (const chunk of this.chunks.values()) if (chunk.pins.tilted) chunk.pins.place(null, "");
+      return;
+    }
+    for (const id of this.visibleIds) this.chunks.get(id)?.pins.place(this.projector, this.projectorKey);
   }
 
   /** How long the last chunk build took, in milliseconds. */
@@ -390,6 +447,7 @@ export class MapRenderer {
     this.atlas = null;
     this.raster.destroy();
     this.root.destroy({ children: true });
+    this.markers.destroy({ children: true });
   }
 
   /** Builds what is missing, hides what is not on screen, shows the rest. */
@@ -460,6 +518,8 @@ export class MapRenderer {
 
     this.visibleIds = [...visible];
     this.residency.keep(this.visibleIds, nowMs);
+    // Chunks just built or shown stand up with the rest.
+    if (this.projector) this.placeMarkers();
   }
 
   private sweep(nowMs: number): void {

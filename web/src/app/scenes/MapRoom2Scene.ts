@@ -97,6 +97,7 @@ import {
 } from "@/game/maproom/tilt";
 import { cachedTiltChoice, loadTiltChoice, saveTiltChoice } from "@/game/maproom/tiltSetting";
 import { TiltView } from "@/game/maproom/TiltView";
+import { markerFit, uprightProjector } from "@/game/maproom/markerPins";
 import { Sight } from "@/game/maproom/Sight";
 import { ZoneStore, type ZoneError } from "@/game/maproom/ZoneStore";
 import { inWorld, type CellRange } from "@/game/maproom/zones";
@@ -233,6 +234,13 @@ export class MapRoom2Scene implements Scene {
   private tiltStrength: TiltStrength = this.openingTilt();
   private tilt: Tilt | null = null;
   private tiltView: TiltView | null = null;
+  /**
+   * Markers stand upright over the tilted map (`markerPins.ts`). Only the dev
+   * hook turns this off, to show the squashed "before" for samples.
+   */
+  private uprightMarkers = true;
+  /** How long standing the markers took last frame, in milliseconds (speed readout). */
+  private markerMs = 0;
   private input: MapInput | null = null;
 
   /**
@@ -499,6 +507,15 @@ export class MapRoom2Scene implements Scene {
         camera: this.camera,
         draws: () => this.tiltView?.draws ?? 0,
         resolution: () => this.tiltView?.textureResolution ?? 0,
+        markers: () => ({ count: this.renderer.markerCount, ms: this.markerMs }),
+        // Markers upright (true) or warped flat with the ground (false, the "before").
+        upright: (on: boolean) => {
+          this.uprightMarkers = on;
+          if (!on) this.renderer.setMarkerProjector(null, "");
+          this.tiltView?.invalidate();
+          this.standMarkers();
+          return on;
+        },
       };
       // Switches the tilt live at any strength, for the owner's samples (not saved).
       (globalThis as Record<string, unknown>)["__bymrMr2Tilt"] = (strength: TiltStrength) => {
@@ -590,6 +607,10 @@ export class MapRoom2Scene implements Scene {
       if (!this.tiltView) this.tiltView = new TiltView(context.renderer.resolution);
       if (this.renderer.root.parent) this.renderer.root.parent.removeChild(this.renderer.root);
       if (!this.tiltView.mesh.parent) context.stage.addChildAt(this.tiltView.mesh, 0);
+      // The upright markers stand over the tilted picture (`markerPins.ts`).
+      if (!this.renderer.markers.parent) {
+        context.stage.addChildAt(this.renderer.markers, context.stage.getChildIndex(this.tiltView.mesh) + 1);
+      }
       this.camera.setPointerMap((point) => tilt.toFlat(point));
       // Edge limits and the zoom floor for what the tilted screen really sees,
       // which is more than the screen at the top: no empty space beyond the
@@ -597,7 +618,10 @@ export class MapRoom2Scene implements Scene {
       this.camera.setMinZoom(tiltMinZoom(tilt, worldBounds(), mapMinZoom()));
       this.camera.setViewExtent(tilt.flatBounds());
       this.tiltView.invalidate();
+      this.standMarkers();
     } else {
+      this.renderer.markers.parent?.removeChild(this.renderer.markers);
+      this.renderer.setMarkerProjector(null, "");
       this.tiltView?.mesh.parent?.removeChild(this.tiltView.mesh);
       this.tiltView?.destroy();
       this.tiltView = null;
@@ -658,6 +682,22 @@ export class MapRoom2Scene implements Scene {
     );
   }
 
+  /**
+   * Stands the map's markers upright over the tilted picture, for the camera
+   * as it is now. Re-placing happens only when the camera or the tilt moved
+   * (the key) or a chunk's markers changed.
+   */
+  private standMarkers(): void {
+    const tilt = this.tilt;
+    if (!tilt || !this.uprightMarkers) return;
+    const camera = { zoom: this.camera.zoom, position: { ...this.camera.position } };
+    const key = `${tilt.pitchDeg}|${tilt.width}x${tilt.height}|${camera.zoom}|${camera.position.x},${camera.position.y}`;
+    const fit = markerFit(tilt, mapRoomGrid.rowStep);
+    const started = performance.now();
+    this.renderer.setMarkerProjector(uprightProjector(tilt, camera, fit), `${key}|${fit}`);
+    this.markerMs = performance.now() - started;
+  }
+
   /** Undoes the tilt for a canvas point, or null when flat. */
   private get tiltToFlat(): ((point: { x: number; y: number }) => { x: number; y: number }) | null {
     const tilt = this.tilt;
@@ -689,6 +729,7 @@ export class MapRoom2Scene implements Scene {
     if (this.tilt && this.tiltView && this.context) {
       if (this.renderer.paintedStepped) this.tiltView.invalidate();
       this.tiltView.render(this.context.renderer, this.renderer.root, this.tilt, this.camera.zoom, this.camera.position);
+      this.standMarkers();
     }
     this.ui?.drawMinimap();
 
@@ -968,10 +1009,13 @@ export class MapRoom2Scene implements Scene {
     const ui = this.ui;
     const panel = ui?.cellPanelRect();
     if (!ui || !panel) return;
+    const point = this.worldToCanvas(this.cellPoint(cell));
+    // A cell is drawn smaller towards the top of the tilted screen.
+    const scale = this.camera.zoom * (this.tilt ? this.tilt.scaleAt(point.y) : 1);
     const pan = panClearOfPanel({
-      point: this.worldToCanvas(this.cellPoint(cell)),
-      halfWidth: (mapRoomGrid.cellWidth / 2) * this.camera.zoom,
-      halfHeight: (mapRoomGrid.cellHeight / 2) * this.camera.zoom,
+      point,
+      halfWidth: (mapRoomGrid.cellWidth / 2) * scale,
+      halfHeight: (mapRoomGrid.cellHeight / 2) * scale,
       panel,
       viewportWidth: this.viewportWidth,
       hudBottom: ui.hudBottom(),
