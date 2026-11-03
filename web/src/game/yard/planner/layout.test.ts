@@ -4,7 +4,6 @@ import {
   type BaseLoadResponse,
   type Layout,
   type LayoutNode,
-  type LayoutNodePlan,
 } from "@/api/types";
 import fixture from "../../../../test/fixtures/baseload-sandbox-yard.json";
 import { readYard, type Yard } from "../yardModel";
@@ -12,12 +11,12 @@ import { layoutMeta, payloadFor, planLoad } from "./layout";
 import { Plan } from "./plan";
 
 /**
- * Planned upgrades across the save and load boundary.
+ * Layouts across the save and load boundary: the drawer, and the `plan`
+ * field older layouts carry.
  *
- * Positions have their own tests in `plan.test.ts`; what is checked here is
- * the `plan` field alone: that a layout carries it only when there is one, and
- * that loading one into a yard that has moved on drops it rather than asking
- * Apply to refuse it (`docs/design/planner-upgrades.md` §2.3).
+ * Positions have their own tests in `plan.test.ts`. Per-building upgrade
+ * planning was removed on 2026-11-03 (owner), so a layout is written without
+ * a `plan` field and an old one that has it still loads, the field ignored.
  *
  * The fixture is the sandbox yard: 575 buildings, six Cannon Towers at level
  * 1, 400 Blocks, a level 10 Town Hall and no countdowns.
@@ -56,159 +55,22 @@ const savedNode = (plan: Plan, id: number, over: Partial<LayoutNode> = {}): Layo
   return { id, t: node.type, x: node.x, y: node.y, ...over };
 };
 
-describe("payloadFor", () => {
-  it("writes a plan on the nodes that have one and nowhere else", () => {
+describe("old saved plans", () => {
+  it("writes no plan field on any node", () => {
     const plan = planOf();
-    const [planned, bare] = cannonIds(plan);
-    plan.setPlan(planned!, 4);
-
-    const nodes = payloadFor(plan).nodes;
-    const withPlan = nodes.find((node) => node.id === planned)!;
-    const without = nodes.find((node) => node.id === bare)!;
-
-    expect(withPlan.plan).toEqual({ level: 4, order: 0 });
-    expect(without.plan).toBeUndefined();
-    expect("plan" in without).toBe(false);
+    for (const node of payloadFor(plan).nodes) expect(node).not.toHaveProperty("plan");
   });
 
-  it("keeps the level and the order a plan was given", () => {
-    const plan = planOf();
-    const [first, second] = cannonIds(plan);
-    plan.setPlan(first!, 2);
-    plan.setPlan(second!, 7);
-
-    const nodes = payloadFor(plan).nodes;
-    expect(nodes.find((node) => node.id === second)!.plan).toEqual({ level: 7, order: 1 });
-  });
-
-  it("drops the field again once the plan is cleared", () => {
+  it("loads a layout that still carries plans, ignoring the plan", () => {
     const plan = planOf();
     const [tower] = cannonIds(plan);
-    plan.setPlan(tower!, 3);
-    plan.setPlan(tower!, null);
+    const saved = { ...savedNode(plan, tower!), plan: { level: 5, order: 0 } } as LayoutNode;
 
-    expect(payloadFor(plan).nodes.find((node) => node.id === tower)!.plan).toBeUndefined();
-  });
-});
+    const result = planLoad(plan, asLayout([saved]));
 
-describe("planLoad: plans", () => {
-  it("restores a plan the yard can still do", () => {
-    const plan = planOf();
-    const [tower] = cannonIds(plan);
-    const result = planLoad(
-      plan,
-      asLayout([savedNode(plan, tower!, { plan: { level: 5, order: 3 } })]),
-    );
-
-    expect(result.plans).toEqual([
-      { id: tower, before: null, after: { level: 5, order: 3 } },
-    ]);
-    expect(result.plansDropped).toBe(0);
-    // Nothing is written: the caller pushes the entries through the stack.
-    expect(plan.get(tower!)!.plan).toBeNull();
-    plan.setPlans(result.plans, false);
-    expect(plan.get(tower!)!.plan).toEqual({ level: 5, order: 3 });
-  });
-
-  it("drops a plan the building has caught up with", () => {
-    // The layout wants level 3 on a tower the yard has already taken to 4.
-    const caughtUp = Plan.fromYard(yardWith({ 32: { l: 4 } }));
-    const result = planLoad(
-      caughtUp,
-      asLayout([savedNode(caughtUp, 32, { plan: { level: 3, order: 0 } })]),
-    );
-
-    expect(result.plans).toEqual([]);
-    expect(result.plansDropped).toBe(1);
-  });
-
-  it("drops a plan on a building that is busy or damaged", () => {
-    const plan = Plan.fromYard(yardWith({ [32]: { cU: 600 }, [33]: { hp: 10 } }));
-    const result = planLoad(
-      plan,
-      asLayout([
-        savedNode(plan, 32, { plan: { level: 3, order: 0 } }),
-        savedNode(plan, 33, { plan: { level: 3, order: 1 } }),
-      ]),
-    );
-
-    expect(result.plans).toEqual([]);
-    expect(result.plansDropped).toBe(2);
-  });
-
-  it("drops a plan past the top of the ladder or on a type with none", () => {
-    const plan = planOf();
-    const [tower] = cannonIds(plan);
-    const trap = plan.buildings().find((node) => node.type === 24)!;
-    const result = planLoad(
-      plan,
-      asLayout([
-        savedNode(plan, tower!, { plan: { level: 99, order: 0 } }),
-        savedNode(plan, trap.id, { plan: { level: 2, order: 1 } }),
-      ]),
-    );
-
-    expect(result.plans).toEqual([]);
-    expect(result.plansDropped).toBe(2);
-  });
-
-  it("reads a plan on a building whose position did not fit", () => {
-    const plan = planOf();
-    const [tower] = cannonIds(plan);
-    const result = planLoad(
-      plan,
-      asLayout([savedNode(plan, tower!, { x: 5_000, plan: { level: 3, order: 0 } })]),
-    );
-
-    // The tower stays where it stood and can still be upgraded there.
-    expect(result.didNotFit).toHaveLength(1);
-    expect(result.plans).toHaveLength(1);
-  });
-
-  it("leaves a plan the layout says nothing about alone", () => {
-    const plan = planOf();
-    const [planned, other] = cannonIds(plan);
-    plan.setPlan(planned!, 3);
-
-    const result = planLoad(plan, asLayout([savedNode(plan, other!)]));
-
-    expect(result.plans).toEqual([]);
-    expect(plan.get(planned!)!.plan).toEqual({ level: 3, order: 0 });
-  });
-
-  it("numbers a plan by reading order when the layout has no order on it", () => {
-    const plan = planOf();
-    const [first, second] = cannonIds(plan);
-    const result = planLoad(
-      plan,
-      asLayout([
-        savedNode(plan, first!, { plan: { level: 3 } as LayoutNodePlan }),
-        savedNode(plan, second!, { plan: { level: 3 } as LayoutNodePlan }),
-      ]),
-    );
-
-    expect(result.plans.map((entry) => entry.after!.order)).toEqual([0, 1]);
-  });
-
-  it("says nothing changed when the plan is the one already set", () => {
-    const plan = planOf();
-    const [tower] = cannonIds(plan);
-    plan.setPlan(tower!, 5);
-    const result = planLoad(
-      plan,
-      asLayout([savedNode(plan, tower!, { plan: { level: 5, order: 0 } })]),
-    );
-
-    expect(result.plans).toEqual([]);
-    expect(result.plansDropped).toBe(0);
-  });
-
-  it("reports no plans for a layout that carries none", () => {
-    const plan = planOf();
-    const result = planLoad(plan, asLayout([savedNode(plan, cannonIds(plan)[0]!)]));
-
-    expect(result.plans).toEqual([]);
-    expect(result.plansDropped).toBe(0);
+    expect(result.didNotFit).toEqual([]);
+    expect(result).not.toHaveProperty("plans");
+    expect(plan.get(tower!)).not.toHaveProperty("plan");
   });
 });
 

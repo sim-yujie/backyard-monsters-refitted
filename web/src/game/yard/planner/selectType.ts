@@ -5,7 +5,7 @@ import type { PlanNode } from "./placement";
  *
  * A finger has no Shift to add one building at a time, and the Box tool only
  * reaches what fits on the screen at once. So when everything selected is one
- * type, the building sheet offers every building of that type on the plot.
+ * type, More ▸ Selection offers every building of that type on the plot.
  *
  * `placed` is the plan's buildings on the plot (`Plan.buildings()`, which
  * already leaves out the drawer and anything fixed). The answer is null when

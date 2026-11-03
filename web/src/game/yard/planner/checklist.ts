@@ -1,13 +1,11 @@
 import { buildingName } from "../buildingArt";
 import { InvalidReason, type PlacementResult, type PlanNode } from "./placement";
-import type { ApplyPreview } from "./upgrades";
 
 /**
  * The pre-Apply checklist (design §3, F17).
  *
- * Three blocking checks about placement, and — once anything is planned —
- * three warning rows about what the upgrade walk will not manage, which report
- * rather than refuse (`docs/design/planner-upgrades.md` §5.5). Each row names
+ * Three blocking checks about placement, and a warning row for decorations
+ * Apply will put into storage, which reports rather than refuses. Each row names
  * the buildings that fail it, so the panel can offer "show me" and select
  * them — which is the whole point of the feature. The original collapsed all
  * of this into one untargeted `basePlanner_cantApply` message
@@ -38,11 +36,10 @@ export interface ChecklistRow {
   /**
    * A row that reports rather than refuses.
    *
-   * Apply is partial by design where planned upgrades are concerned
-   * (`docs/design/planner-upgrades.md` §3.2): a job the yard cannot afford or
-   * has no worker for is started later, not a reason to refuse the move. So
-   * these rows are drawn with their own mark, are left out of
-   * {@link Checklist.ok}, and do not outline anything in red.
+   * A decoration left in the drawer goes into storage on Apply (#128), which
+   * is not a reason to refuse the move. So these rows are drawn with their own
+   * mark, are left out of {@link Checklist.ok}, and do not outline anything in
+   * red.
    */
   readonly warning?: boolean;
 }
@@ -68,7 +65,6 @@ export const buildChecklist = (
   nodes: Map<number, PlanNode> | ReadonlyMap<number, PlanNode>,
   validation: PlacementResult,
   unplaced: readonly number[] = [],
-  preview: ApplyPreview | null = null,
   toStorage: readonly number[] = [],
 ): Checklist => {
   const overlaps: ChecklistItem[] = [];
@@ -112,7 +108,6 @@ export const buildChecklist = (
       ok: outside.length === 0,
       items: outside,
     },
-    ...upgradeRows(nodes, preview),
     ...storageRows(nodes, toStorage),
   ];
 
@@ -143,70 +138,3 @@ const storageRows = (
           warning: true,
         },
       ];
-
-/**
- * The three warning rows a plan with upgrades adds (design F17,
- * `yard-planner-redesign.md:465-467`).
- *
- * Built from the Apply preview rather than from the plan, so the checklist and
- * the dialog cannot disagree about which job the yard cannot pay for: they are
- * reading the same walk. They are left out entirely when there is nothing
- * planned, because three green ticks about upgrades nobody asked for is noise
- * in front of the Apply button.
- */
-const upgradeRows = (
-  nodes: Map<number, PlanNode> | ReadonlyMap<number, PlanNode>,
-  preview: ApplyPreview | null,
-): ChecklistRow[] => {
-  if (!preview) return [];
-  const planned =
-    preview.started.length +
-    preview.finished.length +
-    preview.waiting.length +
-    preview.skipped.length;
-  if (planned === 0) return [];
-
-  const named = (id: number): string => nameOf(nodes.get(id));
-
-  const short = preview.skipped
-    .filter((row) => row.reason === "shortfall")
-    .map((row) => ({ id: row.id, label: `${named(row.id)} cannot be paid for yet` }));
-
-  const waiting = preview.waiting.map((row) => ({
-    id: row.id,
-    label: `${named(row.id)} waits for a free worker`,
-  }));
-
-  const gated = preview.skipped
-    .filter((row) => row.reason === "townHall" || row.reason === "requirements")
-    .map((row) => ({
-      id: row.id,
-      label: row.townHall
-        ? `${named(row.id)} needs Town Hall ${row.townHall.need}`
-        : `${named(row.id)} needs buildings it does not have`,
-    }));
-
-  return [
-    {
-      key: "upgradeResources",
-      label: "Enough resources for the planned upgrades",
-      ok: short.length === 0,
-      items: short,
-      warning: true,
-    },
-    {
-      key: "upgradeWorkers",
-      label: "Enough free workers",
-      ok: waiting.length === 0,
-      items: waiting,
-      warning: true,
-    },
-    {
-      key: "upgradeRequirements",
-      label: "No planned upgrade is blocked by a prerequisite",
-      ok: gated.length === 0,
-      items: gated,
-      warning: true,
-    },
-  ];
-};

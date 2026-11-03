@@ -322,7 +322,6 @@ const nodeOf = (building: YardBuilding, damaged: boolean): PlanNode => {
     decoration: false,
     fixed: false,
     stored: false,
-    plan: null,
     busy: holdsWorker(building),
     damaged,
   };

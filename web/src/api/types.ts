@@ -1084,8 +1084,9 @@ export const isPlayerCell = (cell: MapCell): cell is PlayerCell =>
  * it obvious which of the two a value came from.
  *
  * `l` and `fort` carry the level and fortification a layout was designed
- * around, which phase 2 needs for planned upgrades and which phase 1 only
- * round-trips.
+ * around; nothing reads them back but the layout itself. A layout saved before
+ * 2026-11-03 may also carry a `plan` (a planned upgrade), which nothing reads
+ * any more: the planner no longer plans upgrades.
  */
 export interface LayoutNode {
   /** Building id, matching the id in `buildingdata`. */
@@ -1096,30 +1097,6 @@ export interface LayoutNode {
   y: number;
   l?: number;
   fort?: number;
-  /** The upgrade the player has planned for this building, if any. */
-  plan?: LayoutNodePlan;
-}
-
-/**
- * A planned upgrade on one node (`docs/design/planner-upgrades.md` §2.1).
- *
- * Additive and optional, so the layout format stays at version 2: a server or
- * a client that does not know the field drops it, which is lossy but never
- * wrong. Fortification is not planned — no building in Map Room 2 has a
- * fortify ladder to price — so this carries a level and nothing else (§1.3).
- */
-export interface LayoutNodePlan {
-  /**
-   * The level the player wants this building to reach. At least 2, at most the
-   * type's maximum, and above the building's current level.
-   */
-  level: number;
-  /**
-   * Where this sits in the player's own queue. Apply starts jobs in ascending
-   * order, ties broken by building id, so the order they planned in is the
-   * order they get.
-   */
-  order: number;
 }
 
 /** The layout format version this client writes and reads. */
@@ -1178,17 +1155,8 @@ export interface ApplyLayoutResponse extends ApiEnvelope {
   /** How many buildings changed position. */
   moved: number;
   buildingdata: BuildingDataMap;
-  /**
-   * The resource pool as the server now holds it, sent whenever Apply charged
-   * for something, so the HUD re-reads it instead of subtracting its own
-   * arithmetic from a number it may already have been wrong about.
-   */
+  /** The resource pool as the server now holds it. */
   resources?: Resources;
-  /**
-   * What the upgrade walk did, or null when `startUpgrades` was 0. Absent from
-   * a server that predates planned upgrades.
-   */
-  upgrades?: UpgradeReport | null;
   /** Decorations the layout left out, now in storage (#128). */
   stored?: number[];
   /** The ids of the decorations `fromStorage` put down (#128). */
@@ -1204,109 +1172,12 @@ export interface ApplyLayoutResponse extends ApiEnvelope {
   mushrooms?: MushroomSave;
 }
 
-/* ── Planned upgrades ───────────────────────────────────────────────────── */
-
-/**
- * Why Apply could not start a planned upgrade
- * (`docs/design/planner-upgrades.md` §3.2).
- *
- * None of these refuses the request: a job the yard cannot do now is reported
- * and the rest of the queue carries on, which is what makes Apply partial by
- * design. `caughtUp` means the yard is already at or past the planned level,
- * and `noLadder` that the type has no upgrade steps at all.
- */
-export type UpgradeSkipReason =
-  | "shortfall"
-  | "busy"
-  | "damaged"
-  | "townHall"
-  | "requirements"
-  | "caughtUp"
-  | "noLadder";
-
 /** Twigs, pebbles, putty and goo. */
 export interface UpgradeCost {
   r1: number;
   r2: number;
   r3: number;
   r4: number;
-}
-
-/** Fields every row of the report carries: which building, and of what type. */
-interface UpgradeRow {
-  id: number;
-  t: number;
-}
-
-/** Fields a row carries when it names a step: the levels it spans. */
-interface UpgradeStepRow extends UpgradeRow {
-  /** The level the building was at before this step. */
-  from: number;
-  /** The level this step takes it to. */
-  to: number;
-}
-
-/** An upgrade that is now running: `cU` is set and a worker is on it. */
-export interface StartedUpgrade extends UpgradeStepRow {
-  /** The countdown written, already multiplied by the Sharper Tools buff. */
-  seconds: number;
-  cost: UpgradeCost;
-}
-
-/**
- * An upgrade written straight to its finished level.
- *
- * Only a wall or trap step (5 seconds, D13): the walk completes it on the
- * spot, charges it, awards its points and uses no worker. Every other step,
- * however short, is a {@link StartedUpgrade} (#137).
- */
-export interface FinishedUpgrade extends UpgradeStepRow {
-  cost: UpgradeCost;
-}
-
-/** An upgrade that would have started had a worker been free. */
-export interface WaitingUpgrade extends UpgradeStepRow {
-  reason: "workers";
-}
-
-/**
- * An upgrade the yard's state ruled out, with the detail for that reason.
- *
- * The detail keys are the ones the batch routes already use, so the planner
- * reads a skipped row the same way it reads a 409 from the wall upgrade.
- */
-export interface SkippedUpgrade extends UpgradeRow {
-  reason: UpgradeSkipReason;
-  /** The level the building is at, where the reason names a step. */
-  from?: number;
-  /** The level the step would have reached. */
-  to?: number;
-  /** `shortfall`: how much of each resource the job was still short of. */
-  shortfall?: UpgradeCost;
-  /** `townHall`: the hall level the yard has, and the one the step wants. */
-  townHall?: { have: number; need: number };
-  /** `requirements`: the `[type, count, level]` entries the yard does not meet. */
-  requirements?: (readonly [type: number, count: number, level: number])[];
-}
-
-/** How many workers the yard has, and how many were on a job either side of the walk. */
-export interface UpgradeWorkers {
-  total: number;
-  busyBefore: number;
-  busyAfter: number;
-}
-
-/** Everything Apply's upgrade walk did, in the order the dialog reports it. */
-export interface UpgradeReport {
-  started: StartedUpgrade[];
-  finished: FinishedUpgrade[];
-  waiting: WaitingUpgrade[];
-  skipped: SkippedUpgrade[];
-  /** The total actually charged, across started and finished steps. */
-  cost: UpgradeCost;
-  /** Empire points awarded now, which is the free-finish steps only. */
-  points: number;
-  workers: UpgradeWorkers;
 }
 
 /**
@@ -1330,17 +1201,6 @@ export interface ApplyConflictDetails {
   busy?: number[];
   /** Batch wall upgrade: ids that have to be repaired before they upgrade. */
   damaged?: number[];
-  /**
-   * Apply and save: ids whose planned level is past the top of that type's
-   * ladder, or on a type with no ladder at all.
-   */
-  planLevel?: number[];
-  /**
-   * Save only: ids whose planned level the yard has already reached. Apply
-   * skips those with reason `caughtUp` instead of refusing, because a layout
-   * saved before a job finished is not the client's fault.
-   */
-  planCaughtUp?: number[];
 }
 
 /* ── Batch actions ──────────────────────────────────────────────────────── */

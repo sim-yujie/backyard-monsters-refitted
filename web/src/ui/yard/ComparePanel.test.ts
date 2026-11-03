@@ -8,8 +8,6 @@ import { ComparePanel, diffText, statText } from "./ComparePanel";
 const rows: StatRow[] = [
   { key: "land", label: "Land coverage", plan: 0.26, slot: 0.3, better: "slot" },
   { key: "levels", label: "Building levels", plan: 716, slot: 659, better: "plan" },
-  { key: "cost", label: "Planned upgrades cost", plan: 0, slot: 1_500_000, better: "plan" },
-  { key: "seconds", label: "Planned upgrades time", plan: 0, slot: 7_200, better: "plan" },
   { key: "unplaced", label: "Unplaced buildings", plan: 0, slot: 0, better: null },
 ];
 
@@ -56,9 +54,6 @@ describe("ComparePanel", () => {
 describe("statText and diffText", () => {
   it("spells each kind of figure", () => {
     expect(statText("air", 0.999)).toBe("99%");
-    expect(statText("cost", 0)).toBe("—");
-    expect(statText("cost", 1_500_000)).toBe("1.5M");
-    expect(statText("seconds", 7_200)).toBe("2h 0m");
     expect(statText("levels", 42)).toBe("42");
   });
 

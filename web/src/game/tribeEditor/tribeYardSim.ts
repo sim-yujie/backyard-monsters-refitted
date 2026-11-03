@@ -316,7 +316,6 @@ export class TribeYardSim {
       if (building.X !== node.x || building.Y !== node.y) moved += 1;
       building.X = node.x;
       building.Y = node.y;
-      if (node.plan?.level) this.setLevel(num(node.id), node.plan.level);
     }
     for (const key of Object.keys(buildings)) if (!kept.has(key)) delete buildings[key];
     for (const decoration of payload.fromStorage ?? []) {

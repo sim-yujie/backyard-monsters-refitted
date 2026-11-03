@@ -28,7 +28,6 @@ const node = (over: Partial<PlanNode> & { id: number }): PlanNode => ({
   decoration: false,
   fixed: false,
   stored: false,
-  plan: null,
   busy: false,
   damaged: false,
   ...over,
@@ -50,10 +49,10 @@ describe("coverageTowers", () => {
     ]);
   });
 
-  it("reads the planned level where there is one", () => {
-    const [planned] = coverageTowers([node({ id: 1, plan: { level: 10, order: 0 } })]);
-    expect(planned?.range).toBe(towerRange(CANNON, 10)!.range);
-    expect(planned!.range).toBeGreaterThan(towerRange(CANNON, 1)!.range);
+  it("reads the level the tower has", () => {
+    const [tower] = coverageTowers([node({ id: 1, level: 10 })]);
+    expect(tower?.range).toBe(towerRange(CANNON, 10)!.range);
+    expect(tower!.range).toBeGreaterThan(towerRange(CANNON, 1)!.range);
   });
 
   it("leaves out the Monster Bunker, a foundation, a stored tower and a mushroom", () => {

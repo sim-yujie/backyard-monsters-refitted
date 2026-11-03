@@ -7,7 +7,6 @@ import type {
   MushroomSave,
   Resources,
   TrapPlacement,
-  UpgradeReport,
 } from "@/api/types";
 import { ApiError, NetworkError } from "@/api/http";
 import {
@@ -35,14 +34,12 @@ import { computeCoverage, coverageTowers, figuresOf, type Coverage } from "@/gam
 import { DeadZoneLayer } from "@/game/yard/planner/DeadZoneLayer";
 import { sameTypeIds } from "@/game/yard/planner/selectType";
 import { summariseSelection, typeName } from "@/game/yard/planner/summary";
-import { planTotals } from "@/game/yard/planner/upgrades";
 import { footprintCentre, footprintOf } from "@/game/yard/YardGrid";
-import { freeWorkers } from "@/game/yard/workers";
 import type { Yard } from "@/game/yard/yardModel";
 import { YardView, type YardRenderer } from "@/game/yard/YardRenderer";
 import type { Notices } from "@/ui/maproom/Notices";
 import type { Panel } from "@/ui/Panel";
-import { InspectorPanel } from "@/ui/yard/InspectorPanel";
+import { CoveragePanel } from "@/ui/yard/CoveragePanel";
 import { ComparePanel } from "@/ui/yard/ComparePanel";
 import { diffLayouts, sideStats, slotUnplaced, slotView, statRows } from "@/game/yard/planner/compare";
 import type { CompareDiff } from "@/game/yard/planner/PlannerOverlay";
@@ -94,9 +91,9 @@ import { YardPlannerLayouts } from "./YardPlannerLayouts";
 const NOTICE = "yard-planner";
 
 /**
- * The three things that can fill a phone's one sheet slot (#45): the building
- * sheet, a docked panel (the drawer, the checklist, Find, Layouts, a dialog)
- * and More. Whichever the player raised last is shown; the others stay open
+ * The three things that can fill a phone's one sheet slot (#45): the coverage
+ * panel (still named "inspector", for the building sheet it replaced), a
+ * docked panel (the drawer, the checklist, Find, Layouts, a dialog) and More. Whichever the player raised last is shown; the others stay open
  * underneath, keeping their state, and come back when it closes. "none" is
  * the yard kept clear while a building is moved (`shownSheet`).
  */
@@ -118,7 +115,6 @@ export interface AppliedStorage {
 
 /** The slot pane's highlights while comparing (#9). */
 export interface CompareVisuals {
-  readonly planned: ReadonlyMap<number, number> | null;
   readonly diff: CompareDiff;
 }
 
@@ -167,11 +163,10 @@ export interface YardPlannerOptions {
   /**
    * Called after a successful apply, with the yard the server wrote.
    *
-   * `resources` and `upgrades` arrive whenever Apply was asked to start the
-   * planned upgrades (`docs/design/planner-upgrades.md` §5.5): the pool has
-   * been charged server-side, so the HUD re-reads it rather than subtracting,
-   * and the report is raised as a notice by the scene — the planner closes on
-   * Apply (§8, Q4) and takes its own notices with it. `storage` is what Apply
+   * `resources` is the pool as the server now holds it, and the scene raises
+   * the "Moved N buildings" notice, because the planner closes on Apply (§8,
+   * Q4) and takes its own notices with it. Apply starts no upgrades: planning
+   * them in Layout was removed on 2026-11-03 (owner). `storage` is what Apply
    * did with decorations (#128): the storage and health it left, and which
    * went in and came out.
    */
@@ -179,7 +174,6 @@ export interface YardPlannerOptions {
     buildingdata: BuildingDataMap,
     moved: number,
     resources: Resources | undefined,
-    upgrades: UpgradeReport | null,
     storage: AppliedStorage,
   ) => void;
   /**
@@ -252,12 +246,13 @@ export class YardPlanner {
   private barObserver: ResizeObserver | null = null;
   private readonly dock: HTMLElement;
   /**
-   * The inspector's own dock, on the other side of the canvas.
+   * The coverage panel's own dock, on the other side of the canvas.
    *
-   * Design §4.1 puts the inspector opposite the stack of transient panels, and
-   * they cannot share a column: the inspector is up for as long as anything is
-   * selected, so a checklist or a search box docked above it would push it
-   * around on every click.
+   * Design §4.1 puts it opposite the stack of transient panels, so a checklist
+   * or a search box docked in that column does not push it around. It used to
+   * hold the building inspector too, which opened on every selection; that
+   * was removed on 2026-11-03 (owner: nothing may open over the yard while a
+   * building is picked up or moved).
    */
   private readonly inspectorDock: HTMLElement;
   /**
@@ -275,7 +270,7 @@ export class YardPlanner {
   /** The compare panel while comparing with a slot (#9). */
   private comparePanel: ComparePanel | null = null;
   private helpPanel: Panel | null = null;
-  private inspector: InspectorPanel | null = null;
+  private coveragePanel: CoveragePanel | null = null;
   private search: SearchPanel | null = null;
   private inventory: InventoryPanel | null = null;
   /** The drawer count the docked panels were last drawn from. */
@@ -307,8 +302,6 @@ export class YardPlanner {
    */
   private coverage: Coverage | null = null;
   private coverageKey = "";
-  /** The inspector is showing the coverage view rather than a selection. */
-  private inspectorCoverage = false;
   /** The player closed the coverage view; it stays shut until Dead zones is turned on again. */
   private coverageClosed = false;
   /** The crosshair and axes at yard (0, 0). */
@@ -333,12 +326,10 @@ export class YardPlanner {
    * (`shownSheet`). A player could not line a building up under its own sheet.
    */
   private yardClear = false;
-  /** The selection the building sheet was last raised for, as ids. */
-  private selectionKey = "";
   /** How far the bars cut into the viewport, for the edge scroll. */
   private insets = { top: 0, bottom: 0 };
   private dockObserver: MutationObserver | null = null;
-  /** The building sheet's row on a phone: Select all, then the arrange tools. */
+  /** A phone's selection row, at the top of More: Select all, then the arrange tools. */
   private readonly phoneTools: HTMLElement;
   private readonly selectAll: HTMLButtonElement;
   private selectAllIds: number[] = [];
@@ -570,9 +561,9 @@ export class YardPlanner {
     saveOverlays(now);
     this.bar.setOverlays(now);
     this.drawOverlays();
-    // With nothing selected the inspector is the coverage view while Dead
-    // zones is on, and closed otherwise.
-    this.refreshInspector(this.session.selectedNodes());
+    // With nothing selected the coverage panel is up while Dead zones is on,
+    // and closed otherwise.
+    this.refreshCoverage(this.session.selectedNodes());
   }
 
   /** Hands both layers to whichever view is showing. */
@@ -798,8 +789,7 @@ export class YardPlanner {
     this.closeDialog();
     this.helpPanel?.close();
     this.helpPanel = null;
-    this.inspector?.close();
-    this.inspector = null;
+    this.closeCoverage();
     this.search?.close();
     this.search = null;
     this.inventory?.close();
@@ -859,7 +849,6 @@ export class YardPlanner {
 
     compare.start(slot.yard, ["Your plan", slotName]);
     compare.highlight({
-      planned: slot.plan.plannedLevels(),
       diff: { moved: diff.moved, only: diff.onlySlot },
     });
     this.session.setCompare({ moved: diff.moved, only: diff.onlyPlan });
@@ -901,7 +890,6 @@ export class YardPlanner {
       yardExpansion: this.session.plan.expansion,
       didNotFit: missed,
       missing: result.missing.length,
-      plansDropped: result.plansDropped,
     });
 
     // A preview reports exactly what a load does. It changes nothing, but what
@@ -1029,13 +1017,10 @@ export class YardPlanner {
   }
 
   /**
-   * Apply: check locally, then show what the click is about to do.
+   * Apply: check locally, then say what the click is about to do.
    *
    * The blocking checklist still comes first and still refuses outright (§8,
-   * Q4). Past it the dialog is not a confirmation so much as a statement of
-   * what Apply will *partly* do: the upgrade walk is partial by design (§3.2),
-   * so the itemised preview is the only place the player is told which of
-   * their six towers is the one that waits.
+   * Q4). Apply only moves buildings; it starts no upgrades (owner, 2026-11-03).
    */
   private apply(): void {
     if (this.readOnly || this.applying) return;
@@ -1054,14 +1039,8 @@ export class YardPlanner {
     this.openDialog(
       applyPanel({
         moved: this.session.plan.movedIds().length,
-        preview: this.session.applyPreview(),
         slotName: state.slot === null ? null : state.slotName || `Slot ${state.slot + 1}`,
         dirty: state.dirty,
-        layouts: this.options.baseid === undefined,
-        onSaveAs: () => {
-          this.closeDialog();
-          void this.layouts.toggle();
-        },
         onConfirm: (choice) => {
           this.closeDialog();
           void this.runApply(choice);
@@ -1074,16 +1053,12 @@ export class YardPlanner {
   /**
    * Sends the layout, optionally saving it to its slot first.
    *
-   * The save is awaited rather than fired alongside: Apply closes the planner
-   * and the upgrades it could not start live in the saved layout and nowhere
-   * else (§5.5). A failed save is reported and the apply is abandoned, because
-   * applying after a failed save is exactly the case the checkbox exists to
-   * prevent.
+   * The save is awaited rather than fired alongside: Apply closes the planner,
+   * so a plan that is not saved first is gone. A failed save is reported and
+   * the apply is abandoned, because applying after a failed save is exactly
+   * the case the checkbox exists to prevent.
    */
-  private async runApply(choice: {
-    startUpgrades: boolean;
-    saveFirst: boolean;
-  }): Promise<void> {
+  private async runApply(choice: { saveFirst: boolean }): Promise<void> {
     if (this.readOnly || this.applying) return;
     this.applying = true;
     try {
@@ -1100,16 +1075,11 @@ export class YardPlanner {
         }
       }
 
-      const response = await applyLayout(
-        this.session.payload(),
-        { startUpgrades: choice.startUpgrades },
-        this.options.baseid,
-      );
+      const response = await applyLayout(this.session.payload(), this.options.baseid);
       this.options.onApplied(
         response.buildingdata,
         response.moved,
         response.resources,
-        response.upgrades ?? null,
         {
           stored: response.stored ?? [],
           placed: response.placed ?? [],
@@ -1285,13 +1255,9 @@ export class YardPlanner {
   /* ── Chrome ─────────────────────────────────────────────────────────── */
 
   /**
-   * Rewrites the bar and the inspector from the session's state.
-   *
-   * The cost cells read **the plan** once anything is planned and fall back to
-   * the selection when nothing is (§5.3). Both answers are wanted, but not at
-   * once: a player who has planned six towers wants the bar to say what Apply
-   * is about to charge, and a player who has planned nothing wants to know what
-   * the buildings they have just clicked would cost.
+   * Rewrites the bar, the coverage panel and a phone's selection row from the
+   * session's state. The cost cells say what the selection's next levels
+   * would cost.
    */
   private refreshBar(): void {
     this.options.onPlanChanged?.();
@@ -1304,16 +1270,8 @@ export class YardPlanner {
     this.drawOverlays();
 
     const nodes = this.session.selectedNodes();
-    if (state.plannedCount > 0) {
-      this.bar.setPlanSummary(
-        planTotals(this.session.plannedNodes(), this.yard),
-        freeWorkers(this.yard),
-      );
-      this.bar.setWorkers(this.yard.workers, this.session.applyPreview());
-    } else {
-      this.bar.setSummary(summariseSelection(nodes, this.yard));
-      this.bar.setWorkers(this.yard.workers, null);
-    }
+    this.bar.setSummary(summariseSelection(nodes, this.yard));
+    this.bar.setWorkers(this.yard.workers);
     this.bar.setWallCount(nodes.filter((node) => WALL_TYPES.includes(node.type)).length);
 
     // The drawer and the Find list are views over the plan, so they follow
@@ -1332,80 +1290,48 @@ export class YardPlanner {
     // go all the same (#57). The panel ignores a repeat of the same answer.
     this.inventory?.setArmed(this.session.armedStack());
 
-    this.refreshInspector(nodes);
+    this.refreshCoverage(nodes);
+    this.refreshPhoneTools(nodes);
     this.keepYardClear(state);
   }
 
   /**
-   * Opens, redraws or closes the inspector for the current selection.
+   * Opens, redraws or closes the coverage panel (#55).
    *
-   * One panel for both shapes rather than two that swap: a click that grows a
-   * selection from one building to two changes what the panel says, not which
-   * panel it is, and a panel that is destroyed and rebuilt on every such click
-   * loses the scroll position and flickers.
+   * It shows only while nothing is selected and View › Dead zones is on.
+   * Selecting, picking up or moving a building never opens a panel over the
+   * yard (owner, 2026-11-03): the building inspector that used to open here,
+   * with its upgrade ladder, was removed so a player can line buildings up.
    */
-  private refreshInspector(nodes: readonly PlanNode[]): void {
-    // A new selection raises the building sheet over a phone's other sheets,
-    // unless it is only the next building off a drawer stack, or the one in
-    // hand: then the drawer's strip is what the player is working in (#45).
-    const key = nodes.map((node) => node.id).join(",");
-    if (key !== this.selectionKey) {
-      this.selectionKey = key;
-      const state = this.session.state();
-      if (nodes.length > 0 && !state.placing && !state.carrying) this.raise("inspector");
-    }
-
-    // Nothing selected: the coverage view while Dead zones is on (#55),
-    // otherwise no panel at all.
-    const coverage = nodes.length === 0 && this.overlays.deadZones && !this.coverageClosed;
-    if (nodes.length === 0 && !coverage) {
-      this.inspector?.close();
-      this.inspector = null;
+  private refreshCoverage(nodes: readonly PlanNode[]): void {
+    const show = nodes.length === 0 && this.overlays.deadZones && !this.coverageClosed;
+    if (!show) {
+      this.closeCoverage();
       return;
     }
 
-    const panel =
-      this.inspector ??
-      new InspectorPanel({
-        onPlan: (ids, level) => this.plan(ids, level),
-        onUpgradeWalls: () => this.showWallUpgrade(),
+    let panel = this.coveragePanel;
+    if (!panel) {
+      const opened: CoveragePanel = new CoveragePanel({
         onShowPoint: (point) => this.showYardPoint(point),
-        readOnly: this.readOnly,
         onClose: () => {
-          if (this.inspectorCoverage) this.coverageClosed = true;
-          this.inspector = null;
+          // Only the player's own close keeps it shut; `closeCoverage` lets go first.
+          if (this.coveragePanel !== opened) return;
+          this.coveragePanel = null;
+          this.coverageClosed = true;
         },
       }).mount(this.inspectorDock);
-    this.inspector = panel;
-    this.inspectorCoverage = coverage;
-    const tools = isPhone(this.layout) && !coverage;
-    panel.setTools(tools ? this.phoneTools : null);
-    if (tools) this.refreshPhoneTools(nodes);
-    if (coverage) {
-      panel.showCoverage(this.currentCoverage(), { land: this.overlays.land, air: this.overlays.air });
-    } else {
-      panel.show(nodes, this.yard);
+      panel = opened;
+      this.coveragePanel = opened;
     }
+    panel.showCoverage(this.currentCoverage(), { land: this.overlays.land, air: this.overlays.air });
   }
 
-  /**
-   * Plans a target on the named buildings, or clears it, and says so.
-   *
-   * The session refuses what F1 rule 3 refuses — a busy or damaged building, a
-   * level the yard has already passed — silently, by leaving it out of the
-   * command. The count it returns is how many actually changed, so a click that
-   * did nothing is the one case worth a word.
-   */
-  private plan(ids: readonly number[], level: number | null): void {
-    const changed = this.session.setPlanLevel(ids, level);
-    if (changed > 0 || ids.length === 0) return;
-    this.options.notices.show(
-      NOTICE,
-      level === null
-        ? "Nothing to clear there."
-        : "That upgrade cannot be planned: the building is on a job, damaged, or already there.",
-      { level: "warning", timeoutMs: 4000 },
-    );
+  /** Takes the coverage panel down without counting it as the player's close. */
+  private closeCoverage(): void {
+    const panel = this.coveragePanel;
+    this.coveragePanel = null;
+    panel?.close();
   }
 
   /**
@@ -1476,13 +1402,21 @@ export class YardPlanner {
     if (!changed) return;
 
     this.bar.lendArrange(isPhone(layout) ? this.arrangeHost : null);
-    this.refreshInspector(this.session.selectedNodes());
+    this.refreshPhoneTools(this.session.selectedNodes());
     this.applySheet();
     this.reportPlannerInset();
   }
 
-  /** The building sheet's phone row, for the current selection. */
+  /**
+   * A phone's selection row, for the current selection, in the Selection
+   * section at the top of More (#45). Off a phone the row is not shown at all:
+   * the top bar has Mirror, Align and Distribute, and Select all is a key.
+   */
   private refreshPhoneTools(nodes: readonly PlanNode[]): void {
+    if (!isPhone(this.layout)) {
+      this.bar.setSelectionTools(null);
+      return;
+    }
     const all = sameTypeIds(nodes, this.session.plan.buildings());
     this.selectAllIds = all?.ids ?? [];
     this.selectAll.hidden = all === null;
@@ -1494,6 +1428,7 @@ export class YardPlanner {
     // and a row of dead buttons is worse than none.
     this.arrangeHost.hidden = this.readOnly || nodes.length < 2;
     this.phoneTools.hidden = this.selectAll.hidden && this.arrangeHost.hidden;
+    this.bar.setSelectionTools(this.phoneTools);
   }
 
   /**
@@ -1527,7 +1462,7 @@ export class YardPlanner {
   /**
    * Shows one sheet on a phone: More while it is open, else the one raised
    * last if it has anything in it, else whichever does. The stylesheet hides
-   * the rest; nothing is closed, so a drawer under the building sheet keeps
+   * the rest; nothing is closed, so a drawer under the coverage panel keeps
    * its search and its folds.
    */
   private applySheet(): void {
