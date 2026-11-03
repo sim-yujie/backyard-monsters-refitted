@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { EventEmitter } from "node:events";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -20,12 +20,15 @@ const {
   savedYard,
   writeSavedYard,
 } = await import("./tribeEditor.js");
-const { forgetSavedLayouts, tribeLayoutFor } = await import("../../services/maproom/v2/tribeLayouts.js");
+const { forgetSavedLayouts, ignoreShippedSaves, tribeLayoutFor } = await import("../../services/maproom/v2/tribeLayouts.js");
 const { kozu } = await import("../../game-data/tribes/v2/kozu.js");
 
 const dirs: string[] = [];
+// These checks start from the original layouts, without the owner's shipped saves.
+beforeEach(() => ignoreShippedSaves(true));
 afterEach(() => {
   forgetSavedLayouts();
+  ignoreShippedSaves(false);
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 

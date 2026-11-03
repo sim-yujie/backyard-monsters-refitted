@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Tribe, Tribes } from "../../../enums/Tribes.js";
 import type { SaveData } from "../../../types/EntityData.js";
 import { abunaki } from "../../../game-data/tribes/v2/abunaki.js";
@@ -10,6 +10,7 @@ import { calculateTribeLevel, minimumTribeLevels } from "./calculateTribeLevel.j
 import {
   TRIBE_IDS,
   forgetSavedLayouts,
+  ignoreShippedSaves,
   originalLayoutLevels,
   rememberSavedLayout,
   tribeIdAt,
@@ -32,11 +33,27 @@ const oldPick = (tribeIndex: number, level: number): SaveData => {
 
 const stub = (name: string): SaveData => ({ name, buildingdata: {} }) as SaveData;
 
-afterEach(() => forgetSavedLayouts());
+// The checks below are of the original layouts and the editor's saves; the
+// shipped saved yards have their own test.
+beforeEach(() => ignoreShippedSaves(true));
+afterEach(() => {
+  forgetSavedLayouts();
+  ignoreShippedSaves(false);
+});
 
 describe("tribeLayoutFor", () => {
-  test("ships with no editor-saved yards, so the checks below cover the live data", () => {
-    for (const tribe of TRIBE_IDS) expect(Object.keys(savedTribeLevels[tribe] ?? {})).toEqual([]);
+  test("the shipped saved yards stand at levels real camps have, and those camps use them", () => {
+    ignoreShippedSaves(false);
+    let checked = 0;
+    for (const tribe of TRIBE_IDS) {
+      for (const [level, save] of Object.entries(savedTribeLevels[tribe] ?? {})) {
+        expect(tribeLevels(tribe)).toContain(Number(level));
+        expect(tribeLayoutFor(tribe, Number(level))).toEqual({ from: Number(level), save, saved: true });
+        checked++;
+      }
+    }
+    // Owner's yards, 3 Nov: Legionnaire 29-41, Kozu 34/38/42, Abunakki and Dreadnaut every level.
+    expect(checked).toBe(17);
   });
 
   test("with no saved yards, every camp level gets exactly the yard the old banding gave it", () => {
