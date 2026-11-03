@@ -1,0 +1,6 @@
+Use your image generation tool (one call) to create ONE new image and save it as art.png in the current folder. Do not write code, do not draw with scripts.
+
+The attached picture(s) are a concept painting of a hex world map for a cartoon monster strategy game. MATCH ITS ART STYLE EXACTLY: bright, painted, toy-like cartoon, saturated yellow-greens and warm sandy yellows, crisp small painted details, warm sunlight from the top-left, seen from a tilted top-down camera. Not photo-real. No text, no logos, no watermark, no hex lines, no grid.
+
+The FIRST attached picture is a template: a white flat-topped hexagon on a pure magenta background. The SECOND is the style reference.
+PICTURE: 1536x1024, the SAME framing as the template. Paint ONE raised grassy HILL hex like the hill hex in the style reference: its flat grassy top fills EXACTLY the white hexagon (same corners, same size, same place), with bright painted grass, a few small rocks, two small round bushes near the edge, NOTHING built on it. Below the three bottom edges of the hexagon, steep brown and grey painted rock CLIFFS drop straight down, about 200 pixels tall, with grass tufts hanging over the cliff top. Everything outside the hill (above, beside, and below the cliffs) stays PURE FLAT MAGENTA #FF00FF, with no shadow and no ground.
