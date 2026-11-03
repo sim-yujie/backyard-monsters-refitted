@@ -21,11 +21,19 @@ import {
   type BattleVisualEvent,
   type CreepSnapshot,
 } from "@/game/combat/rules";
-import { playEffect } from "@/game/sound/sound";
+import { playEffect, preloadEffects } from "@/game/sound/sound";
 import { damageStep } from "@/game/yard/YardBuildings";
 import { depthKey, type Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
-import type { AttackSession } from "./AttackSession";
+import { combatKind, type AttackSession } from "./AttackSession";
+import {
+  AttackSounds,
+  attackSoundsFor,
+  freshBurrowSound,
+  settleBurrow,
+  type BurrowSound,
+  type PlaySound,
+} from "./attackSounds";
 import { BombFx, type BombArt } from "./bombFx";
 import { bombCandidatesOf, bombHits, type BombCandidate } from "./bombTargets";
 import { BAR_OFFSET, BAR_WIDTH, BuildingBars } from "./buildingBars";
@@ -636,6 +644,8 @@ export interface AttackBattleLayerOptions {
   readonly random?: () => number;
   /** Wall-clock milliseconds, for the rain after the end; `performance.now` unless a test fixes it. */
   readonly now?: () => number;
+  /** Where the attack's sounds go (`attackSounds.ts`); the game's effects player unless a test listens. */
+  readonly playSound?: PlaySound;
 }
 
 interface CreepView {
@@ -695,6 +705,8 @@ interface CreepView {
   /** The tick it last came up, for the hop; and of its last clod of dirt. */
   surfaceTick: number;
   dirtTick: number;
+  /** Its dig/arise sound, which waits for the state to hold (`settleBurrow`). */
+  burrowSound: BurrowSound;
 }
 
 type DeathEvent = Extract<BattleVisualEvent, { kind: "death" }>;
@@ -864,6 +876,8 @@ export class AttackBattleLayer {
   private readonly bombFx: BombFx;
   /** The Decoy, the Vacuum's hose and the Jars (Inferno WP 6.8), in the bombs' air layer. */
   private readonly siegeFx: SiegeFx;
+  /** Flash's attack sounds, chosen from what is drawn (`attackSounds.ts`). */
+  private readonly sounds: AttackSounds;
   /** Falling particles, above the buildings and the bars, under the shots; made on the first bomb. */
   private air: Container | null = null;
   /** Landed debris, on the ground under the buildings; made on the first bomb. */
@@ -1050,6 +1064,27 @@ export class AttackBattleLayer {
     });
 
     this.preloadRoster();
+
+    // Flash's attack sounds, in both looks; fetched now, not with the game.
+    const inferno = !this.session.raiding && combatKind(this.session.target) === "inferno";
+    const play = options.playSound ?? playEffect;
+    const siegeAlong = !inferno && this.session.target.roster.siege !== null;
+    if (!options.playSound) preloadEffects(attackSoundsFor(inferno, siegeAlong));
+    this.sounds = new AttackSounds({
+      // Nothing sounds once the battle is put to rest: a skip to the end is silent.
+      play: (effect, volume) => {
+        if (!this.settled) play(effect, volume);
+      },
+      inferno,
+      building: (id) => buildingOf.get(id),
+      creepOf: (id) => {
+        const view = this.views.get(id);
+        return view ? { monsterId: view.monsterId, friendly: view.snapshot?.friendly ?? false } : undefined;
+      },
+      jarred: (id) =>
+        this.session.battle()?.siege().jars.some((jar) => jar.buildingId === id && jar.health !== null) ?? false,
+      ...(options.random ? { random: options.random } : {}),
+    });
   }
 
   /**
@@ -1077,7 +1112,10 @@ export class AttackBattleLayer {
       // its view when its death is read, to stay on screen until the bullet lands.
       const live = battle.creeps();
       const seen = this.syncCreeps(live, tick);
-      for (const event of battle.recentEvents(this.lastEventTick)) this.onEvent(event);
+      for (const event of battle.recentEvents(this.lastEventTick)) {
+        this.sounds.onEvent(event);
+        this.onEvent(event);
+      }
       this.lastEventTick = tick;
       this.settleGone(seen, tick);
 
@@ -1096,7 +1134,9 @@ export class AttackBattleLayer {
     this.blastFx.update(shown);
     this.fx.update(shown);
     this.bombFx.update(shown);
-    this.siegeFx.update(battle.siege(), shown);
+    const siege = battle.siege();
+    if (!this.settled) this.sounds.onSiege(siege, tick);
+    this.siegeFx.update(siege, shown);
     this.showBombNumbers(shown);
     this.towerStatus.sync(battle.weakenedTowers());
 
@@ -1633,6 +1673,7 @@ export class AttackBattleLayer {
     view.burrowed = false;
     view.surfaceTick = Number.NEGATIVE_INFINITY;
     view.dirtTick = tick;
+    view.burrowSound = freshBurrowSound();
     view.body.visible = true;
     view.barBack.visible = true;
     view.barFront.visible = true;
@@ -1693,6 +1734,7 @@ export class AttackBattleLayer {
       burrowed: false,
       surfaceTick: Number.NEGATIVE_INFINITY,
       dirtTick: 0,
+      burrowSound: freshBurrowSound(),
     };
   }
 
@@ -2134,6 +2176,7 @@ export class AttackBattleLayer {
         ? { x: view.lastX, y: view.lastY }
         : groundWorld(death.ix, death.iy, this.origin);
       this.spawnSplat(tick, at, death.champion ? 22 : 12);
+      this.sounds.onDeath(death);
       // The engine let go of this creep a flight ago; its ghost goes with the splat.
       if (view && !this.ledger.holds(death.creepId)) {
         this.views.delete(death.creepId);
@@ -2271,6 +2314,7 @@ export class AttackBattleLayer {
       this.rains.set(key, { left: Math.trunc(bomb.particles), owed });
       const at = groundWorld(event.x, event.y, this.origin);
       this.bombFx.drop(key, bomb, at, Math.min(event.t, tick), this.host.zoom ?? 1);
+      this.sounds.onBomb(bomb.resource);
     }
   }
 
@@ -2332,6 +2376,7 @@ export class AttackBattleLayer {
       const crossedDestroyed = step >= 4 && before < 4;
       const crossedDamaged = step >= 2 && before < 2;
       if (!crossedDestroyed && !crossedDamaged) continue;
+      this.sounds.onBuilding(id, crossedDestroyed ? "destroyed" : "damaged");
       const centre = this.host.centreOf(id);
       if (centre) this.fx.poof(tick, centre, crossedDestroyed);
       if (centre && crossedDestroyed && this.juice !== "off") this.demolish(id, centre, tick);
@@ -2453,6 +2498,7 @@ export class AttackBattleLayer {
     if (this.ledger.death(event)) return;
     const at = groundWorld(event.ix, event.iy, this.origin);
     this.spawnSplat(event.tick, at, event.champion ? 22 : 12);
+    this.sounds.onDeath(event);
   }
 
   /**
@@ -2462,6 +2508,8 @@ export class AttackBattleLayer {
    */
   private tunnel(view: CreepView, creep: CreepSnapshot, ground: Point, tick: number): void {
     const under = creep.burrowed === true;
+    const sound = settleBurrow(view.burrowSound, under, tick);
+    if (sound !== null) this.sounds.onBurrow(sound);
     const dirt = dirtFor(view.burrowed, under, tick, view.dirtTick);
     if (dirt === null) return;
     if (dirt === "dig" && !under) {
@@ -2669,6 +2717,8 @@ export class AttackBattleLayer {
       if (!building) continue;
       // `EFFECTS.Scorch(_mc.x, _mc.y + 5)`: just below the origin.
       const at = { x: building.worldX, y: building.worldY + 5 };
+      // Flash's trap sound, in both looks; the Modern look's Heavy Trap adds a building's fall (owner's sample).
+      this.sounds.onTrap(this.juice !== "off" && building.type === HEAVY_TRAP);
       const scorch = new Graphics();
       scorch.ellipse(0, 0, 26, 13).fill({ color: SCORCH_COLOUR, alpha: 0.55 });
       scorch.position.set(at.x, at.y);
@@ -2681,11 +2731,6 @@ export class AttackBattleLayer {
         const middle = { x: building.worldX, y: building.worldY + 10 };
         const heavy = building.type === HEAVY_TRAP;
         this.blastFx.trap(tick, middle, blast * Math.SQRT2, heavy, this.effectsLow);
-        // Its sound, only as it goes off (not when skipping to the end).
-        if (!this.settled) {
-          playEffect("trap");
-          if (heavy) playEffect("trapheavy");
-        }
         continue;
       }
       const ring = new Graphics();
