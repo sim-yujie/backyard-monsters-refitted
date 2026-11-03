@@ -81,6 +81,17 @@ export const removePracticeCamp = async (em: EntityManager, userid: number): Pro
   em.persist(maproom);
 };
 
+/**
+ * The camp of an attack that `guide/skip` removed mid-fight (owner, 4 Nov
+ * 2026: new players skipping the guide during the practice attack had every
+ * save of it refused). A fresh stand-in, as the attack load served the camp
+ * (it opens and resets at full health), so the attack lands as fought. It is
+ * never added to the player's `tribedata`, so the camp stays gone. Undefined
+ * for any other base.
+ */
+export const removedCampStandIn = (baseid: string): TribeData | undefined =>
+  baseid === PRACTICE_CAMP_BASEID ? freshCamp() : undefined;
+
 /** Whether the server's battle destroyed the camp (`scaledMR1Tribes` writes `destroyed`). */
 export const practiceCampDestroyed = async (em: EntityManager, userid: number): Promise<boolean> => {
   const maproom = await em.findOne(Maproom, { userid });
