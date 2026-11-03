@@ -42,14 +42,14 @@ interface Kind {
 }
 
 const CHIMNEY: Kind = {
-  x: BUILDING_HEIGHT * 0.08,
-  y: BUILDING_FOOT_Y - BUILDING_HEIGHT * 0.97,
+  x: BUILDING_HEIGHT * 0.24,
+  y: BUILDING_FOOT_Y - BUILDING_HEIGHT * 0.84,
   life: 4.2,
-  puffs: 4,
-  from: 8,
-  to: 26,
-  rise: 34,
-  alpha: 0.6,
+  puffs: 5,
+  from: 10,
+  to: 30,
+  rise: 20,
+  alpha: 0.8,
   tint: 0xffffff,
 };
 const CAMPFIRE: Kind = {
@@ -57,10 +57,10 @@ const CAMPFIRE: Kind = {
   y: CAMP_BASE_Y - CAMP_HEIGHT * 0.55,
   life: 3.8,
   puffs: 4,
-  from: 7,
-  to: 22,
-  rise: 30,
-  alpha: 0.5,
+  from: 8,
+  to: 24,
+  rise: 18,
+  alpha: 0.7,
   tint: 0xf2ece4,
 };
 const EMBERS: Kind = {
@@ -70,8 +70,8 @@ const EMBERS: Kind = {
   puffs: 4,
   from: 9,
   to: 26,
-  rise: 34,
-  alpha: 0.55,
+  rise: 18,
+  alpha: 0.65,
   tint: 0x5a5550,
 };
 
@@ -81,7 +81,7 @@ const EMBERS: Kind = {
  * straight up would stand in front of the building behind; leaning it into
  * the gap between the columns keeps it reading as this cell's.
  */
-const WIND_X = 26;
+const WIND_X = 46;
 
 interface Source {
   kind: Kind;

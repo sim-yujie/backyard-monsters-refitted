@@ -3,8 +3,7 @@ import { LOD_HEX_ZOOM } from "@/config";
 
 /**
  * The sky over Map Room 2 (MR2 part 1): cloud shadows drifting over the near
- * map, thin white clouds over the far map as in Civilization V's strategic
- * view, and now and then a few gulls flying across.
+ * map, thick white cloud banks framing the far map as in the owner's mock-up, and now and then a few gulls flying across.
  *
  * Clouds are not simulated. Each band of them is a fixed scatter on a grid
  * that the wind slides across the world, so a cloud's place is a function of
@@ -42,21 +41,27 @@ const SHADOWS: Band = {
   windX: 16,
   windY: -5,
   tint: 0x0b1830,
-  alpha: 0.17,
+  alpha: 0.22,
 };
 
-/** White clouds over the whole-world view: big, thin and scattered, so the map still shows. */
-const HIGH_CLOUDS: Band = {
-  spacingX: 13000,
-  spacingY: 9000,
-  cover: 0.45,
-  minWidth: 6000,
-  maxWidth: 11000,
-  windX: 160,
-  windY: -50,
-  tint: 0xffffff,
-  alpha: 0.5,
-};
+/**
+ * Cloud banks around the edge of the far view, as in the owner's Codex mock-up
+ * (3 Nov 2026: "95% similar"): thick white clouds framing the map, the middle
+ * clear. They hang on the screen, not the world, so the map slides under them
+ * as it pans; the top and bottom banks roll slowly with the wind, and every
+ * cloud bobs and swells a little.
+ */
+const FRAME = {
+  /** Clouds in the top and in the bottom bank, and in each side bank. */
+  along: 10,
+  side: 5,
+  /** How far a bank reaches into the view, as a share of the view's height (top, bottom) or width (sides). */
+  reachY: 0.15,
+  reachX: 0.09,
+  /** Seconds for a top or bottom cloud to roll across the screen. */
+  rollSeconds: 300,
+  alpha: 0.96,
+} as const;
 
 /** Shadows show from the zoom where the raster gives way to hexes; white clouds below it, fading in. */
 const SHADOW_FADE_FROM = LOD_HEX_ZOOM * 0.7;
@@ -124,7 +129,7 @@ export class SkyLayer {
       const shadowAlpha = smooth((zoom - SHADOW_FADE_FROM) / (LOD_HEX_ZOOM - SHADOW_FADE_FROM));
       this.place(SHADOWS, this.shadowPool, this.shadows, timeSeconds, view, shadowAlpha);
       const cloudAlpha = smooth((LOD_HEX_ZOOM - zoom) / (LOD_HEX_ZOOM - CLOUDS_FULL_BELOW));
-      this.place(HIGH_CLOUDS, this.cloudPool, this.above, timeSeconds, view, cloudAlpha);
+      this.frame(timeSeconds, view, cloudAlpha);
     }
     if (this.birds && this.bird) this.fly(dt, view, zoom);
   }
@@ -132,6 +137,56 @@ export class SkyLayer {
   destroy(): void {
     this.shadows.destroy({ children: true });
     this.above.destroy({ children: true });
+  }
+
+  /** Puts the cloud banks around the view's edge on the cloud pool's sprites, and hides the rest. */
+  private frame(time: number, view: ViewRect, alpha: number): void {
+    let used = 0;
+    if (alpha > 0.01) {
+      const w = view.right - view.left;
+      const h = view.bottom - view.top;
+      const put = (seed: number, x: number, y: number, width: number): void => {
+        const sprite = this.cloudPool[used] ?? this.newSprite(this.cloudPool, this.above);
+        used += 1;
+        const texture = this.clouds[seed % this.clouds.length]!;
+        if (sprite.texture !== texture) sprite.texture = texture;
+        const breathe = 1 + 0.05 * Math.sin(time * (0.15 + 0.1 * unit(seed, 6)) + unit(seed, 7) * 6.3);
+        const scale = (width / texture.width) * breathe;
+        sprite.scale.set(scale * (unit(seed, 5) < 0.5 ? -1 : 1), scale);
+        const bob = Math.sin(time * (0.1 + 0.08 * unit(seed, 8)) + unit(seed, 9) * 6.3);
+        sprite.position.set(x + bob * w * 0.012, y + bob * h * 0.012);
+        sprite.tint = 0xffffff;
+        sprite.alpha = FRAME.alpha * alpha;
+        sprite.visible = true;
+      };
+      const heightOf = (seed: number, width: number): number => {
+        const texture = this.clouds[seed % this.clouds.length]!;
+        return (width / texture.width) * texture.height;
+      };
+      // Top and bottom: rolling with the wind, wrapping round off the right edge.
+      for (let bank = 0; bank < 2; bank++) {
+        for (let k = 0; k < FRAME.along; k++) {
+          const seed = hash2(101 + bank, k);
+          const u = fract(k / FRAME.along + unit(seed, 1) * 0.06 + time / FRAME.rollSeconds);
+          const width = w * (0.24 + 0.14 * unit(seed, 2));
+          const half = heightOf(seed, width) / 2;
+          const reach = h * FRAME.reachY * (0.7 + 0.6 * unit(seed, 3));
+          const y = bank === 0 ? view.top + reach - half : view.bottom - reach + half;
+          put(seed, view.left + (u * 1.6 - 0.3) * w, y, width);
+        }
+      }
+      // Left and right: standing banks.
+      for (let bank = 0; bank < 2; bank++) {
+        for (let k = 0; k < FRAME.side; k++) {
+          const seed = hash2(201 + bank, k);
+          const width = w * (0.2 + 0.1 * unit(seed, 2));
+          const reach = w * FRAME.reachX * (0.7 + 0.6 * unit(seed, 3));
+          const x = bank === 0 ? view.left + reach - width / 2 : view.right - reach + width / 2;
+          put(seed, x, view.top + ((k + 0.5 + (unit(seed, 1) - 0.5) * 0.5) / FRAME.side) * h, width);
+        }
+      }
+    }
+    for (let index = used; index < this.cloudPool.length; index++) this.cloudPool[index]!.visible = false;
   }
 
   /** Puts the band's clouds that overlap the view on the pool's sprites, and hides the rest. */
@@ -258,6 +313,8 @@ export class SkyLayer {
     };
   }
 }
+
+const fract = (value: number): number => value - Math.floor(value);
 
 const smooth = (value: number): number => {
   const t = Math.min(1, Math.max(0, value));

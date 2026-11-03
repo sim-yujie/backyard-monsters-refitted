@@ -131,15 +131,19 @@ void main() {
   float dist = edge < 0.5 ? local.y + HALF_H : (local.x + local.y + HALF_W) * 0.7071;
   // The wash: the foam band breathes in and out as if waves were running up the shore.
   float wash = sin(uTime * 0.7854 + phase); // every 8 s
-  float width = 10.0 + 4.5 * wash;
+  float width = 12.0 + 5.0 * wash;
   float band = 1.0 - smoothstep(width * 0.35, width, dist);
   vec2 uv = local / vec2(120.0, 60.0) + vec2(uTime * 0.012 + phase * 0.21, -uTime * 0.006 + phase * 0.13);
   float lace = texture(uFoam, uv).a;
-  float foam = clamp(band * (lace * 1.5 + 0.12), 0.0, 1.0);
+  float foam = clamp(band * (lace * 1.6 + 0.18), 0.0, 1.0);
   // A thin bright line where water meets land, there whatever the wash.
-  float line = (1.0 - smoothstep(0.5, 3.0, dist)) * (0.45 + 0.15 * wash);
-  float alpha = max(foam * 0.8, line) * inside * uFoamOn;
-  finalColor = vec4(vec3(1.0) * alpha, alpha);
+  float line = (1.0 - smoothstep(0.5, 3.0, dist)) * (0.55 + 0.15 * wash);
+  float surf = max(foam * 0.9, line);
+  // Under the surf, light turquoise shallows fading out into the deep blue (the owner's mock-up).
+  float shallow = (1.0 - smoothstep(2.0, 34.0, dist)) * 0.62;
+  float alpha = (surf + shallow * (1.0 - surf)) * inside * uFoamOn;
+  vec3 colour = (vec3(1.0) * surf + vec3(0.30, 0.88, 0.78) * shallow * (1.0 - surf)) * inside * uFoamOn;
+  finalColor = vec4(colour, alpha);
 }
 `;
 
