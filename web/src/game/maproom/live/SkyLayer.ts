@@ -68,6 +68,13 @@ const FRAME = {
  * white clouds below it, fading in. As fractions of that zoom.
  */
 const SHADOW_FADE_FROM = 0.7;
+
+/**
+ * The painted ground (`../painted/`) is a bright, light meadow, so the navy shadows read
+ * far darker on it than on the tile map's dark grass: there they are drawn at this share
+ * of their strength. The tile map (Classic and painted switch off) keeps the full shadows.
+ */
+export const PAINTED_SHADOW_STRENGTH = 0.45;
 const CLOUDS_FULL_BELOW = 0.55;
 
 /** Gulls: how often a flock crosses, and how it looks on screen. */
@@ -120,6 +127,8 @@ export class SkyLayer {
     private readonly clouds: readonly Texture[],
     private readonly bird: Texture | null,
     private readonly birds: boolean,
+    /** Share of the shadows' alpha: 1 on the tile map, `PAINTED_SHADOW_STRENGTH` on the painted ground. */
+    private readonly shadowStrength = 1,
   ) {
     this.shadows.interactiveChildren = false;
     this.above.interactiveChildren = false;
@@ -130,7 +139,8 @@ export class SkyLayer {
     this.lastTime = timeSeconds;
     if (this.clouds.length > 0) {
       const hex = hexZoom();
-      const shadowAlpha = smooth((zoom - hex * SHADOW_FADE_FROM) / (hex - hex * SHADOW_FADE_FROM));
+      const shadowAlpha =
+        this.shadowStrength * smooth((zoom - hex * SHADOW_FADE_FROM) / (hex - hex * SHADOW_FADE_FROM));
       this.place(SHADOWS, this.shadowPool, this.shadows, timeSeconds, view, shadowAlpha);
       const cloudAlpha = smooth((hex - zoom) / (hex - hex * CLOUDS_FULL_BELOW));
       this.frame(timeSeconds, view, cloudAlpha);
