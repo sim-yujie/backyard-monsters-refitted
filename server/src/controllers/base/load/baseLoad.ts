@@ -9,7 +9,7 @@ import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { ATTACK_MODES, BaseMode, BaseType } from "../../../enums/Base.js";
 import { EnumYardType } from "../../../enums/EnumYardType.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
-import { WORLD_SIZE } from "../../../config/MapRoom2Config.js";
+import { WORLD_SIZE, mr2PaintedMapFor } from "../../../config/MapRoom2Config.js";
 import { RESOURCE_PRODUCTION_RATES, RESOURCE_CAPACITIES, DEFENDER_DAMAGE_REDUCTION, STRONGHOLD_BONUSES, STRUCTURE_RANGE } from "../../../config/MapRoom3Config.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { getDefenderCoords, isDefensiveStructure } from "../../../services/maproom/v3/getDefenderCoords.js";
@@ -306,6 +306,8 @@ export const baseLoad: KoaController = async (ctx) => {
 
   flags.maproom2 = userSave.mr2upgraded || (townHall && townHall.l >= 6) ? 1 : 0;
   flags.mr2upgraded = userSave.mr2upgraded ? 1 : 0;
+  // Map Room 2's painted look (MR2_PAINTED_MAP); the client keeps Classic on the tile map.
+  flags.mr2painted = mr2PaintedMapFor(user.userid) ? 1 : 0;
 
   let totalResourceRate = 0;
   let totalResourceCapacity = 0;

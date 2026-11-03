@@ -1,0 +1,9 @@
+# refs: meadow2 hills rocks
+Use your image generation tool (one call) to create ONE new SQUARE image (1:1, as large as the tool allows) and save it as sheet.png in the current folder. Do not write code, do not draw with scripts.
+
+The attached pictures are crops of a concept painting of a cartoon strategy game world map. MATCH ITS ART STYLE EXACTLY: bright, painted, toy-like cartoon, saturated yellow-greens and warm sandy yellows, crisp small painted details, warm sunlight from the top-left. Not photo-real. No text, no logos, no watermark, no hex lines, no grid lines, no borders, no buildings, no monsters, no number badges, no frames or labels around the pictures. Ignore the pale hex lines, buildings, monsters and badges in the attached crops: copy only the ground painting.
+
+THE PICTURE: a sheet of 9 small ground decorations for the painted meadow, in a 3 x 3 grid, each one centred in its own cell with plenty of empty space round it, on a FLAT PURE MAGENTA background (#FF00FF) everywhere else. No shadows on the magenta except a soft small contact shadow right under each piece. Seen from a tilted top-down camera, at the scale of the attached crops.
+- Row 1: three FLOWER PATCHES: a loose cluster of tiny white and pink meadow flowers with a few grass blades; a cluster of tiny pale-violet and yellow flowers; a small ring of white daisies.
+- Row 2: three GRASS TUFTS: a tuft of tall bright yellow-green grass blades; a darker green clump of grass; a little bush of grass with a few seed heads.
+- Row 3: three PEBBLE GROUPS: three small grey rounded pebbles half sunk in grass; a pair of flat sandy stones; a small mossy grey rock with a tuft beside it.
