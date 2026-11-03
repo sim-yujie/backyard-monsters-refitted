@@ -115,7 +115,6 @@ describe("reportAnswer", () => {
   });
 
   test("a line in the reporter's own country room is reported as in Global", async () => {
-    delete process.env.CHAT_COUNTRY_ROOMS;
     const { em, executed } = fakeEm();
     const room = history([line(77, "the real words", 1_700_000_000_123)]);
     const answer = await reportAnswer(
@@ -130,7 +129,6 @@ describe("reportAnswer", () => {
   });
 
   test("another country's room cannot be reported from outside it", async () => {
-    delete process.env.CHAT_COUNTRY_ROOMS;
     const { em, executed } = fakeEm();
     const room = history([]);
     const answer = await reportAnswer(
