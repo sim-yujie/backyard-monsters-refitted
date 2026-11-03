@@ -43,6 +43,8 @@ export class Minimap {
   private home: OffsetCell | null = null;
   private selected: OffsetCell | null = null;
   private viewport: CellRange | null = null;
+  /** The tilted view's trapezoid, in cells; drawn instead of the rectangle when set. */
+  private viewShape: readonly { col: number; row: number }[] | null = null;
   /** The viewer's fog of war sight (#331), painted as filled circles instead of the old "loaded zones" shading. */
   private sources: readonly SightSource[] = [];
   /** The player's own outposts (#331): a dot each, like home's but smaller. */
@@ -121,6 +123,17 @@ export class Minimap {
     this.dirty = true;
   }
 
+  /**
+   * The view box as four corners in cells, clockwise from top-left, when the
+   * view is not a rectangle: the tilted map (MR2 look plan step 4) sees a
+   * trapezoid, wider at the far top. Null goes back to the rectangle.
+   */
+  setViewShape(corners: readonly { col: number; row: number }[] | null): void {
+    if (sameCorners(corners, this.viewShape)) return;
+    this.viewShape = corners;
+    this.dirty = true;
+  }
+
   /** The viewer's fog of war sight (#331): own and alliance circles, two tints. */
   setSight(sources: readonly SightSource[]): void {
     this.sources = sources;
@@ -170,7 +183,19 @@ export class Minimap {
     if (this.selected) this.dot(this.selected, palette.text, 2.5);
     if (this.cursor) this.marker(this.cursor, palette.accent);
 
-    if (this.viewport) {
+    if (this.viewShape && this.viewShape.length > 2) {
+      context.strokeStyle = palette.text;
+      context.lineWidth = 1.5;
+      context.beginPath();
+      this.viewShape.forEach((corner, index) => {
+        const x = clampTo(corner.col * this.scale, SIZE);
+        const y = clampTo(corner.row * this.scale, SIZE);
+        if (index === 0) context.moveTo(x, y);
+        else context.lineTo(x, y);
+      });
+      context.closePath();
+      context.stroke();
+    } else if (this.viewport) {
       const left = this.viewport.minCol * this.scale;
       const top = this.viewport.minRow * this.scale;
       const width = Math.max((this.viewport.maxCol - this.viewport.minCol + 1) * this.scale, 3);
@@ -284,3 +309,13 @@ const LABEL =
 
 const clampInt = (value: number, size: number): number =>
   Math.min(Math.max(Math.floor(value), 0), size - 1);
+
+/** Keeps a view box corner on the minimap, half a line inside its edge. */
+const clampTo = (at: number, size: number): number => Math.min(size - 0.75, Math.max(0.75, at));
+
+const sameCorners = (
+  a: readonly { col: number; row: number }[] | null,
+  b: readonly { col: number; row: number }[] | null,
+): boolean =>
+  a === b ||
+  (!!a && !!b && a.length === b.length && a.every((corner, i) => corner.col === b[i]!.col && corner.row === b[i]!.row));

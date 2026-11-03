@@ -10,6 +10,7 @@ import {
 } from "./engine.js";
 import { championByType, CHAMPION_MAX_FOOD_BONUS, CHAMPION_MAX_POWER_LEVEL } from "./stats.js";
 import { MAX_RANK } from "./specialMoves.js";
+import { combineDefenceBonus, landDefenceBonus, landFeatureOf } from "./landFeatures.js";
 import type { CombatBuildingDataMap, MonsterLevels, MonsterRanks, Roster } from "./types.js";
 
 /**
@@ -48,17 +49,24 @@ export interface DefenderForces {
    * it always was.
    */
   readonly neighbours?: number;
+  /**
+   * The defending cell's Map Room 2 land feature (`landFeatures.ts`), 1 to 7,
+   * as the attack load froze it with the land switch on. Absent: open
+   * ground, the battle as it always was.
+   */
+  readonly land?: number;
 }
 
 /**
  * What each count of friendly neighbours adds to a Map Room 2 cell's defence
  * (`docs/mr2-neighbours.md`), as fractions: index 1 is one neighbour. Both
- * stats rise together, by less for each further neighbour: +8% for the first,
- * then +6, +4 and +2 each for the fourth to sixth, so a cell ringed by six
- * friends has +24% building health and +24% tower damage.
+ * stats rise together, by less for each further neighbour: +5% for the first,
+ * then +4, +2, +2 and +1 each for the fifth and sixth, so a cell ringed by six
+ * friends has +15% building health and +15% tower damage. The owner's ladder
+ * (3 Nov): the first +8, +6, +4, +2, +2, +2 scaled by 5/8 and rounded.
  */
 export const NEIGHBOUR_DEFENCE_BONUS: readonly number[] = [
-  0, 0.08, 0.14, 0.18, 0.2, 0.22, 0.24,
+  0, 0.05, 0.09, 0.11, 0.13, 0.14, 0.15,
 ];
 
 /** The battle's defence bonus for `neighbours` friendly cells; none for 0 or a bad count. */
@@ -321,6 +329,7 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
   }
   const buffs = parseBattleBuffs(value.buffs);
   const neighbours = typeof value.neighbours === "number" ? value.neighbours : undefined;
+  const land = landFeatureOf(value.land);
   // A session stored before issue #310 holds one `defenderChampion`.
   const champions = Array.isArray(value.defenderChampions)
     ? value.defenderChampions
@@ -339,6 +348,7 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
     ),
     ...(buffs && { buffs }),
     ...(neighbours !== undefined && neighbourDefenceBonus(neighbours) && { neighbours }),
+    ...(land !== 0 && { land }),
   };
 };
 
@@ -367,7 +377,11 @@ export const battleDefence = (
   const hasLevels = Object.keys(forces.defenderLevels).length > 0;
   const hasRanks = Object.keys(forces.defenderRanks ?? {}).length > 0;
   const hasBuffs = Boolean(forces.buffs && (forces.buffs.attacker || forces.buffs.defender));
-  const defenceBonus = neighbourDefenceBonus(forces.neighbours);
+  // The neighbour bonus and the land feature multiply (`combineDefenceBonus`).
+  const defenceBonus = combineDefenceBonus(
+    neighbourDefenceBonus(forces.neighbours),
+    landDefenceBonus(forces.land),
+  );
   return {
     ...(hasBunkers ? { bunkers: forces.bunkers } : {}),
     ...(hasBunkers || hasChampions || hasLevels ? { defenderLevels: forces.defenderLevels } : {}),

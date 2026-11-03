@@ -458,18 +458,26 @@ export const ALTITUDE_FLOOR = 100;
  * Undefined for a type with no range. A bunker reads its dispatch range from
  * the props table directly (`client/scripts/BUILDING22.as:90`, `:124`) and
  * does not come through here.
+ *
+ * `landPct` is the Map Room 2 cell's land feature (`landFeatures.ts`), whole
+ * percent, applied after the height on any yard kind, outpost or camp:
+ * `int(range * (100 + landPct) / 100)`. 0, the default, changes nothing.
  */
 export const towerRange = (
   type: number,
   level: number,
   kind: CombatTargetKind = "main",
   height = 0,
+  landPct = 0,
 ): number | undefined => {
   const range = towerStats(type, level, kind)?.range;
   if (range === undefined) return undefined;
   const cell = Math.trunc(height);
-  if (!readsOutpostProps(kind) || !(cell >= ALTITUDE_FLOOR)) return range;
-  return Math.trunc((cell * Math.trunc(range)) / AVERAGE_ALTITUDE);
+  const raised =
+    !readsOutpostProps(kind) || !(cell >= ALTITUDE_FLOOR)
+      ? range
+      : Math.trunc((cell * Math.trunc(range)) / AVERAGE_ALTITUDE);
+  return landPct === 0 ? raised : Math.trunc((raised * (100 + landPct)) / 100);
 };
 
 /** Whether a type carries a stats block at all. */
