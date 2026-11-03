@@ -1,5 +1,6 @@
 import { isSwitchOn } from "./BotConfig.js";
 import { MapRoom2 } from "../enums/MapRoom.js";
+import { type HexShape, hexShapeOf } from "../game-rules/maproom/range.js";
 
 /**
  * Represents the size of Map Room 2 world map.
@@ -104,3 +105,16 @@ export const mr2TiltEnabled = (env: Record<string, string | undefined> = process
  */
 export const mr2LandFeaturesEnabled = (env: Record<string, string | undefined> = process.env): boolean =>
   isSwitchOn(env.MR2_LAND_FEATURES);
+
+/**
+ * Map Room 2's hex shape (`docs/mr2-modern-look-plan.md` step 1):
+ * `MR2_HEX_SHAPE=pointy` turns the world's hexes pointy-top (odd-r rows) for
+ * every player, Classic included; anything else, the default, keeps Flash's
+ * flat-top columns (odd-q), exactly as before. Stored cell coordinates do not
+ * change, only which cells touch: range, sight, takeover adjacency and the
+ * neighbour bonus all measure with it. It is the full-undo switch: the
+ * painted look switching off leaves it as it is. Sent to the web client in
+ * the settings block, and read on each use, so tests can flip it.
+ */
+export const mr2HexShape = (env: Record<string, string | undefined> = process.env): HexShape =>
+  hexShapeOf(env.MR2_HEX_SHAPE);

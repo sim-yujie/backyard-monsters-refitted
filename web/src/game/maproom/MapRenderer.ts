@@ -206,9 +206,14 @@ export class MapRenderer {
 
   /**
    * Bakes the texture atlas. Nothing is drawn above the raster tier until this
-   * has run, because it needs a live renderer to rasterise the shapes.
+   * has run, because it needs a live renderer to rasterise the shapes. Runs
+   * after the map has set the world's hex shape.
    */
   attach(renderer: Renderer): void {
+    // The world's hex shape is known by now (`setHexShape`); the layers built
+    // before it line up with the grid again.
+    this.raster.fitGrid();
+    this.range.fitGrid();
     this.atlas?.destroy();
     this.atlas = new MapAtlas(renderer);
     this.webGL2 = (renderer as { context?: { webGLVersion?: number } }).context?.webGLVersion === 2;

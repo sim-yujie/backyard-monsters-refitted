@@ -2,6 +2,7 @@ import { avatarPath, type AvatarId } from "@/game/avatars";
 import { setSessionPicSquare, setSessionUsername } from "./auth";
 import { get, post, postJson } from "./http";
 import { privacyOf, type PrivacySettings } from "./privacy";
+import { hexShapeOf, type HexShape } from "@/game/maproom/rules/range";
 import type { AccountResponse, ChangeUsernameResponse, SetAvatarResponse, SettingsResponse } from "./types";
 
 /**
@@ -78,6 +79,13 @@ export const mapTiltOf = (settings: AccountResponse["settings"]): MapTiltSetting
 /** Reads the tilt switch and the player's choice from `GET /player/account`. */
 export const fetchMapTilt = async (): Promise<MapTiltSettings> =>
   mapTiltOf((await get<AccountResponse>(ACCOUNT_PATH)).settings);
+
+/**
+ * Map Room 2's hex shape (MR2 look plan step 1): the server's MR2_HEX_SHAPE
+ * switch, flat-top unless it says pointy.
+ */
+export const fetchMapHexShape = async (): Promise<HexShape> =>
+  hexShapeOf((await get<AccountResponse>(ACCOUNT_PATH)).settings?.mapHexShape);
 
 /** Stores the player's choice on the account; resolves with what the server now has. */
 export const setTiltedMap = async (tilted: boolean): Promise<MapTiltSettings> =>

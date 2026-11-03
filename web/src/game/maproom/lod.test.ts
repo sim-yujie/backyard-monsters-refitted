@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { LOD_BADGE_ZOOM, LOD_HEX_ZOOM, LOD_LABEL_ZOOM, MAX_ZOOM, MIN_ZOOM } from "@/config";
-import { LodTier, tierForZoom } from "./lod";
+import { afterEach, describe, expect, it } from "vitest";
+import { LOD_BADGE_ZOOM, LOD_GLYPH_ZOOM, LOD_HEX_ZOOM, LOD_LABEL_ZOOM, MAX_ZOOM, MIN_ZOOM } from "@/config";
+import { mapRoomGrid, setHexShape } from "@/game/HexGrid";
+import { glyphZoom, hexZoom, lodScale, LodTier, tierForZoom } from "./lod";
 
 describe("tierForZoom", () => {
   it("uses the raster below the hex threshold and shapes at it", () => {
@@ -27,6 +28,29 @@ describe("tierForZoom", () => {
       expect(tier - previous).toBeLessThanOrEqual(1);
       expect(tier).toBeGreaterThanOrEqual(previous);
       previous = tier;
+    }
+  });
+});
+
+describe("lodScale (MR2_HEX_SHAPE)", () => {
+  afterEach(() => {
+    setHexShape("flat");
+  });
+
+  it("leaves today's thresholds alone on flat-top", () => {
+    expect(lodScale()).toBe(1);
+    expect(hexZoom()).toBe(LOD_HEX_ZOOM);
+    expect(glyphZoom()).toBe(LOD_GLYPH_ZOOM);
+  });
+
+  it("moves the cell-count thresholds so the same number of cells is on screen", () => {
+    const flatCells = 1 / (mapRoomGrid.colStep * mapRoomGrid.rowStep * LOD_HEX_ZOOM ** 2);
+    for (const classic of [false, true]) {
+      setHexShape("pointy", classic);
+      const cells = 1 / (mapRoomGrid.colStep * mapRoomGrid.rowStep * hexZoom() ** 2);
+      expect(cells).toBeCloseTo(flatCells, 10);
+      expect(tierForZoom(hexZoom())).toBe(LodTier.SHAPES);
+      expect(tierForZoom(LOD_BADGE_ZOOM)).toBe(LodTier.BADGES);
     }
   });
 });

@@ -1,5 +1,5 @@
 import { Container, Sprite, type Texture } from "pixi.js";
-import { LOD_HEX_ZOOM } from "@/config";
+import { hexZoom } from "../lod";
 
 /**
  * The sky over Map Room 2 (MR2 part 1): cloud shadows drifting over the near
@@ -63,9 +63,12 @@ const FRAME = {
   alpha: 0.96,
 } as const;
 
-/** Shadows show from the zoom where the raster gives way to hexes; white clouds below it, fading in. */
-const SHADOW_FADE_FROM = LOD_HEX_ZOOM * 0.7;
-const CLOUDS_FULL_BELOW = LOD_HEX_ZOOM * 0.55;
+/**
+ * Shadows show from the zoom where the raster gives way to hexes (`hexZoom`);
+ * white clouds below it, fading in. As fractions of that zoom.
+ */
+const SHADOW_FADE_FROM = 0.7;
+const CLOUDS_FULL_BELOW = 0.55;
 
 /** Gulls: how often a flock crosses, and how it looks on screen. */
 const FLOCK_EVERY_MIN_S = 18;
@@ -126,9 +129,10 @@ export class SkyLayer {
     const dt = Math.max(0, timeSeconds - this.lastTime);
     this.lastTime = timeSeconds;
     if (this.clouds.length > 0) {
-      const shadowAlpha = smooth((zoom - SHADOW_FADE_FROM) / (LOD_HEX_ZOOM - SHADOW_FADE_FROM));
+      const hex = hexZoom();
+      const shadowAlpha = smooth((zoom - hex * SHADOW_FADE_FROM) / (hex - hex * SHADOW_FADE_FROM));
       this.place(SHADOWS, this.shadowPool, this.shadows, timeSeconds, view, shadowAlpha);
-      const cloudAlpha = smooth((LOD_HEX_ZOOM - zoom) / (LOD_HEX_ZOOM - CLOUDS_FULL_BELOW));
+      const cloudAlpha = smooth((hex - zoom) / (hex - hex * CLOUDS_FULL_BELOW));
       this.frame(timeSeconds, view, cloudAlpha);
     }
     if (this.birds && this.bird) this.fly(dt, view, zoom);

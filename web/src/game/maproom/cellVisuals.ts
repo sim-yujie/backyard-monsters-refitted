@@ -1,6 +1,6 @@
 import { CELL_HEIGHT, CELL_WIDTH, WATER_MAX_HEIGHT } from "@/config";
 import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell, type PlayerCell } from "@/api/types";
-import { HexGrid } from "@/game/HexGrid";
+import { HexGrid, mapRoomGrid } from "@/game/HexGrid";
 import { classicLook } from "@/game/classicLook";
 
 /**
@@ -502,9 +502,15 @@ export const rasterColour = (cell: MapCell | undefined): number => {
  * away (see `mapAtlas.ts`'s `hexPoints`). A name plate placed at `dy` from the
  * centre must stay within this width, or it spills into the neighbour hex
  * sharing that edge. Offsets past the hex's own vertical extent clamp to the
- * narrowest width rather than going negative.
+ * narrowest width rather than going negative. On pointy-top (`HexGrid.ts`)
+ * the world grid's own outline decides.
  */
 export const hexWidthAt = (dy: number): number => {
+  if (mapRoomGrid.shape === "pointy") {
+    // Pointy-top: full width down the straight sides, then narrowing to the
+    // point; kept to at least half the width, as flat-top's narrowest is.
+    return Math.max(2 * mapRoomGrid.halfWidthAt(Math.min(Math.abs(dy), mapRoomGrid.cellHeight / 2)), mapRoomGrid.cellWidth / 2);
+  }
   const half = Math.min(Math.abs(dy), CELL_HEIGHT / 2);
   return CELL_WIDTH - (CELL_WIDTH / 2) * (half / (CELL_HEIGHT / 2));
 };

@@ -117,6 +117,8 @@ export interface AccountResponse extends ApiEnvelope {
     mapTiltAllowed?: boolean;
     /** The player's own choice: Map Room 2 tilted (default) or flat. */
     tiltedMap?: boolean;
+    /** The server's MR2_HEX_SHAPE switch: Map Room 2's hexes flat-top (default) or pointy-top. */
+    mapHexShape?: "flat" | "pointy";
   };
 }
 
@@ -130,7 +132,7 @@ export interface ChangeUsernameResponse extends ApiEnvelope {
 /** `POST /api/:apiVersion/player/settings`. */
 export interface SettingsResponse extends ApiEnvelope {
   error: number;
-  settings: { shinyLocked: boolean; mapTiltAllowed?: boolean; tiltedMap?: boolean };
+  settings: { shinyLocked: boolean; mapTiltAllowed?: boolean; tiltedMap?: boolean; mapHexShape?: "flat" | "pointy" };
 }
 
 /* ── Base / yard ────────────────────────────────────────────────────────── */

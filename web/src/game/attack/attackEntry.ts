@@ -9,7 +9,7 @@ import {
   type MapCell,
   type PlayerCell,
 } from "@/api/types";
-import type { OffsetCell } from "@/game/HexGrid";
+import { hexShape, type OffsetCell } from "@/game/HexGrid";
 import { academyRanks } from "@/game/combat/rules/defence";
 import {
   hexDistance,
@@ -57,7 +57,7 @@ export const cellReach = (cell: PlayerCell, declareWar: boolean): number =>
  * drawn with.
  */
 export const cellDistance = (a: OffsetCell, b: OffsetCell): number =>
-  hexDistance({ x: a.col, y: a.row }, { x: b.col, y: b.row });
+  hexDistance({ x: a.col, y: a.row }, { x: b.col, y: b.row }, hexShape());
 
 /**
  * Whether the player's alliance has Declare War running.

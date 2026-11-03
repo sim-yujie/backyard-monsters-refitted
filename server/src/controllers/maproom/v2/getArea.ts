@@ -22,7 +22,7 @@ import { visibleCredits } from "../../../services/user/shinyLock.js";
 import { emptyAreaResponse, hasWorldPlacement } from "../../../services/maproom/v2/emptyAreaResponse.js";
 import { getPlayerSight } from "../../../services/maproom/sight/sightService.js";
 import { isVisible } from "../../../game-rules/maproom/sight.js";
-import { mr2NeighbourBonusMode } from "../../../config/MapRoom2Config.js";
+import { mr2HexShape, mr2NeighbourBonusMode } from "../../../config/MapRoom2Config.js";
 import { loadAreaNeighbourCounts } from "../../../services/maproom/v2/neighbourDefence.js";
 
 /**
@@ -181,10 +181,11 @@ export const getArea: KoaController = async (ctx) => {
   const sight = await getPlayerSight(user);
 
   const zoneVisibility = new Map<string, boolean>();
+  const shape = mr2HexShape();
   for (let cellX = currentX; cellX <= currentX + width; cellX++) {
     for (let cellY = currentY; cellY <= currentY + height; cellY++) {
       const wrapped = { x: wrap(cellX, MapRoom2.WIDTH), y: wrap(cellY, MapRoom2.HEIGHT) };
-      const visible = devConfig.disableFogOfWar || isVisible(wrapped, sight.sources, sight.revealed);
+      const visible = devConfig.disableFogOfWar || isVisible(wrapped, sight.sources, sight.revealed, shape);
       zoneVisibility.set(cellKey(cellX, cellY), visible);
     }
   }

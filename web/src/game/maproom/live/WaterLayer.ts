@@ -20,9 +20,9 @@ const GLINT_ORDER = 0.6;
 const FOAM_ORDER = 0.7;
 
 /**
- * The six edges of a flat-topped hex: where the neighbour across it is (in
- * world points from the cell's place), which foam frame lines it, and how
- * that frame is flipped.
+ * The six edges of a hex: where the neighbour across it is (in columns and
+ * rows of world points from the cell's place), which foam frame lines it, and
+ * how that frame is flipped.
  */
 interface Edge {
   dx: number;
@@ -31,13 +31,22 @@ interface Edge {
   flipX: boolean;
   flipY: boolean;
 }
-const EDGES: readonly Edge[] = [
+const FLAT_EDGES: readonly Edge[] = [
   { dx: 0, dy: -1, frame: FoamEdge.TOP, flipX: false, flipY: false },
   { dx: 0, dy: 1, frame: FoamEdge.TOP, flipX: false, flipY: true },
   { dx: -1, dy: -0.5, frame: FoamEdge.UPPER_LEFT, flipX: false, flipY: false },
   { dx: 1, dy: -0.5, frame: FoamEdge.UPPER_LEFT, flipX: true, flipY: false },
   { dx: -1, dy: 0.5, frame: FoamEdge.UPPER_LEFT, flipX: false, flipY: true },
   { dx: 1, dy: 0.5, frame: FoamEdge.UPPER_LEFT, flipX: true, flipY: true },
+];
+/** Pointy-top (`MR2_HEX_SHAPE=pointy`): upright left and right sides, and four slanted edges. */
+const POINTY_EDGES: readonly Edge[] = [
+  { dx: -1, dy: 0, frame: FoamEdge.SIDE, flipX: false, flipY: false },
+  { dx: 1, dy: 0, frame: FoamEdge.SIDE, flipX: true, flipY: false },
+  { dx: -0.5, dy: -1, frame: FoamEdge.UPPER_LEFT, flipX: false, flipY: false },
+  { dx: 0.5, dy: -1, frame: FoamEdge.UPPER_LEFT, flipX: true, flipY: false },
+  { dx: -0.5, dy: 1, frame: FoamEdge.UPPER_LEFT, flipX: false, flipY: true },
+  { dx: 0.5, dy: 1, frame: FoamEdge.UPPER_LEFT, flipX: true, flipY: true },
 ];
 
 /**
@@ -57,6 +66,7 @@ export class WaterLayer implements LiveChunkLayer {
     // Until the ground tiles arrive, water is a flat blue hex at the cell's lifted centre; the
     // renderer rebuilds every chunk when they land.
     if (!chunk.source.groundReady) return;
+    const edges = mapRoomGrid.shape === "pointy" ? POINTY_EDGES : FLAT_EDGES;
     for (const cell of chunk.cells) {
       if (cell.height === null || cell.height > WATER_MAX_HEIGHT) continue;
 
@@ -66,7 +76,7 @@ export class WaterLayer implements LiveChunkLayer {
       chunk.addGround(glint, cell.order + GLINT_ORDER);
 
       if (!this.foam) continue;
-      for (const edge of EDGES) {
+      for (const edge of edges) {
         const neighbour = mapRoomGrid.pixelToCell(
           cell.spot.x + edge.dx * mapRoomGrid.colStep,
           cell.spot.y + edge.dy * mapRoomGrid.rowStep,
