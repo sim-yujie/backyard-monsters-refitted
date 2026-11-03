@@ -16,6 +16,11 @@ import type { ChatConfig, ChatLineWire, ChatServerMessage } from "@/api/chat";
  * somewhere else (the server keeps one connection per player and closes the
  * older), and retrying would only throw that one off in turn; the box offers
  * to reconnect.
+ *
+ * Besides Global, a player whose country has a room (owner 3 Nov 2026) is in
+ * that room too, on the same socket: the yard load names it, the server lets
+ * them in only from their stored country. The box shows one room at a time
+ * (`channel`); lines in the other are kept and marked unread.
  */
 
 /** A line someone said in the room. */
@@ -55,16 +60,28 @@ export const ChatStatus = {
 } as const;
 export type ChatStatus = (typeof ChatStatus)[keyof typeof ChatStatus];
 
+/** A room the player is in: Global, or their country's room. */
+export interface ChatRoom {
+  readonly channel: string;
+  readonly kind: "global" | "country";
+  /** The country's ISO code, for a country room's tab. */
+  readonly country: string | null;
+}
+
 export interface ChatState {
   readonly status: ChatStatus;
-  /** The room's lines and the client's notices, oldest first; muted players' lines included. */
+  /** The shown room's lines and the client's notices, oldest first; muted players' lines included. */
   readonly entries: readonly ChatEntry[];
   /** Who this player has muted (the server's ignore list). */
   readonly muted: ReadonlySet<number>;
   /** This player, once the server has said who they are. */
   readonly self: { readonly userId: number; readonly name: string } | null;
-  /** The world room joined, or about to be. */
+  /** The room shown: Global, or the country room. */
   readonly channel: string | null;
+  /** Global first, then the country room if the player has one. */
+  readonly rooms: readonly ChatRoom[];
+  /** Rooms not shown that have new lines since they were last shown. */
+  readonly unread: ReadonlySet<string>;
   /**
    * The words of a line the server turned away for coming too fast, for the
    * box to put back in the input; cleared by the next `say`.
@@ -123,7 +140,17 @@ const sameConfig = (a: ChatConfig | null, b: ChatConfig): boolean =>
   a.url === b.url &&
   a.userId === b.userId &&
   a.token === b.token &&
-  a.channel === b.channel;
+  a.channel === b.channel &&
+  (a.countryChannel ?? null) === (b.countryChannel ?? null);
+
+/** The rooms a config puts the player in. */
+const roomsOf = (config: ChatConfig): ChatRoom[] => {
+  const rooms: ChatRoom[] = [{ channel: config.channel, kind: "global", country: null }];
+  if (config.countryChannel && config.countryChannel !== config.channel) {
+    rooms.push({ channel: config.countryChannel, kind: "country", country: config.country ?? null });
+  }
+  return rooms;
+};
 
 const parse = (data: unknown): ChatServerMessage | null => {
   if (typeof data !== "string") return null;
@@ -147,12 +174,18 @@ export class ChatSession {
   private nextId = 1;
   /** The last line said, for `bounced` if the server turns it away. */
   private lastSaid: string | null = null;
+  /** Every room's entries, the shown one's included. */
+  private roomEntries = new Map<string, readonly ChatEntry[]>();
+  /** Rooms the server said "joined" for on this socket. */
+  private joined = new Set<string>();
   private state: ChatState = {
     status: ChatStatus.OFF,
     entries: [],
     muted: new Set(),
     self: null,
     channel: null,
+    rooms: [],
+    unread: new Set(),
     bounced: null,
   };
 
@@ -193,13 +226,47 @@ export class ChatSession {
       this.connect();
       return;
     }
-    if (previous.channel !== config.channel) {
-      this.update({ channel: config.channel, entries: [] });
-      if (this.state.status === ChatStatus.ONLINE) {
-        this.sendRaw({ type: "leave", channel: previous.channel });
-        this.sendRaw({ type: "join", channel: config.channel });
-      }
+    // A move between Map Rooms changes Global; a country change, the country room.
+    const before = this.state.rooms;
+    const after = roomsOf(config);
+    const online = this.state.status === ChatStatus.ONLINE;
+    for (const room of before) {
+      if (after.some((kept) => kept.channel === room.channel)) continue;
+      this.roomEntries.delete(room.channel);
+      this.joined.delete(room.channel);
+      if (online) this.sendRaw({ type: "leave", channel: room.channel });
     }
+    for (const room of after) {
+      if (before.some((had) => had.channel === room.channel)) continue;
+      this.roomEntries.set(room.channel, []);
+      if (online) this.sendRaw({ type: "join", channel: room.channel });
+    }
+    const shown = after.some((room) => room.channel === this.state.channel)
+      ? this.state.channel
+      : config.channel;
+    const unread = new Set(
+      [...this.state.unread].filter((channel) => after.some((room) => room.channel === channel)),
+    );
+    this.show({ rooms: after, channel: shown, unread });
+  }
+
+  /**
+   * The player's country changed in Account settings or the prompt: the
+   * country room the server now gives them (null: none), joined or left at
+   * once, without waiting for the next yard load.
+   */
+  setCountryRoom(countryChannel: string | null, country: string | null): void {
+    const config = this.config;
+    if (!config) return;
+    this.configure({ ...config, countryChannel, country });
+  }
+
+  /** Shows another of the player's rooms in the box. */
+  showRoom(channel: string): void {
+    if (channel === this.state.channel || !this.state.rooms.some((room) => room.channel === channel)) return;
+    const unread = new Set(this.state.unread);
+    unread.delete(channel);
+    this.show({ channel, unread });
   }
 
   /** Connects again after another connection took over (the box's "Reconnect"). */
@@ -218,18 +285,24 @@ export class ChatSession {
       muted: new Set(),
       self: null,
       channel: null,
+      rooms: [],
+      unread: new Set(),
       bounced: null,
     });
+    this.roomEntries.clear();
+    this.joined.clear();
   }
 
   /**
-   * Says a line in the room. False, and nothing sent, when the line is empty
-   * or the room is not joined.
+   * Says a line in the shown room. False, and nothing sent, when the line is
+   * empty or the room is not joined.
    */
   say(text: string): boolean {
     const body = text.trim().slice(0, MAX_LINE_LENGTH);
     const channel = this.state.channel;
-    if (!body || !channel || this.state.status !== ChatStatus.ONLINE) return false;
+    if (!body || !channel || this.state.status !== ChatStatus.ONLINE || !this.joined.has(channel)) {
+      return false;
+    }
     this.lastSaid = body;
     if (this.state.bounced !== null) this.update({ bounced: null });
     this.sendRaw({ type: "say", channel, message: body });
@@ -257,9 +330,16 @@ export class ChatSession {
     const config = this.config;
     if (!config) return;
     this.drop();
-    this.update({
+    const rooms = roomsOf(config);
+    const kept = rooms.some((room) => room.channel === this.state.channel) ? this.state.channel : config.channel;
+    for (const channel of [...this.roomEntries.keys()]) {
+      if (!rooms.some((room) => room.channel === channel)) this.roomEntries.delete(channel);
+    }
+    for (const room of rooms) if (!this.roomEntries.has(room.channel)) this.roomEntries.set(room.channel, []);
+    this.show({
       status: this.retries > 0 ? ChatStatus.RECONNECTING : ChatStatus.CONNECTING,
-      channel: config.channel,
+      rooms,
+      channel: kept,
     });
 
     let socket: ChatSocket;
@@ -281,6 +361,7 @@ export class ChatSession {
 
   /** Lets go of the socket and the timers without touching the state. */
   private drop(): void {
+    this.joined.clear();
     if (this.retryTimer !== null) clearTimeout(this.retryTimer);
     this.retryTimer = null;
     if (this.pingTimer !== null) clearInterval(this.pingTimer);
@@ -323,9 +404,8 @@ export class ChatSession {
   private receive(message: ChatServerMessage): void {
     switch (message.type) {
       case "auth_ok": {
-        const channel = this.config?.channel;
         this.update({ self: { userId: message.userId, name: message.displayName } });
-        if (channel) this.sendRaw({ type: "join", channel });
+        for (const room of this.state.rooms) this.sendRaw({ type: "join", channel: room.channel });
         this.sendRaw({ type: "getignore" });
         this.pingTimer = setInterval(() => this.sendRaw({ type: "ping" }), PING_INTERVAL_MS);
         return;
@@ -334,19 +414,25 @@ export class ChatSession {
         this.drop();
         this.update({ status: ChatStatus.SIGNED_OUT });
         return;
-      case "joined":
-        if (message.channel !== this.state.channel) return;
-        this.retries = 0;
-        this.update({
-          status: ChatStatus.ONLINE,
-          entries: (Array.isArray(message.history) ? message.history : []).map((line) =>
-            this.line(line),
-          ),
-        });
+      case "joined": {
+        const room = this.state.rooms.find((candidate) => candidate.channel === message.channel);
+        if (!room) return;
+        this.joined.add(room.channel);
+        this.roomEntries.set(
+          room.channel,
+          (Array.isArray(message.history) ? message.history : []).map((line) => this.line(line)),
+        );
+        if (room.kind === "global") {
+          this.retries = 0;
+          this.show({ status: ChatStatus.ONLINE });
+        } else {
+          this.show({});
+        }
         return;
+      }
       case "message":
-        if (message.channel !== this.state.channel) return;
-        this.append(this.line(message));
+        if (!this.roomEntries.has(message.channel)) return;
+        this.append(this.line(message), message.channel);
         return;
       case "name_update":
         if (this.state.self && message.userId === this.state.self.userId) {
@@ -367,7 +453,7 @@ export class ChatSession {
           this.update({ bounced: this.lastSaid });
           this.notice(RATE_LIMITED_TEXT);
         } else if (message.code === "invalid_channel") {
-          this.notice(UNAVAILABLE_TEXT);
+          this.refused();
         }
         return;
       default:
@@ -388,12 +474,48 @@ export class ChatSession {
     };
   }
 
-  private notice(text: string): void {
-    this.append({ kind: "notice", id: this.nextId++, text });
+  /**
+   * The server turned a join down. With Global joined and the country room
+   * not, it was the country room (the country changed elsewhere, or its room
+   * closed): its tab goes and Global carries on. Otherwise it was Global.
+   */
+  private refused(): void {
+    const country = this.state.rooms.find((room) => room.kind === "country");
+    const global = this.state.rooms.find((room) => room.kind === "global");
+    if (!country || !global || !this.joined.has(global.channel) || this.joined.has(country.channel)) {
+      this.notice(UNAVAILABLE_TEXT);
+      return;
+    }
+    if (this.config) this.config = { ...this.config, countryChannel: null, country: null };
+    this.roomEntries.delete(country.channel);
+    const unread = new Set(this.state.unread);
+    unread.delete(country.channel);
+    this.show({
+      rooms: this.state.rooms.filter((room) => room !== country),
+      channel: this.state.channel === country.channel ? global.channel : this.state.channel,
+      unread,
+    });
   }
 
-  private append(entry: ChatEntry): void {
-    this.update({ entries: [...this.state.entries, entry].slice(-MAX_ENTRIES) });
+  private notice(text: string): void {
+    const channel = this.state.channel;
+    if (channel) this.append({ kind: "notice", id: this.nextId++, text }, channel);
+  }
+
+  private append(entry: ChatEntry, channel: string): void {
+    const before = this.roomEntries.get(channel) ?? [];
+    this.roomEntries.set(channel, [...before, entry].slice(-MAX_ENTRIES));
+    if (channel === this.state.channel || entry.kind !== "line" || this.state.unread.has(channel)) {
+      this.show({});
+      return;
+    }
+    this.show({ unread: new Set([...this.state.unread, channel]) });
+  }
+
+  /** Updates the state, the shown room's entries brought in from {@link roomEntries}. */
+  private show(patch: Partial<ChatState>): void {
+    const channel = patch.channel !== undefined ? patch.channel : this.state.channel;
+    this.update({ ...patch, entries: (channel && this.roomEntries.get(channel)) || [] });
   }
 
   private sendRaw(message: object): void {

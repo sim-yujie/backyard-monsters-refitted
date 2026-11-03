@@ -3,6 +3,8 @@ import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { UpdateSettingsSchema } from "../../schemas/AuthSchemas.js";
+import { countryChannelFor } from "../../config/ChatConfig.js";
+import { disconnectCountryChat } from "../../chat/chatControl.js";
 
 /** The account's settings block, as `/player/settings` and `/player/account` send it. */
 export const settingsOf = (user: User) => ({
@@ -10,6 +12,12 @@ export const settingsOf = (user: User) => ({
   // The privacy part (`docs/design/friends.md` §3.6, issue #368).
   hideOnline: user.hide_online,
   friendRequests: !user.friend_requests_off,
+  // The player's country (owner 3 Nov 2026): null until picked. `countryAsked`
+  // says the one-time prompt was answered or put off; `countryChannel` is the
+  // country's chat room when it has one (`CHAT_COUNTRY_ROOMS`), else null.
+  country: user.country ?? null,
+  countryAsked: user.country_asked || !!user.country,
+  countryChannel: countryChannelFor(user.country),
 });
 
 /**
@@ -27,12 +35,28 @@ export const settingsOf = (user: User) => ({
  */
 export const updateSettings: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  const { shinyLocked, hideOnline, friendRequests } = UpdateSettingsSchema.parse(ctx.request.body);
+  const { shinyLocked, hideOnline, friendRequests, country, countryAsked } = UpdateSettingsSchema.parse(
+    ctx.request.body,
+  );
 
   if (shinyLocked !== undefined) user.shiny_locked = shinyLocked;
   if (hideOnline !== undefined) user.hide_online = hideOnline;
   if (friendRequests !== undefined) user.friend_requests_off = !friendRequests;
+  if (countryAsked) user.country_asked = true;
+
+  const oldCountry = user.country ?? null;
+
+  if (country !== undefined) {
+    user.country = country;
+    user.country_asked = true;
+  }
+
   await postgres.em.flush();
+
+  // A new country may close the old country room: the chat server lets go of it.
+  const newCountry = user.country ?? null;
+
+  if (newCountry !== oldCountry) await disconnectCountryChat(user.userid, countryChannelFor(newCountry));
 
   ctx.status = Status.OK;
   ctx.body = {

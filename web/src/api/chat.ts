@@ -70,7 +70,12 @@ export interface ChatConfig {
   readonly url: string;
   readonly userId: number;
   readonly token: string;
+  /** Global: the world room for the player's Map Room. */
   readonly channel: string;
+  /** The player's country room beside Global, when their country has one. */
+  readonly countryChannel?: string | null;
+  /** That room's country, ISO 3166-1 alpha-2, for its tab. */
+  readonly country?: string | null;
 }
 
 /**
@@ -86,17 +91,26 @@ export const chatSocketUrl = (server: string, secure: boolean): string =>
  * (a visit, an attack, Inferno, or a server with chat switched off).
  */
 export const chatConfigFrom = (
-  load: { chatservers?: string[]; chattoken?: string; chatchannel?: string },
+  load: {
+    chatservers?: string[];
+    chattoken?: string;
+    chatchannel?: string;
+    chatcountrychannel?: string;
+    chatcountry?: string;
+  },
   userId: number,
   secure: boolean,
 ): ChatConfig | null => {
   const server = load.chatservers?.[0];
   if (!server || !load.chattoken || !load.chatchannel || !(userId > 0)) return null;
+  const country = load.chatcountrychannel && load.chatcountry ? load.chatcountry : null;
   return {
     url: chatSocketUrl(server, secure),
     userId,
     token: load.chattoken,
     channel: load.chatchannel,
+    countryChannel: country ? (load.chatcountrychannel ?? null) : null,
+    country,
   };
 };
 

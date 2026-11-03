@@ -13,6 +13,10 @@ const privacyApi = vi.hoisted(() => ({
   unblockPlayer: vi.fn(),
 }));
 vi.mock("@/api/privacy", () => privacyApi);
+const countryApi = vi.hoisted(() => ({ setCountry: vi.fn() }));
+vi.mock("@/api/country", () => countryApi);
+const chat = vi.hoisted(() => ({ worldChat: { setCountryRoom: vi.fn() } }));
+vi.mock("@/game/chat/chatSession", () => chat);
 
 import { SETTINGS_TEXT, openAccountSettings } from "./AccountSettings";
 
@@ -25,6 +29,7 @@ const open = async (account: Record<string, unknown>) => {
     nextChangeAt: null,
     shinyLocked: false,
     privacy: { hideOnline: false, friendRequests: true },
+    country: { country: null, countryAsked: false, countryChannel: null },
     ...account,
   });
   const popup = openAccountSettings({ container: document.body });
@@ -259,5 +264,65 @@ describe("AccountSettings", () => {
     await settle();
     expect(document.querySelector<HTMLSelectElement>("#settings-look")!.value).toBe("classic");
     localStorage.clear();
+  });
+
+  describe("Country", () => {
+    const pick = (name: string) =>
+      [...document.querySelectorAll<HTMLButtonElement>(".country-picker__option")].find((button) =>
+        button.textContent?.includes(name),
+      )!;
+    const now = () => document.querySelector("#settings-country-now")?.textContent;
+
+    it("shows Not set and the whole list for a player without a country", async () => {
+      await open({});
+      expect(now()).toBe(SETTINGS_TEXT.countryNotSet);
+      expect(document.querySelectorAll(".country-picker__option")).toHaveLength(250);
+      expect(pick("Not set").getAttribute("aria-selected")).toBe("true");
+    });
+
+    it("shows the stored country, ticked in the list, and says it has a room", async () => {
+      await open({ country: { country: "PH", countryAsked: true, countryChannel: "chat:country:PH" } });
+      expect(now()).toContain("Philippines");
+      expect(pick("Philippines").getAttribute("aria-selected")).toBe("true");
+      expect(document.querySelector("#settings-country-hint")?.textContent).toBe(SETTINGS_TEXT.countryRoom);
+    });
+
+    it("saves a pick and switches the chat box to the new country's room", async () => {
+      countryApi.setCountry.mockResolvedValue({ country: "PH", countryAsked: true, countryChannel: "chat:country:PH" });
+      await open({});
+      pick("Philippines").click();
+      await settle();
+      expect(countryApi.setCountry).toHaveBeenCalledWith("PH");
+      expect(chat.worldChat.setCountryRoom).toHaveBeenCalledWith("chat:country:PH", "PH");
+      expect(now()).toContain("Philippines");
+    });
+
+    it("moving to a country without a room takes the country room away", async () => {
+      countryApi.setCountry.mockResolvedValue({ country: "SG", countryAsked: true, countryChannel: null });
+      await open({ country: { country: "PH", countryAsked: true, countryChannel: "chat:country:PH" } });
+      pick("Singapore").click();
+      await settle();
+      expect(chat.worldChat.setCountryRoom).toHaveBeenCalledWith(null, "SG");
+      expect(document.querySelector("#settings-country-hint")?.textContent).toBe(SETTINGS_TEXT.countryHint);
+    });
+
+    it("Not set clears it", async () => {
+      countryApi.setCountry.mockResolvedValue({ country: null, countryAsked: true, countryChannel: null });
+      await open({ country: { country: "PH", countryAsked: true, countryChannel: "chat:country:PH" } });
+      pick("Not set").click();
+      await settle();
+      expect(countryApi.setCountry).toHaveBeenCalledWith(null);
+      expect(now()).toBe(SETTINGS_TEXT.countryNotSet);
+    });
+
+    it("says so and keeps the old country when the save fails", async () => {
+      countryApi.setCountry.mockRejectedValue(new Error("down"));
+      await open({ country: { country: "PH", countryAsked: true, countryChannel: "chat:country:PH" } });
+      pick("Singapore").click();
+      await settle();
+      expect(document.querySelector("#settings-country-hint")?.textContent).toBe(SETTINGS_TEXT.countryFailed);
+      expect(chat.worldChat.setCountryRoom).not.toHaveBeenCalled();
+      expect(now()).toContain("Philippines");
+    });
   });
 });

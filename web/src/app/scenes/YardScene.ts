@@ -112,6 +112,7 @@ import { NotificationDoor } from "@/ui/notifications/NotificationDoor";
 import { DefencesDoor } from "@/ui/defences/DefencesDoor";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
 import { ChatBox } from "@/ui/chat/ChatBox";
+import { openCountryPrompt } from "@/ui/chat/CountryPrompt";
 import {
   MONSTERS_TAB_ORDER,
   MonsterBuilding,
@@ -895,6 +896,14 @@ export class YardScene implements Scene {
       // The owner's load carries world chat's token and room (#282).
       const chat = target ? null : chatConfigFrom(response, getSession()?.userId ?? 0, location.protocol === "https:");
       if (chat) worldChat.configure(chat);
+      // Once, after login: where the player is from, for a country chat room
+      // (owner 3 Nov 2026). The server sends `countryask` until it is answered or put off.
+      if (store?.kind === "main" && response.countryask) {
+        openCountryPrompt({
+          container: context.overlay.modal,
+          onSaved: (settings) => worldChat.setCountryRoom(settings.countryChannel, settings.country),
+        });
+      }
 
       // The planner's entry rule: the own yard's, never a visit's. The
       // Inferno yard has one too (owner decision 2026-10-29), unlike Flash's.

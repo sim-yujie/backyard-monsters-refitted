@@ -77,6 +77,20 @@ export class User {
   @Property({ type: "boolean", default: false })
   friend_requests_off: Opt<boolean> = false;
 
+  /**
+   * The player's country, ISO 3166-1 alpha-2 (`PH`), or null when not set
+   * (owner 3 Nov 2026). Chosen in Account settings or the one-time prompt
+   * after login (`/player/settings`). A country listed in `CHAT_COUNTRY_ROOMS`
+   * gives the player that country's chat room beside Global
+   * (`chat/chatRooms.ts` `authorizeJoin`).
+   */
+  @Property({ type: "string", length: 2, nullable: true })
+  country?: string | null;
+
+  /** The one-time "Where are you playing from?" prompt was answered or put off ("Not now"). */
+  @Property({ type: "boolean", default: false })
+  country_asked: Opt<boolean> = false;
+
   @Property({ type: "string", unique: true })
   @FrontendKey
   email!: string;
