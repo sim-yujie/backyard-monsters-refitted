@@ -82,12 +82,14 @@ export class CloudLayer {
       },
     });
 
-    // The same quad as the ground: the world and a cell's margin round it.
+    // The world and half its size again round it: past the world's edge the cloud runs on (cells there
+    // read as deep fog), so a view zoomed right out without the tilt, which can see past the edge,
+    // shows cloud to the screen's sides rather than bare backdrop.
     const far = cellCentre(shape, WORLD_WIDTH, WORLD_HEIGHT);
-    const x0 = -shape.cellWidth;
-    const y0 = -shape.cellHeight;
-    const x1 = far.x + shape.cellWidth;
-    const y1 = far.y + shape.cellHeight;
+    const x0 = -far.x * 0.5;
+    const y0 = -far.y * 0.5;
+    const x1 = far.x * 1.5;
+    const y1 = far.y * 1.5;
     const geometry = new Geometry({
       attributes: { aPosition: [x0, y0, x1, y0, x1, y1, x0, y1] },
       indexBuffer: [0, 1, 2, 0, 2, 3],
