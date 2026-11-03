@@ -652,6 +652,10 @@ describe("describeSaveFailure", () => {
       message: "The server refused the result: no",
       canRetry: false,
     });
+    // A yard gone since the attack began (410 `baseGone`): the server's own words, no retry.
+    expect(
+      describeSaveFailure(new ApiError("Yard changed.", { status: 410, details: { data: { reason: "baseGone" } } })),
+    ).toEqual({ message: "Yard changed.", canRetry: false });
     expect(describeSaveFailure(new ApiError("boom", { status: 500 }))).toEqual({
       message: "The result was not saved: boom",
       canRetry: true,

@@ -173,6 +173,22 @@ export const saveFailureErr = () =>
     isClientFriendly: true,
   });
 
+/**
+ * A save for a base whose row is no longer there (`services/base/missingBase.ts`):
+ * a camp that regrew, an outpost moved or taken, an owner deleted. Expected,
+ * not a server fault, and a retry cannot help: `reason: "baseGone"` says so,
+ * and `cause` says which.
+ *
+ * @param {string} cause - Why the row is missing.
+ */
+export const baseGoneErr = (cause: string) =>
+  new ClientSafeError({
+    message: "This yard has changed since the attack began, so the result could not be saved.",
+    status: Status.GONE,
+    data: { reason: "baseGone", cause },
+    isClientFriendly: true,
+  });
+
 export const loadFailureErr = () =>
   new ClientSafeError({
     message: "We could not load the requested data",
@@ -200,6 +216,19 @@ export const userPermaBannedErr = () =>
     status: Status.FORBIDDEN,
     data: {},
     isClientFriendly: true
+  });
+
+/**
+ * A ban set from the dashboard (`services/admin/moderation.ts`): says until
+ * when (UTC; the game shows it in the player's own time from `until`) and
+ * the owner's reason.
+ */
+export const userBannedErr = (ban: { until: Date | null; reason: string | null }, text: string) =>
+  new ClientSafeError({
+    message: text,
+    status: Status.FORBIDDEN,
+    data: { reason: "banned", until: ban.until?.toISOString() ?? null, banReason: ban.reason },
+    isClientFriendly: true,
   });
 
 export const antiCheatBanErr = () =>

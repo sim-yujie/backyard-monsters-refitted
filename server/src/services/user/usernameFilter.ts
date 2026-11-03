@@ -1,9 +1,9 @@
-import { Filter as BadWords } from "bad-words";
+import { makeWordFilter } from "../chat/badWords.js";
 
 import { AccountMessage } from "../../game-rules/account/accountRules.js";
 import { invalidAccountErr } from "../../errors/errors.js";
 
-const filter = new BadWords();
+const filter = makeWordFilter();
 
 /**
  * Whether a username holds a word the chat and alliance-name filter refuses

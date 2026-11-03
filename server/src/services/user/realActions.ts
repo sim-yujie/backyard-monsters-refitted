@@ -1,6 +1,7 @@
 import type { Context } from "koa";
 
 import { ATTACK_MODES } from "../../enums/Base.js";
+import { MessageType } from "../../enums/MessageType.js";
 
 /**
  * The routes that count as a real game action (#271), in one place.
@@ -8,16 +9,29 @@ import { ATTACK_MODES } from "../../enums/Base.js";
  * A player counts as online, and so cannot be attacked, only while they have
  * done one of these in the last ten minutes (`online.ts`). The owner's rule:
  * real server-side game actions count (collect, build, upgrade, hatch,
- * attack, planner apply and the like); being there does not. So none of
- * these count:
+ * attack, planner apply and the like); being there does not. Since 3 Nov
+ * every action that changes the game counts (owner: an active player must
+ * never be disconnected): the Inferno's attacks and transfers, truce
+ * requests, and friends' help and gifts too. None of these count
+ * ({@link NOT_REAL_ACTION_ROUTES}):
  *
  * - the `/presence` ping, and every load or poll a client sends while it sits
  *   still: `/base/load` outside an attack, the yard's `state`, Map Room 1's
  *   re-read, Map Room 2's cells and quotes, notifications, attack logs;
  * - an attack's `/base/checkpoint`, sent by itself every few seconds (the
  *   attack's start and its save count);
- * - the account, mail, alliance, bookmark and tutorial-tip routes, which are
- *   not playing the game.
+ * - reading (a mail thread, another yard), marking something seen, reports,
+ *   tutorial tips, and the account's own settings and sign-in;
+ * - writes that change no game state and so could be repeated for nothing
+ *   (security review, 3 Nov): saved layouts and templates, Map Room
+ *   bookmarks, alliance work, friend requests, mail (owner, 3 Nov: "mail
+ *   like chat") and world chat (not an HTTP route at all). They keep the player connected, as they are input, but
+ *   do not renew the protection.
+ *
+ * A test holds every write route in `app.routes.ts` and the friends routes
+ * to one list or the other, so a new feature's actions cannot be left out
+ * by accident, as the Inferno's, the Layout saves and the friends' were
+ * (3 Nov: players disconnected while playing).
  *
  * Only a success counts: a 2xx answer whose body carries no error. The
  * middleware (`middleware/realAction.ts`) matches each request's method and
@@ -130,6 +144,13 @@ export const NOT_REAL_ACTION_YARD_PATHS: readonly string[] = [
 /** An in-game check's answer (#273) counts only when it was right. */
 const isSolvedCheck = (ctx: Context): boolean => (ctx.body as { solved?: unknown } | undefined)?.solved === true;
 
+/**
+ * A mail that proposes a truce in a thread. Other mail is like world chat
+ * (owner, 3 Nov: "mail like chat"): input, not a game action.
+ */
+const isTruceMail = (ctx: Context): boolean =>
+  (ctx.request.body as { type?: unknown } | undefined)?.type === MessageType.TRUCE_REQUEST;
+
 /** An attack load: the attack's start. Any other load is not an action. */
 const isAttackLoad = (ctx: Context): boolean => {
   const body = ctx.request.body as { type?: unknown } | undefined;
@@ -156,6 +177,17 @@ export const REAL_ACTION_ROUTES: readonly RealActionRoute[] = [
   { method: "POST", path: "/api/:apiVersion/bm/yardplanner/apply" },
   { method: "POST", path: "/api/:apiVersion/bm/yardplanner/walls/upgrade" },
   { method: "POST", path: "/api/:apiVersion/bm/yardplanner/traps/rearm" },
+  // The Inferno: an attack's start (its save is /base/save) and sending monsters down.
+  { method: "POST", path: "/api/:apiVersion/bm/inferno/attack/start" },
+  { method: "POST", path: "/api/:apiVersion/bm/inferno/transfer" },
+  // Truce requests (owner, 3 Nov): rate-limited, and bot-watched as any action.
+  // Plain mail is not one (owner: "mail like chat").
+  { method: "POST", path: "/api/:apiVersion/player/requesttruce" },
+  { method: "POST", path: "/api/:apiVersion/player/sendmessage", when: isTruceMail },
+  // Friends: help in their yard, and gifts.
+  { method: "POST", path: "/api/:apiVersion/bm/friends/help" },
+  { method: "POST", path: "/api/:apiVersion/bm/friends/gift" },
+  { method: "POST", path: "/api/:apiVersion/bm/friends/gifts/collect" },
   // The "Stay protected?" prompt's tap (#275): the player said they are there.
   { method: "POST", path: "/api/:apiVersion/bm/presence/stay" },
   // A wild monster raid on the player's yard (#226): every answer to it, so watching one keeps them online.
@@ -170,6 +202,88 @@ export const REAL_ACTION_ROUTES: readonly RealActionRoute[] = [
   { method: "POST", path: "/api/:apiVersion/bm/presence/check/answer", when: isSolvedCheck },
   // Yard actions.
   ...REAL_ACTION_YARD_PATHS.map((path): RealActionRoute => ({ method: "POST", path: `${YARD_ROUTE_PREFIX}${path}` })),
+];
+
+/**
+ * The write routes outside the yard that are not real actions, as
+ * "METHOD pattern": sign-in and the account's own settings, reads and polls,
+ * "seen" marks, reports, and DEV tools. A test holds every POST, PUT and
+ * DELETE route in `app.routes.ts` and the friends routes to this list or
+ * {@link REAL_ACTION_ROUTES}, so a new route needs a decision.
+ */
+export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
+  // Sign-in and the account's own settings.
+  "POST /init",
+  "POST /api/:apiVersion/player/getinfo",
+  "POST /api/:apiVersion/player/logout",
+  "POST /api/:apiVersion/player/register",
+  "POST /api/:apiVersion/player/forgotPassword",
+  "POST /api/:apiVersion/player/reset-password",
+  "POST /api/:apiVersion/player/changeusername",
+  "POST /api/:apiVersion/player/settings",
+  "POST /api/:apiVersion/player/sound",
+  "POST /api/:apiVersion/player/avatar",
+  "POST /api/:apiVersion/player/block",
+  "POST /api/:apiVersion/player/unblock",
+  // Writes that change no game state, so a script could repeat them for
+  // nothing (security review, 3 Nov): they keep the player connected, as
+  // input does, but do not renew the protection.
+  "PUT /api/:apiVersion/bm/yardplanner/layouts/:slot",
+  "DELETE /api/:apiVersion/bm/yardplanner/layouts/:slot",
+  "POST /api/:apiVersion/bm/yardplanner/savetemplate",
+  "POST /api/:apiVersion/bm/yardplanner/deletetemplate",
+  "POST /api/:apiVersion/player/savebookmarks",
+  // A game-team warning or chat pause marked seen (moderation, 3 Nov).
+  "POST /api/:apiVersion/bm/moderation/notice/:id/seen",
+  "POST /api/:apiVersion/bm/friends/request",
+  "POST /api/:apiVersion/bm/friends/request/answer",
+  "POST /api/:apiVersion/bm/friends/request/cancel",
+  "POST /api/:apiVersion/bm/friends/remove",
+  "POST /alliance/createalliance",
+  "POST /alliance/editalliance",
+  "POST /alliance/leavealliance",
+  "POST /alliance/requestjoin",
+  "POST /alliance/inviteuser",
+  "POST /alliance/activatepowerup",
+  "POST /alliance/purchasepowerup",
+  "POST /alliance/changeinvitestatus",
+  "POST /alliance/kickmember",
+  "POST /alliance/promotemember",
+  "POST /alliance/changerelationship",
+  "POST /alliance/deletemessages",
+  // Reads, looks and polls a client sends while the player sits still.
+  "POST /base/updatesaved",
+  "POST /base/checkpoint",
+  "POST /api/:apiVersion/bm/base/updatesaved",
+  "POST /api/:apiVersion/bm/getnewmap",
+  "POST /api/:apiVersion/bm/neighbours/get",
+  "POST /api/:apiVersion/bm/inferno/load",
+  "POST /api/:apiVersion/bm/inferno/view",
+  "POST /api/:apiVersion/bm/presence",
+  "POST /api/:apiVersion/bm/presence/check",
+  "POST /api/:apiVersion/player/getmessagethread",
+  "POST /alliance/searchalliances",
+  "POST /worldmapv2/getarea",
+  "POST /worldmapv2/sight",
+  "POST /worldmapv2/takeoverquote",
+  "POST /worldmapv2/autoattackplan",
+  "POST /worldmapv2/setmapversion",
+  // Marked seen.
+  "POST /api/:apiVersion/bm/inferno/korath/seen",
+  "POST /api/:apiVersion/bm/notifications/read",
+  "POST /api/:apiVersion/bm/notifications/readall",
+  // Reports.
+  "POST /api/:apiVersion/bm/chat/report",
+  "POST /api/:apiVersion/player/reportmessagethread",
+  "POST /api/:apiVersion/bugreport",
+  "POST /api/:apiVersion/bugreport/guest",
+  "POST /api/:apiVersion/clienterrors",
+  "POST /api/:apiVersion/clienterrors/guest",
+  "POST /api/:apiVersion/player/recorddebugdata",
+  // DEV only.
+  "POST /api/:apiVersion/bm/presence/check/dev",
+  "POST /api/:apiVersion/bm/raid/dev/due",
+  "POST /api/:apiVersion/bm/raid/dev/trojan",
 ];
 
 const byRoute = new Map(REAL_ACTION_ROUTES.map((route) => [`${route.method} ${route.path}`, route]));

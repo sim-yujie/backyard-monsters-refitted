@@ -39,6 +39,8 @@ export interface ChatLineWire {
   body: string;
   /** When it was said, ms since the epoch: with `userId`, what names the line. */
   ts: number;
+  /** Said by the game team: the server sets it, only for the game team's accounts. */
+  gm?: boolean;
 }
 
 /** The error codes the chat server answers with. */
@@ -49,7 +51,9 @@ export type ChatErrorCode =
   | "not_authenticated"
   | "invalid_channel"
   | "not_in_channel"
-  | "server_error";
+  | "server_error"
+  /** The game team paused this player's chat; the message carries `until`. */
+  | "muted";
 
 /** What the server sends on the socket; anything else is ignored. */
 export type ChatServerMessage =
@@ -62,7 +66,11 @@ export type ChatServerMessage =
   /** A player's level changed (#232): their name for the lines still to come. */
   | { type: "name_update"; channel: string; userId: number; displayName: string }
   | { type: "ignore_list"; list: { target: string; displayname: string }[] }
-  | { type: "error"; code: ChatErrorCode };
+  | { type: "error"; code: ChatErrorCode; until?: number }
+  /** Banned by the game team: the server closes the socket after it. */
+  | { type: "kicked"; reason: "banned"; until: number | null; text: string; banReason?: string }
+  /** The game team left a warning or mute to show (`api/moderation.ts`). */
+  | { type: "notice" };
 
 /** Everything needed to reach world chat, from the owner's yard load. */
 export interface ChatConfig {

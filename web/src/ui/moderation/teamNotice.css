@@ -1,0 +1,48 @@
+/* A warning or chat pause from the game team (`TeamNoticeDialog.ts`). */
+
+.team-notice-popup {
+  width: min(440px, calc(100vw - 2 * var(--space-4)));
+}
+
+.team-notice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.team-notice__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.team-notice__badge {
+  flex: none;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--colour-success);
+  color: #0d2416;
+  font-size: var(--text-sm);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.team-notice__text {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  color: var(--colour-text-strong);
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.team-notice__until {
+  margin: 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.team-notice__foot {
+  display: flex;
+  justify-content: flex-end;
+}

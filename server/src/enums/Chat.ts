@@ -21,4 +21,10 @@ export enum ChatControlType {
   AllianceEvict = "alliance_evict",
   /** The player changed their country: out of the old country room. */
   CountryEvict = "country_evict",
+  /** The game team banned the player: tell them and close the connection. */
+  Kick = "kick",
+  /** The game team warned or muted the player: tell their game to show it. */
+  Notice = "notice",
+  /** The game team muted (or unmuted) the player: `until` in ms, 0 for none. */
+  Mute = "mute",
 }

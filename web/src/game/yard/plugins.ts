@@ -19,4 +19,5 @@ import "./plugins/korath";
 import "./plugins/quests";
 import "./plugins/raid";
 import "./plugins/slowInternet";
+import "./plugins/teamNotice";
 import "./plugins/tips";

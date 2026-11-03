@@ -256,6 +256,33 @@ describe("mute", () => {
     expect(latest().sent.at(-1)).toEqual({ type: "unignore", targetId: "77" });
     expect(visibleEntries(session.current)).toHaveLength(2);
   });
+
+  it("an unmute made while chat is down reaches the server on reconnect, and the old list does not bring the mute back", () => {
+    const session = joined();
+    latest().hear({ type: "ignore_list", list: [{ target: "77", displayname: "" }] });
+    latest().drop();
+    session.unmute(77);
+    expect(session.current.muted.has(77)).toBe(false);
+
+    vi.advanceTimersByTime(FIRST_RETRY_MS);
+    latest().open();
+    latest().hear({ type: "auth_ok", ...ME });
+    const sent = latest().sent;
+    const unignoreAt = sent.findIndex(
+      (m) => JSON.stringify(m) === JSON.stringify({ type: "unignore", targetId: "77" }),
+    );
+    const getAt = sent.findIndex((m) => (m as { type: string }).type === "getignore");
+    expect(unignoreAt).toBeGreaterThan(-1);
+    expect(unignoreAt).toBeLessThan(getAt);
+
+    // The server's answer to a request sent before it took the unmute still lists 77.
+    latest().hear({ type: "ignore_list", list: [{ target: "77", displayname: "" }] });
+    expect(session.current.muted.has(77)).toBe(false);
+    // Once the server agrees, its list is followed again.
+    latest().hear({ type: "ignore_list", list: [] });
+    latest().hear({ type: "ignore_list", list: [{ target: "77", displayname: "" }] });
+    expect(session.current.muted.has(77)).toBe(true);
+  });
 });
 
 describe("reconnecting", () => {
@@ -429,5 +456,46 @@ describe("the player's world chat", () => {
     expect(worldChat.isEnabled).toBe(false);
     setWorldChatOn(true, null);
     expect(worldChat.isEnabled).toBe(true);
+  });
+});
+
+describe("the game team (dashboard moderation)", () => {
+  it("marks the game team's lines only where the server says so", () => {
+    const session = joined([{ ...wire(7, "Please keep chat friendly.", 1), gm: true }, wire(77, "hi", 2)]);
+    latest().hear({ type: "message", channel: CONFIG.channel, ...wire(7, "Thanks all", 3), gm: true });
+    expect(session.current.entries.map((entry) => entry.kind === "line" && entry.gm)).toEqual([true, false, true]);
+  });
+
+  it("a muted player's line comes back to the input, with when chat opens again", () => {
+    const session = joined();
+    session.say("hello?");
+    latest().hear({ type: "error", code: "muted", until: Date.UTC(2026, 10, 4, 18, 0) });
+    expect(session.current.bounced).toBe("hello?");
+    const last = session.current.entries.at(-1);
+    expect(last).toMatchObject({ kind: "notice" });
+    expect(last?.kind === "notice" && last.text).toMatch(/^Your chat is paused until /);
+  });
+
+  it("a ban signs chat out and tells the game, with the reason and the end", () => {
+    const session = joined();
+    const heard: unknown[] = [];
+    session.onTeam((event) => heard.push(event));
+    latest().hear({ type: "kicked", reason: "banned", until: 5, text: "Banned.", banReason: "Swearing" });
+    expect(session.current.status).toBe(ChatStatus.SIGNED_OUT);
+    expect(heard).toEqual([{ kind: "banned", text: "Banned.", until: 5, reason: "Swearing" }]);
+    // It does not try to come back.
+    latest().drop();
+    vi.advanceTimersByTime(MAX_RETRY_MS);
+    expect(sockets).toHaveLength(1);
+  });
+
+  it("a warning nudge reaches the game; a listener can stop listening", () => {
+    const session = joined();
+    const heard: unknown[] = [];
+    const stop = session.onTeam((event) => heard.push(event));
+    latest().hear({ type: "notice" });
+    stop();
+    latest().hear({ type: "notice" });
+    expect(heard).toEqual([{ kind: "notice" }]);
   });
 });

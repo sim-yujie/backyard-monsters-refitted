@@ -121,6 +121,7 @@ import {
   readNotification,
 } from "./controllers/notifications/routes.js";
 import { chatPlayerYard, reportChatMessage } from "./controllers/chat/routes.js";
+import { getModerationNotice, seeModerationNotice } from "./controllers/moderation/notice.js";
 import { playerAchievements } from "./controllers/achievements/routes.js";
 import { getDefenceReplay, getDefences } from "./controllers/defences/routes.js";
 import { mountFriendsRoutes } from "./controllers/friends/routes.js";
@@ -324,6 +325,12 @@ router.post("/api/:apiVersion/bm/notifications/readall", apiVersion, verifyUserA
 * ──────────────────────────────────────────────── */
 router.post("/api/:apiVersion/bm/chat/report", apiVersion, verifyUserAuth, chatReportLimiter, logRequest, reportChatMessage);
 router.get("/api/:apiVersion/bm/chat/yard", apiVersion, verifyUserAuth, chatPlayerYard);
+
+/**  ────────────────────────────────────────────────
+* 📦 A warning or chat mute from the game team, as the yard's pop-up (`controllers/moderation/notice.ts`)
+* ──────────────────────────────────────────────── */
+router.get("/api/:apiVersion/bm/moderation/notice", apiVersion, verifyUserAuth, getModerationNotice);
+router.post("/api/:apiVersion/bm/moderation/notice/:id/seen", apiVersion, verifyUserAuth, seeModerationNotice);
 
 /**  ────────────────────────────────────────────────
 * 📦 Achievements: another player's (issue #204, `controllers/achievements/player.ts`).

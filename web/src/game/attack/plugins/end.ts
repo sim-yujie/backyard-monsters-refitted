@@ -295,6 +295,9 @@ export const describeSaveFailure = (caught: unknown, isTribe = false): SaveFailu
         canRetry: false,
       };
     }
+    // The yard's row went while the attack ran (a camp that regrew): the
+    // server's words say so, and a retry would meet the same answer.
+    if (reason === "baseGone") return { message: caught.message, canRetry: false };
     if (reason && FINAL_REASONS.has(reason)) {
       return { message: `The server refused the result: ${caught.message}`, canRetry: false };
     }
