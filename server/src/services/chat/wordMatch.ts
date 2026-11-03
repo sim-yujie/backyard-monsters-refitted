@@ -178,6 +178,12 @@ const entryForm = (entry: string): { word: string; phrase: boolean } | null => {
   return { word, phrase };
 };
 
+/**
+ * The word a list entry is caught as ("n1gga" is caught as "nigga"), as
+ * {@link WordHit.word} reports it, or null for an entry that is never matched.
+ */
+export const listedWord = (entry: string): string | null => entryForm(entry)?.word ?? null;
+
 export interface WordMatcherOptions {
   /** Words never caught (and taken off the list): ordinary words that the list has. */
   allowed?: readonly string[];
@@ -346,11 +352,19 @@ export class WordMatcher {
       const candidates: { text: string; start: number; end: number }[] = [];
       if (hasLatin || (hasLetterOrSymbol && !chars.some((n) => n.look))) {
         candidates.push({ text: readAll(chars), start: chars[0]!.from, end: chars[chars.length - 1]!.to });
-        let a = 0;
-        let b = chars.length;
-        while (a < b && isLeetSymbol(chars[a]!.c)) a++;
-        while (b > a && isLeetSymbol(chars[b - 1]!.c)) b--;
-        if ((a > 0 || b < chars.length) && b > a) {
+        // Leet symbols at the ends may be punctuation instead ("fuck!", "@$$!"): try them off, fewest first.
+        let maxA = 0;
+        while (maxA < chars.length && isLeetSymbol(chars[maxA]!.c)) maxA++;
+        let minB = chars.length;
+        while (minB > 0 && isLeetSymbol(chars[minB - 1]!.c)) minB--;
+        const trims: [number, number][] = [];
+        for (let a = 0; a <= maxA; a++) {
+          for (let b = chars.length; b >= Math.max(minB, a + 2); b--) {
+            if (a > 0 || b < chars.length) trims.push([a, b]);
+          }
+        }
+        trims.sort((x, y) => x[0] + (chars.length - x[1]) - (y[0] + (chars.length - y[1])));
+        for (const [a, b] of trims) {
           const inner = chars.slice(a, b);
           candidates.push({ text: readAll(inner), start: inner[0]!.from, end: inner[inner.length - 1]!.to });
         }

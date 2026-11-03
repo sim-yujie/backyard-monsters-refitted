@@ -569,6 +569,9 @@ export const moderatePlayer = (
 export type FlagSeverity = "slur" | "swear";
 
 /** One flagged line. */
+/** How a flagged word was written: as listed, or disguised. */
+export type FlagRule = "word" | "disguised";
+
 export interface FlagLine {
   id: number;
   channel: string;
@@ -578,6 +581,8 @@ export interface FlagLine {
   shown: string;
   words: string[];
   severity: FlagSeverity;
+  /** `word`: a listed word as typed; `disguised`: spelled to get past the filter ("fvck", "f u c k"). */
+  rule: FlagRule;
   at: string;
 }
 

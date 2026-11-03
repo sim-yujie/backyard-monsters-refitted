@@ -443,12 +443,22 @@ export const severityChip = (severity: FlagSeverity): HTMLElement =>
     ? h("span", { class: "chip chip-bad chip-icon" }, icon("bad", 14), "Slur")
     : h("span", { class: "chip chip-warn chip-icon" }, icon("warn", 14), "Swearing");
 
+/** "Disguised" with what the filter read it as, for a word spelled to get past the filter. */
+export const disguisedChip = (words: readonly string[]): HTMLElement =>
+  h(
+    "span",
+    { class: "chip chip-info chip-icon", attrs: { title: `Disguised spelling, read as: ${words.join(", ")}` } },
+    icon("mask", 14),
+    `Disguised: ${words.join(", ")}`,
+  );
+
 /** One flagged line: the player's words with the hits marked, where and when. */
 export const flagLineItem = (line: FlagLine, extra?: Child): HTMLElement =>
   h(
     "li",
     { class: "flag-line" },
     h("span", { class: "chat-quote" }, "“", ...markWords(line.message, line.words), "”"),
+    line.rule === "disguised" ? disguisedChip(line.words) : null,
     h(
       "span",
       { class: "row-meta" },

@@ -7,6 +7,7 @@ import {
   ModerationView,
   actionForm,
   banStatus,
+  flagLineItem,
   markWords,
   roomLabel,
   untilWords,
@@ -329,6 +330,13 @@ describe("lines caught by the word filter", () => {
     const span = document.createElement("span");
     span.append(...markWords("Shut up FAGGOT now", ["faggot"]).map((c) => (typeof c === "string" ? c : (c as Node))));
     expect(span.innerHTML).toBe('Shut up <mark class="flag-word">FAGGOT</mark> now');
+  });
+
+  it("shows a Disguised chip with the word it was read as, only for disguised lines", () => {
+    const line = flagged().lines[0]!;
+    const disguised = flagLineItem({ ...line, message: "fvck you", shown: "**** you", words: ["fuck"], severity: "swear", rule: "disguised" });
+    expect(disguised.querySelector(".chip")?.textContent).toBe("Disguised: fuck");
+    expect(flagLineItem(line).querySelector(".chip")).toBeNull();
   });
 
   it("lists one row per player with the count, slur chip and the player's words", async () => {

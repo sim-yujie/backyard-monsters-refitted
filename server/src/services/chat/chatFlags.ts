@@ -1,7 +1,8 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
-import type { Filter } from "bad-words";
-
-import { NOT_FLAGGED_WORDS, SLUR_WORDS } from "./badWords.js";
+import { COUNTRY_CHANNEL_PREFIX } from "../../config/ChatConfig.js";
+import { ChannelType } from "../../enums/Chat.js";
+import { NOT_FLAGGED_WORDS, SLUR_WORDS, type WordFilter } from "./badWords.js";
+import { listedWord } from "./wordMatch.js";
 
 /**
  * Automatic chat flags (owner, 4 Nov 2026): a chat line the word filter
@@ -11,13 +12,18 @@ import { NOT_FLAGGED_WORDS, SLUR_WORDS } from "./badWords.js";
  *
  * A line flags when the filter masks a word in it, except words that are also
  * ordinary English ({@link NOT_FLAGGED_WORDS}); a line with a word from
- * {@link SLUR_WORDS} is a `slur`, anything else a `swear`. Writes are
+ * {@link SLUR_WORDS} is a `slur`, anything else a `swear`. Its `rule` says
+ * whether a flagging word was typed as such (`word`) or disguised (leetspeak,
+ * stretched or split letters, look-alike letters: `disguised`). Writes are
  * limited per player ({@link FlagLimiter}): one flag per line at most, and
  * no more than {@link FLAGS_PER_WINDOW} in {@link FLAG_WINDOW_MS}. The chat
  * log (`chatLog.ts`) still keeps every line, flagged or not.
  */
 
 export type FlagSeverity = "slur" | "swear";
+
+/** How a flagging word was written: as listed, or disguised. */
+export type FlagRule = "word" | "disguised";
 
 export interface LineCheck {
   /** The line as players see it (the filter's masked copy). */
@@ -26,35 +32,77 @@ export interface LineCheck {
   words: string[];
   /** Null: no flag. */
   severity: FlagSeverity | null;
+  /** Null: no flag. */
+  rule: FlagRule | null;
 }
 
-const slurs: ReadonlySet<string> = new Set(SLUR_WORDS);
-const notFlagged: ReadonlySet<string> = new Set(NOT_FLAGGED_WORDS);
+/** Words as the filter reports them: "n1gga" is caught as "nigga". */
+const asCaught = (words: readonly string[]): ReadonlySet<string> =>
+  new Set(words.flatMap((word) => [word, listedWord(word) ?? word]));
 
-/** The filter splits a line into words this way (`bad-words` `splitRegex`). */
-const WORD_SPLIT = /\b|_/;
+const slurs = asCaught(SLUR_WORDS);
+const notFlagged = asCaught(NOT_FLAGGED_WORDS);
 
 /**
- * Masks a line the way chat always has, and says whether it raises a flag.
- * The words are only looked for when the filter changed the line, so a clean
- * line costs no more than before.
+ * Masks a line the way players see it, and says whether it raises a flag.
  *
- * @param {Filter} filter - The game's word filter (`makeWordFilter`).
+ * @param {WordFilter} filter - The game's word filter (`makeWordFilter`).
  * @param {string} text - The player's line, already cut to length and trimmed.
  * @returns {LineCheck} What players see, and the flag, if any.
  */
-export const checkLine = (filter: Filter, text: string): LineCheck => {
-  const shown = filter.clean(text);
-  if (shown === text) return { shown, words: [], severity: null };
+export const checkLine = (filter: WordFilter, text: string): LineCheck => {
+  const { shown, hits } = filter.scan(text);
+  const flagging = hits.filter((hit) => !notFlagged.has(hit.word));
+  const words = [...new Set(flagging.map((hit) => hit.word))];
+  if (words.length === 0) return { shown, words, severity: null, rule: null };
+  return {
+    shown,
+    words,
+    severity: words.some((word) => slurs.has(word)) ? "slur" : "swear",
+    rule: flagging.some((hit) => hit.disguised) ? "disguised" : "word",
+  };
+};
 
-  const hits = new Set<string>();
-  for (const token of text.split(WORD_SPLIT)) {
-    if (!/\w/.test(token)) continue;
-    if (filter.isProfane(token)) hits.add(token.toLowerCase());
+/**
+ * The rooms whose lines can raise a flag (owner, 4 Nov 2026: "i mainly want
+ * to monitor the global chat, and tagalog chat"): `global` for every World
+ * room, and two-letter country codes for country rooms (`PH`: the
+ * Philippines room, `chat:country:PH`). Alliance chat is private and never
+ * flags. Masking is the same in every room.
+ */
+export const DEFAULT_CHAT_FLAG_ROOMS = "global,PH";
+
+/**
+ * The monitored rooms from `CHAT_FLAG_ROOMS` (comma separated, read when the
+ * chat server starts; default {@link DEFAULT_CHAT_FLAG_ROOMS}). Set it empty
+ * to stop all flags.
+ *
+ * @param {Record<string, string | undefined>} env - Where to read it from.
+ * @returns {ReadonlySet<string>} `global` and upper-case country codes.
+ */
+export const chatFlagRooms = (env: Record<string, string | undefined> = process.env): ReadonlySet<string> =>
+  new Set(
+    (env.CHAT_FLAG_ROOMS ?? DEFAULT_CHAT_FLAG_ROOMS)
+      .split(",")
+      .map((room) => room.trim())
+      .filter((room) => room.length > 0)
+      .map((room) => (room.toLowerCase() === "global" ? "global" : room.toUpperCase())),
+  );
+
+/**
+ * Whether lines in a room can raise a flag.
+ *
+ * @param {ReadonlySet<string>} rooms - From {@link chatFlagRooms}.
+ * @param {ChannelType} channelType - The room's kind.
+ * @param {string} channel - The room's key, e.g. `chat:mr2-global` or `chat:country:PH`.
+ * @returns {boolean} True for a monitored World or country room; never for alliance chat.
+ */
+export const isFlaggedRoom = (rooms: ReadonlySet<string>, channelType: ChannelType, channel: string): boolean => {
+  if (channelType === ChannelType.Global) return rooms.has("global");
+  if (channelType === ChannelType.Country && channel.startsWith(COUNTRY_CHANNEL_PREFIX)) {
+    return rooms.has(channel.slice(COUNTRY_CHANNEL_PREFIX.length).toUpperCase());
   }
-  const words = [...hits].filter((word) => !notFlagged.has(word));
-  if (words.length === 0) return { shown, words, severity: null };
-  return { shown, words, severity: words.some((word) => slurs.has(word)) ? "slur" : "swear" };
+  return false;
 };
 
 /** The window the per-player flag limit counts over. */
@@ -104,6 +152,7 @@ export interface ChatFlagInput {
   shown: string;
   words: readonly string[];
   severity: FlagSeverity;
+  rule: FlagRule;
   /** When the line was said (ms), as chat stamps it. */
   ts: number;
 }
@@ -116,8 +165,8 @@ export interface ChatFlagInput {
  */
 export const recordChatFlag = async (em: EntityManager, flag: ChatFlagInput): Promise<void> => {
   await em.execute(
-    `INSERT INTO bym.chat_flag (userid, channel, message, shown, words, severity, message_ts, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO bym.chat_flag (userid, channel, message, shown, words, severity, rule, message_ts, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       flag.userid,
       flag.channel,
@@ -125,6 +174,7 @@ export const recordChatFlag = async (em: EntityManager, flag: ChatFlagInput): Pr
       flag.shown,
       flag.words.join(","),
       flag.severity,
+      flag.rule,
       flag.ts,
       new Date(flag.ts),
     ],

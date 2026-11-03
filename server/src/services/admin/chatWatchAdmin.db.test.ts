@@ -47,6 +47,7 @@ describe.skipIf(!dbName)("chat flags and the chat log on a real database", () =>
       shown: "****",
       words: [message.split(" ").pop()!],
       severity,
+      rule: message.includes("1") ? "disguised" : "word",
       ts: T0 + minutes * MIN,
     });
 

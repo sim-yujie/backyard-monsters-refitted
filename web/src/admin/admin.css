@@ -2686,6 +2686,10 @@ tbody th {
   gap: 2px;
 }
 
+.flag-line > .chip {
+  justify-self: start;
+}
+
 .flag-word {
   padding: 0 2px;
   border-radius: 4px;

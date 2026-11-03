@@ -7,7 +7,8 @@ import { Migration } from "@mikro-orm/migrations";
  *
  * - `bym.chat_flag`: a chat line the word filter caught, with the player's
  *   own words (`message`) next to what other players saw (`shown`), the
- *   words that hit, and `severity` (`slur` or `swear`). The dashboard groups
+ *   words that hit, `severity` (`slur` or `swear`) and `rule` (`word`: a
+ *   listed word as such; `disguised`: one spelled to get past the filter). The dashboard groups
  *   them by player; `dismissed_at` / `dismissed_by` say when the owner set
  *   them aside. Written by `services/chat/chatFlags.ts`, never more than a
  *   few per player in ten minutes.
@@ -30,6 +31,7 @@ export class AddChatFlagsAndLog extends Migration {
         "shown"        text         NOT NULL,
         "words"        text         NOT NULL,
         "severity"     varchar(8)   NOT NULL,
+        "rule"         varchar(12)  NOT NULL DEFAULT 'word',
         "message_ts"   bigint       NOT NULL,
         "dismissed_at" timestamptz  NULL,
         "dismissed_by" integer      NULL,

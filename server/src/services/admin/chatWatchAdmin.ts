@@ -1,6 +1,6 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
 
-import type { FlagSeverity } from "../chat/chatFlags.js";
+import type { FlagRule, FlagSeverity } from "../chat/chatFlags.js";
 
 /**
  * The dashboard's side of the automatic chat flags and the chat log
@@ -22,6 +22,8 @@ export interface FlagLine {
   shown: string;
   words: string[];
   severity: FlagSeverity;
+  /** `word`: a listed word as such; `disguised`: spelled to get past the filter. */
+  rule: FlagRule;
   at: string;
 }
 
@@ -69,7 +71,7 @@ interface FlaggedRow {
   slurs: string | number;
   last_id: string | number;
   latest_at: Date | string;
-  lines: { id: string | number; channel: string; message: string; shown: string; words: string; severity: FlagSeverity; created_at: string }[] | string | null;
+  lines: { id: string | number; channel: string; message: string; shown: string; words: string; severity: FlagSeverity; rule: FlagRule; created_at: string }[] | string | null;
 }
 
 /**
@@ -94,7 +96,7 @@ export const listChatFlags = async (
      )
      SELECT o.userid, u.username, u.banned, u.mute_until, o.count, o.slurs, o.last_id, o.latest_at,
             (SELECT json_agg(x ORDER BY x.id DESC) FROM (
-               SELECT l.id, l.channel, l.message, l.shown, l.words, l.severity, l.created_at
+               SELECT l.id, l.channel, l.message, l.shown, l.words, l.severity, l.rule, l.created_at
                  FROM bym.chat_flag l
                 WHERE l.userid = o.userid AND l.dismissed_at IS NULL
                 ORDER BY l.id DESC LIMIT ${FLAG_LINES_SHOWN}
@@ -127,6 +129,7 @@ export const listChatFlags = async (
           shown: line.shown,
           words: line.words ? line.words.split(",") : [],
           severity: line.severity,
+          rule: line.rule === "disguised" ? "disguised" : "word",
           at: iso(line.created_at),
         })),
       };
