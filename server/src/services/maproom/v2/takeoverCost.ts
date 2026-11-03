@@ -1,5 +1,7 @@
 import { Tribes } from "../../../enums/Tribes.js";
 import { calculateTribeLevel } from "./calculateTribeLevel.js";
+import { mr2HexShape } from "../../../config/MapRoom2Config.js";
+import { type HexShape, hexDistance } from "../../../game-rules/maproom/range.js";
 
 /**
  * Server-side reconstruction of the Map Room 2 takeover price.
@@ -60,20 +62,27 @@ export interface TakeoverCostInput {
 /**
  * Whether a cell is one of the six hexagonal neighbours of a main yard.
  *
- * Mirrors the odd-q offset adjacency test in `PopupTakeover.as:62-75`.
+ * Mirrors the odd-q offset adjacency test in `PopupTakeover.as:62-75`, which
+ * does not wrap at the world's edge. With `MR2_HEX_SHAPE=pointy` the grid is
+ * odd-r pointy-top and the test is one step on the shared rules' wrapping
+ * `hexDistance`, the same cells `mr2NeighbourCoords` counts.
  *
  * @param {number} homeX - The main yard's X coordinate.
  * @param {number} homeY - The main yard's Y coordinate.
  * @param {number} cellX - The target cell's X coordinate.
  * @param {number} cellY - The target cell's Y coordinate.
+ * @param {HexShape} shape - The world's hex shape (`MR2_HEX_SHAPE`).
  * @returns {boolean} True when the target is adjacent to the main yard.
  */
 export const isAdjacentToMainYard = (
   homeX: number,
   homeY: number,
   cellX: number,
-  cellY: number
+  cellY: number,
+  shape: HexShape = mr2HexShape()
 ) => {
+  if (shape === "pointy") return hexDistance({ x: homeX, y: homeY }, { x: cellX, y: cellY }, shape) === 1;
+
   if (Math.abs(homeX - cellX) === 1)
     return homeY + 1 - ((homeX + 1) % 2) * 2 === cellY || homeY === cellY;
 

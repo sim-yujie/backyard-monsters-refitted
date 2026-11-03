@@ -37,7 +37,7 @@ import { BuildingKind, type BuildingAvatars } from "./buildingAvatars";
 import type { TribeAvatars } from "./tribeAvatars";
 import type { ZoneStore } from "./ZoneStore";
 import { cellLift, paintOrder } from "./ground";
-import { GROUND_ANCHOR_X, GROUND_ANCHOR_Y, type GroundArt } from "./groundArt";
+import { GROUND_ANCHOR_X, groundAnchorY, type GroundArt } from "./groundArt";
 import type { ConstructionBadge } from "./constructionBadge";
 
 /**
@@ -275,7 +275,7 @@ export class MapChunk {
         const tile = height === null ? null : this.groundArt.tileFor(height);
         if (tile && height !== null) {
           const sprite = new Sprite(tile);
-          sprite.anchor.set(GROUND_ANCHOR_X, GROUND_ANCHOR_Y);
+          sprite.anchor.set(GROUND_ANCHOR_X, groundAnchorY());
           sprite.position.set(centre.x, centre.y);
           this.addGround(sprite, order);
           if (height <= WATER_MAX_HEIGHT) {

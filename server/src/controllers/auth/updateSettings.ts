@@ -3,7 +3,7 @@ import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { UpdateSettingsSchema } from "../../schemas/AuthSchemas.js";
-import { mr2TiltEnabled } from "../../config/MapRoom2Config.js";
+import { mr2HexShape, mr2TiltEnabled } from "../../config/MapRoom2Config.js";
 
 /** The account's settings block, as `/player/settings` and `/player/account` send it. */
 export const settingsOf = (user: User) => ({
@@ -15,6 +15,10 @@ export const settingsOf = (user: User) => ({
   // lets the map tilt at all, and the player's own choice (on by default).
   mapTiltAllowed: mr2TiltEnabled(),
   tiltedMap: !user.map_flat,
+  // Map Room 2's hex shape (MR2 look plan step 1, `MR2_HEX_SHAPE`): the map
+  // reads it before it draws a cell, so its picking and range lines match
+  // the server's rules.
+  mapHexShape: mr2HexShape(),
 });
 
 /**

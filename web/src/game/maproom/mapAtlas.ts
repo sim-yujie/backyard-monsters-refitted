@@ -1,5 +1,6 @@
 import { Graphics, Rectangle, type Renderer, type Texture } from "pixi.js";
 import { CELL_HEIGHT, CELL_WIDTH } from "@/config";
+import { mapRoomGrid } from "@/game/HexGrid";
 
 /**
  * The map's art, baked once into textures at startup.
@@ -28,9 +29,9 @@ import { CELL_HEIGHT, CELL_WIDTH } from "@/config";
  */
 const ATLAS_RESOLUTION = 2;
 
-const HALF_WIDTH = CELL_WIDTH / 2;
-const QUARTER_WIDTH = CELL_WIDTH / 4;
-const HALF_HEIGHT = CELL_HEIGHT / 2;
+/** The cell's half extents on the world grid (flat-top or pointy-top, `HexGrid.ts`), read when the atlas is baked. */
+const halfWidth = (): number => mapRoomGrid.cellWidth / 2;
+const halfHeight = (): number => mapRoomGrid.cellHeight / 2;
 
 /**
  * How much the hex fill is grown before baking.
@@ -79,20 +80,11 @@ export const SLIM_PLATE_HALF_HEIGHT = 6;
 /** Half-width the level star and the relation icons are baked at. */
 export const ICON_UNIT = 32;
 
-const hexPoints = (scale: number): number[] => [
-  -HALF_WIDTH * scale,
-  0,
-  -QUARTER_WIDTH * scale,
-  -HALF_HEIGHT * scale,
-  QUARTER_WIDTH * scale,
-  -HALF_HEIGHT * scale,
-  HALF_WIDTH * scale,
-  0,
-  QUARTER_WIDTH * scale,
-  HALF_HEIGHT * scale,
-  -QUARTER_WIDTH * scale,
-  HALF_HEIGHT * scale,
-];
+/** The cell's outline on the world grid's shape, around (0, 0), scaled. */
+const hexPoints = (scale: number): number[] => {
+  const centre = mapRoomGrid.cellToPixel(0, 0);
+  return mapRoomGrid.writeCellCorners(0, 0, []).map((value, i) => (value - (i % 2 === 0 ? centre.x : centre.y)) * scale);
+};
 
 /** A symmetric frame of the given half-extents. */
 const frame = (halfX: number, halfY: number): Rectangle =>
@@ -150,8 +142,8 @@ export class MapAtlas {
   private readonly owned: Texture[];
 
   constructor(renderer: Renderer) {
-    this.hex = bake(renderer, frame(HALF_WIDTH + FILL_BLEED, HALF_HEIGHT + FILL_BLEED), (g) =>
-      g.poly(hexPoints(1 + FILL_BLEED / HALF_WIDTH)).fill(0xffffff),
+    this.hex = bake(renderer, frame(halfWidth() + FILL_BLEED, halfHeight() + FILL_BLEED), (g) =>
+      g.poly(hexPoints(1 + FILL_BLEED / halfWidth())).fill(0xffffff),
     );
 
     this.outlineFine = this.bakeOutline(renderer, OUTLINE_FINE);
@@ -344,7 +336,7 @@ export class MapAtlas {
   }
 
   private bakeOutline(renderer: Renderer, width: number): Texture {
-    return bake(renderer, frame(HALF_WIDTH + width, HALF_HEIGHT + width), (g) =>
+    return bake(renderer, frame(halfWidth() + width, halfHeight() + width), (g) =>
       g.poly(hexPoints(1)).stroke({ width, color: 0xffffff, alignment: 0.5 }),
     );
   }

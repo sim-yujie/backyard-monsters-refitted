@@ -1,5 +1,7 @@
 import { MapRoom2 } from "../../../enums/MapRoom.js";
+import { mr2HexShape } from "../../../config/MapRoom2Config.js";
 import {
+  type HexShape,
   DECLARE_WAR_RANGE,
   MAX_OUTPOST_RANGE,
   hexDistance,
@@ -96,10 +98,16 @@ export const getOutpostRange = outpostRange;
  * @param {number} cellY - Target cell y.
  * @param {number} baseX - Main yard x.
  * @param {number} baseY - Main yard y.
+ * @param {HexShape} shape - The world's hex shape (`MR2_HEX_SHAPE`).
  * @returns {number} Distance in cells.
  */
-export const getDistanceFromMain = (cellX: number, cellY: number, baseX: number, baseY: number) =>
-  hexDistance({ x: baseX, y: baseY }, { x: cellX, y: cellY });
+export const getDistanceFromMain = (
+  cellX: number,
+  cellY: number,
+  baseX: number,
+  baseY: number,
+  shape: HexShape = mr2HexShape()
+) => hexDistance({ x: baseX, y: baseY }, { x: cellX, y: cellY }, shape);
 
 /**
  * Cell coordinates carried by a Map Room 2 / 3 base id.
@@ -222,12 +230,14 @@ export const planRangeCheck = ({
  * @param {NearbyOutpost[]} nearby - Outposts inside the sweep box.
  * @param {ReadonlyMap<string, number>} flingers - Flinger level per outpost baseid.
  * @param {boolean} declareWar - Whether Declare War is running.
+ * @param {HexShape} shape - The world's hex shape (`MR2_HEX_SHAPE`).
  * @returns {RangeVerdict} Whether the target is reachable from an outpost.
  */
 export const checkOutpostRange = (
   nearby: readonly NearbyOutpost[],
   flingers: ReadonlyMap<string, number | undefined>,
-  declareWar: boolean
+  declareWar: boolean,
+  shape: HexShape = mr2HexShape()
 ): RangeVerdict => {
   for (const { baseid, x, y, dx, dy } of nearby) {
     if (!flingers.has(baseid)) continue;
@@ -235,7 +245,7 @@ export const checkOutpostRange = (
     const totalRange = withDeclareWar(outpostRange(flingers.get(baseid)), declareWar);
     const target = { x: x - dx, y: y - dy };
 
-    if (totalRange > 0 && hexDistance({ x, y }, target) <= totalRange)
+    if (totalRange > 0 && hexDistance({ x, y }, target, shape) <= totalRange)
       return { ok: true, via: "outpost" };
   }
 
