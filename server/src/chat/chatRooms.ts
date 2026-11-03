@@ -1,4 +1,4 @@
-import { Filter as BadWords } from "bad-words";
+import { makeWordFilter } from "../services/chat/badWords.js";
 
 import { User } from "../database/models/user.model.js";
 import { postgres } from "../server.js";
@@ -35,7 +35,7 @@ interface ResolvedChannel {
   info: ChannelInfo;
 }
 
-const filter = new BadWords();
+const filter = makeWordFilter();
 
 const RATE_LIMIT_MS = 500;
 const MAX_MSG_LEN = 200;
