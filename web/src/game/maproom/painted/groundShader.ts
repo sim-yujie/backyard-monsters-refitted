@@ -1,4 +1,5 @@
 import { Ground, GroundTexture, OCCUPIED_FLAG, SHADER_TEXTURES } from "./groundKinds";
+import { HILLS_GLSL } from "./hillsShader";
 
 /**
  * The painted ground's WebGL2 shader (Map Room 2 Modern look, plan step 2).
@@ -238,6 +239,8 @@ struct Blend {
   vec3 bary;   // their smooth weights (0 where a cell stops being one of the three)
   vec3 claim;  // the weights roughened by each cell's own noise: the strongest claim wins
   vec3 height; // their heights
+  vec2 hp;     // the point after the noise push (the cells were picked here)
+  vec2 cen[3]; // their centres, regular-hex units
 };
 
 Blend blendAt(vec2 h) {
@@ -262,6 +265,10 @@ Blend blendAt(vec2 h) {
     else if (along > best2) { best2 = along; dir2 = NEIGHBOURS[k]; }
   }
   b.bary = clamp(barycentric(d, centreOf(dir1), centreOf(dir2)), 0.0, 1.0);
+  b.hp = hp;
+  b.cen[0] = centreOf(qr);
+  b.cen[1] = centreOf(qr + dir1);
+  b.cen[2] = centreOf(qr + dir2);
   ivec2 cell0 = toOffset(qr);
   ivec2 cell1 = toOffset(qr + dir1);
   ivec2 cell2 = toOffset(qr + dir2);
@@ -311,6 +318,7 @@ Coast coastOf(Blend b) {
   return c;
 }
 
+${HILLS_GLSL}
 // The sea: shallows and deep as one water, deepening by the three cells' heights (land counts as
 // the shore's height) and turquoise near the land; both textures drift slowly with uTime.
 vec3 waterColour(Blend b, Coast c, vec2 uv, vec2 dx, vec2 dy) {
@@ -402,6 +410,13 @@ vec3 drawDecals(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float fade) {
       Blend fb = blendAt(foot / uUnit);
       Coast fc = coastOf(fb);
       if (!fc.known || (fc.both && fc.s > -0.16)) continue;
+      // Nothing stands on a cliff face or its rim; stones gather at its foot.
+      Cliff fcl = cliffOf(fb);
+      bool scree = false;
+      if (fcl.on && fcl.mask > 0.2) {
+        if (fcl.s > -CLIFF_CLEAR_HIGH && fcl.s < CLIFF_CLEAR_LOW) continue;
+        scree = fcl.s >= CLIFF_CLEAR_LOW && fcl.s < CLIFF_CLEAR_LOW + 0.35;
+      }
       int k = fb.claim.x >= fb.claim.y && fb.claim.x >= fb.claim.z ? 0 : fb.claim.y >= fb.claim.z ? 1 : 2;
       int g = fb.g[k];
       // On the beach band, beach details (pebbles, stones, sand slabs) whatever the ground;
@@ -415,13 +430,54 @@ vec3 drawDecals(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float fade) {
         }
         if (fb.claim[k] - other < DECAL_MARGIN) continue;
       }
-      if (pick > decalDensity(g) * density) continue;
+      if (pick > (scree ? 0.9 : decalDensity(g)) * density) continue;
       int frame = decalFrame(g, hash12(id + 63.1));
       if (boulder) frame = g == ${Ground.MARSH} ? -1 : 8;
+      if (scree) frame = hash12(id + 63.1) < 0.55 ? 6 : 8;
       if (frame < 0) continue;
       vec4 sprite = spriteSample(frame, p, foot, s, hash12(id + 9.9) < 0.5, wdx, wdy) * fade;
       if (frame == 6 || frame == 8) sprite.rgb = darken(sprite, STONE_GAMMA);
       colour = colour * (1.0 - sprite.a) + sprite.rgb;
+    }
+  }
+  return colour;
+}
+
+// Mock-up B's meadow flowers: patches (a slow noise) of tiny painted blooms, pink, lilac, white
+// or yellow by patch, on a fine jittered grid. Drawn by the shader itself, no sprite: each bloom
+// is a few pixels, a soft dot with a lighter middle and a little shade under it.
+const float FLOWER_GRID = 0.045;    // share of a cell's width
+const float FLOWER_SIZE = 0.012;
+const float FLOWER_PATCH = 1.25;    // patches per cell width (about)
+const vec3 FLOWER_COLOURS[4] = vec3[4](
+  vec3(0.93, 0.47, 0.74), vec3(0.76, 0.56, 0.9), vec3(0.98, 0.97, 0.92), vec3(0.98, 0.86, 0.3));
+
+vec3 drawFlowers(vec3 colour, vec2 p, float amount) {
+  float grid = FLOWER_GRID * uCellPoints;
+  vec2 first = floor(p / grid - 0.5);
+  float patchScale = FLOWER_PATCH / uCellPoints;
+  for (int j = 0; j < 2; j++) {
+    for (int i = 0; i < 2; i++) {
+      vec2 id = first + vec2(float(i), float(j));
+      vec2 foot = (id + 0.15 + 0.7 * vec2(hash12(id + 3.7), hash12(id + 9.1))) * grid;
+      // Patches: dense in their middle, thinning out at their edges.
+      float patchNoise = valueNoise(foot * patchScale + 12.3);
+      float density = smoothstep(0.55, 0.8, patchNoise) * amount;
+      if (hash12(id * 1.37 + 0.5) > density) continue;
+      float r = FLOWER_SIZE * uCellPoints * (0.8 + 0.5 * hash12(id + 1.9));
+      vec2 d = p - foot;
+      float dist = length(d * vec2(1.0, 1.25));
+      // A little shade below and right of the bloom, then the bloom.
+      float shade = 1.0 - smoothstep(r * 0.7, r * 1.3, length(d - vec2(r * 0.35, r * 0.45)));
+      colour *= 1.0 - 0.25 * shade;
+      float bloom = 1.0 - smoothstep(r * 0.75, r, dist);
+      if (bloom <= 0.0) continue;
+      vec2 cellOfPatch = floor(foot * patchScale * 1.3 + 4.0);
+      int pick = int(hash12(cellOfPatch) * 4.0);
+      vec3 tone = FLOWER_COLOURS[pick];
+      if (hash12(id + 7.7) < 0.18) tone = FLOWER_COLOURS[2];
+      tone = mix(tone, vec3(1.0), 0.35 * (1.0 - smoothstep(0.0, r * 0.5, dist)));
+      colour = mix(colour, tone, bloom);
     }
   }
   return colour;
@@ -534,6 +590,10 @@ void main() {
     }
   }
 
+  // Rolling hills: the land lit by the smooth height field's slope (plan step 5).
+  vec3 hill = hillAt(h);
+  land *= hillShade(hill.yz);
+
   vec3 colour = land;
   if (wWater > 0.002) {
     vec3 sea = waterColour(b, c, uv, dx, dy);
@@ -543,6 +603,15 @@ void main() {
   if (uQuality > 1.5) {
     // Soft light and shade drifting over the land, as in a painting.
     colour *= 0.94 + 0.12 * valueNoise(vWorld / (uTexScale * 2.3) + 5.0);
+  }
+
+  // Cliffs where neighbours' heights drop a lot: a signed distance to the rim like the coast's.
+  Cliff cliff = cliffOf(b);
+  float cliffDist = cliff.on ? cliff.s : 0.0;
+  vec2 hdx = dFdx(h);
+  vec2 hdy = dFdy(h);
+  if (landSum > 0.002) {
+    colour = drawCliff(colour, cliff, h, hdx, hdy);
   }
 
   // Surf: white foam on the water's edge and broken lines rolling in towards it.
@@ -559,6 +628,20 @@ void main() {
     float lines = crest * reachOut * broken * smoothstep(0.04, 0.09, dist);
     float foam = clamp(edge * (0.8 + 0.2 * white) + lines * (0.8 + 0.2 * white), 0.0, 1.0) * coastMask;
     colour = mix(colour, FOAM_WHITE, foam * 0.97);
+  }
+
+  // Meadow flowers (Medium and High), off the beach and off cliff faces; they fade out before
+  // they are smaller than a couple of pixels.
+  if (uQuality > 0.5 && landSum > 0.002) {
+    float meadow = 0.0;
+    for (int k = 0; k < 3; k++) {
+      int gk = g[k];
+      meadow += wl[k] * (gk == ${Ground.MEADOW} ? 1.0 : gk == ${Ground.LUSH} ? 0.55 : gk == ${Ground.MEADOW_PLAIN} ? 0.45 : 0.0);
+    }
+    meadow *= smoothstep(70.0, 130.0, cellPixels) * (uQuality > 1.5 ? 1.0 : 0.6);
+    if (coastMask > 0.0) meadow *= smoothstep(0.9, 1.5, -dist);
+    if (cliff.on) meadow *= 1.0 - step(-0.4, cliffDist) * step(cliffDist, CLIFF_CLEAR_LOW) * cliff.mask;
+    if (meadow > 0.01) colour = drawFlowers(colour, vWorld, meadow);
   }
 
   // Ground details and sea rocks, once their sheet is in; details fade out as cells get small.

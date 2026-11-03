@@ -551,3 +551,21 @@ describe("the neighbour defence bonus row", () => {
     expect(open(camp()).host.querySelector(".mr2-chip--neighbours")).toBeNull();
   });
 });
+
+describe("the height chip (painted map, plan step 5)", () => {
+  it("shows the hill icon and the height on a camp and a yard only while the painted ground is on", async () => {
+    const { setFlatGround } = await import("@/game/maproom/ground");
+    try {
+      setFlatGround(true);
+      const onCamp = open(camp({ i: 148 }));
+      expect(text(onCamp.host, ".mr2-chip--height")).toContain("+48 m");
+      expect(onCamp.host.querySelector(".mr2-chip--height [data-icon='height']")).not.toBeNull();
+      const onYard = open(player({ i: 112 }));
+      expect(text(onYard.host, ".mr2-chip--height")).toContain("+12 m");
+      setFlatGround(false);
+      expect(open(camp({ i: 148 })).host.querySelector(".mr2-chip--height")).toBeNull();
+    } finally {
+      setFlatGround(false);
+    }
+  });
+});

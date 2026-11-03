@@ -30,6 +30,10 @@ export class GroundData {
       format: "rgba8unorm",
       scaleMode: "nearest",
       autoGenerateMipmaps: false,
+      // Data, not a picture: Pixi's default premultiplies on upload, which scaled the height and
+      // feature channels by the ground byte in alpha (heights read 0..15, so no hills, no cliffs,
+      // and every sea cell read as deep).
+      alphaMode: "no-premultiply-alpha",
     });
   }
 
