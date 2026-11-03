@@ -697,7 +697,20 @@ export const buffOn = (span: BuffSpan | undefined, tick: number): boolean =>
 export interface DefenceBonus {
   readonly damage?: number;
   readonly hp?: number;
+  /**
+   * Tower range, from a Map Room 2 land feature (`landFeatures.ts`): -0.1
+   * makes every tower reach `int(range * 90 / 100)`, after the cell's height.
+   */
+  readonly range?: number;
 }
+
+/**
+ * One part of a {@link DefenceBonus} as the battle uses it: 0 when absent or
+ * unreadable, and 0 for -100% or less, which no table gives. A land feature
+ * can lower a part (marsh: -10% health), so a share between -1 and 0 counts.
+ */
+export const bonusShare = (share: number | undefined): number =>
+  typeof share === "number" && Number.isFinite(share) && share > -1 ? share : 0;
 
 /** Each side's boosts ({@link SideBuffs}); the attacker's towers never fire. */
 export interface BattleBuffs {
@@ -2013,8 +2026,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * Map Room 2's neighbour bonus (`DefenceBonus`): 1 and 1 without one, which
    * every multiplication and test below leaves exactly as it was.
    */
-  const bonusDamage = 1 + Math.max(0, options.defenceBonus?.damage ?? 0);
-  const bonusToughness = 1 + Math.max(0, options.defenceBonus?.hp ?? 0);
+  const bonusDamage = 1 + bonusShare(options.defenceBonus?.damage);
+  const bonusToughness = 1 + bonusShare(options.defenceBonus?.hp);
+  /** The land feature's tower range change, whole percent (`landFeatures.ts`). */
+  const bonusRangePct = Math.round(100 * bonusShare(options.defenceBonus?.range));
   /** What a building takes from `raw`: fortification, then the neighbour bonus. */
   const buildingTakes = (raw: number, fortification: number): number => {
     const dealt = fortifiedDamage(raw, fortification, 0);
@@ -2099,7 +2114,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (!stats || stats.damage === undefined) continue;
     towers.push({
       building,
-      range: towerRange(building.type, building.level, yard.kind, yard.height) ?? 0,
+      range: towerRange(building.type, building.level, yard.kind, yard.height, bonusRangePct) ?? 0,
       report: {
         id: building.id,
         type: building.type,

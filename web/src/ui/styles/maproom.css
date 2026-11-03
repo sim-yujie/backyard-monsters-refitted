@@ -1354,3 +1354,16 @@
     text-align: start;
   }
 }
+
+/* A cell's land feature (`landFeatureRow.ts`): its painted picture, then icons and numbers. */
+.mr2-land-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  flex: none;
+}
+
+/* Map Room 2's neighbour defence bonus: the painted shield and "+11%" (`neighbourBonusChip.ts`). */
+.mr2-chip--neighbours {
+  gap: var(--space-2);
+}

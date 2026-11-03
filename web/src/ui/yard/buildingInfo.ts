@@ -173,7 +173,12 @@ const nextLevelOf = (building: YardBuilding, kind: YardKind = "main"): number | 
  * block too, but its `range` is no reach of anything it fires, so it shows
  * no Range row.
  */
-const towerRows = (building: YardBuilding, kind: YardKind, height: number): InfoRow[] => {
+const towerRows = (
+  building: YardBuilding,
+  kind: YardKind,
+  height: number,
+  landPct = 0,
+): InfoRow[] => {
   if (!TOWER_STATS[building.type] || buildingClass(building.type) !== "tower") return [];
   const level = shownLevel(building);
   const nextLevel = nextLevelOf(building, kind);
@@ -182,8 +187,9 @@ const towerRows = (building: YardBuilding, kind: YardKind, height: number): Info
   if (!now) return [];
 
   const rows: InfoRow[] = [];
-  const nowRange = towerRange(building.type, level, kind, height);
-  const nextRange = nextLevel !== null ? towerRange(building.type, nextLevel, kind, height) : undefined;
+  const nowRange = towerRange(building.type, level, kind, height, landPct);
+  const nextRange =
+    nextLevel !== null ? towerRange(building.type, nextLevel, kind, height, landPct) : undefined;
   if (nowRange !== undefined) rows.push(countRow("Range", nowRange, nextRange));
   // The Aerial Defense Tower's text gives a shell's damage and the shots in a
   // salvo instead of damage per second (`BUILDING115.as:165-176`, issue #265).
@@ -374,6 +380,7 @@ export const buildingInfo = (
   building: YardBuilding,
   kind: YardKind = "main",
   height = 0,
+  landPct = 0,
 ): BuildingInfo => {
   const rows: InfoRow[] = [];
   const health = healthRow(building);
@@ -387,7 +394,7 @@ export const buildingInfo = (
       rows.push(...catapultRows(building, kind));
       break;
     default: {
-      rows.push(...towerRows(building, kind, height));
+      rows.push(...towerRows(building, kind, height, landPct));
       if (TOWER_STATS[building.type]) {
         const room = capacityRow(building, "Holds monsters", kind);
         if (room) rows.push(room);
