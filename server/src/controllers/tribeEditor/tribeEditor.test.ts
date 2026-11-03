@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { EventEmitter } from "node:events";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -15,6 +16,7 @@ const {
   resetStoredCamps,
   levelsFileSource,
   registerTribeEditorRoutes,
+  save,
   savedYard,
   writeSavedYard,
 } = await import("./tribeEditor.js");
@@ -139,6 +141,39 @@ describe("tribe yard editor data", () => {
     expect(tribeLayoutFor("kozu", 36).save).toBe(yard);
     expect(tribeLayoutFor("kozu", 37).save).toBe(kozu[1]!);
     expect(editorStatus().tribes.find((tribe) => tribe.id === "kozu")!.saved).toEqual([31]);
+  });
+
+  test("the save route answers before it writes the data file (a watching server restarts on the write)", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "tribe-editor-route-"));
+    dirs.push(dir);
+    const keys = ["TRIBE_EDITOR", "ENV", "TRIBE_EDITOR_DATA_DIR"] as const;
+    const before = keys.map((key) => process.env[key]);
+    Object.assign(process.env, { TRIBE_EDITOR: "on", ENV: "local", TRIBE_EDITOR_DATA_DIR: dir });
+    try {
+      const res = new EventEmitter();
+      const ctx = {
+        request: { body: { tribe: "kozu", level: 31, buildingdata: { "0": { X: 0, Y: 0, t: 14, l: 9, id: 0 } } } },
+        res,
+        status: 0,
+        body: undefined as unknown,
+      };
+      await save(ctx as never);
+      const file = path.join(dir, "kozu.ts");
+      expect(ctx.status).toBe(200);
+      expect((ctx.body as { level: number }).level).toBe(31);
+      // Camps use the yard at once, but the file waits for the reply to go out.
+      expect(tribeLayoutFor("kozu", 31).saved).toBe(true);
+      expect(existsSync(file)).toBe(false);
+
+      res.emit("finish");
+      for (let i = 0; i < 50 && !existsSync(file); i++) await Bun.sleep(10);
+      expect(readFileSync(file, "utf8")).toContain('"31": {');
+    } finally {
+      keys.forEach((key, i) => {
+        if (before[i] === undefined) delete process.env[key];
+        else process.env[key] = before[i];
+      });
+    }
   });
 
   test("the data file source lists levels in order and reads back as the same yards", async () => {
