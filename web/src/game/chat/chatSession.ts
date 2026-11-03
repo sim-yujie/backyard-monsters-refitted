@@ -147,11 +147,7 @@ const sameConfig = (a: ChatConfig | null, b: ChatConfig): boolean =>
 const roomsOf = (config: ChatConfig): ChatRoom[] => {
   const rooms: ChatRoom[] = [{ channel: config.channel, kind: "global", country: null }];
   if (config.countryChannel && config.countryChannel !== config.channel) {
-    rooms.push({
-      channel: config.countryChannel,
-      kind: "country",
-      country: config.country ?? null,
-    });
+    rooms.push({ channel: config.countryChannel, kind: "country", country: config.country ?? null });
   }
   return rooms;
 };
@@ -255,9 +251,7 @@ export class ChatSession {
       ? this.state.channel
       : config.channel;
     const unread = new Set(
-      [...this.state.unread].filter((channel) =>
-        after.some((room) => room.channel === channel),
-      ),
+      [...this.state.unread].filter((channel) => after.some((room) => room.channel === channel)),
     );
     this.show({ rooms: after, channel: shown, unread });
   }
@@ -275,11 +269,7 @@ export class ChatSession {
 
   /** Shows another of the player's rooms in the box. */
   showRoom(channel: string): void {
-    if (
-      channel === this.state.channel ||
-      !this.state.rooms.some((room) => room.channel === channel)
-    )
-      return;
+    if (channel === this.state.channel || !this.state.rooms.some((room) => room.channel === channel)) return;
     const unread = new Set(this.state.unread);
     unread.delete(channel);
     this.show({ channel, unread });
@@ -316,12 +306,7 @@ export class ChatSession {
   say(text: string): boolean {
     const body = text.trim().slice(0, MAX_LINE_LENGTH);
     const channel = this.state.channel;
-    if (
-      !body ||
-      !channel ||
-      this.state.status !== ChatStatus.ONLINE ||
-      !this.joined.has(channel)
-    ) {
+    if (!body || !channel || this.state.status !== ChatStatus.ONLINE || !this.joined.has(channel)) {
       return false;
     }
     this.lastSaid = body;
@@ -357,14 +342,11 @@ export class ChatSession {
     if (!config) return;
     this.drop();
     const rooms = roomsOf(config);
-    const kept = rooms.some((room) => room.channel === this.state.channel)
-      ? this.state.channel
-      : config.channel;
+    const kept = rooms.some((room) => room.channel === this.state.channel) ? this.state.channel : config.channel;
     for (const channel of [...this.roomEntries.keys()]) {
       if (!rooms.some((room) => room.channel === channel)) this.roomEntries.delete(channel);
     }
-    for (const room of rooms)
-      if (!this.roomEntries.has(room.channel)) this.roomEntries.set(room.channel, []);
+    for (const room of rooms) if (!this.roomEntries.has(room.channel)) this.roomEntries.set(room.channel, []);
     this.show({
       status: this.retries > 0 ? ChatStatus.RECONNECTING : ChatStatus.CONNECTING,
       rooms,
@@ -434,8 +416,7 @@ export class ChatSession {
     switch (message.type) {
       case "auth_ok": {
         this.update({ self: { userId: message.userId, name: message.displayName } });
-        for (const room of this.state.rooms)
-          this.sendRaw({ type: "join", channel: room.channel });
+        for (const room of this.state.rooms) this.sendRaw({ type: "join", channel: room.channel });
         for (const [userId, muted] of this.pendingMutes) this.sendMute(userId, muted);
         this.sendRaw({ type: "getignore" });
         this.pingTimer = setInterval(() => this.sendRaw({ type: "ping" }), PING_INTERVAL_MS);
@@ -446,16 +427,12 @@ export class ChatSession {
         this.update({ status: ChatStatus.SIGNED_OUT });
         return;
       case "joined": {
-        const room = this.state.rooms.find(
-          (candidate) => candidate.channel === message.channel,
-        );
+        const room = this.state.rooms.find((candidate) => candidate.channel === message.channel);
         if (!room) return;
         this.joined.add(room.channel);
         this.roomEntries.set(
           room.channel,
-          (Array.isArray(message.history) ? message.history : []).map((line) =>
-            this.line(line),
-          ),
+          (Array.isArray(message.history) ? message.history : []).map((line) => this.line(line)),
         );
         if (room.kind === "global") {
           this.retries = 0;
@@ -523,12 +500,7 @@ export class ChatSession {
   private refused(): void {
     const country = this.state.rooms.find((room) => room.kind === "country");
     const global = this.state.rooms.find((room) => room.kind === "global");
-    if (
-      !country ||
-      !global ||
-      !this.joined.has(global.channel) ||
-      this.joined.has(country.channel)
-    ) {
+    if (!country || !global || !this.joined.has(global.channel) || this.joined.has(country.channel)) {
       this.notice(UNAVAILABLE_TEXT);
       return;
     }
@@ -551,11 +523,7 @@ export class ChatSession {
   private append(entry: ChatEntry, channel: string): void {
     const before = this.roomEntries.get(channel) ?? [];
     this.roomEntries.set(channel, [...before, entry].slice(-MAX_ENTRIES));
-    if (
-      channel === this.state.channel ||
-      entry.kind !== "line" ||
-      this.state.unread.has(channel)
-    ) {
+    if (channel === this.state.channel || entry.kind !== "line" || this.state.unread.has(channel)) {
       this.show({});
       return;
     }
