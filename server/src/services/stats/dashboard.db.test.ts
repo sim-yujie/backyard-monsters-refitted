@@ -8,6 +8,7 @@ import ormConfig from "../../mikro-orm.config.js";
 import { getBugReport, listBugReports, updateBugReportTicket, type BugReportFilter } from "../admin/bugReportsAdmin.js";
 import { acceptClientErrors } from "../errors/clientErrors.js";
 import { errorTotals, listErrors, recordErrors, USERIDS_KEPT } from "../errors/errorStore.js";
+import { REPORTERS_KEPT } from "../../utils/errorCapture.js";
 import type { ActivityRedis } from "./activity.js";
 import { computeDays, fillDailyStats, getDailySummary, readDailyStats, statsOverview, TRACKING_JOB } from "./dailyStats.js";
 
@@ -188,7 +189,7 @@ describe.skipIf(!dbName)("the owner's dashboard on a real database", () => {
           gameVersion: "v",
           screen: "map",
         },
-        P1,
+        { userid: P1, username: "dashtest_1", ip: "203.0.113.7" },
         at("2026-01-10T08:00:00Z")
       );
       expect(kept).toBe(1);
@@ -198,6 +199,35 @@ describe.skipIf(!dbName)("the owner's dashboard on a real database", () => {
       expect(rows).toHaveLength(1);
       expect(rows[0]!.message).toBe("dashtest no building 41 for [email]");
       expect(Number(rows[0]!.count)).toBe(3);
+      const [group] = (await listErrors(orm.em.fork(), { source: "browser" })).filter((g) => g.message.startsWith("dashtest no building"));
+      expect(group!.reporters).toEqual([
+        { userid: P1, username: "dashtest_1", ip: "203.0.113.7", lastSeen: "2026-01-10T08:00:00.000Z" },
+      ]);
+      expect(group!.thirdParty).toBe(false);
+    });
+
+    test("senders: one per account and address, signed out with no account, the latest few kept", async () => {
+      const entry = (atIso: string, userid: number | null, ip: string) => ({
+        source: "browser" as const,
+        fingerprint: "dashtest-kind-senders",
+        message: "dashtest senders",
+        place: "/:1:5021",
+        stack: "TypeError: x\n    at <anonymous>:1:5021",
+        count: 1,
+        at: at(atIso),
+        userid,
+        reporters: [{ userid, username: userid ? `p${userid}` : "", ip, at: at(atIso) }],
+      });
+      await recordErrors(orm.em.fork(), [entry("2026-01-10T08:00:00Z", null, "198.51.100.2")]);
+      for (let i = 1; i <= REPORTERS_KEPT + 1; i++) {
+        await recordErrors(orm.em.fork(), [entry(`2026-01-10T09:0${i}:00Z`, i, "203.0.113.7")]);
+      }
+      await recordErrors(orm.em.fork(), [entry("2026-01-10T10:00:00Z", 2, "203.0.113.7")]);
+
+      const [group] = (await listErrors(orm.em.fork(), { source: "browser" })).filter((g) => g.message === "dashtest senders");
+      expect(group!.reporters.map((r) => r.userid)).toEqual([2, 6, 5, 4, 3].slice(0, REPORTERS_KEPT));
+      expect(group!.reporters[0]).toEqual({ userid: 2, username: "p2", ip: "203.0.113.7", lastSeen: "2026-01-10T10:00:00.000Z" });
+      expect(group!.thirdParty).toBe(true);
     });
   });
 

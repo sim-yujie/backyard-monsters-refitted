@@ -162,6 +162,18 @@ export interface ErrorGroup {
   gameVersion: string;
   screen: string;
   userids: number[];
+  /** The last few who hit it, newest first. Their addresses are for this page only. */
+  reporters: ErrorReporter[];
+  /** Points only at code that is not the game's (an extension, an injected script). */
+  thirdParty: boolean;
+}
+
+export interface ErrorReporter {
+  /** Null when not signed in. */
+  userid: number | null;
+  username: string;
+  ip: string;
+  lastSeen: string;
 }
 
 export interface ErrorTotals {

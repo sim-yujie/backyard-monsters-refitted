@@ -11,7 +11,8 @@ import { ERROR_RETENTION_DAYS } from "../errors/errorStore.js";
  * requests answered or lapsed more than {@link FRIEND_REQUEST_RETENTION_DAYS}
  * days ago (issue #368), and friend helps older than
  * {@link FRIEND_HELP_RETENTION_DAYS} days (issue #373), and the dashboard's
- * error groups not seen for {@link ERROR_RETENTION_DAYS} days. Log files are pruned by the logger itself
+ * error groups not seen for {@link ERROR_RETENTION_DAYS} days, and each
+ * error's senders (account, name, address) not seen for as long. Log files are pruned by the logger itself
  * (`utils/logFiles.ts`).
  *
  * Every delete goes in batches of {@link RETENTION_BATCH} rows, each its own
@@ -62,6 +63,7 @@ export interface RetentionResult {
   friendHelps: number;
   friendGifts: number;
   appErrors: number;
+  appErrorReporters: number;
 }
 
 export interface RetentionOptions {
@@ -234,6 +236,15 @@ export const runRetentionCleanup = async (
     batchSize,
     pauseMs
   );
+  const appErrorReporters = await deleteOldRows(
+    em,
+    "app_error_reporter",
+    "id",
+    "last_seen",
+    cutoff(now, ERROR_RETENTION_DAYS),
+    batchSize,
+    pauseMs
+  );
   return {
     messages: mail.messages,
     threads: mail.threads,
@@ -244,6 +255,7 @@ export const runRetentionCleanup = async (
     friendHelps,
     friendGifts,
     appErrors,
+    appErrorReporters,
   };
 };
 
@@ -290,7 +302,7 @@ export const startRetentionSweep = (em: EntityManager): (() => void) => {
       const result = await runDailyRetention(em);
       if (result) {
         logger.info(
-          "Privacy clean-up: deleted {messages} mail messages ({threads} empty threads), {attackLogs} battle records, {chatReports} chat reports, {bugReports} bug reports, {appErrors} error groups",
+          "Privacy clean-up: deleted {messages} mail messages ({threads} empty threads), {attackLogs} battle records, {chatReports} chat reports, {bugReports} bug reports, {appErrors} error groups ({appErrorReporters} error senders)",
           { ...result }
         );
       }

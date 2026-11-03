@@ -63,3 +63,16 @@ export const errorShape = (text: string): string =>
 /** The key of one kind of error: its source, message and place, made alike ({@link errorShape}). */
 export const errorFingerprint = (source: string, message: string, place: string): string =>
   createHash("sha1").update(`${source}\n${errorShape(message)}\n${errorShape(place)}`).digest("hex");
+
+/** A script of the game's own: the built bundle (`/static/...js`) or, on a dev server, its sources (`/src/...ts`). */
+const OUR_CODE = /\/(?:static|src|node_modules\/\.vite)\/[^\s:()]+\.(?:m?js|tsx?)\b/;
+
+/**
+ * Whether a browser error points only at code that is not the game's: it
+ * says where it happened, yet neither its place nor its stack names one of
+ * the game's scripts ({@link OUR_CODE}), as with a wallet extension's script
+ * injected into the page (`<anonymous>`, or the page itself at line 1). An
+ * error that says nothing of where it happened is not called anyone's.
+ */
+export const isThirdPartyError = (place: string, stack: string): boolean =>
+  (place.trim() !== "" || stack.trim() !== "") && !OUR_CODE.test(place) && !OUR_CODE.test(stack);

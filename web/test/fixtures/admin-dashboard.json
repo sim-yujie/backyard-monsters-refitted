@@ -284,7 +284,12 @@
           3,
           7,
           8
-        ]
+        ],
+        "reporters": [
+          { "userid": 3, "username": "Alice", "ip": "203.0.113.7", "lastSeen": "2026-10-23T05:53:20.894Z" },
+          { "userid": null, "username": "", "ip": "198.51.100.2", "lastSeen": "2026-10-22T05:53:20.894Z" }
+        ],
+        "thirdParty": false
       }
     ],
     "totals": {
