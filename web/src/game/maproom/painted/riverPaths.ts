@@ -75,7 +75,10 @@ const BULGE_SHARE = 0.11;
 const S_BEND_SHARE = 0.07;
 /** Points along each edge. */
 const STEPS_PER_EDGE = 10;
-/** How far a mouth reaches into the water, as a share of an edge, and how much wider it gets. */
+/**
+ * How far a mouth reaches on into the water, in cell widths (far enough to meet the painted coast
+ * wherever its noise puts it; the painted ground fades it out), and how much wider it gets.
+ */
 const MOUTH_REACH = 0.9;
 const MOUTH_FLARE = 2.6;
 /** The river widens by this much over its last edge on land, into an estuary. */
@@ -295,7 +298,7 @@ export const riverPaths = (
       const dx = end.x - inner.x;
       const dy = end.y - inner.y;
       const step = Math.hypot(dx, dy) || 1;
-      const reach = MOUTH_REACH * grid.cellWidth * 0.58;
+      const reach = MOUTH_REACH * grid.cellWidth;
       const extra: RiverPoint[] = [];
       const count = 6;
       for (let i = 1; i <= count; i++) {
