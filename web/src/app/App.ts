@@ -18,6 +18,10 @@ import { answerBotCheck, fetchBotCheck, forceBotCheck } from "@/api/botCheck";
 import { BotCheckWatch } from "@/game/presence/botCheckWatch";
 import { BotCheckCard } from "@/ui/BotCheckCard";
 import { BootScene } from "./scenes/BootScene";
+import { logout } from "@/api/auth";
+import { banWords } from "@/api/moderation";
+import { worldChat } from "@/game/chat/chatSession";
+import { setSignInNotice } from "./signInNotice";
 import { LoginScene } from "./scenes/LoginScene";
 import { MapGateScene } from "./scenes/MapGateScene";
 import { MapRoom1Scene } from "./scenes/MapRoom1Scene";
@@ -70,6 +74,7 @@ export class App {
   private botCheck: BotCheckWatch | null = null;
   private botCheckCard: BotCheckCard | null = null;
   private stopHearing: (() => void) | null = null;
+  private stopTeam: (() => void) | null = null;
 
   constructor(private readonly host: HTMLElement) {
     this.pixi = new Application();
@@ -287,10 +292,23 @@ export class App {
     const tick = guardTick((deltaSeconds) => this.scenes?.tick(deltaSeconds));
     this.pixi.ticker.add((ticker) => tick.run(ticker.deltaMS / 1000));
 
+    // A ban from the game team signs the player out at once, saying why and
+    // until when (the chat connection carries it, `game/chat/chatSession.ts`).
+    this.stopTeam = worldChat.onTeam((event) => {
+      if (event.kind !== "banned") return;
+      protection.stop();
+      botCheck.stop();
+      logout();
+      setSignInNotice(banWords(event.until, event.reason));
+      scenes.goTo(SceneName.LOGIN);
+    });
+
     await this.scenes.start(SceneName.BOOT);
   }
 
   destroy(): void {
+    this.stopTeam?.();
+    this.stopTeam = null;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.idle?.destroy();

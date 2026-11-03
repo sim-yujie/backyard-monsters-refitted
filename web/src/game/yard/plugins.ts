@@ -18,4 +18,5 @@ import "./plugins/inferno";
 import "./plugins/korath";
 import "./plugins/raid";
 import "./plugins/slowInternet";
+import "./plugins/teamNotice";
 import "./plugins/tips";
