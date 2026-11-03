@@ -54,3 +54,16 @@ export const mr2NeighbourBonusMode = (
 /** Whether the neighbour bonus is on for any cell at all. */
 export const mr2NeighbourBonusEnabled = (env: Record<string, string | undefined> = process.env): boolean =>
   mr2NeighbourBonusMode(env) !== "off";
+
+/**
+ * Map Room 2's land features switch (`docs/mr2-civ-study.md` design A,
+ * `game-rules/combat/landFeatures.ts`): every land cell gets one feature
+ * (forest, rocks, marsh or a resource node) that changes building health,
+ * tower damage, tower range and outpost income. `MR2_LAND_FEATURES` is `on`
+ * (or `true`); anything else, the default, is off: no `lf` on the map, no
+ * `land` in any defence and no change to income, so the game is exactly as
+ * before. The map art follows the switch, as it only draws a cell's `lf`.
+ * Read on each use, so tests can flip it.
+ */
+export const mr2LandFeaturesEnabled = (env: Record<string, string | undefined> = process.env): boolean =>
+  isSwitchOn(env.MR2_LAND_FEATURES);

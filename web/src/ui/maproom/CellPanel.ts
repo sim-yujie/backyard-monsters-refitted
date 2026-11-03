@@ -8,6 +8,7 @@ import { TRIBE_COLOURS } from "@/game/maproom/cellVisuals";
 import { tribePictureUrl } from "@/game/maproom/tribeAvatars";
 import { button, el, icon, type IconName } from "@/ui/maproom1/icons";
 import { GROUND_BONUS_TITLE, groundBonusIcons } from "./groundBonus";
+import { landFeatureChip } from "./landFeatureRow";
 import { icon as lineIcon } from "@/ui/icons";
 
 /**
@@ -451,6 +452,7 @@ export class CellPanel {
     );
     this.addReach(cell);
     this.addDamage(payload.dm, payload.d === 1);
+    this.addLandChip(payload.lf);
     this.setActions("attack", "Look inside");
   }
 
@@ -500,6 +502,8 @@ export class CellPanel {
     this.addDamage(payload.dm, payload.d === 1);
     // Height only matters on an outpost: towers reach and income scale by it.
     if (outpost) this.addGroundChip(payload.i);
+    // The land feature (`landFeatureRow.ts`): an outpost's, never a main yard's.
+    if (outpost) this.addLandChip(payload.lf);
     if (payload.p === 1) {
       // The end, when the server sends it (#187); a bare "Protected" otherwise.
       if (payload.pe !== undefined && payload.pe > Date.now() / 1000) {
@@ -676,6 +680,12 @@ export class CellPanel {
     chip.title = GROUND_BONUS_TITLE;
     chip.append(...groundBonusIcons(height));
     this.chips.append(chip);
+  }
+
+  /** The cell's land feature and what it does (`landFeatureRow.ts`); nothing on open ground. */
+  private addLandChip(feature: number | undefined): void {
+    const chip = landFeatureChip(feature);
+    if (chip) this.chips.append(chip);
   }
 
   private addCountdown(

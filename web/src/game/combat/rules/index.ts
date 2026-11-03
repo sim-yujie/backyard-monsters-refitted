@@ -46,4 +46,5 @@ export * from "./engine.js";
 export * from "./replay.js";
 export * from "./report.js";
 export * from "./defence.js";
+export * from "./landFeatures.js";
 export * from "./descentBurn.js";

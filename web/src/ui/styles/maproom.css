@@ -1354,3 +1354,11 @@
     text-align: start;
   }
 }
+
+/* A cell's land feature (`landFeatureRow.ts`): its painted picture, then icons and numbers. */
+.mr2-land-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  flex: none;
+}

@@ -34,6 +34,7 @@ import { academyRanks } from "../../../../game-rules/combat/index.js";
 import { isDeclareWarRunning } from "../../../../services/alliance/powerups.js";
 import { mr2NeighbourBonusMode } from "../../../../config/MapRoom2Config.js";
 import { loadFriendlyNeighbourCount } from "../../../../services/maproom/v2/neighbourDefence.js";
+import { activeLandFeature } from "../../../../services/maproom/v2/landFeature.js";
 import {
   generateNoise,
   getTerrainHeight,
@@ -243,7 +244,18 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
       ? await loadFriendlyNeighbourCount(save.cell, userSave.worldid, bonusMode === "players")
       : 0;
   const served = await servedDefenderForces(save, userSave);
-  const defenderForces = neighbours > 0 ? { ...served, neighbours } : served;
+  // With the land switch on, the target cell's land feature goes in too
+  // (`landFeature.ts`): an outpost's or a wild monster camp's, never a main
+  // yard's. Open ground, or the switch off, adds nothing.
+  const land =
+    mapversion === MapRoomVersion.V2 && save.cell && userSave.worldid && save.type !== BaseType.MAIN
+      ? activeLandFeature(userSave.worldid, save.cell.x, save.cell.y, save.cell.terrainHeight)
+      : 0;
+  const defenderForces = {
+    ...served,
+    ...(neighbours > 0 && { neighbours }),
+    ...(land !== 0 && { land }),
+  };
   // The attacker's champions' brains as they stand now, after the load has
   // landed any attack they left (issue #219): frozen into the session, served
   // to the client, and the only brains this battle is ever fought with.
