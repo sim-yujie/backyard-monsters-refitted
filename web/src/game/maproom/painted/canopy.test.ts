@@ -2,8 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   BOULDER_FRAME,
   CLEARING_INNER,
+  CLEARING_OUTER,
   FEATURE_DENSITY,
   GOO_FRAME,
+  GOO_LEVEL,
+  GOO_SCALE,
+  MARSH_FADE,
+  MURK_LEVEL,
+  ROCK_FADE,
   LOG_FRAME,
   PINE_FRAME,
   REED_FRAME,
@@ -79,6 +85,16 @@ describe("the canopy forest", () => {
     expect(at(next.x * 0.6, 0, meadowCamp).clearing).toBe(0);
   });
 
+  it("keeps the clearing small, so a forest full of camps still reads as one canopy", () => {
+    const camp = (q: number, r: number): Kind => (q === 0 && r === 0 ? { feature: 1, occupied: true } : FOREST);
+    // Gone well inside the camp's own cell (its sides are 0.87 out), in every direction.
+    expect(CLEARING_OUTER).toBeLessThanOrEqual(0.5);
+    for (let a = 0; a < 6; a++) {
+      const angle = (a / 6) * Math.PI * 2 + 0.3;
+      expect(canopyAt(at(0.62 * Math.cos(angle), 0.62 * Math.sin(angle), camp))).toBe("canopy");
+    }
+  });
+
   it("keeps off the beach: a forest by the sea stops before the water's side", () => {
     const coast = (q: number) => (q >= 1 ? SEA : FOREST);
     const inland = centre(-1, 0);
@@ -120,6 +136,26 @@ describe("rock fields and marsh", () => {
     const edge = at(SQRT3 * 0.5, 0, marsh).marsh;
     expect(edge).toBeGreaterThan(0.3);
     expect(edge).toBeLessThan(0.7);
+  });
+
+  it("keeps the marsh mud inside its own cells: little left by the hex side, none past it", () => {
+    const smooth = (e0: number, e1: number, x: number) => {
+      const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+      return t * t * (3 - 2 * t);
+    };
+    const lone = (q: number, r: number) => (q === 0 && r === 0 ? MARSH : MEADOW);
+    expect(MARSH_FADE[0]).toBeGreaterThan(ROCK_FADE[0]);
+    expect(smooth(MARSH_FADE[0], MARSH_FADE[1], at(0, 0, lone).marsh)).toBeGreaterThan(0.95);
+    // At the hex side (share about a half) the mud is nearly gone; the ragged noise only adds a fringe.
+    expect(smooth(MARSH_FADE[0], MARSH_FADE[1], at(SQRT3 * 0.5, 0, lone).marsh)).toBeLessThan(0.1);
+    expect(smooth(MARSH_FADE[0], MARSH_FADE[1], at(SQRT3 * 0.8, 0, lone).marsh + 0.2)).toBe(0);
+  });
+
+  it("makes the goo small scattered pools inside murky puddles, not wide strips", () => {
+    // A finer noise than the puddles (1.9 a hex unit) and only its tops (an fbm's 95th percentile is about 0.72).
+    expect(GOO_SCALE).toBeGreaterThan(1.9);
+    expect(GOO_LEVEL).toBeGreaterThanOrEqual(0.72);
+    expect(GOO_LEVEL).toBeGreaterThan(MURK_LEVEL + 0.1);
   });
 });
 

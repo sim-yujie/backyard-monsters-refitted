@@ -9,8 +9,11 @@ import {
   EDGE_WANDER,
   FEATURE_RADIUS,
   GOO_FRAME,
+  GOO_LEVEL,
+  GOO_SCALE,
   LOG_FRAME,
   MARSH_FADE,
+  MURK_LEVEL,
   PINE_FRAME,
   REED_FRAME,
   ROCK_FADE,
@@ -42,12 +45,15 @@ const float SHORE_END = ${f(SHORE_END)};
 const float SHORE_CUT = ${f(SHORE_CUT)};
 const vec2 ROCK_FADE = vec2(${f(ROCK_FADE[0])}, ${f(ROCK_FADE[1])});
 const vec2 MARSH_FADE = vec2(${f(MARSH_FADE[0])}, ${f(MARSH_FADE[1])});
+const float GOO_SCALE = ${f(GOO_SCALE)};
+const float GOO_LEVEL = ${f(GOO_LEVEL)};
+const float MURK_LEVEL = ${f(MURK_LEVEL)};
 // The sprite pieces' grid (a share of a cell's width); a piece is at most two squares wide and tall.
 const float FEATURE_GRID = 0.13;
 // The canopy's shadow on the meadow: cast down and right (the sun is top-left), hex units.
 const vec2 CANOPY_SHADOW = vec2(0.1, 0.16);
 // The marsh's murky water and its bright goo.
-const vec3 MURK = vec3(0.2, 0.27, 0.15);
+const vec3 MURK = vec3(0.19, 0.25, 0.16);
 const vec3 GOO = vec3(0.56, 0.9, 0.12);
 const vec3 GOO_LIGHT = vec3(0.86, 1.0, 0.45);
 
@@ -125,25 +131,27 @@ float canopyEdge(vec2 h, Features fe) {
 vec3 canopyColour(vec2 uv, vec2 dx, vec2 dy, vec2 h, float e) {
   vec3 c = sampleGround(${Ground.CANOPY}, uv, dx, dy);
   float patchy = valueNoise(h * 0.55 + 3.0);
-  c *= mix(vec3(0.8, 0.88, 0.84), vec3(1.07, 1.05, 0.92), smoothstep(0.2, 0.8, patchy));
+  c *= mix(vec3(0.78, 0.86, 0.88), vec3(1.04, 1.04, 0.97), smoothstep(0.2, 0.8, patchy));
   float dome = crowns(h * 1.0 + 0.37);
   c *= 0.9 + 0.16 * dome;
   c *= mix(0.68, 1.0, smoothstep(0.0, 0.16, e));
   return c;
 }
 
-// The marsh: wet mud (its texture) with murky puddles and bright goo pools; deep is how far inside
-// the marsh (0 at its fading edge, 1 well in), so the pools keep off its edge.
-vec3 marshColour(vec3 mud, vec2 h, float deep) {
-  float n = fbm(h * 1.7 + 77.0);
-  float murk = smoothstep(0.52, 0.58, n) * smoothstep(0.2, 0.6, deep);
-  vec3 c = mix(mud, MURK, murk * 0.75);
-  // Goo: the highest ground of the noise, with a dark muddy rim and a lighter glossy middle.
-  float m = n + 0.12 * (deep - 1.0);
-  float rim = smoothstep(0.6, 0.63, m);
-  float goo = smoothstep(0.635, 0.65, m);
-  c = mix(c, c * 0.55, rim * (1.0 - goo));
-  vec3 g = mix(GOO, GOO_LIGHT, smoothstep(0.68, 0.74, m) * 0.6 + 0.4 * smoothstep(0.5, 0.9, valueNoise(h * 9.0 + 2.0)) * goo);
+// The marsh (mock-up B): wet mossy grass (the land half-way to the mud texture) with murky puddles of
+// dark water, and small scattered goo pools in the puddles. deep is how far inside the marsh (0 at its
+// fading edge, 1 well in), so the puddles and pools keep off its edge.
+vec3 marshColour(vec3 land, vec3 mud, vec2 h, float deep) {
+  vec3 c = mix(land, mud, 0.55);
+  float n = fbm(h * 1.9 + 77.0) + 0.1 * (deep - 1.0);
+  float murk = smoothstep(MURK_LEVEL, MURK_LEVEL + 0.05, n);
+  c = mix(c, MURK, murk * 0.8);
+  // Goo: the tops of a finer noise inside the puddles, a thin dark rim round a glossy lime middle.
+  float m = fbm(h * GOO_SCALE + 131.0) + 0.18 * (deep - 1.0) + 0.05 * (murk - 1.0);
+  float rim = smoothstep(GOO_LEVEL - 0.03, GOO_LEVEL - 0.015, m);
+  float goo = smoothstep(GOO_LEVEL - 0.012, GOO_LEVEL, m);
+  c = mix(c, MURK * 0.7, rim * (1.0 - goo));
+  vec3 g = mix(GOO, GOO_LIGHT, smoothstep(GOO_LEVEL + 0.02, GOO_LEVEL + 0.07, m) * 0.7);
   return mix(c, g, goo);
 }
 
@@ -178,7 +186,7 @@ vec3 drawFeatures(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float trees, float ne
       float fade = near;
       if (fe.share.x > 0.05) {
         float e = canopyEdge(fh, fe);
-        bool clear = occupied && length(off) < CLEARING_INNER + 0.08;
+        bool clear = occupied && length(off) < CLEARING_OUTER + 0.12;
         if (e > 0.1) {
           if (roll < 0.09) { frame = ${PINE_FRAME} + int(kind * 4.0); cut = 0.7; size = 0.95; fade = trees; }
         } else if (e < -0.005 && e > -0.12 && !clear) {
@@ -194,10 +202,11 @@ vec3 drawFeatures(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float trees, float ne
       }
       if (frame < 0 && fe.share.z > 0.2 && !(occupied && length(off) < 0.45)) {
         float wet = smoothstep(0.25, 0.75, fe.share.z);
-        if (fe.share.z > 0.6 && roll < 0.12) { frame = ${GOO_FRAME} + int(kind * 4.0); }
-        else if (roll < 0.5 * wet) { frame = ${REED_FRAME} + int(kind * 3.0); size = 0.7 + 0.3 * hash12(id + 2.2); }
-        else if (fe.share.z > 0.7 && roll < 0.53) { frame = ${LOG_FRAME}; }
-        else if (roll < 0.58 * wet) { frame = ${BOULDER_FRAME} + int(kind * 4.0); size = 0.6; }
+        // About 2 goo pools, 15 reed clumps, a log and 3 stones a marsh cell (mock-up B; 6 pools were too many).
+        if (fe.share.z > 0.6 && roll < 0.04) { frame = ${GOO_FRAME} + int(kind * 4.0); size = 0.8; }
+        else if (roll < 0.04 + 0.3 * wet) { frame = ${REED_FRAME} + int(kind * 3.0); size = 0.7 + 0.3 * hash12(id + 2.2); }
+        else if (fe.share.z > 0.7 && roll < 0.36) { frame = ${LOG_FRAME}; }
+        else if (roll < 0.36 + 0.06 * wet) { frame = ${BOULDER_FRAME} + int(kind * 4.0); size = 0.6; }
       }
       if (frame < 0 || fade <= 0.0) continue;
       // A smaller piece keeps its foot where it was; it shrinks inside the same frame.

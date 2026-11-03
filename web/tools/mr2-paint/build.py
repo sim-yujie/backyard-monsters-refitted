@@ -67,7 +67,10 @@ ATLAS_COLUMNS = 4
 # moves most of the way to mock-up B's lush grass; the rock ground was brown dirt where mock-up B's
 # rocky ground is grass with grey stones, so it moves half-way to mock-up B's open land.
 MATCH_STRENGTH = {"meadow": 0.9, "lush": 0.8, "meadow-plain": 0.9, "sand": 0.8, "marsh": 0.7,
-                  "forest-floor": 0.75, "rock": 0.5}
+                  "forest-floor": 0.75, "rock": 0.5,
+                  # Step 6 (mr2-canopy2): the canopy was re-painted in mid and deep greens (the first one
+                  # was yellow); it moves most of the way to mock-up B's forest, which is a little warmer.
+                  "canopy": 0.7}
 
 
 def take() -> None:

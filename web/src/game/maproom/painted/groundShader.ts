@@ -687,7 +687,7 @@ void main() {
     marshCover = smoothstep(MARSH_FADE.x, MARSH_FADE.y, feat.share.z + 0.4 * ragged) * featShown;
     if (rockCover > 0.002) land = mix(land, paint(${Ground.ROCK}, uv, dx, dy), rockCover);
     if (marshCover > 0.002) {
-      vec3 mud = marshColour(paint(${Ground.MARSH}, uv, dx, dy), h, smoothstep(0.5, 0.95, feat.share.z + 0.3 * ragged));
+      vec3 mud = marshColour(land, paint(${Ground.MARSH}, uv, dx, dy), h, smoothstep(0.55, 0.95, feat.share.z + 0.3 * ragged));
       land = mix(land, mud, marshCover);
     }
   }
