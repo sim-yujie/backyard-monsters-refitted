@@ -1413,6 +1413,12 @@ interface Creep {
   hasHelpTarget: boolean;
   /** A flying Fomor's waypoint is its ally's own point, which moves with it. */
   followHelper: boolean;
+  /**
+   * The standing wall a walking Fomor's route to its ally, or to its ally's
+   * building, ran into, by building id, or -1. It shoots that wall when it
+   * cannot shoot the building itself.
+   */
+  wallInWay: number;
   /** Where a champion walks back to when it leaves (`_spawnPoint`, `ChampionBase.as:115`). */
   spawnX: number;
   spawnY: number;
@@ -1511,6 +1517,7 @@ const NO_ABILITIES = {
   helpCreep: -1,
   hasHelpTarget: false,
   followHelper: false,
+  wallInWay: -1,
   spawnX: 0,
   spawnY: 0,
   homing: false,
@@ -5354,6 +5361,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const followAlly = (creep: Creep, ally: Creep): void => {
     creep.waypointIndex = 0;
     creep.followHelper = creep.flying;
+    creep.wallInWay = -1;
     if (creep.flying) {
       creep.waypoints = [{ x: ally.ix, y: ally.iy }];
       return;
@@ -5369,7 +5377,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     );
     if (route.blockedBy >= 0) {
       const wall = buildingOf(route.blockedBy);
-      if (wall && wall.hp > 0) creep.targetBuilding = wall.id;
+      if (wall && wall.hp > 0) {
+        creep.targetBuilding = wall.id;
+        creep.wallInWay = wall.id;
+      }
     }
     creep.waypoints =
       route.waypoints.length > 1 ? route.waypoints.slice(1) : [{ x: ally.ix, y: ally.iy }];
@@ -5380,6 +5391,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creep.support = false;
     creep.hasHelpTarget = false;
     creep.followHelper = false;
+    creep.wallInWay = -1;
     creep.atTarget = false;
     creep.targetCreep = -1;
     findTarget(creep);
@@ -5393,11 +5405,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creep.helpCreep = -1;
     creep.targetBuilding = -1;
     creep.followHelper = false;
+    creep.wallInWay = -1;
   };
 
-  /** Fomor heads for a building: straight in the air, by the grid on foot. */
+  /**
+   * Fomor heads for a building: straight in the air, by the grid on foot,
+   * where {@link routeTo} takes on the wall the route runs into.
+   */
   const headFor = (creep: Creep, building: EngineBuilding): void => {
     creep.followHelper = false;
+    creep.wallInWay = -1;
     if (creep.flying) {
       creep.waypoints = [{ x: building.x, y: building.y }];
       creep.waypointIndex = 0;
@@ -5405,20 +5422,34 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       return;
     }
     routeTo(creep, building);
+    if (creep.targetBuilding !== building.id) creep.wallInWay = creep.targetBuilding;
+  };
+
+  /**
+   * The wall in a walking Fomor's way ({@link Creep.wallInWay}) while it
+   * stands and Fomor can shoot it from where it is, else null.
+   *
+   * Following an ally, Fomor aims at the ally's building every tick
+   * (`Fomor.as:199-201`), so the wall its route ran into never stays its
+   * target. Without this it walked up to that wall, found the building out of
+   * its range, planned its way again, and shot neither: a Fomor on foot by a
+   * walled Town Hall stood there the whole attack (player report, 2 Nov 2026).
+   */
+  const wallToShoot = (creep: Creep): EngineBuilding | null => {
+    const wall = creep.wallInWay >= 0 ? buildingOf(creep.wallInWay) : null;
+    return wall && wall.hp > 0 && canShootBuilding(creep, wall, creep.range) ? wall : null;
   };
 
   /**
    * `ChampionBase.move` for a following Fomor (`:1399-1416`): a building in
-   * reach stops it where it is; else it walks its waypoints, the moving one
-   * included.
+   * reach, or the wall in its way, stops it where it is; else it walks its
+   * waypoints, the moving one included.
    */
   const supportMove = (creep: Creep): void => {
     const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
     if (
       !creep.atTarget &&
-      aim &&
-      aim.hp > 0 &&
-      canShootBuilding(creep, aim, creep.range)
+      ((aim && aim.hp > 0 && canShootBuilding(creep, aim, creep.range)) || wallToShoot(creep))
     ) {
       creep.atTarget = true;
       return;
@@ -5470,8 +5501,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         creep.atTarget = false;
       } else if (creep.waypointIndex >= creep.waypoints.length && !creep.atTarget) {
         const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
-        if (aim && canShootBuilding(creep, aim, range)) creep.atTarget = true;
-        else if (aim) headFor(creep, aim);
+        if ((aim && canShootBuilding(creep, aim, range)) || wallToShoot(creep)) {
+          creep.atTarget = true;
+        } else if (aim) {
+          headFor(creep, aim);
+        }
       }
     } else if (creep.hasHelpTarget) {
       const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
@@ -5512,9 +5546,18 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         creep.attacking = true;
         swing(creep);
       } else if (aim) {
-        creep.attacking = false;
-        creep.atTarget = false;
-        headFor(creep, aim);
+        // Out of reach: on foot, the wall in its way is shot instead.
+        if (!wallToShoot(creep)) headFor(creep, aim);
+        const wall = wallToShoot(creep);
+        if (wall) {
+          creep.targetBuilding = wall.id;
+          creep.atTarget = true;
+          creep.attacking = true;
+          swing(creep);
+        } else {
+          creep.attacking = false;
+          creep.atTarget = false;
+        }
       } else {
         dropSupport(creep);
         findBuffTargets(creep);

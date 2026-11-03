@@ -23,7 +23,7 @@ import { GROUP_OPS } from "@/game/yard/planner/groupTools";
 import type { Checklist } from "@/game/yard/planner/checklist";
 import type { LoadMiss } from "@/game/yard/planner/layout";
 import type { PlanNode } from "@/game/yard/planner/placement";
-import { GroupRefusal, PlannerSession, type GroupOutcome } from "@/game/yard/planner/PlannerSession";
+import { GroupRefusal, PlannerSession, type GroupOutcome, type PlannerState } from "@/game/yard/planner/PlannerSession";
 import {
   CentreMarker,
   loadOverlays,
@@ -48,7 +48,14 @@ import { diffLayouts, sideStats, slotUnplaced, slotView, statRows } from "@/game
 import type { CompareDiff } from "@/game/yard/planner/PlannerOverlay";
 import { CENTRE_NOTE, onYardCentre } from "@/game/yard/planner/centreHover";
 import { PlannerBar, type OverlayName } from "@/ui/yard/PlannerBar";
-import { isPhone, PlannerLayout, plannerLayout, undoName } from "@/ui/yard/plannerLayout";
+import {
+  isPhone,
+  type PhoneSheet,
+  PlannerLayout,
+  plannerLayout,
+  shownSheet,
+  undoName,
+} from "@/ui/yard/plannerLayout";
 import { InventoryPanel } from "@/ui/yard/InventoryPanel";
 import { notePlannerActivity } from "@/game/presence/plannerActivity";
 import {
@@ -90,10 +97,11 @@ const NOTICE = "yard-planner";
  * The three things that can fill a phone's one sheet slot (#45): the building
  * sheet, a docked panel (the drawer, the checklist, Find, Layouts, a dialog)
  * and More. Whichever the player raised last is shown; the others stay open
- * underneath, keeping their state, and come back when it closes.
+ * underneath, keeping their state, and come back when it closes. "none" is
+ * the yard kept clear while a building is moved (`shownSheet`).
  */
-type Sheet = "inspector" | "dock" | "more";
-const SHEETS: readonly Sheet[] = ["inspector", "dock", "more"];
+type Sheet = PhoneSheet;
+const SHEET_CLASSES: readonly (Sheet | "none")[] = ["inspector", "dock", "more", "none"];
 
 
 /** What an Apply did with decorations (#128), for the scene to merge and say. */
@@ -317,8 +325,14 @@ export class YardPlanner {
   private touch = false;
   /** The sheet the player raised last. */
   private sheet: Sheet = "inspector";
-  /** The sheet actually showing, or null off a phone. */
-  private shownSheet: Sheet | null = null;
+  /** The sheet actually showing, "none" while the yard is kept clear, or null off a phone. */
+  private showing: Sheet | "none" | null = null;
+  /**
+   * A phone keeps the yard clear of sheets for a move: set when a building is
+   * picked up, cleared by a tap or by anything that raises a sheet
+   * (`shownSheet`). A player could not line a building up under its own sheet.
+   */
+  private yardClear = false;
   /** The selection the building sheet was last raised for, as ids. */
   private selectionKey = "";
   /** How far the bars cut into the viewport, for the edge scroll. */
@@ -373,6 +387,7 @@ export class YardPlanner {
       onFind: () => this.openSearch(),
       onRanges: () => this.toggleOverlay("ranges"),
       onGroup: (outcome) => this.reportGroupTool(outcome),
+      onTap: () => this.tapped(),
       readOnly: this.readOnly,
       insets: () => this.insets,
     });
@@ -778,7 +793,7 @@ export class YardPlanner {
     this.dockObserver = null;
     const overlay = this.options.overlay;
     overlay.classList.remove("planner-phone", "planner-phone--portrait", "planner-phone--landscape");
-    for (const name of SHEETS) overlay.classList.remove(`planner-sheet--${name}`);
+    for (const name of SHEET_CLASSES) overlay.classList.remove(`planner-sheet--${name}`);
     this.closeCompare();
     this.closeDialog();
     this.helpPanel?.close();
@@ -1318,6 +1333,7 @@ export class YardPlanner {
     this.inventory?.setArmed(this.session.armedStack());
 
     this.refreshInspector(nodes);
+    this.keepYardClear(state);
   }
 
   /**
@@ -1480,9 +1496,30 @@ export class YardPlanner {
     this.phoneTools.hidden = this.selectAll.hidden && this.arrangeHost.hidden;
   }
 
+  /**
+   * Clears a phone's sheets off the yard when a building is picked up from it.
+   *
+   * A building out of the drawer is left alone: there the drawer's strip is
+   * what the player is working in, and it is already folded down to one row.
+   */
+  private keepYardClear(state: PlannerState): void {
+    if (!isPhone(this.layout) || this.yardClear || !state.carrying || state.placing) return;
+    this.yardClear = true;
+    this.bar.setMoreOpen(false);
+    this.applySheet();
+  }
+
+  /** A tap on the yard: the sheets a move cleared away may come back. */
+  private tapped(): void {
+    if (!this.yardClear) return;
+    this.yardClear = false;
+    this.applySheet();
+  }
+
   /** Raises one of a phone's sheets over the others. */
   private raise(sheet: Sheet): void {
     this.sheet = sheet;
+    this.yardClear = false;
     if (sheet !== "more") this.bar.setMoreOpen(false);
     this.applySheet();
   }
@@ -1494,15 +1531,16 @@ export class YardPlanner {
    * its search and its folds.
    */
   private applySheet(): void {
-    let shown: Sheet | null = null;
-    if (isPhone(this.layout)) {
-      if (this.bar.isMoreOpen) shown = "more";
-      else if (this.sheet === "dock" && this.dock.childElementCount > 0) shown = "dock";
-      else if (this.inspectorDock.childElementCount > 0) shown = "inspector";
-      else shown = "dock";
-    }
-    this.shownSheet = shown;
-    for (const name of SHEETS) {
+    const shown = shownSheet({
+      layout: this.layout,
+      moreOpen: this.bar.isMoreOpen,
+      raised: this.sheet,
+      dockFilled: this.dock.childElementCount > 0,
+      inspectorFilled: this.inspectorDock.childElementCount > 0,
+      yardClear: this.yardClear,
+    });
+    this.showing = shown;
+    for (const name of SHEET_CLASSES) {
       this.options.overlay.classList.toggle(`planner-sheet--${name}`, shown === name);
     }
   }
@@ -1514,7 +1552,7 @@ export class YardPlanner {
    */
   private hiddenOnPhone(element: HTMLElement): boolean {
     if (!isPhone(this.layout)) return false;
-    return this.shownSheet !== "dock" || this.dock.lastElementChild !== element;
+    return this.showing !== "dock" || this.dock.lastElementChild !== element;
   }
 
   /** Brings a docked panel to the front of a phone's sheet slot. */

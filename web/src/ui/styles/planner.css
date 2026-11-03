@@ -923,7 +923,7 @@
     max-width: none;
   }
 
-  .overlay__layer:has(> .planner-dock--right > *) > .yard-viewtools {
+  .overlay__layer:not(.planner-sheet--none):has(> .planner-dock--right > *) > .yard-viewtools {
     display: none;
   }
 }
@@ -2010,7 +2010,7 @@
 }
 
 /* A sheet sits where Fit is; Fit comes back when the sheet goes. */
-.planner-phone:has(> .planner-dock > *) > .yard-viewtools,
+.planner-phone:not(.planner-sheet--none):has(> .planner-dock > *) > .yard-viewtools,
 .planner-phone:has(> .planner-more:not([hidden])) > .yard-viewtools {
   display: none;
 }
@@ -2064,6 +2064,15 @@
 .planner-sheet--more > .planner-dock,
 .planner-sheet--inspector > .planner-dock:not(.planner-dock--right),
 .planner-sheet--dock > .planner-dock--right {
+  display: none;
+}
+
+/*
+ * No sheet at all while a building is moved, and after the drop until a tap
+ * (`shownSheet`): a player could not line a building up under its own sheet.
+ */
+.planner-sheet--none > .planner-dock,
+.planner-sheet--none > .planner-more {
   display: none;
 }
 
