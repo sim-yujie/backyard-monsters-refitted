@@ -128,7 +128,7 @@ describe("the MR2_LAND_FEATURES switch", () => {
 });
 
 describe("outpost income", () => {
-  const harvester = (t: number, l: number): BuildingData => ({ id: 1, t, X: 0, Y: 0, l }) as BuildingData;
+  const harvester = (t: number, l: number): BuildingData => ({ id: 1, t, x: 0, y: 0, l });
 
   test("is exactly today's with open ground", () => {
     for (const t of [1, 2, 3, 4]) {
