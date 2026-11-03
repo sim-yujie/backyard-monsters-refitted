@@ -12,8 +12,10 @@ Each folder here (deck, banks) holds prompt.txt and the picture Codex painted fr
 - banks: four long cloud banks painted on black, cut out (alpha from brightness, like mr2-live's
   clouds) into a sheet of two rows, two banks a row, 192 px tall, for the edge of sight (High only, like `clouds.webp`):
     web/public/maproom/live/cloud-banks.webp
+  NOT used in the game for now (the painted fog's own bank was enough, and mr2-live's frame of banks is
+  off over the painted ground), so it is only built with --banks.
 
-  python web/tools/mr2-cloud-kit/build.py [--take]
+  python web/tools/mr2-cloud-kit/build.py [--take] [--banks]
 """
 import sys
 from pathlib import Path
@@ -93,6 +95,8 @@ def main() -> None:
         deck.resize((size, size), Image.LANCZOS).save(path, quality=86, method=6)
         print(path.name, size, path.stat().st_size // 1024, "KB")
 
+    if "--banks" not in sys.argv:
+        return
     banks = crop_islands(black_to_alpha(load("banks"), floor=0.03, gain=1.15), 4)
     sheet, frames = pack_grid(banks, BANK_HEIGHT)
     path = LIVE / "cloud-banks.webp"

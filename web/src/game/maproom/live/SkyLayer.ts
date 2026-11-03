@@ -129,6 +129,12 @@ export class SkyLayer {
     private readonly birds: boolean,
     /** Share of the shadows' alpha: 1 on the tile map, `PAINTED_SHADOW_STRENGTH` on the painted ground. */
     private readonly shadowStrength = 1,
+    /**
+     * Whether the cloud banks frame the far map. Off over the painted ground: its own fog clouds
+     * (`../painted/CloudLayer.ts`) fill the far view and bank along the edge of sight, and these flat
+     * sprites over that cloud sea read as a second, different sky.
+     */
+    private readonly frameBanks = true,
   ) {
     this.shadows.interactiveChildren = false;
     this.above.interactiveChildren = false;
@@ -142,8 +148,10 @@ export class SkyLayer {
       const shadowAlpha =
         this.shadowStrength * smooth((zoom - hex * SHADOW_FADE_FROM) / (hex - hex * SHADOW_FADE_FROM));
       this.place(SHADOWS, this.shadowPool, this.shadows, timeSeconds, view, shadowAlpha);
-      const cloudAlpha = smooth((hex - zoom) / (hex - hex * CLOUDS_FULL_BELOW));
-      this.frame(timeSeconds, view, cloudAlpha);
+      if (this.frameBanks) {
+        const cloudAlpha = smooth((hex - zoom) / (hex - hex * CLOUDS_FULL_BELOW));
+        this.frame(timeSeconds, view, cloudAlpha);
+      }
     }
     if (this.birds && this.bird) this.fly(dt, view, zoom);
   }
