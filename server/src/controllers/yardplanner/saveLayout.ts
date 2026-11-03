@@ -4,7 +4,6 @@ import { makeLayout, writeLayout } from "../../services/yardplanner/layoutStorag
 import {
   checkNodesOwned,
   checkNodePlacement,
-  checkPlans,
   parseName,
   parsePayload,
   parseSlot,
@@ -22,13 +21,9 @@ import { onLayoutYard } from "./plannerYard.js";
  * problem to report (`docs/design/yard-planner-redesign.md` §8, decision Q8).
  * Mushrooms are ignored here for the same reason — they move.
  *
- * Planned upgrades are checked here too, and more strictly than Apply checks
- * them: a target past the top of a type's ladder is refused as `planLevel`, and
- * so is one at or below the level the building is already at, as
- * `planCaughtUp`. Apply reports that second case rather than refusing it,
- * because by then the layout may simply be older than a job that finished, but
- * a client *writing* a plan the yard has already passed has lost track of the
- * yard (`docs/design/planner-upgrades.md` §2.2).
+ * A layout holds positions only. Planned upgrades an older client still puts
+ * on its nodes (`plan`) are dropped by the schema and never stored: the
+ * planner no longer plans upgrades (owner, 2026-11-03).
  *
  * A layout may keep buildings in the drawer (`stored`): a half-finished plan
  * is saved as it stands (owner decision 2026-10-05). Those are held to the
@@ -56,7 +51,6 @@ export const saveLayout: KoaController = async (ctx) => {
     (save, kind) => {
       const stored = payload.stored ?? [];
       checkNodesOwned([...payload.nodes, ...stored], save.buildingdata);
-      checkPlans(payload.nodes, save.buildingdata, { refuseCaughtUp: true, kind });
       checkNodePlacement(payload.nodes, payload.expansion, save.buildingdata, kind);
 
       const made = makeLayout(slot, name, payload.expansion, payload.nodes, stored);

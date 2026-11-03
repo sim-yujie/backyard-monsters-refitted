@@ -5,7 +5,6 @@ import {
   type CostStep,
   type YardKind,
 } from "../../game-data/buildingCosts.js";
-import type { LayoutNode } from "../../schemas/YardPlannerSchemas.js";
 import type {
   BuildingData,
   BuildingDataMap,
@@ -35,41 +34,29 @@ import {
   yardKindOf,
   type ResourceAmounts,
 } from "./costs.js";
-import { UNPLANNABLE_KINDS, checkPlans } from "./validateLayout.js";
+import { UNPLANNABLE_KINDS } from "./validateLayout.js";
 import { busyWorkers, sharperToolsMultiplier, workerCount } from "./workers.js";
 
 /**
- * The upgrade walk Apply runs over a layout's planned upgrades
- * (`docs/design/planner-upgrades.md` §3.4).
+ * One building's next upgrade step: the rule set the building panel's
+ * `POST /bm/yard/upgrade`, the instant upgrade and the bots share
+ * (`docs/design/yard-buildings.md` §3.2).
  *
- * The rule the whole file exists to express is decision Q1 of the redesign
- * (`docs/design/yard-planner-redesign.md` §8): **there is no job queue**. A
- * building takes one job and a job takes one worker, so Apply starts as many
- * planned upgrades as there are free workers, in the order the player planned
- * them, and *reports* the rest instead of refusing the request. A yard that
- * cannot afford the third tower still gets the first two and the cheap wall
- * behind them.
- *
- * That makes this walk partial by design, which is why almost nothing here
- * throws. A job the yard's state rules out — busy, damaged, unaffordable,
- * gated, already at the level — is a row in `skipped`; a job that only wants a
- * worker is a row in `waiting`. The one thing that does throw is a malformed
- * plan, a target past the top of a type's ladder, because that is the client
- * sending something it could have checked itself; {@link checkPlans} raises it
- * as the same 400 a bad position raises.
+ * Until 2026-11-03 the Yard Planner's Apply also walked a layout's planned
+ * upgrades through here, starting one job per building on as many buildings as
+ * there were free workers. The owner removed that ("There shouldnt be a way to
+ * queue upgrades at once"), so the walk is gone and Apply only moves
+ * (`controllers/yardplanner/applyLayout.ts`). The file keeps its name.
  *
  * Nothing here touches the database. The caller hands in the slice of the save
- * it reads and writes the returned `buildingdata`, cost and points itself,
- * which is the bargain `wallUpgrade.ts` and `validateLayout.ts` already make.
+ * it reads and writes the returned building, cost and points itself.
  *
  * ## Walls and traps finish at once; everything else runs a countdown
  *
  * A wall or trap step is 5 seconds, and decision Q1 (D13 of
  * `docs/design/yard-buildings.md`) writes those as a finished building rather
  * than a countdown: level up, points awarded now, no worker held. That is
- * exactly what the batch wall route does (`wallUpgrade.ts:263-273`), so a
- * Block planned from 1 to 5 finishes all four steps in one walk and reproduces
- * the batch route. A finished step does not end the building's turn.
+ * exactly what the batch wall route does (`wallUpgrade.ts:263-273`).
  *
  * Every other step is a real job with a worker, however short (#137). A
  * harvester's 300-second level 1 to 2 step used to be written finished because
@@ -77,17 +64,9 @@ import { busyWorkers, sharperToolsMultiplier, workerCount } from "./workers.js";
  * wants that free finish to be the player's own press of **Finish free**
  * (`POST /bm/yard/speedup` `SP1`, `services/yard/speedup.ts`), never automatic.
  *
- * ## One job per building
- *
- * The first step that is not a wall or trap step takes a worker, sets `cU`
- * and ends that building's turn. Whatever the plan still wants stays in the
- * layout's `plan` for a later Apply: writing a second countdown would be the
- * queue Q1 refused, and the Flash client cancels and refunds jobs beyond its
- * worker count on load (spec `docs/specs/base-building.md:804-815`).
- *
  * ## What the audit will make of it
  *
- * The walk writes server-side and so is not audited, but the player's *next*
+ * A step is written server-side and so is not audited, but the player's *next*
  * save is (`services/base/economy/auditEconomySave.ts`). A started step is
  * therefore written exactly as the audit's `startUpgrade` rule expects one:
  * charged `costs[from]`, level left where it was, and
@@ -102,13 +81,13 @@ import { busyWorkers, sharperToolsMultiplier, workerCount } from "./workers.js";
  *
  * ## Outposts
  *
- * An outpost (`type` `outpost`) walks the outpost table: its own ladders and
+ * An outpost (`type` `outpost`) reads the outpost table: its own ladders and
  * level caps, the core (112) as its hall, one worker (`yardKindOf`).
  */
 
-/** The parts of a `Save` the walk reads. */
+/** The parts of a `Save` a step reads. */
 export interface UpgradeWalkSave extends SurfaceInfernoSave {
-  /** `BaseType`: an outpost walks the outpost table. */
+  /** `BaseType`: an outpost reads the outpost table. */
   type?: string;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
@@ -117,91 +96,6 @@ export interface UpgradeWalkSave extends SurfaceInfernoSave {
   /** The siege weapons: a Siege Factory holding one may not be upgraded. */
   siege?: JsonObject | null;
 }
-
-/** Why the walk could not start a planned upgrade (§3.2). */
-export type UpgradeSkipReason =
-  | "shortfall"
-  | "busy"
-  | "damaged"
-  | "townHall"
-  | "requirements"
-  | "caughtUp"
-  | "noLadder";
-
-/** Fields every row of the report carries: which building, and of what type. */
-interface UpgradeRow {
-  id: number;
-  t: number;
-}
-
-/** Fields a row carries when it names a step: the levels it spans. */
-interface UpgradeStepRow extends UpgradeRow {
-  from: number;
-  to: number;
-}
-
-/** An upgrade now running: `cU` is set and a worker is on it. */
-export interface StartedUpgrade extends UpgradeStepRow {
-  /** The countdown written, already multiplied by the Sharper Tools buff. */
-  seconds: number;
-  cost: ResourceAmounts;
-}
-
-/** A wall or trap step, written straight to its finished level (D13). */
-export interface FinishedUpgrade extends UpgradeStepRow {
-  cost: ResourceAmounts;
-}
-
-/** A step that would have started had a worker been free. */
-export interface WaitingUpgrade extends UpgradeStepRow {
-  reason: "workers";
-}
-
-/** A planned upgrade the yard's state ruled out, with the detail for the reason. */
-export interface SkippedUpgrade extends UpgradeRow {
-  reason: UpgradeSkipReason;
-  /** The level the building is at, where the reason names a step. */
-  from?: number;
-  /** The level that step would have reached. */
-  to?: number;
-  /** `shortfall`: how much of each resource the job was still short of. */
-  shortfall?: ResourceAmounts;
-  /** `townHall`: the hall level the yard has, and the one the step wants. */
-  townHall?: { have: number; need: number };
-  /** `requirements`: the `[type, count, level]` entries the yard does not meet. */
-  requirements?: CostRequirement[];
-}
-
-/** How many workers the yard has, and how many were on a job either side of the walk. */
-export interface UpgradeWorkers {
-  total: number;
-  busyBefore: number;
-  busyAfter: number;
-}
-
-/** Everything one walk did, in the order the client's dialog reports it. */
-export interface UpgradeWalk {
-  /** A new `buildingdata` with the countdowns and levels the walk wrote. */
-  buildingdata: BuildingDataMap;
-  started: StartedUpgrade[];
-  finished: FinishedUpgrade[];
-  waiting: WaitingUpgrade[];
-  skipped: SkippedUpgrade[];
-  /** The total actually charged, across started and finished steps. */
-  cost: ResourceAmounts;
-  /** Empire points awarded now, which is the wall and trap steps only. */
-  points: number;
-  workers: UpgradeWorkers;
-}
-
-/** The four resource keys, in the order every cost step spells them. */
-const RESOURCE_KEYS = ["r1", "r2", "r3", "r4"] as const;
-
-/** One resource off a save's `resources` column; anything unreadable is zero. */
-const amountOf = (pool: JsonObject | null | undefined, key: string): number => {
-  const raw = pool?.[key];
-  return typeof raw === "number" && Number.isFinite(raw) ? raw : 0;
-};
 
 /** The four resource amounts of one cost step. */
 const stepCost = (step: CostStep): ResourceAmounts => ({
@@ -260,7 +154,12 @@ const finishesAtOnce = (kind: string, step: CostStep): boolean =>
 
 /** What {@link planOneUpgrade} refuses a step for. */
 export type OneUpgradeReason =
-  | Exclude<UpgradeSkipReason, "caughtUp">
+  | "shortfall"
+  | "busy"
+  | "damaged"
+  | "townHall"
+  | "requirements"
+  | "noLadder"
   | "missing"
   | "maxLevel"
   | "workers";
@@ -277,8 +176,7 @@ export interface OneUpgradeRefusal {
   /**
    * Whether the building as a whole is ruled out (missing, no ladder, busy,
    * damaged, no Town Hall, top of the ladder) or only the step it would take
-   * next (requirements, shortfall, workers). The walk reports the first kind
-   * against the planned level and the second against the next one.
+   * next (requirements, shortfall, workers).
    */
   scope: "building" | "step";
   shortfall?: ResourceAmounts;
@@ -292,8 +190,7 @@ export interface OneUpgradeRefusal {
   siege?: { hold: SiegeHold; weapon: SiegeId };
   /**
    * `requirements` on a main-yard Inferno building whose Under Hall entry is
-   * unmet (Inferno WP 6.1): the Under Hall it has and needs. The walk, which
-   * never reads the player's standing, reports it as plain `requirements`.
+   * unmet (Inferno WP 6.1): the Under Hall it has and needs.
    */
   underHall?: { have: number; need: number };
   /** `shortfall` from the Inferno purse, not the yard's resources. */
@@ -333,9 +230,8 @@ export const upgradeLadder = (type: number, kind: YardKind = "main") => {
 };
 
 /**
- * Takes the next upgrade step of one building, or says why it cannot: the one
- * rule set the planner's walk and the building panel's `POST /bm/yard/upgrade`
- * share (`docs/design/yard-buildings.md` §3.2).
+ * Takes the next upgrade step of one building, or says why it cannot
+ * (`docs/design/yard-buildings.md` §3.2).
  *
  * The rules, in the order they are checked: the building exists and has a
  * ladder; it is not busy (`cB`/`cU`/`cF`); it is not damaged; the yard has a
@@ -346,12 +242,14 @@ export const upgradeLadder = (type: number, kind: YardKind = "main") => {
  * (#136); a wall or trap step straight to its new level, with its points (see
  * "Walls and traps finish at once" above).
  *
- * `save.buildingdata` must already be advanced to `now`, as for the walk.
- * Nothing is charged or written here: the caller takes the returned `building`
- * and `cost`. Walls and traps are not refused here, because the walk upgrades
- * them; the panel's route refuses them before it calls this.
+ * `save.buildingdata` must already be advanced to `now`
+ * (`services/base/advanceBuildingTimers.ts`), or the busy check counts jobs
+ * that finished minutes ago and the worker count comes out short. Nothing is
+ * charged or written here: the caller takes the returned `building` and
+ * `cost`. Walls and traps are not refused here; the panel's route refuses them
+ * before it calls this.
  *
- * @param save - The yard as it stands, including anything an earlier step of the same walk spent or wrote.
+ * @param save - The yard as it stands.
  * @param id - The building's id in `save.buildingdata`.
  * @param now - Unix seconds, for the Sharper Tools window.
  */
@@ -447,159 +345,4 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): 
     points: pointsForUpgrade(step),
     building: { ...building, l: from + 1 },
   };
-};
-
-/**
- * Walks a layout's planned upgrades against the caller's yard and works out
- * what Apply should start, finish, hold back and skip.
- *
- * `save.buildingdata` must already have had its countdowns advanced to `now`
- * (`services/base/advanceBuildingTimers.ts`), or the busy check counts jobs
- * that finished minutes ago and the worker count comes out short.
- *
- * Each step is {@link planOneUpgrade}, taken against the yard as this walk has
- * already changed it: a gate a finished step just opened counts, a resource an
- * earlier job spent is gone, and a worker an earlier job took is busy.
- *
- * Throws only for a plan the cost table cannot price at all; everything that
- * depends on the yard's state is reported.
- */
-export const walkUpgrades = (
-  save: UpgradeWalkSave,
-  nodes: readonly LayoutNode[],
-  now: number
-): UpgradeWalk => {
-  const kind = yardKindOf(save);
-  checkPlans([...nodes], save.buildingdata, { kind });
-
-  const buildings: BuildingDataMap = { ...(save.buildingdata ?? {}) };
-
-  const started: StartedUpgrade[] = [];
-  const finished: FinishedUpgrade[] = [];
-  const waiting: WaitingUpgrade[] = [];
-  const skipped: SkippedUpgrade[] = [];
-  const cost: ResourceAmounts = { r1: 0, r2: 0, r3: 0, r4: 0 };
-  let points = 0;
-
-  const total = workerCount(save.storedata, kind);
-  const busyBefore = busyWorkers(buildings);
-
-  // The pool as the walk has spent it, so a later job sees what an earlier one
-  // took. Only the four resource keys matter; everything else in the column is
-  // left to the controller's `updateResources` call.
-  const pool: Record<string, number> = {};
-  for (const key of RESOURCE_KEYS) pool[key] = amountOf(save.resources, key);
-
-  // What every step is measured against: the walk's own buildings and pool.
-  const yard: UpgradeWalkSave = {
-    type: save.type,
-    buildingdata: buildings,
-    buildinghealthdata: save.buildinghealthdata,
-    resources: pool,
-    storedata: save.storedata,
-  };
-
-  // The player's own order, ties broken by id so two plans made in the same
-  // click are still walked the same way twice (§2.1).
-  const candidates = nodes
-    .filter((node) => node.plan != null)
-    .sort((a, b) => (a.plan!.order - b.plan!.order) || (a.id - b.id));
-
-  for (const node of candidates) {
-    const building = buildings[String(node.id)];
-    // `checkNodesOwned` has already proved every node names a building of the
-    // caller's, so a miss here is a caller that skipped it. Nothing to upgrade
-    // and nothing to report.
-    if (!building) continue;
-
-    const type = Number(building.t);
-    const target = node.plan!.level;
-
-    if (!upgradeLadder(type, kind)) {
-      skipped.push({ id: node.id, t: type, reason: "noLadder" });
-      continue;
-    }
-
-    let level = levelOf(building);
-
-    if (target <= level) {
-      skipped.push({ id: node.id, t: type, reason: "caughtUp", from: level, to: target });
-      continue;
-    }
-
-    // Step by step, against the yard as this walk has already changed it.
-    while (level < target) {
-      const next = planOneUpgrade(yard, node.id, now);
-
-      if (!next.ok) {
-        // `maxLevel` is only reachable if the ladder is shorter than
-        // `checkPlans` measured, which it cannot be; stopping is the harmless
-        // reading.
-        if (next.reason === "missing" || next.reason === "maxLevel") break;
-
-        if (next.reason === "workers") {
-          // Either it starts now or it waits for the next Apply.
-          waiting.push({ id: node.id, t: type, from: level, to: level + 1, reason: "workers" });
-          break;
-        }
-
-        const row: SkippedUpgrade = {
-          id: node.id,
-          t: type,
-          reason: next.reason,
-          from: level,
-          to: next.scope === "building" ? target : level + 1,
-        };
-        if (next.townHall) row.townHall = next.townHall;
-        if (next.requirements) row.requirements = next.requirements;
-        if (next.shortfall) row.shortfall = next.shortfall;
-        skipped.push(row);
-        break;
-      }
-
-      buildings[String(node.id)] = next.building;
-      charge(cost, pool, next.cost);
-
-      if (!next.finished) {
-        started.push({
-          id: node.id,
-          t: type,
-          from: level,
-          to: level + 1,
-          seconds: next.seconds,
-          cost: next.cost,
-        });
-        // One job per building: the rest of the ladder stays planned.
-        break;
-      }
-
-      // A wall or trap step does not end the building's turn.
-      points += next.points;
-      finished.push({ id: node.id, t: type, from: level, to: level + 1, cost: next.cost });
-      level += 1;
-    }
-  }
-
-  return {
-    buildingdata: buildings,
-    started,
-    finished,
-    waiting,
-    skipped,
-    cost,
-    points,
-    workers: { total, busyBefore, busyAfter: busyBefore + started.length },
-  };
-};
-
-/** Adds one step's price to the running total and takes it out of the pool. */
-const charge = (
-  total: ResourceAmounts,
-  pool: Record<string, number>,
-  price: Readonly<ResourceAmounts>
-): void => {
-  for (const key of RESOURCE_KEYS) {
-    total[key] += price[key];
-    pool[key] -= price[key];
-  }
 };

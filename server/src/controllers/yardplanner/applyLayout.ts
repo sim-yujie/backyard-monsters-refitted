@@ -2,10 +2,8 @@ import { Status } from "../../enums/StatusCodes.js";
 import { layoutInvalidErr, layoutUnplacedErr } from "../../errors/errors.js";
 import { advanceBuildingTimers } from "../../services/base/advanceBuildingTimers.js";
 import { healChampions } from "../../services/yard/catchUpChampions.js";
-import { Operation, updateResources } from "../../services/base/updateResources.js";
 import { ApplyLayoutSchema } from "../../schemas/YardPlannerSchemas.js";
 import { currentExpansion } from "../../services/yardplanner/layoutGeometry.js";
-import { walkUpgrades, type UpgradeWalk } from "../../services/yardplanner/startUpgrades.js";
 import { syncBaseValue, syncDerivedLevels } from "../../services/yard/derivedLevels.js";
 import { nextBuildingId } from "../../services/yard/build.js";
 import { TROJAN_HORSE_TYPE } from "../../game-data/buildingFootprints.js";
@@ -31,7 +29,6 @@ import type { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { onPlannerYard } from "./plannerYard.js";
-import { debitOf } from "./upgradeWalls.js";
 
 /**
  * `POST /bm/yardplanner/apply` — move the caller's buildings to the positions a
@@ -66,12 +63,13 @@ import { debitOf } from "./upgradeWalls.js";
  * Countdowns across the whole yard are brought forward to now, because
  * `savetime` moves and a countdown is read as remaining time from it.
  *
- * With `startUpgrades=1` the request does one thing more: after the moves, it
- * walks the nodes' `plan` fields and starts as many of them as the yard's free
- * workers and resources allow (`services/yardplanner/startUpgrades.ts`). That
- * happens inside the same `flush`, so the moves, the new countdowns, the
- * charge and the `savetime` move land together or not at all, and the player's
- * Apply stays one transaction rather than two.
+ * Apply never upgrades anything. Until 2026-11-03 it could also start the
+ * layout's planned upgrades (`startUpgrades=1`), one job per building on as
+ * many buildings as there were free workers; the owner removed that ("There
+ * shouldnt be a way to queue upgrades at once"). An older client that still
+ * sends `startUpgrades` and `plan` fields gets its moves and nothing else, and
+ * `upgrades: null` in the answer, which those clients already read as "nothing
+ * was started".
  *
  * Decorations and storage (#128, as the Flash planner did it,
  * `com/monsters/baseplanner/BasePlanner.as:113-122`): every decoration the
@@ -82,15 +80,8 @@ import { debitOf } from "./upgradeWalls.js";
  *
  * With a `baseid` naming one of the caller's Map Room 2 outposts it applies
  * the layout to that outpost, charging the main pool (`plannerYard.ts`); with
- * the caller's Inferno `baseid`, to the Inferno yard, its planned upgrades
- * paid from the Inferno purse.
- *
- * The upgrade half is **partial by design**. Moves are still all or nothing —
- * any placement fault throws before a byte is written — but a planned upgrade
- * the yard cannot start now is a row in the report, never a refusal of the
- * whole request (`docs/design/planner-upgrades.md` §3.2). The only plan that
- * does refuse the request is a malformed one: a target past the top of a
- * type's ladder, raised as a 400 carrying `planLevel`.
+ * the caller's Inferno `baseid`, to the Inferno yard. Moves are all or
+ * nothing: any placement fault throws before a byte is written.
  *
  * @param {Context} ctx - The Koa context object, which includes the authenticated user.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
@@ -154,32 +145,6 @@ const applyTo = (save: Save, raw: unknown, now: number) => {
     moved++;
   }
 
-  // The walk reads the yard the moves have just written, so the report and the
-  // `buildingdata` that comes back describe the same yard. Nothing in it reads
-  // a position, so the order is for consistency rather than for correctness.
-  let upgrades: UpgradeWalk | null = null;
-  if (body.startUpgrades === 1) {
-    upgrades = walkUpgrades(
-      {
-        type: save.type,
-        buildingdata,
-        buildinghealthdata: save.buildinghealthdata,
-        resources: save.resources,
-        storedata: save.storedata,
-      },
-      payload.nodes,
-      now
-    );
-
-    buildingdata = upgrades.buildingdata;
-    save.resources = updateResources(
-      debitOf(upgrades.cost),
-      { ...(save.resources ?? {}) },
-      Operation.SUBTRACT
-    );
-    save.points = String(Number(save.points ?? "0") + upgrades.points);
-  }
-
   save.buildingdata = buildingdata;
   save.buildinghealthdata = storage.buildinghealthdata;
   save.researchdata = storage.researchdata;
@@ -200,7 +165,8 @@ const applyTo = (save: Save, raw: unknown, now: number) => {
     researchdata: storage.researchdata,
     resources: save.resources,
     mushrooms: save.mushrooms ?? {},
-    upgrades: upgrades && report(upgrades),
+    // Read by older clients, which may still ask for planned upgrades.
+    upgrades: null,
   };
 };
 
@@ -252,17 +218,3 @@ const storeAndPlace = (
 
   return { buildingdata: next, buildinghealthdata: health, researchdata, stored, placed };
 };
-
-/**
- * The walk's result without the new `buildingdata`, which the response already
- * carries at the top level and which is the largest thing in a save.
- */
-const report = (walk: UpgradeWalk) => ({
-  started: walk.started,
-  finished: walk.finished,
-  waiting: walk.waiting,
-  skipped: walk.skipped,
-  cost: walk.cost,
-  points: walk.points,
-  workers: walk.workers,
-});

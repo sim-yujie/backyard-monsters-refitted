@@ -3,11 +3,10 @@ import type { Save } from "../../database/models/save.model.js";
 import { BaseType } from "../../enums/Base.js";
 import { fortifyStepsOf, OUTPOST_COSTS } from "../../game-data/buildingCosts.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
-import type { LayoutNode } from "../../schemas/YardPlannerSchemas.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
 import { storageCap } from "../base/economy/resourceBudget.js";
 import { yardKindOf } from "../yardplanner/costs.js";
-import { walkUpgrades } from "../yardplanner/startUpgrades.js";
+import { planOneUpgrade } from "../yardplanner/startUpgrades.js";
 import { planTrapRearm } from "../yardplanner/trapRearm.js";
 import { planWallUpgrade } from "../yardplanner/wallUpgrade.js";
 import { OUTPOST_WORKERS, workerCount } from "../yardplanner/workers.js";
@@ -273,32 +272,31 @@ describe("the planner batches on an outpost", () => {
     expect(refusal.data).toMatchObject({ capReached: { type: 117, have: 5, max: 5 } });
   });
 
-  test("Apply's walk starts one job, whatever the plan wants", () => {
+  test("an upgrade step is priced from the outpost ladder, with one worker", () => {
     const buildings = {
       "1": CORE,
       "2": { id: 2, t: 20, X: 100, Y: 100, l: 1 },
       "3": { id: 3, t: 21, X: -100, Y: 100, l: 1 },
     };
-    const nodes = [
-      { id: 2, t: 20, x: 100, y: 100, plan: { level: 2, order: 0 } },
-      { id: 3, t: 21, x: -100, y: 100, plan: { level: 2, order: 1 } },
-    ] as unknown as LayoutNode[];
+    const first = planOneUpgrade(yard(buildings as never), 2, NOW);
+    expect(first).toMatchObject({ ok: true, cost: { r1: OUTPOST_COSTS[20]!.costs[1]![0] } });
 
-    const walk = walkUpgrades(yard(buildings as never), nodes, NOW);
-
-    expect(walk.started.map((row) => row.id)).toEqual([2]);
-    expect(walk.waiting.map((row) => row.id)).toEqual([3]);
-    expect(walk.workers).toEqual({ total: 1, busyBefore: 0, busyAfter: 1 });
-    const [r1] = OUTPOST_COSTS[20]!.costs[1]!;
-    expect(walk.cost.r1).toBe(r1);
+    const busy = { ...buildings, "2": { ...buildings["2"], cU: 60 } };
+    expect(planOneUpgrade(yard(busy as never), 3, NOW)).toMatchObject({
+      ok: false,
+      reason: "workers",
+      workers: { total: 1, busy: 1 },
+    });
   });
 
-  test("a plan past the outpost ladder is refused (a Laser Tower to 7)", () => {
-    const nodes = [{ id: 2, t: 23, x: 100, y: 100, plan: { level: 7, order: 0 } }] as unknown as LayoutNode[];
-    const refusal = rejection(() =>
-      walkUpgrades(yard({ "1": CORE, "2": { id: 2, t: 23, X: 100, Y: 100, l: 1 } } as never), nodes, NOW)
-    );
-    expect(refusal.data).toMatchObject({ planLevel: [2] });
+  test("the outpost ladder's top is the top (a Laser Tower stops at 6)", () => {
+    const top = OUTPOST_COSTS[23]!.costs.length + 1;
+    expect(top).toBe(7);
+    const tower = { id: 2, t: 23, X: 100, Y: 100, l: top };
+    expect(planOneUpgrade(yard({ "1": CORE, "2": tower } as never), 2, NOW)).toMatchObject({
+      ok: false,
+      reason: "maxLevel",
+    });
   });
 });
 
