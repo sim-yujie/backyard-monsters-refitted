@@ -9,6 +9,7 @@ import { tribePictureUrl } from "@/game/maproom/tribeAvatars";
 import { button, el, icon, type IconName } from "@/ui/maproom1/icons";
 import { GROUND_BONUS_TITLE, groundBonusIcons } from "./groundBonus";
 import { landFeatureChip } from "./landFeatureRow";
+import { addNeighbourBonusChip } from "./neighbourBonusChip";
 import { icon as lineIcon } from "@/ui/icons";
 
 /**
@@ -438,6 +439,7 @@ export class CellPanel {
       return;
     }
 
+    addNeighbourBonusChip(this.chips, payload);
     if (isPlayerCell(payload)) {
       this.renderPlayer(cell, payload, where);
       return;

@@ -123,8 +123,8 @@ describe("the design A table", () => {
 describe("stacking with the neighbour bonus", () => {
   it("multiplies health and damage, and keeps the feature's range", () => {
     const both = combineDefenceBonus(neighbourDefenceBonus(1), landDefenceBonus(LandFeature.FOREST))!;
-    expect(1 + both.hp!).toBeCloseTo(1.08 * 1.2, 12);
-    expect(1 + both.damage!).toBeCloseTo(1.08, 12);
+    expect(1 + both.hp!).toBeCloseTo(1.05 * 1.2, 12);
+    expect(1 + both.damage!).toBeCloseTo(1.05, 12);
     expect(rangePercentOf(both)).toBe(-10);
   });
 
@@ -132,8 +132,8 @@ describe("stacking with the neighbour bonus", () => {
     const forces = parseDefenderForces({ ...FORCES, neighbours: 2, land: LandFeature.ROCKS });
     expect(forces?.land).toBe(LandFeature.ROCKS);
     const bonus = battleDefence(forces).defenceBonus!;
-    expect(1 + bonus.hp!).toBeCloseTo(1.14 * 1.1, 12);
-    expect(1 + bonus.damage!).toBeCloseTo(1.14 * 1.1, 12);
+    expect(1 + bonus.hp!).toBeCloseTo(1.09 * 1.1, 12);
+    expect(1 + bonus.damage!).toBeCloseTo(1.09 * 1.1, 12);
   });
 
   it("drops open ground and nonsense from a stored defence", () => {

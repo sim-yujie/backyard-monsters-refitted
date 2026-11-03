@@ -132,3 +132,56 @@ export const loadFriendlyNeighbourCount = async (
   };
   return friendlyNeighbourCount(target, stored, heightAt, playersOnly);
 };
+
+/**
+ * The friendly neighbours of every cell in `targets`, as the map shows them
+ * (the cell pop-up's bonus row): `friendlyNeighbourCount`, the very count the
+ * attack load stores with the battle, run once per cell over one set of
+ * stored rows. Keyed `"x,y"`; a cell with none is left out.
+ */
+export const areaNeighbourCounts = (
+  targets: readonly TargetCell[],
+  stored: readonly StoredNeighbour[],
+  heightAt: (x: number, y: number) => number,
+  playersOnly = false
+): Map<string, number> => {
+  const counts = new Map<string, number>();
+  for (const target of targets) {
+    const around = new Set(mr2NeighbourCoords(target.x, target.y).map(({ x, y }) => `${x},${y}`));
+    const near = stored.filter((cell) => around.has(`${cell.x},${cell.y}`));
+    const count = friendlyNeighbourCount(target, near, heightAt, playersOnly);
+    if (count > 0) counts.set(`${target.x},${target.y}`, count);
+  }
+  return counts;
+};
+
+/**
+ * `areaNeighbourCounts` for a map area: reads the stored cells around the
+ * targets in one query.
+ *
+ * @param targets - The area's land cells (players' cells and camps).
+ * @param worldid - Their world.
+ * @param heightAt - The terrain height of a cell with no stored row.
+ * @param playersOnly - Count for players' cells only.
+ */
+export const loadAreaNeighbourCounts = async (
+  targets: readonly TargetCell[],
+  worldid: string,
+  heightAt: (x: number, y: number) => number,
+  playersOnly = false
+): Promise<Map<string, number>> => {
+  const counted = playersOnly ? targets.filter(isPlayerCell) : targets;
+  if (counted.length === 0) return new Map();
+  const around = counted.flatMap(({ x, y }) => mr2NeighbourCoords(x, y));
+  const stored = await postgres.em.find(
+    WorldMapCell,
+    {
+      world: worldid,
+      map_version: MapRoomVersion.V2,
+      x: { $in: [...new Set(around.map(({ x }) => x))] },
+      y: { $in: [...new Set(around.map(({ y }) => y))] },
+    },
+    { fields: ["x", "y", "uid", "base_type", "terrainHeight"] }
+  );
+  return areaNeighbourCounts(counted, stored, heightAt, playersOnly);
+};

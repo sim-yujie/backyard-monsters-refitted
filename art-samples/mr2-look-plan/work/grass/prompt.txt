@@ -1,0 +1,5 @@
+Use your image generation tool (one call) to create ONE new image and save it as art.png in the current folder. Do not write code, do not draw with scripts.
+
+The attached picture(s) are a concept painting of a hex world map for a cartoon monster strategy game. MATCH ITS ART STYLE EXACTLY: bright, painted, toy-like cartoon, saturated yellow-greens and warm sandy yellows, crisp small painted details, warm sunlight from the top-left, seen from a tilted top-down camera. Not photo-real. No text, no logos, no watermark, no hex lines, no grid.
+
+PICTURE: a SQUARE seamless tileable texture (1024x1024) of the open grass meadow ground from the attached painting, seen from above: bright yellow-green painted grass with small tufts and soft light and dark patches, a very few tiny white and pink flowers and a very few tiny pebbles, evenly spread. No trees, no bushes, no big rocks, no paths, no water, no shadows of objects. It must tile seamlessly on all four sides with no visible seam and no single feature that repeats noticeably.

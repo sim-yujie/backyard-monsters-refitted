@@ -30,7 +30,7 @@ import type { DefenceBonus } from "./engine.js";
  *   feature the same way, never below 1.
  * - Health and tower damage: multiplied with the neighbour bonus
  *   (`combineDefenceBonus`): a forest cell with one friendly neighbour has
- *   1.20 x 1.08 = 1.296 times the building toughness.
+ *   1.20 x 1.05 = 1.26 times the building toughness.
  *
  * It applies to a player's outpost and to a wild monster camp (both players
  * and tribes, as the neighbour bonus), not to a player's main yard, which the

@@ -877,6 +877,12 @@ export interface WildMonsterCell {
   d: number;
   /** The cell's land feature (`landFeatures.ts`), with the server's land switch on; absent on open ground. */
   lf?: number;
+  /**
+   * Map Room 2's neighbour defence bonus (`docs/mr2-neighbours.md`): the
+   * friendly cells around this one, 1 to 6, counted as the attack load counts
+   * them. Sent only with the switch on and at least one friend.
+   */
+  nb?: number;
 }
 
 /** A player's main yard (`b` 2) or captured outpost (`b` 3). */
@@ -906,6 +912,12 @@ export interface PlayerCell {
   dm: number;
   /** 1 when damage >= 90, i.e. takeover-eligible. */
   d: number;
+  /**
+   * Map Room 2's neighbour defence bonus (`docs/mr2-neighbours.md`): the
+   * friendly cells around this one, 1 to 6, counted as the attack load counts
+   * them. Sent only with the switch on and at least one friend.
+   */
+  nb?: number;
   /** Lock owner user id; non-zero means busy. Always 0 on the caller's cell. */
   lo: number;
   /** 1 while damage protection is active. */
