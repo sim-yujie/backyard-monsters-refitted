@@ -21,8 +21,12 @@ import type { Tilt } from "./tilt";
  * mipmaps (rebuilt each frame) to stop the cell outlines shimmering there.
  */
 
-/** Grid of the mesh; the warp is exact at the vertices and near enough between. */
-const MESH_VERTICES = 24;
+/**
+ * Grid of the mesh. The warp is exact at the vertices and straight between
+ * them; at 48 the drawn map is within about half a pixel of the maths that
+ * picks cells, even at the strong tilt (24 left it 1.7 px out).
+ */
+const MESH_VERTICES = 48;
 
 /** Largest texture side we ask for; the strong tilt at 4K stays under it. */
 const MAX_TEXTURE_SIDE = 8192;
