@@ -3,7 +3,15 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { QUAKE_ANIM_FRAMES, type BattleVisualEvent, type SiegeSnapshot } from "@/game/combat/rules";
 import { EFFECTS, EffectsPlayer, type Effect, type EffectsBackend } from "@/game/sound/EffectsPlayer";
-import { AttackSounds, attackSoundsFor, damageSoundFor, destroySoundFor } from "./attackSounds";
+import {
+  AttackSounds,
+  BURROW_SOUND_SETTLE_TICKS,
+  attackSoundsFor,
+  damageSoundFor,
+  destroySoundFor,
+  freshBurrowSound,
+  settleBurrow,
+} from "./attackSounds";
 
 /** Buildings by id: type, level. */
 const YARD: Record<number, { type: number; level: number }> = {
@@ -299,5 +307,27 @@ describe("attack sounds", () => {
     sounds.onEvent(shot(1));
     sounds.onBuilding(14, "destroyed");
     expect(starts).toEqual([EFFECTS.splash1.url, EFFECTS.destroytownhall.url]);
+  });
+
+  it("sounds a burrower's dig and arise once each state holds, never while it flips tick by tick", () => {
+    const state = freshBurrowSound();
+    const heard: (boolean | null)[] = [];
+    // Under and up on alternate ticks for a second: silent.
+    for (let tick = 0; tick < 80; tick += 1) {
+      const sound = settleBurrow(state, tick % 2 === 0, tick);
+      if (sound !== null) heard.push(sound);
+    }
+    expect(heard).toEqual([]);
+    // Under for half a second, then up: one dig, one arise, each a settle late.
+    const at: number[] = [];
+    for (let tick = 100; tick < 200; tick += 1) {
+      const sound = settleBurrow(state, tick < 140, tick);
+      if (sound !== null) {
+        heard.push(sound);
+        at.push(tick);
+      }
+    }
+    expect(heard).toEqual([true, false]);
+    expect(at).toEqual([100 + BURROW_SOUND_SETTLE_TICKS, 140 + BURROW_SOUND_SETTLE_TICKS]);
   });
 });

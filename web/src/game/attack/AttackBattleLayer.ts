@@ -26,7 +26,14 @@ import { damageStep } from "@/game/yard/YardBuildings";
 import { depthKey, type Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
 import { combatKind, type AttackSession } from "./AttackSession";
-import { AttackSounds, attackSoundsFor, type PlaySound } from "./attackSounds";
+import {
+  AttackSounds,
+  attackSoundsFor,
+  freshBurrowSound,
+  settleBurrow,
+  type BurrowSound,
+  type PlaySound,
+} from "./attackSounds";
 import { BombFx, type BombArt } from "./bombFx";
 import { bombCandidatesOf, bombHits, type BombCandidate } from "./bombTargets";
 import { BAR_OFFSET, BAR_WIDTH, BuildingBars } from "./buildingBars";
@@ -698,6 +705,8 @@ interface CreepView {
   /** The tick it last came up, for the hop; and of its last clod of dirt. */
   surfaceTick: number;
   dirtTick: number;
+  /** Its dig/arise sound, which waits for the state to hold (`settleBurrow`). */
+  burrowSound: BurrowSound;
 }
 
 type DeathEvent = Extract<BattleVisualEvent, { kind: "death" }>;
@@ -1664,6 +1673,7 @@ export class AttackBattleLayer {
     view.burrowed = false;
     view.surfaceTick = Number.NEGATIVE_INFINITY;
     view.dirtTick = tick;
+    view.burrowSound = freshBurrowSound();
     view.body.visible = true;
     view.barBack.visible = true;
     view.barFront.visible = true;
@@ -1724,6 +1734,7 @@ export class AttackBattleLayer {
       burrowed: false,
       surfaceTick: Number.NEGATIVE_INFINITY,
       dirtTick: 0,
+      burrowSound: freshBurrowSound(),
     };
   }
 
@@ -2497,6 +2508,8 @@ export class AttackBattleLayer {
    */
   private tunnel(view: CreepView, creep: CreepSnapshot, ground: Point, tick: number): void {
     const under = creep.burrowed === true;
+    const sound = settleBurrow(view.burrowSound, under, tick);
+    if (sound !== null) this.sounds.onBurrow(sound);
     const dirt = dirtFor(view.burrowed, under, tick, view.dirtTick);
     if (dirt === null) return;
     if (dirt === "dig" && !under) {
@@ -2505,7 +2518,6 @@ export class AttackBattleLayer {
       // not when it comes up to walk, home or to a foe close by.
       if (creep.state === "attacking") this.punchy(tick, ground, SURFACE_BLAST_RADIUS, SURFACE_PUNCHY);
     }
-    if (dirt === "dig") this.sounds.onBurrow(under);
     view.burrowed = under;
     view.dirtTick = tick;
     this.spawnDirt(tick, ground, dirt === "dig");

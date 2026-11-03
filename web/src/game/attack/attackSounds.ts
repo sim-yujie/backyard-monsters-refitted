@@ -37,7 +37,7 @@ import { ATTACK_EFFECTS, type Effect } from "@/game/sound/EffectsPlayer";
  * | Korath's quake (`Korath.as:176`)                    | `quake`, 0.4                   | `quake`                  |
  * | A monster dying (`MonsterBase.dieFinish`, `deathSplat`) | `monsterland1-3` + `splat1-3`; D.A.V.E. `monsterlanddave` | the splat |
  * | A champion knocked out (`ChampionBase.as:784`)      | `monsterland1-3`               | the splat                |
- * | Wormzer under / up (`MonsterBase.renderBurrow`)     | `dig` / `arise`, 0.5           | the dig                  |
+ * | Wormzer under / up (`MonsterBase.renderBurrow`)     | `dig` / `arise`, 0.5           | the dig, once it holds 0.1 s |
  * | A building damaged / falling (`BFOUNDATION.as:1070-1092`) | `damage1-3` / `destroy1-4` by level, `destroytownhall` | the smoke puff |
  * | A resource bomb thrown (`ResourceBombs.Trigger`)    | `twigbomb/pebblebomb/puttybomb`| the bomb's drop          |
  * | A trap (`BTRAP.as:147`, `BHEAVYTRAP.as:109`)        | `trap`                         | the trap's reveal        |
@@ -124,6 +124,41 @@ export const damageSoundFor = (level: number): Effect =>
 /** `SOUNDS.DestroySoundIDForLevel`. */
 export const destroySoundFor = (level: number): Effect =>
   level < 2 ? "destroy1" : level < 5 ? "destroy2" : level < 8 ? "destroy3" : "destroy4";
+
+/**
+ * How long a burrower must stay under (or up) before its `dig` (or `arise`)
+ * sounds: 8 ticks, a tenth of a second. A burrower at a target can flip
+ * under and up on alternate ticks; without this it chattered `dig`/`arise`
+ * a dozen times a second (an Inferno raid, 3 Nov). A real dive or pop-up
+ * lasts far longer, so it still sounds, a tenth of a second late.
+ */
+export const BURROW_SOUND_SETTLE_TICKS = 8;
+
+/** One burrower's last sounded state, and the tick its new state began (NaN when none). */
+export interface BurrowSound {
+  sounded: boolean;
+  since: number;
+}
+
+/** A burrower's sound state as it lands: up, nothing pending. */
+export const freshBurrowSound = (): BurrowSound => ({ sounded: false, since: Number.NaN });
+
+/**
+ * Whether this tick sounds a burrower's dig (`true`) or arise (`false`), or
+ * nothing (`null`): only once its new state has held for
+ * {@link BURROW_SOUND_SETTLE_TICKS}.
+ */
+export const settleBurrow = (state: BurrowSound, under: boolean, tick: number): boolean | null => {
+  if (under === state.sounded) {
+    state.since = Number.NaN;
+    return null;
+  }
+  if (Number.isNaN(state.since)) state.since = tick;
+  if (tick - state.since < BURROW_SOUND_SETTLE_TICKS) return null;
+  state.sounded = under;
+  state.since = Number.NaN;
+  return under;
+};
 
 export class AttackSounds {
   private readonly play: PlaySound;
