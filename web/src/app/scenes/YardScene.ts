@@ -122,6 +122,7 @@ import { DefencesDoor } from "@/ui/defences/DefencesDoor";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
 import { WorldChatBox } from "@/ui/chat/WorldChatBox";
 import { openCountryPrompt } from "@/ui/chat/CountryPrompt";
+import { supportReminder } from "@/game/support/supportReminder";
 import { reportLook } from "@/app/lookReport";
 import {
   MONSTERS_TAB_ORDER,
@@ -421,6 +422,8 @@ export class YardScene implements Scene {
   private save: BaseLoadResponse | null = null;
   /** The own yard's store; null on a visit and before the load answers. */
   private store: YardStore | null = null;
+  /** Takes back this yard's offer of a place for the support reminder. */
+  private stopSupportOffer: (() => void) | null = null;
   private unsubscribeStore: (() => void) | null = null;
   /** Stops showing juices in the yard (`juiceNews.ts`). */
   private unsubscribeJuice: (() => void) | null = null;
@@ -724,6 +727,8 @@ export class YardScene implements Scene {
 
   exit(): void {
     presence.setScreen(ELSEWHERE);
+    this.stopSupportOffer?.();
+    this.stopSupportOffer = null;
     this.tribeBar?.close();
     this.tribeBar = null;
     this.tribePicker?.close();
@@ -943,6 +948,18 @@ export class YardScene implements Scene {
         openCountryPrompt({
           container: context.overlay.modal,
           onSaved: (settings) => worldChat.setCountryRoom(settings.countryChannel, settings.country),
+        });
+      }
+      // The rare "Support the game" reminder may show only here, on the own
+      // main yard, and never while Bob's guided start runs
+      // (`game/support/supportReminder.ts` keeps the rest of the rule).
+      this.stopSupportOffer?.();
+      this.stopSupportOffer = null;
+      if (store?.kind === "main" && !tribe) {
+        this.stopSupportOffer = supportReminder.offer(() => {
+          if (this.context !== context || this.store !== store) return null;
+          const guide = store.save.onboarding?.guide.state;
+          return guide === "pending" || guide === "active" ? null : context.overlay.modal;
         });
       }
       // Which look the player uses, for the owner's dashboard (owner 4 Nov 2026): once per load.

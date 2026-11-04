@@ -331,8 +331,24 @@ describe("AccountMenu", () => {
       expect(menu.open).toBe(false);
     });
   });
+  describe("the Support the game item", () => {
+    it("is always there, after Report a bug, with the painted heart, and opens the support panel", () => {
+      menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn(), onReportBug: vi.fn() });
+      document.body.append(menu.element);
+      menu.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
+      const item = menu.element.querySelector<HTMLButtonElement>(".account-menu__support")!;
+      expect(item.getAttribute("role")).toBe("menuitem");
+      expect(item.textContent).toBe("Support the game");
+      expect(item.querySelector(".game-icon--support")).not.toBeNull();
+      expect(item.previousElementSibling?.classList.contains("account-menu__report-bug")).toBe(true);
+      item.click();
+      expect(menu.open).toBe(false);
+      expect(document.querySelector(".support-popup")).not.toBeNull();
+      document.querySelector(".support-popup")?.closest(".popup-backdrop")?.remove();
+    });
+  });
   describe("the Join the Discord item", () => {
-    it("is always there, after Report a bug, and opens the invite in a new tab", () => {
+    it("is always there, after Support the game, and opens the invite in a new tab", () => {
       menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn(), onReportBug: vi.fn() });
       document.body.append(menu.element);
       menu.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
@@ -342,7 +358,7 @@ describe("AccountMenu", () => {
       expect(item.getAttribute("href")).toBe("https://discord.gg/wthryBRZHz");
       expect(item.target).toBe("_blank");
       expect(item.rel).toBe("noopener noreferrer");
-      expect(item.previousElementSibling?.classList.contains("account-menu__report-bug")).toBe(true);
+      expect(item.previousElementSibling?.classList.contains("account-menu__support")).toBe(true);
       item.addEventListener("click", (event) => event.preventDefault());
       item.click();
       expect(menu.open).toBe(false);

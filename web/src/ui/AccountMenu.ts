@@ -37,8 +37,10 @@
  * announcements again (`ui/announcements/AnnouncementDialog.ts`).
  *
  * With `onReportBug` it has a "Report a bug" item, which opens the bug report
- * form (`ui/bugReport/BugReportDialog.ts`). After it, always, "Join the
- * Discord" opens the community invite in a new tab.
+ * form (`ui/bugReport/BugReportDialog.ts`). After it, always, "Support the
+ * game" (the painted heart) opens the small Patreon / Ko-fi panel
+ * (`ui/support/SupportPanel.ts`), and "Join the Discord" opens the community
+ * invite in a new tab.
  *
  * Beside "Reduce effects" sit the sound rows, Music and Sound effects, each
  * a mute and a volume slider (`ui/SoundSliders.ts`), saved with the
@@ -53,6 +55,8 @@ import { openAccountSettings } from "@/ui/AccountSettings";
 import { reduceEffects, setReduceEffects } from "@/game/attack/juice";
 import { SoundSliders } from "@/ui/SoundSliders";
 import { fullscreenAvailable, isFullscreen, toggleFullscreen } from "@/ui/fullscreen";
+import { gameIcon } from "@/ui/gameIcon";
+import { openSupportPanel, SUPPORT_TEXT } from "@/ui/support/SupportPanel";
 import "@/ui/friends/friends.css";
 import "@/ui/styles/guide-start.css";
 
@@ -356,6 +360,22 @@ export class AccountMenu {
       });
       this.list.append(reportBug);
     }
+    // Support the game (owner 24 Oct 2026): always here, on every screen with
+    // the menu. Only opens the panel of links; it gives nothing in the game.
+    const support = document.createElement("button");
+    support.type = "button";
+    support.className = "btn btn--ghost account-menu__help account-menu__support";
+    support.setAttribute("role", "menuitem");
+    support.append(
+      gameIcon("support", { size: 24, decorative: true }),
+      Object.assign(document.createElement("span"), { textContent: SUPPORT_TEXT.title }),
+    );
+    support.addEventListener("click", () => {
+      this.toggle(false);
+      const container = document.querySelector<HTMLElement>(".overlay__layer--modal") ?? document.body;
+      openSupportPanel({ container });
+    });
+    this.list.append(support);
     // The community Discord, in a new tab; no referrer to the outside site.
     const discord = document.createElement("a");
     discord.className = "btn btn--ghost account-menu__help account-menu__discord";

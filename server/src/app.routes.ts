@@ -127,6 +127,7 @@ import { playerAchievements } from "./controllers/achievements/routes.js";
 import { getDefenceReplay, getDefences } from "./controllers/defences/routes.js";
 import { mountFriendsRoutes } from "./controllers/friends/routes.js";
 import { mountEventsRoutes } from "./controllers/events/routes.js";
+import { mountSupportRoutes } from "./controllers/support/routes.js";
 import { adminOnly, mountAdminRoutes } from "./controllers/admin/routes.js";
 import { mountAnnouncementRoutes } from "./controllers/announcements/routes.js";
 import { postgres } from "./server.js";
@@ -390,6 +391,8 @@ router.post("/alliance/changerelationship", verifyUserAuth, logRequest, changeRe
 router.get("/api/:apiVersion/events/wmi", apiVersion, logRequest, wildMonsterInvasion);
 // The Events page and "What's new" (`controllers/events/routes.ts`); the claims are yard actions.
 mountEventsRoutes(router);
+// The rare "Support the game" reminder's record (`controllers/support/routes.ts`).
+mountSupportRoutes(router);
 
 /**  ────────────────────────────────────────────────
 * 📦 Bug reports: the game's "Report a bug" form (`controllers/bugReports/submitBugReport.ts`).
