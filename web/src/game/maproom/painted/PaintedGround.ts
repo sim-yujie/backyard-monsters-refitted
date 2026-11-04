@@ -1,4 +1,14 @@
-import { Assets, CanvasSource, Geometry, GlProgram, Mesh, Shader, type TextureSource } from "pixi.js";
+import {
+  Assets,
+  BufferImageSource,
+  CanvasSource,
+  Geometry,
+  GlProgram,
+  Mesh,
+  Shader,
+  type Renderer,
+  type TextureSource,
+} from "pixi.js";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import { onQualityChange, quality, sheetAtQuality, type Quality } from "@/game/quality";
 import { FOG_COLOUR, LOADING_COLOUR } from "../cellVisuals";
@@ -7,10 +17,12 @@ import type { CellRange } from "../zones";
 import { cellCentre, paintedCellShape, textureAspect, type CellShape } from "./cellShape";
 import { SPRITE_ROWS, SPRITE_SHEET_ROWS } from "./canopy";
 import { GroundData } from "./GroundData";
-import { SHADER_TEXTURES } from "./groundKinds";
-import { GROUND_FRAGMENT, GROUND_VERTEX } from "./groundShader";
+import { GroundTexture, SHADER_TEXTURES } from "./groundKinds";
+import { GROUND_SAMPLERS, GROUND_VERTEX, groundFragment } from "./groundShader";
+import { PLACEMENT_GRIDS, PlacementLayer, placementProgram } from "./PlacementLayer";
 import { RiverLayer } from "./RiverLayer";
 import type { RiverCells } from "./riverPaths";
+import type { ProgramWarmer } from "./shaderWarmup";
 
 /** The ground texture atlas, 4 textures a row (`web/tools/mr2-paint/build.py`). */
 const ATLAS_URL = `${import.meta.env.BASE_URL}maproom/painted/ground@4x.webp`;
@@ -53,13 +65,42 @@ interface GroundUniforms {
   uRiverOn: number;
   uRiverRect: Float32Array;
   uFog: Float32Array;
+  uDecalRect: Float32Array;
+  uRockRect: Float32Array;
+  uFeatureRect: Float32Array;
+  uMarshRect: Float32Array;
+  uPlaceAt: Float32Array;
 }
+
+const RECT_UNIFORM = { decals: "uDecalRect", rocks: "uRockRect", features: "uFeatureRect", marsh: "uMarshRect" } as const;
 
 const QUALITY_LEVEL: Record<Quality, number> = { high: 2, medium: 1, low: 0 };
 
-/** The ground's program (one per page; `shaderWarmup.ts` compiles it ahead). */
-export const groundProgram = (): GlProgram =>
-  GlProgram.from({ vertex: GROUND_VERTEX, fragment: GROUND_FRAGMENT, name: "mr2-painted-ground" });
+/**
+ * The ground's program for one Quality (`shaderWarmup.ts` compiles it ahead). Each Quality has its
+ * own, with the level fixed in the source: Low's compiles in a few seconds, so the painted look shows
+ * quickly the first time, and the player's own level takes over when it has compiled (plan step 10).
+ */
+export const groundProgram = (level: Quality): GlProgram =>
+  GlProgram.from({ vertex: GROUND_VERTEX, fragment: groundFragment(level), name: `mr2-painted-ground-${level}` });
+
+/** The foam texture's brightness (luma) for each pixel of its RGBA bytes. */
+const lumaOf = (r: number, g: number, b: number): number => Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+
+/**
+ * The wet sand's colour with the foam's brightness in its alpha (the shader's surf reads it there,
+ * which saves a texture slot: WebGL2 promises only 16). Pure, for the tests.
+ */
+export const withFoamAlpha = (wetSand: Uint8ClampedArray, foam: Uint8ClampedArray): Uint8Array => {
+  const out = new Uint8Array(wetSand.length);
+  for (let i = 0; i < wetSand.length; i += 4) {
+    out[i] = wetSand[i]!;
+    out[i + 1] = wetSand[i + 1]!;
+    out[i + 2] = wetSand[i + 2]!;
+    out[i + 3] = lumaOf(foam[i]!, foam[i + 1]!, foam[i + 2]!);
+  }
+  return out;
+};
 
 /**
  * How often the water and surf step, in milliseconds, by Quality (plan section 5: half rate on
@@ -116,8 +157,18 @@ export class PaintedGround {
   private readonly rivers = new RiverLayer();
   private readonly stopQuality: () => void;
   private destroyed = false;
+  /** Which sprite piece each grid square holds (`PlacementLayer.ts`), worked out round the view. */
+  private readonly placements: PlacementLayer;
 
-  constructor(readonly shape: CellShape = paintedCellShape()) {
+  /**
+   * warmer compiles programs in the background (`shaderWarmup.ts`); with it, the ground starts on
+   * the Low program (compiled before the look was built) and switches to the player's Quality when
+   * that one is ready. Without it every program is taken as ready.
+   */
+  constructor(
+    readonly shape: CellShape = paintedCellShape(),
+    private readonly warmer: ProgramWarmer | null = null,
+  ) {
     this.data = new GroundData();
     this.standIns = STAND_INS.map(solidSource);
     this.spriteStandIn = solidSource("rgba(0,0,0,0)");
@@ -138,18 +189,27 @@ export class PaintedGround {
         uCliffsReady: { value: 0, type: "f32" },
         uRiverRect: { value: new Float32Array([0, 0, 1, 1]), type: "vec4<f32>" },
         uRiverOn: { value: 0, type: "f32" },
+        uDecalRect: { value: new Float32Array(4), type: "vec4<f32>" },
+        uRockRect: { value: new Float32Array(4), type: "vec4<f32>" },
+        uFeatureRect: { value: new Float32Array(4), type: "vec4<f32>" },
+        uMarshRect: { value: new Float32Array(4), type: "vec4<f32>" },
+        uPlaceAt: { value: new Float32Array(4), type: "vec4<f32>" },
       },
       uData: this.data.source,
       uSprites: this.spriteStandIn,
       uCliffs: this.spriteStandIn,
       uRiver: this.rivers.uniforms.source,
+      uPlace: this.spriteStandIn,
     };
-    SHADER_TEXTURES.forEach((_, index) => {
-      resources[`uGround${index}`] = this.standIns[index]!;
-    });
+    for (const index of GROUND_SAMPLERS) resources[`uGround${index}`] = this.standIns[index]!;
+    const wanted = groundProgram(quality());
     this.shader = new Shader({
-      glProgram: groundProgram(),
+      glProgram: !warmer || warmer.ready(wanted) ? wanted : groundProgram("low"),
       resources,
+    });
+    this.placements = new PlacementLayer(shape, this.shader.resources.groundUniforms, {
+      uData: this.data.source,
+      uRiver: this.rivers.uniforms.source,
     });
 
     // The quad covers the world and a cell's margin round it.
@@ -167,6 +227,7 @@ export class PaintedGround {
 
     this.stopQuality = onQualityChange((level) => {
       this.uniforms.uQuality = QUALITY_LEVEL[level];
+      this.placements.invalidate();
       void this.load(level);
     });
   }
@@ -183,7 +244,11 @@ export class PaintedGround {
     const changed = this.rivers.update(range, shown, cells);
     if (!changed) return false;
     const { source, rect, on } = this.rivers.uniforms;
-    if (this.shader.resources.uRiver !== source) this.shader.resources.uRiver = source;
+    if (this.shader.resources.uRiver !== source) {
+      this.shader.resources.uRiver = source;
+      this.placements.setRiverTexture(source);
+    }
+    this.placements.invalidate();
     this.rivers.releaseRetired();
     const uniforms = this.uniforms;
     uniforms.uRiverOn = on ? 1 : 0;
@@ -218,6 +283,50 @@ export class PaintedGround {
     if (time === this.uniforms.uTime) return false;
     this.uniforms.uTime = time;
     return true;
+  }
+
+  /** The placement programs (for the warm-up, `paintedLook.ts`). */
+  static placementPrograms(): GlProgram[] {
+    return PLACEMENT_GRIDS.map(placementProgram);
+  }
+
+  /**
+   * Readies this frame's ground (plan step 10): switches to the player's Quality's program once it
+   * has compiled (the Low one shows meanwhile), and works out the sprite pieces round the view when
+   * it has moved on or something changed. cellPixels is a cell's width on screen. Returns whether
+   * the picture changed, so a tilted view knows to redraw.
+   */
+  prepare(renderer: Renderer, range: CellRange, cellPixels: number, level: Quality = quality()): boolean {
+    let changed = false;
+    const wanted = groundProgram(level);
+    if (this.shader.glProgram !== wanted) {
+      if (!this.warmer || this.warmer.ready(wanted)) {
+        this.shader.glProgram = wanted;
+        changed = true;
+      } else {
+        void this.warmer.warm(wanted);
+      }
+    }
+    const ready = (grid: (typeof PLACEMENT_GRIDS)[number]): boolean => {
+      const program = placementProgram(grid);
+      if (!this.warmer || this.warmer.ready(program)) return true;
+      void this.warmer.warm(program).then((linked) => {
+        if (linked) this.placements.invalidate();
+      });
+      return false;
+    };
+    if (this.placements.update(renderer, range, cellPixels, ready)) {
+      const uniforms = this.uniforms;
+      for (const grid of PLACEMENT_GRIDS) {
+        const rect = this.placements.rect(grid);
+        uniforms[RECT_UNIFORM[grid]].set([rect.x, rect.y, rect.w, rect.h]);
+      }
+      uniforms.uPlaceAt.set(this.placements.columns());
+      const texture = this.placements.texture;
+      if (texture && this.shader.resources.uPlace !== texture) this.shader.resources.uPlace = texture;
+      changed = true;
+    }
+    return changed;
   }
 
   /** Fetches the ground atlas and the sprite sheet at this Quality. */
@@ -307,7 +416,7 @@ export class PaintedGround {
     }
     if (this.destroyed) return false;
     const size = (image as { width: number }).width / ATLAS_COLUMNS;
-    const cut = SHADER_TEXTURES.map((slot) => {
+    const canvases = SHADER_TEXTURES.map((slot) => {
       const canvas = document.createElement("canvas");
       canvas.width = canvas.height = size;
       canvas.getContext("2d")!.drawImage(
@@ -321,19 +430,31 @@ export class PaintedGround {
         size,
         size,
       );
-      return new CanvasSource({
-        resource: canvas,
-        addressMode: "repeat",
-        scaleMode: "linear",
-        mipmapFilter: "linear",
-        autoGenerateMipmaps: true,
-        maxAnisotropy: 4,
+      return canvas;
+    });
+    const style = {
+      addressMode: "repeat",
+      scaleMode: "linear",
+      mipmapFilter: "linear",
+      autoGenerateMipmaps: true,
+      maxAnisotropy: 4,
+    } as const;
+    const wetAt = SHADER_TEXTURES.indexOf(GroundTexture.WET_SAND);
+    const foamAt = SHADER_TEXTURES.indexOf(GroundTexture.FOAM);
+    const pixels = (canvas: HTMLCanvasElement): Uint8ClampedArray =>
+      canvas.getContext("2d")!.getImageData(0, 0, size, size).data;
+    const cut: TextureSource[] = canvases.map((canvas, index) => {
+      if (index !== wetAt) return new CanvasSource({ resource: canvas, ...style });
+      return new BufferImageSource({
+        resource: withFoamAlpha(pixels(canvas), pixels(canvases[foamAt]!)),
+        width: size,
+        height: size,
+        alphaMode: "no-premultiply-alpha",
+        ...style,
       });
     });
     const old = this.textures;
-    cut.forEach((source, index) => {
-      this.shader.resources[`uGround${index}`] = source;
-    });
+    for (const index of GROUND_SAMPLERS) this.shader.resources[`uGround${index}`] = cut[index]!;
     this.textures = cut;
     this.loadedUrl = url;
     for (const source of old) source.destroy();
@@ -342,10 +463,12 @@ export class PaintedGround {
 
   applyZone(zone: ZoneRecord): void {
     this.data.applyZone(zone);
+    this.placements.invalidate();
   }
 
   reset(): void {
     this.data.reset();
+    this.placements.invalidate();
   }
 
   flush(): void {
@@ -359,6 +482,7 @@ export class PaintedGround {
     this.shader.destroy();
     this.data.destroy();
     this.rivers.destroy();
+    this.placements.destroy();
     for (const source of [...this.textures, ...this.standIns, this.spriteStandIn]) source.destroy();
     this.sprites?.destroy();
     this.cliffs?.destroy();

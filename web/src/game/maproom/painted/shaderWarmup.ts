@@ -86,3 +86,50 @@ export const warmPrograms = async (
   }
   return started.map((entry) => finish(gl, entry));
 };
+
+/**
+ * Remembers which programs have been compiled in one WebGL context, and compiles more in the
+ * background on request (plan step 10): the ground's Low program first, the player's own Quality's
+ * and the sprite placement programs after it, and another Quality's when the player changes it.
+ * Each program is compiled once; asking again returns the same answer.
+ */
+export class ProgramWarmer {
+  private readonly linked = new Map<string, boolean>();
+  private readonly pending = new Map<string, Promise<boolean>>();
+
+  constructor(
+    private readonly gl: WebGL2RenderingContext,
+    private readonly wait: Wait = pause,
+  ) {}
+
+  private static key(source: ProgramSource): string {
+    return `${source.vertex ?? ""}\u0000${source.fragment ?? ""}`;
+  }
+
+  /** Whether the program has compiled and linked here (false while it compiles, or if it failed). */
+  ready(source: ProgramSource): boolean {
+    return this.linked.get(ProgramWarmer.key(source)) === true;
+  }
+
+  /** Compiles the program in the background (once) and resolves to whether it linked. */
+  warm(source: ProgramSource): Promise<boolean> {
+    const key = ProgramWarmer.key(source);
+    const known = this.linked.get(key);
+    if (known !== undefined) return Promise.resolve(known);
+    let pending = this.pending.get(key);
+    if (!pending) {
+      pending = warmPrograms(this.gl, [source], this.wait).then(([ok]) => {
+        this.linked.set(key, Boolean(ok));
+        this.pending.delete(key);
+        return Boolean(ok);
+      });
+      this.pending.set(key, pending);
+    }
+    return pending;
+  }
+
+  /** Compiles several at once (in parallel where the browser can) and resolves to each one's answer. */
+  warmAll(sources: readonly ProgramSource[]): Promise<boolean[]> {
+    return Promise.all(sources.map((source) => this.warm(source)));
+  }
+}

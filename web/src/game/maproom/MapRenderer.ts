@@ -132,6 +132,8 @@ export class MapRenderer {
    */
   paintedStepped = false;
   private webGL2 = false;
+  /** The live renderer (attach), which the painted look's sprite placement pass draws with. */
+  private renderer: Renderer | null = null;
   /** The map's WebGL2 context, where the painted look's shaders are compiled ahead (`shaderWarmup.ts`). */
   private gl: WebGL2RenderingContext | null = null;
   /** Whether the painted look is asked for (`setPaintedMap`); it shows once its code and shaders are ready. */
@@ -299,6 +301,7 @@ export class MapRenderer {
     this.range.fitGrid();
     this.atlas?.destroy();
     this.atlas = new MapAtlas(renderer);
+    this.renderer = renderer;
     this.webGL2 = (renderer as { context?: { webGLVersion?: number } }).context?.webGLVersion === 2;
     this.gl = this.webGL2 ? ((renderer as { gl?: WebGL2RenderingContext }).gl ?? null) : null;
     this.live.attach(renderer);
@@ -368,9 +371,12 @@ export class MapRenderer {
     const bordersChanged = this.borders?.flush() ?? false;
     const nowPaint = performance.now();
     const waterStepped = this.painted?.animate(nowPaint, range) ?? false;
+    // The player's Quality's ground program once compiled, and the sprite pieces round the view.
+    const groundReady =
+      this.painted && this.renderer ? this.painted.prepare(this.renderer, range, this.painted.shape.cellWidth * zoom) : false;
     const pulseStepped = this.borders?.animate(nowPaint, range) ?? false;
     const cloudsStepped = this.clouds?.animate(nowPaint, range) ?? false;
-    this.paintedStepped = waterStepped || pulseStepped || bordersChanged || cloudsStepped || fogChanged;
+    this.paintedStepped = waterStepped || groundReady || pulseStepped || bordersChanged || cloudsStepped || fogChanged;
     this.range.flush();
     const atlas = this.atlas;
     if (!atlas) return false;
@@ -483,7 +489,7 @@ export class MapRenderer {
     let kit: { look: PaintedLookModule; programs: PaintedPrograms };
     try {
       const look = await import("./painted/paintedLook");
-      kit = { look, programs: this.destroyed ? { ground: false, clouds: false } : await look.preparePrograms(gl) };
+      kit = { look, programs: this.destroyed ? { ground: false, clouds: false, warmer: null } : await look.preparePrograms(gl) };
     } catch (caught) {
       // The code did not arrive (offline, a new release): the tiles stay; the next map open tries again.
       console.warn("The painted map could not be prepared; the map keeps its tiles.", caught);
@@ -498,7 +504,7 @@ export class MapRenderer {
   }
 
   private buildPainted(look: PaintedLookModule, programs: PaintedPrograms): void {
-    const painted = new look.PaintedGround();
+    const painted = new look.PaintedGround(undefined, programs.warmer);
     this.painted = painted;
     this.root.addChildAt(painted.mesh, this.root.getChildIndex(this.raster.sprite) + 1);
     for (const zone of this.store.loadedZoneRefs()) painted.applyZone(zone);

@@ -7,6 +7,7 @@ import {
   CROWN_BUMP,
   CROWN_GRID,
   EDGE_WANDER,
+  FEATURE_GRID,
   FEATURE_RADIUS,
   CATTAIL_FRAME,
   GOO_CHANCE,
@@ -69,7 +70,7 @@ const float GOO_FLAT = ${f(GOO_FLAT)};
 const float GOO_DEEP = ${f(GOO_DEEP)};
 const float MARSH_GRID = ${f(MARSH_GRID)};
 // The sprite pieces' grid (a share of a cell's width); a piece is at most two squares wide and tall.
-const float FEATURE_GRID = 0.13;
+const float FEATURE_GRID = ${f(FEATURE_GRID)};
 // The canopy's shadow on the meadow: cast down and right (the sun is top-left), hex units.
 const vec2 CANOPY_SHADOW = vec2(0.1, 0.16);
 const float CANOPY_SCALE = 0.62;
@@ -275,57 +276,89 @@ vec3 marshColour(vec3 land, vec3 water, vec2 h, float deep, float islet) {
   return mix(c, body, smoothstep(ag, -ag, goo));
 }
 
-// Edge trees, pines, boulders and stones on a jittered grid, each kept only
-// where its foot suits it (checked with the same shares as the pixel). near fades the small pieces
-// out as cells get small, trees fades the trees; density is the Quality's share (canopy.ts).
+// The sprite pieces (edge trees, pines, boulders, stones; the marsh's pieces) stand on jittered
+// grids. Which piece a grid square holds, if any, hangs on the square alone, never on the pixel, so
+// it is worked out once per square by a small program of its own (PlacementLayer.ts, plan step
+// 10: done per pixel, these checks made the ground shader take 40 s to compile on Windows) and the
+// ground shader only reads the answer (placedAt) and draws the sprite.
+
+// A feature square's foot and frame size (world points).
+void featureSquare(vec2 id, out vec2 foot, out float s) {
+  float grid = FEATURE_GRID * uCellPoints;
+  foot = (id + vec2(hash12(id + 21.7), hash12(id + 33.1))) * grid;
+  s = grid * (1.55 + 0.45 * hash12(id + 12.4));
+}
+
+// Which edge tree, pine, boulder or stone stands on square id, if any (each kept only where its
+// foot suits it, checked with the same shares as the pixel), as a placement texel: r frame + 1, g
+// size, b flags (1 cut to the frame's top 0.7: a pine poking out of the canopy; 2 a tree, which
+// fades with the trees). density is the Quality's share (canopy.ts).
+vec4 featurePlace(vec2 id, float density) {
+  vec4 none = vec4(0.0, 0.0, 0.0, 1.0);
+  float pick = hash12(id * 0.77 + 5.3);
+  if (pick > density) return none;
+  vec2 foot;
+  float s;
+  featureSquare(id, foot, s);
+  vec2 fh = foot / uUnit;
+  vec2 off;
+  vec4 t = trueCellAt(fh, off);
+  if (!isLand(groundOf(t))) return none;
+  Features fe = featuresNear(fh);
+  if (fe.water > 0.01 || max(fe.share.x, max(fe.share.y, fe.share.z)) < 0.12) return none;
+  if (riverAt(foot).y > -0.04) return none;
+  bool occupied = occupiedOf(t);
+  float roll = hash12(id + 47.9);
+  float kind = hash12(id + 63.1);
+  int frame = -1;
+  float size = 1.0;
+  float flags = 0.0;
+  if (fe.share.x > 0.05) {
+    float e = canopyEdge(fh, fe);
+    bool clear = occupied && length(off) < CLEARING_OUTER + 0.12;
+    if (e > 0.1) {
+      if (roll < 0.14) { frame = ${PINE_FRAME} + int(kind * 4.0); size = 0.95; flags = 3.0; }
+    } else if (e < -0.005 && e > -0.12 && !clear) {
+      if (roll < 0.8) { frame = kind < 0.75 ? ${TREE_FRAME} + int(kind / 0.75 * 4.0) : ${PINE_FRAME} + int((kind - 0.75) * 16.0); flags = 2.0; }
+    } else if (e <= -0.12 && e > -0.34 && !clear) {
+      if (roll < 0.22 * (1.0 + e / 0.34)) { frame = kind < 0.6 ? ${TREE_FRAME} + int(kind / 0.6 * 4.0) : ${PINE_FRAME} + int((kind - 0.6) * 10.0); size = 0.85; flags = 2.0; }
+    }
+  }
+  if (frame < 0 && fe.share.y > 0.2 && !(occupied && length(off) < 0.45)) {
+    float rocky = smoothstep(0.25, 0.8, fe.share.y);
+    if (roll < 0.28 * rocky) { frame = ${BOULDER_FRAME} + int(kind * 4.0); size = 0.75 + 0.25 * rocky; }
+    else if (roll < 0.62 * rocky) { frame = kind < 0.5 ? 6 : 8; size = 0.55; }
+  }
+  if (frame < 0) return none;
+  return vec4(float(frame + 1) / 255.0, size, flags / 255.0, 1.0);
+}
+
+// Edge trees, pines, boulders and stones (placed by featurePlace). near fades the small pieces out
+// as cells get small, trees fades the trees.
 vec3 drawFeatures(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float trees, float near, float density) {
   float grid = FEATURE_GRID * uCellPoints;
   vec2 first = floor(p / grid) - vec2(1.0, 0.0);
   for (int j = 0; j < 3; j++) {
     for (int i = 0; i < 3; i++) {
       vec2 id = first + vec2(float(i), float(j));
-      float pick = hash12(id * 0.77 + 5.3);
-      if (pick > density) continue;
-      vec2 foot = (id + vec2(hash12(id + 21.7), hash12(id + 33.1))) * grid;
-      float s = grid * (1.55 + 0.45 * hash12(id + 12.4));
+      if (hash12(id * 0.77 + 5.3) > density) continue;
+      vec2 foot;
+      float s;
+      featureSquare(id, foot, s);
       vec2 local = (p - foot) / s + vec2(0.5, 1.0);
       if (local.x < 0.0 || local.x > 1.0 || local.y < 0.0 || local.y > 1.0) continue;
-      vec2 fh = foot / uUnit;
-      vec2 off;
-      vec4 t = trueCellAt(fh, off);
-      if (!isLand(groundOf(t))) continue;
-      Features fe = featuresNear(fh);
-      if (fe.water > 0.01 || max(fe.share.x, max(fe.share.y, fe.share.z)) < 0.12) continue;
-      if (riverAt(foot).y > -0.04) continue;
-      bool occupied = occupiedOf(t);
-      float roll = hash12(id + 47.9);
-      float kind = hash12(id + 63.1);
-      int frame = -1;
-      float size = 1.0;
-      float cut = 1.0;   // the share of the frame shown from the top (pines poke out of the canopy)
-      float fade = near;
-      if (fe.share.x > 0.05) {
-        float e = canopyEdge(fh, fe);
-        bool clear = occupied && length(off) < CLEARING_OUTER + 0.12;
-        if (e > 0.1) {
-          if (roll < 0.14) { frame = ${PINE_FRAME} + int(kind * 4.0); cut = 0.7; size = 0.95; fade = trees; }
-        } else if (e < -0.005 && e > -0.12 && !clear) {
-          if (roll < 0.8) { frame = kind < 0.75 ? ${TREE_FRAME} + int(kind / 0.75 * 4.0) : ${PINE_FRAME} + int((kind - 0.75) * 16.0); fade = trees; }
-        } else if (e <= -0.12 && e > -0.34 && !clear) {
-          if (roll < 0.22 * (1.0 + e / 0.34)) { frame = kind < 0.6 ? ${TREE_FRAME} + int(kind / 0.6 * 4.0) : ${PINE_FRAME} + int((kind - 0.6) * 10.0); size = 0.85; fade = trees; }
-        }
-      }
-      if (frame < 0 && fe.share.y > 0.2 && !(occupied && length(off) < 0.45)) {
-        float rocky = smoothstep(0.25, 0.8, fe.share.y);
-        if (roll < 0.28 * rocky) { frame = ${BOULDER_FRAME} + int(kind * 4.0); size = 0.75 + 0.25 * rocky; }
-        else if (roll < 0.62 * rocky) { frame = kind < 0.5 ? 6 : 8; size = 0.55; }
-      }
-      if (frame < 0 || fade <= 0.0) continue;
+      vec4 placed = placedAt(id, uFeatureRect, uPlaceAt.z);
+      int frame = int(placed.r * 255.0 + 0.5) - 1;
+      if (frame < 0) continue;
+      int flags = int(placed.b * 255.0 + 0.5);
+      float size = placed.g;
+      float fade = (flags & 2) != 0 ? trees : near;
+      if (fade <= 0.0) continue;
       // A smaller piece keeps its foot where it was; it shrinks inside the same frame.
       vec2 at = vec2(0.5 + (local.x - 0.5) / size, 1.0 - (1.0 - local.y) / size);
       if (at.x < 0.0 || at.x > 1.0 || at.y < 0.0 || at.y > 1.0) continue;
       vec4 sprite = spriteSample(frame, p, foot, s * size, hash12(id + 9.9) < 0.5, wdx, wdy) * fade;
-      if (cut < 1.0) sprite *= 1.0 - smoothstep(cut - 0.1, cut + 0.04, at.y);
+      if ((flags & 1) != 0) sprite *= 1.0 - smoothstep(0.6, 0.74, at.y);
       if (frame == 6 || frame == 8) sprite.rgb = darken(sprite, STONE_GAMMA);
       colour = colour * (1.0 - sprite.a) + sprite.rgb;
     }
@@ -333,9 +366,65 @@ vec3 drawFeatures(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float trees, float ne
   return colour;
 }
 
+// A marsh square's foot and frame size (world points).
+void marshSquare(vec2 id, out vec2 foot, out float s) {
+  float grid = MARSH_GRID * uCellPoints;
+  foot = (id + vec2(hash12(id + 21.7), hash12(id + 33.1))) * grid;
+  s = grid * (1.6 + 0.4 * hash12(id + 12.4));
+}
+
 // The marsh's pieces (mock-up B) on their own, larger jittered grid: tall cattail clumps (most by the
 // water's edge), reed tufts, lily pad clusters on the water, wet rocks by the bank and now and then a
-// fallen log; none on a camp's island or in a goo pool. near and density as drawFeatures.
+// fallen log; none on a camp's island or in a goo pool. Which one square id holds, as a placement
+// texel (r frame + 1, g size); density as featurePlace.
+vec4 marshPlace(vec2 id, float density) {
+  vec4 none = vec4(0.0, 0.0, 0.0, 1.0);
+  if (hash12(id * 0.61 + 2.9) > density) return none;
+  vec2 foot;
+  float s;
+  marshSquare(id, foot, s);
+  vec2 fh = foot / uUnit;
+  vec2 off;
+  vec4 t = trueCellAt(fh, off);
+  if (!isLand(groundOf(t))) return none;
+  Features fe = featuresNear(fh);
+  if (fe.share.z < 0.3 || fe.water > 0.01 || fe.islet > 0.3) return none;
+  if (riverAt(foot).y > -0.04) return none;
+  float deep = marshDeep(fe.share.z, valueNoise(fh * 1.3 + 5.0) - 0.5);
+  float wet = marshWet(fh, deep, fe.islet);
+  vec2 pc;
+  if (gooNear(fh, pc) < 0.04) return none;
+  float inMarsh = smoothstep(0.3, 0.7, fe.share.z);
+  float edge = 1.0 - smoothstep(0.0, 0.12, abs(wet));
+  float roll = hash12(id + 47.9);
+  float kind = hash12(id + 63.1);
+  float reeds = ${MARSH_PIECES.reeds.toFixed(3)} * inMarsh * (0.55 + 0.9 * edge);
+  float lilies = reeds + ${MARSH_PIECES.lilies.toFixed(3)} * inMarsh;
+  float rocks = lilies + ${MARSH_PIECES.rocks.toFixed(3)} * inMarsh;
+  float logs = rocks + ${MARSH_PIECES.log.toFixed(3)} * inMarsh;
+  int frame = -1;
+  float size = 1.0;
+  if (roll < reeds) {
+    frame = kind < 0.78 ? ${CATTAIL_FRAME} + int(kind / 0.78 * 6.0) : kind < 0.9 ? ${REED_TUFT_FRAME} : ${LOW_REEDS_FRAME};
+    size = 0.82 + 0.18 * hash12(id + 2.2);
+  } else if (roll < lilies) {
+    if (wet <= 0.03) return none;
+    frame = ${LILY_FRAME} + (kind < 0.5 ? 0 : 1);
+    size = 0.62;
+  } else if (roll < rocks) {
+    if (abs(wet) >= 0.09) return none;
+    frame = kind < 0.6 ? ${WET_ROCK_FRAME} : ${BOULDER_FRAME} + int(kind * 7.0) % 4;
+    size = 0.55;
+  } else if (roll < logs) {
+    if (wet <= 0.0 || deep <= 0.5) return none;
+    frame = ${LOG_FRAME};
+    size = 0.95;
+  }
+  if (frame < 0) return none;
+  return vec4(float(frame + 1) / 255.0, size, 0.0, 1.0);
+}
+
+// The marsh's pieces (placed by marshPlace); near as drawFeatures.
 vec3 drawMarsh(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float near, float density) {
   float grid = MARSH_GRID * uCellPoints;
   vec2 first = floor(p / grid) - vec2(1.0, 0.0);
@@ -343,48 +432,15 @@ vec3 drawMarsh(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float near, float densit
     for (int i = 0; i < 3; i++) {
       vec2 id = first + vec2(float(i), float(j));
       if (hash12(id * 0.61 + 2.9) > density) continue;
-      vec2 foot = (id + vec2(hash12(id + 21.7), hash12(id + 33.1))) * grid;
-      float s = grid * (1.6 + 0.4 * hash12(id + 12.4));
+      vec2 foot;
+      float s;
+      marshSquare(id, foot, s);
       vec2 local = (p - foot) / s + vec2(0.5, 1.0);
       if (local.x < 0.0 || local.x > 1.0 || local.y < 0.0 || local.y > 1.0) continue;
-      vec2 fh = foot / uUnit;
-      vec2 off;
-      vec4 t = trueCellAt(fh, off);
-      if (!isLand(groundOf(t))) continue;
-      Features fe = featuresNear(fh);
-      if (fe.share.z < 0.3 || fe.water > 0.01 || fe.islet > 0.3) continue;
-      if (riverAt(foot).y > -0.04) continue;
-      float deep = marshDeep(fe.share.z, valueNoise(fh * 1.3 + 5.0) - 0.5);
-      float wet = marshWet(fh, deep, fe.islet);
-      vec2 pc;
-      if (gooNear(fh, pc) < 0.04) continue;
-      float inMarsh = smoothstep(0.3, 0.7, fe.share.z);
-      float edge = 1.0 - smoothstep(0.0, 0.12, abs(wet));
-      float roll = hash12(id + 47.9);
-      float kind = hash12(id + 63.1);
-      float reeds = ${MARSH_PIECES.reeds.toFixed(3)} * inMarsh * (0.55 + 0.9 * edge);
-      float lilies = reeds + ${MARSH_PIECES.lilies.toFixed(3)} * inMarsh;
-      float rocks = lilies + ${MARSH_PIECES.rocks.toFixed(3)} * inMarsh;
-      float logs = rocks + ${MARSH_PIECES.log.toFixed(3)} * inMarsh;
-      int frame = -1;
-      float size = 1.0;
-      if (roll < reeds) {
-        frame = kind < 0.78 ? ${CATTAIL_FRAME} + int(kind / 0.78 * 6.0) : kind < 0.9 ? ${REED_TUFT_FRAME} : ${LOW_REEDS_FRAME};
-        size = 0.82 + 0.18 * hash12(id + 2.2);
-      } else if (roll < lilies) {
-        if (wet <= 0.03) continue;
-        frame = ${LILY_FRAME} + (kind < 0.5 ? 0 : 1);
-        size = 0.62;
-      } else if (roll < rocks) {
-        if (abs(wet) >= 0.09) continue;
-        frame = kind < 0.6 ? ${WET_ROCK_FRAME} : ${BOULDER_FRAME} + int(kind * 7.0) % 4;
-        size = 0.55;
-      } else if (roll < logs) {
-        if (wet <= 0.0 || deep <= 0.5) continue;
-        frame = ${LOG_FRAME};
-        size = 0.95;
-      }
+      vec4 placed = placedAt(id, uMarshRect, uPlaceAt.w);
+      int frame = int(placed.r * 255.0 + 0.5) - 1;
       if (frame < 0) continue;
+      float size = placed.g;
       vec2 at = vec2(0.5 + (local.x - 0.5) / size, 1.0 - (1.0 - local.y) / size);
       if (at.x < 0.0 || at.x > 1.0 || at.y < 0.0 || at.y > 1.0) continue;
       vec4 sprite = spriteSample(frame, p, foot, s * size, hash12(id + 9.9) < 0.5, wdx, wdy) * near;

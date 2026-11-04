@@ -134,6 +134,13 @@ export const gooPool = (rolls: readonly [number, number, number, number, number]
  * cattail clumps are about a third of a cell tall). Shares of the grid squares (on High) by kind.
  */
 export const MARSH_GRID = 0.19;
+/**
+ * The other sprite grids, as shares of a cell's width: edge trees, pines and boulders; ground details
+ * (flowers, tufts, pebbles); sea rocks. `PlacementLayer` works out each square's piece on these.
+ */
+export const FEATURE_GRID = 0.13;
+export const DECAL_GRID = 0.21;
+export const ROCK_GRID = 0.45;
 export const MARSH_PIECES = { reeds: 0.34, lilies: 0.16, rocks: 0.06, log: 0.012 } as const;
 
 /**
