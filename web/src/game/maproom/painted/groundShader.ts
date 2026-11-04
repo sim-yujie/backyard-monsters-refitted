@@ -190,11 +190,12 @@ vec2 cellSeed(ivec2 cell) {
 // the turquoise reaches (as the land's share of the weights); the plain sea's mix towards the
 // shallows colour before it deepens; the surf lines' spacing and speed (lines a second).
 // The beach: it reaches inland to where the water's share round a point (waterNear) falls to
-// between BEACH_FAR (where the beach is widest) and BEACH_NEAR (narrowest), about 0.4-0.7 hex
-// units (MR2 step 11: mock-up B's beach is a strip; at 0.035-0.15 it ran a cell inland), and never
+// between BEACH_FAR (where the beach is widest) and BEACH_NEAR (narrowest), about 0.3-0.5 hex
+// units (MR2 step 11: mock-up B's beach is a strip; at 0.035-0.15 it ran a cell inland, and at
+// 0.12-0.24 it still filled narrow spits of land between two arms of the sea), and never
 // less than BEACH_MIN from the coast line itself, so the wandering coast never meets bare grass.
-const float BEACH_FAR = 0.12;
-const float BEACH_NEAR = 0.24;
+const float BEACH_FAR = 0.2;
+const float BEACH_NEAR = 0.32;
 const float BEACH_MIN = 0.2;
 const float SHALLOWS_REACH = 0.38;
 const float MID_SEA = 0.5;
