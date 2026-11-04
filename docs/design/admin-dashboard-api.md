@@ -30,7 +30,10 @@ sign-in from the same browser (the session in `localStorage`); with none, or
 for anyone but the owner, it shows only "Not found". It should call `GET .../admin/me`
 first and show nothing (or the game's normal 404) unless that answers 200. It
 should honour `?bug=<id>` (open that bug report) and `#health`, `#backups`,
-`#errors`, `#bugs`, `#shiny` (scroll to that part), which the alerts link to. Pictures
+`#errors`, `#bugs`, `#shiny`, `#cases` (open and scroll to that part), which the alerts
+link to. Rarely used sections (Announcements, Players, Activity, Server, Backups)
+start folded; a link to one, or a problem in it, opens it, and the owner's own
+open/fold choice is kept in this browser (`localStorage` `bymr.admin.folds`). Pictures
 (screenshots) must be fetched with the Bearer header and shown through a blob
 URL (`URL.createObjectURL`), since an `<img src>` cannot send the header.
 
@@ -52,6 +55,9 @@ URL (`URL.createObjectURL`), since an `<img src>` cannot send the header.
 | `POST /api/:apiVersion/admin/shiny` | body `{ userid, amount, reason, bugReportId?, requestId }`; answers `{ award: ShinyAwardView, already: boolean, report?: BugReportDetail }`; `400 badAward`, `409 noPlayer` / `noMainYard` / `notTheirReport` |
 | `GET /api/:apiVersion/admin/errors?source=&sort=&limit=&sinceDays=` | `{ groups: ErrorGroup[], totals }` |
 | `GET /api/:apiVersion/admin/health` | `AdminHealthReport` (see "Health" below) |
+| `GET /api/:apiVersion/admin/chatcases?status=&offset=&limit=` | `{ cases: ChatCaseView[], nextOffset: number \| null, open: number, award: { each, first } }`; `status` `open` (default, newest report first) or `closed` (newest closed first); `limit` default 30 (see "Chat cases") |
+| `POST /api/:apiVersion/admin/chatcases/:id/act` | body `{ action: "warn", reason }`, `{ action: "mute", reason, hours }` (1 to 720) or `{ action: "dismiss", note? }`; closes the case and answers `{ case: ChatCaseView }`; `400 badRequest`, `404 notFound`, `409 closed` / `noPlayer` / `gameTeam` |
+| `POST /api/:apiVersion/admin/chatcases/:id/award` | body `{ awards: [{ userid, amount }], reason? }`; answers `{ case, given: [{ userid, amount }], already: number[], failed: [{ userid, reason }] }`; `400 badAward`, `404 notFound` |
 
 Bug report list: `filter` is `all` (default), `open` (new or working),
 `closed` (fixed or won't fix), or one status; `limit` 1 to 100 (default 50);
@@ -109,6 +115,43 @@ the player never sees who on the team wrote it.
   read before a gift cannot wipe the gift out.
 - **Account deletion** removes the player's gifts from the log; a deleted
   owner's gifts stay with `by: null`.
+
+## Chat cases
+
+Player chat reports (`POST .../chat/report`, `services/chat/chatReports.ts`)
+are worked through as cases (`services/admin/chatCases.ts`, tables
+`bym.chat_case`, `bym.chat_case_message`, migration `20261106_AddChatCases`).
+
+- **One case per player.** Every report of the same line (same room, player
+  and time) is one line of the case; every reported line of a player not yet
+  acted on joins their one open case. A report of a line already in a closed
+  case joins that case and is marked `late`.
+- **The room copy.** When a line is first reported, the server keeps a text
+  copy of the room around it: 10 lines in all, 7 before, the line, 2 after
+  (`SNAPSHOT_BEFORE` / `SNAPSHOT_AFTER`; the owner's choice, 4 Nov 2026), with
+  names and times and the reported line marked. It comes from the chat log
+  (the players' own words, `source: "log"`), else from the room's own recent
+  lines as players saw them, starred out (`source: "room"`). While the case
+  is open, a later report fills in lines said after it. The copy is kept with
+  the case, even after the 90-day chat log drops the lines.
+- **Steps.** "Warn" and "Warn + pause" go through the same moderation step as
+  the Moderation section (`moderate()`): one mail and one pop-up with the
+  reason; a pause is also a chat mute for `hours`. The step is linked to the
+  case's first report. "Dismiss" does nothing to the player; its note is only
+  for the log. Each closes the case with who, when, what (`closed`).
+- **Suggested step** (`suggest`): one line and a clean record: warn. More
+  lines, lines caught by the word filter, or any earlier warning, pause or
+  ban: warn + pause 24 hours, then 3 days, then 7 days for each earlier step.
+  The page starts its picker on it; the owner can pick 1 h, 24 h, 3 d or 7 d.
+- **Reporter Shiny.** Each ticked reporter gets the amount the owner sets
+  (the page starts on `award.each`, and `award.first` for the first reporter),
+  through the same gift as the Shiny section, with the mail "Thank you for
+  reporting a chat message that broke the rules." Its request id is
+  `chatcase-<case>-<reporter>`, so a reporter is never given twice for one
+  case (`already`). A closed case (warned or dismissed) may still award.
+- **Kept** as long as chat reports: a year after the case's last report
+  (`CHAT_REPORT_RETENTION_DAYS`), its lines with it. Like chat reports, cases
+  are not removed when an account is deleted.
 
 ## Shapes
 
@@ -300,6 +343,9 @@ interface DailySummary {
 - `DASHBOARD_STATS=off`: this server does not fill the daily table (leave it
   to another server sharing the database). The day-by-day record and the
   error intake run regardless.
+- `CHAT_REPORT_SHINY`: the Shiny the page offers each reporter of a chat case
+  (default 10). `CHAT_REPORT_FIRST_SHINY`: what it offers the first reporter
+  (default: the same; the owner chose no first-reporter bonus, 4 Nov 2026).
 
 ## Health
 
