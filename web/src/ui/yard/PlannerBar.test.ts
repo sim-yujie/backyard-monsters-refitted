@@ -189,7 +189,9 @@ describe("the cost cells", () => {
     const bar = mount();
     bar.setSummary(summaryOf());
 
-    expect(resourceValues(bar)).toEqual(["20,000 / 50,000", "15,000 / 1,000", "5,000 / 5,000", "0 / 0"]);
+    // Short figures keep the bar one row (owner, 2026-11-04); the tooltip has them in full.
+    expect(resourceValues(bar)).toEqual(["20K/50K", "15K/1K", "5K/5K", "0/0"]);
+    expect(cell(bar, "short")?.title).toContain("15,000 needed, 1,000 held");
 
     const short = bar.actionBar.querySelectorAll(".planner-cost__cell--short");
     expect(short).toHaveLength(1);
@@ -202,7 +204,8 @@ describe("the cost cells", () => {
     bar.setWorkers({ total: 5, busy: 1 });
 
     const workers = cell(bar, "workers");
-    expect(workers?.querySelector(".planner-cost__value")?.textContent).toBe("4 free / 5");
+    expect(workers?.querySelector(".planner-cost__value")?.textContent).toBe("4/5");
+    expect(workers?.title).toContain("4 of 5 free");
     expect(workers?.title).not.toContain("would start");
     expect(workers?.classList.contains("planner-cost__cell--short")).toBe(false);
   });
@@ -738,6 +741,26 @@ describe("the View menu (issues #4 and #54)", () => {
   });
 });
 
+describe("one row on a desktop (owner, 2026-11-04)", () => {
+  it("heads the cells with icons, not words", () => {
+    const bar = mount();
+    for (const name of ["time", "workers", "coverage"]) {
+      const label = cell(bar, name)?.querySelector(".planner-cost__label");
+      expect(label?.textContent).toBe("");
+      expect(label?.querySelector("[role=img]")).not.toBeNull();
+    }
+  });
+
+  it("keeps the whole names on the buttons whose words a narrow bar drops", () => {
+    const bar = mount();
+    const walls = bar.actionBar.querySelector(".planner-bar__walls");
+    expect(walls?.textContent).toBe("Upgrade walls");
+    expect(walls?.querySelector(".planner-bar__long")?.textContent).toBe("Upgrade ");
+    const rearm = bar.actionBar.querySelector(".planner-bar__rearm");
+    expect(rearm?.textContent).toContain("Re-arm traps");
+  });
+});
+
 describe("the Coverage cell (#55)", () => {
   it("shows land and air, or says there are no towers", () => {
     const bar = mount();
@@ -746,9 +769,9 @@ describe("the Coverage cell (#55)", () => {
 
     bar.setCoverage({ towers: 6, land: 0.8749, air: 0.41 });
     expect(cell(bar, "coverage")?.hidden).toBe(false);
-    expect(cell(bar, "coverage")?.querySelector(".planner-cost__value")?.textContent).toBe(
-      "Land 87% · Air 41%",
-    );
+    expect(cell(bar, "coverage")?.querySelector(".planner-cost__value")?.textContent).toBe("87% · 41%");
+    // Which figure is which is in the tooltip.
+    expect(cell(bar, "coverage")?.title).toContain("land 87%, air 41%");
     expect(cell(bar, "coverage")?.title).toContain("Dead zones");
   });
 });

@@ -5,7 +5,8 @@ import { percentText, type CoverageFigures } from "@/game/yard/planner/coverage"
 import { PlannerTool, type PlannerState } from "@/game/yard/planner/PlannerSession";
 import type { YardWorkers } from "@/game/yard/yardModel";
 import { YardView } from "@/game/yard/YardRenderer";
-import { formatAmount, formatCountdown } from "@/ui/format";
+import { formatAmount, formatCountdown, formatShort } from "@/ui/format";
+import { gameIcon } from "@/ui/gameIcon";
 import { attachPopover } from "@/ui/Popover";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceIcon } from "@/ui/resourceIcon";
 import { demo, GROUP_OP_DEMOS, type DemoName } from "./demos";
@@ -134,6 +135,21 @@ const EMPTY_SUMMARY: SelectionSummary = {
   shiny: 0,
   byType: [],
   maxed: 0,
+};
+
+/** The worker art the HUD's Workers readout uses (`Hud.ts`). */
+const WORKER_ICON_URL = "/assets/archived/worker.v1.png";
+
+/**
+ * A word a desktop bar under 1440 px drops to keep one row (owner,
+ * 2026-11-04): hidden from sight there but still read out, so the button's
+ * name stays whole.
+ */
+const longPart = (text: string): HTMLElement => {
+  const element = document.createElement("span");
+  element.className = "planner-bar__long";
+  element.textContent = text;
+  return element;
 };
 
 const button = (label: string, title: string, className = "btn btn--ghost"): HTMLButtonElement => {
@@ -785,12 +801,23 @@ export class PlannerBar {
       costs.append(cell.element);
     }
 
-    this.timeCell = new CostCell("Time", "planner-cost__cell planner-cost__cell--time");
+    // Icons over words (owner, 2026-11-04): the painted clock, the HUD's
+    // worker and the tower-range mark head these cells; the name stays the
+    // icon's spoken label and the cell's tooltip says the rest.
+    this.timeCell = new CostCell(
+      gameIcon("time", { size: 16, tooltip: false }),
+      "planner-cost__cell planner-cost__cell--time",
+    );
     this.shinyCell = new CostCell(
       resourceIcon("shiny", { tooltip: false }),
       "planner-cost__cell planner-cost__cell--shiny",
     );
-    this.workersCell = new CostCell("Workers", "planner-cost__cell planner-cost__cell--workers");
+    const workerIcon = document.createElement("span");
+    workerIcon.className = "planner-cost__worker";
+    workerIcon.setAttribute("role", "img");
+    workerIcon.setAttribute("aria-label", "Workers");
+    workerIcon.style.backgroundImage = `url("${WORKER_ICON_URL}")`;
+    this.workersCell = new CostCell(workerIcon, "planner-cost__cell planner-cost__cell--workers");
     // Nothing can be unplaced yet (phase 1 §1.3), so the cell starts hidden and
     // the store tool turns it on rather than adding it.
     this.unplacedCell = new CostCell(
@@ -800,7 +827,10 @@ export class PlannerBar {
     this.unplacedCell.element.hidden = true;
     // Shown whatever the overlay says: a number to compare two arrangements by
     // is wanted most when the hatching is off (#55).
-    this.coverageCell = new CostCell("Coverage", "planner-cost__cell planner-cost__cell--coverage");
+    this.coverageCell = new CostCell(
+      gameIcon("range", { size: 16, label: "Coverage", tooltip: false }),
+      "planner-cost__cell planner-cost__cell--coverage",
+    );
     costs.append(
       this.timeCell.element,
       this.shinyCell.element,
@@ -854,7 +884,8 @@ export class PlannerBar {
 
     // Pressed first, then the walls are picked on the yard (owner, 2026-11-04):
     // a switch, pressed while the picking runs.
-    this.upgradeWalls = button("Upgrade walls", "No walls in this yard");
+    this.upgradeWalls = button("", "No walls in this yard");
+    this.upgradeWalls.append(longPart("Upgrade "), "walls");
     this.upgradeWalls.className = "btn btn--ghost planner-bar__walls";
     this.upgradeWalls.disabled = true;
     this.upgradeWalls.setAttribute("aria-pressed", "false");
@@ -864,7 +895,7 @@ export class PlannerBar {
     // rewritten without the label being rebuilt around it.
     this.rearm = button("", "No fired traps to put back", "btn btn--ghost planner-bar__rearm");
     const rearmLabel = document.createElement("span");
-    rearmLabel.textContent = "Re-arm traps";
+    rearmLabel.append("Re-arm", longPart(" traps"));
     this.rearmBadge = document.createElement("span");
     this.rearmBadge.className = "planner-bar__badge";
     this.rearmBadge.hidden = true;
@@ -1298,8 +1329,8 @@ export class PlannerBar {
     );
 
     this.shinyCell.set(
-      summary.shiny === 0 ? "—" : formatAmount(summary.shiny),
-      "What it would cost in shiny to buy every step outright. Not for sale in the planner yet.",
+      summary.shiny === 0 ? "—" : formatShort(summary.shiny),
+      `${summary.shiny === 0 ? "No" : formatAmount(summary.shiny)} shiny: what it would cost to buy every step outright. Not for sale in the planner yet.`,
     );
   }
 
@@ -1307,8 +1338,8 @@ export class PlannerBar {
   setWorkers(workers: YardWorkers): void {
     const free = Math.max(0, workers.total - workers.busy);
     this.workersCell.set(
-      `${free} free / ${workers.total}`,
-      `${workers.busy} of ${workers.total} ${workers.total === 1 ? "worker is" : "workers are"} already on a job.`,
+      `${free}/${workers.total}`,
+      `Workers: ${free} of ${workers.total} free; ${workers.busy} ${workers.busy === 1 ? "is" : "are"} already on a job.`,
     );
   }
 
@@ -1325,15 +1356,15 @@ export class PlannerBar {
     if (coverage.towers === 0) {
       this.coverageCell.set(
         "No towers",
-        "No towers placed, so there is nothing to cover.",
+        "Coverage: no towers placed, so there is nothing to cover.",
       );
       return;
     }
     const land = percentText(coverage.land);
     const air = percentText(coverage.air);
     this.coverageCell.set(
-      `Land ${land} · Air ${air}`,
-      `How much of the yard is within reach of at least one defence tower: ${land} for creeps on the ground, ${air} for flyers. View › Dead zones shows the rest.`,
+      `${land} · ${air}`,
+      `Coverage: land ${land}, air ${air}. How much of the yard is within reach of at least one defence tower: ${land} for creeps on the ground, ${air} for flyers. View › Dead zones shows the rest.`,
     );
   }
 
@@ -1370,7 +1401,7 @@ export class PlannerBar {
       if (!cell) continue;
       const short = shortfall[key];
       cell.set(
-        `${formatAmount(needed[key])} / ${formatAmount(held[key])}`,
+        `${formatShort(needed[key])}/${formatShort(held[key])}`,
         short > 0
           ? `${label}: ${needed[key].toLocaleString()} needed, ${held[key].toLocaleString()} held — ${short.toLocaleString()} short.\n${breakdown}`
           : `${label}: ${needed[key].toLocaleString()} needed, ${held[key].toLocaleString()} held.\n${breakdown}`,
