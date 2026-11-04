@@ -1,20 +1,14 @@
 import { tutTarget, TutTarget } from "@/game/guide/targets";
-import type { SelectionSummary, SelectionTypeCost } from "@/game/yard/planner/summary";
-import { GroupOp, GROUP_OPS } from "@/game/yard/planner/groupTools";
-import { percentText, type CoverageFigures } from "@/game/yard/planner/coverage";
 import { PlannerTool, type PlannerState } from "@/game/yard/planner/PlannerSession";
-import type { YardWorkers } from "@/game/yard/yardModel";
 import { YardView } from "@/game/yard/YardRenderer";
-import { formatAmount, formatCountdown, formatShort } from "@/ui/format";
-import { gameIcon } from "@/ui/gameIcon";
 import { attachPopover } from "@/ui/Popover";
-import { RESOURCE_KEYS, RESOURCE_NAMES, resourceIcon } from "@/ui/resourceIcon";
-import { demo, GROUP_OP_DEMOS, type DemoName } from "./demos";
-import { costButtonState, isPhone, PlannerLayout } from "./plannerLayout";
+import { demo, type DemoName } from "./demos";
+import { isPhone, PlannerLayout } from "./plannerLayout";
+import { iconFace, PLANNER_ICON_WORDS, type PlannerIcon } from "./plannerIcons";
 
 /**
- * The planner's two bars: tools across the top, the plan summary and the
- * actions along the bottom (design §4.1).
+ * The planner's two bars: tools across the top, the actions along the bottom
+ * (design §4.1).
  *
  * HTML rather than canvas, as §4 asks, so the buttons get real focus, real
  * tooltips and real keyboard behaviour for nothing. Every control carries its
@@ -24,40 +18,20 @@ import { costButtonState, isPhone, PlannerLayout } from "./plannerLayout";
  * The bar is stateless: `update` is handed the session's state and rewrites the
  * bits that changed. Nothing here calls back into the plan.
  *
- * ## The cost cells
+ * ## Buttons only (owner, 2026-11-04)
  *
- * The left of the bottom bar is F3: four resource cells reading "needed /
- * held", a worker time, a shiny price, a free-worker count, an unplaced count
- * and the coverage, then the selection sentence. A cell whose need is past
- * what the yard holds carries `--short`, which is a colour *and* a word in the
- * tooltip, per §4.3.
- *
- * On a desktop the priced cells (resources, time, shiny) sit in a pop-up over
- * the bar, behind one short Cost button: the painted resource pile, a red "!"
- * while anything is short, and the worker time in one unit (owner,
- * 2026-11-04: the figures "will eventually be too long" for a one-row bar).
- * A hover or a click opens it; Esc or a click elsewhere closes it. It is the
- * phone's one-line cost button, drawn short; only the bounded readouts
- * (workers, unplaced, coverage) stay on the bar.
- *
- * "Needed" means **the plan** once anything is planned
- * (`docs/design/planner-upgrades.md` §5.3): every step from each planned
- * building's current level to its target, which is what Apply is about to
- * charge for. With nothing planned there is no plan to add up, so the cells
- * fall back to the selection's next level — the phase 1 reading, and still the
- * useful answer to "what would one more level of these cost".
- *
- * The workers cell is a readout in both modes, because "how many jobs can I
- * even start" is a question about the yard rather than about the plan. The
- * unplaced cell is hidden at zero, which is always, until a store tool can
- * take a building out of the yard.
- *
- * Shiny is shown and never purchasable (§6, Q6), so it is a readout like the
- * rest and not a button.
+ * The bottom bar used to open with the plan's costs, the free workers, the
+ * unplaced count, the coverage and a "N picked" line. The owner found it
+ * redundant and asked for all of it to go: what walls cost is in the Upgrade
+ * walls window, the coverage in the dead-zones panel, and Apply's blockers in
+ * the Checklist. Mirror, Align and Distribute went the same day. The tools
+ * that remain and are pressed often (Undo, Redo, Select, Box, Find, Upgrade
+ * walls, Re-arm traps) are square icon buttons whose words live in the
+ * tooltip and the accessible name; `plannerIcons.ts` holds their faces.
  *
  * ## Touch
  *
- * Two things here are F14's. The "Put back" chip appears beside the summary
+ * Two things here are F14's. The "Put back" chip appears on the bottom bar
  * while something is in hand, because a finger cannot right-click the carried
  * selection to put it down again. And every button in both bars is given a
  * 44 px target under `@media (pointer: coarse)` in `planner.css` — the size the
@@ -66,20 +40,21 @@ import { costButtonState, isPhone, PlannerLayout } from "./plannerLayout";
  *
  * ## Phones (#45)
  *
- * `setLayout` rearranges the same controls for a phone, the owner's Option A:
- * upright, a top bar of Leave, the layout's name, a 3D ⇄ Blueprint switch and
- * undo/redo, and a bottom bar of the summary, the Store chip and the same
- * short Cost button a desktop has (its pop-up hangs over the bar, two cells a
- * row), then Box, the drawer, More and Apply; sideways, all of that in one bar
- * along the bottom.
- * Everything else moves into the More sheet, and Mirror, Align and Distribute
- * are lent to the scene's selection row (`lendArrange`), which sits at the top
- * of More (`setSelectionTools`). The controls are moved, not
- * copied, so every state this class keeps (a disabled Mirror, a count on the
- * drawer) is right in either place; and they are moved back exactly where
- * they were when the window returns to a desktop's shape. A desktop never
- * sees the phone-only controls at all: they are not in the document. (The
- * Cost button is shared, and draws the same on both.)
+ * `setLayout` rearranges the same controls for a phone, the owner's Option A,
+ * with what a thumb presses most on the bottom row (owner, 2026-11-04: "ensure
+ * the mobile layout is intuitive too"). Upright: a top bar of Leave, the
+ * layout's name and the 3D ⇄ Blueprint switch, which are pressed rarely; a
+ * bottom bar of Box, Undo, Redo, Upgrade walls, the drawer, More and Apply,
+ * with the Store chip or Put back above them only while there is something to
+ * store or put back. Sideways: all of that in one bar along the bottom.
+ * Everything else (Find, Checklist, Layouts, Re-arm traps, Clear yard, the
+ * View switches and Help) moves into the More sheet, and the scene's
+ * selection row (Select all of a type) sits at the top of More
+ * (`setSelectionTools`). The controls are moved, not copied, so every state
+ * this class keeps (a count on the drawer) is right in either place; and they
+ * are moved back exactly where they were when the window returns to a
+ * desktop's shape. A desktop never sees the phone-only controls at all: they
+ * are not in the document.
  *
  * ## Read-only
  *
@@ -90,7 +65,7 @@ import { costButtonState, isPhone, PlannerLayout } from "./plannerLayout";
  * controls are left out rather than disabled, because a row of six dead
  * buttons reads as a broken planner and a player cannot tell which of them
  * they are meant to wait for. What stays is what answers questions: the two
- * selection tools, Find, the view switch and the cost cells.
+ * selection tools, Find and the view switch.
  */
 
 /** The switches in the View menu: what each one draws over the yard. */
@@ -107,8 +82,6 @@ export interface PlannerBarActions {
    * and waits to be told what to tick.
    */
   onOverlay: (name: OverlayName) => void;
-  /** Mirror, align or distribute the selection (F7). */
-  onGroupTool: (op: GroupOp) => void;
   onUndo: () => void;
   onRedo: () => void;
   onFind: () => void;
@@ -136,33 +109,6 @@ export interface PlannerBarActions {
   onMore?: (open: boolean) => void;
 }
 
-const ZERO = { r1: 0, r2: 0, r3: 0, r4: 0 } as const;
-
-const EMPTY_SUMMARY: SelectionSummary = {
-  needed: ZERO,
-  held: ZERO,
-  shortfall: ZERO,
-  seconds: 0,
-  shiny: 0,
-  byType: [],
-  maxed: 0,
-};
-
-/** The worker art the HUD's Workers readout uses (`Hud.ts`). */
-const WORKER_ICON_URL = "/assets/archived/worker.v1.png";
-
-/**
- * A word a desktop bar under 1440 px drops to keep one row (owner,
- * 2026-11-04): hidden from sight there but still read out, so the button's
- * name stays whole.
- */
-const longPart = (text: string): HTMLElement => {
-  const element = document.createElement("span");
-  element.className = "planner-bar__long";
-  element.textContent = text;
-  return element;
-};
-
 const button = (label: string, title: string, className = "btn btn--ghost"): HTMLButtonElement => {
   const element = document.createElement("button");
   element.type = "button";
@@ -170,6 +116,23 @@ const button = (label: string, title: string, className = "btn btn--ghost"): HTM
   element.textContent = label;
   element.title = title;
   return element;
+};
+
+/**
+ * A square icon button (owner, 2026-11-04): the face from `plannerIcons.ts`,
+ * the words as its accessible name, and the shortcut in its tooltip.
+ */
+const iconButton = (name: PlannerIcon, title: string): HTMLButtonElement => {
+  const element = button("", title, "btn btn--ghost planner-bar__icon");
+  element.dataset["icon"] = name;
+  element.setAttribute("aria-label", PLANNER_ICON_WORDS[name].words);
+  element.append(iconFace(name));
+  return element;
+};
+
+/** Redraws an icon button's face, words or glyph, leaving a badge alone. */
+const setFace = (element: HTMLButtonElement, name: PlannerIcon, compact: boolean): void => {
+  element.querySelector(":scope > .planner-bar__face")?.replaceWith(iconFace(name, compact));
 };
 
 /**
@@ -205,8 +168,8 @@ const tipContent = (name: DemoName, text: string): Node => {
  * Wraps a control so a demo of it can pop up on hover, focus or a long press.
  *
  * The wrapper is what listens, not the control, because Chrome dispatches no
- * pointer events at all over a disabled button — and a disabled Mirror is
- * exactly when a player wants to know what Mirror does.
+ * pointer events at all over a disabled button — and a disabled Store is
+ * exactly when a player wants to know what Store does.
  */
 const withDemo = (
   control: HTMLElement,
@@ -252,16 +215,14 @@ interface MenuRow {
 /**
  * A toolbar button that drops a short list of actions under it.
  *
- * Align has six members and Distribute two, and putting eight more buttons in
- * a row that already holds nine would push the undo pair off the end of a
- * laptop screen. Written by hand rather than with `<select>` or `<details>`
+ * The View switches and Clear yard each sit behind one trigger, so the top
+ * bar stays one row on a laptop. Written by hand rather than with `<select>` or `<details>`
  * because both of those carry a meaning this does not have: a select holds a
  * value, and a details discloses content rather than firing an action.
  *
  * It closes on a choice, on Escape and on a press anywhere else, which are the
  * three ways anyone tries to dismiss a menu. Disabling the trigger closes it
- * too: a selection can shrink below two while the list is open, and a menu of
- * dead rows is worse than no menu.
+ * too: a menu of dead rows is worse than no menu.
  */
 class Menu {
   readonly element: HTMLElement;
@@ -414,7 +375,7 @@ class Menu {
       const anchor = this.element.getBoundingClientRect();
       this.list.style.setProperty("--menu-top", `${anchor.bottom}px`);
       this.list.style.setProperty("--menu-left", `${anchor.left}px`);
-      // Low on the screen (Align in a phone's More sheet, #45) it opens
+      // Low on the screen (a phone's bottom bar, #45) it opens
       // upward, or it would hang off the bottom of the screen.
       this.list.style.setProperty("--menu-bottom", `${window.innerHeight - anchor.top}px`);
       this.list.classList.toggle("planner-menu__list--up", anchor.bottom > window.innerHeight / 2);
@@ -461,47 +422,14 @@ class Relocator {
   }
 }
 
-/** One "needed / held" readout, with its own label and its own tooltip. */
-class CostCell {
-  readonly element: HTMLElement;
-
-  private readonly value: HTMLElement;
-
-  constructor(label: string | Node, className = "planner-cost__cell") {
-    this.element = document.createElement("span");
-    this.element.className = className;
-
-    const name = document.createElement("span");
-    name.className = "planner-cost__label";
-    name.append(label);
-
-    this.value = document.createElement("span");
-    this.value.className = "planner-cost__value";
-    this.value.textContent = "—";
-
-    this.element.append(name, this.value);
-  }
-
-  set(text: string, title: string, short = false): void {
-    this.value.textContent = text;
-    this.element.title = title;
-    this.element.classList.toggle("planner-cost__cell--short", short);
-  }
-}
-
 export class PlannerBar {
   readonly toolbar: HTMLElement;
   readonly actionBar: HTMLElement;
 
   private readonly tools = new Map<PlannerTool, HTMLButtonElement>();
   private readonly views = new Map<YardView, HTMLButtonElement>();
-  private readonly mirrors: HTMLButtonElement[] = [];
-  /** The `.planner-tip` wrappers the mirror buttons are mounted inside. */
-  private readonly mirrorTips: HTMLElement[] = [];
   /** Detaches every popover the bar attached. */
   private readonly popovers: (() => void)[] = [];
-  private readonly align: Menu;
-  private readonly distribute: Menu;
   private readonly viewMenu: Menu;
   private readonly undo: HTMLButtonElement;
   private readonly redo: HTMLButtonElement;
@@ -510,7 +438,6 @@ export class PlannerBar {
   private readonly upgradeWalls: HTMLButtonElement;
   private readonly rearm: HTMLButtonElement;
   private readonly rearmBadge: HTMLElement;
-  private readonly summary: HTMLElement;
   private readonly putBack: HTMLButtonElement;
   private readonly store: HTMLButtonElement;
   private readonly storeChip: HTMLButtonElement;
@@ -518,67 +445,35 @@ export class PlannerBar {
   private readonly inventoryBadge: HTMLElement;
   private readonly yardMenu: Menu;
   private readonly slotLabel: HTMLElement;
-  private readonly resourceCells = new Map<string, CostCell>();
-  private readonly timeCell: CostCell;
-  private readonly shinyCell: CostCell;
-  private readonly workersCell: CostCell;
-  private readonly unplacedCell: CostCell;
-  /** Land and air coverage of the plan (#55). */
-  private readonly coverageCell: CostCell;
   private readonly readOnly: boolean;
   private readonly actions: PlannerBarActions;
 
   /* ── Phones (#45) ─────────────────────────────────────────────────── */
 
   private layout: PlannerLayout = PlannerLayout.DESKTOP;
-  /** The screen is touched: the summary says "tap", not "click". */
-  private touch = false;
   private readonly places = new Relocator();
   private container: HTMLElement | null = null;
-  private lastState: PlannerState | null = null;
   private readonly heading: HTMLElement;
   private readonly box: HTMLButtonElement;
   private readonly find: HTMLButtonElement;
   private readonly layoutsButton: HTMLButtonElement;
   private readonly help: HTMLButtonElement;
   private readonly exit: HTMLButtonElement;
-  /** Mirror, Align and Distribute: lent to More's Selection section on a phone. */
-  private readonly arrangeGroup: HTMLElement | null;
   /** Upgrade walls, re-arm, Checklist, Layouts and Apply. Null when read-only. */
   private readonly actionRow: HTMLElement | null;
   /** One button for the two views, which a phone has no room to show side by side. */
   private readonly viewSwitch: HTMLButtonElement;
   private readonly moreButton: HTMLButtonElement;
-  /**
-   * The costs in one button: a phone's one line, a tap showing the full cells;
-   * a desktop's short Cost button, opening the pop-up (owner, 2026-11-04).
-   */
-  private readonly costLine: HTMLButtonElement;
-  /** A desktop's Cost button and its pop-up, which a hover also shows. */
-  private readonly costPop: HTMLElement;
-  /** The pop-up's cells: the four resources, the time and the shiny price. */
-  private readonly costPanel: HTMLElement;
-  /** The bar's own readouts; a phone gets the pop-up's cells in here too. */
-  private readonly costs: HTMLElement;
-  /** Closes a desktop's pop-up on a click elsewhere or Esc. */
-  private readonly dismissCosts: (event: Event) => void;
   private readonly moreSheet: HTMLElement;
-  /** More's first section on a phone: Select all and the arrange tools (#45). */
+  /** More's first section on a phone: Select all of a type (#45). */
   private readonly moreSelectionSection: HTMLElement;
   private readonly moreSelection: HTMLElement;
   private readonly moreView: HTMLElement;
   private readonly morePlanSection: HTMLElement;
   private readonly morePlan: HTMLElement;
   private moreOpen = false;
-  private costsOpen = false;
   private tool: PlannerTool = PlannerTool.SELECT;
   private view: YardView = YardView.ISO;
-  /** What the Cost button was last told, so it can be redrawn on its own. */
-  private line = {
-    needed: ZERO as SelectionSummary["needed"],
-    shortfall: ZERO as SelectionSummary["shortfall"],
-    seconds: 0,
-  };
 
   constructor(
     actions: PlannerBarActions,
@@ -612,9 +507,9 @@ export class PlannerBar {
     this.heading.className = "planner-bar__heading";
     this.heading.append(title, this.slotLabel);
 
-    const select = button("Select", "Select tool (V)");
+    const select = iconButton("select", "Select: click a building, Shift+drag for a box (V)");
     select.addEventListener("click", () => actions.onTool(PlannerTool.SELECT));
-    const box = button("Box", "Box select (B)");
+    const box = iconButton("box", "Box select: drag a box over buildings (B)");
     // On a phone Select has no button of its own: Box is a switch, and off is Select.
     box.addEventListener("click", () =>
       actions.onTool(
@@ -625,7 +520,7 @@ export class PlannerBar {
     this.tools.set(PlannerTool.BOX, box);
     this.box = box;
 
-    const find = button("Find", "Find buildings by name or type (F)");
+    const find = iconButton("find", "Find buildings by name or type (F)");
     find.addEventListener("click", actions.onFind);
     this.find = find;
 
@@ -681,49 +576,6 @@ export class PlannerBar {
       },
     ]);
 
-    /* ── F7: mirror, align and distribute ───────────────────────────── */
-
-    const groupButton = (op: GroupOp): HTMLButtonElement => {
-      const info = GROUP_OPS[op];
-      const element = button(info.menu, info.hint);
-      element.disabled = true;
-      element.addEventListener("click", () => actions.onGroupTool(op));
-      // Wrapped so the demo can pop up even while the button is off, and the
-      // wrapper is what goes in the bar (`this.mirrors` keeps the buttons,
-      // because that is what `setGroupEnabled` has to reach).
-      const { element: wrapper, dispose } = withDemo(
-        element,
-        GROUP_OP_DEMOS[op],
-        () => element.title,
-      );
-      this.popovers.push(dispose);
-      this.mirrorTips.push(wrapper);
-      return element;
-    };
-
-    const groupRow = (op: GroupOp): MenuRow => ({
-      label: GROUP_OPS[op].menu,
-      title: GROUP_OPS[op].hint,
-      demo: GROUP_OP_DEMOS[op],
-      run: () => actions.onGroupTool(op),
-    });
-
-    this.mirrors.push(groupButton(GroupOp.MIRROR_X), groupButton(GroupOp.MIRROR_Y));
-
-    this.align = new Menu("Align", "Align the selection's edges or centres", "alignLeft", [
-      groupRow(GroupOp.ALIGN_LEFT),
-      groupRow(GroupOp.ALIGN_RIGHT),
-      groupRow(GroupOp.ALIGN_TOP),
-      groupRow(GroupOp.ALIGN_BOTTOM),
-      groupRow(GroupOp.ALIGN_CENTRE_X),
-      groupRow(GroupOp.ALIGN_CENTRE_Y),
-    ]);
-    this.distribute = new Menu("Distribute", "Space the selection evenly", "distributeH", [
-      groupRow(GroupOp.DISTRIBUTE_X),
-      groupRow(GroupOp.DISTRIBUTE_Y),
-    ]);
-    this.setGroupEnabled(0);
-
     /* ── Store, clear and the drawer (issue #50) ─────────────────────── */
 
     this.store = button("Store", "Select something to store");
@@ -754,9 +606,9 @@ export class PlannerBar {
     this.inventory.disabled = true;
     this.inventory.addEventListener("click", actions.onInventory);
 
-    this.undo = button("Undo", "Undo (Ctrl+Z)");
+    this.undo = iconButton("undo", "Undo (Ctrl+Z)");
     this.undo.addEventListener("click", actions.onUndo);
-    this.redo = button("Redo", "Redo (Ctrl+Shift+Z or Ctrl+Y)");
+    this.redo = iconButton("redo", "Redo (Ctrl+Shift+Z or Ctrl+Y)");
     this.redo.addEventListener("click", actions.onRedo);
 
     const help = button("?", "How the planner works, and every shortcut", "btn btn--ghost btn--icon");
@@ -773,13 +625,8 @@ export class PlannerBar {
     exit.addEventListener("click", actions.onExit);
     this.exit = exit;
 
-    this.undo.setAttribute("aria-label", "Undo");
-    this.redo.setAttribute("aria-label", "Redo");
     const history = group(this.undo, this.redo);
     history.classList.add("planner-bar__group--history");
-    this.arrangeGroup = this.readOnly
-      ? null
-      : group(...this.mirrorTips, this.align.element, this.distribute.element);
 
     this.toolbar.append(
       this.heading,
@@ -794,7 +641,6 @@ export class PlannerBar {
         ? []
         : [
             group(storeTip.element, this.yardMenu.element, this.inventory),
-            ...(this.arrangeGroup ? [this.arrangeGroup] : []),
             history,
           ]),
       spacer(),
@@ -806,106 +652,14 @@ export class PlannerBar {
 
     this.actionBar = document.createElement("div");
     this.actionBar.className = "planner-bar planner-bar--bottom";
-    this.actionBar.setAttribute("aria-label", "Plan summary and actions");
-
-    // The yard readouts that stay on a desktop's bar: workers, unplaced and
-    // coverage, each short and bounded. A phone moves them into the pop-up.
-    const costs = document.createElement("div");
-    costs.className = "planner-cost";
-    costs.setAttribute("role", "group");
-    costs.setAttribute("aria-label", "What the selection would cost");
-    this.costs = costs;
-
-    // The priced cells (owner, 2026-11-04): the four resources, the time and
-    // the shiny price sit in a pop-up over the bar, behind one Cost button,
-    // so the bar does not grow with the numbers. A phone too ("Yes, fix the
-    // phone"): its one-line cost ran to "90.5M 83.0M 25.6M 36d 2h".
-    this.costPanel = document.createElement("div");
-    this.costPanel.className = "planner-cost__pop";
-    this.costPanel.setAttribute("role", "group");
-    this.costPanel.setAttribute("aria-label", "Every cost");
-
-    // Each resource cell and the shiny cell are headed by the icon (#93).
-    for (const key of RESOURCE_KEYS) {
-      // The cell's own tooltip names the resource and says more, so the
-      // icon keeps its name for a screen reader but not a tooltip of its own.
-      const cell = new CostCell(resourceIcon(key, { tooltip: false }));
-      this.resourceCells.set(key, cell);
-      this.costPanel.append(cell.element);
-    }
-
-    // Icons over words (owner, 2026-11-04): the painted clock, the HUD's
-    // worker and the tower-range mark head these cells; the name stays the
-    // icon's spoken label and the cell's tooltip says the rest.
-    this.timeCell = new CostCell(
-      gameIcon("time", { size: 16, tooltip: false }),
-      "planner-cost__cell planner-cost__cell--time",
-    );
-    this.shinyCell = new CostCell(
-      resourceIcon("shiny", { tooltip: false }),
-      "planner-cost__cell planner-cost__cell--shiny",
-    );
-    const workerIcon = document.createElement("span");
-    workerIcon.className = "planner-cost__worker";
-    workerIcon.setAttribute("role", "img");
-    workerIcon.setAttribute("aria-label", "Workers");
-    workerIcon.style.backgroundImage = `url("${WORKER_ICON_URL}")`;
-    this.workersCell = new CostCell(workerIcon, "planner-cost__cell planner-cost__cell--workers");
-    // Nothing can be unplaced yet (phase 1 §1.3), so the cell starts hidden and
-    // the store tool turns it on rather than adding it.
-    this.unplacedCell = new CostCell(
-      "Unplaced",
-      "planner-cost__cell planner-cost__cell--unplaced",
-    );
-    this.unplacedCell.element.hidden = true;
-    // Shown whatever the overlay says: a number to compare two arrangements by
-    // is wanted most when the hatching is off (#55).
-    this.coverageCell = new CostCell(
-      gameIcon("range", { size: 16, label: "Coverage", tooltip: false }),
-      "planner-cost__cell planner-cost__cell--coverage",
-    );
-    this.costPanel.append(this.timeCell.element, this.shinyCell.element);
-    costs.append(this.workersCell.element, this.unplacedCell.element, this.coverageCell.element);
-
-    // One short Cost button, which opens the pop-up on a click (a tap) and,
-    // on a desktop, shows it on a hover. A phone moves it beside the summary.
-    this.costLine = button("", "Show every cost", "btn btn--ghost planner-bar__cost-line");
-    this.costLine.setAttribute("aria-expanded", "false");
-    this.costLine.addEventListener("click", () => this.setCostsOpen(!this.costsOpen));
-    this.costPop = document.createElement("div");
-    this.costPop.className = "planner-bar__cost-pop";
-    this.costPop.append(this.costLine, this.costPanel);
-    this.renderCostLine();
-    // A click or tap anywhere else, or Esc, closes the pop-up. Esc stops
-    // there, so closing it does not also drop the selection. The planner's
-    // keys listen on window in the capture phase, which runs before anything
-    // on document, so the Esc listener must sit on window too; the planner
-    // skips a key that was already handled (defaultPrevented).
-    this.dismissCosts = (event: Event): void => {
-      if (!this.costsOpen) return;
-      if (event instanceof KeyboardEvent) {
-        if (event.key !== "Escape") return;
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        this.setCostsOpen(false);
-        return;
-      }
-      if (event.target instanceof Node && this.costPop.contains(event.target)) return;
-      this.setCostsOpen(false);
-    };
-    document.addEventListener("pointerdown", this.dismissCosts, true);
-    window.addEventListener("keydown", this.dismissCosts, true);
-
-    this.summary = document.createElement("span");
-    this.summary.className = "planner-bar__summary";
-    this.summary.setAttribute("role", "status");
+    this.actionBar.setAttribute("aria-label", "Planner actions");
 
     /*
      * F14's "put back", for a hand that has no second button.
      *
      * Only on screen while something is in hand, because that is the only
-     * moment it means anything, and beside the summary line that says so
-     * rather than out among the actions: it undoes a gesture, not an edit.
+     * moment it means anything, and at the start of the bottom bar rather
+     * than out among the actions: it undoes a gesture, not an edit.
      */
     this.putBack = button(
       "Put back",
@@ -916,11 +670,10 @@ export class PlannerBar {
     this.putBack.addEventListener("click", actions.onPutBack);
 
     /*
-     * The same Store the toolbar has, beside the count of what is selected.
-     *
-     * Not a duplicate for its own sake: the selection sentence is where a
-     * player looks after a marquee, and asking them to travel back up to the
-     * toolbar to act on what it says is the whole reason the chip exists.
+     * The same Store the toolbar has, as a chip on a phone's bottom bar while
+     * something is selected: a phone's top bar has no Store and no Delete
+     * key, so this is its only way to store. A desktop never shows it (the
+     * stylesheet hides it there; the top bar's Store is the one).
      */
     this.storeChip = button(
       "Store",
@@ -941,22 +694,20 @@ export class PlannerBar {
 
     // Pressed first, then the walls are picked on the yard (owner, 2026-11-04):
     // a switch, pressed while the picking runs.
-    this.upgradeWalls = button("", "No walls in this yard");
-    this.upgradeWalls.append(longPart("Upgrade "), "walls");
-    this.upgradeWalls.className = "btn btn--ghost planner-bar__walls";
+    this.upgradeWalls = iconButton("wallupgrade", "No walls in this yard");
+    this.upgradeWalls.classList.add("planner-bar__walls");
     this.upgradeWalls.disabled = true;
     this.upgradeWalls.setAttribute("aria-pressed", "false");
     this.upgradeWalls.addEventListener("click", actions.onUpgradeWalls);
 
     // The label and the badge are separate children so the count can be
     // rewritten without the label being rebuilt around it.
-    this.rearm = button("", "No fired traps to put back", "btn btn--ghost planner-bar__rearm");
-    const rearmLabel = document.createElement("span");
-    rearmLabel.append("Re-arm", longPart(" traps"));
+    this.rearm = iconButton("rearm", "No fired traps to put back");
+    this.rearm.classList.add("planner-bar__rearm");
     this.rearmBadge = document.createElement("span");
     this.rearmBadge.className = "planner-bar__badge";
     this.rearmBadge.hidden = true;
-    this.rearm.append(rearmLabel, this.rearmBadge);
+    this.rearm.append(this.rearmBadge);
     this.rearm.disabled = true;
     this.rearm.addEventListener("click", actions.onRearmTraps);
 
@@ -981,7 +732,7 @@ export class PlannerBar {
       ]) {
         control.disabled = true;
       }
-      this.actionBar.append(this.costPop, costs, this.summary, spacer());
+      this.actionBar.append(spacer());
       this.actionRow = null;
     } else {
       // The actions share a wrapper: one group at the bar's right end on a
@@ -991,15 +742,7 @@ export class PlannerBar {
       actionRow.className = "planner-bar__actions";
       actionRow.append(this.upgradeWalls, this.rearm, this.checklist, layouts, this.apply);
       this.actionRow = actionRow;
-      this.actionBar.append(
-        this.costPop,
-        costs,
-        this.summary,
-        this.storeChip,
-        this.putBack,
-        spacer(),
-        actionRow,
-      );
+      this.actionBar.append(this.storeChip, this.putBack, spacer(), actionRow);
     }
 
     /* ── The phone-only controls (#45), mounted by `setLayout` ────────── */
@@ -1012,7 +755,8 @@ export class PlannerBar {
       actions.onView(this.view === YardView.ISO ? YardView.BLUEPRINT : YardView.ISO),
     );
 
-    this.moreButton = button("More", "Everything else the planner does");
+    this.moreButton = button("⋯", "More: Find, Checklist, Layouts, Re-arm traps, the View switches and Help");
+    this.moreButton.setAttribute("aria-label", "More");
     this.moreButton.classList.add("planner-bar__more");
     this.moreButton.setAttribute("aria-haspopup", "true");
     this.moreButton.setAttribute("aria-expanded", "false");
@@ -1057,8 +801,6 @@ export class PlannerBar {
       if (!pressed || pressed.getAttribute("role") === "menuitemcheckbox") return;
       this.setMoreOpen(false);
     });
-
-    this.setSummary(EMPTY_SUMMARY);
   }
 
   mount(container: HTMLElement): this {
@@ -1087,37 +829,19 @@ export class PlannerBar {
    * wording ("tap" where a mouse reads "click").
    */
   setLayout(layout: PlannerLayout, touch: boolean): void {
-    this.touch = touch;
     if (layout !== this.layout) {
       this.layout = layout;
       this.arrange(layout);
     }
-    if (this.lastState) this.summary.textContent = summarise(this.lastState, this.touch);
-    this.renderCostLine();
+    // A finger has no Esc and no right button: the chip is the way back.
+    this.putBack.title = touch
+      ? "Put the buildings in hand back where they were"
+      : "Put the buildings in hand back where they were (Esc or right-click)";
   }
 
   /**
-   * Lends Mirror, Align and Distribute to `host` (the scene's selection row,
-   * which a phone shows at the top of More), or takes them back into the top
-   * bar with null. A read-only bar has none.
-   *
-   * Lent, Align and Distribute show their rows in place, as the View switches
-   * do: a menu that has to be opened first, inside a sheet that closes on any
-   * button press, would close before it opened.
-   */
-  lendArrange(host: HTMLElement | null): void {
-    const arrange = this.arrangeGroup;
-    if (!arrange) return;
-    const lent = host !== null && isPhone(this.layout);
-    if (lent) this.places.move(arrange, host);
-    else this.places.restoreOne(arrange);
-    this.align.setInline(lent);
-    this.distribute.setInline(lent);
-  }
-
-  /**
-   * Puts the scene's selection row (Select all, and the arrange tools lent by
-   * `lendArrange`) at the top of a phone's More sheet, or takes it out with
+   * Puts the scene's selection row (Select all of a type) at the top of a
+   * phone's More sheet, or takes it out with
    * null (#45). The section follows the row's own `hidden`, so the scene calls
    * this again whenever the selection changes what the row offers.
    *
@@ -1146,14 +870,6 @@ export class PlannerBar {
     this.actions.onMore?.(next);
   }
 
-  /** Shows or hides the pop-up of full cost cells over the Cost button. */
-  private setCostsOpen(open: boolean): void {
-    this.costsOpen = open;
-    this.actionBar.classList.toggle("planner-bar--costs-open", this.costsOpen);
-    this.costLine.setAttribute("aria-expanded", String(this.costsOpen));
-    this.renderCostLine();
-  }
-
   /**
    * Moves every control to where `layout` wants it.
    *
@@ -1167,7 +883,6 @@ export class PlannerBar {
     this.viewSwitch.remove();
     this.moreButton.remove();
     this.setMoreOpen(false);
-    this.setCostsOpen(false);
     this.moreSheet.remove();
 
     const phone = isPhone(layout);
@@ -1179,34 +894,36 @@ export class PlannerBar {
     }
     // Glyphs where a phone has no room for the words; the names stay the same.
     this.exit.textContent = phone ? "✕" : "Leave planner";
-    this.undo.textContent = phone ? "↶" : "Undo";
-    this.redo.textContent = phone ? "↷" : "Redo";
+    setFace(this.undo, "undo", phone);
+    setFace(this.redo, "redo", phone);
     this.help.textContent = phone ? "Help" : "?";
     if (!phone) return;
 
-    // Top: Leave first, then the name, the view switch and undo/redo. The
-    // tool groups stay where they are and the stylesheet hides what is left.
+    // Top, upright: Leave, the layout's name and the view switch, the things
+    // pressed least. The tool groups stay where they are and the stylesheet
+    // hides what is left.
     this.places.move(this.exit, this.toolbar, this.heading);
     this.heading.after(this.viewSwitch);
 
-    // Bottom, first row: the summary, the Store chip (or Put back) and the
-    // Cost button, so the closed bar is that row and the actions. The
-    // readouts join the priced cells in the pop-up, which a phone hangs over
-    // the whole bar, two cells a row and never wider than the screen.
-    const after = this.putBack.parentNode === this.actionBar ? this.putBack : this.summary;
-    this.places.move(this.costPop, this.actionBar, after.nextSibling);
-    this.places.move(this.costs, this.costPanel);
+    // Bottom, under the thumb (owner, 2026-11-04: "ensure the mobile layout
+    // is intuitive too"): Box, Undo, Redo, Upgrade walls, the drawer, More and
+    // Apply, the presses a planning session is made of. The Store chip and
+    // Put back sit over them only while there is something to store or put
+    // back.
     const row = this.actionRow ?? this.actionBar;
     const end = this.actionRow ? this.apply : null;
     this.places.move(this.box, row, row.firstChild);
+    this.places.move(this.undo, row, this.box.nextSibling);
+    this.places.move(this.redo, row, this.undo.nextSibling);
+    if (this.actionRow) this.places.move(this.upgradeWalls, row, this.redo.nextSibling);
     this.places.move(this.inventory, row, end);
     row.insertBefore(this.moreButton, end);
 
-    // Everything else, into More.
+    // Everything else, into More: what a session needs now and then.
     this.places.move(this.viewMenu.element, this.moreView);
     this.viewMenu.setInline(true);
     this.places.move(this.find, this.morePlan);
-    for (const control of [this.checklist, this.layoutsButton, this.upgradeWalls, this.rearm]) {
+    for (const control of [this.checklist, this.layoutsButton, this.rearm]) {
       this.places.move(control, this.morePlan);
     }
     this.places.move(this.yardMenu.element, this.morePlan);
@@ -1215,54 +932,13 @@ export class PlannerBar {
     this.morePlanSection.hidden = this.morePlan.childElementCount === 0;
 
     if (layout === PlannerLayout.LANDSCAPE) {
-      // Sideways there is one bar: Leave, undo and redo open it, and the view
-      // switch joins the tools at its right end. The top bar is left empty.
-      const first = this.actionBar.firstChild;
-      this.places.move(this.exit, this.actionBar, first);
-      this.places.move(this.undo, this.actionBar, first);
-      this.places.move(this.redo, this.actionBar, first);
+      // Sideways there is one bar: Leave opens it, and the view switch joins
+      // the tools before the drawer. The top bar is left empty.
+      this.places.move(this.exit, this.actionBar, this.actionBar.firstChild);
       row.insertBefore(this.viewSwitch, this.inventory.parentNode === row ? this.inventory : this.moreButton);
     }
 
     this.container?.append(this.moreSheet);
-    this.renderCostLine();
-  }
-
-  /**
-   * The Cost button, the same on a desktop and a phone: the painted resource
-   * pile, a red "!" while any resource is short, and the worker time in one
-   * unit ("33m"). No resource figure, so the button is as wide at 999.9B as
-   * at 100; the pop-up over it has every cell, and a click, a tap or (on a
-   * desktop) a hover opens it.
-   */
-  private renderCostLine(): void {
-    const state = costButtonState(this.line.needed, this.line.shortfall, this.line.seconds);
-    const children: Node[] = [gameIcon("income", { size: 24, decorative: true })];
-    if (state.short) {
-      const mark = document.createElement("span");
-      mark.className = "planner-bar__cost-mark";
-      mark.setAttribute("aria-hidden", "true");
-      mark.textContent = "!";
-      children.push(mark);
-    }
-    const time = document.createElement("span");
-    time.className = "planner-bar__cost-time";
-    time.textContent = state.empty ? "—" : state.time;
-    if (state.time) time.prepend(gameIcon("time", { size: 16, decorative: true }));
-    children.push(time);
-    const caret = document.createElement("span");
-    caret.className = "planner-bar__cost-caret";
-    caret.setAttribute("aria-hidden", "true");
-    // The pop-up opens upward, over the bar.
-    caret.textContent = this.costsOpen ? "▾" : "▴";
-    children.push(caret);
-    this.costLine.replaceChildren(...children);
-    this.costLine.classList.toggle("planner-bar__cost-line--short", state.short);
-    const said = state.empty
-      ? "Nothing to pay for"
-      : `${state.short ? "Short of resources" : "Affordable"}${state.time ? `, ${state.time} of work` : ""}`;
-    this.costLine.setAttribute("aria-label", `Cost: ${said}. Show every cost`);
-    this.costLine.title = `${said}. ${this.touch ? "Tap" : "Hover or click"} for every cost.`;
   }
 
   /**
@@ -1304,7 +980,6 @@ export class PlannerBar {
 
   /** Redraws from the session's state. */
   update(state: PlannerState): void {
-    this.lastState = state;
     this.tool = state.tool;
     this.view = state.view;
     this.viewSwitch.textContent = state.view === YardView.ISO ? "3D ⇄" : "Blueprint ⇄";
@@ -1319,14 +994,9 @@ export class PlannerBar {
       element.setAttribute("aria-pressed", String(state.view === view));
     }
     this.upgradeWalls.setAttribute("aria-pressed", String(state.wallPicking));
-    // Picking walls (owner, 2026-11-04): the Upgrade walls window already says
-    // what the pick is and what it costs at the chosen level, so the bar drops
-    // its cost cells, summary and Store chip and keeps its actions on one row.
+    // Picking walls (owner, 2026-11-04): the Upgrade walls window says what
+    // the pick is and what it costs, and nothing picked may be stored.
     this.actionBar.classList.toggle("planner-bar--wall-pick", state.wallPicking);
-    // The cost pop-up goes with the cells, and does not come back on its own.
-    if (state.wallPicking && this.costsOpen) this.setCostsOpen(false);
-
-    this.setGroupEnabled(state.selectionCount);
 
     this.undo.disabled = !state.canUndo;
     this.undo.title = state.canUndo ? `Undo ${state.undoLabel} (Ctrl+Z)` : "Nothing to undo";
@@ -1349,9 +1019,6 @@ export class PlannerBar {
       : "";
     this.slotLabel.classList.toggle("planner-bar__slot--read-only", state.readOnly);
 
-    this.summary.textContent = summarise(state, this.touch);
-    // A desktop cuts a long summary to an ellipsis when the bar is short of room (#192).
-    this.summary.title = this.summary.textContent;
     // A read-only session never mounts the chip; hiding it as well keeps the
     // two states from disagreeing if one ever slips through.
     this.putBack.hidden = this.readOnly || !state.carrying;
@@ -1360,8 +1027,8 @@ export class PlannerBar {
     this.setStoreEnabled(state.selectionCount);
     // Nothing to store while something is already in hand, and the chip would
     // sit next to "Put back" saying the opposite thing.
-    this.storeChip.hidden = state.selectionCount === 0 || state.carrying;
-    this.setStoredCount(state.storedCount, state.unplacedCount);
+    this.storeChip.hidden = state.selectionCount === 0 || state.carrying || state.wallPicking;
+    this.setStoredCount(state.storedCount);
     this.yardMenu.setEnabled(!state.previewing, state.previewing
       ? "Close the preview first"
       : "Actions on the whole yard");
@@ -1370,143 +1037,6 @@ export class PlannerBar {
     this.apply.title = state.previewing
       ? "Close the preview before applying"
       : "Write this layout to your yard";
-  }
-
-  /**
-   * Rewrites the six cost cells from a selection summary.
-   *
-   * The breakdown by type goes into every needed cell's tooltip rather than
-   * into a popover: it is a list of at most a handful of rows, it is wanted
-   * while the pointer is already over the number, and a popover here would sit
-   * under the bar it belongs to.
-   */
-  setSummary(summary: SelectionSummary): void {
-    const breakdown = describeBreakdown(summary.byType, summary.maxed);
-    this.setResourceCells(summary.needed, summary.held, summary.shortfall, breakdown);
-
-    this.line.seconds = summary.seconds;
-    this.renderCostLine();
-    this.timeCell.set(
-      summary.seconds === 0 ? "—" : formatCountdown(summary.seconds),
-      summary.seconds === 0
-        ? "No worker time: nothing selected has a next level."
-        : `${summary.seconds.toLocaleString()} worker seconds for the next level of everything selected.`,
-    );
-
-    this.shinyCell.set(
-      summary.shiny === 0 ? "—" : formatShort(summary.shiny),
-      `${summary.shiny === 0 ? "No" : formatAmount(summary.shiny)} shiny: what it would cost to buy every step outright. Not for sale in the planner yet.`,
-    );
-  }
-
-  /** The free-worker readout. */
-  setWorkers(workers: YardWorkers): void {
-    const free = Math.max(0, workers.total - workers.busy);
-    this.workersCell.set(
-      `${free}/${workers.total}`,
-      `Workers: ${free} of ${workers.total} free; ${workers.busy} ${workers.busy === 1 ? "is" : "are"} already on a job.`,
-    );
-  }
-
-  /**
-   * The share of the plot the towers reach, land and air (#55): "Land 87% ·
-   * Air 41%", or "No towers" when none is placed.
-   */
-  setCoverage(coverage: CoverageFigures): void {
-    if (coverage.towers === 0) {
-      this.coverageCell.set(
-        "No towers",
-        "Coverage: no towers placed, so there is nothing to cover.",
-      );
-      return;
-    }
-    const land = percentText(coverage.land);
-    const air = percentText(coverage.air);
-    this.coverageCell.set(
-      `${land} · ${air}`,
-      `Coverage: land ${land}, air ${air}. How much of the yard is within reach of at least one defence tower: ${land} for creeps on the ground, ${air} for flyers. View › Dead zones shows the rest.`,
-    );
-  }
-
-  /**
-   * How many buildings are in the plan but nowhere on the plot.
-   *
-   * Hidden at zero: an untouched plan should not carry a count of nothing.
-   * Apply is hard-blocked while it is not zero (§8, Q4), so the cell is the
-   * bar's standing answer to "why is Apply refusing me".
-   */
-  setUnplaced(count: number): void {
-    this.unplacedCell.element.hidden = count === 0;
-    this.unplacedCell.set(
-      String(count),
-      count === 0
-        ? "Every building has a place."
-        : `${count} ${count === 1 ? "building has" : "buildings have"} nowhere to go. Apply is blocked until ${count === 1 ? "it does" : "they do"}.`,
-      count > 0,
-    );
-  }
-
-  /** The four resource cells, from whichever reading of "needed" is current. */
-  private setResourceCells(
-    needed: SelectionSummary["needed"],
-    held: SelectionSummary["held"],
-    shortfall: SelectionSummary["shortfall"],
-    breakdown: string,
-  ): void {
-    this.line.needed = needed;
-    this.line.shortfall = shortfall;
-    for (const key of RESOURCE_KEYS) {
-      const label = RESOURCE_NAMES[key];
-      const cell = this.resourceCells.get(key);
-      if (!cell) continue;
-      const short = shortfall[key];
-      cell.set(
-        `${formatShort(needed[key])}/${formatShort(held[key])}`,
-        short > 0
-          ? `${label}: ${needed[key].toLocaleString()} needed, ${held[key].toLocaleString()} held — ${short.toLocaleString()} short.\n${breakdown}`
-          : `${label}: ${needed[key].toLocaleString()} needed, ${held[key].toLocaleString()} held.\n${breakdown}`,
-        short > 0,
-      );
-    }
-  }
-
-  /**
-   * Lights the group operations up for a selection of `count` buildings.
-   *
-   * Each control asks for the minimum its own geometry needs rather than one
-   * number for all of them: mirroring or aligning one building about its own
-   * centre is the identity, and distributing holds the outermost two still, so
-   * it has nothing to space until there is a third between them. A button that
-   * is off says what would turn it on, because that is the question a player
-   * with one tower selected is actually asking.
-   */
-  setGroupEnabled(selected: number): void {
-    // A read-only session never mounts these, and they stay inert as well as
-    // absent so a caller holding one cannot fire it (§8, Q5).
-    const count = this.readOnly ? 0 : selected;
-
-    for (const element of this.mirrors) {
-      element.disabled = count < 2;
-      if (count < 2) setTitle(element, "Select two or more buildings to mirror");
-    }
-    if (count >= 2) {
-      const [horizontal, vertical] = this.mirrors;
-      if (horizontal) setTitle(horizontal, GROUP_OPS[GroupOp.MIRROR_X].hint);
-      if (vertical) setTitle(vertical, GROUP_OPS[GroupOp.MIRROR_Y].hint);
-    }
-
-    this.align.setEnabled(
-      count >= 2,
-      count >= 2
-        ? "Align the selection's edges or centres"
-        : "Select two or more buildings to align",
-    );
-    this.distribute.setEnabled(
-      count >= 3,
-      count >= 3
-        ? "Space the selection evenly"
-        : "Select three or more buildings to space out evenly",
-    );
   }
 
   /**
@@ -1527,18 +1057,11 @@ export class PlannerBar {
   }
 
   /**
-   * How many buildings the drawer holds.
-   *
-   * Drives three things at once, because they are three readings of one
-   * number: the badge on the drawer button, whether that button can be opened
-   * at all, and the Unplaced cost cell that says Apply is blocked.
+   * How many buildings the drawer holds: the badge on the drawer button, and
+   * whether that button can be opened at all. (What of it blocks Apply is the
+   * Checklist's to say.)
    */
-  /**
-   * The drawer's count on its button, and in the Unplaced cell what of it
-   * blocks Apply: a decoration in the drawer does not (#128), so `unplaced`
-   * leaves those out. Absent, everything counts.
-   */
-  setStoredCount(count: number, unplaced = count): void {
+  setStoredCount(count: number): void {
     if (this.readOnly) return;
     this.inventoryBadge.hidden = count === 0;
     this.inventoryBadge.textContent = String(count);
@@ -1547,7 +1070,6 @@ export class PlannerBar {
       count === 0
         ? "Nothing is stored"
         : `${count} ${count === 1 ? "building is" : "buildings are"} in the drawer`;
-    this.setUnplaced(unplaced);
   }
 
   /** Shows the count of blocking problems on the checklist button. */
@@ -1566,7 +1088,7 @@ export class PlannerBar {
     if (this.readOnly) return;
     this.upgradeWalls.disabled = count === 0;
     this.upgradeWalls.title =
-      count === 0 ? "No walls in this yard" : "Pick walls on the yard and raise them a level";
+      count === 0 ? "No walls in this yard" : "Upgrade walls: pick walls on the yard and raise them a level";
   }
 
   /** How many fired traps are waiting to be put back. Zero disables the button. */
@@ -1578,17 +1100,14 @@ export class PlannerBar {
     this.rearm.title =
       count === 0
         ? "No fired traps to put back"
-        : `Put ${count} fired ${count === 1 ? "trap" : "traps"} back where ${count === 1 ? "it" : "they"} stood`;
+        : `Re-arm traps: put ${count} fired ${count === 1 ? "trap" : "traps"} back where ${count === 1 ? "it" : "they"} stood`;
+    this.rearm.setAttribute("aria-label", count === 0 ? "Re-arm traps" : `Re-arm traps, ${count} fired`);
   }
 
   destroy(): void {
     // The menus listen on the document, so dropping the bar is not enough.
-    this.align.destroy();
-    this.distribute.destroy();
     this.yardMenu.destroy();
     this.viewMenu.destroy();
-    document.removeEventListener("pointerdown", this.dismissCosts, true);
-    window.removeEventListener("keydown", this.dismissCosts, true);
     // So do the popovers, and their bubbles hang off the body rather than off
     // the bar, so they outlive it unless they are taken down by hand.
     for (const dispose of this.popovers) dispose();
@@ -1598,73 +1117,6 @@ export class PlannerBar {
     this.moreSheet.remove();
   }
 }
-
-/**
- * The breakdown line under every needed cell's tooltip.
- *
- * Named types rather than ids, because the player selected pictures and not
- * numbers, and the maxed count last so a selection that costs nothing still
- * says why.
- */
-const describeBreakdown = (
-  byType: readonly SelectionTypeCost[],
-  maxed: number,
-): string => {
-  const lines = byType.map(
-    (row) =>
-      `${row.count} × ${row.name}: ${[
-        row.needed.r1 > 0 ? `${row.needed.r1.toLocaleString()} twigs` : "",
-        row.needed.r2 > 0 ? `${row.needed.r2.toLocaleString()} pebbles` : "",
-        row.needed.r3 > 0 ? `${row.needed.r3.toLocaleString()} putty` : "",
-        row.needed.r4 > 0 ? `${row.needed.r4.toLocaleString()} goo` : "",
-      ]
-        .filter(Boolean)
-        .join(", ") || "free"}`,
-  );
-  if (maxed > 0) {
-    lines.push(`${maxed} already at the top of ${maxed === 1 ? "its" : "their"} ladder`);
-  }
-  return lines.length > 0 ? lines.join("\n") : "Nothing selected has a next level.";
-};
-
-const summarise = (state: PlannerState, touch = false): string => {
-  // Picking walls: the pick, and how to add to it.
-  if (state.wallPicking) {
-    const count = state.selectionCount;
-    return `${count} ${count === 1 ? "wall" : "walls"} picked · ${
-      touch ? "drag a box or tap walls" : "drag a box or click walls, Esc to stop"
-    }`;
-  }
-  // Short, so it stays one line (owner, 2026-11-04: "400 selected · 0 moved"
-  // wrapped onto three): "400 picked", and "moved" only once something has.
-  const parts: string[] = [];
-  parts.push(state.selectionCount === 0 ? "Nothing picked" : `${state.selectionCount} picked`);
-  if (state.movedCount > 0) parts.push(`${state.movedCount} moved`);
-  if (state.storedCount > 0) {
-    parts.push(`${state.storedCount} stored`);
-  }
-  if (state.dragInvalid) parts.push("cannot drop here");
-  else if (state.placing) {
-    // The next one off the stack follows each drop (#57), so this is worded
-    // as a run rather than a single placement.
-    parts.push(
-      touch
-        ? "out of the drawer · tap the yard once per building"
-        : "out of the drawer · click the yard once per building, Esc to stop",
-    );
-  } else if (state.carrying) {
-    // Both spellings of "put it back" for a mouse, because a desktop can be
-    // touched too; a phone has no second button and no Esc (F14, #45).
-    parts.push(
-      touch
-        ? "in hand · tap to drop it, or Put back"
-        : "in hand · click to drop, right-click or Put back to cancel",
-    );
-  }
-  else if (state.readOnly) parts.push("read-only · nothing here can be moved");
-  else if (state.previewing) parts.push("read-only preview");
-  return parts.join(" · ");
-};
 
 const group = (...children: HTMLElement[]): HTMLElement => {
   const element = document.createElement("div");

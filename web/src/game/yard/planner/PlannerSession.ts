@@ -13,7 +13,6 @@ import {
   type MoveEntry,
   type StoreEntry,
 } from "./commands";
-import { groupTargets, GroupOp, GROUP_OPS } from "./groupTools";
 import { planLoad, payloadFor, type LoadResult } from "./layout";
 import { rectFromCorners } from "./marquee";
 import { snap, type PlanNode } from "./placement";
@@ -58,30 +57,6 @@ interface PreviewState {
   readonly y: number;
   /** In the drawer: a half-finished layout can lift buildings off or put them down. */
   readonly stored: boolean;
-}
-
-/** Why a group operation did nothing, or null when it did something. */
-export const GroupRefusal = {
-  /** The session may not be edited at all (§8, Q5). */
-  READ_ONLY: "read-only",
-  /** Fewer buildings selected than the operation needs.  */
-  TOO_FEW: "too-few",
-  /** The selection is already like that: a mirror of a symmetric row. */
-  NO_CHANGE: "no-change",
-  /** Somebody would have left the plot or landed on something. */
-  BLOCKED: "blocked",
-} as const;
-export type GroupRefusal = (typeof GroupRefusal)[keyof typeof GroupRefusal];
-
-/** What a mirror, align or distribute did, for the notice that reports it. */
-export interface GroupOutcome {
-  readonly op: GroupOp;
-  readonly ok: boolean;
-  /** How many buildings moved. Zero unless `ok`. */
-  readonly moved: number;
-  /** How many the refusal named, which are the ones outlined in red. */
-  readonly blocked: number;
-  readonly reason: GroupRefusal | null;
 }
 
 export interface PlannerState {
@@ -164,7 +139,6 @@ export class PlannerSession {
   private readonly onViewToggle: () => void;
   private readonly onFind: (() => void) | undefined;
   private readonly onRanges: (() => void) | undefined;
-  private readonly onGroup: ((outcome: GroupOutcome) => void) | undefined;
   private readonly onTap: (() => void) | undefined;
   /**
    * Set for the life of the session: this plan may be read, never changed.
@@ -203,7 +177,7 @@ export class PlannerSession {
    * any selection and the bar's cost cells follow it; what changes is what a
    * press does. A box adds the walls it touches to the pick and ignores
    * everything else, a click or tap on a wall takes it in or out, and nothing
-   * can be moved, nudged, stored or mirrored until the mode ends. With the Box
+   * can be moved, nudged or stored until the mode ends. With the Box
    * tool on (the mode turns it on) every drag is a box, mouse or finger, with
    * no Shift; with Select, a drag on bare ground pans as usual, which is a
    * phone's way to scroll the yard between boxes.
@@ -245,15 +219,6 @@ export class PlannerSession {
      */
     onRanges?: () => void;
     /**
-     * A mirror, align or distribute finished — or was refused.
-     *
-     * Reported through the session rather than returned to the caller because
-     * `M` on the keyboard and the toolbar's menu are the same operation, and
-     * only one of the two has anywhere to put the answer. The scene turns it
-     * into a notice; the session has already put the red outlines on.
-     */
-    onGroup?: (outcome: GroupOutcome) => void;
-    /**
      * A finger tapped the yard (F14), on a building or off one.
      *
      * The scene keeps a phone's sheets off the yard while a building is moved,
@@ -285,7 +250,6 @@ export class PlannerSession {
     this.onViewToggle = options.onViewToggle;
     this.onFind = options.onFind;
     this.onRanges = options.onRanges;
-    this.onGroup = options.onGroup;
     this.onTap = options.onTap;
     this.onWallPickCancel = options.onWallPickCancel;
     this.readOnly = options.readOnly ?? false;
@@ -690,59 +654,6 @@ export class PlannerSession {
     this.view.syncSome(this.selection);
     this.view.resort();
     this.afterEdit();
-  }
-
-  /**
-   * Mirror, align or distribute the selection (design §3, F7).
-   *
-   * One command per press, whatever it moves, so a mirror of four hundred walls
-   * is one Ctrl+Z and not four hundred. It goes through the same validation a
-   * drag does — `beginMove`, test, `commitTargets` — so an operation that would
-   * put anything outside the plot or on top of something is refused whole, with
-   * the offenders outlined in red, rather than applied to whichever half of the
-   * selection happened to fit.
-   */
-  groupTool(op: GroupOp): GroupOutcome {
-    const refuse = (reason: GroupRefusal, blocked = 0): GroupOutcome => {
-      const outcome: GroupOutcome = { op, ok: false, moved: 0, blocked, reason };
-      this.onGroup?.(outcome);
-      return outcome;
-    };
-
-    if (this.readOnly) return refuse(GroupRefusal.READ_ONLY);
-    if (this.input.isGrabbing) this.cancel();
-
-    const nodes = this.selectedNodes().filter((node) => !node.fixed);
-    if (nodes.length < GROUP_OPS[op].minimum) return refuse(GroupRefusal.TOO_FEW);
-
-    const targets = groupTargets(op, nodes);
-    if (targets.size === 0) return refuse(GroupRefusal.NO_CHANGE);
-
-    this.plan.beginMove(nodes.map((node) => node.id));
-    const { entries, issues } = this.plan.commitTargets(targets);
-
-    if (!entries) {
-      this.faulted = new Set<number>();
-      for (const issue of issues) {
-        this.faulted.add(issue.id);
-        if (issue.otherId !== undefined) this.faulted.add(issue.otherId);
-      }
-      this.refresh();
-      return refuse(GroupRefusal.BLOCKED, this.faulted.size);
-    }
-
-    this.record(
-      entries,
-      `${GROUP_OPS[op].label} · ${entries.length} ${entries.length === 1 ? "building" : "buildings"}`,
-    );
-    this.faulted.clear();
-    this.view.syncSome(this.selection);
-    this.view.resort();
-    this.afterEdit();
-
-    const outcome: GroupOutcome = { op, ok: true, moved: entries.length, blocked: 0, reason: null };
-    this.onGroup?.(outcome);
-    return outcome;
   }
 
   undo(): void {
@@ -1166,7 +1077,7 @@ export class PlannerSession {
     // are swallowed rather than let through to the page.
     if (
       this.wallPick &&
-      (action.kind === "nudge" || action.kind === "mirror" || action.kind === "store")
+      (action.kind === "nudge" || action.kind === "store")
     ) {
       return true;
     }
@@ -1199,9 +1110,6 @@ export class PlannerSession {
         // The scene owns what is drawn over the yard, the same way it owns the
         // view switch: the session knows nothing about the overlays.
         this.onRanges?.();
-        return true;
-      case "mirror":
-        this.groupTool(action.axis === "x" ? GroupOp.MIRROR_X : GroupOp.MIRROR_Y);
         return true;
       case "store":
         this.store();

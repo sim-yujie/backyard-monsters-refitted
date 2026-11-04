@@ -193,3 +193,96 @@ export const followWallTarget = (
   }
   return { target: autoWallTarget(walls, all, allowed) ?? choice.target, manual: false };
 };
+
+/**
+ * "Select all" at `target` (owner, 2026-11-04: the player chooses the level
+ * first, then all or what they can afford). It picks every wall below the
+ * level, and only when the yard can pay for every one of them; otherwise the
+ * button is greyed with the reason.
+ */
+export interface SelectAllCheck {
+  /** The walls below `target`: what the button picks. */
+  readonly ids: number[];
+  /** Why the button is greyed, or null when it can be pressed. */
+  readonly reason: string | null;
+}
+
+export const selectAllCheck = (
+  all: readonly PlanNode[],
+  target: number,
+  yard: Yard,
+  hallWord = "Town Hall",
+): SelectAllCheck => {
+  const preview = wallBatchPreview(all.filter((node) => isPickableWall(node)), target, yard);
+  const ids = preview.eligible;
+  if (ids.length === 0) return { ids, reason: `Every wall is already at level ${target} or higher.` };
+  if (preview.gate) return { ids, reason: `Level ${target} needs ${hallWord} ${preview.gate.need}.` };
+  if (isShort(preview.shortfall)) {
+    return {
+      ids,
+      reason: `Not enough to raise all ${ids.length} ${ids.length === 1 ? "wall" : "walls"} to level ${target}.`,
+    };
+  }
+  return { ids, reason: null };
+};
+
+/**
+ * "Affordable" at `target`: as many walls as the yard can pay for, cheapest
+ * (nearest the level) first.
+ *
+ * A pick that is too dear is trimmed down to what can be paid for
+ * ({@link affordablePick}); a pick that can be paid for is kept and topped up
+ * from the rest of the yard with what is left over, so the button never throws
+ * away walls the player chose. `reason` says why the button is greyed: nothing
+ * can be paid for, or the pick is already all the yard can afford.
+ */
+export interface AffordableCheck {
+  readonly ids: number[];
+  readonly reason: string | null;
+}
+
+export const affordableFill = (
+  picked: readonly PlanNode[],
+  all: readonly PlanNode[],
+  target: number,
+  yard: Yard,
+): AffordableCheck => {
+  const walls = picked.filter((node) => isPickableWall(node));
+  const pickPreview = wallBatchPreview(walls, target, yard);
+  const below = all.filter((node) => isPickableWall(node) && effectiveLevel(node) < target);
+  if (below.length === 0) {
+    return { ids: [], reason: `Every wall is already at level ${target} or higher.` };
+  }
+
+  let ids: number[];
+  if (pickPreview.eligible.length > 0 && isShort(pickPreview.shortfall)) {
+    ids = affordablePick(walls, target, yard);
+  } else {
+    const held = heldResources(yard.resources);
+    const cost = pickPreview.cost;
+    const left: Yard = {
+      ...yard,
+      resources: {
+        ...yard.resources,
+        r1: held.r1 - cost.r1,
+        r2: held.r2 - cost.r2,
+        r3: held.r3 - cost.r3,
+        r4: held.r4 - cost.r4,
+      },
+    };
+    const chosen = new Set(walls.map((node) => node.id));
+    const rest = below.filter((node) => !chosen.has(node.id));
+    ids = [...pickPreview.eligible, ...affordablePick(rest, target, left)];
+  }
+
+  if (ids.length === 0) {
+    return { ids, reason: `You cannot afford a single wall at level ${target} yet.` };
+  }
+  const same =
+    ids.length === pickPreview.eligible.length &&
+    ids.every((id) => pickPreview.eligible.includes(id)) &&
+    !isShort(pickPreview.shortfall);
+  return same
+    ? { ids, reason: `Your pick is already all you can afford at level ${target}.` }
+    : { ids, reason: null };
+};

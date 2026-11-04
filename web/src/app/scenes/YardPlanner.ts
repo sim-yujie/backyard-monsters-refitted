@@ -18,17 +18,10 @@ import {
 import type { Camera } from "@/game/Camera";
 import { TRAP_TYPES } from "@/game/yard/buildingCosts";
 import { blueprintToWorld } from "@/game/yard/planner/blueprint";
-import { GROUP_OPS } from "@/game/yard/planner/groupTools";
 import type { Checklist } from "@/game/yard/planner/checklist";
 import type { LoadMiss } from "@/game/yard/planner/layout";
 import type { PlanNode } from "@/game/yard/planner/placement";
-import {
-  GroupRefusal,
-  PlannerSession,
-  PlannerTool,
-  type GroupOutcome,
-  type PlannerState,
-} from "@/game/yard/planner/PlannerSession";
+import { PlannerSession, PlannerTool, type PlannerState } from "@/game/yard/planner/PlannerSession";
 import {
   CentreMarker,
   loadOverlays,
@@ -36,11 +29,11 @@ import {
   saveOverlays,
   type OverlayToggles,
 } from "@/game/yard/planner/RangeLayer";
-import { computeCoverage, coverageTowers, figuresOf, type Coverage } from "@/game/yard/planner/coverage";
+import { computeCoverage, coverageTowers, type Coverage } from "@/game/yard/planner/coverage";
 import { DeadZoneLayer } from "@/game/yard/planner/DeadZoneLayer";
 import { sameTypeIds } from "@/game/yard/planner/selectType";
 import { isPickableWall } from "@/game/yard/planner/wallPick";
-import { summariseSelection, typeName } from "@/game/yard/planner/summary";
+import { typeName } from "@/game/yard/planner/summary";
 import { footprintCentre, footprintOf } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
 import { YardView, type YardRenderer } from "@/game/yard/YardRenderer";
@@ -342,12 +335,10 @@ export class YardPlanner {
   /** How far the bars cut into the viewport, for the edge scroll. */
   private insets = { top: 0, bottom: 0 };
   private dockObserver: MutationObserver | null = null;
-  /** A phone's selection row, at the top of More: Select all, then the arrange tools. */
+  /** A phone's selection row, at the top of More: Select all of a type. */
   private readonly phoneTools: HTMLElement;
   private readonly selectAll: HTMLButtonElement;
   private selectAllIds: number[] = [];
-  /** Where the bar lends Mirror, Align and Distribute. */
-  private readonly arrangeHost: HTMLElement;
 
   constructor(options: YardPlannerOptions) {
     this.options = options;
@@ -373,9 +364,7 @@ export class YardPlanner {
     this.selectAll.type = "button";
     this.selectAll.className = "btn btn--ghost planner-inspector__select-all";
     this.selectAll.addEventListener("click", () => this.session.selectOnly(this.selectAllIds));
-    this.arrangeHost = document.createElement("div");
-    this.arrangeHost.className = "planner-inspector__arrange";
-    this.phoneTools.append(this.selectAll, this.arrangeHost);
+    this.phoneTools.append(this.selectAll);
 
     this.session = new PlannerSession({
       yard: options.yard,
@@ -390,7 +379,6 @@ export class YardPlanner {
       },
       onFind: () => this.openSearch(),
       onRanges: () => this.toggleOverlay("ranges"),
-      onGroup: (outcome) => this.reportGroupTool(outcome),
       onTap: () => this.tapped(),
       onWallPickCancel: () => this.endWallPick(),
       readOnly: this.readOnly,
@@ -420,9 +408,6 @@ export class YardPlanner {
       onTool: (tool) => this.session.setTool(tool),
       onView: (view) => this.setView(view),
       onOverlay: (name) => this.toggleOverlay(name),
-      onGroupTool: (op) => {
-        this.session.groupTool(op);
-      },
       onUndo: () => this.session.undo(),
       onRedo: () => this.session.redo(),
       onFind: () => this.toggleSearch(),
@@ -967,56 +952,6 @@ export class YardPlanner {
     );
   }
 
-  /* ── Mirror, align and distribute ───────────────────────────────────── */
-
-  /**
-   * Says what a group operation did, or why it did nothing (design §3, F7).
-   *
-   * Refusals matter more than successes here: a mirror moves everything at
-   * once, so a player who is told only "nothing happened" has no way to guess
-   * which of forty walls was the problem. The session has already outlined the
-   * offenders in red, and this names the count and the reason so the two read
-   * as one answer.
-   *
-   * A read-only session cannot reach the operation at all, so that refusal is
-   * only ever a programming error and is left silent.
-   */
-  private reportGroupTool(outcome: GroupOutcome): void {
-    const name = GROUP_OPS[outcome.op].label;
-
-    if (outcome.ok) {
-      this.options.notices.show(
-        NOTICE,
-        `${name}: moved ${outcome.moved} ${plural(outcome.moved, "building")}. ${undoName(this.touch)} puts them back.`,
-        { level: "info", timeoutMs: 4000 },
-      );
-      return;
-    }
-
-    switch (outcome.reason) {
-      case GroupRefusal.READ_ONLY:
-        return;
-      case GroupRefusal.TOO_FEW:
-        this.options.notices.show(NOTICE, `${name} needs a bigger selection.`, {
-          level: "warning",
-          timeoutMs: 4000,
-        });
-        return;
-      case GroupRefusal.NO_CHANGE:
-        this.options.notices.show(NOTICE, `${name}: the selection is already like that.`, {
-          level: "info",
-          timeoutMs: 4000,
-        });
-        return;
-      default:
-        this.options.notices.show(
-          NOTICE,
-          `Cannot ${name.toLowerCase()} here: ${outcome.blocked} ${plural(outcome.blocked, "building")} would overlap or leave the plot. Nothing moved.`,
-          { level: "warning" },
-        );
-    }
-  }
-
   /* ── Checklist and Apply ────────────────────────────────────────────── */
 
   private showChecklist(): void {
@@ -1336,9 +1271,9 @@ export class YardPlanner {
   /* ── Chrome ─────────────────────────────────────────────────────────── */
 
   /**
-   * Rewrites the bar, the coverage panel and a phone's selection row from the
-   * session's state. The cost cells say what the selection's next levels
-   * would cost.
+   * Rewrites the bar, the overlays and a phone's selection row from the
+   * session's state. The bar carries buttons only (owner, 2026-11-04): what
+   * walls cost is in the Upgrade walls window.
    */
   private refreshBar(): void {
     this.options.onPlanChanged?.();
@@ -1347,12 +1282,9 @@ export class YardPlanner {
     if (!this.readOnly) this.noteWork();
     const state = this.session.state();
     this.bar.update(state);
-    this.bar.setCoverage(figuresOf(this.currentCoverage()));
     this.drawOverlays();
 
     const nodes = this.session.selectedNodes();
-    this.bar.setSummary(summariseSelection(nodes, this.yard));
-    this.bar.setWorkers(this.yard.workers);
     this.bar.setWallCount(this.session.wallCount());
     this.refreshWallPick();
 
@@ -1465,8 +1397,8 @@ export class YardPlanner {
 
   /**
    * Works out the planner's shape from the window and the pointer, and lays
-   * the chrome out for it: the bars, the classes the stylesheet reads, and
-   * where Mirror, Align and Distribute live. Run on open and on every resize,
+   * the chrome out for it: the bars and the classes the stylesheet reads.
+   * Run on open and on every resize,
    * which is also what turning a phone round sends.
    */
   private applyLayout(): void {
@@ -1483,7 +1415,6 @@ export class YardPlanner {
     overlay.classList.toggle("planner-phone--landscape", layout === PlannerLayout.LANDSCAPE);
     if (!changed) return;
 
-    this.bar.lendArrange(isPhone(layout) ? this.arrangeHost : null);
     this.refreshPhoneTools(this.session.selectedNodes());
     this.applySheet();
     this.reportPlannerInset();
@@ -1491,8 +1422,7 @@ export class YardPlanner {
 
   /**
    * A phone's selection row, for the current selection, in the Selection
-   * section at the top of More (#45). Off a phone the row is not shown at all:
-   * the top bar has Mirror, Align and Distribute, and Select all is a key.
+   * section at the top of More (#45). Off a phone the row is not shown at all.
    */
   private refreshPhoneTools(nodes: readonly PlanNode[]): void {
     if (!isPhone(this.layout)) {
@@ -1506,10 +1436,7 @@ export class YardPlanner {
       this.selectAll.textContent = `Select all ${all.ids.length}`;
       this.selectAll.title = `Select every ${typeName(all.type, this.yard.kind)} on the yard`;
     }
-    // Two or more to mirror or align: with fewer every one of them is off,
-    // and a row of dead buttons is worse than none.
-    this.arrangeHost.hidden = this.readOnly || nodes.length < 2;
-    this.phoneTools.hidden = this.selectAll.hidden && this.arrangeHost.hidden;
+    this.phoneTools.hidden = this.selectAll.hidden;
     this.bar.setSelectionTools(this.phoneTools);
   }
 

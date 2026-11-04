@@ -53,8 +53,7 @@
   letter-spacing: var(--display-tracking);
 }
 
-.planner-bar__slot,
-.planner-bar__summary {
+.planner-bar__slot {
   font-size: var(--text-sm);
 }
 
@@ -90,11 +89,11 @@
 }
 
 /*
- * F7's Align and Distribute menus.
+ * The View and Yard menus.
  *
- * The list is positioned against the group button rather than the bar, so it
- * hangs under whichever of the two was pressed, and it sits above the canvas
- * chrome for the same reason the bars do.
+ * The list is positioned against its trigger rather than the bar, so it hangs
+ * under the button that was pressed, and it sits above the canvas chrome for
+ * the same reason the bars do.
  */
 .planner-menu {
   position: relative;
@@ -169,75 +168,6 @@
 .planner-bar__checklist--bad {
   color: var(--colour-danger);
   border-color: var(--colour-danger);
-}
-
-/* ── F3: the cost and time cells ──────────────────────────────────────── */
-
-.planner-cost {
-  display: flex;
-  align-items: stretch;
-  gap: var(--space-1);
-  flex-wrap: wrap;
-}
-
-.planner-cost__cell {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 72px;
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--colour-border);
-  background: var(--colour-surface-overlay);
-}
-
-.planner-cost__label {
-  font-size: var(--text-xs);
-  color: var(--colour-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-/* A resource cell is headed by its icon rather than its name (#93). */
-.planner-cost__label .res-icon {
-  display: block;
-  height: 16px;
-}
-
-.planner-cost__value {
-  font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
-}
-
-/*
- * Shortfall is a colour *and* a border, and the tooltip says "short" in words,
- * so the state never rests on hue alone (§4.3).
- */
-.planner-cost__cell--short {
-  border-color: var(--colour-danger);
-}
-
-.planner-cost__cell--short .planner-cost__value {
-  color: var(--colour-danger);
-}
-
-.planner-cost__cell--shiny .planner-cost__value {
-  color: var(--colour-warning);
-}
-
-/* The two plan cells (§5.3). Narrower: they carry a count, not an amount. */
-.planner-cost__cell--workers,
-.planner-cost__cell--unplaced {
-  min-width: 64px;
-}
-
-.planner-cost__cell--unplaced[hidden] {
-  display: none;
-}
-
-/* Coverage (#55): two figures in one cell, kept on one line. */
-.planner-cost__cell--coverage .planner-cost__value {
-  white-space: nowrap;
 }
 
 /* The same rule, for the cost rows inside the two batch panels. */
@@ -846,14 +776,7 @@
   }
 }
 
-/*
- * A desktop keeps the bottom bar's actions together at its right end (#192).
- * The summary gives way first: it is laid out at its narrowest, so the costs
- * and the actions share one row wherever they fit (1280 px does, see "One
- * row" below), then it takes what is left. Where the row cannot hold the
- * costs and the actions, the actions move down as one row rather than Apply
- * alone, and the zoom and minimap follow the bar's height up.
- */
+/* A desktop keeps the bottom bar's actions together at its right end (#192). */
 .planner-bar__actions {
   display: flex;
   flex: none;
@@ -862,277 +785,94 @@
   margin-inline-start: auto;
 }
 
-@media (width > 620px) {
-  .planner-bar--bottom > .planner-bar__summary {
-    flex: 1 1 0;
-    min-width: 12ch;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-}
-
 /*
- * One row (owner, 2026-11-04: "Can't the bottom row be made into 1?").
- *
- * A desktop's bottom bar was two rows at 1600 px: every cost cell stood a
- * word over a full figure ("TIME" over "5s", "12,552,536"), and the actions
- * dropped under them. Now each cell is one line, its icon beside a short
- * figure ("100K/12.5M"; the exact one is in the tooltip), the gaps are
- * tighter, and the summary wraps inside its own space instead of being cut
- * off. Below 1440 px the bar also drops the Store chip, which repeats the
- * top bar's Store, and the words "Upgrade" and "traps" (still read out), so
- * it stays one row down to 1280 px with a big selection. Phones keep their
- * own layout (`data-layout`, below).
+ * Buttons only (owner, 2026-11-04: "is there really a need for the stuff in
+ * the bottom left anyway?"). The costs, readouts and summary are gone, so the
+ * desktop's bottom bar is Put back while something is in hand, then the
+ * actions at its right end. The Store chip is a phone's; a desktop stores from
+ * the top bar or with Delete.
  */
 .planner-bar--bottom:not([data-layout]) {
   gap: var(--space-2);
   padding-inline: var(--space-2);
 }
 
-.planner-bar--bottom:not([data-layout]) .planner-cost {
-  flex-wrap: nowrap;
-  gap: var(--space-1);
-}
-
-.planner-bar--bottom:not([data-layout]) .planner-cost__cell {
-  flex-direction: row;
-  align-items: center;
-  gap: 3px;
-  min-width: 0;
-  padding: 2px var(--space-1);
-}
-
-.planner-bar--bottom:not([data-layout]) .planner-cost__value {
-  white-space: nowrap;
-}
-
-/* The actions push right on their own (margin-inline-start: auto), so the
-   spacer only cost width and a gap; without it 1280 px fits one row. */
 .planner-bar--bottom:not([data-layout]) > .planner-bar__spacer {
   display: none;
 }
 
-/* One line, always (owner, 2026-11-04: "400 selected · 0 moved" wrapped onto
-   three). The words are short ("400 picked"); a long hint is cut to an
-   ellipsis and kept whole in the tooltip. */
-.planner-bar--bottom:not([data-layout]) > .planner-bar__summary {
-  min-width: 6ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* The readouts that stay on the bar (workers, unplaced, coverage) are short,
-   and capped as well, so no figure can push the actions off the row. */
-.planner-bar--bottom:not([data-layout]) .planner-cost > .planner-cost__cell {
-  max-width: 9rem;
-}
-
-.planner-bar--bottom:not([data-layout]) .planner-cost > .planner-cost__cell > .planner-cost__value {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.planner-bar--bottom:not([data-layout]) > .planner-bar__store-chip {
+  display: none;
 }
 
 .planner-bar--bottom:not([data-layout]) .planner-bar__actions {
   gap: var(--space-1);
 }
 
-.planner-bar--bottom:not([data-layout]) .planner-bar__actions > .btn:not(.btn--primary) {
+.planner-bar--bottom:not([data-layout]) .planner-bar__actions > .btn:not(.btn--primary, .planner-bar__icon) {
   padding-inline: var(--space-2);
   font-size: var(--text-sm);
 }
 
-@media (width < 1440px) {
-  .planner-bar--bottom:not([data-layout]) > .planner-bar__store-chip {
-    display: none;
-  }
-
-  /* "Walls" and "Re-arm": the dropped words stay in the button's name. */
-  .planner-bar--bottom:not([data-layout]) .planner-bar__long {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
-  .planner-bar--bottom:not([data-layout]) .planner-bar__walls {
-    text-transform: capitalize;
-  }
-}
-
 /*
- * The Cost button and its pop-up (owner, 2026-11-04: "The resource and shiny
- * on the bottom left arent doing good. They will eventually be too long.").
- *
- * A desktop's bar shows one button of a fixed largest width: the painted
- * resource pile, a red "!" while anything is short, and the worker time in
- * one unit. The four "needed / held" cells, the time and the shiny price hang
- * over the bar in a pop-up, shown on a hover and held open by a click
- * (`PlannerBar.setCostsOpen`). A phone has the same button (owner, 4 Nov:
- * "Yes, fix the phone") beside its summary, and its pop-up, which also takes
- * the workers and coverage readouts, hangs over the whole bar (below).
+ * The icon buttons (owner, 2026-11-04): Undo, Redo, Select, Box, Find,
+ * Upgrade walls and Re-arm traps. Square, the painted icon centred; the words
+ * are the tooltip and the accessible name. A badge (Re-arm's count) sits on
+ * the top-right corner rather than widening the square.
  */
-.planner-bar__cost-pop {
+.planner-bar__icon {
   position: relative;
-  display: flex;
-  flex: none;
-}
-
-/* Kept to one class, so the skins' painted plate (skin.css) can dress it as
-   it does the planner's drop-down menus. */
-.planner-cost__pop {
-  position: absolute;
-  bottom: calc(100% + var(--space-2));
-  left: 0;
-  z-index: calc(var(--z-hud) + 1);
-  display: none;
-  grid-template-columns: repeat(2, max-content);
-  gap: var(--space-1);
-  padding: var(--space-2);
-  background: var(--colour-surface-raised);
-  -webkit-backdrop-filter: var(--blur-panel);
-  backdrop-filter: var(--blur-panel);
-  border: 1px solid var(--colour-border);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-panel);
-}
-
-.planner-bar--bottom .planner-bar__cost-line {
-  /* Sized for the longest time, "999d+" (about 137 px in all): the button
-     never shrinks, so the time is never cut (7.5rem cut "82d" to "82"). */
-  flex: none;
-  gap: 3px;
-  max-width: 10rem;
-  padding-inline: var(--space-2);
-}
-
-.planner-bar--bottom .planner-bar__cost-line > .game-icon--income {
-  width: 22px;
-  height: 22px;
-  flex: none;
-}
-
-.planner-bar__cost-mark {
   display: inline-grid;
   place-items: center;
-  flex: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--colour-danger);
-  color: var(--colour-surface-base);
-  font-size: var(--text-xs);
-  font-weight: 800;
-  line-height: 1;
-  text-shadow: none;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
 }
 
-.planner-bar__cost-line--short {
-  border-color: var(--colour-danger);
-}
-
-.planner-bar__cost-time {
+.planner-bar__face {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  gap: var(--space-2);
+  pointer-events: none;
 }
 
-.planner-bar__cost-time > .game-icon {
-  flex: none;
+.planner-bar__face > .game-icon {
+  width: 28px;
+  height: 28px;
 }
 
-/* Held open by a click; shown on a hover where there is one. The strip under
-   it bridges the gap to the button, so the pointer can reach the pop-up. */
-.planner-bar--bottom:not([data-layout]).planner-bar--costs-open .planner-cost__pop {
-  display: grid;
+/* The label is the More sheet's; on a bar the icon stands alone. */
+.planner-bar__face-label {
+  display: none;
 }
 
-@media (hover: hover) {
-  .planner-bar--bottom:not([data-layout]) .planner-bar__cost-pop:hover > .planner-cost__pop {
-    display: grid;
-  }
+/* Words, until a button is painted: small, two lines at most. */
+.planner-bar__face--words {
+  font-size: 10px;
+  line-height: 1.1;
+  text-align: center;
+  white-space: normal;
 }
 
-.planner-bar--bottom:not([data-layout]) .planner-cost__pop::after {
-  content: "";
+.planner-bar__icon > .planner-bar__badge {
   position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  height: calc(var(--space-2) + 2px);
+  top: -4px;
+  right: -4px;
+  margin: 0;
+  pointer-events: none;
 }
 
-/* In the pop-up there is room: each cell its figure in full width. */
-.planner-bar--bottom:not([data-layout]) .planner-cost__pop > .planner-cost__cell {
-  min-width: 8rem;
-}
-
-/*
- * A phone's pop-up hangs over the whole bar rather than over the button, so
- * wherever the button sits it is centred and stays 16 px inside each edge of
- * the screen: two cells a row (twigs and pebbles, putty and goo, time and
- * shiny, workers and coverage), each figure on one line. Two cells of
- * "999.9B/999.9B" are about 300 px, so a 375 px phone holds them whole.
- */
-.planner-bar--bottom[data-layout] > .planner-bar__cost-pop {
-  position: static;
-}
-
-.planner-bar--bottom[data-layout] .planner-cost__pop {
-  left: var(--space-4);
-  right: var(--space-4);
-  width: fit-content;
-  margin-inline: auto;
-  grid-template-columns: repeat(2, minmax(0, max-content));
-}
-
-.planner-bar--bottom[data-layout].planner-bar--costs-open .planner-cost__pop {
-  display: grid;
-}
-
-/* The readouts' group lends its cells to the grid. Above the narrow-screen
-   rule that makes it a scrolling row. */
-.planner-bar--bottom[data-layout] .planner-cost__pop > .planner-cost {
-  display: contents;
-}
-
-.planner-bar--bottom[data-layout] .planner-cost__pop .planner-cost__cell {
-  flex-direction: row;
-  align-items: center;
-  gap: 3px;
-  min-width: 0;
-  padding: 2px var(--space-2);
-}
-
-.planner-bar--bottom[data-layout] .planner-cost__pop .planner-cost__value {
-  white-space: nowrap;
-}
-
-/* The HUD's worker, at the cost cells' icon size. */
-.planner-cost__worker {
-  display: block;
-  height: 16px;
-  aspect-ratio: 140 / 116;
-  background: center / contain no-repeat;
-}
-
-.planner-cost__label .game-icon {
-  display: block;
+.planner-bar__icon:disabled .planner-bar__face > .game-icon {
+  filter: grayscale(1);
+  opacity: 0.5;
 }
 
 /*
  * A phone (#151): the two bars wrapped onto five rows each and left a strip of
  * yard a fifth of the screen tall, most of it under the minimap. Each bar is
  * now as few rows as it can be: the tools are one row that scrolls sideways,
- * the bottom bar is its cost cells (scrolling), the summary line and the
- * actions (scrolling, Apply pinned at the end). The minimap steps aside while
+ * the bottom bar its actions (Apply pinned at the end). The minimap steps aside while
  * the planner is open; the zoom stays.
  */
 @media (width <= 620px) {
@@ -1146,7 +886,6 @@
   }
 
   .planner-bar--top,
-  .planner-bar--bottom .planner-cost,
   .planner-bar__actions {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -1154,7 +893,6 @@
   }
 
   .planner-bar--top > *,
-  .planner-bar--bottom .planner-cost > *,
   .planner-bar__actions > * {
     flex: none;
   }
@@ -1164,19 +902,10 @@
     display: none;
   }
 
-  .planner-bar--bottom .planner-cost,
   .planner-bar__actions {
     display: flex;
     flex: 1 0 100%;
     gap: var(--space-1);
-  }
-
-  .planner-cost__cell {
-    min-width: 64px;
-  }
-
-  .planner-bar__summary {
-    flex: 1 1 auto;
   }
 
   /* Apply stays in view however far the row is scrolled. */
@@ -1522,12 +1251,6 @@
   stroke-width: 2;
 }
 
-.planner-demo__axis {
-  stroke: var(--colour-info);
-  stroke-width: 1;
-  stroke-dasharray: 4 3;
-}
-
 .planner-demo__marquee {
   fill: color-mix(in srgb, var(--colour-info) 22%, transparent);
   stroke: var(--colour-info);
@@ -1598,18 +1321,6 @@
 /* The second click of a carry: pick up, move, put down. */
 .planner-demo__ping--late {
   animation-delay: 1.15s;
-}
-
-/* `view-box`, because the axis a mirror reflects about is a place on the
-   picture and not a place on the shape. The origin is set inline. */
-.planner-demo__flip-x {
-  animation-name: planner-demo-flip-x;
-  transform-box: view-box;
-}
-
-.planner-demo__flip-y {
-  animation-name: planner-demo-flip-y;
-  transform-box: view-box;
 }
 
 @keyframes planner-demo-move {
@@ -1703,38 +1414,6 @@
   }
 }
 
-@keyframes planner-demo-flip-x {
-  0%,
-  16% {
-    transform: scaleX(1);
-  }
-
-  58%,
-  88% {
-    transform: scaleX(-1);
-  }
-
-  100% {
-    transform: scaleX(1);
-  }
-}
-
-@keyframes planner-demo-flip-y {
-  0%,
-  16% {
-    transform: scaleY(1);
-  }
-
-  58%,
-  88% {
-    transform: scaleY(-1);
-  }
-
-  100% {
-    transform: scaleY(1);
-  }
-}
-
 /*
  * Reduced motion: the loop stops and every element is pinned at its *end*
  * state. A still picture of the "after" still answers "what does this button
@@ -1767,14 +1446,6 @@
   /* A click is a moment, and a moment has no still frame. */
   .planner-demo__ping {
     opacity: 0;
-  }
-
-  .planner-demo__flip-x {
-    transform: scaleX(-1);
-  }
-
-  .planner-demo__flip-y {
-    transform: scaleY(-1);
   }
 }
 
@@ -2036,9 +1707,9 @@
   display: contents;
 }
 
-/* Upright: Leave, the layout's name, the view switch and undo/redo. The tool
-   groups that are left in the top bar are the desktop's, and hidden. */
-.planner-bar--top[data-layout="portrait"] > .planner-bar__group:not(.planner-bar__group--history),
+/* Upright: Leave, the layout's name and the view switch. The tool groups
+   that are left in the top bar are the desktop's, and hidden. */
+.planner-bar--top[data-layout="portrait"] > .planner-bar__group,
 .planner-bar--top[data-layout="portrait"] > .planner-bar__spacer {
   display: none;
 }
@@ -2057,15 +1728,7 @@
   white-space: nowrap;
 }
 
-.planner-bar[data-layout] .planner-bar__group--history {
-  border-inline-start: 0;
-  padding-inline: 0;
-}
-
-.planner-bar[data-layout] .planner-bar__exit,
-.planner-bar[data-layout] .planner-bar__group--history > .btn,
-.planner-bar[data-layout] > .btn[aria-label="Undo"],
-.planner-bar[data-layout] > .btn[aria-label="Redo"] {
+.planner-bar[data-layout] .planner-bar__exit {
   font-size: var(--text-lg);
   line-height: 1;
   padding-inline: var(--space-2);
@@ -2076,52 +1739,57 @@
   display: none;
 }
 
-/* One row above the actions: the summary takes what the Store chip (or Put
-   back) and the Cost button leave, and a long hint wraps inside it. At
-   375 px that is about 130 px, room for "9999 picked". */
-.planner-bar--bottom[data-layout] > .planner-bar__summary {
-  flex: 1 1 7rem;
-  min-width: 0;
+/*
+ * A phone's bottom bar (owner, 2026-11-04: "ensure the mobile layout is
+ * intuitive too"): one row of 44 px targets under the thumb, Box, Undo, Redo,
+ * Upgrade walls, the drawer and More on the left and Apply on the right; at
+ * 375 px that is about 350 px, so nothing scrolls. The Store chip and Put back
+ * take a row of their own above it, only while there is something to store
+ * or put back.
+ */
+.planner-bar--bottom[data-layout] {
+  padding-bottom: calc(var(--space-1) + env(safe-area-inset-bottom, 0px));
 }
 
 .planner-bar--bottom[data-layout] > :is(.planner-bar__store-chip, .planner-bar__put-back) {
   flex: none;
+  min-height: 36px;
 }
 
-.planner-bar__cost-line {
-  display: inline-flex;
-  flex: 0 1 auto;
-  min-width: 0;
-  align-items: center;
-  gap: var(--space-2);
+.planner-bar--bottom[data-layout] .planner-bar__actions {
+  gap: 2px;
+  overflow: visible;
+}
+
+.planner-bar--bottom[data-layout] .planner-bar__actions > .btn {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.planner-bar--bottom[data-layout] .planner-bar__icon {
+  width: 44px;
+  height: 44px;
+}
+
+.planner-bar--bottom[data-layout] :is(.planner-bar__inventory, .planner-bar__more) {
   padding-inline: var(--space-2);
-  overflow: hidden;
-  font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  color: var(--colour-text);
 }
 
-.planner-bar__cost-caret {
-  color: var(--colour-text-muted);
+.planner-bar__more {
+  font-size: var(--text-lg);
+  line-height: 1;
 }
 
-/* Upright: Box, the drawer and More on the left, Apply on the right. */
+/* Upright: Apply on the right, the rest from the left. */
 .planner-bar--bottom[data-layout="portrait"] .planner-bar__actions > .btn--primary {
   margin-inline-start: auto;
 }
 
-/* Sideways: one row, the summary giving way first. */
+/* Sideways: one row. */
 .planner-bar--bottom[data-layout="landscape"] {
   flex-wrap: nowrap;
   gap: var(--space-2);
   padding: var(--space-1) var(--space-3) calc(var(--space-1) + env(safe-area-inset-bottom, 0px));
-}
-
-.planner-bar--bottom[data-layout="landscape"] > .planner-bar__summary {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .planner-bar--bottom[data-layout="landscape"] > .planner-bar__spacer {
@@ -2129,22 +1797,14 @@
 }
 
 .planner-bar--bottom[data-layout="landscape"] > .planner-bar__actions {
-  flex: none;
+  flex: 1 1 auto;
   flex-wrap: nowrap;
   gap: var(--space-1);
   margin: 0;
 }
 
-/*
- * Picking walls (owner, 2026-11-04): the Upgrade walls window says what the
- * pick is and what it costs at the level chosen there. The bar's cost cells
- * priced each wall's next level instead (a second, bigger total), and its
- * summary repeated the window's count cut off by an ellipsis, so while
- * picking the bar keeps only its actions: one row, nothing truncated.
- * `:root` lifts it over the phone's opened-cost rule.
- */
-:root .planner-bar--bottom.planner-bar--wall-pick > :is(.planner-cost, .planner-bar__summary, .planner-bar__store-chip, .planner-bar__cost-line, .planner-bar__cost-pop) {
-  display: none;
+.planner-bar--bottom[data-layout="landscape"] .planner-bar__actions > .btn--primary {
+  margin-inline-start: auto;
 }
 
 /* No zoom slider or minimap on a phone: pinch zooms, and Fit stays (#45). */
@@ -2290,6 +1950,22 @@
   background: var(--colour-surface-control);
 }
 
+/* In the list an icon button is a row like the rest: the icon, then its words. */
+.planner-more__list .planner-bar__icon {
+  display: inline-flex;
+  height: auto;
+  padding-inline: var(--space-2);
+}
+
+.planner-more__list .planner-bar__face-label {
+  display: inline;
+}
+
+.planner-more__list .planner-bar__icon > .planner-bar__badge {
+  position: static;
+  margin-inline-start: auto;
+}
+
 /* A menu shown as its rows (`Menu.setInline`): no trigger, no floating list. */
 .planner-menu--inline {
   display: block;
@@ -2330,13 +2006,11 @@
 }
 
 /*
- * ── More ▸ Selection on a phone: Select all, Mirror, Align, Distribute ───
+ * ── More ▸ Selection on a phone: Select all of a type ─────────────────────
  *
  * This row used to sit in a building sheet that opened over the yard on every
  * selection; the sheet was removed on 2026-11-03 (nothing may open over the
- * yard while a building is moved), and the row moved to the top of More. Its
- * buttons flow into More's two-column grid; Align and Distribute, shown in
- * place, take a whole row each.
+ * yard while a building is moved), and the row moved to the top of More.
  */
 
 .planner-more__section--selection .planner-inspector__tools:not([hidden]) {
@@ -2346,59 +2020,14 @@
   gap: var(--space-1);
 }
 
-.planner-more__section--selection .planner-inspector__arrange > .planner-bar__group:not([hidden]) {
-  display: contents;
-}
-
-.planner-more__section--selection .planner-menu--inline {
-  grid-column: 1 / -1;
-}
-
 .planner-inspector__tools {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1);
 }
 
-.planner-inspector__arrange {
-  display: contents;
-}
-
 .planner-inspector__tools[hidden],
-.planner-inspector__arrange[hidden],
 .planner-inspector__select-all[hidden] {
-  display: none;
-}
-
-.planner-inspector__arrange > .planner-bar__group {
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  padding: 0;
-  border: 0;
-}
-
-/*
- * Align and Distribute open in place, under their button and the sheet's full
- * width, rather than as a floating list: the sheet's blur makes it the box a
- * fixed list is placed in, and its scrolling body would clip one.
- */
-.planner-inspector__arrange .planner-menu {
-  flex-direction: column;
-}
-
-.planner-inspector__arrange .planner-menu:has(> .planner-menu__list:not([hidden])) {
-  flex-basis: 100%;
-}
-
-.planner-phone .planner-inspector__arrange .planner-menu > .planner-menu__list {
-  position: static;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-top: var(--space-1);
-  max-width: none;
-}
-
-.planner-phone .planner-inspector__arrange .planner-menu > .planner-menu__list[hidden] {
   display: none;
 }
 

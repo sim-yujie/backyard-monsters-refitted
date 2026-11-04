@@ -1,5 +1,3 @@
-import { RESOURCE_KEYS } from "@/ui/resourceIcon";
-
 /**
  * Which shape the planner's chrome takes (#45, the owner's Option A).
  *
@@ -80,54 +78,6 @@ export const shownSheet = (choice: SheetChoice): PhoneSheet | "none" | null => {
   if (choice.raised === "dock" && choice.dockFilled) return "dock";
   if (choice.inspectorFilled) return "inspector";
   return "dock";
-};
-
-/** The four pool resources, which is what a cost is made of. */
-type PoolKey = (typeof RESOURCE_KEYS)[number];
-
-/**
- * A worker time in one unit, rounded down: "45s", "33m", "5h", "12d", and
- * "999d+" past that. The Cost button (owner, 2026-11-04: the bar's
- * figures "will eventually be too long") has room for five characters of
- * time whatever the plan is; the pop-up and the tooltip keep the exact one.
- */
-export const formatTimeShort = (seconds: number): string => {
-  const whole = Math.floor(seconds);
-  if (whole <= 0) return "0s";
-  if (whole < 60) return `${whole}s`;
-  if (whole < 3_600) return `${Math.floor(whole / 60)}m`;
-  if (whole < 86_400) return `${Math.floor(whole / 3_600)}h`;
-  const days = Math.floor(whole / 86_400);
-  return days > 999 ? "999d+" : `${days}d`;
-};
-
-/** What the Cost button shows, on a desktop and a phone: never a resource figure. */
-export interface CostButtonState {
-  /** Nothing selected or planned costs anything. */
-  readonly empty: boolean;
-  /** Some resource is needed past what the yard holds. */
-  readonly short: boolean;
-  /** The worker time, one unit ("33m"), or "" when there is none. */
-  readonly time: string;
-}
-
-/**
- * The one Cost button (owner, 2026-11-04; a phone's too). The four "needed /
- * held" cells, the time and the shiny price moved into a pop-up over the bar,
- * so the button stays the same short width at 1.2B as at 100: the painted
- * resource pile, a red "!" when anything is short, and the worker time.
- */
-export const costButtonState = (
-  needed: Readonly<Record<PoolKey, number>>,
-  shortfall: Readonly<Record<PoolKey, number>>,
-  seconds: number,
-): CostButtonState => {
-  const costs = RESOURCE_KEYS.some((key) => needed[key] > 0);
-  return {
-    empty: !costs && seconds <= 0,
-    short: RESOURCE_KEYS.some((key) => shortfall[key] > 0),
-    time: seconds > 0 ? formatTimeShort(seconds) : "",
-  };
 };
 
 /**
