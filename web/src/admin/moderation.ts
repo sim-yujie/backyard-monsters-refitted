@@ -1,10 +1,19 @@
 import {
   MAX_MODERATION_REASON,
+  dismissChatFlags,
+  fetchChatFlags,
+  fetchChatLog,
   fetchChatReports,
   fetchPlayerModeration,
   moderatePlayer,
   searchPlayers,
+  type ChatLogEntry,
+  type ChatLogQuery,
   type ChatReportView,
+  type FlaggedPlayer,
+  type FlagLine,
+  type FlagSeverity,
+  type FlagSort,
   type ModerationBody,
   type ModerationEntry,
   type ModerationKind,
@@ -17,9 +26,12 @@ import { icon } from "./icons";
 import { errorWords } from "./shiny";
 
 /**
- * The Moderation section: find a player (or pick a chat report), see their
- * state and history, and warn them, pause their chat, ban them, or lift a
- * ban or pause. Every step is checked on the server, which refuses game team
+ * The Moderation section: find a player (or pick a flagged player or a chat
+ * report), see their state, history and chat, and warn them, pause their
+ * chat, ban them, or lift a ban or pause. Lines the word filter caught are
+ * listed one row per player with the player's own words; nothing is done to
+ * the player until the owner decides. The chat log can be searched by player
+ * or words. Every step is checked on the server, which refuses game team
  * accounts; the page only offers what makes sense.
  *
  * What the player sees: a warning or pause is a pop-up in the game and a
@@ -407,6 +419,184 @@ export const reportRow = (report: ChatReportView, open: (report: ChatReportView)
   );
 };
 
+/** The flagged words in a line, marked; the rest as plain text. */
+export const markWords = (message: string, words: readonly string[]): Child[] => {
+  const usable = words.filter((word) => word.length > 0);
+  if (usable.length === 0) return [message];
+  const escaped = usable.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const pattern = new RegExp(`\\b(${escaped.join("|")})\\b`, "gi");
+  const parts: Child[] = [];
+  let last = 0;
+  for (const match of message.matchAll(pattern)) {
+    const at = match.index ?? 0;
+    if (at > last) parts.push(message.slice(last, at));
+    parts.push(h("mark", { class: "flag-word" }, match[0]));
+    last = at + match[0].length;
+  }
+  if (last < message.length) parts.push(message.slice(last));
+  return parts;
+};
+
+/** "Slur" or "Swearing", with an icon, so the colour is never the only sign. */
+export const severityChip = (severity: FlagSeverity): HTMLElement =>
+  severity === "slur"
+    ? h("span", { class: "chip chip-bad chip-icon" }, icon("bad", 14), "Slur")
+    : h("span", { class: "chip chip-warn chip-icon" }, icon("warn", 14), "Swearing");
+
+/** "Disguised" with what the filter read it as, for a word spelled to get past the filter. */
+export const disguisedChip = (words: readonly string[]): HTMLElement =>
+  h(
+    "span",
+    { class: "chip chip-info chip-icon", attrs: { title: `Disguised spelling, read as: ${words.join(", ")}` } },
+    icon("mask", 14),
+    `Disguised: ${words.join(", ")}`,
+  );
+
+/** One flagged line: the player's words with the hits marked, where and when. */
+export const flagLineItem = (line: FlagLine, extra?: Child): HTMLElement =>
+  h(
+    "li",
+    { class: "flag-line" },
+    h("span", { class: "chat-quote" }, "“", ...markWords(line.message, line.words), "”"),
+    line.rule === "disguised" ? disguisedChip(line.words) : null,
+    h(
+      "span",
+      { class: "row-meta" },
+      `${roomLabel(line.channel)} · `,
+      h("time", { attrs: { datetime: line.at, title: dateTime(line.at) } }, ago(line.at)),
+      ` · players saw “${line.shown}”`,
+      extra ? " · " : null,
+      extra ?? null,
+    ),
+  );
+
+/** One flagged player: open it to act; dismiss sets the flags aside. */
+export const flagRow = (
+  player: FlaggedPlayer,
+  open: (player: FlaggedPlayer) => void,
+  dismiss: (player: FlaggedPlayer) => void,
+): HTMLElement => {
+  const name = player.username ?? `#${player.userid}`;
+  return h(
+    "li",
+    { class: "flag-item" },
+    h(
+      "button",
+      {
+        class: "row report-row flag-row",
+        attrs: { type: "button", "data-flagged": String(player.userid) },
+        onClick: () => open(player),
+      },
+      h(
+        "span",
+        { class: "row-main" },
+        h(
+          "span",
+          { class: "row-top" },
+          h("strong", { class: "report-who" }, name),
+          severityChip(player.slurs > 0 ? "slur" : "swear"),
+          h("span", { class: "chip chip-quiet" }, plural(player.count, "line")),
+          player.banned ? h("span", { class: "chip chip-bad" }, "Banned") : null,
+          player.muted ? h("span", { class: "chip chip-warn" }, "Chat paused") : null,
+          h(
+            "time",
+            { class: "row-when", attrs: { datetime: player.latestAt, title: dateTime(player.latestAt) } },
+            ago(player.latestAt),
+          ),
+        ),
+        h("ul", { class: "flag-lines" }, ...player.lines.map((line) => flagLineItem(line))),
+      ),
+      icon("chevron", 18),
+    ),
+    h(
+      "button",
+      {
+        class: "button quiet flag-dismiss",
+        attrs: {
+          type: "button",
+          "data-dismiss": String(player.userid),
+          title: "Nothing to do: take this player off the list",
+        },
+        onClick: () => dismiss(player),
+      },
+      icon("ok", 16),
+      "Dismiss",
+    ),
+  );
+};
+
+/** One chat log line. */
+export const chatLogItem = (entry: ChatLogEntry, showName: boolean): HTMLElement =>
+  h(
+    "li",
+    { class: `chatlog-line${entry.flagged ? " is-flagged" : ""}` },
+    h(
+      "span",
+      { class: "row-meta" },
+      h("time", { attrs: { datetime: entry.at, title: dateTime(entry.at) } }, dateTime(entry.at)),
+      ` · ${roomLabel(entry.channel)}`,
+      showName ? " · " : null,
+      showName ? h("strong", { class: "chatlog-who" }, entry.username ?? `#${entry.userid}`) : null,
+    ),
+    h(
+      "span",
+      { class: "chatlog-text" },
+      entry.flagged ? severityChip(entry.flagged) : null,
+      entry.flagged ? " " : null,
+      entry.message,
+    ),
+  );
+
+/**
+ * A page of the chat log, newest first, with "Show older". `load` replaces
+ * what it shows with a new query.
+ */
+export class ChatLogPanel {
+  readonly element = h("div", { class: "chatlog" });
+  private query: ChatLogQuery = {};
+  private lines: ChatLogEntry[] = [];
+  private nextBefore: number | null = null;
+  private seq = 0;
+  private showName = true;
+  private empty = "Nothing in the chat log.";
+
+  async load(query: ChatLogQuery, options: { showName?: boolean; empty?: string } = {}): Promise<void> {
+    this.query = query;
+    this.showName = options.showName ?? true;
+    this.empty = options.empty ?? "Nothing in the chat log.";
+    replace(this.element, h("div", { class: "skeleton" }));
+    await this.fetch(false);
+  }
+
+  private async fetch(more: boolean): Promise<void> {
+    const seq = ++this.seq;
+    let answer: { lines: ChatLogEntry[]; nextBefore: number | null };
+    try {
+      answer = await fetchChatLog({ ...this.query, before: more ? (this.nextBefore ?? undefined) : undefined });
+    } catch (err) {
+      if (seq === this.seq)
+        replace(this.element, h("p", { class: "note" }, `The chat log could not be loaded: ${errorWords(err)}`));
+      return;
+    }
+    if (seq !== this.seq) return;
+    this.lines = more ? [...this.lines, ...answer.lines] : answer.lines;
+    this.nextBefore = answer.nextBefore;
+    replace(
+      this.element,
+      this.lines.length
+        ? h("ul", { class: "rows chatlog-lines" }, ...this.lines.map((line) => chatLogItem(line, this.showName)))
+        : h("p", { class: "note" }, this.empty),
+      this.nextBefore !== null
+        ? h(
+            "button",
+            { class: "button wide quiet", attrs: { type: "button" }, onClick: () => void this.fetch(true) },
+            "Show older",
+          )
+        : null,
+    );
+  }
+}
+
 export interface ModerationOptions {
   say(message: string): void;
 }
@@ -428,14 +618,38 @@ export class ModerationView {
   private readonly results = h("div", { class: "results", attrs: { "aria-live": "polite" } });
   private readonly picked = h("div", { class: "picked" });
   private readonly reports = h("div", { class: "group" }, h("div", { class: "skeleton" }));
+  private readonly flags = h("div", { class: "group" }, h("div", { class: "skeleton" }));
   private reportList: ChatReportView[] = [];
   private nextBefore: number | null = null;
+  private flagList: FlaggedPlayer[] = [];
+  private flagNextOffset: number | null = null;
+  private flagView: FlagSort | "slurs" = "latest";
   private searchTimer = 0;
   private searchSeq = 0;
   private openSeq = 0;
-  /** The player on show, the report they were opened from, and the open form. */
-  private current: { player: PlayerModeration; chatReportId: number | null; form: ModerationKind | null } | null =
-    null;
+  /** The player on show, the report or flag row they were opened from, and the open form. */
+  private current: {
+    player: PlayerModeration;
+    chatReportId: number | null;
+    flag: FlaggedPlayer | null;
+    form: ModerationKind | null;
+  } | null = null;
+  /** The player's own chat, or the room around one of their flagged lines. */
+  private readonly cardLog = new ChatLogPanel();
+  private readonly cardLogTitle = h("h4", { class: "mod-log-title" }, "Their chat");
+  private readonly logSearch = h("input", {
+    class: "field-input",
+    attrs: {
+      id: "chatlog-search",
+      type: "search",
+      autocomplete: "off",
+      spellcheck: "false",
+      enterkeyhint: "search",
+      placeholder: "Words, or a player's name",
+    },
+  });
+  private logSearchBy: "words" | "player" = "words";
+  private readonly searchLog = new ChatLogPanel();
 
   constructor(private readonly options: ModerationOptions) {
     this.search.addEventListener("input", () => {
@@ -448,13 +662,18 @@ export class ModerationView {
       window.clearTimeout(this.searchTimer);
       void this.find();
     });
+    this.logSearch.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      void this.searchChat();
+    });
     replace(
       this.element,
       h(
         "p",
         { class: "lede" },
-        "Warn a player, pause their chat, or ban them. Pick a chat report below to act on it, " +
-          "or find the player by name.",
+        "Warn a player, pause their chat, or ban them. Pick a flagged player or a chat report below " +
+          "to act on it, or find the player by name.",
       ),
       h(
         "div",
@@ -464,21 +683,88 @@ export class ModerationView {
         this.results,
       ),
       this.picked,
+      this.flags,
       this.reports,
+      this.renderLogSearch(),
     );
+  }
+
+  private renderLogSearch(): HTMLElement {
+    const by = (value: "words" | "player", label: string) =>
+      h(
+        "button",
+        {
+          class: "seg",
+          attrs: { type: "button", "aria-pressed": String(this.logSearchBy === value), "data-search-by": value },
+          onClick: (event) => {
+            this.logSearchBy = value;
+            const group = (event.currentTarget as HTMLElement).parentElement;
+            group?.querySelectorAll(".seg").forEach((seg) => {
+              seg.setAttribute("aria-pressed", String(seg.getAttribute("data-search-by") === value));
+            });
+            this.logSearch.focus();
+          },
+        },
+        label,
+      );
+    return h(
+      "div",
+      { class: "group chatlog-search" },
+      h(
+        "div",
+        { class: "log-head" },
+        h("h3", {}, "Chat log"),
+        h("span", { class: "hint" }, "Every World and country room line of the last 90 days, as the player typed it."),
+      ),
+      h(
+        "div",
+        { class: "chatlog-find" },
+        h("label", { class: "field-label", attrs: { for: "chatlog-search" } }, "Search the chat log"),
+        h(
+          "div",
+          { class: "segmented", attrs: { role: "group", "aria-label": "Search by" } },
+          by("words", "Words"),
+          by("player", "Player name"),
+        ),
+        h(
+          "div",
+          { class: "chatlog-find-row" },
+          this.logSearch,
+          h("button", { class: "button", attrs: { type: "button" }, onClick: () => void this.searchChat() }, "Search"),
+        ),
+      ),
+      this.searchLog.element,
+    );
+  }
+
+  private async searchChat(): Promise<void> {
+    const text = this.logSearch.value.trim();
+    if (!text) {
+      replace(this.searchLog.element);
+      return;
+    }
+    await this.searchLog.load(this.logSearchBy === "words" ? { q: text } : { player: text }, {
+      empty:
+        this.logSearchBy === "words"
+          ? `No line with “${text}”.`
+          : `No lines from a player called “${text}”. Use the whole name.`,
+    });
   }
 
   /** Loads the reports again, and the player on show unless a form is open. */
   async refresh(): Promise<void> {
     const reload =
       this.current && this.current.form === null
-        ? this.open(this.current.player.userid, this.current.chatReportId ?? undefined, false)
+        ? this.open(this.current.player.userid, this.current.chatReportId ?? undefined, false, this.current.flag ?? undefined)
         : Promise.resolve();
-    await Promise.all([this.loadReports(), reload]);
+    await Promise.all([this.loadFlags(), this.loadReports(), reload]);
   }
 
-  /** Shows a player's state, history and actions; `chatReportId` links what is done to that report. */
-  async open(userid: number, chatReportId?: number, scroll = true): Promise<void> {
+  /**
+   * Shows a player's state, history, chat and actions; `chatReportId` links
+   * what is done to that report, and `flag` shows their flagged lines.
+   */
+  async open(userid: number, chatReportId?: number, scroll = true, flag?: FlaggedPlayer): Promise<void> {
     const seq = ++this.openSeq;
     if (scroll) replace(this.picked, h("div", { class: "picked-card" }, h("div", { class: "skeleton" })));
     let player: PlayerModeration;
@@ -490,9 +776,39 @@ export class ModerationView {
       return;
     }
     if (seq !== this.openSeq) return;
-    this.current = { player, chatReportId: chatReportId ?? null, form: null };
+    this.current = { player, chatReportId: chatReportId ?? null, flag: flag ?? null, form: null };
     this.renderCard();
-    if (scroll) this.picked.scrollIntoView?.({ block: "start" });
+    if (scroll) {
+      this.showOwnChat(player);
+      this.picked.scrollIntoView?.({ block: "start" });
+    }
+  }
+
+  private showOwnChat(player: PlayerModeration): void {
+    this.cardLogTitle.textContent = "Their chat";
+    void this.cardLog.load(
+      { userid: player.userid },
+      { showName: false, empty: "No World or country chat from this player in the log." },
+    );
+  }
+
+  private showRoom(line: FlagLine): void {
+    this.cardLogTitle.textContent = `${roomLabel(line.channel)} chat up to this line`;
+    void this.cardLog.load({ channel: line.channel, until: Date.parse(line.at) + 1000 }, { showName: true });
+  }
+
+  private async dismiss(flag: FlaggedPlayer): Promise<void> {
+    const name = flag.username ?? `#${flag.userid}`;
+    try {
+      await dismissChatFlags(flag.userid, flag.lastId);
+    } catch (err) {
+      this.options.say(`Could not dismiss ${name}: ${errorWords(err)}`);
+      return;
+    }
+    this.options.say(`Dismissed: ${name}`);
+    if (this.current?.flag?.userid === flag.userid) this.current.flag = null;
+    this.renderCard();
+    await this.loadFlags();
   }
 
   private async find(): Promise<void> {
@@ -571,7 +887,7 @@ export class ModerationView {
       replace(this.picked);
       return;
     }
-    const { player, chatReportId, form } = current;
+    const { player, chatReportId, flag, form } = current;
     const fromReport = chatReportId ? this.reportList.find((r) => r.id === chatReportId) : undefined;
     const banned = banStatus(player);
     const chips: Child[] = [
@@ -624,9 +940,11 @@ export class ModerationView {
             onCancel: () => this.setForm(null),
             onDone: (after) => {
               this.options.say(`${actionWord(form)}: ${after.username}`);
-              this.current = { player: after, chatReportId, form: null };
+              this.current = { player: after, chatReportId, flag, form: null };
               this.renderCard();
               void this.loadReports();
+              // Acting on a flagged player takes their flags off the list.
+              if (flag) void this.dismiss(flag);
             },
           });
 
@@ -647,6 +965,7 @@ export class ModerationView {
               { class: "row-meta" },
               player.lastSeenAt ? `Last played ${ago(player.lastSeenAt)}` : "Never played",
               chatReportId ? ` · from chat report #${chatReportId}` : "",
+              flag ? " · caught by the word filter" : "",
             ),
           ),
           h(
@@ -671,6 +990,47 @@ export class ModerationView {
               h("span", { class: "chat-quote" }, `“${fromReport.message}”`),
             )
           : null,
+        flag
+          ? h(
+              "div",
+              { class: "mod-quote flag-quote" },
+              h(
+                "span",
+                { class: "hint" },
+                `Caught by the word filter: ${plural(flag.count, "line")}` +
+                  (flag.count > flag.lines.length ? `, newest ${flag.lines.length} shown` : "") +
+                  ". Acting on the player dismisses them.",
+              ),
+              h(
+                "ul",
+                { class: "flag-lines" },
+                ...flag.lines.map((line) =>
+                  flagLineItem(
+                    line,
+                    h(
+                      "button",
+                      { class: "link-button", attrs: { type: "button" }, onClick: () => this.showRoom(line) },
+                      "See the room",
+                    ),
+                  ),
+                ),
+              ),
+              h(
+                "div",
+                { class: "mod-actions" },
+                h(
+                  "button",
+                  {
+                    class: "button quiet",
+                    attrs: { type: "button", "data-dismiss": String(flag.userid) },
+                    onClick: () => void this.dismiss(flag),
+                  },
+                  icon("ok", 16),
+                  "Dismiss: nothing to do",
+                ),
+              ),
+            )
+          : null,
         h("div", { class: "mod-status" }, ...chips),
         player.gameTeam
           ? h("p", { class: "note" }, "A game team account cannot be warned, paused or banned.")
@@ -681,7 +1041,85 @@ export class ModerationView {
         player.log.length
           ? h("ul", { class: "rows mod-log" }, ...player.log.map(entryRow))
           : h("p", { class: "note" }, "Nothing done to this player yet."),
+        h(
+          "div",
+          { class: "log-head" },
+          this.cardLogTitle,
+          h(
+            "button",
+            { class: "link-button", attrs: { type: "button" }, onClick: () => this.showOwnChat(player) },
+            "Their lines",
+          ),
+        ),
+        this.cardLog.element,
       ),
+    );
+  }
+
+  private async loadFlags(more = false): Promise<void> {
+    let answer: { players: FlaggedPlayer[]; nextOffset: number | null };
+    try {
+      answer = await fetchChatFlags({
+        sort: this.flagView === "latest" ? "latest" : "serious",
+        slursOnly: this.flagView === "slurs",
+        offset: more ? (this.flagNextOffset ?? undefined) : undefined,
+      });
+    } catch (err) {
+      replace(
+        this.flags,
+        h("h3", {}, "Caught by the word filter"),
+        h("p", { class: "note" }, `The flagged players could not be loaded: ${errorWords(err)}`),
+      );
+      return;
+    }
+    this.flagList = more ? [...this.flagList, ...answer.players] : answer.players;
+    this.flagNextOffset = answer.nextOffset;
+    const view = (value: FlagSort | "slurs", label: string) =>
+      h(
+        "button",
+        {
+          class: "seg",
+          attrs: { type: "button", "aria-pressed": String(this.flagView === value), "data-flag-view": value },
+          onClick: () => {
+            if (this.flagView === value) return;
+            this.flagView = value;
+            void this.loadFlags();
+          },
+        },
+        label,
+      );
+    const open = (flagged: FlaggedPlayer) => void this.open(flagged.userid, undefined, true, flagged);
+    const dismiss = (flagged: FlaggedPlayer) => void this.dismiss(flagged);
+    replace(
+      this.flags,
+      h(
+        "div",
+        { class: "log-head" },
+        h("h3", {}, "Caught by the word filter"),
+        h("span", { class: "hint" }, "One row per player, with their own words. Players saw these words starred out."),
+      ),
+      h(
+        "div",
+        { class: "segmented flag-views", attrs: { role: "group", "aria-label": "Which flagged players" } },
+        view("latest", "Newest"),
+        view("serious", "Slurs first"),
+        view("slurs", "Slurs only"),
+      ),
+      this.flagList.length
+        ? h("ul", { class: "rows report-list flag-list" }, ...this.flagList.map((p) => flagRow(p, open, dismiss)))
+        : h(
+            "div",
+            { class: "empty" },
+            h("strong", {}, this.flagView === "slurs" ? "No slurs caught" : "Nothing caught"),
+            h("p", {}, "When the word filter catches a line in chat, the player shows up here."),
+          ),
+      this.flagNextOffset !== null
+        ? h(
+            "button",
+            { class: "button wide quiet", attrs: { type: "button" }, onClick: () => void this.loadFlags(true) },
+            "Show more",
+          )
+        : null,
     );
   }
 

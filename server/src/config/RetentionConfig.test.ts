@@ -3,13 +3,14 @@ import { describe, expect, test } from "bun:test";
 import { retentionConfig } from "./RetentionConfig.js";
 
 describe("retention limits (RetentionConfig.ts)", () => {
-  test("defaults: logs 30 days, mail, battle records and chat reports 12 months, bug reports 6", () => {
+  test("defaults: logs 30 days, mail, battle records and chat reports 12 months, bug reports 6, chat log 90 days", () => {
     expect(retentionConfig({})).toEqual({
       logDays: 30,
       mailDays: 365,
       attackLogDays: 365,
       chatReportDays: 365,
       bugReportDays: 180,
+      chatLogDays: 90,
     });
   });
 
@@ -21,8 +22,9 @@ describe("retention limits (RetentionConfig.ts)", () => {
         ATTACK_LOG_RETENTION_DAYS: "180",
         CHAT_REPORT_RETENTION_DAYS: "730",
         BUG_REPORT_RETENTION_DAYS: "90",
+        CHAT_LOG_RETENTION_DAYS: "30",
       })
-    ).toEqual({ logDays: 14, mailDays: 90, attackLogDays: 180, chatReportDays: 730, bugReportDays: 90 });
+    ).toEqual({ logDays: 14, mailDays: 90, attackLogDays: 180, chatReportDays: 730, bugReportDays: 90, chatLogDays: 30 });
   });
 
   test("a value that is not a positive number keeps the default", () => {
@@ -32,6 +34,7 @@ describe("retention limits (RetentionConfig.ts)", () => {
       attackLogDays: 365,
       chatReportDays: 365,
       bugReportDays: 180,
+      chatLogDays: 90,
     });
   });
 });

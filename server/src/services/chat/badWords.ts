@@ -1,5 +1,7 @@
 import { Filter as BadWords } from "bad-words";
 
+import { WordMatcher, type WordScan } from "./wordMatch.js";
+
 /**
  * Filipino (Tagalog) swear words the word filter masks on top of the
  * library's English list (owner, 3 Nov 2026: "philippines first", after a
@@ -48,6 +50,47 @@ export const FILIPINO_BAD_WORDS: readonly string[] = [
 ];
 
 /**
+ * Hate words about race, religion, sexuality, gender or disability. The
+ * filter masks them like any other bad word; the dashboard's automatic chat
+ * flags (`chatFlags.ts`) mark a line with one of them as a slur, more serious
+ * than plain swearing. Lower case; most are on the library's list already,
+ * the rest are added to the filter here. Words that are also ordinary
+ * English (or Tagalog) stay out.
+ */
+export const SLUR_WORDS: readonly string[] = [
+  // Race and origin.
+  "nigger", "niggers", "nigga", "niggas", "niggaz", "niggah", "nigg3r", "nigg4h", "n1gga", "n1gger", "n1gr",
+  "niiger", "niigr", "nigur", "sandnigger",
+  "chink", "chinks", "gook", "gooks", "g00k", "spic", "spics", "wetback", "wetbacks", "beaner", "beaners",
+  "coon", "coons", "jap", "japs", "paki", "pakis", "pakie", "paky", "packi", "packie", "packy",
+  "honkey", "honky", "injun", "wop", "w0p", "dego", "daygo", "polack", "polak", "polac",
+  // Religion.
+  "kike", "kikes", "raghead", "ragheads", "towelhead", "towelheads",
+  // Sexuality and gender.
+  "faggot", "faggots", "fagot", "fagots", "fag", "fags", "fagz", "faggs", "faggit", "faggitt", "fagg0t", "fagg1t",
+  "fag1t", "faget", "fagit", "faig", "faigs", "feg", "dyke", "dykes", "lesbo", "homo", "gaylord", "tranny",
+  "trannies", "shemale", "heshe", "fudgepacker",
+  // Disability.
+  "retard", "retards", "retarded", "tard", "spaz", "spac",
+];
+
+/**
+ * Words on the filter's list that are also ordinary English, or name a body
+ * part or a thing rather than insult anyone ("hell", "damn", "balls").
+ * The filter still masks them, as before; they never raise an automatic chat
+ * flag on their own, so normal talk does not fill the dashboard.
+ */
+export const NOT_FLAGGED_WORDS: readonly string[] = [
+  "hell", "hells", "damn", "bloody", "butt", "crap", "poop", "fart", "turd", "bum", "sex", "sexy", "lust",
+  "lusting", "horny", "porn", "porno", "pron", "p0rn", "xxx", "xrated", "smut", "balls", "screw", "screwing",
+  "willy", "willies", "knob", "knobs", "knobz", "muff", "bugger", "fanny", "snatch", "cox", "wang", "dink",
+  "dinks", "flange", "boob", "boobs", "breasts", "piss", "pissed", "pisses", "pissing", "tit", "tits", "teets",
+  "nazi", "nazis", "kraut", "sadist", "masochist", "rectum", "anus", "penis", "vagina", "vulva", "labia", "semen",
+  "testicle", "testical", "scrotum", "clitoris", "enema", "orgasm", "orgasms", "feces", "ejaculate", "shag",
+  "pecker", "doggin", "dogging", "kondum", "kondums", "viagra", "cyalis", "v14gra", "v1gra", "slag", "spunk",
+];
+
+/**
  * Extra words the owner adds without a release: `CHAT_EXTRA_BAD_WORDS`,
  * comma separated, read when the server starts.
  *
@@ -61,11 +104,41 @@ export const extraBadWords = (env: Record<string, string | undefined> = process.
     .filter((word) => word.length > 0);
 
 /**
- * The game's word filter (chat, mail, alliance text, player and champion
- * names): the library's English list, the Filipino list and the extra words.
+ * Words on the library's list that are ordinary words, so the filter neither
+ * masks nor flags them (lead, 4 Nov 2026): Tagalog "puto" (rice cake), "pula"
+ * (red) and "suka" (vinegar), English "pawn" and "god". "nob" too, because
+ * the matcher reads stretched letters and "nooob" would otherwise be "nob".
  */
-export const makeWordFilter = (env: Record<string, string | undefined> = process.env): BadWords => {
-  const filter = new BadWords();
-  filter.addWords(...FILIPINO_BAD_WORDS, ...extraBadWords(env));
-  return filter;
+export const UNMASKED_WORDS: readonly string[] = ["puto", "pula", "suka", "pawn", "god", "nob"];
+
+/** The game's word filter, as chat, mail, names and the chat flags use it. */
+export interface WordFilter {
+  /** The text with every caught word masked where the player typed it. */
+  clean(text: string): string;
+  /** Whether the text holds a caught word. */
+  isProfane(text: string): boolean;
+  /** The masked text and every caught word, with where it was and whether it was disguised. */
+  scan(text: string): WordScan;
+}
+
+/**
+ * The game's word filter (chat, mail, alliance text, player and champion
+ * names): the library's English list, the Filipino list, the slurs and the
+ * extra words, matched whole and also when disguised (`wordMatch.ts`:
+ * leetspeak, stretched or split letters, accents, look-alike letters).
+ */
+export const makeWordFilter = (env: Record<string, string | undefined> = process.env): WordFilter => {
+  const matcher = new WordMatcher([...new BadWords().list, ...FILIPINO_BAD_WORDS, ...SLUR_WORDS, ...extraBadWords(env)], {
+    allowed: UNMASKED_WORDS,
+  });
+  return {
+    clean: (text) => matcher.scan(text).shown,
+    isProfane: (text) => matcher.hits(text).length > 0,
+    scan: (text) => matcher.scan(text),
+  };
 };
+
+let shared: WordFilter | null = null;
+
+/** One word filter for the whole server, built on first use (building one takes a couple of ms). */
+export const sharedWordFilter = (): WordFilter => (shared ??= makeWordFilter());

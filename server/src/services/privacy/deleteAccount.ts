@@ -31,8 +31,8 @@ import {
  * the replays of attacks on them, attack plans, neighbour lists, their
  * friendships, friend requests and friend helps both ways (their friends' `friendcount`
  * drops by one), the anti-cheat report and every Redis key of theirs, including login sessions,
- * so they are logged out. Their lines are taken out of world chat history and
- * the fair-play log.
+ * so they are logged out. Their lines are taken out of world chat history, the
+ * dashboard's chat log and automatic chat flags, and the fair-play log.
  *
  * Kept, without their name: other players' battle records and defence replays
  * show {@link DELETED_PLAYER_NAME} in their place, and so does a base's "last
@@ -186,6 +186,8 @@ const deleteSteps = (u: number): DeleteStep[] => [
   { label: "mail threads (no one else will read)", table: "thread", where: unreadThreads("thread"), params: [u, u, u, u, u] },
   { label: "truces", table: "truce", where: `initiator_userid = ? OR recipient_userid = ?`, params: [u, u] },
   { label: "alliance chat messages", table: "alliance_message", where: `user_id = ?`, params: [u] },
+  { label: "chat log lines", table: "chat_log", where: `userid = ?`, params: [u] },
+  { label: "automatic chat flags", table: "chat_flag", where: `userid = ?`, params: [u] },
   { label: "alliance invites", table: "alliance_invite", where: `user_id = ?`, params: [u] },
   { label: "notifications", table: "notification", where: `userid = ?`, params: [u] },
   { label: "defence replays of attacks on them", table: "defence_replay", where: `defender_userid = ?`, params: [u] },

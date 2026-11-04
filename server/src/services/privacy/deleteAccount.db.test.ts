@@ -94,6 +94,8 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     await sql(`DELETE FROM bym.truce WHERE initiator_userid IN (${list}) OR recipient_userid IN (${list})`);
     await sql(`DELETE FROM bym.attack_logs WHERE attacker_userid IN (${list}) OR defender_userid IN (${list})`);
     await sql(`DELETE FROM bym.chat_report WHERE reporter_id IN (${list}) OR reported_id IN (${list})`);
+    await sql(`DELETE FROM bym.chat_log WHERE userid IN (${list})`);
+    await sql(`DELETE FROM bym.chat_flag WHERE userid IN (${list})`);
     await sql(`DELETE FROM bym.notification WHERE userid IN (${list})`);
     await sql(`DELETE FROM bym.defence_replay WHERE attacker_userid IN (${list}) OR defender_userid IN (${list})`);
     await sql(`DELETE FROM bym.attack_plan WHERE userid IN (${list})`);
@@ -226,6 +228,17 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
        VALUES (?, ?, 'chat:mr2-global', 'rude', 1, true, now())`,
       [q, p]
     );
+    for (const userid of [p, q]) {
+      await sql(
+        `INSERT INTO bym.chat_log (userid, channel, message, shown, flagged, created_at) VALUES (?, 'chat:mr2-global', 'fuck', '****', 'swear', now())`,
+        [userid]
+      );
+      await sql(
+        `INSERT INTO bym.chat_flag (userid, channel, message, shown, words, severity, message_ts, created_at)
+         VALUES (?, 'chat:mr2-global', 'fuck', '****', 'fuck', 'swear', 1, now())`,
+        [userid]
+      );
+    }
 
     store = fakeRedis();
     store.strings.set("user-token:game:zz_del_p@test.com", "token");
@@ -406,6 +419,12 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
 
     // Chat reports are kept until the daily clean-up.
     expect(await countOf(`bym.chat_report WHERE reported_id = ?`, [p])).toBe(1);
+
+    // Their chat log lines and chat flags go; other players' stay.
+    expect(await countOf(`bym.chat_log WHERE userid = ?`, [p])).toBe(0);
+    expect(await countOf(`bym.chat_flag WHERE userid = ?`, [p])).toBe(0);
+    expect(await countOf(`bym.chat_log WHERE userid = ?`, [q])).toBe(1);
+    expect(await countOf(`bym.chat_flag WHERE userid = ?`, [q])).toBe(1);
 
     // Redis: their keys and lines go; everyone else's stay.
     expect([...store.strings.keys()].sort()).toEqual(["attackLogs:999999:both", "sight:999999"]);

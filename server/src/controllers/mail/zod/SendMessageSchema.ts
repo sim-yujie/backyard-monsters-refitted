@@ -10,10 +10,14 @@ import { MessageType } from "../../../enums/MessageType.js";
  */
 export const SendMessageSchema = z.object({
   /**
-   * The subject of the message, set when compose first thread
+   * The subject of the message, set when compose first thread. The compose
+   * box stops at 60 characters, but a reply carries its thread's subject,
+   * and the server writes longer ones ("Bug report #12: <60 characters>",
+   * invitations with both names), so the cap here is looser. It bounds the
+   * word filter's work on a player-sent text.
    * @type {string}
    */
-  subject: z.string(),
+  subject: z.string().max(200),
 
   /**
    * The message type.
