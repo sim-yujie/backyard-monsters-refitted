@@ -372,8 +372,12 @@ export class MapRenderer {
     const nowPaint = performance.now();
     const waterStepped = this.painted?.animate(nowPaint, range) ?? false;
     // The player's Quality's ground program once compiled, and the sprite pieces round the view.
+    // A cell's width in drawn pixels, as the shader's fades see it (zoom is CSS pixels per world
+    // point; the renderer's resolution is the most the tilted picture draws at, so never too few).
     const groundReady =
-      this.painted && this.renderer ? this.painted.prepare(this.renderer, range, this.painted.shape.cellWidth * zoom) : false;
+      this.painted && this.renderer
+        ? this.painted.prepare(this.renderer, range, this.painted.shape.cellWidth * zoom * this.renderer.resolution)
+        : false;
     const pulseStepped = this.borders?.animate(nowPaint, range) ?? false;
     const cloudsStepped = this.clouds?.animate(nowPaint, range) ?? false;
     this.paintedStepped = waterStepped || groundReady || pulseStepped || bordersChanged || cloudsStepped || fogChanged;
