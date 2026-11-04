@@ -176,7 +176,8 @@
   position: absolute;
   right: var(--space-4);
   top: calc(var(--hud-height) + var(--hud-inset) + var(--space-7) + var(--space-4));
-  width: 300px;
+  /* Wide enough for an army row inside the skin's frame and a scrollbar. */
+  width: 340px;
   max-height: calc(100vh - var(--hud-height) - var(--hud-inset) - var(--space-7) - var(--space-6));
   display: flex;
   flex-direction: column;

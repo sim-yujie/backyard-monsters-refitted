@@ -541,6 +541,12 @@
   flex: 0 0 auto;
 }
 
+/* Upgrade walls opened from Find would sit under it, off the screen: it takes
+   the dock while it is open, and Find comes back when it closes. */
+.planner-dock:has(> .planner-walls) > :not(.planner-walls) {
+  display: none;
+}
+
 /* The friends row belongs to the yard, not the planner: its top rim would show
    above the planner's bottom bar. */
 .overlay__layer:has(> .planner-dock) > .friends-bar {
