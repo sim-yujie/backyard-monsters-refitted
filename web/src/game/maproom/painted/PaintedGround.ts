@@ -24,6 +24,7 @@ import { PLACEMENT_GRIDS, PlacementLayer, placementProgram } from "./PlacementLa
 import { RiverLayer } from "./RiverLayer";
 import type { RiverCells } from "./riverPaths";
 import type { ProgramWarmer } from "./shaderWarmup";
+import { MR2_FULL_LOOK, markOnce } from "../openMarks";
 
 /** The ground texture atlas, 4 textures a row (`web/tools/mr2-paint/build.py`). */
 const ATLAS_URL = `${import.meta.env.BASE_URL}maproom/painted/ground@4x.webp`;
@@ -174,6 +175,8 @@ export class PaintedGround {
   private readonly rivers = new RiverLayer();
   private readonly stopQuality: () => void;
   private destroyed = false;
+  /** Whether this open's "full look" timing mark is set (`openMarks.ts`). */
+  private fullLookMarked = false;
   /** Which sprite piece each grid square holds (`PlacementLayer.ts`), worked out round the view. */
   private readonly placements: PlacementLayer;
 
@@ -324,7 +327,11 @@ export class PaintedGround {
         void this.warmer.warm(wanted);
       }
     }
-    const ready = (grid: (typeof PLACEMENT_GRIDS)[number]): boolean => {
+    if (!this.fullLookMarked && this.shader.glProgram === wanted) {
+      this.fullLookMarked = true;
+      markOnce(MR2_FULL_LOOK);
+    }
+    const ready =(grid: (typeof PLACEMENT_GRIDS)[number]): boolean => {
       const program = placementProgram(grid);
       if (!this.warmer || this.warmer.ready(program)) return true;
       void this.warmer.warm(program).then((linked) => {

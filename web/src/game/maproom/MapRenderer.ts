@@ -27,6 +27,7 @@ import { RangeOverlay } from "./RangeOverlay";
 import type { Sight } from "./Sight";
 import { TerrainRaster } from "./TerrainRaster";
 import { TribeAvatars } from "./tribeAvatars";
+import { MR2_PAINTED, markOnce } from "./openMarks";
 import { classicLook } from "@/game/classicLook";
 import { isFogCell } from "@/api/types";
 import type { ZoneRecord, ZoneStore } from "./ZoneStore";
@@ -481,6 +482,7 @@ export class MapRenderer {
     this.range.invalidate();
     this.drawHighlight();
     this.rebuildAll();
+    if (painted) markOnce(MR2_PAINTED);
     return painted;
   }
 
@@ -494,7 +496,10 @@ export class MapRenderer {
     let kit: { look: PaintedLookModule; programs: PaintedPrograms };
     try {
       const look = await import("./painted/paintedLook");
-      kit = { look, programs: this.destroyed ? { ground: false, clouds: false, warmer: null } : await look.preparePrograms(gl) };
+      kit = {
+        look,
+        programs: this.destroyed ? { ground: false, clouds: false, warmer: null } : await look.preparePrograms(gl),
+      };
     } catch (caught) {
       // The code did not arrive (offline, a new release): the tiles stay; the next map open tries again.
       console.warn("The painted map could not be prepared; the map keeps its tiles.", caught);
