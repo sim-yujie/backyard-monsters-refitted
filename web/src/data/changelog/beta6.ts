@@ -5,8 +5,8 @@ import type { ChangelogRelease } from "./types";
  *
  * NOT IN `index.ts` YET: the pictures are not taken (pictures.test.ts checks
  * every card's picture exists). Add BETA_6 at the top of CHANGELOG once they
- * are in web/public/whats-new/. Drop the Map Room 2 card if the new map look
- * is not switched on at release.
+ * are in web/public/whats-new/. The new Map Room 2 look is switched on for
+ * beta 6 (owner, 4 Nov).
  */
 export const BETA_6: ChangelogRelease = {
   version: "2.0.0-beta.6",

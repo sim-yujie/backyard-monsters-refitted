@@ -7,8 +7,8 @@ updated: 2026-11-04
 ---
 
 <!-- DRAFT for beta 6. Pictures are not taken yet: each "PICTURE" comment below
-     becomes an image in /images/guides/new6-*.webp. Drop the Map Room 2 section
-     if the new map look is not switched on at release. -->
+     becomes an image in /images/guides/new6-*.webp. The new Map Room 2 look is
+     switched on for beta 6 (owner, 4 Nov). -->
 
 The first sections are new in **beta 6**. Everything from "New in beta 5" down, except the last section, came with beta 5.
 
