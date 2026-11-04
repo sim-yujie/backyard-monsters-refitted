@@ -116,7 +116,7 @@ export interface ModerationEffects {
 }
 
 export type ModerationOutcome =
-  | { outcome: "done"; until: Date | null }
+  | { outcome: "done"; until: Date | null; /** The step's row in the moderation log. */ actionId: number }
   | { outcome: "noPlayer" | "gameTeam" | "notBanned" | "notMuted" };
 
 interface TargetRow {
@@ -182,9 +182,9 @@ export const moderate = async (
         break;
     }
 
-    await tx.execute(
+    const [logged] = await tx.execute<{ id: string | number }[]>(
       `INSERT INTO bym.moderation_action (userid, admin_id, action, reason, until, chat_report_id, seen_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, NULL, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, NULL, ?) RETURNING id`,
       [userid, adminId, request.kind, request.reason, until, request.chatReportId, now],
     );
 
@@ -201,12 +201,13 @@ export const moderate = async (
         now: Math.floor(now.getTime() / 1000),
       });
     }
-    return { outcome: "done", until, target };
+    return { outcome: "done", until, actionId: Number(logged!.id), target };
   });
 
   if (done.outcome !== "done" || !done.target) return { outcome: done.outcome } as ModerationOutcome;
   const target = done.target;
   const until = done.until;
+  const actionId = done.actionId;
 
   logger.info(`Dashboard: ${request.kind} user ${userid} by ${adminId}`);
   switch (request.kind) {
@@ -227,7 +228,7 @@ export const moderate = async (
     case "unban":
       break;
   }
-  return { outcome: "done", until };
+  return { outcome: "done", until, actionId };
 };
 
 /** One step in a player's moderation log, as the dashboard shows it. */

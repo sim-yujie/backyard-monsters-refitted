@@ -25,3 +25,25 @@ export const adminUserIds = (env: Env = process.env): ReadonlySet<number> =>
 /** Whether `userid` may open the dashboard. */
 export const isAdminUser = (userid: unknown, env: Env = process.env): boolean =>
   typeof userid === "number" && adminUserIds(env).has(userid);
+
+/** The Shiny the dashboard offers each genuine chat reporter, and the first one (`services/admin/chatCases.ts`). */
+export interface ChatReportAward {
+  each: number;
+  first: number;
+}
+
+const wholeOr = (raw: string | undefined, fallback: number): number => {
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value >= 1 && value <= 10_000 ? value : fallback;
+};
+
+/**
+ * - `CHAT_REPORT_SHINY` — what the page offers each reporter of a chat case. Default 25.
+ * - `CHAT_REPORT_FIRST_SHINY` — what it offers the first reporter. Default 50.
+ *
+ * Only the starting amounts: the owner can change or untick each one before giving.
+ */
+export const chatReportAward = (env: Env = process.env): ChatReportAward => ({
+  each: wholeOr(env.CHAT_REPORT_SHINY, 25),
+  first: wholeOr(env.CHAT_REPORT_FIRST_SHINY, 50),
+});

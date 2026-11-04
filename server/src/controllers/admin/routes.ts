@@ -32,6 +32,13 @@ import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { endAllSessions } from "../../services/auth/sessions.js";
 import { dismissChatFlags, listChatFlags, readChatLog } from "../../services/admin/chatWatchAdmin.js";
 import {
+  actOnCase,
+  awardReporters,
+  listChatCases,
+  parseCaseAction,
+  parseCaseAward,
+} from "../../services/admin/chatCases.js";
+import {
   listChatReports,
   moderate,
   parseModeration,
@@ -97,6 +104,13 @@ const MODERATION_REFUSAL_WORDS = {
   gameTeam: "That is a game team account.",
   notBanned: "This player is not banned.",
   notMuted: "This player is not muted.",
+} as const;
+
+const CASE_REFUSAL_WORDS = {
+  notFound: "There is no such case.",
+  closed: "This case is already closed.",
+  noPlayer: "This player's account is gone.",
+  gameTeam: "That is a game team account.",
 } as const;
 
 /** What a ban, mute or warning does outside the database. */
@@ -248,6 +262,41 @@ export const mountAdminRoutes = (router: Router): void => {
   // warn, mute and ban, and the chat panel's sign-in to the chat server.
   router.get(`${admin}/chatreports`, apiVersion, adminOnly, async (ctx) => {
     ok(ctx, { ...(await listChatReports(postgres.em.fork(), { before: intOf(ctx.query.before), limit: intOf(ctx.query.limit) })) });
+  });
+
+  // Chat report cases (services/admin/chatCases.ts): every report of the same
+  // line, and every reported line of a player not yet acted on, as one case.
+  router.get(`${admin}/chatcases`, apiVersion, adminOnly, async (ctx) => {
+    ok(ctx, {
+      ...(await listChatCases(postgres.em.fork(), {
+        status: ctx.query.status === "closed" ? "closed" : "open",
+        offset: intOf(ctx.query.offset),
+        limit: intOf(ctx.query.limit),
+      })),
+    });
+  });
+
+  router.post(`${admin}/chatcases/:id/act`, apiVersion, adminOnly, async (ctx) => {
+    const id = intOf(ctx.params.id);
+    if (id === undefined || id < 1) return refuse(ctx, Status.NOT_FOUND, CASE_REFUSAL_WORDS.notFound, "notFound");
+    const action = parseCaseAction(ctx.request.body);
+    if (!action.ok) return refuse(ctx, Status.BAD_REQUEST, action.message, "badRequest");
+    const done = await actOnCase(postgres.em.fork(), id, action.value, ctx.authUser.userid, moderationEffects);
+    if (done.outcome !== "done") {
+      const status = done.outcome === "notFound" ? Status.NOT_FOUND : Status.CONFLICT;
+      return refuse(ctx, status, CASE_REFUSAL_WORDS[done.outcome], done.outcome);
+    }
+    ok(ctx, { case: done.case });
+  });
+
+  router.post(`${admin}/chatcases/:id/award`, apiVersion, adminOnly, async (ctx) => {
+    const id = intOf(ctx.params.id);
+    if (id === undefined || id < 1) return refuse(ctx, Status.NOT_FOUND, CASE_REFUSAL_WORDS.notFound, "notFound");
+    const award = parseCaseAward(ctx.request.body);
+    if (!award.ok) return refuse(ctx, Status.BAD_REQUEST, award.message, "badAward");
+    const done = await awardReporters(postgres.em.fork(), id, award.value, ctx.authUser.userid);
+    if (done.outcome !== "done") return refuse(ctx, Status.NOT_FOUND, CASE_REFUSAL_WORDS.notFound, "notFound");
+    ok(ctx, { case: done.case, given: done.given, already: done.already, failed: done.failed });
   });
 
   // Automatic chat flags and the chat log (services/admin/chatWatchAdmin.ts).

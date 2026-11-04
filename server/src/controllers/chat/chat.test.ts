@@ -59,10 +59,27 @@ describe("reportAnswer", () => {
 
     expect(answer).toEqual({ status: 200, body: { error: 0, stored: true, verified: true } });
     expect(channel.asked).toEqual([CHANNEL]);
-    expect(executed).toHaveLength(1);
     expect(executed[0]!.sql).toContain("INSERT INTO bym.chat_report");
+    // Then the stored report is filed into its case for the dashboard.
+    expect(executed.slice(1).some((e) => e.sql.includes("bym.chat_case"))).toBe(true);
     expect(executed[0]!.sql).toContain("ON CONFLICT DO NOTHING");
     expect(executed[0]!.params).toEqual([2505, 77, CHANNEL, "the real words", 1_700_000_000_123, true]);
+  });
+
+  test("a report is still stored when filing it into a dashboard case fails", async () => {
+    const em = {
+      execute: async (sql: string) => {
+        if (sql.includes("chat_case")) throw new Error("no such table");
+        return [{ id: 1 }];
+      },
+    } as unknown as EntityManager;
+    const answer = await reportAnswer(
+      em,
+      REPORTER,
+      { userid: 77, channel: CHANNEL, message: "rude words", ts: 1_700_000_000_123 },
+      history([]).read,
+    );
+    expect(answer).toEqual({ status: 200, body: { error: 0, stored: true, verified: false } });
   });
 
   test("a line gone from the history keeps the reporter's words, unverified", async () => {
