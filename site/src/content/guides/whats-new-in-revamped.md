@@ -6,10 +6,6 @@ icon: /images/guides/new-card.webp
 updated: 2026-11-04
 ---
 
-<!-- DRAFT for beta 6. Pictures are not taken yet: each "PICTURE" comment below
-     becomes an image in /images/guides/new6-*.webp. The new Map Room 2 look is
-     switched on for beta 6 (owner, 4 Nov). -->
-
 The first sections are new in **beta 6**. Everything from "New in beta 5" down, except the last section, came with beta 5.
 
 ## A new Map Room 2
@@ -21,7 +17,7 @@ In **Modern**, Map Room 2 is one painted landscape: grass, hills, cliffs, forest
 - **Prefer it flat?** Switch the tilt off for your account.
 - **Classic** keeps the original Flash map.
 
-<!-- PICTURE: new6-map.webp, the tilted painted map with a player's land and a tribe camp -->
+![The new Map Room 2: a tilted, painted map with a player's land and the tribe camps around it](/images/guides/new6-map.webp)
 
 ## Your yard in 3D
 
@@ -29,7 +25,7 @@ In **Modern**, most buildings are 3D with moving parts: the Hatchery's crank tur
 
 **Classic** keeps the original Flash buildings.
 
-<!-- PICTURE: new6-buildings.webp, a full yard in 3D -->
+![A yard with its buildings in 3D](/images/guides/new6-buildings.webp)
 
 ## Quests
 
@@ -41,7 +37,7 @@ Open the round **More** button on your main yard, then **Quests**.
 
 Daily quests reset at 00:00 UTC, weekly quests on Monday at 00:00 UTC.
 
-<!-- PICTURE: new6-quests.webp, the Quests window -->
+![The Quests window: the 7-day login card and the daily quests](/images/guides/new6-quests.webp)
 
 ## Monster Lab abilities
 
@@ -52,13 +48,13 @@ Four new upgrades in the **Monster Lab**:
 - **Ichi, Thorns:** Ichi reflects part of the damage it takes back at whatever hit it.
 - **Crabatron, Critical Hits:** Crabatron's hits have a chance to do double damage.
 
-<!-- PICTURE: new6-lab.webp, the Monster Lab window with the new abilities -->
+![The Monster Lab window showing the new Pokey ability](/images/guides/new6-lab.webp)
 
 ## Decorations for Shiny
 
 The original game's decorations are on sale again: **Build ▸ Decorations**, in Flash's five sub-tabs.
 
-<!-- PICTURE: new6-decorations.webp, the Decorations tab -->
+![The Decorations tab in the Build menu](/images/guides/new6-decorations.webp)
 
 ## Sound and volume
 
@@ -70,7 +66,7 @@ The original game's decorations are on sale again: **Build ▸ Decorations**, in
 
 **Account settings ▸ Font:** Game font, Clear or Extra readable.
 
-<!-- PICTURE: new6-font.webp, the same window in the three fonts -->
+![The same Quests window in the three fonts: Game, Clear and Extra readable](/images/guides/new6-font.webp)
 
 ## Tower range
 
