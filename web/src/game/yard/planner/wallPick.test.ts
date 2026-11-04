@@ -13,6 +13,8 @@ import {
   followWallTarget,
   isPickableWall,
   pickSummary,
+  affordableFill,
+  selectAllCheck,
   togglePick,
   wallsOnly,
 } from "./wallPick";
@@ -232,5 +234,72 @@ describe("the level after the pick changes", () => {
       target: 3,
       manual: false,
     });
+  });
+});
+
+describe("Select all at the chosen level", () => {
+  it("picks every wall below the level when the yard can pay for all of them", () => {
+    const yard = yardOf(RICH);
+    const check = selectAllCheck(planOf(yard).buildings(), 2, yard);
+    expect([...check.ids].sort()).toEqual([1, 2, 3]);
+    expect(check.reason).toBeNull();
+  });
+
+  it("is greyed with the reason when the yard cannot pay for all of them", () => {
+    const yard = yardOf({ r1: 0, r2: 25_000 });
+    const check = selectAllCheck(planOf(yard).buildings(), 2, yard);
+    expect(check.reason).toBe("Not enough to raise all 3 walls to level 2.");
+  });
+
+  it("is greyed when every wall is already at the level", () => {
+    const yard = yardOf(RICH);
+    const plan = planOf(yard);
+    expect(selectAllCheck(nodes(plan, [5]), 5, yard).reason).toBe(
+      "Every wall is already at level 5 or higher.",
+    );
+  });
+
+  it("names the hall level a gated level needs", () => {
+    const yard = yardOf(RICH, 1);
+    expect(selectAllCheck(planOf(yard).buildings(), 5, yard).reason).toMatch(/^Level 5 needs Town Hall \d+\.$/);
+  });
+});
+
+describe("Affordable at the chosen level", () => {
+  it("with nothing picked, picks as many walls as the yard can pay for", () => {
+    const yard = yardOf({ r1: 0, r2: 25_000 });
+    const fill = affordableFill([], planOf(yard).buildings(), 2, yard);
+    expect(fill.ids).toHaveLength(2);
+    expect(fill.reason).toBeNull();
+  });
+
+  it("trims a pick that is too dear", () => {
+    const yard = yardOf({ r1: 0, r2: 25_000 });
+    const plan = planOf(yard);
+    expect(affordableFill(nodes(plan, [3, 1, 2]), plan.buildings(), 2, yard).ids).toEqual([3, 1]);
+  });
+
+  it("keeps an affordable pick and tops it up with what is left", () => {
+    const yard = yardOf({ r1: 0, r2: 25_000 });
+    const plan = planOf(yard);
+    const fill = affordableFill(nodes(plan, [3]), plan.buildings(), 2, yard);
+    expect(fill.ids[0]).toBe(3);
+    expect(fill.ids).toHaveLength(2);
+    expect(fill.reason).toBeNull();
+  });
+
+  it("is greyed when the pick is already all the yard can afford", () => {
+    const yard = yardOf({ r1: 0, r2: 25_000 });
+    const plan = planOf(yard);
+    expect(affordableFill(nodes(plan, [1, 2]), plan.buildings(), 2, yard).reason).toBe(
+      "Your pick is already all you can afford at level 2.",
+    );
+  });
+
+  it("is greyed when not one wall can be paid for", () => {
+    const yard = yardOf({ r1: 0, r2: 0 });
+    expect(affordableFill([], planOf(yard).buildings(), 2, yard).reason).toBe(
+      "You cannot afford a single wall at level 2 yet.",
+    );
   });
 });

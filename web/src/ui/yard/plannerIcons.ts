@@ -38,19 +38,18 @@ export const painted =
     gameIcon(name, { size: 24, decorative: true });
 
 /**
- * Each button's painted icon (art/planner-icons, 4 Nov). The owner picks
- * between two looks for three of them on the Review Desk; switching is one
- * word here: `select2`, `box2`, `rearm2`. A button left out of this map shows
- * its words instead.
+ * Each button's painted icon (art/planner-icons, 4 Nov). The owner picked
+ * the second look for select, box and re-arm (`select2`, `box2`, `rearm2`).
+ * A button left out of this map shows its words instead.
  */
 const PAINTED: Partial<Record<PlannerIcon, () => HTMLElement>> = {
   undo: painted("undo"),
   redo: painted("redo"),
-  select: painted("select"),
-  box: painted("box"),
+  select: painted("select2"),
+  box: painted("box2"),
   find: painted("find"),
   wallupgrade: painted("wallupgrade"),
-  rearm: painted("rearm"),
+  rearm: painted("rearm2"),
 };
 
 /** Whether a button shows its painted icon rather than its words. */
