@@ -118,10 +118,12 @@ const LEET: Readonly<Record<string, string>> = {
 };
 
 /**
- * Longest word read for disguises. A longer run of letters and symbols is no
- * listed word disguised; its plain letter runs are still matched as typed.
- * Keeps the work per line in step with its length (a chat line is
- * player-sent, so no line may cost more than a few lookups per character).
+ * Longest stretch read as one word. A longer word (or run of split letters)
+ * is read in pieces: its runs of letters and digits and of one symbol, alone
+ * and up to four side by side ("$$$$...$$g4go", "xxxx...@$$"), and the stems
+ * anywhere in it ("xxxx...xsh1t", "a a a ... f u c k"). Keeps the work per
+ * line in step with its length: a chat line is player-sent, so no line may
+ * cost more than a few lookups per character.
  */
 export const MAX_DISGUISED_LENGTH = 40;
 
@@ -159,6 +161,9 @@ const normalise = (text: string): Norm[] => {
   }
   return out;
 };
+
+/** A word's normalised characters with leetspeak read as letters; asterisks kept. */
+const readAll = (part: Norm[]) => part.map((n) => (n.c === "*" ? "*" : (LEET[n.c] ?? n.c))).join("");
 
 /** Letters and their run lengths: "fuuuck" is f1 u3 c1 k1. */
 const runs = (word: string): { letters: string; counts: number[] } => {
@@ -208,7 +213,7 @@ export class WordMatcher {
   private readonly byLength = new Map<number, string[]>();
   private readonly phrases = new Set<string>();
   private readonly ordinary: ReadonlySet<string>;
-  private readonly stems: { stem: string; pattern: RegExp }[];
+  private readonly stems: { stem: string; pattern: RegExp; global: RegExp }[];
 
   constructor(entries: readonly string[], options: WordMatcherOptions = {}) {
     const allowed = new Set((options.allowed ?? []).map((word) => word.toLowerCase()));
@@ -232,6 +237,7 @@ export class WordMatcher {
     this.stems = STEMS.map((stem) => ({
       stem,
       pattern: new RegExp([...stem].map((c) => `${c}+`).join("")),
+      global: new RegExp([...stem].map((c) => `${c}+`).join(""), "g"),
     }));
   }
 
@@ -264,6 +270,59 @@ export class WordMatcher {
     return null;
   }
 
+  /**
+   * Every stem in a long read text, with where it is: windows of twice
+   * {@link MAX_DISGUISED_LENGTH}, a window's length apart, so a stem up to that
+   * length is always wholly inside one and each search is short. "v" is
+   * also read as "u".
+   */
+  private stemsIn(text: string): { stem: string; from: number; to: number }[] {
+    const found: { stem: string; from: number; to: number }[] = [];
+    const readings = text.includes("v") ? [text, text.replace(/v/g, "u")] : [text];
+    for (const reading of readings) {
+      for (let w = 0; w < reading.length; w += MAX_DISGUISED_LENGTH) {
+        const part = reading.slice(w, w + 2 * MAX_DISGUISED_LENGTH);
+        for (const { stem, global } of this.stems) {
+          global.lastIndex = 0;
+          for (let m = global.exec(part); m; m = global.exec(part)) {
+            found.push({ stem, from: w + m.index, to: w + m.index + m[0].length });
+          }
+        }
+        if (w + 2 * MAX_DISGUISED_LENGTH >= reading.length) break;
+      }
+    }
+    return found.sort((a, b) => a.from - b.from);
+  }
+
+  /** A word longer than {@link MAX_DISGUISED_LENGTH}, read in pieces; `take` keeps hits from overlapping. */
+  private longHits(chars: Norm[], take: (word: string, a: number, b: number) => void): void {
+    const text = readAll(chars);
+    const isSymbol = (n: Norm) => !isLetter(n.c) && !isDigit(n.c);
+    const units: [number, number][] = [];
+    for (let a = 0; a < chars.length; ) {
+      // A run of letters and digits, or of one symbol: "x$$h1t" is "x", "$$", "h1t".
+      const symbol = isSymbol(chars[a]!);
+      let b = a + 1;
+      while (b < chars.length && isSymbol(chars[b]!) === symbol && (!symbol || chars[b]!.c === chars[a]!.c)) b++;
+      units.push([a, b]);
+      a = b;
+    }
+    // Pieces: one to four units side by side, longest first.
+    for (let i = 0; i < units.length; i++) {
+      for (let k = Math.min(i + 3, units.length - 1); k >= i; k--) {
+        const a = units[i]![0];
+        const b = units[k]![1];
+        if (b - a < 2 || b - a > MAX_DISGUISED_LENGTH) continue;
+        const word = this.read(text.slice(a, b), false);
+        if (word) {
+          take(word, a, b);
+          break;
+        }
+      }
+    }
+    for (const { stem, from, to } of this.stemsIn(text)) take(stem, from, to);
+  }
+
   /** What a candidate is read as: whole, starred, a stem, then all of those with "v" as "u". */
   private read(candidate: string, stems: boolean): string | null {
     const tries = candidate.includes("v") ? [candidate, candidate.replace(/v/g, "u")] : [candidate];
@@ -289,7 +348,17 @@ export class WordMatcher {
     for (let t = 0; t < tokens.length; ) {
       let u = t;
       while (u < tokens.length && tokens[u]!.text.length === 1 && (u === t || tokens[u]!.splitFromLast)) u++;
-      if (u - t >= 3 && u - t <= MAX_DISGUISED_LENGTH) {
+      if (u - t > MAX_DISGUISED_LENGTH) {
+        // A long run of split letters: the stems in it ("a a a ... f u c k").
+        const joined = tokens.slice(t, u).map((token) => token.text).join("");
+        let free = t;
+        for (const { stem, from, to } of this.stemsIn(joined)) {
+          if (t + from < free) continue;
+          for (let k = t + from; k < t + to; k++) used.add(k);
+          hit(stem, tokens[t + from]!.start, tokens[t + to - 1]!.end);
+          free = t + to;
+        }
+      } else if (u - t >= 3) {
         const joined = tokens.slice(t, u).map((token) => token.text).join("");
         const word = this.read(joined, true);
         if (word) {
@@ -305,10 +374,15 @@ export class WordMatcher {
     // Whole words first in every reading ("fuck!" is "fuck"), then stems inside longer words.
     tokens.forEach((token, t) => {
       if (used.has(t)) return;
-      // A very long word: only its plain letter runs, as typed.
-      for (const run of token.plain) {
-        const word = this.whole(run.text);
-        if (word) hit(word, run.start, run.end);
+      const { long } = token;
+      if (long) {
+        const taken = new Uint8Array(long.length);
+        this.longHits(long, (word, a, b) => {
+          if (taken.subarray(a, b).some((x) => x === 1)) return;
+          taken.fill(1, a, b);
+          hit(word, long[a]!.from, long[b - 1]!.to);
+        });
+        return;
       }
       for (const stems of [false, true]) {
         for (const candidate of token.candidates) {
@@ -348,8 +422,8 @@ export class WordMatcher {
       splitFromLast: boolean;
       spaceFromLast: boolean;
       candidates: { text: string; start: number; end: number }[];
-      /** Only for a word longer than {@link MAX_DISGUISED_LENGTH}: its runs of plain letters. */
-      plain: { text: string; start: number; end: number }[];
+      /** Only for a word longer than {@link MAX_DISGUISED_LENGTH}: its characters, read in pieces. */
+      long: Norm[] | null;
     }[] = [];
     const inWord = (n: Norm | undefined) => n !== undefined && (isLetter(n.c) || isDigit(n.c) || isLeetSymbol(n.c));
     let i = 0;
@@ -366,23 +440,10 @@ export class WordMatcher {
       const chars = norm.slice(i, j);
       const hasLatin = chars.some((n) => isLetter(n.c) && !n.look);
       const hasLetterOrSymbol = chars.some((n) => isLetter(n.c) || isLeetSymbol(n.c));
-      const readAll = (part: Norm[]) => part.map((n) => (n.c === "*" ? "*" : (LEET[n.c] ?? n.c))).join("");
       const candidates: { text: string; start: number; end: number }[] = [];
-      const plain: { text: string; start: number; end: number }[] = [];
-      if (chars.length > MAX_DISGUISED_LENGTH) {
-        for (let a = 0; a < chars.length; ) {
-          if (!isLetter(chars[a]!.c) || chars[a]!.look) {
-            a++;
-            continue;
-          }
-          let b = a;
-          while (b < chars.length && isLetter(chars[b]!.c) && !chars[b]!.look) b++;
-          if (b - a >= 2 && b - a <= MAX_DISGUISED_LENGTH) {
-            plain.push({ text: chars.slice(a, b).map((n) => n.c).join(""), start: chars[a]!.from, end: chars[b - 1]!.to });
-          }
-          a = b;
-        }
-      } else if (hasLatin || (hasLetterOrSymbol && !chars.some((n) => n.look))) {
+      const readable = hasLatin || (hasLetterOrSymbol && !chars.some((n) => n.look));
+      const long = readable && chars.length > MAX_DISGUISED_LENGTH ? chars : null;
+      if (readable && !long) {
         candidates.push({ text: readAll(chars), start: chars[0]!.from, end: chars[chars.length - 1]!.to });
         // Leet symbols at the ends may be punctuation instead ("fuck!", "@$$!"): try up to
         // MAX_END_TRIM off each end, fewest first; at most 15 more readings per word.
@@ -412,7 +473,7 @@ export class WordMatcher {
         text: candidates[0]?.text ?? "",
         start: chars[0]!.from,
         end: chars[chars.length - 1]!.to,
-        plain,
+        long,
         splitFromLast: gapText.length >= 1 && gapText.length <= 2 && [...gapText].every(isSplitter),
         spaceFromLast: gapText.length >= 1 && /^[\s_-]+$/.test(gapText),
         candidates,
@@ -421,7 +482,7 @@ export class WordMatcher {
       i = j;
     }
     // Digits-only words take part in nothing.
-    return tokens.map((token) => (token.candidates.length ? token : { ...token, text: "" }));
+    return tokens.map((token) => (token.candidates.length || token.long ? token : { ...token, text: "" }));
   }
 
   /** The line with every caught word masked where the player typed it. */

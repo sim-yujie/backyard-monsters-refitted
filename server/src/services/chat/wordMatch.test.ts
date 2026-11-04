@@ -241,8 +241,43 @@ describe("cost per line (chat lines are player-sent)", () => {
     }
   });
 
-  test(`a word longer than ${MAX_DISGUISED_LENGTH} characters still has its plain words masked`, () => {
-    const long = "$".repeat(MAX_DISGUISED_LENGTH) + "fuck" + "$".repeat(5);
-    expect(filter.clean(long)).toBe("$".repeat(MAX_DISGUISED_LENGTH) + "****" + "$".repeat(5));
+  test(`padding a word past ${MAX_DISGUISED_LENGTH} characters does not get it through`, () => {
+    const pad = "x".repeat(MAX_DISGUISED_LENGTH);
+    const cases: [string, string][] = [
+      // Padded with letters: the stem is found inside, disguised or not.
+      [`${pad}sh1t`, "shit"],
+      [`${pad}fvck`, "fuck"],
+      [`${pad}fuuuck${pad}`, "fuck"],
+      [`${pad}b!tch`, "bitch"],
+      // Padded with symbols: the word between them is read as a word.
+      [`${"$".repeat(MAX_DISGUISED_LENGTH)}fuck${"!".repeat(5)}`, "fuck"],
+      [`${"!".repeat(MAX_DISGUISED_LENGTH)}g4go`, "gago"],
+      [`${"+".repeat(MAX_DISGUISED_LENGTH)}@$$`, "ass"],
+      [`${"|".repeat(MAX_DISGUISED_LENGTH)}g@go${"|".repeat(MAX_DISGUISED_LENGTH)}`, "gago"],
+    ];
+    for (const [line, word] of cases) {
+      const { shown, hits } = filter.scan(line);
+      expect([line, hits.map((h) => h.word)]).toEqual([line, [word]]);
+      const hit = hits[0]!;
+      // Only the word is masked, not the padding.
+      expect([line, shown.slice(hit.start, hit.end)]).toEqual([line, "*".repeat(hit.end - hit.start)]);
+      expect([line, shown.slice(0, hit.start)]).toEqual([line, line.slice(0, hit.start)]);
+    }
+    expect(filter.clean(`${"$".repeat(MAX_DISGUISED_LENGTH)}fuck${"!".repeat(5)}`)).toBe(
+      `${"$".repeat(MAX_DISGUISED_LENGTH)}****${"!".repeat(5)}`,
+    );
+  });
+
+  test(`a run of more than ${MAX_DISGUISED_LENGTH} split letters still has its stems caught`, () => {
+    const lead = "a ".repeat(MAX_DISGUISED_LENGTH + 10);
+    expect(filter.clean(`${lead}f u c k`)).toBe(`${lead}* * * *`);
+    expect(filter.clean(`${lead}s.h.i.t`)).toBe(`${lead}*******`);
+    expect(filter.scan(`${lead}f u c k ${lead}`).hits.map((h) => h.word)).toEqual(["fuck"]);
+  });
+
+  test("long ordinary words and runs are left alone", () => {
+    for (const line of ["ha".repeat(40), "lo".repeat(30) + "l!!!", "a ".repeat(60), "x".repeat(100), "1234567890".repeat(6)]) {
+      expect(filter.clean(line)).toBe(line);
+    }
   });
 });
