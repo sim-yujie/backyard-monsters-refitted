@@ -496,9 +496,11 @@ describe("the phone layout (#45)", () => {
     expect(bar.moreElement.isConnected).toBe(false);
   });
 
-  it("upright: Leave, the name and the view switch in the top bar, the things pressed least", () => {
+  it("upright: Leave, the name, the view switch, then Undo and Redo at the right end of the top bar", () => {
     const { bar } = phone(PlannerLayout.PORTRAIT);
-    expect(topShown(bar)).toEqual(["Leave planner", "Showing the 3D yard. Switch to the blueprint"]);
+    expect(topShown(bar)).toEqual(["Leave planner", "Showing the 3D yard. Switch to the blueprint", "Undo", "Redo"]);
+    // Straight in the bar, not in the hidden history group.
+    expect(bar.toolbar.querySelector(":scope > button[data-icon='undo'] + button[data-icon='redo']")).not.toBeNull();
     // Glyphs on the buttons, names for anything that reads them.
     const exit = bar.toolbar.querySelector(".planner-bar__exit");
     expect(exit?.textContent).toBe("✕");
@@ -507,7 +509,11 @@ describe("the phone layout (#45)", () => {
 
   it("upright: the presses a session is made of along the bottom, under the thumb", () => {
     const { bar } = phone(PlannerLayout.PORTRAIT);
-    expect(actionRow(bar)).toEqual(["Box", "Undo", "Redo", "Upgrade walls", "Stored", "More", "Apply"]);
+    // Exactly five, so they fit 360 px: Box 44 + Upgrade walls 44 + Stored
+    // ~88 + More 44 + Apply ~88 = 308, four 2 px gaps and 8 px padding each
+    // side = 332. No test here lays out pixels; keep this sum when adding one.
+    expect(actionRow(bar)).toEqual(["Box", "Upgrade walls", "Stored", "More", "Apply"]);
+    expect(bar.actionBar.querySelector("[data-icon='undo'], [data-icon='redo']")).toBeNull();
     // Buttons only: no cost line, no readouts (owner, 2026-11-04).
     expect(bar.actionBar.querySelector(".planner-bar__cost-line")).toBeNull();
     expect(bar.actionBar.querySelector(".planner-cost__cell")).toBeNull();
@@ -516,7 +522,9 @@ describe("the phone layout (#45)", () => {
   it("draws Box, Undo, Redo and Upgrade walls as painted icons, their words for screen readers", () => {
     const { bar } = phone(PlannerLayout.PORTRAIT);
     for (const name of ["box", "undo", "redo", "wallupgrade"]) {
-      const icon = bar.actionBar.querySelector<HTMLButtonElement>(`button[data-icon="${name}"]`);
+      const icon =
+        bar.actionBar.querySelector<HTMLButtonElement>(`button[data-icon="${name}"]`) ??
+        bar.toolbar.querySelector<HTMLButtonElement>(`button[data-icon="${name}"]`);
       expect(icon, name).not.toBeNull();
       expect(icon?.getAttribute("aria-label")).toBeTruthy();
       expect(icon?.querySelector("img, .game-icon")).not.toBeNull();
@@ -554,6 +562,15 @@ describe("the phone layout (#45)", () => {
     );
     expect(buttons[0]).toBe("Leave planner");
     expect(actionRow(bar)).toEqual(["Box", "Undo", "Redo", "Upgrade walls", "Showing the 3D yard. Switch to the blueprint", "Stored", "More", "Apply"]);
+  });
+
+  it("brings Undo and Redo down when turned sideways, and back up when upright again", () => {
+    const { bar } = phone(PlannerLayout.PORTRAIT);
+    bar.setLayout(PlannerLayout.LANDSCAPE, true);
+    expect(actionRow(bar).slice(0, 3)).toEqual(["Box", "Undo", "Redo"]);
+    bar.setLayout(PlannerLayout.PORTRAIT, true);
+    expect(actionRow(bar)).toEqual(["Box", "Upgrade walls", "Stored", "More", "Apply"]);
+    expect(topShown(bar).slice(-2)).toEqual(["Undo", "Redo"]);
   });
 
   it("puts every control back where it was when the window turns back into a desktop", () => {

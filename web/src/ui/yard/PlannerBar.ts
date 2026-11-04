@@ -43,10 +43,12 @@ import { iconFace, PLANNER_ICON_WORDS, type PlannerIcon } from "./plannerIcons";
  * `setLayout` rearranges the same controls for a phone, the owner's Option A,
  * with what a thumb presses most on the bottom row (owner, 2026-11-04: "ensure
  * the mobile layout is intuitive too"). Upright: a top bar of Leave, the
- * layout's name and the 3D ⇄ Blueprint switch, which are pressed rarely; a
- * bottom bar of Box, Undo, Redo, Upgrade walls, the drawer, More and Apply,
- * with the Store chip or Put back above them only while there is something to
- * store or put back. Sideways: all of that in one bar along the bottom.
+ * layout's name, the 3D ⇄ Blueprint switch, Undo and Redo; a bottom bar of
+ * Box, Upgrade walls, the drawer, More and Apply, with the Store chip or Put
+ * back above them only while there is something to store or put back. Undo
+ * and Redo went up top because seven 44 px buttons do not fit 375 px: Apply
+ * was laid over More (lead, 2026-11-04). Sideways: all of that in one bar
+ * along the bottom.
  * Everything else (Find, Checklist, Layouts, Re-arm traps, Clear yard, the
  * View switches and Help) moves into the More sheet, and the scene's
  * selection row (Select all of a type) sits at the top of More
@@ -900,22 +902,37 @@ export class PlannerBar {
     if (!phone) return;
 
     // Top, upright: Leave, the layout's name and the view switch, the things
-    // pressed least. The tool groups stay where they are and the stylesheet
-    // hides what is left.
+    // pressed least, then Undo and Redo at the right end. The tool groups stay
+    // where they are and the stylesheet hides what is left.
     this.places.move(this.exit, this.toolbar, this.heading);
     this.heading.after(this.viewSwitch);
+    const sideways = layout === PlannerLayout.LANDSCAPE;
+    if (!sideways) {
+      this.places.move(this.undo, this.toolbar, this.viewSwitch.nextSibling);
+      this.places.move(this.redo, this.toolbar, this.undo.nextSibling);
+    }
 
     // Bottom, under the thumb (owner, 2026-11-04: "ensure the mobile layout
-    // is intuitive too"): Box, Undo, Redo, Upgrade walls, the drawer, More and
-    // Apply, the presses a planning session is made of. The Store chip and
-    // Put back sit over them only while there is something to store or put
-    // back.
+    // is intuitive too"): Box, Upgrade walls, the drawer, More and Apply, the
+    // presses a planning session is made of; sideways Undo and Redo join them
+    // after Box. The Store chip and Put back sit over them only while there is
+    // something to store or put back.
+    //
+    // Width budget, upright (no test runner here lays out pixels, so it is
+    // kept by hand): Box 44 + Upgrade walls 44 + Stored ~88 + More 44 +
+    // Apply ~88 = 308, four 2 px gaps = 8, the bar's 8 px padding each side =
+    // 16; 332 px, under the 360 px of a common Android phone. Seven buttons
+    // (Undo and Redo too) came to 424 and laid Apply over More.
     const row = this.actionRow ?? this.actionBar;
     const end = this.actionRow ? this.apply : null;
     this.places.move(this.box, row, row.firstChild);
-    this.places.move(this.undo, row, this.box.nextSibling);
-    this.places.move(this.redo, row, this.undo.nextSibling);
-    if (this.actionRow) this.places.move(this.upgradeWalls, row, this.redo.nextSibling);
+    let after: Node = this.box;
+    if (sideways) {
+      this.places.move(this.undo, row, after.nextSibling);
+      this.places.move(this.redo, row, this.undo.nextSibling);
+      if (this.redo.parentNode === row) after = this.redo;
+    }
+    if (this.actionRow) this.places.move(this.upgradeWalls, row, after.nextSibling);
     this.places.move(this.inventory, row, end);
     row.insertBefore(this.moreButton, end);
 
@@ -931,7 +948,7 @@ export class PlannerBar {
     this.places.move(this.help, this.morePlan);
     this.morePlanSection.hidden = this.morePlan.childElementCount === 0;
 
-    if (layout === PlannerLayout.LANDSCAPE) {
+    if (sideways) {
       // Sideways there is one bar: Leave opens it, and the view switch joins
       // the tools before the drawer. The top bar is left empty.
       this.places.move(this.exit, this.actionBar, this.actionBar.firstChild);

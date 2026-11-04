@@ -1818,8 +1818,8 @@
   display: contents;
 }
 
-/* Upright: Leave, the layout's name and the view switch. The tool groups
-   that are left in the top bar are the desktop's, and hidden. */
+/* Upright: Leave, the layout's name, the view switch, Undo and Redo. The
+   tool groups that are left in the top bar are the desktop's, and hidden. */
 .planner-bar--top[data-layout="portrait"] > .planner-bar__group,
 .planner-bar--top[data-layout="portrait"] > .planner-bar__spacer {
   display: none;
@@ -1852,9 +1852,10 @@
 
 /*
  * A phone's bottom bar (owner, 2026-11-04: "ensure the mobile layout is
- * intuitive too"): one row of 44 px targets under the thumb, Box, Undo, Redo,
- * Upgrade walls, the drawer and More on the left and Apply on the right; at
- * 375 px that is about 350 px, so nothing scrolls. The Store chip and Put back
+ * intuitive too"): one row of 44 px targets under the thumb, Box, Upgrade
+ * walls, the drawer and More on the left and Apply on the right; about 332 px,
+ * so it fits 360 px and nothing scrolls (Undo and Redo are in the top bar
+ * upright, see `PlannerBar.arrange`). The Store chip and Put back
  * take a row of their own above it, only while there is something to store
  * or put back.
  */
@@ -1877,7 +1878,8 @@
   min-height: 44px;
 }
 
-.planner-bar--bottom[data-layout] .planner-bar__icon {
+.planner-bar--bottom[data-layout] .planner-bar__icon,
+.planner-bar--top[data-layout="portrait"] > .planner-bar__icon {
   width: 44px;
   height: 44px;
 }
@@ -1886,9 +1888,30 @@
   padding-inline: var(--space-2);
 }
 
-.planner-bar__more {
-  font-size: var(--text-lg);
+/* The dots' colour; low enough that a pressed More takes the accent text. */
+.planner-bar .planner-bar__more {
+  color: var(--colour-text);
+}
+
+/* Three dots drawn rather than typed: the game font has no "⋯" (U+22EF), so
+   the glyph came out blank. The text stays for nothing visual; the name is
+   the aria-label "More". The pressed and hovered states are named too: the
+   buttons' `background` shorthand there would otherwise wipe the dots while
+   the sheet is open. */
+.planner-bar .btn.planner-bar__more,
+.planner-bar .btn.planner-bar__more:is(:hover, :active, :disabled) {
+  font-size: 0;
   line-height: 1;
+  background-image:
+    radial-gradient(circle, currentColor 0 3px, transparent 3.6px),
+    radial-gradient(circle, currentColor 0 3px, transparent 3.6px),
+    radial-gradient(circle, currentColor 0 3px, transparent 3.6px);
+  background-size: 8px 8px;
+  background-repeat: no-repeat;
+  background-position:
+    calc(50% - 10px) 50%,
+    50% 50%,
+    calc(50% + 10px) 50%;
 }
 
 /* Upright: Apply on the right, the rest from the left. */
