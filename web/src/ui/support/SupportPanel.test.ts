@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { KOFI_URL, PATREON_URL } from "@/config";
 import { openSupportPanel, SUPPORT_TEXT, supportLine } from "./SupportPanel";
@@ -74,5 +77,18 @@ describe("supportLine", () => {
     expect(line.querySelector(".game-icon--support")).not.toBeNull();
     expect(line.textContent).toContain(SUPPORT_TEXT.whatsNew);
     expect(links(line).map((anchor) => anchor.href)).toEqual([PATREON_URL, KOFI_URL]);
+  });
+});
+
+describe("support.css", () => {
+  // Owner: "Patreon monthly not aligned vertically". The words must sit on the
+  // middle of the painted plate, so the plate rule may not pad the bottom more
+  // than the top (6px at the bottom lifted them ~4px above the middle).
+  it("does not lift the words on the painted plates", () => {
+    const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "support.css"), "utf8");
+    const rule = /:root\[data-skin\] \.panel \.support__link \{([^}]*)\}/.exec(css)?.[1] ?? "";
+    const px = (side: string) => Number(new RegExp(`padding-${side}:\\s*(\\d+)`).exec(rule)?.[1] ?? Number.NaN);
+    expect(px("top")).toBeGreaterThanOrEqual(px("bottom"));
+    expect(px("top") - px("bottom")).toBeLessThanOrEqual(2);
   });
 });

@@ -66,10 +66,21 @@
   opacity: 0.92;
 }
 
-/* The painted plates are taller than the glass buttons: room for both lines. */
+/*
+ * The painted plates are taller than the glass buttons: room for both lines.
+ * The words sit on the middle of the whole painted plate, dark bottom lip
+ * included, because that is the shape the eye reads as the button. The shared
+ * plate rule (skin.css) lifts its text 2px onto the bright top face; with the
+ * old 6px here the words sat ~4px above the plate's middle (owner: "not
+ * aligned vertically"). Measured from the plate art: the coloured plate's
+ * middle is 49-50% of its height in all four plates (Modern orange and gold,
+ * Classic yellow and green), and Titan One draws its letters ~1px above the
+ * line's middle, hence the 1px at the top rather than none.
+ */
 :root[data-skin] .panel .support__link {
   min-height: 58px;
-  padding-bottom: 6px;
+  padding-top: 1px;
+  padding-bottom: 0;
 }
 
 .support__thanks {
