@@ -21,6 +21,7 @@ import { installErrorReporter } from "@/game/bugReport/errorReporter";
 import { UpdateCheck, fetchLivePage, runningBundleName } from "@/app/updateCheck";
 import { UpdatePrompt } from "@/ui/UpdatePrompt";
 import { applySkin } from "@/ui/skin";
+import { applyFontChoice } from "@/ui/fontChoice";
 
 // The bug report's list of recent errors, from the very start, and the
 // owner's dashboard's copy of uncaught errors (the Privacy Policy says so).
@@ -29,6 +30,8 @@ installErrorReporter();
 
 // Painted windows: steel in Modern, Flash parchment in Classic (`?skin=` to test).
 applySkin();
+// The player's Font choice (Account Settings): the game font, Clear or Extra readable.
+applyFontChoice();
 
 const host = document.querySelector<HTMLElement>("#game-root");
 

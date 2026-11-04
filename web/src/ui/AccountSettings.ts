@@ -20,6 +20,7 @@ import { saveClassicLook, savedClassicLook, saveMusicChoice, savedMusicChoice, t
 import { setWorldChatOn, worldChatOn } from "@/game/chat/worldChatSetting";
 import { effectsQuality, screenShakeOn, setEffectsQuality, setScreenShake, type EffectsQuality } from "@/game/attack/juice";
 import { quality as downloadQuality, setQuality, type Quality } from "@/game/quality";
+import { savedFontChoice, setFontChoice, type FontChoice } from "@/ui/fontChoice";
 import { Popup } from "@/ui/Popup";
 
 export const SETTINGS_TEXT = {
@@ -70,6 +71,15 @@ export const SETTINGS_TEXT = {
   musicHint: "The yard tune, whatever the Style.",
   musicSaved: "Saved. Reload the page to hear the change.",
   lookFailed: "Could not save this in your browser. Check that site data is allowed.",
+  fontLabel: "Font",
+  fontGame: "Game font",
+  fontClear: "Clear",
+  fontReadable: "Extra readable",
+  fontHint: {
+    game: "The game's own round letters everywhere.",
+    clear: "Game letters for titles, plainer letters for the rest.",
+    readable: "Plain letters that are easy to tell apart, everywhere.",
+  },
   downloadLabel: "Quality",
   downloadHigh: "High",
   downloadMedium: "Medium",
@@ -528,8 +538,56 @@ const lookSection = (): HTMLElement => {
     hint.classList.toggle("field__hint--error", !saved);
   });
 
-  section.append(heading, row, hint, ...musicRows());
+  section.append(heading, row, hint, ...fontRows(), ...musicRows());
   return section;
+};
+
+/** The face each Font option is shown in, so the list itself is a preview. */
+const FONT_PREVIEW: Record<FontChoice, string> = {
+  game: '"Titan One", sans-serif',
+  clear: '"Nunito", sans-serif',
+  readable: '"Atkinson Hyperlegible", sans-serif',
+};
+
+/**
+ * Font (owner, 4 Nov 2026: players found the font hard to read): the game font,
+ * Clear or Extra readable (`ui/fontChoice.ts`). Unlike the Style, it shows at
+ * once: every panel follows the font variables.
+ */
+const fontRows = (): HTMLElement[] => {
+  const row = document.createElement("label");
+  row.className = "account-settings__toggle";
+  const words = document.createElement("span");
+  words.textContent = SETTINGS_TEXT.fontLabel;
+  const font = document.createElement("select");
+  font.id = "settings-font";
+  font.className = "account-settings__select";
+  for (const [value, text] of [
+    ["game", SETTINGS_TEXT.fontGame],
+    ["clear", SETTINGS_TEXT.fontClear],
+    ["readable", SETTINGS_TEXT.fontReadable],
+  ] as const) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    option.style.fontFamily = FONT_PREVIEW[value];
+    font.append(option);
+  }
+  font.value = savedFontChoice();
+  row.append(words, font);
+  const hint = document.createElement("p");
+  hint.className = "field__hint";
+  hint.id = "settings-font-hint";
+  hint.setAttribute("aria-live", "polite");
+  hint.textContent = SETTINGS_TEXT.fontHint[font.value as FontChoice];
+  font.setAttribute("aria-describedby", hint.id);
+  font.addEventListener("change", () => {
+    const choice = font.value as FontChoice;
+    const saved = setFontChoice(choice);
+    hint.textContent = saved ? SETTINGS_TEXT.fontHint[choice] : SETTINGS_TEXT.lookFailed;
+    hint.classList.toggle("field__hint--error", !saved);
+  });
+  return [row, hint];
 };
 
 /** Music on its own (a player's request, 31 Oct 2026): the new yard tune or Flash's, whatever the Style. */
