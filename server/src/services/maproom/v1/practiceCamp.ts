@@ -2,6 +2,9 @@ import type { EntityManager } from "@mikro-orm/core";
 import { Maproom } from "../../../database/models/maproom.model.js";
 import type { TribeData } from "../../../types/TribeData.js";
 import { readOnboarding, type OnboardingSave } from "../../onboarding/state.js";
+import { tutorial } from "../../../game-data/tribes/v1/tutorial.js";
+import { mr1TribePool } from "./mr1TribeRules.js";
+import { LOOT_GAIN_RATIO, RESOURCE_KEYS } from "../../../game-rules/combat/index.js";
 
 /**
  * The guided start's private practice camp (`docs/design/tutorial.md` §5.5,
@@ -79,6 +82,24 @@ export const removePracticeCamp = async (em: EntityManager, userid: number): Pro
   if (left.length === (maproom.tribedata ?? []).length) return;
   maproom.tribedata = left;
   em.persist(maproom);
+};
+
+/**
+ * The camp of an attack that `guide/skip` removed mid-fight (owner, 4 Nov
+ * 2026: new players skipping the guide during the practice attack had every
+ * save of it refused). A stand-in at full health, as the attack load served
+ * the camp (it opens and resets at full health), so the attack lands as
+ * fought: the army spent, the battle replayed. It counts as looted up to
+ * its loot cap (`creditableMR1Loot`), so it gives nothing: a skip grants
+ * nothing more, and the camp's real `looted` went with its entry. It is
+ * never added to the player's `tribedata`, so the camp stays gone.
+ * Undefined for any other base.
+ */
+export const removedCampStandIn = (baseid: string): TribeData | undefined => {
+  if (baseid !== PRACTICE_CAMP_BASEID) return undefined;
+  const pool = mr1TribePool(tutorial);
+  const looted = Object.fromEntries(RESOURCE_KEYS.map((key) => [key, Math.ceil(pool[key] * LOOT_GAIN_RATIO)]));
+  return { ...freshCamp(), looted };
 };
 
 /** Whether the server's battle destroyed the camp (`scaledMR1Tribes` writes `destroyed`). */

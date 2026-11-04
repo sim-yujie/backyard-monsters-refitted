@@ -24,7 +24,14 @@ const ago = (days: number) => new Date(NOW - days * DAY);
 
 const A = 990001;
 const B = 990002;
-const CONFIG: RetentionConfig = { logDays: 30, mailDays: 365, attackLogDays: 365, chatReportDays: 365, bugReportDays: 180 };
+const CONFIG: RetentionConfig = {
+  logDays: 30,
+  mailDays: 365,
+  attackLogDays: 365,
+  chatReportDays: 365,
+  bugReportDays: 180,
+  chatLogDays: 90,
+};
 
 describe.skipIf(!dbName)("the daily privacy clean-up (retention.ts)", () => {
   let orm: MikroORM;
@@ -37,6 +44,8 @@ describe.skipIf(!dbName)("the daily privacy clean-up (retention.ts)", () => {
     await sql(`DELETE FROM bym.message WHERE threadid >= 990001`);
     await sql(`DELETE FROM bym.attack_logs WHERE attacker_userid IN (?, ?)`, [A, B]);
     await sql(`DELETE FROM bym.chat_report WHERE reporter_id IN (?, ?)`, [A, B]);
+    await sql(`DELETE FROM bym.chat_log WHERE userid IN (?, ?)`, [A, B]);
+    await sql(`DELETE FROM bym.chat_flag WHERE userid IN (?, ?)`, [A, B]);
     await sql(`DELETE FROM bym.job_run WHERE job = ?`, [RETENTION_JOB]);
     await sql(`DELETE FROM bym.friend_request WHERE from_userid IN (?, ?)`, [A, B]);
     await sql(`DELETE FROM bym.friend_help WHERE helper_userid IN (?, ?)`, [A, B]);
@@ -159,6 +168,30 @@ describe.skipIf(!dbName)("the daily privacy clean-up (retention.ts)", () => {
     expect(await attackLogAges()).toEqual([364, 3]);
     const reports = await sql(`SELECT 1 FROM bym.chat_report WHERE reporter_id = ?`, [A]);
     expect(reports.length).toBe(1);
+  });
+
+  test("chat log lines older than 90 days and flags older than the chat report limit go", async () => {
+    for (const days of [120, 91, 89, 1]) {
+      await sql(
+        `INSERT INTO bym.chat_log (userid, channel, message, shown, flagged, created_at) VALUES (?, 'chat:mr2-global', ?, ?, NULL, ?)`,
+        [A, `${days} days old`, `${days} days old`, ago(days)]
+      );
+    }
+    for (const days of [400, 100]) {
+      await sql(
+        `INSERT INTO bym.chat_flag (userid, channel, message, shown, words, severity, message_ts, created_at)
+         VALUES (?, 'chat:mr2-global', 'rude', '****', 'rude', 'swear', ?, ?)`,
+        [A, ago(days).getTime(), ago(days)]
+      );
+    }
+
+    expect(await run()).toMatchObject({ chatLog: 2, chatFlags: 1 });
+    const left = await sql<{ message: string }>(`SELECT message FROM bym.chat_log WHERE userid = ? ORDER BY created_at`, [A]);
+    expect(left.map((row) => row.message)).toEqual(["89 days old", "1 days old"]);
+    expect((await sql(`SELECT 1 FROM bym.chat_flag WHERE userid = ?`, [A])).length).toBe(1);
+
+    // The limit is a setting.
+    expect(await run({ config: { ...CONFIG, chatLogDays: 30 } })).toMatchObject({ chatLog: 1 });
   });
 
   test("friend requests answered more than 30 days ago go; pending ones go 30 days after they were made", async () => {

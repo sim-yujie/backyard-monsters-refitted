@@ -303,6 +303,37 @@ describe("Map Room 1 tribe save of a started attack", () => {
   });
 });
 
+describe("Map Room 1 tribe save of a camp gone since the attack began", () => {
+  const CAMP = "1"; // the guide's practice camp
+
+  test("the practice camp, removed by a guide skip mid-attack, still lands the attack, gives nothing and stays gone", async () => {
+    store.set(
+      mr1TribeSessionKey(ATTACKER, CAMP),
+      serialiseAttackSession({ attackerid: ATTACKER, attackid: ATTACK_ID, startedat: now(), entryHoused: { "5000": ARMY } })
+    );
+    const ctx = ctxFor({
+      baseid: CAMP,
+      over: "1",
+      tick: String(WRECK_TICK),
+      flinglog: JSON.stringify(WRECK),
+      attackloot: loot({ r1: 1e6, r2: 1e6, r3: 1e6, r4: 1e6 }),
+    });
+
+    expect(await run(ctx)).toBeNull();
+    expect(userSave.resources).toEqual({ r1: 100, r2: 100, r3: 100, r4: 100 });
+    expect(store.has(mr1TribeSessionKey(ATTACKER, CAMP))).toBe(false);
+    expect(maproom.tribedata.map((tribe) => tribe.baseid)).toEqual([TRIBE]);
+  });
+
+  test("any other tribe gone from the player's Map Room is still refused", async () => {
+    startSession(ATTACKER, now(), ARMY);
+    maproom.tribedata = [];
+    const caught = await run(ctxFor({ over: "1", tick: String(WRECK_TICK), flinglog: JSON.stringify(WRECK) }));
+
+    expect(caught?.data?.reason).toBe("baseGone");
+  });
+});
+
 describe("Map Room 1 army settlement (#132)", () => {
   const flinglog = (C1: number) => JSON.stringify({ events: [{ kind: "fling", t: 10, monsters: { C1 } }] });
   const sent = (C1: number) => JSON.stringify([{ baseid: 5000, m: { housed: { C1 } } }]);

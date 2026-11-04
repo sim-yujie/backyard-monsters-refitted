@@ -7,7 +7,9 @@ import { ERROR_RETENTION_DAYS } from "../errors/errorStore.js";
 /**
  * The daily privacy clean-up: deletes in-game mail, battle records
  * (`attack_logs`) and chat reports older than their limits
- * (`config/RetentionConfig.ts`, the Privacy Policy, section 4), and friend
+ * (`config/RetentionConfig.ts`, the Privacy Policy, section 4), the
+ * automatic chat flags (as long as chat reports) and the dashboard's chat log
+ * (`CHAT_LOG_RETENTION_DAYS`), and friend
  * requests answered or lapsed more than {@link FRIEND_REQUEST_RETENTION_DAYS}
  * days ago (issue #368), and friend helps older than
  * {@link FRIEND_HELP_RETENTION_DAYS} days (issue #373), and the dashboard's
@@ -58,6 +60,8 @@ export interface RetentionResult {
   threads: number;
   attackLogs: number;
   chatReports: number;
+  chatFlags: number;
+  chatLog: number;
   bugReports: number;
   friendRequests: number;
   friendHelps: number;
@@ -191,6 +195,24 @@ export const runRetentionCleanup = async (
     batchSize,
     pauseMs
   );
+  const chatFlags = await deleteOldRows(
+    em,
+    "chat_flag",
+    "id",
+    "created_at",
+    cutoff(now, config.chatReportDays),
+    batchSize,
+    pauseMs
+  );
+  const chatLog = await deleteOldRows(
+    em,
+    "chat_log",
+    "id",
+    "created_at",
+    cutoff(now, config.chatLogDays),
+    batchSize,
+    pauseMs
+  );
   const bugReports = await deleteOldRows(
     em,
     "bug_report",
@@ -250,6 +272,8 @@ export const runRetentionCleanup = async (
     threads: mail.threads,
     attackLogs,
     chatReports,
+    chatFlags,
+    chatLog,
     bugReports,
     friendRequests,
     friendHelps,
@@ -302,7 +326,7 @@ export const startRetentionSweep = (em: EntityManager): (() => void) => {
       const result = await runDailyRetention(em);
       if (result) {
         logger.info(
-          "Privacy clean-up: deleted {messages} mail messages ({threads} empty threads), {attackLogs} battle records, {chatReports} chat reports, {bugReports} bug reports, {appErrors} error groups ({appErrorReporters} error senders)",
+          "Privacy clean-up: deleted {messages} mail messages ({threads} empty threads), {attackLogs} battle records, {chatReports} chat reports, {chatFlags} chat flags, {chatLog} chat log lines, {bugReports} bug reports, {appErrors} error groups ({appErrorReporters} error senders)",
           { ...result }
         );
       }

@@ -30,6 +30,7 @@ import { CHANNELS, INFERNO_CHAT_CHANNEL, countryChannelFor } from "../../config/
 import { ChatControlType } from "../../enums/Chat.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { endAllSessions } from "../../services/auth/sessions.js";
+import { dismissChatFlags, listChatFlags, readChatLog } from "../../services/admin/chatWatchAdmin.js";
 import {
   listChatReports,
   moderate,
@@ -247,6 +248,46 @@ export const mountAdminRoutes = (router: Router): void => {
   // warn, mute and ban, and the chat panel's sign-in to the chat server.
   router.get(`${admin}/chatreports`, apiVersion, adminOnly, async (ctx) => {
     ok(ctx, { ...(await listChatReports(postgres.em.fork(), { before: intOf(ctx.query.before), limit: intOf(ctx.query.limit) })) });
+  });
+
+  // Automatic chat flags and the chat log (services/admin/chatWatchAdmin.ts).
+  router.get(`${admin}/chatflags`, apiVersion, adminOnly, async (ctx) => {
+    const userid = intOf(ctx.query.userid);
+    ok(ctx, {
+      ...(await listChatFlags(postgres.em.fork(), {
+        sort: ctx.query.sort === "serious" ? "serious" : "latest",
+        slursOnly: ctx.query.slurs === "1",
+        userid: userid !== undefined && userid > 0 ? userid : undefined,
+        offset: intOf(ctx.query.offset),
+        limit: intOf(ctx.query.limit),
+      })),
+    });
+  });
+
+  router.post(`${admin}/chatflags/:id/dismiss`, apiVersion, adminOnly, async (ctx) => {
+    const id = playerId(ctx);
+    if (id === null) return;
+    const upTo = intOf((ctx.request.body as { upTo?: unknown } | undefined)?.upTo);
+    if (upTo === undefined || upTo < 1) return refuse(ctx, Status.BAD_REQUEST, "Say which flags to dismiss.", "badRequest");
+    const dismissed = await dismissChatFlags(postgres.em.fork(), id, upTo, ctx.authUser.userid);
+    ok(ctx, { dismissed });
+  });
+
+  router.get(`${admin}/chatlog`, apiVersion, adminOnly, async (ctx) => {
+    const text = (raw: unknown): string | undefined => (typeof raw === "string" && raw.trim() ? raw : undefined);
+    const userid = intOf(ctx.query.userid);
+    ok(ctx, {
+      ...(await readChatLog(postgres.em.fork(), {
+        userid: userid !== undefined && userid > 0 ? userid : undefined,
+        player: text(ctx.query.player),
+        q: text(ctx.query.q),
+        channel: text(ctx.query.channel),
+        until: intOf(ctx.query.until),
+        flagged: ctx.query.flagged === "1",
+        before: intOf(ctx.query.before),
+        limit: intOf(ctx.query.limit),
+      })),
+    });
   });
 
   router.get(`${admin}/players/:id/moderation`, apiVersion, adminOnly, async (ctx) => {
