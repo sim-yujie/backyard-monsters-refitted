@@ -376,8 +376,9 @@ vec4 featurePlace(vec2 id, float density) {
   }
   if (frame < 0 && fe.share.y > 0.2 && !(occupied && length(off) < 0.45)) {
     float rocky = smoothstep(0.25, 0.8, fe.share.y);
-    if (roll < 0.36 * rocky) { frame = ${BOULDER_FRAME} + int(kind * 4.0); size = 0.8 + 0.2 * rocky; }
-    else if (roll < 0.66 * rocky) { frame = kind < 0.5 ? 6 : 8; size = 0.55; }
+    // Boulders of mixed sizes (mock-up B's rocks are a few big lit ones among smaller ones).
+    if (roll < 0.36 * rocky) { frame = ${BOULDER_FRAME} + int(kind * 4.0); size = (0.68 + 0.32 * hash12(id + 81.7)) * (0.85 + 0.15 * rocky); }
+    else if (roll < 0.58 * rocky) { frame = kind < 0.5 ? 6 : 8; size = 0.55; }
   }
   if (frame < 0) return none;
   return vec4(float(frame + 1) / 255.0, size, flags / 255.0, 1.0);
