@@ -211,12 +211,13 @@ vec3 canopyColour(vec2 uv, vec2 dx, vec2 dy, vec2 h, float e, float cellPixels) 
   vec2 cn;
   float crease;
   float roll;
-  float top = dome(h / CROWN_GRID + 0.22 * warp, 0.58, 0.3, 0.0, cn, crease, roll);
+  // The lit domes are smaller than the edge's crowns: many treetops in one solid mass, not big scales.
+  float top = dome(h / (CROWN_GRID * 0.62) + 0.22 * warp, 0.58, 0.3, 0.0, cn, crease, roll);
   vec3 c = sampleGround(${Ground.CANOPY}, uv * CANOPY_SCALE, dx * CANOPY_SCALE, dy * CANOPY_SCALE);
   c = pow(c, vec3(1.22, 1.12, 1.0)) * 0.88;
   vec3 n = normalize(vec3(cn, max(top, 0.05) * 0.75));
   float lit = max(0.0, dot(n, normalize(CROWN_LIGHT)));
-  float ao = mix(0.24, 1.0, smoothstep(0.0, 0.6, top)) * (1.0 - 0.34 * crease);
+  float ao = mix(0.42, 1.0, smoothstep(0.0, 0.6, top)) * (1.0 - 0.2 * crease);
   c *= mix(0.56, 1.5, lit) * ao;
   // Sunlit tops turn warmer, yellow-green; the shade bluer.
   c = mix(c * vec3(0.88, 0.96, 1.1), c * vec3(1.2, 1.08, 0.64), smoothstep(0.4, 0.85, lit));
