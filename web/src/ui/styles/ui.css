@@ -706,6 +706,37 @@ body {
   margin-left: var(--space-1);
 }
 
+/* Shiny Lock on (bug report #10): a padlock where the Shiny number was,
+   since the server sends 0 while locked and a bare 0 read as "my Shiny is
+   gone". A tap says why, in the exact bubble. */
+.hud__lock-mark {
+  flex: none;
+  /* As tall as the Shiny coins and level with them (it sat 8 px high). */
+  width: 24px;
+  height: 24px;
+  /* In the counter's grid it spans the same rows as the coins (1 / 4). */
+  grid-row: 1 / 4;
+  align-self: center;
+  margin-left: var(--space-1);
+  vertical-align: middle;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.45));
+}
+
+.hud__lock-mark[hidden] {
+  display: none;
+}
+
+.hud__exact-lock {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 16rem;
+}
+
+.hud__exact-lock .hud__lock-mark {
+  margin-left: 0;
+}
+
 /* Workers, free / total; a press goes to the job that finishes soonest. */
 .hud__workers {
   display: flex;
