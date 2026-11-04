@@ -257,6 +257,45 @@ describe("AccountSettings", () => {
     expect(localStorage.getItem("bymr.music")).toBeNull();
   });
 
+  it("offers a Font choice that shows at once and is kept in this browser", async () => {
+    localStorage.clear();
+    delete document.documentElement.dataset.font;
+    await open({});
+    const font = document.querySelector<HTMLSelectElement>("#settings-font")!;
+    expect(font.closest("label")!.textContent).toContain(SETTINGS_TEXT.fontLabel);
+    expect([...font.options].map((option) => option.textContent)).toEqual([
+      SETTINGS_TEXT.fontGame,
+      SETTINGS_TEXT.fontClear,
+      SETTINGS_TEXT.fontReadable,
+    ]);
+    // Each option is drawn in its own face, so the list is a preview.
+    expect([...font.options].map((option) => option.style.fontFamily)).toEqual([
+      '"Titan One", sans-serif',
+      '"Nunito", sans-serif',
+      '"Atkinson Hyperlegible", sans-serif',
+    ]);
+    expect(font.value).toBe("game");
+    font.value = "readable";
+    font.dispatchEvent(new Event("change"));
+    expect(document.documentElement.dataset.font).toBe("readable");
+    expect(localStorage.getItem("bymr.font")).toBe("readable");
+    expect(document.querySelector("#settings-font-hint")!.textContent).toBe(SETTINGS_TEXT.fontHint.readable);
+    font.value = "game";
+    font.dispatchEvent(new Event("change"));
+    expect(document.documentElement.dataset.font).toBeUndefined();
+    expect(localStorage.getItem("bymr.font")).toBeNull();
+  });
+
+  it("shows the saved Font choice when the dialog opens, even when the account fails to load", async () => {
+    localStorage.clear();
+    localStorage.setItem("bymr.font", "clear");
+    api.fetchAccount.mockRejectedValue(new Error("down"));
+    openAccountSettings({ container: document.body });
+    await settle();
+    expect(document.querySelector<HTMLSelectElement>("#settings-font")!.value).toBe("clear");
+    localStorage.clear();
+  });
+
   it("shows Classic for a player who had Classic building art on, even when the account fails to load", async () => {
     localStorage.clear();
     localStorage.setItem("bymr.classicBuildingArt", "1");

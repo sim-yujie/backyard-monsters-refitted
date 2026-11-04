@@ -19,6 +19,7 @@ body {
   background: var(--colour-surface-base);
   color: var(--colour-text);
   font-family: var(--font-body);
+  font-weight: var(--body-weight);
   font-size: var(--text-md);
   line-height: var(--leading-normal);
   -webkit-font-smoothing: antialiased;
@@ -1758,7 +1759,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  min-width: min(84vw, 340px);
+  /* Never wider than the panel's own room: on a 375 px phone 84vw is wider than
+     the framed panel holds, and the selects and hints ran under the right edge. */
+  min-width: min(84vw, 340px, 100%);
 }
 
 .account-settings__section {
