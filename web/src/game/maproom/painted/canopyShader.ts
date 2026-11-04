@@ -78,8 +78,8 @@ const float CANOPY_SCALE = 0.62;
 // by the bank, and the glowing lime goo with its dark outline, glow and rings.
 const vec3 MARSH_BANK = vec3(0.33, 0.45, 0.13);
 const vec3 MARSH_MUD = vec3(0.19, 0.22, 0.09);
-const vec3 MARSH_SHALLOW = vec3(0.3, 0.39, 0.18);
-const vec3 MARSH_WATER = vec3(0.15, 0.24, 0.13);
+const vec3 MARSH_SHALLOW = vec3(0.35, 0.45, 0.19);
+const vec3 MARSH_WATER = vec3(0.2, 0.3, 0.15);
 const vec3 MARSH_WATER_TEX = vec3(0.286, 0.38, 0.184);
 const vec3 MARSH_REFLECT = vec3(0.46, 0.56, 0.46);
 const vec3 GOO_EDGE = vec3(0.47, 0.78, 0.03);
@@ -299,13 +299,13 @@ vec3 marshColour(vec3 land, vec3 water, vec2 h, float deep, float islet) {
   float aw = max(fwidth(wet), 1e-4);
   float inWater = smoothstep(-aw, aw, wet);
   float rim = smoothstep(-0.035, -0.005, wet) * (1.0 - inWater);
-  c = mix(c, MARSH_MUD, 0.65 * rim);
+  c = mix(c, MARSH_MUD, 0.5 * rim);
   // The water texture is soft; mock-up B's water swings from near-black green to pale sky reflections.
   vec3 w = MARSH_WATER + clamp((water - MARSH_WATER_TEX) * 2.2, vec3(-0.2), vec3(0.1));
   float sky = smoothstep(0.55, 0.85, valueNoise(h * vec2(0.9, 2.4) + 41.0));
   w = mix(w, MARSH_REFLECT, 0.4 * sky);
   w = mix(w, MARSH_SHALLOW, 0.55 * (1.0 - smoothstep(0.0, 0.07, wet)));
-  w *= 1.0 - 0.28 * (1.0 - smoothstep(0.0, 0.02, wet));
+  w *= 1.0 - 0.12 * (1.0 - smoothstep(0.0, 0.02, wet));
   c = mix(c, w, inWater);
   float ag = min(max(fwidth(goo), 1e-4), 0.05);
   if (goo > 0.4) return c;
