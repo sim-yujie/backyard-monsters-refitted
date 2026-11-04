@@ -907,8 +907,14 @@
   white-space: nowrap;
 }
 
+/* The actions push right on their own (margin-inline-start: auto), so the
+   spacer only cost width and a gap; without it 1280 px fits one row. */
+.planner-bar--bottom:not([data-layout]) > .planner-bar__spacer {
+  display: none;
+}
+
 .planner-bar--bottom:not([data-layout]) > .planner-bar__summary {
-  min-width: 10ch;
+  min-width: 8ch;
   overflow: visible;
   white-space: normal;
   line-height: var(--leading-tight);
