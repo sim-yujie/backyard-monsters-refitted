@@ -216,10 +216,10 @@ vec3 canopyColour(vec2 uv, vec2 dx, vec2 dy, vec2 h, float e, float cellPixels) 
   c = pow(c, vec3(1.22, 1.12, 1.0)) * 0.88;
   vec3 n = normalize(vec3(cn, max(top, 0.05) * 0.75));
   float lit = max(0.0, dot(n, normalize(CROWN_LIGHT)));
-  float ao = mix(0.3, 1.0, smoothstep(0.0, 0.6, top)) * (1.0 - 0.3 * crease);
-  c *= mix(0.62, 1.42, lit) * ao;
+  float ao = mix(0.24, 1.0, smoothstep(0.0, 0.6, top)) * (1.0 - 0.34 * crease);
+  c *= mix(0.56, 1.5, lit) * ao;
   // Sunlit tops turn warmer, yellow-green; the shade bluer.
-  c = mix(c * vec3(0.9, 0.97, 1.08), c * vec3(1.12, 1.05, 0.72), smoothstep(0.45, 0.9, lit));
+  c = mix(c * vec3(0.88, 0.96, 1.1), c * vec3(1.2, 1.08, 0.64), smoothstep(0.4, 0.85, lit));
   // Each crown its own green: some yellower, some bluer.
   c *= mix(vec3(0.92, 0.98, 1.06), vec3(1.08, 1.03, 0.86), roll);
   float patchy = valueNoise(h * 0.55 + 3.0);
