@@ -1001,8 +1001,11 @@
 }
 
 .planner-bar--bottom:not([data-layout]) .planner-bar__cost-line {
+  /* Sized for the longest time, "999d+" (about 137 px in all): the button
+     never shrinks, so the time is never cut (7.5rem cut "82d" to "82"). */
+  flex: none;
   gap: 3px;
-  max-width: 7.5rem;
+  max-width: 10rem;
   padding-inline: var(--space-2);
 }
 

@@ -927,18 +927,25 @@ describe("the desktop Cost button", () => {
 
   it("closes on Esc, and that Esc goes no further", () => {
     const bar = mount();
+    // The planner listens on window in the capture phase (PlannerInput), the
+    // earliest place a key can be heard; listening on document missed it and
+    // the Esc cleared the selection instead (found in the game, 4 Nov).
     const heard = vi.fn();
-    window.addEventListener("keydown", heard);
+    window.addEventListener("keydown", heard, true);
+    const esc = (): KeyboardEvent =>
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
     try {
       costButton(bar).click();
-      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      const first = esc();
+      document.body.dispatchEvent(first);
       expect(isOpen(bar)).toBe(false);
       expect(heard).not.toHaveBeenCalled();
+      expect(first.defaultPrevented).toBe(true);
       // Closed, Esc is the planner's again.
-      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      document.body.dispatchEvent(esc());
       expect(heard).toHaveBeenCalledTimes(1);
     } finally {
-      window.removeEventListener("keydown", heard);
+      window.removeEventListener("keydown", heard, true);
     }
   });
 

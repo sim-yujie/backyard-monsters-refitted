@@ -876,12 +876,16 @@ export class PlannerBar {
     this.costPop.append(this.costLine, this.costPanel);
     this.renderCostLine();
     // A click anywhere else or Esc closes a desktop's pop-up. Esc stops
-    // there, so closing it does not also drop the selection.
+    // there, so closing it does not also drop the selection. The planner's
+    // keys listen on window in the capture phase, which runs before anything
+    // on document, so the Esc listener must sit on window too; the planner
+    // skips a key that was already handled (defaultPrevented).
     this.dismissCosts = (event: Event): void => {
       if (!this.costsOpen || isPhone(this.layout)) return;
       if (event instanceof KeyboardEvent) {
         if (event.key !== "Escape") return;
-        event.stopPropagation();
+        event.preventDefault();
+        event.stopImmediatePropagation();
         this.setCostsOpen(false);
         return;
       }
@@ -889,7 +893,7 @@ export class PlannerBar {
       this.setCostsOpen(false);
     };
     document.addEventListener("pointerdown", this.dismissCosts, true);
-    document.addEventListener("keydown", this.dismissCosts, true);
+    window.addEventListener("keydown", this.dismissCosts, true);
 
     this.summary = document.createElement("span");
     this.summary.className = "planner-bar__summary";
@@ -1628,7 +1632,7 @@ export class PlannerBar {
     this.yardMenu.destroy();
     this.viewMenu.destroy();
     document.removeEventListener("pointerdown", this.dismissCosts, true);
-    document.removeEventListener("keydown", this.dismissCosts, true);
+    window.removeEventListener("keydown", this.dismissCosts, true);
     // So do the popovers, and their bubbles hang off the body rather than off
     // the bar, so they outlive it unless they are taken down by hand.
     for (const dispose of this.popovers) dispose();
