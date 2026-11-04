@@ -250,6 +250,8 @@ export interface PlayerModeration {
   userid: number;
   username: string;
   lastSeenAt: string | null;
+  /** The Style the player's game last sent (`modern`/`classic`), null before beta 6 or on other clients. */
+  look: string | null;
   banned: boolean;
   /** Null with `banned`: for good. */
   banUntil: string | null;
@@ -286,9 +288,14 @@ export const playerModeration = async (
   now: Date = new Date(),
 ): Promise<PlayerModeration | null> => {
   const [player] = await em.execute<
-    (TargetRow & { last_seen_at: Date | string | null; ban_reason: string | null; reports: string | number })[]
+    (TargetRow & {
+      last_seen_at: Date | string | null;
+      look_style: string | null;
+      ban_reason: string | null;
+      reports: string | number;
+    })[]
   >(
-    `SELECT u.userid, u.email, u.username, u.banned, u.ban_until, u.ban_reason, u.mute_until, u.last_seen_at,
+    `SELECT u.userid, u.email, u.username, u.banned, u.ban_until, u.ban_reason, u.mute_until, u.last_seen_at, u.look_style,
             (SELECT count(*) FROM bym.chat_report r WHERE r.reported_id = u.userid) AS reports
        FROM bym."user" u WHERE u.userid = ?`,
     [userid],
@@ -305,6 +312,7 @@ export const playerModeration = async (
     userid: Number(player.userid),
     username: player.username,
     lastSeenAt: iso(player.last_seen_at),
+    look: player.look_style ?? null,
     banned: Boolean(player.banned),
     banUntil: player.banned ? iso(player.ban_until) : null,
     banReason: player.banned ? player.ban_reason : null,

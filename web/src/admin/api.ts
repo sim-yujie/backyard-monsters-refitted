@@ -55,9 +55,22 @@ export interface DailyStat {
   serverErrors: number | null;
 }
 
+/** How real players split between the Look and sound choices, over the last `days` days. */
+export interface LookTotals {
+  days: number;
+  /** Players whose game sent its look in the window. */
+  reported: number;
+  style: { modern: number; classic: number };
+  music: { style: number; new: number; flash: number };
+  quality: { high: number; medium: number; low: number };
+  font: { game: number; clear: number; readable: number };
+}
+
 export interface StatsOverview {
   generatedAt: string;
   players: { total: number; activeToday: number; active7: number; active30: number };
+  /** Missing from a server older than beta 6. */
+  looks?: LookTotals;
   today: DailyStat;
   days: DailyStat[];
 }
@@ -121,6 +134,8 @@ export interface PlayerMatch {
   /** A computer-run neighbour: shown, marked, after the players. */
   bot: boolean;
   lastSeenAt: string | null;
+  /** The Style the player's game last sent (`modern`/`classic`); null before beta 6 or on other clients. */
+  look?: string | null;
 }
 
 export type ShinyAwardRequest = {
@@ -500,6 +515,8 @@ export interface PlayerModeration {
   userid: number;
   username: string;
   lastSeenAt: string | null;
+  /** The Style the player's game last sent (`modern`/`classic`); null before beta 6 or on other clients. */
+  look?: string | null;
   banned: boolean;
   /** Null while `banned`: for good. */
   banUntil: string | null;
