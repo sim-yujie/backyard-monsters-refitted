@@ -19,6 +19,7 @@ import { usernameProblem } from "@/game/account/rules/accountRules";
 import { saveClassicLook, savedClassicLook, saveMusicChoice, savedMusicChoice, type MusicChoice } from "@/game/classicLook";
 import { effectsQuality, screenShakeOn, setEffectsQuality, setScreenShake, type EffectsQuality } from "@/game/attack/juice";
 import { quality as downloadQuality, setQuality, type Quality } from "@/game/quality";
+import { noteShinyLock } from "@/game/shinyLock";
 import { Popup } from "@/ui/Popup";
 
 export const SETTINGS_TEXT = {
@@ -28,7 +29,7 @@ export const SETTINGS_TEXT = {
   usernameHint: "2 to 12 letters, numbers or underscores. You can change it once every 6 months.",
   change: "Change username",
   shinyLabel: "Shiny Lock",
-  shinyHint: "While on, Shiny cannot be spent, so a stray click never costs you any.",
+  shinyHint: "Hides your Shiny (the counter shows a lock) and stops you spending it. Your Shiny is kept.",
   shinyFailed: "Could not save the Shiny Lock setting. Try again.",
   privacyTitle: "Privacy",
   hideOnlineLabel: "Show when I'm online",
@@ -114,6 +115,7 @@ export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
 
   fetchAccount().then(
     (account) => {
+      noteShinyLock(account.shinyLocked);
       body.replaceChildren(
         usernameSection(account, options),
         shinySection(account),
@@ -235,6 +237,7 @@ const shinySection = (account: AccountInfo): HTMLElement => {
     setShinyLocked(wanted).then(
       (stored) => {
         box.checked = stored;
+        noteShinyLock(stored);
         hint.textContent = SETTINGS_TEXT.shinyHint;
         box.disabled = false;
       },

@@ -18,6 +18,7 @@ vi.mock("@/api/country", () => countryApi);
 const chat = vi.hoisted(() => ({ worldChat: { setCountryRoom: vi.fn() } }));
 vi.mock("@/game/chat/chatSession", () => chat);
 
+import { resetShinyLockForTests, shinyLocked } from "@/game/shinyLock";
 import { SETTINGS_TEXT, openAccountSettings } from "./AccountSettings";
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -42,6 +43,7 @@ beforeEach(() => privacyApi.fetchBlocked.mockResolvedValue([]));
 afterEach(() => {
   document.body.replaceChildren();
   vi.clearAllMocks();
+  resetShinyLockForTests();
 });
 
 describe("AccountSettings", () => {
@@ -72,6 +74,14 @@ describe("AccountSettings", () => {
     expect(document.querySelector("#settings-username-hint")!.textContent).toContain("again on");
   });
 
+  it("says first that the lock hides the Shiny, and that it is kept", async () => {
+    await open({ shinyLocked: true });
+    const hint = document.querySelector("#settings-shiny-hint")!.textContent ?? "";
+    expect(hint.startsWith("Hides your Shiny")).toBe(true);
+    expect(hint).toContain("Your Shiny is kept");
+    expect(shinyLocked()).toBe(true);
+  });
+
   it("sends the Shiny Lock switch and puts it back when the save fails", async () => {
     api.setShinyLocked.mockResolvedValueOnce(true).mockRejectedValueOnce(new Error("down"));
     await open({});
@@ -81,6 +91,8 @@ describe("AccountSettings", () => {
     await settle();
     expect(api.setShinyLocked).toHaveBeenLastCalledWith(true);
     expect(box.checked).toBe(true);
+    // The HUD's Shiny counter hears it at once (bug report #10).
+    expect(shinyLocked()).toBe(true);
 
     box.checked = false;
     box.dispatchEvent(new Event("change"));

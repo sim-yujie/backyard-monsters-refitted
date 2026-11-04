@@ -5,6 +5,7 @@ import type { YardJob } from "@/game/yard/jobs";
 import type { YardChange, YardListener, YardStore, YardUiBinding } from "@/game/yard/YardStore";
 import { capState, exactLabel, formatDelta, formatRate, FULL_NOTE, fullText, Hud, INFERNO_FULL_NOTE, workersText } from "./Hud";
 import { Notices } from "./maproom/Notices";
+import { noteShinyLock, resetShinyLockForTests, SHINY_LOCK_TEXT } from "@/game/shinyLock";
 import { setResourceRealm, spokenText } from "./resourceIcon";
 
 /**
@@ -868,5 +869,80 @@ describe("the HUD's income an hour", () => {
     expect(formatRate(12_400)).toBe("+12,400/h");
     expect(formatRate(12_400, true)).toBe("+12.4K/h");
     expect(formatRate(0)).toBe("+0/h");
+  });
+});
+
+describe("the Shiny counter under Shiny Lock (bug report #10)", () => {
+  let hud: Hud;
+
+  const shinyButton = () => document.querySelector<HTMLButtonElement>('[data-resource="shiny"]')!;
+  const lock = () => shinyButton().querySelector(".hud__lock-mark")!;
+  const value = () => shinyButton().querySelector<HTMLElement>(".hud__resource-value")!;
+
+  beforeEach(() => {
+    document.body.replaceChildren();
+    resetShinyLockForTests();
+    hud = new Hud({ scenes: [], onSceneSelect: () => {} }).mount(document.body);
+    hud.setResources({ r1: 1, r2: 1, r3: 1, r4: 1 }, 0);
+  });
+
+  afterEach(() => {
+    hud.destroy();
+    resetShinyLockForTests();
+  });
+
+  it("shows the number while the lock is off", () => {
+    expect(lock().hasAttribute("hidden")).toBe(true);
+    expect(value().hidden).toBe(false);
+    expect(value().textContent).toBe("0");
+  });
+
+  it("shows a padlock, not a 0, while the lock is on, and says why on hover and tap", () => {
+    noteShinyLock(true);
+    expect(lock().hasAttribute("hidden")).toBe(false);
+    expect(value().hidden).toBe(true);
+    expect(shinyButton().title).toBe(SHINY_LOCK_TEXT);
+    expect(shinyButton().getAttribute("aria-label")).toBe(SHINY_LOCK_TEXT);
+
+    shinyButton().click();
+    expect(document.querySelector(".hud__exact")?.textContent).toBe(SHINY_LOCK_TEXT);
+  });
+
+  it("a HUD made while the lock is on starts with the padlock", () => {
+    noteShinyLock(true);
+    hud.destroy();
+    hud = new Hud({ scenes: [], onSceneSelect: () => {} }).mount(document.body);
+    expect(lock().hasAttribute("hidden")).toBe(false);
+    expect(shinyButton().title).toBe(SHINY_LOCK_TEXT);
+  });
+
+  it("turned off, the number comes back and the own yard asks for the real balance", () => {
+    const refresh = vi.fn(() => Promise.resolve({ ok: true }));
+    const store = {
+      caps: null,
+      workers: { total: 1, busy: 0 },
+      jobs: () => [],
+      yard: { kind: "main" },
+      save: {},
+      now: () => 0,
+      isRunning: () => false,
+      subscribe: () => () => undefined,
+      refresh,
+    };
+    const notices = new Notices().mount(document.body);
+    hud.bindYard({ store: store as unknown as YardStore, scene: { selectBuilding: () => {} }, notices });
+    noteShinyLock(true);
+    expect(refresh).not.toHaveBeenCalled();
+
+    noteShinyLock(false);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(lock().hasAttribute("hidden")).toBe(true);
+    expect(value().hidden).toBe(false);
+    hud.setResources({ r1: 1, r2: 1, r3: 1, r4: 1 }, 1_519);
+    expect(value().textContent).toBe("1,519");
+    // The balance arriving is not a gain: nothing floats.
+    expect(document.querySelector(".hud__delta")).toBeNull();
+    hud.bindYard(null);
+    notices.destroy();
   });
 });
