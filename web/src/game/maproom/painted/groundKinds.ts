@@ -87,16 +87,18 @@ export const groundOfHeight = (height: number): Ground => {
 export const LandFeature = { FOREST: 1, ROCKS: 2, MARSH: 3 } as const;
 
 /**
- * A cell's ground: fog, not loaded, or its height band. A forest's ground (seen in a camp's
- * clearing and where the canopy's edge wanders) is lush meadow, unless the cell is high rock or snow.
+ * A cell's ground: fog, not loaded, or its height band, with two changes for mock-up B (MR2 step 11):
+ * - The rock band (170-184 m) is grassy hill top (lush meadow): mock-up B's high ground is bright
+ *   grass, and its rock shows as cliffs at the big drops and as rock fields. Stony ground over every
+ *   high cell read as dull brown patches round the camps up there.
+ * - A forest's ground (seen in a camp's clearing and where the canopy's edge wanders) is the ground
+ *   round it, so a clearing does not show as a darker disc.
  */
 export const groundOf = (cell: MapCell | undefined): Ground => {
   if (cell === undefined) return Ground.UNLOADED;
   if (isFogCell(cell)) return Ground.FOG;
   const ground = groundOfHeight(cell.i);
-  const feature = (cell as { lf?: number }).lf;
-  if (feature === LandFeature.FOREST && (ground === Ground.SAND || ground === Ground.MEADOW)) return Ground.LUSH;
-  return ground;
+  return ground === Ground.ROCK ? Ground.LUSH : ground;
 };
 
 /**

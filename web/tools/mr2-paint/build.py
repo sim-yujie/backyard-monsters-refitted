@@ -94,7 +94,7 @@ def take() -> None:
 # meadow (hills from 140 m, and since step 11 the old rock band 170-184 m too) read as dark olive
 # patches beside it. It moves most of the way to the meadow's own colour (keeping its darker grass
 # blades), so the land reads as one sunny meadow and the hills' light and shade do the rest.
-GRADE_TOWARDS: dict = {}
+GRADE_TOWARDS = {"lush": ((158, 178, 36), 0.75)}
 
 
 def grade(name: str, square: np.ndarray) -> np.ndarray:
