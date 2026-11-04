@@ -34,7 +34,7 @@ export const faq: { q: string; a: string }[] = [
   },
   {
     q: "Will my progress be saved? Will accounts be reset after the beta?",
-    a: "Yes, your progress is saved, and accounts will not be reset when the beta ends. The only exception is a critical bug or lost data that leaves no other fix. The game is still being built, so things may break now and then.",
+    a: "We plan to keep your progress, and we do not plan to reset accounts when the beta ends. A serious exploit or lost data could force a rollback to an earlier save; if that ever happens, we will announce it. The game is still being built, so things may break now and then.",
   },
   {
     q: "How is it different from the original?",
