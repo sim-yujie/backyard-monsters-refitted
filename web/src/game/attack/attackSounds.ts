@@ -206,6 +206,12 @@ export class AttackSounds {
       case "quake":
         this.play("quake", 0.4);
         return;
+      // Each loot orb's plop (`ParticleLoot.as:27`, `ParticleVacuumLoot`):
+      // Flash's "bankland" on every yard, the Inferno's too; the effects
+      // player spaces them (`LOOT_GAP_MS`).
+      case "loot":
+        this.play("loot");
+        return;
       case "hit":
         this.onHit(event);
         return;

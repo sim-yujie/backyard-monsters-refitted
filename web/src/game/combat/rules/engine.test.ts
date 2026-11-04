@@ -1011,6 +1011,47 @@ describe("loot", () => {
     expect(yard.buildings[0]?.looted).toBe(true);
   });
 
+  /** Every loot event of a run, stepping and reading as the battle layer does. */
+  const lootEvents = (battle: ReturnType<typeof createBattle>, ticks: number) => {
+    const seen: Extract<BattleVisualEvent, { kind: "loot" }>[] = [];
+    let last = -1;
+    for (let step = 0; step < ticks && !battle.over(); step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(last)) if (event.kind === "loot") seen.push(event);
+      last = battle.state().tick;
+    }
+    return seen;
+  };
+
+  it("tells the drawing of each take, with what the attacker banks (`ATTACK.as:722-733`)", () => {
+    const yard = yardOf({ "1": { id: 1, t: 1, X: 0, Y: 0, st: 400 } });
+    // Level 10: the low-level bonus (+30%) is in the amounts shown.
+    const battle = createBattle(yard, { seed: 11, playerLevel: 10 });
+    battle.apply({ kind: "fling", t: 0, x: -60, y: -60, r: 40, monsters: { C4: 4 } });
+    const events = lootEvents(battle, 4000);
+    expect(events.length).toBeGreaterThan(1);
+    for (const event of events) {
+      expect(event).toMatchObject({ buildingId: 1, resource: 1, vacuum: false });
+      expect(event.amount).toBeGreaterThan(0);
+    }
+    expect(events.reduce((sum, event) => sum + event.amount, 0)).toBe(battle.state().loot.r1);
+    expect(battle.state().loot.r1).toBeGreaterThan(400);
+  });
+
+  it("tells of a storage building's draws, in the resource each drew", () => {
+    const yard = yardOf({ "1": { id: 1, t: 6, l: 8, X: 0, Y: 0 } });
+    const battle = createBattle(yard, { seed: 11, playerLevel: 20 });
+    battle.apply({ kind: "fling", t: 0, x: -60, y: -60, r: 40, monsters: { C4: 6 } });
+    const events = lootEvents(battle, 1200);
+    expect(events.length).toBeGreaterThan(0);
+    const state = battle.state();
+    for (const resource of [1, 2, 3, 4]) {
+      const key = `r${resource}` as keyof typeof state.loot;
+      const shown = events.filter((event) => event.resource === resource).reduce((sum, event) => sum + event.amount, 0);
+      expect(shown).toBe(state.loot[key]);
+    }
+  });
+
   it("sends a resource specialist at a Storage Silo before a farther full harvester (issue #225)", () => {
     const yard = yardOf({
       "1": { id: 1, t: 6, X: 0, Y: 0 },

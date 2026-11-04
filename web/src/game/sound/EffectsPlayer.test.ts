@@ -1,7 +1,15 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ATTACK_EFFECTS, EFFECTS, EffectsPlayer, GROUP_GAP_MS, MIN_GAP_MS, type EffectsBackend } from "./EffectsPlayer";
+import {
+  ATTACK_EFFECTS,
+  EFFECTS,
+  EffectsPlayer,
+  GROUP_GAP_MS,
+  LOOT_GAP_MS,
+  MIN_GAP_MS,
+  type EffectsBackend,
+} from "./EffectsPlayer";
 import type { GestureTarget } from "./MusicPlayer";
 
 /** A Web Audio stand-in: held back until a press resumes it, files loaded by hand. */
@@ -259,5 +267,39 @@ describe("EffectsPlayer", () => {
     for (const { url } of Object.values(EFFECTS)) expect(existsSync(serverPublic + url), url).toBe(true);
     expect(EFFECTS.ibankfire.url).toBe("/assets/sounds/infernosounds/sound_ibankfire.mp3");
     expect(EFFECTS.ibankland.url).toBe("/assets/sounds/infernosounds/sound_ibankland.mp3");
+  });
+});
+
+describe("EffectsPlayer volume and the loot plop", () => {
+  it("plays every effect at its own volume times the slider's gain; 0 plays nothing", async () => {
+    const { card, clock, player } = await ready();
+    player.setVolume(0.25);
+    clock.now += 1_000;
+    expect(player.play("bankland")).toBe(true);
+    expect(card.starts.at(-1)?.volume).toBeCloseTo(0.8 * 0.25);
+    clock.now += 1_000;
+    player.play("bankland", 0.4);
+    expect(card.starts.at(-1)?.volume).toBeCloseTo(0.1);
+    player.setVolume(0);
+    clock.now += 1_000;
+    expect(player.play("bankland")).toBe(false);
+    player.setVolume(7);
+    expect(player.volume).toBe(1);
+  });
+
+  it("plays the loot orb's plop, Flash's bankland, at most once in its gap", async () => {
+    const { card, clock, player } = await ready();
+    expect(EFFECTS.loot.url).toBe(EFFECTS.bankland.url);
+    player.preload(["loot"]);
+    await card.loadAll();
+    // Twenty buildings looted in one frame: one plop.
+    const started = Array.from({ length: 20 }, () => player.play("loot"));
+    expect(started.filter(Boolean)).toHaveLength(1);
+    clock.now += GROUP_GAP_MS;
+    expect(player.play("loot")).toBe(false);
+    clock.now += LOOT_GAP_MS - GROUP_GAP_MS;
+    expect(player.play("loot")).toBe(true);
+    // The yard's collect plop keeps its own, shorter gap.
+    expect(player.play("bankland")).toBe(true);
   });
 });

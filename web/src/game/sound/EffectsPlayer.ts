@@ -1,4 +1,5 @@
 import { GESTURE_EVENTS, type GestureTarget } from "./MusicPlayer";
+import { sharedAudioContext } from "./soundVolume";
 
 /**
  * Plays the game's short sound effects, the way Flash's `SOUNDS.Play` did
@@ -46,7 +47,17 @@ const INFERNO = "/assets/sounds/infernosounds/";
  * one of a family starts at most once in {@link GROUP_GAP_MS}, so fifty
  * monsters biting at once sound like a fight, not a rattle.
  */
-export type EffectGroup = "hit" | "splat" | "land" | "damage" | "destroy" | "growl" | "magma" | "crack" | "shatter";
+export type EffectGroup =
+  | "hit"
+  | "splat"
+  | "land"
+  | "damage"
+  | "destroy"
+  | "growl"
+  | "magma"
+  | "crack"
+  | "shatter"
+  | "loot";
 
 export interface EffectFile {
   readonly url: string;
@@ -63,6 +74,9 @@ export interface EffectFile {
 const effects = {
   bankfire: { url: `${UI}sound_bankfire.mp3`, volume: 0.8 },
   bankland: { url: `${UI}sound_bankland.mp3`, volume: 0.8 },
+  // An attack's loot orb (`ParticleLoot.as:27`): Flash's same plop, kept to
+  // one per LOOT_GAP_MS so twenty buildings looted at once are not twenty.
+  loot: { url: `${UI}sound_bankland.mp3`, volume: 0.8, attack: true, group: "loot" },
   ibankfire: { url: `${INFERNO}sound_ibankfire.mp3`, volume: 0.8 },
   ibankland: { url: `${INFERNO}sound_ibankland.mp3`, volume: 0.8 },
   // The Monster Juicer blending (`BUILDING9.as:79-81`) and a giblet landing (`GIBLET.as:58`).
@@ -159,6 +173,15 @@ export const MIN_GAP_MS = 50;
 /** The least time between two starts of one {@link EffectGroup}: about ten a second. */
 export const GROUP_GAP_MS = 100;
 
+/**
+ * The loot plop's own gap: about seven a second. Flash let one sound start
+ * three times at once and then once a frame (`SOUNDS.as:245-246`), which a
+ * swarm on a storage building turned into a buzz.
+ */
+export const LOOT_GAP_MS = 150;
+
+const groupGap = (group: EffectGroup): number => (group === "loot" ? LOOT_GAP_MS : GROUP_GAP_MS);
+
 /** The sound card, as the player uses it: Web Audio in the browser, a stand-in in tests. */
 export interface EffectsBackend {
   /** False while the browser holds sound back (suspended, or interrupted on iOS). */
@@ -178,12 +201,10 @@ export interface EffectsPlayerOptions {
   readonly now?: () => number;
 }
 
-type WebkitWindow = typeof globalThis & { webkitAudioContext?: typeof AudioContext };
-
 const webAudio = (): EffectsBackend | null => {
-  const Context = globalThis.AudioContext ?? (globalThis as WebkitWindow).webkitAudioContext;
-  if (!Context) return null;
-  const context = new Context();
+  // Shared with the music on iPhones (`soundVolume.ts`), so one press lets both out.
+  const context = sharedAudioContext();
+  if (!context) return null;
   return {
     get running() {
       return context.state === "running";
@@ -222,6 +243,8 @@ export class EffectsPlayer {
   private readonly lastGroupStart = new Map<EffectGroup, number>();
   private enabled = false;
   private waitingForGesture = false;
+  /** The effects slider's gain (`soundVolume.ts`), times each effect's own volume. */
+  private scale = 1;
 
   constructor(options: EffectsPlayerOptions = {}) {
     this.createBackend = options.createBackend ?? webAudio;
@@ -241,6 +264,16 @@ export class EffectsPlayer {
     return this.waitingForGesture;
   }
 
+  /** The effects slider, as a gain 0-1 (`volumeGain`); 0 plays nothing. */
+  setVolume(gain: number): void {
+    this.scale = Math.min(1, Math.max(0, Number.isFinite(gain) ? gain : 0));
+  }
+
+  /** The slider's gain as set. */
+  get volume(): number {
+    return this.scale;
+  }
+
   /**
    * Fetches `effects` now, ahead of their first play: an attack's sounds as
    * the attack opens, so the game's first load stays small. With sound
@@ -257,7 +290,7 @@ export class EffectsPlayer {
    * (off, held back, not loaded yet, or it or its family just played).
    */
   play(effect: Effect, volume?: number): boolean {
-    if (!this.enabled) return false;
+    if (!this.enabled || this.scale <= 0) return false;
     const backend = this.open();
     if (!backend) return false;
     if (!backend.running) {
@@ -275,10 +308,10 @@ export class EffectsPlayer {
     if (last !== undefined && now - last < MIN_GAP_MS) return false;
     const group = file.group;
     const lastOfGroup = group === undefined ? undefined : this.lastGroupStart.get(group);
-    if (lastOfGroup !== undefined && now - lastOfGroup < GROUP_GAP_MS) return false;
+    if (group !== undefined && lastOfGroup !== undefined && now - lastOfGroup < groupGap(group)) return false;
     this.lastStart.set(effect, now);
     if (group !== undefined) this.lastGroupStart.set(group, now);
-    backend.start(sound, volume ?? file.volume);
+    backend.start(sound, (volume ?? file.volume) * this.scale);
     return true;
   }
 

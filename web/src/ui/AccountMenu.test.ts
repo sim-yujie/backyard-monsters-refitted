@@ -9,9 +9,13 @@ import {
   SOUND_SAVE_FAILED,
   accountName,
   levelText,
-  soundSwitchText,
 } from "./AccountMenu";
-import { loadSoundSwitches, resetSoundSwitchesForTest } from "@/game/sound/soundSwitches";
+import {
+  loadSoundSwitches,
+  resetSoundSwitchesForTest,
+  type SoundSwitches,
+} from "@/game/sound/soundSwitches";
+import { UNMUTE_LEVEL, muteLabel } from "./SoundSliders";
 
 describe("AccountMenu", () => {
   let menu: AccountMenu | null = null;
@@ -366,8 +370,8 @@ describe("AccountMenu stacking", () => {
   });
 });
 
-/** The two sound switches beside "Reduce effects" (beta.5). */
-describe("AccountMenu sound switches", () => {
+/** The sound rows beside "Reduce effects": a mute and a slider each (owner, 4 Nov 2026). */
+describe("AccountMenu sound rows", () => {
   let menu: AccountMenu | null = null;
 
   afterEach(() => {
@@ -376,7 +380,7 @@ describe("AccountMenu sound switches", () => {
     resetSoundSwitchesForTest();
   });
 
-  const build = async (stored: { music: boolean; effects: boolean }, failSave = false) => {
+  const build = async (stored: SoundSwitches, failSave = false) => {
     const saves: unknown[] = [];
     resetSoundSwitchesForTest({
       account: () => 7,
@@ -386,44 +390,78 @@ describe("AccountMenu sound switches", () => {
         if (failSave) throw new Error("offline");
         return { ...stored, ...change };
       },
+      later: (run) => {
+        run();
+        return () => {};
+      },
     });
     menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn() });
     document.body.append(menu.element);
-    const music = menu.element.querySelector<HTMLButtonElement>(".account-menu__sound--music")!;
-    const effects = menu.element.querySelector<HTMLButtonElement>(".account-menu__sound--effects")!;
-    return { saves, music, effects };
+    const rows = menu.element.querySelector<HTMLElement>(".account-menu__sound")!;
+    const part = (which: string) => ({
+      mute: rows.querySelector<HTMLButtonElement>(`.sound-sliders__row--${which} .sound-sliders__mute`)!,
+      slider: rows.querySelector<HTMLInputElement>(`.sound-sliders__row--${which} .sound-sliders__slider`)!,
+      number: rows.querySelector<HTMLOutputElement>(`.sound-sliders__row--${which} .sound-sliders__number`)!,
+    });
+    return { saves, rows, music: part("music"), effects: part("effects") };
   };
 
-  it("sit right after Reduce effects, greyed until the account's switches are known", async () => {
-    const { music, effects } = await build({ music: false, effects: true });
-    expect(music.previousElementSibling?.classList.contains("account-menu__effects")).toBe(true);
-    expect(effects.previousElementSibling).toBe(music);
-    expect(music.getAttribute("role")).toBe("menuitemcheckbox");
-    expect(music.disabled).toBe(true);
+  const ON = { music: true, effects: true, musicVolume: 70, effectsVolume: 100 };
+
+  it("sit right after Reduce effects, greyed until the account's settings are known", async () => {
+    const { rows, music, effects } = await build({ ...ON, music: false });
+    expect(rows.previousElementSibling?.classList.contains("account-menu__effects")).toBe(true);
+    expect(music.mute.disabled).toBe(true);
+    expect(music.slider.disabled).toBe(true);
     await loadSoundSwitches();
-    expect(music.disabled).toBe(false);
-    expect(music.textContent).toBe("Music: Off");
-    expect(music.getAttribute("aria-checked")).toBe("false");
-    expect(effects.textContent).toBe("Sound effects: On");
+    expect(music.mute.disabled).toBe(false);
+    expect(music.mute.getAttribute("aria-pressed")).toBe("true");
+    expect(music.mute.getAttribute("aria-label")).toBe(muteLabel("Music", false));
+    expect(music.slider.value).toBe("70");
+    expect(music.number.textContent).toBe("70");
+    expect(effects.mute.getAttribute("aria-pressed")).toBe("false");
+    expect(effects.number.textContent).toBe("100");
   });
 
-  it("a press flips the switch at once and saves only it", async () => {
-    const { saves, music, effects } = await build({ music: true, effects: true });
+  it("the mute flips the switch at once and saves only it", async () => {
+    const { saves, music, effects } = await build(ON);
     await loadSoundSwitches();
-    effects.click();
-    expect(effects.textContent).toBe("Sound effects: Off");
+    effects.mute.click();
+    expect(effects.mute.getAttribute("aria-pressed")).toBe("true");
     await Promise.resolve();
     expect(saves).toEqual([{ effects: false }]);
-    expect(music.textContent).toBe("Music: On");
+    expect(music.mute.getAttribute("aria-pressed")).toBe("false");
+    // The slider keeps its place while muted.
+    expect(effects.slider.value).toBe("100");
+  });
+
+  it("moving a slider changes the volume; moving a muted one turns it back on", async () => {
+    const { saves, music } = await build({ ...ON, music: false });
+    await loadSoundSwitches();
+    music.slider.value = "35";
+    music.slider.dispatchEvent(new Event("input"));
+    expect(music.number.textContent).toBe("35");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(saves).toContainEqual({ musicVolume: 35 });
+    expect(saves).toContainEqual({ music: true });
+  });
+
+  it("unmuting a row left at 0 puts it at the middle, so the press is heard", async () => {
+    const { saves, effects } = await build({ ...ON, effectsVolume: 0 });
+    await loadSoundSwitches();
+    expect(effects.mute.getAttribute("aria-pressed")).toBe("true");
+    effects.mute.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(saves).toEqual([{ effectsVolume: UNMUTE_LEVEL }]);
+    expect(effects.number.textContent).toBe(String(UNMUTE_LEVEL));
   });
 
   it("a failed save puts it back and says so on hover", async () => {
-    const { music } = await build({ music: true, effects: true }, true);
+    const { music } = await build(ON, true);
     await loadSoundSwitches();
-    music.click();
+    music.mute.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(music.textContent).toBe("Music: On");
-    expect(music.title).toBe(SOUND_SAVE_FAILED);
-    expect(soundSwitchText("Music", false)).toBe("Music: Off");
+    expect(music.mute.getAttribute("aria-pressed")).toBe("false");
+    expect(music.mute.title).toBe(SOUND_SAVE_FAILED);
   });
 });

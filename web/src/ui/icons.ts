@@ -76,6 +76,15 @@ const ICONS = {
   // A speaker with its sound waves, and crossed out: the yard's music button (beta.5).
   speaker: ["M3.5 9.5h4l5-4.5v14l-5-4.5h-4z", "M16 9a4.2 4.2 0 0 1 0 6", "M18.5 6.5a7.8 7.8 0 0 1 0 11"],
   speakerOff: ["M3.5 9.5h4l5-4.5v14l-5-4.5h-4z", "M16 9.5l5 5", "M21 9.5l-5 5"],
+  // A music note, and struck through: the music slider's mute (owner, 4 Nov 2026).
+  note: ["M9 17.5V5.5l10-2v12", { circle: [6.5, 17.5, 2.5] }, { circle: [16.5, 15.5, 2.5] }],
+  noteOff: ["M9 17.5V5.5l10-2v12", { circle: [6.5, 17.5, 2.5] }, { circle: [16.5, 15.5, 2.5] }, "M3.5 3.5l17 17"],
+  // A bang, and struck through: the sound effects slider's mute.
+  burst: ["M12 3l1.9 4.6 4.6-1.9-1.9 4.6L21 12l-4.4 1.7 1.9 4.6-4.6-1.9L12 21l-1.9-4.6-4.6 1.9 1.9-4.6L3 12l4.4-1.7-1.9-4.6 4.6 1.9z"],
+  burstOff: [
+    "M12 3l1.9 4.6 4.6-1.9-1.9 4.6L21 12l-4.4 1.7 1.9 4.6-4.6-1.9L12 21l-1.9-4.6-4.6 1.9 1.9-4.6L3 12l4.4-1.7-1.9-4.6 4.6 1.9z",
+    "M3.5 3.5l17 17",
+  ],
 } as const satisfies Record<string, readonly Shape[]>;
 
 export type IconName = keyof typeof ICONS;

@@ -222,3 +222,87 @@ describe("MusicPlayer", () => {
     expect(page.audios.every((audio) => audio.paused)).toBe(true);
   });
 });
+
+describe("MusicPlayer volume (the music slider)", () => {
+  it("plays each tune at its Flash volume times the slider's gain, and follows a move at once", async () => {
+    const page = new FakePage();
+    const player = page.player();
+    player.setVolume(0.49);
+    player.want("attack");
+    player.setEnabled(true);
+    await settle();
+    const audio = page.audios[0]!;
+    expect(audio.volume).toBeCloseTo(TUNES.attack.volume * 0.49);
+    player.setVolume(1);
+    expect(audio.volume).toBeCloseTo(TUNES.attack.volume);
+    player.setVolume(Number.NaN);
+    expect(audio.volume).toBe(0);
+    player.destroy();
+  });
+
+  it("fades out from the level it set, in steps", async () => {
+    const page = new FakePage();
+    const player = page.player();
+    player.setVolume(0.25);
+    player.want("attack");
+    player.setEnabled(true);
+    await settle();
+    const audio = page.audios[0]!;
+    player.setEnabled(false);
+    // 0.7 x 0.25 = 0.175: four steps of 0.05 down, then paused.
+    page.tick(3);
+    expect(audio.paused).toBe(false);
+    expect(audio.volume).toBeCloseTo(0.05);
+    page.tick(1);
+    expect(audio.paused).toBe(true);
+    // A move while it fades leaves the fade alone.
+    player.setVolume(1);
+    expect(audio.volume).toBeCloseTo(0.05);
+    player.destroy();
+  });
+
+  it("where the page's volume is ignored, sets the level on the route's gain and resumes it in the press", async () => {
+    const page = new FakePage();
+    const levels: number[] = [];
+    let running = false;
+    let resumes = 0;
+    const player = new MusicPlayer({
+      canPlayOgg: false,
+      createAudio: (url) => {
+        const audio = new FakeAudio(url, page);
+        page.audios.push(audio);
+        return audio;
+      },
+      gestures: page,
+      setInterval: () => ({ live: true }),
+      clearInterval: () => {},
+      route: () => ({
+        setLevel: (level) => levels.push(level),
+        get running() {
+          return running;
+        },
+        resume: () => {
+          resumes += 1;
+        },
+      }),
+    });
+    player.setVolume(0.49);
+    player.want("attack");
+    player.setEnabled(true);
+    await settle();
+    const audio = page.audios[0]!;
+    expect(audio.volume).toBe(1);
+    expect(levels.at(-1)).toBeCloseTo(TUNES.attack.volume * 0.49);
+    // The element plays, but into a context still held back: it waits for a press.
+    expect(resumes).toBe(1);
+    expect(page.listening()).toBeGreaterThan(0);
+    running = true;
+    page.press();
+    await settle();
+    expect(resumes).toBe(2);
+    expect(page.listening()).toBe(0);
+    player.setVolume(1);
+    expect(levels.at(-1)).toBeCloseTo(TUNES.attack.volume);
+    player.destroy();
+  });
+});
