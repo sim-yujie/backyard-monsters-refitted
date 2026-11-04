@@ -76,6 +76,16 @@ const hit = (creepId: number, target: { building?: number; creep?: number }, ran
 });
 
 describe("attack sounds", () => {
+  it("plops Flash's bankland for each loot orb, on an Inferno yard too (`ParticleLoot.as:27`)", () => {
+    for (const inferno of [false, true]) {
+      const { sounds, effects } = world({ inferno });
+      sounds.onEvent({ kind: "loot", tick: 1, buildingId: 30, resource: 1, amount: 12, vacuum: false });
+      sounds.onEvent({ kind: "loot", tick: 2, buildingId: 14, resource: 2, amount: 625, vacuum: true });
+      expect(effects()).toEqual(["loot", "loot"]);
+    }
+    expect(EFFECTS.loot.url).toBe(EFFECTS.bankland.url);
+  });
+
   it("plays each tower's own Flash shot", () => {
     const { sounds, effects } = world();
     for (const id of [1, 2, 3, 4, 5, 6, 7, 8, 10]) sounds.onEvent(shot(id));

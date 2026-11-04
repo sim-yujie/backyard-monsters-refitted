@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
-import { loadSoundSwitches, resetSoundSwitchesForTest, soundSwitches } from "@/game/sound/soundSwitches";
+import {
+  loadSoundSwitches,
+  resetSoundSwitchesForTest,
+  soundSwitches,
+  type SoundSwitches,
+} from "@/game/sound/soundSwitches";
 import { MusicButton, musicButtonLabel } from "./MusicButton";
 
 describe("MusicButton", () => {
@@ -12,7 +17,7 @@ describe("MusicButton", () => {
     resetSoundSwitchesForTest();
   });
 
-  const build = (stored: { music: boolean; effects: boolean }) => {
+  const build = (stored: SoundSwitches) => {
     const saves: unknown[] = [];
     resetSoundSwitchesForTest({
       account: () => 7,

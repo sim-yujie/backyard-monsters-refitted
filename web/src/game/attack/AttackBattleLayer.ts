@@ -68,6 +68,7 @@ import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./mon
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
 import { StatusIconRow, TowerStatusIcons, statusesOf } from "./statusIcons";
 import { aimLift, BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
+import { LootFx } from "./lootFx";
 import { SiegeFx, type SiegeArt } from "./siegeFx";
 import { TrapReveal } from "./trapReveal";
 import { WALK_OFF_PAUSE_TICKS, WALK_OFF_TICKS, planWalkOff, walkOffAt, type WalkOff } from "./walkOff";
@@ -898,6 +899,8 @@ export class AttackBattleLayer {
 
   /** Projectiles, smoke and damage numbers (#63, #68); its root sits last in the overlay. */
   private readonly fx: CreepFx;
+  /** Loot orbs and loot numbers (`ParticleLoot`, `ParticleText`). */
+  private readonly lootFx: LootFx;
   /** The damage step each building was last seen at, for the smoke on a crossing. */
   private readonly smokeStep = new Map<number, number>();
   private smokePrimed = false;
@@ -1085,6 +1088,21 @@ export class AttackBattleLayer {
         this.session.battle()?.siege().jars.some((jar) => jar.buildingId === id && jar.health !== null) ?? false,
       ...(options.random ? { random: options.random } : {}),
     });
+    this.lootFx = new LootFx(
+      {
+        air: () => this.airLayer(),
+        labels: () => this.overlay,
+        building: (id) => buildingOf.get(id) ?? null,
+        zoom: () => this.host.zoom ?? 1,
+      },
+      {
+        // Flash's `param1 += 4` keys on the yard, not on who attacks it.
+        inferno: combatKind(this.session.target) === "inferno",
+        raided: this.session.raiding,
+        classicFont: this.classic,
+        reducedMotion: this.reducedMotion,
+      },
+    );
   }
 
   /**
@@ -1114,6 +1132,7 @@ export class AttackBattleLayer {
       const seen = this.syncCreeps(live, tick);
       for (const event of battle.recentEvents(this.lastEventTick)) {
         this.sounds.onEvent(event);
+        this.lootFx.onEvent(event);
         this.onEvent(event);
       }
       this.lastEventTick = tick;
@@ -1137,6 +1156,7 @@ export class AttackBattleLayer {
     const siege = battle.siege();
     if (!this.settled) this.sounds.onSiege(siege, tick);
     this.siegeFx.update(siege, shown);
+    this.lootFx.update(shown);
     this.showBombNumbers(shown);
     this.towerStatus.sync(battle.weakenedTowers());
 
@@ -1407,6 +1427,7 @@ export class AttackBattleLayer {
     this.fx.destroy();
     this.bombFx.destroy();
     this.siegeFx.destroy();
+    this.lootFx.destroy();
     this.heldBombHp.clear();
     this.rains.clear();
     this.bombNumbers.clear();

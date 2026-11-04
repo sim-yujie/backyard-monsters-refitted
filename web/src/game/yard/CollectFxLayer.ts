@@ -31,9 +31,11 @@ import type { HarvestKey } from "./harvest";
 
 /**
  * A ball's picture: a resource's, or `magma`, the ball the Monster Juicer
- * throws for an Inferno monster (`BUILDING9.as:66`, `_lastType` 8).
+ * throws for an Inferno monster (`BUILDING9.as:66`, `_lastType` 8). `bone`,
+ * `coal` and `sulfur` are frames 5-7, the Inferno's other three, which an
+ * attack's loot orbs show on an Inferno yard (`ATTACK.as:723-725`).
  */
-export type PackageDot = HarvestKey | "magma";
+export type PackageDot = HarvestKey | "bone" | "coal" | "sulfur" | "magma";
 
 /** The ball of each resource, and the shadow they share. */
 export interface CollectFxArt {
@@ -83,6 +85,20 @@ const DOT_STYLES: Readonly<Record<PackageDot, DotStyle>> = {
   r4: resourceDot([
     [2, 36, 253, 36],
     [255, 2, 101, 1],
+  ]),
+  // Frames 5-7 (shapes 1807-1809), sampled from their pictures.
+  bone: resourceDot([
+    [0, 255, 250, 235],
+    [255, 140, 118, 60],
+  ]),
+  coal: resourceDot([
+    [0, 215, 210, 200],
+    [130, 22, 22, 20],
+    [255, 0, 0, 0],
+  ]),
+  sulfur: resourceDot([
+    [0, 250, 255, 47],
+    [255, 178, 162, 0],
   ]),
   magma: {
     stops: [

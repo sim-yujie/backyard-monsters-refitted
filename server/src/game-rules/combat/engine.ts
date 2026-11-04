@@ -1154,6 +1154,23 @@ export type BattleVisualEvent =
       readonly flying: boolean;
       readonly ix: number;
       readonly iy: number;
+    }
+  | {
+      /**
+       * Loot taken from a building by a hit or its fall (`ATTACK.Loot` with a
+       * building, `ATTACK.as:722-733`): the drawing pops an orb and a number
+       * there. `amount` is what the attacker banks, the low-level bonus in;
+       * `resource` is 1-4. `vacuum`: the Vacuum Hose took it, whose own ball
+       * is drawn by the hose (`ParticleVacuumLoot`), so only the number shows.
+       * A storage building's fall passes no building in Flash
+       * (`BSTORAGE.as:140`), so it makes none.
+       */
+      readonly kind: "loot";
+      readonly tick: number;
+      readonly buildingId: number;
+      readonly resource: number;
+      readonly amount: number;
+      readonly vacuum: boolean;
     };
 
 /** A beam's line, yard units at both ends. */
@@ -2218,10 +2235,17 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /* ── Damage and loot ───────────────────────────────────────────────────── */
 
   /** `ATTACK.Loot`: the low-level bonus, one whole gain at a time. */
-  const creditLoot = (resource: number, amount: number): void => {
-    if (amount <= 0) return;
+  const creditLoot = (resource: number, amount: number): number => {
+    if (amount <= 0) return 0;
     const key = `r${resource}` as keyof ResourceAmounts;
-    loot[key] += withLowLevelBonus(amount, playerLevel);
+    const credited = withLowLevelBonus(amount, playerLevel);
+    loot[key] += credited;
+    return credited;
+  };
+
+  /** The orb and number of a building's loot, when there was some to show. */
+  const showLoot = (buildingId: number, resource: number, amount: number, vacuum = false): void => {
+    if (amount > 0) visual.push({ kind: "loot", tick, buildingId, resource, amount, vacuum });
   };
 
   /**
@@ -2271,7 +2295,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       defenderLoss[key] += taken;
       let credited = Math.trunc(taken * storageHitScalar);
       if (wildMonsterAttack) credited = Math.trunc(credited / WILD_MONSTER_LOOT_DIVISOR);
-      creditLoot(picked, credited);
+      showLoot(building.id, picked, creditLoot(picked, credited));
       return;
     }
     // A harvester: its own buffer, its own resource, no scalar.
@@ -2286,7 +2310,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // storage hit or fall reads it.
     if (yard.kind === "outpost") yard.resources[key] = Math.max(0, yard.resources[key] - taken);
     defenderLoss[key] += taken;
-    creditLoot(building.type, taken);
+    showLoot(building.id, building.type, creditLoot(building.type, taken));
   };
 
   /**
@@ -3677,7 +3701,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     yard.resources[key] -= taken;
     defenderLoss[key] += taken;
     const credited = wildMonsterAttack ? Math.trunc(taken / WILD_MONSTER_LOOT_DIVISOR) : taken;
-    creditLoot(picked, credited);
+    showLoot(hose.target.id, picked, creditLoot(picked, credited), true);
     hose.looted += credited;
   };
 
