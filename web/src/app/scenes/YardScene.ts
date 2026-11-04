@@ -1486,6 +1486,7 @@ export class YardScene implements Scene {
                 title: plannerEntryTooltip(this.access),
                 open: () => this.togglePlanner(),
               },
+              upgradeWalls: (id: number) => this.openWallPick(id),
             }),
       }).mount(dock);
     }
@@ -2077,6 +2078,15 @@ export class YardScene implements Scene {
    * is why entering is instant on a 575-building yard and why leaving cannot
    * leave anything half-drawn — the sprites go back to the save's positions.
    */
+  /**
+   * A wall pop-up's Upgrade walls (owner, 2026-11-04): the planner, open on
+   * its wall picking with that wall already picked.
+   */
+  private openWallPick(id: number): void {
+    if (!this.planner) this.togglePlanner();
+    this.planner?.startWallPick([id]);
+  }
+
   private togglePlanner(): void {
     if (this.planner) {
       this.planner.requestExit();

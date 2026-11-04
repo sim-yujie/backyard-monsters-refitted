@@ -147,7 +147,11 @@ afterEach(() => {
  * being dropped rather than about where anything lands.
  */
 const planner = (
-  options: { readOnly?: boolean; buildings?: readonly BuildingData[] } = {},
+  options: {
+    readOnly?: boolean;
+    buildings?: readonly BuildingData[];
+    onWallPickCancel?: () => void;
+  } = {},
 ): Harness => {
   const yard = yardOf(options.buildings ?? BUILDINGS);
   const canvas = document.createElement("canvas");
@@ -253,6 +257,7 @@ const planner = (
       taps++;
     },
     ...(options.readOnly === undefined ? {} : { readOnly: options.readOnly }),
+    ...(options.onWallPickCancel ? { onWallPickCancel: options.onWallPickCancel } : {}),
   });
   session.attach();
 
@@ -1912,5 +1917,157 @@ describe("a layout with buildings in the drawer", () => {
     expect(at(harness, 2)).toEqual({ x: 200, y: 0 });
     expect(stillOccupies(harness, 2, 1)).toBe(true);
     expect(harness.session.state().dirty).toBe(true);
+  });
+});
+
+/* ── Upgrade walls: picking (owner, 2026-11-04) ───────────────────────────── */
+
+describe("wall picking", () => {
+  /** Two towers, and three walls: one far off, two beside the towers. */
+  const WALLED: readonly BuildingData[] = [
+    ...BUILDINGS,
+    { id: 4, t: 17, X: 0, Y: 100 },
+    { id: 5, t: 17, X: 40, Y: 100 },
+  ];
+  const WALL_3 = tileCentre(17, -300, -300);
+  const WALL_4 = tileCentre(17, 0, 100);
+
+  const picking = (cancel?: () => void): Harness => {
+    const harness = planner(
+      cancel ? { buildings: WALLED, onWallPickCancel: cancel } : { buildings: WALLED },
+    );
+    harness.session.setWallPick(true);
+    harness.session.setTool(PlannerTool.BOX);
+    return harness;
+  };
+
+  const sorted = (harness: Harness): number[] =>
+    harness.session.selectedIds().sort((a, b) => a - b);
+
+  it("picks only the walls a box touches, and moves nothing", () => {
+    const harness = picking();
+
+    harness.press(blueprintToWorld(-50, -50));
+    harness.drag(blueprintToWorld(300, 150));
+    // Live while the box is drawn, walls only.
+    expect(sorted(harness)).toEqual([4, 5]);
+    harness.release(blueprintToWorld(300, 150));
+
+    expect(sorted(harness)).toEqual([4, 5]);
+    expect(harness.session.state().wallPicking).toBe(true);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(harness.session.state().dirty).toBe(false);
+  });
+
+  it("adds each new box to the pick rather than replacing it", () => {
+    const harness = picking();
+
+    harness.press(blueprintToWorld(-50, 50));
+    harness.drag(blueprintToWorld(100, 150));
+    harness.release(blueprintToWorld(100, 150));
+    harness.press(blueprintToWorld(-350, -350));
+    harness.drag(blueprintToWorld(-250, -250));
+    harness.release(blueprintToWorld(-250, -250));
+
+    expect(sorted(harness)).toEqual([3, 4, 5]);
+  });
+
+  it("takes a wall in or out with a click, and ignores a click on anything else", () => {
+    const harness = picking();
+
+    harness.click(WALL_3);
+    harness.click(WALL_4);
+    expect(sorted(harness)).toEqual([3, 4]);
+
+    harness.click(WALL_4);
+    harness.click(ONE);
+    harness.click(GROUND);
+    expect(sorted(harness)).toEqual([3]);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(harness.session.state().carrying).toBe(false);
+  });
+
+  it("draws the box with one finger, without Shift", () => {
+    const harness = picking();
+
+    harness.press(blueprintToWorld(-50, -50), finger(1));
+    harness.drag(blueprintToWorld(300, 150));
+    harness.release(blueprintToWorld(300, 150), finger(1));
+
+    expect(sorted(harness)).toEqual([4, 5]);
+  });
+
+  it("puts the pick back when a second finger turns the box into a pinch", () => {
+    const harness = picking();
+    harness.session.selectOnly([3]);
+
+    harness.press(blueprintToWorld(-50, -50), finger(1));
+    harness.drag(blueprintToWorld(300, 150));
+    harness.press(blueprintToWorld(400, 300), finger(2));
+
+    expect(sorted(harness)).toEqual([3]);
+  });
+
+  it("with Select, a tap picks a wall and bare ground is left to the camera", () => {
+    vi.useFakeTimers();
+    try {
+      const harness = picking();
+      harness.session.setTool(PlannerTool.SELECT);
+      const seen = reachedCanvas(harness);
+
+      harness.click(WALL_4, finger(1));
+      harness.click(ONE, finger(1));
+      expect(sorted(harness)).toEqual([4]);
+
+      // A long press on a wall never lifts it while picking.
+      harness.press(WALL_4, finger(1));
+      vi.advanceTimersByTime(2000);
+      harness.release(WALL_4, finger(1));
+      expect(harness.session.state().carrying).toBe(false);
+      expect(seen.length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("Select all picks every wall; entering keeps only the walls of a selection", () => {
+    const harness = planner({ buildings: WALLED });
+    harness.session.selectOnly([1, 2, 4]);
+    harness.session.setWallPick(true);
+    expect(sorted(harness)).toEqual([4]);
+
+    harness.session.pickAllWalls();
+    expect(sorted(harness)).toEqual([3, 4, 5]);
+    expect(harness.session.wallCount()).toBe(3);
+
+    // Find's rows pick the walls among what they name.
+    harness.session.selectOnly([1, 5]);
+    expect(sorted(harness)).toEqual([5]);
+  });
+
+  it("Escape asks the owner to end the mode instead of clearing the pick", () => {
+    const cancel = vi.fn();
+    const harness = picking(cancel);
+    harness.session.selectOnly([3, 4]);
+
+    harness.key("Escape");
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(sorted(harness)).toEqual([3, 4]);
+  });
+
+  it("swallows the keys that would move or store the pick", () => {
+    const harness = picking();
+    harness.session.selectOnly([4]);
+
+    harness.key("ArrowRight");
+    harness.key("Delete");
+    expect(at(harness, 4)).toEqual({ x: 0, y: 100 });
+    expect(harness.session.state().storedCount).toBe(0);
+  });
+
+  it("is refused to a read-only session", () => {
+    const harness = planner({ buildings: WALLED, readOnly: true });
+    harness.session.setWallPick(true);
+    expect(harness.session.state().wallPicking).toBe(false);
   });
 });

@@ -57,6 +57,7 @@ const stateOf = (overrides: Partial<PlannerState> = {}): PlannerState => ({
   view: YardView.BLUEPRINT,
   previewing: false,
   readOnly: false,
+  wallPicking: false,
   ...overrides,
 });
 
@@ -427,6 +428,12 @@ describe("the read-only bar", () => {
     expect(bar.actionBar.querySelector(".planner-bar__summary")?.textContent).toBe(
       "3 selected · 0 moved · read-only · nothing here can be moved",
     );
+  });
+
+  it("never offers Upgrade walls, which would change the yard", () => {
+    const bar = mount({ readOnly: true });
+    bar.setWallCount(12);
+    expect(labels(bar)).not.toContain("Upgrade walls");
   });
 
   it("cannot be talked back into enabling an action", () => {
@@ -1012,5 +1019,41 @@ describe("the phone layout (#45)", () => {
     expect(texts(bar.moreElement, ".planner-more__list > .btn")).toEqual(["Find", "Help"]);
     expect(texts(bar.moreElement, ".planner-menu__item")).not.toContain("Clear yard");
     expect(texts(bar.actionBar)).not.toContain("Apply");
+  });
+});
+
+/* ── Upgrade walls: pressed first, walls picked after (owner, 2026-11-04) ─── */
+
+describe("PlannerBar Upgrade walls", () => {
+  const wallsButton = (bar: PlannerBar): HTMLButtonElement => {
+    const found = bar.actionBar.querySelector<HTMLButtonElement>(".planner-bar__walls");
+    if (!found) throw new Error("no Upgrade walls button");
+    return found;
+  };
+
+  it("is live whenever the yard has walls, with nothing selected", () => {
+    const { bar, fired } = mountWith();
+    bar.update(stateOf());
+    bar.setWallCount(0);
+    expect(wallsButton(bar).disabled).toBe(true);
+
+    bar.setWallCount(30);
+    expect(wallsButton(bar).disabled).toBe(false);
+    wallsButton(bar).click();
+    expect(fired.onUpgradeWalls).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows pressed while walls are picked, and the summary counts the pick", () => {
+    const bar = mount();
+    bar.setWallCount(30);
+    bar.update(stateOf({ wallPicking: true, selectionCount: 12 }));
+
+    expect(wallsButton(bar).getAttribute("aria-pressed")).toBe("true");
+    expect(bar.actionBar.querySelector(".planner-bar__summary")?.textContent).toBe(
+      "12 walls picked · drag a box or click walls, Esc to stop",
+    );
+
+    bar.update(stateOf());
+    expect(wallsButton(bar).getAttribute("aria-pressed")).toBe("false");
   });
 });

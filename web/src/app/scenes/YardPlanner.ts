@@ -16,13 +16,19 @@ import {
   upgradeWalls as postWallUpgrade,
 } from "@/api/yardplanner";
 import type { Camera } from "@/game/Camera";
-import { TRAP_TYPES, WALL_TYPES } from "@/game/yard/buildingCosts";
+import { TRAP_TYPES } from "@/game/yard/buildingCosts";
 import { blueprintToWorld } from "@/game/yard/planner/blueprint";
 import { GROUP_OPS } from "@/game/yard/planner/groupTools";
 import type { Checklist } from "@/game/yard/planner/checklist";
 import type { LoadMiss } from "@/game/yard/planner/layout";
 import type { PlanNode } from "@/game/yard/planner/placement";
-import { GroupRefusal, PlannerSession, type GroupOutcome, type PlannerState } from "@/game/yard/planner/PlannerSession";
+import {
+  GroupRefusal,
+  PlannerSession,
+  PlannerTool,
+  type GroupOutcome,
+  type PlannerState,
+} from "@/game/yard/planner/PlannerSession";
 import {
   CentreMarker,
   loadOverlays,
@@ -73,7 +79,7 @@ import {
 } from "@/ui/yard/PlannerHelp";
 import { SearchPanel } from "@/ui/yard/SearchPanel";
 import { describeCost } from "@/ui/yard/upgradeText";
-import { wallUpgradePanel } from "@/ui/yard/WallUpgradePanel";
+import { wallUpgradePanel, type WallUpgradePanel } from "@/ui/yard/WallUpgradePanel";
 import { YardPlannerLayouts } from "./YardPlannerLayouts";
 
 /**
@@ -278,6 +284,12 @@ export class YardPlanner {
   private notice: HTMLElement | null = null;
   private applying = false;
   private batching = false;
+  /** The Upgrade walls panel while walls are being picked, or null. */
+  private wallPanel: WallUpgradePanel | null = null;
+  /** The tool to give back when wall picking ends: the mode turns Box on. */
+  private toolBeforePick: PlannerTool | null = null;
+  /** The pick the wall panel last drew, so a still box redraws nothing. */
+  private wallPickKey = "";
 
   /** The yard as the server last told us it is. Replaced by `rebase`. */
   private yard: Yard;
@@ -379,6 +391,7 @@ export class YardPlanner {
       onRanges: () => this.toggleOverlay("ranges"),
       onGroup: (outcome) => this.reportGroupTool(outcome),
       onTap: () => this.tapped(),
+      onWallPickCancel: () => this.endWallPick(),
       readOnly: this.readOnly,
       insets: () => this.insets,
     });
@@ -421,7 +434,7 @@ export class YardPlanner {
         void this.layouts.toggle();
       },
       onChecklist: () => this.showChecklist(),
-      onUpgradeWalls: () => this.showWallUpgrade(),
+      onUpgradeWalls: () => this.toggleWallPick(),
       onRearmTraps: () => this.showRearm(),
       onApply: () => this.apply(),
       onPutBack: () => this.session.putBack(),
@@ -526,6 +539,8 @@ export class YardPlanner {
   rebase(yard: Yard): void {
     this.yard = yard;
     this.session.rebase(yard);
+    // The wall panel prices its pick against the yard's new resources.
+    this.wallPickKey = "";
     this.refreshBar();
     this.search?.setNodes(this.session.plan.buildings());
   }
@@ -1101,18 +1116,82 @@ export class YardPlanner {
 
   /* ── Batch wall upgrade ─────────────────────────────────────────────── */
 
-  private showWallUpgrade(): void {
-    this.openDialog(
-      wallUpgradePanel({
-        nodes: this.session.selectedNodes(),
-        yard: this.yard,
-        onConfirm: (ids, level) => {
-          this.closeDialog();
-          void this.runWallUpgrade(ids, level);
-        },
-        onClose: () => this.closeDialog(),
-      }),
-    );
+  /** The bar's Upgrade walls: starts picking, or ends it when it is running. */
+  private toggleWallPick(): void {
+    if (this.session.wallPicking) this.endWallPick();
+    else this.startWallPick();
+  }
+
+  /**
+   * Upgrade walls (owner, 2026-11-04): a mode for picking walls on the yard,
+   * with the wall panel open beside it.
+   *
+   * The player presses the button first and picks second: a box picks the
+   * walls it touches and nothing else, a tap or click takes one wall in or
+   * out, and the panel has Select all, Clear and Affordable and says what the
+   * pick costs. Walls already selected when the mode starts stay picked, so
+   * Find's Walls row still works; `ids`, from a wall's own pop-up, picks those.
+   */
+  startWallPick(ids?: readonly number[]): void {
+    if (this.readOnly) return;
+    if (this.session.wallPicking && this.wallPanel) {
+      if (ids) this.session.selectOnly(ids);
+      return;
+    }
+    if (!this.session.wallPicking) {
+      this.toolBeforePick = this.session.state().tool;
+      this.session.setWallPick(true);
+      // Box on: every drag draws a box, mouse or finger, without Shift. A
+      // phone switches it off to scroll the yard between boxes.
+      this.session.setTool(PlannerTool.BOX);
+    }
+    if (ids) this.session.selectOnly(ids);
+
+    const panel = wallUpgradePanel({
+      nodes: this.session.selectedNodes(),
+      yard: this.yard,
+      pick: {
+        allWalls: () => this.session.plan.buildings(),
+        onPick: (picked) => this.session.selectOnly(picked),
+        touch: this.touch,
+      },
+      onConfirm: (picked, level) => {
+        this.endWallPick();
+        this.session.clearSelection();
+        void this.runWallUpgrade(picked, level);
+      },
+      onClose: () => this.endWallPick(),
+    });
+    this.openDialog(panel);
+    this.wallPanel = panel;
+    this.wallPickKey = "";
+    this.refreshBar();
+  }
+
+  /** Leaves wall picking: Cancel, Escape, the panel's close, or another dialog. */
+  private endWallPick(): void {
+    const panel = this.wallPanel;
+    this.wallPanel = null;
+    if (this.session.wallPicking) {
+      this.session.setWallPick(false);
+      if (this.toolBeforePick) this.session.setTool(this.toolBeforePick);
+    }
+    this.toolBeforePick = null;
+    if (panel && this.openPanel === panel) this.closeDialog();
+  }
+
+  /** Hands the wall panel the pick, when it changed. */
+  private refreshWallPick(): void {
+    const panel = this.wallPanel;
+    if (!panel) return;
+    const nodes = this.session.selectedNodes();
+    const key = nodes
+      .map((node) => node.id)
+      .sort((a, b) => a - b)
+      .join(",");
+    if (key === this.wallPickKey) return;
+    this.wallPickKey = key;
+    panel.setNodes(nodes, this.yard);
   }
 
   private async runWallUpgrade(ids: number[], level: number): Promise<void> {
@@ -1272,7 +1351,8 @@ export class YardPlanner {
     const nodes = this.session.selectedNodes();
     this.bar.setSummary(summariseSelection(nodes, this.yard));
     this.bar.setWorkers(this.yard.workers);
-    this.bar.setWallCount(nodes.filter((node) => WALL_TYPES.includes(node.type)).length);
+    this.bar.setWallCount(this.session.wallCount());
+    this.refreshWallPick();
 
     // The drawer and the Find list are views over the plan, so they follow
     // every store and every placement. Only then, though: this runs once per

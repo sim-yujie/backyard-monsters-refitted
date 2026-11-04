@@ -302,6 +302,48 @@
   margin-top: var(--space-3);
 }
 
+/* Upgrade walls' picking mode (owner, 2026-11-04): the hint, then Select all,
+   Clear and Affordable; the short line in the danger colour, never alone. */
+.planner-walls__hint {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.planner-walls__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+
+.planner-walls__tool {
+  flex: 1 1 0;
+  min-width: max-content;
+}
+
+.planner-walls__note--short {
+  color: var(--colour-danger);
+  font-size: var(--text-sm);
+}
+
+.planner-walls--pick .planner-walls__actions .btn--primary {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A phone keeps the pick panel short, so the yard above it can be boxed:
+   the level breakdown goes (the sentence under it says the counts). */
+.planner-phone--portrait .planner-walls--pick .planner-walls__held {
+  display: none;
+}
+
+.planner-phone--portrait .planner-walls--pick :is(.planner-walls__hint, .planner-walls__tools, .planner-walls__levels, .planner-walls__preview) {
+  margin-block: 0 var(--space-1);
+}
+
+.planner-phone--portrait .planner-walls--pick .planner-walls__actions {
+  margin-top: var(--space-2);
+}
+
 /* ── Trap re-arm ──────────────────────────────────────────────────────── */
 
 .planner-rearm__blocked {

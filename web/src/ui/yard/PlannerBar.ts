@@ -852,9 +852,12 @@ export class PlannerBar {
     this.checklist = button("Checklist", "What is blocking Apply");
     this.checklist.addEventListener("click", actions.onChecklist);
 
-    this.upgradeWalls = button("Upgrade walls", "Select some walls first");
+    // Pressed first, then the walls are picked on the yard (owner, 2026-11-04):
+    // a switch, pressed while the picking runs.
+    this.upgradeWalls = button("Upgrade walls", "No walls in this yard");
     this.upgradeWalls.className = "btn btn--ghost planner-bar__walls";
     this.upgradeWalls.disabled = true;
+    this.upgradeWalls.setAttribute("aria-pressed", "false");
     this.upgradeWalls.addEventListener("click", actions.onUpgradeWalls);
 
     // The label and the badge are separate children so the count can be
@@ -1221,6 +1224,7 @@ export class PlannerBar {
     for (const [view, element] of this.views) {
       element.setAttribute("aria-pressed", String(state.view === view));
     }
+    this.upgradeWalls.setAttribute("aria-pressed", String(state.wallPicking));
 
     this.setGroupEnabled(state.selectionCount);
 
@@ -1458,14 +1462,16 @@ export class PlannerBar {
     this.checklist.classList.toggle("planner-bar__checklist--bad", count > 0);
   }
 
-  /** How many walls the selection holds, which is what Upgrade walls acts on. */
+  /**
+   * How many walls stand in the yard. Upgrade walls is pressed first and the
+   * walls picked after (owner, 2026-11-04), so only a yard without any greys
+   * it out.
+   */
   setWallCount(count: number): void {
     if (this.readOnly) return;
     this.upgradeWalls.disabled = count === 0;
     this.upgradeWalls.title =
-      count === 0
-        ? "Select some walls first"
-        : `Raise ${count} selected ${count === 1 ? "wall" : "walls"} to a higher level`;
+      count === 0 ? "No walls in this yard" : "Pick walls on the yard and raise them a level";
   }
 
   /** How many fired traps are waiting to be put back. Zero disables the button. */
@@ -1525,6 +1531,13 @@ const describeBreakdown = (
 };
 
 const summarise = (state: PlannerState, touch = false): string => {
+  // Picking walls: the pick, and how to add to it.
+  if (state.wallPicking) {
+    const count = state.selectionCount;
+    return `${count} ${count === 1 ? "wall" : "walls"} picked · ${
+      touch ? "drag a box or tap walls" : "drag a box or click walls, Esc to stop"
+    }`;
+  }
   const parts: string[] = [];
   parts.push(
     state.selectionCount === 0

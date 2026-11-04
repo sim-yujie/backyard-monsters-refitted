@@ -22,6 +22,7 @@ import { PlannerView } from "./PlannerView";
 import type { CompareDiff } from "./PlannerOverlay";
 import { Plan, type AbsorbResult } from "./plan";
 import { plannerAction } from "./shortcuts";
+import { allWallIds, boxPick, isPickableWall, togglePick, wallsOnly } from "./wallPick";
 
 /** Nothing selected, moved or faulted: what compare shows of the planner's own marks. */
 const EMPTY: ReadonlySet<number> = new Set();
@@ -130,6 +131,11 @@ export interface PlannerState {
    * controls rather than disabling them one by one.
    */
   readonly readOnly: boolean;
+  /**
+   * True while Upgrade walls is picking walls (owner, 2026-11-04): a box and a
+   * tap pick walls only, nothing moves, and Escape leaves the mode.
+   */
+  readonly wallPicking: boolean;
 }
 
 /**
@@ -191,6 +197,22 @@ export class PlannerSession {
    */
   private placing: { id: number; x: number; y: number; ok: boolean } | null = null;
   /**
+   * Upgrade walls' picking mode, or false (owner, 2026-11-04).
+   *
+   * The pick *is* the selection, so the yard outlines it the way it outlines
+   * any selection and the bar's cost cells follow it; what changes is what a
+   * press does. A box adds the walls it touches to the pick and ignores
+   * everything else, a click or tap on a wall takes it in or out, and nothing
+   * can be moved, nudged, stored or mirrored until the mode ends. With the Box
+   * tool on (the mode turns it on) every drag is a box, mouse or finger, with
+   * no Shift; with Select, a drag on bare ground pans as usual, which is a
+   * phone's way to scroll the yard between boxes.
+   */
+  private wallPick = false;
+  /** The pick a box started from, which the box adds to while it is drawn. */
+  private pickBase: ReadonlySet<number> | null = null;
+  private readonly onWallPickCancel: (() => void) | undefined;
+  /**
    * The yard as the server last described it.
    *
    * Held so a panel that needs the yard as well as the plan can ask the
@@ -240,6 +262,11 @@ export class PlannerSession {
      */
     onTap?: () => void;
     /**
+     * Escape while walls are being picked, with no box being drawn: the scene
+     * owns the panel the mode runs in, so it is the one that ends it.
+     */
+    onWallPickCancel?: () => void;
+    /**
      * Opens the plan for reading only (design §8, Q5).
      *
      * Selection, search, the two views and the cost cells all still work —
@@ -260,6 +287,7 @@ export class PlannerSession {
     this.onRanges = options.onRanges;
     this.onGroup = options.onGroup;
     this.onTap = options.onTap;
+    this.onWallPickCancel = options.onWallPickCancel;
     this.readOnly = options.readOnly ?? false;
     this.yard = options.yard;
     this.plan = Plan.fromYard(options.yard);
@@ -277,7 +305,8 @@ export class PlannerSession {
         move: (world, grab) => this.onMove(world, grab),
         release: (world, grab, travelled) => this.onRelease(world, grab, travelled),
         clickEmpty: (shift) => {
-          if (!shift) this.clearSelection();
+          // Picking walls, a click off them keeps the pick: Clear is a button.
+          if (!shift && !this.wallPick) this.clearSelection();
         },
         cancel: () => this.cancel(),
         grabChanged: () => this.refresh(),
@@ -323,6 +352,7 @@ export class PlannerSession {
       previewing: this.preview !== null || this.readOnly,
       readOnly: this.readOnly,
       view: this.view.view,
+      wallPicking: this.wallPick,
     };
   }
 
@@ -338,8 +368,51 @@ export class PlannerSession {
   }
 
   selectOnly(ids: Iterable<number>): void {
-    this.selection = new Set([...ids].filter((id) => this.plan.get(id)?.fixed === false));
+    // Picking walls, Find's rows pick the walls among what they name.
+    this.selection = this.wallPick
+      ? wallsOnly(ids, (id) => this.plan.get(id))
+      : new Set([...ids].filter((id) => this.plan.get(id)?.fixed === false));
     this.refresh();
+  }
+
+  /* ── Upgrade walls: picking ─────────────────────────────────────────── */
+
+  /** True while Upgrade walls is picking walls. */
+  get wallPicking(): boolean {
+    return this.wallPick;
+  }
+
+  /**
+   * Starts or ends wall picking (owner, 2026-11-04).
+   *
+   * Starting keeps the walls of the current selection, so a player who chose
+   * walls the old way (Find, a box, Shift-clicks) finds them already picked;
+   * everything else drops out. Ending leaves the pick selected, for the scene
+   * to clear or keep.
+   */
+  setWallPick(on: boolean): void {
+    if (this.readOnly && on) return;
+    if (this.wallPick === on) return;
+    if (this.placing) this.abandonPlacement();
+    if (this.input.isGrabbing) this.cancel();
+    this.wallPick = on;
+    this.pickBase = null;
+    if (on) {
+      this.selection = wallsOnly(this.selection, (id) => this.plan.get(id));
+      this.faulted.clear();
+    }
+    this.refresh();
+  }
+
+  /** Select all: every wall on the plot. */
+  pickAllWalls(): void {
+    this.selection = new Set(allWallIds(this.plan.buildings()));
+    this.refresh();
+  }
+
+  /** How many walls stand on the plot: none greys out Upgrade walls. */
+  wallCount(): number {
+    return allWallIds(this.plan.buildings()).length;
   }
 
   clearSelection(): void {
@@ -467,7 +540,7 @@ export class PlannerSession {
    * id the drawer does not hold.
    */
   startPlacing(id: number): boolean {
-    if (this.readOnly) return false;
+    if (this.readOnly || this.wallPick) return false;
     const node = this.plan.get(id);
     if (!node || !node.stored) return false;
 
@@ -607,7 +680,7 @@ export class PlannerSession {
 
   /** Arrow keys: one grid step, or ten with Shift. */
   nudge(dx: number, dy: number): void {
-    if (this.readOnly) return;
+    if (this.readOnly || this.wallPick) return;
     if (this.selection.size === 0) return;
     if (this.input.isGrabbing) this.cancel();
     this.plan.beginMove(this.selection);
@@ -861,6 +934,8 @@ export class PlannerSession {
    */
   private wouldClaim(world: Point, shift: boolean): Grab | null {
     if (this.tool === PlannerTool.BOX) return Grab.MARQUEE;
+    // Picking walls with Select: a finger on a wall is a tap, never a carry.
+    if (this.wallPick) return shift ? Grab.MARQUEE : null;
     const id = this.view.pick(world.x, world.y);
     if (id === null) return shift ? Grab.MARQUEE : null;
     return Grab.DRAG;
@@ -877,6 +952,11 @@ export class PlannerSession {
   private tap(world: Point, shift: boolean): void {
     this.onTap?.();
     const id = this.view.pick(world.x, world.y);
+    if (this.wallPick) {
+      this.selection = togglePick(this.selection, id, (key) => this.plan.get(key));
+      this.refresh();
+      return;
+    }
     if (id === null) {
       if (!shift) this.clearSelection();
       return;
@@ -890,6 +970,7 @@ export class PlannerSession {
 
   private claim(world: Point, shift: boolean): Grab | null {
     if (this.tool === PlannerTool.BOX) return this.startMarquee(world);
+    if (this.wallPick) return this.claimPick(world, shift);
 
     const id = this.view.pick(world.x, world.y);
     // A press on bare ground is the camera's, unless Shift asks for a marquee.
@@ -921,7 +1002,22 @@ export class PlannerSession {
     return Grab.DRAG;
   }
 
+  /**
+   * A mouse press while picking walls with the Select tool: Shift draws a box,
+   * a wall goes in or out, and bare ground is the camera's. Nothing is lifted.
+   */
+  private claimPick(world: Point, shift: boolean): Grab | null {
+    if (shift) return this.startMarquee(world);
+    const id = this.view.pick(world.x, world.y);
+    if (id === null || !isPickableWall(this.plan.get(id))) return null;
+    this.selection = togglePick(this.selection, id, (key) => this.plan.get(key));
+    this.refresh();
+    // Held by the planner so the press does not pan, with nothing to drag.
+    return Grab.DRAG;
+  }
+
   private startMarquee(world: Point): Grab {
+    if (this.wallPick) this.pickBase = new Set(this.selection);
     this.pressWorld = world;
     this.marquee = rectFromCorners(world.x, world.y, world.x, world.y);
     return Grab.MARQUEE;
@@ -940,7 +1036,10 @@ export class PlannerSession {
 
     if (grab === Grab.MARQUEE) {
       this.marquee = rectFromCorners(press.x, press.y, world.x, world.y);
-      this.selection = this.view.inMarquee(this.marquee);
+      const boxed = this.view.inMarquee(this.marquee);
+      this.selection = this.pickBase
+        ? boxPick(this.pickBase, boxed, (id) => this.plan.get(id))
+        : boxed;
       this.refresh();
       return;
     }
@@ -968,7 +1067,16 @@ export class PlannerSession {
 
     if (grab === Grab.MARQUEE) {
       this.pressWorld = null;
-      if (press) {
+      const base = this.pickBase;
+      this.pickBase = null;
+      const get = (id: number): PlanNode | undefined => this.plan.get(id);
+      if (base) {
+        // Picking walls: a box that never left the press is a tap on a wall.
+        this.selection =
+          !travelled || !press
+            ? togglePick(base, this.view.pick(world.x, world.y), get)
+            : boxPick(base, this.view.inMarquee(rectFromCorners(press.x, press.y, world.x, world.y)), get);
+      } else if (press) {
         this.selection = this.view.inMarquee(rectFromCorners(press.x, press.y, world.x, world.y));
       }
       this.marquee = null;
@@ -1033,11 +1141,15 @@ export class PlannerSession {
       return;
     }
     if (!this.input.isGrabbing) {
-      this.clearSelection();
+      if (this.wallPick) this.onWallPickCancel?.();
+      else this.clearSelection();
       return;
     }
     this.input.cancel();
     this.plan.cancelMove();
+    // A box abandoned half-drawn (Escape, or a second finger) puts the pick back.
+    if (this.pickBase) this.selection = new Set(this.pickBase);
+    this.pickBase = null;
     this.marquee = null;
     this.pressWorld = null;
     this.dragDelta = { dx: 0, dy: 0 };
@@ -1050,6 +1162,14 @@ export class PlannerSession {
   private onKey(event: KeyboardEvent): boolean {
     const action = plannerAction(event);
     if (!action) return false;
+    // Picking walls nothing moves: the keys that would move or store the pick
+    // are swallowed rather than let through to the page.
+    if (
+      this.wallPick &&
+      (action.kind === "nudge" || action.kind === "mirror" || action.kind === "store")
+    ) {
+      return true;
+    }
 
     switch (action.kind) {
       case "tool":
