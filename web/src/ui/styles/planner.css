@@ -1895,13 +1895,21 @@
 
 /* Three dots drawn rather than typed: the game font has no "⋯" (U+22EF), so
    the glyph came out blank. The text stays for nothing visual; the name is
-   the aria-label "More". The pressed and hovered states are named too: the
-   buttons' `background` shorthand there would otherwise wipe the dots while
-   the sheet is open. */
-.planner-bar .btn.planner-bar__more,
-.planner-bar .btn.planner-bar__more:is(:hover, :active, :disabled) {
+   the aria-label "More". The dots sit on a pseudo-element, so whatever the
+   skins paint as the button's own background (the gold plate while the sheet
+   is open, the hover wash) never wipes them; the lead saw a blank plate when
+   they were the button's background (4 Nov). */
+.planner-bar .btn.planner-bar__more {
+  position: relative;
   font-size: 0;
   line-height: 1;
+}
+
+.planner-bar .btn.planner-bar__more::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
   background-image:
     radial-gradient(circle, currentColor 0 3px, transparent 3.6px),
     radial-gradient(circle, currentColor 0 3px, transparent 3.6px),
