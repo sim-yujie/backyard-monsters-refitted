@@ -4,11 +4,13 @@ import {
   housedGarrisons,
   type BattleBuffs,
   type BattleOptions,
+  type DefenceBonus,
   type DefenderChampion,
   type SideBuffs,
 } from "./engine.js";
 import { championByType, CHAMPION_MAX_FOOD_BONUS, CHAMPION_MAX_POWER_LEVEL } from "./stats.js";
 import { MAX_RANK } from "./specialMoves.js";
+import { combineDefenceBonus, landDefenceBonus, landFeatureOf } from "./landFeatures.js";
 import type { CombatBuildingDataMap, MonsterLevels, MonsterRanks, Roster } from "./types.js";
 
 /**
@@ -40,7 +42,42 @@ export interface DefenderForces {
    * defence, so every replay fights with the same. Absent: none on either side.
    */
   readonly buffs?: BattleBuffs;
+  /**
+   * Map Room 2's neighbour defence bonus (`docs/mr2-neighbours.md`): the
+   * friendly cells around the defending cell, 1 to 6, as the attack load
+   * counted them with the bonus switched on. Absent: no bonus, the battle as
+   * it always was.
+   */
+  readonly neighbours?: number;
+  /**
+   * The defending cell's Map Room 2 land feature (`landFeatures.ts`), 1 to 7,
+   * as the attack load froze it with the land switch on. Absent: open
+   * ground, the battle as it always was.
+   */
+  readonly land?: number;
 }
+
+/**
+ * What each count of friendly neighbours adds to a Map Room 2 cell's defence
+ * (`docs/mr2-neighbours.md`), as fractions: index 1 is one neighbour. Both
+ * stats rise together, by less for each further neighbour: +5% for the first,
+ * then +4, +2, +2 and +1 each for the fifth and sixth, so a cell ringed by six
+ * friends has +15% building health and +15% tower damage. The owner's ladder
+ * (3 Nov): the first +8, +6, +4, +2, +2, +2 scaled by 5/8 and rounded.
+ */
+export const NEIGHBOUR_DEFENCE_BONUS: readonly number[] = [
+  0, 0.05, 0.09, 0.11, 0.13, 0.14, 0.15,
+];
+
+/** The battle's defence bonus for `neighbours` friendly cells; none for 0 or a bad count. */
+export const neighbourDefenceBonus = (
+  neighbours: number | undefined,
+): DefenceBonus | undefined => {
+  if (neighbours === undefined || !Number.isSafeInteger(neighbours)) return undefined;
+  const top = NEIGHBOUR_DEFENCE_BONUS.length - 1;
+  const share = NEIGHBOUR_DEFENCE_BONUS[Math.min(neighbours, top)] ?? 0;
+  return share > 0 ? { hp: share, damage: share } : undefined;
+};
 
 /**
  * The shop items that boost a side in battle, and what each one turns on
@@ -291,6 +328,8 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
     }
   }
   const buffs = parseBattleBuffs(value.buffs);
+  const neighbours = typeof value.neighbours === "number" ? value.neighbours : undefined;
+  const land = landFeatureOf(value.land);
   // A session stored before issue #310 holds one `defenderChampion`.
   const champions = Array.isArray(value.defenderChampions)
     ? value.defenderChampions
@@ -308,6 +347,8 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
       }),
     ),
     ...(buffs && { buffs }),
+    ...(neighbours !== undefined && neighbourDefenceBonus(neighbours) && { neighbours }),
+    ...(land !== 0 && { land }),
   };
 };
 
@@ -316,13 +357,19 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
  * battle without one runs as it always did. The levels go in whenever there
  * are any: a Spurtz Cannon's Spurtz fight at the defender's level with no
  * bunker or caged champion on the yard too (issue #313). The boosts go in
- * whenever either side has one.
+ * whenever either side has one, and the neighbour bonus whenever the count
+ * gives one.
  */
 export const battleDefence = (
   forces: DefenderForces | null | undefined,
 ): Pick<
   BattleOptions,
-  "bunkers" | "defenderLevels" | "defenderRanks" | "defenderChampions" | "buffs"
+  | "bunkers"
+  | "defenderLevels"
+  | "defenderRanks"
+  | "defenderChampions"
+  | "buffs"
+  | "defenceBonus"
 > => {
   if (!forces) return {};
   const hasBunkers = Object.keys(forces.bunkers).length > 0;
@@ -330,6 +377,11 @@ export const battleDefence = (
   const hasLevels = Object.keys(forces.defenderLevels).length > 0;
   const hasRanks = Object.keys(forces.defenderRanks ?? {}).length > 0;
   const hasBuffs = Boolean(forces.buffs && (forces.buffs.attacker || forces.buffs.defender));
+  // The neighbour bonus and the land feature multiply (`combineDefenceBonus`).
+  const defenceBonus = combineDefenceBonus(
+    neighbourDefenceBonus(forces.neighbours),
+    landDefenceBonus(forces.land),
+  );
   return {
     ...(hasBunkers ? { bunkers: forces.bunkers } : {}),
     ...(hasBunkers || hasChampions || hasLevels ? { defenderLevels: forces.defenderLevels } : {}),
@@ -337,5 +389,6 @@ export const battleDefence = (
     ...(hasBunkers && hasRanks ? { defenderRanks: forces.defenderRanks as MonsterRanks } : {}),
     ...(hasChampions ? { defenderChampions: forces.defenderChampions } : {}),
     ...(hasBuffs ? { buffs: forces.buffs } : {}),
+    ...(defenceBonus ? { defenceBonus } : {}),
   };
 };

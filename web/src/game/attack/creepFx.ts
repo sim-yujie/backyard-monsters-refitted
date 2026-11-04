@@ -13,6 +13,7 @@ import {
   bigLabelWidth,
 } from "./juice";
 import { directionColumn } from "./monsterSprites";
+import { StatusIconTextures, type StatusIcon } from "./statusIcons";
 
 /**
  * The moments a creep makes during a battle that are not the creep itself
@@ -136,6 +137,54 @@ const SMOKE_COLOUR = 0x5a5a5a;
 const LABEL_COLOUR = 0xff0000;
 const LABEL_HEAL_COLOUR = 0x39d353;
 const LABEL_STROKE = 0x1a0a0a;
+/** "(+X)": extra damage, a Crabatron's crit (owner, beta 6). */
+export const LABEL_BONUS_COLOUR = 0xff9a1f;
+/** "(-X)": damage taken off, an Octo-ooze's weakening or Fomor's armour (owner, beta 6). */
+export const LABEL_REDUCED_COLOUR = 0xa8dcff;
+/** The modifier's size beside its number. */
+const LABEL_EXTRA_SHARE = 0.8;
+/** A crit's number pops this much larger, then settles over {@link CRIT_POP_TICKS}. */
+export const CRIT_POP = 0.45;
+export const CRIT_POP_TICKS = 12;
+/** The thorn mark in front of an Ichi's reflected damage: its height against the number's size. */
+const THORN_MARK_SHARE = 1.1;
+/** The Modern look's numbers, and the plain bold the Classic look's take (owner, beta 6). */
+const MODERN_FONT = "Titan One, sans-serif";
+const CLASSIC_FONT = "Verdana, Arial, sans-serif";
+const THORN_MARK: StatusIcon = { id: "thorns", label: "Thorns" };
+
+/** A crit's extra size at `age` ticks: {@link CRIT_POP} at first, back to none by {@link CRIT_POP_TICKS}. */
+export const critPop = (age: number): number =>
+  age >= CRIT_POP_TICKS ? 1 : 1 + CRIT_POP * (1 - Math.max(0, age) / CRIT_POP_TICKS);
+
+/**
+ * What else a number says (owner, beta 6): "(+X)" in orange for extra damage
+ * (a crit), "(-X)" in pale blue for damage taken off, and a small thorn in
+ * front of an Ichi's reflected damage. A crit's number pops larger for a moment.
+ */
+export interface NumberMods {
+  /** Damage a crit added, shown as "(+X)". */
+  readonly bonus?: number;
+  /** Damage a weakening or armour took off, shown as "(-X)". */
+  readonly reduced?: number;
+  /** Reflected by an Ichi's thorns. */
+  readonly thorns?: boolean;
+}
+
+/** Whether `mods` adds anything to a number. */
+export const hasMods = (mods: NumberMods | undefined): mods is NumberMods =>
+  mods !== undefined &&
+  ((mods.bonus ?? 0) >= 0.5 || (mods.reduced ?? 0) >= 0.5 || mods.thorns === true);
+
+/** The modifier's text and colour, or null: a bonus over a cut when both are on. */
+export const modText = (mods: NumberMods | undefined): { text: string; colour: number } | null => {
+  if (!mods) return null;
+  const bonus = Math.round(mods.bonus ?? 0);
+  if (bonus > 0) return { text: `(+${bonus})`, colour: LABEL_BONUS_COLOUR };
+  const reduced = Math.round(mods.reduced ?? 0);
+  if (reduced > 0) return { text: `(-${reduced})`, colour: LABEL_REDUCED_COLOUR };
+  return null;
+};
 
 /** The champions that stomp: a long reach in the stats, no projectile in Flash. */
 const STOMPING_CHAMPIONS: ReadonlySet<string> = new Set(["G1", "G2", "G4", "G5"]);
@@ -333,6 +382,8 @@ interface Projectile {
   readonly big: boolean;
   /** Health the swing took off, shown over the building when it lands. */
   readonly amount: number;
+  /** The number's crit or weakening, shown with it. */
+  readonly mods?: NumberMods;
   /** Ticks it is in the air. */
   readonly flight: number;
   readonly style: ProjectileStyle;
@@ -356,6 +407,14 @@ interface Stream {
 
 interface Label {
   readonly text: Text;
+  /** The "(+X)" or "(-X)" beside it; hidden for a plain number. */
+  readonly extra: Text;
+  /** The thorn in front of an Ichi's reflected damage; hidden otherwise. */
+  readonly mark: Sprite;
+  /** A crit: it pops larger as it appears. */
+  crit: boolean;
+  /** Has a modifier or a mark, so no later hit is added into it. */
+  modded: boolean;
   /** The target it counts against: `creep:5`, `building:12`. */
   key: string;
   /** The creep it follows, or -1 for a number fixed where it was made. */
@@ -405,8 +464,11 @@ export class CreepFx {
     private readonly host: CreepFxHost,
     private readonly reducedMotion = false,
     private readonly juiced = false,
-    /** Whether hits show their numbers: new with the revamp (#68), so not in the Classic look. */
+    /** Whether hits show their numbers (#68); both looks show them since beta 6 (owner). */
     private readonly numbers = true,
+    /** The Classic look's plain bold numbers rather than Titan One (owner, beta 6). */
+    private readonly classicFont = false,
+    private readonly marks: StatusIconTextures = new StatusIconTextures(),
   ) {
     for (const layer of [this.root, this.fire, this.rockets, this.smoke, this.labels]) {
       layer.eventMode = "none";
@@ -433,9 +495,21 @@ export class CreepFx {
     amount = 0,
     flight = PROJECTILE_TICKS,
     style: ProjectileStyle = "fireball",
+    mods?: NumberMods,
   ): void {
     if (style !== "rocket") {
-      this.projectiles.push({ tick, from, to, buildingId, big, amount, flight, style, landed: false });
+      this.projectiles.push({
+        tick,
+        from,
+        to,
+        buildingId,
+        big,
+        amount,
+        flight,
+        style,
+        landed: false,
+        ...(hasMods(mods) ? { mods } : {}),
+      });
       return;
     }
     rocketPair(from, to).forEach((pair, index) => {
@@ -446,6 +520,7 @@ export class CreepFx {
         buildingId,
         big,
         amount: index === 0 ? amount : 0,
+        ...(index === 0 && hasMods(mods) ? { mods } : {}),
         flight,
         style,
         landed: false,
@@ -492,11 +567,20 @@ export class CreepFx {
    * number for one target inside the window, or a twenty-first anywhere, is
    * not shown, as Flash dropped them.
    */
-  number(tick: number, key: string, follow: number, amount: number, at: Point, kind: NumberKind): void {
+  number(
+    tick: number,
+    key: string,
+    follow: number,
+    amount: number,
+    at: Point,
+    kind: NumberKind,
+    mods?: NumberMods,
+  ): void {
     if (!this.numbers) return;
     const shown = Math.max(1, Math.round(Math.abs(amount)));
+    const modded = hasMods(mods) ? mods : undefined;
     if (this.juiced) {
-      this.bigNumber(tick, key, follow, shown, at, kind);
+      this.bigNumber(tick, key, follow, shown, at, kind, modded);
       return;
     }
     const siblings = (this.labelsByKey.get(key) ?? []).filter(
@@ -509,7 +593,7 @@ export class CreepFx {
     label.drift = 0;
     label.size = 13;
     label.side = 0;
-    this.showLabel(label, tick, key, follow, shown, at, kind);
+    this.showLabel(label, tick, key, follow, shown, at, kind, modded);
     this.labelsByKey.set(key, [...siblings, label]);
   }
 
@@ -518,10 +602,21 @@ export class CreepFx {
    * into the newest one or put in a place of its own, never on top of
    * another ({@link bigLabelPlan}).
    */
-  private bigNumber(tick: number, key: string, follow: number, shown: number, at: Point, kind: NumberKind): void {
+  private bigNumber(
+    tick: number,
+    key: string,
+    follow: number,
+    shown: number,
+    at: Point,
+    kind: NumberKind,
+    mods?: NumberMods,
+  ): void {
     const alive = (this.labelsByKey.get(key) ?? []).filter((label) => tick - label.bornTick <= BIG_LABEL_TICKS);
     const heal = kind === "heal";
-    const newest = [...alive].reverse().find((label) => (label.amount > 0) === heal);
+    // A modified hit is never added into another number, nor a plain one into it.
+    const newest = mods
+      ? undefined
+      : [...alive].reverse().find((label) => (label.amount > 0) === heal && !label.modded);
     const plan = bigLabelPlan(newest ? tick - newest.bornTick : null, alive.length);
     if (plan === "drop") return;
     if (plan === "merge" && newest) {
@@ -538,10 +633,11 @@ export class CreepFx {
     label.size = bigLabelSize(shown);
     label.side = bigLabelSide(alive.map((other) => other.side));
     label.drift = label.side * BIG_LABEL_DRIFT;
-    this.showLabel(label, tick, key, follow, shown, at, kind);
+    this.showLabel(label, tick, key, follow, shown, at, kind, mods);
     const all = [...alive, label];
     this.spreadOut(all, tick);
     label.text.position.set(Math.round(at.x + label.shiftX), Math.round(at.y));
+    this.placeParts(label);
     this.labelsByKey.set(key, all);
   }
 
@@ -567,7 +663,16 @@ export class CreepFx {
     }
   }
 
-  private showLabel(label: Label, tick: number, key: string, follow: number, shown: number, at: Point, kind: NumberKind): void {
+  private showLabel(
+    label: Label,
+    tick: number,
+    key: string,
+    follow: number,
+    shown: number,
+    at: Point,
+    kind: NumberKind,
+    mods?: NumberMods,
+  ): void {
     label.key = key;
     label.follow = follow;
     label.bornTick = tick;
@@ -581,7 +686,44 @@ export class CreepFx {
     label.text.visible = true;
     label.text.alpha = 1;
     label.text.position.set(Math.round(at.x + label.shiftX), Math.round(at.y));
+    label.crit = (mods?.bonus ?? 0) >= 0.5;
+    label.modded = mods !== undefined;
+    const extra = modText(mods);
+    label.extra.visible = extra !== null;
+    if (extra) {
+      label.extra.text = extra.text;
+      label.extra.style.fill = extra.colour;
+      label.extra.style.fontSize = Math.round(label.size * LABEL_EXTRA_SHARE);
+    }
+    const mark = mods?.thorns === true ? this.marks.get(THORN_MARK) : null;
+    label.mark.visible = mark !== null;
+    if (mark) label.mark.texture = mark;
+    this.placeParts(label);
     this.active.push(label);
+  }
+
+  /**
+   * Puts a number's modifier just right of it and its thorn just left, at its
+   * scale and fade. The number itself stays centred where it always was.
+   */
+  private placeParts(label: Label): void {
+    // A plain number has nothing beside it, and its width is not measured.
+    if (!label.extra.visible && !label.mark.visible) return;
+    const text = label.text;
+    const scale = Math.abs(text.scale.y);
+    // From the digits, not a measure of the text: the same width the juiced spread reckons with.
+    const half = (bigLabelWidth(String(Math.abs(label.amount)).length, label.size) * scale) / 2;
+    if (label.extra.visible) {
+      label.extra.scale.set(scale);
+      label.extra.alpha = text.alpha;
+      label.extra.position.set(Math.round(text.x + half + 2 * scale), Math.round(text.y));
+    }
+    if (label.mark.visible) {
+      const fit = (label.size * THORN_MARK_SHARE * scale) / Math.max(1, label.mark.texture.height);
+      label.mark.scale.set(fit);
+      label.mark.alpha = text.alpha;
+      label.mark.position.set(Math.round(text.x - half - scale), Math.round(text.y));
+    }
   }
 
   /* ── Frame ──────────────────────────────────────────────────────────── */
@@ -662,6 +804,28 @@ export class CreepFx {
       .map((label) => ({ amount: label.amount, x: label.text.x, y: label.text.y }));
   }
 
+  /**
+   * What each number of a target says beside it, oldest first, for tests: the
+   * number, its modifier and colour, whether it has the thorn, and its scale.
+   */
+  partsFor(key: string): Array<{
+    text: string;
+    extra: string | null;
+    extraColour: number | null;
+    thorns: boolean;
+    scale: number;
+    font: string;
+  }> {
+    return (this.labelsByKey.get(key) ?? []).map((label) => ({
+      text: label.text.text,
+      extra: label.extra.visible ? label.extra.text : null,
+      extraColour: label.extra.visible ? Number(label.extra.style.fill) : null,
+      thorns: label.mark.visible,
+      scale: label.text.scale.y,
+      font: String(label.text.style.fontFamily),
+    }));
+  }
+
   /* ── Projectiles ────────────────────────────────────────────────────── */
 
   private drawProjectiles(tick: number): void {
@@ -678,7 +842,8 @@ export class CreepFx {
         if (shot.buildingId >= 0 && shot.amount > 0) {
           this.host.landed?.(shot.buildingId, shot.amount);
           const over = { x: shot.to.x, y: shot.to.y - BUILDING_NUMBER_LIFT };
-          this.number(tick, `building:${shot.buildingId}`, -1, shot.amount, over, "damage");
+          const key = `building:${shot.buildingId}`;
+          this.number(tick, key, -1, shot.amount, over, "damage", shot.mods);
         }
       }
       if (age > shot.flight + burstTicks(shot.style)) continue;
@@ -998,7 +1163,8 @@ export class CreepFx {
         // Titan One (#223) has one weight, already bold; no fontWeight here,
         // or the browser fakes a bolder cut by thickening strokes on a face
         // that cannot get any heavier.
-        fontFamily: "Titan One, sans-serif",
+        fontFamily: this.classicFont ? CLASSIC_FONT : MODERN_FONT,
+        ...(this.classicFont ? { fontWeight: "bold" as const } : {}),
         fontSize: 13,
         fill: LABEL_COLOUR,
         stroke: { color: LABEL_STROKE, width: 3 },
@@ -1006,8 +1172,42 @@ export class CreepFx {
     });
     text.anchor.set(0.5, 1);
     text.eventMode = "none";
-    this.labels.addChild(text);
-    return { text, key: "", follow: -1, bornTick: 0, amount: 0, shiftX: 0, drift: 0, size: 13, side: 0, mergedTick: null, x: 0, y: 0 };
+    const extra = new Text({
+      text: "",
+      style: {
+        fontFamily: this.classicFont ? CLASSIC_FONT : MODERN_FONT,
+        ...(this.classicFont ? { fontWeight: "bold" as const } : {}),
+        fontSize: Math.round(13 * LABEL_EXTRA_SHARE),
+        fill: LABEL_BONUS_COLOUR,
+        stroke: { color: LABEL_STROKE, width: 3 },
+      },
+    });
+    extra.anchor.set(0, 1);
+    extra.eventMode = "none";
+    extra.visible = false;
+    const mark = new Sprite();
+    mark.anchor.set(1, 1);
+    mark.eventMode = "none";
+    mark.visible = false;
+    this.labels.addChild(text, extra, mark);
+    return {
+      text,
+      extra,
+      mark,
+      crit: false,
+      modded: false,
+      key: "",
+      follow: -1,
+      bornTick: 0,
+      amount: 0,
+      shiftX: 0,
+      drift: 0,
+      size: 13,
+      side: 0,
+      mergedTick: null,
+      x: 0,
+      y: 0,
+    };
   }
 
   private forget(label: Label): void {
@@ -1027,6 +1227,8 @@ export class CreepFx {
       const age = tick - label.bornTick;
       if (age > life) {
         label.text.visible = false;
+        label.extra.visible = false;
+        label.mark.visible = false;
         this.forget(label);
         this.labelPool.push(label);
         continue;
@@ -1038,24 +1240,28 @@ export class CreepFx {
         label.x = anchor.ground.x;
         label.y = anchor.top - 6;
       }
+      // A crit pops larger and settles; held a touch larger without motion.
+      const pop = label.crit ? (this.reducedMotion ? 1 + CRIT_POP / 3 : critPop(age)) : 1;
       if (this.juiced && !this.reducedMotion) {
         const big = bigLabelPose(age, label.drift, label.mergedTick === null ? null : tick - label.mergedTick);
-        label.text.scale.set(scale * big.scale);
+        label.text.scale.set(scale * big.scale * pop);
         label.text.position.set(
           Math.round(label.x + label.shiftX * scale + big.dx),
           Math.round(label.y - big.rise),
         );
         label.text.alpha = big.alpha;
+        this.placeParts(label);
         continue;
       }
       const pose = labelPose(age);
       const rise = this.reducedMotion ? 0 : pose.rise;
-      label.text.scale.set(scale);
+      label.text.scale.set(scale * pop);
       label.text.position.set(
         Math.round(label.x + label.shiftX * scale),
         Math.round(label.y - rise),
       );
       label.text.alpha = pose.alpha;
+      this.placeParts(label);
     }
     this.active.length = keep;
   }

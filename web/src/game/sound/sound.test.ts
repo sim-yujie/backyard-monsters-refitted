@@ -38,7 +38,7 @@ const load = async (switches: SoundSwitches | null) => {
   vi.stubGlobal("AudioContext", FakeContext);
   vi.stubGlobal("fetch", () => Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }));
   const switchesModule = await import("./soundSwitches");
-  let stored = switches ?? { music: false, effects: false };
+  let stored = switches ?? { music: false, effects: false, musicVolume: 70, effectsVolume: 100 };
   switchesModule.resetSoundSwitchesForTest({
     account: () => 7,
     fetch: () => Promise.resolve(stored),
@@ -64,13 +64,13 @@ afterEach(() => {
 
 describe("playEffect", () => {
   it("plays with sound effects on", async () => {
-    const { card, pop } = await load({ music: false, effects: true });
+    const { card, pop } = await load({ music: false, effects: true, musicVolume: 70, effectsVolume: 100 });
     await pop();
     expect(card.starts).toBe(1);
   });
 
   it("stays silent with sound effects off, without opening a sound card", async () => {
-    const { card, pop } = await load({ music: true, effects: false });
+    const { card, pop } = await load({ music: true, effects: false, musicVolume: 70, effectsVolume: 100 });
     await pop();
     expect(card.made).toBe(0);
     expect(card.starts).toBe(0);
@@ -83,7 +83,7 @@ describe("playEffect", () => {
   });
 
   it("follows the switch as the player turns it off", async () => {
-    const { card, pop, setSoundSwitch } = await load({ music: false, effects: true });
+    const { card, pop, setSoundSwitch } = await load({ music: false, effects: true, musicVolume: 70, effectsVolume: 100 });
     await pop();
     await setSoundSwitch("effects", false);
     await pop();

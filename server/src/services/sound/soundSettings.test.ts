@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { brandNewYard, soundSettingsOf, withSoundSettings } from "./soundSettings.js";
+import {
+  DEFAULT_EFFECTS_VOLUME,
+  DEFAULT_MUSIC_VOLUME,
+  brandNewYard,
+  soundOf,
+  soundSettingsOf,
+  soundVolumesOf,
+  withSoundSettings,
+} from "./soundSettings.js";
 
 const guide = (state: string) => ({ onboarding: { v: 1, guide: { state } } });
 
@@ -76,5 +84,38 @@ describe("withSoundSettings", () => {
   test("a turned-on switch reads back as the player's choice on a brand-new yard", () => {
     const save = { ...guide("active"), stats: withSoundSettings({}, { music: true }) };
     expect(soundSettingsOf(save).music).toBe(true);
+  });
+});
+
+describe("soundVolumesOf", () => {
+  test("music 70 and effects 100 for a yard that never moved a slider", () => {
+    expect(DEFAULT_MUSIC_VOLUME).toBe(70);
+    expect(DEFAULT_EFFECTS_VOLUME).toBe(100);
+    expect(soundVolumesOf({ stats: null })).toEqual({ musicVolume: 70, effectsVolume: 100 });
+    expect(soundVolumesOf({ stats: { other: {} } })).toEqual({ musicVolume: 70, effectsVolume: 100 });
+  });
+
+  test("reads the stored volumes, numbers or numeric strings, kept to 0-100 whole", () => {
+    expect(soundVolumesOf({ stats: { other: { musicvol: 0, sfxvol: "45" } } })).toEqual({
+      musicVolume: 0,
+      effectsVolume: 45,
+    });
+    expect(soundVolumesOf({ stats: { other: { musicvol: 140, sfxvol: -3.4 } } })).toEqual({
+      musicVolume: 100,
+      effectsVolume: 0,
+    });
+  });
+
+  test("anything unreadable is the default", () => {
+    expect(soundVolumesOf({ stats: { other: { musicvol: "loud", sfxvol: null, x: 1 } } })).toEqual({
+      musicVolume: 70,
+      effectsVolume: 100,
+    });
+  });
+
+  test("written by withSoundSettings and read back, beside the switches", () => {
+    const stats = withSoundSettings({ other: { mute: 1 } }, { musicVolume: 20.4, effectsVolume: 90 });
+    expect(stats).toEqual({ other: { mute: 1, musicvol: 20, sfxvol: 90 } } as never);
+    expect(soundOf({ stats })).toEqual({ music: true, effects: false, musicVolume: 20, effectsVolume: 90 });
   });
 });

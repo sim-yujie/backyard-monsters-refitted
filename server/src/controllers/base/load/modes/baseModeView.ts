@@ -10,6 +10,7 @@ import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
 import { MR1_TRIBE_IDS } from "../../../../game-data/tribes/v1/index.js";
 import { isWildMonsterExpired } from "../../../../services/maproom/wildMonsterExpiry.js";
 import { isVisible } from "../../../../game-rules/maproom/sight.js";
+import { mr2HexShape } from "../../../../config/MapRoom2Config.js";
 import { isCampInPlay } from "../../../../services/maproom/campInPlay.js";
 
 /**
@@ -42,7 +43,7 @@ const isCellVisibleTo = async (user: User, baseid: string): Promise<boolean> => 
   const { getPlayerSight } = await import("../../../../services/maproom/sight/sightService.js");
   const sight = await getPlayerSight(user);
 
-  return isVisible(cell, sight.sources, sight.revealed);
+  return isVisible(cell, sight.sources, sight.revealed, mr2HexShape());
 };
 
 /**

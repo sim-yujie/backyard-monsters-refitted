@@ -232,6 +232,18 @@
 /* A zero-sized box in the bottom-right corner the right-hand buttons hang
    from, each at the mock-up's offsets. */
 .yard-dock__right {
+  /* The bottom row left of Build (Monsters, then Mail, Defences, Alerts and
+     Goals from their own files): each button one slot wide with its word
+     centred under the disc, Monsters' right edge `--dock-row` from the
+     corner and each next one `--dock-pitch` further left. A word wider than
+     the slot spills out evenly on both sides, so the gaps stay even whatever
+     the words (owner, beta 6: Mail's and Monsters' words nearly touched).
+     A pitch of 100px keeps the widest pair, Defences beside Alerts in the
+     Classic look's wider signs, apart. */
+  --dock-slot: 92px;
+  --dock-row: 144px;
+  --dock-pitch: 100px;
+
   position: absolute;
   right: 0;
   bottom: 0;
@@ -243,6 +255,10 @@
   position: absolute;
 }
 
+.yard-dock__right > .yard-dock__button:not(.yard-dock__button--big, .yard-dock__button--layout, .yard-dock__button--kits) {
+  width: var(--dock-slot);
+}
+
 .yard-dock__right > .yard-dock__button--build,
 .yard-dock__right > .yard-dock__button--attack {
   right: 28px;
@@ -250,7 +266,7 @@
 }
 
 .yard-dock__right > .yard-dock__button--monsters {
-  right: 150px;
+  right: var(--dock-row);
   bottom: 30px;
 }
 
@@ -652,7 +668,16 @@
   cursor: pointer;
 }
 
-.yard-viewtools__overview:hover {
+/* + and − dressed as Fit and the speaker below them: one column of four
+   alike buttons, not two filled tiles over two bare icons (owner, beta 6). */
+.yard-viewtools--rail .yard-zoom .yard-zoom__step {
+  border-color: transparent;
+  background: transparent;
+  color: var(--colour-text);
+}
+
+.yard-viewtools__overview:hover,
+.yard-viewtools--rail .yard-zoom .yard-zoom__step:hover:not(:disabled) {
   background: var(--colour-surface-control);
 }
 

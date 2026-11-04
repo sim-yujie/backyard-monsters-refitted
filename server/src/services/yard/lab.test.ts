@@ -107,7 +107,7 @@ describe("planLabStart", () => {
   });
 
   test("refuses in the original's order", () => {
-    expect(refusal(() => planLabStart(saveOf(), "C1", NOW))).toMatchObject({ status: 400, reason: "badRequest" });
+    expect(refusal(() => planLabStart(saveOf(), "C15", NOW))).toMatchObject({ status: 400, reason: "badRequest" });
     expect(refusal(() => planLabStart(saveOf(), "IC1", NOW))).toMatchObject({ status: 400 });
 
     const noLab = saveOf({ buildingdata: { "0": { id: 0, t: 14, x: 0, y: 0, l: 7 } } });
@@ -215,7 +215,7 @@ describe("reading the save", () => {
   test("labResearch needs a monster with an ability, a finish time and a rank 1..3", () => {
     expect(labResearch({ id: 9, x: 0, y: 0, t: 116, upg: "C3", upt: NOW, upl: 1 })).toEqual({ monster: "C3", rank: 1, endsAt: NOW });
     expect(labResearch({ id: 9, x: 0, y: 0, t: 116, upg: "C3" })).toBeNull();
-    expect(labResearch({ id: 9, x: 0, y: 0, t: 116, upg: "C1", upt: NOW, upl: 1 })).toBeNull();
+    expect(labResearch({ id: 9, x: 0, y: 0, t: 116, upg: "C15", upt: NOW, upl: 1 })).toBeNull();
     expect(labResearch({ id: 9, x: 0, y: 0, t: 116, upg: "C3", upt: NOW, upl: 4 })).toBeNull();
   });
 

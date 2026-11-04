@@ -116,7 +116,7 @@ export interface ModerationEffects {
 }
 
 export type ModerationOutcome =
-  | { outcome: "done"; until: Date | null }
+  | { outcome: "done"; until: Date | null; /** The step's row in the moderation log. */ actionId: number }
   | { outcome: "noPlayer" | "gameTeam" | "notBanned" | "notMuted" };
 
 interface TargetRow {
@@ -182,9 +182,9 @@ export const moderate = async (
         break;
     }
 
-    await tx.execute(
+    const [logged] = await tx.execute<{ id: string | number }[]>(
       `INSERT INTO bym.moderation_action (userid, admin_id, action, reason, until, chat_report_id, seen_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, NULL, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, NULL, ?) RETURNING id`,
       [userid, adminId, request.kind, request.reason, until, request.chatReportId, now],
     );
 
@@ -201,12 +201,13 @@ export const moderate = async (
         now: Math.floor(now.getTime() / 1000),
       });
     }
-    return { outcome: "done", until, target };
+    return { outcome: "done", until, actionId: Number(logged!.id), target };
   });
 
   if (done.outcome !== "done" || !done.target) return { outcome: done.outcome } as ModerationOutcome;
   const target = done.target;
   const until = done.until;
+  const actionId = done.actionId;
 
   logger.info(`Dashboard: ${request.kind} user ${userid} by ${adminId}`);
   switch (request.kind) {
@@ -227,7 +228,7 @@ export const moderate = async (
     case "unban":
       break;
   }
-  return { outcome: "done", until };
+  return { outcome: "done", until, actionId };
 };
 
 /** One step in a player's moderation log, as the dashboard shows it. */
@@ -249,6 +250,8 @@ export interface PlayerModeration {
   userid: number;
   username: string;
   lastSeenAt: string | null;
+  /** The Style the player's game last sent (`modern`/`classic`), null before beta 6 or on other clients. */
+  look: string | null;
   banned: boolean;
   /** Null with `banned`: for good. */
   banUntil: string | null;
@@ -285,9 +288,14 @@ export const playerModeration = async (
   now: Date = new Date(),
 ): Promise<PlayerModeration | null> => {
   const [player] = await em.execute<
-    (TargetRow & { last_seen_at: Date | string | null; ban_reason: string | null; reports: string | number })[]
+    (TargetRow & {
+      last_seen_at: Date | string | null;
+      look_style: string | null;
+      ban_reason: string | null;
+      reports: string | number;
+    })[]
   >(
-    `SELECT u.userid, u.email, u.username, u.banned, u.ban_until, u.ban_reason, u.mute_until, u.last_seen_at,
+    `SELECT u.userid, u.email, u.username, u.banned, u.ban_until, u.ban_reason, u.mute_until, u.last_seen_at, u.look_style,
             (SELECT count(*) FROM bym.chat_report r WHERE r.reported_id = u.userid) AS reports
        FROM bym."user" u WHERE u.userid = ?`,
     [userid],
@@ -304,6 +312,7 @@ export const playerModeration = async (
     userid: Number(player.userid),
     username: player.username,
     lastSeenAt: iso(player.last_seen_at),
+    look: player.look_style ?? null,
     banned: Boolean(player.banned),
     banUntil: player.banned ? iso(player.ban_until) : null,
     banReason: player.banned ? player.ban_reason : null,

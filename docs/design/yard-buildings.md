@@ -1224,7 +1224,8 @@ overdrive, `HOD`/`HOD2`/`HOD3`, `CLOD`, `EXH`, `PRO1`–`PRO3` damage protection
 whose effect this client does not model yet (`MDOD`, `MSOD` monster buffs; `BLK2`–`BLK5` Shiny wall
 upgrades; Shiny decorations `BUILDING28…`) are held back until WP6.2 confirms their effect and
 price formula against `client/scripts/STORE.as`, and listed there as "coming later" rather than
-sold with no effect. Existing `storedata` entries of dropped items stay and do nothing.
+sold with no effect. (All of them are sold now: the buffs and walls since beta.4, the decorations
+since beta 6 from the Build menu, §8.3; the Shop has no "coming later" section left.) Existing `storedata` entries of dropped items stay and do nothing.
 
 **Decisions (2026-09-29, WP6.2, #127).** Questions 1-4 answered by the owner, 5-6 by the lead:
 
@@ -1239,7 +1240,9 @@ sold with no effect. Existing `storedata` entries of dropped items stay and do n
 4. **No resource packs.** `BR11`–`BR43` are dropped; building panels already top up a shortfall.
 5. **The held-back items stay held back.** `MDOD`, `MSOD`, `BLK2`–`BLK5` and the Shiny decorations
    are "coming later" tiles with no price; their effects and prices were not checked against
-   `STORE.as`. **Update, beta.4:** the monster buffs and `BLK2`–`BLK5` are now sold. The wall
+   `STORE.as`. **Update, beta 6 (owner 2026-11-04):** the Shiny decorations are sold, from the
+   Build menu's Decorations tab rather than the Shop (§8.3 decision 8); `shop/buy` still refuses
+   `BUILDING…` codes. **Update, beta.4:** the monster buffs and `BLK2`–`BLK5` are now sold. The wall
    upgrades raise every Block below the tier to it for 3 / 6 / 10 / 15 Shiny per Block per level
    climbed, behind Town Hall 3 / 4 / 5 / 6 in the main yard (none in outposts), finishing the
    Block's running build or upgrade, awarding each level's points and healing it
@@ -1263,7 +1266,8 @@ first; placing from inventory is free and may be outside the plot. Routes: `deco
 the lead, and the plot question by the owner (option A):
 
 1. **Storage only.** Only what is in storage is placed, owned Shiny decorations included; no
-   decoration is bought (the Shop keeps them "coming later", §8.2).
+   decoration is bought (the Shop keeps them "coming later", §8.2). *Reversed for buying by the
+   owner on 2026-11-04: see decision 8.*
 2. **Apply stores what the layout leaves out**, as the Flash planner did
    (`BasePlanner.as:113-122`): every decoration not in the layout goes into storage as a recycle
    puts it, and a decoration in the drawer is a warning row, not a block. The drawer lists storage
@@ -1278,6 +1282,32 @@ the lead, and the plot question by the owner (option A):
    building, instead of Flash's 3240 x 2600 decoration area. One already outside the plot (a Flash
    save, an earlier Apply) may stay exactly at its saved spot; any move or new placement must land
    inside, and nothing is moved on its own.
+8. **Bought with Shiny (owner 2026-11-04, beta 6: "the decos from flash client", bought using
+   Shiny).** The decorations Flash sold are sold again, as Flash sold them: the Decorations tab
+   shows the stored ones first (count, free Place), then the ones for sale, each with its Shiny
+   price (`BUILDINGBUTTON.as:59-65`); picking one starts the placement and the Shiny is taken when
+   it goes down (`BFOUNDATION.as:1690-1700`), through `decor/buy`. Short of Shiny, Buy is blocked
+   and says how much more (Flash showed "Get Shiny", `BUILDINGOPTIONSPOPUP.as:453-455`); the server
+   refuses `409 credits` and charges nothing when the spot is refused. Defaults the lead chose, each
+   easy to change:
+   - **What is sold:** the 73 decorations of Flash's Decorations tab (`group` 4) that are not
+     `block`ed, at their store price `BUILDING<type>.c[0]` (5 to 500 Shiny), in the tab's order
+     (its Evil, Plants, Good, Flags and Premium sub-tabs one after the other, each by `order`,
+     `BUILDINGSPOPUP.as:104`, `:132`). The list is
+     `server/src/game-data/store/decorationsForSale.ts` (web copy `web/src/game/yard/decorShop.ts`).
+   - **Not sold, as in Flash:** what Flash's tab hid (`block: true`, shown only while one is in
+     storage, `BUILDINGSPOPUP.as:132`): 58 Camping Tent, 59 Childrens Jax, 67 Rock, 69 Scarecrow,
+     70 Sun Dial, 110/111 the Halloween pumpkins, 120 Big Gulp, 121/131 the Wild Monster totems,
+     135 the D.A.V.E. trophy. The store rows priced 0 are all among these, or have no props entry
+     at all (`BUILDING122`–`BUILDING126`). A stored one of these still shows and places free.
+   - **No limit:** every Flash decoration has `quantity: [0]`, which `BASE.CanBuild` reads as no
+     cap for a decoration (`BASE.as:3720-3740`).
+   - **The same placing rules** as decisions 3 and 5: inside the plot, no worker, no points,
+     finished at once, main yard only. One already stored is placed from storage for free even
+     through `decor/buy`, as Flash took storage first (`BFOUNDATION.as:1691`). Recycling a bought
+     one stores it, as any recycled decoration.
+   - **Pictures:** Flash's build-menu buttons and yard art, in both looks; every sold type has
+     both, so none is held back for a missing picture.
 
 | WP | Scope | Owns | Depends on | Size |
 | --- | --- | --- | --- | --- |

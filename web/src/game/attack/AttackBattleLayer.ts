@@ -16,17 +16,27 @@ import {
   isSpurtzCannon,
   parseDefenderForces,
   towerShellFlies,
+  trapStats,
   type Battle,
   type BattleVisualEvent,
   type CreepSnapshot,
 } from "@/game/combat/rules";
+import { playEffect, preloadEffects } from "@/game/sound/sound";
 import { damageStep } from "@/game/yard/YardBuildings";
 import { depthKey, type Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
-import type { AttackSession } from "./AttackSession";
+import { combatKind, type AttackSession } from "./AttackSession";
+import {
+  AttackSounds,
+  attackSoundsFor,
+  freshBurrowSound,
+  settleBurrow,
+  type BurrowSound,
+  type PlaySound,
+} from "./attackSounds";
 import { BombFx, type BombArt } from "./bombFx";
 import { bombCandidatesOf, bombHits, type BombCandidate } from "./bombTargets";
-import { BuildingBars } from "./buildingBars";
+import { BAR_OFFSET, BAR_WIDTH, BuildingBars } from "./buildingBars";
 import {
   BUILDING_NUMBER_LIFT,
   CreepFx,
@@ -37,6 +47,7 @@ import {
   lungeOffset,
   mouthPoint,
   projectileStyle,
+  type NumberMods,
 } from "./creepFx";
 import { FOMOR_ID } from "@/game/combat/rules/champions";
 import { DAVE_ID } from "@/game/combat/rules/specialMoves";
@@ -55,8 +66,9 @@ import { classicLook } from "@/game/classicLook";
 import { deviceTextureLimit, setDeviceTextureLimit, sheetResolution } from "@/game/quality";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
-import { StatusIconRow, statusesOf } from "./statusIcons";
+import { StatusIconRow, TowerStatusIcons, statusesOf } from "./statusIcons";
 import { aimLift, BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
+import { LootFx } from "./lootFx";
 import { SiegeFx, type SiegeArt } from "./siegeFx";
 import { TrapReveal } from "./trapReveal";
 import { WALK_OFF_PAUSE_TICKS, WALK_OFF_TICKS, planWalkOff, walkOffAt, type WalkOff } from "./walkOff";
@@ -633,6 +645,8 @@ export interface AttackBattleLayerOptions {
   readonly random?: () => number;
   /** Wall-clock milliseconds, for the rain after the end; `performance.now` unless a test fixes it. */
   readonly now?: () => number;
+  /** Where the attack's sounds go (`attackSounds.ts`); the game's effects player unless a test listens. */
+  readonly playSound?: PlaySound;
 }
 
 interface CreepView {
@@ -692,6 +706,8 @@ interface CreepView {
   /** The tick it last came up, for the hop; and of its last clod of dirt. */
   surfaceTick: number;
   dirtTick: number;
+  /** Its dig/arise sound, which waits for the state to hold (`settleBurrow`). */
+  burrowSound: BurrowSound;
 }
 
 type DeathEvent = Extract<BattleVisualEvent, { kind: "death" }>;
@@ -785,6 +801,8 @@ const BOMB_NUMBER_TICKS = 20;
 
 /** Ticks a trap's blast ring takes to fade. */
 export const BURST_TICKS = 14;
+/** The Heavy Trap's type: its explosion is the bigger one, with a small shake. */
+const HEAVY_TRAP = 117;
 const SCORCH_COLOUR = 0x1c1410;
 
 /** Whether the viewer asked for less motion. */
@@ -840,6 +858,8 @@ export class AttackBattleLayer {
   /* Buildings: the towers' guns and shots, the bars, the traps (#64, #66, #67). */
   private readonly towerFx: TowerFx;
   private readonly buildingBars: BuildingBars;
+  /** The towers' stickers over their bars: "weakened" by an Octo-ooze (owner, beta 6). */
+  private readonly towerStatus: TowerStatusIcons;
   private readonly traps = new TrapReveal();
   private readonly bursts: Burst[] = [];
   private readonly scorches: Graphics[] = [];
@@ -857,6 +877,8 @@ export class AttackBattleLayer {
   private readonly bombFx: BombFx;
   /** The Decoy, the Vacuum's hose and the Jars (Inferno WP 6.8), in the bombs' air layer. */
   private readonly siegeFx: SiegeFx;
+  /** Flash's attack sounds, chosen from what is drawn (`attackSounds.ts`). */
+  private readonly sounds: AttackSounds;
   /** Falling particles, above the buildings and the bars, under the shots; made on the first bomb. */
   private air: Container | null = null;
   /** Landed debris, on the ground under the buildings; made on the first bomb. */
@@ -877,6 +899,8 @@ export class AttackBattleLayer {
 
   /** Projectiles, smoke and damage numbers (#63, #68); its root sits last in the overlay. */
   private readonly fx: CreepFx;
+  /** Loot orbs and loot numbers (`ParticleLoot`, `ParticleText`). */
+  private readonly lootFx: LootFx;
   /** The damage step each building was last seen at, for the smoke on a crossing. */
   private readonly smokeStep = new Map<number, number>();
   private smokePrimed = false;
@@ -894,6 +918,8 @@ export class AttackBattleLayer {
 
   /* The bigger effects trial (feat/attack-juice-demo); drawing only. */
   private readonly juice: JuiceLevel;
+  /** "Effects: low" (or a small screen): the Modern trap explosion throws half the bits. */
+  private readonly effectsLow: boolean;
   /** The Classic look: Flash's battle, without the new effects (`game/classicLook.ts`). */
   private readonly classic: boolean;
   /** Wall-clock ms the picture holds still until, for a hit-stop; the battle runs on. */
@@ -914,6 +940,7 @@ export class AttackBattleLayer {
     this.now = options.now ?? (() => performance.now());
     this.classic = options.classic ?? classicLook();
     this.juice = this.classic ? "off" : (options.juice ?? juiceLevel());
+    this.effectsLow = (options.effectsQuality ?? effectsQuality()) === "low";
 
     for (const building of options.yard.buildings) {
       if (building.maxHp !== null && building.maxHp > 0) {
@@ -976,7 +1003,9 @@ export class AttackBattleLayer {
       },
       this.reducedMotion,
       this.juice !== "off",
-      !this.classic,
+      // Both looks show the numbers; Classic in a plain font (owner, beta 6).
+      true,
+      this.classic,
     );
     this.overlay.addChild(this.fx.root);
 
@@ -1019,6 +1048,13 @@ export class AttackBattleLayer {
       (id) => this.maxHpById.get(id),
     );
     this.effects.addChild(this.buildingBars.root);
+    this.towerStatus = new TowerStatusIcons((id) => {
+      const origin = this.host.centreOf(id) ? originOf.get(id) : undefined;
+      return origin
+        ? { x: origin.x + BAR_OFFSET.x + BAR_WIDTH / 2, y: origin.y + BAR_OFFSET.y }
+        : null;
+    });
+    this.effects.addChild(this.towerStatus.root);
     // The blast over the bars; the splats it leaves come after, over it.
     this.effects.addChild(this.blastAir);
 
@@ -1031,6 +1067,42 @@ export class AttackBattleLayer {
     });
 
     this.preloadRoster();
+
+    // Flash's attack sounds, in both looks; fetched now, not with the game.
+    const inferno = !this.session.raiding && combatKind(this.session.target) === "inferno";
+    const play = options.playSound ?? playEffect;
+    const siegeAlong = !inferno && this.session.target.roster.siege !== null;
+    if (!options.playSound) preloadEffects(attackSoundsFor(inferno, siegeAlong));
+    this.sounds = new AttackSounds({
+      // Nothing sounds once the battle is put to rest: a skip to the end is silent.
+      play: (effect, volume) => {
+        if (!this.settled) play(effect, volume);
+      },
+      inferno,
+      building: (id) => buildingOf.get(id),
+      creepOf: (id) => {
+        const view = this.views.get(id);
+        return view ? { monsterId: view.monsterId, friendly: view.snapshot?.friendly ?? false } : undefined;
+      },
+      jarred: (id) =>
+        this.session.battle()?.siege().jars.some((jar) => jar.buildingId === id && jar.health !== null) ?? false,
+      ...(options.random ? { random: options.random } : {}),
+    });
+    this.lootFx = new LootFx(
+      {
+        air: () => this.airLayer(),
+        labels: () => this.overlay,
+        building: (id) => buildingOf.get(id) ?? null,
+        zoom: () => this.host.zoom ?? 1,
+      },
+      {
+        // Flash's `param1 += 4` keys on the yard, not on who attacks it.
+        inferno: combatKind(this.session.target) === "inferno",
+        raided: this.session.raiding,
+        classicFont: this.classic,
+        reducedMotion: this.reducedMotion,
+      },
+    );
   }
 
   /**
@@ -1058,7 +1130,11 @@ export class AttackBattleLayer {
       // its view when its death is read, to stay on screen until the bullet lands.
       const live = battle.creeps();
       const seen = this.syncCreeps(live, tick);
-      for (const event of battle.recentEvents(this.lastEventTick)) this.onEvent(event);
+      for (const event of battle.recentEvents(this.lastEventTick)) {
+        this.sounds.onEvent(event);
+        this.lootFx.onEvent(event);
+        this.onEvent(event);
+      }
       this.lastEventTick = tick;
       this.settleGone(seen, tick);
 
@@ -1077,8 +1153,12 @@ export class AttackBattleLayer {
     this.blastFx.update(shown);
     this.fx.update(shown);
     this.bombFx.update(shown);
-    this.siegeFx.update(battle.siege(), shown);
+    const siege = battle.siege();
+    if (!this.settled) this.sounds.onSiege(siege, tick);
+    this.siegeFx.update(siege, shown);
+    this.lootFx.update(shown);
     this.showBombNumbers(shown);
+    this.towerStatus.sync(battle.weakenedTowers());
 
     if (this.damageDirty) {
       this.damageDirty = false;
@@ -1335,6 +1415,7 @@ export class AttackBattleLayer {
 
     this.towerFx.destroy();
     this.buildingBars.destroy();
+    this.towerStatus.destroy();
     for (const burst of this.bursts) burst.ring.destroy();
     this.bursts.length = 0;
     for (const scorch of this.scorches) scorch.destroy();
@@ -1346,6 +1427,7 @@ export class AttackBattleLayer {
     this.fx.destroy();
     this.bombFx.destroy();
     this.siegeFx.destroy();
+    this.lootFx.destroy();
     this.heldBombHp.clear();
     this.rains.clear();
     this.bombNumbers.clear();
@@ -1612,6 +1694,7 @@ export class AttackBattleLayer {
     view.burrowed = false;
     view.surfaceTick = Number.NEGATIVE_INFINITY;
     view.dirtTick = tick;
+    view.burrowSound = freshBurrowSound();
     view.body.visible = true;
     view.barBack.visible = true;
     view.barFront.visible = true;
@@ -1672,6 +1755,7 @@ export class AttackBattleLayer {
       burrowed: false,
       surfaceTick: Number.NEGATIVE_INFINITY,
       dirtTick: 0,
+      burrowSound: freshBurrowSound(),
     };
   }
 
@@ -1972,6 +2056,7 @@ export class AttackBattleLayer {
         event.amount,
         PROJECTILE_TICKS,
         projectileStyle(monsterId),
+        modsOf(event),
       );
       return;
     }
@@ -1994,8 +2079,19 @@ export class AttackBattleLayer {
     // Flash showed the same red numbers on buildings (`BFOUNDATION.as:534`).
     if (event.buildingId >= 0 && event.amount > 0) {
       const over = { x: target.x, y: target.y - BUILDING_NUMBER_LIFT };
-      this.fx.number(event.tick, `building:${event.buildingId}`, -1, event.amount, over, "damage");
+      const key = `building:${event.buildingId}`;
+      this.fx.number(event.tick, key, -1, event.amount, over, "damage", modsOf(event));
     }
+  }
+
+  /** An Ichi's thorns struck a tower: the number over it, with the thorn mark (owner, beta 6). */
+  private onThorns(event: Extract<BattleVisualEvent, { kind: "thorns" }>): void {
+    if (event.amount <= 0) return;
+    const centre = this.host.centreOf(event.buildingId);
+    if (!centre) return;
+    const over = { x: centre.x, y: centre.y - BUILDING_NUMBER_LIFT };
+    const key = `building:${event.buildingId}`;
+    this.fx.number(event.tick, key, -1, event.amount, over, "damage", { thorns: true });
   }
 
   /**
@@ -2012,7 +2108,8 @@ export class AttackBattleLayer {
       ? { x: view.lastX, y: view.lastY }
       : groundWorld(wound.ix, wound.iy, this.origin);
     const at = { x: ground.x, y: (view?.top ?? ground.y - BODY_HEIGHT) - 6 };
-    this.fx.number(tick, `creep:${wound.creepId}`, wound.creepId, wound.amount, at, "damage");
+    const key = `creep:${wound.creepId}`;
+    this.fx.number(tick, key, wound.creepId, wound.amount, at, "damage", modsOf(wound));
   }
 
   /**
@@ -2100,6 +2197,7 @@ export class AttackBattleLayer {
         ? { x: view.lastX, y: view.lastY }
         : groundWorld(death.ix, death.iy, this.origin);
       this.spawnSplat(tick, at, death.champion ? 22 : 12);
+      this.sounds.onDeath(death);
       // The engine let go of this creep a flight ago; its ghost goes with the splat.
       if (view && !this.ledger.holds(death.creepId)) {
         this.views.delete(death.creepId);
@@ -2237,6 +2335,7 @@ export class AttackBattleLayer {
       this.rains.set(key, { left: Math.trunc(bomb.particles), owed });
       const at = groundWorld(event.x, event.y, this.origin);
       this.bombFx.drop(key, bomb, at, Math.min(event.t, tick), this.host.zoom ?? 1);
+      this.sounds.onBomb(bomb.resource);
     }
   }
 
@@ -2298,6 +2397,7 @@ export class AttackBattleLayer {
       const crossedDestroyed = step >= 4 && before < 4;
       const crossedDamaged = step >= 2 && before < 2;
       if (!crossedDestroyed && !crossedDamaged) continue;
+      this.sounds.onBuilding(id, crossedDestroyed ? "destroyed" : "damaged");
       const centre = this.host.centreOf(id);
       if (centre) this.fx.poof(tick, centre, crossedDestroyed);
       if (centre && crossedDestroyed && this.juice !== "off") this.demolish(id, centre, tick);
@@ -2338,6 +2438,10 @@ export class AttackBattleLayer {
     }
     if (event.kind === "hurt") {
       if (!this.ledger.hurt(event)) this.showWound(event, event.tick);
+      return;
+    }
+    if (event.kind === "thorns") {
+      this.onThorns(event);
       return;
     }
     if (event.kind === "shot") {
@@ -2415,6 +2519,7 @@ export class AttackBattleLayer {
     if (this.ledger.death(event)) return;
     const at = groundWorld(event.ix, event.iy, this.origin);
     this.spawnSplat(event.tick, at, event.champion ? 22 : 12);
+    this.sounds.onDeath(event);
   }
 
   /**
@@ -2424,6 +2529,8 @@ export class AttackBattleLayer {
    */
   private tunnel(view: CreepView, creep: CreepSnapshot, ground: Point, tick: number): void {
     const under = creep.burrowed === true;
+    const sound = settleBurrow(view.burrowSound, under, tick);
+    if (sound !== null) this.sounds.onBurrow(sound);
     const dirt = dirtFor(view.burrowed, under, tick, view.dirtTick);
     if (dirt === null) return;
     if (dirt === "dig" && !under) {
@@ -2619,8 +2726,10 @@ export class AttackBattleLayer {
   /**
    * Shows every trap that has just gone off (issue #66): the renderer lifts
    * its concealment, `syncDamage` then draws it as the ruin its zero health
-   * says, and a scorch with a fading ring marks the blast, as `BTRAP.Explode`
-   * did (`client/scripts/BTRAP.as:88-153`).
+   * says, and a scorch marks the blast, as `BTRAP.Explode` did
+   * (`client/scripts/BTRAP.as:88-153`). With the Classic look a thin fading
+   * ring goes with it; the Modern look draws the trap explosion instead
+   * (`BlastFx.trap`, a sample for the owner, beta 6) with Flash's trap sound.
    */
   private revealTraps(fired: readonly number[], tick: number): void {
     for (const id of this.traps.sync(fired)) {
@@ -2629,11 +2738,22 @@ export class AttackBattleLayer {
       if (!building) continue;
       // `EFFECTS.Scorch(_mc.x, _mc.y + 5)`: just below the origin.
       const at = { x: building.worldX, y: building.worldY + 5 };
+      // Flash's trap sound, in both looks; the Modern look's Heavy Trap adds a building's fall (owner's sample).
+      this.sounds.onTrap(this.juice !== "off" && building.type === HEAVY_TRAP);
       const scorch = new Graphics();
       scorch.ellipse(0, 0, 26, 13).fill({ color: SCORCH_COLOUR, alpha: 0.55 });
       scorch.position.set(at.x, at.y);
       this.effects.addChild(scorch);
       this.scorches.push(scorch);
+      // Modern: the trap explosion (a sample for the owner, beta 6), its fireball as big as the blast; the
+      // blast is a circle round the footprint's middle, on screen root two times its radius across.
+      const blast = trapStats(building.type)?.size;
+      if (this.juice !== "off" && blast) {
+        const middle = { x: building.worldX, y: building.worldY + 10 };
+        const heavy = building.type === HEAVY_TRAP;
+        this.blastFx.trap(tick, middle, blast * Math.SQRT2, heavy, this.effectsLow);
+        continue;
+      }
       const ring = new Graphics();
       ring.position.set(at.x, at.y);
       this.effects.addChild(ring);
@@ -2682,3 +2802,17 @@ export class AttackBattleLayer {
     }
   }
 }
+
+/** A hit's or wound's modifiers for its number: a crit, a cut, thorns (owner, beta 6). */
+const modsOf = (event: {
+  readonly bonus?: number;
+  readonly reduced?: number;
+  readonly thorns?: boolean;
+}): NumberMods | undefined =>
+  event.bonus === undefined && event.reduced === undefined && event.thorns !== true
+    ? undefined
+    : {
+        ...(event.bonus === undefined ? {} : { bonus: event.bonus }),
+        ...(event.reduced === undefined ? {} : { reduced: event.reduced }),
+        ...(event.thorns === true ? { thorns: true } : {}),
+      };

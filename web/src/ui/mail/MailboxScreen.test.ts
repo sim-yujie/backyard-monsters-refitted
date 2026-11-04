@@ -447,6 +447,28 @@ describe("the mailbox screen", () => {
     expect(rows(host)).toHaveLength(0);
   });
 
+  it("keeps a thread's Propose truce and Block player in a row of their own, apart from the name and subject", async () => {
+    const api = fakeApi([[message(), notice]], { 1: [message()], 2: [notice] });
+    const { host } = await openScreen(api);
+    click(rows(host)[1]);
+    await settle();
+
+    const main = host.querySelector(".mail-pane__head > .mail-pane__main");
+    const titles = main?.querySelector(":scope > .mail-pane__titles");
+    const actions = main?.querySelector(":scope > .mail-pane__actions");
+    expect(titles?.querySelector(".mail-pane__name")?.textContent).toBe("Bramblefoot");
+    expect(titles?.querySelector<HTMLElement>(".mail-pane__name")?.title).toBe("Bramblefoot");
+    expect(titles?.querySelector(".btn")).toBeNull();
+    expect(actions?.querySelector(":scope > .mail-pane__truce")?.textContent).toBe("Propose truce");
+    expect(actions?.querySelector(":scope > .mail-block .mail-block__ask")?.textContent).toBe("Block player");
+
+    // A notice has neither button, and so no row for them.
+    click(rows(host)[0]);
+    await settle();
+    expect(host.querySelector(".mail-pane__main .mail-pane__titles")).not.toBeNull();
+    expect(host.querySelector(".mail-pane__actions")).toBeNull();
+  });
+
   it("shows the server's words when a block is refused (#323)", async () => {
     const api = fakeApi([[message()]], { 1: [message()] });
     const words = "You have reported a lot of threads. Please wait a while before reporting more.";

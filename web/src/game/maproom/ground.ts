@@ -34,9 +34,21 @@ export const groundLift = (height: number): number => {
   return lift === 0 ? 0 : lift;
 };
 
-/** A cell's lift, or 0 for one the viewer cannot see or has not loaded. */
+/**
+ * Whether the ground is drawn flat (Map Room 2's painted look, `painted/`): no cell columns, so
+ * every lift is 0 and markers, outlines and picking use the cells' own places.
+ */
+let flatGround = false;
+export const setFlatGround = (flat: boolean): void => {
+  flatGround = flat;
+};
+
+/** Whether the ground is drawn flat, i.e. the painted look is on screen (heights show as hills). */
+export const isFlatGround = (): boolean => flatGround;
+
+/** A cell's lift, or 0 for one the viewer cannot see or has not loaded (or on flat ground). */
 export const cellLift = (cell: MapCell | undefined): number =>
-  cell === undefined || isFogCell(cell) ? 0 : groundLift(cell.i);
+  flatGround || cell === undefined || isFogCell(cell) ? 0 : groundLift(cell.i);
 
 /** Moves a flat `[x, y, ...]` outline (`HexGrid.writeCellCorners`) by a lift, in place. */
 export const liftCorners = (corners: number[], lift: number): number[] => {

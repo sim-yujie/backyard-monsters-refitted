@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { useBotFloor } from "../../testing/botFloor.js";
 import { MikroORM } from "@mikro-orm/postgresql";
 
 import ormConfig from "../../mikro-orm.config.js";
@@ -32,6 +33,9 @@ const T = 3;
 const PLAYER = "wp1friend";
 
 describe.skipIf(!dbName)("a friend request under the §6.2 rule is declined through the sweep (issue #368)", () => {
+  // Written for bots from level 15; the floor of 25 has its own tests (`useBotFloor`).
+  useBotFloor(15);
+
   let orm: MikroORM;
 
   const sql = <R = Record<string, any>>(query: string, params: unknown[] = []) => orm.em.fork().execute<R[]>(query, params);

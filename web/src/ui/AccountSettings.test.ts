@@ -17,8 +17,11 @@ const countryApi = vi.hoisted(() => ({ setCountry: vi.fn() }));
 vi.mock("@/api/country", () => countryApi);
 const chat = vi.hoisted(() => ({ worldChat: { setCountryRoom: vi.fn() } }));
 vi.mock("@/game/chat/chatSession", () => chat);
+const lookReport = vi.hoisted(() => ({ reportLook: vi.fn() }));
+vi.mock("@/app/lookReport", () => lookReport);
 
 import { resetShinyLockForTests, shinyLocked } from "@/game/shinyLock";
+import { setWorldChatOn, worldChatOn } from "@/game/chat/worldChatSetting";
 import { SETTINGS_TEXT, openAccountSettings } from "./AccountSettings";
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -209,9 +212,11 @@ describe("AccountSettings", () => {
     expect(select.value).toBe("high");
     const hint = document.querySelector("#settings-quality-hint")!;
     expect(hint.textContent).toBe(SETTINGS_TEXT.downloadHint.high);
+    lookReport.reportLook.mockClear();
     select.value = "low";
     select.dispatchEvent(new Event("change"));
     expect(localStorage.getItem("bymr.quality")).toBe("low");
+    expect(lookReport.reportLook).toHaveBeenCalledTimes(1);
     expect(hint.textContent).toContain(SETTINGS_TEXT.downloadHint.low);
     expect(hint.textContent).toContain(SETTINGS_TEXT.downloadSaved);
     localStorage.clear();
@@ -237,10 +242,13 @@ describe("AccountSettings", () => {
       SETTINGS_TEXT.lookClassic,
     ]);
     expect(look.value).toBe("modern");
+    lookReport.reportLook.mockClear();
     look.value = "classic";
     look.dispatchEvent(new Event("change"));
     expect(localStorage.getItem("bymr.look")).toBe("classic");
     expect(document.body.textContent).toContain(SETTINGS_TEXT.lookSaved);
+    // The new choice goes to the owner's dashboard (owner 4 Nov 2026); the player sees nothing of it.
+    expect(lookReport.reportLook).toHaveBeenCalledTimes(1);
     look.value = "modern";
     look.dispatchEvent(new Event("change"));
     expect(localStorage.getItem("bymr.look")).toBeNull();
@@ -259,13 +267,54 @@ describe("AccountSettings", () => {
       SETTINGS_TEXT.musicFlash,
     ]);
     expect(music.value).toBe("style");
+    lookReport.reportLook.mockClear();
     music.value = "flash";
     music.dispatchEvent(new Event("change"));
     expect(localStorage.getItem("bymr.music")).toBe("flash");
+    expect(lookReport.reportLook).toHaveBeenCalledTimes(1);
     expect(document.body.textContent).toContain(SETTINGS_TEXT.musicSaved);
     music.value = "style";
     music.dispatchEvent(new Event("change"));
     expect(localStorage.getItem("bymr.music")).toBeNull();
+  });
+
+  it("offers a Font choice that shows at once and is kept in this browser", async () => {
+    localStorage.clear();
+    delete document.documentElement.dataset.font;
+    await open({});
+    const font = document.querySelector<HTMLSelectElement>("#settings-font")!;
+    expect(font.closest("label")!.textContent).toContain(SETTINGS_TEXT.fontLabel);
+    expect([...font.options].map((option) => option.textContent)).toEqual([
+      SETTINGS_TEXT.fontGame,
+      SETTINGS_TEXT.fontClear,
+      SETTINGS_TEXT.fontReadable,
+    ]);
+    // Each option is drawn in its own face, so the list is a preview.
+    expect([...font.options].map((option) => option.style.fontFamily)).toEqual([
+      '"Titan One", sans-serif',
+      '"Nunito", sans-serif',
+      '"Atkinson Hyperlegible", sans-serif',
+    ]);
+    expect(font.value).toBe("game");
+    font.value = "readable";
+    font.dispatchEvent(new Event("change"));
+    expect(document.documentElement.dataset.font).toBe("readable");
+    expect(localStorage.getItem("bymr.font")).toBe("readable");
+    expect(document.querySelector("#settings-font-hint")!.textContent).toBe(SETTINGS_TEXT.fontHint.readable);
+    font.value = "game";
+    font.dispatchEvent(new Event("change"));
+    expect(document.documentElement.dataset.font).toBeUndefined();
+    expect(localStorage.getItem("bymr.font")).toBeNull();
+  });
+
+  it("shows the saved Font choice when the dialog opens, even when the account fails to load", async () => {
+    localStorage.clear();
+    localStorage.setItem("bymr.font", "clear");
+    api.fetchAccount.mockRejectedValue(new Error("down"));
+    openAccountSettings({ container: document.body });
+    await settle();
+    expect(document.querySelector<HTMLSelectElement>("#settings-font")!.value).toBe("clear");
+    localStorage.clear();
   });
 
   it("shows Classic for a player who had Classic building art on, even when the account fails to load", async () => {
@@ -338,5 +387,36 @@ describe("AccountSettings", () => {
       expect(chat.worldChat.setCountryRoom).not.toHaveBeenCalled();
       expect(now()).toContain("Philippines");
     });
+  });
+});
+
+describe("AccountSettings: World chat", () => {
+  afterEach(() => setWorldChatOn(true));
+
+  it("is on by default; switching it off turns world chat off now and keeps it in this browser", async () => {
+    localStorage.clear();
+    setWorldChatOn(true);
+    await open({});
+    const box = document.querySelector<HTMLInputElement>("#settings-world-chat")!;
+    expect(box.checked).toBe(true);
+    expect(box.closest("label")!.textContent).toBe(SETTINGS_TEXT.chatLabel);
+
+    box.checked = false;
+    box.dispatchEvent(new Event("change"));
+    expect(worldChatOn()).toBe(false);
+    expect(localStorage.getItem("bymr.worldChat")).toBe("off");
+
+    box.checked = true;
+    box.dispatchEvent(new Event("change"));
+    expect(worldChatOn()).toBe(true);
+    expect(localStorage.getItem("bymr.worldChat")).toBeNull();
+  });
+
+  it("shows Off when it is off, even when the account fails to load", async () => {
+    setWorldChatOn(false);
+    api.fetchAccount.mockRejectedValue(new Error("down"));
+    openAccountSettings({ container: document.body });
+    await settle();
+    expect(document.querySelector<HTMLInputElement>("#settings-world-chat")!.checked).toBe(false);
   });
 });

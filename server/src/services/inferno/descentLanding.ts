@@ -7,7 +7,7 @@ import { InfernoProgress } from "../../database/models/infernoprogress.model.js"
 import { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import { attackNotBoundErr } from "../../errors/errors.js";
-import type { ResourceAmounts } from "../../game-rules/combat/index.js";
+import type { FlingLog, ResourceAmounts } from "../../game-rules/combat/index.js";
 import { BaseSaveSchema } from "../../schemas/BaseSaveSchema.js";
 import { postgres } from "../../server.js";
 import type { JsonObject } from "../../types/JsonObject.js";
@@ -15,7 +15,10 @@ import type { SaveData } from "../../types/EntityData.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
 import { recordAchievementEvents } from "../achievements/events.js";
-import { parseFlingLog } from "../base/attackCheckpoint.js";
+import { checkpointSession, parseFlingLog } from "../base/attackCheckpoint.js";
+import type { AbandonedOutcome } from "../base/combat/abandonedAttack.js";
+import { replayAbandonedInWorker } from "../base/combat/replayRunner.js";
+import { endRowlessAttack, landRowlessOnce, type RowlessCheckpoint } from "../base/rowlessCheckpoint.js";
 import { checkAttackBinding } from "../base/attackSession.js";
 import { battleReplayInput, battleTick } from "../base/combat/battle.js";
 import { championsAfterAttack } from "../base/combat/attackerRow.js";
@@ -33,7 +36,6 @@ import {
 } from "./descent.js";
 import {
   acquireDescentFinalLock,
-  endDescentSession,
   readDescentSession,
   releaseDescentFinalLock,
   type DescentSession,
@@ -70,9 +72,11 @@ type BaseSaveData = TypeOf<typeof BaseSaveSchema>;
  * achievements hear Flash's Descent counter (18 "Into the Depths" at 1, after
  * any first attack; 19 "Rock Bottom" at 14).
  *
- * A replay past its deadline lands nothing: the answer is
+ * A replay past its deadline lands nothing yet: the answer is
  * `attackResultPendingErr` and the session is kept for a resent save, as for
- * a Map Room 1 tribe. An attack left without a final save lands nothing.
+ * a Map Room 1 tribe. An attack left without a final save lands from its last
+ * checkpoint, through this same landing (`landDescentFromCheckpoint`,
+ * `finaliseRowlessAttack.ts`; owner, 2 Nov 2026).
  */
 
 /** What the landing answers about the Descent, for the report and the map. */
@@ -118,77 +122,141 @@ const descentYard = (template: SaveData, baseid: string, kept: DescentYardState 
     buildinghealthdata: { ...(kept?.health ?? {}) },
   });
 
+/** The Descent yard as the start served it, with the player's progress through the Descent. */
+interface ServedDescent {
+  readonly baseid: string;
+  readonly index: number;
+  readonly template: SaveData;
+  readonly progress: Awaited<ReturnType<typeof readInfernoProgress>>;
+  readonly kept: DescentYardState | undefined;
+  readonly yard: Save;
+}
+
+const servedDescent = async (user: User, baseid: string): Promise<ServedDescent> => {
+  const index = descentIndexOf(baseid)!;
+  const template = descentYardOf(index);
+  const progress = await readInfernoProgress(postgres.em, user.userid);
+  const kept = progress.descentYards[baseid];
+  return { baseid, index, template, progress, kept, yard: descentYard(template, baseid, kept) };
+};
+
 const land = async (ctx: Context, user: User, saveData: BaseSaveData, finalises: boolean) => {
-  const em = postgres.em;
   const userSave = user.save!;
   const now = getCurrentDateTime();
   const baseid = String(saveData.baseid);
 
   const descent = await requireDescentBinding(ctx, user, saveData, now);
-  const index = descentIndexOf(baseid)!;
-  const template = descentYardOf(index);
-  const progress = await readInfernoProgress(em, user.userid);
-  const kept = progress.descentYards[baseid];
-  const yard = descentYard(template, baseid, kept);
+  const served = await servedDescent(user, baseid);
 
-  if (!finalises) return { save: yard, descent: null };
+  if (!finalises) return { save: served.yard, descent: null };
 
-  const battle = await descentBattle(ctx, user, saveData, descent, yard);
+  const battle = await descentBattle(ctx, user, saveData, descent, served.yard);
 
-  // The army leaves the main yard's housing through the fling log, capped by
-  // what it housed at the start (the session's `entryHoused`), as a Map Room 1
-  // attack's does. Only the main yard flings in the Descent.
+  // Only the main yard flings in the Descent.
   const entries = Array.isArray(saveData.monsterupdate) ? saveData.monsterupdate : [];
-  await monsterUpdateHandler(
-    entries.filter((entry: { baseid?: unknown }) => String(entry?.baseid) === String(userSave.baseid)),
-    userSave,
-    { session: descent.session, finalises: true, flinglog: saveData.flinglog, now, mapRoom3: false }
+  return writeDescentLanding(
+    user,
+    descent,
+    served,
+    battle,
+    {
+      entries: entries.filter((entry: { baseid?: unknown }) => String(entry?.baseid) === String(userSave.baseid)),
+      attackerchampion: saveData.attackerchampion,
+      flinglog: saveData.flinglog,
+    },
+    now
   );
+};
 
-  // The attacker's champions as the log explains them (#23, C1), and what
-  // each that fought learned from the server's battle (issue #219). No siege
-  // weapon is used in the Descent, so the siege stock is left alone.
-  if (saveData.attackerchampion) {
-    userSave.champion = championsAfterAttack(userSave.champion, saveData.attackerchampion, saveData.flinglog);
-  }
-  if (battle) userSave.champion = championsAfterLessons(userSave.champion, battle.lessons, battle.log) ?? userSave.champion;
+/** The server's battle for a Descent attack, with the log it fought. */
+type DescentBattle = AbandonedOutcome & { log: FlingLog };
 
-  // The replay's gain, capped by what the yard has left to give, into the
-  // Inferno purse in full.
-  const loot = creditableMR1Loot(battle?.attackloot, mr1TribePool(template), kept?.looted);
-  userSave.iresources = purseAfterDescentLoot(userSave.iresources, loot);
+/** The attacker's side of a landing: what the save (or the checkpoint) says of the attacker's own row. */
+interface DescentAttackerSide {
+  /** The main yard's `monsterupdate` entries; the fling log decides what leaves. */
+  readonly entries: readonly unknown[];
+  readonly attackerchampion: unknown;
+  readonly flinglog: unknown;
+}
 
-  const update = descentProgressAfter(progress, {
-    index,
-    damage: battle?.damage ?? 0,
-    health: battle?.buildinghealthdata ?? kept?.health ?? {},
-    loot,
-  });
+/**
+ * Lands a Descent attack (see the file comment) and ends it: the final save's
+ * path, and the finaliser's for an attack its attacker left
+ * (`finaliseRowlessAttack.ts`). The caller holds the Descent's final lock.
+ */
+const writeDescentLanding = async (
+  user: User,
+  descent: DescentSession,
+  served: ServedDescent,
+  battle: DescentBattle | null,
+  attacker: DescentAttackerSide,
+  now: number
+): Promise<{ save: Save; descent: DescentLanded }> => {
+  const em = postgres.em;
+  const userSave = user.save!;
+  const { baseid, index, template, progress, kept, yard } = served;
+  const ref = { kind: "descent" as const, userid: user.userid, baseid };
 
-  let row = await em.findOne(InfernoProgress, { userid: user.userid });
-  if (!row) {
-    row = em.create(InfernoProgress, { userid: user.userid });
-  }
-  row.descent_destroyed = update.descentDestroyed;
-  row.descent_best = update.descentBest;
-  row.descent_yards = update.descentYards as InfernoProgress["descent_yards"];
-  row.updated_at = new Date(now * 1000);
+  // Marked landed before anything is written: whatever a crash after the
+  // write leaves behind lands nothing more (`landRowlessOnce`).
+  const { loot, update, infernobaseid } = await landRowlessOnce(ref, descent.session, async () => {
+    // The army leaves the main yard's housing through the fling log, capped by
+    // what it housed at the start (the session's `entryHoused`), as a Map Room 1
+    // attack's does.
+    await monsterUpdateHandler([...attacker.entries], userSave, {
+      session: descent.session,
+      finalises: true,
+      flinglog: attacker.flinglog,
+      now,
+      mapRoom3: false,
+    });
 
-  let infernobaseid = progress.infernoBaseid;
-  if (update.captured) {
-    row.descent_passed_at = new Date(now * 1000);
-    if (!infernobaseid) {
-      const infernoYard = await createInfernoYard(em, user, userSave);
-      infernobaseid = infernoYard.baseid;
-      row.inferno_baseid = infernobaseid;
-      // Owning the yard unlocks Korath on the surface (owner I10, WP 5.1).
-      row.korath_unlocked_at ??= new Date(now * 1000);
+    // The attacker's champions as the log explains them (#23, C1), and what
+    // each that fought learned from the server's battle (issue #219). No siege
+    // weapon is used in the Descent, so the siege stock is left alone.
+    if (attacker.attackerchampion) {
+      userSave.champion = championsAfterAttack(userSave.champion, attacker.attackerchampion as never, attacker.flinglog);
     }
-  }
+    if (battle) userSave.champion = championsAfterLessons(userSave.champion, battle.lessons, battle.log) ?? userSave.champion;
 
-  em.persist(row);
-  em.persist(userSave);
-  await em.flush();
+    // The replay's gain, capped by what the yard has left to give, into the
+    // Inferno purse in full.
+    const loot = creditableMR1Loot(battle?.attackloot, mr1TribePool(template), kept?.looted);
+    userSave.iresources = purseAfterDescentLoot(userSave.iresources, loot);
+
+    const update = descentProgressAfter(progress, {
+      index,
+      damage: battle?.damage ?? 0,
+      health: battle?.buildinghealthdata ?? kept?.health ?? {},
+      loot,
+    });
+
+    let row = await em.findOne(InfernoProgress, { userid: user.userid });
+    if (!row) {
+      row = em.create(InfernoProgress, { userid: user.userid });
+    }
+    row.descent_destroyed = update.descentDestroyed;
+    row.descent_best = update.descentBest;
+    row.descent_yards = update.descentYards as InfernoProgress["descent_yards"];
+    row.updated_at = new Date(now * 1000);
+
+    let infernobaseid = progress.infernoBaseid;
+    if (update.captured) {
+      row.descent_passed_at = new Date(now * 1000);
+      if (!infernobaseid) {
+        const infernoYard = await createInfernoYard(em, user, userSave);
+        infernobaseid = infernoYard.baseid;
+        row.inferno_baseid = infernobaseid;
+        // Owning the yard unlocks Korath on the surface (owner I10, WP 5.1).
+        row.korath_unlocked_at ??= new Date(now * 1000);
+      }
+    }
+
+    em.persist(row);
+    em.persist(userSave);
+    await em.flush();
+    return { loot, update, infernobaseid };
+  });
 
   if (update.captured) {
     logger.info("Descent passed by {username} (userid {userid}): Inferno yard {baseid}", {
@@ -207,8 +275,9 @@ const land = async (ctx: Context, user: User, saveData: BaseSaveData, finalises:
     logger.error(`Recording Descent achievements for main save ${userSave.basesaveid} failed: ${err}`);
   }
 
-  // Spent: the lock is still held, so a copy of this save finds nothing.
-  await endDescentSession(user.userid);
+  // Spent: the lock is still held, so a copy of this save finds nothing, and
+  // the attack's checkpoint goes with it, so the finaliser does not land it again.
+  await endRowlessAttack(ref, descent.session.attackid);
 
   if (battle) yard.buildinghealthdata = battle.buildinghealthdata;
   return {
@@ -226,24 +295,20 @@ const land = async (ctx: Context, user: User, saveData: BaseSaveData, finalises:
 };
 
 /**
- * The server's battle for the save that ends a Descent attack, or null when
- * there is none to fight: no roster in the session, or no usable fling log.
- *
- * @throws {ClientSafeError} `attackResultPendingErr` when the replay timed out.
+ * The replay input for a Descent attack: the log cut to what the attack can
+ * do (`descentFightableLog`), over the yard as an Inferno yard, to `tick`.
+ * Shared by the save and the finaliser.
  */
-const descentBattle = async (
-  ctx: Context,
+const descentReplayInput = (
   user: User,
-  saveData: BaseSaveData,
   descent: DescentSession,
-  yard: Save
+  yard: Save,
+  log: FlingLog,
+  tick: number,
+  left: boolean | undefined
 ) => {
   const { session } = descent;
-  const log = parseFlingLog(saveData.flinglog);
-  if (!session.entryHoused || !log) return null;
-
-  const userSave = user.save!;
-  const input = battleReplayInput({
+  return battleReplayInput({
     flinglog: descentFightableLog(log, descent.flingerCapacity, session.attackerAcademy),
     session,
     defender: {
@@ -255,17 +320,37 @@ const descentBattle = async (
     },
     // No catapult and no siege in the Descent: the cut log has neither, and
     // the attacker fights with none.
-    attacker: { ...userSave, catapult: 0, siege: null } as never,
-    tick: battleTick(saveData.tick),
+    attacker: { ...user.save!, catapult: 0, siege: null } as never,
+    tick,
     declareWar: session.declareWar ?? false,
-    left: saveData.left,
+    left,
     // From yard 7 the fight burns surface monsters (WP 1.21), as the client's does.
-    descentYard: descentIndexOf(String(saveData.baseid))! + 1,
+    descentYard: descentIndexOf(String(yard.baseid))! + 1,
   });
+};
+
+/**
+ * The server's battle for the save that ends a Descent attack, or null when
+ * there is none to fight: no roster in the session, or no usable fling log.
+ *
+ * @throws {ClientSafeError} `attackResultPendingErr` when the replay timed out.
+ */
+const descentBattle = async (
+  ctx: Context,
+  user: User,
+  saveData: BaseSaveData,
+  descent: DescentSession,
+  yard: Save
+): Promise<DescentBattle | null> => {
+  const { session } = descent;
+  const log = parseFlingLog(saveData.flinglog);
+  if (!session.entryHoused || !log) return null;
+
+  const input = descentReplayInput(user, descent, yard, log, battleTick(saveData.tick), saveData.left);
   if (!input) return null;
 
   const base = { baseid: String(saveData.baseid) };
-  const fought = await replayBattleForSave(ctx, user, base, input, "a Descent attack has no finaliser, so nothing lands");
+  const fought = await replayBattleForSave(ctx, user, base, input, "the finaliser lands it from its checkpoint");
   const battle = { ...fought, log: input.log };
 
   // Where the save disagrees with it: logged, or refused under
@@ -288,6 +373,50 @@ const descentBattle = async (
     combatConfig.mode
   );
   return battle;
+};
+
+/**
+ * Lands a Descent attack its attacker left without the final save, from the
+ * attack's last checkpoint (`finaliseRowlessAttack.ts`; owner, 2 Nov 2026):
+ * the battle replayed to the moment the attacker was last seen, then landed
+ * exactly as the final save lands it: the monsters flung by then spent, the
+ * yard beaten only if that battle beat it, its damage and loot of that
+ * moment, and the Descent's counter. With `replay` false (a replay that keeps
+ * failing) there is no battle: the flung monsters are spent all the same and
+ * the yard keeps what it had. The caller holds the Descent's final lock.
+ */
+export const landDescentFromCheckpoint = async (
+  user: User,
+  stored: RowlessCheckpoint,
+  now: number,
+  replay = true
+): Promise<{ save: Save; descent: DescentLanded }> => {
+  const { checkpoint } = stored;
+  const descent: DescentSession = {
+    baseid: stored.baseid,
+    flingerCapacity: stored.flingerCapacity,
+    session: checkpointSession(checkpoint),
+  };
+  const served = await servedDescent(user, stored.baseid);
+
+  let battle: DescentBattle | null = null;
+  if (replay && descent.session.entryHoused) {
+    const input = descentReplayInput(user, descent, served.yard, checkpoint.flinglog, checkpoint.tick, true);
+    if (input) battle = { ...(await replayAbandonedInWorker(input)), log: input.log };
+  }
+
+  return writeDescentLanding(
+    user,
+    descent,
+    served,
+    battle,
+    {
+      entries: [{ baseid: user.save!.baseid, m: {} }],
+      attackerchampion: battle?.attackerchampion,
+      flinglog: checkpoint.flinglog,
+    },
+    now
+  );
 };
 
 /**

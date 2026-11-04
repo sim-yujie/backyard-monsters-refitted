@@ -1,5 +1,6 @@
 import type { BaseLoadResponse, BuildingData, Resources } from "@/api/types";
 import { MUSHROOM_TYPE } from "@/game/combat/rules/damagePercent";
+import { landFeatureEffect } from "@/game/combat/rules/landFeatures";
 import { caveState, caveYardMargin } from "@/game/inferno/cave";
 import { ArtState, buildingName, maxHealth, resolveArt } from "./buildingArt";
 import { OUTPOST_CORE_TYPE, type YardKind } from "./buildingCostData";
@@ -139,6 +140,8 @@ export interface Yard {
    * around the plot. A wild monster camp is always foreign.
    */
   readonly foreign: boolean;
+  /** A wild monster camp, on the plot `WMBASE.Setup` grows it to (`wildYardSize`). */
+  readonly wild?: boolean;
   /**
    * Which props table the yard reads: `outpost` for a player's outpost (its
    * save's `type`), whose limits, prices and level caps are its own and whose
@@ -156,6 +159,13 @@ export interface Yard {
    * always 0 there.
    */
   readonly cellHeight: number;
+  /**
+   * The tower range change of the Map Room 2 cell's land feature, whole
+   * percent (`landFeatures.ts`, the load's `landfeature`), applied after the
+   * height by `towerRange`; 0 off Map Room 2, on open ground or with the land
+   * switch off.
+   */
+  readonly landRangePct: number;
   /** Depth-sorted, so the renderer can draw straight down the list. */
   readonly buildings: readonly YardBuilding[];
   readonly mushrooms: readonly YardMushroom[];
@@ -432,8 +442,10 @@ export const readYard = (response: BaseLoadResponse, options: ReadYardOptions = 
     bounds,
     expansionLevel,
     foreign,
+    ...(wild && { wild }),
     kind,
     cellHeight: typeof response.cellheight === "number" ? response.cellheight : 0,
+    landRangePct: landFeatureEffect(response.landfeature).range,
     buildings,
     mushrooms,
     resources: response.resources ?? {},

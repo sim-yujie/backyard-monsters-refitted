@@ -1859,10 +1859,10 @@ export const INFERNO_COST_ROWS: readonly CostRow[] = [
     [552960,552960,0,0,72000,[[14,1,6],[8,1,1]]],
     [2211840,2211840,0,0,144000,[[14,1,6],[8,1,1]]],
   ], [0,0,0,0,0,0]],
-  // 16 Hatchery Control Center (special) — INFERNOYARDPROPS.as:1301
-  [16, "Hatchery Control Center", "special", 2, [
-    [4000000,4000000,4000000,0,90000,[[14,1,3],[13,3,2]]],
-  ], [0,0,0,0,0,0]],
+  // 16 Incubator Control Centre (special) — INFERNOYARDPROPS.as:1301
+  [16, "Incubator Control Centre", "special", 2, [
+    [4000000,4000000,4000000,0,90000,[[14,1,4],[13,2,3]]],
+  ], [0,0,0,0,1,1,1]],
   // 17 Block (wall) — INFERNOYARDPROPS.as:1343
   [17, "Block", "wall", 3, [
     [1000,0,0,0,5,[[14,1,2]]],
@@ -2402,7 +2402,7 @@ export const INFERNO_TRAIT_ROWS: readonly OutpostTraitRow[] = [
   [13, false, [4000,16000,32000], [], []],
   [14, true, [4000,8800,20000,42000,94000,200000], [], []],
   [15, true, [4000,14000,25000,43000,75000,130000], [], [200,260,320,380,450,540]],
-  [16, true, [64000], [], []],
+  [16, false, [64000], [], []],
   [17, false, [1000,2300,5750,18000,27000], [], []],
   [18, true, [3600], [], []],
   [19, true, [1000,1500,2250,3375,5000,7500,12000], [], [600,900,1200,1500,2100,3200,4800]],
@@ -2520,4 +2520,4 @@ export const INFERNO_TRAIT_ROWS: readonly OutpostTraitRow[] = [
  * allowed at least one at some Under Hall level. Everything else in
  * {@link INFERNO_COST_ROWS} (the Under Hall, Flinger, Housing, …) is blocked.
  */
-export const INFERNO_BUILDABLE_TYPES: readonly number[] = [1, 2, 3, 4, 6, 8, 9, 10, 13, 17, 21, 24, 26, 128, 129, 130, 132];
+export const INFERNO_BUILDABLE_TYPES: readonly number[] = [1, 2, 3, 4, 6, 8, 9, 10, 13, 16, 17, 21, 24, 26, 128, 129, 130, 132];

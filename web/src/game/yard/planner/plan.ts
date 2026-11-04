@@ -2,7 +2,7 @@ import { kindOf, maxLevel, type YardKind } from "../buildingCosts";
 import { isStorageId } from "../decorStorage";
 import { holdsWorker } from "../workers";
 import { nearbyArea } from "../nearbyFootprints";
-import { footprintOf } from "../YardGrid";
+import { footprintOf, wildYardSize } from "../YardGrid";
 import { TROJAN_HORSE_TYPE } from "@/game/trojan/trojanHorse";
 import type { Yard } from "../yardModel";
 import type { MoveEntry, StoreEntry } from "./commands";
@@ -105,10 +105,12 @@ export class Plan {
   /** The selection currently picked up, or null when nothing is being dragged. */
   private lifted: PlanNode[] | null = null;
 
-  private constructor(expansion: number, kind: YardKind) {
+  private constructor(expansion: number, kind: YardKind, wild = false) {
     this.expansion = expansion;
     this.kind = kind;
-    this.plot = plotBounds(expansion);
+    // A wild monster camp (the tribe yard editor's) stands on the plot a camp grows to.
+    const [width, height] = wild ? wildYardSize(expansion) : [0, 0];
+    this.plot = wild ? { halfWidth: width / 2, halfHeight: height / 2 } : plotBounds(expansion);
   }
 
   /**
@@ -119,7 +121,7 @@ export class Plan {
    * somewhere free (`server/src/services/yard/mushrooms.ts`).
    */
   static fromYard(yard: Yard): Plan {
-    const plan = new Plan(yard.expansionLevel, yard.kind);
+    const plan = new Plan(yard.expansionLevel, yard.kind, yard.wild === true);
     for (const building of yard.buildings) plan.add(nodeOf(building));
     return plan;
   }

@@ -5,7 +5,10 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, BuildingData, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
+import { setClassicLook } from "@/game/classicLook";
+import { buildPicture } from "@/game/yard/buildButtonArt";
 import { BuildCategory } from "@/game/yard/buildCatalogue";
+import { DecorKind } from "@/game/yard/decorShop";
 import { YardStore, type YardUiBinding } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
@@ -61,6 +64,7 @@ const HALL = building(1, 14, { l: 3 });
 
 afterEach(() => {
   document.body.replaceChildren();
+  setClassicLook(false);
 });
 
 const info = (menu: BuildMenu): HTMLElement => menu.element.querySelector<HTMLElement>(".build-info")!;
@@ -86,7 +90,7 @@ describe("BuildMenu", () => {
     expect(menu.element.hidden).toBe(true);
     menu.open();
     expect(menu.element.hidden).toBe(false);
-    const tabs = [...menu.element.querySelectorAll('[role="tab"]')];
+    const tabs = [...menu.element.querySelectorAll('.build-menu__tabs [role="tab"]')];
     expect(tabs.map((tab) => tab.textContent)).toEqual([
       "Resources",
       "Buildings",
@@ -100,7 +104,8 @@ describe("BuildMenu", () => {
     );
   });
 
-  it("a tile: the original's picture, name and N of M built", () => {
+  it("a tile: the original's picture with the Classic look, name and N of M built", () => {
+    setClassicLook(true);
     const { menu } = setup([HALL, building(2, 20)]);
     menu.open(BuildCategory.DEFENSIVE);
     const cannon = tile(menu, 20);
@@ -111,6 +116,7 @@ describe("BuildMenu", () => {
   });
 
   it("a locked tile: the silhouette, a lock, and the hall that unlocks it", () => {
+    setClassicLook(true);
     const { menu } = setup([HALL]);
     menu.open(BuildCategory.BUILDINGS);
     menu.turn(1);
@@ -124,6 +130,7 @@ describe("BuildMenu", () => {
   });
 
   it("a tile locked by a building says which; one with no silhouette on disk is shaded", () => {
+    setClassicLook(true);
     const { menu } = setup([HALL]);
     menu.open(BuildCategory.BUILDINGS);
     expect(tile(menu, 26).querySelector(".build-tile__count")?.textContent).toBe(
@@ -138,6 +145,26 @@ describe("BuildMenu", () => {
     const snapper = tile(bare, 1);
     expect(snapper.querySelector(".build-tile__count")?.textContent).toBe("Needs a Town Hall");
     expect(snapper.querySelector(".build-tile__picture--shade")).not.toBeNull();
+  });
+
+  it("with the Modern look, a tile shows the building's new look, shaded from itself while locked", () => {
+    const { menu } = setup([HALL, building(2, 20)]);
+    menu.open(BuildCategory.DEFENSIVE);
+    const cannon = tile(menu, 20);
+    expect(cannon.querySelector("img")?.getAttribute("src")).toBe(buildPicture(20, "main", false).url);
+    expect(cannon.querySelector("img")?.getAttribute("src")).toMatch(/^\/assets\/buildingbuttons\/modern\/20\.main\./);
+    expect(cannon.querySelector(".build-tile__picture--modern")).not.toBeNull();
+
+    menu.open(BuildCategory.BUILDINGS);
+    // The Monster Locker has no new look yet: Flash's button, as before.
+    expect(tile(menu, 8).querySelector("img")?.getAttribute("src")).toBe("/assets/buildingbuttons/8.jpg");
+    expect(tile(menu, 8).querySelector(".build-tile__picture--modern")).toBeNull();
+    menu.turn(1);
+    const lab = tile(menu, 116);
+    expect(lab.classList.contains("build-tile--locked")).toBe(true);
+    // Not Flash's silhouette, which is of Flash's art: the new picture, drawn dark.
+    expect(lab.querySelector("img")?.getAttribute("src")).toBe(buildPicture(116, "main", false).url);
+    expect(lab.querySelector(".build-tile__picture--modern.build-tile__picture--shade")).not.toBeNull();
   });
 
   it("a type the yard has all of for good wears the tick", () => {
@@ -283,29 +310,119 @@ describe("BuildMenu", () => {
     expect(onTownHall).toHaveBeenCalledTimes(1);
   });
 
-  it("with nothing stored, the Decorations tab says how to fill it", () => {
+  it("with nothing stored, the Decorations tab sells Flash's 73 for Shiny under its five sub-tabs", () => {
     const { menu } = setup([HALL]);
     menu.open(BuildCategory.DECORATIONS);
-    expect(menu.element.querySelector(".build-menu__empty")?.textContent).toBe(
-      "No decorations in storage. Recycle one to keep it here, then place it again from this tab.",
+    expect(menu.element.querySelector(".build-menu__empty")).toBeNull();
+    const kinds = menu.element.querySelector<HTMLElement>(".build-menu__kinds")!;
+    expect(kinds.hidden).toBe(false);
+    expect(kinds.getAttribute("role")).toBe("tablist");
+    const buttons = [...kinds.querySelectorAll<HTMLButtonElement>(".build-menu__kind")];
+    expect(buttons.map((button) => button.textContent)).toEqual(["Evil", "Plants", "Good", "Flags", "Premium"]);
+    // Flash opened on Evil: the Monster Skull first, 14 on two pages.
+    expect(menu.activeKind).toBe(DecorKind.EVIL);
+    expect(buttons[0]!.getAttribute("aria-selected")).toBe("true");
+    expect(tileTypes(menu)).toEqual(["107", "74", "75", "76", "77", "78", "79", "81", "82", "83"]);
+    expect(menu.element.querySelector(".build-menu__page")?.textContent).toBe("Page 1 of 2");
+    expect(info(menu).querySelector(".build-info__name")?.textContent).toBeTruthy();
+
+    const pages: string[] = [];
+    for (const button of buttons) {
+      button.click();
+      pages.push(menu.element.querySelector(".build-menu__page")!.textContent!);
+      expect(button.getAttribute("aria-selected")).toBe("true");
+      expect(menu.pickedType).toBe(Number(tileTypes(menu)[0]));
+    }
+    expect(pages).toEqual(["Page 1 of 2", "Page 1 of 2", "Page 1 of 2", "Page 1 of 3", "Page 1 of 1"]);
+    expect(tileTypes(menu)).toEqual(["96", "97", "98", "99", "100", "101"]);
+    expect(menu.element.querySelector(".build-menu__legend")?.textContent).toBe(
+      "Stored ones first, free to place. The rest cost Shiny.",
     );
-    expect(menu.element.querySelector(".build-menu__page")?.textContent).toBe("Page 1 of 1");
+  });
+
+  it("an outpost's Decorations tab says they go in the main yard", () => {
+    const store = new YardStore({
+      save: {
+        error: 0,
+        currenttime: T0,
+        savetime: T0,
+        resources: {},
+        credits: 1_000,
+        buildingdata: { "1": building(1, 112) },
+        buildinghealthdata: {},
+        storedata: {},
+        researchdata: { b28: 1 },
+      } as unknown as BaseLoadResponse,
+      target: { baseid: "9", kind: "outpost" },
+      api: { state: vi.fn(() => pendingForever<null>()) } as unknown as YardApi,
+      clock: () => T0,
+      timers: { set: () => 0, clear: () => undefined },
+    });
+    const binding: YardUiBinding = { store, scene: { selectBuilding: vi.fn() }, notices: {} as Notices };
+    const menu = new BuildMenu({ binding, onPick: vi.fn() }).mount(document.body);
+    menu.open(BuildCategory.DECORATIONS);
+    expect(menu.element.querySelector(".build-menu__empty")?.textContent).toBe("Decorations go in your main yard.");
+    expect(menu.element.querySelector<HTMLElement>(".build-menu__kinds")!.hidden).toBe(true);
+  });
+
+  it("a decoration for sale: the Shiny icon and price, and Buy picks it up on the second tap", () => {
+    const { menu, onPick } = setup([HALL], { credits: 1_000 });
+    menu.open(BuildCategory.DECORATIONS);
+
+    const skull = tile(menu, 107);
+    expect(skull.querySelector(".build-tile__count .res-amount")?.getAttribute("data-resource")).toBe("shiny");
+    expect(spokenText(skull.querySelector(".build-tile__count")!)).toBe("Shiny 20");
+    expect(skull.getAttribute("aria-label")).toMatch(/, 20 Shiny$/);
+
+    skull.click();
+    expect(facts(menu)).toEqual(["Shiny 20", "At once", "No worker"]);
+    expect(info(menu).querySelector(".build-info__gate")).toBeNull();
+    const buy = info(menu).querySelector<HTMLButtonElement>(".build-info__buy")!;
+    expect(buy.disabled).toBe(false);
+    buy.click();
+    expect(onPick).not.toHaveBeenCalled();
+    buy.click();
+    expect(onPick).toHaveBeenCalledWith(107, false);
+  });
+
+  it("short of Shiny: the price is marked, Buy is blocked and the line says how much more", () => {
+    const { menu, onPick } = setup([HALL], { credits: 100 });
+    menu.open(BuildCategory.DECORATIONS);
+    menu.openKind(DecorKind.FLAGS);
+    menu.turn(2);
+    // Page 3 ends the flags: the European Flag (32) costs 150.
+    tile(menu, 32).click();
+
+    expect(tile(menu, 32).querySelector(".build-tile__count--short")).not.toBeNull();
+    expect(spokenText(info(menu).querySelector(".build-info__gate")!)).toBe("Need Shiny 50 more.");
+    const buy = info(menu).querySelector<HTMLButtonElement>(".build-info__buy")!;
+    buy.click();
+    buy.click();
+    expect(onPick).not.toHaveBeenCalled();
   });
 
   it("stored decorations: a tile each with the count, free, and Place hands the type over (#128)", () => {
     const { menu, onPick } = setup([HALL], { researchdata: { b28: 3, b121: 1, bl121: 2 } });
     menu.open(BuildCategory.DECORATIONS);
 
-    expect(tileTypes(menu)).toEqual(["28", "121"]);
+    // Each sub-tab with some in storage counts them on its corner.
+    const counts = [...menu.element.querySelectorAll<HTMLElement>(".build-menu__kind-count")];
+    expect(counts.map((count) => (count.hidden ? "" : count.textContent))).toEqual(["", "", "", "3", "1"]);
+    expect(menu.element.querySelector("#build-kind-flags")?.getAttribute("aria-label")).toBe("Flags, 3 in storage");
+    expect(menu.element.querySelector("#build-kind-evil")?.hasAttribute("aria-label")).toBe(false);
+    expect(tileTypes(menu)).not.toContain("28");
+
+    menu.openKind(DecorKind.PREMIUM);
+    expect(tileTypes(menu)[0]).toBe("121");
+    menu.openKind(DecorKind.FLAGS);
+    // Stored first, then the ones for sale (the stored American Flag not again).
+    expect(tileTypes(menu).slice(0, 3)).toEqual(["28", "49", "50"]);
+    expect(menu.element.querySelectorAll('.build-tile[data-type="28"]')).toHaveLength(1);
     expect(tile(menu, 28).querySelector(".build-tile__count")?.textContent).toBe("3 in storage");
     expect(info(menu).querySelector(".build-info__count")?.textContent).toBe("3 in storage");
     expect(facts(menu)).toEqual(["Free", "At once", "No worker"]);
     expect(info(menu).querySelector(".build-info__needs")).toBeNull();
     expect(info(menu).querySelector(".shiny-button")).toBeNull();
-    expect(menu.element.querySelector(".build-menu__legend")?.textContent).toBe(
-      "Your stored decorations. Placing one is free.",
-    );
-
     const place = info(menu).querySelector<HTMLButtonElement>(".build-info__build")!;
     expect(place.getAttribute("aria-label")).toMatch(/^Place .+ from storage$/);
     place.click();
@@ -334,6 +451,32 @@ describe("BuildMenu", () => {
     expect(menu.element.hidden).toBe(true);
   });
 
+  it("reopens on the decoration sub-tab it was left on; arrow keys move along the sub-tabs", () => {
+    const { menu } = setup([HALL]);
+    menu.open(BuildCategory.DECORATIONS);
+    menu.openKind(DecorKind.GOOD);
+    menu.close();
+    menu.open();
+    expect(menu.activeKind).toBe(DecorKind.GOOD);
+    const kinds = menu.element.querySelector(".build-menu__kinds")!;
+    kinds.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(menu.activeKind).toBe(DecorKind.FLAGS);
+    expect(menu.activeTab).toBe(BuildCategory.DECORATIONS);
+    kinds.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    kinds.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    kinds.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    kinds.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    expect(menu.activeKind).toBe(DecorKind.PREMIUM);
+  });
+
+  it("the sub-tabs show only on the Decorations tab, and not where there are none", () => {
+    const { menu } = setup([HALL]);
+    menu.open(BuildCategory.BUILDINGS);
+    expect(menu.element.querySelector<HTMLElement>(".build-menu__kinds")!.hidden).toBe(true);
+    menu.open(BuildCategory.DECORATIONS);
+    expect(menu.element.querySelector<HTMLElement>(".build-menu__kinds")!.hidden).toBe(false);
+  });
+
   it("arrow keys move along the tab strip", () => {
     const { menu } = setup([HALL]);
     menu.open();
@@ -359,6 +502,19 @@ describe("BuildMenu", () => {
 });
 
 describe("PlacementBar", () => {
+  it("a decoration bought for Shiny shows its price", () => {
+    const bar = new PlacementBar({
+      type: 28,
+      instant: false,
+      instantPrice: 0,
+      price: 150,
+      cost: { r1: 0, r2: 0, r3: 0, r4: 0 },
+      time: "At once",
+      onCancel: vi.fn(),
+    }).mount(document.body);
+    expect(spokenText(bar.element.querySelector(".build-placing__price")!)).toBe("Shiny 150 · At once");
+  });
+
   it("says what is in hand and why a spot is refused, and cancels", () => {
     const onCancel = vi.fn();
     const bar = new PlacementBar({

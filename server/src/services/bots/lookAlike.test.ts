@@ -5,6 +5,7 @@ import type { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
 import { MR1_TRIBES } from "../../enums/Tribes.js";
 import { getDefaultBaseData } from "../../game-data/getDefaultBaseData.js";
+import { LOWEST_BOT_FLOOR_LEVEL } from "../../config/BotConfig.js";
 import { mulberry32 } from "../../game-rules/combat/rng.js";
 import { shapeDiff } from "../../testing/shapeDiff.js";
 import { FilterFrontendKeys } from "../../utils/FrontendKey.js";
@@ -52,7 +53,7 @@ const realYard = (yard: Partial<Save> = {}): Save => {
 
 /** A bot's main yard as the factory writes it. */
 const botYard = (level: number, seed: number): Save => {
-  const { profile, yard } = drawBot(mulberry32(seed), level, NOW, T);
+  const { profile, yard } = drawBot(mulberry32(seed), level, NOW, T, false, LOWEST_BOT_FLOOR_LEVEL);
   const save = Object.assign(new Save(), ROW_DEFAULTS, botSaveData(botUser, profile, yard));
   settleNewYard(save, profile.savetime);
   return save;
@@ -122,7 +123,7 @@ describe("a bot's save has a real player's shape (#245)", () => {
 
   test("settling a new bot changes no level, points or base value, and keeps its savetime", () => {
     for (const level of LEVELS) {
-      const { profile, yard } = drawBot(mulberry32(level), level, NOW, T);
+      const { profile, yard } = drawBot(mulberry32(level), level, NOW, T, false, LOWEST_BOT_FLOOR_LEVEL);
       const save = Object.assign(new Save(), botSaveData(botUser, profile, yard));
       settleNewYard(save, profile.savetime);
       expect(save).toMatchObject({ level: yard.level, points: yard.points, basevalue: yard.basevalue, savetime: profile.savetime });

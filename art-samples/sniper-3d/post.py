@@ -29,7 +29,9 @@ PA = Path("D:/Coding/BYMR/worktrees/towers-wire/server/public/assets/buildings/s
 # the painted pieces (buildingArtTiers.ts, Sniper): body (x, y), strip (x, y, w, h), pivot y, in game px
 GAME = {1: dict(body=(-40, -37), strip=(-27, -53, 53, 36), pivot=-20, top=(-40, -45)),
         2: dict(body=(-40, -70), strip=(-26, -83, 52, 35), pivot=-50, top=(-40, -75)),
-        3: dict(body=(-40, -86), strip=(-27, -99, 53, 35), pivot=-67, top=(-40, -92))}
+        3: dict(body=(-40, -99), strip=(-27, -99, 53, 35), pivot=-80, top=(-40, -92), pbody=(-40, -86), ppivot=-67)}
+# (2 Nov 2026: the 3D tier 3 stands a section taller than the painted one, its pivot at -80; pbody/ppivot keep the
+# painted pieces where they were for the comparisons)
 T_PIV4 = (160, 210)        # the turret renders' pivot (sniper3d.py turret: 320 x 300 canvas)
 GIFBG = (92, 136, 60, 255)  # flat grass green for the GIFs (the grass texture makes them too big)
 REST = 0                   # the heading of the still pictures (gun down-right, as the painted tops)
@@ -115,7 +117,7 @@ class Tier:
         ps = Image.open(PA / f"turret.t{t}@2x.webp").convert("RGBA")
         pw = ps.width // 32
         self.pcells = [ps.crop((k * pw, 0, (k + 1) * pw, ps.height)) for k in range(32)]
-        self.ppiv = (-2 * g["strip"][0], 2 * (g["pivot"] - g["strip"][1]))
+        self.ppiv = (-2 * g["strip"][0], 2 * (g.get("ppivot", g["pivot"]) - g["strip"][1]))
 
     def frame(self, k, painted=False):
         """The whole tower at heading k, @2x, on a canvas from game x -48..48, y -112..+60 (origin at (96, 224))."""
@@ -123,9 +125,10 @@ class Tier:
         f = Image.new("RGBA", (192, 344))
         ox, oy = 96, 224
         body = self.pbody if painted else self.body
-        f.alpha_composite(body, (ox + 2 * g["body"][0], oy + 2 * g["body"][1]))
+        bxy = g.get("pbody", g["body"]) if painted else g["body"]
+        f.alpha_composite(body, (ox + 2 * bxy[0], oy + 2 * bxy[1]))
         cell, cp = (self.pcells[k], self.ppiv) if painted else (self.cells[k], self.cpiv)
-        f.alpha_composite(cell, (ox - cp[0], oy + 2 * g["pivot"] - cp[1]))
+        f.alpha_composite(cell, (ox - cp[0], oy + 2 * (g.get("ppivot", g["pivot"]) if painted else g["pivot"]) - cp[1]))
         return f
 
 

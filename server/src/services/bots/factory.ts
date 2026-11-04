@@ -10,7 +10,7 @@ import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { AVATAR_IDS, avatarPath, PLACEHOLDER_PIC_SQUARE } from "../../game-data/avatars.js";
 import { getDefaultBaseData } from "../../game-data/getDefaultBaseData.js";
 import type { Rng } from "../../game-rules/combat/rng.js";
-import { BOT_FLOOR_LEVEL, daysBetween, daysOn, LEVEL_WEIGHTS, type Pace } from "../../config/BotConfig.js";
+import { BOT_TOP_LEVEL, botFloorLevel, LOWEST_BOT_FLOOR_LEVEL, daysBetween, daysOn, levelWeights, type Pace } from "../../config/BotConfig.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
 import { usernameMatch } from "../user/usernameLookup.js";
 import { botName } from "./names.js";
@@ -51,16 +51,18 @@ import { visitMapRoom1 } from "./lookAlike.js";
  *   holds (`shiny.ts`), never the new-save 1,500.
  *
  * {@link createBots} writes in batches of {@link BATCH_SIZE}, one transaction
- * each. {@link fillPlan} decides which levels to make for an even spread over
- * levels 15-40, low levels first.
+ * each. {@link fillPlan} decides which levels to make for an even spread from
+ * the floor (`BOTS_FLOOR_LEVEL`) to 40, low levels first.
  *
  * Takes its entity manager from the caller and never imports `server.js`, so
  * the CLI (`scripts/bots.ts`) can use it without booting a server.
  */
 
-/** Bots live on levels 15 to 40 (decision 4; no bot below 15, owner 2026-10-23). */
-export const BOT_MIN_LEVEL = BOT_FLOOR_LEVEL;
-export const BOT_MAX_LEVEL = 40;
+/**
+ * Bots live on levels from the floor (`BOTS_FLOOR_LEVEL`, `botFloorLevel`:
+ * 25 by default, owner 3 Nov 2026) to 40 (decision 4).
+ */
+export const BOT_MAX_LEVEL = BOT_TOP_LEVEL;
 
 /** Bots made per transaction (§10). */
 export const BATCH_SIZE = 25;
@@ -78,14 +80,19 @@ const DAY = 24 * 60 * 60;
 
 /**
  * How many bots each level should hold for `total` spread over levels 1-40 by
- * `weights` (`LEVEL_WEIGHTS`, even over 15-40 by default, decision 4): each
- * level its weight's share rounded down, the remainder one more each on the
- * levels rounded down most, lowest levels first. Index 0 is level 1; levels
- * below {@link BOT_MIN_LEVEL} hold none, whatever their weight.
+ * `weights` (`levelWeights`, even from the floor to 40 by default, decision
+ * 4): each level its weight's share rounded down, the remainder one more each
+ * on the levels rounded down most, lowest levels first. Index 0 is level 1;
+ * levels below `floor` (`BOTS_FLOOR_LEVEL` by default) hold none, whatever
+ * their weight.
  */
-export const evenSpread = (total: number, weights: readonly number[] = LEVEL_WEIGHTS): number[] => {
+export const evenSpread = (
+  total: number,
+  floor: number = botFloorLevel(),
+  weights: readonly number[] = levelWeights(floor)
+): number[] => {
   const levels = BOT_MAX_LEVEL;
-  const weightOf = (index: number) => (index + 1 < BOT_MIN_LEVEL ? 0 : Math.max(0, weights[index] ?? 0));
+  const weightOf = (index: number) => (index + 1 < floor ? 0 : Math.max(0, weights[index] ?? 0));
   const sum = Array.from({ length: levels }, (_, index) => weightOf(index)).reduce((a, b) => a + b, 0) || 1;
   const exact = Array.from({ length: levels }, (_, index) => (total * weightOf(index)) / sum);
   const share = exact.map(Math.floor);
@@ -109,15 +116,17 @@ export const evenSpread = (total: number, weights: readonly number[] = LEVEL_WEI
  * @param {number} target - Active bots wanted in total
  * @param {Record<number, number>} activeByLevel - Active bots per level now
  * @param {number} [limit] - At most this many
+ * @param {number} [floor] - The lowest level to fill, `BOTS_FLOOR_LEVEL` by default
  * @returns {number[]} One level per bot to make, ascending
  */
 export const fillPlan = (
   target: number,
   activeByLevel: Readonly<Record<number, number>>,
-  limit = Number.POSITIVE_INFINITY
+  limit = Number.POSITIVE_INFINITY,
+  floor: number = botFloorLevel()
 ): number[] => {
   const plan: number[] = [];
-  evenSpread(target).forEach((want, index) => {
+  evenSpread(target, floor).forEach((want, index) => {
     const level = index + 1;
     for (let have = activeByLevel[level] ?? 0; have < want; have++) plan.push(level);
   });
@@ -161,11 +170,12 @@ export const backdate = (rng: Rng, level: number, fraction: number, pace: Pace):
 /**
  * `fraction` of `level`'s band, moved up to where the seed's yard first holds
  * the minimum yard (`minimumYardTotal`) when that is further in: on the
- * floor level a bot keeps building until it has it (owner, 2026-10-23).
- * Above that level every yard already holds it.
+ * lowest floor, level 15, a bot keeps building until it has it (owner,
+ * 2026-10-23). Above that level every yard already holds it, so a bot on a
+ * higher floor (`BOTS_FLOOR_LEVEL`) starts where it is asked to.
  */
 const atLeastMinimum = (seed: number, persona: Persona, level: number, fraction: number): number => {
-  if (level !== BOT_MIN_LEVEL) return fraction;
+  if (level > LOWEST_BOT_FLOOR_LEVEL) return fraction;
   const { min, max } = levelBand(level);
   const minimum = minimumYardTotal(seed, persona);
   return Math.max(fraction, Math.min(0.999999, (minimum - min + 0.5) / (max - min)));
@@ -179,7 +189,7 @@ const avatarFor = (rng: Rng): string =>
  * Draws one bot of `level` (see the file comment).
  *
  * @param {Rng} rng - The draw
- * @param {number} level - The bot's level, 15-40
+ * @param {number} level - The bot's level, the floor to 40
  * @param {number} now - Unix seconds
  * @param {Pace} pace - `BotConfig.pace`
  * @param {boolean} [fresh] - Start at the bottom of the level, as a new player
@@ -218,10 +228,11 @@ export const drawBot = (
   level: number,
   now: number,
   pace: Pace,
-  fresh = false
+  fresh = false,
+  floor: number = botFloorLevel()
 ): { profile: BotProfile; yard: BotYard } => {
-  if (!Number.isInteger(level) || level < BOT_MIN_LEVEL || level > BOT_MAX_LEVEL) {
-    throw new Error(`A bot's level must be ${BOT_MIN_LEVEL}-${BOT_MAX_LEVEL}, not ${level}`);
+  if (!Number.isInteger(level) || level < floor || level > BOT_MAX_LEVEL) {
+    throw new Error(`A bot's level must be ${floor}-${BOT_MAX_LEVEL}, not ${level}`);
   }
   for (let draw = 0; draw < MAX_YARD_DRAWS; draw++) {
     const profile = drawProfile(rng, level, now, pace, fresh);

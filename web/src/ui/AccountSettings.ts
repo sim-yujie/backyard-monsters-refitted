@@ -1,13 +1,15 @@
 /**
  * The account settings dialog: change username and the Shiny Lock switch,
- * opened from the account menu. Its "Game effects" and "Building art" parts
- * are kept in this browser only: no server.
+ * opened from the account menu. Its "World chat", "Game effects" and "Look and
+ * sound" parts are kept in this browser only: no server, except the volume
+ * sliders, which are the account menu's own (`ui/SoundSliders.ts`).
  *
  * Both are server rules this only fronts. A rename keeps the game's username
  * rules and a long cooldown (`changeUsername.ts`); Shiny Lock makes the server
  * refuse every Shiny spend until it is turned off again (`shinyLock.ts`).
  */
 
+import { SoundSliders } from "@/ui/SoundSliders";
 import { changeUsername, fetchAccount, setShinyLocked, type AccountInfo } from "@/api/account";
 import { fetchBlocked, setPrivacy, unblockPlayer, type BlockedPlayer, type PrivacySettings } from "@/api/privacy";
 import { setCountry, type CountrySettings } from "@/api/country";
@@ -17,10 +19,13 @@ import { CountryPicker } from "@/ui/CountryPicker";
 import { ApiError, NetworkError } from "@/api/http";
 import { usernameProblem } from "@/game/account/rules/accountRules";
 import { saveClassicLook, savedClassicLook, saveMusicChoice, savedMusicChoice, type MusicChoice } from "@/game/classicLook";
+import { setWorldChatOn, worldChatOn } from "@/game/chat/worldChatSetting";
 import { effectsQuality, screenShakeOn, setEffectsQuality, setScreenShake, type EffectsQuality } from "@/game/attack/juice";
 import { quality as downloadQuality, setQuality, type Quality } from "@/game/quality";
 import { noteShinyLock } from "@/game/shinyLock";
+import { savedFontChoice, setFontChoice, type FontChoice } from "@/ui/fontChoice";
 import { Popup } from "@/ui/Popup";
+import { reportLook } from "@/app/lookReport";
 
 export const SETTINGS_TEXT = {
   title: "Account settings",
@@ -37,6 +42,8 @@ export const SETTINGS_TEXT = {
   friendRequestsLabel: "Accept friend requests",
   friendRequestsHint: "When off, nobody can send you a friend request.",
   privacyFailed: "Could not save that privacy setting. Try again.",
+  chatLabel: "World chat",
+  chatHint: "Off hides the chat box and stops chat messages.",
   countryTitle: "Country",
   countryNotSet: "Not set",
   countryHint: "Pick your country to get its own chat room beside Global.",
@@ -68,6 +75,15 @@ export const SETTINGS_TEXT = {
   musicHint: "The yard tune, whatever the Style.",
   musicSaved: "Saved. Reload the page to hear the change.",
   lookFailed: "Could not save this in your browser. Check that site data is allowed.",
+  fontLabel: "Font",
+  fontGame: "Game font",
+  fontClear: "Clear",
+  fontReadable: "Extra readable",
+  fontHint: {
+    game: "The game's own round letters everywhere.",
+    clear: "Game letters for titles, plainer letters for the rest.",
+    readable: "Plain letters that are easy to tell apart, everywhere.",
+  },
   downloadLabel: "Quality",
   downloadHigh: "High",
   downloadMedium: "Medium",
@@ -120,6 +136,7 @@ export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
         usernameSection(account, options),
         shinySection(account),
         privacySection(account.privacy),
+        chatSection(),
         countrySection(account.country),
         lookSection(),
         effectsSection(),
@@ -130,7 +147,7 @@ export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
       status.textContent = SETTINGS_TEXT.loadFailed;
       status.classList.add("field__hint--error");
       // Kept in this browser, so they work without the server.
-      body.append(lookSection(), effectsSection());
+      body.append(chatSection(), lookSection(), effectsSection());
     },
   );
   return popup;
@@ -355,6 +372,38 @@ const privacyToggle = (
   return section;
 };
 
+/**
+ * "World chat" (owner, 1 Nov 2026): off takes the chat box away and closes
+ * world chat's connection at once (`game/chat/worldChatSetting.ts`); on brings
+ * both back, no reload.
+ */
+const chatSection = (): HTMLElement => {
+  const section = document.createElement("div");
+  section.className = "account-settings__section";
+  const row = document.createElement("label");
+  row.className = "account-settings__toggle";
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.id = "settings-world-chat";
+  box.checked = worldChatOn();
+  const words = document.createElement("span");
+  words.textContent = SETTINGS_TEXT.chatLabel;
+  row.append(box, words);
+  const hint = document.createElement("p");
+  hint.className = "field__hint";
+  hint.id = "settings-world-chat-hint";
+  hint.setAttribute("aria-live", "polite");
+  hint.textContent = SETTINGS_TEXT.chatHint;
+  box.setAttribute("aria-describedby", hint.id);
+  box.addEventListener("change", () => {
+    const saved = setWorldChatOn(box.checked);
+    hint.textContent = saved ? SETTINGS_TEXT.chatHint : SETTINGS_TEXT.lookFailed;
+    hint.classList.toggle("field__hint--error", !saved);
+  });
+  section.append(row, hint);
+  return section;
+};
+
 /** Whether the device asks for less motion: the shake stays off then, whatever the switch says. */
 const osReducedMotion = (): boolean =>
   typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -448,6 +497,7 @@ const downloadRow = (): HTMLElement[] => {
   select.addEventListener("change", () => {
     const level = select.value as Quality;
     setQuality(level);
+    reportLook();
     hint.textContent = `${SETTINGS_TEXT.downloadHint[level]} ${SETTINGS_TEXT.downloadSaved}`;
   });
   return [row, hint];
@@ -491,12 +541,64 @@ const lookSection = (): HTMLElement => {
   look.setAttribute("aria-describedby", hint.id);
   look.addEventListener("change", () => {
     const saved = saveClassicLook(look.value === "classic");
+    if (saved) reportLook();
     hint.textContent = saved ? SETTINGS_TEXT.lookSaved : SETTINGS_TEXT.lookFailed;
     hint.classList.toggle("field__hint--error", !saved);
   });
 
-  section.append(heading, row, hint, ...musicRows());
+  // The volume sliders, as in the account menu (owner, 4 Nov 2026); saved with the account.
+  const sound = new SoundSliders("account-settings__sound");
+  section.append(heading, row, hint, ...fontRows(), ...musicRows(), sound.element);
   return section;
+};
+
+/** The face each Font option is shown in, so the list itself is a preview. */
+const FONT_PREVIEW: Record<FontChoice, string> = {
+  game: '"Titan One", sans-serif',
+  clear: '"Nunito", sans-serif',
+  readable: '"Atkinson Hyperlegible", sans-serif',
+};
+
+/**
+ * Font (owner, 4 Nov 2026: players found the font hard to read): the game font,
+ * Clear or Extra readable (`ui/fontChoice.ts`). Unlike the Style, it shows at
+ * once: every panel follows the font variables.
+ */
+const fontRows = (): HTMLElement[] => {
+  const row = document.createElement("label");
+  row.className = "account-settings__toggle";
+  const words = document.createElement("span");
+  words.textContent = SETTINGS_TEXT.fontLabel;
+  const font = document.createElement("select");
+  font.id = "settings-font";
+  font.className = "account-settings__select";
+  for (const [value, text] of [
+    ["game", SETTINGS_TEXT.fontGame],
+    ["clear", SETTINGS_TEXT.fontClear],
+    ["readable", SETTINGS_TEXT.fontReadable],
+  ] as const) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    option.style.fontFamily = FONT_PREVIEW[value];
+    font.append(option);
+  }
+  font.value = savedFontChoice();
+  row.append(words, font);
+  const hint = document.createElement("p");
+  hint.className = "field__hint";
+  hint.id = "settings-font-hint";
+  hint.setAttribute("aria-live", "polite");
+  hint.textContent = SETTINGS_TEXT.fontHint[font.value as FontChoice];
+  font.setAttribute("aria-describedby", hint.id);
+  font.addEventListener("change", () => {
+    const choice = font.value as FontChoice;
+    const saved = setFontChoice(choice);
+    if (saved) reportLook();
+    hint.textContent = saved ? SETTINGS_TEXT.fontHint[choice] : SETTINGS_TEXT.lookFailed;
+    hint.classList.toggle("field__hint--error", !saved);
+  });
+  return [row, hint];
 };
 
 /** Music on its own (a player's request, 31 Oct 2026): the new yard tune or Flash's, whatever the Style. */
@@ -528,6 +630,7 @@ const musicRows = (): HTMLElement[] => {
   music.setAttribute("aria-describedby", hint.id);
   music.addEventListener("change", () => {
     const saved = saveMusicChoice(music.value as MusicChoice);
+    if (saved) reportLook();
     hint.textContent = saved ? SETTINGS_TEXT.musicSaved : SETTINGS_TEXT.lookFailed;
     hint.classList.toggle("field__hint--error", !saved);
   });

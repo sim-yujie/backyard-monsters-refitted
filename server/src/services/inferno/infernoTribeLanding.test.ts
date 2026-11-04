@@ -21,6 +21,9 @@ const ARMY = { IC1: 30, IC2: 5 };
 const FORCES = { bunkers: {}, defenderLevels: {}, defenderChampions: [] };
 
 const store = new Map<string, string>();
+/** A Redis delete this picks fails, as if the server died right there. */
+let crashOn: ((key: string) => boolean) | null = null;
+const sets = new Map<string, Set<string>>();
 let userSave: Record<string, unknown>;
 let inferno: Record<string, unknown>;
 let maproom: Record<string, unknown> | null;
@@ -33,6 +36,8 @@ const em = {
   },
   findOne: async (entity: { name: string }, where: Record<string, unknown>) => {
     if (entity.name === "InfernoMaproom") return maproom;
+    // The finaliser loads the attacker with their row.
+    if (entity.name === "User") return { userid: ATTACKER, username: "raider", save: userSave };
     if (where.basesaveid !== undefined) return where.basesaveid === userSave.basesaveid ? userSave : null;
     return String(where.baseid) === INFERNO_BASEID ? inferno : null;
   },
@@ -51,8 +56,11 @@ const em = {
   },
 };
 
+/** The stand-in ORM's entity manager: only it skips the request context (the finaliser's own). */
+const fakeOrmEm = {};
+
 mock.module("../../server.js", () => ({
-  postgres: { em },
+  postgres: { em, orm: { em: fakeOrmEm } },
   redis: {
     get: async (key: string) => store.get(key) ?? null,
     setex: async (key: string, _ttl: number, value: string) => {
@@ -64,7 +72,19 @@ mock.module("../../server.js", () => ({
       store.set(key, value);
       return "OK";
     },
-    del: async (key: string) => (store.delete(key) ? 1 : 0),
+    del: async (key: string) => {
+      if (crashOn?.(key)) throw new Error("the server stopped here");
+      return store.delete(key) ? 1 : 0;
+    },
+    sadd: async (key: string, member: string) => {
+      const set = sets.get(key) ?? new Set<string>();
+      sets.set(key, set);
+      if (set.has(member)) return 0;
+      set.add(member);
+      return 1;
+    },
+    srem: async (key: string, member: string) => (sets.get(key)?.delete(member) ? 1 : 0),
+    smembers: async (key: string) => [...(sets.get(key) ?? [])],
   },
 }));
 
@@ -97,7 +117,23 @@ mock.module("../base/combat/replayRunner.js", () => ({
   },
 }));
 
+const core = await import("@mikro-orm/core");
+// Kept before the stand-in replaces the module in place. Object.create keeps the
+// static getEntityManager the DB tests that run later need, and any other
+// entity manager still gets a real request context.
+const RealRequestContext = core.RequestContext;
+const realCreate = core.RequestContext.create.bind(core.RequestContext);
+mock.module("@mikro-orm/core", () => ({
+  ...core,
+  RequestContext: Object.assign(Object.create(RealRequestContext), {
+    create: (em: unknown, next: () => unknown) => (em === fakeOrmEm ? next() : realCreate(em as never, next as never)),
+  }),
+}));
+
 const { baseSave } = await import("../../controllers/base/save/baseSave.js");
+const { attackCheckpoint } = await import("../../controllers/base/attackCheckpoint.js");
+const { finaliseRowlessAttacksOf } = await import("../base/finaliseRowlessAttack.js");
+const { ROWLESS_CHECKPOINT_INDEX, rowlessCheckpointKey } = await import("../base/rowlessCheckpoint.js");
 const { combatConfig } = await import("../../config/CombatConfig.js");
 const MODE = combatConfig.mode;
 const { serialiseAttackSession } = await import("../base/attackSession.js");
@@ -192,6 +228,7 @@ const hallOf = (baseid: string): string => {
 const savedSwitch = process.env.INFERNO_ENABLED;
 
 beforeEach(() => {
+  crashOn = null;
   process.env.INFERNO_ENABLED = "on";
   (combatConfig as { mode: typeof MODE }).mode = "log";
   canned = null;
@@ -234,6 +271,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // Bun keeps module mocks across files: a battle left canned here would be
+  // every later file's replay (CI run 41459356322, finaliseAttack.test.ts).
+  canned = null;
+  replayTimesOut = false;
+  crashOn = null;
   if (savedSwitch === undefined) delete process.env.INFERNO_ENABLED;
   else process.env.INFERNO_ENABLED = savedSwitch;
   (combatConfig as { mode: typeof MODE }).mode = MODE;
@@ -373,5 +415,97 @@ describe("landing", () => {
     expect(input.log.events.map((event) => event.kind)).toEqual(["fling"]);
     expect(input.attacker.siege).toBeNull();
     expect(userSave.siege).toEqual(stock);
+  });
+});
+
+/** The client's running record of the attack on `baseid` (`POST /base/checkpoint`). */
+const sendCheckpoint = async (baseid: string, log: unknown, tick: number, sources: string[]) => {
+  const ctx = {
+    authUser: { userid: ATTACKER, username: "attacker" },
+    request: {
+      body: {
+        basesaveid: "0",
+        baseid,
+        attackid: String(ATTACK_ID),
+        tick: String(tick),
+        flinglog: JSON.stringify(log),
+        sources: JSON.stringify(sources),
+      },
+    },
+    ip: "127.0.0.1",
+  } as unknown as Context & { body: Record<string, unknown> };
+  try {
+    await attackCheckpoint(ctx, async () => {});
+    return ctx.body;
+  } catch (caught) {
+    return caught as { data?: { reason?: string } };
+  }
+};
+
+/**
+ * Leaving never undoes the attack (owner, 2 Nov 2026): when the final save
+ * never arrives, the attacker's next load lands the Moloch tribe attack from
+ * the last checkpoint the server holds, and never more than that record shows.
+ */
+describe("a Moloch tribe attack left without a save", () => {
+  const REF = { kind: "inferno-tribe" as const, userid: ATTACKER, baseid: "214" };
+
+  test("the next load lands it from its last checkpoint: the flung monsters spent, the loot, the tribe's damage", async () => {
+    startSession();
+    sets.clear();
+    canned = { damage: 30, flung: { IC1: 6 }, attackloot: { r1: 200, r2: 0, r3: 0, r4: 0 } };
+    const purse = (userSave.iresources as Record<string, number>).r1;
+    expect(await sendCheckpoint("214", SCRATCH, 1_200, [INFERNO_BASEID])).toMatchObject({ stored: true });
+
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(1);
+    expect(inputs).toHaveLength(1);
+    expect(inputs[0]!.tick).toBe(1_200);
+    expect((userSave.iresources as Record<string, number>).r1).toBe(purse + 200);
+    expect((inferno.monsters as { housed: Record<string, number> }).housed).toEqual({ IC1: 24, IC2: 5 });
+    expect(tribeState()?.damage).toBe(30);
+    expect(store.has(infernoTribeSessionKey(ATTACKER))).toBe(false);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
+    expect(sets.get(ROWLESS_CHECKPOINT_INDEX)?.size ?? 0).toBe(0);
+
+    // Once: the next load finds nothing, and a late save is refused.
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
+    expect((await run(finalSave()))?.data?.reason).toBe("no-session");
+    expect((userSave.iresources as Record<string, number>).r1).toBe(purse + 200);
+  });
+
+  test("a checkpoint that arrives after the save lands nothing more", async () => {
+    startSession();
+    sets.clear();
+    canned = { damage: 30, flung: { IC1: 6 }, attackloot: { r1: 200, r2: 0, r3: 0, r4: 0 } };
+    expect(await run(finalSave())).toBeNull();
+    const after = structuredClone({ purse: userSave.iresources, army: inferno.monsters, tribe: tribeState() });
+
+    expect(await sendCheckpoint("214", SCRATCH, 2_000, [INFERNO_BASEID])).toMatchObject({
+      data: { reason: "no-session" },
+    });
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
+    expect(structuredClone({ purse: userSave.iresources, army: inferno.monsters, tribe: tribeState() })).toEqual(after);
+  });
+  test("a crash after the final save's write: neither a resent save nor the finaliser lands it again", async () => {
+    startSession();
+    sets.clear();
+    canned = { damage: 30, flung: { IC1: 6 }, attackloot: { r1: 200, r2: 0, r3: 0, r4: 0 } };
+    await sendCheckpoint("214", SCRATCH, 1_200, [INFERNO_BASEID]);
+
+    // The save lands, then the server dies before the session ends.
+    crashOn = (key) => key === infernoTribeSessionKey(ATTACKER);
+    expect(await run(finalSave())).not.toBeNull();
+    crashOn = null;
+    expect(store.has(infernoTribeSessionKey(ATTACKER))).toBe(true);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(true);
+    const snapshot = () => structuredClone({ purse: userSave.iresources, army: inferno.monsters, tribe: tribeState() });
+    const after = snapshot();
+    expect(inputs).toHaveLength(1);
+
+    expect((await run(finalSave()))?.data?.reason).toBe("landed");
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
+    expect(snapshot()).toEqual(after);
+    expect(store.has(infernoTribeSessionKey(ATTACKER))).toBe(false);
+    expect(store.has(rowlessCheckpointKey(REF))).toBe(false);
   });
 });

@@ -211,10 +211,13 @@ describe("YardMenu", () => {
 });
 
 describe("YardDock on a phone", () => {
-  it("folds the own yard's buttons into Menu but leaves a visit's dock alone", () => {
+  it("with the bubble menu off, folds the own yard's buttons into Menu but leaves a visit's dock alone", () => {
     vi.stubGlobal("matchMedia", () => fakeMedia(true).media);
 
-    const own = new YardDock({ onMap: vi.fn(), onLayout: vi.fn(), onBuild: vi.fn() }).mount(document.body);
+    // With the bubble menu on there is no Menu at all (BubbleMenu.test.ts).
+    const own = new YardDock({ onMap: vi.fn(), onLayout: vi.fn(), onBuild: vi.fn() }, false).mount(
+      document.body,
+    );
     const folded = [...own.element.querySelectorAll<HTMLElement>(".yard-menu__grid > [data-dock]")].map(
       (element) => element.dataset["dock"],
     );

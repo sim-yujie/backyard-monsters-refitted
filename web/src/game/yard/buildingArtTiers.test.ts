@@ -23,8 +23,8 @@ const ASSETS = fileURLToPath(new URL("../../../../server/public/assets/", import
 
 /** The towers with three tiers. */
 const TOWERS = [20, 21, 22, 23, 25, 115, 118, 132];
-/** The Spurtz Cannons: one 3D look for every level. */
-const ONE_LOOK = [136, 137];
+/** The Quake Tower and the Spurtz Cannons: one 3D look for every level. */
+const ONE_LOOK = [129, 136, 137];
 
 /** The 3D towers without a turret, which move by a strip of their own: Bunker, Tesla. */
 const ANIMATED = [22, 25];
@@ -68,7 +68,7 @@ describe("the defaults", () => {
   it("show the Modern look: the new Town Hall and the new tiers of every tower", () => {
     expect(classicLook()).toBe(false);
     expect(newTowerArt()).toBe(true);
-    expect(MODERN_TOWERS).toEqual([20, 21, 22, 23, 25, 115, 118, 130, 132, 136, 137]);
+    expect(MODERN_TOWERS).toEqual([20, 21, 22, 23, 25, 115, 118, 129, 130, 132, 136, 137]);
     expect(resolveArt(14, 6, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/townhall/top.new6@2x.webp");
     expect(resolveArt(20, 8, ArtState.DEFAULT)?.still?.url).toBe("/assets/buildings/cannontower/top.t3@2x.webp");
     expect(resolveArt(21, 5, ArtState.DEFAULT)?.still?.url).toBe("/assets/buildings/snipertower/top.t2@2x.webp");
@@ -113,8 +113,8 @@ describe("the old hidden tower switch", () => {
 });
 
 describe("the repainted tower tiers", () => {
-  it("cover the defensive towers, three tiers each but the Spurtz Cannons' one look", () => {
-    expect(Object.keys(TOWER_TIER_ART).map(Number)).toEqual([...TOWERS, ...ONE_LOOK]);
+  it("cover the defensive towers, three tiers each but the Quake Tower's and Spurtz Cannons' one look", () => {
+    expect(Object.keys(TOWER_TIER_ART).map(Number)).toEqual([...TOWERS, ...ONE_LOOK].sort((a, b) => a - b));
     for (const type of TOWERS) {
       expect(TOWER_TIER_ART[type]).toHaveLength(3);
       expect(TOWER_TIER_ART[type]?.[0]?.from).toBe(1);
@@ -196,6 +196,39 @@ describe("the repainted tower tiers", () => {
     }
   });
 
+  it("draw the Quake Tower in 3D from its strike's strip in both yards, one look for every level", () => {
+    for (const kind of ["main", "inferno"] as const) {
+      for (const level of [1, 3, 6]) {
+        const art = resolveArt(129, level, ArtState.DEFAULT, kind);
+        const strip = art?.anims[0];
+        expect(art?.anims).toHaveLength(1);
+        // Flash's 33 cells, each the whole tower, so the battle's `towerCell` events step it as they stepped Flash's.
+        expect(strip?.frames).toBe(33);
+        expect(art?.topIsAnim).toBe(true);
+        expect(art?.still?.url).toBe("/assets/buildings/iquaketower/top.t1@2x.webp");
+        expect(resolveArt(129, level, ArtState.DAMAGED, kind)?.top.url).toBe(
+          "/assets/buildings/iquaketower/top.t1.damaged@2x.webp",
+        );
+        expect(resolveArt(129, level, ArtState.DESTROYED, kind)?.top.url).toBe(
+          "/assets/buildings/iquaketower/top.t1.destroyed@2x.webp",
+        );
+      }
+    }
+    const [tier] = TOWER_TIER_ART[129] ?? [];
+    const [file, , , width, height, frames] = tier?.anim?.strip ?? ["", 0, 0, 0, 0, 0];
+    const columns = tier?.anim?.columns ?? frames;
+    const path = `${ASSETS}${artFolder(129) ?? ""}${file}`;
+    const head = readFileSync(path).subarray(0, 30);
+    expect(head.toString("ascii", 12, 16), path).toBe("VP8X");
+    expect([head.readUIntLE(24, 3) + 1, head.readUIntLE(27, 3) + 1], path).toEqual([
+      2 * width * columns,
+      2 * height * Math.ceil(frames / columns),
+    ]);
+    for (const state of [tier?.top, tier?.damaged?.top, tier?.destroyed?.top]) {
+      expect(existsSync(`${ASSETS}${artFolder(129) ?? ""}${state?.[0] ?? ""}`), state?.[0]).toBe(true);
+    }
+  });
+
   it("ship every strip the Tesla and Bunker name, as big as its cells", () => {
     for (const type of ANIMATED) {
       for (const tier of TOWER_TIER_ART[type] ?? []) {
@@ -222,7 +255,8 @@ describe("the repainted tower tiers", () => {
     expect(tierLift(21, 3)).toBeLessThan(tierLift(21, 4));
     expect(tierLift(21, 7)).toBeGreaterThan(tierLift(21, 4));
     expect(tierLift(14, 9)).toBe(0);
-    expect(tierArtFor(1, 10)).toBeNull();
+    expect(tierArtFor(1, 10)?.lift).toBe(0);
+    expect(tierArtFor(24, 1)?.lift).toBe(0);
   });
 
   it("stand each higher tier taller, on the same base", () => {
@@ -309,7 +343,7 @@ describe("the turning turrets", () => {
         expect(art?.topIsAnim).toBe(false);
         expect(art?.still?.url).toBe(`/assets/${folder}top.t${n}@2x.webp`);
         expect(art?.shadow?.url).toBe(
-          `/assets/${folder}${kind === "main" && PAINTED_SHADOWS.includes(type) ? `shadow.t${n}.jpg` : tier.shadow[0]}`,
+          `/assets/${folder}${kind === "main" && PAINTED_SHADOWS.includes(type) ? `shadow.t${n}.jpg` : tier.shadow?.[0] ?? ""}`,
         );
         // The 3D Cannon's prongs are cut out of each barrel cell, so no tower has a front layer now.
         expect(art?.anims).toHaveLength(1);

@@ -10,7 +10,7 @@ updated: 2026-10-11
 
 Go to [play.bymrevamped.com](https://play.bymrevamped.com) and choose **Create account**. You need a username, an email address and a password. That's it: the game runs in your browser, so there is nothing to download.
 
-> **Open beta:** the game is still being built. Things may break, and your progress may be reset before the full launch.
+> **Open beta:** the game is still being built and things may break. We plan to keep your progress after the beta. A serious exploit or lost data could force a rollback to an earlier save; if that ever happens, we will announce it.
 
 ## The guided start with Bob
 

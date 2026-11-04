@@ -3,6 +3,7 @@ import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { UpdateSettingsSchema } from "../../schemas/AuthSchemas.js";
+import { mr2HexShape, mr2TiltEnabled } from "../../config/MapRoom2Config.js";
 import { countryChannelFor } from "../../config/ChatConfig.js";
 import { disconnectCountryChat } from "../../chat/chatControl.js";
 
@@ -12,6 +13,14 @@ export const settingsOf = (user: User) => ({
   // The privacy part (`docs/design/friends.md` §3.6, issue #368).
   hideOnline: user.hide_online,
   friendRequests: !user.friend_requests_off,
+  // Map Room 2's tilted camera (MR2 look plan step 4): whether the server
+  // lets the map tilt at all, and the player's own choice (on by default).
+  mapTiltAllowed: mr2TiltEnabled(),
+  tiltedMap: !user.map_flat,
+  // Map Room 2's hex shape (MR2 look plan step 1, `MR2_HEX_SHAPE`): the map
+  // reads it before it draws a cell, so its picking and range lines match
+  // the server's rules.
+  mapHexShape: mr2HexShape(),
   // The player's country (owner 3 Nov 2026): null until picked. `countryAsked`
   // says the one-time prompt was answered or put off; `countryChannel` is the
   // country's chat room (every country has one), null while no country is set.
@@ -35,13 +44,14 @@ export const settingsOf = (user: User) => ({
  */
 export const updateSettings: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  const { shinyLocked, hideOnline, friendRequests, country, countryAsked } = UpdateSettingsSchema.parse(
+  const { shinyLocked, hideOnline, friendRequests, tiltedMap, country, countryAsked } = UpdateSettingsSchema.parse(
     ctx.request.body,
   );
 
   if (shinyLocked !== undefined) user.shiny_locked = shinyLocked;
   if (hideOnline !== undefined) user.hide_online = hideOnline;
   if (friendRequests !== undefined) user.friend_requests_off = !friendRequests;
+  if (tiltedMap !== undefined) user.map_flat = !tiltedMap;
   if (countryAsked) user.country_asked = true;
 
   const oldCountry = user.country ?? null;

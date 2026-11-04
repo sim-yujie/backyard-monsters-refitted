@@ -10,7 +10,7 @@ import { LabTab } from "./LabTab";
 import { MONSTERS_TABS } from "./tabs";
 
 /**
- * The Lab tab as a player meets it: the Lab slot, the ten abilities with
+ * The Lab tab as a player meets it: the Lab slot, the fourteen abilities with
  * rank, next rank, effect and the reason one cannot start, the card with
  * Research and Instant, and the running research's Finish now and Cancel
  * confirmation, each wired to its Lab action. The rules are in
@@ -97,16 +97,20 @@ describe("LabTab: slot and list", () => {
     expect(MONSTERS_TABS.find((tab) => tab.id === "lab")!.buildings).toEqual([116]);
   });
 
-  it("the Lab's slot, then the ten abilities with rank, next rank, effect and gate", () => {
+  it("the Lab's slot, then the fourteen abilities with rank, next rank, effect and gate", () => {
     const { element } = setup();
     expect(spokenText(slot(element))).toBe("Monster Lab · level 2 Idle");
     expect(rows(element).map((one) => one.dataset["monster"])).toEqual([
+      "C1",
+      "C2",
       "C3",
       "C4",
+      "C6",
       "C7",
       "C8",
       "C5",
       "C9",
+      "C10",
       "C11",
       "C13",
       "C14",

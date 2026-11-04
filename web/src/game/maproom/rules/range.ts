@@ -17,9 +17,18 @@
  * edges, as Flash's `GetCell` does (`MapRoomPopup.as:1061-1073`), so a step
  * off one edge lands on the other.
  *
- * Cells are `(x, y)` in the offset form the server and the wire use: odd-q,
- * flat-top columns, odd columns half a cell lower. Axial is
- * `q = x, r = y - (x - (x & 1)) / 2` (`MapRoomPopup.as:992-993`).
+ * Cells are `(x, y)` in the offset form the server and the wire use. The
+ * world's hex shape is a server switch (`MR2_HEX_SHAPE`, MR2 look plan step 1):
+ *
+ * - `flat` (the default, Flash's grid): odd-q, flat-top columns, odd columns
+ *   half a cell lower. Axial is `q = x, r = y - (x - (x & 1)) / 2`
+ *   (`MapRoomPopup.as:992-993`).
+ * - `pointy`: odd-r, pointy-top rows, odd rows half a cell to the right.
+ *   Axial is `q = x - (y - (y & 1)) / 2, r = y`.
+ *
+ * Stored coordinates are the same on both; only which cells touch differs.
+ * Every function that measures takes the shape, `flat` when left out, so a
+ * caller that never heard of the switch measures exactly as before.
  *
  * Pure: no imports, no clock, nothing from either tree.
  */
@@ -89,8 +98,34 @@ export const outpostRange = (level: number | undefined): number => {
 export const withDeclareWar = (range: number, declareWar: boolean): number =>
   range > 0 && declareWar ? range + DECLARE_WAR_RANGE : range;
 
+/** The world's hex shape: Flash's flat-top columns, or pointy-top rows. */
+export type HexShape = "flat" | "pointy";
+
+/**
+ * Reads the `MR2_HEX_SHAPE` switch's value: `pointy` (any case, spaces
+ * ignored) is pointy-top, anything else, the default, flat-top.
+ *
+ * @param value - The switch's value, or what the server sent the client.
+ * @returns The shape.
+ */
+export const hexShapeOf = (value: unknown): HexShape =>
+  typeof value === "string" && value.trim().toLowerCase() === "pointy" ? "pointy" : "flat";
+
+/** Axial `q` of an offset cell. */
+export const axialQ = (x: number, y: number, shape: HexShape = "flat"): number =>
+  shape === "pointy" ? x - (y - (y & 1)) / 2 : x;
+
+/** Axial `r` of an offset cell. */
+export const axialR = (x: number, y: number, shape: HexShape = "flat"): number =>
+  shape === "pointy" ? y : y - (x - (x & 1)) / 2;
+
 /** Hex steps between two cells on an unwrapped grid. */
-const stepsBetween = (ax: number, ay: number, bx: number, by: number): number => {
+const stepsBetween = (ax: number, ay: number, bx: number, by: number, shape: HexShape): number => {
+  if (shape === "pointy") {
+    const dq = bx - (by - (by & 1)) / 2 - (ax - (ay - (ay & 1)) / 2);
+    const dr = by - ay;
+    return Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr));
+  }
   const dq = bx - ax;
   const dr = by - (bx - (bx & 1)) / 2 - (ay - (ax - (ax & 1)) / 2);
   return Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr));
@@ -103,19 +138,21 @@ const WRAPS_Y = [0, -MAP_HEIGHT, MAP_HEIGHT] as const;
 /**
  * Hex steps between two cells on the wrapping world.
  *
- * The world is 800 columns wide, an even number, so a copy of it shifted by
- * its width keeps every column's parity and the odd-q conversion stays true
- * across the seam. The shortest of the nine copies is the distance.
+ * The world is 800 cells wide and tall, both even, so a copy of it shifted by
+ * its width or height keeps every column's and row's parity and the odd-q or
+ * odd-r conversion stays true across the seam. The shortest of the nine
+ * copies is the distance.
  *
  * @param a - One cell.
  * @param b - The other.
+ * @param shape - The world's hex shape.
  * @returns Steps between them.
  */
-export const hexDistance = (a: RangeCell, b: RangeCell): number => {
+export const hexDistance = (a: RangeCell, b: RangeCell, shape: HexShape = "flat"): number => {
   let best = Number.POSITIVE_INFINITY;
   for (const sx of WRAPS_X) {
     for (const sy of WRAPS_Y) {
-      const steps = stepsBetween(a.x, a.y, b.x + sx, b.y + sy);
+      const steps = stepsBetween(a.x, a.y, b.x + sx, b.y + sy, shape);
       if (steps < best) best = steps;
     }
   }
@@ -130,7 +167,50 @@ export const hexDistance = (a: RangeCell, b: RangeCell): number => {
  * @param from - The flinging cell.
  * @param to - The target.
  * @param reach - The flinger's reach, Declare War included.
+ * @param shape - The world's hex shape.
  * @returns True when `to` is within `reach` steps.
  */
-export const inReach = (from: RangeCell, to: RangeCell, reach: number): boolean =>
-  reach > 0 && hexDistance(from, to) <= reach;
+export const inReach = (
+  from: RangeCell,
+  to: RangeCell,
+  reach: number,
+  shape: HexShape = "flat",
+): boolean =>
+  reach > 0 && hexDistance(from, to, shape) <= reach;
+
+/**
+ * The six axial directions, starting east (lower right on flat-top) and
+ * turning counter-clockwise. The web grid's `HexGrid.neighbours` keeps this
+ * order, which the range overlay's edge sides rely on.
+ */
+const AXIAL_DIRECTIONS: readonly (readonly [number, number])[] = [
+  [1, 0],
+  [1, -1],
+  [0, -1],
+  [-1, 0],
+  [-1, 1],
+  [0, 1],
+];
+
+const wrapTo = (value: number, size: number): number => ((value % size) + size) % size;
+
+/**
+ * The six cells touching `(x, y)` on the wrapping world, in `AXIAL_DIRECTIONS`
+ * order. Exactly the cells `hexDistance` puts one step away.
+ *
+ * @param x - The cell's column.
+ * @param y - The cell's row.
+ * @param shape - The world's hex shape.
+ * @returns The six neighbours, wrapped into the world.
+ */
+export const hexNeighbours = (x: number, y: number, shape: HexShape = "flat"): RangeCell[] => {
+  const q = axialQ(x, y, shape);
+  const r = axialR(x, y, shape);
+  return AXIAL_DIRECTIONS.map(([dq, dr]) => {
+    const nq = q + dq;
+    const nr = r + dr;
+    const nx = shape === "pointy" ? nq + (nr - (nr & 1)) / 2 : nq;
+    const ny = shape === "pointy" ? nr : nr + (nq - (nq & 1)) / 2;
+    return { x: wrapTo(nx, MAP_WIDTH), y: wrapTo(ny, MAP_HEIGHT) };
+  });
+};

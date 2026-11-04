@@ -123,6 +123,8 @@ export const UpdateSettingsSchema = z.object({
   hideOnline: z.boolean().optional(),
   /** Accept friend requests; false refuses them with `requestsOff` (§3.6). */
   friendRequests: z.boolean().optional(),
+  /** Map Room 2 drawn through the tilted camera; false draws it flat (`user.map_flat`). */
+  tiltedMap: z.boolean().optional(),
   /** The player's country (ISO 3166-1 alpha-2, `user.country`); null clears it. */
   country: z.string().refine(isCountryCode).nullable().optional(),
   /** The one-time country prompt was put off ("Not now"); it is not shown again. */
@@ -131,18 +133,26 @@ export const UpdateSettingsSchema = z.object({
 
 /**
  * Schema to validate a change to the sound switches (beta.5,
- * `services/sound/soundSettings.ts`): send only the switch that changed.
+ * `services/sound/soundSettings.ts`): send only the switch or volume that changed.
  * Strict, so a misspelt switch is refused rather than quietly ignored.
  */
 export const UpdateSoundSchema = z
   .object({
     music: z.boolean().optional(),
     effects: z.boolean().optional(),
+    /** The volume sliders, 0-100 (owner, 4 Nov 2026). */
+    musicVolume: z.number().int().min(0).max(100).optional(),
+    effectsVolume: z.number().int().min(0).max(100).optional(),
   })
   .strict()
-  .refine((body) => body.music !== undefined || body.effects !== undefined, {
-    message: "Send music, effects or both.",
-  });
+  .refine(
+    (body) =>
+      body.music !== undefined ||
+      body.effects !== undefined ||
+      body.musicVolume !== undefined ||
+      body.effectsVolume !== undefined,
+    { message: "Send music, effects, musicVolume or effectsVolume." }
+  );
 
 /**
  * Schema to validate an avatar change (issue #175).

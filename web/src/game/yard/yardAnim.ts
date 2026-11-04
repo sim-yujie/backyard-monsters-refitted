@@ -113,6 +113,8 @@ export const WorkKind = {
   TRAIN: "train",
   /** The Monster Lab researching a power-up. */
   RESEARCH: "research",
+  /** A Hatchery Control Centre while any hatchery in its yard is growing a monster. */
+  CONTROL: "control",
 } as const;
 export type WorkKind = (typeof WorkKind)[keyof typeof WorkKind];
 
@@ -159,6 +161,10 @@ const POLICIES = new Map<number, AnimPolicy>([
   // Hatchery: only with a monster in production, back to cell 0 when not
   // (`BUILDING13.as:34-47`).
   [13, { ...whileWorking(WorkKind.HATCH, whenIdle(every(2, false))), restOnIdle: true }],
+  // Hatchery Control Center: Flash's stands still and so does the main yard's 3D. The Inferno's Incubator Control
+  // Centre (3D look C) loops at the producers' rate, idle and working alike, its working loop while any of the
+  // yard's Incubators is hatching (`loopAnimLayers`).
+  [16, whileWorking(WorkKind.CONTROL, whenIdle(every(3, false)))],
   // Monster Baiter: `BFOUNDATION.as:1141` names type 19.
   [19, STATIC_FIXED],
   // Towers. The cell is a facing, set only when something is being shot at.

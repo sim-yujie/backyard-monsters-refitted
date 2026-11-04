@@ -1,6 +1,6 @@
 import { BUILDING_ART_ROWS, type ArtAnim, type ArtImage, type ArtLevel, type ArtRow } from "./buildingArtData";
 import { INFERNO_ART_ROWS } from "./buildingArtInfernoData";
-import { hasInfernoTiers, tierArtFor } from "./buildingArtTiers";
+import { hasInfernoTiers, tierArtFor, type TierArt } from "./buildingArtTiers";
 import type { YardKind } from "./buildingCostData";
 
 /**
@@ -19,10 +19,12 @@ import type { YardKind } from "./buildingCostData";
  * under construction — uses the level 1 art.
  * (`client/scripts/BFOUNDATION.as:896-914`.)
  *
- * The repainted defensive towers and Town Hall are the exception: unless the
- * player chose the old (Flash) art, each tier or level takes a new picture
- * from `buildingArtTiers.ts` instead of the Flash row; a tower whose turret
- * turns takes a body and a turret strip, like the Flash tower it replaces.
+ * The repainted defensive towers, the Town Hall and the 3D yard buildings are
+ * the exception: unless the player chose the old (Flash) art, each tier or
+ * level takes a new picture from `buildingArtTiers.ts` instead of the Flash
+ * row; a tower whose turret turns takes a body and a turret strip, like the
+ * Flash tower it replaces, and a building whose parts move a body and a strip
+ * of the moving parts.
  *
  * Two buildings have a lower maximum on Map Room 2 than the art table knows
  * about, and the client clamps the level before looking the art up
@@ -198,6 +200,12 @@ export interface ResolvedAnim {
   readonly frames: number;
   /** Cells in a row, for a strip of several rows (the 3D Laser's tilts); one row without it. */
   readonly columns?: number;
+  /**
+   * The first `rest` cells are the building's loop while it is not working,
+   * the others its loop while it is (`TierAnim.rest`, the Inferno's Incubator
+   * Control Centre); absent for a strip that is one loop.
+   */
+  readonly rest?: number;
 }
 
 /**
@@ -267,7 +275,8 @@ export interface ResolvedArt {
   /**
    * The whole building in one picture, for an icon, when `top` is only part
    * of it: a repainted tower whose turret turns has its body as `top` and the
-   * turret in `anims`, and keeps the tier's painted picture here.
+   * turret in `anims`, and keeps the tier's painted picture here; so does a 3D
+   * building whose moving parts are a strip of their own.
    */
   readonly still?: ResolvedImage;
 }
@@ -283,7 +292,7 @@ const imageOf = (folder: string, entry: ArtImage): ResolvedImage | null => {
   };
 };
 
-const animOf = (folder: string, entry: ArtAnim, columns?: number): ResolvedAnim => ({
+const animOf = (folder: string, entry: ArtAnim, columns?: number, rest?: number): ResolvedAnim => ({
   url: `${ASSET_ROOT}${folder}${entry[0]}`,
   x: entry[1],
   y: entry[2],
@@ -291,6 +300,7 @@ const animOf = (folder: string, entry: ArtAnim, columns?: number): ResolvedAnim 
   height: entry[4],
   frames: entry[5],
   ...(columns ? { columns } : {}),
+  ...(rest ? { rest } : {}),
 });
 
 /** Indices into an `ArtLevel` tuple for the default, damaged and destroyed art. */
@@ -298,6 +308,23 @@ const TOP_INDEX: Record<ArtState, 1 | 2 | 3> = { "": 1, damaged: 2, destroyed: 3
 const SHADOW_INDEX: Record<ArtState, 4 | 5 | 6> = { "": 4, damaged: 5, destroyed: 6 };
 /** Destroyed has no slot: the props table ships no `animdestroyed` anywhere. */
 const ANIM_INDEX: Record<ArtState, 7 | 8 | null> = { "": 7, damaged: 8, destroyed: null };
+
+/**
+ * The new (Modern) look a building shows at `level` in a `kind` yard: its
+ * repainted or 3D tier (`tierArtFor`), or null where the yard draws Flash's
+ * art (the Classic look, a type with no new look, and a type the Inferno draws
+ * from its own folder, the Under Hall say, unless the Inferno has tiers of its
+ * own for it: the Blast Tower, the Sharpshooter, the Blocks, the Incubator
+ * Control Centre). The build menu's Modern pictures follow it
+ * (`buildButtonArt.ts`).
+ */
+export const newLookFor = (type: number, level: number, kind: YardKind = "main"): TierArt | null => {
+  const row = rowFor(type, kind);
+  if (!row) return null;
+  const ownInfernoArt =
+    kind === "inferno" && row.folder !== ROWS.get(type)?.folder && !hasInfernoTiers(type, kind);
+  return ownInfernoArt ? null : tierArtFor(type, level, kind);
+};
 
 /**
  * The art for one building, or null when the type is not in the table.
@@ -323,27 +350,50 @@ export const resolveArt = (
 
   // A repainted tier or Town Hall level, unless the old art is on: the same art for
   // default and damaged alike; a destroyed one falls through to the Flash rubble.
+  // A 3D building has damaged and destroyed looks of its own: a still and its shadow.
   // A tower whose turret turns is its body with the turret's strip over it, and
   // the parts of the body in front of the turret (the Cannon's prongs) over that.
   // A type the Inferno draws from its own folder (the Under Hall, say) keeps its Inferno art,
-  // unless the Inferno has tiers of its own for it (the Blast Tower, the Sharpshooter).
-  const ownInfernoArt =
-    kind === "inferno" && row.folder !== ROWS.get(type)?.folder && !hasInfernoTiers(type, kind);
-  const tier = state === ArtState.DESTROYED || ownInfernoArt ? null : tierArtFor(type, wanted, kind);
+  // unless the Inferno has tiers of its own for it (the Blast Tower, the Sharpshooter, the Blocks).
+  const found = newLookFor(type, wanted, kind);
+  const ruin = state === ArtState.DESTROYED ? found?.destroyed : state === ArtState.DAMAGED ? found?.damaged : undefined;
+  const ruinTop = ruin ? imageOf(row.folder, ruin.top) : null;
+  if (ruin && ruinTop) {
+    return {
+      name: row.name,
+      folder: row.folder,
+      level: found?.from ?? wanted,
+      top: ruinTop,
+      shadow: imageOf(row.folder, ruin.shadow),
+      anims: [],
+      topIsAnim: false,
+    };
+  }
+  const tier = state === ArtState.DESTROYED ? null : found;
   // A tier whose moving part is a strip (the 3D Tesla's film, the Bunker's shutters) has it over its top,
   // or, when each cell is the whole building, in its place: its top is then the strip's cell 0.
   if (tier) {
     const { turret, anim } = tier;
-    const layers = turret ? (turret.front ? [turret.strip, turret.front] : [turret.strip]) : anim ? [anim.strip] : [];
+    const layers = turret
+      ? turret.front
+        ? [turret.strip, turret.front]
+        : [turret.strip]
+      : anim
+        ? [anim.strip, ...(anim.more ?? [])]
+        : [];
     const columnsOf = (layer: ArtAnim): number | undefined =>
       layer === turret?.strip ? turret.columns : layer === anim?.strip ? anim.columns : undefined;
     const still = imageOf(row.folder, tier.top);
     const whole = !turret && anim?.whole === true;
+    // A 3D building whose moving parts are cut out of its body (the Twig Snapper's saw) draws the body under its cells.
+    const body = !turret && !whole ? anim?.body : undefined;
     const top = turret
       ? imageOf(row.folder, turret.body)
       : whole && anim
         ? imageOf(row.folder, [anim.strip[0], anim.strip[1], anim.strip[2], anim.strip[3], anim.strip[4]])
-        : still;
+        : body
+          ? imageOf(row.folder, body)
+          : still;
     if (top && still) {
       return {
         name: row.name,
@@ -351,9 +401,11 @@ export const resolveArt = (
         level: tier.from,
         top,
         shadow: imageOf(row.folder, tier.shadow),
-        anims: layers.map((layer) => animOf(row.folder, layer, columnsOf(layer))),
+        anims: layers.map((layer) =>
+          animOf(row.folder, layer, columnsOf(layer), layer === anim?.strip ? anim.rest : undefined),
+        ),
         topIsAnim: whole,
-        ...(turret || whole ? { still } : {}),
+        ...(turret || whole || body ? { still } : {}),
       };
     }
   }

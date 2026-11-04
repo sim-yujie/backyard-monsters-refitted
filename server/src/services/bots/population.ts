@@ -1,8 +1,9 @@
-import { daysBetween, daysOn, type Pace } from "../../config/BotConfig.js";
-import { BOT_MAX_LEVEL, BOT_MIN_LEVEL } from "./factory.js";
+import { botFloorLevel, daysBetween, daysOn, type Pace } from "../../config/BotConfig.js";
+import { BOT_MAX_LEVEL } from "./factory.js";
 
 /**
- * How the bot population climbs and is kept even over levels 15-40
+ * How the bot population climbs and is kept even from the level floor
+ * (`BOTS_FLOOR_LEVEL`, 25 by default) to 40
  * (`docs/design/bot-neighbours.md` §4.4). Everything here is pure; the sweep
  * (`sweep.ts`) reads the rows, runs these and writes.
  *
@@ -20,7 +21,7 @@ import { BOT_MAX_LEVEL, BOT_MIN_LEVEL } from "./factory.js";
  *
  * Each level a bot gains, it has `BotConfig.quietRate` chance to go quiet
  * ({@link drawQuiet}): to stop growing at some point of the level it is on,
- * as a player who quits or slows down. (Bots no longer start below level 15,
+ * as a player who quits or slows down. (Bots no longer start below the floor,
  * so the higher early chance real players show at levels 1-4 is gone, owner
  * 2026-10-23.) From `quiet_since` on its place on the
  * climb stands still; the sweep still repairs it, refills it and keeps its
@@ -33,11 +34,12 @@ import { BOT_MAX_LEVEL, BOT_MIN_LEVEL } from "./factory.js";
  * ## The daily rebalance
  *
  * Every level should hold its share of the total ({@link planRebalance}). A
- * bot below the level floor (`BOT_MIN_LEVEL`, 15) is always retired, all of
- * them on the first rebalance after the floor came in (owner, 2026-10-23):
- * neighbour lists already skip them, and raising them in place would only
- * pile them all on level 15, where the crowded-level rule would retire them
- * the next day; the band-filling below makes their places up on 15-40. A
+ * bot below the level floor (`BOTS_FLOOR_LEVEL`, 25 by default; 15 from
+ * 2026-10-23, 25 from owner 3 Nov 2026) is always retired, all of them on the
+ * first rebalance after the floor came in or rose: neighbour lists already
+ * skip them, and raising them in place would only pile them all on the floor,
+ * where the crowded-level rule would retire them the next day; the
+ * band-filling below makes their places up from the floor to 40. A
  * level more than `BotConfig.levelSlack` bots over its share retires bots
  * down to it, quiet ones first (longest quiet first), then growing ones
  * (longest on the level first). A level more than the slack short gets new
@@ -50,7 +52,7 @@ import { BOT_MAX_LEVEL, BOT_MIN_LEVEL } from "./factory.js";
  * levels are only ever the high ones (quiet bots never leave a level, so lower
  * ones never run short), the band-filling alone would leave nearly every bot
  * on the lower levels quiet. So each day also starts about
- * `BotConfig.freshPerDay` new bots at the bottom of level 15, the floor
+ * `BotConfig.freshPerDay` new bots at the bottom of the floor level
  * ({@link birthsToday}), growing, to climb and quit as players do from there.
  * They come first, within the daily cap; once the total is full,
  * each takes the place of a quiet bot on the most crowded level
@@ -165,6 +167,8 @@ export interface RebalanceRules {
   newPerDay: number;
   /** New bots to start at the floor today ({@link birthsToday}); absent reads as 0. */
   births?: number;
+  /** The level floor: every bot below it retires; absent reads as `BOTS_FLOOR_LEVEL` (`botFloorLevel`). */
+  floor?: number;
 }
 
 /** The daily rebalance's plan. */
@@ -193,7 +197,7 @@ const leavesFirst =
  * many to start at the floor and which levels to make new bots on.
  */
 export const planRebalance = (bots: readonly RebalanceBot[], rules: RebalanceRules, now: number): RebalancePlan => {
-  const { share, total, slack, newPerDay, births = 0 } = rules;
+  const { share, total, slack, newPerDay, births = 0, floor = botFloorLevel() } = rules;
   const byLevel: RebalanceBot[][] = share.map(() => []);
   for (const bot of bots) byLevel[Math.min(Math.max(bot.level, 1), share.length) - 1]!.push(bot);
   for (const list of byLevel) list.sort(leavesFirst(now));
@@ -206,7 +210,7 @@ export const planRebalance = (bots: readonly RebalanceBot[], rules: RebalanceRul
   const held = (index: number) => byLevel[index]!.length + planned[index]!;
 
   byLevel.forEach((list, index) => {
-    if (index + 1 < BOT_MIN_LEVEL) while (list.length > 0) take(index);
+    if (index + 1 < floor) while (list.length > 0) take(index);
     else if (list.length > want(index) + slack) while (list.length > want(index)) take(index);
   });
 
@@ -246,7 +250,7 @@ export const planRebalance = (bots: readonly RebalanceBot[], rules: RebalanceRul
       take(index);
       live--;
     }
-    planned[BOT_MIN_LEVEL - 1]!++;
+    planned[floor - 1]!++;
     born++;
     live++;
   }

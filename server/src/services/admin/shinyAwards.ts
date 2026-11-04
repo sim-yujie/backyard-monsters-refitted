@@ -243,6 +243,8 @@ export interface PlayerMatch {
   /** A computer-run Map Room 1 neighbour (`bym.bot`), shown so the owner never gives to one by mistake. */
   readonly bot: boolean;
   readonly lastSeenAt: string | null;
+  /** The Style the player's game last sent (`modern`/`classic`), null before beta 6 or on other clients. */
+  readonly look: string | null;
 }
 
 /** Search results a query gives at most. */
@@ -292,7 +294,7 @@ export const searchPlayers = async (em: EntityManager, query: string): Promise<P
   const spacedName = `regexp_replace(lower(u.username), ${SQL_SEPARATORS}, '_', 'g')`;
   const joinedName = `regexp_replace(lower(u.username), ${SQL_SEPARATORS}, '', 'g')`;
   const rows = await em.execute<
-    { userid: number; username: string; former_name: string | null; bot: boolean; last_seen_at: Date | string | null }[]
+    { userid: number; username: string; former_name: string | null; bot: boolean; last_seen_at: Date | string | null; look_style: string | null }[]
   >(
     `WITH former AS (
        SELECT DISTINCT ON (userid) userid, name FROM (
@@ -301,7 +303,7 @@ export const searchPlayers = async (em: EntityManager, query: string): Promise<P
          SELECT userid, username AS name FROM bym.shiny_award WHERE lower(username) = ?
        ) names ORDER BY userid
      )
-     SELECT u.userid, u.username, u.last_seen_at,
+     SELECT u.userid, u.username, u.last_seen_at, u.look_style,
             CASE WHEN lower(u.username) <> lower(f.name) THEN f.name END AS former_name,
             (b.userid IS NOT NULL AND b.state <> 'seeded') AS bot
        FROM bym."user" u
@@ -340,5 +342,6 @@ export const searchPlayers = async (em: EntityManager, query: string): Promise<P
     formerName: row.former_name ?? null,
     bot: row.bot === true,
     lastSeenAt: row.last_seen_at === null ? null : new Date(row.last_seen_at).toISOString(),
+    look: row.look_style ?? null,
   }));
 };

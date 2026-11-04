@@ -1,4 +1,5 @@
 import type { ChatConfig, ChatLineWire, ChatServerMessage } from "@/api/chat";
+import { onWorldChatChange, worldChatOn } from "./worldChatSetting";
 
 /**
  * World chat's connection and what it has heard (#282), with no DOM: the chat
@@ -16,6 +17,10 @@ import type { ChatConfig, ChatLineWire, ChatServerMessage } from "@/api/chat";
  * somewhere else (the server keeps one connection per player and closes the
  * older), and retrying would only throw that one off in turn; the box offers
  * to reconnect.
+ *
+ * The player's "World chat" switch (`worldChatSetting.ts`) turns it off: no
+ * socket at all, whatever the yard loads hand it, until it is turned on again
+ * and connects with the last settings it was handed.
  *
  * Besides Global, a player whose country has a room (owner 3 Nov 2026) is in
  * that room too, on the same socket: the yard load names it, the server lets
@@ -188,6 +193,18 @@ const parse = (data: unknown): ChatServerMessage | null => {
   }
 };
 
+/** Stopped or switched off: no room, nobody, nothing heard. */
+const OFF_STATE: ChatState = {
+  status: ChatStatus.OFF,
+  entries: [],
+  muted: new Set(),
+  self: null,
+  channel: null,
+  rooms: [],
+  unread: new Set(),
+  bounced: null,
+};
+
 export class ChatSession {
   private config: ChatConfig | null = null;
   private socket: ChatSocket | null = null;
@@ -202,6 +219,8 @@ export class ChatSession {
    */
   private pendingMutes = new Map<number, boolean>();
   private retries = 0;
+  /** The player's "World chat" switch; off, nothing connects. */
+  private enabled = true;
   private nextId = 1;
   /** The last line said, for `bounced` if the server turns it away. */
   private lastSaid: string | null = null;
@@ -251,6 +270,11 @@ export class ChatSession {
    * Map Rooms) is changed over on the open socket.
    */
   configure(config: ChatConfig): void {
+    if (!this.enabled) {
+      // Kept for when the player turns world chat back on.
+      this.config = config;
+      return;
+    }
     const previous = this.config;
     if (sameConfig(previous, config) && this.state.status !== ChatStatus.SIGNED_OUT) {
       if (this.state.status === ChatStatus.OFF) this.connect();
@@ -310,7 +334,28 @@ export class ChatSession {
 
   /** Connects again after another connection took over (the box's "Reconnect"). */
   reconnect(): void {
-    if (this.config && this.state.status !== ChatStatus.ONLINE) this.connect();
+    if (this.enabled && this.config && this.state.status !== ChatStatus.ONLINE) this.connect();
+  }
+
+  get isEnabled(): boolean {
+    return this.enabled;
+  }
+
+  /**
+   * The player's "World chat" switch. Off closes the socket and empties the
+   * room, keeping the last yard load's settings; On connects with them again
+   * (or waits for the next yard load when there are none).
+   */
+  setEnabled(enabled: boolean): void {
+    if (enabled === this.enabled) return;
+    this.enabled = enabled;
+    if (enabled) {
+      if (this.config) this.connect();
+      return;
+    }
+    this.drop();
+    this.retries = 0;
+    this.update(OFF_STATE);
   }
 
   /** Closes the socket and forgets everything: signing out, or the idle disconnect. */
@@ -318,16 +363,7 @@ export class ChatSession {
     this.config = null;
     this.drop();
     this.retries = 0;
-    this.update({
-      status: ChatStatus.OFF,
-      entries: [],
-      muted: new Set(),
-      self: null,
-      channel: null,
-      rooms: [],
-      unread: new Set(),
-      bounced: null,
-    });
+    this.update(OFF_STATE);
     this.roomEntries.clear();
     this.joined.clear();
   }
@@ -602,5 +638,7 @@ export class ChatSession {
   }
 }
 
-/** The one world chat of the signed-in player. */
+/** The one world chat of the signed-in player, on or off with the player's switch. */
 export const worldChat = new ChatSession();
+worldChat.setEnabled(worldChatOn());
+onWorldChatChange((on) => worldChat.setEnabled(on));

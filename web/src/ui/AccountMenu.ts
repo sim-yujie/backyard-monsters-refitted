@@ -37,11 +37,14 @@
  * announcements again (`ui/announcements/AnnouncementDialog.ts`).
  *
  * With `onReportBug` it has a "Report a bug" item, which opens the bug report
- * form (`ui/bugReport/BugReportDialog.ts`). After it, always, "Join the
- * Discord" opens the community invite in a new tab.
+ * form (`ui/bugReport/BugReportDialog.ts`). After it, always, "Support the
+ * game" (the painted heart) opens the small Patreon / Ko-fi panel
+ * (`ui/support/SupportPanel.ts`), and "Join the Discord" opens the community
+ * invite in a new tab.
  *
- * Beside "Reduce effects" sit the two sound switches, Music and Sound
- * effects (beta.5), saved with the player's yard (`game/sound/soundSwitches.ts`).
+ * Beside "Reduce effects" sit the sound rows, Music and Sound effects, each
+ * a mute and a volume slider (`ui/SoundSliders.ts`), saved with the
+ * player's yard (`game/sound/soundSwitches.ts`).
  */
 
 import { DISCORD_URL } from "@/config";
@@ -50,13 +53,10 @@ import { waitingText } from "@/game/friends/friendText";
 import { guideTourAvailable, startGuideTour } from "@/game/guide/tour";
 import { openAccountSettings } from "@/ui/AccountSettings";
 import { reduceEffects, setReduceEffects } from "@/game/attack/juice";
-import {
-  onSoundSwitches,
-  setSoundSwitch,
-  soundSwitches,
-  type SoundSwitches,
-} from "@/game/sound/soundSwitches";
+import { SoundSliders } from "@/ui/SoundSliders";
 import { fullscreenAvailable, isFullscreen, toggleFullscreen } from "@/ui/fullscreen";
+import { gameIcon } from "@/ui/gameIcon";
+import { openSupportPanel, SUPPORT_TEXT } from "@/ui/support/SupportPanel";
 import "@/ui/friends/friends.css";
 import "@/ui/styles/guide-start.css";
 
@@ -106,11 +106,8 @@ export const accountName = (name: string | null | undefined): string => name?.tr
 /** "Level 12", the pill's line under the name. */
 export const levelText = (level: number): string => `Level ${level}`;
 
-/** "Music: On", a sound switch's item. */
-export const soundSwitchText = (label: string, on: boolean): string => `${label}: ${on ? "On" : "Off"}`;
-
-/** A sound switch's tooltip after its save failed; the switch is already back. */
-export const SOUND_SAVE_FAILED = "Could not save that. Try again.";
+/** A sound row's tooltip after its save failed; the row is already back. */
+export { SOUND_SAVE_FAILED } from "@/ui/SoundSliders";
 
 export class AccountMenu {
   /** The button and the list, in one wrapper the list hangs from. */
@@ -363,6 +360,22 @@ export class AccountMenu {
       });
       this.list.append(reportBug);
     }
+    // Support the game (owner 24 Oct 2026): always here, on every screen with
+    // the menu. Only opens the panel of links; it gives nothing in the game.
+    const support = document.createElement("button");
+    support.type = "button";
+    support.className = "btn btn--ghost account-menu__help account-menu__support";
+    support.setAttribute("role", "menuitem");
+    support.append(
+      gameIcon("support", { size: 24, decorative: true }),
+      Object.assign(document.createElement("span"), { textContent: SUPPORT_TEXT.title }),
+    );
+    support.addEventListener("click", () => {
+      this.toggle(false);
+      const container = document.querySelector<HTMLElement>(".overlay__layer--modal") ?? document.body;
+      openSupportPanel({ container });
+    });
+    this.list.append(support);
     // The community Discord, in a new tab; no referrer to the outside site.
     const discord = document.createElement("a");
     discord.className = "btn btn--ghost account-menu__help account-menu__discord";
@@ -410,11 +423,12 @@ export class AccountMenu {
       setReduceEffects(!reduceEffects());
       showEffects();
     });
-    // Music and sound effects (beta.5): saved with the yard, so they follow
-    // the account (`game/sound/soundSwitches.ts`).
-    const music = this.soundSwitch("music", "Music", "Plays the game's music");
-    const sounds = this.soundSwitch("effects", "Sound effects", "Plays the game's sound effects");
-    this.list.append(settings, this.fullscreen, effects, music, sounds, this.replay, signOut);
+    // Music and sound effects (beta.5), each a mute and a volume slider
+    // (owner, 4 Nov 2026): saved with the yard, so they follow the account
+    // (`game/sound/soundSwitches.ts`, `ui/SoundSliders.ts`).
+    const sound = new SoundSliders("account-menu__sound");
+    this.stopSound.push(() => sound.destroy());
+    this.list.append(settings, this.fullscreen, effects, sound.element, this.replay, signOut);
     this.element.append(this.button, this.list);
     document.addEventListener("pointerdown", this.dismiss, true);
     document.addEventListener("keydown", this.dismiss, true);
@@ -469,38 +483,6 @@ export class AccountMenu {
     document.removeEventListener("keydown", this.dismiss, true);
     for (const stop of this.stopSound) stop();
     this.element.remove();
-  }
-
-  /**
-   * One of the two sound switches, "Music: On" / "Sound effects: Off". It
-   * waits, greyed, until the account's switches are known, and a failed save
-   * puts it back and says so in its tooltip.
-   */
-  private soundSwitch(which: keyof SoundSwitches, label: string, title: string): HTMLButtonElement {
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = `btn btn--ghost account-menu__help account-menu__sound account-menu__sound--${which}`;
-    item.setAttribute("role", "menuitemcheckbox");
-    let failed = false;
-    const show = (switches: SoundSwitches | null): void => {
-      const on = switches?.[which] === true;
-      item.disabled = switches === null;
-      item.setAttribute("aria-checked", String(on));
-      item.textContent = switches === null ? `${label}: …` : soundSwitchText(label, on);
-      item.title = failed ? SOUND_SAVE_FAILED : title;
-    };
-    show(soundSwitches());
-    this.stopSound.push(onSoundSwitches(show));
-    item.addEventListener("click", () => {
-      const switches = soundSwitches();
-      if (!switches) return;
-      failed = false;
-      setSoundSwitch(which, !switches[which]).catch(() => {
-        failed = true;
-        show(soundSwitches());
-      });
-    });
-    return item;
   }
 
   /** A picture of the current avatar that follows it when it changes. */

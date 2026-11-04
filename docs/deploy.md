@@ -261,8 +261,8 @@ themselves are made once, after the first start:
 deploy/prod.sh exec web bun src/scripts/bots.ts create --fill
 ```
 
-It makes 500 bots (`BOTS_TOTAL`), spread over the levels, and takes a minute
-or two. Running it again is safe: it only adds bots that are missing. After
+It makes `BOTS_TOTAL` bots (unset: about 11.5 a level from `BOTS_FLOOR_LEVEL`,
+25, to 40, so 185), spread over those levels, and takes a minute or two. Running it again is safe: it only adds bots that are missing. After
 that the game looks after them by itself. To see how many there are, run
 `deploy/prod.sh exec web bun src/scripts/bots.ts status`.
 
@@ -303,7 +303,7 @@ The live game was first put online straight from a computer, not from
 GitHub: the server's `/opt/bymr` is a plain copy of the code (no `git`
 inside), and the Vercel project `bymrevamped` is not connected to a
 repository. To update, from Git Bash on your computer, in the main
-`backyard-monsters-refitted` folder, on the `release` branch at the new version tag, never `revamp`
+`backyard-monsters-refitted` folder, on the `main` branch (called `release` until 2 Nov 2026) at the new version tag, never `revamp`
 (see `docs/release.md`; put in your server's IP address and your ssh key's file name):
 
 ```

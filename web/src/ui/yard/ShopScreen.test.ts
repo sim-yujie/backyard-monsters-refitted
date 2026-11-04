@@ -82,7 +82,6 @@ describe("ShopScreen", () => {
       "Monsters",
       "Battle boosts",
       "Protection",
-      "Coming later",
     ]);
     expect(
       [...element.querySelectorAll<HTMLElement>(".shop-card:not(.shop-card--later)")].map(
@@ -327,15 +326,10 @@ describe("ShopScreen", () => {
     );
   });
 
-  it("lists the held-back items as coming later, with no price and no button", () => {
+  it("has no Coming later section: the Shiny decorations are sold in the Build menu now (owner 2026-11-04)", () => {
     const { element } = setup();
-    const later = [...element.querySelectorAll<HTMLElement>(".shop-card--later")];
-
-    expect(later.map((one) => one.querySelector(".shop-card__name")!.textContent)).toEqual(["Shiny Decorations"]);
-    for (const one of later) {
-      expect(one.querySelector("button")).toBeNull();
-      expect(one.querySelector(".shop-card__meta")!.textContent).toBe("Coming later");
-    }
+    expect(element.querySelector('[data-section="later"]')).toBeNull();
+    expect(element.querySelector(".shop-card--later")).toBeNull();
   });
 
   it("sells the wall upgrades under Walls, priced from the yard's Blocks", async () => {

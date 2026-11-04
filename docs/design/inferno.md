@@ -202,10 +202,29 @@ Buildable in the Inferno (`INFERNOYARDPROPS.as`, 135 ids; counts per Under Hall 
 | 130 | Inferno Cannon | 7 | as Sniper |
 | 132 | Magma Tower | 6 | from UH3 [0,0,0,1,2,2,3] |
 | 10 | Yard Planner | 1 | **[OWNER I17]** one per yard from UH3; 250,000 Bone + 250,000 Coal, 12 h (43,200 s), hp 16,000: Flash's own `INFERNOYARDPROPS.as` row, which Flash blocked |
+| 16 | Incubator Control Centre | 1 | **[OWNER, 2 Nov: in game for review; numbers PROPOSED]** one per yard from UH4; needs UH4 and two Incubators at level 3; 4,000,000 Bone + 4,000,000 Coal + 4,000,000 Sulfur, 0 Magma, 25 h (90,000 s), hp 64,000. See 2.5.1 |
 | 127 | Inferno entrance | — | exit, not built |
 
 Blocked in the Inferno: flinger, map room, store building, cage/chamber, catapult, bunker,
-laser, tesla and the other surface-only ids. (Flash also blocked the Yard Planner; I17 unblocks it.)
+laser, tesla and the other surface-only ids. (Flash also blocked the Yard Planner; I17 unblocks it,
+and the Incubator Control Centre, 2.5.1.)
+
+#### 2.5.1 The Incubator Control Centre (proposed)
+
+The owner asked to see it in the game before deciding (2 Nov 2026). It is the Hatchery Control Centre's
+type (16) on an Inferno yard: Flash's own unused, `block`ed Inferno row (`INFERNOYARDPROPS.as:1289-1330`),
+the same type, size (100x100 footprint) and folder as the main yard's HCC, renamed. Everything the HCC does
+works on any yard: one shared queue of 7 stacks of 20, each monster to the next free Incubator, paid in `r4`,
+which is Magma in the Inferno.
+
+| Item | Proposed | Why |
+|---|---|---|
+| Count | 1, from Under Hall 4 (`quantity [0,0,0,0,1,1,1]`) | the Inferno cannot store 4,000,000 of anything before UH4 (Resource Pod L8 = 960,000, four pods at UH4) |
+| Needs | UH4 and two Incubators at level 3 (`re [[14,1,4],[13,2,3]]`, `[type, count, level]`) | Flash's row said UH3 and three Incubators at level 2 (`[[14,1,3],[13,3,2]]`) |
+| Cost | 4,000,000 Bone, Coal and Sulfur; 0 Magma | Flash's row |
+| Time | 25 h (90,000 s) | Flash's row |
+| Levels, health | 1 level, 64,000 hp | Flash's row |
+| Look | Modern: 3D look C (on a small magma pool, glowing crystal; the lava's light breathes, idle and working; the crystal pulses while any Incubator hatches). Classic: Flash's HCC picture | owner's pick of the three looks (art/icc-inferno-looks) |
 
 ### 2.6 Inferno monsters (`CREATURELOCKER.as:604-810`)
 

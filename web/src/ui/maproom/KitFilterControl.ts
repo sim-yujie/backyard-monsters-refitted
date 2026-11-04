@@ -8,7 +8,7 @@ import { button, el, icon } from "@/ui/maproom1/icons";
  * nothing. A view only, same split as `RangeControl`: this says which filter
  * is active, the scene tells the renderer what that means.
  *
- * On a phone the row is too wide beside Mail and My range (#381): it folds
+ * On a phone the row is too wide beside Mail (#381): it folds
  * into the Filter button (`toggle`, which the stylesheet shows only there),
  * and opens as a short list under it. Picking a kit, a press elsewhere or
  * Escape closes it again.

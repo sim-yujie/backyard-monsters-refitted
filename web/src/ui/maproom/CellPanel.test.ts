@@ -527,3 +527,45 @@ describe("Add friend on another player's yard (friends WP11, #378)", () => {
     expect(row(open(player()).host).hidden).toBe(true);
   });
 });
+
+describe("the neighbour defence bonus row", () => {
+  it("shows the painted shield and the total percent for the count the server sent", () => {
+    const { host } = open(player({ nb: 3 }));
+    const chip = host.querySelector<HTMLElement>(".mr2-chip--neighbours");
+    expect(chip).not.toBeNull();
+    expect(chip!.querySelector("img")?.dataset["icon"]).toBe("neighbours");
+    expect(chip!.textContent).toContain("+11%");
+    // The total only: no neighbour count on the chip (owner, 3 Nov).
+    expect(chip!.textContent).not.toContain("×");
+    expect(chip!.textContent?.trim()).toBe("+11%");
+    expect(chip!.title).toBe("3 friendly neighbours: buildings +11% health, towers +11% damage.");
+  });
+
+  it("shows on a camp too", () => {
+    const { host } = open(camp({ nb: 1 }));
+    expect(text(host, ".mr2-chip--neighbours")).toContain("+5%");
+  });
+
+  it("shows nothing when the server sends no count (switch off)", () => {
+    expect(open(player()).host.querySelector(".mr2-chip--neighbours")).toBeNull();
+    expect(open(camp()).host.querySelector(".mr2-chip--neighbours")).toBeNull();
+  });
+});
+
+describe("the height chip (painted map, plan step 5)", () => {
+  it("shows the hill icon and the height on a camp and a yard only while the painted ground is on", async () => {
+    const { setFlatGround } = await import("@/game/maproom/ground");
+    try {
+      setFlatGround(true);
+      const onCamp = open(camp({ i: 148 }));
+      expect(text(onCamp.host, ".mr2-chip--height")).toContain("+48 m");
+      expect(onCamp.host.querySelector(".mr2-chip--height [data-icon='height']")).not.toBeNull();
+      const onYard = open(player({ i: 112 }));
+      expect(text(onYard.host, ".mr2-chip--height")).toContain("+12 m");
+      setFlatGround(false);
+      expect(open(camp({ i: 148 })).host.querySelector(".mr2-chip--height")).toBeNull();
+    } finally {
+      setFlatGround(false);
+    }
+  });
+});

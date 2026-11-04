@@ -116,6 +116,8 @@ describe("entity discovery", () => {
       });
       expect(columns("User").hide_online).toEqual({ type: "boolean", nullable: false });
       expect(columns("User").friend_requests_off).toEqual({ type: "boolean", nullable: false });
+      // Map Room 2's flat-map choice (MR2 look plan step 4), against its migration.
+      expect(columns("User").map_flat).toEqual({ type: "boolean", nullable: false });
       // The player's country and the one-time prompt (country chat rooms), against their migration.
       expect(columns("User").country).toEqual({ type: "varchar(2)", nullable: true });
       expect(columns("User").country_asked).toEqual({ type: "boolean", nullable: false });

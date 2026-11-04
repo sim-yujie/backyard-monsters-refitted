@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Container, Texture, TextureSource } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import { setClassicLook } from "@/game/classicLook";
@@ -89,7 +89,11 @@ const seeded = (): (() => number) => {
   };
 };
 
-const setUp = (buildings: BuildingRow[], now: () => number = () => 0) => {
+const setUp = (
+  buildings: BuildingRow[],
+  now: () => number = () => 0,
+  extra: Partial<ConstructorParameters<typeof AttackBattleLayer>[0]> = {},
+) => {
   const session = new AttackSession({ target: targetOf(), seed: 1 });
   const response = yardOf(buildings);
   session.load(response);
@@ -106,6 +110,7 @@ const setUp = (buildings: BuildingRow[], now: () => number = () => 0) => {
     bombArt: { cell: () => Texture.WHITE, destroy() {} },
     random: seeded(),
     now,
+    ...extra,
   });
   return { session, yard, host, overlay, layer };
 };
@@ -174,6 +179,33 @@ describe("traps", () => {
     // The scorch stays; the ring is gone within a second.
     expect(effects.children.length).toBeGreaterThan(decorations);
     layer.destroy();
+  });
+
+  it("blows up with the Modern look's explosion, the Classic look keeping the scorch and thin ring", () => {
+    for (const classic of [false, true]) {
+      const { session, layer } = setUp(
+        [
+          { id: 1, t: 14, l: 1, X: 200, Y: 200 },
+          { id: 2, t: 24, l: 1, X: 0, Y: 0 },
+        ],
+        () => 0,
+        { classic, juice: "full", screenShake: false, effectsQuality: "full" },
+      );
+      const trap = vi.spyOn(layer.blasts, "trap");
+      session.appendFling({ x: 10, y: 10, monsters: { C1: 20 } });
+      play(session, 8, layer);
+      expect(session.battle()?.state().firedTraps).toEqual([2]);
+      // One trap explosion with the Modern look, as big as the Booby Trap's blast (50 across the ground, root
+      // two times that on screen), not the Heavy Trap's, all its bits; none with the Classic look (its ring instead).
+      expect(trap, classic ? "classic" : "modern").toHaveBeenCalledTimes(classic ? 0 : 1);
+      if (!classic) {
+        const [, , radius, heavy, few] = trap.mock.calls[0] ?? [];
+        expect(radius).toBeCloseTo(50 * Math.SQRT2);
+        expect(heavy).toBe(false);
+        expect(few).toBe(false);
+      }
+      layer.destroy();
+    }
   });
 });
 

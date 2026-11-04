@@ -167,6 +167,14 @@ describe("the Vacuum in a fight", () => {
     expect(yard.resources.r1).toBe(10_000_000 - fullLoot);
   });
 
+  it("tells the drawing of each frame's take, as the hose's (`ParticleVacuumLoot`)", () => {
+    const { battle } = battleOf({}, { r2: 10_000_000 });
+    battle.runTo(VACUUM_FRAME_TICKS * 3);
+    const loot = battle.recentEvents(-1).filter((event) => event.kind === "loot");
+    expect(loot.length).toBe(3);
+    for (const event of loot) expect(event).toMatchObject({ buildingId: 1, resource: 2, amount: 625, vacuum: true });
+  });
+
   it("picks among the resources that are left, and stops once the pool is dry", () => {
     const { yard, battle } = battleOf({}, { r1: 100_000, r3: 100_000 });
     battle.runTo(plan.endsAt + 40);

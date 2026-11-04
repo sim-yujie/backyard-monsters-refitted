@@ -1,6 +1,7 @@
 import type { Camera } from "@/game/Camera";
 import { TapClickGuard } from "@/game/TapClickGuard";
 import type { YardBuilding, YardMushroom } from "./yardModel";
+import { pointerHovers } from "./towerRangeHover";
 
 /**
  * Pointer and keyboard input for the yard, on top of what Camera already does.
@@ -24,7 +25,11 @@ export interface YardInputOptions {
   canvas: HTMLCanvasElement;
   /** The building at a world point, or null. */
   pick: (worldX: number, worldY: number) => YardBuilding | null;
-  onHover: (building: YardBuilding | null) => void;
+  /**
+   * The building under the pointer, or null. `mouse` is true only for a real
+   * mouse: a finger or pen has no hover, so it never shows a tower's range.
+   */
+  onHover: (building: YardBuilding | null, mouse: boolean) => void;
   onSelect: (building: YardBuilding | null) => void;
   /**
    * The mushroom at a world point, or null. With {@link onMushroom}, a click
@@ -122,12 +127,12 @@ export class YardInput {
   };
 
   private readonly onPointerMove = (event: PointerEvent): void => {
-    this.options.onHover(this.buildingAt(event));
+    this.options.onHover(this.buildingAt(event), pointerHovers(event.pointerType));
   };
 
   private readonly onPointerLeave = (): void => {
     this.pressed = false;
-    this.options.onHover(null);
+    this.options.onHover(null, false);
   };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {

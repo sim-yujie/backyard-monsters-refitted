@@ -15,7 +15,9 @@ import { positiveNumber } from "./BotConfig.js";
  * - `CHAT_LOG_RETENTION_DAYS`    — the dashboard's full log of World and country
  *                                  chat (`chat_log`), unmasked. Default 90.
  *
- * The automatic chat flags (`chat_flag`) are kept as long as chat reports.
+ * The automatic chat flags (`chat_flag`) and the dashboard's chat report cases
+ * (`chat_case`, with their copies of the room; counted from the last report)
+ * are kept as long as chat reports.
  *
  * The daily clean-up (`services/privacy/retention.ts`) deletes mail, battle
  * records, chat reports and flags, bug reports and chat log lines older than these; the log sink

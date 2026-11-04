@@ -677,3 +677,29 @@ describe("overdrives", () => {
     ]);
   });
 });
+
+describe("hatchery/add — the Inferno's Incubator Control Centre", () => {
+  // The Hatchery Control Centre's type (16) on an Inferno yard (owner, 2 Nov 2026): the same shared queue, paid in
+  // `r4`, which is Magma there.
+  const infernoYard = (): HatcherySave =>
+    hccYard({
+      type: "inferno",
+      monsters: monstersOf(),
+      lockerdata: { IC1: { t: 2 } },
+      academy: { IC1: { level: 1 } },
+    });
+
+  test("takes Inferno monsters into the shared queue, paid in Magma", () => {
+    const save = infernoYard();
+    expect(refusal(() => planHatcheryAdd(save, 1, "IC1", 1, NOW))[1]).toBe("useHcc");
+    const plan = planHatcheryAdd(save, "hcc", "IC1", 3, NOW);
+    expect(plan.report.added).toBe(3);
+    expect(plan.debit).toEqual({ r4: 3 * (hatchCost("IC1", 1) ?? Number.NaN) });
+    expect(hOf(plan.slices?.monsters, 1)[0]).toBe("IC1");
+  });
+
+  test("refuses surface monsters", () => {
+    const save = infernoYard();
+    expect(refusal(() => planHatcheryAdd(save, "hcc", "C1", 1, NOW)).slice(0, 2)).toEqual([400, "badRequest"]);
+  });
+});

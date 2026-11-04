@@ -1,6 +1,6 @@
 import { CELL_HEIGHT, CELL_WIDTH, WATER_MAX_HEIGHT } from "@/config";
 import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell, type PlayerCell } from "@/api/types";
-import { HexGrid } from "@/game/HexGrid";
+import { HexGrid, mapRoomGrid } from "@/game/HexGrid";
 import { classicLook } from "@/game/classicLook";
 
 /**
@@ -84,7 +84,28 @@ export interface CellAppearance {
   hallLevel: number;
   /** The kit filter dims this cell (#334): everything but a matching own outpost, unless `ALL`. */
   dimmed: boolean;
+  /**
+   * A damaged camp's remaining strength, 1..99 (100 minus the server's `dm`),
+   * shown as a health bar under the tent (owner, 4 Nov 2026). Null hides the
+   * bar: a healthy camp, a destroyed one (its red cross and grey tribe say
+   * enough) and every other cell. A camp heals 12 hours after its last attack;
+   * the server then reports `dm` 0 and the open map's stale-zone refresh
+   * redraws the tile without its bar.
+   */
+  campHealth: number | null;
 }
+
+/**
+ * The health bar's value for a camp cell's `dm` and `d`, or null for no bar.
+ * Rounded to a whole percent, kept to 1..99 so a scratched camp still shows a
+ * bar and a nearly flattened one never reads as empty.
+ */
+export const campHealthOf = (dm: number | undefined, destroyed: number | undefined): number | null => {
+  if (destroyed === 1) return null;
+  const damage = Number(dm) || 0;
+  if (damage <= 0) return null;
+  return Math.min(99, Math.max(1, Math.round(100 - damage)));
+};
 
 /** An outpost's Starter Kit (issue #334), as the tower is tinted. */
 export const OutpostKit = {
@@ -204,6 +225,13 @@ export const OWN_COLOUR = RANGE_COLOUR;
 export const SHIELD_COLOUR = 0x9cb9ff;
 export const DAMAGE_COLOUR = 0xe05252;
 export const SELECT_COLOUR = 0xffffff;
+/** A damaged camp's health bar fill: green over half, amber to a quarter, then the damage red. */
+export const HEALTH_GOOD_COLOUR = 0x5fcf4f;
+export const HEALTH_HURT_COLOUR = 0xf2b230;
+
+/** The fill colour of a camp's health bar at `health` percent. */
+export const campHealthColour = (health: number): number =>
+  health > 50 ? HEALTH_GOOD_COLOUR : health > 25 ? HEALTH_HURT_COLOUR : DAMAGE_COLOUR;
 export const HOVER_COLOUR = 0xffffff;
 export const GRID_LINE_COLOUR = 0x0d1017;
 /** Another player's marker ring and a plate's text, `--colour-text`. */
@@ -247,7 +275,7 @@ const RELATION_STYLE: Record<PlayerRelation, { colour: number; icon: CellAppeara
  * `"attacker"` is a base whose owner has ever attacked the viewer: the server
  * tags it `ak` (`services/maproom/v2/attackers.ts`), with no time limit.
  */
-const relationOf = (cell: PlayerCell, myAlliance: number | null): PlayerRelation => {
+export const relationOf = (cell: PlayerCell, myAlliance: number | null): PlayerRelation => {
   if (cell.mine === 1) return "you";
   if (myAlliance !== null && cell.aid !== null && cell.aid === myAlliance) return "alliance";
   if (cell.ak === 1) return "attacker";
@@ -306,6 +334,7 @@ export const loadingAppearance = (): CellAppearance => ({
   kit: null,
   hallLevel: 0,
   dimmed: false,
+  campHealth: null,
 });
 
 /**
@@ -378,6 +407,7 @@ export const fogAppearance = (coord?: { x: number; y: number }, sight?: SightLoo
     kit: null,
     hallLevel: 0,
     dimmed: false,
+    campHealth: null,
   };
 };
 
@@ -428,6 +458,7 @@ export const appearanceOf = (
     kit: null,
     hallLevel: 0,
     dimmed: false,
+    campHealth: null,
   };
 
   if (isWaterCell(cell)) {
@@ -472,6 +503,7 @@ export const appearanceOf = (
     markerColour: TRIBE_COLOURS[cell.n] ?? TRIBE_FALLBACK,
     tribe: cell.n,
     badge: String(cell.l),
+    campHealth: campHealthOf(cell.dm, cell.d),
   };
 };
 
@@ -502,9 +534,15 @@ export const rasterColour = (cell: MapCell | undefined): number => {
  * away (see `mapAtlas.ts`'s `hexPoints`). A name plate placed at `dy` from the
  * centre must stay within this width, or it spills into the neighbour hex
  * sharing that edge. Offsets past the hex's own vertical extent clamp to the
- * narrowest width rather than going negative.
+ * narrowest width rather than going negative. On pointy-top (`HexGrid.ts`)
+ * the world grid's own outline decides.
  */
 export const hexWidthAt = (dy: number): number => {
+  if (mapRoomGrid.shape === "pointy") {
+    // Pointy-top: full width down the straight sides, then narrowing to the
+    // point; kept to at least half the width, as flat-top's narrowest is.
+    return Math.max(2 * mapRoomGrid.halfWidthAt(Math.min(Math.abs(dy), mapRoomGrid.cellHeight / 2)), mapRoomGrid.cellWidth / 2);
+  }
   const half = Math.min(Math.abs(dy), CELL_HEIGHT / 2);
   return CELL_WIDTH - (CELL_WIDTH / 2) * (half / (CELL_HEIGHT / 2));
 };

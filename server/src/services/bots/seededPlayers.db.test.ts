@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { useBotFloor } from "../../testing/botFloor.js";
 import { MikroORM } from "@mikro-orm/postgresql";
 
 import ormConfig from "../../mikro-orm.config.js";
@@ -26,6 +27,9 @@ const DAY = 24 * HOUR;
 const T = 3;
 
 describe.skipIf(!dbName)("seeded Map Room 2 players in the bot sweep on a real database (issue #233)", () => {
+  // Written for bots from level 15; the floor of 25 has its own tests (`useBotFloor`).
+  useBotFloor(15);
+
   let orm: MikroORM;
 
   const sql = <R = Record<string, any>>(query: string, params: unknown[] = []) => orm.em.fork().execute<R[]>(query, params);

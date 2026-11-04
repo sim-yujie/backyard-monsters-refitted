@@ -161,10 +161,6 @@ export const TIPS: Readonly<Partial<Record<GuideScreen, readonly Tip[]>>> = {
   ],
   [GuideScreen.MR2]: [
     {
-      text: "The blue area is your Flinger's reach. Attacking further away costs resources.",
-      target: TutTarget.MR2_RANGE,
-    },
-    {
       text: "Beat a wild camp or a player's outpost and you can take it over as your own outpost.",
       target: TutTarget.MR2_TAKEOVER,
     },

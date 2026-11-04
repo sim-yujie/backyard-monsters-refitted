@@ -9,3 +9,19 @@
  * imports `config/AchievementConfig.ts`, which reads it once.
  */
 process.env.ACHIEVEMENT_REWARDS = "off";
+
+/*
+ * The Inferno is off unless a test turns it on, as on CI. Bun loads
+ * server/.env for tests too, and a developer's `INFERNO_ENABLED=on` there let
+ * Moloch's emergence hold back wild raids and reach `em.execute` on fake
+ * entity managers (32 local-only failures, 2 Nov 2026).
+ */
+process.env.INFERNO_ENABLED = "off";
+
+/*
+ * The bot level floor is its default, 25, unless a test sets it: a
+ * developer's `BOTS_FLOOR_LEVEL` or `BOTS_TOTAL` in server/.env must not move
+ * the bot tests (owner 3 Nov 2026).
+ */
+delete process.env.BOTS_FLOOR_LEVEL;
+delete process.env.BOTS_TOTAL;

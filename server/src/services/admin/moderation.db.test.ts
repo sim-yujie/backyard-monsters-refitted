@@ -110,7 +110,7 @@ describe.skipIf(!dbName)("the dashboard's moderation on a real database", () => 
   });
 
   test("a warning is mailed from the game team, logged, and waits as a pop-up until closed", async () => {
-    expect(await act("warn", { reason: "Please keep chat friendly. Next time it's a ban." })).toEqual({ outcome: "done", until: null });
+    expect(await act("warn", { reason: "Please keep chat friendly. Next time it's a ban." })).toMatchObject({ outcome: "done", until: null });
 
     const mail = await mailTo(PLAYER);
     expect(mail).toEqual([
@@ -139,7 +139,7 @@ describe.skipIf(!dbName)("the dashboard's moderation on a real database", () => 
   test("a ban signs the player out, closes chat, refuses sign-in until it ends, then lifts itself", async () => {
     const done = await act("ban", { reason: "Swearing in chat", days: 3 });
     const until = new Date(NOW.getTime() + 3 * DAY_MS);
-    expect(done).toEqual({ outcome: "done", until });
+    expect(done).toMatchObject({ outcome: "done", until });
 
     expect(await account(PLAYER)).toMatchObject({ banned: true, ban_reason: "Swearing in chat" });
     expect(new Date((await account(PLAYER)).ban_until!).getTime()).toBe(until.getTime());
@@ -158,7 +158,7 @@ describe.skipIf(!dbName)("the dashboard's moderation on a real database", () => 
     await act("ban", { reason: "Cheating", days: null });
     expect(await banAtSignIn(orm.em.fork(), PLAYER, new Date(NOW.getTime() + 999 * DAY_MS))).toEqual({ until: null, reason: "Cheating" });
 
-    expect(await act("unban", {})).toEqual({ outcome: "done", until: null });
+    expect(await act("unban", {})).toMatchObject({ outcome: "done", until: null });
     expect(await account(PLAYER)).toMatchObject({ banned: false, ban_until: null });
     expect(await act("unban", {})).toEqual({ outcome: "notBanned" });
 
@@ -169,7 +169,7 @@ describe.skipIf(!dbName)("the dashboard's moderation on a real database", () => 
   test("a mute pauses chat for its hours, mails and nudges; unmute ends it", async () => {
     const done = await act("mute", { reason: "Please stop spamming.", hours: 24 });
     const until = new Date(NOW.getTime() + DAY_MS);
-    expect(done).toEqual({ outcome: "done", until });
+    expect(done).toMatchObject({ outcome: "done", until });
     expect(calls).toEqual([`mute ${PLAYER} ${until.getTime()}`, `nudge ${PLAYER}`]);
     expect((await mailTo(PLAYER))[0]).toMatchObject({ subject: MUTE_SUBJECT, message: "You can't use chat for 24 hours. Please stop spamming." });
     expect((await playerModeration(orm.em.fork(), PLAYER, NOW))!.muteUntil).toBe(until.toISOString());

@@ -21,7 +21,7 @@ import {
   type PlayerModeration,
 } from "./api";
 import { h, replace, type Child } from "./dom";
-import { ago, dateTime, plural } from "./format";
+import { ago, dateTime, lookName, plural } from "./format";
 import { icon } from "./icons";
 import { errorWords } from "./shiny";
 
@@ -32,7 +32,9 @@ import { errorWords } from "./shiny";
  * listed one row per player with the player's own words; nothing is done to
  * the player until the owner decides. The chat log can be searched by player
  * or words. Every step is checked on the server, which refuses game team
- * accounts; the page only offers what makes sense.
+ * accounts; the page only offers what makes sense. Reports are worked
+ * through as Chat cases (cases.ts); the word filter's list, the raw chat
+ * reports and the chat log search are folded here, each a tap away.
  *
  * What the player sees: a warning or pause is a pop-up in the game and a
  * mail; a ban signs them out at once, and the sign-in screen shows the
@@ -597,6 +599,15 @@ export class ChatLogPanel {
   }
 }
 
+/** A list folded away under its title, with a count beside it. */
+const fold = (title: string, id: string, countBadge: HTMLElement | null, body: HTMLElement): HTMLDetailsElement =>
+  h(
+    "details",
+    { class: "fold", attrs: { id } },
+    h("summary", {}, icon("chevron", 16), h("span", {}, title), countBadge),
+    body,
+  );
+
 export interface ModerationOptions {
   say(message: string): void;
 }
@@ -619,6 +630,8 @@ export class ModerationView {
   private readonly picked = h("div", { class: "picked" });
   private readonly reports = h("div", { class: "group" }, h("div", { class: "skeleton" }));
   private readonly flags = h("div", { class: "group" }, h("div", { class: "skeleton" }));
+  private readonly flagCount = h("span", { class: "fold-count" });
+  private readonly reportCount = h("span", { class: "fold-count" });
   private reportList: ChatReportView[] = [];
   private nextBefore: number | null = null;
   private flagList: FlaggedPlayer[] = [];
@@ -683,9 +696,9 @@ export class ModerationView {
         this.results,
       ),
       this.picked,
-      this.flags,
-      this.reports,
-      this.renderLogSearch(),
+      fold("Caught by the word filter", "mod-fold-flags", this.flagCount, this.flags),
+      fold("Chat reports, one by one", "mod-fold-reports", this.reportCount, this.reports),
+      fold("Chat log", "mod-fold-log", null, this.renderLogSearch()),
     );
   }
 
@@ -710,12 +723,7 @@ export class ModerationView {
     return h(
       "div",
       { class: "group chatlog-search" },
-      h(
-        "div",
-        { class: "log-head" },
-        h("h3", {}, "Chat log"),
-        h("span", { class: "hint" }, "Every World and country room line of the last 90 days, as the player typed it."),
-      ),
+      h("p", { class: "hint" }, "Every World and country room line of the last 90 days, as the player typed it."),
       h(
         "div",
         { class: "chatlog-find" },
@@ -860,6 +868,7 @@ export class ModerationView {
                         player.bot ? "bot" : null,
                         player.formerName ? `was called ${player.formerName}` : null,
                         player.lastSeenAt ? `last played ${ago(player.lastSeenAt)}` : "never played",
+                        lookName(player.look),
                       ]
                         .filter(Boolean)
                         .join(" · "),
@@ -964,6 +973,7 @@ export class ModerationView {
               "span",
               { class: "row-meta" },
               player.lastSeenAt ? `Last played ${ago(player.lastSeenAt)}` : "Never played",
+              lookName(player.look) ? ` · ${lookName(player.look)}` : "",
               chatReportId ? ` · from chat report #${chatReportId}` : "",
               flag ? " · caught by the word filter" : "",
             ),
@@ -1065,11 +1075,7 @@ export class ModerationView {
         offset: more ? (this.flagNextOffset ?? undefined) : undefined,
       });
     } catch (err) {
-      replace(
-        this.flags,
-        h("h3", {}, "Caught by the word filter"),
-        h("p", { class: "note" }, `The flagged players could not be loaded: ${errorWords(err)}`),
-      );
+      replace(this.flags, h("p", { class: "note" }, `The flagged players could not be loaded: ${errorWords(err)}`));
       return;
     }
     this.flagList = more ? [...this.flagList, ...answer.players] : answer.players;
@@ -1090,14 +1096,12 @@ export class ModerationView {
       );
     const open = (flagged: FlaggedPlayer) => void this.open(flagged.userid, undefined, true, flagged);
     const dismiss = (flagged: FlaggedPlayer) => void this.dismiss(flagged);
+    this.flagCount.textContent = this.flagList.length
+      ? `${this.flagList.length}${this.flagNextOffset !== null ? "+" : ""}`
+      : "";
     replace(
       this.flags,
-      h(
-        "div",
-        { class: "log-head" },
-        h("h3", {}, "Caught by the word filter"),
-        h("span", { class: "hint" }, "One row per player, with their own words. Players saw these words starred out."),
-      ),
+      h("p", { class: "hint" }, "One row per player, with their own words. Players saw these words starred out."),
       h(
         "div",
         { class: "segmented flag-views", attrs: { role: "group", "aria-label": "Which flagged players" } },
@@ -1129,22 +1133,16 @@ export class ModerationView {
       this.reportList = more ? [...this.reportList, ...answer.reports] : answer.reports;
       this.nextBefore = answer.nextBefore;
     } catch (err) {
-      replace(
-        this.reports,
-        h("h3", {}, "Chat reports"),
-        h("p", { class: "note" }, `The reports could not be loaded: ${errorWords(err)}`),
-      );
+      replace(this.reports, h("p", { class: "note" }, `The reports could not be loaded: ${errorWords(err)}`));
       return;
     }
     const open = (report: ChatReportView) => void this.open(report.reported.userid, report.id);
+    this.reportCount.textContent = this.reportList.length
+      ? `${this.reportList.length}${this.nextBefore !== null ? "+" : ""}`
+      : "";
     replace(
       this.reports,
-      h(
-        "div",
-        { class: "log-head" },
-        h("h3", {}, "Chat reports"),
-        h("span", { class: "hint" }, "Newest first. Pick one to act on the player."),
-      ),
+      h("p", { class: "hint" }, "Every report on its own, newest first; Chat cases above groups them. Pick one to act on the player."),
       this.reportList.length
         ? h("ul", { class: "rows report-list" }, ...this.reportList.map((report) => reportRow(report, open)))
         : h(

@@ -125,7 +125,7 @@ describe("labActions", () => {
         local: true,
       },
     });
-    const none = await actions.start("C1");
+    const none = await actions.start("C15");
     expect(none.ok ? null : none.refusal.reason).toBe("badRequest");
     expect(api.start).not.toHaveBeenCalled();
   });

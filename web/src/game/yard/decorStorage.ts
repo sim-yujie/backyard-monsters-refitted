@@ -10,8 +10,8 @@ import { isDecoration } from "./planner/placement";
  *
  * Recycling a decoration and a planner Apply that leaves one unplaced put it
  * here; the Build menu's Decorations tab (`decor/place`) and the planner's
- * drawer take it out. Only what is stored can be placed (owner decision
- * 2026-09-29): nothing is bought.
+ * drawer take it out, for free. The ones Flash sold can also be bought for
+ * Shiny from the tab (`decor/buy`, `decorShop.ts`, owner decision 2026-11-04).
  */
 
 type Researchdata = BaseLoadResponse["researchdata"];

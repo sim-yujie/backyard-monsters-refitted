@@ -1,5 +1,5 @@
 import { Container, Graphics, type Renderer } from "pixi.js";
-import { MAX_TEXT_OBJECTS } from "@/config";
+import { MAX_TEXT_OBJECTS, WATER_MAX_HEIGHT } from "@/config";
 import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
 import { HOVER_COLOUR, KitFilter, SELECT_COLOUR, type MapViewerContext } from "./cellVisuals";
 import {
@@ -13,16 +13,28 @@ import { TextPool } from "./LabelLayer";
 import { LodTier, sameView, tierForZoom, viewFor } from "./lod";
 import { MapAtlas } from "./mapAtlas";
 import { MapChunk, TextLevel, type ChunkView } from "./MapChunk";
+import type { Projector } from "./markerPins";
+import type { BorderLayer } from "./painted/BorderLayer";
+import type { CloudLayer } from "./painted/CloudLayer";
+import type { PaintedGround } from "./painted/PaintedGround";
+import type { PaintedPrograms } from "./painted/paintedLook";
 import { BuildingAvatars } from "./buildingAvatars";
-import { cellLift, liftCorners } from "./ground";
+import { cellLift, liftCorners, setFlatGround } from "./ground";
 import { GroundArt } from "./groundArt";
+import { LiveMap } from "./live/LiveMap";
 import { ConstructionBadge } from "./constructionBadge";
 import { RangeOverlay } from "./RangeOverlay";
 import type { Sight } from "./Sight";
 import { TerrainRaster } from "./TerrainRaster";
 import { TribeAvatars } from "./tribeAvatars";
+import { MR2_PAINTED, markOnce } from "./openMarks";
+import { classicLook } from "@/game/classicLook";
+import { isFogCell } from "@/api/types";
 import type { ZoneRecord, ZoneStore } from "./ZoneStore";
 import type { CellRange } from "./zones";
+import type * as PaintedLookNamespace from "./painted/paintedLook";
+
+type PaintedLookModule = typeof PaintedLookNamespace;
 
 /**
  * Chunks built in one frame.
@@ -37,6 +49,10 @@ const MAX_BUILDS_PER_FRAME = 2;
 
 /** Eviction is housekeeping; nothing about the answer is urgent. */
 const SWEEP_INTERVAL_MS = 2_000;
+
+/** How long the painted look's art gets to draw before more programs compile; and the longest wait for it. */
+const ART_DRAWN_MS = 500;
+const ART_WAIT_MS = 15_000;
 
 /**
  * Draws the map.
@@ -70,6 +86,18 @@ export class MapRenderer {
   /** Every chunk's badges, markers and plates, over every chunk's ground. */
   private readonly worldTop = new Container();
   private readonly highlight = new Graphics();
+  /**
+   * The upright marker layer for the tilted map (`markerPins.ts`): while the
+   * tilt is on, `world` and `worldTop` leave `root` (so they are not drawn
+   * into the warped picture) and live here, in screen pixels, over it. The
+   * scene puts this on the stage above the tilted picture. Empty when flat.
+   * Its own render group, so markers coming on and off screen as the map
+   * pans rebuild only this layer's draw list, not the whole stage's.
+   */
+  readonly markers = new Container({ isRenderGroup: true });
+  /** How the markers stand on the tilted screen, or null on the flat map. */
+  private projector: Projector | null = null;
+  private projectorKey = "";
   /** The player's attack range (#177), over the cells and under the highlight. */
   private readonly range = new RangeOverlay();
 
@@ -87,6 +115,8 @@ export class MapRenderer {
   /** Flash's ground tiles, fetched the same way; flat hexes until they land. */
   private readonly groundArt = new GroundArt();
   private readonly constructionBadge = new ConstructionBadge();
+  /** The living map (water, clouds, birds): its own layers, told when chunks come and go. */
+  private readonly live = new LiveMap(this.ground, () => this.rebuildAll());
   private readonly chunks = new Map<number, MapChunk>();
   private readonly residency = new ChunkResidency({
     ttlMs: CHUNK_TTL_MS,
@@ -96,6 +126,32 @@ export class MapRenderer {
   private readonly dirty = new Set<number>();
 
   private atlas: MapAtlas | null = null;
+  /** Map Room 2's painted look (`painted/`, MR2_PAINTED_MAP), in place of the tiles; null when off. */
+  private painted: PaintedGround | null = null;
+  /** The glowing borders round players' land (plan step 8); with the painted look only. */
+  private borders: BorderLayer | null = null;
+  /** The painted fog (plan step 9): cloud over every cell outside the player's sight; with the painted look only. */
+  private clouds: CloudLayer | null = null;
+  /**
+   * Whether the last `draw` stepped the painted water, so a tilted view must redraw its picture
+   * (`TiltView.invalidate`): the step only changes a shader uniform, which Pixi's change lists miss.
+   */
+  paintedStepped = false;
+  private webGL2 = false;
+  /** The live renderer (attach), which the painted look's sprite placement pass draws with. */
+  private renderer: Renderer | null = null;
+  /** The map's WebGL2 context, where the painted look's shaders are compiled ahead (`shaderWarmup.ts`). */
+  private gl: WebGL2RenderingContext | null = null;
+  /** Whether the painted look is asked for (`setPaintedMap`); it shows once its code and shaders are ready. */
+  private paintedWanted = false;
+  /**
+   * The painted look's code (fetched on first use, `painted/paintedLook.ts`) and which of its
+   * shaders compiled; null until both are known.
+   */
+  private paintedKit: { look: PaintedLookModule; programs: PaintedPrograms } | null = null;
+  /** Fetching the code and compiling the shaders, while it runs. */
+  private paintedPreparing: Promise<void> | null = null;
+  private destroyed = false;
 
   private lastRange: CellRange | null = null;
   private lastTier: LodTier | null = null;
@@ -123,6 +179,8 @@ export class MapRenderer {
     this.ground.interactiveChildren = false;
     this.world.interactiveChildren = false;
     this.worldTop.interactiveChildren = false;
+    this.markers.interactiveChildren = false;
+    this.markers.eventMode = "none";
     this.range.liftOf = this.liftAt;
     // The raster stays under the chunks at every tier, so a chunk that has not
     // been built yet shows the world at one texel per cell instead of nothing.
@@ -132,8 +190,51 @@ export class MapRenderer {
       this.world,
       this.range.container,
       this.worldTop,
+      this.live.overlay,
       this.highlight,
     );
+  }
+
+  /**
+   * Stands the markers upright on the tilted screen (`project` from
+   * `markerPins.uprightProjector`, `key` naming the camera and tilt it was
+   * made for), or puts them back into the flat map for null. Cheap to call
+   * every frame: chunks re-place only when the key or their markers changed.
+   */
+  setMarkerProjector(project: Projector | null, key: string): void {
+    const tilted = project !== null;
+    const wasTilted = this.projector !== null;
+    // The flat map stays exactly as it always was: nothing to do.
+    if (!tilted && !wasTilted) return;
+    if (tilted !== wasTilted) {
+      if (tilted) {
+        this.markers.addChild(this.world, this.worldTop);
+      } else {
+        // Back in the flat map's order: over the ground (and the borders), and the badges over the range.
+        this.root.addChildAt(this.world, this.root.getChildIndex(this.range.container));
+        this.root.addChildAt(this.worldTop, this.root.getChildIndex(this.range.container) + 1);
+      }
+    }
+    this.projector = project;
+    this.projectorKey = key;
+    this.placeMarkers();
+  }
+
+  /** How many markers the chunks on screen carry, for the speed readout. */
+  get markerCount(): number {
+    let count = 0;
+    for (const id of this.visibleIds) count += this.chunks.get(id)?.pins.size ?? 0;
+    return count;
+  }
+
+  /** Places the markers of every chunk on screen for the current projector. */
+  private placeMarkers(): void {
+    if (!this.projector) {
+      // Chunks that stood on the tilted screen go back, once; the rest are untouched.
+      for (const chunk of this.chunks.values()) if (chunk.pins.tilted) chunk.pins.place(null, "");
+      return;
+    }
+    for (const id of this.visibleIds) this.chunks.get(id)?.pins.place(this.projector, this.projectorKey);
   }
 
   /** How long the last chunk build took, in milliseconds. */
@@ -168,6 +269,7 @@ export class MapRenderer {
   setMyAlliance(id: number | null): void {
     if (id === this.myAlliance) return;
     this.myAlliance = id;
+    this.borders?.setMyAlliance(id, this.store.loadedZoneRefs());
     this.rebuildAll();
   }
 
@@ -187,16 +289,28 @@ export class MapRenderer {
    */
   resetSight(): void {
     this.raster.reset();
+    this.painted?.reset();
+    this.clouds?.invalidate();
+    this.borders?.reset();
     this.rebuildAll();
   }
 
   /**
    * Bakes the texture atlas. Nothing is drawn above the raster tier until this
-   * has run, because it needs a live renderer to rasterise the shapes.
+   * has run, because it needs a live renderer to rasterise the shapes. Runs
+   * after the map has set the world's hex shape.
    */
   attach(renderer: Renderer): void {
+    // The world's hex shape is known by now (`setHexShape`); the layers built
+    // before it line up with the grid again.
+    this.raster.fitGrid();
+    this.range.fitGrid();
     this.atlas?.destroy();
     this.atlas = new MapAtlas(renderer);
+    this.renderer = renderer;
+    this.webGL2 = (renderer as { context?: { webGLVersion?: number } }).context?.webGLVersion === 2;
+    this.gl = this.webGL2 ? ((renderer as { gl?: WebGL2RenderingContext }).gl ?? null) : null;
+    this.live.attach(renderer);
     this.dropAllChunks();
     this.lastRange = null;
   }
@@ -204,7 +318,12 @@ export class MapRenderer {
   /** Feeds a freshly loaded zone into the raster and invalidates its chunk. */
   applyZone(zone: ZoneRecord): void {
     this.raster.applyZone(zone);
+    this.painted?.applyZone(zone);
+    this.clouds?.invalidate();
+    this.borders?.applyZone(zone);
     if (this.chunks.has(zone.id)) this.dirty.add(zone.id);
+    this.live.zoneArrived(zone.id);
+    this.painted?.invalidateRivers();
     // The range and the highlight stand on the cells, which now have their heights.
     this.range.invalidate();
     this.drawHighlight();
@@ -212,6 +331,23 @@ export class MapRenderer {
 
   /** How far a cell is drawn from its spot on the grid (`ground.ts`), for picking and outlines. */
   readonly liftAt = (col: number, row: number): number => cellLift(this.store.getCell(col, row));
+
+  /** What the rivers (look plan step 7, painted by the painted ground) read of the loaded cells. */
+  private readonly riverCells = {
+    rvAt: (col: number, row: number): number => {
+      const cell = this.store.getCell(col, row);
+      return cell && !isFogCell(cell) && "rv" in cell ? (cell.rv ?? 0) : 0;
+    },
+    isWater: (col: number, row: number): boolean => {
+      const cell = this.store.getCell(col, row);
+      return cell !== undefined && !isFogCell(cell) && cell.i <= WATER_MAX_HEIGHT;
+    },
+    isKnown: (col: number, row: number): boolean => {
+      const cell = this.store.getCell(col, row);
+      return cell !== undefined && !isFogCell(cell);
+    },
+    liftOf: this.liftAt,
+  };
 
   setHovered(cell: OffsetCell | null): void {
     if (same(this.hovered, cell)) return;
@@ -236,6 +372,21 @@ export class MapRenderer {
    */
   draw(range: CellRange, zoom: number): boolean {
     this.raster.flush();
+    this.painted?.flush();
+    const fogChanged = this.clouds?.flush() ?? false;
+    const bordersChanged = this.borders?.flush() ?? false;
+    const nowPaint = performance.now();
+    const waterStepped = this.painted?.animate(nowPaint, range) ?? false;
+    // The player's Quality's ground program once compiled, and the sprite pieces round the view.
+    // A cell's width in drawn pixels, as the shader's fades see it (zoom is CSS pixels per world
+    // point; the renderer's resolution is the most the tilted picture draws at, so never too few).
+    const groundReady =
+      this.painted && this.renderer
+        ? this.painted.prepare(this.renderer, range, this.painted.shape.cellWidth * zoom * this.renderer.resolution)
+        : false;
+    const pulseStepped = this.borders?.animate(nowPaint, range) ?? false;
+    const cloudsStepped = this.clouds?.animate(nowPaint, range) ?? false;
+    this.paintedStepped = waterStepped || groundReady || pulseStepped || bordersChanged || cloudsStepped || fogChanged;
     this.range.flush();
     const atlas = this.atlas;
     if (!atlas) return false;
@@ -248,9 +399,17 @@ export class MapRenderer {
       this.range.setZoom(zoom);
     }
 
+    this.live.update(range, zoom, nowPaint);
     const tier = tierForZoom(zoom);
     const view = viewFor(tier, zoom, atlas);
     const nowMs = Date.now();
+
+    // Rivers belong to the painted map (MR2_PAINTED_MAP): with it off the map
+    // is exactly today's tiles. Never in Classic (Flash's map, which never
+    // gets the painted look anyway), and not on the far raster tier yet.
+    const riversShown = this.painted !== null && tier !== LodTier.RASTER && !classicLook();
+    const riversWork = this.painted?.updateRivers(range, riversShown, this.riverCells) ?? false;
+    if (riversWork) this.paintedStepped = true;
 
     if (tier === LodTier.RASTER) {
       const changed = this.lastTier !== tier;
@@ -264,7 +423,8 @@ export class MapRenderer {
       return changed;
     }
 
-    this.ground.visible = true;
+    // The painted look draws its own ground and hex lines: the tiles stay hidden.
+    this.ground.visible = this.painted === null;
     this.world.visible = true;
     this.worldTop.visible = true;
     if (
@@ -276,7 +436,7 @@ export class MapRenderer {
     ) {
       this.residency.keep(this.visibleIds, nowMs);
       this.sweep(nowMs);
-      return false;
+      return riversWork;
     }
 
     this.lastTier = tier;
@@ -287,8 +447,116 @@ export class MapRenderer {
     return true;
   }
 
+  /**
+   * Turns Map Room 2's painted look on or off (`painted/paintedSwitch.ts` decides). On, the painted
+   * ground replaces the tiles, the raster and the hex outline sprites, and cells stop rising to
+   * their height. It stays off where the shader cannot run (no WebGL2, or it does not compile).
+   *
+   * The first time, the look's code is fetched and its shaders compiled in the background
+   * (`painted/shaderWarmup.ts`): the big ground shader can take the browser 10-40 s to compile the
+   * first time, and doing that on the spot froze the page (the owner's Map Room "crash", 4 Nov
+   * 2026). Today's tiles show meanwhile and the painted look takes over when it is ready.
+   * Returns whether it is on now.
+   */
+  setPaintedMap(on: boolean): boolean {
+    this.paintedWanted = on;
+    if (on && this.painted === null) {
+      const kit = this.paintedKit;
+      if (!kit) {
+        if (this.webGL2 && this.gl && this.renderer) this.paintedPreparing ??= this.preparePainted(this.renderer, this.gl);
+        return false;
+      }
+      if (!kit.programs.ground) return false;
+      this.buildPainted(kit.look, kit.programs);
+    } else if (!on && this.painted !== null) {
+      this.clouds?.destroy();
+      this.clouds = null;
+      this.painted.destroy();
+      this.painted = null;
+      this.borders?.destroy();
+      this.borders = null;
+    } else {
+      return this.painted !== null;
+    }
+    const painted = this.painted !== null;
+    setFlatGround(painted);
+    this.live.setPaintedWater(painted);
+    this.raster.sprite.visible = !painted;
+    if (this.lastTier !== null && this.lastTier !== LodTier.RASTER) this.ground.visible = !painted;
+    this.range.invalidate();
+    this.drawHighlight();
+    this.rebuildAll();
+    if (painted) markOnce(MR2_PAINTED);
+    return painted;
+  }
+
+  /** Whether the painted look is still being fetched or compiled. */
+  get paintedPending(): boolean {
+    return this.paintedPreparing !== null;
+  }
+
+  /** Fetches the painted look's code, compiles its shaders, then shows it if it is still wanted. */
+  private async preparePainted(renderer: Renderer, gl: WebGL2RenderingContext): Promise<void> {
+    let kit: { look: PaintedLookModule; programs: PaintedPrograms };
+    try {
+      const look = await import("./painted/paintedLook");
+      kit = {
+        look,
+        programs: this.destroyed ? { ground: false, clouds: false, warmer: null } : await look.preparePrograms(renderer, gl),
+      };
+    } catch (caught) {
+      // The code did not arrive (offline, a new release): the tiles stay; the next map open tries again.
+      console.warn("The painted map could not be prepared; the map keeps its tiles.", caught);
+      this.paintedPreparing = null;
+      return;
+    }
+    this.paintedPreparing = null;
+    if (this.destroyed) return;
+    this.paintedKit = kit;
+    if (!kit.programs.ground) console.warn("The painted map's shader did not compile here; the map keeps its tiles.");
+    if (this.paintedWanted) this.setPaintedMap(true);
+  }
+
+  private buildPainted(look: PaintedLookModule, programs: PaintedPrograms): void {
+    const painted = new look.PaintedGround(undefined, programs.warmer);
+    this.painted = painted;
+    this.root.addChildAt(painted.mesh, this.root.getChildIndex(this.raster.sprite) + 1);
+    for (const zone of this.store.loadedZoneRefs()) painted.applyZone(zone);
+    const loads: Promise<unknown>[] = [painted.load()];
+    this.borders = new look.BorderLayer();
+    this.borders.setMyAlliance(this.myAlliance, []);
+    // Over the ground (and rivers), under the cells' markers; with the markers standing upright
+    // (tilt) they live outside the root, and the borders go under the attack range instead.
+    const above = this.world.parent === this.root ? this.world : this.range.container;
+    this.root.addChildAt(this.borders.mesh, this.root.getChildIndex(above));
+    for (const zone of this.store.loadedZoneRefs()) this.borders.applyZone(zone);
+    // The painted fog over the ground and the borders (a border running into the fog goes under
+    // the cloud), under the attack range and the cells' markers.
+    if (programs.clouds) {
+      this.clouds = new look.CloudLayer(painted.groundData);
+      this.root.addChildAt(this.clouds.mesh, this.root.getChildIndex(above));
+      painted.setFogColour(look.FOG_UNDER_CLOUD);
+      loads.push(this.clouds.load());
+    }
+    // The rest of the programs once the art is in and has drawn (a few frames), or after a while
+    // if it never comes: where programs compile one at a time (Firefox), a texture set up while
+    // one compiles waits for it (`paintedLook.ts` warmRest).
+    const settle = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+    const loaded = Promise.race([Promise.allSettled(loads).then(() => settle(ART_DRAWN_MS)), settle(ART_WAIT_MS)]);
+    if (programs.warmer) look.warmRest(programs.warmer, loaded);
+  }
+
   destroy(): void {
+    this.destroyed = true;
+    this.clouds?.destroy();
+    this.clouds = null;
+    this.painted?.destroy();
+    this.painted = null;
+    this.borders?.destroy();
+    this.borders = null;
+    setFlatGround(false);
     this.dropAllChunks();
+    this.live.destroy();
     this.pool.destroy();
     this.avatars.destroy();
     this.buildings.destroy();
@@ -298,6 +566,7 @@ export class MapRenderer {
     this.atlas = null;
     this.raster.destroy();
     this.root.destroy({ children: true });
+    this.markers.destroy({ children: true });
   }
 
   /** Builds what is missing, hides what is not on screen, shows the rest. */
@@ -309,6 +578,7 @@ export class MapRenderer {
     for (const [id, chunk] of this.chunks) {
       if (visible.has(id)) continue;
       chunk.visible = false;
+      this.live.show(id, false);
       // Text is the scarce resource, so an off-screen chunk gives its share
       // back as soon as the on-screen ones might want it.
       if (this.pool.inUse > MAX_TEXT_OBJECTS) chunk.releaseText();
@@ -352,6 +622,7 @@ export class MapRenderer {
           sight: this.sight,
         };
         chunk.build(this.store, nowSeconds, context);
+        this.live.chunkBuilt(ref, { store: this.store, viewer: context, nowSeconds, groundReady: this.groundArt.ready });
         this.buildMs = performance.now() - started;
         this.dirty.delete(ref.id);
       }
@@ -361,10 +632,13 @@ export class MapRenderer {
       }
       chunk.applyView(view);
       chunk.visible = true;
+      this.live.show(ref.id, true);
     }
 
     this.visibleIds = [...visible];
     this.residency.keep(this.visibleIds, nowMs);
+    // Chunks just built or shown stand up with the rest.
+    if (this.projector) this.placeMarkers();
   }
 
   private sweep(nowMs: number): void {
@@ -373,6 +647,7 @@ export class MapRenderer {
     for (const id of this.residency.evict(nowMs)) {
       this.chunks.get(id)?.destroy();
       this.chunks.delete(id);
+      this.live.drop(id);
       this.dirty.delete(id);
     }
   }
@@ -380,6 +655,7 @@ export class MapRenderer {
   private dropAllChunks(): void {
     for (const chunk of this.chunks.values()) chunk.destroy();
     this.chunks.clear();
+    this.live.dropAll();
     this.dirty.clear();
     this.visibleIds = [];
     for (const id of this.residency.ids()) this.residency.forget(id);

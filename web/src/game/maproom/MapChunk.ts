@@ -1,7 +1,7 @@
-import { Container, NineSliceSprite, Sprite, type Texture } from "pixi.js";
+import { Container, NineSliceSprite, Sprite, Texture } from "pixi.js";
 import { isFogCell } from "@/api/types";
 import { CELL_HEIGHT, CELL_WIDTH, WATER_MAX_HEIGHT } from "@/config";
-import { mapRoomGrid } from "@/game/HexGrid";
+import { hexShape, mapRoomGrid } from "@/game/HexGrid";
 import { chunkCells, type ChunkRef } from "./chunks";
 import {
   CellMarker,
@@ -14,6 +14,7 @@ import {
   RELATION_OTHER_COLOUR,
   OutpostKit,
   appearanceOf,
+  campHealthColour,
   hexWidthAt,
   type CellAppearance,
   type MapViewerContext,
@@ -36,9 +37,11 @@ import {
 import { BuildingKind, type BuildingAvatars } from "./buildingAvatars";
 import type { TribeAvatars } from "./tribeAvatars";
 import type { ZoneStore } from "./ZoneStore";
-import { cellLift, paintOrder } from "./ground";
-import { GROUND_ANCHOR_X, GROUND_ANCHOR_Y, type GroundArt } from "./groundArt";
+import { cellLift, isFlatGround, paintOrder } from "./ground";
+import { tagStyle, type TagStyle } from "./painted/markerStyle";
+import { GROUND_ANCHOR_X, groundAnchorY, type GroundArt } from "./groundArt";
 import type { ConstructionBadge } from "./constructionBadge";
+import { MarkerPins } from "./markerPins";
 
 /**
  * One 10 x 10 block of the map, built once as sprites.
@@ -122,6 +125,18 @@ const BADGE_Y = CELL_HEIGHT * 0.15;
 const BADGE_TEXT_SIZE = CELL_HEIGHT * 0.21;
 
 /**
+ * A damaged camp's health bar (owner, 4 Nov 2026): a dark track with a
+ * coloured fill for the strength it has left, floating just over the camp's
+ * picture. Sized for the tile map; the painted map's larger tags scale it too.
+ */
+const HEALTH_BAR_WIDTH = CELL_WIDTH * 0.3;
+const HEALTH_BAR_HEIGHT = 6;
+const HEALTH_BAR_BORDER = 1.5;
+const HEALTH_TRACK_ALPHA = 0.85;
+/** The bar's lower edge: a little above the portrait's head (and so above the far tiers' tent). */
+const HEALTH_BAR_TOP = AVATAR_BASE_Y - AVATAR_HEIGHT - 2;
+
+/**
  * A player's hex wears its Town Hall or outpost picture (#334), foot-anchored
  * like a camp's portrait (`AVATAR_HEIGHT`/`AVATAR_BASE_Y` above), but taller:
  * it is now the whole hex's identity, not a small critter. Needs tuning
@@ -190,11 +205,20 @@ export class MapChunk {
   private readonly details = new Container();
   /** The discs and rings behind camps' level numbers. */
   private readonly badgeDiscs = new Container();
+  /** Damaged camps' health bars, shown wherever camps are. */
+  private readonly healthBars = new Container();
   /** Players' markers, shown at every chunked tier. */
   private readonly bases = new Container();
   /** The rounded bars behind players' names, sized when their text is laid out. */
   private readonly plates = new Container();
   private readonly labels: LabelLayer;
+  /**
+   * Every marker above with its cell's foot, so the renderer can stand them
+   * upright on the tilted map (`markerPins.ts`) and put them back for the flat
+   * one. Each cell's markers share one foot: a camp's portrait's, a player's
+   * tower's.
+   */
+  readonly pins = new MarkerPins();
 
   /** This chunk's tiles, water and hairlines, which live in the shared ground layer. */
   private readonly groundSprites: Sprite[] = [];
@@ -233,7 +257,7 @@ export class MapChunk {
       // Crosses go over whichever of the two is showing.
       this.details,
     );
-    this.top.addChild(this.badgeDiscs, this.bases, this.plates, this.labels.badges);
+    this.top.addChild(this.healthBars, this.badgeDiscs, this.bases, this.plates, this.labels.badges);
   }
 
   /** Shows or hides the whole chunk, ground and top alike. */
@@ -275,7 +299,7 @@ export class MapChunk {
         const tile = height === null ? null : this.groundArt.tileFor(height);
         if (tile && height !== null) {
           const sprite = new Sprite(tile);
-          sprite.anchor.set(GROUND_ANCHOR_X, GROUND_ANCHOR_Y);
+          sprite.anchor.set(GROUND_ANCHOR_X, groundAnchorY());
           sprite.position.set(centre.x, centre.y);
           this.addGround(sprite, order);
           if (height <= WATER_MAX_HEIGHT) {
@@ -356,6 +380,7 @@ export class MapChunk {
     this.tents.visible = view.details && !portraits;
     this.portraits.visible = view.details && portraits;
     this.details.visible = view.details;
+    this.healthBars.visible = view.details;
     this.badgeDiscs.visible = view.badges;
     this.plates.visible = view.badges;
     this.labels.badges.visible = view.badges;
@@ -375,19 +400,23 @@ export class MapChunk {
     this.groundSprites.length = 0;
     this.outlineSprites.length = 0;
     this.hasPortraits = false;
+    this.pins.clear("body");
     this.clearPlates();
     for (const layer of [
       this.tents,
       this.portraits,
       this.details,
       this.badgeDiscs,
+      this.healthBars,
       this.bases,
     ]) {
       layer.removeChildren().forEach(destroyChild);
     }
   }
 
+  /** Drops the plates; the text goes back to the pool with them, so both leave the pins. */
   private clearPlates(): void {
+    this.pins.clear("text");
     this.plates.removeChildren().forEach(destroyChild);
   }
 
@@ -399,6 +428,8 @@ export class MapChunk {
     const destroyed = appearance.marker === CellMarker.CAMP_DESTROYED;
     if (appearance.marker !== CellMarker.CAMP && !destroyed) return;
     const alpha = appearance.dimmed ? DIMMED_ALPHA : 1;
+    // Where the camp stands: the portrait's foot. Its tent, cross and badge go with it.
+    const foot = { x, y: y + AVATAR_BASE_Y };
 
     const tent = place(
       new Sprite(destroyed ? this.atlas.tentDestroyed : this.atlas.tent),
@@ -409,8 +440,9 @@ export class MapChunk {
     tent.scale.set(GLYPH_SCALE);
     tent.alpha = alpha;
     this.tents.addChild(tent);
+    this.pins.add(foot, tent);
 
-    const portrait = this.addPortrait(appearance, x, y, destroyed, alpha);
+    const portrait = this.addPortrait(appearance, foot, destroyed, alpha);
 
     if (destroyed) {
       // The cross sits on the picture the close tiers show, or on the tent.
@@ -423,7 +455,10 @@ export class MapChunk {
       cross.scale.set(GLYPH_SCALE);
       cross.alpha = alpha;
       this.details.addChild(cross);
+      this.pins.add(foot, cross);
     }
+
+    if (appearance.campHealth !== null) this.addHealthBar(appearance.campHealth, foot, x, y, alpha);
 
     if (appearance.badge === "") return;
     const bx = x + BADGE_X;
@@ -433,6 +468,8 @@ export class MapChunk {
     badgeDisc.alpha = alpha;
     badgeRing.alpha = alpha;
     this.badgeDiscs.addChild(badgeDisc, badgeRing);
+    this.pins.add(foot, badgeDisc);
+    this.pins.add(foot, badgeRing);
     this.requests.push({
       text: appearance.badge,
       x: bx,
@@ -440,7 +477,43 @@ export class MapChunk {
       size: BADGE_TEXT_SIZE,
       maxWidth: BADGE_RADIUS * 1.6,
       alpha,
+      placed: (text) => this.pins.add(foot, text, "text"),
     });
+  }
+
+  /**
+   * A damaged camp's health bar over its picture: the dark track, then the
+   * fill from its left edge for the `health` percent the camp has left. Both
+   * are pinned to the camp's foot, so they stand upright on the tilted map
+   * with the portrait.
+   */
+  private addHealthBar(health: number, foot: { x: number; y: number }, x: number, y: number, alpha: number): void {
+    const scale = tagStyle(isFlatGround(), hexShape()).scale;
+    const width = HEALTH_BAR_WIDTH * scale;
+    const height = HEALTH_BAR_HEIGHT * scale;
+    const border = HEALTH_BAR_BORDER * scale;
+    // Just clear of the portrait's head, however tall the painted map makes the bar.
+    const by = y + HEALTH_BAR_TOP - border - height / 2;
+
+    const track = new Sprite(Texture.WHITE);
+    track.anchor.set(0.5, 0.5);
+    track.position.set(x, by);
+    track.width = width + border * 2;
+    track.height = height + border * 2;
+    track.tint = MARKER_FILL_COLOUR;
+    track.alpha = HEALTH_TRACK_ALPHA * alpha;
+
+    const fill = new Sprite(Texture.WHITE);
+    fill.anchor.set(0, 0.5);
+    fill.position.set(x - width / 2, by);
+    fill.width = (width * health) / 100;
+    fill.height = height;
+    fill.tint = campHealthColour(health);
+    fill.alpha = alpha;
+
+    this.healthBars.addChild(track, fill);
+    this.pins.add(foot, track);
+    this.pins.add(foot, fill);
   }
 
   /**
@@ -452,8 +525,7 @@ export class MapChunk {
    */
   private addPortrait(
     appearance: CellAppearance,
-    x: number,
-    y: number,
+    foot: { x: number; y: number },
     destroyed: boolean,
     alpha: number,
   ): boolean {
@@ -463,10 +535,11 @@ export class MapChunk {
     const sprite = new Sprite(texture);
     sprite.anchor.set(0.5, 1);
     sprite.setSize((AVATAR_HEIGHT * texture.width) / texture.height, AVATAR_HEIGHT);
-    sprite.position.set(x, y + AVATAR_BASE_Y);
+    sprite.position.set(foot.x, foot.y);
     sprite.tint = destroyed ? AVATAR_DESTROYED_TINT : 0xffffff;
     sprite.alpha = (destroyed ? AVATAR_DESTROYED_ALPHA : 1) * alpha;
     this.portraits.addChild(sprite);
+    this.pins.add(foot, sprite);
     return true;
   }
 
@@ -491,6 +564,7 @@ export class MapChunk {
     const outpost = appearance.marker === CellMarker.OUTPOST;
     const footX = x;
     const footY = y + FOOT_Y;
+    const foot = { x: footX, y: footY };
     const flashScale = BUILDING_HEIGHT / FLASH_TOWER_HEIGHT;
 
     const texture = this.buildings.textureFor(
@@ -507,6 +581,7 @@ export class MapChunk {
       }
       sprite.alpha = alpha;
       this.bases.addChild(sprite);
+      this.pins.add(foot, sprite);
 
       if (appearance.protected) {
         const dome = new Sprite(this.atlas.protectionDome);
@@ -518,6 +593,7 @@ export class MapChunk {
         dome.position.set(footX, footY);
         dome.alpha = alpha;
         this.bases.addChild(dome);
+        this.pins.add(foot, dome);
       }
 
       if (appearance.truce) {
@@ -527,6 +603,7 @@ export class MapChunk {
         tick.position.set(footX + sprite.width * 0.5, footY - sprite.height * 0.8);
         tick.alpha = alpha;
         this.bases.addChild(tick);
+        this.pins.add(foot, tick);
       }
 
       if (appearance.idleWorker) {
@@ -536,6 +613,7 @@ export class MapChunk {
         worker.position.set(footX + (DOME_WIDTH / 2) * flashScale, footY - DOME_ABOVE_FOOT * flashScale * WORKER_Y_FRACTION);
         worker.alpha = alpha;
         this.bases.addChild(worker);
+        this.pins.add(foot, worker);
       }
 
       const badgeTexture = appearance.underConstruction ? this.constructionBadge.texture : null;
@@ -548,6 +626,7 @@ export class MapChunk {
         badge.position.set(footX + (DOME_WIDTH / 2) * flashScale, footY - DOME_ABOVE_FOOT * flashScale * WORKER_Y_FRACTION);
         badge.alpha = alpha;
         this.bases.addChild(badge);
+        this.pins.add(foot, badge);
       }
     }
 
@@ -560,56 +639,68 @@ export class MapChunk {
       envelope.rotation = 0.2; // Flash tilts it a little clockwise
       envelope.alpha = alpha;
       this.bases.addChild(envelope);
+      this.pins.add(foot, envelope);
     }
 
+    // The tag and star grow and turn to mock-up B's parchment on the painted map (plan step 8).
+    const style = tagStyle(isFlatGround(), hexShape());
     // The gold level star every player cell wears (#334).
-    const starRadius = STAR_RADIUS * STAR_SCALE;
+    const starRadius = STAR_RADIUS * STAR_SCALE * style.starScale;
     const starX = footX - BUILDING_HEIGHT * 0.3;
     const starY = footY - BUILDING_HEIGHT * 0.82;
     const star = icon(this.atlas.star, starX, starY, starRadius, STAR_COLOUR);
     star.alpha = alpha;
     this.badgeDiscs.addChild(star);
+    this.pins.add(foot, star);
     this.requests.push({
       text: appearance.star,
       x: starX,
       y: starY,
-      size: STAR_TEXT_SIZE * STAR_SCALE,
+      size: STAR_TEXT_SIZE * STAR_SCALE * style.starScale,
       maxWidth: starRadius * 1.6,
       alpha,
+      placed: (text) => this.pins.add(foot, text, "text"),
     });
 
     if (appearance.plate === "") return;
-    const py = y + LABEL_Y;
-    const height = SLIM_PLATE_HALF_HEIGHT * 2;
+    const halfHeight = SLIM_PLATE_HALF_HEIGHT * style.scale;
+    // A larger tag hangs a little lower, its top where today's tag's top is.
+    const py = y + LABEL_Y + (halfHeight - SLIM_PLATE_HALF_HEIGHT);
+    const height = halfHeight * 2;
     // Capped to the hex's width at the label's lower edge, so it never spills into a neighbour.
-    const maxTotalWidth = hexWidthAt(py - y + SLIM_PLATE_HALF_HEIGHT * 0.5);
+    const maxTotalWidth = hexWidthAt(py - y + halfHeight * 0.5);
     const whiteLabel = appearance.plateColour === RELATION_OTHER_COLOUR;
     const gold = appearance.plateColour === GOLD_PLATE;
     this.requests.push({
       text: appearance.plate,
       x,
       y: py,
-      size: LABEL_TEXT_SIZE,
-      minSize: LABEL_TEXT_SIZE * 0.7,
-      maxWidth: Math.max(maxTotalWidth - LABEL_PADDING * 2, height),
+      size: LABEL_TEXT_SIZE * style.scale,
+      minSize: LABEL_TEXT_SIZE * 0.7 * style.scale,
+      maxWidth: Math.max(maxTotalWidth - LABEL_PADDING * style.scale * 2, height),
       alpha,
-      light: true,
-      dark: whiteLabel ? LABEL_DARK_TEXT : gold ? OWN_PLATE_TEXT_COLOUR : 0xffffff,
-      measured: (width) => this.addLabel(x, py, width, maxTotalWidth, appearance, alpha),
+      // The painted tag's bold dark words (the plain face), like mock-up B's.
+      light: style.text === null,
+      dark: style.text ?? (whiteLabel ? LABEL_DARK_TEXT : gold ? OWN_PLATE_TEXT_COLOUR : 0xffffff),
+      placed: (text) => this.pins.add(foot, text, "text"),
+      measured: (width) => this.addLabel(foot, x, py, width, maxTotalWidth, appearance, alpha, style),
     });
   }
 
   /** The thin rectangle behind a name: white for others, the relation colour otherwise. */
   private addLabel(
+    foot: { x: number; y: number },
     x: number,
     y: number,
     textWidth: number,
     maxTotalWidth: number,
     appearance: CellAppearance,
     alpha: number,
+    style: TagStyle,
   ): void {
-    const height = SLIM_PLATE_HALF_HEIGHT * 2;
-    const total = Math.min(Math.max(textWidth + LABEL_PADDING * 2, height * 1.5), maxTotalWidth);
+    const halfHeight = SLIM_PLATE_HALF_HEIGHT * style.scale;
+    const height = halfHeight * 2;
+    const total = Math.min(Math.max(textWidth + LABEL_PADDING * style.scale * 2, height * 1.5), maxTotalWidth);
     const plate = new NineSliceSprite({
       texture: this.atlas.plateRect,
       leftWidth: SLIM_PLATE_HALF_HEIGHT,
@@ -619,10 +710,11 @@ export class MapChunk {
     });
     plate.width = total;
     plate.height = height;
-    plate.position.set(x - total / 2, y - SLIM_PLATE_HALF_HEIGHT);
-    plate.tint = appearance.plateColour === RELATION_OTHER_COLOUR ? 0xffffff : appearance.plateColour;
-    plate.alpha = (appearance.own ? 1 : PLATE_ALPHA) * alpha;
+    plate.position.set(x - total / 2, y - halfHeight);
+    plate.tint = style.plate ?? (appearance.plateColour === RELATION_OTHER_COLOUR ? 0xffffff : appearance.plateColour);
+    plate.alpha = (style.plateAlpha ?? (appearance.own ? 1 : PLATE_ALPHA)) * alpha;
     this.plates.addChild(plate);
+    this.pins.add(foot, plate, "text");
   }
 }
 

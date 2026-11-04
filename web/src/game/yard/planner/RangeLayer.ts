@@ -92,9 +92,10 @@ export const towerRange = (
   level: number,
   kind: YardKind = "main",
   height = 0,
+  landPct = 0,
 ): TowerRange | null => {
   if (buildingClass(type) !== "tower") return null;
-  const range = combatTowerRange(type, level, kind, height);
+  const range = combatTowerRange(type, level, kind, height, landPct);
   if (range === undefined || range <= 0) return null;
 
   const mode = flyerMode(type);
@@ -257,6 +258,8 @@ export interface RangeDrawOptions {
   readonly kind?: YardKind;
   /** The outpost's map cell height; ignored on the main yard. */
   readonly height?: number;
+  /** The cell's land feature range change, whole percent (`Yard.landRangePct`). */
+  readonly landPct?: number;
 }
 
 /** One disc, resolved to world pixels. */
@@ -292,7 +295,7 @@ export class RangeLayer {
     const land: Disc[] = [];
     const air: Disc[] = [];
     for (const node of options.nodes) {
-      const reach = towerRange(node.type, node.level, options.kind, options.height);
+      const reach = towerRange(node.type, node.level, options.kind, options.height, options.landPct);
       if (!reach) continue;
       if (!(reach.land && options.land) && !(reach.air && options.air)) continue;
 

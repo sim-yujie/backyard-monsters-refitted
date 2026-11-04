@@ -61,6 +61,8 @@ export interface RetentionResult {
   attackLogs: number;
   chatReports: number;
   chatFlags: number;
+  /** Chat report cases (with their lines and copies of the room). */
+  chatCases: number;
   chatLog: number;
   bugReports: number;
   friendRequests: number;
@@ -204,6 +206,21 @@ export const runRetentionCleanup = async (
     batchSize,
     pauseMs
   );
+  // A case goes a year after its last report, with its lines and their copies of the room.
+  const chatCases = await deleteOldRows(
+    em,
+    "chat_case",
+    "id",
+    "last_report_at",
+    cutoff(now, config.chatReportDays),
+    batchSize,
+    pauseMs
+  );
+  if (chatCases > 0) {
+    await em
+      .fork()
+      .execute(`DELETE FROM bym.chat_case_message m WHERE NOT EXISTS (SELECT 1 FROM bym.chat_case c WHERE c.id = m.case_id)`);
+  }
   const chatLog = await deleteOldRows(
     em,
     "chat_log",
@@ -273,6 +290,7 @@ export const runRetentionCleanup = async (
     attackLogs,
     chatReports,
     chatFlags,
+    chatCases,
     chatLog,
     bugReports,
     friendRequests,

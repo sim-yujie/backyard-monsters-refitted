@@ -101,6 +101,7 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "fortify/cancel",
   "starterkit",
   "decor/place",
+  "decor/buy",
   "move",
   "goals/claim",
   "goals/baiter-start",
@@ -110,6 +111,8 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "guide/army",
   "guide/skip",
   "events/ladder/claim",
+  "quests/claim",
+  "quests/bonus/claim",
   "siege/lab/start",
   "siege/lab/cancel",
   "siege/lab/finish",
@@ -133,6 +136,10 @@ export const NOT_REAL_ACTION_YARD_PATHS: readonly string[] = [
   "achievements/state",
   "achievements/seen",
   "events/calendar/claim",
+  // The quest window's read, its login card (as the event calendar) and the daily swap.
+  "quests/state",
+  "quests/login/claim",
+  "quests/swap",
 ];
 
 /** An in-game check's answer (#273) counts only when it was right. */
@@ -216,6 +223,8 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /api/:apiVersion/player/changeusername",
   "POST /api/:apiVersion/player/settings",
   "POST /api/:apiVersion/player/sound",
+  // The Look and sound choices, sent by the game itself at load (owner's dashboard, 4 Nov 2026).
+  "POST /api/:apiVersion/player/look",
   "POST /api/:apiVersion/player/avatar",
   "POST /api/:apiVersion/player/block",
   "POST /api/:apiVersion/player/unblock",

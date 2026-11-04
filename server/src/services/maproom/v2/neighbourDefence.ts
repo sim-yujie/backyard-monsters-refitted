@@ -1,0 +1,196 @@
+import { MapRoom2, MapRoomCell, MapRoomVersion, Terrain } from "../../../enums/MapRoom.js";
+import { Tribes } from "../../../enums/Tribes.js";
+import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
+import { postgres } from "../../../server.js";
+import { generateNoise, getTerrainHeight } from "./generateMap.js";
+import { mr2HexShape } from "../../../config/MapRoom2Config.js";
+import { type HexShape, hexNeighbours } from "../../../game-rules/maproom/range.js";
+
+/**
+ * Map Room 2's neighbour defence bonus (`docs/mr2-neighbours.md`): how many
+ * friendly cells sit around the cell under attack.
+ *
+ * - A player's cell (main yard or outpost) counts that player's own cells.
+ * - A wild monster camp counts the camps of its own tribe. A camp's tribe is
+ *   `(x + y) % 4` (`wildMonsterCell.ts`), and on Map Room 2's grid only one
+ *   of the six neighbours shares that sum (flat-top odd-q: the one beside it
+ *   a row up or down; pointy-top odd-r: (x-1, y+1) on even rows, (x+1, y-1)
+ *   on odd rows), so a camp has at most one same-tribe neighbour: 0 when
+ *   that cell is water or a player's.
+ *
+ * The bonus each count gives is the combat rules' `neighbourDefenceBonus`.
+ */
+
+/** A cell's position. */
+export interface CellAt {
+  readonly x: number;
+  readonly y: number;
+}
+
+/** A stored world map cell around the target, as far as the count reads it. */
+export interface StoredNeighbour extends CellAt {
+  readonly uid: number;
+  readonly base_type: number;
+  readonly terrainHeight?: number | null;
+}
+
+/** The cell under attack. */
+export interface TargetCell extends CellAt {
+  readonly uid: number;
+  readonly base_type: number;
+}
+
+const wrap = (value: number, size: number): number => ((value % size) + size) % size;
+
+/**
+ * The six cells around `(x, y)` on Map Room 2's wrapping odd-q grid: the two
+ * above and below in its column, and in each side column the one on its row
+ * and the one a row up (even column) or down (odd column). The same adjacency
+ * as `isAdjacentToMainYard` (`PopupTakeover.as:62-75`). The world is 800 wide,
+ * an even number, so a wrapped column keeps its parity.
+ *
+ * With `MR2_HEX_SHAPE=pointy` the grid is odd-r pointy-top, and the six are the
+ * shared rules' `hexNeighbours` (`game-rules/maproom/range.ts`), the same cells
+ * the range check puts one step away.
+ */
+export const mr2NeighbourCoords = (x: number, y: number, shape: HexShape = mr2HexShape()): CellAt[] => {
+  if (shape === "pointy") return hexNeighbours(x, y, shape);
+  const side = x % 2 === 0 ? y - 1 : y + 1;
+  return [
+    [x, y - 1],
+    [x, y + 1],
+    [x - 1, y],
+    [x + 1, y],
+    [x - 1, side],
+    [x + 1, side],
+  ].map(([cx, cy]) => ({ x: wrap(cx!, MapRoom2.WIDTH), y: wrap(cy!, MapRoom2.HEIGHT) }));
+};
+
+/** Whether a stored cell is a player's main yard or outpost. */
+const isPlayerCell = (cell: { uid: number; base_type: number }): boolean =>
+  cell.base_type >= MapRoomCell.HOMECELL && cell.uid > 0;
+
+/** A camp's tribe, by its coordinates (`wildMonsterCell.ts`). */
+const tribeOf = (cell: CellAt): number => (cell.x + cell.y) % Tribes.length;
+
+/**
+ * How many friendly cells sit around `target`, 0 to 6.
+ *
+ * @param target - The cell under attack.
+ * @param stored - The stored world map cells at its neighbours' positions (any others are ignored).
+ * @param heightAt - The terrain height of a cell with no stored row (the world's noise).
+ * @param playersOnly - Count for players' cells only: a camp then has none (`MR2_NEIGHBOUR_BONUS=players`).
+ */
+export const friendlyNeighbourCount = (
+  target: TargetCell,
+  stored: readonly StoredNeighbour[],
+  heightAt: (x: number, y: number) => number,
+  playersOnly = false
+): number => {
+  const rows = new Map(stored.map((cell) => [`${cell.x},${cell.y}`, cell]));
+  const around = mr2NeighbourCoords(target.x, target.y);
+
+  if (isPlayerCell(target)) {
+    return around.filter(({ x, y }) => {
+      const row = rows.get(`${x},${y}`);
+      return row !== undefined && isPlayerCell(row) && row.uid === target.uid;
+    }).length;
+  }
+
+  if (playersOnly || target.base_type !== MapRoomCell.WM) return 0;
+  const tribe = tribeOf(target);
+  return around.filter(({ x, y }) => {
+    const row = rows.get(`${x},${y}`);
+    if (row && isPlayerCell(row)) return false;
+    const height = row?.terrainHeight ?? heightAt(x, y);
+    if (height <= Terrain.WATER3) return false;
+    return tribeOf({ x, y }) === tribe;
+  }).length;
+};
+
+/**
+ * The friendly neighbours of a Map Room 2 cell under attack, read from the
+ * world's stored cells and its terrain noise.
+ *
+ * @param target - The attacked cell.
+ * @param worldid - The world it is in.
+ * @param playersOnly - Count for players' cells only.
+ */
+export const loadFriendlyNeighbourCount = async (
+  target: TargetCell,
+  worldid: string,
+  playersOnly = false
+): Promise<number> => {
+  if (playersOnly && !isPlayerCell(target)) return 0;
+  const around = mr2NeighbourCoords(target.x, target.y);
+  const stored = await postgres.em.find(
+    WorldMapCell,
+    {
+      $and: [
+        { $or: around.map(({ x, y }) => ({ x, y })) },
+        { map_version: MapRoomVersion.V2 },
+        { world: worldid },
+      ],
+    },
+    { fields: ["x", "y", "uid", "base_type", "terrainHeight"] }
+  );
+  let noise: ReturnType<typeof generateNoise> | undefined;
+  const heightAt = (x: number, y: number): number => {
+    noise ??= generateNoise(worldid);
+    return getTerrainHeight(noise, x, y);
+  };
+  return friendlyNeighbourCount(target, stored, heightAt, playersOnly);
+};
+
+/**
+ * The friendly neighbours of every cell in `targets`, as the map shows them
+ * (the cell pop-up's bonus row): `friendlyNeighbourCount`, the very count the
+ * attack load stores with the battle, run once per cell over one set of
+ * stored rows. Keyed `"x,y"`; a cell with none is left out.
+ */
+export const areaNeighbourCounts = (
+  targets: readonly TargetCell[],
+  stored: readonly StoredNeighbour[],
+  heightAt: (x: number, y: number) => number,
+  playersOnly = false
+): Map<string, number> => {
+  const counts = new Map<string, number>();
+  for (const target of targets) {
+    const around = new Set(mr2NeighbourCoords(target.x, target.y).map(({ x, y }) => `${x},${y}`));
+    const near = stored.filter((cell) => around.has(`${cell.x},${cell.y}`));
+    const count = friendlyNeighbourCount(target, near, heightAt, playersOnly);
+    if (count > 0) counts.set(`${target.x},${target.y}`, count);
+  }
+  return counts;
+};
+
+/**
+ * `areaNeighbourCounts` for a map area: reads the stored cells around the
+ * targets in one query.
+ *
+ * @param targets - The area's land cells (players' cells and camps).
+ * @param worldid - Their world.
+ * @param heightAt - The terrain height of a cell with no stored row.
+ * @param playersOnly - Count for players' cells only.
+ */
+export const loadAreaNeighbourCounts = async (
+  targets: readonly TargetCell[],
+  worldid: string,
+  heightAt: (x: number, y: number) => number,
+  playersOnly = false
+): Promise<Map<string, number>> => {
+  const counted = playersOnly ? targets.filter(isPlayerCell) : targets;
+  if (counted.length === 0) return new Map();
+  const around = counted.flatMap(({ x, y }) => mr2NeighbourCoords(x, y));
+  const stored = await postgres.em.find(
+    WorldMapCell,
+    {
+      world: worldid,
+      map_version: MapRoomVersion.V2,
+      x: { $in: [...new Set(around.map(({ x }) => x))] },
+      y: { $in: [...new Set(around.map(({ y }) => y))] },
+    },
+    { fields: ["x", "y", "uid", "base_type", "terrainHeight"] }
+  );
+  return areaNeighbourCounts(counted, stored, heightAt, playersOnly);
+};

@@ -26,6 +26,7 @@ import {
 } from "./attackCheckpointStore.js";
 import { attackerSessionKey } from "./attackSession.js";
 import { awaitOwnLanding } from "./awaitOwnLanding.js";
+import { finaliseExpiredRowlessAttacks, finaliseRowlessAttacksOf } from "./finaliseRowlessAttack.js";
 import { endAttackSession, readAttackSession } from "./attackSessionStore.js";
 import { buildingDataWithout, spendFlung, type SourceCell } from "./combat/abandonedAttack.js";
 import { battleReplayInput, foughtLoot } from "./combat/battle.js";
@@ -47,6 +48,8 @@ import type { AbandonedOutcome } from "./combat/abandonedAttack.js";
 import { recordAttackPlan } from "./autoAttack/attackPlanStore.js";
 import { recordAttackAchievements } from "../achievements/events.js";
 import { countAttackLoot } from "../events/lootEvents.js";
+import { attackQuestEvents, defenceQuestEvents } from "../quests/hooks.js";
+import { recordQuestEvents, recordUserQuestEvents } from "../quests/record.js";
 
 /**
  * Finishes an attack its attacker left without saving (issue #138).
@@ -381,6 +384,25 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   // (logged and lost) cannot take the landing down with it.
   await countAttackLoot(postgres.em, attacker.userid, userSave, loot.credit, now);
 
+  // Quests, as the hand-landed save counts them (`controllers/base/save/baseSave.ts`).
+  await recordQuestEvents(
+    postgres.em,
+    userSave.basesaveid,
+    attackQuestEvents({
+      defender,
+      damageBefore,
+      damageAfter: landedDamage,
+      before: storedHealthData,
+      after: outcome.buildinghealthdata,
+      log: input.log,
+      loot: loot.credit,
+    }),
+    now
+  );
+  if (defender.type !== BaseType.TRIBE && defender.saveuserid && defender.saveuserid !== attacker.userid) {
+    await recordUserQuestEvents(postgres.em, defender.saveuserid, defenceQuestEvents(landedDamage), now);
+  }
+
   await endAttackSession(basesaveid);
   await discardCheckpoint(basesaveid);
 
@@ -638,6 +660,9 @@ export const finaliseBeforeLoad = async (
     // a reload or Back, say) lands first, so the yard never shows it undone.
     await awaitOwnLanding(userid);
     await finaliseAttacksFor(userid, mode);
+    // So is one on a Map Room 1 tribe, a Descent yard or a Moloch tribe
+    // (`finaliseRowlessAttack.ts`), which have no row of their own.
+    await finaliseRowlessAttacksOf(userid, mode);
     await releaseUnfoughtAttackOf(userid);
     if (attacking) await finaliseExpiredOnBase(baseid);
   } catch (err) {
@@ -661,6 +686,7 @@ export const startAttackFinaliser = (): (() => void) => {
     running = true;
     try {
       await finaliseExpiredAttacks();
+      await finaliseExpiredRowlessAttacks();
     } catch (err) {
       logger.error(`Abandoned attack sweep failed: ${err}`);
     } finally {

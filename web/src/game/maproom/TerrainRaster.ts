@@ -48,8 +48,17 @@ export class TerrainRaster {
     this.source = new CanvasSource({ resource: this.canvas, scaleMode: "nearest" });
     this.sprite = new Sprite(new Texture({ source: this.source }));
 
-    // Line the texel grid up with the hex grid: texel (x, y) spans one column
-    // step and one row step, centred on the cell's centre.
+    this.fitGrid();
+  }
+
+  /**
+   * Lines the texel grid up with the hex grid: texel (x, y) spans one column
+   * step and one row step, centred on the cell's centre. Called again once
+   * the map knows the world's hex shape (`setHexShape`); the half-cell
+   * stagger (odd columns on flat-top, odd rows on pointy-top) is dropped
+   * either way, being well under a pixel at the zooms this layer shows.
+   */
+  fitGrid(): void {
     this.sprite.position.set(-mapRoomGrid.colStep / 2, -mapRoomGrid.rowStep / 2);
     this.sprite.scale.set(mapRoomGrid.colStep, mapRoomGrid.rowStep);
   }

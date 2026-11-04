@@ -37,6 +37,19 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * `range2` is the cannonball and target), income the mixed resource pile,
  * height the hill with a flag. None carries an arrow, as its number can be a
  * gain or a loss.
+ *
+ * Map Room 2's neighbour defence bonus (`art-samples/mr2-bonus5/icon`): the
+ * teal shield with linked cells and two up arrows (`neighbours`); `neighbours2`
+ * is the hex shield with friends either side, the other option.
+ *
+ * Map Room 2's "Tilted map" button (`ui/maproom/TiltToggle.ts`,
+ * `art-samples/mr2-markers/icon`): a grass slab with hex tiles, a tree and a
+ * flag, seen at an angle (`maptilt`) while the map is tilted and from above
+ * (`mapflat`) while it is flat.
+ *
+ * "Support the game" (`ui/support/SupportPanel.ts`, `art-samples/support-heart`):
+ * a red heart held in green monster hands (`support`), so it is not read as
+ * Health's plain heart; `support2` is the heart with a gold coin, the other option.
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -63,6 +76,12 @@ export const GAME_ICONS = {
   range2: "Tower range",
   income: "Income",
   height: "Height",
+  neighbours: "Neighbour defence bonus",
+  neighbours2: "Neighbour defence bonus",
+  maptilt: "Tilted map",
+  mapflat: "Flat map",
+  support: "Support the game",
+  support2: "Support the game",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;

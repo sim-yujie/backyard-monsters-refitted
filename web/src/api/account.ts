@@ -3,6 +3,7 @@ import { setSessionPicSquare, setSessionUsername } from "./auth";
 import { get, post, postJson } from "./http";
 import { countryOf, type CountrySettings } from "./country";
 import { privacyOf, type PrivacySettings } from "./privacy";
+import { hexShapeOf, type HexShape } from "@/game/maproom/rules/range";
 import type { AccountResponse, ChangeUsernameResponse, SetAvatarResponse, SettingsResponse } from "./types";
 
 /**
@@ -63,3 +64,33 @@ export const setShinyLocked = async (shinyLocked: boolean): Promise<boolean> => 
   const response = await postJson<SettingsResponse>(SETTINGS_PATH, { shinyLocked });
   return response.settings.shinyLocked;
 };
+
+/**
+ * Map Room 2's tilted camera (MR2 look plan step 4) as the account has it:
+ * whether the server's MR2_TILT switch lets the map tilt at all, and the
+ * player's own choice, tilted unless they switched the map flat.
+ */
+export interface MapTiltSettings {
+  readonly allowed: boolean;
+  readonly tilted: boolean;
+}
+
+export const mapTiltOf = (settings: AccountResponse["settings"]): MapTiltSettings => ({
+  allowed: settings?.mapTiltAllowed === true,
+  tilted: settings?.tiltedMap !== false,
+});
+
+/** Reads the tilt switch and the player's choice from `GET /player/account`. */
+export const fetchMapTilt = async (): Promise<MapTiltSettings> =>
+  mapTiltOf((await get<AccountResponse>(ACCOUNT_PATH)).settings);
+
+/**
+ * Map Room 2's hex shape (MR2 look plan step 1): the server's MR2_HEX_SHAPE
+ * switch, flat-top unless it says pointy.
+ */
+export const fetchMapHexShape = async (): Promise<HexShape> =>
+  hexShapeOf((await get<AccountResponse>(ACCOUNT_PATH)).settings?.mapHexShape);
+
+/** Stores the player's choice on the account; resolves with what the server now has. */
+export const setTiltedMap = async (tilted: boolean): Promise<MapTiltSettings> =>
+  mapTiltOf((await postJson<SettingsResponse>(SETTINGS_PATH, { tiltedMap: tilted })).settings);

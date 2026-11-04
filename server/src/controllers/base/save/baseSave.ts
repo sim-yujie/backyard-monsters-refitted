@@ -96,6 +96,8 @@ import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanSt
 import { discardDefenceReplayLoad } from "../../../services/defences/defenceReplayLoad.js";
 import { recordDefenceReplay } from "../../../services/defences/recordDefenceReplay.js";
 import { recordAttackAchievements } from "../../../services/achievements/events.js";
+import { attackQuestEvents, defenceQuestEvents } from "../../../services/quests/hooks.js";
+import { recordQuestEvents, recordUserQuestEvents } from "../../../services/quests/record.js";
 import { INFERNO_SAVE_TYPES, refuseOldInferno } from "../../../services/inferno/infernoGate.js";
 import { infernoConfig } from "../../../config/InfernoConfig.js";
 
@@ -748,6 +750,29 @@ const saveBase = async (
     // After the commit: a counter it fails to write is logged and lost, and
     // must not take the landing's transaction down with it.
     if (loot) await countAttackLoot(postgres.em, user.userid, userSave, loot.credit, now);
+
+    // Quests (`services/quests/hooks.ts`), each on its player's main row
+    // under its own lock, after the commit: a won attack, a tribe camp
+    // destroyed, catapult hits and loot (before the cap) for the attacker; a
+    // held defence for the owner of a player's yard. Logged and lost on a failure.
+    const damageAfter = Number(baseSave.damage) || 0;
+    await recordQuestEvents(
+      postgres.em,
+      userSave.basesaveid,
+      attackQuestEvents({
+        defender: baseSave,
+        damageBefore,
+        damageAfter,
+        before: storedHealthData,
+        after: battle?.buildinghealthdata,
+        log: battleInput?.log,
+        loot: loot?.credit,
+      }),
+      now
+    );
+    if (baseSave.type !== BaseType.TRIBE && baseSave.saveuserid && baseSave.saveuserid !== user.userid) {
+      await recordUserQuestEvents(postgres.em, baseSave.saveuserid, defenceQuestEvents(damageAfter), now);
+    }
   }
 
   // A Map Room 2 camp attack played by hand is the player's plan for the

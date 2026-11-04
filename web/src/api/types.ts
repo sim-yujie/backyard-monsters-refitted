@@ -113,6 +113,12 @@ export interface AccountResponse extends ApiEnvelope {
     shinyLocked?: boolean;
     hideOnline?: boolean;
     friendRequests?: boolean;
+    /** The server's MR2_TILT switch lets Map Room 2 tilt (MR2 look plan step 4). */
+    mapTiltAllowed?: boolean;
+    /** The player's own choice: Map Room 2 tilted (default) or flat. */
+    tiltedMap?: boolean;
+    /** The server's MR2_HEX_SHAPE switch: Map Room 2's hexes flat-top (default) or pointy-top. */
+    mapHexShape?: "flat" | "pointy";
     /** The player's country (ISO 3166-1 alpha-2), null when not set. */
     country?: string | null;
     countryAsked?: boolean;
@@ -131,7 +137,7 @@ export interface ChangeUsernameResponse extends ApiEnvelope {
 /** `POST /api/:apiVersion/player/settings`. */
 export interface SettingsResponse extends ApiEnvelope {
   error: number;
-  settings: { shinyLocked: boolean };
+  settings: { shinyLocked: boolean; mapTiltAllowed?: boolean; tiltedMap?: boolean; mapHexShape?: "flat" | "pointy" };
 }
 
 /* ── Base / yard ────────────────────────────────────────────────────────── */
@@ -766,6 +772,11 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   notifications?: number;
   /**
+   * What the Quests button's red number counts (beta 6), from the latest yard
+   * answer that carried `questsClaimable`; the load itself does not send it.
+   */
+  questsClaimable?: number;
+  /**
    * The owner's loads: how to reach world chat (#282, `game/chat/chatSession.ts`).
    * `chatservers` is every load's, the chat WebSocket's `host:port`;
    * `chattoken` (a day's, per player) and `chatchannel` (the world room for
@@ -788,6 +799,13 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * replay reads the same stored value (`world_map_cell.terrainHeight`).
    */
   cellheight?: number;
+  /**
+   * Map Room 2 attack loads and the owner's own outpost build load, with the
+   * land switch on: the target cell's land feature (`landFeatures.ts`), for
+   * the range rings. Absent on open ground. The battle reads the copy in the
+   * defence (`defenderforces.land`).
+   */
+  landfeature?: number;
   /**
    * On an attack load: the defence the battle is fought against, as the
    * server keeps it for its replay (issue #195): each bunker's garrison, the
@@ -880,6 +898,20 @@ export interface WildMonsterCell {
   dm: number;
   /** 1 once damage >= 90. */
   d: number;
+  /** The cell's land feature (`landFeatures.ts`), with the server's land switch on; absent on open ground. */
+  lf?: number;
+  /**
+   * Map Room 2 rivers (look only, server `rivers.ts`, switch `MR2_RIVERS`): the river on this
+   * cell's own three edges, axial directions 0, 1, 2, two bits of width (1-3) each,
+   * `width << (2 * direction)`. Absent where none, or with the switch off.
+   */
+  rv?: number;
+  /**
+   * Map Room 2's neighbour defence bonus (`docs/mr2-neighbours.md`): the
+   * friendly cells around this one, 1 to 6, counted as the attack load counts
+   * them. Sent only with the switch on and at least one friend.
+   */
+  nb?: number;
 }
 
 /** A player's main yard (`b` 2) or captured outpost (`b` 3). */
@@ -890,6 +922,14 @@ export interface PlayerCell {
   bid: string;
   /** Owner's alliance id. */
   aid: number | null;
+  /** The cell's land feature (`landFeatures.ts`), with the server's land switch on; absent on open ground. */
+  lf?: number;
+  /**
+   * Map Room 2 rivers (look only, server `rivers.ts`, switch `MR2_RIVERS`): the river on this
+   * cell's own three edges, axial directions 0, 1, 2, two bits of width (1-3) each,
+   * `width << (2 * direction)`. Absent where none, or with the switch off.
+   */
+  rv?: number;
   /** Owner username. */
   n: string;
   /** Owner's base level. */
@@ -907,6 +947,12 @@ export interface PlayerCell {
   dm: number;
   /** 1 when damage >= 90, i.e. takeover-eligible. */
   d: number;
+  /**
+   * Map Room 2's neighbour defence bonus (`docs/mr2-neighbours.md`): the
+   * friendly cells around this one, 1 to 6, counted as the attack load counts
+   * them. Sent only with the switch on and at least one friend.
+   */
+  nb?: number;
   /** Lock owner user id; non-zero means busy. Always 0 on the caller's cell. */
   lo: number;
   /** 1 while damage protection is active. */
@@ -1377,6 +1423,11 @@ export type YardResponse<Report> = ApiEnvelope &
     notifications?: number;
     /** Paid unlocks not yet shown, as `/base/load` sends them (#204). */
     achievements?: AchievementUnlock[];
+    /**
+     * Quests, login days and bonuses waiting for a Claim tap (beta 6, the
+     * Quests button's red number). Absent before the player's quest record exists.
+     */
+    questsClaimable?: number;
   };
 
 /**

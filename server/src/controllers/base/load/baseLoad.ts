@@ -9,7 +9,7 @@ import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { ATTACK_MODES, BaseMode, BaseType } from "../../../enums/Base.js";
 import { EnumYardType } from "../../../enums/EnumYardType.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
-import { WORLD_SIZE } from "../../../config/MapRoom2Config.js";
+import { WORLD_SIZE, mr2PaintedMapFor } from "../../../config/MapRoom2Config.js";
 import { RESOURCE_PRODUCTION_RATES, RESOURCE_CAPACITIES, DEFENDER_DAMAGE_REDUCTION, STRONGHOLD_BONUSES, STRUCTURE_RANGE } from "../../../config/MapRoom3Config.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { getDefenderCoords, isDefensiveStructure } from "../../../services/maproom/v3/getDefenderCoords.js";
@@ -55,7 +55,7 @@ import { INFERNO_CHAT_CHANNEL, countryChannelFor } from "../../../config/ChatCon
 import { finaliseBeforeLoad } from "../../../services/base/finaliseAttack.js";
 import { infernoConfig } from "../../../config/InfernoConfig.js";
 import { closeInfernoPlayerAttacksOf } from "../../../services/inferno/infernoPlayerFinalise.js";
-import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
+import { combatCellHeight, combatLandFeature } from "../../../services/base/combat/cellHeight.js";
 import type { DefenderForces } from "../../../game-rules/combat/index.js";
 import type { AcademyLevels, AcademyRanks, ChampionBrains, ChampionHealth } from "../../../services/base/attackSession.js";
 import { touchLastSeen } from "../../../services/user/lastSeen.js";
@@ -207,6 +207,8 @@ export const baseLoad: KoaController = async (ctx) => {
   const ownOutpostBuild = isOwner && type === BaseMode.BUILD && baseSave.type === BaseType.OUTPOST;
   const cellHeight =
     attacking || ownOutpostBuild ? await combatCellHeight(baseSave) : undefined;
+  // Its land feature the same way, for the range rings (`combatLandFeature`).
+  const landFeature = attacking || ownOutpostBuild ? await combatLandFeature(baseSave) : 0;
 
   // The owner opening their own main yard: finish whatever ended while they
   // were away and write it, before anything below reads the yard
@@ -304,6 +306,8 @@ export const baseLoad: KoaController = async (ctx) => {
 
   flags.maproom2 = userSave.mr2upgraded || (townHall && townHall.l >= 6) ? 1 : 0;
   flags.mr2upgraded = userSave.mr2upgraded ? 1 : 0;
+  // Map Room 2's painted look (MR2_PAINTED_MAP); the client keeps Classic on the tile map.
+  flags.mr2painted = mr2PaintedMapFor(user.userid) ? 1 : 0;
 
   let totalResourceRate = 0;
   let totalResourceCapacity = 0;
@@ -500,6 +504,7 @@ export const baseLoad: KoaController = async (ctx) => {
     ...(isOwner && !isInferno && type === BaseMode.BUILD && { onboarding: onboardingSummary(user.save!) }),
     ...(achievements.length > 0 && { achievements }),
     ...(cellHeight !== undefined && { cellheight: cellHeight }),
+    ...(landFeature !== 0 && { landfeature: landFeature }),
     ...(defenderForces && { defenderforces: defenderForces }),
     ...(championBrains && { attackerbrains: championBrains }),
     ...(championHealth && { attackerhealth: championHealth }),
