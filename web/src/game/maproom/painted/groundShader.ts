@@ -222,6 +222,8 @@ const float DECALS_MEDIUM = 0.45;
 // foam white); the bigger mossy stones' size; the turquoise pool and foam ring round a rock's foot.
 const float STONE_GAMMA = 1.45;
 const float ROCK_GAMMA = 1.6;
+// How much of the rocky ground shows under a rock field's boulders (the rest stays the cell's grass).
+const float ROCK_GROUND = 0.4;
 const float BOULDER_SIZE = 1.3;
 const float BOULDER_SHARE = 0.3;
 const vec3 POOL = vec3(0.24, 0.74, 0.8);
@@ -235,6 +237,45 @@ const float RIVER_BANK = 0.02;
 const float RIVER_BANK_SHARE = 0.35;
 const float RIVER_THIN = 0.012;
 const float RIVER_WIDE = 0.06;
+// Mock-up B's river: a deeper, bluer water than the sea's turquoise, and grey stones along its banks
+// (a grid in hex units, how many squares hold one, the band they lie in past the water's edge, in
+// cell widths).
+const vec3 RIVER_DEEP = vec3(0.03, 0.34, 0.74);
+const vec3 RIVER_LIGHT = vec3(0.12, 0.6, 0.94);
+const float STONE_GRID = 0.13;
+const float STONE_CHANCE = 0.72;
+const vec2 STONE_BAND = vec2(0.013, 0.02);
+
+// The bank stones round hex point h, e the river's edge distance there (cell widths, < 0 on the
+// bank), wide how wide the river is (0..1): x the stone's cover (0..1), y its light (0..1).
+vec2 riverStones(vec2 h, float e, float wide) {
+  float centre = STONE_BAND.x * (1.0 + 0.6 * wide);
+  float halfBand = STONE_BAND.y * (1.0 + 0.6 * wide);
+  float band = 1.0 - pow(clamp((-e - centre) / halfBand, -1.0, 1.0), 2.0);
+  if (band <= 0.0) return vec2(0.0);
+  vec2 p = h / STONE_GRID;
+  vec2 base = floor(p);
+  float best = 0.0;
+  vec2 nb = vec2(0.0);
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 id = base + vec2(float(i), float(j));
+      if (hash12(id + 91.7) > STONE_CHANCE) continue;
+      vec2 c = id + 0.25 + 0.5 * vec2(hash12(id + 31.3), hash12(id + 47.1));
+      float r = 0.5 + 0.22 * hash12(id + 12.9);
+      vec2 d = (p - c) / (r * vec2(1.0, 0.8));
+      float top = 1.0 - dot(d, d);
+      if (top > best) { best = top; nb = d; }
+    }
+  }
+  float height = best - (1.0 - band) * 0.9;
+  if (height <= 0.0) return vec2(0.0);
+  vec3 n = normalize(vec3(nb * 1.3, sqrt(max(best, 0.0))));
+  float light = max(0.0, dot(n, normalize(vec3(-0.5, -0.65, 0.6))));
+  // A dark outline round each stone, as painted.
+  light *= mix(0.45, 1.0, smoothstep(0.0, 0.2, height));
+  return vec2(smoothstep(0.0, 0.06, height), light);
+}
 
 // The river at world point p (riverMask.ts): x its depth (1 mid-stream, 0 at the water's edge), y the
 // signed distance to the water's edge in cell widths (> 0 in the water), z how much of a mouth, w its
@@ -761,7 +802,8 @@ void main() {
     float ragged = (uQuality > 0.5 ? fbm(h * 1.3 + 5.0) : valueNoise(h * 1.3 + 5.0)) - 0.5;
     rockCover = smoothstep(ROCK_FADE.x, ROCK_FADE.y, feat.share.y + 0.45 * ragged) * featShown;
     marshCover = smoothstep(MARSH_FADE.x, MARSH_FADE.y, feat.share.z + 0.4 * ragged) * featShown;
-    if (rockCover > 0.002) land = mix(land, paint(${Ground.ROCK}, uv, dx, dy), rockCover);
+    // Mock-up B's rocks stand on green grass: the rocky ground only shows through in patches.
+    if (rockCover > 0.002) land = mix(land, paint(${Ground.ROCK}, uv, dx, dy), rockCover * ROCK_GROUND);
     if (marshCover > 0.002) {
       vec3 mud = marshColour(land, paint(${Ground.MARSH}, uv, dx, dy), h, marshDeep(feat.share.z, ragged), feat.islet);
       land = mix(land, mud, marshCover);
@@ -846,6 +888,16 @@ void main() {
         vec3 bankColour = mix(earth, wetEarth, damp);
         colour = mix(colour, bankColour, bank * (0.55 + 0.3 * patchy) * landHere);
       }
+      // Grey stones along the bank (mock-up B), lit from the top left, with a dark foot.
+      if (snowy < 0.5) {
+        vec2 stone = riverStones(h, e, wide);
+        float shown = stone.x * landHere * (1.0 - river.z);
+        if (shown > 0.002) {
+          vec3 rock = mix(vec3(0.3, 0.32, 0.35), vec3(0.88, 0.88, 0.86), smoothstep(0.25, 0.95, stone.y));
+          colour = mix(colour, colour * 0.6, smoothstep(0.0, 0.3, shown) * (1.0 - shown));
+          colour = mix(colour, rock, shown);
+        }
+      }
     }
     float water = smoothstep(-riverAA, riverAA, e);
     float plume = smoothstep(-0.05, 0.03, e) * river.z * seaShare;
@@ -879,6 +931,19 @@ void main() {
         float glint = smoothstep(0.72, 0.88, valueNoise(h * 9.0 + uTime * vec2(0.35, 0.15)));
         stream = mix(stream, FOAM_WHITE, glint * 0.4 * smoothstep(0.2, 0.55, river.x) * (1.0 - bar));
       }
+      // Mock-up B's blue (bluer than the sea's turquoise), darker in the deep, with white streaks
+      // running with the flow and white water where the river breaks over stones.
+      float lum = dot(stream, vec3(0.3, 0.59, 0.11));
+      vec3 blue = mix(RIVER_DEEP, RIVER_LIGHT, smoothstep(0.25, 0.65, lum));
+      stream = mix(stream, blue, 0.7 * inland * (1.0 - bar));
+      if (uQuality > 0.5) {
+        // Streaks run along the banks: lines of even depth, broken up and drifting.
+        float lane = abs(fract(river.x * 2.6 + 0.25 * valueNoise(h * 3.0 + 8.0)) - 0.5);
+        float streak = (1.0 - smoothstep(0.03, 0.09, lane)) * smoothstep(0.45, 0.7, valueNoise(h * 5.0 + uTime * vec2(0.4, 0.25)));
+        float rapids = smoothstep(0.6, 0.8, valueNoise(h * 1.9 + 33.0));
+        float white = streak * (0.45 + 0.55 * rapids) * smoothstep(0.1, 0.45, river.x);
+        stream = mix(stream, FOAM_WHITE, clamp(white, 0.0, 0.85) * inland * (1.0 - bar));
+      }
       colour = mix(colour, stream, water * landHere);
       colour = mix(colour, mix(shallow, POOL, 0.35), plume * 0.55);
       riverWet = max(water * landHere, plume);
@@ -900,7 +965,7 @@ void main() {
       colour *= 1.0 - 0.38 * shade * (1.0 - canopyCover) * featShown;
     }
     if (canopyCover > 0.002) {
-      vec3 crown = canopyColour(uv, dx, dy, h, e) * hillShade(hill.yz);
+      vec3 crown = canopyColour(uv, dx, dy, h, e, cellPixels) * hillShade(hill.yz);
       colour = mix(colour, crown, canopyCover);
     }
   }

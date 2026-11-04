@@ -34,7 +34,7 @@ export const CANOPY_SHARE = 0.5;
 export const EDGE_WANDER = 0.09;
 export const CROWN_BUMP = 0.14;
 /** The crowns' grid (hex units): about one rounded treetop each, the canopy texture's size. */
-export const CROWN_GRID = 0.27;
+export const CROWN_GRID = 0.35;
 
 /**
  * A camp, yard or outpost on a forest cell stands in a small clearing: no canopy within
@@ -69,7 +69,7 @@ export const MARSH_FADE: readonly [number, number] = [0.45, 0.85];
  * unit, about 0.2..0.8) passes a level that falls with how deep into the marsh a point is: the first
  * level at its fading edge (a few puddles), the second well inside (mostly water).
  */
-export const MARSH_WATER_SCALE = 1.4;
+export const MARSH_WATER_SCALE = 2.2;
 export const MARSH_WATER_LEVEL: readonly [number, number] = [0.68, 0.4];
 /**
  * A camp, yard or outpost on a marsh cell stands on a mossy island: the water level is raised by
@@ -86,7 +86,7 @@ export const ISLET_LIFT = 0.6;
  * marsh. A pool is a main oval and two smaller ovals overlapping it (one rounded blob, no thin tails).
  */
 export const GOO_GRID = 1.4;
-export const GOO_CHANCE = 0.4;
+export const GOO_CHANCE = 0.55;
 /** The main oval's half-width (hex units) and its height against its width (the camera looks down at a slant). */
 export const GOO_SIZE: readonly [number, number] = [0.17, 0.34];
 export const GOO_FLAT = 0.55;
@@ -141,7 +141,7 @@ export const MARSH_GRID = 0.19;
 export const FEATURE_GRID = 0.13;
 export const DECAL_GRID = 0.21;
 export const ROCK_GRID = 0.45;
-export const MARSH_PIECES = { reeds: 0.34, lilies: 0.16, rocks: 0.06, log: 0.012 } as const;
+export const MARSH_PIECES = { reeds: 0.34, lilies: 0.16, rocks: 0.1, log: 0.012 } as const;
 
 /**
  * Edge trees, pines, boulders, goo pools and reeds: the share of their grid squares kept at each
