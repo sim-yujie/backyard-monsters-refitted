@@ -259,14 +259,17 @@ export const inlineUrls = async (
 ): Promise<Map<string, string>> => {
   const found = new Map<string, string>();
   const wanted = new Map<string, string>();
-  for (const { url, base } of refs) {
-    if (!url || url.startsWith("data:") || url.startsWith("#") || FONT_FILE.test(url) || wanted.has(url)) continue;
-    if (wanted.size >= MAX_INLINED) break;
-    wanted.set(url, base);
-  }
   const miss = (url: string): void => {
     stats?.missing.push(url);
   };
+  for (const { url, base } of refs) {
+    if (!url || url.startsWith("data:") || url.startsWith("#") || FONT_FILE.test(url) || wanted.has(url)) continue;
+    if (wanted.size >= MAX_INLINED) {
+      miss(url);
+      continue;
+    }
+    wanted.set(url, base);
+  }
   await Promise.all(
     [...wanted].map(async ([url, base]) => {
       try {
@@ -282,7 +285,9 @@ export const inlineUrls = async (
           data = await readAsDataUrl(blob);
           if (inlinedCache.size < INLINED_CACHE_MAX) inlinedCache.set(absolute.href, data);
         }
+        // Under its absolute address too, so `replaceUrls` finds it however a style wrote it.
         found.set(url, data);
+        found.set(absolute.href, data);
         if (stats) {
           stats.images += 1;
           stats.imageBytes += dataUrlBytes(data);
@@ -295,11 +300,94 @@ export const inlineUrls = async (
   return found;
 };
 
-const replaceUrls = (text: string, inlined: Map<string, string>): string =>
+/** `url` made absolute against `base`; "" when it is not an address. */
+const absoluteUrl = (url: string, base: string): string => {
+  try {
+    return new URL(url, base).href;
+  } catch {
+    return "";
+  }
+};
+
+/**
+ * Every url() in `text` as its inlined data URL, looked up as written or as
+ * an address made absolute against `base`; "none" for one not inlined.
+ */
+export const replaceUrls = (text: string, inlined: ReadonlyMap<string, string>, base: string = window.location.href): string =>
   text.replace(URL_IN_CSS, (whole, _quote: string, url: string) => {
-    const data = inlined.get(url);
-    return data ? `url("${data}")` : url.startsWith("data:") ? whole : "none";
+    if (url.startsWith("data:")) return whole;
+    const data = inlined.get(url) ?? inlined.get(absoluteUrl(url, base));
+    return data ? `url("${data}")` : "none";
   });
+
+/** The CSS properties that can paint a picture. */
+const IMAGE_PROPERTIES = [
+  "background-image",
+  "border-image-source",
+  "mask-image",
+  "-webkit-mask-image",
+  "mask-border-source",
+  "-webkit-mask-box-image-source",
+  "list-style-image",
+  "content",
+] as const;
+
+/** Whether `element` is laid out and at least partly inside the window. */
+const onScreen = (element: Element, width: number, height: number): boolean => {
+  if (element.getClientRects().length === 0) return false;
+  const box = element.getBoundingClientRect();
+  return box.width > 0 && box.height > 0 && box.right > 0 && box.bottom > 0 && box.left < width && box.top < height;
+};
+
+/**
+ * The absolute addresses of the pictures the player can see in `root`: each
+ * shown element's (and its ::before / ::after's) background, border image,
+ * mask and content as the browser worked them out, custom properties and all,
+ * and the shown <img>s' sources. Only these are inlined into the copy, not
+ * every picture any style or hidden window names.
+ */
+export const usedImageUrls = (
+  root: Element,
+  width: number,
+  height: number,
+  shown: (element: Element) => boolean = (element) => onScreen(element, width, height),
+): string[] => {
+  const page = window.location.href;
+  const urls = new Set<string>();
+  const add = (value: string, base: string = page): void => {
+    for (const match of value.matchAll(URL_IN_CSS)) {
+      const url = match[2] ?? "";
+      if (!url || url.startsWith("data:") || url.startsWith("#") || FONT_FILE.test(url)) continue;
+      const absolute = absoluteUrl(url, base);
+      if (absolute) urls.add(absolute);
+    }
+  };
+  for (const element of [root, ...Array.from(root.querySelectorAll("*"))]) {
+    if (!shown(element)) continue;
+    if (element instanceof HTMLImageElement) {
+      for (const src of [element.getAttribute("src") ?? "", element.currentSrc]) {
+        if (src && !src.startsWith("data:")) {
+          const absolute = absoluteUrl(src, page);
+          if (absolute) urls.add(absolute);
+        }
+      }
+    }
+    for (const pseudo of [null, "::before", "::after"] as const) {
+      let style: CSSStyleDeclaration;
+      try {
+        style = window.getComputedStyle(element, pseudo);
+      } catch {
+        continue;
+      }
+      if (pseudo) {
+        const content = style.getPropertyValue("content");
+        if (!content || content === "none" || content === "normal") continue;
+      }
+      for (const property of IMAGE_PROPERTIES) add(style.getPropertyValue(property));
+    }
+  }
+  return [...urls];
+};
 
 type SheetText = { text: string; base: string };
 
@@ -533,24 +621,19 @@ const drawUiLayer = async (
   });
   clone.querySelectorAll("script").forEach((script) => script.remove());
 
-  // Pictures: <img> sources and every url() in the styles and style attributes.
+  // Pictures: only those the player can see now (the page as laid out, before
+  // anything awaits); every other url() in the copy becomes `none`.
+  const page = window.location.href;
+  const refs = usedImageUrls(root, width, height).map((url) => ({ url, base: page }));
   const images = Array.from(clone.querySelectorAll("img"));
   const styled = Array.from(clone.querySelectorAll<HTMLElement>("[style]"));
   const { styles, fonts } = pageStyles();
   const fontFaces = inlineFonts(fonts);
-  const page = window.location.href;
-  const refs = images.map((image) => ({ url: image.getAttribute("src") ?? "", base: page })).filter((ref) => ref.url);
-  for (const element of styled) {
-    for (const match of (element.getAttribute("style") ?? "").matchAll(URL_IN_CSS)) refs.push({ url: match[2] ?? "", base: page });
-  }
-  // A stylesheet's relative URL is relative to the sheet.
-  for (const style of styles) {
-    for (const match of style.text.matchAll(URL_IN_CSS)) refs.push({ url: match[2] ?? "", base: style.base });
-  }
   const inlined = await inlineUrls(refs, stats);
 
   for (const image of images) {
-    const data = inlined.get(image.getAttribute("src") ?? "");
+    const src = image.getAttribute("src") ?? "";
+    const data = src.startsWith("data:") ? src : (inlined.get(src) ?? inlined.get(absoluteUrl(src, page)));
     if (data) image.setAttribute("src", data);
     else image.removeAttribute("src");
     image.removeAttribute("srcset");
@@ -562,11 +645,12 @@ const drawUiLayer = async (
   // A <picture>'s <source> would win over the inlined <img src>.
   clone.querySelectorAll("source").forEach((source) => source.remove());
   for (const element of styled) {
-    element.setAttribute("style", replaceUrls(element.getAttribute("style") ?? "", inlined));
+    element.setAttribute("style", replaceUrls(element.getAttribute("style") ?? "", inlined, page));
   }
   const fontCss = await fontFaces;
   if (stats) stats.fontBytes = fontCss.length;
-  const css = [fontCss, ...styles.map((style) => replaceUrls(style.text, inlined))].join("\n");
+  // A stylesheet's relative URL is relative to the sheet.
+  const css = [fontCss, ...styles.map((style) => replaceUrls(style.text, inlined, style.base))].join("\n");
 
   const html = new XMLSerializer().serializeToString(clone) + preloadImages(inlined, images);
   const svg = uiSvgMarkup(html, css, width, height);

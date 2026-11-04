@@ -9,6 +9,8 @@ import {
   inlineFonts,
   inlineUrls,
   preloadImages,
+  replaceUrls,
+  usedImageUrls,
   rootAttributes,
   uiSvgMarkup,
 } from "./screenCapture";
@@ -205,7 +207,8 @@ describe("the screenshot's pictures", () => {
       stats,
     );
     expect(found.get("/ui/skin/scrap/frame.webp")).toMatch(/^data:image\/webp;base64,/);
-    expect(found.size).toBe(2);
+    expect(new Set(found.values()).size).toBe(2);
+    expect(found.get(new URL("/ui/skin/scrap/frame.webp", base).href)).toBe(found.get("/ui/skin/scrap/frame.webp"));
     expect(stats.images).toBe(2);
     expect(stats.imageBytes).toBe(41_924 + 20_126);
     expect(stats.missing.sort()).toEqual(["/ui/skin/gone.webp", "https://cdn.example.com/x.png"]);
@@ -235,5 +238,36 @@ describe("the screenshot's pictures", () => {
     expect(images.map((image) => image.getAttribute("src"))).toEqual([frame]);
     expect(images[0]?.getAttribute("decoding")).toBe("sync");
     expect(preloadImages(new Map())).toBe("");
+  });
+});
+
+describe("which pictures the screenshot carries", () => {
+  const page = window.location.href;
+
+  it("takes only the pictures of shown elements, as absolute addresses", () => {
+    const root = document.createElement("div");
+    root.innerHTML =
+      '<div class="hud" style="background-image: url(/ui/icons/gold.webp)"></div>' +
+      '<img class="card" src="/whats-new/a.webp">' +
+      '<div class="hidden" style="background-image: url(/ui/icons/hidden.webp)"></div>' +
+      '<img class="hidden" src="/whats-new/hidden.webp">' +
+      '<div style="background-image: url(data:image/png;base64,AA)"></div>';
+    document.body.append(root);
+    const urls = usedImageUrls(root, 800, 600, (element) => !element.classList.contains("hidden"));
+    root.remove();
+    expect(urls.sort()).toEqual([new URL("/ui/icons/gold.webp", page).href, new URL("/whats-new/a.webp", page).href].sort());
+  });
+
+  it("swaps each url() for its data URL however it was written, and the rest for none", () => {
+    const frame = "data:image/webp;base64,AAAA";
+    const inlined = new Map([[new URL("/ui/skin/scrap/frame.webp", page).href, frame]]);
+    const css =
+      ':root[data-skin="scrap"] { --skin-frame: url("/ui/skin/scrap/frame.webp"); }\n' +
+      ':root[data-skin="flash"] { --skin-frame: url("/ui/skin/flash/frame.webp"); }\n' +
+      ".x { background: url(../skin/scrap/frame.webp) }";
+    const out = replaceUrls(css, inlined, new URL("/ui/styles/skin.css", page).href);
+    expect(out).toContain(`--skin-frame: url("${frame}")`);
+    expect(out).toContain("--skin-frame: none");
+    expect(out).toContain(`.x { background: url("${frame}") }`);
   });
 });
