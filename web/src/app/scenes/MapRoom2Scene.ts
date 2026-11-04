@@ -52,6 +52,7 @@ import { storageCapOf } from "@/game/attack/attackerStorage";
 import { Camera } from "@/game/Camera";
 import { mapRoomGrid, setHexShape, type OffsetCell } from "@/game/HexGrid";
 import { loadHexShape } from "@/game/maproom/hexShapeSetting";
+import { markOpen } from "@/game/maproom/openMarks";
 import {
   rangeSources,
   reachText,
@@ -315,6 +316,7 @@ export class MapRoom2Scene implements Scene {
 
   async enter(context: SceneContext): Promise<void> {
     this.context = context;
+    markOpen();
     // The world's hex shape (MR2 look plan step 1) before anything is drawn
     // or picked: the grid's geometry follows the server's rules. Classic gets
     // its own pointy-top cell size (never tilted, Flash's 3/4 tiles).

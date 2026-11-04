@@ -27,6 +27,7 @@ import { RangeOverlay } from "./RangeOverlay";
 import type { Sight } from "./Sight";
 import { TerrainRaster } from "./TerrainRaster";
 import { TribeAvatars } from "./tribeAvatars";
+import { MR2_PAINTED, markOnce } from "./openMarks";
 import { classicLook } from "@/game/classicLook";
 import { isFogCell } from "@/api/types";
 import type { ZoneRecord, ZoneStore } from "./ZoneStore";
@@ -48,6 +49,10 @@ const MAX_BUILDS_PER_FRAME = 2;
 
 /** Eviction is housekeeping; nothing about the answer is urgent. */
 const SWEEP_INTERVAL_MS = 2_000;
+
+/** How long the painted look's art gets to draw before more programs compile; and the longest wait for it. */
+const ART_DRAWN_MS = 500;
+const ART_WAIT_MS = 15_000;
 
 /**
  * Draws the map.
@@ -458,7 +463,7 @@ export class MapRenderer {
     if (on && this.painted === null) {
       const kit = this.paintedKit;
       if (!kit) {
-        if (this.webGL2 && this.gl) this.paintedPreparing ??= this.preparePainted(this.gl);
+        if (this.webGL2 && this.gl && this.renderer) this.paintedPreparing ??= this.preparePainted(this.renderer, this.gl);
         return false;
       }
       if (!kit.programs.ground) return false;
@@ -481,6 +486,7 @@ export class MapRenderer {
     this.range.invalidate();
     this.drawHighlight();
     this.rebuildAll();
+    if (painted) markOnce(MR2_PAINTED);
     return painted;
   }
 
@@ -490,11 +496,14 @@ export class MapRenderer {
   }
 
   /** Fetches the painted look's code, compiles its shaders, then shows it if it is still wanted. */
-  private async preparePainted(gl: WebGL2RenderingContext): Promise<void> {
+  private async preparePainted(renderer: Renderer, gl: WebGL2RenderingContext): Promise<void> {
     let kit: { look: PaintedLookModule; programs: PaintedPrograms };
     try {
       const look = await import("./painted/paintedLook");
-      kit = { look, programs: this.destroyed ? { ground: false, clouds: false, warmer: null } : await look.preparePrograms(gl) };
+      kit = {
+        look,
+        programs: this.destroyed ? { ground: false, clouds: false, warmer: null } : await look.preparePrograms(renderer, gl),
+      };
     } catch (caught) {
       // The code did not arrive (offline, a new release): the tiles stay; the next map open tries again.
       console.warn("The painted map could not be prepared; the map keeps its tiles.", caught);
@@ -513,7 +522,7 @@ export class MapRenderer {
     this.painted = painted;
     this.root.addChildAt(painted.mesh, this.root.getChildIndex(this.raster.sprite) + 1);
     for (const zone of this.store.loadedZoneRefs()) painted.applyZone(zone);
-    void painted.load();
+    const loads: Promise<unknown>[] = [painted.load()];
     this.borders = new look.BorderLayer();
     this.borders.setMyAlliance(this.myAlliance, []);
     // Over the ground (and rivers), under the cells' markers; with the markers standing upright
@@ -527,8 +536,14 @@ export class MapRenderer {
       this.clouds = new look.CloudLayer(painted.groundData);
       this.root.addChildAt(this.clouds.mesh, this.root.getChildIndex(above));
       painted.setFogColour(look.FOG_UNDER_CLOUD);
-      void this.clouds.load();
+      loads.push(this.clouds.load());
     }
+    // The rest of the programs once the art is in and has drawn (a few frames), or after a while
+    // if it never comes: where programs compile one at a time (Firefox), a texture set up while
+    // one compiles waits for it (`paintedLook.ts` warmRest).
+    const settle = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+    const loaded = Promise.race([Promise.allSettled(loads).then(() => settle(ART_DRAWN_MS)), settle(ART_WAIT_MS)]);
+    if (programs.warmer) look.warmRest(programs.warmer, loaded);
   }
 
   destroy(): void {
