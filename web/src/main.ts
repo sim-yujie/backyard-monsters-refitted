@@ -1,3 +1,4 @@
+import "./polyfills";
 import "@/ui/styles/tokens.css";
 import "@/ui/styles/ui.css";
 import "@/ui/styles/maproom.css";
