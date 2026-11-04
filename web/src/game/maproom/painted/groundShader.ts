@@ -190,9 +190,13 @@ vec2 cellSeed(ivec2 cell) {
 // the turquoise reaches (as the land's share of the weights); the plain sea's mix towards the
 // shallows colour before it deepens; the surf lines' spacing and speed (lines a second).
 // The beach: it reaches inland to where the water's share round a point (waterNear) falls to
-// between BEACH_FAR (where the beach is widest) and BEACH_NEAR (narrowest), about 0.5-1 hex units.
-const float BEACH_FAR = 0.035;
-const float BEACH_NEAR = 0.15;
+// between BEACH_FAR (where the beach is widest) and BEACH_NEAR (narrowest), about 0.3-0.5 hex
+// units (MR2 step 11: mock-up B's beach is a strip; at 0.035-0.15 it ran a cell inland, and at
+// 0.12-0.24 it still filled narrow spits of land between two arms of the sea), and never
+// less than BEACH_MIN from the coast line itself, so the wandering coast never meets bare grass.
+const float BEACH_FAR = 0.2;
+const float BEACH_NEAR = 0.32;
+const float BEACH_MIN = 0.2;
 const float SHALLOWS_REACH = 0.38;
 const float MID_SEA = 0.5;
 // The step (hex units) over which High measures the coast's slope.
@@ -729,17 +733,30 @@ void main() {
   float dist = c.s / max(length(slope), 0.6);
   float coastMask = c.both && c.known ? smoothstep(0.004, 0.05, min(c.land, c.water)) : 0.0;
   // On High the coast's slope is measured on the ground itself, a small step either way: the
-  // screen's slope is one value per 2x2 pixels, which drew the foam's edge in little steps.
-  if (uQuality > 1.5 && coastMask > 0.0 && dist > -0.2 && dist < 0.7) {
-    // A loop, not two calls: the compiler keeps one copy of blendAt (plan step 10, compile time).
+  // screen's slope is one value per 2x2 pixels, which drew the foam's edge in little steps. Below a
+  // cliff's rim the cliff is looked for further up the screen (hillsShader.ts cliffAbove), on High
+  // only: on Low and Medium the extra blendAt made the program compile about 25% and 45% slower.
+  // One loop, not three calls: the compiler keeps one copy of blendAt (plan step 10, compile time).
+  bool coastSteps = uQuality > 1.5 && coastMask > 0.0 && dist > -0.2 && dist < 0.7;
+  bool lookUp = uQuality > 1.5 && wl.x + wl.y + wl.z > 0.002 && cliffAbove(b);
+  Cliff ownCliff = cliffOf(b);
+  Cliff cliffUp = ownCliff;
+  cliffUp.on = false;
+  if (coastSteps || lookUp) {
     vec2 side = vec2(0.0);
     bool both = true;
-    for (int k = 0; k < 2; k++) {
-      Coast cs = coastOf(blendAt(h + (k == 0 ? vec2(COAST_STEP, 0.0) : vec2(0.0, COAST_STEP))));
+    for (int k = 0; k < 3; k++) {
+      if (k < 2 ? !coastSteps : !lookUp) continue;
+      Blend bk = blendAt(k == 0 ? h + vec2(COAST_STEP, 0.0) : k == 1 ? h + vec2(0.0, COAST_STEP) : h - vec2(0.0, CLIFF_LOOK_UP));
+      if (k == 2) {
+        cliffUp = cliffOf(bk);
+        continue;
+      }
+      Coast cs = coastOf(bk);
       side[k] = cs.s;
       both = both && cs.both;
     }
-    if (both) dist = c.s / max(length(side - c.s) / COAST_STEP, 0.6);
+    if (coastSteps && both) dist = c.s / max(length(side - c.s) / COAST_STEP, 0.6);
   }
 
   vec3 land = vec3(0.0);
@@ -774,6 +791,7 @@ void main() {
   float nearWater = landSum > 0.002 ? waterNear(b.hp) : 0.0;
   float beachEdge = beachEnd(h);
   float beach = smoothstep(beachEdge * 0.6, beachEdge, nearWater);
+  beach = max(beach, (1.0 - smoothstep(BEACH_MIN * 0.6, BEACH_MIN, -dist)) * coastMask);
   // Only real land turns to sand: fog and cells not yet loaded keep their own look.
   float hiddenLand = dot(wl, vec3(isLand(g.x) ? 0.0 : 1.0, isLand(g.y) ? 0.0 : 1.0, isLand(g.z) ? 0.0 : 1.0));
   beach *= 1.0 - hiddenLand / max(landSum, 1e-5);
@@ -911,7 +929,10 @@ void main() {
   }
 
   // Cliffs where neighbours' heights drop a lot: a signed distance to the rim like the coast's.
-  Cliff cliff = cliffOf(b);
+  // A forest's canopy covers the cliffs under it (MR2 step 11): mock-up B's cliffs stand in the open,
+  // and faces cut through the treetops read as grey gashes in the forest.
+  Cliff cliff = joinCliffs(b, ownCliff, cliffUp);
+  cliff.mask *= 1.0 - canopyCover;
   float cliffDist = cliff.on ? cliff.s : 0.0;
   vec2 hdx = dFdx(h);
   vec2 hdy = dFdy(h);

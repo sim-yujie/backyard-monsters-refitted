@@ -28,6 +28,13 @@ import type { ProgramWarmer } from "./shaderWarmup";
 /** The ground texture atlas, 4 textures a row (`web/tools/mr2-paint/build.py`). */
 const ATLAS_URL = `${import.meta.env.BASE_URL}maproom/painted/ground@4x.webp`;
 const ATLAS_COLUMNS = 4;
+/**
+ * Each atlas square is its texture framed in a gutter of itself, wrapped, 1/32 of the texture's size
+ * on every side (`web/tools/mr2-paint/build.py`), cut off here: without it WebP's smoothing and the
+ * smaller Qualities' resize bled the neighbouring squares into each texture's edge, a straight line
+ * wherever it repeats (MR2 step 11, clearest in the shallows on Low).
+ */
+export const GROUND_GUTTER = 1 / 32;
 
 /**
  * The sprite sheets the shader places (plan steps 2, 3 and 6): ground details (3 rows), sea rocks
@@ -425,14 +432,16 @@ export class PaintedGround {
       return false;
     }
     if (this.destroyed) return false;
-    const size = (image as { width: number }).width / ATLAS_COLUMNS;
+    const square = (image as { width: number }).width / ATLAS_COLUMNS;
+    const size = Math.round(square / (1 + 2 * GROUND_GUTTER));
+    const gutter = (square - size) / 2;
     const canvases = SHADER_TEXTURES.map((slot) => {
       const canvas = document.createElement("canvas");
       canvas.width = canvas.height = size;
       canvas.getContext("2d")!.drawImage(
         image,
-        (slot % ATLAS_COLUMNS) * size,
-        Math.floor(slot / ATLAS_COLUMNS) * size,
+        (slot % ATLAS_COLUMNS) * square + gutter,
+        Math.floor(slot / ATLAS_COLUMNS) * square + gutter,
         size,
         size,
         0,

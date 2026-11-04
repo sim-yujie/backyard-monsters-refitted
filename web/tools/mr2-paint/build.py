@@ -7,12 +7,13 @@ and copied into `source/` by `python build.py --take` from the git-ignored `work
 Textures (2 x 2 sheets and the canopy square) are cut, made seamless (the square is blended with its
 half-rolled copy through a noisy mask, so the wrap seam moves into the middle where the original is
 whole), nudged half-way towards mock-up B's average colour for that ground, and packed into one
-atlas of 512 px squares, `TEXTURE_ORDER` order (the same as `GroundTexture` in
-`web/src/game/maproom/painted/groundKinds.ts`):
+atlas a Quality, `TEXTURE_ORDER` order (the same as `GroundTexture` in
+`web/src/game/maproom/painted/groundKinds.ts`), each square resized on its own and framed in a gutter
+of its own texture, wrapped (1/32 of its size each side, cut off again by `PaintedGround.ts`):
 
-  web/public/maproom/painted/ground@4x.webp   512 px a texture (Quality High)
-  web/public/maproom/painted/ground@2x.webp   256 px (Medium)
-  web/public/maproom/painted/ground.webp      128 px (Low)
+  web/public/maproom/painted/ground@4x.webp   512 px a texture + 16 px gutters (Quality High)
+  web/public/maproom/painted/ground@2x.webp   256 px + 8 (Medium)
+  web/public/maproom/painted/ground.webp      128 px + 4 (Low)
 
 Sprites (decals, sea rocks, cliff pieces, forest bits, marsh and rocks) are keyed out of the magenta
 (`key_out`, the same un-mixing as `web/tools/land-art/build.py`) into one sheet per family, each
@@ -61,6 +62,10 @@ TEXTURE_ORDER: list[tuple[str, str, int | None, tuple[int, int, int, int] | None
     ("canopy", "canopy", None, (1250, 200, 1500, 400)),
 ]
 ATLAS_COLUMNS = 4
+# Each atlas square carries a gutter of its own texture, wrapped, this share of its size on every side
+# (1/32: 16 px High, 8 Medium, 4 Low); `GROUND_GUTTER` in PaintedGround.ts cuts it off again.
+GUTTER_SHARE = 32
+GROUND_QUALITY = 83  # a step under the sprites' 86-90 keeps the gutters within the old download size
 # How far each texture moves to its mock-up B colour (default 0.5). The meadows went further after
 # the first in-game look: they came out greener and darker than mock-up B (hue 82 against 66);
 # the sand came out darker; the marsh came out brown mud where mock-up B has dark wet green.
@@ -83,6 +88,22 @@ def take() -> None:
         if sheet.exists():
             Image.open(sheet).convert("RGB").save(SOURCE / f"{job}.webp", quality=95, method=6)
             print("took", job)
+
+
+# MR2 step 11 (meadow 55%): mock-up B's grass is one bright lime almost everywhere; in game the lush
+# meadow (hills from 140 m, and since step 11 the old rock band 170-184 m too) read as dark olive
+# patches beside it. It moves most of the way to the meadow's own colour (keeping its darker grass
+# blades), so the land reads as one sunny meadow and the hills' light and shade do the rest.
+GRADE_TOWARDS = {"lush": ((158, 178, 36), 0.75)}
+
+
+def grade(name: str, square: np.ndarray) -> np.ndarray:
+    """A texture's last colour step after `match_colour` (MR2 step 11 polish)."""
+    if name not in GRADE_TOWARDS:
+        return square
+    target, strength = GRADE_TOWARDS[name]
+    mean = square.reshape(-1, 3).mean(0)
+    return np.clip(square + strength * (np.array(target, dtype=np.float64) - mean), 0, 255)
 
 
 def seamless(square: np.ndarray, seed: int) -> np.ndarray:
@@ -123,18 +144,45 @@ def cut_texture(sheet: str, quadrant: int | None) -> np.ndarray:
     return np.asarray(image.resize((TEXTURE, TEXTURE), Image.LANCZOS), dtype=np.float64)
 
 
+def wrap_resize(square: np.ndarray, size: int) -> np.ndarray:
+    """A seamless square resized to `size` px and still seamless: resized as a 3 x 3 tiling, middle kept
+    (resizing it alone blurs each edge against nothing, which leaves a line where it repeats)."""
+    if square.shape[0] == size:
+        return square
+    tiled = Image.fromarray(np.tile(square, (3, 3, 1)).round().clip(0, 255).astype(np.uint8), "RGB")
+    big = np.asarray(tiled.resize((size * 3, size * 3), Image.LANCZOS), dtype=np.float64)
+    return big[size:2 * size, size:2 * size]
+
+
 def build_textures() -> None:
+    """One atlas a Quality, each square resized on its own and framed in a wrapped gutter
+    (`GROUND_GUTTER` in PaintedGround.ts): WebP's smoothing and a resize of the whole atlas both
+    bled each square's neighbours into its edge, which showed as a straight line where the texture
+    repeats, worst on Low (MR2 step 11, the line in the shallows)."""
     rows = -(-len(TEXTURE_ORDER) // ATLAS_COLUMNS)
-    atlas = Image.new("RGB", (ATLAS_COLUMNS * TEXTURE, rows * TEXTURE))
+    squares: list[np.ndarray | None] = []
     for index, (name, sheet, quadrant, box) in enumerate(TEXTURE_ORDER):
         if not (SOURCE / f"{sheet}.webp").exists():
             print(f"texture {index:2} {name}: no sheet yet")
+            squares.append(None)
             continue
         square = match_colour(seamless(cut_texture(sheet, quadrant), index), box, MATCH_STRENGTH.get(name, 0.5))
-        tile = Image.fromarray(square.round().astype(np.uint8), "RGB")
-        atlas.paste(tile, ((index % ATLAS_COLUMNS) * TEXTURE, (index // ATLAS_COLUMNS) * TEXTURE))
+        squares.append(grade(name, square))
         print(f"texture {index:2} {name}")
-    write_copies(atlas, "ground", quality=86)
+    OUT.mkdir(parents=True, exist_ok=True)
+    for suffix, factor in (("@4x", 1), ("@2x", 2), ("", 4)):
+        inner = TEXTURE // factor
+        gutter = inner // GUTTER_SHARE
+        cell = inner + 2 * gutter
+        atlas = np.zeros((rows * cell, ATLAS_COLUMNS * cell, 3))
+        for index, square in enumerate(squares):
+            if square is None:
+                continue
+            tile = np.pad(wrap_resize(square, inner), ((gutter, gutter), (gutter, gutter), (0, 0)), mode="wrap")
+            x, y = (index % ATLAS_COLUMNS) * cell, (index // ATLAS_COLUMNS) * cell
+            atlas[y:y + cell, x:x + cell] = tile
+        picture = Image.fromarray(atlas.round().clip(0, 255).astype(np.uint8), "RGB")
+        picture.save(OUT / f"ground{suffix}.webp", quality=GROUND_QUALITY, method=6)
 
 
 def key_out(cell: Image.Image) -> Image.Image:

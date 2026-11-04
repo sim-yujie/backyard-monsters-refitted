@@ -8,17 +8,34 @@ export const HILL_RADIUS = 2;
 
 /**
  * How steep a slope looks in the light: hex units of rise per height unit. The server's heights
- * change by about 9 between neighbours (median) and 22 in the steepest tenth, so most slopes shade
- * by 5-15% and the steep ones by up to the shader's clamp.
+ * change by about 9 between neighbours (median) and 22 in the steepest tenth. The smooth field
+ * averages them over about three cells, so its slopes are gentler than that; at 0.045 (step 5) the
+ * hills barely showed (step 10's scorecard: 30%). MR2 step 11: over four times that, so an
+ * ordinary slope shades by 15-30% like mock-up B's rolling hills, and the steep ones reach the
+ * clamps below.
  */
-export const HILL_LIGHT = 0.045;
+export const HILL_LIGHT = 0.2;
+
+/** The light's range on the slopes: the far side of a steep hill and the side facing the sun. */
+export const HILL_DARKEST = 0.66;
+export const HILL_BRIGHTEST = 1.35;
 
 /**
  * A cliff stands between two land neighbours this many height units apart (the server's heights
- * run 100..192 on land; about one neighbour pair in forty is this steep, often several in a row,
- * which the shader joins into one rock face).
+ * run 100..192 on land). At 26 (step 5) about one neighbour pair in forty was this steep and cliffs
+ * were rare (step 10's scorecard: 30%). MR2 step 11 lowers it so long cliffs show, often several
+ * pairs in a row, which the shader joins into one rock face like mock-up B's; at 19 short single
+ * faces scattered over the meadows like scars.
  */
-export const CLIFF_DROP = 26;
+export const CLIFF_DROP = 22;
+
+/**
+ * A full face's depth down the screen, in hex units (corner radius 1), for the tallest strip: step 5
+ * drew 1.5 but the faces were cut off near the low cell's middle; step 11 finds them below that too
+ * on High (`hillsShader.ts` `cliffAbove`, `joinCliffs`) and paints them taller, about a cell high
+ * as in mock-up B.
+ */
+export const CLIFF_FACE = 2.2;
 
 /** Where the cliff sheet (`cliffs@4x.webp`, `web/tools/mr2-paint/build.py`) keeps its strips. */
 export interface CliffStrip {
