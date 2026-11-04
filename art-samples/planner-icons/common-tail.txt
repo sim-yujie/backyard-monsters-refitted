@@ -1,0 +1,3 @@
+
+Each icon: one simple bold silhouette that still reads at 24 pixels, few big shapes, no tiny details, no text, no letters, no numbers, front view, no drop shadow on the ground. These are rich painted game icons, NOT flat line icons or simple glyphs.
+Background everywhere: flat pure magenta #FF00FF, no gradient, no grid lines, no frames, no labels. The icons themselves must contain no pink or magenta.

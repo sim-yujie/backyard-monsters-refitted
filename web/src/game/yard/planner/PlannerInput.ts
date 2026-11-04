@@ -586,6 +586,8 @@ export class PlannerInput {
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (isTextEntry(event.target)) return;
+    // Already handled by a pop-up over the bar (Esc closing the Cost pop-up).
+    if (event.defaultPrevented) return;
     // Consumed keys are stopped so the read-only yard's own handler does not
     // also act on Escape, and so the browser does not treat Ctrl+S as "save
     // page" or Tab as "move focus".

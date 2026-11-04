@@ -20,14 +20,7 @@ import {
   tileRect,
 } from "./blueprint";
 import type { Corners } from "./marquee";
-import { GroupOp } from "./groupTools";
-import {
-  GroupRefusal,
-  PlannerSession,
-  PlannerTool,
-  type GroupOutcome,
-  type PlannerState,
-} from "./PlannerSession";
+import { PlannerSession, PlannerTool, type PlannerState } from "./PlannerSession";
 
 /**
  * The planner's pointer behaviour, driven through real DOM events.
@@ -101,7 +94,6 @@ interface Harness {
   /** Every state the session pushed at its owner, newest last. */
   readonly states: PlannerState[];
   /** Every group operation the session reported, newest last. */
-  readonly groups: GroupOutcome[];
   /** The ids the session last asked for a red outline on. */
   readonly faulted: () => ReadonlySet<number>;
   /** The ids the session last asked for a faint nearby outline on (#231). */
@@ -147,7 +139,11 @@ afterEach(() => {
  * being dropped rather than about where anything lands.
  */
 const planner = (
-  options: { readOnly?: boolean; buildings?: readonly BuildingData[] } = {},
+  options: {
+    readOnly?: boolean;
+    buildings?: readonly BuildingData[];
+    onWallPickCancel?: () => void;
+  } = {},
 ): Harness => {
   const yard = yardOf(options.buildings ?? BUILDINGS);
   const canvas = document.createElement("canvas");
@@ -225,7 +221,6 @@ const planner = (
   } as unknown as YardRenderer;
 
   const states: PlannerState[] = [];
-  const groups: GroupOutcome[] = [];
   let finds = 0;
   let taps = 0;
   let faulted: ReadonlySet<number> = new Set<number>();
@@ -248,11 +243,11 @@ const planner = (
     onFind: () => {
       finds++;
     },
-    onGroup: (outcome) => groups.push(outcome),
     onTap: () => {
       taps++;
     },
     ...(options.readOnly === undefined ? {} : { readOnly: options.readOnly }),
+    ...(options.onWallPickCancel ? { onWallPickCancel: options.onWallPickCancel } : {}),
   });
   session.attach();
 
@@ -276,7 +271,6 @@ const planner = (
     session,
     canvas,
     states,
-    groups,
     faulted: () => faulted,
     nearby: () => nearby,
     finds: () => finds,
@@ -865,176 +859,6 @@ describe("loading a layout saved with planned upgrades", () => {
     expect(at(harness, 1)).toEqual({ x: 400, y: 200 });
     expect(harness.session.plan.get(1)!.level).toBe(1);
     expect("plannedCount" in harness.session.state()).toBe(false);
-  });
-});
-
-/* ── F7: mirror, align and distribute ────────────────────────────────────── */
-
-/** A ragged row of three walls, close enough to be worth straightening. */
-const RAGGED: readonly BuildingData[] = [
-  { id: 1, t: 17, X: 0, Y: 0 },
-  { id: 2, t: 17, X: 40, Y: 25 },
-  { id: 3, t: 17, X: 80, Y: 60 },
-];
-
-describe("mirror, align and distribute", () => {
-  it("commits a mirror as a single undo entry", () => {
-    const harness = planner();
-    harness.session.selectOnly([1, 2]);
-
-    // The two towers span 0 to 270, so the reflection swaps them.
-    const outcome = harness.session.groupTool(GroupOp.MIRROR_X);
-
-    expect(outcome).toEqual({
-      op: GroupOp.MIRROR_X,
-      ok: true,
-      moved: 2,
-      blocked: 0,
-      reason: null,
-    });
-    expect(at(harness, 1)).toEqual({ x: 200, y: 0 });
-    expect(at(harness, 2)).toEqual({ x: 0, y: 0 });
-    expect(harness.placements.get(1)).toEqual({ x: 200, y: 0 });
-    expect(harness.session.state().undoLabel).toBe("Mirror left to right · 2 buildings");
-
-    harness.session.undo();
-    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
-    expect(at(harness, 2)).toEqual({ x: 200, y: 0 });
-    // One entry for the whole operation: a second undo has nothing to reverse.
-    expect(harness.session.state().canUndo).toBe(false);
-    expect(harness.session.state().movedCount).toBe(0);
-  });
-
-  it("straightens a ragged row in one command", () => {
-    const harness = planner({ buildings: RAGGED });
-    harness.session.selectOnly([1, 2, 3]);
-
-    // The lowest bottom edge is 60 + 20, so every 20-unit wall starts at 60.
-    const outcome = harness.session.groupTool(GroupOp.ALIGN_BOTTOM);
-
-    expect(outcome.ok).toBe(true);
-    expect(outcome.moved).toBe(2);
-    expect(at(harness, 1)).toEqual({ x: 0, y: 60 });
-    expect(at(harness, 2)).toEqual({ x: 40, y: 60 });
-    expect(at(harness, 3)).toEqual({ x: 80, y: 60 });
-    expect(harness.session.state().undoLabel).toBe("Align bottom · 2 buildings");
-    expect(harness.session.state().movedCount).toBe(2);
-  });
-
-  it("counts the buildings it moved, not the ones selected", () => {
-    const harness = planner({ buildings: RAGGED });
-    harness.session.selectOnly([1, 2]);
-
-    // Only the second wall is off the top line, so only it moves.
-    expect(harness.session.groupTool(GroupOp.ALIGN_TOP).moved).toBe(1);
-    expect(harness.session.state().undoLabel).toBe("Align top · 1 building");
-  });
-
-  it("spaces a row evenly and leaves the outermost two where they are", () => {
-    const harness = planner({
-      buildings: [
-        { id: 1, t: 17, X: 0, Y: 0 },
-        { id: 2, t: 17, X: 30, Y: 0 },
-        { id: 3, t: 17, X: 200, Y: 0 },
-      ],
-    });
-    harness.session.selectOnly([1, 2, 3]);
-
-    // Span 220 less three 20-unit walls is 160 of space over two gaps.
-    expect(harness.session.groupTool(GroupOp.DISTRIBUTE_X).moved).toBe(1);
-    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
-    expect(at(harness, 2)).toEqual({ x: 100, y: 0 });
-    expect(at(harness, 3)).toEqual({ x: 200, y: 0 });
-  });
-
-  it("answers M and Shift+M from the canvas", () => {
-    const harness = planner();
-    harness.session.selectOnly([1, 2]);
-
-    harness.key("m");
-    expect(at(harness, 1)).toEqual({ x: 200, y: 0 });
-
-    // Both towers sit at y 0 and are the same height, so the other axis is the
-    // identity and the session says so rather than pushing an empty command.
-    harness.key("M", { shiftKey: true });
-    expect(harness.groups.at(-1)?.reason).toBe(GroupRefusal.NO_CHANGE);
-    expect(harness.session.state().canUndo).toBe(true);
-    harness.session.undo();
-    expect(harness.session.state().canUndo).toBe(false);
-  });
-
-  it("says a selection is too small rather than doing half of it", () => {
-    const harness = planner({ buildings: RAGGED });
-
-    harness.session.selectOnly([1]);
-    expect(harness.session.groupTool(GroupOp.MIRROR_X).reason).toBe(GroupRefusal.TOO_FEW);
-
-    harness.session.selectOnly([1, 3]);
-    expect(harness.session.groupTool(GroupOp.DISTRIBUTE_X).reason).toBe(GroupRefusal.TOO_FEW);
-    expect(harness.session.state().canUndo).toBe(false);
-  });
-});
-
-describe("a group operation that cannot be done", () => {
-  it("moves nothing when two of the selection would land on each other", () => {
-    const harness = planner();
-    harness.session.selectOnly([1, 2]);
-
-    // Both towers sit at y 0, so putting their left edges on one line stacks
-    // the second on the first.
-    const outcome = harness.session.groupTool(GroupOp.ALIGN_LEFT);
-
-    expect(outcome.ok).toBe(false);
-    expect(outcome.reason).toBe(GroupRefusal.BLOCKED);
-    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
-    expect(at(harness, 2)).toEqual({ x: 200, y: 0 });
-    expect(harness.session.state().canUndo).toBe(false);
-    expect(harness.session.state().dirty).toBe(false);
-    expect([...harness.faulted()].sort((a, b) => a - b)).toEqual([1, 2]);
-  });
-
-  it("names a building that was never selected", () => {
-    // A tower at the top, a wall below it, and an unselected wall in the gap
-    // that the tower's mirrored footprint reaches over.
-    const harness = planner({
-      buildings: [
-        { id: 1, t: 20, X: 0, Y: 0 },
-        { id: 2, t: 17, X: 0, Y: 100 },
-        { id: 4, t: 17, X: 0, Y: 80 },
-      ],
-    });
-    harness.session.selectOnly([1, 2]);
-
-    const outcome = harness.session.groupTool(GroupOp.MIRROR_Y);
-
-    expect(outcome.ok).toBe(false);
-    expect(outcome.blocked).toBeGreaterThan(0);
-    expect(harness.faulted().has(4)).toBe(true);
-    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
-    expect(at(harness, 2)).toEqual({ x: 0, y: 100 });
-    expect(harness.placements.get(1)).toEqual({ x: 0, y: 0 });
-  });
-
-  it("leaves the grid intact, so the next drag still sees every building", () => {
-    const harness = planner();
-    harness.session.selectOnly([1, 2]);
-    harness.session.groupTool(GroupOp.ALIGN_LEFT);
-
-    // The refused operation put both towers' cells back: tower 2 still cannot
-    // be dragged onto tower 1, and can still be dragged somewhere free.
-    expect(stillOccupies(harness, 1, 2)).toBe(true);
-    harness.session.nudge(0, 100);
-    expect(at(harness, 1)).toEqual({ x: 0, y: 100 });
-    expect(at(harness, 2)).toEqual({ x: 200, y: 100 });
-  });
-
-  it("is refused outright in a read-only session", () => {
-    const harness = planner({ readOnly: true });
-    harness.session.selectOnly([1, 2]);
-
-    expect(harness.session.groupTool(GroupOp.MIRROR_X).reason).toBe(GroupRefusal.READ_ONLY);
-    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
-    expect(harness.session.state().canUndo).toBe(false);
   });
 });
 
@@ -1912,5 +1736,157 @@ describe("a layout with buildings in the drawer", () => {
     expect(at(harness, 2)).toEqual({ x: 200, y: 0 });
     expect(stillOccupies(harness, 2, 1)).toBe(true);
     expect(harness.session.state().dirty).toBe(true);
+  });
+});
+
+/* ── Upgrade walls: picking (owner, 2026-11-04) ───────────────────────────── */
+
+describe("wall picking", () => {
+  /** Two towers, and three walls: one far off, two beside the towers. */
+  const WALLED: readonly BuildingData[] = [
+    ...BUILDINGS,
+    { id: 4, t: 17, X: 0, Y: 100 },
+    { id: 5, t: 17, X: 40, Y: 100 },
+  ];
+  const WALL_3 = tileCentre(17, -300, -300);
+  const WALL_4 = tileCentre(17, 0, 100);
+
+  const picking = (cancel?: () => void): Harness => {
+    const harness = planner(
+      cancel ? { buildings: WALLED, onWallPickCancel: cancel } : { buildings: WALLED },
+    );
+    harness.session.setWallPick(true);
+    harness.session.setTool(PlannerTool.BOX);
+    return harness;
+  };
+
+  const sorted = (harness: Harness): number[] =>
+    harness.session.selectedIds().sort((a, b) => a - b);
+
+  it("picks only the walls a box touches, and moves nothing", () => {
+    const harness = picking();
+
+    harness.press(blueprintToWorld(-50, -50));
+    harness.drag(blueprintToWorld(300, 150));
+    // Live while the box is drawn, walls only.
+    expect(sorted(harness)).toEqual([4, 5]);
+    harness.release(blueprintToWorld(300, 150));
+
+    expect(sorted(harness)).toEqual([4, 5]);
+    expect(harness.session.state().wallPicking).toBe(true);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(harness.session.state().dirty).toBe(false);
+  });
+
+  it("adds each new box to the pick rather than replacing it", () => {
+    const harness = picking();
+
+    harness.press(blueprintToWorld(-50, 50));
+    harness.drag(blueprintToWorld(100, 150));
+    harness.release(blueprintToWorld(100, 150));
+    harness.press(blueprintToWorld(-350, -350));
+    harness.drag(blueprintToWorld(-250, -250));
+    harness.release(blueprintToWorld(-250, -250));
+
+    expect(sorted(harness)).toEqual([3, 4, 5]);
+  });
+
+  it("takes a wall in or out with a click, and ignores a click on anything else", () => {
+    const harness = picking();
+
+    harness.click(WALL_3);
+    harness.click(WALL_4);
+    expect(sorted(harness)).toEqual([3, 4]);
+
+    harness.click(WALL_4);
+    harness.click(ONE);
+    harness.click(GROUND);
+    expect(sorted(harness)).toEqual([3]);
+    expect(at(harness, 1)).toEqual({ x: 0, y: 0 });
+    expect(harness.session.state().carrying).toBe(false);
+  });
+
+  it("draws the box with one finger, without Shift", () => {
+    const harness = picking();
+
+    harness.press(blueprintToWorld(-50, -50), finger(1));
+    harness.drag(blueprintToWorld(300, 150));
+    harness.release(blueprintToWorld(300, 150), finger(1));
+
+    expect(sorted(harness)).toEqual([4, 5]);
+  });
+
+  it("puts the pick back when a second finger turns the box into a pinch", () => {
+    const harness = picking();
+    harness.session.selectOnly([3]);
+
+    harness.press(blueprintToWorld(-50, -50), finger(1));
+    harness.drag(blueprintToWorld(300, 150));
+    harness.press(blueprintToWorld(400, 300), finger(2));
+
+    expect(sorted(harness)).toEqual([3]);
+  });
+
+  it("with Select, a tap picks a wall and bare ground is left to the camera", () => {
+    vi.useFakeTimers();
+    try {
+      const harness = picking();
+      harness.session.setTool(PlannerTool.SELECT);
+      const seen = reachedCanvas(harness);
+
+      harness.click(WALL_4, finger(1));
+      harness.click(ONE, finger(1));
+      expect(sorted(harness)).toEqual([4]);
+
+      // A long press on a wall never lifts it while picking.
+      harness.press(WALL_4, finger(1));
+      vi.advanceTimersByTime(2000);
+      harness.release(WALL_4, finger(1));
+      expect(harness.session.state().carrying).toBe(false);
+      expect(seen.length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("Select all picks every wall; entering keeps only the walls of a selection", () => {
+    const harness = planner({ buildings: WALLED });
+    harness.session.selectOnly([1, 2, 4]);
+    harness.session.setWallPick(true);
+    expect(sorted(harness)).toEqual([4]);
+
+    harness.session.pickAllWalls();
+    expect(sorted(harness)).toEqual([3, 4, 5]);
+    expect(harness.session.wallCount()).toBe(3);
+
+    // Find's rows pick the walls among what they name.
+    harness.session.selectOnly([1, 5]);
+    expect(sorted(harness)).toEqual([5]);
+  });
+
+  it("Escape asks the owner to end the mode instead of clearing the pick", () => {
+    const cancel = vi.fn();
+    const harness = picking(cancel);
+    harness.session.selectOnly([3, 4]);
+
+    harness.key("Escape");
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(sorted(harness)).toEqual([3, 4]);
+  });
+
+  it("swallows the keys that would move or store the pick", () => {
+    const harness = picking();
+    harness.session.selectOnly([4]);
+
+    harness.key("ArrowRight");
+    harness.key("Delete");
+    expect(at(harness, 4)).toEqual({ x: 0, y: 100 });
+    expect(harness.session.state().storedCount).toBe(0);
+  });
+
+  it("is refused to a read-only session", () => {
+    const harness = planner({ buildings: WALLED, readOnly: true });
+    harness.session.setWallPick(true);
+    expect(harness.session.state().wallPicking).toBe(false);
   });
 });

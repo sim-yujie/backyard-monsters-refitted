@@ -43,6 +43,26 @@ export const formatCompact = (value: number | undefined): string => {
 };
 
 /**
+ * A resource amount at its shortest: "100K", "12.5M", "1.2B".
+ *
+ * The Yard Planner's bottom bar (owner, 2026-11-04: one row, numbers over
+ * words). Like {@link formatCompact} but without a trailing ".0", and rounded
+ * down at every unit, as {@link formatAmount} is: a held 99,960 never reads as
+ * the 100K a wall needs. It also never reads "1000K"; that is "1M". The cell's
+ * tooltip keeps the exact figure.
+ */
+export const formatShort = (value: number | undefined): string => {
+  if (value === undefined) return "—";
+  const whole = Math.floor(value);
+  if (whole < 1_000) return String(whole);
+  // Tenths of the unit, in whole numbers, so the rounding is exact.
+  const tenths = (unit: number): number => Math.floor(whole / (unit / 10)) / 10;
+  if (whole < 1_000_000) return `${tenths(1_000)}K`;
+  if (whole < 1_000_000_000) return `${tenths(1_000_000)}M`;
+  return `${tenths(1_000_000_000)}B`;
+};
+
+/**
  * Seconds remaining as a compact duration, or "Done".
  *
  * Two units at a time, largest first: a three-day job does not need its
