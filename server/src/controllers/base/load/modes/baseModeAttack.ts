@@ -8,6 +8,9 @@ import { damageProtection } from "../../../../services/maproom/v2/damageProtecti
 import { Save } from "../../../../database/models/save.model.js";
 import { User } from "../../../../database/models/user.model.js";
 import { tribeSaveHandler } from "../../../../services/maproom/tribeSaveHandler.js";
+import { isWildMonsterExpired } from "../../../../services/maproom/wildMonsterExpiry.js";
+import { isCampInPlay } from "../../../../services/maproom/campInPlay.js";
+import { regrowCamp } from "../../../../services/maproom/v2/regrowCamp.js";
 import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
 import { validateRange } from "../../../../services/maproom/v2/validateRange.js";
 import { cellCoordsFromBaseId } from "../../../../services/maproom/v2/rangeCheck.js";
@@ -103,6 +106,20 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
     if (save && save.worldid !== userSave.worldid) throw baseNotFoundErr();
   }
 
+  // A wild monster camp heals 12 hours after its last attack
+  // (`wildMonsterExpiry.ts`). Attacking it straight from the map, without
+  // opening it first, has to fight the healed camp too, as opening it does
+  // (`baseModeView`) and the map shows it (`wildMonsterCell`): its row is reset
+  // to a fresh camp below, once nothing can refuse the attack any more, with a
+  // conditional write only one of two attacks at the same moment can win
+  // (`regrowCamp.ts`). Never under someone else's attack (`campInPlay.ts`).
+  const regrown =
+    mapversion === MapRoomVersion.V2 &&
+    save?.type === BaseType.TRIBE &&
+    isWildMonsterExpired(save, getCurrentDateTime());
+  if (regrown && (await isCampInPlay(save!.basesaveid))) throw baseUnderAttackErr();
+  const readSavetime = save?.savetime ?? 0;
+
   if (save && save.type !== BaseType.TRIBE) {
     if (save.protected > getCurrentDateTime()) throw baseProtectedErr();
 
@@ -149,6 +166,11 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
   }
 
   await validateRange(user, mapversion, { baseid, cell: cellCoords });
+
+  if (regrown) {
+    save = await regrowCamp(save!, readSavetime, getCurrentDateTime());
+    if (!save) throw baseUnderAttackErr();
+  }
 
   // Only an attack in range gives a camp attacked for the first time its save
   // row (issue #165): `em.create` hands the row to the next flush, and the
