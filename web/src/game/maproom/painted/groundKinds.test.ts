@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MapCell } from "@/api/types";
 import { Ground, GroundTexture, OCCUPIED_FLAG, SHADER_TEXTURES, encodeCell, groundOf, groundOfHeight } from "./groundKinds";
-import { GROUND_FRAGMENT } from "./groundShader";
+import { GROUND_FRAGMENT, GROUND_SAMPLERS } from "./groundShader";
 
 const land = (i: number, extra: Record<string, unknown> = {}): MapCell => ({ i, ...extra }) as unknown as MapCell;
 
@@ -67,14 +67,19 @@ describe("painted ground kinds", () => {
     expect(out[3]).toBe(Ground.FOG);
   });
 
-  it("binds the coast's wet sand and foam after the cell grounds, and the shader draws coast and details", () => {
+  it("binds the coast's wet sand after the cell grounds, with the foam in its alpha, and the shader draws coast and details", () => {
     expect(SHADER_TEXTURES.indexOf(GroundTexture.WET_SAND)).toBe(10);
     expect(SHADER_TEXTURES.indexOf(GroundTexture.FOAM)).toBe(11);
     // Every cell ground stays below the flat colours, in the data texture's low 4 bits.
     expect(SHADER_TEXTURES.length).toBeLessThan(Ground.FOG);
     expect(GROUND_FRAGMENT).toContain(`& ${OCCUPIED_FLAG}`);
     expect(GROUND_FRAGMENT).toContain("uGround10, uv, dx, dy");
-    expect(GROUND_FRAGMENT).toContain("uGround11, uv, dx, dy");
+    // WebGL2 gives a fragment shader 16 samplers: the foam's brightness rides in the wet sand's
+    // alpha (PaintedGround's withFoamAlpha) instead of a sampler of its own.
+    expect(GROUND_SAMPLERS).not.toContain(11);
+    expect(GROUND_FRAGMENT).not.toContain("uGround11");
+    expect(GROUND_FRAGMENT).toContain("uGround10, uv * 1.7");
+    expect(GROUND_FRAGMENT.match(/uniform sampler2D/g)!.length).toBeLessThanOrEqual(16);
     expect(GROUND_FRAGMENT).toContain("drawRocks(");
     expect(GROUND_FRAGMENT).toContain("drawDecals(");
     // No template placeholder left unfilled.

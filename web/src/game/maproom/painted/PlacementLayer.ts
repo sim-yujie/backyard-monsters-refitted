@@ -80,6 +80,15 @@ export const holds = (outer: SquareRect, inner: SquareRect): boolean =>
     inner.x + inner.w <= outer.x + outer.w &&
     inner.y + inner.h <= outer.y + outer.h);
 
+/** `needed` cut to {@link MAX_SIDE} round its middle (all the atlas ever holds of it). */
+export const capped = (needed: SquareRect): SquareRect => {
+  const cut = (start: number, count: number): [number, number] =>
+    count > MAX_SIDE ? [start + Math.floor((count - MAX_SIDE) / 2), MAX_SIDE] : [start, count];
+  const [x, w] = cut(needed.x, needed.w);
+  const [y, h] = cut(needed.y, needed.h);
+  return { x, y, w, h };
+};
+
 /** `needed` grown by the slack, and cut to {@link MAX_SIDE} round its middle. */
 export const withSlack = (needed: SquareRect): SquareRect => {
   if (needed.w === 0) return NO_SQUARES;
@@ -106,8 +115,16 @@ interface Pass {
 }
 
 /** The placement programs, one per grid (`shaderWarmup.ts` compiles them ahead). */
-export const placementProgram = (grid: PlacementGrid): GlProgram =>
-  GlProgram.from({ vertex: GROUND_VERTEX, fragment: placementFragment(grid), name: `mr2-place-${grid}` });
+export const placementProgram = (grid: PlacementGrid): GlProgram => {
+  // Kept: the ground asks every frame whether each one is ready.
+  let program = PROGRAMS.get(grid);
+  if (!program) {
+    program = GlProgram.from({ vertex: GROUND_VERTEX, fragment: placementFragment(grid), name: `mr2-place-${grid}` });
+    PROGRAMS.set(grid, program);
+  }
+  return program;
+};
+const PROGRAMS = new Map<PlacementGrid, GlProgram>();
 
 export class PlacementLayer {
   private readonly passes = new Map<PlacementGrid, Pass>();
@@ -202,7 +219,9 @@ export class PlacementLayer {
       const want = shown ? squaresFor(bounds, GRID_SHARE[grid] * this.shape.cellWidth) : NO_SQUARES;
       needed.set(grid, want);
       const have = this.passes.get(grid)!.rect;
-      if (!holds(have, want) || (want.w === 0) !== (have.w === 0)) stale = true;
+      // Against the capped squares: a view needing more than the atlas holds would never be held,
+      // and would be worked out again every frame.
+      if (!holds(have, capped(want)) || (want.w === 0) !== (have.w === 0)) stale = true;
     }
     if (!stale) return false;
     this.dirty = false;

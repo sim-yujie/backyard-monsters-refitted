@@ -1,8 +1,12 @@
+import { DOMAdapter } from "pixi.js";
 import { describe, expect, it } from "vitest";
 import type { ZoneRecord } from "../ZoneStore";
 import { GroundData } from "./GroundData";
 import { Ground } from "./groundKinds";
-import { WATER_STEP_MS, waterTime } from "./PaintedGround";
+import { WATER_STEP_MS, groundProgram, waterTime, withFoamAlpha } from "./PaintedGround";
+
+// GlProgram reads the GPU's float precision from a test canvas; these tests run without a DOM.
+DOMAdapter.set({ ...DOMAdapter.get(), createCanvas: () => ({ getContext: () => null }) as unknown as HTMLCanvasElement });
 
 describe("painted ground data texture", () => {
   it("starts as fog and takes each zone's cells", () => {
@@ -44,5 +48,26 @@ describe("painted water clock", () => {
     expect(data.hasWater({ minCol: 20, maxCol: 30, minRow: 20, maxRow: 30 })).toBe(false);
     expect(data.hasWater({ minCol: -50, maxCol: -10, minRow: 0, maxRow: 5 })).toBe(false);
     data.destroy();
+  });
+});
+
+describe("painted ground programs and textures (plan step 10)", () => {
+  it("puts the foam's brightness in the wet sand's alpha, keeping the sand's colour", () => {
+    const wet = new Uint8ClampedArray([10, 20, 30, 255, 40, 50, 60, 255]);
+    const foam = new Uint8ClampedArray([255, 255, 255, 255, 0, 0, 0, 255]);
+    expect(Array.from(withFoamAlpha(wet, foam))).toEqual([10, 20, 30, 255, 40, 50, 60, 0]);
+    // Luma weights: a pure green foam pixel is 59% bright.
+    expect(withFoamAlpha(new Uint8ClampedArray(4), new Uint8ClampedArray([0, 255, 0, 255]))[3]).toBe(150);
+  });
+
+  it("has one program per Quality, the level fixed in its source, each built once", () => {
+    const levels = ["low", "medium", "high"] as const;
+    const programs = levels.map((level) => groundProgram(level));
+    expect(new Set(programs).size).toBe(3);
+    levels.forEach((level, index) => expect(groundProgram(level)).toBe(programs[index]));
+    expect(programs[0]!.fragment).toContain("const float uQuality = 0.0;");
+    expect(programs[1]!.fragment).toContain("const float uQuality = 1.0;");
+    expect(programs[2]!.fragment).toContain("const float uQuality = 2.0;");
+    for (const program of programs) expect(program.fragment).not.toContain("uniform float uQuality");
   });
 });

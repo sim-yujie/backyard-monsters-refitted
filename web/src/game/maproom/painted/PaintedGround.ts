@@ -81,8 +81,16 @@ const QUALITY_LEVEL: Record<Quality, number> = { high: 2, medium: 1, low: 0 };
  * own, with the level fixed in the source: Low's compiles in a few seconds, so the painted look shows
  * quickly the first time, and the player's own level takes over when it has compiled (plan step 10).
  */
-export const groundProgram = (level: Quality): GlProgram =>
-  GlProgram.from({ vertex: GROUND_VERTEX, fragment: groundFragment(level), name: `mr2-painted-ground-${level}` });
+export const groundProgram = (level: Quality): GlProgram => {
+  // Kept, since the ground asks for its program every frame (the source is ~60 kB of text).
+  let program = GROUND_PROGRAMS.get(level);
+  if (!program) {
+    program = GlProgram.from({ vertex: GROUND_VERTEX, fragment: groundFragment(level), name: `mr2-painted-ground-${level}` });
+    GROUND_PROGRAMS.set(level, program);
+  }
+  return program;
+};
+const GROUND_PROGRAMS = new Map<Quality, GlProgram>();
 
 /** The foam texture's brightness (luma) for each pixel of its RGBA bytes. */
 const lumaOf = (r: number, g: number, b: number): number => Math.round(0.299 * r + 0.587 * g + 0.114 * b);

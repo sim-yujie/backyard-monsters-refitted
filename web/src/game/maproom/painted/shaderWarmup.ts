@@ -102,18 +102,26 @@ export class ProgramWarmer {
     private readonly wait: Wait = pause,
   ) {}
 
-  private static key(source: ProgramSource): string {
-    return `${source.vertex ?? ""}\u0000${source.fragment ?? ""}`;
+  /** Each source object's key, so asking every frame does not rebuild and rehash ~100 kB of text. */
+  private readonly keys = new WeakMap<ProgramSource, string>();
+
+  private key(source: ProgramSource): string {
+    let key = this.keys.get(source);
+    if (key === undefined) {
+      key = `${source.vertex ?? ""}\u0000${source.fragment ?? ""}`;
+      this.keys.set(source, key);
+    }
+    return key;
   }
 
   /** Whether the program has compiled and linked here (false while it compiles, or if it failed). */
   ready(source: ProgramSource): boolean {
-    return this.linked.get(ProgramWarmer.key(source)) === true;
+    return this.linked.get(this.key(source)) === true;
   }
 
   /** Compiles the program in the background (once) and resolves to whether it linked. */
   warm(source: ProgramSource): Promise<boolean> {
-    const key = ProgramWarmer.key(source);
+    const key = this.key(source);
     const known = this.linked.get(key);
     if (known !== undefined) return Promise.resolve(known);
     let pending = this.pending.get(key);

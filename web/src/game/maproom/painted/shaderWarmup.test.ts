@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { warmPrograms } from "./shaderWarmup";
+import { ProgramWarmer, warmPrograms } from "./shaderWarmup";
 
 const COMPLETION_STATUS_KHR = 0x91b1;
 const LINK_STATUS = 4;
@@ -84,5 +84,43 @@ describe("compiling the painted map's shaders ahead (the Map Room freeze)", () =
     const wait = vi.fn(async () => {});
     expect(await warmPrograms(gl as unknown as WebGL2RenderingContext, [source], wait)).toEqual([false]);
     expect(wait).not.toHaveBeenCalled();
+  });
+});
+
+describe("ProgramWarmer: the painted look's programs, each compiled once in the background", () => {
+  it("is not ready until the compile has finished and linked", async () => {
+    const gl = fakeGl({ polls: 3 });
+    const warmer = new ProgramWarmer(gl as unknown as WebGL2RenderingContext, vi.fn(async () => {}));
+    expect(warmer.ready(source)).toBe(false);
+    const linked = warmer.warm(source);
+    expect(warmer.ready(source)).toBe(false);
+    expect(await linked).toBe(true);
+    expect(warmer.ready(source)).toBe(true);
+  });
+
+  it("compiles the same text once, however often (and from whichever object) it is asked", async () => {
+    const gl = fakeGl({ polls: 2 });
+    const warmer = new ProgramWarmer(gl as unknown as WebGL2RenderingContext, vi.fn(async () => {}));
+    const [a, b] = await Promise.all([warmer.warm(source), warmer.warm({ ...source })]);
+    expect([a, b]).toEqual([true, true]);
+    expect(await warmer.warm(source)).toBe(true);
+    expect(gl.linkProgram).toHaveBeenCalledTimes(1);
+    expect(warmer.ready({ vertex: "v", fragment: "f" })).toBe(true);
+    expect(warmer.ready({ vertex: "v", fragment: "other" })).toBe(false);
+  });
+
+  it("remembers a failed link: never ready, and never compiled again", async () => {
+    const gl = fakeGl({ polls: 1, links: [false] });
+    const warmer = new ProgramWarmer(gl as unknown as WebGL2RenderingContext, vi.fn(async () => {}));
+    expect(await warmer.warm(source)).toBe(false);
+    expect(await warmer.warm(source)).toBe(false);
+    expect(warmer.ready(source)).toBe(false);
+    expect(gl.linkProgram).toHaveBeenCalledTimes(1);
+  });
+
+  it("warms several together and answers for each", async () => {
+    const gl = fakeGl({ polls: 1, links: [true, false] });
+    const warmer = new ProgramWarmer(gl as unknown as WebGL2RenderingContext, vi.fn(async () => {}));
+    expect(await warmer.warmAll([source, { vertex: "v", fragment: "g" }])).toEqual([true, false]);
   });
 });
