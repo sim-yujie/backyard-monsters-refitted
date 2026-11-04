@@ -9,7 +9,9 @@
  * The screenshot is two layers. The game (Pixi's WebGL canvas) is drawn
  * straight after a fresh render, the only moment its pixels can be read.
  * The menus and panels on top are HTML, so they are copied into an SVG
- * picture with the page's styles and images inlined. Anything that cannot be
+ * picture with the page's styles, images and fonts inlined, and `<html>`'s
+ * attributes (the window style, the font choice) on the picture's root so the
+ * windows look as the player sees them. Anything that cannot be
  * copied (a browser that refuses, a slow page) leaves the game layer alone.
  */
 
@@ -180,22 +182,170 @@ const replaceUrls = (text: string, inlined: Map<string, string>): string =>
     return data ? `url("${data}")` : url.startsWith("data:") ? whole : "none";
   });
 
-/** Every style rule on the page that can be read, with its sheet's address for relative URLs. */
-const pageStyles = (): { text: string; base: string }[] => {
-  const styles: { text: string; base: string }[] = [];
-  for (const sheet of Array.from(document.styleSheets)) {
+type SheetText = { text: string; base: string };
+
+const isFontFace = (rule: CSSRule): boolean =>
+  (typeof CSSFontFaceRule !== "undefined" && rule instanceof CSSFontFaceRule) || rule.cssText.startsWith("@font-face");
+
+/**
+ * Every style rule on the page that can be read, with its sheet's address for
+ * relative URLs; the @font-face rules apart, as their files are inlined
+ * separately (`inlineFonts`).
+ */
+const pageStyles = (sheets: Iterable<CSSStyleSheet> = Array.from(document.styleSheets)): { styles: SheetText[]; fonts: SheetText[] } => {
+  const styles: SheetText[] = [];
+  const fonts: SheetText[] = [];
+  for (const sheet of sheets) {
     try {
-      const rules = Array.from(sheet.cssRules)
-        // Fonts are left out: the copy falls back to the plain font stack.
-        .filter((rule) => !(typeof CSSFontFaceRule !== "undefined" && rule instanceof CSSFontFaceRule))
-        .map((rule) => rule.cssText)
-        .join("\n");
-      styles.push({ text: rules, base: sheet.href ?? window.location.href });
+      const base = sheet.href ?? window.location.href;
+      const rules = Array.from(sheet.cssRules);
+      for (const rule of rules) if (isFontFace(rule)) fonts.push({ text: rule.cssText, base });
+      styles.push({ text: rules.filter((rule) => !isFontFace(rule)).map((rule) => rule.cssText).join("\n"), base });
     } catch {
       // Another site's sheet cannot be read.
     }
   }
-  return styles;
+  return { styles, fonts };
+};
+
+/** All the font files the copy may carry; over this it keeps the plain font stack. */
+export const MAX_FONT_BYTES = 1_500_000;
+
+const unquote = (family: string): string => family.trim().replace(/^(['"])(.*)\1$/, "$2");
+
+const fontFamilyOf = (faceText: string): string => {
+  const match = /font-family:\s*([^;}]+)/.exec(faceText);
+  return match?.[1] ? unquote(match[1]) : "";
+};
+
+/** The font families the page has loaded; null when the browser cannot say (then every face is kept). */
+const loadedFontFamilies = (): Set<string> | null => {
+  try {
+    const set = (document as Document & { fonts?: FontFaceSet }).fonts;
+    if (!set) return null;
+    const families = new Set<string>();
+    set.forEach((face) => {
+      if (face.status === "loaded") families.add(unquote(face.family));
+    });
+    return families.size > 0 ? families : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * The page's @font-face rules with their (same-origin) font files as data
+ * URLs, so the copy shows the player's font choice (Game font, Clear, Extra
+ * readable): an SVG picture cannot load fonts from addresses. Only the
+ * families the page has loaded are carried. Resolves with "" when the files
+ * cannot be had or together pass `MAX_FONT_BYTES`; the copy then keeps the
+ * plain font stack, as before.
+ */
+export const inlineFonts = async (
+  faces: readonly SheetText[],
+  used: Set<string> | null = loadedFontFamilies(),
+  maxBytes: number = MAX_FONT_BYTES,
+): Promise<string> => {
+  const wanted = used ? faces.filter((face) => used.has(fontFamilyOf(face.text))) : [...faces];
+  const files = new Map<string, URL>();
+  for (const face of wanted) {
+    for (const match of face.text.matchAll(URL_IN_CSS)) {
+      const url = match[2] ?? "";
+      if (!url || url.startsWith("data:") || files.has(url)) continue;
+      try {
+        const absolute = new URL(url, face.base);
+        if (absolute.origin === window.location.origin) files.set(url, absolute);
+      } catch {
+        // Not an address.
+      }
+    }
+  }
+  try {
+    const blobs = await Promise.all(
+      [...files].map(async ([url, absolute]) => {
+        const response = await fetch(absolute.href, { cache: "force-cache" });
+        return response.ok ? ([url, await response.blob()] as const) : null;
+      }),
+    );
+    let total = 0;
+    const inlined = new Map<string, string>();
+    for (const entry of blobs) {
+      if (!entry) continue;
+      total += entry[1].size;
+      if (total > maxBytes) return "";
+      inlined.set(entry[0], await readAsDataUrl(entry[1]));
+    }
+    return wanted
+      .filter((face) => [...face.text.matchAll(URL_IN_CSS)].some((match) => inlined.has(match[2] ?? "") || (match[2] ?? "").startsWith("data:")))
+      .map((face) => replaceUrls(face.text, inlined))
+      .join("\n");
+  } catch {
+    return "";
+  }
+};
+
+/** Looks the copy takes from <html> and <body>, which it has no element for. */
+const INHERITED_LOOK = [
+  "font-family",
+  "font-size",
+  "font-weight",
+  "font-synthesis",
+  "line-height",
+  "color",
+  "-webkit-font-smoothing",
+] as const;
+
+/** `element`'s font and text colour as style text; empty where the browser gives nothing. */
+const inheritedLook = (element: Element | null): string => {
+  if (!element) return "";
+  try {
+    const computed = window.getComputedStyle(element);
+    return INHERITED_LOOK.map((name) => [name, computed.getPropertyValue(name)] as const)
+      .filter(([, value]) => value)
+      .map(([name, value]) => `${name}:${value};`)
+      .join("");
+  } catch {
+    return "";
+  }
+};
+
+const escapeAttribute = (value: string): string =>
+  value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+const PLAIN_NAME = /^[A-Za-z_][\w.-]*$/;
+const SVG_OWN = new Set(["xmlns", "width", "height", "viewbox", "style"]);
+
+/**
+ * `<html>`'s attributes (`data-skin`, `data-font`, class, ...) and look as
+ * attributes for the copy's `<svg>`. In the SVG picture `:root` is the
+ * `<svg>`, so without them every `:root[data-skin="scrap"]` rule fails and the
+ * windows show the base look rather than the player's window style.
+ */
+export const rootAttributes = (page: Document = document): string => {
+  const html = page.documentElement;
+  const parts: string[] = [];
+  for (const attribute of Array.from(html.attributes)) {
+    const name = attribute.name.toLowerCase();
+    if (!PLAIN_NAME.test(attribute.name) || SVG_OWN.has(name) || name.startsWith("xmlns")) continue;
+    parts.push(`${attribute.name}="${escapeAttribute(attribute.value)}"`);
+  }
+  // The inline style last, so its custom properties win over the computed look.
+  const style = inheritedLook(html) + (html.getAttribute("style") ?? "");
+  if (style) parts.push(`style="${escapeAttribute(style)}"`);
+  return parts.join(" ");
+};
+
+/** The SVG picture of the menus: `html` (the copied `#game-root`) with `css`, under `<html>`'s attributes. */
+export const uiSvgMarkup = (html: string, css: string, width: number, height: number, page: Document = document): string => {
+  const attributes = rootAttributes(page);
+  const wrapperStyle = `position:relative;width:${width}px;height:${height}px;overflow:hidden;${inheritedLook(page.body)}`;
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"` +
+    `${attributes ? ` ${attributes}` : ""}>` +
+    `<foreignObject x="0" y="0" width="${width}" height="${height}">` +
+    `<div xmlns="http://www.w3.org/1999/xhtml" style="${escapeAttribute(wrapperStyle)}">` +
+    `<style><![CDATA[${css.replaceAll("]]>", "]] >")}]]></style>${html}</div></foreignObject></svg>`
+  );
 };
 
 /**
@@ -248,7 +398,8 @@ const drawUiLayer = async (
   // Pictures: <img> sources and every url() in the styles and style attributes.
   const images = Array.from(clone.querySelectorAll("img"));
   const styled = Array.from(clone.querySelectorAll<HTMLElement>("[style]"));
-  const styles = pageStyles();
+  const { styles, fonts } = pageStyles();
+  const fontFaces = inlineFonts(fonts);
   const page = window.location.href;
   const refs = images.map((image) => ({ url: image.getAttribute("src") ?? "", base: page })).filter((ref) => ref.url);
   for (const element of styled) {
@@ -270,14 +421,10 @@ const drawUiLayer = async (
   for (const element of styled) {
     element.setAttribute("style", replaceUrls(element.getAttribute("style") ?? "", inlined));
   }
-  const css = styles.map((style) => replaceUrls(style.text, inlined)).join("\n").replaceAll("]]>", "]] >");
+  const css = [await fontFaces, ...styles.map((style) => replaceUrls(style.text, inlined))].join("\n");
 
   const html = new XMLSerializer().serializeToString(clone);
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
-    `<foreignObject x="0" y="0" width="${width}" height="${height}">` +
-    `<div xmlns="http://www.w3.org/1999/xhtml" style="position:relative;width:${width}px;height:${height}px;overflow:hidden">` +
-    `<style><![CDATA[${css}]]></style>${html}</div></foreignObject></svg>`;
+  const svg = uiSvgMarkup(html, css, width, height);
 
   const picture = new Image();
   picture.width = width;
