@@ -76,12 +76,12 @@ const vec2 CANOPY_SHADOW = vec2(0.1, 0.16);
 const float CANOPY_SCALE = 0.62;
 // The marsh (mock-up B): wet mossy banks, dark wet mud at the water's edge, shallow water lighter
 // by the bank, and the glowing lime goo with its dark outline, glow and rings.
-const vec3 MARSH_BANK = vec3(0.37, 0.5, 0.27);
-const vec3 MARSH_MUD = vec3(0.25, 0.26, 0.14);
-const vec3 MARSH_SHALLOW = vec3(0.42, 0.52, 0.3);
-const vec3 MARSH_WATER = vec3(0.27, 0.36, 0.15);
+const vec3 MARSH_BANK = vec3(0.33, 0.45, 0.13);
+const vec3 MARSH_MUD = vec3(0.19, 0.22, 0.09);
+const vec3 MARSH_SHALLOW = vec3(0.35, 0.45, 0.19);
+const vec3 MARSH_WATER = vec3(0.2, 0.3, 0.15);
 const vec3 MARSH_WATER_TEX = vec3(0.286, 0.38, 0.184);
-const vec3 MARSH_REFLECT = vec3(0.47, 0.56, 0.42);
+const vec3 MARSH_REFLECT = vec3(0.46, 0.56, 0.46);
 const vec3 GOO_EDGE = vec3(0.47, 0.78, 0.03);
 const vec3 GOO = vec3(0.64, 0.93, 0.04);
 const vec3 GOO_LIGHT = vec3(0.86, 1.0, 0.42);
@@ -162,18 +162,70 @@ float canopyEdge(vec2 h, Features fe) {
   return e;
 }
 
-// The canopy's colour: its texture (one lookup, so its crowns stay crisp), patches of lighter
-// yellow-green and deeper green across the mass, and the crowns darker towards its edge.
-vec3 canopyColour(vec2 uv, vec2 dx, vec2 dy, vec2 h, float e) {
-  // Drawn at 1.6x the ground's scale: mock-up B's crowns are about a third of a cell wide.
+// The canopy's treetops (mock-up B): jittered domes on a grid of the given size (hex units), radius
+// rMin..rMin + rSpan of a grid square. Returns how far up the front dome the point is (0 at its rim
+// or in a gap, 1 at its top); n is its surface's slant, crease the line where two domes meet (1 on
+// it), roll the dome's own random number. A dome lower on the screen stands in front of the one
+// above it.
+float dome(vec2 p, float rMin, float rSpan, float seed, out vec2 n, out float crease, out float roll) {
+  vec2 base = floor(p);
+  float best = -1.0;
+  float second = -1.0;
+  float top = 0.0;
+  n = vec2(0.0);
+  roll = 0.5;
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 id = base + vec2(float(i), float(j));
+      vec2 c = id + 0.2 + 0.6 * vec2(hash12(id + 3.1 + seed), hash12(id + 8.7 + seed));
+      float r = rMin + rSpan * hash12(id + 5.5 + seed);
+      vec2 d = (p - c) / r;
+      float d2 = dot(d, d);
+      if (d2 >= 1.0) continue;
+      float z = sqrt(1.0 - d2);
+      float rank = z * r + 0.3 * c.y;
+      if (rank > best) {
+        second = best;
+        best = rank;
+        top = z;
+        n = d;
+        roll = hash12(id + 13.3 + seed);
+      } else if (rank > second) second = rank;
+    }
+  }
+  crease = second > -1.0 ? 1.0 - smoothstep(0.0, 0.16, best - second) : 0.0;
+  return top;
+}
+
+const vec3 CROWN_LIGHT = vec3(-0.5, -0.62, 0.6);
+
+// The canopy's colour (mock-up B): big rounded treetops with deep shade in the gaps between them,
+// sunlit and warmer on their top-left sides; the canopy texture's small painted crowns are the leaf
+// clumps on each. Patches of lighter and deeper green run across the mass, and the crowns darken
+// towards its edge.
+vec3 canopyColour(vec2 uv, vec2 dx, vec2 dy, vec2 h, float e, float cellPixels) {
+  // Lumpy crown outlines: the crowns' grid warped a little at the clumps' size, and on High a finer
+  // fringe of leaves (faded as the cells get small, before it can shimmer).
+  vec2 warp = vec2(valueNoise(h * 9.0 + 1.3), valueNoise(h * 9.0 + 7.9)) - 0.5;
+  if (uQuality > 1.5) warp += 0.4 * smoothstep(90.0, 160.0, cellPixels) * (vec2(valueNoise(h * 31.0 + 4.1), valueNoise(h * 31.0 + 2.6)) - 0.5);
+  vec2 cn;
+  float crease;
+  float roll;
+  // The lit domes are smaller than the edge's crowns: many treetops in one solid mass, not big scales.
+  float top = dome(h / (CROWN_GRID * 0.62) + 0.22 * warp, 0.58, 0.3, 0.0, cn, crease, roll);
   vec3 c = sampleGround(${Ground.CANOPY}, uv * CANOPY_SCALE, dx * CANOPY_SCALE, dy * CANOPY_SCALE);
-  // Deeper mids and a touch less red: mock-up B's forest is deeper and greener than the meadow.
   c = pow(c, vec3(1.22, 1.12, 1.0)) * 0.88;
+  vec3 n = normalize(vec3(cn, max(top, 0.05) * 0.75));
+  float lit = max(0.0, dot(n, normalize(CROWN_LIGHT)));
+  float ao = mix(0.42, 1.0, smoothstep(0.0, 0.6, top)) * (1.0 - 0.2 * crease);
+  c *= mix(0.56, 1.5, lit) * ao;
+  // Sunlit tops turn warmer, yellow-green; the shade bluer.
+  c = mix(c * vec3(0.88, 0.96, 1.1), c * vec3(1.2, 1.08, 0.64), smoothstep(0.4, 0.85, lit));
+  // Each crown its own green: some yellower, some bluer.
+  c *= mix(vec3(0.92, 0.98, 1.06), vec3(1.08, 1.03, 0.86), roll);
   float patchy = valueNoise(h * 0.55 + 3.0);
-  c *= mix(vec3(0.78, 0.86, 0.88), vec3(1.04, 1.04, 0.97), smoothstep(0.2, 0.8, patchy));
-  float dome = crowns(h * 1.0 + 0.37);
-  c *= 0.9 + 0.16 * dome;
-  c *= mix(0.68, 1.0, smoothstep(0.0, 0.16, e));
+  c *= mix(vec3(0.84, 0.9, 0.92), vec3(1.05, 1.04, 0.96), smoothstep(0.2, 0.8, patchy));
+  c *= mix(0.8, 1.0, smoothstep(0.0, 0.16, e));
   return c;
 }
 
@@ -234,7 +286,7 @@ float gooNear(vec2 h, out vec2 centre) {
 // dark mud at the water's edge, and glowing lime goo pools with a dark outline, a soft glow and faint
 // rings on the water round them. deep is how far inside the marsh (0 at its fading edge, 1 well in).
 vec3 marshColour(vec3 land, vec3 water, vec2 h, float deep, float islet) {
-  vec3 c = mix(land, MARSH_BANK, 0.55) * (0.9 + 0.2 * valueNoise(h * 3.1 + 9.0));
+  vec3 c = mix(land, MARSH_BANK, 0.45) * (0.9 + 0.2 * valueNoise(h * 3.1 + 9.0));
   float wet = marshWet(h, deep, islet);
   vec2 pc;
   float goo = gooNear(h, pc);
@@ -247,22 +299,21 @@ vec3 marshColour(vec3 land, vec3 water, vec2 h, float deep, float islet) {
   wet = max(wet, 0.1 - 0.45 * max(goo, 0.0));
   float aw = max(fwidth(wet), 1e-4);
   float inWater = smoothstep(-aw, aw, wet);
-  float rim = smoothstep(-0.07, -0.01, wet) * (1.0 - inWater);
-  c = mix(c, MARSH_MUD, 0.65 * rim);
+  float rim = smoothstep(-0.035, -0.005, wet) * (1.0 - inWater);
+  c = mix(c, MARSH_MUD, 0.5 * rim);
   // The water texture is soft; mock-up B's water swings from near-black green to pale sky reflections.
   vec3 w = MARSH_WATER + clamp((water - MARSH_WATER_TEX) * 2.2, vec3(-0.2), vec3(0.1));
   float sky = smoothstep(0.55, 0.85, valueNoise(h * vec2(0.9, 2.4) + 41.0));
   w = mix(w, MARSH_REFLECT, 0.4 * sky);
   w = mix(w, MARSH_SHALLOW, 0.55 * (1.0 - smoothstep(0.0, 0.07, wet)));
-  w *= 1.0 - 0.28 * (1.0 - smoothstep(0.0, 0.02, wet));
+  w *= 1.0 - 0.12 * (1.0 - smoothstep(0.0, 0.02, wet));
   c = mix(c, w, inWater);
   float ag = min(max(fwidth(goo), 1e-4), 0.05);
   if (goo > 0.4) return c;
   float outside = max(goo, 0.0);
   c = mix(c, GOO_GLOW, 0.3 * exp(-outside / 0.05) * smoothstep(-ag, ag, goo));
   float broken = smoothstep(0.25, 0.6, valueNoise(h * 4.0 + 17.0));
-  float rings = (1.0 - smoothstep(0.0, 0.008 + ag, abs(goo - 0.07))) * 0.5
-    + (1.0 - smoothstep(0.0, 0.008 + ag, abs(goo - 0.15))) * 0.3 * broken;
+  float rings = (1.0 - smoothstep(0.0, 0.008 + ag, abs(goo - 0.07))) * 0.35 * broken;
   c = mix(c, GOO_LIGHT * 0.85, rings * smoothstep(0.0, 0.02, goo));
   float inner = -min(goo, 0.0);
   vec3 body = mix(GOO_EDGE, GOO, smoothstep(0.0, 0.08, inner));
@@ -317,7 +368,7 @@ vec4 featurePlace(vec2 id, float density) {
     float e = canopyEdge(fh, fe);
     bool clear = occupied && length(off) < CLEARING_OUTER + 0.12;
     if (e > 0.1) {
-      if (roll < 0.14) { frame = ${PINE_FRAME} + int(kind * 4.0); size = 0.95; flags = 3.0; }
+      if (roll < 0.09) { frame = ${PINE_FRAME} + int(kind * 4.0); size = 1.0; flags = 3.0; }
     } else if (e < -0.005 && e > -0.12 && !clear) {
       if (roll < 0.8) { frame = kind < 0.75 ? ${TREE_FRAME} + int(kind / 0.75 * 4.0) : ${PINE_FRAME} + int((kind - 0.75) * 16.0); flags = 2.0; }
     } else if (e <= -0.12 && e > -0.34 && !clear) {
@@ -326,8 +377,9 @@ vec4 featurePlace(vec2 id, float density) {
   }
   if (frame < 0 && fe.share.y > 0.2 && !(occupied && length(off) < 0.45)) {
     float rocky = smoothstep(0.25, 0.8, fe.share.y);
-    if (roll < 0.28 * rocky) { frame = ${BOULDER_FRAME} + int(kind * 4.0); size = 0.75 + 0.25 * rocky; }
-    else if (roll < 0.62 * rocky) { frame = kind < 0.5 ? 6 : 8; size = 0.55; }
+    // Boulders of mixed sizes (mock-up B's rocks are a few big lit ones among smaller ones).
+    if (roll < 0.36 * rocky) { frame = ${BOULDER_FRAME} + int(kind * 4.0); size = (0.68 + 0.32 * hash12(id + 81.7)) * (0.85 + 0.15 * rocky); }
+    else if (roll < 0.58 * rocky) { frame = kind < 0.5 ? 6 : 8; size = 0.55; }
   }
   if (frame < 0) return none;
   return vec4(float(frame + 1) / 255.0, size, flags / 255.0, 1.0);
