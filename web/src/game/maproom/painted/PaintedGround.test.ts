@@ -1,39 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { ZoneRecord } from "../ZoneStore";
 import { GroundData } from "./GroundData";
 import { Ground } from "./groundKinds";
-import { WATER_STEP_MS, groundShaderCompiles, waterTime } from "./PaintedGround";
-
-/** A stand-in WebGL2 context that compiles (or refuses) every shader. */
-const fakeGl = (compiles: boolean, links = true) => {
-  const gl = {
-    VERTEX_SHADER: 1,
-    FRAGMENT_SHADER: 2,
-    COMPILE_STATUS: 3,
-    LINK_STATUS: 4,
-    createShader: vi.fn(() => ({})),
-    shaderSource: vi.fn(),
-    compileShader: vi.fn(),
-    getShaderParameter: vi.fn(() => compiles),
-    createProgram: vi.fn(() => ({})),
-    attachShader: vi.fn(),
-    linkProgram: vi.fn(),
-    getProgramParameter: vi.fn(() => links),
-    deleteProgram: vi.fn(),
-    deleteShader: vi.fn(),
-    getExtension: vi.fn(() => null),
-  };
-  return gl as unknown as WebGL2RenderingContext;
-};
-
-describe("painted ground fallback", () => {
-  it("runs only where the shader compiles and links; otherwise the map keeps its tiles", () => {
-    expect(groundShaderCompiles(fakeGl(true))).toBe(true);
-    expect(groundShaderCompiles(fakeGl(false))).toBe(false);
-    expect(groundShaderCompiles(fakeGl(true, false))).toBe(false);
-    expect(groundShaderCompiles(null)).toBe(false);
-  });
-});
+import { WATER_STEP_MS, waterTime } from "./PaintedGround";
 
 describe("painted ground data texture", () => {
   it("starts as fog and takes each zone's cells", () => {

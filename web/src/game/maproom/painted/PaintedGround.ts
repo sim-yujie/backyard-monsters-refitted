@@ -57,6 +57,10 @@ interface GroundUniforms {
 
 const QUALITY_LEVEL: Record<Quality, number> = { high: 2, medium: 1, low: 0 };
 
+/** The ground's program (one per page; `shaderWarmup.ts` compiles it ahead). */
+export const groundProgram = (): GlProgram =>
+  GlProgram.from({ vertex: GROUND_VERTEX, fragment: GROUND_FRAGMENT, name: "mr2-painted-ground" });
+
 /**
  * How often the water and surf step, in milliseconds, by Quality (plan section 5: half rate on
  * Medium, still on Low). Each step makes the tilted view redraw (`TiltView.invalidate`), so the
@@ -87,58 +91,6 @@ const solidSource = (css: string): CanvasSource => {
   context.fillStyle = css;
   context.fillRect(0, 0, 1, 1);
   return new CanvasSource({ resource: canvas, addressMode: "repeat" });
-};
-
-/**
- * Whether this browser can run the ground shader: a WebGL2 context that compiles and links it.
- * Without that the map stays on today's tiles by itself (plan step 2: "if the shader fails on a
- * GPU, the map falls back to tiles"). `gl` is for tests; the default makes a throwaway context.
- */
-export const groundShaderCompiles = (gl?: WebGL2RenderingContext | null): boolean =>
-  shaderCompiles(GROUND_VERTEX, GROUND_FRAGMENT, gl);
-
-/** Whether this browser compiles and links this WebGL2 program (`groundShaderCompiles`). */
-export const shaderCompiles = (
-  vertexSource: string,
-  fragmentSource: string,
-  gl?: WebGL2RenderingContext | null,
-): boolean => {
-  let context = gl;
-  if (context === undefined) {
-    try {
-      context = document.createElement("canvas").getContext("webgl2");
-    } catch {
-      context = null;
-    }
-  }
-  if (!context) return false;
-  try {
-    const compile = (type: number, source: string): WebGLShader | null => {
-      const shader = context!.createShader(type);
-      if (!shader) return null;
-      // Pixi adds the precision lines after the version; the sources already carry them.
-      context!.shaderSource(shader, source);
-      context!.compileShader(shader);
-      return context!.getShaderParameter(shader, context!.COMPILE_STATUS) ? shader : null;
-    };
-    const vertex = compile(context.VERTEX_SHADER, vertexSource.replace("in vec2 aPosition;", "precision highp float;\nin vec2 aPosition;"));
-    const fragment = compile(context.FRAGMENT_SHADER, fragmentSource);
-    if (!vertex || !fragment) return false;
-    const program = context.createProgram();
-    if (!program) return false;
-    context.attachShader(program, vertex);
-    context.attachShader(program, fragment);
-    context.linkProgram(program);
-    const ok = Boolean(context.getProgramParameter(program, context.LINK_STATUS));
-    context.deleteProgram(program);
-    context.deleteShader(vertex);
-    context.deleteShader(fragment);
-    return ok;
-  } catch {
-    return false;
-  } finally {
-    if (gl === undefined) context.getExtension("WEBGL_lose_context")?.loseContext();
-  }
 };
 
 /**
@@ -196,7 +148,7 @@ export class PaintedGround {
       resources[`uGround${index}`] = this.standIns[index]!;
     });
     this.shader = new Shader({
-      glProgram: GlProgram.from({ vertex: GROUND_VERTEX, fragment: GROUND_FRAGMENT, name: "mr2-painted-ground" }),
+      glProgram: groundProgram(),
       resources,
     });
 

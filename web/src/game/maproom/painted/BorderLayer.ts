@@ -8,6 +8,10 @@ import { BORDER_COLOURS, BorderData, BorderRelation } from "./borders";
 import { cellCentre, paintedCellShape, type CellShape } from "./cellShape";
 import { GROUND_VERTEX } from "./groundShader";
 
+/** The borders' program (one per page; `shaderWarmup.ts` compiles it ahead). */
+export const borderProgram = (): GlProgram =>
+  GlProgram.from({ vertex: GROUND_VERTEX, fragment: BORDER_FRAGMENT, name: "mr2-painted-borders" });
+
 const QUALITY_LEVEL: Record<Quality, number> = { high: 2, medium: 1, low: 0 };
 
 /** The pulse's length (one slow breath) and how often it steps, on High only (plan section 5). */
@@ -49,7 +53,7 @@ export class BorderLayer {
   constructor(readonly shape: CellShape = paintedCellShape()) {
     this.data = new BorderData(shape.kind);
     this.shader = new Shader({
-      glProgram: GlProgram.from({ vertex: GROUND_VERTEX, fragment: BORDER_FRAGMENT, name: "mr2-painted-borders" }),
+      glProgram: borderProgram(),
       resources: {
         borderUniforms: {
           uShape: { value: shape.kind === "flat" ? 0 : 1, type: "f32" },
