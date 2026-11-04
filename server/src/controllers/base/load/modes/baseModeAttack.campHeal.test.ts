@@ -13,10 +13,11 @@ import { WILD_MONSTER_EXPIRATION } from "../../../../services/maproom/wildMonste
  * A Map Room 2 wild monster camp heals 12 hours after its last attack
  * (`wildMonsterExpiry.ts`). The map already showed such a camp as healed and
  * opening it regrew it (`baseModeView`), but attacking it straight from the map
- * fought the old, damaged row. The attack load now regrows it too: the old row
- * goes, but only once nothing can refuse the attack, and never under someone
- * else's attack (`campInPlay.ts`). Drives `baseModeAttack` over the in-memory
- * stand-in of `baseModeAttack.online.test.ts`.
+ * fought the old, damaged row. The attack load now regrows it too, in place and
+ * only once nothing can refuse the attack, never under someone else's attack
+ * (`campInPlay.ts`), and with a conditional claim that only one of two attacks
+ * at the same moment can win (`regrowCamp.ts`). Drives `baseModeAttack` over the
+ * in-memory stand-in of `baseModeAttack.online.test.ts`.
  */
 
 const ATTACKER = 2505;
@@ -32,8 +33,11 @@ type Row = Record<string, unknown>;
 const now = () => Math.floor(Date.now() / 1000);
 
 let tables: Map<unknown, Row[]>;
-let removed: Row[];
 let refuseRange: boolean;
+/** Conditional claims tried, and how many changed a row. */
+let claims: { tried: number; won: number };
+/** When set, every attack waits at the range check until this many have arrived. */
+let rangeBarrier: { size: number; arrived: number; open: () => void; opened: Promise<void> } | null;
 const store = new Map<string, string>();
 const sessions = new Map<number, AttackSession>();
 
@@ -43,7 +47,8 @@ interface StandIn {
   transactional: (run: (tx: StandIn) => Promise<unknown>) => Promise<unknown>;
   create: (entity: unknown, data: Row) => Row;
   persist: () => void;
-  remove: (row: Row) => void;
+  nativeUpdate: (entity: unknown, where: Row, data: Row) => Promise<number>;
+  assign: (row: Row, data: Row) => Row;
   flush: () => Promise<void>;
 }
 
@@ -53,13 +58,14 @@ const em: StandIn = {
   transactional: async (run) => run(em),
   create: (_entity, data) => data,
   persist: () => {},
-  remove: (row) => {
-    removed.push(row);
-    tables.set(
-      Save,
-      tables.get(Save)!.filter((other) => other !== row)
-    );
+  nativeUpdate: async (entity, where, data) => {
+    claims.tried += 1;
+    const hit = (tables.get(entity) ?? []).filter((row) => matchesWhere(row, where));
+    for (const row of hit) Object.assign(row, data);
+    claims.won += hit.length;
+    return hit.length;
   },
+  assign: (row, data) => Object.assign(row, data),
   flush: async () => {},
 };
 
@@ -78,6 +84,11 @@ mock.module("../../../../server.js", () => ({
 mock.module("../../../../services/maproom/v2/validateRange.js", () => ({
   validateRange: async () => {
     if (refuseRange) throw new Error("out of range");
+    if (rangeBarrier) {
+      rangeBarrier.arrived += 1;
+      if (rangeBarrier.arrived >= rangeBarrier.size) rangeBarrier.open();
+      await rangeBarrier.opened;
+    }
   },
   rangeCheckV2: async () => ({ cell: null, verdict: { ok: true, via: "main" } }),
 }));
@@ -163,8 +174,9 @@ const attack = () => {
 beforeEach(() => {
   store.clear();
   sessions.clear();
-  removed = [];
   refuseRange = false;
+  claims = { tried: 0, won: 0 };
+  rangeBarrier = null;
 });
 
 describe("attacking a wild monster camp straight from the map (camp healing)", () => {
@@ -176,21 +188,27 @@ describe("attacking a wild monster camp straight from the map (camp healing)", (
 
     expect(save as unknown).toBe(camp);
     expect(save.damage).toBe(60);
-    expect(removed).toHaveLength(0);
+    expect(claims.tried).toBe(0);
   });
 
-  test("a camp past its 12 hours is fought fresh: the old row goes, a new one stands", async () => {
+  test("a camp past its 12 hours is fought fresh: its row is reset in place", async () => {
     const camp = damagedCamp(WILD_MONSTER_EXPIRATION + 60);
     seed(camp);
 
     const { save } = await attack();
 
-    expect(removed).toEqual([camp]);
-    expect(save as unknown).not.toBe(camp);
+    expect(save as unknown).toBe(camp);
+    expect(save.basesaveid).toBe(CAMP_ROW);
     expect(save.baseid).toBe(CAMP_BASEID);
+    expect(save.worldid).toBe(WORLD);
     expect(save.damage ?? 0).toBe(0);
     expect(save.destroyed ?? 0).toBe(0);
     expect(save.wmid).toBe(camp.wmid as number);
+    // Fresh for the expiry rule at once, so nothing regrows it under this attack.
+    expect(save.savetime).toBeGreaterThanOrEqual(now() - 5);
+    expect(tables.get(Save)!.filter((row) => row.baseid === CAMP_BASEID)).toHaveLength(1);
+    // Its session is on the row, so a second attacker sees the camp in play.
+    expect(sessions.has(CAMP_ROW)).toBe(true);
   });
 
   test("a destroyed camp heals the same way", async () => {
@@ -199,7 +217,8 @@ describe("attacking a wild monster camp straight from the map (camp healing)", (
 
     const { save } = await attack();
 
-    expect(removed).toEqual([camp]);
+    expect(save as unknown).toBe(camp);
+    expect(save.damage ?? 0).toBe(0);
     expect(save.destroyed ?? 0).toBe(0);
   });
 
@@ -208,9 +227,11 @@ describe("attacking a wild monster camp straight from the map (camp healing)", (
     seed(camp);
     refuseRange = true;
 
+    const before = camp.savetime;
     await expect(attack()).rejects.toThrow("out of range");
-    expect(removed).toHaveLength(0);
-    expect(tables.get(Save)).toContain(camp);
+    expect(claims.tried).toBe(0);
+    expect(camp.damage).toBe(60);
+    expect(camp.savetime).toBe(before);
   });
 
   test("an expired camp still under someone's attack is refused, not regrown under them", async () => {
@@ -219,7 +240,25 @@ describe("attacking a wild monster camp straight from the map (camp healing)", (
     store.set(attackSessionKey(CAMP_ROW), "{}");
 
     await expect(attack()).rejects.toThrow();
-    expect(removed).toHaveLength(0);
-    expect(tables.get(Save)).toContain(camp);
+    expect(claims.tried).toBe(0);
+    expect(camp.damage).toBe(60);
+  });
+
+  test("two attacks on the same healed camp at once: one regrows it, the other fights that camp", async () => {
+    const camp = damagedCamp(WILD_MONSTER_EXPIRATION + 60);
+    seed(camp);
+    // Both have read the expired row and passed the in-play check before
+    // either regrows it: the race the conditional claim is there for.
+    let open = () => {};
+    const opened = new Promise<void>((resolve) => (open = resolve));
+    rangeBarrier = { size: 2, arrived: 0, open, opened };
+
+    const [first, second] = await Promise.all([attack(), attack()]);
+
+    expect(claims).toEqual({ tried: 2, won: 1 });
+    expect(first.save as unknown).toBe(camp);
+    expect(second.save as unknown).toBe(camp);
+    expect(camp.damage ?? 0).toBe(0);
+    expect(tables.get(Save)!.filter((row) => row.baseid === CAMP_BASEID)).toHaveLength(1);
   });
 });
