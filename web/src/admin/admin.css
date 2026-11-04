@@ -2795,6 +2795,10 @@ tbody th {
   transform: rotate(0deg);
 }
 
+.section-body[hidden] {
+  display: none;
+}
+
 .section.is-folded {
   margin-top: 16px;
 }
@@ -3063,7 +3067,15 @@ tbody th {
   font-size: 0.75rem;
 }
 
-.case-history,
+.case-history {
+  font-size: 0.875rem;
+}
+
+.case-history > .icon {
+  margin-right: 6px;
+  vertical-align: -3px;
+}
+
 .case-done,
 .case-suggest {
   display: flex;
@@ -3073,7 +3085,7 @@ tbody th {
   font-size: 0.875rem;
 }
 
-.case-history .icon {
+.case-history > .icon {
   color: var(--ink-3);
 }
 
