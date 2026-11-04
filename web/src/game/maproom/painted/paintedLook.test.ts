@@ -1,9 +1,9 @@
-import { DOMAdapter } from "pixi.js";
+import { DOMAdapter, type Renderer } from "pixi.js";
 import { describe, expect, it, vi } from "vitest";
 import { borderProgram } from "./BorderLayer";
 import { cloudProgram } from "./CloudLayer";
 import { groundProgram } from "./PaintedGround";
-import { preparePrograms } from "./paintedLook";
+import { preparePrograms, warmRest } from "./paintedLook";
 import { PLACEMENT_GRIDS, placementProgram } from "./PlacementLayer";
 
 // GlProgram reads the GPU's float precision from a test canvas; these tests run without a DOM.
@@ -53,41 +53,73 @@ const loggingGl = (names: Map<string, string>) => {
   return { gl, log };
 };
 
+/** A stand-in for Pixi's WebGL renderer: its table of linked programs, which the warm-up fills. */
+const fakeRenderer = (gl: object) => ({ gl, shader: { _programDataHash: {} as Record<string, unknown> } });
+
+const programNames = (): Map<string, string> => {
+  const text = (program: { fragment?: string }): string => program.fragment ?? "";
+  return new Map<string, string>([
+    [text(groundProgram("low")), "ground-low"],
+    [text(groundProgram("medium")), "ground-medium"],
+    [text(groundProgram("high")), "ground-high"],
+    [text(borderProgram()), "borders"],
+    [text(cloudProgram()), "clouds"],
+    ...PLACEMENT_GRIDS.map((grid): [string, string] => [text(placementProgram(grid)), `place-${grid}`]),
+  ]);
+};
+
 describe("the painted look's warm-up order (MR2 plan step 10)", () => {
-  it("compiles Low, the borders, the fog and the placements first, and the player's own Quality after", async () => {
+  it("compiles Low, the borders and the fog first, then the placements and the player's own Quality", async () => {
     vi.useFakeTimers();
     try {
-      const text = (program: { fragment?: string }): string => program.fragment ?? "";
-      const names = new Map<string, string>([
-        [text(groundProgram("low")), "ground-low"],
-        [text(groundProgram("medium")), "ground-medium"],
-        [text(groundProgram("high")), "ground-high"],
-        [text(borderProgram()), "borders"],
-        [text(cloudProgram()), "clouds"],
-        ...PLACEMENT_GRIDS.map((grid): [string, string] => [text(placementProgram(grid)), `place-${grid}`]),
-      ]);
-      const { gl, log } = loggingGl(names);
-      const prepared = preparePrograms(gl as unknown as WebGL2RenderingContext);
+      const { gl, log } = loggingGl(programNames());
+      const renderer = fakeRenderer(gl);
+      const prepared = preparePrograms(renderer as unknown as Renderer, gl as unknown as WebGL2RenderingContext);
       await vi.runAllTimersAsync();
       const programs = await prepared;
       expect(programs.ground).toBe(true);
       expect(programs.clouds).toBe(true);
+      // Nothing more until the look is built and asks for the rest.
+      expect(log.filter((entry) => entry.startsWith("compile"))).toHaveLength(3);
+      warmRest(programs.warmer!, Promise.resolve());
+      await vi.runAllTimersAsync();
 
-      const first = log.slice(0, 7);
-      expect(first).toEqual([
-        "compile ground-low",
-        "compile borders",
-        "compile clouds",
+      expect(log.slice(0, 3)).toEqual(["compile ground-low", "compile borders", "compile clouds"]);
+      // The placements and the player's Quality (High here: no saved choice) start only once the
+      // first three have linked, so they never slow the Low ground down.
+      const rest = log.indexOf("compile place-decals");
+      expect(log.slice(0, rest).filter((entry) => entry === "linked")).toHaveLength(3);
+      expect(log.slice(rest).filter((entry) => entry.startsWith("compile"))).toEqual([
         ...PLACEMENT_GRIDS.map((grid) => `compile place-${grid}`),
+        "compile ground-high",
       ]);
-      // The player's Quality (High here: no saved choice) starts only once all seven have linked,
-      // so it never slows the Low ground down.
-      const high = log.indexOf("compile ground-high");
-      expect(high).toBeGreaterThan(0);
-      expect(log.slice(0, high).filter((entry) => entry === "linked")).toHaveLength(7);
       await vi.runAllTimersAsync();
       expect(programs.warmer?.ready(groundProgram("high"))).toBe(true);
       expect(log).not.toContain("compile ground-medium");
+      // Every linked program went to Pixi, so Pixi never compiles them again.
+      expect(Object.keys(renderer.shader._programDataHash)).toHaveLength(8);
+      expect(renderer.shader._programDataHash[groundProgram("high")._key]).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("compiles nothing on the next open, and starts on the player's own Quality", async () => {
+    vi.useFakeTimers();
+    try {
+      const { gl, log } = loggingGl(programNames());
+      const renderer = fakeRenderer(gl);
+      const first = preparePrograms(renderer as unknown as Renderer, gl as unknown as WebGL2RenderingContext);
+      await vi.runAllTimersAsync();
+      warmRest((await first).warmer!, Promise.resolve());
+      await vi.runAllTimersAsync();
+      const compiled = log.length;
+      const again = preparePrograms(renderer as unknown as Renderer, gl as unknown as WebGL2RenderingContext);
+      await vi.runAllTimersAsync();
+      const programs = await again;
+      expect(programs.ground).toBe(true);
+      expect(log.length).toBe(compiled);
+      expect(programs.warmer?.ready(groundProgram("high"))).toBe(true);
     } finally {
       vi.useRealTimers();
     }

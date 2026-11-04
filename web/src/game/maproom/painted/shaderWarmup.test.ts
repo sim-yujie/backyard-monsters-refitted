@@ -8,10 +8,26 @@ const LINK_STATUS = 4;
  * A stand-in WebGL2 context: each program finishes compiling after `polls` status checks (with the
  * parallel-compile extension), and links when `links` says so.
  */
-const fakeGl = ({ parallel = true, polls = 3, links = [true], lost = false } = {}) => {
+const fakeGl = ({ parallel = true, polls = 3, links = [true], lost = false, fences = false } = {}) => {
   let made = 0;
   const asked = new Map<object, number>();
+  /** Fences: each is signalled after `polls` status checks (Firefox: the GPU process finished the compile). */
+  const fenceAsked = new Map<object, number>();
+  const fenceGl = {
+    SYNC_GPU_COMMANDS_COMPLETE: 0x9117,
+    SYNC_STATUS: 0x9114,
+    SIGNALED: 0x9119,
+    fenceSync: vi.fn(() => ({ fence: true })),
+    flush: vi.fn(),
+    getSyncParameter: vi.fn((fence: object) => {
+      const count = (fenceAsked.get(fence) ?? 0) + 1;
+      fenceAsked.set(fence, count);
+      return count >= polls ? 0x9119 : 0x9118;
+    }),
+    deleteSync: vi.fn(),
+  };
   const gl = {
+    ...(fences ? fenceGl : {}),
     VERTEX_SHADER: 1,
     FRAGMENT_SHADER: 2,
     LINK_STATUS,
@@ -79,6 +95,33 @@ describe("compiling the painted map's shaders ahead (the Map Room freeze)", () =
     expect(wait).toHaveBeenCalledTimes(1);
   });
 
+  it("without the extension (Firefox) waits for a fence after the links, never asking the link status early", async () => {
+    const gl = fakeGl({ parallel: false, fences: true, polls: 4 });
+    const wait = vi.fn(async () => {
+      expect(gl.getProgramParameter.mock.calls.some(([, name]) => name === LINK_STATUS)).toBe(false);
+    });
+    expect(await warmPrograms(gl as unknown as WebGL2RenderingContext, [source, source], wait)).toEqual([true, true]);
+    expect(wait).toHaveBeenCalledTimes(4);
+    expect(gl.fenceSync).toHaveBeenCalledTimes(1);
+    expect(gl.flush).toHaveBeenCalled();
+    expect(gl.deleteSync).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands each linked program to keep, and deletes only the ones it did not take", async () => {
+    const gl = fakeGl({ polls: 1, links: [true, true, false] });
+    const kept: number[] = [];
+    const keep = (index: number): boolean => {
+      kept.push(index);
+      return index === 0;
+    };
+    const result = await warmPrograms(gl as unknown as WebGL2RenderingContext, [source, source, source], vi.fn(async () => {}), keep);
+    expect(result).toEqual([true, true, false]);
+    // A failed link is never offered.
+    expect(kept).toEqual([0, 1]);
+    expect(gl.deleteProgram).toHaveBeenCalledTimes(2);
+    expect(gl.deleteShader).toHaveBeenCalledTimes(6);
+  });
+
   it("stops waiting when the context is lost, and reports failure", async () => {
     const gl = fakeGl({ polls: 1000, lost: true });
     const wait = vi.fn(async () => {});
@@ -122,5 +165,55 @@ describe("ProgramWarmer: the painted look's programs, each compiled once in the 
     const gl = fakeGl({ polls: 1, links: [true, false] });
     const warmer = new ProgramWarmer(gl as unknown as WebGL2RenderingContext, vi.fn(async () => {}));
     expect(await warmer.warmAll([source, { vertex: "v", fragment: "g" }])).toEqual([true, false]);
+  });
+
+  it("hands linked programs to the host, and takes what the host already has as ready without compiling", async () => {
+    const gl = fakeGl({ polls: 1 });
+    const held = new Set<string>();
+    const host = {
+      has: (s: { fragment?: string }) => held.has(s.fragment ?? ""),
+      adopt: vi.fn((s: { fragment?: string }) => {
+        held.add(s.fragment ?? "");
+        return true;
+      }),
+    };
+    const warmer = new ProgramWarmer(gl as unknown as WebGL2RenderingContext, vi.fn(async () => {}), host);
+    expect(await warmer.warm(source)).toBe(true);
+    expect(host.adopt).toHaveBeenCalledTimes(1);
+    expect(gl.deleteProgram).not.toHaveBeenCalled();
+    expect(warmer.ready(source)).toBe(true);
+    const other = { vertex: "v", fragment: "already" };
+    held.add("already");
+    expect(warmer.ready(other)).toBe(true);
+    expect(await warmer.warm(other)).toBe(true);
+    expect(gl.linkProgram).toHaveBeenCalledTimes(1);
+  });
+
+  it("compiles again what the host lost (its context was lost and restored)", async () => {
+    const gl = fakeGl({ polls: 1 });
+    const held = new Set<string>();
+    const host = {
+      has: (s: { fragment?: string }) => held.has(s.fragment ?? ""),
+      adopt: (s: { fragment?: string }) => (held.add(s.fragment ?? ""), true),
+    };
+    const warmer = new ProgramWarmer(gl as unknown as WebGL2RenderingContext, vi.fn(async () => {}), host);
+    await warmer.warm(source);
+    held.clear();
+    expect(warmer.ready(source)).toBe(false);
+    expect(await warmer.warm(source)).toBe(true);
+    expect(gl.linkProgram).toHaveBeenCalledTimes(2);
+  });
+
+  it("without the extension compiles one program at a time, in the order asked", async () => {
+    const gl = fakeGl({ parallel: false, fences: true, polls: 2 });
+    const warmer = new ProgramWarmer(gl as unknown as WebGL2RenderingContext, vi.fn(async () => {}));
+    const second = { vertex: "v", fragment: "second" };
+    const linkedBefore: number[] = [];
+    gl.linkProgram.mockImplementation(() => {
+      linkedBefore.push(gl.getProgramParameter.mock.calls.filter(([, name]) => name === LINK_STATUS).length);
+    });
+    expect(await warmer.warmAll([source, second])).toEqual([true, true]);
+    // The second program was sent only after the first one's status was read.
+    expect(linkedBefore).toEqual([0, 1]);
   });
 });
