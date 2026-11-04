@@ -151,14 +151,18 @@
   box-shadow: var(--focus-ring);
 }
 
-/* On the sub-tab's corner, clear of its word. */
+.build-menu__kind-label {
+  position: relative;
+}
+
+/* On the word's top corner, as a note on an icon is. */
 .build-menu__kind-count {
   position: absolute;
-  top: -7px;
-  right: -3px;
+  bottom: calc(100% - 6px);
+  left: calc(100% - 3px);
   z-index: 1;
-  min-width: 18px;
-  height: 18px;
+  min-width: 17px;
+  height: 17px;
   padding: 0 4px;
   border-radius: 9px;
   background: var(--colour-accent);
@@ -166,7 +170,7 @@
   font-family: var(--font-body);
   font-size: 11px;
   font-weight: 700;
-  line-height: 18px;
+  line-height: 17px;
   text-align: center;
   text-shadow: none;
   pointer-events: none;
@@ -806,10 +810,12 @@
     overflow-y: auto;
   }
 
-  /* "Premium" is the longest; the size follows the width so it fits a fifth. */
+  /* "Premium" is the longest; the size follows the width so it fits a
+     fifth, with room to spare in the widest of the fonts (as the tabs above). */
   .build-menu__kind {
     padding: 0 1px;
-    font-size: min(var(--text-sm), 3.3vw);
+    font-size: min(var(--text-sm), 2.9vw);
+    letter-spacing: -0.02em;
   }
 
   .build-menu--picked .build-menu__browse,

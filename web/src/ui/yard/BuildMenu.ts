@@ -268,7 +268,9 @@ export class BuildMenu {
       const count = document.createElement("span");
       count.className = "build-menu__kind-count";
       count.setAttribute("aria-hidden", "true");
-      button.append(label, count);
+      // On the word's corner, so it stays beside it however wide the sub-tab is.
+      label.append(count);
+      button.append(label);
       button.addEventListener("click", () => this.openKind(kind.id));
       this.kinds.append(button);
       this.kindButtons.set(kind.id, button);
