@@ -1,16 +1,25 @@
 import { getSession } from "@/api/auth";
-import { fetchSoundSwitches, saveSoundSwitches, type SoundSwitches } from "@/api/sound";
+import {
+  DEFAULT_EFFECTS_VOLUME,
+  DEFAULT_MUSIC_VOLUME,
+  fetchSoundSwitches,
+  saveSoundSwitches,
+  type SoundSwitches,
+} from "@/api/sound";
 import { musicHeld, noteMusicTurnedOn, onQualityChange } from "@/game/quality";
 
 /**
- * The signed-in player's music and effects switches (beta.5), as the server
- * keeps them with their main yard (`api/sound.ts`).
+ * The signed-in player's music and effects switches (beta.5) and volume
+ * sliders (owner, 4 Nov 2026), as the server keeps them with their main
+ * yard (`api/sound.ts`).
  *
  * Read once per signed-in account, on the first game screen; until then
  * they are unknown (null) and nothing plays, so a brand-new player, whose
  * music the server starts off, never hears a note before the answer comes.
  * A change shows at once and is saved behind it; if the save fails, the
- * switch goes back to what the server holds and the caller is told.
+ * switch goes back to what the server holds and the caller is told. A
+ * slider is saved once it has rested for {@link VOLUME_SAVE_DELAY_MS}, so a
+ * drag is one request, not fifty.
  *
  * On the Medium and Low Quality settings (`game/quality.ts`) the music shows
  * as off, and so is neither played nor downloaded, until the player turns it
@@ -19,6 +28,20 @@ import { musicHeld, noteMusicTurnedOn, onQualityChange } from "@/game/quality";
 
 export type { SoundSwitches };
 
+/** A volume slider's name. */
+export type SoundVolume = "musicVolume" | "effectsVolume";
+
+/** How long a slider rests before its place is saved. */
+export const VOLUME_SAVE_DELAY_MS = 400;
+
+/** What a switch or slider starts from before the server has answered. */
+const FALLBACK: SoundSwitches = {
+  music: true,
+  effects: true,
+  musicVolume: DEFAULT_MUSIC_VOLUME,
+  effectsVolume: DEFAULT_EFFECTS_VOLUME,
+};
+
 type Listener = (switches: SoundSwitches | null) => void;
 
 /** The api calls, swappable for tests. */
@@ -26,12 +49,20 @@ export interface SoundSwitchesApi {
   readonly fetch: () => Promise<SoundSwitches>;
   readonly save: (change: Partial<SoundSwitches>) => Promise<SoundSwitches>;
   readonly account: () => number | null;
+  /** Runs `run` after `ms`; returns the cancel. */
+  readonly later?: (run: () => void, ms: number) => () => void;
 }
+
+const defaultLater = (run: () => void, ms: number): (() => void) => {
+  const handle = setTimeout(run, ms);
+  return () => clearTimeout(handle);
+};
 
 const defaultApi: SoundSwitchesApi = {
   fetch: fetchSoundSwitches,
   save: saveSoundSwitches,
   account: () => getSession()?.userId ?? null,
+  later: defaultLater,
 };
 
 let api: SoundSwitchesApi = defaultApi;
@@ -44,6 +75,16 @@ let version = 0;
 const listeners = new Set<Listener>();
 /** Whether the Quality setting holds the music off on this page; decided on first use. */
 let held: boolean | null = null;
+
+interface VolumeSave {
+  readonly change: Partial<Record<SoundVolume, number>>;
+  /** What to put back if the save fails: the state before the first move. */
+  readonly before: SoundSwitches | null;
+  readonly cancel: () => void;
+  readonly waiters: { resolve: (stored: SoundSwitches) => void; reject: (error: unknown) => void }[];
+}
+
+let volumeSave: VolumeSave | null = null;
 
 const holding = (): boolean => (held ??= musicHeld());
 
@@ -75,6 +116,8 @@ export const onSoundSwitches = (listener: Listener): (() => void) => {
 /** Forgets the switches: signed out, or another account signed in. */
 export const forgetSoundSwitches = (): void => {
   version += 1;
+  volumeSave?.cancel();
+  volumeSave = null;
   owner = null;
   loading = null;
   if (state !== null) publish(null);
@@ -122,15 +165,53 @@ export const setSoundSwitch = async (which: keyof SoundSwitches, on: boolean): P
   const mine = version;
   loading = null;
   owner = api.account();
-  publish({ ...(before ?? { music: true, effects: true }), [which]: on });
+  publish({ ...(before ?? FALLBACK), [which]: on });
   try {
     const stored = await api.save({ [which]: on });
-    if (mine === version) publish(stored);
+    // A slider still waiting to be saved keeps its place over the answer.
+    if (mine === version) publish({ ...stored, ...volumeSave?.change });
     return stored;
   } catch (error) {
     if (mine === version) publish(before);
     throw error;
   }
+};
+
+/**
+ * Moves one slider (0-100): heard at once, saved once it rests. Resolves
+ * with the stored state; rejects, with the slider put back, when the save
+ * fails.
+ */
+export const setSoundVolume = (which: SoundVolume, value: number): Promise<SoundSwitches> => {
+  const level = Math.round(Math.min(100, Math.max(0, Number.isFinite(value) ? value : 0)));
+  const pending = volumeSave;
+  pending?.cancel();
+  version += 1;
+  loading = null;
+  owner = api.account();
+  const before = pending ? pending.before : state;
+  publish({ ...(state ?? FALLBACK), [which]: level });
+  const later = api.later ?? defaultLater;
+  return new Promise<SoundSwitches>((resolve, reject) => {
+    const waiters = [...(pending?.waiters ?? []), { resolve, reject }];
+    const change = { ...pending?.change, [which]: level };
+    const cancel = later(() => {
+      if (volumeSave?.cancel !== cancel) return;
+      volumeSave = null;
+      const mine = version;
+      api.save(change).then(
+        (stored) => {
+          if (mine === version) publish(stored);
+          for (const waiter of waiters) waiter.resolve(stored);
+        },
+        (error: unknown) => {
+          if (mine === version) publish(before);
+          for (const waiter of waiters) waiter.reject(error);
+        },
+      );
+    }, VOLUME_SAVE_DELAY_MS);
+    volumeSave = { change, before, cancel, waiters };
+  });
 };
 
 /** Test hook: swaps the api calls and clears everything. */
@@ -141,5 +222,7 @@ export const resetSoundSwitchesForTest = (next: SoundSwitchesApi = defaultApi): 
   loading = null;
   version = 0;
   held = null;
+  volumeSave?.cancel();
+  volumeSave = null;
   listeners.clear();
 };

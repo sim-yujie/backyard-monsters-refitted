@@ -27,7 +27,7 @@ describe("MusicButton", () => {
   };
 
   it("waits, greyed, until the switches are known, then shows them", async () => {
-    const { element } = build({ music: true, effects: false });
+    const { element } = build({ music: true, effects: false, musicVolume: 70, effectsVolume: 100 });
     expect(element.disabled).toBe(true);
     expect(element.dataset["music"]).toBe("unknown");
     await loadSoundSwitches();
@@ -38,7 +38,7 @@ describe("MusicButton", () => {
   });
 
   it("one press turns music off, the next back on, effects untouched", async () => {
-    const { element, saves } = build({ music: true, effects: false });
+    const { element, saves } = build({ music: true, effects: false, musicVolume: 70, effectsVolume: 100 });
     await loadSoundSwitches();
     element.click();
     expect(element.dataset["music"]).toBe("off");
@@ -52,7 +52,7 @@ describe("MusicButton", () => {
   });
 
   it("stops following the switches once destroyed", async () => {
-    const { element } = build({ music: true, effects: true });
+    const { element } = build({ music: true, effects: true, musicVolume: 70, effectsVolume: 100 });
     button!.destroy();
     button = null;
     await loadSoundSwitches();

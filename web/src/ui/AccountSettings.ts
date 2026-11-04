@@ -1,13 +1,15 @@
 /**
  * The account settings dialog: change username and the Shiny Lock switch,
  * opened from the account menu. Its "World chat", "Game effects" and "Look and
- * sound" parts are kept in this browser only: no server.
+ * sound" parts are kept in this browser only: no server, except the volume
+ * sliders, which are the account menu's own (`ui/SoundSliders.ts`).
  *
  * Both are server rules this only fronts. A rename keeps the game's username
  * rules and a long cooldown (`changeUsername.ts`); Shiny Lock makes the server
  * refuse every Shiny spend until it is turned off again (`shinyLock.ts`).
  */
 
+import { SoundSliders } from "@/ui/SoundSliders";
 import { changeUsername, fetchAccount, setShinyLocked, type AccountInfo } from "@/api/account";
 import { fetchBlocked, setPrivacy, unblockPlayer, type BlockedPlayer, type PrivacySettings } from "@/api/privacy";
 import { setCountry, type CountrySettings } from "@/api/country";
@@ -538,7 +540,9 @@ const lookSection = (): HTMLElement => {
     hint.classList.toggle("field__hint--error", !saved);
   });
 
-  section.append(heading, row, hint, ...fontRows(), ...musicRows());
+  // The volume sliders, as in the account menu (owner, 4 Nov 2026); saved with the account.
+  const sound = new SoundSliders("account-settings__sound");
+  section.append(heading, row, hint, ...fontRows(), ...musicRows(), sound.element);
   return section;
 };
 
