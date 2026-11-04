@@ -39,6 +39,7 @@ import { tribeOfBase } from "../../goals/counters.js";
 import { addQuestEvents, questEvent } from "../../quests/state.js";
 import { lootQuestEvents } from "../../quests/hooks.js";
 import { recordQuestEvents } from "../../quests/record.js";
+import { removedCampStandIn } from "./practiceCamp.js";
 import { countAttackLoot } from "../../events/lootEvents.js";
 import { recordAttackAchievements } from "../../achievements/events.js";
 import {
@@ -100,7 +101,20 @@ const servedTribe = async (user: User, baseid: string): Promise<ServedTribe> => 
 
   if (!maproom) throw new Error(`MapRoom not found for userid: ${user.username}`);
 
-  const existingTribe = maproom.tribedata.find((tribe) => tribe.baseid === baseid);
+  let existingTribe = maproom.tribedata.find((tribe) => tribe.baseid === baseid);
+
+  // The practice camp, removed by a guide skip during this attack: the attack
+  // lands on a stand-in that is never written back.
+  if (!existingTribe) {
+    existingTribe = removedCampStandIn(baseid);
+    if (existingTribe) {
+      logger.info("Practice camp attack by {username} (userid {userid}) landed after a guide skip", {
+        event: "practice-camp-stand-in",
+        userid: user.userid,
+        username: user.username,
+      });
+    }
+  }
 
   // Its entry is gone from the player's Map Room since the attack began.
   if (!existingTribe) {

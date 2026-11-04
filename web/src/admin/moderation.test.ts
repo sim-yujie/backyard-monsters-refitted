@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SESSION_STORAGE_KEY } from "@/config";
-import type { ChatReportView, PlayerModeration } from "./api";
+import type { ChatLogEntry, ChatReportView, FlaggedPlayer, PlayerModeration } from "./api";
 import {
   DEFAULT_WARNING,
   ModerationView,
   actionForm,
   banStatus,
+  flagLineItem,
+  markWords,
   roomLabel,
   untilWords,
 } from "./moderation";
@@ -281,5 +283,162 @@ describe("the forms", () => {
     expect(calls[0]!.body).toEqual({ reason: "" });
     expect(onDone).not.toHaveBeenCalled();
     expect(form.querySelector(".form-error")?.textContent).toContain("Not done:");
+  });
+});
+
+const flagged = (over: Partial<FlaggedPlayer> = {}): FlaggedPlayer => ({
+  userid: 42,
+  username: "MonsterMash",
+  banned: false,
+  muted: false,
+  count: 4,
+  slurs: 1,
+  lastId: 90,
+  latestAt: "2026-11-03T08:00:00Z",
+  lines: [
+    {
+      id: 90,
+      channel: "chat:mr2-global",
+      message: "shut up faggot",
+      shown: "shut up ******",
+      words: ["faggot"],
+      severity: "slur",
+      rule: "word",
+      at: "2026-11-03T08:00:00Z",
+    },
+  ],
+  ...over,
+});
+
+const logLine = (over: Partial<ChatLogEntry> = {}): ChatLogEntry => ({
+  id: 1,
+  userid: 42,
+  username: "MonsterMash",
+  channel: "chat:country:PH",
+  message: "hello po",
+  shown: "hello po",
+  flagged: null,
+  at: "2026-11-03T07:00:00Z",
+  ...over,
+});
+
+const searchButton = (view: ModerationView) =>
+  [...view.element.querySelectorAll(".chatlog-find button")].find((b) => b.textContent === "Search");
+
+describe("lines caught by the word filter", () => {
+  it("marks the caught words in the player's own line", () => {
+    const span = document.createElement("span");
+    span.append(...markWords("Shut up FAGGOT now", ["faggot"]).map((c) => (typeof c === "string" ? c : (c as Node))));
+    expect(span.innerHTML).toBe('Shut up <mark class="flag-word">FAGGOT</mark> now');
+  });
+
+  it("shows a Disguised chip with the word it was read as, only for disguised lines", () => {
+    const line = flagged().lines[0]!;
+    const disguised = flagLineItem({ ...line, message: "fvck you", shown: "**** you", words: ["fuck"], severity: "swear", rule: "disguised" });
+    expect(disguised.querySelector(".chip")?.textContent).toBe("Disguised: fuck");
+    expect(flagLineItem(line).querySelector(".chip")).toBeNull();
+  });
+
+  it("lists one row per player with the count, slur chip and the player's words", async () => {
+    routes = {
+      "GET /chatflags": {
+        players: [flagged(), flagged({ userid: 43, username: "Potty", slurs: 0, count: 1 })],
+        nextOffset: null,
+      },
+      "GET /chatreports": { reports: [], nextBefore: null },
+    };
+    const view = new ModerationView({ say: () => {} });
+    document.body.append(view.element);
+    await view.refresh();
+    const rows = view.element.querySelectorAll(".flag-row");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.textContent).toContain("Slur");
+    expect(rows[0]!.textContent).toContain("4 lines");
+    expect(rows[0]!.textContent).toContain("shut up faggot");
+    expect(rows[1]!.textContent).toContain("Swearing");
+
+    // Slurs first asks the server to sort by it.
+    click(view.element.querySelector('[data-flag-view="serious"]'));
+    await settle();
+    const last = calls.filter((c) => c.path.endsWith("/chatflags")).pop()!;
+    expect(last.query.get("sort")).toBe("serious");
+  });
+
+  it("dismisses a player's flags up to the newest one shown", async () => {
+    routes = {
+      "GET /chatflags": { players: [flagged()], nextOffset: null },
+      "GET /chatreports": { reports: [], nextBefore: null },
+      "POST /chatflags/42/dismiss": { dismissed: 4 },
+    };
+    const said: string[] = [];
+    const view = new ModerationView({ say: (m) => void said.push(m) });
+    document.body.append(view.element);
+    await view.refresh();
+    click(view.element.querySelector('.flag-dismiss[data-dismiss="42"]'));
+    await settle();
+    const post = calls.find((c) => c.method === "POST")!;
+    expect(post.path).toContain("/chatflags/42/dismiss");
+    expect(post.body).toEqual({ upTo: 90 });
+    expect(said).toEqual(["Dismissed: MonsterMash"]);
+  });
+
+  it("opens a flagged player with their lines, the buttons and their own chat", async () => {
+    routes = {
+      "GET /chatflags": { players: [flagged()], nextOffset: null },
+      "GET /chatreports": { reports: [], nextBefore: null },
+      "GET /players/42/moderation": { player: player() },
+      "GET /chatlog": {
+        lines: [logLine(), logLine({ id: 2, message: "fuck", shown: "****", flagged: "swear" })],
+        nextBefore: 2,
+      },
+    };
+    const view = new ModerationView({ say: () => {} });
+    document.body.append(view.element);
+    await view.refresh();
+    click(view.element.querySelector(".flag-row"));
+    await settle();
+    const card = view.element.querySelector(".mod-card")!;
+    expect(card.querySelector(".flag-quote")?.textContent).toContain("shut up faggot");
+    expect([...card.querySelectorAll("[data-kind]")].map((b) => b.getAttribute("data-kind"))).toEqual([
+      "warn",
+      "mute",
+      "ban",
+    ]);
+    const log = calls.find((c) => c.path.endsWith("/chatlog"))!;
+    expect(log.query.get("userid")).toBe("42");
+    expect(card.querySelectorAll(".chatlog-line")).toHaveLength(2);
+    expect(card.querySelector(".chatlog-line.is-flagged")?.textContent).toContain("Swearing");
+    expect(card.textContent).toContain("Show older");
+
+    // The room around the flagged line.
+    click([...card.querySelectorAll(".link-button")].find((b) => b.textContent === "See the room"));
+    await settle();
+    const room = calls.filter((c) => c.path.endsWith("/chatlog")).pop()!;
+    expect(room.query.get("channel")).toBe("chat:mr2-global");
+    expect(room.query.get("until")).toBe(String(Date.parse("2026-11-03T08:00:00Z") + 1000));
+  });
+
+  it("searches the chat log by words or by player name", async () => {
+    routes = {
+      "GET /chatflags": { players: [], nextOffset: null },
+      "GET /chatreports": { reports: [], nextBefore: null },
+      "GET /chatlog": { lines: [logLine()], nextBefore: null },
+    };
+    const view = new ModerationView({ say: () => {} });
+    document.body.append(view.element);
+    await view.refresh();
+    expect(view.element.textContent).toContain("Nothing caught");
+    const input = view.element.querySelector<HTMLInputElement>("#chatlog-search")!;
+    input.value = "hello";
+    click(searchButton(view));
+    await settle();
+    expect(calls.filter((c) => c.path.endsWith("/chatlog")).pop()!.query.get("q")).toBe("hello");
+
+    click(view.element.querySelector('[data-search-by="player"]'));
+    input.value = "MonsterMash";
+    click(searchButton(view));
+    await settle();
+    expect(calls.filter((c) => c.path.endsWith("/chatlog")).pop()!.query.get("player")).toBe("MonsterMash");
+    expect(view.element.querySelector(".chatlog-search .chatlog-line")?.textContent).toContain("MonsterMash");
   });
 });

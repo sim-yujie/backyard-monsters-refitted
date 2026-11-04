@@ -61,8 +61,8 @@ export const sendMessage: KoaController = async (ctx) => {
     }
 
     // Profanity filter
-    const { makeWordFilter } = await import("../../services/chat/badWords.js");
-    const filter = makeWordFilter();
+    const { sharedWordFilter } = await import("../../services/chat/badWords.js");
+    const filter = sharedWordFilter();
     const filteredSubject = filter.clean(message.subject);
     const filteredMessage = filter.clean(message.message);
 

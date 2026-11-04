@@ -1,4 +1,5 @@
 import { makeWordFilter } from "../services/chat/badWords.js";
+import { checkLine } from "../services/chat/chatFlags.js";
 
 import { User } from "../database/models/user.model.js";
 import { postgres } from "../server.js";
@@ -12,6 +13,7 @@ import {
   validateChannel,
 } from "./chatChannels.js";
 import { getHistory, pushMessage } from "./chatHistory.js";
+import { watchLine } from "./chatWatch.js";
 import { markGameTeam, refuseIfMuted } from "./chatGameTeam.js";
 import { takeAllianceLine } from "./chatLimits.js";
 import {
@@ -208,7 +210,10 @@ export const postMessage = async (client: ChatClient, channel: string, body: str
 
   if (refuseIfMuted(client, now)) return;
 
-  const messageBody = filter.clean(body.slice(0, MAX_MSG_LEN).trim());
+  const said = body.slice(0, MAX_MSG_LEN).trim();
+  // Players see the masked line; the dashboard keeps the player's own words (`chatWatch.ts`).
+  const check = checkLine(filter, said);
+  const messageBody = check.shown;
 
   if (!messageBody) return;
 
@@ -250,6 +255,8 @@ export const postMessage = async (client: ChatClient, channel: string, body: str
   };
 
   publishToChannel(channel, JSON.stringify(outgoing));
+
+  watchLine({ userid: client.userId, channel, channelType: info.type, message: said, check, ts: entry.ts });
 };
 
 /**
