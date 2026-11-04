@@ -18,7 +18,7 @@ export const faq: { q: string; a: string }[] = [
   },
   {
     q: "Is it free? Is it free-to-play?",
-    a: "Yes, it is completely free. Nothing in the game is sold for real money: no paid items, no pay-to-win and no ads, and there is nothing to download or install. Donations, such as on Patreon, only help pay for the server and give nothing in the game.",
+    a: "Yes, it is completely free. Nothing in the game is sold for real money: no paid items, no pay-to-win and no ads, and there is nothing to download or install. Donations on Patreon or Ko-fi only help pay for the server and give nothing in the game.",
   },
   {
     q: "Do I need Flash or a download?",
