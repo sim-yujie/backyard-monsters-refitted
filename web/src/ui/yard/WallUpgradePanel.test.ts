@@ -16,7 +16,8 @@ import { wallUpgradePanel } from "./WallUpgradePanel";
  * server will refuse, so they are worth a DOM.
  *
  * The fixture is the one `summary.test.ts` uses: four blocks at level 1, one
- * already at level 5, a Town Hall whose level the tests vary. A block's four
+ * already at level 5, a Town Hall whose level the tests vary. Wall 6, at
+ * level 2, and the level 1 tower (7) are for the picking tests. A block's four
  * upgrade steps cost 0/10,000, 100,000/100,000, 200,000/200,000 and
  * 400,000/400,000 twigs and pebbles, and level 5 wants Town Hall 6.
  */
@@ -27,6 +28,7 @@ const BUILDINGS: readonly BuildingData[] = [
   { id: 3, t: 17, X: 40, Y: 0 },
   { id: 4, t: 17, X: 60, Y: 0 },
   { id: 5, t: 17, X: 100, Y: 0, l: 5 },
+  { id: 6, t: 17, X: 140, Y: 0, l: 2 },
   { id: 7, t: 20, X: 200, Y: 0 },
 ];
 
@@ -175,12 +177,12 @@ describe("wallUpgradePanel", () => {
 /* ── Upgrade walls' picking mode (owner, 2026-11-04) ───────────────────────── */
 
 describe("wallUpgradePanel picking", () => {
-  const pickOpen = (yard: Yard, ids: readonly number[]) => {
+  const pickOpen = (yard: Yard, ids: readonly number[], allIds: readonly number[] = [1, 2, 3, 4, 5]) => {
     const onConfirm = vi.fn();
     const onPick = vi.fn();
     const container = document.createElement("div");
     document.body.append(container);
-    const all = nodesOf(yard, [1, 2, 3, 4, 5]);
+    const all = nodesOf(yard, allIds);
 
     const panel = wallUpgradePanel({
       nodes: nodesOf(yard, ids),
@@ -202,7 +204,12 @@ describe("wallUpgradePanel picking", () => {
     if (!confirm) throw new Error("no confirm button");
     const read = (selector: string): string => container.querySelector(selector)?.textContent ?? "";
 
-    return { panel, container, onConfirm, onPick, tool, confirm, read };
+    const level = (): string | undefined =>
+      container.querySelector<HTMLElement>('.planner-walls__level[aria-pressed="true"]')?.dataset["level"];
+    const press = (value: number): void =>
+      container.querySelector<HTMLButtonElement>(`.planner-walls__level[data-level="${value}"]`)?.click();
+
+    return { panel, container, onConfirm, onPick, tool, confirm, read, level, press };
   };
 
   it("says how to pick, with the finger's word on a touch screen", () => {
@@ -216,8 +223,44 @@ describe("wallUpgradePanel picking", () => {
 
   it("opens one level above the lowest wall, not at the highest the hall allows", () => {
     const harness = pickOpen(yardOf(RICH, 10), [1]);
-    const pressed = harness.container.querySelector(".planner-walls__level[aria-pressed=\"true\"]");
-    expect((pressed as HTMLElement | null)?.dataset["level"]).toBe("2");
+    expect(harness.level()).toBe("2");
+  });
+
+  it("opens one above the lowest wall picked: a level 2 wall offers Level 3", () => {
+    const yard = yardOf(RICH, 10);
+    const harness = pickOpen(yard, [6], [1, 2, 3, 4, 5, 6]);
+    expect(harness.level()).toBe("3");
+    expect(harness.read(".planner-walls__preview")).toBe("1 of 1 wall will go to level 3.");
+    expect(harness.confirm.disabled).toBe(false);
+  });
+
+  it("is not pulled down by a level 1 tower elsewhere in the yard", () => {
+    // The scene passes walls only; the panel ignores anything else it is given.
+    const yard = yardOf(RICH, 10);
+    expect(pickOpen(yard, [], [5, 6, 7]).level()).toBe("3");
+    expect(pickOpen(yard, [6, 7], [1, 6, 7]).level()).toBe("3");
+  });
+
+  it("moves the level when the pick changes", () => {
+    const yard = yardOf(RICH, 10);
+    const harness = pickOpen(yard, [6], [1, 2, 3, 4, 5, 6]);
+    harness.panel.setNodes(nodesOf(yard, [6, 1]));
+    expect(harness.level()).toBe("2");
+    harness.panel.setNodes(nodesOf(yard, [6]));
+    expect(harness.level()).toBe("3");
+  });
+
+  it("keeps a level the player pressed while it still raises a picked wall", () => {
+    const yard = yardOf(RICH, 10);
+    const harness = pickOpen(yard, [6], [1, 2, 3, 4, 5, 6]);
+    harness.press(4);
+    harness.panel.setNodes(nodesOf(yard, [6, 1]));
+    expect(harness.level()).toBe("4");
+
+    // Level 2 would do nothing for a level 2 wall: the level moves up.
+    harness.press(2);
+    harness.panel.setNodes(nodesOf(yard, [6]));
+    expect(harness.level()).toBe("3");
   });
 
   it("Select all and Clear hand the scene the new pick", () => {

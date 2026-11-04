@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse, BuildingData, Resources } from "@/api/types";
+import { townHallLevel } from "../buildingCosts";
 import { readYard, type Yard } from "../yardModel";
+import { wallTargets } from "./summary";
 import { Plan } from "./plan";
 import type { PlanNode } from "./placement";
 import {
   affordablePick,
   allWallIds,
+  autoWallTarget,
   boxPick,
+  followWallTarget,
   isPickableWall,
   pickSummary,
   togglePick,
@@ -162,5 +166,71 @@ describe("Affordable", () => {
 
     const lowHall = yardOf(RICH, 1);
     expect(affordablePick(nodes(planOf(lowHall), [1, 2]), 5, lowHall)).toEqual([]);
+  });
+});
+
+/** The levels a yard's hall allows, in rising order, as the panel passes them. */
+const allowedOf = (yard: Yard) => {
+  const hall = townHallLevel(yard);
+  return wallTargets(yard.kind).filter((entry) => entry.need <= hall);
+};
+
+describe("the level the window offers", () => {
+  const yard = yardOf(RICH);
+  const plan = planOf(yard);
+  const allowed = allowedOf(yard);
+
+  it("is one above the lowest wall picked", () => {
+    // Wall 4 is at level 2, wall 5 at level 5.
+    expect(autoWallTarget(nodes(plan, [4]), plan.buildings(), allowed)).toBe(3);
+    expect(autoWallTarget(nodes(plan, [5, 4]), plan.buildings(), allowed)).toBe(3);
+    expect(autoWallTarget(nodes(plan, [1, 4]), plan.buildings(), allowed)).toBe(2);
+  });
+
+  it("ignores a level 1 tower, picked or elsewhere in the yard", () => {
+    // Tower 7 has no level, so it reads as 1; it must not pull the level to 2.
+    expect(autoWallTarget(nodes(plan, [4, 7]), plan.buildings(), allowed)).toBe(3);
+    expect(autoWallTarget([], nodes(plan, [4, 5, 7, 8]), allowed)).toBe(3);
+  });
+
+  it("with nothing picked, is one above the lowest wall in the yard", () => {
+    expect(autoWallTarget([], plan.buildings(), allowed)).toBe(2);
+  });
+
+  it("stops at the highest level the hall allows", () => {
+    const top = allowed.at(-1)?.level;
+    expect(autoWallTarget(nodes(plan, [5]), plan.buildings(), allowed)).toBe(top);
+    expect(autoWallTarget(nodes(plan, [4]), plan.buildings(), [{ level: 2 }])).toBe(2);
+    expect(autoWallTarget(nodes(plan, [4]), plan.buildings(), [])).toBeNull();
+  });
+});
+
+describe("the level after the pick changes", () => {
+  const yard = yardOf(RICH);
+  const plan = planOf(yard);
+  const allowed = allowedOf(yard);
+
+  it("follows the pick while the player has not pressed a level", () => {
+    let choice = followWallTarget({ target: 5, manual: false }, nodes(plan, [4]), plan.buildings(), allowed, yard);
+    expect(choice).toEqual({ target: 3, manual: false });
+    choice = followWallTarget(choice, nodes(plan, [4, 1]), plan.buildings(), allowed, yard);
+    expect(choice).toEqual({ target: 2, manual: false });
+  });
+
+  it("keeps a level the player pressed while it still raises a picked wall", () => {
+    const pressed = { target: 4, manual: true };
+    expect(followWallTarget(pressed, nodes(plan, [4]), plan.buildings(), allowed, yard)).toBe(pressed);
+    expect(followWallTarget(pressed, nodes(plan, [1, 5]), plan.buildings(), allowed, yard)).toBe(pressed);
+    // Nothing picked: nothing to judge it by, so it stays.
+    expect(followWallTarget(pressed, [], plan.buildings(), allowed, yard)).toBe(pressed);
+  });
+
+  it("moves on from a pressed level that would do nothing", () => {
+    // Every picked wall is already at 2: the level follows the pick again.
+    const pressed = { target: 2, manual: true };
+    expect(followWallTarget(pressed, nodes(plan, [4]), plan.buildings(), allowed, yard)).toEqual({
+      target: 3,
+      manual: false,
+    });
   });
 });

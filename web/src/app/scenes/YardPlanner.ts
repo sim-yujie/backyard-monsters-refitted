@@ -39,6 +39,7 @@ import {
 import { computeCoverage, coverageTowers, figuresOf, type Coverage } from "@/game/yard/planner/coverage";
 import { DeadZoneLayer } from "@/game/yard/planner/DeadZoneLayer";
 import { sameTypeIds } from "@/game/yard/planner/selectType";
+import { isPickableWall } from "@/game/yard/planner/wallPick";
 import { summariseSelection, typeName } from "@/game/yard/planner/summary";
 import { footprintCentre, footprintOf } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
@@ -1151,7 +1152,8 @@ export class YardPlanner {
       nodes: this.session.selectedNodes(),
       yard: this.yard,
       pick: {
-        allWalls: () => this.session.plan.buildings(),
+        // Walls only: the level follows the lowest wall, not a level-1 tower.
+        allWalls: () => this.session.plan.buildings().filter(isPickableWall),
         onPick: (picked) => this.session.selectOnly(picked),
         touch: this.touch,
       },

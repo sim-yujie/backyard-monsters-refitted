@@ -2,6 +2,7 @@ import { WALL_TYPES } from "../buildingCosts";
 import type { Yard } from "../yardModel";
 import type { PlanNode } from "./placement";
 import {
+  effectiveLevel,
   heldResources,
   isShort,
   wallBatchPreview,
@@ -145,4 +146,50 @@ export const affordablePick = (
     chosen.push(entry.id);
   }
   return chosen;
+};
+
+/**
+ * The level the window offers: one above the lowest wall picked, or, with
+ * nothing picked, the lowest wall in the yard (owner, 2026-11-04). Capped at
+ * the highest level the hall allows (`allowed`, in rising order); null when
+ * the hall allows none.
+ */
+export const autoWallTarget = (
+  picked: readonly PlanNode[],
+  all: readonly PlanNode[],
+  allowed: readonly { readonly level: number }[],
+): number | null => {
+  const walls = picked.filter((node) => isPickableWall(node));
+  const from = walls.length > 0 ? walls : all.filter((node) => isPickableWall(node));
+  const top = allowed.at(-1)?.level ?? null;
+  if (from.length === 0) return top;
+  const lowest = Math.min(...from.map(effectiveLevel));
+  return allowed.find((entry) => entry.level > lowest)?.level ?? top;
+};
+
+/** The window's level and whether the player chose it with a level button. */
+export interface WallTargetChoice {
+  readonly target: number;
+  readonly manual: boolean;
+}
+
+/**
+ * The level after the pick changed: it follows the pick
+ * ({@link autoWallTarget}) unless the player pressed a level button, whose
+ * choice is kept while it still raises a picked wall. A chosen level that
+ * would do nothing gives way to the followed one.
+ */
+export const followWallTarget = (
+  choice: WallTargetChoice,
+  picked: readonly PlanNode[],
+  all: readonly PlanNode[],
+  allowed: readonly { readonly level: number }[],
+  yard: Yard,
+): WallTargetChoice => {
+  const walls = picked.filter((node) => isPickableWall(node));
+  if (choice.manual) {
+    if (walls.length === 0) return choice;
+    if (wallBatchPreview(walls, choice.target, yard).eligible.length > 0) return choice;
+  }
+  return { target: autoWallTarget(walls, all, allowed) ?? choice.target, manual: false };
 };

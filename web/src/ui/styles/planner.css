@@ -309,16 +309,21 @@
   font-size: var(--text-sm);
 }
 
+/* One row of three plated buttons, even at 375 wide: they share the row
+   evenly and give up side padding rather than wrap. */
 .planner-walls__tools {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--space-1);
   margin-bottom: var(--space-2);
 }
 
 .planner-walls__tool {
   flex: 1 1 0;
-  min-width: max-content;
+  min-width: 0;
+  white-space: nowrap;
+  padding-inline: var(--space-2);
+  font-size: var(--text-sm);
 }
 
 .planner-walls__note--short {
@@ -1903,6 +1908,18 @@
 
 .planner-bar--bottom[data-layout="landscape"].planner-bar--costs-open > .planner-cost {
   order: -1;
+}
+
+/*
+ * Picking walls (owner, 2026-11-04): the Upgrade walls window says what the
+ * pick is and what it costs at the level chosen there. The bar's cost cells
+ * priced each wall's next level instead (a second, bigger total), and its
+ * summary repeated the window's count cut off by an ellipsis, so while
+ * picking the bar keeps only its actions: one row, nothing truncated.
+ * `:root` lifts it over the phone's opened-cost rule.
+ */
+:root .planner-bar--bottom.planner-bar--wall-pick > :is(.planner-cost, .planner-bar__summary, .planner-bar__store-chip, .planner-bar__cost-line) {
+  display: none;
 }
 
 /* No zoom slider or minimap on a phone: pinch zooms, and Fit stays (#45). */

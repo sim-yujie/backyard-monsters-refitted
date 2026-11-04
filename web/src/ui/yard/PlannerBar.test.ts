@@ -1056,4 +1056,13 @@ describe("PlannerBar Upgrade walls", () => {
     bar.update(stateOf());
     expect(wallsButton(bar).getAttribute("aria-pressed")).toBe("false");
   });
+
+  it("marks the bottom bar while picking, so the stylesheet keeps only the actions", () => {
+    const bar = mount();
+    bar.update(stateOf({ wallPicking: true, selectionCount: 12 }));
+    expect(bar.actionBar.classList.contains("planner-bar--wall-pick")).toBe(true);
+
+    bar.update(stateOf());
+    expect(bar.actionBar.classList.contains("planner-bar--wall-pick")).toBe(false);
+  });
 });

@@ -1225,6 +1225,10 @@ export class PlannerBar {
       element.setAttribute("aria-pressed", String(state.view === view));
     }
     this.upgradeWalls.setAttribute("aria-pressed", String(state.wallPicking));
+    // Picking walls (owner, 2026-11-04): the Upgrade walls window already says
+    // what the pick is and what it costs at the chosen level, so the bar drops
+    // its cost cells, summary and Store chip and keeps its actions on one row.
+    this.actionBar.classList.toggle("planner-bar--wall-pick", state.wallPicking);
 
     this.setGroupEnabled(state.selectionCount);
 

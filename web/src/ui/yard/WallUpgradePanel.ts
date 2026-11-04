@@ -8,7 +8,7 @@ import {
   wallTargets,
   type WallBatchPreview,
 } from "@/game/yard/planner/summary";
-import { affordablePick } from "@/game/yard/planner/wallPick";
+import { affordablePick, followWallTarget, type WallTargetChoice } from "@/game/yard/planner/wallPick";
 import type { Yard } from "@/game/yard/yardModel";
 import { Panel } from "@/ui/Panel";
 import { costRows } from "./costRows";
@@ -29,8 +29,10 @@ import { costRows } from "./costRows";
  * trims a pick the yard cannot pay for down to one it can (or, with nothing
  * picked, picks as many walls as it can pay for), because the owner's players
  * are new and can rarely raise every wall at once. In this mode the level
- * starts one above the lowest wall in the yard, the cheapest step that means
- * anything, rather than at the highest the hall allows.
+ * follows the pick: one above the lowest wall picked (or, with nothing
+ * picked, the lowest wall in the yard), the cheapest step that means
+ * anything, rather than the highest the hall allows. A level button the
+ * player pressed is kept while it still raises a picked wall.
  *
  * ## Why the levels are buttons and not a dropdown
  *
@@ -97,18 +99,18 @@ export const wallUpgradePanel = (options: WallUpgradePanelOptions): WallUpgradeP
   });
 
   const allowed = targets.filter((entry) => entry.need <= hall);
-  // Picking: one above the lowest wall in the yard, the cheapest step a new
-  // player can take. Otherwise the highest the hall allows, the answer a
-  // player who selected their walls first almost always wants.
-  const lowest = pick
-    ? Math.min(...pick.allWalls().map(effectiveLevel), Number.POSITIVE_INFINITY)
-    : Number.POSITIVE_INFINITY;
-  let target =
-    (Number.isFinite(lowest)
-      ? (allowed.find((entry) => entry.level > lowest) ?? allowed.at(-1))?.level
-      : allowed.at(-1)?.level) ??
-    targets[0]?.level ??
-    2;
+  // Not picking: the highest the hall allows, the answer a player who
+  // selected their walls first almost always wants. Picking: the level
+  // follows the pick (see "Picking" above).
+  let choice: WallTargetChoice = {
+    target: allowed.at(-1)?.level ?? targets[0]?.level ?? 2,
+    manual: false,
+  };
+  const follow = (): void => {
+    if (pick) choice = followWallTarget(choice, walls, pick.allWalls(), allowed, yard);
+  };
+  follow();
+  let target = choice.target;
 
   const content: HTMLElement[] = [];
 
@@ -200,6 +202,7 @@ export const wallUpgradePanel = (options: WallUpgradePanelOptions): WallUpgradeP
       : `Take every ${picked} wall to level ${entry.level}.`;
 
     element.addEventListener("click", () => {
+      choice = { target: entry.level, manual: true };
       target = entry.level;
       render();
     });
@@ -266,6 +269,8 @@ export const wallUpgradePanel = (options: WallUpgradePanelOptions): WallUpgradeP
     setNodes(nodes: readonly PlanNode[], next?: Yard): void {
       walls = nodes.filter(isWall);
       if (next) yard = next;
+      follow();
+      target = choice.target;
       render();
     },
   });
@@ -274,7 +279,7 @@ export const wallUpgradePanel = (options: WallUpgradePanelOptions): WallUpgradeP
 const toolButton = (label: string, title: string): HTMLButtonElement => {
   const element = document.createElement("button");
   element.type = "button";
-  element.className = "btn btn--ghost planner-walls__tool";
+  element.className = "btn btn--outline planner-walls__tool";
   element.textContent = label;
   element.title = title;
   return element;
