@@ -238,44 +238,17 @@ const float RIVER_BANK_SHARE = 0.35;
 const float RIVER_THIN = 0.012;
 const float RIVER_WIDE = 0.06;
 // Mock-up B's river: a deeper, bluer water than the sea's turquoise, and grey stones along its banks
-// (a grid in hex units, how many squares hold one, the band they lie in past the water's edge, in
-// cell widths).
-const vec3 RIVER_DEEP = vec3(0.03, 0.34, 0.74);
-const vec3 RIVER_LIGHT = vec3(0.12, 0.6, 0.94);
-const float STONE_GRID = 0.13;
-const float STONE_CHANCE = 0.72;
-const vec2 STONE_BAND = vec2(0.013, 0.02);
-
-// The bank stones round hex point h, e the river's edge distance there (cell widths, < 0 on the
-// bank), wide how wide the river is (0..1): x the stone's cover (0..1), y its light (0..1).
-vec2 riverStones(vec2 h, float e, float wide) {
-  float centre = STONE_BAND.x * (1.0 + 0.6 * wide);
-  float halfBand = STONE_BAND.y * (1.0 + 0.6 * wide);
-  float band = 1.0 - pow(clamp((-e - centre) / halfBand, -1.0, 1.0), 2.0);
-  if (band <= 0.0) return vec2(0.0);
-  vec2 p = h / STONE_GRID;
-  vec2 base = floor(p);
-  float best = 0.0;
-  vec2 nb = vec2(0.0);
-  for (int j = -1; j <= 1; j++) {
-    for (int i = -1; i <= 1; i++) {
-      vec2 id = base + vec2(float(i), float(j));
-      if (hash12(id + 91.7) > STONE_CHANCE) continue;
-      vec2 c = id + 0.25 + 0.5 * vec2(hash12(id + 31.3), hash12(id + 47.1));
-      float r = 0.5 + 0.22 * hash12(id + 12.9);
-      vec2 d = (p - c) / (r * vec2(1.0, 0.8));
-      float top = 1.0 - dot(d, d);
-      if (top > best) { best = top; nb = d; }
-    }
-  }
-  float height = best - (1.0 - band) * 0.9;
-  if (height <= 0.0) return vec2(0.0);
-  vec3 n = normalize(vec3(nb * 1.3, sqrt(max(best, 0.0))));
-  float light = max(0.0, dot(n, normalize(vec3(-0.5, -0.65, 0.6))));
-  // A dark outline round each stone, as painted.
-  light *= mix(0.45, 1.0, smoothstep(0.0, 0.2, height));
-  return vec2(smoothstep(0.0, 0.06, height), light);
-}
+// (a grid in hex units, how many squares hold one, and how far from the water a stone's middle may
+// lie, in cell widths).
+const vec3 RIVER_DEEP = vec3(0.0, 0.32, 0.7);
+const vec3 RIVER_LIGHT = vec3(0.02, 0.6, 1.0);
+const float STONE_GRID = 0.12;
+const float STONE_CHANCE = 0.75;
+const float STONE_REACH = 0.03;
+// The stones' warm greys: in shadow, mid and sunlit.
+const vec3 STONE_DARK = vec3(0.3, 0.29, 0.29);
+const vec3 STONE_MID = vec3(0.6, 0.58, 0.55);
+const vec3 STONE_LIT = vec3(0.84, 0.82, 0.76);
 
 // The river at world point p (riverMask.ts): x its depth (1 mid-stream, 0 at the water's edge), y the
 // signed distance to the water's edge in cell widths (> 0 in the water), z how much of a mouth, w its
@@ -290,6 +263,43 @@ vec4 riverAt(vec2 p) {
 }
 
 float riverBankWidth(vec4 r) { return RIVER_BANK + RIVER_BANK_SHARE * r.w; }
+
+// The bank stones round hex point h, e the river's edge distance there (cell widths, < 0 on the
+// bank), wide how wide the river is (0..1): x the stone's cover (0..1), y its light (0..1). A stone
+// stands where its middle lies on the bank near the water, and is drawn whole: the water painted
+// after it covers its foot, so it sits in the river's edge.
+vec2 riverStones(vec2 h, float e, float wide) {
+  float reach = STONE_REACH * (1.0 + 0.6 * wide);
+  if (-e > reach + 0.12) return vec2(0.0);
+  vec2 p = h / STONE_GRID;
+  vec2 base = floor(p);
+  float best = 0.0;
+  vec2 nb = vec2(0.0);
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 id = base + vec2(float(i), float(j));
+      if (hash12(id + 91.7) > STONE_CHANCE) continue;
+      vec2 c = id + 0.25 + 0.5 * vec2(hash12(id + 31.3), hash12(id + 47.1));
+      float r = 0.42 + 0.4 * hash12(id + 12.9);
+      // Each stone its own oval, leaning one way or the other.
+      vec2 q = p - c;
+      vec2 d = vec2(q.x + (hash12(id + 5.3) - 0.5) * 0.8 * q.y, q.y) / (r * vec2(1.0, 0.86));
+      float top = 1.0 - dot(d, d);
+      if (top <= best) continue;
+      // Only now (inside a stone) look up where its middle lies.
+      float ec = riverAt(c * STONE_GRID * uUnit).y;
+      if (ec > 0.0 || -ec > reach) continue;
+      best = top;
+      nb = d;
+    }
+  }
+  if (best <= 0.0) return vec2(0.0);
+  vec3 n = normalize(vec3(nb * 1.8, sqrt(best)));
+  float light = 0.2 + 0.8 * max(0.0, dot(n, normalize(vec3(-0.5, -0.65, 0.6))));
+  // A thin dark outline round each stone, as painted.
+  light *= mix(0.5, 1.0, smoothstep(0.0, 0.15, best));
+  return vec2(smoothstep(0.0, 0.08, best), light);
+}
 
 // The weights of p in the triangle (0, b, c).
 vec3 barycentric(vec2 p, vec2 b, vec2 c) {
@@ -893,7 +903,8 @@ void main() {
         vec2 stone = riverStones(h, e, wide);
         float shown = stone.x * landHere * (1.0 - river.z);
         if (shown > 0.002) {
-          vec3 rock = mix(vec3(0.3, 0.32, 0.35), vec3(0.88, 0.88, 0.86), smoothstep(0.25, 0.95, stone.y));
+          vec3 rock = mix(STONE_DARK, STONE_MID, smoothstep(0.12, 0.5, stone.y));
+          rock = mix(rock, STONE_LIT, smoothstep(0.55, 0.92, stone.y));
           colour = mix(colour, colour * 0.6, smoothstep(0.0, 0.3, shown) * (1.0 - shown));
           colour = mix(colour, rock, shown);
         }
@@ -915,11 +926,12 @@ void main() {
       float inland = 1.0 - river.z;
       float edge = 1.0 - smoothstep(0.0, 0.014 + 0.014 * wide, e);
       float bedShows = uQuality > 0.5 ? 0.35 + 0.4 * valueNoise(h * 6.0 + 17.0) : 0.5;
-      stream = mix(stream, land * vec3(0.5, 0.52, 0.4), edge * bedShows * inland);
+      stream = mix(stream, land * vec3(0.5, 0.52, 0.4), edge * bedShows * 0.5 * inland);
       float under = (1.0 - smoothstep(0.0, 0.03, e)) * max(0.0, -towardsLand.y);
       stream *= 1.0 - 0.3 * under * inland;
-      float lip = (1.0 - smoothstep(0.0, 0.012, e)) * max(0.0, towardsLand.y);
-      stream = mix(stream, FOAM_WHITE, 0.22 * lip * inland);
+      // A bright rim along both banks, strongest along the sunlit one (mock-up B).
+      float rim = 1.0 - smoothstep(0.002, 0.009, e);
+      stream = mix(stream, FOAM_WHITE, rim * (0.25 + 0.35 * max(0.0, towardsLand.y)) * inland);
       float bar = 0.0;
       if (uQuality > 0.5) {
         // Sand bars where the river widens into its mouth.
@@ -928,20 +940,21 @@ void main() {
       }
       if (uQuality > 1.5) {
         // Glints drifting on the water, mid-stream.
-        float glint = smoothstep(0.72, 0.88, valueNoise(h * 9.0 + uTime * vec2(0.35, 0.15)));
-        stream = mix(stream, FOAM_WHITE, glint * 0.4 * smoothstep(0.2, 0.55, river.x) * (1.0 - bar));
+        float glint = smoothstep(0.78, 0.9, valueNoise(h * 9.0 + uTime * vec2(0.35, 0.15)));
+        stream = mix(stream, FOAM_WHITE, glint * 0.3 *smoothstep(0.2, 0.55, river.x) * (1.0 - bar));
       }
       // Mock-up B's blue (bluer than the sea's turquoise), darker in the deep, with white streaks
       // running with the flow and white water where the river breaks over stones.
       float lum = dot(stream, vec3(0.3, 0.59, 0.11));
       vec3 blue = mix(RIVER_DEEP, RIVER_LIGHT, smoothstep(0.25, 0.65, lum));
-      stream = mix(stream, blue, 0.7 * inland * (1.0 - bar));
+      stream = mix(stream, blue, 0.8 * inland * (1.0 - bar));
       if (uQuality > 0.5) {
-        // Streaks run along the banks: lines of even depth, broken up and drifting.
-        float lane = abs(fract(river.x * 2.6 + 0.25 * valueNoise(h * 3.0 + 8.0)) - 0.5);
-        float streak = (1.0 - smoothstep(0.03, 0.09, lane)) * smoothstep(0.45, 0.7, valueNoise(h * 5.0 + uTime * vec2(0.4, 0.25)));
+        // Streaks run along the banks: lines of even depth, long and only now and then broken, drifting.
+        float lane = abs(fract(river.x * 2.2 + 0.3 * valueNoise(h * 2.0 + 8.0)) - 0.5);
+        float laneWidth = 0.1 + 0.06 * wide;
+        float streak = (1.0 - smoothstep(laneWidth * 0.45, laneWidth, lane)) * smoothstep(0.5, 0.6, valueNoise(h * 7.0 + uTime * vec2(0.3, 0.18)));
         float rapids = smoothstep(0.6, 0.8, valueNoise(h * 1.9 + 33.0));
-        float white = streak * (0.45 + 0.55 * rapids) * smoothstep(0.1, 0.45, river.x);
+        float white = streak * (0.8 + 0.2 * rapids) * smoothstep(0.1, 0.35, river.x);
         stream = mix(stream, FOAM_WHITE, clamp(white, 0.0, 0.85) * inland * (1.0 - bar));
       }
       colour = mix(colour, stream, water * landHere);
