@@ -14,10 +14,10 @@ import { LodTier, sameView, tierForZoom, viewFor } from "./lod";
 import { MapAtlas } from "./mapAtlas";
 import { MapChunk, TextLevel, type ChunkView } from "./MapChunk";
 import type { Projector } from "./markerPins";
-import { BorderLayer } from "./painted/BorderLayer";
-import { CloudLayer, FOG_UNDER_CLOUD } from "./painted/CloudLayer";
-import { PaintedGround, groundShaderCompiles, shaderCompiles } from "./painted/PaintedGround";
-import { CLOUD_FRAGMENT, CLOUD_VERTEX } from "./painted/cloudShader";
+import type { BorderLayer } from "./painted/BorderLayer";
+import type { CloudLayer } from "./painted/CloudLayer";
+import type { PaintedGround } from "./painted/PaintedGround";
+import type { PaintedPrograms } from "./painted/paintedLook";
 import { BuildingAvatars } from "./buildingAvatars";
 import { cellLift, liftCorners, setFlatGround } from "./ground";
 import { GroundArt } from "./groundArt";
@@ -31,6 +31,9 @@ import { classicLook } from "@/game/classicLook";
 import { isFogCell } from "@/api/types";
 import type { ZoneRecord, ZoneStore } from "./ZoneStore";
 import type { CellRange } from "./zones";
+import type * as PaintedLookNamespace from "./painted/paintedLook";
+
+type PaintedLookModule = typeof PaintedLookNamespace;
 
 /**
  * Chunks built in one frame.
@@ -130,6 +133,20 @@ export class MapRenderer {
    */
   paintedStepped = false;
   private webGL2 = false;
+  /** The live renderer (attach), which the painted look's sprite placement pass draws with. */
+  private renderer: Renderer | null = null;
+  /** The map's WebGL2 context, where the painted look's shaders are compiled ahead (`shaderWarmup.ts`). */
+  private gl: WebGL2RenderingContext | null = null;
+  /** Whether the painted look is asked for (`setPaintedMap`); it shows once its code and shaders are ready. */
+  private paintedWanted = false;
+  /**
+   * The painted look's code (fetched on first use, `painted/paintedLook.ts`) and which of its
+   * shaders compiled; null until both are known.
+   */
+  private paintedKit: { look: PaintedLookModule; programs: PaintedPrograms } | null = null;
+  /** Fetching the code and compiling the shaders, while it runs. */
+  private paintedPreparing: Promise<void> | null = null;
+  private destroyed = false;
 
   private lastRange: CellRange | null = null;
   private lastTier: LodTier | null = null;
@@ -285,7 +302,9 @@ export class MapRenderer {
     this.range.fitGrid();
     this.atlas?.destroy();
     this.atlas = new MapAtlas(renderer);
+    this.renderer = renderer;
     this.webGL2 = (renderer as { context?: { webGLVersion?: number } }).context?.webGLVersion === 2;
+    this.gl = this.webGL2 ? ((renderer as { gl?: WebGL2RenderingContext }).gl ?? null) : null;
     this.live.attach(renderer);
     this.dropAllChunks();
     this.lastRange = null;
@@ -353,9 +372,16 @@ export class MapRenderer {
     const bordersChanged = this.borders?.flush() ?? false;
     const nowPaint = performance.now();
     const waterStepped = this.painted?.animate(nowPaint, range) ?? false;
+    // The player's Quality's ground program once compiled, and the sprite pieces round the view.
+    // A cell's width in drawn pixels, as the shader's fades see it (zoom is CSS pixels per world
+    // point; the renderer's resolution is the most the tilted picture draws at, so never too few).
+    const groundReady =
+      this.painted && this.renderer
+        ? this.painted.prepare(this.renderer, range, this.painted.shape.cellWidth * zoom * this.renderer.resolution)
+        : false;
     const pulseStepped = this.borders?.animate(nowPaint, range) ?? false;
     const cloudsStepped = this.clouds?.animate(nowPaint, range) ?? false;
-    this.paintedStepped = waterStepped || pulseStepped || bordersChanged || cloudsStepped || fogChanged;
+    this.paintedStepped = waterStepped || groundReady || pulseStepped || bordersChanged || cloudsStepped || fogChanged;
     this.range.flush();
     const atlas = this.atlas;
     if (!atlas) return false;
@@ -368,7 +394,7 @@ export class MapRenderer {
       this.range.setZoom(zoom);
     }
 
-    this.live.update(range, zoom);
+    this.live.update(range, zoom, nowPaint);
     const tier = tierForZoom(zoom);
     const view = viewFor(tier, zoom, atlas);
     const nowMs = Date.now();
@@ -420,29 +446,23 @@ export class MapRenderer {
    * Turns Map Room 2's painted look on or off (`painted/paintedSwitch.ts` decides). On, the painted
    * ground replaces the tiles, the raster and the hex outline sprites, and cells stop rising to
    * their height. It stays off where the shader cannot run (no WebGL2, or it does not compile).
-   * Returns whether it is on.
+   *
+   * The first time, the look's code is fetched and its shaders compiled in the background
+   * (`painted/shaderWarmup.ts`): the big ground shader can take the browser 10-40 s to compile the
+   * first time, and doing that on the spot froze the page (the owner's Map Room "crash", 4 Nov
+   * 2026). Today's tiles show meanwhile and the painted look takes over when it is ready.
+   * Returns whether it is on now.
    */
   setPaintedMap(on: boolean): boolean {
-    if (on && this.painted === null && this.webGL2 && groundShaderCompiles()) {
-      this.painted = new PaintedGround();
-      this.root.addChildAt(this.painted.mesh, this.root.getChildIndex(this.raster.sprite) + 1);
-      for (const zone of this.store.loadedZoneRefs()) this.painted.applyZone(zone);
-      void this.painted.load();
-      this.borders = new BorderLayer();
-      this.borders.setMyAlliance(this.myAlliance, []);
-      // Over the ground (and rivers), under the cells' markers; with the markers standing upright
-      // (tilt) they live outside the root, and the borders go under the attack range instead.
-      const above = this.world.parent === this.root ? this.world : this.range.container;
-      this.root.addChildAt(this.borders.mesh, this.root.getChildIndex(above));
-      for (const zone of this.store.loadedZoneRefs()) this.borders.applyZone(zone);
-      // The painted fog over the ground and the borders (a border running into the fog goes under
-      // the cloud), under the attack range and the cells' markers.
-      if (shaderCompiles(CLOUD_VERTEX, CLOUD_FRAGMENT)) {
-        this.clouds = new CloudLayer(this.painted.groundData);
-        this.root.addChildAt(this.clouds.mesh, this.root.getChildIndex(above));
-        this.painted.setFogColour(FOG_UNDER_CLOUD);
-        void this.clouds.load();
+    this.paintedWanted = on;
+    if (on && this.painted === null) {
+      const kit = this.paintedKit;
+      if (!kit) {
+        if (this.webGL2 && this.gl) this.paintedPreparing ??= this.preparePainted(this.gl);
+        return false;
       }
+      if (!kit.programs.ground) return false;
+      this.buildPainted(kit.look, kit.programs);
     } else if (!on && this.painted !== null) {
       this.clouds?.destroy();
       this.clouds = null;
@@ -464,7 +484,55 @@ export class MapRenderer {
     return painted;
   }
 
+  /** Whether the painted look is still being fetched or compiled. */
+  get paintedPending(): boolean {
+    return this.paintedPreparing !== null;
+  }
+
+  /** Fetches the painted look's code, compiles its shaders, then shows it if it is still wanted. */
+  private async preparePainted(gl: WebGL2RenderingContext): Promise<void> {
+    let kit: { look: PaintedLookModule; programs: PaintedPrograms };
+    try {
+      const look = await import("./painted/paintedLook");
+      kit = { look, programs: this.destroyed ? { ground: false, clouds: false, warmer: null } : await look.preparePrograms(gl) };
+    } catch (caught) {
+      // The code did not arrive (offline, a new release): the tiles stay; the next map open tries again.
+      console.warn("The painted map could not be prepared; the map keeps its tiles.", caught);
+      this.paintedPreparing = null;
+      return;
+    }
+    this.paintedPreparing = null;
+    if (this.destroyed) return;
+    this.paintedKit = kit;
+    if (!kit.programs.ground) console.warn("The painted map's shader did not compile here; the map keeps its tiles.");
+    if (this.paintedWanted) this.setPaintedMap(true);
+  }
+
+  private buildPainted(look: PaintedLookModule, programs: PaintedPrograms): void {
+    const painted = new look.PaintedGround(undefined, programs.warmer);
+    this.painted = painted;
+    this.root.addChildAt(painted.mesh, this.root.getChildIndex(this.raster.sprite) + 1);
+    for (const zone of this.store.loadedZoneRefs()) painted.applyZone(zone);
+    void painted.load();
+    this.borders = new look.BorderLayer();
+    this.borders.setMyAlliance(this.myAlliance, []);
+    // Over the ground (and rivers), under the cells' markers; with the markers standing upright
+    // (tilt) they live outside the root, and the borders go under the attack range instead.
+    const above = this.world.parent === this.root ? this.world : this.range.container;
+    this.root.addChildAt(this.borders.mesh, this.root.getChildIndex(above));
+    for (const zone of this.store.loadedZoneRefs()) this.borders.applyZone(zone);
+    // The painted fog over the ground and the borders (a border running into the fog goes under
+    // the cloud), under the attack range and the cells' markers.
+    if (programs.clouds) {
+      this.clouds = new look.CloudLayer(painted.groundData);
+      this.root.addChildAt(this.clouds.mesh, this.root.getChildIndex(above));
+      painted.setFogColour(look.FOG_UNDER_CLOUD);
+      void this.clouds.load();
+    }
+  }
+
   destroy(): void {
+    this.destroyed = true;
     this.clouds?.destroy();
     this.clouds = null;
     this.painted?.destroy();

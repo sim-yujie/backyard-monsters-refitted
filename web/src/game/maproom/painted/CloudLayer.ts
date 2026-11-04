@@ -20,6 +20,10 @@ const DECK_COLOUR = [0.85, 0.87, 0.9] as const;
  */
 export const FOG_UNDER_CLOUD = 0xd6dbe3;
 
+/** The painted fog's program (one per page; `shaderWarmup.ts` compiles it ahead). */
+export const cloudProgram = (): GlProgram =>
+  GlProgram.from({ vertex: CLOUD_VERTEX, fragment: CLOUD_FRAGMENT, name: "mr2-painted-clouds" });
+
 const QUALITY_LEVEL: Record<Quality, number> = { high: 2, medium: 1, low: 0 };
 
 interface CloudUniforms {
@@ -64,7 +68,7 @@ export class CloudLayer {
       alphaMode: "no-premultiply-alpha",
     });
     this.shader = new Shader({
-      glProgram: GlProgram.from({ vertex: CLOUD_VERTEX, fragment: CLOUD_FRAGMENT, name: "mr2-painted-clouds" }),
+      glProgram: cloudProgram(),
       resources: {
         cloudUniforms: {
           uShape: { value: shape.kind === "flat" ? 0 : 1, type: "f32" },

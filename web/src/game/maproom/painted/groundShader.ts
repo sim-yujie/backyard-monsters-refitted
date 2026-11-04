@@ -1,8 +1,9 @@
-import { FEATURE_DENSITY, SPRITE_ROWS } from "./canopy";
+import { DECAL_GRID, FEATURE_DENSITY, ROCK_GRID, SPRITE_ROWS } from "./canopy";
 import { CANOPY_GLSL } from "./canopyShader";
 import { Ground, GroundTexture, OCCUPIED_FLAG, SHADER_TEXTURES } from "./groundKinds";
 import { HILLS_GLSL } from "./hillsShader";
 import { EDGE_RANGE, HALF_RANGE } from "./riverMask";
+import type { Quality } from "@/game/quality";
 
 /**
  * The painted ground's WebGL2 shader (Map Room 2 Modern look, plan step 2).
@@ -56,14 +57,19 @@ void main() {
 const WET_SAND = SHADER_TEXTURES.indexOf(GroundTexture.WET_SAND);
 const FOAM = SHADER_TEXTURES.indexOf(GroundTexture.FOAM);
 
-const samplers = SHADER_TEXTURES.map((_, index) => `uniform sampler2D uGround${index};`).join("\n");
-const sampleChain = SHADER_TEXTURES.map(
-  (_, index) => `  ${index === 0 ? "if" : "else if"} (g == ${index}) c = textureGrad(uGround${index}, uv, dx, dy);`,
+/** The samplers the shader declares: every ground texture but the foam (it rides in the wet sand's alpha). */
+export const GROUND_SAMPLERS = SHADER_TEXTURES.map((_, index) => index).filter((index) => index !== FOAM);
+const samplers = GROUND_SAMPLERS.map((index) => `uniform sampler2D uGround${index};`).join("\n");
+const sampleChain = GROUND_SAMPLERS.map(
+  (index, at) => `  ${at === 0 ? "if" : "else if"} (g == ${index}) c = textureGrad(uGround${index}, uv, dx, dy);`,
 ).join("\n");
 
-export const GROUND_FRAGMENT = `#version 300 es
+const FRAGMENT = `#version 300 es
 precision highp float;
 precision highp int;
+// Zero, though the compiler cannot know it: added to every loop's end (dynamicLoops), so Direct3D's
+// compiler keeps each loop as a loop instead of copying its body out (plan step 10, compile time).
+#define LOOP_ZERO int(min(uCellPoints, 0.0))
 in vec2 vWorld;
 out vec4 finalColor;
 
@@ -84,6 +90,15 @@ uniform float uTime;        // seconds of water motion (still on Low)
 uniform sampler2D uRiver;   // the rivers' distance picture (riverMask.ts) over uRiverRect
 uniform vec4 uRiverRect;    // its world rectangle: x0, y0, 1 / width, 1 / height
 uniform float uRiverOn;     // 1 while rivers show
+// Which sprite piece each grid square holds (PlacementLayer.ts): one texel per square, the four
+// grids side by side. A rect is the squares it covers (first x, y; count x, y; 0 before the first
+// pass); uPlaceAt the atlas column each grid starts at (details, sea rocks, features, marsh).
+uniform sampler2D uPlace;
+uniform vec4 uDecalRect;
+uniform vec4 uRockRect;
+uniform vec4 uFeatureRect;
+uniform vec4 uMarshRect;
+uniform vec4 uPlaceAt;
 
 const float SQRT3 = 1.7320508;
 const float APOTHEM = 0.8660254;
@@ -191,9 +206,9 @@ const vec3 FOAM_WHITE = vec3(0.97, 0.99, 1.0);
 // foot must be inside its ground; the share of the beach's end (beachEnd) from which a foot wears
 // beach details; how far (claim units) a rock's foot must be out from the coast; the share of
 // grid squares with a rock near the coast and further out, and of details on Medium.
-const float DECAL_GRID = 0.21;
+const float DECAL_GRID = ${DECAL_GRID.toFixed(4)};
 const float DECAL_SIZE = 0.18;
-const float ROCK_GRID = 0.45;
+const float ROCK_GRID = ${ROCK_GRID.toFixed(4)};
 const float ROCK_SIZE = 0.3;
 const float SPRITE_ROWS = ${SPRITE_ROWS.toFixed(1)};
 const float CLEAR = 0.45;
@@ -465,61 +480,94 @@ float decalDensity(int g) {
   return 0.0;
 }
 
-// Flowers, tufts and pebbles on a jittered grid; each needs its foot well inside a ground that
-// wears it, off the beach, and clear of an occupied cell's picture.
+// The placement texel for square id of a grid (rect: first square x, y; squares x, y; atlasX the
+// grid's first column in uPlace), or none (all 0) outside the squares worked out.
+vec4 placedAt(vec2 id, vec4 rect, float atlasX) {
+  vec2 at = id - rect.xy;
+  if (at.x < 0.0 || at.y < 0.0 || at.x >= rect.z || at.y >= rect.w) return vec4(0.0);
+  return texelFetch(uPlace, ivec2(at) + ivec2(int(atlasX), 0), 0);
+}
+
+// A detail square: its pick, whether it holds a bigger boulder, its foot and frame size. Some
+// squares hold a bigger boulder: its foot stays near the square's middle, so the boulder never
+// reaches past the two squares each way a pixel looks at.
+void decalSquare(vec2 id, out float pick, out bool boulder, out vec2 foot, out float s) {
+  float grid = DECAL_GRID * uCellPoints;
+  pick = hash12(id * 1.13 + 0.71);
+  boulder = hash12(id + 88.8) < BOULDER_SHARE;
+  vec2 jitter = vec2(hash12(id + 17.3), hash12(id + 41.9));
+  foot = (id + (boulder ? 0.5 + (jitter - 0.5) * vec2(0.6, 0.35) : jitter)) * grid;
+  s = DECAL_SIZE * uCellPoints * (0.85 + 0.3 * hash12(id + 5.17)) * (boulder ? BOULDER_SIZE : 1.0);
+}
+
+// Which flower, tuft or pebble stands on detail square id, if any, as a placement texel (r frame +
+// 1): its foot must be well inside a ground that wears it, off the beach, and clear of an occupied
+// cell's picture. Worked out once per square (PlacementLayer.ts), not per pixel.
+vec4 decalPlace(vec2 id) {
+  vec4 none = vec4(0.0, 0.0, 0.0, 1.0);
+  float density = uQuality > 1.5 ? 1.0 : DECALS_MEDIUM;
+  float pick;
+  bool boulder;
+  vec2 foot;
+  float s;
+  decalSquare(id, pick, boulder, foot, s);
+  if (pick > 0.55 * density) return none;
+  // Nothing stands in a river, or leans over one; its banks wear pebbles and stones.
+  vec4 footRiver = riverAt(foot);
+  if (footRiver.y > -0.01 || riverAt(foot - vec2(0.0, 0.6 * s)).y > -0.004) return none;
+  bool riverBank = footRiver.y > -1.15 * riverBankWidth(footRiver);
+  vec2 off;
+  vec4 t = trueCellAt((foot - vec2(0.0, 0.5 * s)) / uUnit, off);
+  if (!isLand(groundOf(t))) return none;
+  if (occupiedOf(t) && length(off) < CLEAR) return none;
+  Blend fb = blendAt(foot / uUnit);
+  Coast fc = coastOf(fb);
+  if (!fc.known || (fc.both && fc.s > -0.16)) return none;
+  // Nothing stands on a cliff face or its rim; stones gather at its foot.
+  Cliff fcl = cliffOf(fb);
+  bool scree = false;
+  if (fcl.on && fcl.mask > 0.2) {
+    if (fcl.s > -CLIFF_CLEAR_HIGH && fcl.s < CLIFF_CLEAR_LOW) return none;
+    scree = fcl.s >= CLIFF_CLEAR_LOW && fcl.s < CLIFF_CLEAR_LOW + 0.35;
+  }
+  int k = fb.claim.x >= fb.claim.y && fb.claim.x >= fb.claim.z ? 0 : fb.claim.y >= fb.claim.z ? 1 : 2;
+  int g = fb.g[k];
+  // On the beach band, beach details (pebbles, stones, sand slabs) whatever the ground;
+  // elsewhere the foot must be a little inside its ground.
+  if (riverBank || waterNear(fb.hp) > beachEnd(foot / uUnit) * DECAL_SHORE) {
+    g = ${Ground.SAND};
+  } else {
+    float other = -9.0;
+    for (int m = 0; m < 3; m++) {
+      if (fb.g[m] != fb.g[k]) other = max(other, fb.claim[m]);
+    }
+    if (fb.claim[k] - other < DECAL_MARGIN) return none;
+  }
+  if (pick > (scree ? 0.9 : decalDensity(g)) * density) return none;
+  int frame = decalFrame(g, hash12(id + 63.1));
+  if (boulder) frame = g == ${Ground.MARSH} ? -1 : 8;
+  if (scree) frame = hash12(id + 63.1) < 0.55 ? 6 : 8;
+  if (frame < 0) return none;
+  return vec4(float(frame + 1) / 255.0, 0.0, 0.0, 1.0);
+}
+
+// Flowers, tufts and pebbles (placed by decalPlace).
 vec3 drawDecals(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float fade) {
   float grid = DECAL_GRID * uCellPoints;
-  float base = DECAL_SIZE * uCellPoints;
   float density = uQuality > 1.5 ? 1.0 : DECALS_MEDIUM;
   vec2 first = floor(vec2(p.x / grid - 0.5, p.y / grid));
   for (int j = 0; j < 2; j++) {
     for (int i = 0; i < 2; i++) {
       vec2 id = first + vec2(float(i), float(j));
-      float pick = hash12(id * 1.13 + 0.71);
+      float pick;
+      bool boulder;
+      vec2 foot;
+      float s;
+      decalSquare(id, pick, boulder, foot, s);
       if (pick > 0.55 * density) continue;
-      // Some squares hold a bigger boulder: its foot stays near the square's middle, so the
-      // boulder never reaches past the two squares each way this pixel looks at.
-      bool boulder = hash12(id + 88.8) < BOULDER_SHARE;
-      vec2 jitter = vec2(hash12(id + 17.3), hash12(id + 41.9));
-      vec2 foot = (id + (boulder ? 0.5 + (jitter - 0.5) * vec2(0.6, 0.35) : jitter)) * grid;
-      float s = base * (0.85 + 0.3 * hash12(id + 5.17)) * (boulder ? BOULDER_SIZE : 1.0);
       vec2 local = (p - foot) / s + vec2(0.5, 1.0);
       if (local.x < 0.0 || local.x > 1.0 || local.y < 0.0 || local.y > 1.0) continue;
-      // Nothing stands in a river, or leans over one; its banks wear pebbles and stones.
-      vec4 footRiver = riverAt(foot);
-      if (footRiver.y > -0.01 || riverAt(foot - vec2(0.0, 0.6 * s)).y > -0.004) continue;
-      bool riverBank = footRiver.y > -1.15 * riverBankWidth(footRiver);
-      vec2 off;
-      vec4 t = trueCellAt((foot - vec2(0.0, 0.5 * s)) / uUnit, off);
-      if (!isLand(groundOf(t))) continue;
-      if (occupiedOf(t) && length(off) < CLEAR) continue;
-      Blend fb = blendAt(foot / uUnit);
-      Coast fc = coastOf(fb);
-      if (!fc.known || (fc.both && fc.s > -0.16)) continue;
-      // Nothing stands on a cliff face or its rim; stones gather at its foot.
-      Cliff fcl = cliffOf(fb);
-      bool scree = false;
-      if (fcl.on && fcl.mask > 0.2) {
-        if (fcl.s > -CLIFF_CLEAR_HIGH && fcl.s < CLIFF_CLEAR_LOW) continue;
-        scree = fcl.s >= CLIFF_CLEAR_LOW && fcl.s < CLIFF_CLEAR_LOW + 0.35;
-      }
-      int k = fb.claim.x >= fb.claim.y && fb.claim.x >= fb.claim.z ? 0 : fb.claim.y >= fb.claim.z ? 1 : 2;
-      int g = fb.g[k];
-      // On the beach band, beach details (pebbles, stones, sand slabs) whatever the ground;
-      // elsewhere the foot must be a little inside its ground.
-      if (riverBank || waterNear(fb.hp) > beachEnd(foot / uUnit) * DECAL_SHORE) {
-        g = ${Ground.SAND};
-      } else {
-        float other = -9.0;
-        for (int m = 0; m < 3; m++) {
-          if (fb.g[m] != fb.g[k]) other = max(other, fb.claim[m]);
-        }
-        if (fb.claim[k] - other < DECAL_MARGIN) continue;
-      }
-      if (pick > (scree ? 0.9 : decalDensity(g)) * density) continue;
-      int frame = decalFrame(g, hash12(id + 63.1));
-      if (boulder) frame = g == ${Ground.MARSH} ? -1 : 8;
-      if (scree) frame = hash12(id + 63.1) < 0.55 ? 6 : 8;
+      int frame = int(placedAt(id, uDecalRect, uPlaceAt.x).r * 255.0 + 0.5) - 1;
       if (frame < 0) continue;
       vec4 sprite = spriteSample(frame, p, foot, s, hash12(id + 9.9) < 0.5, wdx, wdy) * fade;
       if (frame == 6 || frame == 8) sprite.rgb = darken(sprite, STONE_GAMMA);
@@ -569,46 +617,68 @@ vec3 drawFlowers(vec3 colour, vec2 p, float amount) {
   return colour;
 }
 
-// Sea stacks, rocks and islets on a coarser jittered grid: mostly just off the coast, a few further
-// out over the shallower water; their tops keep clear of an occupied cell's picture.
+// A sea rock square: its pick, foot and frame size.
+void rockSquare(vec2 id, out float pick, out vec2 foot, out float s) {
+  float grid = ROCK_GRID * uCellPoints;
+  pick = hash12(id * 0.91 + 3.3);
+  foot = (id + vec2(hash12(id + 2.9), hash12(id + 8.1))) * grid;
+  s = ROCK_SIZE * uCellPoints * (0.8 + 0.35 * hash12(id + 6.6));
+}
+
+// Which sea stack, rock or islet stands on rock square id, if any, as a placement texel (r frame +
+// 1): mostly just off the coast, a few further out over the shallower water; their tops keep clear
+// of an occupied cell's picture.
+vec4 rockPlace(vec2 id) {
+  vec4 none = vec4(0.0, 0.0, 0.0, 1.0);
+  float pick;
+  vec2 foot;
+  float s;
+  rockSquare(id, pick, foot, s);
+  if (pick > max(ROCKS_NEAR, ROCKS_FAR)) return none;
+  vec2 off;
+  vec2 footHex = foot / uUnit;
+  vec2 footCell = roundAxial(axialOf(footHex));
+  if (!isWater(groundOf(cellAt(toOffset(footCell))))) return none;
+  vec4 top = trueCellAt((foot - vec2(0.0, 0.85 * s)) / uUnit, off);
+  if (occupiedOf(top) && length(off) < CLEAR) return none;
+  Blend fb = blendAt(footHex);
+  Coast fc = coastOf(fb);
+  if (!fc.known || (fc.both && fc.s < ROCK_OFFSHORE)) return none;
+  // Near the coast: a land cell next to the foot's cell.
+  bool near = false;
+  for (int k = 0; k < 6; k++) {
+    if (isLand(groundOf(cellAt(toOffset(footCell + NEIGHBOURS[k]))))) near = true;
+  }
+  if (near && pick > ROCKS_NEAR) return none;
+  if (!near && (pick > ROCKS_FAR || dot(fb.bary, min(fb.height, vec3(100.0))) < 91.0)) return none;
+  float r = hash12(id + 77.7);
+  int frame = near
+    ? (r < 0.2 ? 0 : r < 0.38 ? 1 : r < 0.54 ? 2 : r < 0.68 ? 6 : r < 0.8 ? 3 : r < 0.9 ? 7 : r < 0.95 ? 4 : 5)
+    : (r < 0.35 ? 3 : r < 0.6 ? 6 : r < 0.8 ? 4 : 5);
+  return vec4(float(frame + 1) / 255.0, 0.0, 0.0, 1.0);
+}
+
+// Sea stacks, rocks and islets (placed by rockPlace), seated in the sea: lighter turquoise water
+// round the foot and a broken foam ring.
 vec3 drawRocks(vec3 colour, vec2 p, vec2 wdx, vec2 wdy, float fade) {
   float grid = ROCK_GRID * uCellPoints;
-  float base = ROCK_SIZE * uCellPoints;
   // Rows from a little above the pixel: the pool reaches a little below a rock's foot.
   vec2 first = floor(vec2(p.x / grid - 0.5, p.y / grid - 0.15));
   for (int j = 0; j < 2; j++) {
     for (int i = 0; i < 2; i++) {
       vec2 id = first + vec2(float(i), float(j));
-      float pick = hash12(id * 0.91 + 3.3);
+      float pick;
+      vec2 foot;
+      float s;
+      rockSquare(id, pick, foot, s);
       if (pick > max(ROCKS_NEAR, ROCKS_FAR)) continue;
-      vec2 foot = (id + vec2(hash12(id + 2.9), hash12(id + 8.1))) * grid;
-      float s = base * (0.8 + 0.35 * hash12(id + 6.6));
       vec2 local = (p - foot) / s + vec2(0.5, 1.0);
       // The pool round the foot: an ellipse a little wider than the sprite's own foam.
       float pool = length((p - foot + vec2(0.0, 0.08 * s)) / (vec2(0.55, 0.2) * s));
       bool inFrame = local.x >= 0.0 && local.x <= 1.0 && local.y >= 0.0 && local.y <= 1.0;
       if (!inFrame && pool > 1.15) continue;
-      vec2 off;
-      vec2 footHex = foot / uUnit;
-      vec2 footCell = roundAxial(axialOf(footHex));
-      if (!isWater(groundOf(cellAt(toOffset(footCell))))) continue;
-      vec4 top = trueCellAt((foot - vec2(0.0, 0.85 * s)) / uUnit, off);
-      if (occupiedOf(top) && length(off) < CLEAR) continue;
-      Blend fb = blendAt(footHex);
-      Coast fc = coastOf(fb);
-      if (!fc.known || (fc.both && fc.s < ROCK_OFFSHORE)) continue;
-      // Near the coast: a land cell next to the foot's cell.
-      bool near = false;
-      for (int k = 0; k < 6; k++) {
-        if (isLand(groundOf(cellAt(toOffset(footCell + NEIGHBOURS[k]))))) near = true;
-      }
-      if (near && pick > ROCKS_NEAR) continue;
-      if (!near && (pick > ROCKS_FAR || dot(fb.bary, min(fb.height, vec3(100.0))) < 91.0)) continue;
-      float r = hash12(id + 77.7);
-      int frame = near
-        ? (r < 0.2 ? 0 : r < 0.38 ? 1 : r < 0.54 ? 2 : r < 0.68 ? 6 : r < 0.8 ? 3 : r < 0.9 ? 7 : r < 0.95 ? 4 : 5)
-        : (r < 0.35 ? 3 : r < 0.6 ? 6 : r < 0.8 ? 4 : 5);
-      // Seated in the sea: lighter turquoise water round the foot and a broken foam ring.
+      int frame = int(placedAt(id, uRockRect, uPlaceAt.y).r * 255.0 + 0.5) - 1;
+      if (frame < 0) continue;
       float wob = valueNoise(p / s * 3.0 + vec2(uTime * 0.4, 0.0));
       float lit = (1.0 - smoothstep(0.5, 1.2, pool)) * fade;
       colour = mix(colour, POOL, lit * 0.6);
@@ -661,9 +731,15 @@ void main() {
   // On High the coast's slope is measured on the ground itself, a small step either way: the
   // screen's slope is one value per 2x2 pixels, which drew the foam's edge in little steps.
   if (uQuality > 1.5 && coastMask > 0.0 && dist > -0.2 && dist < 0.7) {
-    Coast cx = coastOf(blendAt(h + vec2(COAST_STEP, 0.0)));
-    Coast cy = coastOf(blendAt(h + vec2(0.0, COAST_STEP)));
-    if (cx.both && cy.both) dist = c.s / max(length(vec2(cx.s - c.s, cy.s - c.s)) / COAST_STEP, 0.6);
+    // A loop, not two calls: the compiler keeps one copy of blendAt (plan step 10, compile time).
+    vec2 side = vec2(0.0);
+    bool both = true;
+    for (int k = 0; k < 2; k++) {
+      Coast cs = coastOf(blendAt(h + (k == 0 ? vec2(COAST_STEP, 0.0) : vec2(0.0, COAST_STEP))));
+      side[k] = cs.s;
+      both = both && cs.both;
+    }
+    if (both) dist = c.s / max(length(side - c.s) / COAST_STEP, 0.6);
   }
 
   vec3 land = vec3(0.0);
@@ -845,8 +921,8 @@ void main() {
 
   // Surf: white foam on the water's edge and broken lines rolling in towards it.
   if (coastMask > 0.0 && dist > -0.06 && dist < 0.6) {
-    vec3 foamTexture = sampleGround(${FOAM}, uv * 1.7 + uTime * vec2(0.012, 0.0), dx * 1.7, dy * 1.7);
-    float white = smoothstep(0.55, 0.9, dot(foamTexture, vec3(0.299, 0.587, 0.114)));
+    float foamLight = textureGrad(uGround${WET_SAND}, uv * 1.7 + uTime * vec2(0.012, 0.0), dx * 1.7, dy * 1.7).a;
+    float white = smoothstep(0.55, 0.9, foamLight);
     float wobble = valueNoise(h * 4.5 + vec2(uTime * 0.35, 0.0));
     float edgeWidth = 0.11 + 0.09 * wobble;
     float edge = smoothstep(-0.05, -0.005, dist) * (1.0 - smoothstep(edgeWidth * 0.4, edgeWidth, dist));
@@ -914,3 +990,65 @@ void main() {
   finalColor = vec4(colour, 1.0);
 }
 `;
+
+/**
+ * Every constant loop end gets {@link LOOP_ZERO} added. On Windows, Chrome turns the shader into
+ * Direct3D code, whose compiler unrolls constant loops and inlines every call inside them; the
+ * ground shader's loops (cells round a point, sprite squares) nest, and unrolled they made it take
+ * 40 s to compile. Kept as loops, the Low shader compiles in 2.5 s (plan step 10). Exported for the
+ * tests.
+ */
+export const dynamicLoops = (source: string): string =>
+  source.replace(
+    /for \(int (\w+) = (-?\d+); \1 (<=?) (\d+); \1\+\+\)/g,
+    (_all, name: string, from: string, op: string, to: string) => `for (int ${name} = ${from}; ${name} ${op} ${to} + LOOP_ZERO; ${name}++)`,
+  );
+
+const QUALITY_LINE = "uniform float uQuality;    // 2 High, 1 Medium, 0 Low";
+const MAIN = "\nvoid main() {\n  vec2 h = vWorld / uUnit;";
+
+/**
+ * The ground shader with Quality as a uniform. The game draws {@link groundFragment}'s fixed-Quality
+ * versions; this one is for the tests and the placement programs' shared code.
+ */
+export const GROUND_FRAGMENT = dynamicLoops(FRAGMENT);
+
+/** The Quality levels as the shader's number: 2 High, 1 Medium, 0 Low. */
+const LEVEL: Record<Quality, string> = { high: "2.0", medium: "1.0", low: "0.0" };
+
+/**
+ * The ground shader for one Quality, with the level fixed in the source (plan step 10): the
+ * compiler drops the other levels' code, so Low compiles in a few seconds where the shader for all
+ * three took 40 s on Windows (Direct3D's compiler is slow on big shaders).
+ */
+export const groundFragment = (level: Quality): string =>
+  GROUND_FRAGMENT.replace(QUALITY_LINE, `const float uQuality = ${LEVEL[level]};`);
+
+/** The sprite grids whose pieces `PlacementLayer` works out, in uPlace's column order. */
+export type PlacementGrid = "decals" | "rocks" | "features" | "marsh";
+
+const PLACE_CALL: Record<PlacementGrid, string> = {
+  decals: "decalPlace(id)",
+  rocks: "rockPlace(id)",
+  features: "featurePlace(id, DENSITY)",
+  marsh: "marshPlace(id, DENSITY)",
+};
+
+/**
+ * A placement program's fragment shader: the ground shader's shared code (its functions only) and
+ * a main that works out one grid square per pixel (gl_FragCoord, offset by the pass's column in the
+ * atlas) from uPlaceRect's first square.
+ */
+export const placementFragment = (grid: PlacementGrid): string => {
+  const at = GROUND_FRAGMENT.lastIndexOf(MAIN);
+  if (at < 0) throw new Error("ground shader: main not found");
+  const density = `uQuality > 1.5 ? ${FEATURE_DENSITY.high.toFixed(2)} : uQuality > 0.5 ? ${FEATURE_DENSITY.medium.toFixed(2)} : ${FEATURE_DENSITY.low.toFixed(2)}`;
+  return `${GROUND_FRAGMENT.slice(0, at)}
+uniform vec4 uPlaceRect;   // this pass's first square x, y and its first column in the atlas
+#define DENSITY (${density})
+void main() {
+  vec2 id = uPlaceRect.xy + floor(gl_FragCoord.xy) - vec2(uPlaceRect.z, 0.0);
+  finalColor = ${PLACE_CALL[grid]};
+}
+`;
+};
