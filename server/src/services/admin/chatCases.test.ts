@@ -17,10 +17,10 @@ const line = (i: number, userid = 1): SnapshotLine => ({ userid, name: `p${useri
 const clean = { cases: 0, flags: 0, warnings: 0, mutes: 0, bans: 0 };
 
 describe("the copy of the room", () => {
-  test("keeps 10 lines before and 5 after, marking the reported one", () => {
+  test("keeps 10 lines in all: 7 before, the line, 2 after, marking the reported one", () => {
     const lines = Array.from({ length: 30 }, (_, i) => line(i));
     const kept = windowAround(lines, (l) => l.at === 15);
-    expect(kept.map((l) => l.at)).toEqual([5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+    expect(kept.map((l) => l.at)).toEqual([8, 9, 10, 11, 12, 13, 14, 15, 16, 17]);
     expect(kept.filter((l) => l.reported).map((l) => l.at)).toEqual([15]);
     expect(lines.some((l) => l.reported)).toBe(false);
   });
@@ -87,7 +87,9 @@ describe("reading the owner's step", () => {
     expect(parseCaseAward({ awards: [{ userid: 2, amount: 5 }, { userid: 2, amount: 5 }] }).ok).toBe(false);
   });
   test("the starting amounts come from the server's settings", () => {
-    expect(chatReportAward({})).toEqual({ each: 25, first: 50 });
-    expect(chatReportAward({ CHAT_REPORT_SHINY: "10", CHAT_REPORT_FIRST_SHINY: "nope" })).toEqual({ each: 10, first: 50 });
+    // The owner's choice: 10 each, no first-reporter bonus.
+    expect(chatReportAward({})).toEqual({ each: 10, first: 10 });
+    expect(chatReportAward({ CHAT_REPORT_SHINY: "15", CHAT_REPORT_FIRST_SHINY: "nope" })).toEqual({ each: 15, first: 15 });
+    expect(chatReportAward({ CHAT_REPORT_FIRST_SHINY: "30" })).toEqual({ each: 10, first: 30 });
   });
 });

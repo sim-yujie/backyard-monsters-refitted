@@ -38,12 +38,13 @@ const wholeOr = (raw: string | undefined, fallback: number): number => {
 };
 
 /**
- * - `CHAT_REPORT_SHINY` — what the page offers each reporter of a chat case. Default 25.
- * - `CHAT_REPORT_FIRST_SHINY` — what it offers the first reporter. Default 50.
+ * - `CHAT_REPORT_SHINY` — what the page offers each reporter of a chat case. Default 10.
+ * - `CHAT_REPORT_FIRST_SHINY` — what it offers the first reporter. Default: the same
+ *   as everyone (the owner chose no first-reporter bonus, 4 Nov 2026).
  *
  * Only the starting amounts: the owner can change or untick each one before giving.
  */
-export const chatReportAward = (env: Env = process.env): ChatReportAward => ({
-  each: wholeOr(env.CHAT_REPORT_SHINY, 25),
-  first: wholeOr(env.CHAT_REPORT_FIRST_SHINY, 50),
-});
+export const chatReportAward = (env: Env = process.env): ChatReportAward => {
+  const each = wholeOr(env.CHAT_REPORT_SHINY, 10);
+  return { each, first: wholeOr(env.CHAT_REPORT_FIRST_SHINY, each) };
+};

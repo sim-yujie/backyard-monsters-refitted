@@ -28,9 +28,12 @@ import { MAX_AWARD_REASON, MAX_SHINY_AWARD, giveShiny } from "./shinyAwards.js";
  * default 365 days, counted from its last report).
  */
 
-/** Lines kept before the reported line, and after it. */
-export const SNAPSHOT_BEFORE = 10;
-export const SNAPSHOT_AFTER = 5;
+/**
+ * The room copy: lines kept before the reported line, and after it. The
+ * owner's choice (4 Nov 2026): 10 lines in all, 7 before, the line, 2 after.
+ */
+export const SNAPSHOT_BEFORE = 7;
+export const SNAPSHOT_AFTER = 2;
 
 /** The reason in a reporter's Shiny mail when the owner writes none. */
 export const DEFAULT_AWARD_REASON = "Thank you for reporting a chat message that broke the rules.";

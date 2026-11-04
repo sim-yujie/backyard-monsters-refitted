@@ -5,7 +5,7 @@ import type { HistoryEntry } from "../../chat/chatProtocol.js";
 import { AllianceMessageType } from "../../enums/Alliance.js";
 import ormConfig from "../../mikro-orm.config.js";
 import { recordChatReport } from "../chat/chatReports.js";
-import { actOnCase, awardReporters, getChatCase, listChatCases, parseCaseAction, parseCaseAward, SNAPSHOT_AFTER } from "./chatCases.js";
+import { actOnCase, awardReporters, getChatCase, listChatCases, parseCaseAction, parseCaseAward, SNAPSHOT_AFTER, SNAPSHOT_BEFORE } from "./chatCases.js";
 import type { ModerationEffects } from "./moderation.js";
 
 /**
@@ -161,30 +161,29 @@ describe.skipIf(!dbName)("chat report cases on a real database", () => {
     expect(cases[0]!.suggest).toEqual({ action: "mute", hours: 24 });
   });
 
-  test("the copy of the room: 10 lines before and the own words from the chat log, completed while open, kept after the log goes", async () => {
+  test("the copy of the room: 7 lines before and 2 after, the own words from the chat log, completed while open, kept after the log goes", async () => {
     for (let i = 0; i < 12; i++) await say(i % 2 ? BYSTANDER : REPORTER_A, i, `before ${i}`);
     await say(OFFENDER, 20, "you are rude");
     await say(BYSTANDER, 21, "after 1");
-    await say(REPORTER_A, 22, "after 2");
     await report(REPORTER_A, 20);
 
     let [only] = await open();
     let lines = only!.messages[0]!.snapshot.lines;
     expect(only!.messages[0]!.snapshot.source).toBe("log");
-    expect(lines).toHaveLength(13);
-    expect(lines[0]!.text).toBe("before 2");
-    expect(lines[10]).toMatchObject({ userid: OFFENDER, text: "you are rude", reported: true, name: `casetest_${OFFENDER}` });
+    expect(lines).toHaveLength(SNAPSHOT_BEFORE + 1 + 1);
+    expect(lines[0]!.text).toBe(`before ${12 - SNAPSHOT_BEFORE}`);
+    expect(lines[SNAPSHOT_BEFORE]).toMatchObject({ userid: OFFENDER, text: "you are rude", reported: true, name: `casetest_${OFFENDER}` });
     expect(lines.filter((l) => l.reported)).toHaveLength(1);
 
     for (let i = 23; i < 30; i++) await say(BYSTANDER, i, `later ${i}`);
     [only] = await open();
     lines = only!.messages[0]!.snapshot.lines;
-    expect(lines).toHaveLength(10 + 1 + SNAPSHOT_AFTER);
-    expect(lines.at(-1)!.text).toBe("later 25");
+    expect(lines).toHaveLength(SNAPSHOT_BEFORE + 1 + SNAPSHOT_AFTER);
+    expect(lines.at(-1)!.text).toBe("later 23");
 
     await sql(`DELETE FROM bym.chat_log WHERE channel = ?`, [ROOM]);
     [only] = await open();
-    expect(only!.messages[0]!.snapshot.lines).toHaveLength(16);
+    expect(only!.messages[0]!.snapshot.lines).toHaveLength(SNAPSHOT_BEFORE + 1 + SNAPSHOT_AFTER);
   });
 
   test("with the line not in the chat log yet, the copy comes from the room's own lines, starred out", async () => {
