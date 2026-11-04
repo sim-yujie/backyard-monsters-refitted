@@ -10,7 +10,7 @@ import {
   type ShinyAwardView,
 } from "./api";
 import { h, replace } from "./dom";
-import { ago, count, dateTime, plural } from "./format";
+import { ago, count, dateTime, lookName, plural } from "./format";
 import { icon } from "./icons";
 
 /**
@@ -394,6 +394,7 @@ export class ShinyView {
                         player.bot ? "bot" : null,
                         player.formerName ? `was called ${player.formerName}` : null,
                         player.lastSeenAt ? `last played ${ago(player.lastSeenAt)}` : "never played",
+                        lookName(player.look),
                       ]
                         .filter(Boolean)
                         .join(" · "),

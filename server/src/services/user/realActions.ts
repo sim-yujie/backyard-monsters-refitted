@@ -223,6 +223,8 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /api/:apiVersion/player/changeusername",
   "POST /api/:apiVersion/player/settings",
   "POST /api/:apiVersion/player/sound",
+  // The Look and sound choices, sent by the game itself at load (owner's dashboard, 4 Nov 2026).
+  "POST /api/:apiVersion/player/look",
   "POST /api/:apiVersion/player/avatar",
   "POST /api/:apiVersion/player/block",
   "POST /api/:apiVersion/player/unblock",
