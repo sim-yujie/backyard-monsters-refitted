@@ -3,7 +3,7 @@ title: Resources and buildings
 description: The four resources, the harvesters that make them, and how building and upgrading works.
 order: 2
 icon: /images/monsters/C12.webp
-updated: 2026-10-11
+updated: 2026-11-04
 ---
 
 ## The four resources
@@ -19,6 +19,7 @@ Everything in your yard is paid for with four resources. Each one has its own ha
 
 Harvesters work until they are full, then stop. Tap **Collect all** to bank everything at once, or tap one harvester to empty just that one. Upgrade a harvester to make it work faster.
 
+<!-- TODO lead: retake (see guides-picture-audit.md) -->
 ![A mid-game yard: the Town Hall and silos walled in the middle, towers around them, harvesters and hatcheries outside, and the resource bar along the top](/images/shots/yard-hud.webp)
 
 ## Storage
@@ -29,13 +30,20 @@ You can only hold so much of each resource. Build and upgrade **Storage Silos** 
 
 **Shiny** is the game's special currency. You use it to skip waiting: **Finish now** speeds up a job that is already running, and **Instant** does a whole build or upgrade straight away. Early on these are cheap.
 
+**Shiny Lock** hides your Shiny and shows a padlock instead, so nobody sees it over your shoulder. Turn it off in **Account settings**.
+
 ## Building and upgrading
 
 - Tap **Build** to see every building you can add, sorted into tabs: **Resources**, **Buildings**, **Defensive** and **Decorations**.
+- **Decorations** has five sub-tabs, like the original game. They cost **Shiny**.
 - A greyed-out building tells you what it needs, usually a bigger Town Hall.
 - Tap any building in your yard to **Upgrade** it. Upgrades make it stronger or faster.
 - Every job needs a free **worker**. More workers mean more jobs at once.
 - Jobs with **5 minutes or less** left can be finished for free.
+
+## Quests
+
+Tap the round **More** button, then **Quests**. A 7-day login card, daily quests and weekly quests all pay **Shiny**.
 
 ## The Town Hall
 
@@ -47,6 +55,6 @@ Buildings damaged in an attack stop working until they are repaired. Tap a damag
 
 ## Plan your layout
 
-The **Yard Planner** lets you rearrange your whole yard, and save layouts to come back to later.
+Tap **Layout** to open the **Yard Planner**. It lets you rearrange your whole yard and save layouts to come back to later. To raise many walls at once, see [Upgrade many walls at once](/guides/upgrade-many-walls/).
 
 Next: [Monsters and the Hatchery](/guides/monsters-and-the-hatchery/).

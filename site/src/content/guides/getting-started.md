@@ -16,6 +16,7 @@ Go to [play.bymrevamped.com](https://play.bymrevamped.com) and choose **Create a
 
 The first time you play, Bob, a friendly green monster, takes you through the basics. It takes about eight minutes. Bob points at each button with his hand, and the game pays for everything along the way. Here's what you'll do:
 
+<!-- TODO lead: retake (see guides-picture-audit.md) -->
 ![Bob, the green guide monster, asking you to build a Sniper Tower while his hand points at the Build button](/images/shots/guided-start.webp)
 
 1. **Collect** the twigs your Twig Snapper has made.

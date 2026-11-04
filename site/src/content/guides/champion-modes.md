@@ -10,6 +10,7 @@ updated: 2026-10-29
 
 In the attack screen, every champion in your army list has a **Mode** box. Pick one. Your champion keeps it for the next attack.
 
+<!-- TODO lead: retake (see guides-picture-audit.md) -->
 ![The army list in the attack screen: each champion has a Mode box, here Gorgo is set to Offensive](/images/guides/champion-modes-pick.webp)
 
 ## The three Modes
