@@ -31,8 +31,9 @@ import { classicLook } from "@/game/classicLook";
 import { isFogCell } from "@/api/types";
 import type { ZoneRecord, ZoneStore } from "./ZoneStore";
 import type { CellRange } from "./zones";
+import type * as PaintedLookNamespace from "./painted/paintedLook";
 
-type PaintedLookModule = typeof import("./painted/paintedLook");
+type PaintedLookModule = typeof PaintedLookNamespace;
 
 /**
  * Chunks built in one frame.
