@@ -205,6 +205,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--colour-text-muted);
+  text-align: center;
 }
 
 .planner-walls__levels {
@@ -219,16 +220,22 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-1);
+  gap: 2px;
   min-width: 0;
-  min-height: 76px;
+  min-height: 84px;
   padding: var(--space-1);
   white-space: nowrap;
 }
 
+/* The skin's plate has a rim top and bottom: the wall sits inside it. */
+:root[data-skin] .planner-walls.panel .planner-walls__level {
+  min-height: 84px;
+  padding: 10px 0 12px;
+}
+
 .planner-walls__level-art {
-  width: 48px;
-  height: 36px;
+  width: 40px;
+  height: 30px;
   object-fit: contain;
   pointer-events: none;
 }
@@ -245,6 +252,14 @@
   box-shadow: 0 0 0 2px var(--colour-accent);
 }
 
+/* On a skin's plate the chosen level glows in the plate's own shape. */
+:root[data-skin] .planner-walls.panel .planner-walls__level[aria-pressed="true"] {
+  background: none;
+  border-color: transparent;
+  box-shadow: none;
+  filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 6px var(--colour-accent));
+}
+
 .planner-walls__level[disabled] .planner-walls__level-art {
   filter: grayscale(1);
   opacity: 0.5;
@@ -253,6 +268,7 @@
 .planner-walls__gate {
   margin: 0 0 var(--space-2);
   font-size: var(--text-sm);
+  text-align: center;
 }
 
 /* Three equal buttons in one row, even at 375 wide. */
@@ -275,6 +291,7 @@
   margin: 0;
   font-size: var(--text-sm);
   font-weight: 600;
+  text-align: center;
 }
 
 .planner-walls__hint,
@@ -282,6 +299,7 @@
   margin: var(--space-1) 0 0;
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
+  text-align: center;
 }
 
 .planner-rearm__heading {
@@ -293,6 +311,7 @@
 .planner-walls__costs {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: var(--space-2);
   margin: var(--space-2) 0 0;
   padding: 0;
@@ -340,6 +359,7 @@
 .planner-walls__note {
   margin-block: var(--space-2) 0;
   font-size: var(--text-xs);
+  text-align: center;
 }
 
 /* The short line in the danger colour, never alone: the chips are red too. */
@@ -501,19 +521,30 @@
 .planner-dock {
   position: absolute;
   left: var(--space-4);
-  top: calc(var(--planner-top, calc(var(--hud-height) + 56px)) + var(--space-2));
+  top: calc(var(--planner-top, calc(var(--hud-height) + 56px)) + 2px);
   bottom: calc(var(--planner-bottom, 56px) + var(--space-2));
-  width: min(420px, 38vw);
+  width: calc(min(420px, 38vw) + var(--dock-hang-x));
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  overflow-y: auto;
+  /* A panel's Close button and title plate hang past its frame. This room keeps
+     them inside the dock, so the dock never scrolls sideways under the panel. */
+  --dock-hang-x: 12px;
+  --dock-hang-y: 14px;
+  padding: var(--dock-hang-y) var(--dock-hang-x) 0 0;
+  overflow: hidden auto;
   pointer-events: none;
 }
 
 .planner-dock > * {
   pointer-events: auto;
   flex: 0 0 auto;
+}
+
+/* The friends row belongs to the yard, not the planner: its top rim would show
+   above the planner's bottom bar. */
+.overlay__layer:has(> .planner-dock) > .friends-bar {
+  display: none;
 }
 
 /*
@@ -525,7 +556,7 @@
  */
 .planner-dock--right {
   left: auto;
-  right: var(--space-4);
+  right: calc(var(--space-4) - var(--dock-hang-x));
   align-items: stretch;
 }
 
@@ -841,7 +872,7 @@
 
 @media (width <= 900px) {
   .planner-dock {
-    width: min(92vw, 420px);
+    width: calc(min(92vw, 420px) + var(--dock-hang-x));
   }
 
   .planner-bar {
@@ -1978,7 +2009,7 @@
 .planner-phone--portrait > .planner-dock {
   top: auto;
   left: var(--space-2);
-  right: var(--space-2);
+  right: calc(var(--space-2) - var(--dock-hang-x));
   width: auto;
   max-height: min(
     55vh,
@@ -1991,12 +2022,39 @@
 .planner-phone--landscape > .planner-dock,
 .planner-phone--landscape > .planner-more {
   left: auto;
-  right: var(--space-2);
-  width: min(380px, 46vw);
-  top: calc(var(--planner-top, 0px) + var(--space-2));
+  right: calc(var(--space-2) - var(--dock-hang-x, 0px));
+  width: calc(min(380px, 46vw) + var(--dock-hang-x, 0px));
+  top: calc(var(--planner-top, 0px) + 2px);
   bottom: calc(var(--planner-bottom, 56px) + var(--space-2));
   max-height: none;
   justify-content: flex-start;
+}
+
+/* The walls panel shows all its steps on a phone without scrolling: a shorter
+   level row, and the longest button word stays on its plate. */
+.planner-phone--portrait > .planner-dock:has(> .planner-walls) {
+  max-height: min(
+    64vh,
+    calc(100vh - var(--planner-top, 0px) - var(--planner-bottom, 0px) - 2 * var(--space-2))
+  );
+}
+
+:root[data-skin] .planner-phone .planner-walls.panel .planner-walls__level {
+  min-height: 70px;
+  padding: 7px 0 9px;
+}
+
+.planner-phone .planner-walls__level-art {
+  width: 32px;
+  height: 24px;
+}
+
+.planner-phone .planner-walls__tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 0;
+  font-size: var(--text-xs);
 }
 
 /* The panel shrinks to the sheet and scrolls inside, keeping its title. */
