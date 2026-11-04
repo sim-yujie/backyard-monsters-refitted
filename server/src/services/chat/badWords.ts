@@ -137,3 +137,8 @@ export const makeWordFilter = (env: Record<string, string | undefined> = process
     scan: (text) => matcher.scan(text),
   };
 };
+
+let shared: WordFilter | null = null;
+
+/** One word filter for the whole server, built on first use (building one takes a couple of ms). */
+export const sharedWordFilter = (): WordFilter => (shared ??= makeWordFilter());

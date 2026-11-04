@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { makeWordFilter } from "./badWords.js";
 import { checkLine } from "./chatFlags.js";
-import { WordMatcher } from "./wordMatch.js";
+import { MAX_DISGUISED_LENGTH, WordMatcher } from "./wordMatch.js";
 
 /**
  * The disguised-word matcher behind the word filter: what it must catch
@@ -207,5 +207,42 @@ describe("WordMatcher", () => {
   test("two-word phrases on the list are caught across the space", () => {
     const matcher = new WordMatcher(["blow job"]);
     expect(matcher.scan("nice blow job").shown).toBe("nice **** ***");
+  });
+});
+
+describe("cost per line (chat lines are player-sent)", () => {
+  /** The fastest of a few runs, in ms, after one warm-up run. */
+  const timed = (line: string) => {
+    filter.scan(line);
+    let best = Infinity;
+    for (let i = 0; i < 5; i++) {
+      const t0 = performance.now();
+      filter.scan(line);
+      best = Math.min(best, performance.now() - t0);
+    }
+    return best;
+  };
+
+  test("a 2,000-character line of mixed symbols and letters is checked in under 20 ms", () => {
+    const lines = [
+      // One long run of letters and leet symbols: a single word to the tokenizer.
+      "@$!|+".repeat(200) + "fuck".repeat(250),
+      // Mixed symbols, letters and splitters.
+      "f$u@c!k*-. a ".repeat(154).slice(0, 2000),
+      // Single letters split apart, the split-letter pass's worst case.
+      "f ".repeat(1000),
+      // Stretched letters and asterisks.
+      ("f" + "u".repeat(30) + "*ck! ").repeat(60).slice(0, 2000),
+    ];
+    for (const line of lines) {
+      expect(line.length).toBeGreaterThanOrEqual(1990);
+      const ms = timed(line);
+      expect([line.slice(0, 20), ms < 20]).toEqual([line.slice(0, 20), true]);
+    }
+  });
+
+  test(`a word longer than ${MAX_DISGUISED_LENGTH} characters still has its plain words masked`, () => {
+    const long = "$".repeat(MAX_DISGUISED_LENGTH) + "fuck" + "$".repeat(5);
+    expect(filter.clean(long)).toBe("$".repeat(MAX_DISGUISED_LENGTH) + "****" + "$".repeat(5));
   });
 });

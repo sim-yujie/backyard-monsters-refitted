@@ -117,6 +117,17 @@ const LEET: Readonly<Record<string, string>> = {
   "8": "b",
 };
 
+/**
+ * Longest word read for disguises. A longer run of letters and symbols is no
+ * listed word disguised; its plain letter runs are still matched as typed.
+ * Keeps the work per line in step with its length (a chat line is
+ * player-sent, so no line may cost more than a few lookups per character).
+ */
+export const MAX_DISGUISED_LENGTH = 40;
+
+/** Leet symbols tried off each end of a word, as punctuation ("fuck!", "@$$!"). */
+const MAX_END_TRIM = 3;
+
 const isLetter = (c: string) => c >= "a" && c <= "z";
 const isDigit = (c: string) => c >= "0" && c <= "9";
 const isLeetSymbol = (c: string) => c === "!" || c === "|" || c === "@" || c === "$" || c === "+";
@@ -278,7 +289,7 @@ export class WordMatcher {
     for (let t = 0; t < tokens.length; ) {
       let u = t;
       while (u < tokens.length && tokens[u]!.text.length === 1 && (u === t || tokens[u]!.splitFromLast)) u++;
-      if (u - t >= 3) {
+      if (u - t >= 3 && u - t <= MAX_DISGUISED_LENGTH) {
         const joined = tokens.slice(t, u).map((token) => token.text).join("");
         const word = this.read(joined, true);
         if (word) {
@@ -294,6 +305,11 @@ export class WordMatcher {
     // Whole words first in every reading ("fuck!" is "fuck"), then stems inside longer words.
     tokens.forEach((token, t) => {
       if (used.has(t)) return;
+      // A very long word: only its plain letter runs, as typed.
+      for (const run of token.plain) {
+        const word = this.whole(run.text);
+        if (word) hit(word, run.start, run.end);
+      }
       for (const stems of [false, true]) {
         for (const candidate of token.candidates) {
           const word = this.read(candidate.text, stems);
@@ -332,6 +348,8 @@ export class WordMatcher {
       splitFromLast: boolean;
       spaceFromLast: boolean;
       candidates: { text: string; start: number; end: number }[];
+      /** Only for a word longer than {@link MAX_DISGUISED_LENGTH}: its runs of plain letters. */
+      plain: { text: string; start: number; end: number }[];
     }[] = [];
     const inWord = (n: Norm | undefined) => n !== undefined && (isLetter(n.c) || isDigit(n.c) || isLeetSymbol(n.c));
     let i = 0;
@@ -350,13 +368,28 @@ export class WordMatcher {
       const hasLetterOrSymbol = chars.some((n) => isLetter(n.c) || isLeetSymbol(n.c));
       const readAll = (part: Norm[]) => part.map((n) => (n.c === "*" ? "*" : (LEET[n.c] ?? n.c))).join("");
       const candidates: { text: string; start: number; end: number }[] = [];
-      if (hasLatin || (hasLetterOrSymbol && !chars.some((n) => n.look))) {
+      const plain: { text: string; start: number; end: number }[] = [];
+      if (chars.length > MAX_DISGUISED_LENGTH) {
+        for (let a = 0; a < chars.length; ) {
+          if (!isLetter(chars[a]!.c) || chars[a]!.look) {
+            a++;
+            continue;
+          }
+          let b = a;
+          while (b < chars.length && isLetter(chars[b]!.c) && !chars[b]!.look) b++;
+          if (b - a >= 2 && b - a <= MAX_DISGUISED_LENGTH) {
+            plain.push({ text: chars.slice(a, b).map((n) => n.c).join(""), start: chars[a]!.from, end: chars[b - 1]!.to });
+          }
+          a = b;
+        }
+      } else if (hasLatin || (hasLetterOrSymbol && !chars.some((n) => n.look))) {
         candidates.push({ text: readAll(chars), start: chars[0]!.from, end: chars[chars.length - 1]!.to });
-        // Leet symbols at the ends may be punctuation instead ("fuck!", "@$$!"): try them off, fewest first.
+        // Leet symbols at the ends may be punctuation instead ("fuck!", "@$$!"): try up to
+        // MAX_END_TRIM off each end, fewest first; at most 15 more readings per word.
         let maxA = 0;
-        while (maxA < chars.length && isLeetSymbol(chars[maxA]!.c)) maxA++;
+        while (maxA < MAX_END_TRIM && maxA < chars.length && isLeetSymbol(chars[maxA]!.c)) maxA++;
         let minB = chars.length;
-        while (minB > 0 && isLeetSymbol(chars[minB - 1]!.c)) minB--;
+        while (chars.length - minB < MAX_END_TRIM && minB > 0 && isLeetSymbol(chars[minB - 1]!.c)) minB--;
         const trims: [number, number][] = [];
         for (let a = 0; a <= maxA; a++) {
           for (let b = chars.length; b >= Math.max(minB, a + 2); b--) {
@@ -379,6 +412,7 @@ export class WordMatcher {
         text: candidates[0]?.text ?? "",
         start: chars[0]!.from,
         end: chars[chars.length - 1]!.to,
+        plain,
         splitFromLast: gapText.length >= 1 && gapText.length <= 2 && [...gapText].every(isSplitter),
         spaceFromLast: gapText.length >= 1 && /^[\s_-]+$/.test(gapText),
         candidates,
