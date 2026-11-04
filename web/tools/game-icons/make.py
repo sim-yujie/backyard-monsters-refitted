@@ -7,6 +7,8 @@ usage: python -I make.py <art-samples/icons folder from branch art/game-icons> [
          (Map Room 2's neighbour defence bonus, and its second option)
        python -I make.py ../../../art-samples/support-heart support,support2
          (the "Support the game" heart, and its second option)
+       python -I make.py ../../../art-samples/planner-icons undo,redo,select,box,find,wallupgrade,rearm,select2,box2,rearm2
+         (the Yard Planner's buttons, and the second options of select, box and rearm)
 
 Reads each icon's tight crop at painted size (large/<name>.png) and writes
 <name>-<side>.webp for every side in SIDES: square, the icon centred with a
