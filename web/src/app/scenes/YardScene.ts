@@ -1955,7 +1955,8 @@ export class YardScene implements Scene {
    * the pointer, and a click builds it (`BuildPlacement.ts`). A wall or trap
    * stays in hand after each block; anything else is done after one, and its
    * panel opens on the new building. A decoration from the Decorations tab
-   * comes out of storage (`decor/place`, §8.3): free and finished.
+   * comes out of storage (`decor/place`, §8.3): free and finished; one sold
+   * for Shiny is bought as it goes down (`decor/buy`, owner 2026-11-04).
    */
   private startPlacement(type: number, instant: boolean): void {
     const store = this.store;
@@ -1971,6 +1972,7 @@ export class YardScene implements Scene {
 
     const actions = buildActions(store);
     const storage = offer.stored !== null ? decorActions(store) : null;
+    const buying = offer.price !== undefined;
     const repeat = buildsAtOnce(type, store.kind) && !instant && !storage;
     let placed: number | null = null;
 
@@ -1979,6 +1981,7 @@ export class YardScene implements Scene {
       kind: store.kind,
       instant,
       instantPrice: offer.instantPrice,
+      ...(buying && { price: offer.price }),
       cost: offer.cost,
       ...(offer.inferno && { realm: "inferno" as const }),
       time: offer.atOnce ? "At once" : formatCountdown(offer.seconds),
@@ -2015,7 +2018,7 @@ export class YardScene implements Scene {
         // A one-off building is down; the bar says so until the answer (#277).
         if (!repeat) bar.setBuilding(true);
         const result = storage
-          ? await storage.place(type, x, y)
+          ? await (buying ? storage.buy(type, x, y) : storage.place(type, x, y))
           : instant
             ? await actions.instant(type, x, y)
             : await actions.build(type, x, y);

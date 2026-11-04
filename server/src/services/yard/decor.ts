@@ -1,4 +1,5 @@
 import { footprintOf } from "../../game-data/buildingFootprints.js";
+import { decorationPrice } from "../../game-data/store/decorationsForSale.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import { levelOf } from "../yardplanner/costs.js";
@@ -16,12 +17,17 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * leaves one unplaced put it here; `decor/place` and a planner Apply that
  * places one from the drawer take it out.
  *
- * Owner decisions of 2026-09-29: only what is in storage is placed (Shiny
- * decorations included; none are bought); placing is free and finished at
- * once, holds no worker, awards no points and has no Town Hall limit (the
+ * Owner decisions of 2026-09-29: placing from storage is free and finished
+ * at once, holds no worker, awards no points and has no Town Hall limit (the
  * count is the limit); it goes inside the plot, clear of buildings (a
  * mushroom moves out of the way, #263); main yard only. A totem comes back at its stored level, else
  * level 1, and `bl<type>` goes once its count is 0.
+ *
+ * Owner decision of 2026-11-04: the decorations Flash sold are bought with
+ * Shiny again (`decor/buy`, {@link planBuyDecoration}), at Flash's price
+ * (`game-data/store/decorationsForSale.ts`), charged when one is placed, as
+ * Flash charged it (`BFOUNDATION.as:1690-1700`); the same placement rules
+ * apply, and there is no limit (Flash's `quantity: [0]`).
  */
 
 /** The Wild Monster totems keep their level in storage (`BTOTEM.as:264-270`). */
@@ -82,7 +88,7 @@ export interface DecorSave extends BuildSave {
   researchdata?: JsonObject | null;
 }
 
-/** `report` of `POST /bm/yard/decor/place`. */
+/** `report` of `POST /bm/yard/decor/place` and `/decor/buy`. */
 export interface PlaceDecorationReport {
   id: number;
   t: number;
@@ -92,6 +98,8 @@ export interface PlaceDecorationReport {
   level: number;
   /** How many of the type are left in storage. */
   left: number;
+  /** `decor/buy` only: the Shiny charged (0 when one came out of storage instead). */
+  credits?: number;
 }
 
 const PLACEMENT_MESSAGES = {
@@ -132,4 +140,48 @@ export const planPlaceDecoration = (save: DecorSave, request: BuildRequest) => {
     left: storedCount(researchdata, type),
   };
   return { report, slices: { buildingdata, researchdata } };
+};
+
+/**
+ * Buys one decoration of `type` for Shiny and puts it at `x`, `y`, finished
+ * (owner decision 2026-11-04): the price is the store table's
+ * ({@link decorationPrice}), whatever the client thinks it is, and the
+ * wrapper takes it (`409 shinyLocked`, `409 credits`) only once the spot is
+ * good, so a refused placement charges nothing. `400 notDecoration` for a type
+ * that is not one, `400 notForSale { type }` for one Flash did not sell,
+ * `409 placement` as `decor/place`. One already in storage is placed from
+ * there for free instead, as Flash placed it (`BFOUNDATION.as:1691`), and
+ * `credits` is 0.
+ */
+export const planBuyDecoration = (save: DecorSave, request: BuildRequest) => {
+  const { type } = request;
+  if (!isDecoration(type)) {
+    throw yardBadRequestErr("That is not a decoration.", { type }, "notDecoration");
+  }
+  if (storedCount(save.researchdata, type) > 0) {
+    const placed = planPlaceDecoration(save, request);
+    return { ...placed, report: { ...placed.report, credits: 0 } };
+  }
+  const price = decorationPrice(type);
+  if (price === undefined) {
+    throw yardBadRequestErr("That decoration is not for sale.", { type }, "notForSale");
+  }
+  const problem = placementProblem(save, request);
+  if (problem) throw yardRefusedErr("placement", PLACEMENT_MESSAGES[problem.placement], problem);
+
+  const id = nextBuildingId(save);
+  const buildingdata: BuildingDataMap = {
+    ...(save.buildingdata ?? {}),
+    [String(id)]: placedDecoration(id, request, 1),
+  };
+  const report: PlaceDecorationReport = {
+    id,
+    t: type,
+    x: request.x,
+    y: request.y,
+    level: 1,
+    left: 0,
+    credits: price,
+  };
+  return { report, slices: { buildingdata }, shiny: price };
 };

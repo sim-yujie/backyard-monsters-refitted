@@ -4,7 +4,7 @@ import type { User } from "../../database/models/user.model.js";
 import { MUSHROOM_TYPE } from "../../game-data/buildingFootprints.js";
 import { overlaps, rectOf } from "../../services/yardplanner/layoutGeometry.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
-import { yardPlaceDecorationAction } from "./decor.js";
+import { yardBuyDecorationAction, yardPlaceDecorationAction } from "./decor.js";
 import { yardRecycleAction } from "./recycle.js";
 import { runYardAction, type YardAnswer } from "./yardAction.js";
 
@@ -36,6 +36,7 @@ const em = {
 };
 
 const user = { userid: 2505, shiny_locked: false, save: { basesaveid: 7 } } as unknown as User;
+const lockedUser = { userid: 2505, shiny_locked: true, save: { basesaveid: 7 } } as unknown as User;
 
 const rowOf = (overrides: Row = {}): Row => ({
   basesaveid: 7,
@@ -149,5 +150,113 @@ describe("POST /bm/yard/decor/place", () => {
     expect(overlaps(rectOf(MUSHROOM_TYPE, x, y), rectOf(28, 200, 200))).toBe(false);
     // The answer shows it where the save has it.
     expect((answer.body.mushrooms as { l: unknown[] }).l).toEqual(saved);
+  });
+});
+
+const buy = (body: Row, who: User = user): Promise<YardAnswer> =>
+  runYardAction(em as unknown as EntityManager, who, yardBuyDecorationAction, body);
+
+/**
+ * `POST /bm/yard/decor/buy` (owner decision 2026-11-04): Flash's Shiny
+ * decorations at Flash's price (`game-data/store/decorationsForSale.ts`),
+ * charged when one is placed. 29 is the British Flag (150), 55 the Acorn (5),
+ * 99 the Statue of Liberty (500); 70 the Sun Dial is `block`ed in Flash and
+ * 120 the Big Gulp priced 0, so neither is sold.
+ */
+describe("POST /bm/yard/decor/buy", () => {
+  beforeEach(() => {
+    db.row = rowOf({ credits: 1_000, researchdata: {} });
+  });
+
+  test("charges the store price and puts it down finished: no worker, no points", async () => {
+    const answer = await buy({ type: 29, x: 200, y: 200 });
+
+    expect(answer.status).toBe(200);
+    expect(answer.body.report).toEqual({ id: 5, t: 29, x: 200, y: 200, level: 1, left: 0, credits: 150 });
+    expect(buildings()["5"]).toEqual({ id: 5, t: 29, X: 200, Y: 200 });
+    expect(db.row).toMatchObject({
+      credits: 850,
+      points: "100",
+      resources: { r1: 0, r2: 0, r3: 0, r4: 0 },
+      researchdata: {},
+    });
+    expect((answer.body.workers as { busy: number }).busy).toBe(0);
+
+    await buy({ type: 55, x: 0, y: 200 });
+    await buy({ type: 99, x: -300, y: 200 });
+    expect(db.row!.credits).toBe(850 - 5 - 500);
+  });
+
+  test("any price the client sends is ignored", async () => {
+    await buy({ type: 29, x: 200, y: 200, price: 1, credits: 1 });
+    expect(db.row!.credits).toBe(850);
+  });
+
+  test("no limit: a second of the same is sold too", async () => {
+    await buy({ type: 29, x: 200, y: 200 });
+    const again = await buy({ type: 29, x: 0, y: 200 });
+    expect(again.status).toBe(200);
+    expect(db.row!.credits).toBe(700);
+  });
+
+  test("one in storage is placed from there for nothing", async () => {
+    db.row = rowOf({ credits: 1_000, researchdata: { b29: 1 } });
+    const answer = await buy({ type: 29, x: 200, y: 200 });
+
+    expect(answer.body.report).toMatchObject({ t: 29, left: 0, credits: 0 });
+    expect(db.row).toMatchObject({ credits: 1_000, researchdata: {} });
+  });
+
+  test("refuses what Flash did not sell, and charges nothing", async () => {
+    for (const type of [70, 110, 120, 121, 135]) {
+      expect(await buy({ type, x: 200, y: 200 })).toMatchObject({
+        status: 400,
+        body: { reason: "notForSale", type },
+      });
+    }
+    expect(await buy({ type: 20, x: 200, y: 200 })).toMatchObject({
+      status: 400,
+      body: { reason: "notDecoration" },
+    });
+    expect(db.row!.credits).toBe(1_000);
+    expect(Object.keys(buildings())).toEqual(["0", "4"]);
+  });
+
+  test("too little Shiny: 409 credits, nothing placed", async () => {
+    db.row = rowOf({ credits: 100, researchdata: {} });
+    expect(await buy({ type: 29, x: 200, y: 200 })).toMatchObject({
+      status: 409,
+      body: { reason: "credits", credits: { have: 100, need: 150 } },
+    });
+    expect(db.row!.credits).toBe(100);
+    expect(Object.keys(buildings())).toEqual(["0", "4"]);
+  });
+
+  test("a Shiny-locked account is refused", async () => {
+    expect(await buy({ type: 29, x: 200, y: 200 }, lockedUser)).toMatchObject({
+      status: 409,
+      body: { reason: "shinyLocked" },
+    });
+    expect(db.row!.credits).toBe(1_000);
+  });
+
+  test("a refused spot charges nothing: outside the plot, on a building", async () => {
+    expect(await buy({ type: 29, x: 600, y: 0 })).toMatchObject({
+      status: 409,
+      body: { reason: "placement", placement: "outOfBounds" },
+    });
+    expect(await buy({ type: 29, x: -100, y: -100 })).toMatchObject({
+      status: 409,
+      body: { reason: "placement", placement: "overlap", with: 0 },
+    });
+    expect(db.row!.credits).toBe(1_000);
+    expect(Object.keys(buildings())).toEqual(["0", "4"]);
+  });
+
+  test("recycling a bought one puts it in storage", async () => {
+    await buy({ type: 29, x: 200, y: 200 });
+    await runYardAction(em as unknown as EntityManager, user, yardRecycleAction, { id: 5 });
+    expect(db.row).toMatchObject({ credits: 850, researchdata: { b29: 1 } });
+    expect(buildings()["5"]).toBeUndefined();
   });
 });

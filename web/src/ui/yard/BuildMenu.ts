@@ -124,6 +124,7 @@ const offerRealm = (offer: Pick<BuildOffer, "inferno">): ResourceRealm | undefin
 
 /** "2 of 3 built" and the like: what a tile says under its name. */
 export const tileLine = (offer: BuildOffer, kind: YardKind = "main"): string => {
+  if (offer.price !== undefined) return `${formatAmount(offer.price)} Shiny`;
   if (offer.stored !== null) return `${offer.stored} in storage`;
   const hall = offerHall(offer, kind);
   switch (offer.status) {
@@ -432,9 +433,11 @@ export class BuildMenu {
       const empty = document.createElement("li");
       empty.className = "build-menu__empty";
       empty.textContent =
-        this.active === BuildCategory.DECORATIONS
-          ? "No decorations in storage. Recycle one to keep it here, then place it again from this tab."
-          : "Nothing to build here yet.";
+        this.active !== BuildCategory.DECORATIONS
+          ? "Nothing to build here yet."
+          : store.kind === "main"
+            ? "No decorations in storage. Recycle one to keep it here, then place it again from this tab."
+            : "Decorations go in your main yard.";
       this.grid.replaceChildren(empty);
     } else {
       this.grid.replaceChildren(...pageOf(offers, this.page).map((offer) => this.tile(offer)));
@@ -475,13 +478,13 @@ export class BuildMenu {
       item.append(text);
       return item;
     };
-    // Decorations come from storage: nothing is locked and nothing runs out
-    // but the count, so the build keys would only mislead.
+    // Decorations come from storage or for Shiny: nothing is locked and
+    // nothing runs out, so the build keys would only mislead.
     if (storage) {
       // Not a key: a narrow window hides those, and this is the tab's one line.
       const note = document.createElement("span");
       note.className = "build-menu__note";
-      note.textContent = "Your stored decorations. Placing one is free.";
+      note.textContent = "Stored ones first, free to place. The rest cost Shiny.";
       this.legend.replaceChildren(note);
       return;
     }
@@ -523,6 +526,13 @@ export class BuildMenu {
     const count = document.createElement("span");
     count.className = "build-tile__count";
     count.textContent = tileLine(offer, kind);
+    // A decoration sold for Shiny: the Shop's Shiny icon and the price, red while short.
+    if (offer.price !== undefined) {
+      count.replaceChildren(resourceAmount("shiny", formatAmount(offer.price)));
+      count.classList.add("build-tile__count--price");
+      count.classList.toggle("build-tile__count--short", offer.gate?.reason === "credits");
+      button.setAttribute("aria-label", `${name}, ${tileLine(offer, kind)}`);
+    }
     if (offer.status === "locked" && offer.gate?.reason === "requirements") {
       count.classList.add("build-tile__count--needs");
     }
@@ -572,7 +582,16 @@ export class BuildMenu {
     blurb.className = "build-info__blurb";
     blurb.textContent =
       (kind === "inferno" ? INFERNO_BUILD_BLURBS : BUILD_BLURBS)[offer.type] ??
-      (offer.stored !== null ? "A decoration from your storage. It goes anywhere inside your yard." : "");
+      (offer.price !== undefined
+        ? "A decoration. It goes anywhere inside your yard."
+        : offer.stored !== null
+          ? "A decoration from your storage. It goes anywhere inside your yard."
+          : "");
+    if (offer.price !== undefined) {
+      count.replaceChildren(resourceAmount("shiny", formatAmount(offer.price)));
+      this.info.replaceChildren(back, picture(offer, "build-info__picture", kind), head, blurb, this.buyActions(offer, name));
+      return;
+    }
     if (offer.stored !== null) {
       this.info.replaceChildren(back, picture(offer, "build-info__picture", kind), head, blurb, this.storageActions(offer, name));
       return;
@@ -688,6 +707,66 @@ export class BuildMenu {
     actions.append(place);
     wrap.append(facts, actions);
     return wrap;
+  }
+
+  /**
+   * A decoration sold for Shiny (owner decision 2026-11-04): its price, at
+   * once, no worker, and Buy, a {@link ShinyButton} (tap, then tap again)
+   * that starts the placement; `decor/buy` charges the price when it goes
+   * down. Short of Shiny, Buy is blocked and a line says how much more.
+   */
+  private buyActions(offer: BuildOffer, name: string): HTMLElement {
+    const price = offer.price ?? 0;
+    const wrap = document.createElement("div");
+    const facts = document.createElement("ul");
+    facts.className = "build-info__facts";
+    facts.setAttribute("aria-label", "Cost");
+    const cost = document.createElement("li");
+    cost.className = "build-info__fact";
+    cost.append(resourceAmount("shiny", formatAmount(price)));
+    facts.append(cost);
+    for (const [icon, text] of [
+      [CLOCK, "At once"],
+      [WORKER, "No worker"],
+    ] as const) {
+      const fact = document.createElement("li");
+      fact.className = "build-info__fact";
+      fact.append(glyph(icon, "build-info__fact-icon"), text);
+      facts.append(fact);
+    }
+    wrap.append(facts);
+    if (offer.gate) wrap.append(gateLine(offer.gate));
+
+    const actions = document.createElement("div");
+    actions.className = "build-info__actions";
+    const buy = this.buyButton(offer.type, name);
+    buy.setPrice(price);
+    buy.setBlocked(offer.gate ? "Not enough Shiny." : null);
+    actions.append(buy.element);
+    wrap.append(actions);
+    return wrap;
+  }
+
+  /** Buy for a decoration, kept across redraws as Build instantly is (keyed by the negative type). */
+  private buyButton(type: number, name: string): ShinyButton {
+    const key = -type;
+    let button = this.shiny.get(key);
+    if (!button) {
+      button = new ShinyButton({
+        label: "Buy",
+        what: name,
+        spell: formatAmount,
+        className: "btn--primary build-info__build build-info__buy",
+        onSpend: () => {
+          // Re-checked against the yard as it is now, not as the panel was drawn.
+          const offer = buildOffer(type, this.binding.store);
+          if (offer?.price !== undefined && !offer.gate) this.onPick(type, false);
+        },
+      });
+      button.element.dataset["focus"] = "build";
+      this.shiny.set(key, button);
+    }
+    return button;
   }
 
   private instantButton(type: number): ShinyButton {
@@ -807,6 +886,8 @@ export interface PlacementBarOptions {
   readonly kind?: YardKind;
   /** Placing finished for Shiny rather than for resources. */
   readonly instant: boolean;
+  /** A decoration bought for Shiny: its price, shown in place of the cost. */
+  readonly price?: number;
   readonly instantPrice: number;
   readonly cost: BuildOffer["cost"];
   /** The realm the cost is drawn in: the Inferno's for a main-yard Inferno building. */
@@ -855,6 +936,14 @@ export class PlacementBar {
     price.className = "build-placing__price";
     if (options.instant) {
       price.append("Finished at once for ", resourceAmount("shiny", formatAmount(options.instantPrice)));
+    } else if (options.price !== undefined) {
+      price.append(resourceAmount("shiny", formatAmount(options.price)));
+      if (options.time) {
+        const time = document.createElement("span");
+        time.className = "build-placing__time";
+        time.textContent = ` · ${options.time}`;
+        price.append(time);
+      }
     } else {
       price.append(costAmounts(options.cost, undefined, options.realm ? { realm: options.realm } : {}) ?? "Free");
       if (options.time) {

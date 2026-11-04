@@ -334,6 +334,18 @@
   color: var(--colour-warning);
 }
 
+/* A decoration sold for Shiny: the Shop's Shiny icon and the price (owner 2026-11-04). */
+.build-tile__count--price {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* More Shiny than the player has. */
+.build-tile--ready .build-tile__count--short {
+  color: var(--colour-warning);
+}
+
 /* The lock or the tick in the picture's corner. */
 .build-badge {
   position: absolute;

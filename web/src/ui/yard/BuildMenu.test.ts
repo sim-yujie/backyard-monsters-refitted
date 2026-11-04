@@ -309,29 +309,88 @@ describe("BuildMenu", () => {
     expect(onTownHall).toHaveBeenCalledTimes(1);
   });
 
-  it("with nothing stored, the Decorations tab says how to fill it", () => {
+  it("with nothing stored, the Decorations tab sells Flash's 73 for Shiny, on eight pages", () => {
     const { menu } = setup([HALL]);
     menu.open(BuildCategory.DECORATIONS);
-    expect(menu.element.querySelector(".build-menu__empty")?.textContent).toBe(
-      "No decorations in storage. Recycle one to keep it here, then place it again from this tab.",
+    expect(menu.element.querySelector(".build-menu__empty")).toBeNull();
+    expect(tileTypes(menu)).toEqual(["107", "74", "75", "76", "77", "78", "79", "81", "82", "83"]);
+    expect(menu.element.querySelector(".build-menu__page")?.textContent).toBe("Page 1 of 8");
+    expect(menu.element.querySelector(".build-menu__legend")?.textContent).toBe(
+      "Stored ones first, free to place. The rest cost Shiny.",
     );
-    expect(menu.element.querySelector(".build-menu__page")?.textContent).toBe("Page 1 of 1");
+  });
+
+  it("an outpost's Decorations tab says they go in the main yard", () => {
+    const store = new YardStore({
+      save: {
+        error: 0,
+        currenttime: T0,
+        savetime: T0,
+        resources: {},
+        credits: 1_000,
+        buildingdata: { "1": building(1, 112) },
+        buildinghealthdata: {},
+        storedata: {},
+        researchdata: { b28: 1 },
+      } as unknown as BaseLoadResponse,
+      target: { baseid: "9", kind: "outpost" },
+      api: { state: vi.fn(() => pendingForever<null>()) } as unknown as YardApi,
+      clock: () => T0,
+      timers: { set: () => 0, clear: () => undefined },
+    });
+    const binding: YardUiBinding = { store, scene: { selectBuilding: vi.fn() }, notices: {} as Notices };
+    const menu = new BuildMenu({ binding, onPick: vi.fn() }).mount(document.body);
+    menu.open(BuildCategory.DECORATIONS);
+    expect(menu.element.querySelector(".build-menu__empty")?.textContent).toBe("Decorations go in your main yard.");
+  });
+
+  it("a decoration for sale: the Shiny icon and price, and Buy picks it up on the second tap", () => {
+    const { menu, onPick } = setup([HALL], { credits: 1_000 });
+    menu.open(BuildCategory.DECORATIONS);
+
+    const skull = tile(menu, 107);
+    expect(skull.querySelector(".build-tile__count .res-amount")?.getAttribute("data-resource")).toBe("shiny");
+    expect(spokenText(skull.querySelector(".build-tile__count")!)).toBe("Shiny 20");
+    expect(skull.getAttribute("aria-label")).toMatch(/, 20 Shiny$/);
+
+    skull.click();
+    expect(facts(menu)).toEqual(["Shiny 20", "At once", "No worker"]);
+    expect(info(menu).querySelector(".build-info__gate")).toBeNull();
+    const buy = info(menu).querySelector<HTMLButtonElement>(".build-info__buy")!;
+    expect(buy.disabled).toBe(false);
+    buy.click();
+    expect(onPick).not.toHaveBeenCalled();
+    buy.click();
+    expect(onPick).toHaveBeenCalledWith(107, false);
+  });
+
+  it("short of Shiny: the price is marked, Buy is blocked and the line says how much more", () => {
+    const { menu, onPick } = setup([HALL], { credits: 100 });
+    menu.open(BuildCategory.DECORATIONS);
+    menu.turn(6);
+    // Page 7 ends the flags: the European Flag (32) costs 150.
+    tile(menu, 32).click();
+
+    expect(tile(menu, 32).querySelector(".build-tile__count--short")).not.toBeNull();
+    expect(spokenText(info(menu).querySelector(".build-info__gate")!)).toBe("Need Shiny 50 more.");
+    const buy = info(menu).querySelector<HTMLButtonElement>(".build-info__buy")!;
+    buy.click();
+    buy.click();
+    expect(onPick).not.toHaveBeenCalled();
   });
 
   it("stored decorations: a tile each with the count, free, and Place hands the type over (#128)", () => {
     const { menu, onPick } = setup([HALL], { researchdata: { b28: 3, b121: 1, bl121: 2 } });
     menu.open(BuildCategory.DECORATIONS);
 
-    expect(tileTypes(menu)).toEqual(["28", "121"]);
+    // Stored first, then the ones for sale (the stored American Flag not again).
+    expect(tileTypes(menu).slice(0, 3)).toEqual(["28", "121", "107"]);
+    expect(menu.element.querySelectorAll('.build-tile[data-type="28"]')).toHaveLength(1);
     expect(tile(menu, 28).querySelector(".build-tile__count")?.textContent).toBe("3 in storage");
     expect(info(menu).querySelector(".build-info__count")?.textContent).toBe("3 in storage");
     expect(facts(menu)).toEqual(["Free", "At once", "No worker"]);
     expect(info(menu).querySelector(".build-info__needs")).toBeNull();
     expect(info(menu).querySelector(".shiny-button")).toBeNull();
-    expect(menu.element.querySelector(".build-menu__legend")?.textContent).toBe(
-      "Your stored decorations. Placing one is free.",
-    );
-
     const place = info(menu).querySelector<HTMLButtonElement>(".build-info__build")!;
     expect(place.getAttribute("aria-label")).toMatch(/^Place .+ from storage$/);
     place.click();
@@ -385,6 +444,19 @@ describe("BuildMenu", () => {
 });
 
 describe("PlacementBar", () => {
+  it("a decoration bought for Shiny shows its price", () => {
+    const bar = new PlacementBar({
+      type: 28,
+      instant: false,
+      instantPrice: 0,
+      price: 150,
+      cost: { r1: 0, r2: 0, r3: 0, r4: 0 },
+      time: "At once",
+      onCancel: vi.fn(),
+    }).mount(document.body);
+    expect(spokenText(bar.element.querySelector(".build-placing__price")!)).toBe("Shiny 150 · At once");
+  });
+
   it("says what is in hand and why a spot is refused, and cancels", () => {
     const onCancel = vi.fn();
     const bar = new PlacementBar({

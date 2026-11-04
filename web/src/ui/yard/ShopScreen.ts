@@ -282,7 +282,7 @@ export class ShopScreen {
     }
     if (model.repair) sections.push(this.section("repairs", "Repairs", [this.repairCard(model.repair)]));
     // Flash's Inferno store never listed the Shiny decorations.
-    if (store.kind !== "inferno") {
+    if (store.kind !== "inferno" && COMING_LATER.length > 0) {
       this.comingLater ??= this.section(
         "later",
         "Coming later",
