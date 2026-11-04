@@ -1007,6 +1007,12 @@
     1.5px 1.5px 0 #000000, -1.5px 1.5px 0 #000000, 1.5px -1.5px 0 #000000, -1.5px -1.5px 0 #000000;
 }
 
+/* The BETA chip sits inside the title: without this it takes the title's black
+   outline and its small dark letters smear on the amber (owner, 4 Nov 2026). */
+:root[data-skin] .login-brand__tag {
+  text-shadow: none;
+}
+
 :root[data-skin] :is(.login-brand__note, .login-footer) {
   color: var(--colour-text-secondary);
   text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
