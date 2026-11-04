@@ -10,7 +10,7 @@ import { gameIcon } from "@/ui/gameIcon";
 import { attachPopover } from "@/ui/Popover";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceIcon } from "@/ui/resourceIcon";
 import { demo, GROUP_OP_DEMOS, type DemoName } from "./demos";
-import { costButtonState, costLineParts, isPhone, PlannerLayout } from "./plannerLayout";
+import { costButtonState, isPhone, PlannerLayout } from "./plannerLayout";
 
 /**
  * The planner's two bars: tools across the top, the plan summary and the
@@ -68,8 +68,10 @@ import { costButtonState, costLineParts, isPhone, PlannerLayout } from "./planne
  *
  * `setLayout` rearranges the same controls for a phone, the owner's Option A:
  * upright, a top bar of Leave, the layout's name, a 3D ⇄ Blueprint switch and
- * undo/redo, and a bottom bar of the summary, a one-line cost, Box, the
- * drawer, More and Apply; sideways, all of that in one bar along the bottom.
+ * undo/redo, and a bottom bar of the summary, the Store chip and the same
+ * short Cost button a desktop has (its pop-up hangs over the bar, two cells a
+ * row), then Box, the drawer, More and Apply; sideways, all of that in one bar
+ * along the bottom.
  * Everything else moves into the More sheet, and Mirror, Align and Distribute
  * are lent to the scene's selection row (`lendArrange`), which sits at the top
  * of More (`setSelectionTools`). The controls are moved, not
@@ -77,7 +79,7 @@ import { costButtonState, costLineParts, isPhone, PlannerLayout } from "./planne
  * drawer) is right in either place; and they are moved back exactly where
  * they were when the window returns to a desktop's shape. A desktop never
  * sees the phone-only controls at all: they are not in the document. (The
- * cost line is shared: a desktop draws it as its Cost button.)
+ * Cost button is shared, and draws the same on both.)
  *
  * ## Read-only
  *
@@ -571,12 +573,11 @@ export class PlannerBar {
   private costsOpen = false;
   private tool: PlannerTool = PlannerTool.SELECT;
   private view: YardView = YardView.ISO;
-  /** What the cost line was last told, so it can be redrawn on its own. */
+  /** What the Cost button was last told, so it can be redrawn on its own. */
   private line = {
     needed: ZERO as SelectionSummary["needed"],
     shortfall: ZERO as SelectionSummary["shortfall"],
     seconds: 0,
-    coverage: "",
   };
 
   constructor(
@@ -808,16 +809,17 @@ export class PlannerBar {
     this.actionBar.setAttribute("aria-label", "Plan summary and actions");
 
     // The yard readouts that stay on a desktop's bar: workers, unplaced and
-    // coverage, each short and bounded. A phone gets every cell in here.
+    // coverage, each short and bounded. A phone moves them into the pop-up.
     const costs = document.createElement("div");
     costs.className = "planner-cost";
     costs.setAttribute("role", "group");
     costs.setAttribute("aria-label", "What the selection would cost");
     this.costs = costs;
 
-    // A desktop's priced cells (owner, 2026-11-04): the four resources, the
-    // time and the shiny price sit in a pop-up over the bar, behind one Cost
-    // button, so the bar does not grow with the numbers.
+    // The priced cells (owner, 2026-11-04): the four resources, the time and
+    // the shiny price sit in a pop-up over the bar, behind one Cost button,
+    // so the bar does not grow with the numbers. A phone too ("Yes, fix the
+    // phone"): its one-line cost ran to "90.5M 83.0M 25.6M 36d 2h".
     this.costPanel = document.createElement("div");
     this.costPanel.className = "planner-cost__pop";
     this.costPanel.setAttribute("role", "group");
@@ -865,9 +867,8 @@ export class PlannerBar {
     this.costPanel.append(this.timeCell.element, this.shinyCell.element);
     costs.append(this.workersCell.element, this.unplacedCell.element, this.coverageCell.element);
 
-    // One button for the costs: a phone's one-line cost (#45), and a
-    // desktop's short Cost button, which opens the pop-up on a click and
-    // shows it on a hover. A phone moves it beside the summary.
+    // One short Cost button, which opens the pop-up on a click (a tap) and,
+    // on a desktop, shows it on a hover. A phone moves it beside the summary.
     this.costLine = button("", "Show every cost", "btn btn--ghost planner-bar__cost-line");
     this.costLine.setAttribute("aria-expanded", "false");
     this.costLine.addEventListener("click", () => this.setCostsOpen(!this.costsOpen));
@@ -875,13 +876,13 @@ export class PlannerBar {
     this.costPop.className = "planner-bar__cost-pop";
     this.costPop.append(this.costLine, this.costPanel);
     this.renderCostLine();
-    // A click anywhere else or Esc closes a desktop's pop-up. Esc stops
+    // A click or tap anywhere else, or Esc, closes the pop-up. Esc stops
     // there, so closing it does not also drop the selection. The planner's
     // keys listen on window in the capture phase, which runs before anything
     // on document, so the Esc listener must sit on window too; the planner
     // skips a key that was already handled (defaultPrevented).
     this.dismissCosts = (event: Event): void => {
-      if (!this.costsOpen || isPhone(this.layout)) return;
+      if (!this.costsOpen) return;
       if (event instanceof KeyboardEvent) {
         if (event.key !== "Escape") return;
         event.preventDefault();
@@ -1092,6 +1093,7 @@ export class PlannerBar {
       this.arrange(layout);
     }
     if (this.lastState) this.summary.textContent = summarise(this.lastState, this.touch);
+    this.renderCostLine();
   }
 
   /**
@@ -1144,10 +1146,7 @@ export class PlannerBar {
     this.actions.onMore?.(next);
   }
 
-  /**
-   * Shows or hides the full cost cells: under a phone's one-line cost, or in
-   * the pop-up over a desktop's Cost button.
-   */
+  /** Shows or hides the pop-up of full cost cells over the Cost button. */
   private setCostsOpen(open: boolean): void {
     this.costsOpen = open;
     this.actionBar.classList.toggle("planner-bar--costs-open", this.costsOpen);
@@ -1190,13 +1189,13 @@ export class PlannerBar {
     this.places.move(this.exit, this.toolbar, this.heading);
     this.heading.after(this.viewSwitch);
 
-    // Bottom: the one-line cost beside the summary, then Box, the drawer,
-    // More and Apply. The pop-up's cells go back in with the readouts, in
-    // their old order, where the one-line cost opens them all in one row.
-    this.places.move(this.costLine, this.actionBar, this.summary.nextSibling);
-    for (const cell of [...this.costPanel.children]) {
-      this.places.move(cell, this.costs, this.workersCell.element);
-    }
+    // Bottom, first row: the summary, the Store chip (or Put back) and the
+    // Cost button, so the closed bar is that row and the actions. The
+    // readouts join the priced cells in the pop-up, which a phone hangs over
+    // the whole bar, two cells a row and never wider than the screen.
+    const after = this.putBack.parentNode === this.actionBar ? this.putBack : this.summary;
+    this.places.move(this.costPop, this.actionBar, after.nextSibling);
+    this.places.move(this.costs, this.costPanel);
     const row = this.actionRow ?? this.actionBar;
     const end = this.actionRow ? this.apply : null;
     this.places.move(this.box, row, row.firstChild);
@@ -1230,51 +1229,13 @@ export class PlannerBar {
   }
 
   /**
-   * A phone's cost line: what the selection or the plan would take, compact,
-   * and the worker time; or the coverage when nothing costs anything (#45).
-   * A desktop's Cost button instead (owner, 2026-11-04).
+   * The Cost button, the same on a desktop and a phone: the painted resource
+   * pile, a red "!" while any resource is short, and the worker time in one
+   * unit ("33m"). No resource figure, so the button is as wide at 999.9B as
+   * at 100; the pop-up over it has every cell, and a click, a tap or (on a
+   * desktop) a hover opens it.
    */
   private renderCostLine(): void {
-    if (!isPhone(this.layout)) {
-      this.renderCostButton();
-      return;
-    }
-    this.costLine.classList.remove("planner-bar__cost-line--short");
-    this.costLine.title = "Show every cost";
-    const parts = costLineParts(this.line.needed, this.line.shortfall, this.line.seconds);
-    const children: Node[] = [];
-    if (parts.length === 0) {
-      children.push(document.createTextNode(this.line.coverage));
-    }
-    for (const part of parts) {
-      const figure = document.createElement("span");
-      figure.className = "planner-bar__cost-part";
-      figure.classList.toggle("planner-bar__cost-part--short", part.short);
-      if (part.key !== "time") figure.append(resourceIcon(part.key, { tooltip: false }));
-      figure.append(part.text);
-      children.push(figure);
-    }
-    const caret = document.createElement("span");
-    caret.className = "planner-bar__cost-caret";
-    caret.setAttribute("aria-hidden", "true");
-    caret.textContent = this.costsOpen ? "▴" : "▾";
-    children.push(caret);
-    this.costLine.replaceChildren(...children);
-    this.costLine.setAttribute(
-      "aria-label",
-      parts.length === 0
-        ? `${this.line.coverage}. Show every cost`
-        : `Costs ${parts.map((part) => part.text).join(", ")}. Show every cost`,
-    );
-  }
-
-  /**
-   * A desktop's Cost button: the painted resource pile, a red "!" while any
-   * resource is short, and the worker time in one unit ("33m"). No resource
-   * figure, so the button is as wide at 999.9B as at 100; the pop-up over it
-   * has every cell, and a hover or a click opens it.
-   */
-  private renderCostButton(): void {
     const state = costButtonState(this.line.needed, this.line.shortfall, this.line.seconds);
     const children: Node[] = [gameIcon("income", { size: 24, decorative: true })];
     if (state.short) {
@@ -1301,7 +1262,7 @@ export class PlannerBar {
       ? "Nothing to pay for"
       : `${state.short ? "Short of resources" : "Affordable"}${state.time ? `, ${state.time} of work` : ""}`;
     this.costLine.setAttribute("aria-label", `Cost: ${said}. Show every cost`);
-    this.costLine.title = `${said}. Hover or click for every cost.`;
+    this.costLine.title = `${said}. ${this.touch ? "Tap" : "Hover or click"} for every cost.`;
   }
 
   /**
@@ -1452,11 +1413,6 @@ export class PlannerBar {
    * Air 41%", or "No towers" when none is placed.
    */
   setCoverage(coverage: CoverageFigures): void {
-    this.line.coverage =
-      coverage.towers === 0
-        ? "No towers"
-        : `Land ${percentText(coverage.land)} · Air ${percentText(coverage.air)}`;
-    this.renderCostLine();
     if (coverage.towers === 0) {
       this.coverageCell.set(
         "No towers",

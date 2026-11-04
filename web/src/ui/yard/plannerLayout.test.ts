@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { costButtonState, costLineParts, formatTimeShort, isPhone, PlannerLayout, plannerLayout, shownSheet, type SheetChoice, undoName } from "./plannerLayout";
+import { costButtonState, formatTimeShort, isPhone, PlannerLayout, plannerLayout, shownSheet, type SheetChoice, undoName } from "./plannerLayout";
 
 describe("plannerLayout", () => {
   it("lays a phone held upright out as a phone", () => {
@@ -29,27 +29,6 @@ describe("plannerLayout", () => {
     expect(isPhone(PlannerLayout.PORTRAIT)).toBe(true);
     expect(isPhone(PlannerLayout.LANDSCAPE)).toBe(true);
     expect(isPhone(PlannerLayout.DESKTOP)).toBe(false);
-  });
-});
-
-describe("costLineParts", () => {
-  const zero = { r1: 0, r2: 0, r3: 0, r4: 0 };
-
-  it("names only what costs something, compact, then the time", () => {
-    expect(costLineParts({ r1: 500_000, r2: 0, r3: 2_500, r4: 0 }, zero, 90_000)).toEqual([
-      { key: "r1", text: "500.0K", short: false },
-      { key: "r3", text: "2.5K", short: false },
-      { key: "time", text: "1d 1h", short: false },
-    ]);
-  });
-
-  it("marks what the yard is short of", () => {
-    const parts = costLineParts({ r1: 10, r2: 20, r3: 0, r4: 0 }, { r1: 0, r2: 5, r3: 0, r4: 0 }, 0);
-    expect(parts.map((part) => part.short)).toEqual([false, true]);
-  });
-
-  it("is empty when nothing costs anything", () => {
-    expect(costLineParts(zero, zero, 0)).toEqual([]);
   });
 });
 

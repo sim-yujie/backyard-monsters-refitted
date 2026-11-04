@@ -1,4 +1,3 @@
-import { formatCompact, formatCountdown } from "@/ui/format";
 import { RESOURCE_KEYS } from "@/ui/resourceIcon";
 
 /**
@@ -86,40 +85,9 @@ export const shownSheet = (choice: SheetChoice): PhoneSheet | "none" | null => {
 /** The four pool resources, which is what a cost is made of. */
 type PoolKey = (typeof RESOURCE_KEYS)[number];
 
-/** One figure on a phone's cost line. */
-export interface CostLinePart {
-  readonly key: PoolKey | "time";
-  readonly text: string;
-  /** More is needed than the yard holds. */
-  readonly short: boolean;
-}
-
-/**
- * The costs a phone has room for: one line, only what is not zero.
- *
- * The full cells read "needed / held" and take a row of their own, which a
- * phone cannot spare, and most of them are zero most of the time. So
- * the line names what the selection or the plan would take, compact ("500.0K"),
- * then the worker time; the full cells are one tap away. Empty when nothing
- * costs anything, and the caller says something else there instead.
- */
-export const costLineParts = (
-  needed: Readonly<Record<PoolKey, number>>,
-  shortfall: Readonly<Record<PoolKey, number>>,
-  seconds: number,
-): CostLinePart[] => {
-  const parts: CostLinePart[] = [];
-  for (const key of RESOURCE_KEYS) {
-    if (needed[key] <= 0) continue;
-    parts.push({ key, text: formatCompact(needed[key]), short: shortfall[key] > 0 });
-  }
-  if (seconds > 0) parts.push({ key: "time", text: formatCountdown(seconds), short: false });
-  return parts;
-};
-
 /**
  * A worker time in one unit, rounded down: "45s", "33m", "5h", "12d", and
- * "999d+" past that. The desktop's Cost button (owner, 2026-11-04: the bar's
+ * "999d+" past that. The Cost button (owner, 2026-11-04: the bar's
  * figures "will eventually be too long") has room for five characters of
  * time whatever the plan is; the pop-up and the tooltip keep the exact one.
  */
@@ -133,7 +101,7 @@ export const formatTimeShort = (seconds: number): string => {
   return days > 999 ? "999d+" : `${days}d`;
 };
 
-/** What the desktop's Cost button shows: never a resource figure. */
+/** What the Cost button shows, on a desktop and a phone: never a resource figure. */
 export interface CostButtonState {
   /** Nothing selected or planned costs anything. */
   readonly empty: boolean;
@@ -144,9 +112,9 @@ export interface CostButtonState {
 }
 
 /**
- * The desktop's one Cost button (owner, 2026-11-04). The four "needed / held"
- * cells, the time and the shiny price moved into a pop-up over the bar, so the
- * bar's left end stays the same short width at 1.2B as at 100: the painted
+ * The one Cost button (owner, 2026-11-04; a phone's too). The four "needed /
+ * held" cells, the time and the shiny price moved into a pop-up over the bar,
+ * so the button stays the same short width at 1.2B as at 100: the painted
  * resource pile, a red "!" when anything is short, and the worker time.
  */
 export const costButtonState = (

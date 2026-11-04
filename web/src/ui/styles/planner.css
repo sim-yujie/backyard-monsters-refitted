@@ -972,8 +972,9 @@
  * resource pile, a red "!" while anything is short, and the worker time in
  * one unit. The four "needed / held" cells, the time and the shiny price hang
  * over the bar in a pop-up, shown on a hover and held open by a click
- * (`PlannerBar.setCostsOpen`). A phone keeps its one-line cost and moves the
- * cells back into its own row (`PlannerBar.arrange`).
+ * (`PlannerBar.setCostsOpen`). A phone has the same button (owner, 4 Nov:
+ * "Yes, fix the phone") beside its summary, and its pop-up, which also takes
+ * the workers and coverage readouts, hangs over the whole bar (below).
  */
 .planner-bar__cost-pop {
   position: relative;
@@ -1000,7 +1001,7 @@
   box-shadow: var(--shadow-panel);
 }
 
-.planner-bar--bottom:not([data-layout]) .planner-bar__cost-line {
+.planner-bar--bottom .planner-bar__cost-line {
   /* Sized for the longest time, "999d+" (about 137 px in all): the button
      never shrinks, so the time is never cut (7.5rem cut "82d" to "82"). */
   flex: none;
@@ -1009,7 +1010,7 @@
   padding-inline: var(--space-2);
 }
 
-.planner-bar--bottom:not([data-layout]) .planner-bar__cost-line > .game-icon--income {
+.planner-bar--bottom .planner-bar__cost-line > .game-icon--income {
   width: 22px;
   height: 22px;
   flex: none;
@@ -1073,9 +1074,45 @@
   min-width: 8rem;
 }
 
-/* A phone never shows the pop-up: its cells live in the row it opens. */
+/*
+ * A phone's pop-up hangs over the whole bar rather than over the button, so
+ * wherever the button sits it is centred and stays 16 px inside each edge of
+ * the screen: two cells a row (twigs and pebbles, putty and goo, time and
+ * shiny, workers and coverage), each figure on one line. Two cells of
+ * "999.9B/999.9B" are about 300 px, so a 375 px phone holds them whole.
+ */
 .planner-bar--bottom[data-layout] > .planner-bar__cost-pop {
-  display: none;
+  position: static;
+}
+
+.planner-bar--bottom[data-layout] .planner-cost__pop {
+  left: var(--space-4);
+  right: var(--space-4);
+  width: fit-content;
+  margin-inline: auto;
+  grid-template-columns: repeat(2, minmax(0, max-content));
+}
+
+.planner-bar--bottom[data-layout].planner-bar--costs-open .planner-cost__pop {
+  display: grid;
+}
+
+/* The readouts' group lends its cells to the grid. Above the narrow-screen
+   rule that makes it a scrolling row. */
+.planner-bar--bottom[data-layout] .planner-cost__pop > .planner-cost {
+  display: contents;
+}
+
+.planner-bar--bottom[data-layout] .planner-cost__pop .planner-cost__cell {
+  flex-direction: row;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 2px var(--space-2);
+}
+
+.planner-bar--bottom[data-layout] .planner-cost__pop .planner-cost__value {
+  white-space: nowrap;
 }
 
 /* The HUD's worker, at the cost cells' icon size. */
@@ -2039,24 +2076,16 @@
   display: none;
 }
 
-/* The full cost cells stay behind the one-line cost until it is tapped. */
-.planner-bar--bottom[data-layout] > .planner-cost {
-  display: none;
-}
-
-.planner-bar--bottom[data-layout].planner-bar--costs-open > .planner-cost {
-  display: flex;
-  flex: 1 0 100%;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-/* The summary keeps room for a sentence; the cost line and the chips wrap
-   under it rather than squeezing it to a word a line. */
+/* One row above the actions: the summary takes what the Store chip (or Put
+   back) and the Cost button leave, and a long hint wraps inside it. At
+   375 px that is about 130 px, room for "9999 picked". */
 .planner-bar--bottom[data-layout] > .planner-bar__summary {
-  flex: 1 1 12rem;
+  flex: 1 1 7rem;
   min-width: 0;
+}
+
+.planner-bar--bottom[data-layout] > :is(.planner-bar__store-chip, .planner-bar__put-back) {
+  flex: none;
 }
 
 .planner-bar__cost-line {
@@ -2071,20 +2100,6 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   color: var(--colour-text);
-}
-
-.planner-bar__cost-part {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.planner-bar__cost-part .res-icon {
-  height: 14px;
-}
-
-.planner-bar__cost-part--short {
-  color: var(--colour-danger);
 }
 
 .planner-bar__cost-caret {
@@ -2118,14 +2133,6 @@
   flex-wrap: nowrap;
   gap: var(--space-1);
   margin: 0;
-}
-
-.planner-bar--bottom[data-layout="landscape"].planner-bar--costs-open {
-  flex-wrap: wrap;
-}
-
-.planner-bar--bottom[data-layout="landscape"].planner-bar--costs-open > .planner-cost {
-  order: -1;
 }
 
 /*

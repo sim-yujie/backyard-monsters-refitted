@@ -1139,40 +1139,116 @@ describe("the phone layout (#45)", () => {
     expect(clear.disabled).toBe(false);
   });
 
-  it("gives the costs one line, or the coverage when nothing costs anything", () => {
-    const { bar } = phone(PlannerLayout.PORTRAIT);
-    const line = bar.actionBar.querySelector<HTMLButtonElement>(".planner-bar__cost-line")!;
-    bar.setCoverage({ towers: 6, land: 0.26, air: 0.2 });
-    expect(line.textContent).toBe("Land 26% · Air 20%▾");
+  /* The Cost button on a phone (owner, 2026-11-04: "Yes, fix the phone"). */
 
-    bar.setSummary(summaryOf());
-    expect([...line.querySelectorAll(".planner-bar__cost-part")].map((part) => part.textContent)).toEqual([
-      "20.0K",
-      "15.0K",
-      "5.0K",
-      "30m 0s",
-    ]);
-    // Pebbles are short, and say so.
-    expect(line.querySelectorAll(".planner-bar__cost-part--short")).toHaveLength(1);
+  const costButton = (bar: PlannerBar): HTMLButtonElement =>
+    bar.actionBar.querySelector<HTMLButtonElement>(".planner-bar__cost-pop > .planner-bar__cost-line")!;
+  const costsOpen = (bar: PlannerBar): boolean => bar.actionBar.classList.contains("planner-bar--costs-open");
 
-    line.click();
-    expect(bar.actionBar.classList.contains("planner-bar--costs-open")).toBe(true);
-    expect(line.getAttribute("aria-expanded")).toBe("true");
+  it("gives the costs the desktop's short button, never a resource figure", () => {
+    for (const layout of [PlannerLayout.PORTRAIT, PlannerLayout.LANDSCAPE]) {
+      const { bar } = phone(layout);
+      bar.setSummary(summaryOf());
+      const cost = costButton(bar);
+      expect(cost.querySelector("img.game-icon--income")).not.toBeNull();
+      expect(cost.querySelector(".planner-bar__cost-mark")?.textContent).toBe("!");
+      expect(cost.classList.contains("planner-bar__cost-line--short")).toBe(true);
+      expect(cost.querySelector(".planner-bar__cost-time")?.textContent).toBe("30m");
+      expect(cost.textContent).toBe("!30m▴");
+      expect(cost.title).toBe("Short of resources, 30m of work. Tap for every cost.");
+      bar.destroy();
+    }
   });
 
-  it("keeps every cost cell in its own row, in the old order, beside the one-line cost", () => {
+  it("puts the Store chip and the Cost button on the summary's row, the actions under it", () => {
+    for (const layout of [PlannerLayout.PORTRAIT, PlannerLayout.LANDSCAPE]) {
+      const { bar } = phone(layout);
+      bar.update(stateOf({ view: YardView.ISO, selectionCount: 199 }));
+      const summary = bar.actionBar.querySelector(".planner-bar__summary")!;
+      expect(summary.textContent).toBe("199 picked");
+      const after = (element: Element): Element[] => {
+        const found: Element[] = [];
+        for (let next = element.nextElementSibling; next; next = next.nextElementSibling) found.push(next);
+        return found;
+      };
+      expect(after(summary).map((one) => one.className.split(" ").pop())).toEqual([
+        "planner-bar__store-chip",
+        "planner-bar__put-back",
+        "planner-bar__cost-pop",
+        "planner-bar__spacer",
+        "planner-bar__actions",
+      ]);
+      expect(bar.actionBar.querySelector<HTMLElement>(".planner-bar__store-chip")?.hidden).toBe(false);
+      // No row of cells on the bar any more: they are all in the pop-up.
+      expect(bar.actionBar.querySelector(":scope > .planner-cost")).toBeNull();
+      bar.destroy();
+    }
+  });
+
+  it("opens every cell over the bar: the priced ones, then the readouts", () => {
     const { bar } = phone(PlannerLayout.PORTRAIT);
-    const row = bar.actionBar.querySelector(":scope > .planner-cost")!;
-    const cells = [...row.querySelectorAll<HTMLElement>(":scope > .planner-cost__cell")];
-    expect(cells).toHaveLength(9);
-    expect(cells.slice(4).map((one) => one.className.replace("planner-cost__cell planner-cost__cell--", ""))).toEqual(
-      ["time", "shiny", "workers", "unplaced", "coverage"],
+    const pop = bar.actionBar.querySelector(".planner-cost__pop")!;
+    expect(
+      [...pop.querySelectorAll<HTMLElement>(".planner-cost__cell")].map((one) =>
+        one.className.startsWith("planner-cost__cell planner-cost__cell--")
+          ? one.className.replace("planner-cost__cell planner-cost__cell--", "")
+          : one.querySelector(".planner-cost__label [aria-label]")?.getAttribute("aria-label"),
+      ),
+    ).toEqual(["Twigs", "Pebbles", "Putty", "Goo", "time", "shiny", "workers", "unplaced", "coverage"]);
+    // The readouts keep their group, which the stylesheet lends to the grid.
+    expect(cell(bar, "coverage")?.parentElement?.parentElement).toBe(pop);
+  });
+
+  it("opens on a tap; a second tap, a tap outside or Esc closes it and keeps the selection", () => {
+    const { bar } = phone(PlannerLayout.PORTRAIT);
+    bar.update(stateOf({ view: YardView.ISO, selectionCount: 199 }));
+    const cost = costButton(bar);
+    cost.click();
+    expect(costsOpen(bar)).toBe(true);
+    expect(cost.getAttribute("aria-expanded")).toBe("true");
+    expect(cost.querySelector(".planner-bar__cost-caret")?.textContent).toBe("▾");
+    cost.click();
+    expect(costsOpen(bar)).toBe(false);
+
+    // A tap inside the pop-up leaves it up; one on the yard closes it.
+    cost.click();
+    bar.actionBar
+      .querySelector(".planner-cost__pop .planner-cost__cell")!
+      .dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    expect(costsOpen(bar)).toBe(true);
+    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    expect(costsOpen(bar)).toBe(false);
+
+    // Esc closes it before the planner, which would drop the selection, hears it.
+    const heard = vi.fn();
+    window.addEventListener("keydown", heard, true);
+    try {
+      cost.click();
+      const esc = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+      document.body.dispatchEvent(esc);
+      expect(costsOpen(bar)).toBe(false);
+      expect(esc.defaultPrevented).toBe(true);
+      expect(heard).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("keydown", heard, true);
+    }
+    expect(bar.actionBar.querySelector(".planner-bar__summary")?.textContent).toBe("199 picked");
+  });
+
+  it("keeps the button the same few characters at 999.9B, with every figure whole in the pop-up", () => {
+    const { bar } = phone(PlannerLayout.PORTRAIT);
+    const huge = 999_900_000_000;
+    const big = { r1: huge, r2: huge, r3: huge, r4: huge };
+    bar.setSummary(
+      summaryOf({ needed: big, held: big, shortfall: { r1: huge, r2: 0, r3: 0, r4: 0 }, seconds: 10 ** 10, shiny: huge }),
     );
-    expect(bar.actionBar.querySelector(".planner-cost__pop")?.childElementCount).toBe(0);
-    // The line sits after the summary, as it always has.
-    expect(bar.actionBar.querySelector(".planner-bar__summary")?.nextElementSibling?.classList).toContain(
-      "planner-bar__cost-line",
-    );
+    bar.setWorkers({ total: 999, busy: 0 });
+    bar.setCoverage({ towers: 40, land: 1, air: 1 });
+    expect(costButton(bar).textContent).toBe("!999d+▴");
+    expect(resourceValues(bar)).toEqual(["999.9B/999.9B", "999.9B/999.9B", "999.9B/999.9B", "999.9B/999.9B"]);
+    expect(cell(bar, "shiny")?.querySelector(".planner-cost__value")?.textContent).toBe("999.9B");
+    expect(cell(bar, "workers")?.querySelector(".planner-cost__value")?.textContent).toBe("999/999");
+    expect(cell(bar, "coverage")?.querySelector(".planner-cost__value")?.textContent).toBe("100% · 100%");
   });
 
   it("lends Mirror, Align and Distribute to the selection row and takes them back", () => {
