@@ -657,3 +657,109 @@ export const fetchChatLog = (
 
 export const fetchChatSession = (): Promise<Envelope<AdminChatSession>> =>
   adminPost(`${ADMIN}/chat/session`, {});
+
+/**
+ * Chat report cases (server `services/admin/chatCases.ts`): every report of
+ * the same line, and every reported line of a player not yet acted on, as one
+ * case, with a text copy of the room around each line.
+ */
+export type CaseStatus = "open" | "actioned" | "dismissed";
+export type CaseOutcome = "warn" | "mute" | "dismiss";
+
+export interface SnapshotLine {
+  userid: number;
+  name: string | null;
+  text: string;
+  /** When it was said (ms). */
+  at: number;
+  reported?: true;
+  flagged?: FlagSeverity;
+}
+
+/** `log`: the players' own words; `room`: as players saw them (starred out); `none`: no copy. */
+export interface CaseSnapshot {
+  source: "log" | "room" | "none";
+  lines: SnapshotLine[];
+}
+
+export interface CaseMessage {
+  id: number;
+  channel: string;
+  message: string;
+  ts: number;
+  verified: boolean;
+  reporters: number[];
+  snapshot: CaseSnapshot;
+}
+
+export interface CaseReporter {
+  userid: number;
+  username: string | null;
+  at: string;
+  first: boolean;
+  late: boolean;
+  award: { amount: number; at: string } | null;
+}
+
+export interface CaseHistory {
+  cases: number;
+  flags: number;
+  warnings: number;
+  mutes: number;
+  bans: number;
+}
+
+export interface ChatCaseView {
+  id: number;
+  status: CaseStatus;
+  reported: { userid: number; username: string | null; banned: boolean; muted: boolean; gameTeam: boolean };
+  messages: CaseMessage[];
+  reporters: CaseReporter[];
+  reports: number;
+  firstReportAt: string;
+  lastReportAt: string;
+  history: CaseHistory;
+  suggest: { action: "warn" | "mute"; hours: number | null };
+  closed: {
+    outcome: CaseOutcome;
+    hours: number | null;
+    note: string | null;
+    by: number;
+    byName: string | null;
+    at: string;
+  } | null;
+}
+
+export interface CaseList {
+  cases: ChatCaseView[];
+  nextOffset: number | null;
+  /** Open cases in all. */
+  open: number;
+  /** The Shiny offered each reporter, and the first one. */
+  award: { each: number; first: number };
+}
+
+export type CaseActionBody =
+  | { action: "warn"; reason: string }
+  | { action: "mute"; reason: string; hours: number }
+  | { action: "dismiss"; note?: string };
+
+export const fetchChatCases = (status: "open" | "closed", offset?: number): Promise<Envelope<CaseList>> =>
+  adminGet(`${ADMIN}/chatcases`, { status, offset, limit: 30 });
+
+export const actOnCase = (id: number, body: CaseActionBody): Promise<Envelope<{ case: ChatCaseView }>> =>
+  adminPost(`${ADMIN}/chatcases/${id}/act`, { ...body });
+
+export type AwardFailure = "notReporter" | "noPlayer" | "noMainYard";
+
+export const awardCaseReporters = (
+  id: number,
+  awards: { userid: number; amount: number }[],
+): Promise<
+  Envelope<{
+    case: ChatCaseView;
+    given: { userid: number; amount: number }[];
+    already: number[];
+    failed: { userid: number; reason: AwardFailure }[];
+  }>
+> => adminPost(`${ADMIN}/chatcases/${id}/award`, { awards });
