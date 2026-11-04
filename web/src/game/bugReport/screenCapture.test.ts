@@ -1,6 +1,17 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { inlineFonts, rootAttributes, uiSvgMarkup } from "./screenCapture";
+import {
+  type CaptureStats,
+  type GameApp,
+  SCREENSHOT_WIDTH,
+  clearInlinedImages,
+  gameFrameOf,
+  inlineFonts,
+  inlineUrls,
+  preloadImages,
+  rootAttributes,
+  uiSvgMarkup,
+} from "./screenCapture";
 
 /**
  * The bug report's screenshot copies the HTML windows into an SVG picture.
@@ -107,5 +118,122 @@ describe("the screenshot's fonts", () => {
     const css = await inlineFonts([{ text: '@font-face { font-family: "X"; src: url("https://cdn.example.com/x.woff2"); }', base: window.location.href }], null);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(css).toBe("");
+  });
+});
+
+describe("the screenshot's game layer", () => {
+  const fakeApp = (extract: () => unknown) => {
+    const canvas = document.createElement("canvas");
+    const render = vi.fn();
+    const calls: unknown[] = [];
+    const app = {
+      canvas,
+      stage: {},
+      screen: { x: 0, y: 0, width: 1600, height: 900 },
+      renderer: {
+        resolution: 2,
+        extract: {
+          canvas: (options: unknown) => {
+            calls.push(options);
+            return extract();
+          },
+        },
+      },
+      render,
+    } as unknown as GameApp;
+    return { app, canvas, render, calls };
+  };
+
+  it("has Pixi draw the stage into its own texture, at no more than the screenshot's width", () => {
+    const picture = document.createElement("canvas");
+    picture.width = 1280;
+    picture.height = 720;
+    const { app, canvas, render, calls } = fakeApp(() => picture);
+    const frame = gameFrameOf(app);
+    expect(frame.picture).toBe(picture);
+    expect(frame.canvas).toBe(canvas);
+    expect(render).not.toHaveBeenCalled();
+    expect(calls[0]).toMatchObject({ target: app.stage, frame: app.screen, resolution: SCREENSHOT_WIDTH / 1600 });
+  });
+
+  it("falls back to the page canvas right after a render when the read-back fails", () => {
+    const { app, canvas, render } = fakeApp(() => {
+      throw new Error("no extract");
+    });
+    const frame = gameFrameOf(app);
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(frame.picture).toBe(canvas);
+  });
+});
+
+describe("the screenshot's pictures", () => {
+  afterEach(() => clearInlinedImages());
+
+  const stubImages = (sizes: Record<string, number>) => {
+    const fetchMock = vi.fn(async (href: string) => {
+      const path = new URL(href).pathname;
+      const size = sizes[path];
+      if (size === undefined) return { ok: false, blob: async () => new Blob([]) };
+      return { ok: true, blob: async () => new Blob([new Uint8Array(size)], { type: "image/webp" }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  };
+  const freshStats = (): CaptureStats => ({
+    game: "none",
+    images: 0,
+    imageBytes: 0,
+    missing: [],
+    fontBytes: 0,
+    svgBytes: 0,
+    uiMs: 0,
+    totalMs: 0,
+  });
+  const base = window.location.href;
+
+  it("inlines the window art the styles name, counts it, and notes what it could not have", async () => {
+    stubImages({ "/ui/skin/scrap/frame.webp": 41_924, "/ui/skin/scrap/title.webp": 20_126 });
+    const stats = freshStats();
+    const found = await inlineUrls(
+      [
+        { url: "/ui/skin/scrap/frame.webp", base },
+        { url: "/ui/skin/scrap/title.webp", base },
+        { url: "/ui/skin/scrap/frame.webp", base },
+        { url: "/ui/skin/gone.webp", base },
+        { url: "https://cdn.example.com/x.png", base },
+      ],
+      stats,
+    );
+    expect(found.get("/ui/skin/scrap/frame.webp")).toMatch(/^data:image\/webp;base64,/);
+    expect(found.size).toBe(2);
+    expect(stats.images).toBe(2);
+    expect(stats.imageBytes).toBe(41_924 + 20_126);
+    expect(stats.missing.sort()).toEqual(["/ui/skin/gone.webp", "https://cdn.example.com/x.png"]);
+  });
+
+  it("keeps the pictures for the next report rather than reading them again", async () => {
+    const fetchMock = stubImages({ "/ui/skin/flash/frame.webp": 100 });
+    await inlineUrls([{ url: "/ui/skin/flash/frame.webp", base }]);
+    await inlineUrls([{ url: "/ui/skin/flash/frame.webp", base }]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("puts the styles' art in tiny <img>s so the SVG waits for it, once each", () => {
+    const frame = "data:image/webp;base64,AAAA";
+    const card = "data:image/webp;base64,BBBB";
+    const inlined = new Map([
+      ["/ui/skin/scrap/frame.webp", frame],
+      ["/ui/frame-again.webp", frame],
+      ["/whats-new/card.webp", card],
+    ]);
+    const shown = document.createElement("img");
+    shown.setAttribute("src", card);
+    const markup = preloadImages(inlined, [shown]);
+    const doc = parseSvg(uiSvgMarkup(markup, "", 800, 600));
+    const images = Array.from(doc.getElementsByTagName("img"));
+    // The card is already an <img> of the copy; the frame is added once.
+    expect(images.map((image) => image.getAttribute("src"))).toEqual([frame]);
+    expect(images[0]?.getAttribute("decoding")).toBe("sync");
+    expect(preloadImages(new Map())).toBe("");
   });
 });

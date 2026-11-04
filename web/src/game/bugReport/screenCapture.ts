@@ -6,17 +6,48 @@
  * the camera), and keeps them under the server's caps
  * (`server/src/config/BugReportConfig.ts`).
  *
- * The screenshot is two layers. The game (Pixi's WebGL canvas) is drawn
- * straight after a fresh render, the only moment its pixels can be read.
+ * The screenshot is two layers. The game is drawn by Pixi into a texture of
+ * its own and read back (`gameFrameOf`).
  * The menus and panels on top are HTML, so they are copied into an SVG
  * picture with the page's styles, images and fonts inlined, and `<html>`'s
  * attributes (the window style, the font choice) on the picture's root so the
  * windows look as the player sees them. Anything that cannot be
  * copied (a browser that refuses, a slow page) leaves the game layer alone.
  */
+import type { Container, ExtractOptions, ICanvas, Rectangle } from "pixi.js";
 
-/** Renders the game now and returns its canvas, to be read at once; null when there is none. */
-export type GameFrameSource = () => HTMLCanvasElement | null;
+/**
+ * The game as a picture (`picture`, read at once), and the page's game canvas
+ * (`canvas`), which the copy of the menus leaves out.
+ */
+export interface GameFrame {
+  readonly picture: HTMLCanvasElement;
+  readonly canvas: HTMLCanvasElement;
+}
+
+/** Renders the game now and returns it; null when there is none. */
+export type GameFrameSource = () => GameFrame | null;
+
+/** What the last screenshot took and how long, for the dev console (`window.__bugReportShot`). */
+export interface CaptureStats {
+  /** "extract" (Pixi drew it into a texture of its own), "canvas" (read off the page), or "none". */
+  game: "extract" | "canvas" | "none";
+  /** Pictures inlined into the menus' copy, and their bytes. */
+  images: number;
+  imageBytes: number;
+  /** Pictures the copy could not have (another site, too big, failed), so they show blank. */
+  missing: string[];
+  fontBytes: number;
+  /** The SVG picture's own size. */
+  svgBytes: number;
+  uiMs: number;
+  totalMs: number;
+}
+
+let lastStats: CaptureStats | null = null;
+
+/** The last screenshot's figures; null before the first. */
+export const lastCaptureStats = (): CaptureStats | null => lastStats;
 
 let gameFrame: GameFrameSource | null = null;
 let screenName: () => string | null = () => null;
@@ -84,8 +115,50 @@ const blankCanvas = (width: number, height: number): CanvasRenderingContext2D | 
   return context;
 };
 
+/** The parts of Pixi's Application the screenshot uses. */
+export interface GameApp {
+  readonly canvas: HTMLCanvasElement;
+  readonly stage: Container;
+  readonly screen: Rectangle;
+  readonly renderer: { readonly resolution: number; readonly extract: { canvas(options: ExtractOptions): ICanvas } };
+  render(): void;
+}
+
+/**
+ * The game as it is now. Pixi draws the stage into a texture of its own and
+ * reads it back, which works whatever the browser has done with the page
+ * canvas: a WebGL canvas made without `preserveDrawingBuffer` can read back
+ * empty once the frame has been shown. Drawn at no more than the screenshot's
+ * width, so a big screen reads back no more than it needs. If that fails, the
+ * page canvas right after a fresh render, as before.
+ */
+export const gameFrameOf = (app: GameApp): GameFrame => {
+  const canvas = app.canvas;
+  try {
+    const resolution = Math.min(app.renderer.resolution, SCREENSHOT_WIDTH / Math.max(1, app.screen.width));
+    const picture = app.renderer.extract.canvas({ target: app.stage, frame: app.screen, resolution, clearColor: BACKGROUND });
+    if (picture instanceof HTMLCanvasElement && picture.width > 0 && picture.height > 0) return { picture, canvas };
+  } catch {
+    // Read the page canvas instead.
+  }
+  app.render();
+  return { picture: canvas, canvas };
+};
+
 const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T | null> =>
   Promise.race([promise, new Promise<null>((resolve) => window.setTimeout(() => resolve(null), ms))]);
+
+const wait = (ms: number): Promise<void> => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+/**
+ * Times the menus' picture is drawn, and the pause between. An SVG picture
+ * may fetch and decode the art its styles name only once it is first drawn,
+ * so the first draw can miss window frames and pictures; later ones have them.
+ */
+export const UI_DRAW_PASSES = 3;
+export const UI_SETTLE_MS = 120;
+
+const now = (): number => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
 /**
  * Takes the screenshot: the game, then the menus over it. Resolves with a
@@ -102,14 +175,26 @@ export const captureScreen = async (
   const outWidth = Math.round(width * scale);
   const outHeight = Math.round(height * scale);
 
+  const started = now();
+  const stats: CaptureStats = { game: "none", images: 0, imageBytes: 0, missing: [], fontBytes: 0, svgBytes: 0, uiMs: 0, totalMs: 0 };
+  lastStats = stats;
+  const finish = (url: string | null): string | null => {
+    stats.totalMs = Math.round(now() - started);
+    return url;
+  };
+
   const game = blankCanvas(outWidth, outHeight);
   if (!game) return null;
   let gameCanvas: HTMLCanvasElement | null = null;
   try {
-    // Straight after the render, before anything awaits: WebGL keeps its
-    // pixels only until the frame is shown.
-    gameCanvas = gameFrame?.() ?? null;
-    if (gameCanvas) game.drawImage(gameCanvas, 0, 0, outWidth, outHeight);
+    // Before anything awaits: the App renders the game and hands it over at
+    // once (`app/App.ts`).
+    const frame = gameFrame?.() ?? null;
+    if (frame) {
+      gameCanvas = frame.canvas;
+      game.drawImage(frame.picture, 0, 0, outWidth, outHeight);
+      stats.game = frame.picture === frame.canvas ? "canvas" : "extract";
+    }
   } catch {
     // No game layer; the menus may still show.
   }
@@ -117,21 +202,26 @@ export const captureScreen = async (
   const shot = blankCanvas(outWidth, outHeight);
   if (shot && root) {
     try {
-      const ui = await withTimeout(drawUiLayer(root, gameCanvas, width, height), UI_LAYER_TIMEOUT_MS);
+      const uiStarted = now();
+      const ui = await withTimeout(drawUiLayer(root, gameCanvas, width, height, stats), UI_LAYER_TIMEOUT_MS);
       if (ui) {
-        shot.drawImage(game.canvas, 0, 0);
-        shot.drawImage(ui, 0, 0, outWidth, outHeight);
+        for (let pass = 0; pass < UI_DRAW_PASSES; pass++) {
+          if (pass > 0) await wait(UI_SETTLE_MS);
+          shot.drawImage(game.canvas, 0, 0);
+          shot.drawImage(ui, 0, 0, outWidth, outHeight);
+        }
+        stats.uiMs = Math.round(now() - uiStarted);
         const url = encodeJpeg(shot.canvas, SCREENSHOT_MAX_BYTES);
-        if (url) return url;
+        if (url) return finish(url);
       }
     } catch {
       // A browser that will not read the copy back (Safari) gets the game alone.
     }
   }
   try {
-    return encodeJpeg(game.canvas, SCREENSHOT_MAX_BYTES);
+    return finish(encodeJpeg(game.canvas, SCREENSHOT_MAX_BYTES));
   } catch {
-    return null;
+    return finish(null);
   }
 };
 
@@ -149,8 +239,24 @@ const readAsDataUrl = (blob: Blob): Promise<string> =>
     reader.readAsDataURL(blob);
   });
 
-/** Same-origin images as data URLs, so the SVG copy can show them; others are left out. */
-const inlineUrls = async (refs: readonly { url: string; base: string }[]): Promise<Map<string, string>> => {
+const IMAGE_FILE = /\.(png|jpe?g|gif|webp|avif|svg|bmp)(\?|#|$)/i;
+
+/** Pictures already turned into data URLs, by address: a second report reads none again. */
+const inlinedCache = new Map<string, string>();
+const INLINED_CACHE_MAX = 400;
+
+/** Forgets the pictures kept for the next screenshot (tests). */
+export const clearInlinedImages = (): void => inlinedCache.clear();
+
+/**
+ * Same-origin images as data URLs, so the SVG copy can show them (an SVG
+ * picture loads nothing from addresses); others are left out and noted in
+ * `stats.missing`.
+ */
+export const inlineUrls = async (
+  refs: readonly { url: string; base: string }[],
+  stats?: Pick<CaptureStats, "images" | "imageBytes" | "missing">,
+): Promise<Map<string, string>> => {
   const found = new Map<string, string>();
   const wanted = new Map<string, string>();
   for (const { url, base } of refs) {
@@ -158,18 +264,31 @@ const inlineUrls = async (refs: readonly { url: string; base: string }[]): Promi
     if (wanted.size >= MAX_INLINED) break;
     wanted.set(url, base);
   }
+  const miss = (url: string): void => {
+    stats?.missing.push(url);
+  };
   await Promise.all(
     [...wanted].map(async ([url, base]) => {
       try {
         const absolute = new URL(url, base);
-        if (absolute.origin !== window.location.origin) return;
-        const response = await fetch(absolute.href, { cache: "force-cache" });
-        if (!response.ok) return;
-        const blob = await response.blob();
-        if (blob.size > MAX_INLINED_BYTES || !blob.type.startsWith("image/")) return;
-        found.set(url, await readAsDataUrl(blob));
+        if (absolute.origin !== window.location.origin) return miss(url);
+        let data = inlinedCache.get(absolute.href);
+        if (!data) {
+          const response = await fetch(absolute.href, { cache: "force-cache" });
+          if (!response.ok) return miss(url);
+          const blob = await response.blob();
+          const image = blob.type.startsWith("image/") || (!blob.type && IMAGE_FILE.test(absolute.pathname));
+          if (blob.size > MAX_INLINED_BYTES || !image) return miss(url);
+          data = await readAsDataUrl(blob);
+          if (inlinedCache.size < INLINED_CACHE_MAX) inlinedCache.set(absolute.href, data);
+        }
+        found.set(url, data);
+        if (stats) {
+          stats.images += 1;
+          stats.imageBytes += dataUrlBytes(data);
+        }
       } catch {
-        // Left out of the copy.
+        miss(url);
       }
     }),
   );
@@ -349,6 +468,24 @@ export const uiSvgMarkup = (html: string, css: string, width: number, height: nu
 };
 
 /**
+ * Tiny <img>s of every inlined picture the copy's <img>s do not already
+ * carry (window frames, buttons, icons named in the styles). An SVG picture
+ * waits for its <img>s before it counts as loaded, but not for its styles'
+ * art, which it would only start on the first draw; with these the art is
+ * loaded, under the same address, before the copy is drawn.
+ */
+export const preloadImages = (inlined: ReadonlyMap<string, string>, images: readonly Element[] = []): string => {
+  const carried = new Set(images.map((image) => image.getAttribute("src") ?? ""));
+  const extra = [...new Set(inlined.values())].filter((data) => !carried.has(data));
+  if (extra.length === 0) return "";
+  const tags = extra.map((data) => `<img src="${escapeAttribute(data)}" width="1" height="1" decoding="sync" alt=""/>`).join("");
+  return (
+    `<div xmlns="http://www.w3.org/1999/xhtml" aria-hidden="true" ` +
+    `style="position:absolute;left:0;top:0;width:1px;height:1px;overflow:hidden;opacity:0.01;pointer-events:none">${tags}</div>`
+  );
+};
+
+/**
  * The HTML over the game as a picture the size of the window, with the game
  * canvas itself left out (it is drawn separately).
  */
@@ -357,6 +494,7 @@ const drawUiLayer = async (
   gameCanvas: HTMLCanvasElement | null,
   width: number,
   height: number,
+  stats?: CaptureStats,
 ): Promise<HTMLImageElement | null> => {
   const clone = root.cloneNode(true) as HTMLElement;
 
@@ -409,22 +547,30 @@ const drawUiLayer = async (
   for (const style of styles) {
     for (const match of style.text.matchAll(URL_IN_CSS)) refs.push({ url: match[2] ?? "", base: style.base });
   }
-  const inlined = await inlineUrls(refs);
+  const inlined = await inlineUrls(refs, stats);
 
   for (const image of images) {
     const data = inlined.get(image.getAttribute("src") ?? "");
     if (data) image.setAttribute("src", data);
     else image.removeAttribute("src");
     image.removeAttribute("srcset");
+    image.removeAttribute("sizes");
     image.removeAttribute("loading");
+    // Drawn as soon as the copy is, not after it.
+    image.setAttribute("decoding", "sync");
   }
+  // A <picture>'s <source> would win over the inlined <img src>.
+  clone.querySelectorAll("source").forEach((source) => source.remove());
   for (const element of styled) {
     element.setAttribute("style", replaceUrls(element.getAttribute("style") ?? "", inlined));
   }
-  const css = [await fontFaces, ...styles.map((style) => replaceUrls(style.text, inlined))].join("\n");
+  const fontCss = await fontFaces;
+  if (stats) stats.fontBytes = fontCss.length;
+  const css = [fontCss, ...styles.map((style) => replaceUrls(style.text, inlined))].join("\n");
 
-  const html = new XMLSerializer().serializeToString(clone);
+  const html = new XMLSerializer().serializeToString(clone) + preloadImages(inlined, images);
   const svg = uiSvgMarkup(html, css, width, height);
+  if (stats) stats.svgBytes = svg.length;
 
   const picture = new Image();
   picture.width = width;
