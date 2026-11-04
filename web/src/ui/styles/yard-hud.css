@@ -117,6 +117,19 @@
   height: 24px;
 }
 
+/* The figure spans the same three rows as the coins and is centred on them;
+   left in row 1 it sat above the coins (owner screenshot, 4 Nov). */
+.hud--corner .hud__resource--shiny .hud__resource-value {
+  grid-row: 1 / 4;
+  align-self: center;
+}
+
+/* Shiny has no silo, so no fill bar: its empty cap block only added a row
+   and pushed the pair 2 px off the workers' line. */
+.hud--corner .hud__resource--shiny .hud__resource-cap {
+  display: none;
+}
+
 .hud--corner .hud__workers-button {
   gap: var(--space-2);
   min-height: 36px;
