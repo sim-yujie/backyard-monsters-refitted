@@ -1,5 +1,5 @@
 import { Ground } from "./groundKinds";
-import { CLIFF_DROP, CLIFF_STRIPS, HILL_LIGHT, HILL_RADIUS } from "./hills";
+import { CLIFF_DROP, CLIFF_STRIPS, HILL_BRIGHTEST, HILL_DARKEST, HILL_LIGHT, HILL_RADIUS } from "./hills";
 
 /**
  * Hills and cliffs for the painted ground (Map Room 2 Modern look, plan step 5), GLSL included by
@@ -25,6 +25,8 @@ uniform float uCliffsReady;    // 1 once the cliff sheet has loaded
 
 const float HILL_RADIUS = ${HILL_RADIUS.toFixed(3)};
 const float HILL_LIGHT = ${HILL_LIGHT.toFixed(4)};
+const float HILL_DARKEST = ${HILL_DARKEST.toFixed(3)};
+const float HILL_BRIGHTEST = ${HILL_BRIGHTEST.toFixed(3)};
 const float CLIFF_DROP = ${CLIFF_DROP.toFixed(1)};
 // A full face's depth (hex units, along the drop) for the tallest strip; the share of it drawn into
 // the high cell (the rim sits that far back from the claims' line); the strip's repeat along the
@@ -79,11 +81,15 @@ vec3 hillAt(vec2 h) {
   return vec3(hh, (sgh - hh * sg) / sw);
 }
 
-// How the light falls on a slope, as a multiplier on the ground's colour (1 on the flat).
-float hillShade(vec2 slope) {
+// How the light falls on a slope, as a multiplier on the ground's colour (1 on the flat). Painted
+// the way mock-up B's hills are (MR2 step 11): slopes facing the sun turn a warm, yellower lime,
+// the far sides a deeper, cooler green (red falls fastest, green slowest, so shade stays green and
+// never turns to mud), so the relief reads as colour as well as light.
+vec3 hillShade(vec2 slope) {
   vec3 n = normalize(vec3(-slope * HILL_LIGHT, 1.0));
   vec3 sun = normalize(HILL_SUN);
-  return clamp(dot(n, sun) / sun.z, 0.72, 1.22);
+  float lit = clamp(dot(n, sun) / sun.z, HILL_DARKEST, HILL_BRIGHTEST) - 1.0;
+  return lit > 0.0 ? 1.0 + lit * vec3(1.15, 1.0, 0.55) : 1.0 + lit * vec3(1.2, 0.8, 0.95);
 }
 
 // The cliff round a point, from its three cells (Blend): the strongest pair of a high and a low cell
