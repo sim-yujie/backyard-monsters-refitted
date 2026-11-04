@@ -81,6 +81,10 @@ services:
   db:
     image: postgres:18.1
     container_name: bymr-database
+    # A tiny init process reaps commands started with `docker exec`, so one
+    # that fails or is killed no longer makes Postgres drop every connection
+    # for ~5 minutes (RECURRING-PROBLEMS.md).
+    init: true
     environment:
       - POSTGRES_DB=${DB_NAME:-bym}
       - POSTGRES_USER=${DB_USER:-postgres}
