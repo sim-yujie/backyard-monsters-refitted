@@ -31,3 +31,70 @@ const PRICES: ReadonlyMap<number, number> = new Map(DECORATIONS_FOR_SALE);
 
 /** The Shiny a decoration of `type` costs, or null when it is not sold. */
 export const decorationPrice = (type: number): number | null => PRICES.get(type) ?? null;
+
+/** Flash's five Decorations sub-tabs, in its order (`BUILDINGSPOPUP.as:104-105`). */
+export const DecorKind = {
+  EVIL: "evil",
+  PLANTS: "plants",
+  GOOD: "good",
+  FLAGS: "flags",
+  PREMIUM: "premium",
+} as const;
+export type DecorKind = (typeof DecorKind)[keyof typeof DecorKind];
+
+export interface DecorKindDefinition {
+  readonly id: DecorKind;
+  /** One word, as Flash's button (`btn_evil` and so on). */
+  readonly label: string;
+  /**
+   * Every decoration type in it, by Flash's `order`: its `subgroup` in
+   * `client/scripts/YARD_PROPS.as`. The `block`ed ones (not sold) are here
+   * too, so one in storage shows in its own sub-tab.
+   */
+  readonly types: readonly number[];
+}
+
+/**
+ * Which sub-tab each decoration is under in Flash: every one of the 84
+ * decoration types (`isDecoration`) has a `subgroup`, 0 to 4.
+ */
+export const DECOR_KINDS: readonly DecorKindDefinition[] = [
+  { id: DecorKind.EVIL, label: "Evil", types: [107, 74, 75, 76, 77, 78, 79, 81, 82, 83, 84, 85, 80, 73] },
+  {
+    id: DecorKind.PLANTS,
+    label: "Plants",
+    // Blocked: 67 Rock, 59 Childrens Jax, 69 Scarecrow.
+    types: [55, 66, 72, 67, 59, 91, 92, 94, 95, 93, 56, 69, 90, 86, 88, 89, 87],
+  },
+  {
+    id: DecorKind.GOOD,
+    label: "Good",
+    // Blocked: 70 Sun Dial, 58 Camping Tent.
+    types: [70, 57, 58, 65, 63, 64, 71, 108, 109, 61, 62, 60, 102, 103, 68, 104, 105, 106],
+  },
+  {
+    id: DecorKind.FLAGS,
+    label: "Flags",
+    types: [49, 50, 28, 29, 30, 31, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 32],
+  },
+  {
+    id: DecorKind.PREMIUM,
+    label: "Premium",
+    // Blocked: 120 Big Gulp, 121 and 131 the totems, 110 and 111 the pumpkins, 135 the trophy.
+    types: [120, 96, 97, 121, 98, 131, 99, 100, 101, 110, 135, 111],
+  },
+];
+
+const KIND_OF: ReadonlyMap<number, DecorKind> = new Map(
+  DECOR_KINDS.flatMap((kind) => kind.types.map((type): [number, DecorKind] => [type, kind.id])),
+);
+
+const FLASH_ORDER: ReadonlyMap<number, number> = new Map(
+  DECOR_KINDS.flatMap((kind) => kind.types).map((type, index): [number, number] => [type, index]),
+);
+
+/** The sub-tab a decoration of `type` is under, or null when it is not a decoration. */
+export const decorKindOf = (type: number): DecorKind | null => KIND_OF.get(type) ?? null;
+
+/** Where `type` comes in Flash's tab: sub-tab by sub-tab, each by its `order`. */
+export const decorOrder = (type: number): number => FLASH_ORDER.get(type) ?? Number.MAX_SAFE_INTEGER;
