@@ -263,10 +263,11 @@ describe("wallUpgradePanel picking", () => {
     expect(harness.level()).toBe("3");
   });
 
-  it("Select all and Clear hand the scene the new pick", () => {
+  it("Select all picks every wall below the level, and Clear picks none", () => {
     const harness = pickOpen(yardOf(RICH, 10), [1]);
+    // Wall 5 is already at level 5: raising it to 2 would mean nothing.
     harness.tool("Select all").click();
-    expect(harness.onPick).toHaveBeenLastCalledWith([1, 2, 3, 4, 5]);
+    expect(harness.onPick).toHaveBeenLastCalledWith([1, 2, 3, 4]);
     harness.tool("Clear").click();
     expect(harness.onPick).toHaveBeenLastCalledWith([]);
   });
@@ -311,8 +312,67 @@ describe("wallUpgradePanel picking", () => {
   it("says so when not even one wall can be paid for", () => {
     const yard = yardOf({ r1: 0, r2: 0 }, 10);
     const harness = pickOpen(yard, [1]);
-    harness.tool("Affordable").click();
+    const afford = harness.tool("Affordable");
+    expect(afford.disabled).toBe(true);
+    expect(afford.title).toContain("cannot afford a single wall");
+    afford.click();
     expect(harness.onPick).not.toHaveBeenCalled();
-    expect(harness.read(".planner-walls__note")).toContain("cannot afford a single wall");
+  });
+
+  it("greys Select all, with the reason, when the yard cannot pay for every wall", () => {
+    const yard = yardOf({ r1: 0, r2: 25_000 }, 10);
+    const harness = pickOpen(yard, []);
+    const all = harness.tool("Select all");
+    expect(all.disabled).toBe(true);
+    expect(all.title).toBe("Not enough to raise all 4 walls to level 2.");
+    // Affordable is the way in instead.
+    expect(harness.tool("Affordable").disabled).toBe(false);
+  });
+
+  it("greys a level that would raise none of the picked walls", () => {
+    const yard = yardOf(RICH, 10);
+    const harness = pickOpen(yard, [6], [1, 2, 3, 4, 5, 6]);
+    const two = harness.container.querySelector<HTMLButtonElement>('.planner-walls__level[data-level="2"]')!;
+    expect(two.disabled).toBe(true);
+    expect(two.title).toBe("Every picked wall is already at level 2 or higher.");
+    const three = harness.container.querySelector<HTMLButtonElement>('.planner-walls__level[data-level="3"]')!;
+    expect(three.disabled).toBe(false);
+  });
+
+  it("puts the level first, then the pick buttons, the cost and Upgrade last", () => {
+    const harness = pickOpen(yardOf(RICH, 10), [1]);
+    const order = [
+      ".planner-walls__levels",
+      ".planner-walls__tools",
+      ".planner-walls__costs",
+      ".planner-walls__actions",
+    ].map((selector) => harness.container.querySelector(selector)!);
+    for (let index = 1; index < order.length; index += 1) {
+      const before = order[index - 1]!;
+      expect(before.compareDocumentPosition(order[index]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    expect([...harness.container.querySelectorAll(".planner-walls__tool")].map((b) => b.textContent)).toEqual([
+      "Select all",
+      "Affordable",
+      "Clear",
+    ]);
+  });
+
+  it("shows each level's wall and its name on the level button", () => {
+    const harness = pickOpen(yardOf(RICH, 10), [1]);
+    const button = harness.container.querySelector('.planner-walls__level[data-level="4"]')!;
+    expect(button.querySelector(".planner-walls__level-name")?.textContent).toBe("Level 4");
+    expect(button.querySelector<HTMLImageElement>("img.planner-walls__level-art")?.src).toBeTruthy();
+  });
+
+  it("shows the cost as short figures, red when short, the whole figure in the tooltip", () => {
+    const yard = yardOf({ r1: 0, r2: 25_000 }, 10);
+    const harness = pickOpen(yard, [1, 2, 3]);
+    const chip = harness.container.querySelector<HTMLElement>('.planner-walls__cost[data-key="r2"]')!;
+    expect(chip.querySelector(".planner-walls__cost-value")?.textContent).toBe("30K");
+    expect(chip.classList.contains("planner-walls__cost--short")).toBe(true);
+    expect(chip.title).toContain("30,000");
+    expect(chip.title).toContain("5,000 short");
+    expect(harness.container.querySelector(".planner-walls__cost--time")).not.toBeNull();
   });
 });

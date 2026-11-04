@@ -193,36 +193,159 @@
   color: var(--colour-text-muted);
 }
 
-/* ── Batch wall upgrade ───────────────────────────────────────────────── */
+/* ── Batch wall upgrade (owner, 2026-11-04: the level first, then the pick) ──
+   Top to bottom: Raise to (four big level buttons with the wall's picture),
+   Select all / Affordable / Clear, the pick and its cost chips, Upgrade N.
+   Every row fits 375 px wide, and every button is at least 44 px tall so it
+   can be hit one-handed. The panel's plate comes from the skin (Modern or
+   Classic) like any other panel. */
 
-.planner-walls__levels {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  flex-wrap: wrap;
-  margin-block: var(--space-2);
+.planner-walls__heading {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--colour-text-muted);
 }
 
-.planner-walls__levels-label {
+.planner-walls__levels {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.planner-walls__level {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-width: 0;
+  min-height: 76px;
+  padding: var(--space-1);
+  white-space: nowrap;
+}
+
+.planner-walls__level-art {
+  width: 48px;
+  height: 36px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.planner-walls__level-name {
   font-size: var(--text-sm);
-  color: var(--colour-text-muted);
+  font-weight: 600;
 }
 
 .planner-walls__level[aria-pressed="true"] {
   background: var(--colour-accent);
+  border-color: var(--colour-accent);
   color: var(--colour-accent-text);
+  box-shadow: 0 0 0 2px var(--colour-accent);
 }
 
-.planner-walls__preview,
+.planner-walls__level[disabled] .planner-walls__level-art {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+.planner-walls__gate {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+
+/* Three equal buttons in one row, even at 375 wide. */
+.planner-walls__tools {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.planner-walls__tool {
+  min-width: 0;
+  min-height: 44px;
+  padding-inline: var(--space-2);
+  white-space: nowrap;
+  font-size: var(--text-sm);
+}
+
+.planner-walls__held {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.planner-walls__hint,
+.planner-walls__preview {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
 .planner-rearm__heading {
   margin: 0 0 var(--space-2);
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
 }
 
+.planner-walls__costs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.planner-walls__cost {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 32px;
+  padding: 2px var(--space-2) 2px var(--space-1);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-sunken);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.planner-walls__cost .res-icon {
+  height: 24px;
+  vertical-align: middle;
+}
+
+.planner-walls__cost .game-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.planner-walls__cost--short {
+  border-color: var(--colour-danger);
+  color: var(--colour-danger);
+}
+
+/* Words a screen reader hears; the chip shows the short figure. */
+.planner-walls__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .planner-walls__note {
   margin-block: var(--space-2) 0;
   font-size: var(--text-xs);
+}
+
+/* The short line in the danger colour, never alone: the chips are red too. */
+.planner-walls__note--short {
+  color: var(--colour-danger);
+  font-size: var(--text-sm);
 }
 
 .planner-walls__actions,
@@ -232,51 +355,39 @@
   margin-top: var(--space-3);
 }
 
-/* Upgrade walls' picking mode (owner, 2026-11-04): the hint, then Select all,
-   Clear and Affordable; the short line in the danger colour, never alone. */
-.planner-walls__hint {
-  margin: 0 0 var(--space-2);
-  font-size: var(--text-sm);
-}
-
-/* One row of three plated buttons, even at 375 wide: they share the row
-   evenly and give up side padding rather than wrap. */
-.planner-walls__tools {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: var(--space-1);
-  margin-bottom: var(--space-2);
-}
-
-.planner-walls__tool {
-  flex: 1 1 0;
-  min-width: 0;
-  white-space: nowrap;
-  padding-inline: var(--space-2);
-  font-size: var(--text-sm);
-}
-
-.planner-walls__note--short {
-  color: var(--colour-danger);
-  font-size: var(--text-sm);
-}
-
-.planner-walls--pick .planner-walls__actions .btn--primary {
+.planner-walls__go {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 48px;
   font-variant-numeric: tabular-nums;
 }
 
-/* A phone keeps the pick panel short, so the yard above it can be boxed:
-   the level breakdown goes (the sentence under it says the counts). */
-.planner-phone--portrait .planner-walls--pick .planner-walls__held {
-  display: none;
+.planner-walls__go .game-icon {
+  width: 28px;
+  height: 28px;
 }
 
-.planner-phone--portrait .planner-walls--pick :is(.planner-walls__hint, .planner-walls__tools, .planner-walls__levels, .planner-walls__preview) {
-  margin-block: 0 var(--space-1);
+.planner-walls__go[disabled] .game-icon {
+  filter: grayscale(1);
+  opacity: 0.6;
 }
 
-.planner-phone--portrait .planner-walls--pick .planner-walls__actions {
-  margin-top: var(--space-2);
+/* A phone keeps the panel short, so the yard above it can still be boxed:
+   the level art shrinks and the gaps tighten; nothing is hidden. */
+.planner-phone--portrait .planner-walls__level {
+  min-height: 64px;
+}
+
+.planner-phone--portrait .planner-walls__level-art {
+  width: 40px;
+  height: 28px;
+}
+
+.planner-phone--portrait .planner-walls :is(.planner-walls__levels, .planner-walls__tools) {
+  margin-bottom: var(--space-2);
 }
 
 /* ── Trap re-arm ──────────────────────────────────────────────────────── */

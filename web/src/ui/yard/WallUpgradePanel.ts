@@ -1,3 +1,4 @@
+import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import { maxLevel, townHallLevel, WALL_TYPES } from "@/game/yard/buildingCosts";
 import type { PlanNode } from "@/game/yard/planner/placement";
 import {
@@ -6,41 +7,54 @@ import {
   isShort,
   wallBatchPreview,
   wallTargets,
+  type ResourceAmounts,
   type WallBatchPreview,
 } from "@/game/yard/planner/summary";
-import { affordablePick, followWallTarget, type WallTargetChoice } from "@/game/yard/planner/wallPick";
+import {
+  affordableFill,
+  followWallTarget,
+  selectAllCheck,
+  type WallTargetChoice,
+} from "@/game/yard/planner/wallPick";
 import type { Yard } from "@/game/yard/yardModel";
+import { formatAmount, formatShort } from "@/ui/format";
+import { gameIcon } from "@/ui/gameIcon";
 import { Panel } from "@/ui/Panel";
-import { costRows } from "./costRows";
+import { RESOURCE_KEYS, resourceIcon, resourceName } from "@/ui/resourceIcon";
 
 /**
- * Batch wall upgrade: pick a target level, read what it costs, confirm
- * (plan §3.3, decision Q1).
+ * Batch wall upgrade: choose the level, pick the walls, read the cost, upgrade
+ * (plan §3.3, decision Q1; laid out again by the owner, 2026-11-04).
  *
  * The whole panel is a preview of one server call. Nothing here charges
- * anything or changes the plan — Confirm hands the eligible ids and the target
+ * anything or changes the plan — Upgrade hands the eligible ids and the target
  * to the caller, which posts them, and the yard comes back from the server.
  *
- * ## Picking (owner, 2026-11-04)
+ * ## Top to bottom, in the order a player decides (owner, 2026-11-04)
+ *
+ * "it is more intuitive the user selects what level they want first, then what
+ * they can afford or all if they have the resource and can afford it (or else
+ * just grey it out)". So:
+ *
+ * 1. **Raise to**: four big buttons, Level 2 to 5, each with that level's wall
+ *    picture. A level the hall has not earned, or one that would raise none of
+ *    the picked walls, is greyed with the reason in its tooltip rather than
+ *    hidden: a level that vanishes tells the player nothing about how to get it.
+ * 2. **Select all / Affordable / Clear** (picking only): Select all is greyed
+ *    when the yard cannot pay for every wall below the level, Affordable when
+ *    it cannot pay for one, Clear when nothing is picked.
+ * 3. The pick, and what it costs: resource icons and short figures (red when
+ *    short; the whole figure in the tooltip), and the time.
+ * 4. Upgrade N, greyed when it cannot be sent, and Cancel.
+ *
+ * ## Picking
  *
  * Given `pick`, the panel is the Upgrade walls mode's own: it stays open while
- * the player boxes and taps walls on the yard, the scene hands it each new
- * pick (`setNodes`), and it adds Select all, Clear and Affordable. Affordable
- * trims a pick the yard cannot pay for down to one it can (or, with nothing
- * picked, picks as many walls as it can pay for), because the owner's players
- * are new and can rarely raise every wall at once. In this mode the level
- * follows the pick: one above the lowest wall picked (or, with nothing
- * picked, the lowest wall in the yard), the cheapest step that means
- * anything, rather than the highest the hall allows. A level button the
- * player pressed is kept while it still raises a picked wall.
- *
- * ## Why the levels are buttons and not a dropdown
- *
- * There are four of them, at most, and each one has a different answer to "can
- * I have this" — a level the Town Hall does not reach is disabled with the
- * reason in its tooltip rather than hidden, because a level that vanishes tells
- * the player nothing about how to get it. Clicking one re-previews; it does not
- * act.
+ * the player boxes and taps walls on the yard, and the scene hands it each new
+ * pick (`setNodes`). The level follows the pick: one above the lowest wall
+ * picked (or, with nothing picked, the lowest wall in the yard), the cheapest
+ * step that means anything. A level the player pressed is kept while it still
+ * raises a picked wall (`followWallTarget`).
  *
  * ## Why the walls already at the target are shown rather than dropped
  *
@@ -63,7 +77,7 @@ export interface WallUpgradePanelOptions {
   /** The current selection. Anything that is not a wall is ignored. */
   nodes: readonly PlanNode[];
   yard: Yard;
-  /** Confirm: the ids the server should raise, and the level to raise them to. */
+  /** Upgrade: the ids the server should raise, and the level to raise them to. */
   onConfirm: (ids: number[], level: number) => void;
   onClose: () => void;
   /** Present: the panel runs the Upgrade walls mode (see "Picking" above). */
@@ -78,6 +92,9 @@ export type WallUpgradePanel = Panel & {
 /** Wall type 17's ladder tops out here; the targets run from 2 to this. */
 const WALL_LADDER_TYPE = 17;
 
+/** Each batch step takes this long, so every wall finishes as soon as it is paid for. */
+const STEP_SECONDS = 5;
+
 const isWall = (node: PlanNode): boolean => !node.fixed && WALL_TYPES.includes(node.type);
 
 export const wallUpgradePanel = (options: WallUpgradePanelOptions): WallUpgradePanel => {
@@ -88,6 +105,7 @@ export const wallUpgradePanel = (options: WallUpgradePanelOptions): WallUpgradeP
   // The Inferno's walls climb the Inferno table, counted by the Under Hall.
   const kind = yard.kind;
   const hallWord = kind === "inferno" ? "Under Hall" : "Town Hall";
+  const realm = kind === "inferno" ? "inferno" : "surface";
   const targets = wallTargets(kind);
   const top = maxLevel(WALL_LADDER_TYPE, kind);
   const picked = pick ? "picked" : "selected";
@@ -114,68 +132,93 @@ export const wallUpgradePanel = (options: WallUpgradePanelOptions): WallUpgradeP
 
   const content: HTMLElement[] = [];
 
-  /* ── Picking: the hint and the three pick buttons ──────────────────── */
+  /* ── 1. Raise to: the level first ───────────────────────────────────── */
 
-  const tools = document.createElement("div");
-  tools.className = "planner-walls__tools";
-  const clear = toolButton("Clear", "Pick no walls");
-  if (pick) {
-    const hint = document.createElement("p");
-    hint.className = "planner-walls__hint u-muted";
-    hint.textContent = pick.touch
-      ? "Drag a box over walls, or tap one."
-      : "Drag a box over walls, or click one.";
-
-    const all = toolButton("Select all", "Pick every wall in the yard");
-    all.addEventListener("click", () => pick.onPick(pick.allWalls().map((node) => node.id)));
-
-    clear.addEventListener("click", () => pick.onPick([]));
-
-    const afford = toolButton(
-      "Affordable",
-      "Pick only as many walls as you can pay for (from your pick, or from every wall)",
-    );
-    afford.classList.add("planner-walls__afford");
-    afford.addEventListener("click", () => {
-      const from = walls.length > 0 ? walls : pick.allWalls();
-      const ids = affordablePick(from, target, yard);
-      if (ids.length === 0) {
-        note.textContent = `You cannot afford a single wall at level ${target} yet.`;
-        return;
-      }
-      pick.onPick(ids);
-    });
-
-    tools.append(all, clear, afford);
-    content.push(hint, tools);
-  }
-
-  const held = document.createElement("p");
-  held.className = "planner-walls__held u-muted";
+  const levelHeading = document.createElement("h3");
+  levelHeading.className = "planner-walls__heading";
+  levelHeading.id = `planner-walls-levels-${Math.random().toString(36).slice(2, 8)}`;
+  levelHeading.textContent = "Raise to";
 
   const levelRow = document.createElement("div");
   levelRow.className = "planner-walls__levels";
   levelRow.setAttribute("role", "group");
-  levelRow.setAttribute("aria-label", "Target level");
+  levelRow.setAttribute("aria-labelledby", levelHeading.id);
 
-  const levelLabel = document.createElement("span");
-  levelLabel.className = "planner-walls__levels-label";
-  levelLabel.textContent = "Raise to";
-  levelRow.append(levelLabel);
+  const buttons = new Map<number, HTMLButtonElement>();
+  for (const entry of targets) {
+    const element = document.createElement("button");
+    element.type = "button";
+    element.className = "btn btn--outline planner-walls__level";
+    element.dataset["level"] = String(entry.level);
+    element.append(...levelFace(entry.level, kind));
+    element.addEventListener("click", () => {
+      choice = { target: entry.level, manual: true };
+      target = entry.level;
+      render();
+    });
+    buttons.set(entry.level, element);
+    levelRow.append(element);
+  }
+  content.push(levelHeading, levelRow);
+
+  // Everything the hall allows is out of reach: there is no target to pick.
+  if (allowed.length === 0) {
+    const none = document.createElement("p");
+    none.className = "planner-walls__gate u-muted";
+    none.textContent = `Your ${hallWord} is not high enough for any wall upgrade yet.`;
+    content.push(none);
+  }
+
+  /* ── 2. Which walls: all, what can be paid for, or none ─────────────── */
+
+  const tools = document.createElement("div");
+  tools.className = "planner-walls__tools";
+  const all = toolButton("Select all");
+  const afford = toolButton("Affordable");
+  afford.classList.add("planner-walls__afford");
+  const clear = toolButton("Clear");
+  clear.title = "Pick no walls";
+  let allIds: number[] = [];
+  let affordIds: number[] = [];
+  if (pick) {
+    all.addEventListener("click", () => pick.onPick(allIds));
+    afford.addEventListener("click", () => pick.onPick(affordIds));
+    clear.addEventListener("click", () => pick.onPick([]));
+    tools.append(all, afford, clear);
+    content.push(tools);
+  }
+
+  /* ── 3. The pick and its cost ───────────────────────────────────────── */
+
+  const held = document.createElement("p");
+  held.className = "planner-walls__held";
+
+  const hint = document.createElement("p");
+  hint.className = "planner-walls__hint u-muted";
+  hint.textContent = pick?.touch ? "Drag a box over walls, or tap one." : "Drag a box over walls, or click one.";
 
   const preview = document.createElement("p");
-  preview.className = "planner-walls__preview";
+  preview.className = "planner-walls__preview u-muted";
 
-  const costs = document.createElement("dl");
-  costs.className = "cell-facts planner-walls__costs";
+  const costs = document.createElement("ul");
+  costs.className = "planner-walls__costs";
+  costs.setAttribute("aria-label", "Cost");
 
   const note = document.createElement("p");
   note.className = "planner-walls__note u-muted";
 
+  content.push(held);
+  if (pick) content.push(hint);
+  content.push(preview, costs, note);
+
+  /* ── 4. Upgrade ─────────────────────────────────────────────────────── */
+
   const confirm = document.createElement("button");
   confirm.type = "button";
-  confirm.className = "btn btn--primary";
-  confirm.textContent = "Confirm";
+  confirm.className = "btn btn--primary planner-walls__go";
+  confirm.append(gameIcon("wallupgrade", { size: 24, decorative: true }));
+  const confirmLabel = document.createElement("span");
+  confirm.append(confirmLabel);
 
   const cancel = document.createElement("button");
   cancel.type = "button";
@@ -186,71 +229,68 @@ export const wallUpgradePanel = (options: WallUpgradePanelOptions): WallUpgradeP
   const footer = document.createElement("div");
   footer.className = "planner-walls__actions";
   footer.append(confirm, cancel);
-
-  const buttons = new Map<number, HTMLButtonElement>();
-  for (const entry of targets) {
-    const element = document.createElement("button");
-    element.type = "button";
-    element.className = "btn btn--ghost planner-walls__level";
-    element.textContent = `Level ${entry.level}`;
-    element.dataset["level"] = String(entry.level);
-
-    const gated = entry.need > hall;
-    element.disabled = gated;
-    element.title = gated
-      ? `Needs ${hallWord} ${entry.need}; yours is ${hall === 0 ? "missing" : `level ${hall}`}.`
-      : `Take every ${picked} wall to level ${entry.level}.`;
-
-    element.addEventListener("click", () => {
-      choice = { target: entry.level, manual: true };
-      target = entry.level;
-      render();
-    });
-
-    buttons.set(entry.level, element);
-    levelRow.append(element);
-  }
-
-  // Everything the hall allows is out of reach: there is no target to pick.
-  if (targets.every((entry) => entry.need > hall)) {
-    const none = document.createElement("span");
-    none.className = "u-muted";
-    none.textContent = `Your ${hallWord} is not high enough for any wall upgrade yet.`;
-    levelRow.append(none);
-  }
+  content.push(footer);
 
   const render = (): void => {
     const result = wallBatchPreview(walls, target, yard);
     const short = isShort(result.shortfall);
+    // With nothing picked, a level is judged against the whole yard.
+    const judged = walls.length > 0 || !pick ? walls : pick.allWalls().filter(isWall);
 
-    for (const [level, element] of buttons) {
-      element.setAttribute("aria-pressed", String(level === target));
+    for (const entry of targets) {
+      const element = buttons.get(entry.level);
+      if (!element) continue;
+      element.setAttribute("aria-pressed", String(entry.level === target));
+      const gated = entry.need > hall;
+      const raisesNone =
+        !gated && judged.length > 0 && judged.every((wall) => effectiveLevel(wall) >= entry.level);
+      element.disabled = gated || raisesNone;
+      element.title = gated
+        ? `Needs ${hallWord} ${entry.need}; yours is ${hall === 0 ? "missing" : `level ${hall}`}.`
+        : raisesNone
+          ? `Every ${walls.length > 0 ? `${picked} ` : ""}wall is already at level ${entry.level}${entry.level < top ? " or higher" : ""}.`
+          : `Raise ${walls.length > 0 ? `the ${picked} walls` : "walls"} to level ${entry.level}.`;
     }
-
-    held.textContent = describeHoldings(walls, picked);
-    preview.textContent = describePreview(result, target, top, picked);
-    costs.replaceChildren(...costRows(result.cost, heldResources(yard.resources), result.shortfall));
-    clear.disabled = walls.length === 0;
 
     if (pick) {
-      // The line a new player most needs: whether this pick can be paid for.
-      note.textContent =
-        result.eligible.length > 0 && short && result.gate === null
-          ? "Not enough to upgrade all of these. Pick fewer, or press Affordable."
-          : "";
-      note.classList.toggle("planner-walls__note--short", note.textContent !== "");
-    } else {
-      note.textContent =
-        result.eligible.length === 0
-          ? ""
-          : `${result.steps} ${result.steps === 1 ? "step" : "steps"} of five seconds each, so every wall finishes the moment the server takes the payment.`;
+      const everything = pick.allWalls();
+      const allCheck = selectAllCheck(everything, target, yard, hallWord);
+      allIds = allCheck.ids;
+      all.disabled = allCheck.reason !== null;
+      all.title =
+        allCheck.reason ??
+        `Pick all ${allIds.length} ${allIds.length === 1 ? "wall" : "walls"} below level ${target}.`;
+
+      const fill = affordableFill(walls, everything, target, yard);
+      affordIds = fill.ids;
+      afford.disabled = fill.reason !== null;
+      afford.title = fill.reason ?? `Pick as many walls as you can pay for at level ${target}.`;
     }
+    clear.disabled = walls.length === 0;
+
+    held.textContent = describeHoldings(walls, picked);
+    hint.hidden = walls.length > 0;
+    preview.textContent = describePreview(result, target, top, picked);
+    costs.replaceChildren(
+      ...costChips(result.cost, heldResources(yard.resources), result.shortfall, realm),
+      ...(result.eligible.length > 0 ? [timeChip(result.steps)] : []),
+    );
+    costs.hidden = result.eligible.length === 0;
+
+    // The line a new player most needs: whether this pick can be paid for.
+    note.textContent =
+      result.eligible.length > 0 && short && result.gate === null
+        ? pick
+          ? "Not enough to upgrade all of these. Pick fewer, or press Affordable."
+          : "Not enough to upgrade all of these."
+        : "";
+    note.classList.toggle("planner-walls__note--short", note.textContent !== "");
+    note.hidden = note.textContent === "";
 
     const blocked = result.eligible.length === 0 || short || result.gate !== null;
     confirm.disabled = blocked;
-    // Picking, Confirm carries the count it will raise: "Upgrade 12".
-    confirm.textContent =
-      pick && result.eligible.length > 0 ? `Upgrade ${result.eligible.length}` : "Confirm";
+    // Upgrade carries the count it will raise: "Upgrade 12".
+    confirmLabel.textContent = result.eligible.length > 0 ? `Upgrade ${result.eligible.length}` : "Upgrade";
     confirm.title = result.gate
       ? `Needs ${hallWord} ${result.gate.need}.`
       : result.eligible.length === 0
@@ -263,7 +303,7 @@ export const wallUpgradePanel = (options: WallUpgradePanelOptions): WallUpgradeP
   };
 
   render();
-  panel.setContent(...content, held, levelRow, preview, costs, note, footer);
+  panel.setContent(...content);
 
   return Object.assign(panel, {
     setNodes(nodes: readonly PlanNode[], next?: Yard): void {
@@ -276,13 +316,82 @@ export const wallUpgradePanel = (options: WallUpgradePanelOptions): WallUpgradeP
   });
 };
 
-const toolButton = (label: string, title: string): HTMLButtonElement => {
+/** A level button's inside: that level's wall, then "Level N". */
+const levelFace = (level: number, kind: Yard["kind"]): HTMLElement[] => {
+  const name = document.createElement("span");
+  name.className = "planner-walls__level-name";
+  name.textContent = `Level ${level}`;
+
+  const art = resolveArt(WALL_LADDER_TYPE, level, ArtState.DEFAULT, kind);
+  const picture = art ? (art.still ?? art.top) : null;
+  if (!picture || picture.frame) return [name];
+  const image = document.createElement("img");
+  image.className = "planner-walls__level-art";
+  image.src = picture.url;
+  image.alt = "";
+  image.setAttribute("aria-hidden", "true");
+  image.setAttribute("decoding", "async");
+  return [image, name];
+};
+
+const toolButton = (label: string): HTMLButtonElement => {
   const element = document.createElement("button");
   element.type = "button";
   element.className = "btn btn--outline planner-walls__tool";
   element.textContent = label;
-  element.title = title;
   return element;
+};
+
+/** Words only a screen reader hears: the chip shows the short figure. */
+const spoken = (text: string): HTMLElement => {
+  const element = document.createElement("span");
+  element.className = "planner-walls__sr";
+  element.textContent = text;
+  return element;
+};
+
+/**
+ * One chip per resource the pick costs: its icon and a short figure, red when
+ * the yard holds too little. The whole figures are in the tooltip and spoken.
+ */
+const costChips = (
+  cost: ResourceAmounts,
+  held: ResourceAmounts,
+  shortfall: ResourceAmounts,
+  realm: "surface" | "inferno",
+): HTMLElement[] =>
+  RESOURCE_KEYS.filter((key) => cost[key] > 0).map((key) => {
+    const chip = document.createElement("li");
+    chip.className = "planner-walls__cost";
+    chip.dataset["key"] = key;
+    const lacking = shortfall[key];
+    const name = resourceName(key, realm).toLowerCase();
+    const words =
+      lacking > 0
+        ? `${formatAmount(cost[key])} ${name} needed — you hold ${formatAmount(held[key])}, ${formatAmount(lacking)} short`
+        : `${formatAmount(cost[key])} ${name} of ${formatAmount(held[key])}`;
+    chip.title = words;
+    if (lacking > 0) chip.classList.add("planner-cost__row--short", "planner-walls__cost--short");
+    const figure = document.createElement("span");
+    figure.className = "planner-walls__cost-value";
+    figure.textContent = formatShort(cost[key]);
+    figure.setAttribute("aria-hidden", "true");
+    chip.append(resourceIcon(key, { decorative: true, tooltip: false, realm }), figure, spoken(words));
+    return chip;
+  });
+
+/** The time chip: batch steps are short enough that the walls finish on payment. */
+const timeChip = (steps: number): HTMLElement => {
+  const chip = document.createElement("li");
+  chip.className = "planner-walls__cost planner-walls__cost--time";
+  const words = `${steps} ${steps === 1 ? "step" : "steps"} of ${STEP_SECONDS} seconds each: the walls finish as soon as you pay.`;
+  chip.title = words;
+  const figure = document.createElement("span");
+  figure.className = "planner-walls__cost-value";
+  figure.textContent = "Instant";
+  figure.setAttribute("aria-hidden", "true");
+  chip.append(gameIcon("time", { size: 24, decorative: true }), figure, spoken(words));
+  return chip;
 };
 
 /** "40 walls selected: 34 at level 1, 6 at level 5." */
