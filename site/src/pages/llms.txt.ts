@@ -19,7 +19,7 @@ export const GET: APIRoute = async () => {
       `It runs in a web browser at ${SITE.gameUrl}, with no Flash and nothing to download. ` +
       "It is not made by, affiliated with, endorsed by or sponsored by Kixeye, who created the original game.",
     "",
-    "The game is in open beta: it is live and free to play, but still being built, and progress may be reset before the full launch. " +
+    "The game is in open beta: it is live and completely free (nothing is sold for real money), still being built, and the plan is to keep accounts after the beta (a serious exploit or lost data could force a rollback to an earlier save). " +
       `It is run by one fan, and its server is based on Backyard Monsters Refitted (${SITE.refittedUrl}).`,
     "",
     "## Play",

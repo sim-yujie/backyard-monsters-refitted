@@ -17,8 +17,8 @@ export const faq: { q: string; a: string }[] = [
     a: "Yes. Go to play.bymrevamped.com and sign up with a username, email and password to play Backyard Monsters Revamped in your browser.",
   },
   {
-    q: "Is it free?",
-    a: "Yes. The game is free to play, with nothing to download or install.",
+    q: "Is it free? Is it free-to-play?",
+    a: "Yes, it is completely free. Nothing in the game is sold for real money: no paid items, no pay-to-win and no ads, and there is nothing to download or install. Donations on Patreon or Ko-fi only help pay for the server and give nothing in the game.",
   },
   {
     q: "Do I need Flash or a download?",
@@ -33,8 +33,8 @@ export const faq: { q: string; a: string }[] = [
     a: "No. Accounts and yards from the original game are not carried over, so everyone starts with a fresh yard. Bob's guided start gets you going in a few minutes.",
   },
   {
-    q: "Will my progress be saved?",
-    a: "The game is in open beta, so it is still being built. Things may break, and your progress may be reset before the full launch.",
+    q: "Will my progress be saved? Will accounts be reset after the beta?",
+    a: "We plan to keep your progress, and we do not plan to reset accounts when the beta ends. A serious exploit or lost data could force a rollback to an earlier save; if that ever happens, we will announce it. The game is still being built, so things may break now and then.",
   },
   {
     q: "How is it different from the original?",
