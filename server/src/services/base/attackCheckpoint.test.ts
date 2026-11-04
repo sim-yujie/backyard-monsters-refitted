@@ -10,7 +10,9 @@ import {
   serialiseCheckpoint,
   type CheckpointInput,
 } from "./attackCheckpoint.js";
-import { ATTACK_SESSION_WINDOW } from "./attackSession.js";
+import { attackWindowSeconds } from "./attackWindow.js";
+
+const ATTACK_SESSION_WINDOW = attackWindowSeconds(false);
 
 /**
  * What a checkpoint is and when one may replace another (issue #138). Pure, so
@@ -191,6 +193,13 @@ describe("stored checkpoints", () => {
   test("expires with the attack session's window, not before", () => {
     expect(checkpointExpired(checkpoint, session.startedat + ATTACK_SESSION_WINDOW - 1)).toBe(false);
     expect(checkpointExpired(checkpoint, session.startedat + ATTACK_SESSION_WINDOW)).toBe(true);
+  });
+
+  test("a Declare War attack's checkpoint keeps the longer window", () => {
+    const war = newCheckpoint({ ...session, declareWar: true }, 9, accepted(parseCheckpoint(body())), 1_000_010);
+    expect(checkpointExpired(war, session.startedat + 9 * 60 + 50)).toBe(false);
+    expect(checkpointExpired(war, session.startedat + attackWindowSeconds(true))).toBe(true);
+    expect(checkpointExpired(checkpoint, session.startedat + 9 * 60 + 50)).toBe(true);
   });
 });
 

@@ -3,7 +3,8 @@ import type { User } from "../../database/models/user.model.js";
 import { postgres, redis } from "../../server.js";
 import { readAttackSession } from "../base/attackSessionStore.js";
 import { readHelped } from "../friends/helpedMark.js";
-import { ATTACK_TIMEOUT, isAttackActive } from "../base/isAttackActive.js";
+import { isAttackActive } from "../base/isAttackActive.js";
+import { attackEndsAt } from "../base/attackWindow.js";
 import type { RaidView } from "../raids/raidFlow.js";
 import { challengeKey, readLastAction } from "./online.js";
 
@@ -61,7 +62,7 @@ export const attackOnMainYard = async (user: User): Promise<PresenceAnswer["atta
   if (!save || !isAttackActive(save)) return undefined;
   const last = save.attacks.at(-1);
   if (!last) return undefined;
-  return { by: last.name || "another player", ends: last.starttime + ATTACK_TIMEOUT };
+  return { by: last.name || "another player", ends: attackEndsAt(last) };
 };
 
 /**

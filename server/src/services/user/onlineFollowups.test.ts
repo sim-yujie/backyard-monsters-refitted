@@ -46,7 +46,8 @@ const { userCell } = await import("../../controllers/maproom/v2/cells/userCell.j
 const { playerCell } = await import("../../controllers/maproom/v3/cells/playerCell.js");
 const { updateNeighbourData } = await import("../maproom/updateNeighbourData.js");
 const { toAllianceMember } = await import("../alliance/allianceMember.js");
-const { ATTACK_TIMEOUT } = await import("../base/isAttackActive.js");
+const { attackWindowSeconds } = await import("../base/attackWindow.js");
+const ATTACK_WINDOW = attackWindowSeconds();
 const { attackSessionKey } = await import("../base/attackSession.js");
 const { REAL_ACTION_WINDOW_SECONDS, isPlayerOnline, onlinePlayers, setChallengePending } = await import("./online.js");
 const { HELPED_MARK_SECONDS, markHelped } = await import("../friends/helpedMark.js");
@@ -212,7 +213,7 @@ describe("the presence answer", () => {
     expect(await ping(PLAYER)).not.toHaveProperty("attack");
 
     store.set(attackSessionKey(BASESAVEID), JSON.stringify({ attackerid: OTHER, attackid: 4242, startedat: T0 - 30 }));
-    expect(await ping(PLAYER)).toMatchObject({ attack: { by: "Raider", ends: T0 - 30 + ATTACK_TIMEOUT } });
+    expect(await ping(PLAYER)).toMatchObject({ attack: { by: "Raider", ends: T0 - 30 + ATTACK_WINDOW } });
 
     // The attack's save cleared the row's attackid: over.
     row.attackid = 0;
@@ -220,7 +221,30 @@ describe("the presence answer", () => {
 
     // Or it ran out of time.
     row.attackid = 4242;
-    at(T0 - 30 + ATTACK_TIMEOUT);
+    at(T0 - 30 + ATTACK_WINDOW);
+    expect(await ping(PLAYER)).not.toHaveProperty("attack");
+  });
+
+  test("a Declare War attack locks the yard for its longer window, ending as its save window does", async () => {
+    at(T0);
+    const row = {
+      basesaveid: BASESAVEID,
+      attackid: 4242,
+      attacks: [{ name: "Raider", starttime: T0 - 30, declarewar: true }],
+    };
+    tables.set(Save, [row]);
+    store.set(
+      attackSessionKey(BASESAVEID),
+      JSON.stringify({ attackerid: OTHER, attackid: 4242, startedat: T0 - 30, declareWar: true })
+    );
+    const ends = T0 - 30 + attackWindowSeconds(true);
+    expect(await ping(PLAYER)).toMatchObject({ attack: { by: "Raider", ends } });
+
+    // Past the ordinary window, still locked.
+    at(T0 - 30 + ATTACK_WINDOW + 10);
+    expect(await ping(PLAYER)).toMatchObject({ attack: { by: "Raider", ends } });
+
+    at(ends);
     expect(await ping(PLAYER)).not.toHaveProperty("attack");
   });
 });

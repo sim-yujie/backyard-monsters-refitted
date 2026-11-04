@@ -7,7 +7,7 @@ import {
   type FlingLog,
 } from "../../game-rules/combat/index.js";
 import {
-  ATTACK_SESSION_WINDOW,
+  sessionWindowSeconds,
   sessionFactsOf,
   type AttackSession,
   type AttackSessionFacts,
@@ -333,4 +333,4 @@ export const checkpointSession = (checkpoint: AttackCheckpoint): AttackSession =
  * @param now - Server seconds.
  */
 export const checkpointExpired = (checkpoint: AttackCheckpoint, now: number): boolean =>
-  now - checkpoint.startedat >= ATTACK_SESSION_WINDOW;
+  now - checkpoint.startedat >= sessionWindowSeconds(checkpoint);

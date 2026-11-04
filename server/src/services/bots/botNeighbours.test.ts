@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/postgresql";
 import alea from "alea";
 
-import { ATTACK_TIMEOUT } from "../base/isAttackActive.js";
+import { attackWindowSeconds } from "../base/attackWindow.js";
 import { neighbourLevelWindow } from "../maproom/v1/findOverworldNeighbours.js";
 import {
   botLevelWindow,
@@ -69,7 +69,7 @@ describe("findBotCandidates (issue #236)", () => {
       row(2, { protected: NOW + 60 }),
       row(3, { protected: NOW - 60 }),
       row(4, { attackid: 9, last_attack: { starttime: NOW - 10 } }),
-      row(5, { attackid: 9, last_attack: { starttime: NOW - ATTACK_TIMEOUT - 1 } }),
+      row(5, { attackid: 9, last_attack: { starttime: NOW - attackWindowSeconds() - 1 } }),
       row(6, { attackid: 9, last_attack: null }),
     ]);
     const bots = await findBotCandidates(em, 7, { min: 1, max: 12 }, NOW);
