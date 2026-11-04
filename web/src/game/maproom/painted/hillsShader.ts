@@ -1,5 +1,5 @@
 import { Ground } from "./groundKinds";
-import { CLIFF_DROP, CLIFF_STRIPS, HILL_BRIGHTEST, HILL_DARKEST, HILL_LIGHT, HILL_RADIUS } from "./hills";
+import { CLIFF_DROP, CLIFF_FACE, CLIFF_STRIPS, HILL_BRIGHTEST, HILL_DARKEST, HILL_LIGHT, HILL_RADIUS } from "./hills";
 
 /**
  * Hills and cliffs for the painted ground (Map Room 2 Modern look, plan step 5), GLSL included by
@@ -31,7 +31,8 @@ const float CLIFF_DROP = ${CLIFF_DROP.toFixed(1)};
 // A full face's depth (hex units, along the drop) for the tallest strip; the share of it drawn into
 // the high cell (the rim sits that far back from the claims' line); the strip's repeat along the
 // cliff (hex units); the lip's width and the shadow's reach where the face looks away.
-const float FACE = 1.5;
+const float FACE = ${CLIFF_FACE.toFixed(3)};
+const float CLIFF_LOOK_UP = 0.85;
 const float FACE_BACK = 0.3;
 const float FACE_REPEAT = 4.5;
 const float LIP = 0.08;
@@ -102,6 +103,7 @@ struct Cliff {
   float drop;   // the height between them
   float mask;   // fades the cliff out where either cell stops being one of the three
   float pick;   // 0..1, which strip
+  vec2 mid;     // the point half way between the two cells' centres (on the rim's line)
 };
 
 Cliff cliffOf(Blend b) {
@@ -112,6 +114,7 @@ Cliff cliffOf(Blend b) {
   c.drop = 0.0;
   c.mask = 0.0;
   c.pick = 0.0;
+  c.mid = vec2(0.0);
   int k = b.claim.x >= b.claim.y && b.claim.x >= b.claim.z ? 0 : b.claim.y >= b.claim.z ? 1 : 2;
   if (!isLand(b.g[k])) return c;
   // The other cell nearest in claim that stands CLIFF_DROP above or below the winner.
@@ -128,7 +131,8 @@ Cliff cliffOf(Blend b) {
   vec2 low = kHigh ? b.cen[m] : b.cen[k];
   c.on = true;
   c.n = normalize(low - high);
-  c.s = dot(b.hp - 0.5 * (high + low), c.n);
+  c.mid = 0.5 * (high + low);
+  c.s = dot(b.hp - c.mid, c.n);
   c.drop = abs(b.height[k] - b.height[m]);
   c.mask = smoothstep(0.0, 0.14, min(b.bary[k], b.bary[m]));
   // The third cell carries the cliff on when it stands on the winner's side of the same drop;
@@ -137,6 +141,31 @@ Cliff cliffOf(Blend b) {
     && (b.height[j] > b.height[m]) == kHigh;
   if (!carries) c.mask *= smoothstep(0.0, 0.16, b.claim[k] - b.claim[j]);
   c.pick = fract((b.height[m] + b.height[k]) * 0.6180339);
+  return c;
+}
+
+// A tall face hangs further down the screen than the three cells round its rim reach (they stop
+// near the low cell's middle, which cut every face short: step 10's "short cliffs"). Below them the
+// cliff is found again from a point CLIFF_LOOK_UP further up, where the rim's two cells are among
+// the three (main() works out that point's Blend in its one blendAt loop), and placed by this
+// point's own push, so the face runs on unbroken. Looked for only where the cell up there stands a
+// cliff above this point's own land cell (one texel read).
+bool cliffAbove(Blend b) {
+  if (b.height[0] < 99.5 || !isLand(b.g[0])) return false;
+  vec2 above = b.hp - vec2(0.0, CLIFF_LOOK_UP);
+  return cellAt(toOffset(roundAxial(axialOf(above)))).r * 255.0 - b.height[0] >= CLIFF_DROP;
+}
+
+// This point's own cliff c joined with u, the one found from CLIFF_LOOK_UP above.
+Cliff joinCliffs(Blend b, Cliff c, Cliff u) {
+  if (!u.on || u.n.y < 0.2) return c;
+  u.s = dot(b.hp - u.mid, u.n);
+  if (u.s < 0.0) return c;
+  if (c.on && distance(c.mid, u.mid) < 0.01) {
+    c.mask = max(c.mask, u.mask);
+    return c;
+  }
+  if (!c.on || u.mask > c.mask) return u;
   return c;
 }
 
@@ -196,6 +225,10 @@ vec3 drawCliff(vec3 colour, Cliff c, vec2 h, vec2 hdx, vec2 hdy) {
       // Lit a little by which way it faces (the strips carry their own top-left light).
       float lit = dot(normalize(vec3(n, 0.5)), normalize(HILL_SUN));
       face.rgb *= clamp(0.98 + 0.25 * lit, 0.82, 1.08);
+      // Mock-up B's faces are a light, sunlit grey stone; the strips are painted a warmer brown, which
+      // read as muddy gullies on the map (MR2 step 11): move the rock (not its grassy top) towards grey.
+      float stone = dot(face.rgb, vec3(0.3, 0.5, 0.2));
+      face.rgb = mix(face.rgb, stone * vec3(1.1, 1.05, 1.0), 0.55);
       // The strips' grassy tops are a bright lime: take most of their colour from the ground they
       // hang from, so the rim reads as that ground's edge (meadow, forest floor or gravel).
       float grassy = 1.0 - smoothstep(0.1, 0.26, v);

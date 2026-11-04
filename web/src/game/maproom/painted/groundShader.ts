@@ -732,17 +732,30 @@ void main() {
   float dist = c.s / max(length(slope), 0.6);
   float coastMask = c.both && c.known ? smoothstep(0.004, 0.05, min(c.land, c.water)) : 0.0;
   // On High the coast's slope is measured on the ground itself, a small step either way: the
-  // screen's slope is one value per 2x2 pixels, which drew the foam's edge in little steps.
-  if (uQuality > 1.5 && coastMask > 0.0 && dist > -0.2 && dist < 0.7) {
-    // A loop, not two calls: the compiler keeps one copy of blendAt (plan step 10, compile time).
+  // screen's slope is one value per 2x2 pixels, which drew the foam's edge in little steps. Below a
+  // cliff's rim the cliff is looked for further up the screen (hillsShader.ts cliffAbove), on High
+  // only: on Low and Medium the extra blendAt made the program compile about 25% and 45% slower.
+  // One loop, not three calls: the compiler keeps one copy of blendAt (plan step 10, compile time).
+  bool coastSteps = uQuality > 1.5 && coastMask > 0.0 && dist > -0.2 && dist < 0.7;
+  bool lookUp = uQuality > 1.5 && wl.x + wl.y + wl.z > 0.002 && cliffAbove(b);
+  Cliff ownCliff = cliffOf(b);
+  Cliff cliffUp = ownCliff;
+  cliffUp.on = false;
+  if (coastSteps || lookUp) {
     vec2 side = vec2(0.0);
     bool both = true;
-    for (int k = 0; k < 2; k++) {
-      Coast cs = coastOf(blendAt(h + (k == 0 ? vec2(COAST_STEP, 0.0) : vec2(0.0, COAST_STEP))));
+    for (int k = 0; k < 3; k++) {
+      if (k < 2 ? !coastSteps : !lookUp) continue;
+      Blend bk = blendAt(k == 0 ? h + vec2(COAST_STEP, 0.0) : k == 1 ? h + vec2(0.0, COAST_STEP) : h - vec2(0.0, CLIFF_LOOK_UP));
+      if (k == 2) {
+        cliffUp = cliffOf(bk);
+        continue;
+      }
+      Coast cs = coastOf(bk);
       side[k] = cs.s;
       both = both && cs.both;
     }
-    if (both) dist = c.s / max(length(side - c.s) / COAST_STEP, 0.6);
+    if (coastSteps && both) dist = c.s / max(length(side - c.s) / COAST_STEP, 0.6);
   }
 
   vec3 land = vec3(0.0);
@@ -915,7 +928,10 @@ void main() {
   }
 
   // Cliffs where neighbours' heights drop a lot: a signed distance to the rim like the coast's.
-  Cliff cliff = cliffOf(b);
+  // A forest's canopy covers the cliffs under it (MR2 step 11): mock-up B's cliffs stand in the open,
+  // and faces cut through the treetops read as grey gashes in the forest.
+  Cliff cliff = joinCliffs(b, ownCliff, cliffUp);
+  cliff.mask *= 1.0 - canopyCover;
   float cliffDist = cliff.on ? cliff.s : 0.0;
   vec2 hdx = dFdx(h);
   vec2 hdy = dFdy(h);
