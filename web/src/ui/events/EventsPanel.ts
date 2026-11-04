@@ -104,6 +104,25 @@ export const claimedLine = (title: string, rewards: readonly EventReward[]): HTM
 };
 
 /**
+ * The notice when a picked pumpkin reaches a ladder tier (bug report #10:
+ * a player picked pumpkins and never found the claim): the pumpkin count as
+ * the panel's pumpkin and a figure, "[pumpkin] 10", then the tier's rewards
+ * waiting; the full words on hover and for a screen reader. The notice's own
+ * button opens the Events page.
+ */
+export const readyLine = (need: number, rewards: readonly EventReward[]): HTMLElement => {
+  const words = `${formatAmount(need)} pumpkins: ${rewardsText(rewards)} to claim in Events`;
+  const line = el("span", "events-claimed events-ready");
+  line.setAttribute("role", "img");
+  line.setAttribute("aria-label", words);
+  line.title = words;
+  const count = el("span", "events-reward");
+  count.append(eventsArt("pumpkin", 18), el("span", "events-reward__figure", shortAmount(need)));
+  line.append(count, ...rewards.map((reward) => rewardBadge(reward)));
+  return line;
+};
+
+/**
  * A small picture for one reward, and its short figure. A reward `gained`
  * (claimed, not on offer) signs its resources and Shiny "+10K", in green.
  */
@@ -237,6 +256,18 @@ export class EventsPanel {
     for (const line of this.element.querySelectorAll<HTMLElement>("[data-next-at]")) {
       line.textContent = nextText(Number(line.dataset["nextAt"]) - now);
     }
+  }
+
+  /**
+   * Scrolls the page so the first Claim button that can be pressed is in
+   * view, and says whether there was one. On a phone the pumpkin ladder sits
+   * under the 14 calendar days, below the fold (bug report #10).
+   */
+  showFirstClaim(): boolean {
+    const claim = this.element.querySelector<HTMLElement>("button[data-claim]:not(:disabled)");
+    if (!claim) return false;
+    claim.scrollIntoView?.({ block: "nearest" });
+    return true;
   }
 
   render(view: EventsPanelView): void {
