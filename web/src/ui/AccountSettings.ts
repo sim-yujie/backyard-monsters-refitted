@@ -24,6 +24,7 @@ import { effectsQuality, screenShakeOn, setEffectsQuality, setScreenShake, type 
 import { quality as downloadQuality, setQuality, type Quality } from "@/game/quality";
 import { savedFontChoice, setFontChoice, type FontChoice } from "@/ui/fontChoice";
 import { Popup } from "@/ui/Popup";
+import { reportLook } from "@/app/lookReport";
 
 export const SETTINGS_TEXT = {
   title: "Account settings",
@@ -493,6 +494,7 @@ const downloadRow = (): HTMLElement[] => {
   select.addEventListener("change", () => {
     const level = select.value as Quality;
     setQuality(level);
+    reportLook();
     hint.textContent = `${SETTINGS_TEXT.downloadHint[level]} ${SETTINGS_TEXT.downloadSaved}`;
   });
   return [row, hint];
@@ -536,6 +538,7 @@ const lookSection = (): HTMLElement => {
   look.setAttribute("aria-describedby", hint.id);
   look.addEventListener("change", () => {
     const saved = saveClassicLook(look.value === "classic");
+    if (saved) reportLook();
     hint.textContent = saved ? SETTINGS_TEXT.lookSaved : SETTINGS_TEXT.lookFailed;
     hint.classList.toggle("field__hint--error", !saved);
   });
@@ -588,6 +591,7 @@ const fontRows = (): HTMLElement[] => {
   font.addEventListener("change", () => {
     const choice = font.value as FontChoice;
     const saved = setFontChoice(choice);
+    if (saved) reportLook();
     hint.textContent = saved ? SETTINGS_TEXT.fontHint[choice] : SETTINGS_TEXT.lookFailed;
     hint.classList.toggle("field__hint--error", !saved);
   });
@@ -623,6 +627,7 @@ const musicRows = (): HTMLElement[] => {
   music.setAttribute("aria-describedby", hint.id);
   music.addEventListener("change", () => {
     const saved = saveMusicChoice(music.value as MusicChoice);
+    if (saved) reportLook();
     hint.textContent = saved ? SETTINGS_TEXT.musicSaved : SETTINGS_TEXT.lookFailed;
     hint.classList.toggle("field__hint--error", !saved);
   });

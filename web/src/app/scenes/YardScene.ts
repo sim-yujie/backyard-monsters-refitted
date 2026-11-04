@@ -123,6 +123,7 @@ import { setWatchRun } from "@/game/autoAttack/watchRun";
 import { WorldChatBox } from "@/ui/chat/WorldChatBox";
 import { openCountryPrompt } from "@/ui/chat/CountryPrompt";
 import { supportReminder } from "@/game/support/supportReminder";
+import { reportLook } from "@/app/lookReport";
 import {
   MONSTERS_TAB_ORDER,
   MonsterBuilding,
@@ -961,6 +962,8 @@ export class YardScene implements Scene {
           return guide === "pending" || guide === "active" ? null : context.overlay.modal;
         });
       }
+      // Which look the player uses, for the owner's dashboard (owner 4 Nov 2026): once per load.
+      if (store?.kind === "main") reportLook();
 
       // The planner's entry rule: the own yard's, never a visit's. The
       // Inferno yard has one too (owner decision 2026-10-29), unlike Flash's.

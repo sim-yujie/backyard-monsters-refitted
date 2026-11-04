@@ -57,6 +57,7 @@ import { changeUsername } from "./controllers/auth/changeUsername.js";
 import { getAccount } from "./controllers/auth/getAccount.js";
 import { updateSettings } from "./controllers/auth/updateSettings.js";
 import { getSoundSettings, updateSoundSettings } from "./controllers/auth/soundSettings.js";
+import { reportLook } from "./controllers/auth/lookReport.js";
 import { setAvatar } from "./controllers/auth/setAvatar.js";
 
 import { baseLoad } from "./controllers/base/load/baseLoad.js";
@@ -184,6 +185,8 @@ router.post("/api/:apiVersion/player/settings", apiVersion, verifyUserAuth, logR
 // The music and effects switches, saved with the main yard (beta.5, `services/sound/soundSettings.ts`).
 router.get("/api/:apiVersion/player/sound", apiVersion, verifyUserAuth, getSoundSettings);
 router.post("/api/:apiVersion/player/sound", apiVersion, verifyUserAuth, logRequest, updateSoundSettings);
+// Which look the player uses (Modern/Classic and the rest), for the owner's dashboard (`services/user/lookReport.ts`).
+router.post("/api/:apiVersion/player/look", apiVersion, verifyUserAuth, reportLook);
 router.post("/api/:apiVersion/player/avatar", apiVersion, verifyUserAuth, logRequest, setAvatar);
 
 /**  ────────────────────────────────────────────────
