@@ -3,7 +3,7 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 import { BaseType } from "../../enums/Base.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
 import type { AttackDetails } from "../../controllers/base/load/modes/baseModeAttack.js";
-import { ATTACK_TIMEOUT } from "../base/isAttackActive.js";
+import { attackEndsAt } from "../base/attackWindow.js";
 import { shuffle } from "../../utils/shuffle.js";
 import { botFloorLevel, BOTS_SHOWN_FROM_LEVEL } from "../../config/BotConfig.js";
 
@@ -120,7 +120,7 @@ export const findBotCandidates = async (
     // As `updateNeighbourData` and `isAttackActive` decide them.
     attackable:
       !(row.protected > 0 && row.protected > now) &&
-      !(row.attackid !== 0 && row.last_attack && now - row.last_attack.starttime < ATTACK_TIMEOUT),
+      !(row.attackid !== 0 && row.last_attack && now < attackEndsAt(row.last_attack)),
   }));
 };
 

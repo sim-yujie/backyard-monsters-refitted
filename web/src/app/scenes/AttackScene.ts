@@ -23,6 +23,7 @@ import {
 } from "@/game/attack/AttackSession";
 import { consumeAttackTarget, fromInfernoYard, type AttackTarget } from "@/game/attack/attackTarget";
 import { targetLabel } from "@/game/attack/attackSave";
+import { BattleWallClock } from "@/game/attack/battleWallClock";
 import { baiterTarget, consumeBaiterRun, setBaiterRun, type BaiterRun } from "@/game/baiter/baiterSession";
 import {
   consumeWatchRun,
@@ -161,6 +162,8 @@ export class AttackScene implements Scene {
   private shownResources: Resources = {};
   private input: YardInput | null = null;
   private session: AttackSession | null = null;
+  /** Drives a battle the player fights from the wall clock (`battleWallClock.ts`). */
+  private wallClock: BattleWallClock | null = null;
   private unsubscribe: (() => void) | null = null;
   private target: AttackTarget | null = null;
   private yard: Yard | null = null;
@@ -371,6 +374,7 @@ export class AttackScene implements Scene {
     this.notices.destroy();
     this.battleLayer.removeChildren();
     this.renderer.destroy();
+    this.wallClock = null;
     this.session = null;
     this.presentation = new AttackPresentation();
     this.yard = null;
@@ -419,7 +423,12 @@ export class AttackScene implements Scene {
     this.minimap?.draw();
 
     // The clock runs in battle time; the session rate-limits what listeners hear.
-    this.session?.advance(deltaSeconds);
+    // A battle the player fights is owed the wall time since it last ran, so
+    // it neither pauses in a hidden tab nor crawls on slow frames
+    // (`battleWallClock.ts`); a playback goes at the frames' pace.
+    const session = this.session;
+    if (session && !session.playback && this.wallClock) this.wallClock.frame();
+    else session?.advance(deltaSeconds);
 
     this.sinceUiTick += deltaSeconds;
     if (this.sinceUiTick >= UI_TICK_SECONDS) {
@@ -514,6 +523,14 @@ export class AttackScene implements Scene {
     );
     this.mountPlugins(session, target, yard, context);
     session.start();
+
+    // Runs the battle while frames are stopped (a hidden tab); idle on a playback.
+    const wallClock = new BattleWallClock((seconds, budgetMs) => {
+      if (!session.playback) session.advance(seconds, budgetMs);
+    });
+    wallClock.start();
+    this.wallClock = wallClock;
+    this.teardowns.push(() => wallClock.stop());
   }
 
   private mountPlugins(

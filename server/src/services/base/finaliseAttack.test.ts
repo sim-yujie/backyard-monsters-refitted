@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } fr
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { attackWindowSeconds } from "./attackWindow.js";
+
 /**
  * Finishing an attack its attacker left without a save (issue #138).
  *
@@ -784,12 +786,12 @@ describe("when finalisation runs", () => {
 
     store.clear();
     sets.clear();
-    await arm({ startedat: now() - 420 });
+    await arm({ startedat: now() - attackWindowSeconds() });
     expect(await finaliseAttacksFor(DEFENDER_OWNER, "build")).toBe(1);
   }, REPLAY_TIMEOUT_MS);
 
   test("a stranger's load touches nothing", async () => {
-    await arm({ startedat: now() - 420 });
+    await arm({ startedat: now() - attackWindowSeconds() });
     expect(await finaliseAttacksFor(31337, "build")).toBe(0);
   }, REPLAY_TIMEOUT_MS);
 
@@ -798,7 +800,7 @@ describe("when finalisation runs", () => {
     await finaliseExpiredOnBase(defender.baseid);
     expect(defender.attackid).toBe(ATTACK_ID);
 
-    await arm({ startedat: now() - 420 });
+    await arm({ startedat: now() - attackWindowSeconds() });
     await finaliseExpiredOnBase(defender.baseid);
     expect(defender.attackid).toBe(0);
   }, REPLAY_TIMEOUT_MS);

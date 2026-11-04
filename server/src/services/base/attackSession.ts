@@ -9,7 +9,7 @@ import {
   type ResourceAmounts,
 } from "../../game-rules/combat/index.js";
 import type { EntryHoused } from "../yard/attackRoster.js";
-import { ATTACK_TIMEOUT } from "./isAttackActive.js";
+import { attackWindowSeconds, LONGEST_ATTACK_WINDOW_SECONDS } from "./attackWindow.js";
 
 /**
  * Binds an attack result to the player who started the attack (issue #25).
@@ -34,20 +34,25 @@ import { ATTACK_TIMEOUT } from "./isAttackActive.js";
  */
 
 /**
- * How long a session authorises saves for.
+ * How long a session authorises saves for, from its start.
  *
- * Deliberately the same 7 minutes as `isAttackActive`, so the two windows
+ * Deliberately the same window as `isAttackActive` (`attackWindow.ts`), from
+ * the same Declare War flag the attack load froze into both, so the two
  * cannot disagree: the moment the defender is free to be attacked by someone
- * else, the previous attacker can no longer write to the row.
+ * else, the previous attacker can no longer write to the row. A session
+ * minted before the flag was kept reads as an attack without Declare War.
+ *
+ * @param session - The session, or the checkpoint carrying its facts.
  */
-export const ATTACK_SESSION_WINDOW = ATTACK_TIMEOUT;
+export const sessionWindowSeconds = (session: { declareWar?: boolean }): number =>
+  attackWindowSeconds(session.declareWar === true);
 
 /**
- * How long the stored key is kept. A minute longer than the window, so an
- * attacker who is late gets the precise `expired` reason in the logs rather
+ * How long the stored key is kept. A minute longer than the longest window, so
+ * an attacker who is late gets the precise `expired` reason in the logs rather
  * than looking like someone who never started an attack at all.
  */
-export const ATTACK_SESSION_TTL = ATTACK_SESSION_WINDOW + 60;
+export const ATTACK_SESSION_TTL = LONGEST_ATTACK_WINDOW_SECONDS + 60;
 
 /** One attack, as recorded when the attacker entered the defender's yard. */
 export interface AttackSession {
@@ -401,7 +406,7 @@ export const checkAttackBinding = ({
 }: BindingCheck): AttackBindingResult => {
   if (!session) return { ok: false, reason: "no-session" };
 
-  if (now - session.startedat >= ATTACK_SESSION_WINDOW)
+  if (now - session.startedat >= sessionWindowSeconds(session))
     return { ok: false, reason: "expired" };
 
   if (session.attackerid !== callerid) return { ok: false, reason: "wrong-attacker" };

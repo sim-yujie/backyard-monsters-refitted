@@ -6,7 +6,7 @@ import { BaseType } from "../../enums/Base.js";
 import { postgres } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
-import { ATTACK_SESSION_WINDOW } from "../base/attackSession.js";
+import { sessionWindowSeconds } from "../base/attackSession.js";
 import { replayAbandonedInWorker } from "../base/combat/replayRunner.js";
 import {
   acquireInfernoPlayerFinalLock,
@@ -65,7 +65,7 @@ export type InfernoCloseOutcome = "landed" | "released" | "none" | "busy" | "sta
 
 /** Whether the attack's window has closed, so its attacker can no longer save it. */
 const expired = (attack: InfernoPlayerSession, now: number): boolean =>
-  now - attack.session.startedat >= ATTACK_SESSION_WINDOW;
+  now - attack.session.startedat >= sessionWindowSeconds(attack.session);
 
 /** How many failed closes an attack gets before it is given up. */
 export const INFERNO_CLOSE_ATTEMPTS = 3;
