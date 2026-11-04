@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { costLineParts, isPhone, PlannerLayout, plannerLayout, shownSheet, type SheetChoice, undoName } from "./plannerLayout";
+import { costButtonState, costLineParts, formatTimeShort, isPhone, PlannerLayout, plannerLayout, shownSheet, type SheetChoice, undoName } from "./plannerLayout";
 
 describe("plannerLayout", () => {
   it("lays a phone held upright out as a phone", () => {
@@ -50,6 +50,38 @@ describe("costLineParts", () => {
 
   it("is empty when nothing costs anything", () => {
     expect(costLineParts(zero, zero, 0)).toEqual([]);
+  });
+});
+
+describe("formatTimeShort", () => {
+  it("keeps one unit, rounded down, and never more than five characters", () => {
+    expect(formatTimeShort(0)).toBe("0s");
+    expect(formatTimeShort(45)).toBe("45s");
+    expect(formatTimeShort(1_980)).toBe("33m");
+    expect(formatTimeShort(5 * 3_600 + 59 * 60)).toBe("5h");
+    expect(formatTimeShort(12 * 86_400 + 3_600)).toBe("12d");
+    expect(formatTimeShort(999 * 86_400)).toBe("999d");
+    expect(formatTimeShort(10 ** 12)).toBe("999d+");
+    for (const seconds of [1, 59, 3_599, 86_399, 10 ** 7, 10 ** 15]) {
+      expect(formatTimeShort(seconds).length).toBeLessThanOrEqual(5);
+    }
+  });
+});
+
+describe("costButtonState", () => {
+  const zero = { r1: 0, r2: 0, r3: 0, r4: 0 };
+
+  it("is short when any resource is, and carries the time in one unit", () => {
+    expect(costButtonState({ r1: 10, r2: 20, r3: 0, r4: 0 }, { r1: 0, r2: 5, r3: 0, r4: 0 }, 1_980)).toEqual({
+      empty: false,
+      short: true,
+      time: "33m",
+    });
+    expect(costButtonState({ r1: 10, r2: 0, r3: 0, r4: 0 }, zero, 0)).toEqual({ empty: false, short: false, time: "" });
+  });
+
+  it("is empty when nothing costs anything", () => {
+    expect(costButtonState(zero, zero, 0)).toEqual({ empty: true, short: false, time: "" });
   });
 });
 

@@ -913,11 +913,26 @@
   display: none;
 }
 
+/* One line, always (owner, 2026-11-04: "400 selected · 0 moved" wrapped onto
+   three). The words are short ("400 picked"); a long hint is cut to an
+   ellipsis and kept whole in the tooltip. */
 .planner-bar--bottom:not([data-layout]) > .planner-bar__summary {
-  min-width: 8ch;
-  overflow: visible;
-  white-space: normal;
-  line-height: var(--leading-tight);
+  min-width: 6ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The readouts that stay on the bar (workers, unplaced, coverage) are short,
+   and capped as well, so no figure can push the actions off the row. */
+.planner-bar--bottom:not([data-layout]) .planner-cost > .planner-cost__cell {
+  max-width: 9rem;
+}
+
+.planner-bar--bottom:not([data-layout]) .planner-cost > .planner-cost__cell > .planner-cost__value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .planner-bar--bottom:not([data-layout]) .planner-bar__actions {
@@ -947,6 +962,117 @@
   .planner-bar--bottom:not([data-layout]) .planner-bar__walls {
     text-transform: capitalize;
   }
+}
+
+/*
+ * The Cost button and its pop-up (owner, 2026-11-04: "The resource and shiny
+ * on the bottom left arent doing good. They will eventually be too long.").
+ *
+ * A desktop's bar shows one button of a fixed largest width: the painted
+ * resource pile, a red "!" while anything is short, and the worker time in
+ * one unit. The four "needed / held" cells, the time and the shiny price hang
+ * over the bar in a pop-up, shown on a hover and held open by a click
+ * (`PlannerBar.setCostsOpen`). A phone keeps its one-line cost and moves the
+ * cells back into its own row (`PlannerBar.arrange`).
+ */
+.planner-bar__cost-pop {
+  position: relative;
+  display: flex;
+  flex: none;
+}
+
+/* Kept to one class, so the skins' painted plate (skin.css) can dress it as
+   it does the planner's drop-down menus. */
+.planner-cost__pop {
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  left: 0;
+  z-index: calc(var(--z-hud) + 1);
+  display: none;
+  grid-template-columns: repeat(2, max-content);
+  gap: var(--space-1);
+  padding: var(--space-2);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-panel);
+}
+
+.planner-bar--bottom:not([data-layout]) .planner-bar__cost-line {
+  gap: 3px;
+  max-width: 7.5rem;
+  padding-inline: var(--space-2);
+}
+
+.planner-bar--bottom:not([data-layout]) .planner-bar__cost-line > .game-icon--income {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+
+.planner-bar__cost-mark {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--colour-danger);
+  color: var(--colour-surface-base);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: none;
+}
+
+.planner-bar__cost-line--short {
+  border-color: var(--colour-danger);
+}
+
+.planner-bar__cost-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.planner-bar__cost-time > .game-icon {
+  flex: none;
+}
+
+/* Held open by a click; shown on a hover where there is one. The strip under
+   it bridges the gap to the button, so the pointer can reach the pop-up. */
+.planner-bar--bottom:not([data-layout]).planner-bar--costs-open .planner-cost__pop {
+  display: grid;
+}
+
+@media (hover: hover) {
+  .planner-bar--bottom:not([data-layout]) .planner-bar__cost-pop:hover > .planner-cost__pop {
+    display: grid;
+  }
+}
+
+.planner-bar--bottom:not([data-layout]) .planner-cost__pop::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: calc(var(--space-2) + 2px);
+}
+
+/* In the pop-up there is room: each cell its figure in full width. */
+.planner-bar--bottom:not([data-layout]) .planner-cost__pop > .planner-cost__cell {
+  min-width: 8rem;
+}
+
+/* A phone never shows the pop-up: its cells live in the row it opens. */
+.planner-bar--bottom[data-layout] > .planner-bar__cost-pop {
+  display: none;
 }
 
 /* The HUD's worker, at the cost cells' icon size. */
@@ -2007,7 +2133,7 @@
  * picking the bar keeps only its actions: one row, nothing truncated.
  * `:root` lifts it over the phone's opened-cost rule.
  */
-:root .planner-bar--bottom.planner-bar--wall-pick > :is(.planner-cost, .planner-bar__summary, .planner-bar__store-chip, .planner-bar__cost-line) {
+:root .planner-bar--bottom.planner-bar--wall-pick > :is(.planner-cost, .planner-bar__summary, .planner-bar__store-chip, .planner-bar__cost-line, .planner-bar__cost-pop) {
   display: none;
 }
 

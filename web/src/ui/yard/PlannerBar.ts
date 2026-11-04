@@ -10,7 +10,7 @@ import { gameIcon } from "@/ui/gameIcon";
 import { attachPopover } from "@/ui/Popover";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceIcon } from "@/ui/resourceIcon";
 import { demo, GROUP_OP_DEMOS, type DemoName } from "./demos";
-import { costLineParts, isPhone, PlannerLayout } from "./plannerLayout";
+import { costButtonState, costLineParts, isPhone, PlannerLayout } from "./plannerLayout";
 
 /**
  * The planner's two bars: tools across the top, the plan summary and the
@@ -27,10 +27,18 @@ import { costLineParts, isPhone, PlannerLayout } from "./plannerLayout";
  * ## The cost cells
  *
  * The left of the bottom bar is F3: four resource cells reading "needed /
- * held", a worker time, a shiny price, a free-worker count and an unplaced
- * count, then the selection sentence. A cell whose need is past what the yard
- * holds carries `--short`, which is a colour *and* a word in the tooltip, per
- * §4.3.
+ * held", a worker time, a shiny price, a free-worker count, an unplaced count
+ * and the coverage, then the selection sentence. A cell whose need is past
+ * what the yard holds carries `--short`, which is a colour *and* a word in the
+ * tooltip, per §4.3.
+ *
+ * On a desktop the priced cells (resources, time, shiny) sit in a pop-up over
+ * the bar, behind one short Cost button: the painted resource pile, a red "!"
+ * while anything is short, and the worker time in one unit (owner,
+ * 2026-11-04: the figures "will eventually be too long" for a one-row bar).
+ * A hover or a click opens it; Esc or a click elsewhere closes it. It is the
+ * phone's one-line cost button, drawn short; only the bounded readouts
+ * (workers, unplaced, coverage) stay on the bar.
  *
  * "Needed" means **the plan** once anything is planned
  * (`docs/design/planner-upgrades.md` §5.3): every step from each planned
@@ -68,7 +76,8 @@ import { costLineParts, isPhone, PlannerLayout } from "./plannerLayout";
  * copied, so every state this class keeps (a disabled Mirror, a count on the
  * drawer) is right in either place; and they are moved back exactly where
  * they were when the window returns to a desktop's shape. A desktop never
- * sees the phone-only controls at all: they are not in the document.
+ * sees the phone-only controls at all: they are not in the document. (The
+ * cost line is shared: a desktop draws it as its Cost button.)
  *
  * ## Read-only
  *
@@ -538,8 +547,19 @@ export class PlannerBar {
   /** One button for the two views, which a phone has no room to show side by side. */
   private readonly viewSwitch: HTMLButtonElement;
   private readonly moreButton: HTMLButtonElement;
-  /** The costs in one line; a tap shows the full cells. */
+  /**
+   * The costs in one button: a phone's one line, a tap showing the full cells;
+   * a desktop's short Cost button, opening the pop-up (owner, 2026-11-04).
+   */
   private readonly costLine: HTMLButtonElement;
+  /** A desktop's Cost button and its pop-up, which a hover also shows. */
+  private readonly costPop: HTMLElement;
+  /** The pop-up's cells: the four resources, the time and the shiny price. */
+  private readonly costPanel: HTMLElement;
+  /** The bar's own readouts; a phone gets the pop-up's cells in here too. */
+  private readonly costs: HTMLElement;
+  /** Closes a desktop's pop-up on a click elsewhere or Esc. */
+  private readonly dismissCosts: (event: Event) => void;
   private readonly moreSheet: HTMLElement;
   /** More's first section on a phone: Select all and the arrange tools (#45). */
   private readonly moreSelectionSection: HTMLElement;
@@ -787,10 +807,21 @@ export class PlannerBar {
     this.actionBar.className = "planner-bar planner-bar--bottom";
     this.actionBar.setAttribute("aria-label", "Plan summary and actions");
 
+    // The yard readouts that stay on a desktop's bar: workers, unplaced and
+    // coverage, each short and bounded. A phone gets every cell in here.
     const costs = document.createElement("div");
     costs.className = "planner-cost";
     costs.setAttribute("role", "group");
     costs.setAttribute("aria-label", "What the selection would cost");
+    this.costs = costs;
+
+    // A desktop's priced cells (owner, 2026-11-04): the four resources, the
+    // time and the shiny price sit in a pop-up over the bar, behind one Cost
+    // button, so the bar does not grow with the numbers.
+    this.costPanel = document.createElement("div");
+    this.costPanel.className = "planner-cost__pop";
+    this.costPanel.setAttribute("role", "group");
+    this.costPanel.setAttribute("aria-label", "Every cost");
 
     // Each resource cell and the shiny cell are headed by the icon (#93).
     for (const key of RESOURCE_KEYS) {
@@ -798,7 +829,7 @@ export class PlannerBar {
       // icon keeps its name for a screen reader but not a tooltip of its own.
       const cell = new CostCell(resourceIcon(key, { tooltip: false }));
       this.resourceCells.set(key, cell);
-      costs.append(cell.element);
+      this.costPanel.append(cell.element);
     }
 
     // Icons over words (owner, 2026-11-04): the painted clock, the HUD's
@@ -831,13 +862,34 @@ export class PlannerBar {
       gameIcon("range", { size: 16, label: "Coverage", tooltip: false }),
       "planner-cost__cell planner-cost__cell--coverage",
     );
-    costs.append(
-      this.timeCell.element,
-      this.shinyCell.element,
-      this.workersCell.element,
-      this.unplacedCell.element,
-      this.coverageCell.element,
-    );
+    this.costPanel.append(this.timeCell.element, this.shinyCell.element);
+    costs.append(this.workersCell.element, this.unplacedCell.element, this.coverageCell.element);
+
+    // One button for the costs: a phone's one-line cost (#45), and a
+    // desktop's short Cost button, which opens the pop-up on a click and
+    // shows it on a hover. A phone moves it beside the summary.
+    this.costLine = button("", "Show every cost", "btn btn--ghost planner-bar__cost-line");
+    this.costLine.setAttribute("aria-expanded", "false");
+    this.costLine.addEventListener("click", () => this.setCostsOpen(!this.costsOpen));
+    this.costPop = document.createElement("div");
+    this.costPop.className = "planner-bar__cost-pop";
+    this.costPop.append(this.costLine, this.costPanel);
+    this.renderCostLine();
+    // A click anywhere else or Esc closes a desktop's pop-up. Esc stops
+    // there, so closing it does not also drop the selection.
+    this.dismissCosts = (event: Event): void => {
+      if (!this.costsOpen || isPhone(this.layout)) return;
+      if (event instanceof KeyboardEvent) {
+        if (event.key !== "Escape") return;
+        event.stopPropagation();
+        this.setCostsOpen(false);
+        return;
+      }
+      if (event.target instanceof Node && this.costPop.contains(event.target)) return;
+      this.setCostsOpen(false);
+    };
+    document.addEventListener("pointerdown", this.dismissCosts, true);
+    document.addEventListener("keydown", this.dismissCosts, true);
 
     this.summary = document.createElement("span");
     this.summary.className = "planner-bar__summary";
@@ -924,7 +976,7 @@ export class PlannerBar {
       ]) {
         control.disabled = true;
       }
-      this.actionBar.append(costs, this.summary, spacer());
+      this.actionBar.append(this.costPop, costs, this.summary, spacer());
       this.actionRow = null;
     } else {
       // The actions share a wrapper: one group at the bar's right end on a
@@ -935,6 +987,7 @@ export class PlannerBar {
       actionRow.append(this.upgradeWalls, this.rearm, this.checklist, layouts, this.apply);
       this.actionRow = actionRow;
       this.actionBar.append(
+        this.costPop,
         costs,
         this.summary,
         this.storeChip,
@@ -959,10 +1012,6 @@ export class PlannerBar {
     this.moreButton.setAttribute("aria-haspopup", "true");
     this.moreButton.setAttribute("aria-expanded", "false");
     this.moreButton.addEventListener("click", () => this.setMoreOpen(!this.moreOpen));
-
-    this.costLine = button("", "Show every cost", "btn btn--ghost planner-bar__cost-line");
-    this.costLine.setAttribute("aria-expanded", "false");
-    this.costLine.addEventListener("click", () => this.setCostsOpen(!this.costsOpen));
 
     this.moreSheet = document.createElement("section");
     this.moreSheet.className = "panel map-panel planner-more";
@@ -1091,9 +1140,12 @@ export class PlannerBar {
     this.actions.onMore?.(next);
   }
 
-  /** Shows or hides the full cost cells under a phone's one-line cost. */
+  /**
+   * Shows or hides the full cost cells: under a phone's one-line cost, or in
+   * the pop-up over a desktop's Cost button.
+   */
   private setCostsOpen(open: boolean): void {
-    this.costsOpen = open && isPhone(this.layout);
+    this.costsOpen = open;
     this.actionBar.classList.toggle("planner-bar--costs-open", this.costsOpen);
     this.costLine.setAttribute("aria-expanded", String(this.costsOpen));
     this.renderCostLine();
@@ -1111,7 +1163,6 @@ export class PlannerBar {
     this.yardMenu.setInline(false);
     this.viewSwitch.remove();
     this.moreButton.remove();
-    this.costLine.remove();
     this.setMoreOpen(false);
     this.setCostsOpen(false);
     this.moreSheet.remove();
@@ -1136,8 +1187,12 @@ export class PlannerBar {
     this.heading.after(this.viewSwitch);
 
     // Bottom: the one-line cost beside the summary, then Box, the drawer,
-    // More and Apply.
-    this.summary.after(this.costLine);
+    // More and Apply. The pop-up's cells go back in with the readouts, in
+    // their old order, where the one-line cost opens them all in one row.
+    this.places.move(this.costLine, this.actionBar, this.summary.nextSibling);
+    for (const cell of [...this.costPanel.children]) {
+      this.places.move(cell, this.costs, this.workersCell.element);
+    }
     const row = this.actionRow ?? this.actionBar;
     const end = this.actionRow ? this.apply : null;
     this.places.move(this.box, row, row.firstChild);
@@ -1173,8 +1228,15 @@ export class PlannerBar {
   /**
    * A phone's cost line: what the selection or the plan would take, compact,
    * and the worker time; or the coverage when nothing costs anything (#45).
+   * A desktop's Cost button instead (owner, 2026-11-04).
    */
   private renderCostLine(): void {
+    if (!isPhone(this.layout)) {
+      this.renderCostButton();
+      return;
+    }
+    this.costLine.classList.remove("planner-bar__cost-line--short");
+    this.costLine.title = "Show every cost";
     const parts = costLineParts(this.line.needed, this.line.shortfall, this.line.seconds);
     const children: Node[] = [];
     if (parts.length === 0) {
@@ -1200,6 +1262,42 @@ export class PlannerBar {
         ? `${this.line.coverage}. Show every cost`
         : `Costs ${parts.map((part) => part.text).join(", ")}. Show every cost`,
     );
+  }
+
+  /**
+   * A desktop's Cost button: the painted resource pile, a red "!" while any
+   * resource is short, and the worker time in one unit ("33m"). No resource
+   * figure, so the button is as wide at 999.9B as at 100; the pop-up over it
+   * has every cell, and a hover or a click opens it.
+   */
+  private renderCostButton(): void {
+    const state = costButtonState(this.line.needed, this.line.shortfall, this.line.seconds);
+    const children: Node[] = [gameIcon("income", { size: 24, decorative: true })];
+    if (state.short) {
+      const mark = document.createElement("span");
+      mark.className = "planner-bar__cost-mark";
+      mark.setAttribute("aria-hidden", "true");
+      mark.textContent = "!";
+      children.push(mark);
+    }
+    const time = document.createElement("span");
+    time.className = "planner-bar__cost-time";
+    time.textContent = state.empty ? "—" : state.time;
+    if (state.time) time.prepend(gameIcon("time", { size: 16, decorative: true }));
+    children.push(time);
+    const caret = document.createElement("span");
+    caret.className = "planner-bar__cost-caret";
+    caret.setAttribute("aria-hidden", "true");
+    // The pop-up opens upward, over the bar.
+    caret.textContent = this.costsOpen ? "▾" : "▴";
+    children.push(caret);
+    this.costLine.replaceChildren(...children);
+    this.costLine.classList.toggle("planner-bar__cost-line--short", state.short);
+    const said = state.empty
+      ? "Nothing to pay for"
+      : `${state.short ? "Short of resources" : "Affordable"}${state.time ? `, ${state.time} of work` : ""}`;
+    this.costLine.setAttribute("aria-label", `Cost: ${said}. Show every cost`);
+    this.costLine.title = `${said}. Hover or click for every cost.`;
   }
 
   /**
@@ -1260,6 +1358,8 @@ export class PlannerBar {
     // what the pick is and what it costs at the chosen level, so the bar drops
     // its cost cells, summary and Store chip and keeps its actions on one row.
     this.actionBar.classList.toggle("planner-bar--wall-pick", state.wallPicking);
+    // The cost pop-up goes with the cells, and does not come back on its own.
+    if (state.wallPicking && this.costsOpen) this.setCostsOpen(false);
 
     this.setGroupEnabled(state.selectionCount);
 
@@ -1527,6 +1627,8 @@ export class PlannerBar {
     this.distribute.destroy();
     this.yardMenu.destroy();
     this.viewMenu.destroy();
+    document.removeEventListener("pointerdown", this.dismissCosts, true);
+    document.removeEventListener("keydown", this.dismissCosts, true);
     // So do the popovers, and their bubbles hang off the body rather than off
     // the bar, so they outlive it unless they are taken down by hand.
     for (const dispose of this.popovers) dispose();
@@ -1573,15 +1675,11 @@ const summarise = (state: PlannerState, touch = false): string => {
       touch ? "drag a box or tap walls" : "drag a box or click walls, Esc to stop"
     }`;
   }
+  // Short, so it stays one line (owner, 2026-11-04: "400 selected · 0 moved"
+  // wrapped onto three): "400 picked", and "moved" only once something has.
   const parts: string[] = [];
-  parts.push(
-    state.selectionCount === 0
-      ? "Nothing selected"
-      : state.selectionCount === 1
-        ? "1 selected"
-        : `${state.selectionCount} selected`,
-  );
-  parts.push(state.movedCount === 1 ? "1 moved" : `${state.movedCount} moved`);
+  parts.push(state.selectionCount === 0 ? "Nothing picked" : `${state.selectionCount} picked`);
+  if (state.movedCount > 0) parts.push(`${state.movedCount} moved`);
   if (state.storedCount > 0) {
     parts.push(`${state.storedCount} stored`);
   }
