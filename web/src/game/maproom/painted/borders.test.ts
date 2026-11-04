@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CellType, type MapCell, type PlayerCell } from "@/api/types";
 import { HexGrid } from "@/game/HexGrid";
 import type { ZoneRecord } from "../ZoneStore";
-import { PULSE_STEP_MS, pulseAt } from "./BorderLayer";
+import { PULSE_STEP_TICKS, pulseAt } from "./BorderLayer";
 import { BORDER_FRAGMENT } from "./borderShader";
 import { BorderData, BorderRelation, borderDistance, borderRelationOf, borderSides, sideEnds } from "./borders";
 import { cellCentre, flatTopShape, pointyTopShape, type CellShape } from "./cellShape";
@@ -147,7 +147,9 @@ describe("border pulse and shader", () => {
     expect(pulseAt(1234, 0, "medium")).toBe(0.5);
     expect(pulseAt(1234, 0, "low")).toBe(0.5);
     expect(pulseAt(0, 0, "high")).toBeCloseTo(0.5);
-    expect(pulseAt(PULSE_STEP_MS * 0.5, 0, "high")).toBe(pulseAt(0, 0, "high"));
+    // Steps every 3 ticks of the shared clock (100 ms): half a step later it has not moved.
+    expect(PULSE_STEP_TICKS).toBe(3);
+    expect(pulseAt(50, 0, "high")).toBe(pulseAt(0, 0, "high"));
     expect(pulseAt(800, 0, "high")).toBeCloseTo(1);
   });
 

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { ZoneRecord } from "../ZoneStore";
 import { GroundData } from "./GroundData";
 import { Ground } from "./groundKinds";
-import { WATER_STEP_MS, groundProgram, waterTime, withFoamAlpha } from "./PaintedGround";
+import { WATER_STEP_TICKS, groundProgram, waterTime, withFoamAlpha } from "./PaintedGround";
 
 // GlProgram reads the GPU's float precision from a test canvas; these tests run without a DOM.
 DOMAdapter.set({ ...DOMAdapter.get(), createCanvas: () => ({ getContext: () => null }) as unknown as HTMLCanvasElement });
@@ -27,13 +27,14 @@ describe("painted ground data texture", () => {
 });
 
 describe("painted water clock", () => {
-  it("steps 12 times a second on High, 6 on Medium, and stays still on Low", () => {
+  it("steps 10 times a second on High, 5 on Medium, and stays still on Low", () => {
+    expect(WATER_STEP_TICKS).toEqual({ high: 3, medium: 6, low: null });
     expect(waterTime(1000, 1000, "high")).toBe(0);
     expect(waterTime(1000 + 1000, 1000, "high")).toBeCloseTo(1);
-    expect(waterTime(1000 + 50, 1000, "high")).toBe(0);
-    expect(waterTime(1000 + 90, 1000, "high")).toBeCloseTo(WATER_STEP_MS.high! / 1000);
-    expect(waterTime(1000 + 90, 1000, "medium")).toBe(0);
-    expect(waterTime(1000 + 170, 1000, "medium")).toBeCloseTo(WATER_STEP_MS.medium! / 1000);
+    expect(waterTime(1000 + 90, 1000, "high")).toBe(0);
+    expect(waterTime(1000 + 100, 1000, "high")).toBeCloseTo(0.1);
+    expect(waterTime(1000 + 170, 1000, "medium")).toBe(0);
+    expect(waterTime(1000 + 200, 1000, "medium")).toBeCloseTo(0.2);
     expect(waterTime(99999, 1000, "low")).toBe(0);
   });
 

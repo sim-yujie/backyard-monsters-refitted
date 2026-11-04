@@ -6,6 +6,7 @@ import { onQualityChange, quality, type Quality } from "@/game/quality";
 import { inWorld, zoneFor, zoneFromId, type CellRange } from "../zones";
 import type { ChunkRef } from "../chunks";
 import { hexZoom } from "../lod";
+import { stepAt, TICKS_PER_SECOND } from "../animationClock";
 import { destroyLiveArt, loadLiveArt, type LiveTextures } from "./liveArt";
 import { LiveChunk, type LiveChunkLayer, type LiveSource } from "./LiveChunk";
 import { liveLevelFor, planFor, type LivePlan } from "./liveLevel";
@@ -22,7 +23,8 @@ import { WaterSheet } from "./WaterSheet";
  * Kept apart from the renderer, which only tells it when a chunk is built,
  * shown, hidden or thrown away (`chunkBuilt`, `show`, `drop`) and calls
  * `update` once a frame. Everything is built with its chunk; a frame only
- * advances the clock, and at the animation rate (`LivePlan.stepSeconds`)
+ * advances the clock, and at the animation rate (`LivePlan.stepSeconds`, on
+ * the ticks of the map's shared animation clock, `animationClock.ts`)
  * redraws the small water sheet and moves the clouds and birds on
  * screen. Nothing here ever rebuilds a chunk on its own account.
  *
@@ -56,7 +58,8 @@ export class LiveMap {
   private readonly unsubscribe: () => void;
 
   private clock = 0;
-  private sinceStep = Number.POSITIVE_INFINITY;
+  /** The last step taken, counted on the shared animation clock (-1: none yet). */
+  private lastStep = -1;
   private lastMs = 0;
   private lastZoom = 0;
   /** Milliseconds `update` took, a moving average: the living map's share of a frame's script time. */
@@ -138,12 +141,15 @@ export class LiveMap {
     }
   }
 
-  /** Once a frame, with what the renderer is showing. */
-  update(range: CellRange, zoom: number): void {
-    const nowMs = performance.now();
+  /**
+   * Once a frame, with what the renderer is showing. nowMs is the frame's time, the same one the
+   * painted layers step on, so their steps and these land on the same frame.
+   */
+  update(range: CellRange, zoom: number, nowMs: number = performance.now()): void {
+    const started = performance.now();
     this.lastZoom = zoom;
     this.step(range, zoom, nowMs);
-    this.costMs += (performance.now() - nowMs - this.costMs) * 0.05;
+    this.costMs += (performance.now() - started - this.costMs) * 0.05;
   }
 
   private step(range: CellRange, zoom: number, nowMs: number): void {
@@ -153,9 +159,12 @@ export class LiveMap {
 
     this.redrawStale();
     this.clock += dt;
-    this.sinceStep += dt;
-    if (this.sinceStep < this.plan.stepSeconds) return;
-    this.sinceStep = 0;
+    // On whole ticks of the shared clock (30 a second on High, every other tick on Medium): a still
+    // tilted map then redraws once for this and the painted water, pulse and fog together.
+    if (!Number.isFinite(this.plan.stepSeconds)) return;
+    const step = stepAt(nowMs, Math.max(1, Math.round(this.plan.stepSeconds * TICKS_PER_SECOND)));
+    if (step === this.lastStep) return;
+    this.lastStep = step;
 
     // Below the hex zoom the renderer shows its one-texel-a-cell raster, and no chunk is on screen.
     const visible = zoom < hexZoom() ? [] : [...this.chunks.values()].filter((chunk) => chunk.visible);

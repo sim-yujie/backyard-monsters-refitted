@@ -1,3 +1,4 @@
+import { steppedSeconds } from "../animationClock";
 import {
   Assets,
   BufferImageSource,
@@ -111,20 +112,21 @@ export const withFoamAlpha = (wetSand: Uint8ClampedArray, foam: Uint8ClampedArra
 };
 
 /**
- * How often the water and surf step, in milliseconds, by Quality (plan section 5: half rate on
- * Medium, still on Low). Each step makes the tilted view redraw (`TiltView.invalidate`), so the
- * rate is kept low; the motion is slow enough that 12 steps a second reads as smooth.
+ * How often the water and surf step, in ticks of the map's animation clock (`animationClock.ts`), by
+ * Quality (plan section 5: half rate on Medium, still on Low): 10 a second on High, 5 on Medium. Each
+ * step makes the tilted view redraw (`TiltView.invalidate`), so the rate is kept low and on the same
+ * ticks as the border pulse and the fog; the motion is slow enough that 10 steps a second reads as
+ * smooth.
  */
-export const WATER_STEP_MS: Record<Quality, number | null> = { high: 1000 / 12, medium: 1000 / 6, low: null };
+export const WATER_STEP_TICKS: Record<Quality, number | null> = { high: 3, medium: 6, low: null };
 
 /**
  * The water's clock for this moment: whole steps of the Quality's rate since `startMs`, in seconds,
  * or 0 on Low (still water). Pure, for the tests.
  */
 export const waterTime = (nowMs: number, startMs: number, level: Quality): number => {
-  const step = WATER_STEP_MS[level];
-  if (step === null) return 0;
-  return (Math.floor((nowMs - startMs) / step) * step) / 1000;
+  const every = WATER_STEP_TICKS[level];
+  return every === null ? 0 : steppedSeconds(nowMs, startMs, every);
 };
 
 const rgb = (colour: number): [number, number, number] => [
@@ -286,7 +288,7 @@ export class PaintedGround {
    * Water out of sight, or Quality Low, keeps the clock still.
    */
   animate(nowMs: number, range: CellRange, level: Quality = quality()): boolean {
-    if (WATER_STEP_MS[level] === null || !(this.rivers.showing || this.data.hasWater(range))) return false;
+    if (WATER_STEP_TICKS[level] === null || !(this.rivers.showing || this.data.hasWater(range))) return false;
     const time = waterTime(nowMs, this.startMs, level);
     if (time === this.uniforms.uTime) return false;
     this.uniforms.uTime = time;

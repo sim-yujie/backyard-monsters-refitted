@@ -1,3 +1,4 @@
+import { steppedSeconds } from "../animationClock";
 import { Geometry, GlProgram, Mesh, Shader } from "pixi.js";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import { onQualityChange, quality, type Quality } from "@/game/quality";
@@ -16,15 +17,16 @@ const QUALITY_LEVEL: Record<Quality, number> = { high: 2, medium: 1, low: 0 };
 
 /** The pulse's length (one slow breath) and how often it steps, on High only (plan section 5). */
 export const PULSE_PERIOD_MS = 3200;
-export const PULSE_STEP_MS = 1000 / 10;
+/** Every 3 ticks of the map's animation clock (10 a second), on the water's ticks (`animationClock.ts`). */
+export const PULSE_STEP_TICKS = 3;
 
 /**
- * The pulse for this moment, 0..1, stepped at `PULSE_STEP_MS`; always 0.5 (steady) below High.
- * Pure, for the tests.
+ * The pulse for this moment, 0..1, stepped every `PULSE_STEP_TICKS`; always 0.5 (steady) below
+ * High. Pure, for the tests.
  */
 export const pulseAt = (nowMs: number, startMs: number, level: Quality): number => {
   if (level !== "high") return 0.5;
-  const stepped = Math.floor((nowMs - startMs) / PULSE_STEP_MS) * PULSE_STEP_MS;
+  const stepped = steppedSeconds(nowMs, startMs, PULSE_STEP_TICKS) * 1000;
   return 0.5 + 0.5 * Math.sin((stepped / PULSE_PERIOD_MS) * Math.PI * 2);
 };
 

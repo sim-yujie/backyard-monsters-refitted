@@ -393,7 +393,7 @@ export class MapRenderer {
       this.range.setZoom(zoom);
     }
 
-    this.live.update(range, zoom);
+    this.live.update(range, zoom, nowPaint);
     const tier = tierForZoom(zoom);
     const view = viewFor(tier, zoom, atlas);
     const nowMs = Date.now();

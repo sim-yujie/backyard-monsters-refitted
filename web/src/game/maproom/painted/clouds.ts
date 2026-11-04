@@ -1,3 +1,4 @@
+import { steppedSeconds } from "../animationClock";
 import type { Quality } from "@/game/quality";
 import type { CellRange } from "../zones";
 import { locateCell, type CellShape } from "./cellShape";
@@ -26,17 +27,16 @@ export const CLOUD_EDGE_LOW = 0.22;
 export const CLOUD_EDGE_HIGH = 0.54;
 
 /**
- * How often the clouds drift a step, in milliseconds, by Quality: slower than the water (the drift
- * is only a few pixels a second near, nothing far), half rate on Medium, still on Low. Each step makes
- * a tilted view redraw (`TiltView.invalidate`).
+ * How often the clouds drift a step, in ticks of the map's animation clock, by Quality: on the
+ * water's ticks (10 a second on High, 5 on Medium), so the two never make a still tilted view redraw
+ * on different frames (`animationClock.ts`); still on Low. The drift is only a few pixels a second.
  */
-export const CLOUD_STEP_MS: Record<Quality, number | null> = { high: 1000 / 8, medium: 1000 / 4, low: null };
+export const CLOUD_STEP_TICKS: Record<Quality, number | null> = { high: 3, medium: 6, low: null };
 
 /** The clouds' clock for this moment: whole steps of the Quality's rate since `startMs`, in seconds. */
 export const cloudTime = (nowMs: number, startMs: number, level: Quality): number => {
-  const step = CLOUD_STEP_MS[level];
-  if (step === null) return 0;
-  return (Math.floor((nowMs - startMs) / step) * step) / 1000;
+  const every = CLOUD_STEP_TICKS[level];
+  return every === null ? 0 : steppedSeconds(nowMs, startMs, every);
 };
 
 const SQRT3 = Math.sqrt(3);

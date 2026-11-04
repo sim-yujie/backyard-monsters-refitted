@@ -136,9 +136,11 @@ describe("painted fog helpers", () => {
   });
 
   it("steps the clouds' clock by Quality and stills it on Low", () => {
-    expect(cloudTime(1000 + 130, 1000, "high")).toBeCloseTo(0.125, 9);
+    // On the shared clock's ticks (30 a second): every 3 on High, every 6 on Medium.
+    expect(cloudTime(1000 + 90, 1000, "high")).toBe(0);
+    expect(cloudTime(1000 + 130, 1000, "high")).toBeCloseTo(0.1, 9);
     expect(cloudTime(1000 + 130, 1000, "medium")).toBe(0);
-    expect(cloudTime(1000 + 260, 1000, "medium")).toBeCloseTo(0.25, 9);
+    expect(cloudTime(1000 + 260, 1000, "medium")).toBeCloseTo(0.2, 9);
     expect(cloudTime(1000 + 99999, 1000, "low")).toBe(0);
   });
 });
