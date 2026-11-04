@@ -10,7 +10,12 @@ import {
   accountName,
   levelText,
 } from "./AccountMenu";
-import { loadSoundSwitches, resetSoundSwitchesForTest } from "@/game/sound/soundSwitches";
+import {
+  loadSoundSwitches,
+  resetSoundSwitchesForTest,
+  type SoundSwitches,
+} from "@/game/sound/soundSwitches";
+import { UNMUTE_LEVEL, muteLabel } from "./SoundSliders";
 
 describe("AccountMenu", () => {
   let menu: AccountMenu | null = null;

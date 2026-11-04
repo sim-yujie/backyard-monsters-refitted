@@ -195,8 +195,13 @@ export const setSoundVolume = (which: SoundVolume, value: number): Promise<Sound
   return new Promise<SoundSwitches>((resolve, reject) => {
     const waiters = [...(pending?.waiters ?? []), { resolve, reject }];
     const change = { ...pending?.change, [which]: level };
-    const cancel = later(() => {
-      if (volumeSave?.cancel !== cancel) return;
+    // Compared by entry, not by cancel: a `later` that runs at once (tests)
+    // calls back before it has returned the cancel, so the save waits for it.
+    let due = false;
+    let entry: VolumeSave | null = null;
+    const run = (): void => {
+      due = true;
+      if (entry === null || volumeSave !== entry) return;
       volumeSave = null;
       const mine = version;
       api.save(change).then(
@@ -209,8 +214,11 @@ export const setSoundVolume = (which: SoundVolume, value: number): Promise<Sound
           for (const waiter of waiters) waiter.reject(error);
         },
       );
-    }, VOLUME_SAVE_DELAY_MS);
-    volumeSave = { change, before, cancel, waiters };
+    };
+    const cancel = later(() => run(), VOLUME_SAVE_DELAY_MS);
+    entry = { change, before, cancel, waiters };
+    volumeSave = entry;
+    if (due) run();
   });
 };
 

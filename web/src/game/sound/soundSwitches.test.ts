@@ -260,6 +260,26 @@ describe("setSoundVolume", () => {
     expect(soundSwitches()).toMatchObject({ musicVolume: 10, effects: false });
   });
 
+  it("saves even when the wait runs at once (no read of the cancel before it exists)", async () => {
+    const server = fake();
+    resetSoundSwitchesForTest({
+      account: () => server.account,
+      fetch: () => Promise.resolve({ ...server.stored }),
+      save: async (change) => {
+        server.saves.push(change);
+        server.stored = { ...server.stored, ...change };
+        return { ...server.stored };
+      },
+      later: (run) => {
+        run();
+        return () => {};
+      },
+    });
+    await loadSoundSwitches();
+    await expect(setSoundVolume("musicVolume", 35)).resolves.toMatchObject({ musicVolume: 35 });
+    expect(server.saves).toEqual([{ musicVolume: 35 }]);
+  });
+
   it("an account switch drops a volume still waiting", async () => {
     const server = fake();
     const clock = withTimers(server);
