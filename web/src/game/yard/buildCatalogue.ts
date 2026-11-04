@@ -10,6 +10,7 @@ import {
   townHallLevel,
   type YardKind,
 } from "./buildingCosts";
+import { DECORATIONS_FOR_SALE, decorationPrice } from "./decorShop";
 import { storedCount, storedDecorations } from "./decorStorage";
 import { isDecoration } from "./planner/placement";
 import { overCap } from "./storage";
@@ -76,8 +77,8 @@ export interface BuildCategoryDefinition {
 
 /**
  * Every tab and what it lists. Decorations are never built for resources:
- * the Decorations tab lists what is in storage instead (§8.3, #128;
- * {@link buildOffers}).
+ * the Decorations tab lists what is in storage, then the ones sold for Shiny
+ * (§8.3, #128, owner decision 2026-11-04; {@link buildOffers}).
  */
 export const BUILD_CATALOGUE: readonly BuildCategoryDefinition[] = [
   { id: BuildCategory.RESOURCES, label: "Resources", types: [1, 2, 3, 4, 6] },
@@ -263,12 +264,24 @@ export interface BuildOffer {
    */
   readonly inferno: boolean;
   /**
-   * A decoration placed from storage (§8.3, #128): how many are stored. It is
-   * free, finished at once and needs no worker; there is no instant, and
-   * `owned`, `allowed` and `most` count nothing. Null for anything built.
+   * A decoration (§8.3, #128): how many are stored, 0 for one bought. It is
+   * finished at once and needs no worker; there is no instant, and `owned`,
+   * `allowed` and `most` count nothing. Null for anything built.
    */
   readonly stored: number | null;
+  /**
+   * A decoration bought for Shiny (none stored; owner decision 2026-11-04):
+   * its price, Flash's (`decorShop.ts`), charged when it is placed. Its
+   * `gate` is `credits` while the player has less. Absent otherwise.
+   */
+  readonly price?: number;
 }
+
+/** Decorations go only in the main yard (owner decision 2026-09-29). */
+const decoratesHere = (context: BuildContext): boolean => {
+  const kind = context.kind ?? context.yard.kind;
+  return kind !== "outpost" && kind !== "inferno";
+};
 
 /**
  * The tile of a decoration in storage, or null when none is stored or the
@@ -276,8 +289,7 @@ export interface BuildOffer {
  * decision 2026-09-29).
  */
 export const storageOffer = (type: number, context: BuildContext): BuildOffer | null => {
-  const kind = context.kind ?? context.yard.kind;
-  if (kind === "outpost" || kind === "inferno") return null;
+  if (!decoratesHere(context)) return null;
   const stored = storedCount(context.save.researchdata, type);
   if (stored === 0) return null;
   return {
@@ -298,6 +310,41 @@ export const storageOffer = (type: number, context: BuildContext): BuildOffer | 
     stored,
   };
 };
+
+/**
+ * The tile of a decoration sold for Shiny with none in storage (owner
+ * decision 2026-11-04), or null when it is not sold, one is stored (that tile
+ * is {@link storageOffer}'s) or the yard is an outpost or the Inferno. Picking
+ * it starts the placement; `decor/buy` charges the price when it goes down.
+ */
+export const shopOffer = (type: number, context: BuildContext): BuildOffer | null => {
+  if (!decoratesHere(context)) return null;
+  const price = decorationPrice(type);
+  if (price === null || storedCount(context.save.researchdata, type) > 0) return null;
+  const short = price - context.credits;
+  return {
+    type,
+    category: BuildCategory.DECORATIONS,
+    cost: { r1: 0, r2: 0, r3: 0, r4: 0 },
+    seconds: 0,
+    atOnce: true,
+    owned: 0,
+    allowed: 0,
+    most: 0,
+    status: "ready",
+    needs: [],
+    instantPrice: 0,
+    gate: short > 0 ? { reason: "credits", need: short } : null,
+    instantGate: null,
+    inferno: false,
+    stored: 0,
+    price,
+  };
+};
+
+/** A decoration's tile: from storage when one is stored, else bought ({@link shopOffer}). */
+export const decorationOffer = (type: number, context: BuildContext): BuildOffer | null =>
+  storageOffer(type, context) ?? shopOffer(type, context);
 
 const KEYS = ["r1", "r2", "r3", "r4"] as const;
 
@@ -333,7 +380,7 @@ export const categoryOf = (type: number, kind: YardKind = "main"): BuildCategory
  * cost table cannot price.
  */
 export const buildOffer = (type: number, context: BuildContext): BuildOffer | null => {
-  if (isDecoration(type)) return storageOffer(type, context);
+  if (isDecoration(type)) return decorationOffer(type, context);
   const kind = context.kind ?? context.yard.kind;
   const category = categoryOf(type, kind);
   const row = rowOf(type, kind);
@@ -480,9 +527,14 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
 /** Every tile of a tab, in the tab's order. */
 export const buildOffers = (category: BuildCategory, context: BuildContext): BuildOffer[] => {
   if (category === BuildCategory.DECORATIONS) {
-    return storedDecorations(context.save.researchdata)
+    // What is stored first, then what is sold, in Flash's order (§8.3).
+    const stored = storedDecorations(context.save.researchdata)
       .map((one) => storageOffer(one.type, context))
       .filter((offer): offer is BuildOffer => offer !== null);
+    const sold = DECORATIONS_FOR_SALE.map(([type]) => shopOffer(type, context)).filter(
+      (offer): offer is BuildOffer => offer !== null,
+    );
+    return [...stored, ...sold];
   }
   const tab = catalogueFor(context.kind ?? context.yard.kind).find((entry) => entry.id === category);
   return (tab?.types ?? [])

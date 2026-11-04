@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse, BuildingData, ResourceCaps, Resources } from "@/api/types";
 import { outpostTraitsOf, quantityOf, rowOf } from "./buildingCosts";
@@ -21,6 +22,9 @@ import {
   sortOffers,
   type BuildContext,
 } from "./buildCatalogue";
+import { buttonFile } from "./buildButtonArt";
+import { hasArt } from "./buildingArt";
+import { DECORATIONS_FOR_SALE } from "./decorShop";
 import { readYard } from "./yardModel";
 
 /**
@@ -262,24 +266,26 @@ describe("buildOffer", () => {
 });
 
 describe("buildOffers", () => {
-  it("a tab's tiles in the tab's order; decorations are what storage holds", () => {
+  it("a tab's tiles in the tab's order; decorations are Flash's sold ones with nothing stored", () => {
     const context = contextOf({ buildings: [HALL(3)] });
     expect(buildOffers(BuildCategory.RESOURCES, context).map((offer) => offer.type)).toEqual([
       1, 2, 3, 4, 6,
     ]);
-    expect(buildOffers(BuildCategory.DECORATIONS, context)).toEqual([]);
+    expect(buildOffers(BuildCategory.DECORATIONS, context).map((offer) => offer.type)).toEqual(
+      DECORATIONS_FOR_SALE.map(([type]) => type),
+    );
   });
 
-  it("the Decorations tab lists every stored decoration, free and at once (#128)", () => {
+  it("the Decorations tab lists every stored decoration first, free and at once (#128)", () => {
     const context = contextOf({
       buildings: [HALL(3)],
       researchdata: { b121: 1, bl121: 4, b28: 3, b20: 5, b30: 0, other: 1 },
     });
     const offers = buildOffers(BuildCategory.DECORATIONS, context);
 
-    expect(offers.map((offer) => [offer.type, offer.stored])).toEqual([
-      [28, 3],
-      [121, 1],
+    expect(offers.slice(0, 2).map((offer) => [offer.type, offer.stored, offer.price])).toEqual([
+      [28, 3, undefined],
+      [121, 1, undefined],
     ]);
     expect(offers[0]).toMatchObject({
       category: BuildCategory.DECORATIONS,
@@ -289,15 +295,80 @@ describe("buildOffers", () => {
       gate: null,
     });
     expect(buildOffer(28, context)?.stored).toBe(3);
-    expect(buildOffer(30, context)).toBeNull();
+    // Nothing stored: bought for Shiny instead.
+    expect(buildOffer(30, context)).toMatchObject({ stored: 0, price: 150 });
     // Not a decoration: a stored count means nothing, and it is built as ever.
     expect(buildOffer(20, context)?.stored).toBeNull();
   });
 
-  it("an outpost has no decoration storage", () => {
+  it("an outpost has no decoration storage and sells none", () => {
     const context = contextOf({ buildings: [], researchdata: { b28: 3 }, outpost: true });
     expect(buildOffers(BuildCategory.DECORATIONS, context)).toEqual([]);
     expect(buildOffer(28, context)).toBeNull();
+    expect(buildOffer(29, context)).toBeNull();
+  });
+});
+
+describe("decorations sold for Shiny (owner 2026-11-04)", () => {
+  it("lists stored ones, then the 73 Flash sold in its tab's order, each type once", () => {
+    const context = contextOf({ buildings: [HALL(3)], researchdata: { b29: 2, b70: 1 } });
+    const offers = buildOffers(BuildCategory.DECORATIONS, context);
+
+    expect(DECORATIONS_FOR_SALE).toHaveLength(73);
+    // The Sun Dial (70) is not sold, but shows while one is stored.
+    expect(offers.slice(0, 2).map((offer) => [offer.type, offer.stored])).toEqual([
+      [29, 2],
+      [70, 1],
+    ]);
+    const sold = offers.slice(2);
+    expect(sold.map((offer) => offer.type)).toEqual(
+      DECORATIONS_FOR_SALE.map(([type]) => type).filter((type) => type !== 29),
+    );
+    expect(new Set(offers.map((offer) => offer.type)).size).toBe(offers.length);
+    // Flash's first sub-tab is Evil (the Monster Skull first), its last Premium.
+    expect(sold[0]?.type).toBe(107);
+    expect(sold.at(-1)?.type).toBe(101);
+  });
+
+  it("a sold tile carries Flash's price, finished at once, no worker, no limit", () => {
+    const context = contextOf({ buildings: [HALL(3), building(5, 55)], credits: 1_000 });
+    expect(buildOffer(55, context)).toMatchObject({
+      type: 55,
+      category: BuildCategory.DECORATIONS,
+      price: 5,
+      stored: 0,
+      cost: { r1: 0, r2: 0, r3: 0, r4: 0 },
+      atOnce: true,
+      status: "ready",
+      gate: null,
+    });
+    expect(buildOffer(99, context)?.price).toBe(500);
+    expect(buildOffer(49, context)?.price).toBe(125);
+  });
+
+  it("short of Shiny: still listed and ready, gated on credits with what is missing", () => {
+    const context = contextOf({ buildings: [HALL(3)], credits: 100 });
+    expect(buildOffer(28, context)).toMatchObject({
+      price: 150,
+      status: "ready",
+      gate: { reason: "credits", need: 50 },
+    });
+    expect(buildOffer(55, context)?.gate).toBeNull();
+  });
+
+  it("what Flash hid (block) or priced 0 is not sold", () => {
+    const context = contextOf({ buildings: [HALL(3)] });
+    for (const type of [58, 59, 67, 69, 70, 110, 120, 121, 131, 135]) {
+      expect(buildOffer(type, context)).toBeNull();
+    }
+  });
+
+  it("every sold type has a build-menu picture on disk and art in the yard", () => {
+    const buttons = new URL("../../../../server/public/assets/buildingbuttons/", import.meta.url);
+    for (const [type] of DECORATIONS_FOR_SALE) {
+      expect(existsSync(new URL(buttonFile(type), buttons)), `button for ${type}`).toBe(true);
+      expect(hasArt(type), `yard art for ${type}`).toBe(true);
+    }
   });
 });
 
