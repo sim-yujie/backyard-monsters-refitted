@@ -14,6 +14,7 @@ import {
   buildsAtOnce,
   catalogueFor,
   categoryOf,
+  decorationOffers,
   nextHallAllowing,
   OUTPOST_BUILD_CATALOGUE,
   OUTPOST_BUILDABLE_TYPES,
@@ -24,7 +25,7 @@ import {
 } from "./buildCatalogue";
 import { buttonFile } from "./buildButtonArt";
 import { hasArt } from "./buildingArt";
-import { DECORATIONS_FOR_SALE } from "./decorShop";
+import { DECORATIONS_FOR_SALE, DecorKind } from "./decorShop";
 import { readYard } from "./yardModel";
 
 /**
@@ -369,6 +370,34 @@ describe("decorations sold for Shiny (owner 2026-11-04)", () => {
       expect(existsSync(new URL(buttonFile(type), buttons)), `button for ${type}`).toBe(true);
       expect(hasArt(type), `yard art for ${type}`).toBe(true);
     }
+  });
+});
+
+describe("the Decorations sub-tabs (Flash's Evil, Plants, Good, Flags, Premium)", () => {
+  it("each lists its stored ones first, by Flash's order, then its ones for sale", () => {
+    const context = contextOf({ buildings: [HALL(3)], researchdata: { b67: 1, b88: 2, b55: 1, b28: 4 } });
+    const plants = decorationOffers(DecorKind.PLANTS, context);
+    expect(plants.slice(0, 3).map((offer) => [offer.type, offer.stored])).toEqual([
+      [55, 1],
+      [67, 1],
+      [88, 2],
+    ]);
+    expect(plants.slice(3).map((offer) => offer.type)).toEqual([66, 72, 91, 92, 94, 95, 93, 56, 90, 86, 89, 87]);
+    expect(decorationOffers(DecorKind.FLAGS, context)[0]).toMatchObject({ type: 28, stored: 4 });
+  });
+
+  it("together hold the whole tab, 14, 14, 16, 23 and 6 with nothing stored", () => {
+    const context = contextOf({ buildings: [HALL(3)] });
+    const kinds = [DecorKind.EVIL, DecorKind.PLANTS, DecorKind.GOOD, DecorKind.FLAGS, DecorKind.PREMIUM];
+    expect(kinds.map((kind) => decorationOffers(kind, context).length)).toEqual([14, 14, 16, 23, 6]);
+    expect(kinds.flatMap((kind) => decorationOffers(kind, context).map((offer) => offer.type))).toEqual(
+      buildOffers(BuildCategory.DECORATIONS, context).map((offer) => offer.type),
+    );
+  });
+
+  it("an outpost has none", () => {
+    const context = contextOf({ buildings: [], researchdata: { b28: 3 }, outpost: true });
+    expect(decorationOffers(DecorKind.FLAGS, context)).toEqual([]);
   });
 });
 

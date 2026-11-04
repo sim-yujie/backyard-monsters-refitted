@@ -94,6 +94,88 @@
   min-width: 0;
 }
 
+/* ── The Decorations tab's sub-tabs ─────────────────────────────────────── */
+
+/* Flash's five (Evil, Plants, Good, Flags, Premium) share the width, a
+   smaller tray than the four tabs above; a dot of a number on one counts the
+   decorations of that kind in storage. */
+.build-menu__kinds {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 2px;
+  margin-top: var(--space-1);
+  padding: 3px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.build-menu__kinds[hidden] {
+  display: none;
+}
+
+.build-menu__kind {
+  position: relative;
+  min-width: 0;
+  min-height: var(--control-height-compact);
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: calc(var(--radius-md) - 3px);
+  background: transparent;
+  color: var(--colour-text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--easing),
+    color var(--motion-fast) var(--easing);
+}
+
+.build-menu__kind:hover {
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+}
+
+.build-menu__kind[aria-selected="true"] {
+  background: var(--colour-surface-selected);
+  color: var(--colour-text-strong);
+  font-weight: 700;
+  box-shadow: inset 0 -2px 0 var(--colour-accent);
+}
+
+.build-menu__kind:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* On the sub-tab's corner, clear of its word. */
+.build-menu__kind-count {
+  position: absolute;
+  top: -7px;
+  right: -3px;
+  z-index: 1;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  text-shadow: none;
+  pointer-events: none;
+}
+
+.build-menu__kind-count[hidden] {
+  display: none;
+}
+
 /* ── A page of tiles ───────────────────────────────────────────────────── */
 
 .build-menu__pager {
@@ -722,6 +804,12 @@
   .build-menu__main {
     display: block;
     overflow-y: auto;
+  }
+
+  /* "Premium" is the longest; the size follows the width so it fits a fifth. */
+  .build-menu__kind {
+    padding: 0 1px;
+    font-size: min(var(--text-sm), 3.3vw);
   }
 
   .build-menu--picked .build-menu__browse,

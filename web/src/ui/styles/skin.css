@@ -836,9 +836,10 @@
 }
 
 /* A chosen toggle on a bar (Select, 3D, the map's Map/Yard and kit filter,
-   an attack's or replay's speed, the Inferno map's Map/List): the window's
+   an attack's or replay's speed, the Inferno map's Map/List, the Build
+   window's Decorations sub-tab): the window's
    small second plate, lit. */
-:root[data-skin] :is(.planner-bar button[aria-pressed="true"], .hud__scene-button[aria-current="true"], .mr2-kit-filter__option[aria-pressed="true"], .attack-strip__speed-button[aria-pressed="true"], .inferno-map__toggle-button[aria-pressed="true"]) {
+:root[data-skin] :is(.planner-bar button[aria-pressed="true"], .hud__scene-button[aria-current="true"], .mr2-kit-filter__option[aria-pressed="true"], .attack-strip__speed-button[aria-pressed="true"], .inferno-map__toggle-button[aria-pressed="true"], .build-menu__kind[aria-selected="true"]) {
   border-style: solid;
   border-color: transparent;
   border-width: 0 12px;
@@ -858,6 +859,19 @@
 :root[data-skin] .hud__scenes {
   border-color: var(--colour-border);
   background: var(--colour-surface-sunken);
+}
+
+/* The Build window's Decorations sub-tabs: the window's lettering; the
+   chosen one is the lit plate above, so its edges come from the plate. */
+:root[data-skin] .build-menu__kind {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+}
+
+:root[data-skin] .build-menu__kind[aria-selected="true"] {
+  border-width: 0 8px;
+  border-image-width: 0 8px;
+  padding-inline: 0;
 }
 
 /* A card's own close button (the map's place cards, Map Room 1): the

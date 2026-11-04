@@ -10,7 +10,7 @@ import {
   townHallLevel,
   type YardKind,
 } from "./buildingCosts";
-import { DECORATIONS_FOR_SALE, decorationPrice } from "./decorShop";
+import { DECORATIONS_FOR_SALE, decorKindOf, decorOrder, decorationPrice, type DecorKind } from "./decorShop";
 import { storedCount, storedDecorations } from "./decorStorage";
 import { isDecoration } from "./planner/placement";
 import { overCap } from "./storage";
@@ -540,6 +540,19 @@ export const buildOffers = (category: BuildCategory, context: BuildContext): Bui
   return (tab?.types ?? [])
     .map((type) => buildOffer(type, context))
     .filter((offer): offer is BuildOffer => offer !== null);
+};
+
+/**
+ * The tiles of one of Flash's Decorations sub-tabs (`decorShop.ts`
+ * `DECOR_KINDS`): the stored ones of that kind first, free to place, by
+ * Flash's order, then the ones sold for Shiny.
+ */
+export const decorationOffers = (kind: DecorKind, context: BuildContext): BuildOffer[] => {
+  const mine = buildOffers(BuildCategory.DECORATIONS, context).filter((offer) => decorKindOf(offer.type) === kind);
+  const stored = mine
+    .filter((offer) => offer.price === undefined)
+    .sort((a, b) => decorOrder(a.type) - decorOrder(b.type));
+  return [...stored, ...mine.filter((offer) => offer.price !== undefined)];
 };
 
 /** Tiles by {@link BuildStatus}, the tab's order within each (the sort is stable). */

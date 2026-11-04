@@ -7,6 +7,7 @@ import {
   BuildCategory,
   buildOffer,
   buildOffers,
+  decorationOffers,
   pageCount,
   pageOf,
   sortOffers,
@@ -15,6 +16,7 @@ import {
   type BuildOffer,
 } from "@/game/yard/buildCatalogue";
 import type { SpotCheck } from "@/game/yard/BuildPlacement";
+import { DECOR_KINDS, DecorKind } from "@/game/yard/decorShop";
 import { townHallLevel, type YardKind } from "@/game/yard/buildingCosts";
 import { NEED_MORE_PODS, NEED_MORE_SILOS } from "@/game/yard/storage";
 import { typeName } from "@/game/yard/planner/summary";
@@ -46,6 +48,10 @@ import "@/ui/styles/build-menu.css";
  * cost, the time and the worker, **Build**, and a small **Build instantly**
  * that spends Shiny. Build hands the type to the scene, which closes the
  * window and starts the placement (`game/yard/BuildPlacement.ts`).
+ *
+ * The Decorations tab has Flash's five sub-tabs under the four (Evil,
+ * Plants, Good, Flags, Premium; `BUILDINGSPOPUP.as:104-105`), each with its
+ * stored ones first and a small count of them on the sub-tab.
  *
  * Build instantly is a {@link ShinyButton}: tap, then tap again. It starts the
  * same placement, and the drop builds the building finished for the Shiny
@@ -171,6 +177,9 @@ export class BuildMenu {
   private readonly onTownHall: (() => void) | undefined;
   private readonly onClose: (() => void) | undefined;
   private readonly tabButtons = new Map<BuildCategory, HTMLButtonElement>();
+  private readonly kindButtons = new Map<DecorKind, HTMLButtonElement>();
+  /** The Decorations tab's sub-tabs. */
+  private readonly kinds: HTMLElement;
   private readonly meta: HTMLElement;
   private readonly browse: HTMLElement;
   private readonly grid: HTMLElement;
@@ -185,6 +194,8 @@ export class BuildMenu {
 
   private active: BuildCategory = BuildCategory.RESOURCES;
   private page = 0;
+  /** The Decorations sub-tab showing; Flash opened on Evil. */
+  private kind: DecorKind = DecorKind.EVIL;
   /** The tile whose info is showing, or null for none. */
   private picked: number | null = null;
   private opened = false;
@@ -239,6 +250,31 @@ export class BuildMenu {
     }
     strip.addEventListener("keydown", (event) => this.onStripKey(event));
 
+    this.kinds = document.createElement("div");
+    this.kinds.className = "build-menu__kinds";
+    this.kinds.setAttribute("role", "tablist");
+    this.kinds.setAttribute("aria-label", "Decoration kinds");
+    for (const kind of DECOR_KINDS) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "build-menu__kind";
+      button.id = `build-kind-${kind.id}`;
+      button.dataset["focus"] = `kind-${kind.id}`;
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-controls", "build-menu-main");
+      const label = document.createElement("span");
+      label.className = "build-menu__kind-label";
+      label.textContent = kind.label;
+      const count = document.createElement("span");
+      count.className = "build-menu__kind-count";
+      count.setAttribute("aria-hidden", "true");
+      button.append(label, count);
+      button.addEventListener("click", () => this.openKind(kind.id));
+      this.kinds.append(button);
+      this.kindButtons.set(kind.id, button);
+    }
+    this.kinds.addEventListener("keydown", (event) => this.onKindKey(event));
+
     this.previous = this.pageButton("Previous page", PREVIOUS, -1);
     this.next = this.pageButton("Next page", NEXT, 1);
     tutTarget(this.next, TutTarget.BUILD_NEXT_PAGE);
@@ -255,7 +291,7 @@ export class BuildMenu {
 
     this.browse = document.createElement("div");
     this.browse.className = "build-menu__browse";
-    this.browse.append(pager, this.legend);
+    this.browse.append(this.kinds, pager, this.legend);
 
     this.info = document.createElement("section");
     this.info.className = "build-info";
@@ -279,6 +315,11 @@ export class BuildMenu {
 
   get activeTab(): BuildCategory {
     return this.active;
+  }
+
+  /** The Decorations sub-tab showing (or that the tab opens on). */
+  get activeKind(): DecorKind {
+    return this.kind;
   }
 
   /** The tile whose info is showing. */
@@ -352,6 +393,16 @@ export class BuildMenu {
     }
   }
 
+  /** Shows a Decorations sub-tab, from its first page. */
+  openKind(kind: DecorKind): void {
+    if (kind === this.kind) return;
+    this.disarm();
+    this.kind = kind;
+    this.page = 0;
+    this.picked = isStacked() ? null : (this.sorted()[0]?.type ?? null);
+    this.render();
+  }
+
   /** Turns the page by `step`, staying inside the tab. */
   turn(step: number): void {
     const last = pageCount(this.sorted().length) - 1;
@@ -378,6 +429,17 @@ export class BuildMenu {
     this.tabButtons.get(next)?.focus();
   }
 
+  private onKindKey(event: KeyboardEvent): void {
+    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+    event.preventDefault();
+    event.stopPropagation();
+    const order = DECOR_KINDS.map((kind) => kind.id);
+    const step = event.key === "ArrowRight" ? 1 : -1;
+    const next = order[(order.indexOf(this.kind) + step + order.length) % order.length] ?? this.kind;
+    this.openKind(next);
+    this.kindButtons.get(next)?.focus();
+  }
+
   private pageButton(label: string, paths: readonly string[], step: number): HTMLButtonElement {
     const button = document.createElement("button");
     button.type = "button";
@@ -399,7 +461,30 @@ export class BuildMenu {
   }
 
   private sorted(): BuildOffer[] {
+    if (this.active === BuildCategory.DECORATIONS) return sortOffers(decorationOffers(this.kind, this.binding.store));
     return sortOffers(buildOffers(this.active, this.binding.store));
+  }
+
+  /** The sub-tabs: shown on the Decorations tab while it has any, the chosen one lit, each with its stored count. */
+  private drawKinds(): void {
+    const decorations =
+      this.active === BuildCategory.DECORATIONS ? buildOffers(BuildCategory.DECORATIONS, this.binding.store) : [];
+    this.kinds.hidden = decorations.length === 0;
+    if (this.kinds.hidden) return;
+    for (const kind of DECOR_KINDS) {
+      const button = this.kindButtons.get(kind.id)!;
+      const current = kind.id === this.kind;
+      button.setAttribute("aria-selected", String(current));
+      button.tabIndex = current ? 0 : -1;
+      const stored = decorations
+        .filter((offer) => offer.price === undefined && kind.types.includes(offer.type))
+        .reduce((sum, offer) => sum + (offer.stored ?? 0), 0);
+      const count = button.querySelector<HTMLElement>(".build-menu__kind-count")!;
+      count.textContent = stored > 0 ? formatAmount(stored) : "";
+      count.hidden = stored === 0;
+      if (stored > 0) button.setAttribute("aria-label", `${kind.label}, ${stored} in storage`);
+      else button.removeAttribute("aria-label");
+    }
   }
 
   private render(): void {
@@ -423,6 +508,7 @@ export class BuildMenu {
       outpost ? " · Outpost limits" : hall > 0 ? ` · ${hallName} level ${hall}` : ` · No ${hallName}`,
     );
 
+    this.drawKinds();
     const offers = this.sorted();
     const pages = pageCount(offers.length);
     this.page = Math.min(this.page, pages - 1);

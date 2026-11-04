@@ -8,6 +8,7 @@ import type { YardApi } from "@/api/yard";
 import { setClassicLook } from "@/game/classicLook";
 import { buildPicture } from "@/game/yard/buildButtonArt";
 import { BuildCategory } from "@/game/yard/buildCatalogue";
+import { DecorKind } from "@/game/yard/decorShop";
 import { YardStore, type YardUiBinding } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
@@ -89,7 +90,7 @@ describe("BuildMenu", () => {
     expect(menu.element.hidden).toBe(true);
     menu.open();
     expect(menu.element.hidden).toBe(false);
-    const tabs = [...menu.element.querySelectorAll('[role="tab"]')];
+    const tabs = [...menu.element.querySelectorAll('.build-menu__tabs [role="tab"]')];
     expect(tabs.map((tab) => tab.textContent)).toEqual([
       "Resources",
       "Buildings",
@@ -309,12 +310,31 @@ describe("BuildMenu", () => {
     expect(onTownHall).toHaveBeenCalledTimes(1);
   });
 
-  it("with nothing stored, the Decorations tab sells Flash's 73 for Shiny, on eight pages", () => {
+  it("with nothing stored, the Decorations tab sells Flash's 73 for Shiny under its five sub-tabs", () => {
     const { menu } = setup([HALL]);
     menu.open(BuildCategory.DECORATIONS);
     expect(menu.element.querySelector(".build-menu__empty")).toBeNull();
+    const kinds = menu.element.querySelector<HTMLElement>(".build-menu__kinds")!;
+    expect(kinds.hidden).toBe(false);
+    expect(kinds.getAttribute("role")).toBe("tablist");
+    const buttons = [...kinds.querySelectorAll<HTMLButtonElement>(".build-menu__kind")];
+    expect(buttons.map((button) => button.textContent)).toEqual(["Evil", "Plants", "Good", "Flags", "Premium"]);
+    // Flash opened on Evil: the Monster Skull first, 14 on two pages.
+    expect(menu.activeKind).toBe(DecorKind.EVIL);
+    expect(buttons[0]!.getAttribute("aria-selected")).toBe("true");
     expect(tileTypes(menu)).toEqual(["107", "74", "75", "76", "77", "78", "79", "81", "82", "83"]);
-    expect(menu.element.querySelector(".build-menu__page")?.textContent).toBe("Page 1 of 8");
+    expect(menu.element.querySelector(".build-menu__page")?.textContent).toBe("Page 1 of 2");
+    expect(info(menu).querySelector(".build-info__name")?.textContent).toBeTruthy();
+
+    const pages: string[] = [];
+    for (const button of buttons) {
+      button.click();
+      pages.push(menu.element.querySelector(".build-menu__page")!.textContent!);
+      expect(button.getAttribute("aria-selected")).toBe("true");
+      expect(menu.pickedType).toBe(Number(tileTypes(menu)[0]));
+    }
+    expect(pages).toEqual(["Page 1 of 2", "Page 1 of 2", "Page 1 of 2", "Page 1 of 3", "Page 1 of 1"]);
+    expect(tileTypes(menu)).toEqual(["96", "97", "98", "99", "100", "101"]);
     expect(menu.element.querySelector(".build-menu__legend")?.textContent).toBe(
       "Stored ones first, free to place. The rest cost Shiny.",
     );
@@ -342,6 +362,7 @@ describe("BuildMenu", () => {
     const menu = new BuildMenu({ binding, onPick: vi.fn() }).mount(document.body);
     menu.open(BuildCategory.DECORATIONS);
     expect(menu.element.querySelector(".build-menu__empty")?.textContent).toBe("Decorations go in your main yard.");
+    expect(menu.element.querySelector<HTMLElement>(".build-menu__kinds")!.hidden).toBe(true);
   });
 
   it("a decoration for sale: the Shiny icon and price, and Buy picks it up on the second tap", () => {
@@ -367,8 +388,9 @@ describe("BuildMenu", () => {
   it("short of Shiny: the price is marked, Buy is blocked and the line says how much more", () => {
     const { menu, onPick } = setup([HALL], { credits: 100 });
     menu.open(BuildCategory.DECORATIONS);
-    menu.turn(6);
-    // Page 7 ends the flags: the European Flag (32) costs 150.
+    menu.openKind(DecorKind.FLAGS);
+    menu.turn(2);
+    // Page 3 ends the flags: the European Flag (32) costs 150.
     tile(menu, 32).click();
 
     expect(tile(menu, 32).querySelector(".build-tile__count--short")).not.toBeNull();
@@ -383,8 +405,18 @@ describe("BuildMenu", () => {
     const { menu, onPick } = setup([HALL], { researchdata: { b28: 3, b121: 1, bl121: 2 } });
     menu.open(BuildCategory.DECORATIONS);
 
+    // Each sub-tab with some in storage counts them on its corner.
+    const counts = [...menu.element.querySelectorAll<HTMLElement>(".build-menu__kind-count")];
+    expect(counts.map((count) => (count.hidden ? "" : count.textContent))).toEqual(["", "", "", "3", "1"]);
+    expect(menu.element.querySelector("#build-kind-flags")?.getAttribute("aria-label")).toBe("Flags, 3 in storage");
+    expect(menu.element.querySelector("#build-kind-evil")?.hasAttribute("aria-label")).toBe(false);
+    expect(tileTypes(menu)).not.toContain("28");
+
+    menu.openKind(DecorKind.PREMIUM);
+    expect(tileTypes(menu)[0]).toBe("121");
+    menu.openKind(DecorKind.FLAGS);
     // Stored first, then the ones for sale (the stored American Flag not again).
-    expect(tileTypes(menu).slice(0, 3)).toEqual(["28", "121", "107"]);
+    expect(tileTypes(menu).slice(0, 3)).toEqual(["28", "49", "50"]);
     expect(menu.element.querySelectorAll('.build-tile[data-type="28"]')).toHaveLength(1);
     expect(tile(menu, 28).querySelector(".build-tile__count")?.textContent).toBe("3 in storage");
     expect(info(menu).querySelector(".build-info__count")?.textContent).toBe("3 in storage");
@@ -417,6 +449,32 @@ describe("BuildMenu", () => {
     menu.open();
     menu.element.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(menu.element.hidden).toBe(true);
+  });
+
+  it("reopens on the decoration sub-tab it was left on; arrow keys move along the sub-tabs", () => {
+    const { menu } = setup([HALL]);
+    menu.open(BuildCategory.DECORATIONS);
+    menu.openKind(DecorKind.GOOD);
+    menu.close();
+    menu.open();
+    expect(menu.activeKind).toBe(DecorKind.GOOD);
+    const kinds = menu.element.querySelector(".build-menu__kinds")!;
+    kinds.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(menu.activeKind).toBe(DecorKind.FLAGS);
+    expect(menu.activeTab).toBe(BuildCategory.DECORATIONS);
+    kinds.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    kinds.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    kinds.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    kinds.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    expect(menu.activeKind).toBe(DecorKind.PREMIUM);
+  });
+
+  it("the sub-tabs show only on the Decorations tab, and not where there are none", () => {
+    const { menu } = setup([HALL]);
+    menu.open(BuildCategory.BUILDINGS);
+    expect(menu.element.querySelector<HTMLElement>(".build-menu__kinds")!.hidden).toBe(true);
+    menu.open(BuildCategory.DECORATIONS);
+    expect(menu.element.querySelector<HTMLElement>(".build-menu__kinds")!.hidden).toBe(false);
   });
 
   it("arrow keys move along the tab strip", () => {
