@@ -29,3 +29,13 @@ describe("isWhatsNewOpen", () => {
     expect(isWhatsNewOpen()).toBe(false);
   });
 });
+
+describe("the support line", () => {
+  it("sits at the foot, just above Let's play!, with the Patreon and Ko-fi links", () => {
+    openWhatsNew({ container: document.body, releases: [release] });
+    const done = document.querySelector<HTMLButtonElement>(".whats-new__done")!;
+    const line = done.previousElementSibling;
+    expect(line?.classList.contains("support-line")).toBe(true);
+    expect(line?.querySelectorAll("a.support__link")).toHaveLength(2);
+  });
+});

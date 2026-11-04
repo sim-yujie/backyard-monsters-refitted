@@ -46,6 +46,10 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * `art-samples/mr2-markers/icon`): a grass slab with hex tiles, a tree and a
  * flag, seen at an angle (`maptilt`) while the map is tilted and from above
  * (`mapflat`) while it is flat.
+ *
+ * "Support the game" (`ui/support/SupportPanel.ts`, `art-samples/support-heart`):
+ * a red heart held in green monster hands (`support`), so it is not read as
+ * Health's plain heart; `support2` is the heart with a gold coin, the other option.
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -76,6 +80,8 @@ export const GAME_ICONS = {
   neighbours2: "Neighbour defence bonus",
   maptilt: "Tilted map",
   mapflat: "Flat map",
+  support: "Support the game",
+  support2: "Support the game",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;

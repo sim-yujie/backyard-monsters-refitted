@@ -1,0 +1,145 @@
+/*
+ * "Support the game" (`ui/support/SupportPanel.ts`): the small panel (a
+ * shared `.panel` popup, so the Modern steel and Classic parchment frames
+ * come from skin.css), and the support line at the foot of "What's new".
+ */
+
+.support-popup {
+  width: min(400px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100dvh - 2 * var(--space-4));
+}
+
+.support-popup .panel__body {
+  overflow-y: auto;
+}
+
+.support {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: center;
+}
+
+.support__heart {
+  display: block;
+  width: 72px;
+  height: 72px;
+  filter: drop-shadow(0 3px 3px rgb(0 0 0 / 30%));
+}
+
+.support__why {
+  margin: 0;
+  max-width: 30ch;
+  font-size: var(--text-md);
+  font-weight: 700;
+  line-height: var(--leading-normal);
+  color: var(--colour-text-strong);
+}
+
+.support__links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  width: 100%;
+}
+
+/* An outside link that looks like the panel's buttons: the name, and under it what kind. */
+.support__link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 52px;
+  text-decoration: none;
+  line-height: 1.15;
+}
+
+.support__link-label {
+  font-size: var(--text-md);
+}
+
+.support__link-note {
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 700;
+  opacity: 0.92;
+}
+
+/* The painted plates are taller than the glass buttons: room for both lines. */
+:root[data-skin] .panel .support__link {
+  min-height: 58px;
+  padding-bottom: 6px;
+}
+
+.support__thanks {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.support__answers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.support__answers .btn {
+  min-height: 40px;
+  font-size: var(--text-sm);
+}
+
+/* ── The line at the foot of "What's new" ────────────────────────────────── */
+
+.support-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.support-line__text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text-strong);
+  text-align: center;
+}
+
+.support-line__icon {
+  flex: none;
+}
+
+.support-line .support__links {
+  max-width: 340px;
+  margin: 0 auto;
+}
+
+.support-line .support__link {
+  min-height: 40px;
+}
+
+:root[data-skin] .panel .support-line .support__link {
+  min-height: 46px;
+}
+
+/* ── The Account menu's item ─────────────────────────────────────────────── */
+
+.account-menu__support {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.account-menu__support .game-icon {
+  flex: none;
+}
