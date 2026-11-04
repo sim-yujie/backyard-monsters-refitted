@@ -190,9 +190,12 @@ vec2 cellSeed(ivec2 cell) {
 // the turquoise reaches (as the land's share of the weights); the plain sea's mix towards the
 // shallows colour before it deepens; the surf lines' spacing and speed (lines a second).
 // The beach: it reaches inland to where the water's share round a point (waterNear) falls to
-// between BEACH_FAR (where the beach is widest) and BEACH_NEAR (narrowest), about 0.5-1 hex units.
-const float BEACH_FAR = 0.035;
-const float BEACH_NEAR = 0.15;
+// between BEACH_FAR (where the beach is widest) and BEACH_NEAR (narrowest), about 0.4-0.7 hex
+// units (MR2 step 11: mock-up B's beach is a strip; at 0.035-0.15 it ran a cell inland), and never
+// less than BEACH_MIN from the coast line itself, so the wandering coast never meets bare grass.
+const float BEACH_FAR = 0.12;
+const float BEACH_NEAR = 0.24;
+const float BEACH_MIN = 0.2;
 const float SHALLOWS_REACH = 0.38;
 const float MID_SEA = 0.5;
 // The step (hex units) over which High measures the coast's slope.
@@ -774,6 +777,7 @@ void main() {
   float nearWater = landSum > 0.002 ? waterNear(b.hp) : 0.0;
   float beachEdge = beachEnd(h);
   float beach = smoothstep(beachEdge * 0.6, beachEdge, nearWater);
+  beach = max(beach, (1.0 - smoothstep(BEACH_MIN * 0.6, BEACH_MIN, -dist)) * coastMask);
   // Only real land turns to sand: fog and cells not yet loaded keep their own look.
   float hiddenLand = dot(wl, vec3(isLand(g.x) ? 0.0 : 1.0, isLand(g.y) ? 0.0 : 1.0, isLand(g.z) ? 0.0 : 1.0));
   beach *= 1.0 - hiddenLand / max(landSum, 1e-5);

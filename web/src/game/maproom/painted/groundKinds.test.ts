@@ -22,6 +22,12 @@ describe("painted ground kinds", () => {
     expect(groundOf({ fog: 1 } as unknown as MapCell)).toBe(Ground.FOG);
   });
 
+  it("paints the sand band as low plain meadow: the shader lays the beach along the water", () => {
+    expect(groundOf(land(100))).toBe(Ground.MEADOW_PLAIN);
+    expect(groundOf(land(109))).toBe(Ground.MEADOW_PLAIN);
+    expect(groundOf(land(110))).toBe(Ground.MEADOW);
+  });
+
   it("paints the rock band as grassy hill top (mock-up B; rock shows as cliffs and rock fields)", () => {
     expect(groundOf(land(170))).toBe(Ground.LUSH);
     expect(groundOf(land(184))).toBe(Ground.LUSH);
@@ -30,7 +36,7 @@ describe("painted ground kinds", () => {
 
   it("a land feature (feat/mr2-land's lf) keeps the cell's own ground; forests stand on the meadow round them", () => {
     expect(groundOf(land(130, { lf: 1 }))).toBe(Ground.MEADOW);
-    expect(groundOf(land(105, { lf: 1 }))).toBe(Ground.SAND);
+    expect(groundOf(land(105, { lf: 1 }))).toBe(Ground.MEADOW);
     expect(groundOf(land(150, { lf: 1 }))).toBe(Ground.LUSH);
     expect(groundOf(land(175, { lf: 1 }))).toBe(Ground.LUSH);
     expect(groundOf(land(130, { lf: 2 }))).toBe(Ground.MEADOW);

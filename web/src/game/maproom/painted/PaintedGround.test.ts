@@ -18,7 +18,7 @@ describe("painted ground data texture", () => {
       fetchedAt: 0,
     } as unknown as ZoneRecord;
     data.applyZone(zone);
-    expect(data.groundAt(3, 4)).toBe(Ground.SAND);
+    expect(data.groundAt(3, 4)).toBe(Ground.MEADOW_PLAIN);
     expect(data.groundAt(3, 5)).toBe(Ground.MEADOW);
     data.reset();
     expect(data.groundAt(3, 4)).toBe(Ground.FOG);

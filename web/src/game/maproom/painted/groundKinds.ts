@@ -87,18 +87,27 @@ export const groundOfHeight = (height: number): Ground => {
 export const LandFeature = { FOREST: 1, ROCKS: 2, MARSH: 3 } as const;
 
 /**
+ * The sand band (100-109 m) is low grass, plain meadow (MR2 step 11, coast): painted whole, every
+ * low cell by the sea was sand and the beach ran a cell or more inland, where mock-up B has a strip.
+ * The shader lays the beach along the water itself. A forest there stands on the flowery meadow.
+ */
+const sandAs = (feature: number | undefined): Ground => (feature === LandFeature.FOREST ? Ground.MEADOW : Ground.MEADOW_PLAIN);
+
+/**
  * A cell's ground: fog, not loaded, or its height band, with two changes for mock-up B (MR2 step 11):
  * - The rock band (170-184 m) is grassy hill top (lush meadow): mock-up B's high ground is bright
  *   grass, and its rock shows as cliffs at the big drops and as rock fields. Stony ground over every
  *   high cell read as dull brown patches round the camps up there.
- * - A forest's ground (seen in a camp's clearing and where the canopy's edge wanders) is the ground
- *   round it, so a clearing does not show as a darker disc.
+ * - A forest's ground (seen in a camp's clearing and where the canopy's edge wanders) is meadow, the
+ *   ground round it, so a clearing does not show as a darker disc.
  */
 export const groundOf = (cell: MapCell | undefined): Ground => {
   if (cell === undefined) return Ground.UNLOADED;
   if (isFogCell(cell)) return Ground.FOG;
   const ground = groundOfHeight(cell.i);
-  return ground === Ground.ROCK ? Ground.LUSH : ground;
+  if (ground === Ground.ROCK) return Ground.LUSH;
+  if (ground === Ground.SAND) return sandAs((cell as { lf?: number }).lf);
+  return ground;
 };
 
 /**
