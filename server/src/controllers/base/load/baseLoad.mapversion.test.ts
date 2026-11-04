@@ -86,13 +86,20 @@ mock.module("../../../services/base/reportManager.js", () => ({
 // first (autoAttack.test.ts uses "?real") keeps the `server.js` that file
 // mocked, and its range check then reads that file's rows and lets the attack
 // through. On GitHub's file order that failed this file's range tests.
+//
+// Each copy goes to `mock.module` spread into a plain object. Handed the
+// module namespace itself, Bun leaves an earlier file's mock of the same
+// module in place: after `takeoverQuote.test.ts` or `takeoverCell.test.ts`
+// (whose range stub lets everything through by then), the attack step here
+// still got that stub and the out-of-range attacks went ahead (CI run
+// 41837356306). A plain object replaces it.
 const FRESH = "?real-mapversion";
 const REAL_RANGE = `../../../services/maproom/v2/validateRange.ts${FRESH}`;
 const realRange = (await import(REAL_RANGE)) as typeof import("../../../services/maproom/v2/validateRange.js");
-mock.module("../../../services/maproom/v2/validateRange.js", () => realRange);
+mock.module("../../../services/maproom/v2/validateRange.js", () => ({ ...realRange }));
 const REAL_ATTACK = `./modes/baseModeAttack.ts${FRESH}`;
 const realAttack = (await import(REAL_ATTACK)) as typeof import("./modes/baseModeAttack.js");
-mock.module("./modes/baseModeAttack.js", () => realAttack);
+mock.module("./modes/baseModeAttack.js", () => ({ ...realAttack }));
 
 const REAL_LOAD = `./baseLoad.ts${FRESH}`;
 const { baseLoad } = (await import(REAL_LOAD)) as typeof import("./baseLoad.js");

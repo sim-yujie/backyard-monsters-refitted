@@ -17,6 +17,8 @@ const countryApi = vi.hoisted(() => ({ setCountry: vi.fn() }));
 vi.mock("@/api/country", () => countryApi);
 const chat = vi.hoisted(() => ({ worldChat: { setCountryRoom: vi.fn() } }));
 vi.mock("@/game/chat/chatSession", () => chat);
+const lookReport = vi.hoisted(() => ({ reportLook: vi.fn() }));
+vi.mock("@/app/lookReport", () => lookReport);
 
 import { setWorldChatOn, worldChatOn } from "@/game/chat/worldChatSetting";
 import { SETTINGS_TEXT, openAccountSettings } from "./AccountSettings";
@@ -198,9 +200,11 @@ describe("AccountSettings", () => {
     expect(select.value).toBe("high");
     const hint = document.querySelector("#settings-quality-hint")!;
     expect(hint.textContent).toBe(SETTINGS_TEXT.downloadHint.high);
+    lookReport.reportLook.mockClear();
     select.value = "low";
     select.dispatchEvent(new Event("change"));
     expect(localStorage.getItem("bymr.quality")).toBe("low");
+    expect(lookReport.reportLook).toHaveBeenCalledTimes(1);
     expect(hint.textContent).toContain(SETTINGS_TEXT.downloadHint.low);
     expect(hint.textContent).toContain(SETTINGS_TEXT.downloadSaved);
     localStorage.clear();
@@ -226,10 +230,13 @@ describe("AccountSettings", () => {
       SETTINGS_TEXT.lookClassic,
     ]);
     expect(look.value).toBe("modern");
+    lookReport.reportLook.mockClear();
     look.value = "classic";
     look.dispatchEvent(new Event("change"));
     expect(localStorage.getItem("bymr.look")).toBe("classic");
     expect(document.body.textContent).toContain(SETTINGS_TEXT.lookSaved);
+    // The new choice goes to the owner's dashboard (owner 4 Nov 2026); the player sees nothing of it.
+    expect(lookReport.reportLook).toHaveBeenCalledTimes(1);
     look.value = "modern";
     look.dispatchEvent(new Event("change"));
     expect(localStorage.getItem("bymr.look")).toBeNull();
@@ -248,9 +255,11 @@ describe("AccountSettings", () => {
       SETTINGS_TEXT.musicFlash,
     ]);
     expect(music.value).toBe("style");
+    lookReport.reportLook.mockClear();
     music.value = "flash";
     music.dispatchEvent(new Event("change"));
     expect(localStorage.getItem("bymr.music")).toBe("flash");
+    expect(lookReport.reportLook).toHaveBeenCalledTimes(1);
     expect(document.body.textContent).toContain(SETTINGS_TEXT.musicSaved);
     music.value = "style";
     music.dispatchEvent(new Event("change"));

@@ -1,5 +1,6 @@
 import { CHANGELOG, type ChangelogCard, type ChangelogRelease } from "@/data/changelog";
 import { Popup } from "@/ui/Popup";
+import { supportLine } from "@/ui/support/SupportPanel";
 import "./whats-new.css";
 
 /**
@@ -7,7 +8,8 @@ import "./whats-new.css";
  * the newest release, older releases folded underneath. It pops up once after
  * an update (`game/events/whatsNew.ts` decides) and opens again from the
  * Account menu's "What's new" item. The words and pictures live in
- * `web/src/data/changelog/`, one file per release.
+ * `web/src/data/changelog/`, one file per release. At the foot, above the
+ * button, one support line with the Patreon and Ko-fi links (owner 24 Oct).
  */
 
 const el = <K extends keyof HTMLElementTagNameMap>(
@@ -76,6 +78,7 @@ export const openWhatsNew = (options: WhatsNewOptions): Popup | null => {
     details.append(el("summary", "whats-new__older-summary", release.title), cardList(release));
     body.append(details);
   }
+  body.append(supportLine());
   const done = el("button", "btn btn--primary whats-new__done", "Let's play!");
   done.type = "button";
   done.addEventListener("click", () => popup.close());

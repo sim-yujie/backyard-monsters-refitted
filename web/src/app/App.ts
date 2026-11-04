@@ -1,6 +1,12 @@
 import { Application, Assets, Container } from "pixi.js";
 import { createOverlay, type Overlay } from "@/ui/overlay";
-import { setGameFrameSource, setScreenNameSource } from "@/game/bugReport/screenCapture";
+import {
+  captureScreen,
+  gameFrameOf,
+  lastCaptureStats,
+  setGameFrameSource,
+  setScreenNameSource,
+} from "@/game/bugReport/screenCapture";
 import { PerfOverlay } from "@/ui/PerfOverlay";
 import { SceneManager, type SceneFactory } from "./SceneManager";
 import { withHold, withPresence, withProtection } from "./presenceScene";
@@ -135,10 +141,11 @@ export class App {
 
     // The bug report's screenshot reads the game right after a fresh render,
     // and its "which screen" is the scene on show.
-    setGameFrameSource(() => {
-      this.pixi.render();
-      return this.pixi.canvas;
-    });
+    setGameFrameSource(() => gameFrameOf(this.pixi));
+    if (import.meta.env.DEV) {
+      // Dev console: `await __bugReportShot.capture()` takes one, `.stats()` says what it held.
+      (window as unknown as Record<string, unknown>).__bugReportShot = { capture: captureScreen, stats: lastCaptureStats };
+    }
     setScreenNameSource(() => this.scenes?.activeScene ?? null);
 
     // "Stay protected?" nine minutes after the last real game action (#275),

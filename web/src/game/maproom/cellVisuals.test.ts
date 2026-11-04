@@ -4,9 +4,12 @@ import type { MapCell, PlayerCell } from "@/api/types";
 import { setClassicLook } from "@/game/classicLook";
 import {
   CellMarker,
+  DAMAGE_COLOUR,
   FOG_CLOUD_COLOUR,
   FOG_COLOUR,
   FOG_EDGE_COLOUR,
+  HEALTH_GOOD_COLOUR,
+  HEALTH_HURT_COLOUR,
   KitFilter,
   LOADING_COLOUR,
   OutpostKit,
@@ -18,6 +21,8 @@ import {
   UNEXPLORED_STRIPE,
   UNEXPLORED_STRIPE_COLOUR,
   appearanceOf,
+  campHealthColour,
+  campHealthOf,
   fogAppearance,
   hexWidthAt,
   kitOf,
@@ -323,5 +328,47 @@ describe("unexplored ground (#153)", () => {
     // A step right and a step up land on the same stripe.
     expect(unexploredColour(5, 3)).toBe(unexploredColour(6, 2));
     expect(unexploredColour(0, 0)).not.toBe(unexploredColour(UNEXPLORED_STRIPE, 0));
+  });
+});
+
+/**
+ * A damaged camp shows a health bar (owner, 4 Nov 2026): its remaining
+ * strength, 100 minus the server's `dm`. A healthy camp, a destroyed one (its
+ * red cross is enough) and every other cell show none. The server reports a
+ * camp healed 12 hours after its last attack as `dm` 0, so the bar goes with
+ * the next refresh of the tile.
+ */
+describe("camp health bar", () => {
+  const camp = (dm: number, d = 0) => ({ uid: 0, b: 1, i: 150, bid: "1", n: "Kozu", l: 38, dm, d }) as MapCell;
+
+  it("shows what a damaged camp has left", () => {
+    expect(appearanceOf(camp(40), 0).campHealth).toBe(60);
+    expect(appearanceOf(camp(12.6), 0).campHealth).toBe(87);
+  });
+
+  it("is hidden on a healthy camp, including one the server reports healed", () => {
+    expect(appearanceOf(camp(0), 0).campHealth).toBeNull();
+  });
+
+  it("is hidden on a destroyed camp, which keeps its cross", () => {
+    const destroyed = appearanceOf(camp(100, 1), 0);
+    expect(destroyed.campHealth).toBeNull();
+    expect(destroyed.marker).toBe(CellMarker.CAMP_DESTROYED);
+  });
+
+  it("keeps a sliver at either end: a scratch still shows, near-flattened never reads empty", () => {
+    expect(campHealthOf(0.2, 0)).toBe(99);
+    expect(campHealthOf(99.8, 0)).toBe(1);
+  });
+
+  it("is never on a player's cell, water, fog or a cell still loading", () => {
+    expect(appearanceOf(player({ dm: 50 } as Partial<PlayerCell>), 0).campHealth).toBeNull();
+    expect(appearanceOf(undefined, 0).campHealth).toBeNull();
+  });
+
+  it("goes green, then amber, then red as the camp weakens", () => {
+    expect(campHealthColour(80)).toBe(HEALTH_GOOD_COLOUR);
+    expect(campHealthColour(40)).toBe(HEALTH_HURT_COLOUR);
+    expect(campHealthColour(10)).toBe(DAMAGE_COLOUR);
   });
 });

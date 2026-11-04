@@ -1,4 +1,4 @@
-import { Container, NineSliceSprite, Sprite, type Texture } from "pixi.js";
+import { Container, NineSliceSprite, Sprite, Texture } from "pixi.js";
 import { isFogCell } from "@/api/types";
 import { CELL_HEIGHT, CELL_WIDTH, WATER_MAX_HEIGHT } from "@/config";
 import { hexShape, mapRoomGrid } from "@/game/HexGrid";
@@ -14,6 +14,7 @@ import {
   RELATION_OTHER_COLOUR,
   OutpostKit,
   appearanceOf,
+  campHealthColour,
   hexWidthAt,
   type CellAppearance,
   type MapViewerContext,
@@ -124,6 +125,18 @@ const BADGE_Y = CELL_HEIGHT * 0.15;
 const BADGE_TEXT_SIZE = CELL_HEIGHT * 0.21;
 
 /**
+ * A damaged camp's health bar (owner, 4 Nov 2026): a dark track with a
+ * coloured fill for the strength it has left, floating just over the camp's
+ * picture. Sized for the tile map; the painted map's larger tags scale it too.
+ */
+const HEALTH_BAR_WIDTH = CELL_WIDTH * 0.3;
+const HEALTH_BAR_HEIGHT = 6;
+const HEALTH_BAR_BORDER = 1.5;
+const HEALTH_TRACK_ALPHA = 0.85;
+/** The bar's lower edge: a little above the portrait's head (and so above the far tiers' tent). */
+const HEALTH_BAR_TOP = AVATAR_BASE_Y - AVATAR_HEIGHT - 2;
+
+/**
  * A player's hex wears its Town Hall or outpost picture (#334), foot-anchored
  * like a camp's portrait (`AVATAR_HEIGHT`/`AVATAR_BASE_Y` above), but taller:
  * it is now the whole hex's identity, not a small critter. Needs tuning
@@ -192,6 +205,8 @@ export class MapChunk {
   private readonly details = new Container();
   /** The discs and rings behind camps' level numbers. */
   private readonly badgeDiscs = new Container();
+  /** Damaged camps' health bars, shown wherever camps are. */
+  private readonly healthBars = new Container();
   /** Players' markers, shown at every chunked tier. */
   private readonly bases = new Container();
   /** The rounded bars behind players' names, sized when their text is laid out. */
@@ -242,7 +257,7 @@ export class MapChunk {
       // Crosses go over whichever of the two is showing.
       this.details,
     );
-    this.top.addChild(this.badgeDiscs, this.bases, this.plates, this.labels.badges);
+    this.top.addChild(this.healthBars, this.badgeDiscs, this.bases, this.plates, this.labels.badges);
   }
 
   /** Shows or hides the whole chunk, ground and top alike. */
@@ -365,6 +380,7 @@ export class MapChunk {
     this.tents.visible = view.details && !portraits;
     this.portraits.visible = view.details && portraits;
     this.details.visible = view.details;
+    this.healthBars.visible = view.details;
     this.badgeDiscs.visible = view.badges;
     this.plates.visible = view.badges;
     this.labels.badges.visible = view.badges;
@@ -391,6 +407,7 @@ export class MapChunk {
       this.portraits,
       this.details,
       this.badgeDiscs,
+      this.healthBars,
       this.bases,
     ]) {
       layer.removeChildren().forEach(destroyChild);
@@ -441,6 +458,8 @@ export class MapChunk {
       this.pins.add(foot, cross);
     }
 
+    if (appearance.campHealth !== null) this.addHealthBar(appearance.campHealth, foot, x, y, alpha);
+
     if (appearance.badge === "") return;
     const bx = x + BADGE_X;
     const by = y + BADGE_Y;
@@ -460,6 +479,41 @@ export class MapChunk {
       alpha,
       placed: (text) => this.pins.add(foot, text, "text"),
     });
+  }
+
+  /**
+   * A damaged camp's health bar over its picture: the dark track, then the
+   * fill from its left edge for the `health` percent the camp has left. Both
+   * are pinned to the camp's foot, so they stand upright on the tilted map
+   * with the portrait.
+   */
+  private addHealthBar(health: number, foot: { x: number; y: number }, x: number, y: number, alpha: number): void {
+    const scale = tagStyle(isFlatGround(), hexShape()).scale;
+    const width = HEALTH_BAR_WIDTH * scale;
+    const height = HEALTH_BAR_HEIGHT * scale;
+    const border = HEALTH_BAR_BORDER * scale;
+    // Just clear of the portrait's head, however tall the painted map makes the bar.
+    const by = y + HEALTH_BAR_TOP - border - height / 2;
+
+    const track = new Sprite(Texture.WHITE);
+    track.anchor.set(0.5, 0.5);
+    track.position.set(x, by);
+    track.width = width + border * 2;
+    track.height = height + border * 2;
+    track.tint = MARKER_FILL_COLOUR;
+    track.alpha = HEALTH_TRACK_ALPHA * alpha;
+
+    const fill = new Sprite(Texture.WHITE);
+    fill.anchor.set(0, 0.5);
+    fill.position.set(x - width / 2, by);
+    fill.width = (width * health) / 100;
+    fill.height = height;
+    fill.tint = campHealthColour(health);
+    fill.alpha = alpha;
+
+    this.healthBars.addChild(track, fill);
+    this.pins.add(foot, track);
+    this.pins.add(foot, fill);
   }
 
   /**
