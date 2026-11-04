@@ -222,9 +222,11 @@ export const readChatLog = async (
     where.push("c.channel = ?");
     params.push(query.channel);
   }
-  if (query.until !== undefined) {
+  // A time past what a Date can hold is ignored, not a 500.
+  const until = query.until === undefined ? null : new Date(query.until);
+  if (until && !Number.isNaN(until.getTime())) {
     where.push("c.created_at <= ?");
-    params.push(new Date(query.until));
+    params.push(until);
   }
   if (query.flagged) where.push("c.flagged IS NOT NULL");
   if (query.before !== undefined && query.before > 0) {
