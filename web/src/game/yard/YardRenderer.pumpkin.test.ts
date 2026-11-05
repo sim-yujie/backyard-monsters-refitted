@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Assets, Texture } from "pixi.js";
-import { LOAD_TRIES, RETRY_DELAYS_MS } from "./retryLoad";
+import { LOAD_TRIES, RETRY_DELAYS_MS, versionedArt } from "./retryLoad";
 import { YardRenderer } from "./YardRenderer";
 
 /**
@@ -45,7 +45,7 @@ describe("YardRenderer: the Halloween pumpkin", () => {
     await waitAll();
 
     expect(load).toHaveBeenCalledTimes(3);
-    expect(load).toHaveBeenCalledWith(PUMPKIN);
+    expect(load).toHaveBeenCalledWith(versionedArt(PUMPKIN));
     expect(pumpkinOf(renderer)).toBe(Texture.WHITE);
     expect(warn).not.toHaveBeenCalled();
   });
