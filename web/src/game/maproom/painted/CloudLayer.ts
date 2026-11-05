@@ -13,12 +13,8 @@ const DECK_URL = `${import.meta.env.BASE_URL}maproom/painted/cloud-deck@4x.webp`
 /** The cloud picture's average colour, drawn until it lands. */
 const DECK_COLOUR = [0.85, 0.87, 0.9] as const;
 
-/**
- * The colour the painted ground gives fog cells while the clouds cover them: the cloud's own shade,
- * so wherever the cloud's soft edge thins over a fog cell it shows cloud, not the dark fog of the
- * tile map (`PaintedGround.setFogColour`).
- */
-export const FOG_UNDER_CLOUD = 0xd6dbe3;
+/** The colour the painted ground gives fog cells while the clouds cover them (`PaintedGround.setFogColour`). */
+export { FOG_UNDER_CLOUD } from "../cellVisuals";
 
 /** The painted fog's program (one per page; `shaderWarmup.ts` compiles it ahead). */
 export const cloudProgram = (): GlProgram =>

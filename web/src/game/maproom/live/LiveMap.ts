@@ -218,8 +218,9 @@ export class LiveMap {
       this.layers = layers;
       if (art.clouds.length > 0 || art.bird) {
         const shadowStrength = this.paintedWater ? PAINTED_SHADOW_STRENGTH : 1;
-        // The painted ground's own fog clouds take the far view: no frame of banks over them.
-        this.sky = new SkyLayer(art.clouds, art.bird, this.plan.birds, shadowStrength, !this.paintedWater);
+        // The fog clouds (painted ground, and Classic on High) take the far view: no frame of banks over them.
+        const frameBanks = !this.paintedWater && !classicLook();
+        this.sky = new SkyLayer(art.clouds, art.bird, this.plan.birds, shadowStrength, frameBanks);
         // Shadows under the chunks' overlays; clouds and birds over everything.
         this.overlay.addChildAt(this.sky.shadows, 0);
         this.overlay.addChild(this.sky.above);

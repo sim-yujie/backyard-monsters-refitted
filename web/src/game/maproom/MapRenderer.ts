@@ -29,9 +29,12 @@ import { TerrainRaster } from "./TerrainRaster";
 import { TribeAvatars } from "./tribeAvatars";
 import { MR2_PAINTED, markOnce } from "./openMarks";
 import { classicLook } from "@/game/classicLook";
+import { onQualityChange, quality, type Quality } from "@/game/quality";
+import { setFogUnderCloud } from "./cellVisuals";
 import { isFogCell } from "@/api/types";
 import type { ZoneRecord, ZoneStore } from "./ZoneStore";
 import type { CellRange } from "./zones";
+import type { GroundData } from "./painted/GroundData";
 import type * as PaintedLookNamespace from "./painted/paintedLook";
 
 type PaintedLookModule = typeof PaintedLookNamespace;
@@ -152,6 +155,10 @@ export class MapRenderer {
   private paintedKit: { look: PaintedLookModule; programs: PaintedPrograms } | null = null;
   /** Fetching the code and compiling the shaders, while it runs. */
   private paintedPreparing: Promise<void> | null = null;
+  /** Classic on High: which cells are fog, for `clouds`; the painted look keeps its own in `painted`. */
+  private classicFog: GroundData | null = null;
+  private classicFogPreparing = false;
+  private stopQuality: (() => void) | null = null;
   private destroyed = false;
 
   private lastRange: CellRange | null = null;
@@ -292,6 +299,7 @@ export class MapRenderer {
   resetSight(): void {
     this.raster.reset();
     this.painted?.reset();
+    this.classicFog?.reset();
     this.clouds?.invalidate();
     this.borders?.reset();
     this.rebuildAll();
@@ -313,6 +321,8 @@ export class MapRenderer {
     this.webGL2 = (renderer as { context?: { webGLVersion?: number } }).context?.webGLVersion === 2;
     this.gl = this.webGL2 ? ((renderer as { gl?: WebGL2RenderingContext }).gl ?? null) : null;
     this.live.attach(renderer);
+    this.stopQuality ??= onQualityChange((level) => this.syncClassicFog(level));
+    this.syncClassicFog();
     this.dropAllChunks();
     this.lastRange = null;
   }
@@ -321,6 +331,7 @@ export class MapRenderer {
   applyZone(zone: ZoneRecord): void {
     this.raster.applyZone(zone);
     this.painted?.applyZone(zone);
+    this.classicFog?.applyZone(zone);
     this.clouds?.invalidate();
     this.borders?.applyZone(zone);
     if (this.chunks.has(zone.id)) this.dirty.add(zone.id);
@@ -519,6 +530,50 @@ export class MapRenderer {
     if (this.paintedWanted) this.setPaintedMap(true);
   }
 
+  /** Classic's clouds over the undiscovered map: on High only, the level its other clouds show on. */
+  private syncClassicFog(level: Quality = quality()): void {
+    if (!classicLook()) return;
+    if (level === "high") {
+      if (this.classicFog === null && !this.classicFogPreparing) void this.buildClassicFog();
+    } else if (this.classicFog !== null) {
+      this.clouds?.destroy();
+      this.clouds = null;
+      this.classicFog = null;
+      this.showFogUnderCloud(false);
+    }
+  }
+
+  /** Repaints the fog cells, near and far, for clouds coming or going over them. */
+  private showFogUnderCloud(on: boolean): void {
+    setFogUnderCloud(on);
+    this.raster.reset();
+    for (const zone of this.store.loadedZoneRefs()) this.raster.applyZone(zone);
+    this.rebuildAll();
+  }
+
+  private async buildClassicFog(): Promise<void> {
+    if (!this.webGL2 || !this.gl || !this.renderer) return;
+    this.classicFogPreparing = true;
+    try {
+      const fog = await import("./painted/classicFog");
+      const ready = await fog.prepareFog(this.renderer, this.gl);
+      if (!ready || this.destroyed || quality() !== "high") return;
+      const data = new fog.GroundData();
+      for (const zone of this.store.loadedZoneRefs()) data.applyZone(zone);
+      this.classicFog = data;
+      this.clouds = new fog.CloudLayer(data);
+      // Over the tiles, under the cells' markers and the attack range, as in the painted look.
+      this.root.addChildAt(this.clouds.mesh, this.root.getChildIndex(this.world));
+      void this.clouds.load();
+      this.showFogUnderCloud(true);
+    } catch (caught) {
+      // The code did not arrive (offline, a new release): fog stays dark cells.
+      console.warn("Classic's clouds could not be prepared; the undiscovered map stays dark.", caught);
+    } finally {
+      this.classicFogPreparing = false;
+    }
+  }
+
   private buildPainted(look: PaintedLookModule, programs: PaintedPrograms): void {
     const painted = new look.PaintedGround(undefined, programs.warmer);
     this.painted = painted;
@@ -550,6 +605,10 @@ export class MapRenderer {
 
   destroy(): void {
     this.destroyed = true;
+    this.stopQuality?.();
+    this.stopQuality = null;
+    this.classicFog = null;
+    setFogUnderCloud(false);
     this.clouds?.destroy();
     this.clouds = null;
     this.painted?.destroy();
