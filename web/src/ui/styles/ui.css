@@ -1005,8 +1005,9 @@ body {
   height: 18px;
 }
 
-.account-menu__items > .account-menu__replay {
-  grid-column: 1 / -1;
+.account-menu__items + .account-menu__items {
+  padding-top: var(--space-1);
+  border-top: 1px solid var(--colour-border-subtle);
 }
 
 @media (pointer: coarse) {
@@ -1945,7 +1946,7 @@ body {
 /* One size for the three tabs, so the window does not jump between them. */
 .account-settings-popup {
   width: min(560px, calc(100vw - 16px));
-  height: min(calc(100dvh - 32px), 700px);
+  height: min(calc(100dvh - 32px), 640px);
 }
 
 .account-settings-popup > .panel__body {
@@ -1979,10 +1980,17 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  min-height: 44px;
   cursor: pointer;
   font-weight: 600;
   color: var(--colour-text-strong);
 }
+.account-settings__toggle input[type="checkbox"] {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+
 .account-settings__select {
   min-width: 0;
   margin-left: auto;

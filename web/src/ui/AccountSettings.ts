@@ -1,7 +1,7 @@
 /**
- * The account settings dialog, opened from the account menu, in three tabs
- * (owner, 5 Nov 2026): Account (avatar, username, Shiny Lock, country), Look and
- * sound, and Privacy (world chat, the privacy switches, blocked players). "World
+ * The Settings dialog, opened from the account menu, in three tabs (owner,
+ * 5 Nov 2026): Account (avatar, username, Shiny Lock), Look and sound, and
+ * Social (world chat, country, the privacy switches, blocked players). "World
  * chat", "Game effects" and "Look and sound" are kept in this browser only: no
  * server, except the volume sliders, which the account menu has too
  * (`ui/SoundSliders.ts`).
@@ -32,10 +32,10 @@ import { Popup } from "@/ui/Popup";
 import { reportLook } from "@/app/lookReport";
 
 export const SETTINGS_TEXT = {
-  title: "Account settings",
+  title: "Settings",
   tabAccount: "Account",
   tabLook: "Look and sound",
-  tabPrivacy: "Privacy",
+  tabSocial: "Social",
   reduceLabel: "Reduce effects",
   reduceHint: "Turns off screen shake, hit pauses and slow motion in attacks, with fewer particles.",
   loadFailed: "Could not load your account. Try again.",
@@ -132,7 +132,7 @@ export interface AccountSettingsOptions {
 const SETTINGS_TABS = [
   { id: "account", label: SETTINGS_TEXT.tabAccount },
   { id: "look", label: SETTINGS_TEXT.tabLook },
-  { id: "privacy", label: SETTINGS_TEXT.tabPrivacy },
+  { id: "social", label: SETTINGS_TEXT.tabSocial },
 ] as const;
 
 type SettingsTab = (typeof SETTINGS_TABS)[number]["id"];
@@ -183,7 +183,7 @@ const settingsTabs = (body: HTMLElement): Record<SettingsTab, HTMLElement> => {
     tabs.get(next)?.focus();
     event.preventDefault();
   });
-  body.append(strip, panes.account, panes.look, panes.privacy);
+  body.append(strip, panes.account, panes.look, panes.social);
   show(active);
   return panes;
 };
@@ -207,18 +207,15 @@ export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
     (account) => {
       noteShinyLock(account.shinyLocked);
       status.remove();
-      panes.account.append(
-        usernameSection(account, options),
-        shinySection(account),
-        countrySection(account.country),
-      );
-      panes.privacy.append(chatSection(), privacySection(account.privacy));
+      panes.account.append(usernameSection(account, options), shinySection(account));
+      // Country last: its long list would push the switches out of sight.
+      panes.social.append(chatSection(), privacySection(account.privacy), countrySection(account.country));
     },
     () => {
       status.textContent = SETTINGS_TEXT.loadFailed;
       status.classList.add("field__hint--error");
       // Kept in this browser, so it works without the server.
-      panes.privacy.append(chatSection());
+      panes.social.append(chatSection());
     },
   );
   return popup;

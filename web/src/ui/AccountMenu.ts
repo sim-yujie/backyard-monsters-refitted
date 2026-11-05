@@ -12,7 +12,7 @@
  * out was picked, and a press elsewhere or Escape closes it.
  *
  * With an `avatar` (issue #175) the button wears the player's critter, and
- * Account settings holds the picker (`ui/AvatarPicker.ts`).
+ * Settings holds the picker (`ui/AvatarPicker.ts`).
  *
  * The yard's HUD (#171) shows it as a `pill`: the player's name beside their
  * critter in a ring, rather than the word "Account", and under the name the
@@ -53,7 +53,7 @@ import { guideTourAvailable, startGuideTour } from "@/game/guide/tour";
 import { openAccountSettings } from "@/ui/AccountSettings";
 import type { LevelProgress } from "@/game/yard/experience";
 import { AvatarPicker, type AccountAvatar } from "@/ui/AvatarPicker";
-import { formatAmount } from "@/ui/format";
+import { formatAmount, formatCompact } from "@/ui/format";
 import { SoundSliders } from "@/ui/SoundSliders";
 import { fullscreenAvailable, isFullscreen, toggleFullscreen } from "@/ui/fullscreen";
 import { gameIcon } from "@/ui/gameIcon";
@@ -67,7 +67,7 @@ export interface AccountMenuOptions {
   /** The signed-in player's name; null or empty when the server sent none. */
   readonly name: string | null | undefined;
   readonly onSignOut: () => void;
-  /** The avatar, and the picker in Account settings; without it there is neither. */
+  /** The avatar, and the picker in Settings; without it there is neither. */
   readonly avatar?: AccountAvatar;
   /**
    * "button" (default): a small button with the face and the word "Account".
@@ -104,7 +104,7 @@ export const xpTitle = (xp: LevelProgress): string =>
 export const xpLeftText = (xp: LevelProgress): string =>
   xp.next === null
     ? "The top level"
-    : `${formatAmount(Math.max(0, xp.next - xp.points))} points to level ${xp.level + 1}`;
+    : `${formatCompact(Math.max(0, xp.next - xp.points))} points to level ${xp.level + 1}`;
 
 /** The pill's bar to the next level; the fill's width is the fraction reached. */
 const levelBar = (): { track: HTMLElement; fill: HTMLElement } => {
@@ -148,7 +148,7 @@ export class AccountMenu {
   private readonly stopSound: (() => void)[] = [];
   private readonly name: string;
   private current: AvatarId | null = null;
-  /** The picker Account settings shows; null without an avatar. */
+  /** The picker Settings shows; null without an avatar. */
   private readonly picker: AvatarPicker | null = null;
 
   constructor(options: AccountMenuOptions) {
@@ -227,9 +227,16 @@ export class AccountMenu {
       who.prepend(this.face("account-menu__who-face", "full"));
     }
 
-    // Two columns, so the whole menu fits a laptop screen without scrolling.
-    const items = document.createElement("div");
-    items.className = "account-menu__items";
+    // Three groups, each in two columns, so the whole menu fits a laptop
+    // screen without scrolling: playing, news and the community, and tools.
+    const group = (): HTMLElement => {
+      const items = document.createElement("div");
+      items.className = "account-menu__items";
+      return items;
+    };
+    const play = group();
+    const community = group();
+    const tools = group();
 
     const signOut = document.createElement("button");
     signOut.type = "button";
@@ -241,15 +248,17 @@ export class AccountMenu {
       options.onSignOut();
     });
 
-    this.list.append(who, items);
+    this.list.append(who, play, community, tools);
     // Help: Bob's guided start again, as a tour with Next buttons (issue #227,
     // Q5). Offered only where it can run (the own yard, the guide not running).
     this.replay = document.createElement("button");
     this.replay.type = "button";
     // Not `account-menu__item`: Log out stays the menu's one item of that name.
     this.replay.className = "btn btn--ghost account-menu__help account-menu__replay";
+    this.replay.title = "Replay the guided start";
+    this.replay.setAttribute("aria-label", "Help: replay the guided start");
     this.replay.setAttribute("role", "menuitem");
-    this.replay.textContent = "Help: replay the guided start";
+    this.replay.textContent = "Guided start";
     this.replay.hidden = true;
     this.replay.addEventListener("click", () => {
       this.toggle(false);
@@ -272,7 +281,7 @@ export class AccountMenu {
         this.toggle(false);
         onFriends();
       });
-      items.append(friends);
+      play.append(friends);
       // The same count on the button, so it shows with the menu shut.
       this.buttonCount = document.createElement("span");
       this.buttonCount.className = "account-menu__button-count";
@@ -292,7 +301,7 @@ export class AccountMenu {
         this.toggle(false);
         onAchievements();
       });
-      items.append(achievements);
+      play.append(achievements);
     }
     if (options.onLeaderboard) {
       const onLeaderboard = options.onLeaderboard;
@@ -306,7 +315,7 @@ export class AccountMenu {
         this.toggle(false);
         onLeaderboard();
       });
-      items.append(leaderboard);
+      play.append(leaderboard);
     }
     if (options.onWhatsNew) {
       const onWhatsNew = options.onWhatsNew;
@@ -320,7 +329,7 @@ export class AccountMenu {
         this.toggle(false);
         onWhatsNew();
       });
-      items.append(whatsNew);
+      community.append(whatsNew);
     }
     if (options.onNews) {
       const onNews = options.onNews;
@@ -334,7 +343,7 @@ export class AccountMenu {
         this.toggle(false);
         onNews();
       });
-      items.append(news);
+      community.append(news);
     }
     if (options.onReportBug) {
       const onReportBug = options.onReportBug;
@@ -348,7 +357,7 @@ export class AccountMenu {
         this.toggle(false);
         onReportBug();
       });
-      items.append(reportBug);
+      tools.append(reportBug);
     }
     // Support the game (owner 24 Oct 2026): always here, on every screen with
     // the menu. Only opens the panel of links; it gives nothing in the game.
@@ -365,7 +374,7 @@ export class AccountMenu {
       const container = document.querySelector<HTMLElement>(".overlay__layer--modal") ?? document.body;
       openSupportPanel({ container });
     });
-    items.append(support);
+    community.append(support);
     // The community Discord, in a new tab; no referrer to the outside site.
     const discord = document.createElement("a");
     discord.className = "btn btn--ghost account-menu__help account-menu__discord";
@@ -375,13 +384,13 @@ export class AccountMenu {
     discord.rel = "noopener noreferrer";
     discord.textContent = "Join the Discord";
     discord.addEventListener("click", () => this.toggle(false));
-    items.append(discord);
-    // Account settings (username, Shiny Lock) and Fullscreen, the original's top-bar button.
+    community.append(discord);
+    // Settings (username, Shiny Lock) and Fullscreen, the original's top-bar button.
     const settings = document.createElement("button");
     settings.type = "button";
     settings.className = "btn btn--ghost account-menu__help account-menu__settings";
     settings.setAttribute("role", "menuitem");
-    settings.textContent = "Account settings";
+    settings.textContent = "Settings";
     settings.addEventListener("click", () => {
       this.toggle(false);
       const container = document.querySelector<HTMLElement>(".overlay__layer--modal") ?? document.body;
@@ -402,7 +411,8 @@ export class AccountMenu {
     // (`game/sound/soundSwitches.ts`, `ui/SoundSliders.ts`).
     const sound = new SoundSliders("account-menu__sound");
     this.stopSound.push(() => sound.destroy());
-    items.append(settings, this.fullscreen, this.replay);
+    tools.prepend(settings, this.fullscreen);
+    tools.append(this.replay);
     this.list.append(sound.element, signOut);
     this.element.append(this.button, this.list);
     document.addEventListener("pointerdown", this.dismiss, true);

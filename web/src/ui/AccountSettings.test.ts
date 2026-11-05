@@ -401,20 +401,22 @@ describe("AccountSettings tabs", () => {
     expect(tab("account").getAttribute("aria-selected")).toBe("true");
     expect(pane("account").contains(document.querySelector("#settings-username"))).toBe(true);
     expect(pane("look").hidden).toBe(true);
-    tab("privacy").click();
+    tab("social").click();
     expect(pane("account").hidden).toBe(true);
-    expect(pane("privacy").hidden).toBe(false);
-    expect(pane("privacy").contains(document.querySelector("#settings-show-online"))).toBe(true);
-    expect(tab("privacy").getAttribute("aria-selected")).toBe("true");
+    expect(pane("social").hidden).toBe(false);
+    expect(pane("social").contains(document.querySelector("#settings-show-online"))).toBe(true);
+    expect(pane("social").textContent).toContain(SETTINGS_TEXT.countryTitle);
+    expect(pane("account").textContent).not.toContain(SETTINGS_TEXT.countryTitle);
+    expect(tab("social").getAttribute("aria-selected")).toBe("true");
     expect(tab("account").tabIndex).toBe(-1);
   });
 
   it("moves between tabs with the arrow keys, wrapping round", async () => {
     await open({});
     tab("account").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
-    expect(tab("privacy").getAttribute("aria-selected")).toBe("true");
-    expect(document.activeElement).toBe(tab("privacy"));
-    tab("privacy").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(tab("social").getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(tab("social"));
+    tab("social").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     expect(pane("account").hidden).toBe(false);
   });
 

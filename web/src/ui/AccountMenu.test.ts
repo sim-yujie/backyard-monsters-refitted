@@ -11,6 +11,7 @@ import {
   xpTitle,
 } from "./AccountMenu";
 import { levelProgress } from "@/game/yard/experience";
+import { formatCompact } from "@/ui/format";
 import {
   loadSoundSwitches,
   resetSoundSwitchesForTest,
@@ -97,7 +98,7 @@ describe("AccountMenu", () => {
       expect(menu.element.querySelector(".avatar-picker")).toBeNull();
     });
 
-    it("moves the faces after a pick in Account settings, and opens it again on that pick", async () => {
+    it("moves the faces after a pick in Settings, and opens it again on that pick", async () => {
       const { menu, pick, face } = withAvatar();
       openSettings(menu).click();
       expect(pick).toHaveBeenCalledWith("bee");
@@ -188,7 +189,7 @@ describe("AccountMenu", () => {
       menu.setLevel(1, xp);
       expect(bar.hidden).toBe(false);
       expect(fill.style.width).toBe("50%");
-      expect(next.textContent).toBe("450 points to level 2");
+      expect(next.textContent).toBe(`${formatCompact(450)} points to level 2`);
       expect(button.title).toBe(xpTitle(xp));
       menu.setLevel(1);
       expect(line.hidden).toBe(false);
@@ -302,7 +303,7 @@ describe("AccountMenu", () => {
     });
   });
   describe("the Leaderboard item", () => {
-    it("is there only when asked for, just before What's new, and opens the board", () => {
+    it("is there only when asked for, the last of the first group, and opens the board", () => {
       const { button } = build();
       button.click();
       expect(menu!.element.querySelector(".account-menu__leaderboard")).toBeNull();
@@ -315,14 +316,14 @@ describe("AccountMenu", () => {
       const item = menu.element.querySelector<HTMLButtonElement>(".account-menu__leaderboard")!;
       expect(item.getAttribute("role")).toBe("menuitem");
       expect(item.textContent).toBe("Leaderboard");
-      expect(item.nextElementSibling?.classList.contains("account-menu__whats-new")).toBe(true);
+      expect(item.nextElementSibling).toBeNull();
       item.click();
       expect(onLeaderboard).toHaveBeenCalledOnce();
       expect(menu.open).toBe(false);
     });
   });
   describe("the Report a bug item", () => {
-    it("is there only when asked for, after What's new, and opens the form", () => {
+    it("is there only when asked for, after Fullscreen, and opens the form", () => {
       const { button } = build();
       button.click();
       expect(menu!.element.querySelector(".account-menu__report-bug")).toBeNull();
@@ -335,22 +336,22 @@ describe("AccountMenu", () => {
       const item = menu.element.querySelector<HTMLButtonElement>(".account-menu__report-bug")!;
       expect(item.getAttribute("role")).toBe("menuitem");
       expect(item.textContent).toBe("Report a bug");
-      expect(item.previousElementSibling?.classList.contains("account-menu__whats-new")).toBe(true);
+      expect(item.previousElementSibling?.classList.contains("account-menu__fullscreen")).toBe(true);
       item.click();
       expect(onReportBug).toHaveBeenCalledOnce();
       expect(menu.open).toBe(false);
     });
   });
   describe("the Support the game item", () => {
-    it("is always there, after Report a bug, with the painted heart, and opens the support panel", () => {
-      menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn(), onReportBug: vi.fn() });
+    it("is always there, after News, with the painted heart, and opens the support panel", () => {
+      menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn(), onNews: vi.fn() });
       document.body.append(menu.element);
       menu.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
       const item = menu.element.querySelector<HTMLButtonElement>(".account-menu__support")!;
       expect(item.getAttribute("role")).toBe("menuitem");
       expect(item.textContent).toBe("Support the game");
       expect(item.querySelector(".game-icon--support")).not.toBeNull();
-      expect(item.previousElementSibling?.classList.contains("account-menu__report-bug")).toBe(true);
+      expect(item.previousElementSibling?.classList.contains("account-menu__news")).toBe(true);
       item.click();
       expect(menu.open).toBe(false);
       expect(document.querySelector(".support-popup")).not.toBeNull();
