@@ -188,6 +188,8 @@ export const startInfernoPlayerAttack = async (
       count: 1,
       starttime: now,
       seen: false,
+      // The longer window, as the session's (`attackWindow.ts`).
+      ...(declareWar && { declarewar: true }),
     };
     locked.attacks = [...locked.attacks, attack];
     locked.attackid = Math.floor(Math.random() * 99999) + 1;

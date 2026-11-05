@@ -17,7 +17,7 @@ import {
   REPLAY_MISMATCH_MESSAGE,
   REPLAY_MISMATCH_SETTLES,
   REPLAY_RESEND_DELAY_MS,
-  SESSION_WINDOW_SECONDS,
+  saveWindowSeconds,
   WINDOW_MARGIN_SECONDS,
   createEndPlugin,
   creditedOf,
@@ -451,7 +451,7 @@ describe("the end plugin", () => {
   it("warns once on the wall clock a margin before the server's save window closes", () => {
     mount(async () => ({ error: 0, basesaveid: 1 }) as BaseSaveResponse);
     const shown = () => notices.element.textContent ?? "";
-    clock += (SESSION_WINDOW_SECONDS - WINDOW_MARGIN_SECONDS - 1) * 1000;
+    clock += (saveWindowSeconds(false) - WINDOW_MARGIN_SECONDS - 1) * 1000;
     vi.advanceTimersByTime(1000);
     expect(shown()).toBe("");
 
@@ -466,14 +466,19 @@ describe("the end plugin", () => {
     expect(shown()).toBe("");
   });
 
-  it("warns a Declare War attack on the wall clock, though its own countdown runs past the window (#61)", () => {
-    // Declare War's 420 s countdown alone reaches the server's 420 s window, so
-    // the warning cannot wait for the session's clock.
+  it("warns a Declare War attack on the wall clock, a margin before its own longer window closes (#61)", () => {
+    // Declare War's window is its 420 s countdown, the 120 s grace and a spare minute.
     session = new AttackSession({ target: targetOf(), seed: 1, declareWar: true });
     session.start();
     expect(session.state().countdownSeconds).toBe(DECLARE_WAR_COUNTDOWN_SECONDS);
     mount(async () => ({ error: 0, basesaveid: 1 }) as BaseSaveResponse);
-    clock += (SESSION_WINDOW_SECONDS - WINDOW_MARGIN_SECONDS) * 1000;
+    expect(saveWindowSeconds(true)).toBe(600);
+    // Not at the ordinary window's margin…
+    clock += (saveWindowSeconds(false) - WINDOW_MARGIN_SECONDS) * 1000;
+    vi.advanceTimersByTime(1000);
+    expect(notices.element.textContent).not.toContain("stops accepting");
+    // …but at its own.
+    clock += (saveWindowSeconds(true) - saveWindowSeconds(false)) * 1000;
     vi.advanceTimersByTime(1000);
     expect(session.state().phase).toBe("running");
     expect(notices.element.textContent).toContain("stops accepting this attack's result in about 30 s");
@@ -481,7 +486,7 @@ describe("the end plugin", () => {
 
   it("does not warn after the attack is over, and clears the warning on the end", () => {
     mount(async () => ({ error: 0, basesaveid: 1 }) as BaseSaveResponse);
-    clock += SESSION_WINDOW_SECONDS * 1000;
+    clock += saveWindowSeconds(false) * 1000;
     vi.advanceTimersByTime(1000);
     expect(notices.element.textContent).toContain("stops accepting");
     session.retreat();

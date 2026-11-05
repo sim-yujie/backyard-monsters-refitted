@@ -50,6 +50,15 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * "Support the game" (`ui/support/SupportPanel.ts`, `art-samples/support-heart`):
  * a red heart held in green monster hands (`support`), so it is not read as
  * Health's plain heart; `support2` is the heart with a gold coin, the other option.
+ *
+ * The Yard Planner's buttons (`art-samples/planner-icons`, owner 4 Nov: "I
+ * don't like simple icons. This is a game after all"): blue curved arrows for
+ * undo and redo, a green monster hand tapping for select (`select2` is a gold
+ * mouse pointer), a hazard-striped frame with a pointer for box select
+ * (`box2` is gold corner brackets round stone blocks), a gold magnifier for
+ * find, a stone wall with the level up arrow for upgrade walls, and a set bear
+ * trap inside a yellow reload arrow for re-arm traps (`rearm2` is a spiked
+ * mine in the same arrow).
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -82,6 +91,16 @@ export const GAME_ICONS = {
   mapflat: "Flat map",
   support: "Support the game",
   support2: "Support the game",
+  undo: "Undo",
+  redo: "Redo",
+  select: "Select",
+  select2: "Select",
+  box: "Box select",
+  box2: "Box select",
+  find: "Find",
+  wallupgrade: "Upgrade walls",
+  rearm: "Re-arm traps",
+  rearm2: "Re-arm traps",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;
