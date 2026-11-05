@@ -19,7 +19,6 @@ Tap **Map** to open your Map Room. In Map Room 1 you'll find two kinds of target
 - **Wild monster tribes.** The Legionnaires, Kozu, Abunakki and Dreadnauts are always there to raid. A flattened tribe is back in 10 minutes.
 - **Neighbours.** Other players near you. Protected yards can't be attacked.
 
-<!-- TODO lead: retake (see guides-picture-audit.md) -->
 ![Map Room 1: neighbours and wild tribe camps on a painted map](/images/shots/map.webp)
 
 Tap a target to see it, then tap **Attack**.
