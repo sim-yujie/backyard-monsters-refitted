@@ -3,7 +3,7 @@ title: What's new in Revamped
 description: The features you won't find in the original Backyard Monsters, and where to find them.
 order: 6
 icon: /images/guides/new-card.webp
-updated: 2026-11-05
+updated: 2026-11-06
 ---
 
 The first sections are new in **beta 6**. Everything from "New in beta 5" down, except the last section, came with beta 5.
