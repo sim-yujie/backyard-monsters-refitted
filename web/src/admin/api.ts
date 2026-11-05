@@ -423,6 +423,10 @@ export interface AdminAnnouncement {
   live: boolean;
   /** How many players pressed "Got it". */
   dismissals: number;
+  /** The Shiny each player may claim, 0 for none. */
+  shiny: number;
+  /** How many players claimed the gift. */
+  claims: number;
 }
 
 export interface AnnouncementLimits {
@@ -430,6 +434,7 @@ export interface AnnouncementLimits {
   bodyMax: number;
   images: number;
   imageBytesMax: number;
+  shinyMax: number;
 }
 
 /** What Save sends: a picture already saved by id, or a new one as a data URL. */
@@ -440,6 +445,7 @@ export interface AnnouncementForm {
   startsAt: string | null;
   endsAt: string | null;
   images: ({ keep: number } | { data: string })[];
+  shiny: number;
 }
 
 export const fetchAnnouncements = (): Promise<

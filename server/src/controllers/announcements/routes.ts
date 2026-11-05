@@ -6,6 +6,7 @@ import { Status } from "../../enums/StatusCodes.js";
 import { apiVersion } from "../../middleware/apiVersioning.js";
 import {
   ANNOUNCEMENT_LIMITS,
+  claimForPlayer,
   createAnnouncement,
   deleteAnnouncement,
   dismissForPlayer,
@@ -25,6 +26,7 @@ import { logger } from "../../utils/logger.js";
  *
  *   GET  /api/:apiVersion/bm/announcements              the current ones, newest first, each with `dismissed`
  *   POST /api/:apiVersion/bm/announcements/:id/dismiss  "Got it"
+ *   POST /api/:apiVersion/bm/announcements/:id/claim    the gift's Shiny, once per account
  *   GET  /api/:apiVersion/announcements/images/:id      a published one's picture (an `<img>` sends no sign-in)
  *
  * The dashboard's, behind the owner-only check like every `/admin` route:
@@ -83,6 +85,12 @@ const sendImage = (ctx: Context, image: { bytes: Buffer; type: string }, cache: 
 
 const BAD_IMAGE = "A picture is not right. Reload the page and try again.";
 
+const CLAIM_REFUSAL_WORDS = {
+  notFound: "This gift has ended.",
+  noGift: "This announcement has no gift.",
+  noMainYard: "Your yard could not be found.",
+} as const;
+
 export const mountAnnouncementRoutes = (router: Router, deps: AnnouncementRouteDeps): void => {
   const api = "/api/:apiVersion";
   const now = deps.now ?? (() => new Date());
@@ -98,6 +106,18 @@ export const mountAnnouncementRoutes = (router: Router, deps: AnnouncementRouteD
     const done = await dismissForPlayer(deps.em(), ctx.authUser.userid, id, now());
     if (done === "notFound") return refuse(ctx, Status.NOT_FOUND, "There is no such announcement.", "notFound");
     ok(ctx, { id });
+  });
+
+  router.post(`${api}/bm/announcements/:id/claim`, apiVersion, ...deps.signedIn, async (ctx) => {
+    const id = idOf(ctx, "announcement");
+    if (id === null) return;
+    const done = await claimForPlayer(deps.em(), ctx.authUser.userid, id, now());
+    if (done.outcome !== "claimed" && done.outcome !== "already") {
+      const status = done.outcome === "notFound" ? Status.NOT_FOUND : Status.CONFLICT;
+      return refuse(ctx, status, CLAIM_REFUSAL_WORDS[done.outcome], done.outcome);
+    }
+    if (done.outcome === "claimed") logger.info(`Announcements: ${ctx.authUser.userid} claimed ${done.shiny} Shiny from ${id}`);
+    ok(ctx, { id, shiny: done.shiny, already: done.outcome === "already" });
   });
 
   router.get(`${api}/announcements/images/:id`, apiVersion, deps.imageLimiter, async (ctx) => {
@@ -134,6 +154,9 @@ export const mountAnnouncementRoutes = (router: Router, deps: AnnouncementRouteD
     const done = await updateAnnouncement(em, id, input.value, ctx.authUser.userid, now());
     if (done === "notFound") return refuse(ctx, Status.NOT_FOUND, "There is no such announcement.", "notFound");
     if (done === "badImage") return refuse(ctx, Status.BAD_REQUEST, BAD_IMAGE, "badImage");
+    if (done === "giftClaimed") {
+      return refuse(ctx, Status.CONFLICT, "Players have already claimed this gift, so its amount cannot change.", "giftClaimed");
+    }
     logger.info(`Announcements: ${ctx.authUser.userid} changed ${id} (${input.value.status})`);
     ok(ctx, { announcement: await getForAdmin(em, id, now()) });
   });

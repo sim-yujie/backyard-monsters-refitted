@@ -5,6 +5,7 @@ import {
   AnnouncementsView,
   draftProblem,
   formOf,
+  giftNeedsConfirm,
   fromLocalInput,
   pictureProblem,
   standing,
@@ -17,7 +18,7 @@ import {
  * where each announcement stands, and the preview drawn by the game's code.
  */
 
-const LIMITS = { titleMax: 80, bodyMax: 2000, images: 3, imageBytesMax: 1_000_000 };
+const LIMITS = { titleMax: 80, bodyMax: 2000, images: 3, imageBytesMax: 1_000_000, shinyMax: 10_000 };
 
 interface Call {
   method: string;
@@ -41,6 +42,8 @@ const saved = (over: Partial<AdminAnnouncement> = {}): AdminAnnouncement => ({
   imageIds: [],
   live: true,
   dismissals: 12,
+  shiny: 0,
+  claims: 0,
   ...over,
 });
 
@@ -51,6 +54,7 @@ const draft = (over: Partial<Draft> = {}): Draft => ({
   startsAt: "",
   endsAt: "",
   pictures: [],
+  shiny: "",
   ...over,
 });
 
@@ -97,6 +101,24 @@ describe("the form's checks", () => {
     );
   });
 
+  it("takes a whole gift within the limit, and asks once more before publishing one", () => {
+    expect(draftProblem(draft({ shiny: "200" }), LIMITS)).toBeNull();
+    expect(draftProblem(draft({ shiny: "" }), LIMITS)).toBeNull();
+    for (const shiny of ["-1", "1.5", "10001", "many"]) {
+      expect(draftProblem(draft({ shiny }), LIMITS)).toContain("gift");
+    }
+    expect(formOf(draft({ shiny: " 200 " })).shiny).toBe(200);
+    expect(formOf(draft()).shiny).toBe(0);
+
+    const publish = { status: "published", shiny: "200" } as const;
+    expect(giftNeedsConfirm(publish, undefined)).toBe(true);
+    expect(giftNeedsConfirm(publish, saved({ status: "draft", shiny: 200 }))).toBe(true);
+    expect(giftNeedsConfirm(publish, saved({ shiny: 100 }))).toBe(true);
+    expect(giftNeedsConfirm(publish, saved({ shiny: 200 }))).toBe(false);
+    expect(giftNeedsConfirm({ status: "draft", shiny: "200" }, undefined)).toBe(false);
+    expect(giftNeedsConfirm({ status: "published", shiny: "" }, undefined)).toBe(false);
+  });
+
   it("takes PNG, JPEG and WebP pictures only", () => {
     expect(pictureProblem({ type: "image/png", size: 5_000 })).toBeNull();
     expect(pictureProblem({ type: "image/webp", size: 5_000 })).toBeNull();
@@ -128,6 +150,7 @@ describe("the form's checks", () => {
       status: "published",
       startsAt: null,
       endsAt: null,
+      shiny: 0,
       images: [{ data: "data:image/png;base64,AAAA" }, { keep: 9 }],
     });
   });

@@ -2328,6 +2328,10 @@ tbody th {
   padding: 16px;
 }
 
+.ann-gift .field-input {
+  max-width: 160px;
+}
+
 .ann-preview-foot {
   display: flex;
   justify-content: flex-end;

@@ -1,6 +1,7 @@
 import { dismissAnnouncement, fetchAnnouncements } from "@/api/announcements";
 import { AnnouncementQueue, guideRunning } from "@/game/announcements/announcementQueue";
 import { openAnnouncement } from "@/ui/announcements/AnnouncementDialog";
+import { onGiftClaimed } from "@/ui/announcements/announcementGift";
 import { isPopupOver } from "@/ui/Popup";
 import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
 
@@ -8,7 +9,8 @@ import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
  * Own-yard plugin for the owner's announcements
  * (`game/announcements/announcementQueue.ts`): after the yard loads, each
  * current one the player has not pressed "Got it" on pops up, one at a time,
- * once nothing else has the screen.
+ * once nothing else has the screen. A gift claimed here or in "News" moves
+ * the HUD's Shiny through the yard's next answer.
  */
 
 /** Whether Bob is talking: the guided start, Help's tour of it, or a tip. */
@@ -40,7 +42,11 @@ export const announcementsPlugin: YardPlugin = (mounts) => {
     clearTimer: (handle) => window.clearTimeout(handle as number),
   });
   void queue.start();
-  return () => queue.stop();
+  const stopGifts = onGiftClaimed(() => void mounts.store.refresh());
+  return () => {
+    stopGifts();
+    queue.stop();
+  };
 };
 
 YARD_PLUGINS.push(announcementsPlugin);

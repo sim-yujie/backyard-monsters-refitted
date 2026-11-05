@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Announcement } from "@/api/announcements";
 import { isPopupOver } from "@/ui/Popup";
 import { announcementText, linkPieces, paragraphsOf, safeHref } from "./announcementContent";
+import { onGiftClaimed } from "./announcementGift";
 import { isAnnouncementOpen, openAnnouncement, openNews } from "./AnnouncementDialog";
 
 const news = (id: number, overrides: Partial<Announcement> = {}): Announcement => ({
@@ -114,6 +115,52 @@ describe("openAnnouncement", () => {
     });
     document.querySelector(".announcement__image")!.dispatchEvent(new Event("error"));
     expect(document.querySelector(".announcement__picture")).toBeNull();
+  });
+});
+
+describe("a gift", () => {
+  const gift = { id: 7, title: "Thank you", body: "1,000 players!", imageIds: [], shiny: 200 };
+  const words = (): string[] =>
+    [...document.querySelectorAll<HTMLButtonElement>("button")]
+      .filter((b) => !b.hidden)
+      .map((b) => b.textContent ?? "");
+
+  it("has Claim in place of Got it until it is claimed, and moves the HUD after", async () => {
+    const claim = vi.fn(() => Promise.resolve({}));
+    const heard = vi.fn();
+    const stop = onGiftClaimed(heard);
+    const onClose = vi.fn();
+    openAnnouncement({ container: document.body, announcement: gift, claim, onClose });
+    expect(words()).toContain("Claim");
+    expect(words()).not.toContain("Got it");
+    expect(document.querySelector(".res-amount")?.textContent).toContain("200");
+
+    [...document.querySelectorAll("button")].find((b) => b.textContent === "Claim")!.click();
+    await vi.waitFor(() => expect(words()).toContain("Got it"));
+    expect(claim).toHaveBeenCalledWith(7);
+    expect(heard).toHaveBeenCalledOnce();
+    expect(words()).not.toContain("Claim");
+    expect(document.querySelector(".announcement-gift")?.textContent).toContain("Claimed");
+    expect(onClose).not.toHaveBeenCalled();
+    stop();
+  });
+
+  it("says when the claim did not land and lets the player try again", async () => {
+    const claim = vi.fn(() => Promise.reject(new Error("offline")));
+    openAnnouncement({ container: document.body, announcement: gift, claim });
+    const button = [...document.querySelectorAll("button")].find((b) => b.textContent === "Claim")!;
+    button.click();
+    await vi.waitFor(() =>
+      expect(document.querySelector(".announcement-gift__problem")?.textContent).toContain("try again"),
+    );
+    expect(button.disabled).toBe(false);
+    expect(words()).not.toContain("Got it");
+  });
+
+  it("shows one already claimed with Got it", () => {
+    openAnnouncement({ container: document.body, announcement: { ...gift, claimed: true } });
+    expect(words()).toContain("Got it");
+    expect(words()).not.toContain("Claim");
   });
 });
 
