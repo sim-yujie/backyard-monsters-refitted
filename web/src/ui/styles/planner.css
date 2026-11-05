@@ -252,12 +252,20 @@
   box-shadow: 0 0 0 2px var(--colour-accent);
 }
 
-/* On a skin's plate the chosen level glows in the plate's own shape. */
+/* On a skin's plate the chosen level takes the Upgrade button's plate, so it is
+   a different colour from every other level. */
 :root[data-skin] .planner-walls.panel .planner-walls__level[aria-pressed="true"] {
-  background: none;
   border-color: transparent;
+  border-width: 0 var(--skin-button-cap);
+  border-image-source: var(--skin-button);
+  border-image-slice: 0 var(--skin-button-slice) fill;
+  border-image-width: 0 var(--skin-button-cap);
+  background: none;
   box-shadow: none;
-  filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 6px var(--colour-accent));
+  color: #fff;
+  filter: drop-shadow(0 0 4px var(--colour-accent));
+  text-shadow:
+    0 2px 0 var(--skin-button-stroke), 2px 0 0 var(--skin-button-stroke), -2px 0 0 var(--skin-button-stroke), 0 -2px 0 var(--skin-button-stroke);
 }
 
 .planner-walls__level[disabled] .planner-walls__level-art {
@@ -279,12 +287,21 @@
   margin-bottom: var(--space-3);
 }
 
+/* A centred flex row: a word wider than the space between the plate's ends
+   stays in the middle instead of running off to the right. */
 .planner-walls__tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-width: 0;
   min-height: 44px;
   padding-inline: var(--space-2);
   white-space: nowrap;
   font-size: var(--text-sm);
+}
+
+:root[data-skin] .planner-walls.panel .planner-walls__tool {
+  padding-inline: 0;
 }
 
 .planner-walls__held {
@@ -971,6 +988,7 @@
 .planner-bar__icon {
   position: relative;
   display: inline-grid;
+  place-content: center;
   place-items: center;
   width: 40px;
   min-width: 40px;
@@ -2056,9 +2074,6 @@
 }
 
 .planner-phone .planner-walls__tool {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   padding-inline: 0;
   font-size: var(--text-xs);
 }

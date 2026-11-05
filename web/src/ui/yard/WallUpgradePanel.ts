@@ -237,6 +237,7 @@ export const wallUpgradePanel = (options: WallUpgradePanelOptions): WallUpgradeP
     // With nothing picked, a level is judged against the whole yard.
     const judged = walls.length > 0 || !pick ? walls : pick.allWalls().filter(isWall);
 
+    levelHeading.textContent = `Raise to Level ${target}`;
     for (const entry of targets) {
       const element = buttons.get(entry.level);
       if (!element) continue;
