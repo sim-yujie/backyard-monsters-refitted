@@ -22,7 +22,7 @@ import { BuildingAvatars } from "./buildingAvatars";
 import { cellLift, liftCorners, setFlatGround } from "./ground";
 import { GroundArt } from "./groundArt";
 import { LiveMap } from "./live/LiveMap";
-import { ConstructionBadge } from "./constructionBadge";
+import { CONSTRUCTION_BADGE_URL, IDLE_HELPER_URL, MapPicture } from "./mapPicture";
 import { RangeOverlay } from "./RangeOverlay";
 import type { Sight } from "./Sight";
 import { TerrainRaster } from "./TerrainRaster";
@@ -114,7 +114,8 @@ export class MapRenderer {
   private readonly buildings = new BuildingAvatars();
   /** Flash's ground tiles, fetched the same way; flat hexes until they land. */
   private readonly groundArt = new GroundArt();
-  private readonly constructionBadge = new ConstructionBadge();
+  private readonly constructionBadge = new MapPicture(CONSTRUCTION_BADGE_URL);
+  private readonly idleHelper = new MapPicture(IDLE_HELPER_URL, true);
   /** The living map (water, clouds, birds): its own layers, told when chunks come and go. */
   private readonly live = new LiveMap(this.ground, () => this.rebuildAll());
   private readonly chunks = new Map<number, MapChunk>();
@@ -258,6 +259,7 @@ export class MapRenderer {
       this.buildings.load().then((ok) => ok && this.rebuildAll()),
       this.groundArt.load().then((ok) => ok && this.rebuildAll()),
       this.constructionBadge.load().then((ok) => ok && this.rebuildAll()),
+      classicLook() ? this.idleHelper.load().then((ok) => ok && this.rebuildAll()) : null,
     ]);
   }
 
@@ -562,6 +564,7 @@ export class MapRenderer {
     this.buildings.destroy();
     this.groundArt.destroy();
     this.constructionBadge.destroy();
+    this.idleHelper.destroy();
     this.atlas?.destroy();
     this.atlas = null;
     this.raster.destroy();
@@ -610,6 +613,7 @@ export class MapRenderer {
             this.ground,
             this.groundArt,
             this.constructionBadge,
+            this.idleHelper,
           );
           this.chunks.set(ref.id, chunk);
           this.world.addChild(chunk.container);

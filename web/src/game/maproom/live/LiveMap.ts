@@ -28,8 +28,8 @@ import { WaterSheet } from "./WaterSheet";
  * redraws the small water sheet and moves the clouds and birds on
  * screen. Nothing here ever rebuilds a chunk on its own account.
  *
- * Off in Classic (Flash's map stood still) and on Quality Low, where nothing
- * is downloaded or drawn; reduced on Medium (`liveLevel.ts`). Paused while the
+ * Off on Quality Low, where nothing is downloaded or drawn, and in Classic below
+ * High (Flash's map stood still); reduced on Medium (`liveLevel.ts`). Paused while the
  * tab is hidden: the browser stops sending frames, and the clock skips the
  * gap rather than jumping.
  *

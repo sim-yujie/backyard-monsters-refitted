@@ -40,7 +40,7 @@ import type { ZoneStore } from "./ZoneStore";
 import { cellLift, isFlatGround, paintOrder } from "./ground";
 import { tagStyle, type TagStyle } from "./painted/markerStyle";
 import { GROUND_ANCHOR_X, groundAnchorY, type GroundArt } from "./groundArt";
-import type { ConstructionBadge } from "./constructionBadge";
+import type { MapPicture } from "./mapPicture";
 import { MarkerPins } from "./markerPins";
 
 /**
@@ -155,7 +155,7 @@ const BUILDING_HEIGHT = CELL_HEIGHT * 0.85;
 const FLASH_TOWER_HEIGHT = 61;
 /** The idle worker stands at the dome's right edge, this fraction of the dome height above the foot. */
 const WORKER_Y_FRACTION = 0.3;
-/** Modern's construction badge, in Flash units like the worker it replaces (longest side). */
+/** Modern's construction badge, in Flash units like the helper it replaces (longest side). */
 const BADGE_SIZE = 38;
 
 /** The gold level star every player cell wears (#334), tucked at the tower's upper left. */
@@ -246,7 +246,8 @@ export class MapChunk {
     /** The renderer's layer every chunk's ground is painted into, sorted by `zIndex`. */
     private readonly ground: Container,
     private readonly groundArt: GroundArt,
-    private readonly constructionBadge: ConstructionBadge,
+    private readonly constructionBadge: MapPicture,
+    private readonly idleHelper: MapPicture,
   ) {
     this.labels = new LabelLayer(pool);
     this.container.interactiveChildren = false;
@@ -606,10 +607,11 @@ export class MapChunk {
         this.pins.add(foot, tick);
       }
 
-      if (appearance.idleWorker) {
-        const worker = new Sprite(this.atlas.idleWorker);
+      const helperTexture = appearance.idleWorker ? this.idleHelper.texture : null;
+      if (helperTexture) {
+        const worker = new Sprite(helperTexture);
         worker.anchor.set(0.5);
-        worker.setSize((WORKER_SIZE + 4) * flashScale, (WORKER_SIZE + 4) * flashScale);
+        worker.setSize(WORKER_SIZE * flashScale, WORKER_SIZE * flashScale);
         worker.position.set(footX + (DOME_WIDTH / 2) * flashScale, footY - DOME_ABOVE_FOOT * flashScale * WORKER_Y_FRACTION);
         worker.alpha = alpha;
         this.bases.addChild(worker);
