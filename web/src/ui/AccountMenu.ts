@@ -52,7 +52,7 @@ import { waitingText } from "@/game/friends/friendText";
 import { guideTourAvailable, startGuideTour } from "@/game/guide/tour";
 import { openAccountSettings } from "@/ui/AccountSettings";
 import type { LevelProgress } from "@/game/yard/experience";
-import type { AccountAvatar } from "@/ui/AvatarPicker";
+import { AvatarPicker, type AccountAvatar } from "@/ui/AvatarPicker";
 import { formatAmount } from "@/ui/format";
 import { SoundSliders } from "@/ui/SoundSliders";
 import { fullscreenAvailable, isFullscreen, toggleFullscreen } from "@/ui/fullscreen";
@@ -148,8 +148,8 @@ export class AccountMenu {
   private readonly stopSound: (() => void)[] = [];
   private readonly name: string;
   private current: AvatarId | null = null;
-  /** False while `current` is only the default, not something the player chose. */
-  private picked = false;
+  /** The picker Account settings shows; null without an avatar. */
+  private readonly picker: AvatarPicker | null = null;
 
   constructor(options: AccountMenuOptions) {
     this.element = document.createElement("div");
@@ -159,9 +159,18 @@ export class AccountMenu {
     this.button.type = "button";
     this.button.className = "btn btn--ghost account-menu__button";
     this.name = accountName(options.name);
-    if (options.avatar) {
-      this.current = options.avatar.current;
-      this.picked = options.avatar.picked;
+    const avatar = options.avatar;
+    if (avatar) {
+      this.current = avatar.current;
+      this.picker = new AvatarPicker({
+        current: avatar.current,
+        picked: avatar.picked,
+        onPick: async (id: AvatarId) => {
+          await avatar.onPick(id);
+          this.current = id;
+          this.showFaces();
+        },
+      });
     }
     if (options.variant === "pill") {
       this.element.classList.add("account-menu--pill");
@@ -376,23 +385,8 @@ export class AccountMenu {
     settings.addEventListener("click", () => {
       this.toggle(false);
       const container = document.querySelector<HTMLElement>(".overlay__layer--modal") ?? document.body;
-      const avatar = options.avatar;
-      openAccountSettings({
-        container,
-        ...(avatar &&
-          this.current && {
-            avatar: {
-              current: this.current,
-              picked: this.picked,
-              onPick: async (id: AvatarId) => {
-                await avatar.onPick(id);
-                this.current = id;
-                this.picked = true;
-                this.showFaces();
-              },
-            },
-          }),
-      });
+      this.picker?.clearStatus();
+      openAccountSettings({ container, ...(this.picker && { avatarPicker: this.picker }) });
     });
     this.fullscreen = document.createElement("button");
     this.fullscreen.type = "button";

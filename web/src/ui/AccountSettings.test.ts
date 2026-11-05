@@ -24,6 +24,7 @@ import { reduceEffects } from "@/game/attack/juice";
 import { resetShinyLockForTests, shinyLocked } from "@/game/shinyLock";
 import { setWorldChatOn, worldChatOn } from "@/game/chat/worldChatSetting";
 import { SETTINGS_TEXT, openAccountSettings } from "./AccountSettings";
+import { AvatarPicker } from "./AvatarPicker";
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -424,7 +425,7 @@ describe("AccountSettings tabs", () => {
     api.fetchAccount.mockRejectedValue(new Error("down"));
     openAccountSettings({
       container: document.body,
-      avatar: { current: "owl", picked: true, onPick: () => Promise.resolve() },
+      avatarPicker: new AvatarPicker({ current: "owl", picked: true, onPick: () => Promise.resolve() }),
     });
     await settle();
     expect(pane("account").querySelectorAll(".avatar-picker__tile")).toHaveLength(12);

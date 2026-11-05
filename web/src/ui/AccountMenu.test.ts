@@ -106,6 +106,27 @@ describe("AccountMenu", () => {
       expect(openSettings(menu).getAttribute("aria-checked")).toBe("true");
     });
 
+    it("keeps a save running through closing and reopening, and can go back after it", async () => {
+      let finish: () => void = () => {};
+      const pick = vi.fn(() => new Promise<void>((done) => (finish = done)));
+      const { menu, face } = withAvatar(pick);
+      openSettings(menu).click();
+      // Reopened while Bee is still saving: the tiles wait with the save.
+      const bee = openSettings(menu);
+      const frog = () => document.querySelector<HTMLButtonElement>('.avatar-picker__tile[data-avatar="frog"]')!;
+      expect(bee.disabled).toBe(true);
+      frog().click();
+      expect(pick).toHaveBeenCalledOnce();
+      finish();
+      await vi.waitFor(() => expect(bee.getAttribute("aria-checked")).toBe("true"));
+      expect(face().getAttribute("src")).toMatch(/avatars\/bee-64\.webp$/);
+      expect(frog().disabled).toBe(false);
+      frog().click();
+      expect(pick).toHaveBeenCalledTimes(2);
+      finish();
+      await vi.waitFor(() => expect(menu.avatar).toBe("frog"));
+    });
+
     it("keeps the face when the save fails", async () => {
       const { menu, pick, face } = withAvatar(() => Promise.reject(new Error("no")));
       openSettings(menu).click();

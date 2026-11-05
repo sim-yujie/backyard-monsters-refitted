@@ -3,6 +3,10 @@
  * one marked. Shown in Account settings; it used to fill most of the account
  * menu (owner, 5 Nov 2026). A pick is only marked once `onPick` has stored it;
  * a failed save leaves the old mark and says so.
+ *
+ * The account menu keeps one picker for its whole life and hands it to each
+ * Account settings it opens, so a save still running when the window closes
+ * lands on the same picker that shows when it opens again.
  */
 
 import { AVATARS, avatarName, avatarUrl, type AvatarId } from "@/game/avatars";
@@ -81,6 +85,11 @@ export class AvatarPicker {
 
     this.element.append(heading, grid, this.status);
     this.mark();
+  }
+
+  /** Takes away an old failure's words, for a window opening again. */
+  clearStatus(): void {
+    this.status.hidden = true;
   }
 
   private mark(): void {

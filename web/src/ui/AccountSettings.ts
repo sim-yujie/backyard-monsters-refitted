@@ -12,7 +12,7 @@
  */
 
 import { reduceEffects, setReduceEffects } from "@/game/attack/juice";
-import { AvatarPicker, type AccountAvatar } from "@/ui/AvatarPicker";
+import type { AvatarPicker } from "@/ui/AvatarPicker";
 import { SoundSliders } from "@/ui/SoundSliders";
 import { changeUsername, fetchAccount, setShinyLocked, type AccountInfo } from "@/api/account";
 import { fetchBlocked, setPrivacy, unblockPlayer, type BlockedPlayer, type PrivacySettings } from "@/api/privacy";
@@ -125,8 +125,8 @@ export interface AccountSettingsOptions {
   readonly container: HTMLElement;
   /** Called with the new name after a successful rename. */
   readonly onRenamed?: (username: string) => void;
-  /** The avatar and its picker; without it the Account tab has no picker. */
-  readonly avatar?: AccountAvatar;
+  /** The account menu's avatar picker; without it the Account tab has none. */
+  readonly avatarPicker?: AvatarPicker;
 }
 
 const SETTINGS_TABS = [
@@ -198,7 +198,7 @@ export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
   status.textContent = "Loading…";
   const panes = settingsTabs(body);
   // The avatar and the Look and sound tab need nothing from this load.
-  if (options.avatar) panes.account.append(new AvatarPicker(options.avatar).element);
+  if (options.avatarPicker) panes.account.append(options.avatarPicker.element);
   panes.account.append(status);
   panes.look.append(lookSection(), effectsSection());
   popup.setContent(body).mount(options.container);
