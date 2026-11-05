@@ -30,7 +30,7 @@ import { TribeAvatars } from "./tribeAvatars";
 import { MR2_PAINTED, markOnce } from "./openMarks";
 import { classicLook } from "@/game/classicLook";
 import { onQualityChange, quality, type Quality } from "@/game/quality";
-import { setFogUnderCloud } from "./cellVisuals";
+import { FOG_COLOUR, setFogUnderCloud } from "./cellVisuals";
 import { isFogCell } from "@/api/types";
 import type { ZoneRecord, ZoneStore } from "./ZoneStore";
 import type { CellRange } from "./zones";
@@ -321,7 +321,10 @@ export class MapRenderer {
     this.webGL2 = (renderer as { context?: { webGLVersion?: number } }).context?.webGLVersion === 2;
     this.gl = this.webGL2 ? ((renderer as { gl?: WebGL2RenderingContext }).gl ?? null) : null;
     this.live.attach(renderer);
-    this.stopQuality ??= onQualityChange((level) => this.syncClassicFog(level));
+    this.stopQuality ??= onQualityChange((level) => {
+      this.syncClassicFog(level);
+      this.syncPaintedFog(level);
+    });
     this.syncClassicFog();
     this.dropAllChunks();
     this.lastRange = null;
@@ -530,6 +533,29 @@ export class MapRenderer {
     if (this.paintedWanted) this.setPaintedMap(true);
   }
 
+  /** Modern's clouds over the undiscovered map: not on Medium, which keeps it dark like Classic's (owner, 5 Nov 2026). */
+  private syncPaintedFog(level: Quality): void {
+    const { painted, paintedKit: kit } = this;
+    if (!painted || !kit?.programs.clouds) return;
+    if (level === "medium") {
+      this.clouds?.destroy();
+      this.clouds = null;
+      painted.setFogColour(FOG_COLOUR);
+    } else if (this.clouds === null) {
+      void this.addPaintedFog(kit.look, painted);
+    }
+  }
+
+  /** The painted fog over the ground and the borders, under the attack range and the cells' markers. */
+  private addPaintedFog(look: PaintedLookModule, painted: PaintedGround): Promise<boolean> {
+    const above = this.world.parent === this.root ? this.world : this.range.container;
+    const clouds = new look.CloudLayer(painted.groundData);
+    this.clouds = clouds;
+    this.root.addChildAt(clouds.mesh, this.root.getChildIndex(above));
+    painted.setFogColour(look.FOG_UNDER_CLOUD);
+    return clouds.load();
+  }
+
   /** Classic's clouds over the undiscovered map: on High only, the level its other clouds show on. */
   private syncClassicFog(level: Quality = quality()): void {
     if (!classicLook()) return;
@@ -587,14 +613,8 @@ export class MapRenderer {
     const above = this.world.parent === this.root ? this.world : this.range.container;
     this.root.addChildAt(this.borders.mesh, this.root.getChildIndex(above));
     for (const zone of this.store.loadedZoneRefs()) this.borders.applyZone(zone);
-    // The painted fog over the ground and the borders (a border running into the fog goes under
-    // the cloud), under the attack range and the cells' markers.
-    if (programs.clouds) {
-      this.clouds = new look.CloudLayer(painted.groundData);
-      this.root.addChildAt(this.clouds.mesh, this.root.getChildIndex(above));
-      painted.setFogColour(look.FOG_UNDER_CLOUD);
-      loads.push(this.clouds.load());
-    }
+    // A border running into the fog goes under the cloud.
+    if (programs.clouds && quality() !== "medium") loads.push(this.addPaintedFog(look, painted));
     // The rest of the programs once the art is in and has drawn (a few frames), or after a while
     // if it never comes: where programs compile one at a time (Firefox), a texture set up while
     // one compiles waits for it (`paintedLook.ts` warmRest).
