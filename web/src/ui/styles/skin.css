@@ -958,6 +958,33 @@
 
 /* The one thing to do on a card or bar (Stay protected, Apply, Send, the
    raid's I'm Ready Now) is the window's painted plate too. */
+/* The account menu's items wear the windows' small plate, so they read as
+   buttons (owner, 5 Nov 2026). Narrow ends, so the words keep the room. */
+:root[data-skin] :is(.account-menu__items > .account-menu__help, .account-menu__list > .account-menu__item) {
+  --skin-button2-cap: 14px;
+  justify-content: center;
+  padding: 0 0 3px;
+  border-style: solid;
+  border-color: transparent;
+  border-width: 0 var(--skin-button2-cap);
+  border-radius: 0;
+  border-image-source: var(--skin-button2);
+  border-image-slice: 0 var(--skin-button2-slice) fill;
+  border-image-width: 0 var(--skin-button2-cap);
+  border-image-repeat: stretch;
+  background: none;
+  color: var(--skin-button2-ink);
+  text-align: center;
+  text-shadow:
+    0 1px 0 var(--skin-button2-stroke), 1px 0 0 var(--skin-button2-stroke), -1px 0 0 var(--skin-button2-stroke), 0 -1px 0 var(--skin-button2-stroke);
+}
+
+:root[data-skin] :is(.account-menu__items > .account-menu__help, .account-menu__list > .account-menu__item):hover:not(:disabled) {
+  background: none;
+  color: var(--skin-button2-ink);
+  filter: brightness(1.08);
+}
+
 :root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing, .raid-bar, .ach-card, .descent-card, .inferno-card, .test-report__peek) .btn--primary {
   padding: 0 2px 3px;
   border-style: solid;

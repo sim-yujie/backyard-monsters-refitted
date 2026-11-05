@@ -349,7 +349,8 @@ describe("AccountMenu", () => {
       menu.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
       const item = menu.element.querySelector<HTMLButtonElement>(".account-menu__support")!;
       expect(item.getAttribute("role")).toBe("menuitem");
-      expect(item.textContent).toBe("Support the game");
+      expect(item.textContent).toBe("Support");
+      expect(item.getAttribute("aria-label")).toBe("Support the game");
       expect(item.querySelector(".game-icon--support")).not.toBeNull();
       expect(item.previousElementSibling?.classList.contains("account-menu__news")).toBe(true);
       item.click();

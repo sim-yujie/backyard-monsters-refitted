@@ -982,13 +982,12 @@ body {
 .account-menu__items {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px;
+  gap: var(--space-1);
 }
 
 .account-menu__items > .account-menu__help {
   min-width: 0;
   min-height: 40px;
-  padding-inline: var(--space-1);
   font-size: var(--text-sm);
   line-height: 1.15;
   /* The other two fonts run wider: a long item wraps rather than hits its neighbour. */
@@ -1003,6 +1002,11 @@ body {
   flex: none;
   width: 18px;
   height: 18px;
+}
+
+/* A button left alone on a row fills it, rather than leave a gap beside it. */
+.account-menu__items > :nth-child(odd):is(:last-child, :has(+ [hidden])) {
+  grid-column: 1 / -1;
 }
 
 .account-menu__items + .account-menu__items {

@@ -367,8 +367,10 @@ export class AccountMenu {
     support.setAttribute("role", "menuitem");
     support.append(
       gameIcon("support", { size: 24, decorative: true }),
-      Object.assign(document.createElement("span"), { textContent: SUPPORT_TEXT.title }),
+      Object.assign(document.createElement("span"), { textContent: "Support" }),
     );
+    support.title = SUPPORT_TEXT.title;
+    support.setAttribute("aria-label", SUPPORT_TEXT.title);
     support.addEventListener("click", () => {
       this.toggle(false);
       const container = document.querySelector<HTMLElement>(".overlay__layer--modal") ?? document.body;
