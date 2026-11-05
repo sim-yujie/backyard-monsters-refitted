@@ -19,8 +19,7 @@ Everything in your yard is paid for with four resources. Each one has its own ha
 
 Harvesters work until they are full, then stop. Tap **Collect all** to bank everything at once, or tap one harvester to empty just that one. Upgrade a harvester to make it work faster.
 
-<!-- TODO lead: retake (see guides-picture-audit.md) -->
-![A mid-game yard: the Town Hall and silos walled in the middle, towers around them, harvesters and hatcheries outside, and the resource bar along the top](/images/shots/yard-hud.webp)
+![A mid-game yard: the Town Hall walled in the middle, towers around it, and the More menu open with Mail, Defences, Alerts, Goals, Layout and Quests](/images/shots/yard-hud.webp)
 
 ## Storage
 

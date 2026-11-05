@@ -18,8 +18,7 @@ On your yard, tap **Layout** (or press the **P** key). The planner's painted ico
 - **Some walls:** tap **Box** and drag a box over them. **Shift-click** adds or removes one block.
 - **On a phone:** tap the round **More** button, then **Selection**.
 
-<!-- TODO lead: retake after the planner redo merges (see guides-picture-audit.md) -->
-![The Yard Planner: Find, then Walls, then the Block row picks all 400 walls, and Upgrade 400 walls appears](/images/guides/walls-select.webp)
+![The Yard Planner: Find, then the Block L2 row picks all 369 walls, shown marked on the yard](/images/guides/walls-select.webp)
 
 ## 3. Upgrade walls
 
@@ -29,8 +28,7 @@ Tap **Upgrade walls**, then:
 2. Tap **Select all** or **Affordable**. **Clear** starts again. A button is greyed out when you can't afford it.
 3. Check the cost, then tap **Upgrade**.
 
-<!-- TODO lead: retake after the planner redo merges (see guides-picture-audit.md) -->
-<img class="narrow" src="/images/guides/walls-upgrade.webp" alt="The Upgrade walls window: how many walls, Raise to Level 2 to 5, and the cost" width="840" height="900" loading="lazy">
+<img class="narrow" src="/images/guides/walls-upgrade.webp" alt="The Upgrade walls panel: Raise to Level 2 to 5, Select all, Affordable and Clear, 172 walls picked, the cost, then Upgrade 172" width="840" height="900" loading="lazy">
 
 - Every wall is done **at once**. No builder, no waiting.
 - Higher levels need a higher **Town Hall**.

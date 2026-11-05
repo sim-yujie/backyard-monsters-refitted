@@ -105,8 +105,7 @@ Every window has a painted frame. It follows the same switch.
 - **Low** loads smaller pictures and lighter music.
 - On a slow connection, the game suggests Low once. It never switches by itself.
 
-<!-- TODO lead: retake (see guides-picture-audit.md) -->
-![Account settings: Style (Modern or Classic) and Quality (High, Medium or Low)](/images/guides/new-settings.webp)
+![Account settings, Look and sound: Style, Font, Music, the two volume sliders, Effects and Quality](/images/guides/new-settings.webp)
 
 ## One tab per Hatchery
 

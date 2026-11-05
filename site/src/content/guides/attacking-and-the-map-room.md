@@ -37,7 +37,6 @@ Switching to another browser tab no longer pauses your attack: it keeps running.
 
 The battle ends by itself when the yard is flattened, your monsters are all gone, or time runs out. **Retreat** ends it early and keeps whatever you've looted so far.
 
-<!-- TODO lead: retake (see guides-picture-audit.md) -->
 ![An attack in progress on a Kozu Tribe camp, with the army panel open](/images/shots/attack.webp)
 
 ## Loot
