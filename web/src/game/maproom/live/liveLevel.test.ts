@@ -6,9 +6,9 @@ describe("liveLevelFor", () => {
     expect(liveLevelFor(true, "low")).toBe("off");
   });
 
-  it("moves Classic's water and gulls on Medium and High", () => {
+  it("gives Classic the gulls on Medium and everything on High", () => {
     expect(liveLevelFor(true, "medium")).toBe("classic-reduced");
-    expect(liveLevelFor(true, "high")).toBe("classic");
+    expect(liveLevelFor(true, "high")).toBe("full");
   });
 
   it("follows the Quality setting in Modern", () => {
@@ -33,19 +33,11 @@ describe("planFor", () => {
     expect(plan.artSuffix).toBe("");
   });
 
-  it("on Classic High draws the water and gulls from the sharp art, with no clouds", () => {
-    const plan = planFor("classic");
-    expect([plan.water, plan.foam, plan.birds]).toEqual([true, true, true]);
-    expect(plan.clouds).toBe(false);
-    expect(plan.stepSeconds).toBe(planFor("full").stepSeconds);
-    expect(plan.artSuffix).toBe("@2x");
-  });
-
   it("on Classic Medium draws the water and gulls at half rate from the small art, with no clouds", () => {
     const plan = planFor("classic-reduced");
     expect([plan.water, plan.foam, plan.birds]).toEqual([true, true, true]);
     expect(plan.clouds).toBe(false);
-    expect(plan.stepSeconds).toBeCloseTo(2 * planFor("classic").stepSeconds);
+    expect(plan.stepSeconds).toBeCloseTo(2 * planFor("full").stepSeconds);
     expect(plan.artSuffix).toBe("");
   });
 

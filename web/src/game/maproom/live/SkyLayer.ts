@@ -72,7 +72,7 @@ const SHADOW_FADE_FROM = 0.7;
 /**
  * The painted ground (`../painted/`) is a bright, light meadow, so the navy shadows read
  * far darker on it than on the tile map's dark grass: there they are drawn at this share
- * of their strength. The tile map (painted switch off) keeps the full shadows; Classic has none.
+ * of their strength. The tile map (Classic and painted switch off) keeps the full shadows.
  */
 export const PAINTED_SHADOW_STRENGTH = 0.45;
 const CLOUDS_FULL_BELOW = 0.55;
