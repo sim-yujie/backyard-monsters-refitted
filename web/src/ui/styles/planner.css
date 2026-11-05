@@ -988,6 +988,7 @@
 .planner-bar__icon {
   position: relative;
   display: inline-grid;
+  place-content: center;
   place-items: center;
   width: 40px;
   min-width: 40px;
