@@ -29,7 +29,7 @@ You can only hold so much of each resource. Build and upgrade **Storage Silos** 
 
 **Shiny** is the game's special currency. You use it to skip waiting: **Finish now** speeds up a job that is already running, and **Instant** does a whole build or upgrade straight away. Early on these are cheap.
 
-**Shiny Lock** hides your Shiny and shows a padlock instead, so nobody sees it over your shoulder. Turn it off in **Account settings**.
+**Shiny Lock** hides your Shiny and shows a padlock instead, so nobody sees it over your shoulder. Turn it off in **Settings**.
 
 ## Building and upgrading
 

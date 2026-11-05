@@ -1,14 +1,18 @@
 /**
- * The account settings dialog: change username and the Shiny Lock switch,
- * opened from the account menu. Its "World chat", "Game effects" and "Look and
- * sound" parts are kept in this browser only: no server, except the volume
- * sliders, which are the account menu's own (`ui/SoundSliders.ts`).
+ * The Settings dialog, opened from the account menu, in three tabs (owner,
+ * 5 Nov 2026): Account (avatar, username, Shiny Lock), Look and sound, and
+ * Social (world chat, country, the privacy switches, blocked players). "World
+ * chat", "Game effects" and "Look and sound" are kept in this browser only: no
+ * server, except the volume sliders, which the account menu has too
+ * (`ui/SoundSliders.ts`).
  *
  * Both are server rules this only fronts. A rename keeps the game's username
  * rules and a long cooldown (`changeUsername.ts`); Shiny Lock makes the server
  * refuse every Shiny spend until it is turned off again (`shinyLock.ts`).
  */
 
+import { reduceEffects, setReduceEffects } from "@/game/attack/juice";
+import type { AvatarPicker } from "@/ui/AvatarPicker";
 import { SoundSliders } from "@/ui/SoundSliders";
 import { changeUsername, fetchAccount, setShinyLocked, type AccountInfo } from "@/api/account";
 import { fetchBlocked, setPrivacy, unblockPlayer, type BlockedPlayer, type PrivacySettings } from "@/api/privacy";
@@ -28,7 +32,12 @@ import { Popup } from "@/ui/Popup";
 import { reportLook } from "@/app/lookReport";
 
 export const SETTINGS_TEXT = {
-  title: "Account settings",
+  title: "Settings",
+  tabAccount: "Account",
+  tabLook: "Look and sound",
+  tabSocial: "Social",
+  reduceLabel: "Reduce effects",
+  reduceHint: "Turns off screen shake, hit pauses and slow motion in attacks, with fewer particles.",
   loadFailed: "Could not load your account. Try again.",
   usernameLabel: "Username",
   usernameHint: "2 to 12 letters, numbers or underscores. You can change it once every 6 months.",
@@ -116,7 +125,68 @@ export interface AccountSettingsOptions {
   readonly container: HTMLElement;
   /** Called with the new name after a successful rename. */
   readonly onRenamed?: (username: string) => void;
+  /** The account menu's avatar picker; without it the Account tab has none. */
+  readonly avatarPicker?: AvatarPicker;
 }
+
+const SETTINGS_TABS = [
+  { id: "account", label: SETTINGS_TEXT.tabAccount },
+  { id: "look", label: SETTINGS_TEXT.tabLook },
+  { id: "social", label: SETTINGS_TEXT.tabSocial },
+] as const;
+
+type SettingsTab = (typeof SETTINGS_TABS)[number]["id"];
+
+/** The tab strip and its three panes, the Account tab showing; returns the panes. */
+const settingsTabs = (body: HTMLElement): Record<SettingsTab, HTMLElement> => {
+  const strip = document.createElement("div");
+  strip.className = "tabs account-settings__tabs";
+  strip.setAttribute("role", "tablist");
+  strip.setAttribute("aria-label", SETTINGS_TEXT.title);
+  const tabs = new Map<SettingsTab, HTMLButtonElement>();
+  const panes = {} as Record<SettingsTab, HTMLElement>;
+  let active: SettingsTab = "account";
+  const show = (id: SettingsTab): void => {
+    active = id;
+    for (const [tabId, tab] of tabs) {
+      const on = tabId === id;
+      tab.setAttribute("aria-selected", String(on));
+      tab.tabIndex = on ? 0 : -1;
+      panes[tabId].hidden = !on;
+    }
+  };
+  for (const { id, label } of SETTINGS_TABS) {
+    const tab = document.createElement("button");
+    tab.type = "button";
+    tab.className = "tabs__tab account-settings__tab";
+    tab.id = `account-settings-tab-${id}`;
+    tab.dataset["tab"] = id;
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-controls", `account-settings-pane-${id}`);
+    tab.textContent = label;
+    tab.addEventListener("click", () => show(id));
+    strip.append(tab);
+    tabs.set(id, tab);
+    const pane = document.createElement("div");
+    pane.className = "account-settings__pane";
+    pane.id = `account-settings-pane-${id}`;
+    pane.setAttribute("role", "tabpanel");
+    pane.setAttribute("aria-labelledby", tab.id);
+    panes[id] = pane;
+  }
+  strip.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    const ids = SETTINGS_TABS.map((tab) => tab.id);
+    const at = ids.indexOf(active);
+    const next = ids[(at + (event.key === "ArrowRight" ? 1 : ids.length - 1)) % ids.length]!;
+    show(next);
+    tabs.get(next)?.focus();
+    event.preventDefault();
+  });
+  body.append(strip, panes.account, panes.look, panes.social);
+  show(active);
+  return panes;
+};
 
 /** Opens the dialog; returns it so a caller can close it. */
 export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
@@ -126,28 +196,26 @@ export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
   const status = document.createElement("p");
   status.className = "field__hint";
   status.textContent = "Loading…";
-  body.append(status);
+  const panes = settingsTabs(body);
+  // The avatar and the Look and sound tab need nothing from this load.
+  if (options.avatarPicker) panes.account.append(options.avatarPicker.element);
+  panes.account.append(status);
+  panes.look.append(lookSection(), effectsSection());
   popup.setContent(body).mount(options.container);
 
   fetchAccount().then(
     (account) => {
       noteShinyLock(account.shinyLocked);
-      body.replaceChildren(
-        usernameSection(account, options),
-        shinySection(account),
-        privacySection(account.privacy),
-        chatSection(),
-        countrySection(account.country),
-        lookSection(),
-        effectsSection(),
-      );
-      popup.focusFirst();
+      status.remove();
+      panes.account.append(usernameSection(account, options), shinySection(account));
+      // Country last: its long list would push the switches out of sight.
+      panes.social.append(chatSection(), privacySection(account.privacy), countrySection(account.country));
     },
     () => {
       status.textContent = SETTINGS_TEXT.loadFailed;
       status.classList.add("field__hint--error");
-      // Kept in this browser, so they work without the server.
-      body.append(chatSection(), lookSection(), effectsSection());
+      // Kept in this browser, so it works without the server.
+      panes.social.append(chatSection());
     },
   );
   return popup;
@@ -438,6 +506,22 @@ const effectsSection = (): HTMLElement => {
   shake.setAttribute("aria-describedby", shakeHint.id);
   shake.addEventListener("change", () => setScreenShake(shake.checked));
 
+  const reduceRow = document.createElement("label");
+  reduceRow.className = "account-settings__toggle";
+  const reduce = document.createElement("input");
+  reduce.type = "checkbox";
+  reduce.id = "settings-reduce-effects";
+  reduce.checked = reduceEffects();
+  const reduceWords = document.createElement("span");
+  reduceWords.textContent = SETTINGS_TEXT.reduceLabel;
+  reduceRow.append(reduce, reduceWords);
+  const reduceHint = document.createElement("p");
+  reduceHint.className = "field__hint";
+  reduceHint.id = "settings-reduce-effects-hint";
+  reduceHint.textContent = SETTINGS_TEXT.reduceHint;
+  reduce.setAttribute("aria-describedby", reduceHint.id);
+  reduce.addEventListener("change", () => setReduceEffects(reduce.checked));
+
   const qualityRow = document.createElement("label");
   qualityRow.className = "account-settings__toggle";
   const qualityWords = document.createElement("span");
@@ -463,7 +547,7 @@ const effectsSection = (): HTMLElement => {
   quality.setAttribute("aria-describedby", qualityHint.id);
   quality.addEventListener("change", () => setEffectsQuality(quality.value as EffectsQuality));
 
-  section.append(heading, shakeRow, shakeHint, qualityRow, qualityHint, ...downloadRow());
+  section.append(heading, reduceRow, reduceHint, shakeRow, shakeHint, qualityRow, qualityHint, ...downloadRow());
   return section;
 };
 

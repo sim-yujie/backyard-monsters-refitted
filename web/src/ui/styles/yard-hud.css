@@ -147,6 +147,7 @@
 /* ── Top right: who you are ───────────────────────────────────────────── */
 
 .account-menu__button--pill {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -171,25 +172,41 @@
   box-shadow: var(--focus-ring);
 }
 
-/* The name, and the player's level under it (#192). */
+/* The name, and under it the player's level and a bar to the next (#192). */
 .account-menu__pill-text {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   min-width: 0;
   line-height: 1.15;
 }
 
 .account-menu__pill-level {
-  color: var(--colour-text-secondary);
-  font-size: var(--text-xs);
+  color: var(--colour-text);
+  font-size: var(--text-sm);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.account-menu__pill-level[hidden] {
+.account-menu__pill-level[hidden],
+.account-menu__pill-bar[hidden] {
   display: none;
+}
+
+.account-menu__pill-bar {
+  align-self: stretch;
+  height: 5px;
+  margin-top: 2px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-sunken);
+}
+
+.account-menu__pill-fill {
+  display: block;
+  height: 100%;
+  background: var(--colour-accent);
 }
 
 .account-menu__pill-name {
@@ -222,6 +239,24 @@
   width: 36px;
   height: 36px;
   object-fit: contain;
+}
+
+/* The level on the critter, only where the name and level have no room. */
+.account-menu__ring-level {
+  display: none;
+  position: absolute;
+  bottom: -3px;
+  left: 50%;
+  min-width: 24px;
+  padding: 0 4px;
+  transform: translateX(-50%);
+  border-radius: var(--radius-pill);
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
 }
 
 /* ── The round buttons ────────────────────────────────────────────────── */
@@ -1192,10 +1227,15 @@
   }
 }
 
-/* Too narrow for the name as well: the critter alone opens the menu. */
+/* Too narrow for the name as well: the critter alone opens the menu, with the
+   level on a small badge. */
 @media (620px < width <= 820px) and (height <= 500px) {
   .hud--corner .account-menu__pill-text {
     display: none;
+  }
+
+  .hud--corner .account-menu__ring-level:not([hidden]) {
+    display: block;
   }
 
   .account-menu__button--pill {

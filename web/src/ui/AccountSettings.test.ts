@@ -20,9 +20,11 @@ vi.mock("@/game/chat/chatSession", () => chat);
 const lookReport = vi.hoisted(() => ({ reportLook: vi.fn() }));
 vi.mock("@/app/lookReport", () => lookReport);
 
+import { reduceEffects } from "@/game/attack/juice";
 import { resetShinyLockForTests, shinyLocked } from "@/game/shinyLock";
 import { setWorldChatOn, worldChatOn } from "@/game/chat/worldChatSetting";
 import { SETTINGS_TEXT, openAccountSettings } from "./AccountSettings";
+import { AvatarPicker } from "./AvatarPicker";
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -387,6 +389,61 @@ describe("AccountSettings", () => {
       expect(chat.worldChat.setCountryRoom).not.toHaveBeenCalled();
       expect(now()).toContain("Philippines");
     });
+  });
+});
+
+describe("AccountSettings tabs", () => {
+  const tab = (id: string) => document.querySelector<HTMLButtonElement>(`[role="tab"][data-tab="${id}"]`)!;
+  const pane = (id: string) => document.querySelector<HTMLElement>(`#account-settings-pane-${id}`)!;
+
+  it("opens on Account, and each tab shows only its own settings", async () => {
+    await open({});
+    expect(tab("account").getAttribute("aria-selected")).toBe("true");
+    expect(pane("account").contains(document.querySelector("#settings-username"))).toBe(true);
+    expect(pane("look").hidden).toBe(true);
+    tab("social").click();
+    expect(pane("account").hidden).toBe(true);
+    expect(pane("social").hidden).toBe(false);
+    expect(pane("social").contains(document.querySelector("#settings-show-online"))).toBe(true);
+    expect(pane("social").textContent).toContain(SETTINGS_TEXT.countryTitle);
+    expect(pane("account").textContent).not.toContain(SETTINGS_TEXT.countryTitle);
+    expect(tab("social").getAttribute("aria-selected")).toBe("true");
+    expect(tab("account").tabIndex).toBe(-1);
+  });
+
+  it("moves between tabs with the arrow keys, wrapping round", async () => {
+    await open({});
+    tab("account").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    expect(tab("social").getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(tab("social"));
+    tab("social").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(pane("account").hidden).toBe(false);
+  });
+
+  it("shows the avatar picker on Account only when it has an avatar", async () => {
+    await open({});
+    expect(document.querySelector(".avatar-picker")).toBeNull();
+    document.body.replaceChildren();
+    api.fetchAccount.mockRejectedValue(new Error("down"));
+    openAccountSettings({
+      container: document.body,
+      avatarPicker: new AvatarPicker({ current: "owl", picked: true, onPick: () => Promise.resolve() }),
+    });
+    await settle();
+    expect(pane("account").querySelectorAll(".avatar-picker__tile")).toHaveLength(12);
+    expect(pane("account").textContent).toContain(SETTINGS_TEXT.loadFailed);
+  });
+
+  it("keeps Reduce effects with the game effects, in this browser", async () => {
+    localStorage.clear();
+    await open({});
+    const reduce = document.querySelector<HTMLInputElement>("#settings-reduce-effects")!;
+    expect(pane("look").contains(reduce)).toBe(true);
+    expect(reduce.checked).toBe(false);
+    reduce.click();
+    expect(reduceEffects()).toBe(true);
+    reduce.click();
+    expect(reduceEffects()).toBe(false);
   });
 });
 

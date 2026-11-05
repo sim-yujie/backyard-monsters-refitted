@@ -9,6 +9,7 @@ import { loadShinyLock, onShinyLock, shinyLocked, SHINY_LOCK_TEXT } from "@/game
 import { incomePerHour } from "@/game/yard/incomeRate";
 import { nextWorkerJob } from "@/game/yard/jobs";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
+import { levelProgress } from "@/game/yard/experience";
 import { AccountMenu } from "./AccountMenu";
 import { AchievementsDoor } from "./achievements/AchievementsDoor";
 import { friendsStore } from "@/game/friends/friendsStore";
@@ -825,7 +826,9 @@ export class Hud {
     }
     const shiny = this.readouts.get("shiny");
     if (shiny) this.label(shiny);
-    this.accountMenu?.setLevel(store?.playerLevel ?? null);
+    const level = store?.playerLevel ?? null;
+    const points = store?.playerPoints ?? null;
+    this.accountMenu?.setLevel(level, level !== null && points !== null ? levelProgress(level, points) : null);
 
     this.workers.hidden = store === null;
     if (store) {
