@@ -1,5 +1,6 @@
 import { AlphaFilter, Assets, Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
 import type { Camera } from "@/game/Camera";
+import { versionedArt } from "./retryLoad";
 import { ArtState, resolveArt, restingLayers, type ResolvedImage } from "./buildingArt";
 import type { YardKind } from "./buildingCostData";
 import { nearbyArea, NEARBY_STROKE } from "./nearbyFootprints";
@@ -357,7 +358,7 @@ export class BuildPlacement {
     const layers = restingLayers(art);
     try {
       const textures = await Promise.all(
-        layers.map((layer) => Assets.load<Texture>(layer.url)),
+        layers.map((layer) => Assets.load<Texture>(versionedArt(layer.url))),
       );
       if (this.done) return;
       layers.forEach((layer, index) => {
