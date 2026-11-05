@@ -1084,7 +1084,7 @@ void main() {
   float halfWidth = clamp(0.008 * cellPixels, 0.6, 1.5);
   float line = 1.0 - smoothstep(halfWidth, halfWidth + 1.0, pixels);
   line *= smoothstep(5.0, 12.0, cellPixels);
-  // None across the dark undiscovered map, which the clouds no longer hide on Medium.
+  // None across the dark undiscovered map, which the clouds hide only on High.
   line *= smoothstep(0.0, 0.03, distance(colour, uFog));
   colour = mix(colour, uLine.rgb, uLine.a * line * (1.0 - 0.75 * riverWet));
 

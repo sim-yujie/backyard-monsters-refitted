@@ -533,11 +533,11 @@ export class MapRenderer {
     if (this.paintedWanted) this.setPaintedMap(true);
   }
 
-  /** Modern's clouds over the undiscovered map: not on Medium, which keeps it dark like Classic's (owner, 5 Nov 2026). */
+  /** Modern's clouds over the undiscovered map: on High only; Medium and Low keep it dark, like Classic (owner, 5 Nov 2026). */
   private syncPaintedFog(level: Quality): void {
     const { painted, paintedKit: kit } = this;
     if (!painted || !kit?.programs.clouds) return;
-    if (level === "medium") {
+    if (level !== "high") {
       this.clouds?.destroy();
       this.clouds = null;
       painted.setFogColour(FOG_COLOUR);
@@ -614,7 +614,7 @@ export class MapRenderer {
     this.root.addChildAt(this.borders.mesh, this.root.getChildIndex(above));
     for (const zone of this.store.loadedZoneRefs()) this.borders.applyZone(zone);
     // A border running into the fog goes under the cloud.
-    if (programs.clouds && quality() !== "medium") loads.push(this.addPaintedFog(look, painted));
+    if (programs.clouds && quality() === "high") loads.push(this.addPaintedFog(look, painted));
     // The rest of the programs once the art is in and has drawn (a few frames), or after a while
     // if it never comes: where programs compile one at a time (Firefox), a texture set up while
     // one compiles waits for it (`paintedLook.ts` warmRest).
