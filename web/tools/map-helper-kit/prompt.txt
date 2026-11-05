@@ -1,0 +1,14 @@
+Use your image generation tool (one call) to create a new image and save it as helper-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Inputs 1 and 2 show a tiny game character from a 2012 browser game, blown up 20 times (smooth, and exact pixels). It is only 28 pixels wide. Input 3 is my first redraw, which is NOT close enough. I need a clean, sharp, high-resolution redraw that matches inputs 1 and 2 as if you had the original artwork. When shrunk to 28 pixels it must look the same as input 2.
+
+What was wrong with input 3, fix all of these:
+- It was a teardrop. The character is a ROUND EGG: almost a ball, as wide as about 80% of its height, with only a very small soft nub at the very top, slightly left of centre. The sides stay round right up to the nub. No long sloped shoulder.
+- The eyelids were far too thick. There is only a thin dark-blue lid line across the top of each eye. Most of each eye is bright white and clearly visible.
+- The eyes were too round and droopy. Together the two eyes form one wide white horizontal band across the upper right of the body, at about 35% down from the top, reaching the right edge of the body and poking out past it by a small amount. The left eye is slightly lower and bigger than the right eye. They touch.
+- Each pupil is a small black horizontal dash or oval at the bottom right of its eye, looking right.
+- The blue was too saturated and too dark. Use a medium clear blue (about #2E78D8), a soft sky-blue highlight (about #6CC0FF) on the upper left and on the nub, and a deeper blue (about #1E4FA0) low on the right. It is a soft pre-rendered 3D ball with gentle shading, not glossy plastic.
+
+No arms, no legs, no mouth, no hat.
+
+Output: one single character, centred, filling about 80% of a 1024x1024 square. Background everywhere: flat pure magenta #FF00FF. No ground shadow, no outline stroke, no grid lines, no text, no labels. No magenta inside the character.

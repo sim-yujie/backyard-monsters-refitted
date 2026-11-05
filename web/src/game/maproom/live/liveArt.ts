@@ -3,8 +3,9 @@ import type { LivePlan } from "./liveLevel";
 
 /**
  * The living map's painted art (Codex, `web/tools/mr2-live-kit`), fetched
- * only for the levels that draw it: Low and Classic fetch nothing, Medium the
- * half-size copies and no clouds or birds.
+ * only for the levels that draw it: Low fetches nothing, Medium the half-size
+ * copies and no clouds or birds (Classic's Medium does fetch the bird), High
+ * everything.
  */
 const BASE = `${import.meta.env.BASE_URL}maproom/live/`;
 

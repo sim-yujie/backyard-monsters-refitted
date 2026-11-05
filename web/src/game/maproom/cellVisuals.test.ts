@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { CELL_HEIGHT, CELL_WIDTH } from "@/config";
 import type { MapCell, PlayerCell } from "@/api/types";
 import { setClassicLook } from "@/game/classicLook";
@@ -23,7 +23,9 @@ import {
   appearanceOf,
   campHealthColour,
   campHealthOf,
+  FOG_UNDER_CLOUD,
   fogAppearance,
+  setFogUnderCloud,
   hexWidthAt,
   kitOf,
   terrainBand,
@@ -370,5 +372,16 @@ describe("camp health bar", () => {
     expect(campHealthColour(80)).toBe(HEALTH_GOOD_COLOUR);
     expect(campHealthColour(40)).toBe(HEALTH_HURT_COLOUR);
     expect(campHealthColour(10)).toBe(DAMAGE_COLOUR);
+  });
+});
+
+describe("fog cells under Classic's clouds", () => {
+  afterEach(() => setFogUnderCloud(false));
+
+  it("wear the cloud's colour while the clouds are on, and the dark fog after", () => {
+    setFogUnderCloud(true);
+    expect(fogAppearance({ x: 3, y: 4 }).terrain).toBe(FOG_UNDER_CLOUD);
+    setFogUnderCloud(false);
+    expect(fogAppearance({ x: 3, y: 4 }).terrain).not.toBe(FOG_UNDER_CLOUD);
   });
 });

@@ -353,6 +353,21 @@ export const FOG_COLOUR = 0x1a1e24;
 export const FOG_CLOUD_COLOUR = 0x242b35;
 /** A one-hex ring of lighter fog right where the sight edge is (owner-approved approximation of a continuous feather). */
 export const FOG_EDGE_COLOUR = 0x34404e;
+/**
+ * The colour fog cells take while clouds cover them: the cloud's own shade, so wherever the cloud's
+ * soft edge thins over a fog cell it shows cloud, not dark fog.
+ */
+export const FOG_UNDER_CLOUD = 0xd6dbe3;
+
+let fogUnderCloud = false;
+
+/** Classic's clouds came or went: fog cells built from now on wear {@link FOG_UNDER_CLOUD}, or the dark fog. */
+export const setFogUnderCloud = (on: boolean): void => {
+  fogUnderCloud = on;
+};
+
+/** The flat fog colour of the moment, for the far map's picture. */
+export const fogColour = (): number => (fogUnderCloud ? FOG_UNDER_CLOUD : FOG_COLOUR);
 
 /**
  * A cheap, deterministic "does this fog cell get the lighter cloud blotch"
@@ -381,8 +396,9 @@ const isFogEdge = (coord: { x: number; y: number }, sight: SightLookup): boolean
  * than guessing.
  */
 export const fogAppearance = (coord?: { x: number; y: number }, sight?: SightLookup): CellAppearance => {
-  const terrain =
-    coord && sight && isFogEdge(coord, sight)
+  const terrain = fogUnderCloud
+    ? FOG_UNDER_CLOUD
+    : coord && sight && isFogEdge(coord, sight)
       ? FOG_EDGE_COLOUR
       : coord && fogMottle(coord.x, coord.y)
         ? FOG_CLOUD_COLOUR
@@ -515,7 +531,7 @@ export const appearanceOf = (
  */
 export const rasterColour = (cell: MapCell | undefined): number => {
   if (!cell) return LOADING_COLOUR;
-  if (isFogCell(cell)) return FOG_COLOUR;
+  if (isFogCell(cell)) return fogColour();
   if (isWaterCell(cell)) return terrainColour(cell.i);
   if (isPlayerCell(cell)) {
     if (cell.mine === 1) return OWN_COLOUR;

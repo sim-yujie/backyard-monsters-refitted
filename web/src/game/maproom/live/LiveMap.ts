@@ -28,8 +28,8 @@ import { WaterSheet } from "./WaterSheet";
  * redraws the small water sheet and moves the clouds and birds on
  * screen. Nothing here ever rebuilds a chunk on its own account.
  *
- * Off in Classic (Flash's map stood still) and on Quality Low, where nothing
- * is downloaded or drawn; reduced on Medium (`liveLevel.ts`). Paused while the
+ * Off on Quality Low, where nothing is downloaded or drawn; reduced on Medium
+ * (`liveLevel.ts`). Paused while the
  * tab is hidden: the browser stops sending frames, and the clock skips the
  * gap rather than jumping.
  *
@@ -218,8 +218,9 @@ export class LiveMap {
       this.layers = layers;
       if (art.clouds.length > 0 || art.bird) {
         const shadowStrength = this.paintedWater ? PAINTED_SHADOW_STRENGTH : 1;
-        // The painted ground's own fog clouds take the far view: no frame of banks over them.
-        this.sky = new SkyLayer(art.clouds, art.bird, this.plan.birds, shadowStrength, !this.paintedWater);
+        // The fog clouds (painted ground, and Classic on High) take the far view: no frame of banks over them.
+        const frameBanks = !this.paintedWater && !classicLook();
+        this.sky = new SkyLayer(art.clouds, art.bird, this.plan.birds, shadowStrength, frameBanks);
         // Shadows under the chunks' overlays; clouds and birds over everything.
         this.overlay.addChildAt(this.sky.shadows, 0);
         this.overlay.addChild(this.sky.above);

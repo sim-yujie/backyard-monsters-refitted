@@ -1,7 +1,7 @@
 import { CanvasSource, Sprite, Texture } from "pixi.js";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import { mapRoomGrid } from "@/game/HexGrid";
-import { FOG_COLOUR, rasterColour } from "./cellVisuals";
+import { fogColour, rasterColour } from "./cellVisuals";
 import type { ZoneRecord } from "./ZoneStore";
 
 /**
@@ -111,8 +111,9 @@ export class TerrainRaster {
   }
 
   private fillFog(): void {
+    const colour = fogColour();
     for (let y = 0; y < WORLD_HEIGHT; y++) {
-      for (let x = 0; x < WORLD_WIDTH; x++) this.writeTexel(x, y, FOG_COLOUR);
+      for (let x = 0; x < WORLD_WIDTH; x++) this.writeTexel(x, y, colour);
     }
   }
 }
