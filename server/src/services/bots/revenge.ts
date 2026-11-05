@@ -3,7 +3,7 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 import { BaseType } from "../../enums/Base.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { TruceStatus } from "../../enums/TruceStatus.js";
-import { ATTACK_TIMEOUT } from "../base/isAttackActive.js";
+import { attackEndsAt, type RecordedAttackStart } from "../base/attackWindow.js";
 import { REVENGE_CAP_WINDOW_MS, REVENGE_GIVE_UP_HOURS, revengeCapsAllow, type RevengeEvent } from "./afterAttack.js";
 
 /**
@@ -178,9 +178,9 @@ export const refusedVerdict = (now: number, giveupAt: number, rng: () => number)
 /** A save's attack state as `isAttackActive` reads it, against the given clock. */
 export const underAttackAt = (save: { attackid?: number | null; attacks?: unknown }, now: number): boolean => {
   if (!save.attackid) return false;
-  const attacks = Array.isArray(save.attacks) ? (save.attacks as { starttime?: number }[]) : [];
+  const attacks = Array.isArray(save.attacks) ? (save.attacks as Partial<RecordedAttackStart>[]) : [];
   const last = attacks.at(-1);
-  return last?.starttime !== undefined && now - Number(last.starttime) < ATTACK_TIMEOUT;
+  return last?.starttime !== undefined && now < attackEndsAt({ ...last, starttime: last.starttime });
 };
 
 /** The job a verdict is about. */

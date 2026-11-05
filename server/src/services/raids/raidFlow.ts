@@ -13,7 +13,7 @@ import { extractTownHall } from "../../utils/extractTownHall.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
 import { emergenceHoldsRaids } from "../inferno/emergenceOnLoad.js";
-import { isEmergenceRaid } from "../inferno/emergenceRaid.js";
+import { isEmergenceRaid, MOLOCH_TRIBE } from "../inferno/emergenceRaid.js";
 import { noteTribeRaid } from "../stats/activity.js";
 import { catchUpLockedRow, catchUpLockedYard } from "../../controllers/yard/yardAction.js";
 import { notifyAndCount } from "../notifications/notifications.js";
@@ -26,6 +26,7 @@ import {
   reserveReplaySlot,
 } from "../base/combat/replayRunner.js";
 import type { CompletedJob } from "../yard/catchUp.js";
+import { recordQuests } from "../quests/state.js";
 import { repairsDoneBy } from "../yard/catchUpRepairs.js";
 import { readPresenceMarks } from "../user/online.js";
 import { fightSecondsOf, type RaidFightInput, type RaidFightOutcome } from "./raidFight.js";
@@ -45,6 +46,7 @@ import {
   withFightLock,
   withRaidOpened,
   withoutFightLock,
+  TROJAN_TRIBE,
   type RaidPreference,
 } from "./raidSchedule.js";
 import { mr1RaidCamps, type RaidCamp } from "./raidTribe.js";
@@ -584,6 +586,12 @@ export const finishRaid = async (em: EntityManager, user: User, raidId: unknown,
     }
     completed = await catchUpLockedRow(tx, locked, now);
     const landed = landRaid(locked, { id: raid.id, tribe: raid.tribe, startedAt: raid.startedAt ?? now, outcome }, now);
+    // Quests: a wild monster raid held off (the raid's own good defence, the
+    // one that pays Shiny; not the Trojan Horse or Moloch) is a held defence
+    // for the weekly Fighting quest, on the locked main row.
+    if (landed.defended && raid.tribe !== TROJAN_TRIBE && raid.tribe !== MOLOCH_TRIBE) {
+      recordQuests(locked, now, { defenceWin: 1 });
+    }
     await tx.flush();
     landedNow = true;
     return landed;

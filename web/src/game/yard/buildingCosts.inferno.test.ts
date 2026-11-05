@@ -17,12 +17,14 @@ import {
  * same rows, so the price shown is the price charged.
  */
 describe("the Inferno cost table", () => {
-  it("offers design §2.5's sixteen buildings and the Yard Planner", () => {
-    // The Yard Planner (10) is the owner's addition of 29 Oct 2026; Flash
-    // blocked it in the Inferno.
+  it("offers design §2.5's sixteen buildings, the Yard Planner and the Incubator Control Centre", () => {
+    // The Yard Planner (10) is the owner's addition of 29 Oct 2026, the
+    // Incubator Control Centre (16) of 2 Nov 2026; Flash blocked both in the
+    // Inferno.
     expect([...INFERNO_BUILDABLE_TYPES]).toEqual([
-      1, 2, 3, 4, 6, 8, 9, 10, 13, 17, 21, 24, 26, 128, 129, 130, 132,
+      1, 2, 3, 4, 6, 8, 9, 10, 13, 16, 17, 21, 24, 26, 128, 129, 130, 132,
     ]);
+    expect(nameOf(16, "inferno")).toBe("Incubator Control Centre");
   });
 
   it("reads caps at the Under Hall's level", () => {

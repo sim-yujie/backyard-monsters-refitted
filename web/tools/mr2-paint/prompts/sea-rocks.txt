@@ -1,0 +1,8 @@
+# refs: sea beach
+Use your image generation tool (one call) to create ONE new image, landscape 3:2 (as large as the tool allows), and save it as sheet.png in the current folder. Do not write code, do not draw with scripts.
+
+The attached pictures are crops of a concept painting of a cartoon strategy game world map. MATCH ITS ART STYLE EXACTLY: bright, painted, toy-like cartoon, saturated yellow-greens and warm sandy yellows, crisp small painted details, warm sunlight from the top-left. Not photo-real. No text, no logos, no watermark, no hex lines, no grid lines, no borders, no buildings, no monsters, no number badges, no frames or labels around the pictures. Ignore the pale hex lines, buildings, monsters and badges in the attached crops: copy only the ground painting.
+
+THE PICTURE: a sheet of 8 sea rocks and tiny islets in a 4 x 2 grid, each one centred in its own cell with plenty of empty space round it, on a FLAT PURE MAGENTA background (#FF00FF) everywhere else. Seen from a tilted top-down camera like the attached crops. Each rock stands in the sea: paint a thin ring of white foam and a little turquoise water hugging its foot, which fades out into the magenta.
+- Row 1: a single tall grey sea rock; a pair of rounded grey rocks; a low flat rock shelf; a small sharp rock.
+- Row 2: a tiny rocky islet with a tuft of grass on top; a tiny islet with one small pine tree; a cluster of three small rocks; a mossy boulder.

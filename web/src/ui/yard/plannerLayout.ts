@@ -1,6 +1,3 @@
-import { formatCompact, formatCountdown } from "@/ui/format";
-import { RESOURCE_KEYS } from "@/ui/resourceIcon";
-
 /**
  * Which shape the planner's chrome takes (#45, the owner's Option A).
  *
@@ -81,40 +78,6 @@ export const shownSheet = (choice: SheetChoice): PhoneSheet | "none" | null => {
   if (choice.raised === "dock" && choice.dockFilled) return "dock";
   if (choice.inspectorFilled) return "inspector";
   return "dock";
-};
-
-/** The four pool resources, which is what a cost is made of. */
-type PoolKey = (typeof RESOURCE_KEYS)[number];
-
-/** One figure on a phone's cost line. */
-export interface CostLinePart {
-  readonly key: PoolKey | "time";
-  readonly text: string;
-  /** More is needed than the yard holds. */
-  readonly short: boolean;
-}
-
-/**
- * The costs a phone has room for: one line, only what is not zero.
- *
- * The desktop's nine cells read "needed / held" and take a row of their own,
- * which a phone cannot spare, and most of them are zero most of the time. So
- * the line names what the selection or the plan would take, compact ("500.0K"),
- * then the worker time; the full cells are one tap away. Empty when nothing
- * costs anything, and the caller says something else there instead.
- */
-export const costLineParts = (
-  needed: Readonly<Record<PoolKey, number>>,
-  shortfall: Readonly<Record<PoolKey, number>>,
-  seconds: number,
-): CostLinePart[] => {
-  const parts: CostLinePart[] = [];
-  for (const key of RESOURCE_KEYS) {
-    if (needed[key] <= 0) continue;
-    parts.push({ key, text: formatCompact(needed[key]), short: shortfall[key] > 0 });
-  }
-  if (seconds > 0) parts.push({ key: "time", text: formatCountdown(seconds), short: false });
-  return parts;
 };
 
 /**

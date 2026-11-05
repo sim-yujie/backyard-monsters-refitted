@@ -61,6 +61,8 @@ export interface MonsterWords {
   /** The building that hatches: "Hatchery", "Incubator". */
   readonly hatchery: string;
   readonly hatcheries: string;
+  /** The building that runs them all from one queue: "Hatchery Control Centre", "Incubator Control Centre". */
+  readonly controlCentre: string;
   /** Where monsters live: "Housing", "Compound". */
   readonly housing: string;
   /** The timed power-up that adds 25% room. */
@@ -77,6 +79,7 @@ const SURFACE_WORDS: MonsterWords = {
   locker: "Monster Locker",
   hatchery: "Hatchery",
   hatcheries: "Hatcheries",
+  controlCentre: "Hatchery Control Centre",
   housing: "Housing",
   expansion: "Housing Expansion",
   academy: "Monster Academy",
@@ -89,6 +92,7 @@ const INFERNO_WORDS: MonsterWords = {
   locker: "Strongbox",
   hatchery: "Incubator",
   hatcheries: "Incubators",
+  controlCentre: "Incubator Control Centre",
   housing: "Compound",
   expansion: "Compound Expansion",
   academy: "Infernal Academy",

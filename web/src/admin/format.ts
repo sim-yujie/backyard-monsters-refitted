@@ -87,6 +87,18 @@ export const shortDay = (day: string): string => {
 export const percent = (value: number | null | undefined): string =>
   value === null || value === undefined ? "–" : `${Math.round(value)}%`;
 
+/** The words for each Look and sound choice, as Account settings in the game names them. */
+export const LOOK_WORDS = {
+  style: { modern: "Modern", classic: "Classic" },
+  music: { style: "Same as Style", new: "New", flash: "Original Flash" },
+  quality: { high: "High", medium: "Medium", low: "Low" },
+  font: { game: "Game font", clear: "Clear", readable: "Extra readable" },
+} as const;
+
+/** "Modern look" / "Classic look" for a player's row; null when their game never sent it. */
+export const lookName = (look: string | null | undefined): string | null =>
+  look === "modern" || look === "classic" ? `${LOOK_WORDS.style[look]} look` : null;
+
 /** "12 ms"; a dash when unknown. */
 export const ms = (value: number | null | undefined): string =>
   value === null || value === undefined ? "–" : `${Math.round(value)} ms`;

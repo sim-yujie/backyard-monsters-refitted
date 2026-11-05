@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { LOWEST_BOT_FLOOR_LEVEL } from "../../config/BotConfig.js";
 import { devConfig } from "../../config/GameConfig.js";
 import type { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
@@ -14,7 +15,6 @@ import {
   AVATAR_SHARE,
   backdate,
   BOT_MAX_LEVEL,
-  BOT_MIN_LEVEL,
   botSaveData,
   botUserData,
   drawBot,
@@ -35,43 +35,59 @@ const DAY = 24 * 60 * 60;
 const T = 3;
 
 /** A user row as the factory has it after the insert, asking for the sandbox to prove it is refused. */
+/** The lowest floor, where the minimum-yard rule bites; the default floor is 25 (owner 3 Nov 2026). */
+const LOW = LOWEST_BOT_FLOOR_LEVEL;
+
 const botUser = (): User =>
   ({ userid: 9100, username: "MossyGoblin", sandbox_start: true }) as unknown as User;
 
 describe("evenSpread and fillPlan (decision 4, §10)", () => {
-  test("500 over levels 15-40: 20 on levels 15-20, 19 on 21-40, none below 15", () => {
-    expect(BOT_MIN_LEVEL).toBe(15);
-    const spread = evenSpread(500);
+  test("500 over levels 15-40 at floor 15: 20 on levels 15-20, 19 on 21-40, none below 15", () => {
+    const spread = evenSpread(500, LOW);
     expect(spread).toHaveLength(BOT_MAX_LEVEL);
     expect(spread.reduce((sum, count) => sum + count, 0)).toBe(500);
     expect(spread.slice(0, 14).every((count) => count === 0)).toBe(true);
     expect(spread.slice(14, 20).every((count) => count === 20)).toBe(true);
     expect(spread.slice(20).every((count) => count === 19)).toBe(true);
     // Weights below the floor count for nothing.
-    expect(evenSpread(500, Array<number>(40).fill(1))).toEqual(spread);
+    expect(evenSpread(500, LOW, Array<number>(40).fill(1))).toEqual(spread);
+  });
+
+  test("the default floor is 25 (owner 3 Nov 2026): 185 over 25-40, 12 on 25-33 and 11 on 34-40, none below", () => {
+    const spread = evenSpread(185);
+    expect(spread.reduce((sum, count) => sum + count, 0)).toBe(185);
+    expect(spread.slice(0, 24).every((count) => count === 0)).toBe(true);
+    expect(spread.slice(24, 33).every((count) => count === 12)).toBe(true);
+    expect(spread.slice(33).every((count) => count === 11)).toBe(true);
+    expect(evenSpread(185, 25, Array<number>(40).fill(1))).toEqual(spread);
   });
 
   test("an empty table is filled lowest levels first, from the floor", () => {
-    const plan = fillPlan(500, {});
+    const plan = fillPlan(500, {}, Number.POSITIVE_INFINITY, LOW);
     expect(plan).toHaveLength(500);
     expect(plan).toEqual([...plan].sort((a, b) => a - b));
-    expect(plan[0]).toBe(BOT_MIN_LEVEL);
+    expect(plan[0]).toBe(LOW);
     expect(plan.filter((level) => level === 15)).toHaveLength(20);
     expect(plan.filter((level) => level === 40)).toHaveLength(19);
+    // At the default floor, nothing below 25.
+    const atDefault = fillPlan(185, {});
+    expect(atDefault).toHaveLength(185);
+    expect(atDefault[0]).toBe(25);
   });
 
   test("only the shortfall is made, so a second run makes nothing", () => {
     const active: Record<number, number> = {};
-    for (const level of fillPlan(80, {})) active[level] = (active[level] ?? 0) + 1;
-    expect(fillPlan(80, active)).toEqual([]);
+    for (const level of fillPlan(80, {}, Number.POSITIVE_INFINITY, LOW)) active[level] = (active[level] ?? 0) + 1;
+    expect(fillPlan(80, active, Number.POSITIVE_INFINITY, LOW)).toEqual([]);
 
     active[17] = 0;
     active[21] = 9; // over its share of 3: left alone
-    expect(fillPlan(80, active)).toEqual([17, 17, 17]);
+    expect(fillPlan(80, active, Number.POSITIVE_INFINITY, LOW)).toEqual([17, 17, 17]);
   });
 
   test("a limit takes the lowest levels", () => {
-    expect(fillPlan(500, {}, 22)).toEqual([...Array(20).fill(15), 16, 16]);
+    expect(fillPlan(500, {}, 22, LOW)).toEqual([...Array(20).fill(15), 16, 16]);
+    expect(fillPlan(185, {}, 14)).toEqual([...Array(12).fill(25), 26, 26]);
     expect(fillPlan(500, {}, 0)).toEqual([]);
   });
 });
@@ -111,9 +127,9 @@ describe("drawProfile", () => {
     const rng = mulberry32(17);
     let raised = 0;
     for (let i = 0; i < 60; i++) {
-      const profile = drawProfile(rng, BOT_MIN_LEVEL, NOW, T, true);
+      const profile = drawProfile(rng, LOW, NOW, T, true);
       const minimum = minimumYardTotal(profile.seed, profile.persona);
-      const { min, max } = levelBand(BOT_MIN_LEVEL);
+      const { min, max } = levelBand(LOW);
       expect(profile.targetPoints).toBeGreaterThanOrEqual(Math.max(min, minimum));
       expect(profile.targetPoints).toBeLessThan(max);
       if (minimum > min) {
@@ -125,6 +141,16 @@ describe("drawProfile", () => {
     }
     // Economy bots raise their towers late, so some of them finish the minimum yard inside level 15.
     expect(raised).toBeGreaterThan(0);
+  });
+
+  test("on the default floor, 25, every yard already holds the minimum yard: a fresh bot starts at the very bottom", () => {
+    const rng = mulberry32(25);
+    for (let i = 0; i < 60; i++) {
+      const profile = drawProfile(rng, 25, NOW, T, true);
+      expect(minimumYardTotal(profile.seed, profile.persona)).toBeLessThan(levelBand(25).min);
+      expect(profile.fraction).toBe(0);
+      expect(profile.targetPoints).toBe(levelBand(25).min);
+    }
   });
 
   test("an account looks about as old as its level, with jitter", () => {
@@ -165,25 +191,26 @@ describe("drawProfile", () => {
 describe("drawBot", () => {
   test("the yard stands on the level asked for, at every level", () => {
     const rng = mulberry32(239);
-    for (let level = BOT_MIN_LEVEL; level <= BOT_MAX_LEVEL; level++) {
-      const { profile, yard } = drawBot(rng, level, NOW, T);
+    for (let level = LOW; level <= BOT_MAX_LEVEL; level++) {
+      const { profile, yard } = drawBot(rng, level, NOW, T, false, LOW);
       expect(yard.level).toBe(level);
       expect(calculateBaseLevel(yard.points, yard.basevalue)).toBe(level);
       expect(profile.level).toBe(level);
     }
   }, SLOW_TEST_TIMEOUT_MS);
 
-  test("refuses a level outside 15-40: no bot below the floor (owner, 2026-10-23)", () => {
+  test("refuses a level below the floor or past 40: 25 by default (owner 3 Nov 2026), 15 at the lowest", () => {
     expect(() => drawBot(mulberry32(1), 0, NOW, T)).toThrow();
-    for (const level of [1, 3, 10, 14]) expect(() => drawBot(mulberry32(1), level, NOW, T)).toThrow();
+    for (const level of [1, 3, 10, 14, 15, 24]) expect(() => drawBot(mulberry32(1), level, NOW, T)).toThrow();
+    for (const level of [1, 3, 10, 14]) expect(() => drawBot(mulberry32(1), level, NOW, T, false, LOW)).toThrow();
     expect(() => drawBot(mulberry32(1), 41, NOW, T)).toThrow();
   });
 
   test("every bot on the floor, fresh or not, has the minimum yard: Town Hall 2, every resource building and tower it allows, Housing with an army", () => {
     const rng = mulberry32(1515);
     for (let i = 0; i < 45; i++) {
-      const { yard } = drawBot(rng, BOT_MIN_LEVEL, NOW, T, i % 3 === 0);
-      expect(yard.level).toBe(BOT_MIN_LEVEL);
+      const { yard } = drawBot(rng, LOW, NOW, T, i % 3 === 0, LOW);
+      expect(yard.level).toBe(LOW);
       expect(yard.townHall).toBeGreaterThanOrEqual(MINIMUM_YARD.hall);
       const count = (type: number) => yard.buildings.filter((building) => building.t === type).length;
       // Two of each harvester, two silos, one Housing, three Cannon and three Sniper Towers.
@@ -205,7 +232,7 @@ describe("botSaveData", () => {
 
   test("never the sandbox yard, even with DEV_SANDBOX on and sandbox_start set (#234)", () => {
     devConfig.devSandbox = true;
-    const { profile, yard } = drawBot(mulberry32(3), 16, NOW, T);
+    const { profile, yard } = drawBot(mulberry32(3), 16, NOW, T, false, LOW);
     const save = botSaveData(botUser(), profile, yard);
     const ids = [...yard.buildings, ...yard.decorations].map((building) => String(building.id)).sort();
     expect(Object.keys(save.buildingdata).sort()).toEqual(ids);

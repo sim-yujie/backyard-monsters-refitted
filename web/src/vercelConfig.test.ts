@@ -73,6 +73,16 @@ describe("vercel.json", () => {
     expect(viteConfig).toContain('admin: fileURLToPath(new URL("./admin.html", import.meta.url))');
   });
 
+  it("never stores sounds on Vercel", () => {
+    // Browsers ask for parts of a music file. Vercel stored one such part and
+    // then gave it to everyone as the whole file, whatever part they asked
+    // for, so the Modern yard tune would not play (beta 5.11).
+    expect(config.headers).toContainEqual({
+      source: "/assets/sounds/:path*",
+      headers: [{ key: "x-vercel-enable-rewrite-caching", value: "0" }],
+    });
+  });
+
   it("opens the emailed reset link on the game page", () => {
     expect(config.rewrites).toContainEqual({ source: RESET_PATH, destination: "/index.html" });
   });

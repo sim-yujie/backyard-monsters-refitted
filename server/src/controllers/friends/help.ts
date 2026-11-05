@@ -29,6 +29,7 @@ import { notMainYardErr, yardRaidInProgressErr, yardUnderAttackErr } from "../..
 import type { BuildingData } from "../../types/BuildingData.js";
 import type { ResourceAmounts } from "../../services/yardplanner/costs.js";
 import { catchUpLockedRow } from "../yard/yardAction.js";
+import { recordQuests } from "../../services/quests/state.js";
 import { isTrap } from "../../game-rules/combat/damagePercent.js";
 import { maskBuilding } from "../../services/base/viewMask.js";
 import type { FriendsBody } from "./friends.js";
@@ -168,6 +169,8 @@ export const helpAnswer = async (em: EntityManager, user: User, body: unknown, n
       reward,
       now,
     });
+    // Quests: a friend's yard helped, on the helper's locked main row.
+    recordQuests(mine, now, { friendHelp: 1 });
     await tx.flush();
 
     return {

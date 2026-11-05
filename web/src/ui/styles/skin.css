@@ -615,7 +615,6 @@
   .hud:not(.hud--corner),
   .hud--corner .hud__bar,
   .hud-status__badge,
-  .hud-status__xp,
   .hud-status__boost,
   .friends-bar,
   .friends-bar__card,
@@ -676,6 +675,16 @@
   --colour-text-strong: #ffffff;
   --colour-text-secondary: var(--skin-ink-2);
   --colour-text-muted: var(--skin-ink-3);
+}
+
+/* The yard's zoom rail is one plate: the zoom group inside it (+ and −) wears
+   none of its own, so the four buttons line up in one column instead of +
+   and − sitting in a second frame, pushed right (owner, beta 6). The list
+   above names `.yard-zoom` for the planner's zoom bar, which stands alone. */
+:root[data-skin] .yard-viewtools.yard-viewtools--rail .yard-zoom {
+  border: 0;
+  border-image: none;
+  filter: none;
 }
 
 /* Bars inside a window (Map Room 1's map tools, world chat's tab) would take
@@ -826,9 +835,10 @@
 }
 
 /* A chosen toggle on a bar (Select, 3D, the map's Map/Yard and kit filter,
-   an attack's or replay's speed, the Inferno map's Map/List): the window's
+   an attack's or replay's speed, the Inferno map's Map/List, the Build
+   window's Decorations sub-tab): the window's
    small second plate, lit. */
-:root[data-skin] :is(.planner-bar button[aria-pressed="true"], .hud__scene-button[aria-current="true"], .mr2-kit-filter__option[aria-pressed="true"], .attack-strip__speed-button[aria-pressed="true"], .inferno-map__toggle-button[aria-pressed="true"]) {
+:root[data-skin] :is(.planner-bar button[aria-pressed="true"], .hud__scene-button[aria-current="true"], .mr2-kit-filter__option[aria-pressed="true"], .attack-strip__speed-button[aria-pressed="true"], .inferno-map__toggle-button[aria-pressed="true"], .build-menu__kind[aria-selected="true"]) {
   border-style: solid;
   border-color: transparent;
   border-width: 0 12px;
@@ -848,6 +858,27 @@
 :root[data-skin] .hud__scenes {
   border-color: var(--colour-border);
   background: var(--colour-surface-sunken);
+}
+
+/* The Build window's Decorations sub-tabs: the window's lettering; the
+   chosen one is the lit plate above, its ends drawn over the sub-tab rather
+   than beside the word, so the word keeps the sub-tab's whole width (a
+   fifth of a phone). */
+:root[data-skin] .build-menu__kind {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+}
+
+:root[data-skin] .build-menu__kinds .build-menu__kind[aria-selected="true"] {
+  border-width: 0;
+  border-image-width: 0 8px;
+  padding-inline: 1px;
+}
+
+@media (width <= 620px) {
+  :root[data-skin] .build-menu__kinds .build-menu__kind[aria-selected="true"] {
+    border-image-width: 0 5px;
+  }
 }
 
 /* A card's own close button (the map's place cards, Map Room 1): the
@@ -927,6 +958,33 @@
 
 /* The one thing to do on a card or bar (Stay protected, Apply, Send, the
    raid's I'm Ready Now) is the window's painted plate too. */
+/* The account menu's items wear the windows' small plate, so they read as
+   buttons (owner, 5 Nov 2026). Narrow ends, so the words keep the room. */
+:root[data-skin] :is(.account-menu__items > .account-menu__help, .account-menu__list > .account-menu__item) {
+  --skin-button2-cap: 14px;
+  justify-content: center;
+  padding: 0 0 3px;
+  border-style: solid;
+  border-color: transparent;
+  border-width: 0 var(--skin-button2-cap);
+  border-radius: 0;
+  border-image-source: var(--skin-button2);
+  border-image-slice: 0 var(--skin-button2-slice) fill;
+  border-image-width: 0 var(--skin-button2-cap);
+  border-image-repeat: stretch;
+  background: none;
+  color: var(--skin-button2-ink);
+  text-align: center;
+  text-shadow:
+    0 1px 0 var(--skin-button2-stroke), 1px 0 0 var(--skin-button2-stroke), -1px 0 0 var(--skin-button2-stroke), 0 -1px 0 var(--skin-button2-stroke);
+}
+
+:root[data-skin] :is(.account-menu__items > .account-menu__help, .account-menu__list > .account-menu__item):hover:not(:disabled) {
+  background: none;
+  color: var(--skin-button2-ink);
+  filter: brightness(1.08);
+}
+
 :root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing, .raid-bar, .ach-card, .descent-card, .inferno-card, .test-report__peek) .btn--primary {
   padding: 0 2px 3px;
   border-style: solid;
@@ -973,6 +1031,12 @@
   text-shadow:
     0 2px 0 #000000, 2px 0 0 #000000, -2px 0 0 #000000, 0 -2px 0 #000000,
     1.5px 1.5px 0 #000000, -1.5px 1.5px 0 #000000, 1.5px -1.5px 0 #000000, -1.5px -1.5px 0 #000000;
+}
+
+/* The BETA chip sits inside the title: without this it takes the title's black
+   outline and its small dark letters smear on the amber (owner, 4 Nov 2026). */
+:root[data-skin] .login-brand__tag {
+  text-shadow: none;
 }
 
 :root[data-skin] :is(.login-brand__note, .login-footer) {

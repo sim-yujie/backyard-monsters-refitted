@@ -400,11 +400,12 @@ export interface ComingLaterItem {
 /**
  * What the original sold that is held back until its effect is modelled
  * (§8.2). Listed, never sold: `shop/buy` refuses every one of them. The four
- * battle boosts and the wall upgrades were here until beta.4.
+ * battle boosts and the wall upgrades were here until beta.4; the Shiny
+ * decorations until beta 6, when they went on sale in the Build menu's
+ * Decorations tab (owner decision 2026-11-04, `decorShop.ts`). Empty, the
+ * Shop draws no "Coming later" section.
  */
-export const COMING_LATER: readonly ComingLaterItem[] = [
-  { items: ["BUILDING28"], name: "Shiny Decorations", blurb: "Decorations bought with Shiny." },
-];
+export const COMING_LATER: readonly ComingLaterItem[] = [];
 
 /** One wall upgrade: every Block below `tier` raised to it (`server/src/services/yard/wallBlocks.ts`). */
 export interface WallTier {

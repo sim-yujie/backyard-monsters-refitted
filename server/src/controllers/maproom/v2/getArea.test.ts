@@ -123,7 +123,9 @@ mock.module("../../../services/maproom/v2/createCellData.js", () => ({
   createCellData: async (cell: Row, _worldid: string, _ctx: unknown, cellOwners?: Map<number, Row>) => {
     if (typeof cell.baseid === "string") {
       const owner = cellOwners?.get(cell.uid as number);
-      return { uid: cell.uid, baseid: cell.baseid, username: owner?.username, alliance_id: owner?.alliance_id };
+      // `typed` rows also carry the cell type, as the real builder's do: the neighbour count reads it.
+      const typed = cell.typed ? { b: cell.base_type } : {};
+      return { uid: cell.uid, baseid: cell.baseid, username: owner?.username, alliance_id: owner?.alliance_id, ...typed };
     }
     return { terrain: true, x: cell.x, y: cell.y };
   },
@@ -191,8 +193,11 @@ beforeEach(() => {
 });
 
 const startingDisableFog = devConfig.disableFogOfWar;
+const startingNeighbourBonus = process.env.MR2_NEIGHBOUR_BONUS;
 afterEach(() => {
   devConfig.disableFogOfWar = startingDisableFog;
+  if (startingNeighbourBonus === undefined) delete process.env.MR2_NEIGHBOUR_BONUS;
+  else process.env.MR2_NEIGHBOUR_BONUS = startingNeighbourBonus;
 });
 
 describe("getArea: a fully fogged zone", () => {
@@ -334,5 +339,35 @@ describe("getArea: devConfig.disableFogOfWar", () => {
     const data = body.data as Record<number, Record<number, unknown>>;
 
     expect(data[10]![10]).toEqual({ uid: 4, baseid: "far-base", username: "far-owner", alliance_id: 200 });
+  });
+});
+
+describe("getArea: the neighbour defence bonus (`nb`)", () => {
+  const twoCells = () => {
+    devConfig.disableFogOfWar = true;
+    tables.set(User, [ownerRow(4, "owner", null)]);
+    // A main yard and its outpost right above it: one friendly neighbour each.
+    tables.set(WorldMapCell, [
+      cellRow("home", 4, 10, 10, { typed: true }),
+      cellRow("post", 4, 10, 9, { typed: true, base_type: 3 }),
+    ]);
+  };
+  const cellAt = (body: Row, x: number, y: number) =>
+    (body.data as Record<number, Record<number, Row>>)[x]![y]!;
+
+  test("switched off: no count and no extra query, the response as before", async () => {
+    delete process.env.MR2_NEIGHBOUR_BONUS;
+    twoCells();
+    const body = await run(viewer(1, { homebase: ["500", "500"] }), { x: 0, y: 0 });
+    expect(cellAt(body, 10, 10).nb).toBeUndefined();
+    expect(findCalls.filter((call) => call.entity === WorldMapCell)).toHaveLength(1);
+  });
+
+  test("switched on: each player's cell carries its friendly neighbours", async () => {
+    process.env.MR2_NEIGHBOUR_BONUS = "on";
+    twoCells();
+    const body = await run(viewer(1, { homebase: ["500", "500"] }), { x: 0, y: 0 });
+    expect(cellAt(body, 10, 10).nb).toBe(1);
+    expect(cellAt(body, 10, 9).nb).toBe(1);
   });
 });

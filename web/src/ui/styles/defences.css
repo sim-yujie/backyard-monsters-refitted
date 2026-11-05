@@ -12,12 +12,12 @@
 /* ── The button: beside Mail, the bell one place further left ───────────── */
 
 .yard-dock__right > .yard-dock__button--defences {
-  right: 330px;
+  right: calc(var(--dock-row) + 2 * var(--dock-pitch));
   bottom: 30px;
 }
 
 .yard-dock__right:has(> .yard-dock__button--defences:not([hidden])) > .yard-dock__button--bell {
-  right: 420px;
+  right: calc(var(--dock-row) + 3 * var(--dock-pitch));
 }
 
 /* ── The frame: docked right under the HUD ──────────────────────────────── */

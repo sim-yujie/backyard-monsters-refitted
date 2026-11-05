@@ -1,5 +1,6 @@
 import { Graphics, Rectangle, type Renderer, type Texture } from "pixi.js";
 import { CELL_HEIGHT, CELL_WIDTH } from "@/config";
+import { mapRoomGrid } from "@/game/HexGrid";
 
 /**
  * The map's art, baked once into textures at startup.
@@ -28,9 +29,9 @@ import { CELL_HEIGHT, CELL_WIDTH } from "@/config";
  */
 const ATLAS_RESOLUTION = 2;
 
-const HALF_WIDTH = CELL_WIDTH / 2;
-const QUARTER_WIDTH = CELL_WIDTH / 4;
-const HALF_HEIGHT = CELL_HEIGHT / 2;
+/** The cell's half extents on the world grid (flat-top or pointy-top, `HexGrid.ts`), read when the atlas is baked. */
+const halfWidth = (): number => mapRoomGrid.cellWidth / 2;
+const halfHeight = (): number => mapRoomGrid.cellHeight / 2;
 
 /**
  * How much the hex fill is grown before baking.
@@ -79,20 +80,11 @@ export const SLIM_PLATE_HALF_HEIGHT = 6;
 /** Half-width the level star and the relation icons are baked at. */
 export const ICON_UNIT = 32;
 
-const hexPoints = (scale: number): number[] => [
-  -HALF_WIDTH * scale,
-  0,
-  -QUARTER_WIDTH * scale,
-  -HALF_HEIGHT * scale,
-  QUARTER_WIDTH * scale,
-  -HALF_HEIGHT * scale,
-  HALF_WIDTH * scale,
-  0,
-  QUARTER_WIDTH * scale,
-  HALF_HEIGHT * scale,
-  -QUARTER_WIDTH * scale,
-  HALF_HEIGHT * scale,
-];
+/** The cell's outline on the world grid's shape, around (0, 0), scaled. */
+const hexPoints = (scale: number): number[] => {
+  const centre = mapRoomGrid.cellToPixel(0, 0);
+  return mapRoomGrid.writeCellCorners(0, 0, []).map((value, i) => (value - (i % 2 === 0 ? centre.x : centre.y)) * scale);
+};
 
 /** A symmetric frame of the given half-extents. */
 const frame = (halfX: number, halfY: number): Rectangle =>
@@ -143,15 +135,14 @@ export class MapAtlas {
   /** Flash's green truce tick, a small tile with a white check (#338). */
   readonly truceTick: Texture;
   /** Flash's idle worker, a little blue creature looking right (#338). */
-  readonly idleWorker: Texture;
   /** Flash's open envelope with a letter peeking out, the pending-invitation marker. */
   readonly inviteEnvelope: Texture;
 
   private readonly owned: Texture[];
 
   constructor(renderer: Renderer) {
-    this.hex = bake(renderer, frame(HALF_WIDTH + FILL_BLEED, HALF_HEIGHT + FILL_BLEED), (g) =>
-      g.poly(hexPoints(1 + FILL_BLEED / HALF_WIDTH)).fill(0xffffff),
+    this.hex = bake(renderer, frame(halfWidth() + FILL_BLEED, halfHeight() + FILL_BLEED), (g) =>
+      g.poly(hexPoints(1 + FILL_BLEED / halfWidth())).fill(0xffffff),
     );
 
     this.outlineFine = this.bakeOutline(renderer, OUTLINE_FINE);
@@ -303,12 +294,6 @@ export class MapAtlas {
       drawTick,
       DETAIL_RESOLUTION,
     );
-    this.idleWorker = bake(
-      renderer,
-      new Rectangle(-WORKER_SIZE / 2 - 2, -WORKER_SIZE / 2 - 2, WORKER_SIZE + 4, WORKER_SIZE + 4),
-      drawWorker,
-      DETAIL_RESOLUTION,
-    );
 
     this.inviteEnvelope = bake(
       renderer,
@@ -334,7 +319,6 @@ export class MapAtlas {
       this.swordsIcon,
       this.protectionDome,
       this.truceTick,
-      this.idleWorker,
       this.inviteEnvelope,
     ];
   }
@@ -344,7 +328,7 @@ export class MapAtlas {
   }
 
   private bakeOutline(renderer: Renderer, width: number): Texture {
-    return bake(renderer, frame(HALF_WIDTH + width, HALF_HEIGHT + width), (g) =>
+    return bake(renderer, frame(halfWidth() + width, halfHeight() + width), (g) =>
       g.poly(hexPoints(1)).stroke({ width, color: 0xffffff, alignment: 0.5 }),
     );
   }
@@ -406,25 +390,6 @@ const drawTick = (g: Graphics): void => {
     .stroke({ width: 1.2, color: 0xffffff });
   g.moveTo(-5, 0.5).lineTo(-1.5, 4).lineTo(5.5, -4)
     .stroke({ width: 2.4, color: 0xffffff, cap: "round", join: "round" });
-};
-
-/** Flash's idle worker: a blue teardrop with two big eyes, looking right. */
-const drawWorker = (g: Graphics): void => {
-  const r = WORKER_SIZE / 2;
-  // A soft ground shadow.
-  g.ellipse(1, r * 0.8, r * 0.7, r * 0.22).fill({ color: 0x000000, alpha: 0.22 });
-  // The body: a round blue drop with a little point at the top.
-  g.moveTo(-r * 0.15, -r * 0.95)
-    .bezierCurveTo(r * 0.7, -r * 0.5, r * 0.8, r * 0.2, 0, r * 0.75)
-    .bezierCurveTo(-r * 0.8, r * 0.3, -r * 0.8, -r * 0.4, -r * 0.15, -r * 0.95)
-    .fill(0x2f7de1)
-    .stroke({ width: 1, color: 0x1a4f9e });
-  g.ellipse(-r * 0.3, -r * 0.1, r * 0.14, r * 0.3).fill({ color: 0xa9d0ff, alpha: 0.55 });
-  // Two eyes, pupils to the right.
-  for (const eyeX of [-r * 0.05, r * 0.42]) {
-    g.ellipse(eyeX, -r * 0.18, r * 0.24, r * 0.3).fill(0xffffff).stroke({ width: 0.6, color: 0x1a4f9e });
-    g.circle(eyeX + r * 0.08, -r * 0.14, r * 0.1).fill(0x10213f);
-  }
 };
 
 /**

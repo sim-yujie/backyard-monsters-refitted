@@ -1,6 +1,7 @@
 import { getSight } from "@/api/maproom";
 import type { RevealedSightCell, SightResponse, SightSource } from "@/api/types";
 import { isVisible } from "./rules/sight";
+import { hexShape } from "@/game/HexGrid";
 import { AREA_ZONE_SIZE } from "@/config";
 import type { ZoneRef } from "./zones";
 
@@ -73,7 +74,7 @@ export class Sight {
 
   /** Whether a cell is inside this sight: own and alliance circles, or an always-visible reveal. */
   isCellVisible(x: number, y: number): boolean {
-    return isVisible({ x, y }, this.snapshot.sources, this.snapshot.revealed);
+    return isVisible({ x, y }, this.snapshot.sources, this.snapshot.revealed, hexShape());
   }
 
   /**

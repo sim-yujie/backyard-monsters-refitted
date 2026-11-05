@@ -57,20 +57,20 @@ describe("GET /player/sound", () => {
   test("answers the switches with the defaults filled in", async () => {
     expect(await call(getSoundSettings, undefined)).toEqual({
       status: 200,
-      body: { error: 0, sound: { music: true, effects: true } },
+      body: { error: 0, sound: { music: true, effects: true, musicVolume: 70, effectsVolume: 100 } },
     });
     expect(lookups[0]).toEqual({ basesaveid: 41, type: "main", userid: 7 });
   });
 
   test("a brand-new yard answers music off", async () => {
     save = { ...save, onboarding: { v: 1, guide: { state: "pending" } } };
-    expect((await call(getSoundSettings, undefined)).body).toEqual({ error: 0, sound: { music: false, effects: true } });
+    expect((await call(getSoundSettings, undefined)).body).toEqual({ error: 0, sound: { music: false, effects: true, musicVolume: 70, effectsVolume: 100 } });
   });
 
   test("an account with no yard yet is a brand-new one", async () => {
     expect((await call(getSoundSettings, undefined, user(null))).body).toEqual({
       error: 0,
-      sound: { music: false, effects: true },
+      sound: { music: false, effects: true, musicVolume: 70, effectsVolume: 100 },
     });
     expect(lookups).toEqual([]);
   });
@@ -79,7 +79,7 @@ describe("GET /player/sound", () => {
 describe("POST /player/sound", () => {
   test("writes the change under a lock, keeps the other stats, answers the whole block", async () => {
     const answer = await call(updateSoundSettings, { music: false });
-    expect(answer).toEqual({ status: 200, body: { error: 0, sound: { music: false, effects: true } } });
+    expect(answer).toEqual({ status: 200, body: { error: 0, sound: { music: false, effects: true, musicVolume: 70, effectsVolume: 100 } } });
     expect(save?.stats).toEqual({ other: { wmi_wave: 2, mutemusic: 1 } });
     expect(locked[0]).toBeDefined();
     expect(flushes).toBe(1);
@@ -88,6 +88,21 @@ describe("POST /player/sound", () => {
   test("both switches at once", async () => {
     await call(updateSoundSettings, { music: true, effects: false });
     expect(save?.stats).toEqual({ other: { wmi_wave: 2, mutemusic: 0, mute: 1 } });
+  });
+
+  test("sets a volume, answering it back", async () => {
+    const answer = await call(updateSoundSettings, { musicVolume: 35 });
+    expect(answer.body).toEqual({ error: 0, sound: { music: true, effects: true, musicVolume: 35, effectsVolume: 100 } });
+    expect(save?.stats).toEqual({ other: { wmi_wave: 2, musicvol: 35 } });
+    await call(updateSoundSettings, { effectsVolume: 0, musicVolume: 100 });
+    expect(save?.stats).toEqual({ other: { wmi_wave: 2, musicvol: 100, sfxvol: 0 } });
+  });
+
+  test("refuses a volume out of 0-100 or not a whole number", async () => {
+    for (const body of [{ musicVolume: 101 }, { effectsVolume: -1 }, { musicVolume: 50.5 }, { musicVolume: "50" }]) {
+      expect((await call(updateSoundSettings, body)).status).toBe("ZodError");
+    }
+    expect(flushes).toBe(0);
   });
 
   test("refuses an empty body, a stringified boolean and an unknown switch, writing nothing", async () => {

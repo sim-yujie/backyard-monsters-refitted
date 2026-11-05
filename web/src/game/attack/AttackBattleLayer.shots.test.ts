@@ -267,13 +267,16 @@ describe("the new look's Sniper round striking a creep", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
       session.appendFling({ x: -150, y: -150, monsters: { C1: 1 } });
       let sparks = 0;
+      let numbers = 0;
       for (let step = 0; step < TICKS_PER_SECOND * 10 && !session.ended; step += 1) {
         frame(session, layer);
         sparks = Math.max(sparks, layer.towerEffects.sparkCount);
-        if (classic) expect(layer.creepEffects.labelCount).toBe(0);
+        numbers = Math.max(numbers, layer.creepEffects.labelCount);
       }
       if (classic) expect(sparks).toBe(0);
       else expect(sparks).toBeGreaterThan(0);
+      // Damage numbers show in both looks since beta 6 (owner).
+      expect(numbers).toBeGreaterThan(0);
       layer.destroy();
     }
   });

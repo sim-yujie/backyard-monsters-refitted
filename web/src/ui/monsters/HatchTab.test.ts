@@ -213,7 +213,7 @@ describe("HatchTab: each hatchery's line", () => {
     expect(tab(element, 11).getAttribute("aria-label")).toBe("Hatchery 2, Level 2: Idle, 0 waiting");
   });
 
-  it("pictures each hatchery as the yard draws it at its level (owner, 28 Oct)", () => {
+  it("pictures each hatchery as the yard draws it at its level: 3D in the Modern look (owner, 28 and 31 Oct)", () => {
     const save = loadOf(
       {
         monsters: { saved: T0, housed: {}, hid: [10, 11, 12], h: [["", 0, []], ["", 0, []], ["", 0, []]], hstage: [0, 0, 0] },
@@ -222,9 +222,9 @@ describe("HatchTab: each hatchery's line", () => {
     );
     const { element } = setup(save);
     expect(tabs(element).map((one) => one.querySelector<HTMLImageElement>(".hatch-tab__picture")!.getAttribute("src"))).toEqual([
-      "/assets/buildings/hatchery/top.2.png",
-      "/assets/buildings/hatchery/top.3.png",
-      "/assets/buildings/hatchery/top.4.png",
+      "/assets/buildings/hatchery/top.3d1@2x.webp",
+      "/assets/buildings/hatchery/top.3d2@2x.webp",
+      "/assets/buildings/hatchery/top.3d3@2x.webp",
     ]);
   });
 

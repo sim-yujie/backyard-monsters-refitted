@@ -7,7 +7,7 @@ import { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
 import type { AttackPermission } from "../../enums/MapRoom.js";
 import type { NeighbourData } from "../../types/NeighbourData.js";
-import { ATTACK_TIMEOUT } from "../base/isAttackActive.js";
+import { attackEndsAt } from "../base/attackWindow.js";
 import { friendsAmong } from "../friends/friendFlags.js";
 import { createNeighbourData } from "../maproom/createNeighbourData.js";
 import { needsAttackableRetry, needsNewNeighbours } from "../maproom/neighbourCache.js";
@@ -190,7 +190,7 @@ export const infernoNeighbourViews = async (
 /** Whether `yard` is being attacked at `now`: `isAttackActive`, on the given clock. */
 export const attackedAt = (yard: Pick<Save, "attackid" | "attacks">, now: number): boolean => {
   const last = yard.attacks?.at(-1);
-  return Number(yard.attackid) !== 0 && Boolean(last) && now - Number(last!.starttime) < ATTACK_TIMEOUT;
+  return Number(yard.attackid) !== 0 && Boolean(last) && now < attackEndsAt(last!);
 };
 
 /** One neighbour's view from their kept entry and their yard as it is now. */

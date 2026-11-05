@@ -37,8 +37,11 @@ export const PRIVACY_URL: string = import.meta.env.VITE_PRIVACY_URL || "/privacy
 /** The credits page this client ships (`credits.html`), linked under the sign-in panel. */
 export const CREDITS_URL = "/credits";
 
-/** The owner's Patreon, the login screen's "Support us" link. */
+/** The owner's Patreon (monthly support): the login screen's "Support us" link and the in-game Support panel. */
 export const PATREON_URL = "https://www.patreon.com/c/TheMonsterLab";
+
+/** The owner's Ko-fi (one-time tip), beside Patreon in the in-game Support panel. */
+export const KOFI_URL = "https://ko-fi.com/themonsterlab";
 
 /** The community Discord invite (never expires; it lands in #welcome). */
 export const DISCORD_URL = "https://discord.gg/wthryBRZHz";
@@ -82,6 +85,22 @@ export const CELL_WIDTH = 150;
 export const CELL_HEIGHT = 75;
 
 /**
+ * Pointy-top cells (`MR2_HEX_SHAPE=pointy`, MR2 look plan step 1), 150 wide,
+ * row step = 3/4 of the height. The world grid's size is picked once when the
+ * map opens; the rules never read it, so both looks share the same
+ * neighbours.
+ *
+ * - Modern (tilted or not, painted or tiles): top-down, 150 tall, the
+ *   painted ground's cell (`maproom/painted/cellShape.ts`); the real tilt does
+ *   the squashing (medium tilt: about 150 x 127 on screen). The one number to
+ *   tune against the mock-up side-by-side.
+ * - Classic (never tilted): 100 tall, row step 75 like today, because Flash's
+ *   tiles have the 3/4 view baked in.
+ */
+export const POINTY_CELL_HEIGHT = 150;
+export const CLASSIC_POINTY_CELL_HEIGHT = 100;
+
+/**
  * Camera zoom limits. 1 renders cell art at its native size.
  *
  * MIN_ZOOM is set so the whole world fits a 1080p viewport. The grid is
@@ -112,6 +131,10 @@ export const DEFAULT_ZOOM = 0.6;
  *                        geometry in the band that costs the most.
  *   LOD_BADGE_ZOOM 0.55  cell 61.9 px, ~810 cells: room for a two-digit level.
  *   LOD_LABEL_ZOOM 0.90  cell 101 px, ~300 cells: room for a name.
+ *
+ * These are flat-top's numbers. On pointy-top (MR2_HEX_SHAPE) `lod.ts`'s
+ * `hexZoom` / `glyphZoom` move the first two down so the same number of cells
+ * is on screen; the badge and name thresholds stay, markers being one size.
  */
 export const LOD_HEX_ZOOM = 0.22;
 export const LOD_GLYPH_ZOOM = 0.3;

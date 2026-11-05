@@ -28,6 +28,30 @@ export interface SoundSettings {
   readonly effects: boolean;
 }
 
+/**
+ * The two volume sliders (owner, 4 Nov 2026: "attacking sound is a lot
+ * softer than BGM. Maybe make it a slider"), 0-100 each, beside the
+ * switches, which stay the quick mute. Flash had no slider, so these are
+ * new keys in the same `stats.other` block: `musicvol` and `sfxvol`, whole
+ * numbers. Flash's own client never reads them.
+ *
+ * Defaults (`web/src/game/sound/soundVolume.ts` has the measurements): the
+ * music at 70, which the game plays 6 dB down (slider squared: 0.7² = 0.49), and effects
+ * at 100, Flash's own volumes. Measured from the files, the attack music at
+ * Flash's 0.7 sat 3 dB above a building being hit or a tower firing and
+ * about 25 dB above the monsters' bites; at 70 the hits and shots sit level
+ * with the music or above it.
+ */
+export interface SoundVolumes {
+  readonly musicVolume: number;
+  readonly effectsVolume: number;
+}
+
+export const MUSIC_VOLUME_KEY = "musicvol";
+export const EFFECTS_VOLUME_KEY = "sfxvol";
+export const DEFAULT_MUSIC_VOLUME = 70;
+export const DEFAULT_EFFECTS_VOLUME = 100;
+
 /** The slice of a save these helpers read. */
 export type SoundSave = OnboardingSave & { stats?: Stats | null };
 
@@ -46,6 +70,14 @@ const storedSwitch = (other: Record<string, unknown> | null, key: string): boole
   return null;
 };
 
+/** A stored volume, 0-100 whole, or null when never set or unreadable. */
+const storedVolume = (other: Record<string, unknown> | null, key: string): number | null => {
+  const raw = other?.[key];
+  const value = typeof raw === "string" && raw.trim() !== "" ? Number(raw) : raw;
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Math.round(Math.min(100, Math.max(0, value)));
+};
+
 /** Whether the yard is still brand new: its guided start not yet over. */
 export const brandNewYard = (save: SoundSave): boolean => guideOpen(readOnboarding(save));
 
@@ -58,18 +90,48 @@ export const soundSettingsOf = (save: SoundSave): SoundSettings => {
   };
 };
 
+/** The volumes as they stand on a main save, the defaults filled in. */
+export const soundVolumesOf = (save: SoundSave): SoundVolumes => {
+  const other = isRecord(save.stats) && isRecord(save.stats.other) ? save.stats.other : null;
+  return {
+    musicVolume: storedVolume(other, MUSIC_VOLUME_KEY) ?? DEFAULT_MUSIC_VOLUME,
+    effectsVolume: storedVolume(other, EFFECTS_VOLUME_KEY) ?? DEFAULT_EFFECTS_VOLUME,
+  };
+};
+
+/** The whole sound block the api answers with: switches and volumes. */
+export const soundOf = (save: SoundSave): SoundSettings & SoundVolumes => ({
+  ...soundSettingsOf(save),
+  ...soundVolumesOf(save),
+});
+
+/** A brand-new account's sound block, before it has a yard. */
+export const NEW_ACCOUNT_SOUND: SoundSettings & SoundVolumes = {
+  music: false,
+  effects: true,
+  musicVolume: DEFAULT_MUSIC_VOLUME,
+  effectsVolume: DEFAULT_EFFECTS_VOLUME,
+};
+
 /**
- * The save's `stats` with the switches the player changed written in, a new
+ * The save's `stats` with the switches and volumes the player changed written in, a new
  * object so the ORM sees the change. A switch left undefined stays as it is,
  * and every other stat is kept.
  */
 export const withSoundSettings = (
   stats: Stats | null | undefined,
-  change: { readonly music?: boolean | undefined; readonly effects?: boolean | undefined }
+  change: {
+    readonly music?: boolean | undefined;
+    readonly effects?: boolean | undefined;
+    readonly musicVolume?: number | undefined;
+    readonly effectsVolume?: number | undefined;
+  }
 ): Stats => {
   const base: Stats = isRecord(stats) ? { ...stats } : {};
   const other: Record<string, unknown> = isRecord(base.other) ? { ...base.other } : {};
   if (change.music !== undefined) other[MUTE_MUSIC_KEY] = change.music ? 0 : 1;
   if (change.effects !== undefined) other[MUTE_EFFECTS_KEY] = change.effects ? 0 : 1;
+  if (change.musicVolume !== undefined) other[MUSIC_VOLUME_KEY] = Math.round(change.musicVolume);
+  if (change.effectsVolume !== undefined) other[EFFECTS_VOLUME_KEY] = Math.round(change.effectsVolume);
   return { ...base, other };
 };

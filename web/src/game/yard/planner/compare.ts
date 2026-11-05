@@ -70,7 +70,7 @@ export const sideStats = (
   unplaced: number,
 ): SideStats => {
   const placed = nodes.filter((node) => !node.fixed && !node.stored);
-  const coverage = computeCoverage(coverageTowers(placed, yard.kind, yard.cellHeight), plot);
+  const coverage = computeCoverage(coverageTowers(placed, yard.kind, yard.cellHeight, yard.landRangePct), plot);
   let levels = 0;
   for (const node of placed) levels += node.level;
   return {

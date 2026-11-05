@@ -8,7 +8,7 @@
  * locker, hatchery, academy and lab routes charge: per monster the unlock price
  * and time, the Monster Locker level it needs, whether it is obtainable, its
  * place in the lists, the academy training ladder and the per-level hatch cost,
- * hatch time and housing space; plus the Monster Lab's ten abilities
+ * hatch time and housing space; plus the Monster Lab's fourteen abilities: Flash's ten and the revamp's four
  * (`docs/design/yard-buildings.md` §4.2).
  *
  * What it reads, and from where:
@@ -498,7 +498,70 @@ const abilities = LAB_IDS.map((id) => {
     costs,
     effect,
   };
-}).sort((a, b) => a.order - b.order);
+});
+
+/*
+ * The revamp's four new abilities (owner, beta 6 grill, 2 Nov 2026,
+ * `agent-handoffs/beta6-grill-tower-lab-traps.md` "Monster Lab abilities").
+ * Flash's lab had none for these monsters; they follow its rules (three
+ * ranks, rank N needs Lab level N and the monster at level N + 1) and its
+ * price scale. The effects are shares: 0.1 is 10%.
+ */
+const REVAMP_ABILITIES = [
+  {
+    id: "C1",
+    name: "Swarm",
+    effectLabel: "Swarm Attack Speed",
+    description: "When 5 or more Pokeys attack the same target, each one attacks faster.",
+    upgradeDescription: "Swarming Pokeys attack even faster.",
+    costs: [[24000, 86400], [36000, 86400], [54000, 86400]],
+    effect: [0.1, 0.2, 0.3],
+  },
+  {
+    id: "C2",
+    name: "Weakening Ooze",
+    effectLabel: "Killer's Damage Cut",
+    description: "Whatever kills Octo-ooze is covered in ooze and deals less damage for 5 seconds.",
+    upgradeDescription: "The ooze weakens the killer more.",
+    costs: [[32000, 86400], [48000, 86400], [72000, 86400]],
+    effect: [0.05, 0.1, 0.15],
+  },
+  {
+    id: "C6",
+    name: "Thorns",
+    effectLabel: "Damage Reflected",
+    description: "Ichi reflects part of the damage it takes back at whatever hit it.",
+    upgradeDescription: "Ichi reflects more of the damage it takes.",
+    costs: [[500000, 108000], [750000, 108000], [1125000, 108000]],
+    effect: [0.1, 0.15, 0.2],
+  },
+  {
+    id: "C10",
+    name: "Critical Hits",
+    effectLabel: "Critical Hit Chance",
+    description: "Crabatron's hits have a chance to do double damage.",
+    upgradeDescription: "Raises the chance of a critical hit.",
+    costs: [[5000000, 216000], [7500000, 216000], [11250000, 216000]],
+    effect: [0.1, 0.15, 0.2],
+  },
+];
+
+/**
+ * The Lab list, cheapest first as Flash's ran, with the revamp's four placed
+ * by price among Flash's ten (Flash's own ten keep their order).
+ */
+const LAB_LIST = ["C1", "C2", "C3", "C4", "C6", "C7", "C8", "C5", "C9", "C10", "C11", "C13", "C14", "C12"];
+
+for (const one of REVAMP_ABILITIES) {
+  if (byId.get(one.id)?.blocked !== false) fail(LAB, 0, `${one.id} has a lab ability but is not listed`);
+}
+const flashOrder = abilities.slice().sort((a, b) => a.order - b.order).map((one) => one.id);
+if (flashOrder.join() !== LAB_LIST.filter((id) => LAB_IDS.includes(id)).join()) {
+  fail(LAB, lab.declaredAt, `LAB_LIST no longer keeps Flash's order: ${flashOrder.join(", ")}`);
+}
+abilities.push(...REVAMP_ABILITIES.map((one) => ({ ...one, line: null })));
+for (const one of abilities) one.order = LAB_LIST.indexOf(one.id) + 1;
+abilities.sort((a, b) => a.order - b.order);
 
 /* ── Emit ─────────────────────────────────────────────────────────────────── */
 
@@ -532,7 +595,8 @@ const monsterRow = (one) => {
 
 const abilityRow = (one) =>
   [
-    `  // ${one.id} ${byId.get(one.id).name} — MONSTERLAB.as:${one.line}`,
+    `  // ${one.id} ${byId.get(one.id).name} — ` +
+      (one.line === null ? "revamp (owner, 2 Nov 2026)" : `MONSTERLAB.as:${one.line}`),
     `  {`,
     `    id: ${JSON.stringify(one.id)},`,
     `    order: ${one.order},`,
@@ -559,7 +623,8 @@ const output = `/**
  * page 4 / order 4; Slimeattikus Mini (C18) stays blocked as C17's spawn. The
  * Inferno roster (IC1-IC8) is its own list, \`INFERNO_MONSTER_CATALOGUE\`, priced
  * in Sulfur (unlock, training) and Magma (hatching) on the Inferno yard
- * (\`docs/design/inferno.md\` §2.6). C200 is not included.
+ * (\`docs/design/inferno.md\` §2.6). C200 is not included. The Lab also has the
+ * revamp's four abilities (Pokey, Octo-ooze, Ichi, Crabatron; owner, 2 Nov 2026).
  *
  * This file exists twice, byte for byte: \`web/src/game/monsters/monsterCatalogue.ts\`
  * (what the Monsters screen shows) and \`server/src/game-data/monsterCatalogue.ts\`

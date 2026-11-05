@@ -63,6 +63,10 @@ export interface WoundLike {
   readonly ix: number;
   readonly iy: number;
   readonly amount: number;
+  /** A crit's extra, a weakening's or armour's cut, and an Ichi's thorns: for the number. */
+  readonly bonus?: number;
+  readonly reduced?: number;
+  readonly thorns?: boolean;
 }
 
 interface Shot {

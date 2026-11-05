@@ -141,6 +141,12 @@ export interface BuildingPanelOptions {
     readonly title: string;
     readonly open: () => void;
   };
+  /**
+   * Opens the layout planner picking walls, with this wall already picked
+   * (owner, 2026-11-04): the wall pop-up's Upgrade walls. Left out where there
+   * is no planner to open, and the pop-up then says where walls are upgraded.
+   */
+  upgradeWalls?: (id: number) => void;
   /** Opens the world map, offered on the Map Room. Left out where there is no map to go to. */
   openMap?: () => void;
   /**
@@ -241,6 +247,7 @@ export class BuildingPanel {
   private readonly details: HTMLDetailsElement;
   private readonly facts: HTMLDListElement;
   private readonly planner: BuildingPanelOptions["planner"];
+  private readonly upgradeWalls: BuildingPanelOptions["upgradeWalls"];
   private readonly openMap: (() => void) | undefined;
   private readonly unsubscribe: (() => void) | null;
 
@@ -264,6 +271,7 @@ export class BuildingPanel {
 
   constructor(options: BuildingPanelOptions) {
     this.planner = options.planner;
+    this.upgradeWalls = options.upgradeWalls;
     this.openMap = options.openMap;
     this.yard = options.yard;
     this.panel = new Panel({
@@ -719,7 +727,12 @@ export class BuildingPanel {
   private renderInfo(building: YardBuilding): void {
     // Every row tells the level, on a foreign yard a level the server made up.
     const { rows, list } = this.yard
-      ? buildingInfo(building, this.yard.store.kind, this.yard.store.yard.cellHeight)
+      ? buildingInfo(
+          building,
+          this.yard.store.kind,
+          this.yard.store.yard.cellHeight,
+          this.yard.store.yard.landRangePct,
+        )
       : { rows: [], list: null };
     // With an upgrade to offer, what it changes sits beside the Upgrade
     // button instead (`upgradeGains`); these rows then read as they are now.
@@ -811,13 +824,24 @@ export class BuildingPanel {
         blocks.push(note(`${AUTO_BANKING}.`));
       }
       if (model.batch) {
-        blocks.push(
-          note(
-            WALL_TYPES.includes(building.type)
-              ? "Walls are upgraded in the layout planner."
-              : "Traps are re-armed in the layout planner.",
-          ),
-        );
+        const wall = WALL_TYPES.includes(building.type);
+        const upgradeWalls = this.upgradeWalls;
+        if (wall && upgradeWalls) {
+          // Still no single-wall upgrade here: the button opens the planner's
+          // wall picking with this wall picked, for the player to add more.
+          const button = actionButton("Upgrade walls", () => upgradeWalls(building.id), "btn--primary");
+          button.classList.add("building-panel__walls");
+          button.title = "Open the layout planner and pick the walls to raise";
+          blocks.push(button);
+        } else {
+          blocks.push(
+            note(
+              wall
+                ? "Walls are upgraded in the layout planner."
+                : "Traps are re-armed in the layout planner.",
+            ),
+          );
+        }
       }
       const open = housing ? null : this.openButton(model);
       if (open) blocks.push(open);

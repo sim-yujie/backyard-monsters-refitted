@@ -7,7 +7,7 @@ import { Status } from "../../enums/StatusCodes.js";
 import { BaseType } from "../../enums/Base.js";
 import { baseNotFoundErr } from "../../errors/errors.js";
 import { UpdateSoundSchema } from "../../schemas/AuthSchemas.js";
-import { soundSettingsOf, withSoundSettings } from "../../services/sound/soundSettings.js";
+import { NEW_ACCOUNT_SOUND, soundOf, withSoundSettings } from "../../services/sound/soundSettings.js";
 
 /** The player's main yard, or null before they have one. */
 const mainSaveOf = (user: User): Promise<Save | null> => {
@@ -17,12 +17,12 @@ const mainSaveOf = (user: User): Promise<Save | null> => {
 };
 
 /**
- * `GET /player/sound`: the player's music and effects switches, as saved
+ * `GET /player/sound`: the player's music and effects switches and volumes, as saved
  * with their main yard, the defaults filled in
  * (`services/sound/soundSettings.ts`). An account without a yard yet is a
  * brand-new yard: music off, effects on.
  *
- * @returns `{ error: 0, sound: { music, effects } }`.
+ * @returns `{ error: 0, sound: { music, effects, musicVolume, effectsVolume } }`.
  */
 export const getSoundSettings: KoaController = async (ctx) => {
   const save = await mainSaveOf(ctx.authUser);
@@ -30,12 +30,12 @@ export const getSoundSettings: KoaController = async (ctx) => {
   ctx.status = Status.OK;
   ctx.body = {
     error: 0,
-    sound: save ? soundSettingsOf(save) : { music: false, effects: true },
+    sound: save ? soundOf(save) : NEW_ACCOUNT_SOUND,
   };
 };
 
 /**
- * `POST /player/sound`: turns music or effects on or off, saved with the
+ * `POST /player/sound`: turns music or effects on or off, or sets a volume, saved with the
  * main yard so it follows the account. The body names only the switch that
  * changed (`UpdateSoundSchema`); the whole block comes back.
  *
@@ -44,7 +44,7 @@ export const getSoundSettings: KoaController = async (ctx) => {
  * Unlike Flash, which saved the switches only in the own yard (`SOUNDS.as:
  * 299,317`), this works from any screen: the account menu is on all of them.
  *
- * @returns `{ error: 0, sound: { music, effects } }`.
+ * @returns `{ error: 0, sound: { music, effects, musicVolume, effectsVolume } }`.
  */
 export const updateSoundSettings: KoaController = async (ctx) => {
   const change = UpdateSoundSchema.parse(ctx.request.body);
@@ -63,7 +63,7 @@ export const updateSoundSettings: KoaController = async (ctx) => {
     save.stats = withSoundSettings(save.stats, change);
     em.persist(save);
     await em.flush();
-    return soundSettingsOf(save);
+    return soundOf(save);
   });
 
   ctx.status = Status.OK;

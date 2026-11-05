@@ -29,6 +29,7 @@ import { notMainYardErr, yardRaidInProgressErr, yardUnderAttackErr } from "../..
 import type { BuildingDataMap } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import { catchUpLockedRow } from "../yard/yardAction.js";
+import { recordQuestEvents } from "../../services/quests/record.js";
 import type { FriendsBody } from "./friends.js";
 
 /**
@@ -97,7 +98,7 @@ export const sendGiftAnswer = async (em: EntityManager, user: User, body: unknow
     const amount = giftAmountOf(caps.get(mine.basesaveid) ?? 0, caps.get(theirs.basesaveid) ?? 0);
     const gift = await insertGift(tx, { from, to, resource, amount, now, expiresAt: giftExpiresAt(now) });
     if (!gift) throw friendRefusedErr("giftSentToday");
-    return { gift, senderName: mine.username, receiver: theirs };
+    return { gift, senderName: mine.username, senderBasesaveid: mine.basesaveid, receiver: theirs };
   });
 
   await notifyFriend(
@@ -106,6 +107,8 @@ export const sendGiftAnswer = async (em: EntityManager, user: User, body: unknow
     { event: "gift", userid: from, username: done.senderName, giftid: done.gift.giftid, resource, amount: done.gift.amount },
     new Date(now * 1000)
   );
+  // Quests: a gift sent, on the sender's main row under its own lock (logged, never thrown).
+  await recordQuestEvents(em, done.senderBasesaveid, { friendGift: 1 }, now);
 
   // The sender's answer names the receiver, as a sent request does.
   return { error: 0, gift: { ...done.gift, userid: to, username: done.receiver.username } };

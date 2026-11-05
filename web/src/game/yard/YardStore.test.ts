@@ -692,6 +692,22 @@ describe("the notification count (#257)", () => {
   });
 });
 
+describe("the Quests red number (beta 6)", () => {
+  it("takes each answer's questsClaimable, keeping it when an answer has none", async () => {
+    let next: number | undefined = 4;
+    const api = stubApi({
+      state: vi.fn(() => Promise.resolve({ ...answer(T0), ...(next !== undefined && { questsClaimable: next }) })),
+    });
+    const { store } = storeWith(loadWith({}), api);
+    expect(store.save.questsClaimable).toBeUndefined();
+    await store.refresh();
+    expect(store.save.questsClaimable).toBe(4);
+    next = undefined;
+    await store.refresh();
+    expect(store.save.questsClaimable).toBe(4);
+  });
+});
+
 describe("lifecycle", () => {
   it("fetches the state once at start when the load carried no caps", async () => {
     const api = stubApi();

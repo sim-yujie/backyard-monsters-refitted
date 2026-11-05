@@ -83,11 +83,12 @@ export const coverageTowers = (
   nodes: Iterable<PlanNode>,
   kind: YardKind = "main",
   height = 0,
+  landPct = 0,
 ): CoverageTower[] => {
   const towers: CoverageTower[] = [];
   for (const node of nodes) {
     if (node.fixed || node.stored || node.type === BUNKER_TYPE || node.level <= 0) continue;
-    const reach = towerRange(node.type, node.level, kind, height);
+    const reach = towerRange(node.type, node.level, kind, height, landPct);
     if (!reach) continue;
     towers.push({
       x: node.x + node.width / 2,

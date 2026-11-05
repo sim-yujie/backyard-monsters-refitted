@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatAmount, formatCompact, formatCountdown } from "./format";
+import { formatAmount, formatCompact, formatCountdown, formatShort } from "./format";
 
 /** The shared spellings: amounts in full by default (#134), short only on request. */
 
@@ -40,5 +40,35 @@ describe("formatCountdown", () => {
     expect(formatCountdown(125)).toBe("2m 5s");
     expect(formatCountdown(3_725)).toBe("1h 2m");
     expect(formatCountdown(90_000)).toBe("1d 1h");
+  });
+});
+
+describe("formatShort", () => {
+  it("is exact under a thousand", () => {
+    expect(formatShort(0)).toBe("0");
+    expect(formatShort(71)).toBe("71");
+    expect(formatShort(999.9)).toBe("999");
+  });
+
+  it("drops a trailing .0", () => {
+    expect(formatShort(100_000)).toBe("100K");
+    expect(formatShort(2_000_000)).toBe("2M");
+  });
+
+  it("keeps one decimal, rounded down so a held amount is never overstated", () => {
+    expect(formatShort(12_552_536)).toBe("12.5M");
+    expect(formatShort(21_463_172)).toBe("21.4M");
+    expect(formatShort(99_960)).toBe("99.9K");
+    expect(formatShort(1_250)).toBe("1.2K");
+  });
+
+  it("goes up a unit rather than reading 1000K", () => {
+    expect(formatShort(999_999)).toBe("999.9K");
+    expect(formatShort(1_000_000)).toBe("1M");
+    expect(formatShort(1_234_567_890)).toBe("1.2B");
+  });
+
+  it("shows a dash for a value the save did not send", () => {
+    expect(formatShort(undefined)).toBe("—");
   });
 });

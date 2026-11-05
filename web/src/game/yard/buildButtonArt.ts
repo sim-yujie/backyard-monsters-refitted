@@ -1,3 +1,5 @@
+import { classicLook } from "@/game/classicLook";
+import { MODERN_BUTTON_FILE } from "./buildButtonModernData";
 import type { YardKind } from "./buildingCosts";
 
 /**
@@ -12,6 +14,13 @@ import type { YardKind } from "./buildingCosts";
  * (`BUILDINGBUTTON.as:74-84`). The props table names a silhouette for every
  * type, but only these are on disk; the rest are drawn dark by the menu's CSS
  * from the plain picture.
+ *
+ * With the Modern look (owner, 2 Nov 2026: "refresh the images in 'buildings'
+ * for both overworld and inferno to use our new look for the modern
+ * setting"), a building that has a new look in the yard shows that look
+ * instead: {@link buildPicture}, from `MODERN_BUTTON_FILE`, which
+ * `web/tools/build-pictures/make.py` makes from the yard's own art. With the
+ * Classic look, and for a building with no new look yet, Flash's button.
  */
 
 /** Where the game server keeps the art. Proxied in development. */
@@ -105,3 +114,36 @@ export const silhouetteUrl = (type: number, kind: YardKind = "main"): string | n
   const file = kind === "inferno" ? INFERNO_SILHOUETTE_FILE[type] : SILHOUETTE_FILE[type];
   return file ? ROOT + file : null;
 };
+
+/** Where the Modern pictures are (`web/tools/build-pictures/make.py`). */
+const MODERN_ROOT = `${ROOT}modern/`;
+
+/** A building's picture for a menu, and whether it is the Modern one. */
+export interface BuildPicture {
+  readonly url: string;
+  /**
+   * The building's new look on a transparent ground, rather than Flash's
+   * button: a locked one is shaded from it (Flash's silhouettes are of the
+   * Flash art).
+   */
+  readonly modern: boolean;
+}
+
+/** The Modern picture's file for a yard of `kind`, if the type has one; an outpost draws the main yard's art. */
+export const modernButtonFile = (type: number, kind: YardKind = "main"): string | null =>
+  MODERN_BUTTON_FILE[kind === "inferno" ? "inferno" : "main"][type] ?? null;
+
+/**
+ * The picture of a type on a yard of `kind`, for the build menu and anything
+ * else that shows a building (quests, say): with the Modern look, the
+ * building's new look as the yard draws it at level 1 (`newLookFor`) where it
+ * has one; otherwise Flash's button ({@link buttonUrl}). `classic` is the
+ * player's look (`classicLook`), given only by tests.
+ */
+export const buildPicture = (type: number, kind: YardKind = "main", classic: boolean = classicLook()): BuildPicture => {
+  const file = classic ? null : modernButtonFile(type, kind);
+  return file ? { url: MODERN_ROOT + file, modern: true } : { url: buttonUrl(type, kind), modern: false };
+};
+
+/** The URL of {@link buildPicture}. */
+export const buildPictureUrl = (type: number, kind: YardKind = "main"): string => buildPicture(type, kind).url;

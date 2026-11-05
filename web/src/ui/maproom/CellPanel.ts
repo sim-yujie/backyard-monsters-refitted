@@ -7,7 +7,10 @@ import { cellsText } from "@/game/maproom/attackRange";
 import { TRIBE_COLOURS } from "@/game/maproom/cellVisuals";
 import { tribePictureUrl } from "@/game/maproom/tribeAvatars";
 import { button, el, icon, type IconName } from "@/ui/maproom1/icons";
-import { GROUND_BONUS_TITLE, groundBonusIcons } from "./groundBonus";
+import { GROUND_BONUS_TITLE, groundBonusIcons, heightIcon } from "./groundBonus";
+import { isFlatGround } from "@/game/maproom/ground";
+import { landFeatureChip } from "./landFeatureRow";
+import { addNeighbourBonusChip } from "./neighbourBonusChip";
 import { icon as lineIcon } from "@/ui/icons";
 
 /**
@@ -437,6 +440,7 @@ export class CellPanel {
       return;
     }
 
+    addNeighbourBonusChip(this.chips, payload);
     if (isPlayerCell(payload)) {
       this.renderPlayer(cell, payload, where);
       return;
@@ -451,6 +455,8 @@ export class CellPanel {
     );
     this.addReach(cell);
     this.addDamage(payload.dm, payload.d === 1);
+    this.addHeightChip(payload.i);
+    this.addLandChip(payload.lf);
     this.setActions("attack", "Look inside");
   }
 
@@ -498,8 +504,11 @@ export class CellPanel {
     }
 
     this.addDamage(payload.dm, payload.d === 1);
+    this.addHeightChip(payload.i);
     // Height only matters on an outpost: towers reach and income scale by it.
     if (outpost) this.addGroundChip(payload.i);
+    // The land feature (`landFeatureRow.ts`): an outpost's, never a main yard's.
+    if (outpost) this.addLandChip(payload.lf);
     if (payload.p === 1) {
       // The end, when the server sends it (#187); a bare "Protected" otherwise.
       if (payload.pe !== undefined && payload.pe > Date.now() / 1000) {
@@ -676,6 +685,24 @@ export class CellPanel {
     chip.title = GROUND_BONUS_TITLE;
     chip.append(...groundBonusIcons(height));
     this.chips.append(chip);
+  }
+
+  /**
+   * The cell's height as the hill icon and "+48 m", on the painted map only (plan step 5: its
+   * hills have no hex columns to read the height from). The tile map keeps today's pop-up.
+   */
+  private addHeightChip(height: number): void {
+    if (!isFlatGround()) return;
+    const chip = el("span", "mr2-chip mr2-chip--info mr2-chip--height");
+    chip.title = "Height above the shore";
+    chip.append(heightIcon(height));
+    this.chips.append(chip);
+  }
+
+  /** The cell's land feature and what it does (`landFeatureRow.ts`); nothing on open ground. */
+  private addLandChip(feature: number | undefined): void {
+    const chip = landFeatureChip(feature);
+    if (chip) this.chips.append(chip);
   }
 
   private addCountdown(

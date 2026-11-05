@@ -52,6 +52,7 @@ export const mushroomPickAction = (
         report: pumpkins === undefined ? pick.report : { ...pick.report, pumpkins },
         // Goals M1-M6 count the pick, golden by the server's own roll (#227).
         slices: { mushrooms: { ...pick.mushrooms }, onboarding: countMushroom(save, pick.report.golden) },
+        questEvents: { mushroom: 1 },
       };
     },
   });

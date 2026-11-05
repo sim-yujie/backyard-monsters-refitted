@@ -71,6 +71,18 @@ describe("YardBuildings.setAnimFrame", () => {
     expect(buildings.tops.children.length).toBe(before);
     buildings.destroy();
   });
+
+  // The yard is shown again after every save change; a strip that started
+  // over each time made the Inferno ICC's crystal blink to its dimmest cell
+  // whenever one Incubator handed over to the next.
+  it("keeps each strip's place when the yard is shown again", () => {
+    const buildings = new YardBuildings();
+    buildings.show(readYard(yardResponse()), fakeAtlas());
+    buildings.setAnimFrame(2, 0, 9);
+    buildings.show(readYard(yardResponse()), fakeAtlas());
+    expect(buildings.animFrameOf(2, 0)).toBe(9);
+    buildings.destroy();
+  });
 });
 
 describe("YardBuildings: fortification overlays", () => {
@@ -345,12 +357,12 @@ describe("YardBuildings: loading the pictures", () => {
       const buildings = new YardBuildings();
       buildings.show(walledYard(), fakeAtlas());
       // Asked for on `show`, not on the first frame.
-      expect(asked[0]).toBe("/assets/buildings/walls/top.1.png");
+      expect(asked[0]).toBe("/assets/buildings/walls/top.3d1@2x.webp");
       expect(asked).toHaveLength(3);
 
       buildings.draw(everywhere);
       const tops = asked.slice(0, 3);
-      // A 3D tower's own picture is its body (`body.t1@2x.webp`), not a `top`.
+      // A 3D tower's own picture is its body (`body.t1@2x.webp`), not a `top`; a 3D wall's is `top.3d1@2x.webp`.
       expect(tops.every((url) => /\/(top\.\d|body\.t\d)/.test(url))).toBe(true);
       expect(asked.length).toBeGreaterThan(3);
       buildings.destroy();
@@ -381,7 +393,7 @@ describe("YardBuildings: loading the pictures", () => {
         await vi.advanceTimersByTimeAsync(delay);
         buildings.draw(everywhere);
       }
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining("walls/top.1.png"), expect.anything());
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("walls/top.3d1@2x.webp"), expect.anything());
       // The trap has its picture; the three walls and the tower keep a faint
       // footprint, and nothing is written over any of them.
       expect(buildings.placeholderCount).toBe(4);

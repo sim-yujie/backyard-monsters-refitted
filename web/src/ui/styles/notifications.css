@@ -12,7 +12,7 @@
 /* ── The bell: left of Mail, at its height ──────────────────────────────── */
 
 .yard-dock__right > .yard-dock__button--bell {
-  right: 330px;
+  right: calc(var(--dock-row) + 2 * var(--dock-pitch));
   bottom: 30px;
 }
 

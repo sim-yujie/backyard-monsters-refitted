@@ -1,0 +1,9 @@
+Use your image generation tool (one call) to create ONE new SQUARE image (1:1, as large as the tool allows) and save it as art.png in the current folder. Do not write code, do not draw with scripts.
+
+THE PICTURE: ONE SEAMLESS TILEABLE TEXTURE of a thick, unbroken sea of solid cumulus cloud seen from STRAIGHT ABOVE, filling the whole square, for the unexplored areas of a bright cartoon strategy-game map (the look of a hand-painted fantasy board game: clean, bright, slightly stylised, not photo-real, but the clouds must read as SOLID, THREE-DIMENSIONAL heaps with real volume, like sunlit cumulus seen from an aeroplane).
+
+- Big rounded cloud heaps of mixed sizes: the biggest about a third of the square across, many middle ones, a few small ones tucked between. Each big heap is itself built of smaller round billows (cauliflower-like), so there is detail at two sizes.
+- Strong sunlight from the TOP-LEFT: the top-left side of every heap and billow is bright, clean white with a faint warm cream tint; the bottom-right side of every heap turns to soft cool NEUTRAL GREY (blue-grey, like a shadow on snow, NOT lavender, NOT purple, NOT pink).
+- Real depth: the deep creases and gaps between the big heaps are clearly darker, a mid blue-grey, as if looking down between towering clouds; each heap casts a soft shadow onto its neighbour on its bottom-right side. Clear contrast between bright tops and shaded valleys, but no black.
+- NO ground, NO sea and NO sky shows through anywhere. No text, no logos, no watermark, no grid, no frame.
+- The left edge continues into the right edge and the top edge into the bottom edge, so copies laid side by side show no seam. The detail is even all over the square: no vignette, no darker or lighter corners, no single big cloud in the middle, no horizon, no perspective.

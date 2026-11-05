@@ -1,7 +1,15 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { EFFECTS, EffectsPlayer, MIN_GAP_MS, type EffectsBackend } from "./EffectsPlayer";
+import {
+  ATTACK_EFFECTS,
+  EFFECTS,
+  EffectsPlayer,
+  GROUP_GAP_MS,
+  LOOT_GAP_MS,
+  MIN_GAP_MS,
+  type EffectsBackend,
+} from "./EffectsPlayer";
 import type { GestureTarget } from "./MusicPlayer";
 
 /** A Web Audio stand-in: held back until a press resumes it, files loaded by hand. */
@@ -85,7 +93,62 @@ describe("EffectsPlayer", () => {
     const { card, player } = await ready();
     expect(player.play("bankfire")).toBe(true);
     expect(card.starts).toEqual([{ sound: `decoded ${EFFECTS.bankfire.url}`, volume: 0.8 }]);
-    expect(card.loads).toEqual(Object.values(EFFECTS).map((effect) => effect.url));
+    // The game's own few sounds only: an attack's wait for the attack.
+    expect(card.loads).toEqual(
+      Object.values(EFFECTS)
+        .filter((effect) => effect.attack !== true)
+        .map((effect) => effect.url),
+    );
+  });
+
+  it("fetches an attack's sounds only when an attack asks, each file once", async () => {
+    const { card, player } = await ready();
+    expect(card.loads).not.toContain(EFFECTS.laser.url);
+    player.preload(ATTACK_EFFECTS);
+    // The Heavy Trap's fall and a level 1 building's are one file, fetched once.
+    expect(card.loads.filter((url) => url === EFFECTS.destroy1.url)).toHaveLength(1);
+    expect(new Set(card.loads).size).toBe(card.loads.length);
+    expect(card.loads).toContain(EFFECTS.laser.url);
+    await card.loadAll();
+    expect(player.play("laser")).toBe(true);
+    expect(player.play("trapheavy")).toBe(true);
+  });
+
+  it("fetches nothing for an attack with sound effects off, and catches up when they come on", async () => {
+    const { card, player, made } = setup();
+    player.setEnabled(false);
+    player.preload(ATTACK_EFFECTS);
+    expect(made()).toBe(0);
+    player.setEnabled(true);
+    player.play("bankfire");
+    expect(card.loads).toContain(EFFECTS.splash1.url);
+    await card.loadAll();
+    expect(player.play("splash1")).toBe(true);
+  });
+
+  it("plays at the volume asked for, a monster's swing at Flash's 0.1-0.2", async () => {
+    const { card, player } = await ready();
+    player.preload(["hit2"]);
+    await card.loadAll();
+    expect(player.play("hit2", 0.12)).toBe(true);
+    expect(card.starts.at(-1)?.volume).toBe(0.12);
+  });
+
+  it("starts one of a family at most once in the family's gap, so fifty swings do not rattle", async () => {
+    const { card, clock, player } = await ready();
+    player.preload(ATTACK_EFFECTS);
+    await card.loadAll();
+    // Fifty monsters bite in the same frame, each with a take of its own.
+    const takes = ["hit1", "hit2", "hit3", "hit4", "ihit1"] as const;
+    const started = Array.from({ length: 50 }, (_, index) => player.play(takes[index % takes.length]!));
+    expect(started.filter(Boolean)).toHaveLength(1);
+    // Another family, and a sound of no family, keep their own gaps.
+    expect(player.play("splat2")).toBe(true);
+    expect(player.play("laser")).toBe(true);
+    clock.now += MIN_GAP_MS;
+    expect(player.play("hit3")).toBe(false);
+    clock.now += GROUP_GAP_MS - MIN_GAP_MS;
+    expect(player.play("hit3")).toBe(true);
   });
 
   it("stays silent, and opens no sound card, with sound effects off", () => {
@@ -199,10 +262,44 @@ describe("EffectsPlayer", () => {
     expect(page.listening()).toBe(0);
   });
 
-  it("every effect's file is on the game server, the Inferno's pair too", () => {
+  it("every effect's file is on the game server, the Inferno's ones too", () => {
     const serverPublic = fileURLToPath(new URL("../../../../server/public", import.meta.url));
     for (const { url } of Object.values(EFFECTS)) expect(existsSync(serverPublic + url), url).toBe(true);
     expect(EFFECTS.ibankfire.url).toBe("/assets/sounds/infernosounds/sound_ibankfire.mp3");
     expect(EFFECTS.ibankland.url).toBe("/assets/sounds/infernosounds/sound_ibankland.mp3");
+  });
+});
+
+describe("EffectsPlayer volume and the loot plop", () => {
+  it("plays every effect at its own volume times the slider's gain; 0 plays nothing", async () => {
+    const { card, clock, player } = await ready();
+    player.setVolume(0.25);
+    clock.now += 1_000;
+    expect(player.play("bankland")).toBe(true);
+    expect(card.starts.at(-1)?.volume).toBeCloseTo(0.8 * 0.25);
+    clock.now += 1_000;
+    player.play("bankland", 0.4);
+    expect(card.starts.at(-1)?.volume).toBeCloseTo(0.1);
+    player.setVolume(0);
+    clock.now += 1_000;
+    expect(player.play("bankland")).toBe(false);
+    player.setVolume(7);
+    expect(player.volume).toBe(1);
+  });
+
+  it("plays the loot orb's plop, Flash's bankland, at most once in its gap", async () => {
+    const { card, clock, player } = await ready();
+    expect(EFFECTS.loot.url).toBe(EFFECTS.bankland.url);
+    player.preload(["loot"]);
+    await card.loadAll();
+    // Twenty buildings looted in one frame: one plop.
+    const started = Array.from({ length: 20 }, () => player.play("loot"));
+    expect(started.filter(Boolean)).toHaveLength(1);
+    clock.now += GROUP_GAP_MS;
+    expect(player.play("loot")).toBe(false);
+    clock.now += LOOT_GAP_MS - GROUP_GAP_MS;
+    expect(player.play("loot")).toBe(true);
+    // The yard's collect plop keeps its own, shorter gap.
+    expect(player.play("bankland")).toBe(true);
   });
 });

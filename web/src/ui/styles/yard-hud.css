@@ -117,6 +117,19 @@
   height: 24px;
 }
 
+/* The figure spans the same three rows as the coins and is centred on them;
+   left in row 1 it sat above the coins (owner screenshot, 4 Nov). */
+.hud--corner .hud__resource--shiny .hud__resource-value {
+  grid-row: 1 / 4;
+  align-self: center;
+}
+
+/* Shiny has no silo, so no fill bar: its empty cap block only added a row
+   and pushed the pair 2 px off the workers' line. */
+.hud--corner .hud__resource--shiny .hud__resource-cap {
+  display: none;
+}
+
 .hud--corner .hud__workers-button {
   gap: var(--space-2);
   min-height: 36px;
@@ -134,6 +147,7 @@
 /* ── Top right: who you are ───────────────────────────────────────────── */
 
 .account-menu__button--pill {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -158,25 +172,41 @@
   box-shadow: var(--focus-ring);
 }
 
-/* The name, and the player's level under it (#192). */
+/* The name, and under it the player's level and a bar to the next (#192). */
 .account-menu__pill-text {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   min-width: 0;
   line-height: 1.15;
 }
 
 .account-menu__pill-level {
-  color: var(--colour-text-secondary);
-  font-size: var(--text-xs);
+  color: var(--colour-text);
+  font-size: var(--text-sm);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.account-menu__pill-level[hidden] {
+.account-menu__pill-level[hidden],
+.account-menu__pill-bar[hidden] {
   display: none;
+}
+
+.account-menu__pill-bar {
+  align-self: stretch;
+  height: 5px;
+  margin-top: 2px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-sunken);
+}
+
+.account-menu__pill-fill {
+  display: block;
+  height: 100%;
+  background: var(--colour-accent);
 }
 
 .account-menu__pill-name {
@@ -211,6 +241,24 @@
   object-fit: contain;
 }
 
+/* The level on the critter, only where the name and level have no room. */
+.account-menu__ring-level {
+  display: none;
+  position: absolute;
+  bottom: -3px;
+  left: 50%;
+  min-width: 24px;
+  padding: 0 4px;
+  transform: translateX(-50%);
+  border-radius: var(--radius-pill);
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
 /* ── The round buttons ────────────────────────────────────────────────── */
 
 .yard-dock {
@@ -232,6 +280,18 @@
 /* A zero-sized box in the bottom-right corner the right-hand buttons hang
    from, each at the mock-up's offsets. */
 .yard-dock__right {
+  /* The bottom row left of Build (Monsters, then Mail, Defences, Alerts and
+     Goals from their own files): each button one slot wide with its word
+     centred under the disc, Monsters' right edge `--dock-row` from the
+     corner and each next one `--dock-pitch` further left. A word wider than
+     the slot spills out evenly on both sides, so the gaps stay even whatever
+     the words (owner, beta 6: Mail's and Monsters' words nearly touched).
+     A pitch of 100px keeps the widest pair, Defences beside Alerts in the
+     Classic look's wider signs, apart. */
+  --dock-slot: 92px;
+  --dock-row: 144px;
+  --dock-pitch: 100px;
+
   position: absolute;
   right: 0;
   bottom: 0;
@@ -243,6 +303,10 @@
   position: absolute;
 }
 
+.yard-dock__right > .yard-dock__button:not(.yard-dock__button--big, .yard-dock__button--layout, .yard-dock__button--kits) {
+  width: var(--dock-slot);
+}
+
 .yard-dock__right > .yard-dock__button--build,
 .yard-dock__right > .yard-dock__button--attack {
   right: 28px;
@@ -250,7 +314,7 @@
 }
 
 .yard-dock__right > .yard-dock__button--monsters {
-  right: 150px;
+  right: var(--dock-row);
   bottom: 30px;
 }
 
@@ -652,7 +716,16 @@
   cursor: pointer;
 }
 
-.yard-viewtools__overview:hover {
+/* + and − dressed as Fit and the speaker below them: one column of four
+   alike buttons, not two filled tiles over two bare icons (owner, beta 6). */
+.yard-viewtools--rail .yard-zoom .yard-zoom__step {
+  border-color: transparent;
+  background: transparent;
+  color: var(--colour-text);
+}
+
+.yard-viewtools__overview:hover,
+.yard-viewtools--rail .yard-zoom .yard-zoom__step:hover:not(:disabled) {
   background: var(--colour-surface-control);
 }
 
@@ -1154,10 +1227,15 @@
   }
 }
 
-/* Too narrow for the name as well: the critter alone opens the menu. */
+/* Too narrow for the name as well: the critter alone opens the menu, with the
+   level on a small badge. */
 @media (620px < width <= 820px) and (height <= 500px) {
   .hud--corner .account-menu__pill-text {
     display: none;
+  }
+
+  .hud--corner .account-menu__ring-level:not([hidden]) {
+    display: block;
   }
 
   .account-menu__button--pill {

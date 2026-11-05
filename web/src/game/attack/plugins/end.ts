@@ -1,5 +1,10 @@
 import { guideBus } from "@/game/guide/guideBus";
-import { VICTORY_THRESHOLD } from "@/game/combat/rules";
+import {
+  ATTACK_COUNTDOWN_SECONDS,
+  DECLARE_WAR_COUNTDOWN_SECONDS,
+  RETREAT_GRACE_SECONDS,
+  VICTORY_THRESHOLD,
+} from "@/game/combat/rules";
 import { saveAttack } from "@/api/base";
 import {
   descentLandingOf,
@@ -39,11 +44,10 @@ import { AutoAttackFlow } from "@/ui/attack/AutoAttackFlow";
  * retreat, all decided by `AttackSession` itself — build the final save from
  * it, send it exactly once, and show the {@link EndAttackPanel} over the
  * yard while it goes (§F6). And while the attack runs, warn a margin before
- * the server's 420-second save window closes (§7, Q2): the window is wall
- * time from the attack load, not battle time, so the check is on the clock
- * here rather than on the session's countdown — at 2x the two disagree, and
- * a Declare War attack's 420-second countdown alone would already run past
- * it.
+ * the server's save window closes (§7, Q2; {@link saveWindowSeconds}): the
+ * window is wall time from the attack load, not battle time, so the check is
+ * on the clock here rather than on the session's countdown — at 2x the two
+ * disagree.
  *
  * The save is sent once per attack. A success clears the defender's
  * `attackid` and ends the server's session, so a second send could only be
@@ -84,8 +88,17 @@ import { AutoAttackFlow } from "@/ui/attack/AutoAttackFlow";
  * still holds only its core, the Starter Kit shop already open.
  */
 
-/** How long the server accepts this attack's save, from the attack load. */
-export const SESSION_WINDOW_SECONDS = 420;
+/** The spare time the server gives an attack beyond its own length (`server/.../attackWindow.ts`). */
+export const SAVE_WINDOW_SPARE_SECONDS = 60;
+/**
+ * How long the server accepts this attack's save, from the attack load: the
+ * attack's countdown, the retreat grace after it and a spare minute — 480 s,
+ * or 600 s under Declare War (owner, 4 Nov 2026).
+ */
+export const saveWindowSeconds = (declareWar: boolean): number =>
+  (declareWar ? DECLARE_WAR_COUNTDOWN_SECONDS : ATTACK_COUNTDOWN_SECONDS) +
+  RETREAT_GRACE_SECONDS +
+  SAVE_WINDOW_SPARE_SECONDS;
 /** How early to warn (§7, Q2's "short margin"). */
 export const WINDOW_MARGIN_SECONDS = 30;
 /** The longest the end panel waits for the screen to catch up (#148). */
@@ -285,7 +298,7 @@ export const describeSaveFailure = (caught: unknown, isTribe = false): SaveFailu
       return {
         message:
           "This attack expired before it could be saved: the server accepts a result " +
-          `for ${SESSION_WINDOW_SECONDS / 60} minutes after an attack starts.`,
+          `for ${saveWindowSeconds(false) / 60} minutes after an attack starts.`,
         canRetry: false,
       };
     }
@@ -395,22 +408,22 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
      * for the camp's tribe and level, so the panel offers it again (owner, #221).
      */
     /**
-     * Moloch's Descent (Inferno WP 1.13): like a Map Room 1 tribe, nothing
-     * lands it later, and its way out is home to the main yard, where Flash
-     * returned after it, with Moloch's word on the fight over the panel first.
+     * Moloch's Descent (Inferno WP 1.13): like a Map Room 1 tribe, its way
+     * out is home to the main yard, where Flash returned after it, with
+     * Moloch's word on the fight over the panel first.
      */
     const descent = target.descentYard !== undefined;
     let stopDescentResult: (() => void) | null = null;
     const repeatable = target.kind === "wild" && (target.mapversion ?? 2) === 2 && target.cell !== undefined;
     /**
-     * A Map Room 1 tribe has no checkpoint and nothing lands its attack later
-     * (`docs/server-api.md` "Map Room 1 tribe attacks"), so a timed-out save
-     * is sent again once; a Map Room 2 attack is landed by the server's
-     * finaliser.
+     * A Map Room 1 tribe's timed-out save is sent again once: the server's
+     * finaliser would land it only from the last checkpoint, a few seconds
+     * behind the end (`docs/server-api.md` "Yards with no row"); a Map Room 2
+     * attack is left to that finaliser.
      */
     /**
-     * A Moloch tribe from the Inferno map (WP 2.10): nothing lands it later
-     * either, its result is in the landing's `tribe` block, and its ways out
+     * A Moloch tribe from the Inferno map (WP 2.10): its result is in the
+     * landing's `tribe` block, and its ways out
      * are the Inferno map (the scene's `goToMap`) and, Flash's Return Home,
      * the Inferno yard.
      */
@@ -574,9 +587,10 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
     const warnIfDue = (): void => {
       if (warned || session.state().phase === "ended") return;
       const elapsed = (now() - mountedAt) / 1000;
-      if (elapsed < SESSION_WINDOW_SECONDS - WINDOW_MARGIN_SECONDS) return;
+      const window = saveWindowSeconds(session.state().declareWar);
+      if (elapsed < window - WINDOW_MARGIN_SECONDS) return;
       warned = true;
-      const left = Math.max(0, Math.round(SESSION_WINDOW_SECONDS - elapsed));
+      const left = Math.max(0, Math.round(window - elapsed));
       notices.show(
         "attack-window",
         `The server stops accepting this attack's result in about ${left} s. ` +

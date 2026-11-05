@@ -10,6 +10,7 @@ import {
   planHatcheryFinish,
   planHatcheryRemove,
 } from "../../services/yard/hatchery.js";
+import { housedQuestEvents } from "../../services/quests/hooks.js";
 import { defineYardAction } from "./yardAction.js";
 
 /**
@@ -49,7 +50,11 @@ export const yardHatcheryClearAction = defineYardAction({
 /** `POST /bm/yard/hatchery/finish` — house what fits now for Shiny. */
 export const yardHatcheryFinishAction = defineYardAction({
   schema: YardHatcheryFinishSchema,
-  run: ({ save, body, now }) => planHatcheryFinish(save, body.hatchery, now),
+  run: ({ save, body, now }) => {
+    const plan = planHatcheryFinish(save, body.hatchery, now);
+    // Monsters housed now finished hatching: they count for the hatch quest.
+    return { ...plan, questEvents: housedQuestEvents(plan.report.housed) };
+  },
   outposts: "allow",
   inferno: "allow",
 });

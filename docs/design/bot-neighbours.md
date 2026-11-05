@@ -115,7 +115,7 @@ Later owner decision (2026-10-04, from the #245 leak audit):
 Owner decisions of 2026-10-23 (beta 5, bots from level 15):
 
 25. **No bot below level 15.** The 500 are spread evenly over levels 15-40 (`BOT_FLOOR_LEVEL`,
-    `LEVEL_WEIGHTS` 0 below it).
+    `LEVEL_WEIGHTS` 0 below it). *Raised to 25 on 3 Nov 2026, decision 32.*
 26. **The smallest bot yard** is Town Hall 2 with every resource building it allows (2 of each
     harvester, 2 silos), a Housing with an army in it, and towers (3 Cannon, 3 Sniper). No walls
     needed. That yard comes to level 10-15 (median 11, 600 seeds; an economy bot builds harvesters
@@ -130,7 +130,8 @@ Owner decisions of 2026-10-23 (beta 5, bots from level 15):
     a live server), or at once with `bun src/scripts/bots.ts create --fill`.
 30. **Players under 15 still meet bots:** their real-player window is as before, and bots come
     from the nearest levels the bots stand on (section 4.3). Revenge stays unmatched by level
-    (section 4.7, owner: keep as is).
+    (section 4.7, owner: keep as is). *Replaced on 3 Nov 2026, decision 33: players under 15 see no
+    bots.*
 31. **A revenge is a chain of 2-4 attacks** (owner 2026-10-23): a real player hits back more than
     once, until the yard is wrecked, and stops after one when it went badly (a bot that did about 5%
     does not come back). Each attack must do at least 20% damage itself and leave the yard short of
@@ -138,6 +139,31 @@ Owner decisions of 2026-10-23 (beta 5, bots from level 15):
     attacks through protection; every attack gets the normal reports. The 1-in-3 chance, the 1-24
     hour delay, no level match and the "online in the last 2 minutes" wait stay (section 4.7,
     "Revenge chains").
+
+Owner decisions of 3 Nov 2026 (beta 6, "retire lower level bots"): enough real players now stand
+on the low levels (live, that week: 323 on levels 1-5, 58 on 6-10, 25 on 11-15, 19 on 16-35), so
+the lower bots go and the higher ones stay.
+
+32. **The floor is a setting, 25 by default.** `BOTS_FLOOR_LEVEL` (a whole number 15-40; anything
+    else reads as 25; `botFloorLevel` in `config/BotConfig.ts`) replaces the fixed 15. Each level
+    from the floor to 40 has an even share (`levelWeights`), none below. The next daily rebalance
+    retires every active bot below the floor (decision 29's rule, now at 25), keeping its rows:
+    its yard moves to Map Room 2 with no world, `state = 'retired'`, its pending jobs (revenge
+    included) are dropped, so mail and attack logs keep its name. New bots, from the rebalance or
+    `bots.ts create`, start only at the floor or above. 15 stays the lowest floor because the
+    smallest bot yard (decision 26) comes by then; above 15 every yard already holds it, so a new
+    bot at 25 starts at the very bottom of the level. The seeded Map Room 2 dev players (4.11) keep
+    15-40: they are the dev world map, not neighbours.
+33. **Players under level 15 see no bots**, only real players (`showsBots` in `botNeighbours.ts`,
+    `BOTS_SHOWN_FROM_LEVEL`). From 15 up a list takes bots from the floor up as before (section
+    4.3), so a level 15-24 player is shown level 25-27 bots.
+34. **The total follows the floor.** With `BOTS_TOTAL` unset the total is about 11.5 bots a level
+    (`DEFAULT_BOTS_PER_LEVEL`: the 300 live bots over 15-40) times the levels from the floor to 40:
+    185 at 25 (`defaultBotsTotal`). A server that sets `BOTS_TOTAL` keeps its own number, spread
+    over fewer levels. `bun src/scripts/bots.ts rebalance --dry-run` prints, per level, the bots
+    now, the level's share, how many the next rebalance would retire (below the floor or off a
+    crowded level) and make, and the smallest `BOTS_TOTAL` that keeps every bot at or above the
+    floor, writing nothing.
 
 ## 3. What already exists
 
@@ -404,10 +430,12 @@ function of (seed, P): growth (4.4) is the same progression run a little further
 2. **Bots fill the rest.** `25 − real` bots from the `bot` table (`state = 'active'`,
    `level BETWEEN min AND max`), not already in the list, preferring bots that are attackable now
    (not protected, not under attack), shuffled and spread across the levels in range.
-   A player under level 15 (decision 30) has no bot in their own window when it ends below 15, so
-   the bots are drawn from the floor up instead: from level 15 to whichever is higher of the
-   window's top and 15 + `FLOOR_REACH` (2) (`botLevelWindow` in `botNeighbours.ts`). A level 3
-   player sees real players on 1-10 first, then bots on levels 15-17.
+   A player under level 15 gets no bots at all, only real players (owner 3 Nov 2026, decision
+   33; `showsBots`). A player from 15 up whose window starts below the floor (`BOTS_FLOOR_LEVEL`,
+   25 by default; decision 32) has the bots drawn from the floor up instead: from the floor to
+   whichever is higher of the window's top and the floor + `FLOOR_REACH` (2) (`botLevelWindow` in
+   `botNeighbours.ts`). A level 20 player sees real players on 13-27 first, then bots on levels
+   25-27. (Before 3 Nov 2026 the floor was 15 and a level 3 player was shown bots on 15-17.)
 
 The cached list stores bot entries exactly as real ones (`createNeighbourData`), and the whole
 list is shuffled before it is cached, so the order (real players first, bots after) gives nothing
@@ -439,9 +467,10 @@ loot band, but shows online only on `BOTS_QUIET_ONLINE` (`[PLACEHOLDER]` 0.05) o
 once in three days (owner, 2026-10-23). **When a
 level runs short, a new bot is made right at that level** with a yard drawn for it; **a crowded
 level retires** its quiet bots first (longest quiet first), then its growing bots longest on the
-level. Total about 500 (`BOTS_TOTAL`), each level its `LEVEL_WEIGHTS` share (even over 15-40,
-none below: about 19 a level; decision 25). Every active bot below level 15 is retired by the
-next rebalance (decision 29). The pure
+level. Total `BOTS_TOTAL`, by default about 11.5 a level from the floor up (185 at the floor of
+25; decision 34), each level its `levelWeights` share (even from the floor to 40, none below;
+decisions 25 and 32). Every active bot below the floor (`BOTS_FLOOR_LEVEL`, 25 since 3 Nov 2026,
+15 before) is retired by the next rebalance (decision 29). The pure
 rules are in `services/bots/population.ts`.
 
 - **Grow job** (every 2-6 hours per bot, jittered): the bot's place on the climb walks the days
@@ -472,9 +501,9 @@ rules are in `services/bots/population.ts`.
   band-filling alone leaves the low levels all quiet. Each rebalance therefore also starts about
   `BOTS_FRESH_PER_DAY` (`[PLACEHOLDER]` 3; the whole part each day, plus one more by the chance of
   the fraction; 0 turns it off; was `BOTS_LEVEL1_PER_DAY` while they started at level 1) new bots
-  at the bottom of level 15, growing, as new players, each holding the smallest bot yard
-  (decision 26; `atLeastMinimum` in `factory.ts` starts it as far into level 15 as that yard
-  needs). They climb like real players: the same curve and `BOTS_QUIET_RATE` each level, with no
+  at the bottom of the floor level (15 until 3 Nov 2026, 25 since, decision 32), growing, as new
+  players, each holding the smallest bot yard (decision 26; `atLeastMinimum` in `factory.ts`
+  starts it as far into level 15 as that yard needs; at 25 every yard already holds it). They climb like real players: the same curve and `BOTS_QUIET_RATE` each level, with no
   early quit chances. They come before the band-filling and count in `BOTS_NEW_PER_DAY`. Once
   the total is full each takes the place of a quiet bot on the most crowded level (the higher one
   on a tie); with no quiet bot anywhere, none starts.
@@ -482,7 +511,9 @@ rules are in `services/bots/population.ts`.
   2026-10-23, bots from level 15; the last year of each run):
   3 bots a day started at level 15 plus about 2.15-2.3 a day on short levels, about 5.15-5.3
   retirements a day (mostly quiet bots making room), every level within 2-3 of its share,
-  481-500 bots standing (497 on average). No bot ever stands below 15.
+  481-500 bots standing (497 on average). No bot ever stands below 15. At the floor of 25 with
+  185 bots (`population.test.ts`, 180 days, one seed): every level within 4 of its share, under 5
+  new bots a day, no bot below 25.
 
   | Levels | Bots | Growing | Quiet |
   | --- | --- | --- | --- |
@@ -937,6 +968,13 @@ Three switches in `server/.env`, all off by default: `BOTS_FILL` (neighbour fill
 4. Switch on `BOTS_BRAIN`, then `BOTS_FILL`. Watch for a week: list sizes, attacks on bots,
    protection rates.
 5. Switch on `BOTS_REVENGE`.
+
+**Raising the floor** (owner 3 Nov 2026, decision 32): set `BOTS_FLOOR_LEVEL` and restart; check
+`BOTS_TOTAL` (unset follows the floor). `bots.ts rebalance --dry-run` prints a table per level
+(bots now, share, retired below the floor, retired off a crowded level, new, after), how many bots
+at or above the floor would retire and the smallest `BOTS_TOTAL` that keeps them all, then each bot
+to retire (userid, name, level, why), writing nothing; run it on a copy of the live data first.
+If the higher bots should stay, set `BOTS_TOTAL` to at least that number.
 
 **Kill switch:** `bots.ts retire-all` moves every bot off Map Room 1 at once; every list drops them
 on its next read. `bots.ts delete-retired` removes retired bots and their jobs (only when nothing in

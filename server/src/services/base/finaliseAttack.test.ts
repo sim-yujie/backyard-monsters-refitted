@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } fr
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { attackWindowSeconds } from "./attackWindow.js";
+
 /**
  * Finishing an attack its attacker left without a save (issue #138).
  *
@@ -190,6 +192,14 @@ mock.module("../alliance/powerups.js", () => ({
   runningPowerups: async () => [],
   isDeclareWarRunning: async () => false,
 }));
+
+// The real replay runner, whatever an earlier file left in its place: bun keeps
+// module mocks across files, and a stand-in with a battle canned by another
+// suite failed every landing here on CI (run 41459356322). The query makes the
+// real module one no mock replaces.
+const REAL_RUNNER = "./combat/replayRunner.ts?real";
+const realRunner = (await import(REAL_RUNNER)) as typeof import("./combat/replayRunner.js");
+mock.module("./combat/replayRunner.js", () => ({ ...realRunner }));
 
 const {
   finaliseAbandonedAttack,
@@ -776,12 +786,12 @@ describe("when finalisation runs", () => {
 
     store.clear();
     sets.clear();
-    await arm({ startedat: now() - 420 });
+    await arm({ startedat: now() - attackWindowSeconds() });
     expect(await finaliseAttacksFor(DEFENDER_OWNER, "build")).toBe(1);
   }, REPLAY_TIMEOUT_MS);
 
   test("a stranger's load touches nothing", async () => {
-    await arm({ startedat: now() - 420 });
+    await arm({ startedat: now() - attackWindowSeconds() });
     expect(await finaliseAttacksFor(31337, "build")).toBe(0);
   }, REPLAY_TIMEOUT_MS);
 
@@ -790,7 +800,7 @@ describe("when finalisation runs", () => {
     await finaliseExpiredOnBase(defender.baseid);
     expect(defender.attackid).toBe(ATTACK_ID);
 
-    await arm({ startedat: now() - 420 });
+    await arm({ startedat: now() - attackWindowSeconds() });
     await finaliseExpiredOnBase(defender.baseid);
     expect(defender.attackid).toBe(0);
   }, REPLAY_TIMEOUT_MS);

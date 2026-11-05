@@ -10,12 +10,14 @@ import {
   townHallLevel,
   type YardKind,
 } from "./buildingCosts";
+import { DECORATIONS_FOR_SALE, decorKindOf, decorOrder, decorationPrice, type DecorKind } from "./decorShop";
 import { storedCount, storedDecorations } from "./decorStorage";
 import { isDecoration } from "./planner/placement";
 import { overCap } from "./storage";
 import { isSurfaceInferno, purseFunds, surfaceInfernoStanding, UNDER_HALL_REQUIREMENT } from "./surfaceInferno";
 import { freeWorkers, sharperToolsMultiplier } from "./workers";
 import type { Yard, YardWorkers } from "./yardModel";
+import { isTribeEditing } from "@/game/tribeEditor/tribeEditSession";
 
 /**
  * What the build menu offers and why a tile cannot be built, as data
@@ -75,8 +77,8 @@ export interface BuildCategoryDefinition {
 
 /**
  * Every tab and what it lists. Decorations are never built for resources:
- * the Decorations tab lists what is in storage instead (§8.3, #128;
- * {@link buildOffers}).
+ * the Decorations tab lists what is in storage, then the ones sold for Shiny
+ * (§8.3, #128, owner decision 2026-11-04; {@link buildOffers}).
  */
 export const BUILD_CATALOGUE: readonly BuildCategoryDefinition[] = [
   { id: BuildCategory.RESOURCES, label: "Resources", types: [1, 2, 3, 4, 6] },
@@ -129,19 +131,21 @@ export const OUTPOST_BUILDABLE_TYPES: ReadonlySet<number> = new Set(
 );
 
 /**
- * The Inferno yard's build menu (Inferno WP 1.19): the seventeen types the
+ * The Inferno yard's build menu (Inferno WP 1.19): the eighteen types the
  * Inferno props table offers (`client/scripts/INFERNOYARDPROPS.as`, its
  * `group` 1 to 3 without `block`; the server's `INFERNO_BUILDABLE_TYPES`), in
  * that table's `order` within each tab. The Under Hall is the hall. The
  * Housing Bunker (128) is filed under Buildings, as its `group` 2 files it.
  * The Yard Planner (10) is this project's (owner decision 2026-10-29: Flash
- * `block`ed it there), placed before the Juicer as in the main menu.
+ * `block`ed it there), placed before the Juicer as in the main menu; so is the
+ * Incubator Control Centre (16, owner 2 Nov 2026), after the Incubator as the
+ * Hatchery Control Center follows the Hatchery in the main menu.
  * Decorations are not built there, and the storage they come from is the main
  * yard's, so the tab is empty, as an outpost's.
  */
 export const INFERNO_BUILD_CATALOGUE: readonly BuildCategoryDefinition[] = [
   { id: BuildCategory.RESOURCES, label: "Resources", types: [1, 2, 3, 4, 6] },
-  { id: BuildCategory.BUILDINGS, label: "Buildings", types: [8, 26, 128, 13, 10, 9] },
+  { id: BuildCategory.BUILDINGS, label: "Buildings", types: [8, 26, 128, 13, 16, 10, 9] },
   { id: BuildCategory.DEFENSIVE, label: "Defensive", types: [21, 129, 130, 132, 24, 17] },
   { id: BuildCategory.DECORATIONS, label: "Decorations", types: [] },
 ];
@@ -260,12 +264,24 @@ export interface BuildOffer {
    */
   readonly inferno: boolean;
   /**
-   * A decoration placed from storage (§8.3, #128): how many are stored. It is
-   * free, finished at once and needs no worker; there is no instant, and
-   * `owned`, `allowed` and `most` count nothing. Null for anything built.
+   * A decoration (§8.3, #128): how many are stored, 0 for one bought. It is
+   * finished at once and needs no worker; there is no instant, and `owned`,
+   * `allowed` and `most` count nothing. Null for anything built.
    */
   readonly stored: number | null;
+  /**
+   * A decoration bought for Shiny (none stored; owner decision 2026-11-04):
+   * its price, Flash's (`decorShop.ts`), charged when it is placed. Its
+   * `gate` is `credits` while the player has less. Absent otherwise.
+   */
+  readonly price?: number;
 }
+
+/** Decorations go only in the main yard (owner decision 2026-09-29). */
+const decoratesHere = (context: BuildContext): boolean => {
+  const kind = context.kind ?? context.yard.kind;
+  return kind !== "outpost" && kind !== "inferno";
+};
 
 /**
  * The tile of a decoration in storage, or null when none is stored or the
@@ -273,8 +289,7 @@ export interface BuildOffer {
  * decision 2026-09-29).
  */
 export const storageOffer = (type: number, context: BuildContext): BuildOffer | null => {
-  const kind = context.kind ?? context.yard.kind;
-  if (kind === "outpost" || kind === "inferno") return null;
+  if (!decoratesHere(context)) return null;
   const stored = storedCount(context.save.researchdata, type);
   if (stored === 0) return null;
   return {
@@ -295,6 +310,41 @@ export const storageOffer = (type: number, context: BuildContext): BuildOffer | 
     stored,
   };
 };
+
+/**
+ * The tile of a decoration sold for Shiny with none in storage (owner
+ * decision 2026-11-04), or null when it is not sold, one is stored (that tile
+ * is {@link storageOffer}'s) or the yard is an outpost or the Inferno. Picking
+ * it starts the placement; `decor/buy` charges the price when it goes down.
+ */
+export const shopOffer = (type: number, context: BuildContext): BuildOffer | null => {
+  if (!decoratesHere(context)) return null;
+  const price = decorationPrice(type);
+  if (price === null || storedCount(context.save.researchdata, type) > 0) return null;
+  const short = price - context.credits;
+  return {
+    type,
+    category: BuildCategory.DECORATIONS,
+    cost: { r1: 0, r2: 0, r3: 0, r4: 0 },
+    seconds: 0,
+    atOnce: true,
+    owned: 0,
+    allowed: 0,
+    most: 0,
+    status: "ready",
+    needs: [],
+    instantPrice: 0,
+    gate: short > 0 ? { reason: "credits", need: short } : null,
+    instantGate: null,
+    inferno: false,
+    stored: 0,
+    price,
+  };
+};
+
+/** A decoration's tile: from storage when one is stored, else bought ({@link shopOffer}). */
+export const decorationOffer = (type: number, context: BuildContext): BuildOffer | null =>
+  storageOffer(type, context) ?? shopOffer(type, context);
 
 const KEYS = ["r1", "r2", "r3", "r4"] as const;
 
@@ -330,7 +380,7 @@ export const categoryOf = (type: number, kind: YardKind = "main"): BuildCategory
  * cost table cannot price.
  */
 export const buildOffer = (type: number, context: BuildContext): BuildOffer | null => {
-  if (isDecoration(type)) return storageOffer(type, context);
+  if (isDecoration(type)) return decorationOffer(type, context);
   const kind = context.kind ?? context.yard.kind;
   const category = categoryOf(type, kind);
   const row = rowOf(type, kind);
@@ -426,6 +476,28 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
     status = "locked";
   }
 
+  // The tribe yard editor (LOCAL only): wild monster tribes do not follow the
+  // player's rules (owner, 2 Nov 2026), so everything is free, instant and unlimited.
+  if (isTribeEditing()) {
+    return {
+      type,
+      category,
+      cost: { r1: 0, r2: 0, r3: 0, r4: 0 },
+      seconds: 0,
+      atOnce,
+      owned,
+      allowed: Math.max(owned + 1, allowed),
+      most: Math.max(owned + 1, most),
+      status: "ready",
+      needs: [],
+      instantPrice: 0,
+      gate: null,
+      instantGate: null,
+      inferno,
+      stored: null,
+    };
+  }
+
   const instantPrice = instantCost(step);
   const instantGate: BuildGate | null =
     common ??
@@ -455,14 +527,32 @@ export const buildOffer = (type: number, context: BuildContext): BuildOffer | nu
 /** Every tile of a tab, in the tab's order. */
 export const buildOffers = (category: BuildCategory, context: BuildContext): BuildOffer[] => {
   if (category === BuildCategory.DECORATIONS) {
-    return storedDecorations(context.save.researchdata)
+    // What is stored first, then what is sold, in Flash's order (§8.3).
+    const stored = storedDecorations(context.save.researchdata)
       .map((one) => storageOffer(one.type, context))
       .filter((offer): offer is BuildOffer => offer !== null);
+    const sold = DECORATIONS_FOR_SALE.map(([type]) => shopOffer(type, context)).filter(
+      (offer): offer is BuildOffer => offer !== null,
+    );
+    return [...stored, ...sold];
   }
   const tab = catalogueFor(context.kind ?? context.yard.kind).find((entry) => entry.id === category);
   return (tab?.types ?? [])
     .map((type) => buildOffer(type, context))
     .filter((offer): offer is BuildOffer => offer !== null);
+};
+
+/**
+ * The tiles of one of Flash's Decorations sub-tabs (`decorShop.ts`
+ * `DECOR_KINDS`): the stored ones of that kind first, free to place, by
+ * Flash's order, then the ones sold for Shiny.
+ */
+export const decorationOffers = (kind: DecorKind, context: BuildContext): BuildOffer[] => {
+  const mine = buildOffers(BuildCategory.DECORATIONS, context).filter((offer) => decorKindOf(offer.type) === kind);
+  const stored = mine
+    .filter((offer) => offer.price === undefined)
+    .sort((a, b) => decorOrder(a.type) - decorOrder(b.type));
+  return [...stored, ...mine.filter((offer) => offer.price !== undefined)];
 };
 
 /** Tiles by {@link BuildStatus}, the tab's order within each (the sort is stable). */

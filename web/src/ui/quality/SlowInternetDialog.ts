@@ -8,7 +8,7 @@ import { Popup } from "@/ui/Popup";
 
 export const SLOW_TEXT = {
   title: "Slow internet?",
-  body: "Low quality loads the game faster: lighter monsters, music off. You can change it in Account settings.",
+  body: "Low quality loads the game faster: lighter monsters, music off. You can change it in Settings.",
   useLow: "Use Low",
   keep: "Keep High",
 } as const;

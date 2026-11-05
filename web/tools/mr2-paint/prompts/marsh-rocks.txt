@@ -1,0 +1,9 @@
+# refs: marsh rocks
+Use your image generation tool (one call) to create ONE new image, landscape 3:2 (as large as the tool allows), and save it as sheet.png in the current folder. Do not write code, do not draw with scripts.
+
+The attached pictures are crops of a concept painting of a cartoon strategy game world map. MATCH ITS ART STYLE EXACTLY: bright, painted, toy-like cartoon, saturated yellow-greens and warm sandy yellows, crisp small painted details, warm sunlight from the top-left. Not photo-real. No text, no logos, no watermark, no hex lines, no grid lines, no borders, no buildings, no monsters, no number badges, no frames or labels around the pictures. Ignore the pale hex lines, buildings, monsters and badges in the attached crops: copy only the ground painting.
+
+THE PICTURE: a sheet of 12 pieces in a 4 x 3 grid, each centred in its own cell with plenty of empty space round it, on a FLAT PURE MAGENTA background (#FF00FF) everywhere else, seen from the tilted top-down camera of the attached crops, each with a small soft contact shadow.
+- Row 1: four grey BOULDERS of different sizes and shapes (one big rounded, one cracked flat, a pair, a mossy one), like the rocks in the attached crops.
+- Row 2: four bright toxic-green GOO POOLS lying flat on dark wet mud (irregular blob shapes with glossy highlights and a dark muddy rim fading out), like the attached marsh crop.
+- Row 3: four REED CLUMPS: tall cattail reeds with brown heads, a short reed tuft, a clump of reeds with a lily pad, a fallen mossy log.

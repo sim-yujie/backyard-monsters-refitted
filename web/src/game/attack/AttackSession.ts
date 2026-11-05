@@ -127,6 +127,13 @@ export const SKIP_SLICE_TICKS = 40;
 /** How long one frame of Skip to end may run the engine for, in ms. */
 export const SKIP_FRAME_BUDGET_MS = 12;
 
+/**
+ * A battle the player fights is run to its target in slices of this many
+ * ticks, each checked for the end, so a long gap handed to
+ * {@link AttackSession.advance} can be spread over several calls.
+ */
+export const CATCH_UP_SLICE_TICKS = 40;
+
 /** A fling before the session stamps its tick and radius. */
 export interface FlingInput {
   /** Drop centre, yard units — the same space as `buildingdata.X/Y`. */
@@ -284,9 +291,13 @@ export const devDescentYard = (search: string): { descentYard?: number } =>
  * A target's Descent yard as session options (Inferno WP 1.21): the yard, 1
  * to 13, the server's attack start named; nothing outside the Descent.
  */
-export const descentYardOf = (target: Pick<AttackTarget, "descentYard">): { descentYard?: number } => {
+export const descentYardOf = (
+  target: Pick<AttackTarget, "descentYard">,
+): { descentYard?: number } => {
   const yard = target.descentYard;
-  return yard !== undefined && Number.isInteger(yard) && yard >= 1 && yard <= DESCENT_YARDS ? { descentYard: yard } : {};
+  return yard !== undefined && Number.isInteger(yard) && yard >= 1 && yard <= DESCENT_YARDS
+    ? { descentYard: yard }
+    : {};
 };
 
 /** A random 32-bit seed for a battle the server has not seeded (§7, Q1). */
@@ -342,7 +353,8 @@ export const servedAcademy = (raw: unknown): MonsterLevels | null => {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
   const levels: Record<string, number> = {};
   for (const [id, level] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof level === "number" && Number.isSafeInteger(level) && level >= 1) levels[id] = level;
+    if (typeof level === "number" && Number.isSafeInteger(level) && level >= 1)
+      levels[id] = level;
   }
   return levels;
 };
@@ -383,9 +395,14 @@ export const servedHeight = (raw: unknown): number =>
  * "Yard kind"), as the server replays them.
  */
 export const combatKind = (
-  target: Pick<AttackTarget, "kind" | "mapversion" | "descentYard" | "infernoTribe" | "infernoPlayer">,
+  target: Pick<
+    AttackTarget,
+    "kind" | "mapversion" | "descentYard" | "infernoTribe" | "infernoPlayer"
+  >,
 ): CombatTargetKind =>
-  target.descentYard !== undefined || target.infernoTribe === true || target.infernoPlayer === true
+  target.descentYard !== undefined ||
+  target.infernoTribe === true ||
+  target.infernoPlayer === true
     ? "inferno"
     : target.kind === "wild" && target.mapversion === 1
       ? "tribe"
@@ -418,6 +435,14 @@ const UNTARGETED_CLASSES: ReadonlySet<BuildingClass> = new Set<BuildingClass>([
 const rosterEmpty = (roster: Roster): boolean =>
   Object.values(roster).every((count) => count <= 0);
 
+/** A drop refused while drops are paused (`AttackSession.holdDrops`); its message is the player's. */
+export class DropsHeldError extends Error {
+  constructor() {
+    super("Reconnecting…");
+    this.name = "DropsHeldError";
+  }
+}
+
 export class AttackSession {
   readonly target: AttackTarget;
   readonly seed: number;
@@ -426,6 +451,7 @@ export class AttackSession {
   private endReason: AttackEndReason | null = null;
   private response: BaseLoadResponse | null = null;
   private battle_: Battle | null = null;
+  private dropsHeld_ = false;
   private combatYard: CombatYard | null = null;
   private declareWar_: boolean;
   private countdownSeconds: number;
@@ -566,11 +592,15 @@ export class AttackSession {
   /**
    * Advances the battle by a frame's worth of real time at the current speed.
    *
+   * A battle the player fights spends at most `budgetMs` of engine time on
+   * it ({@link catchUp}); what is left over is run by the next calls. The
+   * default has no budget, so the whole delta is run at once.
+   *
    * Listeners hear about it at most four times a battle-second, plus whenever
    * the phase changes, so a DOM panel is not rebuilt sixty times a second for
    * a countdown that changes once.
    */
-  advance(deltaSeconds: number): void {
+  advance(deltaSeconds: number, budgetMs = Number.POSITIVE_INFINITY): void {
     const battle = this.battle_;
     if (this.phase !== "running" || !battle) return;
 
@@ -579,7 +609,8 @@ export class AttackSession {
       return;
     }
     this.targetTick += Math.max(0, deltaSeconds) * TICKS_PER_SECOND * this.speed_;
-    this.runToTarget(battle);
+    if (this.script) this.runToTarget(battle);
+    else this.catchUp(battle, budgetMs);
 
     if (this.phase !== "running") return;
     const quarter = Math.floor((battle.tick / TICKS_PER_SECOND) * 4);
@@ -601,8 +632,30 @@ export class AttackSession {
     const target = Math.floor(this.targetTick + 1e-6);
     this.playScriptTo(battle, target);
     if (this.phase !== "running") return;
-    battle.runTo(this.script ? Math.min(target, Math.max(battle.tick, this.scriptEnd)) : target);
+    battle.runTo(
+      this.script ? Math.min(target, Math.max(battle.tick, this.scriptEnd)) : target,
+    );
     this.checkEnd(battle);
+  }
+
+  /**
+   * Runs a battle the player fights toward the target tick in slices of
+   * {@link CATCH_UP_SLICE_TICKS}, checking for the end after each, until it
+   * gets there or `budgetMs` is spent (at least one slice always runs). What
+   * the budget leaves is not dropped: the target stays ahead of the battle and
+   * the next call carries on, as Flash's banked loops did (`GLOBAL.as:1229-1238`).
+   * A scene that drives the clock from the wall can so hand it a long gap — a
+   * tab that was hidden — without freezing the page.
+   */
+  private catchUp(battle: Battle, budgetMs: number): void {
+    const target = Math.floor(this.targetTick + 1e-6);
+    const until = this.now() + budgetMs;
+    while (this.phase === "running" && battle.tick < target) {
+      const from = battle.tick;
+      battle.runTo(Math.min(target, from + CATCH_UP_SLICE_TICKS));
+      this.checkEnd(battle);
+      if (battle.tick <= from || this.now() >= until) break;
+    }
   }
 
   /**
@@ -629,7 +682,8 @@ export class AttackSession {
    * fights, or one that is over.
    */
   skipToEnd(): void {
-    if (!this.script || !this.battle_ || this.phase === "ended" || this.phase === "idle") return;
+    if (!this.script || !this.battle_ || this.phase === "ended" || this.phase === "idle")
+      return;
     if (this.skipping_) return;
     if (this.phase === "loaded") this.phase = "running";
     this.skipping_ = true;
@@ -780,14 +834,18 @@ export class AttackSession {
         throw new RangeError(`AttackSession: bad count ${count} for ${id}`);
       }
       if (count > (remaining[id] ?? 0)) {
-        throw new RangeError(`AttackSession: ${count} ${id} exceeds the ${remaining[id] ?? 0} left`);
+        throw new RangeError(
+          `AttackSession: ${count} ${id} exceeds the ${remaining[id] ?? 0} left`,
+        );
       }
       total += count;
     }
     if (input.champion) {
       const blocked = this.championBlock(input.champion.t);
       if (blocked) {
-        throw new Error(`AttackSession: champion ${input.champion.t} cannot be flung (${blocked})`);
+        throw new Error(
+          `AttackSession: champion ${input.champion.t} cannot be flung (${blocked})`,
+        );
       }
     } else if (total === 0) {
       throw new RangeError("AttackSession: an empty fling");
@@ -849,11 +907,16 @@ export class AttackSession {
     };
   }
 
-
   /** Appends a resource bomb at the current tick and hands it to the battle. */
   appendBomb(input: BombInput): BombDrop {
     const battle = this.requireLive("bomb");
-    const event: BombDrop = { kind: "bomb", t: battle.tick, x: input.x, y: input.y, id: input.id };
+    const event: BombDrop = {
+      kind: "bomb",
+      t: battle.tick,
+      x: input.x,
+      y: input.y,
+      id: input.id,
+    };
     battle.apply(event);
     this.events.push(event);
     this.acted = true;
@@ -945,6 +1008,23 @@ export class AttackSession {
     return this.endReason;
   }
 
+  /**
+   * Pauses (or resumes) new drops, bombs and siege weapons: each is refused
+   * with a {@link DropsHeldError} until released. The checkpoint package holds
+   * them while the server has not confirmed its record of the attack for a
+   * while (`plugins/checkpoint.ts`), so a player who cuts the connection
+   * cannot go on dropping where the server cannot see it, then close the tab
+   * and have the unseen part undone. The battle itself runs on.
+   */
+  holdDrops(held: boolean): void {
+    this.dropsHeld_ = held;
+  }
+
+  /** Whether new drops are paused ({@link holdDrops}). */
+  dropsHeld(): boolean {
+    return this.dropsHeld_;
+  }
+
   /** The running battle, or null before {@link load}. */
   battle(): Battle | null {
     return this.battle_;
@@ -1026,7 +1106,9 @@ export class AttackSession {
 
   /** Whether any champion could still be sent. */
   championAvailable(): boolean {
-    return this.target.roster.champions.some((champion) => this.championBlock(champion.t) === null);
+    return this.target.roster.champions.some(
+      (champion) => this.championBlock(champion.t) === null,
+    );
   }
 
   state(): AttackSessionState {
@@ -1107,7 +1189,10 @@ export class AttackSession {
   private requireLive(what: string): Battle {
     const battle = this.battle_;
     if (!battle || this.phase === "idle") throw new Error(`AttackSession: ${what} before load`);
-    if (this.phase === "ended") throw new Error(`AttackSession: ${what} after the attack ended`);
+    if (this.phase === "ended")
+      throw new Error(`AttackSession: ${what} after the attack ended`);
+    // Nothing new while the server's record of the attack is out of date (see `holdDrops`).
+    if (this.dropsHeld_) throw new DropsHeldError();
     // An input layer that fires before the scene's start() starts the clock.
     if (this.phase === "loaded") this.phase = "running";
     return battle;
@@ -1174,7 +1259,10 @@ export class AttackSession {
     // A raid plays on to where the server's fight ended: no Town Hall or
     // empty yard ends it early, as none ended the server's (#226).
     if (this.raid) {
-      if (battleState.over || ((this.script?.length ?? 0) === 0 && battleState.tick >= this.scriptEnd)) {
+      if (
+        battleState.over ||
+        ((this.script?.length ?? 0) === 0 && battleState.tick >= this.scriptEnd)
+      ) {
         this.end("expired");
       }
       return;
@@ -1193,7 +1281,10 @@ export class AttackSession {
       return;
     }
     // A playback stops where the server stopped the battle.
-    if (battleState.over || (this.script && this.script.length === 0 && battleState.tick >= this.scriptEnd)) {
+    if (
+      battleState.over ||
+      (this.script && this.script.length === 0 && battleState.tick >= this.scriptEnd)
+    ) {
       this.end("expired");
     }
   }

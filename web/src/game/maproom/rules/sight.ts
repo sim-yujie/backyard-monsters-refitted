@@ -21,7 +21,7 @@
  * Pure: no imports besides `range.ts`, no clock, nothing from either tree.
  */
 
-import { type RangeCell, inReach } from "./range.js";
+import { type HexShape, type RangeCell, inReach } from "./range.js";
 
 /**
  * One sight circle: a flinger's own cell and its final reach (Declare War's
@@ -46,12 +46,14 @@ const sameCell = (a: RangeCell, b: RangeCell): boolean => a.x === b.x && a.y ===
  *   union, every member's), Declare War already folded in.
  * @param revealed - Every cell visible on its own: the player's own bases and
  *   the bases of anyone who has ever attacked them.
+ * @param shape - The world's hex shape (`range.ts`), flat when left out.
  * @returns True when `cell` is visible.
  */
 export const isVisible = (
   cell: RangeCell,
   sources: readonly SightSource[],
   revealed: readonly RevealedCell[],
+  shape: HexShape = "flat",
 ): boolean =>
   revealed.some((r) => sameCell(r, cell)) ||
-  sources.some((source) => inReach(source, cell, source.reach));
+  sources.some((source) => inReach(source, cell, source.reach, shape));

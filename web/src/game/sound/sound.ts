@@ -1,23 +1,39 @@
 import { EffectsPlayer, type Effect } from "./EffectsPlayer";
 import { MusicPlayer } from "./MusicPlayer";
-import { onSoundSwitches, soundSwitches } from "./soundSwitches";
+import { onSoundSwitches, soundSwitches, type SoundSwitches } from "./soundSwitches";
+import { volumeGain } from "./soundVolume";
 import type { Tune } from "./tunes";
 
 /**
  * The game's one music player, made on first use and driven by two things:
  * the screen's tune ({@link setScreenTune}, from `app/musicScene.ts`) and the
  * player's music switch (`soundSwitches.ts`). Beside it, the one effects
- * player ({@link playEffect}), driven by the sound effects switch.
+ * player ({@link playEffect}), driven by the sound effects switch. Each
+ * plays at its slider's gain (`soundVolume.ts`).
  */
 
 let player: MusicPlayer | null = null;
 let effects: EffectsPlayer | null = null;
 
+/**
+ * The music as the switch and slider say: on with the switch, at the
+ * slider's gain; at 0 it is off, so nothing is downloaded to be silent.
+ */
+const tuneMusic = (made: MusicPlayer, switches: SoundSwitches | null): void => {
+  made.setVolume(volumeGain(switches?.musicVolume ?? 0));
+  made.setEnabled(switches?.music === true && switches.musicVolume > 0);
+};
+
+const tuneEffects = (made: EffectsPlayer, switches: SoundSwitches | null): void => {
+  made.setVolume(volumeGain(switches?.effectsVolume ?? 0));
+  made.setEnabled(switches?.effects === true && switches.effectsVolume > 0);
+};
+
 const musicPlayer = (): MusicPlayer => {
   if (player) return player;
   const made = new MusicPlayer();
-  made.setEnabled(soundSwitches()?.music === true);
-  onSoundSwitches((switches) => made.setEnabled(switches?.music === true));
+  tuneMusic(made, soundSwitches());
+  onSoundSwitches((switches) => tuneMusic(made, switches));
   player = made;
   if (import.meta.env.DEV) {
     // `__sound.playing` / `__sound.blocked` for the browser checks.
@@ -29,8 +45,8 @@ const musicPlayer = (): MusicPlayer => {
 const effectsPlayer = (): EffectsPlayer => {
   if (effects) return effects;
   const made = new EffectsPlayer();
-  made.setEnabled(soundSwitches()?.effects === true);
-  onSoundSwitches((switches) => made.setEnabled(switches?.effects === true));
+  tuneEffects(made, soundSwitches());
+  onSoundSwitches((switches) => tuneEffects(made, switches));
   effects = made;
   if (import.meta.env.DEV) {
     // `__effects.blocked` for the browser checks.
@@ -51,7 +67,20 @@ export const setScreenTune = (tune: Tune | null | undefined): void => {
   musicPlayer().want(tune);
 };
 
-/** Plays a sound effect, unless the player has sound effects off (or the switches are not known yet). */
-export const playEffect = (effect: Effect): void => {
-  effectsPlayer().play(effect);
+/**
+ * Plays a sound effect, at `volume` or its own, unless the player has sound
+ * effects off (or the switches are not known yet).
+ */
+export const playEffect = (effect: Effect, volume?: number): void => {
+  const played = effectsPlayer().play(effect, volume);
+  if (import.meta.env.DEV) {
+    // `__effectsLog` for the browser checks: every effect asked for, and whether it sounded.
+    const log = ((globalThis as Record<string, unknown>)["__effectsLog"] ??= []) as unknown[];
+    if (log.length < 5_000) log.push({ at: Math.round(performance.now()), effect, volume, played });
+  }
+};
+
+/** Fetches an attack's sounds as it opens (`attackSounds.ts`); nothing with sound effects off. */
+export const preloadEffects = (list: readonly Effect[]): void => {
+  effectsPlayer().preload(list);
 };

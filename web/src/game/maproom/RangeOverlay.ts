@@ -61,14 +61,23 @@ export class RangeOverlay {
     this.container.interactiveChildren = false;
     this.container.visible = false;
 
-    const bounds = mapRoomGrid.worldBounds(WORLD_WIDTH, WORLD_HEIGHT);
-    // A cell's width of margin all round, so the dim reaches past the art.
-    this.dim
-      .rect(-mapRoomGrid.cellWidth, -mapRoomGrid.cellHeight, bounds.width * 1.1, bounds.height * 1.1)
-      .fill({ color: DIM_COLOUR, alpha: DIM_ALPHA });
+    this.fitGrid();
     this.dim.setMask({ mask: this.hole, inverse: true });
 
     this.container.addChild(this.hole, this.dim, this.inside, this.line);
+  }
+
+  /**
+   * Sizes the dim to the world grid, again once the map knows the world's hex
+   * shape (`setHexShape`): a cell's width of margin all round, so the dim
+   * reaches past the art.
+   */
+  fitGrid(): void {
+    const bounds = mapRoomGrid.worldBounds(WORLD_WIDTH, WORLD_HEIGHT);
+    this.dim
+      .clear()
+      .rect(-mapRoomGrid.cellWidth, -mapRoomGrid.cellHeight, bounds.width * 1.1, bounds.height * 1.1)
+      .fill({ color: DIM_COLOUR, alpha: DIM_ALPHA });
   }
 
   /** Shows the range of these flingers, or hides the overlay for null. */

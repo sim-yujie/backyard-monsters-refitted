@@ -6,7 +6,7 @@ import { BaseType } from "../../enums/Base.js";
 import { postgres } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
-import { ATTACK_SESSION_WINDOW } from "../base/attackSession.js";
+import { sessionWindowSeconds } from "../base/attackSession.js";
 import { replayAbandonedInWorker } from "../base/combat/replayRunner.js";
 import {
   acquireInfernoPlayerFinalLock,
@@ -25,8 +25,9 @@ import { NO_LOOT, playerLoot, playerReplayInput, spendsWholeArmy, writePlayerLan
  * Closes an Inferno player attack its attacker left without the final save
  * (`docs/design/inferno.md` §2.7; owner, 27 Oct): once `attack/start`
  * succeeds the attack is used, so nobody can fling, fail, refresh and attack
- * again for nothing. Tribes and the Descent keep their own rule (an attack
- * left unsaved lands nothing there).
+ * again for nothing. Moloch tribes and the Descent have their own finaliser,
+ * which lands an unsaved attack from its last checkpoint
+ * (`finaliseRowlessAttack.ts`).
  *
  * The attack lands from its last checkpoint (`/base/checkpoint`, kept in
  * `infernoPlayerSession.ts`) through the final save's own landing
@@ -64,7 +65,7 @@ export type InfernoCloseOutcome = "landed" | "released" | "none" | "busy" | "sta
 
 /** Whether the attack's window has closed, so its attacker can no longer save it. */
 const expired = (attack: InfernoPlayerSession, now: number): boolean =>
-  now - attack.session.startedat >= ATTACK_SESSION_WINDOW;
+  now - attack.session.startedat >= sessionWindowSeconds(attack.session);
 
 /** How many failed closes an attack gets before it is given up. */
 export const INFERNO_CLOSE_ATTEMPTS = 3;

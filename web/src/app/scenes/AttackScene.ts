@@ -8,6 +8,8 @@ import type { BaseLoadResponse, Resources } from "@/api/types";
 import { clockReading, formatClock } from "@/game/attack/attackClock";
 import { withLoot } from "@/game/attack/attackerPool";
 import { boostSummary, loadBoosts } from "@/game/attack/boostSummary";
+import { neighbourBonusChip } from "@/ui/maproom/neighbourBonusChip";
+import { loadNeighbours } from "@/game/maproom/neighbourBonus";
 import { attackYardHandlers } from "@/game/attack/AttackInput";
 import { AttackPresentation } from "@/game/attack/attackPresentation";
 import {
@@ -21,6 +23,7 @@ import {
 } from "@/game/attack/AttackSession";
 import { consumeAttackTarget, fromInfernoYard, type AttackTarget } from "@/game/attack/attackTarget";
 import { targetLabel } from "@/game/attack/attackSave";
+import { BattleWallClock } from "@/game/attack/battleWallClock";
 import { baiterTarget, consumeBaiterRun, setBaiterRun, type BaiterRun } from "@/game/baiter/baiterSession";
 import {
   consumeWatchRun,
@@ -159,6 +162,8 @@ export class AttackScene implements Scene {
   private shownResources: Resources = {};
   private input: YardInput | null = null;
   private session: AttackSession | null = null;
+  /** Drives a battle the player fights from the wall clock (`battleWallClock.ts`). */
+  private wallClock: BattleWallClock | null = null;
   private unsubscribe: (() => void) | null = null;
   private target: AttackTarget | null = null;
   private yard: Yard | null = null;
@@ -369,6 +374,7 @@ export class AttackScene implements Scene {
     this.notices.destroy();
     this.battleLayer.removeChildren();
     this.renderer.destroy();
+    this.wallClock = null;
     this.session = null;
     this.presentation = new AttackPresentation();
     this.yard = null;
@@ -417,7 +423,12 @@ export class AttackScene implements Scene {
     this.minimap?.draw();
 
     // The clock runs in battle time; the session rate-limits what listeners hear.
-    this.session?.advance(deltaSeconds);
+    // A battle the player fights is owed the wall time since it last ran, so
+    // it neither pauses in a hidden tab nor crawls on slow frames
+    // (`battleWallClock.ts`); a playback goes at the frames' pace.
+    const session = this.session;
+    if (session && !session.playback && this.wallClock) this.wallClock.frame();
+    else session?.advance(deltaSeconds);
 
     this.sinceUiTick += deltaSeconds;
     if (this.sinceUiTick >= UI_TICK_SECONDS) {
@@ -512,6 +523,14 @@ export class AttackScene implements Scene {
     );
     this.mountPlugins(session, target, yard, context);
     session.start();
+
+    // Runs the battle while frames are stopped (a hidden tab); idle on a playback.
+    const wallClock = new BattleWallClock((seconds, budgetMs) => {
+      if (!session.playback) session.advance(seconds, budgetMs);
+    });
+    wallClock.start();
+    this.wallClock = wallClock;
+    this.teardowns.push(() => wallClock.stop());
   }
 
   private mountPlugins(
@@ -946,6 +965,7 @@ export class AttackScene implements Scene {
     const load = this.session?.attackLoad();
     if (this.boostsShown || !chip || !load) return;
     this.boostsShown = true;
+    this.showNeighbourBonus(chip, load);
     const side = this.raiding || isDefenceWatch(this.watchRun) ? "defender" : "attacker";
     const summary = boostSummary(loadBoosts(load), side);
     if (!summary) return;
@@ -955,6 +975,16 @@ export class AttackScene implements Scene {
     chip.setAttribute("aria-label", `${summary.label}. ${summary.lines.join(". ")}`);
     chip.setAttribute("role", "note");
     chip.hidden = false;
+  }
+
+  /**
+   * Map Room 2's neighbour defence bonus on the target, beside the boosts
+   * chip: the count the server froze into the load for this battle, so the
+   * number shown is the one fought (`docs/mr2-neighbours.md`).
+   */
+  private showNeighbourBonus(boosts: HTMLElement, load: { readonly defenderforces?: unknown }): void {
+    const chip = neighbourBonusChip(loadNeighbours(load), "attack-strip__neighbours");
+    if (chip) boosts.after(chip);
   }
 
   /** A Housing destroyed in the battle takes its monsters with it (`BUILDING15.as:93-104`). */

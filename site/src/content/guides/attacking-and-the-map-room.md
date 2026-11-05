@@ -3,7 +3,7 @@ title: Attacking and the Map Room
 description: Find a target, fling your monsters in and bring home the loot.
 order: 5
 icon: /images/monsters/C7.webp
-updated: 2026-10-11
+updated: 2026-11-04
 ---
 
 ## What you need
@@ -32,7 +32,9 @@ Tap a target to see it, then tap **Attack**.
 3. Watch them go! Your monsters head for their favourite targets on their own.
 4. Use **2x** to speed the battle up.
 
-The battle ends by itself when the yard is flattened or your monsters are all gone. **Retreat** ends it early and keeps whatever you've looted so far.
+Switching to another browser tab no longer pauses your attack: it keeps running.
+
+The battle ends by itself when the yard is flattened, your monsters are all gone, or time runs out. **Retreat** ends it early and keeps whatever you've looted so far.
 
 ![An attack in progress on a Kozu Tribe camp, with the army panel open](/images/shots/attack.webp)
 
@@ -42,9 +44,10 @@ Your monsters carry off resources from the buildings they wreck. Harvesters and 
 
 ## Map Room 2: the world map
 
-Once your Town Hall reaches **level 6**, you can upgrade your Map Room to **Map Room 2**. This moves your yard onto a big shared world map.
+Once your Town Hall reaches **level 6**, you can upgrade your Map Room to **Map Room 2**. This moves your yard onto a big shared world map. In **Modern** it is one painted landscape with hills, forests, rivers and beaches, seen at a tilt.
 
 - The blue area around you is your Flinger's reach. Attacking further away costs resources.
+- Forests, rocks and marsh change a cell's defence and income. A cell next to your own cells defends a little better.
 - Beat a wild camp or a player's outpost and you can **take it over** as your own outpost.
 - **Find** jumps to your yard, your outposts or any spot on the map.
 

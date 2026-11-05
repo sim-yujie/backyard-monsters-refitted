@@ -45,6 +45,8 @@ interface Fixture {
   tailTicks: number;
   /** The defender's garrisons, their levels and the caged champion (issue #195). */
   defence?: Record<string, unknown>;
+  /** The attacker's Monster Lab ranks (beta 6's Lab abilities). */
+  ranks?: Record<string, number>;
   /** Whether the log is a wild monster raid (issue #226). */
   raid?: boolean;
   log: { v: 1; seed: number; events: unknown[] };
@@ -87,6 +89,7 @@ const inputOf = (fixture: Fixture): any => {
       playerLevel: fixture.playerLevel,
       tailTicks: fixture.tailTicks,
       ...(fixture.defence ?? {}),
+      ...(fixture.ranks ? { ranks: fixture.ranks } : {}),
       ...(fixture.raid ? { raid: fixture.raid } : {}),
     };
   }
@@ -101,6 +104,7 @@ const inputOf = (fixture: Fixture): any => {
     playerLevel: fixture.playerLevel,
     tailTicks: fixture.tailTicks,
     ...(fixture.defence ?? {}),
+    ...(fixture.ranks ? { ranks: fixture.ranks } : {}),
     ...(fixture.raid ? { raid: fixture.raid } : {}),
   };
 };

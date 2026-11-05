@@ -182,25 +182,68 @@ describe("the monster catalogue", () => {
 });
 
 describe("the lab table", () => {
-  it("has ten rows in the lab's own order", () => {
-    expect(LAB_ABILITIES).toHaveLength(10);
+  it("has Flash's ten rows in the lab's own order, and the revamp's four by price", () => {
+    expect(LAB_ABILITIES).toHaveLength(14);
     expect(ids(LAB_ABILITIES)).toEqual([
+      "C1",
+      "C2",
       "C3",
       "C4",
+      "C6",
       "C7",
       "C8",
       "C5",
       "C9",
+      "C10",
       "C11",
       "C13",
       "C14",
       "C12",
     ]);
+    expect(LAB_ABILITIES.map((one) => one.order)).toEqual(
+      Array.from({ length: 14 }, (_, k) => k + 1),
+    );
     for (const one of LAB_ABILITIES) {
       expect(one.costs, one.id).toHaveLength(3);
       expect(one.effect, one.id).toHaveLength(3);
       expect(isListed(one.id), one.id).toBe(true);
     }
+  });
+
+  it("carries the owner's prices and shares for the revamp's four (2 Nov 2026)", () => {
+    expect(labAbility("C1")).toMatchObject({
+      costs: [
+        [24000, 86400],
+        [36000, 86400],
+        [54000, 86400],
+      ],
+      effect: [0.1, 0.2, 0.3],
+    });
+    expect(labAbility("C2")).toMatchObject({
+      costs: [
+        [32000, 86400],
+        [48000, 86400],
+        [72000, 86400],
+      ],
+      effect: [0.05, 0.1, 0.15],
+    });
+    expect(labAbility("C6")).toMatchObject({
+      costs: [
+        [500000, 108000],
+        [750000, 108000],
+        [1125000, 108000],
+      ],
+      effect: [0.1, 0.15, 0.2],
+    });
+    expect(labAbility("C10")).toMatchObject({
+      costs: [
+        [5000000, 216000],
+        [7500000, 216000],
+        [11250000, 216000],
+      ],
+      effect: [0.1, 0.15, 0.2],
+    });
+    expect(labAbility("C17")).toBeUndefined();
   });
 
   it("carries Bolt's and D.A.V.E.'s numbers", () => {
@@ -216,7 +259,7 @@ describe("the lab table", () => {
       effect: [150, 300, 450],
     });
     expect(labStep("C12", 3)).toEqual([33750000, 144 * 3600]);
-    expect(labAbility("C1")).toBeUndefined();
+    expect(labAbility("C15")).toBeUndefined();
     expect(labStep("C3", 4)).toBeUndefined();
   });
 });

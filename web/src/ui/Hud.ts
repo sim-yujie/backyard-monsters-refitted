@@ -5,9 +5,11 @@ import { getSession } from "@/api/auth";
 import type { Friend } from "@/api/friends";
 import type { ResourceCaps, Resources } from "@/api/types";
 import { avatarOf, pickedAvatar, type AvatarId } from "@/game/avatars";
+import { loadShinyLock, onShinyLock, shinyLocked, SHINY_LOCK_TEXT } from "@/game/shinyLock";
 import { incomePerHour } from "@/game/yard/incomeRate";
 import { nextWorkerJob } from "@/game/yard/jobs";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
+import { levelProgress } from "@/game/yard/experience";
 import { AccountMenu } from "./AccountMenu";
 import { AchievementsDoor } from "./achievements/AchievementsDoor";
 import { friendsStore } from "@/game/friends/friendsStore";
@@ -21,6 +23,7 @@ import { openBugReport } from "./bugReport/BugReportDialog";
 import { AMOUNT_CHANGE_SIGNS } from "./amountChange";
 import { formatAmount, formatCompact } from "./format";
 import { gameIcon } from "./gameIcon";
+import { lockArt } from "./lockArt";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, restyleIcon, type ResourceKey } from "./resourceIcon";
 import { DamageBanner } from "./yard/DamageBanner";
 
@@ -232,6 +235,8 @@ interface Readout {
   readonly rate: HTMLElement;
   /** The painted "storage full" mark on the pile, shown while the silo is full. */
   readonly fullMark: HTMLElement;
+  /** Shiny only: the padlock shown instead of the number while Shiny Lock is on (bug report #10). */
+  readonly lockMark: Element | null;
   amount: number | undefined;
   cap: number | undefined;
   /** Income an hour, on the main yard only. */
@@ -282,6 +287,9 @@ export class Hud {
   private fitted: HudFit = HudFit.FULL;
   /** The animation frame counting a readout up, or 0. */
   private frame = 0;
+  /** Shiny Lock is on: the Shiny counter shows a padlock, not the 0 the server sends (`game/shinyLock.ts`). */
+  private locked = shinyLocked();
+  private readonly unwatchLock: () => void;
 
   constructor(options: HudOptions) {
     this.corner = options.layout === "corner";
@@ -332,11 +340,16 @@ export class Hud {
       // a picture only.
       const fullMark = gameIcon("storagefull", { size: 16, decorative: true, className: "hud__full-mark" });
       fullMark.hidden = true;
+      const lockMark = key === "shiny" ? lockArt(20, "hud__lock-mark") : null;
+      lockMark?.setAttribute("hidden", "");
+      // Beside the Shiny picture, where the number sits.
+      if (lockMark) value.after(lockMark);
       button.append(amount, capText, fullMark, bar, rate);
       // On the own yard the Shiny counter is the Shop's door (§8.2); the
       // Shop's header then shows the exact balance.
       button.addEventListener("click", () => {
-        const openShop = key === "shiny" ? this.shopOpener() : null;
+        // While Shiny Lock is on a tap says why there is a padlock, not the Shop.
+        const openShop = key === "shiny" && !this.locked ? this.shopOpener() : null;
         if (openShop) {
           this.hideExact();
           openShop();
@@ -356,6 +369,7 @@ export class Hud {
         fill,
         rate,
         fullMark,
+        lockMark,
         amount: undefined,
         cap: undefined,
         perHour: undefined,
@@ -367,6 +381,10 @@ export class Hud {
       this.readouts.set(key, readout);
       this.label(readout);
     }
+    this.unwatchLock = onShinyLock((on) => this.applyShinyLock(on));
+    const shinyReadout = this.readouts.get("shiny");
+    if (shinyReadout) this.render(shinyReadout);
+    loadShinyLock();
 
     // Workers: only on the player's own yard, so hidden until a binding comes.
     // Beside the readout list rather than in it, so on a phone, where the list
@@ -490,7 +508,8 @@ export class Hud {
     const changes: [Readout, number][] = [];
     for (const key of [...RESOURCE_KEYS, "shiny"] as const) {
       const change = this.setAmount(key, key === "shiny" ? shiny : resources[key]);
-      if (change) changes.push(change);
+      // A locked counter shows a padlock: the drop to the server's 0 floats nothing.
+      if (change && !(key === "shiny" && this.locked)) changes.push(change);
     }
     // Refit before floating, so each float starts where its readout now is.
     this.fit();
@@ -654,6 +673,7 @@ export class Hud {
     if (this.frame) window.cancelAnimationFrame(this.frame);
     this.frame = 0;
     window.removeEventListener("resize", this.onResize);
+    this.unwatchLock();
     this.hideExact();
     this.accountMenu?.destroy();
     this.accountMenu = null;
@@ -685,6 +705,12 @@ export class Hud {
 
   /** The readout's visible amount, cap and fill bar, spelled for the current fit. */
   private render(readout: Readout): void {
+    if (readout.lockMark) {
+      const locked = this.locked;
+      readout.lockMark.toggleAttribute("hidden", !locked);
+      readout.value.hidden = locked;
+      readout.button.classList.toggle("hud__resource-button--locked", locked);
+    }
     const shown = readout.shown ?? this.target(readout);
     if (shown === undefined) return;
     const state = capState(shown, readout.cap);
@@ -800,7 +826,9 @@ export class Hud {
     }
     const shiny = this.readouts.get("shiny");
     if (shiny) this.label(shiny);
-    this.accountMenu?.setLevel(store?.playerLevel ?? null);
+    const level = store?.playerLevel ?? null;
+    const points = store?.playerPoints ?? null;
+    this.accountMenu?.setLevel(level, level !== null && points !== null ? levelProgress(level, points) : null);
 
     this.workers.hidden = store === null;
     if (store) {
@@ -835,6 +863,11 @@ export class Hud {
   private readonly onResize = (): void => this.fit();
 
   private label(readout: Readout): void {
+    if (readout.lockMark && this.locked) {
+      readout.button.title = SHINY_LOCK_TEXT;
+      readout.button.setAttribute("aria-label", SHINY_LOCK_TEXT);
+      return;
+    }
     const text = exactLabel(readout.key, readout.amount, readout.cap);
     if (readout.key === "shiny" && this.shopOpener()) {
       readout.button.title = `${text}\nOpen the Shop`;
@@ -884,6 +917,29 @@ export class Hud {
     window.setTimeout(remove, FLOAT_LIFETIME_MS);
   }
 
+  /**
+   * Shiny Lock turned on or off. On: the padlock replaces the number (the
+   * server sends 0 while locked). Off: the number comes back, and on the own
+   * yard the store asks for the real balance at once, without a "+1,519" float.
+   */
+  private applyShinyLock(on: boolean): void {
+    const was = this.locked;
+    this.locked = on;
+    const readout = this.readouts.get("shiny");
+    if (!readout) return;
+    if (was && !on) {
+      readout.amount = undefined;
+      readout.shown = null;
+      readout.count = null;
+      readout.value.textContent = "—";
+      void this.yardBinding?.store.refresh();
+    }
+    this.render(readout);
+    this.label(readout);
+    if (this.bubbleFor === "shiny") this.fillExact(readout);
+    this.fit();
+  }
+
   /* ── The exact amount on a tap ─────────────────────────────────────── */
 
   private toggleExact(key: ResourceKey): void {
@@ -910,6 +966,13 @@ export class Hud {
 
   private fillExact(readout: Readout): void {
     if (!this.bubble) return;
+    if (readout.lockMark && this.locked) {
+      const note = document.createElement("p");
+      note.className = "hud__exact-note hud__exact-lock";
+      note.append(lockArt(18, "hud__lock-mark"), SHINY_LOCK_TEXT);
+      this.bubble.replaceChildren(note);
+      return;
+    }
     const { amount, cap } = readout;
     const text =
       amount === undefined

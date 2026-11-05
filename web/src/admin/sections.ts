@@ -1,4 +1,4 @@
-import type { AdminHealthReport, Container, DailyStat, Disk, StatsOverview } from "./api";
+import type { AdminHealthReport, Container, DailyStat, Disk, LookTotals, StatsOverview } from "./api";
 import { chart, type ChartOptions, type ChartPoint } from "./charts";
 import { h, type Child } from "./dom";
 import {
@@ -8,6 +8,7 @@ import {
   dateTime,
   dayLabel,
   duration,
+  LOOK_WORDS,
   longDuration,
   ms,
   percent,
@@ -458,6 +459,47 @@ const numbersTable = (
 
 const inDays = (overview: StatsOverview): string => `in ${overview.days.length} days`;
 
+/** "12 (40%)": a count and its share of `of`. */
+const share = (n: number, of: number): string => (of > 0 ? `${count(n)} (${percent((n / of) * 100)})` : count(n));
+
+/** One line per choice: "Same as Style 12 (40%) · New 3 (10%) · Original Flash 0". */
+const splitLine = <K extends string>(words: Record<K, string>, counts: Record<K, number>, of: number): string =>
+  (Object.keys(words) as K[]).map((key) => `${words[key]} ${share(counts[key] ?? 0, of)}`).join(" · ");
+
+/**
+ * Modern vs Classic (owner, 4 Nov 2026: "can we log down which players are
+ * using modern vs classic for beta6?"), and the other Look and sound choices:
+ * players whose game sent them in the last week. Games before beta 6 and the
+ * Android build never send them.
+ */
+export const renderLooks = (looks: LookTotals | undefined): HTMLElement => {
+  const heading = h("h3", {}, "Modern or Classic");
+  if (!looks || looks.reported === 0) {
+    return h(
+      "div",
+      { class: "group" },
+      heading,
+      h("p", { class: "note" }, "No player's game has sent its look yet. Games from beta 6 on send it when the yard opens."),
+    );
+  }
+  const of = looks.reported;
+  return h(
+    "div",
+    { class: "group" },
+    heading,
+    figures(
+      figure("Modern", count(looks.style.modern), `${percent((looks.style.modern / of) * 100)} of ${count(of)}`),
+      figure("Classic", count(looks.style.classic), `${percent((looks.style.classic / of) * 100)} of ${count(of)}`),
+    ),
+    facts([
+      ["Music", splitLine(LOOK_WORDS.music, looks.music, of)],
+      ["Quality", splitLine(LOOK_WORDS.quality, looks.quality, of)],
+      ["Font", splitLine(LOOK_WORDS.font, looks.font, of)],
+      ["Counted", `${plural(of, "player")} whose game opened their yard in the last ${looks.days} days`],
+    ]),
+  );
+};
+
 export const renderPlayers = (overview: StatsOverview): Child[] => {
   const { players, today, days } = overview;
   const yesterday = days[days.length - 1];
@@ -473,6 +515,7 @@ export const renderPlayers = (overview: StatsOverview): Child[] => {
       figure("Played this week", count(players.active7), "last 7 days"),
       figure("Players in all", count(players.total), `${count(players.active30)} played this month`),
     ),
+    renderLooks(overview.looks),
     h(
       "div",
       { class: "charts" },

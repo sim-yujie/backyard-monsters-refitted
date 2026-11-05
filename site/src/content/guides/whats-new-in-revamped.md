@@ -3,14 +3,101 @@ title: What's new in Revamped
 description: The features you won't find in the original Backyard Monsters, and where to find them.
 order: 6
 icon: /images/guides/new-card.webp
-updated: 2026-10-29
+updated: 2026-11-06
 ---
 
-Everything on this page except the last section is new in **beta 5**.
+The first sections are new in **beta 6**. Everything from "New in beta 5" down, except the last section, came with beta 5.
+
+## A new Map Room 2
+
+In **Modern**, Map Room 2 is one painted landscape: grass, hills, cliffs, forests, rock fields, goo marsh, beaches and rivers. You look across it at a tilt.
+
+- **Land matters:** forest, rock and marsh cells change a cell's defence and income.
+- **Neighbours help:** a cell next to your own cells defends better (+5% to +15%). The cell's pop-up shows it as a shield.
+- **Prefer it flat?** Switch the tilt off for your account.
+- **Tribe camps:** a damaged camp shows a health bar, and heals 12 hours after the last attack.
+- **Classic** keeps the original Flash map art, with the same moving water and clouds.
+
+![The new Map Room 2: a tilted, painted map with a player's land and the tribe camps around it](/images/guides/new6-map.webp)
+
+## Your yard in 3D
+
+In **Modern**, most buildings are 3D with moving parts: the Hatchery's crank turns, the Juicer blends monsters, and more. Each building has its own damaged and destroyed look. The Build menu shows the new pictures.
+
+**Classic** keeps the original Flash buildings.
+
+![A yard with its buildings in 3D](/images/guides/new6-buildings.webp)
+
+## Quests
+
+Open the round **More** button on your main yard, then **Quests**.
+
+- **Daily login:** 7 days of Shiny.
+- **Daily quests:** 5 a day, with Shiny for finishing them all. One free swap a day.
+- **Weekly quests:** 3 a week, each paying Shiny.
+
+Daily quests reset at 00:00 UTC, weekly quests on Monday at 00:00 UTC.
+
+![The Quests window: the 7-day login card and the daily quests](/images/guides/new6-quests.webp)
+
+## Monster Lab abilities
+
+Four new upgrades in the **Monster Lab**:
+
+- **Pokey, Swarm:** when 5 or more Pokeys attack the same target, each one attacks faster.
+- **Octo-ooze, Weakening Ooze:** whatever kills an Octo-ooze deals less damage for 5 seconds.
+- **Ichi, Thorns:** Ichi reflects part of the damage it takes back at whatever hit it.
+- **Crabatron, Critical Hits:** Crabatron's hits have a chance to do double damage.
+
+![The Monster Lab window showing the new Pokey ability](/images/guides/new6-lab.webp)
+
+## Decorations for Shiny
+
+The original game's decorations are on sale again: **Build ▸ Decorations**, in Flash's five sub-tabs.
+
+![The Decorations tab in the Build menu](/images/guides/new6-decorations.webp)
+
+## Sound and volume
+
+- The original attack sounds are back.
+- Loot flies out of buildings as orbs, with "+" numbers, while you attack.
+- **Music** and **Sound effects** each have their own volume slider.
+
+## Shiny Lock
+
+Turn on **Shiny Lock** in **Settings** to hide your Shiny. A padlock shows instead.
+
+## Easier to read
+
+**Settings ▸ Font:** Game font, Clear or Extra readable.
+
+![The same Quests window in the three fonts: Game, Clear and Extra readable](/images/guides/new6-font.webp)
+
+## Tower range
+
+Hover over one of your own defences to see how far it reaches. Only on your own yard.
+
+## Yard Planner and walls
+
+The planner's bottom bar is now painted buttons: Undo, Redo, Select, Box, Find, Upgrade walls and Re-arm traps. Mirror, Align and Distribute are gone.
+
+**Upgrade walls** no longer needs you to select walls first. See [Upgrade many walls at once](/guides/upgrade-many-walls/).
+
+## Account menu and Settings
+
+Your level now shows on your account button. **Settings** has three tabs: **Account**, **Look and sound** and **Social**.
+
+## Attacks in a hidden tab
+
+An attack keeps running while the game's tab is hidden, so you can switch tabs and come back.
+
+## New in beta 5
+
+These came with beta 5.
 
 ## Modern or Classic
 
-One switch: **Account settings ▸ Look and sound ▸ Style**.
+One switch: **Settings ▸ Look and sound ▸ Style**.
 
 - **Modern:** the new paintings, effects and music.
 - **Classic:** the original Flash art, effects and music.
@@ -28,12 +115,13 @@ Every window has a painted frame. It follows the same switch.
 
 ## Quality, for slow internet
 
-**Account settings ▸ Quality:** High, Medium or Low.
+**Settings ▸ Quality:** High, Medium or Low.
 
 - **Low** loads smaller pictures and lighter music.
+- **Map Room 2:** on High, water, foam, clouds and gulls all move. Medium keeps the moving water and foam. Low is still.
 - On a slow connection, the game suggests Low once. It never switches by itself.
 
-![Account settings: Style (Modern or Classic) and Quality (High, Medium or Low)](/images/guides/new-settings.webp)
+![Settings, the Look and sound tab: Style, Font, Music and the two volume sliders](/images/guides/new-settings.webp)
 
 ## One tab per Hatchery
 

@@ -29,7 +29,7 @@ import {
   type Resources,
   type TakeoverQuoteResponse,
 } from "@/api/types";
-import { CELL_HEIGHT, CELL_WIDTH, DEFAULT_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS } from "@/config";
+import { DEFAULT_ZOOM, MIN_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS } from "@/config";
 import { mapRefreshSeconds } from "@/game/quality";
 import {
   attackRefusal,
@@ -50,7 +50,9 @@ import { visitFriend } from "@/game/friends/friendVisit";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
 import { storageCapOf } from "@/game/attack/attackerStorage";
 import { Camera } from "@/game/Camera";
-import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
+import { mapRoomGrid, setHexShape, type OffsetCell } from "@/game/HexGrid";
+import { loadHexShape } from "@/game/maproom/hexShapeSetting";
+import { markOpen } from "@/game/maproom/openMarks";
 import {
   rangeSources,
   reachText,
@@ -79,7 +81,24 @@ import { academyLevel } from "@/game/monsters/housing";
 import { housingSpace } from "@/game/monsters/monsterCatalogue";
 import { takenOverResources, type TakeoverCandidate } from "@/game/maproom/takeover";
 import { MapInput } from "@/game/maproom/MapInput";
+import { paintedMapOn } from "@/game/maproom/painted/paintedSwitch";
 import { MapRenderer } from "@/game/maproom/MapRenderer";
+import { classicLook } from "@/game/classicLook";
+import {
+  decideTilt,
+  DEFAULT_TILT,
+  readTiltOverride,
+  tiltFor,
+  tiltMinZoom,
+  tiltViewQuad,
+  TILT_STRENGTHS,
+  type Tilt,
+  type TiltChoice,
+  type TiltStrength,
+} from "@/game/maproom/tilt";
+import { cachedTiltChoice, loadTiltChoice, saveTiltChoice } from "@/game/maproom/tiltSetting";
+import { TiltView } from "@/game/maproom/TiltView";
+import { markerFit, uprightProjector } from "@/game/maproom/markerPins";
 import { Sight } from "@/game/maproom/Sight";
 import { ZoneStore, type ZoneError } from "@/game/maproom/ZoneStore";
 import { inWorld, type CellRange } from "@/game/maproom/zones";
@@ -97,6 +116,7 @@ import { RelocateDialog } from "@/ui/maproom/RelocateDialog";
 import { TransferDialog, type TransferChoice } from "@/ui/maproom/TransferDialog";
 import { formatSpan } from "@/ui/attack/EndAttackPanel";
 import { previewEndTakeover, type EndTakeoverPreviewOptions } from "@/ui/attack/endTakeoverPreview";
+import { devStats } from "../devDetails";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../sceneName";
 import { isPhoneLayout } from "@/ui/phoneLayout";
@@ -123,6 +143,36 @@ const ZOOM_STEP = 1.5;
 const PUMP_INTERVAL_SECONDS = 0.25;
 /** How often visible zones are checked for staleness. */
 const STALE_CHECK_INTERVAL_SECONDS = 5;
+/**
+ * The world's size in map pixels, which the camera keeps inside: read each
+ * time, because the grid takes the server's hex shape when the map opens
+ * (`setHexShape`, MR2 look plan step 1).
+ */
+const worldBounds = (): { width: number; height: number } => mapRoomGrid.worldBounds(WORLD_WIDTH, WORLD_HEIGHT);
+
+/**
+ * The zoom floor for the grid's size: `MIN_ZOOM` fits Flash's flat-top world
+ * (90,075 x 60,075) in a 1080p screen; a pointy-top world is bigger, so the
+ * floor drops by as much to fit it the same way.
+ */
+const FLAT_WORLD = { width: 90_075, height: 60_075 };
+const mapMinZoom = (): number => {
+  const bounds = worldBounds();
+  return MIN_ZOOM * Math.min(1, FLAT_WORLD.width / bounds.width, FLAT_WORLD.height / bounds.height);
+};
+
+/** Said when the "Tilted map" choice could not be stored on the account. */
+const TILT_SAVE_FAILED = "Could not save the tilted map setting. It will reset next time.";
+
+/**
+ * A world point in the minimap's cell space (fractional columns and rows),
+ * from the grid's own steps: the minimap is drawn in cells, not map pixels.
+ */
+const worldToCellSpace = (world: { x: number; y: number }): { col: number; row: number } => ({
+  col: (world.x / worldBounds().width) * WORLD_WIDTH,
+  row: (world.y / worldBounds().height) * WORLD_HEIGHT,
+});
+
 /** How often countdowns, the status line and the open cell panel are refreshed. */
 const UI_TICK_SECONDS = 1;
 
@@ -134,7 +184,7 @@ const KIT_FILTER_KEY = "bymr.map.kitFilter";
 
 export class MapRoom2Scene implements Scene {
   private readonly camera = new Camera({
-    bounds: mapRoomGrid.worldBounds(WORLD_WIDTH, WORLD_HEIGHT),
+    bounds: worldBounds(),
   });
 
   /**
@@ -173,6 +223,25 @@ export class MapRoom2Scene implements Scene {
 
   private context: SceneContext | null = null;
   private ui: MapRoomUi | null = null;
+
+  /**
+   * The tilted camera (`tilt.ts`, MR2 look plan step 4): the account's side
+   * (the server's MR2_TILT switch and the player's "Tilted map" choice, last
+   * answer kept in this browser so the map opens in the right shape), and the
+   * strength that gives. Classic is always flat. Off draws today's flat map
+   * with nothing in between.
+   */
+  private tiltChoice: TiltChoice = cachedTiltChoice();
+  private tiltStrength: TiltStrength = this.openingTilt();
+  private tilt: Tilt | null = null;
+  private tiltView: TiltView | null = null;
+  /**
+   * Markers stand upright over the tilted map (`markerPins.ts`). Only the dev
+   * hook turns this off, to show the squashed "before" for samples.
+   */
+  private uprightMarkers = true;
+  /** How long standing the markers took last frame, in milliseconds (speed readout). */
+  private markerMs = 0;
   private input: MapInput | null = null;
 
   /**
@@ -247,6 +316,15 @@ export class MapRoom2Scene implements Scene {
 
   async enter(context: SceneContext): Promise<void> {
     this.context = context;
+    markOpen();
+    // The world's hex shape (MR2 look plan step 1) before anything is drawn
+    // or picked: the grid's geometry follows the server's rules. Classic gets
+    // its own pointy-top cell size (never tilted, Flash's 3/4 tiles).
+    const shape = await loadHexShape();
+    if (this.context !== context) return;
+    setHexShape(shape, classicLook());
+    this.camera.setBounds(worldBounds());
+    this.camera.setMinZoom(mapMinZoom());
     this.pendingFocus = consumeMapFocus();
     this.viewportWidth = context.width;
     this.viewportHeight = context.height;
@@ -260,6 +338,7 @@ export class MapRoom2Scene implements Scene {
 
     this.camera.resize(context.width, context.height);
     this.camera.attach(context.canvas);
+    this.setTilt(this.tiltStrength);
 
     this.ui = new MapRoomUi(
       {
@@ -326,6 +405,7 @@ export class MapRoom2Scene implements Scene {
           writeKitFilter(filter);
           this.renderer.setKitFilter(filter);
         },
+        onTiltToggle: (tilted) => this.chooseTilt(tilted),
         reach: (cell) => {
           const answer = reachTo(cell, this.rangeSources);
           const text = reachText(answer);
@@ -407,6 +487,8 @@ export class MapRoom2Scene implements Scene {
     this.ui.setRangeOn(this.rangeOn);
     this.ui.setKitFilter(this.kitFilter);
     this.renderer.setKitFilter(this.kitFilter);
+    this.syncTiltUi();
+    void this.refreshTiltChoice();
 
     this.input = new MapInput({
       camera: this.camera,
@@ -417,10 +499,33 @@ export class MapRoom2Scene implements Scene {
       onZoomStep: (direction) => this.zoomTo(this.camera.zoom * Math.pow(ZOOM_STEP, direction)),
       onCancel: () => this.clearSelection(),
       liftOf: this.renderer.liftAt,
+      screenToFlat: () => this.tiltToFlat,
     });
     this.input.attach();
 
     if (import.meta.env.DEV) {
+      // The camera and the tilted picture's redraw count, for samples and the speed check.
+      (globalThis as Record<string, unknown>)["__bymrMr2TiltDebug"] = {
+        camera: this.camera,
+        renderer: this.renderer,
+        draws: () => this.tiltView?.draws ?? 0,
+        resolution: () => this.tiltView?.textureResolution ?? 0,
+        markers: () => ({ count: this.renderer.markerCount, ms: this.markerMs }),
+        // Markers upright (true) or warped flat with the ground (false, the "before").
+        upright: (on: boolean) => {
+          this.uprightMarkers = on;
+          if (!on) this.renderer.setMarkerProjector(null, "");
+          this.tiltView?.invalidate();
+          this.standMarkers();
+          return on;
+        },
+      };
+      // Switches the tilt live at any strength, for the owner's samples (not saved).
+      (globalThis as Record<string, unknown>)["__bymrMr2Tilt"] = (strength: TiltStrength) => {
+        if (classicLook() || !TILT_STRENGTHS.includes(strength)) return this.tiltStrength;
+        this.setTilt(strength);
+        return strength;
+      };
       // The end panel's takeover offer, without finishing a real attack (#82).
       (globalThis as Record<string, unknown>)["__takeoverPreview"] = {
         endPanel: (options: EndTakeoverPreviewOptions) => previewEndTakeover(context.overlay.modal, options),
@@ -456,7 +561,15 @@ export class MapRoom2Scene implements Scene {
     }
     this.input?.detach();
     this.input = null;
+    this.camera.setPointerMap(null);
     this.camera.detach();
+    this.tiltView?.destroy();
+    this.tiltView = null;
+    this.tilt = null;
+    if (import.meta.env.DEV) {
+      delete (globalThis as Record<string, unknown>)["__bymrMr2Tilt"];
+      delete (globalThis as Record<string, unknown>)["__bymrMr2TiltDebug"];
+    }
 
     window.removeEventListener("focus", this.handleFocus);
     document.removeEventListener("visibilitychange", this.handleFocus);
@@ -476,6 +589,128 @@ export class MapRoom2Scene implements Scene {
     this.viewportWidth = width;
     this.viewportHeight = height;
     this.camera.resize(width, height);
+    if (this.tilt) this.setTilt(this.tiltStrength);
+  }
+
+  /**
+   * Turns the tilted camera on at a strength, or off (MR2_TILT prototype).
+   *
+   * On, the map's root leaves the stage and is drawn into the tilt view's
+   * texture each frame; the camera keeps working in flat-screen terms, with
+   * every pointer position un-tilted first, so drag, wheel and pinch stay
+   * pinned to the ground under the pointer.
+   */
+  private setTilt(strength: TiltStrength): void {
+    const context = this.context;
+    if (!context) return;
+    this.tiltStrength = strength;
+    this.tilt = tiltFor(strength, this.viewportWidth, this.viewportHeight);
+    const tilt = this.tilt;
+    if (tilt) {
+      if (!this.tiltView) this.tiltView = new TiltView(context.renderer.resolution);
+      if (this.renderer.root.parent) this.renderer.root.parent.removeChild(this.renderer.root);
+      if (!this.tiltView.mesh.parent) context.stage.addChildAt(this.tiltView.mesh, 0);
+      // The upright markers stand over the tilted picture (`markerPins.ts`).
+      if (!this.renderer.markers.parent) {
+        context.stage.addChildAt(this.renderer.markers, context.stage.getChildIndex(this.tiltView.mesh) + 1);
+      }
+      this.camera.setPointerMap((point) => tilt.toFlat(point));
+      // Edge limits and the zoom floor for what the tilted screen really sees,
+      // which is more than the screen at the top: no empty space beyond the
+      // world's edge, at the edge or zoomed right out.
+      this.camera.setMinZoom(tiltMinZoom(tilt, worldBounds(), mapMinZoom()));
+      this.camera.setViewExtent(tilt.flatBounds());
+      this.tiltView.invalidate();
+      this.standMarkers();
+    } else {
+      this.renderer.markers.parent?.removeChild(this.renderer.markers);
+      this.renderer.setMarkerProjector(null, "");
+      this.tiltView?.mesh.parent?.removeChild(this.tiltView.mesh);
+      this.tiltView?.destroy();
+      this.tiltView = null;
+      if (!this.renderer.root.parent) context.stage.addChildAt(this.renderer.root, 0);
+      this.camera.setPointerMap(null);
+      this.camera.setViewExtent(null);
+      this.camera.setMinZoom(mapMinZoom());
+      // The root was moved for the tilt texture; put it back for the flat camera.
+      this.applyCamera();
+    }
+    this.camera.dirty = true;
+    this.syncTiltUi();
+  }
+
+  /** The strength the map opens at: Classic flat, then a testing override, then the account's choice. */
+  private openingTilt(): TiltStrength {
+    return decideTilt({ classic: classicLook(), override: readTiltOverride(), choice: this.tiltChoice });
+  }
+
+  /** The "Tilted map" button and the zoom floor, in step with the tilt. */
+  private syncTiltUi(): void {
+    this.ui?.setTilt({ available: !classicLook() && this.tiltChoice.allowed, tilted: this.tilt !== null });
+    this.ui?.setMinZoom(this.camera.minZoom);
+  }
+
+  /**
+   * Asks the account for the tilt switch and the player's choice, and turns
+   * the map to match if the answer differs from the one this browser kept.
+   * A failed fetch keeps the map as it opened.
+   */
+  private async refreshTiltChoice(): Promise<void> {
+    try {
+      this.tiltChoice = await loadTiltChoice();
+    } catch {
+      return;
+    }
+    if (!this.context) return;
+    const strength = this.openingTilt();
+    if (strength !== this.tiltStrength) this.setTilt(strength);
+    else this.syncTiltUi();
+  }
+
+  /**
+   * The player pressed "Tilted map": the map turns at once, and the choice is
+   * stored on the account (`user.map_flat`). If the save fails the map stays
+   * as chosen for this visit and a notice says it was not kept.
+   */
+  private chooseTilt(tilted: boolean): void {
+    if (classicLook()) return;
+    this.tiltChoice = { ...this.tiltChoice, tilted };
+    this.setTilt(tilted ? DEFAULT_TILT : "off");
+    saveTiltChoice(tilted).then(
+      (choice) => {
+        this.tiltChoice = choice;
+        this.syncTiltUi();
+      },
+      () => this.ui?.notices.show("tilt", TILT_SAVE_FAILED, { level: "warning" }),
+    );
+  }
+
+  /**
+   * Stands the map's markers upright over the tilted picture, for the camera
+   * as it is now. Re-placing happens only when the camera or the tilt moved
+   * (the key) or a chunk's markers changed.
+   */
+  private standMarkers(): void {
+    const tilt = this.tilt;
+    if (!tilt || !this.uprightMarkers) return;
+    const camera = { zoom: this.camera.zoom, position: { ...this.camera.position } };
+    const key = `${tilt.pitchDeg}|${tilt.width}x${tilt.height}|${camera.zoom}|${camera.position.x},${camera.position.y}`;
+    const fit = markerFit(tilt, mapRoomGrid.rowStep);
+    const started = performance.now();
+    this.renderer.setMarkerProjector(uprightProjector(tilt, camera, fit), `${key}|${fit}`);
+    this.markerMs = performance.now() - started;
+  }
+
+  /** Undoes the tilt for a canvas point, or null when flat. */
+  private get tiltToFlat(): ((point: { x: number; y: number }) => { x: number; y: number }) | null {
+    const tilt = this.tilt;
+    return tilt ? (point) => tilt.toFlat(point) : null;
+  }
+
+  /** Where a world point is seen on the canvas, tilted or not. */
+  private worldToCanvas(world: { x: number; y: number }): { x: number; y: number } {
+    const flat = this.camera.worldToScreen(world);
+    return this.tilt ? this.tilt.toScreen(flat) : flat;
   }
 
   update(deltaSeconds: number): void {
@@ -487,12 +722,18 @@ export class MapRoom2Scene implements Scene {
       this.range = this.visibleRange();
       if (this.ready) this.store.ensureVisible(this.range);
       this.ui?.setViewport(this.range);
+      this.ui?.setViewShape(this.tiltViewCells());
       this.ui?.setZoom(this.camera.zoom);
       // The card follows its cell as the map moves under a still pointer.
       this.showHoverCard();
     }
 
     this.renderer.draw(this.range, this.camera.zoom);
+    if (this.tilt && this.tiltView && this.context) {
+      if (this.renderer.paintedStepped) this.tiltView.invalidate();
+      this.tiltView.render(this.context.renderer, this.renderer.root, this.tilt, this.camera.zoom, this.camera.position);
+      this.standMarkers();
+    }
     this.ui?.drawMinimap();
 
     if (this.ready) {
@@ -533,6 +774,8 @@ export class MapRoom2Scene implements Scene {
       // The load that chose this map, when there was one (issue #162).
       const base = takePrimedOwnYard() ?? (await loadOwnYard());
       this.ownSave = base;
+      // Map Room 2's painted look (MR2_PAINTED_MAP), never in Classic.
+      this.renderer.setPaintedMap(paintedMapOn({ serverFlag: base.flags?.["mr2painted"] }));
       this.income = new IncomePrediction(base.buildingresources, base.resources);
       this.incomeCap = storageCapOf(base);
       this.clockOffset = base.currenttime - Date.now() / 1000;
@@ -656,18 +899,39 @@ export class MapRoom2Scene implements Scene {
 
   /** The inclusive cell range covering the viewport, with a small margin. */
   private visibleRange(): CellRange {
-    const view = this.camera.visibleWorldRect();
+    const view = this.tiltedWorldRect() ?? this.camera.visibleWorldRect();
     const topLeft = mapRoomGrid.pixelToCell(view.left, view.top);
     const bottomRight = mapRoomGrid.pixelToCell(view.right, view.bottom);
 
+    // Two cells of margin across the stagger: flat-top's odd columns reach
+    // half a cell further up and down than their neighbours, pointy-top's odd
+    // rows half a cell further right. One cell the other way.
+    const pointy = mapRoomGrid.shape === "pointy";
+    const colMargin = pointy ? 2 : 1;
+    const rowMargin = pointy ? 1 : 2;
     return {
-      minCol: clamp(topLeft.col - 1, WORLD_WIDTH),
-      maxCol: clamp(bottomRight.col + 1, WORLD_WIDTH),
-      // Two rows of margin vertically: the odd-column stagger means a column
-      // reaches half a cell further up and down than its neighbour.
-      minRow: clamp(topLeft.row - 2, WORLD_HEIGHT),
-      maxRow: clamp(bottomRight.row + 2, WORLD_HEIGHT),
+      minCol: clamp(topLeft.col - colMargin, WORLD_WIDTH),
+      maxCol: clamp(bottomRight.col + colMargin, WORLD_WIDTH),
+      minRow: clamp(topLeft.row - rowMargin, WORLD_HEIGHT),
+      maxRow: clamp(bottomRight.row + rowMargin, WORLD_HEIGHT),
     };
+  }
+
+  /** The tilted screen's four corners in cells, for the minimap's trapezoid; null when flat. */
+  private tiltViewCells(): { col: number; row: number }[] | null {
+    if (!this.tilt) return null;
+    return tiltViewQuad(this.tilt, (flat) => this.camera.screenToWorld(flat)).map((world) =>
+      worldToCellSpace(world),
+    );
+  }
+
+  /** The world rectangle the tilted screen can see (more than the flat one at the top), or null when flat. */
+  private tiltedWorldRect(): { left: number; top: number; right: number; bottom: number } | null {
+    if (!this.tilt) return null;
+    const flat = this.tilt.flatBounds();
+    const topLeft = this.camera.screenToWorld({ x: flat.left, y: flat.top });
+    const bottomRight = this.camera.screenToWorld({ x: flat.right, y: flat.bottom });
+    return { left: topLeft.x, top: topLeft.y, right: bottomRight.x, bottom: bottomRight.y };
   }
 
   private zoomTo(zoom: number): void {
@@ -730,8 +994,8 @@ export class MapRoom2Scene implements Scene {
       ui.hideHover();
       return;
     }
-    const centre = this.camera.worldToScreen(this.cellPoint(cell));
-    const half = (CELL_WIDTH / 2) * this.camera.zoom;
+    const centre = this.worldToCanvas(this.cellPoint(cell));
+    const half = (mapRoomGrid.cellWidth / 2) * this.camera.zoom * (this.tilt ? this.tilt.scaleAt(centre.y) : 1);
     ui.showHover(content, { left: centre.x - half, right: centre.x + half, middle: centre.y });
   }
 
@@ -748,16 +1012,27 @@ export class MapRoom2Scene implements Scene {
     const ui = this.ui;
     const panel = ui?.cellPanelRect();
     if (!ui || !panel) return;
+    const point = this.worldToCanvas(this.cellPoint(cell));
+    // A cell is drawn smaller towards the top of the tilted screen.
+    const scale = this.camera.zoom * (this.tilt ? this.tilt.scaleAt(point.y) : 1);
     const pan = panClearOfPanel({
-      point: this.camera.worldToScreen(this.cellPoint(cell)),
-      halfWidth: (CELL_WIDTH / 2) * this.camera.zoom,
-      halfHeight: (CELL_HEIGHT / 2) * this.camera.zoom,
+      point,
+      halfWidth: (mapRoomGrid.cellWidth / 2) * scale,
+      halfHeight: (mapRoomGrid.cellHeight / 2) * scale,
       panel,
       viewportWidth: this.viewportWidth,
       hudBottom: ui.hudBottom(),
     });
     if (!pan) return;
     this.camera.settle();
+    if (this.tilt) {
+      // The pan is in canvas pixels; move the flat camera so the cell lands there.
+      const now = this.worldToCanvas(this.cellPoint(cell));
+      const from = this.tilt.toFlat(now);
+      const to = this.tilt.toFlat({ x: now.x + pan.dx, y: now.y + pan.dy });
+      this.camera.panByScreen(to.x - from.x, to.y - from.y);
+      return;
+    }
     this.camera.panByScreen(pan.dx, pan.dy);
   }
 
@@ -1194,11 +1469,14 @@ export class MapRoom2Scene implements Scene {
 
     ui.setSight(this.sight.sources);
     ui.setAttackers(this.revealedAttackers());
-    ui.setStatus(
-      `${this.store.loadedZones} zones · ${this.store.pendingRequests} queued · ` +
-        `${this.frameCostMs.toFixed(1)} ms/frame · ` +
-        `${this.renderer.lastBuildMs.toFixed(2)} ms/chunk`,
-    );
+    // The counts are a developer's, behind their opt-in switch (beta 6).
+    if (devStats()) {
+      ui.setStatus(
+        `${this.store.loadedZones} zones · ${this.store.pendingRequests} queued · ` +
+          `${this.frameCostMs.toFixed(1)} ms/frame · ` +
+          `${this.renderer.lastBuildMs.toFixed(2)} ms/chunk`,
+      );
+    }
   }
 
   /**

@@ -37,6 +37,28 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * `range2` is the cannonball and target), income the mixed resource pile,
  * height the hill with a flag. None carries an arrow, as its number can be a
  * gain or a loss.
+ *
+ * Map Room 2's neighbour defence bonus (`art-samples/mr2-bonus5/icon`): the
+ * teal shield with linked cells and two up arrows (`neighbours`); `neighbours2`
+ * is the hex shield with friends either side, the other option.
+ *
+ * Map Room 2's "Tilted map" button (`ui/maproom/TiltToggle.ts`,
+ * `art-samples/mr2-markers/icon`): a grass slab with hex tiles, a tree and a
+ * flag, seen at an angle (`maptilt`) while the map is tilted and from above
+ * (`mapflat`) while it is flat.
+ *
+ * "Support the game" (`ui/support/SupportPanel.ts`, `art-samples/support-heart`):
+ * a red heart held in green monster hands (`support`), so it is not read as
+ * Health's plain heart; `support2` is the heart with a gold coin, the other option.
+ *
+ * The Yard Planner's buttons (`art-samples/planner-icons`, owner 4 Nov: "I
+ * don't like simple icons. This is a game after all"): blue curved arrows for
+ * undo and redo, a green monster hand tapping for select (`select2` is a gold
+ * mouse pointer), a hazard-striped frame with a pointer for box select
+ * (`box2` is gold corner brackets round stone blocks), a gold magnifier for
+ * find, a stone wall with the level up arrow for upgrade walls, and a set bear
+ * trap inside a yellow reload arrow for re-arm traps (`rearm2` is a spiked
+ * mine in the same arrow).
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -63,6 +85,22 @@ export const GAME_ICONS = {
   range2: "Tower range",
   income: "Income",
   height: "Height",
+  neighbours: "Neighbour defence bonus",
+  neighbours2: "Neighbour defence bonus",
+  maptilt: "Tilted map",
+  mapflat: "Flat map",
+  support: "Support the game",
+  support2: "Support the game",
+  undo: "Undo",
+  redo: "Redo",
+  select: "Select",
+  select2: "Select",
+  box: "Box select",
+  box2: "Box select",
+  find: "Find",
+  wallupgrade: "Upgrade walls",
+  rearm: "Re-arm traps",
+  rearm2: "Re-arm traps",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;

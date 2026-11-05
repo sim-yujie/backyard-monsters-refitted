@@ -16,6 +16,7 @@ import "./plugins/guidedStart";
 import "./plugins/hatchWalkOut";
 import "./plugins/inferno";
 import "./plugins/korath";
+import "./plugins/quests";
 import "./plugins/raid";
 import "./plugins/slowInternet";
 import "./plugins/teamNotice";
