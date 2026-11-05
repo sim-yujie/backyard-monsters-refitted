@@ -1,5 +1,5 @@
 import { redis } from "../../server.js";
-import { ATTACK_SESSION_WINDOW, attackerSessionKey } from "./attackSession.js";
+import { attackerSessionKey, sessionWindowSeconds } from "./attackSession.js";
 import { readAttackSession } from "./attackSessionStore.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 
@@ -21,5 +21,5 @@ export const isPlayerAttacking = async (userid: number): Promise<boolean> => {
   const session = await readAttackSession(row);
   if (!session || session.attackerid !== userid) return false;
 
-  return getCurrentDateTime() - session.startedat < ATTACK_SESSION_WINDOW;
+  return getCurrentDateTime() - session.startedat < sessionWindowSeconds(session);
 };

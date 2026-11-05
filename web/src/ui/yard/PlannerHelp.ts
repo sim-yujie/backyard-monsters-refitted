@@ -143,10 +143,6 @@ const HINT_ROWS: readonly HintRow[] = [
     text: "Or click once to lift the selection, move the pointer, and click again to drop it.",
   },
   {
-    demo: "mirrorH",
-    text: "Mirror, Align and Distribute tidy a selection: two or more to mirror or align, three or more to space out.",
-  },
-  {
     demo: "store",
     text:
       "Store (Delete) lifts the selection off the yard into a drawer, so there is room to move the rest. Click a stack in the drawer, then click the yard once per building; Esc stops.",
@@ -161,7 +157,7 @@ const HINT_ROWS: readonly HintRow[] = [
  * The same moves, for a finger (#45).
  *
  * A phone has no Shift, no second button, no Esc and no keyboard, and its
- * controls are not where a desktop's are (Mirror and its kin are under
+ * controls are not where a desktop's are (Select all is under
  * More ▸ Selection, Find and the overlays under More), so the card says how to do
  * each thing there rather than leaving half its lines untrue.
  */
@@ -181,10 +177,6 @@ const TOUCH_HINT_ROWS: readonly HintRow[] = [
   {
     demo: "carry",
     text: "If it does not fit where you let go, it stays in hand: tap the yard to drop it, or press Put back.",
-  },
-  {
-    demo: "mirrorH",
-    text: "Mirror, Align and Distribute are under More ▸ Selection when two or more are selected.",
   },
   {
     demo: "store",
@@ -230,8 +222,6 @@ const SHORTCUT_ROWS: readonly (readonly [string, string])[] = [
   ["Shift + click", "Add or remove one building"],
   ["Arrow keys", "Nudge the selection by one grid step"],
   ["Shift + arrows", "Nudge by ten steps"],
-  ["M", "Mirror the selection left to right — positions, not artwork"],
-  ["Shift + M", "Mirror it top to bottom"],
   ["Ctrl + Z", "Undo"],
   ["Ctrl + Shift + Z, Ctrl + Y", "Redo"],
   ["Ctrl + S", "Save to the current slot"],

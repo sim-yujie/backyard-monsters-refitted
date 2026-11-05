@@ -21,7 +21,7 @@ import {
   type PlayerModeration,
 } from "./api";
 import { h, replace, type Child } from "./dom";
-import { ago, dateTime, plural } from "./format";
+import { ago, dateTime, lookName, plural } from "./format";
 import { icon } from "./icons";
 import { errorWords } from "./shiny";
 
@@ -868,6 +868,7 @@ export class ModerationView {
                         player.bot ? "bot" : null,
                         player.formerName ? `was called ${player.formerName}` : null,
                         player.lastSeenAt ? `last played ${ago(player.lastSeenAt)}` : "never played",
+                        lookName(player.look),
                       ]
                         .filter(Boolean)
                         .join(" · "),
@@ -972,6 +973,7 @@ export class ModerationView {
               "span",
               { class: "row-meta" },
               player.lastSeenAt ? `Last played ${ago(player.lastSeenAt)}` : "Never played",
+              lookName(player.look) ? ` · ${lookName(player.look)}` : "",
               chatReportId ? ` · from chat report #${chatReportId}` : "",
               flag ? " · caught by the word filter" : "",
             ),

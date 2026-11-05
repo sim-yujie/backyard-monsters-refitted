@@ -37,8 +37,11 @@ export const PRIVACY_URL: string = import.meta.env.VITE_PRIVACY_URL || "/privacy
 /** The credits page this client ships (`credits.html`), linked under the sign-in panel. */
 export const CREDITS_URL = "/credits";
 
-/** The owner's Patreon, the login screen's "Support us" link. */
+/** The owner's Patreon (monthly support): the login screen's "Support us" link and the in-game Support panel. */
 export const PATREON_URL = "https://www.patreon.com/c/TheMonsterLab";
+
+/** The owner's Ko-fi (one-time tip), beside Patreon in the in-game Support panel. */
+export const KOFI_URL = "https://ko-fi.com/themonsterlab";
 
 /** The community Discord invite (never expires; it lands in #welcome). */
 export const DISCORD_URL = "https://discord.gg/wthryBRZHz";

@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import { liveLevelFor, planFor } from "./liveLevel";
 
 describe("liveLevelFor", () => {
-  it("keeps Classic still at every Quality, as Flash's map was", () => {
-    expect(liveLevelFor(true, "high")).toBe("off");
-    expect(liveLevelFor(true, "medium")).toBe("off");
+  it("keeps Classic still on Low", () => {
     expect(liveLevelFor(true, "low")).toBe("off");
+  });
+
+  it("gives Classic the gulls on Medium and everything on High", () => {
+    expect(liveLevelFor(true, "medium")).toBe("classic-reduced");
+    expect(liveLevelFor(true, "high")).toBe("full");
   });
 
   it("follows the Quality setting in Modern", () => {
@@ -26,6 +29,14 @@ describe("planFor", () => {
     const plan = planFor("reduced");
     expect([plan.water, plan.foam]).toEqual([true, true]);
     expect([plan.clouds, plan.birds]).toEqual([false, false]);
+    expect(plan.stepSeconds).toBeCloseTo(2 * planFor("full").stepSeconds);
+    expect(plan.artSuffix).toBe("");
+  });
+
+  it("on Classic Medium draws the water and gulls at half rate from the small art, with no clouds", () => {
+    const plan = planFor("classic-reduced");
+    expect([plan.water, plan.foam, plan.birds]).toEqual([true, true, true]);
+    expect(plan.clouds).toBe(false);
     expect(plan.stepSeconds).toBeCloseTo(2 * planFor("full").stepSeconds);
     expect(plan.artSuffix).toBe("");
   });

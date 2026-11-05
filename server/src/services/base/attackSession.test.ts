@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
   ATTACK_SESSION_TTL,
-  ATTACK_SESSION_WINDOW,
   attackSessionKey,
   checkAttackBinding,
   newAttackSession,
@@ -10,6 +9,10 @@ import {
   sessionFactsOf,
   type AttackSession,
 } from "./attackSession.js";
+import { LONGEST_ATTACK_WINDOW_SECONDS, attackWindowSeconds } from "./attackWindow.js";
+
+/** An ordinary attack's window: 300 s of countdown, 120 s of retreat grace, a spare minute. */
+const ATTACK_SESSION_WINDOW = attackWindowSeconds(false);
 
 /**
  * The binding rule is pure, so the whole of issue #25's decision is testable
@@ -89,6 +92,21 @@ describe("checkAttackBinding", () => {
 
   test("expiry is decided before identity, so a stale session cannot name an attacker", () => {
     expect(check(2504, ATTACK_SESSION_WINDOW + 1)).toEqual({ ok: false, reason: "expired" });
+  });
+
+  test("an ordinary attack saves at 7 min 30 s and is refused at 8 min 10 s", () => {
+    expect(ATTACK_SESSION_WINDOW).toBe(480);
+    expect(check(ATTACKER, 7 * 60 + 30)).toEqual({ ok: true });
+    expect(check(ATTACKER, 8 * 60 + 10)).toEqual({ ok: false, reason: "expired" });
+  });
+
+  test("a Declare War attack has its longer countdown's window: it saves at 9 min 50 s", () => {
+    const war = session({ declareWar: true });
+    expect(attackWindowSeconds(true)).toBe(600);
+    expect(check(ATTACKER, 9 * 60 + 50, { session: war })).toEqual({ ok: true });
+    expect(check(ATTACKER, 10 * 60, { session: war })).toEqual({ ok: false, reason: "expired" });
+    // Without the flag, the same moment is past the window.
+    expect(check(ATTACKER, 9 * 60 + 50)).toEqual({ ok: false, reason: "expired" });
   });
 
   test("a session for an attack the row has moved on from is stale", () => {
@@ -244,7 +262,7 @@ describe("the stored session", () => {
   });
 
   test("the key outlives the window it authorises", () => {
-    expect(ATTACK_SESSION_TTL).toBeGreaterThan(ATTACK_SESSION_WINDOW);
+    expect(ATTACK_SESSION_TTL).toBeGreaterThan(LONGEST_ATTACK_WINDOW_SECONDS);
   });
 });
 

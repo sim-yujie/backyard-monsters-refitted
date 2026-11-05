@@ -226,7 +226,7 @@ const brand = (): HTMLElement => {
 
   const note = document.createElement("p");
   note.className = "login-brand__note";
-  note.textContent = "Beta: game progress may be reset.";
+  note.textContent = "Open beta: we plan to keep your progress.";
 
   header.append(title, note);
   return header;

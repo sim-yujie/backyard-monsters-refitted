@@ -22,16 +22,19 @@ import { BuildingAvatars } from "./buildingAvatars";
 import { cellLift, liftCorners, setFlatGround } from "./ground";
 import { GroundArt } from "./groundArt";
 import { LiveMap } from "./live/LiveMap";
-import { ConstructionBadge } from "./constructionBadge";
+import { CONSTRUCTION_BADGE_URL, IDLE_HELPER_URL, MapPicture } from "./mapPicture";
 import { RangeOverlay } from "./RangeOverlay";
 import type { Sight } from "./Sight";
 import { TerrainRaster } from "./TerrainRaster";
 import { TribeAvatars } from "./tribeAvatars";
 import { MR2_PAINTED, markOnce } from "./openMarks";
 import { classicLook } from "@/game/classicLook";
+import { onQualityChange, quality, type Quality } from "@/game/quality";
+import { FOG_COLOUR, setFogUnderCloud } from "./cellVisuals";
 import { isFogCell } from "@/api/types";
 import type { ZoneRecord, ZoneStore } from "./ZoneStore";
 import type { CellRange } from "./zones";
+import type { GroundData } from "./painted/GroundData";
 import type * as PaintedLookNamespace from "./painted/paintedLook";
 
 type PaintedLookModule = typeof PaintedLookNamespace;
@@ -114,7 +117,8 @@ export class MapRenderer {
   private readonly buildings = new BuildingAvatars();
   /** Flash's ground tiles, fetched the same way; flat hexes until they land. */
   private readonly groundArt = new GroundArt();
-  private readonly constructionBadge = new ConstructionBadge();
+  private readonly constructionBadge = new MapPicture(CONSTRUCTION_BADGE_URL);
+  private readonly idleHelper = new MapPicture(IDLE_HELPER_URL, true);
   /** The living map (water, clouds, birds): its own layers, told when chunks come and go. */
   private readonly live = new LiveMap(this.ground, () => this.rebuildAll());
   private readonly chunks = new Map<number, MapChunk>();
@@ -151,6 +155,10 @@ export class MapRenderer {
   private paintedKit: { look: PaintedLookModule; programs: PaintedPrograms } | null = null;
   /** Fetching the code and compiling the shaders, while it runs. */
   private paintedPreparing: Promise<void> | null = null;
+  /** Classic on High: which cells are fog, for `clouds`; the painted look keeps its own in `painted`. */
+  private classicFog: GroundData | null = null;
+  private classicFogPreparing = false;
+  private stopQuality: (() => void) | null = null;
   private destroyed = false;
 
   private lastRange: CellRange | null = null;
@@ -258,6 +266,7 @@ export class MapRenderer {
       this.buildings.load().then((ok) => ok && this.rebuildAll()),
       this.groundArt.load().then((ok) => ok && this.rebuildAll()),
       this.constructionBadge.load().then((ok) => ok && this.rebuildAll()),
+      classicLook() ? this.idleHelper.load().then((ok) => ok && this.rebuildAll()) : null,
     ]);
   }
 
@@ -290,6 +299,7 @@ export class MapRenderer {
   resetSight(): void {
     this.raster.reset();
     this.painted?.reset();
+    this.classicFog?.reset();
     this.clouds?.invalidate();
     this.borders?.reset();
     this.rebuildAll();
@@ -311,6 +321,11 @@ export class MapRenderer {
     this.webGL2 = (renderer as { context?: { webGLVersion?: number } }).context?.webGLVersion === 2;
     this.gl = this.webGL2 ? ((renderer as { gl?: WebGL2RenderingContext }).gl ?? null) : null;
     this.live.attach(renderer);
+    this.stopQuality ??= onQualityChange((level) => {
+      this.syncClassicFog(level);
+      this.syncPaintedFog(level);
+    });
+    this.syncClassicFog();
     this.dropAllChunks();
     this.lastRange = null;
   }
@@ -319,6 +334,7 @@ export class MapRenderer {
   applyZone(zone: ZoneRecord): void {
     this.raster.applyZone(zone);
     this.painted?.applyZone(zone);
+    this.classicFog?.applyZone(zone);
     this.clouds?.invalidate();
     this.borders?.applyZone(zone);
     if (this.chunks.has(zone.id)) this.dirty.add(zone.id);
@@ -517,6 +533,73 @@ export class MapRenderer {
     if (this.paintedWanted) this.setPaintedMap(true);
   }
 
+  /** Modern's clouds over the undiscovered map: on High only; Medium and Low keep it dark, like Classic (owner, 5 Nov 2026). */
+  private syncPaintedFog(level: Quality): void {
+    const { painted, paintedKit: kit } = this;
+    if (!painted || !kit?.programs.clouds) return;
+    if (level !== "high") {
+      this.clouds?.destroy();
+      this.clouds = null;
+      painted.setFogColour(FOG_COLOUR);
+    } else if (this.clouds === null) {
+      void this.addPaintedFog(kit.look, painted);
+    }
+  }
+
+  /** The painted fog over the ground and the borders, under the attack range and the cells' markers. */
+  private addPaintedFog(look: PaintedLookModule, painted: PaintedGround): Promise<boolean> {
+    const above = this.world.parent === this.root ? this.world : this.range.container;
+    const clouds = new look.CloudLayer(painted.groundData);
+    this.clouds = clouds;
+    this.root.addChildAt(clouds.mesh, this.root.getChildIndex(above));
+    painted.setFogColour(look.FOG_UNDER_CLOUD);
+    return clouds.load();
+  }
+
+  /** Classic's clouds over the undiscovered map: on High only, the level its other clouds show on. */
+  private syncClassicFog(level: Quality = quality()): void {
+    if (!classicLook()) return;
+    if (level === "high") {
+      if (this.classicFog === null && !this.classicFogPreparing) void this.buildClassicFog();
+    } else if (this.classicFog !== null) {
+      this.clouds?.destroy();
+      this.clouds = null;
+      this.classicFog = null;
+      this.showFogUnderCloud(false);
+    }
+  }
+
+  /** Repaints the fog cells, near and far, for clouds coming or going over them. */
+  private showFogUnderCloud(on: boolean): void {
+    setFogUnderCloud(on);
+    this.raster.reset();
+    for (const zone of this.store.loadedZoneRefs()) this.raster.applyZone(zone);
+    this.rebuildAll();
+  }
+
+  private async buildClassicFog(): Promise<void> {
+    if (!this.webGL2 || !this.gl || !this.renderer) return;
+    this.classicFogPreparing = true;
+    try {
+      const fog = await import("./painted/classicFog");
+      const ready = await fog.prepareFog(this.renderer, this.gl);
+      if (!ready || this.destroyed || quality() !== "high") return;
+      const data = new fog.GroundData();
+      for (const zone of this.store.loadedZoneRefs()) data.applyZone(zone);
+      this.classicFog = data;
+      this.clouds = new fog.CloudLayer(data);
+      // Over the tiles, under the cells' markers and the attack range, as in the painted look.
+      this.root.addChildAt(this.clouds.mesh, this.root.getChildIndex(this.world));
+      void this.clouds.load();
+      this.showFogUnderCloud(true);
+    } catch (caught) {
+      // The code did not arrive (offline, a new release): fog stays dark cells.
+      console.warn("Classic's clouds could not be prepared; the undiscovered map stays dark.", caught);
+    } finally {
+      this.classicFogPreparing = false;
+    }
+  }
+
   private buildPainted(look: PaintedLookModule, programs: PaintedPrograms): void {
     const painted = new look.PaintedGround(undefined, programs.warmer);
     this.painted = painted;
@@ -530,14 +613,8 @@ export class MapRenderer {
     const above = this.world.parent === this.root ? this.world : this.range.container;
     this.root.addChildAt(this.borders.mesh, this.root.getChildIndex(above));
     for (const zone of this.store.loadedZoneRefs()) this.borders.applyZone(zone);
-    // The painted fog over the ground and the borders (a border running into the fog goes under
-    // the cloud), under the attack range and the cells' markers.
-    if (programs.clouds) {
-      this.clouds = new look.CloudLayer(painted.groundData);
-      this.root.addChildAt(this.clouds.mesh, this.root.getChildIndex(above));
-      painted.setFogColour(look.FOG_UNDER_CLOUD);
-      loads.push(this.clouds.load());
-    }
+    // A border running into the fog goes under the cloud.
+    if (programs.clouds && quality() === "high") loads.push(this.addPaintedFog(look, painted));
     // The rest of the programs once the art is in and has drawn (a few frames), or after a while
     // if it never comes: where programs compile one at a time (Firefox), a texture set up while
     // one compiles waits for it (`paintedLook.ts` warmRest).
@@ -548,6 +625,10 @@ export class MapRenderer {
 
   destroy(): void {
     this.destroyed = true;
+    this.stopQuality?.();
+    this.stopQuality = null;
+    this.classicFog = null;
+    setFogUnderCloud(false);
     this.clouds?.destroy();
     this.clouds = null;
     this.painted?.destroy();
@@ -562,6 +643,7 @@ export class MapRenderer {
     this.buildings.destroy();
     this.groundArt.destroy();
     this.constructionBadge.destroy();
+    this.idleHelper.destroy();
     this.atlas?.destroy();
     this.atlas = null;
     this.raster.destroy();
@@ -610,6 +692,7 @@ export class MapRenderer {
             this.ground,
             this.groundArt,
             this.constructionBadge,
+            this.idleHelper,
           );
           this.chunks.set(ref.id, chunk);
           this.world.addChild(chunk.container);

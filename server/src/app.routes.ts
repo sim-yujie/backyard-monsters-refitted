@@ -57,6 +57,7 @@ import { changeUsername } from "./controllers/auth/changeUsername.js";
 import { getAccount } from "./controllers/auth/getAccount.js";
 import { updateSettings } from "./controllers/auth/updateSettings.js";
 import { getSoundSettings, updateSoundSettings } from "./controllers/auth/soundSettings.js";
+import { reportLook } from "./controllers/auth/lookReport.js";
 import { setAvatar } from "./controllers/auth/setAvatar.js";
 
 import { baseLoad } from "./controllers/base/load/baseLoad.js";
@@ -126,6 +127,7 @@ import { playerAchievements } from "./controllers/achievements/routes.js";
 import { getDefenceReplay, getDefences } from "./controllers/defences/routes.js";
 import { mountFriendsRoutes } from "./controllers/friends/routes.js";
 import { mountEventsRoutes } from "./controllers/events/routes.js";
+import { mountSupportRoutes } from "./controllers/support/routes.js";
 import { adminOnly, mountAdminRoutes } from "./controllers/admin/routes.js";
 import { mountAnnouncementRoutes } from "./controllers/announcements/routes.js";
 import { postgres } from "./server.js";
@@ -183,6 +185,8 @@ router.post("/api/:apiVersion/player/settings", apiVersion, verifyUserAuth, logR
 // The music and effects switches, saved with the main yard (beta.5, `services/sound/soundSettings.ts`).
 router.get("/api/:apiVersion/player/sound", apiVersion, verifyUserAuth, getSoundSettings);
 router.post("/api/:apiVersion/player/sound", apiVersion, verifyUserAuth, logRequest, updateSoundSettings);
+// Which look the player uses (Modern/Classic and the rest), for the owner's dashboard (`services/user/lookReport.ts`).
+router.post("/api/:apiVersion/player/look", apiVersion, verifyUserAuth, reportLook);
 router.post("/api/:apiVersion/player/avatar", apiVersion, verifyUserAuth, logRequest, setAvatar);
 
 /**  ────────────────────────────────────────────────
@@ -387,6 +391,8 @@ router.post("/alliance/changerelationship", verifyUserAuth, logRequest, changeRe
 router.get("/api/:apiVersion/events/wmi", apiVersion, logRequest, wildMonsterInvasion);
 // The Events page and "What's new" (`controllers/events/routes.ts`); the claims are yard actions.
 mountEventsRoutes(router);
+// The rare "Support the game" reminder's record (`controllers/support/routes.ts`).
+mountSupportRoutes(router);
 
 /**  ────────────────────────────────────────────────
 * 📦 Bug reports: the game's "Report a bug" form (`controllers/bugReports/submitBugReport.ts`).

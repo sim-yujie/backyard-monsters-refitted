@@ -32,12 +32,6 @@ export type PlannerAction =
    */
   | { readonly kind: "ranges" }
   /**
-   * M mirrors the selection left to right, which is the binding F13's table
-   * names. Shift+M is the same operation on the other axis: the toolbar offers
-   * both and a player who has learned one will try the other.
-   */
-  | { readonly kind: "mirror"; readonly axis: "x" | "y" }
-  /**
    * Delete or Backspace: lift the selection off the yard into the drawer.
    *
    * Both keys, because half of everyone reaches for one and half for the
@@ -79,12 +73,6 @@ export const plannerAction = (event: {
     case "r":
     case "R":
       return { kind: "ranges" };
-    // The two cases are deliberately not folded together: Shift is the axis
-    // here rather than a modifier on one action, so `M` is not `m`.
-    case "m":
-      return { kind: "mirror", axis: "x" };
-    case "M":
-      return { kind: "mirror", axis: "y" };
     case "Escape":
       return { kind: "cancel" };
     case "Tab":

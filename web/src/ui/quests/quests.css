@@ -101,6 +101,7 @@
 
 .quests-tabs {
   flex: none;
+  justify-content: center;
   margin: var(--space-2) var(--space-3) 0;
 }
 
@@ -136,8 +137,12 @@
   flex-direction: column;
   gap: var(--space-4);
   min-height: 0;
-  padding: var(--space-3);
+  /* The scrollbar's width is kept free on both sides, so the rows stay in the
+     window's centre whether or not the tab scrolls. */
+  padding: var(--space-3) var(--space-2);
   overflow-y: auto;
+  scrollbar-gutter: stable both-edges;
+  scrollbar-width: thin;
 }
 
 .quests-section__head {

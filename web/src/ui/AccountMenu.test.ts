@@ -4,12 +4,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AvatarId } from "@/game/avatars";
 import {
   AccountMenu,
-  DEFAULT_NOTE,
-  PICK_FAILED,
   SOUND_SAVE_FAILED,
   accountName,
   levelText,
+  xpLeftText,
+  xpTitle,
 } from "./AccountMenu";
+import { levelProgress } from "@/game/yard/experience";
+import { formatCompact } from "@/ui/format";
 import {
   loadSoundSwitches,
   resetSoundSwitchesForTest,
@@ -70,96 +72,79 @@ describe("AccountMenu", () => {
     expect(accountName("Kozu")).toBe("Kozu");
   });
 
-  describe("avatar picker (#175)", () => {
-    const withAvatar = (
-      current: AvatarId,
-      picked: boolean,
-      onPick: (id: AvatarId) => Promise<void> = () => Promise.resolve(),
-    ) => {
+  describe("the avatar (#175)", () => {
+    const withAvatar = (onPick: (id: AvatarId) => Promise<void> = () => Promise.resolve()) => {
       const pick = vi.fn(onPick);
       const created = new AccountMenu({
         name: "Agent Tester",
         onSignOut: vi.fn(),
-        avatar: { current, picked, onPick: pick },
+        avatar: { current: "frog", picked: false, onPick: pick },
       });
       menu = created;
       document.body.append(created.element);
-      const tile = (id: AvatarId) =>
-        created.element.querySelector<HTMLButtonElement>(`.account-menu__tile[data-avatar="${id}"]`)!;
-      const checked = () =>
-        [...created.element.querySelectorAll<HTMLElement>('.account-menu__tile[aria-checked="true"]')].map(
-          (node) => node.dataset["avatar"],
-        );
-      const note = () => created.element.querySelector<HTMLElement>(".account-menu__note")!;
-      const status = () => created.element.querySelector<HTMLElement>(".account-menu__status")!;
       const face = () => created.element.querySelector<HTMLImageElement>(".account-menu__face")!;
-      return { menu: created, pick, tile, checked, note, status, face };
+      return { menu: created, pick, face };
+    };
+    const openSettings = (created: AccountMenu) => {
+      document.querySelector(".account-settings-popup")?.remove();
+      created.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
+      created.element.querySelector<HTMLButtonElement>(".account-menu__settings")!.click();
+      return document.querySelector<HTMLButtonElement>('.avatar-picker__tile[data-avatar="bee"]')!;
     };
 
-    it("shows all twelve critters with the current one marked", () => {
-      const { menu, checked, note, face } = withAvatar("owl", true);
-      expect(menu.element.querySelectorAll(".account-menu__tile")).toHaveLength(12);
-      expect(checked()).toEqual(["owl"]);
-      expect(note().hidden).toBe(true);
-      expect(face().getAttribute("src")).toMatch(/avatars\/owl-64\.webp$/);
-      expect(menu.element.querySelector(".account-menu__button")?.textContent).toBe("Account");
+    it("wears the critter, and keeps the picker out of the menu", () => {
+      const { menu, face } = withAvatar();
+      expect(face().getAttribute("src")).toMatch(/avatars\/frog-64\.webp$/);
+      expect(menu.element.querySelector(".avatar-picker")).toBeNull();
     });
 
-    it("says when the marked critter is only the default", () => {
-      const { checked, note } = withAvatar("frog", false);
-      expect(checked()).toEqual(["frog"]);
-      expect(note().hidden).toBe(false);
-      expect(note().textContent).toBe(DEFAULT_NOTE);
-    });
-
-    it("stores a pick, then moves the mark and the faces to it", async () => {
-      const { menu, pick, tile, checked, note, face } = withAvatar("frog", false);
-      menu.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
-      tile("bee").click();
+    it("moves the faces after a pick in Settings, and opens it again on that pick", async () => {
+      const { menu, pick, face } = withAvatar();
+      openSettings(menu).click();
       expect(pick).toHaveBeenCalledWith("bee");
-      await vi.waitFor(() => expect(checked()).toEqual(["bee"]));
-      expect(menu.avatar).toBe("bee");
-      expect(note().hidden).toBe(true);
+      await vi.waitFor(() => expect(menu.avatar).toBe("bee"));
       expect(face().getAttribute("src")).toMatch(/avatars\/bee-64\.webp$/);
-      expect(menu.open).toBe(true);
+      expect(openSettings(menu).getAttribute("aria-checked")).toBe("true");
     });
 
-    it("keeps the old mark and says so when the save fails", async () => {
-      const { pick, tile, checked, status } = withAvatar("owl", true, () => Promise.reject(new Error("no")));
-      tile("mole").click();
-      expect(pick).toHaveBeenCalledOnce();
-      await vi.waitFor(() => expect(status().hidden).toBe(false));
-      expect(status().textContent).toBe(PICK_FAILED);
-      expect(checked()).toEqual(["owl"]);
-      expect(tile("mole").disabled).toBe(false);
-    });
-
-    it("does not re-send the avatar already picked, but lets a default be confirmed", async () => {
-      const picked = withAvatar("owl", true);
-      picked.tile("owl").click();
-      expect(picked.pick).not.toHaveBeenCalled();
-      menu!.destroy();
-
-      const fallback = withAvatar("owl", false);
-      fallback.tile("owl").click();
-      expect(fallback.pick).toHaveBeenCalledWith("owl");
-      await vi.waitFor(() => expect(fallback.note().hidden).toBe(true));
-    });
-
-    it("sends one pick at a time", async () => {
+    it("keeps a save running through closing and reopening, and can go back after it", async () => {
       let finish: () => void = () => {};
-      const { pick, tile, checked } = withAvatar("owl", true, () => new Promise<void>((done) => (finish = done)));
-      tile("bee").click();
-      tile("worm").click();
+      const pick = vi.fn(() => new Promise<void>((done) => (finish = done)));
+      const { menu, face } = withAvatar(pick);
+      openSettings(menu).click();
+      // Reopened while Bee is still saving: the tiles wait with the save.
+      const bee = openSettings(menu);
+      const frog = () => document.querySelector<HTMLButtonElement>('.avatar-picker__tile[data-avatar="frog"]')!;
+      expect(bee.disabled).toBe(true);
+      frog().click();
       expect(pick).toHaveBeenCalledOnce();
-      expect(tile("worm").disabled).toBe(true);
       finish();
-      await vi.waitFor(() => expect(checked()).toEqual(["bee"]));
+      await vi.waitFor(() => expect(bee.getAttribute("aria-checked")).toBe("true"));
+      expect(face().getAttribute("src")).toMatch(/avatars\/bee-64\.webp$/);
+      expect(frog().disabled).toBe(false);
+      frog().click();
+      expect(pick).toHaveBeenCalledTimes(2);
+      finish();
+      await vi.waitFor(() => expect(menu.avatar).toBe("frog"));
+    });
+
+    it("keeps the face when the save fails", async () => {
+      const { menu, pick, face } = withAvatar(() => Promise.reject(new Error("no")));
+      openSettings(menu).click();
+      await vi.waitFor(() => expect(pick).toHaveBeenCalledOnce());
+      await vi.waitFor(() =>
+        expect(document.querySelector<HTMLElement>(".avatar-picker__status")?.hidden).toBe(false),
+      );
+      expect(menu.avatar).toBe("frog");
+      expect(face().getAttribute("src")).toMatch(/avatars\/frog-64\.webp$/);
     });
 
     it("has no picker without an avatar", () => {
-      build();
-      expect(menu!.element.querySelector(".account-menu__avatars")).toBeNull();
+      document.querySelector(".account-settings-popup")?.remove();
+      const { button } = build();
+      button.click();
+      menu!.element.querySelector<HTMLButtonElement>(".account-menu__settings")!.click();
+      expect(document.querySelector(".avatar-picker")).toBeNull();
       expect(menu!.element.querySelector(".account-menu__face")).toBeNull();
       expect(menu!.avatar).toBeNull();
     });
@@ -171,7 +156,10 @@ describe("AccountMenu", () => {
       document.body.append(menu.element);
       const button = menu.element.querySelector<HTMLButtonElement>(".account-menu__button--pill")!;
       const line = menu.element.querySelector<HTMLElement>(".account-menu__pill-level")!;
-      return { menu, button, line };
+      const bar = menu.element.querySelector<HTMLElement>(".account-menu__pill-bar")!;
+      const fill = menu.element.querySelector<HTMLElement>(".account-menu__pill-fill")!;
+      const next = menu.element.querySelector<HTMLElement>(".account-menu__who-next")!;
+      return { menu, button, line, bar, fill, next };
     };
 
     it("shows no level line until one is set", () => {
@@ -186,10 +174,33 @@ describe("AccountMenu", () => {
       expect(levelText(12)).toBe("Level 12");
       expect(line.hidden).toBe(false);
       expect(line.textContent).toBe("Level 12");
+      expect(menu.element.querySelector(".account-menu__ring-level")?.textContent).toBe("12");
       expect(button.getAttribute("aria-label")).toBe("Your account: agenttester, Level 12");
       menu.setLevel(null);
       expect(line.hidden).toBe(true);
       expect(button.getAttribute("aria-label")).toBe("Your account: agenttester");
+    });
+
+    it("shows the bar and the points to the next level, and takes them away with no points", () => {
+      const { menu, button, line, bar, fill, next } = pill();
+      expect(bar.hidden).toBe(true);
+      expect(next.hidden).toBe(true);
+      const xp = levelProgress(1, 450);
+      menu.setLevel(1, xp);
+      expect(bar.hidden).toBe(false);
+      expect(fill.style.width).toBe("50%");
+      expect(next.textContent).toBe(`${formatCompact(450)} points to level 2`);
+      expect(button.title).toBe(xpTitle(xp));
+      menu.setLevel(1);
+      expect(line.hidden).toBe(false);
+      expect(bar.hidden).toBe(true);
+      expect(next.hidden).toBe(true);
+      expect(button.title).toBe("Your account");
+    });
+
+    it("words the tooltip and the top level", () => {
+      expect(xpTitle(levelProgress(1, 400))).toBe("Level 1. 400 points, 500 more for level 2.");
+      expect(xpLeftText(levelProgress(56, 9e13))).toBe("The top level");
     });
 
     it("the plain button ignores it", () => {
@@ -292,7 +303,7 @@ describe("AccountMenu", () => {
     });
   });
   describe("the Leaderboard item", () => {
-    it("is there only when asked for, just before What's new, and opens the board", () => {
+    it("is there only when asked for, the last of the first group, and opens the board", () => {
       const { button } = build();
       button.click();
       expect(menu!.element.querySelector(".account-menu__leaderboard")).toBeNull();
@@ -305,14 +316,14 @@ describe("AccountMenu", () => {
       const item = menu.element.querySelector<HTMLButtonElement>(".account-menu__leaderboard")!;
       expect(item.getAttribute("role")).toBe("menuitem");
       expect(item.textContent).toBe("Leaderboard");
-      expect(item.nextElementSibling?.classList.contains("account-menu__whats-new")).toBe(true);
+      expect(item.nextElementSibling).toBeNull();
       item.click();
       expect(onLeaderboard).toHaveBeenCalledOnce();
       expect(menu.open).toBe(false);
     });
   });
   describe("the Report a bug item", () => {
-    it("is there only when asked for, after What's new, and opens the form", () => {
+    it("is there only when asked for, after Fullscreen, and opens the form", () => {
       const { button } = build();
       button.click();
       expect(menu!.element.querySelector(".account-menu__report-bug")).toBeNull();
@@ -325,14 +336,31 @@ describe("AccountMenu", () => {
       const item = menu.element.querySelector<HTMLButtonElement>(".account-menu__report-bug")!;
       expect(item.getAttribute("role")).toBe("menuitem");
       expect(item.textContent).toBe("Report a bug");
-      expect(item.previousElementSibling?.classList.contains("account-menu__whats-new")).toBe(true);
+      expect(item.previousElementSibling?.classList.contains("account-menu__fullscreen")).toBe(true);
       item.click();
       expect(onReportBug).toHaveBeenCalledOnce();
       expect(menu.open).toBe(false);
     });
   });
+  describe("the Support the game item", () => {
+    it("is always there, after News, with the painted heart, and opens the support panel", () => {
+      menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn(), onNews: vi.fn() });
+      document.body.append(menu.element);
+      menu.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
+      const item = menu.element.querySelector<HTMLButtonElement>(".account-menu__support")!;
+      expect(item.getAttribute("role")).toBe("menuitem");
+      expect(item.textContent).toBe("Support");
+      expect(item.getAttribute("aria-label")).toBe("Support the game");
+      expect(item.querySelector(".game-icon--support")).not.toBeNull();
+      expect(item.previousElementSibling?.classList.contains("account-menu__news")).toBe(true);
+      item.click();
+      expect(menu.open).toBe(false);
+      expect(document.querySelector(".support-popup")).not.toBeNull();
+      document.querySelector(".support-popup")?.closest(".popup-backdrop")?.remove();
+    });
+  });
   describe("the Join the Discord item", () => {
-    it("is always there, after Report a bug, and opens the invite in a new tab", () => {
+    it("is always there, after Support the game, and opens the invite in a new tab", () => {
       menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn(), onReportBug: vi.fn() });
       document.body.append(menu.element);
       menu.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
@@ -342,7 +370,7 @@ describe("AccountMenu", () => {
       expect(item.getAttribute("href")).toBe("https://discord.gg/wthryBRZHz");
       expect(item.target).toBe("_blank");
       expect(item.rel).toBe("noopener noreferrer");
-      expect(item.previousElementSibling?.classList.contains("account-menu__report-bug")).toBe(true);
+      expect(item.previousElementSibling?.classList.contains("account-menu__support")).toBe(true);
       item.addEventListener("click", (event) => event.preventDefault());
       item.click();
       expect(menu.open).toBe(false);
@@ -408,9 +436,9 @@ describe("AccountMenu sound rows", () => {
 
   const ON = { music: true, effects: true, musicVolume: 70, effectsVolume: 100 };
 
-  it("sit right after Reduce effects, greyed until the account's settings are known", async () => {
+  it("sit after the menu's items, greyed until the account's settings are known", async () => {
     const { rows, music, effects } = await build({ ...ON, music: false });
-    expect(rows.previousElementSibling?.classList.contains("account-menu__effects")).toBe(true);
+    expect(rows.previousElementSibling?.classList.contains("account-menu__items")).toBe(true);
     expect(music.mute.disabled).toBe(true);
     expect(music.slider.disabled).toBe(true);
     await loadSoundSwitches();

@@ -8,6 +8,9 @@ import { damageProtection } from "../../../../services/maproom/v2/damageProtecti
 import { Save } from "../../../../database/models/save.model.js";
 import { User } from "../../../../database/models/user.model.js";
 import { tribeSaveHandler } from "../../../../services/maproom/tribeSaveHandler.js";
+import { isWildMonsterExpired } from "../../../../services/maproom/wildMonsterExpiry.js";
+import { isCampInPlay } from "../../../../services/maproom/campInPlay.js";
+import { regrowCamp } from "../../../../services/maproom/v2/regrowCamp.js";
 import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
 import { validateRange } from "../../../../services/maproom/v2/validateRange.js";
 import { cellCoordsFromBaseId } from "../../../../services/maproom/v2/rangeCheck.js";
@@ -48,6 +51,11 @@ export interface AttackDetails {
   count: number;
   starttime: number;
   seen: boolean;
+  /**
+   * Declare War ran for the attacker when the attack started: its window is
+   * the longer one (`attackWindow.ts`). Absent otherwise.
+   */
+  declarewar?: boolean;
 }
 
 interface BaseModeAttack {
@@ -103,6 +111,20 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
     if (save && save.worldid !== userSave.worldid) throw baseNotFoundErr();
   }
 
+  // A wild monster camp heals 12 hours after its last attack
+  // (`wildMonsterExpiry.ts`). Attacking it straight from the map, without
+  // opening it first, has to fight the healed camp too, as opening it does
+  // (`baseModeView`) and the map shows it (`wildMonsterCell`): its row is reset
+  // to a fresh camp below, once nothing can refuse the attack any more, with a
+  // conditional write only one of two attacks at the same moment can win
+  // (`regrowCamp.ts`). Never under someone else's attack (`campInPlay.ts`).
+  const regrown =
+    mapversion === MapRoomVersion.V2 &&
+    save?.type === BaseType.TRIBE &&
+    isWildMonsterExpired(save, getCurrentDateTime());
+  if (regrown && (await isCampInPlay(save!.basesaveid))) throw baseUnderAttackErr();
+  const readSavetime = save?.savetime ?? 0;
+
   if (save && save.type !== BaseType.TRIBE) {
     if (save.protected > getCurrentDateTime()) throw baseProtectedErr();
 
@@ -125,7 +147,7 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
   // to run as the last statement of this function, long after the `attackid`,
   // the appended attack record, the map cell, the attack log and the Map Room 3
   // attack cost had been flushed — so an attack the server then refused still
-  // left the defender flagged as under attack for the full 7-minute window of
+  // left the defender flagged as under attack for the full attack window of
   // `isAttackActive`, with nobody attacking them and nothing to clear it.
   //
   // The cell row is read now rather than in the block below: a wild monster camp
@@ -150,6 +172,11 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
 
   await validateRange(user, mapversion, { baseid, cell: cellCoords });
 
+  if (regrown) {
+    save = await regrowCamp(save!, readSavetime, getCurrentDateTime());
+    if (!save) throw baseUnderAttackErr();
+  }
+
   // Only an attack in range gives a camp attacked for the first time its save
   // row (issue #165): `em.create` hands the row to the next flush, and the
   // range refusal's report entry used to be that flush.
@@ -173,6 +200,11 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
   // Past this point the attack is committed: everything below writes.
   if (save.attacks.length > 3) save.attacks = save.attacks.slice(-2);
 
+  // Whether Declare War runs for the attacker: frozen into the session for the
+  // battle (issue #201, below), and onto the row, where it sets how long the
+  // attack locks the yard (`attackWindow.ts`).
+  const declareWar = await isDeclareWarRunning(user.alliance_id);
+
   // Track the details of the attack
   const attackDetails: AttackDetails = {
     fbid: "",
@@ -182,6 +214,7 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
     count: 1,
     starttime: getCurrentDateTime(),
     seen: false,
+    ...(declareWar && { declarewar: true }),
   };
 
   if (save.type != BaseType.TRIBE) save.attacks.push(attackDetails);
@@ -269,7 +302,6 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
   const attackerAcademy = academyLevels(userSave.academy);
   // The Monster Lab ranks, frozen the same way (issue #352).
   const attackerRanks = academyRanks(userSave.academy);
-  const declareWar = await isDeclareWarRunning(user.alliance_id);
 
   if (isMR1Tribe) {
     await startMR1TribeSession(

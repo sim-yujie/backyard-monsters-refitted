@@ -270,6 +270,16 @@ describe("BuildingPanel: buildings without an Upgrade here", () => {
     expect(element.querySelector(".building-panel__note")?.textContent).toMatch(/layout planner/);
   });
 
+  it("a wall offers Upgrade walls, which opens the planner's wall picking on it (owner 2026-11-04)", () => {
+    const upgradeWalls = vi.fn();
+    const { element } = setup([HALL, building(2, 17, 1)], 2, { panel: { upgradeWalls } });
+    // Still no single-wall upgrade: the one button is the door to the planner.
+    expect(buttons(element).map((button) => button.textContent)).not.toContain("Upgrade");
+    expect(element.querySelector(".building-panel__note")).toBeNull();
+    buttonNamed(element, "Upgrade walls")!.click();
+    expect(upgradeWalls).toHaveBeenCalledWith(2);
+  });
+
   it("a Map Room 2 opens the map", () => {
     const openMap = vi.fn();
     const { element } = setup([building(1, 14, 6), building(2, 11, 2)], 2, {

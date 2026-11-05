@@ -100,6 +100,28 @@ export class User {
   @Property({ type: "boolean", default: false })
   country_asked: Opt<boolean> = false;
 
+  /**
+   * The player's Look and sound choices as the web client last sent them
+   * (`POST /player/look`, owner 4 Nov 2026: how players split between Modern
+   * and Classic). Null until the first load that sends them. Only the owner's
+   * dashboard reads them; the game never does.
+   */
+  @Property({ type: "string", length: 8, nullable: true })
+  look_style?: string | null;
+
+  @Property({ type: "string", length: 8, nullable: true })
+  look_music?: string | null;
+
+  @Property({ type: "string", length: 8, nullable: true })
+  look_quality?: string | null;
+
+  @Property({ type: "string", length: 8, nullable: true })
+  look_font?: string | null;
+
+  /** When the client last sent the look choices. */
+  @Property({ type: "Date", nullable: true })
+  look_seen_at?: Date | null;
+
   @Property({ type: "string", unique: true })
   @FrontendKey
   email!: string;

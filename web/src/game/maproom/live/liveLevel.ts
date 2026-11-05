@@ -4,17 +4,19 @@ import type { Quality } from "@/game/quality";
  * How alive Map Room 2 is (owner, 3 Nov 2026: "make the map live/animated like
  * in Civ").
  *
- * - Classic looks exactly as Flash did, and Flash's map stood still: `off`.
  * - Quality Low is for slow internet and slow PCs: `off`, and none of the
  *   living map's art is downloaded.
  * - Quality Medium: `reduced`, the water at half the animation rate, from the smaller copies of the art, and no clouds or birds.
  * - Quality High: `full`.
+ * - Classic (owner, 5 Nov 2026) is the same, apart from Medium: `classic-reduced`
+ *   is `reduced` with the gulls.
  */
-export type LiveLevel = "off" | "reduced" | "full";
+export type LiveLevel = "off" | "reduced" | "classic-reduced" | "full";
 
 export const liveLevelFor = (classic: boolean, quality: Quality): LiveLevel => {
-  if (classic || quality === "low") return "off";
-  return quality === "medium" ? "reduced" : "full";
+  if (quality === "low") return "off";
+  if (quality === "high") return "full";
+  return classic ? "classic-reduced" : "reduced";
 };
 
 /** What a level draws, and how often the animation steps. */
@@ -57,6 +59,16 @@ const PLANS: Record<LiveLevel, LivePlan> = {
     foam: true,
     clouds: false,
     birds: false,
+    stepSeconds: 1 / 15,
+    waterResolution: 1,
+    artSuffix: "",
+  },
+  "classic-reduced": {
+    level: "classic-reduced",
+    water: true,
+    foam: true,
+    clouds: false,
+    birds: true,
     stepSeconds: 1 / 15,
     waterResolution: 1,
     artSuffix: "",

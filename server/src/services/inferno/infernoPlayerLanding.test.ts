@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Context } from "koa";
 
 import type { AbandonedInput, AbandonedOutcome } from "../base/combat/abandonedAttack.js";
+import { attackWindowSeconds } from "../base/attackWindow.js";
 
 /**
  * The landing of an attack on another player's Inferno yard (WP 3.3,
@@ -709,7 +710,7 @@ describe("an attack left without its final save (owner, 27 Oct)", () => {
     expect(store.has(infernoPlayerSessionKey(TARGET_SAVEID))).toBe(true);
 
     // The same attack, its window now closed.
-    const startedat = now() - 421;
+    const startedat = now() - attackWindowSeconds() - 1;
     startSession(undefined, startedat);
     store.set(
       infernoPlayerCheckpointKey(TARGET_SAVEID),
@@ -730,7 +731,7 @@ describe("an attack left without its final save (owner, 27 Oct)", () => {
   });
 
   test("a load closes the caller's own attacks and their own yard's, never anybody else's", async () => {
-    startSession(undefined, now() - 421);
+    startSession(undefined, now() - attackWindowSeconds() - 1);
     canned = { damage: 10 };
     // A third player's load: neither their attack nor their yard.
     await closeBeforeInfernoLoad(5555);

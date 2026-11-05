@@ -11,14 +11,13 @@
  * Built like the attack's phone menu (`AttackMenu`): it only reports that Log
  * out was picked, and a press elsewhere or Escape closes it.
  *
- * With an `avatar` (issue #175) the button wears the player's critter and the
- * menu holds the picker: the twelve critters in a grid, the current one
- * marked. A pick is only marked once `onPick` has stored it; a failed save
- * leaves the old mark and says so.
+ * With an `avatar` (issue #175) the button wears the player's critter, and
+ * Settings holds the picker (`ui/AvatarPicker.ts`).
  *
  * The yard's HUD (#171) shows it as a `pill`: the player's name beside their
  * critter in a ring, rather than the word "Account", and under the name the
- * player's level once the yard has sent it (`setLevel`, #192).
+ * player's level with a bar to the next (`setLevel`, #192; the one place the
+ * level shows, owner 5 Nov 2026).
  *
  * With `onAchievements` (issue #204) the menu has an "Achievements" item,
  * the way into the achievements screen on every screen with the HUD.
@@ -37,39 +36,38 @@
  * announcements again (`ui/announcements/AnnouncementDialog.ts`).
  *
  * With `onReportBug` it has a "Report a bug" item, which opens the bug report
- * form (`ui/bugReport/BugReportDialog.ts`). After it, always, "Join the
- * Discord" opens the community invite in a new tab.
+ * form (`ui/bugReport/BugReportDialog.ts`). After it, always, "Support the
+ * game" (the painted heart) opens the small Patreon / Ko-fi panel
+ * (`ui/support/SupportPanel.ts`), and "Join the Discord" opens the community
+ * invite in a new tab.
  *
- * Beside "Reduce effects" sit the sound rows, Music and Sound effects, each
- * a mute and a volume slider (`ui/SoundSliders.ts`), saved with the
- * player's yard (`game/sound/soundSwitches.ts`).
+ * Under the items sit the sound rows, Music and Sound effects, each a mute and
+ * a volume slider (`ui/SoundSliders.ts`), saved with the player's yard
+ * (`game/sound/soundSwitches.ts`).
  */
 
 import { DISCORD_URL } from "@/config";
-import { AVATARS, avatarName, avatarUrl, type AvatarId } from "@/game/avatars";
+import { avatarUrl, type AvatarId } from "@/game/avatars";
 import { waitingText } from "@/game/friends/friendText";
 import { guideTourAvailable, startGuideTour } from "@/game/guide/tour";
 import { openAccountSettings } from "@/ui/AccountSettings";
-import { reduceEffects, setReduceEffects } from "@/game/attack/juice";
+import type { LevelProgress } from "@/game/yard/experience";
+import { AvatarPicker, type AccountAvatar } from "@/ui/AvatarPicker";
+import { formatAmount, formatCompact } from "@/ui/format";
 import { SoundSliders } from "@/ui/SoundSliders";
 import { fullscreenAvailable, isFullscreen, toggleFullscreen } from "@/ui/fullscreen";
+import { gameIcon } from "@/ui/gameIcon";
+import { openSupportPanel, SUPPORT_TEXT } from "@/ui/support/SupportPanel";
 import "@/ui/friends/friends.css";
 import "@/ui/styles/guide-start.css";
 
-export interface AccountAvatar {
-  /** The critter the player is shown as: their pick, or their default. */
-  readonly current: AvatarId;
-  /** False while `current` is only the default, not something they chose. */
-  readonly picked: boolean;
-  /** Stores a pick; rejects when the server refused or could not be reached. */
-  readonly onPick: (id: AvatarId) => Promise<void>;
-}
+export type { AccountAvatar } from "@/ui/AvatarPicker";
 
 export interface AccountMenuOptions {
   /** The signed-in player's name; null or empty when the server sent none. */
   readonly name: string | null | undefined;
   readonly onSignOut: () => void;
-  /** The avatar and its picker; without it the menu is name and Log out only. */
+  /** The avatar, and the picker in Settings; without it there is neither. */
   readonly avatar?: AccountAvatar;
   /**
    * "button" (default): a small button with the face and the word "Account".
@@ -90,17 +88,35 @@ export interface AccountMenuOptions {
   readonly onReportBug?: () => void;
 }
 
-/** What the picker's heading adds while the player still wears the default. */
-export const DEFAULT_NOTE = "Default until you pick one";
-
-/** What the picker says when a pick could not be saved. */
-export const PICK_FAILED = "Could not save that avatar. Try again.";
-
 /** What the menu's heading says: the name, or a plain stand-in without one. */
 export const accountName = (name: string | null | undefined): string => name?.trim() || "Signed in";
 
 /** "Level 12", the pill's line under the name. */
 export const levelText = (level: number): string => `Level ${level}`;
+
+/** The level's tooltip: "1,200 points. 2,300 more for level 4." */
+export const xpTitle = (xp: LevelProgress): string =>
+  xp.next === null
+    ? `Level ${xp.level}, the top level. ${formatAmount(xp.points)} points.`
+    : `Level ${xp.level}. ${formatAmount(xp.points)} points, ${formatAmount(Math.max(0, xp.next - xp.points))} more for level ${xp.level + 1}.`;
+
+/** The menu's line under the level: what is left to the next one. */
+export const xpLeftText = (xp: LevelProgress): string =>
+  xp.next === null
+    ? "The top level"
+    : `${formatCompact(Math.max(0, xp.next - xp.points))} points to level ${xp.level + 1}`;
+
+/** The pill's bar to the next level; the fill's width is the fraction reached. */
+const levelBar = (): { track: HTMLElement; fill: HTMLElement } => {
+  const track = document.createElement("span");
+  track.className = "account-menu__pill-bar";
+  track.setAttribute("aria-hidden", "true");
+  track.hidden = true;
+  const fill = document.createElement("span");
+  fill.className = "account-menu__pill-fill";
+  track.append(fill);
+  return { track, fill };
+};
 
 /** A sound row's tooltip after its save failed; the row is already back. */
 export { SOUND_SAVE_FAILED } from "@/ui/SoundSliders";
@@ -113,11 +129,13 @@ export class AccountMenu {
   private readonly list: HTMLElement;
   /** Every picture of the current avatar: the button's and the heading's. */
   private readonly faces: HTMLImageElement[] = [];
-  private readonly tiles = new Map<AvatarId, HTMLButtonElement>();
-  private readonly note: HTMLElement | null = null;
-  private readonly status: HTMLElement | null = null;
-  /** The pill's level line; null on the plain button. */
+  /** The pill's level line and bar; null on the plain button. */
   private readonly level: HTMLElement | null = null;
+  private readonly levelBar: ReturnType<typeof levelBar> | null = null;
+  /** The level on the critter, for the screens with no room for the line. */
+  private readonly ringLevel: HTMLElement | null = null;
+  /** The menu heading's points left to the next level. */
+  private readonly whoNext: HTMLElement;
   /** Help's replay of the guided start; shown only while one is on offer. */
   private readonly replay: HTMLButtonElement;
   /** Enters or leaves fullscreen; hidden where the browser has none. */
@@ -130,7 +148,8 @@ export class AccountMenu {
   private readonly stopSound: (() => void)[] = [];
   private readonly name: string;
   private current: AvatarId | null = null;
-  private saving = false;
+  /** The picker Settings shows; null without an avatar. */
+  private readonly picker: AvatarPicker | null = null;
 
   constructor(options: AccountMenuOptions) {
     this.element = document.createElement("div");
@@ -140,7 +159,19 @@ export class AccountMenu {
     this.button.type = "button";
     this.button.className = "btn btn--ghost account-menu__button";
     this.name = accountName(options.name);
-    if (options.avatar) this.current = options.avatar.current;
+    const avatar = options.avatar;
+    if (avatar) {
+      this.current = avatar.current;
+      this.picker = new AvatarPicker({
+        current: avatar.current,
+        picked: avatar.picked,
+        onPick: async (id: AvatarId) => {
+          await avatar.onPick(id);
+          this.current = id;
+          this.showFaces();
+        },
+      });
+    }
     if (options.variant === "pill") {
       this.element.classList.add("account-menu--pill");
       const name = document.createElement("span");
@@ -151,15 +182,20 @@ export class AccountMenu {
       this.level = document.createElement("span");
       this.level.className = "account-menu__pill-level";
       this.level.hidden = true;
-      name.append(nameLine, this.level);
+      this.levelBar = levelBar();
+      name.append(nameLine, this.level, this.levelBar.track);
       const ring = document.createElement("span");
       ring.className = "account-menu__ring";
       if (options.avatar) ring.append(this.face("account-menu__ring-face", "full"));
       else ring.textContent = accountName(options.name).charAt(0).toUpperCase();
       this.button.className = "account-menu__button account-menu__button--pill";
-      this.button.append(name, ring);
+      this.ringLevel = document.createElement("span");
+      this.ringLevel.className = "account-menu__ring-level";
+      this.ringLevel.setAttribute("aria-hidden", "true");
+      this.ringLevel.hidden = true;
+      this.button.append(name, ring, this.ringLevel);
       this.button.setAttribute("aria-label", `Your account: ${accountName(options.name)}`);
-      this.button.title = "Your account: avatar and Log out";
+      this.button.title = "Your account";
     } else {
       this.button.textContent = "Account";
       if (options.avatar) this.button.prepend(this.face("account-menu__face", "small"));
@@ -176,17 +212,31 @@ export class AccountMenu {
 
     const who = document.createElement("div");
     who.className = "account-menu__who";
-    const label = document.createElement("span");
-    label.className = "account-menu__label";
-    label.textContent = "Signed in as";
+    const whoText = document.createElement("div");
+    whoText.className = "account-menu__who-text";
     const name = document.createElement("span");
     name.className = "account-menu__name";
     name.textContent = accountName(options.name);
-    who.append(label, name);
+    this.whoNext = document.createElement("span");
+    this.whoNext.className = "account-menu__who-next";
+    this.whoNext.hidden = true;
+    whoText.append(name, this.whoNext);
+    who.append(whoText);
     if (options.avatar) {
       who.classList.add("account-menu__who--avatar");
       who.prepend(this.face("account-menu__who-face", "full"));
     }
+
+    // Three groups, each in two columns, so the whole menu fits a laptop
+    // screen without scrolling: playing, news and the community, and tools.
+    const group = (): HTMLElement => {
+      const items = document.createElement("div");
+      items.className = "account-menu__items";
+      return items;
+    };
+    const play = group();
+    const community = group();
+    const tools = group();
 
     const signOut = document.createElement("button");
     signOut.type = "button";
@@ -198,64 +248,17 @@ export class AccountMenu {
       options.onSignOut();
     });
 
-    this.list.append(who);
-    if (options.avatar) {
-      const avatar = options.avatar;
-      const picker = document.createElement("div");
-      picker.className = "account-menu__avatars";
-
-      const heading = document.createElement("div");
-      heading.className = "account-menu__avatars-head";
-      heading.id = "account-menu-avatars-head";
-      const title = document.createElement("span");
-      title.className = "account-menu__label";
-      title.textContent = "Avatar";
-      this.note = document.createElement("span");
-      this.note.className = "account-menu__note";
-      this.note.textContent = DEFAULT_NOTE;
-      this.note.hidden = avatar.picked;
-      heading.append(title, this.note);
-
-      const grid = document.createElement("div");
-      grid.className = "account-menu__grid";
-      grid.setAttribute("role", "radiogroup");
-      grid.setAttribute("aria-labelledby", heading.id);
-      for (const { id } of AVATARS) {
-        const tile = document.createElement("button");
-        tile.type = "button";
-        tile.className = "account-menu__tile";
-        tile.dataset["avatar"] = id;
-        tile.setAttribute("role", "radio");
-        tile.setAttribute("aria-label", avatarName(id));
-        tile.title = avatarName(id);
-        const picture = document.createElement("img");
-        picture.src = avatarUrl(id);
-        picture.alt = "";
-        picture.decoding = "async";
-        picture.loading = "lazy";
-        tile.append(picture);
-        tile.addEventListener("click", () => void this.pick(id, avatar));
-        grid.append(tile);
-        this.tiles.set(id, tile);
-      }
-
-      this.status = document.createElement("p");
-      this.status.className = "account-menu__status";
-      this.status.setAttribute("role", "status");
-      this.status.hidden = true;
-
-      picker.append(heading, grid, this.status);
-      this.list.append(picker);
-      this.mark();
-    }
+    this.list.append(who, play, community, tools);
     // Help: Bob's guided start again, as a tour with Next buttons (issue #227,
     // Q5). Offered only where it can run (the own yard, the guide not running).
     this.replay = document.createElement("button");
     this.replay.type = "button";
     // Not `account-menu__item`: Log out stays the menu's one item of that name.
-    this.replay.className = "btn btn--ghost account-menu__help";
+    this.replay.className = "btn btn--ghost account-menu__help account-menu__replay";
+    this.replay.title = "Replay the guided start";
+    this.replay.setAttribute("aria-label", "Help: replay the guided start");
     this.replay.setAttribute("role", "menuitem");
-    this.replay.textContent = "Help: replay the guided start";
+    this.replay.textContent = "Guided start";
     this.replay.hidden = true;
     this.replay.addEventListener("click", () => {
       this.toggle(false);
@@ -278,7 +281,7 @@ export class AccountMenu {
         this.toggle(false);
         onFriends();
       });
-      this.list.append(friends);
+      play.append(friends);
       // The same count on the button, so it shows with the menu shut.
       this.buttonCount = document.createElement("span");
       this.buttonCount.className = "account-menu__button-count";
@@ -298,7 +301,7 @@ export class AccountMenu {
         this.toggle(false);
         onAchievements();
       });
-      this.list.append(achievements);
+      play.append(achievements);
     }
     if (options.onLeaderboard) {
       const onLeaderboard = options.onLeaderboard;
@@ -312,7 +315,7 @@ export class AccountMenu {
         this.toggle(false);
         onLeaderboard();
       });
-      this.list.append(leaderboard);
+      play.append(leaderboard);
     }
     if (options.onWhatsNew) {
       const onWhatsNew = options.onWhatsNew;
@@ -326,7 +329,7 @@ export class AccountMenu {
         this.toggle(false);
         onWhatsNew();
       });
-      this.list.append(whatsNew);
+      community.append(whatsNew);
     }
     if (options.onNews) {
       const onNews = options.onNews;
@@ -340,7 +343,7 @@ export class AccountMenu {
         this.toggle(false);
         onNews();
       });
-      this.list.append(news);
+      community.append(news);
     }
     if (options.onReportBug) {
       const onReportBug = options.onReportBug;
@@ -354,8 +357,26 @@ export class AccountMenu {
         this.toggle(false);
         onReportBug();
       });
-      this.list.append(reportBug);
+      tools.append(reportBug);
     }
+    // Support the game (owner 24 Oct 2026): always here, on every screen with
+    // the menu. Only opens the panel of links; it gives nothing in the game.
+    const support = document.createElement("button");
+    support.type = "button";
+    support.className = "btn btn--ghost account-menu__help account-menu__support";
+    support.setAttribute("role", "menuitem");
+    support.append(
+      gameIcon("support", { size: 24, decorative: true }),
+      Object.assign(document.createElement("span"), { textContent: "Support" }),
+    );
+    support.title = SUPPORT_TEXT.title;
+    support.setAttribute("aria-label", SUPPORT_TEXT.title);
+    support.addEventListener("click", () => {
+      this.toggle(false);
+      const container = document.querySelector<HTMLElement>(".overlay__layer--modal") ?? document.body;
+      openSupportPanel({ container });
+    });
+    community.append(support);
     // The community Discord, in a new tab; no referrer to the outside site.
     const discord = document.createElement("a");
     discord.className = "btn btn--ghost account-menu__help account-menu__discord";
@@ -365,17 +386,18 @@ export class AccountMenu {
     discord.rel = "noopener noreferrer";
     discord.textContent = "Join the Discord";
     discord.addEventListener("click", () => this.toggle(false));
-    this.list.append(discord);
-    // Account settings (username, Shiny Lock) and Fullscreen, the original's top-bar button.
+    community.append(discord);
+    // Settings (username, Shiny Lock) and Fullscreen, the original's top-bar button.
     const settings = document.createElement("button");
     settings.type = "button";
     settings.className = "btn btn--ghost account-menu__help account-menu__settings";
     settings.setAttribute("role", "menuitem");
-    settings.textContent = "Account settings";
+    settings.textContent = "Settings";
     settings.addEventListener("click", () => {
       this.toggle(false);
       const container = document.querySelector<HTMLElement>(".overlay__layer--modal") ?? document.body;
-      openAccountSettings({ container });
+      this.picker?.clearStatus();
+      openAccountSettings({ container, ...(this.picker && { avatarPicker: this.picker }) });
     });
     this.fullscreen = document.createElement("button");
     this.fullscreen.type = "button";
@@ -386,29 +408,14 @@ export class AccountMenu {
       this.toggle(false);
       void toggleFullscreen();
     });
-    // Reduce effects (feat/attack-juice-demo): no shake, hit-stop or slow
-    // motion in attacks, and fewer bits flying. Read when an attack opens.
-    const effects = document.createElement("button");
-    effects.type = "button";
-    effects.className = "btn btn--ghost account-menu__help account-menu__effects";
-    effects.setAttribute("role", "menuitemcheckbox");
-    const showEffects = (): void => {
-      const on = reduceEffects();
-      effects.setAttribute("aria-checked", String(on));
-      effects.textContent = `Reduce effects: ${on ? "On" : "Off"}`;
-      effects.title = "Turns off screen shake, hit pauses and slow motion in attacks, with fewer particles";
-    };
-    showEffects();
-    effects.addEventListener("click", () => {
-      setReduceEffects(!reduceEffects());
-      showEffects();
-    });
     // Music and sound effects (beta.5), each a mute and a volume slider
     // (owner, 4 Nov 2026): saved with the yard, so they follow the account
     // (`game/sound/soundSwitches.ts`, `ui/SoundSliders.ts`).
     const sound = new SoundSliders("account-menu__sound");
     this.stopSound.push(() => sound.destroy());
-    this.list.append(settings, this.fullscreen, effects, sound.element, this.replay, signOut);
+    tools.prepend(settings, this.fullscreen);
+    tools.append(this.replay);
+    this.list.append(sound.element, signOut);
     this.element.append(this.button, this.list);
     document.addEventListener("pointerdown", this.dismiss, true);
     document.addEventListener("keydown", this.dismiss, true);
@@ -424,20 +431,26 @@ export class AccountMenu {
   }
 
   /**
-   * The pill's "Level N" under the name, or none with null (a yard that has
-   * not sent it, or no yard). The plain button has no room for it.
+   * The level on the pill, or none with null (a yard that has not sent it, or
+   * no yard). `xp` adds the bar, the tooltip and the menu's points to the next
+   * level; a server that sends no points leaves them out.
    */
-  setLevel(level: number | null): void {
-    const line = this.level;
-    if (!line) return;
+  setLevel(level: number | null, xp: LevelProgress | null = null): void {
+    this.whoNext.textContent = xp ? xpLeftText(xp) : "";
+    this.whoNext.hidden = xp === null;
+    if (!this.level || !this.levelBar || !this.ringLevel) return;
     const text = level === null ? "" : levelText(level);
-    if (line.textContent === text && line.hidden === (level === null)) return;
-    line.textContent = text;
-    line.hidden = level === null;
+    this.ringLevel.textContent = level === null ? "" : String(level);
+    this.ringLevel.hidden = level === null;
+    this.level.textContent = text;
+    this.level.hidden = level === null;
+    this.levelBar.track.hidden = xp === null;
+    this.levelBar.fill.style.width = xp ? `${Math.round(xp.fraction * 100)}%` : "0%";
     this.button.setAttribute(
       "aria-label",
       level === null ? `Your account: ${this.name}` : `Your account: ${this.name}, ${text}`,
     );
+    this.button.title = xp ? xpTitle(xp) : "Your account";
   }
 
   /** The requests and gifts waiting, on the Friends item and the button; none shows at 0. */
@@ -477,38 +490,11 @@ export class AccountMenu {
     return picture;
   }
 
-  /** Marks the current avatar's tile and points every face at it. */
-  private mark(): void {
-    for (const [id, tile] of this.tiles) {
-      const on = id === this.current;
-      tile.setAttribute("aria-checked", String(on));
-      tile.classList.toggle("is-current", on);
-    }
+  /** Points every face at the current avatar. */
+  private showFaces(): void {
     if (!this.current) return;
     for (const picture of this.faces) {
       picture.src = avatarUrl(this.current, picture.dataset["size"] === "small" ? "small" : "full");
-    }
-  }
-
-  private async pick(id: AvatarId, avatar: AccountAvatar): Promise<void> {
-    if (this.saving) return;
-    if (id === this.current && this.note?.hidden) return;
-    this.saving = true;
-    for (const tile of this.tiles.values()) tile.disabled = true;
-    if (this.status) this.status.hidden = true;
-    try {
-      await avatar.onPick(id);
-      this.current = id;
-      if (this.note) this.note.hidden = true;
-      this.mark();
-    } catch {
-      if (this.status) {
-        this.status.textContent = PICK_FAILED;
-        this.status.hidden = false;
-      }
-    } finally {
-      this.saving = false;
-      for (const tile of this.tiles.values()) tile.disabled = false;
     }
   }
 

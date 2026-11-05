@@ -62,9 +62,13 @@ The original game's decorations are on sale again: **Build ▸ Decorations**, in
 - Loot flies out of buildings as orbs, with "+" numbers, while you attack.
 - **Music** and **Sound effects** each have their own volume slider.
 
+## Shiny Lock
+
+Turn on **Shiny Lock** in **Settings** to hide your Shiny. A padlock shows instead.
+
 ## Easier to read
 
-**Account settings ▸ Font:** Game font, Clear or Extra readable.
+**Settings ▸ Font:** Game font, Clear or Extra readable.
 
 ![The same Quests window in the three fonts: Game, Clear and Extra readable](/images/guides/new6-font.webp)
 
@@ -78,7 +82,7 @@ These came with beta 5.
 
 ## Modern or Classic
 
-One switch: **Account settings ▸ Look and sound ▸ Style**.
+One switch: **Settings ▸ Look and sound ▸ Style**.
 
 - **Modern:** the new paintings, effects and music.
 - **Classic:** the original Flash art, effects and music.
@@ -96,12 +100,12 @@ Every window has a painted frame. It follows the same switch.
 
 ## Quality, for slow internet
 
-**Account settings ▸ Quality:** High, Medium or Low.
+**Settings ▸ Quality:** High, Medium or Low.
 
 - **Low** loads smaller pictures and lighter music.
 - On a slow connection, the game suggests Low once. It never switches by itself.
 
-![Account settings: Style (Modern or Classic) and Quality (High, Medium or Low)](/images/guides/new-settings.webp)
+![Settings, the Look and sound tab: Style, Font, Music and the two volume sliders](/images/guides/new-settings.webp)
 
 ## One tab per Hatchery
 

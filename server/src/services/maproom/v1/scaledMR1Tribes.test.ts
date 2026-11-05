@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
+import { attackWindowSeconds } from "../../base/attackWindow.js";
 import type { Context } from "koa";
 
 /**
@@ -260,8 +261,8 @@ describe("Map Room 1 tribe save without a started attack (#161)", () => {
     expect((userSave.resources as Record<string, number>).r1).toBe(100);
   });
 
-  test("an attack started more than 420 seconds ago no longer authorises it", async () => {
-    startSession(ATTACKER, now() - 421);
+  test("an attack started longer ago than its window no longer authorises it", async () => {
+    startSession(ATTACKER, now() - attackWindowSeconds() - 1);
     const caught = await run(ctxFor({ over: "1", attackloot: loot({ r1: 50 }) }));
     expect(caught?.data?.reason).toBe("expired");
   });
@@ -906,7 +907,7 @@ describe("Map Room 1 tribe attack left without a save", () => {
     await checkpoint(SCRATCH, SCRATCH_TICK);
     expect(await finaliseExpiredRowlessAttacks()).toBe(0);
     try {
-      setSystemTime(new Date(Date.now() + 421_000));
+      setSystemTime(new Date(Date.now() + (attackWindowSeconds() + 1) * 1000));
       expect(await finaliseExpiredRowlessAttacks()).toBe(1);
     } finally {
       setSystemTime();

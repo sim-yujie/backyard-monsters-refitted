@@ -6,7 +6,7 @@
  * before-and-after positions is 400 small objects, and undoing it is the same
  * loop as doing it. The design doc is explicit that this has to exist from day
  * one rather than be retrofitted, because every later mutation — place, store,
- * mirror, align, load — pushes onto the same stack.
+ * load — pushes onto the same stack.
  *
  * Nothing here knows what a plan is: a command is two functions and a label, so
  * this file stays a stack and the plan stays the thing being changed.
@@ -181,7 +181,7 @@ export class CommandStack {
 /**
  * A move of one or more buildings, as before-and-after positions.
  *
- * Positions rather than a single delta because a load or an align moves each
+ * Positions rather than a single delta because a load moves each
  * building by a different amount, and one shape for every positional command
  * means undo never has to ask which kind it is holding.
  *

@@ -14,7 +14,20 @@ import { tribeIdAt, tribeLayoutFor } from "./tribeLayouts.js";
  * @param {string} baseid - The base ID as a string, which will be converted to an integer.
  * @returns {Save} - A new `Save` object for the wild monster, with tribe-specific data.
  */
-export const tribeSaveV2 = (baseid: string, worldid: string | null | undefined) => {
+export const tribeSaveV2 = (baseid: string, worldid: string | null | undefined) =>
+  // Return a new save for the wild monster.
+  postgres.em.create(Save, { ...freshTribeData(baseid), baseid, worldid }, { partial: true });
+
+/**
+ * What a fresh camp at this base id's cell holds: its tribe's yard for its
+ * level, with that level and the tribe's `wmid`. Plain data, written nowhere:
+ * `tribeSaveV2` makes a new row of it, and `regrowCamp` resets a healed camp's
+ * row to it in place.
+ *
+ * The template's nested objects are shared by every camp of that tribe and
+ * level, so callers that change them must copy first (`regrowCamp` does).
+ */
+export const freshTribeData = (baseid: string) => {
   const cellX = parseInt(baseid.slice(-6, -3));
   const cellY = parseInt(baseid.slice(-3));
 
@@ -26,14 +39,7 @@ export const tribeSaveV2 = (baseid: string, worldid: string | null | undefined) 
 
   const { tribeSave } = fetchTribeData(tribeIndex, level);
 
-  // Return a new save for the wild monster.
-  return postgres.em.create(Save, {
-    ...tribeSave,
-    baseid,
-    level,
-    wmid,
-    worldid,
-  }, { partial: true });
+  return { ...tribeSave, level, wmid };
 };
 
 /**

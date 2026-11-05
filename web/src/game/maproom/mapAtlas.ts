@@ -135,7 +135,6 @@ export class MapAtlas {
   /** Flash's green truce tick, a small tile with a white check (#338). */
   readonly truceTick: Texture;
   /** Flash's idle worker, a little blue creature looking right (#338). */
-  readonly idleWorker: Texture;
   /** Flash's open envelope with a letter peeking out, the pending-invitation marker. */
   readonly inviteEnvelope: Texture;
 
@@ -295,12 +294,6 @@ export class MapAtlas {
       drawTick,
       DETAIL_RESOLUTION,
     );
-    this.idleWorker = bake(
-      renderer,
-      new Rectangle(-WORKER_SIZE / 2 - 2, -WORKER_SIZE / 2 - 2, WORKER_SIZE + 4, WORKER_SIZE + 4),
-      drawWorker,
-      DETAIL_RESOLUTION,
-    );
 
     this.inviteEnvelope = bake(
       renderer,
@@ -326,7 +319,6 @@ export class MapAtlas {
       this.swordsIcon,
       this.protectionDome,
       this.truceTick,
-      this.idleWorker,
       this.inviteEnvelope,
     ];
   }
@@ -398,25 +390,6 @@ const drawTick = (g: Graphics): void => {
     .stroke({ width: 1.2, color: 0xffffff });
   g.moveTo(-5, 0.5).lineTo(-1.5, 4).lineTo(5.5, -4)
     .stroke({ width: 2.4, color: 0xffffff, cap: "round", join: "round" });
-};
-
-/** Flash's idle worker: a blue teardrop with two big eyes, looking right. */
-const drawWorker = (g: Graphics): void => {
-  const r = WORKER_SIZE / 2;
-  // A soft ground shadow.
-  g.ellipse(1, r * 0.8, r * 0.7, r * 0.22).fill({ color: 0x000000, alpha: 0.22 });
-  // The body: a round blue drop with a little point at the top.
-  g.moveTo(-r * 0.15, -r * 0.95)
-    .bezierCurveTo(r * 0.7, -r * 0.5, r * 0.8, r * 0.2, 0, r * 0.75)
-    .bezierCurveTo(-r * 0.8, r * 0.3, -r * 0.8, -r * 0.4, -r * 0.15, -r * 0.95)
-    .fill(0x2f7de1)
-    .stroke({ width: 1, color: 0x1a4f9e });
-  g.ellipse(-r * 0.3, -r * 0.1, r * 0.14, r * 0.3).fill({ color: 0xa9d0ff, alpha: 0.55 });
-  // Two eyes, pupils to the right.
-  for (const eyeX of [-r * 0.05, r * 0.42]) {
-    g.ellipse(eyeX, -r * 0.18, r * 0.24, r * 0.3).fill(0xffffff).stroke({ width: 0.6, color: 0x1a4f9e });
-    g.circle(eyeX + r * 0.08, -r * 0.14, r * 0.1).fill(0x10213f);
-  }
 };
 
 /**

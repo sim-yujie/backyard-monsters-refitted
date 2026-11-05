@@ -239,7 +239,7 @@ const saveBase = async (
   // The attack must be this caller's (issue #25). A non-zero `attackid` on the
   // row is not on its own permission to write to it: the save has to come from
   // the account the server recorded when the attack started, inside the same
-  // 7-minute window `isAttackActive` uses. Checked before `validateSave` and
+  // window `isAttackActive` uses (`attackWindow.ts`). Checked before `validateSave` and
   // before the economy audit so a refusal touches nothing at all.
   const session = isAttack
     ? await requireAttackBinding(ctx, user, baseSave, saveData.attackid, now)
