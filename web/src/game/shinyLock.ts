@@ -17,7 +17,7 @@ import { getAuthToken } from "@/api/http";
  */
 
 /** The counter's words while the lock is on: tooltip, screen reader and the tap bubble. */
-export const SHINY_LOCK_TEXT = "Shiny Lock is on. Turn it off in Account settings to see and spend your Shiny.";
+export const SHINY_LOCK_TEXT = "Shiny Lock is on. Turn it off in Settings to see and spend your Shiny.";
 
 type Listener = (locked: boolean) => void;
 
