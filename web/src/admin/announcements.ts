@@ -1,4 +1,5 @@
 import { announcementContent } from "@/ui/announcements/announcementContent";
+import { giftAmount } from "@/ui/announcements/announcementGift";
 import "@/ui/announcements/announcements.css";
 import {
   deleteAnnouncement,
@@ -19,9 +20,11 @@ import { errorWords } from "./shiny";
  * Announcements: the pop-ups the owner writes for players (server
  * `services/announcements/announcements.ts`). Each has a title, plain text
  * (line breaks kept, `https://` addresses become links), up to three
- * pictures, an optional start and end, and Draft or Published. Players see
- * the published ones in date after their yard loads, once each, until they
- * press "Got it"; the Account menu's "News" shows them again.
+ * pictures, an optional start and end, an optional Shiny gift, and Draft or
+ * Published. Players see the published ones in date after their yard loads,
+ * once each, until they press "Got it" or claim the gift; the Account menu's
+ * "News" shows them again. Publishing a gift asks once more, in place,
+ * because it reaches every player and cannot be taken back.
  *
  * The preview beside the form is drawn by the game's own code
  * (`ui/announcements/announcementContent.ts`) in the game's colours, so it is
@@ -35,6 +38,7 @@ const DEFAULT_LIMITS: AnnouncementLimits = {
   bodyMax: 2000,
   images: 3,
   imageBytesMax: 1_000_000,
+  shinyMax: 10_000,
 };
 const PICTURE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 /** The widest picture kept as it is; wider ones are made this wide. */
@@ -56,6 +60,8 @@ export interface Draft {
   startsAt: string;
   endsAt: string;
   pictures: FormPicture[];
+  /** The gift as typed, empty for none. */
+  shiny: string;
 }
 
 const emptyDraft = (): Draft => ({
@@ -65,7 +71,11 @@ const emptyDraft = (): Draft => ({
   startsAt: "",
   endsAt: "",
   pictures: [],
+  shiny: "",
 });
+
+/** The gift as typed, as a number: 0 for none, NaN when it is not a number. */
+export const giftOf = (draft: Pick<Draft, "shiny">): number => Number(draft.shiny.trim() || 0);
 
 /** An ISO time as a `datetime-local` value on this computer's clock, or "". */
 export const toLocalInput = (iso: string | null): string => {
@@ -97,7 +107,20 @@ export const draftProblem = (draft: Draft, limits: AnnouncementLimits): string |
   const end = fromLocalInput(draft.endsAt);
   if (start && end && end <= start) return "The end time must be after the start time.";
   if (draft.pictures.length > limits.images) return `At most ${limits.images} pictures.`;
+  const gift = giftOf(draft);
+  if (!Number.isSafeInteger(gift) || gift < 0 || gift > limits.shinyMax)
+    return `The gift must be a whole number of Shiny from 0 to ${count(limits.shinyMax)}.`;
   return null;
+};
+
+/** Whether saving publishes a gift players do not have yet, which asks once more. */
+export const giftNeedsConfirm = (
+  draft: Pick<Draft, "status" | "shiny">,
+  saved: Pick<AdminAnnouncement, "status" | "shiny"> | undefined,
+): boolean => {
+  const gift = giftOf(draft);
+  if (draft.status !== "published" || gift <= 0) return false;
+  return saved?.status !== "published" || saved.shiny !== gift;
 };
 
 /** What Save sends for the form. */
@@ -110,6 +133,7 @@ export const formOf = (draft: Draft): AnnouncementForm => ({
   images: draft.pictures.map((picture) =>
     picture.kind === "saved" ? { keep: picture.id } : { data: picture.data },
   ),
+  shiny: giftOf(draft),
 });
 
 /** Why a picked file cannot be used, or null. */
@@ -195,6 +219,8 @@ export class AnnouncementsView {
   private deleting: number | null = null;
   private busy = false;
   private problem: string | null = null;
+  /** Save asked once more about publishing a gift, and the owner has not answered. */
+  private confirmingGift = false;
   /** Blob URLs of saved pictures, by id, revoked when no longer shown. */
   private readonly savedSrc = new Map<number, string>();
 
@@ -229,6 +255,7 @@ export class AnnouncementsView {
           startsAt: toLocalInput(item.startsAt),
           endsAt: toLocalInput(item.endsAt),
           pictures: [],
+          shiny: item.shiny > 0 ? String(item.shiny) : "",
         }
       : emptyDraft();
     this.render();
@@ -253,10 +280,11 @@ export class AnnouncementsView {
     this.editing = undefined;
     this.draft = emptyDraft();
     this.problem = null;
+    this.confirmingGift = false;
     this.render();
   }
 
-  private async save(): Promise<void> {
+  private async save(confirmed = false): Promise<void> {
     const problem = draftProblem(this.draft, this.limits);
     if (problem) {
       this.problem = problem;
@@ -264,6 +292,14 @@ export class AnnouncementsView {
       return;
     }
     if (this.editing === undefined) return;
+    const saved = this.items.find((item) => item.id === this.editing);
+    if (!confirmed && giftNeedsConfirm(this.draft, saved)) {
+      this.confirmingGift = true;
+      this.problem = null;
+      this.render();
+      return;
+    }
+    this.confirmingGift = false;
     this.busy = true;
     this.problem = null;
     this.render();
@@ -397,6 +433,7 @@ export class AnnouncementsView {
           " ",
           item.endsAt ? `until ${dateTime(item.endsAt)} · ` : "",
           item.imageIds.length > 0 ? `${plural(item.imageIds.length, "picture")} · ` : "",
+          item.shiny > 0 ? `Gift ${count(item.shiny)} Shiny · ${count(item.claims)} claimed · ` : "",
           item.status === "published" ? `${count(item.dismissals)} pressed Got it · ` : "",
           h(
             "time",
@@ -470,6 +507,9 @@ export class AnnouncementsView {
       this.draft = { ...this.draft, ...patch };
       this.problem = null;
       problem.hidden = true;
+      this.confirmingGift = false;
+      giftConfirm.hidden = true;
+      formActions.hidden = false;
       drawPreview();
     };
 
@@ -517,6 +557,24 @@ export class AnnouncementsView {
     });
     endsAt.value = draft.endsAt;
     endsAt.addEventListener("input", () => set({ endsAt: endsAt.value }));
+
+    const savedItem = this.items.find((item) => item.id === this.editing);
+    const claims = savedItem?.claims ?? 0;
+    const gift = h("input", {
+      class: "field-input",
+      attrs: {
+        id: `ann-gift-${n}`,
+        type: "number",
+        min: "0",
+        max: String(limits.shinyMax),
+        step: "1",
+        inputmode: "numeric",
+        placeholder: "No gift",
+        ...(claims > 0 && { disabled: "" }),
+      },
+    });
+    gift.value = draft.shiny;
+    gift.addEventListener("input", () => set({ shiny: gift.value }));
 
     const statusButtons = (["draft", "published"] as const).map((status) =>
       h(
@@ -606,6 +664,54 @@ export class AnnouncementsView {
       { class: "button quiet", attrs: { type: "button" }, onClick: () => this.close() },
       "Cancel",
     );
+    const formActions = h(
+      "div",
+      {
+        class: "actions ann-form-actions",
+        attrs: { ...(this.confirmingGift && { hidden: "" }) },
+      },
+      cancel,
+      save,
+    );
+    const giftConfirm = h(
+      "div",
+      { class: "confirm", attrs: { ...(!this.confirmingGift && { hidden: "" }) } },
+      h(
+        "p",
+        { class: "confirm-question" },
+        `Publish with a gift of ${count(giftOf(draft) || 0)} Shiny?`,
+      ),
+      h(
+        "p",
+        { class: "note" },
+        "Every player can claim it once while this announcement is up. Claimed Shiny cannot be taken back, and the amount cannot change after the first claim.",
+      ),
+      h(
+        "div",
+        { class: "actions" },
+        h(
+          "button",
+          {
+            class: "button quiet",
+            attrs: { type: "button" },
+            onClick: () => {
+              this.confirmingGift = false;
+              this.render();
+            },
+          },
+          "Go back",
+        ),
+        h(
+          "button",
+          {
+            class: "button primary",
+            attrs: { type: "button", ...(this.busy && { disabled: "" }) },
+            onClick: () => void this.save(true),
+          },
+          "Publish with gift",
+        ),
+      ),
+    );
 
     const form = h(
       "form",
@@ -653,6 +759,19 @@ export class AnnouncementsView {
       ),
       h(
         "div",
+        { class: "field ann-gift" },
+        h("label", { attrs: { for: gift.id } }, "Shiny gift"),
+        gift,
+        h(
+          "span",
+          { class: "hint" },
+          claims > 0
+            ? `${count(claims)} claimed, so the amount cannot change.`
+            : "Each player gets this once, when they press Claim. Empty: no gift.",
+        ),
+      ),
+      h(
+        "div",
         { class: "ann-times" },
         h(
           "div",
@@ -685,7 +804,8 @@ export class AnnouncementsView {
         ),
       ),
       problem,
-      h("div", { class: "actions ann-form-actions" }, cancel, save),
+      giftConfirm,
+      formActions,
     );
     form.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -707,6 +827,7 @@ export class AnnouncementsView {
       draft.body.trim() || "Your text shows here.",
       draft.pictures.map((picture) => picture.src).filter((src) => src !== ""),
     );
+    const gift = giftOf(draft);
     return h(
       "div",
       { class: "game-look ann-preview" },
@@ -723,11 +844,18 @@ export class AnnouncementsView {
           "div",
           { class: "ann-preview-body" },
           content,
-          h(
-            "div",
-            { class: "ann-preview-foot" },
-            h("span", { class: "ann-preview-done" }, "Got it"),
-          ),
+          gift > 0
+            ? h(
+                "div",
+                { class: "announcement-gift" },
+                giftAmount(gift),
+                h("span", { class: "ann-preview-done" }, "Claim"),
+              )
+            : h(
+                "div",
+                { class: "ann-preview-foot" },
+                h("span", { class: "ann-preview-done" }, "Got it"),
+              ),
         ),
       ),
     );

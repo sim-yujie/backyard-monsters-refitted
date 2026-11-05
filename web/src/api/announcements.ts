@@ -6,6 +6,7 @@ import type { ApiEnvelope } from "./types";
  *
  *   GET  /api/:apiVersion/bm/announcements              the current ones, newest first
  *   POST /api/:apiVersion/bm/announcements/:id/dismiss  "Got it", kept per account
+ *   POST /api/:apiVersion/bm/announcements/:id/claim    the gift's Shiny, once per account
  *   GET  /api/:apiVersion/announcements/images/:id      a picture, for an `<img src>`
  */
 
@@ -19,8 +20,12 @@ export interface Announcement {
   /** When it became current, ISO. */
   readonly shownFrom: string;
   readonly endsAt: string | null;
-  /** Whether this player pressed "Got it" on it already. */
+  /** Whether it is done with for this player: "Got it" pressed, and any gift claimed. */
   readonly dismissed: boolean;
+  /** The gift this player may claim; absent or 0 is none. */
+  readonly shiny?: number;
+  /** Whether this player claimed the gift. */
+  readonly claimed?: boolean;
 }
 
 export interface AnnouncementList extends ApiEnvelope {
@@ -32,6 +37,15 @@ export const fetchAnnouncements = (): Promise<AnnouncementList> =>
 
 export const dismissAnnouncement = (id: number): Promise<ApiEnvelope> =>
   post(`/api/:apiVersion/bm/announcements/${id}/dismiss`);
+
+export interface GiftClaim extends ApiEnvelope {
+  readonly shiny: number;
+  /** True when an earlier press gave it. */
+  readonly already: boolean;
+}
+
+export const claimAnnouncementGift = (id: number): Promise<GiftClaim> =>
+  post<GiftClaim>(`/api/:apiVersion/bm/announcements/${id}/claim`);
 
 /** A published announcement's picture. */
 export const announcementImageUrl = (id: number): string =>

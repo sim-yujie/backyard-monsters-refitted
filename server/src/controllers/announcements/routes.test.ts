@@ -14,7 +14,7 @@ const routes = [...source.matchAll(/router\.(get|post|put|patch|delete)\(`\$\{(a
 );
 
 describe("the announcement routes (controllers/announcements/routes.ts)", () => {
-  test("are the dashboard's five and the game's three", () => {
+  test("are the dashboard's five and the game's four", () => {
     expect(routes.filter((r) => r.base === "admin").map((r) => `${r.method} ${r.path}`)).toEqual([
       "GET /announcements",
       "POST /announcements",
@@ -25,6 +25,7 @@ describe("the announcement routes (controllers/announcements/routes.ts)", () => 
     expect(routes.filter((r) => r.base === "api").map((r) => `${r.method} ${r.path}`)).toEqual([
       "GET /bm/announcements",
       "POST /bm/announcements/:id/dismiss",
+      "POST /bm/announcements/:id/claim",
       "GET /announcements/images/:id",
     ]);
   });

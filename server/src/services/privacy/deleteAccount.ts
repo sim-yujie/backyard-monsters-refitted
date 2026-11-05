@@ -206,6 +206,7 @@ const deleteSteps = (u: number): DeleteStep[] => [
   { label: "bug reports they sent", table: "bug_report", where: `userid = ?`, params: [u] },
   { label: "the dashboard's error senders (name and address)", table: "app_error_reporter", where: `userid = ?`, params: [u] },
   { label: "announcements they pressed \"Got it\" on", table: "announcement_dismissal", where: `userid = ?`, params: [u] },
+  { label: "announcement gifts they claimed", table: "announcement_claim", where: `userid = ?`, params: [u] },
   { label: "map cells (home and outposts)", table: "world_map_cell", where: `uid = ?`, params: [u] },
   { label: "account (login and email)", table: `"user"`, where: `userid = ?`, params: [u] },
   { label: "saves (yards, outposts, inferno)", table: "save", where: `userid = ?`, params: [u] },
