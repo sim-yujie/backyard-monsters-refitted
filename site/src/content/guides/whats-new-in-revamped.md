@@ -3,7 +3,7 @@ title: What's new in Revamped
 description: The features you won't find in the original Backyard Monsters, and where to find them.
 order: 6
 icon: /images/guides/new-card.webp
-updated: 2026-11-04
+updated: 2026-11-05
 ---
 
 The first sections are new in **beta 6**. Everything from "New in beta 5" down, except the last section, came with beta 5.
@@ -15,7 +15,8 @@ In **Modern**, Map Room 2 is one painted landscape: grass, hills, cliffs, forest
 - **Land matters:** forest, rock and marsh cells change a cell's defence and income.
 - **Neighbours help:** a cell next to your own cells defends better (+5% to +15%). The cell's pop-up shows it as a shield.
 - **Prefer it flat?** Switch the tilt off for your account.
-- **Classic** keeps the original Flash map.
+- **Tribe camps:** a damaged camp shows a health bar, and heals 12 hours after the last attack.
+- **Classic** keeps the original Flash map art, with the same moving water and clouds.
 
 ![The new Map Room 2: a tilted, painted map with a player's land and the tribe camps around it](/images/guides/new6-map.webp)
 
@@ -76,6 +77,20 @@ Turn on **Shiny Lock** in **Settings** to hide your Shiny. A padlock shows inste
 
 Hover over one of your own defences to see how far it reaches. Only on your own yard.
 
+## Yard Planner and walls
+
+The planner's bottom bar is now painted buttons: Undo, Redo, Select, Box, Find, Upgrade walls and Re-arm traps. Mirror, Align and Distribute are gone.
+
+**Upgrade walls** no longer needs you to select walls first. See [Upgrade many walls at once](/guides/upgrade-many-walls/).
+
+## Account menu and Settings
+
+Your level now shows on your account button. **Settings** has three tabs: **Account**, **Look and sound** and **Social**.
+
+## Attacks in a hidden tab
+
+An attack keeps running while the game's tab is hidden, so you can switch tabs and come back.
+
 ## New in beta 5
 
 These came with beta 5.
@@ -103,6 +118,7 @@ Every window has a painted frame. It follows the same switch.
 **Settings ▸ Quality:** High, Medium or Low.
 
 - **Low** loads smaller pictures and lighter music.
+- **Map Room 2:** on High, water, foam, clouds and gulls all move. Medium keeps the moving water and foam. Low is still.
 - On a slow connection, the game suggests Low once. It never switches by itself.
 
 ![Settings, the Look and sound tab: Style, Font, Music and the two volume sliders](/images/guides/new-settings.webp)
