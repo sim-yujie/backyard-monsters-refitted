@@ -55,7 +55,7 @@ export const BETA_6: ChangelogRelease = {
     {
       image: "/whats-new/beta6-font.webp",
       title: "Pick your font",
-      text: "Hard to read? Account settings now offers Game font, Clear or Extra readable.",
+      text: "Hard to read? Settings now offers Game font, Clear or Extra readable.",
     },
   ],
 };
