@@ -8,15 +8,15 @@ import type { Quality } from "@/game/quality";
  *   living map's art is downloaded.
  * - Quality Medium: `reduced`, the water at half the animation rate, from the smaller copies of the art, and no clouds or birds.
  * - Quality High: `full`.
- * - Classic looks as Flash did, so it stays still on Low and Medium. On High
- *   (owner, 5 Nov 2026) it gets `classic`: the moving water and the gulls, but
- *   no clouds or cloud shadows over Flash's ground.
+ * - Classic (owner, 5 Nov 2026) gets the moving water and the gulls, but no
+ *   clouds or cloud shadows over Flash's ground: `classic` on High,
+ *   `classic-reduced` on Medium (half the animation rate, the smaller art).
  */
-export type LiveLevel = "off" | "reduced" | "classic" | "full";
+export type LiveLevel = "off" | "reduced" | "classic-reduced" | "classic" | "full";
 
 export const liveLevelFor = (classic: boolean, quality: Quality): LiveLevel => {
   if (quality === "low") return "off";
-  if (classic) return quality === "high" ? "classic" : "off";
+  if (classic) return quality === "high" ? "classic" : "classic-reduced";
   return quality === "medium" ? "reduced" : "full";
 };
 
@@ -60,6 +60,16 @@ const PLANS: Record<LiveLevel, LivePlan> = {
     foam: true,
     clouds: false,
     birds: false,
+    stepSeconds: 1 / 15,
+    waterResolution: 1,
+    artSuffix: "",
+  },
+  "classic-reduced": {
+    level: "classic-reduced",
+    water: true,
+    foam: true,
+    clouds: false,
+    birds: true,
     stepSeconds: 1 / 15,
     waterResolution: 1,
     artSuffix: "",

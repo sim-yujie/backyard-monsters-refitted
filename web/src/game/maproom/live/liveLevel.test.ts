@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { liveLevelFor, planFor } from "./liveLevel";
 
 describe("liveLevelFor", () => {
-  it("keeps Classic still on Medium and Low, as Flash's map was", () => {
-    expect(liveLevelFor(true, "medium")).toBe("off");
+  it("keeps Classic still on Low", () => {
     expect(liveLevelFor(true, "low")).toBe("off");
   });
 
-  it("moves Classic's water and gulls on High", () => {
+  it("moves Classic's water and gulls on Medium and High", () => {
+    expect(liveLevelFor(true, "medium")).toBe("classic-reduced");
     expect(liveLevelFor(true, "high")).toBe("classic");
   });
 
@@ -39,6 +39,14 @@ describe("planFor", () => {
     expect(plan.clouds).toBe(false);
     expect(plan.stepSeconds).toBe(planFor("full").stepSeconds);
     expect(plan.artSuffix).toBe("@2x");
+  });
+
+  it("on Classic Medium draws the water and gulls at half rate from the small art, with no clouds", () => {
+    const plan = planFor("classic-reduced");
+    expect([plan.water, plan.foam, plan.birds]).toEqual([true, true, true]);
+    expect(plan.clouds).toBe(false);
+    expect(plan.stepSeconds).toBeCloseTo(2 * planFor("classic").stepSeconds);
+    expect(plan.artSuffix).toBe("");
   });
 
   it("on High draws everything from the sharp art", () => {
