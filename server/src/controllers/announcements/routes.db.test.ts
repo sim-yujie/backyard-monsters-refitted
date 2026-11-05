@@ -15,7 +15,8 @@ import { mountAnnouncementRoutes } from "./routes.js";
 /**
  * The announcement routes over HTTP against a real Postgres: only the owner
  * writes, players see only published announcements in date, newest first,
- * "Got it" sticks to the account, and a draft's pictures stay private.
+ * "Got it" sticks to the account, a gift gives its Shiny once per account,
+ * and a draft's pictures stay private.
  *
  * Opt-in, like the other database tests: runs only when DASHBOARD_TEST_DB
  * names a throwaway database with every migration applied (never `bym`).
@@ -34,6 +35,7 @@ const OWNER = 996109;
 const ALL = [PLAYER, OTHER, OWNER];
 const LIST = ALL.join(",");
 const HOUR = 3_600_000;
+const START_SHINY = 50;
 
 const PNG =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
@@ -96,6 +98,12 @@ describe.skipIf(!dbName)("the announcement routes on a real database", () => {
 
   const reset = async () => {
     await sql(`DELETE FROM bym.announcement WHERE title LIKE 'anntest%'`);
+    await sql(`UPDATE bym.save SET credits = ? WHERE userid IN (${PLAYER}, ${OTHER})`, [START_SHINY]);
+  };
+
+  const shinyOf = async (userid: number) => {
+    const [row] = await sql<{ credits: number }>(`SELECT credits FROM bym.save WHERE userid = ?`, [userid]);
+    return Number(row!.credits);
   };
 
   beforeAll(async () => {
@@ -107,6 +115,15 @@ describe.skipIf(!dbName)("the announcement routes on a real database", () => {
         `INSERT INTO bym."user" (userid, username, email, password, blocked_users) VALUES (?, ?, ?, 'x', '[]') ON CONFLICT DO NOTHING`,
         [userid, name, `${name}@test.invalid`]
       );
+    }
+    for (const userid of [PLAYER, OTHER]) {
+      const [row] = await sql(
+        `INSERT INTO bym.save (userid, saveuserid, baseid, type, points, basevalue, createtime, name, credits, attacks,
+                               takeover_date, created_at, lastupdate_at)
+         VALUES (?, ?, ?, 'main', '0', '0', 0, 'yard', ?, '[]', now(), now(), now()) RETURNING basesaveid`,
+        [userid, userid, `${userid}00`, START_SHINY]
+      );
+      await sql(`UPDATE bym."user" SET save_basesaveid = ? WHERE userid = ?`, [row!.basesaveid, userid]);
     }
     const version = getGameVersion();
     const app = new Koa();
@@ -142,6 +159,8 @@ describe.skipIf(!dbName)("the announcement routes on a real database", () => {
     server?.close();
     if (!orm) return;
     await reset();
+    await sql(`UPDATE bym."user" SET save_basesaveid = NULL WHERE userid IN (${LIST})`);
+    await sql(`DELETE FROM bym.save WHERE userid IN (${LIST})`);
     await sql(`DELETE FROM bym."user" WHERE userid IN (${LIST})`);
     await orm.close();
   });
@@ -222,6 +241,83 @@ describe.skipIf(!dbName)("the announcement routes on a real database", () => {
       expect((await call("POST", `/api/v/bm/announcements/${draft}/dismiss`, PLAYER)).status).toBe(404);
       expect((await call("POST", `/api/v/bm/announcements/999999999/dismiss`, PLAYER)).status).toBe(404);
       expect((await call("POST", `/api/v/bm/announcements/abc/dismiss`, PLAYER)).status).toBe(404);
+    });
+
+    test("a gift gives its Shiny once per account, and counts as \"Got it\"", async () => {
+      const id = (await write("thanks", { shiny: 200 })).id;
+      const before = (await call("GET", "/api/v/bm/announcements", PLAYER)).body.announcements[0];
+      expect(before).toMatchObject({ id, shiny: 200, claimed: false, dismissed: false });
+
+      const first = await call("POST", `/api/v/bm/announcements/${id}/claim`, PLAYER);
+      expect(first.status).toBe(200);
+      expect(first.body).toMatchObject({ id, shiny: 200, already: false });
+      expect(await shinyOf(PLAYER)).toBe(START_SHINY + 200);
+
+      const second = await call("POST", `/api/v/bm/announcements/${id}/claim`, PLAYER);
+      expect(second.body).toMatchObject({ shiny: 200, already: true });
+      expect(await shinyOf(PLAYER)).toBe(START_SHINY + 200);
+      expect(await shinyOf(OTHER)).toBe(START_SHINY);
+
+      const after = (await call("GET", "/api/v/bm/announcements", PLAYER)).body.announcements[0];
+      expect(after).toMatchObject({ claimed: true, dismissed: true });
+      const admin = await call("GET", "/api/v/admin/announcements", OWNER);
+      expect(admin.body.announcements.find((a: { id: number }) => a.id === id)).toMatchObject({ shiny: 200, claims: 1, dismissals: 1 });
+    });
+
+    test("many presses at once give one gift", async () => {
+      const id = (await write("thanks", { shiny: 200 })).id;
+      const answers = await Promise.all(
+        Array.from({ length: 8 }, () => call("POST", `/api/v/bm/announcements/${id}/claim`, PLAYER))
+      );
+      expect(answers.map((a) => a.status)).toEqual(Array(8).fill(200));
+      expect(answers.filter((a) => a.body.already === false)).toHaveLength(1);
+      expect(await shinyOf(PLAYER)).toBe(START_SHINY + 200);
+    });
+
+    test("closing a gift without claiming it brings it back", async () => {
+      const id = (await write("thanks", { shiny: 200 })).id;
+      await call("POST", `/api/v/bm/announcements/${id}/dismiss`, PLAYER);
+      expect((await playerList()).find((a) => a.id === id)?.dismissed).toBe(false);
+      await call("POST", `/api/v/bm/announcements/${id}/claim`, PLAYER);
+      expect((await playerList()).find((a) => a.id === id)?.dismissed).toBe(true);
+    });
+
+    test("only a current gift can be claimed, and the claim's answer stays after it ends", async () => {
+      const plain = (await write("no gift")).id;
+      const draft = (await write("draft", { status: "draft", shiny: 200 })).id;
+      const ending = (await write("ending", { shiny: 200, endsAt: new Date(now.getTime() + HOUR).toISOString() })).id;
+      await call("POST", `/api/v/bm/announcements/${ending}/claim`, OTHER);
+
+      expect((await call("POST", `/api/v/bm/announcements/${plain}/claim`, PLAYER)).status).toBe(409);
+      expect((await call("POST", `/api/v/bm/announcements/${draft}/claim`, PLAYER)).status).toBe(404);
+      expect((await call("POST", `/api/v/bm/announcements/abc/claim`, PLAYER)).status).toBe(404);
+
+      now = new Date(now.getTime() + 2 * HOUR);
+      const late = await call("POST", `/api/v/bm/announcements/${ending}/claim`, PLAYER);
+      expect(late.status).toBe(404);
+      expect(await shinyOf(PLAYER)).toBe(START_SHINY);
+      expect((await call("POST", `/api/v/bm/announcements/${ending}/claim`, OTHER)).body.already).toBe(true);
+      expect(await shinyOf(OTHER)).toBe(START_SHINY + 200);
+    });
+
+    test("a player with no yard is refused and no claim is kept", async () => {
+      const id = (await write("thanks", { shiny: 200 })).id;
+      expect((await call("POST", `/api/v/bm/announcements/${id}/claim`, OWNER)).status).toBe(409);
+      const [row] = await sql<{ n: number }>(`SELECT count(*)::int AS n FROM bym.announcement_claim WHERE announcement_id = ?`, [id]);
+      expect(row!.n).toBe(0);
+    });
+
+    test("a gift's amount changes only until the first claim; the words can change after it", async () => {
+      const id = (await write("thanks", { shiny: 200 })).id;
+      const put = (overrides: Record<string, unknown>) =>
+        call("PUT", `/api/v/admin/announcements/${id}`, OWNER, form("thanks", overrides));
+      expect((await put({ shiny: 300 })).status).toBe(200);
+      await call("POST", `/api/v/bm/announcements/${id}/claim`, PLAYER);
+      const refused = await put({ shiny: 400 });
+      expect(refused.status).toBe(409);
+      expect(refused.body.reason).toBe("giftClaimed");
+      expect((await put({ shiny: 300, body: "New words" })).status).toBe(200);
+      expect((await call("POST", `/api/v/bm/announcements/${id}/claim`, OTHER)).body.shiny).toBe(300);
     });
 
     test("deleting an announcement takes its \"Got it\" records with it", async () => {

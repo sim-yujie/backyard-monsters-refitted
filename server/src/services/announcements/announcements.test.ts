@@ -38,8 +38,18 @@ describe("parseAnnouncement", () => {
         startsAt: null,
         endsAt: null,
         images: [],
+        shiny: 0,
       },
     });
+  });
+
+  test("takes a whole gift within the limit, and no gift when none is sent", () => {
+    expect(parseAnnouncement({ ...form(), shiny: 200 })).toMatchObject({ ok: true, value: { shiny: 200 } });
+    expect(parseAnnouncement({ ...form(), shiny: 0 })).toMatchObject({ ok: true, value: { shiny: 0 } });
+    expect(parseAnnouncement({ ...form(), shiny: null })).toMatchObject({ ok: true, value: { shiny: 0 } });
+    for (const shiny of [-1, 1.5, 10_001, "200", Number.NaN]) {
+      expect(parseAnnouncement({ ...form(), shiny }).ok).toBe(false);
+    }
   });
 
   test("tidies the text: Windows line breaks, control characters, runs of blank lines, spaces in the title", () => {

@@ -1,5 +1,8 @@
+import { LockMode } from "@mikro-orm/core";
 import type { EntityManager } from "@mikro-orm/postgresql";
 
+import { Save } from "../../database/models/save.model.js";
+import { BaseType } from "../../enums/Base.js";
 import { sniffImageType, type BugReportImageType } from "../bugReports/bugReportImage.js";
 
 /**
@@ -19,6 +22,13 @@ import { sniffImageType, type BugReportImageType } from "../bugReports/bugReport
  *   not ended. Drafts and pictures of drafts are the dashboard's alone.
  * - **Dismissed** ("Got it") is kept per account, so it does not come back on
  *   another device.
+ * - **A gift** is an amount of Shiny each player may claim once while the
+ *   announcement is current (`bym.announcement_claim`, whose key is one claim
+ *   per account per gift). It lands the way a dashboard award does
+ *   (`services/admin/shinyAwards.ts`): on the player's main yard, re-read
+ *   under its row lock. A gift not claimed yet keeps popping up, one visit to
+ *   the page at a time, even after the close button, so nobody loses it by
+ *   closing the pop-up. Its amount cannot change once anyone has claimed it.
  */
 
 export const ANNOUNCEMENT_LIMITS = {
@@ -26,6 +36,8 @@ export const ANNOUNCEMENT_LIMITS = {
   bodyMax: 2000,
   images: 3,
   imageBytesMax: 1_000_000,
+  /** The largest gift, per player: the same as the most one dashboard award may give. */
+  shinyMax: 10_000,
   /** The most current announcements a player is sent. */
   playerList: 20,
 } as const;
@@ -42,6 +54,8 @@ export interface AnnouncementInput {
   readonly startsAt: Date | null;
   readonly endsAt: Date | null;
   readonly images: readonly AnnouncementImageInput[];
+  /** The gift each player may claim, 0 for none. */
+  readonly shiny: number;
 }
 
 export type Parsed<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly message: string };
@@ -103,7 +117,8 @@ const imagesOf = (raw: unknown): unknown => {
 
 /**
  * The dashboard's form, checked: `{ title, body, status, startsAt, endsAt,
- * images: [{ keep: id } | { data: "data:image/png;base64,..." }] }`.
+ * images: [{ keep: id } | { data: "data:image/png;base64,..." }], shiny }`.
+ * No `shiny` is no gift.
  */
 export const parseAnnouncement = (body: unknown): Parsed<AnnouncementInput> => {
   const raw = body !== null && typeof body === "object" ? (body as Record<string, unknown>) : {};
@@ -134,7 +149,11 @@ export const parseAnnouncement = (body: unknown): Parsed<AnnouncementInput> => {
     if (!image.ok) return image;
     images.push(image.value);
   }
-  return { ok: true, value: { title, body: text, status: raw.status, startsAt, endsAt, images } };
+  const shiny = raw.shiny ?? 0;
+  if (typeof shiny !== "number" || !Number.isSafeInteger(shiny) || shiny < 0 || shiny > ANNOUNCEMENT_LIMITS.shinyMax) {
+    return { ok: false, message: `The gift must be a whole number of Shiny from 0 to ${ANNOUNCEMENT_LIMITS.shinyMax.toLocaleString("en-US")}.` };
+  }
+  return { ok: true, value: { title, body: text, status: raw.status, startsAt, endsAt, images, shiny } };
 };
 
 /** What a player is sent about one current announcement. */
@@ -146,8 +165,12 @@ export interface PlayerAnnouncement {
   /** When it became current (its start, or when it was published), ISO. */
   shownFrom: string;
   endsAt: string | null;
-  /** Whether this player pressed "Got it" on it. */
+  /** Whether it is done with for this player: "Got it" pressed, and any gift claimed. */
   dismissed: boolean;
+  /** The gift this player may claim, 0 for none. */
+  shiny: number;
+  /** Whether this player claimed the gift. */
+  claimed: boolean;
 }
 
 /** What the dashboard shows about one announcement. */
@@ -166,6 +189,10 @@ export interface AdminAnnouncement {
   live: boolean;
   /** How many players pressed "Got it". */
   dismissals: number;
+  /** The gift each player may claim, 0 for none. */
+  shiny: number;
+  /** How many players claimed the gift. */
+  claims: number;
 }
 
 const iso = (value: Date | string | null): string | null => (value === null ? null : new Date(value).toISOString());
@@ -185,27 +212,37 @@ export const listForPlayer = async (em: EntityManager, userid: number, now: Date
       shown_from: Date;
       ends_at: Date | null;
       dismissed: boolean;
+      shiny: number;
+      claimed: boolean;
       image_ids: (number | string)[] | null;
     }[]
   >(
     `SELECT a.id, a.title, a.body, coalesce(a.starts_at, a.published_at, a.created_at) AS shown_from, a.ends_at,
             EXISTS (SELECT 1 FROM bym.announcement_dismissal d WHERE d.announcement_id = a.id AND d.userid = ?) AS dismissed,
+            a.shiny,
+            EXISTS (SELECT 1 FROM bym.announcement_claim c WHERE c.announcement_id = a.id AND c.userid = ?) AS claimed,
             ${IMAGE_IDS}
        FROM bym.announcement a
       WHERE ${CURRENT}
       ORDER BY shown_from DESC, a.id DESC
       LIMIT ${ANNOUNCEMENT_LIMITS.playerList}`,
-    [userid, now, now]
+    [userid, userid, now, now]
   );
-  return rows.map((row) => ({
-    id: Number(row.id),
-    title: row.title,
-    body: row.body,
-    imageIds: ids(row.image_ids),
-    shownFrom: iso(row.shown_from)!,
-    endsAt: iso(row.ends_at),
-    dismissed: Boolean(row.dismissed),
-  }));
+  return rows.map((row) => {
+    const shiny = Number(row.shiny ?? 0);
+    const claimed = Boolean(row.claimed);
+    return {
+      id: Number(row.id),
+      title: row.title,
+      body: row.body,
+      imageIds: ids(row.image_ids),
+      shownFrom: iso(row.shown_from)!,
+      endsAt: iso(row.ends_at),
+      dismissed: Boolean(row.dismissed) && (shiny === 0 || claimed),
+      shiny,
+      claimed,
+    };
+  });
 };
 
 /**
@@ -228,6 +265,58 @@ export const dismissForPlayer = async (
   );
   return rows.length > 0 ? "dismissed" : "notFound";
 };
+
+/** What {@link claimForPlayer} did. */
+export type ClaimOutcome =
+  | { readonly outcome: "claimed" | "already"; readonly shiny: number }
+  | { readonly outcome: "notFound" | "noGift" | "noMainYard" };
+
+/**
+ * Gives this player the announcement's gift, once. The claim, the Shiny and
+ * the "Got it" land together or not at all. Pressing it twice, or at once on
+ * two devices, gives once: the yard's row lock puts the two in turn, and the
+ * claim's key refuses the second. `notFound` when no current announcement has
+ * this id, unless the player claimed it before it ended.
+ */
+export const claimForPlayer = async (em: EntityManager, userid: number, id: number, now: Date): Promise<ClaimOutcome> =>
+  em.transactional(async (tx): Promise<ClaimOutcome> => {
+    const [earlier] = await tx.execute<{ amount: number }[]>(
+      `SELECT amount FROM bym.announcement_claim WHERE userid = ? AND announcement_id = ?`,
+      [userid, id]
+    );
+    if (earlier) return { outcome: "already", shiny: Number(earlier.amount) };
+
+    const [gift] = await tx.execute<{ shiny: number }[]>(`SELECT a.shiny FROM bym.announcement a WHERE a.id = ? AND ${CURRENT}`, [id, now, now]);
+    if (!gift) return { outcome: "notFound" };
+    const shiny = Number(gift.shiny);
+    if (shiny <= 0) return { outcome: "noGift" };
+
+    const [player] = await tx.execute<{ save_basesaveid: number | null }[]>(
+      `SELECT save_basesaveid FROM bym."user" WHERE userid = ?`,
+      [userid]
+    );
+    if (!player || player.save_basesaveid === null) return { outcome: "noMainYard" };
+    const save = await tx.findOne(
+      Save,
+      { basesaveid: Number(player.save_basesaveid) },
+      { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true }
+    );
+    if (!save || save.type !== BaseType.MAIN || save.userid !== userid) return { outcome: "noMainYard" };
+
+    const claims = await tx.execute<{ amount: number }[]>(
+      `INSERT INTO bym.announcement_claim (userid, announcement_id, amount, claimed_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT (userid, announcement_id) DO NOTHING RETURNING amount`,
+      [userid, id, shiny, now]
+    );
+    if (claims.length === 0) return { outcome: "already", shiny };
+    save.credits += shiny;
+    await tx.flush();
+    await tx.execute(
+      `INSERT INTO bym.announcement_dismissal (userid, announcement_id) VALUES (?, ?) ON CONFLICT (userid, announcement_id) DO NOTHING`,
+      [userid, id]
+    );
+    return { outcome: "claimed", shiny };
+  });
 
 /**
  * One picture's bytes, or null. `publishedOnly` is the game's route: a draft's
@@ -262,12 +351,16 @@ export const listForAdmin = async (em: EntityManager, now: Date): Promise<AdminA
       image_ids: (number | string)[] | null;
       live: boolean;
       dismissals: number;
+      shiny: number;
+      claims: number;
     }[]
   >(
     `SELECT a.id, a.title, a.body, a.status, a.starts_at, a.ends_at, a.published_at, a.created_at, a.updated_at,
             ${IMAGE_IDS},
             (${CURRENT}) AS live,
-            (SELECT count(*)::int FROM bym.announcement_dismissal d WHERE d.announcement_id = a.id) AS dismissals
+            (SELECT count(*)::int FROM bym.announcement_dismissal d WHERE d.announcement_id = a.id) AS dismissals,
+            a.shiny,
+            (SELECT count(*)::int FROM bym.announcement_claim c WHERE c.announcement_id = a.id) AS claims
        FROM bym.announcement a
       ORDER BY a.created_at DESC, a.id DESC`,
     [now, now]
@@ -285,6 +378,8 @@ export const listForAdmin = async (em: EntityManager, now: Date): Promise<AdminA
     imageIds: ids(row.image_ids),
     live: Boolean(row.live),
     dismissals: Number(row.dismissals),
+    shiny: Number(row.shiny ?? 0),
+    claims: Number(row.claims ?? 0),
   }));
 };
 
@@ -334,9 +429,9 @@ export const createAnnouncement = async (
   try {
     return await em.transactional(async (tx) => {
       const [row] = await tx.execute<{ id: string }[]>(
-        `INSERT INTO bym.announcement (title, body, status, starts_at, ends_at, published_at, created_by, updated_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-        [input.title, input.body, input.status, input.startsAt, input.endsAt, input.status === "published" ? now : null, by, by, now, now]
+        `INSERT INTO bym.announcement (title, body, status, starts_at, ends_at, published_at, shiny, created_by, updated_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+        [input.title, input.body, input.status, input.startsAt, input.endsAt, input.status === "published" ? now : null, input.shiny, by, by, now, now]
       );
       const id = Number(row!.id);
       if ((await saveImages(tx, id, input.images)) === "badImage") throw new BadImage();
@@ -348,22 +443,32 @@ export const createAnnouncement = async (
   }
 };
 
-/** Changes an announcement; `notFound` when there is none, `badImage` as for a new one. */
+/**
+ * Changes an announcement; `notFound` when there is none, `badImage` as for a
+ * new one, `giftClaimed` when it changes a gift players have already claimed.
+ */
 export const updateAnnouncement = async (
   em: EntityManager,
   id: number,
   input: AnnouncementInput,
   by: number,
   now: Date
-): Promise<"saved" | "notFound" | "badImage"> => {
+): Promise<"saved" | "notFound" | "badImage" | "giftClaimed"> => {
   try {
     return await em.transactional(async (tx) => {
+      const [before] = await tx.execute<{ shiny: number; claimed: boolean }[]>(
+        `SELECT a.shiny, EXISTS (SELECT 1 FROM bym.announcement_claim c WHERE c.announcement_id = a.id) AS claimed
+           FROM bym.announcement a WHERE a.id = ? FOR UPDATE`,
+        [id]
+      );
+      if (!before) return "notFound" as const;
+      if (before.claimed && Number(before.shiny) !== input.shiny) return "giftClaimed" as const;
       const rows = await tx.execute<{ id: string }[]>(
         `UPDATE bym.announcement
-            SET title = ?, body = ?, status = ?, starts_at = ?, ends_at = ?, updated_by = ?, updated_at = ?,
+            SET title = ?, body = ?, status = ?, starts_at = ?, ends_at = ?, shiny = ?, updated_by = ?, updated_at = ?,
                 published_at = CASE WHEN ? = 'published' THEN coalesce(published_at, ?) ELSE published_at END
           WHERE id = ? RETURNING id`,
-        [input.title, input.body, input.status, input.startsAt, input.endsAt, by, now, input.status, now, id]
+        [input.title, input.body, input.status, input.startsAt, input.endsAt, input.shiny, by, now, input.status, now, id]
       );
       if (rows.length === 0) return "notFound" as const;
       if ((await saveImages(tx, id, input.images)) === "badImage") throw new BadImage();

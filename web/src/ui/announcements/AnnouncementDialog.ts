@@ -1,6 +1,7 @@
 import { announcementImageUrl, type Announcement } from "@/api/announcements";
 import { Popup } from "@/ui/Popup";
 import { announcementContent } from "./announcementContent";
+import { announcementGift } from "./announcementGift";
 import "./announcements.css";
 
 /**
@@ -9,7 +10,9 @@ import "./announcements.css";
  * the Account menu's "News", which shows every current one again.
  *
  * The scrim does not close the pop-up, so a stray tap on a phone does not
- * skip it; "Got it", the close button and Escape all do.
+ * skip it; "Got it", the close button and Escape all do. One with a gift not
+ * yet claimed has "Claim" (`announcementGift.ts`) and shows "Got it" after
+ * it; closing it unclaimed brings it back on the next visit.
  */
 
 const el = <K extends keyof HTMLElementTagNameMap>(
@@ -32,14 +35,22 @@ export const isAnnouncementOpen = (): boolean =>
 export interface AnnouncementDialogOptions {
   /** Where the popup mounts: the modal layer. */
   readonly container: HTMLElement;
-  readonly announcement: Pick<Announcement, "title" | "body" | "imageIds">;
+  readonly announcement: Pick<Announcement, "title" | "body" | "imageIds"> &
+    Partial<Pick<Announcement, "id" | "shiny" | "claimed">>;
   /** Which one of how many waiting, shown as "1 / 2" when there is more than one. */
   readonly step?: { readonly index: number; readonly total: number };
   /** A picture's address; the game's public picture route by default. */
   readonly imageUrl?: (id: number) => string;
   /** Called once when it closes, however it closes. */
   readonly onClose?: () => void;
+  /** Asks the server for the gift; the game's route by default. */
+  readonly claim?: (id: number) => Promise<unknown>;
 }
+
+/** Whether `item` has a gift to draw. */
+const hasGift = (
+  item: Partial<Pick<Announcement, "id" | "shiny">>,
+): item is { id: number; shiny: number } => item.id !== undefined && (item.shiny ?? 0) > 0;
 
 /** Opens one announcement with its "Got it". */
 export const openAnnouncement = (options: AnnouncementDialogOptions): Popup => {
@@ -53,6 +64,25 @@ export const openAnnouncement = (options: AnnouncementDialogOptions): Popup => {
   });
   const body = el("div", "announcement-dialog");
   body.append(announcementContent(announcement.body, announcement.imageIds.map(imageUrl)));
+  const done = el("button", "btn btn--primary announcement-dialog__done", "Got it");
+  done.type = "button";
+  done.addEventListener("click", () => popup.close());
+  let claimButton: HTMLButtonElement | null = null;
+  if (hasGift(announcement)) {
+    const gift = announcementGift({
+      id: announcement.id,
+      shiny: announcement.shiny,
+      claimed: announcement.claimed === true,
+      ...(options.claim && { claim: options.claim }),
+      onClaimed: () => {
+        done.hidden = false;
+        done.focus({ preventScroll: true });
+      },
+    });
+    claimButton = gift.button;
+    done.hidden = claimButton !== null;
+    body.append(gift.element);
+  }
   const foot = el("div", "announcement-dialog__foot");
   if (options.step && options.step.total > 1) {
     const count = el(
@@ -63,14 +93,11 @@ export const openAnnouncement = (options: AnnouncementDialogOptions): Popup => {
     count.setAttribute("aria-label", `${options.step.index + 1} of ${options.step.total}`);
     foot.append(count);
   }
-  const done = el("button", "btn btn--primary announcement-dialog__done", "Got it");
-  done.type = "button";
-  done.addEventListener("click", () => popup.close());
   foot.append(done);
   body.append(foot);
   popup.setContent(body).mount(options.container);
   // Without scrolling: the button is at the foot and the picture must show.
-  done.focus({ preventScroll: true });
+  (claimButton ?? done).focus({ preventScroll: true });
   return popup;
 };
 
@@ -108,6 +135,11 @@ export const openNews = (options: NewsOptions): Popup => {
           el("h3", "announcement-news__title", item.title),
           announcementContent(item.body, item.imageIds.map(imageUrl)),
         );
+        if (hasGift(item)) {
+          article.append(
+            announcementGift({ id: item.id, shiny: item.shiny, claimed: item.claimed === true }).element,
+          );
+        }
         body.append(article);
       }
       const unseen = list.filter((item) => !item.dismissed).map((item) => item.id);
