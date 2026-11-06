@@ -60,10 +60,10 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * trap inside a yellow reload arrow for re-arm traps (`rearm2` is a spiked
  * mine in the same arrow).
  *
- * Event coins (beta 7, `game/eventCoins.ts`): `eventcoin` is a PLACEHOLDER, a
- * gold coin with a raised star drawn by script
- * (`art-samples/event-coin/paint_placeholder.py`), until Codex paints the
- * real one; replace `large/eventcoin.png` there and run `make.py` again.
+ * Event coins (beta 7, `game/eventCoins.ts`, `art-samples/event-coin`,
+ * painted by Codex 7 Nov): `eventcoin` is a thick gold coin with a raised gold
+ * star. The other painted options (red star, dotted festival token, monster
+ * face) are in `art-samples/event-coin/codex`, not shipped.
  */
 export const GAME_ICONS = {
   health: "Health",
