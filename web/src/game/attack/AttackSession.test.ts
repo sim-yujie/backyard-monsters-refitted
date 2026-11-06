@@ -8,6 +8,7 @@ import {
 } from "@/game/combat/rules";
 import {
   AttackSession,
+  DropsClosedError,
   combatKind,
   hasDeclareWar,
   mintSeed,
@@ -718,6 +719,25 @@ describe("AttackSession ending", () => {
     expect(state.phase).toBe("ended");
     expect(state.endReason).toBe("expired");
     expect(state.remainingSeconds).toBe(0);
+  });
+
+  it("refuses a fling or a bomb once the countdown has run out, and still takes a Retreat", () => {
+    const session = sessionOf({ roster: { ...targetOf().roster, catapultLevel: 4 } });
+    session.start();
+    session.setSpeed(2);
+    // A monster still out keeps the attack running through the retreat.
+    play(session, (ATTACK_COUNTDOWN_SECONDS - 1) / 2);
+    session.appendFling({ x: -100, y: -100, monsters: { C1: 1 } });
+    play(session, 1);
+    expect(session.state().phase).toBe("running");
+    expect(session.state().remainingSeconds).toBe(0);
+
+    expect(() => session.appendFling({ x: 0, y: 0, monsters: { C1: 1 } })).toThrow(DropsClosedError);
+    expect(() => session.appendBomb({ x: 0, y: 0, id: "tw0" })).toThrow(DropsClosedError);
+    expect(session.flingLog().events.map((event) => event.kind)).toEqual(["fling"]);
+
+    session.retreat();
+    expect(session.state().endReason).toBe("retreat");
   });
 
   it("ends as destroyed at 100% damage", () => {

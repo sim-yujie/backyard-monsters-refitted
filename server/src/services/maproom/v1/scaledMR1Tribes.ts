@@ -37,7 +37,7 @@ import { creditableMR1Loot, mr1TribePool } from "./mr1TribeRules.js";
 import { recordTribeDestroyed } from "../../goals/tribeCounter.js";
 import { tribeOfBase } from "../../goals/counters.js";
 import { addQuestEvents, questEvent } from "../../quests/state.js";
-import { lootQuestEvents } from "../../quests/hooks.js";
+import { catapultQuestEvents, lootQuestEvents } from "../../quests/hooks.js";
 import { recordQuestEvents } from "../../quests/record.js";
 import { removedCampStandIn } from "./practiceCamp.js";
 import { countAttackLoot } from "../../events/lootEvents.js";
@@ -292,15 +292,17 @@ const writeTribeLanding = async (
   // attacker's main row under its own lock.
   const destroyedNow = !!battle?.destroyed && !wasDestroyed;
   if (destroyedNow) await recordTribeDestroyed(postgres.em, userSave.basesaveid, baseid);
-  // Quests: the tribe's loot before the cap (decision 13), and a tribe's yard
-  // destroyed, which is also a won attack.
+  // Quests: the tribe's loot before the cap (decision 13), a tribe's yard
+  // destroyed, which is also a won attack, and catapult hits on the tribe's
+  // buildings (from the replayed log, as a Map Room 2 camp's are counted).
   await recordQuestEvents(
     postgres.em,
     userSave.basesaveid,
     addQuestEvents(
       lootQuestEvents(credit),
       destroyedNow ? questEvent("tribeDestroy", tribeOfBase(baseid)) : null,
-      destroyedNow ? { attackWin: 1 } : null
+      destroyedNow ? { attackWin: 1 } : null,
+      catapultQuestEvents(battle?.log, tribeData.buildingdata as JsonObject | undefined)
     ),
     now
   );
