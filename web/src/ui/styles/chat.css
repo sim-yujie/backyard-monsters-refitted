@@ -286,6 +286,20 @@ button.chat-line__name {
   overscroll-behavior: contain;
 }
 
+/* The 150px above counts the input's row. A player's strip stands in its
+   place and is 80px taller (its buttons wrap to a second row since Profile
+   joined them), so with the strip up the room gives up those 80px too:
+   Report landed under Main yard (profiles test, 7 Nov). */
+.chat-box--open:has(> .chat-box__player:not([hidden])) > .chat-box__lines {
+  height: clamp(48px, calc(100dvh - var(--chat-top) - 229px - 230px - 13px), 260px);
+}
+
+/* And should a very short window still run the strip into the dock, the
+   strip is on top: none of its buttons is ever under a dock button. */
+.chat-box--open:has(> .chat-box__player:not([hidden])) {
+  z-index: 1;
+}
+
 .chat-box--open .chat-line {
   padding-block: 2px;
 }
@@ -447,6 +461,12 @@ button.chat-line__name {
     height: auto;
     min-height: 120px;
     max-height: calc(100dvh - var(--chat-top) - 270px - 140px);
+  }
+
+  .chat-box--open:has(> .chat-box__player:not([hidden])) > .chat-box__lines {
+    height: auto;
+    min-height: 48px;
+    max-height: calc(100dvh - var(--chat-top) - 270px - 140px - 80px);
   }
 
   .chat-box--open .chat-line,

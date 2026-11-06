@@ -3191,9 +3191,14 @@ tbody th {
 }
 
 /* Photo reports (photos.ts): the photo beside who reported it and the buttons. */
+/* `.row` is a one-column grid with no padding: the photo sat on top of the
+   name, touching the card's edge (profiles test, 7 Nov). Photo left, the
+   rest beside it, padded like a bug row. */
 .photo-case {
-  align-items: flex-start;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: start;
   gap: 12px;
+  padding: 14px 12px 14px 16px;
 }
 
 .photo-case__picture {
@@ -3233,6 +3238,12 @@ tbody th {
 }
 
 @media (max-width: 480px) {
+  .photo-case {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+
   .photo-case__picture,
   .photo-case__img {
     width: 72px;

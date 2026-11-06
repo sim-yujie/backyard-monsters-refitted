@@ -108,6 +108,13 @@
   zoom: 0.5;
 }
 
+/* The painted medal is 60px, so half was still 30px beside the others' 24px. */
+.profile__stat-icon .ach-badge--art {
+  zoom: 1;
+  width: 24px;
+  height: 24px;
+}
+
 .profile__stat-value {
   white-space: nowrap;
   overflow: hidden;
@@ -184,12 +191,15 @@
   margin-left: auto;
 }
 
+/* The same height whether it holds Report, the question with its two plates
+   or "Reported": the window no longer jumps when the report goes in. */
 .profile__report {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--space-2);
   justify-content: flex-end;
+  min-height: 46px;
 }
 
 .profile__reported {
@@ -216,7 +226,14 @@
 }
 
 .photo-crop__frame {
+  /* Up to 260px, less on a small window: room for the hint, the slider and
+     the buttons under it. */
+  --crop-side: clamp(160px, min(calc(100vw - 96px), calc(100dvh - 220px)), var(--crop-frame, 260px));
+
   display: block;
+  width: var(--crop-side);
+  height: var(--crop-side);
+  box-sizing: border-box;
   border-radius: var(--radius-md);
   border: 2px solid var(--colour-border-strong);
   background: var(--colour-surface-sunken);
@@ -253,7 +270,11 @@
   justify-content: center;
 }
 
-/* A phone held sideways: the crop frame and its buttons side by side. */
+/* A phone held sideways: the frame on the left as tall as the window's body
+   allows, the hint, slider and buttons on the right, nothing to scroll. At
+   812x375 a 260px frame with the slider under it made the body scroll
+   (profiles test, 7 Nov). The window takes about 140px of the height around
+   its body (the margins, the title sign, the frame and the body's padding). */
 @media (max-height: 480px) and (orientation: landscape) {
   .profile-popup {
     width: min(600px, calc(100vw - 2 * var(--space-4)));
@@ -261,17 +282,33 @@
 
   .profile--crop {
     display: grid;
-    grid-template-columns: auto 1fr;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: 1fr auto auto auto auto 1fr;
     grid-template-areas:
+      "crop ."
       "crop hint"
+      "crop zoom"
       "crop note"
-      "crop foot";
+      "crop foot"
+      "crop .";
     align-items: center;
     column-gap: var(--space-4);
+    row-gap: var(--space-3);
   }
 
+  /* The frame and the slider become cells of the grid above. */
   .profile--crop .photo-crop {
+    display: contents;
+  }
+
+  .profile--crop .photo-crop__frame {
+    --crop-side: clamp(120px, calc(100dvh - 160px), var(--crop-frame, 260px));
+
     grid-area: crop;
+  }
+
+  .profile--crop .photo-crop__zoom {
+    grid-area: zoom;
   }
 
   .profile--crop .profile__crop-hint {
@@ -284,5 +321,6 @@
 
   .profile--crop .profile__crop-foot {
     grid-area: foot;
+    justify-content: flex-start;
   }
 }

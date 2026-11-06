@@ -119,6 +119,16 @@ describe("Photo reports", () => {
     expect([...card.querySelectorAll("[data-action]")].map((b) => b.getAttribute("data-action"))).toEqual(["unblock"]);
   });
 
+  it("says Kept only once on a case closed by Keep, and Kept before on a new case", () => {
+    const { view } = build();
+    const closed = view.item(
+      photoCase({ kept: true, hidden: false, closed: { outcome: "kept", at: new Date().toISOString(), by: 9, byName: "owner" } }),
+    );
+    expect(closed.textContent).toContain("Kept by owner");
+    expect(closed.textContent).not.toContain("Kept before");
+    expect(view.item(photoCase({ kept: true })).textContent).toContain("Kept before");
+  });
+
   it("says when the list will not load", async () => {
     answer = () => undefined;
     const { view, onCount } = build();

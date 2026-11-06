@@ -184,7 +184,8 @@ export class PhotosView {
           ),
           view.hidden ? h("span", { class: "chip chip-warn" }, "Hidden") : null,
           view.blocked ? h("span", { class: "chip chip-bad" }, "Blocked") : null,
-          view.kept ? h("span", { class: "chip chip-quiet" }, "Kept before") : null,
+          // A case closed by Keep already says "Kept by …"; the chip would say it twice.
+          view.kept && view.closed?.outcome !== "kept" ? h("span", { class: "chip chip-quiet" }, "Kept before") : null,
           view.banned ? h("span", { class: "chip chip-bad" }, "Banned") : null,
           view.closed ? h("span", { class: "chip chip-good" }, closedWords(view.closed)) : null,
           when,

@@ -286,7 +286,7 @@ export class ProfileDialog {
     const ask = (): void => {
       const words = el("span", "profile__note", REPORT_ASK);
       const status = el("span", "profile__note profile__note--error");
-      const yes = btn("btn--danger profile__report-yes", "Report", () => {
+      const yes = btn("btn--primary profile__report-yes", "Report", () => {
         if (this.busy) return;
         this.busy = true;
         yes.disabled = true;
@@ -301,7 +301,7 @@ export class ProfileDialog {
             this.busy = false;
           });
       });
-      const no = btn("btn--ghost profile__report-no", "Cancel", () => row.replaceChildren(open));
+      const no = btn("btn--outline profile__report-no", "Cancel", () => row.replaceChildren(open));
       row.replaceChildren(words, yes, no, status);
       yes.focus();
     };
@@ -359,15 +359,16 @@ export class ProfileDialog {
     }
     const profile = this.profile;
     if (!profile) return;
-    const frameSide = Math.max(160, Math.min(260, Math.floor(Math.min(window.innerWidth - 96, window.innerHeight - 220))));
-    const cropper = new PhotoCropper({ picture, frame: frameSide });
+    // The frame's side on screen comes from profile.css, so a phone turned
+    // after the photo was picked still fits it.
+    const cropper = new PhotoCropper({ picture, frame: 260 });
     const step = el("div", "profile profile--crop");
     step.append(el("p", "profile__crop-hint", "Drag to move. Slide to zoom."), cropper.element);
     const note = el("p", "profile__note profile__note--error");
     note.setAttribute("role", "status");
     note.hidden = true;
     const foot = el("div", "profile__crop-foot");
-    const back = btn("btn--ghost profile__crop-back", "Back", () => this.show(profile));
+    const back = btn("btn--outline profile__crop-back", "Back", () => this.show(profile));
     const use = btn("btn--primary profile__crop-use", "Use photo", () => {
       const dataUrl = cropper.result();
       if (!dataUrl) {

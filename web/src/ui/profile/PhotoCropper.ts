@@ -63,7 +63,10 @@ export const loadPicture = (file: File): Promise<HTMLImageElement> => {
 export interface PhotoCropperOptions {
   /** The picture to crop, already loaded. */
   readonly picture: CanvasImageSource & { readonly naturalWidth: number; readonly naturalHeight: number };
-  /** The frame's side on screen, in CSS pixels. */
+  /**
+   * The frame's largest side on screen, in CSS pixels. The style sheet may
+   * draw it smaller to fit the window (profile.css, `--crop-side`).
+   */
   readonly frame?: number;
 }
 
@@ -101,8 +104,9 @@ export class PhotoCropper {
     const ratio = Math.min(2, globalThis.devicePixelRatio || 1);
     this.canvas.width = Math.round(this.frame * ratio);
     this.canvas.height = Math.round(this.frame * ratio);
-    this.canvas.style.width = `${this.frame}px`;
-    this.canvas.style.height = `${this.frame}px`;
+    // The side on screen is the style sheet's, so it follows the window as it
+    // turns or resizes; this is only its upper bound.
+    this.element.style.setProperty("--crop-frame", `${this.frame}px`);
     this.canvas.setAttribute("role", "img");
     this.canvas.setAttribute("aria-label", "Drag to move the photo");
     this.canvas.addEventListener("pointerdown", this.onDown);
@@ -149,7 +153,8 @@ export class PhotoCropper {
 
   /** Moves the picture by a drag of (`dx`, `dy`) screen pixels. */
   moveBy(dx: number, dy: number): void {
-    const perPixel = this.square.side / this.frame;
+    const shown = this.canvas.getBoundingClientRect().width;
+    const perPixel = this.square.side / (shown > 0 ? shown : this.frame);
     this.cx -= dx * perPixel;
     this.cy -= dy * perPixel;
     this.settle();
