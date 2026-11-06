@@ -121,7 +121,18 @@ describe("tab rows fill the width", () => {
     expect(tab).toMatch(/flex: 1 1 0;/);
     expect(tab).toMatch(/min-width: max-content;/);
     expect(tab).toMatch(/white-space: nowrap;/);
+    // The words in the middle of each tab, flex box or plain text (patch 6.3).
+    expect(tab).toMatch(/justify-content: center;/);
+    expect(tab).toMatch(/text-align: center;/);
     expect(rule(ui, ".tab-row[hidden]")).toMatch(/display: none;/);
+  });
+
+  it("keeps a phone's tab words off the pinched painted ends, the test report's at the other tabs' size", () => {
+    const skin = css("styles/skin.css");
+    expect(rule(skin, ":root[data-skin] .panel .tab-row > :is(.tabs__tab, .test-report__tab)")).toMatch(
+      /padding-inline: 6px;/,
+    );
+    expect(rule(skin, ":root[data-skin] .panel .test-report__tab")).toMatch(/font-size: var\(--text-sm\);/);
   });
 
   it.each([

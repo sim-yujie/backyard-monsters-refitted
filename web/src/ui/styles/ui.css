@@ -391,9 +391,13 @@ body {
   display: none;
 }
 
+/* The words sit in the middle of each tab, whether the tab is a flex box
+   (a label with a count or an icon) or plain text. */
 .tab-row > :is([role="tab"], button) {
   flex: 1 1 0;
+  justify-content: center;
   min-width: max-content;
+  text-align: center;
   white-space: nowrap;
 }
 
