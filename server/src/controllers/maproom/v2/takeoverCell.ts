@@ -218,7 +218,8 @@ export const takeoverCell: KoaController = async (ctx) => {
     // Evaluated on the taker's locked main row before the outpost joins their
     // list, so a first-ever evaluation's backfill (§8) does not take this
     // takeover for an outpost they already had: it is a live unlock.
-    await recordAchievements(em, taker, now, events);
+    // Landlord (#392) reads the outposts held, this one included.
+    await recordAchievements(em, taker, now, { ...events, outposts: (taker.outposts?.length ?? 0) + 1 });
 
     // Update user
     taker.outposts.push([cell.x, cell.y, baseid]);

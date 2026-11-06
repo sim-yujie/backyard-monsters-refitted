@@ -1,3 +1,5 @@
+import { readWishes } from "./giftWishes.js";
+import type { GiftResource } from "./giftRules.js";
 import type { EntityManager } from "@mikro-orm/postgresql";
 
 import type { FriendRequestStatus } from "../../database/models/friendrequest.model.js";
@@ -36,6 +38,8 @@ export interface FriendView {
   canGiftFrom: number | null;
   /** Whether you could help them now; null when the help gates refuse (`GET /bm/friends` fills it, WP6). */
   help: { speedup: boolean; repair: boolean } | null;
+  /** The gifts they wish for, up to 3 (#391); a gift picker shows these first, starred. */
+  wishes: GiftResource[];
 }
 
 /** One friend request, as both lists and the request routes send it; the player is the other side. */
@@ -97,8 +101,10 @@ const dateOf = (seconds: number): Date => new Date(seconds * 1000);
  * @param {number} now - Unix seconds
  */
 export const listFriends = async (em: EntityManager, userid: number, now: number): Promise<FriendView[]> => {
-  const rows = await em.execute<(CardRow & { since: Date; hide_online: boolean; last_seen_at: Date | null })[]>(
-    `SELECT ${CARD_COLUMNS}, f.created_at AS since, u.hide_online, u.last_seen_at
+  const rows = await em.execute<
+    (CardRow & { since: Date; hide_online: boolean; last_seen_at: Date | null; gift_wishes: string | null })[]
+  >(
+    `SELECT ${CARD_COLUMNS}, f.created_at AS since, u.hide_online, u.last_seen_at, u.gift_wishes
        FROM bym.friend f JOIN ${CARD_JOIN} ON u.userid = f.friend_userid
       WHERE f.userid = ?
       ORDER BY lower(u.username), u.userid`,
@@ -116,6 +122,7 @@ export const listFriends = async (em: EntityManager, userid: number, now: number
       giftSentToday: false,
       canGiftFrom: since + ageGate > now ? since + ageGate : null,
       help: null,
+      wishes: readWishes(row.gift_wishes),
     };
   });
 };

@@ -150,6 +150,18 @@ describe("landedAttackEvents", () => {
     expect(landedAttackEvents(attack)).toEqual({ wm2hall: 1, hugerage: 2 });
     expect(landedAttackEvents({ ...attack, defender: {}, bombs: undefined })).toEqual({});
   });
+
+  test("Kozu Hunter (#392): a landed attack that damaged a Kozu camp counts once, Map Room 1 or 2", () => {
+    const base = { attackerBasesaveid: 7, before: {}, after: {} };
+    expect(landedAttackEvents({ ...base, defender: kozuCamp(), damage: 12 })).toEqual({ kozuattacks: 1 });
+    // A Map Room 1 Kozu tribe has no row: the landing says so.
+    expect(landedAttackEvents({ ...base, defender: {}, kozuCamp: true, damage: 3 })).toEqual({ kozuattacks: 1 });
+    // No damage (opened and left), or not a Kozu camp: nothing.
+    expect(landedAttackEvents({ ...base, defender: kozuCamp(), damage: 0 })).toEqual({});
+    expect(landedAttackEvents({ ...base, defender: kozuCamp() })).toEqual({});
+    expect(landedAttackEvents({ ...base, defender: { ...kozuCamp(), wmid: KOZU_CAMP_WMID + 10 }, damage: 50 })).toEqual({});
+    expect(landedAttackEvents({ ...base, defender: { ...kozuCamp(), type: "main" }, damage: 50 })).toEqual({});
+  });
 });
 
 describe("recordAttackAchievements", () => {

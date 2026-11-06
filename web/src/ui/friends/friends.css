@@ -533,5 +533,155 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* Tight: on a 375 px phone "Pebbles" with its pile and star must stay
+     inside the painted plate's ends (its rivets), not run over them. */
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+:root[data-skin] .panel .gift-picker__choice.btn--outline {
+  padding-inline: 0;
+}
+
+/* Modern's steel plate has a rivet inside each end. Once the dialog drops below
+   its full 420 px (92vw < 420 px, i.e. phones), "Pebbles" with its pile and star
+   ran over them, so there the choices are drawn a size smaller and tighter.
+   Classic's plate has no rivets and keeps its size. */
+@media (width <= 456px) {
+  :root[data-skin="scrap"] .panel .gift-picker__choice.btn--outline {
+    gap: 2px;
+    font-size: var(--text-sm);
+  }
+
+  :root[data-skin="scrap"] .panel .gift-picker__choice .gift-picker__star {
+    font-size: 1em;
+  }
+}
+
+/* Gift wishes (#391): the friend's wished resources first, each starred. */
+.gift-picker__choice--wished {
+  border-color: var(--colour-medal-gold);
+}
+
+/* The same gold star on the buttons, in the legend and on the wish tiles. */
+.gift-picker__star,
+.gift-wish__star,
+.gift-wishes__star {
+  color: var(--colour-medal-gold);
+  font-size: 1.1em;
+  line-height: 1;
+  text-shadow:
+    0 1px 0 #4a3000, 1px 0 0 #4a3000, -1px 0 0 #4a3000, 0 -1px 0 #4a3000;
+}
+
+.gift-picker__legend {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+/* The Gifts tab's "★ My wishes" strip: four resource toggles, up to 3 on. */
+.gift-wishes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md, 8px);
+}
+
+.gift-wishes__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gift-wishes__title {
+  font-weight: 700;
+  color: var(--colour-text-strong);
+}
+
+.gift-wishes__hint {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.gift-wishes__toggles {
+  display: flex;
+  gap: var(--space-3);
+  /* Room for the stars that stick out of the tiles' top-right corners. */
+  padding: 6px 6px 0 0;
+}
+
+/* A wish toggle: its own square tile, not the skin's wide plate (whose ends
+   are wider than half of 44 px). Off: a sunken tile with a plain rim. On: a
+   gold tile with a dark gold rim and a star on its top-right corner, so on and
+   off differ in colour, not only in the star (owner rule). */
+.gift-wish {
+  position: relative;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  min-width: 0;
+  height: 44px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 2px solid var(--colour-border-strong);
+  border-radius: 10px;
+  background: var(--colour-surface-sunken);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--easing),
+    border-color var(--motion-fast) var(--easing),
+    transform var(--motion-fast) var(--easing);
+}
+
+.gift-wish > .res-icon {
+  display: block;
+  width: 32px;
+  height: auto;
+  vertical-align: 0;
+}
+
+.gift-wish:hover:not(:disabled) {
+  border-color: var(--colour-medal-gold);
+}
+
+.gift-wish:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.gift-wish:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.gift-wish--on,
+.gift-wish--on:hover:not(:disabled) {
+  border-color: #8a5a00;
+  background: radial-gradient(circle at 50% 30%, #fff3b0, var(--colour-medal-gold) 75%);
+  box-shadow:
+    0 0 0 2px rgb(255 214 90 / 55%),
+    0 2px 3px var(--colour-art-shadow);
+}
+
+.gift-wish__star {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  font-size: 18px;
+  pointer-events: none;
+}
+
+.gift-wish:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }

@@ -44,6 +44,7 @@ import { RESOURCE_KEYS } from "../../../services/base/updateResources.js";
 import { mapSaveData } from "../../../services/base/mapSaveData.js";
 import { onboardingSummary } from "../../../services/onboarding/summary.js";
 import { unseenAchievements } from "../../../services/achievements/record.js";
+import { recordLogin, recordVisit } from "../../../services/achievements/daily.js";
 import { clearExpiredStoreItems } from "../../../services/base/clearExpiredStoreItems.js";
 import { syncDerivedLevels } from "../../../services/yard/derivedLevels.js";
 import { catchUpOwnerOutpost, catchUpOwnerYard } from "../../yard/yardRoute.js";
@@ -488,6 +489,17 @@ export const baseLoad: KoaController = async (ctx) => {
   const relationship = isOwnMainYard
     ? EnumBaseRelationship.SELF
     : cellRelationship(user.alliance_id, ownerAllianceId, stances);
+
+  // Hidden achievements (#392, `services/achievements/daily.ts`): the day's
+  // first load of the player's own main yard counts a day on the login run
+  // (Regular) and the friends held (Popular); opening someone else's yard to
+  // look or help counts a yard visited today (Neighbourly). Each writes only
+  // when there is something new, and never fails the load.
+  if (type === BaseMode.BUILD && isOwner && baseSave.type === BaseType.MAIN) {
+    await recordLogin(postgres.em, userSave);
+  } else if (type === BaseMode.VIEW || type === BaseMode.HELP) {
+    await recordVisit(postgres.em, userSave, baseSave);
+  }
 
   // The account's paid achievement unlocks not yet shown, on the owner's
   // build-mode load, main yard or outpost (issue #204,

@@ -315,17 +315,18 @@ const writeTribeLanding = async (
     now
   );
 
-  // Each biggest Putty bomb fired counts towards Huge Rage (#299); a Map Room 1
-  // Kozu tribe is counted by its tribe counter above, never here.
-  if (attacker.bombs) {
-    await recordAttackAchievements(postgres.em, {
-      attackerBasesaveid: userSave.basesaveid,
-      defender: {},
-      before: null,
-      after: null,
-      bombs: attacker.bombs.charges,
-    });
-  }
+  // Each biggest Putty bomb fired counts towards Huge Rage (#299), and an
+  // attack that damaged a Kozu tribe towards Kozu Hunter (#392); a Map Room 1
+  // Kozu tribe destroyed is counted by its tribe counter above, never here.
+  await recordAttackAchievements(postgres.em, {
+    attackerBasesaveid: userSave.basesaveid,
+    defender: {},
+    before: null,
+    after: null,
+    bombs: attacker.bombs?.charges,
+    damage: battle?.damage,
+    kozuCamp: tribeOfBase(baseid) === "kozu",
+  });
 
   // Spent: the lock is still held, so a copy of this save finds nothing, and
   // the attack's checkpoint goes with it, so the finaliser does not land it again.

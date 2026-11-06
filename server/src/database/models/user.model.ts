@@ -122,6 +122,14 @@ export class User {
   @Property({ type: "Date", nullable: true })
   look_seen_at?: Date | null;
 
+  /**
+   * Gift wishes (#391): up to 3 of `r1`-`r4`, comma separated, or null for
+   * none. Set through `POST /bm/friends/wishes`; friends read them in
+   * `GET /bm/friends` (`services/friends/giftWishes.ts`).
+   */
+  @Property({ type: "string", length: 16, nullable: true })
+  gift_wishes?: string | null;
+
   @Property({ type: "string", unique: true })
   @FrontendKey
   email!: string;

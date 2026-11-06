@@ -44,6 +44,12 @@ export const ACHIEVEMENT_STATS = [
   "descent",
   "underhall",
   "infernoquests",
+  // Beta 7's hidden achievements (#392, owner 6 Nov): web-only, no Flash stat.
+  "neighbourly",
+  "loginstreak",
+  "friends",
+  "kozuattacks",
+  "outposts",
 ] as const;
 
 export type AchievementStat = (typeof ACHIEVEMENT_STATS)[number];
@@ -68,7 +74,13 @@ export interface AchievementDef {
   readonly available: boolean;
   /** True: it belongs to the new Inferno, so it counts only while the Inferno is switched on (`infernoConfig.enabled`). */
   readonly inferno?: boolean;
-  /** Where Flash defined the rule and moved its stat (`client/scripts`). */
+  /**
+   * True: hidden (#392). Until earned, every list shows it as "???" with no
+   * name, description, reward or progress (`services/achievements/view.ts`);
+   * the unlock pop-up is the first the player hears of it.
+   */
+  readonly hidden?: boolean;
+  /** Where Flash defined the rule and moved its stat (`client/scripts`); "web" for the web's own. */
   readonly flash: string;
 }
 
@@ -314,9 +326,73 @@ const LIST: readonly AchievementDef[] = [
     available: true,
     flash: "ACHIEVEMENTS.as:51; BUILDING14.as:137, :151, :177",
   },
+  // ── Beta 7's hidden achievements (#392; owner's targets and Shiny, 6 Nov
+  // 2026, beta7-grill item 32). Web-only: Flash had no 23 onwards. Every
+  // counter is the server's own (`services/achievements/daily.ts`, `events.ts`).
+  {
+    id: 23,
+    name: "Neighbourly",
+    description: "Visit 30 yards in one day.",
+    shiny: 15,
+    // Other players' yards opened to look or help, each counted once a UTC day.
+    rules: [{ stat: "neighbourly", target: 30 }],
+    mode: "all",
+    available: true,
+    hidden: true,
+    flash: "web",
+  },
+  {
+    id: 24,
+    name: "Regular",
+    description: "Play 30 days in a row.",
+    shiny: 25,
+    // The longest run of UTC days with a load of the player's own main yard.
+    rules: [{ stat: "loginstreak", target: 30 }],
+    mode: "all",
+    available: true,
+    hidden: true,
+    flash: "web",
+  },
+  {
+    id: 25,
+    name: "Popular",
+    description: "Have 80 friends.",
+    shiny: 15,
+    // The most friends held at once.
+    rules: [{ stat: "friends", target: 80 }],
+    mode: "all",
+    available: true,
+    hidden: true,
+    flash: "web",
+  },
+  {
+    id: 26,
+    // Flash's entry 10 is already "Kozu Crusher" (destroy a Kozu Town Hall).
+    name: "Kozu Hunter",
+    description: "Attack Kozu camps 100 times.",
+    shiny: 20,
+    // Landed attacks on a Kozu camp (Map Room 1 or 2) that did some damage.
+    rules: [{ stat: "kozuattacks", target: 100 }],
+    mode: "all",
+    available: true,
+    hidden: true,
+    flash: "web",
+  },
+  {
+    id: 27,
+    name: "Landlord",
+    description: "Hold 100 outposts at once.",
+    shiny: 25,
+    // The most outposts on the main save's list at once.
+    rules: [{ stat: "outposts", target: 100 }],
+    mode: "all",
+    available: true,
+    hidden: true,
+    flash: "web",
+  },
 ];
 
-/** All 22, in Flash's order. */
+/** All 27: Flash's 22 in Flash's order, then the web's own. */
 export const ACHIEVEMENTS: readonly AchievementDef[] = LIST;
 
 /** The entries players can earn whether or not the new Inferno is on (§5.1). */

@@ -50,8 +50,12 @@ const fallenIn = (health: HealthMap, id: string): boolean => {
  * @param before - `buildinghealthdata` as the attack began.
  * @param after - The battle's `buildinghealthdata`.
  */
+/** Whether the defender is a Map Room 2 Kozu camp: a tribe row with the Kozu `wmid`, any level. */
+export const isKozuCamp = (defender: DefenderLike): boolean =>
+  defender.type === BaseType.TRIBE && Number(defender.wmid) === KOZU_CAMP_WMID;
+
 export const kozuHallFell = (defender: DefenderLike, before: HealthMap, after: HealthMap): boolean => {
-  if (defender.type !== BaseType.TRIBE || Number(defender.wmid) !== KOZU_CAMP_WMID) return false;
+  if (!isKozuCamp(defender)) return false;
   return Object.entries(defender.buildingdata ?? {}).some(([key, entry]) => {
     if (Number(entry?.t) !== TOWN_HALL_TYPE) return false;
     // The id the engine knows an entry by: its `id`, else its key (`buildEngineYard`).
@@ -99,16 +103,28 @@ export interface LandedAttack {
   after: HealthMap;
   /** The bombs the attack was charged for (`combat/bombSpend.ts`), once per attack. */
   bombs?: readonly { readonly id: string }[] | null;
+  /** The battle's damage, 0 to 100: Kozu Hunter counts an attack only when it did some. */
+  damage?: number | null;
+  /**
+   * True for a Map Room 1 Kozu tribe (`tribeOfBase`), whose landing has no
+   * tribe row to read; a Map Room 2 camp is told by its row ({@link isKozuCamp}).
+   */
+  kozuCamp?: boolean;
 }
 
 /**
  * The achievement events of a landed attack: `wm2hall` for a Map Room 2 Kozu
- * Town Hall brought down, and `hugerage` for each `pu3` fired (Flash
+ * Town Hall brought down, `kozuattacks` for a Kozu camp damaged, and
+ * `hugerage` for each `pu3` fired (Flash
  * `ResourceBombs.as:318-319`, which Flash itself never let count).
  */
 export const landedAttackEvents = (attack: LandedAttack): AchievementEvents => {
   const events: AchievementEvents = {};
   if (kozuHallFell(attack.defender, attack.before, attack.after)) events.wm2hall = 1;
+  // Kozu Hunter (#392): one landed attack on a Kozu camp, Map Room 1 or 2,
+  // that did some damage. An attack opened and left with nothing flung does
+  // no damage, so it never counts.
+  if ((attack.kozuCamp || isKozuCamp(attack.defender)) && Number(attack.damage) > 0) events.kozuattacks = 1;
   const rages = (attack.bombs ?? []).filter((bomb) => bomb.id === HUGE_RAGE_BOMB).length;
   if (rages > 0) events.hugerage = rages;
   return events;

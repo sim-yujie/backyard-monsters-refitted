@@ -12,6 +12,10 @@ import "./friends.css";
  * works out the amount (3% of the lower of the two storage caps) and takes
  * nothing from the sender. One gift per friend per day: once sent, the store
  * marks the friend so every "Send gift" button turns off.
+ *
+ * Gift wishes (#391): the friend's wished resources (up to 3) come first,
+ * each with a ★, and a short legend says what the star means. Any resource
+ * can still be sent; a wished one earns nothing extra.
  */
 
 export const GIFT_TEXT = {
@@ -29,13 +33,23 @@ export const GIFT_TEXT = {
   },
   cancel: "Cancel",
   done: "Done",
+  /** The legend under the choices when the friend has wishes. */
+  wished: (name: string): string => `★ = ${name}'s wish`,
 } as const;
 
 /** Who the gift is for. */
 export interface GiftTarget {
   readonly userid: number;
   readonly username: string;
+  /** Their gift wishes; looked up in the friends list when left out. */
+  readonly wishes?: readonly GiftResource[];
 }
+
+/** The four choices, the friend's wishes first (each in the usual order). */
+export const choiceOrder = (wishes: readonly GiftResource[]): GiftResource[] => [
+  ...RESOURCE_KEYS.filter((key) => wishes.includes(key)),
+  ...RESOURCE_KEYS.filter((key) => !wishes.includes(key)),
+];
 
 export interface GiftPickerOptions {
   readonly api?: FriendsApi;
@@ -76,21 +90,38 @@ export class GiftPicker {
 
     const lead = make("p", "takeover-dialog__lead", GIFT_TEXT.lead(target.username));
     const grid = make("div", "gift-picker__choices");
-    for (const key of RESOURCE_KEYS) {
-      const choice = make("button", "btn btn--outline gift-picker__choice");
+    const wishes = target.wishes ?? this.store.friends.find((friend) => friend.userid === target.userid)?.wishes ?? [];
+    for (const key of choiceOrder(wishes)) {
+      const wished = wishes.includes(key);
+      const choice = make("button", wished ? "btn btn--outline gift-picker__choice gift-picker__choice--wished" : "btn btn--outline gift-picker__choice");
       choice.type = "button";
       choice.dataset["resource"] = key;
       choice.append(resourceIcon(key, { decorative: true }), make("span", "gift-picker__name", RESOURCE_NAMES[key]));
+      if (wished) {
+        const star = make("span", "gift-picker__star", "★");
+        star.setAttribute("aria-hidden", "true");
+        choice.append(star);
+        choice.setAttribute("aria-label", `${RESOURCE_NAMES[key]} (wished)`);
+      }
       choice.addEventListener("click", () => void this.send(key));
       this.choices.set(key, choice);
       grid.append(choice);
+    }
+    const legend: HTMLElement[] = [];
+    if (wishes.length > 0) {
+      // "★ = Bob's wish", its star gold like the buttons'.
+      const line = make("p", "gift-picker__legend");
+      const star = make("span", "gift-picker__star", "★");
+      star.setAttribute("aria-hidden", "true");
+      line.append(star, GIFT_TEXT.wished(target.username).slice(1));
+      legend.push(line);
     }
     this.cancel = make("button", "btn btn--ghost", GIFT_TEXT.cancel);
     this.cancel.type = "button";
     this.cancel.addEventListener("click", () => this.popup.close());
     const actions = make("div", "takeover-dialog__actions");
     actions.append(this.cancel);
-    this.popup.setContent(lead, grid, this.status.element, actions);
+    this.popup.setContent(lead, grid, ...legend, this.status.element, actions);
   }
 
   get statusText(): string {

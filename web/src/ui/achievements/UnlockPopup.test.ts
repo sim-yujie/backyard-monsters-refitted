@@ -74,6 +74,23 @@ describe("UnlockPopup", () => {
     expect(text(".ach-card__names")).toBe("Ach 1, Ach 2 and Ach 3");
     expect(text(".ach-card__shiny")).toContain("+15");
     expect(shown).toHaveLength(1);
+    // Their count on a gold medal, the list's medal.
+    expect(text(".ach-card__badge .ach-badge--gold .ach-badge__count")).toBe("3");
+  });
+
+  it("shows the achievement's own badge: painted when there is one, else the list's stand-in medal", () => {
+    inbox.add([live(2, 10)]);
+    const painted = popup.element.querySelector<HTMLElement>(".ach-card__badge .ach-badge")!;
+    expect(painted.dataset["achievement"]).toBe("2");
+    expect(painted.querySelector("img.ach-badge__art")).not.toBeNull();
+    expect(popup.element.querySelector(".ach-card__badge")?.textContent).not.toContain("★");
+    click(".ach-card__close");
+    vi.advanceTimersByTime(GAP_MS);
+    inbox.add([live(24, 25)]);
+    const standIn = popup.element.querySelector<HTMLElement>(".ach-card__badge .ach-badge")!;
+    expect(standIn.dataset["achievement"]).toBe("24");
+    expect(standIn.classList.contains("ach-badge--gold")).toBe(true);
+    expect(standIn.querySelector(".ach-badge__cup")).not.toBeNull();
   });
 
   it("the close button takes the card down at once", () => {
@@ -151,6 +168,13 @@ describe("the card's look", () => {
     expect(card()).toMatch(/background: var\(--colour-surface-raised\);/);
     expect(card()).toMatch(/backdrop-filter: var\(--blur-panel\);/);
     expect(card()).not.toMatch(/--colour-surface-overlay/);
+  });
+
+  it("is wide enough on a computer to keep ACHIEVEMENT EARNED! on one line", () => {
+    expect(rule(".ach-pop")).toMatch(/width: min\(460px,/);
+    const file = resolve(dirname(fileURLToPath(import.meta.url)), "../styles/achievement-popup.css");
+    const wide = readFileSync(file, "utf8").split("@media (min-width: 601px) {")[1]?.split("}")[0] ?? "";
+    expect(wide).toMatch(/\.ach-card__kicker \{[^}]*white-space: nowrap;/);
   });
 
   it("writes its kicker in amber, not the dark ink meant for an amber fill", () => {

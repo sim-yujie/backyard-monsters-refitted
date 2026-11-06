@@ -16,6 +16,7 @@ export const fixtureFriend = (userid: number, extra: Partial<Friend> = {}): Frie
   giftSentToday: false,
   canGiftFrom: null,
   help: null,
+  wishes: [],
   ...extra,
 });
 
@@ -65,6 +66,8 @@ export const fixtureGift = (id: number, userid: number, extra: Partial<Gift> = {
   ...extra,
 });
 
+type FriendsApiWishes = Parameters<FriendsApi["setWishes"]>[0];
+
 export type FixtureCall = readonly [method: keyof FriendsApi, ...args: unknown[]];
 
 /**
@@ -92,7 +95,12 @@ export const fixtureApi = (
     search: answer("search", []),
     suggestions: answer("suggestions", []),
     sendGift: answer("sendGift", null),
-    gifts: answer("gifts", { gifts: [], collectsLeft: 5 }),
+    gifts: answer("gifts", { gifts: [], collectsLeft: 5, wishes: [] }),
+    // Left out of `answers`, it stores what it was asked, like the server.
+    setWishes: (...args: unknown[]) =>
+      "setWishes" in answers
+        ? answer("setWishes", [])(...args)
+        : (calls.push(["setWishes", ...args]), Promise.resolve([...(args[0] as FriendsApiWishes)])),
     collect: answer("collect", { collected: 0, resources: {}, collectsLeft: 5, giftsWaiting: 0 }),
     help: answer("help", { reward: {}, helpsLeft: 0, building: null }),
     loadHelpYard: answer("loadHelpYard", { error: 0 } as Awaited<ReturnType<FriendsApi["loadHelpYard"]>>),
