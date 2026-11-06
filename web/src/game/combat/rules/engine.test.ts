@@ -17,6 +17,7 @@ import {
   type BunkerLossTally,
 } from "./engine.js";
 import { digestOf } from "./digest.js";
+import { ATTACK_COUNTDOWN_SECONDS, TICKS_PER_SECOND } from "./stats.js";
 import {
   aerialSalvo,
   BOMBS,
@@ -133,6 +134,39 @@ describe("a Pokey against a lone Cannon Tower", () => {
     const { battle } = battleOf();
     run(battle, 40000);
     expect(battle.over()).toBe(true);
+  });
+});
+
+describe("the retreat after the countdown (`DROPZONE.as:53`)", () => {
+  const ENDS = ATTACK_COUNTDOWN_SECONDS * TICKS_PER_SECOND;
+  const battleTo = (t: number) => {
+    const battle = createBattle(yardOf({ "1": { id: 1, t: 21, l: 1, X: 0, Y: 0 } }), { seed: 1 });
+    battle.runTo(t);
+    return battle;
+  };
+  const flungAt = (t: number) => {
+    const battle = battleTo(t);
+    battle.apply({ kind: "fling", t, x: -100, y: -100, r: 0, monsters: { C1: 1 } });
+    return battle.state().creepsFlung;
+  };
+  const healthAfterBombAt = (t: number) => {
+    const battle = battleTo(t);
+    const before = battle.state().health;
+    battle.apply({ kind: "bomb", t, x: 0, y: 0, id: "pb1" });
+    run(battle, 200);
+    return { before, after: battle.state().health };
+  };
+
+  it("takes a fling and a bomb on the last tick of the countdown", () => {
+    expect(flungAt(ENDS - 1)).toBe(1);
+    const { before, after } = healthAfterBombAt(ENDS - 1);
+    expect(after).not.toEqual(before);
+  });
+
+  it("ignores them once it has run out", () => {
+    expect(flungAt(ENDS)).toBe(0);
+    const { before, after } = healthAfterBombAt(ENDS);
+    expect(after).toEqual(before);
   });
 });
 

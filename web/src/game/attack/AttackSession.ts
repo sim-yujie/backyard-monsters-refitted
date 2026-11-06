@@ -443,6 +443,14 @@ export class DropsHeldError extends Error {
   }
 }
 
+/** A fling or bomb refused because the countdown has run out; its message is the player's. */
+export class DropsClosedError extends Error {
+  constructor() {
+    super("Time is up: your monsters are pulling back.");
+    this.name = "DropsClosedError";
+  }
+}
+
 export class AttackSession {
   readonly target: AttackTarget;
   readonly seed: number;
@@ -826,7 +834,7 @@ export class AttackSession {
    * here (§F2 "after a drop").
    */
   appendFling(input: FlingInput): FlingDrop {
-    const battle = this.requireLive("fling");
+    const battle = this.requireBeforeRetreat("fling");
     const remaining = this.remaining();
     let total = 0;
     for (const [id, count] of Object.entries(input.monsters)) {
@@ -909,7 +917,7 @@ export class AttackSession {
 
   /** Appends a resource bomb at the current tick and hands it to the battle. */
   appendBomb(input: BombInput): BombDrop {
-    const battle = this.requireLive("bomb");
+    const battle = this.requireBeforeRetreat("bomb");
     const event: BombDrop = {
       kind: "bomb",
       t: battle.tick,
@@ -1184,6 +1192,13 @@ export class AttackSession {
       byType[t] = hp ?? 0;
     }
     return byType;
+  }
+
+  /** {@link requireLive} for a fling or a bomb: the engine takes neither once the countdown is over. */
+  private requireBeforeRetreat(what: string): Battle {
+    const battle = this.requireLive(what);
+    if (battle.tick >= this.countdownSeconds * TICKS_PER_SECOND) throw new DropsClosedError();
+    return battle;
   }
 
   private requireLive(what: string): Battle {
