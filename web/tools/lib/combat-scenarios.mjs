@@ -278,6 +278,36 @@ export const SCENARIOS = [
       ],
     },
   },
+  // Slimeattikus's Lab "Split" on both sides (owner, beta 7 grill item 31,
+  // 6 Nov 2026): ranked attackers and a bunker's ranked Slimeattikus leave
+  // smaller copies of themselves on top of Flash's Minis.
+  {
+    name: "lab-split",
+    description:
+      "Ranked Slimeattikus into the sandbox yard, against a bunker holding Slimeattikus at the " +
+      "defender's rank: each one that dies leaves its Minis and its Lab Split copies (beta 7).",
+    yard: "sandbox",
+    kind: "main",
+    levels: { C17: 3, C10: 4 },
+    playerLevel: 20,
+    tailTicks: 9000,
+    ranks: { C17: 3 },
+    defence: {
+      bunkers: {
+        85: { C17: 2 },
+      },
+      defenderLevels: { C17: 3 },
+      defenderRanks: { C17: 2 },
+    },
+    log: {
+      v: 1,
+      seed: 20261106,
+      events: [
+        { kind: "fling", t: 200, x: 420, y: -560, r: 120, monsters: { C17: 4 } },
+        { kind: "fling", t: 260, x: 380, y: -520, r: 120, monsters: { C10: 3, C17: 2 } },
+      ],
+    },
+  },
   {
     name: "caged-champion",
     description:

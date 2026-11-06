@@ -4,9 +4,12 @@ import { createBattle, type Battle, type BattleVisualEvent, type CreepSnapshot }
 import { replayAttack } from "./replay.js";
 import {
   CRIT_MULTIPLIER,
+  SPLIT_COPY_DAMAGE_SHARE,
   SWARM_SIZE,
   WEAKEN_SECONDS,
   critChance,
+  splitCopyCount,
+  splitCopyHealthShare,
   swarmSpeedShare,
   thornsShare,
   weakenShare,
@@ -16,9 +19,10 @@ import type { CombatBuildingDataMap, FlingEvent } from "./types.js";
 import { buildEngineYard } from "./yard.js";
 
 /**
- * The revamp's four Monster Lab abilities (owner, beta 6 grill, 2 Nov 2026):
+ * The revamp's Monster Lab abilities (owner, beta 6 grill, 2 Nov 2026):
  * Pokey's Swarm, Octo-ooze's Weakening Ooze, Ichi's Thorns and Crabatron's
- * Critical Hits, on attack and on defence. Rank 0 is always the plain monster.
+ * Critical Hits; and Slimeattikus's Split (beta 7 grill item 31, 6 Nov 2026).
+ * On attack and on defence. Rank 0 is always the plain monster.
  */
 
 const yardOf = (buildings: CombatBuildingDataMap) =>
@@ -69,6 +73,9 @@ describe("the numbers per rank", () => {
     expect([1, 2, 3].map(thornsShare)).toEqual([0.1, 0.15, 0.2]);
     expect([1, 2, 3].map(critChance)).toEqual([0.1, 0.15, 0.2]);
     expect(CRIT_MULTIPLIER).toBe(2);
+    expect([0, 1, 2, 3].map(splitCopyCount)).toEqual([0, 2, 2, 3]);
+    expect([0, 1, 2, 3].map(splitCopyHealthShare)).toEqual([0, 0.25, 0.35, 0.35]);
+    expect(SPLIT_COPY_DAMAGE_SHARE).toBe(0.5);
   });
 });
 
@@ -415,6 +422,91 @@ describe("Fomor's enrage armour on the numbers", () => {
   });
 });
 
+describe("Slimeattikus's Split", () => {
+  /** Every creep a battle ever showed, as first seen, and every swing at a building. */
+  const census = (battle: Battle, steps: number) => {
+    const seen = new Map<number, CreepSnapshot>();
+    const swings = new Map<number, number[]>();
+    const deaths = new Set<number>();
+    watch(battle, steps, (creeps, events) => {
+      for (const creep of creeps) if (!seen.has(creep.id)) seen.set(creep.id, creep);
+      for (const event of events) {
+        if (event.kind === "death") deaths.add(event.creepId);
+        if (event.kind !== "hit" || event.buildingId < 0 || event.amount <= 0) continue;
+        swings.set(event.creepId, [...(swings.get(event.creepId) ?? []), event.amount]);
+      }
+    });
+    const all = [...seen.values()];
+    return {
+      all,
+      deaths,
+      swings,
+      copies: all.filter((creep) => creep.splitCopy),
+      minis: all.filter((creep) => creep.monsterId === "C18"),
+    };
+  };
+
+  /** One level 1 Slimeattikus (700 health, 850 damage) dropped between two level 6 Cannons. */
+  const underCannons = (rank: number) => {
+    const yard = yardOf({
+      "1": block(1, 0, 0),
+      "2": { ...cannon(2, 100, 0), l: 6 },
+      "3": { ...cannon(3, 0, 100), l: 6 },
+    });
+    const battle = createBattle(yard, { seed: 4, ranks: { C17: rank } });
+    battle.apply(dropOf("C17", 40, 40, 1, 0));
+    return census(battle, 6000);
+  };
+
+  it("leaves only Flash's Minis at rank 0", () => {
+    const { copies, minis } = underCannons(0);
+    expect(copies).toHaveLength(0);
+    // `splits` is 2 at level 1 (`creeps/Slimeattikus.as:11-13`).
+    expect(minis).toHaveLength(2);
+  });
+
+  it.each([
+    [1, 2, 175],
+    [2, 2, 245],
+    [3, 3, 245],
+  ])("at rank %i leaves %i smaller copies at %i health, on top of the Minis", (rank, count, health) => {
+    const { copies, minis, deaths } = underCannons(rank);
+    expect(copies).toHaveLength(count);
+    expect(minis).toHaveLength(2);
+    for (const copy of copies) {
+      expect(copy).toMatchObject({ monsterId: "C17", level: 1, friendly: false, maxHp: health, hp: health });
+      // A copy is rank 0: it never carries the Lab rank on.
+      expect(copy.rank).toBeUndefined();
+    }
+    // Every copy died under the cannons, and none of them split again.
+    for (const copy of copies) expect(deaths.has(copy.id)).toBe(true);
+  });
+
+  it("gives each copy half the original's damage", () => {
+    const { all, copies, swings } = underCannons(3);
+    const original = all.find((creep) => creep.monsterId === "C17" && !creep.splitCopy)!;
+    const full = swings.get(original.id) ?? [];
+    const half = copies.flatMap((copy) => swings.get(copy.id) ?? []);
+    expect(full.length).toBeGreaterThan(0);
+    expect(half.length).toBeGreaterThan(0);
+    for (const amount of full) expect(amount).toBe(850);
+    for (const amount of half) expect(amount).toBe(850 * SPLIT_COPY_DAMAGE_SHARE);
+  });
+
+  it("splits a bunker's Slimeattikus at the defender's rank, into defenders", () => {
+    const fight = (defenderRanks: Record<string, number>) => {
+      const yard = yardOf({ "1": bunker(1, 0, 0), "2": block(2, 200, 200) });
+      const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C17: 1 } }, defenderRanks });
+      battle.apply(dropOf("C10", 180, 180, 4, 10));
+      return census(battle, 4000);
+    };
+    expect(fight({}).copies).toHaveLength(0);
+    const ranked = fight({ C17: 3 });
+    expect(ranked.copies).toHaveLength(3);
+    for (const copy of ranked.copies) expect(copy.friendly).toBe(true);
+  });
+});
+
 describe("the same battle on the server", () => {
   const log = {
     v: 1 as const,
@@ -424,6 +516,7 @@ describe("the same battle on the server", () => {
       dropOf("C2", 0, 80, 3, 10),
       dropOf("C6", 80, 0, 2, 10),
       dropOf("C10", 40, 40, 3, 10),
+      dropOf("C17", 100, 100, 2, 10),
     ],
   };
   const input = {
@@ -436,7 +529,7 @@ describe("the same battle on the server", () => {
     log,
     tailTicks: 3000,
   };
-  const ranks = { C1: 3, C2: 2, C6: 3, C10: 3 };
+  const ranks = { C1: 3, C2: 2, C6: 3, C10: 3, C17: 3 };
 
   it("replays identically with the same ranks", () => {
     const one = replayAttack({ ...input, ranks });
@@ -447,7 +540,7 @@ describe("the same battle on the server", () => {
 
   it("is a different battle with ranks than without, and the same with rank 0", () => {
     const plain = replayAttack(input);
-    const zero = replayAttack({ ...input, ranks: { C1: 0, C2: 0, C6: 0, C10: 0 } });
+    const zero = replayAttack({ ...input, ranks: { C1: 0, C2: 0, C6: 0, C10: 0, C17: 0 } });
     expect(zero.digest).toBe(plain.digest);
     expect(replayAttack({ ...input, ranks }).digest).not.toBe(plain.digest);
   });

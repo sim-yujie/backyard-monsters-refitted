@@ -133,3 +133,23 @@ export const CRABATRON_ID = "C10";
 export const critChance = (rank: number): number => (5 + 5 * rank) / 100;
 /** A critical hit's damage multiplier. */
 export const CRIT_MULTIPLIER = 2;
+
+/*
+ * C17 Slimeattikus: "Split" (owner, beta 7 grill item 31, 6 Nov 2026). Flash's
+ * Lab had none for it; Flash's own split into Slimeattikus Minis (`C18`,
+ * `DeathSplit.as`) stays as it was. A ranked Slimeattikus that dies also
+ * leaves copies of itself: smaller, at a share of its health and half its
+ * damage. A copy never splits again, into copies or Minis.
+ */
+
+/** C17 Slimeattikus: "Split". */
+export const SLIMEATTIKUS_ID = "C17";
+/** How many copies a ranked Slimeattikus leaves: 2, 2, 3. */
+export const splitCopyCount = (rank: number): number => (rank >= 3 ? 3 : rank >= 1 ? 2 : 0);
+/** The share of the original's full health each copy gets: 25%, 35%, 35%. */
+export const splitCopyHealthShare = (rank: number): number =>
+  rank >= 2 ? 0.35 : rank >= 1 ? 0.25 : 0;
+/** The share of the original's damage each copy deals, at every rank. */
+export const SPLIT_COPY_DAMAGE_SHARE = 0.5;
+/** How big a copy is drawn beside the original. Drawing only; the battle never reads it. */
+export const SPLIT_COPY_SCALE = 0.7;
