@@ -1,7 +1,7 @@
 /* The achievement unlock pop-up (issue #204, WP6) ────────────────────────────
  * A card that slides up at the bottom centre of the own yard
- * (`web/src/ui/achievements/UnlockPopup.ts`). The badge is a CSS stand-in
- * until the badge art (WP8). Every value is a token. */
+ * (`web/src/ui/achievements/UnlockPopup.ts`). The badge is the list's own
+ * medal (painted, or its 60 px stand-in). Every value is a token. */
 
 .ach-pop {
   position: absolute;
@@ -9,7 +9,9 @@
   bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   z-index: var(--z-hud);
-  width: min(360px, calc(100% - 2 * var(--space-4)));
+  /* Wide enough on a computer for "ACHIEVEMENT EARNED!" on one line beside
+     the 60 px badge and the View and close buttons. */
+  width: min(460px, calc(100% - 2 * var(--space-4)));
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -37,19 +39,11 @@
   animation: ach-card-in var(--motion-normal) var(--easing) both;
 }
 
+/* The badge is the achievements list's own medal (achievements.css), 60 px. */
 .ach-card__badge {
   flex: none;
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  border: 2px solid var(--colour-warning-line);
-  background: radial-gradient(circle at 35% 30%, var(--colour-warning-bright), var(--colour-warning));
-  color: var(--colour-text-inverse);
-  font-family: var(--font-display);
-  font-size: var(--text-xl);
-  line-height: 1;
 }
 
 .ach-card__body {
@@ -99,6 +93,15 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
+}
+
+/* One line where the card is at full width; a phone's narrow card may wrap it. */
+@media (min-width: 601px) {
+  .ach-card__kicker {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
 }
 
 /* On a phone the yard's round buttons sit at both bottom corners: the card goes above them. */

@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GiftResource } from "@/api/friends";
 import { ApiError } from "@/api/http";
@@ -196,6 +199,21 @@ describe("my wishes (#391)", () => {
     expect(pressed(tab)).toEqual(["r2", "r4"]);
     expect(toggle(tab, "r2").querySelector(".gift-wish__star")?.textContent).toBe("★");
     expect(toggle(tab, "r1").querySelector(".gift-wish__star")).toBeNull();
+    // The title's star is the stars' gold one (its own span).
+    expect(tab.element.querySelector(".gift-wishes__title .gift-wishes__star")?.textContent).toBe("★");
+  });
+
+  it("draws each toggle as its own square tile, not the skin's wide button plate", async () => {
+    const { tab } = setup({ gifts: { ...twoGifts, wishes: ["r2"] } });
+    await tab.show();
+    for (const resource of ["r1", "r2", "r3", "r4"]) {
+      const one = toggle(tab, resource);
+      expect(one.classList.contains("btn")).toBe(false);
+      expect(one.classList.contains("btn--outline")).toBe(false);
+      expect(one.querySelector(".res-icon")).not.toBeNull();
+    }
+    expect(toggle(tab, "r2").classList.contains("gift-wish--on")).toBe(true);
+    expect(toggle(tab, "r1").classList.contains("gift-wish--on")).toBe(false);
   });
 
   it("saves each change at once, and turns the last one off at 3", async () => {
@@ -229,5 +247,31 @@ describe("my wishes (#391)", () => {
     await settle();
     expect(pressed(tab)).toEqual(["r2"]);
     expect(tab.statusText).toBe(GIFTS_TEXT.wishesFailed);
+  });
+});
+
+describe("the wish tiles' look", () => {
+  // jsdom applies no stylesheet: the rules are read from the CSS text.
+  const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "friends.css"), "utf8").replace(/\r\n/g, "\n");
+  const rule = (selector: string): string => css.split(`\n${selector} {`)[1]?.split("}")[0] ?? "";
+
+  it("is a 44 px square with the icon in the middle", () => {
+    expect(rule(".gift-wish")).toMatch(/box-sizing: border-box;/);
+    expect(rule(".gift-wish")).toMatch(/width: 44px;/);
+    expect(rule(".gift-wish")).toMatch(/height: 44px;/);
+    expect(rule(".gift-wish")).toMatch(/place-items: center;/);
+    expect(rule(".gift-wish")).not.toMatch(/border-image/);
+    expect(rule(".gift-wish > .res-icon")).toMatch(/width: 32px;/);
+  });
+
+  it("is a different colour when on, with no inset ring, and the star on the top-right corner", () => {
+    const off = rule(".gift-wish");
+    const on = css.split("\n.gift-wish--on,\n.gift-wish--on:hover:not(:disabled) {")[1]?.split("}")[0] ?? "";
+    expect(off).toMatch(/background: var\(--colour-surface-sunken\);/);
+    expect(on).toMatch(/background: radial-gradient\([^;]*var\(--colour-medal-gold\)/);
+    expect(on).not.toMatch(/inset/);
+    expect(rule(".gift-wish__star")).toMatch(/position: absolute;/);
+    expect(rule(".gift-wish__star")).toMatch(/top: -\d+px;/);
+    expect(rule(".gift-wish__star")).toMatch(/right: -\d+px;/);
   });
 });

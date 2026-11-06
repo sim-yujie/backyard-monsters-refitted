@@ -107,7 +107,15 @@ export class GiftPicker {
       this.choices.set(key, choice);
       grid.append(choice);
     }
-    const legend = wishes.length > 0 ? [make("p", "gift-picker__legend", GIFT_TEXT.wished(target.username))] : [];
+    const legend: HTMLElement[] = [];
+    if (wishes.length > 0) {
+      // "★ = Bob's wish", its star gold like the buttons'.
+      const line = make("p", "gift-picker__legend");
+      const star = make("span", "gift-picker__star", "★");
+      star.setAttribute("aria-hidden", "true");
+      line.append(star, GIFT_TEXT.wished(target.username).slice(1));
+      legend.push(line);
+    }
     this.cancel = make("button", "btn btn--ghost", GIFT_TEXT.cancel);
     this.cancel.type = "button";
     this.cancel.addEventListener("click", () => this.popup.close());

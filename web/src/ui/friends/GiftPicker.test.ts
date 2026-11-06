@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/api/http";
 import { fixtureApi, fixtureFriend, fixtureGift, fixtureList } from "@/game/friends/friendsFixture";
@@ -80,6 +83,8 @@ describe("the gift picker", () => {
     expect(choice("r2").querySelector(".gift-picker__star")?.textContent).toBe("★");
     expect(choice("r1").querySelector(".gift-picker__star")).toBeNull();
     expect(document.querySelector(".gift-picker__legend")?.textContent).toBe(GIFT_TEXT.wished("Bob"));
+    // The legend's star is the buttons' gold one.
+    expect(document.querySelector(".gift-picker__legend .gift-picker__star")?.textContent).toBe("★");
     choice("r1").click();
     await vi.waitFor(() => expect(calls.some(([method]) => method === "sendGift")).toBe(true));
     expect(calls.find(([method]) => method === "sendGift")).toEqual(["sendGift", 7, "r1"]);
@@ -90,5 +95,16 @@ describe("the gift picker", () => {
     expect(document.querySelector(".gift-picker__choice--wished")).toBeNull();
     expect(document.querySelector(".gift-picker__legend")).toBeNull();
     expect(choiceOrder([])).toEqual(["r1", "r2", "r3", "r4"]);
+  });
+});
+
+describe("the choices' look", () => {
+  // jsdom applies no stylesheet: the rules are read from the CSS text.
+  const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "friends.css"), "utf8").replace(/\r\n/g, "\n");
+  const rule = (selector: string): string => css.split(`\n${selector} {`)[1]?.split("}")[0] ?? "";
+
+  it("keeps a choice's pile, name and star tight, so they fit inside the plate on a phone", () => {
+    expect(rule(".gift-picker__choice")).toMatch(/gap: var\(--space-1\);/);
+    expect(rule(":root[data-skin] .panel .gift-picker__choice.btn--outline")).toMatch(/padding-inline: 0;/);
   });
 });

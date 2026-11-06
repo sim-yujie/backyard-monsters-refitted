@@ -217,7 +217,7 @@ export class GiftsTab implements FriendsTabView {
     const toggles = make("div", "gift-wishes__toggles");
     for (const key of RESOURCE_KEYS) {
       const on = this.wishes.includes(key);
-      const toggle = make("button", on ? "btn btn--outline gift-wish gift-wish--on" : "btn btn--outline gift-wish");
+      const toggle = make("button", on ? "gift-wish gift-wish--on" : "gift-wish");
       toggle.type = "button";
       toggle.dataset["resource"] = key;
       toggle.setAttribute("aria-pressed", String(on));
@@ -236,7 +236,12 @@ export class GiftsTab implements FriendsTabView {
     toggles.setAttribute("role", "group");
     toggles.setAttribute("aria-label", "My gift wishes");
     const head = make("div", "gift-wishes__head");
-    head.append(make("span", "gift-wishes__title", GIFTS_TEXT.wishes), make("span", "gift-wishes__hint", GIFTS_TEXT.wishesHint));
+    // The title's ★ in the stars' gold; the words stay "★ My wishes".
+    const title = make("span", "gift-wishes__title");
+    const star = make("span", "gift-wishes__star", "★");
+    star.setAttribute("aria-hidden", "true");
+    title.append(star, GIFTS_TEXT.wishes.slice(1));
+    head.append(title, make("span", "gift-wishes__hint", GIFTS_TEXT.wishesHint));
     this.wishBar.replaceChildren(head, toggles);
   }
 
