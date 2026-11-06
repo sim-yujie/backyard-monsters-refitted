@@ -442,11 +442,21 @@ button.chat-line__name {
     text-overflow: ellipsis;
   }
 
+  /* The dock takes about 270px at the bottom of a phone: the open box ends
+     above it and the room gives way, whatever the player strip, the country
+     notice and the input take (a fixed 140px for them let the strip's
+     Report run under the dock's More; 6 Nov UI check). On a phone too short
+     for even that, the box sits over the dock rather than under it. */
+  .chat-box--open {
+    z-index: 2;
+    max-height: calc(100dvh - var(--chat-top) - 270px);
+  }
+
   .chat-box--open .chat-box__lines {
-    /* The dock takes about 270px at the bottom of a phone. */
+    flex: 1 1 auto;
     height: auto;
-    min-height: 120px;
-    max-height: calc(100dvh - var(--chat-top) - 270px - 140px);
+    min-height: 80px;
+    max-height: none;
   }
 
   .chat-box--open .chat-line,

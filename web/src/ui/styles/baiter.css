@@ -240,7 +240,16 @@
   padding: 0 var(--space-1);
 }
 
+/* A card is 150-176 px wide and the painted plates' ends do not shrink, so
+   −, the count, + and Fill can be wider than it: Fill then takes its own
+   line across the card instead of running into the next column or past the
+   screen's edge (6 Nov UI check and tester, phone and phone on its side). */
+.baiter__controls {
+  flex-wrap: wrap;
+}
+
 .baiter__controls .qty-stepper__fill {
+  flex: 1 0 auto;
   padding: var(--space-1) var(--space-2);
 }
 
