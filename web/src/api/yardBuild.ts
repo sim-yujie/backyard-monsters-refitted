@@ -65,8 +65,13 @@ export const buildAt = (
   x: number,
   y: number,
   baseid?: string,
+  /** `topUp`: the Shiny the player agreed to for a short pool (Flash's `TopoffBuild`). */
+  extra: { topUp?: number } = {},
 ): Promise<YardResponse<BuildReport>> =>
-  post<YardResponse<BuildReport>>(BUILD_PATH, yardBody({ type, x, y }, baseid));
+  post<YardResponse<BuildReport>>(
+    BUILD_PATH,
+    yardBody(extra.topUp === undefined ? { type, x, y } : { type, x, y, topUp: extra.topUp }, baseid),
+  );
 
 /** Places a new building finished, for Shiny. Refusals: `build`'s short of `shortfall` and `workers`, then `shinyLocked`, `credits`. */
 export const instantBuildAt = (
@@ -143,7 +148,7 @@ const reasonOf = (gate: BuildGate, inferno: boolean): string =>
 
 export interface BuildActions {
   /** Places a building of `type` with its footprint at `(x, y)`. */
-  build(type: number, x: number, y: number): Promise<YardActionResult<BuildReport>>;
+  build(type: number, x: number, y: number, topUp?: number): Promise<YardActionResult<BuildReport>>;
   /** The same, finished at once for Shiny. */
   instant(type: number, x: number, y: number): Promise<YardActionResult<InstantBuildReport>>;
   /** Cancels a building under construction. */
@@ -156,15 +161,18 @@ export interface BuildActions {
  * the placement already held the spot, and the server measures it again.
  */
 export const buildActions = (store: YardStore, api: BuildApi = buildApi): BuildActions => ({
-  build: (type, x, y) =>
+  build: (type, x, y, topUp) =>
     store.run({
       key: BuildKey.place(type),
       check: (reader) => {
         const offer = buildOffer(type, reader);
         if (!offer) return refuse("notBuildable", "That cannot be built here.");
+        // A topped-up build pays its shortfall in Shiny: the server prices and checks it.
+        if (topUp !== undefined && offer.gate?.reason === "shortfall") return null;
         return offer.gate ? refuse(reasonOf(offer.gate, offer.inferno), gateMessage(offer.gate, offer.inferno)) : null;
       },
-      send: (_api, ...yard) => api.build(type, x, y, ...yard),
+      send: (_api, ...yard) =>
+        topUp === undefined ? api.build(type, x, y, ...yard) : api.build(type, x, y, yard[0], { topUp }),
     }),
   instant: (type, x, y) =>
     store.run({
