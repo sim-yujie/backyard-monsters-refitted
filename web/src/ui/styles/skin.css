@@ -1099,6 +1099,22 @@
     padding-inline: 6px;
   }
 
+  /* Classic's plates have rounder painted ends than Modern's, and Settings'
+     words touched them on a phone (tester, 6 Nov): 10px off the ends, the
+     strip's side margins halved and the words a touch smaller so all three
+     still fit across. */
+  :root[data-skin] .panel .account-settings__tabs {
+    margin-inline: var(--space-2);
+  }
+
+  :root[data-skin] .panel .tab-row > .account-settings__tab {
+    font-size: min(var(--text-sm), 3.5vw);
+  }
+
+  :root[data-skin="flash"] .panel .tab-row > .account-settings__tab {
+    padding-inline: 10px;
+  }
+
   /* The test report's words at the other tabs' size: all three fit 320px. */
   :root[data-skin] .panel .test-report__tab {
     font-size: var(--text-sm);

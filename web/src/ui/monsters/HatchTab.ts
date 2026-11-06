@@ -891,7 +891,20 @@ export class HatchTab implements MonstersTab {
 
     const label = document.createElement("span");
     label.className = "hatch-now__label";
-    label.textContent = compact ? where : "Hatching now";
+    const number = compact ? this.numbers.get(hatchery.id) : undefined;
+    if (compact && number !== undefined) {
+      // Word and number apart, so a phone can drop the word and keep the
+      // number readable ("Hatch…" hid which hatchery it was; 6 Nov UI check).
+      const word = document.createElement("span");
+      word.className = "hatch-now__label-word";
+      word.textContent = this.words.hatchery;
+      const count = document.createElement("span");
+      count.className = "hatch-now__label-number";
+      count.textContent = String(number);
+      label.append(word, " ", count);
+    } else {
+      label.textContent = compact ? where : "Hatching now";
+    }
     card.append(label);
 
     if (!monster) {

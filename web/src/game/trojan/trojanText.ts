@@ -4,8 +4,15 @@
  * `ai_trojan_*` keys): the letter popup and the trap banner.
  */
 
-/** `ai_trojan_headline`. */
+/** `ai_trojan_headline`. Too long for a window's title sign: it opens the letter instead. */
 export const TROJAN_HEADLINE = "Wild Monsters left you a note pinned to a large wooden structure.";
+
+/**
+ * The letter window's title. The painted title sign is one line, and the
+ * headline was cut to "left you a note pi…" on every screen size (6 Nov UI
+ * check), so the sign says who it is from and the headline leads the letter.
+ */
+export const TROJAN_TITLE = "Wild Monsters' note";
 
 /** `ai_trojan_letter`, `#v1#` filled with the player's name. */
 export const trojanLetterText = (playerName: string): string =>

@@ -68,6 +68,7 @@ import {
 import { confirmPanel } from "@/ui/yard/PlannerDialogs";
 import { YardMinimap } from "@/ui/yard/YardMinimap";
 import { ViewToolsFold } from "@/ui/attack/ViewToolsFold";
+import { attackScreenParts, type AttackScreenParts } from "@/ui/attack/attackScreenParts";
 import { ZoomControl } from "@/ui/ZoomControl";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../sceneName";
@@ -152,6 +153,15 @@ export class AttackScene implements Scene {
    */
   private readonly raiding: boolean;
   private raidRun: RaidRun | null = null;
+  /**
+   * What this kind of fight shows around the battlefield: a live attack's
+   * screen is cleaned up (`attackScreenParts`, beta 7); its way out is
+   * Retreat.
+   */
+  private readonly parts: AttackScreenParts;
+  private get live(): boolean {
+    return this.parts.live;
+  }
 
   private context: SceneContext | null = null;
   private viewportWidth = 0;
@@ -215,6 +225,7 @@ export class AttackScene implements Scene {
     this.practice = options.practice ?? false;
     this.watching = options.watch ?? false;
     this.raiding = options.raid ?? false;
+    this.parts = attackScreenParts({ practice: this.practice, watching: this.watching, raiding: this.raiding });
     this.battleLayer.eventMode = "none";
   }
 
@@ -251,8 +262,9 @@ export class AttackScene implements Scene {
     // every panel (Inferno WP 2.10, 3.5).
     setResourceRealm(fromInfernoYard(this.target) ? "inferno" : "surface");
 
-    // A raid has no HUD: nothing on it may be left until it is over.
-    if (!this.raiding) {
+    // A raid has no HUD: nothing on it may be left until it is over. A live
+    // attack has none either: the attack bar is the screen's top.
+    if (this.parts.hud) {
       this.hud = new Hud({
         scenes: [
           { id: SceneName.MAP, label: "Map" },
@@ -269,7 +281,7 @@ export class AttackScene implements Scene {
     this.notices.setTopInset(this.inset.top);
 
     this.status = document.createElement("div");
-    this.status.className = "cell-readout attack-status";
+    this.status.className = this.live ? "cell-readout attack-status attack-status--live" : "cell-readout attack-status";
     context.overlay.content.append(this.status);
 
     this.buildDock(context);
@@ -669,6 +681,13 @@ export class AttackScene implements Scene {
     }).mount(tools);
     this.zoomControl.setRange(this.fitZoom, MAX_ZOOM);
     this.zoomControl.setZoom(camera.zoom);
+    // A live attack keeps the zoom only, always in view: no minimap, so
+    // nothing to fold behind a map button on a phone.
+    if (!this.parts.minimap) {
+      tools.classList.add("attack-viewtools--live", "attack-viewtools--open");
+      this.placeViewTools();
+      return;
+    }
     this.minimap = new YardMinimap({
       renderer: this.renderer,
       camera,
@@ -689,7 +708,11 @@ export class AttackScene implements Scene {
 
   private buildStrip(context: SceneContext): void {
     const strip = document.createElement("div");
-    strip.className = this.raiding ? "attack-strip attack-strip--raid" : "attack-strip";
+    strip.className = this.raiding
+      ? "attack-strip attack-strip--raid"
+      : this.live
+        ? "attack-strip attack-strip--live"
+        : "attack-strip";
 
     const title = document.createElement("span");
     title.className = "attack-strip__title";
@@ -799,7 +822,7 @@ export class AttackScene implements Scene {
     // A raid cannot be stopped or left (quitting the game cancels it). A
     // defence replay has no Retreat either (owner, #362): Skip to end, or leave.
     retreat.hidden = this.raiding || isDefenceWatch(this.watchRun);
-    this.menu.element.hidden = this.raiding;
+    this.menu.element.hidden = !this.parts.menu;
 
     // The shop boosts this battle is fought with (beta.4): hidden until the load says.
     const boosts = document.createElement("span");
@@ -824,7 +847,7 @@ export class AttackScene implements Scene {
 
   private buildDock(context: SceneContext): void {
     const dock = document.createElement("div");
-    dock.className = "attack-dock";
+    dock.className = this.live ? "attack-dock attack-dock--live" : "attack-dock";
 
     // The sheet's handle: only shown at phone widths, by the stylesheet.
     const handle = document.createElement("button");
@@ -1070,6 +1093,11 @@ export class AttackScene implements Scene {
     const yard = this.yard;
     const target = this.target;
     if (!status || !yard || !target) return;
+    // A live attack's screen has no status line: the strip says it all.
+    if (!this.parts.statusLine) {
+      status.hidden = true;
+      return;
+    }
     const sent = Object.values(state.remaining).reduce((sum, count) => sum + count, 0);
     if (this.practice) {
       // An ended test has put its battle to rest (#308): nobody is left attacking on screen.
