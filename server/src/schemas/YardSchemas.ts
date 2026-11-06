@@ -63,6 +63,12 @@ export const YardInstantUpgradeSchema = z.object({
  */
 export const YardShopBuySchema = z.object({
   item: z.string().min(1).max(16),
+  /**
+   * A resource pack (`BR11`..`BR43I`, `services/yard/resourcePacks.ts`): the
+   * Shiny the player agreed to. The server prices the pack itself; it refuses
+   * `409 priceChanged` rather than charge more than this.
+   */
+  price: z.coerce.number().int().nonnegative().optional(),
 });
 
 /** `POST /bm/yard/locker/cancel` and `/locker/finish` take no fields: there is only one unlock. */
