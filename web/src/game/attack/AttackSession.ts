@@ -270,6 +270,15 @@ export interface AttackSessionOptions {
    */
   readonly raid?: boolean;
   /**
+   * A raid's last wave's tick (`BattleOptions.raidSpawnsUntil`): the battle
+   * does not end on an empty field before it, as the server's did not. The
+   * Trojan Horse's army lands one monster at a time for about 46 s; without
+   * this, the first few dying ended the fight on screen after ~8 s, and the
+   * rest of the horse's army (Crabatrons, Project Xs) never came out. Absent,
+   * 0: every wave lands at once, as a wild raid's do. Raids only.
+   */
+  readonly raidSpawnsUntil?: number;
+  /**
    * The Descent yard attacked, 1 to 13 (Inferno WP 1.21): from yard 7 the
    * fight's burn takes health from every surface monster, as the server's
    * replay of it does. Absent: the target's own `descentYard`, which is
@@ -494,6 +503,8 @@ export class AttackSession {
   private readonly playerLevel: number | undefined;
   private readonly clockFromFirstDrop: boolean;
   private readonly raid: boolean;
+  /** {@link AttackSessionOptions.raidSpawnsUntil}, 0 when absent. */
+  private readonly raidSpawnsUntil: number;
   private readonly descentYard: number | undefined;
   /** The academy levels the battle is fought at: the load's, else the roster's. */
   private levels_: MonsterLevels;
@@ -503,6 +514,7 @@ export class AttackSession {
   constructor(options: AttackSessionOptions) {
     this.target = options.target;
     this.raid = options.raid ?? false;
+    this.raidSpawnsUntil = Math.max(0, Math.floor(options.raidSpawnsUntil ?? 0));
     // The option (the dev practice's `?descentYard`), else the Descent target's own yard.
     this.descentYard = options.descentYard ?? descentYardOf(options.target).descentYard;
     this.seed = options.seed ?? mintSeed();
@@ -561,9 +573,15 @@ export class AttackSession {
         : servedRanks(response.attackerranks);
     const defence = battleDefence(parseDefenderForces(response.defenderforces));
     // The raid as `raidFight.ts` fights it: its seed, its hit limit, the
-    // player's defence, and nothing of an attacker's.
+    // player's defence, the tick its last wave lands (the Trojan Horse's,
+    // `trojanFight.ts`), and nothing of an attacker's.
     if (this.raid) {
-      this.battle_ = createBattle(yard, { seed: this.seed, ...defence, raid: true });
+      this.battle_ = createBattle(yard, {
+        seed: this.seed,
+        ...defence,
+        raid: true,
+        ...(this.raidSpawnsUntil > 0 ? { raidSpawnsUntil: this.raidSpawnsUntil } : {}),
+      });
       this.phase = "loaded";
       this.notify();
       return;
