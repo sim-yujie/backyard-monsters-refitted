@@ -35,7 +35,7 @@ import {
 } from "@/game/autoAttack/watchRun";
 import { DEFENCE_REFUSAL_TEXT, defenceReadout, type DefenceRefusal } from "@/game/defences/defenceWatch";
 import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
-import { consumeRaidRun, raidTarget, type RaidRun } from "@/game/raid/raidSession";
+import { consumeRaidRun, raidSpawnsUntil, raidTarget, type RaidRun } from "@/game/raid/raidSession";
 import { MOLOCH_RAID_TITLE, MOLOCH_RAIDERS } from "@/game/inferno/emergenceText";
 import { isMolochRaid } from "@/game/inferno/molochRaid";
 import { backToInferno } from "@/game/inferno/tribeReturn";
@@ -494,14 +494,14 @@ export class AttackScene implements Scene {
     // A Baiter test's clock waits for the first drop, as Flash's practice
     // did; its replay plays the recorded seed from the start (#22, WP5).
     const testReplay = this.run?.replay;
-    const raid = this.raidRun?.fight;
+    const raidRun = this.raidRun;
     const session = new AttackSession({
       target: { ...target, load: response },
       ...(replay ? { seed: replay.seed, declareWar: replay.declareWar } : {}),
       ...(testReplay
         ? { seed: testReplay.seed }
-        : raid
-          ? { seed: raid.seed, raid: true }
+        : raidRun
+          ? { seed: raidRun.fight.seed, raid: true, raidSpawnsUntil: raidSpawnsUntil(raidRun) }
           : this.practice
             ? { clockFromFirstDrop: true }
             : {}),

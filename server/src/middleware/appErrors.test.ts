@@ -40,6 +40,13 @@ describe("onAppError", () => {
     expect(debug).toHaveBeenCalledTimes(3);
   });
 
+  test("a request body cut short (tab closed mid-save) is the client leaving too", () => {
+    onAppError(Object.assign(new Error("Parse Error: Invalid EOF state"), { code: "HPE_INVALID_EOF_STATE" }), ctx);
+    onAppError(new Error("Parse Error: Invalid EOF state"), ctx);
+    expect(error).not.toHaveBeenCalled();
+    expect(debug).toHaveBeenCalledTimes(2);
+  });
+
   test("any other error is still logged as one", () => {
     onAppError(new Error("disk on fire"), ctx);
     expect(error).toHaveBeenCalledTimes(1);

@@ -22,6 +22,27 @@ export const TROJAN_HORSE_TYPE = 27;
  */
 export const TROJAN_TRIBE = "wild";
 
+/**
+ * The kinds the horse's army brings, in the order they first come out of its
+ * door: 6 Pokey, then 5 each of the rest, one every 20 Flash frames, so
+ * Pokey at 0 s and Project X from about 41.7 s. Mirrors
+ * `server/src/services/raids/trojanArmy.ts`'s `trojanSchedule` (no Eye-ra,
+ * no D.A.V.E.). The client only fetches their sheets early with it
+ * (`raidSheets.ts`); the fight itself plays the server's own script.
+ */
+export const TROJAN_ROSTER: readonly string[] = [
+  "C1",
+  "C2",
+  "C3",
+  "C4",
+  "C6",
+  "C7",
+  "C8",
+  "C9",
+  "C10",
+  "C11",
+];
+
 /** The horse on this yard, or null when it holds none. */
 export const findTrojanHorse = (buildings: readonly YardBuilding[]): YardBuilding | null =>
   buildings.find((building) => building.type === TROJAN_HORSE_TYPE) ?? null;

@@ -270,6 +270,15 @@ export interface AttackSessionOptions {
    */
   readonly raid?: boolean;
   /**
+   * A raid's last wave's tick (`BattleOptions.raidSpawnsUntil`): the battle
+   * does not end on an empty field before it, as the server's did not. The
+   * Trojan Horse's army lands one monster at a time for about 46 s; without
+   * this, the first few dying ended the fight on screen after ~8 s, and the
+   * rest of the horse's army (Crabatrons, Project Xs) never came out. Absent,
+   * 0: every wave lands at once, as a wild raid's do. Raids only.
+   */
+  readonly raidSpawnsUntil?: number;
+  /**
    * The Descent yard attacked, 1 to 13 (Inferno WP 1.21): from yard 7 the
    * fight's burn takes health from every surface monster, as the server's
    * replay of it does. Absent: the target's own `descentYard`, which is
@@ -482,6 +491,7 @@ export class AttackSession {
    */
   private script: AttackEvent[] | null = null;
   private scriptEnd = 0;
+  private scriptStamp_ = 0;
   /** {@link skipToEnd} is running the rest of a playback, slice by slice. */
   private skipping_ = false;
   /** The playback ended by skipping to it: nothing of its end was drawn. */
@@ -493,6 +503,8 @@ export class AttackSession {
   private readonly playerLevel: number | undefined;
   private readonly clockFromFirstDrop: boolean;
   private readonly raid: boolean;
+  /** {@link AttackSessionOptions.raidSpawnsUntil}, 0 when absent. */
+  private readonly raidSpawnsUntil: number;
   private readonly descentYard: number | undefined;
   /** The academy levels the battle is fought at: the load's, else the roster's. */
   private levels_: MonsterLevels;
@@ -502,6 +514,7 @@ export class AttackSession {
   constructor(options: AttackSessionOptions) {
     this.target = options.target;
     this.raid = options.raid ?? false;
+    this.raidSpawnsUntil = Math.max(0, Math.floor(options.raidSpawnsUntil ?? 0));
     // The option (the dev practice's `?descentYard`), else the Descent target's own yard.
     this.descentYard = options.descentYard ?? descentYardOf(options.target).descentYard;
     this.seed = options.seed ?? mintSeed();
@@ -560,9 +573,15 @@ export class AttackSession {
         : servedRanks(response.attackerranks);
     const defence = battleDefence(parseDefenderForces(response.defenderforces));
     // The raid as `raidFight.ts` fights it: its seed, its hit limit, the
-    // player's defence, and nothing of an attacker's.
+    // player's defence, the tick its last wave lands (the Trojan Horse's,
+    // `trojanFight.ts`), and nothing of an attacker's.
     if (this.raid) {
-      this.battle_ = createBattle(yard, { seed: this.seed, ...defence, raid: true });
+      this.battle_ = createBattle(yard, {
+        seed: this.seed,
+        ...defence,
+        raid: true,
+        ...(this.raidSpawnsUntil > 0 ? { raidSpawnsUntil: this.raidSpawnsUntil } : {}),
+      });
       this.phase = "loaded";
       this.notify();
       return;
@@ -774,6 +793,30 @@ export class AttackSession {
       .sort((one, other) => one.event.t - other.event.t || one.at - other.at)
       .map(({ event }) => event);
     this.scriptEnd = Math.max(0, Math.floor(endTick));
+    this.scriptStamp_ += 1;
+  }
+
+  /** Counts the scripts handed to {@link playScript}, so a watcher sees a new one. */
+  get scriptStamp(): number {
+    return this.scriptStamp_;
+  }
+
+  /**
+   * The monster types the script still has to bring on, by a raid's waves or a
+   * replay's flings: the battle layer fetches their sheets at once. A raid's
+   * roster is empty, so without this a sheet was only asked for when its first
+   * monster came out, and a Trojan Horse's Crabatrons and Project Xs (the last
+   * and biggest sheets) fought as green squares while theirs downloaded.
+   */
+  scriptedMonsters(): string[] {
+    const ids = new Set<string>();
+    for (const event of this.script ?? []) {
+      if (event.kind !== "raid" && event.kind !== "fling") continue;
+      for (const [id, count] of Object.entries(event.monsters)) {
+        if (count > 0) ids.add(id);
+      }
+    }
+    return [...ids];
   }
 
   /** Whether this session plays a wild monster raid on the player's own yard (#226). */

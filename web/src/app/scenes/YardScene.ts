@@ -156,6 +156,7 @@ import { SceneName } from "../sceneName";
 import { BAITER_TYPE, setBaiterRun } from "@/game/baiter/baiterSession";
 import { trojanApi } from "@/api/trojan";
 import { setRaidRun } from "@/game/raid/raidSession";
+import { warmTrojanSheets } from "@/game/raid/raidSheets";
 import { TROJAN_HORSE_TYPE, findTrojanHorse } from "@/game/trojan/trojanHorse";
 import { TrojanFlow } from "@/game/trojan/trojanFlow";
 import { TrojanLetter } from "@/ui/trojan/TrojanLetter";
@@ -989,6 +990,9 @@ export class YardScene implements Scene {
       // The Trojan Horse was just placed (issue #327, design §3.1): the
       // camera pans to it once, no popup, no sound. Own main yard only —
       // `trojanNew` never comes with a visit's or an outpost's load.
+      // A horse on the own main yard: its army's small sheets start now, as
+      // its fight has no warning to fetch them in (`raidSheets.ts`).
+      if (store?.kind === "main" && findTrojanHorse(yard.buildings)) warmTrojanSheets(false);
       if (store?.kind === "main" && response.trojanNew) {
         const horse = findTrojanHorse(yard.buildings);
         if (horse && this.camera) {
@@ -1396,6 +1400,8 @@ export class YardScene implements Scene {
     const store = this.store;
     const context = this.context;
     if (!store || !context || this.trojanLetter) return;
+    // The fight is a click away: its paintings start too, after the stand-ins.
+    warmTrojanSheets(true);
     const flow = new TrojanFlow({
       api: trojanApi,
       fight: (response) => {
