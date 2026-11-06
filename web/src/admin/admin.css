@@ -3225,11 +3225,35 @@ tbody th {
   opacity: 0.7;
 }
 
+/* Name, chips and time wrap as whole pieces: at 375px the green "Kept by …"
+   chip and the time squeezed the name until it broke mid-word ("agen/tteste/r").
+   Now a chip that does not fit drops to its own line and the name keeps whole
+   words (it breaks inside a word only when that word alone is wider than the card). */
+.photo-case .row-top {
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
+.photo-case .report-who {
+  overflow-wrap: break-word;
+  text-align: left;
+}
+
+/* The flag stays beside the first line of the reporters, never alone. */
 .photo-case__reporters {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 4px;
-  flex-wrap: wrap;
+}
+
+.photo-case__reporters > .icon {
+  flex: none;
+  margin-top: 2px;
+}
+
+.photo-case__reporter-words {
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .photo-case__actions {

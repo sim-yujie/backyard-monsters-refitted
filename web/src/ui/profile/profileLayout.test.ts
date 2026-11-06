@@ -33,6 +33,20 @@ describe("profile layout rules", () => {
     );
   });
 
+  it("keeps the report row one height: the question on its own line above the plates", () => {
+    const profile = squash(css("profile.css"));
+    expect(profile).toContain("min-height: calc(46px + var(--space-1) + var(--report-ask-line));");
+    expect(profile).toContain(".profile__report-ask { flex: 0 0 100%;");
+    expect(profile).toMatch(/\.profile__report-no \{ flex: 0 0 auto; white-space: nowrap; \}/);
+  });
+
+  it("lets dashboard photo cases wrap chips whole instead of breaking the name mid-word", () => {
+    const admin = squash(css("../../admin/admin.css"));
+    expect(admin).toContain(".photo-case .row-top { flex-wrap: wrap; gap: 6px 8px; }");
+    expect(admin).toContain(".photo-case .report-who { overflow-wrap: break-word;");
+    expect(admin).toContain(".photo-case__reporters > .icon { flex: none;");
+  });
+
   it("puts a reported photo beside its case in the dashboard", () => {
     const admin = squash(css("../../admin/admin.css"));
     expect(admin).toMatch(

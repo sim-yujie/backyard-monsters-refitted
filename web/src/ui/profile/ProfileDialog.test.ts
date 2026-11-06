@@ -8,6 +8,7 @@ import {
   LOAD_FAILED,
   NO_BIO,
   PHOTO_HIDDEN,
+  REPORT_ASK,
   REPORTED,
   openProfile,
   photoNote,
@@ -123,6 +124,28 @@ describe("profile window", () => {
     await flush();
     expect(api.reportPhoto).toHaveBeenCalledWith(2503);
     expect(q(".profile__reported")?.textContent).toBe(REPORTED);
+  });
+
+  it("asks on its own line above the two plates, and shows a failed report in that line", async () => {
+    const api = apiWith(profileOf({ photoVersion: 2 }), {
+      reportPhoto: vi.fn(() => Promise.reject(new Error("Too many reports"))),
+    });
+    await open(api);
+    q<HTMLButtonElement>(".profile__report-open")?.click();
+    const row = q(".profile__report");
+    // Only the question and the two plates: no empty status box to push Cancel onto a new line.
+    expect([...(row?.children ?? [])].map((child) => child.className)).toEqual([
+      "profile__note profile__report-ask",
+      "btn btn--primary profile__report-yes",
+      "btn btn--outline profile__report-no",
+    ]);
+    expect(q(".profile__report-ask")?.textContent).toBe(REPORT_ASK);
+    q<HTMLButtonElement>(".profile__report-yes")?.click();
+    await flush();
+    expect(q(".profile__report-ask")?.textContent).toBe("Too many reports");
+    expect(q(".profile__report-ask")?.classList.contains("profile__note--error")).toBe(true);
+    expect(row?.children).toHaveLength(3);
+    expect(q<HTMLButtonElement>(".profile__report-yes")?.disabled).toBe(false);
   });
 
   it("Cancel puts the Report button back", async () => {

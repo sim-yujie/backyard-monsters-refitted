@@ -195,7 +195,9 @@ export class PhotosView {
               "span",
               { class: "hint photo-case__reporters" },
               icon("flag", 14),
-              ` ${plural(view.reporters.length, "report")}: ${reporterWords(view)}`,
+              // Its own box beside the flag: as a bare text node a long list
+              // wrapped under the flag and left it alone on a line (375px).
+              h("span", { class: "photo-case__reporter-words" }, ` ${plural(view.reporters.length, "report")}: ${reporterWords(view)}`),
             )
           : null,
         buttons.length ? h("span", { class: "actions photo-case__actions" }, ...buttons) : null,

@@ -284,17 +284,23 @@ export class ProfileDialog {
       return row;
     }
     const ask = (): void => {
-      const words = el("span", "profile__note", REPORT_ASK);
-      const status = el("span", "profile__note profile__note--error");
+      // The question sits on its own line above the two plates, and a failed
+      // report shows its message in that same line, so the row keeps one
+      // height (see .profile__report) and the plates never wrap.
+      const words = el("span", "profile__note profile__report-ask", REPORT_ASK);
       const yes = btn("btn--primary profile__report-yes", "Report", () => {
         if (this.busy) return;
         this.busy = true;
         yes.disabled = true;
+        words.textContent = REPORT_ASK;
+        words.classList.remove("profile__note--error");
         void this.api
           .reportPhoto(profile.userid)
           .then(done)
           .catch((caught: unknown) => {
-            status.textContent = messageOf(caught, SAVE_FAILED);
+            words.textContent = messageOf(caught, SAVE_FAILED);
+            words.title = words.textContent; // a long message ends in "…" on one line
+            words.classList.add("profile__note--error");
             yes.disabled = false;
           })
           .finally(() => {
@@ -302,7 +308,7 @@ export class ProfileDialog {
           });
       });
       const no = btn("btn--outline profile__report-no", "Cancel", () => row.replaceChildren(open));
-      row.replaceChildren(words, yes, no, status);
+      row.replaceChildren(words, yes, no);
       yes.focus();
     };
     const open = btn("btn--ghost profile__report-open", "⚑ Report", ask);
