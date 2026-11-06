@@ -927,9 +927,14 @@ const playerRow = (
   yes.textContent = SETTINGS_TEXT.confirm;
   const no = document.createElement("button");
   no.type = "button";
-  no.className = "btn btn--ghost block-button__no";
+  no.className = "btn btn--outline block-button__no";
   no.textContent = SETTINGS_TEXT.cancel;
-  confirm.append(question, yes, no);
+  // Confirm and Cancel stay together: on a phone the question takes its own
+  // line and the pair sits under it (owner, 6 Nov 2026).
+  const choices = document.createElement("span");
+  choices.className = "account-settings__choices";
+  choices.append(yes, no);
+  confirm.append(question, choices);
 
   const asking = (on: boolean): void => {
     name.hidden = on;

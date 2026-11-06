@@ -2061,15 +2061,26 @@ body {
   color: var(--colour-text-strong);
 }
 
+/* The confirm fills the row: the question, then Confirm and Cancel as one
+   pair. When the three do not fit on one line (a phone), the question takes
+   the whole first line and the pair sits under it, left-aligned. */
 .account-settings__player-list .block-button__confirm {
-  flex: 1 1 auto;
-  justify-content: flex-end;
+  flex: 1 1 100%;
+  justify-content: flex-start;
+  min-width: 0;
 }
 
 .account-settings__player-list .block-button__question {
-  flex: 1 1 8em;
+  flex: 1 1 14em;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.account-settings__choices {
+  display: flex;
+  flex: none;
+  align-items: stretch;
+  gap: var(--space-2);
 }
 
 /* Block button with its confirm (friends rows, Find results) */

@@ -203,6 +203,11 @@ describe("AccountSettings", () => {
     expect(confirm.hidden).toBe(false);
     expect(loud.querySelector(".block-button__question")!.textContent).toBe("Unmute Loud?");
     expect(loud.querySelector(".block-button__yes")!.textContent).toBe(SETTINGS_TEXT.confirm);
+    // Confirm and Cancel are one pair after the question, and Cancel is a real (outlined) button.
+    const choices = loud.querySelector<HTMLElement>(".account-settings__choices")!;
+    expect([...choices.children].map((el) => el.textContent)).toEqual([SETTINGS_TEXT.confirm, SETTINGS_TEXT.cancel]);
+    expect(choices.previousElementSibling!.classList.contains("block-button__question")).toBe(true);
+    expect(loud.querySelector(".block-button__no")!.className).toContain("btn--outline");
     loud.querySelector<HTMLButtonElement>(".block-button__no")!.click();
     await settle();
     expect(confirm.hidden).toBe(true);
