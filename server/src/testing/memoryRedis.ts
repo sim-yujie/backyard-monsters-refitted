@@ -1,7 +1,7 @@
 /**
  * For tests: the part of Bun's `RedisClient` the presence and bot-check code
  * uses (#271, #273), in memory. Strings, lists, sets (`sadd`, `srem`,
- * `smembers`, for the chat mute list) and hashes (the last through
+ * `scard`, `smembers`, for the chat mute list) and hashes (the last through
  * `send("HINCRBY" | "HGET" | "HSET")`, which the typed client lacks, and
  * `send("EXPIRE")` for a hash's life), with key lives
  * read off `Date.now()`, so `setSystemTime` ages them. Anything else fails
@@ -117,6 +117,10 @@ export const memoryRedis = (strings: Map<string, string> = new Map(), { ages = t
       const removed = members.filter((member) => set.delete(member)).length;
       if (set.size === 0) drop(key);
       return removed;
+    },
+    scard: async (key: string): Promise<number> => {
+      age(key);
+      return sets.get(key)?.size ?? 0;
     },
     smembers: async (key: string): Promise<string[]> => {
       age(key);

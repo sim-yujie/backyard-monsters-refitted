@@ -290,13 +290,17 @@ export const listBlocked = async (em: EntityManager, userid: number): Promise<{ 
   return rows.map((row) => ({ userid: Number(row.userid), username: row.username }));
 };
 
+/** The most muted players listed; chat refuses mutes past it (`MAX_MUTED`, chatIgnoreList.ts). */
+export const MUTED_LIST_LIMIT = 500;
+
 /**
  * Players the caller muted in chat, with their names, in name order. The ids
  * come from the chat mute set in Redis (`chat-ignore:<id>`); ids that are not
- * numbers or have no account are left out.
+ * numbers or have no account are left out, and at most the first
+ * {@link MUTED_LIST_LIMIT} valid ids are looked up, so the query stays small.
  */
 export const listMuted = async (em: EntityManager, ids: readonly string[]): Promise<{ userid: number; username: string }[]> => {
-  const userids = [...new Set(ids.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))];
+  const userids = [...new Set(ids.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))].slice(0, MUTED_LIST_LIMIT);
   if (userids.length === 0) return [];
   const rows = await em.execute<{ userid: number; username: string }[]>(
     `SELECT u.userid, u.username

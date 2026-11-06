@@ -268,6 +268,21 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
     redis.clear();
   });
 
+  test("muted players: a set of 600 ids looks up at most 500, without error", async () => {
+    const { listMuted, MUTED_LIST_LIMIT } = await import("./friendViews.js");
+    // The crowd (100 real players) first, then 500 ids with no account.
+    const ids = [
+      ...Array.from({ length: CROWD_SIZE }, (_, i) => String(CROWD + i)),
+      ...Array.from({ length: 500 }, (_, i) => String(995_000 + i)),
+    ];
+    const muted = await listMuted(em(), ids);
+    expect(muted).toHaveLength(CROWD_SIZE);
+    expect(muted.length).toBeLessThanOrEqual(MUTED_LIST_LIMIT);
+    // Ids past the first 500 are not looked up: these 100 real players come after 500 others.
+    const late = await listMuted(em(), [...ids.slice(CROWD_SIZE), ...ids.slice(0, CROWD_SIZE)]);
+    expect(late).toEqual([]);
+  });
+
   test("the friend limit on both sides, open requests, and the daily cap", async () => {
     const crowd = Array.from({ length: CROWD_SIZE }, (_, i) => CROWD + i);
     const rows = crowd.flatMap((other) => [`(${A}, ${other})`, `(${other}, ${A})`]).join(", ");
