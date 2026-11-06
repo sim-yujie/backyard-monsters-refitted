@@ -523,6 +523,21 @@
   padding-inline: 0;
 }
 
+/* Modern's steel plate has a rivet inside each end. Once the dialog drops below
+   its full 420 px (92vw < 420 px, i.e. phones), "Pebbles" with its pile and star
+   ran over them, so there the choices are drawn a size smaller and tighter.
+   Classic's plate has no rivets and keeps its size. */
+@media (width <= 456px) {
+  :root[data-skin="scrap"] .panel .gift-picker__choice.btn--outline {
+    gap: 2px;
+    font-size: var(--text-sm);
+  }
+
+  :root[data-skin="scrap"] .panel .gift-picker__choice .gift-picker__star {
+    font-size: 1em;
+  }
+}
+
 /* Gift wishes (#391): the friend's wished resources first, each starred. */
 .gift-picker__choice--wished {
   border-color: var(--colour-medal-gold);

@@ -62,4 +62,20 @@ describe("the medals' size", () => {
   it("centres a hidden row's ??? on its medal", () => {
     expect(rule(".ach-row--hidden")).toMatch(/align-items: center;/);
   });
+
+  it("puts an earned row's date under the description on a phone, so the name keeps the row's width", () => {
+    // The phone rules sit indented inside "@media (width <= 620px) { ... }".
+    const phone = css.split("\n@media (width <= 620px) {")[1]?.split("\n}\n")[0] ?? "";
+    const phoneRule = (selector: string): string => phone.split(`\n  ${selector} {`)[1]?.split("}")[0] ?? "";
+    const row = phoneRule('.ach-row[data-status="earned"]');
+    expect(row).toMatch(/display: grid;/);
+    expect(row).toMatch(/grid-template-columns: auto minmax\(0, 1fr\);/);
+    expect(phoneRule('.ach-row[data-status="earned"] > .ach-badge')).toMatch(/grid-row: span 2;/);
+    expect(phoneRule('.ach-row[data-status="earned"] > .ach-row__date')).toMatch(/grid-column: 2;/);
+  });
+
+  it("keeps an earned row's date beside the words on a wide screen", () => {
+    expect(css).not.toMatch(/\n\.ach-row\[data-status="earned"\]/);
+    expect(rule(".ach-row__date")).toMatch(/white-space: nowrap;/);
+  });
 });
