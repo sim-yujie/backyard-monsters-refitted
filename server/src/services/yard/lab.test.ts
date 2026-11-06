@@ -88,7 +88,14 @@ describe("planLabStart", () => {
 
     // C3 rank 1: 48,000 putty, 86,400 s (MONSTERLAB.as:78-88).
     expect(plan.debit).toEqual({ r3: 48_000 });
-    expect(plan.report).toEqual({ monster: "C3", rank: 1, lab: LAB, endsAt: NOW + 86_400, cost: { r3: 48_000 } });
+    expect(plan.report).toEqual({
+      monster: "C3",
+      rank: 1,
+      lab: LAB,
+      endsAt: NOW + 86_400,
+      seconds: 86_400,
+      cost: { r3: 48_000 },
+    });
     expect(plan.slices.buildingdata[String(LAB)]).toEqual({
       id: LAB,
       t: 116,
@@ -98,6 +105,7 @@ describe("planLabStart", () => {
       upg: "C3",
       upt: NOW + 86_400,
       upl: 1,
+      upd: 86_400,
     });
   });
 

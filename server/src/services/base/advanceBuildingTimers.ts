@@ -57,6 +57,7 @@ export const advanceBuildingTimers = (buildingData: BuildingDataMap, healthData:
         delete building.cU;
         delete building.cL;
         delete building.hl;
+        delete building.wd;
         building.l = (building.l || 1) + 1;
       }
     } else if (building.cB) {
