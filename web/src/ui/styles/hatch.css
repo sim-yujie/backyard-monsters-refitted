@@ -4,7 +4,8 @@
  * one's line (or the HCC's hatcheries and shared queue) on top, the message
  * and housing bar, then the monster grid beside the info panel with the
  * batch add. On a phone
- * the same order, with the add controls in a bar fixed to the sheet's bottom.
+ * the same order, with the add controls in a bar fixed to the sheet's bottom
+ * (on a tall one; on a shorter one the bar scrolls with the rest).
  *
  * Same rule as ui.css: every value comes from tokens.css. The frame, the
  * header and `.monsters-status` / `.monsters-gate` are monsters.css; buttons
@@ -1587,7 +1588,8 @@ button.hatch-slot:disabled {
     flex-wrap: wrap;
   }
 
-  /* The info panel becomes the bar fixed to the sheet's bottom. The split
+  /* The info panel becomes the bar fixed to the sheet's bottom (not on a
+     screen under 960 px tall: see the end of this file). The split
      steps aside so the bar's containing block is the whole scrolling tab:
      inside the split it could only stick while the split reached the
      sheet's bottom edge. */
@@ -1692,6 +1694,40 @@ button.hatch-slot:disabled {
 
   .hatch-add__words {
     font-size: var(--text-md);
+  }
+}
+
+/* ── A short screen: the content keeps its room under the fixed rows ─────
+   Under the window's title, tabs and header and the hatchery tabs, all fixed
+   (owner, 6 Nov 2026), the add bar fixed to a phone's bottom (287 px) left
+   the monster list and the queue no room at all at 375x667 and one row at
+   375x812 (patch 6.3). Below 960 px tall the bar scrolls with the content,
+   under the monster grid; the details button keeps its corner. */
+@media (height <= 960px) {
+  .hatch-info {
+    position: relative;
+    box-shadow: none;
+  }
+}
+
+/* A phone on its side (812x375): smaller hatchery tabs, so the box under
+   them shows three rows or more. */
+@media (height <= 500px) {
+  .hatch__tabs-row {
+    padding-top: var(--space-1);
+  }
+
+  .hatch__tabs-row:not([hidden]) + .hatch__scroll {
+    padding-top: var(--space-2);
+  }
+
+  .hatch-tab {
+    padding-block: 2px;
+  }
+
+  .hatch-tab__art {
+    width: 24px;
+    height: 32px;
   }
 }
 

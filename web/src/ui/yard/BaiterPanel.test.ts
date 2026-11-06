@@ -8,6 +8,7 @@ import { TEST_ROSTER, emptyArmy } from "@/game/baiter/baiterSession";
 import { clearTestHistory, recordTest, replayOf } from "@/game/baiter/testHistory";
 import type { TestReport } from "@/game/baiter/testReport";
 import { BaiterPanel, resetBaiterMemory, type BaiterPanelOptions } from "./BaiterPanel";
+import { scrollLikeBrowser } from "../scrollLikeBrowser";
 
 /**
  * The Baiter's test setup (issue #22, WP2, `docs/design/baiter-simulator.md`
@@ -326,8 +327,16 @@ describe("BaiterPanel", () => {
       expect(row.nextElementSibling).toBe(army);
       expect(army.nextElementSibling).toBe(recent);
       expect(army.contains(row) || recent.contains(row)).toBe(false);
+      // As a browser: a hidden view keeps its scroll and ignores a reset.
+      scrollLikeBrowser(army);
+      scrollLikeBrowser(recent);
+      const [armyTab, recentTab] = host.querySelectorAll<HTMLButtonElement>(".baiter__tab");
+      army.scrollTop = 1237;
+      recentTab!.click();
       recent.scrollTop = 90;
-      host.querySelectorAll<HTMLButtonElement>(".baiter__tab")[1]!.click();
+      armyTab!.click();
+      expect(army.scrollTop).toBe(0);
+      recentTab!.click();
       expect(recent.scrollTop).toBe(0);
     });
 

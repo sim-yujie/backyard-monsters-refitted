@@ -282,9 +282,11 @@ export class BaiterPanel {
     const controls: HTMLButtonElement[] = [];
     const select = (index: number): void => {
       views.forEach(([, view], at) => {
-        // On a phone each view scrolls under the row: another tab opens at its top.
-        if (at === index && view.hidden) view.scrollTop = 0;
+        const opening = at === index && view.hidden;
         view.hidden = at !== index;
+        // On a phone each view scrolls under the row: another tab opens at its
+        // top. Only once shown: a browser ignores scrollTop on a hidden box.
+        if (opening) view.scrollTop = 0;
         const control = controls[at];
         if (!control) return;
         control.setAttribute("aria-selected", String(at === index));

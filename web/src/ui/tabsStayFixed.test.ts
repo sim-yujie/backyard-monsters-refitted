@@ -71,3 +71,32 @@ describe("tabs stay fixed at the top", () => {
     expect(rule(friends, ".friends-tab--friends")).toMatch(/min-height: 0;/);
   });
 });
+
+/*
+ * Content stays usable on short screens (patch 6.3): under the fixed rows,
+ * never squeezed to under about three rows at 375x667 or 812x375.
+ */
+describe("room under the fixed rows on a short screen", () => {
+  it("lets the Hatchery's add bar scroll with the content below 960 px tall, and shrinks its tabs on a phone on its side", () => {
+    const hatch = css("styles/hatch.css");
+    const short = media(hatch, "(height <= 960px)");
+    expect(short).toMatch(/\.hatch-info \{[^}]*position: relative;/);
+    // After the phone's sticky bar, so it wins.
+    expect(hatch.indexOf("@media (height <= 960px)")).toBeGreaterThan(hatch.indexOf("position: sticky;"));
+    const side = media(hatch, "(height <= 500px)");
+    expect(side).toMatch(/\.hatch-tab__art \{[^}]*height: 32px;/);
+  });
+
+  it("puts the Friends count, search and filters on one line on a phone on its side", () => {
+    const side = media(css("friends/friends.css"), "(width > 620px) and (height <= 500px)");
+    expect(side).toMatch(/\.friends-tab--friends \{[^}]*display: grid;[^}]*grid-template-rows: auto auto minmax\(0, 1fr\);/);
+    expect(side).toMatch(/\.friends-tab--friends > \.friends-tools \{[^}]*grid-area: 1 \/ 2;[^}]*flex-direction: row;/);
+    expect(side).toMatch(/\.friends-tab--friends > \.friends-tab__body \{[^}]*grid-area: 3 \/ 1 \/ 4 \/ -1;/);
+  });
+
+  it("puts the Planner help's line beside its tabs, and lets Got it scroll, on a short screen", () => {
+    const side = media(css("styles/planner.css"), "(height <= 500px)");
+    expect(side).toMatch(/\.planner-help \.panel__head \{[^}]*flex-direction: row;/);
+    expect(side).toMatch(/\.planner-help__footer \{[^}]*position: static;/);
+  });
+});
