@@ -130,6 +130,7 @@ const { ROWLESS_CLOSE_ATTEMPTS, finaliseExpiredRowlessAttacks, finaliseRowlessAt
 const { mr1TribeFinalLockKey } = await import("./mr1TribeSession.js");
 const { ROWLESS_CHECKPOINT_INDEX, rowlessCheckpointKey } = await import("../../base/rowlessCheckpoint.js");
 const { combatConfig } = await import("../../../config/CombatConfig.js");
+const { emptyQuests, questsJson, readQuests } = await import("../../quests/state.js");
 /** The mode the suite runs in, put back after a test changes it (C7). */
 const MODE = combatConfig.mode;
 const setMode = (mode: typeof MODE) => {
@@ -158,6 +159,25 @@ const startSession = (attackerid = ATTACKER, startedat = now(), housed: Record<s
  */
 const WRECK = { v: 1, seed: 7, events: [{ kind: "fling", t: 40, x: 300, y: 150, r: 100, monsters: { C1: 60 } }] };
 const WRECK_TICK = 24_000;
+
+/** A day's record with one "Catapult 2 Town Halls" quest. */
+const catapultQuestDay = () =>
+  questsJson({
+    ...emptyQuests(),
+    daily: {
+      period: new Date().toISOString().slice(0, 10),
+      bonus: false,
+      swaps: 0,
+      quests: [{ slot: 0, kind: "catapultHit", variant: "14", need: 2, have: 0, claimed: false, rewards: [] }],
+    },
+  } as never);
+const catapultQuestHave = () => readQuests(userSave.dailyquests).daily?.quests[0]?.have;
+/** A fight with one bomb at this spot; this tribe's Town Hall stands at (-70, -65). */
+const wreckWithBomb = (x: number, y: number) => ({
+  ...WRECK,
+  events: [...WRECK.events, { kind: "bomb", t: 50, x, y, id: "tw0" }],
+});
+const onQuestSave = () => Object.assign(userSave, { type: "main", basesaveid: 9000, catapult: 4, dailyquests: catapultQuestDay() });
 const SCRATCH = { v: 1, seed: 7, events: [{ kind: "fling", t: 40, x: 300, y: 150, r: 100, monsters: { C1: 4 } }] };
 const SCRATCH_TICK = 2_400;
 const ARMY = { C1: 64 };
@@ -494,6 +514,22 @@ describe("Map Room 1 tribe save: the attacker's own row (#23, C1)", () => {
   });
 });
 
+describe("Map Room 1 tribe save: the catapult quest", () => {
+  beforeEach(onQuestSave);
+
+  test("a bomb that lands on the tribe's building counts", async () => {
+    startSession();
+    await run(ctxFor({ over: "1", tick: String(WRECK_TICK), flinglog: JSON.stringify(wreckWithBomb(-70, -65)) }));
+    expect(catapultQuestHave()).toBe(1);
+  });
+
+  test("a bomb that lands far from the building does not", async () => {
+    startSession();
+    await run(ctxFor({ over: "1", tick: String(WRECK_TICK), flinglog: JSON.stringify(wreckWithBomb(20_000, 20_000)) }));
+    expect(catapultQuestHave()).toBe(0);
+  });
+});
+
 describe("Map Room 1 tribe save: the tribe's monsters (#23, C2)", () => {
   test("stay as stored whatever the save sends", async () => {
     startSession();
@@ -749,6 +785,16 @@ describe("Map Room 1 tribe attack left without a save", () => {
 
   const finalSave = () =>
     ctxFor({ over: "1", attackid: String(ATTACK_ID), tick: String(WRECK_TICK), flinglog: JSON.stringify(WRECK) });
+
+  test("a catapult hit in the last checkpoint counts for the quest", async () => {
+    onQuestSave();
+    startSession(ATTACKER, now(), ARMY);
+    userSave.monsters = { housed: { ...ARMY } };
+    expect(await checkpoint(wreckWithBomb(-70, -65), WRECK_TICK)).toMatchObject({ stored: true });
+
+    expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(1);
+    expect(catapultQuestHave()).toBe(1);
+  });
 
   test("the next load lands it from its last checkpoint: army spent, damage, loot, session ended", async () => {
     startSession(ATTACKER, now(), ARMY);

@@ -7231,6 +7231,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (finished) return;
     // Raid waves in a raid battle only, and nothing else there (fidelity note 17).
     if ((event.kind === "raid") !== raid) return;
+    // No fling or bomb once the countdown has run out (`DROPZONE.as:53`).
+    if ((event.kind === "fling" || event.kind === "bomb") && tick >= countdown) return;
     if (event.kind === "raid") raidWave(event);
     else if (event.kind === "fling") fling(event);
     else if (event.kind === "bomb") bomb(event);
