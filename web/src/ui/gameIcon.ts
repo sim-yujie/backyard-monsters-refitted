@@ -59,6 +59,12 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * find, a stone wall with the level up arrow for upgrade walls, and a set bear
  * trap inside a yellow reload arrow for re-arm traps (`rearm2` is a spiked
  * mine in the same arrow).
+ *
+ * The profile window's stats (`ui/profile/ProfileDialog.ts`,
+ * `art-samples/profile-icons`, painted 7 Nov in place of line icons): the
+ * domed Town Hall with its horn antenna (`townhall`), a gold crown for empire
+ * points (`empire`), two smiling monster heads for friends (`friends`) and the
+ * crimson alliance shield with its gold stripe (`alliance`).
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -101,6 +107,10 @@ export const GAME_ICONS = {
   wallupgrade: "Upgrade walls",
   rearm: "Re-arm traps",
   rearm2: "Re-arm traps",
+  townhall: "Town Hall",
+  empire: "Empire points",
+  friends: "Friends",
+  alliance: "Alliance",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;

@@ -3,8 +3,7 @@ import type { OwnPhotoState, Profile } from "@/api/profile";
 import { avatarOf, avatarUrl } from "@/game/avatars";
 import { achievementBadge } from "@/ui/achievements/badge";
 import { formatAmount } from "@/ui/format";
-import { gameIcon } from "@/ui/gameIcon";
-import { icon } from "@/ui/icons";
+import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { Popup } from "@/ui/Popup";
 import { loadPicture, PhotoCropper } from "./PhotoCropper";
 import "@/ui/achievements/achievements.css";
@@ -124,21 +123,24 @@ const stat = (name: string, art: Element, value: string): HTMLElement => {
   return item;
 };
 
+/** A stat's painted icon (`gameIcon`), at the 24 px the stat row is laid out for. */
+const statIcon = (name: GameIconName): HTMLImageElement => gameIcon(name, { size: 24, decorative: true });
+
 export const statsList = (profile: Profile): HTMLElement => {
   const { stats } = profile;
   const list = el("ul", "profile__stats");
-  list.append(stat("Level", gameIcon("levelup", { size: 24, decorative: true }), String(stats.level)));
-  if (stats.townHall > 0) list.append(stat("Town Hall", icon("home", 20), String(stats.townHall)));
-  list.append(stat("Empire points", icon("yards", 20), formatAmount(stats.empirePoints)));
+  list.append(stat("Level", statIcon("levelup"), String(stats.level)));
+  if (stats.townHall > 0) list.append(stat("Town Hall", statIcon("townhall"), String(stats.townHall)));
+  list.append(stat("Empire points", statIcon("empire"), formatAmount(stats.empirePoints)));
   if (stats.achievements) {
     list.append(
       stat("Achievements", achievementBadge(1, "gold", true), `${stats.achievements.earned}/${stats.achievements.total}`),
     );
   }
-  list.append(stat("Friends", icon("friends", 20), formatAmount(stats.friends)));
+  list.append(stat("Friends", statIcon("friends"), formatAmount(stats.friends)));
   const joined = joinedText(stats.joined);
-  if (joined) list.append(stat("Joined", gameIcon("time", { size: 24, decorative: true }), joined));
-  if (stats.alliance) list.append(stat("Alliance", icon("shield", 20), stats.alliance));
+  if (joined) list.append(stat("Joined", statIcon("time"), joined));
+  if (stats.alliance) list.append(stat("Alliance", statIcon("alliance"), stats.alliance));
   return list;
 };
 

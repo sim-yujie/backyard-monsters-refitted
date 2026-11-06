@@ -93,6 +93,10 @@ describe("profile window", () => {
     expect(stats).toContain("Town Hall: 8");
     expect(stats).toContain("Achievements: 5/22");
     expect(stats).toContain("Friends: 3");
+    // Every stat but achievements (its medal) is a painted icon, never a line icon (owner, 7 Nov).
+    const icons = [...container.querySelectorAll<HTMLImageElement>(".profile__stat-icon .game-icon")];
+    expect(icons.map((icon) => icon.dataset["icon"])).toEqual(["levelup", "townhall", "empire", "friends", "time"]);
+    expect(q(".profile__stat-icon svg")).toBeNull();
     // No photo, so nothing to report; no editor on someone else's profile.
     expect(q(".profile__report")).toBeNull();
     expect(q(".profile__bio-input")).toBeNull();
