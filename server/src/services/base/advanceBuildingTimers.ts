@@ -76,6 +76,7 @@ export const advanceBuildingTimers = (buildingData: BuildingDataMap, healthData:
       if (building.cF <= 0) {
         delete building.cF;
         delete building.hl;
+        delete building.wd;
         building.fort = (building.fort ?? 0) + 1;
       }
     }

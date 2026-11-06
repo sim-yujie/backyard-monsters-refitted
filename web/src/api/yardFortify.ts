@@ -27,7 +27,10 @@ export interface FortifyReport {
   to: number;
   /** The countdown written, after Sharper Tools. */
   seconds: number;
+  /** What was charged: less a Builder's Weekend's `weekendOff`%, when one ran. */
   cost: UpgradeCost;
+  /** Builder's Weekend: the percentage taken off; absent when none was. */
+  weekendOff?: number;
 }
 
 /** `report` of `fortify/cancel`. */

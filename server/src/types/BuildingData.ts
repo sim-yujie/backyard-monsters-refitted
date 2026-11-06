@@ -9,7 +9,7 @@ export interface BuildingData {
   cU?: number;            // countdown upgrade
   cF?: number;            // countdown fortify
   cL?: number;            // length in seconds of the running build/upgrade, as started (#136); not `cT`, which BEXPIRABLE uses
-  wd?: number;            // Builder's Weekend: the running upgrade was bought this many % off; its cancel gives back that price
+  wd?: number;            // Builder's Weekend: the running upgrade or fortify was bought this many % off; its cancel gives back that price
   hp?: number;            // health, only when damaged (not written on MR3)
   rE?: number;            // repairing flag
   prefab?: number;        // kit type for outpost buildings
