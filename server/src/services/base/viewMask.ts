@@ -67,7 +67,7 @@ export const maskedHp = (hp: number, type: number, level: number, art: number, k
 /** One building as a viewer gets it; see the file comment. */
 export const maskBuilding = (building: BuildingData, kind: CombatTargetKind): BuildingData => {
   const level = levelOf(building);
-  const art = artLevelOf(building.t, level);
+  const art = artLevelOf(building.t, level, true, kind);
   const masked: BuildingData = { ...building };
   delete masked.cL;
   if (typeof building.l === "number") masked.l = art;
@@ -104,7 +104,7 @@ export const maskHealth = (
     const building = byId.get(id);
     if (!building) continue;
     const level = levelOf(building);
-    out[id] = maskedHp(Number(hp), building.t, level, artLevelOf(building.t, level), kind);
+    out[id] = maskedHp(Number(hp), building.t, level, artLevelOf(building.t, level, true, kind), kind);
   }
   return out;
 };
