@@ -6,6 +6,7 @@ import { AllianceMessageType } from "../../enums/Alliance.js";
 import ormConfig from "../../mikro-orm.config.js";
 import { recordChatReport } from "../chat/chatReports.js";
 import { actOnCase, awardReporters, getChatCase, listChatCases, parseCaseAction, parseCaseAward, SNAPSHOT_AFTER, SNAPSHOT_BEFORE } from "./chatCases.js";
+import { normaliseJsonBody } from "../../middleware/jsonBody.js";
 import type { ModerationEffects } from "./moderation.js";
 
 /**
@@ -269,13 +270,13 @@ describe.skipIf(!dbName)("chat report cases on a real database", () => {
     await report(REPORTER_B, 20);
     await report(REPORTER_C, 20);
     const [only] = await open();
-    const request = parseCaseAward({
+    const request = parseCaseAward(normaliseJsonBody({
       awards: [
         { userid: REPORTER_A, amount: 50 },
         { userid: REPORTER_B, amount: 25 },
         { userid: BYSTANDER, amount: 25 },
       ],
-    });
+    }));
     if (!request.ok) throw new Error(request.message);
     const first = await awardReporters(orm.em.fork(), only!.id, request.value, OWNER, NOW);
     if (first.outcome !== "done") throw new Error(first.outcome);
@@ -291,7 +292,7 @@ describe.skipIf(!dbName)("chat report cases on a real database", () => {
     const mail = await sql<{ subject: string }>(`SELECT subject FROM bym.message WHERE targetid = ?`, [REPORTER_A]);
     expect(mail.map((m) => m.subject)).toEqual(["A gift of 50 Shiny"]);
 
-    const again = parseCaseAward({ awards: [{ userid: REPORTER_A, amount: 500 }, { userid: REPORTER_C, amount: 25 }] });
+    const again = parseCaseAward(normaliseJsonBody({ awards: [{ userid: REPORTER_A, amount: 500 }, { userid: REPORTER_C, amount: 25 }] }));
     if (!again.ok) throw new Error(again.message);
     const second = await awardReporters(orm.em.fork(), only!.id, again.value, OWNER, NOW);
     if (second.outcome !== "done") throw new Error(second.outcome);
