@@ -51,16 +51,19 @@ const when = (t: number): string =>
     minute: "2-digit",
   });
 
+/** "2 d 0 h" with no-break spaces: a narrow screen wraps it whole, never "h." alone. */
+const unbroken = (seconds: number): string => duration(seconds).replace(/ /g, "\u00a0");
+
 /** One sentence: what runs now, or what comes next, or that it is off. */
 export const weekendSentence = (panel: WeekendPanelView): string => {
   const { active, next } = panel.state;
   const run = (r: WeekendRunView) => `${r.title} (${r.line})`;
   if (active) {
     const by = active.forced ? " (run by hand)" : "";
-    return `On now: ${run(active)}${by}. Ends in ${duration(active.endsAt - panel.now)}.`;
+    return `On now: ${run(active)}${by}. Ends in ${unbroken(active.endsAt - panel.now)}.`;
   }
   if (!panel.settings.enabled) return "Weekend events are off. No event runs or is announced.";
-  if (next) return `Next: ${run(next)}, starts in ${duration(next.startsAt - panel.now)}.`;
+  if (next) return `Next: ${run(next)}, starts in ${unbroken(next.startsAt - panel.now)}.`;
   return "Nothing planned in the next 8 weekends.";
 };
 

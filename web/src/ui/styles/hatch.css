@@ -1275,8 +1275,9 @@ button.hatch-slot:disabled {
 /* A painted icon (the word on hover and for a screen reader) and its number. */
 .hatch-info__stat {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 2px 6px;
   padding: 5px 10px;
   border-radius: var(--radius-sm);
   background: var(--colour-surface-sunken);
@@ -1296,6 +1297,19 @@ button.hatch-slot:disabled {
   font-size: var(--text-md);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+/* Hatch Rush's "−30%" under the time (a 98 px tile at 1280 has no room for
+   it beside "4s"): its own line, the chip a little tighter. */
+.hatch-info__stat dd.hatch-info__stat-extra {
+  display: flex;
+  flex-basis: 100%;
+  font-size: inherit;
+}
+
+.hatch-info__stat-extra > .chip {
+  padding: 1px 6px;
+  gap: 3px;
 }
 
 .hatch-add {

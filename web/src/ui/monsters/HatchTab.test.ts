@@ -9,6 +9,7 @@ import { YardStore, type YardActionResult } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { HOLD_DELAY_MS } from "@/ui/QuantityStepper";
 import { spokenText } from "@/ui/resourceIcon";
+import { resetWeekend, setWeekend } from "@/game/weekend";
 import { HatchTab, plural } from "./HatchTab";
 
 /**
@@ -503,6 +504,44 @@ describe("HatchTab: the info panel and the batch add", () => {
     // Icons, not words: the stat names are only on hover and for a screen reader.
     expect(element.querySelector(".hatch-info__stats")!.textContent).not.toMatch(/[A-Za-z]{3}/);
     expect(spokenText(element.querySelector(".hatch-info__each")!)).toBe("Goo 350 · Time each 23s · Housing each 15");
+  });
+
+  it("puts Hatch Rush's chip on its own line under the time, inside the tile", () => {
+    const now = 1_794_614_400 + 3_600;
+    setWeekend(
+      {
+        active: {
+          id: "hatch",
+          title: "Hatch Rush",
+          line: "Monsters hatch 30% faster",
+          percent: 30,
+          key: "2026-11-14",
+          startsAt: now - 3_600,
+          endsAt: now - 3_600 + 172_800,
+          announceAt: now - 3_600 - 86_400,
+          forced: false,
+        },
+        next: null,
+      },
+      now,
+    );
+    try {
+      const { element } = setup(twoHatcheries(), { monster: "C3" });
+      const time = [...element.querySelectorAll<HTMLElement>(".hatch-info__stat")].at(-1)!;
+      const values = [...time.querySelectorAll("dd")];
+      // The time alone in the first <dd>; the chip in a second one, which the
+      // tile wraps onto its own line (hatch.css), not squeezed beside "23s".
+      // (23s shortened by the rush.)
+      expect(values.map((dd) => dd.textContent)).toEqual(["17s", "−30%"]);
+      expect(values[1]!.className).toBe("hatch-info__stat-extra");
+      expect(values[1]!.querySelector(".weekend-chip")).not.toBeNull();
+      // The other five tiles keep one value each.
+      for (const stat of [...element.querySelectorAll(".hatch-info__stat")].slice(0, -1)) {
+        expect(stat.querySelectorAll("dd")).toHaveLength(1);
+      }
+    } finally {
+      resetWeekend();
+    }
   });
 
   it("offers Max, explains it, previews the batch dashed and adds it in one request", async () => {

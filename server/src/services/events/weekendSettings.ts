@@ -45,6 +45,23 @@ const plainObject = (raw: unknown): Record<string, unknown> | null =>
   raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
 
 /**
+ * A list or table field of a dashboard change, as sent. The dashboard posts
+ * JSON, and `middleware/jsonBody.ts` turns every object or array at the top of
+ * a JSON body into JSON text before any route sees it, so `rotation` and
+ * `percent` arrive as strings; a direct caller may still pass the real value.
+ * Both read the same. Text that is not JSON is passed on as it is, and fails
+ * the field's own check.
+ */
+const sentValue = (raw: unknown): unknown => {
+  if (typeof raw !== "string") return raw;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return raw;
+  }
+};
+
+/**
  * Settings read from storage, every field checked and any bad or missing one
  * left at its default: a broken row never stops the game.
  */
@@ -130,15 +147,16 @@ export const parseWeekendChange = (body: unknown): Parsed<WeekendChange> => {
         change.enabled = row.enabled;
       }
       if (row.rotation !== undefined) {
-        if (!Array.isArray(row.rotation) || !row.rotation.every(isWeekendEventId)) {
+        const rotation = sentValue(row.rotation);
+        if (!Array.isArray(rotation) || !rotation.every(isWeekendEventId)) {
           return bad("The rotation lists unknown events.");
         }
-        if (row.rotation.length === 0) return bad("The rotation needs at least one event (or switch weekend events off).");
-        if (row.rotation.length > 12) return bad("The rotation can hold at most 12 weekends.");
-        change.rotation = row.rotation;
+        if (rotation.length === 0) return bad("The rotation needs at least one event (or switch weekend events off).");
+        if (rotation.length > 12) return bad("The rotation can hold at most 12 weekends.");
+        change.rotation = rotation;
       }
       if (row.percent !== undefined) {
-        const percent = plainObject(row.percent);
+        const percent = plainObject(sentValue(row.percent));
         if (!percent) return bad("Percentages are missing.");
         const out: Partial<Record<WeekendEventId, number>> = {};
         for (const [id, value] of Object.entries(percent)) {

@@ -3233,11 +3233,25 @@ tbody th {
   flex-wrap: wrap;
 }
 
+/* A phone: the date above its choice, so "Rotation: Builder's Weekend" fits
+   the full width instead of being cut. */
+@media (max-width: 599px) {
+  .weekend-plan .weekend-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}
+
 .weekend-force,
 .weekend-percents {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
+}
+
+/* Wide enough for "Builder's Weekend" and the arrow; a phone stacks the two. */
+.weekend-force {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 }
 
 .weekend-settings > summary {

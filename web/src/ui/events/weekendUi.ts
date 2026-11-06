@@ -47,6 +47,19 @@ export const weekendChip = (id: WeekendEventId, t: number = weekendNow()): HTMLE
   });
 };
 
+/**
+ * A lowered time or price with its event's chip, kept together on one line
+ * (`.weekend-with-chip`), so a long line wraps before them rather than leaving
+ * the chip alone under it. Just the text when no chip.
+ */
+export const withWeekendChip = (text: string, chip: HTMLElement | null): Node | string => {
+  if (!chip) return text;
+  const span = document.createElement("span");
+  span.className = "weekend-with-chip";
+  span.append(text, " ", chip);
+  return span;
+};
+
 /** A Study Weekend's training or research time: what the server will write. */
 export const studySeconds = (seconds: number, t: number = weekendNow()): number =>
   shorterBy(seconds, weekendPercent("study", t));

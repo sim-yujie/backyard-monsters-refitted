@@ -28,7 +28,7 @@ import "@/ui/styles/lab.css";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
 import { monsterPicture } from "./LockerTab";
 import type { MonstersFocus, MonstersTab, MonstersTabContext } from "./monstersTab";
-import { studySeconds, weekendChip } from "@/ui/events/weekendUi";
+import { studySeconds, weekendChip, withWeekendChip } from "@/ui/events/weekendUi";
 
 /**
  * The Lab tab: the Monster Lab (`docs/design/yard-buildings.md` §6 "Lab tab").
@@ -433,9 +433,11 @@ export class LabTab implements MonstersTab {
       const lockedInstant = instantGate(ability, store);
       const cost = document.createElement("p");
       cost.className = "locker-detail__note";
-      cost.append(`Rank ${rank + 1}: `, resourceAmount("r3", step[0]), ` · ${duration(studySeconds(step[1]))}`);
-      const study = weekendChip("study");
-      if (study) cost.append(" ", study);
+      cost.append(
+        `Rank ${rank + 1}: `,
+        resourceAmount("r3", step[0]),
+        withWeekendChip(` · ${duration(studySeconds(step[1]))}`, weekendChip("study")),
+      );
       action.append(cost);
       if (gate) action.append(gateLine(gate));
       const buttons = document.createElement("div");
