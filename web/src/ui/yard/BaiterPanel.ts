@@ -282,6 +282,8 @@ export class BaiterPanel {
     const controls: HTMLButtonElement[] = [];
     const select = (index: number): void => {
       views.forEach(([, view], at) => {
+        // On a phone each view scrolls under the row: another tab opens at its top.
+        if (at === index && view.hidden) view.scrollTop = 0;
         view.hidden = at !== index;
         const control = controls[at];
         if (!control) return;

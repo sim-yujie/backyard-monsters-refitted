@@ -171,7 +171,7 @@ const settingsTabs = (body: HTMLElement): Record<SettingsTab, HTMLElement> => {
   const tabs = new Map<SettingsTab, HTMLButtonElement>();
   const panes = {} as Record<SettingsTab, HTMLElement>;
   const scroll = document.createElement("div");
-  scroll.className = "account-settings__scroll";
+  scroll.className = "tab-scroll account-settings__scroll";
   let active: SettingsTab = "account";
   const show = (id: SettingsTab): void => {
     // Another tab opens at its top.

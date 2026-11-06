@@ -88,6 +88,24 @@
   gap: var(--space-3);
 }
 
+/* The Friends tab fills the box, and only its list scrolls (ui.css
+   `.tab-scroll`): the search and the filter buttons stay over it, as the
+   tabs stay over every window's content (owner, 6 Nov 2026). */
+.friends-body:has(> .friends-tab--friends) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.friends-tab--friends {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.friends-tab--friends > .friends-tools {
+  flex: none;
+}
+
 .friends-summary {
   margin: 0;
   font-weight: 700;

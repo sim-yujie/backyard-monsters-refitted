@@ -511,6 +511,22 @@ describe("BuildingPanel: the Champion Cage (§7.2)", () => {
     expect(element.querySelector<HTMLElement>(".building-panel__actions")!.hidden).toBe(false);
   });
 
+  it("keeps the cage's and chamber's tabs over the body, which alone scrolls; a new tab opens at its top (owner, 6 Nov 2026)", () => {
+    for (const type of [114, 119]) {
+      const { element } = setup([HALL, building(2, type, 1)], 2);
+      const tablist = element.querySelector<HTMLElement>('[role="tablist"]')!;
+      const body = element.querySelector<HTMLElement>(":scope > .panel__body")!;
+      expect(tablist.parentElement!.classList.contains("panel__head")).toBe(true);
+      expect(tablist.parentElement!.nextElementSibling).toBe(body);
+      expect(body.contains(tablist)).toBe(false);
+      body.scrollTop = 200;
+      expect(body.scrollTop).toBe(200);
+      tabNamed(element, "building").click();
+      expect(body.scrollTop).toBe(0);
+      document.body.replaceChildren();
+    }
+  });
+
   it("puts a red dot on a damaged chamber's Building tab", () => {
     const { element } = setup([HALL, { ...building(2, 119, 1), hp: 100 }], 2);
     expect(tabNamed(element, "building").classList.contains("building-panel__tab--alert")).toBe(true);

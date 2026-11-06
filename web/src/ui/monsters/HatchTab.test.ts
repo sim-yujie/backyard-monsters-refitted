@@ -194,6 +194,25 @@ describe("HatchTab: each hatchery's line", () => {
     expect(tabs(element).map((one) => one.tabIndex)).toEqual([0, -1]);
   });
 
+  it("keeps the hatchery tabs over the scroll box, and another hatchery opens at the top (owner, 6 Nov 2026)", () => {
+    const { element } = setup(twoHatcheries(), { monster: "C1" });
+    const strip = element.querySelector<HTMLElement>(".hatch-tabs")!;
+    const scroll = element.querySelector<HTMLElement>(".hatch__scroll")!;
+    const row = strip.parentElement!;
+    expect(row.classList.contains("hatch__tabs-row")).toBe(true);
+    expect(row.hidden).toBe(false);
+    expect(row.parentElement).toBe(element);
+    expect(row.nextElementSibling).toBe(scroll);
+    expect(scroll.contains(strip)).toBe(false);
+    // The line, the grid and the info all scroll in the box.
+    expect(scroll.contains(line(element, 10))).toBe(true);
+    expect(scroll.querySelector(".hatch__grid")).not.toBeNull();
+    scroll.scrollTop = 300;
+    tab(element, 11).click();
+    expect(scroll.scrollTop).toBe(0);
+    expect(document.activeElement).toBe(tab(element, 11));
+  });
+
   it("puts each hatchery's number, level, what it is doing and how many wait on its tab", () => {
     const { element } = setup(twoHatcheries());
     expect(tabs(element).map((one) => one.dataset["hatchery"])).toEqual(["10", "11"]);
@@ -296,6 +315,7 @@ describe("HatchTab: each hatchery's line", () => {
     const save = loadOf({}, [building(10, 13, 3)]);
     const { element } = setup(save, { monster: "C1" });
     expect(element.querySelector(".hatch-tabs")).toBeNull();
+    expect(element.querySelector<HTMLElement>(".hatch__tabs-row")!.hidden).toBe(true);
     expect(line(element, 10).className).toBe("hatch-line");
     expect(line(element, 10).querySelector(".hatch-line__number")!.textContent).toBe("1");
     expect(text(line(element, 10), ".hatch-line__title")).toBe("Hatchery 1 · Level 3");

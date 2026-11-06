@@ -455,7 +455,7 @@
 /* A dock is 300px and its frame takes 48 of them: the inside keeps a little
    less margin (the frame is the margin), the plates' ends are pinched, and a
    row that still does not fit wraps rather than running under the frame. */
-:root[data-skin] .map-panel .panel__body {
+:root[data-skin] .map-panel :is(.panel__head, .panel__body) {
   padding-inline: var(--space-2);
 }
 

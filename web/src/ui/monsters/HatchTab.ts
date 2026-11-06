@@ -181,6 +181,10 @@ export class HatchTab implements MonstersTab {
   private readonly context: MonstersTabContext;
   private readonly actions: HatcheryActions;
   private readonly status: HTMLElement;
+  /** The hatchery tabs, over the scroll box: they never scroll out of sight (owner, 6 Nov 2026). */
+  private readonly tabsRow: HTMLElement;
+  /** Everything under the tabs; only this scrolls. */
+  private readonly scroll: HTMLElement;
   private readonly lines: HTMLElement;
   private readonly boosts: HTMLElement;
   private readonly message: HTMLElement;
@@ -242,6 +246,13 @@ export class HatchTab implements MonstersTab {
     this.status.className = "monsters-status";
     this.status.setAttribute("role", "status");
     this.status.hidden = true;
+
+    this.tabsRow = document.createElement("div");
+    this.tabsRow.className = "hatch__tabs-row";
+    this.tabsRow.hidden = true;
+
+    this.scroll = document.createElement("div");
+    this.scroll.className = "tab-scroll hatch__scroll";
 
     this.lines = document.createElement("section");
     this.lines.className = "hatch-lines";
@@ -338,7 +349,8 @@ export class HatchTab implements MonstersTab {
     this.info.append(this.infoHead, this.infoEach, this.detailsButton, this.stats, this.addBlock);
     // The message sits in the split so the info panel can stand beside it on a wide screen.
     split.append(this.message, pick, this.info);
-    this.element.append(this.status, this.lines, this.boosts, split);
+    this.scroll.append(this.status, this.lines, this.boosts, split);
+    this.element.append(this.tabsRow, this.scroll);
   }
 
   private get store() {
@@ -590,10 +602,12 @@ export class HatchTab implements MonstersTab {
       const note = document.createElement("p");
       note.className = "hatch__none";
       note.textContent = `Build ${article(this.words.hatchery)} to hatch monsters.`;
+      this.showTabs(null);
       this.lines.replaceChildren(note);
       return;
     }
     if (yard.hcc) {
+      this.showTabs(null);
       this.lines.replaceChildren(this.hccLine(yard, preview));
       return;
     }
@@ -601,7 +615,14 @@ export class HatchTab implements MonstersTab {
     const tabs = hatcheryTabs(yard, this.numbers);
     const chosen = yard.hatcheries.find((one) => one.id === this.target) ?? yard.hatcheries[0]!;
     const line = this.hatcheryLine(yard, chosen, tabs.length > 0, preview, added);
-    this.lines.replaceChildren(...(tabs.length > 0 ? [this.tabStrip(tabs, chosen.id), line] : [line]));
+    this.showTabs(tabs.length > 0 ? this.tabStrip(tabs, chosen.id) : null);
+    this.lines.replaceChildren(line);
+  }
+
+  /** The tab strip in its row over the scroll box, or no row at all. */
+  private showTabs(strip: HTMLElement | null): void {
+    this.tabsRow.replaceChildren(...(strip ? [strip] : []));
+    this.tabsRow.hidden = strip === null;
   }
 
   /**
@@ -1484,6 +1505,8 @@ export class HatchTab implements MonstersTab {
     if (this.target === id) return;
     this.target = id;
     saveHatchTab(this.tabKey, id);
+    // The other hatchery opens at the top, its line under the tabs.
+    this.scroll.scrollTop = 0;
     this.render();
     // The strip has just been redrawn: keep the focus on the tab chosen.
     this.element.querySelector<HTMLElement>(`[data-focus-key="tab-${id}"]`)?.focus();

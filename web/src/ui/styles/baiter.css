@@ -567,6 +567,28 @@
   }
 }
 
+/* ── A phone, or a phone on its side: the whole tab scrolls ────────────────
+   Too little room for the cards to scroll on their own, so each tab scrolls
+   as one: under the Army / Recent tests tabs, which stay fixed at the top
+   (owner, 6 Nov 2026), not with them. */
+
+@media (width <= 620px), (height <= 500px) {
+  .baiter-window .panel__body:has(.baiter) {
+    overflow: hidden;
+  }
+
+  .baiter__view {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .baiter__list {
+    flex: none;
+    overflow: visible;
+  }
+}
+
 /* ── A phone: both windows are full-screen sheets ──────────────────────── */
 
 @media (width <= 620px) {
@@ -594,20 +616,8 @@
     padding: var(--space-2) var(--space-3);
   }
 
-  /* The whole sheet scrolls; the cards no longer need their own scroller. */
-  .baiter,
-  .baiter__view--army {
-    flex: none;
-  }
-
-  .baiter-window .panel__body:has(.baiter) {
-    overflow-y: auto;
-  }
-
   .baiter__list {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    flex: none;
-    overflow: visible;
   }
 
   .baiter__shortcuts {

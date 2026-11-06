@@ -326,6 +326,47 @@ body {
   max-height: min(70vh, 640px);
 }
 
+/*
+ * Tabs stay fixed at the top of every window (owner, 6 Nov 2026): a window's
+ * tab row never sits inside the box that scrolls. Two shared pieces:
+ *
+ * - `.panel__head` (Panel.setHead): the tab row, and any line that belongs
+ *   above it, between the title bar and the body. Only the body scrolls.
+ * - `.tab-scroll`: the scroll box under a tab row that lives inside the body
+ *   (Settings, the Hatchery, the Friends list, the Baiter on a phone).
+ */
+.panel__head {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) 0;
+}
+
+/* Nothing to show (a building with no tabs): no strip of padding either. */
+.panel__head:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+/* The window may shrink to the room it has; then the body, not the window,
+   scrolls. */
+.panel:has(> .panel__head) {
+  min-height: 0;
+}
+
+.panel:has(> .panel__head) > .panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tab-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 /* ── Popup ──────────────────────────────────────────────────────────────── */
 
 .popup-backdrop {
@@ -1976,12 +2017,8 @@ body {
   margin: var(--space-4) var(--space-4) 0;
 }
 
+/* The scroll box is the shared `.tab-scroll` (above); only its padding here. */
 .account-settings__scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   padding: 0 var(--space-4) var(--space-4);
 }
 

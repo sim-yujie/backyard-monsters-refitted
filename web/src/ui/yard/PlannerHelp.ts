@@ -283,6 +283,8 @@ export const plannerHelpPanel = (options: PlannerHelpOptions): Panel => {
   const tabs = new Map<HelpTab, HTMLButtonElement>();
 
   const select = (tab: HelpTab): void => {
+    // Another tab opens at its top.
+    if (tabs.get(tab)?.getAttribute("aria-selected") === "false") panel.body.scrollTop = 0;
     for (const [name, element] of Object.entries(panels) as [HelpTab, HTMLElement][]) {
       element.hidden = name !== tab;
     }
@@ -335,8 +337,10 @@ export const plannerHelpPanel = (options: PlannerHelpOptions): Panel => {
 
   // A touched screen gets the pictures alone: a tab of keys it has no
   // keyboard for would be a tab of things it cannot do.
+  // The tabs (and the line over them) stay in sight while the body scrolls
+  // (owner, 6 Nov 2026: tabs fixed at the top of every window).
   if (touch) panel.setContent(intro, basics, footer);
-  else panel.setContent(intro, tablist, basics, shortcuts, footer);
+  else panel.setHead(intro, tablist).setContent(basics, shortcuts, footer);
   select(touch ? "basics" : (options.tab ?? "basics"));
   return panel;
 };

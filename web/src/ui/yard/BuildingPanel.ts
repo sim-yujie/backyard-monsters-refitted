@@ -389,8 +389,9 @@ export class BuildingPanel {
     this.facts.className = "cell-facts";
     this.details.append(summary, this.facts);
 
+    // The cage's and chamber's tabs sit over the body, which scrolls alone.
+    this.panel.setHead(this.cageTabs);
     this.panel.setContent(
-      this.cageTabs,
       this.blurb,
       this.kind,
       this.info,
@@ -561,6 +562,8 @@ export class BuildingPanel {
   private showCageTab(tab: CageTab): void {
     if (this.cageTab === tab) return;
     this.cageTab = tab;
+    // The other tab opens at its top.
+    this.panel.body.scrollTop = 0;
     this.render();
     if (tab === "champion" && this.champion instanceof ChampionPanel) {
       guideBus.emit("screen", { id: GuideScreen.CHAMPION, root: this.champion.element, header: null });

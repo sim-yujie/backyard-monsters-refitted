@@ -98,8 +98,15 @@
 
 /* Flash's five (Evil, Plants, Good, Flags, Premium) share the width, a
    smaller tray than the four tabs above; a dot of a number on one counts the
-   decorations of that kind in storage. */
+   decorations of that kind in storage.
+   They head the tiles' column, which scrolls with the info column beside
+   it, so they stick to the top of the scrolling area rather than leave it:
+   tabs stay fixed at the top (owner, 6 Nov 2026). Solid, so the tiles
+   scrolled under them do not show through. */
 .build-menu__kinds {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 2px;
@@ -107,7 +114,7 @@
   padding: 3px;
   border: 1px solid var(--colour-border-subtle);
   border-radius: var(--radius-md);
-  background: var(--colour-surface-sunken);
+  background: linear-gradient(var(--colour-surface-sunken), var(--colour-surface-sunken)), var(--colour-surface-base);
 }
 
 .build-menu__kinds[hidden] {

@@ -317,6 +317,20 @@ describe("BaiterPanel", () => {
       expect([army.hidden, recent.hidden]).toEqual([false, true]);
     });
 
+    it("keeps the tab row out of the views, which scroll under it; a new tab opens at its top (owner, 6 Nov 2026)", () => {
+      keep("Your yard held");
+      open();
+      const row = host.querySelector<HTMLElement>(".baiter__tabs")!;
+      const army = host.querySelector<HTMLElement>(".baiter__view--army")!;
+      const recent = host.querySelector<HTMLElement>(".baiter__view--recent")!;
+      expect(row.nextElementSibling).toBe(army);
+      expect(army.nextElementSibling).toBe(recent);
+      expect(army.contains(row) || recent.contains(row)).toBe(false);
+      recent.scrollTop = 90;
+      host.querySelectorAll<HTMLButtonElement>(".baiter__tab")[1]!.click();
+      expect(recent.scrollTop).toBe(0);
+    });
+
     it("shows no tabs before any test has finished", () => {
       open();
       expect(host.querySelector(".baiter__tabs")).toBeNull();
