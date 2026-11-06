@@ -219,8 +219,8 @@
   height: 16px;
 }
 
-/* A second line (a held −1 h / −2 h that finishes the job: "Finishes now ·
-   35 min unused", patch 6.3): under the label and price, allowed to wrap. */
+/* Lines under the label and price (a held −1 h / −2 h that finishes the job:
+   "Finishes now" / "35 min unused", patch 6.3), one per line. */
 .shiny-button--noted {
   flex-wrap: wrap;
   row-gap: 0;
@@ -232,6 +232,10 @@
   font-weight: normal;
   white-space: normal;
   opacity: 0.9;
+}
+
+.shiny-button__note-line {
+  display: block;
 }
 
 .shiny-button--armed,
@@ -271,8 +275,9 @@
   grid-column: 1 / -1;
 }
 
-/* A speed-up with a second line takes the whole row, so the line fits a phone. */
-.building-job .building-panel__buttons > .shiny-button--noted {
+/* A speed-up with lines under it takes the whole row, so they fit a phone;
+   its partner then does too, so neither sits beside an empty cell. */
+.building-job .building-panel__buttons:has(> .shiny-button--noted) > * {
   grid-column: 1 / -1;
 }
 

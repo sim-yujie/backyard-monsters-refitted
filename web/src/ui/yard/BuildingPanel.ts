@@ -1875,7 +1875,7 @@ const applySpeedup = (button: ShinyButton, offer: SpeedupOffer): void => {
   button.setPrice(offer.price);
   button.setFree(offer.free);
   // A held −1 h / −2 h on a shorter job finishes it; say what is lost (patch 6.3).
-  button.setNote(offer.unused > 0 ? `Finishes now · ${unusedText(offer.unused)} unused` : null);
+  button.setNote(offer.unused > 0 ? ["Finishes now", `${unusedText(offer.unused)} unused`] : null);
   button.setBlocked(
     offer.blocked === "paused"
       ? "Repair the building first: its countdown is paused."

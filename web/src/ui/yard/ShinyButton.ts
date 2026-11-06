@@ -63,7 +63,7 @@ export class ShinyButton {
   private price = 0;
   private free = 0;
   private reason: string | null = null;
-  private note: string | null = null;
+  private note: readonly string[] | null = null;
   private busy = false;
   private armTimer: unknown = null;
 
@@ -82,8 +82,8 @@ export class ShinyButton {
     this.labelNode.className = "shiny-button__label";
     this.priceNode = document.createElement("span");
     this.priceNode.className = "shiny-button__price";
-    // A second line under the label and price: what the spend also means
-    // ("Finishes now · 35 min unused"), kept in the armed state as the confirm.
+    // Lines under the label and price: what the spend also means
+    // ("Finishes now" / "35 min unused"), kept in the armed state as the confirm.
     this.noteNode = document.createElement("span");
     this.noteNode.className = "shiny-button__note";
     this.noteNode.hidden = true;
@@ -123,9 +123,12 @@ export class ShinyButton {
     this.draw();
   }
 
-  /** A second line on the button, or null for none. A change while armed keeps it armed. */
-  setNote(note: string | null): void {
-    if (note === this.note) return;
+  /** Lines under the label, one each, or null for none. A change while armed keeps it armed. */
+  setNote(note: readonly string[] | null): void {
+    const same =
+      note === this.note ||
+      (note !== null && this.note !== null && note.length === this.note.length && note.every((line, i) => line === this.note![i]));
+    if (same) return;
     this.note = note;
     this.draw();
   }
@@ -165,7 +168,8 @@ export class ShinyButton {
         this.live.textContent = "";
         this.draw();
       }, ARM_WINDOW_MS);
-      this.live.textContent = `Tap again to spend ${this.spell(this.price)} Shiny.`;
+      const spend = this.free > 0 ? "use a free one" : `spend ${this.spell(this.price)} Shiny`;
+      this.live.textContent = `Tap again to ${spend}${this.note ? ` (${this.note.join(", ")})` : ""}.`;
       this.draw();
       return;
     }
@@ -193,11 +197,18 @@ export class ShinyButton {
     this.element.classList.toggle("shiny-button--free", freeText !== null);
     this.element.classList.toggle("shiny-button--noted", this.note !== null);
     this.noteNode.hidden = this.note === null;
-    this.noteNode.textContent = this.note ?? "";
+    this.noteNode.replaceChildren(
+      ...(this.note ?? []).map((text) => {
+        const line = document.createElement("span");
+        line.className = "shiny-button__note-line";
+        line.textContent = text;
+        return line;
+      }),
+    );
     this.element.disabled = this.reason !== null || this.busy;
     this.element.setAttribute("aria-pressed", armed ? "true" : "false");
     const cost = freeText ? `a free one, ${this.free} left` : `${priceText} Shiny`;
-    const noted = this.note ? ` (${this.note})` : "";
+    const noted = this.note ? ` (${this.note.join(", ")})` : "";
     const name = armed
       ? `Tap again to ${freeText ? "use" : "spend"} ${cost} on ${this.what ?? this.label}${noted}`
       : `${this.what ? `${this.label} ${this.what}` : this.label}${noted}, ${cost}`;

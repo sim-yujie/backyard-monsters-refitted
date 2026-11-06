@@ -274,11 +274,13 @@ describe("BuildingPanel: a held speed-up on a shorter job (patch 6.3)", () => {
     const minusOne = buttonNamed(element, "−1 h")!;
     const minusTwo = buttonNamed(element, "−2 h")!;
     expect(minusOne.disabled).toBe(false);
-    expect(minusOne.querySelector(".shiny-button__note")?.textContent).toBe("Finishes now · 35 min unused");
-    expect(minusOne.getAttribute("aria-label")).toMatch(/Finishes now · 35 min unused/);
+    const lines = (button: HTMLElement) =>
+      [...button.querySelectorAll(".shiny-button__note-line")].map((line) => line.textContent);
+    expect(lines(minusOne)).toEqual(["Finishes now", "35 min unused"]);
+    expect(minusOne.getAttribute("aria-label")).toMatch(/Finishes now, 35 min unused/);
     expect(minusOne.classList.contains("shiny-button--noted")).toBe(true);
     expect(minusTwo.disabled).toBe(false);
-    expect(minusTwo.querySelector(".shiny-button__note")?.textContent).toBe("Finishes now · 1 h 35 min unused");
+    expect(lines(minusTwo)).toEqual(["Finishes now", "1 h 35 min unused"]);
   });
 
   it("the second tap spends the held −1 h, with the note still on the armed button", () => {
