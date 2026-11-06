@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { resetWeekend, setWeekend, type WeekendRun } from "@/game/weekend";
 import { openWeekendPopup, studySeconds, WeekendBanner, weekendAmount, weekendChip } from "./weekendUi";
+import type { CoinsAnswer } from "@/api/eventCoins";
 
 const NOW = 1_794_614_400 + 3_600;
 const STUDY: WeekendRun = {
@@ -68,5 +69,25 @@ describe("openWeekendPopup", () => {
 
     openWeekendPopup({ container: document.body, run: STUDY, now: NOW });
     expect(document.querySelector(".weekend-popup__when")?.textContent).toBe("Ends in 1d 23h");
+  });
+
+  it("coin rows: Play 25 and Boost 75 at once, then ticks and the purse from the server", async () => {
+    let answer: (value: CoinsAnswer | null) => void = () => undefined;
+    const loading = new Promise<CoinsAnswer | null>((resolve) => (answer = resolve));
+    const popup = openWeekendPopup({ container: document.body, run: STUDY, now: NOW, loadCoins: () => loading });
+    const root = popup.element;
+    const rows = [...root.querySelectorAll<HTMLElement>(".weekend-coins__row")];
+    expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual(["Play: 25 event coins", "Boost: 75 event coins"]);
+    expect(root.querySelector<HTMLElement>(".weekend-coins__purse")!.hidden).toBe(true);
+
+    answer({ balance: 125, weekend: { key: STUDY.key, played: true, boost: false, coins: { played: 25, boost: 75 } } });
+    await loading;
+    await Promise.resolve();
+    expect(rows[0]!.classList.contains("weekend-coins__row--paid")).toBe(true);
+    expect(rows[0]!.querySelector<HTMLElement>(".weekend-coins__tick")!.hidden).toBe(false);
+    expect(rows[1]!.querySelector<HTMLElement>(".weekend-coins__tick")!.hidden).toBe(true);
+    const purse = root.querySelector<HTMLElement>(".weekend-coins__purse")!;
+    expect(purse.hidden).toBe(false);
+    expect(purse.textContent).toContain("125");
   });
 });

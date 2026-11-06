@@ -243,6 +243,8 @@ export const grantedRewards = (granted: readonly GrantedReward[]): EventReward[]
         return [{ kind: "decoration", type: reward.type, count: reward.count }];
       case "krallen":
         return [{ kind: "krallen" }];
+      case "eventCoins":
+        return [{ kind: "eventCoins", amount: reward.amount }];
     }
   });
 

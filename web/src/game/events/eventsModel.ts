@@ -152,6 +152,8 @@ export const rewardText = (reward: EventReward, decorationName: (type: number) =
     }
     case "krallen":
       return "Krallen";
+    case "eventCoins":
+      return `${formatAmount(reward.amount)} event ${reward.amount === 1 ? "coin" : "coins"}`;
   }
 };
 

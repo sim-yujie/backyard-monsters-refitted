@@ -77,7 +77,16 @@ export const onCoinBalance = (listener: (balance: number) => void): (() => void)
   return () => balanceListeners.delete(listener);
 };
 
-/** Forgets everything (tests, sign-out). */
+/**
+ * Sign-out: forgets the balance and any waiting gain, so the next account's
+ * first balance shows no "+N" measured against this one's. Listeners stay.
+ */
+export const forgetCoinBalance = (): void => {
+  balance = null;
+  pending = null;
+};
+
+/** Forgets everything (tests). */
 export const resetCoins = (): void => {
   balance = null;
   pending = null;

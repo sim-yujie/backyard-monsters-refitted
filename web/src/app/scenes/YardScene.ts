@@ -1977,7 +1977,7 @@ export class YardScene implements Scene {
    * stays in hand after each block; anything else is done after one, and its
    * panel opens on the new building. A decoration from the Decorations tab
    * comes out of storage (`decor/place`, §8.3): free and finished; one sold
-   * for Shiny is bought as it goes down (`decor/buy`, owner 2026-11-04).
+   * for event coins is bought as it goes down (`decor/buy`, owner 2026-11-04).
    */
   private startPlacement(type: number, instant: boolean): void {
     const store = this.store;

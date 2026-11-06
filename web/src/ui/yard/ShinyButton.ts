@@ -1,4 +1,5 @@
 import { resourceAmount } from "@/ui/resourceIcon";
+import { iconAmount } from "@/ui/gameIcon";
 
 /**
  * A button that spends Shiny, pressed twice
@@ -45,6 +46,12 @@ export interface ShinyButtonOptions {
   readonly onSpend: () => void;
   readonly className?: string;
   readonly timers?: ShinyButtonTimers;
+  /**
+   * What the price is paid in: Shiny (the default) or event coins (a
+   * decoration, owner decision 29). Coins show the coin icon and are named
+   * "event coins" in the accessible name.
+   */
+  readonly currency?: "shiny" | "eventcoin";
 }
 
 export class ShinyButton {
@@ -55,6 +62,7 @@ export class ShinyButton {
   private readonly spell: (price: number) => string;
   private readonly onSpend: () => void;
   private readonly timers: ShinyButtonTimers;
+  private readonly currency: "shiny" | "eventcoin";
   private readonly labelNode: HTMLElement;
   private readonly priceNode: HTMLElement;
   private readonly noteNode: HTMLElement;
@@ -73,6 +81,7 @@ export class ShinyButton {
     this.spell = options.spell;
     this.onSpend = options.onSpend;
     this.timers = options.timers ?? browserTimers;
+    this.currency = options.currency ?? "shiny";
 
     this.element = document.createElement("button");
     this.element.type = "button";
@@ -168,7 +177,7 @@ export class ShinyButton {
         this.live.textContent = "";
         this.draw();
       }, ARM_WINDOW_MS);
-      const spend = this.free > 0 ? "use a free one" : `spend ${this.spell(this.price)} Shiny`;
+      const spend = this.free > 0 ? "use a free one" : `spend ${this.spell(this.price)} ${this.unit}`;
       this.live.textContent = `Tap again to ${spend}${this.note ? ` (${this.note.join(", ")})` : ""}.`;
       this.draw();
       return;
@@ -186,13 +195,23 @@ export class ShinyButton {
     this.draw();
   };
 
+  /** The currency's name in words. */
+  private get unit(): string {
+    return this.currency === "eventcoin" ? "event coins" : "Shiny";
+  }
+
   private draw(): void {
     const armed = this.armed;
     const freeText = this.free > 0 ? `Free (${this.free} left)` : null;
     const priceText = freeText ?? this.spell(this.price);
     this.labelNode.textContent = armed ? "Tap again" : this.label;
     if (freeText) this.priceNode.textContent = freeText;
-    else this.priceNode.replaceChildren(resourceAmount("shiny", priceText, { decorative: true }));
+    else
+      this.priceNode.replaceChildren(
+        this.currency === "eventcoin"
+          ? iconAmount("eventcoin", priceText, { decorative: true })
+          : resourceAmount("shiny", priceText, { decorative: true }),
+      );
     this.element.classList.toggle("shiny-button--armed", armed);
     this.element.classList.toggle("shiny-button--free", freeText !== null);
     this.element.classList.toggle("shiny-button--noted", this.note !== null);
@@ -207,7 +226,7 @@ export class ShinyButton {
     );
     this.element.disabled = this.reason !== null || this.busy;
     this.element.setAttribute("aria-pressed", armed ? "true" : "false");
-    const cost = freeText ? `a free one, ${this.free} left` : `${priceText} Shiny`;
+    const cost = freeText ? `a free one, ${this.free} left` : `${priceText} ${this.unit}`;
     const noted = this.note ? ` (${this.note.join(", ")})` : "";
     const name = armed
       ? `Tap again to ${freeText ? "use" : "spend"} ${cost} on ${this.what ?? this.label}${noted}`

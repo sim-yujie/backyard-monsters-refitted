@@ -77,7 +77,7 @@ export interface BuildCategoryDefinition {
 
 /**
  * Every tab and what it lists. Decorations are never built for resources:
- * the Decorations tab lists what is in storage, then the ones sold for Shiny
+ * the Decorations tab lists what is in storage, then the ones sold for event coins
  * (§8.3, #128, owner decision 2026-11-04; {@link buildOffers}).
  */
 export const BUILD_CATALOGUE: readonly BuildCategoryDefinition[] = [

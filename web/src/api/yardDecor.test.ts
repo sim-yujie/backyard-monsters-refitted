@@ -43,7 +43,7 @@ describe("decor/place and decor/buy", () => {
   });
 });
 
-const setup = (researchdata: Record<string, unknown>, kind: "main" | "outpost" = "main", credits = 0) => {
+const setup = (researchdata: Record<string, unknown>, kind: "main" | "outpost" = "main", coins = 0) => {
   const report: PlaceDecorationReport = { id: 5, t: 28, x: 200, y: 200, level: 1, left: 0 };
   const answer = (extra: Record<string, unknown> = {}) =>
     Promise.resolve({
@@ -58,7 +58,7 @@ const setup = (researchdata: Record<string, unknown>, kind: "main" | "outpost" =
     } as unknown as YardResponse<PlaceDecorationReport>);
   const api = {
     place: vi.fn(() => answer()),
-    buy: vi.fn(() => answer({ credits: credits - 150, report: { ...report, credits: 150 } })),
+    buy: vi.fn(() => answer({ eventcoins: coins - 150, report: { ...report, coins: 150 } })),
   } satisfies DecorApi;
   const store = new YardStore({
     save: {
@@ -70,7 +70,7 @@ const setup = (researchdata: Record<string, unknown>, kind: "main" | "outpost" =
       buildinghealthdata: {},
       storedata: {},
       researchdata,
-      credits,
+      eventcoins: coins,
     } as unknown as BaseLoadResponse,
     ...(kind === "outpost" ? { target: { baseid: "9", kind: "outpost" } as const } : {}),
     api: { state: vi.fn() } as unknown as YardApi,
@@ -106,17 +106,17 @@ describe("decorActions", () => {
 });
 
 describe("decorActions.buy", () => {
-  it("buys one Flash sold and takes the answer's Shiny", async () => {
+  it("buys one Flash sold and takes the answer's event coins", async () => {
     const { store, api, actions } = setup({}, "main", 200);
-    expect(await actions.buy(28, 200, 200)).toMatchObject({ ok: true, report: { id: 5, credits: 150 } });
+    expect(await actions.buy(28, 200, 200)).toMatchObject({ ok: true, report: { id: 5, coins: 150 } });
     expect(api.buy).toHaveBeenCalledWith(28, 200, 200);
-    expect(store.credits).toBe(50);
+    expect(store.eventCoins).toBe(50);
     expect(store.save.buildingdata?.["5"]).toMatchObject({ t: 28 });
   });
 
-  it("refuses locally: short of Shiny, not sold, in an outpost", async () => {
+  it("refuses locally: short of event coins, not sold, in an outpost", async () => {
     const poor = setup({}, "main", 100);
-    expect(await poor.actions.buy(28, 0, 0)).toMatchObject({ ok: false, refusal: { reason: "credits", local: true } });
+    expect(await poor.actions.buy(28, 0, 0)).toMatchObject({ ok: false, refusal: { reason: "coins", local: true } });
     const rich = setup({}, "main", 1_000);
     expect(await rich.actions.buy(120, 0, 0)).toMatchObject({ ok: false, refusal: { reason: "notForSale" } });
     const outpost = setup({}, "outpost", 1_000);

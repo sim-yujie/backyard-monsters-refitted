@@ -28,6 +28,7 @@ import { INFERNO_LOCKED_MESSAGE, purseFunds } from "@/game/yard/surfaceInferno";
 import { BUILD_BLURBS, INFERNO_BUILD_BLURBS } from "./buildBlurbs";
 import { costFactChips } from "./costFactChips";
 import { ShinyButton } from "./ShinyButton";
+import { coinAmount, coinWords } from "@/ui/events/coinUi";
 import "@/ui/styles/build-menu.css";
 
 /**
@@ -130,7 +131,7 @@ const offerRealm = (offer: Pick<BuildOffer, "inferno">): ResourceRealm | undefin
 
 /** "2 of 3 built" and the like: what a tile says under its name. */
 export const tileLine = (offer: BuildOffer, kind: YardKind = "main"): string => {
-  if (offer.price !== undefined) return `${formatAmount(offer.price)} Shiny`;
+  if (offer.price !== undefined) return coinWords(offer.price);
   if (offer.stored !== null) return `${offer.stored} in storage`;
   const hall = offerHall(offer, kind);
   switch (offer.status) {
@@ -577,13 +578,16 @@ export class BuildMenu {
       item.append(text);
       return item;
     };
-    // Decorations come from storage or for Shiny: nothing is locked and
+    // Decorations come from storage or for event coins: nothing is locked and
     // nothing runs out, so the build keys would only mislead.
     if (storage) {
       // Not a key: a narrow window hides those, and this is the tab's one line.
+      // Short, with the purse: "Stored: free. You have [coin] 300."
       const note = document.createElement("span");
       note.className = "build-menu__note";
-      note.textContent = "Stored ones first, free to place. The rest cost Shiny.";
+      const purse = coinAmount(this.binding.store.eventCoins, { className: "build-menu__coins" });
+      purse.setAttribute("aria-label", coinWords(this.binding.store.eventCoins));
+      note.append("Stored: free. You have ", purse, ".");
       this.legend.replaceChildren(note);
       return;
     }
@@ -625,11 +629,11 @@ export class BuildMenu {
     const count = document.createElement("span");
     count.className = "build-tile__count";
     count.textContent = tileLine(offer, kind);
-    // A decoration sold for Shiny: the Shop's Shiny icon and the price, red while short.
+    // A decoration sold for event coins: the coin icon and the price, red while short.
     if (offer.price !== undefined) {
-      count.replaceChildren(resourceAmount("shiny", formatAmount(offer.price)));
+      count.replaceChildren(coinAmount(offer.price));
       count.classList.add("build-tile__count--price");
-      count.classList.toggle("build-tile__count--short", offer.gate?.reason === "credits");
+      count.classList.toggle("build-tile__count--short", offer.gate?.reason === "coins");
       button.setAttribute("aria-label", `${name}, ${tileLine(offer, kind)}`);
     }
     if (offer.status === "locked" && offer.gate?.reason === "requirements") {
@@ -687,7 +691,7 @@ export class BuildMenu {
           ? "A decoration from your storage. It goes anywhere inside your yard."
           : "");
     if (offer.price !== undefined) {
-      count.replaceChildren(resourceAmount("shiny", formatAmount(offer.price)));
+      count.replaceChildren(coinAmount(offer.price));
       this.info.replaceChildren(back, picture(offer, "build-info__picture", kind), head, blurb, this.buyActions(offer, name));
       return;
     }
@@ -809,10 +813,11 @@ export class BuildMenu {
   }
 
   /**
-   * A decoration sold for Shiny (owner decision 2026-11-04): its price, at
-   * once, no worker, and Buy, a {@link ShinyButton} (tap, then tap again)
-   * that starts the placement; `decor/buy` charges the price when it goes
-   * down. Short of Shiny, Buy is blocked and a line says how much more.
+   * A decoration sold for event coins (owner decisions 2026-11-04 and 29):
+   * its price, at once, no worker, and Buy, a {@link ShinyButton} in coins
+   * (tap, then tap again) that starts the placement; `decor/buy` charges the
+   * price when it goes down. Short of coins, Buy is blocked and a line says
+   * how many more.
    */
   private buyActions(offer: BuildOffer, name: string): HTMLElement {
     const price = offer.price ?? 0;
@@ -822,7 +827,7 @@ export class BuildMenu {
     facts.setAttribute("aria-label", "Cost");
     const cost = document.createElement("li");
     cost.className = "build-info__fact";
-    cost.append(resourceAmount("shiny", formatAmount(price)));
+    cost.append(coinAmount(price));
     facts.append(cost);
     for (const [icon, text] of [
       [CLOCK, "At once"],
@@ -840,7 +845,7 @@ export class BuildMenu {
     actions.className = "build-info__actions";
     const buy = this.buyButton(offer.type, name);
     buy.setPrice(price);
-    buy.setBlocked(offer.gate ? "Not enough Shiny." : null);
+    buy.setBlocked(offer.gate ? "Not enough event coins." : null);
     actions.append(buy.element);
     wrap.append(actions);
     return wrap;
@@ -855,6 +860,7 @@ export class BuildMenu {
         label: "Buy",
         what: name,
         spell: formatAmount,
+        currency: "eventcoin",
         className: "btn--primary build-info__build build-info__buy",
         onSpend: () => {
           // Re-checked against the yard as it is now, not as the panel was drawn.
@@ -989,7 +995,7 @@ export interface PlacementBarOptions {
   readonly kind?: YardKind;
   /** Placing finished for Shiny rather than for resources. */
   readonly instant: boolean;
-  /** A decoration bought for Shiny: its price, shown in place of the cost. */
+  /** A decoration bought for event coins: its price, shown in place of the cost. */
   readonly price?: number;
   readonly instantPrice: number;
   readonly cost: BuildOffer["cost"];
@@ -1040,7 +1046,7 @@ export class PlacementBar {
     if (options.instant) {
       price.append("Finished at once for ", resourceAmount("shiny", formatAmount(options.instantPrice)));
     } else if (options.price !== undefined) {
-      price.append(resourceAmount("shiny", formatAmount(options.price)));
+      price.append(coinAmount(options.price));
       if (options.time) {
         const time = document.createElement("span");
         time.className = "build-placing__time";
