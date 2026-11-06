@@ -326,6 +326,81 @@ body {
   max-height: min(70vh, 640px);
 }
 
+/*
+ * Tabs stay fixed at the top of every window (owner, 6 Nov 2026): a window's
+ * tab row never sits inside the box that scrolls. Two shared pieces:
+ *
+ * - `.panel__head` (Panel.setHead): the tab row, and any line that belongs
+ *   above it, between the title bar and the body. Only the body scrolls.
+ * - `.tab-scroll`: the scroll box under a tab row that lives inside the body
+ *   (Settings, the Hatchery, the Friends list, the Baiter on a phone).
+ */
+.panel__head {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) 0;
+}
+
+/* Nothing to show (a building with no tabs): no strip of padding either. */
+.panel__head:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+/* The window may shrink to the room it has; then the body, not the window,
+   scrolls. */
+.panel:has(> .panel__head) {
+  min-height: 0;
+}
+
+.panel:has(> .panel__head) > .panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tab-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/*
+ * `.tab-row`: every row of tabs fills its window's width, its tabs sharing it
+ * equally (owner, 6 Nov 2026). A tab never gets narrower than its words: when
+ * the row has more tabs than fit (many hatcheries, chat rooms, a phone) it
+ * scrolls sideways rather than cut or wrap a label. Only width here; each
+ * look keeps its own tab plates (skin.css). The attribute in the selectors
+ * lifts them over the windows' own rules, which load after this file.
+ */
+.tab-row:is([role="tablist"], [role="group"]) {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  align-self: stretch;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.tab-row[hidden] {
+  display: none;
+}
+
+/* The words sit in the middle of each tab, whether the tab is a flex box
+   (a label with a count or an icon) or plain text. */
+.tab-row > :is([role="tab"], button) {
+  flex: 1 1 0;
+  justify-content: center;
+  min-width: max-content;
+  text-align: center;
+  white-space: nowrap;
+}
+
 /* ── Popup ──────────────────────────────────────────────────────────────── */
 
 .popup-backdrop {
@@ -1953,15 +2028,31 @@ body {
   height: min(calc(100dvh - 32px), 640px);
 }
 
+/* Only the tab content scrolls (owner, 6 Nov 2026): the body holds the tab
+   strip and the scroll box, and the strip never scrolls out of sight. */
 .account-settings-popup > .panel__body {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   max-height: none;
-  overflow-x: hidden;
+  padding: 0;
+  overflow: hidden;
+}
+
+.account-settings-popup .account-settings {
+  flex: 1;
+  min-height: 0;
 }
 
 .account-settings__tabs {
-  justify-content: center;
+  flex: none;
+  margin: var(--space-4) var(--space-4) 0;
+}
+
+/* The scroll box is the shared `.tab-scroll` (above); only its padding here. */
+.account-settings__scroll {
+  padding: 0 var(--space-4) var(--space-4);
 }
 
 .account-settings__pane {
@@ -2024,20 +2115,62 @@ body {
   gap: var(--space-3);
 }
 
-.account-settings__blocked {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
 .account-settings__blocked-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/*
+ * The blocked and muted lists (owner, 6 Nov 2026): the country list's search
+ * box and scroll box (country.css), about five rows tall, so a long list
+ * scrolls inside instead of stretching the Settings window.
+ */
+.account-settings__players[hidden] {
+  display: none;
+}
+
+.country-picker__list.account-settings__player-list {
+  max-height: calc(5 * 44px + 2px);
+}
+
+.account-settings__player-list .account-settings__blocked-row {
+  min-height: 44px;
+  padding: 4px var(--space-3);
+}
+
+.account-settings__player-list .account-settings__blocked-row[hidden],
+.account-settings__player-name[hidden] {
+  display: none;
+}
+
+.account-settings__player-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--colour-text-strong);
+}
+
+/* The confirm fills the row: the question, then Confirm and Cancel as one
+   pair. When the three do not fit on one line (a phone), the question takes
+   the whole first line and the pair sits under it, left-aligned. */
+.account-settings__player-list .block-button__confirm {
+  flex: 1 1 100%;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.account-settings__player-list .block-button__question {
+  flex: 1 1 14em;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.account-settings__choices {
+  display: flex;
+  flex: none;
+  align-items: stretch;
   gap: var(--space-2);
 }
 

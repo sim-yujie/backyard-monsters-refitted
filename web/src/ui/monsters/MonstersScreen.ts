@@ -138,7 +138,7 @@ export class MonstersScreen {
     });
 
     const strip = document.createElement("div");
-    strip.className = "tabs monsters-tabs";
+    strip.className = "tabs tab-row monsters-tabs";
     strip.setAttribute("role", "tablist");
     strip.setAttribute("aria-label", "Monster buildings");
     for (const id of MONSTERS_TAB_ORDER) {

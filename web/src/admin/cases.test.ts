@@ -317,6 +317,24 @@ describe("the steps", () => {
     expect(said).toEqual(["Gave 15 Shiny to 1 reporter"]);
   });
 
+  it("counts reporters that start ticked without being touched, and never the one already given", async () => {
+    answer = (call) =>
+      call.path.endsWith("/award")
+        ? ok({ case: troll(), given: [{ userid: 5, amount: 10 }, { userid: 6, amount: 10 }], already: [], failed: [] })
+        : ok(list([troll()]));
+    await mount();
+    const card = caseEl().querySelector(".case-card")!;
+    click(button(card, "Award 2"));
+    const form = card.querySelector("form.case-form")!;
+    click(button(form, "Next"));
+    expect(form.querySelector<HTMLElement>(".form-error")?.hidden).toBe(true);
+    expect(form.querySelector(".confirm-question")?.textContent).toBe("Give 20 Shiny to 2 reporters?");
+    click(button(form, "Yes, give"));
+    await settle();
+    const post = calls.find((c) => c.method === "POST")!;
+    expect(post.body).toEqual({ awards: [{ userid: 5, amount: 10 }, { userid: 6, amount: 10 }] });
+  });
+
   it("refuses an empty award before asking", async () => {
     answer = () => ok(list([troll()]));
     await mount();

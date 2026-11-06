@@ -11,11 +11,13 @@ const privacyApi = vi.hoisted(() => ({
   setPrivacy: vi.fn(),
   fetchBlocked: vi.fn(),
   unblockPlayer: vi.fn(),
+  fetchMuted: vi.fn(),
+  unmutePlayer: vi.fn(),
 }));
 vi.mock("@/api/privacy", () => privacyApi);
 const countryApi = vi.hoisted(() => ({ setCountry: vi.fn() }));
 vi.mock("@/api/country", () => countryApi);
-const chat = vi.hoisted(() => ({ worldChat: { setCountryRoom: vi.fn() } }));
+const chat = vi.hoisted(() => ({ worldChat: { setCountryRoom: vi.fn(), unmute: vi.fn() } }));
 vi.mock("@/game/chat/chatSession", () => chat);
 const lookReport = vi.hoisted(() => ({ reportLook: vi.fn() }));
 vi.mock("@/app/lookReport", () => lookReport);
@@ -43,7 +45,10 @@ const open = async (account: Record<string, unknown>) => {
   return popup;
 };
 
-beforeEach(() => privacyApi.fetchBlocked.mockResolvedValue([]));
+beforeEach(() => {
+  privacyApi.fetchBlocked.mockResolvedValue([]);
+  privacyApi.fetchMuted.mockResolvedValue([]);
+});
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -52,6 +57,39 @@ afterEach(() => {
 });
 
 describe("AccountSettings", () => {
+  it("keeps the tab strip out of the scroll box, so only the tab content scrolls", async () => {
+    await open({});
+    const strip = document.querySelector<HTMLElement>(".account-settings__tabs")!;
+    const scroll = document.querySelector<HTMLElement>(".account-settings__scroll")!;
+    expect(strip.getAttribute("role")).toBe("tablist");
+    // The strip and the scroll box are siblings in the body: the strip is not inside it.
+    expect(strip.parentElement).toBe(scroll.parentElement);
+    expect(scroll.contains(strip)).toBe(false);
+    expect(strip.nextElementSibling).toBe(scroll);
+    // All three panes scroll inside it.
+    const panes = [...document.querySelectorAll<HTMLElement>("[role='tabpanel']")];
+    expect(panes).toHaveLength(3);
+    for (const pane of panes) expect(pane.parentElement).toBe(scroll);
+  });
+
+  it("switches tabs by click and arrow keys, and a new tab opens at its top", async () => {
+    await open({});
+    const scroll = document.querySelector<HTMLElement>(".account-settings__scroll")!;
+    const tab = (id: string) => document.querySelector<HTMLButtonElement>(`#account-settings-tab-${id}`)!;
+    const pane = (id: string) => document.querySelector<HTMLElement>(`#account-settings-pane-${id}`)!;
+    scroll.scrollTop = 120;
+    tab("social").click();
+    expect(scroll.scrollTop).toBe(0);
+    expect(pane("social").hidden).toBe(false);
+    expect(tab("social").getAttribute("aria-selected")).toBe("true");
+    tab("social").focus();
+    tab("social").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(pane("account").hidden).toBe(false);
+    expect(document.activeElement).toBe(tab("account"));
+    expect(tab("account").tabIndex).toBe(0);
+    expect(tab("social").tabIndex).toBe(-1);
+  });
+
   it("renames through the server and then locks the field for the cooldown", async () => {
     api.changeUsername.mockResolvedValue({ username: "NewName", nextChangeAt: "2027-04-01T00:00:00.000Z" });
     await open({});
@@ -138,32 +176,150 @@ describe("AccountSettings", () => {
     expect(box.checked).toBe(false);
   });
 
-  it("lists blocked players by name and unblocks one", async () => {
+  /** The visible rows' names in a list. */
+  const names = (list: string) =>
+    [...document.querySelectorAll<HTMLElement>(`#${list} .account-settings__blocked-row`)]
+      .filter((row) => !row.hidden)
+      .map((row) => row.querySelector(".account-settings__player-name")!.textContent);
+  const row = (list: string, name: string) =>
+    [...document.querySelectorAll<HTMLElement>(`#${list} .account-settings__blocked-row`)].find(
+      (el) => el.querySelector(".account-settings__player-name")!.textContent === name,
+    )!;
+  /** Unblock/Unmute, then the row's Confirm. */
+  const undo = async (list: string, name: string) => {
+    row(list, name).querySelector<HTMLButtonElement>(".block-button__ask")!.click();
+    row(list, name).querySelector<HTMLButtonElement>(".block-button__yes")!.click();
+    await settle();
+  };
+  const typeSearch = (list: string, text: string) => {
+    const search = document.querySelector<HTMLInputElement>(`#${list}-search`)!;
+    search.value = text;
+    search.dispatchEvent(new Event("input"));
+  };
+
+  it("lists blocked players by name and unblocks one after the confirm", async () => {
     privacyApi.unblockPlayer.mockResolvedValue(undefined);
     privacyApi.fetchBlocked.mockResolvedValue([
       { userid: 7, username: "Gus" },
       { userid: 9, username: "Hal" },
     ]);
     await open({});
-    const rows = () => [...document.querySelectorAll("#settings-blocked li")];
-    expect(rows().map((row) => row.textContent)).toEqual(["GusUnblock", "HalUnblock"]);
-    rows()[0]!.querySelector("button")!.click();
-    await settle();
+    expect(names("settings-blocked")).toEqual(["Gus", "Hal"]);
+    await undo("settings-blocked", "Gus");
     expect(privacyApi.unblockPlayer).toHaveBeenCalledWith(7);
-    expect(rows().map((row) => row.textContent)).toEqual(["HalUnblock"]);
-    rows()[0]!.querySelector("button")!.click();
-    await settle();
+    expect(names("settings-blocked")).toEqual(["Hal"]);
+    await undo("settings-blocked", "Hal");
     expect(document.body.textContent).toContain(SETTINGS_TEXT.blockedNone);
+    // Nobody left: the search box and the list box go.
+    expect(document.querySelector<HTMLElement>("#settings-blocked")!.closest<HTMLElement>(".account-settings__players")!.hidden).toBe(true);
+    expect(document.querySelector<HTMLInputElement>("#settings-blocked-search")!.disabled).toBe(true);
   });
 
   it("keeps a blocked player listed when Unblock fails", async () => {
     privacyApi.unblockPlayer.mockRejectedValue(new Error("down"));
     privacyApi.fetchBlocked.mockResolvedValue([{ userid: 7, username: "Gus" }]);
     await open({});
-    document.querySelector<HTMLButtonElement>("#settings-blocked button")!.click();
-    await settle();
-    expect(document.querySelectorAll("#settings-blocked li")).toHaveLength(1);
+    await undo("settings-blocked", "Gus");
+    expect(names("settings-blocked")).toEqual(["Gus"]);
     expect(document.body.textContent).toContain(SETTINGS_TEXT.unblockFailed);
+  });
+
+  it("asks 'Unmute <name>?' on the row; Cancel puts the row back without calling the server", async () => {
+    privacyApi.fetchMuted.mockResolvedValue([{ userid: 4, username: "Loud" }]);
+    await open({});
+    const loud = row("settings-muted", "Loud");
+    const ask = loud.querySelector<HTMLButtonElement>(".block-button__ask")!;
+    const confirm = loud.querySelector<HTMLElement>(".block-button__confirm")!;
+    expect(confirm.hidden).toBe(true);
+    ask.click();
+    expect(ask.hidden).toBe(true);
+    expect(confirm.hidden).toBe(false);
+    expect(loud.querySelector(".block-button__question")!.textContent).toBe("Unmute Loud?");
+    expect(loud.querySelector(".block-button__yes")!.textContent).toBe(SETTINGS_TEXT.confirm);
+    // Confirm and Cancel are one pair after the question, and Cancel is a real (outlined) button.
+    const choices = loud.querySelector<HTMLElement>(".account-settings__choices")!;
+    expect([...choices.children].map((el) => el.textContent)).toEqual([SETTINGS_TEXT.confirm, SETTINGS_TEXT.cancel]);
+    expect(choices.previousElementSibling!.classList.contains("block-button__question")).toBe(true);
+    expect(loud.querySelector(".block-button__no")!.className).toContain("btn--outline");
+    loud.querySelector<HTMLButtonElement>(".block-button__no")!.click();
+    await settle();
+    expect(confirm.hidden).toBe(true);
+    expect(ask.hidden).toBe(false);
+    expect(privacyApi.unmutePlayer).not.toHaveBeenCalled();
+    expect(chat.worldChat.unmute).not.toHaveBeenCalled();
+    expect(names("settings-muted")).toEqual(["Loud"]);
+  });
+
+  it("unmutes after the confirm, on the server and in the chat box", async () => {
+    privacyApi.unmutePlayer.mockResolvedValue(undefined);
+    privacyApi.fetchMuted.mockResolvedValue([
+      { userid: 4, username: "Loud" },
+      { userid: 5, username: "Spam" },
+    ]);
+    await open({});
+    expect(names("settings-muted")).toEqual(["Loud", "Spam"]);
+    // The blocked list is its own list.
+    expect(names("settings-blocked")).toEqual([]);
+    await undo("settings-muted", "Loud");
+    expect(privacyApi.unmutePlayer).toHaveBeenCalledWith(4);
+    expect(chat.worldChat.unmute).toHaveBeenCalledWith(4);
+    expect(names("settings-muted")).toEqual(["Spam"]);
+    await undo("settings-muted", "Spam");
+    expect(document.body.textContent).toContain(SETTINGS_TEXT.mutedNone);
+  });
+
+  it("filters the muted list by name as you type, with 'No match.' when nothing is left", async () => {
+    privacyApi.fetchMuted.mockResolvedValue([
+      { userid: 4, username: "Loud" },
+      { userid: 5, username: "Spam" },
+      { userid: 6, username: "SpamKing" },
+    ]);
+    await open({});
+    const list = document.querySelector<HTMLElement>("#settings-muted")!;
+    const search = document.querySelector<HTMLInputElement>("#settings-muted-search")!;
+    expect(search.disabled).toBe(false);
+    expect(search.placeholder).toContain(SETTINGS_TEXT.mutedSearch);
+    typeSearch("settings-muted", "spam");
+    expect(names("settings-muted")).toEqual(["Spam", "SpamKing"]);
+    expect(list.textContent).not.toContain(SETTINGS_TEXT.noMatch);
+    typeSearch("settings-muted", "zzz");
+    expect(names("settings-muted")).toEqual([]);
+    expect(list.textContent).toContain(SETTINGS_TEXT.noMatch);
+    typeSearch("settings-muted", "");
+    expect(names("settings-muted")).toEqual(["Loud", "Spam", "SpamKing"]);
+    expect(list.textContent).not.toContain(SETTINGS_TEXT.noMatch);
+  });
+
+  it("puts each list in its own scroll box under its own search", async () => {
+    privacyApi.fetchMuted.mockResolvedValue(Array.from({ length: 16 }, (_, i) => ({ userid: 100 + i, username: `P${i}` })));
+    await open({});
+    const list = document.querySelector<HTMLElement>("#settings-muted")!;
+    expect(list.classList.contains("country-picker__list")).toBe(true);
+    expect(list.classList.contains("account-settings__player-list")).toBe(true);
+    expect(list.querySelectorAll(".account-settings__blocked-row")).toHaveLength(16);
+    const box = list.closest<HTMLElement>(".account-settings__players")!;
+    expect(box.hidden).toBe(false);
+    expect(box.firstElementChild).toBe(document.querySelector("#settings-muted-search"));
+    // No blocked players: their search and box stay hidden, the "none" line shows.
+    expect(document.querySelector<HTMLElement>("#settings-blocked")!.closest<HTMLElement>(".account-settings__players")!.hidden).toBe(true);
+    expect(document.body.textContent).toContain(SETTINGS_TEXT.blockedNone);
+  });
+
+  it("keeps a muted player listed, and the chat box unchanged, when Unmute fails", async () => {
+    privacyApi.unmutePlayer.mockRejectedValue(new Error("down"));
+    privacyApi.fetchMuted.mockResolvedValue([{ userid: 4, username: "Loud" }]);
+    await open({});
+    await undo("settings-muted", "Loud");
+    expect(names("settings-muted")).toEqual(["Loud"]);
+    expect(chat.worldChat.unmute).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain(SETTINGS_TEXT.unmuteFailed);
+  });
+
+  it("says so when the muted list cannot load", async () => {
+    privacyApi.fetchMuted.mockRejectedValue(new Error("down"));
+    await open({});
+    expect(document.body.textContent).toContain(SETTINGS_TEXT.mutedLoadFailed);
+    expect(document.body.textContent).toContain(SETTINGS_TEXT.blockedNone);
   });
 
   it("keeps Screen shake in this browser, on until switched off", async () => {

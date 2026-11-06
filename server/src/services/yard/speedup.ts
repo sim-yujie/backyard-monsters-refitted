@@ -20,6 +20,7 @@ import {
   SPEEDUP_SECONDS,
   speedupAllowed,
   speedupPrice,
+  speedupUnused,
   type SpeedupItem,
 } from "./shiny.js";
 import { yardRefusedErr } from "./yardErrors.js";
@@ -32,8 +33,8 @@ import { yardRefusedErr } from "./yardErrors.js";
  * | Item | Effect | Price | Only when |
  * | --- | --- | --- | --- |
  * | `SP1` | finish (−5 min) | free | ≤ 300 s left |
- * | `SP2` | −1 h | 20 | ≥ 1 h left |
- * | `SP3` | −2 h | 40 | ≥ 2 h left |
+ * | `SP2` | −1 h | 20 | ≥ 1 h left (a free one held: > 300 s) |
+ * | `SP3` | −2 h | 40 | ≥ 2 h left (a free one held: > 300 s) |
  * | `SP4` | finish | `timeCost(remaining)` | > 300 s left |
  *
  * (`client/scripts/STORE.as:1071-1082`, `:2043-2090`.) A countdown taken to
@@ -73,6 +74,11 @@ export interface SpeedupReport {
   finished: BuildingJob | null;
   /** Set when the speed-up finished a repair instead of a job. */
   repaired?: true;
+  /**
+   * Seconds of a free `SP2` / `SP3` that went unused because the job had less
+   * time left than it takes off (patch 6.3). Only set when above 0.
+   */
+  unused?: number;
 }
 
 /** What the speed-up decided. */
@@ -96,13 +102,20 @@ export interface SpeedupPlan {
  * (`409 mapRoom`); the item not allowed at this much time left
  * (`409 itemRefused`). Shiny lock and balance are the wrapper's.
  *
+ * With `held` (the yard keeps a free one of `item`), `SP2` / `SP3` also go on a
+ * countdown shorter than they take off, above five minutes (patch 6.3): the
+ * job finishes as if its countdown ran out and the rest is lost
+ * (`report.unused`). Nothing is credited for the lost part.
+ *
  * @param save - The yard, already caught up to `now`.
+ * @param held - The yard holds a free `item` the wrapper will spend.
  */
 export const planSpeedup = (
   save: SpeedupSave,
   id: number,
   item: SpeedupItem,
-  now: number
+  now: number,
+  held = false
 ): SpeedupPlan => {
   const building = buildingOrThrow(save.buildingdata, id);
   const kind = yardKindOf(save);
@@ -119,7 +132,7 @@ export const planSpeedup = (
   if (Number(building.t) === MAP_ROOM_TYPE) throw mapRoomErr(id);
 
   const remaining = Math.floor(Number(building[field]));
-  if (!speedupAllowed(item, remaining)) {
+  if (!speedupAllowed(item, remaining, held)) {
     throw yardRefusedErr("itemRefused", itemRefusedMessage(item), { id, item, remaining });
   }
 
@@ -140,7 +153,14 @@ export const planSpeedup = (
     buildingdata: { ...save.buildingdata, [String(id)]: next },
     shiny,
     points: finished?.detail.points ?? 0,
-    report: { id, item, credits: shiny, remaining: left, finished },
+    report: {
+      id,
+      item,
+      credits: shiny,
+      remaining: left,
+      finished,
+      ...(speedupUnused(item, remaining) > 0 && { unused: speedupUnused(item, remaining) }),
+    },
   };
 };
 

@@ -25,6 +25,7 @@ import type { ApiEnvelope, BaseLoadResponse } from "./types";
  * - `POST /base/load` with `type: "help"`: a friend's main yard to help in (WP2/WP5).
  * - `POST /player/settings { hideOnline?, friendRequests? }`,
  *   `GET /player/blocked`, `POST /player/block|unblock { userid }` (WP9).
+ * - `GET /player/muted`, `POST /player/unmute { userid }`: the chat mute list.
  *
  * Every POST goes as JSON: its booleans must stay booleans. A refused call
  * throws the `ApiError` as every route does; {@link friendRefusal} turns it
@@ -48,6 +49,8 @@ const SETTINGS_PATH = "/api/:apiVersion/player/settings";
 const BLOCKED_PATH = "/api/:apiVersion/player/blocked";
 const BLOCK_PATH = "/api/:apiVersion/player/block";
 const UNBLOCK_PATH = "/api/:apiVersion/player/unblock";
+const MUTED_PATH = "/api/:apiVersion/player/muted";
+const UNMUTE_PATH = "/api/:apiVersion/player/unmute";
 
 /** The fewest letters a search sends (§3.1). */
 export const SEARCH_MIN_LENGTH = 3;
@@ -235,6 +238,9 @@ export interface BlockedPlayer {
   readonly userid: number;
   readonly username: string;
 }
+
+/** One player the player muted in chat. */
+export type MutedPlayer = BlockedPlayer;
 
 /** Every stable refusal `reason` a friends route sends (§6.2). */
 export type FriendRefusalReason =
@@ -499,6 +505,9 @@ export interface FriendsApi {
   blocked(): Promise<BlockedPlayer[]>;
   block(userid: number): Promise<void>;
   unblock(userid: number): Promise<void>;
+  /** The players muted in chat. */
+  muted(): Promise<MutedPlayer[]>;
+  unmute(userid: number): Promise<void>;
 }
 
 export const friendsApi: FriendsApi = {
@@ -598,5 +607,13 @@ export const friendsApi: FriendsApi = {
   },
   async unblock(userid) {
     await postJson(UNBLOCK_PATH, { userid });
+  },
+  async muted() {
+    const answer = await get<Answer>(MUTED_PATH);
+    const players = Array.isArray(answer) ? answer : answer["muted"];
+    return list(players).map((raw) => ({ userid: id(raw["userid"]), username: text(raw["username"], "A player") }));
+  },
+  async unmute(userid) {
+    await postJson(UNMUTE_PATH, { userid });
   },
 };

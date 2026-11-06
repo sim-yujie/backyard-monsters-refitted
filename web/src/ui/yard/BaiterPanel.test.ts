@@ -8,6 +8,7 @@ import { TEST_ROSTER, emptyArmy } from "@/game/baiter/baiterSession";
 import { clearTestHistory, recordTest, replayOf } from "@/game/baiter/testHistory";
 import type { TestReport } from "@/game/baiter/testReport";
 import { BaiterPanel, resetBaiterMemory, type BaiterPanelOptions } from "./BaiterPanel";
+import { scrollLikeBrowser } from "../scrollLikeBrowser";
 
 /**
  * The Baiter's test setup (issue #22, WP2, `docs/design/baiter-simulator.md`
@@ -315,6 +316,28 @@ describe("BaiterPanel", () => {
       expect(tabs[1]!.getAttribute("aria-selected")).toBe("true");
       tabs[1]!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
       expect([army.hidden, recent.hidden]).toEqual([false, true]);
+    });
+
+    it("keeps the tab row out of the views, which scroll under it; a new tab opens at its top (owner, 6 Nov 2026)", () => {
+      keep("Your yard held");
+      open();
+      const row = host.querySelector<HTMLElement>(".baiter__tabs")!;
+      const army = host.querySelector<HTMLElement>(".baiter__view--army")!;
+      const recent = host.querySelector<HTMLElement>(".baiter__view--recent")!;
+      expect(row.nextElementSibling).toBe(army);
+      expect(army.nextElementSibling).toBe(recent);
+      expect(army.contains(row) || recent.contains(row)).toBe(false);
+      // As a browser: a hidden view keeps its scroll and ignores a reset.
+      scrollLikeBrowser(army);
+      scrollLikeBrowser(recent);
+      const [armyTab, recentTab] = host.querySelectorAll<HTMLButtonElement>(".baiter__tab");
+      army.scrollTop = 1237;
+      recentTab!.click();
+      recent.scrollTop = 90;
+      armyTab!.click();
+      expect(army.scrollTop).toBe(0);
+      recentTab!.click();
+      expect(recent.scrollTop).toBe(0);
     });
 
     it("shows no tabs before any test has finished", () => {

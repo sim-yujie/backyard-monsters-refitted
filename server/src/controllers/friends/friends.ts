@@ -1,7 +1,9 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
 import z from "zod";
 
+import { chatIgnoreKey } from "../../chat/chatChannels.js";
 import type { User } from "../../database/models/user.model.js";
+import { redis } from "../../server.js";
 import {
   answerFriendRequest,
   blockPlayer,
@@ -20,6 +22,7 @@ import {
   countIncoming,
   listBlocked,
   listFriends,
+  listMuted,
   listRequests,
   searchPlayers,
 } from "../../services/friends/friendViews.js";
@@ -131,5 +134,21 @@ export const blockAnswer = async (em: EntityManager, user: User, body: unknown, 
 export const unblockAnswer = async (em: EntityManager, user: User, body: unknown): Promise<FriendsBody> => {
   const { userid } = PlayerSchema.parse(body);
   await unblockPlayer(em, user.userid, userid);
+  return { error: 0 };
+};
+
+/** `GET /player/muted`: the players the caller muted in chat. */
+export const mutedAnswer = async (em: EntityManager, user: User): Promise<FriendsBody> => ({
+  error: 0,
+  muted: await listMuted(em, await redis.smembers(chatIgnoreKey(user.userid))),
+});
+
+/**
+ * `POST /player/unmute` `{ userid }`: takes them off the chat mute set. Works
+ * with chat closed; an open chat box is told by the client over its socket.
+ */
+export const unmuteAnswer = async (user: User, body: unknown): Promise<FriendsBody> => {
+  const { userid } = PlayerSchema.parse(body);
+  await redis.srem(chatIgnoreKey(user.userid), String(userid));
   return { error: 0 };
 };

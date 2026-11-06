@@ -1,7 +1,7 @@
 /**
  * The Settings dialog, opened from the account menu, in three tabs (owner,
  * 5 Nov 2026): Account (avatar, username, Shiny Lock), Look and sound, and
- * Social (world chat, country, the privacy switches, blocked players). "World
+ * Social (world chat, country, the privacy switches, blocked and muted players). "World
  * chat", "Game effects" and "Look and sound" are kept in this browser only: no
  * server, except the volume sliders, which the account menu has too
  * (`ui/SoundSliders.ts`).
@@ -15,11 +15,20 @@ import { reduceEffects, setReduceEffects } from "@/game/attack/juice";
 import type { AvatarPicker } from "@/ui/AvatarPicker";
 import { SoundSliders } from "@/ui/SoundSliders";
 import { changeUsername, fetchAccount, setShinyLocked, type AccountInfo } from "@/api/account";
-import { fetchBlocked, setPrivacy, unblockPlayer, type BlockedPlayer, type PrivacySettings } from "@/api/privacy";
+import {
+  fetchBlocked,
+  fetchMuted,
+  setPrivacy,
+  unblockPlayer,
+  unmutePlayer,
+  type BlockedPlayer,
+  type PrivacySettings,
+} from "@/api/privacy";
 import { setCountry, type CountrySettings } from "@/api/country";
 import { countryLabelNodes } from "@/ui/countryFlag";
 import { worldChat } from "@/game/chat/chatSession";
 import { CountryPicker } from "@/ui/CountryPicker";
+import "@/ui/styles/country.css";
 import { ApiError, NetworkError } from "@/api/http";
 import { usernameProblem } from "@/game/account/rules/accountRules";
 import { saveClassicLook, savedClassicLook, saveMusicChoice, savedMusicChoice, type MusicChoice } from "@/game/classicLook";
@@ -61,8 +70,20 @@ export const SETTINGS_TEXT = {
   blockedTitle: "Blocked players",
   blockedNone: "You have not blocked anyone.",
   blockedLoadFailed: "Could not load your blocked players.",
+  blockedSearch: "Search blocked players",
   unblock: "Unblock",
+  unblockAsk: (name: string) => `Unblock ${name}?`,
   unblockFailed: "Could not unblock that player. Try again.",
+  mutedTitle: "Muted players",
+  mutedNone: "You have not muted anyone.",
+  mutedLoadFailed: "Could not load your muted players.",
+  mutedSearch: "Search muted players",
+  unmute: "Unmute",
+  unmuteAsk: (name: string) => `Unmute ${name}?`,
+  unmuteFailed: "Could not unmute that player. Try again.",
+  noMatch: "No match.",
+  confirm: "Confirm",
+  cancel: "Cancel",
   effectsTitle: "Game effects",
   shakeLabel: "Screen shake",
   shakeHint: "The screen jolts on big hits in a fight.",
@@ -137,16 +158,24 @@ const SETTINGS_TABS = [
 
 type SettingsTab = (typeof SETTINGS_TABS)[number]["id"];
 
-/** The tab strip and its three panes, the Account tab showing; returns the panes. */
+/**
+ * The tab strip and its three panes, the Account tab showing; returns the
+ * panes. Only the panes scroll, in their own box under the strip, so the tabs
+ * never scroll out of sight (owner, 6 Nov 2026).
+ */
 const settingsTabs = (body: HTMLElement): Record<SettingsTab, HTMLElement> => {
   const strip = document.createElement("div");
-  strip.className = "tabs account-settings__tabs";
+  strip.className = "tabs tab-row account-settings__tabs";
   strip.setAttribute("role", "tablist");
   strip.setAttribute("aria-label", SETTINGS_TEXT.title);
   const tabs = new Map<SettingsTab, HTMLButtonElement>();
   const panes = {} as Record<SettingsTab, HTMLElement>;
+  const scroll = document.createElement("div");
+  scroll.className = "tab-scroll account-settings__scroll";
   let active: SettingsTab = "account";
   const show = (id: SettingsTab): void => {
+    // Another tab opens at its top.
+    if (id !== active) scroll.scrollTop = 0;
     active = id;
     for (const [tabId, tab] of tabs) {
       const on = tabId === id;
@@ -183,7 +212,8 @@ const settingsTabs = (body: HTMLElement): Record<SettingsTab, HTMLElement> => {
     tabs.get(next)?.focus();
     event.preventDefault();
   });
-  body.append(strip, panes.account, panes.look, panes.social);
+  scroll.append(panes.account, panes.look, panes.social);
+  body.append(strip, scroll);
   show(active);
   return panes;
 };
@@ -721,7 +751,7 @@ const musicRows = (): HTMLElement[] => {
   return [row, hint];
 };
 
-/** Privacy: the two switches and the blocked players with Unblock (friends WP9). */
+/** Privacy: the two switches, then the blocked and the muted players, each with its undo button (friends WP9). */
 const privacySection = (privacy: PrivacySettings): HTMLElement => {
   const section = document.createElement("div");
   section.className = "account-settings__section";
@@ -737,68 +767,206 @@ const privacySection = (privacy: PrivacySettings): HTMLElement => {
     privacyToggle("settings-friend-requests", SETTINGS_TEXT.friendRequestsLabel, SETTINGS_TEXT.friendRequestsHint, privacy.friendRequests, async (wanted) =>
       (await setPrivacy({ friendRequests: wanted })).friendRequests,
     ),
-    blockedSection(),
+    playerListSection({
+      id: "settings-blocked",
+      title: SETTINGS_TEXT.blockedTitle,
+      none: SETTINGS_TEXT.blockedNone,
+      loadFailed: SETTINGS_TEXT.blockedLoadFailed,
+      search: SETTINGS_TEXT.blockedSearch,
+      action: SETTINGS_TEXT.unblock,
+      ask: SETTINGS_TEXT.unblockAsk,
+      actionFailed: SETTINGS_TEXT.unblockFailed,
+      load: fetchBlocked,
+      undo: unblockPlayer,
+    }),
+    playerListSection({
+      id: "settings-muted",
+      title: SETTINGS_TEXT.mutedTitle,
+      none: SETTINGS_TEXT.mutedNone,
+      loadFailed: SETTINGS_TEXT.mutedLoadFailed,
+      search: SETTINGS_TEXT.mutedSearch,
+      action: SETTINGS_TEXT.unmute,
+      ask: SETTINGS_TEXT.unmuteAsk,
+      actionFailed: SETTINGS_TEXT.unmuteFailed,
+      load: fetchMuted,
+      // The server forgets the mute even with World chat off; an open chat
+      // box is told too, so their lines come back at once.
+      undo: async (userid) => {
+        await unmutePlayer(userid);
+        worldChat.unmute(userid);
+      },
+    }),
   );
   return section;
 };
 
-const blockedSection = (): HTMLElement => {
+/**
+ * One list of players with an undo button each: the blocked, or the muted in
+ * chat. Built like the country list (owner, 6 Nov 2026): a search box over a
+ * box of about five rows that scrolls inside, so a long list never stretches
+ * the window, and each undo asks first on its row.
+ */
+interface PlayerList {
+  readonly id: string;
+  readonly title: string;
+  readonly none: string;
+  readonly loadFailed: string;
+  readonly search: string;
+  readonly action: string;
+  readonly ask: (name: string) => string;
+  readonly actionFailed: string;
+  readonly load: () => Promise<BlockedPlayer[]>;
+  readonly undo: (userid: number) => Promise<void>;
+}
+
+const playerListSection = (kind: PlayerList): HTMLElement => {
   const section = document.createElement("div");
   section.className = "account-settings__section";
   const heading = document.createElement("h3");
   heading.className = "account-settings__heading";
-  heading.textContent = SETTINGS_TEXT.blockedTitle;
+  heading.textContent = kind.title;
+
+  const box = document.createElement("div");
+  box.className = "country-picker account-settings__players";
+  box.hidden = true;
+  const search = document.createElement("input");
+  search.type = "search";
+  search.id = `${kind.id}-search`;
+  search.className = "field__input country-picker__search";
+  search.placeholder = `\u{1F50D} ${kind.search}`;
+  search.setAttribute("aria-label", kind.search);
+  search.autocomplete = "off";
+  search.disabled = true;
   const list = document.createElement("ul");
-  list.className = "account-settings__blocked";
-  list.id = "settings-blocked";
+  list.className = "country-picker__list account-settings__player-list";
+  list.id = kind.id;
+  list.setAttribute("aria-label", kind.title);
+  const noMatch = document.createElement("li");
+  noMatch.className = "country-picker__none";
+  noMatch.textContent = SETTINGS_TEXT.noMatch;
+  box.append(search, list);
+
   const note = document.createElement("p");
   note.className = "field__hint";
   note.setAttribute("aria-live", "polite");
   note.textContent = "Loading…";
-  section.append(heading, list, note);
+  section.append(heading, box, note);
 
-  const show = (blocked: BlockedPlayer[]): void => {
-    list.replaceChildren(...blocked.map((player) => blockedRow(player, note, list)));
-    note.classList.remove("field__hint--error");
-    note.textContent = blocked.length === 0 ? SETTINGS_TEXT.blockedNone : "";
+  const rows = (): HTMLElement[] => [...list.querySelectorAll<HTMLElement>(".account-settings__blocked-row")];
+  /** Shows the rows whose name holds the search text, and "No match." when none does. */
+  const filter = (): void => {
+    const query = search.value.trim().toLowerCase();
+    let shown = 0;
+    for (const row of rows()) {
+      const match = (row.dataset["name"] ?? "").includes(query);
+      row.hidden = !match;
+      if (match) shown++;
+    }
+    if (shown === 0) list.append(noMatch);
+    else noMatch.remove();
   };
-  fetchBlocked().then(show, () => {
-    note.textContent = SETTINGS_TEXT.blockedLoadFailed;
+  /** With nobody left, the search and the box go and the "none" line shows. */
+  const settle = (): void => {
+    const empty = rows().length === 0;
+    box.hidden = empty;
+    search.disabled = empty;
+    if (empty) {
+      search.value = "";
+      noMatch.remove();
+      note.classList.remove("field__hint--error");
+      note.textContent = kind.none;
+    } else {
+      filter();
+    }
+  };
+  search.addEventListener("input", filter);
+
+  const fail = (message: string): void => {
+    note.textContent = message;
     note.classList.add("field__hint--error");
-  });
+  };
+  const done = (row: HTMLElement): void => {
+    row.remove();
+    note.classList.remove("field__hint--error");
+    note.textContent = "";
+    settle();
+  };
+
+  kind.load().then(
+    (players) => {
+      list.replaceChildren(...players.map((player) => playerRow(kind, player, done, fail)));
+      note.classList.remove("field__hint--error");
+      note.textContent = "";
+      settle();
+    },
+    () => fail(kind.loadFailed),
+  );
   return section;
 };
 
-const blockedRow = (
+/** A row: the name and the undo button, which first asks ("Unmute <name>?") on the row. */
+const playerRow = (
+  kind: PlayerList,
   player: BlockedPlayer,
-  note: HTMLElement,
-  list: HTMLElement,
+  done: (row: HTMLElement) => void,
+  fail: (message: string) => void,
 ): HTMLElement => {
   const row = document.createElement("li");
   row.className = "account-settings__blocked-row";
   row.dataset["userid"] = String(player.userid);
+  row.dataset["name"] = player.username.toLowerCase();
   const name = document.createElement("span");
+  name.className = "account-settings__player-name";
   name.textContent = player.username;
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "btn btn--ghost";
-  button.textContent = SETTINGS_TEXT.unblock;
-  button.addEventListener("click", () => {
-    button.disabled = true;
-    unblockPlayer(player.userid).then(
+
+  const askButton = document.createElement("button");
+  askButton.type = "button";
+  askButton.className = "btn btn--ghost block-button__ask";
+  askButton.textContent = kind.action;
+
+  const confirm = document.createElement("span");
+  confirm.className = "block-button__confirm";
+  confirm.hidden = true;
+  const question = document.createElement("span");
+  question.className = "block-button__question";
+  question.textContent = kind.ask(player.username);
+  const yes = document.createElement("button");
+  yes.type = "button";
+  yes.className = "btn btn--primary block-button__yes";
+  yes.textContent = SETTINGS_TEXT.confirm;
+  const no = document.createElement("button");
+  no.type = "button";
+  no.className = "btn btn--outline block-button__no";
+  no.textContent = SETTINGS_TEXT.cancel;
+  // Confirm and Cancel stay together: on a phone the question takes its own
+  // line and the pair sits under it (owner, 6 Nov 2026).
+  const choices = document.createElement("span");
+  choices.className = "account-settings__choices";
+  choices.append(yes, no);
+  confirm.append(question, choices);
+
+  const asking = (on: boolean): void => {
+    name.hidden = on;
+    askButton.hidden = on;
+    confirm.hidden = !on;
+    (on ? yes : askButton).focus();
+  };
+  askButton.addEventListener("click", () => asking(true));
+  no.addEventListener("click", () => asking(false));
+  yes.addEventListener("click", () => {
+    yes.disabled = true;
+    no.disabled = true;
+    kind.undo(player.userid).then(
+      () => done(row),
       () => {
-        row.remove();
-        const left = list.children.length;
-        note.classList.remove("field__hint--error");
-        note.textContent = left === 0 ? SETTINGS_TEXT.blockedNone : "";
-      },
-      () => {
-        button.disabled = false;
-        note.textContent = SETTINGS_TEXT.unblockFailed;
-        note.classList.add("field__hint--error");
+        yes.disabled = false;
+        no.disabled = false;
+        asking(false);
+        fail(kind.actionFailed);
       },
     );
   });
-  row.append(name, button);
+
+  row.append(name, askButton, confirm);
   return row;
 };

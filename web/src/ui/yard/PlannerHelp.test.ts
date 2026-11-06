@@ -155,6 +155,25 @@ describe("the help card", () => {
     expect(tab?.getAttribute("aria-selected")).toBe("true");
   });
 
+  it("keeps its tabs over the body, which alone scrolls; a new tab opens at its top (owner, 6 Nov 2026)", () => {
+    const panel = plannerHelpPanel({ onClose: () => {} });
+    const tablist = panel.element.querySelector<HTMLElement>("[role='tablist']")!;
+    expect(tablist.parentElement!.classList.contains("panel__head")).toBe(true);
+    expect(tablist.parentElement!.nextElementSibling).toBe(panel.body);
+    expect(panel.body.contains(tablist)).toBe(false);
+    expect(panel.body.querySelector("#planner-help-basics")).not.toBeNull();
+    expect(panel.body.querySelector("#planner-help-shortcuts")).not.toBeNull();
+
+    panel.mount(document.body);
+    panel.body.scrollTop = 150;
+    tablist.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    const shortcuts = panel.element.querySelector<HTMLButtonElement>("#planner-help-tab-shortcuts")!;
+    expect(shortcuts.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(shortcuts);
+    expect(panel.body.scrollTop).toBe(0);
+    panel.close();
+  });
+
   it("can be asked for the shortcuts first", () => {
     const panel = plannerHelpPanel({ tab: "shortcuts", onClose: () => {} });
     expect(panel.element.querySelector<HTMLElement>("#planner-help-shortcuts")?.hidden).toBe(

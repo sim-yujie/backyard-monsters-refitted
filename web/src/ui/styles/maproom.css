@@ -144,6 +144,10 @@
   gap: var(--space-3);
 }
 
+.map-panel .panel__head {
+  padding: var(--space-3) var(--space-3) 0;
+}
+
 .map-panel .panel__titlebar {
   padding: var(--space-2) var(--space-3);
 }

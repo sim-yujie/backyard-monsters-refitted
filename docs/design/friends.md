@@ -276,6 +276,8 @@ add lines to that file only. Answers use `{ error: 0, ... }` like the rest.
 | `POST /player/settings` (existing) | adds `hideOnline?`, `friendRequests?` (every field optional) | `settings` adds both |
 | `GET /player/blocked` | — | `blocked: [{ userid, username }]` |
 | `POST /player/block`, `POST /player/unblock` | `{ userid }` | `{}` |
+| `GET /player/muted` | — | `muted: [{ userid, username }]` (chat mutes, Redis `chat-ignore:<id>`) |
+| `POST /player/unmute` | `{ userid }` | `{}` |
 
 `Friend` = `{ userid, username, pic, level, online: "online" | "today" | "week" | "away" | null,
 since, giftSentToday, canGiftFrom, help: { speedup, repair } | null }`. `online` is `null` when the

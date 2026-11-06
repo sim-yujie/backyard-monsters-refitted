@@ -12,6 +12,7 @@ import {
   type SnapshotLine,
 } from "./chatCases.js";
 import { chatReportAward } from "../../config/AdminConfig.js";
+import { normaliseJsonBody } from "../../middleware/jsonBody.js";
 
 const line = (i: number, userid = 1): SnapshotLine => ({ userid, name: `p${userid}`, text: `line ${i}`, at: i });
 const clean = { cases: 0, flags: 0, warnings: 0, mutes: 0, bans: 0 };
@@ -85,6 +86,23 @@ describe("reading the owner's step", () => {
     expect(parseCaseAward({ awards: [{ userid: 2, amount: 2.5 }] }).ok).toBe(false);
     expect(parseCaseAward({ awards: [{ userid: 2, amount: 0 }] }).ok).toBe(false);
     expect(parseCaseAward({ awards: [{ userid: 2, amount: 5 }, { userid: 2, amount: 5 }] }).ok).toBe(false);
+  });
+  test("an award as the server really receives it: the JSON middleware sends the list as a string", () => {
+    // The dashboard posts JSON; jsonBodyCompat re-stringifies `awards` before the route reads it.
+    const sent = (awards: unknown) => parseCaseAward(normaliseJsonBody({ awards }));
+    expect(sent([{ userid: 2, amount: 10 }])).toEqual({
+      ok: true,
+      value: { awards: [{ userid: 2, amount: 10 }], reason: DEFAULT_AWARD_REASON },
+    });
+    expect(sent([{ userid: 2, amount: 10 }, { userid: 3, amount: 25 }])).toEqual({
+      ok: true,
+      value: { awards: [{ userid: 2, amount: 10 }, { userid: 3, amount: 25 }], reason: DEFAULT_AWARD_REASON },
+    });
+    expect(sent([])).toEqual({ ok: false, message: "Tick at least one reporter." });
+    expect(sent([{ userid: 2, amount: 5 }, { userid: 2, amount: 5 }]).ok).toBe(false);
+    expect(parseCaseAward({ awards: "not json" }).ok).toBe(false);
+    expect(parseCaseAward({ awards: "{}" }).ok).toBe(false);
+    expect(parseCaseAward({}).ok).toBe(false);
   });
   test("the starting amounts come from the server's settings", () => {
     // The owner's choice: 10 each, no first-reporter bonus.

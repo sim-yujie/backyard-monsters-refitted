@@ -57,11 +57,13 @@ export class ShinyButton {
   private readonly timers: ShinyButtonTimers;
   private readonly labelNode: HTMLElement;
   private readonly priceNode: HTMLElement;
+  private readonly noteNode: HTMLElement;
   private readonly live: HTMLElement;
 
   private price = 0;
   private free = 0;
   private reason: string | null = null;
+  private note: readonly string[] | null = null;
   private busy = false;
   private armTimer: unknown = null;
 
@@ -80,12 +82,17 @@ export class ShinyButton {
     this.labelNode.className = "shiny-button__label";
     this.priceNode = document.createElement("span");
     this.priceNode.className = "shiny-button__price";
+    // Lines under the label and price: what the spend also means
+    // ("Finishes now" / "35 min unused"), kept in the armed state as the confirm.
+    this.noteNode = document.createElement("span");
+    this.noteNode.className = "shiny-button__note";
+    this.noteNode.hidden = true;
     // The armed state is announced through this, not through the button's own
     // name changing under the cursor, which screen readers do not all repeat.
     this.live = document.createElement("span");
     this.live.className = "u-visually-hidden";
     this.live.setAttribute("aria-live", "polite");
-    this.element.append(this.labelNode, this.priceNode, this.live);
+    this.element.append(this.labelNode, this.priceNode, this.noteNode, this.live);
 
     this.element.addEventListener("click", this.onClick);
     this.element.addEventListener("blur", this.disarm);
@@ -113,6 +120,16 @@ export class ShinyButton {
   setFree(count: number): void {
     if (count === this.free) return;
     this.free = count;
+    this.draw();
+  }
+
+  /** Lines under the label, one each, or null for none. A change while armed keeps it armed. */
+  setNote(note: readonly string[] | null): void {
+    const same =
+      note === this.note ||
+      (note !== null && this.note !== null && note.length === this.note.length && note.every((line, i) => line === this.note![i]));
+    if (same) return;
+    this.note = note;
     this.draw();
   }
 
@@ -151,7 +168,8 @@ export class ShinyButton {
         this.live.textContent = "";
         this.draw();
       }, ARM_WINDOW_MS);
-      this.live.textContent = `Tap again to spend ${this.spell(this.price)} Shiny.`;
+      const spend = this.free > 0 ? "use a free one" : `spend ${this.spell(this.price)} Shiny`;
+      this.live.textContent = `Tap again to ${spend}${this.note ? ` (${this.note.join(", ")})` : ""}.`;
       this.draw();
       return;
     }
@@ -177,12 +195,23 @@ export class ShinyButton {
     else this.priceNode.replaceChildren(resourceAmount("shiny", priceText, { decorative: true }));
     this.element.classList.toggle("shiny-button--armed", armed);
     this.element.classList.toggle("shiny-button--free", freeText !== null);
+    this.element.classList.toggle("shiny-button--noted", this.note !== null);
+    this.noteNode.hidden = this.note === null;
+    this.noteNode.replaceChildren(
+      ...(this.note ?? []).map((text) => {
+        const line = document.createElement("span");
+        line.className = "shiny-button__note-line";
+        line.textContent = text;
+        return line;
+      }),
+    );
     this.element.disabled = this.reason !== null || this.busy;
     this.element.setAttribute("aria-pressed", armed ? "true" : "false");
     const cost = freeText ? `a free one, ${this.free} left` : `${priceText} Shiny`;
+    const noted = this.note ? ` (${this.note.join(", ")})` : "";
     const name = armed
-      ? `Tap again to ${freeText ? "use" : "spend"} ${cost} on ${this.what ?? this.label}`
-      : `${this.what ? `${this.label} ${this.what}` : this.label}, ${cost}`;
+      ? `Tap again to ${freeText ? "use" : "spend"} ${cost} on ${this.what ?? this.label}${noted}`
+      : `${this.what ? `${this.label} ${this.what}` : this.label}${noted}, ${cost}`;
     this.element.setAttribute("aria-label", this.reason ? `${name}. ${this.reason}` : name);
     this.element.title = this.reason ?? (armed ? "Tap again within 3 seconds to spend" : "");
   }

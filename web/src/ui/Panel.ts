@@ -24,6 +24,8 @@ export class Panel {
   readonly titlebar: HTMLElement;
 
   private readonly titleElement: HTMLElement;
+  /** The fixed strip over the body ({@link setHead}); made on first use. */
+  private head: HTMLElement | null = null;
   private readonly onClose: (() => void) | undefined;
   private readonly closeOnEscape: boolean;
   private closed = false;
@@ -72,6 +74,22 @@ export class Panel {
   /** Replaces the body contents. */
   setContent(...nodes: (Node | string)[]): this {
     this.body.replaceChildren(...nodes);
+    return this;
+  }
+
+  /**
+   * Puts a tab row (and any line that belongs above it) between the title bar
+   * and the body, replacing what was there. It stays in sight while only the
+   * body scrolls: tabs are fixed at the top of every window (owner, 6 Nov
+   * 2026). Hidden when everything in it is hidden (ui.css `.panel__head`).
+   */
+  setHead(...nodes: Node[]): this {
+    if (!this.head) {
+      this.head = document.createElement("div");
+      this.head.className = "panel__head";
+      this.body.before(this.head);
+    }
+    this.head.replaceChildren(...nodes);
     return this;
   }
 

@@ -228,6 +228,7 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /api/:apiVersion/player/avatar",
   "POST /api/:apiVersion/player/block",
   "POST /api/:apiVersion/player/unblock",
+  "POST /api/:apiVersion/player/unmute",
   // Writes that change no game state, so a script could repeat them for
   // nothing (security review, 3 Nov): they keep the player connected, as
   // input does, but do not renew the protection.
