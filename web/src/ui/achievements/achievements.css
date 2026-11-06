@@ -262,6 +262,24 @@
     linear-gradient(color-mix(in srgb, var(--medal) 40%, black), color-mix(in srgb, var(--medal) 40%, black)) center bottom / 12px 3px no-repeat;
 }
 
+/* A hidden achievement not earned yet (#299): a "?" on a grey medal. */
+.ach-badge__secret {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display, inherit);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  color: color-mix(in srgb, var(--medal) 35%, black);
+}
+
+.ach-row--hidden .ach-row__name {
+  letter-spacing: 0.15em;
+  color: var(--colour-text-muted);
+}
+
 /* ── The painted badge (#298): the picture is the whole medal ─────────── */
 
 .ach-badge--art {

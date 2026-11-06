@@ -1,8 +1,8 @@
-import { friendRefusal, type FriendsApi, type Gift, type GiftResource, type ResourceAmounts } from "@/api/friends";
+import { friendRefusal, GIFT_WISH_MAX, type FriendsApi, type Gift, type GiftResource, type ResourceAmounts } from "@/api/friends";
 import type { FriendsStore } from "@/game/friends/friendsStore";
 import { playerPool, type PlayerPool } from "@/game/friends/friendsView";
 import { formatAmount } from "@/ui/format";
-import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount } from "@/ui/resourceIcon";
+import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, resourceIcon } from "@/ui/resourceIcon";
 import { openGiftPicker, type GiftTarget } from "./GiftPicker";
 import { button, make, playerRow, section, StatusLine, type FriendsTabView } from "./rows";
 
@@ -14,6 +14,10 @@ import { button, make, playerRow, section, StatusLine, type FriendsTabView } fro
  * there is not room for all of it, the first press warns and a second one
  * collects anyway. At most 5 a day; the rest wait, and a gift lapses after 7
  * days. Fetched fresh each time the tab comes forward.
+ *
+ * Above the gifts, **★ My wishes** (#391): four resource toggles, at most 3
+ * on. Friends see those first, starred, when they send a gift. Saved at
+ * once; a failed save puts the last saved wishes back.
  */
 
 export interface GiftsTabOptions {
@@ -100,6 +104,9 @@ export const GIFTS_TEXT = {
   short: (lost: ResourceAmounts): string =>
     `Your storage is too full: ${amountsText(lost)} would be lost. Press again to collect anyway.`,
   underAttack: "Your yard is under attack right now. Collect when the attack is over.",
+  wishes: "★ My wishes",
+  wishesHint: `Up to ${GIFT_WISH_MAX}. Friends see them first.`,
+  wishesFailed: "Your wishes could not be saved. Try again.",
 } as const;
 
 export class GiftsTab implements FriendsTabView {
@@ -110,7 +117,13 @@ export class GiftsTab implements FriendsTabView {
   private readonly summary: HTMLElement;
   private readonly status = new StatusLine();
   private readonly body: HTMLElement;
+  private readonly wishBar: HTMLElement;
   private gifts: Gift[] = [];
+  /** The wishes shown (saved or being saved), and the last the server confirmed. */
+  private wishes: GiftResource[] = [];
+  private savedWishes: GiftResource[] = [];
+  /** Bumped by every wish save, so only the latest answer counts. */
+  private wishSave = 0;
   private collectsLeft = 0;
   private loaded = false;
   private busy = false;
@@ -126,7 +139,8 @@ export class GiftsTab implements FriendsTabView {
     this.element = make("div", "friends-tab friends-tab--gifts");
     this.summary = make("div", "friends-summary gifts-summary");
     this.body = make("div", "friends-tab__body");
-    this.element.append(this.summary, this.status.element, this.body);
+    this.wishBar = make("div", "gift-wishes");
+    this.element.append(this.summary, this.wishBar, this.status.element, this.body);
   }
 
   get statusText(): string {
@@ -138,9 +152,14 @@ export class GiftsTab implements FriendsTabView {
     this.warned = null;
     if (!this.loaded) this.status.set(GIFTS_TEXT.loading);
     try {
-      const { gifts, collectsLeft } = await this.options.api.gifts();
+      const { gifts, collectsLeft, wishes } = await this.options.api.gifts();
       if (this.destroyed || generation !== this.generation) return;
       this.gifts = [...gifts];
+      // Not while a wish change is still being saved.
+      if (this.sameWishes(this.wishes, this.savedWishes)) {
+        this.wishes = [...wishes];
+        this.savedWishes = [...wishes];
+      }
       this.collectsLeft = collectsLeft;
       this.loaded = true;
       if (this.status.text === GIFTS_TEXT.loading) this.status.set(null);
@@ -170,6 +189,7 @@ export class GiftsTab implements FriendsTabView {
     all.disabled = this.busy || this.gifts.length === 0 || this.collectsLeft === 0;
     const line = make("p", "gifts-summary__left", GIFTS_TEXT.left(this.collectsLeft));
     this.summary.replaceChildren(line, all);
+    this.renderWishes();
 
     const rows = this.gifts.map((gift) => {
       const collect = button(
@@ -189,6 +209,61 @@ export class GiftsTab implements FriendsTabView {
       return row;
     });
     this.body.replaceChildren(section(GIFTS_TEXT.waiting, rows, GIFTS_TEXT.none));
+  }
+
+  /** The "★ My wishes" strip: one toggle per resource, the others off once 3 are on. */
+  private renderWishes(): void {
+    const full = this.wishes.length >= GIFT_WISH_MAX;
+    const toggles = make("div", "gift-wishes__toggles");
+    for (const key of RESOURCE_KEYS) {
+      const on = this.wishes.includes(key);
+      const toggle = make("button", on ? "btn btn--outline gift-wish gift-wish--on" : "btn btn--outline gift-wish");
+      toggle.type = "button";
+      toggle.dataset["resource"] = key;
+      toggle.setAttribute("aria-pressed", String(on));
+      toggle.setAttribute("aria-label", RESOURCE_NAMES[key]);
+      toggle.title = RESOURCE_NAMES[key];
+      toggle.disabled = !on && full;
+      toggle.append(resourceIcon(key, { decorative: true }));
+      if (on) {
+        const star = make("span", "gift-wish__star", "★");
+        star.setAttribute("aria-hidden", "true");
+        toggle.append(star);
+      }
+      toggle.addEventListener("click", () => void this.toggleWish(key));
+      toggles.append(toggle);
+    }
+    toggles.setAttribute("role", "group");
+    toggles.setAttribute("aria-label", "My gift wishes");
+    const head = make("div", "gift-wishes__head");
+    head.append(make("span", "gift-wishes__title", GIFTS_TEXT.wishes), make("span", "gift-wishes__hint", GIFTS_TEXT.wishesHint));
+    this.wishBar.replaceChildren(head, toggles);
+  }
+
+  private sameWishes(a: readonly GiftResource[], b: readonly GiftResource[]): boolean {
+    return a.length === b.length && a.every((key) => b.includes(key));
+  }
+
+  /** Turns a wish on or off and saves at once; a refusal puts the last saved wishes back. */
+  private async toggleWish(key: GiftResource): Promise<void> {
+    const on = this.wishes.includes(key);
+    if (!on && this.wishes.length >= GIFT_WISH_MAX) return;
+    const next = on ? this.wishes.filter((one) => one !== key) : RESOURCE_KEYS.filter((one) => one === key || this.wishes.includes(one));
+    this.wishes = next;
+    this.renderWishes();
+    const save = ++this.wishSave;
+    try {
+      const stored = await this.options.api.setWishes(next);
+      if (this.destroyed || save !== this.wishSave) return;
+      this.wishes = [...stored];
+      this.savedWishes = [...stored];
+      if (this.status.text === GIFTS_TEXT.wishesFailed) this.status.set(null);
+    } catch {
+      if (this.destroyed || save !== this.wishSave) return;
+      this.wishes = [...this.savedWishes];
+      this.status.set(GIFTS_TEXT.wishesFailed, "error");
+    }
+    this.renderWishes();
   }
 
   /** Collects one gift or all it can; warns first, once, when storage is short. */

@@ -515,3 +515,82 @@
   justify-content: center;
   gap: var(--space-2);
 }
+
+/* Gift wishes (#391): the friend's wished resources first, each starred. */
+.gift-picker__choice--wished {
+  border-color: var(--colour-medal-gold);
+}
+
+.gift-picker__star,
+.gift-wish__star {
+  color: var(--colour-medal-gold);
+  font-size: 1.1em;
+  line-height: 1;
+  text-shadow: 0 1px 1px var(--colour-art-shadow);
+}
+
+.gift-picker__legend {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+/* The Gifts tab's "★ My wishes" strip: four resource toggles, up to 3 on. */
+.gift-wishes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md, 8px);
+}
+
+.gift-wishes__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gift-wishes__title {
+  font-weight: 700;
+  color: var(--colour-text-strong);
+}
+
+.gift-wishes__hint {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.gift-wishes__toggles {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.gift-wish {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+}
+
+.gift-wish--on {
+  border-color: var(--colour-medal-gold);
+  box-shadow: inset 0 0 0 1px var(--colour-medal-gold);
+}
+
+.gift-wish__star {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  font-size: 16px;
+}
+
+.gift-wish:disabled {
+  opacity: 0.45;
+}

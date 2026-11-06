@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { GiftResource } from "@/api/friends";
 import { ApiError } from "@/api/http";
 import { fixtureApi, fixtureGift, fixtureList } from "@/game/friends/friendsFixture";
 import { FriendsStore } from "@/game/friends/friendsStore";
@@ -20,6 +21,7 @@ const twoGifts = {
     fixtureGift(2, 8, { username: "Cat", resource: "r4" as const, amount: 500, canSendBack: false }),
   ],
   collectsLeft: 5,
+  wishes: [] as GiftResource[],
 };
 
 let clearPool: (() => void) | null = null;
@@ -62,7 +64,7 @@ describe("the list", () => {
   });
 
   it("says so when none are waiting, and Collect all is off", async () => {
-    const { tab } = setup({ gifts: { gifts: [], collectsLeft: 5 } });
+    const { tab } = setup({ gifts: { gifts: [], collectsLeft: 5, wishes: [] } });
     await tab.show();
     expect(tab.element.textContent).toContain(GIFTS_TEXT.none);
     expect(buttonIn(tab.element, GIFTS_TEXT.collectAll).disabled).toBe(true);
@@ -178,5 +180,54 @@ describe("helpers", () => {
     expect(overflowOf({ r1: 1_500, r2: 500 }, pool)).toEqual({ r1: 500 });
     expect(overflowOf({ r1: 1_500 }, null)).toEqual({});
     expect(overflowOf({ r1: 1_500 }, { resources: {}, caps: null })).toEqual({});
+  });
+});
+
+describe("my wishes (#391)", () => {
+  const toggle = (tab: GiftsTab, resource: string): HTMLButtonElement =>
+    tab.element.querySelector(`.gift-wish[data-resource="${resource}"]`) as HTMLButtonElement;
+  const pressed = (tab: GiftsTab): string[] =>
+    [...tab.element.querySelectorAll<HTMLElement>('.gift-wish[aria-pressed="true"]')].map((node) => node.dataset["resource"]!);
+
+  it("shows the saved wishes pressed and starred", async () => {
+    const { tab } = setup({ gifts: { ...twoGifts, wishes: ["r2", "r4"] } });
+    await tab.show();
+    expect(tab.element.querySelector(".gift-wishes__title")?.textContent).toBe(GIFTS_TEXT.wishes);
+    expect(pressed(tab)).toEqual(["r2", "r4"]);
+    expect(toggle(tab, "r2").querySelector(".gift-wish__star")?.textContent).toBe("★");
+    expect(toggle(tab, "r1").querySelector(".gift-wish__star")).toBeNull();
+  });
+
+  it("saves each change at once, and turns the last one off at 3", async () => {
+    const { tab, calls } = setup();
+    await tab.show();
+    toggle(tab, "r3").click();
+    toggle(tab, "r1").click();
+    await settle();
+    expect(pressed(tab)).toEqual(["r1", "r3"]);
+    toggle(tab, "r4").click();
+    await settle();
+    expect(pressed(tab)).toEqual(["r1", "r3", "r4"]);
+    expect(toggle(tab, "r2").disabled).toBe(true);
+    toggle(tab, "r3").click();
+    await settle();
+    expect(pressed(tab)).toEqual(["r1", "r4"]);
+    expect(toggle(tab, "r2").disabled).toBe(false);
+    expect(calls.filter(([method]) => method === "setWishes").map(([, wishes]) => wishes)).toEqual([
+      ["r3"],
+      ["r1", "r3"],
+      ["r1", "r3", "r4"],
+      ["r1", "r4"],
+    ]);
+  });
+
+  it("puts the saved wishes back and says so when saving fails", async () => {
+    const { tab } = setup({ gifts: { ...twoGifts, wishes: ["r2"] }, setWishes: new Error("offline") });
+    await tab.show();
+    toggle(tab, "r1").click();
+    expect(pressed(tab)).toEqual(["r1", "r2"]);
+    await settle();
+    expect(pressed(tab)).toEqual(["r2"]);
+    expect(tab.statusText).toBe(GIFTS_TEXT.wishesFailed);
   });
 });
