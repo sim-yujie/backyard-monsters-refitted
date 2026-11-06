@@ -86,6 +86,9 @@ describe("weekend helpers", () => {
     const on = panelOf();
     on.state.active = { ...on.state.next!, startsAt: NOW - 60, forced: true };
     expect(weekendSentence(on)).toMatch(/^On now: Builder's Weekend .* \(run by hand\)\. Ends in /);
+    // The time left never splits on a narrow screen: no-break spaces only.
+    expect(weekendSentence(on).split("Ends in ")[1]).toMatch(/^\d+\u00a0[dhms](\u00a0\d+\u00a0[hm])?\.$/);
+    expect(weekendSentence(panelOf()).split("starts in ")[1]).not.toContain(" ");
   });
 
   it("saturday labels, the choice's change, rotation moves and number checks", () => {

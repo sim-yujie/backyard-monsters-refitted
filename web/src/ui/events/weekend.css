@@ -56,8 +56,6 @@
   flex: none;
   padding: 0 var(--space-2);
   border-radius: var(--radius-pill);
-  background: var(--colour-warning-soft);
-  color: var(--colour-warning-text);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -80,10 +78,30 @@
 
 /* ── The chip beside a price or a time ─────────────────────────────────── */
 
-.weekend-chip {
-  color: var(--colour-warning-text);
-  background: var(--colour-warning-soft);
+/*
+ * The "−30%" on the banner and beside a price or a time: a solid amber pill,
+ * like the pop-up's, so it reads on every background. Each look pairs its own
+ * amber with its own inverse ink: the HUD and Modern panels have light amber
+ * with near-black ink (about 10:1), Classic's cream panels a dark amber with
+ * cream ink (about 6:1), the light theme dark amber with white (about 5.4:1).
+ * (`--colour-warning-text` stays dark in every look, so it cannot go on
+ * Classic's dark amber, and on the old 10% wash it was dark on dark.)
+ */
+.weekend-banner__amount,
+.chip.weekend-chip {
+  background: var(--colour-warning);
+  color: var(--colour-text-inverse);
+  /* Modern panels shadow their words; on a light fill that only blurs them. */
+  text-shadow: none;
+}
+
+.chip.weekend-chip {
   font-weight: 800;
+}
+
+/* A lowered time and its chip, on one line together (`withWeekendChip`). */
+.weekend-with-chip {
+  white-space: nowrap;
 }
 
 /* ── Pop-up ─────────────────────────────────────────────────────────────── */
