@@ -289,3 +289,21 @@ export const listBlocked = async (em: EntityManager, userid: number): Promise<{ 
   );
   return rows.map((row) => ({ userid: Number(row.userid), username: row.username }));
 };
+
+/**
+ * Players the caller muted in chat, with their names, in name order. The ids
+ * come from the chat mute set in Redis (`chat-ignore:<id>`); ids that are not
+ * numbers or have no account are left out.
+ */
+export const listMuted = async (em: EntityManager, ids: readonly string[]): Promise<{ userid: number; username: string }[]> => {
+  const userids = [...new Set(ids.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))];
+  if (userids.length === 0) return [];
+  const rows = await em.execute<{ userid: number; username: string }[]>(
+    `SELECT u.userid, u.username
+       FROM bym."user" u
+      WHERE u.userid IN (${userids.map(() => "?").join(", ")})
+      ORDER BY lower(u.username), u.userid`,
+    userids
+  );
+  return rows.map((row) => ({ userid: Number(row.userid), username: row.username }));
+};

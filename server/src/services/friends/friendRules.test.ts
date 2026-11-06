@@ -94,6 +94,8 @@ describe("friends migration and routes", () => {
       ["get", "/player/blocked`"],
       ["post", "/player/block`"],
       ["post", "/player/unblock`"],
+      ["get", "/player/muted`"],
+      ["post", "/player/unmute`"],
       ["post", "/bm/friends/help`"],
     ]) {
       const line = `router.${method}(\`\${api}${path}`;

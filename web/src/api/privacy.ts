@@ -1,4 +1,4 @@
-import { friendsApi, type BlockedPlayer } from "./friends";
+import { friendsApi, type BlockedPlayer, type MutedPlayer } from "./friends";
 import { postJson } from "./http";
 import type { ApiEnvelope } from "./types";
 
@@ -6,6 +6,7 @@ import type { ApiEnvelope } from "./types";
  * Privacy and blocking (friends WP9, `docs/design/friends.md` §3.6 and §6.2):
  * the two privacy switches ride on `POST /player/settings`, the block list is
  * `GET /player/blocked`, and `POST /player/block|unblock { userid }` change it.
+ * The chat mute list is `GET /player/muted`, and `POST /player/unmute`.
  * Kept apart from the friends client so the settings dialog and the Block
  * buttons need only this small module.
  */
@@ -18,7 +19,7 @@ export interface PrivacySettings {
   readonly friendRequests: boolean;
 }
 
-export type { BlockedPlayer };
+export type { BlockedPlayer, MutedPlayer };
 
 interface SettingsAnswer extends ApiEnvelope {
   settings?: { hideOnline?: unknown; friendRequests?: unknown };
@@ -43,3 +44,7 @@ export const setPrivacy = async (change: Partial<PrivacySettings>): Promise<Priv
 export const fetchBlocked = (): Promise<BlockedPlayer[]> => friendsApi.blocked();
 export const blockPlayer = (userid: number): Promise<void> => friendsApi.block(userid);
 export const unblockPlayer = (userid: number): Promise<void> => friendsApi.unblock(userid);
+
+// The chat mute list; muting itself happens in the chat box.
+export const fetchMuted = (): Promise<MutedPlayer[]> => friendsApi.muted();
+export const unmutePlayer = (userid: number): Promise<void> => friendsApi.unmute(userid);

@@ -19,12 +19,14 @@ import {
   blockedAnswer,
   cancelAnswer,
   friendsAnswer,
+  mutedAnswer,
   removeAnswer,
   requestAnswer,
   requestsAnswer,
   searchAnswer,
   suggestionsAnswer,
   unblockAnswer,
+  unmuteAnswer,
   type FriendsBody,
 } from "./friends.js";
 import { helpBlock } from "../../services/friends/helpFacts.js";
@@ -83,4 +85,8 @@ export const mountFriendsRoutes = (router: Router): void => {
     route((ctx, now) => blockAnswer(postgres.em, ctx.authUser, ctx.request.body, now)));
   router.post(`${api}/player/unblock`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,
     route((ctx) => unblockAnswer(postgres.em, ctx.authUser, ctx.request.body)));
+  router.get(`${api}/player/muted`, apiVersion, verifyUserAuth, verifyAccountStatus, friendsReadLimiter,
+    route((ctx) => mutedAnswer(postgres.em, ctx.authUser)));
+  router.post(`${api}/player/unmute`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,
+    route((ctx) => unmuteAnswer(ctx.authUser, ctx.request.body)));
 };

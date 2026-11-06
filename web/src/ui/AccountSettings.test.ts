@@ -11,11 +11,13 @@ const privacyApi = vi.hoisted(() => ({
   setPrivacy: vi.fn(),
   fetchBlocked: vi.fn(),
   unblockPlayer: vi.fn(),
+  fetchMuted: vi.fn(),
+  unmutePlayer: vi.fn(),
 }));
 vi.mock("@/api/privacy", () => privacyApi);
 const countryApi = vi.hoisted(() => ({ setCountry: vi.fn() }));
 vi.mock("@/api/country", () => countryApi);
-const chat = vi.hoisted(() => ({ worldChat: { setCountryRoom: vi.fn() } }));
+const chat = vi.hoisted(() => ({ worldChat: { setCountryRoom: vi.fn(), unmute: vi.fn() } }));
 vi.mock("@/game/chat/chatSession", () => chat);
 const lookReport = vi.hoisted(() => ({ reportLook: vi.fn() }));
 vi.mock("@/app/lookReport", () => lookReport);
@@ -43,7 +45,10 @@ const open = async (account: Record<string, unknown>) => {
   return popup;
 };
 
-beforeEach(() => privacyApi.fetchBlocked.mockResolvedValue([]));
+beforeEach(() => {
+  privacyApi.fetchBlocked.mockResolvedValue([]);
+  privacyApi.fetchMuted.mockResolvedValue([]);
+});
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -164,6 +169,45 @@ describe("AccountSettings", () => {
     await settle();
     expect(document.querySelectorAll("#settings-blocked li")).toHaveLength(1);
     expect(document.body.textContent).toContain(SETTINGS_TEXT.unblockFailed);
+  });
+
+  it("lists muted players by name, unmutes one on the server and in the chat box", async () => {
+    privacyApi.unmutePlayer.mockResolvedValue(undefined);
+    privacyApi.fetchMuted.mockResolvedValue([
+      { userid: 4, username: "Loud" },
+      { userid: 5, username: "Spam" },
+    ]);
+    await open({});
+    const rows = () => [...document.querySelectorAll("#settings-muted li")];
+    expect(rows().map((row) => row.textContent)).toEqual(["LoudUnmute", "SpamUnmute"]);
+    // The blocked list is its own list.
+    expect(document.querySelectorAll("#settings-blocked li")).toHaveLength(0);
+    rows()[0]!.querySelector("button")!.click();
+    await settle();
+    expect(privacyApi.unmutePlayer).toHaveBeenCalledWith(4);
+    expect(chat.worldChat.unmute).toHaveBeenCalledWith(4);
+    expect(rows().map((row) => row.textContent)).toEqual(["SpamUnmute"]);
+    rows()[0]!.querySelector("button")!.click();
+    await settle();
+    expect(document.body.textContent).toContain(SETTINGS_TEXT.mutedNone);
+  });
+
+  it("keeps a muted player listed, and the chat box unchanged, when Unmute fails", async () => {
+    privacyApi.unmutePlayer.mockRejectedValue(new Error("down"));
+    privacyApi.fetchMuted.mockResolvedValue([{ userid: 4, username: "Loud" }]);
+    await open({});
+    document.querySelector<HTMLButtonElement>("#settings-muted button")!.click();
+    await settle();
+    expect(document.querySelectorAll("#settings-muted li")).toHaveLength(1);
+    expect(chat.worldChat.unmute).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain(SETTINGS_TEXT.unmuteFailed);
+  });
+
+  it("says so when the muted list cannot load", async () => {
+    privacyApi.fetchMuted.mockRejectedValue(new Error("down"));
+    await open({});
+    expect(document.body.textContent).toContain(SETTINGS_TEXT.mutedLoadFailed);
+    expect(document.body.textContent).toContain(SETTINGS_TEXT.blockedNone);
   });
 
   it("keeps Screen shake in this browser, on until switched off", async () => {

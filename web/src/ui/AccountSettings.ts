@@ -1,7 +1,7 @@
 /**
  * The Settings dialog, opened from the account menu, in three tabs (owner,
  * 5 Nov 2026): Account (avatar, username, Shiny Lock), Look and sound, and
- * Social (world chat, country, the privacy switches, blocked players). "World
+ * Social (world chat, country, the privacy switches, blocked and muted players). "World
  * chat", "Game effects" and "Look and sound" are kept in this browser only: no
  * server, except the volume sliders, which the account menu has too
  * (`ui/SoundSliders.ts`).
@@ -15,7 +15,15 @@ import { reduceEffects, setReduceEffects } from "@/game/attack/juice";
 import type { AvatarPicker } from "@/ui/AvatarPicker";
 import { SoundSliders } from "@/ui/SoundSliders";
 import { changeUsername, fetchAccount, setShinyLocked, type AccountInfo } from "@/api/account";
-import { fetchBlocked, setPrivacy, unblockPlayer, type BlockedPlayer, type PrivacySettings } from "@/api/privacy";
+import {
+  fetchBlocked,
+  fetchMuted,
+  setPrivacy,
+  unblockPlayer,
+  unmutePlayer,
+  type BlockedPlayer,
+  type PrivacySettings,
+} from "@/api/privacy";
 import { setCountry, type CountrySettings } from "@/api/country";
 import { countryLabelNodes } from "@/ui/countryFlag";
 import { worldChat } from "@/game/chat/chatSession";
@@ -63,6 +71,11 @@ export const SETTINGS_TEXT = {
   blockedLoadFailed: "Could not load your blocked players.",
   unblock: "Unblock",
   unblockFailed: "Could not unblock that player. Try again.",
+  mutedTitle: "Muted players",
+  mutedNone: "You have not muted anyone.",
+  mutedLoadFailed: "Could not load your muted players.",
+  unmute: "Unmute",
+  unmuteFailed: "Could not unmute that player. Try again.",
   effectsTitle: "Game effects",
   shakeLabel: "Screen shake",
   shakeHint: "The screen jolts on big hits in a fight.",
@@ -721,7 +734,7 @@ const musicRows = (): HTMLElement[] => {
   return [row, hint];
 };
 
-/** Privacy: the two switches and the blocked players with Unblock (friends WP9). */
+/** Privacy: the two switches, then the blocked and the muted players, each with its undo button (friends WP9). */
 const privacySection = (privacy: PrivacySettings): HTMLElement => {
   const section = document.createElement("div");
   section.className = "account-settings__section";
@@ -737,39 +750,76 @@ const privacySection = (privacy: PrivacySettings): HTMLElement => {
     privacyToggle("settings-friend-requests", SETTINGS_TEXT.friendRequestsLabel, SETTINGS_TEXT.friendRequestsHint, privacy.friendRequests, async (wanted) =>
       (await setPrivacy({ friendRequests: wanted })).friendRequests,
     ),
-    blockedSection(),
+    playerListSection({
+      id: "settings-blocked",
+      title: SETTINGS_TEXT.blockedTitle,
+      none: SETTINGS_TEXT.blockedNone,
+      loadFailed: SETTINGS_TEXT.blockedLoadFailed,
+      action: SETTINGS_TEXT.unblock,
+      actionFailed: SETTINGS_TEXT.unblockFailed,
+      load: fetchBlocked,
+      undo: unblockPlayer,
+    }),
+    playerListSection({
+      id: "settings-muted",
+      title: SETTINGS_TEXT.mutedTitle,
+      none: SETTINGS_TEXT.mutedNone,
+      loadFailed: SETTINGS_TEXT.mutedLoadFailed,
+      action: SETTINGS_TEXT.unmute,
+      actionFailed: SETTINGS_TEXT.unmuteFailed,
+      load: fetchMuted,
+      // The server forgets the mute even with World chat off; an open chat
+      // box is told too, so their lines come back at once.
+      undo: async (userid) => {
+        await unmutePlayer(userid);
+        worldChat.unmute(userid);
+      },
+    }),
   );
   return section;
 };
 
-const blockedSection = (): HTMLElement => {
+/** One list of players with an undo button each: the blocked, or the muted in chat. */
+interface PlayerList {
+  readonly id: string;
+  readonly title: string;
+  readonly none: string;
+  readonly loadFailed: string;
+  readonly action: string;
+  readonly actionFailed: string;
+  readonly load: () => Promise<BlockedPlayer[]>;
+  readonly undo: (userid: number) => Promise<void>;
+}
+
+const playerListSection = (kind: PlayerList): HTMLElement => {
   const section = document.createElement("div");
   section.className = "account-settings__section";
   const heading = document.createElement("h3");
   heading.className = "account-settings__heading";
-  heading.textContent = SETTINGS_TEXT.blockedTitle;
+  heading.textContent = kind.title;
   const list = document.createElement("ul");
   list.className = "account-settings__blocked";
-  list.id = "settings-blocked";
+  list.id = kind.id;
   const note = document.createElement("p");
   note.className = "field__hint";
   note.setAttribute("aria-live", "polite");
   note.textContent = "Loading…";
   section.append(heading, list, note);
 
-  const show = (blocked: BlockedPlayer[]): void => {
-    list.replaceChildren(...blocked.map((player) => blockedRow(player, note, list)));
+  const show = (players: BlockedPlayer[]): void => {
+    list.replaceChildren(...players.map((player) => playerRow(kind, player, note, list)));
     note.classList.remove("field__hint--error");
-    note.textContent = blocked.length === 0 ? SETTINGS_TEXT.blockedNone : "";
+    note.textContent = players.length === 0 ? kind.none : "";
   };
-  fetchBlocked().then(show, () => {
-    note.textContent = SETTINGS_TEXT.blockedLoadFailed;
+  kind.load().then(show, () => {
+    note.textContent = kind.loadFailed;
     note.classList.add("field__hint--error");
   });
   return section;
 };
 
-const blockedRow = (
+const playerRow = (
+  kind: PlayerList,
   player: BlockedPlayer,
   note: HTMLElement,
   list: HTMLElement,
@@ -782,19 +832,19 @@ const blockedRow = (
   const button = document.createElement("button");
   button.type = "button";
   button.className = "btn btn--ghost";
-  button.textContent = SETTINGS_TEXT.unblock;
+  button.textContent = kind.action;
   button.addEventListener("click", () => {
     button.disabled = true;
-    unblockPlayer(player.userid).then(
+    kind.undo(player.userid).then(
       () => {
         row.remove();
         const left = list.children.length;
         note.classList.remove("field__hint--error");
-        note.textContent = left === 0 ? SETTINGS_TEXT.blockedNone : "";
+        note.textContent = left === 0 ? kind.none : "";
       },
       () => {
         button.disabled = false;
-        note.textContent = SETTINGS_TEXT.unblockFailed;
+        note.textContent = kind.actionFailed;
         note.classList.add("field__hint--error");
       },
     );

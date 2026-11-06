@@ -153,6 +153,15 @@ describe("friendsApi reads", () => {
     expect(await friendsApi.blocked()).toEqual([{ userid: 9, username: "Grump" }]);
     expect(calls[1]?.url).toMatch(/\/player\/blocked$/);
   });
+
+  it("reads the chat mute list, unknown names as 'A player'", async () => {
+    stubFetch({ error: 0, muted: [{ userid: 4, username: "Loud" }, { userid: 5 }] });
+    expect(await friendsApi.muted()).toEqual([
+      { userid: 4, username: "Loud" },
+      { userid: 5, username: "A player" },
+    ]);
+    expect(calls[0]?.url).toMatch(/\/player\/muted$/);
+  });
 });
 
 describe("friendsApi writes", () => {
@@ -169,6 +178,7 @@ describe("friendsApi writes", () => {
     await friendsApi.remove(7);
     await friendsApi.block(9);
     await friendsApi.unblock(9);
+    await friendsApi.unmute(4);
 
     expect(calls.map((call) => [call.url.replace(/^.*\/api\/[^/]+/, ""), call.json])).toEqual([
       ["/bm/friends/request", { username: "Bob" }],
@@ -179,6 +189,7 @@ describe("friendsApi writes", () => {
       ["/bm/friends/remove", { userid: 7 }],
       ["/player/block", { userid: 9 }],
       ["/player/unblock", { userid: 9 }],
+      ["/player/unmute", { userid: 4 }],
     ]);
     expect(calls.every((call) => call.method === "POST" && call.contentType === "application/json")).toBe(true);
   });
