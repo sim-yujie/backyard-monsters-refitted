@@ -109,7 +109,7 @@ describe("GET bm/achievements/player/:userid", () => {
     const answer = await ask();
 
     expect(answer.status).toBe(200);
-    expect(answer.body).toMatchObject({ error: 0, userid: 3001, name: "Bot Bertie", earned: 3, total: 17 });
+    expect(answer.body).toMatchObject({ error: 0, userid: 3001, name: "Bot Bertie", earned: 3, total: 22 });
     const earned = (answer.body.achievements as Row[]).filter((view) => view.status === "earned");
     expect(earned).toEqual([
       { id: 1, name: "Moving Up", description: expect.any(String), status: "earned", at: NOW },
@@ -137,7 +137,11 @@ describe("GET bm/achievements/player/:userid", () => {
 
     for (const view of answer.body.achievements as Row[]) {
       expect(Object.keys(view).sort()).toEqual(
-        view.status === "earned" ? ["at", "description", "id", "name", "status"] : ["description", "id", "name", "status"]
+        view.status === "earned"
+          ? ["at", "description", "id", "name", "status"]
+          : view.hidden
+            ? ["description", "hidden", "id", "name", "status"]
+            : ["description", "id", "name", "status"]
       );
     }
     expect(answer.body).not.toHaveProperty("shinyEarned");

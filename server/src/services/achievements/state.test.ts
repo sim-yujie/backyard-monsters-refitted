@@ -18,7 +18,7 @@ describe("readAchievements", () => {
   });
 
   test("every stat is present, zero by default", () => {
-    expect(Object.keys(emptyStats())).toHaveLength(19);
+    expect(Object.keys(emptyStats())).toHaveLength(24);
     expect(Object.values(emptyStats()).every((value) => value === 0)).toBe(true);
   });
 
