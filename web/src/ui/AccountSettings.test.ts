@@ -57,6 +57,39 @@ afterEach(() => {
 });
 
 describe("AccountSettings", () => {
+  it("keeps the tab strip out of the scroll box, so only the tab content scrolls", async () => {
+    await open({});
+    const strip = document.querySelector<HTMLElement>(".account-settings__tabs")!;
+    const scroll = document.querySelector<HTMLElement>(".account-settings__scroll")!;
+    expect(strip.getAttribute("role")).toBe("tablist");
+    // The strip and the scroll box are siblings in the body: the strip is not inside it.
+    expect(strip.parentElement).toBe(scroll.parentElement);
+    expect(scroll.contains(strip)).toBe(false);
+    expect(strip.nextElementSibling).toBe(scroll);
+    // All three panes scroll inside it.
+    const panes = [...document.querySelectorAll<HTMLElement>("[role='tabpanel']")];
+    expect(panes).toHaveLength(3);
+    for (const pane of panes) expect(pane.parentElement).toBe(scroll);
+  });
+
+  it("switches tabs by click and arrow keys, and a new tab opens at its top", async () => {
+    await open({});
+    const scroll = document.querySelector<HTMLElement>(".account-settings__scroll")!;
+    const tab = (id: string) => document.querySelector<HTMLButtonElement>(`#account-settings-tab-${id}`)!;
+    const pane = (id: string) => document.querySelector<HTMLElement>(`#account-settings-pane-${id}`)!;
+    scroll.scrollTop = 120;
+    tab("social").click();
+    expect(scroll.scrollTop).toBe(0);
+    expect(pane("social").hidden).toBe(false);
+    expect(tab("social").getAttribute("aria-selected")).toBe("true");
+    tab("social").focus();
+    tab("social").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(pane("account").hidden).toBe(false);
+    expect(document.activeElement).toBe(tab("account"));
+    expect(tab("account").tabIndex).toBe(0);
+    expect(tab("social").tabIndex).toBe(-1);
+  });
+
   it("renames through the server and then locks the field for the cooldown", async () => {
     api.changeUsername.mockResolvedValue({ username: "NewName", nextChangeAt: "2027-04-01T00:00:00.000Z" });
     await open({});

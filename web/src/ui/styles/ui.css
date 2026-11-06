@@ -1953,15 +1953,36 @@ body {
   height: min(calc(100dvh - 32px), 640px);
 }
 
+/* Only the tab content scrolls (owner, 6 Nov 2026): the body holds the tab
+   strip and the scroll box, and the strip never scrolls out of sight. */
 .account-settings-popup > .panel__body {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   max-height: none;
-  overflow-x: hidden;
+  padding: 0;
+  overflow: hidden;
+}
+
+.account-settings-popup .account-settings {
+  flex: 1;
+  min-height: 0;
 }
 
 .account-settings__tabs {
+  flex: none;
   justify-content: center;
+  margin: var(--space-4) var(--space-4) 0;
+}
+
+.account-settings__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 var(--space-4) var(--space-4);
 }
 
 .account-settings__pane {

@@ -158,7 +158,11 @@ const SETTINGS_TABS = [
 
 type SettingsTab = (typeof SETTINGS_TABS)[number]["id"];
 
-/** The tab strip and its three panes, the Account tab showing; returns the panes. */
+/**
+ * The tab strip and its three panes, the Account tab showing; returns the
+ * panes. Only the panes scroll, in their own box under the strip, so the tabs
+ * never scroll out of sight (owner, 6 Nov 2026).
+ */
 const settingsTabs = (body: HTMLElement): Record<SettingsTab, HTMLElement> => {
   const strip = document.createElement("div");
   strip.className = "tabs account-settings__tabs";
@@ -166,8 +170,12 @@ const settingsTabs = (body: HTMLElement): Record<SettingsTab, HTMLElement> => {
   strip.setAttribute("aria-label", SETTINGS_TEXT.title);
   const tabs = new Map<SettingsTab, HTMLButtonElement>();
   const panes = {} as Record<SettingsTab, HTMLElement>;
+  const scroll = document.createElement("div");
+  scroll.className = "account-settings__scroll";
   let active: SettingsTab = "account";
   const show = (id: SettingsTab): void => {
+    // Another tab opens at its top.
+    if (id !== active) scroll.scrollTop = 0;
     active = id;
     for (const [tabId, tab] of tabs) {
       const on = tabId === id;
@@ -204,7 +212,8 @@ const settingsTabs = (body: HTMLElement): Record<SettingsTab, HTMLElement> => {
     tabs.get(next)?.focus();
     event.preventDefault();
   });
-  body.append(strip, panes.account, panes.look, panes.social);
+  scroll.append(panes.account, panes.look, panes.social);
+  body.append(strip, scroll);
   show(active);
   return panes;
 };
