@@ -1562,5 +1562,10 @@ export interface ShopBuyReport {
   /** Wall upgrades (`BLK2`..`BLK5`) only: the tier, how many Blocks it raised, the points they earned. */
   tier?: number;
   blocks?: number;
+  /** Wall upgrades and resource packs: the empire points earned. */
   points?: number;
+  /** Resource packs (`BR11`..`BR43I`, issue #393) only: which resource, how much landed, and whether into the Inferno purse. */
+  resource?: "r1" | "r2" | "r3" | "r4";
+  amount?: number;
+  inferno?: boolean;
 }

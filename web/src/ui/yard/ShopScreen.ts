@@ -13,11 +13,12 @@ import {
   type WallOffer,
 } from "@/game/yard/shop";
 import type { YardKind } from "@/game/yard/buildingCostData";
+import { PACK_LABELS, packGroups, type PackGroup, type PackOffer } from "@/game/yard/resourcePacks";
 import { actionKey, YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
-import { formatAmount, formatCountdown } from "@/ui/format";
+import { formatAmount, formatCompact, formatCountdown } from "@/ui/format";
 import { iconAmount } from "@/ui/gameIcon";
 import { Panel } from "@/ui/Panel";
-import { resourceAmount } from "@/ui/resourceIcon";
+import { resourceAmount, resourceIcon, resourceName, type ResourceRealm } from "@/ui/resourceIcon";
 import { ShinyButton } from "./ShinyButton";
 import "@/ui/styles/shop.css";
 
@@ -60,7 +61,28 @@ interface Card {
   readonly button: ShinyButton;
 }
 
+/** One resource's card under Resources; its offers' buttons live in `packButtons`. */
+interface PackCard {
+  readonly element: HTMLElement;
+  readonly meta: HTMLElement;
+  readonly gate: HTMLElement;
+}
+
 const FIX_KEY = "FIX";
+
+/** "r1", "r1I": a pack card's key, one per resource and realm. */
+const packCardKey = (group: PackGroup): string => `${group.resource}${group.inferno ? "I" : ""}`;
+
+const realmOf = (group: PackGroup): ResourceRealm => (group.inferno ? "inferno" : "surface");
+
+/** What a pack card says under its heading: held / storage. */
+export const packMeta = (group: PackGroup): string => `${formatAmount(group.held)} / ${formatAmount(group.cap)}`;
+
+/** The one line under a pack card when none of its offers can be bought, else null. */
+export const packGate = (group: PackGroup): string | null => {
+  if (group.offers.some((offer) => offer.blocked === null)) return null;
+  return group.offers.find((offer) => offer.amount > 0)?.blocked ?? group.offers[0]?.blocked ?? null;
+};
 
 /** "7 days", "12 hours", "1 hour". */
 export const durationText = (seconds: number): string => {
@@ -146,6 +168,9 @@ export class ShopScreen {
   private readonly status: HTMLElement;
   private readonly list: HTMLElement;
   private readonly cards = new Map<string, Card>();
+  /** Resources: one card per resource, and one button per offer keyed by its item (`BR21`). */
+  private readonly packCards = new Map<string, PackCard>();
+  private readonly packButtons = new Map<string, ShinyButton>();
   /** The "Coming later" section never changes, so it is drawn once. */
   private comingLater: HTMLElement | null = null;
   private readonly unsubscribe: () => void;
@@ -218,6 +243,7 @@ export class ShopScreen {
     this.element.hidden = true;
     this.setStatus(null);
     for (const card of this.cards.values()) card.button.setBusy(false);
+    for (const button of this.packButtons.values()) button.setBusy(false);
     this.onClose?.();
   }
 
@@ -237,6 +263,9 @@ export class ShopScreen {
     this.unsubscribe();
     for (const card of this.cards.values()) card.button.destroy();
     this.cards.clear();
+    for (const button of this.packButtons.values()) button.destroy();
+    this.packButtons.clear();
+    this.packCards.clear();
     this.element.remove();
   }
 
@@ -278,7 +307,12 @@ export class ShopScreen {
       if (section === ShopSection.BUILDING) {
         const note = store.kind === "inferno" ? INFERNO_WALLS_NOTE : WALLS_NOTE;
         sections.push(this.section("walls", "Walls", model.walls.map((offer) => this.wallCard(offer)), note));
+        sections.push(...this.resourcesSection());
       }
+    }
+    // An outpost's list may have no Building section; Resources still shows.
+    if (!sections.some((one) => one.dataset["section"] === "resources")) {
+      sections.splice(Math.min(1, sections.length), 0, ...this.resourcesSection());
     }
     if (model.repair) sections.push(this.section("repairs", "Repairs", [this.repairCard(model.repair)]));
     // Flash's Inferno store never listed the Shiny decorations.
@@ -293,6 +327,12 @@ export class ShopScreen {
     }
     this.list.replaceChildren(...sections);
     this.syncPending();
+  }
+
+  /** Flash's Resources tab (`STORE.as:198-330`, issue #393): three offers per resource, or nothing. */
+  private resourcesSection(): HTMLElement[] {
+    const groups = packGroups(this.binding.store);
+    return groups.length > 0 ? [this.section("resources", "Resources", groups.map((group) => this.packCard(group)))] : [];
   }
 
   private section(
@@ -434,12 +474,71 @@ export class ShopScreen {
     // The player has already moved on.
     const active = document.activeElement;
     if (active && active !== document.body) return;
-    const button = this.cards.get(key)?.button.element;
+    const button = (this.cards.get(key)?.button ?? this.packButtons.get(key))?.element;
     const target =
       button && button.isConnected && !button.hidden && !button.disabled
         ? button
         : this.element.querySelector<HTMLElement>(".shop-screen__close");
     target?.focus();
+  }
+
+  /**
+   * One resource's card: its icon and name, held / storage, and the three
+   * offers (+10%, +50%, Fill) as Shiny buttons, each with the amount it
+   * brings under its label. Made once per resource and reused.
+   */
+  private packCard(group: PackGroup): HTMLElement {
+    const key = packCardKey(group);
+    const realm = realmOf(group);
+    let card = this.packCards.get(key);
+    if (!card) {
+      const element = document.createElement("article");
+      element.className = "shop-card shop-card--pack";
+      element.dataset["pack"] = key;
+      const title = document.createElement("h4");
+      title.className = "shop-card__name shop-card__name--pack";
+      title.append(resourceIcon(group.resource, { decorative: true, realm }), resourceName(group.resource, realm));
+      const meta = document.createElement("p");
+      meta.className = "shop-card__meta";
+      const packs = document.createElement("div");
+      packs.className = "shop-card__packs";
+      for (const offer of group.offers) packs.append(this.packButton(group, offer).element);
+      const gate = document.createElement("p");
+      gate.className = "shop-card__gate";
+      gate.hidden = true;
+      element.append(title, meta, packs, gate);
+      card = { element, meta, gate };
+      this.packCards.set(key, card);
+    }
+    card.meta.textContent = packMeta(group);
+    card.meta.title = `${resourceName(group.resource, realm)}: ${formatAmount(group.held)} of ${formatAmount(group.cap)}`;
+    for (const offer of group.offers) {
+      const button = this.packButton(group, offer);
+      button.setPrice(offer.price);
+      button.setNote(offer.amount > 0 ? [`+${formatCompact(offer.amount)}`] : null);
+      button.setBlocked(offer.blocked);
+    }
+    const reason = packGate(group);
+    card.gate.textContent = reason ?? "";
+    card.gate.hidden = reason === null;
+    card.element.dataset["state"] = reason === null ? "buy" : "blocked";
+    return card.element;
+  }
+
+  private packButton(group: PackGroup, offer: PackOffer): ShinyButton {
+    const existing = this.packButtons.get(offer.item);
+    if (existing) return existing;
+    const name = resourceName(group.resource, realmOf(group));
+    const button = new ShinyButton({
+      label: PACK_LABELS[offer.size],
+      what: name,
+      spell: formatAmount,
+      onSpend: () => void this.buyPack(offer.item),
+      className: "shop-card__pack",
+    });
+    button.element.dataset["item"] = offer.item;
+    this.packButtons.set(offer.item, button);
+    return button;
   }
 
   private repairCard(offer: RepairAllOffer): HTMLElement {
@@ -510,6 +609,7 @@ export class ShopScreen {
     for (const [key, card] of this.cards) {
       card.button.setBusy(store.isRunning(key === FIX_KEY ? RepairKey.NOW : actionKey("buy", key)));
     }
+    for (const [item, button] of this.packButtons) button.setBusy(store.isRunning(actionKey("buy", item)));
   }
 
   /* ── Actions ────────────────────────────────────────────────────────── */
@@ -522,6 +622,34 @@ export class ShopScreen {
       const what =
         blocks === undefined ? `${name} bought: ` : `${name}: ${formatAmount(blocks)} ${blocks === 1 ? "Block" : "Blocks"} raised, `;
       this.setStatus("good", [what, resourceAmount("shiny", result.report.credits), " spent."]);
+    } else {
+      this.setStatus("bad", [refusalText(result.refusal)]);
+    }
+    if (this.opened) this.render();
+    this.restoreFocus(item);
+  }
+
+  /**
+   * Buys one offer at the price the player saw: the server refuses
+   * (`priceChanged`) rather than charge more, and funds the amount it works
+   * out itself.
+   */
+  private async buyPack(item: string): Promise<void> {
+    const store = this.binding.store;
+    const offer = packGroups(store)
+      .flatMap((group) => group.offers)
+      .find((one) => one.item === item);
+    if (!offer) return;
+    const result = await store.buy(item, offer.price);
+    if (this.destroyed) return;
+    if (result.ok) {
+      const { resource, amount, inferno, credits } = result.report;
+      const realm: ResourceRealm = inferno || store.kind === "inferno" ? "inferno" : "surface";
+      this.setStatus("good", [
+        resource && amount !== undefined ? resourceAmount(resource, amount, { realm, change: "gain" }) : "Bought",
+        " for ",
+        resourceAmount("shiny", credits),
+      ]);
     } else {
       this.setStatus("bad", [refusalText(result.refusal)]);
     }

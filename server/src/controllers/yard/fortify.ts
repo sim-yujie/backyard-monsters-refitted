@@ -1,5 +1,6 @@
 import { YardCancelFortifySchema, YardFortifySchema } from "../../schemas/YardSchemas.js";
 import { planCancelFortify, planFortify } from "../../services/yard/fortify.js";
+import { withTopUp } from "../../services/yard/topUp.js";
 import { defineYardAction } from "./yardAction.js";
 
 /**
@@ -15,7 +16,8 @@ import { defineYardAction } from "./yardAction.js";
  */
 export const yardFortifyAction = defineYardAction({
   schema: YardFortifySchema,
-  run: ({ save, body, now }) => planFortify(save, body.id, now),
+  // A short pool topped up with Shiny, Flash's `TopoffFortify` (`services/yard/topUp.ts`, issue #393).
+  run: ({ save, body, now }) => withTopUp(save, body.topUp, (seen) => planFortify(seen, body.id, now)),
   outposts: "allow",
   inferno: "allow",
 });

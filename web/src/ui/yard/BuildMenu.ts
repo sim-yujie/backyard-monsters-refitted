@@ -15,6 +15,7 @@ import {
   type BuildNeed,
   type BuildOffer,
 } from "@/game/yard/buildCatalogue";
+import { topUpPrice } from "@/game/yard/resourcePacks";
 import type { SpotCheck } from "@/game/yard/BuildPlacement";
 import { DECOR_KINDS, DecorKind } from "@/game/yard/decorShop";
 import { townHallLevel, type YardKind } from "@/game/yard/buildingCosts";
@@ -67,8 +68,12 @@ import "@/ui/styles/build-menu.css";
 export interface BuildMenuOptions {
   /** The own yard. The window exists only there. */
   readonly binding: YardUiBinding;
-  /** Build was pressed: carry this type, finished for Shiny when `instant`. */
-  readonly onPick: (type: number, instant: boolean) => void;
+  /**
+   * Build was pressed: carry this type, finished for Shiny when `instant`;
+   * with `topUp`, the Shiny price the player agreed to for the resources it
+   * is short (Flash's `BRTOPUP`, issue #393).
+   */
+  readonly onPick: (type: number, instant: boolean, topUp?: number) => void;
   /** "Upgrade Town Hall": show the Town Hall. Left out, the link is not drawn. */
   readonly onTownHall?: () => void;
   /** After the player closes it. */
@@ -194,6 +199,8 @@ export class BuildMenu {
   private readonly unsubscribe: () => void;
   /** One Build instantly button per type, kept across redraws so an armed one survives them. */
   private readonly shiny = new Map<number, ShinyButton>();
+  /** One Top up button per type, kept across redraws like Build instantly. */
+  private readonly topUps = new Map<number, ShinyButton>();
 
   private active: BuildCategory = BuildCategory.RESOURCES;
   private page = 0;
@@ -384,6 +391,8 @@ export class BuildMenu {
     this.disarm();
     for (const button of this.shiny.values()) button.destroy();
     this.shiny.clear();
+    for (const button of this.topUps.values()) button.destroy();
+    this.topUps.clear();
     this.element.remove();
   }
 
@@ -471,6 +480,11 @@ export class BuildMenu {
       if (!button.armed) continue;
       button.destroy();
       this.shiny.delete(type);
+    }
+    for (const [type, button] of this.topUps) {
+      if (!button.armed) continue;
+      button.destroy();
+      this.topUps.delete(type);
     }
   }
 
@@ -763,13 +777,25 @@ export class BuildMenu {
     build.addEventListener("click", () => this.onPick(offer.type, false));
     actions.append(build);
 
+    // Short of resources that fit in storage: buy what is missing and build
+    // (Flash's top-up, issue #393). Tap, then tap again, then pick a spot.
+    const store = this.binding.store;
+    const guidePaid = guidePays(offer.type, store.save.onboarding, store.kind);
+    if (!guidePaid && gate?.reason === "shortfall" && !gate.overCap) {
+      const price = topUpPrice(gate.shortfall);
+      if (price > 0) {
+        const topUp = this.topUpButton(offer.type);
+        topUp.setPrice(price);
+        topUp.setBlocked(price > store.credits ? "Not enough Shiny." : null);
+        actions.append(topUp.element);
+      }
+    }
+
     // Build instantly is offered once the hall and prerequisites allow the
     // building; what it lacks after that is Shiny, which the button itself says.
     // Not while the guided start pays for this one ("This one's on me: tap
     // Build"): there is nothing to spend Shiny on, and Bob's cover over the
     // panel swallowed the tap, so the button did nothing.
-    const store = this.binding.store;
-    const guidePaid = guidePays(offer.type, store.save.onboarding, store.kind);
     if (!guidePaid && (!offer.instantGate || offer.instantGate.reason === "credits")) {
       const instant = this.instantButton(offer.type);
       instant.setPrice(offer.instantPrice);
@@ -870,6 +896,26 @@ export class BuildMenu {
       });
       button.element.dataset["focus"] = "build";
       this.shiny.set(key, button);
+    }
+    return button;
+  }
+
+  private topUpButton(type: number): ShinyButton {
+    let button = this.topUps.get(type);
+    if (!button) {
+      button = new ShinyButton({
+        label: "Top up",
+        spell: formatAmount,
+        className: "btn--primary build-info__topup",
+        onSpend: () => {
+          // The price now, not as the panel was drawn: income may have lowered it.
+          const gate = buildOffer(type, this.binding.store)?.gate;
+          if (gate?.reason === "shortfall" && !gate.overCap) this.onPick(type, false, topUpPrice(gate.shortfall));
+          else if (gate === null) this.onPick(type, false);
+        },
+      });
+      button.element.dataset["focus"] = "topup";
+      this.topUps.set(type, button);
     }
     return button;
   }

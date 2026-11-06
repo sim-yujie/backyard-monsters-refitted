@@ -221,11 +221,13 @@ export interface YardStoreReader {
 
 /** The action side, for the panel and the Monsters screen. */
 export interface YardStoreActions {
-  upgrade(id: number): Promise<YardActionResult<UpgradeStartReport>>;
+  /** `topUp`: pay a shortfall with this much Shiny (Flash's `BRTOPUP`). */
+  upgrade(id: number, topUp?: number): Promise<YardActionResult<UpgradeStartReport>>;
   cancelUpgrade(id: number): Promise<YardActionResult<UpgradeCancelReport>>;
   instantUpgrade(id: number): Promise<YardActionResult<UpgradeInstantReport>>;
   speedUp(id: number, item: SpeedupItem): Promise<YardActionResult<SpeedupReport>>;
-  buy(item: string): Promise<YardActionResult<ShopBuyReport>>;
+  /** `price`: for a resource pack, the Shiny the player agreed to; never charged more. */
+  buy(item: string, price?: number): Promise<YardActionResult<ShopBuyReport>>;
   run<Report>(action: YardStoreAction<Report>): Promise<YardActionResult<Report>>;
   refresh(): Promise<YardActionResult<null>>;
 }
@@ -654,11 +656,15 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     return promise;
   }
 
-  upgrade(id: number): Promise<YardActionResult<UpgradeStartReport>> {
+  upgrade(id: number, topUp?: number): Promise<YardActionResult<UpgradeStartReport>> {
     return this.run({
       key: actionKey("upgrade", id),
-      check: (store) => upgradeRefusal(store, id),
-      send: (api, ...yard) => api.upgrade(id, ...yard),
+      check: (store) => {
+        const refusal = upgradeRefusal(store, id);
+        // A topped-up upgrade pays its shortfall in Shiny: the server prices and checks it.
+        return topUp !== undefined && refusal?.reason === "shortfall" ? null : refusal;
+      },
+      send: (api, ...yard) => (topUp === undefined ? api.upgrade(id, ...yard) : api.upgrade(id, yard[0], { topUp })),
     });
   }
 
@@ -704,10 +710,10 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     });
   }
 
-  buy(item: string): Promise<YardActionResult<ShopBuyReport>> {
+  buy(item: string, price?: number): Promise<YardActionResult<ShopBuyReport>> {
     return this.run({
       key: actionKey("buy", item),
-      send: (api, ...yard) => api.shopBuy(item, ...yard),
+      send: (api, ...yard) => (price === undefined ? api.shopBuy(item, ...yard) : api.shopBuy(item, yard[0], { price })),
     });
   }
 

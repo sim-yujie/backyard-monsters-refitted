@@ -6,6 +6,7 @@ import { devDetails } from "@/app/devDetails";
 import type { YardRefusal } from "@/api/yard";
 import { buildActions } from "@/api/yardBuild";
 import { fortifyActions, FortifyKey } from "@/api/yardFortify";
+import { topUpPrice } from "@/game/yard/resourcePacks";
 import { recycleAction, recycleKey, type RecycleReport } from "@/api/yardRecycle";
 import { repairActions } from "@/api/yardRepair";
 import type { BaiterRun } from "@/game/baiter/baiterSession";
@@ -265,6 +266,8 @@ export class BuildingPanel {
   private readonly shiny = new Map<string, ShinyButton>();
   /** Buttons whose request key disables them while it runs. */
   private pendingButtons: { key: string; button: HTMLButtonElement | ShinyButton }[] = [];
+  /** Each Top up button's price as last drawn, by its key: what the second tap sends. */
+  private readonly topUpPrices = new Map<string, number>();
   /** The building whose Cancel confirmation is open. */
   private confirmingCancel: number | null = null;
   /** The building whose Recycle confirmation is open. */
@@ -815,7 +818,7 @@ export class BuildingPanel {
       if (repair) blocks.push(this.repairBlock(building, repair, used));
       if (model.job) blocks.push(this.jobBlock(building, model.job, used));
       if (model.upgrade) blocks.push(this.upgradeBlock(building, model.upgrade, used, yard.store.resources));
-      if (model.fortify) blocks.push(this.fortifyBlock(building, model.fortify, yard.store.resources));
+      if (model.fortify) blocks.push(this.fortifyBlock(building, model.fortify, used, yard.store.resources));
       const housing = this.isHousing(building);
       // A one-level building (Yard Planner, General Store) has no ladder to
       // top out; a Housing says "max" in its chip.
@@ -1082,6 +1085,13 @@ export class BuildingPanel {
     if (offer.gate) upgrade.setAttribute("aria-describedby", this.gateId(building));
     row.append(upgrade);
     this.pendingButtons.push({ key: actionKey("upgrade", building.id), button: upgrade });
+    const topUp = this.topUpButton(`${building.id}:topup`, offer.gate, used, (price) =>
+      void this.runUpgrade(building.id, price),
+    );
+    if (topUp) {
+      row.append(topUp.element);
+      this.pendingButtons.push({ key: actionKey("upgrade", building.id), button: topUp });
+    }
 
     // The Map Room is never bought with Shiny (D16): Upgrade alone.
     if (offer.instant) {
@@ -1109,7 +1119,12 @@ export class BuildingPanel {
    * (`msg_inactivefortify`, `BFOUNDATION.as:2207-2210`). Fully fortified
    * says so (`bdg_fullyfortified`).
    */
-  private fortifyBlock(building: YardBuilding, offer: FortifyOffer, resources: Resources): HTMLElement {
+  private fortifyBlock(
+    building: YardBuilding,
+    offer: FortifyOffer,
+    used: Set<string>,
+    resources: Resources,
+  ): HTMLElement {
     if (offer.maxed) return note(`Fully fortified: F${offer.max} of ${offer.max}.`);
 
     const block = document.createElement("section");
@@ -1147,6 +1162,13 @@ export class BuildingPanel {
     if (offer.gate) fortify.setAttribute("aria-describedby", gateId);
     row.append(fortify);
     this.pendingButtons.push({ key: FortifyKey.start(building.id), button: fortify });
+    const topUp = this.topUpButton(`${building.id}:fortify-topup`, offer.gate, used, (price) =>
+      void this.runFortify(building.id, price),
+    );
+    if (topUp) {
+      row.append(topUp.element);
+      this.pendingButtons.push({ key: FortifyKey.start(building.id), button: topUp });
+    }
     block.append(row);
     return block;
   }
@@ -1419,6 +1441,35 @@ export class BuildingPanel {
     refs.bar.classList.toggle("building-job__bar--paused", job.paused);
   }
 
+  /**
+   * Flash's top-up (`BRTOPUP`, `BUILDINGOPTIONSPOPUP.as:642-760`, issue
+   * #393): when the only thing short is resources that fit in storage, buy
+   * the shortfall with Shiny and start the job, tap then tap again. The price
+   * on the button is sent along; the server works out its own and refuses
+   * rather than charge another.
+   */
+  private topUpButton(
+    key: string,
+    gate: { readonly reason: string } | null,
+    used: Set<string>,
+    start: (price: number) => void,
+  ): ShinyButton | null {
+    if (!isTopUpGate(gate)) return null;
+    const price = topUpPrice(gate.shortfall);
+    if (price <= 0) return null;
+    used.add(key);
+    const button = this.shinyButton(key, "Top up", () => {
+      // The price at the second tap, which a tick of income may have lowered.
+      const current = this.topUpPrices.get(key);
+      if (current !== undefined) start(current);
+    });
+    this.topUpPrices.set(key, price);
+    button.setPrice(price);
+    const credits = this.yard?.store.credits ?? 0;
+    button.setBlocked(price > credits ? "Not enough Shiny." : null);
+    return button;
+  }
+
   private shinyButton(key: string, label: string, onSpend: () => void): ShinyButton {
     let button = this.shiny.get(key);
     if (!button) {
@@ -1457,10 +1508,10 @@ export class BuildingPanel {
 
   /* ── Actions ────────────────────────────────────────────────────────── */
 
-  private async runUpgrade(id: number): Promise<void> {
+  private async runUpgrade(id: number, topUp?: number): Promise<void> {
     const store = this.yard?.store;
     if (!store) return;
-    const result = await store.upgrade(id);
+    const result = await store.upgrade(id, topUp);
     this.report(id, result, (report) => [`Upgrade to ${report.to} started.`]);
   }
 
@@ -1495,10 +1546,10 @@ export class BuildingPanel {
     );
   }
 
-  private async runFortify(id: number): Promise<void> {
+  private async runFortify(id: number, topUp?: number): Promise<void> {
     const store = this.yard?.store;
     if (!store) return;
-    const result = await fortifyActions(store).start(id);
+    const result = await fortifyActions(store).start(id, topUp);
     this.report(id, result, (report) => [`Fortifying to F${report.to}.`]);
   }
 
@@ -2109,3 +2160,9 @@ const refusalText = (refusal: YardRefusal): string =>
   refusal.reason === "network"
     ? "Could not reach the server. Try again."
     : refusal.message || "That did not work.";
+
+/** A gate a top-up clears: resources short, none of them over its storage cap. */
+const isTopUpGate = (
+  gate: { readonly reason: string } | null,
+): gate is { readonly reason: "shortfall"; readonly shortfall: Partial<Record<"r1" | "r2" | "r3" | "r4", number>>; readonly overCap: boolean } =>
+  gate !== null && gate.reason === "shortfall" && !(gate as { overCap?: boolean }).overCap;

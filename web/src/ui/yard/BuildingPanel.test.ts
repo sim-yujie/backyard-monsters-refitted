@@ -4,6 +4,8 @@ import type { BaseLoadResponse, BuildingData, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
 import { setDevDetails } from "@/app/devDetails";
 import { YardStore, type YardUiBinding } from "@/game/yard/YardStore";
+import { topUpPrice } from "@/game/yard/resourcePacks";
+import { panelModel } from "./buildingActions";
 import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
 import { BuildingPanel, recycledMessage, unusedText, type BuildingPanelOptions } from "./BuildingPanel";
@@ -189,6 +191,34 @@ describe("BuildingPanel: a tower at rest", () => {
     expect(buttonNamed(element, "Upgrade")?.disabled).toBe(true);
     const gate = element.querySelector(".building-panel__gate")!;
     expect(spokenText(gate)).toMatch(/^Need Twigs [\d.,K]+ more\.$/);
+  });
+
+  it("a shortfall that fits in storage offers Top up: tap twice to buy it and start (issue #393)", () => {
+    const { element, api, store } = setup([HALL, building(2, 20, 4)], 2, {
+      load: { resources: { r1: 1_000_000, r2: 1e8, r3: 1e8, r4: 1e8 } },
+    });
+    const gate = panelModel(store.building(2)!, store).upgrade?.gate;
+    if (gate?.reason !== "shortfall") throw new Error("expected a shortfall");
+    const price = topUpPrice(gate.shortfall);
+    const topUp = buttonNamed(element, "Top up")!;
+    expect(topUp.disabled).toBe(false);
+    expect(spokenText(topUp.querySelector(".shiny-button__price")!)).toContain(String(price));
+    topUp.click();
+    expect(api.upgrade).not.toHaveBeenCalled();
+    topUp.click();
+    expect(api.upgrade).toHaveBeenCalledWith(2, undefined, { topUp: price });
+  });
+
+  it("offers no Top up when a cost is over the storage cap, or with too little Shiny to pay it", () => {
+    const over = setup([HALL, building(2, 20, 4)], 2, {
+      load: { resources: { r1: 0, r2: 1e8, r3: 1e8, r4: 1e8 }, caps: { r1: 10, r2: 5e8, r3: 5e8, r4: 5e8 } },
+    }).element;
+    expect(buttonNamed(over, "Top up")).toBeUndefined();
+    document.body.replaceChildren();
+    const poor = setup([HALL, building(2, 20, 4)], 2, {
+      load: { resources: { r1: 0, r2: 1e8, r3: 1e8, r4: 1e8 }, credits: 0 },
+    }).element;
+    expect(buttonNamed(poor, "Top up")?.disabled).toBe(true);
   });
 
   it("a Town Hall gate reads as one sentence", () => {
