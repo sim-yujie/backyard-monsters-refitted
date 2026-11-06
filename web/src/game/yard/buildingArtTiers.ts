@@ -737,6 +737,29 @@ export const PAINTED_BUILDING_ART: Readonly<Record<number, readonly TierArt[]>> 
   ],
 };
 
+/**
+ * The Inferno's own painted buildings, drawn in an Inferno yard from the Inferno's folders: its Under Hall (14, the
+ * centre building of every Inferno yard, `buildings/itownhall/`; owner on the Review Desk, 6 Nov 2026: "Underhall can
+ * be repainted"), painted by Codex from Flash's three looks (levels 1, 2 and 3 to 6) in the finish of the painted
+ * Town Hall and Monster Locker, and fitted onto Flash's footprint by `web/tools/underhall-repaint/` (`finish.py`, then
+ * `export.py`), on Flash's own shadows. Each look has its own damaged and destroyed picture, as Flash's has; like
+ * Flash's, it stands still. The main yard's Town Hall (also type 14) keeps `TOWN_HALL_ART`.
+ */
+export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly TierArt[]>> = {
+  // 14 Under Hall: painted, Flash's three looks, each damaged and destroyed in paint too
+  14: [
+    { from: 1, top: ["top.c1@2x.webp", -52, -30], shadow: ["shadow.1.v2.jpg", -65, 49], lift: 0,
+      damaged: { top: ["top.c1.damaged@2x.webp", -57, -38], shadow: ["shadow.1.damaged.v2.jpg", -65, 47] },
+      destroyed: { top: ["top.c1.destroyed@2x.webp", -66, 10], shadow: ["shadow.1.destroyed.v2.jpg", -68, 43] } },
+    { from: 2, top: ["top.c2@2x.webp", -51, -58], shadow: ["shadow.2.v2.jpg", -70, 35], lift: 0,
+      damaged: { top: ["top.c2.damaged@2x.webp", -50, -47], shadow: ["shadow.2.damaged.v2.jpg", -59, 44] },
+      destroyed: { top: ["top.c2.destroyed@2x.webp", -53, 1], shadow: ["shadow.2.destroyed.v2.jpg", -76, 33] } },
+    { from: 3, top: ["top.c3@2x.webp", -51, -54], shadow: ["shadow.3.v2.jpg", -74, 35], lift: 0,
+      damaged: { top: ["top.c3.damaged@2x.webp", -56, -65], shadow: ["shadow.3.damaged.v2.jpg", -73, 33] },
+      destroyed: { top: ["top.c3.destroyed@2x.webp", -61, -21], shadow: ["shadow.3.destroyed.v2.jpg", -75, 29] } },
+  ],
+};
+
 /** Every type with new art the old-art switch turns back: the towers, the Town Hall (14), the 3D and painted buildings. */
 const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = {
   ...TOWER_TIER_ART,
@@ -747,23 +770,26 @@ const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = {
 
 /**
  * Whether an Inferno yard's `type` has tiers of its own (`INFERNO_TOWER_TIER_ART`,
- * `INFERNO_BUILDING_3D_ART`).
+ * `INFERNO_BUILDING_3D_ART`, `INFERNO_PAINTED_BUILDING_ART`).
  */
 export const hasInfernoTiers = (type: number, kind: YardKind): boolean =>
-  kind === "inferno" && (type in INFERNO_TOWER_TIER_ART || type in INFERNO_BUILDING_3D_ART);
+  kind === "inferno" &&
+  (type in INFERNO_TOWER_TIER_ART || type in INFERNO_BUILDING_3D_ART || type in INFERNO_PAINTED_BUILDING_ART);
 
 /**
  * The new picture a building shows at `level` in a `kind` yard, or null with
  * the Classic look, for a tower not in `MODERN_TOWERS`, below level 1, for
  * every type without new art and for a 3D or painted building in an Inferno
- * yard with no Inferno 3D look of its own (it keeps its Inferno art until one
- * is approved).
+ * yard with no Inferno 3D or painted look of its own (it keeps its Inferno art
+ * until one is approved).
  */
 export const tierArtFor = (type: number, level: number, kind: YardKind = "main"): TierArt | null => {
   if (!newTowerArt()) return null;
   let looks: readonly TierArt[] | undefined;
   if (kind === "inferno" && type in INFERNO_BUILDING_3D_ART) {
     looks = INFERNO_BUILDING_3D_ART[type];
+  } else if (kind === "inferno" && type in INFERNO_PAINTED_BUILDING_ART) {
+    looks = INFERNO_PAINTED_BUILDING_ART[type];
   } else if (kind === "inferno" && (type in BUILDING_3D_ART || type in PAINTED_BUILDING_ART)) {
     return null;
   } else {
