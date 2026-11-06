@@ -3,15 +3,16 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { achievementBadge, badgeArtUrl } from "./badge";
+import { PAINTED, achievementBadge, badgeArtUrl } from "./badge";
 
-/** The badge: the painted medal for the seventeen shown, the CSS medal otherwise or when the picture fails (#298). */
+/** The badge: the painted medal for every achievement, the CSS medal otherwise or when the picture fails (#298). */
 
-const SHOWN = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 22];
+const ALL = Array.from({ length: 27 }, (_, i) => i + 1);
+const PUBLIC = resolve(dirname(fileURLToPath(import.meta.url)), "../../../public");
 
 describe("achievementBadge", () => {
-  it("shows the painted medal for each of the seventeen shown achievements", () => {
-    for (const id of SHOWN) {
+  it("shows the painted medal for each of the 27 achievements, hidden ones included", () => {
+    for (const id of ALL) {
       const badge = achievementBadge(id, "silver", true);
       const art = badge.querySelector<HTMLImageElement>("img.ach-badge__art");
       expect(art?.getAttribute("src")).toBe(badgeArtUrl(id));
@@ -37,8 +38,16 @@ describe("achievementBadge", () => {
     expect(badge.classList.contains("ach-badge--silver")).toBe(true);
   });
 
+  it("has a WebP picture file for every painted badge", () => {
+    for (const id of PAINTED) {
+      const file = readFileSync(resolve(PUBLIC, `achievements/badge-${id}.webp`));
+      expect(file.subarray(0, 4).toString("latin1")).toBe("RIFF");
+      expect(file.subarray(8, 12).toString("latin1")).toBe("WEBP");
+    }
+  });
+
   it("draws the CSS medal for an achievement without a picture", () => {
-    const badge = achievementBadge(14, "silver", true);
+    const badge = achievementBadge(99, "silver", true);
     expect(badge.querySelector("img")).toBeNull();
     expect(badge.querySelector(".ach-badge__cup")).not.toBeNull();
   });
