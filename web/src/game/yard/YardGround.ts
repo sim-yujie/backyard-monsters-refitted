@@ -237,6 +237,10 @@ export class YardGround {
     // The season or the terrain changed while these were in flight: the newer
     // load lays its own.
     if (season !== this.season || terrain !== this.terrain || this.tiles) return this.tiles !== null;
+    // The yard was left (e.g. for the map) while these were in flight: there
+    // is nothing to lay them on ("The supplied Container must be a child of
+    // the caller", 5 players, 3-6 Nov 2026).
+    if (this.root.destroyed || this.clip.destroyed || this.clip.parent !== this.root) return false;
 
     const composite = this.bakeComposite(textures);
     if (!composite) return false;

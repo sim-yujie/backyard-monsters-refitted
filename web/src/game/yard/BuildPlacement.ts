@@ -1,5 +1,6 @@
-import { AlphaFilter, Assets, Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
+import { AlphaFilter, Assets, Container, Graphics, Sprite, type Texture } from "pixi.js";
 import type { Camera } from "@/game/Camera";
+import { cellTexture } from "@/game/textureLimit";
 import { versionedArt } from "./retryLoad";
 import { ArtState, resolveArt, restingLayers, type ResolvedImage } from "./buildingArt";
 import type { YardKind } from "./buildingCostData";
@@ -365,13 +366,9 @@ export class BuildPlacement {
         const texture = textures[index];
         if (!texture) return;
         const frame = layer.frame;
+        // A strip bigger than the graphics card holds is cut (`cellTexture`), not drawn black.
         const sprite = new Sprite(
-          frame
-            ? new Texture({
-                source: texture.source,
-                frame: new Rectangle(0, 0, frame.width, frame.height),
-              })
-            : texture,
+          frame ? cellTexture(texture.source, { x: 0, y: 0, width: frame.width, height: frame.height }).texture : texture,
         );
         sprite.position.set(layer.x, layer.y);
         this.art.addChild(sprite);

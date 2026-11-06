@@ -3,6 +3,7 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 import type { ClientErrorsBody } from "../../schemas/ClientErrorSchemas.js";
 import type { ErrorReporter } from "../../utils/errorCapture.js";
 import { noteErrors } from "../stats/activity.js";
+import { isBrowserNoise } from "./errorNoise.js";
 import { cleanMessage, cleanPlace, cleanStack, errorFingerprint } from "./errorText.js";
 import { recordErrors, type ErrorEntry } from "./errorStore.js";
 
@@ -25,6 +26,8 @@ export const acceptClientErrors = async (
   for (const item of body.errors) {
     const message = cleanMessage(item.kind === "rejection" ? `Unhandled rejection: ${item.message}` : item.message);
     const place = cleanPlace(item.place);
+    // Browser add-ons and the player's own browser settings, not the game.
+    if (isBrowserNoise(message, place, item.stack)) continue;
     const fingerprint = errorFingerprint("browser", message, place);
     occurrences += item.count;
     const known = byKind.get(fingerprint);

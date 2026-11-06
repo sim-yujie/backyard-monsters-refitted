@@ -1760,6 +1760,47 @@ body {
   flex: none;
 }
 
+/* "Graphics are off" (ui/GraphicsOffNotice.ts): the browser will not let the
+   game draw, so this is plain HTML in the game's window over the dark page.
+   Above everything; nothing else is on screen. */
+.graphics-off {
+  position: fixed;
+  z-index: var(--z-system);
+}
+
+.graphics-off__panel {
+  width: min(92vw, 440px);
+}
+
+.graphics-off__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: 80vh;
+  line-height: var(--leading-normal);
+}
+
+.graphics-off__text {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--colour-text-strong);
+}
+
+.graphics-off__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding-inline-start: 1.4em;
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+.graphics-off__retry {
+  align-self: center;
+  min-width: 8em;
+}
+
 /* The in-game check (#273): in the "Stay protected?" card's place, and like it
    nothing behind is dimmed or blocked. Danger-edged: the yard can be attacked.
    Its own block name: `.bot-check` is the sign-up form's Turnstile widget. */
