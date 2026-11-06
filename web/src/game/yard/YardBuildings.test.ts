@@ -9,7 +9,7 @@ import { HIGHLIGHT_MATRIX, YardBuildings } from "./YardBuildings";
 import { readWork } from "./buildingWork";
 import { rowOf } from "./buildingCosts";
 import { artFor, readYard } from "./yardModel";
-import { RETRY_DELAYS_MS } from "./retryLoad";
+import { RETRY_DELAYS_MS, versionedArt } from "./retryLoad";
 
 /**
  * The frame setter a battle turns a tower's gun with (issue #67), and the
@@ -357,7 +357,7 @@ describe("YardBuildings: loading the pictures", () => {
       const buildings = new YardBuildings();
       buildings.show(walledYard(), fakeAtlas());
       // Asked for on `show`, not on the first frame.
-      expect(asked[0]).toBe("/assets/buildings/walls/top.3d1@2x.webp");
+      expect(asked[0]).toBe(versionedArt("/assets/buildings/walls/top.3d1@2x.webp"));
       expect(asked).toHaveLength(3);
 
       buildings.draw(everywhere);
