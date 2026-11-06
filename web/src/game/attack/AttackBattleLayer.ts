@@ -564,7 +564,14 @@ export class MonsterSheetTextures {
     this.standInAsked.add(sheet.key);
     const url = sheetStandInUrl(sheet);
     if (!url) return;
-    this.load(url)
+    let fetching: Promise<Texture>;
+    try {
+      fetching = this.load(url);
+    } catch {
+      // A loader that throws rather than rejects (a test's) has no stand-in to give.
+      return;
+    }
+    fetching
       .then((texture) => {
         // Not kept once the full sheet beat it: it would never be drawn.
         if (!this.sources.has(sheet.key)) this.standIns.set(sheet.key, texture);
