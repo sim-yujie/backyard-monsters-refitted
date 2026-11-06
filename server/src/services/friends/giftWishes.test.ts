@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { WishesSchema } from "../../controllers/friends/gift.js";
+import { normaliseJsonBody } from "../../middleware/jsonBody.js";
 import { MAX_GIFT_WISHES, readWishes, storedWishes } from "./giftWishes.js";
 
 /** Gift wishes (#391): up to 3 of the four gift resources, stored as `r1,r3`. */
@@ -25,5 +26,12 @@ describe("gift wishes", () => {
     expect(() => WishesSchema.parse({ wishes: ["r1", "r1"] })).toThrow();
     expect(() => WishesSchema.parse({ wishes: ["shiny"] })).toThrow();
     expect(() => WishesSchema.parse({ wishes: ["r1"], extra: 1 })).toThrow();
+  });
+
+  test("the route reads a JSON body's array, which arrives re-stringified (middleware/jsonBody.ts)", () => {
+    expect(WishesSchema.parse(normaliseJsonBody({ wishes: ["r2", "r4"] }))).toEqual({ wishes: ["r2", "r4"] });
+    expect(WishesSchema.parse(normaliseJsonBody({ wishes: [] }))).toEqual({ wishes: [] });
+    expect(() => WishesSchema.parse({ wishes: "r1,r2" })).toThrow();
+    expect(() => WishesSchema.parse(normaliseJsonBody({ wishes: ["r1", "r1"] }))).toThrow();
   });
 });

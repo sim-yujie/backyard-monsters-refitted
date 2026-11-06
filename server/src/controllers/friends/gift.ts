@@ -57,8 +57,17 @@ import type { FriendsBody } from "./friends.js";
 const id = z.coerce.number().int().positive();
 
 export const GiftSchema = z.object({ userid: id, resource: z.enum(GIFT_RESOURCES) });
+/** A JSON body's array arrives re-stringified (`middleware/jsonBody.ts`), so a string is parsed first. */
+const parsedList = (value: unknown): unknown => {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+};
 export const WishesSchema = z
-  .object({ wishes: z.array(z.enum(GIFT_RESOURCES)).max(MAX_GIFT_WISHES) })
+  .object({ wishes: z.preprocess(parsedList, z.array(z.enum(GIFT_RESOURCES)).max(MAX_GIFT_WISHES)) })
   .strict()
   .refine((body) => new Set(body.wishes).size === body.wishes.length, { message: "each wish once" });
 export const CollectSchema = z.union([
