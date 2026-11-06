@@ -1,6 +1,7 @@
 import { raidApi, type RaidApi } from "@/api/raid";
 import type { AttackPlugin } from "@/game/attack/attackPlugins";
 import { battlePlugin } from "@/game/attack/plugins/battle";
+import { raidSheetQueue } from "@/game/attack/sheetQueue";
 import { MOLOCH_RAID_GONE } from "@/game/inferno/emergenceText";
 import { isMolochRaid } from "@/game/inferno/molochRaid";
 import { TROJAN_HORSE_TYPE } from "@/game/trojan/trojanHorse";
@@ -36,6 +37,13 @@ export interface RaidPluginDeps {
   /** Forgets the raid once it has landed or gone. */
   readonly clearRaid: () => void;
   readonly wait: (ms: number) => Promise<void>;
+  /**
+   * Called as the fight is over and its finish goes out: forgets the sheet
+   * downloads not yet started and starts no new one until the returned
+   * release is called (`sheetQueue.ts`), so the finish never waits behind
+   * paintings for a connection. None when left out.
+   */
+  readonly holdSheets?: () => () => void;
 }
 
 /**
@@ -125,16 +133,24 @@ export const createRaidPlugin =
 
     let finishing = false;
     let gone = false;
+    /** Lets the sheet downloads go again (`holdSheets`): when the finish is back, or this screen is gone. */
+    let release: (() => void) | null = null;
     const finish = async (): Promise<void> => {
       if (finishing) return;
       finishing = true;
       banner.textContent = "The raid is over…";
-      const outcome = await finishRaidFight({
-        api: deps.api,
-        id: run.raid.id,
-        serverNow: deps.serverNow,
-        wait: deps.wait,
-      });
+      release = deps.holdSheets?.() ?? null;
+      let outcome: RaidFinish;
+      try {
+        outcome = await finishRaidFight({
+          api: deps.api,
+          id: run.raid.id,
+          serverNow: deps.serverNow,
+          wait: deps.wait,
+        });
+      } finally {
+        release?.();
+      }
       // Kept for the yard even when this screen has gone meanwhile.
       if (outcome.kind === "landed") setRaidResult(outcome.result);
       deps.clearRaid();
@@ -152,6 +168,7 @@ export const createRaidPlugin =
 
     return () => {
       gone = true;
+      release?.();
       if (trapTimer !== null) clearTimeout(trapTimer);
       for (const timer of doorTimers) clearTimeout(timer);
       unsubscribe();
@@ -164,6 +181,10 @@ export const raidPlugin: AttackPlugin = createRaidPlugin({
   serverNow: () => raidWatch.serverNow(),
   clearRaid: () => raidWatch.set(null),
   wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  holdSheets: () => {
+    raidSheetQueue.dropWaiting();
+    return raidSheetQueue.hold();
+  },
 });
 
 /** What the raid scene mounts, and nothing else. */

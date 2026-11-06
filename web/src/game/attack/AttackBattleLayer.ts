@@ -1,5 +1,4 @@
 import {
-  Assets,
   Container,
   Graphics,
   Rectangle,
@@ -25,6 +24,7 @@ import { damageStep } from "@/game/yard/YardBuildings";
 import { depthKey, type Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
 import { combatKind, type AttackSession } from "./AttackSession";
+import { loadSheet, raidSheetQueue, SheetDropped, type SheetLoader, type SheetQueue } from "./sheetQueue";
 import {
   AttackSounds,
   attackSoundsFor,
@@ -80,7 +80,6 @@ import {
   frameRect,
   frameRow,
   hoverOffset,
-  isHighResolutionSheet,
   shadowOffset,
   sheetColumn,
   sheetStandInUrl,
@@ -407,18 +406,8 @@ export const layoutCreep = (
 
 /* ── Sheet textures ─────────────────────────────────────────────────────── */
 
-/** Fetches one sheet; `Assets.load` in the client, something else in a test. */
-export type SheetLoader = (url: string) => Promise<Texture>;
-
-/**
- * `Assets.load`, with mipmaps for a high-resolution sheet: a 4x repaint is
- * drawn at a quarter of its size or less at the usual zoom, and without them
- * it shimmers.
- */
-export const loadSheet: SheetLoader = (url) =>
-  Assets.load<Texture>(
-    isHighResolutionSheet(url) ? { src: url, data: { autoGenerateMipmaps: true } } : url,
-  );
+// The loader lives beside the raid queue (`sheetQueue.ts`); kept importable from here.
+export { loadSheet, type SheetLoader };
 
 /**
  * The cells of the monster sheets as textures, cut once and shared.
@@ -566,7 +555,7 @@ export class MonsterSheetTextures {
     if (!url) return;
     let fetching: Promise<Texture>;
     try {
-      fetching = this.load(url);
+      fetching = this.load(url, { standIn: true });
     } catch {
       // A loader that throws rather than rejects (a test's) has no stand-in to give.
       return;
@@ -591,13 +580,18 @@ export class MonsterSheetTextures {
         // left to `destroy`, as a sprite may show one until the next frame.
         this.standIns.delete(sheet.key);
       })
-      .catch((caught: unknown) => {
-        console.warn(`Monster sheet ${sheet.file} did not load; drawing a marker.`, caught);
-        this.failed.add(sheet.key);
-      })
-      .finally(() => {
-        this.pending.delete(sheet.key);
-      });
+      .then(
+        () => this.pending.delete(sheet.key),
+        (caught: unknown) => {
+          // Dropped from the raid queue as the fight ended: not a fault, and
+          // left pending, so these textures never ask for it again (the stand-in
+          // or a marker is drawn). A later fight has textures of its own.
+          if (caught instanceof SheetDropped) return;
+          this.pending.delete(sheet.key);
+          console.warn(`Monster sheet ${sheet.file} did not load; drawing a marker.`, caught);
+          this.failed.add(sheet.key);
+        },
+      );
     return null;
   }
 }
@@ -650,6 +644,8 @@ export interface AttackBattleLayerOptions {
   /** "Effects: full / low" for the towers' shots; the player's setting or the screen size when left out. */
   readonly effectsQuality?: EffectsQuality;
   readonly textures?: MonsterSheetTextures;
+  /** The queue a raid's sheets wait in; the shared `raidSheetQueue` when left out. Unused unless raiding. */
+  readonly sheetQueue?: SheetQueue;
   /** The bomb sheets; a test hands in its own (#87). */
   readonly bombArt?: BombArt;
   /** The siege weapons' sheets; a test hands in its own (Inferno WP 6.8). */
@@ -832,6 +828,8 @@ export class AttackBattleLayer {
   private readonly origin: Point;
   private readonly reducedMotion: boolean;
   readonly textures: MonsterSheetTextures;
+  /** The raid queue this layer's sheets wait in; null when not raiding. */
+  private readonly sheetQueue: SheetQueue | null;
 
   /** Creep bodies, inside the renderer's sorted container. */
   private readonly depth: Container;
@@ -953,7 +951,11 @@ export class AttackBattleLayer {
     this.overlay = options.overlay;
     this.origin = { x: options.yard.bounds.originX, y: options.yard.bounds.originY };
     this.reducedMotion = options.reducedMotion ?? prefersReducedMotion();
-    this.textures = options.textures ?? new MonsterSheetTextures();
+    // A raid's sheets wait in the raid queue (`sheetQueue.ts`): stand-ins
+    // first, then two paintings at a time, so the fight's own requests are
+    // never stuck behind them.
+    this.sheetQueue = this.session.raiding ? (options.sheetQueue ?? raidSheetQueue) : null;
+    this.textures = options.textures ?? new MonsterSheetTextures(this.sheetQueue?.loader ?? loadSheet);
     this.now = options.now ?? (() => performance.now());
     this.classic = options.classic ?? classicLook();
     this.juice = this.classic ? "off" : (options.juice ?? juiceLevel());
@@ -1461,6 +1463,8 @@ export class AttackBattleLayer {
       layer.destroy({ children: true });
     }
     this.textures.destroy();
+    // The fight is gone: what its sheets still had waiting is not fetched.
+    this.sheetQueue?.dropWaiting();
   }
 
   /* ── Frame ──────────────────────────────────────────────────────────── */

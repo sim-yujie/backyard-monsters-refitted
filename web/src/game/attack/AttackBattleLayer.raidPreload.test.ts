@@ -7,7 +7,8 @@ import { AttackBattleLayer, MonsterSheetTextures, type BattleYardHost } from "./
 import { AttackSession } from "./AttackSession";
 import type { AttackTarget } from "./attackTarget";
 import { MONSTER_SPRITES } from "./monsterSpriteData";
-import { sheetUrl } from "./monsterSprites";
+import { sheetStandInUrl, sheetUrl } from "./monsterSprites";
+import { SheetQueue } from "./sheetQueue";
 
 /**
  * A raid's raiders (a tribe's waves, the Trojan Horse's 51) are in no roster,
@@ -117,5 +118,68 @@ describe("AttackBattleLayer: a raid's sheets", () => {
     session.playScript(SPAWNS, 4_000);
     expect(session.scriptStamp).toBe(before + 1);
     expect(session.scriptedMonsters().sort()).toEqual(["C1", "C10", "C11"]);
+  });
+});
+
+describe("AttackBattleLayer: a raid's sheets wait in the raid queue", () => {
+  const queued = () => {
+    const started: string[] = [];
+    const queue = new SheetQueue({
+      load: (url) => {
+        started.push(url);
+        // A slow line: nothing arrives during the test.
+        return new Promise<Texture>(() => {});
+      },
+    });
+    const session = new AttackSession({ target: target(), seed: 1, raid: true });
+    const layer = new AttackBattleLayer({
+      session,
+      yard: readYard(yard()),
+      host: host(),
+      overlay: new Container(),
+      reducedMotion: false,
+      sheetQueue: queue,
+      bombArt: { cell: () => Texture.WHITE, destroy() {} },
+    });
+    return { started, queue, session, layer };
+  };
+
+  it("asks for the stand-ins first, in the script's order, and holds the paintings back", () => {
+    const { started, queue, session, layer } = queued();
+    session.playScript(SPAWNS, 4_000);
+    layer.update();
+    const sheets = ["C1", "C10", "C11"].map((id) => MONSTER_SPRITES[id]!);
+    expect(started).toEqual(sheets.map((sheet) => sheetStandInUrl(sheet)));
+    expect(queue.snapshot().waiting.full).toEqual(sheets.map((sheet) => sheetUrl(sheet)));
+    layer.destroy();
+  });
+
+  it("drops what still waits once the fight is gone", () => {
+    const { started, queue, session, layer } = queued();
+    session.playScript(SPAWNS, 4_000);
+    layer.update();
+    const before = started.length;
+    layer.destroy();
+    expect(queue.snapshot().waiting).toEqual({ small: [], full: [] });
+    expect(started.length).toBe(before);
+  });
+
+  it("leaves the raid queue alone in a player's own attack", () => {
+    const queue = new SheetQueue({ load: () => new Promise<Texture>(() => {}), maxActive: 1 });
+    queue.load("/assets/monsters/pokey-anim.png").catch(() => {});
+    queue.load("/assets/monsters/octo-anim.png").catch(() => {});
+    const session = new AttackSession({ target: target(), seed: 1 });
+    const layer = new AttackBattleLayer({
+      session,
+      yard: readYard(yard()),
+      host: host(),
+      overlay: new Container(),
+      reducedMotion: false,
+      sheetQueue: queue,
+      textures: new MonsterSheetTextures(() => new Promise<Texture>(() => {})),
+      bombArt: { cell: () => Texture.WHITE, destroy() {} },
+    });
+    layer.destroy();
+    expect(queue.snapshot().waiting.small).toEqual(["/assets/monsters/octo-anim.png"]);
   });
 });
