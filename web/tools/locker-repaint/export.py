@@ -33,7 +33,7 @@ KEY = {
     1: dict(box=(-40, -41, -16, -17), p=(-23, -22), q=(-28, -29)),
     2: dict(box=(-46, -98, -10, -56), p=(-23.5, -61), q=(-29, -78)),
     3: dict(box=(-48, -94, -17, -52), p=(-17, -49), q=(-30, -72)),
-    4: dict(box=(-48, -92, 2, -50), p=(-28, -50.5), q=(-21, -73), cut=(0, -1)),
+    4: dict(box=(-48, -92, 0, -50), p=(-28, -50.5), q=(-21, -73), cut=(0, -1), skip=((-14, -50), (2, -61.5))),
 }
 PREVIEW = "--preview" in sys.argv
 
@@ -86,6 +86,9 @@ for n in (1, 2, 3, 4):
     u = np.array(kd.get("cut", np.array(q) - np.array(p)), float)
     yy, xx = np.mgrid[0:im.height, 0:im.width]
     sel = (xx >= x0) & (xx < x1) & (yy >= y0) & (yy < y1) & ((xx - p[0]) * u[0] + (yy - p[1]) * u[1] > 0)
+    if "skip" in kd:  # the machine's trim inside the box: everything below the line a->b (and right of a) stays put
+        (ax, ay), (bx, by) = (((OX + x) * UP, (OY + y) * UP) for x, y in kd["skip"])
+        sel &= ~((xx >= ax) & ((yy - ay) * (bx - ax) - (xx - ax) * (by - ay) > 0))
     a = np.asarray(im).copy()
     handle = np.where(sel[..., None], a, 0).astype("uint8")
     body = np.where(sel[..., None], 0, a).astype("uint8")

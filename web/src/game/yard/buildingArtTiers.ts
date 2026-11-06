@@ -718,7 +718,22 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
 export const PAINTED_BUILDING_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 8 Monster Locker: painted, Flash's four looks; its key turns while a monster unlocks
   8: [
-    // LOCKER_ROWS
+    { from: 1, top: ["top.c1@2x.webp", -36, -38], shadow: ["shadow.1.jpg", -27, 37], lift: 0,
+      anim: { strip: ["anim.c1@2x.webp", -39, -38, 23, 21, 42], body: ["body.c1@2x.webp", -31, -27] },
+      damaged: { top: ["top.c1.damaged@2x.webp", -40, -24], shadow: ["shadow.1.damaged.jpg", -52, 26] },
+      destroyed: { top: ["top.c.destroyed@2x.webp", -48, -1], shadow: ["shadow.2.destroyed.jpg", -52, 25] } },
+    { from: 2, top: ["top.c2@2x.webp", -52, -95], shadow: ["shadow.2.jpg", -40, 18], lift: 0,
+      anim: { strip: ["anim.c2@2x.webp", -46, -95, 33, 37, 40], body: ["body.c2@2x.webp", -52, -69] },
+      damaged: { top: ["top.c2.damaged@2x.webp", -55, -50], shadow: ["shadow.2.damaged.jpg", -52, 26] },
+      destroyed: { top: ["top.c.destroyed@2x.webp", -48, -1], shadow: ["shadow.2.destroyed.jpg", -52, 25] } },
+    { from: 3, top: ["top.c3@2x.webp", -54, -90], shadow: ["shadow.3.jpg", -55, 23], lift: 0,
+      anim: { strip: ["anim.c3@2x.webp", -48, -90, 39, 40, 40], body: ["body.c3@2x.webp", -54, -82] },
+      damaged: { top: ["top.c3.damaged@2x.webp", -54, -70], shadow: ["shadow.3.damaged.jpg", -56, 31] },
+      destroyed: { top: ["top.c.destroyed@2x.webp", -48, -1], shadow: ["shadow.2.destroyed.jpg", -52, 25] } },
+    { from: 4, top: ["top.c4@2x.webp", -54, -89], shadow: ["shadow.4.jpg", -54, 30], lift: 0,
+      anim: { strip: ["anim.c4@2x.webp", -46, -91, 48, 47, 42], body: ["body.c4@2x.webp", -54, -88] },
+      damaged: { top: ["top.c4.damaged@2x.webp", -73, -97], shadow: ["shadow.4.damaged.jpg", -59, 30] },
+      destroyed: { top: ["top.c.destroyed@2x.webp", -48, -1], shadow: ["shadow.2.destroyed.jpg", -52, 25] } },
   ],
 };
 
