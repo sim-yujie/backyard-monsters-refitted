@@ -16,6 +16,7 @@ import {
 import { AnnouncementsView } from "./announcements";
 import { BugsView } from "./bugs";
 import { CasesView } from "./cases";
+import { PhotosView } from "./photos";
 import { ChatPanel } from "./chat";
 import { h, replace } from "./dom";
 import { ErrorsView } from "./errors";
@@ -65,6 +66,7 @@ import { applyTheme, readTheme, themePicker } from "./theme";
 
 const SECTIONS = [
   ["cases", "Chat cases"],
+  ["photos", "Photo reports"],
   ["bugs", "Bug reports"],
   ["moderation", "Moderation"],
   ["chat", "Chat"],
@@ -218,6 +220,16 @@ class Dashboard {
   });
   /** Open chat cases, or null before they are read. */
   private openCases: number | null = null;
+  private readonly photos = new PhotosView({
+    say: (message) => this.say(message),
+    onCount: (open) => {
+      this.openPhotos = open;
+      this.renderPhotoState();
+    },
+    openPlayer: (userid) => this.openPlayer(userid),
+  });
+  /** Players with open photo reports, or null before they are read. */
+  private openPhotos: number | null = null;
   private readonly folds = readFolds();
   private readonly chat = new ChatPanel({
     openPlayer: (userid) => this.openPlayer(userid),
@@ -304,6 +316,7 @@ class Dashboard {
     };
     this.sections = {
       cases: section("cases", "Chat cases"),
+      photos: section("photos", "Photo reports"),
       bugs: section("bugs", "Bug reports"),
       moderation: section("moderation", "Moderation"),
       chat: section("chat", "Chat as the game team"),
@@ -316,6 +329,7 @@ class Dashboard {
       backups: section("backups", "Backups"),
     };
     replace(this.sections.cases.body, this.cases.element);
+    replace(this.sections.photos.body, this.photos.element);
     replace(this.sections.bugs.body, this.bugs.element);
     replace(this.sections.moderation.body, this.moderation.element);
     replace(this.sections.chat.body, this.chat.element);
@@ -402,6 +416,7 @@ class Dashboard {
       this.loadHealth(),
       this.loadStats(),
       this.cases.refresh(),
+      this.photos.refresh(),
       this.bugs.show(route.bug),
       this.moderation.refresh(),
       this.shiny.refresh(),
@@ -449,6 +464,7 @@ class Dashboard {
       this.loadHealth(),
       this.loadStats(),
       this.cases.refresh(),
+      this.photos.refresh(),
       this.bugs.refresh(),
       this.moderation.refresh(),
       this.shiny.refresh(),
@@ -480,6 +496,20 @@ class Dashboard {
   private openNamed(href: string): void {
     const id = SECTIONS.find(([name]) => `#${name}` === href)?.[0];
     if (id) this.setOpen(id, true, false);
+  }
+
+  /** The players with open photo reports on the link and the heading. */
+  private renderPhotoState(): void {
+    const { state, link } = this.sections.photos;
+    const badge = link.querySelector(".nav-state")!;
+    if (this.openPhotos) {
+      const text = String(this.openPhotos);
+      replace(badge, h("span", { class: "count" }, text, h("span", { class: "sr-only" }, " open")));
+      replace(state, h("span", { class: "chip chip-info" }, `${text} open`));
+    } else {
+      replace(badge);
+      replace(state);
+    }
   }
 
   /** The open chat cases on the link and the heading. */
@@ -619,7 +649,7 @@ class Dashboard {
   private renderStates(items: readonly TopItem[]): void {
     const levels = sectionLevels(items);
     for (const [id] of SECTIONS) {
-      if (id === "cases") continue;
+      if (id === "cases" || id === "photos") continue;
       const { state, link } = this.sections[id];
       const level =
         id === "players" ||
