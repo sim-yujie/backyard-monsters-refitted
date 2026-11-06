@@ -473,9 +473,9 @@ describe("jobOffer: speed-ups by time left", () => {
   it("90 minutes: Finish now at the time price, −1 h yes, −2 h no", () => {
     const job = at(5_400);
     // timeCost(5400) = min(ceil(5400 × 20 / 3600), trunc(sqrt(5400 × 0.8))) = min(30, 65).
-    expect(job.finish).toEqual({ item: "SP4", price: 30, free: 0, blocked: null });
-    expect(job.minusOne).toEqual({ item: "SP2", price: 20, free: 0, blocked: null });
-    expect(job.minusTwo).toEqual({ item: "SP3", price: 40, free: 0, blocked: "tooShort" });
+    expect(job.finish).toEqual({ item: "SP4", price: 30, free: 0, unused: 0, blocked: null });
+    expect(job.minusOne).toEqual({ item: "SP2", price: 20, free: 0, unused: 0, blocked: null });
+    expect(job.minusTwo).toEqual({ item: "SP3", price: 40, free: 0, unused: 0, blocked: "tooShort" });
   });
 
   it("24 hours: Finish now costs 262 (the design's worked example)", () => {
@@ -484,7 +484,7 @@ describe("jobOffer: speed-ups by time left", () => {
 
   it("five minutes or less: the finish is free (SP1) and the hour items are refused", () => {
     const job = at(200);
-    expect(job.finish).toEqual({ item: "SP1", price: 0, free: 0, blocked: null });
+    expect(job.finish).toEqual({ item: "SP1", price: 0, free: 0, unused: 0, blocked: null });
     expect(job.minusOne?.blocked).toBe("tooShort");
   });
 
@@ -501,8 +501,43 @@ describe("jobOffer: speed-ups by time left", () => {
       storedata: { BEW: { q: 4 }, FREESP2: { q: 2 } },
     });
     const job = jobOffer(pick(context, 2), context);
-    expect(job?.minusOne).toEqual({ item: "SP2", price: 0, free: 2, blocked: null });
-    expect(job?.minusTwo).toEqual({ item: "SP3", price: 40, free: 0, blocked: "credits" });
+    expect(job?.minusOne).toEqual({ item: "SP2", price: 0, free: 2, unused: 0, blocked: null });
+    expect(job?.minusTwo).toEqual({ item: "SP3", price: 40, free: 0, unused: 0, blocked: "credits" });
+  });
+
+  /** A job `seconds` from done in a yard holding free SP2s and SP3s. */
+  const heldAt = (seconds: number, credits = 0) => {
+    const context = contextOf({
+      buildings: [HALL(5), building(2, 20, 4, { cU: seconds })],
+      credits,
+      storedata: { FREESP2: { q: 2 }, FREESP3: { q: 1 } },
+    });
+    const job = jobOffer(pick(context, 2), context);
+    if (!job) throw new Error("no job");
+    return job;
+  };
+
+  it("a held −1 h / −2 h finishes a shorter job, with the minutes it loses (patch 6.3)", () => {
+    const job = heldAt(1_500);
+    expect(job.minusOne).toEqual({ item: "SP2", price: 0, free: 2, unused: 2_100, blocked: null });
+    expect(job.minusTwo).toEqual({ item: "SP3", price: 0, free: 1, unused: 5_700, blocked: null });
+  });
+
+  it("a held −2 h at 90 minutes loses 30; a held −1 h takes its hour as before", () => {
+    const job = heldAt(5_400);
+    expect(job.minusOne).toMatchObject({ unused: 0, blocked: null });
+    expect(job.minusTwo).toMatchObject({ unused: 1_800, blocked: null });
+  });
+
+  it("a held one at five minutes or less stays put: the finish is free", () => {
+    const job = heldAt(300);
+    expect(job.finish?.item).toBe("SP1");
+    expect(job.minusOne).toMatchObject({ unused: 0, blocked: "tooShort" });
+    expect(job.minusTwo).toMatchObject({ unused: 0, blocked: "tooShort" });
+  });
+
+  it("a bought −1 h is still not offered under an hour", () => {
+    expect(at(1_500).minusOne).toEqual({ item: "SP2", price: 20, free: 0, unused: 0, blocked: "tooShort" });
   });
 
   it("a damaged building's countdown is paused and every speed-up with it", () => {

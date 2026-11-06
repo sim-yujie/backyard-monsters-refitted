@@ -1486,7 +1486,7 @@ export class BuildingPanel {
     const result = await store.speedUp(id, item);
     this.report(id, result, (report) =>
       report.remaining <= 0
-        ? ["Finished."]
+        ? [report.unused ? `Finished. ${unusedText(report.unused)} of it went unused.` : "Finished."]
         : [`${item === "SP3" ? "Two hours" : "An hour"} taken off.`],
     );
   }
@@ -1859,14 +1859,28 @@ const isPlanner = (building: YardBuilding): boolean => building.type === YARD_PL
 const speedupSlot = (item: SpeedupItem): "finish" | "minusOne" | "minusTwo" =>
   item === "SP2" ? "minusOne" : item === "SP3" ? "minusTwo" : "finish";
 
+/**
+ * Time a held −1 h / −2 h loses on a shorter job, in whole minutes:
+ * "35 min", "1 h 35 min", "2 h" (patch 6.3).
+ */
+export const unusedText = (seconds: number): string => {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest} min`;
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+};
+
 const applySpeedup = (button: ShinyButton, offer: SpeedupOffer): void => {
   button.setPrice(offer.price);
   button.setFree(offer.free);
+  // A held −1 h / −2 h on a shorter job finishes it; say what is lost (patch 6.3).
+  button.setNote(offer.unused > 0 ? `Finishes now · ${unusedText(offer.unused)} unused` : null);
   button.setBlocked(
     offer.blocked === "paused"
       ? "Repair the building first: its countdown is paused."
       : offer.blocked === "tooShort"
-        ? offer.item === "SP4"
+        ? offer.item === "SP4" || offer.free > 0
           ? "Five minutes or less left: finish it free."
           : `Less than ${offer.item === "SP3" ? "two hours" : "an hour"} left.`
         : offer.blocked === "credits"

@@ -11,6 +11,7 @@ import {
   repairAllPrice,
   speedupAllowed,
   speedupPrice,
+  speedupUnused,
   storeItemPrice,
   timeCost,
   topupPrice,
@@ -129,6 +130,28 @@ describe("speed-ups", () => {
     ["SP1", 0, false],
   ] as const)("%s at %p s left: %p", (item, remaining, allowed) => {
     expect(speedupAllowed(item, remaining)).toBe(allowed);
+  });
+
+  test("a held free SP2/SP3 also goes on a shorter countdown, above five minutes (patch 6.3)", () => {
+    expect(speedupAllowed("SP2", 3599, true)).toBe(true);
+    expect(speedupAllowed("SP2", 301, true)).toBe(true);
+    expect(speedupAllowed("SP2", 300, true)).toBe(false);
+    expect(speedupAllowed("SP3", 7199, true)).toBe(true);
+    expect(speedupAllowed("SP3", 301, true)).toBe(true);
+    expect(speedupAllowed("SP3", 0, true)).toBe(false);
+    // Bought ones are unchanged; held changes nothing for SP1/SP4.
+    expect(speedupAllowed("SP2", 3599, false)).toBe(false);
+    expect(speedupAllowed("SP1", 301, true)).toBe(false);
+    expect(speedupAllowed("SP4", 300, true)).toBe(false);
+  });
+
+  test("speedupUnused: what SP2/SP3 would take off past the end, never negative", () => {
+    expect(speedupUnused("SP2", 1500)).toBe(2100);
+    expect(speedupUnused("SP3", 4000)).toBe(3200);
+    expect(speedupUnused("SP2", 3600)).toBe(0);
+    expect(speedupUnused("SP2", 90000)).toBe(0);
+    expect(speedupUnused("SP4", 100)).toBe(0);
+    expect(speedupUnused("SP1", 100)).toBe(0);
   });
 
   test("prices: SP1 free, SP2 20, SP3 40, SP4 timeCost(remaining)", () => {
