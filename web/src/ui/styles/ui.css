@@ -2024,21 +2024,52 @@ body {
   gap: var(--space-3);
 }
 
-.account-settings__blocked {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
 .account-settings__blocked-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+}
+
+/*
+ * The blocked and muted lists (owner, 6 Nov 2026): the country list's search
+ * box and scroll box (country.css), about five rows tall, so a long list
+ * scrolls inside instead of stretching the Settings window.
+ */
+.account-settings__players[hidden] {
+  display: none;
+}
+
+.country-picker__list.account-settings__player-list {
+  max-height: calc(5 * 44px + 2px);
+}
+
+.account-settings__player-list .account-settings__blocked-row {
+  min-height: 44px;
+  padding: 4px var(--space-3);
+}
+
+.account-settings__player-list .account-settings__blocked-row[hidden],
+.account-settings__player-name[hidden] {
+  display: none;
+}
+
+.account-settings__player-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--colour-text-strong);
+}
+
+.account-settings__player-list .block-button__confirm {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+
+.account-settings__player-list .block-button__question {
+  flex: 1 1 8em;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* Block button with its confirm (friends rows, Find results) */
