@@ -24,9 +24,16 @@ pitting, scratches, pale worn edges, rougher where rusty); glossy brass with pai
 lights only the brass sees; tier 1 stack = short funnel on a thin olive pipe held by an olive bracket round a rust
 drum (the arch rises from the drum at every tier); tiers 2-3 swap it for a copper pipe, wider funnel and a broad steel
 clamp; the column is narrower and further back with taller slats on a pale steel plinth; Flash look 3's steel claw
-feet; the bin is a low trough with flared walls; the coal is matte black. Still off: Flash's look 3 arch sits ~0.5
-higher than look 1's (ours is the same at every tier), Flash's look 3 belt is a rounded, brighter band, the star
-wheel reads paler and bigger than Flash's at game size.
+feet; the bin is a low trough with flared walls; the coal is matte black.
+Third pass (7 Nov, inferno-3d-4): every warm colour a little more saturated orange (warm()); the column's top is a
+puffy cushion (pillow(): superellipse sections rounding over into a low dome) on a higher strap; the belt is a fat
+rounded band (a height field round the tank) with a round-ended window opening and a row of plain dark rivets; the star
+wheel is dark tarnished bronze with broad points and a dark hub ring; from tier 2 the drum gets a riveted collar
+section (DRUM_UP: the arch, clamp and a short stack held only by the clamp go up with it) and the lantern a taller
+base (LANT_UP: the star and the arch's far end go up), as Flash look 3 sits its top parts higher; at tier 1 the drum
+stands on a deep foot ring seated on the elbow, clear of the elbow's end flange. Still off: Flash look 3's hopper is a
+big box high on the tank (ours a low trough), its tank is taller and domed, its lantern has a round roof, and its whole
+column stands a little further back.
 """
 import math
 import os
@@ -42,7 +49,30 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE))
 import kit  # noqa: E402
-from cbits import (Acc, K0, K1, Tm, aim, basis, bar, grey, mat, one, polar, rivets, rod)  # noqa: E402,F401
+from cbits import (Acc, K0, K1, Tm, aim, basis, bar, grey, one, polar, rivets, rod)  # noqa: E402,F401
+import cbits  # noqa: E402
+import colorsys  # noqa: E402
+
+
+def warm(c, k=1.3, pull=0.3, v=0.94):
+    """Flash's colours are a little more saturated orange than ours were (7 Nov vet): warm hues (red to yellow) get more
+    saturation, are pulled toward orange (25 deg) and a touch darker; greys and the blue-steel claws stay as they are."""
+    h, s, val = colorsys.rgb_to_hsv(*(x / 255 for x in c))
+    hd = h * 360
+    if s < 0.06 or 70 < hd < 330:
+        return c
+    if hd >= 330:
+        hd -= 360
+    hd += pull * (25 - hd)
+    r, g, b = colorsys.hsv_to_rgb((hd % 360) / 360, min(1.0, s * k), val * v)
+    return (round(r * 255), round(g * 255), round(b * 255))
+
+
+def mat(name, col, **kw):
+    for key in ("wear", "rust", "edge"):
+        if kw.get(key):
+            kw[key] = warm(kw[key])
+    return cbits.mat(name, warm(col), **kw)
 
 LV = kit.L
 T = 1 if LV <= 2 else (2 if LV <= 6 else 3)
@@ -69,6 +99,11 @@ PORT_Z = 4.6                     # the port in the bin's front wall where the co
 LEGS = (-150, -72, -26, 38, 112)
 WIN = (-68, -50, -32, -14, 4)    # the window band's posts (degrees)
 WZ = (1.52, 1.72, 2.62, 2.82)    # rail bottom, pane bottom, pane top, rail top
+# Flash look 3 sits its top parts higher than look 1. Upgrades from tier 2 on the same base: the drum gets a riveted
+# collar section (the arch, clamp and stack go up with it) and the lantern stands on a taller base (the star and the
+# arch's far end go up with it).
+DRUM_UP = 1.1 if T >= 2 else 0.0
+LANT_UP = 0.7 if T >= 2 else 0.0
 
 
 # ------------------------------------------------------------------------------------------------------------ materials
@@ -92,9 +127,9 @@ def PALE():
 
 def CBRASS():
     """The square column (Flash look 3): coppery brass, more orange than the tier 1 elbow."""
-    return mat("cbrass", (184, 98, 30), rough=0.24, metal=0.95, wear=(132, 78, 34), wear_amt=0.5, rust=(96, 52, 30),
-               rust_at=0.64, dirt=0.6, speck=0.22, bump=0.06, weather=0.55, edge=(250, 206, 120),
-               hi=((255, 222, 140), ((-0.25, -0.7, 0.68), 18, 2.6), ((-0.6, -0.8, 0.05), 30, 1.4)))
+    return mat("cbrass", (172, 94, 30), rough=0.26, metal=0.95, wear=(128, 72, 32), wear_amt=0.5, rust=(96, 50, 28),
+               rust_at=0.64, dirt=0.6, speck=0.22, bump=0.06, weather=0.55, edge=(246, 182, 100),
+               hi=((255, 204, 120), ((-0.25, -0.7, 0.68), 14, 2.4), ((-0.6, -0.8, 0.05), 30, 1.2)))
 
 
 def BRASS():
@@ -306,15 +341,17 @@ def tank():
     def bands(a):
         a.lathe(Matrix(), [(R - 0.02, 1.1), (R + 0.035, 1.13), (R + 0.035, 1.24), (R - 0.02, 1.28)], 0, 96)   # foot band
         a.lathe(Matrix(), [(2.0, 3.88), (2.1, 3.9), (2.12, 3.98), (2.04, 4.04), (1.9, 4.04)], 0, 96)        # rim
-        a.lathe(Matrix(), [(R - 0.02, 3.36), (R + 0.025, 3.38), (R + 0.025, 3.44), (R - 0.02, 3.46)], 0, 96)  # a thin ridge
-        rivets(a, [(polar(R + 0.025, 6 + 12 * i, 3.41), polar(1, 6 + 12 * i, 0)) for i in range(30)], 0.035)
+        if T == 1:                                  # a thin ridge (from tier 2 the belt covers it)
+            a.lathe(Matrix(), [(R - 0.02, 3.36), (R + 0.025, 3.38), (R + 0.025, 3.44), (R - 0.02, 3.46)], 0, 96)
+            rivets(a, [(polar(R + 0.025, 6 + 12 * i, 3.41), polar(1, 6 + 12 * i, 0)) for i in range(30)], 0.035)
         rivets(a, [(polar(2.12, 12 * i, 3.94), polar(1, 12 * i, 0.6).normalized()) for i in range(30)], 0.04)
     one("tank-bands", [dark], bands, bevel=0.008)
 
     # the window band: rails and posts proud of the skin, the glass behind them (moving: it flickers)
     def frame(a):
-        arc_box(a, R - 0.02, R + 0.14, WZ[0], WZ[1], WIN[0] - 3, WIN[-1] + 3, 0)
-        arc_box(a, R - 0.02, R + 0.14, WZ[2], WZ[3], WIN[0] - 3, WIN[-1] + 3, 0)
+        rr = R + 0.14 if T == 1 else R + 0.05                   # from tier 2 the belt's round lip hides the rails
+        arc_box(a, R - 0.02, rr, WZ[0], WZ[1], WIN[0] - 3, WIN[-1] + 3, 0)
+        arc_box(a, R - 0.02, rr, WZ[2], WZ[3], WIN[0] - 3, WIN[-1] + 3, 0)
         for th in WIN:
             arc_box(a, R - 0.02, R + 0.15, WZ[1], WZ[2], th - 2.2, th + 2.2, 0, 2)
         if T >= 2:                                              # Flash look 3: a bar across each window
@@ -326,24 +363,49 @@ def tank():
                 pts.append((polar(R + 0.14, th, z), polar(1, th, 0)))
         rivets(a, pts, 0.04)
     one("win-frame", [dark], frame, bevel=0.012)
-    if T >= 2:                                                  # Flash look 3: a thick riveted belt the windows sit in
+    if T >= 2:                                                  # Flash look 3: a fat rounded band the windows sit in
         def belt(a):
-            ro, zb, zt = R + 0.5, 1.2, 3.15
-            arc_box(a, R - 0.02, ro, zb, zt, WIN[-1] + 2.2, 248, 0)      # it stops at the coal bin's sides
-            arc_box(a, R - 0.02, ro, zb, zt, 284, WIN[0] + 360 - 2.2, 0)
-            arc_box(a, R - 0.02, ro, zb, WZ[1] - 0.02, WIN[0] - 2.2, WIN[-1] + 2.2, 0)
-            arc_box(a, R - 0.02, ro, WZ[2] + 0.02, zt, WIN[0] - 2.2, WIN[-1] + 2.2, 0)
-            for th in WIN[1:-1]:
-                arc_box(a, R - 0.02, ro, WZ[1] - 0.03, WZ[2] + 0.03, th - 2.2, th + 2.2, 0, 2)
-            for t0, t1 in ((-76, 248), (284, 289.8)):           # lips top and bottom, rivets
-                arc_box(a, ro - 0.02, ro + 0.04, zt - 0.02, zt + 0.06, t0, t1, 0)
-                arc_box(a, ro - 0.02, ro + 0.04, zb - 0.06, zb + 0.02, t0, t1, 0)
-            ths = [th for th in (7.5 * i for i in range(48)) if not 244 < th < 288]
-            rivets(a, [(polar(ro + 0.04, th, zt - 0.12), polar(1, th, 0)) for th in ths] +
-                   [(polar(ro + 0.04, th + 3.75, zb + 0.12), polar(1, th + 3.75, 0)) for th in ths], 0.04)
-        belt_m = mat("belt", (150, 86, 46), rough=0.6, metal=0.4, wear=(212, 150, 96), wear_amt=0.6, rust=(84, 42, 24),
-                     rust_at=0.5, dirt=0.5, speck=0.25, weather=1.2, bump=0.14)      # Flash look 3: an orange-rust belt
-        one("tank-belt", [belt_m], belt, bevel=0.015)
+            zb, zt, dep, base = 1.3, 3.45, 0.53, R - 0.03
+            th0, th1 = -76.0, 248.0                             # it stops at the coal bin's sides
+            o_th, o_z, o_r = (WIN[0] - 1.0, WIN[-1] + 1.0), (1.64, 2.7), 0.42     # the window opening, round ends
+            w_open, w_end = 0.3, 0.32                           # how wide the rounding over the edges is
+
+            def round_(d, w):
+                x = min(max(d / w, 0.0), 1.0)
+                return math.sqrt(1 - (1 - x) ** 2)
+
+            def rad(th, z):
+                u = (2 * z - zb - zt) / (zt - zb)
+                prof = max(0.0, 1 - abs(u) ** 2.4) ** (1 / 2.4)
+                s_ = math.radians(th) * R                       # arc length round the tank
+                e = round_(min(s_ - math.radians(th0) * R, math.radians(th1) * R - s_), w_end)
+                cx = min(max(s_, math.radians(o_th[0]) * R + o_r), math.radians(o_th[1]) * R - o_r)
+                cz = min(max(z, o_z[0] + o_r), o_z[1] - o_r)
+                d = math.hypot(s_ - cx, z - cz) - o_r           # distance outside the opening's rounded rectangle
+                inside = (math.radians(o_th[0]) * R <= s_ <= math.radians(o_th[1]) * R) and o_z[0] <= z <= o_z[1]
+                op = 0.0 if inside or d <= 0 else round_(d, w_open)
+                return base + dep * prof * e * op
+
+            nth, nz = int(th1 - th0) * 2, 48
+            rows = []
+            for i in range(nth + 1):
+                th = th0 + (th1 - th0) * i / nth
+                rows.append([a.bm.verts.new(polar(rad(th, z), th, z)) for z in
+                             (zb + (zt - zb) * j / nz for j in range(nz + 1))])
+            for r0, r1 in zip(rows, rows[1:]):
+                for j in range(nz):
+                    a.bm.faces.new((r0[j], r1[j], r1[j + 1], r0[j + 1])).material_index = 0
+            BELT.extend((polar(rad(th, 3.02) - 0.01, th, 3.02), polar(1, th, 0.35).normalized())
+                        for th in range(-66, 246, 13))          # Flash: a row of big dark rivets above the windows
+        BELT = []
+        belt_m = mat("belt", (172, 98, 46), rough=0.42, metal=0.55, wear=(226, 162, 100), wear_amt=0.6,
+                     rust=(96, 46, 24), rust_at=0.56, dirt=0.45, speck=0.22, weather=1.0, bump=0.1,
+                     hi=((255, 196, 122), ((-0.2, -0.6, 0.78), 6, 0.55)))   # Flash: bright orange with a highlight
+        stud = mat("stud", (60, 38, 28), rough=0.75, metal=0.15, wear=(92, 62, 44), wear_amt=0.3, dirt=0.3)
+        one("tank-belt", [belt_m], belt)
+        one("belt-studs", [stud], lambda a: [a.sphere(aim(n, q) @ Matrix.Diagonal((1, 1, 0.6, 1)), 0.085, 0, 14, 8)
+                                             for q, n in BELT])   # Flash's rivets: plain dark domes (their own object,
+                                                                  # so the belt's worn-edge paint doesn't ring them)
     g = hub("glow")
     fire = (glow_mat("fire", (200, 62, 12), (255, 146, 44), 2.0 if T < 3 else 2.8) if T >= 2 else
             glow_mat("fire", (236, 120, 30), (255, 226, 140), 2.2))      # Flash look 1: pale yellow panes
@@ -487,6 +549,44 @@ def bin_():
         one("bin-hood", [BRASS()], hood, bevel=0.03)
 
 
+def sq(h, n, m=48):
+    """A superellipse |x|^n + |y|^n = h^n as m points, counter-clockwise: n large = a square with round corners, n = 2 a
+    circle."""
+    pts = []
+    for i in range(m):
+        t = 2 * math.pi * (i + 0.5) / m
+        c, s_ = math.cos(t), math.sin(t)
+        pts.append((h * math.copysign(abs(c) ** (2 / n), c), h * math.copysign(abs(s_) ** (2 / n), s_)))
+    return pts
+
+
+def pillow(a, h, H, rt, rtz, dome, bulge, n_side=5.0, n_top=2.6, mi=0):
+    """A square body with round corners that rounds over at the top (rt across, rtz down) into a low dome, its corners
+    getting rounder toward the top: Flash look 3's column, a puffy cushion. The sides bulge a little (bulge)."""
+    rows = []
+    zs = H - rtz
+    for i in range(9):                                          # the sides, bulging a little
+        z = zs * i / 8
+        rows.append((h * (1 + bulge * math.sin(math.pi * z / zs)), n_side, z))
+    for i in range(1, 10):                                      # the top's rounding
+        ph = math.radians(10 * i)
+        rows.append((h - rt * (1 - math.cos(ph)), n_side + (n_top - n_side) * i / 9, zs + rtz * math.sin(ph)))
+    for rho in (0.8, 0.6, 0.4, 0.2):                            # the dome
+        rows.append(((h - rt) * rho, n_top, H + dome * (1 - rho * rho)))
+    rings = [[a.bm.verts.new((x, y, z)) for x, y in sq(hh, nn)] for hh, nn, z in rows]
+    fs = [a.bm.faces.new(rings[0][::-1])]
+    m = len(rings[0])
+    for r0, r1 in zip(rings, rings[1:]):
+        for j in range(m):
+            k = (j + 1) % m
+            fs.append(a.bm.faces.new((r0[j], r0[k], r1[k], r1[j])))
+    top = a.bm.verts.new((0, 0, H + dome))
+    for j in range(m):
+        fs.append(a.bm.faces.new((rings[-1][j], rings[-1][(j + 1) % m], top)))
+    for f in fs:
+        f.material_index = mi
+
+
 def flare(a, x0, x1, y0, y1, zb, zt, fl, th, mi):
     """Four walls round the rectangle x0..x1, y0..y1 at zb, leaning out by fl at zt (a trough's top), th thick. The
     front wall stays upright, where the pipe or chute comes in."""
@@ -527,7 +627,8 @@ def column():
     brass, brass2, dark = BRASS2(), CBRASS(), RIM()
     c = CC
     hs = 0.74
-    zs = 3.0                                                    # the strap's bottom: 4 tall slats below it, as Flash
+    zs = 3.6                                                    # the strap's bottom: 4 tall slats below it, as Flash
+    pitch = (zs - 0.24) / 4
     plate = mat("plinth", (150, 140, 128), rough=0.5, metal=0.6, wear=(196, 188, 176), wear_amt=0.5, rust=(110, 66, 40),
                 rust_at=0.55, dirt=0.5, weather=1.0)            # Flash's pale steel plinth
 
@@ -537,29 +638,27 @@ def column():
             for sy in (-1, 1):
                 a.cone(Tm((c.x + sx * 0.93, c.y + sy * 0.93, 0.22)), 0.07, 0.06, 0.06, 3, 6)
         for i in range(4):                                                   # the slats
-            z = 0.24 + i * 0.69
-            box(a, (c.x, c.y, z + 0.335), (2 * hs - 0.04 * (i % 2), 2 * hs - 0.04 * (i % 2), 0.65), 1)
+            z = 0.24 + i * pitch
+            box(a, (c.x, c.y, z + pitch / 2), (2 * hs - 0.04 * (i % 2), 2 * hs - 0.04 * (i % 2), pitch - 0.04), 1)
         box(a, (c.x, c.y, zs + 0.31), (2 * hs + 0.16, 2 * hs + 0.16, 0.62), 2)     # the strap
         rivets(a, [(Vector((c.x + hs + 0.08, c.y + d, zs + 0.31)), Vector((1, 0, 0))) for d in (-0.5, 0.0, 0.5)] +
                [(Vector((c.x + d, c.y - hs - 0.08, zs + 0.31)), Vector((0, -1, 0))) for d in (-0.5, 0.0, 0.5)], 0.045, 0)
         if T >= 3:                                                            # tier 3: iron corner guards
             for sx in (-1, 1):
                 for sy in (-1, 1):
-                    box(a, (c.x + sx * (hs + 0.02), c.y + sy * (hs + 0.02), 1.62), (0.2, 0.2, 2.76), 0)
+                    box(a, (c.x + sx * (hs + 0.02), c.y + sy * (hs + 0.02), (0.24 + zs) / 2), (0.2, 0.2, zs - 0.24), 0)
             rivets(a, [(Vector((c.x + hs + 0.12, c.y + sy * (hs - 0.02), z)), Vector((1, 0, 0)))
-                       for sy in (-1, 1) for z in (0.8, 1.7, 2.6)] +
+                       for sy in (-1, 1) for z in (0.24 + 0.17 * (zs - 0.24), 0.24 + 0.5 * (zs - 0.24), 0.24 + 0.83 * (zs - 0.24))] +
                    [(Vector((c.x + sx * (hs - 0.02), c.y - hs - 0.12, z)), Vector((0, -1, 0)))
-                    for sx in (-1, 1) for z in (0.8, 1.7, 2.6)], 0.04, 0)
+                    for sx in (-1, 1) for z in (0.24 + 0.17 * (zs - 0.24), 0.24 + 0.5 * (zs - 0.24), 0.24 + 0.83 * (zs - 0.24))], 0.04, 0)
     one("col-foot", [dark, brass2, brass, plate], foot, bevel=0.03)
 
     h = hub("colpump", (c.x, c.y, zs + 0.62))
-    hu = hs + 0.05                                              # the upper body, a little wider than the slats
+    hu = hs + 0.08                                              # the upper body: as wide as the strap, as Flash
 
-    def upper(a):
-        box(a, (0, 0, 1.3), (2 * hu, 2 * hu, 2.6), 0)
-        a.cube(Tm((0, 0, 2.62)) @ Matrix.Diagonal((1, 1, 0.5, 1)), (2 * hu - 0.12, 2 * hu - 0.12, 1.0), 0)   # the pillow top
-    up = one("col-body", [brass2], upper, parent=h, bevel=0.46)
-    up.modifiers["bevel"].segments = 5
+    def upper(a):                                               # Flash: a puffy pillow with a soft domed top
+        pillow(a, hu, 2.35, rt=0.42, rtz=0.5, dome=0.1, bulge=0.03, n_side=8.0)
+    one("col-body", [brass2], upper, parent=h)
 
     def pump(f):
         p = 0.5 - 0.5 * math.cos(2 * math.pi * 2 * f)
@@ -580,19 +679,28 @@ def stack():
     pipe, held by an olive bracket of two bands round the drum. Tiers 2-3 (Flash look 3 redesigns it): a copper pipe
     with a wider funnel, held by a broad steel clamp round pipe and drum. The drum is the same at every tier."""
     rusty, inside = RUSTY(), INSIDE()
-    d0, d1 = 5.12, 7.75                                       # the drum's bottom (on the pipe / chute) and top
+    d0, d1 = 5.12, 7.75 + DRUM_UP                             # the drum's bottom (on the pipe / chute) and top
 
     def drum(a):
         a.cone(Tm((COL.x, COL.y, d0)), DR, DR, d1 - d0, 0, 32)
-        a.cone(Tm((COL.x, COL.y, d0)), DR + 0.07, DR + 0.07, 0.14, 0, 32)                # its foot ring
         a.cone(Tm((COL.x, COL.y, d1 - 0.04)), DR + 0.08, DR + 0.05, 0.22, 1, 32)         # the pale top ring
-        rivets(a, [(polar(DR + 0.07, th, d0 + 0.07) + COL, polar(1, th)) for th in range(0, 360, 30)], 0.035, 0)
-    one("drum", [rusty, PALE()], drum, bevel=0.01)
+        if T == 1:                                  # on the elbow: a deep foot ring seated on the pipe, over the flange
+            a.cone(Tm((COL.x, COL.y, 4.95)), DR + 0.13, DR + 0.13, 0.62, 2, 32)
+            a.cone(Tm((COL.x, COL.y, 5.5)), DR + 0.17, DR + 0.15, 0.12, 2, 32)
+            rivets(a, [(polar(DR + 0.13, th, 5.35) + COL, polar(1, th)) for th in range(15, 360, 30)], 0.04, 2)
+        else:                                       # on the chute: the foot ring, and the collar section added on top
+            a.cone(Tm((COL.x, COL.y, d0)), DR + 0.07, DR + 0.07, 0.14, 0, 32)
+            rivets(a, [(polar(DR + 0.07, th, d0 + 0.07) + COL, polar(1, th)) for th in range(0, 360, 30)], 0.035, 0)
+            zc = 7.75 - 0.06                                                       # the collar's seam
+            a.cone(Tm((COL.x, COL.y, zc)), DR + 0.06, DR + 0.06, 0.14, 2, 32)
+            rivets(a, [(polar(DR + 0.06, th, zc + 0.07) + COL, polar(1, th)) for th in range(15, 360, 30)], 0.035, 2)
+    one("drum", [rusty, PALE(), RIM()], drum, bevel=0.01)
 
     if T == 1:
-        z_lo, top, r, cup_r, cup_h, pm = 4.6, 8.95, 0.2, 0.44, 0.66, OLIVE()
+        z_lo, top, r, cup_r, cup_h, pm = 4.6, 9.35, 0.2, 0.44, 0.66, OLIVE()
     else:
-        z_lo, top, r, cup_r, cup_h, pm = 6.2, 9.12, 0.27, 0.58, 0.74, COPPER()
+        z_lo, top, r, cup_r, cup_h, pm = d1 - 0.68, 10.05, 0.27, 0.54, 0.66, COPPER()   # Flash: a short stack held
+                                                                                     # only by the clamp
 
     def fn(a):
         rod(a, (STK.x, STK.y, z_lo), (STK.x, STK.y, top), r, 0, 20)
@@ -629,10 +737,11 @@ def stack():
         one("bracket", [OLIVE()], bracket, bevel=0.01)
     else:                                                       # Flash look 3: a broad steel clamp and its bolt
         def clamp(a):
-            band(a, 6.85, 0.5, r, 0.08)
-            q = Vector((STK.x, STK.y, 7.1)) + polar(r + 0.12, -150)
-            box(a, (q.x, q.y, 7.1), (0.22, 0.22, 0.42))
-            rod(a, (q.x, q.y, 7.35), (q.x, q.y, 6.85), 0.05, 0, 8)
+            zc = d1 - 0.62                                      # Flash: high on the drum, under its top ring
+            band(a, zc, 0.52, r, 0.08)
+            q = Vector((STK.x, STK.y, zc + 0.26)) + polar(r + 0.12, -150)
+            box(a, (q.x, q.y, zc + 0.26), (0.22, 0.22, 0.42))
+            rod(a, (q.x, q.y, zc + 0.52), (q.x, q.y, zc), 0.05, 0, 8)
         one("clamp", [STEEL()], clamp, bevel=0.015)
 
     if T >= 3:                                                  # tier 3: a little smoke from the stack
@@ -660,12 +769,14 @@ def arch():
     """The copper pipe from the collar over to the turret; a bulge runs along it every loop."""
     copper, dark = COPPER(), RIM()
     h = hub("arch")
-    corners = [(COL.x, COL.y, 7.7), (COL.x, COL.y, 9.85), (TUR.x, TUR.y, 8.0), (TUR.x, TUR.y, 7.25)]
+    up = 0.55 if T >= 2 else 0.0                                # Flash look 3's arch is ~0.5 higher than look 1's
+    corners = [(COL.x, COL.y, 7.7 + DRUM_UP), (COL.x, COL.y, 9.6 + up), (TUR.x, TUR.y, 8.0 + LANT_UP),
+               (TUR.x, TUR.y, 7.25 + LANT_UP)]
     ob, sp, s = pipe("arch-pipe", corners, 0.34, copper, 0.6, h)
     bulger(sp, s, 0.34, 0.2, 0.45, lead=0.3, tail=0.3, phase=0.35)
 
     def fn(a):
-        a.cone(Tm((TUR.x, TUR.y, 7.18)), 0.44, 0.44, 0.12, 0, 24)
+        a.cone(Tm((TUR.x, TUR.y, 7.18 + LANT_UP)), 0.44, 0.44, 0.12, 0, 24)
     one("arch-fix", [dark], fn, bevel=0.01)
 
 
@@ -673,15 +784,19 @@ def turret():
     tur, dark, spike = TURRET(), RIM(), SPIKE()
     c = TUR
     rb = 1.0 if T == 1 else 0.76                                # Flash look 3's lantern is slimmer than the turret
+    U = LANT_UP                                                 # tiers 2-3: the lantern stands on a taller base
 
     def body(a):
-        a.cone(Tm((c.x, c.y, 3.98)), rb, rb, 1.52, 0, 48)
+        a.cone(Tm((c.x, c.y, 3.98)), rb, rb, 1.52 + U, 0, 48)
         a.cone(Tm((c.x, c.y, 3.98)), rb + 0.06, rb + 0.06, 0.16, 1, 48)
-        a.cone(Tm((c.x, c.y, 5.38)), rb + 0.05, rb + 0.05, 0.12, 1, 48)
+        a.cone(Tm((c.x, c.y, 5.38 + U)), rb + 0.05, rb + 0.05, 0.12, 1, 48)
         for i in range(8):                                                     # panel seams
             th = 22.5 + 45 * i
             p0 = c + polar(rb + 0.01, th, 4.14)
-            bar(a, p0, p0 + Vector((0, 0, 1.24)), 0.06, 0.05, 1)
+            bar(a, p0, p0 + Vector((0, 0, 1.24 + U)), 0.06, 0.05, 1)
+        if U:                                                                  # the base's riveted band
+            a.cone(Tm((c.x, c.y, 4.02 + U)), rb + 0.07, rb + 0.07, 0.14, 1, 48)
+            rivets(a, [(c + polar(rb + 0.07, th, 4.09 + U), polar(1, th)) for th in range(0, 360, 30)], 0.035, 1)
     one("tur-body", [tur, dark], body, bevel=0.012)
 
     if T == 1:
@@ -706,19 +821,19 @@ def turret():
 
     # tiers 2-3: the lantern (Flash look 3): windows of fire in the body, a roof, the star wheel on a post
     def roof(a):
-        a.cone(Tm((c.x, c.y, 5.48)), rb + 0.12, 0.36, 0.5, 0, 48)
-        a.cone(Tm((c.x, c.y, 6.1)), 0.3, 0.3, 1.15, 0, 20)                     # the post up to the arch
-        a.cone(Tm((c.x, c.y, 6.48)), 0.38, 0.38, 0.08, 0, 20)                  # the star's seat
+        a.cone(Tm((c.x, c.y, 5.48 + U)), rb + 0.12, 0.36, 0.5, 0, 48)
+        a.cone(Tm((c.x, c.y, 6.1 + U)), 0.3, 0.3, 1.15, 0, 20)                 # the post up to the arch
+        a.cone(Tm((c.x, c.y, 6.48 + U)), 0.38, 0.38, 0.08, 0, 20)              # the star's seat
     one("tur-roof", [TURRET()], roof, bevel=0.012)
     wins = (-140, -95, -50, -5, 40)
 
     def mull(a):
         for th in wins:
             for d in (-15, 15):
-                arc_box(a, rb - 0.02, rb + 0.07, 4.25, 5.3, th + d - 2.5, th + d + 2.5, 0, 1)
-            arc_box(a, rb - 0.02, rb + 0.07, 4.18, 4.3, th - 17, th + 17, 0)
-            arc_box(a, rb - 0.02, rb + 0.07, 5.25, 5.36, th - 17, th + 17, 0)
-            arc_box(a, rb + 0.01, rb + 0.05, 4.25, 5.3, th - 1.0, th + 1.0, 0, 1)
+                arc_box(a, rb - 0.02, rb + 0.07, 4.25 + U, 5.3 + U, th + d - 2.5, th + d + 2.5, 0, 1)
+            arc_box(a, rb - 0.02, rb + 0.07, 4.18 + U, 4.3 + U, th - 17, th + 17, 0)
+            arc_box(a, rb - 0.02, rb + 0.07, 5.25 + U, 5.36 + U, th - 17, th + 17, 0)
+            arc_box(a, rb + 0.01, rb + 0.05, 4.25 + U, 5.3 + U, th - 1.0, th + 1.0, 0, 1)
     sl = Acc()
     mull(sl)
     o = sl.obj("tur-mull", [dark], bevel=0.01)
@@ -728,7 +843,7 @@ def turret():
     lps = []
     for i, th in enumerate(wins):
         a = Acc()
-        arc_box(a, rb - 0.005, rb + 0.012, 4.28, 5.28, th - 13, th + 13, 0)
+        arc_box(a, rb - 0.005, rb + 0.012, 4.28 + U, 5.28 + U, th - 13, th + 13, 0)
         o = a.obj("lpane-%d" % i, [lf], g)
         o.location = (c.x, c.y, 0)
         lps.append(o)
@@ -740,23 +855,25 @@ def turret():
     EXTRA.append(flick)
 
     # the star wheel: eight pointed blades round a hub, turning about the post
-    sh = hub("star", (c.x, c.y, 6.56))
-    st = mat("star-f8", (104, 96, 88), rough=0.55, metal=0.65, wear=(146, 136, 124), wear_amt=0.4, rust=(108, 64, 40),
-             rust_at=0.55, dirt=0.35, fold=8)                    # darker, rust-flecked steel, as Flash's star
+    sh = hub("star", (c.x, c.y, 6.56 + U))
+    st = mat("star-f8", (112, 84, 58), rough=0.5, metal=0.7, wear=(150, 132, 108), wear_amt=0.45, rust=(92, 54, 32),
+             rust_at=0.5, dirt=0.4, fold=8)                      # Flash's star: dark tarnished bronze-brown
 
     def star(a):
-        a.lathe(Matrix(), [(0.32, -0.02), (0.5, -0.02), (0.5, 0.2), (0.32, 0.2), (0.32, -0.02)], 0, 32)
+        a.lathe(Matrix(), [(0.32, 0.0), (0.56, 0.0), (0.6, 0.09), (0.56, 0.26), (0.32, 0.26), (0.32, 0.0)], 1, 32)
         for i in range(8):
             ang = 2 * math.pi * i / 8
             M = Matrix.Rotation(ang, 4, "Z")
-            out = [(0.42, -0.24), (0.95, -0.4), (1.7, 0.0), (0.95, 0.4), (0.42, 0.24)]
+            out = [(0.42, -0.28), (0.95, -0.44), (1.6, 0.0), (0.95, 0.44), (0.42, 0.28)]   # broad points, as Flash
             a.prism(M @ Matrix.Rotation(math.radians(-4), 4, "Y"), out, 0.02, 0.1, 0)
         if T >= 3:
             for i in range(8):
                 ang = 2 * math.pi * (i + 0.5) / 8
-                a.cone(Matrix.Rotation(ang, 4, "Z") @ Tm((0.42, 0, 0.05)) @ Matrix.Rotation(math.pi / 2, 4, "Y"),
+                a.cone(Matrix.Rotation(ang, 4, "Z") @ Tm((0.56, 0, 0.1)) @ Matrix.Rotation(math.pi / 2, 4, "Y"),
                        0.06, 0.0, 0.3, 0, 6)
-    one("star", [st], star, parent=sh, bevel=0.012)
+    hubm = mat("starhub-f8", (66, 42, 30), rough=0.6, metal=0.5, wear=(110, 74, 50), wear_amt=0.35, dirt=0.3,
+               fold=8)                                          # Flash: a dark ring round the arch's end (it turns)
+    one("star", [st, hubm], star, parent=sh, bevel=0.012)
 
     def spin(f):
         sh.rotation_euler = (0, 0, math.radians(-90 * f))
