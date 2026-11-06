@@ -243,6 +243,8 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /api/:apiVersion/bm/friends/request/answer",
   "POST /api/:apiVersion/bm/friends/request/cancel",
   "POST /api/:apiVersion/bm/friends/remove",
+  // The player's gift wish list (beta 7): a setting, changes no game state.
+  "POST /api/:apiVersion/bm/friends/wishes",
   "POST /alliance/createalliance",
   "POST /alliance/editalliance",
   "POST /alliance/leavealliance",
