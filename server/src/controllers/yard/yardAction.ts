@@ -15,6 +15,7 @@ import { addEvents, builtEvents, recordAchievements, unseenAchievements } from "
 import type { AchievementEvents } from "../../services/achievements/evaluate.js";
 import { autobankYard } from "../../services/maproom/v2/autobank.js";
 import { isShinyLocked } from "../../services/user/shinyLock.js";
+import { coinNotes, coinStore } from "../../services/events/eventCoins.js";
 import { catchUpYard, type CompletedJob } from "../../services/yard/catchUp.js";
 import { catchUpDamage } from "../../services/yard/catchUpDamage.js";
 import { creditResources } from "../../services/yard/credit.js";
@@ -218,6 +219,14 @@ export interface YardOutcome<Report> {
    * (the lock stops spending, not receiving).
    */
   grantShiny?: number;
+  /**
+   * Event coins to take (`services/events/eventCoins.ts`): the decorations
+   * shop. Refused `409 coins` if short. The Shiny lock does not apply: coins
+   * are earned, never bought.
+   */
+  coins?: CoinChange;
+  /** Event coins to give: an event reward. Never refused. */
+  grantCoins?: CoinChange;
   /** Empire points to add. */
   points?: number;
   /**
@@ -262,6 +271,34 @@ export interface YardAction<Schema extends z.ZodType, Report> {
    */
   reportAfterAchievements?: (save: Save) => Report;
 }
+
+/** An event coin change and why, for the coin log. */
+export interface CoinChange {
+  amount: number;
+  /** Short, e.g. `decor-55`, `calendar`. */
+  reason: string;
+}
+
+/**
+ * Takes and gives the outcome's event coins, in the action's transaction
+ * (after {@link applyOutcome}, so a yard refusal comes first; a coin refusal
+ * rolls everything back). The coin row is locked after the main yard's, as
+ * everywhere (`eventCoins.ts`).
+ */
+export const applyCoins = async (tx: EntityManager, user: User, outcome: YardOutcome<unknown>): Promise<void> => {
+  const spend = amount(outcome.coins?.amount);
+  if (spend > 0) {
+    const left = await coinStore().spend(tx, user.userid, spend, outcome.coins!.reason);
+    if (left === null) {
+      const have = await coinStore().balance(tx, user.userid);
+      throw yardRefusedErr("coins", "You do not have enough event coins for that.", {
+        coins: { have, need: spend },
+      });
+    }
+  }
+  const give = amount(outcome.grantCoins?.amount);
+  if (give > 0) await coinStore().grant(tx, user.userid, give, outcome.grantCoins!.reason);
+};
 
 /** Identity helper so `run`'s `body` is typed from `schema`. */
 export const defineYardAction = <Schema extends z.ZodType, Report>(
@@ -667,6 +704,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
 
       const outcome = await action.run({ save, user, body: parsed.data, now, completed, em: tx });
       applyOutcome(save, user, outcome);
+      await applyCoins(tx, user, outcome);
       // A Resource Pod built, finished or recycled moves the main yard's
       // Inferno caps (`syncInfernoCap`).
       if (yard.inferno) syncInfernoCap(yard.main, yard.inferno);
@@ -708,6 +746,8 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         achievements: unseenAchievements(yard.main),
         questsClaimable: yard.main.dailyquests ? claimableCount(readQuests(yard.main.dailyquests), now) : null,
         outpost: yard.outpost ? String(yard.outpost.baseid) : null,
+        // Event coins changed in this request (a buy, a claim, a weekend's coins).
+        coins: coinNotes(tx),
       };
     });
 
@@ -729,6 +769,9 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         ...(answer.achievements.length > 0 && { achievements: answer.achievements }),
         // The quest window's red number (`services/quests/state.ts`).
         ...(answer.questsClaimable !== null && { questsClaimable: answer.questsClaimable }),
+        // The purse after this request's coin changes, and what was paid (`eventCoins.ts`).
+        ...(answer.coins && { eventcoins: answer.coins.balance }),
+        ...(answer.coins && answer.coins.gained.length > 0 && { coinsGained: answer.coins.gained }),
       },
       outpost: answer.outpost,
       flingerBefore,

@@ -14,6 +14,7 @@ import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import { typeName } from "@/game/yard/planner/summary";
 import { AMOUNT_CHANGE_SIGNS } from "@/ui/amountChange";
 import { formatAmount, formatCountdown } from "@/ui/format";
+import { gameIcon } from "@/ui/gameIcon";
 import { Panel } from "@/ui/Panel";
 import { resourceIcon, RESOURCE_KEYS } from "@/ui/resourceIcon";
 import { eventsArt } from "./eventsArt";
@@ -156,6 +157,10 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
     case "krallen":
       pictures.append(krallenPicture(1, "icon", "events-reward__image"));
       break;
+    case "eventCoins":
+      pictures.append(gameIcon("eventcoin", { size: 24, decorative: true }));
+      figure = shortAmount(reward.amount);
+      break;
     case "decoration": {
       const art = resolveArt(reward.type, 1, ArtState.DEFAULT);
       if (art) {
@@ -172,7 +177,7 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
     }
   }
   badge.append(pictures);
-  const amount = reward.kind === "resources" || reward.kind === "shiny";
+  const amount = reward.kind === "resources" || reward.kind === "shiny" || reward.kind === "eventCoins";
   if (gained && amount && figure) {
     badge.classList.add("events-reward--gain");
     figure = `${AMOUNT_CHANGE_SIGNS.gain}${figure}`;

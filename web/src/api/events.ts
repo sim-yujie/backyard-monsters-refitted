@@ -25,6 +25,8 @@ export type EventReward =
   | { readonly kind: "shopItem"; readonly item: string }
   | { readonly kind: "speedup"; readonly item: string; readonly count: number }
   | { readonly kind: "decoration"; readonly type: number; readonly count: number }
+  /** Event coins (beta 7): the decorations shop's currency. */
+  | { readonly kind: "eventCoins"; readonly amount: number }
   /** The champion Krallen: level 1 the first time, one level more each later win, at most 5. */
   | { readonly kind: "krallen" };
 
@@ -35,6 +37,7 @@ export type GrantedReward =
   | { kind: "shopItem"; item: string; endsAt: number }
   | { kind: "speedup"; item: string; count: number; held: number }
   | { kind: "decoration"; type: number; count: number; stored: number }
+  | { kind: "eventCoins"; amount: number }
   /** `raised` false: she was at the top already and nothing changed. */
   | { kind: "krallen"; level: number; raised: boolean };
 

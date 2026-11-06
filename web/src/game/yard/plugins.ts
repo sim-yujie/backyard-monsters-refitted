@@ -10,6 +10,7 @@
  */
 import "./plugins/achievements";
 import "./plugins/announcements";
+import "./plugins/eventCoins";
 import "./plugins/events";
 import "./plugins/goals";
 import "./plugins/guidedStart";

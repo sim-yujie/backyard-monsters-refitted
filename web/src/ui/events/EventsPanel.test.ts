@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import type { EventView } from "@/api/events";
-import { claimedLine, EVENT_EXTRAS, EventsPanel, nextText, type EventsPanelView } from "./EventsPanel";
+import { claimedLine, EVENT_EXTRAS, EventsPanel, nextText, rewardBadge, type EventsPanelView } from "./EventsPanel";
 
 const DAYS: EventView["calendar"] = {
   days: [
@@ -236,6 +236,17 @@ describe("EventsPanel: the Krallen Hunt", () => {
     panel.render(list([claimed]));
     expect(panel.element.querySelector(".events-krallen__done")?.textContent).toBe("Prize claimed. The next hunt starts on the 15th.");
     panel.close();
+  });
+});
+
+describe("rewardBadge: event coins (beta 7)", () => {
+  it("the coin and the amount; claimed, a green +N", () => {
+    const offer = rewardBadge({ kind: "eventCoins", amount: 15 });
+    expect(offer.querySelector("[data-icon='eventcoin'], img")).not.toBeNull();
+    expect(offer.querySelector(".events-reward__figure")!.textContent).toBe("15");
+    const gained = rewardBadge({ kind: "eventCoins", amount: 15 }, true);
+    expect(gained.querySelector(".events-reward__figure")!.textContent).toBe("+15");
+    expect(gained.classList.contains("events-reward--gain")).toBe(true);
   });
 });
 

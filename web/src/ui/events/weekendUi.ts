@@ -9,6 +9,9 @@ import {
 import { formatCountdown } from "@/ui/format";
 import { gameIcon, iconChip, type GameIconName } from "@/ui/gameIcon";
 import { Popup } from "@/ui/Popup";
+import { fetchCoins, type CoinsAnswer, type WeekendCoins } from "@/api/eventCoins";
+import { coinBalance } from "@/game/eventCoins";
+import { coinAmount, coinWords } from "./coinUi";
 import "./weekend.css";
 
 /**
@@ -114,6 +117,61 @@ export interface WeekendPopupOptions {
   /** The server's clock now. */
   readonly now: number;
   readonly onClose?: () => void;
+  /** Reads the coin purse and this weekend's awards (`GET /bm/coins`); tests pass their own. */
+  readonly loadCoins?: () => Promise<CoinsAnswer | null>;
+}
+
+/** What each weekend part pays before the server says (`server/.../weekendCoins.ts` WEEKEND_COINS). */
+const WEEKEND_COIN_DEFAULTS = { played: 25, boost: 75 } as const;
+
+/**
+ * The pop-up's coin rows (event coins, beta 7): "Play [coin] 25" and
+ * "Boost [coin] 75", a tick on each one paid this weekend, and the purse.
+ * Drawn at once from the defaults and the last balance seen, then filled
+ * from `GET /bm/coins`.
+ */
+export class WeekendCoinRows {
+  readonly element: HTMLElement;
+  private readonly rows: Record<"played" | "boost", { row: HTMLElement; amount: HTMLElement; tick: HTMLElement }>;
+  private readonly purse: HTMLElement;
+
+  constructor(run: Pick<WeekendRun, "id">) {
+    this.element = el("div", "weekend-coins");
+    const list = el("ul", "weekend-coins__rows");
+    list.setAttribute("aria-label", "Event coins this weekend");
+    const row = (part: "played" | "boost", words: string, icon: GameIconName) => {
+      const item = el("li", "weekend-coins__row");
+      item.dataset["part"] = part;
+      const what = el("span", "weekend-coins__what");
+      what.append(gameIcon(icon, { size: 16, decorative: true }), words);
+      const amount = el("span", "weekend-coins__amount");
+      const tick = el("span", "weekend-coins__tick", "✓");
+      tick.setAttribute("aria-label", "Paid");
+      tick.hidden = true;
+      item.append(what, amount, tick);
+      list.append(item);
+      return { row: item, amount, tick };
+    };
+    this.rows = { played: row("played", "Play", "time"), boost: row("boost", "Boost", WEEKEND_ICON[run.id]) };
+    this.purse = el("p", "weekend-coins__purse");
+    this.element.append(list, this.purse);
+    this.update(null, coinBalance());
+  }
+
+  /** Paid ticks and amounts from the server (null: none yet), and the purse (null: unknown, hidden). */
+  update(weekend: WeekendCoins | null, balance: number | null): void {
+    for (const part of ["played", "boost"] as const) {
+      const { row, amount, tick } = this.rows[part];
+      const coins = weekend?.coins[part] ?? WEEKEND_COIN_DEFAULTS[part];
+      const paid = weekend?.[part] === true;
+      amount.replaceChildren(coinAmount(coins, { decorative: true }));
+      row.setAttribute("aria-label", `${part === "played" ? "Play" : "Boost"}: ${coinWords(coins)}${paid ? ", paid" : ""}`);
+      row.classList.toggle("weekend-coins__row--paid", paid);
+      tick.hidden = !paid;
+    }
+    this.purse.hidden = balance === null;
+    if (balance !== null) this.purse.replaceChildren("You have ", coinAmount(balance));
+  }
 }
 
 /**
@@ -148,8 +206,17 @@ export const openWeekendPopup = (options: WeekendPopupOptions): Popup => {
   const done = el("button", "btn btn--primary weekend-popup__done", "OK");
   done.type = "button";
   done.addEventListener("click", () => popup.close());
-  body.append(hero, el("h3", "weekend-popup__title", run.title), el("p", "weekend-popup__line", run.line), when, done);
+  const coins = new WeekendCoinRows(run);
+  body.append(hero, el("h3", "weekend-popup__title", run.title), el("p", "weekend-popup__line", run.line), when, coins.element, done);
   popup.setContent(body).mount(options.container);
+  (options.loadCoins ?? fetchCoins)()
+    .then((answer) => {
+      // An announced weekend has no paid parts yet: the defaults stand.
+      if (answer) coins.update(answer.weekend, answer.balance);
+    })
+    .catch(() => {
+      // Offline or refused: the defaults and the last balance stay.
+    });
   done.focus({ preventScroll: true });
   return popup;
 };
