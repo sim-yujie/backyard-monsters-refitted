@@ -706,8 +706,29 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
   ],
 };
 
-/** Every type with new art the old-art switch turns back: the towers, the Town Hall (14), the 3D buildings. */
-const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = { ...TOWER_TIER_ART, 14: TOWN_HALL_ART, ...BUILDING_3D_ART };
+/**
+ * The painted yard buildings (beta 7, owner decision 34: "Codex-painted Modern look"): the Monster Locker (8),
+ * painted by Codex from Flash's four looks (levels 1 to 4) in the finish of the painted Town Hall and fitted onto
+ * Flash's footprint by `web/tools/locker-repaint/` (`finish.py`, then `export.py`), on Flash's own shadows. As the
+ * owner asked (1 Nov 2026), the key and the cogs are inside the machine: the key's shaft goes down into the gold cogs
+ * and only its handle stands out. The handle turns about its shaft while a monster unlocks, as Flash's key did: the
+ * strip over a `body` without it. Each look has a damaged picture; the destroyed one is shared, as Flash's is. Like
+ * the 3D buildings, the Inferno keeps its own art.
+ */
+export const PAINTED_BUILDING_ART: Readonly<Record<number, readonly TierArt[]>> = {
+  // 8 Monster Locker: painted, Flash's four looks; its key turns while a monster unlocks
+  8: [
+    // LOCKER_ROWS
+  ],
+};
+
+/** Every type with new art the old-art switch turns back: the towers, the Town Hall (14), the 3D and painted buildings. */
+const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = {
+  ...TOWER_TIER_ART,
+  14: TOWN_HALL_ART,
+  ...BUILDING_3D_ART,
+  ...PAINTED_BUILDING_ART,
+};
 
 /**
  * Whether an Inferno yard's `type` has tiers of its own (`INFERNO_TOWER_TIER_ART`,
@@ -719,16 +740,16 @@ export const hasInfernoTiers = (type: number, kind: YardKind): boolean =>
 /**
  * The new picture a building shows at `level` in a `kind` yard, or null with
  * the Classic look, for a tower not in `MODERN_TOWERS`, below level 1, for
- * every type without new art and for a 3D building in an Inferno yard with
- * no Inferno 3D look of its own (it keeps its Inferno art until one is
- * approved).
+ * every type without new art and for a 3D or painted building in an Inferno
+ * yard with no Inferno 3D look of its own (it keeps its Inferno art until one
+ * is approved).
  */
 export const tierArtFor = (type: number, level: number, kind: YardKind = "main"): TierArt | null => {
   if (!newTowerArt()) return null;
   let looks: readonly TierArt[] | undefined;
   if (kind === "inferno" && type in INFERNO_BUILDING_3D_ART) {
     looks = INFERNO_BUILDING_3D_ART[type];
-  } else if (kind === "inferno" && type in BUILDING_3D_ART) {
+  } else if (kind === "inferno" && (type in BUILDING_3D_ART || type in PAINTED_BUILDING_ART)) {
     return null;
   } else {
     const inferno = kind === "inferno" && type in INFERNO_TOWER_TIER_ART;
