@@ -270,6 +270,22 @@ describe.skipIf(!dbName)("the daily privacy clean-up (retention.ts)", () => {
     expect(left.map((row) => row.fingerprint)).toEqual(["zz-ret-29", "zz-ret-0"]);
   });
 
+  test("browser add-on noise goes; graphics or sound switched off stays (owner, 7 Nov 2026)", async () => {
+    const rows: [string, string][] = [
+      ["zz-ret-iabjs", "SyntaxError: Unexpected end of input (iabjs://browser_declutter:37:40)"],
+      ["zz-ret-webgl", "GraphicsOffError: Graphics off: WebGL is disabled due to your security policy (No available renderer)"],
+      ["zz-ret-audio", "Error: Web Audio API is disabled due to your security policy"],
+    ];
+    for (const [fingerprint, message] of rows) {
+      await sql(`INSERT INTO bym.app_error (source, fingerprint, message) VALUES ('browser', ?, ?)`, [fingerprint, message]);
+    }
+
+    await run();
+
+    const left = await sql<{ fingerprint: string }>(`SELECT fingerprint FROM bym.app_error WHERE fingerprint LIKE 'zz-ret-%' ORDER BY id`);
+    expect(left.map((row) => row.fingerprint)).toEqual(["zz-ret-webgl", "zz-ret-audio"]);
+  });
+
   test("an error's senders (name and address) go 30 days after they last hit it, even while the error stays", async () => {
     await sql(`INSERT INTO bym.app_error (source, fingerprint, message) VALUES ('browser', 'zz-ret-senders', 'x')`);
     for (const days of [45, 31, 29, 0]) {

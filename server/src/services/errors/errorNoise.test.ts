@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { isBrowserNoise } from "./errorNoise.js";
 
-/** Errors from browser add-ons and the player's own settings are not kept (owner, 6 Nov 2026). */
+/** Errors from browser add-ons are not kept (owner, 6 Nov 2026); the player's graphics/sound settings are (7 Nov). */
 describe("isBrowserNoise", () => {
   test("Facebook's in-app browser scripts", () => {
     expect(isBrowserNoise("SyntaxError: Unexpected end of input", "iabjs://browser_declutter:37:40")).toBe(true);
@@ -14,9 +14,12 @@ describe("isBrowserNoise", () => {
     ).toBe(true);
   });
 
-  test("WebGL or Web Audio switched off by the browser's settings", () => {
-    expect(isBrowserNoise("Unhandled rejection: Error: WebGL is disabled due to your security policy")).toBe(true);
-    expect(isBrowserNoise("Error: Web Audio API is disabled due to your security policy")).toBe(true);
+  test("graphics or sound switched off in the browser are kept (owner, 7 Nov 2026)", () => {
+    expect(isBrowserNoise("Unhandled rejection: Error: WebGL is disabled due to your security policy")).toBe(false);
+    expect(isBrowserNoise("Error: Web Audio API is disabled due to your security policy")).toBe(false);
+    expect(
+      isBrowserNoise("GraphicsOffError: Graphics off: WebGL is disabled due to your security policy (No available renderer)")
+    ).toBe(false);
   });
 
   test("the game's own errors are kept", () => {

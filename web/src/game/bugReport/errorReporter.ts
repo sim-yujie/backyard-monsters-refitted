@@ -77,6 +77,17 @@ export const isNoise = (message: string, place: string, stack: string): boolean 
   message.trim() === "" || NOISE.some((pattern) => pattern.test(message.trim())) || EXTENSION_URL.test(place) || EXTENSION_URL.test(stack);
 
 let uninstall: (() => void) | null = null;
+let reportCaught: ((error: unknown) => void) | null = null;
+
+/**
+ * Sends an error the game caught itself but still wants on the owner's
+ * dashboard (graphics switched off: the game shows its own message, and this
+ * is the evidence). Counted and batched like an uncaught one; does nothing
+ * before {@link installErrorReporter}.
+ */
+export const reportCaughtError = (error: unknown): void => {
+  reportCaught?.(error);
+};
 
 /**
  * Starts listening (once; a second call does nothing). Returns the function
@@ -150,6 +161,7 @@ export const installErrorReporter = (target: Window = window, overrides: Partial
 
   target.addEventListener("error", onError);
   target.addEventListener("unhandledrejection", onRejection);
+  reportCaught = (error) => add("error", messageOf(error), "", stackOf(error));
 
   uninstall = () => {
     target.removeEventListener("error", onError);
@@ -157,6 +169,7 @@ export const installErrorReporter = (target: Window = window, overrides: Partial
     if (timer !== null) deps.clearTimer(timer);
     timer = null;
     stopped = true;
+    reportCaught = null;
     uninstall = null;
   };
   return uninstall;

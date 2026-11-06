@@ -8,13 +8,15 @@ import type { EntityManager } from "@mikro-orm/postgresql";
  * - `iabjs://`: scripts Facebook's in-app browser adds to every page
  *   ("browser_declutter"); its own syntax errors land in our handler.
  * - `window.ethereum`: crypto-wallet browser add-ons poking the page.
- * - "disabled due to your security policy": the player's browser has WebGL or
- *   Web Audio switched off by its own settings; nothing in the game can fix it.
+ *
+ * Graphics (WebGL) or sound (Web Audio) switched off in the player's browser
+ * ("... is disabled due to your security policy") is NOT noise and is kept
+ * (owner, 7 Nov 2026): it shows how many players see the game's
+ * "graphics are off" message.
  */
 export const BROWSER_NOISE: readonly RegExp[] = [
   /iabjs:\/\//i,
   /window\.ethereum/i,
-  /is disabled due to your security policy/i,
 ];
 
 /** Whether a browser error is one of {@link BROWSER_NOISE}. */
@@ -32,7 +34,6 @@ export const isBrowserNoise = (message: string, place = "", stack = ""): boolean
 const STORED_NOISE_LIKE: readonly string[] = [
   "%iabjs://%",
   "%window.ethereum%",
-  "%is disabled due to your security policy%",
   "%Parse Error: Invalid EOF state%",
 ];
 
