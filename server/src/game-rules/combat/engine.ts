@@ -257,6 +257,8 @@ import {
   OCTO_ID,
   POKEY_ID,
   PROJECT_X_ID,
+  SLIMEATTIKUS_ID,
+  SPLIT_COPY_DAMAGE_SHARE,
   PROJECT_X_RADIUS,
   SWARM_SIZE,
   TERATORN_ID,
@@ -276,6 +278,8 @@ import {
   finkExtraTargets,
   projectXMultiplier,
   rankOf,
+  splitCopyCount,
+  splitCopyHealthShare,
   swarmSpeedShare,
   thornsShare,
   venomShare,
@@ -943,6 +947,8 @@ export interface CreepSnapshot {
   readonly swarming?: boolean;
   /** Oozed by an Octo-ooze it killed: dealing less damage for a while (Lab "Weakening Ooze"). */
   readonly weakened?: boolean;
+  /** A copy a ranked Slimeattikus left as it died (Lab "Split"): drawn small, split-marked. */
+  readonly splitCopy?: boolean;
 }
 
 /**
@@ -1477,6 +1483,8 @@ interface Creep {
   weakUntil: number;
   /** The share of its damage the ooze takes off while it lasts. */
   weakShare: number;
+  /** A copy a ranked Slimeattikus left as it died (Lab "Split"); it never splits again. */
+  splitCopy: boolean;
 }
 
 /** A {@link ChampionLesson} as the battle builds it (issue #219). */
@@ -1547,6 +1555,7 @@ const NO_ABILITIES = {
   swarming: false,
   weakUntil: 0,
   weakShare: 0,
+  splitCopy: false,
 } as const;
 
 interface DefenderHome {
@@ -2001,8 +2010,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const traps: Trap[] = [];
   const bunkers: Bunker[] = [];
   const bunkerLosses: BunkerLossTally = new Map();
-  /** Dead Slimeattikus whose Minis are born at the end of the step (issue #129). */
-  const pendingSplits: Array<{ readonly parent: Creep; readonly count: number }> = [];
+  /**
+   * Dead Slimeattikus whose Minis (issue #129) and, for a ranked one, copies
+   * (Lab "Split") are born at the end of the step.
+   */
+  const pendingSplits: Array<{
+    readonly parent: Creep;
+    readonly count: number;
+    readonly copies: number;
+  }> = [];
   /** Where the dead lie, for Rezghul to raise (`Targeting._deadCreepCells`). */
   const corpses: Corpse[] = [];
   /** Corpses Rezghul raised this step, back on their feet at its end. */
@@ -2615,8 +2631,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   /**
    * What a creep's death sets off. A Slimeattikus splits into Slimeattikus
-   * Minis (issue #129, {@link splitOnDeath}); they are born when the step is
-   * done, so none of them acts on the tick its parent fell.
+   * Minis (issue #129, {@link splitOnDeath}), and a ranked one into copies of
+   * itself as well (Lab "Split", {@link copyOnDeath}); they are born when the
+   * step is done, so none of them acts on the tick its parent fell. A copy
+   * splits into nothing.
    */
   const onDeath = (creep: Creep): void => {
     // `dieFinish` files every dead creep but a champion or a disposable one as
@@ -2633,9 +2651,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         y: creep.y,
       });
     }
-    const splits = monsterStat(creep.monsterId, "splits", creep.level);
-    if (splits > 0 && !creep.champion) {
-      pendingSplits.push({ parent: creep, count: Math.floor(splits) });
+    const splits = creep.splitCopy
+      ? 0
+      : Math.floor(monsterStat(creep.monsterId, "splits", creep.level));
+    const copies =
+      creep.monsterId === SLIMEATTIKUS_ID && !creep.splitCopy ? splitCopyCount(creep.rank) : 0;
+    if ((splits > 0 || copies > 0) && !creep.champion) {
+      pendingSplits.push({ parent: creep, count: splits, copies });
     }
     if (creep.rank > 0 && creep.monsterId === PROJECT_X_ID) projectXBlast(creep);
   };
@@ -2669,10 +2691,44 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
   };
 
-  /** Splits waiting for the end of the step (issue #129). */
+  /**
+   * Lab "Split" (owner, beta 7 grill item 31, 6 Nov 2026): a ranked
+   * Slimeattikus leaves {@link splitCopyCount} copies of itself, each placed
+   * as a Mini is, at its level, with {@link splitCopyHealthShare} of its full
+   * health and {@link SPLIT_COPY_DAMAGE_SHARE} of its damage. A copy is
+   * rank 0 and marked, so it leaves neither copies nor Minis; like a Mini it is
+   * spawned, not flung, and disposable. An attacker's attack, a defender's
+   * defend.
+   */
+  const copyOnDeath = (parent: Creep, count: number): void => {
+    const health = splitCopyHealthShare(parent.rank);
+    for (let child = 0; child < count; child += 1) {
+      const screenX = rng.float() * 120 - 60;
+      const screenY = rng.float() * 120 - 60;
+      const at = { x: parent.ix + screenY + screenX / 2, y: parent.iy + screenY - screenX / 2 };
+      const copy = spawnCreep(
+        parent.monsterId,
+        parent.level,
+        at,
+        parent.friendly,
+        parent.friendly ? "defend" : "attack",
+      );
+      copy.maxHp = Math.max(1, Math.round(copy.maxHp * health));
+      copy.hp = copy.maxHp;
+      copy.damage = Math.trunc(copy.damage * SPLIT_COPY_DAMAGE_SHARE);
+      copy.splitCopy = true;
+      copy.disposable = true;
+      joinRow(copy, false);
+    }
+  };
+
+  /** Splits waiting for the end of the step (issue #129, Lab "Split"). */
   const bornAtStepEnd = (): void => {
     const waiting = pendingSplits.splice(0);
-    for (const { parent, count } of waiting) splitOnDeath(parent, count);
+    for (const { parent, count, copies } of waiting) {
+      splitOnDeath(parent, count);
+      copyOnDeath(parent, copies);
+    }
     const risen = pendingZombies.splice(0);
     for (const { corpse, raiser } of risen) raise(corpse, raiser);
     const hatching = pendingSpurtz.splice(0);
@@ -7296,6 +7352,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         : {}),
       ...(creep.swarming ? { swarming: true } : {}),
       ...(creep.weakUntil > tick ? { weakened: true } : {}),
+      ...(creep.splitCopy ? { splitCopy: true } : {}),
     }));
 
   const weakenedTowers = (): number[] =>

@@ -1,4 +1,5 @@
 import type { AcademyData } from "@/api/types";
+import { splitCopyCount } from "@/game/combat/rules";
 import { timeCost } from "@/game/yard/buildingCosts";
 import { JobKind, LAB_TYPE } from "@/game/yard/jobs";
 import { NEED_MORE_SILOS_PHRASE, overCap } from "@/game/yard/storage";
@@ -19,7 +20,7 @@ import type { TrainingContext } from "./training";
  * What the Lab tab shows, as data (`docs/design/yard-buildings.md` §6 "Lab
  * tab"; `docs/specs/monsters-and-hatchery.md` §4.2).
  *
- * The tab draws; this decides. The Lab's state, the fourteen monsters with an
+ * The tab draws; this decides. The Lab's state, the fifteen monsters with an
  * ability with their rank and next rank, what the ability does now and next,
  * the one reason Start (or Instant) cannot be pressed, and every price come
  * from here, checked in the order the server checks them (`researchGate`,
@@ -195,8 +196,8 @@ const unlocked = (context: LabContext, id: string): boolean =>
   Number(context.save.lockerdata?.[id]?.t) === 2;
 
 /**
- * The fourteen monsters with an ability, in the Lab's list order
- * (`MONSTERLABPOPUP.as:452`, with the revamp's four placed by price).
+ * The fifteen monsters with an ability, in the Lab's list order
+ * (`MONSTERLABPOPUP.as:452`, with the revamp's five placed by price).
  */
 export const labRows = (context: LabContext): LabRow[] => {
   const research = runningResearch(context);
@@ -345,9 +346,12 @@ const times = (value: number): string => `${value}×`;
  * (`client/scripts/MONSTERLAB.as:77-188`); how the original printed each is
  * `MONSTERLABPOPUP.as:215-250` (Eye-ra as a percentage, Bandito as a speed,
  * Fang, Project X and Wormzer as multiples of the monster's damage). The
- * revamp's four (owner, 2 Nov 2026) read as percentages.
+ * revamp's four (owner, 2 Nov 2026) read as percentages; Slimeattikus's
+ * "Split" (owner, 6 Nov 2026) as its copies times each one's health share.
  */
-const EFFECTS: Readonly<Record<string, { readonly label: string; readonly value: (v: number) => string }>> = {
+const EFFECTS: Readonly<
+  Record<string, { readonly label: string; readonly value: (v: number, rank: number) => string }>
+> = {
   C3: { label: "Blink range", value: String },
   C4: { label: "Extra targets", value: String },
   C7: { label: "Whirlwind speed", value: times },
@@ -362,13 +366,14 @@ const EFFECTS: Readonly<Record<string, { readonly label: string; readonly value:
   C2: { label: "Killer's damage", value: (v) => `-${percent(v)} for 5 s` },
   C6: { label: "Damage reflected", value: percent },
   C10: { label: "Double-damage chance", value: percent },
+  C17: { label: "Split", value: (v, rank) => `${splitCopyCount(rank)} × ${percent(v)} health` },
 };
 
 /** What one rank of an ability gives, "Blink range 300"; rank 0 is "none". */
 export const effectAt = (ability: LabAbility, rank: number): string => {
   const effect = EFFECTS[ability.id] ?? { label: ability.effectLabel, value: String };
   const value = ability.effect[rank - 1];
-  return rank < 1 || value === undefined ? "none" : effect.value(value);
+  return rank < 1 || value === undefined ? "none" : effect.value(value, rank);
 };
 
 /**

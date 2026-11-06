@@ -182,8 +182,8 @@ describe("the monster catalogue", () => {
 });
 
 describe("the lab table", () => {
-  it("has Flash's ten rows in the lab's own order, and the revamp's four by price", () => {
-    expect(LAB_ABILITIES).toHaveLength(14);
+  it("has Flash's ten rows in the lab's own order, and the revamp's five by price", () => {
+    expect(LAB_ABILITIES).toHaveLength(15);
     expect(ids(LAB_ABILITIES)).toEqual([
       "C1",
       "C2",
@@ -195,13 +195,14 @@ describe("the lab table", () => {
       "C5",
       "C9",
       "C10",
+      "C17",
       "C11",
       "C13",
       "C14",
       "C12",
     ]);
     expect(LAB_ABILITIES.map((one) => one.order)).toEqual(
-      Array.from({ length: 14 }, (_, k) => k + 1),
+      Array.from({ length: 15 }, (_, k) => k + 1),
     );
     for (const one of LAB_ABILITIES) {
       expect(one.costs, one.id).toHaveLength(3);
@@ -243,7 +244,20 @@ describe("the lab table", () => {
       ],
       effect: [0.1, 0.15, 0.2],
     });
-    expect(labAbility("C17")).toBeUndefined();
+  });
+
+  it("carries the owner's prices and health shares for Slimeattikus's Split (6 Nov 2026)", () => {
+    // Beta 7 grill item 31: ~6M / 9M / 13.5M putty, 2.5 days a rank;
+    // copies at 25% / 35% / 35% of the original's health.
+    expect(labAbility("C17")).toMatchObject({
+      name: "Split",
+      costs: [
+        [6000000, 216000],
+        [9000000, 216000],
+        [13500000, 216000],
+      ],
+      effect: [0.25, 0.35, 0.35],
+    });
   });
 
   it("carries Bolt's and D.A.V.E.'s numbers", () => {
