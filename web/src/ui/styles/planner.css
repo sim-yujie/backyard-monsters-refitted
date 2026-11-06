@@ -1736,6 +1736,47 @@
   }
 }
 
+/*
+ * A short screen (a phone on its side, 812x375): the card has under 200 px
+ * between the planner's bars, and the line, the tabs and the pinned "Got it"
+ * left the text 30 px (patch 6.3). The tabs and the line share one row, the
+ * line in small type, and "Got it" scrolls with the text: the title bar's
+ * close stays in sight for leaving.
+ */
+@media (height <= 500px) {
+  .planner-help-dock {
+    padding: var(--space-1) var(--space-3);
+  }
+
+  .planner-help .panel__head {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-3);
+    padding-top: var(--space-2);
+  }
+
+  .planner-help .panel__head > .planner-help__tabs {
+    flex: none;
+    order: -1;
+  }
+
+  .planner-help .panel__head > .planner-help__intro {
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: var(--text-xs);
+  }
+
+  .planner-help .panel__body {
+    padding-block: var(--space-2);
+  }
+
+  .planner-help__footer {
+    position: static;
+    margin-bottom: 0;
+    padding-block: 0;
+  }
+}
+
 /* ── Compare (#9) ─────────────────────────────────────────────────────────
  * The two panes are the canvas's; this is the chrome over them: a name at the
  * top of each pane, the planner's bars set aside (compare is read-only), and

@@ -469,6 +469,21 @@ describe("BuildMenu", () => {
     expect(menu.activeKind).toBe(DecorKind.PREMIUM);
   });
 
+  it("opens another tab or sub-tab at its top; reopening the window keeps its place (owner, 6 Nov 2026)", () => {
+    const { menu } = setup([HALL]);
+    menu.open(BuildCategory.DECORATIONS);
+    const main = menu.element.querySelector<HTMLElement>(".build-menu__main")!;
+    main.scrollTop = 283;
+    menu.openKind(DecorKind.GOOD);
+    expect(main.scrollTop).toBe(0);
+    main.scrollTop = 120;
+    menu.close();
+    menu.open();
+    expect(main.scrollTop).toBe(120);
+    menu.open(BuildCategory.BUILDINGS);
+    expect(main.scrollTop).toBe(0);
+  });
+
   it("the sub-tabs show only on the Decorations tab, and not where there are none", () => {
     const { menu } = setup([HALL]);
     menu.open(BuildCategory.BUILDINGS);

@@ -118,7 +118,9 @@ export class FriendsTab implements FriendsTabView {
     this.options = options;
     this.element = make("div", "friends-tab friends-tab--friends");
     this.summary = make("p", "friends-summary");
-    this.body = make("div", "friends-tab__body");
+    // Only the list scrolls: the search and the filter buttons stay over it
+    // (owner, 6 Nov 2026: tabs fixed at the top).
+    this.body = make("div", "tab-scroll friends-tab__body");
     this.tools = make("div", "friends-tools");
     const searchBox = make("div", "friends-tools__search");
     searchBox.setAttribute("role", "search");

@@ -165,6 +165,12 @@ export interface SpeedupOffer {
   readonly price: number;
   /** Free ones of this speed-up the yard holds (event rewards); spent before Shiny. */
   readonly free: number;
+  /**
+   * Seconds of a held free −1 h / −2 h that would go unused: the job has less
+   * time left than it takes off, so it finishes now and the rest is lost
+   * (patch 6.3). 0 otherwise.
+   */
+  readonly unused: number;
   /** Null when it can be pressed, else why not. */
   readonly blocked: "paused" | "tooShort" | "credits" | null;
 }
@@ -455,12 +461,17 @@ const speedup = (
   const seconds = Math.trunc(remaining);
   const price =
     item === "SP4" ? timeCost(seconds) : item === "SP1" || free > 0 ? 0 : SPEEDUP_PRICE[item];
+  // A held free −1 h / −2 h also goes on a shorter job, above five minutes
+  // (patch 6.3, server `speedupAllowed`): it finishes it and the rest is lost.
+  // A bought one is not offered there: Finish now never costs more.
   const allowed =
     item === "SP1"
       ? seconds > 0 && seconds <= FREE_FINISH_SECONDS
       : item === "SP4"
         ? seconds > FREE_FINISH_SECONDS
-        : seconds >= SPEEDUP_SECONDS[item];
+        : seconds >= SPEEDUP_SECONDS[item] || (free > 0 && seconds > FREE_FINISH_SECONDS);
+  const unused =
+    allowed && (item === "SP2" || item === "SP3") ? Math.max(0, SPEEDUP_SECONDS[item] - seconds) : 0;
   const blocked = paused
     ? "paused"
     : !allowed
@@ -468,7 +479,7 @@ const speedup = (
       : credits < price
         ? "credits"
         : null;
-  return { item, price, free, blocked };
+  return { item, price, free, unused, blocked };
 };
 
 /**

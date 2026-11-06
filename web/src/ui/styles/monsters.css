@@ -72,6 +72,13 @@
   scrollbar-width: none;
 }
 
+/* In the title bar (Monsters, Chaos Weapons): the room between the title
+   and the close button, the tabs equal in it (ui.css `.tab-row`). */
+.monsters-screen .monsters-tabs {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 /* ── Header: housing, goo, putty ─────────────────────────────────────────── */
 
 .monsters-header {
@@ -549,13 +556,11 @@
   }
 
   /* The title and the close button share the first row; the tabs take the
-     whole second one, in equal columns. */
+     whole second one, the tabs equal and sliding sideways if they cannot
+     all fit (ui.css `.tab-row`). */
   .monsters-screen .monsters-tabs {
     order: 1;
     flex: 1 0 100%;
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(0, 1fr);
   }
 
   .monsters-screen .tabs__tab {

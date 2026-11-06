@@ -455,7 +455,7 @@
 /* A dock is 300px and its frame takes 48 of them: the inside keeps a little
    less margin (the frame is the margin), the plates' ends are pinched, and a
    row that still does not fit wraps rather than running under the frame. */
-:root[data-skin] .map-panel .panel__body {
+:root[data-skin] .map-panel :is(.panel__head, .panel__body) {
   padding-inline: var(--space-2);
 }
 
@@ -1079,17 +1079,29 @@
     height: 40px;
   }
 
-  /* Four tabs share a phone's width: their painted ends pinched. */
-  :root[data-skin] .panel .tabs {
+  /* Four or five tabs share a phone's width (three in the test report, with
+     long words): their painted ends pinched. */
+  :root[data-skin] .panel :is(.tabs, .test-report__tabs) {
     gap: 2px;
   }
 
-  :root[data-skin] .panel .tabs__tab {
+  :root[data-skin] .panel :is(.tabs__tab, .test-report__tab) {
     --skin-tab-cap: 5px;
 
     min-height: 38px;
     padding: 2px 0 0;
     letter-spacing: -0.02em;
+  }
+
+  /* In a row that fills its window (ui.css `.tab-row`) the words keep 6px
+     off the pinched ends; the Build menu's tabs size themselves. */
+  :root[data-skin] .panel .tab-row > :is(.tabs__tab, .test-report__tab) {
+    padding-inline: 6px;
+  }
+
+  /* The test report's words at the other tabs' size: all three fit 320px. */
+  :root[data-skin] .panel .test-report__tab {
+    font-size: var(--text-sm);
   }
 
   :root[data-skin] .build-menu__tabs .tabs__tab {

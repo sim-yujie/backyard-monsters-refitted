@@ -188,6 +188,8 @@ export class BuildMenu {
   private readonly pages: HTMLElement;
   private readonly legend: HTMLElement;
   private readonly info: HTMLElement;
+  /** The box under the tabs that scrolls (build-menu.css `.build-menu__main`). */
+  private readonly main: HTMLElement;
   private readonly unsubscribe: () => void;
   /** One Build instantly button per type, kept across redraws so an armed one survives them. */
   private readonly shiny = new Map<number, ShinyButton>();
@@ -303,6 +305,7 @@ export class BuildMenu {
     main.id = "build-menu-main";
     main.setAttribute("role", "tabpanel");
     main.append(this.browse, this.info);
+    this.main = main;
 
     panel.setContent(strip, main);
     this.unsubscribe = this.binding.store.subscribe((change) => this.onChange(change));
@@ -343,7 +346,8 @@ export class BuildMenu {
     const wasOpen = this.opened;
     this.opened = true;
     this.element.hidden = false;
-    if (category !== this.active) {
+    const switching = category !== this.active;
+    if (switching) {
       this.active = category;
       this.page = 0;
       this.picked = null;
@@ -357,6 +361,7 @@ export class BuildMenu {
     // Beside the tiles there is room to show the first one straight away.
     if (this.picked === null && !isStacked()) this.picked = this.sorted()[0]?.type ?? null;
     this.render();
+    if (switching) this.toTop();
     if (!wasOpen) this.tabButtons.get(category)?.focus();
     if (!wasOpen) guideBus.emit("screen", { id: GuideScreen.BUILD, root: this.element, header: this.header });
   }
@@ -403,6 +408,12 @@ export class BuildMenu {
     this.page = 0;
     this.picked = isStacked() ? null : (this.sorted()[0]?.type ?? null);
     this.render();
+    this.toTop();
+  }
+
+  /** Another tab or sub-tab opens at its top, as every tab row does (owner, 6 Nov 2026). */
+  private toTop(): void {
+    this.main.scrollTop = 0;
   }
 
   /** Turns the page by `step`, staying inside the tab. */

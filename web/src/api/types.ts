@@ -1501,6 +1501,11 @@ export interface SpeedupReport {
   finished: CompletedJob | null;
   /** Set when `SP1` finished a repair instead of a job (#279). */
   repaired?: true;
+  /**
+   * Seconds of a free `SP2` / `SP3` that went unused: the job had less time
+   * left than it takes off, so it finished and the rest was lost (patch 6.3).
+   */
+  unused?: number;
 }
 
 /** `POST /bm/yard/mushroom/pick` (`docs/design/yard-buildings.md` §5.6). */

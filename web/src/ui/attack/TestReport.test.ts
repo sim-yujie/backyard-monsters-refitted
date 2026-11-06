@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TestReport } from "@/game/baiter/testReport";
 import { TestReportPanel, type TestReportOptions } from "./TestReport";
+import { scrollLikeBrowser } from "../scrollLikeBrowser";
 
 /** A Baiter test's report panel (#22, WP4): three tabs, tappable towers, four ways on. */
 
@@ -106,6 +107,22 @@ describe("a Baiter test's report panel", () => {
     expect(document.activeElement).toBe(tabs[2]);
     tabs[2]!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     expect(visibleView().id).toBe("test-report-summary");
+  });
+
+  it("opens another tab at its top, its row fixed over it (owner, 6 Nov 2026)", () => {
+    mountPanel();
+    const tabs = [...document.querySelectorAll<HTMLButtonElement>("[role=tab]")];
+    const views = [...document.querySelectorAll<HTMLElement>(".test-report__view")];
+    // As a browser: a hidden view keeps its scroll and ignores a reset.
+    views.forEach(scrollLikeBrowser);
+    expect(views.some((view) => view.contains(tabs[0]!))).toBe(false);
+    views[0]!.scrollTop = 300;
+    tabs[1]!.click();
+    views[1]!.scrollTop = 200;
+    tabs[0]!.click();
+    expect(views[0]!.scrollTop).toBe(0);
+    tabs[1]!.click();
+    expect(views[1]!.scrollTop).toBe(0);
   });
 
   it("lists the towers in order, and a tap on a row, or its name, shows that tower", () => {

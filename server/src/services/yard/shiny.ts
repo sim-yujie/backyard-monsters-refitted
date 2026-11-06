@@ -71,22 +71,36 @@ export const SPEEDUP_SECONDS: Readonly<Record<SpeedupItem, number>> = {
 /**
  * Whether `item` may be used on a countdown with `remaining` seconds left
  * (`client/scripts/STORE.as:1071-1082`): `SP1` only at five minutes or less,
- * `SP2` only at an hour or more, `SP3` only at two hours or more, `SP4` only
- * above five minutes. Nothing applies to a countdown that is not running.
+ * `SP2` at an hour or more, `SP3` at two hours or more, `SP4` only above five
+ * minutes. Nothing applies to a countdown that is not running.
+ *
+ * Patch 6.3 (players asked): a free `SP2` / `SP3` the yard holds (`held`, an
+ * event or quest reward) may also go on a shorter countdown, above five
+ * minutes. It finishes the job; the time it would have taken off beyond that is
+ * lost. A bought one is still refused there: Finish now (`SP4`) never costs
+ * more than its fixed price below its hour(s), and at five minutes or less
+ * finishing is free (`SP1`).
  */
-export const speedupAllowed = (item: SpeedupItem, remaining: number): boolean => {
+export const speedupAllowed = (item: SpeedupItem, remaining: number, held = false): boolean => {
   if (!(remaining > 0)) return false;
   switch (item) {
     case "SP1":
       return remaining <= FREE_SECONDS;
     case "SP2":
-      return remaining >= SPEEDUP_SECONDS.SP2;
     case "SP3":
-      return remaining >= SPEEDUP_SECONDS.SP3;
+      return remaining >= SPEEDUP_SECONDS[item] || (held && remaining > FREE_SECONDS);
     case "SP4":
       return remaining > FREE_SECONDS;
   }
 };
+
+/**
+ * Seconds of `item` that go unused on a countdown with `remaining` seconds
+ * left: what `SP2` / `SP3` would take off beyond the end of the job. 0 for
+ * `SP1` / `SP4` (they finish whatever is left) and for a countdown long enough.
+ */
+export const speedupUnused = (item: SpeedupItem, remaining: number): number =>
+  item === "SP2" || item === "SP3" ? Math.max(0, SPEEDUP_SECONDS[item] - Math.max(0, Math.floor(remaining))) : 0;
 
 /**
  * The price of a building speed-up: `SP1` free, `SP2`/`SP3` their fixed store

@@ -99,6 +99,46 @@ describe("planSpeedup: SP rules per remaining time", () => {
     );
   });
 
+  test("a held free SP2 finishes a job with less than an hour left; the rest is lost (patch 6.3)", () => {
+    const plan = planSpeedup(yardOf({ cU: 1500, cL: 4000 }), 1, "SP2", NOW, true);
+
+    // Finished exactly as a countdown running out: level, points, no countdown left.
+    expect(plan.buildingdata["1"]).toMatchObject({ l: 2 });
+    expect(plan.buildingdata["1"].cU).toBeUndefined();
+    expect(plan.buildingdata["1"].cL).toBeUndefined();
+    expect(plan.points).toBe(6966);
+    expect(plan.report).toMatchObject({
+      remaining: 0,
+      unused: 2100,
+      finished: { kind: "upgrade", detail: { from: 1, level: 2, points: 6966 } },
+    });
+  });
+
+  test("a held free SP3 finishes a job with under two hours left, never below zero", () => {
+    const plan = planSpeedup(yardOf({ cU: 4000 }), 1, "SP3", NOW, true);
+    expect(plan.buildingdata["1"]).toMatchObject({ l: 2 });
+    expect(plan.report).toMatchObject({ remaining: 0, unused: 3200, finished: { kind: "upgrade" } });
+
+    const justOver = planSpeedup(yardOf({ cU: 301 }), 1, "SP3", NOW, true);
+    expect(justOver.report).toMatchObject({ remaining: 0, unused: 6899 });
+  });
+
+  test("a held SP2/SP3 at five minutes or less is refused: finishing is free then", () => {
+    for (const item of ["SP2", "SP3"] as const) {
+      expect(refusal(() => planSpeedup(yardOf({ cU: 300 }), 1, item, NOW, true))).toMatchObject({
+        status: 409,
+        reason: "itemRefused",
+        data: { id: 1, item, remaining: 300 },
+      });
+    }
+  });
+
+  test("a held one on a long countdown still only takes its hour off, with nothing unused", () => {
+    const plan = planSpeedup(yardOf({ cU: 5000 }), 1, "SP2", NOW, true);
+    expect(plan.buildingdata["1"]).toMatchObject({ l: 1, cU: 1400 });
+    expect(plan.report.unused).toBeUndefined();
+  });
+
   test("SP3 takes two hours off for 40", () => {
     const plan = planSpeedup(yardOf({ cU: 10000 }), 1, "SP3", NOW);
 
@@ -220,6 +260,12 @@ describe("planSpeedup: SP1 on a repair (#279)", () => {
   test("the paid items are refused on a repair", () => {
     for (const item of ["SP2", "SP3", "SP4"] as const) {
       expect(refusal(() => planSpeedup(repairing(4000), 1, item, NOW)).reason).toBe("itemRefused");
+    }
+  });
+
+  test("a held free SP2/SP3 does not finish a repair either (patch 6.3)", () => {
+    for (const item of ["SP2", "SP3"] as const) {
+      expect(refusal(() => planSpeedup(repairing(1500), 1, item, NOW, true)).reason).toBe("itemRefused");
     }
   });
 

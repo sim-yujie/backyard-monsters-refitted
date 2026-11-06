@@ -219,6 +219,25 @@
   height: 16px;
 }
 
+/* Lines under the label and price (a held −1 h / −2 h that finishes the job:
+   "Finishes now" / "35 min unused", patch 6.3), one per line. */
+.shiny-button--noted {
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+
+.shiny-button__note {
+  flex-basis: 100%;
+  font-size: var(--text-sm);
+  font-weight: normal;
+  white-space: normal;
+  opacity: 0.9;
+}
+
+.shiny-button__note-line {
+  display: block;
+}
+
 .shiny-button--armed,
 .shiny-button--armed:hover:not(:disabled) {
   background: var(--colour-accent);
@@ -253,6 +272,12 @@
 }
 
 .building-job .building-panel__buttons > :first-child {
+  grid-column: 1 / -1;
+}
+
+/* A speed-up with lines under it takes the whole row, so they fit a phone;
+   its partner then does too, so neither sits beside an empty cell. */
+.building-job .building-panel__buttons:has(> .shiny-button--noted) > * {
   grid-column: 1 / -1;
 }
 

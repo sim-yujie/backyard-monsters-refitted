@@ -6,7 +6,7 @@ import { setDevDetails } from "@/app/devDetails";
 import { YardStore, type YardUiBinding } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
-import { BuildingPanel, recycledMessage, type BuildingPanelOptions } from "./BuildingPanel";
+import { BuildingPanel, recycledMessage, unusedText, type BuildingPanelOptions } from "./BuildingPanel";
 import type * as maproomApi from "@/api/maproom";
 import { moveToRandomSpot } from "@/api/maproom";
 
@@ -263,6 +263,59 @@ describe("BuildingPanel: an upgrade running", () => {
   });
 });
 
+describe("BuildingPanel: a held speed-up on a shorter job (patch 6.3)", () => {
+  const heldOn = (seconds: number) =>
+    setup([HALL, building(2, 20, 4, { cU: seconds })], 2, {
+      load: { storedata: { BEW: { q: 4 }, FREESP2: { q: 2 }, FREESP3: { q: 1 } } } as Partial<BaseLoadResponse>,
+    });
+
+  it("−1 h and −2 h stay pressable and say the job finishes and what is lost", () => {
+    const { element } = heldOn(1_500);
+    const minusOne = buttonNamed(element, "−1 h")!;
+    const minusTwo = buttonNamed(element, "−2 h")!;
+    expect(minusOne.disabled).toBe(false);
+    const lines = (button: HTMLElement) =>
+      [...button.querySelectorAll(".shiny-button__note-line")].map((line) => line.textContent);
+    expect(lines(minusOne)).toEqual(["Finishes now", "35 min unused"]);
+    expect(minusOne.getAttribute("aria-label")).toMatch(/Finishes now, 35 min unused/);
+    expect(minusOne.classList.contains("shiny-button--noted")).toBe(true);
+    expect(minusTwo.disabled).toBe(false);
+    expect(lines(minusTwo)).toEqual(["Finishes now", "1 h 35 min unused"]);
+  });
+
+  it("the second tap spends the held −1 h, with the note still on the armed button", () => {
+    const { element, api } = heldOn(1_500);
+    const minusOne = buttonNamed(element, "−1 h")!;
+    minusOne.click();
+    expect(minusOne.textContent).toContain("Tap again");
+    expect(minusOne.textContent).toContain("35 min unused");
+    expect(api.speedUp).not.toHaveBeenCalled();
+    minusOne.click();
+    expect(api.speedUp).toHaveBeenCalledWith(2, "SP2");
+  });
+
+  it("a long job shows no note: the hour comes off as before", () => {
+    const { element } = heldOn(9_000);
+    const minusOne = buttonNamed(element, "−1 h")!;
+    expect(minusOne.querySelector<HTMLElement>(".shiny-button__note")?.hidden).toBe(true);
+    expect(minusOne.classList.contains("shiny-button--noted")).toBe(false);
+  });
+
+  it("five minutes or less: the held ones wait, finishing is free", () => {
+    const { element } = heldOn(200);
+    const minusOne = buttonNamed(element, "−1 h")!;
+    expect(minusOne.disabled).toBe(true);
+    expect(minusOne.title).toBe("Five minutes or less left: finish it free.");
+  });
+
+  it("unusedText spells whole minutes and hours", () => {
+    expect(unusedText(2_100)).toBe("35 min");
+    expect(unusedText(5_700)).toBe("1 h 35 min");
+    expect(unusedText(3_600)).toBe("1 h");
+    expect(unusedText(10)).toBe("1 min");
+  });
+});
+
 describe("BuildingPanel: buildings without an Upgrade here", () => {
   it("a wall points at the layout planner and offers no Upgrade", () => {
     const { element } = setup([HALL, building(2, 17, 1)], 2);
@@ -509,6 +562,22 @@ describe("BuildingPanel: the Champion Cage (§7.2)", () => {
     tabNamed(element, "building").click();
     expect(element.querySelector<HTMLElement>(".building-panel__champion")!.hidden).toBe(true);
     expect(element.querySelector<HTMLElement>(".building-panel__actions")!.hidden).toBe(false);
+  });
+
+  it("keeps the cage's and chamber's tabs over the body, which alone scrolls; a new tab opens at its top (owner, 6 Nov 2026)", () => {
+    for (const type of [114, 119]) {
+      const { element } = setup([HALL, building(2, type, 1)], 2);
+      const tablist = element.querySelector<HTMLElement>('[role="tablist"]')!;
+      const body = element.querySelector<HTMLElement>(":scope > .panel__body")!;
+      expect(tablist.parentElement!.classList.contains("panel__head")).toBe(true);
+      expect(tablist.parentElement!.nextElementSibling).toBe(body);
+      expect(body.contains(tablist)).toBe(false);
+      body.scrollTop = 200;
+      expect(body.scrollTop).toBe(200);
+      tabNamed(element, "building").click();
+      expect(body.scrollTop).toBe(0);
+      document.body.replaceChildren();
+    }
   });
 
   it("puts a red dot on a damaged chamber's Building tab", () => {

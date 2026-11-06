@@ -136,7 +136,7 @@ export class SiegeScreen {
     });
 
     const strip = document.createElement("div");
-    strip.className = "tabs monsters-tabs siege-tabs";
+    strip.className = "tabs tab-row monsters-tabs siege-tabs";
     strip.setAttribute("role", "tablist");
     strip.setAttribute("aria-label", "Chaos buildings");
     for (const site of SITES) {

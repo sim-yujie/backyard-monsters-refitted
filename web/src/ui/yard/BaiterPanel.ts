@@ -276,13 +276,17 @@ export class BaiterPanel {
   /** The tab row over the army and the recent tests; the army is shown first. */
   private tabs(views: ReadonlyArray<readonly [string, HTMLElement]>): HTMLElement {
     const row = document.createElement("div");
-    row.className = "baiter__tabs";
+    row.className = "tab-row baiter__tabs";
     row.setAttribute("role", "tablist");
     row.setAttribute("aria-label", "Baiter");
     const controls: HTMLButtonElement[] = [];
     const select = (index: number): void => {
       views.forEach(([, view], at) => {
+        const opening = at === index && view.hidden;
         view.hidden = at !== index;
+        // On a phone each view scrolls under the row: another tab opens at its
+        // top. Only once shown: a browser ignores scrollTop on a hidden box.
+        if (opening) view.scrollTop = 0;
         const control = controls[at];
         if (!control) return;
         control.setAttribute("aria-selected", String(at === index));

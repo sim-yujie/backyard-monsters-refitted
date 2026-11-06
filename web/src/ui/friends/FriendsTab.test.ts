@@ -223,6 +223,18 @@ describe("FriendsTab", () => {
     expect(tab.element.querySelector(".friends-section__title")?.textContent).toBe("Your friends");
   });
 
+  it("keeps the search and filter buttons over the list, which alone scrolls (owner, 6 Nov 2026)", async () => {
+    const { tab } = setup({ list: { list: fixtureList([fixtureFriend(1, { username: "Annie" })]) } });
+    await tab.show();
+    const tools = tab.element.querySelector<HTMLElement>(".friends-tools")!;
+    const list = tab.element.querySelector<HTMLElement>(".friends-tab__body")!;
+    expect(tools.parentElement).toBe(tab.element);
+    expect(list.parentElement).toBe(tab.element);
+    expect(list.classList.contains("tab-scroll")).toBe(true);
+    expect(list.contains(tools.querySelector(".friends-tools__filters"))).toBe(false);
+    expect(names(list)).toEqual(["Annie"]);
+  });
+
   it("keeps the search box hidden until there are friends", async () => {
     const { tab } = setup({ list: { list: fixtureList([]) } });
     await tab.show();

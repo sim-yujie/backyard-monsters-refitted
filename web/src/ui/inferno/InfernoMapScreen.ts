@@ -174,7 +174,7 @@ export class InfernoMapScreen {
     // Moloch's tribes or the other players (PvP, WP 3.5).
     const bar = element("div", "inferno-map__bar");
     if (actions.players) {
-      const tabs = element("div", "inferno-map__toggle inferno-map__tabs");
+      const tabs = element("div", "inferno-map__toggle tab-row inferno-map__tabs");
       tabs.setAttribute("role", "group");
       tabs.setAttribute("aria-label", "Attack");
       this.tribesTab = button("Tribes", "inferno-map__toggle-button", () => this.setTab("tribes"));
