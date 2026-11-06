@@ -684,13 +684,30 @@ export interface CaseAwardRequest {
   reason: string;
 }
 
+/** A list sent as an array or as the JSON string of one; null when it is neither. */
+const listOf = (raw: unknown): unknown[] | null => {
+  let value = raw;
+  if (typeof raw === "string") {
+    try {
+      value = JSON.parse(raw) as unknown;
+    } catch {
+      return null;
+    }
+  }
+  return Array.isArray(value) ? value : null;
+};
+
 /** Reads `{ awards: [{ userid, amount }], reason? }`: whole amounts of 1 to {@link MAX_SHINY_AWARD}, each reporter once. */
 export const parseCaseAward = (raw: unknown): Parsed<CaseAwardRequest> => {
   const body = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-  if (!Array.isArray(body.awards) || body.awards.length === 0) return { ok: false, message: "Tick at least one reporter." };
-  if (body.awards.length > 100) return { ok: false, message: "Too many reporters at once." };
+  // The server's JSON middleware (`middleware/jsonBody.ts`) re-stringifies every
+  // top-level array, so a real request carries `awards` as a JSON string.
+  const list = listOf(body.awards);
+  if (list === null) return { ok: false, message: "Pick reporters to give Shiny to." };
+  if (list.length === 0) return { ok: false, message: "Tick at least one reporter." };
+  if (list.length > 100) return { ok: false, message: "Too many reporters at once." };
   const awards: { userid: number; amount: number }[] = [];
-  for (const item of body.awards as unknown[]) {
+  for (const item of list) {
     const entry = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
     const { userid, amount } = entry;
     if (typeof userid !== "number" || !Number.isSafeInteger(userid) || userid < 1) return { ok: false, message: "Pick a reporter." };
