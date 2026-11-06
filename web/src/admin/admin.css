@@ -3189,3 +3189,73 @@ tbody th {
     flex: 1 1 auto;
   }
 }
+
+/* ── Weekend events (`weekend.ts`) ───────────────────────────────────── */
+
+.weekend-admin {
+  display: grid;
+  gap: 18px;
+}
+
+.weekend-sentence {
+  font-size: 1.0625rem;
+  font-weight: 650;
+}
+
+.weekend-sentence.is-on {
+  color: var(--good-text);
+}
+
+.weekend-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap);
+  font-weight: 600;
+}
+
+.weekend-switch input {
+  width: 22px;
+  height: 22px;
+}
+
+.weekend-plan .weekend-row {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.weekend-row .row-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.weekend-force,
+.weekend-percents {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.weekend-settings > summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.weekend-rotation {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 1.5em;
+}
+
+.weekend-rotation li > span {
+  display: inline-block;
+  min-width: 10em;
+}

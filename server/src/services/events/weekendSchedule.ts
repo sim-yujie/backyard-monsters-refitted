@@ -89,7 +89,8 @@ export const scheduledEvent = (settings: WeekendSettings, day: number): WeekendE
   if (override) return override;
   const first = dayOfDate(settings.firstWeekend);
   const rotation = settings.rotation;
-  if (first === null || rotation.length === 0) return null;
+  // Before the first weekend nothing runs: the rotation starts when the owner says.
+  if (first === null || rotation.length === 0 || day < first) return null;
   const weeks = Math.floor((day - first) / 7);
   return rotation[((weeks % rotation.length) + rotation.length) % rotation.length] ?? null;
 };

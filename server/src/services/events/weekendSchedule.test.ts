@@ -30,8 +30,9 @@ describe("weekend schedule", () => {
     expect(scheduledEvent(s, sat("2026-11-28"))).toBe("study");
     expect(scheduledEvent(s, sat("2026-12-05"))).toBe("hatch");
     expect(scheduledEvent(s, sat("2026-12-12"))).toBe("builders");
-    // Before the first weekend the rotation runs backwards.
-    expect(scheduledEvent(s, sat("2026-11-07"))).toBe("hatch");
+    // Nothing runs before the first weekend (the owner picks the start), unless swapped in by hand.
+    expect(scheduledEvent(s, sat("2026-11-07"))).toBeNull();
+    expect(scheduledEvent({ ...s, overrides: { "2026-11-07": "study" } }, sat("2026-11-07"))).toBe("study");
   });
 
   test("runs Saturday 00:00 to the end of Sunday, server time (UTC)", () => {

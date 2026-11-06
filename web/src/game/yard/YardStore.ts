@@ -31,6 +31,7 @@ import { MAIN_YARD, outpostBaseid, type OwnYardTarget } from "./ownYards";
 import { freeWorkers, holdsWorker } from "./workers";
 import { readYard, type Yard, type YardBuilding, type YardWorkers } from "./yardModel";
 import { isTribeEditing } from "@/game/tribeEditor/tribeEditSession";
+import { costLessBy, weekendPercent } from "@/game/weekend";
 
 /**
  * One of the player's own yards, the main yard or an outpost, as one source
@@ -930,7 +931,8 @@ const upgradeRefusal = (
   const step = costOf(building.type, building.level, kind);
   if (!step) return refuse("maxLevel", "That building is at its highest level.");
   const [r1, r2, r3, r4] = step;
-  const cost = { r1, r2, r3, r4 };
+  // Less a Builder's Weekend's percentage, as the server charges (`planOneUpgrade`).
+  const cost = costLessBy({ r1, r2, r3, r4 }, weekendPercent("builders", store.now()));
   // A main-yard Inferno building is paid from the Inferno purse (WP 6.1).
   const inferno = isSurfaceInferno(building.type, kind);
   const held = inferno ? purseFunds(store.save).resources : store.resources;
