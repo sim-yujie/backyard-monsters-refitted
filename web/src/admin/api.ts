@@ -786,3 +786,84 @@ export const awardCaseReporters = (
     failed: { userid: number; reason: AwardFailure }[];
   }>
 > => adminPost(`${ADMIN}/chatcases/${id}/award`, { awards });
+
+/* ── Weekend events (`server/src/controllers/admin/weekend.ts`) ─────────── */
+
+export type WeekendEventId = "builders" | "plunder" | "study" | "hatch";
+
+export interface WeekendSettingsView {
+  enabled: boolean;
+  rotation: WeekendEventId[];
+  percent: Record<WeekendEventId, number>;
+  /** `YYYY-MM-DD`, a Saturday. */
+  firstWeekend: string;
+  utcOffsetMinutes: number;
+  lengthHours: number;
+  announceHours: number;
+  overrides: Record<string, WeekendEventId | "skip">;
+  forced: { id: WeekendEventId; since: number; until: number } | null;
+}
+
+export interface WeekendRunView {
+  id: WeekendEventId;
+  title: string;
+  line: string;
+  percent: number;
+  key: string;
+  startsAt: number;
+  endsAt: number;
+  announceAt: number;
+  forced: boolean;
+}
+
+export interface WeekendPlanRowView {
+  key: string;
+  startsAt: number;
+  rotation: WeekendEventId | null;
+  override: WeekendEventId | "skip" | null;
+  runs: WeekendEventId | null;
+}
+
+export interface WeekendPanelView {
+  now: number;
+  settings: WeekendSettingsView;
+  updatedAt: number | null;
+  updatedBy: number | null;
+  state: { active: WeekendRunView | null; next: WeekendRunView | null };
+  plan: WeekendPlanRowView[];
+  /** A local `WEEKEND_FORCE` the server was started with (never in production). */
+  envForced: WeekendEventId | null;
+  events: { id: WeekendEventId; title: string; line: string }[];
+  limits: {
+    minPercent: number;
+    maxPercent: number;
+    minOffsetMinutes: number;
+    maxOffsetMinutes: number;
+    minLengthHours: number;
+    maxLengthHours: number;
+    maxAnnounceHours: number;
+    maxForceHours: number;
+  };
+}
+
+/** One change from the dashboard; the server checks every value again. */
+export type WeekendChange =
+  | {
+      action: "settings";
+      enabled?: boolean;
+      rotation?: WeekendEventId[];
+      percent?: Partial<Record<WeekendEventId, number>>;
+      firstWeekend?: string;
+      utcOffsetMinutes?: number;
+      lengthHours?: number;
+      announceHours?: number;
+    }
+  | { action: "weekend"; weekend: string; event: WeekendEventId | "skip" | null }
+  | { action: "force"; event: WeekendEventId; hours: number }
+  | { action: "stopForce" }
+  | { action: "reset" };
+
+export const fetchWeekend = (): Promise<Envelope<WeekendPanelView>> => adminGet(`${ADMIN}/weekend`);
+
+export const changeWeekend = (change: WeekendChange): Promise<Envelope<WeekendPanelView>> =>
+  adminPost(`${ADMIN}/weekend`, change as unknown as JsonBody);

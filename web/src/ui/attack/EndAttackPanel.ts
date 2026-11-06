@@ -4,6 +4,7 @@ import type { ResourceAmounts } from "@/game/combat/rules";
 import { championName } from "@/ui/attack/ArmyPanel";
 import { RESOURCE_KEYS, resourceAmount, resourceName, type ResourceRealm } from "@/ui/resourceIcon";
 import { Panel } from "@/ui/Panel";
+import { weekendChip } from "@/ui/events/weekendUi";
 
 /**
  * The one screen at the end of an attack (`docs/design/attack-flow.md` §F6):
@@ -453,6 +454,19 @@ export class EndAttackPanel {
         ? `${name}: ${whole(amount)} gained of ${whole(taken)} taken; the rest did not fit in your storage`
         : `${name}: ${whole(amount)}${amount >= 1 ? " gained" : ""}`;
       if (lost) spilled = true;
+      this.loot.append(item);
+    }
+    // Tribe Plunder: the server banked more than the battle took (a wild
+    // tribe's loot, `withPlunderBonus`); the chip says why.
+    const bonus = RESOURCE_KEYS.some((key) => {
+      const taken = inferno ? (takenByServer?.[key] ?? kept[key]) : lootTaken[key];
+      return Math.floor(kept[key]) > Math.floor(taken);
+    });
+    const plunder = bonus ? weekendChip("plunder") : null;
+    if (plunder) {
+      const item = document.createElement("li");
+      item.className = "attack-end__loot-item attack-end__loot-item--weekend";
+      item.append(plunder);
       this.loot.append(item);
     }
     const storage = inferno ? "Your Inferno storage" : "Your storage";

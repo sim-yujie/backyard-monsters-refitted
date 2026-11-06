@@ -28,6 +28,7 @@ import "@/ui/styles/train.css";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
 import { describe, monsterPicture } from "./LockerTab";
 import type { MonstersFocus, MonstersTab, MonstersTabContext } from "./monstersTab";
+import { studySeconds, weekendChip } from "@/ui/events/weekendUi";
 
 /**
  * The Train tab: the Monster Academy (`docs/design/yard-buildings.md` §6
@@ -387,7 +388,7 @@ export class TrainTab implements MonstersTab {
         this.rowClocks.push({ node: clock, endsAt: row.training.endsAt });
         state.append(`Training → ${row.training.to} · `, clock);
       } else if (row.step) {
-        state.append(`→ ${row.level + 1}: `, resourceAmount("r3", row.step[0]), ` · ${duration(row.step[1])}`);
+        state.append(`→ ${row.level + 1}: `, resourceAmount("r3", row.step[0]), ` · ${duration(studySeconds(row.step[1]))}`);
       } else {
         state.textContent = "Fully trained";
       }
@@ -444,9 +445,11 @@ export class TrainTab implements MonstersTab {
       facts.append(
         `Level ${level + 1}: `,
         resourceAmount("r3", step[0]),
-        ` · ${duration(step[1])}`,
+        ` · ${duration(studySeconds(step[1]))}`,
         ...(gate === null && at ? [` · at ${this.academyName} ${at.number}`] : []),
       );
+      const study = weekendChip("study");
+      if (study) facts.append(" ", study);
       action.append(facts);
       // Training is a player-wide level, not one monster's (issue #180).
       const scope = document.createElement("p");

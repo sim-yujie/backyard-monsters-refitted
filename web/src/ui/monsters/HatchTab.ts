@@ -63,6 +63,23 @@ import {
   type MonstersTab,
   type MonstersTabContext,
 } from "./monstersTab";
+import { weekendChip } from "@/ui/events/weekendUi";
+
+/** Hatch Rush's "−30%" chip after a hatch time, or nothing. */
+const hatchRushChip = (): (Node | string)[] => {
+  const chip = weekendChip("hatch");
+  return chip ? [" ", chip] : [];
+};
+
+/** A hatch time with Hatch Rush's chip beside it while one runs. */
+const timeWithRush = (time: string): Node | string => {
+  const chip = weekendChip("hatch");
+  if (!chip) return time;
+  const value = document.createElement("span");
+  value.append(time, " ", chip);
+  return value;
+};
+
 
 /**
  * The Hatch tab: the Hatcheries and the Hatchery Control Centre, laid out as
@@ -1307,6 +1324,7 @@ export class HatchTab implements MonstersTab {
       resourceAmount("r4", row.price, { realm: this.realm }),
       " · ",
       iconAmount("time", duration(row.seconds), { label: "Time each" }),
+      ...hatchRushChip(),
       " · ",
       iconAmount("housing", row.space, { label: this.realm === "inferno" ? "Space each" : "Housing each" }),
     );
@@ -1322,7 +1340,7 @@ export class HatchTab implements MonstersTab {
         : [gameIcon("damage"), statNumber(damage)],
       [resourceIcon("r4", { realm: this.realm }), formatAmount(row.price)],
       [gameIcon("housing", { label: this.realm === "inferno" ? "Space each" : "Housing each" }), String(row.space)],
-      [gameIcon("time", { label: "Time each" }), duration(row.seconds)],
+      [gameIcon("time", { label: "Time each" }), timeWithRush(duration(row.seconds))],
     ];
     this.stats.replaceChildren(
       ...stats.map(([term, value]) => {
