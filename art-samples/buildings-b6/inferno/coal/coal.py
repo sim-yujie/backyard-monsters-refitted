@@ -18,9 +18,15 @@ Loops: everything moves by whole cycles in one loop (36 frames), so the last fra
 Vet against Flash (7 Nov, coal-levels.png and crop-*.png at full size): no black iron anywhere (rim, bands, frames,
 feet and fixings are dark rust-copper), heavy mottled rust on the tank, orange fire in the windows, rust-brass hopper
 heaped with coal, pale rusty spike collar. Tier 2 follows Flash's redesigns: a thick riveted belt the windows sit in,
-a slimmer lantern, the column with a pillow top, strap and four slats. Still off: the tier 1 stack is a tall pipe
-(Flash: short funnel on a bracketed drum), the column is matte where Flash's is glossy, Flash's look 3 claws are
-bigger, the hopper is a box where Flash's is a lower trough.
+a slimmer lantern, the column with a pillow top, strap and four slats.
+Second pass (7 Nov, inferno-3d-3): every material gets Flash's wear (cbits.weathering: big blotches, rust streaks,
+pitting, scratches, pale worn edges, rougher where rusty); glossy brass with painted highlight bands (mat hi=) and two
+lights only the brass sees; tier 1 stack = short funnel on a thin olive pipe held by an olive bracket round a rust
+drum (the arch rises from the drum at every tier); tiers 2-3 swap it for a copper pipe, wider funnel and a broad steel
+clamp; the column is narrower and further back with taller slats on a pale steel plinth; Flash look 3's steel claw
+feet; the bin is a low trough with flared walls; the coal is matte black. Still off: Flash's look 3 arch sits ~0.5
+higher than look 1's (ours is the same at every tier), Flash's look 3 belt is a rounded, brighter band, the star
+wheel reads paler and bigger than Flash's at game size.
 """
 import math
 import os
@@ -51,11 +57,14 @@ rnd = random.Random(52)
 # ------------------------------------------------------------------------------------------------------------ sizes
 R = 2.1                          # the tank
 TZ0, TZ1 = 0.95, 4.1             # its bottom and top
-PIPE = Vector((0.15, -5.1, 0))   # the brass pipe (tier 1) / column (tiers 2-3) on the ground, front left
+PIPE = Vector((0.15, -5.1, 0))   # the brass pipe (tier 1) on the ground, front left
+CC = Vector((0.15, -4.65, 0))    # the square column (tiers 2-3): Flash look 3 has it narrower and further back
 STK = Vector((0.15, -5.0, 0))    # the stack above it
-COL = Vector((0.15, -3.6, 0))    # the collar the copper arch rises from
+COL = Vector((0.15, -3.08, 0))    # the drum the copper arch rises from
+DR = 0.6                         # its radius
 TUR = Vector((0.08, 0.9, 0))     # the turret / lantern on the tank top, back right
-BX, BY, BZ = (-0.85, 0.75), (-3.0, -1.4), (2.5, 5.1)      # the coal bin on the tank's front left side
+BX, BY, BZ = (-0.85, 0.75), (-3.0, -1.4), (2.5, 4.45)     # the coal bin on the tank's front left side (box part)
+LIP, FL = 0.42, 0.3               # Flash: a low trough: walls flare out above the box by FL over LIP
 PORT_Z = 4.6                     # the port in the bin's front wall where the coal comes in
 LEGS = (-150, -72, -26, 38, 112)
 WIN = (-68, -50, -32, -14, 4)    # the window band's posts (degrees)
@@ -64,59 +73,64 @@ WZ = (1.52, 1.72, 2.62, 2.82)    # rail bottom, pane bottom, pane top, rail top
 
 # ------------------------------------------------------------------------------------------------------------ materials
 def TANK():
-    return mat("tank", (128, 74, 48), rough=0.78, metal=0.2, wear=(178, 128, 96), wear_amt=0.55, rust=(78, 38, 22),
-               rust_at=0.46, dirt=0.65, scale=4.2, speck=0.32, bump=0.16)
+    return mat("tank", (124, 70, 46), rough=0.78, metal=0.2, wear=(188, 150, 130), wear_amt=0.85, rust=(78, 38, 22),
+               rust_at=0.46, dirt=0.65, scale=2.6, speck=0.32, bump=0.22, weather=1.35,
+               edge=(196, 150, 118))
 
 
 def RIM():
     """Dark rust-copper for the tank's rim and bands, the window frames, the feet (Flash has no black iron)."""
     return mat("rim", (98, 54, 36), rough=0.72, metal=0.35, wear=(146, 92, 60), wear_amt=0.45, rust=(70, 36, 22),
-               rust_at=0.55, dirt=0.45, speck=0.25)
+               rust_at=0.55, dirt=0.45, speck=0.25, weather=1.1, bump=0.14)
 
 
 def PALE():
     """The turret's spike collar and cap: pale worn iron, as Flash's grey-tan collar."""
     return mat("pale", (146, 116, 96), rough=0.7, metal=0.3, wear=(176, 150, 128), wear_amt=0.5, rust=(116, 60, 38),
-               rust_at=0.5, dirt=0.5, scale=7.0, speck=0.35, bump=0.12)
+               rust_at=0.5, dirt=0.5, scale=7.0, speck=0.35, bump=0.14, weather=1.0)
 
 
 def CBRASS():
     """The square column (Flash look 3): coppery brass, more orange than the tier 1 elbow."""
-    return mat("cbrass", (190, 112, 50), rough=0.36, metal=0.8, wear=(120, 70, 36), wear_amt=0.6, rust=(96, 52, 30),
-               rust_at=0.6, dirt=0.6, speck=0.28, bump=0.12)
+    return mat("cbrass", (184, 98, 30), rough=0.24, metal=0.95, wear=(132, 78, 34), wear_amt=0.5, rust=(96, 52, 30),
+               rust_at=0.64, dirt=0.6, speck=0.22, bump=0.06, weather=0.55, edge=(250, 206, 120),
+               hi=((255, 222, 140), ((-0.25, -0.7, 0.68), 18, 2.6), ((-0.6, -0.8, 0.05), 30, 1.4)))
 
 
 def BRASS():
-    return mat("brass", (206, 138, 50), rough=0.4, metal=0.75, wear=(150, 96, 38), wear_amt=0.5, rust=(112, 70, 32),
-               rust_at=0.7, dirt=0.35)
+    return mat("brass", (212, 136, 40), rough=0.24, metal=0.95, wear=(150, 96, 38), wear_amt=0.45, rust=(112, 70, 32),
+               rust_at=0.7, dirt=0.4, weather=0.5, edge=(252, 214, 128),
+               hi=((255, 226, 140), ((-0.25, -0.65, 0.72), 14, 1.6), ((-0.5, -0.86, 0.1), 16, 0.9)))
 
 
 def BRASS2():
-    return mat("brass2", (160, 100, 46), rough=0.6, metal=0.5, wear=(128, 76, 36), wear_amt=0.55, rust=(104, 60, 30),
-               rust_at=0.66, dirt=0.45)
+    return mat("brass2", (176, 108, 46), rough=0.4, metal=0.8, wear=(128, 76, 36), wear_amt=0.55, rust=(104, 60, 30),
+               rust_at=0.6, dirt=0.55, weather=0.8, edge=(236, 182, 104))
 
 
 def OLIVE():
-    return mat("olive", (150, 122, 60), rough=0.55, metal=0.55, wear=(100, 80, 42), rust=(112, 66, 36), rust_at=0.66,
-               dirt=0.4)
+    return mat("olive", (150, 122, 60), rough=0.45, metal=0.65, wear=(100, 80, 42), rust=(112, 66, 36), rust_at=0.6,
+               dirt=0.45, weather=1.0, edge=(204, 182, 116))
 
 
 def COPPER():
-    return mat("copper", (198, 112, 78), rough=0.45, metal=0.6, wear=(140, 76, 50), wear_amt=0.45, rust=(120, 66, 40),
-               rust_at=0.72, dirt=0.3)
+    return mat("copper", (198, 112, 78), rough=0.38, metal=0.7, wear=(140, 76, 50), wear_amt=0.45, rust=(120, 66, 40),
+               rust_at=0.62, dirt=0.35, weather=0.9, edge=(236, 170, 130))
 
 
 def RUSTY():
-    return mat("rusty", (124, 60, 38), rough=0.72, metal=0.3, wear=(84, 42, 28), rust=(156, 84, 46), dirt=0.4)
+    return mat("rusty", (124, 60, 38), rough=0.72, metal=0.3, wear=(84, 42, 28), rust=(156, 84, 46), dirt=0.45,
+               weather=1.1, edge=(190, 128, 96))
 
 
 def DARK():
     return mat("dark", (54, 48, 46), rough=0.7, metal=0.45, wear=(94, 86, 78), wear_amt=0.35, rust=(98, 56, 34),
-               rust_at=0.7, dirt=0.3)
+               rust_at=0.7, dirt=0.3, weather=0.9)
 
 
 def TURRET():
-    return mat("turret", (114, 80, 64), rough=0.7, metal=0.3, wear=(78, 54, 44), rust=(142, 78, 46), dirt=0.45)
+    return mat("turret", (114, 80, 64), rough=0.7, metal=0.3, wear=(78, 54, 44), rust=(142, 78, 46), dirt=0.5,
+               weather=1.1, edge=(176, 140, 116), bump=0.14)
 
 
 def SPIKE():
@@ -125,12 +139,12 @@ def SPIKE():
 
 def STEEL(fold=None):
     return mat("steel" + ("-f%d" % fold if fold else ""), (138, 136, 132), rough=0.42, metal=0.75, wear=(86, 82, 78),
-               wear_amt=0.45, dirt=0.25, fold=fold)
+               wear_amt=0.45, dirt=0.3, fold=fold, weather=0.8)
 
 
 def COAL():
-    return mat("coal", (44, 42, 42), rough=0.36, metal=0.2, wear=(104, 100, 96), wear_amt=0.45, dirt=0.1, speck=0.3,
-               bump=0.2)
+    return mat("coal", (20, 19, 19), rough=0.62, metal=0.0, wear=(46, 44, 44), wear_amt=0.35, dirt=0.15, speck=0.4,
+               bump=0.3)
 
 
 def INSIDE():
@@ -327,9 +341,12 @@ def tank():
             ths = [th for th in (7.5 * i for i in range(48)) if not 244 < th < 288]
             rivets(a, [(polar(ro + 0.04, th, zt - 0.12), polar(1, th, 0)) for th in ths] +
                    [(polar(ro + 0.04, th + 3.75, zb + 0.12), polar(1, th + 3.75, 0)) for th in ths], 0.04)
-        one("tank-belt", [RIM()], belt, bevel=0.015)
+        belt_m = mat("belt", (150, 86, 46), rough=0.6, metal=0.4, wear=(212, 150, 96), wear_amt=0.6, rust=(84, 42, 24),
+                     rust_at=0.5, dirt=0.5, speck=0.25, weather=1.2, bump=0.14)      # Flash look 3: an orange-rust belt
+        one("tank-belt", [belt_m], belt, bevel=0.015)
     g = hub("glow")
-    fire = glow_mat("fire", (200, 62, 12), (255, 146, 44), 2.0 if T < 3 else 2.8)
+    fire = (glow_mat("fire", (200, 62, 12), (255, 146, 44), 2.0 if T < 3 else 2.8) if T >= 2 else
+            glow_mat("fire", (236, 120, 30), (255, 226, 140), 2.2))      # Flash look 1: pale yellow panes
     panes = []
     for i, (th0, th1) in enumerate(zip(WIN, WIN[1:])):
         panes.append(one("pane-%d" % i, [fire], lambda a, th0=th0, th1=th1: arc_box(
@@ -351,29 +368,58 @@ def tank():
         one("tank-straps", [dark], straps, bevel=0.01)
 
 
+def talon(a, p0, p1, p2, r0, r1, mi, n=7):
+    """A hooked claw: a tapering tube along a quadratic curve p0 -> p2 (pulled toward p1)."""
+    pts = [(1 - u) ** 2 * p0 + 2 * u * (1 - u) * p1 + u * u * p2 for u in (k / n for k in range(n + 1))]
+    for k, (q0, q1) in enumerate(zip(pts, pts[1:])):
+        ra, rb = r0 + (r1 - r0) * k / n, r0 + (r1 - r0) * (k + 1) / n
+        a.cone(aim(q1 - q0, q0), ra, rb, (q1 - q0).length * 1.08, mi, 8)
+        if k:
+            a.sphere(Tm(q0), ra * 1.02, mi, 8, 5)
+
+
 def legs():
     dark, steel = RIM(), STEEL()
+    knuck = mat("knuckle", (64, 72, 86), rough=0.4, metal=0.85, wear=(132, 142, 156), wear_amt=0.5, rust=(96, 60, 40),
+                rust_at=0.62, dirt=0.35, weather=0.9)               # Flash look 3: the blue-black steel knuckle
 
     def fn(a):
         for th in LEGS:
             u = polar(1, th)
-            M = basis(u, Vector((0, 0, 1)).cross(u), (0, 0, 1))
+            sd = Vector((0, 0, 1)).cross(u)
+            M = basis(u, sd, (0, 0, 1))
             a.cube(M @ Tm((1.8, 0, 1.0)), (0.42, 0.34, 0.18), 0)                       # the plate under the tank
             bar(a, polar(1.8, th, 0.98), polar(2.15, th, 0.45), 0.24, 0.2, 0)             # the strut
-            a.cube(M @ Tm((2.2, 0, 0.23)), (0.46, 0.44, 0.46), 0)                         # the foot
-            a.cube(M @ Tm((2.2, 0, 0.48)), (0.5, 0.48, 0.06), 0)                          # its cap
-            if T >= 2:                                                                    # Flash look 3: a claw
-                a.cone(aim(polar(1, th, -0.55), polar(2.42, th, 0.26)), 0.1, 0.015, 0.4, 1, 6)
-    one("legs", [dark, steel], fn, bevel=0.03)
+            if T == 1:
+                a.cube(M @ Tm((2.2, 0, 0.23)), (0.46, 0.44, 0.46), 0)                     # the foot
+                a.cube(M @ Tm((2.2, 0, 0.48)), (0.5, 0.48, 0.06), 0)                      # its cap
+    one("legs", [dark], fn, bevel=0.03)
+    if T == 1:
+        return
+
+    def claws(a):
+        """Flash look 3 redesigns the foot: a steel knuckle on the strut's end and three big hooked claws."""
+        for th in LEGS:
+            u = polar(1, th)
+            sd = Vector((0, 0, 1)).cross(u)
+            k0 = polar(2.2, th, 0.5)
+            a.sphere(Tm(k0) @ Matrix.Diagonal((1.15, 1.15, 0.9, 1)), 0.3, 1, 16, 10)
+            a.cone(Tm(k0 + Vector((0, 0, 0.12))), 0.3, 0.24, 0.2, 1, 16)
+            for sgn, out in ((-1, 0.36), (0, 0.48), (1, 0.36)):
+                q0 = k0 + u * 0.1 + sd * (0.15 * sgn) - Vector((0, 0, 0.1))
+                q2 = polar(2.2 + out, th, 0.0) + sd * (0.3 * sgn)
+                q1 = (q0 + q2) / 2 + u * 0.2 + Vector((0, 0, 0.2)) + sd * (0.06 * sgn)
+                talon(a, q0, q1, q2, 0.13, 0.025, 0)
+    one("legs-claw", [steel, knuck], claws)
 
 
 def bin_():
     dark = mat("binwall", (124, 84, 44), rough=0.62, metal=0.45, wear=(170, 116, 56), wear_amt=0.45, rust=(92, 50, 28),
-               rust_at=0.52, dirt=0.55, speck=0.3)                # rust-brass walls, as Flash's dark hopper
+               rust_at=0.52, dirt=0.6, speck=0.3, weather=1.1, bump=0.12)    # rust-brass walls, as Flash's hopper
     brass, inside = BRASS(), INSIDE()
     (x0, x1), (y0, y1), (z0, z1) = BX, BY, BZ
     w = 0.1
-    py0, pz0, pz1, px0, px1 = y0, PORT_Z - 0.5, PORT_Z + 0.5, PIPE.x - 0.6, PIPE.x + 0.6
+    py0, pz0, pz1, px0, px1 = y0, PORT_Z - 0.5, min(PORT_Z + 0.5, z1), PIPE.x - 0.6, PIPE.x + 0.6
 
     def fn(a):
         # the front (-Y) wall: a solid foot, the grille, the port with the wall round it
@@ -393,16 +439,19 @@ def bin_():
         box(a, ((x0 + x1) / 2, (y0 - 1.9) / 2, z0 + 0.05), (x1 - x0, -1.9 - y0, 0.1))
         # the inside of the front wall's foot and the floor, dark
         box(a, ((x0 + x1) / 2, (y0 - 1.9) / 2 + 0.02, z0 + 0.11), (x1 - x0 - 2 * w, -1.9 - y0 - 0.1, 0.02), 2)
+        flare(a, x0, x1, y0, y1, z1 - 0.02, z1 + LIP, FL, w, 0)          # the trough's flared top
     one("bin-box", [dark, brass, inside], fn, bevel=0.02)
+    zt = z1 + LIP
 
     def rim(a):
-        for y in (y0, y1):                                      # the brass edging round the top
-            box(a, ((x0 + x1) / 2, y + (w / 2 if y == y0 else -w / 2), z1 + 0.04), (x1 - x0 + 0.08, 0.16, 0.1))
-        for x in (x0, x1):
-            box(a, (x, (y0 + y1) / 2, z1 + 0.04), (0.16, y1 - y0 + 0.08, 0.1))
+        X0, X1, Y0, Y1 = x0 - FL, x1 + FL, y0, y1 + FL          # the brass edging round the flared top
+        for y in (Y0, Y1):
+            box(a, ((X0 + X1) / 2, y + (w / 2 if y == Y0 else -w / 2), zt + 0.03), (X1 - X0 + 0.08, 0.16, 0.1))
+        for x in (X0, X1):
+            box(a, (x + (w / 2 if x == X0 else -w / 2), (Y0 + Y1) / 2, zt + 0.03), (0.16, Y1 - Y0 + 0.08, 0.1))
         for x in (x0, x1):                                      # brass corner straps down the front
             box(a, (x, y0 - 0.01, (z0 + z1) / 2), (0.16, 0.12, z1 - z0))
-        pts = [(Vector((x, y0 - 0.075, z)), Vector((0, -1, 0))) for x in (x0, x1) for z in (2.8, 3.45, 4.1, 4.6)]
+        pts = [(Vector((x, y0 - 0.075, z)), Vector((0, -1, 0))) for x in (x0, x1) for z in (2.8, 3.45, 4.1)]
         rivets(a, pts, 0.035)
     one("bin-rim", [brass], rim, bevel=0.015)
 
@@ -419,22 +468,37 @@ def bin_():
 
     def heap(a):                                                # Flash: the hopper is heaped with coal (still)
         hr = random.Random(7)
-        box(a, ((x0 + x1) / 2, (y0 + y1) / 2, 4.74), (x1 - x0 - 2 * w, y1 - y0 - 2 * w, 0.06), 1)
-        for i in range(6):
-            for j in range(6):
-                x = x0 + w + 0.14 + i * (x1 - x0 - 2 * w - 0.28) / 5 + hr.uniform(-0.06, 0.06)
-                y = y0 + w + 0.14 + j * (y1 - y0 - 2 * w - 0.28) / 5 + hr.uniform(-0.06, 0.06)
-                lump(a, (x, y, 4.8 + 0.1 * hr.random()), 0.15 + 0.06 * hr.random(), hr)
+        box(a, ((x0 + x1) / 2, (y0 + y1) / 2, z1 + 0.04), (x1 - x0, y1 - y0, 0.06), 1)
+        for i in range(7):
+            for j in range(7):
+                x = x0 + 0.08 + i * (x1 - x0 - 0.16) / 6 + hr.uniform(-0.05, 0.05)
+                y = y0 + 0.08 + j * (y1 - y0 - 0.16) / 6 + hr.uniform(-0.05, 0.05)
+                mid = 1 - max(abs(i - 3), abs(j - 3)) / 3                # heaped a little in the middle
+                lump(a, (x, y, z1 + 0.1 + 0.18 * mid + 0.08 * hr.random()), 0.14 + 0.06 * hr.random(), hr)
     one("bin-heap", [COAL(), inside], heap, smooth=False)
 
     if T >= 2:                                                  # Flash look 3: a brass hood over the bin's back half
         def hood(a):
             hb = (y0 + y1) / 2 + 0.15
-            box(a, ((x0 + x1) / 2, (hb + y1) / 2 + 0.02, z1 + 0.18), (x1 - x0 + 0.16, y1 - hb + 0.1, 0.16))
-            box(a, ((x0 + x1) / 2, hb, z1 + 0.32), (x1 - x0 + 0.16, 0.14, 0.18))
-            rivets(a, [(Vector((x, hb - 0.075, z1 + 0.32)), Vector((0, -1, 0))) for x in (-0.65, -0.2, 0.25, 0.6)],
+            box(a, ((x0 + x1) / 2, (hb + y1 + FL) / 2 + 0.02, zt + 0.16), (x1 - x0 + 2 * FL + 0.16, y1 + FL - hb + 0.1, 0.16))
+            box(a, ((x0 + x1) / 2, hb, zt + 0.3), (x1 - x0 + 2 * FL + 0.16, 0.14, 0.18))
+            rivets(a, [(Vector((x, hb - 0.075, zt + 0.3)), Vector((0, -1, 0))) for x in (-0.9, -0.3, 0.3, 0.9)],
                    0.035)
         one("bin-hood", [BRASS()], hood, bevel=0.03)
+
+
+def flare(a, x0, x1, y0, y1, zb, zt, fl, th, mi):
+    """Four walls round the rectangle x0..x1, y0..y1 at zb, leaning out by fl at zt (a trough's top), th thick. The
+    front wall stays upright, where the pipe or chute comes in."""
+    def rect(d, z, f):                                          # f: the front (-Y) side's share of the lean
+        return [a.bm.verts.new(v) for v in ((x0 - d, y0 - d * f, z), (x1 + d, y0 - d * f, z), (x1 + d, y1 + d, z),
+                                             (x0 - d, y1 + d, z))]
+    ob, ot, ib, it = rect(0, zb, 1), rect(fl, zt, 0), rect(-th, zb, 1), rect(fl - th, zt, 1 - fl / (fl - th))
+    for i in range(4):
+        k = (i + 1) % 4
+        for q in ((ob[i], ob[k], ot[k], ot[i]), (ib[k], ib[i], it[i], it[k]), (ot[i], ot[k], it[k], it[i]),
+                  (ob[k], ob[i], ib[i], ib[k])):
+            a.bm.faces.new(q).material_index = mi
 
 
 def elbow():
@@ -442,47 +506,51 @@ def elbow():
     brass, rusty, dark = BRASS(), RUSTY(), RIM()
     h = hub("elbow")
     corners = [(PIPE.x, PIPE.y, -0.3), (PIPE.x, PIPE.y, PORT_Z), (PIPE.x, BY[0] - 0.02, PORT_Z)]
-    ob, sp, s = pipe("elbow-pipe", corners, 0.8, brass, 1.35, h)
-    bulger(sp, s, 0.78, 0.15, 0.5, lead=0.9, tail=0.5)
+    ob, sp, s = pipe("elbow-pipe", corners, 0.9, brass, 1.35, h)
+    bulger(sp, s, 0.88, 0.15, 0.5, lead=0.9, tail=0.5)
 
     def fn(a):
-        a.cone(Tm((PIPE.x, PIPE.y, 0.0)), 1.04, 0.98, 0.16, 0, 32)                     # the ground ring
-        a.cone(Tm((PIPE.x, PIPE.y, 0.0)), 0.9, 0.9, 0.5, 1, 32)                     # the rusty collar
-        a.cone(aim((0, 1, 0), (PIPE.x, BY[0] - 0.14, PORT_Z)), 0.96, 0.96, 0.12, 1, 32)  # the flange on the bin
-        pts = [(Vector((PIPE.x, BY[0] - 0.15, PORT_Z)) + Vector((0.86 * math.cos(t), 0, 0.86 * math.sin(t))),
+        a.cone(Tm((PIPE.x, PIPE.y, 0.0)), 1.14, 1.08, 0.16, 0, 32)                     # the ground ring
+        a.cone(Tm((PIPE.x, PIPE.y, 0.0)), 1.0, 1.0, 0.5, 1, 32)
+        a.cone(Tm((PIPE.x, PIPE.y, 3.0)), 1.07, 1.07, 0.26, 2, 32)                     # Flash: a collar under the bend
+        a.cone(Tm((PIPE.x, PIPE.y, 3.04)), 1.11, 1.11, 0.18, 2, 32)                     # the rusty collar
+        a.cone(aim((0, 1, 0), (PIPE.x, BY[0] - 0.14, PORT_Z)), 1.06, 1.06, 0.12, 1, 32)  # the flange on the bin
+        pts = [(Vector((PIPE.x, BY[0] - 0.15, PORT_Z)) + Vector((0.96 * math.cos(t), 0, 0.96 * math.sin(t))),
                 Vector((0, -1, 0))) for t in [i * math.pi / 3 + 0.5 for i in range(6)]]
         rivets(a, pts, 0.045, 0)
-    one("elbow-fix", [dark, rusty], fn, bevel=0.015)
+    one("elbow-fix", [dark, rusty, brass], fn, bevel=0.015)
 
 
 def column():
     """Tiers 2-3: the square brass column in the elbow's place (Flash look 3): plinth, slatted foot, a strap, and the
     upper body that swells as it pumps; a short iron chute carries the coal from it into the same port."""
     brass, brass2, dark = BRASS2(), CBRASS(), RIM()
-    c = PIPE
-    hs = 0.88
-    zs = 2.38                                                   # the strap's bottom: 4 slats below it, as Flash
+    c = CC
+    hs = 0.74
+    zs = 3.0                                                    # the strap's bottom: 4 tall slats below it, as Flash
+    plate = mat("plinth", (150, 140, 128), rough=0.5, metal=0.6, wear=(196, 188, 176), wear_amt=0.5, rust=(110, 66, 40),
+                rust_at=0.55, dirt=0.5, weather=1.0)            # Flash's pale steel plinth
 
     def foot(a):
-        box(a, (c.x, c.y, 0.15), (2.55, 2.55, 0.3), 0)
+        box(a, (c.x, c.y, 0.12), (2.15, 2.15, 0.24), 3)
         for sx in (-1, 1):
             for sy in (-1, 1):
-                a.cone(Tm((c.x + sx * 1.13, c.y + sy * 1.13, 0.28)), 0.07, 0.06, 0.06, 0, 6)
+                a.cone(Tm((c.x + sx * 0.93, c.y + sy * 0.93, 0.22)), 0.07, 0.06, 0.06, 3, 6)
         for i in range(4):                                                   # the slats
-            z = 0.3 + i * 0.52
-            box(a, (c.x, c.y, z + 0.25), (2 * hs - 0.04 * (i % 2), 2 * hs - 0.04 * (i % 2), 0.48), 1)
+            z = 0.24 + i * 0.69
+            box(a, (c.x, c.y, z + 0.335), (2 * hs - 0.04 * (i % 2), 2 * hs - 0.04 * (i % 2), 0.65), 1)
         box(a, (c.x, c.y, zs + 0.31), (2 * hs + 0.16, 2 * hs + 0.16, 0.62), 2)     # the strap
         rivets(a, [(Vector((c.x + hs + 0.08, c.y + d, zs + 0.31)), Vector((1, 0, 0))) for d in (-0.5, 0.0, 0.5)] +
                [(Vector((c.x + d, c.y - hs - 0.08, zs + 0.31)), Vector((0, -1, 0))) for d in (-0.5, 0.0, 0.5)], 0.045, 0)
         if T >= 3:                                                            # tier 3: iron corner guards
             for sx in (-1, 1):
                 for sy in (-1, 1):
-                    box(a, (c.x + sx * (hs + 0.02), c.y + sy * (hs + 0.02), 1.34), (0.2, 0.2, 2.08), 0)
+                    box(a, (c.x + sx * (hs + 0.02), c.y + sy * (hs + 0.02), 1.62), (0.2, 0.2, 2.76), 0)
             rivets(a, [(Vector((c.x + hs + 0.12, c.y + sy * (hs - 0.02), z)), Vector((1, 0, 0)))
-                       for sy in (-1, 1) for z in (0.7, 1.4, 2.1)] +
+                       for sy in (-1, 1) for z in (0.8, 1.7, 2.6)] +
                    [(Vector((c.x + sx * (hs - 0.02), c.y - hs - 0.12, z)), Vector((0, -1, 0)))
-                    for sx in (-1, 1) for z in (0.7, 1.4, 2.1)], 0.04, 0)
-    one("col-foot", [dark, brass2, brass], foot, bevel=0.03)
+                    for sx in (-1, 1) for z in (0.8, 1.7, 2.6)], 0.04, 0)
+    one("col-foot", [dark, brass2, brass, plate], foot, bevel=0.03)
 
     h = hub("colpump", (c.x, c.y, zs + 0.62))
     hu = hs + 0.05                                              # the upper body, a little wider than the slats
@@ -490,7 +558,7 @@ def column():
     def upper(a):
         box(a, (0, 0, 1.3), (2 * hu, 2 * hu, 2.6), 0)
         a.cube(Tm((0, 0, 2.62)) @ Matrix.Diagonal((1, 1, 0.5, 1)), (2 * hu - 0.12, 2 * hu - 0.12, 1.0), 0)   # the pillow top
-    up = one("col-body", [brass2], upper, parent=h, bevel=0.36)
+    up = one("col-body", [brass2], upper, parent=h, bevel=0.46)
     up.modifiers["bevel"].segments = 5
 
     def pump(f):
@@ -500,42 +568,71 @@ def column():
 
     def chute(a):
         y0, y1 = c.y + hs - 0.1, BY[0] - 0.02
-        box(a, (PIPE.x, (y0 + y1) / 2, PORT_Z), (1.16, y1 - y0, 1.08), 0)
-        a.cube(Tm((PIPE.x, BY[0] - 0.1, PORT_Z)), (1.34, 0.12, 1.26), 0)
-        rivets(a, [(Vector((PIPE.x + 0.58, (y0 + y1) / 2 + d, PORT_Z + e)), Vector((1, 0, 0)))
-                   for d in (-0.25, 0.25) for e in (-0.38, 0.38)], 0.04, 0)
+        box(a, (c.x, (y0 + y1) / 2, PORT_Z), (1.16, y1 - y0, 1.08), 0)
+        a.cube(Tm((c.x, BY[0] - 0.1, PORT_Z)), (1.34, 0.12, 1.26), 0)
+        rivets(a, [(Vector((c.x + 0.58, (y0 + y1) / 2 + d, PORT_Z + e)), Vector((1, 0, 0)))
+                   for d in (-0.2, 0.2) for e in (-0.38, 0.38)], 0.04, 0)
     one("col-chute", [RIM()], chute, bevel=0.03)
 
 
 def stack():
-    olive, rusty, inside = OLIVE(), RUSTY(), INSIDE()
-    z_lo = 3.9 if T == 1 else 5.8
-    top = 9.75
+    """The stack and the drum the copper arch rises from. Tier 1 (Flash look 1): a short rusty funnel on a thin olive
+    pipe, held by an olive bracket of two bands round the drum. Tiers 2-3 (Flash look 3 redesigns it): a copper pipe
+    with a wider funnel, held by a broad steel clamp round pipe and drum. The drum is the same at every tier."""
+    rusty, inside = RUSTY(), INSIDE()
+    d0, d1 = 5.12, 7.75                                       # the drum's bottom (on the pipe / chute) and top
+
+    def drum(a):
+        a.cone(Tm((COL.x, COL.y, d0)), DR, DR, d1 - d0, 0, 32)
+        a.cone(Tm((COL.x, COL.y, d0)), DR + 0.07, DR + 0.07, 0.14, 0, 32)                # its foot ring
+        a.cone(Tm((COL.x, COL.y, d1 - 0.04)), DR + 0.08, DR + 0.05, 0.22, 1, 32)         # the pale top ring
+        rivets(a, [(polar(DR + 0.07, th, d0 + 0.07) + COL, polar(1, th)) for th in range(0, 360, 30)], 0.035, 0)
+    one("drum", [rusty, PALE()], drum, bevel=0.01)
+
+    if T == 1:
+        z_lo, top, r, cup_r, cup_h, pm = 4.6, 8.95, 0.2, 0.44, 0.66, OLIVE()
+    else:
+        z_lo, top, r, cup_r, cup_h, pm = 6.2, 9.12, 0.27, 0.58, 0.74, COPPER()
 
     def fn(a):
-        rod(a, (STK.x, STK.y, z_lo), (STK.x, STK.y, top), 0.34, 0, 24)
-        for z in (top - 0.06,):
-            a.cone(Tm((STK.x, STK.y, z)), 0.36, 0.36, 0.12, 0, 24)
-        box(a, (STK.x, STK.y, 7.45), (1.0, 1.0, 0.95), 0)                       # the bracket box
-        box(a, (STK.x, STK.y, 7.45), (1.08, 1.08, 0.14), 0)
-        rod(a, (STK.x, STK.y, 8.1), (COL.x, COL.y - 0.3, 8.1), 0.24, 0, 20)     # the stub to the collar
-        rivets(a, [(Vector((STK.x + 0.5, STK.y + d, 7.45 + e)), Vector((1, 0, 0))) for d in (-0.25, 0.25)
-                   for e in (-0.3, 0.3)], 0.04, 0)
-    one("stack", [olive], fn, bevel=0.02)
+        rod(a, (STK.x, STK.y, z_lo), (STK.x, STK.y, top), r, 0, 20)
+    one("stack", [pm], fn, bevel=0.0)
 
     def cup(a):
-        a.lathe(Tm((STK.x, STK.y, top + 0.04)), [(0.26, 0.0), (0.34, 0.0), (0.5, 0.38), (0.6, 0.62), (0.6, 0.72),
-                                                 (0.5, 0.72), (0.44, 0.55), (0.3, 0.3), (0.2, 0.3)], 0, 32)
-        a.cone(Tm((STK.x, STK.y, top + 0.3)), 0.3, 0.3, 0.02, 1, 24)
-        a.cone(Tm((COL.x, COL.y, 7.72)), 0.42, 0.42, 0.85, 0, 24)                # the collar
-        a.cone(Tm((COL.x, COL.y, 8.55)), 0.47, 0.47, 0.1, 0, 24)
-        a.cone(Tm((COL.x, COL.y, 7.66)), 0.47, 0.47, 0.1, 0, 24)
-    one("cup", [rusty, inside], cup, bevel=0.01)
+        k = cup_r / 0.6
+        a.lathe(Tm((STK.x, STK.y, top - 0.02)),
+                [(r - 0.04, 0.0), (r + 0.05, 0.0), (r + 0.07, 0.16), (0.48 * k, 0.5 * cup_h / 0.72),
+                 (cup_r, cup_h - 0.1), (cup_r, cup_h), (cup_r - 0.09, cup_h), (cup_r - 0.14, cup_h - 0.14),
+                 (r + 0.02, 0.3), (r - 0.06, 0.3)], 0, 32)
+        a.cone(Tm((STK.x, STK.y, top + 0.28)), r, r, 0.02, 1, 24)
+    one("cup", [rusty, inside], cup, bevel=0.0)
 
-    if T >= 2:                                                  # Flash look 3: a steel clamp band on the stack
+    gap = (Vector((COL.x, COL.y, 0)) - Vector((STK.x, STK.y, 0)))
+    side = Vector((-gap.y, gap.x, 0)).normalized()
+
+    def band(a, z, h, rr, t):
+        """A flat band round the drum and the pipe: two rings and two straight runs between them."""
+        a.lathe(Tm((COL.x, COL.y, z)), [(DR - 0.01, 0), (DR + t, 0), (DR + t, h), (DR - 0.01, h)], 0, 32)
+        a.lathe(Tm((STK.x, STK.y, z)), [(rr - 0.01, 0), (rr + t, 0), (rr + t, h), (rr - 0.01, h)], 0, 24)
+        for sg in (-1, 1):
+            p0 = Vector((STK.x, STK.y, z + h / 2)) + side * sg * (rr + t / 2)
+            p1 = Vector((COL.x, COL.y, z + h / 2)) + side * sg * (DR + t / 2)
+            bar(a, p0, p1, t, h, 0)
+
+    if T == 1:                                                  # the olive bracket: two bands and a strap
+        def bracket(a):
+            for z in (6.1, 6.9):
+                band(a, z, 0.28, r, 0.09)
+            p = Vector((COL.x, COL.y, 0)) + polar(DR + 0.04, -45)
+            bar(a, Vector((p.x, p.y, 5.9)), Vector((p.x, p.y, 7.35)), 0.2, 0.07, 0)
+            rivets(a, [(Vector((p.x, p.y, z)) + polar(0.04, -45), polar(1, -45)) for z in (6.25, 7.05)], 0.035, 0)
+        one("bracket", [OLIVE()], bracket, bevel=0.01)
+    else:                                                       # Flash look 3: a broad steel clamp and its bolt
         def clamp(a):
-            a.cone(Tm((STK.x, STK.y, 8.55)), 0.38, 0.38, 0.4, 0, 24)
-            box(a, (STK.x + 0.42, STK.y, 8.75), (0.18, 0.16, 0.36), 0)
+            band(a, 6.85, 0.5, r, 0.08)
+            q = Vector((STK.x, STK.y, 7.1)) + polar(r + 0.12, -150)
+            box(a, (q.x, q.y, 7.1), (0.22, 0.22, 0.42))
+            rod(a, (q.x, q.y, 7.35), (q.x, q.y, 6.85), 0.05, 0, 8)
         one("clamp", [STEEL()], clamp, bevel=0.015)
 
     if T >= 3:                                                  # tier 3: a little smoke from the stack
@@ -546,11 +643,12 @@ def stack():
                  for i in range(n)]
         for p in puffs:
             p.modifiers.new("s", "SUBSURF").render_levels = 2
+        z_top = top + cup_h
 
         def move(f):
             for i, p in enumerate(puffs):
                 ph = (f + i / n) % 1.0
-                p.location = (STK.x + 0.4 * ph + 0.06 * math.sin(7 * i), STK.y + 0.35 * ph, top + 0.75 + 1.8 * ph)
+                p.location = (STK.x + 0.4 * ph + 0.06 * math.sin(7 * i), STK.y + 0.35 * ph, z_top + 0.1 + 1.8 * ph)
                 s = 0.5 + 1.4 * ph
                 p.scale = (s, s, s)
                 p.rotation_euler = (0, 0, 2.3 * i)
@@ -562,7 +660,7 @@ def arch():
     """The copper pipe from the collar over to the turret; a bulge runs along it every loop."""
     copper, dark = COPPER(), RIM()
     h = hub("arch")
-    corners = [(COL.x, COL.y, 8.5), (COL.x, COL.y, 9.85), (TUR.x, TUR.y, 8.0), (TUR.x, TUR.y, 7.25)]
+    corners = [(COL.x, COL.y, 7.7), (COL.x, COL.y, 9.85), (TUR.x, TUR.y, 8.0), (TUR.x, TUR.y, 7.25)]
     ob, sp, s = pipe("arch-pipe", corners, 0.34, copper, 0.6, h)
     bulger(sp, s, 0.34, 0.2, 0.45, lead=0.3, tail=0.3, phase=0.35)
 
@@ -706,6 +804,31 @@ def coal():
 
 
 # ------------------------------------------------------------------------------------------------------------ build
+def gloss_lights():
+    """Flash's brass is glossy with strong highlight bands. Two long lights that only the brass sees, and only in its
+    reflections (light linking: the brass receives them, only the brass can shadow them), so nothing else changes."""
+    names = ("elbow-pipe", "col-body", "col-foot", "bin-rim", "bin-hood")
+    rec = bpy.data.collections.new("brass-receivers")
+    for o in bpy.data.objects:
+        if o.name.split(".")[0] in names:
+            rec.objects.link(o)
+    tgt = Vector((PIPE.x, PIPE.y, 4.2))
+    for name, d, size, e in (("gloss-a", Vector((-0.75, -0.52, -0.42)), (1.4, 7.0), float(os.environ.get("GLOSS", 500))),
+                             ("gloss-b", Vector((-0.2, -0.9, 0.55)), (5.0, 1.2), float(os.environ.get("GLOSS2", 350)))):
+        ld = bpy.data.lights.new(name, "AREA")
+        ld.shape = "RECTANGLE"
+        ld.size, ld.size_y = size
+        ld.energy = e
+        ld.color = (1.0, 0.9, 0.74)
+        lo = bpy.data.objects.new(name, ld)
+        kit.link(lo)
+        lo.location = tgt + d.normalized() * 12
+        lo.rotation_euler = (-d).to_track_quat("-Z", "Y").to_euler()
+        lo.visible_diffuse = False
+        lo.light_linking.receiver_collection = rec
+        lo.light_linking.blocker_collection = rec
+
+
 def build():
     tank()
     legs()
@@ -718,6 +841,7 @@ def build():
     arch()
     turret()
     coal()
+    gloss_lights()
 
 
 _border = kit.border_of

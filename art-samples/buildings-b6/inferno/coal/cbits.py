@@ -75,8 +75,52 @@ def folded(t, v, n):
     return c.outputs[0]
 
 
+def _lit(c, k):
+    return tuple(min(255, int(x * k)) for x in c)
+
+
+def weathering(t, v, out, col, wear, rust, scale, w, rough, edge):
+    """Flash's heavy wear on top of the base paint (7 Nov, the owner wants the gritty Flash surface, not clean CG):
+    big dark grime blotches, rust streaks running down (noise stretched along Z), pale scratches, worn bright edges
+    (bevel normal against the true normal), and rougher where rusty. w = 0..1.5, how much of it."""
+    rc = rust or _lit(col, 0.6)
+    # big blotches: darker and lighter clouds a few game px across (they show at game size)
+    blot = t.noise(v, scale * 0.9, 3.0, 0.6, 0.6)
+    out = t.mix(out, t.ramp(blot, [(0.3, grey(max(0.0, 1 - 0.42 * w))), (0.5, K1)]), 1.0, "MULTIPLY")
+    out = t.mix(out, kit.srgb(*_lit(wear or col, 1.25)), t.ramp(blot, [(0.6, K0), (0.78, grey(min(1.0, 0.45 * w)))]))
+    # streaks: rust/soot runs down the sides
+    sv = t.coords(scale=(scale * 1.8, scale * 1.8, scale * 0.16))
+    st = t.ramp(t.noise(sv, 1.0, 4.0, 0.6, 0.3), [(0.52, K0), (0.66, grey(min(1.0, 0.75 * w)))])
+    out = t.mix(out, kit.srgb(*_lit(rc, 0.62)), st)
+    # fine dark pitting
+    pit = t.ramp(t.noise(v, scale * 7, 5.0, 0.7), [(0.6, K1), (0.72, grey(1 - 0.45 * w))])
+    out = t.mix(out, pit, 1.0, "MULTIPLY")
+    # scratches: thin pale squiggles (noise contour lines), only in patches
+    sc = t.noise(t.coords(scale=(scale * 6, scale * 1.5, scale * 1.5)), 1.0, 2.0, 0.5, 0.4)
+    line = t.ramp(sc, [(0.485, K0), (0.5, K1), (0.515, K0)])
+    patch = t.ramp(t.noise(v, scale * 0.7, 2.0, 0.5, 0.0), [(0.5, K0), (0.62, K1)])
+    sm = t.mix(line, patch, 1.0, "MULTIPLY")
+    pale = edge or _lit(wear or col, 1.45)
+    out = t.mix(out, kit.srgb(*pale), _math(t, "MULTIPLY", sm, 0.55 * w))
+    # worn edges: pale bare metal where the surface turns sharply (convex and concave alike, AO darkens the concave)
+    bev = t.n("ShaderNodeBevel")
+    bev.samples = 6
+    bev.inputs["Radius"].default_value = 0.035
+    geo = t.n("ShaderNodeNewGeometry")
+    dot = t.n("ShaderNodeVectorMath", operation="DOT_PRODUCT")
+    t.link(bev.outputs["Normal"], dot.inputs[0])
+    t.link(geo.outputs["Normal"], dot.inputs[1])
+    e = _math(t, "SUBTRACT", 1.0, dot.outputs["Value"])
+    brk = t.noise(v, scale * 3, 3.0, 0.6)
+    e = _math(t, "MULTIPLY", t.ramp(e, [(0.004, K0), (0.04, K1)]), t.ramp(brk, [(0.35, K0), (0.55, K1)]))
+    out = t.mix(out, kit.srgb(*pale), _math(t, "MULTIPLY", e, min(1.0, 0.8 * w)))
+    # rougher where rusty or blotched dark
+    r = t.ramp(blot, [(0.3, grey(min(1.0, rough + 0.3))), (0.6, grey(rough))])
+    return out, r
+
+
 def mat(name, col, rough=0.65, metal=0.0, wear=None, wear_amt=0.6, rust=None, rust_at=0.62, dirt=0.35, scale=5.0,
-        fold=None, speck=0.18, bump=0.08, glow=None, heat=None, alpha=False, ao_min=0.55):
+        fold=None, speck=0.18, bump=0.08, glow=None, heat=None, alpha=False, ao_min=0.55, weather=0.0, edge=None, hi=None):
     """Paint or metal: worn patches (`wear` shows through), rust blotches, a fine speckle, darker toward the ground and
     in creases. glow = (colour, strength, scale): hot seams that give light. heat = colour toward the mesh's 'heat'
     attribute (1 at a spike's tip). fold = n: the texture repeats every 360/n degrees round local Z (turning parts)."""
@@ -93,6 +137,9 @@ def mat(name, col, rough=0.65, metal=0.0, wear=None, wear_amt=0.6, rust=None, ru
         out = t.mix(out, kit.srgb(*rust), t.ramp(t.noise(v, scale * 0.8, 5.0, 0.65, 1.0), [(rust_at, K0), (rust_at + 0.14, grey(0.75))]))
     if speck:
         out = t.mix(out, t.ramp(t.noise(v, scale * 12, 2.0, 0.5), [(0.3, grey(1 - speck)), (0.62, K1)]), 1.0, "MULTIPLY")
+    rough_in = rough
+    if weather and not fold:
+        out, rough_in = weathering(t, v, out, col, wear, rust, scale, weather, rough, edge)
     if heat:
         at = t.n("ShaderNodeAttribute", attribute_name="heat")
         hf = _math(t, "POWER", at.outputs["Fac"], 1.6)
@@ -100,7 +147,19 @@ def mat(name, col, rough=0.65, metal=0.0, wear=None, wear_amt=0.6, rust=None, ru
         t.bsdf.inputs["Emission Color"].default_value = kit.srgb(*heat[0])
         t.link(_math(t, "MULTIPLY", hf, heat[1]), t.bsdf.inputs["Emission Strength"])
     out = t.grime(out, 0.0, 2.6, dirt, ao_min)
-    t.set(**{"Base Color": out, "rough": rough, "metal": metal, "spec": 0.4})
+    t.set(**{"Base Color": out, "rough": rough_in, "metal": metal, "spec": 0.4})
+    if hi:                                                      # Flash's painted highlight bands on glossy brass
+        geo = t.n("ShaderNodeNewGeometry")
+        tot = None
+        for d, pw, k in hi[1:]:
+            dot = t.n("ShaderNodeVectorMath", operation="DOT_PRODUCT")
+            t.link(geo.outputs["Normal"], dot.inputs[0])
+            dot.inputs[1].default_value = tuple(Vector(d).normalized())
+            m = _math(t, "MULTIPLY", _math(t, "POWER", _math(t, "MAXIMUM", dot.outputs["Value"], 0.0), pw), k)
+            tot = m if tot is None else _math(t, "ADD", tot, m)
+        brk = t.ramp(t.noise(v, scale * 1.2, 3.0, 0.6), [(0.3, grey(0.55)), (0.65, K1)])   # broken by the wear
+        t.bsdf.inputs["Emission Color"].default_value = kit.srgb(*hi[0])
+        t.link(_math(t, "MULTIPLY", tot, brk), t.bsdf.inputs["Emission Strength"])
     if glow:
         gcol, gk, gs = glow
         if gk > 1:                                              # bright, through the grille
