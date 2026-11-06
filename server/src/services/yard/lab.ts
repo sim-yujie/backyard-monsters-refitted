@@ -136,7 +136,7 @@ export const labOf = (buildingdata: BuildingDataMap | null | undefined): LabBuil
 
 /**
  * The lab ability of a monster a player may research, or `400 badRequest`:
- * not one of the fourteen with an ability (the five others and every Inferno
+ * not one of the fifteen with an ability (the four others and every Inferno
  * monster have none, MH §4.2).
  */
 export const researchableOrThrow = (monster: string): LabAbility => {
