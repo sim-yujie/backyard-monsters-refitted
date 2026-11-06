@@ -198,6 +198,13 @@ export interface FortifyOffer {
   readonly seconds: number;
   readonly gate: UpgradeGate | null;
   readonly maxed: boolean;
+  /**
+   * A Builder's Weekend's percentage taken off `cost` (owner, 7 Nov:
+   * `planFortify`), absent when none runs; `fullCost` is then the price
+   * without it.
+   */
+  readonly weekendOff?: number;
+  readonly fullCost?: UpgradeCost;
 }
 
 /** A running build or upgrade countdown and what can be done about it. */
@@ -509,9 +516,9 @@ export const cancelOffer = (building: YardBuilding, context: PanelContext): Canc
   const fullCost: UpgradeCost = step
     ? { r1: step[0], r2: step[1], r3: step[2], r4: step[3] }
     : { ...ZERO };
-  // An upgrade bought in a Builder's Weekend gives back what was paid (`wd`,
-  // `planCancelUpgrade`), whenever it is cancelled.
-  const paidOff = building.countdown?.kind === "fortify" ? 0 : Number(building.raw["wd"]) || 0;
+  // An upgrade or fortify bought in a Builder's Weekend gives back what was
+  // paid (`wd`, `planCancelUpgrade` / `planCancelFortify`), whenever it is cancelled.
+  const paidOff = Number(building.raw["wd"]) || 0;
   const cost = costLessBy(fullCost, paidOff);
   // A main-yard Inferno building's refund goes to the Inferno purse, up to its caps.
   const funds = fundsFor(building.type, context);
@@ -651,7 +658,10 @@ export const fortifyOffer = (building: YardBuilding, context: PanelContext): For
     return { from, to: from, max: ladder.length, cost: ZERO, seconds: 0, gate: null, maxed: true };
   }
 
-  const cost: UpgradeCost = { r1: step[0], r2: step[1], r3: step[2], r4: step[3] };
+  const fullCost: UpgradeCost = { r1: step[0], r2: step[1], r3: step[2], r4: step[3] };
+  // Builder's Weekend: the server charges this much less (`planFortify`).
+  const weekendOff = weekendPercent("builders", context.now());
+  const cost: UpgradeCost = costLessBy(fullCost, weekendOff);
   const seconds = Math.floor(step[4] * sharperToolsMultiplier(context.save.storedata, context.now()));
   const hall = townHallLevel(context.yard);
 
@@ -682,7 +692,16 @@ export const fortifyOffer = (building: YardBuilding, context: PanelContext): For
     }
   }
 
-  return { from, to: from + 1, max: ladder.length, cost, seconds, gate, maxed: false };
+  return {
+    from,
+    to: from + 1,
+    max: ladder.length,
+    cost,
+    seconds,
+    gate,
+    maxed: false,
+    ...(weekendOff > 0 && { weekendOff, fullCost }),
+  };
 };
 
 /**

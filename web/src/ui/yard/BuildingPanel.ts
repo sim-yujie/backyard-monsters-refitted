@@ -1123,6 +1123,9 @@ export class BuildingPanel {
     title.textContent = `Fortify to F${offer.to}`;
     title.title = `Fortified F${offer.from} of ${offer.max}.`;
     head.append(title, stepTime(offer.seconds, "Fortify time · 1 worker"));
+    // Builder's Weekend: the cost below is already the lower one.
+    const off = offer.weekendOff ? weekendChip("builders") : null;
+    if (off) head.append(off);
     block.append(head);
 
     block.append(this.costFactsLine(offer.cost, resources));

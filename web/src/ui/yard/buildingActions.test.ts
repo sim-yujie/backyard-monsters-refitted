@@ -642,6 +642,34 @@ describe("Builder's Weekend (game/weekend.ts)", () => {
     const context = contextOf({ buildings: [HALL(5), building(2, 20, 4, { cU: 5_400, wd: 30 })] });
     expect(cancelOffer(pick(context, 2), context).refund).toEqual({ r1: 875_000, r2: 656_250, r3: 218_750, r4: 0 });
   });
+
+  it("Fortify costs 30% less too, and its shortfall is against the lower price (owner, 7 Nov)", () => {
+    setWeekend({ active: BUILDERS, next: null });
+    const context = contextOf({
+      buildings: [HALL(5), building(2, 20, 4)],
+      resources: { r1: 35_000, r2: 26_250, r3: 8_750, r4: 0 },
+    });
+    expect(fortifyOffer(pick(context, 2), context)).toMatchObject({
+      cost: { r1: 35_000, r2: 26_250, r3: 8_750, r4: 0 },
+      weekendOff: 30,
+      fullCost: { r1: 50_000, r2: 37_500, r3: 12_500, r4: 0 },
+      gate: null,
+    });
+  });
+
+  it("Fortify outside the weekend: the full price, no weekendOff", () => {
+    const context = contextOf({ buildings: [HALL(5), building(2, 20, 4)] });
+    const offer = fortifyOffer(pick(context, 2), context);
+    expect(offer?.cost).toEqual({ r1: 50_000, r2: 37_500, r3: 12_500, r4: 0 });
+    expect(offer).not.toHaveProperty("weekendOff");
+  });
+
+  it("a weekend fortify's cancel gives back what was paid (wd)", () => {
+    const paid = contextOf({ buildings: [HALL(5), building(2, 20, 4, { cF: 5_400, wd: 30 })] });
+    expect(cancelOffer(pick(paid, 2), paid).refund).toEqual({ r1: 35_000, r2: 26_250, r3: 8_750, r4: 0 });
+    const full = contextOf({ buildings: [HALL(5), building(2, 20, 4, { cF: 5_400 })] });
+    expect(cancelOffer(pick(full, 2), full).refund).toEqual({ r1: 50_000, r2: 37_500, r3: 12_500, r4: 0 });
+  });
 });
 
 describe("on an outpost (outposts WP5)", () => {
