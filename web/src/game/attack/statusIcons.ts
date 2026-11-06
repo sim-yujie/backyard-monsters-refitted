@@ -66,6 +66,9 @@ export const STATUS_EFFECTS: readonly StatusEffect[] = [
   // and a monster that killed a defending ranked Octo-ooze.
   { id: "swarming", label: "Swarming", stacks: (c) => (c.swarming ? 1 : 0) },
   { id: "weakened", label: "Weakened", stacks: (c) => (c.weakened ? 1 : 0) },
+  // Lab "Split" (owner, beta 7): the copies a ranked Slimeattikus leaves wear
+  // this mark for as long as they live.
+  { id: "split", label: "Split copy", stacks: (c) => (c.splitCopy ? 1 : 0) },
 ];
 
 /** What a tower's stickers read: the engine's word on it this frame. */
@@ -88,6 +91,7 @@ export const STATUS_ICON_FILES = [
   "lootBoosted",
   "swarming",
   "weakened",
+  "split",
   "slowed",
   "stunned",
   "frozen",
