@@ -188,6 +188,26 @@
   display: flex;
 }
 
+/* The face is a button that opens the player's profile. */
+.friends-row__face-button {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.friends-row__face-button:hover .friends-row__face {
+  outline: 2px solid var(--colour-accent);
+}
+
+.friends-row__face-button:focus-visible {
+  outline: 2px solid var(--colour-accent);
+  outline-offset: 2px;
+}
+
 .friends-row__face {
   width: 34px;
   height: 34px;

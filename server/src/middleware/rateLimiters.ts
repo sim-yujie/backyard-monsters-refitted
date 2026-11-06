@@ -618,3 +618,56 @@ export const announcementImageLimiter = RateLimit.middleware({
     ctx.body = { error: "Too many requests. Please try again shortly." };
   },
 });
+
+/** A player's answer when a profile limiter is full (`controllers/profile/routes.ts`). */
+const profileRefusal = (error: string) => async (ctx: Context) => {
+  ctx.status = Status.TOO_MANY_REQUESTS;
+  ctx.body = { error, reason: "rateLimited" };
+};
+
+/** Profiles opened: 60 a minute per user. */
+export const profileReadLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 60,
+  prefixKey: "profile-read",
+  keyGenerator: byUser("profile-read"),
+  handler: profileRefusal("Too many requests. Please slow down."),
+});
+
+/** Bio saves and photo removals: 20 every 15 minutes per user. */
+export const profileWriteLimiter = RateLimit.middleware({
+  interval: { min: 15 },
+  max: 20,
+  prefixKey: "profile-write",
+  keyGenerator: byUser("profile-write"),
+  handler: profileRefusal("You have changed your profile a lot. Please wait a few minutes."),
+});
+
+/**
+ * Photo uploads: 10 an hour per user. Only one a day is stored; this caps
+ * how often a refused or broken upload makes the server decode a picture.
+ */
+export const photoUploadLimiter = RateLimit.middleware({
+  interval: { min: 60 },
+  max: 10,
+  prefixKey: "photo-upload",
+  keyGenerator: byUser("photo-upload"),
+  handler: profileRefusal("Too many uploads. Please wait a while."),
+});
+
+/** "Report inappropriate image": 10 every 15 minutes per user, like chat reports. */
+export const photoReportLimiter = RateLimit.middleware({
+  interval: { min: 15 },
+  max: 10,
+  prefixKey: "photo-report",
+  keyGenerator: byUser("photo-report"),
+  handler: profileRefusal("You have sent a lot of reports. Please wait a few minutes."),
+});
+
+/** Profile photos, which need no sign-in: 240 a minute per IP. Browsers keep them a day. */
+export const profilePhotoLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 240,
+  prefixKey: "profile-photos",
+  handler: profileRefusal("Too many requests. Please try again shortly."),
+});

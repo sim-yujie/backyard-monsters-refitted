@@ -3259,3 +3259,53 @@ tbody th {
   display: inline-block;
   min-width: 10em;
 }
+
+/* Photo reports (photos.ts): the photo beside who reported it and the buttons. */
+.photo-case {
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.photo-case__picture {
+  flex: none;
+  width: 96px;
+  height: 96px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2, rgba(127, 127, 127, 0.12));
+}
+
+.photo-case__img {
+  display: block;
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+}
+
+.photo-case__none {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.photo-case__reporters {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.photo-case__actions {
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+@media (max-width: 480px) {
+  .photo-case__picture,
+  .photo-case__img {
+    width: 72px;
+    height: 72px;
+  }
+}

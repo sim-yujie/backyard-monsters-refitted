@@ -64,6 +64,12 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * painted by Codex 7 Nov): `eventcoin` is a thick gold coin with a raised gold
  * star. The other painted options (red star, dotted festival token, monster
  * face) are in `art-samples/event-coin/codex`, not shipped.
+ *
+ * The profile window's stats (`ui/profile/ProfileDialog.ts`,
+ * `art-samples/profile-icons`, painted 7 Nov in place of line icons): the
+ * domed Town Hall with its horn antenna (`townhall`), a gold crown for empire
+ * points (`empire`), two smiling monster heads for friends (`friends`) and the
+ * crimson alliance shield with its gold stripe (`alliance`).
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -107,6 +113,10 @@ export const GAME_ICONS = {
   rearm: "Re-arm traps",
   rearm2: "Re-arm traps",
   eventcoin: "Event coins",
+  townhall: "Town Hall",
+  empire: "Empire points",
+  friends: "Friends",
+  alliance: "Alliance",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;
