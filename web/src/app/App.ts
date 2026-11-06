@@ -42,6 +42,7 @@ import { WATCH_PLUGINS } from "@/game/autoAttack/watchPlugin";
 import { makeRaidDue } from "@/api/raid";
 import { RAID_PLUGINS } from "@/game/raid/raidPlugin";
 import { raidWatch } from "@/game/raid/raidWatch";
+import { gpuTextureLimit } from "@/game/textureLimit";
 // A type only: the dev hook's code is loaded on demand, in DEV alone.
 import type { DevDefenceOptions } from "@/game/defences/devWatchDefence";
 
@@ -121,6 +122,11 @@ export class App {
       autoDensity: true,
       preference: "webgl",
     });
+
+    // The graphics card's texture limit, read before any picture is asked for:
+    // the yard cuts building strips bigger than it (a black box otherwise) and
+    // the monster sheets are fetched in a copy it can hold.
+    gpuTextureLimit(this.pixi.renderer);
 
     const canvas = this.pixi.canvas;
     this.host.append(canvas);

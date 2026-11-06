@@ -1,4 +1,5 @@
-import { Rectangle, Texture } from "pixi.js";
+import type { Texture } from "pixi.js";
+import { cellTexture } from "@/game/textureLimit";
 import type { ResolvedAnim, ResolvedImage } from "./buildingArt";
 import { LOAD_TRIES, loadWithRetries } from "./retryLoad";
 import { stripCells } from "./yardAnim";
@@ -32,6 +33,8 @@ export class YardTextures {
   private readonly strips = new Map<string, Texture[]>();
   private readonly pending = new Map<string, Promise<void>>();
   private readonly failed = new Set<string>();
+  /** Cells copied out of an oversized picture: they own their canvas, so they are destroyed with it. */
+  private readonly owned = new Set<Texture>();
 
   /** Extra listeners added by `watch`, alongside the one the owner passed in. */
   private readonly watchers = new Set<(key: string) => void>();
@@ -82,12 +85,7 @@ export class YardTextures {
         .then((texture) => {
           this.ready.set(
             key,
-            frame
-              ? new Texture({
-                  source: texture.source,
-                  frame: new Rectangle(0, 0, frame.width, frame.height),
-                })
-              : texture,
+            frame ? this.cell(texture, { x: 0, y: 0, width: frame.width, height: frame.height }) : texture,
           );
           this.announce(key);
         })
@@ -129,9 +127,11 @@ export class YardTextures {
           const columns = cut.columns ?? cut.frames;
           for (let i = 0; i < cut.frames; i++) {
             cells.push(
-              new Texture({
-                source: texture.source,
-                frame: new Rectangle((i % columns) * cut.width, Math.floor(i / columns) * cut.height, cut.width, cut.height),
+              this.cell(texture, {
+                x: (i % columns) * cut.width,
+                y: Math.floor(i / columns) * cut.height,
+                width: cut.width,
+                height: cut.height,
               }),
             );
           }
@@ -149,6 +149,18 @@ export class YardTextures {
     );
 
     return null;
+  }
+
+  /**
+   * A cell over a loaded picture. A picture bigger than the graphics card
+   * holds (a 3D tower's 6144 px turret strip on a 4096 px phone) has each cell
+   * copied out on its own: bound whole, WebGL refuses it and every tower using
+   * it is drawn as a black box.
+   */
+  private cell(texture: Texture, rect: { x: number; y: number; width: number; height: number }): Texture {
+    const made = cellTexture(texture.source, rect);
+    if (made.owned) this.owned.add(made.texture);
+    return made.texture;
   }
 
   /** `loadWithRetries`, given up once this yard is gone. */
@@ -181,11 +193,12 @@ export class YardTextures {
     for (const [key, texture] of this.ready) {
       // Only the strip sub-textures are ours to destroy; a whole image belongs
       // to the Assets cache and may still be wanted by another screen.
-      if (key.includes("#")) texture.destroy(false);
+      if (key.includes("#")) texture.destroy(this.owned.has(texture));
     }
     for (const cells of this.strips.values()) {
-      for (const cell of cells) cell.destroy(false);
+      for (const cell of cells) cell.destroy(this.owned.has(cell));
     }
+    this.owned.clear();
     this.strips.clear();
     this.ready.clear();
     this.failed.clear();

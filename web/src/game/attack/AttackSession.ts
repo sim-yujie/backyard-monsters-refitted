@@ -482,6 +482,7 @@ export class AttackSession {
    */
   private script: AttackEvent[] | null = null;
   private scriptEnd = 0;
+  private scriptStamp_ = 0;
   /** {@link skipToEnd} is running the rest of a playback, slice by slice. */
   private skipping_ = false;
   /** The playback ended by skipping to it: nothing of its end was drawn. */
@@ -774,6 +775,30 @@ export class AttackSession {
       .sort((one, other) => one.event.t - other.event.t || one.at - other.at)
       .map(({ event }) => event);
     this.scriptEnd = Math.max(0, Math.floor(endTick));
+    this.scriptStamp_ += 1;
+  }
+
+  /** Counts the scripts handed to {@link playScript}, so a watcher sees a new one. */
+  get scriptStamp(): number {
+    return this.scriptStamp_;
+  }
+
+  /**
+   * The monster types the script still has to bring on, by a raid's waves or a
+   * replay's flings: the battle layer fetches their sheets at once. A raid's
+   * roster is empty, so without this a sheet was only asked for when its first
+   * monster came out, and a Trojan Horse's Crabatrons and Project Xs (the last
+   * and biggest sheets) fought as green squares while theirs downloaded.
+   */
+  scriptedMonsters(): string[] {
+    const ids = new Set<string>();
+    for (const event of this.script ?? []) {
+      if (event.kind !== "raid" && event.kind !== "fling") continue;
+      for (const [id, count] of Object.entries(event.monsters)) {
+        if (count > 0) ids.add(id);
+      }
+    }
+    return [...ids];
   }
 
   /** Whether this session plays a wild monster raid on the player's own yard (#226). */

@@ -1,6 +1,5 @@
 import {
   Assets,
-  CanvasSource,
   Container,
   Graphics,
   Rectangle,
@@ -63,7 +62,8 @@ import {
 import { dirtFor, surfaceHop } from "./burrowFx";
 import { jumpLift } from "./jumpFx";
 import { classicLook } from "@/game/classicLook";
-import { deviceTextureLimit, setDeviceTextureLimit, sheetResolution } from "@/game/quality";
+import { deviceTextureLimit, sheetResolution } from "@/game/quality";
+import { copyCell, gpuTextureLimit } from "@/game/textureLimit";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
 import { StatusIconRow, TowerStatusIcons, statusesOf } from "./statusIcons";
@@ -115,6 +115,9 @@ import {
   type EffectsQuality,
   type JuiceLevel,
 } from "./juice";
+
+/** Kept here too: the yard life layer and older callers import it from the battle layer. */
+export { gpuTextureLimit };
 
 /**
  * Everything that moves during a battle (`docs/design/attack-flow.md` §F5, §6
@@ -533,60 +536,6 @@ export class MonsterSheetTextures {
   }
 }
 
-/**
- * One cell of an oversized sheet, copied through a canvas into a texture of
- * its own at the sheet's resolution (`rect` is in 1x units, the picture `@4x`
- * or so). Null where there is no canvas to draw with, or nothing drawable
- * behind the source, in which case the caller shows its marker instead.
- */
-const copyCell = (
-  source: TextureSource,
-  rect: { x: number; y: number; width: number; height: number },
-): Texture | null => {
-  if (typeof document === "undefined") return null;
-  const image = (source as { resource?: unknown }).resource;
-  if (!image || typeof image !== "object") return null;
-  const scale = source.resolution > 0 ? source.resolution : 1;
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.ceil(rect.width * scale);
-  canvas.height = Math.ceil(rect.height * scale);
-  const context = canvas.getContext("2d");
-  if (!context) return null;
-  try {
-    context.drawImage(
-      image as CanvasImageSource,
-      rect.x * scale,
-      rect.y * scale,
-      rect.width * scale,
-      rect.height * scale,
-      0,
-      0,
-      rect.width * scale,
-      rect.height * scale,
-    );
-  } catch {
-    return null;
-  }
-  return new Texture({ source: new CanvasSource({ resource: canvas, resolution: scale }) });
-};
-
-/** The GPU texture limit a Pixi renderer reports, or null when it does not say. */
-export const gpuTextureLimit = (renderer: Renderer): number | null => {
-  const gl = (renderer as { gl?: WebGLRenderingContext }).gl;
-  let size: unknown = null;
-  if (gl && typeof gl.getParameter === "function") size = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-  if (typeof size !== "number" || size <= 0) {
-    const device = (renderer as { device?: { limits?: { maxTextureDimension2D?: unknown } } })
-      .device;
-    size = device?.limits?.maxTextureDimension2D;
-  }
-  if (typeof size !== "number" || size <= 0) return null;
-  // Remembered for every sheet cutter (the guide's walk-ins too, which have no
-  // renderer of their own) and for picking a copy the card can hold (`sheetUrl`).
-  setDeviceTextureLimit(size);
-  return size;
-};
-
 /* ── The layer ──────────────────────────────────────────────────────────── */
 
 /** What the layer needs from the yard renderer; `YardRenderer` provides it. */
@@ -911,6 +860,8 @@ export class AttackBattleLayer {
   private readonly now: () => number;
   private damageDirty = true;
   private limitRead = false;
+  /** The session's script whose monsters' sheets were last asked for ({@link preloadScript}). */
+  private scriptSeen = 0;
   private readonly unsubscribe: () => void;
   private destroyed = false;
   /** Put to rest by {@link settle}: no creeps, no guns, only what plays out. */
@@ -1111,6 +1062,7 @@ export class AttackBattleLayer {
    */
   update(): void {
     if (this.destroyed) return;
+    this.preloadScript();
     const battle = this.session.battle();
     if (!battle) return;
     // Skip to end (issue #362) draws nothing until the battle is over, and
@@ -1454,6 +1406,22 @@ export class AttackBattleLayer {
       if (limit !== null) this.textures.setMaxTextureSize(limit);
     }
     this.update();
+  }
+
+  /**
+   * Starts the sheets of every monster a played-back script will bring on,
+   * once per script: a raid's (and the Trojan Horse's) raiders are in no
+   * roster, so `preloadRoster` cannot know them.
+   */
+  private preloadScript(): void {
+    const stamp = this.session.scriptStamp;
+    if (stamp === this.scriptSeen) return;
+    this.scriptSeen = stamp;
+    for (const id of this.session.scriptedMonsters()) {
+      const sheet = spriteFor(id, this.session.levels[id] ?? 1);
+      if (sheet) this.textures.preload(sheet);
+      if (id === DAVE_ID) this.textures.preload(ROCKET_SHEET);
+    }
   }
 
   /** Starts the sheets the attacker could send, so the first drop is not blank. */
