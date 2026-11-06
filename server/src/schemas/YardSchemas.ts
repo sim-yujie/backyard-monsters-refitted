@@ -39,7 +39,13 @@ export const YardTargetSchema = z.object({
 export const YardStateSchema = z.object({});
 
 /** `POST /bm/yard/upgrade`: the building to take one level up. */
-export const YardUpgradeSchema = z.object({ id: BuildingIdField });
+/**
+ * The Shiny top-up the player agreed to when the pool is short of a build,
+ * upgrade or fortification (Flash's `BRTOPUP`, `services/yard/topUp.ts`).
+ */
+const TopUpField = z.coerce.number().int().nonnegative().optional();
+
+export const YardUpgradeSchema = z.object({ id: BuildingIdField, topUp: TopUpField });
 
 /** `POST /bm/yard/upgrade/cancel`: the building whose running upgrade to cancel. */
 export const YardCancelUpgradeSchema = z.object({ id: BuildingIdField });
@@ -152,6 +158,8 @@ export const YardBuildSchema = z.object({
   type: z.coerce.number().int().positive(),
   x: YardCoordinateField,
   y: YardCoordinateField,
+  /** Build only (not instant build): see {@link TopUpField}. */
+  topUp: TopUpField,
 });
 
 /**
@@ -294,7 +302,7 @@ export const YardChampionThawSchema = z.object({
 });
 
 /** `POST /bm/yard/fortify`: the building to fortify one step (outposts). */
-export const YardFortifySchema = z.object({ id: BuildingIdField });
+export const YardFortifySchema = z.object({ id: BuildingIdField, topUp: TopUpField });
 
 /** `POST /bm/yard/fortify/cancel`: the building whose running fortification to cancel. */
 export const YardCancelFortifySchema = z.object({ id: BuildingIdField });

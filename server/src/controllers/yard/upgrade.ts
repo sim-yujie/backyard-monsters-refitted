@@ -1,6 +1,7 @@
 import { YardCancelUpgradeSchema, YardUpgradeSchema } from "../../schemas/YardSchemas.js";
 import { upgradeQuestEvents } from "../../services/quests/hooks.js";
 import { withInfernoStanding } from "../../services/yard/surfaceInferno.js";
+import { withTopUp } from "../../services/yard/topUp.js";
 import { planCancelUpgrade, planUpgradeAction } from "../../services/yard/upgrade.js";
 import { defineYardAction } from "./yardAction.js";
 
@@ -16,7 +17,9 @@ export const yardUpgradeAction = defineYardAction({
   schema: YardUpgradeSchema,
   run: async ({ save, user, body, now, em }) => {
     const type = Number(save.buildingdata?.[String(body.id)]?.t);
-    const plan = await planUpgradeAction(await withInfernoStanding(em, user.userid, save, type), body.id, now);
+    const standing = await withInfernoStanding(em, user.userid, save, type);
+    // A short pool topped up with Shiny, Flash's `BRTOPUP` (`services/yard/topUp.ts`, issue #393).
+    const plan = await withTopUp(standing, body.topUp, (seen) => planUpgradeAction(seen, body.id, now));
     // Daily quests: an upgrade started on a harvester or a tower.
     return { ...plan, questEvents: upgradeQuestEvents(type) };
   },

@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/core";
 import type { User } from "../../database/models/user.model.js";
 import { capOf } from "../../services/yard/credit.js";
+import { topupCost } from "../../services/base/economy/resourceBudget.js";
 import { packPrice } from "../../services/yard/resourcePacks.js";
+import { yardUpgradeAction } from "./upgrade.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { yardShopBuyAction } from "./shopBuy.js";
-import { runYardAction, type YardAnswer } from "./yardAction.js";
+import { runYardAction, type YardAction, type YardAnswer } from "./yardAction.js";
 
 /**
  * Buying resources with Shiny through `shop/buy` (issue #393), end to end
@@ -177,5 +179,52 @@ describe("POST /bm/yard/shop/buy, resource packs", () => {
       expect((db.row!.iresources as Row).r1).toBe(10_000);
       expect(resources().r1).toBe(0);
     });
+  });
+});
+
+describe("POST /bm/yard/upgrade with a Shiny top-up (Flash's BRTOPUP)", () => {
+  const upgrade = (body: Row): Promise<YardAnswer> =>
+    runYardAction(em as unknown as EntityManager, user, yardUpgradeAction as YardAction<never, unknown>, body);
+  const withCannon = (resources: Row) =>
+    rowOf({
+      resources,
+      buildingdata: {
+        "0": { id: 0, t: 14, X: 0, Y: 0, l: 3 },
+        "1": { id: 1, t: 20, X: 100, Y: 100, l: 1 },
+      },
+    });
+
+  test("short: refused with the shortfall and its price; the exact price funds it and starts", async () => {
+    db.row = withCannon({ r1: 0, r2: 0, r3: 0, r4: 0 });
+    const short = await upgrade({ id: 1 });
+    expect(short.status).toBe(409);
+    const shortfall = (short.body as { shortfall: Record<string, number> }).shortfall;
+    const price = topupCost(shortfall as never);
+    expect(price).toBeGreaterThan(0);
+
+    const wrong = await upgrade({ id: 1, topUp: price - 1 });
+    expect(wrong.status).toBe(409);
+    expect(wrong.body).toMatchObject({ reason: "shortfall", topUp: price, shortfall });
+
+    const paid = await upgrade({ id: 1, topUp: price });
+    expect(paid.status).toBe(200);
+    expect(db.row!.credits).toBe(1000 - price);
+    expect(resources()).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
+    expect((db.row!.buildingdata as Record<string, Row>)["1"]!.cU).toBeGreaterThan(0);
+    // `BRTOPUP` only funds: no points beyond the upgrade's own when it finishes.
+    expect(Number(db.row!.points)).toBe(0);
+  });
+
+  test("part short: only the missing part is bought; the rest is charged as usual", async () => {
+    db.row = withCannon({ r1: 0, r2: 0, r3: 0, r4: 0 });
+    const shortfall = ((await upgrade({ id: 1 })).body as { shortfall: Record<string, number> }).shortfall;
+    const r1 = Math.floor((shortfall.r1 ?? 0) / 2);
+    db.row = withCannon({ r1, r2: 0, r3: 0, r4: 0 });
+    const less = { ...shortfall, r1: (shortfall.r1 ?? 0) - r1 };
+    const price = topupCost(less as never);
+    const paid = await upgrade({ id: 1, topUp: price });
+    expect(paid.status).toBe(200);
+    expect(resources().r1).toBe(0);
+    expect(db.row!.credits).toBe(1000 - price);
   });
 });
