@@ -20,7 +20,8 @@ export const yardUpgradeAction = defineYardAction({
     const type = Number(save.buildingdata?.[String(body.id)]?.t);
     const off = weekendBoost("builders", now);
     const plan = await planUpgradeAction(await withInfernoStanding(em, user.userid, save, type), body.id, now, off);
-    if (off > 0) weekendBoostUsed(user.userid, "builders", now);
+    // The weekend's coins, in this transaction (`weekendCoins.ts`).
+    if (off > 0) await weekendBoostUsed(em, user.userid, "builders", now);
     // Daily quests: an upgrade started on a harvester or a tower.
     return { ...plan, questEvents: upgradeQuestEvents(type) };
   },

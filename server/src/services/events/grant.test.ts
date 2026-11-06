@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  EVENT_COINS_LADDER_TOTAL,
+  EVENT_COINS_PER_CALENDAR_DAY,
+  withDailyCoins,
+} from "../../game-data/events/eventRewards.js";
 import { planGrant, rewardProblem } from "./grant.js";
 
 const NOW = 1_800_000_000;
@@ -76,5 +81,45 @@ describe("rewardProblem", () => {
     expect(rewardProblem({ kind: "shiny", amount: 0 })).toBe("no amount");
     expect(rewardProblem({ kind: "resources", amounts: { r5: 1 } as never })).toBe("unknown resource");
     expect(() => planGrant(save(), [{ kind: "shiny", amount: -1 }], NOW)).toThrow();
+  });
+});
+
+describe("event coins as a reward (beta 7 grill item 29)", () => {
+  test("coins add up into grantCoins and are reported; the yard is not touched", () => {
+    const plan = planGrant(
+      save(),
+      [
+        { kind: "eventCoins", amount: 15 },
+        { kind: "shiny", amount: 10 },
+        { kind: "eventCoins", amount: 40 },
+      ],
+      NOW
+    );
+    expect(plan.grantCoins).toBe(55);
+    expect(plan.grantShiny).toBe(10);
+    expect(plan.slices).toEqual({});
+    expect(plan.granted).toEqual([
+      { kind: "eventCoins", amount: 15 },
+      { kind: "shiny", amount: 10 },
+      { kind: "eventCoins", amount: 40 },
+    ]);
+    expect(planGrant(save(), [{ kind: "shiny", amount: 1 }], NOW).grantCoins).toBe(0);
+  });
+
+  test("a coin reward needs an amount", () => {
+    expect(rewardProblem({ kind: "eventCoins", amount: 0 })).toBe("no amount");
+    expect(rewardProblem({ kind: "eventCoins", amount: 15 })).toBeNull();
+  });
+
+  test("withDailyCoins adds 15 to every day of a 14-day calendar: 210 in all", () => {
+    const days = Array.from({ length: 14 }, () => ({ rewards: [{ kind: "shiny", amount: 5 } as const] }));
+    const calendar = withDailyCoins(days);
+    expect(EVENT_COINS_PER_CALENDAR_DAY).toBe(15);
+    expect(calendar.every((day) => day.rewards.length === 2)).toBe(true);
+    const total = calendar.reduce((sum, day) => sum + planGrant(save(), day.rewards, NOW).grantCoins, 0);
+    expect(total).toBe(210);
+    // About 400 with the ladder's ~190 (owner's figure).
+    expect(total + EVENT_COINS_LADDER_TOTAL).toBe(400);
+    expect(days[0]!.rewards).toHaveLength(1);
   });
 });

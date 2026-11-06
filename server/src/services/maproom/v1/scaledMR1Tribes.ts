@@ -226,6 +226,8 @@ const writeTribeLanding = async (
 
   // Marked landed before anything is written: whatever a crash after the
   // write leaves behind lands nothing more (`landRowlessOnce`).
+  /** Tribe Plunder raised the loot: the weekend's coins are paid after the flush. */
+  let plunderUsed = false;
   const { credit, credited } = await landRowlessOnce(ref, session, async () => {
     // The tribe keeps its own monsters, the stored ones or its template's: the
     // save's copy is never written (issue #23, C2). What the battle did to it
@@ -276,7 +278,7 @@ const writeTribeLanding = async (
     // Tribe Plunder: the attacker banks that much more; the tribe gives up only `credit` (`weekendBoosts.ts`).
     const plunder = plunderPercent(true, now);
     const credited: ResourceAmounts = bankAttackLoot(userSave, withPlunderBonus(credit, plunder), krallenBuff).credited;
-    if (plunder > 0) weekendBoostUsed(user.userid, "plunder", now);
+    plunderUsed = plunder > 0;
 
     const looted = { ...existingTribe.looted };
     for (const key of RESOURCE_KEYS) looted[key] = (looted[key] ?? 0) + credit[key];
@@ -291,6 +293,8 @@ const writeTribeLanding = async (
   // Event loot (the monthly Krallen Hunt): the tribe's whole credit, before
   // the attacker's cap, once, under the tribe's final lock.
   await countAttackLoot(postgres.em, user.userid, userSave, credit, now);
+  // Tribe Plunder's weekend coins, after the flush: logged, not thrown (`weekendCoins.ts`).
+  if (plunderUsed) await weekendBoostUsed(postgres.em, user.userid, "plunder", now, true);
 
   // Goals WM1-WM4 (#227): a tribe this replay destroyed, counted on the
   // attacker's main row under its own lock.

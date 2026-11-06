@@ -15,9 +15,10 @@ export const yardPlaceDecorationAction = defineYardAction({
 });
 
 /**
- * `POST /bm/yard/decor/buy` — buy a decoration Flash sold for Shiny and put
- * it down (owner decision 2026-11-04, §8.3): the store table's price, charged
- * only once the spot is good; otherwise as `decor/place`. Main yard only.
+ * `POST /bm/yard/decor/buy` — buy a decoration Flash sold and put it down
+ * (owner decision 2026-11-04, §8.3), for event coins (owner, 6 Nov 2026):
+ * the store table's Shiny price as coins, charged only once the spot is
+ * good (`409 coins` when short); otherwise as `decor/place`. Main yard only.
  */
 export const yardBuyDecorationAction = defineYardAction({
   schema: YardPlaceDecorationSchema,

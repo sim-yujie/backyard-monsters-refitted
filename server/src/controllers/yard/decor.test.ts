@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/core";
 import type { User } from "../../database/models/user.model.js";
 import { MUSHROOM_TYPE } from "../../game-data/buildingFootprints.js";
 import { overlaps, rectOf } from "../../services/yardplanner/layoutGeometry.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { memoryCoinStore, useCoinStore, type EventCoinStore } from "../../services/events/eventCoins.js";
 import { yardBuyDecorationAction, yardPlaceDecorationAction } from "./decor.js";
 import { yardRecycleAction } from "./recycle.js";
 import { runYardAction, type YardAnswer } from "./yardAction.js";
@@ -157,54 +158,73 @@ const buy = (body: Row, who: User = user): Promise<YardAnswer> =>
   runYardAction(em as unknown as EntityManager, who, yardBuyDecorationAction, body);
 
 /**
- * `POST /bm/yard/decor/buy` (owner decision 2026-11-04): Flash's Shiny
- * decorations at Flash's price (`game-data/store/decorationsForSale.ts`),
+ * `POST /bm/yard/decor/buy` (owner decisions 2026-11-04 and 6 Nov): Flash's
+ * decorations at Flash's Shiny price as EVENT COINS
+ * (`game-data/store/decorationsForSale.ts`, `services/events/eventCoins.ts`),
  * charged when one is placed. 29 is the British Flag (150), 55 the Acorn (5),
  * 99 the Statue of Liberty (500); 70 the Sun Dial is `block`ed in Flash and
- * 120 the Big Gulp priced 0, so neither is sold.
+ * 120 the Big Gulp priced 0, so neither is sold. The coins come from an
+ * in-memory store; Shiny is never touched.
  */
 describe("POST /bm/yard/decor/buy", () => {
+  let coins: ReturnType<typeof memoryCoinStore>;
+  let previous: EventCoinStore;
+  const balance = () => coins.balances.get(2505) ?? 0;
+
   beforeEach(() => {
     db.row = rowOf({ credits: 1_000, researchdata: {} });
+    coins = memoryCoinStore();
+    coins.balances.set(2505, 1_000);
+    previous = useCoinStore(coins);
   });
 
-  test("charges the store price and puts it down finished: no worker, no points", async () => {
+  afterEach(() => {
+    useCoinStore(previous);
+  });
+
+  test("charges the store price in coins and puts it down finished: no worker, no points, no Shiny", async () => {
     const answer = await buy({ type: 29, x: 200, y: 200 });
 
     expect(answer.status).toBe(200);
-    expect(answer.body.report).toEqual({ id: 5, t: 29, x: 200, y: 200, level: 1, left: 0, credits: 150 });
+    expect(answer.body.report).toEqual({ id: 5, t: 29, x: 200, y: 200, level: 1, left: 0, coins: 150 });
+    expect(answer.body.eventcoins).toBe(850);
+    expect(answer.body.coinsGained).toBeUndefined();
     expect(buildings()["5"]).toEqual({ id: 5, t: 29, X: 200, Y: 200 });
+    expect(balance()).toBe(850);
     expect(db.row).toMatchObject({
-      credits: 850,
+      credits: 1_000,
       points: "100",
       resources: { r1: 0, r2: 0, r3: 0, r4: 0 },
       researchdata: {},
     });
     expect((answer.body.workers as { busy: number }).busy).toBe(0);
+    expect(coins.log.at(-1)).toEqual({ userid: 2505, amount: -150, reason: "decor-29", awardKey: null });
 
     await buy({ type: 55, x: 0, y: 200 });
     await buy({ type: 99, x: -300, y: 200 });
-    expect(db.row!.credits).toBe(850 - 5 - 500);
+    expect(balance()).toBe(850 - 5 - 500);
   });
 
   test("any price the client sends is ignored", async () => {
-    await buy({ type: 29, x: 200, y: 200, price: 1, credits: 1 });
-    expect(db.row!.credits).toBe(850);
+    await buy({ type: 29, x: 200, y: 200, price: 1, coins: 1, credits: 1 });
+    expect(balance()).toBe(850);
   });
 
   test("no limit: a second of the same is sold too", async () => {
     await buy({ type: 29, x: 200, y: 200 });
     const again = await buy({ type: 29, x: 0, y: 200 });
     expect(again.status).toBe(200);
-    expect(db.row!.credits).toBe(700);
+    expect(balance()).toBe(700);
   });
 
   test("one in storage is placed from there for nothing", async () => {
     db.row = rowOf({ credits: 1_000, researchdata: { b29: 1 } });
     const answer = await buy({ type: 29, x: 200, y: 200 });
 
-    expect(answer.body.report).toMatchObject({ t: 29, left: 0, credits: 0 });
+    expect(answer.body.report).toMatchObject({ t: 29, left: 0, coins: 0 });
+    expect(answer.body.eventcoins).toBeUndefined();
     expect(db.row).toMatchObject({ credits: 1_000, researchdata: {} });
+    expect(balance()).toBe(1_000);
   });
 
   test("refuses what Flash did not sell, and charges nothing", async () => {
@@ -218,26 +238,32 @@ describe("POST /bm/yard/decor/buy", () => {
       status: 400,
       body: { reason: "notDecoration" },
     });
-    expect(db.row!.credits).toBe(1_000);
+    expect(balance()).toBe(1_000);
     expect(Object.keys(buildings())).toEqual(["0", "4"]);
   });
 
-  test("too little Shiny: 409 credits, nothing placed", async () => {
-    db.row = rowOf({ credits: 100, researchdata: {} });
+  test("too few coins: 409 coins, nothing placed, Shiny not used instead", async () => {
+    coins.balances.set(2505, 100);
     expect(await buy({ type: 29, x: 200, y: 200 })).toMatchObject({
       status: 409,
-      body: { reason: "credits", credits: { have: 100, need: 150 } },
+      body: { reason: "coins", coins: { have: 100, need: 150 } },
     });
-    expect(db.row!.credits).toBe(100);
+    expect(balance()).toBe(100);
+    expect(db.row!.credits).toBe(1_000);
     expect(Object.keys(buildings())).toEqual(["0", "4"]);
   });
 
-  test("a Shiny-locked account is refused", async () => {
-    expect(await buy({ type: 29, x: 200, y: 200 }, lockedUser)).toMatchObject({
+  test("a player with no coins at all is refused", async () => {
+    coins.balances.clear();
+    expect(await buy({ type: 55, x: 200, y: 200 })).toMatchObject({
       status: 409,
-      body: { reason: "shinyLocked" },
+      body: { reason: "coins", coins: { have: 0, need: 5 } },
     });
-    expect(db.row!.credits).toBe(1_000);
+  });
+
+  test("the Shiny lock does not stop coin spending: coins are earned, not bought", async () => {
+    expect((await buy({ type: 29, x: 200, y: 200 }, lockedUser)).status).toBe(200);
+    expect(balance()).toBe(850);
   });
 
   test("a refused spot charges nothing: outside the plot, on a building", async () => {
@@ -249,14 +275,15 @@ describe("POST /bm/yard/decor/buy", () => {
       status: 409,
       body: { reason: "placement", placement: "overlap", with: 0 },
     });
-    expect(db.row!.credits).toBe(1_000);
+    expect(balance()).toBe(1_000);
     expect(Object.keys(buildings())).toEqual(["0", "4"]);
   });
 
   test("recycling a bought one puts it in storage", async () => {
     await buy({ type: 29, x: 200, y: 200 });
     await runYardAction(em as unknown as EntityManager, user, yardRecycleAction, { id: 5 });
-    expect(db.row).toMatchObject({ credits: 850, researchdata: { b29: 1 } });
+    expect(db.row).toMatchObject({ researchdata: { b29: 1 } });
+    expect(balance()).toBe(850);
     expect(buildings()["5"]).toBeUndefined();
   });
 });
