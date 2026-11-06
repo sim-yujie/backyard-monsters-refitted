@@ -126,10 +126,21 @@
   padding: 2px;
 }
 
+/* The row fills the window, the tabs equal in it (ui.css `.tab-row`); with
+   many hatcheries it slides sideways, its thin bar showing there is more.
+   A tab's floor is a set width, not its words: its countdown ticks, and a
+   width that followed it would make the row twitch. */
+.hatch-tabs.tab-row {
+  scrollbar-width: thin;
+}
+
+.hatch-tabs > .hatch-tab {
+  flex: 1 1 0;
+  min-width: 132px;
+}
+
 .hatch-tab {
   position: relative;
-  flex: 0 1 176px;
-  min-width: 132px;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -1405,9 +1416,11 @@ button.hatch-slot:disabled {
 
 @container hatch (width < 560px) {
   /* Every tab fits across: the picture over the level and the light. */
-  .hatch-tab {
-    flex: 1 1 0;
+  .hatch-tabs > .hatch-tab {
     min-width: 62px;
+  }
+
+  .hatch-tab {
     flex-direction: column;
     gap: 2px;
     padding: var(--space-1) 2px;

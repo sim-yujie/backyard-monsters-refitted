@@ -269,7 +269,7 @@ export const plannerHelpPanel = (options: PlannerHelpOptions): Panel => {
     : "Nothing here reaches your yard until you press Apply.";
 
   const tablist = document.createElement("div");
-  tablist.className = "planner-help__tabs";
+  tablist.className = "tab-row planner-help__tabs";
   tablist.setAttribute("role", "tablist");
   tablist.setAttribute("aria-label", "Planner help");
 

@@ -101,7 +101,6 @@
 
 .quests-tabs {
   flex: none;
-  justify-content: center;
   margin: var(--space-2) var(--space-3) 0;
 }
 

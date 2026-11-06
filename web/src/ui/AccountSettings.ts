@@ -165,7 +165,7 @@ type SettingsTab = (typeof SETTINGS_TABS)[number]["id"];
  */
 const settingsTabs = (body: HTMLElement): Record<SettingsTab, HTMLElement> => {
   const strip = document.createElement("div");
-  strip.className = "tabs account-settings__tabs";
+  strip.className = "tabs tab-row account-settings__tabs";
   strip.setAttribute("role", "tablist");
   strip.setAttribute("aria-label", SETTINGS_TEXT.title);
   const tabs = new Map<SettingsTab, HTMLButtonElement>();

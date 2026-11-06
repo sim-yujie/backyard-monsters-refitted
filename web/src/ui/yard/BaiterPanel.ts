@@ -276,7 +276,7 @@ export class BaiterPanel {
   /** The tab row over the army and the recent tests; the army is shown first. */
   private tabs(views: ReadonlyArray<readonly [string, HTMLElement]>): HTMLElement {
     const row = document.createElement("div");
-    row.className = "baiter__tabs";
+    row.className = "tab-row baiter__tabs";
     row.setAttribute("role", "tablist");
     row.setAttribute("aria-label", "Baiter");
     const controls: HTMLButtonElement[] = [];

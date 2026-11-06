@@ -309,7 +309,7 @@ export class BuildingPanel {
     this.championSlot.hidden = true;
 
     this.cageTabs = document.createElement("div");
-    this.cageTabs.className = "tabs building-panel__tabs";
+    this.cageTabs.className = "tabs tab-row building-panel__tabs";
     this.cageTabs.setAttribute("role", "tablist");
     this.cageTabs.setAttribute("aria-label", "Champion Cage");
     this.cageTabs.hidden = true;

@@ -100,3 +100,56 @@ describe("room under the fixed rows on a short screen", () => {
     expect(side).toMatch(/\.planner-help__footer \{[^}]*position: static;/);
   });
 });
+
+/*
+ * Every tab row fills its window's width, its tabs equal (owner, 6 Nov 2026):
+ * one shared rule (ui.css `.tab-row`); a row with more tabs than fit slides
+ * sideways rather than cut or wrap a label.
+ */
+describe("tab rows fill the width", () => {
+  const source = (path: string): string => readFileSync(resolve(here, path), "utf8");
+
+  it("has the shared rule: a full-width row that scrolls sideways, tabs equal and never under their words", () => {
+    const ui = css("styles/ui.css");
+    const row = rule(ui, '.tab-row:is([role="tablist"], [role="group"])');
+    expect(row).toMatch(/display: flex;/);
+    expect(row).toMatch(/flex-wrap: nowrap;/);
+    expect(row).toMatch(/justify-content: flex-start;/);
+    expect(row).toMatch(/align-self: stretch;/);
+    expect(row).toMatch(/overflow-x: auto;/);
+    const tab = rule(ui, '.tab-row > :is([role="tab"], button)');
+    expect(tab).toMatch(/flex: 1 1 0;/);
+    expect(tab).toMatch(/min-width: max-content;/);
+    expect(tab).toMatch(/white-space: nowrap;/);
+    expect(rule(ui, ".tab-row[hidden]")).toMatch(/display: none;/);
+  });
+
+  it.each([
+    ["AccountSettings.ts", "account-settings__tabs"],
+    ["attack/TestReport.ts", "test-report__tabs"],
+    ["chat/ChatBox.ts", "chat-box__rooms"],
+    ["friends/FriendsScreen.ts", "friends-tabs"],
+    ["inferno/InfernoMapScreen.ts", "inferno-map__tabs"],
+    ["monsters/HatchTab.ts", "hatch-tabs"],
+    ["monsters/MonstersScreen.ts", "monsters-tabs"],
+    ["quests/QuestsPanel.ts", "quests-tabs"],
+    ["siege/SiegeScreen.ts", "siege-tabs"],
+    ["yard/BaiterPanel.ts", "baiter__tabs"],
+    ["yard/BuildingPanel.ts", "building-panel__tabs"],
+    ["yard/PlannerHelp.ts", "planner-help__tabs"],
+  ])("%s gives its tab row the shared class", (file, own) => {
+    expect(source(file)).toMatch(new RegExp(`"[^"]*tab-row [^"]*${own}[^"]*"`));
+  });
+
+  it("fills the title bar's room in Monsters and Chaos Weapons, and the whole second row on a phone", () => {
+    const monsters = css("styles/monsters.css");
+    expect(rule(monsters, ".monsters-screen .monsters-tabs")).toMatch(/flex: 1 1 0;\s*min-width: 0;/);
+    const phone = media(monsters, "(width <= 620px)");
+    expect(phone).toMatch(/\.monsters-screen \.monsters-tabs \{\s*order: 1;\s*flex: 1 0 100%;\s*\}/);
+  });
+
+  it("keeps a Hatchery tab's set floor, so its ticking countdown never moves the row", () => {
+    const hatch = css("styles/hatch.css");
+    expect(rule(hatch, ".hatch-tabs > .hatch-tab")).toMatch(/flex: 1 1 0;\s*min-width: 132px;/);
+  });
+});

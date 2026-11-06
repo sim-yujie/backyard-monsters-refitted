@@ -136,7 +136,7 @@ export class TestReportPanel {
     this.panel.element.setAttribute("role", "dialog");
     this.panel.element.setAttribute("aria-modal", "true");
 
-    const tablist = element("div", "test-report__tabs");
+    const tablist = element("div", "tab-row test-report__tabs");
     tablist.setAttribute("role", "tablist");
     tablist.setAttribute("aria-label", "Test report");
     this.views.set("summary", this.summaryView());

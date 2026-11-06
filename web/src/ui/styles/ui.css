@@ -367,6 +367,36 @@ body {
   overscroll-behavior: contain;
 }
 
+/*
+ * `.tab-row`: every row of tabs fills its window's width, its tabs sharing it
+ * equally (owner, 6 Nov 2026). A tab never gets narrower than its words: when
+ * the row has more tabs than fit (many hatcheries, chat rooms, a phone) it
+ * scrolls sideways rather than cut or wrap a label. Only width here; each
+ * look keeps its own tab plates (skin.css). The attribute in the selectors
+ * lifts them over the windows' own rules, which load after this file.
+ */
+.tab-row:is([role="tablist"], [role="group"]) {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  align-self: stretch;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.tab-row[hidden] {
+  display: none;
+}
+
+.tab-row > :is([role="tab"], button) {
+  flex: 1 1 0;
+  min-width: max-content;
+  white-space: nowrap;
+}
+
 /* ── Popup ──────────────────────────────────────────────────────────────── */
 
 .popup-backdrop {
@@ -2013,7 +2043,6 @@ body {
 
 .account-settings__tabs {
   flex: none;
-  justify-content: center;
   margin: var(--space-4) var(--space-4) 0;
 }
 

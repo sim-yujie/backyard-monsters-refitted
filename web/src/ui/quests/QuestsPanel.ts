@@ -130,7 +130,7 @@ export class QuestsPanel {
     });
     this.element = this.panel.element;
 
-    const strip = el("div", "tabs quests-tabs");
+    const strip = el("div", "tabs tab-row quests-tabs");
     strip.setAttribute("role", "tablist");
     strip.setAttribute("aria-label", "Quests");
     for (const { id, label } of QUESTS_TABS) {

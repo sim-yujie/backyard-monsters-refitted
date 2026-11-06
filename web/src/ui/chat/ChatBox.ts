@@ -154,7 +154,7 @@ export class ChatBox {
     this.tab.addEventListener("click", () => this.setOpen(!this.open));
 
     this.rooms = document.createElement("div");
-    this.rooms.className = "chat-box__rooms";
+    this.rooms.className = "tab-row chat-box__rooms";
     this.rooms.setAttribute("role", "tablist");
     this.rooms.setAttribute("aria-label", "Chat rooms");
     this.rooms.hidden = true;

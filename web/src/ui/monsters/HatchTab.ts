@@ -632,7 +632,7 @@ export class HatchTab implements MonstersTab {
    */
   private tabStrip(tabs: readonly HatcheryTab[], chosen: number): HTMLElement {
     const strip = document.createElement("div");
-    strip.className = "hatch-tabs";
+    strip.className = "tab-row hatch-tabs";
     strip.setAttribute("role", "tablist");
     strip.setAttribute("aria-label", `Choose ${article(this.words.hatchery)}`);
     const ids = tabs.map((tab) => tab.id);
