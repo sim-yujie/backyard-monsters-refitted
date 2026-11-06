@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { setClassicLook } from "@/game/classicLook";
 import { ArtState, resolveArt } from "./buildingArt";
 import { BUILDING_ART_ROWS } from "./buildingArtData";
-import { PAINTED_BUILDING_ART, tierArtFor, type TierImage } from "./buildingArtTiers";
+import { INFERNO_ART_ROWS } from "./buildingArtInfernoData";
+import { INFERNO_PAINTED_BUILDING_ART, PAINTED_BUILDING_ART, tierArtFor, type TierImage } from "./buildingArtTiers";
 
 /** The game server's assets, which the painted pictures are served from. */
 const ASSETS = fileURLToPath(new URL("../../../../server/public/assets/", import.meta.url));
@@ -25,8 +26,8 @@ const pngSize = (file: string): [number, number] => {
 };
 
 /** Where a picture's bottom edge stands below the building's origin, in world px (`@2x` pictures at half size). */
-const bottomOf = ([file, , y]: TierImage): number => {
-  const [, height] = file.includes("@2x") ? webpSize(FOLDER + file) : pngSize(FOLDER + file);
+const bottomOf = ([file, , y]: TierImage, folder: string = FOLDER): number => {
+  const [, height] = file.includes("@2x") ? webpSize(folder + file) : pngSize(folder + file);
   return y + (file.includes("@2x") ? height / 2 : height);
 };
 
@@ -96,5 +97,66 @@ describe("the painted Monster Locker", () => {
     setClassicLook(true);
     expect(tierArtFor(LOCKER, 2)).toBeNull();
     expect(resolveArt(LOCKER, 2, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/monsterlocker/top.2.png");
+  });
+});
+
+describe("the painted Under Hall (the Inferno's centre building)", () => {
+  const UNDER_HALL = 14;
+  const folder = `${ASSETS}buildings/itownhall/`;
+  const looks = INFERNO_PAINTED_BUILDING_ART[UNDER_HALL] ?? [];
+  const flash = INFERNO_ART_ROWS.find(([type]) => type === UNDER_HALL);
+
+  it("has a look for each of Flash's three, at the same levels", () => {
+    expect(looks.map((look) => look.from)).toEqual(flash?.[3].map(([level]) => level));
+    expect(looks.map((look) => look.from)).toEqual([1, 2, 3]);
+  });
+
+  it("names only pictures that are on disk", () => {
+    for (const look of looks) {
+      const files = [look.top, look.shadow, look.damaged?.top, look.damaged?.shadow, look.destroyed?.top, look.destroyed?.shadow];
+      for (const file of files) {
+        expect(file, `level ${look.from}`).toBeTruthy();
+        expect(existsSync(folder + (file?.[0] ?? "")), file?.[0]).toBe(true);
+      }
+    }
+  });
+
+  it("stands where Flash's does: each picture's base within 4 px of Flash's", () => {
+    for (const [index, look] of looks.entries()) {
+      const [, top, damaged, destroyed] = flash?.[3][index] ?? [];
+      expect(Math.abs(bottomOf(look.top, folder) - bottomOf(top as TierImage, folder)), `level ${look.from}`).toBeLessThanOrEqual(4);
+      expect(Math.abs(bottomOf(look.damaged?.top as TierImage, folder) - bottomOf(damaged as TierImage, folder))).toBeLessThanOrEqual(4);
+      expect(Math.abs(bottomOf(look.destroyed?.top as TierImage, folder) - bottomOf(destroyed as TierImage, folder))).toBeLessThanOrEqual(4);
+    }
+  });
+
+  it("keeps Flash's own shadows (the footprint is Flash's)", () => {
+    for (const [index, look] of looks.entries()) {
+      const level = flash?.[3][index];
+      expect(look.shadow).toEqual(level?.[4]);
+      expect(look.damaged?.shadow).toEqual(level?.[5]);
+      expect(look.destroyed?.shadow).toEqual(level?.[6]);
+    }
+  });
+
+  it("shows in the Inferno yard, whole, damaged and destroyed, standing still", () => {
+    const root = "/assets/buildings/itownhall/";
+    expect(resolveArt(UNDER_HALL, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${root}top.c1@2x.webp`);
+    expect(resolveArt(UNDER_HALL, 2, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${root}top.c2@2x.webp`);
+    expect(resolveArt(UNDER_HALL, 6, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${root}top.c3@2x.webp`);
+    expect(resolveArt(UNDER_HALL, 6, ArtState.DEFAULT, "inferno")?.anims).toEqual([]);
+    expect(resolveArt(UNDER_HALL, 2, ArtState.DAMAGED, "inferno")?.top.url).toBe(`${root}top.c2.damaged@2x.webp`);
+    expect(resolveArt(UNDER_HALL, 4, ArtState.DESTROYED, "inferno")?.top.url).toBe(`${root}top.c3.destroyed@2x.webp`);
+  });
+
+  it("leaves the main yard's Town Hall alone, and goes back to Flash's Under Hall with the Classic look", () => {
+    expect(resolveArt(UNDER_HALL, 3, ArtState.DEFAULT)?.top.url).toBe("/assets/buildings/townhall/top.new3@2x.webp");
+    expect(tierArtFor(UNDER_HALL, 3, "inferno")?.top[0]).toBe("top.c3@2x.webp");
+    setClassicLook(true);
+    expect(tierArtFor(UNDER_HALL, 3, "inferno")).toBeNull();
+    expect(resolveArt(UNDER_HALL, 3, ArtState.DEFAULT, "inferno")?.top.url).toBe("/assets/buildings/itownhall/top.3.v2.png");
+    expect(resolveArt(UNDER_HALL, 3, ArtState.DESTROYED, "inferno")?.top.url).toBe(
+      "/assets/buildings/itownhall/top.3.destroyed.v2.png",
+    );
   });
 });
