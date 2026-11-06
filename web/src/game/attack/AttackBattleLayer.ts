@@ -83,6 +83,7 @@ import {
   isHighResolutionSheet,
   shadowOffset,
   sheetColumn,
+  sheetStandInUrl,
   sheetUrl,
   spriteFor,
   type SwingTiming,
@@ -439,6 +440,17 @@ export class MonsterSheetTextures {
   private readonly pending = new Set<string>();
   private readonly failed = new Set<string>();
   private readonly cells = new Map<string, Texture>();
+  /**
+   * The stand-ins (`sheetStandInUrl`): each sheet's small 1x copy, by sheet
+   * key, fetched beside the copy the Quality setting asks for and drawn only
+   * until that one is in. Asked for only by {@link frame}'s and
+   * {@link preload}'s `standIn`, so a caller that does not want them (the
+   * yard's wandering monsters) never downloads them.
+   */
+  private readonly standIns = new Map<string, Texture>();
+  /** Sheet keys whose stand-in was asked for (in, coming, or failed): each is fetched once. */
+  private readonly standInAsked = new Set<string>();
+  private readonly standInCells = new Map<string, Texture>();
   /** Cells that own their source (canvas copies) and must be destroyed fully. */
   private readonly owned = new Set<Texture>();
   /** The limit given or set; null to go by the device's, once a layer has read it. */
@@ -472,34 +484,56 @@ export class MonsterSheetTextures {
     return width > this.maxTextureSize || height > this.maxTextureSize;
   }
 
-  /** Starts fetching a sheet, so its first cell is ready sooner. */
-  preload(sheet: MonsterSheet): void {
+  /**
+   * Starts fetching a sheet, so its first cell is ready sooner; with
+   * `standIn`, its small copy first (`sheetStandInUrl`), which arrives well
+   * ahead of a `@4x` painting on a slow line.
+   */
+  preload(sheet: MonsterSheet, standIn = false): void {
+    if (standIn) this.standInSource(sheet);
     this.source(sheet);
   }
 
-  /** The texture for cell `(column, row)`, or null until the sheet is in. */
-  frame(sheet: MonsterSheet, column: number, row: number): Texture | null {
+  /**
+   * The texture for cell `(column, row)`, or null until the sheet is in. With
+   * `standIn`, the same cell of the sheet's small copy while the full one is
+   * still coming (or did not come), so the caller should swap textures when
+   * the cell it is handed changes, not only when the cell's place does.
+   */
+  frame(sheet: MonsterSheet, column: number, row: number, standIn = false): Texture | null {
     const key = `${sheet.key}:${column}:${row}`;
     const cached = this.cells.get(key);
     if (cached) return cached;
 
+    if (standIn) this.standInSource(sheet);
     const source = this.source(sheet);
-    if (!source) return null;
-    const rect = frameRect(sheet, column, row);
-
-    let cell: Texture | null;
-    if (this.oversized(sheet, source.source)) {
-      cell = copyCell(source.source, rect);
-      if (!cell) return null;
-      this.owned.add(cell);
-    } else {
-      cell = new Texture({
-        source: source.source,
-        frame: new Rectangle(rect.x, rect.y, rect.width, rect.height),
-      });
+    if (source) {
+      const cell = this.cut(sheet, source, column, row);
+      if (cell) this.cells.set(key, cell);
+      return cell;
     }
-    this.cells.set(key, cell);
+    if (!standIn) return null;
+    const small = this.standIns.get(sheet.key);
+    if (!small) return null;
+    const standInCell = this.standInCells.get(key);
+    if (standInCell) return standInCell;
+    const cell = this.cut(sheet, small, column, row);
+    if (cell) this.standInCells.set(key, cell);
     return cell;
+  }
+
+  /** Cell `(column, row)` of a loaded copy of `sheet`; any copy frames the same in 1x units. */
+  private cut(sheet: MonsterSheet, source: Texture, column: number, row: number): Texture | null {
+    const rect = frameRect(sheet, column, row);
+    if (this.oversized(sheet, source.source)) {
+      const cell = copyCell(source.source, rect);
+      if (cell) this.owned.add(cell);
+      return cell;
+    }
+    return new Texture({
+      source: source.source,
+      frame: new Rectangle(rect.x, rect.y, rect.width, rect.height),
+    });
   }
 
   /** True once this sheet is known not to be coming. */
@@ -509,11 +543,33 @@ export class MonsterSheetTextures {
 
   destroy(): void {
     for (const cell of this.cells.values()) cell.destroy(this.owned.has(cell));
+    for (const cell of this.standInCells.values()) cell.destroy(this.owned.has(cell));
     this.cells.clear();
+    this.standInCells.clear();
     this.owned.clear();
     this.sources.clear();
+    this.standIns.clear();
+    this.standInAsked.clear();
     this.pending.clear();
     this.failed.clear();
+  }
+
+  /**
+   * Starts the stand-in's fetch once. It is only wanted while the full sheet
+   * is not in, so none is asked for once that one is; one that fails is
+   * dropped quietly (the full sheet, or a marker, is drawn as before).
+   */
+  private standInSource(sheet: MonsterSheet): void {
+    if (this.standInAsked.has(sheet.key) || this.sources.has(sheet.key)) return;
+    this.standInAsked.add(sheet.key);
+    const url = sheetStandInUrl(sheet);
+    if (!url) return;
+    this.load(url)
+      .then((texture) => {
+        // Not kept once the full sheet beat it: it would never be drawn.
+        if (!this.sources.has(sheet.key)) this.standIns.set(sheet.key, texture);
+      })
+      .catch(() => {});
   }
 
   private source(sheet: MonsterSheet): Texture | null {
@@ -524,6 +580,9 @@ export class MonsterSheetTextures {
     this.load(sheetUrl(sheet))
       .then((texture) => {
         this.sources.set(sheet.key, texture);
+        // The full sheet is in: its stand-in is not drawn again. Its cells are
+        // left to `destroy`, as a sprite may show one until the next frame.
+        this.standIns.delete(sheet.key);
       })
       .catch((caught: unknown) => {
         console.warn(`Monster sheet ${sheet.file} did not load; drawing a marker.`, caught);
@@ -1411,7 +1470,10 @@ export class AttackBattleLayer {
   /**
    * Starts the sheets of every monster a played-back script will bring on,
    * once per script: a raid's (and the Trojan Horse's) raiders are in no
-   * roster, so `preloadRoster` cannot know them.
+   * roster, so `preloadRoster` cannot know them. Their small stand-in copies
+   * too: a raid's first wave lands at once, and on a slow line the full
+   * paintings take far longer than the stand-ins (the raid warning has
+   * usually fetched both already, `raidSheets.ts`).
    */
   private preloadScript(): void {
     const stamp = this.session.scriptStamp;
@@ -1419,7 +1481,7 @@ export class AttackBattleLayer {
     this.scriptSeen = stamp;
     for (const id of this.session.scriptedMonsters()) {
       const sheet = spriteFor(id, this.session.levels[id] ?? 1);
-      if (sheet) this.textures.preload(sheet);
+      if (sheet) this.textures.preload(sheet, true);
       if (id === DAVE_ID) this.textures.preload(ROCKET_SHEET);
     }
   }
@@ -1859,9 +1921,9 @@ export class AttackBattleLayer {
         reducedMotion: this.reducedMotion,
         classic: this.classic,
       });
-      const cell = this.textures.frame(sheet, layout.column, layout.row);
+      const cell = this.textures.frame(sheet, layout.column, layout.row, true);
       if (cell) {
-        if (view.cellKey !== layout.key && !held) {
+        if ((view.cellKey !== layout.key || body.texture !== cell) && !held) {
           view.cellKey = layout.key;
           body.texture = cell;
         }

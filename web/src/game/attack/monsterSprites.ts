@@ -2,7 +2,7 @@ import { classicLook } from "@/game/classicLook";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet, type RowCycle } from "./monsterSpriteData";
 import { windUpFrame } from "./juice";
 import { SHEET_VERSIONS } from "./sheetVersions";
-import { sheetAtQuality, sheetForDevice } from "@/game/quality";
+import { sheetAtQuality, sheetCopies, sheetForDevice } from "@/game/quality";
 
 /**
  * Picking a cell out of a monster sprite sheet.
@@ -857,6 +857,27 @@ export function sheetUrl(sheet: MonsterSheet | string): string {
   const repaint = classicLook() ? undefined : REPAINTED_SHEETS[file];
   if (!repaint) return `${ASSET_ROOT}${file}`;
   const copy = typeof sheet === "string" ? sheetAtQuality(repaint) : sheetForDevice(repaint, applyLayout(sheet));
+  return versionedUrl(copy);
+}
+
+const versionedUrl = (copy: string): string => {
   const version = SHEET_VERSIONS[copy];
   return `${ASSET_ROOT}${copy}${version ? `?v=${version}` : ""}`;
+};
+
+/**
+ * The small copy of a painted sheet to draw while the one {@link sheetUrl}
+ * names is still downloading: its 1x copy (Low's), about a sixteenth of a
+ * `@4x` painting's bytes, so on a slow line a raid's monsters show as
+ * themselves, if softer, rather than as squares. Null when there is nothing
+ * smaller to stand in: the Classic look, a sheet with no painting, or a
+ * painting already fetched as its 1x copy.
+ */
+export function sheetStandInUrl(sheet: MonsterSheet): string | null {
+  const repaint = classicLook() ? undefined : REPAINTED_SHEETS[sheet.file];
+  if (!repaint) return null;
+  const copies = sheetCopies(repaint);
+  if (!copies) return null;
+  const standIn = versionedUrl(copies.low);
+  return standIn === sheetUrl(sheet) ? null : standIn;
 }
