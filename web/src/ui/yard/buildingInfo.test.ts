@@ -6,6 +6,7 @@ import {
   buildingInfo,
   damagePerSecond,
   townHallUnlocks,
+  unlockText,
 } from "./buildingInfo";
 
 /**
@@ -61,6 +62,12 @@ describe("towers", () => {
       now: { text: "50/s" },
       next: { text: "105/s" },
     });
+  });
+
+  it("the Siege Works shoots nothing, so it shows no Range, though its stats block has one", () => {
+    expect(row({ t: 134, l: 1 }, "Range")).toBeUndefined();
+    // A Monster Bunker's range is where it sends its monsters: kept.
+    expect(row({ t: 22, l: 1 }, "Range")).toBeDefined();
   });
 
   it("Tesla Tower: damage per shot and shots per charge, as its own text (#266)", () => {
@@ -177,20 +184,42 @@ describe("economy buildings", () => {
 
 describe("Town Hall", () => {
   it("lists what the next level lets the yard build", () => {
-    expect(townHallUnlocks(0)).toContain("Flinger (new)");
-    expect(townHallUnlocks(1)).toContain("Storage Silo +1");
+    expect(townHallUnlocks(0).map(unlockText)).toContain("Flinger new");
+    expect(townHallUnlocks(0).find((item) => item.name === "Flinger")).toMatchObject({ type: 5, isNew: true });
+    expect(townHallUnlocks(1).map(unlockText)).toContain("Storage Silo +1");
     // The Town Hall itself is not something a Town Hall unlocks.
-    expect(townHallUnlocks(1).some((item) => item.startsWith("Town Hall"))).toBe(false);
+    expect(townHallUnlocks(1).some((item) => item.name.startsWith("Town Hall"))).toBe(false);
   });
 
   it("the panel titles the list with the next level", () => {
     const info = buildingInfo(one({ t: 14, l: 1 }));
-    expect(info.list?.label).toBe("Town Hall 2 unlocks");
-    expect(info.list?.items).toContain("Storage Silo +1");
+    expect(info.list?.label).toBe("Lv 2 unlocks");
+    expect(info.list?.title).toBe("Town Hall 2 unlocks");
+    expect(info.list?.items.map(unlockText)).toContain("Storage Silo +1");
   });
 
   it("a Town Hall at the top has no list", () => {
     expect(buildingInfo(one({ t: 14, l: 10 })).list).toBeNull();
+  });
+});
+
+describe("Under Hall (WP 1.19)", () => {
+  it("lists the Inferno table's unlocks by the Inferno's names", () => {
+    const unlocks = townHallUnlocks(1, "inferno");
+    const items = unlocks.map((item) => item.name);
+    expect(unlocks.map(unlockText)).toContain("Bone Cruncher +1");
+    expect(unlocks.map(unlockText)).toContain("Sharpshooter +1");
+    expect(unlocks.map(unlockText)).toContain("Booby Trap new");
+    // Not the surface list: no Twig Snapper, no Storage Silo, no Monster Locker.
+    expect(items.some((item) => item.startsWith("Twig Snapper"))).toBe(false);
+    expect(items.some((item) => item.startsWith("Storage Silo"))).toBe(false);
+    expect(items.some((item) => item.startsWith("Monster Locker"))).toBe(false);
+  });
+
+  it("the panel titles the list with the Under Hall's next level", () => {
+    const info = buildingInfo(one({ t: 14, l: 1 }), "inferno");
+    expect(info.list?.title).toBe("Under Hall 2 unlocks");
+    expect(info.list?.items.map(unlockText)).toContain("Magma Pump +1");
   });
 });
 

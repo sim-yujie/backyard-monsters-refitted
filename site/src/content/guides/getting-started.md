@@ -10,13 +10,13 @@ updated: 2026-10-11
 
 Go to [play.bymrevamped.com](https://play.bymrevamped.com) and choose **Create account**. You need a username, an email address and a password. That's it: the game runs in your browser, so there is nothing to download.
 
-> **Open beta:** the game is still being built. Things may break, and your progress may be reset before the full launch.
+> **Open beta:** the game is still being built and things may break. We plan to keep your progress after the beta. A serious exploit or lost data could force a rollback to an earlier save; if that ever happens, we will announce it.
 
 ## The guided start with Bob
 
 The first time you play, Bob, a friendly green monster, takes you through the basics. It takes about eight minutes. Bob points at each button with his hand, and the game pays for everything along the way. Here's what you'll do:
 
-![Bob, the green guide monster, asking you to build a Sniper Tower while his hand points at the Build button](/images/shots/guided-start.webp)
+![Bob, the green guide monster, asking you to tap Collect all while his hand points at it](/images/shots/guided-start.webp)
 
 1. **Collect** the twigs your Twig Snapper has made.
 2. **Build a Sniper Tower**, then finish it for free.

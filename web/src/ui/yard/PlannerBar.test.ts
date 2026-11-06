@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PlannerTool, type PlannerState } from "@/game/yard/planner/PlannerSession";
-import type { ApplyPreview, PlanTotals } from "@/game/yard/planner/upgrades";
 import { YardView } from "@/game/yard/YardRenderer";
 import { PlannerBar, type PlannerBarActions } from "./PlannerBar";
 import { PlannerLayout } from "./plannerLayout";
@@ -21,7 +20,6 @@ const actions = (): PlannerBarActions => ({
   onTool: noop,
   onView: noop,
   onOverlay: vi.fn(),
-  onGroupTool: vi.fn(),
   onUndo: vi.fn(),
   onRedo: vi.fn(),
   onFind: noop,
@@ -42,7 +40,6 @@ const stateOf = (overrides: Partial<PlannerState> = {}): PlannerState => ({
   tool: PlannerTool.SELECT,
   selectionCount: 0,
   movedCount: 0,
-  plannedCount: 0,
   dirty: false,
   canUndo: false,
   canRedo: false,
@@ -58,13 +55,14 @@ const stateOf = (overrides: Partial<PlannerState> = {}): PlannerState => ({
   view: YardView.BLUEPRINT,
   previewing: false,
   readOnly: false,
+  wallPicking: false,
   ...overrides,
 });
 
 /** Every button label on the mounted bars, in order. */
 const labels = (bar: PlannerBar): string[] =>
   [...bar.toolbar.querySelectorAll("button"), ...bar.actionBar.querySelectorAll("button")].map(
-    (button) => button.textContent?.trim() ?? "",
+    (button) => button.getAttribute("aria-label") ?? button.textContent?.trim() ?? "",
   );
 
 const mount = (options: { readOnly?: boolean; layouts?: boolean } = {}): PlannerBar =>
@@ -79,99 +77,6 @@ const mountWith = (
   const fired = actions();
   return { bar: new PlannerBar(fired, options).mount(container), fired };
 };
-
-/** The two mirror buttons, which are the only ones labelled with an arrow. */
-const mirrorButtons = (bar: PlannerBar): HTMLButtonElement[] =>
-  [...bar.toolbar.querySelectorAll("button")].filter((button) =>
-    button.textContent?.startsWith("Mirror"),
-  );
-
-/**
- * The group-operation menus: Align and Distribute, in that order.
- *
- * Named rather than counted. The toolbar now holds three other menus — Yard
- * (Clear yard) and View (the overlays) — and every one of them would shift the
- * indices these helpers are indexed by.
- */
-const groupMenus = (bar: PlannerBar): HTMLElement[] =>
-  [...bar.toolbar.querySelectorAll<HTMLElement>(".planner-menu")].filter((menu) => {
-    const label = menu.querySelector(".planner-menu__trigger")?.textContent ?? "";
-    return label.startsWith("Align") || label.startsWith("Distribute");
-  });
-
-/**
- * The demo wrapper around the first Mirror button.
- *
- * By name rather than by position: Store is wrapped the same way and sits
- * ahead of it in the toolbar, so "the first `.planner-tip`" stopped meaning
- * "a mirror" the moment storing existed.
- */
-const mirrorTip = (bar: PlannerBar): HTMLElement => {
-  const wrapper = [...bar.toolbar.querySelectorAll<HTMLElement>(".planner-tip")].find(
-    (tip) => tip.querySelector("button")?.textContent?.startsWith("Mirror"),
-  );
-  if (!wrapper) throw new Error("no mirror tip in the toolbar");
-  return wrapper;
-};
-
-const menuTriggers = (bar: PlannerBar): HTMLButtonElement[] =>
-  groupMenus(bar).flatMap((menu) => [
-    ...menu.querySelectorAll<HTMLButtonElement>(".planner-menu__trigger"),
-  ]);
-
-const menuItems = (bar: PlannerBar, index: number): HTMLButtonElement[] => {
-  const list = groupMenus(bar)[index]?.querySelector(".planner-menu__list");
-  return list ? [...list.querySelectorAll<HTMLButtonElement>("button")] : [];
-};
-
-/** Every cost cell the player can actually see. */
-const visibleCells = (bar: PlannerBar): HTMLElement[] =>
-  [...bar.actionBar.querySelectorAll<HTMLElement>(".planner-cost__cell")].filter(
-    (cell) => !cell.hidden,
-  );
-
-const cell = (bar: PlannerBar, modifier: string): HTMLElement | null =>
-  bar.actionBar.querySelector<HTMLElement>(`.planner-cost__cell--${modifier}`);
-
-/** The four resource cells' readouts, in twigs-pebbles-putty-goo order. */
-const resourceValues = (bar: PlannerBar): string[] =>
-  [...bar.actionBar.querySelectorAll<HTMLElement>(".planner-cost__cell")]
-    .slice(0, 4)
-    .map((element) => element.querySelector(".planner-cost__value")?.textContent ?? "");
-
-/** A plan's totals, in the shape `planTotals` returns. */
-const totalsOf = (over: Partial<PlanTotals> = {}): PlanTotals => ({
-  needed: { r1: 20_000, r2: 15_000, r3: 5_000, r4: 0 },
-  held: { r1: 50_000, r2: 1_000, r3: 5_000, r4: 0 },
-  shortfall: { r1: 0, r2: 14_000, r3: 0, r4: 0 },
-  seconds: 1_800,
-  longest: 900,
-  shiny: 42,
-  byType: [
-    {
-      type: 20,
-      name: "Cannon Tower",
-      count: 2,
-      needed: { r1: 20_000, r2: 15_000, r3: 5_000, r4: 0 },
-    },
-  ],
-  steps: 2,
-  planned: 2,
-  ...over,
-});
-
-/** An Apply preview with nothing in it, for the cases that only need counts. */
-const previewOf = (over: Partial<ApplyPreview> = {}): ApplyPreview => ({
-  started: [],
-  finished: [],
-  waiting: [],
-  skipped: [],
-  cost: { r1: 0, r2: 0, r3: 0, r4: 0 },
-  points: 0,
-  workers: { total: 5, busyBefore: 0, busyAfter: 0 },
-  remaining: { r1: 0, r2: 0, r3: 0, r4: 0 },
-  ...over,
-});
 
 describe("the editing bar", () => {
   it("carries the actions that write to the yard", () => {
@@ -196,188 +101,6 @@ describe("the editing bar", () => {
     const bar = mount();
     bar.update(stateOf({ slotName: "Turtle", dirty: true }));
     expect(bar.toolbar.querySelector(".planner-bar__slot")?.textContent).toBe("Turtle · unsaved");
-  });
-});
-
-describe("the plan cells", () => {
-  it("reads needed against held, and marks a resource the plan is short of", () => {
-    const bar = mount();
-    bar.setPlanSummary(totalsOf(), 5);
-
-    expect(resourceValues(bar)).toEqual(["20,000 / 50,000", "15,000 / 1,000", "5,000 / 5,000", "0 / 0"]);
-
-    const short = bar.actionBar.querySelectorAll(".planner-cost__cell--short");
-    expect(short).toHaveLength(1);
-    // Colour is never the only channel: the word is in the tooltip too.
-    expect((short[0] as HTMLElement).title).toContain("14,000 short");
-  });
-
-  it("shows worker seconds, with the wall-clock lower bound in the tooltip", () => {
-    const bar = mount();
-    bar.setPlanSummary(totalsOf(), 2);
-
-    const time = cell(bar, "time");
-    expect(time?.querySelector(".planner-cost__value")?.textContent).toBe("30m 0s");
-    // max(longest 900, ceil(1800 / 2)) is 900 seconds either way.
-    expect(time?.title).toContain("At least 15m 0s");
-    expect(time?.title).toContain("2 free workers");
-    expect(time?.title).toContain("lower bound");
-  });
-
-  it("counts the free workers and says what Apply would do with them", () => {
-    const bar = mount();
-    bar.setWorkers(
-      { total: 5, busy: 1 },
-      previewOf({
-        started: [{ id: 1, t: 20, from: 1, to: 2, seconds: 900, cost: { r1: 0, r2: 0, r3: 0, r4: 0 } }],
-        waiting: [{ id: 2, t: 20, from: 1, to: 2, reason: "workers" }],
-      }),
-    );
-
-    const workers = cell(bar, "workers");
-    expect(workers?.querySelector(".planner-cost__value")?.textContent).toBe("4 free / 5");
-    expect(workers?.title).toContain("1 would start on Apply");
-    expect(workers?.title).toContain("1 would wait for a worker");
-    // Something waiting is a shortfall of workers, marked like any other.
-    expect(workers?.classList.contains("planner-cost__cell--short")).toBe(true);
-  });
-
-  it("keeps the workers cell plain when nothing is planned", () => {
-    const bar = mount();
-    bar.setWorkers({ total: 5, busy: 0 }, null);
-
-    const workers = cell(bar, "workers");
-    expect(workers?.querySelector(".planner-cost__value")?.textContent).toBe("5 free / 5");
-    expect(workers?.title).not.toContain("would start");
-    expect(workers?.classList.contains("planner-cost__cell--short")).toBe(false);
-  });
-
-  it("hides the unplaced cell at zero and shows it above", () => {
-    const bar = mount();
-    bar.setUnplaced(0);
-    expect(cell(bar, "unplaced")?.hidden).toBe(true);
-
-    bar.setUnplaced(3);
-    const unplaced = cell(bar, "unplaced");
-    expect(unplaced?.hidden).toBe(false);
-    expect(unplaced?.querySelector(".planner-cost__value")?.textContent).toBe("3");
-    expect(unplaced?.title).toContain("Apply is blocked");
-  });
-
-  it("counts the plan in the summary sentence, and leaves it out at zero", () => {
-    const bar = mount();
-    const sentence = (): string =>
-      bar.actionBar.querySelector(".planner-bar__summary")?.textContent ?? "";
-
-    bar.update(stateOf({ selectionCount: 1, plannedCount: 6 }));
-    expect(sentence()).toBe("1 selected · 0 moved · 6 planned");
-
-    bar.update(stateOf({ selectionCount: 1, plannedCount: 0 }));
-    expect(sentence()).toBe("1 selected · 0 moved");
-  });
-});
-
-describe("the group operations", () => {
-  it("offers mirror, six alignments and two distributions", () => {
-    const bar = mount();
-    bar.update(stateOf({ selectionCount: 3 }));
-
-    expect(mirrorButtons(bar).map((button) => button.textContent)).toEqual([
-      "Mirror ↔",
-      "Mirror ↕",
-    ]);
-    expect(menuTriggers(bar).map((button) => button.textContent)).toEqual([
-      "Align ▾",
-      "Distribute ▾",
-    ]);
-    expect(menuItems(bar, 0)).toHaveLength(6);
-    expect(menuItems(bar, 1)).toHaveLength(2);
-  });
-
-  it("stays off until there is a selection big enough to mean something", () => {
-    const bar = mount();
-    const off = (): boolean[] => [
-      ...mirrorButtons(bar).map((button) => button.disabled),
-      ...menuTriggers(bar).map((button) => button.disabled),
-    ];
-
-    bar.update(stateOf({ selectionCount: 0 }));
-    expect(off()).toEqual([true, true, true, true]);
-
-    bar.update(stateOf({ selectionCount: 1 }));
-    expect(off()).toEqual([true, true, true, true]);
-
-    // Two is enough to mirror and to align, but distributing holds the
-    // outermost two still and so needs a third to move.
-    bar.update(stateOf({ selectionCount: 2 }));
-    expect(off()).toEqual([false, false, false, true]);
-
-    bar.update(stateOf({ selectionCount: 3 }));
-    expect(off()).toEqual([false, false, false, false]);
-  });
-
-  it("says what would turn a dead control on", () => {
-    const bar = mount();
-    bar.update(stateOf({ selectionCount: 2 }));
-
-    const [, distribute] = menuTriggers(bar);
-    expect(distribute?.title).toContain("three or more");
-
-    bar.update(stateOf({ selectionCount: 1 }));
-    expect(mirrorButtons(bar)[0]?.title).toContain("two or more");
-  });
-
-  it("fires the operation the menu row names, then closes", () => {
-    const { bar, fired } = mountWith();
-    bar.update(stateOf({ selectionCount: 3 }));
-
-    const [align] = menuTriggers(bar);
-    align?.click();
-    expect(align?.getAttribute("aria-expanded")).toBe("true");
-
-    menuItems(bar, 0)[0]?.click();
-    expect(fired.onGroupTool).toHaveBeenCalledWith("align-left");
-    expect(align?.getAttribute("aria-expanded")).toBe("false");
-  });
-
-  it("notes where an opening list hangs, for the phone's scrolling bar (#151)", () => {
-    const bar = mount();
-    bar.update(stateOf({ selectionCount: 3 }));
-
-    const [align] = menuTriggers(bar);
-    const menu = align?.closest<HTMLElement>(".planner-menu");
-    vi.spyOn(menu!, "getBoundingClientRect").mockReturnValue({
-      bottom: 150,
-      left: 212,
-    } as DOMRect);
-    align?.click();
-
-    const list = menu?.querySelector<HTMLElement>(".planner-menu__list");
-    expect(list?.style.getPropertyValue("--menu-top")).toBe("150px");
-    expect(list?.style.getPropertyValue("--menu-left")).toBe("212px");
-  });
-
-  it("fires a mirror straight from the toolbar", () => {
-    const { bar, fired } = mountWith();
-    bar.update(stateOf({ selectionCount: 2 }));
-
-    mirrorButtons(bar)[1]?.click();
-    expect(fired.onGroupTool).toHaveBeenCalledWith("mirror-y");
-  });
-
-  it("closes an open menu on Escape and when the selection shrinks under it", () => {
-    const bar = mount();
-    bar.update(stateOf({ selectionCount: 3 }));
-
-    const [align, distribute] = menuTriggers(bar);
-    align?.click();
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    expect(align?.getAttribute("aria-expanded")).toBe("false");
-
-    distribute?.click();
-    expect(distribute?.getAttribute("aria-expanded")).toBe("true");
-    bar.update(stateOf({ selectionCount: 1 }));
-    expect(distribute?.getAttribute("aria-expanded")).toBe("false");
   });
 });
 
@@ -406,17 +129,6 @@ describe("the put-back chip (F14)", () => {
     expect(fired.onPutBack).toHaveBeenCalledTimes(1);
   });
 
-  it("says both ways of putting it back in the summary line", () => {
-    const bar = mount();
-    bar.update(stateOf({ carrying: true, selectionCount: 1 }));
-
-    // A finger has no second button, so the chip has to be named where the
-    // right-click is.
-    expect(bar.actionBar.querySelector(".planner-bar__summary")?.textContent).toContain(
-      "right-click or Put back to cancel",
-    );
-  });
-
   it("is not mounted at all in a read-only session", () => {
     const bar = mount({ readOnly: true });
     bar.update(stateOf({ readOnly: true, previewing: true }));
@@ -434,18 +146,6 @@ describe("the read-only bar", () => {
       expect(shown).not.toContain(gone);
     }
     expect(bar.actionBar.querySelector(".planner-bar__rearm")).toBeNull();
-    // Mirror, align and distribute all move buildings, so they go too.
-    expect(mirrorButtons(bar)).toHaveLength(0);
-    expect(menuTriggers(bar)).toHaveLength(0);
-  });
-
-  it("keeps the group operations inert even though they are not mounted", () => {
-    const bar = mount({ readOnly: true });
-    bar.update(stateOf({ readOnly: true, previewing: true, selectionCount: 6 }));
-    expect(groupMenus(bar)).toHaveLength(0);
-    // The View menu is not one of them: it draws over the yard rather than
-    // changing it, so a read-only session keeps it.
-    expect(bar.toolbar.querySelector(".planner-menu")).not.toBeNull();
   });
 
   it("keeps the tools that only answer questions", () => {
@@ -456,11 +156,8 @@ describe("the read-only bar", () => {
     for (const kept of ["Select", "Box", "Find", "3D", "Blueprint", "Leave planner"]) {
       expect(shown).toContain(kept);
     }
-    // The cost cells are the read-only planner's whole point alongside find:
-    // four resources, time, shiny, the worker count and the coverage (#55).
-    // Unplaced is in the DOM but hidden, because nothing can be unplaced yet.
-    expect(visibleCells(bar)).toHaveLength(8);
-    expect(bar.actionBar.querySelectorAll(".planner-cost__cell")).toHaveLength(9);
+    // The bottom bar is buttons only now (owner, 2026-11-04): no cost cells.
+    expect(bar.actionBar.querySelectorAll(".planner-cost__cell")).toHaveLength(0);
   });
 
   it("says Read-only where the slot name goes, and why in the tooltip", () => {
@@ -473,12 +170,10 @@ describe("the read-only bar", () => {
     expect(slot?.getAttribute("title")).toContain("build mode");
   });
 
-  it("says so in the summary line too", () => {
+  it("never offers Upgrade walls, which would change the yard", () => {
     const bar = mount({ readOnly: true });
-    bar.update(stateOf({ readOnly: true, previewing: true, selectionCount: 3 }));
-    expect(bar.actionBar.querySelector(".planner-bar__summary")?.textContent).toBe(
-      "3 selected · 0 moved · read-only · nothing here can be moved",
-    );
+    bar.setWallCount(12);
+    expect(labels(bar)).not.toContain("Upgrade walls");
   });
 
   it("cannot be talked back into enabling an action", () => {
@@ -491,7 +186,8 @@ describe("the read-only bar", () => {
     bar.setBlocking(0);
 
     expect(labels(bar)).not.toContain("Upgrade walls");
-    expect(bar.actionBar.querySelector("button:not([disabled])")).toBeNull();
+    // The Cost button only opens the cost pop-up, which changes nothing.
+    expect(bar.actionBar.querySelector("button:not([disabled]):not(.planner-bar__cost-line)")).toBeNull();
   });
 });
 
@@ -519,50 +215,45 @@ describe("the tool demos", () => {
     vi.useRealTimers();
   });
 
-  it("shows a moving picture when a group tool is hovered", () => {
+  it("shows a moving picture when Store is hovered", () => {
     const bar = mount();
-    const mirror = bar.toolbar.querySelector(".planner-tip");
-    expect(mirror).not.toBeNull();
+    const tip = bar.toolbar.querySelector(".planner-tip");
+    expect(tip).not.toBeNull();
 
-    hover(mirror!);
-    // Not instantly: sweeping a pointer across nine buttons should not strobe.
+    hover(tip!);
+    // Not instantly: sweeping a pointer across the bar should not strobe.
     expect(popovers()).toHaveLength(0);
     vi.advanceTimersByTime(400);
 
     const [bubble] = popovers();
     expect(bubble).toBeDefined();
     expect(bubble?.querySelector("svg.planner-demo")).not.toBeNull();
-    expect(bubble?.querySelectorAll(".planner-demo__anim").length ?? 0).toBeGreaterThan(0);
     bar.destroy();
   });
 
-  it("shows one for a tool that is off, which is when it is most wanted", () => {
+  it("shows one for a tool that is off, with the reason it is off", () => {
     const bar = mount();
-    bar.setGroupEnabled(0);
-
-    const wrapper = mirrorTip(bar);
+    const wrapper = bar.toolbar.querySelector<HTMLElement>(".planner-tip")!;
     expect(wrapper.querySelector("button")?.disabled).toBe(true);
     hover(wrapper);
     vi.advanceTimersByTime(400);
 
     const [bubble] = popovers();
-    // The reason it is off, rather than the hint for what it would do.
-    expect(bubble?.textContent).toContain("two or more");
+    expect(bubble?.textContent).toContain("Select something to store");
     expect(bubble?.querySelector("svg.planner-demo")).not.toBeNull();
     bar.destroy();
   });
 
   it("leaves the native tooltip where the wrapper can still show it", () => {
     const bar = mount();
-    const wrapper = mirrorTip(bar);
+    const wrapper = bar.toolbar.querySelector<HTMLElement>(".planner-tip")!;
     const button = wrapper.querySelector("button");
-    bar.setGroupEnabled(4);
-    expect(button?.title).toContain("Flip the selection left to right");
     // A disabled button takes no pointer events, so the wrapper carries the
     // same words for the browser to show instead.
     expect(wrapper.title).toBe(button?.title);
     bar.destroy();
   });
+
 
   it("takes its bubbles down with it", () => {
     const bar = mount();
@@ -669,42 +360,6 @@ describe("store, clear and the drawer (issue #50)", () => {
     expect(fired.onInventory).toHaveBeenCalledTimes(1);
   });
 
-  it("turns the Unplaced cell on with the drawer and says Apply is blocked", () => {
-    const bar = mount();
-    bar.update(stateOf({ storedCount: 0 }));
-    expect(cell(bar, "unplaced")?.hidden).toBe(true);
-
-    bar.update(stateOf({ storedCount: 3, unplacedCount: 3 }));
-    const unplaced = cell(bar, "unplaced");
-    expect(unplaced?.hidden).toBe(false);
-    expect(unplaced?.querySelector(".planner-cost__value")?.textContent).toBe("3");
-    expect(unplaced?.title).toContain("Apply is blocked");
-    expect(unplaced?.classList.contains("planner-cost__cell--short")).toBe(true);
-  });
-
-  it("leaves decorations out of Unplaced: Apply puts them into storage (#128)", () => {
-    const bar = mount();
-    bar.update(stateOf({ storedCount: 5, unplacedCount: 0 }));
-    expect(drawer(bar)?.querySelector(".planner-bar__badge")?.textContent).toBe("5");
-    expect(cell(bar, "unplaced")?.hidden).toBe(true);
-
-    bar.update(stateOf({ storedCount: 5, unplacedCount: 2 }));
-    expect(cell(bar, "unplaced")?.querySelector(".planner-cost__value")?.textContent).toBe("2");
-  });
-
-  it("counts the drawer in the summary line, and words a placement its own way", () => {
-    const bar = mount();
-    const summary = (): string =>
-      bar.actionBar.querySelector(".planner-bar__summary")?.textContent ?? "";
-
-    bar.update(stateOf({ storedCount: 4 }));
-    expect(summary()).toContain("4 stored");
-
-    bar.update(stateOf({ storedCount: 4, carrying: true, placing: true, selectionCount: 1 }));
-    expect(summary()).toContain("out of the drawer");
-    expect(summary()).not.toContain("right-click or Put back");
-  });
-
   it("gives a read-only session none of it", () => {
     const bar = mount({ readOnly: true });
     bar.update(stateOf({ readOnly: true, previewing: true, storedCount: 2 }));
@@ -783,21 +438,6 @@ describe("the View menu (issues #4 and #54)", () => {
   });
 });
 
-describe("the Coverage cell (#55)", () => {
-  it("shows land and air, or says there are no towers", () => {
-    const bar = mount();
-    bar.setCoverage({ towers: 0, land: 0, air: 0 });
-    expect(cell(bar, "coverage")?.querySelector(".planner-cost__value")?.textContent).toBe("No towers");
-
-    bar.setCoverage({ towers: 6, land: 0.8749, air: 0.41 });
-    expect(cell(bar, "coverage")?.hidden).toBe(false);
-    expect(cell(bar, "coverage")?.querySelector(".planner-cost__value")?.textContent).toBe(
-      "Land 87% · Air 41%",
-    );
-    expect(cell(bar, "coverage")?.title).toContain("Dead zones");
-  });
-});
-
 describe("the Blueprint button (2026-09-30)", () => {
   const blueprint = (bar: PlannerBar): HTMLButtonElement =>
     [...bar.toolbar.querySelectorAll<HTMLButtonElement>("button")].find(
@@ -818,7 +458,6 @@ describe("the Blueprint button (2026-09-30)", () => {
     expect(blueprint(bar).title).toContain("Tab switches");
   });
 });
-
 /* ── Phones (#45) ─────────────────────────────────────────────────────── */
 
 describe("the phone layout (#45)", () => {
@@ -848,34 +487,48 @@ describe("the phone layout (#45)", () => {
   /** The bottom row's button labels, a count badge left out. */
   const actionRow = (bar: PlannerBar): string[] =>
     [...(bar.actionBar.querySelector(".planner-bar__actions") ?? bar.actionBar).querySelectorAll("button")].map(
-      (button) => button.firstChild?.textContent?.trim() ?? "",
+      (button) => button.getAttribute("aria-label") ?? button.firstChild?.textContent?.trim() ?? "",
     );
 
   it("puts none of the phone's controls on a desktop", () => {
     const bar = mount();
     expect(labels(bar)).not.toContain("More");
-    expect(bar.actionBar.querySelector(".planner-bar__cost-line")).toBeNull();
     expect(bar.moreElement.isConnected).toBe(false);
   });
 
-  it("upright: Leave, the name, the view switch and undo in the top bar", () => {
+  it("upright: Leave, the name, the view switch, then Undo and Redo at the right end of the top bar", () => {
     const { bar } = phone(PlannerLayout.PORTRAIT);
-    expect(topShown(bar)).toEqual([
-      "Leave planner",
-      "Showing the 3D yard. Switch to the blueprint",
-      "Undo",
-      "Redo",
-    ]);
+    expect(topShown(bar)).toEqual(["Leave planner", "Showing the 3D yard. Switch to the blueprint", "Undo", "Redo"]);
+    // Straight in the bar, not in the hidden history group.
+    expect(bar.toolbar.querySelector(":scope > button[data-icon='undo'] + button[data-icon='redo']")).not.toBeNull();
     // Glyphs on the buttons, names for anything that reads them.
     const exit = bar.toolbar.querySelector(".planner-bar__exit");
     expect(exit?.textContent).toBe("✕");
     expect(bar.toolbar.querySelector(".planner-bar__heading .planner-bar__slot")).not.toBeNull();
   });
 
-  it("upright: Box, the drawer, More and Apply along the bottom", () => {
+  it("upright: the presses a session is made of along the bottom, under the thumb", () => {
     const { bar } = phone(PlannerLayout.PORTRAIT);
-    expect(actionRow(bar)).toEqual(["Box", "Stored", "More", "Apply"]);
-    expect(bar.actionBar.querySelector(".planner-bar__cost-line")).not.toBeNull();
+    // Exactly five, so they fit 360 px: Box 44 + Upgrade walls 44 + Stored
+    // ~88 + More 44 + Apply ~88 = 308, four 2 px gaps and 8 px padding each
+    // side = 332. No test here lays out pixels; keep this sum when adding one.
+    expect(actionRow(bar)).toEqual(["Box", "Upgrade walls", "Stored", "More", "Apply"]);
+    expect(bar.actionBar.querySelector("[data-icon='undo'], [data-icon='redo']")).toBeNull();
+    // Buttons only: no cost line, no readouts (owner, 2026-11-04).
+    expect(bar.actionBar.querySelector(".planner-bar__cost-line")).toBeNull();
+    expect(bar.actionBar.querySelector(".planner-cost__cell")).toBeNull();
+  });
+
+  it("draws Box, Undo, Redo and Upgrade walls as painted icons, their words for screen readers", () => {
+    const { bar } = phone(PlannerLayout.PORTRAIT);
+    for (const name of ["box", "undo", "redo", "wallupgrade"]) {
+      const icon =
+        bar.actionBar.querySelector<HTMLButtonElement>(`button[data-icon="${name}"]`) ??
+        bar.toolbar.querySelector<HTMLButtonElement>(`button[data-icon="${name}"]`);
+      expect(icon, name).not.toBeNull();
+      expect(icon?.getAttribute("aria-label")).toBeTruthy();
+      expect(icon?.querySelector("img, .game-icon")).not.toBeNull();
+    }
   });
 
   it("puts everything else in More", () => {
@@ -886,7 +539,6 @@ describe("the phone layout (#45)", () => {
       "Find",
       "Checklist",
       "Layouts",
-      "Upgrade walls",
       "Re-arm traps",
       "Help",
     ]);
@@ -902,14 +554,23 @@ describe("the phone layout (#45)", () => {
     expect(more!.querySelectorAll(".planner-menu__list[hidden]")).toHaveLength(0);
   });
 
-  it("sideways: one bar, Leave and undo at its start", () => {
+  it("sideways: one bar, Leave at its start, then the same row with the view switch", () => {
     const { bar } = phone(PlannerLayout.LANDSCAPE);
     expect(bar.toolbar.dataset["layout"]).toBe("landscape");
     const buttons = [...bar.actionBar.querySelectorAll("button")].map(
       (button) => button.getAttribute("aria-label") ?? button.textContent?.trim(),
     );
-    expect(buttons.slice(0, 3)).toEqual(["Leave planner", "Undo", "Redo"]);
-    expect(actionRow(bar)).toEqual(["Box", "3D ⇄", "Stored", "More", "Apply"]);
+    expect(buttons[0]).toBe("Leave planner");
+    expect(actionRow(bar)).toEqual(["Box", "Undo", "Redo", "Upgrade walls", "Showing the 3D yard. Switch to the blueprint", "Stored", "More", "Apply"]);
+  });
+
+  it("brings Undo and Redo down when turned sideways, and back up when upright again", () => {
+    const { bar } = phone(PlannerLayout.PORTRAIT);
+    bar.setLayout(PlannerLayout.LANDSCAPE, true);
+    expect(actionRow(bar).slice(0, 3)).toEqual(["Box", "Undo", "Redo"]);
+    bar.setLayout(PlannerLayout.PORTRAIT, true);
+    expect(actionRow(bar)).toEqual(["Box", "Upgrade walls", "Stored", "More", "Apply"]);
+    expect(topShown(bar).slice(-2)).toEqual(["Undo", "Redo"]);
   });
 
   it("puts every control back where it was when the window turns back into a desktop", () => {
@@ -924,12 +585,11 @@ describe("the phone layout (#45)", () => {
     // The phone rules key off this, so a desktop must not keep it.
     expect(bar.toolbar.dataset["layout"]).toBeUndefined();
     expect(bar.actionBar.dataset["layout"]).toBeUndefined();
-    expect(bar.actionBar.querySelector(".planner-bar__cost-line")).toBeNull();
   });
 
   it("makes Box a switch, since Select has no button of its own", () => {
     const { bar, fired } = phone(PlannerLayout.PORTRAIT);
-    const box = [...bar.actionBar.querySelectorAll("button")].find((one) => one.textContent === "Box")!;
+    const box = [...bar.actionBar.querySelectorAll("button")].find((one) => one.getAttribute("aria-label") === "Box")!;
     box.click();
     expect(fired.onTool).toHaveBeenLastCalledWith(PlannerTool.BOX);
     bar.update(stateOf({ tool: PlannerTool.BOX }));
@@ -949,7 +609,7 @@ describe("the phone layout (#45)", () => {
 
   it("opens More, leaves it up for a switch and closes it on a choice", () => {
     const { bar, fired } = phone(PlannerLayout.PORTRAIT);
-    const moreButton = [...bar.actionBar.querySelectorAll("button")].find((one) => one.textContent === "More")!;
+    const moreButton = [...bar.actionBar.querySelectorAll("button")].find((one) => one.getAttribute("aria-label") === "More")!;
     moreButton.click();
     expect(bar.isMoreOpen).toBe(true);
     expect(bar.moreElement.hidden).toBe(false);
@@ -963,7 +623,7 @@ describe("the phone layout (#45)", () => {
     expect(bar.isMoreOpen).toBe(true);
 
     const find = [...bar.moreElement.querySelectorAll<HTMLButtonElement>("button")].find(
-      (one) => one.textContent === "Find",
+      (one) => (one.getAttribute("aria-label") ?? one.textContent) === "Find",
     )!;
     find.click();
     expect(fired.onFind).toHaveBeenCalledTimes(1);
@@ -982,50 +642,32 @@ describe("the phone layout (#45)", () => {
     expect(clear.disabled).toBe(false);
   });
 
-  it("gives the costs one line, or the coverage when nothing costs anything", () => {
-    const { bar } = phone(PlannerLayout.PORTRAIT);
-    const line = bar.actionBar.querySelector<HTMLButtonElement>(".planner-bar__cost-line")!;
-    bar.setCoverage({ towers: 6, land: 0.26, air: 0.2 });
-    expect(line.textContent).toBe("Land 26% · Air 20%▾");
+  it("puts the selection row at the top of More, and follows its hidden flag", () => {
+    const { bar, container } = phone(PlannerLayout.PORTRAIT);
+    const section = container.querySelector<HTMLElement>(".planner-more__section--selection")!;
+    expect(section.hidden).toBe(true);
 
-    bar.setPlanSummary(totalsOf(), 5);
-    expect([...line.querySelectorAll(".planner-bar__cost-part")].map((part) => part.textContent)).toEqual([
-      "20.0K",
-      "15.0K",
-      "5.0K",
-      "30m 0s",
-    ]);
-    // Pebbles are short, and say so.
-    expect(line.querySelectorAll(".planner-bar__cost-part--short")).toHaveLength(1);
+    const tools = document.createElement("div");
+    tools.append(Object.assign(document.createElement("button"), { textContent: "Select all" }));
+    bar.setSelectionTools(tools);
+    expect(section.hidden).toBe(false);
+    expect(texts(section)).toContain("Select all");
 
-    line.click();
-    expect(bar.actionBar.classList.contains("planner-bar--costs-open")).toBe(true);
-    expect(line.getAttribute("aria-expanded")).toBe("true");
+    tools.hidden = true;
+    bar.setSelectionTools(tools);
+    expect(section.hidden).toBe(true);
+
+    bar.setSelectionTools(null);
+    expect(section.hidden).toBe(true);
+    expect(texts(section)).not.toContain("Select all");
   });
 
-  it("lends Mirror, Align and Distribute to the building sheet and takes them back", () => {
-    const { bar } = phone(PlannerLayout.PORTRAIT);
-    const host = document.createElement("div");
-    bar.lendArrange(host);
-    expect(texts(host)).toEqual(expect.arrayContaining(["Mirror ↔", "Mirror ↕", "Align ▾", "Distribute ▾"]));
-    expect(mirrorButtons(bar)).toHaveLength(0);
-
+  it("keeps the selection section hidden off a phone", () => {
+    const { bar, container } = phone(PlannerLayout.PORTRAIT);
     bar.setLayout(PlannerLayout.DESKTOP, false);
-    expect(host.childElementCount).toBe(0);
-    expect(mirrorButtons(bar)).toHaveLength(2);
-  });
-
-  it("speaks of taps on a touched screen", () => {
-    const { bar } = phone(PlannerLayout.PORTRAIT);
-    bar.update(stateOf({ selectionCount: 1, carrying: true }));
-    const summary = bar.actionBar.querySelector(".planner-bar__summary")?.textContent ?? "";
-    expect(summary).toContain("tap to drop it, or Put back");
-    expect(summary).not.toContain("right-click");
-
-    bar.update(stateOf({ selectionCount: 1, carrying: true, placing: true }));
-    expect(bar.actionBar.querySelector(".planner-bar__summary")?.textContent).toContain(
-      "tap the yard once per building",
-    );
+    bar.setSelectionTools(document.createElement("div"));
+    const section = container.querySelector<HTMLElement>(".planner-more__section--selection");
+    expect(section?.hidden ?? true).toBe(true);
   });
 
   it("gives a read-only session the view switches, Find and Help, and nothing that edits", () => {
@@ -1033,5 +675,47 @@ describe("the phone layout (#45)", () => {
     expect(texts(bar.moreElement, ".planner-more__list > .btn")).toEqual(["Find", "Help"]);
     expect(texts(bar.moreElement, ".planner-menu__item")).not.toContain("Clear yard");
     expect(texts(bar.actionBar)).not.toContain("Apply");
+  });
+});
+
+/* ── Upgrade walls: pressed first, walls picked after (owner, 2026-11-04) ─── */
+
+describe("PlannerBar Upgrade walls", () => {
+  const wallsButton = (bar: PlannerBar): HTMLButtonElement => {
+    const found = bar.actionBar.querySelector<HTMLButtonElement>(".planner-bar__walls");
+    if (!found) throw new Error("no Upgrade walls button");
+    return found;
+  };
+
+  it("is live whenever the yard has walls, with nothing selected", () => {
+    const { bar, fired } = mountWith();
+    bar.update(stateOf());
+    bar.setWallCount(0);
+    expect(wallsButton(bar).disabled).toBe(true);
+
+    bar.setWallCount(30);
+    expect(wallsButton(bar).disabled).toBe(false);
+    wallsButton(bar).click();
+    expect(fired.onUpgradeWalls).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows pressed while walls are picked", () => {
+    const bar = mount();
+    bar.setWallCount(30);
+    bar.update(stateOf({ wallPicking: true, selectionCount: 12 }));
+
+    expect(wallsButton(bar).getAttribute("aria-pressed")).toBe("true");
+
+    bar.update(stateOf());
+    expect(wallsButton(bar).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("marks the bottom bar while picking, so the stylesheet keeps only the actions", () => {
+    const bar = mount();
+    bar.update(stateOf({ wallPicking: true, selectionCount: 12 }));
+    expect(bar.actionBar.classList.contains("planner-bar--wall-pick")).toBe(true);
+
+    bar.update(stateOf());
+    expect(bar.actionBar.classList.contains("planner-bar--wall-pick")).toBe(false);
   });
 });

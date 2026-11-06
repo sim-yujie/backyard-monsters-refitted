@@ -1,5 +1,4 @@
 import Koa, { type Next } from "koa";
-import bodyParser from "koa-bodyparser";
 import serve from "koa-static";
 import ormConfig from "./mikro-orm.config.js";
 import router from "./app.routes.js";
@@ -8,15 +7,18 @@ import { RedisClient } from "bun";
 import { MikroORM, RequestContext } from "@mikro-orm/core";
 import { EntityManager, PostgreSqlDriver } from "@mikro-orm/postgresql";
 import { LOG_BASE, LOG_DIR, logger } from "./utils/logger.js";
+import { errorRequestScope } from "./utils/errorCapture.js";
 import { ascii_node } from "./utils/ascii_art.js";
 import { ErrorInterceptor } from "./middleware/clientSafeError.js";
 import { onAppError } from "./middleware/appErrors.js";
+import { bodyParsers } from "./middleware/bodyLimits.js";
 import { jsonBodyCompat } from "./middleware/jsonBody.js";
 import { realActionTracker } from "./middleware/realAction.js";
 import { processLanguagesFile } from "./middleware/processLanguageFile.js";
 import { logMissingAssets, requestLogging } from "./middleware/requestLogging.js";
 import { corsCacheControl } from "./middleware/corsCacheControlSetup.js";
 import { byteRanges } from "./middleware/byteRanges.js";
+import { notModified, tagFile } from "./middleware/notModified.js";
 import { isStaticPath } from "./utils/staticPaths.js";
 import { Env } from "./enums/Env.js";
 import { initAnticheat } from "./scripts/anticheat/anticheat.js";
@@ -27,6 +29,7 @@ import { economyConfig, economyModeWasUnrecognised } from "./config/EconomyConfi
 import { combatConfig, combatModeWasUnrecognised } from "./config/CombatConfig.js";
 import { ownerSaveConfig, ownerSaveModeWasUnrecognised } from "./config/OwnerSaveConfig.js";
 import { startAttackFinaliser } from "./services/base/finaliseAttack.js";
+import { startInfernoPlayerFinaliser } from "./services/inferno/infernoPlayerFinalise.js";
 import { startRetentionSweep } from "./services/privacy/retention.js";
 import { startAlertSweep } from "./services/alerts/alertSweep.js";
 import { startDailySummary } from "./services/alerts/dailySummary.js";
@@ -86,8 +89,11 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   startChatServer();
 
   app.use(clientIp());
+  // A server error logged during a request keeps who sent it (`utils/errorCapture.ts`).
+  app.use((ctx, next) => errorRequestScope(ctx, next));
   app.use(corsCacheControl);
-  app.use(bodyParser({ enableTypes: ["json", "form"], jsonLimit: "8mb", formLimit: "8mb"}));
+  // 2 MB, and 8 MB only on the routes that carry pictures (`bodyLimits.ts`).
+  app.use(bodyParsers());
 
   // Flattens a native JSON body to the flat, string-field shape every schema
   // and service downstream expects. A form body never reaches it (issue #28).
@@ -102,9 +108,12 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // Serve static files
   app.use(processLanguagesFile);
 
-  const staticFiles = serve("public/");
-  // Range requests get just the bytes asked for, which iPhone Safari needs to play music.
-  app.use((ctx, next) => isStaticPath(ctx.path) ? byteRanges(ctx, () => staticFiles(ctx, next)) : next());
+  const staticFiles = serve("public/", { setHeaders: tagFile });
+  // Range requests get just the bytes asked for, which iPhone Safari needs to
+  // play music; a file the browser already has gets an empty 304.
+  app.use((ctx, next) =>
+    isStaticPath(ctx.path) ? byteRanges(ctx, () => notModified(ctx, () => staticFiles(ctx, next))) : next(),
+  );
 
   process.on("unhandledRejection", (reason, promise) => {
     logger.error(`Unhandled Rejection at: ${promise} reason: ${reason}`);
@@ -130,7 +139,11 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // Finishes attacks whose window closed without a save (issue #138).
   // `ATTACK_FINALISER_SWEEP=off` leaves the sweep to another server sharing
   // the same database, such as a second development server.
-  if (process.env.ATTACK_FINALISER_SWEEP !== "off") startAttackFinaliser();
+  if (process.env.ATTACK_FINALISER_SWEEP !== "off") {
+    startAttackFinaliser();
+    // Inferno player attacks left without a save (`infernoPlayerFinalise.ts`).
+    startInfernoPlayerFinaliser();
+  }
 
   // Deletes mail, battle records and chat reports past their retention limits,
   // once a UTC day (`config/RetentionConfig.ts`, the Privacy Policy). Two

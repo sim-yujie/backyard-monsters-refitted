@@ -136,7 +136,7 @@ export class TestReportPanel {
     this.panel.element.setAttribute("role", "dialog");
     this.panel.element.setAttribute("aria-modal", "true");
 
-    const tablist = element("div", "test-report__tabs");
+    const tablist = element("div", "tab-row test-report__tabs");
     tablist.setAttribute("role", "tablist");
     tablist.setAttribute("aria-label", "Test report");
     this.views.set("summary", this.summaryView());
@@ -199,9 +199,14 @@ export class TestReportPanel {
     return !this.peekBar.hidden;
   }
 
-  /** Shows one tab. */
+  /** Shows one tab; another tab opens at its top, as every tab row does (owner, 6 Nov 2026). */
   select(tab: TestReportTab): void {
-    for (const [name, view] of this.views) view.hidden = name !== tab;
+    for (const [name, view] of this.views) {
+      const opening = name === tab && view.hidden;
+      view.hidden = name !== tab;
+      // Once shown: a browser ignores scrollTop on a hidden box.
+      if (opening) view.scrollTop = 0;
+    }
     for (const [name, control] of this.tabs) {
       control.setAttribute("aria-selected", String(name === tab));
       control.tabIndex = name === tab ? 0 : -1;

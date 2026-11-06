@@ -78,6 +78,12 @@ export interface MailMessage {
    * notice's Add friend (friends WP11, #378). Null on everything else.
    */
   readonly byuserid?: number | null;
+  /**
+   * On the game's attack notices since 28 Oct: the damage the yard was left
+   * at and the loot taken, `{ damage, loot: { r1..r4 } }` (less-text job 3).
+   * Null on everything else and on older notices.
+   */
+  readonly attackstats?: unknown;
 }
 
 /** One name `getmessagetargets` gives, by user id. */

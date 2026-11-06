@@ -24,7 +24,7 @@ const goal = (id: string, status: GoalView["status"]): GoalView => ({
 const ok = <R>(report: R): YardActionResult<R> => ({ ok: true, report, completed: [] });
 
 /** A store holding a pool and the badge count, whose listeners can be poked. */
-const storeOf = (goalsReady: number, kind: "main" | "outpost" = "main") => {
+const storeOf = (goalsReady: number, kind: "main" | "outpost" | "inferno" = "main") => {
   const listeners = new Set<() => void>();
   const store = {
     kind,
@@ -125,6 +125,60 @@ describe("the Goals button", () => {
   });
 });
 
+describe("on the Inferno yard (Inferno WP 4.3)", () => {
+  it("mounts as Flash's Quests, badged with the ready quests", async () => {
+    const store = storeOf(3, "inferno");
+    const { mounts, dock } = mountsOf(store);
+    store.run.mockResolvedValue(ok({ goals: [] }));
+    const teardown = goalsPlugin(mounts);
+    expect(store.run.mock.calls[0]![0]).toMatchObject({ key: "goals:state" });
+    const button = dock.element.querySelector<HTMLButtonElement>('[data-tut="dock-goals"]')!;
+    expect(button.getAttribute("aria-label")).toBe("Quests. 3 quests ready to claim");
+    expect(button.textContent).toContain("Quests");
+    await settle();
+    teardown?.();
+  });
+
+  it("opens the Quests panel without the guide's events", async () => {
+    const { mounts } = mountsOf(storeOf(0, "inferno"));
+    const opened = vi.fn();
+    const off = guideBus.on("screen", opened);
+    const door = new GoalsDoor(mounts, actionsOf([goal("IT1", "open")]));
+    door.toggle();
+    await settle();
+    expect(opened).not.toHaveBeenCalled();
+    expect(mounts.overlay.content.querySelector(".panel__title, .panel__titlebar")!.textContent).toContain("Quests");
+    door.destroy();
+    off();
+  });
+
+  it("a monster reward's notice says it moved into the Compound", async () => {
+    const { mounts, notices } = mountsOf(storeOf(1, "inferno"));
+    const zagnoid: GoalView = { ...goal("IUC2", "ready"), monsters: { id: "IC2", name: "Zagnoid", count: 10 } };
+    const actions = actionsOf([zagnoid]);
+    actions.claim.mockResolvedValueOnce(
+      ok<GoalClaimReport>({
+        id: "IUC2",
+        credited: { r1: 0, r2: 0, r3: 0, r4: 0 },
+        overflow: { r1: 0, r2: 0, r3: 0, r4: 0 },
+        monsters: { id: "IC2", count: 10 },
+        points: 3,
+      }),
+    );
+    const door = new GoalsDoor(mounts, actions);
+    door.toggle();
+    await settle();
+    mounts.overlay.content.querySelector<HTMLButtonElement>('.goals-claim[data-goal="IUC2"]')!.click();
+    await settle();
+    const [key, line] = notices.show.mock.calls[0] as [string, HTMLElement];
+    expect(key).toBe("goals");
+    expect(line.textContent).toBe("10 Zagnoids → Compound");
+    expect(line.getAttribute("aria-label")).toBe("10 Zagnoids moved into the Compound");
+    expect(line.querySelector("img")!.getAttribute("src")).toContain("IC2");
+    door.destroy();
+  });
+});
+
 describe("the Goals panel and the guide", () => {
   it("emits screen \"goals\" as it opens and screenClosed as it closes", async () => {
     const { mounts } = mountsOf(storeOf(0));
@@ -196,6 +250,39 @@ describe("Claim", () => {
     await settle();
     expect(renderer.cancelBank).toHaveBeenCalledWith(4);
     expect(document.querySelector("[role=alert]")?.textContent).toBe("That goal is not finished yet.");
+    door.destroy();
+  });
+
+  it("a siege weapon reward (SW4-SW12) says it waits in the Chaos Factory", async () => {
+    const store = storeOf(1);
+    const { mounts, notices } = mountsOf(store);
+    const sw4: GoalView = {
+      ...goal("SW4", "ready"),
+      reward: { r1: 0, r2: 0, r3: 0, r4: 0 },
+      siege: { id: "decoy", name: "Marilyn Monstroe", count: 1 },
+      room: true,
+    };
+    const actions = actionsOf([sw4]);
+    actions.claim.mockResolvedValueOnce(
+      ok<GoalClaimReport>({
+        id: "SW4",
+        credited: { r1: 0, r2: 0, r3: 0, r4: 0 },
+        overflow: { r1: 0, r2: 0, r3: 0, r4: 0 },
+        siegeReward: { id: "decoy", count: 1 },
+        points: 0,
+      }),
+    );
+    const door = new GoalsDoor(mounts, actions);
+    door.toggle();
+    await settle();
+    document.querySelector<HTMLButtonElement>(".goals-claim")!.click();
+    await settle();
+    expect(actions.claim).toHaveBeenCalledWith("SW4");
+    expect(notices.show).toHaveBeenCalledWith(
+      "goals",
+      "Marilyn Monstroe ready · Chaos Factory",
+      expect.objectContaining({ level: "info" }),
+    );
     door.destroy();
   });
 

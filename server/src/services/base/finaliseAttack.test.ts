@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } fr
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { attackWindowSeconds } from "./attackWindow.js";
+
 /**
  * Finishing an attack its attacker left without a save (issue #138).
  *
@@ -118,6 +120,8 @@ mock.module("../../server.js", () => ({
       },
       findOne: async (entity: { name: string }, where: Record<string, unknown>) => {
         if (entity.name === "User") return where.userid === ATTACKER ? attacker() : null;
+        // The attacker's main row, locked with the defender's as the attack lands (audit P1, P2).
+        if (where.basesaveid === userSave.basesaveid) return userSave;
         return where.basesaveid === BASESAVEID || where.baseid === defender.baseid ? defender : null;
       },
       find: async (entity: { name: string }, where: { baseid: { $in: string[] } }) =>
@@ -132,6 +136,12 @@ mock.module("../../server.js", () => ({
       persist: () => {},
       upsert,
       flush,
+      // The transaction an attack lands in (audit P1, P2): the stand-in rows change
+      // in place, so there is nothing to commit or roll back.
+      begin: async () => {},
+      commit: async () => {},
+      rollback: async () => {},
+      getTransactionContext: () => undefined,
       // Only the event counter's SQL is answered; anything else fails as with no database.
       execute: async (sql: string, params: unknown[]) => {
         if (!sql.includes("event_progress")) throw new Error("no database");
@@ -183,6 +193,14 @@ mock.module("../alliance/powerups.js", () => ({
   isDeclareWarRunning: async () => false,
 }));
 
+// The real replay runner, whatever an earlier file left in its place: bun keeps
+// module mocks across files, and a stand-in with a battle canned by another
+// suite failed every landing here on CI (run 41459356322). The query makes the
+// real module one no mock replaces.
+const REAL_RUNNER = "./combat/replayRunner.ts?real";
+const realRunner = (await import(REAL_RUNNER)) as typeof import("./combat/replayRunner.js");
+mock.module("./combat/replayRunner.js", () => ({ ...realRunner }));
+
 const {
   finaliseAbandonedAttack,
   finaliseAttacksFor,
@@ -191,7 +209,7 @@ const {
   landCheckpointedAttack,
   releaseUnfoughtAttackOf,
 } = await import("./finaliseAttack.js");
-const { storeCheckpoint, acquireFinalLock } = await import("./attackCheckpointStore.js");
+const { storeCheckpoint, acquireFinalLock, releaseFinalLock } = await import("./attackCheckpointStore.js");
 const { attackCheckpointKey } = await import("./attackCheckpoint.js");
 const { attackSessionKey, attackerSessionKey } = await import("./attackSession.js");
 const { replayAbandonedAttack } = await import("./combat/abandonedAttack.js");
@@ -744,6 +762,23 @@ describe("when finalisation runs", () => {
     expect(defender.attackid).toBe(0);
   }, REPLAY_TIMEOUT_MS);
 
+  test("the attacker's reload waits for the save their leaving page sent, then never serves the attack undone", async () => {
+    await arm();
+    // The keepalive save holds the lock while it lands; it lets go 300 ms later.
+    await acquireFinalLock(BASESAVEID);
+    const started = Date.now();
+    setTimeout(() => void releaseFinalLock(BASESAVEID), 300);
+
+    await finaliseBeforeLoad(ATTACKER, "build", "0", false);
+
+    // It waited rather than skip the attack as busy, and by the time it read
+    // the rows the attack was landed (here by the load itself, the stand-in
+    // save having written nothing): the monsters spent, the row freed.
+    expect(Date.now() - started).toBeGreaterThanOrEqual(250);
+    expect(defender.attackid).toBe(0);
+    expect(userSave.monsters.housed.C1).toBeLessThan(200);
+  }, REPLAY_TIMEOUT_MS);
+
   test("the defender's load waits for the attacker's window to close", async () => {
     await arm();
     expect(await finaliseAttacksFor(DEFENDER_OWNER, "build")).toBe(0);
@@ -751,12 +786,12 @@ describe("when finalisation runs", () => {
 
     store.clear();
     sets.clear();
-    await arm({ startedat: now() - 420 });
+    await arm({ startedat: now() - attackWindowSeconds() });
     expect(await finaliseAttacksFor(DEFENDER_OWNER, "build")).toBe(1);
   }, REPLAY_TIMEOUT_MS);
 
   test("a stranger's load touches nothing", async () => {
-    await arm({ startedat: now() - 420 });
+    await arm({ startedat: now() - attackWindowSeconds() });
     expect(await finaliseAttacksFor(31337, "build")).toBe(0);
   }, REPLAY_TIMEOUT_MS);
 
@@ -765,7 +800,7 @@ describe("when finalisation runs", () => {
     await finaliseExpiredOnBase(defender.baseid);
     expect(defender.attackid).toBe(ATTACK_ID);
 
-    await arm({ startedat: now() - 420 });
+    await arm({ startedat: now() - attackWindowSeconds() });
     await finaliseExpiredOnBase(defender.baseid);
     expect(defender.attackid).toBe(0);
   }, REPLAY_TIMEOUT_MS);
@@ -976,6 +1011,21 @@ describe("the defence replay an abandoned attack lands (issue #359)", () => {
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
 
     expect(replays[0]).toMatchObject({ replay: null });
+  }, REPLAY_TIMEOUT_MS);
+
+  // The stand-in rows change in place and cannot roll back, so the next pass,
+  // which lands it once, is `baseSave.landing.db.test.ts`'s, on a real database.
+  test("a landing that fails before its commit records none, and tells nobody", async () => {
+    await asPlayerYard();
+    await arm();
+    // The landing's write fails: it rolls back, and nothing of it may stay.
+    flush.mockImplementationOnce(async () => {
+      throw new Error("connection reset");
+    });
+
+    await expect(finaliseAbandonedAttack(BASESAVEID, "test")).rejects.toThrow("connection reset");
+    expect(replays).toEqual([]);
+    expect(notices).toEqual([]);
   }, REPLAY_TIMEOUT_MS);
 
   // Map Room 1, outposts and own yards are refused by the same gate on the

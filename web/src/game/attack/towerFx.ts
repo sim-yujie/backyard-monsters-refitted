@@ -20,8 +20,11 @@ import {
   type LaserSweep,
   type LobLine,
 } from "@/game/combat/rules";
+import { BUNKER_TYPE } from "@/game/monsters/bunker";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
-import { tierLift } from "@/game/yard/buildingArtTiers";
+import { tierArtFor, tierLift } from "@/game/yard/buildingArtTiers";
+import type { YardKind } from "@/game/yard/buildingCostData";
+import { arcLift, bearingCell, cellBearing, muzzleOffset, shellArc, tiltRow, type TurretAim } from "@/game/yard/turretAim";
 import type { Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
 import { blastNoise, tintAt } from "./blastFx";
@@ -50,7 +53,12 @@ import { ShellSprites } from "./spurtzShell";
  * `Track`), and the Tesla Tower plays a charge, a firing loop and a wind-down
  * (`BUILDING25.as:84-200`), starting on the engine's `charge` event and
  * looping while its zaps come (issue #266), with a glow on the coil as it
- * charges. The Cannon Tower has no animated layer.
+ * charges. The Flash Cannon Tower has no animated layer; the new art's
+ * Cannon turns its barrel at 11.25 a cell like the Sniper (owner, 27 Oct
+ * 2026), though the Flash one never did. The Inferno Blast and Magma Towers
+ * turn at 11.25 a cell too (`INFERNO_CANNON_TOWER.as`, `INFERNO_MAGMA_TOWER.as`).
+ * The Quake Tower raises its hammer cell by cell on the engine's `towerCell`
+ * and shakes for ten ticks on its `towerQuake` (`INFERNOQUAKETOWER.as`).
  *
  * ## Projectiles
  *
@@ -115,6 +123,12 @@ export const muzzleOf = (type: number, worldX: number, worldY: number): Point =>
   y: worldY + (TOWER_MUZZLE[type] ?? DEFAULT_MUZZLE),
 });
 
+/** The point a 3D turret turns about, world px; the origin for a tower without one. */
+const pivotOf = (info: Pick<TowerInfo, "worldX" | "worldY" | "pivot">): Point => ({
+  x: info.worldX + (info.pivot?.x ?? 0),
+  y: info.worldY + (info.pivot?.y ?? 0),
+});
+
 /** Half the 70-unit footprint `Rotate` adds to the origin (`BTOWER.as:456`). */
 const TOWER_CENTRE = 35;
 const DEGREES = 180 / Math.PI;
@@ -143,9 +157,16 @@ interface FacingRule {
 
 /** The classes whose cell is a bearing, with their divisor and offset. */
 const FACING: Readonly<Record<number, FacingRule>> = {
+  // The Flash Cannon has no strip, so no cells and it never turns; the new
+  // art's barrel is painted at 32 headings, cell k at 11.25k.
+  20: { degreesPerCell: 11.25, offsetDegrees: 0 },
   21: { degreesPerCell: 11.25, offsetDegrees: 0 },
   115: { degreesPerCell: 12, offsetDegrees: 0 },
   118: { degreesPerCell: 12, offsetDegrees: 30 },
+  // The Inferno Blast and Magma Towers turn by `BTOWER.Rotate`'s 11.25° cells
+  // while they fight (`INFERNO_CANNON_TOWER.as`, `INFERNO_MAGMA_TOWER.as`).
+  130: { degreesPerCell: 11.25, offsetDegrees: 0 },
+  132: { degreesPerCell: 11.25, offsetDegrees: 0 },
 };
 
 /** Whether a type turns its gun toward its target. */
@@ -247,7 +268,22 @@ export interface TowerInfo {
    * its muzzle and coil by as much (`buildingArtTiers.ts`); 0 with the Flash art.
    */
   readonly lift: number;
+  /**
+   * A 3D turret's aim (`turretAim.ts`): where each cell's barrel points on
+   * screen and where its muzzle is. The tower then shows the cell that
+   * points along its shot, which leaves from that muzzle.
+   */
+  readonly aim?: TurretAim;
+  /** The point the 3D turret turns about, world px from the origin. */
+  readonly pivot?: Point;
 }
+
+/** A tower's 3D turret aim and pivot, or nothing for a tower without one. */
+const turretOf = (type: number, level: number, kind: YardKind): Pick<TowerInfo, "aim" | "pivot"> => {
+  const turret = tierArtFor(type, level, kind)?.turret;
+  if (!turret?.aim) return {};
+  return { aim: turret.aim, pivot: { x: turret.pivot[0], y: turret.pivot[1] } };
+};
 
 /** Every tower in a yard, with what its facing and shots need. */
 export const towersOf = (yard: Yard): TowerInfo[] =>
@@ -261,21 +297,32 @@ export const towersOf = (yard: Yard): TowerInfo[] =>
       y: building.y,
       worldX: building.worldX,
       worldY: building.worldY,
-      frames: resolveArt(building.type, building.level, ArtState.DEFAULT)?.anims[0]?.frames ?? 0,
-      lift: tierLift(building.type, building.level),
+      // An Inferno yard draws its towers from its own table: the Blast Tower is only there.
+      frames: resolveArt(building.type, building.level, ArtState.DEFAULT, yard.kind)?.anims[0]?.frames ?? 0,
+      lift: tierLift(building.type, building.level, yard.kind),
+      ...turretOf(building.type, building.level, yard.kind),
     }));
 
 /* ── The effects ────────────────────────────────────────────────────────── */
 
 /** Ticks a turret keeps tracking after its last shot before holding still. */
 export const FACING_HOLD_TICKS = 30;
+
+/** Ticks a Quake Tower shakes after its quake (`INFERNOQUAKETOWER.as`, `_shake = 10`). */
+export const QUAKE_SHAKE_TICKS = 10;
+/** How far it shakes each way, px (`Math.random() * 4 - 2`). */
+const QUAKE_SHAKE_PX = 2;
 /**
  * Ticks the Tesla keeps its loop going after its last zap: a zap comes every
  * 4 frames (8 ticks), so a gap past this means the charge is spent.
  */
 const TESLA_HOLD_TICKS = 12;
-/** Ticks from a charge's start to its first possible zap: the 32 frames of charge. */
-const TESLA_CHARGE_TICKS = TESLA_CHARGE_END * TESLA_TICKS_PER_FRAME;
+/**
+ * Ticks between steps of a Monster Bunker's shutters: its `TickFast` moves
+ * them a cell each frame of the 40 fps stage (`BUILDING22.as:433-455`), and
+ * the engine keeps 80 ticks a second.
+ */
+const BUNKER_TICKS_PER_CELL = 2;
 /** World px the coil sits above the origin, where the bolts leave (`BUILDING25.as:140-150`). */
 const COIL_HEIGHT = 50;
 /** `PROJECTILE.Move`: half the stat speed per tick, re-aimed every fifth. */
@@ -338,7 +385,7 @@ const SPURTZ_SHELL = 0xf3f0dc;
 /** The towers drawn the new way (beta.5): Cannon, Sniper, Laser, Tesla, Aerial Defense, Railgun. */
 const NEW_LOOK_TYPES: ReadonlySet<number> = new Set([20, 21, 23, 25, 115, 118]);
 /** The new look's guns that turn onto a creep as soon as it is in range: every one with a turning gun. */
-const AIMING_TYPES: ReadonlySet<number> = new Set([21, 23, 115, 118]);
+const AIMING_TYPES: ReadonlySet<number> = new Set([20, 21, 23, 115, 118]);
 /** The new look's bullets that fly as painted tracers: the Sniper's round and the flak shell. */
 const TRACER_TYPES: ReadonlySet<number> = new Set([21, 115]);
 /** The new look's laser: an orange glow, an amber band, a white-hot core. */
@@ -476,13 +523,6 @@ export const sightStrength = (since: number, rate: number): number | null => {
 export const SNIPER_TRAIL_TICKS = 34;
 /** Ticks the bright line of a Sniper's trail takes to fade after its round strikes. */
 const SNIPER_GLOW_TICKS = 19;
-/**
- * World px a tick the new look's Sniper round flies: four times Flash's ball,
- * so a shot across its range lands in about a tenth of a second and the flash,
- * the line and the strike read as one crack. Looks only: the engine has taken
- * the damage off on the tick it fired, and the wound shows when this lands.
- */
-export const SNIPER_ROUND_SPEED = 20;
 /** Ticks the wide sheath of light round a Sniper's line takes to fade after its round strikes. */
 const SNIPER_CRACK_TICKS = 10;
 /** The Sniper's strike: the yard's jolt, px, and how long it lasts, ticks. */
@@ -591,6 +631,8 @@ interface Bullet {
   lift?: number;
   /** World px across its flight a flak shell is drawn off the muzzle, out of one of the twin barrels (new look). */
   readonly barrel?: Point | undefined;
+  /** How high a 3D Cannon's shell is drawn over its straight line, as `shellArc`: lobbed from the raised barrel. */
+  readonly arc?: number;
 }
 
 /**
@@ -653,6 +695,18 @@ interface TowerState {
   /** The tick the Tesla's latest charge began; a charge not yet shown starts the strip. */
   chargeTick: number;
   chargePending: boolean;
+  /**
+   * The tick the Tesla last stopped zapping (`coilRest`), and the tick by
+   * which its next charge comes if it still has a target: until then the new
+   * look keeps its film rolling. Below `chargeTick` while it is charging or zapping.
+   */
+  restTick: number;
+  rearmBy: number;
+  /**
+   * The Classic Tesla wound down to rest: the Flash one leaves its last
+   * wind-down cell up then, drawing nothing for cell 0 (`BUILDING25.as:199-201`).
+   */
+  wound: boolean;
   /** The charge the Tesla's last zap belonged to, so the first of each is told (new look). */
   zapCharge: number;
   /** The gun's kick after a shot (new look): when, and how far back at most, world px. */
@@ -663,6 +717,19 @@ interface TowerState {
   heading: number | null;
   /** Shells the flak tower has fired (new look), so its twin barrels take turns. */
   salvo: number;
+  /** The tick a Quake Tower's quake went off, so it shakes for a few ticks after. */
+  quake: number;
+  /**
+   * Where a Monster Bunker's shutters are: 0 down, the strip's last cell up.
+   * It counts one past that, as the Flash `_animTick` reached 15 on a strip
+   * of 15 cells, and holds there a frame before it comes down.
+   */
+  door: number;
+  /** Its door's way (`bunkerDoor`): open or shut, and since which tick. */
+  doorOpen: boolean;
+  doorSince: number;
+  /** Destroyed: it neither turns nor glows any more, as no rest will ever come from the engine. */
+  fallen: boolean;
 }
 
 /** What the effects ask of the yard renderer. */
@@ -754,12 +821,20 @@ export class TowerFx {
         cell: null,
         tesla: TESLA_IDLE,
         chargeTick: Number.NEGATIVE_INFINITY,
+        restTick: Number.NEGATIVE_INFINITY,
+        rearmBy: Number.NEGATIVE_INFINITY,
+        wound: false,
         chargePending: false,
         zapCharge: Number.NaN,
         recoil: null,
         crackle: Number.NEGATIVE_INFINITY,
         heading: null,
         salvo: 0,
+        quake: Number.NEGATIVE_INFINITY,
+        door: 0,
+        doorOpen: false,
+        doorSince: Number.NEGATIVE_INFINITY,
+        fallen: false,
       });
     }
   }
@@ -782,6 +857,69 @@ export class TowerFx {
     tower.chargePending = true;
   }
 
+  /**
+   * A Quake Tower's wind-up drew strip cell `cell` (`INFERNOQUAKETOWER.TickAttack`):
+   * its hammer goes up a cell at a time.
+   */
+  onTowerCell(towerId: number, cell: number): void {
+    const tower = this.towers.get(towerId);
+    if (!tower || tower.info.frames <= 0) return;
+    this.setCell(tower, Math.min(cell, tower.info.frames - 1));
+  }
+
+  /**
+   * A Quake Tower's quake went off on `tick` (`DelayedFire`): it shakes for
+   * {@link QUAKE_SHAKE_TICKS}. Returns the world point under its middle, where
+   * the rings start, or null for a tower this does not know.
+   */
+  onTowerQuake(towerId: number, tick: number): Point | null {
+    const tower = this.towers.get(towerId);
+    if (!tower) return null;
+    tower.quake = tick;
+    return this.groundAt(tower.info.x + TOWER_CENTRE, tower.info.y + TOWER_CENTRE);
+  }
+
+  /**
+   * A Tesla Tower stopped zapping on `tick`; `rearmBy` is the latest tick it
+   * charges again if it still has a target, null if it has none. The new look
+   * keeps its film rolling till then, the old one has wound down already.
+   */
+  onCoilRest(towerId: number, tick: number, rearmBy: number | null): void {
+    const tower = this.towers.get(towerId);
+    if (!tower) return;
+    tower.restTick = tick;
+    tower.rearmBy = rearmBy ?? Number.NEGATIVE_INFINITY;
+  }
+
+  /**
+   * A Monster Bunker's door opened or shut on `tick` (the engine's
+   * `bunkerDoor`): the Classic door and the 3D shutters both move by it, so
+   * they are fully up before the first monster comes out.
+   */
+  onDoor(buildingId: number, tick: number, open: boolean): void {
+    const tower = this.towers.get(buildingId);
+    if (!tower) return;
+    tower.doorOpen = open;
+    tower.doorSince = tick;
+  }
+
+  /**
+   * A tower was destroyed: its Tesla coil, Railgun charge and Laser sight go
+   * out for good. A Tesla destroyed mid-charge never gets its `coilRest`, so
+   * its film would otherwise roll on over the ruin. Shots already in the air
+   * still land.
+   */
+  fall(id: number): void {
+    const tower = this.towers.get(id);
+    if (!tower || tower.fallen) return;
+    tower.fallen = true;
+    tower.tesla = TESLA_IDLE;
+    tower.chargePending = false;
+    tower.targetCreep = -1;
+    tower.recoil = null;
+    tower.quake = Number.NEGATIVE_INFINITY;
+  }
+
   /** A tower's splash radius in cartesian units: 0 for none, or a tower this does not know. */
   splashOf(id: number): number {
     const info = this.towers.get(id)?.info;
@@ -791,6 +929,12 @@ export class TowerFx {
   /** The cell a tower's gun was last set to, or null while it has never turned. */
   cellOf(id: number): number | null {
     return this.towers.get(id)?.cell ?? null;
+  }
+
+  /** Where a tower's shots leave from right now, world px, or null for a tower this does not know. */
+  muzzleAt(id: number): Point | null {
+    const tower = this.towers.get(id);
+    return tower ? this.muzzle(tower) : null;
   }
 
   /**
@@ -807,7 +951,6 @@ export class TowerFx {
     tower.lastShotTick = event.tick;
     tower.targetCreep = event.creepId;
 
-    const from = muzzleOf(tower.info.type, tower.info.worldX, tower.info.worldY - tower.info.lift);
     const aim = this.aimAt(target, event.ix, event.iy);
     const type = tower.info.type;
 
@@ -819,6 +962,8 @@ export class TowerFx {
         ? this.groundAt(sweep.fromIx, sweep.fromIy)
         : { x: tower.info.worldX, y: tower.info.worldY + LASER_DROP };
       const end = sweep ? this.groundAt(sweep.toIx, sweep.toIy) : { x: aim.x, y: aim.y + BODY_HEIGHT };
+      // A 3D head looks at where the beam first burns, so it lights from the lens.
+      if (tower.info.aim) this.lookAt(tower, this.yardAt(end), end);
       this.beams.push({
         towerId: tower.info.id,
         bornTick: event.tick,
@@ -828,6 +973,10 @@ export class TowerFx {
       });
       return null;
     }
+    // A 3D barrel is put on the cell that points along the shot, which leaves its muzzle.
+    if (tower.info.aim) this.lookAt(tower, { x: target?.ix ?? event.ix, y: target?.iy ?? event.iy }, null);
+    const from = this.muzzle(tower);
+
     if (type === 25) {
       // `BUILDING25.as:150`: the bolt leaves from 50 px above the origin.
       const coil = { x: tower.info.worldX, y: tower.info.worldY - tower.info.lift - COIL_HEIGHT };
@@ -889,7 +1038,12 @@ export class TowerFx {
     this.nextKey += 1;
     // The flak's twin barrels take turns: its shell is drawn out of one of them.
     const barrel = type === 115 && this.painted ? this.barrelOf(tower, from, aim) : undefined;
-    const flies = type === 21 && this.painted ? SNIPER_ROUND_SPEED : speed;
+    // A 3D Cannon keeps its barrel raised and lobs its shell: up out of the muzzle and down on the creep.
+    const tilt = type === 20 ? tower.info.aim?.tilt : undefined;
+    const arc =
+      tilt === undefined
+        ? 0
+        : this.arcOf(tower, tilt, from, target?.ix ?? event.ix, target?.iy ?? event.iy, aimLift(target));
     this.bullets.push({
       key,
       type,
@@ -897,7 +1051,10 @@ export class TowerFx {
       bornTick: event.tick,
       x: from.x,
       y: from.y,
-      speed: Math.max(flies, 1),
+      // At its shell's speed, the new look's Sniper round too: the engine flies
+      // the shell and hurts when it lands (engine fidelity note 1), so a faster
+      // round would strike well before its wound and its kill.
+      speed: Math.max(speed, 1),
       splash: stats?.splash ?? 0,
       aim,
       stepX: 0,
@@ -907,10 +1064,12 @@ export class TowerFx {
       from,
       lift: aimLift(target),
       barrel,
+      ...(arc > 0 ? { arc } : {}),
     });
     this.flashes.push({ at: from, tick: event.tick, type });
     if (this.painted) {
-      if (type === 20) this.cannonFx(event.tick, from, aim);
+      // A lobbed shell leaves along the barrel, `arc` above its straight line at the start.
+      if (type === 20) this.cannonFx(event.tick, tower, from, { x: aim.x, y: aim.y - arc });
       else if (type === 21) this.sniperFx(event.tick, tower, from, aim);
       else if (type === 115) this.flakVolley(event.tick, tower, from, aim, aimLift(target), Math.max(speed, 1), barrel);
     }
@@ -936,7 +1095,9 @@ export class TowerFx {
     const elapsed = Math.max(0, Math.min(tick - this.lastTick, 400));
     this.lastTick = tick;
 
-    for (const tower of this.towers.values()) this.turn(tower, tick, elapsed, creepAt, creeps);
+    for (const tower of this.towers.values()) {
+      if (!tower.fallen) this.turn(tower, tick, elapsed, creepAt, creeps);
+    }
 
     this.sparks?.begin();
     const graphics = this.graphics;
@@ -972,10 +1133,18 @@ export class TowerFx {
       tower.targetCreep = -1;
       tower.chargePending = false;
       tower.chargeTick = Number.NEGATIVE_INFINITY;
+      tower.restTick = Number.NEGATIVE_INFINITY;
+      tower.rearmBy = Number.NEGATIVE_INFINITY;
+      tower.wound = false;
       tower.tesla = TESLA_IDLE;
       if (tower.info.type === 25 && tower.info.frames > 0) this.setCell(tower, TESLA_IDLE.cell);
-      if (tower.recoil) this.host.nudge?.(tower.info.id, 0, 0, 0);
+      tower.door = 0;
+      tower.doorOpen = false;
+      tower.doorSince = Number.NEGATIVE_INFINITY;
+      if (tower.info.type === BUNKER_TYPE && tower.info.frames > 1) this.setCell(tower, 0);
+      if (tower.recoil || tower.quake > Number.NEGATIVE_INFINITY) this.host.nudge?.(tower.info.id, 0, 0, 0);
       tower.recoil = null;
+      tower.quake = Number.NEGATIVE_INFINITY;
     }
     this.graphics.clear();
     this.glow.clear();
@@ -1006,10 +1175,15 @@ export class TowerFx {
     const { info } = tower;
     if (info.type === 25) {
       this.stepCoil(tower, tick, elapsed);
-      if (info.frames > 0) this.setCell(tower, tower.tesla.cell);
+      if (info.frames > 0) this.setCell(tower, tower.wound ? TESLA_WIND_END - 1 : tower.tesla.cell);
+      return;
+    }
+    if (info.type === BUNKER_TYPE) {
+      if (info.frames > 1) this.stepDoor(tower, tick, elapsed);
       return;
     }
     if (tower.recoil) this.kick(tower, tick);
+    if (tower.quake > Number.NEGATIVE_INFINITY) this.quakeShake(tower, tick);
     if (info.frames <= 0) return;
     if (this.look !== "classic" && AIMING_TYPES.has(info.type)) {
       this.aim(tower, tick, elapsed, creepAt, creeps);
@@ -1022,14 +1196,22 @@ export class TowerFx {
       for (const candidate of this.beams) if (candidate.towerId === info.id) beam = candidate;
       const end = beam ? laserEnd(beam.sweep, Math.max(0, tick - beam.bornTick)) : null;
       if (!beam || !end) return;
+      if (info.aim) {
+        this.lookAt(tower, this.yardAt(end), end);
+        return;
+      }
       const degrees = Math.atan2(end.y - beam.sweep.ay, end.x - beam.sweep.ax) * DEGREES;
       this.setCell(tower, laserCell(degrees, info.frames));
       return;
     }
 
-    if (!facesTarget(info.type) || !recent) return;
+    if (!(facesTarget(info.type) || info.aim) || !recent) return;
     const creep = creepAt(tower.targetCreep);
     if (!creep) return;
+    if (info.aim) {
+      this.lookAt(tower, { x: creep.ix, y: creep.iy }, null);
+      return;
+    }
     const cell = facingCell(
       info.type,
       bearingDegrees({ x: info.x, y: info.y }, { x: creep.ix, y: creep.iy }),
@@ -1054,6 +1236,10 @@ export class TowerFx {
     creeps: readonly CreepSnapshot[],
   ): void {
     const { info } = tower;
+    if (info.aim) {
+      this.aim3d(tower, info.aim, tick, elapsed, creepAt, creeps);
+      return;
+    }
     let wanted: number | null = null;
     let speed = CATCH_UP_DEGREES_PER_TICK;
     if (info.type === 23) {
@@ -1082,6 +1268,83 @@ export class TowerFx {
     const cell =
       info.type === 23 ? laserCell(tower.heading, info.frames) : facingCell(info.type, tower.heading, info.frames);
     if (cell !== null) this.setCell(tower, cell);
+  }
+
+  /**
+   * `aim` for a 3D turret: the same turn onto a creep in range and the same
+   * catch-up once it fires, by the bearing on the ground from the tower to
+   * its target (the creep, or where the beam burns), showing the cell that
+   * faces nearest that way. A Laser's head also takes the tilt that looks at
+   * the spot; a Cannon's barrel keeps its one tilt.
+   */
+  private aim3d(
+    tower: TowerState,
+    aim: TurretAim,
+    tick: number,
+    elapsed: number,
+    creepAt: (id: number) => CreepSnapshot | undefined,
+    creeps: readonly CreepSnapshot[],
+  ): void {
+    const { info } = tower;
+    // The target in yard units, and for a Laser the spot it burns, world px.
+    let yard: Point | null = null;
+    let spot: Point | null = null;
+    let speed = CATCH_UP_DEGREES_PER_TICK;
+    if (info.type === 23) {
+      let beam: Beam | undefined;
+      for (const candidate of this.beams) if (candidate.towerId === info.id) beam = candidate;
+      spot = beam ? laserEnd(beam.sweep, Math.max(0, tick - beam.bornTick)) : null;
+      if (spot) yard = this.yardAt(spot);
+    } else if (tick - tower.lastShotTick <= FACING_HOLD_TICKS) {
+      const creep = creepAt(tower.targetCreep);
+      if (creep) yard = { x: creep.ix, y: creep.iy };
+    }
+    if (yard === null) {
+      const creep = this.nearestInRange(info, creeps);
+      if (!creep) return;
+      speed = TURN_DEGREES_PER_TICK;
+      yard = { x: creep.ix, y: creep.iy };
+      if (info.type === 23) spot = this.groundAt(creep.ix, creep.iy);
+    }
+    const row = spot ? this.tiltToward(info, aim, spot) : 0;
+    const wanted = bearingDegrees({ x: info.x, y: info.y }, yard);
+    const from = tower.heading ?? cellBearing(aim, tower.cell ?? 0);
+    tower.heading = stepDegrees(from, wanted, speed * Math.max(1, elapsed));
+    this.setCell(tower, bearingCell(aim, tower.heading, row));
+  }
+
+  /**
+   * Puts a 3D turret straight onto the cell that faces `yard` (yard units)
+   * on the ground: for a shot, and for the Flash look's facing. `spot` is
+   * where a Laser burns, world px, which also picks the tilt of its head.
+   */
+  private lookAt(tower: TowerState, yard: Point, spot: Point | null): void {
+    const { info } = tower;
+    const aim = info.aim;
+    if (!aim) return;
+    const row = spot ? this.tiltToward(info, aim, spot) : 0;
+    tower.heading = bearingDegrees({ x: info.x, y: info.y }, yard);
+    this.setCell(tower, bearingCell(aim, tower.heading, row));
+  }
+
+  /** The tilt row of a 3D head that looks at a spot on the ground, from how far it is from under the head. */
+  private tiltToward(info: TowerInfo, aim: TurretAim, spot: Point): number {
+    // The ground under its head: the art says how far below the pivot, else the middle of the footprint.
+    const pivot = pivotOf(info);
+    const under = { x: pivot.x, y: aim.ground === undefined ? info.worldY + LASER_DROP : pivot.y + aim.ground };
+    return tiltRow(aim, spot.x - under.x, spot.y - under.y);
+  }
+
+  /**
+   * Where a tower's shots leave from, world px: a 3D turret's muzzle tip on
+   * `cell` (the one it shows), or the Flash class's muzzle lifted by its tier.
+   */
+  private muzzle(tower: TowerState, cell: number | null = tower.cell): Point {
+    const { info } = tower;
+    const offset = info.aim && cell !== null ? muzzleOffset(info.aim, cell) : null;
+    if (!offset) return muzzleOf(info.type, info.worldX, info.worldY - info.lift);
+    const pivot = pivotOf(info);
+    return { x: pivot.x + offset[0], y: pivot.y + offset[1] };
   }
 
   /**
@@ -1125,26 +1388,104 @@ export class TowerFx {
   }
 
   /**
+   * A Quake Tower's shake after its quake (`INFERNOQUAKETOWER._shake`): ten
+   * ticks of up to 2 px each way, then back in place.
+   */
+  private quakeShake(tower: TowerState, tick: number): void {
+    const age = tick - tower.quake;
+    if (age >= QUAKE_SHAKE_TICKS || age < 0) {
+      tower.quake = Number.NEGATIVE_INFINITY;
+      this.host.nudge?.(tower.info.id, 0, 0, 0);
+      return;
+    }
+    const dx = Math.floor(jitter(tick, tower.info.id) * (QUAKE_SHAKE_PX * 2 + 1)) - QUAKE_SHAKE_PX;
+    const dy = Math.floor(jitter(tick, tower.info.id + 1) * (QUAKE_SHAKE_PX * 2 + 1)) - QUAKE_SHAKE_PX;
+    this.host.nudge?.(tower.info.id, 0, dx, dy);
+  }
+
+  /**
    * The Tesla's strip over the ticks since the last update, a step on every
    * tick the engine runs a frame on (every second one): it charges on the
    * engine's charge, loops while zaps keep coming, then winds down.
    */
   private stepCoil(tower: TowerState, tick: number, elapsed: number): void {
+    if (this.look !== "classic") {
+      this.rollFilm(tower, tick, elapsed);
+      return;
+    }
     let state = tower.tesla;
     for (let at = tick - elapsed + 1; at <= tick; at += 1) {
       if (at % TESLA_TICKS_PER_FRAME !== 0) continue;
       if (state.phase === "idle") {
         if (!tower.chargePending || at < tower.chargeTick) continue;
         tower.chargePending = false;
+        tower.wound = false;
         state = teslaTick(state, true);
         continue;
       }
-      const zapping =
-        at - tower.lastShotTick <= TESLA_HOLD_TICKS ||
-        at - tower.chargeTick <= TESLA_CHARGE_TICKS + TESLA_HOLD_TICKS;
-      state = teslaTick(state, zapping);
+      // The Flash strip is the engine's own: it loops until the engine stops zapping.
+      const zapping = !(tower.restTick >= tower.chargeTick && at > tower.restTick);
+      const next = teslaTick(state, zapping);
+      if (state.phase === "wind" && next.phase === "idle") tower.wound = true;
+      state = next;
     }
     tower.tesla = state;
+  }
+
+  /**
+   * The new look's Tesla (owner, beta.5): it charges on its first charge, then
+   * its film rolls without a break for as long as it keeps firing — through
+   * the engine's own wind-downs and recharges between charges, and through
+   * zaps at a target already dead — and winds down only once it stops for
+   * want of a target, or no new charge comes by the tick one would
+   * ({@link onCoilRest}). A charge during the wind-down rolls it on again.
+   */
+  private rollFilm(tower: TowerState, tick: number, elapsed: number): void {
+    let state = tower.tesla;
+    for (let at = tick - elapsed + 1; at <= tick; at += 1) {
+      if (at % TESLA_TICKS_PER_FRAME !== 0) continue;
+      const charged = tower.chargePending && at >= tower.chargeTick;
+      if (charged) tower.chargePending = false;
+      if (state.phase === "idle" || state.phase === "charge") {
+        if (state.phase === "idle" && !charged) continue;
+        state = teslaTick(state, true);
+        continue;
+      }
+      if (charged && state.phase === "wind") {
+        state = { phase: "loop", cell: TESLA_CHARGE_END, windTicks: 0 };
+        continue;
+      }
+      state = teslaTick(state, this.coilFiring(tower, at));
+    }
+    tower.tesla = state;
+  }
+
+  /** Whether a Tesla is still firing on `at` (new look): charging, zapping, or due to charge again. */
+  private coilFiring(tower: TowerState, at: number): boolean {
+    if (at - tower.lastShotTick <= TESLA_HOLD_TICKS) return true;
+    const resting = tower.restTick >= tower.chargeTick && at >= tower.restTick;
+    if (!resting) return at >= tower.chargeTick;
+    return at <= tower.rearmBy;
+  }
+
+  /**
+   * A Monster Bunker's shutters over the ticks since the last update: a cell
+   * up every frame while its door is open, a cell down every frame once it
+   * has shut, as `BUILDING22.TickFast` (`:433-455`) moves them.
+   */
+  private stepDoor(tower: TowerState, tick: number, elapsed: number): void {
+    const top = tower.info.frames - 1;
+    // The Flash door counts to 15 on its strip of 15 cells (`BUILDING22.as:440-443`).
+    const most = top + 1;
+    for (let at = tick - elapsed + 1; at <= tick; at += 1) {
+      if (at % BUNKER_TICKS_PER_CELL !== 0) continue;
+      const open =
+        at >= tower.doorSince
+          ? tower.doorOpen
+          : !tower.doorOpen && Number.isFinite(tower.doorSince);
+      tower.door = Math.max(0, Math.min(most, tower.door + (open ? 1 : -1)));
+    }
+    this.setCell(tower, Math.min(tower.door, top));
   }
 
   private setCell(tower: TowerState, cell: number): void {
@@ -1158,6 +1499,13 @@ export class TowerFx {
   /** The world point of a yard position on the ground. */
   private groundAt(ix: number, iy: number): Point {
     return { x: ix - iy + this.origin.x, y: (ix + iy) / 2 + this.origin.y };
+  }
+
+  /** The yard position of a world point on the ground: `groundAt` undone. */
+  private yardAt(at: Point): Point {
+    const x = at.x - this.origin.x;
+    const y = at.y - this.origin.y;
+    return { x: y + x / 2, y: y - x / 2 };
   }
 
   /** The world point a shot is aimed at: the creep's body, or its altitude. */
@@ -1238,7 +1586,7 @@ export class TowerFx {
       if (bullet.type === 20 && bullet.ticks % 5 === 0 && this.look === "full" && this.painted) {
         // A thin wisp of smoke behind the cannon ball.
         this.sparks?.emit(stepTick, {
-          look: "wisp", at: { x: bullet.x, y: bullet.y }, life: 26, size0: 6, size1: 14,
+          look: "wisp", at: this.drawnAt(bullet), life: 26, size0: 6, size1: 14,
           vz: 0.15, peak: 0.32, rotation: blastNoise(stepTick, 3) * 6.28, colours: SMOKE_TINTS,
         });
       }
@@ -1265,15 +1613,37 @@ export class TowerFx {
     }
   }
 
+  /**
+   * `shellArc` for a shell fired `tilt` degrees down from `from` (a 3D
+   * turret's muzzle) at a creep at yard `ix`, `iy`, `lift` world px above
+   * the ground there.
+   */
+  private arcOf(tower: TowerState, tilt: number, from: Point, ix: number, iy: number, lift: number): number {
+    const { info } = tower;
+    const under = this.groundAt(info.x + TOWER_CENTRE, info.y + TOWER_CENTRE);
+    const lands = this.groundAt(ix, iy);
+    const ground = Math.hypot(lands.x - under.x, 2 * (lands.y - under.y));
+    return shellArc(tilt, ground, under.y - from.y - lift);
+  }
+
+  /** Where a bullet is drawn, world px: on its straight line, or a lobbed shell over it on its arc. */
+  private drawnAt(bullet: Bullet): Point {
+    if (!bullet.arc || !bullet.from) return { x: bullet.x, y: bullet.y };
+    const gone = Math.hypot(bullet.x - bullet.from.x, bullet.y - bullet.from.y);
+    const left = Math.hypot(bullet.aim.x - bullet.x, bullet.aim.y - bullet.y);
+    return { x: bullet.x, y: bullet.y - arcLift(bullet.arc, gone / (gone + left || 1)) };
+  }
+
   private drawRound(bullet: Bullet): void {
     const graphics = this.graphics;
     if (this.painted && bullet.type === 21 && this.drawSniperRound(bullet)) return;
     if (this.painted && bullet.type === 115 && this.drawFlakRound(bullet)) return;
     if (bullet.type === 20) {
       // Flash's cannon ball, a slow heavy round.
-      graphics.circle(bullet.x, bullet.y, 4.5).fill({ color: CANNON_BALL });
-      graphics.circle(bullet.x - 1, bullet.y - 1, 2.8).fill({ color: CANNON_BALL_LIT });
-      graphics.circle(bullet.x - 1.6, bullet.y - 1.6, 1).fill({ color: 0x6e6e6e });
+      const { x, y } = this.drawnAt(bullet);
+      graphics.circle(x, y, 4.5).fill({ color: CANNON_BALL });
+      graphics.circle(x - 1, y - 1, 2.8).fill({ color: CANNON_BALL_LIT });
+      graphics.circle(x - 1.6, y - 1.6, 1).fill({ color: 0x6e6e6e });
       return;
     }
     if (bullet.type === 21) {
@@ -1359,7 +1729,9 @@ export class TowerFx {
       if (!end) continue;
       const { ax, ay } = beam.sweep;
       const along = Math.hypot(end.x - ax, end.y - ay) || 1;
-      const start = {
+      // A 3D head's beam leaves its lens, on the cell the head shows.
+      const tower = this.towers.get(beam.towerId);
+      const start = tower?.info.aim?.muzzle ? this.muzzle(tower) : {
         x: ax + ((end.x - ax) / along) * 8,
         y: ay + ((end.y - ay) / along) * 8 - LASER_HEIGHT,
       };
@@ -1393,6 +1765,7 @@ export class TowerFx {
       return;
     }
     for (const tower of this.towers.values()) {
+      if (tower.fallen) continue;
       const { phase, cell } = tower.tesla;
       if (phase !== "charge" && phase !== "loop") continue;
       const power = phase === "charge" ? cell / TESLA_CHARGE_END : 0.8 + jitter(tick, 7) * 0.2;
@@ -1518,6 +1891,7 @@ export class TowerFx {
     const sparks = this.sparks;
     if (!sparks) return;
     for (const tower of this.towers.values()) {
+      if (tower.fallen) continue;
       const { phase, cell } = tower.tesla;
       if (phase !== "charge" && phase !== "loop") continue;
       const power = phase === "charge" ? cell / TESLA_CHARGE_END : 0.85 + blastNoise(tick, 7) * 0.15;
@@ -1810,11 +2184,12 @@ export class TowerFx {
     const sparks = this.sparks;
     if (!sparks) return;
     for (const tower of this.towers.values()) {
+      if (tower.fallen) continue;
       if (tower.info.type !== 118 || !Number.isFinite(tower.lastShotTick)) continue;
       const rate = towerStats(tower.info.type, tower.info.level)?.rate ?? 160;
       const charge = railCharge(tick - tower.lastShotTick, rate);
       if (charge <= 0) continue;
-      const at = muzzleOf(tower.info.type, tower.info.worldX, tower.info.worldY - tower.info.lift);
+      const at = this.muzzle(tower);
       const flicker = 0.85 + blastNoise(tick, 17) * 0.15;
       sparks.lamp(tower, {
         look: "orb",
@@ -2109,10 +2484,14 @@ export class TowerFx {
   }
 
   /** The Cannon fires: a flash of flame out of the muzzle and a puff of smoke. */
-  private cannonFx(tick: number, muzzle: Point, aim: Point): void {
+  private cannonFx(tick: number, tower: TowerState, muzzle: Point, aim: Point): void {
+    const heading = Math.atan2(aim.y - muzzle.y, aim.x - muzzle.x);
+    // The new art's turning barrel kicks back; the Flash Cannon has none to move.
+    if (tower.info.frames > 0) {
+      tower.recoil = { tick, dx: -Math.cos(heading) * RECOIL_PX, dy: -Math.sin(heading) * RECOIL_PX };
+    }
     const sparks = this.sparks;
     if (!sparks) return;
-    const heading = Math.atan2(aim.y - muzzle.y, aim.x - muzzle.x);
     const ahead = { x: muzzle.x + Math.cos(heading) * 9, y: muzzle.y + Math.sin(heading) * 9 };
     sparks.emit(tick, {
       look: "muzzle",
@@ -2261,6 +2640,7 @@ export class TowerFx {
     const sparks = this.sparks;
     if (!sparks) return;
     for (const tower of this.towers.values()) {
+      if (tower.fallen) continue;
       const { info } = tower;
       if (info.type !== 21) continue;
       const rate = towerStats(info.type, info.level)?.rate ?? 80;
@@ -2276,7 +2656,7 @@ export class TowerFx {
       }
       if (!creep || strength === null) continue;
       const dot = this.aimAt(creep, creep.ix, creep.iy);
-      const muzzle = muzzleOf(info.type, info.worldX, info.worldY - info.lift);
+      const muzzle = this.muzzle(tower);
       const distance = Math.hypot(dot.x - muzzle.x, dot.y - muzzle.y) || 1;
       const tip = {
         x: muzzle.x + ((dot.x - muzzle.x) / distance) * 12,

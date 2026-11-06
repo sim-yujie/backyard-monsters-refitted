@@ -88,6 +88,24 @@
   gap: var(--space-3);
 }
 
+/* The Friends tab fills the box, and only its list scrolls (ui.css
+   `.tab-scroll`): the search and the filter buttons stay over it, as the
+   tabs stay over every window's content (owner, 6 Nov 2026). */
+.friends-body:has(> .friends-tab--friends) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.friends-tab--friends {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.friends-tab--friends > .friends-tools {
+  flex: none;
+}
+
 .friends-summary {
   margin: 0;
   font-weight: 700;
@@ -383,6 +401,46 @@
   .friends-screen .panel__body {
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
+  }
+
+  /* The count, the search and the filters share one line, so the list under
+     them keeps room for three friends or more (patch 6.3: it had half a row
+     at 812x375). */
+  .friends-tab--friends {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-1) var(--space-3);
+  }
+
+  .friends-tab--friends > .friends-summary {
+    grid-area: 1 / 1;
+  }
+
+  .friends-tab--friends > .friends-tools {
+    grid-area: 1 / 2;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .friends-tab--friends > .friends-status {
+    grid-area: 2 / 1 / 3 / -1;
+  }
+
+  .friends-tab--friends > .friends-tab__body {
+    grid-area: 3 / 1 / 4 / -1;
+    align-self: stretch;
+  }
+
+  .friends-tools__search {
+    flex: 1 1 140px;
+    min-width: 0;
+  }
+
+  .friends-tools__filters {
+    flex: 0 1 auto;
+    min-width: 0;
   }
 }
 

@@ -5,6 +5,7 @@ import type { User } from "../../database/models/user.model.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import {
   yardHatcheryAddAction,
+  yardHatcheryClearAction,
   yardHatcheryFinishAction,
   yardHatcheryRemoveAction,
 } from "./hatchery.js";
@@ -199,6 +200,31 @@ describe("add then remove", () => {
       status: 409,
       body: { reason: "noSlot", slot: 0 },
     });
+  });
+});
+
+describe("add then clear all", () => {
+  test("empties the waiting stacks in one write; the goo matches removing them one by one", async () => {
+    await call(yardHatcheryAddAction, { hatchery: 1, monster: "C1", count: 45 });
+    const flushes = db.flushes;
+    const answer = await call(yardHatcheryClearAction, { hatchery: 1 });
+    expect(answer).toMatchObject({
+      status: 200,
+      body: { report: { hatchery: 1, removed: { C1: 44 }, refund: { r4: 44 * 250 } } },
+    });
+    expect(db.flushes).toBe(flushes + 1);
+    // Only the one in production is still paid for, and it keeps hatching.
+    expect(goo()).toBe(1_000_000 - 250);
+    expect((monsters().h as unknown[][])[0]).toEqual(["C1", expect.any(Number), [], 1]);
+  });
+
+  test("an empty queue is 409 emptyQueue and writes nothing", async () => {
+    const before = structuredClone(db.row);
+    expect(await call(yardHatcheryClearAction, { hatchery: 2 })).toMatchObject({
+      status: 409,
+      body: { reason: "emptyQueue" },
+    });
+    expect(db.row).toEqual(before);
   });
 });
 

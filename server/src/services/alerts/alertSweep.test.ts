@@ -41,9 +41,12 @@ const fakeRedis = () => {
   };
 };
 
+/** A disk with room, so the machine running the tests does not decide the outcome. */
+const roomyDisk = async () => ({ path: "logs", mount: "/", totalBytes: 100, usedBytes: 50, availableBytes: 50, usedPercent: 50 });
+
 /** One check with no host.json. */
 const check = (redis: AlertSweepDeps["redis"], sql: AlertSweepDeps["sql"], now?: number) =>
-  runAlertCheck({ redis, sql, send, readHostStatus: async () => null }, now);
+  runAlertCheck({ redis, sql, send, readHostStatus: async () => null, containerDisk: roomyDisk }, now);
 
 const down: AlertSweepDeps["sql"] = async () => {
   throw new Error("connection refused");

@@ -1,4 +1,5 @@
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { inRealm, monsterRealmOf, type MonsterRealm } from "@/game/monsters/realm";
 import {
   gateText,
   instantGate,
@@ -148,8 +149,8 @@ const refuse = (
 ): YardRefusal => ({ reason, message, detail, local: true });
 
 /** A gate as the refusal the server would send for it. */
-const gateRefusal = (gate: TrainGate): YardRefusal => {
-  const message = `${gateText(gate)}.`;
+const gateRefusal = (gate: TrainGate, realm: MonsterRealm): YardRefusal => {
+  const message = `${gateText(gate, realm)}.`;
   switch (gate.reason) {
     case "academyLevel":
       return refuse(gate.reason, message, { have: gate.have, need: gate.need });
@@ -171,10 +172,11 @@ const unknownMonster = (monster: string): YardRefusal =>
  */
 export const academyActions = (store: YardStore, api: AcademyApi = academyApi): AcademyActions => {
   const gated = (monster: string, gate: typeof trainGate) => (reader: Parameters<typeof trainGate>[1]) => {
-    const entry = monsterEntry(monster);
+    const realm = monsterRealmOf(reader.yard.kind);
+    const entry = inRealm(monster, realm) ? monsterEntry(monster) : undefined;
     if (!entry || entry.blocked) return unknownMonster(monster);
     const refusal = gate(entry, reader);
-    return refusal ? gateRefusal(refusal) : null;
+    return refusal ? gateRefusal(refusal, realm) : null;
   };
   const training = (monster: string) => (reader: Parameters<typeof runningTraining>[0]) =>
     runningTraining(reader, monster)

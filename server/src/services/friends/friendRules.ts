@@ -15,8 +15,8 @@ export const FRIEND_LIMITS = {
   requestLapseDays: 14,
   /** After a decline, the sender waits this many days to ask that player again (Q9). */
   declineWaitDays: 7,
-  /** Gifts and help need this many hours of friendship (Q7); `canGiftFrom` reports it. */
-  friendshipAgeHours: 24,
+  /** Gifts and help need this many hours of friendship (Q7; 12 since owner 2026-10-29, was 24); `canGiftFrom` reports it. */
+  friendshipAgeHours: 12,
   /** Helps a player can give in a UTC day (Q1); the help engine counts them (`services/friends/helpConfig.ts`). */
   dailyHelps: 20,
 } as const;

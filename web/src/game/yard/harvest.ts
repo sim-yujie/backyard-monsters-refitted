@@ -1,5 +1,6 @@
 import type { BaseLoadResponse, BuildingData, ResourceCaps, Resources } from "@/api/types";
 import { maxHealth } from "./buildingArt";
+import type { YardKind } from "./buildingCostData";
 import { rowOf } from "./buildingCosts";
 import { savedAtOf } from "./jobs";
 
@@ -122,14 +123,15 @@ interface HarvesterSetup {
 const setupOf = (
   building: BuildingData,
   save: Pick<BaseLoadResponse, "buildinghealthdata">,
+  kind: YardKind = "main",
 ): HarvesterSetup | null => {
   const type = Number(building.t);
   if (!isHarvester(type)) return null;
-  const stats = rowOf(type)?.[6];
+  const stats = rowOf(type, kind)?.[6];
   if (!stats) return null;
 
   const level = levelOf(building);
-  const max = maxHealth(type, Math.max(1, level)) ?? undefined;
+  const max = maxHealth(type, Math.max(1, level), kind) ?? undefined;
   const health =
     finite(save.buildinghealthdata?.[String(building.id)]) ?? finite(building.hp) ?? undefined;
   const baseCycle = Math.max(1, at(stats.cycleTime, level));
@@ -156,14 +158,17 @@ const overdriveEnd = (save: Pick<BaseLoadResponse, "storedata">): number | undef
  * {@link harvesterNow} fills its buffer with. Zero while it does not run
  * (being built, upgraded or fortified, or under half health); doubled while
  * the Production Overdrive runs at `now`. A full buffer does not zero it: it
- * is what the harvester makes as long as it is banked.
+ * is what the harvester makes as long as it is banked. On the Inferno yard
+ * (`kind`) its Bone Cruncher, Coal Extractor, Sulfur Swirler and Magma Pump
+ * run at the Inferno table's rates, as the server's catch-up runs them.
  */
 export const harvesterPerHour = (
   building: BuildingData,
   save: Pick<BaseLoadResponse, "buildinghealthdata" | "storedata">,
   now: number,
+  kind: YardKind = "main",
 ): { readonly resource: HarvestKey; readonly perHour: number } | null => {
-  const setup = setupOf(building, save);
+  const setup = setupOf(building, save, kind);
   if (!setup) return null;
   const resource = `r${setup.type}` as HarvestKey;
   if (!setup.runs) return { resource, perHour: 0 };

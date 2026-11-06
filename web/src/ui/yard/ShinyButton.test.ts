@@ -82,6 +82,18 @@ describe("ShinyButton", () => {
     expect(button.armed).toBe(true);
   });
 
+  it("keeps its width while armed, so the second tap does not land on a neighbour", () => {
+    const { button, clock } = make();
+    vi.spyOn(button.element, "getBoundingClientRect").mockReturnValue({ width: 285 } as DOMRect);
+    button.element.click();
+    expect(button.element.style.minWidth).toBe("285px");
+    clock.fire();
+    expect(button.element.style.minWidth).toBe("");
+    button.element.click();
+    button.element.dispatchEvent(new Event("blur"));
+    expect(button.element.style.minWidth).toBe("");
+  });
+
   it("blur and Escape disarm", () => {
     const { button } = make();
     button.element.click();

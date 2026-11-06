@@ -27,16 +27,48 @@ const em = {
   fork: () => ({ findOne: async () => null, flush: async () => {} }),
 };
 
+/** Redis keys the sign-in back-off keeps: key -> value and seconds left. */
+const kept = new Map<string, { value: string; ttl: number }>();
+
 mock.module("../../server.js", () => ({
   postgres: { em },
   redis: {
-    get: async () => null,
-    set: async () => "OK",
+    get: async (key: string) => kept.get(key)?.value ?? null,
+    exists: async (key: string) => kept.has(key),
+    set: async (key: string, value: string, ex?: string, seconds?: string) => {
+      if (ex === "EX") kept.set(key, { value, ttl: Number(seconds) });
+      return "OK";
+    },
     setex: async () => "OK",
-    del: async () => 0,
-    sadd: async () => 1,
-    srem: async () => 1,
-    smembers: async () => [],
+    del: async (...keys: string[]) => keys.filter((key) => kept.delete(key)).length,
+    incr: async (key: string) => {
+      const next = Number(kept.get(key)?.value ?? 0) + 1;
+      kept.set(key, { value: String(next), ttl: kept.get(key)?.ttl ?? -1 });
+      return next;
+    },
+    expire: async (key: string, seconds: number) => {
+      const entry = kept.get(key);
+      if (entry) entry.ttl = seconds;
+      return entry ? 1 : 0;
+    },
+    ttl: async (key: string) => kept.get(key)?.ttl ?? -2,
+    sadd: async (key: string, member: string) => {
+      const members = new Set((kept.get(key)?.value ?? "").split(",").filter(Boolean)).add(member);
+      kept.set(key, { value: [...members].join(","), ttl: kept.get(key)?.ttl ?? -1 });
+      return 1;
+    },
+    srem: async (key: string, member: string) => {
+      const entry = kept.get(key);
+      if (entry) entry.value = entry.value.split(",").filter((one) => one && one !== member).join(",");
+      return 1;
+    },
+    smembers: async (key: string) => (kept.get(key)?.value ?? "").split(",").filter(Boolean),
+    hincrby: async (key: string, field: string, by: number) => {
+      const hash = JSON.parse(kept.get(key)?.value ?? "{}") as Record<string, number>;
+      hash[field] = (hash[field] ?? 0) + by;
+      kept.set(key, { value: JSON.stringify(hash), ttl: kept.get(key)?.ttl ?? -1 });
+      return hash[field];
+    },
   },
 }));
 mock.module("../../utils/logger.js", () => ({
@@ -44,6 +76,7 @@ mock.module("../../utils/logger.js", () => ({
 }));
 
 const { login } = await import("./login.js");
+const { clearAllLoginFailures } = await import("../../services/auth/loginBackoff.js");
 
 const PASSWORD = "hunter22!";
 const HASH = await bcrypt.hash(PASSWORD, 4);
@@ -51,10 +84,10 @@ const HASH = await bcrypt.hash(PASSWORD, 4);
 const saved: Record<string, string | undefined> = {};
 const SWITCHES = ["ENV", "REQUIRE_DISCORD_VERIFICATION", "DISCORD_TOKEN", "SECRET_KEY"];
 
-const run = async (password = PASSWORD) => {
+const run = async (password = PASSWORD, email = "player@example.com", ip = "127.0.0.1") => {
   const ctx = {
-    request: { body: { email: "player@example.com", password } },
-    ip: "127.0.0.1",
+    request: { body: { email, password } },
+    ip,
     get: () => "test",
   } as unknown as Context & { body: Row };
   try {
@@ -83,6 +116,7 @@ beforeEach(() => {
     discord_id: null,
   };
   botIds = [];
+  kept.clear();
 });
 
 afterEach(() => {
@@ -164,5 +198,214 @@ describe("login does not say which emails have an account (issue #317)", () => {
     const wrongPassword = await run("not-the-password");
     const none = await run("");
     expect(none.message).toBe(wrongPassword.message);
+  });
+});
+
+describe("sign-in back-off per email and address (security audit 2026-10-29, L2)", () => {
+  const EMAIL = "player@example.com";
+  const HOME = "127.0.0.1";
+  const STRANGER = "203.0.113.9";
+  const PAUSE = `login-pause:${EMAIL}|${HOME}`;
+  const FAILURES = `login-failures:${EMAIL}|${HOME}`;
+  const wrong = (ip = HOME, email = EMAIL) => run("not-the-password", email, ip);
+
+  test("five wrong passwords, then a short pause that refuses even the right one", async () => {
+    for (let at = 0; at < 5; at++) expect((await wrong()).status).toBe(409);
+
+    const paused = await run();
+    expect(paused.status).toBe(429);
+    expect(paused.message).toContain("1 minute");
+    expect(kept.get(PAUSE)?.ttl).toBe(30);
+  });
+
+  test("a stranger pausing the email does not stop the player on their own connection", async () => {
+    for (let at = 0; at < 12; at++) await wrong(STRANGER);
+    expect((await run(PASSWORD, EMAIL, STRANGER)).status).toBe(429);
+
+    expect((await run(PASSWORD, EMAIL, HOME)).status).toBe(200);
+    // And the player's sign-in does not lift the stranger's pause.
+    expect((await run(PASSWORD, EMAIL, STRANGER)).status).toBe(429);
+  });
+
+  test("a password reset lifts the pause from every address", async () => {
+    for (let at = 0; at < 5; at++) {
+      await wrong(HOME);
+      await wrong(STRANGER);
+    }
+    expect((await run(PASSWORD, EMAIL, HOME)).status).toBe(429);
+
+    await clearAllLoginFailures(EMAIL);
+
+    expect((await run(PASSWORD, EMAIL, HOME)).status).toBe(200);
+    expect((await run(PASSWORD, EMAIL, STRANGER)).status).toBe(200);
+    expect([...kept.keys()].filter((key) => key.includes(EMAIL) && !key.startsWith("login-known:"))).toEqual([]);
+  });
+
+  test("a try during the pause is not counted, and skips the password check", async () => {
+    for (let at = 0; at < 5; at++) await wrong();
+    const compare = spyOn(bcrypt, "compare");
+    await wrong();
+    await wrong();
+    expect(compare).not.toHaveBeenCalled();
+    compare.mockRestore();
+    expect(kept.get(FAILURES)?.value).toBe("5");
+  });
+
+  test("each wrong password after a pause doubles it, up to 15 minutes", async () => {
+    const pauses: number[] = [];
+    for (let at = 0; at < 12; at++) {
+      await wrong();
+      pauses.push(kept.get(PAUSE)?.ttl ?? 0);
+      kept.delete(PAUSE); // the pause runs out
+      kept.delete(`login-network-pause:${EMAIL}|127.0.0.0/24`); // and so does the network's, past 10
+    }
+    expect(pauses).toEqual([0, 0, 0, 0, 30, 60, 120, 240, 480, 900, 900, 900]);
+    expect(kept.get(FAILURES)?.ttl).toBe(15 * 60);
+  });
+
+  test("the right password forgets the wrong ones from that address", async () => {
+    for (let at = 0; at < 4; at++) await wrong();
+    expect((await run()).status).toBe(200);
+    expect(kept.has(FAILURES)).toBe(false);
+    for (let at = 0; at < 4; at++) await wrong();
+    expect((await run()).status).toBe(200);
+  });
+
+  test("an email with no account is paused the same way, so the pause says nothing", async () => {
+    user = null as unknown as Row;
+    for (let at = 0; at < 5; at++) await wrong(HOME, "nobody@example.com");
+    expect((await run(PASSWORD, "nobody@example.com")).status).toBe(429);
+  });
+
+  test("one email's pause does not touch another's", async () => {
+    for (let at = 0; at < 5; at++) await wrong(HOME, "other@example.com");
+    expect((await run()).status).toBe(200);
+  });
+});
+
+describe("account-wide sign-in pause (security audit 2026-10-29, L2)", () => {
+  const EMAIL = "player@example.com";
+  const HOME = "127.0.0.1";
+  /** Ten addresses on ten networks, five wrong passwords each: the account-wide 50 in an hour. */
+  const sprayFromTenAddresses = async () => {
+    for (let address = 1; address <= 10; address++) {
+      for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, `198.51.${address}.1`);
+    }
+  };
+  const ACCOUNT = `login-account-failures:${EMAIL}`;
+
+  test("many addresses trip it: a new address is refused even with the right password", async () => {
+    await sprayFromTenAddresses();
+    expect(kept.get(`login-account-failures:${EMAIL}`)?.value).toBe("50");
+
+    const stranger = await run(PASSWORD, EMAIL, "203.0.113.50");
+    expect(stranger.status).toBe(429);
+    expect(stranger.message).toContain("60 minutes");
+  });
+
+  test("an address the player signed in from still gets in with the right password", async () => {
+    expect((await run(PASSWORD, EMAIL, HOME)).status).toBe(200);
+    await sprayFromTenAddresses();
+
+    expect((await run(PASSWORD, EMAIL, HOME)).status).toBe(200);
+    expect((await run(PASSWORD, EMAIL, "203.0.113.50")).status).toBe(429);
+  });
+
+  test("below the line nobody is refused, and other emails are untouched", async () => {
+    for (let address = 1; address <= 9; address++) {
+      for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, `198.51.${address}.1`);
+    }
+    expect((await run(PASSWORD, EMAIL, "203.0.113.50")).status).toBe(200);
+
+    await sprayFromTenAddresses();
+    expect((await run(PASSWORD, "other@example.com", "203.0.113.50")).status).toBe(200);
+  });
+
+  test("a password reset lifts it", async () => {
+    await sprayFromTenAddresses();
+    await clearAllLoginFailures(EMAIL);
+    expect((await run(PASSWORD, EMAIL, "203.0.113.50")).status).toBe(200);
+  });
+
+  test("IPv6 addresses in one /64 share a count; another /64 does not", async () => {
+    for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, `2001:db8:1:2::${at + 1}`);
+
+    expect((await run(PASSWORD, EMAIL, "2001:db8:1:2:ffff:ffff:ffff:ffff")).status).toBe(429);
+    expect((await run(PASSWORD, EMAIL, "2001:db8:1:3::1")).status).toBe(200);
+    expect(kept.has(`login-pause:${EMAIL}|2001:db8:1:2::/64`)).toBe(true);
+  });
+
+  test("one IPv4 /24 adds at most 10 to the count, however many addresses it uses", async () => {
+    for (let address = 1; address <= 30; address++) {
+      for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, `198.51.100.${address}`);
+    }
+    expect(kept.get(ACCOUNT)?.value).toBe("10");
+    expect((await run(PASSWORD, EMAIL, "203.0.113.50")).status).toBe(200);
+  });
+
+  test("one IPv6 /48 adds at most 10 to the count, across its /64s", async () => {
+    for (let net = 1; net <= 30; net++) {
+      for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, `2001:db8:5:${net}::1`);
+    }
+    expect(kept.get(ACCOUNT)?.value).toBe("10");
+    expect((await run(PASSWORD, EMAIL, "203.0.113.50")).status).toBe(200);
+  });
+
+  test("a password reset also forgets each network's share and lifts its pause", async () => {
+    for (let address = 1; address <= 3; address++) {
+      for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, `198.51.100.${address}`);
+    }
+    expect((await run(PASSWORD, EMAIL, "198.51.100.4")).status).toBe(429);
+    await clearAllLoginFailures(EMAIL);
+    expect(kept.has(`login-network-failures:${EMAIL}`)).toBe(false);
+    expect(kept.has(`login-network-pause:${EMAIL}|198.51.100.0/24`)).toBe(false);
+
+    for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, "198.51.100.3");
+    expect(kept.get(ACCOUNT)?.value).toBe("5");
+  });
+
+  test("past its 10, rotating /64s inside one /48 pauses that whole network", async () => {
+    const KNOWN_IN_NETWORK = "2001:db8:5:ffff::1";
+    expect((await run(PASSWORD, EMAIL, KNOWN_IN_NETWORK)).status).toBe(200);
+    for (let net = 1; net <= 10; net++) await run("not-the-password", EMAIL, `2001:db8:5:${net}::1`);
+    expect(kept.has(`login-network-pause:${EMAIL}|2001:db8:5::/48`)).toBe(false);
+
+    await run("not-the-password", EMAIL, "2001:db8:5:11::1");
+    expect(kept.get(`login-network-pause:${EMAIL}|2001:db8:5::/48`)?.ttl).toBe(30);
+    const fresh = await run(PASSWORD, EMAIL, "2001:db8:5:12::1");
+    expect(fresh.status).toBe(429);
+    expect(fresh.message).toContain("wait 1 minute and");
+
+    expect((await run(PASSWORD, EMAIL, KNOWN_IN_NETWORK)).status).toBe(200);
+    expect((await run(PASSWORD, EMAIL, "2001:db8:6:1::1")).status).toBe(200);
+    expect((await run(PASSWORD, EMAIL, "203.0.113.50")).status).toBe(200);
+  });
+
+  test("each wrong password past a network's 10 doubles its pause, up to an hour", async () => {
+    const NETWORK_PAUSE = `login-network-pause:${EMAIL}|2001:db8:5::/48`;
+    const pauses: number[] = [];
+    for (let net = 1; net <= 19; net++) {
+      await run("not-the-password", EMAIL, `2001:db8:5:${net}::1`);
+      pauses.push(kept.get(NETWORK_PAUSE)?.ttl ?? 0);
+      kept.delete(NETWORK_PAUSE); // the pause runs out
+    }
+    expect(pauses).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 30, 60, 120, 240, 480, 960, 1920, 3600, 3600]);
+    expect(kept.get(ACCOUNT)?.value).toBe("10");
+  });
+
+  test("the pause lasts at most an hour from the first wrong password", async () => {
+    await sprayFromTenAddresses();
+    expect(kept.get(ACCOUNT)?.ttl).toBe(60 * 60);
+
+    kept.get(ACCOUNT)!.ttl = 60; // 59 minutes later
+    for (let at = 0; at < 5; at++) await run("not-the-password", EMAIL, "192.0.2.1");
+    expect(kept.get(ACCOUNT)?.ttl).toBe(60);
+    expect((await run(PASSWORD, EMAIL, "203.0.113.50")).message).toContain("wait 1 minute and");
+  });
+
+  test("a count left with no expiry gets one, so the pause cannot last for ever", async () => {
+    kept.set(ACCOUNT, { value: "60", ttl: -1 });
+    await run("not-the-password", EMAIL, "192.0.2.1");
+    expect(kept.get(ACCOUNT)).toEqual({ value: "61", ttl: 60 * 60 });
   });
 });

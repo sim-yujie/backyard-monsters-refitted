@@ -1,0 +1,18 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint ONE empty game WINDOW (a pop-up panel for the game's interface), as a SQUARE image 1024x1024. The window fills the image, with about 40 px of green all round it.
+
+Style "Flash refreshed": the old Flash game's light pop-ups, redrawn crisp and richer. The window is a warm CREAM PARCHMENT panel (light cream, faint paper grain) with gently rounded corners, a THICK dark chocolate-brown outline (about 16 px), and just inside it a lighter tan bevel band with a thin line, like a picture-frame edge. In each corner a small carved, slightly yellowed BONE ornament (curled bone with a leather strap) wraps over the border, as on the old game's frame. Fill: smooth light cream parchment.
+Title banner: a red cloth RIBBON with folded swallow-tail ends and a darker red underside, as the old game's 'NEW!' ribbon. Big main button: a chunky glossy ORANGE-YELLOW pill-shaped rounded rectangle (yellow top fading to orange at the bottom), thick dark brown outline, white shine on top, a darker orange raised bottom edge. Small button: the same shape in glossy GREEN. Close button: a round glossy RED button with a white X and a dark outline. Tabs: cream parchment with the dark brown outline (selected), tan / khaki darker (not selected). Resource chip: a dark chocolate-brown pill with a lighter brown bevel edge.
+
+Inputs: flash.png shows the OLD Flash game's own interface art: a tan parchment window with carved bone corners, a plain cream pop-up, the red 'NEW!' ribbon, round red close button, wooden YES/NO buttons and a yellow note. Use it only as loose inspiration for the style; redraw everything new, crisp and richer. finish.png shows today's painted game art (monsters and icons): match its painting finish, not its subjects.
+
+Rules for the window, because it will be cut into a 9-slice and stretched to any size:
+- Each of the four border sides looks the same all along its length (a pattern that can repeat), so a middle piece of each side can be repeated.
+- The four corners may carry bigger decoration, but keep each corner's decoration inside about 170 px from the corner.
+- The middle of the window is a plain, quiet fill with no objects, no pictures and no decoration, so text and icons can sit on it. The fill must look the same everywhere in the middle (no vignette, no big light spot).
+- The window's outside edge is crisp against the green; nothing sticks out more than about 30 px past the border.
+
+It is for the browser game Backyard Monsters (cartoony, colourful monster world; the old Flash game had chunky painted interface art). Painting finish: the same hand-painted, slightly glossy cartoon game-art finish as the game's painted icons and monsters in finish.png (bold shapes, soft shading, light from the upper left, a crisp dark outline round each piece). Everything is seen straight on, flat, front view (no perspective, no tilt).
+
+Background everywhere: flat pure green #00FF00, no shadow on the background. The painting itself must contain no bright pure green. No text, no letters, no numbers, no symbols except where asked, no icons on the pieces.

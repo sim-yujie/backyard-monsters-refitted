@@ -36,8 +36,38 @@ import {
   lootAuraBonus,
 } from "./champions.js";
 import { BRAIN_KEYS, brainBase } from "./brain.js";
+import {
+  DECOY_BUILDING_REACH,
+  DECOY_FRAME_TICKS,
+  decoyPlan,
+  decoyStandPoint,
+  decoyTouchesBuilding,
+} from "./decoy.js";
+import type { DecoyPlan } from "./decoy.js";
+import { DESCENT_BURN_INTERVAL, burnsInDescent, descentBurnShare } from "./descentBurn.js";
+import { DECOY, JARS, VACUUM } from "./siege.js";
+import type { SiegeId } from "./siege.js";
+import {
+  JAR_CHECK_TICKS,
+  JAR_FRAMES,
+  JAR_TOWER_TYPES,
+  jarFrame,
+  jarShot,
+  jarsPlan,
+} from "./jars.js";
+import {
+  VACUUM_FRAME_TICKS,
+  VACUUM_TARGET_TYPES,
+  shootsHose,
+  vacuumGain,
+  vacuumHoseY,
+  vacuumLootCap,
+  vacuumPlan,
+  vacuumTake,
+} from "./vacuum.js";
+import type { VacuumPlan } from "./vacuum.js";
 import type { BrainKey, BrainWeights, ChampionLesson } from "./brain.js";
-import { buildPathGrid, pointTarget } from "./grid.js";
+import { buildPathGrid, cellOf, pointTarget } from "./grid.js";
 import {
   cannotBeat,
   exposure,
@@ -66,6 +96,8 @@ import {
   RETREAT_GRACE_SECONDS,
   STORAGE_TYPES,
   TARGET_GROUP,
+  SPECIALIST_DAMAGE_MULTIPLIER,
+  HUNT_DAMAGE_MULTIPLIER,
   TOWER_ACQUIRE_TICKS,
   TOWER_REARM_MULTIPLIER,
   TRAP_RETARGET_TICKS,
@@ -96,6 +128,17 @@ import {
   RAILGUN_SEGMENT,
   RAILGUN_SEGMENTS,
   RAILGUN_TYPE,
+  BALTHAZAR_ID,
+  KING_WORMZER_ID,
+  KING_WORMZER_MULTIPLIER,
+  SABNOX_ID,
+  HOUSING_BUNKER_INTERCEPTORS,
+  HOUSING_BUNKER_TARGETS,
+  HOUSING_BUNKER_TYPE,
+  QUAKE_ANIM_FRAMES,
+  QUAKE_FRAME_TICKS,
+  QUAKE_TOWER_TYPE,
+  quakeDamage,
   AERIAL_DEFENSE_TYPE,
   AERIAL_SHOT_TICKS,
   aerialSalvo,
@@ -165,6 +208,7 @@ import {
   oldStyleTargets,
   towerTargets,
   shellBlastTargets,
+  QUAKE_TARGETS,
   TRAP_TARGETS,
 } from "./targeting.js";
 import {
@@ -202,15 +246,22 @@ import {
   BOLT_ID,
   BOUNCE_RADIUS,
   BRAIN_ID,
+  CRABATRON_ID,
+  CRIT_MULTIPLIER,
   DAVE_ID,
   EYE_RA_ID,
   FANG_ID,
   FINK_ID,
   FINK_RADIUS,
+  ICHI_ID,
+  OCTO_ID,
+  POKEY_ID,
   PROJECT_X_ID,
   PROJECT_X_RADIUS,
+  SWARM_SIZE,
   TERATORN_ID,
   VENOM_INTERVAL_SECONDS,
+  WEAKEN_SECONDS,
   WORMZER_ID,
   WORMZER_RADIUS,
   airburstPercent,
@@ -220,11 +271,15 @@ import {
   blinkRouteLimit,
   bounceCount,
   cloakDelaySeconds,
+  critChance,
   daveRange,
   finkExtraTargets,
   projectXMultiplier,
   rankOf,
+  swarmSpeedShare,
+  thornsShare,
   venomShare,
+  weakenShare,
   wormzerMultiplier,
 } from "./specialMoves.js";
 
@@ -263,11 +318,18 @@ import {
  * Each is a deliberate simplification, cited, and each is a candidate for a
  * later pass rather than a bug.
  *
- * 1. **Projectiles land instantly.** A tower's `speed` is the flight time of
- *    its shot (`client/scripts/BTOWER.as:107`); the engine applies the damage
- *    on the tick the tower fires. A creep that would have outrun a slow shell
- *    does not here, so slow towers are slightly stronger and a creep killed by
- *    a shot already in the air dies a few ticks earlier.
+ * 1. **Tower shells fly, as Flash's do, but from fresh.** The Cannon, Sniper,
+ *    Aerial Defense, Inferno Cannon and Magma shots are shells that home on
+ *    their target at half their `speed` a loop (`BTOWER.as:107`,
+ *    `PROJECTILE.as`, `FIREBALL.as`) and hurt when they land; one whose target
+ *    has died is wasted. The Laser, Tesla, Railgun and Quake hurt at once, as
+ *    in Flash. Where it is not Flash: Flash pools its shells and a reused one
+ *    keeps its old frame count and heading, where every shell here starts
+ *    fresh (as the Spurtz's do, note 18); a flyer's height leaves out its
+ *    five-pixel bob; and a shell at a monster that retreated is gone, as the
+ *    monster is (note 7). A splash shell blasts where it lands, short of its
+ *    target and, at a flyer, up in the air, as Flash's does; that one quirk
+ *    hangs off {@link SHELL_BLASTS_WHERE_IT_LANDS}.
  * 2. **Unit steps use a normalised vector, not `cos(atan2(…))`.** The client
  *    advances `_tmpPoint`, a screen point, by `cos(atan2(dy, dx)) * speed` and
  *    the matching sine (`CreepBase.as:1679-1680`), which is the unit vector
@@ -303,7 +365,8 @@ import {
  *    rather than walked to the edge (`ATTACK.as:237-240`). It deals no more
  *    damage either way.
  * 8. **Not modelled at all**, each because it is out of Map Room 2's scope:
- *    the Stronghold's four emitters, every siege weapon, and the per-creep
+ *    the Stronghold's four emitters (the siege weapons are, Inferno WP 6.5 to
+ *    6.7, {@link BattleOptions.siege}), and the per-creep
  *    `_hitLimit`, even for a raid (note 17, owner decision 2026-10-06). A yard
  *    holding one of those buildings fires it as an ordinary single-target
  *    tower. The Monster Lab's moves (Brain's cloak, Bolt's blink, Fang's
@@ -338,8 +401,8 @@ import {
  * 11. **The looting property.** A creep loots at 0.5 and a resource
  *    specialist or a champion at 2 (`MonsterBase.as:260`, `CreepBase.as:224-226`,
  *    `ChampionBase.as:221`), Krallen included, whose `_lootMults` is never read
- *    (issue #178). Krallen's aura adds to it (note 12); the Vacuum's
- *    `lootBonus`, a siege weapon, is not modelled.
+ *    (issue #178). Krallen's aura adds to it (note 12). The Vacuum's
+ *    `lootBonus` is no looting property: it sucks the pool itself.
  * 12. **The champions' own behaviour (issue #222)**, from
  *    `com/monsters/monsters/champions/*.as` and the numbers in `champions.ts`:
  *    their target lists (`ChampionBase.findTarget`, Krallen's loot first) and
@@ -449,9 +512,11 @@ import {
  *    them walk 1.5 times as fast and swing 1.5 times as often
  *    (`HyperSpeed.as`). The defender's boosts are its yard's; the attacker's
  *    are its main yard's, copied at attack start (`GLOBAL.as:816-822`,
- *    `MonsterBase.updateBuffs`, `:799-845`), and a wild raid has none. Where
- *    it is not Flash: a boost runs the whole battle if it was running when the
- *    battle began, where Flash's stops the moment it runs out.
+ *    `MonsterBase.updateBuffs`, `:799-845`), and a wild raid has none. Each
+ *    runs for the whole seconds it had left at the start ({@link BuffSpan}),
+ *    as in Flash: Tower Overdrive is looked at on every shot and stops the
+ *    moment it runs out; a monster's boosts are the ones on when it joins the
+ *    field, and it keeps them, since Flash never takes the modifiers off.
  * 20. **Walls block a shot on foot, as Flash's do (owner decision
  *    2026-10-23).** An attacker on foot shoots a building only with no
  *    standing Wall between it and the building's anchor, the target aside
@@ -487,7 +552,10 @@ import {
  * The union is `types.ts`'s {@link FlingEvent}, which is the §3.10 contract the
  * web client's attack flow (issue #32) builds against. The engine consumes it
  * directly rather than restating it, so the two cannot drift apart. A `siege`
- * event is accepted and ignored (fidelity note 8). A raid battle's waves are
+ * event drops the Decoy, the Vacuum or the Jars at the attacker's level
+ * ({@link BattleOptions.siege}); any other weapon, or one with no level, is
+ * accepted and ignored (fidelity
+ * note 8). A raid battle's waves are
  * the server's own {@link RaidEvent}s (fidelity note 17).
  */
 export type AttackEvent = FlingEvent | RaidEvent;
@@ -563,23 +631,86 @@ export interface BattleOptions {
    * attacker never has any.
    */
   readonly buffs?: BattleBuffs;
+  /**
+   * Map Room 2's neighbour defence bonus (`docs/mr2-neighbours.md`): what the
+   * friendly cells around the defending cell add to its defence, as the attack
+   * load froze it ({@link DefenceBonus}). Absent, or both parts 0, the battle
+   * runs exactly as it did before the bonus existed.
+   */
+  readonly defenceBonus?: DefenceBonus;
+  /**
+   * The attacker's Siege Lab levels per weapon (Inferno WP 6.5 to 6.7): what a
+   * `siege` event fights at. An absent weapon, or none at all, is level 0,
+   * and its event is ignored, so a log from before the Decoy replays as it did.
+   */
+  readonly siege?: Readonly<Partial<Record<SiegeId, number>>>;
+  /**
+   * The Descent yard fought, 1 to 13 (Inferno WP 1.21): from yard 7 its burn
+   * takes health from every surface monster (`descentBurn.ts`). Absent for
+   * any fight outside the Descent, which then burns nothing.
+   */
+  readonly descentYard?: number;
+  /** Overrides {@link SHELL_BLASTS_WHERE_IT_LANDS} for this battle; absent, it holds. */
+  readonly shellBlastsWhereItLands?: boolean;
 }
 
 /**
  * The boosts one side's shop items give it in a battle (fidelity note 19):
  * Tower Overdrive (`TOD`), Monster Overdrive (`MOD`), the Monster Defensive
- * Buff (`MDOD`) and the Monster Speed Buff (`MSOD`). Each is on or absent.
+ * Buff (`MDOD`) and the Monster Speed Buff (`MSOD`). Each is a {@link BuffSpan}
+ * or absent.
  */
 export interface SideBuffs {
   /** Tower Overdrive: the side's towers do {@link TOWER_OVERDRIVE} times the damage. */
-  readonly towerDamage?: boolean;
+  readonly towerDamage?: BuffSpan;
   /** Monster Overdrive: its monsters do {@link MONSTER_OVERDRIVE} times the damage. */
-  readonly monsterDamage?: boolean;
+  readonly monsterDamage?: BuffSpan;
   /** Monster Defensive Buff: its monsters take {@link MONSTER_ARMOUR_BUFF} off every hit. */
-  readonly monsterArmour?: boolean;
+  readonly monsterArmour?: BuffSpan;
   /** Monster Speed Buff: its monsters walk and swing {@link MONSTER_SPEED_BUFF} times as fast. */
-  readonly monsterSpeed?: boolean;
+  readonly monsterSpeed?: BuffSpan;
 }
+
+/**
+ * How long a boost runs (fidelity note 19): the whole seconds it had left
+ * when the battle began, its end `e` less the start, or `true` for the whole
+ * battle, which is what a defence frozen before boosts could run out holds;
+ * `false` is off.
+ */
+export type BuffSpan = boolean | number;
+
+/**
+ * Whether a boost is on at `tick`: Flash's `boost.Get() >= GLOBAL.Timestamp()`
+ * (`BUILDING20.as:29`, `MonsterBase.as:802`), with the clock in whole seconds
+ * from the battle's start.
+ */
+export const buffOn = (span: BuffSpan | undefined, tick: number): boolean =>
+  span === true || (typeof span === "number" && Math.trunc(tick / TICKS_PER_SECOND) <= span);
+
+/**
+ * A defence bonus as fractions (`docs/mr2-neighbours.md`): `damage` 0.08 makes
+ * every tower shot 1.08 times as hard, on top of Tower Overdrive; `hp` 0.08
+ * makes every building take 1 / 1.08 of each hit, as if it had 1.08 times its
+ * health, after fortification. Neither changes a building's stored health, its
+ * health bar's ceiling or the loot it holds: it only takes longer to empty.
+ */
+export interface DefenceBonus {
+  readonly damage?: number;
+  readonly hp?: number;
+  /**
+   * Tower range, from a Map Room 2 land feature (`landFeatures.ts`): -0.1
+   * makes every tower reach `int(range * 90 / 100)`, after the cell's height.
+   */
+  readonly range?: number;
+}
+
+/**
+ * One part of a {@link DefenceBonus} as the battle uses it: 0 when absent or
+ * unreadable, and 0 for -100% or less, which no table gives. A land feature
+ * can lower a part (marsh: -10% health), so a share between -1 and 0 counts.
+ */
+export const bonusShare = (share: number | undefined): number =>
+  typeof share === "number" && Number.isFinite(share) && share > -1 ? share : 0;
 
 /** Each side's boosts ({@link SideBuffs}); the attacker's towers never fire. */
 export interface BattleBuffs {
@@ -786,7 +917,7 @@ export interface CreepSnapshot {
   readonly targetBuilding: number;
   /** The creep it is on — a defender's quarry — or -1. */
   readonly targetCreep: number;
-  /** Korath's flame is on it (issue #222). */
+  /** Korath's flame (issue #222) or the Descent burn (Inferno WP 1.21) is on it. */
   readonly burning?: boolean;
   /** Inside Fomor's enrage aura: faster, and harder to hurt. */
   readonly enraged?: boolean;
@@ -806,6 +937,12 @@ export interface CreepSnapshot {
   readonly blinking?: boolean;
   /** Fang's venom stacks on it; absent when it is not poisoned (issue #352). */
   readonly poisonStacks?: number;
+  /** Malphus mid-hop over a wall: ticks since it took off, under {@link HOP_TICKS}. */
+  readonly hop?: number;
+  /** A ranked Pokey in a swarm of 5 or more on one target, swinging faster (Lab "Swarm"). */
+  readonly swarming?: boolean;
+  /** Oozed by an Octo-ooze it killed: dealing less damage for a while (Lab "Weakening Ooze"). */
+  readonly weakened?: boolean;
 }
 
 /**
@@ -851,6 +988,56 @@ export type BattleVisualEvent =
       readonly towerId: number;
     }
   | {
+      /**
+       * A Quake Tower's wind-up drew strip cell `cell` (`INFERNOQUAKETOWER.TickAttack`,
+       * `:107-122`): a cell every 6 ticks, the last few every tick, as it raises its
+       * hammer. Drawing only.
+       */
+      readonly kind: "towerCell";
+      readonly tick: number;
+      readonly towerId: number;
+      readonly cell: number;
+    }
+  | {
+      /**
+       * A Quake Tower's quake went off (`DelayedFire`, `:137-159`): rings out to
+       * `radius` round the tower (`QuakeGraphic`) and the tower shakes. Drawing only.
+       */
+      readonly kind: "towerQuake";
+      readonly tick: number;
+      readonly towerId: number;
+      readonly radius: number;
+    }
+  | {
+      /**
+       * A Tesla Tower stopped zapping and winds down (drawing only). `rearmBy`
+       * is the latest tick its next charge can begin if a target is still in
+       * reach, its charge spent; null when it stopped for want of a target.
+       */
+      readonly kind: "coilRest";
+      readonly tick: number;
+      readonly towerId: number;
+      readonly rearmBy: number | null;
+    }
+  | {
+      /**
+       * A Monster Bunker's door starts to open or to shut (drawing only), as
+       * the Flash one's `TickFast` drove it (`BUILDING22.as:433-455`). It is
+       * fully up {@link BUNKER_DOOR_FRAMES} frames after it starts to open,
+       * and only then does the bunker send a monster out.
+       */
+      readonly kind: "bunkerDoor";
+      readonly tick: number;
+      readonly buildingId: number;
+      readonly open: boolean;
+    }
+  | {
+      /** A bunker sent a monster out (drawing only). */
+      readonly kind: "release";
+      readonly tick: number;
+      readonly buildingId: number;
+    }
+  | {
       /** A creep landed a swing on a building or on another creep. */
       readonly kind: "hit";
       readonly tick: number;
@@ -870,6 +1057,10 @@ export type BattleVisualEvent =
       readonly flying: boolean;
       /** Health the swing took off, after fortification; 0 when it hit nothing. */
       readonly amount: number;
+      /** What a Crabatron's critical hit added to `amount`, after fortification. */
+      readonly bonus?: number;
+      /** What an Octo-ooze's weakening took off the swing, after fortification. */
+      readonly reduced?: number;
     }
   | {
       /** A creep lost health: a tower shot, splash, a trap, or another creep. */
@@ -881,6 +1072,28 @@ export type BattleVisualEvent =
       readonly ix: number;
       readonly iy: number;
       /** Health actually taken, capped at what the creep had left. */
+      readonly amount: number;
+      /** What a Crabatron's critical hit added to the blow. */
+      readonly bonus?: number;
+      /**
+       * What an Octo-ooze's weakening (a weakened tower or monster) or Fomor's
+       * enrage armour on the creep took off the blow.
+       */
+      readonly reduced?: number;
+      /** The blow is an Ichi's thorns: damage it reflected back at whoever hit it. */
+      readonly thorns?: boolean;
+    }
+  | {
+      /**
+       * An Ichi's thorns struck a tower (Lab "Thorns"): `amount`, after
+       * fortification, off the building that shot it, at its yard anchor.
+       */
+      readonly kind: "thorns";
+      readonly tick: number;
+      readonly creepId: number;
+      readonly buildingId: number;
+      readonly ix: number;
+      readonly iy: number;
       readonly amount: number;
     }
   | {
@@ -941,6 +1154,23 @@ export type BattleVisualEvent =
       readonly flying: boolean;
       readonly ix: number;
       readonly iy: number;
+    }
+  | {
+      /**
+       * Loot taken from a building by a hit or its fall (`ATTACK.Loot` with a
+       * building, `ATTACK.as:722-733`): the drawing pops an orb and a number
+       * there. `amount` is what the attacker banks, the low-level bonus in;
+       * `resource` is 1-4. `vacuum`: the Vacuum Hose took it, whose own ball
+       * is drawn by the hose (`ParticleVacuumLoot`), so only the number shows.
+       * A storage building's fall passes no building in Flash
+       * (`BSTORAGE.as:140`), so it makes none.
+       */
+      readonly kind: "loot";
+      readonly tick: number;
+      readonly buildingId: number;
+      readonly resource: number;
+      readonly amount: number;
+      readonly vacuum: boolean;
     };
 
 /** A beam's line, yard units at both ends. */
@@ -959,6 +1189,46 @@ export interface BeamLine {
 export interface LobLine extends BeamLine {
   readonly landTick: number;
   readonly scale: number;
+}
+
+/**
+ * The siege weapon on the field (Inferno WP 6.8), for the renderer and the
+ * attack screen's siege button. Reads only; the battle is unchanged by it.
+ */
+export interface SiegeSnapshot {
+  /** The weapon holding Flash's one siege slot (`SiegeWeapons.activeWeaponID`), or null. */
+  readonly active: SiegeId | null;
+  /** The Decoy until it blows up: its drop point in yard units and its clock. */
+  readonly decoy: {
+    readonly x: number;
+    readonly y: number;
+    readonly droppedAt: number;
+    readonly landsAt: number;
+    readonly explodesAt: number;
+    readonly range: number;
+  } | null;
+  /** The Vacuum's hose until it lets go: the building it hangs over and its health. */
+  readonly vacuum: {
+    readonly buildingId: number;
+    readonly droppedAt: number;
+    readonly endsAt: number;
+    readonly health: number;
+    readonly durability: number;
+    /** The resource its last frame took (1-4), for the balls drawn up it; null when none. */
+    readonly took: number | null;
+  } | null;
+  /**
+   * Every jar still on a tower, its strip included: `health` is null before
+   * it lands and once it breaks; `frame` is its cell of the 23-cell strip.
+   */
+  readonly jars: readonly {
+    readonly buildingId: number;
+    readonly landsAt: number;
+    readonly frame: number;
+    readonly breaking: boolean;
+    readonly health: number | null;
+    readonly durability: number;
+  }[];
 }
 
 /** How many ticks of shots and deaths a battle remembers: two seconds. */
@@ -990,11 +1260,38 @@ export interface Battle {
    * frame sees everything and one that does not sees the recent past.
    */
   recentEvents(sinceTick: number): readonly BattleVisualEvent[];
+  /** The siege weapon on the field right now (Inferno WP 6.8); a fresh copy per call. */
+  siege(): SiegeSnapshot;
+  /**
+   * What each standing Housing Bunker still holds right now, by building id
+   * and monster id: its pool, without the defenders it has out. The yard draws
+   * these pacing in its pen (`HOUSINGBUNKER.as`, whose dispatched creatures
+   * are the penned ones walking out). A fallen bunker is absent. Drawing
+   * only: not in the state or the checkpoint. A fresh copy per call.
+   */
+  bunkerPools(): Readonly<Record<number, Readonly<Record<string, number>>>>;
+  /**
+   * The towers an Octo-ooze's ooze is weakening right now (Lab "Weakening
+   * Ooze"), by building id, ascending. Drawing only. A fresh copy per call.
+   */
+  weakenedTowers(): readonly number[];
 }
 
 /* ── Internals ────────────────────────────────────────────────────────────── */
 
-type Behaviour = "attack" | "defend" | "bunker" | "heal" | "retreat";
+/**
+ * What kind of blow lands, for the Lab's abilities (owner, 2 Nov 2026): a
+ * plain `hit`; a Crabatron's `crit`, its double already in the damage; a
+ * damage-over-time tick (`dot`, venom or flame), which neither an Octo-ooze's
+ * ooze cuts nor an Ichi reflects; and an Ichi's `thorns`, never reflected again.
+ */
+type Blow = "hit" | "crit" | "dot" | "thorns";
+
+/** A blow an Octo-ooze's ooze can weaken and an Ichi can reflect: one struck, not a tick. */
+const struck = (blow: Blow): boolean => blow === "hit" || blow === "crit";
+
+/** `decoy`: a defender the Decoy holds ({@link BattleOptions.siege}). */
+type Behaviour = "attack" | "defend" | "bunker" | "heal" | "retreat" | "decoy";
 
 /** A building an Eye-ra's blast reached, and the health it took. */
 type BlastHit = readonly [EngineBuilding, number];
@@ -1133,6 +1430,12 @@ interface Creep {
   hasHelpTarget: boolean;
   /** A flying Fomor's waypoint is its ally's own point, which moves with it. */
   followHelper: boolean;
+  /**
+   * The standing wall a walking Fomor's route to its ally, or to its ally's
+   * building, ran into, by building id, or -1. It shoots that wall when it
+   * cannot shoot the building itself.
+   */
+  wallInWay: number;
   /** Where a champion walks back to when it leaves (`_spawnPoint`, `ChampionBase.as:115`). */
   spawnX: number;
   spawnY: number;
@@ -1155,6 +1458,25 @@ interface Creep {
    * for every other creep and for a Hybrid champion, which picks as Flash's.
    */
   weights: StanceWeights | null;
+  /**
+   * `k_sBHVR_HUNT` (`CreepBase.as:398-402`): an attacker whose target group
+   * was 6, Balthazar. It keeps the behaviour after its group falls through
+   * to 1, so its blows at a creep stay triple (`:884-886`).
+   */
+  hunts: boolean;
+  /**
+   * The cage slot of the penned champion a hunter is after (`findHuntingTargets`
+   * lists `CREATURES._guardian` in its cage too, `MonsterBase.as:960-965`), or -1.
+   */
+  huntPen: number;
+  /** Malphus: the tick its hop over a wall began (`CreepBase.as:1503-1528`), or -1. */
+  hopStart: number;
+  /** A ranked Pokey with 4 more Pokeys of its side on its target this tick (Lab "Swarm"). */
+  swarming: boolean;
+  /** Octo-ooze's ooze on the creep that killed one: the tick it wears off; 0 for none. */
+  weakUntil: number;
+  /** The share of its damage the ooze takes off while it lasts. */
+  weakShare: number;
 }
 
 /** A {@link ChampionLesson} as the battle builds it (issue #219). */
@@ -1212,12 +1534,19 @@ const NO_ABILITIES = {
   helpCreep: -1,
   hasHelpTarget: false,
   followHelper: false,
+  wallInWay: -1,
   spawnX: 0,
   spawnY: 0,
   homing: false,
   looking: false,
   surfaceChase: false,
   weights: null,
+  hunts: false,
+  huntPen: -1,
+  hopStart: -1,
+  swarming: false,
+  weakUntil: 0,
+  weakShare: 0,
 } as const;
 
 interface DefenderHome {
@@ -1250,6 +1579,8 @@ interface CageSlot {
   pen: CagePen | null;
   /** Its health and report tally (issue #22). */
   readonly report: DefenderChampionReport;
+  /** The hunter that struck it in its cage, by creep id, or -1: it comes out at it. */
+  provokedBy: number;
 }
 
 interface Tower {
@@ -1264,6 +1595,7 @@ interface Tower {
   /**
    * Its `_fireStage`. The Aerial Defense's: 1 while it reloads, 2 while it
    * fires a salvo. The Tesla's: 0 idle, 1 charging, 2 zapping, 3 winding down.
+   * The Quake Tower's: 0 idle, 1 winding up.
    */
   stage: number;
   /** Shots fired in the salvo under way, or zaps in the charge. */
@@ -1274,6 +1606,32 @@ interface Tower {
   charge: number;
   /** A Spurtz Cannon's gun (issue #313); null for every other tower. */
   gun: SpurtzGun | null;
+  /**
+   * A Quake Tower's own `_frameNumber`, counted only while it winds up
+   * ({@link QUAKE_TOWER_TYPE}); its wind-up is `stage` 1 and its strip cell
+   * `charge`.
+   */
+  quakeFrame: number;
+  /** `_targetVacuum`: it fires at the Vacuum's hose (Inferno WP 6.6). */
+  onHose: boolean;
+  /** Octo-ooze's ooze on a tower that killed one: the tick it wears off; 0 for none. */
+  weakUntil: number;
+  /** The share of its damage the ooze takes off while it lasts. */
+  weakShare: number;
+}
+
+/**
+ * One tower's Candy Jar (Inferno WP 6.7, `BTOWER._jarHealth`,
+ * `_jarAnimation`). `health` is null while it falls and once it is broken;
+ * `breaking` is its strip playing on from `frame` (`KillJar`).
+ */
+interface Jar {
+  readonly building: EngineBuilding;
+  readonly landsAt: number;
+  readonly durability: number;
+  health: number | null;
+  frame: number;
+  breaking: boolean;
 }
 
 /** A Spurtz Cannon's barrel, aim and brood (issue #313, `SpurtzCannon.as`). */
@@ -1314,6 +1672,107 @@ interface SpurtzShell {
   readonly scale: number;
 }
 
+/**
+ * A tower's shell in the air (fidelity note 1): the Cannon's, Sniper's,
+ * Aerial Defense's and Inferno Cannon's `PROJECTILE` (`PROJECTILE.as`), or the
+ * Magma Tower's `FIREBALL` (`FIREBALL.as:92-162`). It homes on its target and
+ * does its damage once it is within its `speed` of it.
+ */
+interface TowerShell {
+  readonly tower: Tower;
+  readonly target: Creep;
+  /** `_tmpX`, `_tmpY`: where it is, on screen. */
+  x: number;
+  y: number;
+  /** `_xChange`, `_yChange`: its move a loop, re-aimed every fifth frame. */
+  stepX: number;
+  stepY: number;
+  /** `_frameNumber`, which starts at 4 (`ProjectileBase.as:59`). */
+  frame: number;
+  /** Its `_maxSpeed`: it moves half of this a loop and lands within all of it. */
+  readonly speed: number;
+  /** `int(damage * scale)`, fixed when it was fired. */
+  readonly damage: number;
+  readonly splash: number;
+  /** What its blast may hurt. */
+  readonly flags: number;
+  /**
+   * A `FIREBALL` aims at the target's `_tmpPoint` itself; a `PROJECTILE` at
+   * where it is drawn, `_mc.x`, `_mc.y`, which are whole.
+   */
+  readonly exact: boolean;
+}
+
+/**
+ * The towers whose shot flies (fidelity note 1), with `_top`, how far above
+ * the anchor it leaves from. The Sniper's sits higher on an Inferno yard
+ * (`BUILDING21.as:15`). Every other tower hurts at once.
+ */
+const SHELL_TOP: Readonly<Record<number, number>> = {
+  20: -4, // BUILDING20.as:17
+  21: -30, // BUILDING21.as:15
+  115: -5, // BUILDING115.as:31
+  130: -25, // INFERNO_CANNON_TOWER.as:14
+  132: -30, // INFERNO_MAGMA_TOWER.as:34
+};
+/** Whether a tower's shot is a shell that hurts when it lands, not when fired. */
+export const towerShellFlies = (type: number): boolean => SHELL_TOP[type] !== undefined;
+/** The Sniper's `_top` on an Inferno yard. */
+const SNIPER_INFERNO_TOP = -60;
+/** The Magma Tower, whose shell is a `FIREBALL` (`INFERNO_MAGMA_TOWER.as:77`). */
+const MAGMA_TOWER_TYPE = 132;
+/**
+ * How high a flyer is drawn, which a shell aims at: `m_altitudeMax`, 108, or
+ * 40 for IC5 (`CreepBase.as:144-150`). The five-pixel bob is left out.
+ */
+const FLYER_ALTITUDE = 108;
+const FLYER_ALTITUDES: Readonly<Record<string, number>> = { IC5: 40 };
+/**
+ * Flash's splash-altitude quirk (fidelity note 1), on as in Flash: a splash
+ * shell blasts round the point it lands at, up to its `speed` short of its
+ * target and, at a flyer, up at the height the flyer is drawn, so its target
+ * takes only a share, a small one in the air. Off, it still flies, but blasts
+ * on its target as an instant shot does: the whole shot to the target, the
+ * blast round it. The owner has yet to choose; a battle may override it with
+ * {@link BattleOptions.shellBlastsWhereItLands}.
+ */
+export const SHELL_BLASTS_WHERE_IT_LANDS = true;
+/** A shell re-aims on every fifth frame (`PROJECTILE.as:36`, `FIREBALL.as:128`). */
+const SHELL_AIM_FRAMES = 5;
+
+/**
+ * A Monster Bunker picks among this many of the nearest (`FindTargets(3)`,
+ * `BUILDING22.as:341`).
+ */
+const BUNKER_TARGETS = 3;
+/**
+ * The monsters a Monster Bunker sends after a flyer, in the order it tries
+ * them (`BUILDING22.as:348-359`): DAVE, Eye-ra, Balthazar, IC7.
+ */
+const BUNKER_INTERCEPTORS: readonly string[] = ["C12", "C5", "IC5", "IC7"];
+/** Of those, the ones that go only with their Monster Lab power-up. */
+const BUNKER_POWERED_INTERCEPTORS: ReadonlySet<string> = new Set(["C12", "C5"]);
+
+/**
+ * A bunker's kinds in the order it walks them to pick one for a walker, the
+ * monster list's: C1 up, then the Inferno's IC1 up. Flash walks its
+ * `_monsters` Dictionary and keeps the last kind with one to release
+ * (`BUILDING22.as:360-365`); that Dictionary's order is the Flash player's
+ * own, which no save keeps, so the engine takes the list it was filled from
+ * in Map Room 3 (`GLOBAL.player.monsterList`, `:653-661`).
+ */
+const byMonsterList = (
+  [one]: readonly [string, number],
+  [other]: readonly [string, number],
+): number => {
+  const oneInferno = one.startsWith("I");
+  if (oneInferno !== other.startsWith("I")) return oneInferno ? 1 : -1;
+  const oneNumber = Number(one.replace(/^\D+/, ""));
+  const otherNumber = Number(other.replace(/^\D+/, ""));
+  if (oneNumber !== otherNumber) return oneNumber - otherNumber;
+  return one < other ? -1 : one > other ? 1 : 0;
+};
+
 /** A Laser Tower's beam still sweeping (issue #267), `LASER` in Flash. */
 interface LaserBeam {
   readonly tower: Tower;
@@ -1338,7 +1797,20 @@ interface Bunker {
   pool: Map<string, number>;
   dispatched: number;
   tickNumber: number;
+  /** Whether its door is open, for the drawing ({@link BattleVisualEvent} `bunkerDoor`). */
+  doorOpen: boolean;
+  /**
+   * `_animTick`, how far up a Monster Bunker's door is, in frames: 0 shut,
+   * {@link BUNKER_DOOR_FRAMES} fully open. It sends nothing out until then.
+   */
+  door: number;
 }
+
+/**
+ * Frames a Monster Bunker's door takes to open; it sends a monster out only once
+ * it is fully up (`_animTick >= 15`, `BUILDING22.as:204`, `:344`).
+ */
+export const BUNKER_DOOR_FRAMES = 15;
 
 /** The drop radius a payload earns: `max(200, bucket / 4) / 2` (`ATTACK.as:667-671`). */
 export const dropRadius = (bucketTotal: number): number =>
@@ -1446,6 +1918,24 @@ const creepReach = (range: number): number => Math.max(range * range, 2500);
 const CLOSE_FIGHT_SQUARED = 2500;
 
 /**
+ * Balthazar is at a building under 50 screen px from its `_position`, and
+ * otherwise flies to a point `30 + Math.random() * 10` px out from it
+ * (`MonsterBase.as:1130-1141`); the engine takes that radius's middle.
+ */
+const BALTHAZAR_REACH = 50;
+const BALTHAZAR_STOP = 35;
+
+/**
+ * Malphus's hop (`CreepBase.as:1508-1526`): a 0.4 s tween 60 px up, then a
+ * 0.4 s bounce back down. `_jumpingUp` holds for the first, `_jumping` for
+ * both, and `move()` speeds it up by three, then by two (`:1471-1478`).
+ */
+export const HOP_UP_TICKS = ticks(0.4);
+export const HOP_TICKS = ticks(0.8);
+const HOP_UP_SPEED = 3;
+const HOP_DOWN_SPEED = 2;
+
+/**
  * The creeps one can fight (issue #195): the other side, on the ground, and in
  * the air too unless it is a ground creep that swings in melee.
  */
@@ -1519,6 +2009,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const pendingZombies: Array<{ readonly corpse: Corpse; readonly raiser: Creep }> = [];
   /** Spurtz Cannon shells in the air, in the order fired (issue #313, `FIREBALLS`). */
   const spurtzShells: SpurtzShell[] = [];
+  /** The other towers' shells in the air, in the order fired (fidelity note 1). */
+  const towerShells: TowerShell[] = [];
+  const blastWhereItLands = options.shellBlastsWhereItLands ?? SHELL_BLASTS_WHERE_IT_LANDS;
   /** Spurtz hatched this step, on their feet at its end: screen points, whole. */
   const pendingSpurtz: Array<{ readonly tower: Tower; readonly x: number; readonly y: number }> =
     [];
@@ -1547,16 +2040,38 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   let puttied = 0;
   /*
    * Each side's shop boosts (fidelity note 19). A creep is the defender's when
-   * it is friendly; a wild raid's raiders have none of the player's.
+   * it is friendly; a wild raid's raiders have none of the player's. A
+   * monster gets the ones on when it joins the field and keeps them: Flash's
+   * `updateBuffs` adds a boost's modifier and never takes it off
+   * (`MonsterBase.as:799-845`), so one that runs out mid-battle only misses
+   * the monsters that come later.
    */
+  /*
+   * Map Room 2's neighbour bonus (`DefenceBonus`): 1 and 1 without one, which
+   * every multiplication and test below leaves exactly as it was.
+   */
+  const bonusDamage = 1 + bonusShare(options.defenceBonus?.damage);
+  const bonusToughness = 1 + bonusShare(options.defenceBonus?.hp);
+  /** The land feature's tower range change, whole percent (`landFeatures.ts`). */
+  const bonusRangePct = Math.round(100 * bonusShare(options.defenceBonus?.range));
+  /** What a building takes from `raw`: fortification, then the neighbour bonus. */
+  const buildingTakes = (raw: number, fortification: number): number => {
+    const dealt = fortifiedDamage(raw, fortification, 0);
+    return bonusToughness === 1 ? dealt : dealt / bonusToughness;
+  };
   const attackerBuffs: SideBuffs = (options.raid ? undefined : options.buffs?.attacker) ?? {};
   const defenderBuffs: SideBuffs = options.buffs?.defender ?? {};
-  const buffsOf = (creep: Creep): SideBuffs => (creep.friendly ? defenderBuffs : attackerBuffs);
-  /** Tower Overdrive on the defender's towers' damage, 1 without it. */
-  const towerBoost = defenderBuffs.towerDamage ? TOWER_OVERDRIVE : 1;
+  const boosted = (creep: Creep, buff: keyof SideBuffs): boolean =>
+    buffOn((creep.friendly ? defenderBuffs : attackerBuffs)[buff], creep.born);
+  /**
+   * Tower Overdrive on the defender's towers' damage, 1 without it: looked at
+   * on every shot, so it stops the moment it runs out (`BUILDING20.as:29`).
+   */
+  const towerBoost = (): number =>
+    (buffOn(defenderBuffs.towerDamage, tick) ? TOWER_OVERDRIVE : 1) * bonusDamage;
   /** Monster Overdrive (`MonsterDust.as`), on a creep as it joins the field. */
   const boostDamage = (creep: Creep): void => {
-    if (buffsOf(creep).monsterDamage) creep.damage *= MONSTER_OVERDRIVE;
+    if (boosted(creep, "monsterDamage")) creep.damage *= MONSTER_OVERDRIVE;
   };
   let nextCreepId = 1;
   let creepsFlung = 0;
@@ -1587,6 +2102,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const playerLevel = options.playerLevel ?? 20;
   const storageHitScalar = storageScalar(yard.kind);
   const wildMonsterAttack = isWildMonsterAttack(yard.kind);
+  // The Descent burn's share of full health a burn (Inferno WP 1.21); 0 burns nothing.
+  const descentBurn = descentBurnShare(options.descentYard);
 
   for (const building of yard.buildings) {
     if (building.hp <= 0) continue;
@@ -1604,7 +2121,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
           if (count > 0) pool.set(id, count);
         }
       }
-      bunkers.push({ building, pool, dispatched: 0, tickNumber: 0 });
+      bunkers.push({ building, pool, dispatched: 0, tickNumber: 0, doorOpen: false, door: 0 });
       bunkerReports.set(building.id, {
         id: building.id,
         level: building.level,
@@ -1621,7 +2138,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (!stats || stats.damage === undefined) continue;
     towers.push({
       building,
-      range: towerRange(building.type, building.level, yard.kind, yard.height) ?? 0,
+      range: towerRange(building.type, building.level, yard.kind, yard.height, bonusRangePct) ?? 0,
       report: {
         id: building.id,
         type: building.type,
@@ -1644,10 +2161,17 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       gun: isSpurtzCannon(building.type)
         ? { barrel: 0, aim: 0, targets: [], index: 0, target: null, hatched: [] }
         : null,
+      quakeFrame: 0,
+      onHose: false,
+      weakUntil: 0,
+      weakShare: 0,
     });
   }
 
   for (const tower of towers) towerReports.set(tower.building.id, tower.report);
+  /** Each tower by its report, for the blows that reach a creep with only the report in hand. */
+  const towerOfReport = new Map<TowerReport, Tower>();
+  for (const tower of towers) towerOfReport.set(tower.report, tower);
 
   /** Laser beams still sweeping, oldest first; each outlives its tower (`LASERS.as`). */
   const laserBeams: LaserBeam[] = [];
@@ -1690,6 +2214,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         champion: null,
         pen: null,
         report: { t: caged.t, hp: cagedHealth(caged), damageDealt: 0, kills: 0 },
+        provokedBy: -1,
       }))
     : [];
   /** The slot of a caged champion's creep, or undefined for any other creep. */
@@ -1710,10 +2235,17 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   /* ── Damage and loot ───────────────────────────────────────────────────── */
 
   /** `ATTACK.Loot`: the low-level bonus, one whole gain at a time. */
-  const creditLoot = (resource: number, amount: number): void => {
-    if (amount <= 0) return;
+  const creditLoot = (resource: number, amount: number): number => {
+    if (amount <= 0) return 0;
     const key = `r${resource}` as keyof ResourceAmounts;
-    loot[key] += withLowLevelBonus(amount, playerLevel);
+    const credited = withLowLevelBonus(amount, playerLevel);
+    loot[key] += credited;
+    return credited;
+  };
+
+  /** The orb and number of a building's loot, when there was some to show. */
+  const showLoot = (buildingId: number, resource: number, amount: number, vacuum = false): void => {
+    if (amount > 0) visual.push({ kind: "loot", tick, buildingId, resource, amount, vacuum });
   };
 
   /**
@@ -1763,7 +2295,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       defenderLoss[key] += taken;
       let credited = Math.trunc(taken * storageHitScalar);
       if (wildMonsterAttack) credited = Math.trunc(credited / WILD_MONSTER_LOOT_DIVISOR);
-      creditLoot(picked, credited);
+      showLoot(building.id, picked, creditLoot(picked, credited));
       return;
     }
     // A harvester: its own buffer, its own resource, no scalar.
@@ -1778,7 +2310,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // storage hit or fall reads it.
     if (yard.kind === "outpost") yard.resources[key] = Math.max(0, yard.resources[key] - taken);
     defenderLoss[key] += taken;
-    creditLoot(building.type, taken);
+    showLoot(building.id, building.type, creditLoot(building.type, taken));
   };
 
   /**
@@ -1809,6 +2341,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     destroyedIds.push(building.id);
     const fallen = towerReports.get(building.id) ?? bunkerReports.get(building.id);
     if (fallen) fallen.destroyedTick = tick;
+    if (building.type === HOUSING_BUNKER_TYPE) housingBunkerFalls(building.id);
     if (byAttacker) {
       // The client empties a harvester when it falls (`BRESOURCE.as:129-134`).
       if (building.stored > 0) takeLoot(building, building.stored, 1);
@@ -1817,22 +2350,62 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     grid.removeBuilding(building);
   };
 
+  /*
+   * The Lab's revamp abilities (owner, 2 Nov 2026). `towerSource` is the tower
+   * whose shot {@link towerHurt} is landing, taken (and cleared) by the
+   * {@link damageCreep} it calls, so a blow that one sets off (a death blast,
+   * thorns) is not the tower's. `lastBlowMods` is what the last
+   * {@link damageBuilding} added (a crit) or took off (an ooze), for the
+   * swing's number.
+   */
+  let towerSource: Tower | null = null;
+  let lastBlowMods: { readonly bonus: number; readonly reduced: number } | null = null;
+  /** The share an Octo-ooze's ooze takes off a creep's blows now; 0 when it is not oozed. */
+  const weakShareOf = (creep: Creep): number => (creep.weakUntil > tick ? creep.weakShare : 0);
+  /** The same for a tower's shots. */
+  const towerWeakShare = (tower: Tower): number =>
+    tower.weakUntil > tick ? tower.weakShare : 0;
+  /** Whether a Crabatron's blow is a critical hit: one draw, for a ranked Crabatron only. */
+  const critRoll = (creep: Creep): boolean =>
+    creep.rank > 0 && creep.monsterId === CRABATRON_ID && rng.float() < critChance(creep.rank);
+  /** Whether Pokeys can swarm at all this battle: a side has them ranked. */
+  const swarmsPossible =
+    rankOf(options.ranks, POKEY_ID) > 0 || rankOf(options.defenderRanks, POKEY_ID) > 0;
+
   /**
    * `BFOUNDATION.modifyHealth` (`:499-541`): fortification, then loot.
    *
    * The hit that brings a building down loots nothing of its own: the client
    * calls `Destroyed` first and loots only `if (!this._destroyed)`, so the
    * fall's own rule is all that hit takes.
+   *
+   * `byAttacker` is a blow with an attacker behind it: one by a creep, or the
+   * Decoy's from a `DummyTarget`, which loots and fells like a creep's.
    */
   const damageBuilding = (
     building: EngineBuilding,
     raw: number,
     creep: Creep | null,
     lootMultiplier = creep ? lootOf(creep) : 1,
+    byAttacker = creep !== null,
+    blow: Blow = "hit",
   ): number => {
+    lastBlowMods = null;
     if (building.hp <= 0 || raw <= 0) return 0;
-    const dealt = fortifiedDamage(raw, building.fortification, 0);
+    // An Octo-ooze's ooze on the striker takes its share off (Lab "Weakening Ooze").
+    const weak = creep && struck(blow) ? weakShareOf(creep) : 0;
+    const reduced = raw * weak;
+    if (weak > 0) raw -= reduced;
+    const dealt = buildingTakes(raw, building.fortification);
     const applied = Math.min(dealt, building.hp);
+    if (weak > 0 || blow === "crit") {
+      // The number's modifiers, after fortification as the number itself is.
+      const scale = raw > 0 ? dealt / raw : 0;
+      lastBlowMods = {
+        bonus: blow === "crit" ? Math.min(applied, (raw - raw / CRIT_MULTIPLIER) * scale) : 0,
+        reduced: reduced * scale,
+      };
+    }
     if (creep) {
       const row = attackerRowOf.get(creep.id);
       if (row) row.buildingDamage += applied;
@@ -1843,14 +2416,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     building.hp -= dealt;
     if (building.hp > 0) {
-      if (creep) takeLoot(building, dealt, lootMultiplier);
+      if (byAttacker) takeLoot(building, dealt, lootMultiplier);
       return applied;
     }
     // The killing hit on storage still makes the pick it made before issue
     // #167 and throws it away, so the random stream every later bunker pick
     // reads is the one it was, and the fall changes the loot and nothing else.
-    if (creep && STORAGE_TYPES.includes(building.type)) pickStored();
-    destroy(building, creep !== null);
+    if (byAttacker && STORAGE_TYPES.includes(building.type)) pickStored();
+    destroy(building, byAttacker);
     return applied;
   };
 
@@ -1924,7 +2497,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     raw: number,
     by: Creep | null = null,
     striker: Creep | null = null,
+    blow: Blow = "hit",
   ): number => {
+    const tower = towerSource;
+    towerSource = null;
     if (creep.hp <= 0) return 0;
     // A defender's blow turns the attacker on it (issue #195), and its aggro
     // ends a flying champion's look (`ChampionBase.as:903`, issue #222).
@@ -1934,10 +2510,17 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     // An enraged creep's armour, `1 - armor` off every hit (issue #222).
     // A putty boost is its own armour; the two combine as 1-(1-a)(1-b).
+    // Only Fomor's enrage sets `armour`: its cut shows as "(-X)" too (owner).
+    const fomorCut = raw * creep.armour;
     if (creep.armour > 0) raw *= 1 - creep.armour;
     if (creep.puttyArmour > 0) raw *= 1 - creep.puttyArmour;
     // The Monster Defensive Buff is armour of its own too (`BeastMode.as`).
-    if (buffsOf(creep).monsterArmour) raw *= 1 - MONSTER_ARMOUR_BUFF;
+    if (boosted(creep, "monsterArmour")) raw *= 1 - MONSTER_ARMOUR_BUFF;
+    // An Octo-ooze's ooze on the tower or monster striking (Lab "Weakening Ooze").
+    let weak = 0;
+    if (struck(blow)) weak = tower ? towerWeakShare(tower) : striker ? weakShareOf(striker) : 0;
+    const reduced = raw * weak;
+    if (weak > 0) raw -= reduced;
     const applied = Math.min(raw, creep.hp);
     if (applied > 0) {
       visual.push({
@@ -1948,6 +2531,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         ix: creep.ix,
         iy: creep.iy,
         amount: applied,
+        ...(blow === "crit" ? { bonus: Math.min(applied, raw - raw / CRIT_MULTIPLIER) } : {}),
+        ...(weak > 0 || fomorCut > 0 ? { reduced: reduced + fomorCut } : {}),
+        ...(blow === "thorns" ? { thorns: true } : {}),
       });
     }
     creep.hp -= raw;
@@ -1960,10 +2546,71 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         countLost(creep);
       }
       recordDeath(creep);
+      if (creep.rank > 0 && creep.monsterId === OCTO_ID) ooze(creep, tower, striker);
       onDeath(creep);
     }
     if (striker && striker.friendly && !creep.friendly) creditDefender(striker, applied, killed);
+    // Ichi's thorns: a share of the health it actually lost, back at the striker.
+    if (applied > 0 && creep.rank > 0 && creep.monsterId === ICHI_ID && struck(blow)) {
+      thorns(creep, applied * thornsShare(creep.rank), tower, striker);
+    }
     return applied;
+  };
+
+  /** A tower's blow at a creep: {@link damageCreep}, knowing whose shot it is. */
+  const towerHurt = (report: TowerReport, creep: Creep, raw: number): number => {
+    towerSource = towerOfReport.get(report) ?? null;
+    return damageCreep(creep, raw);
+  };
+
+  /**
+   * Octo-ooze's "Weakening Ooze" (owner, 2 Nov 2026): the tower or the other
+   * side's monster that killed it deals its share less for
+   * {@link WEAKEN_SECONDS}. A new kill starts the time again and sets the
+   * share; it never stacks.
+   */
+  const ooze = (octo: Creep, tower: Tower | null, striker: Creep | null): void => {
+    const until = tick + ticks(WEAKEN_SECONDS);
+    const share = weakenShare(octo.rank);
+    if (tower) {
+      tower.weakUntil = until;
+      tower.weakShare = share;
+    } else if (striker && striker.hp > 0 && !striker.gone && striker.friendly !== octo.friendly) {
+      striker.weakUntil = until;
+      striker.weakShare = share;
+    }
+  };
+
+  /**
+   * Ichi's "Thorns" (owner, 2 Nov 2026): `amount` back at whoever struck it, a
+   * tower, a monster or a champion. Only what it actually lost counts (the
+   * caller's `applied`, never overkill), and a splash only its own share.
+   */
+  const thorns = (
+    ichi: Creep,
+    amount: number,
+    tower: Tower | null,
+    striker: Creep | null,
+  ): void => {
+    if (amount <= 0) return;
+    if (tower) {
+      const building = tower.building;
+      if (building.hp <= 0 || ichi.friendly) return;
+      const dealt = damageBuilding(building, amount, ichi, lootOf(ichi), true, "thorns");
+      if (dealt <= 0) return;
+      visual.push({
+        kind: "thorns",
+        tick,
+        creepId: ichi.id,
+        buildingId: building.id,
+        ix: building.x,
+        iy: building.y,
+        amount: dealt,
+      });
+      return;
+    }
+    if (!striker || striker.hp <= 0 || striker.gone || striker.friendly === ichi.friendly) return;
+    damageCreep(striker, amount, null, ichi, "thorns");
   };
 
   /**
@@ -2199,7 +2846,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       burrows: movement === "burrow",
       explode: monsterStat(monsterId, "explode", level) > 0,
       lootMultiplier: lootingMultiplier(targetGroup, false),
-      flags: defenseFlags(friendly, flying, false),
+      // Balthazar sheds both its flying and its ground flag (`Balthazar.as:10-15`).
+      flags:
+        monsterId === BALTHAZAR_ID
+          ? defenseFlags(friendly, flying, false) & ~(TARGETS_FLYING | TARGETS_GROUND)
+          : defenseFlags(friendly, flying, false),
       targetable: true,
       behaviour: mode,
       attackCooldown: 0,
@@ -2225,6 +2876,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       provokedBy: -1,
       ...NO_ABILITIES,
       rank,
+      // Target group 6 hunts (`CreepBase.as:198-199`); a defender never does.
+      hunts: mode === "attack" && targetGroup === TARGET_GROUP.CHAMPIONS,
     };
     nextCreepId += 1;
     creeps.push(creep);
@@ -2272,6 +2925,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     foodBonus = 0,
     stance?: ChampionStance,
     brain?: Partial<BrainWeights>,
+    startHealth?: number,
   ): Creep | null => {
     const id = championByType(type);
     if (!id) return null;
@@ -2279,6 +2933,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // (`ChampionBase.as:123-155`); a log with no `fb` gives 0, which adds
     // nothing. Its power level gates its abilities alone (issue #202).
     const health = championStatWithFood(id, "health", level, foodBonus);
+    // It comes out at the health it has, never above full: Flash spawned it
+    // at its stored `hp` (`ATTACK.as:532`), so a champion hurt in one attack
+    // is still hurt in the next. A log with none sends it at full health.
+    const hp =
+      startHealth !== undefined && Number.isFinite(startHealth) && startHealth >= 1
+        ? Math.min(Math.floor(startHealth), health)
+        : health;
     // A `fly` rung puts the champion in the air exactly as it does a monster:
     // altitude 108 and the flying defence flag (`ChampionBase.as:181-188`), so
     // walls never stop it and only air-capable towers can shoot it.
@@ -2294,7 +2955,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       iy: at.y,
       x: cart.x,
       y: cart.y,
-      hp: health,
+      hp,
       maxHp: health,
       baseSpeed: championStatWithFood(id, "speed", level, foodBonus) / 4,
       damage: championStatWithFood(id, "damage", level, foodBonus),
@@ -2358,10 +3019,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   /**
    * The caged champion comes out for the first time (issues #195, #260): from
-   * where it stood in its cage, at its stored health, its stats at its level
-   * plus its food bonus, with the frame it counted in there.
+   * where it stood in its cage, at its health (the stored one, less any
+   * Decoy blast it took in there), its stats at its level plus its food
+   * bonus, with the frame it counted in there.
    */
-  const releaseChampion = (caged: DefenderChampion, at: CagePen): Creep | null => {
+  const releaseChampion = (
+    caged: DefenderChampion,
+    at: CagePen,
+    health: number,
+  ): Creep | null => {
     const id = championByType(caged.t);
     if (!id) return null;
     const level = Math.max(1, Math.floor(caged.l));
@@ -2380,7 +3046,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       iy: at.iy,
       x: at.x,
       y: at.y,
-      hp: Math.min(cagedHealth(caged), maxHp),
+      hp: Math.min(health, maxHp),
       maxHp,
       baseSpeed: championStatWithFood(id, "speed", level, food) / 4,
       damage: championStatWithFood(id, "damage", level, food),
@@ -2501,6 +3167,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         event.champion.fb ?? 0,
         event.champion.s,
         event.champion.b,
+        event.champion.hp,
       );
     }
   };
@@ -2613,6 +3280,574 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
   };
 
+  /* ── The Decoy (Inferno WP 6.5, `decoy.ts`) ────────────────────────────── */
+
+  /**
+   * The Decoy on the field, or null. `pulled` is Flash's `_attractedCreeps`;
+   * `before` is what each creep it holds was doing, to go back to.
+   */
+  let decoy: {
+    readonly plan: DecoyPlan;
+    /** The drop point in yard units, as the event gave it. */
+    readonly at: { readonly x: number; readonly y: number };
+    readonly droppedAt: number;
+    /** The drop point on screen. */
+    readonly drop: Cart;
+    readonly pulled: Set<number>;
+    readonly before: Map<number, Behaviour>;
+  } | null = null;
+
+  /**
+   * A `siege` event: the Decoy, the Vacuum or the Jars at the attacker's
+   * level drops now. Flash keeps one siege weapon live at a time
+   * (`SiegeWeapons.activeWeaponID`), so one dropped while another is still
+   * out is ignored, as is any other weapon.
+   */
+  const siege = (event: Extract<AttackEvent, { kind: "siege" }>): void => {
+    if (decoy || vacuum || jarDrop) return;
+    if (event.weapon === VACUUM.id) {
+      startVacuum();
+      return;
+    }
+    if (event.weapon === JARS.id) {
+      startJars(screenOf(event.x, event.y));
+      return;
+    }
+    if (event.weapon !== DECOY.id) return;
+    const plan = decoyPlan(options.siege?.decoy ?? 0, tick);
+    if (!plan) return;
+    decoy = {
+      plan,
+      at: { x: event.x, y: event.y },
+      droppedAt: tick,
+      drop: screenOf(event.x, event.y),
+      pulled: new Set(),
+      before: new Map(),
+    };
+  };
+
+  /**
+   * `getDefendingCreepsInRange` (`Decoy.as:332-357`): a defender on the field
+   * within the range of the drop, on screen. Flash looks only in `CREATURES`,
+   * the defending side, so the attacker's own champion is never in it; of the
+   * caged champions it looks only at the basic one (`CREATURES._guardian`,
+   * `:341-345`), so the Krallen is not either. This is what the blast hits.
+   */
+  const decoyReaches = (creep: Creep, drop: Cart, range: number): boolean => {
+    if (!creep.friendly || creep.hp <= 0 || creep.gone || creep.monsterId === KRALLEN_ID) {
+      return false;
+    }
+    const at = screenPointOf(creep.ix, creep.iy);
+    const dx = at.x - drop.x;
+    const dy = at.y - drop.y;
+    return dx * dx + dy * dy <= range * range;
+  };
+
+  /**
+   * Who the Decoy pulls (`updateDecoy`, `Decoy.as:241-262`): of that list only
+   * a `CreepBase` (`:246`). A champion is a `ChampionBase`, which is not one
+   * (`ChampionBase.as:24`), so the basic champion is never pulled, in its cage
+   * or out of it; only the blast reaches it (owner, 28 Oct: "refer to flash").
+   */
+  const decoyPulls = (creep: Creep, drop: Cart, range: number): boolean =>
+    !creep.champion && decoyReaches(creep, drop, range);
+
+  /**
+   * The basic champion waiting in its cage within the range, measured from
+   * where it stands in there: `getDefendingCreepsInRange` lists
+   * `CREATURES._guardian` whatever it is doing (`Decoy.as:341-345`), so the
+   * blast reaches it there too (`:283-289`). Not the Krallen.
+   */
+  const cagedInReach = (drop: Cart, range: number): { slot: CageSlot; away: number }[] => {
+    const found: { slot: CageSlot; away: number }[] = [];
+    for (const slot of cageSlots) {
+      const pen = slot.pen;
+      if (!pen || championByType(slot.caged.t) === KRALLEN_ID) continue;
+      const at = screenPointOf(pen.ix, pen.iy);
+      const away = Math.hypot(at.x - drop.x, at.y - drop.y);
+      if (away <= range) found.push({ slot, away });
+    }
+    return found;
+  };
+
+  /**
+   * The blast on a champion in its cage: off its health where it stands, the
+   * Monster Defensive Buff taken off as on the field. It comes out later with
+   * what is left. One brought to nothing dies in there: its pen goes, so it
+   * never comes out.
+   */
+  const damageCaged = (slot: CageSlot, raw: number): void => {
+    const dealt = buffOn(defenderBuffs.monsterArmour, tick) ? raw * (1 - MONSTER_ARMOUR_BUFF) : raw;
+    const hp = Math.max(0, slot.report.hp - dealt);
+    slot.report.hp = hp;
+    if (slot.champion) slot.champion.hp = hp;
+    if (hp <= 0) slot.pen = null;
+  };
+
+  /** `changeModeDecoy`: it stops fighting and walks to stand by the Decoy. */
+  const pullToDecoy = (creep: Creep, drop: Cart, before: Map<number, Behaviour>): void => {
+    if (creep.behaviour !== "decoy") before.set(creep.id, creep.behaviour);
+    creep.behaviour = "decoy";
+    creep.targetCreep = -1;
+    creep.attacking = false;
+    creep.atTarget = false;
+    creep.homing = false;
+    const stand = decoyStandPoint(rng, screenPointOf(creep.ix, creep.iy), drop, creep.flying);
+    // `screenPointOf` undone: screen (a, d) is yard (d + a / 2, d - a / 2).
+    creep.waypoints = [{ x: stand.y + stand.x / 2, y: stand.y - stand.x / 2 }];
+    creep.waypointIndex = 0;
+  };
+
+  /** `detractCreep` and `findDefenseTargets`: back to defending, looking afresh. */
+  const releaseFromDecoy = (creep: Creep, before: Map<number, Behaviour>): void => {
+    creep.behaviour = before.get(creep.id) ?? "defend";
+    before.delete(creep.id);
+    creep.targetCreep = -1;
+    creep.attacking = false;
+    creep.atTarget = false;
+    creep.waypoints = [];
+    creep.waypointIndex = 0;
+  };
+
+  /** A defender the Decoy holds (`tickBDecoy`): it walks to its spot and stands. */
+  const tickDecoyed = (creep: Creep): void => {
+    creep.attacking = false;
+    moveCreep(creep);
+  };
+
+  /**
+   * `ejectDefendersFromBunkers` (`Decoy.as:229-239`, `BUILDING22.EjectCreeps`,
+   * `:195-239`): a standing bunker the range touches sends out one of each
+   * kind it still holds, each frame, already held by the Decoy. As with the
+   * bunker's own sending, a healer stays in (issue #195). Only a Monster
+   * Bunker: Flash ejects from a `BUILDING22` alone (`Decoy.as:234`), so a
+   * Housing Bunker keeps its monsters in.
+   */
+  const ejectForDecoy = (drop: Cart, range: number, before: Map<number, Behaviour>): void => {
+    for (const bunker of bunkers) {
+      const building = bunker.building;
+      if (building.hp <= 0 || building.type === HOUSING_BUNKER_TYPE) continue;
+      // Only through a door that is fully up (`_animTick >= 15`, `:204`).
+      if (bunker.door < BUNKER_DOOR_FRAMES) continue;
+      const at = screenOf(building.x, building.y);
+      const dx = at.x - drop.x;
+      const dy = at.y + building.middle - drop.y;
+      if (!decoyTouchesBuilding(range, dx, dy, propsSizeOf(building.type))) continue;
+      const stats = towerStats(building.type, building.level, yard.kind);
+      const leash = stats?.range ?? 0;
+      const scan = towerScanPoint(building);
+      for (const [monsterId, count] of [...bunker.pool.entries()].sort()) {
+        if (count <= 0 || monsterStat(monsterId, "damage", 1) <= 0) continue;
+        bunker.pool.set(monsterId, count - 1);
+        bunker.dispatched += 1;
+        const sentBy = bunkerReports.get(building.id);
+        if (sentBy) sentBy.sent += 1;
+        visual.push({ kind: "release", tick, buildingId: building.id });
+        const level = clampLevel(options.defenderLevels ?? options.levels, monsterId);
+        const defender = spawnCreep(
+          monsterId,
+          level,
+          { x: building.x, y: building.y },
+          true,
+          "defend",
+          building.id,
+          1,
+          rankOf(options.defenderRanks, monsterId),
+        );
+        if (leash > 0) {
+          defender.home = {
+            ix: building.x,
+            iy: building.y,
+            centreX: scan.x,
+            centreY: scan.y,
+            leash,
+          };
+        }
+        pullToDecoy(defender, drop, before);
+      }
+    }
+  };
+
+  /**
+   * `onDeactivation` (`Decoy.as:278-305`): `DealLinearAEDamage` over the range
+   * (`Targeting.as:340-389`) at the defenders it reaches and at every building
+   * but a mushroom, or one nothing can target, closer than
+   * {@link DECOY_BUILDING_REACH} of the range, each measured on screen to its
+   * anchor. A building takes it from a `DummyTarget`: it loots at 1, and a fall
+   * is the attacker's. Then everyone it held goes back to defending.
+   */
+  const explodeDecoy = (): void => {
+    const live = decoy;
+    if (!live) return;
+    decoy = null;
+    const { drop, before } = live;
+    const { range, damage } = live.plan;
+    const hit = creeps.filter((creep) => decoyReaches(creep, drop, range));
+    const reach = range * DECOY_BUILDING_REACH;
+    for (const creep of hit) {
+      const at = screenPointOf(creep.ix, creep.iy);
+      const dealt = linearAreaDamage(damage, range, 0, Math.hypot(at.x - drop.x, at.y - drop.y));
+      if (dealt !== undefined && !creep.gone) damageCreep(creep, dealt);
+    }
+    for (const { slot, away } of cagedInReach(drop, range)) {
+      const dealt = linearAreaDamage(damage, range, 0, away);
+      if (dealt !== undefined) damageCaged(slot, dealt);
+    }
+    for (const building of yard.buildings) {
+      if (building.hp <= 0 || building.kind === "mushroom") continue;
+      if (UNTARGETABLE_TYPES.includes(building.type)) continue;
+      const at = screenOf(building.x, building.y);
+      const away = Math.hypot(at.x - drop.x, at.y - drop.y);
+      if (away >= reach) continue;
+      const dealt = linearAreaDamage(damage, range, 0, away);
+      if (dealt !== undefined) damageBuilding(building, dealt, null, 1, true);
+    }
+    for (const creep of creeps) {
+      if (creep.friendly && creep.behaviour === "decoy") releaseFromDecoy(creep, before);
+    }
+  };
+
+  /**
+   * The Decoy's frame (`Decoy.onEnterFrame`, `updateDecoy`): from the tick it
+   * lands, every {@link DECOY_FRAME_TICKS}, it pulls the defenders newly in
+   * range, lets go of the ones no longer in it, and empties the bunkers it
+   * touches. It blows up on its tick whatever the frame.
+   */
+  const tickDecoy = (): void => {
+    const live = decoy;
+    if (!live || tick < live.plan.landsAt) return;
+    if (tick >= live.plan.explodesAt) {
+      explodeDecoy();
+      return;
+    }
+    if ((tick - live.plan.landsAt) % DECOY_FRAME_TICKS !== 0) return;
+    const { drop, pulled, before } = live;
+    const range = live.plan.range;
+    const held = new Set<number>();
+    for (const creep of creeps) {
+      if (!decoyPulls(creep, drop, range)) continue;
+      held.add(creep.id);
+      if (!pulled.has(creep.id)) {
+        pulled.add(creep.id);
+        pullToDecoy(creep, drop, before);
+      }
+    }
+    for (const id of pulled) {
+      if (held.has(id)) continue;
+      pulled.delete(id);
+      const creep = byCreepId.get(id);
+      if (creep) releaseFromDecoy(creep, before);
+    }
+    ejectForDecoy(drop, range, before);
+  };
+
+  /** Whether a landed Decoy reaches `building` (`BUILDING22.DecoyInRange`, `:241-254`). */
+  const decoyOver = (building: EngineBuilding): boolean => {
+    const live = decoy;
+    if (!live || tick < live.plan.landsAt || tick >= live.plan.explodesAt) return false;
+    const at = screenOf(building.x, building.y);
+    const dx = at.x - live.drop.x;
+    const dy = at.y + building.middle - live.drop.y;
+    return decoyTouchesBuilding(live.plan.range, dx, dy, propsSizeOf(building.type));
+  };
+
+  /**
+   * The Monster Bunkers' doors, once a frame: as `BUILDING22.TickFast`
+   * (`:433-455`), a door opens while its bunker has monsters, in or out, and
+   * has attackers in its range, monsters out, or a Decoy over it, and shuts
+   * otherwise, a frame of {@link BUNKER_DOOR_FRAMES} at a time. The bunker
+   * sends monsters out only through a door that is fully up. Only a change of
+   * way is told ({@link BattleVisualEvent} `bunkerDoor`).
+   */
+  const tickBunkerDoors = (): void => {
+    if (tick % 2 !== 0) return;
+    let out: Map<number, number> | null = null;
+    for (const bunker of bunkers) {
+      const building = bunker.building;
+      if (building.type === HOUSING_BUNKER_TYPE) continue;
+      let open = false;
+      if (building.hp > 0) {
+        if (!out) {
+          out = new Map();
+          for (const creep of creeps) {
+            if (creep.homeBunker < 0 || creep.gone || creep.hp <= 0) continue;
+            out.set(creep.homeBunker, (out.get(creep.homeBunker) ?? 0) + 1);
+          }
+        }
+        const outside = out.get(building.id) ?? 0;
+        let inside = 0;
+        for (const count of bunker.pool.values()) inside += count;
+        if (outside > 0) open = true;
+        else if (inside > 0) {
+          const range = towerStats(building.type, building.level, yard.kind)?.range ?? 0;
+          const scan = towerScanPoint(building);
+          // Flyers count only for a bunker that would send at them (`BUILDING22.as:123`).
+          const flags = oldStyleTargets(bunkerInterceptor(bunker) ? 1 : 0);
+          open =
+            (range > 0 && index.inRange(range, scan.x, scan.y, flags).length > 0) ||
+            decoyOver(building);
+        }
+      }
+      bunker.door = open
+        ? Math.min(BUNKER_DOOR_FRAMES, bunker.door + 1)
+        : Math.max(0, bunker.door - 1);
+      if (open === bunker.doorOpen) continue;
+      bunker.doorOpen = open;
+      visual.push({ kind: "bunkerDoor", tick, buildingId: building.id, open });
+    }
+  };
+
+  /* ── The Vacuum (Inferno WP 6.6, `vacuum.ts`) ──────────────────────────── */
+
+  /**
+   * The Vacuum's hose on the field, or null: `Vacuum.hose` while the Vacuum
+   * is the active weapon. `health` is `_vacuumHealth`; `sucked` is
+   * `_vacuumCurrTime - _vacuumStartTime` in ticks; `looted` and `cap` are
+   * `_amountLooted` and `_totalPossibleLoot`.
+   */
+  let vacuum: {
+    readonly plan: VacuumPlan;
+    readonly target: EngineBuilding;
+    readonly droppedAt: number;
+    readonly cap: number;
+    health: number;
+    sucked: number;
+    looted: number;
+    /** The resource its last frame took (1-4), null when it took nothing. */
+    took: number | null;
+  } | null = null;
+
+  /**
+   * `Vacuum.activate` and `ApplyVacuum`: it latches onto the Town Hall (or the
+   * Resource Outpost) wherever it was dropped. With no such building, or a
+   * fallen one, Flash's activation never gets going, so nothing happens.
+   */
+  const startVacuum = (): void => {
+    const plan = vacuumPlan(options.siege?.vacuum ?? 0, tick);
+    const target = yard.buildings.find((building) => VACUUM_TARGET_TYPES.includes(building.type));
+    if (!plan || !target || target.hp <= 0) return;
+    const cap = vacuumLootCap(target.type, yard.resources);
+    vacuum = {
+      plan,
+      target,
+      droppedAt: tick,
+      cap,
+      health: plan.durability,
+      sucked: 0,
+      looted: 0,
+      took: null,
+    };
+  };
+
+  /**
+   * `BTOWER.canShootVacuumHose` (`BTOWER.as:163-169`): a hose is out, this
+   * tower is one that can shoot it, and the hose is within its range of the
+   * tower's `_position`, a plain distance on screen. The hose is where its
+   * 2 s tween has it now ({@link vacuumHoseY}).
+   */
+  const hoseInReach = (tower: Tower): boolean => {
+    const hose = vacuum;
+    const building = tower.building;
+    if (!hose || !shootsHose(building.type)) return false;
+    const x = hose.target.sx - building.sx;
+    const y = vacuumHoseY(hose.target.sy, tick - hose.droppedAt) - building.sy;
+    return Math.sqrt(x * x + y * y) <= tower.range;
+  };
+
+  /**
+   * A tower's `Fire` at the hose. A Tesla names no creep and starts to charge
+   * ({@link armCoil}); its zaps then hit the hose. A shell with no blast hits
+   * it for `int(damage * scale)` (`PROJECTILE.as:44-50`, `FIREBALL.as:168-174`).
+   * A shell with a blast, the Aerial Defense's, bursts where the hose is and
+   * hits the creeps round it, and the hose for 0 (`PROJECTILE.Splash`, `:64-69`).
+   */
+  const shootHose = (tower: Tower, damage: number, splash: number, flags: number): void => {
+    const hose = vacuum;
+    const building = tower.building;
+    if (!hose) return;
+    if (building.type === TESLA_TYPE) {
+      armCoil(tower, -1);
+      return;
+    }
+    countShot(tower.report);
+    const shot = towerShotDamage(damage, building.hp, building.maxHp);
+    if (splash <= 0) {
+      hose.health -= shot;
+      return;
+    }
+    const at = fromIso(hose.target.sx, vacuumHoseY(hose.target.sy, tick - hose.droppedAt));
+    for (const hit of index.inRange(splash, at.x, at.y, flags)) {
+      const dealt = Math.max((shot / splash) * (splash - hit.dist), shot / 5);
+      const health = hit.creep.hp;
+      tower.report.damageDealt += towerHurt(tower.report, hit.creep, dealt);
+      if (health > 0 && hit.creep.hp <= 0) tower.report.kills += 1;
+    }
+  };
+
+  /**
+   * `VacuumLoot` (`VacuumHose.as:81-142`): unless it has taken its cap, it
+   * picks one of the pool's non-empty resources at random and takes `amount`
+   * of it, or what is left, to the attacker whole, no storage scalar. Against
+   * a wild monster attack the attacker gets a fifth.
+   */
+  const suck = (hose: NonNullable<typeof vacuum>, amount: number): void => {
+    hose.took = null;
+    if (hose.looted > hose.cap) return;
+    const picked = pickStored();
+    if (picked === null) return;
+    const key = `r${picked}` as keyof ResourceAmounts;
+    const taken = vacuumTake(yard.resources[key], amount);
+    if (taken > 0) hose.took = picked;
+    yard.resources[key] -= taken;
+    defenderLoss[key] += taken;
+    const credited = wildMonsterAttack ? Math.trunc(taken / WILD_MONSTER_LOOT_DIVISOR) : taken;
+    showLoot(hose.target.id, picked, creditLoot(picked, credited), true);
+    hose.looted += credited;
+  };
+
+  /**
+   * The hose's frame (`Vacuum.onEnterFrame`, `VacuumHose.tick`, `:266-289`):
+   * every {@link VACUUM_FRAME_TICKS} after the drop it sucks what is due since
+   * the last. It lets go when its timer runs out, whatever the frame, and on
+   * a frame once the building under it has fallen or its health is gone.
+   */
+  const tickVacuum = (): void => {
+    const hose = vacuum;
+    if (!hose) return;
+    if (tick >= hose.plan.endsAt) {
+      vacuum = null;
+      return;
+    }
+    const elapsed = tick - hose.droppedAt;
+    if (elapsed <= 0 || elapsed % VACUUM_FRAME_TICKS !== 0) return;
+    if (hose.target.hp <= 0 || hose.health <= 0) {
+      vacuum = null;
+      return;
+    }
+    const amount = vacuumGain(hose.plan.rate, hose.sucked, elapsed);
+    hose.sucked = elapsed;
+    suck(hose, amount);
+  };
+
+  /* ── The Jars (Inferno WP 6.7, `jars.ts`) ──────────────────────────────── */
+
+  /** Each jarred tower's jar by building id, until its strip ends (`RemoveJar`). */
+  const jars = new Map<number, Jar>();
+
+  /** The Jars while they are the active weapon (`Jars._targets`), or null. */
+  let jarDrop: { readonly droppedAt: number; readonly jars: readonly Jar[] } | null = null;
+
+  /**
+   * `Jars.onActivation` (`Jars.as:190-200`, `:219-230`): a jar on every tower
+   * the drop's range touches (`BASE.GetBuildingOverlap`, the Decoy's test),
+   * fallen or busy ones too, each untargetable from now (`ApplyJar`). Only
+   * `JAR_TOWER_TYPES` (owner): the Stronghold fights on.
+   */
+  const startJars = (drop: Cart): void => {
+    const plan = jarsPlan(options.siege?.jars ?? 0, tick);
+    if (!plan) return;
+    const held: Jar[] = [];
+    for (const building of yard.buildings) {
+      if (!JAR_TOWER_TYPES.includes(building.type) || isBunker(building.type)) continue;
+      const at = screenOf(building.x, building.y);
+      const dx = at.x - drop.x;
+      const dy = at.y + building.middle - drop.y;
+      if (!decoyTouchesBuilding(plan.range, dx, dy, propsSizeOf(building.type))) continue;
+      const jar: Jar = {
+        building,
+        landsAt: plan.landsAt,
+        durability: plan.durability,
+        health: null,
+        frame: 0,
+        breaking: false,
+      };
+      building.jarred = true;
+      jars.set(building.id, jar);
+      held.push(jar);
+    }
+    jarDrop = { droppedAt: tick, jars: held };
+  };
+
+  /** A tower's jar while it is landed and whole (`isJard`), or null. */
+  const jarOn = (building: EngineBuilding): Jar | null => {
+    const jar = jars.size > 0 ? jars.get(building.id) : undefined;
+    return jar && jar.health !== null ? jar : null;
+  };
+
+  /** `KillJar` (`BTOWER.as:316-322`): it breaks, and its strip plays on. */
+  const killJar = (jar: Jar): void => {
+    jar.health = null;
+    if (jars.get(jar.building.id) === jar) jar.breaking = true;
+  };
+
+  /**
+   * `UpdateJar` (`BTOWER.as:284-298`), where every `BTOWER.Fire` begins: a
+   * landed jar's strip cell from its health. Returns the jar, or null.
+   */
+  const crackJar = (building: EngineBuilding): Jar | null => {
+    const jar = jarOn(building);
+    if (jar && jar.health !== null) jar.frame = jarFrame(jar.health, jar.durability);
+    return jar;
+  };
+
+  /**
+   * A shot the tower fires while its jar is on hits the jar instead, which
+   * breaks at 0 (each tower's `Fire`, `isJard`). False for a tower whose shots
+   * never touch its jar; it fires as ever. A Spurtz Cannon's jar breaks at its
+   * next {@link tickJar}, not here (`SpurtzCannon.shootJar`).
+   */
+  const hitJar = (tower: Tower, jar: Jar, damage: number): boolean => {
+    const building = tower.building;
+    if (jar.health === null) return false;
+    const dealt = jarShot(building.type, damage, building.hp, building.maxHp);
+    if (dealt === null) return false;
+    countShot(tower.report);
+    jar.health -= dealt;
+    if (jar.health <= 0 && !isSpurtzCannon(building.type)) killJar(jar);
+    return true;
+  };
+
+  /**
+   * `TickJar` (`BTOWER.as:300-308`), at the end of every tower's
+   * `TickAttack`, standing or not: a jar at 0 breaks, a breaking one moves on
+   * a cell, and at the strip's end it is gone and the tower can be attacked
+   * again (`RemoveJar`).
+   */
+  const tickJar = (jar: Jar): void => {
+    if (jar.health !== null && jar.health <= 0) killJar(jar);
+    if (jar.breaking) jar.frame += 1;
+    if (jar.frame < JAR_FRAMES) return;
+    jar.building.jarred = false;
+    jars.delete(jar.building.id);
+  };
+
+  /**
+   * The jars before the towers fire: the last tick's `TickJar` for each but a
+   * Spurtz Cannon's (its own loop runs it, {@link tickSpurtzCannon}), then
+   * the landing a second after the drop (`JarLanded`, which comes before the
+   * check on the same tick), then `Jars.update` every second after the drop:
+   * once the jars' health adds up to nothing, every one breaks and the Jars
+   * stop being the active weapon. With no jar at all the sum is `NaN`, so
+   * they never stop.
+   */
+  const tickJars = (): void => {
+    if (jars.size === 0 && !jarDrop) return;
+    for (const jar of jars.values()) {
+      if (!isSpurtzCannon(jar.building.type)) tickJar(jar);
+    }
+    const drop = jarDrop;
+    if (!drop) return;
+    let left = 0;
+    for (const jar of drop.jars) {
+      if (tick === jar.landsAt && !jar.breaking) jar.health = jar.durability;
+      left += jar.health ?? 0;
+    }
+    const elapsed = tick - drop.droppedAt;
+    if (elapsed % JAR_CHECK_TICKS !== 0 || drop.jars.length === 0 || left > 0) return;
+    for (const jar of drop.jars) killJar(jar);
+    jarDrop = null;
+  };
+
   /* ── Creeps ────────────────────────────────────────────────────────────── */
 
   const targetContext = { bunkerInUse };
@@ -2631,8 +3866,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creep.waypointIndex = 0;
   };
 
-  /** Returns false when the creep found nothing and turned for home. */
-  const findTarget = (creep: Creep): boolean => {
+  /**
+   * Returns false when the creep found nothing and turned for home.
+   *
+   * `relook` is the look a monster takes every {@link RETARGET_TICKS} while it
+   * still has a target: its new route is only taken under `setWaypoints`'
+   * rule ({@link routeTo}).
+   */
+  const findTarget = (creep: Creep, relook = false): boolean => {
     let chosen: EngineBuilding | null;
     if (creep.champion) {
       // A champion's own lists (`ChampionBase.findTarget`, `Krallen.findTarget`, issue #222).
@@ -2650,19 +3891,78 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
             scoring,
           );
     } else {
+      // Group 6 hunts first, while it still is group 6 (`MonsterBase.as:1041-1049`).
+      if (creep.hunts && creep.targetGroup === TARGET_GROUP.CHAMPIONS) takeHuntTarget(creep);
       const result = findBuildingTarget(yard, creep.x, creep.y, creep.targetGroup, targetContext);
       if (result.fellThrough && creep.targetGroup !== TARGET_GROUP.TOWERS) {
         creep.targetGroup = TARGET_GROUP.ALL;
       }
       chosen = result.closest;
     }
+    const quarry = creep.hunts && (creep.targetCreep >= 0 || creep.huntPen >= 0);
     if (!chosen) {
+      // `if (!closestBuilding && !this._targetCreep)` (`MonsterBase.as:1087-1089`).
+      if (quarry) return true;
       // Nothing left to attack: `changeModeRetreat` (`MonsterBase.as:1089`).
       creep.behaviour = "retreat";
       return false;
     }
-    routeTo(creep, chosen);
+    if (quarry) {
+      // Balthazar heads for a building only once it has no creep (`MonsterBase.as:1130`).
+      creep.targetBuilding = chosen.id;
+      return true;
+    }
+    routeTo(creep, chosen, relook && !creep.champion);
     return true;
+  };
+
+  /** How many defenders `findHuntingTargets` lists at most (`MonsterBase.as:955`). */
+  const HUNT_LIST = 10;
+
+  /**
+   * `findHuntingTargets` (`MonsterBase.as:943-981`): the nearest, on screen, of
+   * the first ten defenders out on the field and the cage's champions, the one
+   * still in its cage included (`:960-971`). Flash leaves `_atTarget` as it
+   * was, so a Balthazar that was at a building would strike its new quarry
+   * from there; here it flies to it first.
+   */
+  const takeHuntTarget = (creep: Creep): void => {
+    let nearest = Infinity;
+    let foe: Creep | null = null;
+    let pen = -1;
+    let listed = 0;
+    for (const other of creeps) {
+      if (listed >= HUNT_LIST) break;
+      if (!other.friendly || other.champion || other.gone || other.hp <= 0) continue;
+      if (other.behaviour !== "defend" && other.behaviour !== "bunker") continue;
+      listed += 1;
+      if (!other.targetable || !canHit(creep.hitFlags, other.flags)) continue;
+      const squared = screenDistanceSquared(creep.ix, creep.iy, other.ix, other.iy);
+      if (squared < nearest) {
+        nearest = squared;
+        foe = other;
+        pen = -1;
+      }
+    }
+    for (let at = 0; at < cageSlots.length; at += 1) {
+      const slot = cageSlots[at] as CageSlot;
+      const out = slot.champion;
+      const where = slot.pen ?? (out && out.hp > 0 && !out.gone && out.targetable ? out : null);
+      if (!where || slot.report.hp <= 0) continue;
+      const squared = screenDistanceSquared(creep.ix, creep.iy, where.ix, where.iy);
+      if (squared < nearest) {
+        nearest = squared;
+        foe = slot.pen ? null : out;
+        pen = slot.pen ? at : -1;
+      }
+    }
+    if (!foe && pen < 0) return;
+    creep.targetCreep = foe ? foe.id : -1;
+    creep.huntPen = pen;
+    creep.atTarget = false;
+    creep.attacking = false;
+    creep.waypoints = [];
+    creep.waypointIndex = 0;
   };
 
   /**
@@ -2782,7 +4082,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       exposure(
         fireAt(building),
         building.hp,
-        fortifiedDamage(champion.damage, building.fortification, 0) / delay,
+        buildingTakes(champion.damage, building.fortification) / delay,
         champion.hp,
       );
     /** A candidate's features; its threat only when asked, being the costly one. */
@@ -2797,12 +4097,26 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     return { features, liveTower, shareAt };
   };
 
-  /** Sets a creep on its way to a building: straight for a flyer, by the grid on foot. */
-  const routeTo = (creep: Creep, chosen: EngineBuilding): void => {
-    creep.targetBuilding = chosen.id;
-    if (creep.champion && creep.flying) creep.looking = true;
-    creep.waypointIndex = 0;
+  /**
+   * Sets a creep on its way to a building: straight for a flyer, by the grid on foot.
+   *
+   * With `keep`, a creep on foot that is already walking to a target takes the
+   * new route only under `setWaypoints`' rule (`MonsterBase.as:1255-1270`,
+   * `ChampionBase.as:704-716`): when it has fewer waypoints than the old one
+   * has left, and never when it ends at a wall, unless the creep is a wall
+   * specialist. Otherwise it walks on as it was, target and all. A flyer and a
+   * burrower are set on their target without a route (`MonsterBase.as:1093-1158`),
+   * so the rule never reaches them.
+   */
+  const routeTo = (creep: Creep, chosen: EngineBuilding, keep = false): void => {
     if (creep.flying) {
+      creep.targetBuilding = chosen.id;
+      if (creep.champion) creep.looking = true;
+      creep.waypointIndex = 0;
+      if (!creep.champion && creep.monsterId === BALTHAZAR_ID) {
+        flyBalthazarTo(creep, chosen);
+        return;
+      }
       creep.waypoints = [{ x: chosen.x, y: chosen.y }];
       // Under 170 screen px from `_position` (`ChampionBase.as:662`).
       const at = screenPointOf(creep.ix, creep.iy);
@@ -2813,10 +4127,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       { fromX: creep.ix, fromY: creep.iy, target: chosen, ignoreWalls: creep.ignoreWalls },
       rng,
     );
-    if (route.blockedBy >= 0) {
-      const wall = buildingOf(route.blockedBy);
-      if (wall && wall.hp > 0) creep.targetBuilding = wall.id;
+    const blocker = route.blockedBy >= 0 ? buildingOf(route.blockedBy) : null;
+    const wall = blocker && blocker.hp > 0 ? blocker : null;
+    if (keep && !creep.burrows && creep.targetBuilding >= 0) {
+      const left = creep.waypoints.length - creep.waypointIndex;
+      const shorter = route.waypoints.length < left;
+      if (!shorter || (wall && creep.targetGroup !== TARGET_GROUP.WALLS)) return;
     }
+    creep.targetBuilding = wall ? wall.id : chosen.id;
+    creep.waypointIndex = 0;
     if (route.waypoints.length > 1) {
       // The first waypoint is the creep's own cell; walking to it is a no-op.
       creep.waypoints = route.waypoints.slice(1);
@@ -2827,10 +4146,39 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   };
 
   /**
+   * Balthazar's approach to a building (`MonsterBase.as:1128-1143`): it is at
+   * it under 50 screen px from `_position`; farther off it flies to a point 30
+   * to 40 px out from there, towards itself, and is at it once that point is
+   * reached ({@link moveCreep}). Straight there, by fidelity note 4: the
+   * radius is the middle of Flash's 30 to 40, and there is no ±20° swing.
+   */
+  const flyBalthazarTo = (creep: Creep, chosen: EngineBuilding): void => {
+    const at = screenPointOf(creep.ix, creep.iy);
+    const across = at.x - chosen.sx;
+    const down = at.y - chosen.sy;
+    const away = Math.sqrt(across * across + down * down);
+    creep.atTarget = away < BALTHAZAR_REACH;
+    if (creep.atTarget || away === 0) {
+      creep.waypoints = [{ x: chosen.x, y: chosen.y }];
+      return;
+    }
+    const stopX = chosen.sx + (across / away) * BALTHAZAR_STOP;
+    const stopY = chosen.sy + (down / away) * BALTHAZAR_STOP;
+    // `screenPointOf` undone: screen (a, d) is yard (d + a / 2, d - a / 2).
+    creep.waypoints = [{ x: stopY + stopX / 2, y: stopY - stopX / 2 }];
+  };
+
+  /**
    * The renderer's note of a swing that connected: a lunge or a projectile at
    * the attacker's end, a flash at the target's. Not simulation state.
    */
-  const recordHit = (creep: Creep, targetIx: number, targetIy: number, amount: number): void => {
+  const recordHit = (
+    creep: Creep,
+    targetIx: number,
+    targetIy: number,
+    amount: number,
+    mods: { readonly bonus: number; readonly reduced: number } | null = null,
+  ): void => {
     visual.push({
       kind: "hit",
       tick,
@@ -2844,6 +4192,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       ranged: creep.range > 1,
       flying: creep.flying,
       amount,
+      ...(mods && mods.bonus > 0 ? { bonus: mods.bonus } : {}),
+      ...(mods && mods.reduced > 0 ? { reduced: mods.reduced } : {}),
     });
   };
 
@@ -2854,11 +4204,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const swingDelay = (creep: Creep): number => {
     let boost = creep.enrage * creep.puttySpeed;
     // The Monster Speed Buff divides the delay too (`HyperSpeed.as`, `DivisionModifier`).
-    if (buffsOf(creep).monsterSpeed) boost *= MONSTER_SPEED_BUFF;
+    if (boosted(creep, "monsterSpeed")) boost *= MONSTER_SPEED_BUFF;
     // A ranked Bandito spins faster: 1, 1.5, 2 x (`BanditoAOEDamageSpin.as:23`, issue #352).
     if (creep.rank > 0 && creep.monsterId === BANDITO_ID) {
       boost *= banditoSpeedPercent(creep.rank) / 100;
     }
+    // A swarming Pokey swings 10, 20 or 30% faster (Lab "Swarm", owner 2 Nov 2026).
+    if (creep.swarming) boost *= 1 + swarmSpeedShare(creep.rank);
     return Math.trunc(boost === 1 ? creep.attackDelay : creep.attackDelay / boost);
   };
 
@@ -2874,23 +4226,39 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (other && other.hp > 0) {
         recordHit(creep, other.ix, other.iy, strikeCreep(creep, other, null));
         if (creep.rank > 0) onAttack(creep, creep.damage, other, null);
+        if (creep.monsterId === KING_WORMZER_ID) {
+          kingWormzerSplash(creep, creep.damage, other, null);
+        }
       }
       return;
     }
     if (!target || target.hp <= 0) return;
     // Korath counts every swing towards his quake (`Korath.as:78`).
     if (creep.monsterId === KORATH_ID && creep.champion) creep.hits += 1;
-    const multiplier = specialistMultiplier(creep.targetGroup, target.kind);
+    // A monster's shot is `rangedAttack`'s plain `damage`, outside the specialist
+    // multipliers (`CreepBase.as:886-894`, `:919-920`); Sabnox doubles its own at
+    // a tower (`Sabnox.as:12-17`).
+    const shot = !creep.champion && creep.range > 1;
+    const multiplier = shot
+      ? creep.monsterId === SABNOX_ID && target.kind === "tower"
+        ? SPECIALIST_DAMAGE_MULTIPLIER
+        : 1
+      : specialistMultiplier(creep.targetGroup, target.kind);
     // Fomor's fireball lands as a `DummyTarget`, which loots at 1 (`FIREBALL.as:165`,
-    // `BFOUNDATION.as:528-533`), not at its own 2 (issue #222).
-    const looting = creep.champion && creep.monsterId === FOMOR_ID ? 1 : lootOf(creep);
-    recordHit(
-      creep,
-      target.x,
-      target.y,
-      damageBuilding(target, creep.damage * multiplier, creep, looting),
-    );
+    // `BFOUNDATION.as:528-533`), not at its own 2 (issue #222). So does every
+    // monster's shot: a fireball as a `DummyTarget`, Rezghul's `Projectilev2` as
+    // itself (`Projectilev2.as:155`), neither of them a `MonsterBase`.
+    const fireball = (creep.champion && creep.monsterId === FOMOR_ID) || shot;
+    const looting = fireball ? 1 : lootOf(creep);
+    // A ranked Crabatron's critical hit doubles the blow (Lab "Critical Hits").
+    const crit = critRoll(creep);
+    const blow = crit ? creep.damage * multiplier * CRIT_MULTIPLIER : creep.damage * multiplier;
+    const dealt = damageBuilding(target, blow, creep, looting, true, crit ? "crit" : "hit");
+    recordHit(creep, target.x, target.y, dealt, lastBlowMods);
     if (creep.rank > 0) onAttack(creep, creep.damage * multiplier, null, target);
+    if (creep.monsterId === KING_WORMZER_ID) {
+      kingWormzerSplash(creep, creep.damage * multiplier, null, target);
+    }
     // Krallen moves on from a harvester she has drained (`ChampionBase.as:836-840`).
     if (
       creep.champion &&
@@ -2903,6 +4271,76 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   };
 
   /**
+   * A blow's damage at a creep: triple for a hunter's melee blow
+   * (`CreepBase.as:884-886`). A shot is fired without it (`:902-903`).
+   */
+  const huntBlow = (creep: Creep): number =>
+    creep.hunts && creep.range <= 1 ? creep.damage * HUNT_DAMAGE_MULTIPLIER : creep.damage;
+
+  /** `CREATURES._creatureCount > 0 || CREATURES._hasLivingGuardian` (`CreepBase.as:851`). */
+  const anyHuntable = (): boolean =>
+    defendersOut > 0 || cageSlots.some((slot) => slot.report.hp > 0);
+
+  /**
+   * A hunter after the champion still in its cage (`MonsterBase.as:960-965`):
+   * it flies there and strikes it in its cage at triple damage, from within
+   * the 50 px every melee blow at a creep needs (`CreepBase.as:1563-1567`).
+   * The blow turns the champion on it (`:906-914`), which comes out at the
+   * start of the next step ({@link tickCageSlot}). Once the champion is out,
+   * or dead, the hunter goes on as at any other creep: false hands the tick
+   * back.
+   */
+  const huntPenned = (creep: Creep): boolean => {
+    const slot = cageSlots[creep.huntPen];
+    const pen = slot?.pen;
+    if (!slot || !pen || slot.report.hp <= 0) {
+      creep.huntPen = -1;
+      const out = slot?.champion;
+      if (out && out.hp > 0 && !out.gone && byCreepId.get(out.id) === out) {
+        creep.targetCreep = out.id;
+      } else {
+        // Dead in its cage: `loseTarget` and a fresh look (`CreepBase.as:860-863`).
+        loseTarget(creep);
+      }
+      return false;
+    }
+    const squared = screenDistanceSquared(creep.ix, creep.iy, pen.ix, pen.iy);
+    creep.atTarget = squared < creepReach(creep.range);
+    if (creep.atTarget) {
+      creep.attacking = true;
+      if (creep.attackCooldown <= 0) {
+        creep.attackCooldown += swingDelay(creep);
+        const before = slot.report.hp;
+        damageCaged(slot, huntBlow(creep));
+        // `recordHit`'s, but on neither a building nor a creep on the field.
+        visual.push({
+          kind: "hit",
+          tick,
+          creepId: creep.id,
+          buildingId: -1,
+          creepTargetId: -1,
+          ix: creep.ix,
+          iy: creep.iy,
+          targetIx: pen.ix,
+          targetIy: pen.iy,
+          ranged: false,
+          flying: creep.flying,
+          amount: before - slot.report.hp,
+        });
+        if (slot.pen) slot.provokedBy = creep.id;
+      } else {
+        creep.attackCooldown -= 1;
+      }
+      return true;
+    }
+    creep.attacking = false;
+    creep.waypoints = [{ x: pen.ix, y: pen.iy }];
+    creep.waypointIndex = 0;
+    moveCreep(creep);
+    return true;
+  };
+
+  /**
    * One blow at another creep. Korath's at a flyer is his fireball, a quarter
    * of his damage (`Korath.as:72-75`, `:110-115`); his others are blows that
    * count towards his quake (`:78`); both leave his flame on what they hit
@@ -2910,7 +4348,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    */
   const strikeCreep = (creep: Creep, foe: Creep, by: Creep | null): number => {
     if (!(creep.champion && creep.monsterId === KORATH_ID)) {
-      return damageCreep(foe, creep.damage, by, creep);
+      // A ranked Crabatron's critical hit doubles the blow (Lab "Critical Hits").
+      const crit = critRoll(creep);
+      const blow = crit ? huntBlow(creep) * CRIT_MULTIPLIER : huntBlow(creep);
+      return damageCreep(foe, blow, by, creep, crit ? "crit" : "hit");
     }
     if (foe.flying && hasFireball(KORATH_ID, creep.level, creep.power)) {
       // The flame catches as the fireball lands, before its damage (`FIREBALL.as:138-149`).
@@ -2940,7 +4381,24 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creep.burnTick += 1;
     if (creep.burnTick < FLAME_INTERVAL) return false;
     creep.burnTick -= FLAME_INTERVAL;
-    damageCreep(creep, creep.burnDps, null, creep.burnBy);
+    damageCreep(creep, creep.burnDps, null, creep.burnBy, "dot");
+    return creep.hp <= 0;
+  };
+
+  /** Whether the Descent's burn is on this creep (Inferno WP 1.21). */
+  const descentBurning = (creep: Creep): boolean =>
+    descentBurn > 0 && burnsInDescent(creep.monsterId);
+
+  /**
+   * The Descent burn's tick (Inferno WP 1.21), beside the flame's: every
+   * {@link DESCENT_BURN_INTERVAL} ticks the creep has been on the field it
+   * loses its share of full health, through its armour, from no one. True
+   * when it killed.
+   */
+  const tickDescentBurn = (creep: Creep): boolean => {
+    const age = tick - creep.born;
+    if (age <= 0 || age % DESCENT_BURN_INTERVAL !== 0) return false;
+    damageCreep(creep, creep.maxHp * descentBurn);
     return creep.hp <= 0;
   };
 
@@ -3080,6 +4538,28 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   };
 
   /**
+   * King Wormzer's splash on every hit, ranked or not ({@link KING_WORMZER_ID}):
+   * the buildings within {@link WORMZER_RADIUS}, the swing times
+   * {@link KING_WORMZER_MULTIPLIER}, once per target in a row. No monster is
+   * hurt, and a defender's splash finds no building.
+   */
+  const kingWormzerSplash = (
+    creep: Creep,
+    damage: number,
+    foe: Creep | null,
+    building: EngineBuilding | null,
+  ): void => {
+    const key = splashKey(foe, building);
+    if (key === creep.lastSplash) return;
+    creep.lastSplash = key;
+    const targets = splashTargets(creep, WORMZER_RADIUS, null, null).filter(
+      (target) => target.building !== null,
+    );
+    dealSplash(creep, damage * KING_WORMZER_MULTIPLIER, WORMZER_RADIUS, 0, targets);
+    noteSplash(creep, WORMZER_RADIUS, targets.length);
+  };
+
+  /**
    * `PoisonOnAttack.onAttack` (`PoisonOnAttack.as:12`, `DOTEffect.as`): a bite
    * on a creep leaves one venom on it, and each further bite adds a stack. The
    * venom's strength is the first Fang's damage times its rank's share, and it
@@ -3104,7 +4584,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creep.venomTick += 1;
     if (creep.venomTick < ticks(VENOM_INTERVAL_SECONDS)) return false;
     creep.venomTick = 0;
-    damageCreep(creep, creep.venomStacks * creep.venomDps, null, creep.venomBy);
+    damageCreep(creep, creep.venomStacks * creep.venomDps, null, creep.venomBy, "dot");
     return creep.hp <= 0;
   };
 
@@ -3319,9 +4799,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // A putty bomb's boost, on top of Fomor's (`ResourceBomb.as:170-185`).
     if (creep.puttySpeed !== 1) speed *= creep.puttySpeed;
     // The Monster Speed Buff (`HyperSpeed.k_moveSpeedModifier`).
-    if (buffsOf(creep).monsterSpeed) speed *= MONSTER_SPEED_BUFF;
+    if (boosted(creep, "monsterSpeed")) speed *= MONSTER_SPEED_BUFF;
     const factor = BEHAVIOUR_SPEED[creep.behaviour];
     if (factor !== undefined) speed *= factor;
+    // Mid-hop, Malphus goes three times as fast on the way up and twice on
+    // the way down (`CreepBase.as:1471-1478`).
+    if (creep.hopStart >= 0) {
+      const into = tick - creep.hopStart;
+      if (into >= HOP_TICKS) creep.hopStart = -1;
+      else speed *= into < HOP_UP_TICKS ? HOP_UP_SPEED : HOP_DOWN_SPEED;
+    }
     if (creep.attacking) return;
     if (creep.waypointIndex >= creep.waypoints.length) return;
 
@@ -3335,6 +4822,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         return;
       }
       waypoint = creep.waypoints[creep.waypointIndex] as Cart;
+      if (creep.hopStart < 0 && hopsOver(creep, waypoint)) creep.hopStart = tick;
     }
 
     // Flash walks `_tmpPoint` `speed` screen px towards the waypoint
@@ -3342,6 +4830,19 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // whichever way it heads. The step is taken on screen, then turned back
     // into yard units: screen (a, d) is yard (a / 2 + d, d - a / 2).
     stepCreep(creep, waypoint.x, waypoint.y, speed);
+  };
+
+  /**
+   * Whether a jumper's next waypoint sets off a hop (`CreepBase.as:1505-1526`):
+   * it lies on a standing wall. `PATHING.GetBuildingFromISO` reads the grid's
+   * registered building, and only a wall registers (`BWALL.as:11-13`), so
+   * Malphus hops over walls and walks through every other building.
+   */
+  const hopsOver = (creep: Creep, waypoint: Cart): boolean => {
+    if (!creep.ignoreWalls || creep.burrows || creep.champion) return false;
+    const id = grid.wallAt(cellOf(Math.trunc(waypoint.x), Math.trunc(waypoint.y)));
+    const wall = id >= 0 ? buildingOf(id) : null;
+    return !!wall && wall.hp > 0;
   };
 
   /** `speed` screen px towards a yard point, as {@link moveCreep} takes them. */
@@ -3378,9 +4879,14 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       distanceSquared(home.centreX, home.centreY, other.x, other.y) < home.leash * home.leash;
     let target = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
     if (!target || target.hp <= 0 || target.gone || !leashed(target) || unseen(target)) {
+      // A Balthazar passes over an Eye-ra (`CreepBase.as:667-671`).
       const found = index
         .inRange(DEFEND_SEARCH, creep.x, creep.y, creep.hitFlags)
-        .find((hit) => leashed(hit.creep))?.creep;
+        .find(
+          (hit) =>
+            leashed(hit.creep) &&
+            !(creep.monsterId === BALTHAZAR_ID && hit.creep.monsterId === EYE_RA_ID),
+        )?.creep;
       if (!found) {
         if (creep.blinkHops > 0) stopBlink(creep);
         creep.targetCreep = -1;
@@ -3879,6 +5385,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const followAlly = (creep: Creep, ally: Creep): void => {
     creep.waypointIndex = 0;
     creep.followHelper = creep.flying;
+    creep.wallInWay = -1;
     if (creep.flying) {
       creep.waypoints = [{ x: ally.ix, y: ally.iy }];
       return;
@@ -3894,7 +5401,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     );
     if (route.blockedBy >= 0) {
       const wall = buildingOf(route.blockedBy);
-      if (wall && wall.hp > 0) creep.targetBuilding = wall.id;
+      if (wall && wall.hp > 0) {
+        creep.targetBuilding = wall.id;
+        creep.wallInWay = wall.id;
+      }
     }
     creep.waypoints =
       route.waypoints.length > 1 ? route.waypoints.slice(1) : [{ x: ally.ix, y: ally.iy }];
@@ -3905,6 +5415,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creep.support = false;
     creep.hasHelpTarget = false;
     creep.followHelper = false;
+    creep.wallInWay = -1;
     creep.atTarget = false;
     creep.targetCreep = -1;
     findTarget(creep);
@@ -3918,11 +5429,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     creep.helpCreep = -1;
     creep.targetBuilding = -1;
     creep.followHelper = false;
+    creep.wallInWay = -1;
   };
 
-  /** Fomor heads for a building: straight in the air, by the grid on foot. */
+  /**
+   * Fomor heads for a building: straight in the air, by the grid on foot,
+   * where {@link routeTo} takes on the wall the route runs into.
+   */
   const headFor = (creep: Creep, building: EngineBuilding): void => {
     creep.followHelper = false;
+    creep.wallInWay = -1;
     if (creep.flying) {
       creep.waypoints = [{ x: building.x, y: building.y }];
       creep.waypointIndex = 0;
@@ -3930,20 +5446,34 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       return;
     }
     routeTo(creep, building);
+    if (creep.targetBuilding !== building.id) creep.wallInWay = creep.targetBuilding;
+  };
+
+  /**
+   * The wall in a walking Fomor's way ({@link Creep.wallInWay}) while it
+   * stands and Fomor can shoot it from where it is, else null.
+   *
+   * Following an ally, Fomor aims at the ally's building every tick
+   * (`Fomor.as:199-201`), so the wall its route ran into never stays its
+   * target. Without this it walked up to that wall, found the building out of
+   * its range, planned its way again, and shot neither: a Fomor on foot by a
+   * walled Town Hall stood there the whole attack (player report, 2 Nov 2026).
+   */
+  const wallToShoot = (creep: Creep): EngineBuilding | null => {
+    const wall = creep.wallInWay >= 0 ? buildingOf(creep.wallInWay) : null;
+    return wall && wall.hp > 0 && canShootBuilding(creep, wall, creep.range) ? wall : null;
   };
 
   /**
    * `ChampionBase.move` for a following Fomor (`:1399-1416`): a building in
-   * reach stops it where it is; else it walks its waypoints, the moving one
-   * included.
+   * reach, or the wall in its way, stops it where it is; else it walks its
+   * waypoints, the moving one included.
    */
   const supportMove = (creep: Creep): void => {
     const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
     if (
       !creep.atTarget &&
-      aim &&
-      aim.hp > 0 &&
-      canShootBuilding(creep, aim, creep.range)
+      ((aim && aim.hp > 0 && canShootBuilding(creep, aim, creep.range)) || wallToShoot(creep))
     ) {
       creep.atTarget = true;
       return;
@@ -3995,8 +5525,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         creep.atTarget = false;
       } else if (creep.waypointIndex >= creep.waypoints.length && !creep.atTarget) {
         const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
-        if (aim && canShootBuilding(creep, aim, range)) creep.atTarget = true;
-        else if (aim) headFor(creep, aim);
+        if ((aim && canShootBuilding(creep, aim, range)) || wallToShoot(creep)) {
+          creep.atTarget = true;
+        } else if (aim) {
+          headFor(creep, aim);
+        }
       }
     } else if (creep.hasHelpTarget) {
       const aim = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
@@ -4037,9 +5570,18 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         creep.attacking = true;
         swing(creep);
       } else if (aim) {
-        creep.attacking = false;
-        creep.atTarget = false;
-        headFor(creep, aim);
+        // Out of reach: on foot, the wall in its way is shot instead.
+        if (!wallToShoot(creep)) headFor(creep, aim);
+        const wall = wallToShoot(creep);
+        if (wall) {
+          creep.targetBuilding = wall.id;
+          creep.atTarget = true;
+          creep.attacking = true;
+          swing(creep);
+        } else {
+          creep.attacking = false;
+          creep.atTarget = false;
+        }
       } else {
         dropSupport(creep);
         findBuffTargets(creep);
@@ -4213,6 +5755,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // The flame and the auras tick before their creep acts, and a champion's
     // frame counts up in `tickState` before its behaviour reads it (issue #222).
     if (creep.burnDps > 0 && tickBurn(creep)) return;
+    if (descentBurning(creep) && tickDescentBurn(creep)) return;
     if (creep.venomStacks > 0 && tickVenom(creep)) return;
     if (creep.rank > 0 && creep.monsterId === BRAIN_ID) tickCloak(creep);
     if (creep.champion) {
@@ -4224,7 +5767,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       }
     }
     if (creep.friendly) {
-      if (creep.champion) tickCageChampion(creep);
+      if (creep.behaviour === "decoy") tickDecoyed(creep);
+      else if (creep.champion) tickCageChampion(creep);
       else if (creep.hatchedBy >= 0) tickSpurtz(creep);
       else tickDefender(creep);
       return;
@@ -4233,6 +5777,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       tickHealer(creep);
       return;
     }
+    if (creep.huntPen >= 0 && huntPenned(creep)) return;
     if (defended && fightsBack(creep) && engage(creep)) return;
     if (creep.support) {
       // `move()`, then `tickBBuff` (`MonsterBase.tick`, `Fomor.as:22-32`).
@@ -4259,7 +5804,16 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       ? !creep.looking && creep.frame % CHAMPION_RETARGET_FRAMES === 0
       : (tick + creep.phase) % RETARGET_TICKS === 0;
     if (hunting && !creep.attacking && lookAgain) {
-      hunting = findTarget(creep);
+      hunting = findTarget(creep, true);
+    } else if (
+      hunting &&
+      creep.hunts &&
+      creep.targetGroup === TARGET_GROUP.CHAMPIONS &&
+      lookAgain &&
+      anyHuntable()
+    ) {
+      // A hunter at a building looks for a creep again all the same (`CreepBase.as:851-852`).
+      hunting = findTarget(creep, true);
     }
     if (hunting && creep.targetBuilding < 0) hunting = findTarget(creep);
     if (!hunting) return;
@@ -4360,9 +5914,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const base = stats?.damage;
     if (stats?.range === undefined || base === undefined) return;
     // Tower Overdrive (fidelity note 19): on the shot before it is cut to a whole number.
-    const damage = towerBoost === 1 ? base : base * towerBoost;
+    const boost = towerBoost();
+    const damage = boost === 1 ? base : base * boost;
     if (building.type === AERIAL_DEFENSE_TYPE) {
       tickSalvo(tower, damage, stats.rate ?? 0, stats.splash ?? 0);
+      return;
+    }
+    // A Quake Tower winding up does nothing else, its fire tick standing still.
+    if (building.type === QUAKE_TOWER_TYPE && tower.stage === 1) {
+      windQuake(tower, damage);
       return;
     }
     rearm(tower, damage, stats.rate ?? 0, stats.splash ?? 0);
@@ -4376,9 +5936,21 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (tower.fireTick > 0) return;
     tower.fireTick += rate * TOWER_REARM_MULTIPLIER;
 
+    // On the Vacuum's hose it shoots nothing else till the hose is gone (`BTOWER.as:197-204`).
+    if (tower.onHose) {
+      if (vacuum) shootHose(tower, damage, splash, towerTargets(building.type));
+      else tower.onHose = false;
+      return;
+    }
     const scan = scanOf(tower);
     const live = liveTargets(tower, scan);
     if (live.length === 0) {
+      // With nobody to shoot, the hose if it can reach it (`:181-185`).
+      if (hoseInReach(tower)) {
+        tower.onHose = true;
+        tower.fireTick = TOWER_ACQUIRE_TICKS;
+        return;
+      }
       findTowerTargets(tower, scan, 1);
       // Every re-acquire path resets the fire tick to 30 (`BTOWER.as:184`, `:189`, `:220`).
       tower.fireTick = TOWER_ACQUIRE_TICKS;
@@ -4389,10 +5961,20 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     // `int(damage * scale)`, but the Railgun's beam is not truncated (`BUILDING118.as:195`).
     const shot = towerShotDamage(damage, building.hp, building.maxHp);
     for (const creep of live) {
+      // A landed jar takes the shot instead (Inferno WP 6.7, `BTOWER.Fire`, `isJard`).
+      const jar = crackJar(building);
       if (building.type === TESLA_TYPE) {
-        armCoil(tower, creep);
+        armCoil(tower, creep.id);
         continue;
       }
+      if (building.type === QUAKE_TOWER_TYPE) {
+        // `INFERNOQUAKETOWER.Fire` (`:128-135`): the wind-up starts. Its jar
+        // takes the blow at the end of it ({@link windQuake}).
+        tower.stage = 1;
+        tower.charge = 0;
+        continue;
+      }
+      if (jar && hitJar(tower, jar, damage)) continue;
       countShot(tower.report);
       if (building.type === LASER_TYPE) {
         fireLaser(tower, creep, shot, splash);
@@ -4402,11 +5984,68 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         fireRailgun(tower, creep, damage * towerHealthScale(building.hp, building.maxHp));
         continue;
       }
+      // The Magma Tower's fireball is such a shell (`INFERNO_MAGMA_TOWER.as:56-79`):
+      // one target, no splash. Its `FlameEffect` (`:81-89`) is a listener
+      // nothing ever adds, so a creep it hits does not burn.
       fireShell(tower, creep, shot, splash, shellBlastTargets(building.type));
     }
   };
 
-  /** A shell at `creep` carrying `shot`, then its blast, if it has one. */
+  /**
+   * One tick of a Quake Tower's wind-up (`INFERNOQUAKETOWER.TickAttack`,
+   * `:107-122`), and its quake on the tick after the strip's last cell
+   * (`DelayedFire`, `:137-159`): a landed jar takes the blow instead.
+   */
+  const windQuake = (tower: Tower, damage: number): void => {
+    tower.quakeFrame += 1;
+    const step =
+      tower.quakeFrame % QUAKE_FRAME_TICKS === 0 || tower.charge >= QUAKE_ANIM_FRAMES - 4;
+    if (!step) return;
+    if (tower.charge < QUAKE_ANIM_FRAMES) {
+      // `AnimFrame(false)` draws the cell before the tick moves on.
+      visual.push({ kind: "towerCell", tick, towerId: tower.building.id, cell: tower.charge });
+      tower.charge += 1;
+      return;
+    }
+    tower.stage = 0;
+    const jar = jarOn(tower.building);
+    if (jar && hitJar(tower, jar, damage)) return;
+    quakeTower(tower, Math.trunc(damage));
+  };
+
+  /**
+   * `INFERNOQUAKETOWER.Quake` (`:161-189`): every creep on the ground or unseen
+   * within the range of the scan point takes {@link quakeDamage}. The tower's
+   * health does not weaken it. A Vacuum hose within range of the tower's
+   * `_position` takes `int(power / range * (range - d))`, `d` the tower to the
+   * Town Hall the hose is on (`:183-187`), with no floor.
+   */
+  const quakeTower = (tower: Tower, power: number): void => {
+    countShot(tower.report);
+    visual.push({ kind: "towerQuake", tick, towerId: tower.building.id, radius: tower.range });
+    const scan = towerScanPoint(tower.building);
+    for (const hit of index.inRange(tower.range, scan.x, scan.y, QUAKE_TARGETS)) {
+      const creep = hit.creep;
+      const before = creep.hp;
+      const dealt = quakeDamage(power, tower.range, hit.dist, creep.hp);
+      tower.report.damageDealt += towerHurt(tower.report, creep, dealt);
+      if (before > 0 && creep.hp <= 0) tower.report.kills += 1;
+    }
+    const hose = vacuum;
+    if (!hose) return;
+    const building = tower.building;
+    const x = hose.target.sx - building.sx;
+    const y = vacuumHoseY(hose.target.sy, tick - hose.droppedAt) - building.sy;
+    if (Math.sqrt(x * x + y * y) >= tower.range) return;
+    const hallY = hose.target.sy - building.sy;
+    const hall = Math.sqrt(x * x + hallY * hallY);
+    hose.health -= Math.trunc((power / tower.range) * (tower.range - hall));
+  };
+
+  /**
+   * A shell at `creep` carrying `shot`. A tower in {@link SHELL_TOP} sends it
+   * flying ({@link tickTowerShells}); any other hurts at once, its blast too.
+   */
   const fireShell = (
     tower: Tower,
     creep: Creep,
@@ -4422,9 +6061,47 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       ix: creep.ix,
       iy: creep.iy,
     });
+    const building = tower.building;
+    const top = SHELL_TOP[building.type];
+    if (top !== undefined) {
+      // `PROJECTILES.Spawn(new Point(_mc.x, _mc.y + _top), ...)` (`BUILDING20.as:43`
+      // and the others), or `FIREBALLS.Spawn2` for the Magma Tower.
+      const rise = building.type === 21 && yard.kind === "inferno" ? SNIPER_INFERNO_TOP : top;
+      const fireball = building.type === MAGMA_TOWER_TYPE;
+      towerShells.push({
+        tower,
+        target: creep,
+        x: building.sx,
+        y: building.sy + rise,
+        stepX: 0,
+        stepY: 0,
+        frame: 4,
+        speed: towerStats(building.type, building.level, yard.kind)?.speed ?? 0,
+        damage: shot,
+        // A `FIREBALL` at a flyer has no blast (`FIREBALLS.as:103-108`).
+        splash: fireball && creep.flying ? 0 : splash,
+        flags,
+        exact: fireball,
+      });
+      return;
+    }
+    hurtOnTarget(tower.report, creep, shot, splash, flags);
+  };
+
+  /**
+   * `shot` on `creep` itself, then its blast round it, if any: an instant
+   * shot's, or a shell's with {@link SHELL_BLASTS_WHERE_IT_LANDS} off.
+   */
+  const hurtOnTarget = (
+    report: TowerReport,
+    creep: Creep,
+    shot: number,
+    splash: number,
+    flags: number,
+  ): void => {
     const before = creep.hp;
-    tower.report.damageDealt += damageCreep(creep, shot);
-    if (before > 0 && creep.hp <= 0) tower.report.kills += 1;
+    report.damageDealt += towerHurt(report, creep, shot);
+    if (before > 0 && creep.hp <= 0) report.kills += 1;
     if (splash <= 0) return;
     // `DealLinearAEDamage` over the blast, with its floor of a fifth (`:340-389`),
     // of what the shell carries.
@@ -4432,8 +6109,87 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const linear = (shot / splash) * (splash - hit.dist);
       const dealt = Math.max(linear, shot / 5);
       const health = hit.creep.hp;
-      tower.report.damageDealt += damageCreep(hit.creep, dealt);
-      if (health > 0 && hit.creep.hp <= 0) tower.report.kills += 1;
+      report.damageDealt += towerHurt(report, hit.creep, dealt);
+      if (health > 0 && hit.creep.hp <= 0) report.kills += 1;
+    }
+  };
+
+  /**
+   * `PROJECTILES.Tick` then `FIREBALLS.Tick` for the towers' shells, after the
+   * creeps, in the order fired (`GLOBAL.as:1290-1291`). A shell whose target
+   * has died is gone, its blast with it (`PROJECTILE.as:20-23`); the
+   * Magma's `FIREBALL` flies on to land on nothing (`FIREBALL.as:142-146`),
+   * which comes to the same. One whose target has left the field is gone too.
+   */
+  const tickTowerShells = (): void => {
+    if (towerShells.length === 0) return;
+    // The blasts look for creeps where they stand now, after their moves.
+    index.rebuild(creeps);
+    let write = 0;
+    for (let read = 0; read < towerShells.length; read += 1) {
+      const shell = towerShells[read] as TowerShell;
+      if (flyShell(shell)) continue;
+      towerShells[write] = shell;
+      write += 1;
+    }
+    towerShells.length = write;
+  };
+
+  /**
+   * One loop of a shell (`PROJECTILE.Tick` and `Move`, `PROJECTILE.as:18-53`):
+   * the distance to its target, as a whole number, then its move, then that
+   * distance less the move, whole again; within its `speed`, it lands. True
+   * once it is done with.
+   */
+  const flyShell = (shell: TowerShell): boolean => {
+    shell.frame += 1;
+    const target = shell.target;
+    if (target.hp <= 0 || target.gone) return true;
+    const at = screenPointOf(target.ix, target.iy);
+    // A flyer is aimed at where it is drawn, its altitude up (`PROJECTILE.as:24`).
+    const lift = target.flying ? (FLYER_ALTITUDES[target.monsterId] ?? FLYER_ALTITUDE) : 0;
+    const aimX = shell.exact ? at.x : Math.trunc(at.x);
+    const aimY = (shell.exact ? at.y : Math.trunc(at.y)) - lift;
+    const toX = aimX - shell.x;
+    const toY = aimY - shell.y;
+    const length = Math.sqrt(toX * toX + toY * toY);
+    const step = shell.speed * 0.5;
+    if (shell.frame % SHELL_AIM_FRAMES === 0) {
+      // `cos(atan2(dy, dx))` and its sine: the unit vector (note 2); `atan2(0, 0)` is 0.
+      shell.stepX = length > 0 ? (toX / length) * step : step;
+      shell.stepY = length > 0 ? (toY / length) * step : 0;
+    }
+    shell.x += shell.stepX;
+    shell.y += shell.stepY;
+    if (Math.trunc(Math.trunc(length) - step) > shell.speed) return false;
+    landShell(shell);
+    return true;
+  };
+
+  /**
+   * A shell lands. With a blast, `PROJECTILE.Splash` (`PROJECTILE.as:63-68`):
+   * `DealLinearAEDamage` round the point it went off at, which is up to its
+   * `speed` short of the target and, at a flyer, up in the air, so the target
+   * takes only its share like the rest (`Targeting.as:340-389`). Without one,
+   * or with {@link SHELL_BLASTS_WHERE_IT_LANDS} off, the target takes the shot.
+   */
+  const landShell = (shell: TowerShell): void => {
+    const report = shell.tower.report;
+    const target = shell.target;
+    if (shell.splash <= 0 || !blastWhereItLands) {
+      hurtOnTarget(report, target, shell.damage, shell.splash, shell.flags);
+      return;
+    }
+    const radius = shell.splash;
+    const centre = fromIso(shell.x, shell.y);
+    for (const hit of index.inRange(radius, centre.x, centre.y, shell.flags)) {
+      const dist = Math.trunc(hit.dist);
+      if (radius < dist) continue;
+      const linear = Math.trunc((shell.damage / radius) * (radius - dist));
+      const dealt = Math.max(linear, Math.trunc(shell.damage / 5));
+      const before = hit.creep.hp;
+      report.damageDealt += towerHurt(report, hit.creep, dealt);
+      if (before > 0 && hit.creep.hp <= 0) report.kills += 1;
     }
   };
 
@@ -4451,7 +6207,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const stats = towerStats(building.type, building.level, yard.kind);
     const base = stats?.damage;
     if (stats?.range === undefined || base === undefined) return;
-    const damage = towerBoost === 1 ? base : base * towerBoost;
+    const boost = towerBoost();
+    const damage = boost === 1 ? base : base * boost;
 
     tower.fireTick -= 1;
     if (tower.fireTick <= 0) {
@@ -4475,8 +6232,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         gun.index = 0;
         tower.shotsFired = 0;
         aimSpurtz(tower, gun);
+        crackJar(building);
       }
     }
+    // `BTOWER.TickAttack` ends with `TickJar`, before the Spurtz's own shot (Inferno WP 6.7).
+    const own = jars.size > 0 ? jars.get(building.id) : undefined;
+    if (own) tickJar(own);
 
     // `updateTarget` (`:120-131`): only the first in the list has to be alive.
     const first = gun.targets[0];
@@ -4497,7 +6258,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       tower.shotsFired < (stats.shots ?? 0) &&
       (Math.abs(gun.aim - gun.barrel) <= SPURTZ_START_ANGLE || tower.shotsFired > 0)
     ) {
-      shootSpurtz(tower, gun, gun.target, damage, stats.speed ?? 0);
+      // A landed jar takes it, and the burst does not count it (`shootJar`, `:173-201`).
+      const jar = jarOn(building);
+      if (jar) hitJar(tower, jar, damage);
+      else shootSpurtz(tower, gun, gun.target, damage, stats.speed ?? 0);
     }
   };
 
@@ -4622,7 +6386,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const linear = Math.trunc((shell.damage / radius) * (radius - dist));
       const dealt = Math.max(linear, Math.trunc(shell.damage / 5));
       const before = hit.creep.hp;
-      report.damageDealt += damageCreep(hit.creep, dealt);
+      report.damageDealt += towerHurt(report, hit.creep, dealt);
       if (before > 0 && hit.creep.hp <= 0) report.kills += 1;
     }
     if (rng.float() > SPURTZ_HATCH_CHANCE) {
@@ -4668,16 +6432,28 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       tower.fireTick += rate * TOWER_REARM_MULTIPLIER;
     }
     const scan = scanOf(tower);
-    if (liveTargets(tower, scan).length === 0) {
+    // The Vacuum's hose comes before any creep (`BUILDING115.as:61-69`, Inferno WP 6.6).
+    if (hoseInReach(tower)) {
+      tower.onHose = true;
+      tower.fireTick = TOWER_ACQUIRE_TICKS;
+    } else if (liveTargets(tower, scan).length === 0) {
+      tower.onHose = false;
       findTowerTargets(tower, scan, salvo);
       tower.fireTick = TOWER_ACQUIRE_TICKS;
     }
-    if (tower.targets.length === 0) return;
+    // Flash fires at a hose that is gone and throws; ours goes back to its creeps.
+    if (!vacuum) tower.onHose = false;
+    if (!tower.onHose && tower.targets.length === 0) return;
     if (tower.shotsFired >= salvo) {
       tower.stage = 1;
       return;
     }
     if (tower.frame % AERIAL_SHOT_TICKS !== 0) return;
+    if (tower.onHose) {
+      tower.shotsFired += 1;
+      shootHose(tower, damage, splash, scan.flags);
+      return;
+    }
     const aim = tower.targets[tower.shotsFired % tower.targets.length] as number;
     const creep = byCreepId.get(aim);
     // A target found dead costs the frame its shot; the tower looks again (`:84-93`).
@@ -4686,6 +6462,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       return;
     }
     tower.shotsFired += 1;
+    const jar = crackJar(building);
+    if (jar && hitJar(tower, jar, damage)) return;
     countShot(tower.report);
     const shot = towerShotDamage(damage, building.hp, building.maxHp);
     fireShell(tower, creep, shot, splash, scan.flags);
@@ -4695,11 +6473,28 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * The Tesla's `Fire` (`BUILDING25.as:84-96`): it names its target, and an
    * idle coil starts to charge ({@link TESLA_TYPE}, issue #266).
    */
-  const armCoil = (tower: Tower, creep: Creep): void => {
-    tower.zapTarget = creep.id;
+  const armCoil = (tower: Tower, creepId: number): void => {
+    tower.zapTarget = creepId;
     if (tower.stage !== 0) return;
     tower.stage = 1;
     visual.push({ kind: "charge", tick, towerId: tower.building.id });
+  };
+
+  /**
+   * The Tesla leaves its zaps for the wind-down (drawing only, {@link BattleVisualEvent}
+   * `coilRest`). Spent, it can charge again once the wind-down is over, a cell
+   * every second frame, at the first `Fire` after, one a reload apart.
+   */
+  const restCoil = (tower: Tower, rate: number, spent: boolean): void => {
+    tower.stage = 3;
+    const windTicks = ((TESLA_WIND_END - tower.charge) * 2 + 1) * TESLA_TICKS_PER_FRAME;
+    const reload = Math.max(rate * TOWER_REARM_MULTIPLIER, TOWER_ACQUIRE_TICKS);
+    visual.push({
+      kind: "coilRest",
+      tick,
+      towerId: tower.building.id,
+      rearmBy: spent ? tick + windTicks + reload : null,
+    });
   };
 
   /** The Tesla's `TickFast`, once a frame: charge, zaps, wind-down (`BUILDING25.as:98-203`). */
@@ -4730,7 +6525,13 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const building = tower.building;
     const target = byCreepId.get(tower.zapTarget);
     // It zaps the creep it named wherever that is now; a dead one takes nothing.
-    if (tower.targets.length > 0 && target && target.hp > 0) {
+    // Named none, it zaps the Vacuum's hose while it can reach it (`:137-152`).
+    const zapsHose = tower.onHose && tower.zapTarget < 0 && hoseInReach(tower);
+    // With anything to zap, a landed jar takes the zap first (`:130-136`, Inferno WP 6.7).
+    const jar = tower.targets.length > 0 || tower.onHose ? jarOn(building) : null;
+    if (jar) {
+      hitJar(tower, jar, damage);
+    } else if ((tower.targets.length > 0 || tower.onHose) && target && target.hp > 0) {
       countShot(tower.report);
       visual.push({
         kind: "shot",
@@ -4740,21 +6541,37 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         ix: target.ix,
         iy: target.iy,
       });
-      tower.report.damageDealt += damageCreep(
+      tower.report.damageDealt += towerHurt(
+        tower.report,
         target,
         towerShotDamage(damage, building.hp, building.maxHp),
       );
       if (target.hp <= 0) tower.report.kills += 1;
+    } else if (zapsHose && vacuum) {
+      countShot(tower.report);
+      vacuum.health -= towerShotDamage(damage, building.hp, building.maxHp);
     }
     tower.shotsFired += 1;
     if (tower.shotsFired >= rate) {
-      tower.stage = 3;
+      restCoil(tower, rate, true);
+      return;
+    }
+    // On the hose it stays on it while it can reach it, else it looks for creeps
+    // (`:161-173`); one whose creep is gone turns to the hose if it can (`:174-177`).
+    if (tower.onHose) {
+      if (hoseInReach(tower)) return;
+      findTowerTargets(tower, scanOf(tower), 1);
+      if (tower.targets.length === 0) restCoil(tower, rate, false);
       return;
     }
     if (target && target.hp > 0 && target.targetable) return;
+    if (hoseInReach(tower)) {
+      tower.onHose = true;
+      return;
+    }
     const scan = scanOf(tower);
     findTowerTargets(tower, scan, 1);
-    if (tower.targets.length === 0) tower.stage = 3;
+    if (tower.targets.length === 0) restCoil(tower, rate, false);
   };
 
 
@@ -4800,7 +6617,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const at = screenPointOf(hit.creep.ix, hit.creep.iy);
       if (!beamHits(fromX, fromY, toX, toY, at.x, at.y, RAILGUN_BEAM_RADIUS)) continue;
       const before = hit.creep.hp;
-      tower.report.damageDealt += damageCreep(hit.creep, dealt);
+      tower.report.damageDealt += towerHurt(tower.report, hit.creep, dealt);
       if (before > 0 && hit.creep.hp <= 0) tower.report.kills += 1;
     }
   };
@@ -4865,7 +6682,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       const report = beam.tower.report;
       for (const hit of index.inRange(beam.splash, at.x, at.y, TRAP_TARGETS)) {
         const before = hit.creep.hp;
-        report.damageDealt += damageCreep(
+        report.damageDealt += towerHurt(
+          report,
           hit.creep,
           laserPulse(beam.damage, beam.splash, hit.dist),
         );
@@ -4920,7 +6738,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const building = bunker.building;
     if (building.hp <= 0) return;
     bunker.tickNumber += 1;
-    if (bunker.tickNumber % 30 !== 0) return;
+    // Only through a door that is fully up (`_animTick >= 15`, `BUILDING22.as:344`).
+    if (bunker.tickNumber % 30 !== 0 || bunker.door < BUNKER_DOOR_FRAMES) return;
     let left = 0;
     for (const count of bunker.pool.values()) left += count;
     if (left === 0) return;
@@ -4928,24 +6747,114 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const stats = towerStats(building.type, building.level, yard.kind);
     const range = stats?.range ?? 0;
     if (range <= 0) return;
-    // A bunker sends its defenders at anything attacking, air or ground
-    // (`HOUSINGBUNKER.as:269-300`); the interceptor pick is the random draw.
+    // `FindTargets(3)` (`BUILDING22.as:80-160`): the three nearest walkers, and
+    // the three nearest flyers only for a bunker holding a monster that can
+    // hit one. Scanned from the middle of the footprint, like a tower (`:90`).
+    const scan = towerScanPoint(building);
+    const walkers = index
+      .inRange(range, scan.x, scan.y, oldStyleTargets(0))
+      .slice(0, BUNKER_TARGETS);
+    const interceptor = bunkerInterceptor(bunker);
+    const flyers = interceptor
+      ? index.inRange(range, scan.x, scan.y, oldStyleTargets(2)).slice(0, BUNKER_TARGETS)
+      : [];
+
+    // `:345-365`: an interceptor after a flyer; else, at a walker, the last
+    // kind in the bunker's list with one still in. A healer has nothing to
+    // fight with, so it stays in (issue #195).
+    let monsterId = flyers.length > 0 ? interceptor : undefined;
+    let foes = flyers;
+    if (!monsterId && walkers.length > 0) {
+      foes = walkers;
+      for (const [id, count] of [...bunker.pool.entries()].sort(byMonsterList)) {
+        if (count > 0 && monsterStat(id, "damage", 1) > 0) monsterId = id;
+      }
+    }
+    if (!monsterId) return;
+    // Its target is any of the three, at random (`:384-388`).
+    const foe = (foes[rng.int(foes.length)] as { creep: Creep }).creep;
+    const defender = sendFromBunker(bunker, monsterId, foe, range, scan);
+    // It looks for foes of its own with its `targetMode` (`CreepBase.as:663`):
+    // air and ground for an interceptor, else ground only.
+    defender.hitFlags = oldStyleTargets(interceptsFlyers(monsterId) ? 1 : 0);
+  };
+
+  /**
+   * Whether a Monster Bunker's monster can go after a flyer (`BUILDING22.as:123`,
+   * `:348-359`): a DAVE or an Eye-ra with its Monster Lab power-up, or a
+   * Balthazar or an IC7.
+   */
+  const interceptsFlyers = (monsterId: string): boolean =>
+    BUNKER_INTERCEPTORS.includes(monsterId) &&
+    (!BUNKER_POWERED_INTERCEPTORS.has(monsterId) || rankOf(options.defenderRanks, monsterId) > 0);
+
+  /**
+   * The interceptor a Monster Bunker would send after a flyer: the first of
+   * {@link BUNKER_INTERCEPTORS} it still holds. Without one it never looks at
+   * flyers, and stays shut for them.
+   */
+  const bunkerInterceptor = (bunker: Bunker): string | undefined =>
+    BUNKER_INTERCEPTORS.find((id) => (bunker.pool.get(id) ?? 0) > 0 && interceptsFlyers(id));
+
+  /**
+   * A Housing Bunker's turn ({@link HOUSING_BUNKER_TYPE}): every 30 ticks, a
+   * Balthazar or Sabnox after each flyer in range, then everything it still
+   * holds at the nearest walker. A bunker keeps its healers in (issue #195).
+   */
+  const tickHousingBunker = (bunker: Bunker): void => {
+    const building = bunker.building;
+    if (building.hp <= 0) return;
+    bunker.tickNumber += 1;
+    if (bunker.tickNumber % 30 !== 0 || building.busy) return;
+    if (![...bunker.pool.values()].some((count) => count > 0)) return;
+    const range = towerStats(building.type, building.level, yard.kind)?.range ?? 0;
+    if (range <= 0) return;
     // Scanned from the middle of the footprint, like a tower (`HOUSINGBUNKER.as:156`).
     const scan = towerScanPoint(building);
-    const found = index.inRange(range, scan.x, scan.y, oldStyleTargets(1));
-    if (found.length === 0) return;
-
-    const ids: string[] = [];
-    for (const [monsterId, count] of [...bunker.pool.entries()].sort()) {
-      // A healer has nothing to fight with, so it stays in (issue #195).
-      if (count > 0 && monsterStat(monsterId, "damage", 1) > 0) ids.push(monsterId);
+    const nearest = (flags: number): Creep[] => {
+      const found: Creep[] = [];
+      const hits = index.inRange(range, scan.x, scan.y, flags);
+      for (let at = 0; at < hits.length && at < HOUSING_BUNKER_TARGETS; at += 1) {
+        const creep = (hits[at] as { creep: Creep }).creep;
+        if (creep.behaviour !== "retreat" && !creep.gone) found.push(creep);
+      }
+      return found;
+    };
+    const walkers = nearest(oldStyleTargets(0));
+    const canIntercept = HOUSING_BUNKER_INTERCEPTORS.some((id) => (bunker.pool.get(id) ?? 0) > 0);
+    const flyers = canIntercept ? nearest(oldStyleTargets(2)) : [];
+    for (const flyer of flyers) {
+      const monsterId = HOUSING_BUNKER_INTERCEPTORS.find((id) => (bunker.pool.get(id) ?? 0) > 0);
+      if (!monsterId) break;
+      sendFromBunker(bunker, monsterId, flyer, range, scan);
     }
-    if (ids.length === 0) return;
-    const monsterId = ids[rng.int(ids.length)] as string;
+    const walker = walkers[0];
+    if (!walker) return;
+    for (const [monsterId, count] of [...bunker.pool.entries()].sort()) {
+      if (monsterStat(monsterId, "damage", 1) <= 0) continue;
+      for (let sent = 0; sent < count; sent += 1) {
+        sendFromBunker(bunker, monsterId, walker, range, scan);
+      }
+    }
+  };
+
+  /**
+   * One of a bunker's monsters out at `foe`. It chases nothing outside the
+   * bunker's own range, and walks back in (issue #195).
+   */
+  const sendFromBunker = (
+    bunker: Bunker,
+    monsterId: string,
+    foe: Creep,
+    range: number,
+    scan: Cart,
+  ): Creep => {
+    const building = bunker.building;
     bunker.pool.set(monsterId, (bunker.pool.get(monsterId) ?? 0) - 1);
     bunker.dispatched += 1;
     const sentBy = bunkerReports.get(building.id);
     if (sentBy) sentBy.sent += 1;
+    visual.push({ kind: "release", tick, buildingId: building.id });
     const level = clampLevel(options.defenderLevels ?? options.levels, monsterId);
     const defender = spawnCreep(
       monsterId,
@@ -4957,8 +6866,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       1,
       rankOf(options.defenderRanks, monsterId),
     );
-    defender.targetCreep = (found[0] as { creep: Creep }).creep.id;
-    // It chases nothing outside the bunker's own range, and walks back in (issue #195).
+    defender.targetCreep = foe.id;
     defender.home = {
       ix: building.x,
       iy: building.y,
@@ -4966,6 +6874,23 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       centreY: scan.y,
       leash: range,
     };
+    return defender;
+  };
+
+  /**
+   * A Housing Bunker fell: every monster it houses dies, those it never sent
+   * and those out fighting (`HOUSINGBUNKER.as:116-127`), each counted against it.
+   */
+  const housingBunkerFalls = (id: number): void => {
+    const bunker = bunkerById.get(id);
+    if (!bunker) return;
+    for (const [monsterId, count] of [...bunker.pool.entries()].sort()) {
+      for (let lost = 0; lost < count; lost += 1) addBunkerLoss(bunkerLosses, id, monsterId);
+    }
+    bunker.pool.clear();
+    for (const creep of creeps) {
+      if (creep.homeBunker === id && !creep.gone && creep.hp > 0) creep.hp = 0;
+    }
   };
 
   /**
@@ -4985,10 +6910,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     const pen = slot.pen;
     if (!pen) return;
     const frame = pen.frame + 1;
+    // A hunter's blow in there turns it on the hunter (`CreepBase.as:906-914`).
+    const hunter = slot.provokedBy >= 0 ? byCreepId.get(slot.provokedBy) : undefined;
+    slot.provokedBy = -1;
     const foe =
-      frame % CAGE_LOOK_FRAMES === 0
-        ? defenceTarget(pen.x, pen.y, pen.hitFlags, pen.flying)
-        : undefined;
+      hunter && hunter.hp > 0 && !hunter.gone
+        ? hunter
+        : frame % CAGE_LOOK_FRAMES === 0
+          ? defenceTarget(pen.x, pen.y, pen.hitFlags, pen.flying)
+          : undefined;
     if (!foe) {
       pen.frame = frame;
       return;
@@ -5003,7 +6933,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       creeps.splice(after < 0 ? creeps.length : after, 0, champion);
       byCreepId.set(champion.id, champion);
     } else {
-      champion = releaseChampion(slot.caged, pen);
+      champion = releaseChampion(slot.caged, pen, slot.report.hp);
     }
     slot.pen = null;
     if (!champion) return;
@@ -5186,6 +7116,33 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (drop > 0) visual.splice(0, drop);
   };
 
+  /**
+   * Pokey's "Swarm" (owner, 2 Nov 2026): a ranked Pokey is swarming this tick
+   * while it and 4 or more other Pokeys of its side are swinging at one target.
+   */
+  const markSwarms = (): void => {
+    const counts = new Map<number, number>();
+    for (const creep of creeps) {
+      creep.swarming = false;
+      const key = swarmKey(creep);
+      if (key !== null) counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    for (const creep of creeps) {
+      const key = swarmKey(creep);
+      if (key !== null && creep.rank > 0) creep.swarming = (counts.get(key) ?? 0) >= SWARM_SIZE;
+    }
+  };
+
+  /** A swinging Pokey's target and side as one number; null for anything else. */
+  const swarmKey = (creep: Creep): number | null => {
+    if (creep.monsterId !== POKEY_ID || creep.hp <= 0 || creep.gone || !creep.attacking) {
+      return null;
+    }
+    const target = creep.targetCreep >= 0 ? creep.targetCreep * 2 + 1 : creep.targetBuilding * 2;
+    if (target < 0) return null;
+    return target * 2 + (creep.friendly ? 1 : 0);
+  };
+
   const step = (): void => {
     if (finished) return;
     tick += 1;
@@ -5198,20 +7155,29 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     index.rebuild(creeps);
     tickLaserBeams();
     for (const trap of traps) tickTrap(trap);
+    tickJars();
     for (const tower of towers) tickTower(tower);
     tickSpurtzShells();
-    for (const bunker of bunkers) tickBunker(bunker);
+    for (const bunker of bunkers) {
+      if (bunker.building.type === HOUSING_BUNKER_TYPE) tickHousingBunker(bunker);
+      else tickBunker(bunker);
+    }
     if (defended) {
       tickCage();
       defendersOut = 0;
       for (const creep of creeps) if (creep.friendly && creep.hp > 0) defendersOut += 1;
     }
     tickPutty();
+    tickDecoy();
+    tickBunkerDoors();
+    tickVacuum();
+    if (swarmsPossible) markSwarms();
     for (const creep of creeps) {
       tickCreep(creep);
       if (creep.burrows) tickBurrow(creep);
     }
     tickLeaving();
+    tickTowerShells();
 
     if (creeps.length > 0) {
       let write = 0;
@@ -5265,9 +7231,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     if (finished) return;
     // Raid waves in a raid battle only, and nothing else there (fidelity note 17).
     if ((event.kind === "raid") !== raid) return;
+    // No fling or bomb once the countdown has run out (`DROPZONE.as:53`).
+    if ((event.kind === "fling" || event.kind === "bomb") && tick >= countdown) return;
     if (event.kind === "raid") raidWave(event);
     else if (event.kind === "fling") fling(event);
     else if (event.kind === "bomb") bomb(event);
+    else if (event.kind === "siege") siege(event);
     else if (event.kind === "retreat") {
       retreated = true;
       for (const creep of creeps) {
@@ -5312,7 +7281,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       state: creep.attacking ? "attacking" : "walking",
       targetBuilding: creep.targetBuilding,
       targetCreep: creep.targetCreep,
-      burning: creep.burnDps > 0,
+      burning: creep.burnDps > 0 || descentBurning(creep),
       enraged: creep.enragedBy >= 0,
       puttied: creep.puttyUntil > 0,
       lootBoosted: creep.lootBuffedBy >= 0,
@@ -5322,7 +7291,18 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       ...(creep.invisible && creep.burrows ? { burrowed: true } : {}),
       ...(creep.blinkHops > 0 ? { blinking: true } : {}),
       ...(creep.venomStacks > 0 ? { poisonStacks: creep.venomStacks } : {}),
+      ...(creep.hopStart >= 0 && tick - creep.hopStart < HOP_TICKS
+        ? { hop: tick - creep.hopStart }
+        : {}),
+      ...(creep.swarming ? { swarming: true } : {}),
+      ...(creep.weakUntil > tick ? { weakened: true } : {}),
     }));
+
+  const weakenedTowers = (): number[] =>
+    towers
+      .filter((tower) => tower.weakUntil > tick && tower.building.hp > 0)
+      .map((tower) => tower.building.id)
+      .sort((one, other) => one - other);
 
   const recentEvents = (sinceTick: number): BattleVisualEvent[] => {
     let start = 0;
@@ -5331,6 +7311,34 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     return visual.slice(start);
   };
+
+  const siegeSnapshot = (): SiegeSnapshot => ({
+    active: decoy ? DECOY.id : vacuum ? VACUUM.id : jarDrop ? JARS.id : null,
+    decoy: decoy && {
+      x: decoy.at.x,
+      y: decoy.at.y,
+      droppedAt: decoy.droppedAt,
+      landsAt: decoy.plan.landsAt,
+      explodesAt: decoy.plan.explodesAt,
+      range: decoy.plan.range,
+    },
+    vacuum: vacuum && {
+      buildingId: vacuum.target.id,
+      droppedAt: vacuum.droppedAt,
+      endsAt: vacuum.plan.endsAt,
+      health: vacuum.health,
+      durability: vacuum.plan.durability,
+      took: vacuum.took,
+    },
+    jars: [...jars.values()].map((jar) => ({
+      buildingId: jar.building.id,
+      landsAt: jar.landsAt,
+      frame: jar.frame,
+      breaking: jar.breaking,
+      health: jar.health,
+      durability: jar.durability,
+    })),
+  });
 
   const state = (): BattleState => ({
     tick,
@@ -5372,6 +7380,19 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       startHp: lesson.startHp,
       endHp: Math.max(0, championsHp[lesson.monsterId] ?? 0),
     }));
+
+  /** {@link Battle.bunkerPools}. */
+  const bunkerPools = (): Record<number, Record<string, number>> => {
+    const out: Record<number, Record<string, number>> = {};
+    for (const bunker of bunkers) {
+      const building = bunker.building;
+      if (building.type !== HOUSING_BUNKER_TYPE || building.hp <= 0) continue;
+      const pool: Record<string, number> = {};
+      for (const [monsterId, count] of bunker.pool) if (count > 0) pool[monsterId] = count;
+      out[building.id] = pool;
+    }
+    return out;
+  };
 
   /** {@link BattleState.bunkerGarrisons}: each supplied bunker's pool, plus its defenders out. */
   const garrisonsAfter = (): Record<number, Record<string, number>> => {
@@ -5456,6 +7477,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     checkpoint,
     creeps: creepSnapshots,
     recentEvents,
+    siege: siegeSnapshot,
+    bunkerPools,
+    weakenedTowers,
   };
 };
 
@@ -5533,6 +7557,63 @@ export const bunkerGarrisons = (
     }
     if (Object.keys(roster).length === 0) continue;
     garrisons[Math.floor(numberOf(data.id ?? key))] = roster;
+  }
+  return garrisons;
+};
+
+/**
+ * A yard's housed monsters as its Housing Bunkers' garrisons (Inferno plan WP
+ * 1.6), by building id, as {@link BattleOptions.bunkers} takes them.
+ *
+ * On an Inferno yard the Housing Bunkers are the housing: `HOUSING.Populate`
+ * puts each housed monster, the save's `monsters`, in a standing one
+ * (`client/scripts/HOUSING.as:201-235`). Flash draws the bunker at random for
+ * each monster; this deals them out in turn instead, monster ids in order and
+ * bunkers by id, so the split is even and the same on every run. A bunker
+ * whose `buildinghealthdata` entry is 0 is down and takes none. Counts are
+ * read as {@link bunkerGarrisons} reads a bunker's own.
+ *
+ * @param buildingdata - The yard's stored buildings.
+ * @param monsters - The yard's housed monsters, `{ monsterId: count }`.
+ * @param buildinghealthdata - The yard's stored health, by building id.
+ */
+export const housedGarrisons = (
+  buildingdata: CombatBuildingDataMap | readonly CombatBuildingData[] | null | undefined,
+  monsters: unknown,
+  buildinghealthdata?: Readonly<Record<string, unknown>> | null,
+): Record<number, Roster> => {
+  const garrisons: Record<number, Record<string, number>> = {};
+  if (!buildingdata || typeof buildingdata !== "object") return garrisons;
+  if (!monsters || typeof monsters !== "object" || Array.isArray(monsters)) return garrisons;
+  const entries: Array<[string, CombatBuildingData]> = Array.isArray(buildingdata)
+    ? (buildingdata as readonly CombatBuildingData[]).map((data, index) => [String(index), data])
+    : Object.entries(buildingdata as CombatBuildingDataMap);
+  const houses: number[] = [];
+  for (const [key, data] of entries) {
+    if (!data || typeof data !== "object") continue;
+    if (Math.floor(numberOf(data.t)) !== HOUSING_BUNKER_TYPE) continue;
+    const id = Math.floor(numberOf(data.id ?? key));
+    const health = buildinghealthdata?.[String(id)];
+    if (health !== undefined && !(numberOf(health) > 0)) continue;
+    houses.push(id);
+  }
+  if (houses.length === 0) return garrisons;
+  houses.sort((one, other) => one - other);
+  const counts = new Map<string, number>();
+  for (const [raw, value] of Object.entries(monsters as Record<string, unknown>)) {
+    const id = LEGACY_MONSTER_IDS[raw] ?? raw;
+    const count = Array.isArray(value) ? value.length : Math.floor(numberOf(value));
+    if (!isKnownMonster(id) || !(count > 0)) continue;
+    counts.set(id, (counts.get(id) ?? 0) + count);
+  }
+  let turn = 0;
+  for (const id of [...counts.keys()].sort()) {
+    for (let dealt = 0; dealt < (counts.get(id) as number); dealt += 1) {
+      const house = houses[turn % houses.length] as number;
+      const garrison = (garrisons[house] ??= {});
+      garrison[id] = (garrison[id] ?? 0) + 1;
+      turn += 1;
+    }
   }
   return garrisons;
 };

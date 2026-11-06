@@ -13,9 +13,13 @@ import {
   type DashboardSection,
   type StatsOverview,
 } from "./api";
+import { AnnouncementsView } from "./announcements";
 import { BugsView } from "./bugs";
+import { CasesView } from "./cases";
+import { ChatPanel } from "./chat";
 import { h, replace } from "./dom";
 import { ErrorsView } from "./errors";
+import { ModerationView } from "./moderation";
 import { count, dateTime } from "./format";
 import { icon } from "./icons";
 import { topItems, verdict, type TopItem } from "./problems";
@@ -39,9 +43,19 @@ import { applyTheme, readTheme, themePicker } from "./theme";
  * Phone first: the owner opens it from a Telegram alert, which links a
  * section (`#health`, `#backups`, `#errors`, `#bugs`) or a report (`?bug=<id>`).
  * The Shiny section (`#shiny`) gives Shiny to a player and lists every gift.
+ * The Announcements section (`#announcements`) writes the pop-ups players
+ * see in the game.
+ * Chat cases (`#cases`) come first: every report of a player's chat lines
+ * as one case, with a copy of the room and one-step warn / pause, Shiny for
+ * the reporters, or dismiss. The Moderation section (`#moderation`) warns,
+ * pauses chat for, or bans any player, and keeps the raw lists (word filter,
+ * reports, chat log) folded; the Chat section (`#chat`) chats as the game team.
  * The top answers "is anything wrong, and what do I do?" in one sentence,
  * then each problem with its fix; the sections below are ordered by how often
- * they need the owner (bug reports first, server internals last).
+ * they need the owner (chat cases and bug reports first, server internals
+ * last). Sections the owner rarely opens start folded (their heading opens
+ * them; the choice is remembered in this browser), and a link to a section
+ * (a Telegram alert's `#health`, a nav link) always opens it.
  *
  * On a phone the section links are one row that stays at the top and scrolls
  * sideways; on a computer they are a sidebar. Either way they never cover a
@@ -50,8 +64,12 @@ import { applyTheme, readTheme, themePicker } from "./theme";
  */
 
 const SECTIONS = [
+  ["cases", "Chat cases"],
   ["bugs", "Bug reports"],
+  ["moderation", "Moderation"],
+  ["chat", "Chat"],
   ["shiny", "Shiny"],
+  ["announcements", "Announcements"],
   ["players", "Players"],
   ["activity", "Activity"],
   ["errors", "Errors"],
@@ -60,6 +78,41 @@ const SECTIONS = [
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number][0];
+
+/** Sections folded until the owner opens them: rarely needed, or told about at the top. */
+export const FOLDED_AT_FIRST: ReadonlySet<SectionId> = new Set<SectionId>([
+  "announcements",
+  "players",
+  "activity",
+  "health",
+  "backups",
+]);
+
+const FOLD_KEY = "bymr.admin.folds";
+
+/** The sections the owner opened or folded in this browser: id -> open. */
+export const readFolds = (): Partial<Record<SectionId, boolean>> => {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(FOLD_KEY) ?? "{}");
+    if (!raw || typeof raw !== "object") return {};
+    const folds: Partial<Record<SectionId, boolean>> = {};
+    for (const [id] of SECTIONS) {
+      const value = (raw as Record<string, unknown>)[id];
+      if (typeof value === "boolean") folds[id] = value;
+    }
+    return folds;
+  } catch {
+    return {};
+  }
+};
+
+const saveFolds = (folds: Partial<Record<SectionId, boolean>>): void => {
+  try {
+    localStorage.setItem(FOLD_KEY, JSON.stringify(folds));
+  } catch {
+    // A private window: folds are not remembered, nothing else changes.
+  }
+};
 
 const RANGES = [
   [30, "30 days"],
@@ -125,6 +178,7 @@ interface Section {
   body: HTMLElement;
   state: HTMLElement;
   link: HTMLAnchorElement;
+  toggle: HTMLButtonElement;
 }
 
 class Dashboard {
@@ -151,6 +205,25 @@ class Dashboard {
     openReport: (id) => this.openBug(id),
     say: (message) => this.say(message),
   });
+  private readonly moderation = new ModerationView({ say: (message) => this.say(message) });
+  private readonly cases = new CasesView({
+    say: (message) => this.say(message),
+    onCount: (open) => {
+      this.openCases = open;
+      this.renderCaseState();
+      this.renderToday();
+    },
+    openPlayer: (userid) => this.openPlayer(userid),
+    onChanged: () => void this.moderation.refresh(),
+  });
+  /** Open chat cases, or null before they are read. */
+  private openCases: number | null = null;
+  private readonly folds = readFolds();
+  private readonly chat = new ChatPanel({
+    openPlayer: (userid) => this.openPlayer(userid),
+    say: (message) => this.say(message),
+  });
+  private readonly announcements = new AnnouncementsView({ say: (message) => this.say(message) });
   private readonly errors = new ErrorsView((message) => this.say(message));
   private readonly sections: Record<SectionId, Section>;
   private readonly nav: HTMLElement;
@@ -202,33 +275,52 @@ class Dashboard {
     );
 
     const section = (id: SectionId, title: string, ...extra: HTMLElement[]): Section => {
-      const body = h("div", { class: "section-body" }, skeleton());
+      const body = h("div", { class: "section-body", attrs: { id: `${id}-body` } }, skeleton());
       const state = h("span", { class: "section-state" });
+      // The heading is the fold's button: one tap opens or folds the section.
+      const toggle = h(
+        "button",
+        {
+          class: "section-toggle",
+          attrs: { type: "button", "aria-controls": `${id}-body`, "aria-expanded": "true" },
+          onClick: () => this.setOpen(id, toggle.getAttribute("aria-expanded") !== "true", true),
+        },
+        icon("chevron", 18),
+        h("span", {}, title),
+      );
       const element = h(
         "section",
         { class: "section", attrs: { id, "aria-labelledby": `${id}-title` } },
         h(
           "header",
           { class: "section-head" },
-          h("h2", { attrs: { id: `${id}-title` } }, title),
+          h("h2", { attrs: { id: `${id}-title` } }, toggle),
           state,
           ...extra,
         ),
         body,
       );
-      return { element, body, state, link: links.get(id)! };
+      return { element, body, state, link: links.get(id)!, toggle };
     };
     this.sections = {
+      cases: section("cases", "Chat cases"),
       bugs: section("bugs", "Bug reports"),
+      moderation: section("moderation", "Moderation"),
+      chat: section("chat", "Chat as the game team"),
       shiny: section("shiny", "Give Shiny"),
+      announcements: section("announcements", "Announcements"),
       players: section("players", "Players", rangeButtons),
       activity: section("activity", "Activity"),
       errors: section("errors", "Errors"),
       health: section("health", "Server"),
       backups: section("backups", "Backups"),
     };
+    replace(this.sections.cases.body, this.cases.element);
     replace(this.sections.bugs.body, this.bugs.element);
+    replace(this.sections.moderation.body, this.moderation.element);
+    replace(this.sections.chat.body, this.chat.element);
     replace(this.sections.shiny.body, this.shiny.element);
+    replace(this.sections.announcements.body, this.announcements.element);
     replace(this.sections.errors.body, this.errors.element);
 
     this.refreshButton = h(
@@ -276,6 +368,16 @@ class Dashboard {
       this.toast,
     );
 
+    for (const [id] of SECTIONS) {
+      this.setOpen(id, this.folds[id] ?? !FOLDED_AT_FIRST.has(id), false);
+    }
+    // A link to a section opens it: the nav, "See Server", a Telegram alert.
+    window.addEventListener("hashchange", () => this.openNamed(location.hash));
+    document.addEventListener("click", (event) => {
+      const link = (event.target as Element | null)?.closest?.("a[href^='#']");
+      if (link) this.openNamed(link.getAttribute("href") ?? "");
+    });
+
     window.addEventListener("popstate", () => {
       const route = readRoute(location.search, location.hash);
       void this.bugs.show(route.bug);
@@ -294,12 +396,16 @@ class Dashboard {
 
   async start(): Promise<void> {
     const route = readRoute(location.search, location.hash);
+    if (route.section) this.setOpen(route.section, true, false);
     // The errors list loads with the stats, whose daily counts its charts use.
     await Promise.all([
       this.loadHealth(),
       this.loadStats(),
+      this.cases.refresh(),
       this.bugs.show(route.bug),
+      this.moderation.refresh(),
       this.shiny.refresh(),
+      this.announcements.refresh(),
     ]);
     // The sections grew as they loaded; go to the one the link named.
     if (route.section) this.sections[route.section].element.scrollIntoView();
@@ -342,12 +448,52 @@ class Dashboard {
     await Promise.all([
       this.loadHealth(),
       this.loadStats(),
+      this.cases.refresh(),
       this.bugs.refresh(),
+      this.moderation.refresh(),
       this.shiny.refresh(),
     ]);
     this.refreshButton.classList.remove("is-busy");
     this.refreshButton.disabled = false;
     this.say("Up to date");
+  }
+
+  /** Opens or folds a section; `remember` keeps the owner's choice in this browser. */
+  private setOpen(id: SectionId, open: boolean, remember: boolean): void {
+    const { body, toggle, element } = this.sections[id];
+    const was = toggle.getAttribute("aria-expanded") === "true";
+    toggle.setAttribute("aria-expanded", String(open));
+    element.classList.toggle("is-folded", !open);
+    body.hidden = !open;
+    if (remember) {
+      this.folds[id] = open;
+      saveFolds(this.folds);
+    }
+    // Charts drawn while folded had no width: draw them again.
+    if (open && !was && (id === "players" || id === "activity") && this.overview) {
+      replace(this.sections.players.body, ...renderPlayers(this.overview));
+      replace(this.sections.activity.body, ...renderActivity(this.overview));
+    }
+  }
+
+  /** Opens the section a link names (`#health`), without remembering it. */
+  private openNamed(href: string): void {
+    const id = SECTIONS.find(([name]) => `#${name}` === href)?.[0];
+    if (id) this.setOpen(id, true, false);
+  }
+
+  /** The open chat cases on the link and the heading. */
+  private renderCaseState(): void {
+    const { state, link } = this.sections.cases;
+    const badge = link.querySelector(".nav-state")!;
+    if (this.openCases) {
+      const text = String(this.openCases);
+      replace(badge, h("span", { class: "count" }, text, h("span", { class: "sr-only" }, " open")));
+      replace(state, h("span", { class: "chip chip-info" }, `${text} open`));
+    } else {
+      replace(badge);
+      replace(state);
+    }
   }
 
   private say(message: string): void {
@@ -362,6 +508,13 @@ class Dashboard {
       id === null ? `${location.pathname}#bugs` : `${location.pathname}?bug=${id}#bugs`;
     history.pushState(null, "", url);
     void this.bugs.show(id).then(() => this.sections.bugs.element.scrollIntoView());
+  }
+
+  /** Opens a player in the Moderation section (a name clicked in the chat panel). */
+  private openPlayer(userid: number): void {
+    this.setOpen("moderation", true, false);
+    this.sections.moderation.element.scrollIntoView();
+    void this.moderation.open(userid);
   }
 
   private async setRange(days: number): Promise<void> {
@@ -466,9 +619,17 @@ class Dashboard {
   private renderStates(items: readonly TopItem[]): void {
     const levels = sectionLevels(items);
     for (const [id] of SECTIONS) {
+      if (id === "cases") continue;
       const { state, link } = this.sections[id];
       const level =
-        id === "players" || id === "activity" || id === "shiny" ? undefined : levels[id];
+        id === "players" ||
+        id === "activity" ||
+        id === "shiny" ||
+        id === "announcements" ||
+        id === "moderation" ||
+        id === "chat"
+          ? undefined
+          : levels[id];
       const badge = link.querySelector(".nav-state")!;
       if (id === "bugs" && this.newBugs) {
         const text = this.newBugs >= 30 ? "30+" : String(this.newBugs);
@@ -477,6 +638,8 @@ class Dashboard {
         continue;
       }
       if (level) {
+        // A problem in a folded section opens it.
+        this.setOpen(id, true, false);
         replace(badge, mark(level));
         replace(
           state,
@@ -603,7 +766,7 @@ class Dashboard {
     );
   }
 
-  /** Today in three taps: new bug reports, players, errors. */
+  /** Today in four taps: open chat cases, new bug reports, players, errors. */
   private renderToday(): void {
     const today = this.overview?.today ?? null;
     const errorsToday =
@@ -619,6 +782,11 @@ class Dashboard {
       );
     replace(
       this.todayBox,
+      link(
+        "#cases",
+        this.openCases === null ? "–" : String(this.openCases),
+        this.openCases === 1 ? "open chat case" : "open chat cases",
+      ),
       link(
         "#bugs",
         this.newBugs === null ? "–" : this.newBugs >= 30 ? "30+" : String(this.newBugs),

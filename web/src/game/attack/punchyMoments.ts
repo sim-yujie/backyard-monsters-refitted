@@ -17,7 +17,9 @@ import type { PunchyStrength } from "./blastFx";
 /** How a ranked splash is drawn: Eye-ra's fireball, the yellow rings, or the rings with a flash. */
 export type SplashLook = "fiery" | "rings" | "rings-flash";
 
-export const splashLook = (moveId: string): SplashLook => {
+/** The look for a splash; every one keeps its yellow rings in the Classic look. */
+export const splashLook = (moveId: string, classic = false): SplashLook => {
+  if (classic) return "rings";
   if (moveId === EYE_RA_ID) return "fiery";
   if (moveId === BANDITO_ID) return "rings-flash";
   return "rings";

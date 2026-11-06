@@ -47,15 +47,27 @@ export const outpostTarget = (baseid: string, cell?: OffsetCell): OwnYardTarget 
   cell ? { baseid, kind: "outpost", cell } : { baseid, kind: "outpost" };
 
 /**
- * The `baseid` a yard route sends for this yard: the outpost's, and none for
- * the main yard, which the server reads a missing `baseid` as.
+ * The Inferno yard (WP 1.18), before its load has named it. The player owns
+ * at most one, which `POST /bm/inferno/load` finds from the main save with no
+ * id sent, so the yard screen opens it with `BaseMode.DEFAULT` and takes the
+ * real `baseid` from the answer ({@link infernoTarget}).
+ */
+export const INFERNO_YARD: OwnYardTarget = { baseid: BaseMode.DEFAULT, kind: "inferno" };
+
+/** The Inferno yard, named by the `baseid` its load answered. */
+export const infernoTarget = (baseid: string): OwnYardTarget => ({ baseid, kind: "inferno" });
+
+/**
+ * The `baseid` a yard route sends for this yard: the outpost's or the Inferno
+ * yard's, and none for the main yard, which the server reads a missing
+ * `baseid` as. Undefined too for an Inferno target its load has not named.
  */
 export const outpostBaseid = (target: OwnYardTarget): string | undefined =>
-  target.kind === "outpost" ? target.baseid : undefined;
+  target.kind === "main" || target.baseid === BaseMode.DEFAULT ? undefined : target.baseid;
 
-/** Whether two targets are the same yard. */
+/** Whether two targets are the same yard. The player has one main yard and one Inferno yard. */
 export const sameYard = (a: OwnYardTarget, b: OwnYardTarget): boolean =>
-  a.kind === b.kind && (a.kind === "main" || a.baseid === b.baseid);
+  a.kind === b.kind && (a.kind !== "outpost" || a.baseid === b.baseid);
 
 /** One outpost of the main yard's `outposts`. */
 export interface OwnOutpost {
@@ -90,13 +102,16 @@ export const outpostsOf = (save: Pick<BaseLoadResponse, "outposts">): OwnOutpost
 /** What the switcher and the HUD call the main yard. */
 export const MAIN_YARD_TITLE = "Main yard";
 
+/** What the HUD calls the Inferno yard. */
+export const INFERNO_YARD_TITLE = "Inferno";
+
 /** "Outpost (241, 208)", or "Outpost" when its cell is not known. */
 export const outpostTitle = (cell: OffsetCell | null | undefined): string =>
   cell ? `Outpost (${cell.col}, ${cell.row})` : "Outpost";
 
-/** The yard's title: "Main yard" or "Outpost (x, y)". */
+/** The yard's title: "Main yard", "Inferno" or "Outpost (x, y)". */
 export const yardTitle = (target: OwnYardTarget): string =>
-  target.kind === "main" ? MAIN_YARD_TITLE : outpostTitle(target.cell);
+  target.kind === "main" ? MAIN_YARD_TITLE : target.kind === "inferno" ? INFERNO_YARD_TITLE : outpostTitle(target.cell);
 
 /** "No outposts", "1 outpost", "3 outposts". */
 export const outpostCountText = (count: number): string =>

@@ -20,7 +20,8 @@ export interface SocketData {
  */
 export type ChannelInfo =
   | { type: ChannelType.Alliance; allianceId: number }
-  | { type: ChannelType.Global };
+  | { type: ChannelType.Global }
+  | { type: ChannelType.Country; country: string };
 
 /** An authenticated connection and every channel it currently holds. */
 export interface ChatClient {
@@ -31,6 +32,10 @@ export interface ChatClient {
   picSquare: string | null;
   channels: Map<string, ChannelInfo>;
   lastMsgAt: number;
+  /** One of `ADMIN_USER_IDS`: their lines carry the game team's mark (`gm`). */
+  gm?: boolean;
+  /** No lines accepted before this time (ms since the epoch); 0 or absent when not muted. */
+  mutedUntil?: number;
 }
 
 /**

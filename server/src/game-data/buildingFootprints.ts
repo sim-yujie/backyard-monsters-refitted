@@ -1,3 +1,5 @@
+import type { YardKind } from "./buildingCosts.js";
+
 /**
  * Building footprints, in yard units, one entry per building type id.
  *
@@ -196,9 +198,23 @@ export const MUSHROOM_TYPE = 7;
  */
 export const TROJAN_HORSE_TYPE = 27;
 
-/** Footprint for a building type, falling back to {@link DEFAULT_FOOTPRINT}. */
-export const footprintOf = (type: number): Footprint =>
-  FOOTPRINTS[type] ?? DEFAULT_FOOTPRINT;
+/**
+ * The two classes whose footprint changes in the Inferno yard
+ * (`BASE.isInfernoMainYardOrOutpost`): the Under Hall, which shares the Town
+ * Hall's type, is 160 x 160 (`client/scripts/BUILDING14.as:18`), and the
+ * Academy 80 x 80 (`client/scripts/BUILDING26.as:22`).
+ */
+export const INFERNO_FOOTPRINTS: Readonly<Record<number, Footprint>> = {
+  14: { w: 160, h: 160, decoration: false },
+  26: { w: 80, h: 80, decoration: false },
+};
+
+/**
+ * Footprint for a building type, falling back to {@link DEFAULT_FOOTPRINT}; in
+ * the Inferno yard (`kind`), {@link INFERNO_FOOTPRINTS} first.
+ */
+export const footprintOf = (type: number, kind: YardKind = "main"): Footprint =>
+  (kind === "inferno" ? INFERNO_FOOTPRINTS[type] : undefined) ?? FOOTPRINTS[type] ?? DEFAULT_FOOTPRINT;
 
 /** Whether a type is a decoration, and so exempt from plot bounds and Apply's placement check. */
 export const isDecoration = (type: number): boolean =>

@@ -84,7 +84,8 @@ export const runningCountdown = (
  *
  * An idle building given `field` `cU` is upgraded one level: the instant
  * upgrade (`BFOUNDATION.DoInstantUpgrade`, `:2130-2140`, calls `Upgraded()`).
- * `kind` is the yard's, so an outpost's job is priced from the outpost table.
+ * `kind` is the yard's, so an outpost's or the Inferno's job is priced (its
+ * points) from that yard's table.
  *
  * The caller must already have refused a damaged building: a paused countdown
  * would not advance.
@@ -100,6 +101,7 @@ export const finishBuildingJob = (
   const key = String(building.id);
   const one = {
     ...(kind === "outpost" && { type: BaseType.OUTPOST }),
+    ...(kind === "inferno" && { type: BaseType.INFERNO }),
     buildingdata: { [key]: { ...building, [field]: 1 } as BuildingData },
   };
 

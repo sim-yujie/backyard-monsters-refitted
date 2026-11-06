@@ -1,7 +1,8 @@
 /**
  * Building repair times, per type and level. GENERATED — do not edit by hand.
  *
- * Source: the `repairTime` array of each entry in `client/scripts/YARD_PROPS.as`.
+ * Source: the `repairTime` array of each entry in `client/scripts/YARD_PROPS.as`,
+ * and for the Inferno yard in `client/scripts/INFERNOYARDPROPS.as`.
  * Regenerate with `node tools/gen-repair-times.mjs` from `web/`.
  *
  * A repairing building heals `ceil(maxHealth / min(3600, repairTime[lvl - 1]))`
@@ -153,16 +154,151 @@ export const REPAIR_TIMES: Readonly<Record<number, readonly number[]>> = {
   140: [1920, 7680, 30720, 86400, 345600], // YARD_PROPS.as:7960
 };
 
+/**
+ * The Inferno yard's, from its own props table, which replaces the main one
+ * there (`GLOBAL.SetBuildingProps`, `client/scripts/GLOBAL.as:716-719`).
+ */
+export const INFERNO_REPAIR_TIMES: Readonly<Record<number, readonly number[]>> = {
+  1: [30, 60, 120, 240, 480, 960, 1920, 3840, 7680, 15360], // INFERNOYARDPROPS.as:131
+  2: [30, 60, 120, 240, 480, 960, 1920, 3840, 7680, 15360], // INFERNOYARDPROPS.as:252
+  3: [30, 60, 120, 240, 480, 960, 1920, 3840, 7680, 15360], // INFERNOYARDPROPS.as:373
+  4: [30, 60, 120, 240, 480, 960, 1920, 3840, 7680, 15360], // INFERNOYARDPROPS.as:504
+  5: [100, 300, 600, 900], // INFERNOYARDPROPS.as:599
+  6: [30, 60, 120, 240, 480, 960, 1920, 3840, 7680, 15360], // INFERNOYARDPROPS.as:734
+  7: [10], // INFERNOYARDPROPS.as:754
+  8: [480, 1920, 3840, 15360], // INFERNOYARDPROPS.as:819
+  9: [480, 1920, 7680], // INFERNOYARDPROPS.as:877
+  10: [3840], // INFERNOYARDPROPS.as:921
+  11: [300, 600], // INFERNOYARDPROPS.as:964
+  12: [10], // INFERNOYARDPROPS.as:1007
+  13: [60, 150, 300], // INFERNOYARDPROPS.as:1065
+  14: [480, 1920, 3840, 7680, 15360, 30720], // INFERNOYARDPROPS.as:1209
+  15: [100, 200, 300, 400, 500, 600], // INFERNOYARDPROPS.as:1287
+  16: [300], // INFERNOYARDPROPS.as:1330
+  17: [5, 5, 5, 5, 5], // INFERNOYARDPROPS.as:1404
+  18: [20], // INFERNOYARDPROPS.as:1443
+  19: [120, 240, 480, 960, 1920, 3840, 7680], // INFERNOYARDPROPS.as:1531
+  20: [360, 720, 1440, 2880, 5760, 11520, 23000, 46000, 64800, 86400], // INFERNOYARDPROPS.as:1708
+  21: [360, 720, 1440, 2880, 5760, 11520, 23000], // INFERNOYARDPROPS.as:1885
+  22: [120, 240, 480, 960], // INFERNOYARDPROPS.as:1947
+  23: [1440, 2880, 5760, 11520, 23000, 46000], // INFERNOYARDPROPS.as:2111
+  24: [1], // INFERNOYARDPROPS.as:2156
+  25: [1920, 3840, 7680, 9260, 12000, 18000], // INFERNOYARDPROPS.as:2320
+  26: [3800, 7680, 10640, 21280], // INFERNOYARDPROPS.as:2395
+  27: [1], // INFERNOYARDPROPS.as:2430
+  28: [1], // INFERNOYARDPROPS.as:2464
+  29: [1], // INFERNOYARDPROPS.as:2498
+  30: [1], // INFERNOYARDPROPS.as:2532
+  31: [1], // INFERNOYARDPROPS.as:2566
+  32: [1], // INFERNOYARDPROPS.as:2601
+  33: [1], // INFERNOYARDPROPS.as:2635
+  34: [1], // INFERNOYARDPROPS.as:2669
+  35: [1], // INFERNOYARDPROPS.as:2703
+  36: [1], // INFERNOYARDPROPS.as:2737
+  37: [1], // INFERNOYARDPROPS.as:2771
+  38: [1], // INFERNOYARDPROPS.as:2805
+  39: [1], // INFERNOYARDPROPS.as:2839
+  40: [1], // INFERNOYARDPROPS.as:2873
+  41: [1], // INFERNOYARDPROPS.as:2907
+  42: [1], // INFERNOYARDPROPS.as:2941
+  43: [1], // INFERNOYARDPROPS.as:2975
+  44: [1], // INFERNOYARDPROPS.as:3009
+  45: [1], // INFERNOYARDPROPS.as:3043
+  46: [1], // INFERNOYARDPROPS.as:3077
+  47: [1], // INFERNOYARDPROPS.as:3111
+  48: [1], // INFERNOYARDPROPS.as:3145
+  49: [1], // INFERNOYARDPROPS.as:3180
+  50: [1], // INFERNOYARDPROPS.as:3215
+  51: [120, 240, 480, 960], // INFERNOYARDPROPS.as:3299
+  52: [1], // INFERNOYARDPROPS.as:3334
+  53: [10], // INFERNOYARDPROPS.as:3350
+  54: [10], // INFERNOYARDPROPS.as:3373
+  55: [1], // INFERNOYARDPROPS.as:3414
+  56: [1], // INFERNOYARDPROPS.as:3447
+  57: [1], // INFERNOYARDPROPS.as:3480
+  58: [1], // INFERNOYARDPROPS.as:3513
+  59: [1], // INFERNOYARDPROPS.as:3546
+  60: [1], // INFERNOYARDPROPS.as:3579
+  61: [1], // INFERNOYARDPROPS.as:3612
+  62: [1], // INFERNOYARDPROPS.as:3645
+  63: [1], // INFERNOYARDPROPS.as:3678
+  64: [1], // INFERNOYARDPROPS.as:3711
+  65: [1], // INFERNOYARDPROPS.as:3744
+  66: [1], // INFERNOYARDPROPS.as:3777
+  67: [1], // INFERNOYARDPROPS.as:3810
+  68: [1], // INFERNOYARDPROPS.as:3843
+  69: [1], // INFERNOYARDPROPS.as:3876
+  70: [1], // INFERNOYARDPROPS.as:3909
+  71: [1], // INFERNOYARDPROPS.as:3943
+  72: [1], // INFERNOYARDPROPS.as:3976
+  73: [1], // INFERNOYARDPROPS.as:4009
+  74: [1], // INFERNOYARDPROPS.as:4042
+  75: [1], // INFERNOYARDPROPS.as:4075
+  76: [1], // INFERNOYARDPROPS.as:4108
+  77: [1], // INFERNOYARDPROPS.as:4141
+  78: [1], // INFERNOYARDPROPS.as:4174
+  79: [1], // INFERNOYARDPROPS.as:4207
+  80: [1], // INFERNOYARDPROPS.as:4240
+  81: [1], // INFERNOYARDPROPS.as:4273
+  82: [1], // INFERNOYARDPROPS.as:4306
+  83: [1], // INFERNOYARDPROPS.as:4339
+  84: [1], // INFERNOYARDPROPS.as:4372
+  85: [1], // INFERNOYARDPROPS.as:4405
+  86: [1], // INFERNOYARDPROPS.as:4435
+  87: [1], // INFERNOYARDPROPS.as:4468
+  88: [1], // INFERNOYARDPROPS.as:4501
+  89: [1], // INFERNOYARDPROPS.as:4534
+  90: [1], // INFERNOYARDPROPS.as:4567
+  91: [1], // INFERNOYARDPROPS.as:4600
+  92: [1], // INFERNOYARDPROPS.as:4633
+  93: [1], // INFERNOYARDPROPS.as:4666
+  94: [1], // INFERNOYARDPROPS.as:4699
+  95: [1], // INFERNOYARDPROPS.as:4732
+  96: [1], // INFERNOYARDPROPS.as:4766
+  97: [1], // INFERNOYARDPROPS.as:4800
+  98: [1], // INFERNOYARDPROPS.as:4834
+  99: [1], // INFERNOYARDPROPS.as:4868
+  100: [1], // INFERNOYARDPROPS.as:4902
+  101: [1], // INFERNOYARDPROPS.as:4936
+  102: [1], // INFERNOYARDPROPS.as:4969
+  103: [1], // INFERNOYARDPROPS.as:4999
+  104: [1], // INFERNOYARDPROPS.as:5032
+  105: [1], // INFERNOYARDPROPS.as:5065
+  106: [1], // INFERNOYARDPROPS.as:5098
+  107: [1], // INFERNOYARDPROPS.as:5131
+  108: [1], // INFERNOYARDPROPS.as:5164
+  109: [1], // INFERNOYARDPROPS.as:5197
+  110: [1], // INFERNOYARDPROPS.as:5230
+  111: [1], // INFERNOYARDPROPS.as:5263
+  113: [240], // INFERNOYARDPROPS.as:5313
+  114: [1080], // INFERNOYARDPROPS.as:5346
+  115: [1920, 3840, 7680, 9260, 12000, 18000], // INFERNOYARDPROPS.as:5507
+  116: [3800, 7680, 10640, 15600], // INFERNOYARDPROPS.as:5562
+  117: [1], // INFERNOYARDPROPS.as:5604
+  118: [2880, 5760, 11520, 23000, 46000, 69000], // INFERNOYARDPROPS.as:5770
+  119: [3600], // INFERNOYARDPROPS.as:5812
+  127: [1, 1, 1, 1, 1], // INFERNOYARDPROPS.as:5993
+  128: [100, 200, 300, 400, 500, 600], // INFERNOYARDPROPS.as:6069
+  129: [1440, 2880, 5760, 11520, 23000, 46000], // INFERNOYARDPROPS.as:6221
+  130: [360, 720, 1440, 2880, 5760, 11520, 23000], // INFERNOYARDPROPS.as:6395
+  131: [1, 1, 1, 1, 1, 1, 1], // INFERNOYARDPROPS.as:6491
+  132: [1440, 2880, 5760, 11520, 23000, 46000, 92000], // INFERNOYARDPROPS.as:6657
+  133: [1, 1, 1, 1, 1, 1, 1], // INFERNOYARDPROPS.as:6734
+  134: [1, 1, 1, 1, 1, 1, 1], // INFERNOYARDPROPS.as:6811
+  135: [1], // INFERNOYARDPROPS.as:6848
+};
+
 /** No repair takes longer than this (`BFOUNDATION.as:1369`). */
 export const REPAIR_CAP_SECONDS = 3600;
 
 /**
  * A type's `repairTime` at a level: `[0]` for level 0 (a building still under
  * construction), the last entry past the top of the ladder, and the one-hour
- * cap for a type the table does not have.
+ * cap for a type the table does not have. `table` is the yard's: the Inferno
+ * yard reads its own.
  */
-export const repairTimeOf = (type: number, level: number): number => {
-  const times = REPAIR_TIMES[type];
+export const repairTimeOf = (type: number, level: number, table: "main" | "inferno" = "main"): number => {
+  const times = (table === "inferno" ? INFERNO_REPAIR_TIMES : REPAIR_TIMES)[type];
   if (!times || times.length === 0) return REPAIR_CAP_SECONDS;
   const index = Math.min(Math.max(Math.floor(level) - 1, 0), times.length - 1);
   return times[index] ?? REPAIR_CAP_SECONDS;

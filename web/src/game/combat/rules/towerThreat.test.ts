@@ -90,11 +90,18 @@ const towerAt = (type: number, level: number, hp: number, hall: Layout["hall"]) 
  * The tower's real damage per tick over whole cycles: from the first cycle
  * that starts after the creep has settled to the last that starts before the
  * end. Damage still in flight (a shell, a beam) is the same at both ends.
+ * The shells blast on their target (`shellBlastsWhereItLands` off): the
+ * estimate reads a shell's whole worth, where Flash's quirk would put an
+ * Aerial Defense burst up in the air, a fifth or so of it reaching the flyer.
  */
 const measure = (type: number, level: number, hp: number, layout: Layout) => {
   const yard = towerAt(type, level, hp, layout.hall);
   const gun = yard.buildings.find((building) => building.id === 1) as EngineBuilding;
-  const battle = createBattle(yard, { seed: 1, levels: { C12: 6, C14: 6 } });
+  const battle = createBattle(yard, {
+    seed: 1,
+    levels: { C12: 6, C14: 6 },
+    shellBlastsWhereItLands: false,
+  });
   battle.apply({ kind: "fling", t: 0, ...layout.fling, r: 0, monsters: { [layout.prey]: 1 } });
   const dealt: number[] = [0];
   const starts: number[] = [];

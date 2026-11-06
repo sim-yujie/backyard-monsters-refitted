@@ -1,7 +1,8 @@
 import type { BaseLoadResponse, ResourceCaps, Resources } from "@/api/types";
 import { maxHp } from "@/game/combat/rules";
 import { academyLevel } from "./housing";
-import { hatchCost } from "./monsterCatalogue";
+import { hatchCost, isInfernoMonster } from "./monsterCatalogue";
+import { monsterWords, type MonsterRealm } from "./realm";
 
 /**
  * The Monster Juicer on the client (`docs/design/yard-buildings.md` §7.3,
@@ -74,11 +75,11 @@ export const juicerStatus = (save: BaseLoadResponse): JuicerStatus => {
   return { ok: false, problem: problemOf(first.id, first.building)!, id: first.id };
 };
 
-/** A sentence for a {@link JuicerProblem}. */
-export const juicerProblemText = (problem: JuicerProblem): string => {
+/** A sentence for a {@link JuicerProblem}; Magma in the Inferno. */
+export const juicerProblemText = (problem: JuicerProblem, realm: MonsterRealm = "surface"): string => {
   switch (problem) {
     case "noJuicer":
-      return "Build a Monster Juicer to turn monsters back into goo.";
+      return `Build a Monster Juicer to turn monsters back into ${monsterWords(realm).goo}.`;
     case "building":
       return "Your Monster Juicer is still being built.";
     case "upgrading":
@@ -102,11 +103,27 @@ export interface JuicePreview {
   readonly credited: number;
   /** Goo the cap would swallow. */
   readonly lost: number;
+  /**
+   * Magma from Inferno monsters juiced on the main yard, before the cap: it
+   * goes into the Inferno purse (`iresources`), as the server pays it
+   * (`planJuice`, Inferno WP 2.3). 0 on the Inferno yard, whose goo is Magma.
+   */
+  readonly magma: number;
+  /** Magma that would land in the purse. */
+  readonly magmaCredited: number;
+  /** Magma the purse's cap would swallow. */
+  readonly magmaLost: number;
 }
+
+/** What `have + gain` comes to under `cap`, the way the server clamps a credit: never below `have`. */
+const landed = (have: number, gain: number, cap: number | undefined): number =>
+  typeof cap === "number" ? Math.max(have, Math.min(have + gain, cap)) - have : gain;
 
 /**
  * What juicing `selection` would give at `rate`, clamped to the goo cap the
- * way the server clamps it (a pool already over the cap takes nothing).
+ * way the server clamps it (a pool already over the cap takes nothing). On a
+ * surface yard an Inferno monster's juice is Magma for the Inferno purse,
+ * clamped to its cap (`r4max`; none saved takes nothing, as on the server).
  */
 export const juicePreview = (
   save: BaseLoadResponse,
@@ -114,16 +131,20 @@ export const juicePreview = (
   rate: number,
   resources: Resources,
   caps: ResourceCaps | null,
+  realm: MonsterRealm = "surface",
 ): JuicePreview => {
   let count = 0;
   let goo = 0;
+  let magma = 0;
   for (const [id, n] of Object.entries(selection)) {
     if (!(n > 0)) continue;
     count += n;
-    goo += juiceGoo(save, id, n, rate);
+    const paid = juiceGoo(save, id, n, rate);
+    if (realm === "surface" && isInfernoMonster(id)) magma += paid;
+    else goo += paid;
   }
-  const have = numberOf(resources.r4);
-  const cap = caps?.r4;
-  const credited = typeof cap === "number" ? Math.max(have, Math.min(have + goo, cap)) - have : goo;
-  return { count, goo, credited, lost: goo - credited };
+  const credited = landed(numberOf(resources.r4), goo, caps?.r4);
+  const purse = save.iresources;
+  const magmaCredited = magma > 0 ? landed(numberOf(purse?.r4), magma, numberOf(purse?.r4max)) : 0;
+  return { count, goo, credited, lost: goo - credited, magma, magmaCredited, magmaLost: magma - magmaCredited };
 };

@@ -21,8 +21,8 @@ export const ADD_FRIEND_TEXT = {
   acceptTitle: (name?: string): string => `${name ?? "They"} asked to be your friend. Accept?`,
   friend: "Friends",
   requested: "Request sent",
-  sent: (name?: string): string => (name ? `Friend request sent to ${name}.` : "Friend request sent."),
-  accepted: (name?: string): string => (name ? `${name} is now your friend.` : "You are now friends."),
+  sent: (name?: string): string => (name ? `Request sent to ${name}` : "Request sent"),
+  accepted: (name?: string): string => (name ? `Now friends with ${name}` : "Now friends"),
 } as const;
 
 export interface AddFriendOptions {

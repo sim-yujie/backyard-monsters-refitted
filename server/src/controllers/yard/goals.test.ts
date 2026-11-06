@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { EntityManager } from "@mikro-orm/core";
 import type z from "zod";
 import type { User } from "../../database/models/user.model.js";
@@ -218,6 +218,88 @@ describe("goals/claim", () => {
     await call(actions.claim, { id: "T1" });
     const answer = await call(actions.claim, { id: "CR3" });
     expect(answer.body.onboarding).toMatchObject({ goalsReady: 1 });
+  });
+});
+
+describe("siege weapon rewards (SW4-SW12, Inferno WP 6.8)", () => {
+  const saved = process.env.INFERNO_ENABLED;
+  const factory = (extra: Row = {}): Row => ({ id: 4, t: 133, x: 0, y: 0, X: 300, Y: -300, l: 1, ...extra });
+  /** C16 claimed and the Decoy researched to level 1; the Factory as given. */
+  const sieged = (overrides: Row = {}): Row =>
+    rowOf({
+      onboarding: { v: 1, guide: { state: "done" }, raidSeen: 100, goals: { C16: { done: 1, claimed: 2 } } },
+      siege: { decoy: { level: 1, quantity: 0 } },
+      ...overrides,
+    });
+  const withFactory = (extra: Row = {}): Row => ({ ...(rowOf().buildingdata as Row), "4": factory(extra) });
+
+  beforeEach(() => {
+    process.env.INFERNO_ENABLED = "on";
+  });
+  afterEach(() => {
+    if (saved === undefined) delete process.env.INFERNO_ENABLED;
+    else process.env.INFERNO_ENABLED = saved;
+  });
+
+  test("goals/state lists them after C16, with the weapon and whether the Factory has room", async () => {
+    db.row = sieged();
+    let goals = (
+      (await call(actions.state)).body.report as { goals: { id: string; status: string; room?: boolean; siege?: unknown }[] }
+    ).goals;
+    let byId = new Map(goals.map((goal) => [goal.id, goal]));
+    expect(byId.get("SW4")).toMatchObject({
+      status: "ready",
+      siege: { id: "decoy", name: "Marilyn Monstroe", count: 1 },
+      room: false,
+    });
+    expect(byId.get("SW5")).toMatchObject({ status: "open", siege: { id: "vacuum", name: "Loot-O-Tron 5000" } });
+    expect(byId.get("SW5")?.room).toBeUndefined();
+    expect(byId.has("SW7")).toBe(false);
+
+    db.row = sieged({ buildingdata: withFactory() });
+    goals = ((await call(actions.state)).body.report as { goals: typeof goals }).goals;
+    byId = new Map(goals.map((goal) => [goal.id, goal]));
+    expect(byId.get("SW4")?.room).toBe(true);
+  });
+
+  test("a claim makes the weapon in an idle, empty Factory, for no points", async () => {
+    db.row = sieged({ buildingdata: withFactory() });
+    const answer = await call(actions.claim, { id: "SW4" });
+    expect(answer.status).toBe(200);
+    expect(answer.body.report).toMatchObject({
+      id: "SW4",
+      siegeReward: { id: "decoy", count: 1 },
+      siege: { decoy: { level: 1, quantity: 1 }, vacuum: { level: 0, quantity: 0 } },
+      points: 0,
+    });
+    expect(db.row?.siege).toEqual({ decoy: { level: 1, quantity: 1 } });
+    expect(db.row?.points).toBe("100");
+    expect(stored().goals.SW4?.claimed).toBeNumber();
+  });
+
+  test("refused while the Factory cannot take it (msg_quest_noroomsiegeweapon); nothing written", async () => {
+    const cases: Row[] = [
+      sieged(),
+      sieged({ buildingdata: withFactory({ l: 0, cB: 600 }) }),
+      sieged({ buildingdata: withFactory({ unlockingWeapons: { decoy: 9_999_999_999 } }) }),
+      sieged({ buildingdata: withFactory(), siege: { decoy: { level: 1, quantity: 0 }, jars: { level: 2, quantity: 1 } } }),
+    ];
+    for (const row of cases) {
+      db.row = row;
+      const before = structuredClone(db.row);
+      const answer = await call(actions.claim, { id: "SW4" });
+      expect(answer).toMatchObject({ status: 409, body: { reason: "siegeRoom", weapon: "decoy" } });
+      expect(String((answer.body as { error?: string }).error)).toContain("Chaos Factory");
+      expect(db.row).toEqual(before);
+    }
+  });
+
+  test("hidden with the Inferno off", async () => {
+    process.env.INFERNO_ENABLED = "off";
+    db.row = sieged({ buildingdata: withFactory() });
+    const goals = ((await call(actions.state)).body.report as { goals: { id: string }[] }).goals;
+    expect(goals.some((goal) => goal.id.startsWith("SW"))).toBe(false);
+    expect(await call(actions.claim, { id: "SW4" })).toMatchObject({ status: 409, body: { reason: "goalHidden" } });
   });
 });
 

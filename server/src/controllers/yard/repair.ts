@@ -6,13 +6,15 @@ import { defineYardAction } from "./yardAction.js";
  * `POST /bm/yard/repair` — start repairing the named buildings (`ids`), or
  * every damaged one (`all=1`, the post-attack banner's Repair all)
  * (`docs/design/yard-buildings.md` §5.5). Free, no worker; the catch-up heals.
- * The rules are `services/yard/repair.ts`.
+ * The rules are `services/yard/repair.ts`. On the Inferno yard (WP 1.16) the
+ * Inferno table's health and repair times count, and its catch-up heals.
  */
 export const yardRepairAction = defineYardAction({
   schema: YardRepairSchema,
   run: ({ save, body, now }) =>
     planRepair(save, body.ids ? { ids: body.ids } : { all: true }, now),
   outposts: "allow",
+  inferno: "allow",
 });
 
 /**
@@ -23,4 +25,5 @@ export const yardRepairInstantAction = defineYardAction({
   schema: YardRepairInstantSchema,
   run: ({ save }) => planRepairInstant(save),
   outposts: "allow",
+  inferno: "allow",
 });

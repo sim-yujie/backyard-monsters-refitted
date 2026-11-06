@@ -31,8 +31,8 @@ import {
  * the replays of attacks on them, attack plans, neighbour lists, their
  * friendships, friend requests and friend helps both ways (their friends' `friendcount`
  * drops by one), the anti-cheat report and every Redis key of theirs, including login sessions,
- * so they are logged out. Their lines are taken out of world chat history and
- * the fair-play log.
+ * so they are logged out. Their lines are taken out of world chat history, the
+ * dashboard's chat log and automatic chat flags, and the fair-play log.
  *
  * Kept, without their name: other players' battle records and defence replays
  * show {@link DELETED_PLAYER_NAME} in their place, and so does a base's "last
@@ -186,6 +186,8 @@ const deleteSteps = (u: number): DeleteStep[] => [
   { label: "mail threads (no one else will read)", table: "thread", where: unreadThreads("thread"), params: [u, u, u, u, u] },
   { label: "truces", table: "truce", where: `initiator_userid = ? OR recipient_userid = ?`, params: [u, u] },
   { label: "alliance chat messages", table: "alliance_message", where: `user_id = ?`, params: [u] },
+  { label: "chat log lines", table: "chat_log", where: `userid = ?`, params: [u] },
+  { label: "automatic chat flags", table: "chat_flag", where: `userid = ?`, params: [u] },
   { label: "alliance invites", table: "alliance_invite", where: `user_id = ?`, params: [u] },
   { label: "notifications", table: "notification", where: `userid = ?`, params: [u] },
   { label: "defence replays of attacks on them", table: "defence_replay", where: `defender_userid = ?`, params: [u] },
@@ -199,8 +201,12 @@ const deleteSteps = (u: number): DeleteStep[] => [
   { label: "friend helps (given and received)", table: "friend_help", where: `helper_userid = ? OR owner_userid = ?`, params: [u, u] },
   { label: "friend gifts (sent and received)", table: "friend_gift", where: `from_userid = ? OR to_userid = ?`, params: [u, u] },
   { label: "event progress (calendars, collections)", table: "event_progress", where: `userid = ?`, params: [u] },
+  { label: "Inferno progress", table: "inferno_progress", where: `userid = ?`, params: [u] },
   { label: "Shiny the game team gave them", table: "shiny_award", where: `userid = ?`, params: [u] },
   { label: "bug reports they sent", table: "bug_report", where: `userid = ?`, params: [u] },
+  { label: "the dashboard's error senders (name and address)", table: "app_error_reporter", where: `userid = ?`, params: [u] },
+  { label: "announcements they pressed \"Got it\" on", table: "announcement_dismissal", where: `userid = ?`, params: [u] },
+  { label: "announcement gifts they claimed", table: "announcement_claim", where: `userid = ?`, params: [u] },
   { label: "map cells (home and outposts)", table: "world_map_cell", where: `uid = ?`, params: [u] },
   { label: "account (login and email)", table: `"user"`, where: `userid = ?`, params: [u] },
   { label: "saves (yards, outposts, inferno)", table: "save", where: `userid = ?`, params: [u] },
@@ -293,6 +299,14 @@ const updateSteps = (u: number, username: string): UpdateStep[] => [
     setParams: [],
     where: `awarded_by = ?`,
     params: [u],
+  },
+  {
+    label: "announcements written from their account (account number removed)",
+    table: "announcement",
+    set: `created_by = CASE WHEN created_by = ? THEN NULL ELSE created_by END, updated_by = CASE WHEN updated_by = ? THEN NULL ELSE updated_by END`,
+    setParams: [u, u],
+    where: `created_by = ? OR updated_by = ?`,
+    params: [u, u],
   },
 ];
 

@@ -58,9 +58,9 @@ describe("isTrapType", () => {
 });
 
 describe("countedBuildings (#72)", () => {
-  it("counts every building but the traps", () => {
-    // A town hall, a wall, a cannon tower, a Booby Trap and a Heavy Trap.
-    expect(countedBuildings([14, 17, 20, 24, 117])).toBe(3);
+  it("counts every building but the traps and the walls", () => {
+    // A town hall, a wall, a legacy wall, a cannon tower, a Booby Trap and a Heavy Trap.
+    expect(countedBuildings([14, 17, 18, 20, 24, 117])).toBe(2);
     expect(countedBuildings([])).toBe(0);
   });
 });

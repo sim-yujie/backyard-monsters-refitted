@@ -8,6 +8,7 @@ import {
   createBattle,
   damagePercent,
   derivedDestroyed,
+  felledCount,
   toCombatYard,
   type BuildingHealthMap,
   type ChampionLesson,
@@ -19,6 +20,7 @@ import {
   type ResourceAmounts,
   type Roster,
 } from "../../../game-rules/combat/index.js";
+import { fightableSiege, siegeLevelsOf } from "../../../game-rules/combat/siege.js";
 import { BaseType } from "../../../enums/Base.js";
 import type { ChampionData } from "../../../schemas/ChampionSchema.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
@@ -88,6 +90,11 @@ export interface AbandonedInput {
    * whose client fought none either.
    */
   defence?: DefenderForces;
+  /**
+   * The Descent yard fought, 1 to 13 (Inferno WP 1.12): from yard 7 the
+   * shared engine burns surface monsters (WP 1.21). Absent outside the Descent.
+   */
+  descentYard?: number;
 }
 
 /** Everything the attack save would have carried, derived. */
@@ -189,7 +196,9 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
   const { defender, attacker, log, declareWar } = input;
   const kind = defender.kind ?? combatKindOf(defender.type);
   const buildingdata = defender.buildingdata ?? {};
-  const events = ordered(log.events);
+  // Only the siege weapons the attacker held, each at its Lab level (Inferno WP 6.8).
+  const events = fightableSiege(ordered(log.events), attacker.siege);
+  const siege = siegeLevelsOf(attacker.siege);
   const lastEvent = events.reduce((last, event) => Math.max(last, Math.floor(event.t)), 0);
   const end = Math.max(Math.floor(input.tick), lastEvent);
 
@@ -206,9 +215,11 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
       levels: academyLevels(attacker.academy),
       // The Lab ranks the attack froze (issue #352): off the same academy as the levels.
       ranks: academyRanks(attacker.academy),
+      ...(Object.keys(siege).length > 0 && { siege }),
       declareWar,
       ...(input.playerLevel !== undefined && { playerLevel: input.playerLevel }),
       ...battleDefence(input.defence),
+      ...(input.descentYard !== undefined && { descentYard: input.descentYard }),
       // Each attacking champion's lesson for its brain (issue #219); reads only.
       learn: true,
     }
@@ -263,7 +274,7 @@ export const replayAbandonedAttack = (input: AbandonedInput): AbandonedOutcome =
       tick: state.tick,
       left: input.left ?? true,
       damagePercent: percent,
-      buildingsDestroyed: state.destroyedIds.length,
+      buildingsDestroyed: felledCount(combatYard, state.destroyedIds),
       loot,
       defenderChampionsFell: state.defenderChampions.filter((caged) => caged.hp === 0).length,
     }),

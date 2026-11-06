@@ -236,6 +236,41 @@ const lookTexture = (look: Look): Texture => {
 
 /* ── The effect ─────────────────────────────────────────────────────────── */
 
+/**
+ * The Modern trap explosion's numbers (beta 6, a SAMPLE for the owner), all in
+ * one place so the owner's call on it is a quick change. Ticks are the
+ * battle's, 80 a second. The Classic look keeps the scorch and thin ring the
+ * battle screen draws itself.
+ */
+export const TRAP_FX = {
+  /** The fireball's reach on the ground against the blast's: 1 = its edge is the blast's edge. */
+  reach: 1,
+  /** The white flash, the fire on the ground and the smoke puff, ticks. */
+  flashTicks: 8,
+  fireTicks: 36,
+  smokeTicks: 80,
+  /** Clods of dirt thrown out, smoke puffs and sparks: [Booby Trap, Heavy Trap]. */
+  dirt: [12, 22],
+  puffs: [6, 10],
+  sparks: [8, 14],
+  /** The Heavy Trap's small shake (screen px, ticks); the Booby Trap does not shake. */
+  heavyShake: { amp: 5, ticks: 24 },
+} as const;
+
+/**
+ * The ground the fireball covers for a blast reaching `radius` screen px
+ * across (the blast's circle as the yard shows it: twice as wide as tall).
+ */
+export const trapFireball = (radius: number): { width: number; height: number } => ({
+  width: 2 * radius * TRAP_FX.reach,
+  height: radius * TRAP_FX.reach,
+});
+
+/** The soft look fades out toward its edge: its picture is this much wider than what still shows. */
+const SOFT_EDGE = 1.15;
+/** The ring look's line sits at this share of its picture's width. */
+const RING_LINE = 0.89;
+
 export class BlastFx {
   private readonly bits: Bit[] = [];
   private readonly pool: Sprite[] = [];
@@ -463,6 +498,75 @@ export class BlastFx {
   }
 
   /* ── Fiery ──────────────────────────────────────────────────────────── */
+
+  /**
+   * A trap going off (Modern): a bright flash, a fireball on the ground as big
+   * as the blast (so the player sees who was in range) with a brighter edge, a
+   * fire core rising, dirt and sparks thrown out, and a smoke puff fading over
+   * about a second. `radius` is the blast's reach across the ground, screen px.
+   * The Heavy Trap's is bigger and gives a small shake, which the "Screen
+   * shake" switch (no host shake), less motion and "Reduce effects" keep out.
+   * `few` halves the bits ("Effects: low").
+   */
+  trap(tick: number, at: Point, radius: number, heavy = false, few = false): void {
+    const { scale, many } = this.begin(radius);
+    const some = (count: number): number => many(few ? Math.ceil(count / 2) : count);
+    const side = heavy ? 1 : 0;
+    const { width, height } = trapFireball(radius);
+    const flat = height / width;
+    const lift = { x: at.x, y: at.y - (heavy ? 14 : 10) };
+    // The smoke puff first, so the fire is drawn over it: grey, rising and fading over about a second.
+    const puffs = some(TRAP_FX.puffs[side]);
+    for (let index = 0; index < puffs; index += 1) {
+      const angle = (index / puffs) * Math.PI * 2 + blastNoise(tick, index + 900);
+      const spread = width * 0.5 * (0.1 + blastNoise(tick, index + 920) * 0.35);
+      this.add(tick, {
+        look: "soft", at: { x: at.x + Math.cos(angle) * spread, y: at.y + Math.sin(angle) * spread * 0.5 }, delay: 4,
+        life: Math.round(TRAP_FX.smokeTicks * (0.8 + blastNoise(tick, index + 940) * 0.4)),
+        z: 6, vz: 0.28, vx: Math.cos(angle) * 0.35, vy: Math.sin(angle) * 0.18, drag: 0.02,
+        size0: width * 0.2, size1: width * 0.45, fadeIn: 8, hold: 0.15, peak: 0.6,
+        colours: [0x6e645a, 0x4e4844, 0x3a3634],
+      });
+    }
+    // The flash.
+    this.add(tick, { look: "soft", at: lift, add: true, life: TRAP_FX.flashTicks, size0: width * 0.3, size1: width * 0.75, easeOut: true, colours: [0xffffff, 0xfff6c8, 0xffd060] });
+    // The fireball on the ground, out to the blast's edge, and that edge a little brighter.
+    this.add(tick, { look: "soft", at, add: true, life: TRAP_FX.fireTicks, size0: width * 0.35, size1: width * SOFT_EDGE, squash: flat, easeOut: true, hold: 0.3, peak: 0.95, colours: [0xfff4c0, 0xffb030, 0xff6a10, 0x9a2400] });
+    this.add(tick, { look: "ring", at, add: true, life: Math.round(TRAP_FX.fireTicks * 0.8), size0: (width * 0.4) / RING_LINE, size1: width / RING_LINE, squash: flat, easeOut: true, hold: 0.35, peak: 0.55, colours: [0xffe090, 0xff9030, 0xc04010] });
+    // The fire's core, rising off the ground as it burns out.
+    this.add(tick, { look: "soft", at: lift, add: true, life: Math.round(TRAP_FX.fireTicks * 0.85), size0: width * 0.22, size1: width * 0.5, vz: 0.35, hold: 0.2, peak: 0.95, colours: [0xffffff, 0xffd060, 0xff7010, 0x601000] });
+    // Dirt thrown up and out, landing in the blast and lying a moment.
+    const dirt = some(TRAP_FX.dirt[side]);
+    for (let index = 0; index < dirt; index += 1) {
+      const angle = ((index + blastNoise(tick, index + 960)) / dirt) * Math.PI * 2;
+      const speed = (1.8 + blastNoise(tick, index + 980) * 3.2) * scale;
+      const tone = blastNoise(tick, index + 1000);
+      this.add(tick, {
+        look: "dot", at: { x: at.x, y: at.y },
+        life: 46 + Math.round(blastNoise(tick, index + 1020) * 22),
+        z: 4, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed * 0.5,
+        vz: (heavy ? 5 : 3.8) + blastNoise(tick, index + 1040) * 4, gravity: 0.32, drag: 0.03,
+        size0: (3 + tone * 4) * (heavy ? 1.3 : 1), size1: 3, hold: 0.7, spin: 0.3,
+        colours: [tone > 0.5 ? 0x6b5038 : 0x58483a, 0x3e3328],
+      });
+    }
+    const sparks = some(TRAP_FX.sparks[side]);
+    for (let index = 0; index < sparks; index += 1) {
+      const angle = ((index + blastNoise(tick, index + 1060)) / sparks) * Math.PI * 2;
+      const speed = (6 + blastNoise(tick, index + 1080) * 6) * scale;
+      this.add(tick, {
+        look: "dot", at: lift, add: true,
+        life: 12 + Math.round(blastNoise(tick, index + 1100) * 8),
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed * 0.5,
+        drag: 0.15, size0: 4, size1: 1.5, stretch: true,
+        colours: [0xffffff, 0xffe070, 0xff8020],
+      });
+    }
+    if (heavy && !this.reducedMotion && !this.fewer) {
+      const { amp, ticks } = TRAP_FX.heavyShake;
+      this.startShake({ born: tick, life: ticks, amp: Math.min(this.maxShake, amp) });
+    }
+  }
 
   /** A fiery blast at the ground point `at`, `radius` screen px wide: Eye-ra's. */
   fiery(tick: number, at: Point, radius: number): void {

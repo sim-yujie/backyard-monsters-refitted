@@ -8,7 +8,8 @@ import {
   changeUsernameLimiter,
   debugDataLimiter,
   getAreaLimiter,
-  getCellsLimiter,
+  attackLogsLimiter,
+  purchasePowerupLimiter,
   sightLimiter,
   loginLimiter,
   forgotPasswordEmailLimiter,
@@ -38,6 +39,8 @@ import {
   allianceCreateEditLimiter,
   bugReportLimiter,
   clientErrorLimiter,
+  announcementsLimiter,
+  announcementImageLimiter,
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
 
@@ -45,6 +48,7 @@ import { init } from "./controllers/init.js";
 import { supportedLangs } from "./controllers/supportedLangs.js";
 
 import { login } from "./controllers/auth/login.js";
+import { logout } from "./controllers/auth/logout.js";
 import { register } from "./controllers/auth/register.js";
 import { signUpOptions } from "./controllers/auth/signUpOptions.js";
 import { forgotPassword } from "./controllers/auth/forgotPassword.js";
@@ -53,6 +57,7 @@ import { changeUsername } from "./controllers/auth/changeUsername.js";
 import { getAccount } from "./controllers/auth/getAccount.js";
 import { updateSettings } from "./controllers/auth/updateSettings.js";
 import { getSoundSettings, updateSoundSettings } from "./controllers/auth/soundSettings.js";
+import { reportLook } from "./controllers/auth/lookReport.js";
 import { setAvatar } from "./controllers/auth/setAvatar.js";
 
 import { baseLoad } from "./controllers/base/load/baseLoad.js";
@@ -65,8 +70,14 @@ import { migrateToFriend, rejectMigrateToFriend } from "./controllers/maproom/v2
 
 import { getNewMap } from "./controllers/maproom/getNewMap.js";
 import { setMapVersion } from "./controllers/maproom/setMapVersion.js";
-import { infernoSave } from "./controllers/inferno/infernoSave.js";
-import { infernoMonsters } from "./controllers/inferno/infernoMonsters.js";
+import { infernoState, korathSeen } from "./controllers/inferno/infernoState.js";
+import { infernoAttackStart } from "./controllers/inferno/descentAttack.js";
+import { infernoLoad } from "./controllers/inferno/infernoLoad.js";
+import { infernoTransferAction } from "./controllers/inferno/transfer.js";
+import { infernoMap } from "./controllers/inferno/infernoMap.js";
+import { infernoNeighbours } from "./controllers/inferno/infernoNeighbours.js";
+import { infernoView } from "./controllers/inferno/infernoView.js";
+import { yardRoute } from "./controllers/yard/yardRoute.js";
 import { getNeighbours } from "./controllers/maproom/getNeighbours.js";
 import { getMapRoom1 } from "./controllers/maproom/getMapRoom1.js";
 import { presence, stayProtected } from "./controllers/maproom/presence.js";
@@ -85,10 +96,6 @@ import { autoAttack, autoAttackPlan, autoAttackReplay } from "./controllers/mapr
 import { transferMonsters } from "./controllers/maproom/v2/transferMonsters.js";
 import { saveBookmarks } from "./controllers/maproom/v2/saveBookmarks.js";
 
-import { initialPlayerCellData } from "./controllers/maproom/v3/initialPlayerCellData.js";
-import { getMapRoomCells } from "./controllers/maproom/v3/getCells.js";
-import { relocate } from "./controllers/maproom/v3/relocate.js";
-import { getFriendInfo } from "./controllers/maproom/v3/getFriendInfo.js";
 
 import { getMessageTargets } from "./controllers/mail/getMessageTargets.js";
 import { getMessageThreads } from "./controllers/mail/getMessageThreads.js";
@@ -107,6 +114,7 @@ import { upgradeWalls } from "./controllers/yardplanner/upgradeWalls.js";
 import { rearmTraps } from "./controllers/yardplanner/rearmTraps.js";
 import { layoutRoute } from "./controllers/yardplanner/layoutRoute.js";
 import { yardRoutes } from "./controllers/yard/index.js";
+import { registerTribeEditorRoutes } from "./controllers/tribeEditor/tribeEditor.js";
 import {
   getNotifications,
   getUnreadNotifications,
@@ -114,11 +122,15 @@ import {
   readNotification,
 } from "./controllers/notifications/routes.js";
 import { chatPlayerYard, reportChatMessage } from "./controllers/chat/routes.js";
+import { getModerationNotice, seeModerationNotice } from "./controllers/moderation/notice.js";
 import { playerAchievements } from "./controllers/achievements/routes.js";
 import { getDefenceReplay, getDefences } from "./controllers/defences/routes.js";
 import { mountFriendsRoutes } from "./controllers/friends/routes.js";
 import { mountEventsRoutes } from "./controllers/events/routes.js";
-import { mountAdminRoutes } from "./controllers/admin/routes.js";
+import { mountSupportRoutes } from "./controllers/support/routes.js";
+import { adminOnly, mountAdminRoutes } from "./controllers/admin/routes.js";
+import { mountAnnouncementRoutes } from "./controllers/announcements/routes.js";
+import { postgres } from "./server.js";
 import { clientErrors, guestClientErrors } from "./controllers/errors/clientErrors.js";
 
 import { getAvailableWorlds } from "./controllers/leaderboards/getAvailableWorlds.js";
@@ -161,6 +173,7 @@ router.get("/connection", (ctx) => (ctx.status = Status.OK));
 * 📦 Auth
 * ──────────────────────────────────────────────── */
 router.post("/api/:apiVersion/player/getinfo", apiVersion, loginLimiter, logRequest, login);
+router.post("/api/:apiVersion/player/logout", apiVersion, verifyUserAuth, logRequest, logout);
 router.post("/api/:apiVersion/player/register", apiVersion, registerLimiter, logRequest, register);
 router.get("/api/:apiVersion/player/signupoptions", apiVersion, signUpOptions);
 router.post("/api/:apiVersion/player/forgotPassword", apiVersion, forgotPasswordIpLimiter, forgotPasswordEmailLimiter, forgotPassword);
@@ -172,6 +185,8 @@ router.post("/api/:apiVersion/player/settings", apiVersion, verifyUserAuth, logR
 // The music and effects switches, saved with the main yard (beta.5, `services/sound/soundSettings.ts`).
 router.get("/api/:apiVersion/player/sound", apiVersion, verifyUserAuth, getSoundSettings);
 router.post("/api/:apiVersion/player/sound", apiVersion, verifyUserAuth, logRequest, updateSoundSettings);
+// Which look the player uses (Modern/Classic and the rest), for the owner's dashboard (`services/user/lookReport.ts`).
+router.post("/api/:apiVersion/player/look", apiVersion, verifyUserAuth, reportLook);
 router.post("/api/:apiVersion/player/avatar", apiVersion, verifyUserAuth, logRequest, setAvatar);
 
 /**  ────────────────────────────────────────────────
@@ -192,10 +207,17 @@ router.post("/base/checkpoint", verifyUserAuth, attackCheckpoint);
 * ──────────────────────────────────────────────── */
 router.post("/api/:apiVersion/bm/getnewmap", apiVersion, verifyUserAuth, logRequest, getNewMap);
 router.post("/api/:apiVersion/bm/base/load", apiVersion, verifyUserAuth, logRequest, baseLoad);
-router.post("/api/:apiVersion/bm/base/save", apiVersion, verifyUserAuth, logRequest, infernoSave);
 router.post("/api/:apiVersion/bm/base/updatesaved", verifyUserAuth, logRequest, updateSaved);
-router.post("/api/:apiVersion/bm/base/infernomonsters", apiVersion, verifyUserAuth, logRequest, infernoMonsters);
 router.post("/api/:apiVersion/bm/neighbours/get", apiVersion, verifyUserAuth, logRequest, getNeighbours);
+// The new Inferno (docs/design/inferno.md §3.2), refused while `infernoConfig.enabled` is off.
+router.get("/api/:apiVersion/bm/inferno/state", apiVersion, verifyUserAuth, verifyAccountStatus, infernoState);
+router.post("/api/:apiVersion/bm/inferno/korath/seen", apiVersion, verifyUserAuth, verifyAccountStatus, logRequest, korathSeen);
+router.post("/api/:apiVersion/bm/inferno/attack/start", apiVersion, verifyUserAuth, verifyAccountStatus, logRequest, infernoAttackStart);
+router.get("/api/:apiVersion/bm/inferno/map", apiVersion, verifyUserAuth, verifyAccountStatus, infernoMap);
+router.get("/api/:apiVersion/bm/inferno/neighbours", apiVersion, verifyUserAuth, verifyAccountStatus, infernoNeighbours);
+router.post("/api/:apiVersion/bm/inferno/view", apiVersion, verifyUserAuth, verifyAccountStatus, infernoView);
+router.post("/api/:apiVersion/bm/inferno/load", apiVersion, verifyUserAuth, verifyAccountStatus, infernoLoad);
+router.post("/api/:apiVersion/bm/inferno/transfer", apiVersion, verifyUserAuth, verifyAccountStatus, logRequest, yardRoute(infernoTransferAction));
 // The web client's Map Room 1 screen (issue #132); re-read while the map is open, so not echoed by logRequest.
 router.get("/api/:apiVersion/bm/maproom1", apiVersion, verifyUserAuth, getMapRoom1);
 // The web client's presence ping (#242), every 30 s while its tab is visible, so not echoed by logRequest.
@@ -249,13 +271,10 @@ router.post("/api/:apiVersion/player/savebookmarks", apiVersion, verifyUserAuth,
 /**  ────────────────────────────────────────────────
 * 📦 Map Room 3
 * ──────────────────────────────────────────────── */
-router.post("/worldmapv3/initworldmap", verifyUserAuth, verifyAccountStatus, logRequest, initialPlayerCellData);
-router.get("/worldmapv3/initworldmap", verifyUserAuth, verifyAccountStatus, logRequest, initialPlayerCellData);
-router.post("/worldmapv3/getcells", verifyUserAuth, verifyAccountStatus, getCellsLimiter, logRequest, getMapRoomCells);
-router.get("/worldmapv3/relocate", verifyUserAuth, verifyAccountStatus, logRequest, relocate);
-router.get("/worldmapv3/getfriendinfo", verifyUserAuth, verifyAccountStatus, getFriendInfo);
-router.get("/worldmapv3/setmapversion", verifyUserAuth, verifyAccountStatus, logRequest, setMapVersion);
-router.post("/worldmapv3/setmapversion", verifyUserAuth, verifyAccountStatus, logRequest, setMapVersion);
+// None of it is mounted (security audit 2026-10-29, C1 and M2): the web client
+// never had Map Room 3, which took an attack's cost and result from the client,
+// and `/worldmapv3/relocate` moved any player off their Map Room 2 world for
+// free. `setmapversion` refuses version 3 on the Map Room 2 route above.
 
 /**  ────────────────────────────────────────────────
 * 📦 Mail
@@ -291,6 +310,13 @@ for (const { path, controller } of yardRoutes) {
 }
 
 /**  ────────────────────────────────────────────────
+* 🛠️ Tribe yard editor (LOCAL servers only: `TRIBE_EDITOR=on` with `ENV=local`
+*    and no production `NODE_ENV`, `config/TribeEditorConfig.ts`). Off, its
+*    routes are not registered at all, so they answer 404.
+* ──────────────────────────────────────────────── */
+registerTribeEditorRoutes(router);
+
+/**  ────────────────────────────────────────────────
 * 📦 Notifications (the yard's bell, issue #257, `controllers/notifications/notifications.ts`)
 * ──────────────────────────────────────────────── */
 router.get("/api/:apiVersion/bm/notifications", apiVersion, verifyUserAuth, getNotifications);
@@ -303,6 +329,12 @@ router.post("/api/:apiVersion/bm/notifications/readall", apiVersion, verifyUserA
 * ──────────────────────────────────────────────── */
 router.post("/api/:apiVersion/bm/chat/report", apiVersion, verifyUserAuth, chatReportLimiter, logRequest, reportChatMessage);
 router.get("/api/:apiVersion/bm/chat/yard", apiVersion, verifyUserAuth, chatPlayerYard);
+
+/**  ────────────────────────────────────────────────
+* 📦 A warning or chat mute from the game team, as the yard's pop-up (`controllers/moderation/notice.ts`)
+* ──────────────────────────────────────────────── */
+router.get("/api/:apiVersion/bm/moderation/notice", apiVersion, verifyUserAuth, getModerationNotice);
+router.post("/api/:apiVersion/bm/moderation/notice/:id/seen", apiVersion, verifyUserAuth, seeModerationNotice);
 
 /**  ────────────────────────────────────────────────
 * 📦 Achievements: another player's (issue #204, `controllers/achievements/player.ts`).
@@ -329,7 +361,7 @@ router.get("/api/:apiVersion/worlds", publicReadLimiter, getAvailableWorlds);
 router.get("/api/:apiVersion/leaderboards", publicReadLimiter, getLeaderboards);
 // The leaderboard by empire points (beta.4, `services/leaderboard/empireBoard.ts`): the top 100 and the caller's own row.
 router.get("/api/:apiVersion/leaderboards/empire", apiVersion, verifyUserAuth, verifyAccountStatus, leaderboardLimiter, getEmpireBoard);
-router.get("/api/:apiVersion/attacklogs", verifyUserAuth, getAttackLogs);
+router.get("/api/:apiVersion/attacklogs", verifyUserAuth, attackLogsLimiter, getAttackLogs);
 
 /**  ────────────────────────────────────────────────
 * 📦 Alliances
@@ -345,7 +377,7 @@ router.post("/alliance/requestjoin", verifyUserAuth, allianceJoinRequestLimiter,
 router.post("/alliance/inviteuser", verifyUserAuth, allianceInviteLimiter, logRequest, inviteUser);
 router.get("/alliance/getpowerups", verifyUserAuth, logRequest, getPowerups);
 router.post("/alliance/activatepowerup", verifyUserAuth, logRequest, activatePowerup);
-router.post("/alliance/purchasepowerup", verifyUserAuth, logRequest, purchasePowerup);
+router.post("/alliance/purchasepowerup", verifyUserAuth, purchasePowerupLimiter, logRequest, purchasePowerup);
 router.post("/alliance/changeinvitestatus", verifyUserAuth, logRequest, changeInviteStatus);
 router.get("/alliance/getmessages", verifyUserAuth, logRequest, getMessages);
 router.post("/alliance/deletemessages", verifyUserAuth, logRequest, deleteMessages);
@@ -359,6 +391,8 @@ router.post("/alliance/changerelationship", verifyUserAuth, logRequest, changeRe
 router.get("/api/:apiVersion/events/wmi", apiVersion, logRequest, wildMonsterInvasion);
 // The Events page and "What's new" (`controllers/events/routes.ts`); the claims are yard actions.
 mountEventsRoutes(router);
+// The rare "Support the game" reminder's record (`controllers/support/routes.ts`).
+mountSupportRoutes(router);
 
 /**  ────────────────────────────────────────────────
 * 📦 Bug reports: the game's "Report a bug" form (`controllers/bugReports/submitBugReport.ts`).
@@ -378,6 +412,17 @@ router.post("/api/:apiVersion/clienterrors/guest", apiVersion, clientErrorLimite
 * 📦 The owner's dashboard (`controllers/admin/routes.ts`): 404 to anyone not in ADMIN_USER_IDS.
 * ──────────────────────────────────────────────── */
 mountAdminRoutes(router);
+
+/**  ────────────────────────────────────────────────
+* 📦 Announcements: the owner writes them on the dashboard, the game pops them up
+* (`controllers/announcements/routes.ts`). Not echoed by logRequest: the writes carry pictures.
+* ──────────────────────────────────────────────── */
+mountAnnouncementRoutes(router, {
+  em: () => postgres.em.fork(),
+  signedIn: [verifyUserAuth, verifyAccountStatus, announcementsLimiter],
+  adminOnly,
+  imageLimiter: announcementImageLimiter,
+});
 
 /**  ────────────────────────────────────────────────
 * 📦 Debug

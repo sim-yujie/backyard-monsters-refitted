@@ -1,0 +1,3 @@
+D:/Coding/BYMR/worktrees/ui-skin/mockups/gen/flash/frame/sample-new.png
+D:/Coding/BYMR/worktrees/ui-skin/mockups/refs/flash.png
+D:/Coding/BYMR/worktrees/ui-skin/mockups/refs/finish.png

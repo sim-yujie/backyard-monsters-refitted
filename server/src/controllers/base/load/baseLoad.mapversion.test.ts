@@ -80,13 +80,30 @@ mock.module("../../../services/base/reportManager.js", () => ({
   logBanReport: async () => {},
 }));
 
-// The real range check, whatever another test file has put in its place:
-// the query makes it a module of its own, which no mock replaces.
-const REAL_RANGE = "../../../services/maproom/v2/validateRange.ts?real";
+// Fresh copies of the range check, the attack step and the base load, made
+// after this file's own mocks: the query makes each a module of its own, which
+// no mock replaces. The query is this file's alone. A copy another file loaded
+// first (autoAttack.test.ts uses "?real") keeps the `server.js` that file
+// mocked, and its range check then reads that file's rows and lets the attack
+// through. On GitHub's file order that failed this file's range tests.
+//
+// Each copy goes to `mock.module` spread into a plain object. Handed the
+// module namespace itself, Bun leaves an earlier file's mock of the same
+// module in place: after `takeoverQuote.test.ts` or `takeoverCell.test.ts`
+// (whose range stub lets everything through by then), the attack step here
+// still got that stub and the out-of-range attacks went ahead (CI run
+// 41837356306). A plain object replaces it.
+const FRESH = "?real-mapversion";
+const REAL_RANGE = `../../../services/maproom/v2/validateRange.ts${FRESH}`;
 const realRange = (await import(REAL_RANGE)) as typeof import("../../../services/maproom/v2/validateRange.js");
-mock.module("../../../services/maproom/v2/validateRange.js", () => realRange);
+mock.module("../../../services/maproom/v2/validateRange.js", () => ({ ...realRange }));
+const REAL_ATTACK = `./modes/baseModeAttack.ts${FRESH}`;
+const realAttack = (await import(REAL_ATTACK)) as typeof import("./modes/baseModeAttack.js");
+mock.module("./modes/baseModeAttack.js", () => ({ ...realAttack }));
 
-const { baseLoad } = await import("./baseLoad.js");
+const REAL_LOAD = `./baseLoad.ts${FRESH}`;
+const { baseLoad } = (await import(REAL_LOAD)) as typeof import("./baseLoad.js");
+const { BaseLoadSchema } = await import("../../../schemas/BaseLoadSchema.js");
 const { mr1TribeSessionKey } = await import("../../../services/maproom/v1/mr1TribeSession.js");
 const { playerMapVersion } = await import("../../../services/maproom/playerMapVersion.js");
 
@@ -128,7 +145,7 @@ const attackerUser = () => {
   return { userid: ATTACKER, username: "agenttester", save, blockedUsers: [] };
 };
 
-const load = async (baseid: string, mapversion?: number): Promise<unknown> => {
+const load = async (baseid: string, mapversion?: number, extra: Row = {}): Promise<unknown> => {
   const ctx = {
     authUser: attackerUser(),
     meetsDiscordAgeCheck: true,
@@ -139,6 +156,7 @@ const load = async (baseid: string, mapversion?: number): Promise<unknown> => {
         baseid,
         ...(mapversion !== undefined && { mapversion: String(mapversion) }),
         attackData: JSON.stringify({ champions: [], monsters: [] }),
+        ...extra,
       },
     },
   } as unknown as Context;
@@ -266,6 +284,54 @@ describe("a Map Room 1 account on a world keeps Map Room 1 (#165)", () => {
     expect(refusal.data).toEqual({ reason: "baseNotFound" });
     expect(created).toEqual([]);
   });
+});
+
+describe("Map Room 3 is closed (security audit 2026-10-29, C1)", () => {
+  const NEAR_CAMP = campId(243, 209);
+  const negativeCost = {
+    resources: JSON.stringify({ resources: [-1_000_000_000, -1_000_000_000, -1_000_000_000] }),
+    shiny: JSON.stringify({ shiny: -1_000_000 }),
+  };
+
+  test("the load's schema has no attack cost: a sent one is dropped", () => {
+    const parsed = BaseLoadSchema.parse({
+      type: "wmattack",
+      userid: "1",
+      baseid: NEAR_CAMP,
+      attackcost: negativeCost.resources,
+    });
+
+    expect("attackcost" in parsed).toBe(false);
+  });
+
+  for (const [what, attackcost] of Object.entries(negativeCost)) {
+    test(`a negative ${what} attack cost pays nothing on a Map Room 2 attack`, async () => {
+      expect(await load(NEAR_CAMP, 3, { attackcost })).toBeNull();
+
+      const save = attackerUser().save!;
+      expect(save.resources).toEqual({ r1: 1_000, r2: 1_000, r3: 1_000, r4: 1_000 });
+      expect(save.credits).toBe(0);
+    });
+  }
+
+  for (const [what, attackcost] of Object.entries(negativeCost)) {
+    test(`a save still on Map Room 3 starts no attack, with a negative ${what} cost or none`, async () => {
+      tables.set(Save, [attackerRow({ mapversion: 3 })]);
+
+      for (const extra of [{ attackcost }, {}]) {
+        const refusal = (await load(NEAR_CAMP, 3, extra)) as Error & { data?: Row };
+
+        expect(refusal.data).toEqual({ reason: "mapRoom3Closed" });
+      }
+      const save = attackerUser().save!;
+      expect(save.resources).toEqual({ r1: 1_000, r2: 1_000, r3: 1_000, r4: 1_000 });
+      expect(save.credits).toBe(0);
+      expect(save.attackid).toBe(0);
+      expect(created).toEqual([]);
+      expect(flushes).toBe(0);
+      expect(sessionKeys).toEqual([]);
+    });
+  }
 });
 
 describe("playerMapVersion", () => {

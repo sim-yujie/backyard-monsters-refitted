@@ -73,6 +73,29 @@ const GRASS_TILES = [
   "2176_isograss7_isograss7.png",
 ] as const;
 
+/**
+ * The Inferno yard's ground: Flash's four lava images, `inferno_lava1` to
+ * `inferno_lava4`, composited the same way as the grass (`MAPBG.as:30-37`;
+ * `BASE.as:1493-1495` picks `"lava"` on an Inferno yard). In the order
+ * `MAPBG` numbers them, g1 to g4; the numeric prefixes are the asset ids.
+ */
+const LAVA_ROOT = "/assets/yardbg/lava/";
+const LAVA_TILES = [
+  "2169_inferno_lava1_inferno_lava1.png",
+  "2171_inferno_lava2_inferno_lava2.png",
+  "2170_inferno_lava3_inferno_lava3.png",
+  "2165_inferno_lava4_inferno_lava4.png",
+] as const;
+
+/** The lava's dark crust, shown until its tiles arrive. */
+const LAVA_COLOUR = 0x3a1a12;
+
+/**
+ * What the ground is made of: grass (dressed for the season) on the surface,
+ * lava on an Inferno yard. Flash took no season dressing in the Inferno.
+ */
+export type Terrain = "grass" | "lava";
+
 /** One grass image, in pixels (`client/scripts/MAPBG.as:89`). */
 const TILE_WIDTH = 200;
 const TILE_HEIGHT = 100;
@@ -137,6 +160,7 @@ export class YardGround {
   private seed = 1;
   private style: GroundStyle = "plot";
   private season: Season = "normal";
+  private terrain: Terrain = "grass";
 
   constructor() {
     // The clip is only ever used as a mask. Pixi takes it out of the ordinary
@@ -147,10 +171,16 @@ export class YardGround {
   }
 
   /** Draws the plot outline and the flat fill. Safe to call before the art. */
-  layout(bounds: YardBounds, seed: number, style: GroundStyle = "plot"): void {
+  layout(bounds: YardBounds, seed: number, style: GroundStyle = "plot", terrain: Terrain = "grass"): void {
+    if (terrain !== this.terrain) {
+      // Another yard's ground: the tiles in hand are the wrong ones.
+      this.terrain = terrain;
+      this.dropTiles();
+    }
     this.bounds = bounds;
     this.seed = seed;
     this.style = style;
+    const colour = terrain === "lava" ? LAVA_COLOUR : GROUND_COLOUR[this.season];
 
     const corners = bounds.corners;
     const first = corners[0];
@@ -166,9 +196,9 @@ export class YardGround {
     this.surround
       .clear()
       .rect(left, top, right - left, bottom - top)
-      .fill({ color: GROUND_COLOUR[this.season] });
+      .fill({ color: colour });
 
-    this.plot.clear().poly(world).fill({ color: GROUND_COLOUR[this.season] });
+    this.plot.clear().poly(world).fill({ color: colour });
     this.clip.clear().poly(world).fill({ color: 0xffffff });
     this.boundary.clear();
     if (style === "plot") {
@@ -190,19 +220,23 @@ export class YardGround {
     const bounds = this.bounds;
     if (!bounds || this.tiles) return this.tiles !== null;
     const season = this.season;
+    const terrain = this.terrain;
+    const urls =
+      terrain === "lava"
+        ? LAVA_TILES.map((file) => LAVA_ROOT + file)
+        : GRASS_TILES.map((file) => TILE_ROOT[season] + file);
 
     let textures: Texture[];
     try {
-      textures = await Promise.all(
-        GRASS_TILES.map((file) => Assets.load<Texture>(TILE_ROOT[season] + file)),
-      );
+      textures = await Promise.all(urls.map((url) => Assets.load<Texture>(url)));
     } catch (caught) {
-      console.warn("Yard grass did not load; the plot stays a flat colour.", caught);
+      console.warn("Yard ground did not load; the plot stays a flat colour.", caught);
       return false;
     }
 
-    // The season changed while these were in flight: the newer load lays its own.
-    if (season !== this.season || this.tiles) return this.tiles !== null;
+    // The season or the terrain changed while these were in flight: the newer
+    // load lays its own.
+    if (season !== this.season || terrain !== this.terrain || this.tiles) return this.tiles !== null;
 
     const composite = this.bakeComposite(textures);
     if (!composite) return false;
@@ -226,9 +260,11 @@ export class YardGround {
   setSeason(season: Season): void {
     if (season === this.season) return;
     this.season = season;
+    // Lava is lava in every season.
+    if (this.terrain === "lava") return;
     this.dropTiles();
     if (!this.bounds) return;
-    this.layout(this.bounds, this.seed, this.style);
+    this.layout(this.bounds, this.seed, this.style, this.terrain);
     void this.loadTiles();
   }
 

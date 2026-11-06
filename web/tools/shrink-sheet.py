@@ -2,6 +2,8 @@
 
 Usage: python web/tools/shrink-sheet.py <sheet.png> [<sheet.png> ...]
 Same file name and pixel size; a file is left alone if pngquant makes it bigger.
+A painted sheet (`name@4x.png`, `name@3x.png`) then gets its smaller copies for the
+Quality setting next to it (`sheet_copies.py`).
 pngquant is found via $PNGQUANT, then PATH, then the sheet-size trial install.
 """
 import os
@@ -39,3 +41,9 @@ if __name__ == "__main__":
     for p in sys.argv[1:]:
         b, a = shrink(p)
         print(f"{p}: {b} -> {a}")
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import sheet_copies
+
+    for p in sys.argv[1:]:
+        if sheet_copies.PAINTED.search(p) and sheet_copies.scale_of(p) >= 3:
+            sheet_copies.make_copies(p)

@@ -1,4 +1,8 @@
+import { academyLevel } from "@/game/monsters/housing";
 import { juicerProblemText, juicerStatus } from "@/game/monsters/juice";
+import { announceJuiced } from "@/game/monsters/juiceNews";
+import { hatchCost } from "@/game/monsters/monsterCatalogue";
+import { monsterRealmOf } from "@/game/monsters/realm";
 import { actionKey, type YardActionResult, type YardStore } from "@/game/yard/YardStore";
 import { post } from "./http";
 import type { YardResponse } from "./types";
@@ -24,6 +28,10 @@ export interface JuiceReport {
   goo: number;
   /** Goo the storage cap turned away. */
   lost: number;
+  /** Magma that landed in the Inferno purse, from Inferno monsters juiced on the main yard. */
+  magma?: number;
+  /** Magma the Inferno cap turned away. */
+  magmaLost?: number;
   /** The Juicer's rate that applied. */
   rate: number;
 }
@@ -69,15 +77,18 @@ const refuse = (reason: string, message: string, detail: Record<string, unknown>
  * the Juicer still works and the monsters are still there (T4).
  */
 export const juiceActions = (store: YardStore, api: JuiceApi = juiceApi): JuiceActions => ({
-  juice: (monsters) =>
-    store.run({
+  juice: async (monsters) => {
+    // The Juicer and the hatch costs as they were when the request went out.
+    const seen: { juicer: { id: number; level: number; rate: number } | null } = { juicer: null };
+    const costs: Record<string, number> = {};
+    const result = await store.run({
       key: JUICE_KEY,
       check: (reader) => {
         const status = juicerStatus(reader.save);
         if (!status.ok) {
           const reason =
             status.problem === "building" || status.problem === "upgrading" ? "busy" : status.problem;
-          return refuse(reason, juicerProblemText(status.problem));
+          return refuse(reason, juicerProblemText(status.problem, monsterRealmOf(reader.kind)));
         }
         const entries = Object.entries(monsters).filter(([, n]) => n > 0);
         if (entries.length === 0) return refuse("badRequest", "Pick at least one monster to juice.");
@@ -91,8 +102,19 @@ export const juiceActions = (store: YardStore, api: JuiceApi = juiceApi): JuiceA
             });
           }
         }
+        seen.juicer = { id: status.id, level: status.level, rate: status.rate };
+        for (const [monster] of entries) {
+          costs[monster] = hatchCost(monster, academyLevel(reader.save.academy, monster)) ?? 0;
+        }
         return null;
       },
       send: (_api, ...yard) => api.juice(monsters, ...yard),
-    }),
+    });
+    // Drawing only: the yard walks the juiced monsters into the Juicer (`juicerShow.ts`).
+    if (result.ok && seen.juicer) {
+      const { id, level, rate } = seen.juicer;
+      announceJuiced({ juicer: id, level, monsters: result.report.juiced, hatchCost: costs, rate });
+    }
+    return result;
+  },
 });

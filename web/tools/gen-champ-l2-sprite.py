@@ -247,4 +247,6 @@ for (c, row), cell in placed.items():
 stem = S["file"][:-4]
 out.save(ASSETS / f"{stem}-repaint@4x.png", optimize=True)
 out.resize(ORIGINAL.size, Image.LANCZOS).save(ASSETS / f"{stem}-repaint.png", optimize=True)
+# The Quality setting's half-size copy (web/tools/sheet_copies.py).
+__import__("subprocess").run([sys.executable, str(Path(__file__).resolve().with_name("sheet_copies.py")), str(ASSETS / f"{stem}-repaint@4x.png")], check=True)
 print(f"wrote {stem}-repaint@4x.png and {stem}-repaint.png", file=sys.stderr)

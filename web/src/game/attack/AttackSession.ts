@@ -4,6 +4,7 @@ import {
   CHAMPION_MAX_FOOD_BONUS,
   CHAMPION_MAX_POWER_LEVEL,
   DECLARE_WAR_COUNTDOWN_SECONDS,
+  DESCENT_YARDS,
   RETREAT_GRACE_SECONDS,
   TICKS_PER_SECOND,
   buildEngineYard,
@@ -12,6 +13,7 @@ import {
   createBattle,
   damagePercent,
   dropRadius,
+  felledCount,
   battleDefence,
   flingCost,
   healthOf,
@@ -37,6 +39,7 @@ import {
   type Roster,
   type ChampionStance,
 } from "@/game/combat/rules";
+import { siegeLevelsOf } from "@/game/combat/rules/siege";
 import { hasDeclareWar } from "./attackEntry";
 import type { AttackTarget } from "./attackTarget";
 
@@ -123,6 +126,13 @@ export const PLAYBACK_SPEEDS: readonly AttackSpeed[] = [1, 2, 4];
 export const SKIP_SLICE_TICKS = 40;
 /** How long one frame of Skip to end may run the engine for, in ms. */
 export const SKIP_FRAME_BUDGET_MS = 12;
+
+/**
+ * A battle the player fights is run to its target in slices of this many
+ * ticks, each checked for the end, so a long gap handed to
+ * {@link AttackSession.advance} can be spread over several calls.
+ */
+export const CATCH_UP_SLICE_TICKS = 40;
 
 /** A fling before the session stamps its tick and radius. */
 export interface FlingInput {
@@ -259,9 +269,36 @@ export interface AttackSessionOptions {
    * limit, and played back from the server's waves (`playScript`).
    */
   readonly raid?: boolean;
+  /**
+   * The Descent yard attacked, 1 to 13 (Inferno WP 1.21): from yard 7 the
+   * fight's burn takes health from every surface monster, as the server's
+   * replay of it does. Absent: the target's own `descentYard`, which is
+   * absent outside the Descent.
+   */
+  readonly descentYard?: number;
   /** The clock {@link AttackSession.skipToEnd} budgets a frame by, in ms; `performance.now` by default. */
   readonly now?: () => number;
 }
+
+/**
+ * A dev build's `?descentYard=N` (Inferno WP 1.21): the Descent yard, 1 to
+ * 13, a practice fight burns as; nothing for anything else.
+ */
+export const devDescentYard = (search: string): { descentYard?: number } =>
+  descentYardOf({ descentYard: Number(new URLSearchParams(search).get("descentYard")) });
+
+/**
+ * A target's Descent yard as session options (Inferno WP 1.21): the yard, 1
+ * to 13, the server's attack start named; nothing outside the Descent.
+ */
+export const descentYardOf = (
+  target: Pick<AttackTarget, "descentYard">,
+): { descentYard?: number } => {
+  const yard = target.descentYard;
+  return yard !== undefined && Number.isInteger(yard) && yard >= 1 && yard <= DESCENT_YARDS
+    ? { descentYard: yard }
+    : {};
+};
 
 /** A random 32-bit seed for a battle the server has not seeded (§7, Q1). */
 export const mintSeed = (): number => {
@@ -293,6 +330,19 @@ export const servedBrain = (raw: unknown, t: number): BrainWeights | null => {
 };
 
 /**
+ * A champion's health from the load's `attackerhealth`: what the server froze
+ * into this attack at launch, after catching the attacker's yard up, and sends
+ * it out at in the replay (`ATTACK.as:532`); null when the load has none (a
+ * practice fight on the own yard), which sends it out at full health. The
+ * own-yard load's copy is not read: a champion heals in its cage meanwhile.
+ */
+export const servedHealth = (raw: unknown, t: number): number | null => {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const hp = (raw as Record<string, unknown>)[String(t)];
+  return typeof hp === "number" && Number.isFinite(hp) ? Math.max(0, Math.floor(hp)) : null;
+};
+
+/**
  * The academy levels from the load's `attackeracademy` (issue #201): the ones
  * the server froze into this attack at launch, after catching the attacker's
  * yard up, and replays with; null when the load has none (an older server),
@@ -303,7 +353,8 @@ export const servedAcademy = (raw: unknown): MonsterLevels | null => {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
   const levels: Record<string, number> = {};
   for (const [id, level] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof level === "number" && Number.isSafeInteger(level) && level >= 1) levels[id] = level;
+    if (typeof level === "number" && Number.isSafeInteger(level) && level >= 1)
+      levels[id] = level;
   }
   return levels;
 };
@@ -339,10 +390,23 @@ export const servedHeight = (raw: unknown): number =>
  * The target kind as the rules module spells it. The two agree by name, but a
  * Map Room 1 tribe, which the map hands over as `wild`, is the rules' `tribe`:
  * Flash's lower loot for a wild monster camp is Map Room 2's alone
- * (`BSTORAGE.as:77`, `:111`, `:117`).
+ * (`BSTORAGE.as:77`, `:111`, `:117`). A Descent yard and a Moloch tribe of
+ * the Inferno map and another player's Inferno yard (WP 3.5) are fought as Inferno yards (`docs/design/inferno.md` §2.4
+ * "Yard kind"), as the server replays them.
  */
-export const combatKind = (target: Pick<AttackTarget, "kind" | "mapversion">): CombatTargetKind =>
-  target.kind === "wild" && target.mapversion === 1 ? "tribe" : target.kind;
+export const combatKind = (
+  target: Pick<
+    AttackTarget,
+    "kind" | "mapversion" | "descentYard" | "infernoTribe" | "infernoPlayer"
+  >,
+): CombatTargetKind =>
+  target.descentYard !== undefined ||
+  target.infernoTribe === true ||
+  target.infernoPlayer === true
+    ? "inferno"
+    : target.kind === "wild" && target.mapversion === 1
+      ? "tribe"
+      : target.kind;
 
 /** Housed monsters minus what has been flung, only the positive counts. */
 const subtractRoster = (housed: Roster, flung: Roster): Roster => {
@@ -371,6 +435,22 @@ const UNTARGETED_CLASSES: ReadonlySet<BuildingClass> = new Set<BuildingClass>([
 const rosterEmpty = (roster: Roster): boolean =>
   Object.values(roster).every((count) => count <= 0);
 
+/** A drop refused while drops are paused (`AttackSession.holdDrops`); its message is the player's. */
+export class DropsHeldError extends Error {
+  constructor() {
+    super("Reconnecting…");
+    this.name = "DropsHeldError";
+  }
+}
+
+/** A fling or bomb refused because the countdown has run out; its message is the player's. */
+export class DropsClosedError extends Error {
+  constructor() {
+    super("Time is up: your monsters are pulling back.");
+    this.name = "DropsClosedError";
+  }
+}
+
 export class AttackSession {
   readonly target: AttackTarget;
   readonly seed: number;
@@ -379,6 +459,7 @@ export class AttackSession {
   private endReason: AttackEndReason | null = null;
   private response: BaseLoadResponse | null = null;
   private battle_: Battle | null = null;
+  private dropsHeld_ = false;
   private combatYard: CombatYard | null = null;
   private declareWar_: boolean;
   private countdownSeconds: number;
@@ -412,6 +493,7 @@ export class AttackSession {
   private readonly playerLevel: number | undefined;
   private readonly clockFromFirstDrop: boolean;
   private readonly raid: boolean;
+  private readonly descentYard: number | undefined;
   /** The academy levels the battle is fought at: the load's, else the roster's. */
   private levels_: MonsterLevels;
   /** The Lab ranks the battle is fought at: the load's, else the roster's (issue #352). */
@@ -420,6 +502,8 @@ export class AttackSession {
   constructor(options: AttackSessionOptions) {
     this.target = options.target;
     this.raid = options.raid ?? false;
+    // The option (the dev practice's `?descentYard`), else the Descent target's own yard.
+    this.descentYard = options.descentYard ?? descentYardOf(options.target).descentYard;
     this.seed = options.seed ?? mintSeed();
     this.levels_ = options.target.roster.levels;
     this.ranks_ = options.target.roster.ranks ?? {};
@@ -483,12 +567,18 @@ export class AttackSession {
       this.notify();
       return;
     }
+    // The Lab level of each siege weapon the attacker holds one of, as the
+    // server's replay reads the same save (Inferno WP 6.8). None against an
+    // Inferno yard, the Descent's included (`UI_TOP.as:289`).
+    const siege = kind === "inferno" ? {} : siegeLevelsOf(this.target.roster.siege);
     this.battle_ = createBattle(yard, {
       seed: this.seed,
       levels: this.levels_,
       ...(Object.keys(this.ranks_).length > 0 ? { ranks: this.ranks_ } : {}),
+      ...(Object.keys(siege).length > 0 ? { siege } : {}),
       declareWar: this.declareWar_,
       ...(playerLevel === undefined ? {} : { playerLevel }),
+      ...(this.descentYard === undefined ? {} : { descentYard: this.descentYard }),
       // The defence the server replays the battle against (issue #195).
       ...defence,
     });
@@ -510,11 +600,15 @@ export class AttackSession {
   /**
    * Advances the battle by a frame's worth of real time at the current speed.
    *
+   * A battle the player fights spends at most `budgetMs` of engine time on
+   * it ({@link catchUp}); what is left over is run by the next calls. The
+   * default has no budget, so the whole delta is run at once.
+   *
    * Listeners hear about it at most four times a battle-second, plus whenever
    * the phase changes, so a DOM panel is not rebuilt sixty times a second for
    * a countdown that changes once.
    */
-  advance(deltaSeconds: number): void {
+  advance(deltaSeconds: number, budgetMs = Number.POSITIVE_INFINITY): void {
     const battle = this.battle_;
     if (this.phase !== "running" || !battle) return;
 
@@ -523,7 +617,8 @@ export class AttackSession {
       return;
     }
     this.targetTick += Math.max(0, deltaSeconds) * TICKS_PER_SECOND * this.speed_;
-    this.runToTarget(battle);
+    if (this.script) this.runToTarget(battle);
+    else this.catchUp(battle, budgetMs);
 
     if (this.phase !== "running") return;
     const quarter = Math.floor((battle.tick / TICKS_PER_SECOND) * 4);
@@ -545,8 +640,30 @@ export class AttackSession {
     const target = Math.floor(this.targetTick + 1e-6);
     this.playScriptTo(battle, target);
     if (this.phase !== "running") return;
-    battle.runTo(this.script ? Math.min(target, Math.max(battle.tick, this.scriptEnd)) : target);
+    battle.runTo(
+      this.script ? Math.min(target, Math.max(battle.tick, this.scriptEnd)) : target,
+    );
     this.checkEnd(battle);
+  }
+
+  /**
+   * Runs a battle the player fights toward the target tick in slices of
+   * {@link CATCH_UP_SLICE_TICKS}, checking for the end after each, until it
+   * gets there or `budgetMs` is spent (at least one slice always runs). What
+   * the budget leaves is not dropped: the target stays ahead of the battle and
+   * the next call carries on, as Flash's banked loops did (`GLOBAL.as:1229-1238`).
+   * A scene that drives the clock from the wall can so hand it a long gap — a
+   * tab that was hidden — without freezing the page.
+   */
+  private catchUp(battle: Battle, budgetMs: number): void {
+    const target = Math.floor(this.targetTick + 1e-6);
+    const until = this.now() + budgetMs;
+    while (this.phase === "running" && battle.tick < target) {
+      const from = battle.tick;
+      battle.runTo(Math.min(target, from + CATCH_UP_SLICE_TICKS));
+      this.checkEnd(battle);
+      if (battle.tick <= from || this.now() >= until) break;
+    }
   }
 
   /**
@@ -573,7 +690,8 @@ export class AttackSession {
    * fights, or one that is over.
    */
   skipToEnd(): void {
-    if (!this.script || !this.battle_ || this.phase === "ended" || this.phase === "idle") return;
+    if (!this.script || !this.battle_ || this.phase === "ended" || this.phase === "idle")
+      return;
     if (this.skipping_) return;
     if (this.phase === "loaded") this.phase = "running";
     this.skipping_ = true;
@@ -716,7 +834,7 @@ export class AttackSession {
    * here (§F2 "after a drop").
    */
   appendFling(input: FlingInput): FlingDrop {
-    const battle = this.requireLive("fling");
+    const battle = this.requireBeforeRetreat("fling");
     const remaining = this.remaining();
     let total = 0;
     for (const [id, count] of Object.entries(input.monsters)) {
@@ -724,14 +842,18 @@ export class AttackSession {
         throw new RangeError(`AttackSession: bad count ${count} for ${id}`);
       }
       if (count > (remaining[id] ?? 0)) {
-        throw new RangeError(`AttackSession: ${count} ${id} exceeds the ${remaining[id] ?? 0} left`);
+        throw new RangeError(
+          `AttackSession: ${count} ${id} exceeds the ${remaining[id] ?? 0} left`,
+        );
       }
       total += count;
     }
     if (input.champion) {
       const blocked = this.championBlock(input.champion.t);
       if (blocked) {
-        throw new Error(`AttackSession: champion ${input.champion.t} cannot be flung (${blocked})`);
+        throw new Error(
+          `AttackSession: champion ${input.champion.t} cannot be flung (${blocked})`,
+        );
       }
     } else if (total === 0) {
       throw new RangeError("AttackSession: an empty fling");
@@ -764,8 +886,9 @@ export class AttackSession {
    * level (issue #202) and food-bonus rank its roster entry holds, which it
    * fights at and the server checks against the attacker's stored champion
    * (the food bonus adds the stats its cage card shows), and the Mode the
-   * player picked (issue #220), which the server replays it in, and its
-   * learned brain as the attack load froze it (issue #219, {@link servedBrain}).
+   * player picked (issue #220), which the server replays it in, its
+   * learned brain as the attack load froze it (issue #219, {@link servedBrain}),
+   * and the health the attack load froze it at ({@link servedHealth}).
    */
   private flungChampion(champion: NonNullable<FlingInput["champion"]>): {
     t: number;
@@ -774,11 +897,13 @@ export class AttackSession {
     fb?: number;
     s?: ChampionStance;
     b?: BrainWeights;
+    hp?: number;
   } {
     const entry = this.target.roster.champions.find((owned) => owned.t === champion.t);
     const pl = Number(entry?.pl);
     const fb = Number(entry?.fb);
     const brain = servedBrain(this.response?.attackerbrains, champion.t);
+    const hp = servedHealth(this.response?.attackerhealth, champion.t);
     return {
       t: champion.t,
       l: champion.l,
@@ -786,13 +911,20 @@ export class AttackSession {
       ...(Number.isInteger(fb) && fb > 0 ? { fb: Math.min(fb, CHAMPION_MAX_FOOD_BONUS) } : {}),
       ...(isChampionStance(champion.s) ? { s: champion.s } : {}),
       ...(brain ? { b: brain } : {}),
+      ...(hp !== null ? { hp } : {}),
     };
   }
 
   /** Appends a resource bomb at the current tick and hands it to the battle. */
   appendBomb(input: BombInput): BombDrop {
-    const battle = this.requireLive("bomb");
-    const event: BombDrop = { kind: "bomb", t: battle.tick, x: input.x, y: input.y, id: input.id };
+    const battle = this.requireBeforeRetreat("bomb");
+    const event: BombDrop = {
+      kind: "bomb",
+      t: battle.tick,
+      x: input.x,
+      y: input.y,
+      id: input.id,
+    };
     battle.apply(event);
     this.events.push(event);
     this.acted = true;
@@ -801,9 +933,10 @@ export class AttackSession {
   }
 
   /**
-   * Appends a siege weapon at the current tick. The engine accepts and
-   * ignores it today (`engine.ts` fidelity note 8); the log carries it so a
-   * later engine replays it (§F4).
+   * Appends a siege weapon at the current tick. The battle fights the Decoy,
+   * the Vacuum or the Jars at the attacker's Siege Lab level, read off the
+   * roster's `siege` stock at load (`BattleOptions.siege`, Inferno WP 6.5 to
+   * 6.8); a weapon the attacker holds none of does nothing.
    */
   appendSiege(input: SiegeInput): Extract<FlingEvent, { kind: "siege" }> {
     const battle = this.requireLive("siege");
@@ -883,6 +1016,23 @@ export class AttackSession {
     return this.endReason;
   }
 
+  /**
+   * Pauses (or resumes) new drops, bombs and siege weapons: each is refused
+   * with a {@link DropsHeldError} until released. The checkpoint package holds
+   * them while the server has not confirmed its record of the attack for a
+   * while (`plugins/checkpoint.ts`), so a player who cuts the connection
+   * cannot go on dropping where the server cannot see it, then close the tab
+   * and have the unseen part undone. The battle itself runs on.
+   */
+  holdDrops(held: boolean): void {
+    this.dropsHeld_ = held;
+  }
+
+  /** Whether new drops are paused ({@link holdDrops}). */
+  dropsHeld(): boolean {
+    return this.dropsHeld_;
+  }
+
   /** The running battle, or null before {@link load}. */
   battle(): Battle | null {
     return this.battle_;
@@ -925,6 +1075,14 @@ export class AttackSession {
   }
 
   /**
+   * The attacker's report rows (issue #22): each monster type and champion
+   * sent, born on the field and lost. Empty before the battle starts.
+   */
+  attackersAfter(): BattleState["attackers"] {
+    return this.battle_?.state().attackers ?? [];
+  }
+
+  /**
    * Why the champion of type `t` cannot be sent now, or null when it can.
    *
    * Flash's rule (`client/scripts/UI_TOP.as:328-356`): the army list offers
@@ -941,7 +1099,7 @@ export class AttackSession {
     const champions = this.target.roster.champions;
     const entry = champions.find((champion) => champion.t === t);
     if (!entry) return "unknown";
-    if (entry.hp <= 0) return "hurt";
+    if ((servedHealth(this.response?.attackerhealth, t) ?? entry.hp) <= 0) return "hurt";
     if (entry.status !== 0) return "away";
     if (this.championsFlung.has(t)) return "flung";
     if (t === KRALLEN_TYPE) return null;
@@ -956,7 +1114,9 @@ export class AttackSession {
 
   /** Whether any champion could still be sent. */
   championAvailable(): boolean {
-    return this.target.roster.champions.some((champion) => this.championBlock(champion.t) === null);
+    return this.target.roster.champions.some(
+      (champion) => this.championBlock(champion.t) === null,
+    );
   }
 
   state(): AttackSessionState {
@@ -980,7 +1140,7 @@ export class AttackSession {
       declareWar: this.declareWar_,
       speed: this.speed_,
       damagePercent: battleState ? this.damageOf(battleState) : 0,
-      buildingsDestroyed: battleState?.destroyedIds.length ?? 0,
+      buildingsDestroyed: battleState ? this.destroyedOf(battleState) : 0,
       loot: battleState?.loot ?? { r1: 0, r2: 0, r3: 0, r4: 0 },
       defenderLoss: battleState?.defenderLoss ?? { r1: 0, r2: 0, r3: 0, r4: 0 },
       creepsFlung: battleState?.creepsFlung ?? 0,
@@ -1034,10 +1194,20 @@ export class AttackSession {
     return byType;
   }
 
+  /** {@link requireLive} for a fling or a bomb: the engine takes neither once the countdown is over. */
+  private requireBeforeRetreat(what: string): Battle {
+    const battle = this.requireLive(what);
+    if (battle.tick >= this.countdownSeconds * TICKS_PER_SECOND) throw new DropsClosedError();
+    return battle;
+  }
+
   private requireLive(what: string): Battle {
     const battle = this.battle_;
     if (!battle || this.phase === "idle") throw new Error(`AttackSession: ${what} before load`);
-    if (this.phase === "ended") throw new Error(`AttackSession: ${what} after the attack ended`);
+    if (this.phase === "ended")
+      throw new Error(`AttackSession: ${what} after the attack ended`);
+    // Nothing new while the server's record of the attack is out of date (see `holdDrops`).
+    if (this.dropsHeld_) throw new DropsHeldError();
     // An input layer that fires before the scene's start() starts the clock.
     if (this.phase === "loaded") this.phase = "running";
     return battle;
@@ -1046,6 +1216,12 @@ export class AttackSession {
   private afterEvent(battle: Battle): void {
     this.checkEnd(battle);
     this.notify();
+  }
+
+  /** The felled buildings "N of M" counts: no walls, as `countedBuildings` leaves them out of M. */
+  private destroyedOf(battleState: BattleState): number {
+    const yard = this.combatYard;
+    return yard ? felledCount(yard, battleState.destroyedIds) : battleState.destroyedIds.length;
   }
 
   private damageOf(battleState: BattleState): number {
@@ -1098,7 +1274,10 @@ export class AttackSession {
     // A raid plays on to where the server's fight ended: no Town Hall or
     // empty yard ends it early, as none ended the server's (#226).
     if (this.raid) {
-      if (battleState.over || ((this.script?.length ?? 0) === 0 && battleState.tick >= this.scriptEnd)) {
+      if (
+        battleState.over ||
+        ((this.script?.length ?? 0) === 0 && battleState.tick >= this.scriptEnd)
+      ) {
         this.end("expired");
       }
       return;
@@ -1117,7 +1296,10 @@ export class AttackSession {
       return;
     }
     // A playback stops where the server stopped the battle.
-    if (battleState.over || (this.script && this.script.length === 0 && battleState.tick >= this.scriptEnd)) {
+    if (
+      battleState.over ||
+      (this.script && this.script.length === 0 && battleState.tick >= this.scriptEnd)
+    ) {
       this.end("expired");
     }
   }

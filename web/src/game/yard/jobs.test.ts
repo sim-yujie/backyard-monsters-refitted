@@ -394,6 +394,7 @@ describe("yardJobs", () => {
       "mushroom",
       "repair",
       "research",
+      "siege",
       "storeItem",
       "train",
       "unlock",

@@ -1,21 +1,25 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
 
 import type { ClientErrorsBody } from "../../schemas/ClientErrorSchemas.js";
+import type { ErrorReporter } from "../../utils/errorCapture.js";
 import { noteErrors } from "../stats/activity.js";
 import { cleanMessage, cleanPlace, cleanStack, errorFingerprint } from "./errorText.js";
 import { recordErrors, type ErrorEntry } from "./errorStore.js";
 
 /**
  * One batch of browser errors from the web client, cleaned
- * (`errorText.ts`), merged by kind, and stored (`errorStore.ts`) with the
- * sender's account number when signed in. Returns how many kinds were kept.
+ * (`errorText.ts`), merged by kind, and stored (`errorStore.ts`) with its
+ * sender: account number and name when signed in, and address, all read by
+ * the controller from the request itself, never from the body. Returns how
+ * many kinds were kept.
  */
 export const acceptClientErrors = async (
   em: EntityManager,
   body: ClientErrorsBody,
-  userid: number | null,
+  sender: Omit<ErrorReporter, "at">,
   now: Date = new Date()
 ): Promise<number> => {
+  const reporter: ErrorReporter = { ...sender, at: now };
   const byKind = new Map<string, ErrorEntry>();
   let occurrences = 0;
   for (const item of body.errors) {
@@ -38,7 +42,8 @@ export const acceptClientErrors = async (
             at: now,
             gameVersion: body.gameVersion,
             screen: body.screen,
-            userid,
+            userid: sender.userid,
+            reporters: [reporter],
           }
     );
   }

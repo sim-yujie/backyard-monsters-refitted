@@ -233,6 +233,60 @@ describe("POST /bm/yard/speedup with free speed-ups", () => {
     expect((db.row!.buildingdata as Record<string, Row>)["1"]!.cU).toBeLessThanOrEqual(9000 - 3600);
   });
 
+  /** The yard with the cannon's upgrade `seconds` from done. */
+  const upgradingFor = (seconds: number, storedata: Row): Row => {
+    const row = rowOf({ storedata });
+    (row.buildingdata as Record<string, Row>)["1"]!.cU = seconds;
+    return row;
+  };
+
+  test("a kept SP2 finishes a job with under an hour left; the rest is lost, one item spent (patch 6.3)", async () => {
+    db.row = upgradingFor(1500, { FREESP2: { q: 2 } });
+    const answer = await call(yardSpeedupAction, { id: 1, item: "SP2" });
+
+    expect(answer.status).toBe(200);
+    expect(answer.body.report).toMatchObject({
+      item: "SP2",
+      credits: 0,
+      free: true,
+      freeLeft: 1,
+      remaining: 0,
+      finished: { kind: "upgrade", detail: { level: 2 } },
+    });
+    expect((answer.body.report as Row).unused).toBeGreaterThan(2000);
+    expect(db.row!.credits).toBe(100);
+    expect((db.row!.storedata as Row).FREESP2).toEqual({ q: 1 });
+    const cannon = (db.row!.buildingdata as Record<string, Row>)["1"]!;
+    expect(cannon.l).toBe(2);
+    expect(cannon.cU).toBeUndefined();
+  });
+
+  test("a kept SP3 on an hour left finishes it too", async () => {
+    db.row = upgradingFor(3600, { FREESP3: { q: 1 } });
+    const answer = await call(yardSpeedupAction, { id: 1, item: "SP3" });
+
+    expect(answer.body.report).toMatchObject({ item: "SP3", credits: 0, freeLeft: 0, remaining: 0 });
+    expect((db.row!.storedata as Row).FREESP3).toEqual({ q: 0 });
+    expect((db.row!.buildingdata as Record<string, Row>)["1"]!.l).toBe(2);
+  });
+
+  test("with none kept, a bought SP2 under an hour is still refused and nothing changes", async () => {
+    db.row = upgradingFor(1500, {});
+    const answer = await call(yardSpeedupAction, { id: 1, item: "SP2" });
+
+    expect(answer).toMatchObject({ status: 409, body: { reason: "itemRefused" } });
+    expect(db.row!.credits).toBe(100);
+    expect((db.row!.buildingdata as Record<string, Row>)["1"]!.l).toBe(1);
+  });
+
+  test("a kept SP2 with five minutes or less left is refused and kept", async () => {
+    db.row = upgradingFor(200, { FREESP2: { q: 1 } });
+    const answer = await call(yardSpeedupAction, { id: 1, item: "SP2" });
+
+    expect(answer).toMatchObject({ status: 409, body: { reason: "itemRefused" } });
+    expect((db.row!.storedata as Row).FREESP2).toEqual({ q: 1 });
+  });
+
   test("with none kept, SP3 costs its Shiny; a Flash-era SP3 count is not a free one", async () => {
     db.row = rowOf({ storedata: { SP3: { q: 4 } } });
     const answer = await call(yardSpeedupAction, { id: 1, item: "SP3" });

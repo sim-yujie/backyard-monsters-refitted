@@ -27,6 +27,7 @@ mock.module("../../server.js", () => ({ postgres, redis }));
 const friends = await import("../../controllers/friends/friends.js");
 const { updateSettings } = await import("../../controllers/auth/updateSettings.js");
 const { lastActionKey, lastSeenKey } = await import("../user/online.js");
+const { chatIgnoreKey } = await import("../../chat/chatChannels.js");
 
 const A = 994_001;
 const B = 994_002;
@@ -122,7 +123,7 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
     expect(await notices(B)).toEqual([{ event: "request", userid: A, username: "zz_fr_alice" }]);
 
     const accepted = await answer(B, sent.request.requestid, true, T0 + 60);
-    expect(accepted.friend).toMatchObject({ userid: A, username: "zz_fr_alice", since: T0 + 60, canGiftFrom: T0 + 60 + DAY, help: null });
+    expect(accepted.friend).toMatchObject({ userid: A, username: "zz_fr_alice", since: T0 + 60, canGiftFrom: T0 + 60 + 12 * 60 * 60, help: null });
     expect(await notices(A)).toEqual([{ event: "accepted", userid: B, username: "zz_fr_bob" }]);
     expect((await notices(B)).at(-1)).toEqual({ event: "accepted", userid: A, username: "zz_fr_alice" });
 
@@ -242,6 +243,44 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
     expect(((await ask(A, B)) as any).request.status).toBe("pending");
     expect(await reasonOf(friends.blockAnswer(em(), as(B), { userid: B }, T0))).toBe("self");
     expect(await reasonOf(friends.blockAnswer(em(), as(B), { userid: 994_999 }, T0))).toBe("noSuchPlayer");
+  });
+
+  test("muted players: listed by name from the chat mute set, unknown ids left out; unmute takes one off", async () => {
+    expect(await friends.mutedAnswer(em(), as(B))).toEqual({ error: 0, muted: [] });
+    await redis.sadd(chatIgnoreKey(B), String(D), String(A), "994999", "not-a-number");
+    await redis.sadd(chatIgnoreKey(C), String(A));
+    expect(await friends.mutedAnswer(em(), as(B))).toEqual({
+      error: 0,
+      muted: [
+        { userid: A, username: "zz_fr_alice" },
+        { userid: D, username: "zz_fr_dave" },
+      ],
+    });
+
+    expect(await friends.unmuteAnswer(as(B), { userid: A })).toEqual({ error: 0 });
+    expect(((await friends.mutedAnswer(em(), as(B))) as any).muted).toEqual([{ userid: D, username: "zz_fr_dave" }]);
+    expect((await redis.smembers(chatIgnoreKey(B))).sort()).toEqual([String(D), "994999", "not-a-number"].sort());
+    // Someone else's mute of A stays.
+    expect(await redis.smembers(chatIgnoreKey(C))).toEqual([String(A)]);
+    // Unmuting someone not muted is fine; a bad body is a zod error.
+    expect(await friends.unmuteAnswer(as(B), { userid: C })).toEqual({ error: 0 });
+    expect(await reasonOf(friends.unmuteAnswer(as(B), { userid: "x" }))).not.toBe("not refused");
+    redis.clear();
+  });
+
+  test("muted players: a set of 600 ids looks up at most 500, without error", async () => {
+    const { listMuted, MUTED_LIST_LIMIT } = await import("./friendViews.js");
+    // The crowd (100 real players) first, then 500 ids with no account.
+    const ids = [
+      ...Array.from({ length: CROWD_SIZE }, (_, i) => String(CROWD + i)),
+      ...Array.from({ length: 500 }, (_, i) => String(995_000 + i)),
+    ];
+    const muted = await listMuted(em(), ids);
+    expect(muted).toHaveLength(CROWD_SIZE);
+    expect(muted.length).toBeLessThanOrEqual(MUTED_LIST_LIMIT);
+    // Ids past the first 500 are not looked up: these 100 real players come after 500 others.
+    const late = await listMuted(em(), [...ids.slice(CROWD_SIZE), ...ids.slice(0, CROWD_SIZE)]);
+    expect(late).toEqual([]);
   });
 
   test("the friend limit on both sides, open requests, and the daily cap", async () => {
@@ -383,12 +422,12 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
     const user = await (postgres.em as ReturnType<typeof em>).findOneOrFail(User, { userid: B });
     const ctx = { authUser: user, request: { body: { friendRequests: false, hideOnline: true } } } as unknown as Context;
     await updateSettings(ctx);
-    expect(ctx.body).toEqual({ error: 0, settings: { shinyLocked: false, hideOnline: true, friendRequests: false } });
+    expect(ctx.body).toEqual({ error: 0, settings: { shinyLocked: false, hideOnline: true, friendRequests: false, mapTiltAllowed: false, tiltedMap: true, mapHexShape: "flat", country: null, countryAsked: false, countryChannel: null } });
     expect(await reasonOf(ask(A, B))).toBe("requestsOff");
 
     const back = { authUser: user, request: { body: { friendRequests: true } } } as unknown as Context;
     await updateSettings(back);
-    expect(back.body).toEqual({ error: 0, settings: { shinyLocked: false, hideOnline: true, friendRequests: true } });
+    expect(back.body).toEqual({ error: 0, settings: { shinyLocked: false, hideOnline: true, friendRequests: true, mapTiltAllowed: false, tiltedMap: true, mapHexShape: "flat", country: null, countryAsked: false, countryChannel: null } });
     expect(((await ask(A, B)) as any).request.status).toBe("pending");
   });
 });

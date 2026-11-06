@@ -239,3 +239,31 @@ describe("replayAbandonedAttack at the attacker's Lab ranks (issue #352)", () =>
     expect(at(0).buildinghealthdata).toEqual(plain.buildinghealthdata);
   }, REPLAY_TIMEOUT_MS);
 });
+
+describe("replayAbandonedAttack with siege weapons (Inferno WP 6.8)", () => {
+  const vacuumAt = (t: number) => ({ kind: "siege" as const, t, x: 0, y: 0, weapon: "vacuum" });
+  const looted = (siege: AbandonedInput["attacker"]["siege"], events: FlingLog["events"]) => {
+    const outcome = replayAbandonedAttack(
+      input(6000, {
+        attacker: { academy: {}, champion: [], siege },
+        log: { v: 1, seed: 7, events },
+      })
+    );
+    const loot = outcome.attackloot as Record<string, number>;
+    return { outcome, total: (loot.r1 ?? 0) + (loot.r2 ?? 0) + (loot.r3 ?? 0) + (loot.r4 ?? 0) };
+  };
+
+  test("fights a held weapon at its Lab level and spends it", () => {
+    const held = looted({ vacuum: { level: 1, quantity: 1 } }, [vacuumAt(40)]);
+    expect(held.total).toBeGreaterThan(0);
+    expect(held.outcome.attackersiege).toEqual({ vacuum: { level: 1, quantity: 0 } });
+  }, REPLAY_TIMEOUT_MS);
+
+  test("a weapon not held, or used past its stock, does nothing", () => {
+    expect(looted({ vacuum: { level: 1, quantity: 0 } }, [vacuumAt(40)]).total).toBe(0);
+    expect(looted(null, [vacuumAt(40)]).total).toBe(0);
+    // One held, two sent: the second (after the first's 30 s) is not fought.
+    const once = looted({ vacuum: { level: 1, quantity: 1 } }, [vacuumAt(40)]).total;
+    expect(looted({ vacuum: { level: 1, quantity: 1 } }, [vacuumAt(40), vacuumAt(3000)]).total).toBe(once);
+  }, REPLAY_TIMEOUT_MS);
+});

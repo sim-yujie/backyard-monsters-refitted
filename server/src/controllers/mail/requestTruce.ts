@@ -76,8 +76,8 @@ export const requestTruce: KoaController = async (ctx) => {
     return;
   }
 
-  const { Filter } = await import("bad-words");
-  const filteredMessage = new Filter().clean(message);
+  const { sharedWordFilter } = await import("../../services/chat/badWords.js");
+  const filteredMessage = sharedWordFilter().clean(message);
 
   const truce = postgres.em.create(Truce, {
     initiator_userid: user.userid,

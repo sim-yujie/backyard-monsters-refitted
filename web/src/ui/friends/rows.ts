@@ -1,6 +1,7 @@
 import { avatarOf, avatarUrl } from "@/game/avatars";
 import { levelLabel } from "@/game/friends/friendText";
 import { onlineDot } from "@/ui/onlineDot";
+import { spokenText } from "@/ui/resourceIcon";
 
 /**
  * The pieces every Friends tab builds its rows from (issue #370): a row
@@ -122,14 +123,18 @@ export class StatusLine {
     this.element.hidden = true;
   }
 
+  /** The line as a screen reader says it: a resource icon reads as its name. */
   get text(): string {
-    return this.element.hidden ? "" : (this.element.textContent ?? "");
+    return this.element.hidden ? "" : spokenText(this.element);
   }
 
-  /** Shows a line; `error` colours it as a refusal. Null hides it. */
-  set(text: string | null, kind: "info" | "error" = "info"): void {
+  /**
+   * Shows a line, words or nodes ("Sent to Bob · [twig] 1,000"); `error`
+   * colours it as a refusal. Null hides it.
+   */
+  set(text: string | Node | null, kind: "info" | "error" = "info"): void {
     this.element.hidden = text === null;
-    this.element.textContent = text ?? "";
+    this.element.replaceChildren(text ?? "");
     this.element.classList.toggle("friends-status--error", kind === "error" && text !== null);
   }
 }

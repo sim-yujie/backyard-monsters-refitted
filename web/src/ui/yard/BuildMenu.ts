@@ -1,12 +1,13 @@
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { guidePays } from "@/game/guide/steps";
-import { buttonUrl, silhouetteUrl } from "@/game/yard/buildButtonArt";
+import { buildPicture, buildPictureUrl, silhouetteUrl } from "@/game/yard/buildButtonArt";
 import {
   BUILD_CATALOGUE,
   BuildCategory,
   buildOffer,
   buildOffers,
+  decorationOffers,
   pageCount,
   pageOf,
   sortOffers,
@@ -15,14 +16,16 @@ import {
   type BuildOffer,
 } from "@/game/yard/buildCatalogue";
 import type { SpotCheck } from "@/game/yard/BuildPlacement";
-import { townHallLevel } from "@/game/yard/buildingCosts";
-import { NEED_MORE_SILOS } from "@/game/yard/storage";
+import { DECOR_KINDS, DecorKind } from "@/game/yard/decorShop";
+import { townHallLevel, type YardKind } from "@/game/yard/buildingCosts";
+import { NEED_MORE_PODS, NEED_MORE_SILOS } from "@/game/yard/storage";
 import { typeName } from "@/game/yard/planner/summary";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
-import { costAmounts, resourceAmount } from "@/ui/resourceIcon";
-import { BUILD_BLURBS } from "./buildBlurbs";
+import { costAmounts, resourceAmount, type ResourceRealm } from "@/ui/resourceIcon";
+import { INFERNO_LOCKED_MESSAGE, purseFunds } from "@/game/yard/surfaceInferno";
+import { BUILD_BLURBS, INFERNO_BUILD_BLURBS } from "./buildBlurbs";
 import { costFactChips } from "./costFactChips";
 import { ShinyButton } from "./ShinyButton";
 import "@/ui/styles/build-menu.css";
@@ -45,6 +48,10 @@ import "@/ui/styles/build-menu.css";
  * cost, the time and the worker, **Build**, and a small **Build instantly**
  * that spends Shiny. Build hands the type to the scene, which closes the
  * window and starts the placement (`game/yard/BuildPlacement.ts`).
+ *
+ * The Decorations tab has Flash's five sub-tabs under the four (Evil,
+ * Plants, Good, Flags, Premium; `BUILDINGSPOPUP.as:104-105`), each with its
+ * stored ones first and a small count of them on the sub-tab.
  *
  * Build instantly is a {@link ShinyButton}: tap, then tap again. It starts the
  * same placement, and the drop builds the building finished for the Shiny
@@ -110,17 +117,31 @@ const NEXT = ["M9 6l6 6-6 6"];
 const CLOCK = ["M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z", "M12 7v5l3 2"];
 const WORKER = ["M12 4a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7z", "M5 20c0-3.5 3-6 7-6s7 2.5 7 6"];
 
+/** The hall of a yard of `kind`: the Under Hall in the Inferno (WP 1.19). */
+export const hallWord = (kind: YardKind = "main"): string => (kind === "inferno" ? "Under Hall" : "Town Hall");
+
+/** The hall an offer counts by: a main-yard Inferno building's is the Under Hall (WP 6.1). */
+const offerHall = (offer: Pick<BuildOffer, "inferno">, kind: YardKind): string =>
+  offer.inferno ? "Under Hall" : hallWord(kind);
+
+/** The realm an offer's price is drawn in: a main-yard Inferno building's is the Inferno's. */
+const offerRealm = (offer: Pick<BuildOffer, "inferno">): ResourceRealm | undefined =>
+  offer.inferno ? "inferno" : undefined;
+
 /** "2 of 3 built" and the like: what a tile says under its name. */
-export const tileLine = (offer: BuildOffer): string => {
+export const tileLine = (offer: BuildOffer, kind: YardKind = "main"): string => {
+  if (offer.price !== undefined) return `${formatAmount(offer.price)} Shiny`;
   if (offer.stored !== null) return `${offer.stored} in storage`;
+  const hall = offerHall(offer, kind);
   switch (offer.status) {
     case "locked": {
       const gate = offer.gate;
+      if (gate?.reason === "infernoLocked") return "Capture an Inferno base first";
       if (gate?.reason === "townHall") {
-        return gate.have <= 0 ? "Needs a Town Hall" : `Unlocks at Town Hall ${gate.need}`;
+        return gate.have <= 0 ? `Needs a${/^[AEIOU]/.test(hall) ? "n" : ""} ${hall}` : `Unlocks at ${hall} ${gate.need}`;
       }
       const need = offer.needs.find((one) => !one.met);
-      return need ? `Needs ${needText(need)}` : "Not yet";
+      return need ? `Needs ${needText(need, kind, hall)}` : "Not yet";
     }
     case "maxed":
       return `${offer.owned} of ${offer.most} · all built`;
@@ -136,10 +157,13 @@ const plural = (name: string): string => {
   return `${name}s`;
 };
 
-/** One line of the needs list, as words. On an outpost the core is the hall. */
-export const needText = (need: BuildNeed, outpost = false): string => {
-  if (need.kind === "townHall") return outpost ? "an Outpost core" : `Town Hall level ${need.level}`;
-  const name = typeName(need.type);
+/**
+ * One line of the needs list, as words. On an outpost the core is the hall;
+ * `hall` names it otherwise (the Under Hall for a main-yard Inferno building).
+ */
+export const needText = (need: BuildNeed, kind: YardKind = "main", hall: string = hallWord(kind)): string => {
+  if (need.kind === "townHall") return kind === "outpost" ? "an Outpost core" : `${hall} level ${need.level}`;
+  const name = typeName(need.type, kind);
   const which =
     need.count === 1 ? `${/^[aeiou]/i.test(name) ? "an" : "a"} ${name}` : `${need.count} ${plural(name)}`;
   return need.level > 1 ? `${which} at level ${need.level}` : which;
@@ -153,6 +177,9 @@ export class BuildMenu {
   private readonly onTownHall: (() => void) | undefined;
   private readonly onClose: (() => void) | undefined;
   private readonly tabButtons = new Map<BuildCategory, HTMLButtonElement>();
+  private readonly kindButtons = new Map<DecorKind, HTMLButtonElement>();
+  /** The Decorations tab's sub-tabs. */
+  private readonly kinds: HTMLElement;
   private readonly meta: HTMLElement;
   private readonly browse: HTMLElement;
   private readonly grid: HTMLElement;
@@ -161,12 +188,16 @@ export class BuildMenu {
   private readonly pages: HTMLElement;
   private readonly legend: HTMLElement;
   private readonly info: HTMLElement;
+  /** The box under the tabs that scrolls (build-menu.css `.build-menu__main`). */
+  private readonly main: HTMLElement;
   private readonly unsubscribe: () => void;
   /** One Build instantly button per type, kept across redraws so an armed one survives them. */
   private readonly shiny = new Map<number, ShinyButton>();
 
   private active: BuildCategory = BuildCategory.RESOURCES;
   private page = 0;
+  /** The Decorations sub-tab showing; Flash opened on Evil. */
+  private kind: DecorKind = DecorKind.EVIL;
   /** The tile whose info is showing, or null for none. */
   private picked: number | null = null;
   private opened = false;
@@ -221,6 +252,33 @@ export class BuildMenu {
     }
     strip.addEventListener("keydown", (event) => this.onStripKey(event));
 
+    this.kinds = document.createElement("div");
+    this.kinds.className = "build-menu__kinds";
+    this.kinds.setAttribute("role", "tablist");
+    this.kinds.setAttribute("aria-label", "Decoration kinds");
+    for (const kind of DECOR_KINDS) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "build-menu__kind";
+      button.id = `build-kind-${kind.id}`;
+      button.dataset["focus"] = `kind-${kind.id}`;
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-controls", "build-menu-main");
+      const label = document.createElement("span");
+      label.className = "build-menu__kind-label";
+      label.textContent = kind.label;
+      const count = document.createElement("span");
+      count.className = "build-menu__kind-count";
+      count.setAttribute("aria-hidden", "true");
+      // On the word's corner, so it stays beside it however wide the sub-tab is.
+      label.append(count);
+      button.append(label);
+      button.addEventListener("click", () => this.openKind(kind.id));
+      this.kinds.append(button);
+      this.kindButtons.set(kind.id, button);
+    }
+    this.kinds.addEventListener("keydown", (event) => this.onKindKey(event));
+
     this.previous = this.pageButton("Previous page", PREVIOUS, -1);
     this.next = this.pageButton("Next page", NEXT, 1);
     tutTarget(this.next, TutTarget.BUILD_NEXT_PAGE);
@@ -237,7 +295,7 @@ export class BuildMenu {
 
     this.browse = document.createElement("div");
     this.browse.className = "build-menu__browse";
-    this.browse.append(pager, this.legend);
+    this.browse.append(this.kinds, pager, this.legend);
 
     this.info = document.createElement("section");
     this.info.className = "build-info";
@@ -247,6 +305,7 @@ export class BuildMenu {
     main.id = "build-menu-main";
     main.setAttribute("role", "tabpanel");
     main.append(this.browse, this.info);
+    this.main = main;
 
     panel.setContent(strip, main);
     this.unsubscribe = this.binding.store.subscribe((change) => this.onChange(change));
@@ -261,6 +320,11 @@ export class BuildMenu {
 
   get activeTab(): BuildCategory {
     return this.active;
+  }
+
+  /** The Decorations sub-tab showing (or that the tab opens on). */
+  get activeKind(): DecorKind {
+    return this.kind;
   }
 
   /** The tile whose info is showing. */
@@ -282,7 +346,8 @@ export class BuildMenu {
     const wasOpen = this.opened;
     this.opened = true;
     this.element.hidden = false;
-    if (category !== this.active) {
+    const switching = category !== this.active;
+    if (switching) {
       this.active = category;
       this.page = 0;
       this.picked = null;
@@ -296,6 +361,7 @@ export class BuildMenu {
     // Beside the tiles there is room to show the first one straight away.
     if (this.picked === null && !isStacked()) this.picked = this.sorted()[0]?.type ?? null;
     this.render();
+    if (switching) this.toTop();
     if (!wasOpen) this.tabButtons.get(category)?.focus();
     if (!wasOpen) guideBus.emit("screen", { id: GuideScreen.BUILD, root: this.element, header: this.header });
   }
@@ -334,6 +400,22 @@ export class BuildMenu {
     }
   }
 
+  /** Shows a Decorations sub-tab, from its first page. */
+  openKind(kind: DecorKind): void {
+    if (kind === this.kind) return;
+    this.disarm();
+    this.kind = kind;
+    this.page = 0;
+    this.picked = isStacked() ? null : (this.sorted()[0]?.type ?? null);
+    this.render();
+    this.toTop();
+  }
+
+  /** Another tab or sub-tab opens at its top, as every tab row does (owner, 6 Nov 2026). */
+  private toTop(): void {
+    this.main.scrollTop = 0;
+  }
+
   /** Turns the page by `step`, staying inside the tab. */
   turn(step: number): void {
     const last = pageCount(this.sorted().length) - 1;
@@ -360,6 +442,17 @@ export class BuildMenu {
     this.tabButtons.get(next)?.focus();
   }
 
+  private onKindKey(event: KeyboardEvent): void {
+    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+    event.preventDefault();
+    event.stopPropagation();
+    const order = DECOR_KINDS.map((kind) => kind.id);
+    const step = event.key === "ArrowRight" ? 1 : -1;
+    const next = order[(order.indexOf(this.kind) + step + order.length) % order.length] ?? this.kind;
+    this.openKind(next);
+    this.kindButtons.get(next)?.focus();
+  }
+
   private pageButton(label: string, paths: readonly string[], step: number): HTMLButtonElement {
     const button = document.createElement("button");
     button.type = "button";
@@ -381,7 +474,30 @@ export class BuildMenu {
   }
 
   private sorted(): BuildOffer[] {
+    if (this.active === BuildCategory.DECORATIONS) return sortOffers(decorationOffers(this.kind, this.binding.store));
     return sortOffers(buildOffers(this.active, this.binding.store));
+  }
+
+  /** The sub-tabs: shown on the Decorations tab while it has any, the chosen one lit, each with its stored count. */
+  private drawKinds(): void {
+    const decorations =
+      this.active === BuildCategory.DECORATIONS ? buildOffers(BuildCategory.DECORATIONS, this.binding.store) : [];
+    this.kinds.hidden = decorations.length === 0;
+    if (this.kinds.hidden) return;
+    for (const kind of DECOR_KINDS) {
+      const button = this.kindButtons.get(kind.id)!;
+      const current = kind.id === this.kind;
+      button.setAttribute("aria-selected", String(current));
+      button.tabIndex = current ? 0 : -1;
+      const stored = decorations
+        .filter((offer) => offer.price === undefined && kind.types.includes(offer.type))
+        .reduce((sum, offer) => sum + (offer.stored ?? 0), 0);
+      const count = button.querySelector<HTMLElement>(".build-menu__kind-count")!;
+      count.textContent = stored > 0 ? formatAmount(stored) : "";
+      count.hidden = stored === 0;
+      if (stored > 0) button.setAttribute("aria-label", `${kind.label}, ${stored} in storage`);
+      else button.removeAttribute("aria-label");
+    }
   }
 
   private render(): void {
@@ -397,13 +513,15 @@ export class BuildMenu {
     // the line names the outpost's limits instead (`buildingCosts.ts`).
     const outpost = store.kind === "outpost";
     const hall = townHallLevel(store.yard);
+    const hallName = hallWord(store.kind);
     const free = workers.total - workers.busy;
     this.meta.replaceChildren(
       glyph(WORKER, "build-menu__meta-icon"),
       `${free} of ${workers.total} ${workers.total === 1 ? "worker" : "workers"} free`,
-      outpost ? " · Outpost limits" : hall > 0 ? ` · Town Hall level ${hall}` : " · No Town Hall",
+      outpost ? " · Outpost limits" : hall > 0 ? ` · ${hallName} level ${hall}` : ` · No ${hallName}`,
     );
 
+    this.drawKinds();
     const offers = this.sorted();
     const pages = pageCount(offers.length);
     this.page = Math.min(this.page, pages - 1);
@@ -414,9 +532,11 @@ export class BuildMenu {
       const empty = document.createElement("li");
       empty.className = "build-menu__empty";
       empty.textContent =
-        this.active === BuildCategory.DECORATIONS
-          ? "No decorations in storage. Recycle one to keep it here, then place it again from this tab."
-          : "Nothing to build here yet.";
+        this.active !== BuildCategory.DECORATIONS
+          ? "Nothing to build here yet."
+          : store.kind === "main"
+            ? "No decorations in storage. Recycle one to keep it here, then place it again from this tab."
+            : "Decorations go in your main yard.";
       this.grid.replaceChildren(empty);
     } else {
       this.grid.replaceChildren(...pageOf(offers, this.page).map((offer) => this.tile(offer)));
@@ -457,13 +577,13 @@ export class BuildMenu {
       item.append(text);
       return item;
     };
-    // Decorations come from storage: nothing is locked and nothing runs out
-    // but the count, so the build keys would only mislead.
+    // Decorations come from storage or for Shiny: nothing is locked and
+    // nothing runs out, so the build keys would only mislead.
     if (storage) {
       // Not a key: a narrow window hides those, and this is the tab's one line.
       const note = document.createElement("span");
       note.className = "build-menu__note";
-      note.textContent = "Your stored decorations. Placing one is free.";
+      note.textContent = "Stored ones first, free to place. The rest cost Shiny.";
       this.legend.replaceChildren(note);
       return;
     }
@@ -477,7 +597,7 @@ export class BuildMenu {
       upgrade.type = "button";
       upgrade.className = "btn btn--ghost build-menu__hall";
       upgrade.dataset["focus"] = "hall";
-      upgrade.append("Upgrade Town Hall", glyph(NEXT, "build-menu__hall-icon"));
+      upgrade.append(`Upgrade ${hallWord(this.binding.store.kind)}`, glyph(NEXT, "build-menu__hall-icon"));
       upgrade.addEventListener("click", () => this.onTownHall?.());
       parts.push(upgrade);
     }
@@ -485,7 +605,8 @@ export class BuildMenu {
   }
 
   private tile(offer: BuildOffer): HTMLElement {
-    const name = typeName(offer.type);
+    const kind = this.binding.store.kind;
+    const name = typeName(offer.type, kind);
     const item = document.createElement("li");
     item.className = "build-menu__cell";
 
@@ -503,12 +624,19 @@ export class BuildMenu {
     title.textContent = name;
     const count = document.createElement("span");
     count.className = "build-tile__count";
-    count.textContent = tileLine(offer);
+    count.textContent = tileLine(offer, kind);
+    // A decoration sold for Shiny: the Shop's Shiny icon and the price, red while short.
+    if (offer.price !== undefined) {
+      count.replaceChildren(resourceAmount("shiny", formatAmount(offer.price)));
+      count.classList.add("build-tile__count--price");
+      count.classList.toggle("build-tile__count--short", offer.gate?.reason === "credits");
+      button.setAttribute("aria-label", `${name}, ${tileLine(offer, kind)}`);
+    }
     if (offer.status === "locked" && offer.gate?.reason === "requirements") {
       count.classList.add("build-tile__count--needs");
     }
 
-    button.append(picture(offer, "build-tile__picture"), title, count);
+    button.append(picture(offer, "build-tile__picture", kind), title, count);
     item.append(button);
     return item;
   }
@@ -522,7 +650,8 @@ export class BuildMenu {
       this.info.replaceChildren(empty);
       return;
     }
-    const name = typeName(offer.type);
+    const kind = this.binding.store.kind;
+    const name = typeName(offer.type, kind);
     this.info.setAttribute("aria-label", name);
 
     const back = document.createElement("button");
@@ -544,17 +673,26 @@ export class BuildMenu {
     count.className = "build-info__count";
     count.textContent =
       offer.stored !== null || offer.status === "locked"
-        ? tileLine(offer)
+        ? tileLine(offer, kind)
         : `${offer.owned} of ${offer.allowed} built`;
     head.append(title, count);
 
     const blurb = document.createElement("p");
     blurb.className = "build-info__blurb";
     blurb.textContent =
-      BUILD_BLURBS[offer.type] ??
-      (offer.stored !== null ? "A decoration from your storage. It goes anywhere inside your yard." : "");
+      (kind === "inferno" ? INFERNO_BUILD_BLURBS : BUILD_BLURBS)[offer.type] ??
+      (offer.price !== undefined
+        ? "A decoration. It goes anywhere inside your yard."
+        : offer.stored !== null
+          ? "A decoration from your storage. It goes anywhere inside your yard."
+          : "");
+    if (offer.price !== undefined) {
+      count.replaceChildren(resourceAmount("shiny", formatAmount(offer.price)));
+      this.info.replaceChildren(back, picture(offer, "build-info__picture", kind), head, blurb, this.buyActions(offer, name));
+      return;
+    }
     if (offer.stored !== null) {
-      this.info.replaceChildren(back, picture(offer, "build-info__picture"), head, blurb, this.storageActions(offer, name));
+      this.info.replaceChildren(back, picture(offer, "build-info__picture", kind), head, blurb, this.storageActions(offer, name));
       return;
     }
 
@@ -572,7 +710,7 @@ export class BuildMenu {
       const state = document.createElement("span");
       state.className = "u-visually-hidden";
       state.textContent = need.met ? "Done: " : "Not yet: ";
-      const words = needText(need, this.binding.store.kind === "outpost");
+      const words = needText(need, kind, offerHall(offer, kind));
       line.append(mark, state, words.charAt(0).toUpperCase() + words.slice(1));
       list.append(line);
     }
@@ -581,7 +719,9 @@ export class BuildMenu {
     const facts = document.createElement("ul");
     facts.className = "build-info__facts";
     facts.setAttribute("aria-label", "Cost");
-    facts.append(...costFactChips(offer.cost, this.binding.store.resources));
+    // A main-yard Inferno building is paid from the Inferno purse (WP 6.1).
+    const held = offer.inferno ? purseFunds(this.binding.store.save).resources : this.binding.store.resources;
+    facts.append(...costFactChips(offer.cost, held, offerRealm(offer)));
     const time = document.createElement("li");
     time.className = "build-info__fact";
     time.append(glyph(CLOCK, "build-info__fact-icon"), offer.atOnce ? "At once" : formatCountdown(offer.seconds));
@@ -590,14 +730,14 @@ export class BuildMenu {
     worker.append(glyph(WORKER, "build-info__fact-icon"), offer.atOnce ? "No worker" : "1 worker");
     facts.append(time, worker);
 
-    const nodes: Node[] = [back, picture(offer, "build-info__picture"), head, blurb, needs, facts];
+    const nodes: Node[] = [back, picture(offer, "build-info__picture", kind), head, blurb, needs, facts];
 
     // The needs list already says what a locked building waits for.
     const gate = offer.gate;
     const reasonId = `build-gate-${offer.type}`;
     const saysWhy = gate !== null && gate.reason !== "townHall" && gate.reason !== "requirements";
     if (gate && saysWhy) {
-      const reason = gateLine(gate);
+      const reason = gateLine(gate, kind, offer.inferno);
       reason.id = reasonId;
       nodes.push(reason);
     }
@@ -612,7 +752,7 @@ export class BuildMenu {
     tutTarget(build, TutTarget.BUILD_GO);
     build.textContent = "Build · then pick a spot";
     build.disabled = gate !== null && gate.reason !== "workers";
-    build.setAttribute("aria-label", `Build ${name}` + (gate ? `. ${gateSentence(gate)}` : ""));
+    build.setAttribute("aria-label", `Build ${name}` + (gate ? `. ${gateSentence(gate, kind, offer.inferno)}` : ""));
     if (saysWhy) build.setAttribute("aria-describedby", reasonId);
     // Every worker busy still picks the building up: the "all workers busy"
     // box comes once a spot is chosen, and the build goes on there (#345).
@@ -668,6 +808,66 @@ export class BuildMenu {
     return wrap;
   }
 
+  /**
+   * A decoration sold for Shiny (owner decision 2026-11-04): its price, at
+   * once, no worker, and Buy, a {@link ShinyButton} (tap, then tap again)
+   * that starts the placement; `decor/buy` charges the price when it goes
+   * down. Short of Shiny, Buy is blocked and a line says how much more.
+   */
+  private buyActions(offer: BuildOffer, name: string): HTMLElement {
+    const price = offer.price ?? 0;
+    const wrap = document.createElement("div");
+    const facts = document.createElement("ul");
+    facts.className = "build-info__facts";
+    facts.setAttribute("aria-label", "Cost");
+    const cost = document.createElement("li");
+    cost.className = "build-info__fact";
+    cost.append(resourceAmount("shiny", formatAmount(price)));
+    facts.append(cost);
+    for (const [icon, text] of [
+      [CLOCK, "At once"],
+      [WORKER, "No worker"],
+    ] as const) {
+      const fact = document.createElement("li");
+      fact.className = "build-info__fact";
+      fact.append(glyph(icon, "build-info__fact-icon"), text);
+      facts.append(fact);
+    }
+    wrap.append(facts);
+    if (offer.gate) wrap.append(gateLine(offer.gate));
+
+    const actions = document.createElement("div");
+    actions.className = "build-info__actions";
+    const buy = this.buyButton(offer.type, name);
+    buy.setPrice(price);
+    buy.setBlocked(offer.gate ? "Not enough Shiny." : null);
+    actions.append(buy.element);
+    wrap.append(actions);
+    return wrap;
+  }
+
+  /** Buy for a decoration, kept across redraws as Build instantly is (keyed by the negative type). */
+  private buyButton(type: number, name: string): ShinyButton {
+    const key = -type;
+    let button = this.shiny.get(key);
+    if (!button) {
+      button = new ShinyButton({
+        label: "Buy",
+        what: name,
+        spell: formatAmount,
+        className: "btn--primary build-info__build build-info__buy",
+        onSpend: () => {
+          // Re-checked against the yard as it is now, not as the panel was drawn.
+          const offer = buildOffer(type, this.binding.store);
+          if (offer?.price !== undefined && !offer.gate) this.onPick(type, false);
+        },
+      });
+      button.element.dataset["focus"] = "build";
+      this.shiny.set(key, button);
+    }
+    return button;
+  }
+
   private instantButton(type: number): ShinyButton {
     let button = this.shiny.get(type);
     if (!button) {
@@ -690,10 +890,11 @@ export class BuildMenu {
 }
 
 /**
- * The building's picture from the original's build buttons, or its dark
- * silhouette while it is locked (`game/yard/buildButtonArt.ts`).
+ * The building's picture: with the Modern look its new look where it has one,
+ * otherwise the original's build button; while it is locked, its dark
+ * silhouette (`game/yard/buildButtonArt.ts`).
  */
-const picture = (offer: BuildOffer, className: string): HTMLElement => {
+const picture = (offer: BuildOffer, className: string, kind: YardKind): HTMLElement => {
   const box = document.createElement("span");
   box.className = className;
   box.setAttribute("aria-hidden", "true");
@@ -701,10 +902,14 @@ const picture = (offer: BuildOffer, className: string): HTMLElement => {
   image.alt = "";
   image.setAttribute("decoding", "async");
   const locked = offer.status === "locked";
-  const silhouette = locked ? silhouetteUrl(offer.type) : null;
-  image.src = silhouette ?? buttonUrl(offer.type);
+  const art = buildPicture(offer.type, kind);
+  // Flash's silhouettes are of Flash's art: a Modern picture is shaded from itself.
+  const silhouette = locked && !art.modern ? silhouetteUrl(offer.type, kind) : null;
+  image.src = silhouette ?? art.url;
   // No silhouette on disk: the plain picture, drawn dark by the CSS.
   if (locked && !silhouette) box.classList.add(`${className}--shade`);
+  // The new look on a transparent ground, on the tile's own colour.
+  if (art.modern) box.classList.add(`${className}--modern`);
   box.append(image);
   if (offer.status === "locked" || offer.status === "maxed") {
     const badge = document.createElement("span");
@@ -715,20 +920,29 @@ const picture = (offer: BuildOffer, className: string): HTMLElement => {
   return box;
 };
 
-/** Why a building cannot be built, as plain words (a button's accessible name, the info's reason). */
-export const gateSentence = (gate: BuildGate): string => {
+/**
+ * Why a building cannot be built, as plain words (a button's accessible name,
+ * the info's reason). `inferno`: a main-yard Inferno building, counted by the
+ * Under Hall and paid from the Inferno purse.
+ */
+export const gateSentence = (gate: BuildGate, kind: YardKind = "main", inferno = false): string => {
+  const hall = offerHall({ inferno }, kind);
   switch (gate.reason) {
+    case "infernoLocked":
+      return INFERNO_LOCKED_MESSAGE;
     case "townHall":
-      return gate.have <= 0 ? "Build a Town Hall first." : `Needs Town Hall ${gate.need}.`;
+      return gate.have <= 0 ? `Build a ${hall} first.` : `Needs ${hall} ${gate.need}.`;
     case "limit":
       return gate.next === null
         ? `You have the most a yard can hold (${gate.allowed}).`
-        : `You have all ${gate.allowed} your Town Hall allows. Town Hall ${gate.next} allows more.`;
+        : `You have all ${gate.allowed} your ${hall} allows. ${hall} ${gate.next} allows more.`;
     case "requirements":
       return `Needs ${gate.requirements
-        .map(([type, count, level]) => needText({ kind: "building", type, count, level, met: false }))
+        .map(([type, count, level]) => needText({ kind: "building", type, count, level, met: false }, kind))
         .join(", ")}.`;
     case "shortfall":
+      if (inferno) return gate.overCap ? NEED_MORE_PODS : "Not enough Inferno resources.";
+      if (kind === "inferno") return gate.overCap ? NEED_MORE_PODS : "Not enough resources.";
       return gate.overCap ? NEED_MORE_SILOS : "Not enough resources.";
     case "workers":
       return gate.total === 1 ? "Your worker is busy." : `All ${gate.total} workers are busy.`;
@@ -738,15 +952,15 @@ export const gateSentence = (gate: BuildGate): string => {
 };
 
 /** The one line that says why a building cannot be built, amounts with their icons. */
-export const gateLine = (gate: BuildGate): HTMLElement => {
+export const gateLine = (gate: BuildGate, kind: YardKind = "main", inferno = false): HTMLElement => {
   const line = document.createElement("p");
   line.className = "build-info__gate";
   if (gate.reason === "shortfall" && !gate.overCap) {
-    line.append("Need ", costAmounts(gate.shortfall) ?? "", " more.");
+    line.append("Need ", costAmounts(gate.shortfall, undefined, inferno ? { realm: "inferno" } : {}) ?? "", " more.");
   } else if (gate.reason === "credits") {
     line.append("Need ", resourceAmount("shiny", formatAmount(gate.need)), " more.");
   } else {
-    line.textContent = gateSentence(gate);
+    line.textContent = gateSentence(gate, kind, inferno);
   }
   return line;
 };
@@ -767,10 +981,16 @@ export const spotSentence = (check: SpotCheck, nameOf: (id: number) => string | 
 
 export interface PlacementBarOptions {
   readonly type: number;
+  /** The yard's kind, for the Inferno's picture and name; the main yard when absent. */
+  readonly kind?: YardKind;
   /** Placing finished for Shiny rather than for resources. */
   readonly instant: boolean;
+  /** A decoration bought for Shiny: its price, shown in place of the cost. */
+  readonly price?: number;
   readonly instantPrice: number;
   readonly cost: BuildOffer["cost"];
+  /** The realm the cost is drawn in: the Inferno's for a main-yard Inferno building. */
+  readonly realm?: ResourceRealm;
   /** How long it takes, already spelled ("15m 0s", "At once"). */
   readonly time?: string;
   readonly onCancel: () => void;
@@ -804,19 +1024,27 @@ export class PlacementBar {
     what.className = "build-placing__what";
     const image = document.createElement("img");
     image.className = "build-placing__picture";
-    image.src = buttonUrl(options.type);
+    image.src = buildPictureUrl(options.type, options.kind);
     image.alt = "";
     const words = document.createElement("div");
     words.className = "build-placing__words";
     const name = document.createElement("strong");
     name.className = "build-placing__name";
-    name.textContent = typeName(options.type);
+    name.textContent = typeName(options.type, options.kind);
     const price = document.createElement("span");
     price.className = "build-placing__price";
     if (options.instant) {
       price.append("Finished at once for ", resourceAmount("shiny", formatAmount(options.instantPrice)));
+    } else if (options.price !== undefined) {
+      price.append(resourceAmount("shiny", formatAmount(options.price)));
+      if (options.time) {
+        const time = document.createElement("span");
+        time.className = "build-placing__time";
+        time.textContent = ` · ${options.time}`;
+        price.append(time);
+      }
     } else {
-      price.append(costAmounts(options.cost) ?? "Free");
+      price.append(costAmounts(options.cost, undefined, options.realm ? { realm: options.realm } : {}) ?? "Free");
       if (options.time) {
         const time = document.createElement("span");
         time.className = "build-placing__time";

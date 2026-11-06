@@ -91,6 +91,13 @@ export interface AttackRoster {
    */
   readonly flingerLevel: number;
   /**
+   * What one fling may carry, when the server set it for this attack: a
+   * Moloch tribe's is a Housing Bunker's load (Inferno R11, `flingercapacity`
+   * of `POST /bm/inferno/attack/start`), a Descent's the Descent flinger's.
+   * Absent: the Map Room 2 flinger's payload (`flingerPayload`).
+   */
+  readonly flingCapacity?: number;
+  /**
    * The attacker's catapult level, 0 when none: the Catapult building's level
    * from the own-yard load, or the save's `catapult` field when that is higher
    * (`attackEntry.ts`, `ownCatapultLevel`).
@@ -149,7 +156,36 @@ export interface AttackTarget {
    * which case the attack scene fetches it.
    */
   readonly load?: BaseLoadResponse;
+  /**
+   * The Descent yard attacked, 1 to 13: the `descentyard` of the server's
+   * Descent attack start (`POST /bm/inferno/attack/start`). From yard 7 the
+   * fight burns surface monsters, as the server's replay of it does (Inferno
+   * WP 1.21). Absent outside the Descent.
+   */
+  readonly descentYard?: number;
+  /**
+   * A Moloch tribe from the Inferno map (Inferno WP 2.9): its yard, `"214"`
+   * to `"234"`, is fought as an Inferno yard, as the server's tribe start
+   * serves it and its landing replays it. Absent for anything else.
+   */
+  readonly infernoTribe?: boolean;
+  /**
+   * Another player's Inferno yard from the Inferno map (Inferno WP 3.5),
+   * fought as an Inferno yard with the Inferno yard's Housing Bunker army, as
+   * a tribe is. Once started it counts (owner, 27 Oct), so it is saved even
+   * when nothing was flung. Absent for anything else.
+   */
+  readonly infernoPlayer?: boolean;
 }
+
+/**
+ * Whether the attack is fought from the Inferno yard: a Moloch tribe or
+ * another player's Inferno yard from the Inferno map. Its HUD shows the
+ * Inferno purse and its ways out lead back to the Inferno yard.
+ */
+export const fromInfernoYard = (
+  target: Pick<AttackTarget, "infernoTribe" | "infernoPlayer"> | null | undefined,
+): boolean => target?.infernoTribe === true || target?.infernoPlayer === true;
 
 /** A foreign cell the yard scene is about to show read-only. */
 export interface ViewTarget {
@@ -167,6 +203,12 @@ export interface ViewTarget {
    * tribe (`baseModeView.ts:20-21`).
    */
   readonly mapversion?: number;
+  /**
+   * Another player's Inferno yard from the Inferno map (WP 3.4): loaded with
+   * `POST /bm/inferno/view`, to look at only (Flash's `iview`), and its Home
+   * and Map lead back to the own Inferno yard and its map. Absent elsewhere.
+   */
+  readonly inferno?: boolean;
   /**
    * The attack this look could turn into, or null when the map's preconditions
    * refuse it — in which case the yard shows no Attack button at all (§4.1).

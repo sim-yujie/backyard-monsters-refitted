@@ -1,5 +1,6 @@
 import {
   Assets,
+  CanvasSource,
   Container,
   Graphics,
   Rectangle,
@@ -14,17 +15,28 @@ import {
   battleDefence,
   isSpurtzCannon,
   parseDefenderForces,
+  towerShellFlies,
+  trapStats,
   type Battle,
   type BattleVisualEvent,
   type CreepSnapshot,
 } from "@/game/combat/rules";
+import { playEffect, preloadEffects } from "@/game/sound/sound";
 import { damageStep } from "@/game/yard/YardBuildings";
 import { depthKey, type Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
-import type { AttackSession } from "./AttackSession";
+import { combatKind, type AttackSession } from "./AttackSession";
+import {
+  AttackSounds,
+  attackSoundsFor,
+  freshBurrowSound,
+  settleBurrow,
+  type BurrowSound,
+  type PlaySound,
+} from "./attackSounds";
 import { BombFx, type BombArt } from "./bombFx";
 import { bombCandidatesOf, bombHits, type BombCandidate } from "./bombTargets";
-import { BuildingBars } from "./buildingBars";
+import { BAR_OFFSET, BAR_WIDTH, BuildingBars } from "./buildingBars";
 import {
   BUILDING_NUMBER_LIFT,
   CreepFx,
@@ -35,10 +47,11 @@ import {
   lungeOffset,
   mouthPoint,
   projectileStyle,
+  type NumberMods,
 } from "./creepFx";
 import { FOMOR_ID } from "@/game/combat/rules/champions";
 import { DAVE_ID } from "@/game/combat/rules/specialMoves";
-import { BlastFx } from "./blastFx";
+import { BlastFx, type PunchyStrength } from "./blastFx";
 import { RingFx } from "./ringFx";
 import {
   BANDITO_PUNCHY,
@@ -48,10 +61,15 @@ import {
   splashLook,
 } from "./punchyMoments";
 import { dirtFor, surfaceHop } from "./burrowFx";
+import { jumpLift } from "./jumpFx";
+import { classicLook } from "@/game/classicLook";
+import { deviceTextureLimit, setDeviceTextureLimit, sheetResolution } from "@/game/quality";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
-import { StatusIconRow, statusesOf } from "./statusIcons";
+import { StatusIconRow, TowerStatusIcons, statusesOf } from "./statusIcons";
 import { aimLift, BODY_HEIGHT, TowerFx, towersOf } from "./towerFx";
+import { LootFx } from "./lootFx";
+import { SiegeFx, type SiegeArt } from "./siegeFx";
 import { TrapReveal } from "./trapReveal";
 import { WALK_OFF_PAUSE_TICKS, WALK_OFF_TICKS, planWalkOff, walkOffAt, type WalkOff } from "./walkOff";
 import {
@@ -215,6 +233,7 @@ const CHAMPION_BAR = { width: 40, height: 5, gap: 8 } as const;
 /** The GPU texture limit assumed until the renderer says otherwise. */
 export const DEFAULT_MAX_TEXTURE_SIZE = 4096;
 
+
 /** How a creep should be drawn this frame, with no Pixi in it. */
 export interface CreepLayout {
   readonly sheet: MonsterSheet;
@@ -246,10 +265,18 @@ export interface CreepPose {
   readonly swingAge?: number;
   /** When its next blow is expected, for the juiced wind-up; absent draws it as before. */
   readonly swing?: SwingTiming;
+  /**
+   * Ticks since Korath began his quake: the stomp's clock, which Flash starts
+   * at 0 with the quake (`Korath.as:183-185`), so the slam lands with the
+   * quake. Absent when he is not quaking.
+   */
+  readonly quakeAge?: number;
 }
 
 export interface LayoutOptions {
   readonly reducedMotion: boolean;
+  /** The Classic look: no walking hop, which Flash never had. */
+  readonly classic?: boolean;
 }
 
 /**
@@ -288,7 +315,9 @@ export const headingBetween = (from: Point, to: Point): number | null => {
 };
 
 /**
- * Which row cycle a creep shows: attacking, walking, or standing.
+ * Which row cycle a creep shows: Korath's stomp while he quakes
+ * (`Korath.getNextSprite`, `Korath.as:146-149`), else attacking, walking, or
+ * standing.
  *
  * A flyer never stands: it is in the air, and the only flyer sheets with a
  * standing row are Fomor's (`fly_3` to `fly_6`), whose row 0 has the wings
@@ -298,6 +327,7 @@ export const headingBetween = (from: Point, to: Point): number | null => {
  * waiting in the air keeps flapping (#206).
  */
 export const animationFor = (creep: CreepSnapshot, moving: boolean): MonsterAnimation => {
+  if (creep.quaking) return "stomp";
   if (creep.state === "attacking") return "attack";
   return moving || creep.flying ? "walk" : "idle";
 };
@@ -329,7 +359,7 @@ export const layoutCreep = (
   const row =
     animation === "attack"
       ? attackRow(sheet, pose.swingAge, pose.age, pose.swing)
-      : frameRow(sheet, animation, pose.age);
+      : frameRow(sheet, animation, animation === "stomp" ? (pose.quakeAge ?? pose.age) : pose.age);
   const anchor = anchorOffset(sheet);
 
   let y = ground.y + anchor.y;
@@ -342,7 +372,12 @@ export const layoutCreep = (
   } else if (creep.flying) {
     altitude = flyerAltitude(creep.monsterId);
     y += options.reducedMotion ? -altitude : hoverOffset(pose.age, altitude);
-  } else if (pose.moving && !options.reducedMotion && singlePose(sheet)) {
+  } else if (creep.hop !== undefined && !options.reducedMotion) {
+    // Malphus over a wall: its body sorts by the height it is drawn at, like a
+    // flyer's, so it shows over the wall rather than behind it.
+    altitude = jumpLift(creep.hop);
+    y -= altitude;
+  } else if (pose.moving && !options.reducedMotion && !options.classic && singlePose(sheet)) {
     y -= Math.abs(Math.sin((pose.age / HOP_PERIOD_TICKS) * Math.PI)) * HOP_HEIGHT;
   }
 
@@ -376,7 +411,7 @@ export type SheetLoader = (url: string) => Promise<Texture>;
  * drawn at a quarter of its size or less at the usual zoom, and without them
  * it shimmers.
  */
-const loadSheet: SheetLoader = (url) =>
+export const loadSheet: SheetLoader = (url) =>
   Assets.load<Texture>(
     isHighResolutionSheet(url) ? { src: url, data: { autoGenerateMipmaps: true } } : url,
   );
@@ -387,9 +422,14 @@ const loadSheet: SheetLoader = (url) =>
  * Mirrors `YardTextures`: `frame` never blocks and never throws; it starts the
  * fetch on the first ask, returns null until the sheet is in, and remembers a
  * failure so a missing file is asked for once. Cells of a sheet within the
- * texture limit are `Texture`s framed over the one source. Cells of a sheet
- * over the limit are copied through a canvas into their own small source, so
- * the oversized image is never bound to the GPU.
+ * texture limit are `Texture`s framed over the one source. A painted sheet
+ * bigger than the limit is fetched as a smaller copy that fits (`sheetUrl`),
+ * so it is never downloaded and decoded whole. As a last resort, cells of a
+ * sheet still over the limit are copied through a canvas into their own small
+ * source, so the oversized image is never bound to the GPU: WebGL refuses a
+ * picture wider or taller than the limit, and Pixi would draw nothing for it.
+ * The limit is the picture's real size, so a `@4x` repaint counts four times
+ * the table's cells.
  */
 export class MonsterSheetTextures {
   private readonly sources = new Map<string, Texture>();
@@ -398,13 +438,14 @@ export class MonsterSheetTextures {
   private readonly cells = new Map<string, Texture>();
   /** Cells that own their source (canvas copies) and must be destroyed fully. */
   private readonly owned = new Set<Texture>();
-  private limit: number;
+  /** The limit given or set; null to go by the device's, once a layer has read it. */
+  private limit: number | null;
 
   constructor(
     private readonly load: SheetLoader = loadSheet,
-    maxTextureSize = DEFAULT_MAX_TEXTURE_SIZE,
+    maxTextureSize?: number,
   ) {
-    this.limit = maxTextureSize;
+    this.limit = maxTextureSize ?? null;
   }
 
   /** The GPU's texture limit, once the renderer has said what it is. */
@@ -413,12 +454,19 @@ export class MonsterSheetTextures {
   }
 
   get maxTextureSize(): number {
-    return this.limit;
+    return this.limit ?? deviceTextureLimit() ?? DEFAULT_MAX_TEXTURE_SIZE;
   }
 
-  /** Whether a sheet needs cutting through a canvas rather than framing. */
-  oversized(sheet: MonsterSheet): boolean {
-    return sheet.width > this.limit || sheet.height > this.limit;
+  /**
+   * Whether a sheet needs cutting through a canvas rather than framing: the
+   * loaded picture's size in pixels, or before it is in, the table's size
+   * times the resolution its URL names.
+   */
+  oversized(sheet: MonsterSheet, source?: Pick<TextureSource, "pixelWidth" | "pixelHeight">): boolean {
+    const scale = source ? 1 : sheetResolution(sheetUrl(sheet));
+    const width = source?.pixelWidth ?? sheet.width * scale;
+    const height = source?.pixelHeight ?? sheet.height * scale;
+    return width > this.maxTextureSize || height > this.maxTextureSize;
   }
 
   /** Starts fetching a sheet, so its first cell is ready sooner. */
@@ -437,7 +485,7 @@ export class MonsterSheetTextures {
     const rect = frameRect(sheet, column, row);
 
     let cell: Texture | null;
-    if (this.oversized(sheet)) {
+    if (this.oversized(sheet, source.source)) {
       cell = copyCell(source.source, rect);
       if (!cell) return null;
       this.owned.add(cell);
@@ -487,7 +535,8 @@ export class MonsterSheetTextures {
 
 /**
  * One cell of an oversized sheet, copied through a canvas into a texture of
- * its own. Null where there is no canvas to draw with, or nothing drawable
+ * its own at the sheet's resolution (`rect` is in 1x units, the picture `@4x`
+ * or so). Null where there is no canvas to draw with, or nothing drawable
  * behind the source, in which case the caller shows its marker instead.
  */
 const copyCell = (
@@ -497,40 +546,45 @@ const copyCell = (
   if (typeof document === "undefined") return null;
   const image = (source as { resource?: unknown }).resource;
   if (!image || typeof image !== "object") return null;
+  const scale = source.resolution > 0 ? source.resolution : 1;
   const canvas = document.createElement("canvas");
-  canvas.width = Math.ceil(rect.width);
-  canvas.height = Math.ceil(rect.height);
+  canvas.width = Math.ceil(rect.width * scale);
+  canvas.height = Math.ceil(rect.height * scale);
   const context = canvas.getContext("2d");
   if (!context) return null;
   try {
     context.drawImage(
       image as CanvasImageSource,
-      rect.x,
-      rect.y,
-      rect.width,
-      rect.height,
+      rect.x * scale,
+      rect.y * scale,
+      rect.width * scale,
+      rect.height * scale,
       0,
       0,
-      rect.width,
-      rect.height,
+      rect.width * scale,
+      rect.height * scale,
     );
   } catch {
     return null;
   }
-  return Texture.from(canvas);
+  return new Texture({ source: new CanvasSource({ resource: canvas, resolution: scale }) });
 };
 
 /** The GPU texture limit a Pixi renderer reports, or null when it does not say. */
 export const gpuTextureLimit = (renderer: Renderer): number | null => {
   const gl = (renderer as { gl?: WebGLRenderingContext }).gl;
-  if (gl && typeof gl.getParameter === "function") {
-    const size: unknown = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-    if (typeof size === "number" && size > 0) return size;
+  let size: unknown = null;
+  if (gl && typeof gl.getParameter === "function") size = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+  if (typeof size !== "number" || size <= 0) {
+    const device = (renderer as { device?: { limits?: { maxTextureDimension2D?: unknown } } })
+      .device;
+    size = device?.limits?.maxTextureDimension2D;
   }
-  const device = (renderer as { device?: { limits?: { maxTextureDimension2D?: unknown } } })
-    .device;
-  const size = device?.limits?.maxTextureDimension2D;
-  return typeof size === "number" && size > 0 ? size : null;
+  if (typeof size !== "number" || size <= 0) return null;
+  // Remembered for every sheet cutter (the guide's walk-ins too, which have no
+  // renderer of their own) and for picking a copy the card can hold (`sheetUrl`).
+  setDeviceTextureLimit(size);
+  return size;
 };
 
 /* ── The layer ──────────────────────────────────────────────────────────── */
@@ -571,6 +625,11 @@ export interface AttackBattleLayerOptions {
   readonly reducedMotion?: boolean;
   /** How big the effects are drawn; the player's setting when left out (feat/attack-juice-demo). */
   readonly juice?: JuiceLevel;
+  /**
+   * The Classic look (`game/classicLook.ts`); the player's choice when left
+   * out. It draws the battle as Flash did, whatever `juice` says.
+   */
+  readonly classic?: boolean;
   /** The "Screen shake" switch; the player's setting when left out (beta.5). */
   readonly screenShake?: boolean;
   /** "Effects: full / low" for the towers' shots; the player's setting or the screen size when left out. */
@@ -578,12 +637,16 @@ export interface AttackBattleLayerOptions {
   readonly textures?: MonsterSheetTextures;
   /** The bomb sheets; a test hands in its own (#87). */
   readonly bombArt?: BombArt;
+  /** The siege weapons' sheets; a test hands in its own (Inferno WP 6.8). */
+  readonly siegeArt?: SiegeArt;
   /** The towers' shot sheet; a test hands in its own. */
   readonly shotSheet?: (url: string) => Promise<Texture>;
   /** The bomb rain's randomness; `Math.random` unless a test fixes it. */
   readonly random?: () => number;
   /** Wall-clock milliseconds, for the rain after the end; `performance.now` unless a test fixes it. */
   readonly now?: () => number;
+  /** Where the attack's sounds go (`attackSounds.ts`); the game's effects player unless a test listens. */
+  readonly playSound?: PlaySound;
 }
 
 interface CreepView {
@@ -616,6 +679,8 @@ interface CreepView {
   swingTick: number;
   /** Ticks expected from its last hit to the next, for the juiced wind-up. */
   swingGap: number;
+  /** The tick Korath was first seen quaking, the stomp's clock; -Infinity while he is not. */
+  quakeTick: number;
   lungeX: number;
   lungeY: number;
   /** The tick the creep was last hurt, for the red tint (#68). */
@@ -641,6 +706,8 @@ interface CreepView {
   /** The tick it last came up, for the hop; and of its last clod of dirt. */
   surfaceTick: number;
   dirtTick: number;
+  /** Its dig/arise sound, which waits for the state to hold (`settleBurrow`). */
+  burrowSound: BurrowSound;
 }
 
 type DeathEvent = Extract<BattleVisualEvent, { kind: "death" }>;
@@ -688,6 +755,8 @@ const SHADOW_ALPHA = 0.8;
 const SPLAT_COLOUR = 0x5da832;
 /** `G4QuakeGraphic`'s line colour, 15893760 (`champions/Korath.as:233`). */
 const QUAKE_COLOUR = 0xf28500;
+/** The Quake Tower's `QuakeGraphic` line colour (`INFERNOQUAKETOWER.as`). */
+const TOWER_QUAKE_COLOUR = 0x6666cc;
 /** The special moves' bursts (issue #352): a splash, a Bolt's hop. */
 const SPLASH_COLOUR = 0xe8d44d;
 const BLINK_COLOUR = 0x9fd4ff;
@@ -732,6 +801,8 @@ const BOMB_NUMBER_TICKS = 20;
 
 /** Ticks a trap's blast ring takes to fade. */
 export const BURST_TICKS = 14;
+/** The Heavy Trap's type: its explosion is the bigger one, with a small shake. */
+const HEAVY_TRAP = 117;
 const SCORCH_COLOUR = 0x1c1410;
 
 /** Whether the viewer asked for less motion. */
@@ -787,6 +858,8 @@ export class AttackBattleLayer {
   /* Buildings: the towers' guns and shots, the bars, the traps (#64, #66, #67). */
   private readonly towerFx: TowerFx;
   private readonly buildingBars: BuildingBars;
+  /** The towers' stickers over their bars: "weakened" by an Octo-ooze (owner, beta 6). */
+  private readonly towerStatus: TowerStatusIcons;
   private readonly traps = new TrapReveal();
   private readonly bursts: Burst[] = [];
   private readonly scorches: Graphics[] = [];
@@ -802,6 +875,10 @@ export class AttackBattleLayer {
 
   /* Resource bombs (#87): the rain, and the health its particles still carry. */
   private readonly bombFx: BombFx;
+  /** The Decoy, the Vacuum's hose and the Jars (Inferno WP 6.8), in the bombs' air layer. */
+  private readonly siegeFx: SiegeFx;
+  /** Flash's attack sounds, chosen from what is drawn (`attackSounds.ts`). */
+  private readonly sounds: AttackSounds;
   /** Falling particles, above the buildings and the bars, under the shots; made on the first bomb. */
   private air: Container | null = null;
   /** Landed debris, on the ground under the buildings; made on the first bomb. */
@@ -822,6 +899,8 @@ export class AttackBattleLayer {
 
   /** Projectiles, smoke and damage numbers (#63, #68); its root sits last in the overlay. */
   private readonly fx: CreepFx;
+  /** Loot orbs and loot numbers (`ParticleLoot`, `ParticleText`). */
+  private readonly lootFx: LootFx;
   /** The damage step each building was last seen at, for the smoke on a crossing. */
   private readonly smokeStep = new Map<number, number>();
   private smokePrimed = false;
@@ -839,6 +918,10 @@ export class AttackBattleLayer {
 
   /* The bigger effects trial (feat/attack-juice-demo); drawing only. */
   private readonly juice: JuiceLevel;
+  /** "Effects: low" (or a small screen): the Modern trap explosion throws half the bits. */
+  private readonly effectsLow: boolean;
+  /** The Classic look: Flash's battle, without the new effects (`game/classicLook.ts`). */
+  private readonly classic: boolean;
   /** Wall-clock ms the picture holds still until, for a hit-stop; the battle runs on. */
   private holdUntil = Number.NEGATIVE_INFINITY;
   /** Whether the attack-ending blow plays its last moments in slow motion. */
@@ -855,7 +938,9 @@ export class AttackBattleLayer {
     this.reducedMotion = options.reducedMotion ?? prefersReducedMotion();
     this.textures = options.textures ?? new MonsterSheetTextures();
     this.now = options.now ?? (() => performance.now());
-    this.juice = options.juice ?? juiceLevel();
+    this.classic = options.classic ?? classicLook();
+    this.juice = this.classic ? "off" : (options.juice ?? juiceLevel());
+    this.effectsLow = (options.effectsQuality ?? effectsQuality()) === "low";
 
     for (const building of options.yard.buildings) {
       if (building.maxHp !== null && building.maxHp > 0) {
@@ -873,7 +958,7 @@ export class AttackBattleLayer {
     // overlay stays where it is.
     this.overlay.addChild(this.effects, this.fire, this.shells, this.shotGlow, this.shotSparks, this.bars);
     // The "Screen shake" switch stills every shake, the blasts' and the towers'.
-    const shakeOn = options.screenShake ?? screenShakeOn();
+    const shakeOn = !this.classic && (options.screenShake ?? screenShakeOn());
     this.blastFx = new BlastFx(
       {
         air: this.blastAir,
@@ -896,6 +981,18 @@ export class AttackBattleLayer {
         ...(options.random ? { random: options.random } : {}),
       },
     );
+    const buildingOf = new Map(options.yard.buildings.map((building) => [building.id, building]));
+    this.siegeFx = new SiegeFx(
+      {
+        air: () => this.airLayer(),
+        world: (x, y) => groundWorld(x, y, this.origin),
+        building: (id) => buildingOf.get(id) ?? null,
+      },
+      {
+        reducedMotion: this.reducedMotion,
+        ...(options.siegeArt ? { art: options.siegeArt } : {}),
+      },
+    );
     this.fx = new CreepFx(
       {
         creepAnchor: (id) => this.creepAnchor(id),
@@ -906,6 +1003,9 @@ export class AttackBattleLayer {
       },
       this.reducedMotion,
       this.juice !== "off",
+      // Both looks show the numbers; Classic in a plain font (owner, beta 6).
+      true,
+      this.classic,
     );
     this.overlay.addChild(this.fx.root);
 
@@ -948,6 +1048,13 @@ export class AttackBattleLayer {
       (id) => this.maxHpById.get(id),
     );
     this.effects.addChild(this.buildingBars.root);
+    this.towerStatus = new TowerStatusIcons((id) => {
+      const origin = this.host.centreOf(id) ? originOf.get(id) : undefined;
+      return origin
+        ? { x: origin.x + BAR_OFFSET.x + BAR_WIDTH / 2, y: origin.y + BAR_OFFSET.y }
+        : null;
+    });
+    this.effects.addChild(this.towerStatus.root);
     // The blast over the bars; the splats it leaves come after, over it.
     this.effects.addChild(this.blastAir);
 
@@ -960,6 +1067,42 @@ export class AttackBattleLayer {
     });
 
     this.preloadRoster();
+
+    // Flash's attack sounds, in both looks; fetched now, not with the game.
+    const inferno = !this.session.raiding && combatKind(this.session.target) === "inferno";
+    const play = options.playSound ?? playEffect;
+    const siegeAlong = !inferno && this.session.target.roster.siege !== null;
+    if (!options.playSound) preloadEffects(attackSoundsFor(inferno, siegeAlong));
+    this.sounds = new AttackSounds({
+      // Nothing sounds once the battle is put to rest: a skip to the end is silent.
+      play: (effect, volume) => {
+        if (!this.settled) play(effect, volume);
+      },
+      inferno,
+      building: (id) => buildingOf.get(id),
+      creepOf: (id) => {
+        const view = this.views.get(id);
+        return view ? { monsterId: view.monsterId, friendly: view.snapshot?.friendly ?? false } : undefined;
+      },
+      jarred: (id) =>
+        this.session.battle()?.siege().jars.some((jar) => jar.buildingId === id && jar.health !== null) ?? false,
+      ...(options.random ? { random: options.random } : {}),
+    });
+    this.lootFx = new LootFx(
+      {
+        air: () => this.airLayer(),
+        labels: () => this.overlay,
+        building: (id) => buildingOf.get(id) ?? null,
+        zoom: () => this.host.zoom ?? 1,
+      },
+      {
+        // Flash's `param1 += 4` keys on the yard, not on who attacks it.
+        inferno: combatKind(this.session.target) === "inferno",
+        raided: this.session.raiding,
+        classicFont: this.classic,
+        reducedMotion: this.reducedMotion,
+      },
+    );
   }
 
   /**
@@ -987,7 +1130,11 @@ export class AttackBattleLayer {
       // its view when its death is read, to stay on screen until the bullet lands.
       const live = battle.creeps();
       const seen = this.syncCreeps(live, tick);
-      for (const event of battle.recentEvents(this.lastEventTick)) this.onEvent(event);
+      for (const event of battle.recentEvents(this.lastEventTick)) {
+        this.sounds.onEvent(event);
+        this.lootFx.onEvent(event);
+        this.onEvent(event);
+      }
       this.lastEventTick = tick;
       this.settleGone(seen, tick);
 
@@ -1006,7 +1153,12 @@ export class AttackBattleLayer {
     this.blastFx.update(shown);
     this.fx.update(shown);
     this.bombFx.update(shown);
+    const siege = battle.siege();
+    if (!this.settled) this.sounds.onSiege(siege, tick);
+    this.siegeFx.update(siege, shown);
+    this.lootFx.update(shown);
     this.showBombNumbers(shown);
+    this.towerStatus.sync(battle.weakenedTowers());
 
     if (this.damageDirty) {
       this.damageDirty = false;
@@ -1263,6 +1415,7 @@ export class AttackBattleLayer {
 
     this.towerFx.destroy();
     this.buildingBars.destroy();
+    this.towerStatus.destroy();
     for (const burst of this.bursts) burst.ring.destroy();
     this.bursts.length = 0;
     for (const scorch of this.scorches) scorch.destroy();
@@ -1273,6 +1426,8 @@ export class AttackBattleLayer {
     this.lastJump.clear();
     this.fx.destroy();
     this.bombFx.destroy();
+    this.siegeFx.destroy();
+    this.lootFx.destroy();
     this.heldBombHp.clear();
     this.rains.clear();
     this.bombNumbers.clear();
@@ -1524,6 +1679,7 @@ export class AttackBattleLayer {
     view.lungeTick = Number.NEGATIVE_INFINITY;
     view.swingTick = Number.NEGATIVE_INFINITY;
     view.swingGap = expectedSwingGap(creep.monsterId, creep.level, creep.champion);
+    view.quakeTick = Number.NEGATIVE_INFINITY;
     view.lungeX = 0;
     view.lungeY = 0;
     view.hurtTick = Number.NEGATIVE_INFINITY;
@@ -1538,6 +1694,7 @@ export class AttackBattleLayer {
     view.burrowed = false;
     view.surfaceTick = Number.NEGATIVE_INFINITY;
     view.dirtTick = tick;
+    view.burrowSound = freshBurrowSound();
     view.body.visible = true;
     view.barBack.visible = true;
     view.barFront.visible = true;
@@ -1582,6 +1739,7 @@ export class AttackBattleLayer {
       lungeTick: Number.NEGATIVE_INFINITY,
       swingTick: Number.NEGATIVE_INFINITY,
       swingGap: 60,
+      quakeTick: Number.NEGATIVE_INFINITY,
       lungeX: 0,
       lungeY: 0,
       hurtTick: Number.NEGATIVE_INFINITY,
@@ -1597,6 +1755,7 @@ export class AttackBattleLayer {
       burrowed: false,
       surfaceTick: Number.NEGATIVE_INFINITY,
       dirtTick: 0,
+      burrowSound: freshBurrowSound(),
     };
   }
 
@@ -1676,26 +1835,31 @@ export class AttackBattleLayer {
 
     const sheet = view.sheet;
     const swing = this.swingTiming(view);
+    if (!creep.quaking) view.quakeTick = Number.NEGATIVE_INFINITY;
+    else if (view.quakeTick === Number.NEGATIVE_INFINITY) view.quakeTick = tick;
     const pose: CreepPose = {
       heading: view.heading,
       moving: view.moving,
       age: tick - view.bornTick,
       swingAge: tick - view.swingTick,
       ...(swing ? { swing } : {}),
+      ...(creep.quaking ? { quakeAge: tick - view.quakeTick } : {}),
     };
     const body = view.body;
 
     // A melee hit nudges the body toward what it struck and back (#63). The
     // wound's tint (#68) and the health bar wait for `paintCreeps`, after
     // this frame's bullets have landed (#77). Juiced, it snaps further, and
-    // the body leans back as it winds up and squashes and stretches.
+    // the body leans back as it winds up and squashes and stretches; not
+    // while Korath stamps out his quake, which has its own frames.
     const sinceHit = tick - view.swingTick;
+    const swinging = creep.state === "attacking" && !creep.quaking;
     const windUp =
-      swing && sheet && creep.state === "attacking" && !view.moving
+      swing && sheet && swinging && !view.moving
         ? this.windUpOf(sheet, sinceHit, swing)
         : null;
     const squash =
-      swing && !this.reducedMotion && creep.state === "attacking" && !creep.flying
+      swing && !this.reducedMotion && swinging && !creep.flying
         ? squashScale(sinceHit, windUp, swing.strike ?? 2)
         : { x: 1, y: 1 };
     const lunge = this.reducedMotion
@@ -1725,6 +1889,7 @@ export class AttackBattleLayer {
     if (sheet) {
       const layout = layoutCreep(creep, sheet, pose, this.origin, {
         reducedMotion: this.reducedMotion,
+        classic: this.classic,
       });
       const cell = this.textures.frame(sheet, layout.column, layout.row);
       if (cell) {
@@ -1891,6 +2056,7 @@ export class AttackBattleLayer {
         event.amount,
         PROJECTILE_TICKS,
         projectileStyle(monsterId),
+        modsOf(event),
       );
       return;
     }
@@ -1913,8 +2079,19 @@ export class AttackBattleLayer {
     // Flash showed the same red numbers on buildings (`BFOUNDATION.as:534`).
     if (event.buildingId >= 0 && event.amount > 0) {
       const over = { x: target.x, y: target.y - BUILDING_NUMBER_LIFT };
-      this.fx.number(event.tick, `building:${event.buildingId}`, -1, event.amount, over, "damage");
+      const key = `building:${event.buildingId}`;
+      this.fx.number(event.tick, key, -1, event.amount, over, "damage", modsOf(event));
     }
+  }
+
+  /** An Ichi's thorns struck a tower: the number over it, with the thorn mark (owner, beta 6). */
+  private onThorns(event: Extract<BattleVisualEvent, { kind: "thorns" }>): void {
+    if (event.amount <= 0) return;
+    const centre = this.host.centreOf(event.buildingId);
+    if (!centre) return;
+    const over = { x: centre.x, y: centre.y - BUILDING_NUMBER_LIFT };
+    const key = `building:${event.buildingId}`;
+    this.fx.number(event.tick, key, -1, event.amount, over, "damage", { thorns: true });
   }
 
   /**
@@ -1931,7 +2108,8 @@ export class AttackBattleLayer {
       ? { x: view.lastX, y: view.lastY }
       : groundWorld(wound.ix, wound.iy, this.origin);
     const at = { x: ground.x, y: (view?.top ?? ground.y - BODY_HEIGHT) - 6 };
-    this.fx.number(tick, `creep:${wound.creepId}`, wound.creepId, wound.amount, at, "damage");
+    const key = `creep:${wound.creepId}`;
+    this.fx.number(tick, key, wound.creepId, wound.amount, at, "damage", modsOf(wound));
   }
 
   /**
@@ -2019,6 +2197,7 @@ export class AttackBattleLayer {
         ? { x: view.lastX, y: view.lastY }
         : groundWorld(death.ix, death.iy, this.origin);
       this.spawnSplat(tick, at, death.champion ? 22 : 12);
+      this.sounds.onDeath(death);
       // The engine let go of this creep a flight ago; its ghost goes with the splat.
       if (view && !this.ledger.holds(death.creepId)) {
         this.views.delete(death.creepId);
@@ -2156,6 +2335,7 @@ export class AttackBattleLayer {
       this.rains.set(key, { left: Math.trunc(bomb.particles), owed });
       const at = groundWorld(event.x, event.y, this.origin);
       this.bombFx.drop(key, bomb, at, Math.min(event.t, tick), this.host.zoom ?? 1);
+      this.sounds.onBomb(bomb.resource);
     }
   }
 
@@ -2212,10 +2392,12 @@ export class AttackBattleLayer {
       const before = this.smokeStep.get(id) ?? 0;
       if (step === before) continue;
       this.smokeStep.set(id, step);
+      if (step >= 4) this.towerFx.fall(id);
       if (!this.smokePrimed) continue;
       const crossedDestroyed = step >= 4 && before < 4;
       const crossedDamaged = step >= 2 && before < 2;
       if (!crossedDestroyed && !crossedDamaged) continue;
+      this.sounds.onBuilding(id, crossedDestroyed ? "destroyed" : "damaged");
       const centre = this.host.centreOf(id);
       if (centre) this.fx.poof(tick, centre, crossedDestroyed);
       if (centre && crossedDestroyed && this.juice !== "off") this.demolish(id, centre, tick);
@@ -2258,10 +2440,18 @@ export class AttackBattleLayer {
       if (!this.ledger.hurt(event)) this.showWound(event, event.tick);
       return;
     }
+    if (event.kind === "thorns") {
+      this.onThorns(event);
+      return;
+    }
     if (event.kind === "shot") {
       const key = this.towerFx.onShot(event, this.views.get(event.creepId)?.snapshot ?? undefined);
+      // A shell's wounds come from the engine on the tick it lands (fidelity
+      // note 1), so there is nothing to hold; holding would only claim another
+      // shell's landing on this tick and show it a flight late.
+      const type = this.yard.buildings.find((each) => each.id === event.towerId)?.type;
       this.ledger.shot(
-        key === null
+        key === null || (type !== undefined && towerShellFlies(type))
           ? null
           : {
               key,
@@ -2282,17 +2472,37 @@ export class AttackBattleLayer {
       this.towerFx.onCharge(event.towerId, event.tick);
       return;
     }
+    if (event.kind === "towerCell") {
+      this.towerFx.onTowerCell(event.towerId, event.cell);
+      return;
+    }
+    if (event.kind === "towerQuake") {
+      // The Quake Tower's `QuakeGraphic`: rings out to its reach, in its blue.
+      const at = this.towerFx.onTowerQuake(event.towerId, event.tick);
+      if (at) this.spawnRing(event.tick, at, event.radius, TOWER_QUAKE_COLOUR);
+      return;
+    }
+    if (event.kind === "coilRest") {
+      this.towerFx.onCoilRest(event.towerId, event.tick, event.rearmBy);
+      return;
+    }
+    // A monster out moves nothing: the shutters follow the door (`bunkerDoor`).
+    if (event.kind === "release") return;
+    if (event.kind === "bunkerDoor") {
+      this.towerFx.onDoor(event.buildingId, event.tick, event.open);
+      return;
+    }
     if (event.kind === "splash") {
       // Eye-ra's blast is a fireball (feat/eyera-explosion); a Bandito's
       // rings come with a flash (feat/punchy-trial); the rest keep the rings.
       const at = groundWorld(event.ix, event.iy, this.origin);
-      const look = splashLook(event.moveId);
+      const look = splashLook(event.moveId, this.classic);
       if (look === "fiery") {
         this.blastFx.fiery(event.tick, at, event.radius);
         return;
       }
       this.spawnRing(event.tick, at, event.radius, SPLASH_COLOUR);
-      if (look === "rings-flash") this.blastFx.punchy(event.tick, at, event.radius, BANDITO_PUNCHY);
+      if (look === "rings-flash") this.punchy(event.tick, at, event.radius, BANDITO_PUNCHY);
       return;
     }
     if (event.kind === "blink") {
@@ -2309,6 +2519,7 @@ export class AttackBattleLayer {
     if (this.ledger.death(event)) return;
     const at = groundWorld(event.ix, event.iy, this.origin);
     this.spawnSplat(event.tick, at, event.champion ? 22 : 12);
+    this.sounds.onDeath(event);
   }
 
   /**
@@ -2318,13 +2529,15 @@ export class AttackBattleLayer {
    */
   private tunnel(view: CreepView, creep: CreepSnapshot, ground: Point, tick: number): void {
     const under = creep.burrowed === true;
+    const sound = settleBurrow(view.burrowSound, under, tick);
+    if (sound !== null) this.sounds.onBurrow(sound);
     const dirt = dirtFor(view.burrowed, under, tick, view.dirtTick);
     if (dirt === null) return;
     if (dirt === "dig" && !under) {
       view.surfaceTick = tick;
       // Up out of the ground to bite: a light punchy blast (feat/punchy-trial);
       // not when it comes up to walk, home or to a foe close by.
-      if (creep.state === "attacking") this.blastFx.punchy(tick, ground, SURFACE_BLAST_RADIUS, SURFACE_PUNCHY);
+      if (creep.state === "attacking") this.punchy(tick, ground, SURFACE_BLAST_RADIUS, SURFACE_PUNCHY);
     }
     view.burrowed = under;
     view.dirtTick = tick;
@@ -2423,7 +2636,12 @@ export class AttackBattleLayer {
   private spawnQuake(tick: number, at: Point, radius: number): void {
     this.spawnRing(tick, at, radius, QUAKE_COLOUR);
     // And the stomp itself, a punchy blast inside the reach (feat/punchy-trial).
-    this.blastFx.punchy(tick, at, radius * 0.9, QUAKE_PUNCHY);
+    this.punchy(tick, at, radius * 0.9, QUAKE_PUNCHY);
+  }
+
+  /** A punchy blast (feat/punchy-trial), new with the revamp, so never in the Classic look. */
+  private punchy(tick: number, at: Point, radius: number, strength: PunchyStrength): void {
+    if (!this.classic) this.blastFx.punchy(tick, at, radius, strength);
   }
 
   /** Three fading rings on the ground, radius wide: a quake, or a special move's burst. */
@@ -2508,8 +2726,10 @@ export class AttackBattleLayer {
   /**
    * Shows every trap that has just gone off (issue #66): the renderer lifts
    * its concealment, `syncDamage` then draws it as the ruin its zero health
-   * says, and a scorch with a fading ring marks the blast, as `BTRAP.Explode`
-   * did (`client/scripts/BTRAP.as:88-153`).
+   * says, and a scorch marks the blast, as `BTRAP.Explode` did
+   * (`client/scripts/BTRAP.as:88-153`). With the Classic look a thin fading
+   * ring goes with it; the Modern look draws the trap explosion instead
+   * (`BlastFx.trap`, a sample for the owner, beta 6) with Flash's trap sound.
    */
   private revealTraps(fired: readonly number[], tick: number): void {
     for (const id of this.traps.sync(fired)) {
@@ -2518,11 +2738,22 @@ export class AttackBattleLayer {
       if (!building) continue;
       // `EFFECTS.Scorch(_mc.x, _mc.y + 5)`: just below the origin.
       const at = { x: building.worldX, y: building.worldY + 5 };
+      // Flash's trap sound, in both looks; the Modern look's Heavy Trap adds a building's fall (owner's sample).
+      this.sounds.onTrap(this.juice !== "off" && building.type === HEAVY_TRAP);
       const scorch = new Graphics();
       scorch.ellipse(0, 0, 26, 13).fill({ color: SCORCH_COLOUR, alpha: 0.55 });
       scorch.position.set(at.x, at.y);
       this.effects.addChild(scorch);
       this.scorches.push(scorch);
+      // Modern: the trap explosion (a sample for the owner, beta 6), its fireball as big as the blast; the
+      // blast is a circle round the footprint's middle, on screen root two times its radius across.
+      const blast = trapStats(building.type)?.size;
+      if (this.juice !== "off" && blast) {
+        const middle = { x: building.worldX, y: building.worldY + 10 };
+        const heavy = building.type === HEAVY_TRAP;
+        this.blastFx.trap(tick, middle, blast * Math.SQRT2, heavy, this.effectsLow);
+        continue;
+      }
       const ring = new Graphics();
       ring.position.set(at.x, at.y);
       this.effects.addChild(ring);
@@ -2571,3 +2802,17 @@ export class AttackBattleLayer {
     }
   }
 }
+
+/** A hit's or wound's modifiers for its number: a crit, a cut, thorns (owner, beta 6). */
+const modsOf = (event: {
+  readonly bonus?: number;
+  readonly reduced?: number;
+  readonly thorns?: boolean;
+}): NumberMods | undefined =>
+  event.bonus === undefined && event.reduced === undefined && event.thorns !== true
+    ? undefined
+    : {
+        ...(event.bonus === undefined ? {} : { bonus: event.bonus }),
+        ...(event.reduced === undefined ? {} : { reduced: event.reduced }),
+        ...(event.thorns === true ? { thorns: true } : {}),
+      };

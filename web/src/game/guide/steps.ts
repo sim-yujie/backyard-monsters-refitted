@@ -13,7 +13,10 @@ import { TutTarget } from "./targets";
  * everything: nothing here grants or advances.
  *
  * Lines are adapted from Flash's `tut_*` strings
- * (`server/public/gamestage/assets/english.json`), the key in a comment.
+ * (`server/public/gamestage/assets/english.json`), the key in a comment, and
+ * cut short (the owner's text cut, 28 Oct): one thing to do per bubble, in
+ * Bob's voice, with a picture of the button or the building it is about
+ * ({@link GuideCue}) at its start.
  */
 
 /** The macro steps, in order: the server's `GUIDE_STEPS`. */
@@ -48,6 +51,29 @@ export const isGuideStep = (step: unknown): step is GuideStepName =>
 /** Housed Pokeys the guide tops up to (the server's `FREE_POKEYS`). */
 export const FREE_POKEYS = 15;
 
+/**
+ * The picture at the start of Bob's bubble: what he asks the player to tap,
+ * as it looks on screen (the dock's own line icon, the building's card
+ * picture), or what the line is about (the Shiny coin, the painted clock).
+ * Drawn by `ui/guide/guideCue.ts`; the words still name it.
+ */
+export type GuideCue =
+  /** A yard button's line icon (`ui/icons.ts`), as the button wears it. */
+  | { readonly kind: "icon"; readonly name: "build" | "map" | "collect" | "attack" }
+  /** The Goals button's art. */
+  | { readonly kind: "goals" }
+  /** A building's picture, as on its Build menu card. */
+  | { readonly kind: "building"; readonly type: number }
+  /** A Pokey and how many. */
+  | { readonly kind: "pokeys"; readonly count: number }
+  /** A resource's pile, or the Shiny coin. */
+  | { readonly kind: "resource"; readonly key: "r1" | "shiny" }
+  /** A painted icon (`ui/gameIcon.ts`). */
+  | { readonly kind: "painted"; readonly name: "time" | "shield" };
+
+/** The Build button's cue. */
+const BUILD_CUE: GuideCue = { kind: "icon", name: "build" };
+
 /** One of the four buildings the guide pays for. */
 export interface GuideBuild {
   readonly type: number;
@@ -65,7 +91,12 @@ export interface GuideBuild {
     readonly finishTap: string;
     readonly finishNow: string;
   };
+  /** The picture beside `finishNow`: the clock, or the Shiny a skip would cost. */
+  readonly finishCue: GuideCue;
 }
+
+/** The painted clock: building takes time. */
+const TIME_CUE: GuideCue = { kind: "painted", name: "time" };
 
 /** The four guide buildings, by their build step. */
 export const GUIDE_BUILDS: Readonly<Record<string, GuideBuild>> = {
@@ -74,57 +105,60 @@ export const GUIDE_BUILDS: Readonly<Record<string, GuideBuild>> = {
     tab: "defensive",
     name: "Sniper Tower",
     lines: {
-      open: "Wild monsters are gathering nearby. Let's build a Sniper Tower. Tap Build.", // tut_31
-      tab: "Open the Defensive tab.", // tut_32
+      open: "Wild monsters nearby! We need a Sniper Tower. Tap Build.", // tut_31
+      tab: "Tap Defensive.", // tut_32
       card: "Pick the Sniper Tower.", // tut_33
-      go: "Here's what it does and what it costs. This one's on me: tap Build.", // tut_34
-      place: "Drag it onto the grass, then tap Build here.", // tut_35
+      go: "This one's on me. Tap Build.", // tut_34
+      place: "Drag it onto the grass. Tap Build here.", // tut_35
       finishTap: "Tap your Sniper Tower.", // tut_36
-      finishNow: "Building usually takes time, but not today. This one's on me: tap Finish now.", // tut_37
+      finishNow: "Building takes time, but not today. On me: Finish now!", // tut_37
     },
+    finishCue: TIME_CUE,
   },
   "build-housing": {
     type: 15,
     tab: "buildings",
     name: "Monster Housing",
     lines: {
-      open: "First, your army needs somewhere to live. Tap Build.", // tut_50
-      tab: "Open the Buildings tab.", // tut_51
+      open: "Your army needs a home. Tap Build.", // tut_50
+      tab: "Tap Buildings.", // tut_51
       card: "Pick Monster Housing.", // tut_52
       go: "On me again: tap Build.", // tut_53
-      place: "Place it on the grass, then tap Build here. You can drag the yard to find space.", // tut_54
+      place: "Drag it onto the grass. Tap Build here.", // tut_54
       finishTap: "Tap your Housing.", // tut_55
       finishNow: "And Finish now, free again.",
     },
+    finishCue: TIME_CUE,
   },
   "build-maproom": {
     type: 11,
     tab: "buildings",
     name: "Map Room",
     lines: {
-      open: "Now a Map Room, so we can find those Legionnaires. Tap Build.", // tut_90_b
-      tab: "Open the Buildings tab.", // tut_91
+      open: "Now a Map Room, to find those Legionnaires. Tap Build.", // tut_90_b
+      tab: "Tap Buildings.", // tut_91
       card: "Pick the Map Room.", // tut_92
       go: "On me: tap Build.", // tut_93
-      place: "Place it, then tap Build here.", // tut_94
+      place: "Drag it onto the grass. Tap Build here.", // tut_94
       finishTap: "Tap your Map Room.", // tut_97
       finishNow: "Finish now. Free again.",
     },
+    finishCue: TIME_CUE,
   },
   "build-flinger": {
     type: 5,
     tab: "buildings",
     name: "Flinger",
     lines: {
-      open: "Last piece: a Flinger, so we can fling our Pokeys into the enemy's yard. Tap Build.", // tut_65
-      tab: "Open the Buildings tab.", // tut_66
+      open: "Last piece: a Flinger, to fling our Pokeys. Tap Build.", // tut_65
+      tab: "Tap Buildings.", // tut_66
       card: "Pick the Flinger.", // tut_67
       go: "On me: tap Build.", // tut_68
-      place: "Place it, then tap Build here.", // tut_69
+      place: "Drag it onto the grass. Tap Build here.", // tut_69
       finishTap: "Tap your Flinger.",
-      finishNow:
-        "A Flinger takes a while to build, which would normally cost a few Shiny to skip. Today it's free: tap Finish now.", // tut_96
+      finishNow: "Skipping this wait costs Shiny. Today it's free: Finish now!", // tut_96
     },
+    finishCue: { kind: "resource", key: "shiny" },
   },
 };
 
@@ -165,10 +199,11 @@ export interface BuildScreen {
   readonly cardShown: boolean;
 }
 
-/** One micro step: what Bob says and what he points at. */
+/** One micro step: what Bob says, the picture beside it, and what he points at. */
 export interface MicroStep {
   readonly key: string;
   readonly text: string;
+  readonly cue: GuideCue;
   readonly target: string;
   /** False while placing: the yard must pan (§2.1). */
   readonly block: boolean;
@@ -182,27 +217,30 @@ export interface MicroStep {
  */
 export const buildMicroStep = (build: GuideBuild, screen: BuildScreen): MicroStep => {
   const { lines } = build;
+  // Past the Build button every step is about the building: its picture.
+  const cue: GuideCue = { kind: "building", type: build.type };
   if (screen.carrying === build.type) {
-    return { key: "place", text: lines.place, target: TutTarget.BUILD_HERE, block: false };
+    return { key: "place", text: lines.place, cue, target: TutTarget.BUILD_HERE, block: false };
   }
   if (screen.carrying !== null) {
     return {
       key: "wrong-carry",
-      text: `That's not the one. Put it down, and we'll build the ${build.name}.`,
+      text: `Not that one! Put it down: we want the ${build.name}.`,
+      cue,
       target: TutTarget.BUILD_CANCEL_CARRY,
       block: true,
     };
   }
   if (screen.menuOpen && screen.picked) {
-    return { key: "go", text: lines.go, target: TutTarget.BUILD_GO, block: true };
+    return { key: "go", text: lines.go, cue, target: TutTarget.BUILD_GO, block: true };
   }
   if (screen.menuOpen && screen.cardShown) {
-    return { key: "card", text: lines.card, target: `${TutTarget.BUILD_CARD}${build.type}`, block: true };
+    return { key: "card", text: lines.card, cue, target: `${TutTarget.BUILD_CARD}${build.type}`, block: true };
   }
   if (screen.menuOpen) {
-    return { key: "tab", text: lines.tab, target: `${TutTarget.BUILD_TAB}${build.tab}`, block: true };
+    return { key: "tab", text: lines.tab, cue, target: `${TutTarget.BUILD_TAB}${build.tab}`, block: true };
   }
-  return { key: "open", text: lines.open, target: TutTarget.DOCK_BUILD, block: true };
+  return { key: "open", text: lines.open, cue: BUILD_CUE, target: TutTarget.DOCK_BUILD, block: true };
 };
 
 /* ── The other lines ──────────────────────────────────────────────────── */
@@ -210,24 +248,20 @@ export const buildMicroStep = (build: GuideBuild, screen: BuildScreen): MicroSte
 /** Bob's lines for the steps that are not a build. */
 export const LINES = {
   welcome: (name: string): string =>
-    `Welcome to Backyard Monsters${name ? `, ${name}` : ""}! I'm Bob. Give me eight minutes and I'll have your yard ready for anything.`, // tut_1
-  collect:
-    "Harvesters work until they're full, so empty them often. Tap Collect all to bank what your Twig Snapper has made.", // tut_3, tut_4
-  collected: "Nice! Twigs build and upgrade your buildings.", // tut_5
+    `Welcome to Backyard Monsters${name ? `, ${name}` : ""}! I'm Bob. Eight minutes, and your yard's ready for anything.`, // tut_1
+  collect: "Harvesters stop when they're full. Tap Collect all!", // tut_3, tut_4
+  collected: "Nice! Twigs pay for your buildings.", // tut_5
   raidBanner: "Legionnaire scouts are attacking!",
-  raidStart:
-    "WHOA! Just in time, here come some wild monsters! Your Sniper Tower will make short work of them. Sit back and watch.", // tut_40
-  raidEnd:
-    "That's defence: towers fire on anything that comes into range. Those were Legionnaire scouts. Let's strike back before they come back bigger!", // tut_42, tut_44
-  pokeys:
-    "I've recruited some Pokeys to help. They're slow and small, but what they lack in strength they make up for in numbers!", // tut_57
-  openMap: "Let's find the tribe that attacked you. Tap Map.", // tut_101
-  pickCamp:
-    "This is your map. That glowing camp is a Legionnaire outpost, and it's yours alone to practise on. Tap it.", // tut_102
+  raidStart: "WHOA! Here they come! Sit back and watch your Sniper Tower work.", // tut_40
+  raidEnd: "Towers hit anything in range. Now let's strike back before they come back bigger!", // tut_42, tut_44
+  pokeys: `I got you ${FREE_POKEYS} Pokeys! Small and slow, but there's loads of them.`, // tut_57
+  openMap: "Let's find who attacked you. Tap Map.", // tut_101
+  mapAgain: "Back to the map: tap Map.",
+  pickCamp: "That glowing camp is a Legionnaire outpost, just for you to practise on. Tap it.", // tut_102
   tapAttack: "Now tap Attack!", // tut_102
-  attackBase: "This is their base: one Sniper Tower and a few walls.", // tut_110
-  fillAll: "Your 15 Pokeys are in the army panel. Tap Fill all to load every one.", // tut_111
-  dropBox: "Now tap inside the glowing box to fling them in.", // tut_112
+  attackBase: "One tower and a few walls: easy pickings!", // tut_110
+  fillAll: `Tap Fill all to load your ${FREE_POKEYS} Pokeys.`, // tut_111
+  dropBox: "Now tap inside the glowing box to fling them in!", // tut_112
   outsideBox: "Inside the glowing box, please!",
   battle: [
     "Excellent! Your Pokeys are attacking.", // tut_113
@@ -235,21 +269,34 @@ export const LINES = {
     "Your Pokeys are looting their harvesters!", // tut_115
     "Flatten the base and you win.", // tut_116
   ],
-  won: "Congratulations, you levelled their whole base! Check out that loot.", // tut_120, tut_130
-  wonHome: "Congratulations, you levelled their whole base! Let's head home and see what you've earned.",
-  lost: "Ouch, the Legionnaires got lucky. Here's a fresh squad of 15 Pokeys: let's go again!",
-  lostHere: "Ouch, the Legionnaires got lucky. Head back to the map and we'll go again!",
+  won: "You flattened their whole base! Check out that loot.", // tut_120, tut_130
+  wonHome: "You flattened their whole base! Let's head home and count the loot.",
+  lost: `Ouch, the Legionnaires got lucky. Here's ${FREE_POKEYS} fresh Pokeys: let's go again!`,
+  lostHere: "Ouch, the Legionnaires got lucky. Back to the map, and we'll go again!",
   checking: "Let's see how your Pokeys did...",
-  homeGoals: "You finished a pile of Goals along the way. Tap Goals and claim your rewards.", // tut_131, tut_191
-  homeGoalsNoButton:
-    "You finished a pile of Goals along the way. Check Goals for your rewards when you're ready.",
+  homeGoals: "You finished a pile of Goals! Tap Goals for your rewards.", // tut_131, tut_191
+  homeGoalsNoButton: "You finished a pile of Goals! Check Goals for your rewards.",
   goalsLater: "Don't forget them!",
-  finishNow:
-    "One more tip. Instant and Finish now cost Shiny, and early on they're cheap: upgrading your Town Hall to level 2 instantly costs about 24 of your 1,500 Shiny.",
-  protection:
-    "Your yard is protected for the next 7 days: other players can't attack you while it lasts. Check Goals for what to do next. Good luck!", // tut_190, tut_191
+  finishNow: "Finish now and Instant cost Shiny, but they're cheap early on: Town Hall level 2 is about 24.",
+  protection: "Your yard is protected for 7 days: nobody can attack it. Goals has what's next. Good luck!", // tut_190, tut_191
   skipAsk: "Skip the guided start? You'll miss Bob's free army and the gifts.",
 } as const;
+
+/** The picture beside each of {@link LINES} that has one. */
+export const CUES: Partial<Record<keyof typeof LINES, GuideCue>> = {
+  collect: { kind: "icon", name: "collect" },
+  collected: { kind: "resource", key: "r1" },
+  pokeys: { kind: "pokeys", count: FREE_POKEYS },
+  openMap: { kind: "icon", name: "map" },
+  mapAgain: { kind: "icon", name: "map" },
+  tapAttack: { kind: "icon", name: "attack" },
+  fillAll: { kind: "pokeys", count: FREE_POKEYS },
+  lost: { kind: "pokeys", count: FREE_POKEYS },
+  homeGoals: { kind: "goals" },
+  homeGoalsNoButton: { kind: "goals" },
+  finishNow: { kind: "resource", key: "shiny" },
+  protection: { kind: "painted", name: "shield" },
+};
 
 /**
  * The guide in seven parts, the owner's confirmed order (hello and collect;
@@ -274,9 +321,11 @@ export const dotsFor = (step: GuideStepName): { index: number; count: number } =
 
 /* ── The Help tour (Q5) ────────────────────────────────────────────────── */
 
-/** One stop of the replay tour: a line, and a target to point at if it is on screen. */
+/** One stop of the replay tour: a line, its picture, and a target to point at if it is on screen. */
 export interface TourStop {
   readonly text: string;
+  /** The picture beside the line ({@link GuideCue}). */
+  readonly cue?: GuideCue;
   readonly target?: string;
   /** Plays the staged raid (the only step the tour acts out; it touches no data). */
   readonly raid?: boolean;
@@ -289,19 +338,20 @@ export interface TourStop {
  */
 export const TOUR: readonly TourStop[] = [
   { text: LINES.welcome("") },
-  { text: LINES.collect, target: TutTarget.COLLECT_ALL },
-  { text: GUIDE_BUILDS["build-sniper"]!.lines.open, target: TutTarget.DOCK_BUILD },
-  { text: "Building takes time. Tap a building, then Finish now to skip the wait for a little Shiny." },
+  { text: LINES.collect, cue: CUES.collect!, target: TutTarget.COLLECT_ALL },
+  { text: GUIDE_BUILDS["build-sniper"]!.lines.open, cue: BUILD_CUE, target: TutTarget.DOCK_BUILD },
+  { text: "Building takes time. Tap a building and Finish now skips the wait for a little Shiny.", cue: TIME_CUE },
   { text: LINES.raidStart, raid: true },
   { text: LINES.raidEnd },
-  { text: GUIDE_BUILDS["build-housing"]!.lines.open, target: TutTarget.DOCK_BUILD },
-  { text: LINES.pokeys, target: TutTarget.DOCK_MONSTERS },
-  { text: GUIDE_BUILDS["build-maproom"]!.lines.open },
-  { text: GUIDE_BUILDS["build-flinger"]!.lines.open },
-  { text: LINES.openMap, target: TutTarget.DOCK_MAP },
-  { text: "On the map, tap a tribe's camp, then Attack. Tap Fill all, then tap the yard to fling your army in." },
-  { text: "Flatten 90% of a camp and it's yours: the loot comes home with your monsters." },
-  { text: LINES.homeGoals, target: TutTarget.DOCK_GOALS },
-  { text: LINES.finishNow, target: TutTarget.HUD_SHINY },
-  { text: "That's the tour. Check Goals for what to do next. Good luck!" },
+  { text: GUIDE_BUILDS["build-housing"]!.lines.open, cue: BUILD_CUE, target: TutTarget.DOCK_BUILD },
+  { text: LINES.pokeys, cue: CUES.pokeys!, target: TutTarget.DOCK_MONSTERS },
+  { text: GUIDE_BUILDS["build-maproom"]!.lines.open, cue: { kind: "building", type: GUIDE_BUILDS["build-maproom"]!.type } },
+  { text: GUIDE_BUILDS["build-flinger"]!.lines.open, cue: { kind: "building", type: GUIDE_BUILDS["build-flinger"]!.type } },
+  { text: LINES.openMap, cue: CUES.openMap!, target: TutTarget.DOCK_MAP },
+  { text: "On the map, tap a tribe's camp, then Attack.", cue: CUES.tapAttack! },
+  { text: "Tap Fill all, then tap their yard to fling your army in.", cue: CUES.fillAll! },
+  { text: "Flatten 90% of a camp to win it. The loot comes home with your monsters." },
+  { text: LINES.homeGoals, cue: CUES.homeGoals!, target: TutTarget.DOCK_GOALS },
+  { text: LINES.finishNow, cue: CUES.finishNow!, target: TutTarget.HUD_SHINY },
+  { text: "That's the tour. Goals has what to do next. Good luck!" },
 ];

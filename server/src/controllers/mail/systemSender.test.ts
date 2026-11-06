@@ -21,7 +21,7 @@ const noticeMessage = () =>
     userUnread: 0,
     targetUnread: 1,
     subject: "Bramble attacked your outpost at (243, 206)",
-    message: "It was left 40% damaged, and nothing was looted.",
+    message: "It was left 40% damaged. Nothing was looted.",
     updatetime: 100,
   });
 
@@ -192,7 +192,7 @@ describe("a yard notice's defence replay", () => {
       userUnread: 0,
       targetUnread: 0,
       subject: "Bramble attacked your yard",
-      message: "It was left 47% damaged, and nothing was looted.",
+      message: "It was left 47% damaged. Nothing was looted.",
       baseid: "70001",
       updatetime: 100,
       replayid,

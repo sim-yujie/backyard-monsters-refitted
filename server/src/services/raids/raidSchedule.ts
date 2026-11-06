@@ -278,6 +278,18 @@ export const recordTrojanFinished = (schedule: RaidSchedule, record: RaidRecord,
   };
 };
 
+/**
+ * A landed Moloch emergence raid (`docs/design/inferno.md` §2.3): kept in
+ * `recent` and marked landed, and nothing else. Flash's emergence attack ran
+ * with `_isAI` false, so `ResetWait` never touched the wild raids' wait or
+ * sessions (`WMATTACK.as:820-822`).
+ */
+export const recordEmergenceFinished = (schedule: RaidSchedule, record: RaidRecord): RaidSchedule => ({
+  ...withoutFightLock(schedule),
+  lastRaidId: record.id,
+  recent: [record, ...schedule.recent].slice(0, RECENT_RAIDS_KEPT),
+});
+
 /** A raid's warning opened now: the minimum gap to the next one starts here. */
 export const withRaidOpened = (schedule: RaidSchedule, now: number): RaidSchedule => ({ ...schedule, lastOpenedAt: now });
 

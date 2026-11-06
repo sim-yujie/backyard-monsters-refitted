@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { cleanMessage, cleanPlace, cleanStack, ERROR_TEXT_LIMITS, errorFingerprint, errorShape, scrubText } from "./errorText.js";
+import { cleanMessage, cleanPlace, cleanStack, ERROR_TEXT_LIMITS, errorFingerprint, errorShape, isThirdPartyError, scrubText } from "./errorText.js";
 
 describe("cleaning error text (errorText.ts)", () => {
   test("emails, IP addresses, tokens and long hex are replaced", () => {
@@ -36,5 +36,17 @@ describe("cleaning error text (errorText.ts)", () => {
     expect(a).toBe(b);
     expect(errorFingerprint("server", "No building 42", "/static/index-Dh3HKT6K.js:1:200")).not.toBe(a);
     expect(errorFingerprint("browser", "Other thing", "/static/index.js")).not.toBe(a);
+  });
+
+  test("an error pointing only at code that is not the game's is third-party", () => {
+    // A wallet extension's script injected into the page.
+    expect(isThirdPartyError("/:1:5021", "TypeError: Cannot redefine property: ethereum\n    at <anonymous>:1:5021")).toBe(true);
+    expect(isThirdPartyError("", "Error: x\n    at https://other.example/inject.js:3:9")).toBe(true);
+    // The game's own bundle, or its sources on a dev server.
+    expect(isThirdPartyError("/static/index-Dh3HKT6K.js:1:2345", "")).toBe(false);
+    expect(isThirdPartyError("", "Error: x\n    at <anonymous>:1:1\n    at https://play.test/static/index-AAAAAAAA.js:1:9")).toBe(false);
+    expect(isThirdPartyError("http://localhost:5173/src/game/main.ts:10:2", "")).toBe(false);
+    // Nothing says where: not called anyone's.
+    expect(isThirdPartyError("", "")).toBe(false);
   });
 });

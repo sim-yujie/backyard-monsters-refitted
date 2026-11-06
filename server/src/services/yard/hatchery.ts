@@ -14,7 +14,7 @@ import {
   HOUSING_MIN_HEALTH,
 } from "../monsters/transferRules.js";
 import { fitCredit } from "./credit.js";
-import { obtainableOrThrow } from "./locker.js";
+import { monsterRealmOf, obtainableOrThrow } from "./locker.js";
 import {
   levelOf,
   readProduction,
@@ -84,8 +84,12 @@ export const MAX_ADD = 400;
 /** Goo is the fourth resource (`BASE.Charge(4, …)`). */
 const GOO = "r4";
 
-/** The overdrive store items, one at a time (MH §5.5). */
-export const OVERDRIVE_ITEMS = ["HOD", "HOD2", "HOD3"] as const;
+/**
+ * The overdrive store items, one at a time (MH §5.5): the surface's, and the
+ * Inferno shop's `HODI` / `HOD2I` / `HOD3I` (each yard's store data only ever
+ * holds its own).
+ */
+export const OVERDRIVE_ITEMS = ["HOD", "HOD2", "HOD3", "HODI", "HOD2I", "HOD3I"] as const;
 
 /** A hatchery, or the HCC's shared queue. */
 export type HatcheryTarget = number | "hcc";
@@ -384,7 +388,7 @@ export const planHatcheryAdd = (
   count: number,
   now: number
 ) => {
-  obtainableOrThrow(monster);
+  obtainableOrThrow(monster, monsterRealmOf(save));
   if (Number(save.lockerdata?.[monster]?.t) !== 2) {
     throw yardRefusedErr("locked", "Unlock that monster in the Monster Locker first.", {
       monster,
@@ -501,6 +505,48 @@ export const planHatcheryRemove = (
   };
 };
 
+/** `report` of `POST /bm/yard/hatchery/clear`. */
+export interface HatcheryClearReport {
+  hatchery: HatcheryTarget;
+  /** Monsters taken out, by id. */
+  removed: Record<string, number>;
+  /** Goo actually returned, after the storage cap. */
+  refund: { r4: number };
+}
+
+/**
+ * Clear all: empties every waiting stack of a hatchery's queue, or the HCC's
+ * shared queue, as `remove` with `count=all` on each stack would. Each stack
+ * refunds its paid level; the total is clamped to the cap once, which is what
+ * the one-by-one credits add up to. The monsters in production keep hatching
+ * (their own × cancels them). Refusals: the target's (a hatchery id with an
+ * HCC is `useHcc`), then `409 emptyQueue` when nothing waits.
+ */
+export const planHatcheryClear = (save: HatcherySave, target: HatcheryTarget, now: number) => {
+  const { model } = modelOf(save);
+  const resolved = targetOf(save, model, target);
+  const queue = resolved.hcc ? model.hcc : resolved.hatchery.queue;
+  if (queue.length === 0) throw yardRefusedErr("emptyQueue", "Nothing is waiting in that queue.");
+
+  const removed: Record<string, number> = {};
+  let goo = 0;
+  for (const [monster, count, level] of queue.splice(0)) {
+    removed[monster] = (removed[monster] ?? 0) + count;
+    goo += count * gooOf(monster, level);
+  }
+
+  const report: HatcheryClearReport = {
+    hatchery: target,
+    removed,
+    refund: { r4: fitCredit(save, { r4: goo }).credited.r4 },
+  };
+  return {
+    report,
+    slices: { monsters: writeProduction(save.monsters, model, now) },
+    credit: { r4: goo },
+  };
+};
+
 /** Free housing space right now (`HOUSING._housingSpace`): capacity, EXH included, less the army. */
 export const freeHousing = (
   save: HatcherySave,
@@ -514,6 +560,7 @@ export const freeHousing = (
     housingExpansionActive: HOUSING_EXPANSION_ITEMS.some(
       (item) => numberOf(save.storedata?.[item]?.e) > now
     ),
+    inferno: yardKindOf(save) === "inferno",
   });
   const used = Object.entries(housed).reduce(
     (total, [id, count]) => total + spaceOf(id, levels) * count,
@@ -640,7 +687,7 @@ export const planHatcheryFinish = (save: HatcherySave, target: HatcheryTarget, n
 };
 
 /**
- * The shop's extra rule for `HOD`/`HOD2`/`HOD3`: one hatchery overdrive at a
+ * The shop's extra rule for `HOD`/`HOD2`/`HOD3` (`HODI`.. in the Inferno): one hatchery overdrive at a
  * time (they do not stack, MH §5.5). `409 alreadyActive { item, endsAt }`
  * names the one running.
  */

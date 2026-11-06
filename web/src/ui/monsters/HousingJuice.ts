@@ -2,6 +2,7 @@ import type { YardRefusal } from "@/api/yard";
 import { JUICE_KEY, juiceActions, type JuiceActions } from "@/api/yardJuice";
 import { housedRows, type HousedRow } from "@/game/monsters/housing";
 import { juicePreview, juicerProblemText, juicerStatus, type JuicerStatus } from "@/game/monsters/juice";
+import { monsterRealmOf, monsterWords } from "@/game/monsters/realm";
 import type { YardStore } from "@/game/yard/YardStore";
 import { formatAmount } from "@/ui/format";
 import { QuantityStepper } from "@/ui/QuantityStepper";
@@ -84,14 +85,14 @@ export class HousingJuice {
       const note = document.createElement("p");
       note.className =
         status.problem === "noJuicer" ? "housing-juice__note" : "housing-juice__note housing-juice__note--bad";
-      note.textContent = juicerProblemText(status.problem);
+      note.textContent = juicerProblemText(status.problem, monsterRealmOf(this.store.kind));
       this.element.replaceChildren(note);
       return;
     }
 
     const intro = document.createElement("p");
     intro.className = "housing-juice__note";
-    intro.textContent = `Level ${status.level} Juicer: each monster gives back ${Math.round(status.rate * 100)}% of its hatch cost in goo. Juiced monsters are gone for good.`;
+    intro.textContent = `Level ${status.level} Juicer: each monster gives back ${Math.round(status.rate * 100)}% of its hatch cost in ${monsterWords(monsterRealmOf(this.store.kind)).goo}. Juiced monsters are gone for good.`;
 
     if (this.rows.length === 0) {
       this.selection.clear();
@@ -182,14 +183,20 @@ export class HousingJuice {
       question.className = "housing-juice__question";
       question.append(
         `Juice ${formatAmount(preview.count)} ${preview.count === 1 ? "monster" : "monsters"} for `,
-        resourceAmount("r4", formatAmount(preview.credited)),
+        ...juiceAmounts(preview.credited, preview.magmaCredited, preview.magma > 0 && preview.goo === 0),
         "? They are gone for good.",
       );
       wrap.append(question);
       if (preview.lost > 0) {
         const lost = document.createElement("p");
         lost.className = "housing-juice__lost";
-        lost.append("Your goo storage is full: ", resourceAmount("r4", formatAmount(preview.lost)), " will not fit and is lost.");
+        lost.append(`Your ${monsterWords(monsterRealmOf(this.store.kind)).goo} storage is full: `, resourceAmount("r4", formatAmount(preview.lost)), " will not fit and is lost.");
+        wrap.append(lost);
+      }
+      if (preview.magmaLost > 0) {
+        const lost = document.createElement("p");
+        lost.className = "housing-juice__lost";
+        lost.append("Your Inferno Magma storage is full: ", magmaAmount(preview.magmaLost), " will not fit and is lost.");
         wrap.append(lost);
       }
       const row = document.createElement("div");
@@ -244,7 +251,7 @@ export class HousingJuice {
       const preview = this.preview();
       this.juiceButton.replaceChildren(
         total === 0 ? "Juice selected" : `Juice ${formatAmount(total)} · `,
-        ...(total === 0 ? [] : [resourceAmount("r4", formatAmount(preview.goo))]),
+        ...(total === 0 ? [] : juiceAmounts(preview.goo, preview.magma, preview.magma > 0 && preview.goo === 0)),
       );
     }
     this.syncPending();
@@ -284,6 +291,7 @@ export class HousingJuice {
       rate,
       this.store.resources,
       this.store.caps,
+      monsterRealmOf(this.store.kind),
     );
   }
 
@@ -297,13 +305,18 @@ export class HousingJuice {
       this.selection.clear();
       const { report } = result;
       const count = Object.values(report.juiced).reduce((sum, n) => sum + n, 0);
+      const magma = report.magma ?? 0;
+      const magmaLost = report.magmaLost ?? 0;
       const content: (Node | string)[] = [
         `Juiced ${formatAmount(count)} ${count === 1 ? "monster" : "monsters"}: `,
-        resourceAmount("r4", formatAmount(report.goo)),
+        ...juiceAmounts(report.goo, magma, magma + magmaLost > 0 && report.goo + report.lost === 0),
         " added.",
       ];
       if (report.lost > 0) {
         content.push(" Storage was full, so ", resourceAmount("r4", formatAmount(report.lost)), " was lost.");
+      }
+      if (magmaLost > 0) {
+        content.push(" The Inferno's storage was full, so ", magmaAmount(magmaLost), " was lost.");
       }
       this.onStatus({ tone: "good", content });
     } else {
@@ -326,3 +339,17 @@ const refusalText = (refusal: YardRefusal): string =>
   refusal.reason === "network"
     ? "Could not reach the server. Try again."
     : refusal.message || "That did not work.";
+
+/** Magma for the Inferno purse, with the Inferno's icon on the main yard. */
+const magmaAmount = (amount: number): HTMLElement => resourceAmount("r4", formatAmount(amount), { realm: "inferno" });
+
+/**
+ * What a juice comes to: the goo, the Magma an Inferno monster gives on the
+ * main yard (Inferno WP 2.3), or both. `magmaOnly` leaves the goo out.
+ */
+const juiceAmounts = (goo: number, magma: number, magmaOnly: boolean): (Node | string)[] => {
+  if (magmaOnly) return [magmaAmount(magma)];
+  const parts: (Node | string)[] = [resourceAmount("r4", formatAmount(goo))];
+  if (magma > 0) parts.push(" and ", magmaAmount(magma));
+  return parts;
+};

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { attackWindowSeconds } from "../base/attackWindow.js";
 import type { RevengeEvent } from "./afterAttack.js";
 import {
   BUSY_RETRY_MINUTES,
@@ -199,10 +200,14 @@ describe("the runner's answers", () => {
 });
 
 describe("helpers", () => {
-  test("under attack is a live attackid whose last attack began under 7 minutes ago", () => {
+  test("under attack is a live attackid whose last attack's window (countdown, retreat grace, a spare minute) is still open", () => {
     expect(underAttackAt({ attackid: 0, attacks: [{ starttime: NOW }] }, NOW)).toBe(false);
     expect(underAttackAt({ attackid: 5, attacks: [{ starttime: NOW - 60 }] }, NOW)).toBe(true);
-    expect(underAttackAt({ attackid: 5, attacks: [{ starttime: NOW - 7 * MINUTE }] }, NOW)).toBe(false);
+    expect(underAttackAt({ attackid: 5, attacks: [{ starttime: NOW - attackWindowSeconds() }] }, NOW)).toBe(false);
+    expect(underAttackAt({ attackid: 5, attacks: [{ starttime: NOW - attackWindowSeconds() + 1 }] }, NOW)).toBe(true);
+    expect(
+      underAttackAt({ attackid: 5, attacks: [{ starttime: NOW - attackWindowSeconds() - 1, declarewar: true }] }, NOW)
+    ).toBe(true);
     expect(underAttackAt({ attackid: 5, attacks: [] }, NOW)).toBe(false);
   });
 

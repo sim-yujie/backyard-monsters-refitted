@@ -20,14 +20,24 @@ export const sendIgnoreList = async (client: ChatClient) => {
   });
 };
 
+/** The most players one account can mute in chat; Settings lists at most this many. */
+export const MAX_MUTED = 500;
+
+/** A user id as the ignore list stores it: a positive whole number, as text. */
+const isUserId = (value: unknown): value is string =>
+  typeof value === "string" && /^[1-9][0-9]{0,15}$/.test(value) && Number.isSafeInteger(Number(value));
+
 /**
  * Adds a user to a client's ignore list, then echoes the updated list back.
+ * Anything but a positive whole-number id is ignored, and so is a new id once
+ * the list holds {@link MAX_MUTED}: the list is sent back unchanged.
  *
  * @param {ChatClient} client - The client doing the ignoring.
  * @param {string} targetId - The user id to ignore.
  */
 export const addIgnore = async (client: ChatClient, targetId: string) => {
-  await redis.sadd(chatIgnoreKey(client.userId), targetId);
+  const key = chatIgnoreKey(client.userId);
+  if (isUserId(targetId) && (await redis.scard(key)) < MAX_MUTED) await redis.sadd(key, targetId);
   await sendIgnoreList(client);
 };
 

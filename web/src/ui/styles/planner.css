@@ -53,8 +53,7 @@
   letter-spacing: var(--display-tracking);
 }
 
-.planner-bar__slot,
-.planner-bar__summary {
+.planner-bar__slot {
   font-size: var(--text-sm);
 }
 
@@ -90,11 +89,11 @@
 }
 
 /*
- * F7's Align and Distribute menus.
+ * The View and Yard menus.
  *
- * The list is positioned against the group button rather than the bar, so it
- * hangs under whichever of the two was pressed, and it sits above the canvas
- * chrome for the same reason the bars do.
+ * The list is positioned against its trigger rather than the bar, so it hangs
+ * under the button that was pressed, and it sits above the canvas chrome for
+ * the same reason the bars do.
  */
 .planner-menu {
   position: relative;
@@ -171,75 +170,6 @@
   border-color: var(--colour-danger);
 }
 
-/* ── F3: the cost and time cells ──────────────────────────────────────── */
-
-.planner-cost {
-  display: flex;
-  align-items: stretch;
-  gap: var(--space-1);
-  flex-wrap: wrap;
-}
-
-.planner-cost__cell {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 72px;
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--colour-border);
-  background: var(--colour-surface-overlay);
-}
-
-.planner-cost__label {
-  font-size: var(--text-xs);
-  color: var(--colour-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-/* A resource cell is headed by its icon rather than its name (#93). */
-.planner-cost__label .res-icon {
-  display: block;
-  height: 16px;
-}
-
-.planner-cost__value {
-  font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
-}
-
-/*
- * Shortfall is a colour *and* a border, and the tooltip says "short" in words,
- * so the state never rests on hue alone (§4.3).
- */
-.planner-cost__cell--short {
-  border-color: var(--colour-danger);
-}
-
-.planner-cost__cell--short .planner-cost__value {
-  color: var(--colour-danger);
-}
-
-.planner-cost__cell--shiny .planner-cost__value {
-  color: var(--colour-warning);
-}
-
-/* The two plan cells (§5.3). Narrower: they carry a count, not an amount. */
-.planner-cost__cell--workers,
-.planner-cost__cell--unplaced {
-  min-width: 64px;
-}
-
-.planner-cost__cell--unplaced[hidden] {
-  display: none;
-}
-
-/* Coverage (#55): two figures in one cell, kept on one line. */
-.planner-cost__cell--coverage .planner-cost__value {
-  white-space: nowrap;
-}
-
 /* The same rule, for the cost rows inside the two batch panels. */
 .planner-cost__row--short {
   color: var(--colour-danger);
@@ -263,36 +193,196 @@
   color: var(--colour-text-muted);
 }
 
-/* ── Batch wall upgrade ───────────────────────────────────────────────── */
+/* ── Batch wall upgrade (owner, 2026-11-04: the level first, then the pick) ──
+   Top to bottom: Raise to (four big level buttons with the wall's picture),
+   Select all / Affordable / Clear, the pick and its cost chips, Upgrade N.
+   Every row fits 375 px wide, and every button is at least 44 px tall so it
+   can be hit one-handed. The panel's plate comes from the skin (Modern or
+   Classic) like any other panel. */
 
-.planner-walls__levels {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  flex-wrap: wrap;
-  margin-block: var(--space-2);
+.planner-walls__heading {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--colour-text-muted);
+  text-align: center;
 }
 
-.planner-walls__levels-label {
+.planner-walls__levels {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.planner-walls__level {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 84px;
+  padding: var(--space-1);
+  white-space: nowrap;
+}
+
+/* The skin's plate has a rim top and bottom: the wall sits inside it. */
+:root[data-skin] .planner-walls.panel .planner-walls__level {
+  min-height: 84px;
+  padding: 10px 0 12px;
+}
+
+.planner-walls__level-art {
+  width: 40px;
+  height: 30px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.planner-walls__level-name {
   font-size: var(--text-sm);
-  color: var(--colour-text-muted);
+  font-weight: 600;
 }
 
 .planner-walls__level[aria-pressed="true"] {
   background: var(--colour-accent);
+  border-color: var(--colour-accent);
   color: var(--colour-accent-text);
+  box-shadow: 0 0 0 2px var(--colour-accent);
 }
 
-.planner-walls__preview,
+/* On a skin's plate the chosen level takes the Upgrade button's plate, so it is
+   a different colour from every other level. */
+:root[data-skin] .planner-walls.panel .planner-walls__level[aria-pressed="true"] {
+  border-color: transparent;
+  border-width: 0 var(--skin-button-cap);
+  border-image-source: var(--skin-button);
+  border-image-slice: 0 var(--skin-button-slice) fill;
+  border-image-width: 0 var(--skin-button-cap);
+  background: none;
+  box-shadow: none;
+  color: #fff;
+  filter: drop-shadow(0 0 4px var(--colour-accent));
+  text-shadow:
+    0 2px 0 var(--skin-button-stroke), 2px 0 0 var(--skin-button-stroke), -2px 0 0 var(--skin-button-stroke), 0 -2px 0 var(--skin-button-stroke);
+}
+
+.planner-walls__level[disabled] .planner-walls__level-art {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+.planner-walls__gate {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+/* Three equal buttons in one row, even at 375 wide. */
+.planner-walls__tools {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+/* A centred flex row: a word wider than the space between the plate's ends
+   stays in the middle instead of running off to the right. */
+.planner-walls__tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 44px;
+  padding-inline: var(--space-2);
+  white-space: nowrap;
+  font-size: var(--text-sm);
+}
+
+:root[data-skin] .planner-walls.panel .planner-walls__tool {
+  padding-inline: 0;
+}
+
+.planner-walls__held {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-align: center;
+}
+
+.planner-walls__hint,
+.planner-walls__preview {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  text-align: center;
+}
+
 .planner-rearm__heading {
   margin: 0 0 var(--space-2);
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
 }
 
+.planner-walls__costs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.planner-walls__cost {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 32px;
+  padding: 2px var(--space-2) 2px var(--space-1);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-sunken);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.planner-walls__cost .res-icon {
+  height: 24px;
+  vertical-align: middle;
+}
+
+.planner-walls__cost .game-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.planner-walls__cost--short {
+  border-color: var(--colour-danger);
+  color: var(--colour-danger);
+}
+
+/* Words a screen reader hears; the chip shows the short figure. */
+.planner-walls__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .planner-walls__note {
   margin-block: var(--space-2) 0;
   font-size: var(--text-xs);
+  text-align: center;
+}
+
+/* The short line in the danger colour, never alone: the chips are red too. */
+.planner-walls__note--short {
+  color: var(--colour-danger);
+  font-size: var(--text-sm);
 }
 
 .planner-walls__actions,
@@ -300,6 +390,41 @@
   display: flex;
   gap: var(--space-2);
   margin-top: var(--space-3);
+}
+
+.planner-walls__go {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  font-variant-numeric: tabular-nums;
+}
+
+.planner-walls__go .game-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.planner-walls__go[disabled] .game-icon {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+
+/* A phone keeps the panel short, so the yard above it can still be boxed:
+   the level art shrinks and the gaps tighten; nothing is hidden. */
+.planner-phone--portrait .planner-walls__level {
+  min-height: 64px;
+}
+
+.planner-phone--portrait .planner-walls__level-art {
+  width: 40px;
+  height: 28px;
+}
+
+.planner-phone--portrait .planner-walls :is(.planner-walls__levels, .planner-walls__tools) {
+  margin-bottom: var(--space-2);
 }
 
 /* ── Trap re-arm ──────────────────────────────────────────────────────── */
@@ -413,13 +538,18 @@
 .planner-dock {
   position: absolute;
   left: var(--space-4);
-  top: calc(var(--planner-top, calc(var(--hud-height) + 56px)) + var(--space-2));
+  top: calc(var(--planner-top, calc(var(--hud-height) + 56px)) + 2px);
   bottom: calc(var(--planner-bottom, 56px) + var(--space-2));
-  width: min(420px, 38vw);
+  width: calc(min(420px, 38vw) + var(--dock-hang-x));
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  overflow-y: auto;
+  /* A panel's Close button and title plate hang past its frame. This room keeps
+     them inside the dock, so the dock never scrolls sideways under the panel. */
+  --dock-hang-x: 12px;
+  --dock-hang-y: 14px;
+  padding: var(--dock-hang-y) var(--dock-hang-x) 0 0;
+  overflow: hidden auto;
   pointer-events: none;
 }
 
@@ -428,67 +558,37 @@
   flex: 0 0 auto;
 }
 
+/* Upgrade walls opened from Find would sit under it, off the screen: it takes
+   the dock while it is open, and Find comes back when it closes. */
+.planner-dock:has(> .planner-walls) > :not(.planner-walls) {
+  display: none;
+}
+
+/* The friends row belongs to the yard, not the planner: its top rim would show
+   above the planner's bottom bar. */
+.overlay__layer:has(> .planner-dock) > .friends-bar {
+  display: none;
+}
+
 /*
- * The inspector's column, opposite the transient panels (design §4.1).
+ * The coverage panel's column, opposite the transient panels (design §4.1).
  *
- * A column of its own rather than a slot in the left dock: the inspector is up
- * for as long as anything is selected, and a checklist or a search box opening
+ * A column of its own rather than a slot in the left dock: the panel stays up
+ * while the player compares arrangements, and a checklist or a search box opening
  * above it in the same stack would shove it down the screen on every click.
  */
 .planner-dock--right {
   left: auto;
-  right: var(--space-4);
+  right: calc(var(--space-4) - var(--dock-hang-x));
   align-items: stretch;
 }
 
-/* ── The inspector ────────────────────────────────────────────────────── */
+/* ── The coverage panel (class names kept from the old inspector) ──────── */
 
-.planner-inspector__heading,
-.planner-inspector__plan-line {
+.planner-inspector__heading {
   margin: 0 0 var(--space-2);
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
-}
-
-.planner-inspector__status {
-  margin-bottom: var(--space-2);
-}
-
-.planner-inspector__ladder {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  flex-wrap: wrap;
-  margin-block: var(--space-3);
-}
-
-/* The reason nothing on the ladder can be pressed takes its own line under
-   the buttons rather than squeezing in beside them. */
-.planner-inspector__ladder .planner-inspector__note {
-  flex-basis: 100%;
-  margin-top: 0;
-}
-
-.planner-inspector__ladder-label {
-  font-size: var(--text-sm);
-  color: var(--colour-text-muted);
-}
-
-.planner-inspector__level {
-  font-size: var(--text-sm);
-  padding-inline: var(--space-2);
-  font-variant-numeric: tabular-nums;
-}
-
-.planner-inspector__level[aria-pressed="true"] {
-  background: var(--colour-accent);
-  color: var(--colour-accent-text);
-}
-
-.planner-inspector__plan {
-  margin-top: var(--space-3);
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--colour-border);
 }
 
 .planner-inspector__note {
@@ -524,50 +624,6 @@
   padding-block: 0;
 }
 
-.planner-inspector__actions {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  margin-top: var(--space-3);
-}
-
-/* Everything that only describes the building. Closed on every redraw: the
-   panel keeps no state, so the marker is the only thing that has to look
-   pressable. */
-.planner-inspector__details {
-  margin-top: var(--space-3);
-  border-top: 1px solid var(--colour-border);
-  padding-top: var(--space-2);
-}
-
-.planner-inspector__summary {
-  cursor: pointer;
-  font-size: var(--text-xs);
-  color: var(--colour-text-muted);
-  list-style: none;
-}
-
-.planner-inspector__summary::-webkit-details-marker {
-  display: none;
-}
-
-.planner-inspector__summary::before {
-  content: "▸ ";
-}
-
-.planner-inspector__details[open] .planner-inspector__summary::before {
-  content: "▾ ";
-}
-
-.planner-inspector__summary:hover,
-.planner-inspector__summary:focus-visible {
-  color: var(--colour-text);
-}
-
-.planner-inspector__details > :not(summary) {
-  margin-top: var(--space-2);
-}
-
 /* ── The Apply dialog ─────────────────────────────────────────────────── */
 
 .planner-apply__heading {
@@ -583,53 +639,10 @@
   font-size: var(--text-sm);
 }
 
-.planner-apply__list-title {
-  margin: var(--space-3) 0 var(--space-1);
-  font-size: var(--text-sm);
-}
-
-/*
- * Each group of rows carries a word in its heading as well as its colour, so
- * "starts now" and "cannot start" are never told apart by hue alone (§4.3).
- */
-.planner-apply__list-title--start {
-  color: var(--colour-success);
-}
-
-.planner-apply__list-title--wait {
-  color: var(--colour-warning);
-}
-
-.planner-apply__list-title--skip {
-  color: var(--colour-danger);
-}
-
-.planner-apply__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  font-size: var(--text-sm);
-  max-height: 24vh;
-  overflow-y: auto;
-}
-
-.planner-apply__list li {
-  padding-block: 1px;
-}
-
-.planner-apply__totals {
-  margin-top: var(--space-3);
-}
-
-.planner-apply__save-note {
-  margin: var(--space-2) 0 0;
-  font-size: var(--text-xs);
-}
-
-.planner-apply__save-as {
-  margin-top: var(--space-1);
-  font-size: var(--text-sm);
-  padding-inline: var(--space-2);
+/* Only offered when a loaded slot has unsaved edits; display: flex above
+   would otherwise beat the hidden attribute. */
+.planner-apply__check[hidden] {
+  display: none;
 }
 
 .planner-apply__actions {
@@ -882,7 +895,7 @@
 
 @media (width <= 900px) {
   .planner-dock {
-    width: min(92vw, 420px);
+    width: calc(min(92vw, 420px) + var(--dock-hang-x));
   }
 
   .planner-bar {
@@ -901,7 +914,7 @@
   }
 
   /*
-   * The inspector is a bottom sheet below 900 px (design §4, #45): full width
+   * The coverage panel is a bottom sheet below 900 px (design §4, #45): full width
    * along the bottom edge above the action bar, as tall as its content up to
    * half the screen, rather than a column down the right that covers the
    * yard's middle on a phone. The zoom and minimap, which share that corner,
@@ -923,19 +936,12 @@
     max-width: none;
   }
 
-  .overlay__layer:has(> .planner-dock--right > *) > .yard-viewtools {
+  .overlay__layer:not(.planner-sheet--none):has(> .planner-dock--right > *) > .yard-viewtools {
     display: none;
   }
 }
 
-/*
- * A desktop keeps the bottom bar's actions together at its right end (#192).
- * The summary gives way first: it is laid out at its narrowest, twelve
- * characters, so the costs and the actions share one row wherever they fit
- * (1440 px does), then it takes what is left and ends in an ellipsis. Where the row cannot hold
- * the costs and the actions, the actions move down as one row rather than
- * Apply alone, and the zoom and minimap follow the bar's height up.
- */
+/* A desktop keeps the bottom bar's actions together at its right end (#192). */
 .planner-bar__actions {
   display: flex;
   flex: none;
@@ -944,22 +950,95 @@
   margin-inline-start: auto;
 }
 
-@media (width > 620px) {
-  .planner-bar--bottom > .planner-bar__summary {
-    flex: 1 1 0;
-    min-width: 12ch;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
+/*
+ * Buttons only (owner, 2026-11-04: "is there really a need for the stuff in
+ * the bottom left anyway?"). The costs, readouts and summary are gone, so the
+ * desktop's bottom bar is Put back while something is in hand, then the
+ * actions at its right end. The Store chip is a phone's; a desktop stores from
+ * the top bar or with Delete.
+ */
+.planner-bar--bottom:not([data-layout]) {
+  gap: var(--space-2);
+  padding-inline: var(--space-2);
+}
+
+.planner-bar--bottom:not([data-layout]) > .planner-bar__spacer {
+  display: none;
+}
+
+.planner-bar--bottom:not([data-layout]) > .planner-bar__store-chip {
+  display: none;
+}
+
+.planner-bar--bottom:not([data-layout]) .planner-bar__actions {
+  gap: var(--space-1);
+}
+
+.planner-bar--bottom:not([data-layout]) .planner-bar__actions > .btn:not(.btn--primary, .planner-bar__icon) {
+  padding-inline: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+/*
+ * The icon buttons (owner, 2026-11-04): Undo, Redo, Select, Box, Find,
+ * Upgrade walls and Re-arm traps. Square, the painted icon centred; the words
+ * are the tooltip and the accessible name. A badge (Re-arm's count) sits on
+ * the top-right corner rather than widening the square.
+ */
+.planner-bar__icon {
+  position: relative;
+  display: inline-grid;
+  place-content: center;
+  place-items: center;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+}
+
+.planner-bar__face {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.planner-bar__face > .game-icon {
+  width: 28px;
+  height: 28px;
+}
+
+/* The label is the More sheet's; on a bar the icon stands alone. */
+.planner-bar__face-label {
+  display: none;
+}
+
+/* Words, until a button is painted: small, two lines at most. */
+.planner-bar__face--words {
+  font-size: 10px;
+  line-height: 1.1;
+  text-align: center;
+  white-space: normal;
+}
+
+.planner-bar__icon > .planner-bar__badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  margin: 0;
+  pointer-events: none;
+}
+
+.planner-bar__icon:disabled .planner-bar__face > .game-icon {
+  filter: grayscale(1);
+  opacity: 0.5;
 }
 
 /*
  * A phone (#151): the two bars wrapped onto five rows each and left a strip of
  * yard a fifth of the screen tall, most of it under the minimap. Each bar is
  * now as few rows as it can be: the tools are one row that scrolls sideways,
- * the bottom bar is its cost cells (scrolling), the summary line and the
- * actions (scrolling, Apply pinned at the end). The minimap steps aside while
+ * the bottom bar its actions (Apply pinned at the end). The minimap steps aside while
  * the planner is open; the zoom stays.
  */
 @media (width <= 620px) {
@@ -973,7 +1052,6 @@
   }
 
   .planner-bar--top,
-  .planner-bar--bottom .planner-cost,
   .planner-bar__actions {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -981,7 +1059,6 @@
   }
 
   .planner-bar--top > *,
-  .planner-bar--bottom .planner-cost > *,
   .planner-bar__actions > * {
     flex: none;
   }
@@ -991,19 +1068,10 @@
     display: none;
   }
 
-  .planner-bar--bottom .planner-cost,
   .planner-bar__actions {
     display: flex;
     flex: 1 0 100%;
     gap: var(--space-1);
-  }
-
-  .planner-cost__cell {
-    min-width: 64px;
-  }
-
-  .planner-bar__summary {
-    flex: 1 1 auto;
   }
 
   /* Apply stays in view however far the row is scrolled. */
@@ -1349,12 +1417,6 @@
   stroke-width: 2;
 }
 
-.planner-demo__axis {
-  stroke: var(--colour-info);
-  stroke-width: 1;
-  stroke-dasharray: 4 3;
-}
-
 .planner-demo__marquee {
   fill: color-mix(in srgb, var(--colour-info) 22%, transparent);
   stroke: var(--colour-info);
@@ -1425,18 +1487,6 @@
 /* The second click of a carry: pick up, move, put down. */
 .planner-demo__ping--late {
   animation-delay: 1.15s;
-}
-
-/* `view-box`, because the axis a mirror reflects about is a place on the
-   picture and not a place on the shape. The origin is set inline. */
-.planner-demo__flip-x {
-  animation-name: planner-demo-flip-x;
-  transform-box: view-box;
-}
-
-.planner-demo__flip-y {
-  animation-name: planner-demo-flip-y;
-  transform-box: view-box;
 }
 
 @keyframes planner-demo-move {
@@ -1530,38 +1580,6 @@
   }
 }
 
-@keyframes planner-demo-flip-x {
-  0%,
-  16% {
-    transform: scaleX(1);
-  }
-
-  58%,
-  88% {
-    transform: scaleX(-1);
-  }
-
-  100% {
-    transform: scaleX(1);
-  }
-}
-
-@keyframes planner-demo-flip-y {
-  0%,
-  16% {
-    transform: scaleY(1);
-  }
-
-  58%,
-  88% {
-    transform: scaleY(-1);
-  }
-
-  100% {
-    transform: scaleY(1);
-  }
-}
-
 /*
  * Reduced motion: the loop stops and every element is pinned at its *end*
  * state. A still picture of the "after" still answers "what does this button
@@ -1594,14 +1612,6 @@
   /* A click is a moment, and a moment has no still frame. */
   .planner-demo__ping {
     opacity: 0;
-  }
-
-  .planner-demo__flip-x {
-    transform: scaleX(-1);
-  }
-
-  .planner-demo__flip-y {
-    transform: scaleY(-1);
   }
 }
 
@@ -1723,6 +1733,47 @@
 @media (width <= 620px) {
   .planner-help__demo {
     width: 80px;
+  }
+}
+
+/*
+ * A short screen (a phone on its side, 812x375): the card has under 200 px
+ * between the planner's bars, and the line, the tabs and the pinned "Got it"
+ * left the text 30 px (patch 6.3). The tabs and the line share one row, the
+ * line in small type, and "Got it" scrolls with the text: the title bar's
+ * close stays in sight for leaving.
+ */
+@media (height <= 500px) {
+  .planner-help-dock {
+    padding: var(--space-1) var(--space-3);
+  }
+
+  .planner-help .panel__head {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-3);
+    padding-top: var(--space-2);
+  }
+
+  .planner-help .panel__head > .planner-help__tabs {
+    flex: none;
+    order: -1;
+  }
+
+  .planner-help .panel__head > .planner-help__intro {
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: var(--text-xs);
+  }
+
+  .planner-help .panel__body {
+    padding-block: var(--space-2);
+  }
+
+  .planner-help__footer {
+    position: static;
+    margin-bottom: 0;
+    padding-block: 0;
   }
 }
 
@@ -1863,9 +1914,9 @@
   display: contents;
 }
 
-/* Upright: Leave, the layout's name, the view switch and undo/redo. The tool
-   groups that are left in the top bar are the desktop's, and hidden. */
-.planner-bar--top[data-layout="portrait"] > .planner-bar__group:not(.planner-bar__group--history),
+/* Upright: Leave, the layout's name, the view switch, Undo and Redo. The
+   tool groups that are left in the top bar are the desktop's, and hidden. */
+.planner-bar--top[data-layout="portrait"] > .planner-bar__group,
 .planner-bar--top[data-layout="portrait"] > .planner-bar__spacer {
   display: none;
 }
@@ -1884,15 +1935,7 @@
   white-space: nowrap;
 }
 
-.planner-bar[data-layout] .planner-bar__group--history {
-  border-inline-start: 0;
-  padding-inline: 0;
-}
-
-.planner-bar[data-layout] .planner-bar__exit,
-.planner-bar[data-layout] .planner-bar__group--history > .btn,
-.planner-bar[data-layout] > .btn[aria-label="Undo"],
-.planner-bar[data-layout] > .btn[aria-label="Redo"] {
+.planner-bar[data-layout] .planner-bar__exit {
   font-size: var(--text-lg);
   line-height: 1;
   padding-inline: var(--space-2);
@@ -1903,74 +1946,88 @@
   display: none;
 }
 
-/* The full cost cells stay behind the one-line cost until it is tapped. */
-.planner-bar--bottom[data-layout] > .planner-cost {
-  display: none;
+/*
+ * A phone's bottom bar (owner, 2026-11-04: "ensure the mobile layout is
+ * intuitive too"): one row of 44 px targets under the thumb, Box, Upgrade
+ * walls, the drawer and More on the left and Apply on the right; about 332 px,
+ * so it fits 360 px and nothing scrolls (Undo and Redo are in the top bar
+ * upright, see `PlannerBar.arrange`). The Store chip and Put back
+ * take a row of their own above it, only while there is something to store
+ * or put back.
+ */
+.planner-bar--bottom[data-layout] {
+  padding-bottom: calc(var(--space-1) + env(safe-area-inset-bottom, 0px));
 }
 
-.planner-bar--bottom[data-layout].planner-bar--costs-open > .planner-cost {
-  display: flex;
-  flex: 1 0 100%;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
+.planner-bar--bottom[data-layout] > :is(.planner-bar__store-chip, .planner-bar__put-back) {
+  flex: none;
+  min-height: 36px;
 }
 
-/* The summary keeps room for a sentence; the cost line and the chips wrap
-   under it rather than squeezing it to a word a line. */
-.planner-bar--bottom[data-layout] > .planner-bar__summary {
-  flex: 1 1 12rem;
-  min-width: 0;
+.planner-bar--bottom[data-layout] .planner-bar__actions {
+  gap: 2px;
+  overflow: visible;
 }
 
-.planner-bar__cost-line {
-  display: inline-flex;
-  flex: 0 1 auto;
-  min-width: 0;
-  align-items: center;
-  gap: var(--space-2);
+.planner-bar--bottom[data-layout] .planner-bar__actions > .btn {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.planner-bar--bottom[data-layout] .planner-bar__icon,
+.planner-bar--top[data-layout="portrait"] > .planner-bar__icon {
+  width: 44px;
+  height: 44px;
+}
+
+.planner-bar--bottom[data-layout] :is(.planner-bar__inventory, .planner-bar__more) {
   padding-inline: var(--space-2);
-  overflow: hidden;
-  font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+}
+
+/* The dots' colour; low enough that a pressed More takes the accent text. */
+.planner-bar .planner-bar__more {
   color: var(--colour-text);
 }
 
-.planner-bar__cost-part {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
+/* Three dots drawn rather than typed: the game font has no "⋯" (U+22EF), so
+   the glyph came out blank. The text stays for nothing visual; the name is
+   the aria-label "More". The dots sit on a pseudo-element, so whatever the
+   skins paint as the button's own background (the gold plate while the sheet
+   is open, the hover wash) never wipes them; the lead saw a blank plate when
+   they were the button's background (4 Nov). */
+.planner-bar .btn.planner-bar__more {
+  position: relative;
+  font-size: 0;
+  line-height: 1;
 }
 
-.planner-bar__cost-part .res-icon {
-  height: 14px;
+.planner-bar .btn.planner-bar__more::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle, currentColor 0 3px, transparent 3.6px),
+    radial-gradient(circle, currentColor 0 3px, transparent 3.6px),
+    radial-gradient(circle, currentColor 0 3px, transparent 3.6px);
+  background-size: 8px 8px;
+  background-repeat: no-repeat;
+  background-position:
+    calc(50% - 10px) 50%,
+    50% 50%,
+    calc(50% + 10px) 50%;
 }
 
-.planner-bar__cost-part--short {
-  color: var(--colour-danger);
-}
-
-.planner-bar__cost-caret {
-  color: var(--colour-text-muted);
-}
-
-/* Upright: Box, the drawer and More on the left, Apply on the right. */
+/* Upright: Apply on the right, the rest from the left. */
 .planner-bar--bottom[data-layout="portrait"] .planner-bar__actions > .btn--primary {
   margin-inline-start: auto;
 }
 
-/* Sideways: one row, the summary giving way first. */
+/* Sideways: one row. */
 .planner-bar--bottom[data-layout="landscape"] {
   flex-wrap: nowrap;
   gap: var(--space-2);
   padding: var(--space-1) var(--space-3) calc(var(--space-1) + env(safe-area-inset-bottom, 0px));
-}
-
-.planner-bar--bottom[data-layout="landscape"] > .planner-bar__summary {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .planner-bar--bottom[data-layout="landscape"] > .planner-bar__spacer {
@@ -1978,18 +2035,14 @@
 }
 
 .planner-bar--bottom[data-layout="landscape"] > .planner-bar__actions {
-  flex: none;
+  flex: 1 1 auto;
   flex-wrap: nowrap;
   gap: var(--space-1);
   margin: 0;
 }
 
-.planner-bar--bottom[data-layout="landscape"].planner-bar--costs-open {
-  flex-wrap: wrap;
-}
-
-.planner-bar--bottom[data-layout="landscape"].planner-bar--costs-open > .planner-cost {
-  order: -1;
+.planner-bar--bottom[data-layout="landscape"] .planner-bar__actions > .btn--primary {
+  margin-inline-start: auto;
 }
 
 /* No zoom slider or minimap on a phone: pinch zooms, and Fit stays (#45). */
@@ -2010,7 +2063,7 @@
 }
 
 /* A sheet sits where Fit is; Fit comes back when the sheet goes. */
-.planner-phone:has(> .planner-dock > *) > .yard-viewtools,
+.planner-phone:not(.planner-sheet--none):has(> .planner-dock > *) > .yard-viewtools,
 .planner-phone:has(> .planner-more:not([hidden])) > .yard-viewtools {
   display: none;
 }
@@ -2021,7 +2074,7 @@
 .planner-phone--portrait > .planner-dock {
   top: auto;
   left: var(--space-2);
-  right: var(--space-2);
+  right: calc(var(--space-2) - var(--dock-hang-x));
   width: auto;
   max-height: min(
     55vh,
@@ -2034,12 +2087,36 @@
 .planner-phone--landscape > .planner-dock,
 .planner-phone--landscape > .planner-more {
   left: auto;
-  right: var(--space-2);
-  width: min(380px, 46vw);
-  top: calc(var(--planner-top, 0px) + var(--space-2));
+  right: calc(var(--space-2) - var(--dock-hang-x, 0px));
+  width: calc(min(380px, 46vw) + var(--dock-hang-x, 0px));
+  top: calc(var(--planner-top, 0px) + 2px);
   bottom: calc(var(--planner-bottom, 56px) + var(--space-2));
   max-height: none;
   justify-content: flex-start;
+}
+
+/* The walls panel shows all its steps on a phone without scrolling: a shorter
+   level row, and the longest button word stays on its plate. */
+.planner-phone--portrait > .planner-dock:has(> .planner-walls) {
+  max-height: min(
+    64vh,
+    calc(100vh - var(--planner-top, 0px) - var(--planner-bottom, 0px) - 2 * var(--space-2))
+  );
+}
+
+:root[data-skin] .planner-phone .planner-walls.panel .planner-walls__level {
+  min-height: 70px;
+  padding: 7px 0 9px;
+}
+
+.planner-phone .planner-walls__level-art {
+  width: 32px;
+  height: 24px;
+}
+
+.planner-phone .planner-walls__tool {
+  padding-inline: 0;
+  font-size: var(--text-xs);
 }
 
 /* The panel shrinks to the sheet and scrolls inside, keeping its title. */
@@ -2064,6 +2141,15 @@
 .planner-sheet--more > .planner-dock,
 .planner-sheet--inspector > .planner-dock:not(.planner-dock--right),
 .planner-sheet--dock > .planner-dock--right {
+  display: none;
+}
+
+/*
+ * No sheet at all while a building is moved, and after the drop until a tap
+ * (`shownSheet`): a player could not line a building up under its own sheet.
+ */
+.planner-sheet--none > .planner-dock,
+.planner-sheet--none > .planner-more {
   display: none;
 }
 
@@ -2126,6 +2212,22 @@
   background: var(--colour-surface-control);
 }
 
+/* In the list an icon button is a row like the rest: the icon, then its words. */
+.planner-more__list .planner-bar__icon {
+  display: inline-flex;
+  height: auto;
+  padding-inline: var(--space-2);
+}
+
+.planner-more__list .planner-bar__face-label {
+  display: inline;
+}
+
+.planner-more__list .planner-bar__icon > .planner-bar__badge {
+  position: static;
+  margin-inline-start: auto;
+}
+
 /* A menu shown as its rows (`Menu.setInline`): no trigger, no floating list. */
 .planner-menu--inline {
   display: block;
@@ -2165,7 +2267,20 @@
   bottom: calc(var(--menu-bottom, 0px) + var(--space-1));
 }
 
-/* ── The building sheet's row: Select all, Mirror, Align, Distribute ─────── */
+/*
+ * ── More ▸ Selection on a phone: Select all of a type ─────────────────────
+ *
+ * This row used to sit in a building sheet that opened over the yard on every
+ * selection; the sheet was removed on 2026-11-03 (nothing may open over the
+ * yard while a building is moved), and the row moved to the top of More.
+ */
+
+.planner-more__section--selection .planner-inspector__tools:not([hidden]) {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-1);
+}
 
 .planner-inspector__tools {
   display: flex;
@@ -2173,45 +2288,8 @@
   gap: var(--space-1);
 }
 
-.planner-inspector__arrange {
-  display: contents;
-}
-
 .planner-inspector__tools[hidden],
-.planner-inspector__arrange[hidden],
 .planner-inspector__select-all[hidden] {
-  display: none;
-}
-
-.planner-inspector__arrange > .planner-bar__group {
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  padding: 0;
-  border: 0;
-}
-
-/*
- * Align and Distribute open in place, under their button and the sheet's full
- * width, rather than as a floating list: the sheet's blur makes it the box a
- * fixed list is placed in, and its scrolling body would clip one.
- */
-.planner-inspector__arrange .planner-menu {
-  flex-direction: column;
-}
-
-.planner-inspector__arrange .planner-menu:has(> .planner-menu__list:not([hidden])) {
-  flex-basis: 100%;
-}
-
-.planner-phone .planner-inspector__arrange .planner-menu > .planner-menu__list {
-  position: static;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-top: var(--space-1);
-  max-width: none;
-}
-
-.planner-phone .planner-inspector__arrange .planner-menu > .planner-menu__list[hidden] {
   display: none;
 }
 

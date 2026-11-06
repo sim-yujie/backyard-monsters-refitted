@@ -6,13 +6,11 @@
  * before-and-after positions is 400 small objects, and undoing it is the same
  * loop as doing it. The design doc is explicit that this has to exist from day
  * one rather than be retrofitted, because every later mutation — place, store,
- * mirror, align, load — pushes onto the same stack.
+ * load — pushes onto the same stack.
  *
  * Nothing here knows what a plan is: a command is two functions and a label, so
  * this file stays a stack and the plan stays the thing being changed.
  */
-
-import type { NodePlan } from "./placement";
 
 /** Depth the design doc specifies. */
 export const UNDO_DEPTH = 200;
@@ -33,20 +31,6 @@ export interface MoveEntry {
   readonly fromY: number;
   readonly toX: number;
   readonly toY: number;
-}
-
-/**
- * One building's planned upgrade before and after an edit.
- *
- * Whole values rather than a level, because clearing a plan and setting one
- * are the same edit from the stack's point of view and because `order` has to
- * come back exactly as it was: undoing a re-aimed plan that kept its place in
- * the queue must not send it to the back.
- */
-export interface PlanEntry {
-  readonly id: number;
-  readonly before: NodePlan | null;
-  readonly after: NodePlan | null;
 }
 
 /**
@@ -197,7 +181,7 @@ export class CommandStack {
 /**
  * A move of one or more buildings, as before-and-after positions.
  *
- * Positions rather than a single delta because a load or an align moves each
+ * Positions rather than a single delta because a load moves each
  * building by a different amount, and one shape for every positional command
  * means undo never has to ask which kind it is holding.
  *
@@ -214,23 +198,6 @@ export const moveCommand = (
   label,
   apply: () => move(entries, false),
   revert: () => move(entries, true),
-});
-
-/**
- * A planned upgrade set or cleared on one or more buildings.
- *
- * The same shape as a move for the same reason: planning ten towers to level 5
- * from a multi-selection is one press and has to be one Ctrl+Z, and the stack
- * should not have to know which kind of edit it is holding.
- */
-export const planCommand = (
-  entries: readonly PlanEntry[],
-  setPlans: (entries: readonly PlanEntry[], reverse: boolean) => void,
-  label: string,
-): PlanCommand => ({
-  label,
-  apply: () => setPlans(entries, false),
-  revert: () => setPlans(entries, true),
 });
 
 /**

@@ -29,9 +29,11 @@ export interface LayoutsControllerOptions {
    */
   readOnly?: boolean;
   /**
-   * The outpost the planner is over, sent with every slot call so the server
-   * refuses it (`notInOutpost`): Flash's planner could not save or load
-   * layouts in an outpost. Undefined on the main yard.
+   * The Inferno yard the planner is over, sent with every slot call so the
+   * server reads and writes the Inferno yard's own slots, never the main
+   * yard's (owner decision 2026-10-29). An outpost's would be refused
+   * (`notInOutpost`), so an outpost's planner is read-only here. Undefined on
+   * the main yard.
    */
   baseid?: string;
   onLoad: (layout: Layout) => void;

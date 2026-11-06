@@ -10,6 +10,9 @@ import {
   STATUS_ICON_FILES,
   StatusIconRow,
   StatusIconTextures,
+  TOWER_ICON_SIZE,
+  TOWER_STATUS_EFFECTS,
+  TowerStatusIcons,
   badgeScale,
   statusIconUrl,
   statusRow,
@@ -72,6 +75,8 @@ describe("statusesOf", () => {
     expect(idsOf(creepOf({ enraged: true }))).toEqual(["enraged"]);
     expect(idsOf(creepOf({ puttied: true }))).toEqual(["puttied"]);
     expect(idsOf(creepOf({ lootBoosted: true }))).toEqual(["lootBoosted"]);
+    expect(idsOf(creepOf({ swarming: true }))).toEqual(["swarming"]);
+    expect(idsOf(creepOf({ weakened: true }))).toEqual(["weakened"]);
   });
 
   it("keeps the registry's order whatever order the flags are in, and carries the venom's stacks", () => {
@@ -240,5 +245,48 @@ describe("StatusIconRow", () => {
     row.show(statusesOf(creepOf({ burning: true })), 0, 0, 0);
     expect(row.container.visible).toBe(false);
     row.destroy();
+  });
+});
+
+describe("a tower's stickers (owner, beta 6)", () => {
+  /** Pictures in already for the tower effects. */
+  const towerTextures = async (): Promise<StatusIconTextures> => {
+    const textures = new StatusIconTextures(() => Promise.resolve(Texture.WHITE));
+    for (const effect of TOWER_STATUS_EFFECTS) textures.get(effect);
+    await flush();
+    return textures;
+  };
+
+  it("has a shipped picture for each tower effect", () => {
+    for (const effect of TOWER_STATUS_EFFECTS) {
+      expect(existsSync(path.join(PUBLIC_ICONS, `${effect.id}.webp`))).toBe(true);
+    }
+    expect(existsSync(path.join(PUBLIC_ICONS, "thorns.webp"))).toBe(true);
+  });
+
+  it('shows "weakened" over the bar of each weakened tower, and drops it when it ends', async () => {
+    const bars: Record<number, { x: number; y: number }> = { 7: { x: 100, y: 50 }, 8: { x: 300, y: 80 } };
+    const towers = new TowerStatusIcons((id) => bars[id] ?? null, await towerTextures());
+    towers.sync([7]);
+    expect(towers.shown).toEqual({ 7: ["weakened"] });
+    towers.sync([7, 8, 99]);
+    // 99 has no bar (not drawn): no sticker for it.
+    expect(towers.shown).toEqual({ 7: ["weakened"], 8: ["weakened"] });
+    towers.sync([8]);
+    expect(towers.shown).toEqual({ 8: ["weakened"] });
+    towers.sync([]);
+    expect(towers.shown).toEqual({});
+    towers.destroy();
+  });
+
+  it("sits centred just above the bar, a tower-sized sticker", async () => {
+    const towers = new TowerStatusIcons(() => ({ x: 100, y: 50 }), await towerTextures());
+    towers.sync([3]);
+    const row = towers.root.children[0]!;
+    const icon = row.children.find((child) => child.visible) as Sprite;
+    expect(icon.x).toBe(100);
+    expect(icon.y).toBe(Math.round(50 - ICON_GAP - TOWER_ICON_SIZE / 2));
+    expect(icon.width).toBeCloseTo(TOWER_ICON_SIZE, 6);
+    towers.destroy();
   });
 });

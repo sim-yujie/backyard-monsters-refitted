@@ -76,8 +76,9 @@ const TEST_TIPS: Partial<Record<GuideScreen, readonly Tip[]>> = {
     { text: "Threads.", target: TutTarget.MAIL_THREADS },
     { text: "Nothing to point at." },
   ],
-  [GuideScreen.MR2]: [{ text: "Range.", target: TutTarget.MR2_RANGE }],
+  [GuideScreen.MR2]: [{ text: "Find.", target: TutTarget.MR2_FIND }],
   [GuideScreen.SHOP]: [{ text: "Workers.", target: TutTarget.SHOP_WORKERS, side: "below" }],
+  [GuideScreen.ATTACK]: [{ text: "Drop on open ground." }],
 };
 
 const setup = (options: { touch?: boolean; send?: (screen: GuideScreen) => Promise<unknown> } = {}) => {
@@ -267,6 +268,20 @@ describe("when tips show by themselves", () => {
     expect(view()!.shown).toMatchObject({ text: "Click Collect all." });
   });
 
+  it("does not start the attack's tips on the yard when the guided start ends there", async () => {
+    const { bus, view, runner: tips } = setup();
+    tips.setOnboarding(onboarding("active"));
+    // The attack and the yard both hand over the overlay's content layer, which stays on the page.
+    const layer = yard();
+    bus.emit("screen", { id: GuideScreen.ATTACK, root: layer, header: null });
+    bus.emit("screen", { id: GuideScreen.YARD, root: layer, header: null });
+    await settle();
+
+    tips.setOnboarding(onboarding("done"));
+    await settle();
+    expect(view()?.shown ?? null).toBeNull();
+  });
+
   it("stops unseen tips when the guided start begins", async () => {
     const { bus, view, send, runner: tips } = setup();
     tips.setOnboarding(onboarding("legacy"));
@@ -399,11 +414,11 @@ describe("seen when the player moves on", () => {
     view()!.attached = false;
 
     const map = box();
-    control(TutTarget.MR2_RANGE, map);
+    control(TutTarget.MR2_FIND, map);
     bus.emit("screen", { id: GuideScreen.MR2, root: map, header: null });
     expect(send).toHaveBeenCalledWith(GuideScreen.YARD);
     await settle();
-    expect(view()!.shown).toMatchObject({ text: "Range." });
+    expect(view()!.shown).toMatchObject({ text: "Find." });
   });
 
   it("a replay never marks anything seen", async () => {

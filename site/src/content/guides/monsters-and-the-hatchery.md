@@ -39,7 +39,9 @@ Need space? The **Monster Juicer** turns monsters you no longer want back into g
 
 ## Champions
 
-Build a **Champion Cage** to raise a champion: one big, powerful monster that fights alongside your army. Feed your champion every day to keep it growing.
+Build a **Champion Cage** to raise a champion: one big, powerful monster that fights alongside your army. It is ready at once. Feed your champion every day to keep it growing.
+
+When it attacks, you choose what it goes for: see [Champion Modes](/guides/champion-modes/).
 
 ## A few early monsters
 

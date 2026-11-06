@@ -15,10 +15,25 @@ import { compareListOrder, housingSpace, monsterEntry, type MonsterEntry } from 
  * level's space. A building part-way through an upgrade houses at its old
  * level, because `l` only moves when the upgrade finishes. The server has no
  * separate "under repair" rule: a damaged building counts by its health alone.
+ *
+ * On the Inferno yard (its save's `type` is `inferno`, Inferno WP 2.4) the
+ * housing is its Compounds, the Housing Bunker type 128 at the Inferno's
+ * 200/300/520/780/1140/1820 (`HOUSING.as:65`), and the expansion is the
+ * Inferno shop's `EXHI`, as the server counts them (`deriveHousingCapacity`).
  */
 
 /** Housing type id (`client/scripts/YARD_PROPS.as:1553`). */
 export const HOUSING_TYPE = 15;
+
+/** The Inferno yard's housing, the Compound (`HOUSINGBUNKER`, `INFERNOYARDPROPS.as:5995`). */
+export const HOUSING_BUNKER_TYPE = 128;
+
+/** Whether a save is the Inferno yard's. */
+const isInfernoSave = (save: Pick<BaseLoadResponse, "type">): boolean => save.type === "inferno";
+
+/** The housing building type of the yard `save` is. */
+export const housingTypeOf = (save: Pick<BaseLoadResponse, "type">): number =>
+  isInfernoSave(save) ? HOUSING_BUNKER_TYPE : HOUSING_TYPE;
 
 /** A Housing building at or below this health houses nothing (`client/scripts/HOUSING.as:66-67`). */
 export const HOUSING_MIN_HEALTH = 10;
@@ -34,6 +49,15 @@ export const HOUSING_EXPANSION = {
   seconds: 86_400,
   multiplier: 1.25,
 } as const;
+
+/** The Inferno's Housing Expansion, `EXHI`: the same 375 Shiny for 1.25x over 24 hours. */
+export const INFERNO_HOUSING_EXPANSION = { ...HOUSING_EXPANSION, item: "EXHI" } as const;
+
+/** The Housing Expansion the yard `save` is sells. */
+export const housingExpansionOf = (
+  save: Pick<BaseLoadResponse, "type">,
+): typeof HOUSING_EXPANSION | typeof INFERNO_HOUSING_EXPANSION =>
+  isInfernoSave(save) ? INFERNO_HOUSING_EXPANSION : HOUSING_EXPANSION;
 
 /** The `hstage` value of a hatchery whose monster is done and waits for room (`production.ts`). */
 const STAGE_WAITING = 2;
@@ -81,16 +105,18 @@ export const housedCount = (save: Pick<BaseLoadResponse, "monsters">, id: string
 
 /** When the running Housing Expansion ends (unix seconds), or null when none runs. */
 export const expansionEndsAt = (save: BaseLoadResponse, now: number): number | null => {
-  const ends = Number(save.storedata?.[HOUSING_EXPANSION.item]?.e);
+  const ends = Number(save.storedata?.[housingExpansionOf(save).item]?.e);
   return Number.isFinite(ends) && ends > now ? ends : null;
 };
 
 /** Every Housing building in the yard, by id, with what each houses and why not. */
 export const housingBuildings = (save: BaseLoadResponse, now: number): HousingBuildingRow[] => {
   const expanded = expansionEndsAt(save, now) !== null;
+  const type = housingTypeOf(save);
+  const kind = isInfernoSave(save) ? "inferno" : "main";
   const rows: HousingBuildingRow[] = [];
   for (const [key, building] of Object.entries(save.buildingdata ?? {})) {
-    if (!building || Number(building.t) !== HOUSING_TYPE) continue;
+    if (!building || Number(building.t) !== type) continue;
     const id = Number(building.id ?? key);
     const level = Math.max(1, Math.floor(Number(building.l ?? 1)) || 1);
     const health = save.buildinghealthdata?.[String(building.id ?? key)] ?? building.hp;
@@ -100,7 +126,7 @@ export const housingBuildings = (save: BaseLoadResponse, now: number): HousingBu
         : health !== undefined && Number(health) <= HOUSING_MIN_HEALTH
           ? "damaged"
           : null;
-    const room = capacity(HOUSING_TYPE, level);
+    const room = capacity(type, level, kind);
     rows.push({
       id,
       level,

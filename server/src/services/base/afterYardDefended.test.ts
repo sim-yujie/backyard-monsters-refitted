@@ -97,7 +97,7 @@ describe("a real defender", () => {
         targetid: PLAYER,
         messagetype: YARD_ATTACKED,
         subject: "Bramble attacked your yard",
-        message: "It was left 47% damaged, and 1,234 Twigs and 500 Goo were looted.",
+        message: "It was left 47% damaged. 1,234 Twigs and 500 Goo were looted.",
         coords: null,
         baseid: "70001",
         targetUnread: 1,
@@ -119,9 +119,10 @@ describe("a real defender", () => {
     expect(jobs).toEqual([]);
   });
 
-  test("hears of housed monsters lost", async () => {
+  test("keeps the housed monsters lost in the notice's numbers, not its words (owner, 27 Oct)", async () => {
     await afterYardDefended(request, defence({ housedLost: 3, defenderDelta: null }));
-    expect(messages[0]!.message).toBe("It was left 47% damaged, nothing was looted, and 3 housed monsters were lost.");
+    expect(messages[0]!.message).toBe("It was left 47% damaged. Nothing was looted.");
+    expect(messages[0]!.attackstats).toEqual({ damage: 47, loot: {}, housedLost: 3 });
   });
 });
 
@@ -142,7 +143,7 @@ describe("a Map Room 2 main yard (#361)", () => {
       targetid: PLAYER,
       messagetype: YARD_ATTACKED,
       subject: "Bramble attacked your yard",
-      message: "It was left 47% damaged, and 1,234 Twigs and 500 Goo were looted.",
+      message: "It was left 47% damaged. 1,234 Twigs and 500 Goo were looted.",
       coords: null,
       targetUnread: 1,
     });

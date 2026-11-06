@@ -1,3 +1,4 @@
+import "./polyfills";
 import "@/ui/styles/tokens.css";
 import "@/ui/styles/ui.css";
 import "@/ui/styles/maproom.css";
@@ -12,15 +13,25 @@ import "@/ui/styles/repair.css";
 import "@/ui/styles/recycle.css";
 import "@/ui/styles/takeover.css";
 import "@/ui/styles/moveyards.css";
+import "@/ui/styles/skin.css";
 
 import { App } from "@/app/App";
 import { installErrorLog } from "@/game/bugReport/errorLog";
 import { installErrorReporter } from "@/game/bugReport/errorReporter";
+import { UpdateCheck, fetchLivePage, runningBundleName } from "@/app/updateCheck";
+import { UpdatePrompt } from "@/ui/UpdatePrompt";
+import { applySkin } from "@/ui/skin";
+import { applyFontChoice } from "@/ui/fontChoice";
 
 // The bug report's list of recent errors, from the very start, and the
 // owner's dashboard's copy of uncaught errors (the Privacy Policy says so).
 installErrorLog();
 installErrorReporter();
+
+// Painted windows: steel in Modern, Flash parchment in Classic (`?skin=` to test).
+applySkin();
+// The player's Font choice (Account Settings): the game font, Clear or Extra readable.
+applyFontChoice();
 
 const host = document.querySelector<HTMLElement>("#game-root");
 
@@ -34,6 +45,14 @@ void app.start().catch((error: unknown) => {
   console.error("Failed to start:", error);
   host.textContent = "The game could not start. Check the console for details.";
 });
+
+// "New version": a tab left open across a release learns the live page now
+// runs another build. A dev build serves /src/main.ts and has nothing to compare.
+const running = runningBundleName();
+if (running) {
+  const prompt = new UpdatePrompt(host);
+  new UpdateCheck({ running, fetchPage: fetchLivePage, onNewVersion: () => prompt.show() }).start();
+}
 
 // A handle for measuring in the browser: frame cost, renderer state, forced
 // redraws. Development only, so nothing ships with a global back door.

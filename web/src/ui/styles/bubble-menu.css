@@ -1,0 +1,291 @@
+/*
+ * The bubble menu (beta 6 desk sample, `ui/yard/BubbleMenu.ts`): More on the
+ * yard's bottom row, beside Monsters, and Layout, Goals, Alerts, Defences and
+ * Mail standing up out of it as bubbles in one straight column, each word on
+ * a sign to the bubble's left (owner, beta 6: straight, not an arc).
+ *
+ * The fan is a zero-sized point at the centre of More's disc; each bubble
+ * hangs there by its disc's centre and flies out to its place, the k-th
+ * (`--bubble-k`, set by the script, 1 nearest More) `--bubble-start` plus
+ * k-1 steps straight up. The column has room for a sixth (Quests) under the
+ * top bar at every size. They fly out one after the
+ * other and fold back the other way round. On a phone on its side the
+ * bubbles stand in rows instead (`--bubble-col`, `--bubble-row`).
+ *
+ * With the fan on, the dock wears `yard-dock--bubbles` and has no phone Menu,
+ * so this file also places the dock's buttons (the layout pass, beta 6): the
+ * ways out (the switcher over Map) in the bottom-left corner, the yard's own
+ * buttons in the bottom-right one around Build, the same on a desktop and a
+ * phone. With the switch off nothing here applies and yard-hud.css's places
+ * stand.
+ *
+ * Every colour comes from tokens.css and the dock's own classes, so the
+ * Classic and Modern looks dress the bubbles as they dress the dock.
+ */
+
+.bubble-menu {
+  /* Half More's disc: where the fan hangs from, from the box's top. */
+  --bubble-anchor: 34px;
+  --bubble-disc: 56px;
+  --bubble-start: 84px;
+  --bubble-step: 64px;
+
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.bubble-menu[hidden] {
+  display: none;
+}
+
+/* The bottom row: More, Monsters and Build, More in Mail's old place. */
+.yard-dock__right > .bubble-menu {
+  right: calc(var(--dock-row) + var(--dock-pitch));
+  bottom: 30px;
+  width: var(--dock-slot);
+}
+
+.bubble-menu > .yard-dock__button--more {
+  width: 100%;
+}
+
+.yard-dock__badge.bubble-menu__badge {
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+/* More's three dots turn a quarter while the fan is out. */
+.yard-dock__button--more .yard-dock__disc > svg {
+  transition: transform var(--motion-normal) var(--easing);
+}
+
+.bubble-menu--open .yard-dock__button--more .yard-dock__disc > svg {
+  transform: rotate(90deg);
+}
+
+.bubble-menu__fan {
+  position: absolute;
+  top: var(--bubble-anchor);
+  right: 50%;
+  width: 0;
+  height: 0;
+}
+
+.bubble-menu__fan[hidden] {
+  display: none;
+}
+
+/* A bubble: hung by its disc's centre, folded into More while shut. */
+.bubble-menu__fan > .yard-dock__button {
+  position: absolute;
+  right: calc(var(--bubble-disc) / -2);
+  bottom: calc(var(--bubble-disc) / -2);
+  flex-direction: row-reverse;
+  gap: var(--space-2);
+  opacity: 0;
+  transform: scale(0.2);
+  transform-origin: calc(100% - var(--bubble-disc) / 2) 50%;
+  transition:
+    transform 170ms cubic-bezier(0.4, 0, 1, 1),
+    opacity 140ms linear;
+  transition-delay: calc((var(--bubble-count, 1) - var(--bubble-k, 1)) * 25ms);
+  pointer-events: none;
+}
+
+.bubble-menu--open .bubble-menu__fan > .yard-dock__button {
+  opacity: 1;
+  transform: translateY(calc((var(--bubble-start) + (var(--bubble-k, 1) - 1) * var(--bubble-step)) * -1))
+    scale(1);
+  transition:
+    transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 160ms linear;
+  transition-delay: calc((var(--bubble-k, 1) - 1) * 40ms);
+  pointer-events: auto;
+}
+
+.bubble-menu__fan .yard-dock__disc {
+  width: var(--bubble-disc);
+  height: var(--bubble-disc);
+}
+
+/* ── The dock's places with the fan on ───────────────────────────────── */
+
+/* A desktop, and any screen short of 780px: Collect all (an outpost's Kits)
+   ends the bottom row, left of More, its ring level with the discs. The
+   zoom rail keeps the middle of the right edge. */
+.yard-dock--bubbles .yard-dock__right > .yard-collect,
+.yard-dock--bubbles .yard-dock__right > .yard-dock__button--kits {
+  top: auto;
+  right: calc(var(--dock-row) + 2 * var(--dock-pitch));
+  bottom: 16px;
+  transform: none;
+}
+
+.yard-dock--bubbles .yard-dock__right > .yard-dock__button--kits {
+  bottom: 30px;
+  width: var(--dock-slot);
+}
+
+/* The friends bar stands beside Map, the ways out and the friends in one
+   corner, rather than alone in the middle of the bottom edge, and keeps
+   clear of the shorter row. */
+@media (width > 620px) and (height > 500px) {
+  .overlay__layer.overlay__layer:has(> .yard-dock--bubbles) > .friends-bar {
+    --friends-bar-right: 470px;
+    margin-inline: 0;
+  }
+}
+
+/* A tall desktop: the right edge is one column, the zoom rail over Collect
+   all over Build, so the yard's middle is free and every button is in the
+   one corner; the bottom row is More, Monsters and Build. */
+@media (width > 620px) and (height > 780px) {
+  .yard-dock--bubbles .yard-dock__right > .yard-collect,
+  .yard-dock--bubbles .yard-dock__right > .yard-dock__button--kits {
+    right: 26px;
+    bottom: 158px;
+  }
+
+  .yard-dock--bubbles .yard-dock__right > .yard-dock__button--kits {
+    right: 28px;
+    width: 92px;
+  }
+
+  /* Centred over Build (28px in, 92px wide); 298px clears Collect all. */
+  .overlay__layer:has(> .yard-dock--bubbles):not(:has(> .planner-bar)) > .yard-viewtools--rail {
+    top: auto;
+    right: calc(28px + 46px - 35px);
+    bottom: 298px;
+    transform: none;
+  }
+
+  .overlay__layer.overlay__layer:has(> .yard-dock--bubbles) > .friends-bar {
+    --friends-bar-right: 370px;
+  }
+}
+
+/* A phone held upright: the switcher over Map and Friends beside it in the
+   left corner (yard-hud.css, friends-bar.css), and the right corner a square
+   of four under the thumb: More over Monsters, Collect all over Build. The
+   column rises straight from More, the bubbles a little smaller and closer. */
+@media (width <= 620px) {
+  .bubble-menu {
+    --bubble-anchor: 30px;
+    --bubble-disc: 52px;
+    --bubble-start: 76px;
+    --bubble-step: 60px;
+  }
+
+  .yard-dock__right > .bubble-menu,
+  .yard-dock--bubbles .yard-dock__right > .yard-dock__button--monsters {
+    right: 108px;
+  }
+
+  .yard-dock__right > .bubble-menu {
+    bottom: 128px;
+  }
+
+  .yard-dock--bubbles .yard-dock__right > .yard-collect {
+    right: 8px;
+    bottom: 128px;
+    transform: scale(0.84);
+    transform-origin: bottom center;
+  }
+
+  .yard-dock--bubbles .yard-dock__right > .yard-dock__button--kits {
+    right: 10px;
+    bottom: 128px;
+  }
+}
+
+/* A phone on its side: one bottom row, Collect all, More, Monsters, Build, at
+   the phone's sizes, the zoom rail alone on the right edge above them. The
+   bubbles stand in rows of three above More and to its right, where the
+   screen is empty (owner, beta 6), with their words under them, as a column
+   up from More would not fit the short screen. */
+@media (width > 620px) and (height <= 500px) {
+  .bubble-menu {
+    --bubble-anchor: 28px;
+    --bubble-disc: 52px;
+    --bubble-start: 84px;
+    --bubble-step: 86px;
+    --bubble-pitch: 88px;
+  }
+
+  .yard-dock__right > .bubble-menu {
+    bottom: var(--space-4);
+  }
+
+  .yard-dock--bubbles .yard-dock__right > .yard-collect {
+    right: calc(var(--dock-row) + 2 * var(--dock-pitch) - 4px);
+    bottom: var(--space-4);
+    transform: scale(0.76);
+    transform-origin: bottom center;
+  }
+
+  /* The rail a little tighter, so it ends above Build rather than on it. */
+  .overlay__layer:has(> .yard-dock--bubbles) > .yard-viewtools--rail {
+    top: calc(var(--hud-height) + var(--space-1));
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .overlay__layer:has(> .yard-dock--bubbles) > .yard-viewtools--rail .yard-zoom {
+    gap: 4px;
+  }
+
+  .overlay__layer:has(> .yard-dock--bubbles) > .yard-viewtools--rail .yard-zoom__step,
+  .overlay__layer:has(> .yard-dock--bubbles) > .yard-viewtools--rail .yard-viewtools__overview {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+  }
+
+  .yard-dock--bubbles .yard-dock__right > .yard-dock__button--kits {
+    bottom: var(--space-4);
+  }
+
+  /* Friends a step right of Map, so their signs keep the bottom row's gap
+     instead of touching (lead, beta 6). */
+  .overlay__layer:has(> .yard-dock--bubbles) > .friends-bar > .friends-bar__toggle {
+    left: 100px;
+  }
+
+  /* The yard's readout line would sit on Friends. */
+  .overlay__layer:has(> .yard-dock--bubbles) > .cell-readout {
+    display: none;
+  }
+}
+
+.bubble-menu--grid .bubble-menu__fan > .yard-dock__button {
+  right: auto;
+  bottom: auto;
+  left: calc(var(--bubble-pitch) / -2);
+  top: calc(var(--bubble-disc) / -2);
+  width: var(--bubble-pitch);
+  flex-direction: column;
+  gap: 4px;
+  transform-origin: 50% calc(var(--bubble-disc) / 2);
+}
+
+.bubble-menu--grid.bubble-menu--open .bubble-menu__fan > .yard-dock__button {
+  transform: translate(
+      calc(var(--bubble-col, 0) * var(--bubble-pitch)),
+      calc((var(--bubble-start) + var(--bubble-row, 0) * var(--bubble-step)) * -1)
+    )
+    scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble-menu__fan > .yard-dock__button,
+  .bubble-menu--open .bubble-menu__fan > .yard-dock__button {
+    transition: opacity var(--motion-fast) linear;
+    transition-delay: 0s;
+  }
+
+  .yard-dock__button--more .yard-dock__disc > svg {
+    transition: none;
+  }
+}

@@ -80,11 +80,14 @@ describe("Mr1Guide", () => {
   it("asks the server after the attack: a win sends Bob home with the player", async () => {
     const api = fakeApi();
     const goHome = vi.fn();
-    guide = new Mr1Guide(layer, { goHome, refresh: vi.fn(), refreshOwn: vi.fn() }, api as unknown as GuideApi);
+    const refresh = vi.fn();
+    guide = new Mr1Guide(layer, { goHome, refresh, refreshOwn: vi.fn() }, api as unknown as GuideApi);
     guide.update(worldAt("attack"));
     await settle();
     expect(api.advance).toHaveBeenCalledWith("attack");
     expect(text()).toBe(LINES.wonHome);
+    // The map is read again at once, so the beaten camp's pin goes.
+    expect(refresh).toHaveBeenCalledOnce();
     // The camp is gone from the next read; Bob keeps cheering until home.
     guide.update(worldAt(null));
     expect(text()).toBe(LINES.wonHome);

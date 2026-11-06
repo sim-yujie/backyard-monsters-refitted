@@ -117,8 +117,8 @@ describe("toCombatYard", () => {
   });
 
   it("gives a type with no health ladder no health at all", () => {
-    // Three of the 140 props entries carry no `hp`; none is targetable.
-    const yard = toCombatYard({ buildingdata: { "1": { id: 1, t: 130 } } });
+    // The outpost core reads its ladder from the outpost table only.
+    const yard = toCombatYard({ buildingdata: { "1": { id: 1, t: 112 } } });
     expect(yard.byId.get(1)?.maxHp).toBe(0);
     expect(yard.byId.get(1)?.hp).toBe(0);
   });

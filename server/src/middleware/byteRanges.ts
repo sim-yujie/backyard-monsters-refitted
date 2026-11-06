@@ -47,14 +47,18 @@ export const parseByteRange = (header: string, size: number): ByteRange | typeof
 
 /**
  * Whether an If-Range header still matches the file, so the range can be sent.
- * koa-send sets Last-Modified but no ETag, so only a date can match.
+ * It names the file's tag (`notModified.ts`) or its Last-Modified date; a
+ * weak tag never matches (RFC 9110 13.1.5).
  *
  * @param {Context} ctx - The Koa request/response context object.
  * @returns {boolean} True when there is no If-Range or it names this version.
  */
 const ifRangeMatches = (ctx: Context) => {
   const ifRange = ctx.get("If-Range");
-  return !ifRange || ifRange === ctx.response.get("Last-Modified");
+  if (!ifRange) return true;
+  if (ifRange.startsWith("W/")) return false;
+  if (ifRange.startsWith('"')) return ifRange === ctx.response.get("ETag");
+  return ifRange === ctx.response.get("Last-Modified");
 };
 
 /**

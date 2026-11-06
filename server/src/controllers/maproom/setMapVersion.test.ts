@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import type { Context } from "koa";
 
 /**
@@ -150,5 +151,41 @@ describe("setMapVersion from Map Room 1", () => {
     expect(result).toMatchObject({ ok: false, status: 409 });
     expect(moves).toEqual([]);
     expect(delCalls).toEqual([]);
+  });
+});
+
+describe("Map Room 3 is closed (security audit 2026-10-29, C1, M2)", () => {
+  for (const [from, mapversion, mr2upgraded] of [
+    ["Map Room 1", 1, false],
+    ["Map Room 2", 2, true],
+  ] as const) {
+    test(`version 3 is refused from ${from} and nothing is written`, async () => {
+      save = { basesaveid: 2526, mapversion, mr2upgraded, worldid: "world-a", buildingdata: townHall(10) };
+
+      const result = await run(3);
+
+      expect(result).toMatchObject({ ok: false, status: 409, reason: "mapRoom3Closed" });
+      expect(save).toMatchObject({ mapversion, worldid: "world-a" });
+      expect(flushed).toBe(0);
+      expect(moves).toEqual([]);
+      expect(removed).toEqual([]);
+    });
+  }
+
+  test("a save still on Map Room 3 can leave it with version 0", async () => {
+    save = { basesaveid: 2526, mapversion: 3, mr2upgraded: false, worldid: "world-3", buildingdata: townHall(10) };
+
+    const result = await run(0);
+
+    expect(result.ok).toBe(true);
+    expect(save.mapversion).toBe(1);
+    expect(moves).toEqual(["leave"]);
+  });
+
+  test("no /worldmapv3 route is mounted, relocate and setmapversion above all", () => {
+    const routes = readFileSync(new URL("../../app.routes.ts", import.meta.url), "utf8");
+
+    expect(routes).not.toMatch(/router\.\w+\("\/worldmapv3\//);
+    expect(routes).toContain('router.post("/worldmapv2/setmapversion"');
   });
 });

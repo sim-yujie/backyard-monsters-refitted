@@ -23,7 +23,6 @@ export const playerKeys = (userid: number, email: string): string[] => [
   `last-action:${userid}`,
   `presence-challenge:${userid}`,
   `last-seen:main:${userid}`,
-  `last-seen:inferno:${userid}`,
   // Wild monster raids (`services/raids/raidStore.ts`).
   `wild-raid:${userid}`,
   `raid-screen:${userid}`,

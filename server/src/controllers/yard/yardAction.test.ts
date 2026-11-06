@@ -174,6 +174,8 @@ describe("POST /bm/yard/state", () => {
       "report",
       "playerlevel",
       "playerpoints",
+      // The quests' red number, once the action has written the record.
+      "questsClaimable",
     ]);
     expect(ctx.body).toMatchObject({
       error: 0,

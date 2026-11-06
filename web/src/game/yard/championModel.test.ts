@@ -7,6 +7,7 @@ import {
   freezeGate,
   predictedHealth,
   thawGate,
+  thawProblem,
   withChampionsHealed,
 } from "./championModel";
 import { championEntry } from "./championCatalogue";
@@ -65,19 +66,29 @@ describe("cageView", () => {
     ]);
   });
 
+  it("offers Korath too once he is unlocked (Inferno WP 5.1): the load's infernostate says so", () => {
+    const names = (save: BaseLoadResponse) => {
+      const view = cageView(save, NOW);
+      return view.kind === "empty" ? view.choices.map((one) => one.entry.name) : [];
+    };
+    const state = (korathUnlocked?: boolean) =>
+      ({ infernostate: { korathUnlocked } }) as unknown as Partial<BaseLoadResponse>;
+    expect(names(saveOf([]))).toEqual(["Gorgo", "Drull", "Fomor"]);
+    expect(names(saveOf([], state(false)))).toEqual(["Gorgo", "Drull", "Fomor"]);
+    expect(names(saveOf([], state(undefined)))).toEqual(["Gorgo", "Drull", "Fomor"]);
+    expect(names(saveOf([], state(true)))).toEqual(["Gorgo", "Drull", "Fomor", "Korath"]);
+    // One champion at a time: with Gorgo in the cage there is nothing to pick.
+    expect(cageView(saveOf([gorgo()], state(true)), NOW).kind).toBe("active");
+  });
+
   it("a juiced champion leaves the cage empty", () => {
     expect(cageView(saveOf([gorgo({ status: 2 })]), NOW).kind).toBe("empty");
   });
 });
 
-describe("the egg (owner 2026-10-20)", () => {
-  it("is the cage's state while it waits, with the time left, never below 0", () => {
-    const view = cageView(saveOf([gorgo({ t: 3, status: 3, ft: NOW + 5 * HOUR })]), NOW);
-    expect(view.kind).toBe("egg");
-    if (view.kind !== "egg") return;
-    expect([view.egg.entry.id, view.egg.hatchAt, view.egg.left]).toEqual(["G3", NOW + 5 * HOUR, 5 * HOUR]);
-    const due = cageView(saveOf([gorgo({ t: 3, status: 3, ft: NOW - 10 })]), NOW);
-    expect(due.kind === "egg" && due.egg.left).toBe(0);
+describe("no eggs (owner 2026-10-28)", () => {
+  it("never shows an egg: an older save's egg is not a champion, and the server hatches it", () => {
+    expect(cageView(saveOf([gorgo({ t: 3, status: 3, ft: NOW + 5 * HOUR })]), NOW).kind).toBe("empty");
   });
 });
 
@@ -184,14 +195,12 @@ describe("the Champion Chamber (#125)", () => {
     expect(thawGate(view, true)).toBeNull();
   });
 
-  it("thaws no champion while an egg waits in the cage, but Krallen may", () => {
+  it("does not block a thaw on an older save's egg (the server hatches it first and says why)", () => {
     const egg = gorgo({ t: 2, status: 3, ft: NOW + HOUR });
-    const view = chamberView(withChamber([egg, gorgo({ status: 1 }), gorgo({ t: 5, l: 5, status: 1, ft: HOUR })]), NOW);
+    const view = chamberView(withChamber([egg, gorgo({ status: 1 })]), NOW);
     if (view.kind !== "ready") throw new Error(view.kind);
-    expect(view.egg?.entry.id).toBe("G2");
     expect(view.active).toBeNull();
-    expect(thawGate(view)).toBe("Your cage holds a Drull egg. Cancel it before you thaw a champion.");
-    expect(thawGate(view, true)).toBeNull();
+    expect(thawGate(view)).toBeNull();
   });
 
   it("thaws nothing while the chamber is damaged", () => {
@@ -199,6 +208,19 @@ describe("the Champion Chamber (#125)", () => {
     expect(thawGate(view)).toMatch(/damaged/);
     expect(thawGate(chamberView(withChamber([gorgo({ status: 1 })]), NOW))).toBeNull();
     expect(chamberView(saveOf([]), NOW).kind).toBe("noChamber");
+  });
+
+  it("names each thaw problem as a key, in thawGate's order, and gives frozen champions their stats", () => {
+    const full = chamberView(withChamber([gorgo(), gorgo({ t: 3, status: 1, ft: HOUR, l: 3 })]), NOW);
+    expect(thawProblem(full)).toBe("cageFull");
+    expect(thawProblem(full, true)).toBeNull();
+    const damaged = chamberView(withChamber([gorgo(), gorgo({ t: 3, status: 1 })], { hp: 10 }), NOW);
+    expect(thawProblem(damaged)).toBe("damaged");
+    expect(thawProblem(chamberView(saveOf([]), NOW))).toBe("noChamber");
+    if (full.kind !== "ready") throw new Error(full.kind);
+    const [frozen] = full.frozen;
+    expect(frozen!.stats.health).toBe(frozen!.maxHealth);
+    expect(frozen!.stats.damage).toBeGreaterThan(0);
   });
 });
 

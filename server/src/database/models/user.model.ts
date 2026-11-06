@@ -77,6 +77,51 @@ export class User {
   @Property({ type: "boolean", default: false })
   friend_requests_off: Opt<boolean> = false;
 
+  /**
+   * The player switched Map Room 2's tilted camera off: the map is drawn flat
+   * (`docs/mr2-modern-look-plan.md` step 4, owner 3 Nov 2026: the tilt is on
+   * by default in the Modern look, opt-out). Set from the map's tilt button
+   * through `/player/settings`; only read by the web client.
+   */
+  @Property({ type: "boolean", default: false })
+  map_flat: Opt<boolean> = false;
+
+  /**
+   * The player's country, ISO 3166-1 alpha-2 (`PH`), or null when not set
+   * (owner 3 Nov 2026). Chosen in Account settings or the one-time prompt
+   * after login (`/player/settings`). Any country gives the player that
+   * country's chat room beside Global
+   * (`chat/chatRooms.ts` `authorizeJoin`).
+   */
+  @Property({ type: "string", length: 2, nullable: true })
+  country?: string | null;
+
+  /** The one-time "Where are you playing from?" prompt was answered or put off ("Not now"). */
+  @Property({ type: "boolean", default: false })
+  country_asked: Opt<boolean> = false;
+
+  /**
+   * The player's Look and sound choices as the web client last sent them
+   * (`POST /player/look`, owner 4 Nov 2026: how players split between Modern
+   * and Classic). Null until the first load that sends them. Only the owner's
+   * dashboard reads them; the game never does.
+   */
+  @Property({ type: "string", length: 8, nullable: true })
+  look_style?: string | null;
+
+  @Property({ type: "string", length: 8, nullable: true })
+  look_music?: string | null;
+
+  @Property({ type: "string", length: 8, nullable: true })
+  look_quality?: string | null;
+
+  @Property({ type: "string", length: 8, nullable: true })
+  look_font?: string | null;
+
+  /** When the client last sent the look choices. */
+  @Property({ type: "Date", nullable: true })
+  look_seen_at?: Date | null;
+
   @Property({ type: "string", unique: true })
   @FrontendKey
   email!: string;

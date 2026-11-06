@@ -6,6 +6,7 @@ import type { YardApi } from "@/api/yard";
 import { NetworkError } from "@/api/http";
 import { setAchievementsOpener } from "@/game/achievements/achievementsView";
 import { UnlockInbox } from "@/game/achievements/unlockInbox";
+import { holdForEmergence } from "@/game/inferno/emergenceHold";
 import { outpostTarget, type OwnYardTarget } from "@/game/yard/ownYards";
 import { YardStore } from "@/game/yard/YardStore";
 import { CARD_MS, GAP_MS } from "@/ui/achievements/UnlockPopup";
@@ -14,7 +15,8 @@ import { guideOpen, UnlockPopupDoor } from "./achievements";
 
 /**
  * The unlock pop-up on the own yard (#204, WP6), against a real store: the
- * load's and each answer's `achievements`, `seen`, the guided start's hold.
+ * load's and each answer's `achievements`, `seen`, the guided start's hold,
+ * and stepping aside for Moloch's emergence (Inferno WP 1.10).
  */
 
 const T0 = 2_000_000;
@@ -190,5 +192,29 @@ describe("UnlockPopupDoor", () => {
     vi.advanceTimersByTime(GAP_MS);
     expect(names()).toEqual(["Ach 2"]);
     expect(content.querySelector(".ach-card__view")).toBeNull();
+  });
+
+  it("steps aside while Moloch's emergence plays, the card up keeping its time for after", async () => {
+    setup({ achievements: [unlock(2), unlock(5)] });
+    expect(names()).toEqual(["Ach 2"]);
+    const dock = content.querySelector<HTMLElement>(".ach-pop")!;
+    const release = holdForEmergence();
+    expect(dock.style.display).toBe("none");
+    vi.advanceTimersByTime(CARD_MS * 3);
+    expect(names()).toEqual(["Ach 2"]);
+    release();
+    expect(dock.style.display).toBe("");
+    vi.advanceTimersByTime(CARD_MS - 1);
+    expect(names()).toEqual(["Ach 2"]);
+    vi.advanceTimersByTime(1 + GAP_MS);
+    expect(names()).toEqual(["Ach 5"]);
+  });
+
+  it("shows nothing at load while the emergence is already playing, then the cards once it ends", async () => {
+    const release = holdForEmergence();
+    setup({ achievements: [unlock(2)] });
+    expect(names()).toEqual([]);
+    release();
+    expect(names()).toEqual(["Ach 2"]);
   });
 });

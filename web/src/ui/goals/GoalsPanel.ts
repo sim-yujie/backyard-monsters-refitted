@@ -17,6 +17,12 @@ import "./goals.css";
  *
  * A view only: the plugin (`game/yard/plugins/goals.ts`) fetches the list,
  * works out each figure, claims and plays the balls.
+ *
+ * On the Inferno yard the same panel is Flash's Quests window
+ * (`docs/design/inferno.md` WP 4.3, {@link INFERNO_QUEST_WORDS}): the ready
+ * quests, then the open ones, thirteen rows in all (`QUESTSPOPUP.as:161-183`),
+ * with the Compound for Housing and a Shiny chip on the five quests that pay
+ * some.
  */
 
 /** How many open goals show under "Up next". */
@@ -40,15 +46,59 @@ export type GoalsPanelView =
       readonly refusal: { readonly id: string; readonly message: string } | null;
     };
 
+/** The panel's words, and how many rows it lists. */
+export interface GoalsPanelWords {
+  readonly title: string;
+  readonly loading: string;
+  readonly allDone: string;
+  /** Where monster rewards go: "Housing", "your Compound". */
+  readonly housing: string;
+  /**
+   * Ready and open rows together at most (Flash's Quests window: 13), or
+   * undefined for every ready goal and {@link NEXT_COUNT} open ones.
+   */
+  readonly rows?: number;
+}
+
+/** The surface's Goals. */
+export const GOAL_WORDS: GoalsPanelWords = {
+  title: "Goals",
+  loading: "Loading your goals…",
+  allDone: "Every goal is done. Nice work!",
+  housing: "Housing",
+};
+
+/** The Inferno's Quests window, in Flash's words (`msg_questi_housing`, `QUESTSPOPUP.as`). */
+export const INFERNO_QUEST_WORDS: GoalsPanelWords = {
+  title: "Quests",
+  loading: "Loading your quests…",
+  allDone: "Every quest is done. Nice work!",
+  housing: "your Compound",
+  rows: 13,
+};
+
 export interface GoalsPanelOptions {
   onClaim(goal: GoalView, button: HTMLButtonElement): void;
   onRetry(): void;
   onClose(): void;
+  /** The surface's {@link GOAL_WORDS} when absent. */
+  words?: GoalsPanelWords;
 }
 
-/** "10 Octo-oozes" (Flash's names take an s). */
+/**
+ * "10 Octo-oozes" (Flash's names take an s). A name already ending in s or x
+ * stays as it is: "20 Valgos", "5 Sabnox", not "Valgoss" or "Sabnoxs".
+ */
 export const monstersText = (count: number, name: string): string =>
-  `${formatAmount(count)} ${count === 1 ? name : `${name}s`}`;
+  `${formatAmount(count)} ${count === 1 || /[sx]$/i.test(name) ? name : `${name}s`}`;
+
+/** A siege weapon reward as Flash's reward popup listed it: "1 Marilyn Monstroe" (`QUESTS.as:1846-1847`). */
+export const siegeText = (count: number, name: string): string => `${formatAmount(count)} ${name}`;
+
+/** Flash's words when the Chaos Factory cannot take a goal's weapon (`msg_quest_noroomsiegeweapon`). */
+export const SIEGE_ROOM_NOTE =
+  "You cannot collect this reward now. You may need to build a Chaos Factory first. " +
+  "Otherwise, your Chaos Factory is building a Chaos Weapon, or currently has one stored.";
 
 const el = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -77,20 +127,35 @@ const monsterChip = (goal: GoalView): HTMLElement | null => {
   return chip;
 };
 
-/** The reward as listed: "icon 2,000 icon 2,000", and the monsters. */
+/** The siege weapon reward (SW4-SW12): its siege button picture and "1 Marilyn Monstroe". */
+const siegeChip = (goal: GoalView): HTMLElement | null => {
+  if (!goal.siege) return null;
+  const chip = el("span", "goals-monsters goals-siege");
+  const image = el("img", "goals-monsters__image");
+  image.src = `/assets/siegebuttons/${goal.siege.id}.png`;
+  image.alt = "";
+  chip.append(image, el("span", "goals-monsters__text", siegeText(goal.siege.count, goal.siege.name)));
+  return chip;
+};
+
+/** The reward as listed: "icon 2,000 icon 2,000", the Shiny, the monsters, the siege weapon. */
 const rewardRow = (goal: GoalView): HTMLElement => {
   const row = el("div", "goals-reward");
   for (const key of REWARD_KEYS) {
     if (goal.reward[key] > 0) row.append(resourceAmount(key, goal.reward[key]));
   }
+  if (goal.shiny) row.append(resourceAmount("shiny", goal.shiny));
   const monsters = monsterChip(goal);
   if (monsters) row.append(monsters);
+  const siege = siegeChip(goal);
+  if (siege) row.append(siege);
   return row;
 };
 
 /**
- * The Claim button: "Claim" and what will land per resource, "+1,000"; a
- * resource the cap cuts is marked and the button ends "(storage full)".
+ * The Claim button: "Claim" and what will land per resource, "+1,000" in
+ * green as a gain (`amountChange.ts`); a resource the cap cuts is marked and
+ * the button ends "(storage full)".
  */
 export const claimButton = (goal: GoalView, figure: ClaimFigure | undefined): HTMLButtonElement => {
   const button = tutTarget(el("button", "btn btn--primary goals-claim"), GOALS_CLAIM_TARGET);
@@ -102,15 +167,27 @@ export const claimButton = (goal: GoalView, figure: ClaimFigure | undefined): HT
     const reward = goal.reward[key];
     if (reward <= 0) continue;
     const credited = figure?.credited[key] ?? reward;
-    const chip = resourceAmount(key, `+${formatAmount(credited)}`, { className: "goals-claim__amount" });
+    // A capped chip's own title says more than "800 gained".
+    const chip = resourceAmount(key, credited, {
+      className: "goals-claim__amount",
+      change: "gain",
+      tooltip: credited >= reward,
+    });
     if (credited < reward) {
       chip.classList.add("goals-claim__amount--capped");
       chip.title = `${formatAmount(reward)} reward, ${formatAmount(credited)} fits in storage`;
     }
     amounts.append(chip);
   }
+  // Shiny has no cap: it always arrives whole.
+  if (goal.shiny) {
+    amounts.append(resourceAmount("shiny", goal.shiny, { className: "goals-claim__amount", change: "gain" }));
+  }
   if (goal.monsters) {
     amounts.append(el("span", "goals-claim__amount", `+${monstersText(goal.monsters.count, goal.monsters.name)}`));
+  }
+  if (goal.siege) {
+    amounts.append(el("span", "goals-claim__amount", `+${siegeText(goal.siege.count, goal.siege.name)}`));
   }
   if (amounts.childElementCount > 0) button.append(amounts);
   if (figure?.capped) button.append(el("span", "goals-claim__full", " (storage full)"));
@@ -121,12 +198,14 @@ export class GoalsPanel {
   readonly element: HTMLElement;
   private readonly panel: Panel;
   private readonly options: GoalsPanelOptions;
+  private readonly words: GoalsPanelWords;
   private claimedOpen = false;
 
   constructor(options: GoalsPanelOptions) {
     this.options = options;
+    this.words = options.words ?? GOAL_WORDS;
     this.panel = new Panel({
-      title: "Goals",
+      title: this.words.title,
       className: "goals-panel",
       closeOnEscape: true,
       onClose: () => options.onClose(),
@@ -151,7 +230,7 @@ export class GoalsPanel {
 
   render(view: GoalsPanelView): void {
     if (view.kind === "loading") {
-      this.panel.setContent(el("p", "goals-status", "Loading your goals…"));
+      this.panel.setContent(el("p", "goals-status", this.words.loading));
       return;
     }
     if (view.kind === "error") {
@@ -164,8 +243,10 @@ export class GoalsPanel {
       return;
     }
 
-    const ready = view.goals.filter((goal) => goal.status === "ready");
-    const next = view.goals.filter((goal) => goal.status === "open").slice(0, NEXT_COUNT);
+    const { rows } = this.words;
+    const ready = view.goals.filter((goal) => goal.status === "ready").slice(0, rows);
+    const nextCount = rows === undefined ? NEXT_COUNT : rows - ready.length;
+    const next = view.goals.filter((goal) => goal.status === "open").slice(0, nextCount);
     const claimed = view.goals.filter((goal) => goal.status === "claimed");
     const sections: HTMLElement[] = [];
 
@@ -176,7 +257,7 @@ export class GoalsPanel {
       sections.push(this.section("Up next", next.map((goal) => this.openRow(goal))));
     }
     if (ready.length === 0 && next.length === 0) {
-      sections.push(el("p", "goals-status", "Every goal is done. Nice work!"));
+      sections.push(el("p", "goals-status", this.words.allDone));
     }
     if (claimed.length > 0) sections.push(this.claimedList(claimed));
     this.panel.setContent(...sections);
@@ -199,7 +280,7 @@ export class GoalsPanel {
     row.dataset["goal"] = goal.id;
     this.head(goal, row);
     const button = claimButton(goal, view.figures.get(goal.id));
-    const noRoom = goal.monsters !== undefined && goal.room === false;
+    const noRoom = (goal.monsters !== undefined || goal.siege !== undefined) && goal.room === false;
     button.disabled = view.claiming !== null || noRoom;
     if (view.claiming === goal.id) button.classList.add("goals-claim--busy");
     button.addEventListener("click", () => this.options.onClaim(goal, button));
@@ -209,9 +290,11 @@ export class GoalsPanel {
         el(
           "p",
           "goals-row__note",
-          `Make room in Housing for ${monstersText(goal.monsters.count, goal.monsters.name)}`,
+          `Make room in ${this.words.housing} for ${monstersText(goal.monsters.count, goal.monsters.name)}`,
         ),
       );
+    } else if (noRoom && goal.siege) {
+      row.append(el("p", "goals-row__note", SIEGE_ROOM_NOTE));
     }
     if (view.refusal?.id === goal.id) {
       const note = el("p", "goals-row__note goals-row__note--refused", view.refusal.message);

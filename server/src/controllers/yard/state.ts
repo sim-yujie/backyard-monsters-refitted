@@ -14,4 +14,5 @@ export const yardStateAction = defineYardAction({
   schema: YardStateSchema,
   run: () => ({ report: null }),
   outposts: "allow",
+  inferno: "allow",
 });

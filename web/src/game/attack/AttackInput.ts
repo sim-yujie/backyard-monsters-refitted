@@ -15,6 +15,8 @@ import {
   type BombStats,
   type Ellipse,
 } from "@/game/combat/rules";
+import { JAR_TOWER_TYPES } from "@/game/combat/rules/jars";
+import { DECOY, JARS, VACUUM, type SiegeId } from "@/game/combat/rules/siege";
 import type { Point } from "@/game/yard/YardGrid";
 import { toIso } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
@@ -176,24 +178,21 @@ export const overlappingBuildings = (
 
 /* ── Siege weapons ────────────────────────────────────────────────────────── */
 
-export type SiegeWeaponId = "decoy" | "vacuum" | "jars";
+export type SiegeWeaponId = SiegeId;
 
 /** One of the three, as the Flash client's `SiegeWeapon` subclasses spell it. */
 export interface SiegeWeaponSpec {
   readonly id: SiegeWeaponId;
   readonly name: string;
   /**
-   * Drop-zone range by level, `RANGE` in `weapons/Decoy.as:55` and
-   * `Jars.as:36`. The Vacuum has none (`Vacuum.as:26`): Flash fired it with no
+   * Drop-zone range by level, the shared siege data's (`combat/rules/siege.ts`,
+   * Flash's `RANGE`). The Vacuum has none (`Vacuum.as:26`): Flash fired it with no
    * drop zone at all, so the ring it gets here is a nominal clearance.
    */
   readonly range: readonly number[];
   /** What the drop has to satisfy (`docs/specs/combat.md` §3 siege table). */
   readonly target: "clear" | "clear-special" | "tower";
-  /**
-   * Where it goes. Only that: the engine gives siege weapons no effect yet,
-   * so the picker promises none (#152).
-   */
+  /** Where it goes. */
   readonly hint: string;
 }
 
@@ -201,21 +200,21 @@ export const SIEGE_WEAPONS: readonly SiegeWeaponSpec[] = [
   {
     id: "decoy",
     name: "Decoy",
-    range: [250, 270, 290, 310, 320, 350, 380, 410, 440, 480],
+    range: DECOY.range,
     target: "clear-special",
     hint: "Goes on open ground.",
   },
   {
     id: "vacuum",
     name: "Vacuum",
-    range: [],
+    range: VACUUM.range,
     target: "clear",
     hint: "Goes clear of buildings.",
   },
   {
     id: "jars",
     name: "Jars",
-    range: [200, 210, 235, 335, 360, 370, 380, 390, 400, 410],
+    range: JARS.range,
     target: "tower",
     hint: "Goes on a tower.",
   },
@@ -257,6 +256,18 @@ export const parseSiegeStock = (raw: unknown): SiegeStock[] => {
     stock.push({ id: weapon.id, level: lvl, quantity: Math.max(0, qty) });
   }
   return stock;
+};
+
+/**
+ * `SiegeWeapons.availableWeapon`: the one weapon an attack offers, the first
+ * of Decoy, Vacuum and Jars with one in stock, or null for none.
+ */
+export const availableSiege = (stock: readonly SiegeStock[]): SiegeStock | null => {
+  for (const weapon of SIEGE_WEAPONS) {
+    const held = stock.find((entry) => entry.id === weapon.id);
+    if (held && held.quantity > 0) return held;
+  }
+  return null;
 };
 
 /* ── Tools ────────────────────────────────────────────────────────────────── */
@@ -404,12 +415,14 @@ export const judgeDrop = (
         : { legal: false, reason: "A bomb has to land on a building.", touching };
     }
     case "tower": {
-      const touching = overlappingBuildings(point, zone.size, obstacles).filter(
-        (obstacle) => obstacle.tower,
+      // Jars cap only the defences (`JAR_TOWER_TYPES`, owner), so a drop
+      // touching none is refused and the jar kept.
+      const touching = overlappingBuildings(point, zone.size, obstacles).filter((obstacle) =>
+        JAR_TOWER_TYPES.includes(obstacle.type),
       );
       return touching.length > 0
         ? { legal: true, reason: "", touching }
-        : { legal: false, reason: "Jars have to land on a tower.", touching };
+        : { legal: false, reason: "Jars only cap defences.", touching };
     }
     case "monsters":
       // `CREEPS.CreepOverlap` wants a creep under the zone (issue #147). The

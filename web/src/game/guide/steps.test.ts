@@ -5,12 +5,14 @@ import { buildOffer, type BuildContext } from "@/game/yard/buildCatalogue";
 import { readYard } from "@/game/yard/yardModel";
 import {
   buildMicroStep,
+  CUES,
   dotsFor,
   GUIDE_BUILDS,
   GUIDE_STEPS,
   guideBuildOf,
   guidePays,
   isGuideStep,
+  LINES,
   TOUR,
 } from "./steps";
 import { TutTarget } from "./targets";
@@ -111,7 +113,11 @@ describe("a build step's micro steps", () => {
   const screen = { carrying: null, menuOpen: false, picked: false, cardShown: false };
 
   it("walk Build, tab, card, Build, place from what is on screen", () => {
-    expect(buildMicroStep(sniper, screen)).toMatchObject({ key: "open", target: TutTarget.DOCK_BUILD });
+    expect(buildMicroStep(sniper, screen)).toMatchObject({
+      key: "open",
+      target: TutTarget.DOCK_BUILD,
+      cue: { kind: "icon", name: "build" },
+    });
     expect(buildMicroStep(sniper, { ...screen, menuOpen: true })).toMatchObject({
       key: "tab",
       target: "build-tab:defensive",
@@ -119,6 +125,7 @@ describe("a build step's micro steps", () => {
     expect(buildMicroStep(sniper, { ...screen, menuOpen: true, cardShown: true })).toMatchObject({
       key: "card",
       target: "build-card:21",
+      cue: { kind: "building", type: 21 },
     });
     expect(buildMicroStep(sniper, { ...screen, menuOpen: true, cardShown: true, picked: true })).toMatchObject({
       key: "go",
@@ -148,5 +155,29 @@ describe("the Help tour", () => {
     expect(TOUR.length).toBeGreaterThan(5);
     for (const stop of TOUR) expect(stop.text.length).toBeGreaterThan(10);
     expect(TOUR.filter((stop) => stop.raid)).toHaveLength(1);
+  });
+});
+
+/** The text cut (28 Oct): one short line per bubble, a picture where there is a button. */
+describe("Bob's lines", () => {
+  const all = (): string[] => [
+    LINES.welcome("Sam"),
+    ...Object.values(LINES).flatMap((line) => (typeof line === "string" ? [line] : Array.isArray(line) ? line : [])),
+    ...Object.values(GUIDE_BUILDS).flatMap((build) => Object.values(build.lines)),
+  ];
+
+  it("are short: no line over 100 characters", () => {
+    for (const line of all()) expect(line.length, line).toBeLessThanOrEqual(100);
+  });
+
+  it("ask for one button at a time", () => {
+    for (const line of all()) expect(line.match(/\bTap\b/gi)?.length ?? 0, line).toBeLessThanOrEqual(1);
+  });
+
+  it("put a picture beside every line that names a yard button", () => {
+    expect(CUES.collect).toEqual({ kind: "icon", name: "collect" });
+    expect(CUES.openMap).toEqual({ kind: "icon", name: "map" });
+    expect(CUES.homeGoals).toEqual({ kind: "goals" });
+    expect(GUIDE_BUILDS["build-flinger"]!.finishCue).toEqual({ kind: "resource", key: "shiny" });
   });
 });

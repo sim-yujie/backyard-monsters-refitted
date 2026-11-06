@@ -10,7 +10,7 @@ import { mulberry32 } from "../../game-rules/combat/rng.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
 import { starterBuildingData } from "../yard/starterBase.js";
 import { BOT_MAX_LEVEL, evenSpread } from "./factory.js";
-import { giveSeededYards, isBlankSeedYard, planSeededLevels } from "./seededPlayers.js";
+import { giveSeededYards, isBlankSeedYard, planSeededLevels, SEEDED_FLOOR } from "./seededPlayers.js";
 import { bookFirstGrows, tends } from "./sweep.js";
 
 /**
@@ -83,11 +83,13 @@ describe("isBlankSeedYard", () => {
 });
 
 describe("planSeededLevels", () => {
-  test("2,500 players are spread evenly over levels 15-40, as the bots are, and shuffled", () => {
+  test("2,500 players are spread evenly over levels 15-40, whatever the bots' floor, and shuffled", () => {
     const levels = planSeededLevels(2500, {}, mulberry32(233));
     expect(levels).toHaveLength(2500);
     const counts = Array.from({ length: BOT_MAX_LEVEL }, (_, index) => levels.filter((level) => level === index + 1).length);
-    expect(counts).toEqual(evenSpread(2500));
+    // The dev world map keeps level 15 when the bots' floor rises to 25 (owner 3 Nov 2026).
+    expect(SEEDED_FLOOR).toBe(15);
+    expect(counts).toEqual(evenSpread(2500, SEEDED_FLOOR));
     expect(levels).not.toEqual([...levels].sort((a, b) => a - b));
   });
 

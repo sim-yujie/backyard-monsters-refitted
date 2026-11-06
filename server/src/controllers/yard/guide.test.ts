@@ -175,7 +175,7 @@ describe("guide/advance", () => {
 });
 
 describe("the guided build (/bm/yard/build at a build step)", () => {
-  test("tops up the Sniper Tower: debits min(held, cost), records the shortfall and the id", async () => {
+  test("pays the whole Sniper Tower: the player's own resources are untouched, the grant is the cost", async () => {
     at("build-sniper");
     const cost = costFor(21);
     const answer = await build(21, 300, -300);
@@ -184,31 +184,20 @@ describe("the guided build (/bm/yard/build at a build step)", () => {
     const id = (answer.body.report as { id: number }).id;
     expect(buildings()[String(id)]).toMatchObject({ t: 21, X: 300, Y: -300 });
     expect(Number(buildings()[String(id)]!.cB)).toBeGreaterThan(0);
-    expect(resources()).toMatchObject({
-      r1: 1600 - Math.min(1600, cost.r1),
-      r2: 1600 - Math.min(1600, cost.r2),
-      r3: 0,
-      r4: 0,
-    });
-    expect(onboarding().grants["fund:21"]).toMatchObject({
-      r1: Math.max(0, cost.r1 - 1600),
-      r2: Math.max(0, cost.r2 - 1600),
-      r3: cost.r3,
-      r4: cost.r4,
-      id,
-    });
+    expect(resources()).toMatchObject({ r1: 1600, r2: 1600, r3: 0, r4: 0 });
+    expect(onboarding().grants["fund:21"]).toMatchObject({ ...cost, id });
     expect(step()).toBe("finish-sniper");
     // The summary points at it after a reload.
     expect(onboardingSummary(db.row as never).guide.building).toBe(id);
   });
 
-  test("a player holding more than the cost pays the full cost: the guide gives nothing", async () => {
+  test("a player holding more than the cost still pays nothing: \"This one's on me\"", async () => {
     at("build-sniper");
     db.row!.resources = { r1: 50000, r2: 50000, r3: 50000, r4: 0 };
     const cost = costFor(21);
     await build(21, 300, -300);
-    expect(resources()).toMatchObject({ r1: 50000 - cost.r1, r2: 50000 - cost.r2, r3: 50000 - cost.r3 });
-    expect(onboarding().grants["fund:21"]).toMatchObject({ r1: 0, r2: 0, r3: 0, r4: 0 });
+    expect(resources()).toMatchObject({ r1: 50000, r2: 50000, r3: 50000 });
+    expect(onboarding().grants["fund:21"]).toMatchObject(cost);
   });
 
   test("only the step's type is paid for; another type is an ordinary build", async () => {
@@ -239,6 +228,16 @@ describe("the guided build (/bm/yard/build at a build step)", () => {
     expect(answer.status).toBe(409);
     expect(answer.body).toMatchObject({ reason: "guideBuilding" });
     expect(buildings()[String(id)]).toBeDefined();
+  });
+
+  test("cancelled after a skip, Bob's share does not come back as a refund", async () => {
+    at("build-sniper");
+    const id = ((await build(21, 300, -300)).body.report as { id: number }).id;
+    db.row!.onboarding = { ...onboarding(), guide: { state: "skipped" } };
+    const answer = await call(yardCancelBuildAction, { id });
+    expect(answer.status).toBe(200);
+    expect(buildings()[String(id)]).toBeUndefined();
+    expect(resources()).toMatchObject({ r1: 1600, r2: 1600, r3: 0, r4: 0 });
   });
 });
 

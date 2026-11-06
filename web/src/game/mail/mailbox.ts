@@ -1,5 +1,7 @@
 import type { MailMessage, MailTarget } from "@/api/mail";
 import type { OffsetCell } from "@/game/HexGrid";
+import { attackNoticeRealm, attackNoticeStatsOf, type AttackNoticeStats } from "@/game/attack/attackNoticeStats";
+import type { ResourceRealm } from "@/ui/resourceIcon";
 
 /**
  * What the mailbox screen shows (#193), worked out from what the mail routes
@@ -64,6 +66,14 @@ export interface MailThread {
   readonly truce: ThreadTruce | null;
   /** The thread's latest invitation to move, as the server keeps it, or null for none (#205). */
   readonly invite: ThreadTruce | null;
+  /** When the last message is the game's attack notice with its numbers, those (less-text job 3); else null. */
+  readonly attack: MailAttack | null;
+}
+
+/** An attack notice's numbers and the resources they count in, shown as icons instead of its sentence. */
+export interface MailAttack {
+  readonly stats: AttackNoticeStats;
+  readonly realm: ResourceRealm;
 }
 
 /**
@@ -107,6 +117,12 @@ export interface MailItem {
    * its Add friend (friends WP11, #378); null on anything else and on older notices.
    */
   readonly byUserId: number | null;
+  /**
+   * On the game's attack notice written since 28 Oct, its numbers, which the
+   * mailbox shows as icons with {@link text} kept as their words; null on
+   * anything else and on older notices.
+   */
+  readonly attack: MailAttack | null;
 }
 
 /** A past contact, for a new message's recipient list. */
@@ -155,6 +171,7 @@ export const threadList = (
         ? { status: last.trucestate, until: Number(last.truceexpire) > 0 ? Number(last.truceexpire) : null }
         : null,
       invite: last.migratestate ? inviteOf(last) : null,
+      attack: Number(last.userid) === SYSTEM_SENDER ? attackOf(last) : null,
     }))
     .sort((one, other) => other.time - one.time || other.threadid - one.threadid);
 
@@ -195,6 +212,12 @@ export const byUserIdOf = (message: Pick<MailMessage, "byuserid">, myId: number)
   return message.byuserid != null && Number.isInteger(id) && id > 0 && id !== myId ? id : null;
 };
 
+/** A game notice's attack numbers (`attackstats`), or null when it has none. */
+export const attackOf = (message: Pick<MailMessage, "attackstats" | "messagetype">): MailAttack | null => {
+  const stats = attackNoticeStatsOf(message.attackstats);
+  return stats && { stats, realm: attackNoticeRealm(message.messagetype) };
+};
+
 /** An open thread, oldest first, each message the player's or the other side's. */
 export const threadItems = (messages: readonly MailMessage[], myId: number): MailItem[] =>
   messages.map((message) => {
@@ -211,6 +234,7 @@ export const threadItems = (messages: readonly MailMessage[], myId: number): Mai
       invite: message.messagetype === "migraterequest" ? inviteOf(message) : null,
       defenceId: notice && message.messagetype === YARD_ATTACKED ? defenceIdOf(message) : null,
       byUserId: notice ? byUserIdOf(message, myId) : null,
+      attack: notice ? attackOf(message) : null,
     };
   });
 
@@ -219,18 +243,31 @@ export const teamAnswerable = (items: readonly MailItem[]): boolean =>
   items.some((item) => item.team && item.type === TEAM_MESSAGE);
 
 /**
- * Everyone the player has written with, by name, the game and deleted
- * accounts left out: the recipients a new message offers.
+ * The recipients a new message offers, by name: the player's friends and
+ * everyone they have written with, each once, the game and deleted accounts
+ * left out. Friends count even before the first message: the mail targets
+ * only name players with a thread, so a new friend was missing from the list.
  */
-export const contactsOf = (targets: Readonly<Record<string, MailTarget>>): MailContact[] =>
-  Object.entries(targets)
-    .filter(([, target]) => !target.deleted)
-    .map(([userid, target]) => ({ userid: Number(userid), name: target.first_name || `Player ${userid}` }))
+export const contactsOf = (
+  targets: Readonly<Record<string, MailTarget>>,
+  friends: readonly MailContact[] = [],
+): MailContact[] => {
+  const contacts = new Map<number, MailContact>();
+  for (const { userid, name } of friends) {
+    contacts.set(userid, { userid, name: name || `Player ${userid}` });
+  }
+  for (const [key, target] of Object.entries(targets)) {
+    const userid = Number(key);
+    if (target.deleted || contacts.has(userid)) continue;
+    contacts.set(userid, { userid, name: target.first_name || `Player ${key}` });
+  }
+  return [...contacts.values()]
     .filter(
       (contact) =>
         Number.isSafeInteger(contact.userid) && contact.userid !== SYSTEM_SENDER && contact.userid !== SUPPORT_SENDER,
     )
     .sort((one, other) => one.name.localeCompare(other.name) || one.userid - other.userid);
+};
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 

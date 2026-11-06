@@ -42,17 +42,19 @@ export interface AlertSweepDeps {
   /** Fakes for tests; the real Telegram and host.json otherwise. */
   readonly send?: SendTelegram;
   readonly readHostStatus?: ReadHostStatus;
+  /** The logs folder's disk; the real one otherwise. */
+  readonly containerDisk?: HealthDeps["containerDisk"];
 }
 
 /** One check: summary, problems, messages. Exported for tests and the CLI. */
-export const runAlertCheck = async ({ redis, sql, send, readHostStatus }: AlertSweepDeps, now: number = Date.now()) => {
+export const runAlertCheck = async ({ redis, sql, send, readHostStatus, containerDisk }: AlertSweepDeps, now: number = Date.now()) => {
   const config = alertConfig();
   if (!config.telegram) return null;
 
   const locked = await redis.send("SET", [ALERT_LOCK_KEY, String(now), "NX", "PX", String(ALERT_CHECK_MS - 5000)]);
   if (locked === null) return null;
 
-  const health = await healthSummary({ sql, redisSend: (command, args) => redis.send(command, args), readHostStatus, now });
+  const health = await healthSummary({ sql, redisSend: (command, args) => redis.send(command, args), readHostStatus, containerDisk, now });
   const errors = await errorRateSource(now).catch((err) => {
     logger.warn(`Alerts: the error count could not be read: ${err}`);
     return null;

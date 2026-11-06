@@ -124,6 +124,33 @@ describe("countByKind", () => {
       ["wall", 4],
     ]);
   });
+
+  it("files every Inferno tower under Towers, as the Find list does", () => {
+    // The Inferno Cannon (130) is only in the Inferno table; counted by the
+    // main table it fell under Other while its stack sat under Towers.
+    const inferno = readYard({
+      error: 0,
+      id: 2,
+      baseid: "2",
+      basesaveid: 2,
+      type: "inferno",
+      worldsize: [800, 800],
+      currenttime: 1_700_000_000,
+      savetime: 1_700_000_000,
+      storedata: {},
+      buildingdata: {
+        "1": { id: 1, t: 14, X: -100, Y: 0, l: 4 },
+        "2": { id: 2, t: 21, X: 200, Y: 0, l: 2 },
+        "3": { id: 3, t: 130, X: 300, Y: 0, l: 2 },
+      },
+      mushrooms: { l: [] },
+    } as unknown as BaseLoadResponse);
+    const all = [...Plan.fromYard(inferno).all()];
+    expect(countByKind(all, "inferno").get("tower")).toBe(2);
+    expect(countByKind(all, "inferno").has("other")).toBe(false);
+    const towers = categorise(searchNodes(all, "", new Set(), "inferno")).find(({ kind }) => kind === "tower");
+    expect(towers?.groups.map(({ type }) => type).sort()).toEqual([130, 21]);
+  });
 });
 
 describe("categorise", () => {

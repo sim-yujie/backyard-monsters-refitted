@@ -1,11 +1,13 @@
-import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { cellsText, type RangeSource } from "@/game/maproom/attackRange";
 import { DECLARE_WAR_RANGE } from "@/game/maproom/rules/range";
 import { button, el, icon } from "@/ui/maproom1/icons";
 
 /**
- * "My range" (issue #177): the button that shows the player's attack range on
- * the map, and the legend that opens with it (the approved R-MR2-Range board).
+ * "My range" (issue #177): the legend that opens while the player's attack
+ * range is drawn on the map (the approved R-MR2-Range board). Its own switch
+ * turns the range off; the own yard's cell panel turns it on. The "My range"
+ * button beside the zoom went in beta 6 (owner: with fog of war it showed
+ * little the player could use).
  *
  * The legend says what the line means and lists each flinger with its reach,
  * so "why can I not attack that camp" has an answer on screen. A view only:
@@ -18,9 +20,7 @@ export interface RangeControlOptions {
 }
 
 export class RangeControl {
-  /** Goes beside the zoom buttons. */
-  readonly button: HTMLButtonElement;
-  /** Opens above the button while the range is shown. */
+  /** Opens above the map's tool row while the range is shown. */
   readonly legend: HTMLElement;
 
   private readonly toggle: HTMLButtonElement;
@@ -29,12 +29,6 @@ export class RangeControl {
   private on = false;
 
   constructor(private readonly options: RangeControlOptions) {
-    this.button = button("mr2-tool mr2-range-button");
-    tutTarget(this.button, TutTarget.MR2_RANGE);
-    this.button.append(icon("range", 20, "map-icon"), el("span", "mr2-tool__label", "My range"));
-    this.button.title = "Show which cells your Flingers reach";
-    this.button.addEventListener("click", () => this.set(!this.on));
-
     this.legend = el("section", "mr2-float mr2-range-legend");
     this.legend.setAttribute("aria-label", "My attack range");
 
@@ -105,7 +99,6 @@ export class RangeControl {
   }
 
   private render(): void {
-    this.button.setAttribute("aria-pressed", String(this.on));
     this.toggle.setAttribute("aria-checked", String(this.on));
     this.legend.hidden = !this.on;
   }

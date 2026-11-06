@@ -136,6 +136,21 @@
   color: var(--colour-text-secondary);
 }
 
+/* A boost's effect as painted icons and numbers, "[claw] +25%  [clock] 24h"
+   (the text cut, 28 Oct), in place of its sentence. */
+.shop-card__effects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.shop-card__effects .chip {
+  padding: 2px var(--space-2) 2px 4px;
+  color: var(--colour-text-strong);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
 .shop-card__meta {
   margin: 0;
   font-size: var(--text-xs);

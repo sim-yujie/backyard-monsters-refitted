@@ -5,7 +5,7 @@ import { YardChampionStanceSchema } from "../../schemas/YardSchemas.js";
 import { planChampionEvolve, planChampionStance, type ChampionSave } from "../yard/champion.js";
 import { checkpointSession, newCheckpoint, parseFlingLog, parseStoredCheckpoint, serialiseCheckpoint } from "./attackCheckpoint.js";
 import { brainsOf, newAttackSession, parseAttackSession, serialiseAttackSession } from "./attackSession.js";
-import { fightableLog, withFrozenBrains } from "./combat/attackLoot.js";
+import { fightableLog, withFrozenChampions } from "./combat/attackLoot.js";
 import { battleReplayInput } from "./combat/battle.js";
 
 /**
@@ -102,8 +102,8 @@ describe("the log a client sends", () => {
   });
 
   test("a replay that does not cut the log down is stamped all the same", () => {
-    expect(withFrozenBrains(log(FORGED), { "1": BRAIN }).events[0]).toMatchObject({ champion: { b: BRAIN } });
-    expect(withFrozenBrains(log(FORGED), undefined).events[0]).not.toHaveProperty("champion.b");
+    expect(withFrozenChampions(log(FORGED), { "1": BRAIN }).events[0]).toMatchObject({ champion: { b: BRAIN } });
+    expect(withFrozenChampions(log(FORGED), undefined).events[0]).not.toHaveProperty("champion.b");
     const input = battleReplayInput({
       flinglog: log(FORGED),
       session: { attackerid: 2, attackid: 1, startedat: 0, championBrains: { "1": BRAIN } },

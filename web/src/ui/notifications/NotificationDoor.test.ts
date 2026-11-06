@@ -213,7 +213,7 @@ describe("NotificationDoor", () => {
     expect(friends.nudge).toHaveBeenCalledTimes(1);
     await door.open();
     expect(friends.nudge).toHaveBeenCalledTimes(2);
-    expect(rows()[0]?.textContent).toContain("Bob wants to be your friend.");
+    expect(rows()[0]?.textContent).toContain("Friend request from Bob");
   });
 
   it("opens the Friends screen on its Gifts tab from a gift's row, closing the list", async () => {

@@ -77,8 +77,9 @@ const sequence = (...values: number[]): Random => {
   return () => values[Math.min(index++, values.length - 1)]!;
 };
 
+/** A pick outside every event: the pumpkin hunt's clock is pinned off, so the date the suite runs on does not matter. */
 const pick = (body: Row, random: Random, user = userOf()): Promise<YardAnswer> =>
-  runYardAction(em as unknown as EntityManager, user, mushroomPickAction(random), body);
+  runYardAction(em as unknown as EntityManager, user, mushroomPickAction(random, undefined, () => false), body);
 
 beforeEach(() => {
   db.row = rowOf();

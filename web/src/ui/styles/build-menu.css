@@ -94,6 +94,99 @@
   min-width: 0;
 }
 
+/* ── The Decorations tab's sub-tabs ─────────────────────────────────────── */
+
+/* Flash's five (Evil, Plants, Good, Flags, Premium) share the width, a
+   smaller tray than the four tabs above; a dot of a number on one counts the
+   decorations of that kind in storage.
+   They head the tiles' column, which scrolls with the info column beside
+   it, so they stick to the top of the scrolling area rather than leave it:
+   tabs stay fixed at the top (owner, 6 Nov 2026). Solid, so the tiles
+   scrolled under them do not show through. */
+.build-menu__kinds {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 2px;
+  margin-top: var(--space-1);
+  padding: 3px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: linear-gradient(var(--colour-surface-sunken), var(--colour-surface-sunken)), var(--colour-surface-base);
+}
+
+.build-menu__kinds[hidden] {
+  display: none;
+}
+
+.build-menu__kind {
+  position: relative;
+  min-width: 0;
+  min-height: var(--control-height-compact);
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: calc(var(--radius-md) - 3px);
+  background: transparent;
+  color: var(--colour-text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--easing),
+    color var(--motion-fast) var(--easing);
+}
+
+.build-menu__kind:hover {
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+}
+
+.build-menu__kind[aria-selected="true"] {
+  background: var(--colour-surface-selected);
+  color: var(--colour-text-strong);
+  font-weight: 700;
+  box-shadow: inset 0 -2px 0 var(--colour-accent);
+}
+
+.build-menu__kind:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.build-menu__kind-label {
+  position: relative;
+}
+
+/* On the word's top corner, as a note on an icon is. */
+.build-menu__kind-count {
+  position: absolute;
+  bottom: calc(100% - 6px);
+  left: calc(100% - 3px);
+  z-index: 1;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+  text-shadow: none;
+  pointer-events: none;
+}
+
+.build-menu__kind-count[hidden] {
+  display: none;
+}
+
 /* ── A page of tiles ───────────────────────────────────────────────────── */
 
 .build-menu__pager {
@@ -275,10 +368,31 @@
   filter: grayscale(1) brightness(0.62) contrast(40) invert(0.3) brightness(1.43);
 }
 
+/*
+ * The Modern look's picture: the building's new look on a transparent ground
+ * (`game/yard/buildButtonArt.ts`), so the tile's own colour shows round it.
+ * Locked, it is a dark shape of itself, as Flash's silhouettes were of its art.
+ */
+.build-tile__picture--modern img,
+.build-info__picture--modern img {
+  object-fit: contain;
+}
+
+.build-tile__picture--modern.build-tile__picture--shade img,
+.build-info__picture--modern.build-info__picture--shade img {
+  filter: brightness(0) opacity(0.5);
+}
+
 /* At the limit for now, or for good: the original's grey shroud. */
 .build-tile--limit .build-tile__picture img,
 .build-tile--maxed .build-tile__picture img {
   opacity: 0.5;
+}
+
+/* A Modern picture has no white ground to grey: half would sink it into the dark tile. */
+.build-tile--limit .build-tile__picture--modern img,
+.build-tile--maxed .build-tile__picture--modern img {
+  opacity: 0.75;
 }
 
 .build-tile--locked,
@@ -310,6 +424,18 @@
 
 /* "Needs 3 Hatcheries at level 2": something the player can go and do. */
 .build-tile__count--needs {
+  color: var(--colour-warning);
+}
+
+/* A decoration sold for Shiny: the Shop's Shiny icon and the price (owner 2026-11-04). */
+.build-tile__count--price {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* More Shiny than the player has. */
+.build-tile--ready .build-tile__count--short {
   color: var(--colour-warning);
 }
 
@@ -491,12 +617,22 @@
   font-weight: 600;
 }
 
+/*
+ * The Build button keeps to the bottom of the window when the info is taller
+ * than the room for it (a short screen, a long list of needs), so it is in
+ * sight and in reach without scrolling the info first.
+ */
 .build-info__actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   margin-top: auto;
-  padding-top: var(--space-2);
+  padding: var(--space-2) 0 var(--space-1);
+  /* Solid, so the needs scrolled under it do not show through. */
+  background: linear-gradient(var(--colour-surface-sunken), var(--colour-surface-sunken)), var(--colour-surface-base);
 }
 
 .build-info__build {
@@ -681,6 +817,14 @@
     overflow-y: auto;
   }
 
+  /* "Premium" is the longest; the size follows the width so it fits a
+     fifth, with room to spare in the widest of the fonts (as the tabs above). */
+  .build-menu__kind {
+    padding: 0 1px;
+    font-size: min(var(--text-sm), 2.9vw);
+    letter-spacing: -0.02em;
+  }
+
   .build-menu--picked .build-menu__browse,
   .build-menu:not(.build-menu--picked) .build-info {
     display: none;
@@ -749,6 +893,10 @@
     padding: 0;
     border: 0;
     background: transparent;
+  }
+
+  .build-info__actions {
+    background: var(--colour-surface-base);
   }
 
   .build-info__back {
@@ -906,6 +1054,10 @@
     padding: 0;
     border: 0;
     background: transparent;
+  }
+
+  .build-info__actions {
+    background: var(--colour-surface-base);
   }
 
   .build-info__back {

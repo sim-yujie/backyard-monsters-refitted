@@ -12,6 +12,7 @@ import {
 import { championPortrait, showPortrait } from "@/game/portraits";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import { typeName } from "@/game/yard/planner/summary";
+import { AMOUNT_CHANGE_SIGNS } from "@/ui/amountChange";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
 import { resourceIcon, RESOURCE_KEYS } from "@/ui/resourceIcon";
@@ -85,8 +86,47 @@ const decorationName = (type: number): string => typeName(type);
 export const rewardsText = (rewards: readonly EventReward[]): string =>
   rewards.map((reward) => rewardText(reward, decorationName)).join(" + ");
 
-/** A small picture for one reward, and its short figure. */
-const rewardBadge = (reward: EventReward): HTMLElement => {
+/**
+ * A claim's notice: "Day 3 claimed" and the rewards as the panel's own
+ * pictures and short figures, "[twig][pebble] +1K", the resources and Shiny
+ * green with a plus as gains (owner, 28 Oct); the full words ("Day 3
+ * claimed, gained 1,000 Twigs + 1,000 Pebbles") on hover and for a screen
+ * reader.
+ */
+export const claimedLine = (title: string, rewards: readonly EventReward[]): HTMLElement => {
+  const words = rewards.length > 0 ? `${title}, gained ${rewardsText(rewards)}` : title;
+  const line = el("span", "events-claimed");
+  line.setAttribute("role", "img");
+  line.setAttribute("aria-label", words);
+  line.title = words;
+  line.append(el("span", "events-claimed__title", title), ...rewards.map((reward) => rewardBadge(reward, true)));
+  return line;
+};
+
+/**
+ * The notice when a picked pumpkin reaches a ladder tier (bug report #10:
+ * a player picked pumpkins and never found the claim): the pumpkin count as
+ * the panel's pumpkin and a figure, "[pumpkin] 10", then the tier's rewards
+ * waiting; the full words on hover and for a screen reader. The notice's own
+ * button opens the Events page.
+ */
+export const readyLine = (need: number, rewards: readonly EventReward[]): HTMLElement => {
+  const words = `${formatAmount(need)} pumpkins: ${rewardsText(rewards)} to claim in Events`;
+  const line = el("span", "events-claimed events-ready");
+  line.setAttribute("role", "img");
+  line.setAttribute("aria-label", words);
+  line.title = words;
+  const count = el("span", "events-reward");
+  count.append(eventsArt("pumpkin", 18), el("span", "events-reward__figure", shortAmount(need)));
+  line.append(count, ...rewards.map((reward) => rewardBadge(reward)));
+  return line;
+};
+
+/**
+ * A small picture for one reward, and its short figure. A reward `gained`
+ * (claimed, not on offer) signs its resources and Shiny "+10K", in green.
+ */
+export const rewardBadge = (reward: EventReward, gained = false): HTMLElement => {
   const badge = el("span", `events-reward events-reward--${reward.kind}`);
   const pictures = el("span", "events-reward__pictures");
   let figure = "";
@@ -132,6 +172,11 @@ const rewardBadge = (reward: EventReward): HTMLElement => {
     }
   }
   badge.append(pictures);
+  const amount = reward.kind === "resources" || reward.kind === "shiny";
+  if (gained && amount && figure) {
+    badge.classList.add("events-reward--gain");
+    figure = `${AMOUNT_CHANGE_SIGNS.gain}${figure}`;
+  }
   if (figure) badge.append(el("span", "events-reward__figure", figure));
   return badge;
 };
@@ -211,6 +256,18 @@ export class EventsPanel {
     for (const line of this.element.querySelectorAll<HTMLElement>("[data-next-at]")) {
       line.textContent = nextText(Number(line.dataset["nextAt"]) - now);
     }
+  }
+
+  /**
+   * Scrolls the page so the first Claim button that can be pressed is in
+   * view, and says whether there was one. On a phone the pumpkin ladder sits
+   * under the 14 calendar days, below the fold (bug report #10).
+   */
+  showFirstClaim(): boolean {
+    const claim = this.element.querySelector<HTMLElement>("button[data-claim]:not(:disabled)");
+    if (!claim) return false;
+    claim.scrollIntoView?.({ block: "nearest" });
+    return true;
   }
 
   render(view: EventsPanelView): void {

@@ -645,22 +645,55 @@
   font-size: var(--text-sm);
 }
 
-.mr1-card__facts {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-  color: var(--colour-text-secondary);
-}
-
-.mr1-card__fact {
+/* A tribe camp's health left (less-text job 5; owner, 28 Oct): the heart, a
+ * bar that shrinks from full as the camp is damaged, a notch at 10% where it
+ * is wrecked, and the percent. Green, then amber, then red near the notch. */
+.mr1-health {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
-.mr1-card__fact .mr1-icon {
-  color: var(--colour-text-muted);
+.mr1-health__bar {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-raised);
+  box-shadow: inset 0 0 0 1px var(--colour-border);
+  overflow: hidden;
+}
+
+.mr1-health__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--colour-success);
+}
+
+.mr1-health[data-level="mid"] .mr1-health__fill {
+  background: var(--colour-warning);
+}
+
+.mr1-health[data-level="low"] .mr1-health__fill {
+  background: var(--colour-danger);
+}
+
+.mr1-health__notch {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--colour-text);
+  opacity: 0.7;
+}
+
+.mr1-health__value {
+  min-width: 3.5ch;
+  text-align: right;
 }
 
 /* The shield (they attacked you) and sword (you attacked them) counts on a

@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { useBotFloor } from "../../testing/botFloor.js";
 import { RedisClient } from "bun";
 import { MikroORM } from "@mikro-orm/postgresql";
 
@@ -42,6 +43,9 @@ const redis = enabled ? new RedisClient(redisUrl) : (null as unknown as RedisCli
 if (enabled) mock.module("../../server.js", () => ({ postgres, redis }));
 
 describe.skipIf(!enabled)("a bot's revenge fought for real (issue #244)", () => {
+  // Written for bots from level 15; the floor of 25 has its own tests (`useBotFloor`).
+  useBotFloor(15);
+
   let orm: MikroORM;
   let bot = 0;
   let secondBot = 0;
@@ -63,9 +67,16 @@ describe.skipIf(!enabled)("a bot's revenge fought for real (issue #244)", () => 
     ReplayTimeoutError: typeof import("../base/combat/replayRunner.js").ReplayTimeoutError;
   };
 
+  /**
+   * The plan's and the battle's seeds, fixed: under a fresh seed each run the
+   * revenge sometimes looted nothing, and the test's loot checks failed by chance.
+   */
+  const PLAN_SEED = 244;
+  const BATTLE_SEED = 2440;
+
   const realRunner = (): RevengeRunner => ({
     isOnline: modules.seenRecently,
-    attack: (input) => modules.runRevengeAttack(input),
+    attack: (input) => modules.runRevengeAttack({ ...input, planSeed: PLAN_SEED, battleSeed: BATTLE_SEED }),
   });
 
   const pass = async (runner: RevengeRunner = realRunner()): Promise<SweepReport> =>
@@ -241,8 +252,8 @@ describe.skipIf(!enabled)("a bot's revenge fought for real (issue #244)", () => 
   test(
     "a replay past its deadline spends nothing, and the finaliser lands it exactly once, as the same log and seed fight",
     async () => {
-      // The first test's revenge may have flattened the yard (its battle seed is fresh each run), and
-      // a yard with nothing left standing has nothing to attack: mend it first, as a player would.
+      // The first test's revenge left the yard damaged (under its fixed seeds, 38%): mend it first,
+      // as a player would, so this one starts from a whole yard.
       await sql(`UPDATE bym.save SET protected = 0, buildinghealthdata = '{}' WHERE userid = ?`, [player]);
       await attackedBot(secondBot);
 

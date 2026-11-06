@@ -19,11 +19,10 @@ export const HELP_RULES = {
 
 /**
  * Who may help, or send a gift (§7 rules 1 and 2, Q7): friends this long, both
- * accounts this old, both at this level or above.
+ * at this level or above. No account-age rule (owner 2026-10-29: it was 3 days).
  */
 export const FRIEND_GATES = {
   friendshipAgeHours: FRIEND_LIMITS.friendshipAgeHours,
-  accountAgeDays: 3,
   minLevel: 5,
 } as const;
 

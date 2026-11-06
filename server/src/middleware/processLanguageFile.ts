@@ -3,10 +3,18 @@ import fs from "fs/promises";
 import { Env } from "../enums/Env.js";
 import { logger } from "../utils/logger.js";
 import { Status } from "../enums/StatusCodes.js";
+import { SUPPORTED_LANGUAGES } from "../controllers/supportedLangs.js";
 
 const matchLanguage = /^\/gamestage\/assets\/([a-zA-Z]+)\.json$/;
 
 const languageCache = new Map<string, Promise<string>>();
+
+/**
+ * The files that exist (`english.json`, ...). Anything else, such as a
+ * scanner or an old client asking for `en.json`, is a plain 404 rather than a
+ * failed read logged as a server error.
+ */
+const languageFiles: ReadonlySet<string> = new Set(SUPPORTED_LANGUAGES.map((name) => name.toLowerCase()));
 
 /**
  * Locally the language files are the ones being edited, and bun --watch does not
@@ -43,6 +51,12 @@ export const processLanguagesFile = async (ctx: Context, next: Next) => {
   }
 
   const languageCode = match[1];
+
+  if (!languageFiles.has(languageCode)) {
+    ctx.status = Status.NOT_FOUND;
+    ctx.body = { error: "Unknown language" };
+    return;
+  }
 
   try {
     let body = cacheLanguageFiles ? languageCache.get(languageCode) : undefined;

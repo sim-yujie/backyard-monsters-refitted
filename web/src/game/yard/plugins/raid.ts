@@ -1,5 +1,6 @@
 import { raidApi } from "@/api/raid";
 import { repairActions } from "@/api/yardRepair";
+import { isMolochRaid } from "@/game/inferno/molochRaid";
 import { runRaidAftermath } from "@/game/raid/raidAftermath";
 import { consumeRaidNote, consumeRaidResult, setRaidRun } from "@/game/raid/raidSession";
 import { raidWatch } from "@/game/raid/raidWatch";
@@ -13,7 +14,9 @@ import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
  * `docs/design/wild-raids.md` §4.3), on the main yard only: the alert, the
  * top bar's countdown and the lock (`RaidYardFlow`, drawn by `RaidYardUi`),
  * the hand-over to the raid scene when the fight is due, and, when the yard
- * opens after a fight, the result and frequency popups.
+ * opens after a fight, the result and frequency popups. Not after Moloch's
+ * raids: Flash showed only "stage passed" for those (`GoodDefense` and
+ * `PoorDefense`), which the Inferno's plugin plays.
  */
 
 /** Repair now for the result popup, as the Shop prices it, or null when nothing is damaged. */
@@ -59,7 +62,7 @@ export const raidYardPlugin: YardPlugin = (mounts) => {
   // Back from a fight: what it landed, or why it did not.
   const note = consumeRaidNote();
   if (note) notice(note);
-  const result = consumeRaidResult();
+  const result = consumeRaidResult((landed) => !isMolochRaid(landed));
   if (result) {
     void runRaidAftermath(
       { api: raidApi, view: raidAftermathView(overlay.modal, () => repairOffer(mounts), notice) },

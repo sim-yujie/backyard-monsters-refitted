@@ -6,6 +6,8 @@
  * signature rather than pretending the list is complete.
  */
 
+import type { InfernoLoadState } from "./inferno";
+
 /** Every successful game response carries `error: 0`. See ApiError for why. */
 export interface ApiEnvelope {
   error?: number | string;
@@ -107,7 +109,22 @@ export interface AccountResponse extends ApiEnvelope {
   username: string;
   canChangeUsername: boolean;
   nextChangeAt: string | null;
-  settings?: { shinyLocked?: boolean; hideOnline?: boolean; friendRequests?: boolean };
+  settings?: {
+    shinyLocked?: boolean;
+    hideOnline?: boolean;
+    friendRequests?: boolean;
+    /** The server's MR2_TILT switch lets Map Room 2 tilt (MR2 look plan step 4). */
+    mapTiltAllowed?: boolean;
+    /** The player's own choice: Map Room 2 tilted (default) or flat. */
+    tiltedMap?: boolean;
+    /** The server's MR2_HEX_SHAPE switch: Map Room 2's hexes flat-top (default) or pointy-top. */
+    mapHexShape?: "flat" | "pointy";
+    /** The player's country (ISO 3166-1 alpha-2), null when not set. */
+    country?: string | null;
+    countryAsked?: boolean;
+    /** The country's chat room, when it has one. */
+    countryChannel?: string | null;
+  };
 }
 
 /** `POST /api/:apiVersion/player/changeusername`. */
@@ -120,7 +137,7 @@ export interface ChangeUsernameResponse extends ApiEnvelope {
 /** `POST /api/:apiVersion/player/settings`. */
 export interface SettingsResponse extends ApiEnvelope {
   error: number;
-  settings: { shinyLocked: boolean };
+  settings: { shinyLocked: boolean; mapTiltAllowed?: boolean; tiltedMap?: boolean; mapHexShape?: "flat" | "pointy" };
 }
 
 /* ── Base / yard ────────────────────────────────────────────────────────── */
@@ -562,6 +579,19 @@ export type BuildingDataMap = Record<string, BuildingData>;
 export type BuildingHealthData = Record<string, number>;
 
 /**
+ * The siege weapons a player holds (`siege`, Inferno WP 6.3): each weapon's
+ * researched level, 0..10, and how many are made and unused, 0 or 1
+ * (`SiegeWeapon.exportVariables`).
+ */
+export type SiegeData = Record<string, { level?: number; quantity?: number } | undefined>;
+
+/**
+ * The Inferno purse (`iresources`): Bone, Coal, Sulfur and Magma held as
+ * `r1..r4`, their caps as `r1max..r4max` (`BASE._iresources`).
+ */
+export type InfernoResourcesData = Partial<Record<`r${1 | 2 | 3 | 4}` | `r${1 | 2 | 3 | 4}max`, number>>;
+
+/**
  * One yard mushroom as the save stores it: `[frame, X, Y]`, the art frame
  * (1 to 5) and the position in yard units, as for a building
  * (`client/scripts/BASE.as:2749-2757` writes it, `MUSHROOMS.as:84-90` reads
@@ -635,6 +665,10 @@ export interface BaseLoadResponse extends ApiEnvelope {
   randommoveat?: number | null;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
+  /** The siege weapons (WP 6.3). Not a yard-state field: siege answers and `completed` keep it current. */
+  siege?: SiegeData | null;
+  /** The Inferno purse the Siege Lab and Factory pay from (WP 6.3). */
+  iresources?: InfernoResourcesData | null;
   mushrooms?: MushroomSave | null;
   /**
    * Owned store items. `ENL.q` is the yard expansion level, 0..6, `BEW.q` the
@@ -707,6 +741,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   attackerbrains?: unknown;
   /**
+   * Attack modes only: the attacker's champions' health, by type, as the
+   * server froze it into this attack at launch. A flung champion comes out at
+   * this (`ATTACK.as:532`), which is what the server replays.
+   */
+  attackerhealth?: unknown;
+  /**
    * Attack modes only: the attacker's academy levels, by monster id, as the
    * server froze them into this attack at launch after catching their yard up
    * (issue #201). The battle is fought at these, which the server replays.
@@ -732,6 +772,11 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   notifications?: number;
   /**
+   * What the Quests button's red number counts (beta 6), from the latest yard
+   * answer that carried `questsClaimable`; the load itself does not send it.
+   */
+  questsClaimable?: number;
+  /**
    * The owner's loads: how to reach world chat (#282, `game/chat/chatSession.ts`).
    * `chatservers` is every load's, the chat WebSocket's `host:port`;
    * `chattoken` (a day's, per player) and `chatchannel` (the world room for
@@ -741,11 +786,26 @@ export interface BaseLoadResponse extends ApiEnvelope {
   chattoken?: string;
   chatchannel?: string;
   /**
+   * The owner's loads, when the player has picked a country (every country has its own chat room)
+   * (owner 3 Nov 2026): the room's key (`chat:country:PH`) and the country.
+   */
+  chatcountrychannel?: string;
+  chatcountry?: string;
+  /** The owner's loads, until answered or put off: ask once where the player is from. */
+  countryask?: number;
+  /**
    * Map Room 2 attack loads only: the target cell's height, `i`, which
    * stretches an outpost's tower range (`BTOWER.as:80-85`). The server's loot
    * replay reads the same stored value (`world_map_cell.terrainHeight`).
    */
   cellheight?: number;
+  /**
+   * Map Room 2 attack loads and the owner's own outpost build load, with the
+   * land switch on: the target cell's land feature (`landFeatures.ts`), for
+   * the range rings. Absent on open ground. The battle reads the copy in the
+   * defence (`defenderforces.land`).
+   */
+  landfeature?: number;
   /**
    * On an attack load: the defence the battle is fought against, as the
    * server keeps it for its replay (issue #195): each bunker's garrison, the
@@ -761,6 +821,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * yard routes' `completed` shape (issue #135). `[]` when nothing did.
    */
   completed?: CompletedJob[];
+  /**
+   * Only on the owner's build-mode load of their own main yard, and only while
+   * the new Inferno is switched on: the cave, and the level Moloch's
+   * emergence just raised it to (`docs/design/inferno.md` §2.2).
+   */
+  infernostate?: InfernoLoadState;
   /**
    * Only on the owner's build-mode load of their own main yard or outpost:
    * the account's new-player tutorial summary (issue #227). Every yard action
@@ -832,6 +898,20 @@ export interface WildMonsterCell {
   dm: number;
   /** 1 once damage >= 90. */
   d: number;
+  /** The cell's land feature (`landFeatures.ts`), with the server's land switch on; absent on open ground. */
+  lf?: number;
+  /**
+   * Map Room 2 rivers (look only, server `rivers.ts`, switch `MR2_RIVERS`): the river on this
+   * cell's own three edges, axial directions 0, 1, 2, two bits of width (1-3) each,
+   * `width << (2 * direction)`. Absent where none, or with the switch off.
+   */
+  rv?: number;
+  /**
+   * Map Room 2's neighbour defence bonus (`docs/mr2-neighbours.md`): the
+   * friendly cells around this one, 1 to 6, counted as the attack load counts
+   * them. Sent only with the switch on and at least one friend.
+   */
+  nb?: number;
 }
 
 /** A player's main yard (`b` 2) or captured outpost (`b` 3). */
@@ -842,6 +922,14 @@ export interface PlayerCell {
   bid: string;
   /** Owner's alliance id. */
   aid: number | null;
+  /** The cell's land feature (`landFeatures.ts`), with the server's land switch on; absent on open ground. */
+  lf?: number;
+  /**
+   * Map Room 2 rivers (look only, server `rivers.ts`, switch `MR2_RIVERS`): the river on this
+   * cell's own three edges, axial directions 0, 1, 2, two bits of width (1-3) each,
+   * `width << (2 * direction)`. Absent where none, or with the switch off.
+   */
+  rv?: number;
   /** Owner username. */
   n: string;
   /** Owner's base level. */
@@ -859,6 +947,12 @@ export interface PlayerCell {
   dm: number;
   /** 1 when damage >= 90, i.e. takeover-eligible. */
   d: number;
+  /**
+   * Map Room 2's neighbour defence bonus (`docs/mr2-neighbours.md`): the
+   * friendly cells around this one, 1 to 6, counted as the attack load counts
+   * them. Sent only with the switch on and at least one friend.
+   */
+  nb?: number;
   /** Lock owner user id; non-zero means busy. Always 0 on the caller's cell. */
   lo: number;
   /** 1 while damage protection is active. */
@@ -881,6 +975,8 @@ export interface PlayerCell {
   fr: number;
   /** 1 on the caller's own outpost whose worker is free (#338); absent otherwise. */
   wi?: 1;
+  /** 1 on the caller's own outpost whose worker is building, upgrading or fortifying; absent otherwise. */
+  wb?: 1;
   /** Own cells only: the owner's live resources. */
   r?: Resources;
   /** Own cells only: hatchery and garrison state. */
@@ -988,8 +1084,9 @@ export const isPlayerCell = (cell: MapCell): cell is PlayerCell =>
  * it obvious which of the two a value came from.
  *
  * `l` and `fort` carry the level and fortification a layout was designed
- * around, which phase 2 needs for planned upgrades and which phase 1 only
- * round-trips.
+ * around; nothing reads them back but the layout itself. A layout saved before
+ * 2026-11-03 may also carry a `plan` (a planned upgrade), which nothing reads
+ * any more: the planner no longer plans upgrades.
  */
 export interface LayoutNode {
   /** Building id, matching the id in `buildingdata`. */
@@ -1000,30 +1097,6 @@ export interface LayoutNode {
   y: number;
   l?: number;
   fort?: number;
-  /** The upgrade the player has planned for this building, if any. */
-  plan?: LayoutNodePlan;
-}
-
-/**
- * A planned upgrade on one node (`docs/design/planner-upgrades.md` §2.1).
- *
- * Additive and optional, so the layout format stays at version 2: a server or
- * a client that does not know the field drops it, which is lossy but never
- * wrong. Fortification is not planned — no building in Map Room 2 has a
- * fortify ladder to price — so this carries a level and nothing else (§1.3).
- */
-export interface LayoutNodePlan {
-  /**
-   * The level the player wants this building to reach. At least 2, at most the
-   * type's maximum, and above the building's current level.
-   */
-  level: number;
-  /**
-   * Where this sits in the player's own queue. Apply starts jobs in ascending
-   * order, ties broken by building id, so the order they planned in is the
-   * order they get.
-   */
-  order: number;
 }
 
 /** The layout format version this client writes and reads. */
@@ -1082,17 +1155,8 @@ export interface ApplyLayoutResponse extends ApiEnvelope {
   /** How many buildings changed position. */
   moved: number;
   buildingdata: BuildingDataMap;
-  /**
-   * The resource pool as the server now holds it, sent whenever Apply charged
-   * for something, so the HUD re-reads it instead of subtracting its own
-   * arithmetic from a number it may already have been wrong about.
-   */
+  /** The resource pool as the server now holds it. */
   resources?: Resources;
-  /**
-   * What the upgrade walk did, or null when `startUpgrades` was 0. Absent from
-   * a server that predates planned upgrades.
-   */
-  upgrades?: UpgradeReport | null;
   /** Decorations the layout left out, now in storage (#128). */
   stored?: number[];
   /** The ids of the decorations `fromStorage` put down (#128). */
@@ -1108,109 +1172,12 @@ export interface ApplyLayoutResponse extends ApiEnvelope {
   mushrooms?: MushroomSave;
 }
 
-/* ── Planned upgrades ───────────────────────────────────────────────────── */
-
-/**
- * Why Apply could not start a planned upgrade
- * (`docs/design/planner-upgrades.md` §3.2).
- *
- * None of these refuses the request: a job the yard cannot do now is reported
- * and the rest of the queue carries on, which is what makes Apply partial by
- * design. `caughtUp` means the yard is already at or past the planned level,
- * and `noLadder` that the type has no upgrade steps at all.
- */
-export type UpgradeSkipReason =
-  | "shortfall"
-  | "busy"
-  | "damaged"
-  | "townHall"
-  | "requirements"
-  | "caughtUp"
-  | "noLadder";
-
 /** Twigs, pebbles, putty and goo. */
 export interface UpgradeCost {
   r1: number;
   r2: number;
   r3: number;
   r4: number;
-}
-
-/** Fields every row of the report carries: which building, and of what type. */
-interface UpgradeRow {
-  id: number;
-  t: number;
-}
-
-/** Fields a row carries when it names a step: the levels it spans. */
-interface UpgradeStepRow extends UpgradeRow {
-  /** The level the building was at before this step. */
-  from: number;
-  /** The level this step takes it to. */
-  to: number;
-}
-
-/** An upgrade that is now running: `cU` is set and a worker is on it. */
-export interface StartedUpgrade extends UpgradeStepRow {
-  /** The countdown written, already multiplied by the Sharper Tools buff. */
-  seconds: number;
-  cost: UpgradeCost;
-}
-
-/**
- * An upgrade written straight to its finished level.
- *
- * Only a wall or trap step (5 seconds, D13): the walk completes it on the
- * spot, charges it, awards its points and uses no worker. Every other step,
- * however short, is a {@link StartedUpgrade} (#137).
- */
-export interface FinishedUpgrade extends UpgradeStepRow {
-  cost: UpgradeCost;
-}
-
-/** An upgrade that would have started had a worker been free. */
-export interface WaitingUpgrade extends UpgradeStepRow {
-  reason: "workers";
-}
-
-/**
- * An upgrade the yard's state ruled out, with the detail for that reason.
- *
- * The detail keys are the ones the batch routes already use, so the planner
- * reads a skipped row the same way it reads a 409 from the wall upgrade.
- */
-export interface SkippedUpgrade extends UpgradeRow {
-  reason: UpgradeSkipReason;
-  /** The level the building is at, where the reason names a step. */
-  from?: number;
-  /** The level the step would have reached. */
-  to?: number;
-  /** `shortfall`: how much of each resource the job was still short of. */
-  shortfall?: UpgradeCost;
-  /** `townHall`: the hall level the yard has, and the one the step wants. */
-  townHall?: { have: number; need: number };
-  /** `requirements`: the `[type, count, level]` entries the yard does not meet. */
-  requirements?: (readonly [type: number, count: number, level: number])[];
-}
-
-/** How many workers the yard has, and how many were on a job either side of the walk. */
-export interface UpgradeWorkers {
-  total: number;
-  busyBefore: number;
-  busyAfter: number;
-}
-
-/** Everything Apply's upgrade walk did, in the order the dialog reports it. */
-export interface UpgradeReport {
-  started: StartedUpgrade[];
-  finished: FinishedUpgrade[];
-  waiting: WaitingUpgrade[];
-  skipped: SkippedUpgrade[];
-  /** The total actually charged, across started and finished steps. */
-  cost: UpgradeCost;
-  /** Empire points awarded now, which is the free-finish steps only. */
-  points: number;
-  workers: UpgradeWorkers;
 }
 
 /**
@@ -1234,17 +1201,6 @@ export interface ApplyConflictDetails {
   busy?: number[];
   /** Batch wall upgrade: ids that have to be repaired before they upgrade. */
   damaged?: number[];
-  /**
-   * Apply and save: ids whose planned level is past the top of that type's
-   * ladder, or on a type with no ladder at all.
-   */
-  planLevel?: number[];
-  /**
-   * Save only: ids whose planned level the yard has already reached. Apply
-   * skips those with reason `caughtUp` instead of refusing, because a layout
-   * saved before a job finished is not the client's fault.
-   */
-  planCaughtUp?: number[];
 }
 
 /* ── Batch actions ──────────────────────────────────────────────────────── */
@@ -1467,6 +1423,11 @@ export type YardResponse<Report> = ApiEnvelope &
     notifications?: number;
     /** Paid unlocks not yet shown, as `/base/load` sends them (#204). */
     achievements?: AchievementUnlock[];
+    /**
+     * Quests, login days and bonuses waiting for a Claim tap (beta 6, the
+     * Quests button's red number). Absent before the player's quest record exists.
+     */
+    questsClaimable?: number;
   };
 
 /**
@@ -1540,6 +1501,11 @@ export interface SpeedupReport {
   finished: CompletedJob | null;
   /** Set when `SP1` finished a repair instead of a job (#279). */
   repaired?: true;
+  /**
+   * Seconds of a free `SP2` / `SP3` that went unused: the job had less time
+   * left than it takes off, so it finished and the rest was lost (patch 6.3).
+   */
+  unused?: number;
 }
 
 /** `POST /bm/yard/mushroom/pick` (`docs/design/yard-buildings.md` §5.6). */

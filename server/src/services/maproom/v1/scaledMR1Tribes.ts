@@ -1,6 +1,6 @@
 import type { Context } from "koa";
 import type { TypeOf } from "zod";
-import { attackNotBoundErr, saveFailureErr } from "../../../errors/errors.js";
+import { attackNotBoundErr, baseGoneErr } from "../../../errors/errors.js";
 import { Maproom } from "../../../database/models/maproom.model.js";
 import { Save } from "../../../database/models/save.model.js";
 import { User } from "../../../database/models/user.model.js";
@@ -12,27 +12,38 @@ import { monsterUpdateHandler } from "../../../controllers/base/save/handlers/mo
 import { MR1_TRIBES_MAP } from "../../../game-data/tribes/v1/index.js";
 import { combatConfig } from "../../../config/CombatConfig.js";
 import { bankAttackLoot, krallenBuffOf } from "../../base/combat/attackLoot.js";
-import { chargeBombSpend } from "../../base/combat/bombSpend.js";
-import { parseFlingLog } from "../../base/attackCheckpoint.js";
+import { bombSpendOf, catapultLevelOf, chargeBombSpend, type BombSpend } from "../../base/combat/bombSpend.js";
+import { checkpointSession, parseFlingLog } from "../../base/attackCheckpoint.js";
+import type { AbandonedOutcome } from "../../base/combat/abandonedAttack.js";
+import { replayAbandonedInWorker } from "../../base/combat/replayRunner.js";
+import { endRowlessAttack, landRowlessOnce, type RowlessCheckpoint } from "../../base/rowlessCheckpoint.js";
 import { recordBombSpend } from "../../base/combat/recordBombSpend.js";
 import { checkAttackBinding, type AttackSession } from "../../base/attackSession.js";
 import { storedDamage } from "../../base/storedDamage.js";
 import { championsAfterAttack, siegeAfterAttack } from "../../base/combat/attackerRow.js";
 import { championsAfterLessons } from "../../base/combat/championBrain.js";
-import { RESOURCE_KEYS, derivedDestroyed, type ResourceAmounts } from "../../../game-rules/combat/index.js";
+import {
+  RESOURCE_KEYS,
+  derivedDestroyed,
+  type FlingLog,
+  type ResourceAmounts,
+} from "../../../game-rules/combat/index.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
-import type { SaveData } from "../../../types/EntityData.js";
 import type { TribeData } from "../../../types/TribeData.js";
 import { isDeclareWarRunning } from "../../alliance/powerups.js";
 import { battleReplayInput, battleTick } from "../../base/combat/battle.js";
 import { recordBattleMismatches, replayBattleForSave } from "../../base/combat/saveBattle.js";
 import { creditableMR1Loot, mr1TribePool } from "./mr1TribeRules.js";
 import { recordTribeDestroyed } from "../../goals/tribeCounter.js";
+import { tribeOfBase } from "../../goals/counters.js";
+import { addQuestEvents, questEvent } from "../../quests/state.js";
+import { catapultQuestEvents, lootQuestEvents } from "../../quests/hooks.js";
+import { recordQuestEvents } from "../../quests/record.js";
+import { removedCampStandIn } from "./practiceCamp.js";
 import { countAttackLoot } from "../../events/lootEvents.js";
 import { recordAttackAchievements } from "../../achievements/events.js";
 import {
   acquireMR1TribeFinalLock,
-  endMR1TribeSession,
   readMR1TribeSession,
   releaseMR1TribeFinalLock,
 } from "./mr1TribeSession.js";
@@ -77,161 +88,260 @@ export const scaledMR1Tribes = async (ctx: Context, user: User, saveData: BaseSa
   }
 };
 
+/** The tribe as the attack load served it, and the player's stored copy of it. */
+interface ServedTribe {
+  readonly maproom: Maproom;
+  readonly existingTribe: TribeData;
+  readonly tribeData: NonNullable<ReturnType<typeof MR1_TRIBES_MAP.get>>;
+  readonly tribeSave: Save;
+}
+
+const servedTribe = async (user: User, baseid: string): Promise<ServedTribe> => {
+  const maproom = await postgres.em.findOne(Maproom, { userid: user.userid });
+
+  if (!maproom) throw new Error(`MapRoom not found for userid: ${user.username}`);
+
+  let existingTribe = maproom.tribedata.find((tribe) => tribe.baseid === baseid);
+
+  // The practice camp, removed by a guide skip during this attack: the attack
+  // lands on a stand-in that is never written back.
+  if (!existingTribe) {
+    existingTribe = removedCampStandIn(baseid);
+    if (existingTribe) {
+      logger.info("Practice camp attack by {username} (userid {userid}) landed after a guide skip", {
+        event: "practice-camp-stand-in",
+        userid: user.userid,
+        username: user.username,
+      });
+    }
+  }
+
+  // Its entry is gone from the player's Map Room since the attack began.
+  if (!existingTribe) {
+    logger.warn("Save refused for {username} (userid {userid}): attack on base {baseid} gone", {
+      event: "save-base-gone",
+      userid: user.userid,
+      username: user.username,
+      baseid,
+      saveType: "attack",
+      cause: "tribeGone",
+    });
+    throw baseGoneErr("tribeGone");
+  }
+
+  const tribeData = MR1_TRIBES_MAP.get(baseid);
+
+  if (!tribeData) throw new Error(`No MR1 tribe data found for baseid: ${baseid}`);
+
+  const tribeSave = Object.assign(new Save(), { ...tribeData, baseid });
+  return { maproom, existingTribe, tribeData, tribeSave };
+};
+
+/** The tribe as the response shows it: its stored health and monsters. */
+const tribeAsStored = ({ tribeSave, existingTribe, tribeData }: ServedTribe): Save =>
+  Object.assign(tribeSave, {
+    buildinghealthdata: existingTribe.tribeHealthData,
+    monsters: existingTribe.monsters ?? tribeData.monsters,
+  });
+
 const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData, finalises: boolean) => {
   const userSave = user.save!;
   const now = getCurrentDateTime();
 
   const session = await requireTribeBinding(ctx, user, saveData, now);
+  const served = await servedTribe(user, saveData.baseid);
 
-  const maproom = await postgres.em.findOne(Maproom, { userid: user.userid });
-
-  if (!maproom) throw new Error(`MapRoom not found for userid: ${user.username}`);
-
-  const existingTribe = maproom.tribedata.find((tribe) => tribe.baseid === saveData.baseid);
-
-  if (!existingTribe) throw saveFailureErr();
-
-  const tribeData = MR1_TRIBES_MAP.get(saveData.baseid);
-
-  if (!tribeData) throw new Error(`No MR1 tribe data found for baseid: ${saveData.baseid}`);
-
-  const tribeSave = Object.assign(new Save(), { ...tribeData, baseid: saveData.baseid });
+  if (!finalises) return { save: tribeAsStored(served), credited: null };
 
   // Worked out before anything is written, so a refusal in `reject` mode
   // leaves every row as it was (issue #90, as `baseSave.ts` does).
-  const bombs = finalises
-    ? recordBombSpend(ctx, user, userSave, tribeSave, saveData.flinglog, combatConfig.mode, session?.attackerResources)
-    : null;
+  const bombs = recordBombSpend(
+    ctx,
+    user,
+    userSave,
+    served.tribeSave,
+    saveData.flinglog,
+    combatConfig.mode,
+    session?.attackerResources
+  );
 
   // The battle, replayed to the client's clock over the tribe as the attack
-  // load served it (issue #23, C4), in a worker. A tribe keeps no checkpoint
-  // and no finaliser lands its attacks, so a replay past its deadline lands
-  // nothing: the save is answered `attackResultPendingErr`, the session is
-  // left for a resent save, and the tribe respawns in time anyway.
-  const battle = finalises ? await tribeBattle(ctx, user, saveData, session, tribeData, existingTribe) : null;
+  // load served it (issue #23, C4), in a worker. A replay past its deadline
+  // lands nothing: the save is answered `attackResultPendingErr` and the
+  // session is left for a resent save, or for the finaliser to land from the
+  // attack's last checkpoint (`finaliseRowlessAttack.ts`).
+  const battle = await tribeBattle(ctx, user, saveData, session, served);
+
+  // Only the main yard flings on Map Room 1, and Flash's `attackcreatures`
+  // blob is never written.
+  const entries = Array.isArray(saveData.monsterupdate) ? saveData.monsterupdate : [];
+  return writeTribeLanding(
+    user,
+    String(saveData.baseid),
+    session,
+    served,
+    battle,
+    {
+      entries: entries.filter((entry: { baseid?: unknown }) => String(entry?.baseid) === String(userSave.baseid)),
+      attackerchampion: saveData.attackerchampion,
+      flinglog: saveData.flinglog,
+      bombs,
+    },
+    now
+  );
+};
+
+/** The server's battle for a tribe attack: the replay's outcome with the camp's `destroyed` and the log it fought. */
+type TribeBattle = AbandonedOutcome & { destroyed: number; log: FlingLog };
+
+/** The attacker's side of a landing: what the save (or the checkpoint) says of the attacker's own row. */
+interface TribeAttackerSide {
+  /** The main yard's `monsterupdate` entries; the fling log decides what leaves. */
+  readonly entries: readonly unknown[];
+  readonly attackerchampion: unknown;
+  readonly flinglog: unknown;
+  readonly bombs: BombSpend | null;
+}
+
+/**
+ * Lands a tribe attack (see `scaledMR1Tribes`) and ends it: the final save's
+ * path, and the finaliser's for an attack its attacker left
+ * (`finaliseRowlessAttack.ts`). The caller holds the tribe's final lock.
+ */
+const writeTribeLanding = async (
+  user: User,
+  baseid: string,
+  session: AttackSession,
+  served: ServedTribe,
+  battle: TribeBattle | null,
+  attacker: TribeAttackerSide,
+  now: number
+) => {
+  const userSave = user.save!;
+  const { maproom, existingTribe, tribeData } = served;
+  const ref = { kind: "mr1" as const, userid: user.userid, baseid };
 
   const wasDestroyed = Boolean(existingTribe.destroyed);
-  /** What the attacker's pool took of the loot, for the response. */
-  let credited: ResourceAmounts | null = null;
-  /** The battle's credit before the attacker's cap, for event loot. */
-  let lootCredit: ResourceAmounts | null = null;
 
-  // The tribe keeps its own monsters, the stored ones or its template's: the
-  // save's copy is never written (issue #23, C2). What the battle did to it
-  // is the replay's; a save without one writes none of it.
-  if (battle) {
-    existingTribe.tribeHealthData = battle.buildinghealthdata;
-    existingTribe.destroyed = battle.destroyed;
-    existingTribe.destroyedAt = battle.destroyed
-      ? wasDestroyed ? existingTribe.destroyedAt ?? now : now
-      : undefined;
-    existingTribe.damage = storedDamage(battle.damage) ?? existingTribe.damage;
+  // Marked landed before anything is written: whatever a crash after the
+  // write leaves behind lands nothing more (`landRowlessOnce`).
+  const { credit, credited } = await landRowlessOnce(ref, session, async () => {
+    // The tribe keeps its own monsters, the stored ones or its template's: the
+    // save's copy is never written (issue #23, C2). What the battle did to it
+    // is the replay's; a landing without one writes none of it.
+    if (battle) {
+      existingTribe.tribeHealthData = battle.buildinghealthdata;
+      existingTribe.destroyed = battle.destroyed;
+      existingTribe.destroyedAt = battle.destroyed
+        ? wasDestroyed ? existingTribe.destroyedAt ?? now : now
+        : undefined;
+      existingTribe.damage = storedDamage(battle.damage) ?? existingTribe.damage;
 
-    userSave.wmstatus.forEach((tribe) => {
-      if (tribe[0] === Number(saveData.baseid)) tribe[2] = battle.destroyed;
-    });
-  }
+      userSave.wmstatus.forEach((tribe) => {
+        if (tribe[0] === Number(baseid)) tribe[2] = battle.destroyed;
+      });
+    }
 
-  if (finalises) {
     // The army settles as a Map Room 2 attack's does (issue #132): the flung
     // monsters leave the main yard's housing as caught up now, capped by what
-    // it housed at entry (the session's `entryHoused`). Only the main yard
-    // flings on Map Room 1, and Flash's `attackcreatures` blob is never written.
-    const entries = Array.isArray(saveData.monsterupdate) ? saveData.monsterupdate : [];
-    await monsterUpdateHandler(
-      entries.filter((entry: { baseid?: unknown }) => String(entry?.baseid) === String(userSave.baseid)),
-      userSave,
-      { session, finalises: true, flinglog: saveData.flinglog, now, mapRoom3: false }
-    );
+    // it housed at entry (the session's `entryHoused`).
+    await monsterUpdateHandler([...attacker.entries], userSave, {
+      session,
+      finalises: true,
+      flinglog: attacker.flinglog,
+      now,
+      mapRoom3: false,
+    });
 
     // Read before the champions below are written (`attackLootOf` reads them the same way).
-    const krallenBuff = krallenBuffOf(parseFlingLog(saveData.flinglog), userSave.champion);
+    const krallenBuff = krallenBuffOf(parseFlingLog(attacker.flinglog), userSave.champion);
 
     // The attacker's own row as the log explains it, not as the save says it
     // (#23, C1): siege less what was used, champion health only downwards.
-    if (saveData.attackerchampion) {
-      userSave.champion = championsAfterAttack(userSave.champion, saveData.attackerchampion, saveData.flinglog);
+    if (attacker.attackerchampion) {
+      userSave.champion = championsAfterAttack(userSave.champion, attacker.attackerchampion as never, attacker.flinglog);
     }
     // Each champion that fought learns from the server's battle, once, under
     // the tribe's final lock (issue #219).
     if (battle) userSave.champion = championsAfterLessons(userSave.champion, battle.lessons, battle.log) ?? userSave.champion;
-    userSave.siege = siegeAfterAttack(userSave.siege, saveData.flinglog);
+    userSave.siege = siegeAfterAttack(userSave.siege, attacker.flinglog);
 
-    if (bombs) userSave.resources = chargeBombSpend(bombs.spend, userSave.resources);
+    if (attacker.bombs) userSave.resources = chargeBombSpend(attacker.bombs.spend, userSave.resources);
 
     // The replay's gain, capped by what the tribe has left to give. The tribe
     // gives up the whole credit; the attacker keeps what fits in their
     // storage (issue #166, `bankAttackLoot`), as on Map Room 2.
     const credit = creditableMR1Loot(battle?.attackloot, mr1TribePool(tribeData), existingTribe.looted);
-    credited = bankAttackLoot(userSave, credit, krallenBuff).credited;
-    lootCredit = credit;
+    const credited: ResourceAmounts = bankAttackLoot(userSave, credit, krallenBuff).credited;
 
     const looted = { ...existingTribe.looted };
     for (const key of RESOURCE_KEYS) looted[key] = (looted[key] ?? 0) + credit[key];
     existingTribe.looted = looted;
-  }
 
-  postgres.em.persist(maproom);
-  postgres.em.persist(userSave);
-  await postgres.em.flush();
+    postgres.em.persist(maproom);
+    postgres.em.persist(userSave);
+    await postgres.em.flush();
+    return { credit, credited };
+  });
 
   // Event loot (the monthly Krallen Hunt): the tribe's whole credit, before
   // the attacker's cap, once, under the tribe's final lock.
-  if (lootCredit) await countAttackLoot(postgres.em, user.userid, userSave, lootCredit, now);
+  await countAttackLoot(postgres.em, user.userid, userSave, credit, now);
 
   // Goals WM1-WM4 (#227): a tribe this replay destroyed, counted on the
   // attacker's main row under its own lock.
-  if (battle?.destroyed && !wasDestroyed) {
-    await recordTribeDestroyed(postgres.em, userSave.basesaveid, String(saveData.baseid));
-  }
+  const destroyedNow = !!battle?.destroyed && !wasDestroyed;
+  if (destroyedNow) await recordTribeDestroyed(postgres.em, userSave.basesaveid, baseid);
+  // Quests: the tribe's loot before the cap (decision 13), a tribe's yard
+  // destroyed, which is also a won attack, and catapult hits on the tribe's
+  // buildings (from the replayed log, as a Map Room 2 camp's are counted).
+  await recordQuestEvents(
+    postgres.em,
+    userSave.basesaveid,
+    addQuestEvents(
+      lootQuestEvents(credit),
+      destroyedNow ? questEvent("tribeDestroy", tribeOfBase(baseid)) : null,
+      destroyedNow ? { attackWin: 1 } : null,
+      catapultQuestEvents(battle?.log, tribeData.buildingdata as JsonObject | undefined)
+    ),
+    now
+  );
 
   // Each biggest Putty bomb fired counts towards Huge Rage (#299); a Map Room 1
   // Kozu tribe is counted by its tribe counter above, never here.
-  if (bombs) {
+  if (attacker.bombs) {
     await recordAttackAchievements(postgres.em, {
       attackerBasesaveid: userSave.basesaveid,
       defender: {},
       before: null,
       after: null,
-      bombs: bombs.charges,
+      bombs: attacker.bombs.charges,
     });
   }
 
-  // Spent: the lock is still held, so a copy of this save finds nothing.
-  if (finalises) await endMR1TribeSession(user.userid, saveData.baseid);
+  // Spent: the lock is still held, so a copy of this save finds nothing, and
+  // the attack's checkpoint goes with it, so the finaliser does not land it again.
+  await endRowlessAttack(ref, session.attackid);
 
-  const save = Object.assign(tribeSave, {
-    buildinghealthdata: existingTribe.tribeHealthData,
-    monsters: existingTribe.monsters ?? tribeData.monsters,
-  });
-  return { save, credited };
+  return { save: tribeAsStored(served), credited };
 };
 
 /**
- * The server's battle for the save that ends a tribe attack (issue #23, C4),
- * or null when there is none to fight: no roster in the session, or no usable
- * fling log.
- *
- * The tribe is fought as the web client fights it: the template's buildings,
- * the health it has kept since it respawned, the template's pool, as the
- * engine's `"tribe"` kind (`AttackSession.combatKind`). `destroyed` is the
- * client's own figure for it too: the web save works it out with a camp's
- * threshold (`attackSave.ts` passes `session.target.kind`, `"wild"`), and the
- * tribe's respawn reads it.
- *
- * @throws {ClientSafeError} `attackResultPendingErr` when the replay timed out.
+ * The replay input for a tribe attack: the tribe as the web client fights it
+ * (the template's buildings, the health it has kept since it respawned, the
+ * template's pool, as the engine's `"tribe"` kind, `AttackSession.combatKind`),
+ * the fling log to `tick`. Shared by the save and the finaliser.
  */
-const tribeBattle = async (
-  ctx: Context,
+const tribeReplayInput = async (
   user: User,
-  saveData: BaseSaveData,
   session: AttackSession,
-  tribeData: Pick<SaveData, "type" | "buildingdata" | "resources">,
-  existingTribe: TribeData
-) => {
-  if (!session.entryHoused) return null;
-  const input = battleReplayInput({
-    flinglog: saveData.flinglog,
+  { tribeData, existingTribe }: ServedTribe,
+  flinglog: unknown,
+  tick: number,
+  left: boolean | undefined
+) =>
+  battleReplayInput({
+    flinglog,
     session,
     defender: {
       type: String(tribeData.type),
@@ -241,20 +351,51 @@ const tribeBattle = async (
       resources: tribeData.resources as JsonObject | undefined,
     },
     attacker: user.save!,
-    tick: battleTick(saveData.tick),
+    tick,
     declareWar: await isDeclareWarRunning(user.alliance_id),
-    left: saveData.left,
+    left,
   });
+
+/**
+ * The battle a replay fought: `destroyed` is the client's own figure for a
+ * tribe, worked out with a camp's threshold (`attackSave.ts` passes
+ * `session.target.kind`, `"wild"`), and the tribe's respawn reads it. The log
+ * it fought rides along for the champions' lessons (issue #219).
+ */
+const tribeBattleOf = (fought: AbandonedOutcome, log: FlingLog): TribeBattle => ({
+  ...fought,
+  destroyed: derivedDestroyed(fought.damage, "wild") ?? 0,
+  log,
+});
+
+/**
+ * The server's battle for the save that ends a tribe attack (issue #23, C4),
+ * or null when there is none to fight: no roster in the session, or no usable
+ * fling log.
+ *
+ * @throws {ClientSafeError} `attackResultPendingErr` when the replay timed out.
+ */
+const tribeBattle = async (
+  ctx: Context,
+  user: User,
+  saveData: BaseSaveData,
+  session: AttackSession,
+  served: ServedTribe
+): Promise<TribeBattle | null> => {
+  if (!session.entryHoused) return null;
+  const input = await tribeReplayInput(user, session, served, saveData.flinglog, battleTick(saveData.tick), saveData.left);
   if (!input) return null;
 
   const base = { baseid: saveData.baseid };
-  const fought = await replayBattleForSave(ctx, user, base, input, "a tribe has no finaliser, so nothing lands");
-  // The log it fought rides along for the champions' lessons (issue #219).
-  const battle = { ...fought, destroyed: derivedDestroyed(fought.damage, "wild") ?? 0, log: input.log };
+  const battle = tribeBattleOf(
+    await replayBattleForSave(ctx, user, base, input, "the finaliser lands it from its checkpoint"),
+    input.log
+  );
 
   // Where the save disagrees with it: logged, or refused under
   // `COMBAT_SAVE_VALIDATION=reject` before anything is written (C7). A refused
-  // tribe attack lands nothing: there is no finaliser to land it instead.
+  // tribe attack is left to the finaliser, which lands the server's own
+  // result from the attack's last checkpoint.
   await recordBattleMismatches(
     ctx,
     user,
@@ -269,10 +410,59 @@ const tribeBattle = async (
       attackersiege: saveData.attackersiege,
     },
     battle,
-    tribeData.buildingdata as JsonObject | undefined,
+    served.tribeData.buildingdata as JsonObject | undefined,
     combatConfig.mode
   );
   return battle;
+};
+
+/**
+ * Lands a tribe attack its attacker left without the final save, from the
+ * attack's last checkpoint (`finaliseRowlessAttack.ts`; owner, 2 Nov 2026):
+ * the battle replayed to the moment the attacker was last seen, then landed
+ * exactly as the final save lands it: the monsters flung by then spent, the
+ * bombs charged, the tribe's damage, `destroyed` and loot of that moment.
+ * With `replay` false (a replay that keeps failing) there is no battle: the
+ * flung monsters and the bombs are spent all the same, and nothing is won.
+ * The caller holds the tribe's final lock.
+ */
+export const landMR1TribeFromCheckpoint = async (
+  user: User,
+  stored: RowlessCheckpoint,
+  now: number,
+  replay = true
+) => {
+  const { checkpoint } = stored;
+  const userSave = user.save!;
+  const session = checkpointSession(checkpoint);
+  const served = await servedTribe(user, stored.baseid);
+
+  let battle: TribeBattle | null = null;
+  if (replay && session.entryHoused) {
+    const input = await tribeReplayInput(user, session, served, checkpoint.flinglog, checkpoint.tick, true);
+    if (input) battle = tribeBattleOf(await replayAbandonedInWorker(input), input.log);
+  }
+
+  // Priced against the pool the attack began with, as `recordBombSpend` prices a save's.
+  const bombs = bombSpendOf(checkpoint.flinglog, {
+    resources: (session.attackerResources as JsonObject | undefined) ?? userSave.resources,
+    catapultLevel: catapultLevelOf(userSave),
+  });
+
+  return writeTribeLanding(
+    user,
+    stored.baseid,
+    session,
+    served,
+    battle,
+    {
+      entries: [{ baseid: userSave.baseid, m: {} }],
+      attackerchampion: battle?.attackerchampion,
+      flinglog: checkpoint.flinglog,
+      bombs,
+    },
+    now
+  );
 };
 
 /**

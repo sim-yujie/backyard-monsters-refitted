@@ -1,3 +1,4 @@
+import { classicLook } from "@/game/classicLook";
 import { championAttackDelay, monsterAttackDelay } from "@/game/combat/rules/stats";
 
 /**
@@ -116,10 +117,11 @@ const juiceOffInAddress = (): boolean => {
   }
 };
 
-/** How big the attack effects are drawn right now. */
+/** How big the attack effects are drawn right now: as before the trial in the Classic look. */
 export const juiceLevel = (): JuiceLevel => {
   // The battle screen's own tests pin the look as it was; the bigger ones' are in juice.test.ts.
   if (import.meta.env.MODE === "test") return "off";
+  if (classicLook()) return "off";
   if (juiceOffInAddress()) return "off";
   return reduceEffects() ? "reduced" : "full";
 };

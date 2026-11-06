@@ -313,7 +313,7 @@ export const buildPathGrid = (yard: EngineYard): PathGrid => {
    * each cell in `touched` when given.
    */
   const stamp = (building: EngineBuilding, sign: number, touched?: number[]): void => {
-    for (const rect of gridCost(building.type, building.level)) {
+    for (const rect of gridCost(building.type, building.level, yard.kind)) {
       const originX = toCellAxis(building.cx + rect[0], GRID_WIDTH);
       const originY = toCellAxis(building.cy + rect[1], GRID_HEIGHT);
       const across = Math.ceil(rect[2] * 0.1);

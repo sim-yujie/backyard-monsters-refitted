@@ -12,7 +12,7 @@
 /* ── The yard's Mail button: left of Monsters, at its height ────────────── */
 
 .yard-dock__right > .yard-dock__button--mail {
-  right: 240px;
+  right: calc(var(--dock-row) + var(--dock-pitch));
   bottom: 30px;
 }
 
@@ -256,20 +256,69 @@
   display: none;
 }
 
+/*
+ * Beside the phone's "‹ All mail" the titles ask for 11rem. They once had
+ * flex: 1 (a basis of 0) in the same row as the thread's buttons, so the row
+ * never wrapped: the buttons squeezed the name and subject to a sliver and
+ * the truce plate sat over the name. The buttons now live in .mail-pane__main.
+ */
 .mail-pane__titles {
-  flex: 1;
+  flex: 1 1 11rem;
   min-width: 0;
 }
 
-.mail-pane__name {
+.mail-pane__name,
+.mail-pane__subject {
   margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.mail-pane__name {
   font-size: var(--text-lg);
 }
 
+/* A thread's name is one line, cut with "…" (its title holds the whole). */
+.mail-pane__name--thread {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .mail-pane__subject {
-  margin: 0;
   color: var(--colour-text-secondary);
   font-size: var(--text-sm);
+}
+
+/*
+ * A thread's titles and its buttons. The titles ask for their whole width
+ * (flex-basis auto), so Propose truce and Block player sit beside them only
+ * when the name and subject fit on one line; otherwise the buttons take a
+ * row of their own under them.
+ */
+.mail-pane__main {
+  flex: 1 1 11rem;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.mail-pane__main > .mail-pane__titles {
+  flex: 1 1 auto;
+}
+
+.mail-pane__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* While Block asks, its question needs the whole width. */
+.mail-pane__actions:has(.mail-block__confirm:not([hidden])) {
+  flex-basis: 100%;
 }
 
 .mail-pane__note {
@@ -607,6 +656,11 @@
 
   .mail-pane__back {
     display: inline-flex;
+  }
+
+  /* A thread's name and buttons take the full width, under "‹ All mail". */
+  .mail-pane__main {
+    flex-basis: 100%;
   }
 
   .mail-message {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { heightBonus, heightBonusLine } from "./heightBonus";
+import { heightBonus } from "./heightBonus";
 
 describe("heightBonus", () => {
   it("makes a hill reach farther and pay less, as the tower and income rules do", () => {
@@ -14,10 +14,5 @@ describe("heightBonus", () => {
 
   it("reads a cell with no height as 100 for income", () => {
     expect(heightBonus(0).incomePct).toBe(25);
-  });
-
-  it("says it in one line", () => {
-    expect(heightBonusLine(150)).toBe("High ground: tower range +20%, income −17%");
-    expect(heightBonusLine(90)).toBe("Low ground: tower range 0%, income +39%");
   });
 });

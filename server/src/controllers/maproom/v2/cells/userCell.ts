@@ -42,7 +42,7 @@ type Cell = Loaded<WorldMapCell, "save", UserCellFields>;
  */
 export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number, UserCellOwner>) => {
   const currentUser: User = ctx.authUser;
-  const { online: onlineNow, truces, pendingInvites, idleWorkers, attackers, friends } = ctx.state;
+  const { online: onlineNow, truces, pendingInvites, idleWorkers, busyWorkers, attackers, friends } = ctx.state;
 
   const mine = currentUser.userid === cell.uid;
   const cellOwner = mine ? currentUser : cellOwners.get(cell.uid);
@@ -91,6 +91,8 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     // The viewer's own outpost with its one worker free (#338; Flash's idle
     // `mcWorker`). Absent elsewhere: nobody else sees whether a worker is busy.
     ...(mine && outpostCell && (idleWorkers as Set<number> | undefined)?.has(cellSave.basesaveid) && { wi: 1 }),
+    // ... or with it building, upgrading or fortifying (Modern's construction badge).
+    ...(mine && outpostCell && (busyWorkers as Set<number> | undefined)?.has(cellSave.basesaveid) && { wb: 1 }),
     bid: cell.baseid,
     aid: cellOwner.alliance_id,
     i: cell.terrainHeight,

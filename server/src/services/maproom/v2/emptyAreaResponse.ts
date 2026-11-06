@@ -14,8 +14,8 @@ export const hasWorldPlacement = (save: Pick<Save, "worldid"> | null | undefined
 /**
  * The clean `getarea` response for a caller with no Map Room 2 placement.
  *
- * Mirrors the rule Map Room 3's `getcells` already applies for the same
- * situation (`controllers/maproom/v3/getCells.ts`): "no world" means nothing
+ * Mirrors the rule Map Room 3's `getcells` applied for the same situation
+ * (removed with Map Room 3, security audit 2026-10-29): "no world" means nothing
  * to show, not a failure. Before this, `getArea` dereferenced `save.worldid`
  * unconditionally and crashed with a 500 (`TypeError: null is not an object`)
  * for every account that had not yet joined a world (GitHub issue #35).

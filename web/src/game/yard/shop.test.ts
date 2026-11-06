@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
-import { SHOP_ITEMS, shopItemsFor, shopModel, wallOffers, type ShopOffer } from "./shop";
+import { INFERNO_SHOP_ITEMS, SHOP_ITEMS, shopItemsFor, shopModel, wallOffers, type ShopOffer } from "./shop";
 import { YardStore } from "./YardStore";
 
 /**
@@ -14,7 +14,7 @@ const T0 = 2_000_000;
 
 const never = <R>() => new Promise<R>(() => undefined);
 
-const storeOf = (extra: Partial<BaseLoadResponse> = {}, kind: "main" | "outpost" = "main"): YardStore =>
+const storeOf = (extra: Partial<BaseLoadResponse> = {}, kind: "main" | "outpost" | "inferno" = "main"): YardStore =>
   new YardStore({
     save: {
       error: 0,
@@ -28,7 +28,7 @@ const storeOf = (extra: Partial<BaseLoadResponse> = {}, kind: "main" | "outpost"
       lockerdata: {},
       ...extra,
     } as unknown as BaseLoadResponse,
-    ...(kind === "outpost" ? { target: { baseid: "9", kind: "outpost" } as const } : {}),
+    ...(kind === "main" ? {} : { target: { baseid: "9", kind } as const }),
     api: { state: vi.fn(() => never<YardResponse<null>>()) } as unknown as YardApi,
     clock: () => T0,
     timers: { set: () => 0, clear: () => undefined },
@@ -179,5 +179,96 @@ describe("wallOffers", () => {
       "outpost",
     );
     expect(wallOffers(outpost)[3]).toMatchObject({ blocks: 1, state: { kind: "buy", price: 34, blocked: null } });
+  });
+});
+
+describe("on the Inferno yard (WP 1.17 items)", () => {
+  const inferno = (extra: Partial<BaseLoadResponse> = {}) => storeOf(extra, "inferno");
+
+  it("sells Flash's Inferno store and the workers, nothing of the surface's own", () => {
+    expect(shopItemsFor("inferno")).toBe(INFERNO_SHOP_ITEMS);
+    const codes = shopModel(inferno()).offers.map((one) => one.item.item);
+    expect(codes).toEqual([
+      "BEW",
+      "ENLI",
+      "BIP",
+      "HODI",
+      "HOD2I",
+      "HOD3I",
+      "EXHI",
+      "TODI",
+      "PRO1",
+      "PRO2",
+      "PRO3",
+    ]);
+    // No Sharper Tools, Production Overdrive, Locker Overdrive or monster boosts.
+    for (const surface of [
+      "BST",
+      "POD",
+      "CLOD",
+      "MOD",
+      "MDOD",
+      "MSOD",
+      "ENL",
+      "HOD",
+      "TOD",
+      "EXH",
+    ]) {
+      expect(codes).not.toContain(surface);
+    }
+  });
+
+  it("reads the Inferno's own ladders: workers 250 to 2,000, More Yardage in five steps", () => {
+    const store = inferno({ storedata: { BEW: { q: 1 }, ENLI: { q: 4 } } });
+    expect(offer(store, "BEW")).toMatchObject({
+      owned: 1,
+      state: { kind: "buy", price: 500, blocked: null },
+    });
+    expect(offer(store, "ENLI")).toMatchObject({
+      owned: 4,
+      state: { kind: "buy", price: 250 },
+    });
+    const full = inferno({ storedata: { BEW: { q: 4 }, ENLI: { q: 5 } } });
+    expect(offer(full, "BEW").state).toEqual({ kind: "soldOut" });
+    expect(offer(full, "ENLI").state).toEqual({ kind: "soldOut" });
+  });
+
+  it("runs one of its three Hatchery Overdrives at a time", () => {
+    const store = inferno({ storedata: { HOD2I: { e: T0 + 3_600 } } });
+    expect(offer(store, "HOD2I").state).toEqual({ kind: "running", endsAt: T0 + 3_600 });
+    expect(offer(store, "HODI").state).toMatchObject({
+      blocked: "Another Hatchery Overdrive is running.",
+    });
+  });
+
+  it("restarts Tower Overdrive while it runs, like the surface's", () => {
+    const store = inferno({ storedata: { TODI: { e: T0 + 600 } } });
+    expect(offer(store, "TODI").state).toEqual({
+      kind: "buy",
+      price: 600,
+      blocked: null,
+      endsAt: T0 + 600,
+    });
+  });
+
+  it("sells Granite and Forged Steel behind Under Hall 3 and 4", () => {
+    const yard = (hall: number) =>
+      inferno({
+        buildingdata: {
+          "0": { id: 0, t: 14, X: 0, Y: 0, l: hall },
+          "1": { id: 1, t: 17, X: 50, Y: 50, l: 1 },
+        },
+      });
+    const [granite, steel, ...rest] = wallOffers(yard(3));
+    expect(rest).toEqual([]);
+    expect(granite).toMatchObject({
+      tier: { item: "BLK2I", name: "Granite Blocks" },
+      state: { price: 3, blocked: null },
+    });
+    expect(steel).toMatchObject({
+      tier: { item: "BLK3I" },
+      state: { price: 9, blocked: "Needs Under Hall level 4." },
+    });
+    expect(wallOffers(yard(4))[1]!.state).toEqual({ kind: "buy", price: 9, blocked: null });
   });
 });

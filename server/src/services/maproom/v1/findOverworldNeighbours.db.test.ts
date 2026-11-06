@@ -115,13 +115,16 @@ describe.skipIf(!dbName)("findOverworldNeighbours on a real database (issue #236
     });
   });
 
-  test("bots fill the rest from active bots within 7 levels; retired bots never appear", async () => {
+  test("bots fill the rest from active bots within 7 levels, from the floor up; retired bots never appear", async () => {
     await rolledBack(async (em) => {
       const player = await addPlayer(em, { level: 20, seen: NOW });
       const real = await addPlayer(em, { level: 21, seen: daysAgo(3) });
 
-      const inRange = await addPlayer(em, { level: 15, seen: null });
-      await makeBot(em, inRange, 15);
+      // The floor is 25 (owner 3 Nov 2026): a level 20 player's bots come from 25-27.
+      const inRange = await addPlayer(em, { level: 25, seen: null });
+      await makeBot(em, inRange, 25);
+      const belowFloor = await addPlayer(em, { level: 22, seen: null });
+      await makeBot(em, belowFloor, 22);
       const alsoInRange = await addPlayer(em, { level: 27, seen: daysAgo(1) });
       await makeBot(em, alsoInRange, 27);
       const retired = await addPlayer(em, { level: 20, seen: null });
@@ -139,6 +142,23 @@ describe.skipIf(!dbName)("findOverworldNeighbours on a real database (issue #236
       );
 
       expect(neighbours.map((n) => n.userid).sort()).toEqual([real, inRange, alsoInRange].sort());
+      expect(neighbours.map((n) => n.userid)).not.toContain(belowFloor);
+    });
+  });
+
+  test("a player under level 15 is shown no bots, only real players (owner 3 Nov 2026)", async () => {
+    await rolledBack(async (em) => {
+      const player = await addPlayer(em, { level: 10, seen: NOW });
+      const real = await addPlayer(em, { level: 11, seen: daysAgo(1) });
+      for (const level of [10, 25, 26]) await makeBot(em, await addPlayer(em, { level, seen: null }), level);
+
+      const neighbours = await findOverworldNeighbours(
+        em,
+        { userid: player },
+        { points: pointsFor(10), basevalue: "0" },
+        { now: NOW, fill: true }
+      );
+      expect(neighbours.map((n) => n.userid)).toEqual([real]);
     });
   });
 

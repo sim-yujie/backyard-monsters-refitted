@@ -9,3 +9,4 @@ import "./plugins/battle";
 import "./plugins/checkpoint";
 import "./plugins/end";
 import "./plugins/practice";
+import "./plugins/descent";

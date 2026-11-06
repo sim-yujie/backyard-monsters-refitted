@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearCanvasTargets, registerCanvasTarget } from "@/game/guide/targets";
 import { BobBubble } from "./BobBubble";
-import { autoSide, HAND_HEIGHT, HAND_WIDTH, handBox, placeArrow } from "./GuideArrow";
+import { autoSide, fitArrow, HAND_HEIGHT, HAND_WIDTH, handBox, placeArrow } from "./GuideArrow";
 import { GuideOverlay, type FrameClock } from "./GuideOverlay";
 import { HOLE_PADDING, panesAround } from "./Spotlight";
 
@@ -44,6 +44,25 @@ describe("placeArrow", () => {
   it("from the right it is mirrored, not turned upside down", () => {
     expect(placeArrow(rect, "right")).toMatchObject({ x: 140 + HAND_WIDTH / 2 + 6, y: 310, mirror: true });
     expect(placeArrow(rect, "left")).toMatchObject({ x: 100 - HAND_WIDTH / 2 - 6, rotate: 0, mirror: false });
+  });
+});
+
+describe("fitArrow", () => {
+  const screen = { width: 1280, height: 800 };
+
+  it("keeps the side asked for while the hand fits there", () => {
+    expect(fitArrow({ left: 820, top: 570, width: 145, height: 50 }, "below", screen).side).toBe("below");
+  });
+
+  it("goes to the left when the side asked for runs off the screen (a card at the bottom of a phone)", () => {
+    const phone = { width: 390, height: 844 };
+    const attack = { left: 200, top: 780, width: 170, height: 48 };
+    expect(fitArrow(attack, "below", phone).side).toBe("left");
+  });
+
+  it("with no side asked for, chooses as placeArrow does", () => {
+    const rect = { left: 100, top: 300, width: 40, height: 20 };
+    expect(fitArrow(rect, undefined, screen)).toEqual(placeArrow(rect));
   });
 });
 
@@ -89,6 +108,19 @@ describe("BobBubble", () => {
     element.querySelector<HTMLButtonElement>(".guide-bob__skip")?.click();
     expect(next).toHaveBeenCalledOnce();
     expect(skip).toHaveBeenCalledOnce();
+  });
+
+  it("leads the line with the cue's picture, hidden from a screen reader, and drops it on the next line", () => {
+    const bubble = new BobBubble().mount(document.body);
+    bubble.show({ text: "Tap Build.", cue: { kind: "icon", name: "build" } });
+    const cue = bubble.element.querySelector<HTMLElement>(".guide-bob__line > .guide-cue")!;
+    expect(cue.dataset["cue"]).toBe("icon");
+    expect(cue.getAttribute("aria-hidden")).toBe("true");
+    expect(cue.querySelector("svg")).not.toBeNull();
+    expect(cue.nextElementSibling).toBe(bubble.element.querySelector(".guide-bob__text"));
+    expect(bubble.element.querySelector(".guide-bob__text")?.textContent).toBe("Tap Build.");
+    bubble.show({ text: "Nice!" });
+    expect(bubble.element.querySelector(".guide-cue")).toBeNull();
   });
 
   it("a tip shows Bob's head and no controls row when there is nothing to press", () => {

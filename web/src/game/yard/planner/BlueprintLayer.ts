@@ -153,12 +153,10 @@ interface Tile {
   nameText: BitmapText | null;
   /** The level pill, background and text together; null when unlevelled. */
   readonly badge: Container | null;
-  /** The pill's background, redrawn when a plan makes the text wider. */
+  /** The pill's background, sized to the level text. */
   readonly pill: Graphics | null;
-  /** The level text alone, which a planned upgrade rewrites; null when absent. */
+  /** The level text alone; null when absent. */
   readonly levelText: BitmapText | null;
-  /** What that text says with nothing planned, so the arrow can be taken off. */
-  readonly levelBase: string;
   /** The pictures this tile wants, bottom to top; empty when it wants none. */
   readonly art: readonly ArtPart[];
   /** Those pictures, drawn together, once they have all settled. */
@@ -201,19 +199,10 @@ export class BlueprintLayer {
   /** Whether the icons are showing. Hidden further out than the labels. */
   private iconsVisible = true;
   /**
-   * Planned target level by building id, or null when the planner is closed.
-   *
-   * Held rather than applied and forgotten, because the tiles are rebuilt
-   * whenever the yard is — a batch wall upgrade does exactly that with the
-   * planner still open — and a badge that vanished on a rebuild would look
-   * like the plan had been lost.
-   */
-  private planned: ReadonlyMap<number, number> | null = null;
-  /**
    * Where the renderer has put buildings, and which it has hidden, by id.
    *
-   * Held for the same reason as {@link planned}, and for one more: the tiles
-   * are built on the first switch to this view, and the planner can store,
+   * Held rather than applied and forgotten, because the tiles are rebuilt
+   * whenever the yard is, and built on the first switch to this view, and the planner can store,
    * clear or move half the yard before that. Without these the first build
    * drew the save as it was, so a cleared yard showed every building both in
    * the drawer and on the plot.
@@ -270,23 +259,6 @@ export class BlueprintLayer {
       if (tile.badge) tile.badge.visible = labels;
       if (tile.icon) tile.icon.visible = icons;
     }
-  }
-
-  /**
-   * Marks the tiles of buildings with a planned upgrade, and clears the rest.
-   *
-   * The blueprint is where the level is already written, so a plan is a suffix
-   * on that number — "3→5" — rather than a second mark to look for
-   * (`docs/design/planner-upgrades.md` §5.4). The canvas badge is the chevron
-   * `PlannerOverlay` draws; between them the plan is visible in both views and
-   * in two channels, neither of them colour alone.
-   *
-   * A tile with no level text — a wall, or anything still building — gets
-   * nothing here and keeps the chevron as its only mark.
-   */
-  setPlanned(planned: ReadonlyMap<number, number> | null): void {
-    this.planned = planned;
-    for (const tile of this.byId.values()) this.labelPlan(tile);
   }
 
   /** The world extent the camera roams: the decoration area plus margin. */
@@ -373,7 +345,7 @@ export class BlueprintLayer {
   /* ── Building the scene ─────────────────────────────────────────────── */
 
   private rectOf(tile: Tile): Rect {
-    return tileRect(tile.building.type, tile.x, tile.y);
+    return tileRect(tile.building.type, tile.x, tile.y, this.yard?.kind);
   }
 
   private build(): void {
@@ -460,7 +432,7 @@ export class BlueprintLayer {
     // cache for its pictures, which usually answers at once because the
     // isometric yard has already fetched them.
     const resolved = tileShowsIcon(category, width, height)
-      ? resolveArt(building.type, building.level, ArtState.DEFAULT)
+      ? resolveArt(building.type, building.level, ArtState.DEFAULT, this.yard?.kind)
       : null;
     const art = resolved ? partsOf(resolved) : [];
 
@@ -516,7 +488,6 @@ export class BlueprintLayer {
       badge,
       pill,
       levelText,
-      levelBase,
       art,
       icon: null,
       x: building.x,
@@ -524,7 +495,7 @@ export class BlueprintLayer {
     };
     this.byId.set(building.id, tile);
     this.order.push(tile);
-    this.labelPlan(tile);
+    this.drawPill(tile);
 
     if (draws) this.attachIcon(tile, gathered.ready);
     else if (gathered.waiting) this.awaiting.push(tile);
@@ -647,15 +618,6 @@ export class BlueprintLayer {
   }
 
   /* ── Labels ─────────────────────────────────────────────────────────── */
-
-  /** Writes "3→5" on a planned tile's level, or the plain level on the rest. */
-  private labelPlan(tile: Tile): void {
-    const text = tile.levelText;
-    if (!text) return;
-    const target = this.planned?.get(tile.building.id);
-    text.text = target === undefined ? tile.levelBase : `${tile.levelBase}→${target}`;
-    this.drawPill(tile);
-  }
 
   /** Sizes the pill to whatever the level text now says. */
   private drawPill(tile: Tile): void {

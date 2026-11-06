@@ -32,7 +32,7 @@ export interface FriendView {
   since: number;
   /** Gifts arrive with WP8; false until then. */
   giftSentToday: boolean;
-  /** When the 24-hour friendship rule clears, unix seconds; null once it has. */
+  /** When the 12-hour friendship rule clears, unix seconds; null once it has (the level gate is not in it). */
   canGiftFrom: number | null;
   /** Whether you could help them now; null when the help gates refuse (`GET /bm/friends` fills it, WP6). */
   help: { speedup: boolean; repair: boolean } | null;
@@ -286,6 +286,28 @@ export const listBlocked = async (em: EntityManager, userid: number): Promise<{ 
             )
       ORDER BY lower(u.username), u.userid`,
     [userid]
+  );
+  return rows.map((row) => ({ userid: Number(row.userid), username: row.username }));
+};
+
+/** The most muted players listed; chat refuses mutes past it (`MAX_MUTED`, chatIgnoreList.ts). */
+export const MUTED_LIST_LIMIT = 500;
+
+/**
+ * Players the caller muted in chat, with their names, in name order. The ids
+ * come from the chat mute set in Redis (`chat-ignore:<id>`); ids that are not
+ * numbers or have no account are left out, and at most the first
+ * {@link MUTED_LIST_LIMIT} valid ids are looked up, so the query stays small.
+ */
+export const listMuted = async (em: EntityManager, ids: readonly string[]): Promise<{ userid: number; username: string }[]> => {
+  const userids = [...new Set(ids.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))].slice(0, MUTED_LIST_LIMIT);
+  if (userids.length === 0) return [];
+  const rows = await em.execute<{ userid: number; username: string }[]>(
+    `SELECT u.userid, u.username
+       FROM bym."user" u
+      WHERE u.userid IN (${userids.map(() => "?").join(", ")})
+      ORDER BY lower(u.username), u.userid`,
+    userids
   );
   return rows.map((row) => ({ userid: Number(row.userid), username: row.username }));
 };

@@ -68,6 +68,23 @@ export const MUSHROOM_STORED_CAP = 20;
 /** Tries to find a free spot before giving up on one mushroom (`MUSHROOMS.as:171`). */
 export const SPAWN_ATTEMPTS = 5000;
 
+/**
+ * Yard units of open ground a new mushroom keeps between its footprint and
+ * every building's, on all four sides (owner bug, 28 Oct 2026). A pumpkin
+ * that grew with its footprint touching a wall's looked half sunk into the
+ * block; with this gap it stands clear of it. A plot with no such spot left
+ * still grows on any free one, as before, rather than not at all.
+ */
+export const MUSHROOM_CLEARANCE = 10;
+
+/**
+ * Tries to find a clear spot for a mushroom that is only too close to a
+ * building ({@link moveMushroomsOffBuildings}). Fewer than
+ * {@link SPAWN_ATTEMPTS}: one that finds none stays where it is, and this
+ * runs on every load and every building change.
+ */
+export const NUDGE_ATTEMPTS = 200;
+
 /** Shiny a golden mushroom gives: `MUSHROOM1` 3, `MUSHROOM2` 8 (`game-data/store/purchaseKeys.ts`). */
 export const GOLDEN_SMALL = 3;
 export const GOLDEN_BIG = 8;
@@ -147,32 +164,65 @@ const buildingRects = (buildingdata: BuildingDataMap | null | undefined): Footpr
   return rects;
 };
 
+/** `rect` grown by `by` yard units on every side. */
+const grown = (rect: FootprintRect, by: number): FootprintRect => ({
+  x: rect.x - by,
+  y: rect.y - by,
+  w: rect.w + 2 * by,
+  h: rect.h + 2 * by,
+});
+
+/**
+ * Whether a mushroom's footprint keeps {@link MUSHROOM_CLEARANCE} from every
+ * building's.
+ */
+const clearOf = (rect: FootprintRect, buildings: readonly FootprintRect[]): boolean => {
+  const around = grown(rect, MUSHROOM_CLEARANCE);
+  return !buildings.some((building) => overlaps(around, building));
+};
+
+/** What a new mushroom's footprint must keep off. */
+interface Obstacles {
+  buildings: readonly FootprintRect[];
+  mushrooms: FootprintRect[];
+}
+
 /**
  * A free spot for one new mushroom: a random point in the plot whose 30 × 30
  * footprint lies inside it and overlaps no building and no other mushroom
- * (`MUSHROOMS.as:171-181`), or null after {@link SPAWN_ATTEMPTS} misses.
+ * (`MUSHROOMS.as:171-181`), or null after `attempts` misses.
+ *
+ * A spot {@link MUSHROOM_CLEARANCE} clear of every building wins. With
+ * `loose`, the first spot that only misses them is the answer when no clear
+ * one turns up, so a crowded plot still grows; without it, null.
  *
  * The original's loop also accepted any point that fell *outside* the plot
  * (the test at `:175` sets "found" for it) and replaced such a mushroom on the
  * next load (`:93-111`); here the point is drawn inside the plot to begin with.
  */
 const freeSpot = (
-  obstacles: readonly FootprintRect[],
+  obstacles: Obstacles,
   expansion: number,
-  random: Random
+  random: Random,
+  { attempts = SPAWN_ATTEMPTS, loose = true }: { attempts?: number; loose?: boolean } = {}
 ): [number, number] | null => {
   const [width, height] = yardSize(expansion);
   const { w, h } = rectOf(MUSHROOM_TYPE, 0, 0);
   const spanX = width - w;
   const spanY = height - h;
+  let fallback: [number, number] | null = null;
 
-  for (let attempt = 0; attempt < SPAWN_ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
     const x = Math.floor(-width / 2 + random() * spanX);
     const y = Math.floor(-height / 2 + random() * spanY);
     const rect = rectOf(MUSHROOM_TYPE, x, y);
-    if (!obstacles.some((other) => overlaps(rect, other))) return [x, y];
+    if (obstacles.mushrooms.some((other) => overlaps(rect, other))) continue;
+    if (clearOf(rect, obstacles.buildings)) return [x, y];
+    if (loose && !fallback && !obstacles.buildings.some((other) => overlaps(rect, other))) {
+      fallback = [x, y];
+    }
   }
-  return null;
+  return fallback;
 };
 
 /**
@@ -188,7 +238,10 @@ export const spawnMushrooms = (
   random: Random
 ): MushroomEntry[] => {
   const list = [...existing];
-  const obstacles = [...buildingRects(save.buildingdata), ...list.map(mushroomRect)];
+  const obstacles: Obstacles = {
+    buildings: buildingRects(save.buildingdata),
+    mushrooms: list.map(mushroomRect),
+  };
   const expansion = currentExpansion(save.storedata);
 
   for (let i = 0; i < count; i++) {
@@ -196,7 +249,7 @@ export const spawnMushrooms = (
     if (!spot) break;
     const entry: MushroomEntry = [Math.floor(random() * 5) + 1, spot[0], spot[1]];
     list.push(entry);
-    obstacles.push(mushroomRect(entry));
+    obstacles.mushrooms.push(mushroomRect(entry));
   }
   return list;
 };
@@ -212,13 +265,18 @@ export const spawnMushrooms = (
  * place in the list, so the pick route's index still names it; one with no
  * free spot left goes, as a growing one does not grow. `s` is kept.
  *
+ * A mushroom no building stands on but one comes within
+ * {@link MUSHROOM_CLEARANCE} of (a pumpkin that grew against a wall before
+ * the gap was kept, 28 Oct 2026) moves too, but only to a clear spot: with
+ * none in {@link NUDGE_ATTEMPTS} draws it stays where it is, untouched.
+ *
  * Every route that changes `buildingdata` runs this before it writes, and so
  * does the catch-up (`catchUpMushrooms.ts`), so a saved yard never holds a
- * mushroom under a building. Nothing is written when none is covered.
+ * mushroom under a building. Nothing is written when none moves.
  *
  * @param save - The yard, mutated in place: `mushrooms` may change.
  * @param random - The spot source.
- * @returns How many mushrooms were covered (moved or, with no room, removed).
+ * @returns How many mushrooms moved or, covered with no room, were removed.
  */
 export const moveMushroomsOffBuildings = (
   save: MushroomYardSave,
@@ -228,30 +286,53 @@ export const moveMushroomsOffBuildings = (
   if (l.length === 0) return 0;
 
   const buildings = buildingRects(save.buildingdata);
-  const covered = l.map((entry) => {
-    const rect = mushroomRect(entry);
-    return buildings.some((building) => overlaps(rect, building));
-  });
-  const count = covered.filter(Boolean).length;
-  if (count === 0) return 0;
+  const rects = l.map(mushroomRect);
+  const covered = rects.map((rect) => buildings.some((building) => overlaps(rect, building)));
+  const crowded = rects.map((rect, index) => !covered[index] && !clearOf(rect, buildings));
+  if (!covered.includes(true) && !crowded.includes(true)) return 0;
 
   const expansion = currentExpansion(save.storedata);
-  const obstacles = [...buildings, ...l.filter((_, index) => !covered[index]).map(mushroomRect)];
+  // A crowded mushroom that cannot move keeps its ground, so it stays an
+  // obstacle until it has found somewhere else.
+  const obstacles: Obstacles = {
+    buildings,
+    mushrooms: rects.filter((_, index) => !covered[index]),
+  };
+  let changed = 0;
   const list: MushroomEntry[] = [];
   l.forEach((entry, index) => {
-    if (!covered[index]) {
+    if (!covered[index] && !crowded[index]) {
       list.push(entry);
       return;
     }
+    if (crowded[index]) {
+      const own = rects[index]!;
+      const others = obstacles.mushrooms.filter((rect) => rect !== own);
+      const spot = freeSpot({ buildings, mushrooms: others }, expansion, random, {
+        attempts: NUDGE_ATTEMPTS,
+        loose: false,
+      });
+      if (!spot) {
+        list.push(entry);
+        return;
+      }
+      const moved: MushroomEntry = [entry[0], spot[0], spot[1]];
+      list.push(moved);
+      obstacles.mushrooms = [...others, mushroomRect(moved)];
+      changed++;
+      return;
+    }
+    changed++;
     const spot = freeSpot(obstacles, expansion, random);
     if (!spot) return;
     const moved: MushroomEntry = [entry[0], spot[0], spot[1]];
     list.push(moved);
-    obstacles.push(mushroomRect(moved));
+    obstacles.mushrooms.push(mushroomRect(moved));
   });
 
+  if (changed === 0) return 0;
   save.mushrooms = { l: list, s };
-  return count;
+  return changed;
 };
 
 /** `report` of `POST /bm/yard/mushroom/pick`. */

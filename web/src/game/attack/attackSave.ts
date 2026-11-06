@@ -1,4 +1,5 @@
 import { isPracticeCamp } from "@/game/guide/practiceBox";
+import { tribeOutcome, underHallFallen } from "@/game/inferno/tribeMap";
 import type {
   AttackSavePayload,
   BuildingDataMap,
@@ -17,7 +18,7 @@ import {
   type ResourceAmounts,
   type Roster,
 } from "@/game/combat/rules";
-import type { AttackEndReason, AttackSession, AttackSessionState } from "./AttackSession";
+import { combatKind, type AttackEndReason, type AttackSession, type AttackSessionState } from "./AttackSession";
 import type { AttackTargetKind, RosterSource, SiegeInventory } from "./attackTarget";
 import { keptLoot } from "./attackerStorage";
 import { countedBuildings } from "./trapReveal";
@@ -265,7 +266,8 @@ export const buildAttackSave = (
   const battleState = battle.state();
   const log = session.flingLog();
   const damage = Math.round(state.damagePercent * 100) / 100;
-  const destroyed = derivedDestroyed(damage, session.target.kind);
+  // A Descent yard or a Moloch tribe is an Inferno yard to the server, which derives no `destroyed` for it.
+  const destroyed = combatKind(session.target) === "inferno" ? undefined : derivedDestroyed(damage, session.target.kind);
   const { roster } = session.target;
   const attackerchampion = attackerChampionsAfter(roster.champions, session.championsHpAfter());
   const attackersiege = attackerSiegeAfter(roster.siege, log.events);
@@ -334,22 +336,47 @@ export interface AttackSummary {
   readonly targetName: string;
   readonly kind: AttackTargetKind;
   readonly endReason: AttackEndReason | null;
+  /**
+   * The end panel's heading when the attack has its own (Flash's "Base
+   * Destroyed!" or "Attack Ended" after a Moloch tribe); absent, the panel's
+   * plain one.
+   */
+  readonly title?: string;
   readonly outcome: string;
   readonly tone: OutcomeTone;
+  /**
+   * A Moloch tribe from the Inferno map (Inferno WP 2.10): won on its Under
+   * Hall, with Flash's words for the result.
+   */
+  readonly infernoTribe: boolean;
   readonly damagePercent: number;
   readonly buildingsDestroyed: number;
   readonly buildingsTotal: number;
   /**
    * What the attacker keeps: the loot up to the room in their storage
-   * (issue #166, `attackerStorage.ts`), as the server will bank it.
+   * (issue #166, `attackerStorage.ts`), as the server will bank it. An
+   * Inferno fight's goes to the Inferno purse in full, so it is all of it.
    */
   readonly loot: ResourceAmounts;
   /** What the battle took from the defender, before the attacker's storage cap. */
   readonly lootTaken: ResourceAmounts;
+  /**
+   * The fight was on an Inferno yard (a Descent yard, Inferno WP 1.13): its
+   * loot is Bone, Coal, Sulfur and Magma, as Flash's `_resourceNames` were
+   * for the yard it loaded.
+   */
+  readonly inferno: boolean;
+  /** Monsters flung; champions are counted on their own. */
   readonly monstersSent: number;
+  /** Monsters born on the field rather than flung: Slimeattikus Minis and zombies. */
+  readonly monstersBorn: number;
+  /** Monsters that died, of those sent and born; a champion is never one. */
   readonly monstersLost: number;
-  /** Each champion sent, by type, with its health at the end; empty when none was. */
-  readonly champions: readonly { readonly t: number; readonly hp: number }[];
+  /**
+   * Each champion sent, by type and level, with its health at the end; empty
+   * when none was. One at no health was beaten (`ChampionBase.as:778-785`).
+   */
+  readonly champions: readonly { readonly t: number; readonly l: number; readonly hp: number }[];
   readonly elapsedSeconds: number;
 }
 
@@ -365,13 +392,15 @@ const MAIN_PROTECTION_DAMAGE = 50;
  * "destroyed" (#152).
  *
  * The guided start's practice camp (issue #227) is a camp by name already,
- * so it is "The practice camp", not "Practice camp's camp".
+ * so it is "The practice camp", not "Practice camp's camp". Another player's
+ * Inferno yard (WP 3.5) is "Bob's Inferno yard".
  */
 export const describeOutcome = (
   kind: AttackTargetKind,
   name: string,
   damagePercent: number,
   practice = false,
+  infernoYard = false,
 ): { outcome: string; tone: OutcomeTone } => {
   const damage = Math.floor(damagePercent);
   if (kind === "wild" || kind === "outpost") {
@@ -387,22 +416,34 @@ export const describeOutcome = (
           tone: "lose",
         };
   }
+  const yard = `${name}'s ${infernoYard ? "Inferno yard" : "yard"}`;
   return damagePercent >= MAIN_PROTECTION_DAMAGE
-    ? { outcome: `Heavy damage: ${damage}% of ${name}'s yard.`, tone: "win" }
-    : { outcome: `${damage}% damage dealt to ${name}'s yard.`, tone: "neutral" };
+    ? { outcome: `Heavy damage: ${damage}% of ${yard}.`, tone: "win" }
+    : { outcome: `${damage}% damage dealt to ${yard}.`, tone: "neutral" };
 };
 
 /**
  * What the attack screen calls its target: "Kozu Tribe's camp", "Ann's
  * outpost", "Bob's yard" (#187). The guided start's practice camp (issue
  * #227) is a camp by name already: "The practice camp", or "the practice
- * camp" inside a sentence.
+ * camp" inside a sentence. A Moloch tribe is named for its band already:
+ * "Moloch's Minions" (Inferno WP 2.10). Another player's Inferno yard is
+ * "Bob's Inferno yard" (WP 3.5).
  */
 export const targetLabel = (
-  target: { readonly baseid: string; readonly kind: AttackTargetKind; readonly name: string; readonly mapversion?: number },
+  target: {
+    readonly baseid: string;
+    readonly kind: AttackTargetKind;
+    readonly name: string;
+    readonly mapversion?: number;
+    readonly infernoTribe?: boolean;
+    readonly infernoPlayer?: boolean;
+  },
   sentenceStart = true,
 ): string => {
   if (isPracticeCamp(target)) return sentenceStart ? "The practice camp" : "the practice camp";
+  if (target.infernoTribe) return target.name;
+  if (target.infernoPlayer) return `${target.name}'s Inferno yard`;
   const noun = target.kind === "wild" ? "camp" : target.kind === "outpost" ? "outpost" : "yard";
   return `${target.name}'s ${noun}`;
 };
@@ -410,27 +451,42 @@ export const targetLabel = (
 export const summariseAttack = (session: AttackSession): AttackSummary => {
   const { load } = requireLoaded(session);
   const state = session.state();
-  const { kind, name } = session.target;
+  const { kind, name, roster } = session.target;
+  const inferno = combatKind(session.target) === "inferno";
+  const infernoTribe = session.target.infernoTribe === true;
+  // A tribe is won on its Under Hall, not the damage (WP 2.10); the landing has the last word.
+  const outcome = infernoTribe
+    ? tribeOutcome(underHallFallen(load.buildingdata, session.battle()?.state().health ?? {}))
+    : describeOutcome(kind, name, state.damagePercent, isPracticeCamp(session.target), session.target.infernoPlayer);
+  // The report's monster rows, without the champions' (#22): the engine's
+  // own kill count takes in a champion at no health, which was never flung
+  // as a monster, and the Minis and zombies born on the field.
+  const monsters = session.attackersAfter().filter((row) => !row.champion);
+  const sum = (field: "sent" | "spawned" | "lost"): number =>
+    monsters.reduce((total, row) => total + row[field], 0);
   return {
     targetName: name,
     kind,
     endReason: state.endReason,
-    ...describeOutcome(kind, name, state.damagePercent, isPracticeCamp(session.target)),
+    ...outcome,
+    infernoTribe,
     damagePercent: state.damagePercent,
     buildingsDestroyed: state.buildingsDestroyed,
     // Traps left out, as on the status line (#72).
     buildingsTotal: countedBuildings(Object.values(load.buildingdata ?? {}).map((entry) => entry.t)),
-    loot: keptLoot(
-      state.loot,
-      session.target.roster.resources,
-      session.target.roster.storageCap ?? null,
-      session.flingLog(),
-      session.target.roster.champions,
-    ),
+    // The main yard's storage does not hold an Inferno fight's take.
+    loot: inferno
+      ? { ...state.loot }
+      : keptLoot(state.loot, roster.resources, roster.storageCap ?? null, session.flingLog(), roster.champions),
     lootTaken: { ...state.loot },
-    monstersSent: state.creepsFlung,
-    monstersLost: state.creepsKilled,
-    champions: Object.entries(session.championsHpAfter()).map(([t, hp]) => ({ t: Number(t), hp })),
+    inferno,
+    monstersSent: sum("sent"),
+    monstersBorn: sum("spawned"),
+    monstersLost: sum("lost"),
+    champions: Object.entries(session.championsHpAfter()).map(([type, hp]) => {
+      const t = Number(type);
+      return { t, l: roster.champions.find((champion) => champion.t === t)?.l ?? 1, hp };
+    }),
     elapsedSeconds: state.elapsedSeconds,
   };
 };

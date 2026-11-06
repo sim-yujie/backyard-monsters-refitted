@@ -1,7 +1,7 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
 import z from "zod";
 import type { HistoryEntry } from "../../chat/chatProtocol.js";
-import { CHANNELS, INFERNO_CHAT_CHANNEL } from "../../config/ChatConfig.js";
+import { CHANNELS, COUNTRY_CHANNEL_PREFIX, INFERNO_CHAT_CHANNEL, countryChannelFor } from "../../config/ChatConfig.js";
 import { User } from "../../database/models/user.model.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { CHAT_REPORT_MAX_TEXT, recordChatReport } from "../../services/chat/chatReports.js";
@@ -27,14 +27,17 @@ export type HistoryReader = (channel: string) => Promise<HistoryEntry[]>;
 
 /**
  * The world rooms a line can be reported from: the global channels the server
- * issues at base load, as `chatChannels.ts` `validateChannel` accepts them.
+ * issues at base load, as `chatChannels.ts` `validateChannel` accepts them,
+ * and country rooms (checked against the reporter's own country below).
  * Alliance rooms are left out; the web client has none yet.
  */
 const WORLD_CHANNELS = new Set([...Object.values(CHANNELS), INFERNO_CHAT_CHANNEL]);
 
 const ReportSchema = z.object({
   userid: z.coerce.number().int().positive(),
-  channel: z.string().refine((channel) => WORLD_CHANNELS.has(channel)),
+  channel: z
+    .string()
+    .refine((channel) => WORLD_CHANNELS.has(channel) || channel.startsWith(COUNTRY_CHANNEL_PREFIX)),
   message: z.string().trim().min(1).max(CHAT_REPORT_MAX_TEXT * 2),
   ts: z.coerce.number().int().positive(),
 });
@@ -57,6 +60,11 @@ export const reportAnswer = async (
 
   const { userid, channel, message, ts } = parsed.data;
   if (userid === user.userid) return refused(Status.BAD_REQUEST, "You cannot report yourself.", "self");
+
+  // A country room can be reported only from inside it: the reporter's own country's room.
+  if (channel.startsWith(COUNTRY_CHANNEL_PREFIX) && channel !== countryChannelFor(user.country)) {
+    return refused(Status.BAD_REQUEST, "That message could not be reported.", "badRequest");
+  }
 
   const history = await readHistory(channel);
   const result = await recordChatReport(em, { reporter: user.userid, reported: userid, channel, message, ts }, history);

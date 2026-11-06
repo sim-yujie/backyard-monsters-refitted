@@ -14,6 +14,7 @@ import {
   threadItems,
   threadList,
   unreadThreads,
+  type MailAttack,
   type MailContact,
   type MailItem,
   type MailThread,
@@ -45,6 +46,7 @@ import {
 } from "@/game/mail/invite";
 import type { OwnOutpost } from "@/game/yard/ownYards";
 import { Panel } from "@/ui/Panel";
+import { attackStatsRow, attackStatsText } from "@/ui/attackNotice";
 import { requestCard, type RequestAction } from "./RequestCard";
 import "@/ui/styles/mail.css";
 
@@ -59,9 +61,9 @@ import "@/ui/styles/mail.css";
  *   player, which asks once more before it blocks.
  * - The game's notices (an outpost attacked or taken, #187) read as notices:
  *   no reply, no block, and "Show on map" when they name a cell.
- * - New message writes to a past contact, or to the player whose yard the map
- *   opened it from (`openCompose`). There is no player search: the server has
- *   no route for one.
+ * - New message writes to a friend or a past contact (`friends`), or to the
+ *   player the map or the Friends screen opened it for (`openCompose`). There
+ *   is no player search: the server has no route for one.
  * - Truces (#203): "Propose truce" in a player thread, or from the map on the
  *   player's yard (`openTruce`, the server's `requesttruce`). The thread's
  *   request carries a card with its state (waiting, active, ended, lapsed,
@@ -111,6 +113,13 @@ export interface MailboxScreenOptions {
    * game's other notices, nor on older notices that name no one.
    */
   readonly addFriend?: (userid: number) => HTMLElement;
+  /**
+   * The player's friends, offered as recipients beside past contacts: a
+   * friend not yet written to has no thread, so the mail targets leave them
+   * out. Asked with every refresh; a failure offers past contacts only.
+   * Absent: past contacts only.
+   */
+  readonly friends?: () => Promise<readonly MailContact[]>;
 }
 
 /** A new message's recipient when the map opened it: the player whose yard it was. */
@@ -165,6 +174,25 @@ const buttonOf = (className: string, text: string, onClick: () => void): HTMLBut
   return node;
 };
 
+/**
+ * An attack notice's numbers as icons in place of its sentence (less-text job
+ * 3): the sentence stays as the tooltip, and the icons carry their words.
+ */
+const attackText = (text: string, attack: MailAttack): HTMLElement => {
+  const node = make("p", "mail-message__text mail-message__text--attack");
+  node.title = text;
+  node.append(attackStatsRow(attack.stats, attack.realm));
+  return node;
+};
+
+/** The thread list's preview of an attack notice: its numbers as icons. */
+const attackPreview = (attack: MailAttack): HTMLElement => {
+  const node = make("span", "mail-row__preview mail-row__preview--attack");
+  node.title = attackStatsText(attack.stats, attack.realm);
+  node.append(attackStatsRow(attack.stats, attack.realm));
+  return node;
+};
+
 /** What an attack notice's Watch says while its replay loads. */
 const WATCH_LOADING = "Loading…";
 
@@ -183,6 +211,7 @@ export class MailboxScreen {
 
   private threads: MailThread[] = [];
   private targets: Record<string, MailTarget> = {};
+  private friends: readonly MailContact[] = [];
   private view: View = { kind: "none" };
   private opened = false;
   private destroyed = false;
@@ -336,9 +365,14 @@ export class MailboxScreen {
     const generation = ++this.generation;
     this.list.classList.add("mail-list--loading");
     try {
-      const [threads, targets] = await Promise.all([this.api.threads(), this.api.targets()]);
+      const [threads, targets, friends] = await Promise.all([
+        this.api.threads(),
+        this.api.targets(),
+        this.loadFriends(),
+      ]);
       if (this.destroyed || generation !== this.generation) return;
       this.targets = targets;
+      this.friends = friends;
       this.threads = threadList(threads, targets);
       if (this.loadFailed) this.setStatus(null);
     } catch {
@@ -350,6 +384,18 @@ export class MailboxScreen {
     }
     this.renderList();
     this.reportUnread();
+    // A new message opened before the recipients came shows "no one to write to": offer them now.
+    const waiting = this.view.kind === "compose" || this.view.kind === "invite";
+    if (waiting && !this.pane.querySelector(".mail-compose__to, .mail-compose__fixed")) this.renderPane();
+  }
+
+  /** The player's friends as recipients; none when there is no list to ask or it fails. */
+  private async loadFriends(): Promise<readonly MailContact[]> {
+    try {
+      return (await this.options.friends?.()) ?? [];
+    } catch {
+      return [];
+    }
   }
 
   /** Opens a thread: its messages fetched, which marks it read on the server. */
@@ -402,7 +448,7 @@ export class MailboxScreen {
         row.append(
           head,
           make("span", "mail-row__subject", thread.subject),
-          make("span", "mail-row__preview", thread.preview),
+          thread.attack ? attackPreview(thread.attack) : make("span", "mail-row__preview", thread.preview),
         );
         const state = truceState(thread.truce, now);
         const invited = inviteState(thread.invite, now);
@@ -458,21 +504,32 @@ export class MailboxScreen {
   private renderThread(thread: MailThread, items: readonly MailItem[]): void {
     const head = make("header", "mail-pane__head");
     const titles = make("div", "mail-pane__titles");
-    titles.append(make("h3", "mail-pane__name", thread.otherName), make("p", "mail-pane__subject", thread.subject));
-    head.append(this.backButton(), titles);
+    // A name too long for the pane is cut with "…"; the whole of it shows on hover.
+    const name = make("h3", "mail-pane__name mail-pane__name--thread", thread.otherName);
+    name.title = thread.otherName;
+    titles.append(name, make("p", "mail-pane__subject", thread.subject));
+    const main = make("div", "mail-pane__main");
+    main.append(titles);
+    head.append(this.backButton(), main);
     const now = this.now();
     const state = truceState(thread.truce, now);
     // The thread's truce belongs to its last request, which carries the card.
     const request = state === null ? -1 : requestIndex(items);
     const until = thread.truce?.until ?? null;
-    if (!thread.notice && !thread.team && canPropose(state, until, items[request]?.mine ?? false, now)) {
-      head.append(
-        buttonOf("btn btn--outline mail-pane__truce", "Propose truce", () =>
-          this.showTruceForm({ userid: thread.otherId, name: thread.otherName }, thread),
-        ),
-      );
+    // Propose truce and Block player keep to a row of their own, which goes
+    // under the name and subject when the pane has no room beside them.
+    if (!thread.notice && !thread.team) {
+      const actions = make("div", "mail-pane__actions");
+      if (canPropose(state, until, items[request]?.mine ?? false, now)) {
+        actions.append(
+          buttonOf("btn btn--outline mail-pane__truce", "Propose truce", () =>
+            this.showTruceForm({ userid: thread.otherId, name: thread.otherName }, thread),
+          ),
+        );
+      }
+      actions.append(this.blockControl(thread));
+      main.append(actions);
     }
-    if (!thread.notice && !thread.team) head.append(this.blockControl(thread));
 
     // Likewise the thread's latest invitation to move (#205).
     const invitation = inviteIndex(items);
@@ -484,7 +541,7 @@ export class MailboxScreen {
       if (item.label && index !== request && index !== invitation) {
         bubble.append(make("strong", "mail-message__label", item.label));
       }
-      bubble.append(make("p", "mail-message__text", item.text));
+      bubble.append(item.attack ? attackText(item.text, item.attack) : make("p", "mail-message__text", item.text));
       if (index === request && state !== null) {
         const card = truceCard(state, until, item.mine, thread.otherName, now);
         bubble.classList.add("mail-message--request");
@@ -819,14 +876,14 @@ export class MailboxScreen {
       form.append(make("p", "mail-compose__fixed", `To ${to.name}`));
       recipient = () => ({ userid: to.userid, name: to.name });
     } else {
-      const contacts = contactsOf(this.targets);
+      const contacts = contactsOf(this.targets, this.friends);
       if (contacts.length === 0) {
         this.pane.replaceChildren(
           head,
           make(
             "p",
             "mail-pane__empty",
-            "You have no one to invite yet. Invite a player from their yard's panel on the map, or write to them first.",
+            "You have no one to invite yet. Add friends, or invite a player from their yard's panel on the map.",
           ),
         );
         return;
@@ -996,14 +1053,14 @@ export class MailboxScreen {
       form.append(make("p", "mail-compose__fixed", `To ${to.name}`));
       recipient = () => ({ userid: to.userid, name: to.name });
     } else {
-      const contacts = contactsOf(this.targets);
+      const contacts = contactsOf(this.targets, this.friends);
       if (contacts.length === 0) {
         this.pane.replaceChildren(
           head,
           make(
             "p",
             "mail-pane__empty",
-            "You have no one to write to yet. To write to a player, open their yard's panel on the map and press Message.",
+            "You have no one to write to yet. Add friends, or open a player's yard panel on the map and press Message.",
           ),
         );
         return;

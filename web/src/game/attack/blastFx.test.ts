@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Container } from "pixi.js";
-import { BlastFx, MAX_BITS, MAX_MARKS, MAX_SHAKE, bitPath, blastNoise, tintAt } from "./blastFx";
+import { BlastFx, MAX_BITS, MAX_MARKS, MAX_SHAKE, TRAP_FX, bitPath, blastNoise, tintAt, trapFireball } from "./blastFx";
 
 const fxOf = (reducedMotion = false) => {
   const air = new Container();
@@ -237,5 +237,87 @@ describe("a tower's jolt (beta.5 tower attack effects)", () => {
     fx.jolt(0, 4, 18);
     for (let tick = 0; tick < 30; tick += 1) fx.update(tick);
     expect(shakes.every(([dx, dy]) => dx === 0 && dy === 0)).toBe(true);
+  });
+});
+
+describe("the Modern trap explosion (art/traps-3d, a sample for the owner)", () => {
+  const BOOBY = 50 * Math.SQRT2;
+  const HEAVY = 90 * Math.SQRT2;
+  /** The widest the fire on the ground gets, screen px: the fireball and its brighter edge. */
+  const fireWidth = (fx: BlastFx, air: Container, tick: number): number => {
+    for (let at = tick; at < tick + TRAP_FX.fireTicks; at += 1) fx.update(at);
+    return Math.max(...air.children.map((child) => (child.visible ? child.width : 0)));
+  };
+
+  it("covers the blast: a fireball as wide as the blast's reach across the ground, half as tall", () => {
+    expect(trapFireball(BOOBY)).toEqual({ width: 2 * BOOBY, height: BOOBY });
+    expect(trapFireball(HEAVY).width).toBeCloseTo(2 * HEAVY);
+    // Drawn: its edge (the ring) reaches the blast's edge, the Heavy Trap's bigger than the Booby Trap's.
+    const booby = fxOf();
+    booby.fx.trap(0, { x: 0, y: 0 }, BOOBY);
+    const heavy = fxOf();
+    heavy.fx.trap(0, { x: 0, y: 0 }, HEAVY, true);
+    const small = fireWidth(booby.fx, booby.air, 0);
+    const big = fireWidth(heavy.fx, heavy.air, 0);
+    expect(small).toBeGreaterThan(2 * BOOBY);
+    expect(small).toBeLessThan(2 * BOOBY * 1.3);
+    expect(big).toBeGreaterThan(small * 1.6);
+  });
+
+  it("throws more for the Heavy Trap, and plays out leaving nothing behind", () => {
+    const booby = fxOf();
+    booby.fx.trap(10, { x: 0, y: 0 }, BOOBY);
+    const heavy = fxOf();
+    heavy.fx.trap(10, { x: 0, y: 0 }, HEAVY, true);
+    expect(heavy.fx.bitCount).toBeGreaterThan(booby.fx.bitCount);
+    for (const { fx, air } of [booby, heavy]) {
+      fx.update(10 + 400);
+      expect(fx.bitCount).toBe(0);
+      expect(air.children.length).toBe(0);
+    }
+  });
+
+  it("shakes the yard a little for the Heavy Trap only, never the Booby Trap", () => {
+    const booby = fxOf();
+    booby.fx.trap(0, { x: 0, y: 0 }, BOOBY);
+    for (let tick = 0; tick < 40; tick += 1) booby.fx.update(tick);
+    expect(booby.shakes.every(([dx, dy]) => dx === 0 && dy === 0)).toBe(true);
+    const heavy = fxOf();
+    heavy.fx.trap(0, { x: 0, y: 0 }, HEAVY, true);
+    expect(heavy.fx.shakeAmp).toBe(TRAP_FX.heavyShake.amp);
+    for (let tick = 0; tick < 40; tick += 1) heavy.fx.update(tick);
+    expect(heavy.shakes.some(([dx, dy]) => dx !== 0 || dy !== 0)).toBe(true);
+    expect(heavy.shakes.at(-1)).toEqual([0, 0]);
+  });
+
+  it("does not shake with Screen shake off, less motion or Reduce effects", () => {
+    // Screen shake off: the battle screen gives no shake to the host.
+    const air = new Container();
+    const off = new BlastFx({ air, ground: () => new Container() });
+    off.trap(0, { x: 0, y: 0 }, HEAVY, true);
+    for (let tick = 0; tick < 40; tick += 1) off.update(tick);
+    const still = fxOf(true);
+    still.fx.trap(0, { x: 0, y: 0 }, HEAVY, true);
+    const shakes: [number, number][] = [];
+    const reduced = new BlastFx({ air: new Container(), ground: () => new Container(), shake: (dx, dy) => shakes.push([dx, dy]) }, false, MAX_SHAKE, true);
+    reduced.trap(0, { x: 0, y: 0 }, HEAVY, true);
+    for (let tick = 0; tick < 40; tick += 1) {
+      still.fx.update(tick);
+      reduced.update(tick);
+    }
+    expect(still.shakes).toEqual([]);
+    expect(shakes).toEqual([]);
+    expect(reduced.shakeAmp).toBe(0);
+  });
+
+  it("throws half the bits with Effects: low, and only the flash and fire for less motion", () => {
+    const full = fxOf();
+    full.fx.trap(0, { x: 0, y: 0 }, HEAVY, true);
+    const low = fxOf();
+    low.fx.trap(0, { x: 0, y: 0 }, HEAVY, true, true);
+    const still = fxOf(true);
+    still.fx.trap(0, { x: 0, y: 0 }, HEAVY, true);
+    expect(low.fx.bitCount).toBeLessThan(full.fx.bitCount * 0.6);
+    expect(still.fx.bitCount).toBe(4);
   });
 });

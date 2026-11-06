@@ -1,13 +1,16 @@
 import { KRALLEN_ID } from "./champions.js";
 import {
   bunkerGarrisons,
+  housedGarrisons,
   type BattleBuffs,
   type BattleOptions,
+  type DefenceBonus,
   type DefenderChampion,
   type SideBuffs,
 } from "./engine.js";
 import { championByType, CHAMPION_MAX_FOOD_BONUS, CHAMPION_MAX_POWER_LEVEL } from "./stats.js";
 import { MAX_RANK } from "./specialMoves.js";
+import { combineDefenceBonus, landDefenceBonus, landFeatureOf } from "./landFeatures.js";
 import type { CombatBuildingDataMap, MonsterLevels, MonsterRanks, Roster } from "./types.js";
 
 /**
@@ -39,14 +42,51 @@ export interface DefenderForces {
    * defence, so every replay fights with the same. Absent: none on either side.
    */
   readonly buffs?: BattleBuffs;
+  /**
+   * Map Room 2's neighbour defence bonus (`docs/mr2-neighbours.md`): the
+   * friendly cells around the defending cell, 1 to 6, as the attack load
+   * counted them with the bonus switched on. Absent: no bonus, the battle as
+   * it always was.
+   */
+  readonly neighbours?: number;
+  /**
+   * The defending cell's Map Room 2 land feature (`landFeatures.ts`), 1 to 7,
+   * as the attack load froze it with the land switch on. Absent: open
+   * ground, the battle as it always was.
+   */
+  readonly land?: number;
 }
 
 /**
+ * What each count of friendly neighbours adds to a Map Room 2 cell's defence
+ * (`docs/mr2-neighbours.md`), as fractions: index 1 is one neighbour. Both
+ * stats rise together, by less for each further neighbour: +5% for the first,
+ * then +4, +2, +2 and +1 each for the fifth and sixth, so a cell ringed by six
+ * friends has +15% building health and +15% tower damage. The owner's ladder
+ * (3 Nov): the first +8, +6, +4, +2, +2, +2 scaled by 5/8 and rounded.
+ */
+export const NEIGHBOUR_DEFENCE_BONUS: readonly number[] = [
+  0, 0.05, 0.09, 0.11, 0.13, 0.14, 0.15,
+];
+
+/** The battle's defence bonus for `neighbours` friendly cells; none for 0 or a bad count. */
+export const neighbourDefenceBonus = (
+  neighbours: number | undefined,
+): DefenceBonus | undefined => {
+  if (neighbours === undefined || !Number.isSafeInteger(neighbours)) return undefined;
+  const top = NEIGHBOUR_DEFENCE_BONUS.length - 1;
+  const share = NEIGHBOUR_DEFENCE_BONUS[Math.min(neighbours, top)] ?? 0;
+  return share > 0 ? { hp: share, damage: share } : undefined;
+};
+
+/**
  * The shop items that boost a side in battle, and what each one turns on
- * (`STORE.as:2431-2500`).
+ * (`STORE.as:2431-2500`). `TODI` is the Inferno shop's Tower Overdrive, held
+ * only in an Inferno yard's store data (`STORE.as:2439-2444`).
  */
 export const BOOST_ITEMS: Readonly<Record<string, keyof SideBuffs>> = {
   TOD: "towerDamage",
+  TODI: "towerDamage",
   MOD: "monsterDamage",
   MDOD: "monsterArmour",
   MSOD: "monsterSpeed",
@@ -89,8 +129,10 @@ export const academyRanks = (academy: unknown): MonsterRanks => {
 
 /**
  * The boosts a yard's `storedata` has running at `now` (unix seconds): each
- * {@link BOOST_ITEMS} entry whose end `e` is still ahead. An attacker brings
- * no towers, so its Tower Overdrive is left out. Undefined when none runs.
+ * {@link BOOST_ITEMS} entry whose end `e` is still ahead, as the whole seconds
+ * it has left, so the battle can stop it when it runs out (engine fidelity
+ * note 19). An attacker brings no towers, so its Tower Overdrive is left out.
+ * Undefined when none runs.
  *
  * @param storedata - The yard's `storedata`.
  * @param now - The battle's start, unix seconds.
@@ -107,17 +149,30 @@ export const storeBuffs = (
   for (const [item, buff] of Object.entries(BOOST_ITEMS)) {
     if (side === "attacker" && buff === "towerDamage") continue;
     const ends = Number(record(store[item])?.e);
-    if (Number.isFinite(ends) && ends > now) buffs[buff] = true;
+    if (!Number.isFinite(ends) || ends <= now) continue;
+    // `TOD` and `TODI` both feed the one `_towerOverdrive`, the later read
+    // winning (`STORE.as:2436-2444`).
+    buffs[buff] = Math.floor(ends - now);
   }
   return Object.keys(buffs).length > 0 ? buffs : undefined;
 };
 
-/** A side's boosts as stored or served: only the known ones, and only when on. */
+/**
+ * A side's boosts as stored or served: only the known ones, and only when on.
+ * A boost is `true` (on all battle, as stored before boosts could run out) or
+ * the whole seconds it had left.
+ */
 const parseSideBuffs = (raw: unknown): SideBuffs | undefined => {
   const value = record(raw);
   if (!value) return undefined;
   const buffs: { -readonly [K in keyof SideBuffs]: SideBuffs[K] } = {};
-  for (const buff of Object.values(BOOST_ITEMS)) if (value[buff] === true) buffs[buff] = true;
+  for (const buff of Object.values(BOOST_ITEMS)) {
+    const span = value[buff];
+    if (span === true) buffs[buff] = true;
+    else if (typeof span === "number" && Number.isFinite(span) && span >= 0) {
+      buffs[buff] = Math.floor(span);
+    }
+  }
   return Object.keys(buffs).length > 0 ? buffs : undefined;
 };
 
@@ -194,13 +249,32 @@ export const cagedChampions = (champions: unknown): DefenderChampion[] => {
   return picked;
 };
 
+/** Two sets of garrisons as one, counts added where a bunker is in both. */
+const mergeGarrisons = (
+  one: Record<number, Roster>,
+  other: Record<number, Roster>,
+): Record<number, Roster> => {
+  const merged: Record<number, Record<string, number>> = {};
+  for (const garrisons of [one, other]) {
+    for (const [id, roster] of Object.entries(garrisons)) {
+      const into = (merged[Number(id)] ??= {});
+      for (const [monsterId, count] of Object.entries(roster)) {
+        into[monsterId] = (into[monsterId] ?? 0) + (count ?? 0);
+      }
+    }
+  }
+  return merged;
+};
+
 /**
  * A yard's defence, read off the save that defends it.
  *
  * @param save - The defending row's `buildingdata` and `champion`, and the
  *   academy its monsters fight at: its own, or its owner's main yard's for an
  *   outpost; and, with the battle's start `now`, its own `storedata`, for the
- *   shop boosts it defends with ({@link storeBuffs}).
+ *   shop boosts it defends with ({@link storeBuffs}). An Inferno yard's housed
+ *   `monsters` defend from its Housing Bunkers ({@link housedGarrisons}), read
+ *   with its `buildinghealthdata`; no other yard has a Housing Bunker.
  */
 export const defenderForcesOf = (save: {
   readonly buildingdata: unknown;
@@ -208,12 +282,16 @@ export const defenderForcesOf = (save: {
   readonly champion: unknown;
   readonly storedata?: unknown;
   readonly now?: number;
+  readonly monsters?: unknown;
+  readonly buildinghealthdata?: unknown;
 }): DefenderForces => {
   const defenderRanks = academyRanks(save.academy);
   const defender =
     save.now === undefined ? undefined : storeBuffs(save.storedata, save.now, "defender");
+  const buildingdata = record(save.buildingdata) as CombatBuildingDataMap | null;
+  const housed = housedGarrisons(buildingdata, save.monsters, record(save.buildinghealthdata));
   return {
-    bunkers: bunkerGarrisons(record(save.buildingdata) as CombatBuildingDataMap | null),
+    bunkers: mergeGarrisons(bunkerGarrisons(buildingdata), housed),
     defenderLevels: academyLevels(save.academy),
     // Kept only when the Lab has researched something, so a yard without ranks serves what it did.
     ...(Object.keys(defenderRanks).length > 0 ? { defenderRanks } : {}),
@@ -250,6 +328,8 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
     }
   }
   const buffs = parseBattleBuffs(value.buffs);
+  const neighbours = typeof value.neighbours === "number" ? value.neighbours : undefined;
+  const land = landFeatureOf(value.land);
   // A session stored before issue #310 holds one `defenderChampion`.
   const champions = Array.isArray(value.defenderChampions)
     ? value.defenderChampions
@@ -267,6 +347,8 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
       }),
     ),
     ...(buffs && { buffs }),
+    ...(neighbours !== undefined && neighbourDefenceBonus(neighbours) && { neighbours }),
+    ...(land !== 0 && { land }),
   };
 };
 
@@ -275,13 +357,19 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
  * battle without one runs as it always did. The levels go in whenever there
  * are any: a Spurtz Cannon's Spurtz fight at the defender's level with no
  * bunker or caged champion on the yard too (issue #313). The boosts go in
- * whenever either side has one.
+ * whenever either side has one, and the neighbour bonus whenever the count
+ * gives one.
  */
 export const battleDefence = (
   forces: DefenderForces | null | undefined,
 ): Pick<
   BattleOptions,
-  "bunkers" | "defenderLevels" | "defenderRanks" | "defenderChampions" | "buffs"
+  | "bunkers"
+  | "defenderLevels"
+  | "defenderRanks"
+  | "defenderChampions"
+  | "buffs"
+  | "defenceBonus"
 > => {
   if (!forces) return {};
   const hasBunkers = Object.keys(forces.bunkers).length > 0;
@@ -289,6 +377,11 @@ export const battleDefence = (
   const hasLevels = Object.keys(forces.defenderLevels).length > 0;
   const hasRanks = Object.keys(forces.defenderRanks ?? {}).length > 0;
   const hasBuffs = Boolean(forces.buffs && (forces.buffs.attacker || forces.buffs.defender));
+  // The neighbour bonus and the land feature multiply (`combineDefenceBonus`).
+  const defenceBonus = combineDefenceBonus(
+    neighbourDefenceBonus(forces.neighbours),
+    landDefenceBonus(forces.land),
+  );
   return {
     ...(hasBunkers ? { bunkers: forces.bunkers } : {}),
     ...(hasBunkers || hasChampions || hasLevels ? { defenderLevels: forces.defenderLevels } : {}),
@@ -296,5 +389,6 @@ export const battleDefence = (
     ...(hasBunkers && hasRanks ? { defenderRanks: forces.defenderRanks as MonsterRanks } : {}),
     ...(hasChampions ? { defenderChampions: forces.defenderChampions } : {}),
     ...(hasBuffs ? { buffs: forces.buffs } : {}),
+    ...(defenceBonus ? { defenceBonus } : {}),
   };
 };

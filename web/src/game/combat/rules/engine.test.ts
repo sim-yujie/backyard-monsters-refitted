@@ -5,15 +5,19 @@ import {
   bucketCost,
   bunkerGarrisons,
   bunkerLossRecord,
+  BUNKER_DOOR_FRAMES,
   createBattle,
   dropRadius,
   flingCost,
   flingerPayload,
   scatterRadius,
+  type Battle,
+  type BattleOptions,
   type BattleVisualEvent,
   type BunkerLossTally,
 } from "./engine.js";
 import { digestOf } from "./digest.js";
+import { ATTACK_COUNTDOWN_SECONDS, TICKS_PER_SECOND } from "./stats.js";
 import {
   aerialSalvo,
   BOMBS,
@@ -36,7 +40,7 @@ import {
   TARGET_GROUP,
 } from "./stats.js";
 import { buildEngineYard, reachesBuilding, screenDistanceSquared, screenPointOf } from "./yard.js";
-import type { CombatBuildingDataMap } from "./types.js";
+import type { CombatBuildingData, CombatBuildingDataMap, Roster } from "./types.js";
 
 /**
  * The engine, one rule at a time.
@@ -54,6 +58,9 @@ const yardOf = (buildings: CombatBuildingDataMap, health?: Record<string, number
     resources: { r1: 100000, r2: 0, r3: 0, r4: 0 },
   });
 
+/** `shellBlastsWhereItLands` as an option, or none, which leaves the rule's own setting. */
+const quirk = (on: boolean | undefined) => (on === undefined ? {} : { shellBlastsWhereItLands: on });
+
 const run = (battle: ReturnType<typeof createBattle>, ticks: number): void => {
   for (let step = 0; step < ticks && !battle.over(); step += 1) battle.step();
 };
@@ -64,21 +71,22 @@ describe("a Pokey against a lone Cannon Tower", () => {
    * (`rate * 2` fast ticks, `BTOWER.as:179`) and 6,000 health.
    * Level 1 Pokey: 200 health, 60 damage, 60-tick swing.
    */
-  const battleOf = () => {
+  const battleOf = (shellBlastsWhereItLands?: boolean) => {
     const yard = yardOf({ "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } });
-    const battle = createBattle(yard, { seed: 1 });
+    const battle = createBattle(yard, { seed: 1, ...quirk(shellBlastsWhereItLands) });
     battle.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 200, monsters: { C1: 1 } });
     return { yard, battle };
   };
 
-  it("kills it in eleven shots, at a shot a second", () => {
+  it("kills it in thirteen shots, at a shot a second", () => {
     const { battle } = battleOf();
     run(battle, 1200);
     const state = battle.state();
     const tower = state.towers[0];
-    // Two shots of 20, then 19 once the Pokey has dented it (issue #264):
-    // `int(20 * (0.5 + 0.5 * 5940 / 6000))`, and so on down to 8 for the last.
-    expect(tower?.shots).toBe(11);
+    // Each shell blasts a few pixels short of the Pokey, so it takes 15 or 16
+    // of the 20 (less once the Pokey has dented the tower, issue #264), and
+    // the 11 it had left to the last: thirteen shots.
+    expect(tower?.shots).toBe(13);
     expect(tower?.kills).toBe(1);
     expect(tower?.damageDealt).toBe(200);
     expect(state.creepsKilled).toBe(1);
@@ -88,16 +96,98 @@ describe("a Pokey against a lone Cannon Tower", () => {
     const { yard, battle } = battleOf();
     run(battle, 1200);
     const tower = yard.buildings[0];
-    // 60 damage a swing, and the Pokey got eleven in before it died. It lands
-    // within 50 screen pixels of (-100, -100) (issue #91), which with this
-    // seed puts it at the tower in time for an eleventh swing.
-    expect(tower!.maxHp - tower!.hp).toBe(660);
+    // 60 damage a swing, and the Pokey got fourteen in before it died. It
+    // lands within 50 screen pixels of (-100, -100) (issue #91), which with this
+    // seed puts it at the tower early: it keeps its first route, which no later
+    // look beats (`MonsterBase.as:1255-1270`).
+    expect(tower!.maxHp - tower!.hp).toBe(840);
+  });
+
+  it("kills it in eleven shots with SHELL_BLASTS_WHERE_IT_LANDS off", () => {
+    const { yard, battle } = battleOf(false);
+    run(battle, 1200);
+    const tower = battle.state().towers[0];
+    // Each shell blasts on the Pokey: two of 20, then 19 once it has dented
+    // the tower, `int(20 * (0.5 + 0.5 * 5940 / 6000))`, down to 8 for the last.
+    expect(tower?.shots).toBe(11);
+    expect(tower?.damageDealt).toBe(200);
+    // Twelve swings of 60 before the eleventh shell.
+    expect(yard.buildings[0]!.maxHp - yard.buildings[0]!.hp).toBe(720);
+  });
+
+  it("lands each shell eight ticks after it leaves the tower, and only then hurts", () => {
+    const { battle } = battleOf();
+    const shots: number[] = [];
+    const hurts: number[] = [];
+    for (let step = 0; step < 240; step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "shot") shots.push(event.tick);
+        if (event.kind === "hurt") hurts.push(event.tick);
+      }
+    }
+    expect(shots[0]).toBe(70);
+    expect(hurts[0]).toBe(78);
   });
 
   it("ends the battle once the last attacker is gone and the countdown has run", () => {
     const { battle } = battleOf();
     run(battle, 40000);
     expect(battle.over()).toBe(true);
+  });
+});
+
+describe("the retreat after the countdown (`DROPZONE.as:53`)", () => {
+  const ENDS = ATTACK_COUNTDOWN_SECONDS * TICKS_PER_SECOND;
+  const battleTo = (t: number) => {
+    const battle = createBattle(yardOf({ "1": { id: 1, t: 21, l: 1, X: 0, Y: 0 } }), { seed: 1 });
+    battle.runTo(t);
+    return battle;
+  };
+  const flungAt = (t: number) => {
+    const battle = battleTo(t);
+    battle.apply({ kind: "fling", t, x: -100, y: -100, r: 0, monsters: { C1: 1 } });
+    return battle.state().creepsFlung;
+  };
+  const healthAfterBombAt = (t: number) => {
+    const battle = battleTo(t);
+    const before = battle.state().health;
+    battle.apply({ kind: "bomb", t, x: 0, y: 0, id: "pb1" });
+    run(battle, 200);
+    return { before, after: battle.state().health };
+  };
+
+  it("takes a fling and a bomb on the last tick of the countdown", () => {
+    expect(flungAt(ENDS - 1)).toBe(1);
+    const { before, after } = healthAfterBombAt(ENDS - 1);
+    expect(after).not.toEqual(before);
+  });
+
+  it("ignores them once it has run out", () => {
+    expect(flungAt(ENDS)).toBe(0);
+    const { before, after } = healthAfterBombAt(ENDS);
+    expect(after).toEqual(before);
+  });
+});
+
+describe("a shell whose target dies before it lands (`PROJECTILE.as:20-23`)", () => {
+  it("is wasted: three Snipers fire at once at a Pokey two shells kill", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 21, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 21, l: 1, X: 60, Y: 0 },
+      "3": { id: 3, t: 21, l: 1, X: 0, Y: 60 },
+    });
+    const battle = createBattle(yard, { seed: 1 });
+    battle.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 0, monsters: { C1: 1 } });
+    run(battle, 600);
+    // All three fire on tick 110; 100 apiece kills the 200-health Pokey with
+    // two, and the third shell, still in the air, comes to nothing.
+    const towers = battle.state().towers.map((tower) => [tower.shots, tower.damageDealt]);
+    expect(towers).toEqual([
+      [1, 100],
+      [1, 100],
+      [1, 0],
+    ]);
   });
 });
 
@@ -111,7 +201,7 @@ describe("a tower that is busy cannot fire (BTOWER.canAttack)", () => {
   };
 
   it("fires normally with no countdown", () => {
-    expect(shotsWith({}).towers[0]?.shots).toBe(11);
+    expect(shotsWith({}).towers[0]?.shots).toBe(13);
   });
 
   it.each([
@@ -133,10 +223,13 @@ describe("a tower that is busy cannot fire (BTOWER.canAttack)", () => {
   });
 });
 describe("a tower's shot at its own health (issue #264)", () => {
-  /** One shot from a level 1 Cannon Tower (damage 20) at `hp`, at a lone Octo-ooze. */
+  /**
+   * One shot from a level 1 Sniper Tower (damage 100, no blast, so the whole
+   * shell reaches its target) at `hp`, at a lone Octo-ooze.
+   */
   const firstHit = (hp?: number) => {
     const health = hp === undefined ? undefined : { "1": hp };
-    const yard = yardOf({ "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } }, health);
+    const yard = yardOf({ "1": { id: 1, t: 21, l: 1, X: 0, Y: 0 } }, health);
     const battle = createBattle(yard, { seed: 1 });
     battle.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 200, monsters: { C2: 1 } });
     for (let step = 0; step < 1200; step += 1) {
@@ -148,14 +241,14 @@ describe("a tower's shot at its own health (issue #264)", () => {
   };
 
   it("deals its whole damage at full health", () => {
-    expect(firstHit()).toBe(20);
+    expect(firstHit()).toBe(100);
   });
 
-  it("deals int(damage * (0.5 + 0.5 * hp / maxHp)) when hurt (`BUILDING20.as:27`, `:43`)", () => {
-    const full = maxHp(20, 1);
-    // 0.5 + 0.5 * 0.3 = 0.65 of 20 is 13; a tenth of its health is 0.55, 11.
-    expect(firstHit(Math.round(full * 0.3))).toBe(13);
-    expect(firstHit(Math.round(full * 0.1))).toBe(11);
+  it("deals int(damage * (0.5 + 0.5 * hp / maxHp)) when hurt (`BUILDING21.as:42`, `:55`)", () => {
+    const full = maxHp(21, 1);
+    // 0.5 + 0.5 * 0.3 = 0.65 of 100 is 65; a tenth of its health is 0.55, 55.
+    expect(firstHit(Math.round(full * 0.3))).toBe(65);
+    expect(firstHit(Math.round(full * 0.1))).toBe(55);
   });
 });
 
@@ -358,7 +451,11 @@ describe("the Aerial Defense Tower's salvo (issue #265)", () => {
    * A level 3 Aerial Defense Tower (250 damage, range 340, rate 60, salvo 6)
    * and a harvester beside it, where `flyers` land and hover.
    */
-  const salvoBattle = (flyers: Record<string, number>, health?: Record<string, number>) => {
+  const salvoBattle = (
+    flyers: Record<string, number>,
+    health?: Record<string, number>,
+    shellBlastsWhereItLands?: boolean,
+  ) => {
     const yard = yardOf(
       {
         "1": { id: 1, t: 115, l: 3, X: 0, Y: 0 },
@@ -366,7 +463,7 @@ describe("the Aerial Defense Tower's salvo (issue #265)", () => {
       },
       health,
     );
-    const battle = createBattle(yard, { seed: 5 });
+    const battle = createBattle(yard, { seed: 5, ...quirk(shellBlastsWhereItLands) });
     battle.apply({ kind: "fling", t: 0, x: 110, y: 110, r: 0, monsters: flyers });
     return battle;
   };
@@ -430,20 +527,34 @@ describe("the Aerial Defense Tower's salvo (issue #265)", () => {
     expect(gap(1)).toBeLessThanOrEqual(124);
   });
 
-  it("deals every shell's whole damage with the blast round it", () => {
-    const battle = salvoBattle({ C15: 2 });
+  /** The first shell's hurts: the tick it lands, here the tick it was fired, so close. */
+  const firstShell = (shellBlastsWhereItLands?: boolean) => {
+    const battle = salvoBattle({ C15: 2 }, undefined, shellBlastsWhereItLands);
     for (let step = 0; step < 200 && !battle.over(); step += 1) {
       battle.step();
       const events = battle.recentEvents(battle.tick - 1);
       const shot = events.find((event) => event.kind === "shot");
       if (shot?.kind !== "shot") continue;
       const hurt = events.filter((event) => event.kind === "hurt");
-      // The target takes the shell; the flyer beside it, the blast's near-full share.
-      expect(hurt.find((event) => event.creepId === shot.creepId)?.amount).toBe(250);
-      expect(hurt).toHaveLength(2);
-      return;
+      return { target: hurt.find((event) => event.creepId === shot.creepId)?.amount, hurt };
     }
     throw new Error("the tower never fired");
+  };
+
+  it("blasts up at the flyer's height, so its target takes only a share (Flash's quirk)", () => {
+    // 250 a shell; it goes off 108 pixels up the screen, where a flyer is
+    // drawn, and the blast centres on the ground point that screen point
+    // reads as, well off the target: a share to it, none to the flyer beside.
+    const { target, hurt } = firstShell();
+    expect(target).toBe(67);
+    expect(hurt).toHaveLength(1);
+  });
+
+  it("deals every shell's whole damage with the blast round it with the quirk off", () => {
+    const { target, hurt } = firstShell(false);
+    // The target takes the shell; the flyer beside it, the blast's near-full share.
+    expect(target).toBe(250);
+    expect(hurt).toHaveLength(2);
   });
 });
 
@@ -505,6 +616,37 @@ describe("the Tesla Tower's charge and zaps (issue #266)", () => {
     // then up to `rate * 2` for the next `Fire`.
     expect(charges[1]! - lastZap.tick).toBeGreaterThanOrEqual(60);
     expect(charges[1]! - lastZap.tick).toBeLessThanOrEqual(92 + 20);
+  });
+
+  it("says when it stops zapping, and by when it charges again while it still has a target", () => {
+    const battle = teslaBattle({ C15: 1 });
+    const charges: number[] = [];
+    const rests: { tick: number; rearmBy: number | null }[] = [];
+    for (let step = 0; step < 700 && !battle.over(); step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "charge") charges.push(event.tick);
+        if (event.kind === "coilRest") rests.push({ tick: event.tick, rearmBy: event.rearmBy });
+      }
+    }
+    expect(charges.length).toBeGreaterThanOrEqual(2);
+    // Its 10 zaps spent, it rests between its charges, and the next comes by `rearmBy`.
+    const rest = rests.find((one) => one.tick > charges[0]! && one.tick < charges[1]!)!;
+    expect(rest.rearmBy).not.toBeNull();
+    expect(charges[1]!).toBeLessThanOrEqual(rest.rearmBy!);
+    expect(charges[1]!).toBeGreaterThan(rest.tick);
+  });
+
+  it("rests for want of a target once its last target is dead", () => {
+    const battle = teslaBattle({ C1: 1 });
+    const rests: (number | null)[] = [];
+    for (let step = 0; step < 600 && !battle.over(); step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "coilRest") rests.push(event.rearmBy);
+      }
+    }
+    expect(rests.at(-1)).toBeNull();
   });
 
   it("kills a clump of Pokeys, a charge at a time", () => {
@@ -901,6 +1043,47 @@ describe("loot", () => {
     expect(state.defenderLoss.r1).toBe(400);
     expect(state.loot.r1).toBe(400);
     expect(yard.buildings[0]?.looted).toBe(true);
+  });
+
+  /** Every loot event of a run, stepping and reading as the battle layer does. */
+  const lootEvents = (battle: ReturnType<typeof createBattle>, ticks: number) => {
+    const seen: Extract<BattleVisualEvent, { kind: "loot" }>[] = [];
+    let last = -1;
+    for (let step = 0; step < ticks && !battle.over(); step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(last)) if (event.kind === "loot") seen.push(event);
+      last = battle.state().tick;
+    }
+    return seen;
+  };
+
+  it("tells the drawing of each take, with what the attacker banks (`ATTACK.as:722-733`)", () => {
+    const yard = yardOf({ "1": { id: 1, t: 1, X: 0, Y: 0, st: 400 } });
+    // Level 10: the low-level bonus (+30%) is in the amounts shown.
+    const battle = createBattle(yard, { seed: 11, playerLevel: 10 });
+    battle.apply({ kind: "fling", t: 0, x: -60, y: -60, r: 40, monsters: { C4: 4 } });
+    const events = lootEvents(battle, 4000);
+    expect(events.length).toBeGreaterThan(1);
+    for (const event of events) {
+      expect(event).toMatchObject({ buildingId: 1, resource: 1, vacuum: false });
+      expect(event.amount).toBeGreaterThan(0);
+    }
+    expect(events.reduce((sum, event) => sum + event.amount, 0)).toBe(battle.state().loot.r1);
+    expect(battle.state().loot.r1).toBeGreaterThan(400);
+  });
+
+  it("tells of a storage building's draws, in the resource each drew", () => {
+    const yard = yardOf({ "1": { id: 1, t: 6, l: 8, X: 0, Y: 0 } });
+    const battle = createBattle(yard, { seed: 11, playerLevel: 20 });
+    battle.apply({ kind: "fling", t: 0, x: -60, y: -60, r: 40, monsters: { C4: 6 } });
+    const events = lootEvents(battle, 1200);
+    expect(events.length).toBeGreaterThan(0);
+    const state = battle.state();
+    for (const resource of [1, 2, 3, 4]) {
+      const key = `r${resource}` as keyof typeof state.loot;
+      const shown = events.filter((event) => event.resource === resource).reduce((sum, event) => sum + event.amount, 0);
+      expect(shown).toBe(state.loot[key]);
+    }
   });
 
   it("sends a resource specialist at a Storage Silo before a farther full harvester (issue #225)", () => {
@@ -1866,7 +2049,8 @@ describe("a bunker's reach (issue #91)", () => {
    * A level 1 Monster Bunker (range 300, 90 x 90) at the origin scans from the
    * middle of its footprint, (45, 45) (`HOUSINGBUNKER.as:156`,
    * `BUILDING22.as:90`). A Pokey dropped by a harvester off to the south-east
-   * stops at it and swings; the bunker's first look is on tick 30.
+   * stops at it and swings. The bunker's first look is on tick 30, but its door
+   * is not fully up till after that, so it sends nothing out before tick 60.
    */
   const battleOf = (harvesterAt: number) => {
     const yard = yardOf({
@@ -1884,7 +2068,7 @@ describe("a bunker's reach (issue #91)", () => {
     });
     run(battle, 29);
     const pokey = battle.creeps()[0]!;
-    run(battle, 1);
+    run(battle, 31);
     const defenders = battle.creeps().filter((creep) => creep.friendly);
     return { pokey, defenders };
   };
@@ -1900,6 +2084,146 @@ describe("a bunker's reach (issue #91)", () => {
     const { pokey, defenders } = battleOf(350);
     expect(Math.hypot(pokey.ix - 45, pokey.iy - 45)).toBeGreaterThan(300);
     expect(defenders).toHaveLength(0);
+  });
+
+  it("tells the renderer each defender it sends, to roll the shutters up (drawing only)", () => {
+    const sent = (harvesterAt: number) => {
+      const yard = yardOf({
+        "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 1, l: 1, X: harvesterAt, Y: harvesterAt },
+      });
+      const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C1: 2 } } });
+      battle.apply({ kind: "fling", t: 0, x: harvesterAt - 20, y: harvesterAt - 20, r: 0, monsters: { C1: 1 } });
+      run(battle, 60);
+      return battle.recentEvents(-1).filter((event) => event.kind === "release");
+    };
+    expect(sent(290)).toEqual([{ kind: "release", tick: 60, buildingId: 1 }]);
+    expect(sent(350)).toEqual([]);
+  });
+
+  it("tells the renderer when the Flash door opens and shuts: open while attackers are in range or its monsters are out (drawing only)", () => {
+    const doors = (harvesterAt: number) => {
+      const yard = yardOf({
+        "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+        "2": { id: 2, t: 1, l: 1, X: harvesterAt, Y: harvesterAt },
+      });
+      const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C1: 2 } } });
+      battle.apply({ kind: "fling", t: 0, x: harvesterAt - 20, y: harvesterAt - 20, r: 0, monsters: { C1: 1 } });
+      const out: { tick: number; open: boolean; defenders: number }[] = [];
+      let released = Infinity;
+      for (let step = 0; step < 1500 && !battle.over(); step += 1) {
+        battle.step();
+        const defenders = battle.creeps().filter((creep) => creep.friendly).length;
+        for (const event of battle.recentEvents(battle.tick - 1)) {
+          if (event.kind === "release") released = Math.min(released, event.tick);
+          if (event.kind === "bunkerDoor") out.push({ tick: event.tick, open: event.open, defenders });
+        }
+      }
+      return { out, released };
+    };
+    const { out, released } = doors(290);
+    // It opens as the attacker comes in range, and the first defender comes out
+    // only once it is fully up, 15 frames on (`BUILDING22.as:344`).
+    expect(out[0]?.open).toBe(true);
+    expect(released).toBeGreaterThan(out[0]!.tick + (BUNKER_DOOR_FRAMES - 1) * 2);
+    expect(released).toBeLessThan(Infinity);
+    // Never shut while one of its monsters is out.
+    for (const change of out) if (!change.open) expect(change.defenders).toBe(0);
+    // Out of range, it stays shut till the attacker walks in.
+    const far = doors(350);
+    expect(far.out[0]?.open).toBe(true);
+    expect(far.out[0]!.tick).toBeGreaterThan(30);
+    expect(far.released).toBeGreaterThan(far.out[0]!.tick + (BUNKER_DOOR_FRAMES - 1) * 2);
+  });
+
+  it("sends nothing out on its 30-tick look while the door is still rising, and the next look sends it", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: 290, Y: 290 },
+    });
+    const battle = createBattle(yard, { seed: 3, bunkers: { 1: { C1: 2 } } });
+    battle.apply({ kind: "fling", t: 0, x: 270, y: 270, r: 0, monsters: { C1: 1 } });
+    run(battle, 30);
+    const opened = battle.recentEvents(-1).find((event) => event.kind === "bunkerDoor");
+    // Open before the first look on tick 30, but not yet fully up by it.
+    expect(opened).toMatchObject({ open: true });
+    expect(opened!.tick + (BUNKER_DOOR_FRAMES - 1) * 2).toBeGreaterThanOrEqual(30);
+    expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(0);
+    run(battle, 30);
+    expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(1);
+  });
+});
+
+describe("whom a Monster Bunker sends, and at whom (`BUILDING22.as:330-390`)", () => {
+  /** A level 1 bunker at the origin holding `pool`, with a harvester to the south-east. */
+  const bunkerBattle = (pool: Roster, extra: Partial<BattleOptions> = {}) => {
+    const yard = yardOf({
+      "1": { id: 1, t: 22, l: 1, X: 0, Y: 0 },
+      "2": { id: 2, t: 1, l: 1, X: 200, Y: 200 },
+    });
+    return createBattle(yard, { seed: 3, bunkers: { 1: pool }, ...extra });
+  };
+  /** Each defender's kind, in the order it came out, and whether the door ever opened. */
+  const releases = (battle: Battle, ticks: number) => {
+    const sent: string[] = [];
+    const seen = new Set<number>();
+    let opened = false;
+    for (let step = 0; step < ticks && !battle.over(); step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "bunkerDoor" && event.open) opened = true;
+      }
+      for (const creep of battle.creeps()) {
+        if (!creep.friendly || seen.has(creep.id)) continue;
+        seen.add(creep.id);
+        sent.push(creep.monsterId);
+      }
+    }
+    return { sent, opened };
+  };
+  const flyers = { kind: "fling", t: 0, x: 120, y: 120, r: 0, monsters: { C14: 2 } } as const;
+
+  it("stays shut for flyers when it holds nothing that can reach them", () => {
+    const battle = bunkerBattle({ C1: 3 });
+    battle.apply(flyers);
+    expect(releases(battle, 600)).toEqual({ sent: [], opened: false });
+  });
+
+  it("sends an Eye-ra after a flyer only with its Monster Lab power-up", () => {
+    const ranked = bunkerBattle({ C1: 3, C5: 1 }, { defenderRanks: { C5: 1 } });
+    ranked.apply(flyers);
+    expect(releases(ranked, 600).sent[0]).toBe("C5");
+    const plain = bunkerBattle({ C1: 3, C5: 1 });
+    plain.apply(flyers);
+    expect(releases(plain, 600)).toEqual({ sent: [], opened: false });
+  });
+
+  it("sends the last kind in the monster list first, whatever the seed, not one at random", () => {
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const battle = bunkerBattle({ C1: 1, C2: 1, C3: 1 }, { seed });
+      battle.apply({ kind: "fling", t: 0, x: 150, y: 150, r: 0, monsters: { C12: 3 } });
+      expect(releases(battle, 400).sent).toEqual(["C3", "C2", "C1"]);
+    }
+  });
+
+  it("sends each at any of the three nearest walkers, at random, never a farther one", () => {
+    const targets = new Set<number>();
+    for (let seed = 1; seed <= 12; seed += 1) {
+      const battle = bunkerBattle({ C1: 1 }, { seed });
+      // Four Pokeys in a line out from the bunker: ids 1 to 4, the fourth farthest.
+      for (const at of [150, 170, 190, 210]) {
+        battle.apply({ kind: "fling", t: 0, x: at, y: at, r: 0, monsters: { C1: 1 } });
+      }
+      for (let step = 0; step < 200; step += 1) {
+        battle.step();
+        const defender = battle.creeps().find((creep) => creep.friendly);
+        if (!defender) continue;
+        targets.add(defender.targetCreep);
+        break;
+      }
+    }
+    expect(targets.size).toBeGreaterThan(1);
+    expect([...targets].every((id) => id >= 1 && id <= 3)).toBe(true);
   });
 });
 
@@ -1986,7 +2310,7 @@ describe("the fight-back (issue #195)", () => {
     const battle = bunkerBattle();
     const far = battle.creeps().find((creep) => creep.ix > 1000)!;
     run(battle, 1);
-    run(battle, 29);
+    run(battle, 59);
     const [defender] = battle.creeps().filter((creep) => creep.friendly);
     expect(defender).toMatchObject({ monsterId: "C8", level: 6 });
     for (let step = 0; step < 300; step += 1) {
@@ -2004,11 +2328,28 @@ describe("the fight-back (issue #195)", () => {
     expect(battle.state().bunkerGarrisons).toEqual({ 1: { C8: 1 } });
   });
 
-  it("sends it out again at the next attacker to come near", () => {
+  it("sends it out again at the next attacker to come near, once its shut door is back up", () => {
     const battle = bunkerBattle();
-    run(battle, 600);
+    let shut = false;
+    for (let step = 0; step < 600; step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "bunkerDoor") shut = !event.open;
+      }
+    }
+    expect(shut).toBe(true);
     battle.apply({ kind: "fling", t: 600, x: 140, y: 140, r: 0, monsters: { C1: 1 } });
-    run(battle, 60);
+    let opened = -1;
+    let sent = -1;
+    for (let step = 0; step < 90; step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "bunkerDoor" && event.open && opened < 0) opened = event.tick;
+        if (event.kind === "release" && sent < 0) sent = event.tick;
+      }
+    }
+    expect(opened).toBeGreaterThanOrEqual(600);
+    expect(sent).toBeGreaterThan(opened + (BUNKER_DOOR_FRAMES - 1) * 2);
     expect(battle.creeps().filter((creep) => creep.friendly)).toHaveLength(1);
   });
 
@@ -2327,12 +2668,13 @@ describe("the Housing Bunker (issue #143)", () => {
     return { yard, pokey, defenders };
   };
 
-  it("stands with its health and sends a defender at a creep within 500", () => {
+  it("stands with its health and sends its defenders at a creep within 500", () => {
     const { yard, pokey, defenders } = battleOf(400);
     expect(yard.buildings[0]?.hp).toBe(4000);
     expect(Math.hypot(pokey.ix - 80, pokey.iy - 80)).toBeLessThan(500);
-    expect(defenders).toHaveLength(1);
-    expect(defenders[0]?.targetCreep).toBe(pokey.id);
+    // All of them at once (`HOUSINGBUNKER.as:289-298`, Inferno WP 1.6).
+    expect(defenders).toHaveLength(2);
+    for (const defender of defenders) expect(defender.targetCreep).toBe(pokey.id);
   });
 
   it("sends nothing at a creep beyond its range", () => {
@@ -2565,9 +2907,9 @@ describe("the renderer's view of the field (issue #32, WP5)", () => {
       }
       seen = battle.tick;
     }
-    // Eleven shots kill the Pokey (issue #264), which is what the tower report says too.
+    // Thirteen shots kill the Pokey, which is what the tower report says too.
     expect(shots).toBe(battle.state().towers[0]?.shots);
-    expect(shots).toBe(11);
+    expect(shots).toBe(13);
     expect(deaths).toBe(1);
   });
 
@@ -2585,9 +2927,9 @@ describe("the renderer's view of the field (issue #32, WP5)", () => {
     }
     const hits = events.filter((event) => event.kind === "hit");
     const hurts = events.filter((event) => event.kind === "hurt");
-    // The Pokey got eleven swings in before it died, 60 a swing, on foot, at
+    // The Pokey got fourteen swings in before it died, 60 a swing, on foot, at
     // the tower it was standing on.
-    expect(hits).toHaveLength(11);
+    expect(hits).toHaveLength(14);
     for (const hit of hits) {
       if (hit.kind !== "hit") throw new Error("filtered");
       expect(hit.creepId).toBe(1);
@@ -2599,11 +2941,12 @@ describe("the renderer's view of the field (issue #32, WP5)", () => {
       expect(hit.targetIx).toBe(0);
       expect(hit.targetIy).toBe(0);
     }
-    // Eleven shots, each one a wound with the Pokey's position that tick, of
-    // 20 and then 19 as the tower is hurt (issue #264), the last the 8 it had left.
-    expect(hurts).toHaveLength(11);
+    // Thirteen shells, each one a wound with the Pokey's position the tick it
+    // lands: the blast's share of 20 a few pixels short, less as the tower is
+    // hurt (issue #264), the last the 11 it had left.
+    expect(hurts).toHaveLength(13);
     expect(hurts.map((hurt) => (hurt.kind === "hurt" ? hurt.amount : 0))).toEqual([
-      20, 20, 19, 19, 19, 19, 19, 19, 19, 19, 8,
+      16, 15, 16, 16, 16, 16, 16, 16, 16, 16, 15, 15, 11,
     ]);
     for (const hurt of hurts) {
       if (hurt.kind !== "hurt") throw new Error("filtered");
@@ -3039,5 +3382,77 @@ describe("an Eye-ra with no wall to break", () => {
       amount: hall.maxHp - hall.hp,
     });
     expect(events.find((event) => event.kind === "splash")).toMatchObject({ moveId: "C5", hits: 1 });
+  });
+});
+
+describe("the Quake Tower's drawing events (INFERNOQUAKETOWER.as)", () => {
+  it("draws its 33 strip cells as it winds up, then tells of the quake once, at the tower's reach", () => {
+    const yard = yardOf({
+      "1": { id: 1, t: 14, l: 1, X: 820, Y: 820 },
+      "2": { id: 2, t: 129, l: 3, X: 760, Y: 760 },
+    });
+    const battle = createBattle(yard, { seed: 3 });
+    battle.apply({ kind: "fling", t: 0, x: 790, y: 790, r: 0, monsters: { C1: 4 } });
+    const cells: number[] = [];
+    const quakes: { tick: number; radius: number }[] = [];
+    for (let step = 0; step < 400 && !battle.over() && quakes.length === 0; step += 1) {
+      battle.step();
+      for (const event of battle.recentEvents(battle.tick - 1)) {
+        if (event.kind === "towerCell" && event.towerId === 2) cells.push(event.cell);
+        if (event.kind === "towerQuake" && event.towerId === 2) quakes.push(event);
+      }
+    }
+    expect(cells).toEqual(Array.from({ length: 33 }, (_, cell) => cell));
+    expect(quakes).toHaveLength(1);
+    expect(quakes[0]?.radius).toBe(180);
+    expect(battle.state().towers.find((tower) => tower.id === 2)?.shots).toBe(1);
+  });
+});
+
+describe("a Brain at a wall", () => {
+  /**
+   * A harvester inside a closed ring of walls, 20 a side from -100 to 100. A
+   * wall holds no loot, so it is never "looted": a group 3 creep whose route
+   * is cut at one keeps it and breaks it, as Flash's does (`CreepBase.as:853`
+   * drops a group 3 target only once `_looted`, which a wall never is). Read
+   * as looted, it dropped the wall every tick, re-pathed, and each fresh
+   * route's unchecked first step walked it on through the wall.
+   */
+  const ringed = (): CombatBuildingDataMap => {
+    const buildings: Record<string, CombatBuildingData> = {
+      "1": { id: 1, t: 1, l: 1, X: -35, Y: -35, st: 1000 },
+    };
+    let id = 10;
+    for (let at = -100; at < 100; at += 20) {
+      for (const [X, Y] of [[at, -100], [at, 80], [-100, at], [80, at]] as const) {
+        if (Object.values(buildings).some((one) => one.X === X && one.Y === Y)) continue;
+        buildings[String(id)] = { id, t: 17, l: 1, X, Y };
+        id += 1;
+      }
+    }
+    return buildings;
+  };
+
+  it("breaks the wall in its way instead of walking through it", () => {
+    const yard = yardOf(ringed());
+    const walls = yard.buildings.filter((building) => building.kind === "wall");
+    expect(walls.every((wall) => !wall.looted)).toBe(true);
+    const battle = createBattle(yard, { seed: 1, levels: { C9: 1 } });
+    battle.apply({ kind: "fling", t: 0, x: -400, y: -400, r: 40, monsters: { C9: 4 } });
+    let swungAtWall = false;
+    for (let step = 0; step < 3000 && !battle.over(); step += 1) {
+      battle.step();
+      const ringStands = walls.every((wall) => wall.hp > 0);
+      for (const brain of battle.creeps()) {
+        const target = yard.buildings.find((building) => building.id === brain.targetBuilding);
+        if (brain.state === "attacking" && target?.kind === "wall") swungAtWall = true;
+        // Nobody gets inside while the ring is whole.
+        if (ringStands) {
+          expect(Math.abs(brain.ix) < 75 && Math.abs(brain.iy) < 75, `tick ${step}`).toBe(false);
+        }
+      }
+    }
+    expect(swungAtWall).toBe(true);
+    expect(walls.some((wall) => wall.hp < wall.maxHp)).toBe(true);
   });
 });

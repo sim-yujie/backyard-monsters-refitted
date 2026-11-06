@@ -2,11 +2,12 @@ import type { BaseLoadResponse } from "@/api/types";
 import {
   BEHAVIOUR_SPEED,
   championStat,
+  housedGarrisons,
   isKnownMonster,
   monsterMovement,
   monsterTickSpeed,
 } from "@/game/combat/rules";
-import { academyLevel } from "@/game/monsters/housing";
+import { academyLevel, HOUSING_BUNKER_TYPE, housingTypeOf } from "@/game/monsters/housing";
 import { footprintOf, fromIso } from "./YardGrid";
 import type { Yard, YardBuilding } from "./yardModel";
 
@@ -32,7 +33,10 @@ import type { Yard, YardBuilding } from "./yardModel";
  * - **No workers on a wild monster camp.** `QUEUE.Spawn` skips the two world
  *   map modes, `WMATTACK` and `WMVIEW` (`QUEUE.as:56`); a player's yard, visited
  *   or attacked, has its workers, and a running job has one standing at it
- *   (`BFOUNDATION.as:3154-3182` queues it on load, whoever is looking).
+ *   (`BFOUNDATION.as:3154-3182` queues it on load, whoever is looking). A
+ *   Moloch yard (a Descent yard or an Inferno map tribe) is one too: it loads
+ *   as an Inferno yard, but Flash attacks it in `IWMATTACK`, which
+ *   `GLOBAL.Setup` turns into `WMATTACK` (`GLOBAL.as:763-787`).
  * - **No champion on an attacked yard.** Flash's cage champion was a guardian
  *   that came out to fight the attacker. The combat engine does not simulate a
  *   defending champion (only the attacker's flung ones,
@@ -56,6 +60,18 @@ import type { Yard, YardBuilding } from "./yardModel";
  * its pen (`CreepBase.as:260`), so it stands on the ground over its shadow,
  * which the owner kept (#211) when the flyers went higher on the attack
  * screen.
+ *
+ * On the Inferno the pens are its Compounds, the Housing Bunker (type 128):
+ * `Populate` takes `HOUSINGBUNKER` there instead of `BUILDING15`
+ * (`HOUSING.as:211`), with the same 160 x 160 footprint and `PointInHouse`. On
+ * an attacked Inferno yard a bunker is also a defence: the creatures it sends
+ * out are the penned ones walking off to the fight (`HOUSINGBUNKER.as`,
+ * `dispatchCreature`). So each pen there shows its own garrison
+ * ({@link YardLife.rosters}): the engine's deal at the start
+ * (`housedGarrisons`), then what the battle says it still holds
+ * ({@link withRosters}, `Battle.bunkerPools`). A monster leaves the pen as its
+ * defender comes out, one walking back in rejoins it, and a fallen bunker's
+ * pen empties.
  *
  * Flash drew every one. A big army is thousands, so this draws a sample:
  * {@link sampleArmy} keeps every type present and shares at most
@@ -135,8 +151,7 @@ export const MAX_TICKS_PER_FRAME = 20;
 /** The most housed monsters drawn at once across the whole yard. */
 export const MAX_HOUSED_DRAWN = 150;
 
-/** Housing's type id and its pen (`HOUSING.as:237-240`). */
-export const HOUSING_TYPE = 15;
+/** Housing's pen (`HOUSING.as:237-240`); the Inferno's Housing Bunker has the same. */
 const PEN = { inset: 40, size: 80 } as const;
 
 /** The Champion Cage's type id and its pen (`CHAMPIONCAGE.as:280-283`). */
@@ -148,9 +163,6 @@ export const CHAMPION_CHAMBER_TYPE = 119;
 
 /** A frozen champion's `status` (`champions/ChampionBase.as:26-36`). */
 const FROZEN_STATUS = 1;
-
-/** A champion's egg waiting in the cage (owner 2026-10-20; `championModel.ts`). */
-const EGG_STATUS = 3;
 
 /**
  * A champion's speed on a trip to or from the Chamber against its pacing
@@ -254,12 +266,6 @@ export interface YardLife {
   readonly cage: LifePen | null;
   /** Ids (`G1`..`G5`) of the champions frozen in the Chamber (#314). */
   readonly frozen: readonly string[];
-  /**
-   * The egg waiting in the cage (owner 2026-10-20): its champion's id (`G1`..`G4`)
-   * and the middle of the cage's footprint in yard units, where it stands; null
-   * when there is none, or on an attacked yard.
-   */
-  readonly egg: LifeEgg | null;
   /** The Champion Chamber's footprint, or null when the yard has none. */
   readonly chamber: LifeArea | null;
   readonly workers: number;
@@ -270,13 +276,13 @@ export interface YardLife {
   readonly plot: { readonly width: number; readonly height: number };
   /** Every footprint, so an idle worker is not put down inside a building. */
   readonly footprints: readonly LifeArea[];
-}
-
-/** An egg in the cage, and where it stands. */
-export interface LifeEgg {
-  readonly id: string;
-  readonly x: number;
-  readonly y: number;
+  /**
+   * What each pen holds of its own, by pen id, on an attacked Inferno yard,
+   * whose Housing Bunkers send their monsters out one by one; a pen with no
+   * entry holds none. Null everywhere else: {@link groups} is one army dealt
+   * round the pens.
+   */
+  readonly rosters: Readonly<Record<number, readonly LifeGroup[]>> | null;
 }
 
 /** Nothing alive at all. */
@@ -287,13 +293,13 @@ export const EMPTY_LIFE: YardLife = {
   champions: [],
   cage: null,
   frozen: [],
-  egg: null,
   chamber: null,
   workers: 0,
   jobs: [],
   hardHat: false,
   plot: { width: 0, height: 0 },
   footprints: [],
+  rosters: null,
 };
 
 const standing = (building: YardBuilding): boolean => building.hp === null || building.hp > 0;
@@ -307,8 +313,11 @@ const TRIBE_TYPE = "tribe";
  *
  * Pens are the Housing buildings with health above zero, as `Populate` takes
  * them (`HOUSING.as:212-215`); one still being built counts, as it did there.
+ * On the Inferno they are its Housing Bunkers, each with its own garrison
+ * when attacked.
  * The champion list keeps status 0 only (`CHAMPIONCAGE.as:593-594`), and is
- * empty on an attacked yard; a wild monster camp has no workers.
+ * empty on an attacked yard; a wild monster camp has no workers, nor has a
+ * Moloch yard, which the caller marks `wild` since its save says Inferno.
  *
  * Every housed monster the combat tables know is drawn. A ground monster, the
  * Pokey among them, names no `movement` there (only flyers, burrowers and
@@ -318,6 +327,7 @@ export const yardLifeOf = (
   save: BaseLoadResponse,
   yard: Yard,
   view: LifeView = "own",
+  wild = false,
 ): YardLife => {
   const groups: LifeGroup[] = [];
   for (const [id, raw] of Object.entries(save.monsters?.housed ?? {})) {
@@ -326,21 +336,20 @@ export const yardLifeOf = (
     groups.push({ id, level: academyLevel(save.academy, id), count });
   }
 
+  const housing = housingTypeOf(save);
   const pens: LifePen[] = [];
   let cage: LifePen | null = null;
-  let cageMiddle: YardPoint | null = null;
   let chamber: LifeArea | null = null;
   const jobs: LifeJob[] = [];
   const footprints: LifeArea[] = [];
   for (const building of yard.buildings) {
     const [width, height] = building.footprint;
     footprints.push({ x: building.x, y: building.y, width, height });
-    if (building.type === HOUSING_TYPE && standing(building)) {
+    if (building.type === housing && standing(building)) {
       pens.push({ id: building.id, x: building.x, y: building.y });
     }
     if (building.type === CHAMPION_CAGE_TYPE && cage === null) {
       cage = { id: building.id, x: building.x, y: building.y };
-      cageMiddle = { x: building.x + width / 2, y: building.y + height / 2 };
     }
     if (building.type === CHAMPION_CHAMBER_TYPE && chamber === null) {
       chamber = { x: building.x, y: building.y, width, height };
@@ -354,35 +363,77 @@ export const yardLifeOf = (
 
   const champions: LifeChampion[] = [];
   const frozen: string[] = [];
-  let egg: string | null = null;
   for (const entry of view === "attack" ? [] : (save.champion ?? [])) {
     if (!entry) continue;
     const t = Math.floor(Number(entry.t));
     if (!(t >= 1)) continue;
     const status = Number(entry.status ?? 0);
     if (status === FROZEN_STATUS) frozen.push(`G${t}`);
-    if (status === EGG_STATUS && egg === null) egg = `G${t}`;
     if (status !== 0) continue;
     const level = Math.max(1, Math.floor(Number(entry.l)) || 1);
     champions.push({ id: `G${t}`, level, sheetLevel: level });
   }
 
-  const workless = save.type === TRIBE_TYPE;
-  return {
+  const workless = wild || save.type === TRIBE_TYPE;
+  const life: YardLife = {
     groups,
     pens,
     fallen: EMPTY_LIFE.fallen,
     champions,
     cage,
     frozen,
-    egg: egg && cageMiddle ? { id: egg, ...cageMiddle } : null,
     chamber,
     workers: workless ? 0 : yard.workers.total,
     jobs: workless ? [] : jobs,
     hardHat: yard.buildTime < 1,
     plot: { width: yard.bounds.yardWidth, height: yard.bounds.yardHeight },
     footprints,
+    rosters: null,
   };
+  if (housing !== HOUSING_BUNKER_TYPE || view !== "attack") return life;
+  // The engine's own deal, so each pen shows what its bunker will send.
+  return withRosters(life, housedGarrisons(save.buildingdata, save.monsters?.housed ?? {}, save.buildinghealthdata));
+};
+
+/**
+ * The life with each pen holding what `pools` says, by building id then
+ * monster id (an attacked Inferno yard, `Battle.bunkerPools`); the same object
+ * when that is what it holds already, so a caller can tell nothing changed.
+ * Each type walks at its academy level, read off {@link YardLife.groups}.
+ */
+export const withRosters = (
+  life: YardLife,
+  pools: Readonly<Record<number, Readonly<Record<string, number>>>>,
+): YardLife => {
+  const levels = new Map(life.groups.map((group) => [group.id, group.level]));
+  const rosters: Record<number, LifeGroup[]> = {};
+  for (const pen of life.pens) {
+    const roster: LifeGroup[] = [];
+    for (const id of Object.keys(pools[pen.id] ?? {}).sort()) {
+      const count = Math.floor(pools[pen.id]?.[id] ?? 0);
+      if (count > 0 && isKnownMonster(id)) roster.push({ id, level: levels.get(id) ?? 1, count });
+    }
+    if (roster.length > 0) rosters[pen.id] = roster;
+  }
+  if (life.rosters && sameRosters(life.rosters, rosters)) return life;
+  return { ...life, rosters };
+};
+
+const sameRosters = (
+  one: Readonly<Record<number, readonly LifeGroup[]>>,
+  other: Readonly<Record<number, readonly LifeGroup[]>>,
+): boolean => {
+  const keys = Object.keys(one);
+  if (keys.length !== Object.keys(other).length) return false;
+  return keys.every((key) => {
+    const mine = one[Number(key)] ?? [];
+    const theirs = other[Number(key)];
+    return (
+      theirs !== undefined &&
+      mine.length === theirs.length &&
+      mine.every((group, at) => group.id === theirs[at]?.id && group.count === theirs[at]?.count)
+    );
+  });
 };
 
 /**
@@ -527,6 +578,29 @@ export interface Walker {
   trip: YardPoint[] | null;
   /** Going into the Chamber: gone once its trip is over ({@link walkerGone}). */
   leaving: boolean;
+  /** A monster on its way into the Monster Juicer ({@link juiceTrip}); absent otherwise. */
+  juice?: JuiceWalk;
+}
+
+/**
+ * A monster walking (or flying) to the Monster Juicer to be juiced, as Flash's
+ * creep in juice mode (`CreepBase.as:369-382`, `:1270-1288`).
+ */
+export interface JuiceWalk {
+  /** The Juicer's building id. */
+  readonly juicer: number;
+  /** A flyer takes off first and drops into the Juicer at the end. */
+  readonly flies: boolean;
+  /** Its height above the ground now, world px. */
+  altitude: number;
+  /** The height it climbs to (`m_altitudeMax`). */
+  readonly top: number;
+  /** Ticks into its take-off. */
+  rise: number;
+  /** Ticks into its drop at the Juicer, or null before it gets there. */
+  landing: number | null;
+  /** The height its drop started from. */
+  dropFrom: number;
 }
 
 /** A point in yard units. */
@@ -625,9 +699,7 @@ export const walkerSpecs = (
   if (life.pens.length > 0) {
     // The nth of a type in a pen keeps its key while the army around it changes.
     const seen = new Map<string, number>();
-    sampleArmy(life.groups, cap).forEach((monster, index) => {
-      const pen = life.pens[index % life.pens.length];
-      // Dealt round every pen first, so the ones left standing keep theirs.
+    const penned = (pen: LifePen | undefined, monster: SampledMonster): void => {
       if (!pen || life.fallen.has(pen.id)) return;
       const slot = `${pen.id}:${monster.id}`;
       const nth = seen.get(slot) ?? 0;
@@ -641,7 +713,18 @@ export const walkerSpecs = (
         speed: monsterTickSpeed(monster.id, monster.level) * (BEHAVIOUR_SPEED["pen"] ?? 1),
         odds: CREEP_WANDER_ODDS,
       });
-    });
+    };
+    const rosters = life.rosters;
+    if (rosters) {
+      // Each pen its own garrison, the places shared out evenly.
+      const share = Math.max(1, Math.floor(cap / life.pens.length));
+      for (const pen of life.pens) {
+        for (const monster of sampleArmy(rosters[pen.id] ?? [], share)) penned(pen, monster);
+      }
+    } else {
+      // Dealt round every pen first, so the ones left standing keep theirs.
+      sampleArmy(life.groups, cap).forEach((monster, index) => penned(life.pens[index % life.pens.length], monster));
+    }
   }
 
   const cage = life.cage;
@@ -699,7 +782,7 @@ export const reconcileWalkers = (
     }
   }
   for (const [key, walker] of current) {
-    if (!next.has(key) && walker.leaving && walker.trip !== null) next.set(key, walker);
+    if (!next.has(key) && walker.leaving && !walkerGone(walker)) next.set(key, walker);
   }
   return next;
 };
@@ -716,6 +799,10 @@ const inside = (area: LifeArea, x: number, y: number): boolean =>
  */
 export const stepWalker = (walker: Walker, random: Random): void => {
   walker.age++;
+  if (walker.juice) {
+    stepJuice(walker, walker.juice);
+    return;
+  }
   if (walker.trip !== null) {
     stepTrip(walker);
     return;
@@ -820,8 +907,76 @@ export const thawTrip = (walker: Walker, door: YardPoint, route: TripRoute): boo
   return false;
 };
 
-/** Whether a walker has gone into the Chamber and is to be taken off. */
-export const walkerGone = (walker: Walker): boolean => walker.leaving && walker.trip === null;
+/**
+ * Whether a walker has gone into the Chamber, or into the Juicer, and is to be
+ * taken off. A flyer at the Juicer first drops into it ({@link JUICE_DROP_TICKS}).
+ */
+export const walkerGone = (walker: Walker): boolean =>
+  walker.leaving &&
+  walker.trip === null &&
+  (!walker.juice || !walker.juice.flies || (walker.juice.landing ?? 0) >= JUICE_DROP_TICKS);
+
+/* ── Trips into the Monster Juicer ──────────────────────────────────────── */
+
+/**
+ * A flyer's take-off when it is sent to the Juicer: up to its top height over
+ * two seconds, easing in (`CreepBase.as:373-379`, `TweenLite.to(_graphicMC, 2,
+ * Sine.easeIn)`), in creature ticks.
+ */
+export const JUICE_RISE_TICKS = 2 * CREATURE_TICK_HZ;
+
+/** A flyer stands still until it is this high (`CreepBase.as:1466-1468`: speed 0 below altitude 25). */
+export const JUICE_MIN_FLY_ALTITUDE = 25;
+
+/** A flyer's drop into the Juicer: 0.4 s, easing out (`CreepBase.as:1274-1281`). */
+export const JUICE_DROP_TICKS = Math.round(0.4 * CREATURE_TICK_HZ);
+
+/**
+ * Where a monster goes into the Juicer: the front corner of its footprint,
+ * the one nearest the viewer, as at the Chamber ({@link chamberDoor}).
+ */
+export const juicerDoor = chamberDoor;
+
+/**
+ * Sends a penned monster to the Juicer `juicer` along `route` from where it
+ * stands to `door` (`changeModeJuice`, `CreepBase.as:369-382`). A flyer climbs
+ * to `top` px first. Returns false, leaving it be, when there is no way.
+ */
+export const juiceTrip = (
+  walker: Walker,
+  juicer: number,
+  door: YardPoint,
+  route: TripRoute,
+  flies: boolean,
+  top: number,
+): boolean => {
+  if (!startTrip(walker, route({ x: walker.x, y: walker.y }, door), true)) return false;
+  walker.juice = { juicer, flies, altitude: 0, top, rise: 0, landing: null, dropFrom: 0 };
+  return true;
+};
+
+/** One tick of a monster on its way into the Juicer. */
+const stepJuice = (walker: Walker, juice: JuiceWalk): void => {
+  if (walker.trip !== null) {
+    if (juice.flies) {
+      if (juice.rise < JUICE_RISE_TICKS) {
+        juice.rise++;
+        juice.altitude = juice.top * (1 - Math.cos(((juice.rise / JUICE_RISE_TICKS) * Math.PI) / 2));
+      }
+      if (juice.altitude < JUICE_MIN_FLY_ALTITUDE) return;
+    }
+    stepTrip(walker);
+    if (walker.trip === null && juice.flies) {
+      juice.landing = 0;
+      juice.dropFrom = juice.altitude;
+    }
+    return;
+  }
+  if (juice.landing !== null && juice.landing < JUICE_DROP_TICKS) {
+    juice.landing++;
+    juice.altitude = juice.dropFrom * (1 - Math.sin(((juice.landing / JUICE_DROP_TICKS) * Math.PI) / 2));
+  }
+};
 
 /** One tick of a trip: on at its trip speed, through as many waypoints as that reaches. */
 const stepTrip = (walker: Walker): void => {

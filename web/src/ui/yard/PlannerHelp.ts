@@ -143,10 +143,6 @@ const HINT_ROWS: readonly HintRow[] = [
     text: "Or click once to lift the selection, move the pointer, and click again to drop it.",
   },
   {
-    demo: "mirrorH",
-    text: "Mirror, Align and Distribute tidy a selection: two or more to mirror or align, three or more to space out.",
-  },
-  {
     demo: "store",
     text:
       "Store (Delete) lifts the selection off the yard into a drawer, so there is room to move the rest. Click a stack in the drawer, then click the yard once per building; Esc stops.",
@@ -161,14 +157,14 @@ const HINT_ROWS: readonly HintRow[] = [
  * The same moves, for a finger (#45).
  *
  * A phone has no Shift, no second button, no Esc and no keyboard, and its
- * controls are not where a desktop's are (Mirror and its kin are in the
- * building sheet, Find and the overlays under More), so the card says how to do
+ * controls are not where a desktop's are (Select all is under
+ * More ▸ Selection, Find and the overlays under More), so the card says how to do
  * each thing there rather than leaving half its lines untrue.
  */
 const TOUCH_HINT_ROWS: readonly HintRow[] = [
   {
     demo: "select",
-    text: "Tap a building to select it. Its panel has Select all, to take every one of that type.",
+    text: "Tap a building to select it. More ▸ Selection has Select all, to take every one of that type.",
   },
   {
     demo: "boxSelect",
@@ -181,10 +177,6 @@ const TOUCH_HINT_ROWS: readonly HintRow[] = [
   {
     demo: "carry",
     text: "If it does not fit where you let go, it stays in hand: tap the yard to drop it, or press Put back.",
-  },
-  {
-    demo: "mirrorH",
-    text: "Mirror, Align and Distribute are in the building panel when two or more are selected.",
   },
   {
     demo: "store",
@@ -230,8 +222,6 @@ const SHORTCUT_ROWS: readonly (readonly [string, string])[] = [
   ["Shift + click", "Add or remove one building"],
   ["Arrow keys", "Nudge the selection by one grid step"],
   ["Shift + arrows", "Nudge by ten steps"],
-  ["M", "Mirror the selection left to right — positions, not artwork"],
-  ["Shift + M", "Mirror it top to bottom"],
   ["Ctrl + Z", "Undo"],
   ["Ctrl + Shift + Z, Ctrl + Y", "Redo"],
   ["Ctrl + S", "Save to the current slot"],
@@ -279,7 +269,7 @@ export const plannerHelpPanel = (options: PlannerHelpOptions): Panel => {
     : "Nothing here reaches your yard until you press Apply.";
 
   const tablist = document.createElement("div");
-  tablist.className = "planner-help__tabs";
+  tablist.className = "tab-row planner-help__tabs";
   tablist.setAttribute("role", "tablist");
   tablist.setAttribute("aria-label", "Planner help");
 
@@ -293,6 +283,8 @@ export const plannerHelpPanel = (options: PlannerHelpOptions): Panel => {
   const tabs = new Map<HelpTab, HTMLButtonElement>();
 
   const select = (tab: HelpTab): void => {
+    // Another tab opens at its top.
+    if (tabs.get(tab)?.getAttribute("aria-selected") === "false") panel.body.scrollTop = 0;
     for (const [name, element] of Object.entries(panels) as [HelpTab, HTMLElement][]) {
       element.hidden = name !== tab;
     }
@@ -345,8 +337,10 @@ export const plannerHelpPanel = (options: PlannerHelpOptions): Panel => {
 
   // A touched screen gets the pictures alone: a tab of keys it has no
   // keyboard for would be a tab of things it cannot do.
+  // The tabs (and the line over them) stay in sight while the body scrolls
+  // (owner, 6 Nov 2026: tabs fixed at the top of every window).
   if (touch) panel.setContent(intro, basics, footer);
-  else panel.setContent(intro, tablist, basics, shortcuts, footer);
+  else panel.setHead(intro, tablist).setContent(basics, shortcuts, footer);
   select(touch ? "basics" : (options.tab ?? "basics"));
   return panel;
 };

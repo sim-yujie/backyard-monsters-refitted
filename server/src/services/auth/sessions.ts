@@ -29,3 +29,19 @@ export const endAllSessions = async (user: { email: string; userid: number }): P
     chatTokenKey(user.userid)
   );
 };
+
+/**
+ * Logs one session out (security audit 2026-10-29, L4): drops the account's
+ * stored login token for that session type, so the token stops working at
+ * once rather than when it expires, and its chat token.
+ *
+ * Only one token per session type is stored, so this is the one signed in.
+ * The other session type (the launcher or the game) stays signed in.
+ *
+ * @param {SessionType} sessionType - The session being signed out.
+ * @param {{ email: string; userid: number }} user - The account.
+ * @returns {Promise<void>} Resolves once the tokens are gone.
+ */
+export const endSession = async (sessionType: SessionType, user: { email: string; userid: number }): Promise<void> => {
+  await redis.del(sessionTokenKey(sessionType, user.email), chatTokenKey(user.userid));
+};

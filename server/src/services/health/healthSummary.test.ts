@@ -17,7 +17,8 @@ const REDIS_INFO = "# Memory\r\nused_memory:1048576\r\nused_memory_human:1.00M\r
 const deps = (extra: Partial<HealthDeps> = {}): HealthDeps => ({
   now: NOW,
   sql: async <T>() => [{ bytes: "123456789" }] as T[],
-  redisSend: async (command) => (command === "PING" ? "PONG" : REDIS_INFO),
+  redisSend: async (command, args) =>
+    command === "PING" ? "PONG" : args[0] === "stats" ? "# Stats\r\nevicted_keys:7\r\n" : REDIS_INFO,
   readHostStatus: async () => HOST,
   uptimeSeconds: 3600,
   memoryUsage: { rss: 300_000_000, heapUsed: 100_000_000 },
@@ -40,7 +41,7 @@ describe("health summary", () => {
     });
     expect(health.database).toMatchObject({ ok: true, sizeBytes: 123456789 });
     expect(health.database.pingMs).toBeGreaterThanOrEqual(0);
-    expect(health.redis).toMatchObject({ ok: true, usedMemoryBytes: 1048576, peakMemoryBytes: 2097152, maxMemoryBytes: 0 });
+    expect(health.redis).toMatchObject({ ok: true, usedMemoryBytes: 1048576, peakMemoryBytes: 2097152, maxMemoryBytes: 0, evictedKeys: 7 });
     expect(health.host).toMatchObject({ stale: false, hostname: HOST.hostname });
     expect(health.host?.containers?.length).toBe(3);
     expect(health.disksFrom).toBe("host");

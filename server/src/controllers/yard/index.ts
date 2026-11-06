@@ -22,6 +22,7 @@ import {
 } from "./champion.js";
 import {
   yardHatcheryAddAction,
+  yardHatcheryClearAction,
   yardHatcheryFinishAction,
   yardHatcheryRemoveAction,
 } from "./hatchery.js";
@@ -41,12 +42,23 @@ import {
 } from "./locker.js";
 import { yardMushroomPickAction } from "./mushrooms.js";
 import { yardRecycleAction } from "./recycle.js";
+import { yardMoveAction } from "./move.js";
 import { yardRepairAction, yardRepairInstantAction } from "./repair.js";
 import { yardShopBuyAction } from "./shopBuy.js";
+import {
+  yardSiegeFactoryCancelAction,
+  yardSiegeFactoryFinishAction,
+  yardSiegeFactoryInstantAction,
+  yardSiegeFactoryStartAction,
+  yardSiegeLabCancelAction,
+  yardSiegeLabFinishAction,
+  yardSiegeLabInstantAction,
+  yardSiegeLabStartAction,
+} from "./siege.js";
 import { yardStarterKitAction } from "./starterKit.js";
 import { yardSpeedupAction } from "./speedup.js";
 import { yardStateAction } from "./state.js";
-import { yardPlaceDecorationAction } from "./decor.js";
+import { yardBuyDecorationAction, yardPlaceDecorationAction } from "./decor.js";
 import { yardRoute } from "./yardRoute.js";
 import { yardCancelUpgradeAction, yardUpgradeAction } from "./upgrade.js";
 import { goalsRoutes } from "./goals.js";
@@ -54,6 +66,7 @@ import { guideRoutes } from "./guide.js";
 import { tipsRoutes } from "./tips.js";
 import { achievementsRoutes } from "./achievements.js";
 import { eventsRoutes } from "./events.js";
+import { questsRoutes } from "./quests.js";
 
 /**
  * Every yard action route, mounted by `app.routes.ts` as
@@ -86,6 +99,7 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "locker/instant", controller: yardRoute(yardLockerInstantAction) },
   { path: "hatchery/add", controller: yardRoute(yardHatcheryAddAction) },
   { path: "hatchery/remove", controller: yardRoute(yardHatcheryRemoveAction) },
+  { path: "hatchery/clear", controller: yardRoute(yardHatcheryClearAction) },
   { path: "hatchery/finish", controller: yardRoute(yardHatcheryFinishAction) },
   { path: "bank", controller: yardRoute(yardBankAction) },
   { path: "mushroom/pick", controller: yardRoute(yardMushroomPickAction) },
@@ -120,6 +134,7 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "fortify/cancel", controller: yardRoute(yardCancelFortifyAction) },
   { path: "starterkit", controller: yardRoute(yardStarterKitAction) },
   { path: "decor/place", controller: yardRoute(yardPlaceDecorationAction) },
+  { path: "decor/buy", controller: yardRoute(yardBuyDecorationAction) },
   // The new-player tutorial (issue #227): each package fills its own file.
   ...goalsRoutes,
   ...guideRoutes,
@@ -128,4 +143,16 @@ export const yardRoutes: YardRouteEntry[] = [
   ...achievementsRoutes,
   // Events: the login calendar and collection ladder claims (`events.ts`).
   ...eventsRoutes,
+  ...questsRoutes,
+  // One building moved (the Inferno's WP 1.15; the main yard and outposts too).
+  { path: "move", controller: yardRoute(yardMoveAction) },
+  // The Siege Lab and Siege Factory (Inferno WP 6.3, `siege.ts`).
+  { path: "siege/lab/start", controller: yardRoute(yardSiegeLabStartAction) },
+  { path: "siege/lab/cancel", controller: yardRoute(yardSiegeLabCancelAction) },
+  { path: "siege/lab/finish", controller: yardRoute(yardSiegeLabFinishAction) },
+  { path: "siege/lab/instant", controller: yardRoute(yardSiegeLabInstantAction) },
+  { path: "siege/factory/start", controller: yardRoute(yardSiegeFactoryStartAction) },
+  { path: "siege/factory/cancel", controller: yardRoute(yardSiegeFactoryCancelAction) },
+  { path: "siege/factory/finish", controller: yardRoute(yardSiegeFactoryFinishAction) },
+  { path: "siege/factory/instant", controller: yardRoute(yardSiegeFactoryInstantAction) },
 ];

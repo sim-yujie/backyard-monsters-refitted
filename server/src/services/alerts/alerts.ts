@@ -82,6 +82,9 @@ export const duration = (ms: number): string => {
 /** The disk check stays open until a disk is this many points below the limit, so it does not flicker. */
 const DISK_RECOVERY_MARGIN = 3;
 
+/** The same for Redis's memory. */
+const REDIS_RECOVERY_MARGIN = 5;
+
 /**
  * Finds what is wrong in a health summary (and the error rate, when there is an
  * error count to read).
@@ -116,6 +119,35 @@ export const findProblems = (
       detail: `The game server cannot reach Redis: ${health.redis.error ?? "no answer"}. Logins and chat stop working.`,
       section: "health",
     });
+  }
+
+  // Redis's memory against its own cap (docker-compose.prod.yml: 160 MB,
+  // volatile-lru). Near the cap it starts dropping keys that expire, the
+  // sign-in back-off counts among them (security audit 2026-10-29).
+  if (!health.redis.ok) {
+    unchecked.push("redis-memory", "redis-evictions");
+  } else {
+    const { usedMemoryBytes: used, maxMemoryBytes: max, evictedKeys } = health.redis;
+    if (used !== null && max) {
+      const percent = Math.round((used / max) * 100);
+      const limit = open.has("redis-memory") ? config.redisMemoryPercent - REDIS_RECOVERY_MARGIN : config.redisMemoryPercent;
+      if (percent >= limit) {
+        problems.push({
+          key: "redis-memory",
+          title: "Redis is nearly full",
+          detail: `Redis holds ${size(used)} of its ${size(max)} cap (${percent}%). When full it drops keys that expire (caches, presence, sign-in back-off counts) to make room.`,
+          section: "health",
+        });
+      }
+    }
+    if ((evictedKeys ?? 0) > 0) {
+      problems.push({
+        key: "redis-evictions",
+        title: "Redis has dropped keys to save memory",
+        detail: `Redis has dropped ${evictedKeys} key${evictedKeys === 1 ? "" : "s"} to stay under its cap since it last started. Raise maxmemory in docker-compose.prod.yml, or find what is filling it; the count goes back to 0 when Redis restarts.`,
+        section: "health",
+      });
+    }
   }
 
   if (!health.host || health.host.stale) {

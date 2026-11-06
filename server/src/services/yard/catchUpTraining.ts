@@ -15,6 +15,7 @@ import {
   researchedAcademy,
   withoutResearch,
 } from "./lab.js";
+import { inRealm, monsterRealmOf } from "./locker.js";
 
 /**
  * Catch-up step 4: Monster Academy training (`docs/design/yard-buildings.md`
@@ -36,7 +37,8 @@ import {
  * - **Stale slots**: an academy whose `upg` names a monster with no running
  *   training is idle (`BUILDING26.Click`, `:26-31`); its `upg` is dropped.
  *
- * Only surface `C` ids are read (D19). Pure apart from mutating the save it is
+ * Only the yard's own realm is read: surface `C` ids on a main yard, Inferno
+ * `IC` ids on the Inferno yard (`locker.ts` `monsterRealmOf`). Pure apart from mutating the save it is
  * handed. Idempotent: a second run at the same moment finds nothing expired,
  * nothing relative and nothing stale.
  */
@@ -59,6 +61,8 @@ export interface TrainJob {
 
 /** The slice of a save this step reads and writes. */
 export interface CatchUpTrainingSave {
+  /** `BaseType`: the Inferno yard trains the Inferno roster. */
+  type?: string;
   buildingdata?: BuildingDataMap | null;
   academy?: JsonObject | null;
 }
@@ -102,9 +106,10 @@ const academyFor = (buildingdata: BuildingDataMap | null | undefined, monster: s
 export const catchUpTraining = (save: CatchUpTrainingSave, from: number, now: number): TrainJob[] => {
   migrateLegacyIds(save);
 
+  const realm = monsterRealmOf(save);
   const jobs: TrainJob[] = [];
   for (const [monster, raw] of Object.entries(save.academy ?? {})) {
-    if (!/^C\d+$/.test(monster) || !raw || typeof raw !== "object") continue;
+    if (!inRealm(monster, realm) || !raw || typeof raw !== "object") continue;
     const entry = raw as JsonObject;
     let time = Number(entry.time);
     if (entry.time == null || !Number.isFinite(time) || time <= 0) continue;

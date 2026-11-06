@@ -1,7 +1,7 @@
 import { setScreenTune } from "@/game/sound/sound";
 import { loadSoundSwitches } from "@/game/sound/soundSwitches";
 import { MAP_ROOM_TUNE, type Tune } from "@/game/sound/tunes";
-import { SceneName } from "./App";
+import { SceneName } from "./sceneName";
 import type { SceneFactory } from "./SceneManager";
 
 /**

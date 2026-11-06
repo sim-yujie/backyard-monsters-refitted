@@ -79,8 +79,8 @@ export const updateNeighbourData = async (
     getTruces(currentUserId, userIds),
 
     // Who is online by the rule an attack load applies (#271, #275): a main
-    // yard's needs a real action too; an Inferno yard's only its last-seen mark
-    // (`infernoModeAttack.ts`).
+    // yard's needs a real action too. (The Inferno's list is
+    // `services/inferno/infernoNeighbours.ts`, not this.)
     baseType === BaseType.MAIN ? onlinePlayers(userIds, currentTime) : null,
 
     // The friend flag, read fresh: the cached list outlives friendships (friends WP2, #369).

@@ -8,6 +8,8 @@ import {
   type CombatBuildingData,
   type EngineBuilding,
 } from "@/game/combat/rules";
+import { HOUSING_BUNKER_TYPE, HOUSING_TYPE } from "@/game/monsters/housing";
+import type { YardKind } from "@/game/yard/buildingCostData";
 import { boxAround } from "./StagedRaidLayer";
 import type { YardPoint } from "./stagedRaid";
 
@@ -165,9 +167,6 @@ export const walkerAt = (
   };
 };
 
-/** Monster Housing (`YARD_PROPS.as`). */
-const HOUSING_TYPE = 15;
-
 /** One building as the walk reads it. */
 export interface WalkInBuilding {
   readonly id?: number;
@@ -185,7 +184,16 @@ export interface WalkInBuilding {
 export interface WalkInYard {
   readonly buildings: readonly WalkInBuilding[];
   readonly bounds: { readonly yardWidth: number };
+  /** Which props table: the Inferno houses its monsters in Housing Bunkers. Absent is `main`. */
+  readonly kind?: YardKind;
 }
+
+/**
+ * The Housing type monsters walk home to: Monster Housing, or on the Inferno
+ * the Housing Bunker, as `HOUSING` looks it up (`HOUSING.as:65`).
+ */
+const housingOn = (yard: WalkInYard): number =>
+  yard.kind === "inferno" ? HOUSING_BUNKER_TYPE : HOUSING_TYPE;
 
 const centreOf = (building: WalkInBuilding): YardPoint => ({
   x: building.x + building.footprint[0] / 2,
@@ -246,7 +254,8 @@ export const walkIntoHousing = (
   count: number,
   onEnd?: () => void,
 ): MonsterWalkIn | null => {
-  const housing = yard.buildings.find((building) => building.type === HOUSING_TYPE);
+  const type = housingOn(yard);
+  const housing = yard.buildings.find((building) => building.type === type);
   if (!housing || count <= 0) return null;
   const to = centreOf(housing);
   const from = { x: yard.bounds.yardWidth / 2, y: to.y };
@@ -269,10 +278,11 @@ export const hatcheryWalk = (
   const source = yard.buildings.find((building) => building.id === hatchery);
   if (!source) return null;
   const start = centreOf(source);
+  const type = housingOn(yard);
   let to: YardPoint | null = null;
   let best = Infinity;
   for (const building of yard.buildings) {
-    if (building.type !== HOUSING_TYPE || (building.hp != null && building.hp <= 0)) continue;
+    if (building.type !== type || (building.hp != null && building.hp <= 0)) continue;
     const centre = centreOf(building);
     const distance = Math.hypot(centre.x - start.x, centre.y - start.y);
     if (distance < best) {

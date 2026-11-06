@@ -1,8 +1,7 @@
 import type { Layout, LayoutNode, LayoutPayload, LayoutStoredNode } from "@/api/types";
 import { LAYOUT_VERSION } from "@/api/types";
-import { maxLevel } from "../buildingCosts";
-import type { MoveEntry, PlanEntry, StoreEntry } from "./commands";
-import { plannableType, type Plan } from "./plan";
+import type { MoveEntry, StoreEntry } from "./commands";
+import type { Plan } from "./plan";
 import { inBounds, Occupancy, snap, type PlanNode } from "./placement";
 
 /**
@@ -64,10 +63,6 @@ const toLayoutNode = (node: PlanNode): LayoutNode => ({
   y: node.y,
   ...(node.level !== 1 ? { l: node.level } : {}),
   ...(node.fort ? { fort: node.fort } : {}),
-  // Only when there is one: `plan` is an additive optional field and a layout
-  // that writes `plan: null` on 575 nodes is a bigger payload saying nothing
-  // (`docs/design/planner-upgrades.md` §2.1).
-  ...(node.plan ? { plan: { level: node.plan.level, order: node.plan.order } } : {}),
 });
 
 /** Why a saved node could not be put where the layout wanted it. */
@@ -111,16 +106,6 @@ export interface LoadResult {
   readonly lifts: StoreEntry[];
   /** Buildings in the drawer that the layout puts on the plot: put down last. */
   readonly places: StoreEntry[];
-  /** Planned upgrades the layout carried and this yard can still do. */
-  readonly plans: PlanEntry[];
-  /**
-   * How many planned upgrades the layout carried that this yard cannot do.
-   *
-   * A count rather than a list: the reason is almost always that the building
-   * has caught up or is mid-job, which is not something the player can act on,
-   * so the banner says how many and not which.
-   */
-  readonly plansDropped: number;
   /** Saved nodes that stayed where they were, for the banner. */
   readonly didNotFit: LoadMiss[];
   /** Saved nodes this yard has no building for, with where they stood. */
@@ -151,14 +136,10 @@ export interface LoadResult {
  * the yard no longer has is dropped quietly: it stood nowhere, so there is no
  * spot to report.
  *
- * ## Plans are set, never cleared
+ * ## Old planned upgrades
  *
- * A saved node carrying a `plan` this yard can still do sets one; a saved node
- * with no `plan` leaves whatever the player has planned alone. A layout is a
- * record of positions first, and a load that silently wiped the upgrades
- * planned in the last minute would be a worse surprise than one that leaves a
- * plan the player can clear in a click (`docs/design/planner-upgrades.md`
- * §2.3, which lists only the reading side of this field).
+ * A layout saved before 2026-11-03 may carry a `plan` (a planned upgrade) on
+ * its nodes. The planner no longer plans upgrades, so it is not read.
  */
 export const planLoad = (plan: Plan, layout: Layout): LoadResult => {
   const named = new Set<number>();
@@ -180,11 +161,8 @@ export const planLoad = (plan: Plan, layout: Layout): LoadResult => {
 
   const entries: MoveEntry[] = [];
   const places: StoreEntry[] = [];
-  const plans: PlanEntry[] = [];
   const didNotFit: LoadMiss[] = [];
   const missing: LoadMissing[] = [];
-  let plansDropped = 0;
-  let order = 0;
 
   for (const saved of layout.nodes) {
     const node = plan.get(saved.id);
@@ -194,31 +172,6 @@ export const planLoad = (plan: Plan, layout: Layout): LoadResult => {
     if (!node || node.fixed) {
       missing.push({ id: saved.id, t: saved.t, x, y });
       continue;
-    }
-
-    // Plans are read whether or not the position fits: a wall that could not
-    // be moved into a shrunken yard can still be upgraded where it stands.
-    if (saved.plan) {
-      const level = Number(saved.plan.level);
-      const wanted = Number.isFinite(level) ? Math.trunc(level) : 0;
-      // `order` is taken from the layout where it has one and renumbered by
-      // reading order otherwise, so a layout written by something that dropped
-      // the field still walks in the order its nodes are listed in.
-      const savedOrder = Number(saved.plan.order);
-      const at = Number.isFinite(savedOrder) && savedOrder >= 0 ? Math.trunc(savedOrder) : order;
-      order = Math.max(order, at) + 1;
-
-      const plannable =
-        plannableType(node.type) &&
-        !node.busy &&
-        !node.damaged &&
-        wanted > node.level &&
-        wanted <= maxLevel(node.type);
-
-      if (!plannable) plansDropped++;
-      else if (!node.plan || node.plan.level !== wanted || node.plan.order !== at) {
-        plans.push({ id: node.id, before: node.plan, after: { level: wanted, order: at } });
-      }
     }
 
     // One that does not fit stays where it is: on its cells, or in the drawer.
@@ -245,8 +198,6 @@ export const planLoad = (plan: Plan, layout: Layout): LoadResult => {
     entries,
     lifts,
     places,
-    plans,
-    plansDropped,
     didNotFit,
     missing,
     expansion: layout.expansion,

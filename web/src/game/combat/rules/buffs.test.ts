@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createBattle, type BattleBuffs, type BattleOptions } from "./engine.js";
+import { buffOn, createBattle, type BattleBuffs, type BattleOptions } from "./engine.js";
 import {
   battleDefence,
   defenderForcesOf,
@@ -34,9 +34,13 @@ const CANNON: CombatBuildingDataMap = { "1": { id: 1, t: 20, l: 1, X: 0, Y: 0 } 
 /** The same tower being upgraded: silent, so the Pokey only swings. */
 const SILENT: CombatBuildingDataMap = { "1": { id: 1, t: 20, l: 1, X: 0, Y: 0, cU: 600 } };
 
+/**
+ * The Pokey drop. Its Cannon shells blast on the Pokey (`shellBlastsWhereItLands`
+ * off), so a shot's whole damage reaches it and the arithmetic stays plain.
+ */
 const pokeyBattle = (buildings: CombatBuildingDataMap, extra: Partial<BattleOptions> = {}) => {
   const yard = yardOf(buildings);
-  const battle = createBattle(yard, { seed: 1, ...extra });
+  const battle = createBattle(yard, { seed: 1, shellBlastsWhereItLands: false, ...extra });
   battle.apply({ kind: "fling", t: 0, x: -100, y: -100, r: 200, monsters: { C1: 1 } });
   return { yard, battle };
 };
@@ -183,6 +187,54 @@ describe("the Monster Speed Buff", () => {
   });
 });
 
+describe("a boost that runs out mid-battle (`buffOn`)", () => {
+  it("is on through the whole seconds it had left, then off", () => {
+    expect(buffOn(2, 0)).toBe(true);
+    expect(buffOn(2, 239)).toBe(true);
+    expect(buffOn(2, 240)).toBe(false);
+    expect(buffOn(0, 79)).toBe(true);
+    expect(buffOn(true, 1_000_000)).toBe(true);
+    expect(buffOn(false, 0)).toBe(false);
+    expect(buffOn(undefined, 0)).toBe(false);
+  });
+
+  it("boosts the tower shots fired before tick 240, not those after", () => {
+    const hurts = (towerDamage?: number | boolean) => {
+      const extra = towerDamage === undefined ? {} : { buffs: { defender: { towerDamage } } };
+      const { battle } = pokeyBattle(CANNON, extra);
+      const amounts: number[] = [];
+      for (let step = 0; step < 1200 && !battle.over(); step += 1) {
+        battle.step();
+        for (const event of battle.recentEvents(battle.tick - 1)) {
+          if (event.kind === "hurt") amounts.push(event.amount);
+        }
+      }
+      return amounts;
+    };
+    // Shots go at ticks 70, 150, 230, 310 and on: two seconds left covers three.
+    const short = hurts(2);
+    expect(short.slice(0, 3)).toEqual(hurts(true).slice(0, 3));
+    expect(short.slice(3, 6)).toEqual(hurts().slice(3, 6));
+    expect(short[0]).toBe(25);
+    expect(short[3]).toBe(19);
+  });
+
+  it("leaves a monster that joins after it ran out unboosted, and one before boosted", () => {
+    const firstSwing = (joins: number) => {
+      const yard = yardOf(SILENT);
+      const battle = createBattle(yard, { seed: 1, buffs: { attacker: { monsterDamage: 1 } } });
+      run(battle, joins);
+      battle.apply({ kind: "fling", t: joins, x: -100, y: -100, r: 200, monsters: { C1: 1 } });
+      for (let step = 0; step < 2000 && lost(yard) === 0; step += 1) battle.step();
+      return lost(yard);
+    };
+    // The one flung at once swings first at tick 212, after the boost ran out
+    // at 160, and still has Monster Overdrive: Flash's monsters keep theirs.
+    expect(firstSwing(0)).toBe(75);
+    expect(firstSwing(200)).toBe(60);
+  });
+});
+
 describe("a wild raid", () => {
   it("never gives the raiders the attacker's boosts", () => {
     const raid = (buffs?: BattleBuffs) => {
@@ -229,15 +281,16 @@ describe("boosts off a yard's storedata", () => {
   };
 
   it("reads only the running boosts", () => {
+    // Each as the whole seconds it has left, so it can end mid-battle.
     expect(storeBuffs(store, NOW, "defender")).toEqual({
-      towerDamage: true,
-      monsterDamage: true,
-      monsterSpeed: true,
+      towerDamage: 100,
+      monsterDamage: 100,
+      monsterSpeed: 1,
     });
   });
 
   it("leaves Tower Overdrive off the attacker's", () => {
-    expect(storeBuffs(store, NOW, "attacker")).toEqual({ monsterDamage: true, monsterSpeed: true });
+    expect(storeBuffs(store, NOW, "attacker")).toEqual({ monsterDamage: 100, monsterSpeed: 1 });
   });
 
   it("has none for a missing, empty or run-out store", () => {
@@ -251,7 +304,7 @@ describe("boosts off a yard's storedata", () => {
     const save = { buildingdata: {}, academy: {}, champion: [], storedata: store };
     expect(defenderForcesOf(save).buffs).toBeUndefined();
     expect(defenderForcesOf({ ...save, now: NOW }).buffs).toEqual({
-      defender: { towerDamage: true, monsterDamage: true, monsterSpeed: true },
+      defender: { towerDamage: 100, monsterDamage: 100, monsterSpeed: 1 },
     });
     expect(defenderForcesOf({ ...save, storedata: {}, now: NOW })).not.toHaveProperty("buffs");
   });
@@ -260,8 +313,8 @@ describe("boosts off a yard's storedata", () => {
     const forces = defenderForcesOf({ buildingdata: {}, academy: {}, champion: [], storedata: store, now: NOW });
     const both = withAttackerBuffs(forces, { MSOD: { e: NOW + 5 }, TOD: { e: NOW + 5 } }, NOW);
     expect(both.buffs).toEqual({
-      defender: { towerDamage: true, monsterDamage: true, monsterSpeed: true },
-      attacker: { monsterSpeed: true },
+      defender: { towerDamage: 100, monsterDamage: 100, monsterSpeed: 1 },
+      attacker: { monsterSpeed: 5 },
     });
     expect(withAttackerBuffs(forces, {}, NOW)).toBe(forces);
   });

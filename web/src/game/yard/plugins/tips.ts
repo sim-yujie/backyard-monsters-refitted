@@ -1,5 +1,6 @@
 import { markTipsSeen } from "@/api/tips";
 import { GuideScreen } from "@/game/guide/guideBus";
+import { emergencePlaying } from "@/game/inferno/emergenceHold";
 import { TipRunner, type TipView } from "@/game/guide/TipRunner";
 import { windowOver } from "@/game/guide/windowOver";
 import { isAttackDialogOpen } from "@/ui/attack/attackDialogs";
@@ -22,7 +23,8 @@ import { YARD_PLUGINS, type YardSceneControls } from "../yardPlugins";
  * "seen" flag, which moves to the server here. Wherever they are, the tips
  * also wait while another Bob is talking (the guided start, Help's tour),
  * while the What's new cards are up, while the attack screen's Retreat
- * question or "Attack over" panel is, and while any other window is over
+ * question or "Attack over" panel is, while Moloch's emergence plays on the
+ * yard (the Inferno cave, WP 1.10), and while any other window is over
  * their screen (the Leaderboard, Report a bug, the Shop once its own tips are
  * done, Friends on a phone).
  */
@@ -79,6 +81,7 @@ runner.setBlocked(
     otherBobTalking() ||
     isWhatsNewOpen() ||
     isAttackDialogOpen() ||
+    emergencePlaying() ||
     windowOver(screen) ||
     (yardScene?.plannerOpen() ?? false),
 );

@@ -10,6 +10,10 @@ import {
   hatchCost,
   hatchTime,
   housingSpace,
+  INFERNO_LISTED_MONSTERS,
+  INFERNO_MONSTER_CATALOGUE,
+  isInfernoListed,
+  isInfernoMonster,
   isListed,
   LAB_ABILITIES,
   labAbility,
@@ -46,7 +50,55 @@ describe("the monster catalogue", () => {
   it("holds the nineteen surface monsters and nothing else", () => {
     expect(ids(MONSTER_CATALOGUE)).toEqual(Array.from({ length: 19 }, (_, k) => `C${k + 1}`));
     expect(monsterEntry("C200")).toBeUndefined();
-    expect(monsterEntry("IC1")).toBeUndefined();
+    expect(MONSTER_CATALOGUE.some((entry) => isInfernoMonster(entry.id))).toBe(false);
+  });
+
+  it("holds the eight Inferno monsters in their own list (Inferno WP 2.1)", () => {
+    expect(ids(INFERNO_MONSTER_CATALOGUE)).toEqual(
+      Array.from({ length: 8 }, (_, k) => `IC${k + 1}`),
+    );
+    expect(monsterEntry("IC1")?.name).toBe("Spurtz");
+    expect(isInfernoListed("IC8")).toBe(true);
+    expect(isInfernoListed("IC9")).toBe(false);
+    expect(isListed("IC1")).toBe(false);
+    expect(isInfernoListed("C1")).toBe(false);
+    // Hatchery order is `index`: Valgos (IC4) comes before Malphus (IC3).
+    expect(ids(INFERNO_LISTED_MONSTERS)).toEqual([
+      "IC1",
+      "IC2",
+      "IC4",
+      "IC3",
+      "IC5",
+      "IC6",
+      "IC7",
+      "IC8",
+    ]);
+  });
+
+  it("prices the Inferno roster as Flash (docs/design/inferno.md §2.6)", () => {
+    const golden: Record<string, [number, number, number, number]> = {
+      // id: unlock Sulfur, unlock seconds, locker level, housing
+      IC1: [2400, 3600, 1, 15],
+      IC2: [4800, 14400, 1, 15],
+      IC3: [76800, 64800, 2, 15],
+      IC4: [38400, 64800, 2, 30],
+      IC5: [614400, 86400, 3, 40],
+      IC6: [1228800, 86400, 3, 50],
+      IC7: [2457600, 172800, 3, 80],
+      IC8: [4915200, 259200, 4, 100],
+    };
+    for (const entry of INFERNO_MONSTER_CATALOGUE) {
+      expect([entry.resource, entry.time, entry.level, housingSpace(entry.id, 1)], entry.id).toEqual(
+        golden[entry.id],
+      );
+      expect(entry.trainingCosts.length, entry.id).toBe(5);
+    }
+    // King Wormzer's five academy steps: 48 days in all (R4).
+    const wormzer = INFERNO_MONSTER_CATALOGUE.find((entry) => entry.id === "IC8")!;
+    expect(wormzer.trainingCosts.reduce((sum, [, seconds]) => sum + seconds, 0)).toBe(48 * 86400);
+    expect(hatchCost("IC1", 1)).toBe(500);
+    expect(hatchTime("IC8", 6)).toBe(2700);
+    expect(hatchCost("IC8", 6)).toBe(1204000);
   });
 
   it("keeps Pokey's unlock price and time", () => {
@@ -130,25 +182,68 @@ describe("the monster catalogue", () => {
 });
 
 describe("the lab table", () => {
-  it("has ten rows in the lab's own order", () => {
-    expect(LAB_ABILITIES).toHaveLength(10);
+  it("has Flash's ten rows in the lab's own order, and the revamp's four by price", () => {
+    expect(LAB_ABILITIES).toHaveLength(14);
     expect(ids(LAB_ABILITIES)).toEqual([
+      "C1",
+      "C2",
       "C3",
       "C4",
+      "C6",
       "C7",
       "C8",
       "C5",
       "C9",
+      "C10",
       "C11",
       "C13",
       "C14",
       "C12",
     ]);
+    expect(LAB_ABILITIES.map((one) => one.order)).toEqual(
+      Array.from({ length: 14 }, (_, k) => k + 1),
+    );
     for (const one of LAB_ABILITIES) {
       expect(one.costs, one.id).toHaveLength(3);
       expect(one.effect, one.id).toHaveLength(3);
       expect(isListed(one.id), one.id).toBe(true);
     }
+  });
+
+  it("carries the owner's prices and shares for the revamp's four (2 Nov 2026)", () => {
+    expect(labAbility("C1")).toMatchObject({
+      costs: [
+        [24000, 86400],
+        [36000, 86400],
+        [54000, 86400],
+      ],
+      effect: [0.1, 0.2, 0.3],
+    });
+    expect(labAbility("C2")).toMatchObject({
+      costs: [
+        [32000, 86400],
+        [48000, 86400],
+        [72000, 86400],
+      ],
+      effect: [0.05, 0.1, 0.15],
+    });
+    expect(labAbility("C6")).toMatchObject({
+      costs: [
+        [500000, 108000],
+        [750000, 108000],
+        [1125000, 108000],
+      ],
+      effect: [0.1, 0.15, 0.2],
+    });
+    expect(labAbility("C10")).toMatchObject({
+      costs: [
+        [5000000, 216000],
+        [7500000, 216000],
+        [11250000, 216000],
+      ],
+      effect: [0.1, 0.15, 0.2],
+    });
+    expect(labAbility("C17")).toBeUndefined();
   });
 
   it("carries Bolt's and D.A.V.E.'s numbers", () => {
@@ -164,7 +259,7 @@ describe("the lab table", () => {
       effect: [150, 300, 450],
     });
     expect(labStep("C12", 3)).toEqual([33750000, 144 * 3600]);
-    expect(labAbility("C1")).toBeUndefined();
+    expect(labAbility("C15")).toBeUndefined();
     expect(labStep("C3", 4)).toBeUndefined();
   });
 });

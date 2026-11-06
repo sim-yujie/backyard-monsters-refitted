@@ -89,4 +89,23 @@ describe("resource icons", () => {
     line.append("Short ", resourceIcon("r1"), "5.0M", hidden, ".");
     expect(spokenText(line)).toBe("Short Twigs 5.0M.");
   });
+
+  it("signs loot taken red and loot won green, the word said for the sign (owner, 28 Oct)", () => {
+    const taken = resourceAmount("r1", 1234, { change: "loss" });
+    expect(taken.classList).toContain("res-amount--loss");
+    expect(taken.dataset["change"]).toBe("loss");
+    expect(taken.querySelector(".res-amount__value")?.textContent).toBe("−1,234");
+    expect(spokenText(taken)).toBe("Twigs 1,234 lost");
+
+    const won = resourceAmount("r3", 1_500_000, { change: "gain", compact: true });
+    expect(won.classList).toContain("res-amount--gain");
+    expect(won.querySelector(".res-amount__value")?.textContent).toBe("+1.5M");
+    expect(spokenText(won)).toBe("Putty 1.5M gained");
+
+    // A negative number or an already signed string is the same amount lost.
+    expect(resourceAmount("r2", -300, { change: "loss" }).querySelector(".res-amount__value")?.textContent).toBe(
+      "−300",
+    );
+    expect(spokenText(resourceAmount("r2", "-300", { change: "loss" }))).toBe("Pebbles 300 lost");
+  });
 });

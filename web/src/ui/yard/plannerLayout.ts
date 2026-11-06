@@ -1,6 +1,3 @@
-import { formatCompact, formatCountdown } from "@/ui/format";
-import { RESOURCE_KEYS } from "@/ui/resourceIcon";
-
 /**
  * Which shape the planner's chrome takes (#45, the owner's Option A).
  *
@@ -38,38 +35,49 @@ export const plannerLayout = (width: number, height: number, coarse: boolean): P
 /** True for either phone shape. */
 export const isPhone = (layout: PlannerLayout): boolean => layout !== PlannerLayout.DESKTOP;
 
-/** The four pool resources, which is what a cost is made of. */
-type PoolKey = (typeof RESOURCE_KEYS)[number];
+/**
+ * The three things that can fill a phone's one sheet slot (#45): the building
+ * sheet, a docked panel (the drawer, the checklist, Find, Layouts, a dialog)
+ * and the More sheet.
+ */
+export type PhoneSheet = "inspector" | "dock" | "more";
 
-/** One figure on a phone's cost line. */
-export interface CostLinePart {
-  readonly key: PoolKey | "time";
-  readonly text: string;
-  /** More is needed than the yard holds. */
-  readonly short: boolean;
+/** What `shownSheet` decides from. */
+export interface SheetChoice {
+  readonly layout: PlannerLayout;
+  /** The More sheet is open. */
+  readonly moreOpen: boolean;
+  /** The sheet the player raised last. */
+  readonly raised: PhoneSheet;
+  /** Something is docked in the panel slot. */
+  readonly dockFilled: boolean;
+  /** The building sheet has something in it. */
+  readonly inspectorFilled: boolean;
+  /**
+   * The yard is being kept clear for a move: a building is in hand, or was put
+   * down and the player has not tapped or opened anything since.
+   */
+  readonly yardClear: boolean;
 }
 
 /**
- * The costs a phone has room for: one line, only what is not zero.
+ * Which sheet a phone shows: null off a phone, where every panel shows as it
+ * always has, and "none" while the yard is kept clear for a move.
  *
- * The desktop's nine cells read "needed / held" and take a row of their own,
- * which a phone cannot spare, and most of them are zero most of the time. So
- * the line names what the selection or the plan would take, compact ("500.0K"),
- * then the worker time; the full cells are one tap away. Empty when nothing
- * costs anything, and the caller says something else there instead.
+ * A phone's sheet covers half the yard: the bottom half upright, the right half
+ * on its side. A player reported that picking a building up opened its sheet
+ * there, over the spot they were trying to line it up on. So while a building
+ * is in hand no sheet shows, and after the drop the yard stays clear until the
+ * player taps (which brings the building sheet back) or opens something. More
+ * still opens on request, since only the player opens it.
  */
-export const costLineParts = (
-  needed: Readonly<Record<PoolKey, number>>,
-  shortfall: Readonly<Record<PoolKey, number>>,
-  seconds: number,
-): CostLinePart[] => {
-  const parts: CostLinePart[] = [];
-  for (const key of RESOURCE_KEYS) {
-    if (needed[key] <= 0) continue;
-    parts.push({ key, text: formatCompact(needed[key]), short: shortfall[key] > 0 });
-  }
-  if (seconds > 0) parts.push({ key: "time", text: formatCountdown(seconds), short: false });
-  return parts;
+export const shownSheet = (choice: SheetChoice): PhoneSheet | "none" | null => {
+  if (!isPhone(choice.layout)) return null;
+  if (choice.moreOpen) return "more";
+  if (choice.yardClear) return "none";
+  if (choice.raised === "dock" && choice.dockFilled) return "dock";
+  if (choice.inspectorFilled) return "inspector";
+  return "dock";
 };
 
 /**

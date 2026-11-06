@@ -36,6 +36,15 @@ mock.module("../../server.js", () => ({
       store.set(key, value);
       return "OK";
     },
+    // The sign-in back-off (`services/auth/loginBackoff.ts`): no pause.
+    ttl: async () => -2,
+    incr: async () => 1,
+    hincrby: async () => 1,
+    expire: async () => 1,
+    sadd: async () => 1,
+    srem: async () => 0,
+    exists: async () => false,
+    del: async () => 0,
   },
 }));
 mock.module("../../utils/logger.js", () => ({

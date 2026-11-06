@@ -1,4 +1,5 @@
-import { Filter as BadWords } from "bad-words";
+import { makeWordFilter } from "../services/chat/badWords.js";
+import { checkLine } from "../services/chat/chatFlags.js";
 
 import { User } from "../database/models/user.model.js";
 import { postgres } from "../server.js";
@@ -12,6 +13,8 @@ import {
   validateChannel,
 } from "./chatChannels.js";
 import { getHistory, pushMessage } from "./chatHistory.js";
+import { watchLine } from "./chatWatch.js";
+import { markGameTeam, refuseIfMuted } from "./chatGameTeam.js";
 import { takeAllianceLine } from "./chatLimits.js";
 import {
   ErrorCode,
@@ -26,15 +29,16 @@ import {
   subscribeToChannel,
   unsubscribeFromChannel,
 } from "./chatTransport.js";
-import { ALLIANCE_CHANNEL_ALIAS } from "../config/ChatConfig.js";
-import { ChannelType } from "../enums/Chat.js";
+import { ALLIANCE_CHANNEL_ALIAS, COUNTRY_CHANNEL_PREFIX, countryChannelFor } from "../config/ChatConfig.js";
+import { ChannelType, ChatControlType } from "../enums/Chat.js";
+import type { ChatControlMessage } from "./chatControl.js";
 
 interface ResolvedChannel {
   key: string;
   info: ChannelInfo;
 }
 
-const filter = new BadWords();
+const filter = makeWordFilter();
 
 const RATE_LIMIT_MS = 500;
 const MAX_MSG_LEN = 200;
@@ -46,6 +50,11 @@ const MAX_MSG_LEN = 200;
  * Alliance chat is different: the client sends only the ALLIANCE_CHANNEL_ALIAS
  * and the key is derived from the player's own membership, so no client can name
  * another alliance's channel regardless of what it sends.
+ *
+ * Country rooms work the same way: the client may name only the room its base
+ * load issued (`chatcountrychannel`), and the server checks that against the
+ * room derived from the player's stored country, so a player can be in one
+ * country room at most, their own, and only while that country has a room.
  *
  * @param {number} userid - The player requesting the join.
  * @param {string} requestedChannel - The channel name as sent by the client.
@@ -63,6 +72,17 @@ export const authorizeJoin = async (userid: number, requestedChannel: string): P
     const key = allianceChannelKey(user.alliance_id);
 
     return { key, info: { type: ChannelType.Alliance, allianceId: user.alliance_id } };
+  }
+
+  if (requestedChannel.startsWith(COUNTRY_CHANNEL_PREFIX)) {
+    const em = postgres.orm.em.fork();
+    const user = await em.findOne(User, { userid }, { fields: ["country"] });
+
+    const key = countryChannelFor(user?.country);
+
+    if (!key || key !== requestedChannel || !user?.country) return null;
+
+    return { key, info: { type: ChannelType.Country, country: user.country } };
   }
 
   const key = validateChannel(requestedChannel);
@@ -154,10 +174,10 @@ export const leaveAllChannels = (client: ChatClient) => {
  * @returns {Promise<HistoryEntry[]>} Entries ordered oldest to newest.
  */
 export const getChannelHistory = async (channel: string, info: ChannelInfo): Promise<HistoryEntry[]> => {
-  if (info.type !== ChannelType.Alliance) return await getHistory(channel);
+  if (info.type !== ChannelType.Alliance) return markGameTeam(await getHistory(channel));
 
   const em = postgres.orm.em.fork();
-  return await getAllianceMessages(info.allianceId, em);
+  return markGameTeam(await getAllianceMessages(info.allianceId, em));
 };
 
 /**
@@ -188,7 +208,12 @@ export const postMessage = async (client: ChatClient, channel: string, body: str
 
   client.lastMsgAt = now;
 
-  const messageBody = filter.clean(body.slice(0, MAX_MSG_LEN).trim());
+  if (refuseIfMuted(client, now)) return;
+
+  const said = body.slice(0, MAX_MSG_LEN).trim();
+  // Players see the masked line; the dashboard keeps the player's own words (`chatWatch.ts`).
+  const check = checkLine(filter, said);
+  const messageBody = check.shown;
 
   if (!messageBody) return;
 
@@ -204,6 +229,7 @@ export const postMessage = async (client: ChatClient, channel: string, body: str
     allianceImage: null,
     body: messageBody,
     messageType: AllianceMessageType.MESSAGE,
+    ...(client.gm && { gm: true }),
   };
 
   let entry: HistoryEntry;
@@ -229,4 +255,26 @@ export const postMessage = async (client: ChatClient, channel: string, body: str
   };
 
   publishToChannel(channel, JSON.stringify(outgoing));
+
+  watchLine({ userid: client.userId, channel, channelType: info.type, message: said, check, ts: entry.ts });
+};
+
+/**
+ * Takes a client out of the rooms a control message says they no longer
+ * belong in: every alliance room for an alliance eviction; every country room
+ * but `keep` (the new country's) for a country change.
+ *
+ * @param {ChatClient} client - The client to act on.
+ * @param {ChatControlMessage} message - The eviction published by the API side.
+ */
+export const evict = (client: ChatClient, message: ChatControlMessage) => {
+  for (const [channel, info] of [...client.channels]) {
+    if (message.type === ChatControlType.AllianceEvict && info.type === ChannelType.Alliance) {
+      leaveChannel(client, channel);
+    }
+
+    if (message.type === ChatControlType.CountryEvict && info.type === ChannelType.Country && channel !== message.keep) {
+      leaveChannel(client, channel);
+    }
+  }
 };

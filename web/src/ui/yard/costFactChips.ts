@@ -1,4 +1,4 @@
-import { RESOURCE_KEYS, resourceAmount, type ResourceCost } from "@/ui/resourceIcon";
+import { RESOURCE_KEYS, resourceAmount, type ResourceCost, type ResourceRealm } from "@/ui/resourceIcon";
 import "@/ui/styles/build-menu.css";
 
 /**
@@ -11,8 +11,11 @@ import "@/ui/styles/build-menu.css";
  * green/red keeps one meaning whether the chip is picking a new building
  * (`BuildMenu.ts`) or upgrading or fortifying one already built
  * (`BuildingPanel.ts`).
+ *
+ * `realm` draws the chips as that realm's resources: a main-yard Inferno
+ * building's price, held against the Inferno purse (Inferno WP 6.1).
  */
-export const costFactChips = (cost: ResourceCost, held: ResourceCost): HTMLElement[] =>
+export const costFactChips = (cost: ResourceCost, held: ResourceCost, realm?: ResourceRealm): HTMLElement[] =>
   RESOURCE_KEYS.filter((key) => Number(cost[key] ?? 0) > 0).map((key) => {
     const amount = Number(cost[key] ?? 0);
     const chip = document.createElement("li");
@@ -20,6 +23,6 @@ export const costFactChips = (cost: ResourceCost, held: ResourceCost): HTMLEleme
     chip.classList.add(
       Number(held[key] ?? 0) < amount ? "build-info__fact--short" : "build-info__fact--ok",
     );
-    chip.append(resourceAmount(key, amount));
+    chip.append(resourceAmount(key, amount, realm ? { realm } : {}));
     return chip;
   });

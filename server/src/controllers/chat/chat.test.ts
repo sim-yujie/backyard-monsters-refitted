@@ -59,10 +59,27 @@ describe("reportAnswer", () => {
 
     expect(answer).toEqual({ status: 200, body: { error: 0, stored: true, verified: true } });
     expect(channel.asked).toEqual([CHANNEL]);
-    expect(executed).toHaveLength(1);
     expect(executed[0]!.sql).toContain("INSERT INTO bym.chat_report");
+    // Then the stored report is filed into its case for the dashboard.
+    expect(executed.slice(1).some((e) => e.sql.includes("bym.chat_case"))).toBe(true);
     expect(executed[0]!.sql).toContain("ON CONFLICT DO NOTHING");
     expect(executed[0]!.params).toEqual([2505, 77, CHANNEL, "the real words", 1_700_000_000_123, true]);
+  });
+
+  test("a report is still stored when filing it into a dashboard case fails", async () => {
+    const em = {
+      execute: async (sql: string) => {
+        if (sql.includes("chat_case")) throw new Error("no such table");
+        return [{ id: 1 }];
+      },
+    } as unknown as EntityManager;
+    const answer = await reportAnswer(
+      em,
+      REPORTER,
+      { userid: 77, channel: CHANNEL, message: "rude words", ts: 1_700_000_000_123 },
+      history([]).read,
+    );
+    expect(answer).toEqual({ status: 200, body: { error: 0, stored: true, verified: false } });
   });
 
   test("a line gone from the history keeps the reporter's words, unverified", async () => {
@@ -111,6 +128,34 @@ describe("reportAnswer", () => {
     expect(answer.status).toBe(400);
     expect(answer.body["reason"]).toBe("badRequest");
     expect(channel.asked).toEqual([]);
+    expect(executed).toHaveLength(0);
+  });
+
+  test("a line in the reporter's own country room is reported as in Global", async () => {
+    const { em, executed } = fakeEm();
+    const room = history([line(77, "the real words", 1_700_000_000_123)]);
+    const answer = await reportAnswer(
+      em,
+      { userid: 2505, country: "PH" } as User,
+      { userid: 77, channel: "chat:country:PH", message: "x", ts: 1_700_000_000_123 },
+      room.read,
+    );
+    expect(answer).toEqual({ status: 200, body: { error: 0, stored: true, verified: true } });
+    expect(room.asked).toEqual(["chat:country:PH"]);
+    expect(executed[0]!.params).toContain("chat:country:PH");
+  });
+
+  test("another country's room cannot be reported from outside it", async () => {
+    const { em, executed } = fakeEm();
+    const room = history([]);
+    const answer = await reportAnswer(
+      em,
+      { userid: 2505, country: "SG" } as User,
+      { userid: 77, channel: "chat:country:PH", message: "x", ts: 5 },
+      room.read,
+    );
+    expect(answer.status).toBe(400);
+    expect(room.asked).toEqual([]);
     expect(executed).toHaveLength(0);
   });
 });

@@ -23,11 +23,14 @@ import type { HatcheryMarks } from "./YardHatchMarks";
 import type { MonstersFocus, MonstersTabId } from "@/ui/monsters/monstersTab";
 import { costOf, maxLevel, TRAP_TYPES, WALL_TYPES, type YardKind } from "./buildingCosts";
 import { predictHatches, type HatchPrediction } from "@/game/monsters/hatchPredict";
+import { siegeSlices, type SiegeSite } from "@/game/siege/siege";
+import { isSurfaceInferno, purseFunds } from "@/game/yard/surfaceInferno";
 import { JobKind, predictCompletion, SERVER_COMPLETED_KINDS, yardJobs, type YardJob } from "./jobs";
 import { IncomePrediction, overdriveEndOf } from "./outpostIncome";
 import { MAIN_YARD, outpostBaseid, type OwnYardTarget } from "./ownYards";
 import { freeWorkers, holdsWorker } from "./workers";
 import { readYard, type Yard, type YardBuilding, type YardWorkers } from "./yardModel";
+import { isTribeEditing } from "@/game/tribeEditor/tribeEditSession";
 
 /**
  * One of the player's own yards, the main yard or an outpost, as one source
@@ -232,6 +235,11 @@ export interface YardSceneHooks {
    * monster building's Open button use it. Absent where there is no screen.
    */
   openMonsters?(tab: MonstersTabId, focus?: MonstersFocus): void;
+  /**
+   * Opens the Siege screen on its Chaos Lab or Chaos Factory tab (Inferno WP
+   * 6.4): a Siege Lab's or Factory's Open button uses it. Absent where there is no screen.
+   */
+  openSiege?(site: SiegeSite): void;
   /** Starts a Wild Monster Baiter practice attack (#126). Absent where there is none. */
   runBaiter?(run: BaiterRun): void;
   /** Plays a finished Baiter test back (#22, WP5, `testHistory.ts`). Absent where there is none. */
@@ -441,7 +449,8 @@ export class YardStore implements YardStoreReader, YardStoreActions {
   }
 
   get yard(): Yard {
-    this.cachedYard ??= readYard(this.current);
+    // A tribe camp in the editor stands on the plot a camp grows to (`readYard`).
+    this.cachedYard ??= readYard(this.current, isTribeEditing() ? { wild: true } : {});
     return this.cachedYard;
   }
 
@@ -705,7 +714,10 @@ export class YardStore implements YardStoreReader, YardStoreActions {
         entry.resolve({ ok: true, report: null, completed: [] });
         continue;
       }
-      const refusal = entry.type === "action" ? (entry.check?.(this) ?? null) : null;
+      // The tribe yard editor (LOCAL only) builds free, instant and without
+      // the player's limits, so the client's own checks are left out there.
+      const refusal =
+        entry.type === "action" && !isTribeEditing() ? (entry.check?.(this) ?? null) : null;
       if (refusal && entry.type === "action") {
         entry.resolve({ ok: false, refusal });
         continue;
@@ -775,6 +787,9 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     if (typeof response.playerlevel === "number") slices.playerlevel = response.playerlevel;
     if (typeof response.playerpoints === "number") slices.playerpoints = response.playerpoints;
     if (typeof response.notifications === "number") slices.notifications = response.notifications;
+    if (typeof response.questsClaimable === "number") slices.questsClaimable = response.questsClaimable;
+    // Nor are the siege weapons and the Inferno purse: they ride `completed` and the siege routes' reports.
+    Object.assign(slices, siegeSlices(this.current, response.completed, response.report));
     this.applied = Math.max(this.applied, number);
     this.syncClock(response.currenttime);
     this.setSave({ ...this.current, ...slices });
@@ -893,6 +908,7 @@ const upgradeRefusal = (
 ): YardRefusal | null => {
   const building = store.building(id);
   if (!building) return refuse("badRequest", "That building is not in your yard.");
+  // On every yard, the Inferno's too (owner decision 2026-10-29).
   if (WALL_TYPES.includes(building.type) || TRAP_TYPES.includes(building.type)) {
     return refuse("useBatchRoute", "Walls and traps are upgraded from the layout planner.");
   }
@@ -915,12 +931,18 @@ const upgradeRefusal = (
   if (!step) return refuse("maxLevel", "That building is at its highest level.");
   const [r1, r2, r3, r4] = step;
   const cost = { r1, r2, r3, r4 };
+  // A main-yard Inferno building is paid from the Inferno purse (WP 6.1).
+  const inferno = isSurfaceInferno(building.type, kind);
+  const held = inferno ? purseFunds(store.save).resources : store.resources;
   const shortfall: Record<string, number> = {};
   let short = false;
   for (const key of ["r1", "r2", "r3", "r4"] as const) {
-    const missing = cost[key] - (Number(store.resources[key]) || 0);
+    const missing = cost[key] - (Number(held[key]) || 0);
     shortfall[key] = Math.max(0, missing);
     if (missing > 0) short = true;
+  }
+  if (short && inferno) {
+    return refuse("shortfall", "You do not have enough Inferno resources for that.", { shortfall, purse: "inferno" });
   }
   if (short) {
     return refuse("shortfall", "You do not have enough resources for that.", { shortfall });

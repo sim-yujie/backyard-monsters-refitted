@@ -1,10 +1,12 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { useBotFloor } from "../../testing/botFloor.js";
 import type { Context } from "koa";
 import { MikroORM, type EntityManager } from "@mikro-orm/postgresql";
 
 import ormConfig from "../../mikro-orm.config.js";
 import { User } from "../../database/models/user.model.js";
 import { PLACEHOLDER_PIC_SQUARE } from "../../game-data/avatars.js";
+import { experiencePoints } from "../../game-data/stats/experiencePoints.js";
 import { mulberry32 } from "../../game-rules/combat/rng.js";
 import { shapeDiff } from "../../testing/shapeDiff.js";
 import { createBots, deleteBots } from "./factory.js";
@@ -87,6 +89,9 @@ type Controller = (ctx: Context) => Promise<void>;
 type Body = Record<string, unknown>;
 
 describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => {
+  // Written for bots from level 15; the floor of 25 has its own tests (`useBotFloor`).
+  useBotFloor(15);
+
   const db = orm!;
   const sql = <R = Record<string, any>>(query: string, params: unknown[] = []) => db.em.fork().execute<R[]>(query, params);
 
@@ -117,8 +122,11 @@ describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => 
     return ctx.body as Body;
   };
 
+  /** An attack load carries the attack payload, as the client sends it (`web/src/api/base.ts`); outside ENV=local the server refuses one without (`validateAttack.ts`). */
+  const NO_ARMY = JSON.stringify({ monsters: [], champions: [] });
+
   const load = (email: string, type: string, baseid: string) =>
-    call(routes.baseLoad, email, { type, userid: "0", baseid, mapversion: "1" });
+    call(routes.baseLoad, email, { type, userid: "0", baseid, mapversion: "1", ...(type === "attack" ? { attackData: NO_ARMY } : {}) });
 
   /** A player as sign-up makes one (`register.ts`), then their first yard load and a look at Map Room 1. */
   const signUp = async (name: string) => {
@@ -197,6 +205,12 @@ describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => 
     await sql(`UPDATE bym.save SET protected = 0 WHERE userid = ?`, [real.userid]);
     // And has since closed the game: online, they could not be attacked.
     strings.delete(`last-seen:main:${real.userid}`);
+    // Players under level 15 are shown no bots (owner 3 Nov 2026): the viewer and the real player stand on 15, as the bot.
+    await sql(`UPDATE bym.save SET points = ?, level = 15 WHERE userid IN (?, ?) AND type = 'main'`, [
+      String(experiencePoints[14]),
+      real.userid,
+      viewer.userid,
+    ]);
   }, 120_000);
 
   afterAll(async () => {
@@ -206,8 +220,8 @@ describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => 
     await db.close(true);
   });
 
-  test("the real player starts on level 1, the bot on the floor (level 15)", async () => {
-    expect((await saveOf(real.userid)).level).toBe(1);
+  test("the real player stands on level 15 (players under 15 see no bots), the bot on the floor (level 15)", async () => {
+    expect((await saveOf(real.userid)).level).toBe(15);
     expect((await saveOf(bot.userid)).level).toBe(15);
   });
 

@@ -113,6 +113,8 @@ export const WorkKind = {
   TRAIN: "train",
   /** The Monster Lab researching a power-up. */
   RESEARCH: "research",
+  /** A Hatchery Control Centre while any hatchery in its yard is growing a monster. */
+  CONTROL: "control",
 } as const;
 export type WorkKind = (typeof WorkKind)[keyof typeof WorkKind];
 
@@ -159,16 +161,23 @@ const POLICIES = new Map<number, AnimPolicy>([
   // Hatchery: only with a monster in production, back to cell 0 when not
   // (`BUILDING13.as:34-47`).
   [13, { ...whileWorking(WorkKind.HATCH, whenIdle(every(2, false))), restOnIdle: true }],
+  // Hatchery Control Center: Flash's stands still and so does the main yard's 3D. The Inferno's Incubator Control
+  // Centre (3D look C) loops at the producers' rate, idle and working alike, its working loop while any of the
+  // yard's Incubators is hatching (`loopAnimLayers`).
+  [16, whileWorking(WorkKind.CONTROL, whenIdle(every(3, false)))],
   // Monster Baiter: `BFOUNDATION.as:1141` names type 19.
   [19, STATIC_FIXED],
   // Towers. The cell is a facing, set only when something is being shot at.
   [21, STATIC],
-  [22, STATIC],
+  // Monster Bunker: its strip is its shutters, down (cell 0) at rest; its `TickFast` brings them down
+  // straight away when nothing calls them up (`BUILDING22.as:446-452`), so a random cell never shows.
+  [22, STATIC_FIXED],
   [23, STATIC],
   [25, STATIC_FIXED],
   [115, STATIC],
   [118, STATIC],
   [129, STATIC_FIXED],
+  [130, STATIC],
   [132, STATIC],
   [136, STATIC_FIXED],
   [137, STATIC_FIXED],
@@ -212,6 +221,8 @@ export interface StripCells {
   readonly width: number;
   readonly height: number;
   readonly frames: number;
+  /** Cells in a row, for a strip of several rows. */
+  readonly columns?: number;
 }
 
 /**
@@ -235,12 +246,21 @@ export interface StripCells {
  * `frames` of them and the rest are leftovers.
  */
 export const stripCells = (
-  anim: { readonly width: number; readonly height: number; readonly frames: number },
+  anim: {
+    readonly width: number;
+    readonly height: number;
+    readonly frames: number;
+    readonly columns?: number;
+  },
   sourceWidth: number,
   sourceHeight: number,
 ): StripCells => {
   const width = Math.max(1, Math.min(anim.width, sourceWidth));
   const height = Math.max(1, Math.min(anim.height, sourceHeight));
   const fit = Math.max(1, Math.floor(sourceWidth / width));
-  return { width, height, frames: Math.max(1, Math.min(anim.frames, fit)) };
+  if (!anim.columns) return { width, height, frames: Math.max(1, Math.min(anim.frames, fit)) };
+  // A strip of several rows (the 3D Laser's tilts): whole rows that fit.
+  const columns = Math.min(anim.columns, fit);
+  const rows = Math.max(1, Math.floor(sourceHeight / height));
+  return { width, height, frames: Math.max(1, Math.min(anim.frames, columns * rows)), columns };
 };

@@ -286,8 +286,9 @@ export class AutoAttackFlow {
       const item = document.createElement("li");
       const amount = result.loot[key];
       item.className = `attack-end__loot-item${amount > 0 ? "" : " attack-end__loot-item--none"}`;
-      item.append(resourceAmount(key, formatAmount(amount)));
-      item.title = `${RESOURCE_NAMES[key]}: ${Math.floor(amount).toLocaleString("en-US")}`;
+      // Won, so green with a plus, "+1,500" (owner, 28 Oct).
+      item.append(resourceAmount(key, amount, { change: "gain", tooltip: false }));
+      item.title = `${RESOURCE_NAMES[key]}: ${Math.floor(amount).toLocaleString("en-US")}${amount >= 1 ? " gained" : ""}`;
       if (result.lootLeft[key] > 0) spilled = true;
       loot.append(item);
     }

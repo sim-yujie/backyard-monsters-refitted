@@ -37,6 +37,7 @@ import type { MushroomYardSave } from "./mushrooms.js";
 import { clearOutpostMushrooms, placeOutpostCore } from "./outpostYard.js";
 import { syncBaseValue, type BaseValueSave } from "./derivedLevels.js";
 import { addStarterBase, type StarterBaseJob, type StarterBaseSave } from "./starterBase.js";
+import { catchUpSiege, type SiegeCompletedJob, type SiegeSave } from "./siege.js";
 import { yardKindOf } from "../yardplanner/costs.js";
 
 /**
@@ -59,6 +60,7 @@ import { yardKindOf } from "../yardplanner/costs.js";
  * | 1 | `catchUpBuildings.ts` — countdowns, points, `flinger`/`catapult`, store buffs | 1 |
  * | 2 | `catchUpLocker.ts` — `unlockStarterMonster`, the Pokey always unlocked (#218); unlocks and the Locker Overdrive (runs first, see there) | 2 |
  * | 2 | `catchUpMonsters.ts` — HCC queue refund, hatchery production, housing cull (after the buildings) | 2 |
+ * | 2 | `siege.ts` `catchUpSiege` — Siege Lab research and Siege Factory weapons; a job paused over a window its building spends destroyed (runs before the repairs, whose health it reads) | 3 |
  * | 3 | `catchUpRepairs.ts` — repairs heal; runs before the buildings, whose paused countdowns it restarts at the repair's end | 3 |
  * | 3 | `catchUpHarvesters.ts` — harvester buffers fill (nothing is banked); `catchUpMushrooms.ts` | 3 |
  * | 4 | `catchUpTraining.ts` — academy training (legacy relative `time` made absolute once); `catchUpResearch`, lab research | 4 |
@@ -76,12 +78,25 @@ import { yardKindOf } from "../yardplanner/costs.js";
  * ({@link catchUpOutpost}): an empty outpost gets its core first
  * (`outpostYard.ts`), then repairs, buildings, monsters and damage, as above.
  * The rest is the player's or the main yard's alone: the starter base and the
- * Map Room, the Locker, the Academy and the Lab (their data is the main
- * yard's), mushrooms and champions (outposts have neither), and the harvester
+ * Map Room, the Locker, the Academy, the Lab and the Siege Lab and Factory
+ * (their data is the main yard's), mushrooms and champions (outposts have neither), and the harvester
  * buffers (an outpost's harvesters hold nothing; their income is autobanked
  * into the main pool, WP4). Run it on the outpost seen through its owner's
  * main yard (`poolView.ts`), so points and the HCC's goo refund land in the
  * main yard's pool.
+ *
+ * **The Inferno yard** (`type` `inferno`, `docs/design/inferno.md` WP 1.14-1.16)
+ * runs {@link catchUpInferno}: Spurtz always unlocked and the Inferno Locker's
+ * unlock (WP 2.2), its repairs at the Inferno table's repair times (WP 1.16),
+ * its buildings' countdowns at the Inferno table's figures, its Incubators'
+ * hatching into the Housing Bunkers (WP 2.3, the `HODI`.. overdrives and
+ * `EXHI` from the Inferno row's own store data), then its Bone, Coal, Sulfur
+ * and Magma harvesters at the Inferno rates, each filling its own buffer until
+ * full, as in Flash, the Inferno Academy's training (WP 2.2), and last the
+ * damage figure. The Inferno roster only (`IC…`, `locker.ts`
+ * `monsterRealmOf`). Run it on the
+ * yard seen through its owner's main yard (`poolView.ts`, `infernoView`); the
+ * points stay on the Inferno row, its own level as in Flash.
  *
  * **Guarantees.** Idempotent: a second run at the same `now` changes nothing,
  * because `savetime` has moved to `now` and nothing is left at zero. It never
@@ -107,7 +122,8 @@ export type CompletedJob =
   | RepairJob
   | StarterBaseJob
   | StarveJob
-  | ChampionHatchJob;
+  | ChampionHatchJob
+  | SiegeCompletedJob;
 
 /** The slice of a save the catch-up reads and writes. */
 export interface CatchUpSave
@@ -120,8 +136,11 @@ export interface CatchUpSave
     CatchUpTrainingSave,
     CatchUpChampionsSave,
     CatchUpDamageSave,
-    BaseValueSave {
+    BaseValueSave,
+    SiegeSave {
   savetime?: number;
+  /** When the row was made: where an Inferno yard never caught up starts its clock. */
+  createtime?: number | null;
 }
 
 /**
@@ -138,7 +157,9 @@ export interface CatchUpSave
  * @param now - Unix seconds to advance to.
  */
 export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
-  if (yardKindOf(save) === "outpost") return catchUpOutpost(save, now);
+  const kind = yardKindOf(save);
+  if (kind === "outpost") return catchUpOutpost(save, now);
+  if (kind === "inferno") return catchUpInferno(save, now);
 
   const starter = addStarterBase(save, now);
   unlockStarterMonster(save);
@@ -149,6 +170,7 @@ export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
     ...starter,
     ...migrateYard(save, now),
     ...catchUpLocker(save, from, now),
+    ...catchUpSiege(save, from, now),
     ...catchUpRepairs(save, from, now),
     ...catchUpBuildings(save, from, now),
   ];
@@ -189,6 +211,36 @@ export const catchUpOutpost = (save: CatchUpSave, now: number): CompletedJob[] =
     ...catchUpBuildings(save, from, now),
   ];
   completed.push(...catchUpMonsters(save, from, now, completed));
+  catchUpDamage(save);
+
+  save.savetime = now;
+
+  return completed.sort((a, b) => a.at - b.at);
+};
+
+/**
+ * The Inferno yard's catch-up (the file comment): the Locker, repairs,
+ * building countdowns, the Incubators, the harvesters, the Academy and
+ * damage, in the main yard's order, from the last
+ * catch-up (`savetime`, else the moment the yard was made, `createtime`) to
+ * `now`, with the same guarantees. A yard with neither starts its clock now.
+ *
+ * @param save - The Inferno yard, mutated in place; `savetime` ends at `now`.
+ * @param now - Unix seconds to advance to.
+ */
+export const catchUpInferno = (save: CatchUpSave, now: number): CompletedJob[] => {
+  const stored = Number(save.savetime) || Number(save.createtime);
+  const from = Number.isFinite(stored) && stored > 0 ? Math.min(stored, now) : now;
+
+  unlockStarterMonster(save);
+  const completed: CompletedJob[] = [
+    ...catchUpLocker(save, from, now),
+    ...catchUpRepairs(save, from, now),
+    ...catchUpBuildings(save, from, now),
+  ];
+  completed.push(...catchUpMonsters(save, from, now, completed));
+  catchUpHarvesters(save, from, now, completed, "inferno");
+  completed.push(...catchUpTraining(save, from, now));
   catchUpDamage(save);
 
   save.savetime = now;

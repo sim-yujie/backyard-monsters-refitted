@@ -3,12 +3,14 @@ import { ApiError, NetworkError } from "@/api/http";
 import { unlockInbox } from "@/game/achievements/unlockInbox";
 import { clearTestHistory } from "@/game/baiter/testHistory";
 import { worldChat } from "@/game/chat/chatSession";
+import { banRefusal } from "@/api/moderation";
+import { takeSignInNotice } from "@/app/signInNotice";
 import { CREDITS_URL, DISCORD_URL, PATREON_URL, PRIVACY_URL, TERMS_URL, TURNSTILE_SITE_KEY } from "@/config";
 import { openBugReport } from "@/ui/bugReport/BugReportDialog";
 import { modalLayer } from "@/ui/events/WhatsNewDialog";
 import { Panel } from "@/ui/Panel";
 import type { Scene, SceneContext } from "../SceneManager";
-import { SceneName } from "../App";
+import { SceneName } from "../sceneName";
 import {
   BOT_CHECK_PENDING,
   SANDBOX_START_LABEL,
@@ -111,6 +113,27 @@ const switchRow = (question: string, action: string, onClick: () => void): HTMLE
   return row;
 };
 
+/**
+ * The short "Have an account? Sign in" line at the top of the sign-up form, so
+ * a player who pressed Create account by mistake sees the way back at once.
+ */
+const backToSignInLine = (onClick: () => void): HTMLElement => {
+  const row = document.createElement("p");
+  row.className = "login-form__have-account";
+
+  const words = document.createElement("span");
+  words.textContent = "Have an account?";
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "btn btn--ghost login-form__have-account-button";
+  button.textContent = "Sign in";
+  button.addEventListener("click", onClick);
+
+  row.append(words, button);
+  return row;
+};
+
 /** A link that opens in a new tab, so the half-filled form stays where it is. */
 const newTabLink = (href: string, words: string, rel = "noopener"): HTMLAnchorElement => {
   const link = document.createElement("a");
@@ -203,7 +226,7 @@ const brand = (): HTMLElement => {
 
   const note = document.createElement("p");
   note.className = "login-brand__note";
-  note.textContent = "Beta: game progress may be reset.";
+  note.textContent = "Open beta: we plan to keep your progress.";
 
   header.append(title, note);
   return header;
@@ -245,7 +268,7 @@ export class LoginScene implements Scene {
     clearTestHistory();
     unlockInbox.clear();
     this.wrapper = document.createElement("div");
-    this.wrapper.className = "scene-centre";
+    this.wrapper.className = "scene-centre scene-centre--login";
 
     this.panel = new Panel({ title: "Sign in", closable: false, className: "panel--login" });
 
@@ -296,7 +319,7 @@ export class LoginScene implements Scene {
     const error = document.createElement("p");
     error.className = "form-error";
     error.setAttribute("role", "alert");
-    error.textContent = carried.notice ?? "";
+    error.textContent = carried.notice ?? takeSignInNotice() ?? "";
 
     const submit = primaryButton("Play");
 
@@ -491,15 +514,17 @@ export class LoginScene implements Scene {
     const submit = primaryButton("Create account");
     const sandboxStart = sandboxStartBox();
 
-    const toSignIn = switchRow("", "I already have an account", () =>
-      this.showSignIn(context, { email: fields.email.input.value.trim() }),
-    );
+    const backToSignIn = (): void =>
+      this.showSignIn(context, { email: fields.email.input.value.trim() });
+    const haveAccount = backToSignInLine(backToSignIn);
+    const toSignIn = switchRow("", "I already have an account", backToSignIn);
 
     this.dropBotCheck();
     const botCheck = this.turnstileSiteKey ? new BotCheck(this.turnstileSiteKey) : null;
     this.botCheck = botCheck;
 
     form.append(
+      haveAccount,
       ...SIGN_UP_FIELDS.map((name) => fields[name].wrapper),
       sandboxStart.row,
       ...(botCheck ? [botCheck.element] : []),
@@ -685,6 +710,8 @@ export class LoginScene implements Scene {
 
 /** Turns a thrown value into something worth showing a player. */
 const describe = (caught: unknown): string => {
+  const banned = banRefusal(caught);
+  if (banned) return banned;
   if (caught instanceof NetworkError) {
     return "Could not reach the server. Check that it is running, then try again.";
   }

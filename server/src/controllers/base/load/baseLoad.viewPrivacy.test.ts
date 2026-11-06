@@ -159,7 +159,8 @@ describe("looking at someone else's yard", () => {
     expect(JSON.stringify(body)).not.toContain(`"t":${BOOBY_TRAP}`);
     expect(JSON.stringify(body)).not.toContain(`"t":${HEAVY_TRAP}`);
     const buildings = body.buildingdata as Record<string, Row>;
-    expect(buildings["2"]!.l).toBe(1);
+    // The level 9 Sniper reads its tier's first level (tiers start at 1, 4, 7), not 9.
+    expect(buildings["2"]!.l).toBe(7);
     expect(buildings["1"]!.l).toBe(8);
     expect(Object.keys(body.buildinghealthdata as Row)).toEqual(["2"]);
     expect(body.credits).toBe(0);
@@ -170,7 +171,7 @@ describe("looking at someone else's yard", () => {
     await updateSaved(ctx, async () => {});
 
     expect(typesOf(ctx.body)).toEqual([14, SNIPER]);
-    expect((ctx.body.buildingdata as Record<string, Row>)["2"]!.l).toBe(1);
+    expect((ctx.body.buildingdata as Record<string, Row>)["2"]!.l).toBe(7);
   });
 
   test("a committed attack load sends the whole yard, traps and levels, for the battle", async () => {

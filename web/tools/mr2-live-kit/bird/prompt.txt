@@ -1,0 +1,5 @@
+Use your image generation tool (one call) to create ONE new image and save it as art.png in the current folder. Do not write code, do not draw with scripts.
+
+STYLE: bright, painted, toy-like cartoon, as in a 2010s casual strategy game seen from a Civilization V style tilted top-down camera, warm sunlight from the top-left. Clean and readable, not photo-real. No text, no logos, no watermark.
+
+PICTURE: a SQUARE image (1024x1024) with ONE seagull seen from directly above, flying with its wings fully spread wide, centred, filling about 70 percent of the width: white body, light grey wings with dark grey-black wing tips, small yellow beak, painted with chunky soft outlines. Background: PURE SOLID GREEN (#00FF00) everywhere else, no shadow.

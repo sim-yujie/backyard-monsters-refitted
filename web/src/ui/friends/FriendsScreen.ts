@@ -85,6 +85,7 @@ export class FriendsScreen {
         store: this.store,
         onFind: () => void this.open("find"),
         ...(options.onVisit && { onVisit: options.onVisit }),
+        ...(options.onMessage && { onMessage: options.onMessage }),
         onGift:
           options.onGift ??
           ((friend) => void openGiftPicker(friend, this.element.parentElement, { api, store: this.store })),
@@ -97,7 +98,7 @@ export class FriendsScreen {
       new FindTab({ api, store: this.store, ...(options.debounceMs !== undefined && { debounceMs: options.debounceMs }) }),
     );
 
-    const strip = make("div", "tabs friends-tabs");
+    const strip = make("div", "tabs tab-row friends-tabs");
     strip.setAttribute("role", "tablist");
     strip.setAttribute("aria-label", "Friends");
     for (const { id, label } of FRIENDS_TABS) {

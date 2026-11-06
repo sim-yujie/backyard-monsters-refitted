@@ -19,6 +19,7 @@
  */
 
 import { propsSize } from "./buildingArt";
+import type { YardKind } from "./buildingCostData";
 
 export interface Point {
   x: number;
@@ -328,6 +329,17 @@ for (const [size, types] of FOOTPRINT_GROUPS) {
 }
 
 /**
+ * The two classes that set a different footprint in the Inferno yard
+ * (`BASE.isInfernoMainYardOrOutpost`): the Under Hall, 160 against the Town
+ * Hall's 130 (`client/scripts/BUILDING14.as:18`), and the Inferno Academy, 80
+ * against 100 (`client/scripts/BUILDING26.as:22`).
+ */
+const INFERNO_FOOTPRINTS = new Map<number, number>([
+  [14, 160],
+  [26, 80],
+]);
+
+/**
  * The only non-square footprint: the Inferno Portal
  * (`client/scripts/INFERNOPORTAL.as:37`).
  */
@@ -352,9 +364,13 @@ export const DEFAULT_FOOTPRINT = 40;
  * not name falls through to that, which covers ids 28–50, 55–111, 120, 121, 131
  * and 135.
  */
-export const footprintOf = (type: number): readonly [width: number, height: number] => {
+export const footprintOf = (
+  type: number,
+  kind: YardKind = "main",
+): readonly [width: number, height: number] => {
   if (type === 127) return PORTAL;
-  const size = FOOTPRINTS.get(type) ?? propsSize(type) ?? DEFAULT_FOOTPRINT;
+  const inferno = kind === "inferno" ? INFERNO_FOOTPRINTS.get(type) : undefined;
+  const size = inferno ?? FOOTPRINTS.get(type) ?? propsSize(type) ?? DEFAULT_FOOTPRINT;
   return [size, size];
 };
 
@@ -371,8 +387,9 @@ export const footprintCorners = (
   type: number,
   x: number,
   y: number,
+  kind: YardKind = "main",
 ): Point[] => {
-  const [width, height] = footprintOf(type);
+  const [width, height] = footprintOf(type, kind);
   return [
     yardToWorld(bounds, x, y),
     yardToWorld(bounds, x + width, y),
@@ -387,8 +404,9 @@ export const footprintBox = (
   type: number,
   x: number,
   y: number,
+  kind: YardKind = "main",
 ): Rect => {
-  const [width, height] = footprintOf(type);
+  const [width, height] = footprintOf(type, kind);
   const origin = yardToWorld(bounds, x, y);
   // Right corner is +width on x, bottom is +height on y; in isometric pixels
   // that is +width right and +width/2 down, and -height left and +height/2 down.
@@ -410,7 +428,8 @@ export const footprintCentre = (
   type: number,
   x: number,
   y: number,
+  kind: YardKind = "main",
 ): Point => {
-  const [width, height] = footprintOf(type);
+  const [width, height] = footprintOf(type, kind);
   return yardToWorld(bounds, x + width / 2, y + height / 2);
 };

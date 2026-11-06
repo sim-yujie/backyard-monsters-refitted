@@ -24,7 +24,14 @@ const ago = (days: number) => new Date(NOW - days * DAY);
 
 const A = 990001;
 const B = 990002;
-const CONFIG: RetentionConfig = { logDays: 30, mailDays: 365, attackLogDays: 365, chatReportDays: 365, bugReportDays: 180 };
+const CONFIG: RetentionConfig = {
+  logDays: 30,
+  mailDays: 365,
+  attackLogDays: 365,
+  chatReportDays: 365,
+  bugReportDays: 180,
+  chatLogDays: 90,
+};
 
 describe.skipIf(!dbName)("the daily privacy clean-up (retention.ts)", () => {
   let orm: MikroORM;
@@ -37,6 +44,8 @@ describe.skipIf(!dbName)("the daily privacy clean-up (retention.ts)", () => {
     await sql(`DELETE FROM bym.message WHERE threadid >= 990001`);
     await sql(`DELETE FROM bym.attack_logs WHERE attacker_userid IN (?, ?)`, [A, B]);
     await sql(`DELETE FROM bym.chat_report WHERE reporter_id IN (?, ?)`, [A, B]);
+    await sql(`DELETE FROM bym.chat_log WHERE userid IN (?, ?)`, [A, B]);
+    await sql(`DELETE FROM bym.chat_flag WHERE userid IN (?, ?)`, [A, B]);
     await sql(`DELETE FROM bym.job_run WHERE job = ?`, [RETENTION_JOB]);
     await sql(`DELETE FROM bym.friend_request WHERE from_userid IN (?, ?)`, [A, B]);
     await sql(`DELETE FROM bym.friend_help WHERE helper_userid IN (?, ?)`, [A, B]);
@@ -161,6 +170,30 @@ describe.skipIf(!dbName)("the daily privacy clean-up (retention.ts)", () => {
     expect(reports.length).toBe(1);
   });
 
+  test("chat log lines older than 90 days and flags older than the chat report limit go", async () => {
+    for (const days of [120, 91, 89, 1]) {
+      await sql(
+        `INSERT INTO bym.chat_log (userid, channel, message, shown, flagged, created_at) VALUES (?, 'chat:mr2-global', ?, ?, NULL, ?)`,
+        [A, `${days} days old`, `${days} days old`, ago(days)]
+      );
+    }
+    for (const days of [400, 100]) {
+      await sql(
+        `INSERT INTO bym.chat_flag (userid, channel, message, shown, words, severity, message_ts, created_at)
+         VALUES (?, 'chat:mr2-global', 'rude', '****', 'rude', 'swear', ?, ?)`,
+        [A, ago(days).getTime(), ago(days)]
+      );
+    }
+
+    expect(await run()).toMatchObject({ chatLog: 2, chatFlags: 1 });
+    const left = await sql<{ message: string }>(`SELECT message FROM bym.chat_log WHERE userid = ? ORDER BY created_at`, [A]);
+    expect(left.map((row) => row.message)).toEqual(["89 days old", "1 days old"]);
+    expect((await sql(`SELECT 1 FROM bym.chat_flag WHERE userid = ?`, [A])).length).toBe(1);
+
+    // The limit is a setting.
+    expect(await run({ config: { ...CONFIG, chatLogDays: 30 } })).toMatchObject({ chatLog: 1 });
+  });
+
   test("friend requests answered more than 30 days ago go; pending ones go 30 days after they were made", async () => {
     for (const [userid, name] of [[A, "zz_ret_a"], [B, "zz_ret_b"]] as const) {
       await sql(`INSERT INTO bym."user" (userid, username, email, password, blocked_users) VALUES (?, ?, ?, 'x', '[]')`, [userid, name, `${name}@test.invalid`]);
@@ -235,6 +268,26 @@ describe.skipIf(!dbName)("the daily privacy clean-up (retention.ts)", () => {
     expect(result).toMatchObject({ appErrors: 2 });
     const left = await sql<{ fingerprint: string }>(`SELECT fingerprint FROM bym.app_error WHERE fingerprint LIKE 'zz-ret-%' ORDER BY id`);
     expect(left.map((row) => row.fingerprint)).toEqual(["zz-ret-29", "zz-ret-0"]);
+  });
+
+  test("an error's senders (name and address) go 30 days after they last hit it, even while the error stays", async () => {
+    await sql(`INSERT INTO bym.app_error (source, fingerprint, message) VALUES ('browser', 'zz-ret-senders', 'x')`);
+    for (const days of [45, 31, 29, 0]) {
+      await sql(
+        `INSERT INTO bym.app_error_reporter (error_id, userid, username, ip, last_seen)
+         SELECT id, ?, 'zz', '203.0.113.7', ? FROM bym.app_error WHERE fingerprint = 'zz-ret-senders'`,
+        [days, ago(days)]
+      );
+    }
+
+    const result = await run();
+
+    expect(result).toMatchObject({ appErrorReporters: 2 });
+    const left = await sql<{ userid: number }>(
+      `SELECT r.userid FROM bym.app_error_reporter r JOIN bym.app_error e ON e.id = r.error_id
+        WHERE e.fingerprint = 'zz-ret-senders' ORDER BY r.userid DESC`
+    );
+    expect(left.map((row) => Number(row.userid))).toEqual([29, 0]);
   });
 
   test("each limit is its own setting", async () => {

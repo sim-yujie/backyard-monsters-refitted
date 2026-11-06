@@ -19,6 +19,7 @@ import { CellPanel, type OwnFlinger, type OwnMoves } from "./CellPanel";
 import { FindControl } from "./FindControl";
 import { HoverCard, type HoverCardContent } from "./HoverCard";
 import { Minimap } from "./Minimap";
+import { TiltToggle } from "./TiltToggle";
 import { KitFilterControl } from "./KitFilterControl";
 import { NavPanel } from "./NavPanel";
 import { Notices } from "./Notices";
@@ -65,6 +66,8 @@ export interface MapRoomUiHandlers {
   onAchievementsOpen?: () => void;
   /** The Friends list's Visit (#372): the scene opens the friend's yard. */
   onVisitFriend?: (friend: Friend) => void;
+  /** The Friends list's Message: the scene's mailbox writes to the friend. */
+  onMessageFriend?: (friend: Friend) => void;
   onHome: () => void;
   onRefresh: () => void;
   onJump: (cell: OffsetCell) => void;
@@ -93,10 +96,12 @@ export interface MapRoomUiHandlers {
   onZoom: (zoom: number) => void;
   onZoomStep: (direction: 1 | -1) => void;
   onCellPanelClose: () => void;
-  /** "My range" turned on or off (#177), from its button or the cell panel. */
+  /** "My range" turned on or off (#177), from the legend's switch or the own yard's cell panel. */
   onRangeToggle: (on: boolean) => void;
   /** The kit filter (#334) was changed. */
   onKitFilterChange: (filter: KitFilter) => void;
+  /** The "Tilted map" button was pressed (MR2 look plan step 4): tilt the map, or draw it flat. */
+  onTiltToggle?: (tilted: boolean) => void;
   /** The cell panel's range chip (#174); see `CellPanelOptions.reach`. */
   reach: (cell: OffsetCell) => { text: string; inRange: boolean } | null;
   /** The cell panel's own-yard Flinger line (#174). */
@@ -131,6 +136,7 @@ export class MapRoomUi {
   private readonly hover = new HoverCard();
   private readonly minimap: Minimap;
   private readonly zoomControl: ZoomControl;
+  private readonly tiltToggle: TiltToggle;
   private readonly rangeControl: RangeControl;
   private readonly kitFilterControl: KitFilterControl;
   private readonly docks: HTMLElement[] = [];
@@ -155,6 +161,7 @@ export class MapRoomUi {
       onSignOut: handlers.onSignOut,
       ...(handlers.onAchievementsOpen ? { onAchievementsOpen: handlers.onAchievementsOpen } : {}),
       ...(handlers.onVisitFriend ? { onVisitFriend: handlers.onVisitFriend } : {}),
+      ...(handlers.onMessageFriend ? { onMessageFriend: handlers.onMessageFriend } : {}),
     });
     this.hud.setActiveScene(activeScene);
 
@@ -191,6 +198,8 @@ export class MapRoomUi {
       labels: ZOOM_LABELS,
     });
 
+    this.tiltToggle = new TiltToggle((tilted) => this.handlers.onTiltToggle?.(tilted));
+
     this.rangeControl = new RangeControl({ onToggle: (on) => this.toggleRange(on) });
     this.kitFilterControl = new KitFilterControl({
       onFilterChange: (filter) => this.handlers.onKitFilterChange(filter),
@@ -210,7 +219,8 @@ export class MapRoomUi {
     bottomRight.append(this.rangeControl.legend);
     const tools = document.createElement("div");
     tools.className = "mr2-toolrow";
-    tools.append(this.rangeControl.button, this.kitFilterControl.toggle, this.kitFilterControl.element);
+    tools.append(this.kitFilterControl.toggle, this.kitFilterControl.element);
+    tools.append(this.tiltToggle.element);
     this.zoomControl.mount(tools);
     bottomRight.append(tools);
     this.tools = tools;
@@ -270,6 +280,21 @@ export class MapRoomUi {
 
   setViewport(range: CellRange): void {
     this.minimap.setViewport(range);
+  }
+
+  /** The tilted view's trapezoid for the minimap, in cells; null for the flat rectangle. */
+  setViewShape(corners: readonly { col: number; row: number }[] | null): void {
+    this.minimap.setViewShape(corners);
+  }
+
+  /** The "Tilted map" button: shown only when the map can tilt, pressed while it is tilted. */
+  setTilt(state: { available: boolean; tilted: boolean }): void {
+    this.tiltToggle.set(state);
+  }
+
+  /** The zoom floor moved (the tilted map cannot zoom out as far as the flat one). */
+  setMinZoom(minZoom: number): void {
+    this.zoomControl.setRange(minZoom, MAX_ZOOM);
   }
 
   setHome(cell: OffsetCell): void {

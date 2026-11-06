@@ -24,6 +24,23 @@ describe("the dashboard routes (controllers/admin/routes.ts)", () => {
     );
   });
 
+  test("include the moderation and chat panel routes", () => {
+    expect(routes.map((r) => r.route)).toEqual(
+      expect.arrayContaining([
+        "GET /chatreports",
+        "GET /players/:id/moderation",
+        "POST /players/:id/:kind",
+        "POST /chat/session",
+      ])
+    );
+  });
+
+  test("include the chat flag and chat log routes", () => {
+    expect(routes.map((r) => r.route)).toEqual(
+      expect.arrayContaining(["GET /chatflags", "POST /chatflags/:id/dismiss", "GET /chatlog"])
+    );
+  });
+
   test("all go through the owner-only check", () => {
     expect(routes.length).toBeGreaterThan(5);
     for (const { route, rest } of routes) expect(`${route}: ${rest}`).toContain("apiVersion, adminOnly,");

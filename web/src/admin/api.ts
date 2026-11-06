@@ -6,6 +6,7 @@ import {
   get,
   getAuthToken,
   postJson,
+  send,
   type FormBody,
   type JsonBody,
 } from "@/api/http";
@@ -54,9 +55,22 @@ export interface DailyStat {
   serverErrors: number | null;
 }
 
+/** How real players split between the Look and sound choices, over the last `days` days. */
+export interface LookTotals {
+  days: number;
+  /** Players whose game sent its look in the window. */
+  reported: number;
+  style: { modern: number; classic: number };
+  music: { style: number; new: number; flash: number };
+  quality: { high: number; medium: number; low: number };
+  font: { game: number; clear: number; readable: number };
+}
+
 export interface StatsOverview {
   generatedAt: string;
   players: { total: number; activeToday: number; active7: number; active30: number };
+  /** Missing from a server older than beta 6. */
+  looks?: LookTotals;
   today: DailyStat;
   days: DailyStat[];
 }
@@ -120,6 +134,8 @@ export interface PlayerMatch {
   /** A computer-run neighbour: shown, marked, after the players. */
   bot: boolean;
   lastSeenAt: string | null;
+  /** The Style the player's game last sent (`modern`/`classic`); null before beta 6 or on other clients. */
+  look?: string | null;
 }
 
 export type ShinyAwardRequest = {
@@ -161,6 +177,18 @@ export interface ErrorGroup {
   gameVersion: string;
   screen: string;
   userids: number[];
+  /** The last few who hit it, newest first. Their addresses are for this page only. */
+  reporters: ErrorReporter[];
+  /** Points only at code that is not the game's (an extension, an injected script). */
+  thirdParty: boolean;
+}
+
+export interface ErrorReporter {
+  /** Null when not signed in. */
+  userid: number | null;
+  username: string;
+  ip: string;
+  lastSeen: string;
 }
 
 export interface ErrorTotals {
@@ -391,3 +419,370 @@ export const fetchReportImage = async (
   if (!response.ok) throw new Error(`The ${which} could not be loaded (${response.status}).`);
   return URL.createObjectURL(await response.blob());
 };
+
+/** The owner's in-game announcements (server `controllers/announcements/routes.ts`). */
+export type AnnouncementStatus = "draft" | "published";
+
+export interface AdminAnnouncement {
+  id: number;
+  title: string;
+  body: string;
+  status: AnnouncementStatus;
+  startsAt: string | null;
+  endsAt: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  imageIds: number[];
+  /** Whether players see it now. */
+  live: boolean;
+  /** How many players pressed "Got it". */
+  dismissals: number;
+  /** The Shiny each player may claim, 0 for none. */
+  shiny: number;
+  /** How many players claimed the gift. */
+  claims: number;
+}
+
+export interface AnnouncementLimits {
+  titleMax: number;
+  bodyMax: number;
+  images: number;
+  imageBytesMax: number;
+  shinyMax: number;
+}
+
+/** What Save sends: a picture already saved by id, or a new one as a data URL. */
+export interface AnnouncementForm {
+  title: string;
+  body: string;
+  status: AnnouncementStatus;
+  startsAt: string | null;
+  endsAt: string | null;
+  images: ({ keep: number } | { data: string })[];
+  shiny: number;
+}
+
+export const fetchAnnouncements = (): Promise<
+  Envelope<{ announcements: AdminAnnouncement[]; limits: AnnouncementLimits }>
+> => adminGet(`${ADMIN}/announcements`);
+
+export const saveAnnouncement = (
+  id: number | null,
+  form: AnnouncementForm,
+): Promise<Envelope<{ announcement: AdminAnnouncement }>> =>
+  id === null
+    ? adminPost(`${ADMIN}/announcements`, { ...form })
+    : signedIn(() => send("PUT", `${ADMIN}/announcements/${id}`, { json: { ...form } }));
+
+export const deleteAnnouncement = (id: number): Promise<Envelope<{ id: number }>> =>
+  signedIn(() => send("DELETE", `${ADMIN}/announcements/${id}`));
+
+/** A saved picture (drafts' too), as a blob URL; the caller revokes it. */
+export const fetchAnnouncementImage = async (id: number): Promise<string> => {
+  const load = (): Promise<Response> => {
+    const token = getAuthToken();
+    return fetch(apiUrl(`${ADMIN}/announcements/images/${id}`), {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  };
+  let response = await load();
+  if (response.status === 404 && adoptNewerSignIn()) response = await load();
+  if (!response.ok) throw new Error(`The picture could not be loaded (${response.status}).`);
+  return URL.createObjectURL(await response.blob());
+};
+
+/**
+ * Moderation (server `services/admin/moderation.ts`): warn, pause chat
+ * (mute), ban, and lifting a ban or pause; a player's log; chat reports.
+ */
+export type ModerationKind = "warn" | "mute" | "unmute" | "ban" | "unban";
+
+/** The longest reason the server keeps (`MAX_MODERATION_REASON`). */
+export const MAX_MODERATION_REASON = 300;
+
+/** One step in a player's moderation log. */
+export interface ModerationEntry {
+  id: number;
+  action: ModerationKind;
+  reason: string;
+  /** A ban's or mute's end; null for good (a ban) or no end (the rest). */
+  until: string | null;
+  by: number;
+  byName: string | null;
+  chatReportId: number | null;
+  /** When the player closed the pop-up (warnings and mutes). */
+  seenAt: string | null;
+  at: string;
+}
+
+/** A player as the moderation view shows them. */
+export interface PlayerModeration {
+  userid: number;
+  username: string;
+  lastSeenAt: string | null;
+  /** The Style the player's game last sent (`modern`/`classic`); null before beta 6 or on other clients. */
+  look?: string | null;
+  banned: boolean;
+  /** Null while `banned`: for good. */
+  banUntil: string | null;
+  banReason: string | null;
+  /** Only while the pause lasts. */
+  muteUntil: string | null;
+  /** A game team account: cannot be warned, paused or banned. */
+  gameTeam: boolean;
+  reportsAgainst: number;
+  log: ModerationEntry[];
+}
+
+/** One chat report, newest first in the list. */
+export interface ChatReportView {
+  id: number;
+  reporter: { userid: number; username: string | null };
+  reported: { userid: number; username: string | null; banned: boolean; muted: boolean };
+  channel: string;
+  message: string;
+  /** When the line was said (ms). */
+  messageTs: number;
+  /** The words match the chat server's own copy of the line. */
+  verified: boolean;
+  reportsAgainst: number;
+  /** The steps taken from this report, oldest first. */
+  actions: ModerationKind[];
+  at: string;
+}
+
+/** What a moderation step sends: a reason, and a ban's days (null for good) or a mute's hours. */
+export interface ModerationBody {
+  reason?: string;
+  days?: number | null;
+  hours?: number;
+  chatReportId?: number;
+}
+
+/** The chat panel's sign-in: the chat server, the owner's chat token and the rooms to join. */
+export interface AdminChatSession {
+  server: string;
+  userId: number;
+  token: string;
+  rooms: { channel: string; label: string }[];
+}
+
+export const fetchChatReports = (
+  before?: number,
+): Promise<Envelope<{ reports: ChatReportView[]; nextBefore: number | null }>> =>
+  adminGet(`${ADMIN}/chatreports`, { before, limit: 30 });
+
+export const fetchPlayerModeration = (
+  id: number,
+): Promise<Envelope<{ player: PlayerModeration }>> => adminGet(`${ADMIN}/players/${id}/moderation`);
+
+export const moderatePlayer = (
+  id: number,
+  kind: ModerationKind,
+  body: ModerationBody,
+): Promise<Envelope<{ player: PlayerModeration }>> =>
+  adminPost(`${ADMIN}/players/${id}/${kind}`, { ...body });
+
+/**
+ * Automatic chat flags and the chat log (server
+ * `services/admin/chatWatchAdmin.ts`): lines the word filter caught, one row
+ * per player, with the player's own words.
+ */
+export type FlagSeverity = "slur" | "swear";
+
+/** One flagged line. */
+/** How a flagged word was written: as listed, or disguised. */
+export type FlagRule = "word" | "disguised";
+
+export interface FlagLine {
+  id: number;
+  channel: string;
+  /** The player's own words. */
+  message: string;
+  /** What other players saw. */
+  shown: string;
+  words: string[];
+  severity: FlagSeverity;
+  /** `word`: a listed word as typed; `disguised`: spelled to get past the filter ("fvck", "f u c k"). */
+  rule: FlagRule;
+  at: string;
+}
+
+/** A flagged player: open flags counted, newest lines first. */
+export interface FlaggedPlayer {
+  userid: number;
+  username: string | null;
+  banned: boolean;
+  muted: boolean;
+  count: number;
+  slurs: number;
+  /** Dismissing up to this id leaves any flag that came in since. */
+  lastId: number;
+  latestAt: string;
+  lines: FlagLine[];
+}
+
+export type FlagSort = "latest" | "serious";
+
+export const fetchChatFlags = (
+  options: { sort?: FlagSort; slursOnly?: boolean; userid?: number; offset?: number | undefined } = {},
+): Promise<Envelope<{ players: FlaggedPlayer[]; nextOffset: number | null }>> =>
+  adminGet(`${ADMIN}/chatflags`, {
+    sort: options.sort,
+    slurs: options.slursOnly ? "1" : undefined,
+    userid: options.userid,
+    offset: options.offset,
+    limit: 30,
+  });
+
+export const dismissChatFlags = (userid: number, upTo: number): Promise<Envelope<{ dismissed: number }>> =>
+  adminPost(`${ADMIN}/chatflags/${userid}/dismiss`, { upTo });
+
+/** One line of the chat log. */
+export interface ChatLogEntry {
+  id: number;
+  userid: number;
+  username: string | null;
+  channel: string;
+  message: string;
+  shown: string;
+  flagged: FlagSeverity | null;
+  at: string;
+}
+
+export interface ChatLogQuery {
+  userid?: number;
+  /** A player's whole name, any case. */
+  player?: string;
+  /** Words in the line. */
+  q?: string;
+  channel?: string;
+  /** Lines said at or before this time (ms). */
+  until?: number;
+  flagged?: boolean;
+  before?: number | undefined;
+}
+
+export const fetchChatLog = (
+  query: ChatLogQuery,
+): Promise<Envelope<{ lines: ChatLogEntry[]; nextBefore: number | null }>> =>
+  adminGet(`${ADMIN}/chatlog`, {
+    userid: query.userid,
+    player: query.player,
+    q: query.q,
+    channel: query.channel,
+    until: query.until,
+    flagged: query.flagged ? "1" : undefined,
+    before: query.before,
+    limit: 30,
+  });
+
+export const fetchChatSession = (): Promise<Envelope<AdminChatSession>> =>
+  adminPost(`${ADMIN}/chat/session`, {});
+
+/**
+ * Chat report cases (server `services/admin/chatCases.ts`): every report of
+ * the same line, and every reported line of a player not yet acted on, as one
+ * case, with a text copy of the room around each line.
+ */
+export type CaseStatus = "open" | "actioned" | "dismissed";
+export type CaseOutcome = "warn" | "mute" | "dismiss";
+
+export interface SnapshotLine {
+  userid: number;
+  name: string | null;
+  text: string;
+  /** When it was said (ms). */
+  at: number;
+  reported?: true;
+  flagged?: FlagSeverity;
+}
+
+/** `log`: the players' own words; `room`: as players saw them (starred out); `none`: no copy. */
+export interface CaseSnapshot {
+  source: "log" | "room" | "none";
+  lines: SnapshotLine[];
+}
+
+export interface CaseMessage {
+  id: number;
+  channel: string;
+  message: string;
+  ts: number;
+  verified: boolean;
+  reporters: number[];
+  snapshot: CaseSnapshot;
+}
+
+export interface CaseReporter {
+  userid: number;
+  username: string | null;
+  at: string;
+  first: boolean;
+  late: boolean;
+  award: { amount: number; at: string } | null;
+}
+
+export interface CaseHistory {
+  cases: number;
+  flags: number;
+  warnings: number;
+  mutes: number;
+  bans: number;
+}
+
+export interface ChatCaseView {
+  id: number;
+  status: CaseStatus;
+  reported: { userid: number; username: string | null; banned: boolean; muted: boolean; gameTeam: boolean };
+  messages: CaseMessage[];
+  reporters: CaseReporter[];
+  reports: number;
+  firstReportAt: string;
+  lastReportAt: string;
+  history: CaseHistory;
+  suggest: { action: "warn" | "mute"; hours: number | null };
+  closed: {
+    outcome: CaseOutcome;
+    hours: number | null;
+    note: string | null;
+    by: number;
+    byName: string | null;
+    at: string;
+  } | null;
+}
+
+export interface CaseList {
+  cases: ChatCaseView[];
+  nextOffset: number | null;
+  /** Open cases in all. */
+  open: number;
+  /** The Shiny offered each reporter, and the first one. */
+  award: { each: number; first: number };
+}
+
+export type CaseActionBody =
+  | { action: "warn"; reason: string }
+  | { action: "mute"; reason: string; hours: number }
+  | { action: "dismiss"; note?: string };
+
+export const fetchChatCases = (status: "open" | "closed", offset?: number): Promise<Envelope<CaseList>> =>
+  adminGet(`${ADMIN}/chatcases`, { status, offset, limit: 30 });
+
+export const actOnCase = (id: number, body: CaseActionBody): Promise<Envelope<{ case: ChatCaseView }>> =>
+  adminPost(`${ADMIN}/chatcases/${id}/act`, { ...body });
+
+export type AwardFailure = "notReporter" | "noPlayer" | "noMainYard";
+
+export const awardCaseReporters = (
+  id: number,
+  awards: { userid: number; amount: number }[],
+): Promise<
+  Envelope<{
+    case: ChatCaseView;
+    given: { userid: number; amount: number }[];
+    already: number[];
+    failed: { userid: number; reason: AwardFailure }[];
+  }>
+> => adminPost(`${ADMIN}/chatcases/${id}/award`, { awards });

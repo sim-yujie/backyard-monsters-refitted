@@ -10,6 +10,7 @@ import {
 import type { BaseLoadResponse } from "@/api/types";
 import { setAttackTarget, setViewTarget, type AttackTarget } from "@/game/attack/attackTarget";
 import { visitFriend } from "@/game/friends/friendVisit";
+import { mapRefreshSeconds } from "@/game/quality";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
 import { MailDoor } from "@/ui/mail/MailDoor";
 import { Mr1Guide } from "@/game/guide/mr1Guide";
@@ -29,7 +30,7 @@ import { MapRoom1Ui } from "@/ui/maproom1/MapRoom1Ui";
 import type { CardAction } from "@/ui/maproom1/TargetCard";
 import { MonstersTabId } from "@/ui/monsters/monstersTab";
 import type { Scene, SceneContext } from "../SceneManager";
-import { SceneName } from "../App";
+import { SceneName } from "../sceneName";
 
 /**
  * Map Room 1: the neighbours and the four wild monster tribes, for a player
@@ -87,6 +88,8 @@ export class MapRoom1Scene implements Scene {
           visitFriend(friend, save ? { resources: save.resources ?? null, credits: save.credits } : undefined);
           context.goTo(SceneName.YARD);
         },
+        // The Friends list's Message: a new message to them.
+        onMessageFriend: (friend) => void this.mail?.openCompose({ userid: friend.userid, name: friend.username }),
         onView: (target) => this.view(target),
         onAttack: (target) => this.attack(target),
         onAction: (action) => this.act(action),
@@ -153,7 +156,8 @@ export class MapRoom1Scene implements Scene {
     }
     if (document.visibilityState !== "visible") return;
     this.sinceRefresh += deltaSeconds;
-    if (this.sinceRefresh >= REFRESH_SECONDS) void this.refresh();
+    // A third as often on the Low Quality setting.
+    if (this.sinceRefresh >= mapRefreshSeconds(REFRESH_SECONDS)) void this.refresh();
   }
 
   private now(): number {
@@ -309,7 +313,7 @@ export class MapRoom1Scene implements Scene {
   }
 
   private readonly onVisibility = (): void => {
-    if (document.visibilityState === "visible" && this.sinceRefresh >= REFRESH_SECONDS / 2)
+    if (document.visibilityState === "visible" && this.sinceRefresh >= mapRefreshSeconds(REFRESH_SECONDS) / 2)
       void this.refresh();
   };
 }

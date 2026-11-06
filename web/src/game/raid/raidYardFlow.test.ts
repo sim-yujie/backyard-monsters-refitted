@@ -105,6 +105,11 @@ describe("raidStage", () => {
     expect(raidStage(raid({ phase: "fighting" }), NOW, false)).toMatchObject({ kind: "locked" });
   });
 
+  it("leaves Moloch's raid in its warning to the yard, and locks for his fight", () => {
+    expect(raidStage(raid({ tribe: "moloch", attackAt: NOW }), NOW, false)).toEqual({ kind: "none" });
+    expect(raidStage(raid({ tribe: "moloch", phase: "fighting" }), NOW, false)).toMatchObject({ kind: "locked" });
+  });
+
   it("counts down as a clock", () => {
     expect(raidCountdownText(299)).toBe("4:59");
     expect(raidCountdownText(5)).toBe("0:05");
@@ -136,6 +141,16 @@ describe("RaidYardFlow", () => {
     expect(t.fight).toHaveBeenCalledTimes(1);
     expect(t.fight.mock.calls[0]![0].fight.seed).toBe(1);
     expect(t.watch.current?.phase).toBe("fighting");
+    t.flow.stop();
+  });
+
+  it("neither alerts nor starts Moloch's raid, though it is due at once", async () => {
+    const t = setup();
+    t.watch.set(raid({ tribe: "moloch", attackAt: NOW }));
+    t.flow.start();
+    await settle();
+    expect(t.last().kind).toBe("none");
+    expect(t.api.start).not.toHaveBeenCalled();
     t.flow.stop();
   });
 

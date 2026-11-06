@@ -14,6 +14,7 @@ import {
   planRepair,
   planSpeedup,
   previewHelp,
+  refusalDetails,
   rewardOf,
   type HelpFacts,
   type SpeedupPlan,
@@ -26,7 +27,8 @@ import {
  */
 
 const NOW = 1_760_000_000;
-const DAY = 24 * 60 * 60;
+const HOUR = 60 * 60;
+const DAY = 24 * HOUR;
 const CANNON = 20;
 const HALL = 14;
 const SILO = 6;
@@ -104,7 +106,6 @@ describe("gates", () => {
     userid,
     banned: false,
     blocked_users: [],
-    createtime: NOW - 10 * DAY,
     points: "20000",
     basevalue: "0",
     ...fields,
@@ -117,8 +118,26 @@ describe("gates", () => {
     ...fields,
   });
 
-  test("friends for a day, both accounts 3 days old and level 5, under the cap: allowed", () => {
+  test("friends for 12 hours, both level 5, under the cap: allowed; account age is no rule", () => {
+    expect(FRIEND_GATES.friendshipAgeHours).toBe(12);
     expect(gateRefusal(facts(), NOW)).toBeNull();
+    expect(gateRefusal(facts({ friendsSince: NOW - 12 * HOUR }), NOW)).toBeNull();
+  });
+
+  test("tooNew names the gate that holds: the one lifting last, and level above both", () => {
+    // Friends 11 hours: an hour to go.
+    expect(gateRefusal(facts({ friendsSince: NOW - 11 * HOUR }), NOW)).toEqual({
+      reason: "tooNew",
+      from: NOW + HOUR,
+      rule: "friendship",
+    });
+    // A low level is named even when time would also hold: waiting alone won't lift it.
+    expect(gateRefusal(facts({ friendsSince: NOW - HOUR, owner: side(2, { points: "100" }) }), NOW)).toEqual({
+      reason: "tooNew",
+      rule: "level",
+    });
+    expect(refusalDetails({ reason: "tooNew", from: 5, rule: "friendship" })).toEqual({ from: 5, rule: "friendship" });
+    expect(refusalDetails({ reason: "cannotSend" })).toEqual({});
   });
 
   test("each refusal, with from when time alone lifts it", () => {
@@ -126,12 +145,12 @@ describe("gates", () => {
     expect(gateRefusal(facts({ owner: side(2, { blocked_users: [1] }) }), NOW)).toEqual({ reason: "cannotSend" });
     expect(gateRefusal(facts({ helper: side(1, { blocked_users: [2] }) }), NOW)).toEqual({ reason: "cannotSend" });
     expect(gateRefusal(facts({ owner: side(2, { banned: true }) }), NOW)).toEqual({ reason: "cannotSend" });
-    expect(gateRefusal(facts({ friendsSince: NOW - 3600 }), NOW)).toEqual({ reason: "tooNew", from: NOW - 3600 + DAY });
-    expect(gateRefusal(facts({ owner: side(2, { createtime: NOW - DAY }) }), NOW)).toEqual({
+    expect(gateRefusal(facts({ friendsSince: NOW - 3600 }), NOW)).toEqual({
       reason: "tooNew",
-      from: NOW - DAY + FRIEND_GATES.accountAgeDays * DAY,
+      from: NOW - 3600 + 12 * HOUR,
+      rule: "friendship",
     });
-    expect(gateRefusal(facts({ helper: side(1, { points: "100" }) }), NOW)).toEqual({ reason: "tooNew" });
+    expect(gateRefusal(facts({ helper: side(1, { points: "100" }) }), NOW)).toEqual({ reason: "tooNew", rule: "level" });
     expect(gateRefusal(facts({ helpsToday: 20 }), NOW)).toEqual({ reason: "dailyCap" });
     expect(helpsLeftOf(19)).toBe(1);
     expect(helpsLeftOf(25)).toBe(0);

@@ -431,6 +431,75 @@ p {
   object-fit: cover;
 }
 
+/* Guide pictures are cropped to their subject, so each keeps its own shape. */
+.prose img[src*="/images/guides/"] {
+  width: 100%;
+  height: auto;
+}
+
+/* Tall window shots and small close-ups stay near their real size, centred. */
+.prose img.narrow,
+.prose img.small {
+  display: block;
+  margin-inline: auto;
+}
+
+.prose img.narrow {
+  max-width: 500px;
+}
+
+.prose img.small {
+  max-width: 320px;
+}
+
+/* Icon cards in guides: one painted game icon, a name and a line each. */
+.prose .cards {
+  list-style: none;
+  padding: 0;
+  margin: 1.2em 0 1.6em;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+}
+
+.prose .cards li {
+  margin: 0;
+  padding: 18px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.prose .cards h3 {
+  margin: 4px 0 6px;
+}
+
+.prose .cards p {
+  margin: 0;
+  font-size: 0.98rem;
+}
+
+.prose .cards .pill {
+  margin-top: 10px;
+  font-size: 0.8rem;
+}
+
+.prose img.icon {
+  display: inline-block;
+  width: 56px;
+  height: 56px;
+  margin: 0 2px;
+  border: 0;
+  border-radius: 0;
+  vertical-align: middle;
+}
+
+.prose img.icon--small {
+  width: 32px;
+  height: 32px;
+}
+
 .prose blockquote {
   margin: 1.4em 0;
   padding: 14px 18px;

@@ -89,14 +89,22 @@ export const IdleState = {
 } as const;
 export type IdleState = (typeof IdleState)[keyof typeof IdleState];
 
+/**
+ * Why the player was disconnected, for the screen that says so: `idle`, ten
+ * minutes without input; `protection`, the "Stay protected?" protection ran
+ * out with input still coming (#275). The screen used to say "without any
+ * input" for both (3 Nov).
+ */
+export type DisconnectReason = "idle" | "protection";
+
 export interface IdleWatchOptions {
   readonly timings?: IdleTimings;
   /** Shows the countdown; `disconnectAt` is a {@link IdleWatchOptions.now} time. */
   readonly onWarn: (disconnectAt: number) => void;
   /** Takes the countdown down: input came, or a deferral began. */
   readonly onCancelWarn: () => void;
-  /** Disconnects; called once. */
-  readonly onDisconnect: () => void;
+  /** Disconnects; called once, with why. */
+  readonly onDisconnect: (reason: DisconnectReason) => void;
   /** Where input is heard; `window` by default. */
   readonly input?: EventTarget;
   /** Milliseconds; `Date.now` by default. */
@@ -107,13 +115,15 @@ export class IdleWatch {
   readonly timings: IdleTimings;
   private readonly onWarn: (disconnectAt: number) => void;
   private readonly onCancelWarn: () => void;
-  private readonly onDisconnect: () => void;
+  private readonly onDisconnect: (reason: DisconnectReason) => void;
   private readonly input: EventTarget;
   private readonly now: () => number;
   private holders = 0;
   private deferrals = 0;
   private warning = false;
   private disconnected = false;
+  /** The "Stay protected?" protection has run out: disconnect as if idle. */
+  private lapsed = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   /** When the player last gave input; loading the page counts. */
   private lastInput: number;
@@ -171,6 +181,18 @@ export class IdleWatch {
     });
   }
 
+  /**
+   * The player's protection ran out (#275): with no real game action for ten
+   * minutes they are disconnected even if they moved the mouse, as an idle
+   * player is (owner, 30 Oct). An attack or a replay still defers it, and a
+   * real action that renews the protection before then calls this with false.
+   */
+  lapse(on: boolean): void {
+    if (on === this.lapsed || this.disconnected) return;
+    this.lapsed = on;
+    this.schedule();
+  }
+
   /** Any input: the player is there. Cheap, as pointer moves call it often. */
   readonly activity = (): void => {
     if (this.disconnected) return;
@@ -207,8 +229,8 @@ export class IdleWatch {
     const { disconnectMs, warningMs } = this.timings;
     const disconnectAt = this.lastInput + disconnectMs;
     const now = this.now();
-    if (now >= disconnectAt) {
-      this.disconnect();
+    if (now >= disconnectAt || this.lapsed) {
+      this.disconnect(now >= disconnectAt ? "idle" : "protection");
       return;
     }
     const warnAt = disconnectAt - warningMs;
@@ -228,11 +250,11 @@ export class IdleWatch {
     else this.onCancelWarn();
   }
 
-  private disconnect(): void {
+  private disconnect(reason: DisconnectReason): void {
     this.setWarning(false);
     this.disconnected = true;
     this.destroy();
-    this.onDisconnect();
+    this.onDisconnect(reason);
   }
 
   private clear(): void {

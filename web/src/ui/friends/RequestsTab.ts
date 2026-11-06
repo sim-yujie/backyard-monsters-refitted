@@ -28,7 +28,7 @@ export const REQUESTS_TEXT = {
   accept: "Accept",
   decline: "Decline",
   cancel: "Cancel",
-  accepted: (name: string): string => `${name} is now your friend.`,
+  accepted: (name: string): string => `Now friends with ${name}`,
   declined: (name: string): string => `Request from ${name} declined.`,
   cancelled: (name: string): string => `Request to ${name} cancelled.`,
   asked: (when: string): string => `Asked ${when}`,

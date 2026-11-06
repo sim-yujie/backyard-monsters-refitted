@@ -8,6 +8,7 @@ import type {
   AttackEvent,
   BattleOptions,
   BattleState,
+  DefenceBonus,
   DefenderChampion,
   TowerReport,
 } from "./engine.js";
@@ -88,6 +89,8 @@ export interface ReplayInput {
   readonly defenderRanks?: MonsterRanks;
   /** The champions in the defender's Champion Cage (issues #195, #310). */
   readonly defenderChampions?: readonly DefenderChampion[] | null;
+  /** Map Room 2's neighbour defence bonus (`BattleOptions.defenceBonus`); absent, none. */
+  readonly defenceBonus?: DefenceBonus;
   /**
    * Ticks to keep simulating after the last event; the default is the whole
    * attack, or for a raid its whole cap.
@@ -214,6 +217,7 @@ export const replayAttack = (input: ReplayInput): ReplayOutcome => {
     ...(input.ranks ? { ranks: input.ranks } : {}),
     ...(input.defenderRanks ? { defenderRanks: input.defenderRanks } : {}),
     ...(input.defenderChampions ? { defenderChampions: input.defenderChampions } : {}),
+    ...(input.defenceBonus ? { defenceBonus: input.defenceBonus } : {}),
     ...(input.learn ? { learn: true } : {}),
     ...(input.raid ? { raid: input.raid } : {}),
   };

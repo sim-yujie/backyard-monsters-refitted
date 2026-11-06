@@ -1,11 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { CELL_HEIGHT, CELL_WIDTH } from "@/config";
 import type { MapCell, PlayerCell } from "@/api/types";
+import { setClassicLook } from "@/game/classicLook";
 import {
   CellMarker,
+  DAMAGE_COLOUR,
   FOG_CLOUD_COLOUR,
   FOG_COLOUR,
   FOG_EDGE_COLOUR,
+  HEALTH_GOOD_COLOUR,
+  HEALTH_HURT_COLOUR,
   KitFilter,
   LOADING_COLOUR,
   OutpostKit,
@@ -17,9 +21,14 @@ import {
   UNEXPLORED_STRIPE,
   UNEXPLORED_STRIPE_COLOUR,
   appearanceOf,
+  campHealthColour,
+  campHealthOf,
+  FOG_UNDER_CLOUD,
   fogAppearance,
+  setFogUnderCloud,
   hexWidthAt,
   kitOf,
+  terrainBand,
   terrainColour,
   unexploredColour,
   type MapViewerContext,
@@ -101,11 +110,24 @@ describe("appearanceOf", () => {
     expect(appearanceOf(player({ p: 1, t: 100 }), 50)).toMatchObject({ truce: true, protected: true });
   });
 
-  it("shows the idle worker on the player's own outpost only when the server says it is free (#338)", () => {
-    expect(appearanceOf(player({ mine: 1, b: 3, wi: 1 }), 0).idleWorker).toBe(true);
-    expect(appearanceOf(player({ mine: 1, b: 3 }), 0).idleWorker).toBe(false);
-    expect(appearanceOf(player({ mine: 0, b: 3, wi: 1 }), 0).idleWorker).toBe(false);
-    expect(appearanceOf(player({ mine: 1, b: 2, wi: 1 }), 0).idleWorker).toBe(false);
+  it("in Classic, shows the idle worker on the player's own outpost only when the server says it is free (#338)", () => {
+    setClassicLook(true);
+    try {
+      expect(appearanceOf(player({ mine: 1, b: 3, wi: 1 }), 0).idleWorker).toBe(true);
+      expect(appearanceOf(player({ mine: 1, b: 3 }), 0).idleWorker).toBe(false);
+      expect(appearanceOf(player({ mine: 0, b: 3, wi: 1 }), 0).idleWorker).toBe(false);
+      expect(appearanceOf(player({ mine: 1, b: 2, wi: 1 }), 0).idleWorker).toBe(false);
+      expect(appearanceOf(player({ mine: 1, b: 3, wb: 1 }), 0).underConstruction).toBe(false);
+    } finally {
+      setClassicLook(false);
+    }
+  });
+
+  it("in Modern, shows the construction badge on the player's own outpost while its worker is busy, never the idle worker", () => {
+    expect(appearanceOf(player({ mine: 1, b: 3, wb: 1 }), 0).underConstruction).toBe(true);
+    expect(appearanceOf(player({ mine: 1, b: 3, wi: 1 }), 0)).toMatchObject({ underConstruction: false, idleWorker: false });
+    expect(appearanceOf(player({ mine: 0, b: 3, wb: 1 }), 0).underConstruction).toBe(false);
+    expect(appearanceOf(player({ mine: 1, b: 2, wb: 1 }), 0).underConstruction).toBe(false);
   });
 
   it("shows the envelope on the player's own outpost while an invitation to move onto it waits, and nothing else (#205)", () => {
@@ -277,11 +299,27 @@ describe("hexWidthAt (#334): how much width a plate has before it spills into a 
   });
 });
 
-it("keeps the server's height bands with the toned-down ground", () => {
-  expect(terrainColour(99)).toBe(0x234565);
-  expect(terrainColour(100)).toBe(0xb9ad86);
-  expect(terrainColour(150)).toBe(0x43623a);
-  expect(terrainColour(200)).toBe(0x64625c);
+it("keeps the server's height bands with Flash's ground colours", () => {
+  setClassicLook(true);
+  try {
+    expect(terrainColour(99)).toBe(0x32b6db);
+    expect(terrainColour(100)).toBe(0xcfbd79);
+    expect(terrainColour(150)).toBe(0x415d0e);
+    expect(terrainColour(200)).toBe(0x4d5d3f);
+  } finally {
+    setClassicLook(false);
+  }
+});
+
+it("tones Modern's water down and keeps Flash's land colours", () => {
+  expect(terrainColour(99)).toBe(0x4987b2);
+  expect(terrainColour(100)).toBe(0xcfbd79);
+  expect(terrainColour(200)).toBe(0x4d5d3f);
+});
+
+it("numbers the bands as Flash's ground tiles, water1 to land6", () => {
+  expect([0, 79, 80, 89, 90, 99, 100, 104, 105, 109, 110].map(terrainBand)).toEqual([0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5]);
+  expect([119, 120, 139, 140, 159, 160, 169, 170, 174, 175, 208].map(terrainBand)).toEqual([5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10]);
 });
 
 describe("unexplored ground (#153)", () => {
@@ -292,5 +330,58 @@ describe("unexplored ground (#153)", () => {
     // A step right and a step up land on the same stripe.
     expect(unexploredColour(5, 3)).toBe(unexploredColour(6, 2));
     expect(unexploredColour(0, 0)).not.toBe(unexploredColour(UNEXPLORED_STRIPE, 0));
+  });
+});
+
+/**
+ * A damaged camp shows a health bar (owner, 4 Nov 2026): its remaining
+ * strength, 100 minus the server's `dm`. A healthy camp, a destroyed one (its
+ * red cross is enough) and every other cell show none. The server reports a
+ * camp healed 12 hours after its last attack as `dm` 0, so the bar goes with
+ * the next refresh of the tile.
+ */
+describe("camp health bar", () => {
+  const camp = (dm: number, d = 0) => ({ uid: 0, b: 1, i: 150, bid: "1", n: "Kozu", l: 38, dm, d }) as MapCell;
+
+  it("shows what a damaged camp has left", () => {
+    expect(appearanceOf(camp(40), 0).campHealth).toBe(60);
+    expect(appearanceOf(camp(12.6), 0).campHealth).toBe(87);
+  });
+
+  it("is hidden on a healthy camp, including one the server reports healed", () => {
+    expect(appearanceOf(camp(0), 0).campHealth).toBeNull();
+  });
+
+  it("is hidden on a destroyed camp, which keeps its cross", () => {
+    const destroyed = appearanceOf(camp(100, 1), 0);
+    expect(destroyed.campHealth).toBeNull();
+    expect(destroyed.marker).toBe(CellMarker.CAMP_DESTROYED);
+  });
+
+  it("keeps a sliver at either end: a scratch still shows, near-flattened never reads empty", () => {
+    expect(campHealthOf(0.2, 0)).toBe(99);
+    expect(campHealthOf(99.8, 0)).toBe(1);
+  });
+
+  it("is never on a player's cell, water, fog or a cell still loading", () => {
+    expect(appearanceOf(player({ dm: 50 } as Partial<PlayerCell>), 0).campHealth).toBeNull();
+    expect(appearanceOf(undefined, 0).campHealth).toBeNull();
+  });
+
+  it("goes green, then amber, then red as the camp weakens", () => {
+    expect(campHealthColour(80)).toBe(HEALTH_GOOD_COLOUR);
+    expect(campHealthColour(40)).toBe(HEALTH_HURT_COLOUR);
+    expect(campHealthColour(10)).toBe(DAMAGE_COLOUR);
+  });
+});
+
+describe("fog cells under Classic's clouds", () => {
+  afterEach(() => setFogUnderCloud(false));
+
+  it("wear the cloud's colour while the clouds are on, and the dark fog after", () => {
+    setFogUnderCloud(true);
+    expect(fogAppearance({ x: 3, y: 4 }).terrain).toBe(FOG_UNDER_CLOUD);
+    setFogUnderCloud(false);
+    expect(fogAppearance({ x: 3, y: 4 }).terrain).not.toBe(FOG_UNDER_CLOUD);
   });
 });

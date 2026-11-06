@@ -1,0 +1,338 @@
+#!/usr/bin/env python3
+"""Build the Map Room 2 painted-landscape art (plan steps 2, 3, 5, 6) from the Codex sheets.
+
+The sheets were painted by Codex (`run.sh`, prompts in `prompts/`, mock-up B crops attached with -i)
+and copied into `source/` by `python build.py --take` from the git-ignored `work/runs/<job>/sheet.png`.
+
+Textures (2 x 2 sheets and the canopy square) are cut, made seamless (the square is blended with its
+half-rolled copy through a noisy mask, so the wrap seam moves into the middle where the original is
+whole), nudged half-way towards mock-up B's average colour for that ground, and packed into one
+atlas a Quality, `TEXTURE_ORDER` order (the same as `GroundTexture` in
+`web/src/game/maproom/painted/groundKinds.ts`), each square resized on its own and framed in a gutter
+of its own texture, wrapped (1/32 of its size each side, cut off again by `PaintedGround.ts`):
+
+  web/public/maproom/painted/ground@4x.webp   512 px a texture + 16 px gutters (Quality High)
+  web/public/maproom/painted/ground@2x.webp   256 px + 8 (Medium)
+  web/public/maproom/painted/ground.webp      128 px + 4 (Low)
+
+Sprites (decals, sea rocks, cliff pieces, forest bits, marsh and rocks) are keyed out of the magenta
+(`key_out`, the same un-mixing as `web/tools/land-art/build.py`) into one sheet per family, each
+piece in its own 256 px frame (High; 128 / 64 px Medium / Low), foot at the bottom centre:
+
+  web/public/maproom/painted/<family>@4x.webp, @2x, plain
+
+Strips (cliff faces, canopy edge) keep their full width and are made to repeat sideways.
+
+  python web/tools/mr2-paint/build.py [--take] [--textures] [--cliffs]   (either flag: only those)
+"""
+import sys
+from pathlib import Path
+
+import numpy as np
+from PIL import Image, ImageFilter
+from scipy.ndimage import gaussian_filter, label
+
+HERE = Path(__file__).resolve().parent
+SOURCE = HERE / "source"
+RUNS = HERE / "work" / "runs"
+OUT = HERE.parents[1] / "public" / "maproom" / "painted"
+MOCKUP = Path("C:/Coding/BYMR/worktrees/mr2-mockup2/art-samples/mr2-mockup2/variant-B-soft-lines.jpg")
+
+TEXTURE = 512
+FRAME = 256
+KEY = np.array([255.0, 0.0, 255.0])
+JOBS = ["ground-a", "ground-b", "sea", "canopy", "decals", "sea-rocks", "cliff", "forest-bits", "marsh-rocks",
+        "marsh-pieces", "marsh-water"]
+
+# (sheet, quadrant 0..3 row by row or None for the whole square, mock-up B box to match or None)
+TEXTURE_ORDER: list[tuple[str, str, int | None, tuple[int, int, int, int] | None]] = [
+    ("meadow", "ground-a", 0, (600, 660, 800, 760)),
+    ("lush", "ground-a", 1, (1000, 780, 1150, 860)),
+    ("sand", "ground-a", 2, (200, 760, 260, 920)),
+    ("rock", "ground-a", 3, (300, 500, 700, 700)),
+    # mr2-marsh: the marsh's texture is now its shallow dark-green water (the banks are the land, darkened).
+    ("marsh", "marsh-water", None, (1400, 850, 1480, 880)),
+    ("forest-floor", "ground-b", 1, (1000, 780, 1150, 860)),
+    ("snow", "ground-b", 2, None),
+    ("meadow-plain", "ground-b", 3, (600, 660, 800, 760)),
+    ("shallows", "sea", 0, None),
+    ("deep", "sea", 1, (0, 300, 80, 600)),
+    ("wet-sand", "sea", 2, None),
+    ("foam", "sea", 3, None),
+    ("canopy", "canopy", None, (1250, 200, 1500, 400)),
+]
+ATLAS_COLUMNS = 4
+# Each atlas square carries a gutter of its own texture, wrapped, this share of its size on every side
+# (1/32: 16 px High, 8 Medium, 4 Low); `GROUND_GUTTER` in PaintedGround.ts cuts it off again.
+GUTTER_SHARE = 32
+GROUND_QUALITY = 83  # a step under the sprites' 86-90 keeps the gutters within the old download size
+# How far each texture moves to its mock-up B colour (default 0.5). The meadows went further after
+# the first in-game look: they came out greener and darker than mock-up B (hue 82 against 66);
+# the sand came out darker; the marsh came out brown mud where mock-up B has dark wet green.
+# Round 4 (mr2-hills): the forest floor (forest cells until step 6's canopy covers them) was the
+# darkest ground on screen, a dark mossy green (lightness 0.25 against the meadows' 0.43), so it
+# moves most of the way to mock-up B's lush grass; the rock ground was brown dirt where mock-up B's
+# rocky ground is grass with grey stones, so it moves half-way to mock-up B's open land.
+MATCH_STRENGTH = {"meadow": 0.9, "lush": 0.8, "meadow-plain": 0.9, "sand": 0.8, "marsh": 0.7,
+                  "forest-floor": 0.75, "rock": 0.5,
+                  # Step 6 (mr2-canopy2): the canopy was re-painted in mid and deep greens (the first one
+                  # was yellow); it moves most of the way to mock-up B's forest, which is a little warmer.
+                  "canopy": 0.7}
+
+
+def take() -> None:
+    """Copies each run's sheet into source/ as a quality-95 webp (committed)."""
+    SOURCE.mkdir(exist_ok=True)
+    for job in JOBS:
+        sheet = RUNS / job / "sheet.png"
+        if sheet.exists():
+            Image.open(sheet).convert("RGB").save(SOURCE / f"{job}.webp", quality=95, method=6)
+            print("took", job)
+
+
+# MR2 step 11 (meadow 55%): mock-up B's grass is one bright lime almost everywhere; in game the lush
+# meadow (hills from 140 m, and since step 11 the old rock band 170-184 m too) read as dark olive
+# patches beside it. It moves most of the way to the meadow's own colour (keeping its darker grass
+# blades), so the land reads as one sunny meadow and the hills' light and shade do the rest.
+GRADE_TOWARDS = {"lush": ((158, 178, 36), 0.75)}
+
+
+def grade(name: str, square: np.ndarray) -> np.ndarray:
+    """A texture's last colour step after `match_colour` (MR2 step 11 polish)."""
+    if name not in GRADE_TOWARDS:
+        return square
+    target, strength = GRADE_TOWARDS[name]
+    mean = square.reshape(-1, 3).mean(0)
+    return np.clip(square + strength * (np.array(target, dtype=np.float64) - mean), 0, 255)
+
+
+def seamless(square: np.ndarray, seed: int) -> np.ndarray:
+    """Blends a square with its half-rolled copy so it wraps with no seam."""
+    n = square.shape[0]
+    rolled = np.roll(square, (n // 2, n // 2), axis=(0, 1))
+    t = np.abs(np.linspace(-1, 1, n))  # 0 in the middle, 1 at the edges
+    edge = np.maximum(t[:, None], t[None, :])
+    rng = np.random.default_rng(seed)
+    wobble = gaussian_filter(rng.standard_normal((n, n)), n / 24)
+    wobble /= np.abs(wobble).max() + 1e-6
+    # Keep the original inside, the rolled copy near the edges, with a wandering, fairly
+    # sharp boundary (a soft cross-fade would ghost two layers of grass over each other).
+    keep = np.clip((0.72 - edge + 0.16 * wobble) / 0.08, 0, 1)
+    keep = gaussian_filter(keep, 1.5)[..., None]
+    return square * keep + rolled * (1 - keep)
+
+
+def match_colour(square: np.ndarray, box: tuple[int, int, int, int] | None, strength: float = 0.5) -> np.ndarray:
+    if box is None or not MOCKUP.exists():
+        return square
+    target = np.asarray(Image.open(MOCKUP).convert("RGB").crop(box), dtype=np.float64).reshape(-1, 3).mean(0)
+    mean = square.reshape(-1, 3).mean(0)
+    return np.clip(square + strength * (target - mean), 0, 255)
+
+
+def cut_texture(sheet: str, quadrant: int | None) -> np.ndarray:
+    image = Image.open(SOURCE / f"{sheet}.webp").convert("RGB")
+    w, h = image.size
+    if quadrant is not None:
+        half_w, half_h = w // 2, h // 2
+        x, y = (quadrant % 2) * half_w, (quadrant // 2) * half_h
+        inset = 8  # the squares touch; keep clear of any line where they meet
+        image = image.crop((x + inset, y + inset, x + half_w - inset, y + half_h - inset))
+    else:
+        inset = 6
+        image = image.crop((inset, inset, w - inset, h - inset))
+    return np.asarray(image.resize((TEXTURE, TEXTURE), Image.LANCZOS), dtype=np.float64)
+
+
+def wrap_resize(square: np.ndarray, size: int) -> np.ndarray:
+    """A seamless square resized to `size` px and still seamless: resized as a 3 x 3 tiling, middle kept
+    (resizing it alone blurs each edge against nothing, which leaves a line where it repeats)."""
+    if square.shape[0] == size:
+        return square
+    tiled = Image.fromarray(np.tile(square, (3, 3, 1)).round().clip(0, 255).astype(np.uint8), "RGB")
+    big = np.asarray(tiled.resize((size * 3, size * 3), Image.LANCZOS), dtype=np.float64)
+    return big[size:2 * size, size:2 * size]
+
+
+def build_textures() -> None:
+    """One atlas a Quality, each square resized on its own and framed in a wrapped gutter
+    (`GROUND_GUTTER` in PaintedGround.ts): WebP's smoothing and a resize of the whole atlas both
+    bled each square's neighbours into its edge, which showed as a straight line where the texture
+    repeats, worst on Low (MR2 step 11, the line in the shallows)."""
+    rows = -(-len(TEXTURE_ORDER) // ATLAS_COLUMNS)
+    squares: list[np.ndarray | None] = []
+    for index, (name, sheet, quadrant, box) in enumerate(TEXTURE_ORDER):
+        if not (SOURCE / f"{sheet}.webp").exists():
+            print(f"texture {index:2} {name}: no sheet yet")
+            squares.append(None)
+            continue
+        square = match_colour(seamless(cut_texture(sheet, quadrant), index), box, MATCH_STRENGTH.get(name, 0.5))
+        squares.append(grade(name, square))
+        print(f"texture {index:2} {name}")
+    OUT.mkdir(parents=True, exist_ok=True)
+    for suffix, factor in (("@4x", 1), ("@2x", 2), ("", 4)):
+        inner = TEXTURE // factor
+        gutter = inner // GUTTER_SHARE
+        cell = inner + 2 * gutter
+        atlas = np.zeros((rows * cell, ATLAS_COLUMNS * cell, 3))
+        for index, square in enumerate(squares):
+            if square is None:
+                continue
+            tile = np.pad(wrap_resize(square, inner), ((gutter, gutter), (gutter, gutter), (0, 0)), mode="wrap")
+            x, y = (index % ATLAS_COLUMNS) * cell, (index // ATLAS_COLUMNS) * cell
+            atlas[y:y + cell, x:x + cell] = tile
+        picture = Image.fromarray(atlas.round().clip(0, 255).astype(np.uint8), "RGB")
+        picture.save(OUT / f"ground{suffix}.webp", quality=GROUND_QUALITY, method=6)
+
+
+def key_out(cell: Image.Image) -> Image.Image:
+    """Magenta to transparent; part-magenta pixels (soft shadows, anti-aliased edges) un-mixed."""
+    rgb = np.asarray(cell.convert("RGB")).astype(np.float64)
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    alpha = np.max(np.stack([1.0 - r / 255.0, 1.0 - b / 255.0, g / 255.0]), axis=0)
+    gap = np.clip((np.minimum(r, b) - g - 10.0) / 30.0, 0.0, 1.0)
+    alpha = 1.0 - gap * (1.0 - alpha)
+    alpha = np.where(alpha < 0.08, 0.0, np.clip((alpha - 0.08) / 0.92, 0.0, 1.0) ** 0.9)
+    keep = alpha > 0
+    a = np.where(keep, alpha, 1.0)[..., None]
+    colour = np.clip((rgb - (1.0 - a) * KEY) / a, 0, 255)
+    cr, cg, cb = colour[..., 0], colour[..., 1], colour[..., 2]
+    pink = (alpha < 0.98) & (np.minimum(cr, cb) > cg + 8)
+    colour[pink] = np.array([40.0, 48.0, 30.0])  # a soft shadow, not a pink glow
+    speck = (r > 200) & (b > 180) & (g < 110)
+    alpha = np.where(speck, 0.0, alpha)
+    out = np.dstack([colour, alpha * 255.0]).round().astype(np.uint8)
+    out[alpha <= 0] = 0
+    return Image.fromarray(out, "RGBA")
+
+
+def pieces(sheet: Image.Image, min_area: int = 900) -> list[Image.Image]:
+    """Every separate keyed piece on a sheet, row by row (top to bottom, then left to right)."""
+    keyed = key_out(sheet)
+    alpha = np.asarray(keyed)[..., 3]
+    solid = gaussian_filter((alpha > 40).astype(float), 3) > 0.15
+    labels, count = label(solid)
+    found = []
+    for index in range(1, count + 1):
+        ys, xs = np.nonzero(labels == index)
+        if len(ys) < min_area or ys.max() - ys.min() < 40:
+            continue  # a sliver of shadow cut off a strip above, not a piece
+        found.append((ys.min(), xs.min(), ys.max() + 1, xs.max() + 1))
+    row_height = sheet.height / 8
+    found.sort(key=lambda box: (round(((box[0] + box[2]) / 2) / row_height), box[1]))
+    return [keyed.crop((x0, y0, x1, y1)) for y0, x0, y1, x1 in found]
+
+
+def framed(items: list[Image.Image], columns: int) -> Image.Image:
+    rows = -(-len(items) // columns)
+    sheet = Image.new("RGBA", (columns * FRAME, rows * FRAME), (0, 0, 0, 0))
+    for index, item in enumerate(items):
+        scale = min(1.0, (FRAME - 4) / item.width, (FRAME - 4) / item.height)
+        if scale < 1:
+            item = item.resize((max(1, round(item.width * scale)), max(1, round(item.height * scale))), Image.LANCZOS)
+        x = (index % columns) * FRAME + (FRAME - item.width) // 2
+        y = (index // columns) * FRAME + FRAME - 2 - item.height
+        sheet.alpha_composite(item, (x, y))
+    return sheet
+
+
+def build_sprites() -> None:
+    for family in ["decals", "sea-rocks", "marsh-rocks"]:
+        path = SOURCE / f"{family}.webp"
+        if not path.exists():
+            continue
+        found = pieces(Image.open(path))
+        if family == "marsh-rocks" and (SOURCE / "marsh-pieces.webp").exists():
+            # mr2-marsh: keep the rock fields' four boulders; the marsh's pieces are the new sheet's
+            # 12 (six tall cattail clumps, a reed tuft, low reeds, two lily pad clusters, a log, a wet rock).
+            found = found[:4] + pieces(Image.open(SOURCE / "marsh-pieces.webp"))
+        print(f"{family}: {len(found)} pieces")
+        write_copies(framed(found, 4), family)
+
+
+def repeat_sideways(strip: Image.Image, overlap: int = 96) -> Image.Image:
+    """Cross-fades a strip's two ends so copies laid end to end join with no seam."""
+    data = np.asarray(strip, dtype=np.float64)
+    w = data.shape[1]
+    body = data[:, : w - overlap].copy()
+    ramp = np.linspace(0, 1, overlap)[None, :, None]
+    body[:, :overlap] = data[:, w - overlap :] * (1 - ramp) + data[:, :overlap] * ramp
+    return Image.fromarray(body.round().astype(np.uint8), "RGBA")
+
+
+def build_strips() -> None:
+    """Cliff faces and the canopy edge: wide bands keyed out and kept whole, plus the small bits."""
+    for family in ["cliff", "forest-bits"]:
+        path = SOURCE / f"{family}.webp"
+        if not path.exists():
+            continue
+        sheet = Image.open(path)
+        keyed = key_out(sheet)
+        alpha = np.asarray(keyed)[..., 3]
+        wide = (alpha > 40).sum(axis=1) > 0.85 * sheet.width  # rows the full-width bands cover
+        bands, start = [], None
+        for y, on in enumerate(list(wide) + [False]):
+            if on and start is None:
+                start = y
+            if not on and start is not None:
+                if y - start > 30:
+                    bands.append((max(0, start - 12), min(sheet.height, y + 12)))
+                start = None
+        strips = [repeat_sideways(keyed.crop((0, y0, sheet.width, y1))) for y0, y1 in bands]
+        below = bands[-1][1] if bands else 0
+        rest = pieces(sheet.crop((0, below, sheet.width, sheet.height)))
+        print(f"{family}: {len(strips)} strips, {len(rest)} pieces")
+        for index, strip in enumerate(strips):
+            write_copies(strip.resize((1024, round(strip.height * 1024 / strip.width)), Image.LANCZOS),
+                         f"{family}-strip{index + 1}")
+        write_copies(framed(rest, 4), f"{family}-pieces")
+
+
+# The cliff sheet the ground shader reads (plan step 5): the three face strips stacked in the top
+# half with clear rows between them, the scree and peak pieces (4 frames a row) in the bottom half.
+# The rows must match `CLIFF_STRIP_PIXELS` / `CLIFF_PIECES_TOP` in web/src/game/maproom/painted/hills.ts.
+CLIFF_STRIP_TOPS = [8, 238, 361]
+CLIFF_PIECES_TOP = 512
+
+
+def build_cliff_sheet() -> None:
+    sheet = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
+    for index, top in enumerate(CLIFF_STRIP_TOPS):
+        strip = Image.open(OUT / f"cliff-strip{index + 1}@4x.webp").convert("RGBA")
+        sheet.alpha_composite(strip, (0, top))
+        print(f"cliff strip {index + 1}: rows {top}..{top + strip.height}")
+    pieces_sheet = Image.open(OUT / "cliff-pieces@4x.webp").convert("RGBA")
+    sheet.alpha_composite(pieces_sheet, (0, CLIFF_PIECES_TOP))
+    write_copies(sheet, "cliffs")
+
+
+def write_copies(picture: Image.Image, name: str, quality: int = 90) -> None:
+    OUT.mkdir(parents=True, exist_ok=True)
+    for suffix, factor in (("@4x", 1), ("@2x", 2), ("", 4)):
+        copy = picture if factor == 1 else picture.resize(
+            (picture.width // factor, picture.height // factor), Image.LANCZOS)
+        options = {"quality": quality, "method": 6}
+        if copy.mode == "RGBA":
+            options["alpha_quality"] = 90
+        copy.save(OUT / f"{name}{suffix}.webp", **options)
+
+
+if __name__ == "__main__":
+    if "--take" in sys.argv:
+        take()
+    only = {flag for flag in ("--textures", "--cliffs") if flag in sys.argv}
+    if not only or "--textures" in only:
+        build_textures()
+    if not only:
+        build_sprites()
+        build_strips()
+    if not only or "--cliffs" in only:
+        build_cliff_sheet()
+    totals = {"@4x": 0, "@2x": 0, "": 0}
+    for path in sorted(OUT.glob("*.webp")):
+        size = path.stat().st_size
+        suffix = "@4x" if "@4x" in path.name else "@2x" if "@2x" in path.name else ""
+        totals[suffix] += size
+        print(f"{path.name:34} {size // 1024:5} KB")
+    print("High {:.2f} MB, Medium {:.2f} MB, Low {:.2f} MB".format(
+        totals["@4x"] / 2**20, totals["@2x"] / 2**20, totals[""] / 2**20))

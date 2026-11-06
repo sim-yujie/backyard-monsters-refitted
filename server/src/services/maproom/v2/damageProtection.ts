@@ -1,3 +1,5 @@
+import type { EntityManager } from "@mikro-orm/core";
+
 import { BaseMode, BaseType } from "../../../enums/Base.js";
 import { Save } from "../../../database/models/save.model.js";
 import { postgres } from "../../../server.js";
@@ -17,8 +19,10 @@ import { startTakeoverGrant } from "./takeoverGrantStore.js";
  *
  * @param {Save} save - The save data object.
  * @param {BaseMode} [mode] - The mode of the base (optional).
+ * @param {EntityManager} [em] - Where the change is persisted: the request's by
+ *   default, a transaction's when the save was read in one.
  */
-export const damageProtection = async (save: Save, mode?: BaseMode) => {
+export const damageProtection = async (save: Save, mode?: BaseMode, em: EntityManager = postgres.em) => {
   let { type, damage, attacks } = save;
 
   let protection = save.protected;
@@ -137,7 +141,7 @@ export const damageProtection = async (save: Save, mode?: BaseMode) => {
 
   if (persist) {
     save.protected = protection;
-    postgres.em.persist(save);
+    em.persist(save);
   }
 
   return persist;

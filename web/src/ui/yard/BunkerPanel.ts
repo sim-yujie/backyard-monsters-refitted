@@ -11,7 +11,7 @@ import {
   type FillRow,
 } from "@/game/monsters/bunker";
 import { juiceGoo, juicerProblemText, juicerStatus, type JuicerStatus } from "@/game/monsters/juice";
-import { compareListOrder, monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { compareListOrder, isInfernoMonster, monsterEntry } from "@/game/monsters/monsterCatalogue";
 import type { YardStore } from "@/game/yard/YardStore";
 import { formatAmount } from "@/ui/format";
 import { monsterPicture } from "@/ui/monsters/LockerTab";
@@ -413,7 +413,9 @@ export class BunkerPanel {
       return;
     }
     this.outNote.textContent = juicer.ok
-      ? "Taking a monster out juices it for goo. It does not go back to housing."
+      ? ids.some(isInfernoMonster)
+        ? "Taking a monster out juices it for goo, but an Inferno monster is deleted. Nothing goes back to housing."
+        : "Taking a monster out juices it for goo. It does not go back to housing."
       : juicer.problem === "noJuicer"
         ? "Taking a monster out deletes it: it does not go back to housing, and nothing is refunded. Build a Monster Juicer to get goo back instead."
         : `Taking a monster out deletes it: nothing is refunded. ${juicerProblemText(juicer.problem)}`;
@@ -422,9 +424,13 @@ export class BunkerPanel {
     this.syncOut(true);
   }
 
+  /** True when taking `id` out juices it: a working Juicer, and never an Inferno monster (`BunkerJuiceById`). */
+  private juices(id: string): boolean {
+    return this.juicer!.ok && !isInfernoMonster(id);
+  }
+
   private outItem(id: string, count: number): HTMLElement {
     const monster = monsterEntry(id)!;
-    const juicer = this.juicer!;
     const item = document.createElement("li");
     item.className = "bunker__row";
     item.dataset["monster"] = id;
@@ -455,7 +461,7 @@ export class BunkerPanel {
     const take = document.createElement("button");
     take.type = "button";
     take.className = "btn bunker__take";
-    take.textContent = juicer.ok ? "Juice" : "Remove";
+    take.textContent = this.juices(id) ? "Juice" : "Remove";
     take.addEventListener("click", () => {
       this.confirmingOut = id;
       this.renderOut();
@@ -475,15 +481,16 @@ export class BunkerPanel {
   private outConfirm(id: string): HTMLElement {
     const monster = monsterEntry(id)!;
     const juicer = this.juicer!;
+    const juices = this.juices(id);
     const count = this.outSelection.get(id) ?? 0;
     const wrap = document.createElement("div");
     wrap.className = "bunker__confirm";
     wrap.setAttribute("role", "group");
-    wrap.setAttribute("aria-label", juicer.ok ? "Confirm juice" : "Confirm remove");
+    wrap.setAttribute("aria-label", juices ? "Confirm juice" : "Confirm remove");
     const question = document.createElement("p");
     question.className = "bunker__question";
     const what = `${formatAmount(count)} ${monster.name}`;
-    if (juicer.ok) {
+    if (juices && juicer.ok) {
       const goo = juiceGoo(this.store.save, id, count, juicer.rate);
       question.append(`Juice ${what} for `, resourceAmount("r4", formatAmount(goo)), "? They are gone for good.");
     } else {
@@ -494,7 +501,7 @@ export class BunkerPanel {
     const yes = document.createElement("button");
     yes.type = "button";
     yes.className = "btn btn--danger bunker__yes";
-    yes.textContent = juicer.ok ? "Yes, juice" : "Yes, remove";
+    yes.textContent = juices ? "Yes, juice" : "Yes, remove";
     yes.addEventListener("click", () => void this.runRemove(id, count));
     const keep = document.createElement("button");
     keep.type = "button";

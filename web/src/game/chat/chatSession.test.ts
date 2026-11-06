@@ -9,8 +9,10 @@ import {
   PING_INTERVAL_MS,
   RATE_LIMITED_TEXT,
   visibleEntries,
+  worldChat,
   type ChatSocket,
 } from "./chatSession";
+import { setWorldChatOn } from "./worldChatSetting";
 
 /** A socket the test drives: what the client sent, and the server's side. */
 class FakeSocket implements ChatSocket {
@@ -254,6 +256,33 @@ describe("mute", () => {
     expect(latest().sent.at(-1)).toEqual({ type: "unignore", targetId: "77" });
     expect(visibleEntries(session.current)).toHaveLength(2);
   });
+
+  it("an unmute made while chat is down reaches the server on reconnect, and the old list does not bring the mute back", () => {
+    const session = joined();
+    latest().hear({ type: "ignore_list", list: [{ target: "77", displayname: "" }] });
+    latest().drop();
+    session.unmute(77);
+    expect(session.current.muted.has(77)).toBe(false);
+
+    vi.advanceTimersByTime(FIRST_RETRY_MS);
+    latest().open();
+    latest().hear({ type: "auth_ok", ...ME });
+    const sent = latest().sent;
+    const unignoreAt = sent.findIndex(
+      (m) => JSON.stringify(m) === JSON.stringify({ type: "unignore", targetId: "77" }),
+    );
+    const getAt = sent.findIndex((m) => (m as { type: string }).type === "getignore");
+    expect(unignoreAt).toBeGreaterThan(-1);
+    expect(unignoreAt).toBeLessThan(getAt);
+
+    // The server's answer to a request sent before it took the unmute still lists 77.
+    latest().hear({ type: "ignore_list", list: [{ target: "77", displayname: "" }] });
+    expect(session.current.muted.has(77)).toBe(false);
+    // Once the server agrees, its list is followed again.
+    latest().hear({ type: "ignore_list", list: [] });
+    latest().hear({ type: "ignore_list", list: [{ target: "77", displayname: "" }] });
+    expect(session.current.muted.has(77)).toBe(true);
+  });
 });
 
 describe("reconnecting", () => {
@@ -342,5 +371,131 @@ describe("reconnecting", () => {
     socket.drop();
     vi.advanceTimersByTime(MAX_RETRY_MS * 2);
     expect(sockets).toHaveLength(1);
+  });
+});
+
+describe("the World chat switch", () => {
+  it("off closes the socket and empties the room; nothing more is heard", () => {
+    const session = joined([wire(7, "hi", 1)]);
+    const socket = latest();
+    session.setEnabled(false);
+
+    expect(socket.closed).toBe(true);
+    expect(session.isEnabled).toBe(false);
+    expect(session.current.status).toBe(ChatStatus.OFF);
+    expect(session.current.entries).toEqual([]);
+    expect(session.current.channel).toBeNull();
+
+    // A late message on the closed socket changes nothing.
+    socket.hear({ type: "message", channel: CONFIG.channel, ...wire(8, "late", 2) });
+    expect(session.current.entries).toEqual([]);
+    // Nor does a drop bring a retry.
+    socket.drop();
+    vi.advanceTimersByTime(MAX_RETRY_MS * 2);
+    expect(sockets).toHaveLength(1);
+  });
+
+  it("off, a yard load's settings are kept but nothing connects", () => {
+    const session = newSession();
+    session.setEnabled(false);
+    session.configure(CONFIG);
+    session.reconnect();
+    vi.advanceTimersByTime(MAX_RETRY_MS * 2);
+    expect(sockets).toHaveLength(0);
+    expect(session.current.status).toBe(ChatStatus.OFF);
+  });
+
+  it("on again connects with the last settings, no yard load needed", () => {
+    const session = joined();
+    session.setEnabled(false);
+    session.setEnabled(true);
+
+    expect(sockets).toHaveLength(2);
+    expect(session.current.status).toBe(ChatStatus.CONNECTING);
+    latest().open();
+    expect(latest().sent[0]).toEqual({ type: "auth", userId: 2505, token: "tok" });
+    latest().hear({ type: "auth_ok", ...ME });
+    latest().hear({ type: "joined", channel: CONFIG.channel, history: [wire(7, "back", 3)] });
+    expect(session.current.status).toBe(ChatStatus.ONLINE);
+    expect(session.current.entries).toHaveLength(1);
+  });
+
+  it("on again before any yard load waits for one", () => {
+    const session = newSession();
+    session.setEnabled(false);
+    session.setEnabled(true);
+    expect(sockets).toHaveLength(0);
+    session.configure(CONFIG);
+    expect(sockets).toHaveLength(1);
+  });
+
+  it("on again after signing out stays off until the next yard load", () => {
+    const session = joined();
+    session.setEnabled(false);
+    session.stop();
+    session.setEnabled(true);
+    expect(sockets).toHaveLength(1);
+  });
+
+  it("a settings change while off is the one used when turned on", () => {
+    const session = joined();
+    session.setEnabled(false);
+    session.configure({ ...CONFIG, token: "fresh", channel: "chat:mr2-other" });
+    session.setEnabled(true);
+    latest().open();
+    expect(latest().sent[0]).toEqual({ type: "auth", userId: 2505, token: "fresh" });
+    latest().hear({ type: "auth_ok", ...ME });
+    expect(latest().sent[1]).toEqual({ type: "join", channel: "chat:mr2-other" });
+  });
+});
+
+describe("the player's world chat", () => {
+  it("follows the World chat switch", () => {
+    expect(worldChat.isEnabled).toBe(true);
+    setWorldChatOn(false, null);
+    expect(worldChat.isEnabled).toBe(false);
+    setWorldChatOn(true, null);
+    expect(worldChat.isEnabled).toBe(true);
+  });
+});
+
+describe("the game team (dashboard moderation)", () => {
+  it("marks the game team's lines only where the server says so", () => {
+    const session = joined([{ ...wire(7, "Please keep chat friendly.", 1), gm: true }, wire(77, "hi", 2)]);
+    latest().hear({ type: "message", channel: CONFIG.channel, ...wire(7, "Thanks all", 3), gm: true });
+    expect(session.current.entries.map((entry) => entry.kind === "line" && entry.gm)).toEqual([true, false, true]);
+  });
+
+  it("a muted player's line comes back to the input, with when chat opens again", () => {
+    const session = joined();
+    session.say("hello?");
+    latest().hear({ type: "error", code: "muted", until: Date.UTC(2026, 10, 4, 18, 0) });
+    expect(session.current.bounced).toBe("hello?");
+    const last = session.current.entries.at(-1);
+    expect(last).toMatchObject({ kind: "notice" });
+    expect(last?.kind === "notice" && last.text).toMatch(/^Your chat is paused until /);
+  });
+
+  it("a ban signs chat out and tells the game, with the reason and the end", () => {
+    const session = joined();
+    const heard: unknown[] = [];
+    session.onTeam((event) => heard.push(event));
+    latest().hear({ type: "kicked", reason: "banned", until: 5, text: "Banned.", banReason: "Swearing" });
+    expect(session.current.status).toBe(ChatStatus.SIGNED_OUT);
+    expect(heard).toEqual([{ kind: "banned", text: "Banned.", until: 5, reason: "Swearing" }]);
+    // It does not try to come back.
+    latest().drop();
+    vi.advanceTimersByTime(MAX_RETRY_MS);
+    expect(sockets).toHaveLength(1);
+  });
+
+  it("a warning nudge reaches the game; a listener can stop listening", () => {
+    const session = joined();
+    const heard: unknown[] = [];
+    const stop = session.onTeam((event) => heard.push(event));
+    latest().hear({ type: "notice" });
+    stop();
+    latest().hear({ type: "notice" });
+    expect(heard).toEqual([{ kind: "notice" }]);
   });
 });

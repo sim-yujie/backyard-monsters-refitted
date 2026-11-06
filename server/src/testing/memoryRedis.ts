@@ -1,6 +1,7 @@
 /**
  * For tests: the part of Bun's `RedisClient` the presence and bot-check code
- * uses (#271, #273), in memory. Strings, lists and hashes (the last through
+ * uses (#271, #273), in memory. Strings, lists, sets (`sadd`, `srem`,
+ * `scard`, `smembers`, for the chat mute list) and hashes (the last through
  * `send("HINCRBY" | "HGET" | "HSET")`, which the typed client lacks, and
  * `send("EXPIRE")` for a hash's life), with key lives
  * read off `Date.now()`, so `setSystemTime` ages them. Anything else fails
@@ -13,11 +14,12 @@
 export const memoryRedis = (strings: Map<string, string> = new Map(), { ages = true }: { ages?: boolean } = {}) => {
   const lists = new Map<string, string[]>();
   const hashes = new Map<string, Map<string, string>>();
+  const sets = new Map<string, Set<string>>();
   /** When each key dies, epoch milliseconds; absent while it lives for ever. */
   const expiry = new Map<string, number>();
 
   const drop = (key: string): boolean => {
-    const had = strings.delete(key) || lists.delete(key) || hashes.delete(key);
+    const had = strings.delete(key) || lists.delete(key) || hashes.delete(key) || sets.delete(key);
     expiry.delete(key);
     return had;
   };
@@ -28,7 +30,7 @@ export const memoryRedis = (strings: Map<string, string> = new Map(), { ages = t
   };
   const exists = (key: string): boolean => {
     age(key);
-    return strings.has(key) || lists.has(key) || hashes.has(key);
+    return strings.has(key) || lists.has(key) || hashes.has(key) || sets.has(key);
   };
   const setString = (key: string, value: string, ttlSeconds?: number): void => {
     drop(key);
@@ -100,6 +102,30 @@ export const memoryRedis = (strings: Map<string, string> = new Map(), { ages = t
       const list = lists.get(key) ?? [];
       return list.slice(start, stop < 0 ? list.length + stop + 1 : stop + 1);
     },
+    sadd: async (key: string, ...members: string[]): Promise<number> => {
+      age(key);
+      const set = sets.get(key) ?? new Set<string>();
+      const before = set.size;
+      for (const member of members) set.add(member);
+      sets.set(key, set);
+      return set.size - before;
+    },
+    srem: async (key: string, ...members: string[]): Promise<number> => {
+      age(key);
+      const set = sets.get(key);
+      if (!set) return 0;
+      const removed = members.filter((member) => set.delete(member)).length;
+      if (set.size === 0) drop(key);
+      return removed;
+    },
+    scard: async (key: string): Promise<number> => {
+      age(key);
+      return sets.get(key)?.size ?? 0;
+    },
+    smembers: async (key: string): Promise<string[]> => {
+      age(key);
+      return [...(sets.get(key) ?? [])];
+    },
     send: async (command: string, args: string[]): Promise<unknown> => {
       const [key = "", field = "", by = "0"] = args;
       age(key);
@@ -137,6 +163,7 @@ export const memoryRedis = (strings: Map<string, string> = new Map(), { ages = t
       strings.clear();
       lists.clear();
       hashes.clear();
+      sets.clear();
       expiry.clear();
     },
   };

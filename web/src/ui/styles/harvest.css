@@ -4,14 +4,14 @@
  * is the yard's round button (`yard-hud.css`).
  */
 
-/* The banked amount, rising off the building it came from and fading. */
+/* The banked amount, rising off the building it came from and fading; its
+   green "+720" is the gain look (`.res-amount--gain`, `ui.css`). */
 .yard-bank-float {
   position: fixed;
   z-index: var(--z-popup);
   padding: 0 var(--space-1);
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--colour-surface-base) 80%, transparent);
-  color: var(--colour-success);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;

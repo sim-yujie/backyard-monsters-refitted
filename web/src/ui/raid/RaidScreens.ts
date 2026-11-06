@@ -316,14 +316,15 @@ export const raidResultPopup = (result: RaidResult, repair: RaidRepairOffer | nu
 
   if (result.shiny > 0) {
     const reward = element("p", "raid-result__reward");
-    reward.append("Reward: ", resourceAmount("shiny", `+${formatAmount(result.shiny)}`));
+    // Gains green with a plus, losses red with a minus (owner, 28 Oct).
+    reward.append("Reward: ", resourceAmount("shiny", result.shiny, { change: "gain" }));
     parts.push(reward);
   }
   if (anyStolen(result)) {
     const stolen = element("div", "raid-result__stolen");
     const list = element("span", "res-list");
     for (const key of RESOURCE_KEYS) {
-      if (result.stolen[key] > 0) list.append(resourceAmount(key, formatAmount(result.stolen[key])));
+      if (result.stolen[key] > 0) list.append(resourceAmount(key, result.stolen[key], { change: "loss" }));
     }
     stolen.append(element("span", "raid-result__label", "The raiders took"), list);
     parts.push(stolen);

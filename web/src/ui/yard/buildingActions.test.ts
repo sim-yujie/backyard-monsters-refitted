@@ -51,6 +51,8 @@ interface Fixture {
   readonly now?: number;
   /** The save's `type`: `outpost` reads the outpost table. */
   readonly type?: string;
+  readonly infernostate?: BaseLoadResponse["infernostate"];
+  readonly iresources?: BaseLoadResponse["iresources"];
 }
 
 const contextOf = (fixture: Fixture): PanelContext => {
@@ -64,6 +66,8 @@ const contextOf = (fixture: Fixture): PanelContext => {
     buildinghealthdata: fixture.health ?? {},
     storedata: fixture.storedata ?? { BEW: { q: 4 } },
     ...(fixture.type ? { type: fixture.type } : {}),
+    ...(fixture.infernostate && { infernostate: fixture.infernostate }),
+    ...(fixture.iresources && { iresources: fixture.iresources }),
   } as unknown as BaseLoadResponse;
   const yard = readYard(save);
   return {
@@ -469,9 +473,9 @@ describe("jobOffer: speed-ups by time left", () => {
   it("90 minutes: Finish now at the time price, −1 h yes, −2 h no", () => {
     const job = at(5_400);
     // timeCost(5400) = min(ceil(5400 × 20 / 3600), trunc(sqrt(5400 × 0.8))) = min(30, 65).
-    expect(job.finish).toEqual({ item: "SP4", price: 30, free: 0, blocked: null });
-    expect(job.minusOne).toEqual({ item: "SP2", price: 20, free: 0, blocked: null });
-    expect(job.minusTwo).toEqual({ item: "SP3", price: 40, free: 0, blocked: "tooShort" });
+    expect(job.finish).toEqual({ item: "SP4", price: 30, free: 0, unused: 0, blocked: null });
+    expect(job.minusOne).toEqual({ item: "SP2", price: 20, free: 0, unused: 0, blocked: null });
+    expect(job.minusTwo).toEqual({ item: "SP3", price: 40, free: 0, unused: 0, blocked: "tooShort" });
   });
 
   it("24 hours: Finish now costs 262 (the design's worked example)", () => {
@@ -480,7 +484,7 @@ describe("jobOffer: speed-ups by time left", () => {
 
   it("five minutes or less: the finish is free (SP1) and the hour items are refused", () => {
     const job = at(200);
-    expect(job.finish).toEqual({ item: "SP1", price: 0, free: 0, blocked: null });
+    expect(job.finish).toEqual({ item: "SP1", price: 0, free: 0, unused: 0, blocked: null });
     expect(job.minusOne?.blocked).toBe("tooShort");
   });
 
@@ -497,8 +501,43 @@ describe("jobOffer: speed-ups by time left", () => {
       storedata: { BEW: { q: 4 }, FREESP2: { q: 2 } },
     });
     const job = jobOffer(pick(context, 2), context);
-    expect(job?.minusOne).toEqual({ item: "SP2", price: 0, free: 2, blocked: null });
-    expect(job?.minusTwo).toEqual({ item: "SP3", price: 40, free: 0, blocked: "credits" });
+    expect(job?.minusOne).toEqual({ item: "SP2", price: 0, free: 2, unused: 0, blocked: null });
+    expect(job?.minusTwo).toEqual({ item: "SP3", price: 40, free: 0, unused: 0, blocked: "credits" });
+  });
+
+  /** A job `seconds` from done in a yard holding free SP2s and SP3s. */
+  const heldAt = (seconds: number, credits = 0) => {
+    const context = contextOf({
+      buildings: [HALL(5), building(2, 20, 4, { cU: seconds })],
+      credits,
+      storedata: { FREESP2: { q: 2 }, FREESP3: { q: 1 } },
+    });
+    const job = jobOffer(pick(context, 2), context);
+    if (!job) throw new Error("no job");
+    return job;
+  };
+
+  it("a held −1 h / −2 h finishes a shorter job, with the minutes it loses (patch 6.3)", () => {
+    const job = heldAt(1_500);
+    expect(job.minusOne).toEqual({ item: "SP2", price: 0, free: 2, unused: 2_100, blocked: null });
+    expect(job.minusTwo).toEqual({ item: "SP3", price: 0, free: 1, unused: 5_700, blocked: null });
+  });
+
+  it("a held −2 h at 90 minutes loses 30; a held −1 h takes its hour as before", () => {
+    const job = heldAt(5_400);
+    expect(job.minusOne).toMatchObject({ unused: 0, blocked: null });
+    expect(job.minusTwo).toMatchObject({ unused: 1_800, blocked: null });
+  });
+
+  it("a held one at five minutes or less stays put: the finish is free", () => {
+    const job = heldAt(300);
+    expect(job.finish?.item).toBe("SP1");
+    expect(job.minusOne).toMatchObject({ unused: 0, blocked: "tooShort" });
+    expect(job.minusTwo).toMatchObject({ unused: 0, blocked: "tooShort" });
+  });
+
+  it("a bought −1 h is still not offered under an hour", () => {
+    expect(at(1_500).minusOne).toEqual({ item: "SP2", price: 20, free: 0, unused: 0, blocked: "tooShort" });
   });
 
   it("a damaged building's countdown is paused and every speed-up with it", () => {
@@ -739,5 +778,64 @@ describe("randomMoveOffer: Move to a random spot (#366)", () => {
     });
     const later = onMapRoom2({ randommoveat: T0 - 7 * DAY });
     expect(randomMoveOffer(pick(later, 2), later)?.blocked).toBeNull();
+  });
+});
+
+/**
+ * A main-yard Quake Tower (Inferno WP 6.1): its upgrade reads the Inferno
+ * Under Hall and the Inferno purse, as `planOneUpgrade` does. Level 1 to 2
+ * costs 1,250,000 / 750,000 / 500,000 Inferno and needs Under Hall 1.
+ */
+describe("upgradeOffer and cancelOffer: a main-yard Inferno building", () => {
+  const QUAKE = 129;
+  const PURSE = { r1: 5e6, r2: 5e6, r3: 5e6, r4: 5e6, r1max: 6e6, r2max: 6e6, r3max: 6e6, r4max: 6e6 };
+  const stateOf = (underHall: number) =>
+    ({
+      now: T0,
+      cave: { shown: true, level: 5, maxLevel: 5 },
+      emergence: { lastAt: null, nextAt: null, done: true },
+      descent: { level: 14, destroyed: [], passed: true },
+      hasYard: true,
+      underHall,
+      korathNotice: false,
+      raised: null,
+    }) as unknown as BaseLoadResponse["infernostate"];
+  const quakeYard = (underHall: number, extra: Partial<Fixture> = {}) =>
+    contextOf({
+      buildings: [HALL(9), building(2, QUAKE, 1)],
+      infernostate: stateOf(underHall),
+      iresources: PURSE,
+      ...extra,
+    });
+
+  it("no Under Hall: underHall {have 0, need 1}, Instant too", () => {
+    const context = quakeYard(0);
+    const offer = upgradeOffer(pick(context, 2), context);
+    expect(offer).toMatchObject({ inferno: true, gate: { reason: "underHall", have: 0, need: 1 } });
+    expect(offer?.instantGate).toEqual({ reason: "underHall", have: 0, need: 1 });
+  });
+
+  it("with an Under Hall, priced from the purse: the surface's resources are not counted", () => {
+    const context = quakeYard(1, { resources: { r1: 0, r2: 0, r3: 0, r4: 0 } });
+    const offer = upgradeOffer(pick(context, 2), context);
+    expect(offer).toMatchObject({ gate: null, cost: { r1: 1_250_000, r2: 750_000, r3: 500_000, r4: 0 } });
+
+    const poor = quakeYard(1, { iresources: { ...PURSE, r2: 0 } });
+    expect(upgradeOffer(pick(poor, 2), poor)?.gate).toEqual({
+      reason: "shortfall",
+      shortfall: { r1: 0, r2: 750_000, r3: 0, r4: 0 },
+      overCap: false,
+    });
+  });
+
+  it("a cancelled upgrade's refund fits the purse's caps", () => {
+    const context = quakeYard(1, {
+      buildings: [HALL(9), building(2, QUAKE, 1, { cU: 100, cL: 86_400 } as Partial<BuildingData>)],
+    });
+    // The Quake Tower's step back up to the 6,000,000 cap: 1,000,000 Bone fits of 1,250,000.
+    expect(cancelOffer(pick(context, 2), context)).toEqual({
+      refund: { r1: 1_000_000, r2: 750_000, r3: 500_000, r4: 0 },
+      lost: { r1: 250_000, r2: 0, r3: 0, r4: 0 },
+    });
   });
 });

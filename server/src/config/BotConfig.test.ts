@@ -11,9 +11,12 @@ import {
   DEFAULT_BOTS_NEW_PER_DAY,
   DEFAULT_BOTS_QUIET_ONLINE,
   DEFAULT_BOTS_QUIET_RATE,
-  DEFAULT_BOTS_TOTAL,
-  LEVEL_WEIGHTS,
-  BOT_FLOOR_LEVEL,
+  DEFAULT_BOTS_FLOOR_LEVEL,
+  DEFAULT_BOTS_PER_LEVEL,
+  BOTS_SHOWN_FROM_LEVEL,
+  botFloorLevel,
+  defaultBotsTotal,
+  levelWeights,
 } from "./BotConfig.js";
 
 const KEYS = [
@@ -21,6 +24,7 @@ const KEYS = [
   "BOTS_BRAIN",
   "BOTS_REVENGE",
   "BOTS_TOTAL",
+  "BOTS_FLOOR_LEVEL",
   "BOTS_PACE_SCALE",
   "BOTS_QUIET_RATE",
   "BOTS_QUIET_ONLINE",
@@ -52,7 +56,7 @@ describe("bot switches (issue #235)", () => {
       fill: false,
       brain: false,
       revenge: false,
-      total: DEFAULT_BOTS_TOTAL,
+      total: defaultBotsTotal(DEFAULT_BOTS_FLOOR_LEVEL),
       pace: DAYS_ON_LEVEL,
       quietRate: DEFAULT_BOTS_QUIET_RATE,
       quietOnline: DEFAULT_BOTS_QUIET_ONLINE,
@@ -62,7 +66,7 @@ describe("bot switches (issue #235)", () => {
       levelSlack: DEFAULT_BOTS_LEVEL_SLACK,
       seeded: true,
     });
-    expect(DEFAULT_BOTS_TOTAL).toBe(500);
+    expect(botConfig().total).toBe(185);
   });
 
   test("seeded Map Room 2 dev yards are tended everywhere but production (issue #233)", () => {
@@ -92,7 +96,7 @@ describe("bot switches (issue #235)", () => {
     for (const bad of ["", "0", "-3", "lots", "0.4"]) {
       process.env.BOTS_TOTAL = bad;
       process.env.BOTS_PACE_SCALE = bad === "0.4" ? "0" : bad;
-      expect(botConfig()).toMatchObject({ total: DEFAULT_BOTS_TOTAL, pace: DAYS_ON_LEVEL });
+      expect(botConfig()).toMatchObject({ total: 185, pace: DAYS_ON_LEVEL });
     }
   });
 
@@ -165,12 +169,52 @@ describe("the growth curve", () => {
     expect(daysBetween(12, 11.5, 3)).toBe(0);
   });
 
-  test("every level 15-40 has a share of the total and no level below the floor has one", () => {
-    expect(BOT_FLOOR_LEVEL).toBe(15);
-    expect(LEVEL_WEIGHTS).toHaveLength(40);
-    LEVEL_WEIGHTS.forEach((weight, index) => {
-      if (index + 1 < BOT_FLOOR_LEVEL) expect(weight).toBe(0);
-      else expect(weight).toBeGreaterThan(0);
-    });
+  test("every level from the floor to 40 has a share of the total and no level below the floor has one", () => {
+    for (const floor of [15, 25, 40]) {
+      const weights = levelWeights(floor);
+      expect(weights).toHaveLength(40);
+      weights.forEach((weight, index) => {
+        if (index + 1 < floor) expect(weight).toBe(0);
+        else expect(weight).toBeGreaterThan(0);
+      });
+    }
+    // The setting's floor by default.
+    process.env.BOTS_FLOOR_LEVEL = "30";
+    expect(levelWeights().indexOf(1)).toBe(29);
   });
 });
+
+describe("the level floor (owner 3 Nov 2026)", () => {
+  test("is 25 unless BOTS_FLOOR_LEVEL sets a whole number 15-40", () => {
+    expect(DEFAULT_BOTS_FLOOR_LEVEL).toBe(25);
+    expect(botFloorLevel()).toBe(25);
+    for (const good of ["15", "20", " 30 ", "40"]) {
+      process.env.BOTS_FLOOR_LEVEL = good;
+      expect(botFloorLevel()).toBe(Number(good));
+    }
+    // Below 15 a fresh bot could miss the minimum yard; past 40 no bot stands.
+    for (const bad of ["", "14", "1", "0", "-25", "41", "25.5", "lots"]) {
+      process.env.BOTS_FLOOR_LEVEL = bad;
+      expect(botFloorLevel()).toBe(DEFAULT_BOTS_FLOOR_LEVEL);
+    }
+  });
+
+  test("players are shown bots from level 15, whatever the floor", () => {
+    expect(BOTS_SHOWN_FROM_LEVEL).toBe(15);
+  });
+
+  test("the default total keeps about 11.5 bots a level from the floor up: 300 at 15, 185 at 25", () => {
+    expect(DEFAULT_BOTS_PER_LEVEL).toBeCloseTo(11.54, 2);
+    expect(defaultBotsTotal(15)).toBe(300);
+    expect(defaultBotsTotal(25)).toBe(185);
+    expect(defaultBotsTotal(40)).toBe(12);
+    expect(botConfig().total).toBe(185);
+    process.env.BOTS_FLOOR_LEVEL = "20";
+    expect(botConfig().total).toBe(equalShare(20));
+    // BOTS_TOTAL still wins when set.
+    process.env.BOTS_TOTAL = "300";
+    expect(botConfig().total).toBe(300);
+  });
+});
+
+const equalShare = (floor: number) => Math.round((300 / 26) * (41 - floor));

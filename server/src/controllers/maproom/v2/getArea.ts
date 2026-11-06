@@ -13,7 +13,7 @@ import { onlinePlayers } from "../../../services/user/online.js";
 import { getTruces } from "../../../services/maproom/getTruces.js";
 import { attackersAmong } from "../../../services/maproom/v2/attackers.js";
 import { friendsAmong } from "../../../services/friends/friendFlags.js";
-import { idleWorkerSaves } from "../../../services/maproom/v2/idleWorkers.js";
+import { outpostWorkerSaves } from "../../../services/maproom/v2/idleWorkers.js";
 import { pendingInvitesOn } from "../../../services/mail/inviteRules.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { mapRoomDisabledErr } from "../../../errors/errors.js";
@@ -22,6 +22,8 @@ import { visibleCredits } from "../../../services/user/shinyLock.js";
 import { emptyAreaResponse, hasWorldPlacement } from "../../../services/maproom/v2/emptyAreaResponse.js";
 import { getPlayerSight } from "../../../services/maproom/sight/sightService.js";
 import { isVisible } from "../../../game-rules/maproom/sight.js";
+import { mr2HexShape, mr2NeighbourBonusMode } from "../../../config/MapRoom2Config.js";
+import { loadAreaNeighbourCounts } from "../../../services/maproom/v2/neighbourDefence.js";
 
 /**
  * Wraps a zone coordinate to the world's `0..size-1`: `getarea`'s 11×11 block
@@ -111,6 +113,36 @@ const CELL_SAVE_FIELDS = [
  * 
  * @throws {Error} Throws an error if there are issues parsing the request body or retrieving data.
  */
+/** A served cell the neighbour count reads: players' cells and camps have both. */
+interface CountedCell {
+  uid?: number;
+  b?: number;
+  nb?: number;
+}
+
+/** Puts `nb` on every served land cell with friendly neighbours, when the switch is on. */
+const addNeighbourCounts = async (
+  cells: Record<number, Record<number, unknown>>,
+  worldid: string,
+  heightAt: (x: number, y: number) => number
+): Promise<void> => {
+  const mode = mr2NeighbourBonusMode();
+  if (mode === "off") return;
+  const targets: Array<{ x: number; y: number; uid: number; base_type: number; cell: CountedCell }> = [];
+  for (const [x, column] of Object.entries(cells)) {
+    for (const [y, payload] of Object.entries(column)) {
+      const cell = payload as CountedCell;
+      if (typeof cell.b !== "number" || typeof cell.uid !== "number") continue;
+      targets.push({ x: Number(x), y: Number(y), uid: cell.uid, base_type: cell.b, cell });
+    }
+  }
+  const counts = await loadAreaNeighbourCounts(targets, worldid, heightAt, mode === "players");
+  for (const target of targets) {
+    const count = counts.get(`${target.x},${target.y}`);
+    if (count) target.cell.nb = count;
+  }
+};
+
 export const getArea: KoaController = async (ctx) => {
   if (!devConfig.maproom) throw mapRoomDisabledErr();
   
@@ -149,10 +181,11 @@ export const getArea: KoaController = async (ctx) => {
   const sight = await getPlayerSight(user);
 
   const zoneVisibility = new Map<string, boolean>();
+  const shape = mr2HexShape();
   for (let cellX = currentX; cellX <= currentX + width; cellX++) {
     for (let cellY = currentY; cellY <= currentY + height; cellY++) {
       const wrapped = { x: wrap(cellX, MapRoom2.WIDTH), y: wrap(cellY, MapRoom2.HEIGHT) };
-      const visible = devConfig.disableFogOfWar || isVisible(wrapped, sight.sources, sight.revealed);
+      const visible = devConfig.disableFogOfWar || isVisible(wrapped, sight.sources, sight.revealed, shape);
       zoneVisibility.set(cellKey(cellX, cellY), visible);
     }
   }
@@ -216,12 +249,12 @@ export const getArea: KoaController = async (ctx) => {
     .filter((cell) => cell.uid === user.userid && cell.base_type === MapRoomCell.OUTPOST)
     .map((cell) => cell.baseid);
 
-  // Own outposts whose worker is free (#338), by base-save id.
+  // Own outposts whose worker is free (#338) or busy, by base-save id.
   const ownOutpostSaveIds = visibleDbCells
     .filter((cell) => cell.uid === user.userid && cell.base_type === MapRoomCell.OUTPOST && cell.save)
     .map((cell) => cell.save!.basesaveid);
 
-  const [ownersList, online, truces, pendingInvites, idleWorkers, attackers, friends] = await Promise.all([
+  const [ownersList, online, truces, pendingInvites, workers, attackers, friends] = await Promise.all([
     postgres.em.find(User, { userid: { $in: ownerIds } }, {
       populate: ["save"],
       fields: CELL_OWNER_FIELDS,
@@ -231,7 +264,7 @@ export const getArea: KoaController = async (ctx) => {
     onlinePlayers(ownerIds, getCurrentDateTime()),
     getTruces(user.userid, ownerIds),
     pendingInvitesOn(postgres.em, user.userid, ownOutposts, getCurrentDateTime()),
-    idleWorkerSaves(postgres.em, ownOutpostSaveIds),
+    outpostWorkerSaves(postgres.em, ownOutpostSaveIds),
     // Who has ever attacked the viewer: the red "attacked you" plate (`ak`).
     attackersAmong(postgres.em, user.userid, ownerIds),
     // Friends among them: the `fr` flag (friends WP2, #369).
@@ -243,7 +276,8 @@ export const getArea: KoaController = async (ctx) => {
   ctx.state.online = online;
   ctx.state.truces = truces;
   ctx.state.pendingInvites = pendingInvites;
-  ctx.state.idleWorkers = idleWorkers;
+  ctx.state.idleWorkers = workers.idle;
+  ctx.state.busyWorkers = workers.busy;
   ctx.state.attackers = attackers;
   ctx.state.friends = friends;
 
@@ -289,6 +323,11 @@ export const getArea: KoaController = async (ctx) => {
       cells[cellX][cellY] = await createCellData(inMemoryCell, worldid, ctx);
     }
   }
+
+  // Map Room 2's neighbour defence bonus, switched on: each land cell's
+  // friendly neighbours as `nb`, counted the way the attack load counts them
+  // for the battle (`docs/mr2-neighbours.md`). Switched off, nothing is added.
+  await addNeighbourCounts(cells, worldid, (cx, cy) => getTerrainHeight(noise, cx, cy));
 
   ctx.status = Status.OK;
   ctx.body = {

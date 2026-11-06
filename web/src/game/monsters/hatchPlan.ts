@@ -3,14 +3,8 @@ import { maxHp } from "@/game/combat/rules";
 import { timeCost } from "@/game/yard/buildingCosts";
 import { acceleratedEnd, overdriveAt, savedAtOf } from "@/game/yard/jobs";
 import { academyLevel, housingCapacity } from "./housingSummary";
-import {
-  hatchCost,
-  hatchTime,
-  housingSpace,
-  LISTED_MONSTERS,
-  monsterEntry,
-  type MonsterEntry,
-} from "./monsterCatalogue";
+import { hatchCost, hatchTime, housingSpace, monsterEntry, type MonsterEntry } from "./monsterCatalogue";
+import { listedMonstersOf, type MonsterRealm } from "./realm";
 
 /**
  * What the Hatch tab shows, as data (`docs/design/yard-buildings.md` §4.4).
@@ -59,7 +53,22 @@ export const HATCHERY_OVERDRIVES = [
   { item: "HOD3", power: 10, price: 100 },
 ] as const;
 
-export type OverdriveItem = (typeof HATCHERY_OVERDRIVES)[number]["item"];
+/** The Inferno shop's Incubator Overdrives, the only ones it sells (`INFERNO_SHOP_ITEMS`, WP 1.17). */
+export const INFERNO_HATCHERY_OVERDRIVES = [
+  { item: "HODI", power: 4, price: 30 },
+  { item: "HOD2I", power: 6, price: 50 },
+  { item: "HOD3I", power: 10, price: 100 },
+] as const;
+
+export type OverdriveItem =
+  | (typeof HATCHERY_OVERDRIVES)[number]["item"]
+  | (typeof INFERNO_HATCHERY_OVERDRIVES)[number]["item"];
+
+/** The overdrives a yard of `realm` sells. */
+export const overdrivesOf = (
+  realm: MonsterRealm,
+): readonly { readonly item: OverdriveItem; readonly power: number; readonly price: number }[] =>
+  realm === "inferno" ? INFERNO_HATCHERY_OVERDRIVES : HATCHERY_OVERDRIVES;
 
 /** A queue stack: monster id, how many, the academy level whose price was paid. */
 export type QueueStack = [id: string, count: number, level: number];
@@ -174,16 +183,29 @@ const readQueue = (raw: unknown, levels: Readonly<Record<string, number>>): Queu
   return queue;
 };
 
-const buildingsOfType = (save: BaseLoadResponse, type: number): [number, BuildingData][] =>
+/** The slices of a save that say whether its HCC works. */
+type HccSave = Pick<BaseLoadResponse, "buildingdata" | "buildinghealthdata">;
+
+const buildingsOfType = (save: HccSave, type: number): [number, BuildingData][] =>
   Object.entries(save.buildingdata ?? {})
     .filter(([, building]) => Number(building?.t) === type)
     .map(([key, building]): [number, BuildingData] => [Number(building.id ?? key), building])
     .filter(([id]) => Number.isFinite(id));
 
-const healthOf = (save: BaseLoadResponse, id: number, building: BuildingData): number | null =>
+const healthOf = (save: HccSave, id: number, building: BuildingData): number | null =>
   finite(save.buildinghealthdata?.[String(id)] ?? building.hp);
 
 const underConstruction = (building: BuildingData): boolean => (finite(building.cB) ?? 0) > 0;
+
+/**
+ * The yard's HCC, once built, and whether it works (hands the shared queue to
+ * the hatcheries): above {@link HCC_MIN_HEALTH}. Null when the yard has none.
+ */
+export const readHcc = (save: HccSave): { readonly id: number; readonly works: boolean } | null => {
+  const found = buildingsOfType(save, HCC_TYPE)[0] ?? null;
+  if (!found || underConstruction(found[1])) return null;
+  return { id: found[0], works: (healthOf(save, found[0], found[1]) ?? Infinity) > HCC_MIN_HEALTH };
+};
 
 /** The hatcheries in service order, as the server orders them: `hid` first, then new ones by id. */
 const serviceOrder = (save: BaseLoadResponse): [number, BuildingData][] => {
@@ -279,14 +301,7 @@ export const readHatchYard = (save: BaseLoadResponse, now: number): HatchYard =>
     };
   });
 
-  const hccBuilding = buildingsOfType(save, HCC_TYPE)[0] ?? null;
-  const hcc =
-    hccBuilding && !underConstruction(hccBuilding[1])
-      ? {
-          id: hccBuilding[0],
-          works: (healthOf(save, hccBuilding[0], hccBuilding[1]) ?? Infinity) > HCC_MIN_HEALTH,
-        }
-      : null;
+  const hcc = readHcc(save);
 
   const housed: Record<string, number> = {};
   for (const [key, raw] of Object.entries(monsters?.housed ?? {})) {
@@ -327,6 +342,13 @@ export const queueOf = (yard: HatchYard, target: HatchTarget): QueueStack[] | nu
 /** Monsters waiting in a queue. */
 export const queuedCount = (queue: readonly QueueStack[]): number =>
   queue.reduce((total, stack) => total + stack[1], 0);
+
+/**
+ * The goo Clear all gives back for a queue: each stack at its paid level, as
+ * taking every stack out one by one would (`hatchery/clear`), before the cap.
+ */
+export const queueRefund = (queue: readonly QueueStack[]): number =>
+  queue.reduce((total, [id, count, level]) => total + count * priceOf(id, level), 0);
 
 /* ── Housing ───────────────────────────────────────────────────────────── */
 
@@ -735,7 +757,7 @@ export const activeOverdrive = (
   storedata: StoreData | null | undefined,
   now: number,
 ): { readonly item: OverdriveItem; readonly power: number; readonly endsAt: number } | null => {
-  for (const { item, power } of HATCHERY_OVERDRIVES) {
+  for (const { item, power } of [...HATCHERY_OVERDRIVES, ...INFERNO_HATCHERY_OVERDRIVES]) {
     const endsAt = finite(storedata?.[item]?.e);
     if (endsAt !== null && endsAt > now) return { item, power, endsAt };
   }
@@ -761,12 +783,15 @@ export interface HatchMonster {
 }
 
 /**
- * Every listed monster in list order, each saying whether it can be hatched:
- * unlocked (`lockerdata[id].t == 2`, the add route's rule), unlocking, or
- * locked.
+ * Every listed monster of `realm` in list order (the Inferno roster in an
+ * Incubator), each saying whether it can be hatched: unlocked
+ * (`lockerdata[id].t == 2`, the add route's rule), unlocking, or locked.
  */
-export const hatchMonsters = (save: Pick<BaseLoadResponse, "lockerdata" | "academy">): HatchMonster[] =>
-  LISTED_MONSTERS.map((monster) => {
+export const hatchMonsters = (
+  save: Pick<BaseLoadResponse, "lockerdata" | "academy">,
+  realm: MonsterRealm = "surface",
+): HatchMonster[] =>
+  listedMonstersOf(realm).map((monster) => {
     const t = Number(save.lockerdata?.[monster.id]?.t);
     const state: HatchMonsterState =
       t === 2 ? { kind: "ready" } : t === 1 ? { kind: "unlocking" } : { kind: "locked" };

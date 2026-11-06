@@ -1,0 +1,5 @@
+Use your image generation tool (one call) to create ONE new image and save it as art.png in the current folder. Do not write code, do not draw with scripts.
+
+STYLE: bright, painted, toy-like cartoon, as in a 2010s casual strategy game seen from a Civilization V style tilted top-down camera, warm sunlight from the top-left. Clean and readable, not photo-real. No text, no logos, no watermark.
+
+PICTURE: a SQUARE seamless tileable texture (1024x1024) of white sea foam seen from above, as it lies where waves break on a beach: lacy bubbly foam, small foam clumps and thin foamy streaks, pure white to very pale cyan, on a PURE BLACK background (#000000). Foam covers about 40 percent of the square, evenly spread, tiling seamlessly on all four sides. No water colour, no sand, no land.

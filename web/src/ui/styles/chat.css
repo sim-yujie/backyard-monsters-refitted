@@ -22,6 +22,7 @@
   --chat-text: var(--colour-text-strong);
   --chat-name: var(--colour-accent);
   --chat-own: var(--colour-warning-bright);
+  --chat-gm: var(--colour-success);
   color: var(--chat-text);
   pointer-events: none;
 }
@@ -32,6 +33,7 @@
   --chat-text: #ffffff;
   --chat-name: #7fe4f8;
   --chat-own: #ffe2a8;
+  --chat-gm: #9fe0b0;
 }
 
 .chat-box[hidden] {
@@ -89,6 +91,83 @@
   background: var(--colour-online);
 }
 
+/* ── Rooms: Global and the player's country room (owner 3 Nov 2026) ── */
+
+.chat-box__rooms {
+  display: flex;
+  gap: var(--space-1);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--colour-border);
+}
+
+.chat-box__rooms[hidden] {
+  display: none;
+}
+
+.chat-box__room {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 30px;
+  padding: 2px var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--colour-text-muted);
+  font: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.chat-box__room:hover {
+  background: var(--colour-shade);
+}
+
+.chat-box__room:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.chat-box__room--on {
+  border-color: var(--colour-border);
+  background: var(--colour-surface-control-hover);
+  color: var(--colour-text-strong);
+}
+
+/* New lines in the room not shown: a small amber dot on its tab. */
+.chat-box__room--unread::after,
+.chat-box:not(.chat-box--open)[data-unread="true"] .chat-box__tab::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--colour-warning-bright);
+}
+
+.chat-box__tab {
+  position: relative;
+}
+
+/* Global's one line of manners: English here. */
+.chat-box__rule {
+  margin: 0;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--colour-shade);
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.chat-box__rule[hidden] {
+  display: none;
+}
+
 /* ── The lines ─────────────────────────────────────────────────────── */
 
 .chat-box__lines {
@@ -137,6 +216,30 @@ button.chat-line__name {
   color: var(--chat-own);
 }
 
+/* The game team's lines: a GM badge, the name in green, a bar down the side. */
+.chat-line--gm {
+  border-left: 3px solid var(--chat-gm);
+}
+
+.chat-line--gm .chat-line__name {
+  color: var(--chat-gm);
+}
+
+.chat-line__gm {
+  display: inline-block;
+  margin-right: 0.35em;
+  padding: 0 0.35em;
+  border-radius: var(--radius-sm, 3px);
+  background: var(--chat-gm);
+  color: #0d2416;
+  font-size: 0.75em;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  text-shadow: none;
+  vertical-align: 0.1em;
+}
+
 .chat-line--notice {
   color: var(--colour-text-secondary);
   font-style: italic;
@@ -172,8 +275,13 @@ button.chat-line__name {
   pointer-events: auto;
 }
 
+/* On a short window (a laptop at 125%: 730px tall) a 260px room ran the box
+   down behind Main yard and Map, which took the clicks meant for the input
+   (bug report 4). The room gives way instead: the left dock's top sits 229px
+   above the bottom, the box's tab, status, input and painted frame take up to
+   150px besides the lines, and 13px keeps a gap. */
 .chat-box--open .chat-box__lines {
-  height: 260px;
+  height: clamp(80px, calc(100dvh - var(--chat-top) - 229px - 150px - 13px), 260px);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -308,6 +416,10 @@ button.chat-line__name {
   .chat-box:not(.chat-box--open) .chat-box__tab-label {
     /* The dot and "Chat" are enough beside the line. */
     font-size: 0;
+  }
+
+  .chat-box:not(.chat-box--open) .chat-box__tab-label .country-flag {
+    display: none;
   }
 
   .chat-box:not(.chat-box--open) .chat-box__tab-label::after {

@@ -90,7 +90,7 @@ describe("Plan and storage", () => {
 
     expect(plan.unplacedIds()).toEqual([2]);
     expect(plan.toStorageIds()).toEqual([3]);
-    const checklist = buildChecklist(plan.index(), plan.validate(), plan.unplacedIds(), null, plan.toStorageIds());
+    const checklist = buildChecklist(plan.index(), plan.validate(), plan.unplacedIds(), plan.toStorageIds());
     const rows = Object.fromEntries(checklist.rows.map((row) => [row.key, row]));
     expect(rows["placed"]?.items.map((item) => item.id)).toEqual([2]);
     expect(rows["toStorage"]).toMatchObject({ ok: false, warning: true, items: [{ id: 3 }] });
@@ -99,7 +99,7 @@ describe("Plan and storage", () => {
   it("with only decorations in the drawer nothing blocks Apply", () => {
     const plan = planOf({ b28: 1 });
     plan.store([3]);
-    const checklist = buildChecklist(plan.index(), plan.validate(), plan.unplacedIds(), null, plan.toStorageIds());
+    const checklist = buildChecklist(plan.index(), plan.validate(), plan.unplacedIds(), plan.toStorageIds());
     expect(checklist.ok).toBe(true);
   });
 

@@ -36,6 +36,11 @@ const store = new Map<string, string>();
 const upsert = mock(async (_entity: unknown, _row: Record<string, any>) => {});
 /** Defence replays written (issue #359). */
 const replays: Record<string, any>[] = [];
+/** The landing's open transaction, and its commit (audit P1, P2). */
+let transaction: object | undefined;
+const commit = mock(async () => {
+  transaction = undefined;
+});
 /** The event counter writes (`services/events/progressStore.ts`), as `[event, amount]`. */
 const counted: [string, number][] = [];
 
@@ -66,6 +71,16 @@ mock.module("../../../server.js", () => ({
       upsert,
       persist: () => {},
       flush: async () => {},
+      // The transaction the save that ends an attack lands in (audit P1, P2): the
+      // stand-in rows change in place, so only whether one is open is kept.
+      begin: async () => {
+        transaction = {};
+      },
+      commit,
+      rollback: async () => {
+        transaction = undefined;
+      },
+      getTransactionContext: () => transaction,
       // Only the event counter's SQL is answered; anything else fails as with no database.
       execute: async (sql: string, params: unknown[]) => {
         if (!sql.includes("event_progress")) throw new Error("no database");
@@ -209,6 +224,7 @@ beforeEach(() => {
   setMode("log");
   reports.length = 0;
   replays.length = 0;
+  transaction = undefined;
   notices.length = 0;
   counted.length = 0;
   store.clear();
@@ -699,7 +715,7 @@ describe("a fallen Housing's monsters through the save (issue #160)", () => {
     expect(lines.at(-1)).toStartWith("Result:");
   });
 
-  test("a Map Room 2 outpost loses its own housed monsters, and its owner is told", async () => {
+  test("a Map Room 2 outpost loses its own housed monsters, and its owner's notice keeps the count", async () => {
     armed("outpost");
     // The outpost's base id carries its cell (`rangeCheck.ts`).
     defender.baseid = "1000243206";
@@ -709,7 +725,9 @@ describe("a fallen Housing's monsters through the save (issue #160)", () => {
 
     expect(defender.monsters.housed).toEqual({ C1: 5 });
     expect(notices).toHaveLength(1);
-    expect(String(notices[0]!.message)).toEndWith(", and 6 housed monsters were lost.");
+    // Kept in the numbers, not told in the words (owner, 27 Oct).
+    expect(String(notices[0]!.message)).toEndWith("Nothing was looted.");
+    expect(notices[0]!.attackstats).toMatchObject({ housedLost: 6 });
   });
 
   test("a Housing repaired before its owner's next load still lost them", async () => {
@@ -1207,6 +1225,23 @@ describe("the defence replay a save lands (issue #359)", () => {
       }),
     ]);
     expect(String(notices[0]!.message)).toStartWith(`It was left ${defender.damage}% damaged`);
+  });
+
+  // The stand-in rows change in place and cannot roll back, so the save sent
+  // again, which lands it once, is `baseSave.landing.db.test.ts`'s.
+  test("a landing that fails before its commit records none, and tells nobody", async () => {
+    asPlayerYard();
+    // The landing's commit fails: it rolls back, and nothing of it may stay.
+    commit.mockImplementationOnce(async () => {
+      throw new Error("connection reset");
+    });
+
+    await expect(
+      baseSave(ctxFor({ over: "1", tick: "3200", flinglog: JSON.stringify(LOG) }), async () => {})
+    ).rejects.toThrow("connection reset");
+
+    expect(replays).toEqual([]);
+    expect(notices).toEqual([]);
   });
 
   test("a Map Room 1 main yard's owner is told the same words, with no replay", async () => {

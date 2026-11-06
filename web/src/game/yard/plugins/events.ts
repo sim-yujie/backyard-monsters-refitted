@@ -1,10 +1,10 @@
 import { eventsActions, eventsApi, type EventsActions, type EventsApi, type EventView } from "@/api/events";
-import { claimableCount, grantedKrallenText, isOver, serverClock, type ServerClock } from "@/game/events/eventsModel";
-import { onPumpkins, withPumpkinCount } from "@/game/events/pumpkinHunt";
+import { claimableCount, claimableTiers, grantedKrallenText, isOver, serverClock, type ServerClock } from "@/game/events/eventsModel";
+import { onPumpkins, PUMPKIN_HUNT_KIND, withPumpkinCount } from "@/game/events/pumpkinHunt";
 import { seasonFor, setSeason } from "@/game/season";
 import { latestRelease, localSeen, markSeen, whatsNewDecision } from "@/game/events/whatsNew";
 import { eventsArt } from "@/ui/events/eventsArt";
-import { calendarKey, EventsPanel, rewardsText, tierKey, type EventsPanelView } from "@/ui/events/EventsPanel";
+import { calendarKey, claimedLine, EventsPanel, readyLine, tierKey, type EventsPanelView } from "@/ui/events/EventsPanel";
 import { modalLayer, openWhatsNew } from "@/ui/events/WhatsNewDialog";
 import "@/ui/events/pumpkinHuntHint";
 import { dockButton } from "@/ui/yard/YardDock";
@@ -22,6 +22,10 @@ import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
  *   opens, and whenever the page opens.
  * - **Claims** go through the yard store's queue, which merges what they pay
  *   (resources, Shiny, store items) into the HUD; a notice says what came.
+ * - **Ready.** A picked pumpkin that reaches a ladder tier says so in a
+ *   notice whose Claim button opens the page, and the page opens scrolled to
+ *   the first Claim (bug report #10: the ladder sits under the calendar,
+ *   below the fold on a phone).
  * - **What's new.** The first read also says which release's cards the
  *   player has seen; the newest pops up once (`game/events/whatsNew.ts`).
  *
@@ -29,6 +33,8 @@ import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
  */
 
 const EVENTS_NOTICE = "events";
+/** Its own key: a notice with a button cannot reuse one shown without. */
+const READY_NOTICE = "events-ready";
 
 /** How often the page's countdowns and the list's freshness are checked. */
 const TICK_MS = 1_000;
@@ -49,6 +55,8 @@ export class EventsDoor {
   private timer: number | null = null;
   private destroyed = false;
   private whatsNewChecked = false;
+  /** The page was just opened: scroll it to the first Claim once the list shows. */
+  private scrollToClaim = false;
   /** Stops following the pumpkin hunt's count (`game/events/pumpkinHunt.ts`). */
   private readonly unwatchPumpkins: () => void;
 
@@ -64,8 +72,10 @@ export class EventsDoor {
     // A pumpkin picked: the ladder and the badge move at once, not at the next read.
     this.unwatchPumpkins = onPumpkins((count) => {
       if (!this.events) return;
+      const before = this.events;
       this.events = withPumpkinCount(this.events, count);
       this.refresh();
+      this.noteTierReady(before, this.events);
     });
     this.badge = document.createElement("span");
     this.badge.className = "yard-dock__badge events-badge";
@@ -123,12 +133,43 @@ export class EventsDoor {
       onClose: () => {
         this.panel = null;
         this.refusal = null;
+        this.scrollToClaim = false;
         this.button.setAttribute("aria-expanded", "false");
       },
     }).mount(this.mounts.overlay.content);
     this.button.setAttribute("aria-expanded", "true");
+    this.scrollToClaim = true;
     this.render();
     void this.load();
+  }
+
+  /** The Events page open (opened if shut), scrolled to the first Claim. */
+  private openAtClaim(): void {
+    this.mounts.notices.clear(READY_NOTICE);
+    if (this.panel) {
+      this.panel.showFirstClaim();
+      return;
+    }
+    this.toggle();
+  }
+
+  /** A pumpkin that reached a ladder tier: a notice with the tier's rewards and a Claim button. */
+  private noteTierReady(before: readonly EventView[], after: readonly EventView[]): void {
+    for (const event of after) {
+      if (event.kind !== PUMPKIN_HUNT_KIND || !event.ladder) continue;
+      const old = before.find((other) => other.id === event.id)?.ladder;
+      const was = new Set(old ? claimableTiers(old) : []);
+      const fresh = claimableTiers(event.ladder).filter((index) => !was.has(index));
+      const tier = fresh.length > 0 ? event.ladder.tiers[fresh[fresh.length - 1]!] : undefined;
+      if (!tier) continue;
+      this.mounts.notices.show(READY_NOTICE, readyLine(tier.need, tier.rewards), {
+        level: "info",
+        timeoutMs: 10_000,
+        actionLabel: "Claim",
+        onAction: () => this.openAtClaim(),
+      });
+      return;
+    }
   }
 
   private get now(): number {
@@ -144,7 +185,12 @@ export class EventsDoor {
   }
 
   private render(): void {
-    this.panel?.render(this.view());
+    const view = this.view();
+    this.panel?.render(view);
+    if (this.scrollToClaim && view.kind === "list") {
+      this.scrollToClaim = false;
+      this.panel?.showFirstClaim();
+    }
   }
 
   private refresh(): void {
@@ -183,7 +229,7 @@ export class EventsDoor {
     this.claiming = null;
     if (result.ok) {
       const day = event.calendar?.days[result.report.day - 1] ?? [];
-      this.mounts.notices.show(EVENTS_NOTICE, `Day ${result.report.day} claimed: ${rewardsText(day)}`, {
+      this.mounts.notices.show(EVENTS_NOTICE, claimedLine(`Day ${result.report.day} claimed`, day), {
         level: "info",
         timeoutMs: 5_000,
       });
@@ -205,7 +251,7 @@ export class EventsDoor {
     this.claiming = null;
     if (result.ok) {
       const rewards = event.ladder?.tiers[tier]?.rewards ?? [];
-      const words = grantedKrallenText(result.report.granted) ?? `Reward claimed: ${rewardsText(rewards)}`;
+      const words = grantedKrallenText(result.report.granted) ?? claimedLine("Claimed", rewards);
       this.mounts.notices.show(EVENTS_NOTICE, words, {
         level: "info",
         timeoutMs: 5_000,

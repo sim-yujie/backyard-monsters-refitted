@@ -1,4 +1,3 @@
-import { GroupOp } from "@/game/yard/planner/groupTools";
 
 /**
  * Small looping pictures of what each planner tool does.
@@ -49,16 +48,6 @@ export type DemoName =
   | "boxSelect"
   | "drag"
   | "carry"
-  | "mirrorH"
-  | "mirrorV"
-  | "alignLeft"
-  | "alignRight"
-  | "alignTop"
-  | "alignBottom"
-  | "alignCentreX"
-  | "alignCentreY"
-  | "distributeH"
-  | "distributeV"
   | "find"
   | "store";
 
@@ -135,16 +124,6 @@ const ring = (rect: Rect): SVGRectElement => {
   return node;
 };
 
-/** The guide an align lands on, or the axis a mirror reflects about. */
-const axis = (from: [number, number], to: [number, number]): SVGLineElement =>
-  el("line", {
-    x1: from[0],
-    y1: from[1],
-    x2: to[0],
-    y2: to[1],
-    class: "planner-demo__axis",
-  });
-
 /**
  * A pointer, at rest.
  *
@@ -187,24 +166,6 @@ const marquee = (rect: Rect): SVGRectElement => {
   const node = el("rect", { x, y, width, height, class: "planner-demo__marquee" });
   node.classList.add(DEMO_ANIM_CLASS, "planner-demo__grow");
   return node;
-};
-
-/** Everything inside reflects about the vertical line at `centre`. */
-const flipX = (centre: number, ...children: SVGElement[]): SVGGElement => {
-  const group = el("g");
-  group.classList.add(DEMO_ANIM_CLASS, "planner-demo__flip-x");
-  group.style.transformOrigin = `${centre}px 36px`;
-  group.append(...children);
-  return group;
-};
-
-/** Everything inside reflects about the horizontal line at `centre`. */
-const flipY = (centre: number, ...children: SVGElement[]): SVGGElement => {
-  const group = el("g");
-  group.classList.add(DEMO_ANIM_CLASS, "planner-demo__flip-y");
-  group.style.transformOrigin = `60px ${centre}px`;
-  group.append(...children);
-  return group;
 };
 
 /* ── The demos ──────────────────────────────────────────────────────────── */
@@ -268,163 +229,6 @@ export const carry = (): SVGSVGElement => {
   return svg;
 };
 
-/** The selection flips left to right about its own centre. */
-export const mirrorH = (): SVGSVGElement => {
-  const svg = frame("mirrorH");
-  const rects: Rect[] = [
-    [18, 12, 18, 12],
-    [46, 30, 26, 12],
-    [18, 48, 14, 12],
-  ];
-  svg.append(
-    ...rects.map(ghost),
-    axis([45, 4], [45, 68]),
-    flipX(45, ...rects.map((rect) => block(rect, true))),
-  );
-  return svg;
-};
-
-/** The selection flips top to bottom about its own centre. */
-export const mirrorV = (): SVGSVGElement => {
-  const svg = frame("mirrorV");
-  const rects: Rect[] = [
-    [14, 12, 20, 10],
-    [42, 24, 28, 10],
-    [80, 46, 22, 10],
-  ];
-  svg.append(
-    ...rects.map(ghost),
-    axis([6, 34], [114, 34]),
-    flipY(34, ...rects.map((rect) => block(rect, true))),
-  );
-  return svg;
-};
-
-/**
- * The three blocks every align demo starts from, and their extent.
- *
- * One layout for all six so the six pictures read as one family: the shapes
- * never move between them, only the guide and where they end up.
- */
-const ALIGN_RECTS: readonly Rect[] = [
-  [22, 10, 26, 12],
-  [48, 30, 22, 12],
-  [34, 50, 30, 12],
-];
-
-/** Builds one align demo from the offset each block ends up moving by. */
-const alignDemo = (
-  name: DemoName,
-  guide: [[number, number], [number, number]],
-  offsets: readonly (readonly [number, number])[],
-): SVGSVGElement => {
-  const svg = frame(name);
-  svg.append(...ALIGN_RECTS.map(ghost), axis(guide[0], guide[1]));
-  ALIGN_RECTS.forEach((rect, index) => {
-    const [dx, dy] = offsets[index] ?? [0, 0];
-    svg.append(mover(dx, dy, block(rect, true)));
-  });
-  return svg;
-};
-
-/** Every left edge onto the leftmost one. */
-export const alignLeft = (): SVGSVGElement =>
-  alignDemo("alignLeft", [
-    [22, 4],
-    [22, 68],
-  ], [
-    [0, 0],
-    [-26, 0],
-    [-12, 0],
-  ]);
-
-/** Every right edge onto the rightmost one. */
-export const alignRight = (): SVGSVGElement =>
-  alignDemo("alignRight", [
-    [70, 4],
-    [70, 68],
-  ], [
-    [22, 0],
-    [0, 0],
-    [6, 0],
-  ]);
-
-/** Every top edge onto the topmost one. */
-export const alignTop = (): SVGSVGElement =>
-  alignDemo("alignTop", [
-    [6, 10],
-    [114, 10],
-  ], [
-    [0, 0],
-    [0, -20],
-    [0, -40],
-  ]);
-
-/** Every bottom edge onto the bottommost one. */
-export const alignBottom = (): SVGSVGElement =>
-  alignDemo("alignBottom", [
-    [6, 62],
-    [114, 62],
-  ], [
-    [0, 40],
-    [0, 20],
-    [0, 0],
-  ]);
-
-/** Every centre onto one vertical line. */
-export const alignCentreX = (): SVGSVGElement =>
-  alignDemo("alignCentreX", [
-    [46, 4],
-    [46, 68],
-  ], [
-    [11, 0],
-    [-13, 0],
-    [-3, 0],
-  ]);
-
-/** Every centre onto one horizontal line. */
-export const alignCentreY = (): SVGSVGElement =>
-  alignDemo("alignCentreY", [
-    [6, 36],
-    [114, 36],
-  ], [
-    [0, 20],
-    [0, 0],
-    [0, -20],
-  ]);
-
-/** Equal gaps left to right, the outer two left where they are. */
-export const distributeH = (): SVGSVGElement => {
-  const svg = frame("distributeH");
-  const fixed: Rect[] = [
-    [8, 28, 18, 16],
-    [94, 28, 18, 16],
-  ];
-  const moved: [Rect, number][] = [
-    [[34, 28, 14, 16], 7],
-    [[56, 28, 10, 16], 13],
-  ];
-  svg.append(...fixed.map((rect) => block(rect)), ...moved.map(([rect]) => ghost(rect)));
-  for (const [rect, dx] of moved) svg.append(mover(dx, 0, block(rect, true)));
-  return svg;
-};
-
-/** Equal gaps top to bottom, the outer two left where they are. */
-export const distributeV = (): SVGSVGElement => {
-  const svg = frame("distributeV");
-  const fixed: Rect[] = [
-    [50, 4, 20, 12],
-    [50, 58, 20, 12],
-  ];
-  const moved: [Rect, number][] = [
-    [[50, 20, 20, 10], 4],
-    [[50, 34, 20, 8], 8],
-  ];
-  svg.append(...fixed.map((rect) => block(rect)), ...moved.map(([rect]) => ghost(rect)));
-  for (const [rect, dy] of moved) svg.append(mover(0, dy, block(rect, true)));
-  return svg;
-};
-
 /**
  * The selection leaves the yard and goes into the drawer.
  *
@@ -479,40 +283,9 @@ export const DEMOS: Readonly<Record<DemoName, () => SVGSVGElement>> = {
   boxSelect,
   drag,
   carry,
-  mirrorH,
-  mirrorV,
-  alignLeft,
-  alignRight,
-  alignTop,
-  alignBottom,
-  alignCentreX,
-  alignCentreY,
-  distributeH,
-  distributeV,
   find,
   store,
 };
 
 /** Draws one by name. */
 export const demo = (name: DemoName): SVGSVGElement => DEMOS[name]();
-
-/**
- * Which demo stands for which group operation.
- *
- * Every align and every distribute has its own picture rather than one
- * standing in for the rest: "top edges" illustrated by a left-align is worse
- * than no picture, because it is confidently wrong about the one thing the
- * player is trying to work out.
- */
-export const GROUP_OP_DEMOS: Readonly<Record<GroupOp, DemoName>> = {
-  [GroupOp.MIRROR_X]: "mirrorH",
-  [GroupOp.MIRROR_Y]: "mirrorV",
-  [GroupOp.ALIGN_LEFT]: "alignLeft",
-  [GroupOp.ALIGN_RIGHT]: "alignRight",
-  [GroupOp.ALIGN_TOP]: "alignTop",
-  [GroupOp.ALIGN_BOTTOM]: "alignBottom",
-  [GroupOp.ALIGN_CENTRE_X]: "alignCentreX",
-  [GroupOp.ALIGN_CENTRE_Y]: "alignCentreY",
-  [GroupOp.DISTRIBUTE_X]: "distributeH",
-  [GroupOp.DISTRIBUTE_Y]: "distributeV",
-};

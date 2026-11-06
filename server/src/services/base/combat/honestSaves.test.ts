@@ -43,6 +43,8 @@ interface Fixture {
   resources?: Record<string, number>;
   playerLevel: number;
   defence?: Record<string, unknown>;
+  /** The attacker's Monster Lab ranks, sent as the load's `attackerranks`. */
+  ranks?: Record<string, number>;
 }
 
 /** A save file, as the web test writes it. */
@@ -132,6 +134,7 @@ const sessionOf = (one: HonestSave, fixture: Fixture): AttackSession => {
     attackerlevel: fixture.playerLevel,
     attackerAcademy: one.attacker.academy,
     declareWar: one.declareWar,
+    ...(fixture.ranks && { attackerRanks: fixture.ranks }),
     ...(defenderForces && { defenderForces }),
     ...(championBrains && { championBrains }),
   };

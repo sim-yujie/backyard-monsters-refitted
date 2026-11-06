@@ -174,6 +174,15 @@ describe("Bucket rows", () => {
     expect(bucket.cost()).toBeLessThanOrEqual(CAPACITY);
   });
 
+  it("carries what the server set for the attack instead, a tribe's Housing Bunker load (Inferno WP 2.10)", () => {
+    // A level 4 Housing Bunker holds 780 (R11); a Rezghul costs 250, so three go.
+    const bucket = new Bucket(sessionWith({ monsters: { C19: 20 }, flingCapacity: 780 }), { storage: null });
+    expect(bucket.capacity()).toBe(780);
+    bucket.setCount("C19", 20);
+    expect(bucket.count("C19")).toBe(Math.floor(780 / bucketCost({ C19: 1 }, {})));
+    expect(bucket.cost()).toBeLessThanOrEqual(780);
+  });
+
   it("counts the other rows against a row's ceiling", () => {
     const bucket = new Bucket(sessionWith({ monsters: { C1: 30, C19: 20 } }), { storage: null });
     bucket.setCount("C1", 30);

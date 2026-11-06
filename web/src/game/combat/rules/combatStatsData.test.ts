@@ -93,9 +93,9 @@ describe("TOWER_STATS", () => {
     expect(cannon?.map((one) => one.splash)).toEqual([30, 35, 40, 45, 50, 55, 60, 65, 70, 75]);
   });
 
-  it("keeps the thirteen blocks the props file carries, and the Housing Bunker's", () => {
+  it("keeps the thirteen blocks the props file carries, and the two Inferno twins", () => {
     expect(Object.keys(TOWER_STATS).map(Number).sort((a, b) => a - b)).toEqual([
-      20, 21, 22, 23, 25, 115, 118, 128, 129, 132, 134, 136, 137, 138,
+      20, 21, 22, 23, 25, 115, 118, 128, 129, 130, 132, 134, 136, 137, 138,
     ]);
     // The Monster Bunker carries a range and nothing else (`:2423`).
     expect(TOWER_STATS[22]?.map((one) => one.range)).toEqual([300, 350, 400, 450, 500]);
@@ -109,11 +109,21 @@ describe("TOWER_STATS", () => {
     expect(TOWER_STATS[136]?.[0]?.shots).toBeGreaterThan(0);
   });
 
-  it("gives every flyer-mode tower a stats block except 130, which has none", () => {
+  it("gives every flyer-mode tower a stats block", () => {
     const missing = Object.keys(FLYER_MODE)
       .map(Number)
       .filter((type) => TOWER_STATS[type] === undefined);
-    expect(missing).toEqual([130]);
+    expect(missing).toEqual([]);
+  });
+
+  it("takes the Inferno Cannon's seven levels from the Inferno table (`INFERNOYARDPROPS.as`)", () => {
+    // The main table's 130 is a stub with no stats, so the 106 Inferno Cannons
+    // in the Moloch tribes' yards dealt no damage before.
+    const cannon = TOWER_STATS[130];
+    expect(cannon).toHaveLength(7);
+    expect(cannon?.[0]?.range).toBe(160);
+    expect(cannon?.at(-1)?.range).toBe(220);
+    for (const level of cannon ?? []) expect(level.damage).toBeGreaterThan(0);
   });
 });
 
@@ -137,12 +147,14 @@ describe("BUILDING_HP", () => {
     expect(missing).toEqual([]);
   });
 
-  it("leaves out only the two entries no props file gives an hp the engine reads", () => {
-    // 112 is the outpost core and 130 an Inferno tower whose ladder lives in its
-    // own props file. Neither is a Map Room 2 main-yard type, so neither reaches
-    // the audit of `docs/design/server-combat.md` §2.2.
-    expect(Object.keys(BUILDING_HP)).toHaveLength(138);
-    for (const type of [112, 130]) expect(BUILDING_HP[type]).toBeUndefined();
+  it("leaves out only the one entry no props file gives an hp the engine reads", () => {
+    // 112 is the outpost core, whose ladder lives in the outpost table. It is
+    // not a Map Room 2 main-yard type, so it does not reach the audit of
+    // `docs/design/server-combat.md` §2.2. The Inferno Cannon 130 takes its
+    // ladder from the Inferno table, as the Housing Bunker does.
+    expect(Object.keys(BUILDING_HP)).toHaveLength(139);
+    expect(BUILDING_HP[112]).toBeUndefined();
+    expect(BUILDING_HP[130]?.length).toBe(7);
   });
 
   it("takes the Housing Bunker's health from the Inferno table, as its range (issue #143)", () => {

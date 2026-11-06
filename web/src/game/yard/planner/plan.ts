@@ -1,11 +1,11 @@
-import { kindOf, maxLevel } from "../buildingCosts";
+import { kindOf, maxLevel, type YardKind } from "../buildingCosts";
 import { isStorageId } from "../decorStorage";
 import { holdsWorker } from "../workers";
 import { nearbyArea } from "../nearbyFootprints";
-import { footprintOf } from "../YardGrid";
+import { footprintOf, wildYardSize } from "../YardGrid";
 import { TROJAN_HORSE_TYPE } from "@/game/trojan/trojanHorse";
 import type { Yard } from "../yardModel";
-import type { MoveEntry, PlanEntry, StoreEntry } from "./commands";
+import type { MoveEntry, StoreEntry } from "./commands";
 import {
   inBounds,
   isDecoration,
@@ -13,13 +13,9 @@ import {
   plotBounds,
   validateOffset,
   validatePlan,
-  validateTargets,
-  type NodePlan,
-  type PlacementIssue,
   type PlacementResult,
   type PlanNode,
   type PlotBounds,
-  type Position,
   type YardArea,
 } from "./placement";
 
@@ -55,17 +51,6 @@ export interface PlaceCheck {
 
 const FREE: PlaceCheck = { reason: null, blockedBy: null };
 
-/**
- * What `commitTargets` did.
- *
- * `entries` is null whenever nothing moved, and `issues` then says whether that
- * was because the operation was refused or because it had nothing to do.
- */
-export interface TargetCommit {
-  readonly entries: MoveEntry[] | null;
-  readonly issues: readonly PlacementIssue[];
-}
-
 /** What `absorb` changed, for the notice and the tests. */
 export interface AbsorbResult {
   /** Buildings the yard has that the plan did not. */
@@ -74,24 +59,13 @@ export interface AbsorbResult {
   readonly removed: number[];
   /** Buildings whose level or fortification moved. */
   readonly changed: number[];
-  /**
-   * Buildings whose planned upgrade the yard caught up with, and which
-   * therefore no longer have one.
-   *
-   * Reported rather than silently dropped because the batch wall upgrade
-   * raises four hundred walls at once and a bar that quietly loses four
-   * hundred plans looks like a bug (`docs/design/planner-upgrades.md` §2.3).
-   */
-  readonly plansDropped: number[];
 }
 
 /**
- * Types that have no ladder to plan an upgrade along.
+ * Types that have no upgrade ladder, though the cost table gives some a row.
  *
- * The same three kinds the server refuses a plan on
- * (`server/src/services/yardplanner/validateLayout.ts`,
- * `UNPLANNABLE_KINDS`), so a level this accepts is never a level Apply
- * answers with a 400.
+ * The same three kinds the server refuses an upgrade on
+ * (`server/src/services/yardplanner/validateLayout.ts`, `UNPLANNABLE_KINDS`).
  */
 const UNPLANNABLE_KINDS: ReadonlySet<string> = new Set([
   "decoration",
@@ -99,13 +73,15 @@ const UNPLANNABLE_KINDS: ReadonlySet<string> = new Set([
   "placeholder",
 ]);
 
-/** Whether a type can be planned an upgrade at all. */
-export const plannableType = (type: number): boolean =>
-  maxLevel(type) > 0 && !UNPLANNABLE_KINDS.has(kindOf(type));
+/** Whether a type has an upgrade ladder at all, on a yard of `kind` (`ladderFor`). */
+export const plannableType = (type: number, kind: YardKind = "main"): boolean =>
+  maxLevel(type, kind) > 0 && !UNPLANNABLE_KINDS.has(kindOf(type, kind));
 
 export class Plan {
   readonly plot: PlotBounds;
   readonly expansion: number;
+  /** The yard's kind: the Inferno's ladders and footprints differ. */
+  readonly kind: YardKind;
 
   private readonly nodes = new Map<number, PlanNode>();
   /** Where each building sat when the planner opened, for the moved outline. */
@@ -115,9 +91,12 @@ export class Plan {
   /** The selection currently picked up, or null when nothing is being dragged. */
   private lifted: PlanNode[] | null = null;
 
-  private constructor(expansion: number) {
+  private constructor(expansion: number, kind: YardKind, wild = false) {
     this.expansion = expansion;
-    this.plot = plotBounds(expansion);
+    this.kind = kind;
+    // A wild monster camp (the tribe yard editor's) stands on the plot a camp grows to.
+    const [width, height] = wild ? wildYardSize(expansion) : [0, 0];
+    this.plot = wild ? { halfWidth: width / 2, halfHeight: height / 2 } : plotBounds(expansion);
   }
 
   /**
@@ -128,7 +107,7 @@ export class Plan {
    * somewhere free (`server/src/services/yard/mushrooms.ts`).
    */
   static fromYard(yard: Yard): Plan {
-    const plan = new Plan(yard.expansionLevel);
+    const plan = new Plan(yard.expansionLevel, yard.kind, yard.wild === true);
     for (const building of yard.buildings) plan.add(nodeOf(building));
     return plan;
   }
@@ -282,109 +261,6 @@ export class Plan {
     for (const node of landing) this.occupancy.stamp(node);
   }
 
-  /* ── Planned upgrades ───────────────────────────────────────────────── */
-
-  /**
-   * Every building with a planned upgrade, in the order Apply will walk them:
-   * ascending `plan.order`, ties broken by id.
-   *
-   * The same sort the server's walk uses
-   * (`server/src/services/yardplanner/startUpgrades.ts`), so the preview and
-   * the walk agree on which job runs out of workers.
-   */
-  plannedNodes(): PlanNode[] {
-    return [...this.nodes.values()]
-      .filter((node) => node.plan !== null && !node.stored)
-      .sort((a, b) => a.plan!.order - b.plan!.order || a.id - b.id);
-  }
-
-  /**
-   * How many buildings have a plan.
-   *
-   * Stored buildings are left out here and in {@link plannedNodes}: Apply is
-   * blocked while anything is in the drawer, so an upgrade planned on a stored
-   * building is not part of what Apply would do and must not be counted into
-   * what the bar says Apply will charge.
-   */
-  get plannedCount(): number {
-    let count = 0;
-    for (const node of this.nodes.values()) if (node.plan && !node.stored) count++;
-    return count;
-  }
-
-  /** Planned target level by building id, for the canvas badge and the tiles. */
-  plannedLevels(): ReadonlyMap<number, number> {
-    const levels = new Map<number, number>();
-    for (const node of this.nodes.values()) {
-      if (node.plan && !node.stored) levels.set(node.id, node.plan.level);
-    }
-    return levels;
-  }
-
-  /**
-   * Plans an upgrade on one building, or clears the plan with `null`.
-   *
-   * Returns what changed so the caller can push it onto the undo stack, or
-   * null when nothing did — which is also how a refusal reads, because every
-   * refusal here is a thing the player cannot be shown a button for anyway:
-   *
-   * - anything fixed, and any type with no ladder;
-   * - a **busy** or **damaged** building, which is F1 rule 3 (design
-   *   `yard-planner-redesign.md:131-134`) and which Apply would skip;
-   * - a level at or below the one the building already has, or past the top of
-   *   its ladder, which is the shape fault the server answers with a 400.
-   *
-   * A **gated** level is not refused. A player raising their Town Hall in the
-   * same plan wants the tower behind it queued too; Apply reports what it
-   * could not start (§8, Q5).
-   *
-   * `order` is kept when only the level changes, so re-aiming a plan does not
-   * send it to the back of the queue, and is `max(order) + 1` for a new one.
-   */
-  setPlan(id: number, level: number | null): PlanEntry | null {
-    const node = this.nodes.get(id);
-    if (!node || node.fixed) return null;
-
-    const before = node.plan;
-
-    if (level === null) {
-      if (!before) return null;
-      node.plan = null;
-      return { id, before, after: null };
-    }
-
-    if (node.busy || node.damaged) return null;
-    if (!plannableType(node.type)) return null;
-    if (level <= node.level || level > maxLevel(node.type)) return null;
-    if (before && before.level === level) return null;
-
-    const after: NodePlan = { level, order: before ? before.order : this.nextOrder() };
-    node.plan = after;
-    return { id, before, after };
-  }
-
-  /**
-   * Applies or reverses recorded plan changes. The undo stack's only writer
-   * for plans, the counterpart of {@link move}.
-   */
-  setPlans(entries: readonly PlanEntry[], reverse: boolean): void {
-    for (const entry of entries) {
-      const node = this.nodes.get(entry.id);
-      // As `move`: the stack can outlive a rebase that dropped the building.
-      if (!node) continue;
-      node.plan = reverse ? entry.before : entry.after;
-    }
-  }
-
-  /** The order a plan made now would take: one past the last one planned. */
-  private nextOrder(): number {
-    let highest = -1;
-    for (const node of this.nodes.values()) {
-      if (node.plan && node.plan.order > highest) highest = node.plan.order;
-    }
-    return highest + 1;
-  }
-
   /** Whether a building is somewhere other than where the yard had it. */
   hasMoved(id: number): boolean {
     const node = this.nodes.get(id);
@@ -506,57 +382,6 @@ export class Plan {
     return entries;
   }
 
-  /**
-   * Drops the lifted selection at one position each: mirror, align, distribute.
-   *
-   * The counterpart of `commitMove` for the operations that move every
-   * building by a different amount. It is all-or-nothing by design (F7): if any
-   * one of them would leave the plot or land on something, nothing moves at
-   * all, and the issues come back so the caller can outline the buildings that
-   * caused it. A building the map does not name stays where it is and is still
-   * tested, because its neighbour may have been sent on top of it.
-   *
-   * Either way the grid is closed again before this returns.
-   */
-  commitTargets(targets: ReadonlyMap<number, Position>): TargetCommit {
-    const lifted = this.lifted;
-    this.lifted = null;
-    if (!lifted || lifted.length === 0) return { entries: null, issues: [] };
-
-    const moving: [PlanNode, Position][] = [];
-    for (const node of lifted) {
-      const to = targets.get(node.id);
-      if (to && (to.x !== node.x || to.y !== node.y)) moving.push([node, to]);
-    }
-
-    const result =
-      moving.length === 0
-        ? { valid: false, issues: [] }
-        : validateTargets(lifted, targets, this.occupancy, this.plot);
-
-    if (!result.valid) {
-      for (const node of lifted) this.occupancy.stamp(node);
-      return { entries: null, issues: result.issues };
-    }
-
-    const entries: MoveEntry[] = moving.map(([node, to]) => ({
-      id: node.id,
-      fromX: node.x,
-      fromY: node.y,
-      toX: to.x,
-      toY: to.y,
-    }));
-
-    for (const [node, to] of moving) {
-      node.x = to.x;
-      node.y = to.y;
-    }
-    // Every lifted node, not just the moved ones: the ones that stayed put had
-    // their cells taken out of the grid by `beginMove` and need them back.
-    for (const node of lifted) this.occupancy.stamp(node);
-    return { entries, issues: [] };
-  }
-
   /** Puts a lifted selection back without moving it. */
   cancelMove(): void {
     const lifted = this.lifted;
@@ -622,7 +447,6 @@ export class Plan {
     const added: number[] = [];
     const removed: number[] = [];
     const changed: number[] = [];
-    const plansDropped: number[] = [];
 
     for (const building of yard.buildings) {
       seen.add(building.id);
@@ -643,20 +467,11 @@ export class Plan {
         changed.push(node.id);
       }
       // Whether a building is on a job or wants repairing is the server's
-      // answer too, and both decide whether its plan can still start.
+      // answer too.
       node.busy = holdsWorker(building);
       node.damaged = building.hp !== null;
       // The save's spot is the one a decoration may keep outside the plot.
       if (node.decoration) node.home = { x: building.x, y: building.y };
-
-      // A plan the yard has reached is finished, not pending: a batch wall
-      // upgrade that raised four hundred blocks to level 5 has done exactly
-      // what four hundred plans asked for, and leaving them set would have the
-      // bar charge for them again and Apply skip them as `caughtUp`.
-      if (node.plan && building.level >= node.plan.level) {
-        node.plan = null;
-        plansDropped.push(node.id);
-      }
     }
 
     for (const node of [...this.nodes.values()]) {
@@ -669,7 +484,7 @@ export class Plan {
       removed.push(node.id);
     }
 
-    return { added, removed, changed, plansDropped };
+    return { added, removed, changed };
   }
 
   /**
@@ -688,7 +503,7 @@ export class Plan {
    * mid-drag.
    */
   canPlace(type: number, x: number, y: number): PlaceCheck {
-    const [width, height] = footprintOf(type);
+    const [width, height] = footprintOf(type, this.kind);
     const probe: PlanNode = {
       // Negative, so it can never collide with a real id if it were stamped.
       id: -1,
@@ -702,7 +517,6 @@ export class Plan {
       decoration: isDecoration(type),
       fixed: false,
       stored: false,
-      plan: null,
       busy: false,
       damaged: false,
     };
@@ -760,7 +574,6 @@ const nodeOf = (building: Yard["buildings"][number]): PlanNode => {
     // move, a clear or Apply's layout may touch.
     fixed: building.type === TROJAN_HORSE_TYPE,
     stored: fromStorage,
-    plan: null,
     busy: holdsWorker(building),
     damaged: building.hp !== null,
   };

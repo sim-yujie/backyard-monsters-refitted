@@ -11,6 +11,7 @@ import type { StorageCapSave } from "../base/economy/resourceBudget.js";
 import { levelOf } from "../yardplanner/costs.js";
 import { isDamaged } from "./buildingJobs.js";
 import { fitCredit } from "./credit.js";
+import { inRealm, monsterRealmOf, type MonsterRealm } from "./locker.js";
 import { instantTrainPrice, timeCost } from "./shiny.js";
 import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
 
@@ -37,7 +38,21 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * Everything here is pure: it reads the caught-up save the yard action wrapper
  * hands it and returns what should change, or throws the refusal. The wrapper
  * charges the putty and the Shiny, clamps the refund and writes.
+ *
+ * **The Inferno yard** (`docs/design/inferno.md` §2.6, WP 2.2): its Academy
+ * trains the Inferno roster only, from the Inferno row's own `academy`, and
+ * `r3` is Sulfur from the Inferno purse (`ACADEMY.as:68`, `acad_err_sulfur`).
+ * Its Academy has four levels, so a monster trains to level 5 at most: Flash
+ * calls one at level 5 or above fully trained there (`ACADEMY.as:86-90`),
+ * though the table holds a sixth level ({@link INFERNO_TOP_TRAINING_LEVEL}).
  */
+
+/**
+ * The highest level an Inferno monster reaches in the Inferno's Academy: five
+ * (`ACADEMY.as:86-90`; the Inferno Academy's four levels let level 4 train on
+ * to 5 and stop there).
+ */
+export const INFERNO_TOP_TRAINING_LEVEL = 5;
 
 /** Monster Academy type id (`client/scripts/ACADEMY.as:8`). */
 export const ACADEMY_TYPE = 26;
@@ -51,6 +66,8 @@ export const RELATIVE_TRAINING_LIMIT = 60 * 60 * 162;
 
 /** The slice of a save the academy routes read. */
 export interface AcademySave extends StorageCapSave {
+  /** `BaseType`: the Inferno yard trains the Inferno roster ({@link monsterRealmOf}). */
+  type?: string;
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
   resources?: JsonObject | null;
@@ -145,10 +162,10 @@ const academyRefusal = (save: AcademySave, academy: AcademyBuilding): Error | nu
 
 /**
  * The catalogue entry for a monster a player may train, or `400 badRequest`:
- * not in the catalogue, blocked (C18), or not a surface `C` id (D19).
+ * not in the catalogue, blocked (C18), or not of the yard's realm.
  */
-export const trainableOrThrow = (monster: string): MonsterEntry => {
-  const entry = /^C\d+$/.test(monster) ? monsterEntry(monster) : undefined;
+export const trainableOrThrow = (monster: string, realm: MonsterRealm = "surface"): MonsterEntry => {
+  const entry = inRealm(monster, realm) ? monsterEntry(monster) : undefined;
   if (!entry || entry.blocked) {
     throw yardBadRequestErr("That monster cannot be trained.", { monster });
   }
@@ -159,7 +176,8 @@ export const trainableOrThrow = (monster: string): MonsterEntry => {
  * The monster's own checks, `ACADEMY.as:63-65` in order: `409 training
  * {monster, endsAt}` already training; `409 locked {monster}` not unlocked
  * (`lockerdata[id].t` is not 2); `409 maxLevel {monster, level}` at the top
- * of its ladder. Returns its level and the step it would pay for.
+ * of its ladder, which in the Inferno is {@link INFERNO_TOP_TRAINING_LEVEL}.
+ * Returns its level and the step it would pay for.
  */
 const monsterGate = (save: AcademySave, monster: string): { level: number; step: PaidStep } => {
   const endsAt = trainingEndsAt(save.academy, monster);
@@ -171,7 +189,11 @@ const monsterGate = (save: AcademySave, monster: string): { level: number; step:
   }
   const level = trainingLevel(save.academy, monster);
   const step = trainingStep(monster, level);
-  if (!step || level >= maxTrainingLevel(monster)) {
+  const top =
+    monsterRealmOf(save) === "inferno"
+      ? Math.min(maxTrainingLevel(monster), INFERNO_TOP_TRAINING_LEVEL)
+      : maxTrainingLevel(monster);
+  if (!step || level >= top) {
     throw yardRefusedErr("maxLevel", "That monster is fully trained.", { monster, level });
   }
   return { level, step };
@@ -202,7 +224,7 @@ export const trainGate = (
   monster: string,
   academyId: number | undefined
 ): { academy: AcademyBuilding; level: number; step: PaidStep } => {
-  trainableOrThrow(monster);
+  trainableOrThrow(monster, monsterRealmOf(save));
   const academies = academiesOf(save.buildingdata);
 
   if (academyId !== undefined) {
@@ -283,7 +305,7 @@ const trainedSlices = (save: AcademySave, monster: string) => {
 
 /** The running training on `monster`, or `409 notTraining {monster}`. */
 const runningOrThrow = (save: AcademySave, monster: string) => {
-  trainableOrThrow(monster);
+  trainableOrThrow(monster, monsterRealmOf(save));
   const endsAt = trainingEndsAt(save.academy, monster);
   if (endsAt === null) {
     throw yardRefusedErr("notTraining", "That monster is not training.", { monster });

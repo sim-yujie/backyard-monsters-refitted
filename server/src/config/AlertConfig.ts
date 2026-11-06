@@ -13,6 +13,8 @@ import { positiveNumber } from "./BotConfig.js";
  * - `ALERT_ERRORS_MIN`, `ALERT_ERRORS_FACTOR` — a "sudden jump in errors" is at
  *   least ERRORS_MIN server errors in 10 minutes and at least FACTOR times the
  *   usual 10 minutes over the past day (defaults 20 and 5).
+ * - `ALERT_REDIS_MEMORY_PERCENT` — Redis this full of its own cap (`maxmemory`,
+ *   default 75) is nearly full. Any key it has had to drop is a problem too.
  *
  * Read on each call rather than once at import, so tests can change them.
  */
@@ -21,6 +23,7 @@ export const DEFAULT_DISK_PERCENT = 90;
 export const DEFAULT_BACKUP_HOURS = 26;
 export const DEFAULT_ERRORS_MIN = 20;
 export const DEFAULT_ERRORS_FACTOR = 5;
+export const DEFAULT_REDIS_MEMORY_PERCENT = 75;
 
 /** A problem still not fixed is said again this often. */
 export const ALERT_REMINDER_MS = 12 * 60 * 60 * 1000;
@@ -39,6 +42,7 @@ export interface AlertConfig {
   readonly backupHours: number;
   readonly errorsMin: number;
   readonly errorsFactor: number;
+  readonly redisMemoryPercent: number;
 }
 
 /** The alert settings as the environment sets them now. */
@@ -53,6 +57,7 @@ export const alertConfig = (env: Record<string, string | undefined> = process.en
     backupHours: positiveNumber(env.ALERT_BACKUP_HOURS, DEFAULT_BACKUP_HOURS),
     errorsMin: positiveNumber(env.ALERT_ERRORS_MIN, DEFAULT_ERRORS_MIN),
     errorsFactor: positiveNumber(env.ALERT_ERRORS_FACTOR, DEFAULT_ERRORS_FACTOR),
+    redisMemoryPercent: Math.min(positiveNumber(env.ALERT_REDIS_MEMORY_PERCENT, DEFAULT_REDIS_MEMORY_PERCENT), 100),
   };
 };
 

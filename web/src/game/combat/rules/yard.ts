@@ -1,6 +1,6 @@
 import { GRID_COST, TRAP_STATS } from "./combatStatsData.js";
 import {
-  STORAGE_TYPES,
+  HARVESTER_TYPES,
   hpLadder,
   isTower,
   maxHp,
@@ -249,8 +249,24 @@ const FOOTPRINTS: Readonly<Record<number, Footprint>> = {
 /** The 40 x 40 `DEFAULT_FOOTPRINT` of `server/src/game-data/buildingFootprints.ts`. */
 export const DEFAULT_FOOTPRINT: Footprint = { w: 40, h: 40 };
 
-/** A type's footprint, falling back to its pathing rectangle then the default. */
-export const footprintOf = (type: number): Footprint => {
+/**
+ * The two classes whose footprint differs on an Inferno yard
+ * (`BASE.isInfernoMainYardOrOutpost`): the Under Hall, 160 against the Town
+ * Hall's 130 (`client/scripts/BUILDING14.as:18`), and the Inferno Academy, 80
+ * against 100 (`client/scripts/BUILDING26.as:22`).
+ */
+const INFERNO_FOOTPRINTS: Readonly<Record<number, Footprint>> = {
+  14: { w: 160, h: 160 },
+  26: { w: 80, h: 80 },
+};
+
+/**
+ * A type's footprint, falling back to its pathing rectangle then the default.
+ * On an Inferno yard the Under Hall and Academy take their Inferno sizes.
+ */
+export const footprintOf = (type: number, kind: CombatTargetKind = "main"): Footprint => {
+  const inferno = kind === "inferno" ? INFERNO_FOOTPRINTS[type] : undefined;
+  if (inferno) return inferno;
   const known = FOOTPRINTS[type];
   if (known) return known;
   const rect = GRID_COST[type]?.[0];
@@ -495,7 +511,7 @@ export const buildEngineYard = (input: EngineYardInput): EngineYard => {
     const type = Math.floor(numberOf(data.t));
     const rawLevel = Math.floor(numberOf(data.l));
     const level = rawLevel > 0 ? rawLevel : 1;
-    const footprint = footprintOf(type);
+    const footprint = footprintOf(type, yardKind);
     const onScreen = screenOf(numberOf(data.X), numberOf(data.Y));
     const anchor = fromIso(onScreen.x, onScreen.y);
     const ceiling = buildingMaxHp(type, level, yardKind);
@@ -531,8 +547,11 @@ export const buildEngineYard = (input: EngineYardInput): EngineYard => {
       fired: trap && reported === 0,
       // Only a harvester runs dry: `_looted` starts false (`BFOUNDATION.as:198`)
       // and only `BRESOURCE.Loot` sets it (`BRESOURCE.as:121-125`), so storage,
-      // which hands out of the pool, is never looted (issue #225).
-      looted: !STORAGE_TYPES.includes(type) && banked <= 0,
+      // which hands out of the pool, is never looted (issue #225), and nor is
+      // anything that holds no loot at all. A wall read as looted made a
+      // group 3 creep (Brain, Bolt) drop it as stale every tick and re-path,
+      // and each fresh route's unchecked first step walked it through the wall.
+      looted: HARVESTER_TYPES.includes(type) && banked <= 0,
       stored: banked,
       jarred: false,
     });

@@ -1,5 +1,7 @@
 import type { Camera } from "@/game/Camera";
-import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
+import type { OffsetCell } from "@/game/HexGrid";
+import { TapClickGuard, touchEndsOn } from "@/game/TapClickGuard";
+import { pickCell } from "./ground";
 import { inWorld } from "./zones";
 
 /**
@@ -29,6 +31,17 @@ export interface MapInputOptions {
   onZoomStep: (direction: number) => void;
   /** Escape. */
   onCancel: () => void;
+  /**
+   * How far each cell is drawn from its spot (`ground.ts`), so a click lands
+   * on the raised or sunken face it hits. Flat when absent.
+   */
+  liftOf?: (col: number, row: number) => number;
+  /**
+   * Undoes the tilted camera (MR2_TILT, `tilt.ts`): a canvas point to where
+   * it would be on the flat map's screen. Left alone when absent. Read on
+   * every pointer event, so the tilt can change while the map is open.
+   */
+  screenToFlat?: () => ((point: { x: number; y: number }) => { x: number; y: number }) | null;
 }
 
 export class MapInput {
@@ -36,9 +49,17 @@ export class MapInput {
   private pressX = 0;
   private pressY = 0;
   private pressed = false;
+  /**
+   * A tap that opens a cell's panel must not click the panel too: its Attack
+   * may be under the finger. One that ends on the canvas keeps its click, for
+   * the double tap.
+   */
+  private readonly tapClick: TapClickGuard;
 
   constructor(options: MapInputOptions) {
     this.options = options;
+    const canvas = options.canvas;
+    this.tapClick = new TapClickGuard(canvas, (event) => touchEndsOn(canvas, event));
   }
 
   attach(): void {
@@ -48,6 +69,7 @@ export class MapInput {
     canvas.addEventListener("pointermove", this.onPointerMove);
     canvas.addEventListener("pointerleave", this.onPointerLeave);
     canvas.addEventListener("dblclick", this.onDoubleClick);
+    this.tapClick.attach();
     window.addEventListener("keydown", this.onKeyDown);
   }
 
@@ -58,23 +80,25 @@ export class MapInput {
     canvas.removeEventListener("pointermove", this.onPointerMove);
     canvas.removeEventListener("pointerleave", this.onPointerLeave);
     canvas.removeEventListener("dblclick", this.onDoubleClick);
+    this.tapClick.detach();
     window.removeEventListener("keydown", this.onKeyDown);
   }
 
   /** The cell under a pointer event, or null when it is off the world. */
   cellAt(event: { clientX: number; clientY: number }): OffsetCell | null {
     const rect = this.options.canvas.getBoundingClientRect();
-    const world = this.options.camera.screenToWorld({
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-    });
-    const cell = mapRoomGrid.pixelToCell(world.x, world.y);
+    const local = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    const toFlat = this.options.screenToFlat?.() ?? null;
+    // Two steps, kept apart: undo the tilt, then today's hex rule on the world point.
+    const world = this.options.camera.screenToWorld(toFlat ? toFlat(local) : local);
+    const cell = pickCell(world.x, world.y, this.options.liftOf ?? flat);
     return inWorld(cell.col, cell.row) ? cell : null;
   }
 
   private readonly onPointerDown = (event: PointerEvent): void => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     this.pressed = true;
+    this.tapClick.press();
     this.pressX = event.clientX;
     this.pressY = event.clientY;
   };
@@ -87,7 +111,9 @@ export class MapInput {
     if (travelled > DRAG_SLOP) return;
 
     const cell = this.cellAt(event);
-    if (cell) this.options.onSelect(cell);
+    if (!cell) return;
+    this.tapClick.opened(event);
+    this.options.onSelect(cell);
   };
 
   private readonly onPointerMove = (event: PointerEvent): void => {
@@ -144,3 +170,5 @@ const isTextEntry = (target: EventTarget | null): boolean => {
     target.isContentEditable
   );
 };
+
+const flat = (): number => 0;

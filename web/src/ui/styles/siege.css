@@ -1,0 +1,296 @@
+/* The Siege screen (Inferno WP 6.4, `ui/siege/SiegeScreen.ts`): Flash's
+   Chaos Lab and Chaos Factory popup in the Monsters screen's frame
+   (monsters.css `.monsters-screen`, `.locker__split`). */
+
+/* ── The purse: Bone, Coal, Sulfur, Magma ──────────────────────────────── */
+
+.siege-purse {
+  gap: var(--space-2) var(--space-4);
+}
+
+.inferno-amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The painted pile, then the name, as the Siege screen's words were checked with the name. */
+.inferno-amount__name {
+  color: var(--colour-text-muted);
+  font-weight: 700;
+}
+
+.siege-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.siege-notice {
+  margin: var(--space-4);
+}
+
+/* ── The list ──────────────────────────────────────────────────────────── */
+
+.siege-row {
+  grid-template-columns: 50px 1fr auto;
+  min-height: 66px;
+}
+
+.siege-row .siege-row__icon {
+  grid-row: 1 / span 2;
+  width: 50px;
+  height: 50px;
+}
+
+.siege-row__name {
+  grid-column: 2;
+}
+
+.siege-row__state {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.siege-row__ready {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  font-weight: 700;
+  color: var(--colour-success);
+  white-space: nowrap;
+}
+
+.siege-stars {
+  display: inline-flex;
+  gap: 1px;
+  font-size: var(--text-sm);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.siege-stars__star {
+  color: var(--colour-surface-overlay);
+  -webkit-text-stroke: 0.5px var(--colour-border-strong);
+}
+
+.siege-stars__star--on {
+  color: var(--colour-warning-bright);
+  -webkit-text-stroke: 0;
+}
+
+/* A job's time bar and the time left beside it. */
+.siege-time {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.siege-time__bar {
+  flex: 1;
+  width: 90px;
+  min-width: 60px;
+}
+
+.siege-time__left {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ── The chosen weapon ─────────────────────────────────────────────────── */
+
+.siege-detail__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.siege-detail__ready {
+  font-weight: 700;
+  color: var(--colour-success);
+}
+
+.siege-detail__video {
+  display: block;
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+  aspect-ratio: 400 / 175;
+  object-fit: cover;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.siege-detail__description {
+  margin: 0;
+}
+
+.siege-stats {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+
+.siege-stats__label {
+  font-weight: 700;
+}
+
+.siege-stats__value {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  min-width: 0;
+}
+
+/* The figure now in front, the next level's behind it (`mcBar`, `mcBar2`). */
+.siege-stats__bar {
+  position: relative;
+  flex: 1;
+  max-width: 200px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-overlay);
+  overflow: hidden;
+}
+
+.siege-stats__next,
+.siege-stats__now {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+}
+
+.siege-stats__next {
+  background: var(--colour-accent-line);
+}
+
+.siege-stats__now {
+  background: var(--colour-info);
+}
+
+.siege-stats__figure {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── What can be done with it ──────────────────────────────────────────── */
+
+.siege-offer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.siege-offer__boxes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.siege-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  text-align: center;
+}
+
+.siege-box__text {
+  margin: 0;
+  font-weight: 700;
+  font-size: var(--text-sm);
+}
+
+.siege-offer > .siege-box--instant {
+  flex-direction: row;
+  width: 100%;
+  text-align: left;
+}
+
+.siege-offer__time {
+  width: 100%;
+}
+
+.siege-offer__time .siege-time__bar {
+  width: auto;
+}
+
+.siege-costs {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  justify-content: center;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  text-align: left;
+}
+
+.siege-costs__name {
+  font-weight: 700;
+  color: var(--colour-text-muted);
+}
+
+.siege-costs__value {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Flash's red figure where the purse holds less (`UpdateShowCurrentCosts`). */
+.siege-costs__value--short {
+  color: var(--colour-danger);
+}
+
+.siege-offer__warning {
+  margin: 0;
+  font-weight: 700;
+}
+
+.siege-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--colour-warning-line);
+  border-radius: var(--radius-md);
+  background: var(--colour-warning-soft);
+}
+
+.siege-confirm__question {
+  margin: 0;
+  font-weight: 700;
+}
+
+.siege-confirm__text {
+  margin: 0;
+}
+
+/* A phone: the boxes stack. */
+@media (width <= 620px) {
+  .siege-offer__boxes {
+    grid-template-columns: 1fr;
+  }
+
+  .siege-detail__video {
+    max-width: none;
+  }
+}

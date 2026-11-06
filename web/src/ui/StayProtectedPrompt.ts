@@ -1,10 +1,15 @@
 import { countdownText } from "./IdleWarning";
 
-/** What the prompt says, and whether its countdown still runs. */
+/**
+ * What the prompt says, and whether its countdown still runs. It names the
+ * disconnect that follows (owner, 30 Oct): speaking only of attacks, it let
+ * players who did not mind one run it out unwarned (3 Nov). Past the end it
+ * shows only while an attack or a replay holds the disconnect off.
+ */
 export const stayProtectedText = (msLeft: number): { readonly line: string; readonly over: boolean } =>
   msLeft > 0
-    ? { line: `Other players can attack your yard in ${countdownText(msLeft)}.`, over: false }
-    : { line: "Other players can attack your yard now.", over: true };
+    ? { line: `Tap within ${countdownText(msLeft)} to stay connected.`, over: false }
+    : { line: "Tap now to stay connected.", over: true };
 
 /**
  * The small "Stay protected?" prompt (#275, `game/presence/protectionWatch.ts`).

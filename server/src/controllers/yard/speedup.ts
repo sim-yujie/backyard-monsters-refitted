@@ -23,13 +23,16 @@ export const freeSpeedupsHeld = (storedata: JsonObject | null | undefined, item:
  *
  * A free `SP2` or `SP3` the yard keeps (an event reward, `storedata.FREESP2.q`
  * / `FREESP3.q`) is spent before any Shiny: the speed-up costs nothing and
- * the count goes down by one (`report.free`, `report.freeLeft`).
+ * the count goes down by one (`report.free`, `report.freeLeft`). A held one
+ * may also finish a job with less time left than it takes off (patch 6.3);
+ * the rest of it is lost (`report.unused`).
  */
 export const yardSpeedupAction = defineYardAction({
   schema: YardSpeedupSchema,
   run: ({ save, body, now }) => {
-    const plan = planSpeedup(save, body.id, body.item, now);
-    const held = plan.shiny > 0 ? freeSpeedupsHeld(save.storedata, body.item) : 0;
+    const heldBefore = freeSpeedupsHeld(save.storedata, body.item);
+    const plan = planSpeedup(save, body.id, body.item, now, heldBefore > 0);
+    const held = plan.shiny > 0 ? heldBefore : 0;
     const key = held > 0 ? FREE_SPEEDUP_KEYS[body.item as FreeSpeedupItem] : null;
     const storedata: JsonObject | null = key
       ? { ...(save.storedata ?? {}), [key]: { ...((save.storedata?.[key] as JsonObject | undefined) ?? {}), q: held - 1 } }
@@ -47,4 +50,5 @@ export const yardSpeedupAction = defineYardAction({
     };
   },
   outposts: "allow",
+  inferno: "allow",
 });

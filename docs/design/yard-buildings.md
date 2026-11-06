@@ -1031,8 +1031,10 @@ finish-now and instant only with a snapshot of `academy`, `buildingdata`, `resou
   `:683-700` on save). Capacity uses the Map Room 2 table 380/450/540/660/800 (MH §6.3).
 - **Bunker panel** (in the building panel, not the Monsters screen, per D4): two columns, "Housing"
   and "Bunker", both built from the `QuantityStepper`; a From Housing / Buy switch; one **Move to
-  bunker** button for the whole selection. Only `BUNKERABLE_MONSTERS` (C1–C13, C17) are offered
-  (`client/scripts/MONSTERBUNKERPOPUP.as:48-69`); the Buy prices are `BUYABLE_MONSTERS` (`:30-46`).
+  bunker** button for the whole selection. Only `BUNKERABLE_MONSTERS` (C1–C13, C17, and the
+  Inferno IC1–IC8 once moved to the main yard's housing, Inferno WP 2.5) are offered
+  (`client/scripts/MONSTERBUNKERPOPUP.as:48-69`); the Buy prices are `BUYABLE_MONSTERS` (`:30-46`),
+  without the Inferno ones. An Inferno monster taken out is deleted, never juiced (`:701-702`).
 - Routes: `POST /bm/yard/bunker/fill` `bunker`, `monsters` (JSON `{id: n}`), `source` =
   `housing` (putty `cResource × 0.5 × n`, monsters leave housing) or `buy` (Shiny, monster must be
   unlocked); capacity checked against `cStorage` sum. `bunker/remove` `bunker`, `monster`, `count`
@@ -1052,11 +1054,12 @@ finish-now and instant only with a snapshot of `academy`, `buildingdata`, `resou
   countdown, feeds `2 / 6`, hunger countdown ("Hungry in 14:02:11", red during the 24 h grace), the
   feed recipe with what the player holds ("15 Octo-ooze — you have 40"), and buttons **Feed**
   (monsters), **Feed · 26 shiny**, **Evolve now · 158 shiny** (`feedShiny × 2 × feeds left`, MH
-  §7.4), **Heal · n shiny**, **Rename**, **Juice** (Phase 5 Juicer, confirmation). The panel stays
+  §7.4), **Heal · n shiny**, **Rename**. No **Juice** (owner 2026-10-28, below). The panel stays
   open after each action.
-- Routes: `champion/raise` `type` (lays an egg, below); `champion/cancel-egg`; `champion/feed` `mode` = `monsters`|`shiny` (doubled price
+- Routes: `champion/raise` `type` (the champion is in the cage at once, below); `champion/feed` `mode` = `monsters`|`shiny` (doubled price
   outside the feed window, MH §7.4); `champion/evolve`; `champion/heal`; `champion/rename` `name`
-  (1–20 characters, filtered); `champion/juice`.
+  (1–20 characters, filtered). `champion/juice` is refused (`409 juiceDisabled`) and
+  `champion/cancel-egg` is gone (`410 eggsRemoved`).
 - Catch-up (`catchUpChampions.ts`): passive heal `max × 5 / healtime` per 5 s; starvation — past
   `ft + 24 h` below level 6 lose one feed and restart the timer, at level 6 lose one food-bonus
   rank (`client/scripts/com/monsters/monsters/champions/ChampionBase.as:1062-1109`); frozen champions do nothing.
@@ -1065,28 +1068,19 @@ finish-now and instant only with a snapshot of `academy`, `buildingdata`, `resou
   damaged or the cage is occupied (MH §7.6). Storage unchanged: `champion[i].status = 1`, `ft`
   relative while frozen, and the chamber's `fz` JSON string (`CHAMPIONCHAMBER.as:313-378`); the
   server writes both.
-- **Eggs (owner 2026-10-20)**: raising a champion lays an **egg** that hatches **24 hours** later,
-  every time, the first champion included. Nothing speeds it up: no Shiny, no items, no friend help
-  (speed-ups only touch building countdowns). The player can **cancel** the egg (in-game confirm:
-  "Cancel the egg? You can pick again, but the new egg takes a full day.") and raise again; the new
-  egg starts a full day over. Korath is still not raisable. While it waits, the egg does nothing:
-  it does not defend or attack, cannot be fed, healed, evolved, renamed, juiced or frozen
-  (`409 eggInCage`), and goals and achievements do not count it. **Chamber rule**: an egg cannot be
-  frozen, and no basic champion thaws into the cage while an egg is there (cancel it first);
-  Krallen is unaffected. Recycling the cage with an egg in it is refused (cancel first).
-  - Storage: a normal `champion` entry with `status` 3 and `ft` = hatch time (raise + 86 400 s);
-    the other fields hold the level-1 champion. No new fields, no migration.
-  - The server's catch-up hatches it once `ft <= now` (also offline: attacks and raids catch up
-    both yards): `status` 0, `ft` = hatch time + the feed time, and it emits the completed job
-    `championHatch` (`id` = `G<n>`), shown as "Your Drull has hatched!".
-  - Route `champion/cancel-egg` (none; `409 noEgg`); `champion/raise` refuses `409 eggInCage
-    { type, hatchAt }` while one waits.
-  - Client: the cage window shows the egg, "Hatches in 23h 12m" and **Cancel egg**, and none of
-    the champion's buttons; at 0 it says "Hatching…" and asks the server. The raise cards say
-    "Hatches in 1 day". On the yard the egg stands in the middle of the cage's pen (own and
-    visited yards, not the attack screen). Pictures: `web/public/eggs/G<n>-egg.webp` (window,
-    240 square, drawn at 120 px) and `G<n>-egg-yard.webp` (yard, 96 x 120, drawn 60 px tall);
-    placeholders from `web/tools/gen-egg-placeholders.py` until the painted eggs are approved.
+- **No eggs, no juicing (owner 2026-10-28)**, replacing the one-day egg of 2026-10-20: raising
+  puts the level-1 champion in the cage at once, as Flash did (`CHAMPIONSELECTPOPUP.RaiseGuard`),
+  fed for one feed interval; and a champion can no longer be juiced (`champion/juice` answers
+  `409 juiceDisabled`; the cage window has no Juice tile). Juicing a hurt champion and raising a
+  fresh one was an exploit. Side effect, accepted by the owner: a player without a Champion Chamber
+  cannot swap their champion's type.
+  - Older saves: an egg (`status` 3) still in a save is hatched by the server's next catch-up at
+    once, whatever its hatch time (`status` 0, `ft` = hatch time or now, whichever is earlier, plus
+    the feed time), with the completed job `championHatch` ("Your Drull has hatched!"). Until that
+    catch-up, cage actions and thawing answer `409 eggInCage`. `champion/cancel-egg` answers
+    `410 eggsRemoved`. Champions juiced earlier stay `status` 2; raising that type replaces them.
+  - Client: no egg card, Cancel egg, "Hatches in 1 day" or egg on the yard. The egg pictures
+    (`web/public/eggs/`, their generator and the beta 4 "What's new" egg card) were removed.
 
 ### 7.3 Monster Juicer (D10)
 
@@ -1106,7 +1100,7 @@ champion's status to juiced (`ChampionBase.as:276`).
 
 - Housing tab gains per-row `QuantityStepper` + **Juice selected · 12,400 goo** and **Select all**.
 - Route: `POST /bm/yard/juice` `monsters` (JSON `{id: n}`) → `{ goo, lost }` (`lost` = what the cap
-  swallowed); bunker juicing goes through `bunker/remove`; champions through `champion/juice`.
+  swallowed); bunker juicing goes through `bunker/remove`. Champions cannot be juiced (owner 2026-10-28).
 
 | WP | Scope | Owns | Depends on | Size |
 | --- | --- | --- | --- | --- |
@@ -1230,7 +1224,8 @@ overdrive, `HOD`/`HOD2`/`HOD3`, `CLOD`, `EXH`, `PRO1`–`PRO3` damage protection
 whose effect this client does not model yet (`MDOD`, `MSOD` monster buffs; `BLK2`–`BLK5` Shiny wall
 upgrades; Shiny decorations `BUILDING28…`) are held back until WP6.2 confirms their effect and
 price formula against `client/scripts/STORE.as`, and listed there as "coming later" rather than
-sold with no effect. Existing `storedata` entries of dropped items stay and do nothing.
+sold with no effect. (All of them are sold now: the buffs and walls since beta.4, the decorations
+since beta 6 from the Build menu, §8.3; the Shop has no "coming later" section left.) Existing `storedata` entries of dropped items stay and do nothing.
 
 **Decisions (2026-09-29, WP6.2, #127).** Questions 1-4 answered by the owner, 5-6 by the lead:
 
@@ -1245,7 +1240,9 @@ sold with no effect. Existing `storedata` entries of dropped items stay and do n
 4. **No resource packs.** `BR11`–`BR43` are dropped; building panels already top up a shortfall.
 5. **The held-back items stay held back.** `MDOD`, `MSOD`, `BLK2`–`BLK5` and the Shiny decorations
    are "coming later" tiles with no price; their effects and prices were not checked against
-   `STORE.as`. **Update, beta.4:** the monster buffs and `BLK2`–`BLK5` are now sold. The wall
+   `STORE.as`. **Update, beta 6 (owner 2026-11-04):** the Shiny decorations are sold, from the
+   Build menu's Decorations tab rather than the Shop (§8.3 decision 8); `shop/buy` still refuses
+   `BUILDING…` codes. **Update, beta.4:** the monster buffs and `BLK2`–`BLK5` are now sold. The wall
    upgrades raise every Block below the tier to it for 3 / 6 / 10 / 15 Shiny per Block per level
    climbed, behind Town Hall 3 / 4 / 5 / 6 in the main yard (none in outposts), finishing the
    Block's running build or upgrade, awarding each level's points and healing it
@@ -1269,7 +1266,8 @@ first; placing from inventory is free and may be outside the plot. Routes: `deco
 the lead, and the plot question by the owner (option A):
 
 1. **Storage only.** Only what is in storage is placed, owned Shiny decorations included; no
-   decoration is bought (the Shop keeps them "coming later", §8.2).
+   decoration is bought (the Shop keeps them "coming later", §8.2). *Reversed for buying by the
+   owner on 2026-11-04: see decision 8.*
 2. **Apply stores what the layout leaves out**, as the Flash planner did
    (`BasePlanner.as:113-122`): every decoration not in the layout goes into storage as a recycle
    puts it, and a decoration in the drawer is a warning row, not a block. The drawer lists storage
@@ -1284,6 +1282,32 @@ the lead, and the plot question by the owner (option A):
    building, instead of Flash's 3240 x 2600 decoration area. One already outside the plot (a Flash
    save, an earlier Apply) may stay exactly at its saved spot; any move or new placement must land
    inside, and nothing is moved on its own.
+8. **Bought with Shiny (owner 2026-11-04, beta 6: "the decos from flash client", bought using
+   Shiny).** The decorations Flash sold are sold again, as Flash sold them: the Decorations tab
+   shows the stored ones first (count, free Place), then the ones for sale, each with its Shiny
+   price (`BUILDINGBUTTON.as:59-65`); picking one starts the placement and the Shiny is taken when
+   it goes down (`BFOUNDATION.as:1690-1700`), through `decor/buy`. Short of Shiny, Buy is blocked
+   and says how much more (Flash showed "Get Shiny", `BUILDINGOPTIONSPOPUP.as:453-455`); the server
+   refuses `409 credits` and charges nothing when the spot is refused. Defaults the lead chose, each
+   easy to change:
+   - **What is sold:** the 73 decorations of Flash's Decorations tab (`group` 4) that are not
+     `block`ed, at their store price `BUILDING<type>.c[0]` (5 to 500 Shiny), in the tab's order
+     (its Evil, Plants, Good, Flags and Premium sub-tabs one after the other, each by `order`,
+     `BUILDINGSPOPUP.as:104`, `:132`). The list is
+     `server/src/game-data/store/decorationsForSale.ts` (web copy `web/src/game/yard/decorShop.ts`).
+   - **Not sold, as in Flash:** what Flash's tab hid (`block: true`, shown only while one is in
+     storage, `BUILDINGSPOPUP.as:132`): 58 Camping Tent, 59 Childrens Jax, 67 Rock, 69 Scarecrow,
+     70 Sun Dial, 110/111 the Halloween pumpkins, 120 Big Gulp, 121/131 the Wild Monster totems,
+     135 the D.A.V.E. trophy. The store rows priced 0 are all among these, or have no props entry
+     at all (`BUILDING122`–`BUILDING126`). A stored one of these still shows and places free.
+   - **No limit:** every Flash decoration has `quantity: [0]`, which `BASE.CanBuild` reads as no
+     cap for a decoration (`BASE.as:3720-3740`).
+   - **The same placing rules** as decisions 3 and 5: inside the plot, no worker, no points,
+     finished at once, main yard only. One already stored is placed from storage for free even
+     through `decor/buy`, as Flash took storage first (`BFOUNDATION.as:1691`). Recycling a bought
+     one stores it, as any recycled decoration.
+   - **Pictures:** Flash's build-menu buttons and yard art, in both looks; every sold type has
+     both, so none is held back for a missing picture.
 
 | WP | Scope | Owns | Depends on | Size |
 | --- | --- | --- | --- | --- |

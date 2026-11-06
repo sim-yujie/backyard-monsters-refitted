@@ -7,6 +7,7 @@ import type { AddressInfo } from "net";
 import Koa from "koa";
 import serve from "koa-static";
 import { byteRanges, parseByteRange, UNSATISFIABLE } from "./byteRanges.js";
+import { notModified, tagFile } from "./notModified.js";
 
 describe("parseByteRange", () => {
   test("reads a closed range", () => {
@@ -57,8 +58,9 @@ describe("byteRanges with koa-static", () => {
     writeFileSync(join(dir, "tune.mp3"), content);
 
     const app = new Koa();
-    const staticFiles = serve(dir);
-    app.use((ctx, next) => byteRanges(ctx, () => staticFiles(ctx, next)));
+    // The same chain as server.ts.
+    const staticFiles = serve(dir, { setHeaders: tagFile });
+    app.use((ctx, next) => byteRanges(ctx, () => notModified(ctx, () => staticFiles(ctx, next))));
     app.use((ctx) => {
       ctx.body = "not a file";
     });
@@ -145,6 +147,39 @@ describe("byteRanges with koa-static", () => {
 
     expect(res.status).toBe(206);
     await res.arrayBuffer();
+  });
+
+  test("sends the range when If-Range names the file's tag", async () => {
+    const tag = (await fetch(`${base}/tune.mp3`, { method: "HEAD" })).headers.get("ETag")!;
+
+    const res = await fetch(`${base}/tune.mp3`, { headers: { Range: "bytes=500-", "If-Range": tag } });
+
+    expect(res.status).toBe(206);
+    expect(Buffer.from(await res.arrayBuffer())).toEqual(content.subarray(500));
+  });
+
+  test("never matches a weak tag in If-Range", async () => {
+    const tag = (await fetch(`${base}/tune.mp3`, { method: "HEAD" })).headers.get("ETag")!;
+
+    const res = await fetch(`${base}/tune.mp3`, { headers: { Range: "bytes=500-", "If-Range": `W/${tag}` } });
+
+    expect(res.status).toBe(200);
+    expect((await res.arrayBuffer()).byteLength).toBe(1000);
+  });
+
+  test("lets a browser check the part it kept, then fetch the rest", async () => {
+    // What Chrome asks when a reload cut a download off at byte 500: is the
+    // kept part current, and then the rest of that same version.
+    const tag = (await fetch(`${base}/tune.mp3`, { method: "HEAD" })).headers.get("ETag")!;
+
+    const kept = await fetch(`${base}/tune.mp3`, { headers: { Range: "bytes=0-499", "If-None-Match": tag } });
+    expect(kept.status).toBe(304);
+    await kept.arrayBuffer();
+
+    const rest = await fetch(`${base}/tune.mp3`, { headers: { Range: "bytes=500-", "If-Range": tag } });
+    expect(rest.status).toBe(206);
+    expect(rest.headers.get("Content-Range")).toBe("bytes 500-999/1000");
+    expect(Buffer.from(await rest.arrayBuffer())).toEqual(content.subarray(500));
   });
 
   test("answers HEAD with the full length and Accept-Ranges", async () => {

@@ -142,6 +142,26 @@ describe("FriendsTab", () => {
     expect(calls).toContainEqual(["block", 4]);
   });
 
+  // The owner's report (beta 4.1): no way to write to a friend from the list.
+  it("shows Message when the opener hands it in, and hands the friend over", async () => {
+    const bare = setup();
+    await bare.tab.show();
+    expect(bare.tab.element.textContent).not.toContain(FRIENDS_TEXT.message);
+    bare.tab.destroy();
+
+    const { api, store } = (() => {
+      const made = fixtureApi({ list: fixtureList([fixtureFriend(6, { username: "Eve" })]) });
+      return { api: made.api, store: new FriendsStore({ api: made.api }) };
+    })();
+    const onMessage = vi.fn();
+    const tab = new FriendsTab({ api, store, onFind: vi.fn(), onMessage });
+    document.body.append(tab.element);
+    await tab.show();
+    const eve = tab.element.querySelector('[data-userid="6"]');
+    buttonIn(eve, FRIENDS_TEXT.message).click();
+    expect(onMessage).toHaveBeenCalledWith(expect.objectContaining({ userid: 6, username: "Eve" }));
+  });
+
   it("wears the bar's wrench and gift marks", async () => {
     const { tab } = setup({
       list: {
@@ -201,6 +221,18 @@ describe("FriendsTab", () => {
     expect(search.value).toBe("");
     expect(names(tab.element)).toEqual(["Annie", "Bob", "Joanna"]);
     expect(tab.element.querySelector(".friends-section__title")?.textContent).toBe("Your friends");
+  });
+
+  it("keeps the search and filter buttons over the list, which alone scrolls (owner, 6 Nov 2026)", async () => {
+    const { tab } = setup({ list: { list: fixtureList([fixtureFriend(1, { username: "Annie" })]) } });
+    await tab.show();
+    const tools = tab.element.querySelector<HTMLElement>(".friends-tools")!;
+    const list = tab.element.querySelector<HTMLElement>(".friends-tab__body")!;
+    expect(tools.parentElement).toBe(tab.element);
+    expect(list.parentElement).toBe(tab.element);
+    expect(list.classList.contains("tab-scroll")).toBe(true);
+    expect(list.contains(tools.querySelector(".friends-tools__filters"))).toBe(false);
+    expect(names(list)).toEqual(["Annie"]);
   });
 
   it("keeps the search box hidden until there are friends", async () => {

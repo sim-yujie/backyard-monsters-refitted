@@ -1,6 +1,18 @@
 import { guideBus } from "@/game/guide/guideBus";
-import { VICTORY_THRESHOLD } from "@/game/combat/rules";
+import {
+  ATTACK_COUNTDOWN_SECONDS,
+  DECLARE_WAR_COUNTDOWN_SECONDS,
+  RETREAT_GRACE_SECONDS,
+  VICTORY_THRESHOLD,
+} from "@/game/combat/rules";
 import { saveAttack } from "@/api/base";
+import {
+  descentLandingOf,
+  playerLandingOf,
+  tribeLandingOf,
+  type DescentLanding,
+  type InfernoAmounts,
+} from "@/api/inferno";
 import { ApiError, NetworkError, getAuthToken } from "@/api/http";
 import { declineTakeover, getTakeoverQuote, takeOverCell, type TakeoverPayment } from "@/api/maproom";
 import type {
@@ -10,15 +22,18 @@ import type {
   TakeoverQuoteResponse,
 } from "@/api/types";
 import { ATTACK_PLUGINS, type AttackMounts, type AttackPlugin } from "@/game/attack/attackPlugins";
-import { buildAttackSave, forKeepalive, summariseAttack } from "@/game/attack/attackSave";
+import { buildAttackSave, describeOutcome, forKeepalive, summariseAttack } from "@/game/attack/attackSave";
 import { combatKind } from "@/game/attack/AttackSession";
-import type { AttackTarget } from "@/game/attack/attackTarget";
+import { fromInfernoYard, type AttackTarget } from "@/game/attack/attackTarget";
 import type { ResourceAmounts } from "@/game/combat/rules";
+import { playDescentResult } from "@/game/inferno/descentResult";
+import { RETURN_HOME } from "@/game/inferno/descentText";
+import { tribeOutcome } from "@/game/inferno/tribeMap";
 import { setMapFocus } from "@/game/maproom/mapFocus";
 import { takeoverGrantOf, type TakeoverKind } from "@/game/maproom/takeover";
-import { outpostTarget } from "@/game/yard/ownYards";
+import { INFERNO_YARD, MAIN_YARD, outpostTarget } from "@/game/yard/ownYards";
 import { monsterName } from "@/ui/attack/ArmyPanel";
-import { EndAttackPanel, type SaveFailure } from "@/ui/attack/EndAttackPanel";
+import { EndAttackPanel, type SaveFailure, type SavedInfo } from "@/ui/attack/EndAttackPanel";
 import { EndTakeoverOffer } from "@/ui/attack/EndTakeoverOffer";
 import { AutoAttackFlow } from "@/ui/attack/AutoAttackFlow";
 
@@ -29,11 +44,10 @@ import { AutoAttackFlow } from "@/ui/attack/AutoAttackFlow";
  * retreat, all decided by `AttackSession` itself — build the final save from
  * it, send it exactly once, and show the {@link EndAttackPanel} over the
  * yard while it goes (§F6). And while the attack runs, warn a margin before
- * the server's 420-second save window closes (§7, Q2): the window is wall
- * time from the attack load, not battle time, so the check is on the clock
- * here rather than on the session's countdown — at 2x the two disagree, and
- * a Declare War attack's 420-second countdown alone would already run past
- * it.
+ * the server's save window closes (§7, Q2; {@link saveWindowSeconds}): the
+ * window is wall time from the attack load, not battle time, so the check is
+ * on the clock here rather than on the session's countdown — at 2x the two
+ * disagree.
  *
  * The save is sent once per attack. A success clears the defender's
  * `attackid` and ends the server's session, so a second send could only be
@@ -74,8 +88,17 @@ import { AutoAttackFlow } from "@/ui/attack/AutoAttackFlow";
  * still holds only its core, the Starter Kit shop already open.
  */
 
-/** How long the server accepts this attack's save, from the attack load. */
-export const SESSION_WINDOW_SECONDS = 420;
+/** The spare time the server gives an attack beyond its own length (`server/.../attackWindow.ts`). */
+export const SAVE_WINDOW_SPARE_SECONDS = 60;
+/**
+ * How long the server accepts this attack's save, from the attack load: the
+ * attack's countdown, the retreat grace after it and a spare minute — 480 s,
+ * or 600 s under Declare War (owner, 4 Nov 2026).
+ */
+export const saveWindowSeconds = (declareWar: boolean): number =>
+  (declareWar ? DECLARE_WAR_COUNTDOWN_SECONDS : ATTACK_COUNTDOWN_SECONDS) +
+  RETREAT_GRACE_SECONDS +
+  SAVE_WINDOW_SPARE_SECONDS;
 /** How early to warn (§7, Q2's "short margin"). */
 export const WINDOW_MARGIN_SECONDS = 30;
 /** The longest the end panel waits for the screen to catch up (#148). */
@@ -93,6 +116,16 @@ type SaveShown =
       readonly credited: ResourceAmounts | null;
       /** The takeover the panel offers, when the attack earned one. */
       readonly takeover: TakeoverChance | null;
+      /**
+       * A Moloch tribe's or an Inferno player's landing (WP 2.10, 3.5): its
+       * result, loot taken, a tribe's comeback and the purse after.
+       */
+      readonly inferno?: {
+        readonly result: NonNullable<SavedInfo["result"]>;
+        readonly taken: ResourceAmounts;
+        readonly backAt: number | null;
+        readonly purse: InfernoAmounts;
+      };
     }
   | { readonly kind: "failed"; readonly failure: SaveFailure }
   | { readonly kind: "pending"; readonly message: string }
@@ -108,6 +141,9 @@ const showOn = (panel: EndAttackPanel, shown: SaveShown): void => {
         protectedUntil: shown.protectedUntil,
         now: shown.now,
         credited: shown.credited,
+        ...(shown.inferno
+          ? { result: shown.inferno.result, taken: shown.inferno.taken, backAt: shown.inferno.backAt }
+          : {}),
       });
       return;
     case "failed":
@@ -218,6 +254,10 @@ export const REPLAY_RESEND_DELAY_MS = 4_000;
 /** The panel's words while the server works the result out. */
 export const PENDING_MESSAGE = "The server is still working out the result. It will reach your map shortly.";
 export const PENDING_RESEND_MESSAGE = "The server is still working out the result. Trying again in a few seconds…";
+
+/** A landed Inferno player attack's heading: Flash's `popup_attackended_title` (WP 3.5). */
+export const PLAYER_RESULT_TITLE = "Attack Ended";
+
 export const PENDING_GAVE_UP: SaveFailure = {
   message: "The server could not work out the result in time, so it was not saved.",
   canRetry: true,
@@ -258,7 +298,7 @@ export const describeSaveFailure = (caught: unknown, isTribe = false): SaveFailu
       return {
         message:
           "This attack expired before it could be saved: the server accepts a result " +
-          `for ${SESSION_WINDOW_SECONDS / 60} minutes after an attack starts.`,
+          `for ${saveWindowSeconds(false) / 60} minutes after an attack starts.`,
         canRetry: false,
       };
     }
@@ -268,6 +308,9 @@ export const describeSaveFailure = (caught: unknown, isTribe = false): SaveFailu
         canRetry: false,
       };
     }
+    // The yard's row went while the attack ran (a camp that regrew): the
+    // server's words say so, and a retry would meet the same answer.
+    if (reason === "baseGone") return { message: caught.message, canRetry: false };
     if (reason && FINAL_REASONS.has(reason)) {
       return { message: `The server refused the result: ${caught.message}`, canRetry: false };
     }
@@ -283,9 +326,18 @@ export const describeSaveFailure = (caught: unknown, isTribe = false): SaveFailu
  * What the server banked of the loot (`lootcredited`, issue #166): the
  * battle's take cut to the room in the attacker's storage. Null when the
  * response does not say.
+ *
+ * A Descent attack's answer has none: what its landing put in the Inferno
+ * purse is the `descent` block's `loot` (WP 1.12), the figure its battle
+ * report shows, so the end panel shows that one (Inferno WP 1.13).
  */
-export const creditedOf = (response: BaseSaveResponse): ResourceAmounts | null => {
-  const value: unknown = response.lootcredited;
+export const creditedOf = (response: BaseSaveResponse, descent = false): ResourceAmounts | null => {
+  const value: unknown = descent ? descentLandingOf(response)?.loot : response.lootcredited;
+  return amountsOf(value);
+};
+
+/** Four whole amounts from an answer's loot block; null when it is not one. */
+const amountsOf = (value: unknown): ResourceAmounts | null => {
   if (typeof value !== "object" || value === null) return null;
   const read = (key: string): number => {
     const amount = Number((value as Record<string, unknown>)[key]);
@@ -293,6 +345,19 @@ export const creditedOf = (response: BaseSaveResponse): ResourceAmounts | null =
   };
   return { r1: read("r1"), r2: read("r2"), r3: read("r3"), r4: read("r4") };
 };
+
+/**
+ * What a player attack's own battle took, as far as the defender paid for it
+ * (WP 3.5). The defender's loss (`player.loot`) can be more than the attacker
+ * took (the surface loot rule, `attackLoot.ts`), so it is no measure of what
+ * the purse had no room for.
+ */
+const playerTaken = (defenderLost: ResourceAmounts, took: ResourceAmounts): ResourceAmounts => ({
+  r1: Math.min(defenderLost.r1, took.r1),
+  r2: Math.min(defenderLost.r2, took.r2),
+  r3: Math.min(defenderLost.r3, took.r3),
+  r4: Math.min(defenderLost.r4, took.r4),
+});
 
 /** The defender's protection expiry from the save's envelope, if it has one. */
 const protectedUntilOf = (response: BaseSaveResponse): number | null => {
@@ -342,27 +407,62 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
      * A Map Room 2 wild camp attack, once saved, is the plan the server repeats
      * for the camp's tribe and level, so the panel offers it again (owner, #221).
      */
+    /**
+     * Moloch's Descent (Inferno WP 1.13): like a Map Room 1 tribe, its way
+     * out is home to the main yard, where Flash returned after it, with
+     * Moloch's word on the fight over the panel first.
+     */
+    const descent = target.descentYard !== undefined;
+    let stopDescentResult: (() => void) | null = null;
     const repeatable = target.kind === "wild" && (target.mapversion ?? 2) === 2 && target.cell !== undefined;
     /**
-     * A Map Room 1 tribe has no checkpoint and nothing lands its attack later
-     * (`docs/server-api.md` "Map Room 1 tribe attacks"), so a timed-out save
-     * is sent again once; a Map Room 2 attack is landed by the server's
-     * finaliser.
+     * A Map Room 1 tribe's timed-out save is sent again once: the server's
+     * finaliser would land it only from the last checkpoint, a few seconds
+     * behind the end (`docs/server-api.md` "Yards with no row"); a Map Room 2
+     * attack is left to that finaliser.
      */
-    const isTribe = combatKind(target) === "tribe";
+    /**
+     * A Moloch tribe from the Inferno map (WP 2.10): its result is in the
+     * landing's `tribe` block, and its ways out
+     * are the Inferno map (the scene's `goToMap`) and, Flash's Return Home,
+     * the Inferno yard.
+     */
+    const infernoTribe = target.infernoTribe === true;
+    /**
+     * Another player's Inferno yard (WP 3.5): its result is in the landing's
+     * `player` block and its ways out are a tribe's. It counts once started
+     * (owner, 27 Oct), so it is saved even with nothing flung: a save that
+     * never came would cost the whole army once the server closes it.
+     */
+    const infernoPlayer = target.infernoPlayer === true;
+    const isTribe = combatKind(target) === "tribe" || descent || infernoTribe;
+    const inferno = combatKind(target) === "inferno";
+    /** The tribe's purse after the landing has gone onto the HUD; it goes once. */
+    let pursed = false;
 
     /**
      * The HUD takes the banked loot when the panel shows a landed save (#168),
      * so both read the same amounts; before that it keeps the attack's pool.
+     * An Inferno fight's loot goes to the Inferno purse, not to the main
+     * yard's pool the HUD shows here.
      */
     const creditHud = (): void => {
-      if (credited || !panel || shown?.kind !== "saved" || !shown.credited) return;
+      // A tribe's or a player's HUD shows the Inferno purse: the landing's total is what it now holds.
+      if (fromInfernoYard(target) && !pursed && panel && shown?.kind === "saved" && shown.inferno) {
+        pursed = true;
+        mounts.showResources({ ...shown.inferno.purse });
+      }
+      if (inferno || credited || !panel || shown?.kind !== "saved" || !shown.credited) return;
       credited = true;
       creditLoot(shown.credited);
     };
 
     /** Opens the map on the target's cell. */
     const returnToMap = (): void => {
+      if (descent) {
+        goToOutpost(MAIN_YARD);
+        return;
+      }
       if (target.cell && (target.mapversion ?? 2) === 2) setMapFocus({ cell: target.cell });
       goToMap();
     };
@@ -428,24 +528,69 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       if (next.kind === "saved" && next.takeover) offerTakeover(next.takeover);
     };
 
+    /**
+     * Moloch's word on a landed Descent attack, once. It waits for the end
+     * panel: the save often lands while the fight is still settling, and a
+     * popup opened then would sit under the panel mounted after it.
+     */
+    let descentLanded: DescentLanding | null = null;
+    const playDescent = (response?: BaseSaveResponse): void => {
+      if (response && descent) descentLanded = descentLandingOf(response);
+      if (!descentLanded || !panel || stopDescentResult || tornDown || leaving) return;
+      stopDescentResult = playDescentResult(modal, target.descentYard!, descentLanded, () => goToOutpost(INFERNO_YARD));
+    };
+
     /** The panel's saved state for a response. A grant's outpost is not protected yet. */
     const savedFrom = (response: BaseSaveResponse): SaveShown => {
+      playDescent(response);
       const takeover = takeoverChanceOf(target, response, payload);
+      const landing = infernoTribe ? tribeLandingOf(response) : null;
+      const player = infernoPlayer ? playerLandingOf(response) : null;
+      const none = { r1: 0, r2: 0, r3: 0, r4: 0 };
       return {
         kind: "saved",
         protectedUntil: takeover?.grant ? null : protectedUntilOf(response),
         now: now() / 1000,
-        credited: creditedOf(response),
+        credited: landing
+          ? amountsOf(landing.lootcredited)
+          : player
+            ? amountsOf(player.lootcredited)
+            : creditedOf(response, descent),
         takeover,
+        ...(landing
+          ? {
+              inferno: {
+                result: tribeOutcome(landing.won),
+                taken: amountsOf(landing.loot) ?? none,
+                backAt: landing.respawnat > 0 ? landing.respawnat : null,
+                purse: amountsOf(landing.total) ?? none,
+              },
+            }
+          : {}),
+        // The server's damage has the last word (Flash ended a player attack with no popup).
+        ...(player
+          ? {
+              inferno: {
+                result: {
+                  title: PLAYER_RESULT_TITLE,
+                  ...describeOutcome("main", target.name, player.damage, false, true),
+                },
+                taken: playerTaken(amountsOf(player.loot) ?? none, session.state().loot),
+                backAt: null,
+                purse: amountsOf(player.total) ?? none,
+              },
+            }
+          : {}),
       };
     };
 
     const warnIfDue = (): void => {
       if (warned || session.state().phase === "ended") return;
       const elapsed = (now() - mountedAt) / 1000;
-      if (elapsed < SESSION_WINDOW_SECONDS - WINDOW_MARGIN_SECONDS) return;
+      const window = saveWindowSeconds(session.state().declareWar);
+      if (elapsed < window - WINDOW_MARGIN_SECONDS) return;
       warned = true;
-      const left = Math.max(0, Math.round(SESSION_WINDOW_SECONDS - elapsed));
+      const left = Math.max(0, Math.round(window - elapsed));
       notices.show(
         "attack-window",
         `The server stops accepting this attack's result in about ${left} s. ` +
@@ -523,7 +668,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
     const leave = (unloading: boolean): void => {
       const phase = session.state().phase;
       if (phase === "running" || phase === "loaded") {
-        if (!session.hasActed()) return;
+        if (!session.hasActed() && !infernoPlayer) return;
         leaving = true;
         session.leave();
         return;
@@ -541,6 +686,9 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       if (panel || tornDown) return;
       panel = new EndAttackPanel({
         summary: summariseAttack(session),
+        ...(descent ? { returnLabel: RETURN_HOME } : {}),
+        // Flash's Return Home went to the Inferno yard; Return to map opens the Inferno map over it.
+        ...(fromInfernoYard(target) ? { home: { label: RETURN_HOME, onHome: () => goToOutpost(INFERNO_YARD) } } : {}),
         onReturn: () => {
           offer?.declineOnLeave(false);
           returnToMap();
@@ -557,6 +705,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       });
       creditHud();
       offerAgain();
+      playDescent();
     };
 
     /** Opens the panel once nothing on screen is still playing out, or the wait runs out. */
@@ -579,8 +728,10 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       ended = true;
       notices.clear("attack-window");
       // An attack the player never touched is not saved (#79): no drop, no
-      // bomb, no siege means nothing happened to either yard.
-      if (!session.hasActed()) {
+      // bomb, no siege means nothing happened to either yard. An Inferno
+      // player attack is: it counts once started, and its save, with nothing
+      // flung, is what keeps the army (WP 3.5).
+      if (!session.hasActed() && !infernoPlayer) {
         show({ kind: "unsent" });
       } else {
         payload = buildAttackSave(session, { nameOf });
@@ -610,6 +761,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
       offer = null;
       repeat?.close();
       repeat = null;
+      stopDescentResult?.();
       tornDown = true;
       page.window.removeEventListener("pagehide", onPageHide);
       unsubscribe();

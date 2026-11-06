@@ -25,7 +25,7 @@ export class Maproom {
   neighborsLevel?: number | null;
 
   /** Neighbours dropped today by the daily attack cap; a re-search leaves them out (issue #247). */
-  @Property({ columnType: "jsonb" })
+  @Property({ columnType: "jsonb", defaultRaw: "'[]'" })
   droppedNeighbours: Opt<DroppedNeighbour[]> = [];
 
   @Property({ type: Date })

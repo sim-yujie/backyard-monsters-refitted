@@ -36,8 +36,22 @@ export const servedDefenderForces = async (
     champion: championsHealedTo(save.champion, Number(save.savetime), now),
     storedata: save.storedata,
     now,
+    // An Inferno yard's housed monsters defend from its Housing Bunkers (Inferno WP 1.6).
+    monsters: housedDefenders(save.monsters),
+    buildinghealthdata: save.buildinghealthdata,
   });
   return attacker ? withAttackerBuffs(forces, attacker.storedata, now) : forces;
+};
+
+/**
+ * The housed monsters a row's Housing Bunkers defend with. A player's Inferno
+ * yard keeps them under `monsters.housed`, as every player yard keeps its
+ * housing; a Descent or Moloch tribe yard from the data files lists them
+ * flat (`{ IC1: 10 }`).
+ */
+export const housedDefenders = (monsters: Save["monsters"] | undefined): unknown => {
+  const housed = monsters?.housed;
+  return housed && typeof housed === "object" && !Array.isArray(housed) ? housed : monsters;
 };
 
 /** The academy the row's monsters fight at: its own, or its owner's main yard's for an outpost. */

@@ -22,8 +22,11 @@ import { syncBaseValue, syncDerivedLevels } from "../../services/yard/derivedLev
 import { joinMapRoom2 } from "../../services/yard/mapRoom.js";
 import { moveMushroomsOffBuildings } from "../../services/yard/mushrooms.js";
 import { outpostCarryover, outpostProblems } from "../../services/yard/outpostYard.js";
-import { poolView } from "../../services/yard/poolView.js";
+import { infernoView, poolView } from "../../services/yard/poolView.js";
+import { requireInfernoEnabled } from "../../services/inferno/infernoGate.js";
+import { syncInfernoCap } from "../../services/inferno/infernoLoad.js";
 import {
+  notInInfernoErr,
   notInOutpostErr,
   notMainYardErr,
   notYourYardErr,
@@ -35,7 +38,11 @@ import {
 import { raidFighting } from "../../services/raids/raidLock.js";
 import { yardState } from "../../services/yard/yardState.js";
 import { onboardingSummary } from "../../services/onboarding/summary.js";
-import type { ResourceAmounts } from "../../services/yardplanner/costs.js";
+import { updateOnboarding } from "../../services/onboarding/state.js";
+import { INFERNO_QUESTS, markDone } from "../../services/goals/goalRules.js";
+import { townHallLevel, type ResourceAmounts } from "../../services/yardplanner/costs.js";
+import { jobQuestEvents } from "../../services/quests/hooks.js";
+import { addQuestEvents, claimableCount, readQuests, recordQuests, type QuestEvents } from "../../services/quests/state.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
 
@@ -104,6 +111,20 @@ import { logger } from "../../utils/logger.js";
  * `"allow"` (Flash's list: recycle, cancelling a construction, banking and the
  * player-level buildings are refused).
  *
+ * ## The Inferno yard (`docs/design/inferno.md` §5, WP 1.15)
+ *
+ * A body whose `baseid` is the caller's own Inferno yard (the main save's
+ * `baseid_inferno`) acts on that yard, while the new Inferno is switched on
+ * (`403 infernoOff` otherwise). The main row is locked first, then the Inferno
+ * row, as for an outpost. `run` gets the Inferno yard seen through the main
+ * yard (`infernoView`, `services/yard/poolView.ts`): its own buildings, store
+ * data and points, the main save's `iresources` as its purse, the Inferno cap,
+ * and the player's Shiny. Its `type` stays `inferno`, so the rules price and
+ * gate from the Inferno table. The catch-up is the Inferno's
+ * (`catchUpInferno`), Map Room 2 is never joined and no outpost income is paid
+ * from one, and nothing built there counts for an achievement. A
+ * route refuses (`409 notInInferno`) unless its `inferno` says `"allow"`.
+ *
  * FROZEN (2026-09-27): later work packages build routes against
  * `defineYardAction` / `YardAction` / `YardOutcome` here and `yardRoute` there.
  * WP3 added `YardAction.outposts` (optional) and {@link lockOwnYard}.
@@ -114,7 +135,8 @@ import { logger } from "../../utils/logger.js";
  * {@link YardSlices}, `achievementEvents` to {@link YardOutcome}, and the
  * unseen unlocks to the answer; its WP4 added
  * {@link YardAction.reportAfterAchievements}. Events (2026-10-20) added
- * `grantShiny` to {@link YardOutcome}.
+ * `grantShiny` to {@link YardOutcome}. The Inferno's WP 1.15 added
+ * `YardAction.inferno` (optional) and `OwnYard.inferno`.
  */
 
 /** Save columns an action may replace wholesale. */
@@ -142,6 +164,14 @@ export type YardSlices = Partial<
     // written whole, through `updateAchievements`. On an outpost it lands on
     // the main row. The wrapper evaluates it again after the slices land.
     | "achievements"
+    // The Siege Lab and Factory (Inferno WP 6.3, `services/yard/siege.ts`):
+    // the weapons, and the Inferno purse they are paid from, which the plans
+    // charge and fund themselves (the wrapper's pool is the surface one).
+    | "siege"
+    | "iresources"
+    // The quests' record (`services/quests/state.ts`), main yard only; the
+    // wrapper counts the request's progress on it after the slices land.
+    | "dailyquests"
   >
 >;
 
@@ -196,6 +226,12 @@ export interface YardOutcome<Report> {
    * builds are counted by the wrapper; do not repeat them here.
    */
   achievementEvents?: AchievementEvents;
+  /**
+   * Quest progress the action brought about (`services/quests/hooks.ts`): an
+   * upgrade started, a bank, a mushroom. The catch-up's finished hatches are
+   * counted by the wrapper; do not repeat them here.
+   */
+  questEvents?: QuestEvents;
 }
 
 /**
@@ -212,6 +248,12 @@ export interface YardAction<Schema extends z.ZodType, Report> {
   ) => YardOutcome<Report> | Promise<YardOutcome<Report>>;
   /** Whether the route works on an outpost; refused with a plain message when absent. */
   outposts?: OutpostPolicy;
+  /**
+   * Whether the route works on the Inferno yard (WP 1.15); refused
+   * `409 notInInferno` when absent, so a route is closed there until it is
+   * checked against Flash's Inferno rules.
+   */
+  inferno?: "allow";
   /**
    * Builds the report again once the wrapper has evaluated the account's
    * achievements (issue #204), for a route that answers with that record, so
@@ -328,6 +370,8 @@ export interface OwnYard {
   main: Save;
   /** The outpost row, or null when the request acts on the main yard. */
   outpost: Save | null;
+  /** The Inferno yard row, or null unless the request acts on it. */
+  inferno: Save | null;
 }
 
 /**
@@ -339,6 +383,9 @@ export interface OwnYard {
  * either row is being attacked: an attack on an outpost loots the main pool
  * too.
  *
+ * A `baseid` that is the main yard's `baseid_inferno` locks the caller's
+ * Inferno yard instead ({@link lockInfernoRow}).
+ *
  * @param em - The transaction's entity manager.
  * @param user - The caller.
  * @param baseid - `baseid` from the request; absent for the main yard.
@@ -349,7 +396,13 @@ export const lockOwnYard = async (
   baseid?: string
 ): Promise<OwnYard> => {
   const main = await lockMainYard(em, user);
-  if (baseid === undefined || baseid === String(main.baseid)) return { save: main, main, outpost: null };
+  if (baseid === undefined || baseid === String(main.baseid)) {
+    return { save: main, main, outpost: null, inferno: null };
+  }
+  if (Number(main.baseid_inferno) > 0 && baseid === String(main.baseid_inferno)) {
+    const inferno = await lockInfernoRow(em, user, baseid);
+    return { save: infernoView(inferno, main), main, outpost: null, inferno };
+  }
 
   const listed = (main.outposts ?? []).some(([, , id]) => String(id) === baseid);
   if (!listed) throw notYourYardErr();
@@ -372,7 +425,27 @@ export const lockOwnYard = async (
   }
   if (isAttackActive(outpost)) throw yardUnderAttackErr();
 
-  return { save: poolView(outpost, main), main, outpost };
+  return { save: poolView(outpost, main), main, outpost, inferno: null };
+};
+
+/**
+ * Locks the caller's Inferno yard, the one their main save names: `403
+ * infernoOff` while the new Inferno is switched off, `403 notYourYard` unless
+ * the row is an Inferno yard and theirs, `409 underAttack` while it is being
+ * attacked.
+ */
+export const lockInfernoRow = async (em: EntityManager, user: User, baseid: string): Promise<Save> => {
+  requireInfernoEnabled();
+  const inferno = await em.findOne(
+    Save,
+    { baseid },
+    { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true }
+  );
+  if (!inferno || inferno.type !== BaseType.INFERNO || inferno.userid !== user.userid) {
+    throw notYourYardErr();
+  }
+  if (isAttackActive(inferno)) throw yardUnderAttackErr();
+  return inferno;
 };
 
 /** Outposts whose old-data problems this process has logged already. */
@@ -459,6 +532,10 @@ export const catchUpLockedRow = async (tx: EntityManager, locked: Save, now: num
   const completed = catchUpYard(locked, now);
   await joinMapRoom2(tx, locked);
   await autobankYard(tx, locked, now, completed);
+  // Hatches that finished while the player was away count for
+  // quests, on every path that catches the main row up (a load, a raid, a
+  // friend's help or gift).
+  if (locked.type === BaseType.MAIN) recordQuests(locked, now, jobQuestEvents(completed));
   return completed;
 };
 
@@ -496,9 +573,22 @@ export const catchUpLockedOutpost = async (
     const completed = catchUpYard(yard.save, now);
     await autobankYard(tx, yard.main, now, [], yard.outpost);
     await recordAchievements(tx, yard.main, now, builtEvents(completed), yard.outpost);
+    recordQuests(yard.main, now, jobQuestEvents(completed));
     await tx.flush();
     return { save: yard.outpost, completed };
   });
+
+/**
+ * Marks the Inferno quests met now done on the Inferno yard's view, writing
+ * the account's `onboarding` (on the main row) only when one changed.
+ */
+const markInfernoQuestsDone = (save: Save, now: number): void => {
+  let changed = false;
+  const onboarding = updateOnboarding(save, (record) => {
+    changed = markDone(save, record, now, INFERNO_QUESTS);
+  });
+  if (changed) save.onboarding = onboarding;
+};
 
 /** What {@link runYardAction} answers: the HTTP status and the body. */
 export interface YardAnswer {
@@ -561,31 +651,45 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
       if (yard.outpost && action.outposts !== "allow") {
         throw notInOutpostErr(action.outposts?.refuse);
       }
+      if (yard.inferno && action.inferno !== "allow") throw notInInfernoErr();
+      const onMain = !yard.outpost && !yard.inferno;
 
       const save = yard.save;
       flingerBefore = save.flinger;
       const now = getCurrentDateTime();
       const completed = catchUpYard(save, now);
-      if (!yard.outpost) await joinMapRoom2(tx, save, user);
+      if (onMain) await joinMapRoom2(tx, save, user);
       // Outpost income up to now lands before the action decides (outposts
       // WP4): it can pay for it, and a rate the action changes (a harvester
-      // upgrade on an outpost) only counts from here on.
-      await autobankYard(tx, yard.main, now, yard.outpost ? [] : completed, yard.outpost);
+      // upgrade on an outpost) only counts from here on. Never from the
+      // Inferno, whose purse no outpost fills.
+      if (!yard.inferno) await autobankYard(tx, yard.main, now, onMain ? completed : [], yard.outpost);
 
       const outcome = await action.run({ save, user, body: parsed.data, now, completed, em: tx });
       applyOutcome(save, user, outcome);
+      // A Resource Pod built, finished or recycled moves the main yard's
+      // Inferno caps (`syncInfernoCap`).
+      if (yard.inferno) syncInfernoCap(yard.main, yard.inferno);
       moveMushroomsOffBuildings(save);
       // An instant or paid repair shows on the map now, not at the next catch-up (#182 B).
       catchUpDamage(save);
       save.savetime = now;
+      // The Inferno quests met by now are marked done, as Flash's
+      // `QUESTS.Check` did on every tick there (`docs/design/inferno.md`
+      // WP 4.1): the badge counts them and achievement 21 reads them.
+      if (yard.inferno) markInfernoQuestsDone(save, now);
       // The account's, so on the main row from an outpost too (issue #204).
-      await recordAchievements(
-        tx,
-        yard.main,
-        now,
-        addEvents(builtEvents(completed), outcome.achievementEvents),
-        yard.outpost
-      );
+      // Nothing built in the Inferno counts towards the surface's stats (the
+      // Blocks and Heavy Traps are the surface's; Flash's Inferno builds were
+      // not checked against them, `docs/design/inferno.md` §5); the Under
+      // Hall's level is achievement 20's (`BUILDING14.Constructed`).
+      // Quests: the account's, on the main row; nothing in the Inferno counts.
+      // Before the achievements so `reportAfterAchievements` sees them.
+      if (!yard.inferno) recordQuests(yard.main, now, addQuestEvents(jobQuestEvents(completed), outcome.questEvents));
+      const events = yard.inferno
+        ? { underhall: townHallLevel(save.buildingdata, "inferno") }
+        : addEvents(builtEvents(completed), outcome.achievementEvents);
+      await recordAchievements(tx, yard.main, now, events, yard.outpost);
       const report = action.reportAfterAchievements
         ? action.reportAfterAchievements(save)
         : outcome.report;
@@ -598,9 +702,11 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         report,
         playerlevel: playerLevelOf(yard.main),
         playerpoints: playerPointsOf(yard.main),
-        // The account's, so from the main row on an outpost's answer too.
-        onboarding: onboardingSummary(yard.main),
+        // The account's, so from the main row on an outpost's answer too. On
+        // the Inferno the badge counts the Inferno quests (`goalBookOf`).
+        onboarding: onboardingSummary(yard.inferno ? save : yard.main),
         achievements: unseenAchievements(yard.main),
+        questsClaimable: yard.main.dailyquests ? claimableCount(readQuests(yard.main.dailyquests), now) : null,
         outpost: yard.outpost ? String(yard.outpost.baseid) : null,
       };
     });
@@ -621,6 +727,8 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         playerlevel: answer.playerlevel,
         playerpoints: answer.playerpoints,
         ...(answer.achievements.length > 0 && { achievements: answer.achievements }),
+        // The quest window's red number (`services/quests/state.ts`).
+        ...(answer.questsClaimable !== null && { questsClaimable: answer.questsClaimable }),
       },
       outpost: answer.outpost,
       flingerBefore,

@@ -9,8 +9,11 @@ import { acceptClientErrors } from "../../services/errors/clientErrors.js";
 /**
  * Browser errors the web client sends on its own (`services/errors/
  * clientErrors.ts`), for the owner's dashboard. `clientErrors` is signed in
- * and keeps the account number with each error; `guestClientErrors` is the
- * login screen's and keeps nothing about the sender. Both are rate limited
+ * and keeps the account number and name from the login token
+ * (`ctx.authUser`); `guestClientErrors` is the login screen's and keeps no
+ * account. Both keep the sender's address (`ctx.ip`, `middleware/clientIp.ts`),
+ * shown only on the owner's dashboard. Nothing about the sender is read from
+ * the body (`ClientErrorsSchema` keeps only the errors). Both are rate limited
  * per account or address (`clientErrorLimiter`) and answer `{ kept }`.
  *
  * Neither goes through `logRequest`: an error report must not make more log
@@ -24,10 +27,11 @@ const answer = (ctx: Context, kept: number): void => {
 
 export const clientErrors: KoaController = async (ctx) => {
   const body = ClientErrorsSchema.parse(ctx.request.body ?? {});
-  answer(ctx, await acceptClientErrors(postgres.em.fork(), body, ctx.authUser.userid));
+  const { userid, username } = ctx.authUser;
+  answer(ctx, await acceptClientErrors(postgres.em.fork(), body, { userid, username, ip: ctx.ip }));
 };
 
 export const guestClientErrors: KoaController = async (ctx) => {
   const body = ClientErrorsSchema.parse(ctx.request.body ?? {});
-  answer(ctx, await acceptClientErrors(postgres.em.fork(), body, null));
+  answer(ctx, await acceptClientErrors(postgres.em.fork(), body, { userid: null, username: "", ip: ctx.ip }));
 };

@@ -63,22 +63,9 @@ const BLOCK_COLUMNS = Math.ceil(GRID_COLUMNS / BLOCK);
 const BLOCK_ROWS = Math.ceil(GRID_ROWS / BLOCK);
 
 /**
- * A planned upgrade on one node (`docs/design/planner-upgrades.md` §2.1).
- *
- * Immutable, so the undo stack can hold the value that was there before an
- * edit rather than a copy of it. `level` is the target the player wants and
- * `order` their place in the queue: Apply walks plans in ascending `order`,
- * ties broken by id, so the order they planned in is the order they get.
- */
-export interface NodePlan {
-  readonly level: number;
-  readonly order: number;
-}
-
-/**
  * One building in the plan.
  *
- * Positions, level, fortification and the planned upgrade are mutable;
+ * Positions, level and fortification are mutable;
  * identity and footprint are not. The level moves because a batch action can
  * change it under the plan — `Plan.absorb` takes the server's word for it
  * after a wall upgrade rather than rebuilding the plan and losing every drag
@@ -114,8 +101,8 @@ export interface PlanNode {
    * The building has been lifted off the plot and into the planner's drawer.
    *
    * A stored node holds no cells, is drawn nowhere, and is not written into a
-   * layout. It is still in the plan — it keeps its id, its level and its
-   * planned upgrade — because storing has to be undoable and because the
+   * layout. It is still in the plan — it keeps its id and its level —
+   * because storing has to be undoable and because the
    * checklist names it by type when it blocks Apply
    * (`docs/design/yard-planner-redesign.md` §8, Q4).
    *
@@ -124,20 +111,12 @@ export interface PlanNode {
    */
   stored: boolean;
   /**
-   * The upgrade the player has planned for this building, or null.
-   *
-   * Carried on the node rather than in a side table because every path that
-   * reads a plan — the save, the load, the badge, the bar's totals, the Apply
-   * preview — already has the node in hand.
-   */
-  plan: NodePlan | null;
-  /**
    * A build, upgrade or fortify countdown is running on this building.
    *
    * One of the two facts about the yard the placement layer carries, because
-   * F1 rule 3 refuses to plan an upgrade on a busy building and the Apply walk
-   * skips one (`docs/design/planner-upgrades.md` §3.4). A rebuild does not
-   * count: it holds no worker (spec `docs/specs/base-building.md:784-786`).
+   * the building panel's ladder (`upgrades.ts`, `ladderFor`) refuses to offer
+   * an upgrade on a busy building. A rebuild does not count: it holds no
+   * worker (spec `docs/specs/base-building.md:784-786`).
    */
   busy: boolean;
   /**
@@ -396,54 +375,6 @@ export const validateOffset = (
     const other = occupancy.blockedBy(node, x, y);
     if (other !== null) issues.push({ id: node.id, reason: InvalidReason.OVERLAP, otherId: other });
   }
-
-  return issues.length === 0 ? VALID : { valid: false, issues };
-};
-
-/**
- * Tests a selection moved to per-building positions: mirror, align, distribute.
- *
- * Unlike `validateOffset` this cannot assume the movers stay clear of each
- * other. A translation preserves the gaps inside the selection, so a set that
- * was valid before the drag is valid after it; an align does the opposite on
- * purpose, and two towers told to share a left edge can end up on the same
- * cells. So the movers are stamped in as they are cleared, and a later one that
- * lands on an earlier one is reported exactly like a collision with a wall that
- * never moved.
- *
- * The grid is left as it was found. The caller must have erased the movers
- * first (`Plan.beginMove`), and everything this stamps it takes back out, so a
- * refused operation changes nothing — which is the whole point: F7 is
- * all-or-nothing, never a partial application.
- */
-export const validateTargets = (
-  moving: readonly PlanNode[],
-  targets: ReadonlyMap<number, Position>,
-  occupancy: Occupancy,
-  plot: PlotBounds,
-): PlacementResult => {
-  const issues: PlacementIssue[] = [];
-  const placed: [PlanNode, Position][] = [];
-
-  for (const node of moving) {
-    // A building the operation does not name stays put, and still has to be
-    // tested: an align can move its neighbour on top of it.
-    const to = targets.get(node.id) ?? { x: node.x, y: node.y };
-
-    if (!inBounds(node, to.x, to.y, plot)) {
-      issues.push({ id: node.id, reason: InvalidReason.BOUNDS });
-      continue;
-    }
-    const other = occupancy.blockedBy(node, to.x, to.y);
-    if (other !== null) {
-      issues.push({ id: node.id, reason: InvalidReason.OVERLAP, otherId: other });
-      continue;
-    }
-    occupancy.stamp(node, to.x, to.y);
-    placed.push([node, to]);
-  }
-
-  for (const [node, to] of placed) occupancy.erase(node, to.x, to.y);
 
   return issues.length === 0 ? VALID : { valid: false, issues };
 };

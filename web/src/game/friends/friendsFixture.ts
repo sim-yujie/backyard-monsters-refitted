@@ -100,6 +100,8 @@ export const fixtureApi = (
     blocked: answer("blocked", []),
     block: answer("block", undefined),
     unblock: answer("unblock", undefined),
+    muted: answer("muted", []),
+    unmute: answer("unmute", undefined),
   };
   return { api, calls };
 };

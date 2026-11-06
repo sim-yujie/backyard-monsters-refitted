@@ -1,3 +1,4 @@
+import { LockMode, type EntityManager } from "@mikro-orm/core";
 import { AllianceMessageType, AlliancePowerupType } from "../../enums/Alliance.js";
 import { AlliancePowerup } from "../../database/models/alliancepowerup.model.js";
 import { Save } from "../../database/models/save.model.js";
@@ -5,6 +6,7 @@ import type { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { invalidateAllianceSight } from "../maproom/sight/sightService.js";
+import { notMainYardErr } from "../yard/yardErrors.js";
 import {
   notEnoughShinyErr,
   powerupNotReadyErr,
@@ -23,7 +25,8 @@ interface Powerup {
 export interface PowerupPurchase {
   allianceId: number;
   author: User;
-  userSave: PayingSave;
+  /** The paying player's main save, locked while the Shiny is spent. */
+  basesaveid: number;
   powerupId: number;
   hours: number;
 }
@@ -40,8 +43,6 @@ interface RunningPowerup {
   endtime: number;
 }
 
-type PayingSave = Pick<Save, "credits">;
-
 /**
  * Loads an alliance's power-ups, seeding and expiring them as it goes.
  
@@ -50,10 +51,20 @@ type PayingSave = Pick<Save, "credits">;
  * charge instead of appearing instantly ready.
  *
  * @param {number} allianceId - The alliance whose power-ups are being read.
+ * @param {EntityManager} em - The entity manager to read with: a transaction's, to lock the rows.
+ * @param {boolean} lock - Whether to lock the rows (`SELECT ... FOR UPDATE`) and read them afresh.
  * @returns {Promise<Powerup[]>} All three power-ups, in tab order.
  */
-export const alliancePowerup = async (allianceId: number): Promise<Powerup[]> => {
-  const rows = await postgres.em.find(AlliancePowerup, { alliance_id: allianceId });
+export const alliancePowerup = async (
+  allianceId: number,
+  em: EntityManager = postgres.em,
+  lock = false
+): Promise<Powerup[]> => {
+  const rows = await em.find(
+    AlliancePowerup,
+    { alliance_id: allianceId },
+    lock ? { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true } : {}
+  );
 
   const now = getCurrentDateTime();
 
@@ -61,7 +72,7 @@ export const alliancePowerup = async (allianceId: number): Promise<Powerup[]> =>
     let status = rows.find((row) => row.powerup === rules.type);
 
     if (!status) {
-      status = postgres.em.create(AlliancePowerup, {
+      status = em.create(AlliancePowerup, {
         alliance_id: allianceId,
         powerup: rules.type,
         active: false,
@@ -69,7 +80,7 @@ export const alliancePowerup = async (allianceId: number): Promise<Powerup[]> =>
         updated_at: new Date(),
       });
 
-      postgres.em.persist(status);
+      em.persist(status);
     } else if (status.active && status.end_time <= now) {
       status.active = false;
       status.end_time += rules.recharge_time;
@@ -78,7 +89,7 @@ export const alliancePowerup = async (allianceId: number): Promise<Powerup[]> =>
     return { rules, status };
   });
 
-  await postgres.em.flush();
+  await em.flush();
 
   return powerups;
 };
@@ -86,85 +97,119 @@ export const alliancePowerup = async (allianceId: number): Promise<Powerup[]> =>
 /**
  * Starts a charged power-up, buffing every member of the alliance for its running time.
  *
+ * The charge is read, checked and written inside one transaction holding the
+ * alliance's power-up rows' lock, as {@link reducePowerupCharge} does. Read
+ * outside it, two starts sent at once both passed the "charged" check and
+ * both announced the start (security audit 2026-10-29, wave 2).
+ *
  * @param {number} allianceId - The alliance starting it.
  * @param {number} powerupId - Which power-up, from the getpowerups rows.
  * @returns {Promise<Powerup[]>} All the alliance's power-ups, the started one updated.
  * @throws {ClientSafeError} When the id is unknown, or it is already running or still charging.
  */
 export const startPowerup = async ({ allianceId, author, powerupId }: PowerupActivation): Promise<Powerup[]> => {
-  const powerups: Powerup[] = await alliancePowerup(allianceId);
+  // A power-up the alliance has never held is seeded first, outside the lock.
+  await alliancePowerup(allianceId);
 
-  const powerup = powerups.find(({ rules }) => rules.powerup_id === powerupId);
-  
-  if (!powerup) throw powerupUnknownErr();
+  const outcome = await postgres.em.transactional(async (em) => {
+    const powerups = await alliancePowerup(allianceId, em, true);
 
-  const { rules, status } = powerup;
-  const now = getCurrentDateTime();
+    const powerup = powerups.find(({ rules }) => rules.powerup_id === powerupId);
 
-  if (status.active) throw powerupRunningErr();
-  if (status.end_time > now) throw powerupNotReadyErr();
+    if (!powerup) throw powerupUnknownErr();
 
-  status.active = true;
-  status.end_time = now + rules.running_time;
+    const { rules, status } = powerup;
+    const now = getCurrentDateTime();
 
-  await postgres.em.flush();
+    if (status.active) throw powerupRunningErr();
+    if (status.end_time > now) throw powerupNotReadyErr();
+
+    status.active = true;
+    status.end_time = now + rules.running_time;
+
+    await em.flush();
+
+    return { powerups, type: rules.type };
+  });
 
   // Declare War's +2 reach changes every member's Map Room 2 fog of war
   // sight; a cache built before this start is missing it (issue #329,
   // `docs/design/fog-of-war.md` §9).
-  if (rules.type === AlliancePowerupType.DECLARE_WAR) await invalidateAllianceSight(allianceId);
+  if (outcome.type === AlliancePowerupType.DECLARE_WAR) await invalidateAllianceSight(allianceId);
 
   await announceShout({
     allianceId,
     author,
     type: AllianceMessageType.POWERUP_ACTIVATED,
-    body: rules.type,
+    body: outcome.type,
   });
 
-  return powerups;
+  return outcome.powerups;
 };
 
 /**
  * Spends Shiny to bring a charging power-up closer to ready.
  *
+ * The balance and the charge are read, checked and written inside one
+ * transaction holding the paying save's row lock (the one yard actions take)
+ * and the alliance's power-up rows' (security audit 2026-10-29, M1). Read
+ * outside it, two purchases sent at once both passed the check and only one
+ * charge stuck, and a yard action's Shiny spend landing in between was
+ * written over with the old balance.
+ *
  * @param {PowerupPurchase} purchase - Alliance, paying save, power-up and hours asked for.
- * @returns {Promise<Powerup[]>} All the alliance's power-ups, the sped-up one updated.
+ * @returns {Promise<{ powerups: Powerup[]; credits: number }>} All the alliance's power-ups, the sped-up one updated, and the Shiny left.
  * @throws {ClientSafeError} When the id is unknown, it is running or already charged, or Shiny is short.
  */
-export const reducePowerupCharge = async ({ allianceId, author, userSave, powerupId, hours }: PowerupPurchase) => {
-  const powerups = await alliancePowerup(allianceId);
+export const reducePowerupCharge = async ({ allianceId, author, basesaveid, powerupId, hours }: PowerupPurchase) => {
+  // A power-up the alliance has never held is seeded first, outside the lock.
+  await alliancePowerup(allianceId);
 
-  const powerup = powerups.find(({ rules }) => rules.powerup_id === powerupId);
-  if (!powerup) throw powerupUnknownErr();
+  const outcome = await postgres.em.transactional(async (em) => {
+    // The paying save first, then the power-ups: always in this order.
+    const userSave = await em.findOne(
+      Save,
+      { basesaveid },
+      { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true }
+    );
+    if (!userSave) throw notMainYardErr();
 
-  const { rules, status } = powerup;
-  const now = getCurrentDateTime();
+    const powerups = await alliancePowerup(allianceId, em, true);
 
-  if (status.active) throw powerupRunningErr();
+    const powerup = powerups.find(({ rules }) => rules.powerup_id === powerupId);
+    if (!powerup) throw powerupUnknownErr();
 
-  if (status.end_time <= now) throw powerupReadyErr();
+    const { rules, status } = powerup;
+    const now = getCurrentDateTime();
 
-  const remainingHours = Math.ceil((status.end_time - now) / 3600);
-  const boughtHours = Math.min(hours, remainingHours);
+    if (status.active) throw powerupRunningErr();
 
-  const cost = boughtHours * rules.hourly_cost;
+    if (status.end_time <= now) throw powerupReadyErr();
 
-  if (userSave.credits < cost) throw notEnoughShinyErr();
+    const remainingHours = Math.ceil((status.end_time - now) / 3600);
+    const boughtHours = Math.min(hours, remainingHours);
 
-  userSave.credits -= cost;
+    const cost = boughtHours * rules.hourly_cost;
 
-  status.end_time = Math.max(now, status.end_time - boughtHours * 3600);
+    if (userSave.credits < cost) throw notEnoughShinyErr();
 
-  await postgres.em.flush();
+    userSave.credits -= cost;
+
+    status.end_time = Math.max(now, status.end_time - boughtHours * 3600);
+
+    await em.flush();
+
+    return { powerups, credits: userSave.credits, type: rules.type, boughtHours };
+  });
 
   await announceShout({
     allianceId,
     author,
     type: AllianceMessageType.POWERUP_PURCHASE,
-    body: JSON.stringify({ powerup: rules.type, hours: boughtHours }),
+    body: JSON.stringify({ powerup: outcome.type, hours: outcome.boughtHours }),
   });
 
-  return powerups;
+  return { powerups: outcome.powerups, credits: outcome.credits };
 };
 
 /**

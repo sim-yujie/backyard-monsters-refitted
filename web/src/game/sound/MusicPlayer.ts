@@ -1,4 +1,6 @@
-import { TUNES, tuneUrl, type Tune } from "./tunes";
+import { lightMusic } from "@/game/quality";
+import { pageVolumeIgnored, sharedAudioContext } from "./soundVolume";
+import { tuneFile, tuneUrl, type Tune } from "./tunes";
 
 /**
  * Plays one tune at a time, looping, the way Flash's music did
@@ -21,6 +23,14 @@ import { TUNES, tuneUrl, type Tune } from "./tunes";
  * pressed a key on the page. A refused start is not an error: the player
  * listens for the next such press on the whole page and starts the music
  * inside it, with nothing on screen to ask for it.
+ *
+ * **The music slider** ({@link MusicPlayer.setVolume}, owner 4 Nov 2026)
+ * scales each tune's Flash volume. Safari on iPhone and iPad ignores a
+ * page's `audio.volume`, so there (`pageVolumeIgnored`) each tune's element
+ * is routed through a Web Audio gain on the page's shared context instead
+ * ({@link MusicRoute}): the slider and the fades work there too. The cost:
+ * that context is held back until a press like any other sound, and iOS
+ * stops it when the page goes to the background.
  */
 
 /** The part of an `HTMLAudioElement` the player uses, so tests can stand one in. */
@@ -38,13 +48,51 @@ export interface GestureTarget {
   removeEventListener(type: string, listener: () => void, options?: EventListenerOptions): void;
 }
 
+/** A tune's element routed through a Web Audio gain (iPhone, iPad). */
+export interface MusicRoute {
+  /** The gain the tune plays at, 0-1. */
+  setLevel(level: number): void;
+  /** False while the browser holds the context back. */
+  readonly running: boolean;
+  /** Asks for the context to run; inside a press, that is allowed. */
+  resume(): void;
+}
+
+/** The Web Audio route, made where the page's volume is ignored; null elsewhere. */
+const defaultRoute = (audio: AudioLike): MusicRoute | null => {
+  if (!pageVolumeIgnored()) return null;
+  const context = sharedAudioContext();
+  if (!context || typeof HTMLMediaElement === "undefined" || !(audio instanceof HTMLMediaElement)) return null;
+  try {
+    const gain = context.createGain();
+    context.createMediaElementSource(audio).connect(gain).connect(context.destination);
+    return {
+      setLevel: (level) => {
+        gain.gain.value = level;
+      },
+      get running() {
+        return context.state === "running";
+      },
+      resume: () => {
+        context.resume().catch(() => {});
+      },
+    };
+  } catch {
+    return null;
+  }
+};
+
 export interface MusicPlayerOptions {
   readonly createAudio?: (url: string) => AudioLike;
   /** Whether the browser plays Ogg Vorbis; asked of the browser when left out. */
   readonly canPlayOgg?: boolean;
+  /** Whether to stream a tune's lighter copy: the Quality setting's, when left out. */
+  readonly light?: () => boolean;
   readonly gestures?: GestureTarget;
   readonly setInterval?: (run: () => void, ms: number) => unknown;
   readonly clearInterval?: (handle: unknown) => void;
+  /** Routes a new element through a gain; the Web Audio route on iOS when left out. */
+  readonly route?: (audio: AudioLike) => MusicRoute | null;
 }
 
 /**
@@ -75,10 +123,17 @@ interface Fading {
 export class MusicPlayer {
   private readonly createAudio: (url: string) => AudioLike;
   private readonly canPlayOgg: boolean;
+  private readonly light: () => boolean;
   private readonly gestures: GestureTarget | null;
   private readonly startTimer: (run: () => void, ms: number) => unknown;
   private readonly stopTimer: (handle: unknown) => void;
   private readonly elements = new Map<Tune, AudioLike>();
+  private readonly route: (audio: AudioLike) => MusicRoute | null;
+  private readonly routes = new Map<AudioLike, MusicRoute>();
+  /** Each element's level as last set, which iOS will not read back from `volume`. */
+  private readonly levels = new Map<AudioLike, number>();
+  /** The music slider's gain (`soundVolume.ts`). */
+  private scale = 1;
 
   private wanted: Tune | null = null;
   private enabled = false;
@@ -90,9 +145,30 @@ export class MusicPlayer {
   constructor(options: MusicPlayerOptions = {}) {
     this.createAudio = options.createAudio ?? defaultAudio;
     this.canPlayOgg = options.canPlayOgg ?? browserPlaysOgg();
+    this.light = options.light ?? (() => lightMusic());
     this.gestures = options.gestures ?? (typeof document === "undefined" ? null : document);
     this.startTimer = options.setInterval ?? ((run, ms) => setInterval(run, ms));
     this.stopTimer = options.clearInterval ?? ((handle) => clearInterval(handle as ReturnType<typeof setInterval>));
+    this.route = options.route ?? defaultRoute;
+  }
+
+  /**
+   * The music slider, as a gain 0-1 (`volumeGain`). The tune playing
+   * follows at once; one fading out keeps fading.
+   */
+  setVolume(gain: number): void {
+    this.scale = Math.min(1, Math.max(0, Number.isFinite(gain) ? gain : 0));
+    const current = this.current;
+    if (!current) return;
+    const audio = this.elements.get(current);
+    if (audio && !this.fading.some((fade) => fade.audio === audio)) {
+      this.setLevel(audio, tuneFile(current).volume * this.scale);
+    }
+  }
+
+  /** The slider's gain as set. */
+  get volume(): number {
+    return this.scale;
   }
 
   /** The tune the screen wants; null for silence. */
@@ -141,9 +217,12 @@ export class MusicPlayer {
   private element(tune: Tune): AudioLike {
     let audio = this.elements.get(tune);
     if (!audio) {
-      audio = this.createAudio(tuneUrl(TUNES[tune], this.canPlayOgg));
+      // The copy is picked once a page: a Quality change shows from the next visit.
+      audio = this.createAudio(tuneUrl(tuneFile(tune), this.canPlayOgg, this.light()));
       audio.loop = true;
       this.elements.set(tune, audio);
+      const route = this.route(audio);
+      if (route) this.routes.set(audio, route);
     }
     return audio;
   }
@@ -152,23 +231,29 @@ export class MusicPlayer {
     const audio = this.element(tune);
     // A tune still fading out from a moment ago starts over at full volume.
     this.cancelFade(audio);
-    audio.volume = TUNES[tune].volume;
+    this.setLevel(audio, tuneFile(tune).volume * this.scale);
     audio.currentTime = 0;
     this.attempt(tune);
   }
 
   /** Asks the browser to play the current tune; a refusal waits for the next press. */
   private attempt(tune: Tune): void {
+    const audio = this.element(tune);
+    const route = this.routes.get(audio);
+    route?.resume();
     let started: Promise<void>;
     try {
-      started = this.element(tune).play();
+      started = audio.play();
     } catch {
       this.listen();
       return;
     }
     started.then(
       () => {
-        if (this.current === tune) this.stopListening();
+        if (this.current !== tune) return;
+        // Routed, the element plays into a context that may still be held back.
+        if (route && !route.running) this.listen();
+        else this.stopListening();
       },
       () => {
         if (this.current === tune) this.listen();
@@ -199,14 +284,14 @@ export class MusicPlayer {
 
   /**
    * Turns a tune down step by step and pauses it at the end. The steps are
-   * counted, not read back from the volume: iOS ignores a page's volume, and
-   * there the tune simply stops when the fade would have ended.
+   * counted from the level as set, not read back from the volume, which iOS
+   * does not report; there the steps go to the tune's gain.
    */
   private fadeOut(tune: Tune): void {
     const audio = this.elements.get(tune);
     if (!audio) return;
     this.cancelFade(audio);
-    const from = audio.volume;
+    const from = this.levels.get(audio) ?? audio.volume;
     let steps = Math.max(1, Math.ceil(from / FADE_STEP));
     const handle = this.startTimer(() => {
       steps -= 1;
@@ -215,9 +300,18 @@ export class MusicPlayer {
         audio.pause();
         return;
       }
-      audio.volume = Math.max(0, Math.min(1, steps * FADE_STEP));
+      this.setLevel(audio, Math.max(0, Math.min(1, steps * FADE_STEP)));
     }, FADE_TICK_MS);
     this.fading.push({ audio, handle });
+  }
+
+  /** Sets a tune's level: on its gain where routed, else on the element. */
+  private setLevel(audio: AudioLike, level: number): void {
+    const clamped = Math.max(0, Math.min(1, level));
+    this.levels.set(audio, clamped);
+    const route = this.routes.get(audio);
+    if (route) route.setLevel(clamped);
+    else audio.volume = clamped;
   }
 
   private cancelFade(audio: AudioLike): void {

@@ -1,27 +1,41 @@
-import { Assets, Container, Graphics, Sprite, type Renderer, type Texture } from "pixi.js";
+import { Container, Graphics, Sprite, type Renderer, type Texture } from "pixi.js";
 import { YardBuildings } from "./YardBuildings";
 import { NO_WORK, readWork, type WorkSource } from "./buildingWork";
 import { flightEnds, flightTotals, planFlights, TOWN_HALL_TYPE, type BankSource } from "./collectFx";
 import { CollectFxLayer, type LandListener } from "./CollectFxLayer";
 import type { HarvestKey } from "./harvest";
 import { YardGround } from "./YardGround";
+import { LOAD_TRIES, loadWithRetries } from "./retryLoad";
 import { CHOSEN_FILL, YardHatchMarks, type HatcheryMarks } from "./YardHatchMarks";
 import { YardHelpMarks } from "./YardHelpMarks";
 import { BAR_HEIGHT, jobBarScale, YardJobBars } from "./YardJobBars";
-import { YardLifeLayer } from "./YardLifeLayer";
-import { holdBack, type LifeHold, type YardLife, type YardPoint } from "./yardLifeModel";
+import { MAX_JUICE_WALKERS, YardLifeLayer } from "./YardLifeLayer";
+import { holdBack, juicerDoor, type LifeHold, type YardLife, type YardPoint } from "./yardLifeModel";
+import { YardGibletsLayer } from "./YardGibletsLayer";
+import { blendOf, isInfernoMonster, JUICER_SPOUT, JuicerBlend, planGiblets } from "./juicerShow";
+import type { JuicedNews } from "@/game/monsters/juiceNews";
+import { flyerAltitude } from "@/game/attack/monsterSprites";
+import { playEffect } from "@/game/sound/sound";
 import { routeBetween } from "@/game/guide/MonsterWalkIn";
 import { yardArtAtlas, type YardArtAtlas } from "./yardAtlas";
-import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
+import { loadSheet, MonsterSheetTextures, prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { currentSeason, onSeasonChange, type Season } from "@/game/season";
 import { BlueprintLayer } from "./planner/BlueprintLayer";
 import { blueprintToYard, blueprintToWorld } from "./planner/blueprint";
 import { PlannerOverlay, type PlannerVisuals } from "./planner/PlannerOverlay";
 import { diamondCorners, type Corners, type Diamond } from "./planner/marquee";
 import { fromIso, toIso, yardFitRect, yardToWorld, type Point, type Rect } from "./YardGrid";
-import { mushroomAt, mushroomKey } from "./mushroomPick";
+import { mushroomAt, mushroomKey, mushroomZIndex } from "./mushroomPick";
 import { MUSHROOM_POP_SECONDS, mushroomPopScale, newMushroomKeys } from "./mushroomPop";
 import type { Yard, YardBuilding, YardMushroom } from "./yardModel";
+import { rangeRadii } from "./planner/RangeLayer";
+import {
+  hoverRange,
+  RANGE_COLOUR,
+  RANGE_EDGE_ALPHA,
+  RANGE_FILL_ALPHA,
+  rangeHoverFrame,
+} from "./towerRangeHover";
 
 /**
  * The yard's scene graph: ground, mushrooms, buildings and the selection
@@ -65,7 +79,6 @@ export class YardRenderer {
 
   private readonly ground = new YardGround();
   private readonly buildings = new YardBuildings();
-  private readonly mushroomLayer = new Container();
   /** Each mushroom's sprite by `mushroomKey`, rebuilt with every `show`. */
   private readonly mushroomSprites = new Map<string, Sprite>();
   /** Mushrooms shaking for a pick, by `mushroomKey` (`BMUSHROOM.as:76-81`). */
@@ -78,6 +91,15 @@ export class YardRenderer {
   private readonly popping = new Map<string, number>();
   private readonly blueprint = new BlueprintLayer(this.buildings.art);
   private readonly chrome = new Graphics();
+  /**
+   * The range oval of the defence the mouse rests on (`towerRangeHover.ts`):
+   * on the ground under the buildings, as Flash drew it on
+   * `MAP._BUILDINGFOOTPRINTS`. One ellipse, redrawn only when the tower
+   * changes; the grow-in is a scale and alpha write per frame.
+   */
+  private readonly rangeOval = new Graphics();
+  private rangeTarget: YardBuilding | null = null;
+  private rangeElapsed = 0;
   private readonly planner = new PlannerOverlay();
   /** Progress bars over running builds and upgrades, own yard only (#139). */
   private readonly jobBars = new YardJobBars((id) => this.jobBarAnchor(id));
@@ -85,8 +107,24 @@ export class YardRenderer {
   private readonly hatchMarks = new YardHatchMarks((id) => this.hatchMarkAnchor(id));
   /** The wrenches over a friend's yard on a visit (#374); see `YardHelpMarks`. */
   private readonly helpMarks = new YardHelpMarks((id) => this.hatchMarkAnchor(id));
+  /** Opens {@link sheetsAllowed}; see there. */
+  private allowSheets: () => void = () => {};
+  /**
+   * Settles once the first yard shown has every building's picture, or after
+   * {@link SHEET_HOLD_MS} at most. The creatures' sheets wait for it: a
+   * painted monster sheet is up to 10 MB, three of them came to 24 MB on a
+   * full yard, and fetched alongside the building pictures they held those
+   * back for seconds on a slow link. Once open it stays open.
+   */
+  private readonly sheetsAllowed = new Promise<void>((resolve) => {
+    this.allowSheets = resolve;
+  });
+  private sheetHold: ReturnType<typeof setTimeout> | null = null;
   /** What lives on the yard (#158, #159): scenery, never in the battle. */
-  private readonly life = new YardLifeLayer({ reducedMotion: prefersReducedMotion() });
+  private readonly life = new YardLifeLayer({
+    reducedMotion: prefersReducedMotion(),
+    textures: new MonsterSheetTextures((url) => this.sheetsAllowed.then(() => loadSheet(url))),
+  });
   /** The planner is open: the creatures step out of the way until it closes. */
   private lifeHidden = false;
   /** The life last set, before {@link lifeHolds} cut it. */
@@ -95,6 +133,15 @@ export class YardRenderer {
   private readonly lifeHolds = new Set<LifeHold>();
   /** The resource balls a bank throws at the Town Hall (#208), over every building. */
   private readonly collect = new CollectFxLayer();
+  /** The Monster Juicer's spurt (`juicerShow.ts`), over every building. */
+  private readonly giblets = new YardGibletsLayer(Math.random, () => playEffect("splat5"));
+  /** Each Juicer at work, by building id, and what its arrivals carry. */
+  private readonly blends = new Map<number, JuicerBlend>();
+  private readonly juiceNews = new Map<number, JuicedNews>();
+  /** Blend of monsters juiced but not walked there, added with the next arrival. */
+  private readonly unwalked = new Map<number, number>();
+  /** Juicers whose last arrival was an Inferno monster: their balls are magma (`_lastType` 8). */
+  private readonly magmaLast = new Set<number>();
 
   /**
    * Where the planner hangs its world-space decals: the tower range discs and
@@ -117,6 +164,10 @@ export class YardRenderer {
   private season: Season = "normal";
   /** The Halloween pumpkin that stands in for a mushroom, once it has loaded. */
   private pumpkin: Texture | null = null;
+  /** Whether the pumpkin is being asked for, so a second Halloween does not ask twice. */
+  private pumpkinLoading = false;
+  /** Whether `destroy` has run: a pumpkin still being retried then gives up. */
+  private destroyed = false;
   private unwatchSeason: (() => void) | null = null;
   private yard: Yard | null = null;
   /** Which buildings are working and the clock to read it on (#255); see `setWork`. */
@@ -147,14 +198,19 @@ export class YardRenderer {
   private zoomWatcher: ((zoom: number) => void) | null = null;
 
   constructor() {
-    this.mushroomLayer.eventMode = "none";
+    this.buildings.onArtReady(() => this.openSheets());
+    this.life.onJuiceArrive = (monster, juicer) => this.juiceArrived(monster, juicer);
     this.isoDecals.eventMode = "none";
+    this.rangeOval.eventMode = "none";
+    this.rangeOval.visible = false;
     this.root.addChild(
       this.ground.root,
       this.isoDecals,
+      this.giblets.ground,
+      this.rangeOval,
       this.buildings.shadows,
-      this.mushroomLayer,
       this.buildings.tops,
+      this.giblets.root,
       this.collect.root,
       this.blueprint.root,
       this.chrome,
@@ -181,20 +237,29 @@ export class YardRenderer {
   /**
    * Dresses the yard for `season`: the ground's tiles, and pumpkins in place
    * of the mushrooms at Halloween. The mushrooms keep the glyph until the
-   * pumpkin picture arrives, and keep it for good if it never does.
+   * pumpkin picture arrives, and keep it for good if it never does. The
+   * picture gets the yard's five tries (`retryLoad.ts`), so one broken answer
+   * on a first load does not leave mushrooms all Halloween.
    */
   setSeason(season: Season): void {
     if (season === this.season) return;
     this.season = season;
     this.ground.setSeason(season);
-    if (season === "halloween" && !this.pumpkin) {
-      void Assets.load<Texture>(PUMPKIN_ART).then(
-        (texture) => {
-          this.pumpkin = texture;
-          this.redrawMushrooms();
-        },
-        (caught: unknown) => console.warn("The Halloween pumpkin did not load; mushrooms stay.", caught),
-      );
+    if (season === "halloween" && !this.pumpkin && !this.pumpkinLoading) {
+      this.pumpkinLoading = true;
+      void loadWithRetries(PUMPKIN_ART, () => this.destroyed)
+        .then(
+          (texture) => {
+            if (this.destroyed) return;
+            this.pumpkin = texture;
+            this.redrawMushrooms();
+          },
+          (caught: unknown) =>
+            console.warn(`The Halloween pumpkin did not load in ${LOAD_TRIES} tries; mushrooms stay.`, caught),
+        )
+        .finally(() => {
+          this.pumpkinLoading = false;
+        });
     }
     this.redrawMushrooms();
   }
@@ -218,6 +283,7 @@ export class YardRenderer {
     const popNew = Boolean(options.popNewMushrooms) && this.yard !== null && !prefersReducedMotion();
     this.clearMushrooms();
     this.setHovered(null);
+    this.setRangeHover(null);
     this.setSelected(null);
     this.yard = yard;
     this.byId.clear();
@@ -230,8 +296,15 @@ export class YardRenderer {
 
     // The base seed keeps one yard's grass the same between visits. Somebody
     // else's yard sits on open grass with no plot edge (see `Yard.foreign`).
-    this.ground.layout(yard.bounds, yard.savedAt || 1, yard.foreign ? "open" : "plot");
+    // An Inferno yard stands on lava (`BASE.as:1493-1495`).
+    this.ground.layout(
+      yard.bounds,
+      yard.savedAt || 1,
+      yard.foreign ? "open" : "plot",
+      yard.kind === "inferno" ? "lava" : "grass",
+    );
     void this.ground.loadTiles();
+    this.sheetHold ??= setTimeout(() => this.openSheets(), SHEET_HOLD_MS);
 
     // The creatures outlive a redraw: out of the containers the yard is about
     // to empty, and back in once it has refilled them.
@@ -254,7 +327,10 @@ export class YardRenderer {
       else sprite.anchor.set(0.5, 0.85);
       sprite.scale.set(this.mushroomSize());
       sprite.position.set(mushroom.worldX, mushroom.worldY);
-      this.mushroomLayer.addChild(sprite);
+      // Among the buildings, by depth: a wall behind it no longer covers it.
+      sprite.eventMode = "none";
+      sprite.zIndex = mushroomZIndex(mushroom);
+      this.buildings.addGuest(sprite);
       this.mushroomSprites.set(key, sprite);
       keys.add(key);
     }
@@ -276,6 +352,7 @@ export class YardRenderer {
     if (this.currentView === YardView.ISO) {
       this.buildings.draw(visible, deltaSeconds, this.work?.now() ?? 0);
       this.life.update(visible, deltaSeconds);
+      this.runJuicers(deltaSeconds);
       this.jobBars.update();
       // A handful of badges: cheap to place every frame.
       if (this.hatchMarks.current) this.hatchMarks.reposition();
@@ -288,6 +365,59 @@ export class YardRenderer {
       this.chromeDirty = false;
       this.drawChrome();
     }
+    this.growRangeOval(deltaSeconds);
+  }
+
+  /**
+   * Shows the range oval of the defence the mouse is resting on, or hides it
+   * when passed null. Pass only a mouse's hover: phones and tablets show no
+   * oval (owner). Whether this building gets one at all — own yard, a
+   * standing, idle defence — is `hoverRange`'s call; the planner and the
+   * blueprint view never show it.
+   */
+  setRangeHover(building: YardBuilding | null): void {
+    const yard = this.yard;
+    const range =
+      building &&
+      yard &&
+      !this.plannerVisuals &&
+      this.currentView === YardView.ISO &&
+      !this.stored.has(building.id) &&
+      !this.concealed.has(building.id)
+        ? hoverRange(building, yard)
+        : null;
+    const target = range === null ? null : building;
+    if (target?.id === this.rangeTarget?.id) return;
+
+    this.rangeTarget = target;
+    this.rangeElapsed = 0;
+    this.rangeOval.visible = false;
+    this.rangeOval.clear();
+    if (!target || range === null) return;
+
+    const { rx, ry } = rangeRadii(range, YardView.ISO);
+    this.rangeOval
+      .ellipse(0, 0, rx, ry)
+      .fill({ color: RANGE_COLOUR, alpha: RANGE_FILL_ALPHA })
+      .stroke({ color: RANGE_COLOUR, alpha: RANGE_EDGE_ALPHA, width: 1, pixelLine: true });
+    const offset = this.buildings.offsetOf(target.id);
+    this.rangeOval.position.set(target.centreX + offset.x, target.centreY + offset.y);
+  }
+
+  /** The tower the range oval belongs to, or null; for tests and the scene. */
+  get rangeHoverId(): number | null {
+    return this.rangeTarget?.id ?? null;
+  }
+
+  /** Runs the oval's 0.25 s wait and 0.25 s grow-in (`rangeHoverFrame`). */
+  private growRangeOval(deltaSeconds: number): void {
+    if (!this.rangeTarget) return;
+    this.rangeElapsed += deltaSeconds;
+    const frame = rangeHoverFrame(this.rangeElapsed);
+    this.rangeOval.visible = frame !== null;
+    if (!frame) return;
+    this.rangeOval.alpha = frame.alpha;
+    this.rangeOval.scale.set(frame.scaleX, frame.scaleY);
   }
 
   setHovered(building: YardBuilding | null): void {
@@ -316,9 +446,10 @@ export class YardRenderer {
     for (const layer of [
       this.ground.root,
       this.isoDecals,
+      this.giblets.ground,
       this.buildings.shadows,
-      this.mushroomLayer,
       this.buildings.tops,
+      this.giblets.root,
       this.collect.root,
       this.buildings.markers,
       this.jobBars.root,
@@ -328,6 +459,7 @@ export class YardRenderer {
     ]) {
       layer.visible = iso;
     }
+    if (!iso) this.setRangeHover(null);
     this.blueprint.setActive(!iso);
     this.life.setHidden(!iso || this.lifeHidden);
     this.chromeDirty = true;
@@ -545,14 +677,12 @@ export class YardRenderer {
   setPlannerVisuals(visuals: PlannerVisuals | null): void {
     this.plannerVisuals = visuals;
     this.chromeDirty = true;
+    // The planner draws its own rings; a hover oval would sit on top of them.
+    if (visuals) this.setRangeHover(null);
     if (!visuals) {
       this.planner.clear();
-      this.blueprint.setPlanned(null);
       return;
     }
-    // The badge has two halves: the chevron the overlay draws over either view,
-    // and the "3→5" the blueprint writes on the tile it already levels.
-    this.blueprint.setPlanned(visuals.planned);
     this.planner.draw(visuals, (id) => this.cornersOf(id));
   }
 
@@ -617,6 +747,120 @@ export class YardRenderer {
   /** Re-stacks the isometric draw list after a planner move is committed. */
   resortByDepth(): void {
     this.buildings.resortByDepth();
+  }
+
+  /* ── The Monster Juicer at work (`juicerShow.ts`) ──────────────────── */
+
+  /**
+   * Shows a juice the server has made (`juiceNews.ts`): the juiced monsters
+   * walk (or fly) from their pens into the Juicer, which blends each as it
+   * gets there. Drawing only; the goo is banked already. With no Juicer
+   * drawn nothing shows; under reduced motion, or with no way there, the
+   * Juicer blends at once.
+   */
+  juice(news: JuicedNews): void {
+    const yard = this.yard;
+    const juicer = this.byId.get(news.juicer);
+    if (!yard || !juicer || this.stored.has(juicer.id) || this.concealed.has(juicer.id)) return;
+    const [width, height] = juicer.footprint;
+    const door = juicerDoor({ x: juicer.x, y: juicer.y, width, height });
+    const route = (from: YardPoint, to: YardPoint) => routeBetween(yard, from, to);
+    this.juiceNews.set(juicer.id, news);
+    let walking = 0;
+    let unwalked = 0;
+    for (const [monster, count] of Object.entries(news.monsters)) {
+      const room = Math.max(0, MAX_JUICE_WALKERS - walking);
+      const started = this.life.juice(monster, Math.min(count, room), juicer.id, door, route, flyerAltitude(monster));
+      walking += started;
+      unwalked += blendOf(news.hatchCost[monster] ?? 0) * (count - started);
+    }
+    const blend = this.blendFor(juicer.id, news.level);
+    if (walking === 0) blend.add(unwalked);
+    else if (unwalked > 0) this.unwalked.set(juicer.id, (this.unwalked.get(juicer.id) ?? 0) + unwalked);
+  }
+
+  /** Juicers mid-blend, for tests and the browser checks. */
+  get juicersBlending(): number {
+    let count = 0;
+    for (const blend of this.blends.values()) if (blend.running) count++;
+    return count;
+  }
+
+  private blendFor(id: number, level: number): JuicerBlend {
+    let blend = this.blends.get(id);
+    if (!blend) {
+      blend = new JuicerBlend(level);
+      this.blends.set(id, blend);
+    }
+    blend.level = level;
+    return blend;
+  }
+
+  /** A monster got into the Juicer: `Blend`, and its goo ball flies off (`BUILDING9.as:54-68`). */
+  private juiceArrived(monster: string, id: number): void {
+    const news = this.juiceNews.get(id);
+    if (!news) return;
+    const blend = this.blendFor(id, news.level);
+    const cost = news.hatchCost[monster] ?? 0;
+    blend.add(blendOf(cost) + (this.unwalked.get(id) ?? 0));
+    this.unwalked.delete(id);
+    if (isInfernoMonster(monster)) this.magmaLast.add(id);
+    else this.magmaLast.delete(id);
+    this.throwJuice(id, Math.ceil(cost * news.rate));
+  }
+
+  /**
+   * Goo balls from the Juicer to the Town Hall (`ResourcePackages.Create`,
+   * `BUILDING9.as:66`, `:85`): Flash's goo ball, or its magma ball when the
+   * last monster in was an Inferno one. Drawing only: the goo is banked
+   * already, so a landing adds nothing.
+   */
+  private throwJuice(id: number, amount: number): void {
+    const juicer = this.byId.get(id);
+    const hall = this.yard?.buildings.find(
+      (building) =>
+        building.type === TOWN_HALL_TYPE && !this.stored.has(building.id) && !this.concealed.has(building.id),
+    );
+    if (!juicer || !hall || amount <= 0) return;
+    const at = (building: YardBuilding): { x: number; y: number } => {
+      const offset = this.buildings.offsetOf(building.id);
+      return { x: building.worldX + offset.x, y: building.worldY + offset.y };
+    };
+    const planned = planFlights(
+      [{ type: juicer.type, ...at(juicer), resource: "r4", amount }],
+      at(hall),
+    );
+    const flights = this.magmaLast.has(id)
+      ? planned.map((flight) => ({ ...flight, dot: "magma" as const }))
+      : planned;
+    if (flights.length > 0) this.collect.launch(flights, () => undefined);
+  }
+
+  /** Runs each Juicer's blend a frame: its strip, its sound, its spurt and its last goo ball. */
+  private runJuicers(deltaSeconds: number): void {
+    this.giblets.update(deltaSeconds);
+    for (const [id, blend] of this.blends) {
+      const juicer = this.byId.get(id);
+      if (!juicer) {
+        this.blends.delete(id);
+        this.magmaLast.delete(id);
+        continue;
+      }
+      if (!blend.running) continue;
+      for (const event of blend.advance(deltaSeconds)) {
+        if (event.kind === "sound") playEffect("juice");
+        else if (event.kind === "goo") this.throwJuice(id, 1);
+        else {
+          const offset = this.buildings.offsetOf(id);
+          const spout = {
+            x: juicer.worldX + offset.x + JUICER_SPOUT.x,
+            y: juicer.worldY + offset.y + JUICER_SPOUT.y,
+          };
+          this.giblets.throw(planGiblets(spout, event.amount, this.giblets.inAir));
+        }
+      }
+      this.buildings.setAnimFrame(id, 0, blend.cell);
+    }
   }
 
   /* ── A bank's balls ─────────────────────────────────────────────────── */
@@ -829,10 +1073,21 @@ export class YardRenderer {
     if (sprite && mushroom) sprite.position.set(mushroom.worldX, mushroom.worldY);
   }
 
+  /** Lets the creatures' sheets load; see {@link sheetsAllowed}. */
+  private openSheets(): void {
+    this.allowSheets();
+    if (this.sheetHold !== null) clearTimeout(this.sheetHold);
+  }
+
   destroy(): void {
+    this.destroyed = true;
+    this.openSheets();
     this.unwatchSeason?.();
     this.unwatchSeason = null;
     this.collect.destroy();
+    this.giblets.destroy();
+    this.blends.clear();
+    this.magmaLast.clear();
     this.life.destroy();
     this.clearMushrooms();
     this.popping.clear();
@@ -932,7 +1187,10 @@ export class YardRenderer {
   }
 
   private clearMushrooms(): void {
-    for (const child of this.mushroomLayer.removeChildren()) child.destroy();
+    for (const sprite of this.mushroomSprites.values()) {
+      this.buildings.removeGuest(sprite);
+      sprite.destroy();
+    }
     this.mushroomSprites.clear();
   }
 
@@ -991,6 +1249,13 @@ export class YardRenderer {
 const PUMPKIN_ART = "/assets/buildings/decorations/pumpkins/top.png";
 const PUMPKIN_BASE = 0.9;
 const PUMPKIN_SCALE = 1.3;
+
+/**
+ * The longest the creatures' sheets wait for the building pictures, in
+ * milliseconds: a building picture that never answers must not keep the
+ * yard empty of monsters.
+ */
+const SHEET_HOLD_MS = 4000;
 
 /** How far a hatchery's number is raised over a job bar and its time, world pixels at zoom 1. */
 const JOB_BAR_CLEARANCE = BAR_HEIGHT + 22;

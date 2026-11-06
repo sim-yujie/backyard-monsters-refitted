@@ -9,7 +9,7 @@ import {
   type ResourceAmounts,
 } from "../../game-rules/combat/index.js";
 import type { EntryHoused } from "../yard/attackRoster.js";
-import { ATTACK_TIMEOUT } from "./isAttackActive.js";
+import { attackWindowSeconds, LONGEST_ATTACK_WINDOW_SECONDS } from "./attackWindow.js";
 
 /**
  * Binds an attack result to the player who started the attack (issue #25).
@@ -34,20 +34,25 @@ import { ATTACK_TIMEOUT } from "./isAttackActive.js";
  */
 
 /**
- * How long a session authorises saves for.
+ * How long a session authorises saves for, from its start.
  *
- * Deliberately the same 7 minutes as `isAttackActive`, so the two windows
+ * Deliberately the same window as `isAttackActive` (`attackWindow.ts`), from
+ * the same Declare War flag the attack load froze into both, so the two
  * cannot disagree: the moment the defender is free to be attacked by someone
- * else, the previous attacker can no longer write to the row.
+ * else, the previous attacker can no longer write to the row. A session
+ * minted before the flag was kept reads as an attack without Declare War.
+ *
+ * @param session - The session, or the checkpoint carrying its facts.
  */
-export const ATTACK_SESSION_WINDOW = ATTACK_TIMEOUT;
+export const sessionWindowSeconds = (session: { declareWar?: boolean }): number =>
+  attackWindowSeconds(session.declareWar === true);
 
 /**
- * How long the stored key is kept. A minute longer than the window, so an
- * attacker who is late gets the precise `expired` reason in the logs rather
+ * How long the stored key is kept. A minute longer than the longest window, so
+ * an attacker who is late gets the precise `expired` reason in the logs rather
  * than looking like someone who never started an attack at all.
  */
-export const ATTACK_SESSION_TTL = ATTACK_SESSION_WINDOW + 60;
+export const ATTACK_SESSION_TTL = LONGEST_ATTACK_WINDOW_SECONDS + 60;
 
 /** One attack, as recorded when the attacker entered the defender's yard. */
 export interface AttackSession {
@@ -109,6 +114,16 @@ export interface AttackSession {
    */
   championBrains?: ChampionBrains;
   /**
+   * Each of the attacker's champions' health at attack start, by type, after
+   * the load caught their yard up. The battle sends a champion out at this
+   * and nothing else, as Flash sent it at its stored `hp` (`ATTACK.as:532`):
+   * the attack load serves it to the client as `attackerhealth`, and every
+   * replay stamps it on the log's champions (`fightableLog`), so a champion
+   * hurt in one attack is still hurt in the next, and a log cannot heal it.
+   * Absent on a session minted before it, whose battle sent each at full.
+   */
+  championHealth?: ChampionHealth;
+  /**
    * The attacker's academy levels at attack start, monster id → level, after
    * the load caught their yard up (issue #201). The attack load serves them to
    * the client as `attackeracademy` and every replay fights at these, so a
@@ -144,6 +159,27 @@ export type AcademyRanks = Readonly<Record<string, number>>;
 
 /** Champion type → brain, as {@link AttackSession.championBrains} keeps it. */
 export type ChampionBrains = Readonly<Record<string, BrainWeights>>;
+
+/** Champion type → health, as {@link AttackSession.championHealth} keeps it. */
+export type ChampionHealth = Readonly<Record<string, number>>;
+
+/**
+ * The health to freeze from the attacker's stored champions: each one's
+ * whole `hp`, at least 0, by type; undefined when there are none.
+ *
+ * @param champions - The attacker's `champion` list as stored.
+ */
+export const healthOf = (champions: unknown): ChampionHealth | undefined => {
+  if (!Array.isArray(champions)) return undefined;
+  const out: Record<string, number> = {};
+  for (const champion of champions) {
+    const t = (champion as { t?: unknown } | null)?.t;
+    if (typeof t !== "number" || !Number.isInteger(t) || t < 1 || t > 5) continue;
+    const hp = Number((champion as { hp?: unknown }).hp);
+    out[String(t)] = Number.isFinite(hp) ? Math.max(0, Math.floor(hp)) : 0;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+};
 
 /**
  * The brains to freeze from the attacker's stored champions: each non-zero
@@ -196,6 +232,7 @@ export const serialiseAttackSession = (session: AttackSession): string =>
   session.attackerResources ||
   session.defenderForces ||
   session.championBrains ||
+  session.championHealth ||
   session.attackerAcademy ||
   session.attackerRanks ||
   session.declareWar !== undefined ||
@@ -253,6 +290,7 @@ export type AttackSessionFacts = Pick<
   | "attackerlevel"
   | "defenderForces"
   | "championBrains"
+  | "championHealth"
   | "attackerAcademy"
   | "attackerRanks"
   | "declareWar"
@@ -273,6 +311,9 @@ export const sessionFactsOf = (parsed: Record<string, unknown>): AttackSessionFa
   const championBrains = isRecord(parsed.championBrains)
     ? brainsOf(Object.entries(parsed.championBrains).map(([t, b]) => ({ t: Number(t), b })))
     : undefined;
+  const championHealth = isRecord(parsed.championHealth)
+    ? healthOf(Object.entries(parsed.championHealth).map(([t, hp]) => ({ t: Number(t), hp })))
+    : undefined;
   const attackerAcademy = academyLevelsOf(parsed.attackerAcademy);
   const attackerRanks = academyRanksOf(parsed.attackerRanks);
   const { attackerlevel, declareWar } = parsed;
@@ -282,6 +323,7 @@ export const sessionFactsOf = (parsed: Record<string, unknown>): AttackSessionFa
     ...(defenderResources && { defenderResources }),
     ...(attackerResources && { attackerResources }),
     ...(championBrains && { championBrains }),
+    ...(championHealth && { championHealth }),
     ...(Number.isSafeInteger(attackerlevel) &&
       (attackerlevel as number) >= 1 && { attackerlevel: attackerlevel as number }),
     ...(attackerAcademy && { attackerAcademy }),
@@ -364,7 +406,7 @@ export const checkAttackBinding = ({
 }: BindingCheck): AttackBindingResult => {
   if (!session) return { ok: false, reason: "no-session" };
 
-  if (now - session.startedat >= ATTACK_SESSION_WINDOW)
+  if (now - session.startedat >= sessionWindowSeconds(session))
     return { ok: false, reason: "expired" };
 
   if (session.attackerid !== callerid) return { ok: false, reason: "wrong-attacker" };
@@ -407,6 +449,7 @@ const academyRanksOf = (raw: unknown): AcademyRanks | undefined => {
  * @param {AcademyLevels} [attackerAcademy] - The attacker's academy levels, which the attack load serves too (#201).
  * @param {boolean} [declareWar] - Whether Declare War was running for the attacker (#201).
  * @param {AcademyRanks} [attackerRanks] - The attacker's Monster Lab ranks, frozen (#352).
+ * @param {ChampionHealth} [championHealth] - The attacker's champions' health, frozen.
  */
 export const newAttackSession = (
   attackerid: number,
@@ -419,7 +462,8 @@ export const newAttackSession = (
   championBrains?: ChampionBrains,
   attackerAcademy?: AcademyLevels,
   declareWar?: boolean,
-  attackerRanks?: AcademyRanks
+  attackerRanks?: AcademyRanks,
+  championHealth?: ChampionHealth
 ): AttackSession => ({
   attackerid,
   attackid,
@@ -430,6 +474,7 @@ export const newAttackSession = (
   ...(attackerResources && { attackerResources }),
   ...(attackerlevel !== undefined && { attackerlevel }),
   ...(championBrains && { championBrains }),
+  ...(championHealth && { championHealth }),
   ...(attackerAcademy && { attackerAcademy }),
   ...(attackerRanks && Object.keys(attackerRanks).length > 0 && { attackerRanks }),
   ...(declareWar !== undefined && { declareWar }),

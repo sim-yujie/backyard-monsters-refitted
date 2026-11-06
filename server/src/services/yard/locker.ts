@@ -1,9 +1,13 @@
-import { monsterEntry, type MonsterEntry } from "../../game-data/monsterCatalogue.js";
+import {
+  isInfernoMonster,
+  monsterEntry,
+  type MonsterEntry,
+} from "../../game-data/monsterCatalogue.js";
 import { storeItems } from "../../game-data/store/storeItems.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import type { StorageCapSave } from "../base/economy/resourceBudget.js";
-import { levelOf } from "../yardplanner/costs.js";
+import { levelOf, yardKindOf } from "../yardplanner/costs.js";
 import { fitCredit } from "./credit.js";
 import { instantUnlockPrice, timeCost } from "./shiny.js";
 import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
@@ -22,7 +26,31 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * Everything here is pure: it reads the caught-up save the yard action wrapper
  * hands it and returns what should change, or throws the refusal. The wrapper
  * charges the putty and the Shiny, clamps the refund and writes.
+ *
+ * **The Inferno yard** (`docs/design/inferno.md` §2.6, WP 2.2) has its own
+ * Locker, `lockerdata` and `academy` on the Inferno row. The same rules run
+ * there for the Inferno roster (`IC1`..`IC8`) only, priced from the
+ * catalogue's `INFERNO_MONSTER_CATALOGUE`; `r3` is then Sulfur, paid from the
+ * Inferno purse (`infernoView`). Spurtz (`IC1`) is always unlocked there, as
+ * the Pokey is on the surface (`CREATURELOCKER.getFirstCreatureID`, `:58-66`).
+ * Each yard only ever sees its own realm's unlock (`CREATURELOCKER.Tick`,
+ * `:895-903`).
  */
+
+/**
+ * Which roster a yard's Locker, Academy and Hatcheries serve: the surface
+ * monsters (`C…`) on a main yard or outpost, the Inferno ones (`IC…`) on the
+ * Inferno yard (`BASE.isInfernoMainYardOrOutpost`).
+ */
+export type MonsterRealm = "surface" | "inferno";
+
+/** The realm of the yard `save` is. */
+export const monsterRealmOf = (save: { type?: string | null } | null | undefined): MonsterRealm =>
+  yardKindOf(save) === "inferno" ? "inferno" : "surface";
+
+/** True when `id` belongs to `realm`'s roster: `C<n>` on the surface, `IC<n>` in the Inferno. */
+export const inRealm = (id: string, realm: MonsterRealm): boolean =>
+  realm === "inferno" ? isInfernoMonster(id) : /^C\d+$/.test(id);
 
 /** Monster Locker type id (`client/scripts/YARD_PROPS.as:901`). */
 export const LOCKER_TYPE = 8;
@@ -47,16 +75,28 @@ export const CLOD_EXTRA_SECONDS = 4;
  */
 export const STARTER_MONSTER = "C1";
 
+/** The Inferno's always-unlocked monster, Spurtz (`CREATURELOCKER.as:58-60`). */
+export const INFERNO_STARTER_MONSTER = "IC1";
+
+/** The monster `realm`'s yards always have unlocked. */
+export const starterMonsterOf = (realm: MonsterRealm): string =>
+  realm === "inferno" ? INFERNO_STARTER_MONSTER : STARTER_MONSTER;
+
 /**
  * `lockerdata` with the Pokey unlocked, as Flash's load made it: the same
  * object when it already is, otherwise a copy with `C1: { t: 2 }`. Like Flash
  * it replaces a running Pokey unlock, which a save from before #218 may hold.
+ * On the Inferno yard (`realm` `inferno`) the monster is Spurtz.
  */
-export const withStarterUnlocked = (lockerdata: JsonObject | null | undefined): JsonObject => {
-  if (lockerdata && Number((lockerdata[STARTER_MONSTER] as JsonObject | undefined)?.t) === 2) {
+export const withStarterUnlocked = (
+  lockerdata: JsonObject | null | undefined,
+  realm: MonsterRealm = "surface"
+): JsonObject => {
+  const starter = starterMonsterOf(realm);
+  if (lockerdata && Number((lockerdata[starter] as JsonObject | undefined)?.t) === 2) {
     return lockerdata;
   }
-  return { ...(lockerdata ?? {}), [STARTER_MONSTER]: { t: 2 } };
+  return { ...(lockerdata ?? {}), [starter]: { t: 2 } };
 };
 
 /** One `lockerdata` entry: `t` 1 unlocking (with `s`/`e`), 2 unlocked. */
@@ -68,6 +108,8 @@ export interface LockerEntry {
 
 /** The slice of a save the locker routes read. */
 export interface LockerSave extends StorageCapSave {
+  /** `BaseType`: the Inferno yard unlocks the Inferno roster ({@link monsterRealmOf}). */
+  type?: string;
   buildingdata?: BuildingDataMap | null;
   resources?: JsonObject | null;
   lockerdata?: JsonObject | null;
@@ -82,15 +124,16 @@ const finite = (raw: unknown): number | null => {
 };
 
 /**
- * The running surface unlock, or null. Like `CREATURELOCKER.Tick` it takes the
- * first `t: 1` entry of this realm (`:895-903`); the realm is always the
- * surface here, so an Inferno (`IC…`) entry never counts (D19).
+ * The running unlock of `realm`, or null. Like `CREATURELOCKER.Tick` it takes
+ * the first `t: 1` entry of the yard's realm (`:895-903`), so a surface yard
+ * never counts an Inferno (`IC…`) entry and the Inferno yard never a surface one.
  */
 export const runningUnlock = (
-  lockerdata: JsonObject | null | undefined
+  lockerdata: JsonObject | null | undefined,
+  realm: MonsterRealm = "surface"
 ): { monster: string; entry: LockerEntry } | null => {
   for (const [monster, entry] of Object.entries(lockerdata ?? {})) {
-    if (!monster.startsWith("C") || Number(entry?.t) !== 1) continue;
+    if (!inRealm(monster, realm) || Number(entry?.t) !== 1) continue;
     return { monster, entry: entry as LockerEntry };
   }
   return null;
@@ -154,11 +197,11 @@ export const unlockFinishAt = (
 
 /**
  * The catalogue entry for a monster a player may unlock, or `400 badRequest`:
- * an id not in the catalogue, a blocked one (C18, spawned by C17), or not a
- * surface `C` id (Inferno is out of scope, D19).
+ * an id not in the catalogue, a blocked one (C18, spawned by C17), or not of
+ * the yard's realm (an Inferno `IC` id on the surface, a `C` id in the Inferno).
  */
-export const obtainableOrThrow = (monster: string): MonsterEntry => {
-  const entry = /^C\d+$/.test(monster) ? monsterEntry(monster) : undefined;
+export const obtainableOrThrow = (monster: string, realm: MonsterRealm = "surface"): MonsterEntry => {
+  const entry = inRealm(monster, realm) ? monsterEntry(monster) : undefined;
   if (!entry || entry.blocked) {
     throw yardBadRequestErr("That monster cannot be unlocked.", { monster });
   }
@@ -174,9 +217,10 @@ export const obtainableOrThrow = (monster: string): MonsterEntry => {
  * Putty is the wrapper's `409 shortfall` (start only).
  */
 export const unlockGate = (save: LockerSave, monster: string): MonsterEntry => {
-  const entry = obtainableOrThrow(monster);
+  const realm = monsterRealmOf(save);
+  const entry = obtainableOrThrow(monster, realm);
 
-  const running = runningUnlock(save.lockerdata);
+  const running = runningUnlock(save.lockerdata, realm);
   const existing = save.lockerdata?.[monster];
   if (existing && running?.monster !== monster) {
     throw yardRefusedErr("alreadyUnlocked", "That monster is already unlocked.", { monster });
@@ -204,7 +248,7 @@ const notUnlockingErr = () => yardRefusedErr("notUnlocking", "No unlock is runni
 
 /** The running unlock, or `409 notUnlocking`. */
 export const runningOrThrow = (save: LockerSave) => {
-  const running = runningUnlock(save.lockerdata);
+  const running = runningUnlock(save.lockerdata, monsterRealmOf(save));
   if (!running) throw notUnlockingErr();
   return running;
 };

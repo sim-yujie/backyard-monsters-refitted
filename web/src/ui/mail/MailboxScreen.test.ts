@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { InviteAnswer, InvitePayment, MailApi, MailMessage, MailTarget, Outgoing, SendResult } from "@/api/mail";
 import { MailboxScreen, type MailboxScreenOptions } from "./MailboxScreen";
 import { ApiError } from "@/api/http";
+import { spokenText } from "@/ui/resourceIcon";
 
 /**
  * The mailbox screen (#193) over a fake mail API: the list, a thread, a
@@ -223,6 +224,33 @@ describe("the mailbox screen", () => {
     });
   });
 
+  it("shows an attack notice's numbers as icons, the sentence kept as their tooltip (less-text job 3)", async () => {
+    const defended = message({
+      threadid: 7,
+      userid: 0,
+      messagetype: "yardattacked",
+      subject: "Kai_Builds attacked your yard",
+      message: "It was left 63% damaged. 1,234 Twigs and 500 Goo were looted.",
+      unread: 1,
+      updatetime: NOW - 30,
+      attackstats: { damage: 63, loot: { r1: 1234, r4: 500 }, housedLost: 9 },
+    });
+    const api = fakeApi([[defended]], { 7: [defended] });
+    const { host } = await openScreen(api);
+
+    const preview = rows(host)[0]!.querySelector(".mail-row__preview--attack");
+    expect(spokenText(preview!)).toBe("Yard damage 63% Twigs 1,234 lost Goo 500 lost");
+    expect(preview!.getAttribute("title")).toBe("Yard damage 63% · 1,234 Twigs lost · 500 Goo lost");
+    click(rows(host)[0]);
+    await settle();
+    expect(host.querySelector(".mail-pane__subject")?.textContent).toBe("Kai_Builds attacked your yard");
+    const text = host.querySelector<HTMLElement>(".mail-message__text--attack");
+    expect(spokenText(text!)).toBe("Yard damage 63% Twigs 1,234 lost Goo 500 lost");
+    expect(text!.title).toBe("It was left 63% damaged. 1,234 Twigs and 500 Goo were looted.");
+    // The housed monsters lost are not told (owner, 27 Oct).
+    expect(text!.textContent).not.toContain("9");
+  });
+
   describe("Add friend on an attack notice (friends WP11, #378)", () => {
     const attacked = message({
       threadid: 5,
@@ -330,6 +358,66 @@ describe("the mailbox screen", () => {
     expect(api.sent[0]).toEqual({ threadid: 0, targetid: 123, subject: "Truce?", message: "Shall we?" });
   });
 
+  // The owner's report (beta 4.1): a friend never written to was not on the list.
+  it("writes a new message to a friend who has no thread yet", async () => {
+    const api = fakeApi([[]], {}, {});
+    api.sendResult = { ok: true, threadid: 9 };
+    const friends = vi.fn(async () => [{ userid: 3119, name: "Dmtwo" }]);
+    const { host } = await openScreen(api, { friends });
+
+    click(host.querySelector(".mail-list__new"));
+    await settle();
+    const to = host.querySelector<HTMLSelectElement>(".mail-compose__to")!;
+    expect([...to.options].map((option) => option.textContent)).toEqual(["Dmtwo"]);
+    type(host.querySelector<HTMLTextAreaElement>(".mail-writer__text")!, "Hello friend");
+    click(host.querySelector(".mail-writer__send"));
+    await settle();
+    expect(api.sent).toEqual([{ threadid: 0, targetid: 3119, subject: "(no subject)", message: "Hello friend" }]);
+  });
+
+  it("offers friends and past contacts together, each once", async () => {
+    const api = fakeApi([[message()]], {});
+    const friends = async () => [
+      { userid: 88, name: "Acorn" },
+      { userid: 99, name: "Clover" },
+    ];
+    const { host } = await openScreen(api, { friends });
+
+    click(host.querySelector(".mail-list__new"));
+    await settle();
+    const to = host.querySelector<HTMLSelectElement>(".mail-compose__to")!;
+    expect([...to.options].map((option) => option.textContent)).toEqual(["Acorn", "Bramblefoot", "Clover"]);
+  });
+
+  it("still offers past contacts when the friends list cannot load", async () => {
+    const api = fakeApi([[message()]], {});
+    const { host } = await openScreen(api, { friends: () => Promise.reject(new Error("offline")) });
+
+    expect(rows(host)).toHaveLength(1);
+    click(host.querySelector(".mail-list__new"));
+    await settle();
+    const to = host.querySelector<HTMLSelectElement>(".mail-compose__to")!;
+    expect([...to.options].map((option) => option.textContent)).toEqual(["Acorn", "Bramblefoot"]);
+  });
+
+  it("offers the friends once they arrive to a new message opened before them", async () => {
+    const api = fakeApi([[]], {}, {});
+    let arrive: (friends: { userid: number; name: string }[]) => void = () => undefined;
+    const friends = () => new Promise<{ userid: number; name: string }[]>((resolve) => (arrive = resolve));
+    const host = document.createElement("div");
+    document.body.append(host);
+    hosts.push(host);
+    const screen = new MailboxScreen({ api, myId: () => ME, now: () => NOW, friends }).mount(host);
+    void screen.openCompose();
+    await settle();
+    expect(host.querySelector(".mail-compose__to")).toBeNull();
+
+    arrive([{ userid: 3119, name: "Dmtwo" }]);
+    await settle();
+    const to = host.querySelector<HTMLSelectElement>(".mail-compose__to")!;
+    expect([...to.options].map((option) => option.textContent)).toEqual(["Dmtwo"]);
+  });
+
   it("says who to write to when there is no one yet", async () => {
     const api = fakeApi([[]], {}, {});
     const { host } = await openScreen(api);
@@ -357,6 +445,28 @@ describe("the mailbox screen", () => {
     expect(api.blocked).toEqual([1]);
     expect(host.querySelector(".mail-status")?.textContent).toBe("Bramblefoot is blocked.");
     expect(rows(host)).toHaveLength(0);
+  });
+
+  it("keeps a thread's Propose truce and Block player in a row of their own, apart from the name and subject", async () => {
+    const api = fakeApi([[message(), notice]], { 1: [message()], 2: [notice] });
+    const { host } = await openScreen(api);
+    click(rows(host)[1]);
+    await settle();
+
+    const main = host.querySelector(".mail-pane__head > .mail-pane__main");
+    const titles = main?.querySelector(":scope > .mail-pane__titles");
+    const actions = main?.querySelector(":scope > .mail-pane__actions");
+    expect(titles?.querySelector(".mail-pane__name")?.textContent).toBe("Bramblefoot");
+    expect(titles?.querySelector<HTMLElement>(".mail-pane__name")?.title).toBe("Bramblefoot");
+    expect(titles?.querySelector(".btn")).toBeNull();
+    expect(actions?.querySelector(":scope > .mail-pane__truce")?.textContent).toBe("Propose truce");
+    expect(actions?.querySelector(":scope > .mail-block .mail-block__ask")?.textContent).toBe("Block player");
+
+    // A notice has neither button, and so no row for them.
+    click(rows(host)[0]);
+    await settle();
+    expect(host.querySelector(".mail-pane__main .mail-pane__titles")).not.toBeNull();
+    expect(host.querySelector(".mail-pane__actions")).toBeNull();
   });
 
   it("shows the server's words when a block is refused (#323)", async () => {

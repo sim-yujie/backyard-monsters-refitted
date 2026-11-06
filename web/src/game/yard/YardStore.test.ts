@@ -510,6 +510,22 @@ describe("the action queue", () => {
     expect(api.cancelUpgrade).not.toHaveBeenCalled();
   });
 
+  it("sends an Inferno wall to the planner's batch, as on the main yard", async () => {
+    const api = stubApi();
+    const { store } = storeWith(
+      loadWith({
+        type: "inferno",
+        buildingdata: { ...baseBuildings(), "6": { X: 500, Y: 0, t: 17, id: 6, l: 1 } },
+      }),
+      api,
+    );
+    const result = await store.upgrade(6);
+    // Owner decision 29 Oct 2026: the Inferno has the planner, so its walls
+    // upgrade only through the batch, like the main yard's (D13).
+    expect(result.ok ? "ok" : result.refusal.reason).toBe("useBatchRoute");
+    expect(api.upgrade).not.toHaveBeenCalled();
+  });
+
   it("reports a server refusal and fetches the state it was refused against", async () => {
     const refused = new ApiError("You do not have enough resources for that.", {
       status: 409,
@@ -673,6 +689,22 @@ describe("the notification count (#257)", () => {
     next = undefined;
     await store.refresh();
     expect(store.save.notifications).toBe(3);
+  });
+});
+
+describe("the Quests red number (beta 6)", () => {
+  it("takes each answer's questsClaimable, keeping it when an answer has none", async () => {
+    let next: number | undefined = 4;
+    const api = stubApi({
+      state: vi.fn(() => Promise.resolve({ ...answer(T0), ...(next !== undefined && { questsClaimable: next }) })),
+    });
+    const { store } = storeWith(loadWith({}), api);
+    expect(store.save.questsClaimable).toBeUndefined();
+    await store.refresh();
+    expect(store.save.questsClaimable).toBe(4);
+    next = undefined;
+    await store.refresh();
+    expect(store.save.questsClaimable).toBe(4);
   });
 });
 

@@ -1,4 +1,4 @@
-import { Texture } from "pixi.js";
+import { Texture, type Sprite } from "pixi.js";
 import { describe, expect, it, vi } from "vitest";
 import { planFlights, type Flight } from "./collectFx";
 import { CollectFxLayer, type CollectFxArt } from "./CollectFxLayer";
@@ -99,6 +99,14 @@ describe("CollectFxLayer", () => {
     expect(sound).toHaveBeenCalledTimes(6);
   });
 
+  it("pops the Inferno's own pair on the Inferno yard, as Flash did", () => {
+    const sound = vi.fn();
+    const layer = new CollectFxLayer({ art: art(), sound, inferno: () => true });
+    layer.launch(flights(100), () => {});
+    for (let frame = 0; frame < 60 * 4 && layer.flying > 0; frame++) layer.update(1 / 60);
+    expect(sound.mock.calls).toEqual([["ibankfire"], ["ibankland"]]);
+  });
+
   it("makes no sound for balls landed at once or taken away", () => {
     const sound = vi.fn();
     const layer = new CollectFxLayer({ art: art(), sound });
@@ -107,5 +115,19 @@ describe("CollectFxLayer", () => {
     layer.cancel(group);
     layer.finish();
     expect(sound).not.toHaveBeenCalled();
+  });
+  it("shows a flight's own ball when it has one: the Juicer's magma ball for an Inferno monster", () => {
+    const magma = new Texture();
+    const dot = vi.fn((resource: string) => (resource === "magma" ? magma : Texture.EMPTY));
+    const layer = new CollectFxLayer({ art: { dot, shadow: Texture.EMPTY, destroy: vi.fn() } });
+    const [goo] = planFlights(
+      [{ type: 9, x: 0, y: 0, resource: "r4", amount: 1 }],
+      { x: 600, y: 0 },
+      () => 0,
+    );
+    layer.launch([goo!, { ...goo!, dot: "magma" }], () => {});
+    expect(dot).toHaveBeenCalledWith("r4");
+    expect(dot).toHaveBeenCalledWith("magma");
+    expect(dotsOf(layer).map((sprite) => (sprite as Sprite).texture)).toContain(magma);
   });
 });

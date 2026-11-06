@@ -155,6 +155,13 @@ export const fundedBuildingIds = (onboarding: Onboarding): number[] =>
     .map(([, grant]) => (!Array.isArray(grant) && typeof grant?.id === "number" ? grant.id : null))
     .filter((id): id is number => id !== null);
 
+/** The `fund:<type>` grant that paid for building `id`, if the guide paid for it. */
+export const fundGrantFor = (onboarding: Onboarding, id: number): GrantRecord | undefined =>
+  Object.entries(onboarding.grants)
+    .filter(([key]) => key.startsWith("fund:"))
+    .map(([, grant]) => (!Array.isArray(grant) ? grant : undefined))
+    .find((grant) => grant?.id === id);
+
 /* ── guide/advance ───────────────────────────────────────────────────────── */
 
 /** What the route needs to know about the world outside the save for an advance. */
@@ -287,12 +294,14 @@ export const isGuidedBuild = (save: BuildSave, onboarding: Onboarding, type: num
   grantOf(onboarding, `fund:${type}`) === undefined;
 
 /**
- * The guide pays for its building (§2.4): `BASE.Fund` before a tutorial build
- * (`client/scripts/TUTORIAL.as:396-400`), done without handing resources
- * over. The build's gates are the ordinary `planBuild`'s, measured against
- * the yard topped up to the cost; the debit is cut to `min(held, cost)` per
- * resource, and the difference is the grant, recorded as `fund:<type>` with
- * the new building's id. The step moves to `finish-<type>`.
+ * The guide pays for its building (§2.4): Bob says "This one's on me", so the
+ * whole cost is his and the player's own resources are not touched (Flash's
+ * `BASE.Fund` only topped up the shortfall, which still emptied the player's
+ * savings). Done without handing resources over: the build's gates are the
+ * ordinary `planBuild`'s, measured against the yard with the cost added on
+ * top of what it holds; nothing is debited, and the cost is the grant,
+ * recorded as `fund:<type>` with the new building's id. The step moves to
+ * `finish-<type>`.
  */
 export const planGuidedBuild = (
   save: BuildSave,
@@ -310,29 +319,17 @@ export const planGuidedBuild = (
   const row = costOf(request.type, yardKindOf(save));
   const cost = row?.costs[0] ? stepAmounts(row.costs[0]) : { r1: 0, r2: 0, r3: 0, r4: 0 };
   const held = heldOf(save.resources);
-  const topped: ResourceAmounts = {
-    r1: Math.max(held.r1, cost.r1),
-    r2: Math.max(held.r2, cost.r2),
-    r3: Math.max(held.r3, cost.r3),
-    r4: Math.max(held.r4, cost.r4),
+  const funded: ResourceAmounts = {
+    r1: held.r1 + cost.r1,
+    r2: held.r2 + cost.r2,
+    r3: held.r3 + cost.r3,
+    r4: held.r4 + cost.r4,
   };
-  const plan = planBuild({ ...save, resources: { ...(save.resources ?? {}), ...topped } }, request, now);
+  const plan = planBuild({ ...save, resources: { ...(save.resources ?? {}), ...funded } }, request, now);
 
-  const debit: ResourceAmounts = {
-    r1: Math.min(held.r1, cost.r1),
-    r2: Math.min(held.r2, cost.r2),
-    r3: Math.min(held.r3, cost.r3),
-    r4: Math.min(held.r4, cost.r4),
-  };
+  const debit: ResourceAmounts = { r1: 0, r2: 0, r3: 0, r4: 0 };
   const onboarding: Onboarding = structuredClone(current);
-  onboarding.grants[key] = {
-    r1: cost.r1 - debit.r1,
-    r2: cost.r2 - debit.r2,
-    r3: cost.r3 - debit.r3,
-    r4: cost.r4 - debit.r4,
-    id: plan.report.id,
-    at: now,
-  };
+  onboarding.grants[key] = { ...cost, id: plan.report.id, at: now };
   onboarding.guide.step = finishStepOf(request.type)!;
   return { ...plan, debit, onboarding };
 };

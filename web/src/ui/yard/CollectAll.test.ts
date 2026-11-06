@@ -4,10 +4,12 @@ import type { BaseLoadResponse, BuildingData } from "@/api/types";
 import type { BankReport } from "@/api/yardBank";
 import type { YardActionResult, YardStore, YardUiBinding } from "@/game/yard/YardStore";
 import { Notices } from "@/ui/maproom/Notices";
-import { spokenText } from "@/ui/resourceIcon";
+import { setResourceRealm, spokenText } from "@/ui/resourceIcon";
 import {
+  bankFloat,
   COLLECT_EMPTY_LABEL,
   COLLECT_FULL_NOTE,
+  INFERNO_COLLECT_FULL_NOTE,
   CollectAll,
   collectRing,
   CollectState,
@@ -166,6 +168,23 @@ describe("CollectAll", () => {
     expect(button().getAttribute("aria-label")).toContain(COLLECT_FULL_NOTE);
   });
 
+  it("names the Resource Pods when the Inferno purse is full", () => {
+    (binding.store as unknown as { resources: Record<string, number> }).resources = {
+      r1: 1_000,
+      r2: 0,
+      r3: 0,
+      r4: 0,
+    };
+    setResourceRealm("inferno");
+    try {
+      collect.bind(binding);
+      expect(button().title).toContain(INFERNO_COLLECT_FULL_NOTE);
+      expect(button().getAttribute("aria-label")).toContain(INFERNO_COLLECT_FULL_NOTE);
+    } finally {
+      setResourceRealm("surface");
+    }
+  });
+
   it("banks everything in one request and says what was collected", async () => {
     run.mockResolvedValue({ ok: true, report: reportOf({ r1: 720, r4: 500 }), completed: [] });
     collect.bind(binding);
@@ -175,7 +194,7 @@ describe("CollectAll", () => {
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0]![0].key).toBe("bank:all");
     const notice = document.querySelector(".notice")!;
-    expect(spokenText(notice)).toContain("Collected Twigs 720 Goo 500.");
+    expect(spokenText(notice)).toContain("Collected Twigs 720 gained Goo 500 gained.");
   });
 
   it("throws the balls on the press and hands the answer over after (#208)", async () => {
@@ -246,6 +265,17 @@ describe("collectRing", () => {
   });
 });
 
+describe("bankFloat", () => {
+  it("floats a tap's bank as a gain: green \"+720\", hidden from a screen reader", () => {
+    const float = bankFloat("r1", 720);
+    expect(float.classList.contains("yard-bank-float")).toBe(true);
+    expect(float.classList.contains("res-amount--gain")).toBe(true);
+    expect(float.querySelector(".res-amount__value")!.textContent).toBe("+720");
+    expect(float.getAttribute("aria-hidden")).toBe("true");
+    expect(float.querySelector("[title]")).toBeNull();
+  });
+});
+
 describe("showBankResult", () => {
   let notices: Notices;
 
@@ -261,7 +291,11 @@ describe("showBankResult", () => {
   it("warns when storage kept some in the harvesters", () => {
     showBankResult(notices, { ok: true, report: reportOf({ r1: 280 }, { r1: 440 }), completed: [] });
     expect(document.querySelector(".notice--warning")).not.toBeNull();
-    expect(text()).toContain("Collected Twigs 280. Twigs 440 stayed in your harvesters: storage is full.");
+    expect(text()).toContain("Collected Twigs 280 gained. Twigs 440 stayed in your harvesters: storage is full.");
+    // Collected is a gain, green "+280" (owner, 28 Oct); what stayed is plain.
+    const values = [...document.querySelectorAll(".notice .res-amount__value")];
+    expect(values.map((value) => value.textContent)).toEqual(["+280", "440"]);
+    expect(document.querySelectorAll(".notice .res-amount--gain")).toHaveLength(1);
   });
 
   it("says a server refusal, but not a local nothing-to-collect", () => {

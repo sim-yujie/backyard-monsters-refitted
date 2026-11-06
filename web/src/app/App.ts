@@ -1,12 +1,18 @@
-import { Application, Container } from "pixi.js";
+import { Application, Assets, Container } from "pixi.js";
 import { createOverlay, type Overlay } from "@/ui/overlay";
-import { setGameFrameSource, setScreenNameSource } from "@/game/bugReport/screenCapture";
+import {
+  captureScreen,
+  gameFrameOf,
+  lastCaptureStats,
+  setGameFrameSource,
+  setScreenNameSource,
+} from "@/game/bugReport/screenCapture";
 import { PerfOverlay } from "@/ui/PerfOverlay";
 import { SceneManager, type SceneFactory } from "./SceneManager";
 import { withHold, withPresence, withProtection } from "./presenceScene";
 import { withIdle } from "./idleScene";
 import { withMusic } from "./musicScene";
-import { IdleWatch, idleDurationText, idleTimingsFor } from "@/game/presence/idleWatch";
+import { type DisconnectReason, IdleWatch, idleDurationText, idleTimingsFor } from "@/game/presence/idleWatch";
 import { IdleWarning } from "@/ui/IdleWarning";
 import { getAuthToken, onAnswer } from "@/api/http";
 import { stayProtected } from "@/api/presence";
@@ -18,13 +24,19 @@ import { answerBotCheck, fetchBotCheck, forceBotCheck } from "@/api/botCheck";
 import { BotCheckWatch } from "@/game/presence/botCheckWatch";
 import { BotCheckCard } from "@/ui/BotCheckCard";
 import { BootScene } from "./scenes/BootScene";
+import { logout } from "@/api/auth";
+import { banWords } from "@/api/moderation";
+import { worldChat } from "@/game/chat/chatSession";
+import { setSignInNotice } from "./signInNotice";
 import { LoginScene } from "./scenes/LoginScene";
 import { MapGateScene } from "./scenes/MapGateScene";
 import { MapRoom1Scene } from "./scenes/MapRoom1Scene";
 import { MapRoom2Scene } from "./scenes/MapRoom2Scene";
 import { YardScene } from "./scenes/YardScene";
 import { AttackScene } from "./scenes/AttackScene";
-import { AwayScene } from "./scenes/AwayScene";
+import { AwayScene, awayText } from "./scenes/AwayScene";
+import { SceneName } from "./sceneName";
+import { guardTick } from "./guardedTick";
 import { BAITER_PLUGINS, BAITER_REPLAY_PLUGINS } from "@/game/baiter/baiterPlugin";
 import { WATCH_PLUGINS } from "@/game/autoAttack/watchPlugin";
 import { makeRaidDue } from "@/api/raid";
@@ -45,51 +57,6 @@ async function loadTitanOne(): Promise<void> {
     // Fallback stack takes over; see the comment in `start()`.
   }
 }
-
-/** Scene names, so nothing depends on a bare string in two places. */
-export const SceneName = {
-  BOOT: "boot",
-  LOGIN: "login",
-  /**
-   * "The map", before anything knows which: loads the own yard and opens
-   * Map Room 1, Map Room 2 or, with no Map Room, the yard (issue #162).
-   */
-  MAP: "map",
-  /** The neighbours and wild monster tribes, below Map Room 2 (issue #132). */
-  MAP_ROOM_1: "maproom1",
-  MAP_ROOM_2: "maproom2",
-  YARD: "yard",
-  /** An attack on a foreign yard; opened through `game/attack/attackTarget`. */
-  ATTACK: "attack",
-  /**
-   * A Wild Monster Baiter practice attack on the own yard (#126): the attack
-   * scene with only the battle layer and the Baiter's package, opened through
-   * `game/baiter/baiterSession`. Nothing on it talks to the server.
-   */
-  BAITER: "baiter",
-  /**
-   * A finished Baiter test played back (#22, WP5): the attack scene with only
-   * the battle layer and the Baiter's package, opened through
-   * `game/baiter/testHistory`. Nothing on it talks to the server.
-   */
-  BAITER_REPLAY: "baiter-replay",
-  /**
-   * An auto-attack's battle played back (issue #221): the attack scene with
-   * only the battle layer and the watch package, opened through
-   * `game/autoAttack/watchRun`. Nothing on it talks to the server.
-   */
-  WATCH: "watch",
-  /**
-   * A wild monster raid on the own main yard (#226): the attack scene with
-   * only the battle layer and the raid package, opened through
-   * `game/raid/raidSession`. It plays the fight the server already fought,
-   * then lands it and opens the yard.
-   */
-  RAID: "raid",
-  /** "You were away too long": the idle disconnect (#271, `game/presence/idleWatch.ts`). */
-  AWAY: "away",
-} as const;
-export type SceneName = (typeof SceneName)[keyof typeof SceneName];
 
 /**
  * The application shell.
@@ -113,6 +80,7 @@ export class App {
   private botCheck: BotCheckWatch | null = null;
   private botCheckCard: BotCheckCard | null = null;
   private stopHearing: (() => void) | null = null;
+  private stopTeam: (() => void) | null = null;
 
   constructor(private readonly host: HTMLElement) {
     this.pixi = new Application();
@@ -131,6 +99,15 @@ export class App {
     // the Font Loading API, or a font request that fails, still renders —
     // just with the fallback stack from --font-display/--font-body.
     await loadTitanOne();
+
+    // Pictures are fetched by the page, not by Pixi's worker pool. The pool
+    // fetches and decodes one picture per worker, one worker per processor
+    // core, newest request first: a yard asking for a hundred pictures at once
+    // waited in a queue of four to twelve, its walls (asked for first) served
+    // last, and a 10 MB monster sheet held a worker the whole time. The page's
+    // own fetch lets the browser have them all in flight, in the order asked,
+    // and `createImageBitmap` still decodes them off the main thread.
+    Assets.setPreferences({ preferWorkers: false });
 
     await this.pixi.init({
       // The canvas fills the window; CSS pins it and `resizeTo` keeps the
@@ -164,10 +141,11 @@ export class App {
 
     // The bug report's screenshot reads the game right after a fresh render,
     // and its "which screen" is the scene on show.
-    setGameFrameSource(() => {
-      this.pixi.render();
-      return this.pixi.canvas;
-    });
+    setGameFrameSource(() => gameFrameOf(this.pixi));
+    if (import.meta.env.DEV) {
+      // Dev console: `await __bugReportShot.capture()` takes one, `.stats()` says what it held.
+      (window as unknown as Record<string, unknown>).__bugReportShot = { capture: captureScreen, stats: lastCaptureStats };
+    }
     setScreenNameSource(() => this.scenes?.activeScene ?? null);
 
     // "Stay protected?" nine minutes after the last real game action (#275),
@@ -179,6 +157,8 @@ export class App {
       timings: protectionTimingsFor(window.location.search, import.meta.env.DEV),
       onShow: (endsAt) => prompt.show(endsAt),
       onHide: () => prompt.hide(),
+      // Out of protection is disconnected, input or none (owner, 30 Oct).
+      onLapse: (lapsed) => idle.lapse(lapsed),
       stay: stayProtected,
       account: getAuthToken,
     });
@@ -234,6 +214,8 @@ export class App {
     // Its "Still there?" comes first: "Stay protected?" waits while it is up,
     // and its button answers both when both are due.
     const scenes = this.scenes;
+    // What the away screen says: idle input, or the protection run out (3 Nov).
+    let awayReason: DisconnectReason = "idle";
     const warning = new IdleWarning(this.host, Date.now, () => {
       if (protection.due) protection.stay().catch(() => {});
     });
@@ -249,7 +231,8 @@ export class App {
         warning.hide();
         holdBack();
       },
-      onDisconnect: () => {
+      onDisconnect: (reason) => {
+        awayReason = reason;
         protection.stop();
         botCheck.stop();
         scenes.goTo(SceneName.AWAY);
@@ -303,7 +286,19 @@ export class App {
     );
     register(SceneName.WATCH, game(() => new AttackScene(WATCH_PLUGINS, { watch: true }), true));
     register(SceneName.RAID, game(() => new AttackScene(RAID_PLUGINS, { raid: true }), true));
-    register(SceneName.AWAY, () => new AwayScene(idleDurationText(idle.timings.disconnectMs), this.halt));
+    register(
+      SceneName.AWAY,
+      () =>
+        new AwayScene(
+          awayText(
+            awayReason,
+            idleDurationText(
+              awayReason === "protection" ? protection.timings.windowMs : idle.timings.disconnectMs,
+            ),
+          ),
+          this.halt,
+        ),
+    );
 
     // Pixi's renderer resize fires on the window; mirror it to the scenes.
     this.pixi.renderer.on("resize", this.handleResize);
@@ -314,14 +309,28 @@ export class App {
       this.resizeObserver.observe(this.host);
     }
 
-    this.pixi.ticker.add((ticker) => {
-      this.scenes?.tick(ticker.deltaMS / 1000);
+    // Guarded: one throw in a scene's update must not stop Pixi asking for
+    // the next frame (`guardedTick.ts`).
+    const tick = guardTick((deltaSeconds) => this.scenes?.tick(deltaSeconds));
+    this.pixi.ticker.add((ticker) => tick.run(ticker.deltaMS / 1000));
+
+    // A ban from the game team signs the player out at once, saying why and
+    // until when (the chat connection carries it, `game/chat/chatSession.ts`).
+    this.stopTeam = worldChat.onTeam((event) => {
+      if (event.kind !== "banned") return;
+      protection.stop();
+      botCheck.stop();
+      logout();
+      setSignInNotice(banWords(event.until, event.reason));
+      scenes.goTo(SceneName.LOGIN);
     });
 
     await this.scenes.start(SceneName.BOOT);
   }
 
   destroy(): void {
+    this.stopTeam?.();
+    this.stopTeam = null;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.idle?.destroy();

@@ -12,15 +12,17 @@ import { armLoginDeadline, clearLoginDeadline, closeIfTooLargeBeforeLogin } from
 import { addIgnore, removeIgnore, sendIgnoreList } from "./chatIgnoreList.js";
 import {
   authorizeJoin,
+  evict,
   getChannelHistory,
   joinChannel,
   leaveAllChannels,
   leaveChannel,
   postMessage,
 } from "./chatRooms.js";
+import { applyModeration } from "./chatModeration.js";
 import { clients, type SocketData } from "./chatState.js";
 import { initTransport, subscribeControl } from "./chatTransport.js";
-import { ChannelType, ChatControlType } from "../enums/Chat.js";
+import { ChatControlType } from "../enums/Chat.js";
 
 type ServerWebSocket<T> = import("bun").ServerWebSocket<T>;
 
@@ -34,7 +36,8 @@ export const initGateway = () => initTransport(() => subscribeControl(handleCont
 /**
  * Handles a control message published by the API side.
  * Membership changes are written there, so this is how the gateway learns that a
- * player it is holding in an alliance channel no longer belongs in it.
+ * player it is holding in an alliance channel (or a country room, after a
+ * country change) no longer belongs in it.
  *
  * @param {string} payload - The serialised {@link ChatControlMessage}.
  */
@@ -48,15 +51,15 @@ const handleControlMessage = (payload: string) => {
     return;
   }
 
-  if (message.type !== ChatControlType.AllianceEvict) return;
+  if (applyModeration(message)) return;
+
+  if (message.type !== ChatControlType.AllianceEvict && message.type !== ChatControlType.CountryEvict) return;
 
   const client = clients.get(message.userId);
 
   if (!client) return;
 
-  for (const [channel, info] of [...client.channels]) {
-    if (info.type === ChannelType.Alliance) leaveChannel(client, channel);
-  }
+  evict(client, message);
 };
 
 /**

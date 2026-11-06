@@ -17,8 +17,8 @@ import { BaseType } from "../../../enums/Base.js";
 import {
   attackNotBoundErr,
   permissionErr,
-  saveFailureErr,
 } from "../../../errors/errors.js";
+import { refuseMissingBase } from "../../../services/base/missingBase.js";
 import { combatConfig } from "../../../config/CombatConfig.js";
 import { chargeBombSpend } from "../../../services/base/combat/bombSpend.js";
 import { recordBombSpend } from "../../../services/base/combat/recordBombSpend.js";
@@ -40,6 +40,11 @@ import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
 import { scaledMR1Tribes } from "../../../services/maproom/v1/scaledMR1Tribes.js";
+import { isDescentBaseid } from "../../../services/inferno/descent.js";
+import { landDescentAttack } from "../../../services/inferno/descentLanding.js";
+import { landInfernoPlayerAttack } from "../../../services/inferno/infernoPlayerLanding.js";
+import { landInfernoTribeAttack } from "../../../services/inferno/infernoTribeLanding.js";
+import { isInfernoTribeBaseid } from "../../../services/inferno/infernoTribes.js";
 import { economyConfig } from "../../../config/EconomyConfig.js";
 import {
   auditEconomySave,
@@ -59,6 +64,7 @@ import {
   discardCheckpoint,
   releaseFinalLock,
 } from "../../../services/base/attackCheckpointStore.js";
+import { beginAttackLanding, commitAttackLanding, rollbackAttackLanding } from "../../../services/base/attackLanding.js";
 import { ownerSaveConfig } from "../../../config/OwnerSaveConfig.js";
 import { requireOwnerSaveAllowed } from "../../../services/base/ownerSave.js";
 import { storedDamage } from "../../../services/base/storedDamage.js";
@@ -90,7 +96,10 @@ import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanSt
 import { discardDefenceReplayLoad } from "../../../services/defences/defenceReplayLoad.js";
 import { recordDefenceReplay } from "../../../services/defences/recordDefenceReplay.js";
 import { recordAttackAchievements } from "../../../services/achievements/events.js";
-import { INFERNO_SAVE_TYPES, requireInfernoOpen } from "../../../services/inferno/infernoGate.js";
+import { attackQuestEvents, defenceQuestEvents } from "../../../services/quests/hooks.js";
+import { recordQuestEvents, recordUserQuestEvents } from "../../../services/quests/record.js";
+import { INFERNO_SAVE_TYPES, refuseOldInferno } from "../../../services/inferno/infernoGate.js";
+import { infernoConfig } from "../../../config/InfernoConfig.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -125,7 +134,48 @@ export const baseSave: KoaController = async (ctx) => {
     return;
   }
 
-  if (!baseSave) throw saveFailureErr();
+  // A Descent yard has no row either: its attack is bound to the attacker
+  // (`POST /bm/inferno/attack/start`, `services/inferno/descentLanding.ts`).
+  if (!baseSave && isDescentBaseid(saveData.baseid)) {
+    const { save: yardSave, descent } = await landDescentAttack(ctx, user, saveData);
+    const filteredSave = await mapSaveData(yardSave, user, { attack: true });
+
+    ctx.status = Status.OK;
+    ctx.body = { error: 0, ...filteredSave, ...(descent && { descent }) };
+    return;
+  }
+
+  // Nor does a Moloch tribe of the Inferno map: its attack is bound to the
+  // attacker too (`services/inferno/infernoTribeLanding.ts`).
+  if (!baseSave && isInfernoTribeBaseid(saveData.baseid)) {
+    const { save: yardSave, tribe } = await landInfernoTribeAttack(ctx, user, saveData);
+    const filteredSave = await mapSaveData(yardSave, user, { attack: true });
+
+    ctx.status = Status.OK;
+    ctx.body = { error: 0, ...filteredSave, ...(tribe && { tribe }) };
+    return;
+  }
+
+  // A row that is gone: answered as an expected refusal, and logged (`missingBase.ts`).
+  if (!baseSave) {
+    return refuseMissingBase(ctx, user, {
+      baseid: saveData.baseid,
+      basesaveid,
+      saveType: Number(saveData.attackid) ? "attack" : "own",
+    });
+  }
+
+  // Another player's Inferno yard, attacked through the new Inferno: its
+  // attack is bound to its row (`services/inferno/infernoPlayerLanding.ts`).
+  // The owner's own saves of it stay on the old, closed route below.
+  if (baseSave.type === BaseType.INFERNO && baseSave.saveuserid !== user.userid && infernoConfig.enabled) {
+    const { save: yardSave, player } = await landInfernoPlayerAttack(ctx, user, saveData, baseSave);
+    const filteredSave = await mapSaveData(yardSave, user, { attack: true });
+
+    ctx.status = Status.OK;
+    ctx.body = { error: 0, ...filteredSave, ...(player && { player }) };
+    return;
+  }
 
   const isOwner = baseSave.saveuserid === user.userid;
   const isOutpostOwner = isOwner && baseSave.type === BaseType.OUTPOST;
@@ -134,9 +184,9 @@ export const baseSave: KoaController = async (ctx) => {
   // Not the owner and not in an attack
   if (!isOwner && baseSave.attackid === 0) throw permissionErr();
 
-  // An Inferno yard or a Moloch tribe row is the old Inferno's, closed until
-  // the new Inferno ships (`config/InfernoConfig.ts`).
-  if (INFERNO_SAVE_TYPES.has(baseSave.type)) requireInfernoOpen(ctx, user, `base/save on ${baseSave.type}`);
+  // Any other save of an Inferno yard or a Moloch tribe row is the Flash
+  // Inferno's: the new one changes them through its own routes (WP 7.1).
+  if (INFERNO_SAVE_TYPES.has(baseSave.type)) refuseOldInferno(ctx, user, `base/save on ${baseSave.type}`);
 
   // Owner saves of a main yard (issue #101) or an outpost (outposts plan WP0b)
   // are retired: yards change through the server's action routes now, and this
@@ -155,6 +205,12 @@ export const baseSave: KoaController = async (ctx) => {
 
   try {
     await saveBase(ctx, { user, userSave, body, saveData, baseSave, isOutpostOwner, isAttack });
+  } catch (err) {
+    // A landing that failed part-way leaves nothing of itself behind: the
+    // attack stays open for this save sent again, or for the finaliser
+    // (`beginAttackLanding`).
+    if (finalises) await rollbackAttackLanding();
+    throw err;
   } finally {
     if (finalises) await releaseFinalLock(baseSave.basesaveid);
   }
@@ -183,7 +239,7 @@ const saveBase = async (
   // The attack must be this caller's (issue #25). A non-zero `attackid` on the
   // row is not on its own permission to write to it: the save has to come from
   // the account the server recorded when the attack started, inside the same
-  // 7-minute window `isAttackActive` uses. Checked before `validateSave` and
+  // window `isAttackActive` uses (`attackWindow.ts`). Checked before `validateSave` and
   // before the economy audit so a refusal touches nothing at all.
   const session = isAttack
     ? await requireAttackBinding(ctx, user, baseSave, saveData.attackid, now)
@@ -316,6 +372,20 @@ const saveBase = async (
         });
 
   if (verdict) await recordEconomyVerdict(ctx, user, baseSave, verdict, economyConfig.mode);
+
+  // The save that ends an attack writes from here on in one transaction, on
+  // its rows locked and read afresh, and commits it only once the attack is
+  // closed (`beginAttackLanding`).
+  const lands = isAttack && Boolean(saveData.over);
+  // Read first, in a fork and so on a connection of its own, which a landing
+  // holding one already must not wait on. Only a replayed battle reads it.
+  const housingOwner = battle ? await getHousingOwner(baseSave) : null;
+  if (lands) {
+    await beginAttackLanding(userSave, baseSave, outpostOwnerSave);
+    // Under the lock, the row must still be this attack's: one another landing
+    // has closed since lands nothing of this one.
+    if (Number(baseSave.attackid) !== session!.attackid) throw attackNotBoundErr("superseded");
+  }
 
   const storedHealthData = baseSave.buildinghealthdata;
   // The yard's damage before this attack, for its defence replay (#359).
@@ -476,6 +546,8 @@ const saveBase = async (
   let takeoverGrant: TakeoverOffer | null = null;
   /** What the attacker's pool took of the loot (issue #166), for the response. */
   let banked: ResourceAmounts | null = null;
+  /** The defence replay and the yard owner's notice, written once the landing has committed. */
+  let afterLanding: (() => Promise<void>) | null = null;
 
   if (isAttack) {
     if (saveData.monsterupdate) {
@@ -549,7 +621,7 @@ const saveBase = async (
       housingLoss = landHousingLoss(
         baseSave,
         { before: storedHealthData, after: battle.buildinghealthdata },
-        await getHousingOwner(baseSave),
+        housingOwner,
         now
       );
       (baseSave as unknown as { attackreport: unknown }).attackreport = reportWithHousingLoss(
@@ -560,10 +632,6 @@ const saveBase = async (
 
     postgres.em.persist(userSave);
     await postgres.em.flush();
-
-    // Event loot (the monthly Krallen Hunt) counts the credit before the cap,
-    // once: this save holds the final lock (`services/events/lootEvents.ts`).
-    if (loot) await countAttackLoot(postgres.em, user.userid, userSave, loot.credit, now);
 
     // MR3 Takeover Logic:
     // If the attack is over and damage >= 90, trigger takeover or destroy logic.
@@ -603,49 +671,46 @@ const saveBase = async (
         housedLost: lostCount(housingLoss),
         now,
       });
-      // A Map Room 2 main yard's defence replay, recorded before the notice
-      // so the notice can open it (defence replays, #359).
-      const replayId =
-        battle && battleInput
-          ? await recordDefenceReplay(postgres.em, {
-              yard: baseSave,
-              attacker: user,
-              session,
-              input: battleInput,
-              report: (baseSave as unknown as { attackreport: unknown }).attackreport,
-              damageBefore,
-              damageAfter: baseSave.damage ?? 0,
-              defenderDelta,
-              housedLost: lostCount(housingLoss),
-              now,
-            })
-          : null;
-      // A Map Room 1 or 2 main yard's owner is told the same (#361), and an
-      // attacked Map Room 1 bot books its repair and maybe a revenge (bot
-      // neighbours, #241).
-      await afterYardDefended(postgres.em, {
-        yard: baseSave,
-        attacker: user,
-        defenderDelta,
-        housedLost: lostCount(housingLoss),
-        now,
-        replayId,
-      });
+      // The replay is written on a connection of its own (`recordDefenceReplay`),
+      // so it waits for the landing's commit: a landing rolled back leaves none
+      // behind, and the one that lands records it once.
+      const report = (baseSave as unknown as { attackreport: unknown }).attackreport;
+      const damageAfter = baseSave.damage ?? 0;
+      const housedLost = lostCount(housingLoss);
+      afterLanding = async () => {
+        // A Map Room 2 main yard's defence replay, recorded before the notice
+        // so the notice can open it (defence replays, #359).
+        const replayId =
+          battle && battleInput
+            ? await recordDefenceReplay(postgres.em, {
+                yard: baseSave,
+                attacker: user,
+                session,
+                input: battleInput,
+                report,
+                damageBefore,
+                damageAfter,
+                defenderDelta,
+                housedLost,
+                now,
+              })
+            : null;
+        // A Map Room 1 or 2 main yard's owner is told the same (#361), and an
+        // attacked Map Room 1 bot books its repair and maybe a revenge (bot
+        // neighbours, #241).
+        await afterYardDefended(postgres.em, {
+          yard: baseSave,
+          attacker: user,
+          defenderDelta,
+          housedLost,
+          now,
+          replayId,
+        });
+      };
     }
   }
 
   baseSave.attackid = saveData.over ? 0 : baseSave.attackid;
-
-  // The attack is finished, so its session is spent. Dropping it now frees the
-  // row immediately instead of leaving a key that authorises nothing until it
-  // times out (issue #25).
-  if (isAttack && saveData.over) {
-    await endAttackSession(baseSave.basesaveid);
-    // Nothing is left for the server to finish from (issue #138), nor to
-    // keep a defence replay of (#359).
-    await discardCheckpoint(baseSave.basesaveid);
-    await discardDefenceReplayLoad(baseSave.basesaveid);
-  }
 
   // Attack saves store health from the attacker's replay but keep buildingdata from the DB,
   // so the owner's countdowns are brought up to the attack before savetime moves to it.
@@ -662,6 +727,53 @@ const saveBase = async (
 
   postgres.em.persist(baseSave);
   await postgres.em.flush();
+
+  if (lands) {
+    // The loot on both sides and `attackid = 0` commit together: a copy of
+    // this save, or the finaliser, finds the attack closed from now on.
+    await commitAttackLanding();
+
+    // The attack is finished, so its session is spent. Dropping it now frees the
+    // row immediately instead of leaving a key that authorises nothing until it
+    // times out (issue #25).
+    await endAttackSession(baseSave.basesaveid);
+    // Nothing is left for the server to finish from (issue #138), nor to
+    // keep a defence replay of (#359).
+    await discardCheckpoint(baseSave.basesaveid);
+    // The attack has landed: a notice that fails now costs it nothing, as the
+    // Inferno's (`infernoPlayerLanding.ts`).
+    if (afterLanding) await runAfterLanding(afterLanding, baseSave);
+    await discardDefenceReplayLoad(baseSave.basesaveid);
+
+    // Event loot (the monthly Krallen Hunt) counts the credit before the cap,
+    // once: this save holds the final lock (`services/events/lootEvents.ts`).
+    // After the commit: a counter it fails to write is logged and lost, and
+    // must not take the landing's transaction down with it.
+    if (loot) await countAttackLoot(postgres.em, user.userid, userSave, loot.credit, now);
+
+    // Quests (`services/quests/hooks.ts`), each on its player's main row
+    // under its own lock, after the commit: a won attack, a tribe camp
+    // destroyed, catapult hits and loot (before the cap) for the attacker; a
+    // held defence for the owner of a player's yard. Logged and lost on a failure.
+    const damageAfter = Number(baseSave.damage) || 0;
+    await recordQuestEvents(
+      postgres.em,
+      userSave.basesaveid,
+      attackQuestEvents({
+        defender: baseSave,
+        damageBefore,
+        damageAfter,
+        before: storedHealthData,
+        after: battle?.buildinghealthdata,
+        log: battleInput?.log,
+        loot: loot?.credit,
+      }),
+      now
+    );
+    if (baseSave.type !== BaseType.TRIBE && baseSave.saveuserid && baseSave.saveuserid !== user.userid) {
+      await recordUserQuestEvents(postgres.em, baseSave.saveuserid, defenceQuestEvents(damageAfter), now);
+    }
+  }
 
   // A Map Room 2 camp attack played by hand is the player's plan for the
   // camp's tribe and level from now on (issue #221): the log the server fought,
@@ -754,6 +866,15 @@ const requireAttackBinding = async (
   );
 
   throw attackNotBoundErr(result.reason);
+};
+
+/** A landed attack's follow-up, a failure logged and never thrown into the answer. */
+const runAfterLanding = async (followUp: () => Promise<void>, yard: Save): Promise<void> => {
+  try {
+    await followUp();
+  } catch (err) {
+    logger.error(`The defence notice for yard ${yard.baseid} failed: ${err}`);
+  }
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

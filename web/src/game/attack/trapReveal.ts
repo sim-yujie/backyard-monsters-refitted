@@ -1,4 +1,4 @@
-import { TRAP_TYPES } from "@/game/yard/buildingCosts";
+import { TRAP_TYPES, WALL_TYPES } from "@/game/yard/buildingCosts";
 import type { Yard } from "@/game/yard/yardModel";
 
 /**
@@ -21,17 +21,20 @@ export const isTrapType = (type: number): boolean => TRAP_TYPES.includes(type);
 
 /**
  * How many buildings the attack's counts cover: every building but the
- * traps (#72). The status line's "N buildings" and the end panel's "N of
- * M" both use it, so they always agree. Traps are left out on both sides
- * of the count: an attacker is never shown one (above), and the engine never
- * lists a fired trap among `destroyedIds`, so counting them in the total
- * would leave a gap nothing could close and give away how many there are.
- * The Flash client showed no building count at all, in its HUD or its end
- * popups (`UI_TOP.as` attack mode, `popup_attackend.as`).
+ * traps (#72) and the walls. The status line's "N buildings" and the end
+ * panel's "N of M" both use it, so they always agree. Traps are left out on
+ * both sides of the count: an attacker is never shown one (above), and the
+ * engine never lists a fired trap among `destroyedIds`, so counting them in
+ * the total would leave a gap nothing could close and give away how many
+ * there are. Walls are left out on both sides because the damage figure
+ * leaves them out (`damagePercent.ts`, `BFOUNDATION.as:434-452`): a Descent
+ * yard is mostly walls and read "23 of 234" at 100% damage. The Flash client
+ * showed no building count at all, in its HUD or its end popups (`UI_TOP.as`
+ * attack mode, `popup_attackend.as`).
  */
 export const countedBuildings = (types: Iterable<number>): number => {
   let count = 0;
-  for (const type of types) if (!isTrapType(type)) count += 1;
+  for (const type of types) if (!isTrapType(type) && !WALL_TYPES.includes(type)) count += 1;
   return count;
 };
 

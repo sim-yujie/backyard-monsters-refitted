@@ -33,7 +33,7 @@ const healthy = (extra: Partial<HealthSummary> = {}): HealthSummary =>
     disks: [{ path: "/opt", mount: "/", totalBytes: 100, usedBytes: 50, availableBytes: 50, usedPercent: 50 }],
     disksFrom: "host",
     database: { ok: true, pingMs: 1, sizeBytes: 1 },
-    redis: { ok: true, pingMs: 1, usedMemoryBytes: 1, peakMemoryBytes: 1, maxMemoryBytes: 0 },
+    redis: { ok: true, pingMs: 1, usedMemoryBytes: 1, peakMemoryBytes: 1, maxMemoryBytes: 0, evictedKeys: 0 },
     backups: { count: 3, totalBytes: 3, partialCount: 0, newest: { name: "bym-1.dump", at: "", sizeBytes: 1, ageHours: 9 } },
     responseTimes: {} as HealthSummary["responseTimes"],
     ...extra,
@@ -89,13 +89,42 @@ describe("finding problems", () => {
     const result = findProblems(
       healthy({
         database: { ok: false, pingMs: null, sizeBytes: null, error: "refused" },
-        redis: { ok: false, pingMs: null, usedMemoryBytes: null, peakMemoryBytes: null, maxMemoryBytes: null, error: "closed" },
+        redis: { ok: false, pingMs: null, usedMemoryBytes: null, peakMemoryBytes: null, maxMemoryBytes: null, evictedKeys: null, error: "closed" },
       }),
       null,
       config
     );
     expect(keys(result)).toEqual(["database", "redis"]);
     expect(result.problems[0].detail).toContain("refused");
+    // Redis's memory cannot be read, so an open memory alert is neither repeated nor called fixed.
+    expect(result.unchecked).toEqual(expect.arrayContaining(["redis-memory", "redis-evictions"]));
+  });
+
+  test("Redis at 75% of its cap is nearly full; once open, it stays open until 70% (security audit 2026-10-29)", () => {
+    const MB = 1024 ** 2;
+    const at = (usedMb: number, maxMb = 160) =>
+      healthy({ redis: { ...healthy().redis, usedMemoryBytes: usedMb * MB, maxMemoryBytes: maxMb * MB } });
+
+    expect(keys(findProblems(at(119), null, config))).toEqual([]);
+    const full = findProblems(at(120), null, config);
+    expect(full.problems[0]).toMatchObject({ key: "redis-memory", section: "health" });
+    expect(full.problems[0].detail).toContain("120 MB of its 160 MB cap (75%)");
+
+    expect(keys(findProblems(at(113), null, config, new Set(["redis-memory"])))).toEqual(["redis-memory"]);
+    expect(keys(findProblems(at(111), null, config, new Set(["redis-memory"])))).toEqual([]);
+
+    // No cap (a local Redis): nothing to measure against.
+    expect(keys(findProblems(at(500, 0), null, config))).toEqual([]);
+    // ALERT_REDIS_MEMORY_PERCENT moves the line.
+    expect(keys(findProblems(at(100), null, alertConfig({ ALERT_REDIS_MEMORY_PERCENT: "60" })))).toEqual(["redis-memory"]);
+  });
+
+  test("any key Redis has dropped to save memory is a problem", () => {
+    const dropped = (evictedKeys: number) => healthy({ redis: { ...healthy().redis, evictedKeys } });
+    expect(keys(findProblems(dropped(0), null, config))).toEqual([]);
+    const result = findProblems(dropped(42), null, config);
+    expect(keys(result)).toEqual(["redis-evictions"]);
+    expect(result.problems[0].detail).toContain("dropped 42 keys");
   });
 
   test("a jump in errors needs both the minimum and the factor over the usual", () => {

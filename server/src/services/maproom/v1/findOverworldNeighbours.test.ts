@@ -61,7 +61,8 @@ const fakeEm = (reals: object[], bots: object[] = []) => {
 };
 
 const player = { userid: 1 };
-const levelFive = { points: pointsFor(5), basevalue: "0" };
+/** A player shown bots: from level 15 up (owner 3 Nov 2026). */
+const levelTwenty = { points: pointsFor(20), basevalue: "0" };
 
 describe("the level window", () => {
   test("is seven levels either way, never below level 1", () => {
@@ -103,7 +104,7 @@ describe("findOverworldNeighbours", () => {
 
   test("with BOTS_FILL off the list is real players only and bots are never asked for", async () => {
     const { em, queries } = fakeEm([realRow(2), realRow(3)], [botRow(50)]);
-    const neighbours = await findOverworldNeighbours(em, player, levelFive, { now: NOW, fill: false });
+    const neighbours = await findOverworldNeighbours(em, player, levelTwenty, { now: NOW, fill: false });
 
     expect(neighbours.map((n) => n.userid).sort()).toEqual([2, 3]);
     expect(queries).toHaveLength(1);
@@ -114,11 +115,11 @@ describe("findOverworldNeighbours", () => {
     try {
       delete process.env.BOTS_FILL;
       const off = fakeEm([realRow(2)], [botRow(50)]);
-      expect(await findOverworldNeighbours(off.em, player, levelFive, { now: NOW })).toHaveLength(1);
+      expect(await findOverworldNeighbours(off.em, player, levelTwenty, { now: NOW })).toHaveLength(1);
 
       process.env.BOTS_FILL = "on";
       const on = fakeEm([realRow(2)], [botRow(50)]);
-      expect(await findOverworldNeighbours(on.em, player, levelFive, { now: NOW })).toHaveLength(2);
+      expect(await findOverworldNeighbours(on.em, player, levelTwenty, { now: NOW })).toHaveLength(2);
     } finally {
       if (before === undefined) delete process.env.BOTS_FILL;
       else process.env.BOTS_FILL = before;
@@ -128,7 +129,7 @@ describe("findOverworldNeighbours", () => {
   test("a full list of real players asks for no bots", async () => {
     const reals = Array.from({ length: NEIGHBOUR_LIMIT }, (_, i) => realRow(100 + i));
     const { em, queries } = fakeEm(reals, [botRow(50)]);
-    const neighbours = await findOverworldNeighbours(em, player, levelFive, { now: NOW, fill: true });
+    const neighbours = await findOverworldNeighbours(em, player, levelTwenty, { now: NOW, fill: true });
 
     expect(neighbours).toHaveLength(NEIGHBOUR_LIMIT);
     expect(queries).toHaveLength(1);
@@ -138,7 +139,7 @@ describe("findOverworldNeighbours", () => {
     const reals = [realRow(2), realRow(3), realRow(4)];
     const bots = Array.from({ length: 40 }, (_, i) => botRow(500 + i, 15 + (i % 3)));
     const { em, queries } = fakeEm(reals, bots);
-    const neighbours = await findOverworldNeighbours(em, player, levelFive, {
+    const neighbours = await findOverworldNeighbours(em, player, levelTwenty, {
       now: NOW,
       fill: true,
       random: alea("fill"),
@@ -152,15 +153,32 @@ describe("findOverworldNeighbours", () => {
 
     const botQuery = queries[1];
     expect(botQuery.sql).toContain("b.state = 'active'");
-    // A level 5 player's window is 1-12, but no bot stands below 15: the nearest bots, 15-17 (`botLevelWindow`).
-    expect(botQuery.params).toEqual(["main", 15, 17, 1, 1]);
+    // A level 20 player's window is 13-27, but no bot stands below the floor, 25: the nearest bots, 25-27 (`botLevelWindow`).
+    expect(botQuery.params).toEqual(["main", 25, 27, 1, 1]);
+  });
+
+  test("a player under level 15 is shown no bots, only real players, with BOTS_FILL on (owner 3 Nov 2026)", async () => {
+    for (const level of [1, 5, 14]) {
+      const { em, queries } = fakeEm([realRow(2), realRow(3)], [botRow(50, 25)]);
+      const neighbours = await findOverworldNeighbours(em, player, { points: pointsFor(level), basevalue: "0" }, {
+        now: NOW,
+        fill: true,
+      });
+      expect(neighbours.map((n) => n.userid).sort()).toEqual([2, 3]);
+      expect(queries).toHaveLength(1);
+    }
+    // From 15 up the bots come back.
+    const { em, queries } = fakeEm([realRow(2)], [botRow(50, 25)]);
+    const fifteen = await findOverworldNeighbours(em, player, { points: pointsFor(15), basevalue: "0" }, { now: NOW, fill: true });
+    expect(fifteen.map((n) => n.userid).sort((a, b) => a - b)).toEqual([2, 50]);
+    expect(queries[1]!.params).toEqual(["main", 25, 27, 1, 1]);
   });
 
   test("bots attackable now are picked before protected ones", async () => {
     const protectedBots = Array.from({ length: 30 }, (_, i) => botRow(600 + i, 5, NOW_S + 3600));
     const openBots = Array.from({ length: 5 }, (_, i) => botRow(700 + i, 6));
     const { em } = fakeEm([], [...protectedBots, ...openBots]);
-    const neighbours = await findOverworldNeighbours(em, player, levelFive, {
+    const neighbours = await findOverworldNeighbours(em, player, levelTwenty, {
       now: NOW,
       fill: true,
       random: alea("open"),
@@ -172,7 +190,7 @@ describe("findOverworldNeighbours", () => {
 
   test("a bot entry has exactly the fields and types of a real player's", async () => {
     const { em } = fakeEm([realRow(2)], [botRow(50)]);
-    const neighbours = await findOverworldNeighbours(em, player, levelFive, { now: NOW, fill: true });
+    const neighbours = await findOverworldNeighbours(em, player, levelTwenty, { now: NOW, fill: true });
 
     const shape = (entry: object) =>
       Object.entries(entry)
@@ -193,7 +211,7 @@ describe("findOverworldNeighbours", () => {
 
     for (let run = 0; run < 100; run++) {
       const { em } = fakeEm(reals, bots);
-      const neighbours = await findOverworldNeighbours(em, player, levelFive, {
+      const neighbours = await findOverworldNeighbours(em, player, levelTwenty, {
         now: NOW,
         fill: true,
         random: alea(`order-${run}`),
@@ -209,7 +227,7 @@ describe("findOverworldNeighbours", () => {
 
   test("a bot already on the list is not added twice", async () => {
     const { em } = fakeEm([realRow(2)], [botRow(2), botRow(50)]);
-    const neighbours = await findOverworldNeighbours(em, player, levelFive, { now: NOW, fill: true });
+    const neighbours = await findOverworldNeighbours(em, player, levelTwenty, { now: NOW, fill: true });
 
     expect(neighbours.map((n) => n.userid).sort((a, b) => a - b)).toEqual([2, 50]);
   });
@@ -218,7 +236,7 @@ describe("findOverworldNeighbours", () => {
 describe("neighbours dropped today by the attack cap (issue #247)", () => {
   test("are left out of the real-player search", async () => {
     const { em, queries } = fakeEm([]);
-    await findOverworldNeighbours(em, player, levelFive, { now: NOW, fill: false, exclude: [7, 8] });
+    await findOverworldNeighbours(em, player, levelTwenty, { now: NOW, fill: false, exclude: [7, 8] });
 
     const [{ sql, params }] = queries;
     expect(sql).toContain("u.userid NOT IN (?, ?, ?)");
@@ -227,7 +245,7 @@ describe("neighbours dropped today by the attack cap (issue #247)", () => {
 
   test("are never picked as bots", async () => {
     const { em } = fakeEm([realRow(2)], [botRow(50), botRow(51)]);
-    const neighbours = await findOverworldNeighbours(em, player, levelFive, { now: NOW, fill: true, exclude: [50] });
+    const neighbours = await findOverworldNeighbours(em, player, levelTwenty, { now: NOW, fill: true, exclude: [50] });
 
     expect(neighbours.map((n) => n.userid).sort((a, b) => a - b)).toEqual([2, 51]);
   });

@@ -4,7 +4,8 @@
  * or a tab of the Monsters screen ("Hatch"), or the Monster Baiter's test
  * panel (a Baiter test's "Change army", #22 WP4), or the Defences screen (a
  * defence replay's Back, an attack notice's Defences on the map, #363), or a
- * notice (a friend's visit refused on the way in, #372).
+ * notice (a friend's visit refused on the way in, #372), or the Inferno map
+ * (back from a Moloch tribe attack, Inferno WP 2.10).
  *
  * The same one-shot handoff as `game/attack/attackTarget.ts`:
  * `SceneManager.goTo` takes a name and nothing else, so the request rides in
@@ -17,7 +18,9 @@ export type YardIntent =
   | { readonly kind: "baiter" }
   | { readonly kind: "defences" }
   /** A line to show on arrival: why a friend's yard did not open (#372). */
-  | { readonly kind: "notice"; readonly text: string };
+  | { readonly kind: "notice"; readonly text: string }
+  /** The Inferno map over the Inferno yard: the way back from a Moloch tribe attack (Inferno WP 2.10). */
+  | { readonly kind: "infernoMap" };
 
 let pending: YardIntent | null = null;
 

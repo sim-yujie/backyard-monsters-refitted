@@ -48,6 +48,10 @@ const READERS: Record<string, string> = {
     "books the decline of a friend request under the friends design's §6.2 rule (#368); the request is stored and answered alike for anyone, writes only a bot_job row",
   "controllers/friends/gift.ts":
     "refuses a gift to or from a bot as notFriends, the same answer as for any player who is not a friend (#375)",
+  "services/inferno/infernoNeighbours.ts":
+    "leaves bots out of the Inferno neighbours (no bots in the Inferno, R10); a bot is simply not listed, like a player out of range",
+  "controllers/inferno/playerAttack.ts":
+    "refuses an attack on a bot's Inferno yard as notInfernoPlayer, the same answer as for any yard that is not a live player's (R10)",
 };
 
 /** Directories whose files may read bot data freely: the bot code and the database layer. */

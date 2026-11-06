@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { LogRecord } from "@logtape/logtape";
 
 import { cleanMessage, cleanPlace, cleanStack, errorFingerprint } from "../services/errors/errorText.js";
@@ -12,9 +13,61 @@ import { cleanMessage, cleanPlace, cleanStack, errorFingerprint } from "../servi
  *
  * At most {@link PENDING_MAX} kinds wait at once; past that, further kinds
  * are only counted ({@link takeCapturedErrors}'s `dropped`).
+ *
+ * An error logged while a request is handled also keeps who sent it
+ * ({@link errorRequestScope}): the signed-in account read from the request's
+ * login token (`middleware/auth.ts` sets `ctx.authUser`) and the address
+ * `middleware/clientIp.ts` trusts, never anything from the request's body.
  */
 
 export const PENDING_MAX = 200;
+
+/** Senders kept per kind of error, most recent first. */
+export const REPORTERS_KEPT = 5;
+
+/** Who hit an error: their account when signed in, and their address. */
+export interface ErrorReporter {
+  readonly userid: number | null;
+  readonly username: string;
+  readonly ip: string;
+  readonly at: Date;
+}
+
+/** What a captured error reads from its request; the request's own Koa context fits. */
+export interface RequestWho {
+  readonly ip?: string;
+  readonly authUser?: { readonly userid: number; readonly username: string } | null;
+}
+
+/** The request being handled, so an error caught during it can name its sender. */
+const requests = new AsyncLocalStorage<RequestWho>();
+
+/**
+ * Koa middleware (`server.ts`, right after `clientIp`): an error logged while
+ * the rest of the request runs finds the request here. It keeps the context
+ * itself, so the account `verifyUserAuth` sets later is seen too.
+ */
+export const errorRequestScope = <T>(ctx: RequestWho, next: () => Promise<T>): Promise<T> => requests.run(ctx, next);
+
+/** The sender of the request being handled, or null outside a request or with nothing known. */
+export const currentReporter = (at: Date): ErrorReporter | null => {
+  const who = requests.getStore();
+  if (!who) return null;
+  const user = who.authUser ?? null;
+  const ip = typeof who.ip === "string" ? who.ip : "";
+  if (!user && !ip) return null;
+  return { userid: user ? user.userid : null, username: user ? user.username : "", ip, at };
+};
+
+/**
+ * The senders with `reporter` added first: one per account and address, the
+ * most recent {@link REPORTERS_KEPT}.
+ */
+export const withReporter = (reporters: readonly ErrorReporter[], reporter: ErrorReporter | null): ErrorReporter[] => {
+  if (!reporter) return [...reporters];
+  const others = reporters.filter((r) => r.userid !== reporter.userid || r.ip !== reporter.ip);
+  return [reporter, ...others].slice(0, REPORTERS_KEPT);
+};
 
 export interface CapturedError {
   readonly fingerprint: string;
@@ -24,6 +77,8 @@ export interface CapturedError {
   count: number;
   /** When it was last seen, in ms. */
   at: number;
+  /** Who hit it, most recent first ({@link REPORTERS_KEPT} at most). */
+  reporters: ErrorReporter[];
 }
 
 const pending = new Map<string, CapturedError>();
@@ -63,17 +118,27 @@ export const errorCaptureSink = (record: LogRecord): void => {
     const message = cleanMessage(rendered(record));
     const place = cleanPlace(placeOf(record));
     const fingerprint = errorFingerprint("server", message, place);
+    const reporter = currentReporter(new Date(record.timestamp));
     const known = pending.get(fingerprint);
     if (known) {
       known.count += 1;
       known.at = record.timestamp;
+      known.reporters = withReporter(known.reporters, reporter);
       return;
     }
     if (pending.size >= PENDING_MAX) {
       dropped += 1;
       return;
     }
-    pending.set(fingerprint, { fingerprint, message, place, stack: cleanStack(firstStack(record)), count: 1, at: record.timestamp });
+    pending.set(fingerprint, {
+      fingerprint,
+      message,
+      place,
+      stack: cleanStack(firstStack(record)),
+      count: 1,
+      at: record.timestamp,
+      reporters: withReporter([], reporter),
+    });
   } catch {
     // Catching an error must never become one.
   }

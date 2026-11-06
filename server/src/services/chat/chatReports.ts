@@ -1,9 +1,13 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
 import type { HistoryEntry } from "../../chat/chatProtocol.js";
+import { logger } from "../../utils/logger.js";
+import { fileChatReport } from "../admin/chatCases.js";
 
 /**
  * Reports of world chat lines (issue #282), stored in `bym.chat_report` for
- * moderation. Nothing reads them back yet.
+ * moderation. Each stored report is filed into a case for the owner's
+ * dashboard (`services/admin/chatCases.ts`), with a copy of the room around
+ * the line.
  *
  * The reporter's client names the line by who said it and when (the chat
  * server's millisecond stamp). The channel's own history is checked for that
@@ -59,11 +63,25 @@ export const recordChatReport = async (
   const message = (line ? line.body : input.message).slice(0, CHAT_REPORT_MAX_TEXT);
 
   const rows = await em.execute<{ id: number }[]>(
-    `INSERT INTO bym.chat_report (reporter_id, reported_id, channel, message, message_ts, verified)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO bym.chat_report (reporter_id, reported_id, channel, message, message_ts, verified, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, now())
      ON CONFLICT DO NOTHING RETURNING id`,
     [input.reporter, input.reported, input.channel, message, input.ts, verified],
   );
+
+  const stored = rows[0];
+  if (stored) {
+    // The case is for the dashboard: a failure there never fails the report.
+    try {
+      await fileChatReport(
+        em,
+        { reportId: Number(stored.id), reported: input.reported, channel: input.channel, ts: input.ts, message, verified },
+        history,
+      );
+    } catch (err) {
+      logger.warn(`Chat report ${stored.id} not filed into a case: ${err}`);
+    }
+  }
 
   return { stored: rows.length > 0, verified };
 };

@@ -2,14 +2,17 @@ import { describe, expect, test } from "bun:test";
 
 import {
   DAYS_ON_LEVEL,
+  DEFAULT_BOTS_FLOOR_LEVEL,
   DEFAULT_BOTS_GROWING_FLOW,
   DEFAULT_BOTS_FRESH_PER_DAY,
   DEFAULT_BOTS_LEVEL_SLACK,
   DEFAULT_BOTS_NEW_PER_DAY,
   DEFAULT_BOTS_QUIET_RATE,
+  defaultBotsTotal,
+  LOWEST_BOT_FLOOR_LEVEL,
 } from "../../config/BotConfig.js";
 import { mulberry32 } from "../../game-rules/combat/rng.js";
-import { BOT_MIN_LEVEL, evenSpread } from "./factory.js";
+import { evenSpread } from "./factory.js";
 import {
   anchorFor,
   birthsToday,
@@ -27,6 +30,8 @@ import {
 /** The bot population's pace, quiet bots and daily rebalance (`docs/design/bot-neighbours.md` §4.4). */
 
 const NOW = 1_800_000_000;
+/** The level floor `BOTS_FLOOR_LEVEL` gives when unset: 25 (owner 3 Nov 2026). */
+const FLOOR = DEFAULT_BOTS_FLOOR_LEVEL;
 const DAY = 24 * 60 * 60;
 const T = 3;
 const date = (seconds: number) => new Date(seconds * 1000);
@@ -98,13 +103,13 @@ describe("quiet bots", () => {
     const draw = mulberry32(5);
     const rng = () => draw.float();
     // Three levels at the default 0.05: 1 - 0.95³ = 14% go quiet, the same from 15 as from 30.
-    for (const from of [BOT_MIN_LEVEL, 30]) {
+    for (const from of [LOWEST_BOT_FLOOR_LEVEL, 30]) {
       let quiet = 0;
       for (let n = 0; n < 4000; n++) if (drawQuiet(rng, from, from + 3, NOW, T, DEFAULT_BOTS_QUIET_RATE)) quiet++;
       expect(quiet / 4000).toBeGreaterThan(0.12);
       expect(quiet / 4000).toBeLessThan(0.165);
     }
-    expect(drawQuiet(rng, BOT_MIN_LEVEL, 20, NOW, T, 0)).toBeNull();
+    expect(drawQuiet(rng, LOWEST_BOT_FLOOR_LEVEL, 20, NOW, T, 0)).toBeNull();
   });
 
   test("new bots start quiet by their level's settled mix: nearly all low, none at the top", () => {
@@ -120,17 +125,20 @@ describe("quiet bots", () => {
 
 describe("the daily rebalance", () => {
   let id = 0;
-  /** The rules' levels from the floor up: `L(1)` is level 15, the floor. */
-  const L = (n: number) => BOT_MIN_LEVEL - 1 + n;
+  /** The rules' levels from the floor up: `L(1)` is level 25, the default floor. */
+  const L = (n: number) => FLOOR - 1 + n;
   /** A share array from the floor up, none below it. */
-  const at = (shares: number[]) => [...Array<number>(BOT_MIN_LEVEL - 1).fill(0), ...shares];
+  const at = (shares: number[]) => [...Array<number>(FLOOR - 1).fill(0), ...shares];
   const bot = (level: number, daysOnLevel: number, quietDaysAgo?: number): RebalanceBot => ({
     userid: ++id,
     level,
     level_since: date(NOW - daysOnLevel * DAY),
     quiet_since: quietDaysAgo === undefined ? null : date(NOW - quietDaysAgo * DAY),
   });
-  const rules = (share: number[], extra: Partial<{ total: number; slack: number; newPerDay: number; births: number }> = {}) => ({
+  const rules = (
+    share: number[],
+    extra: Partial<{ total: number; slack: number; newPerDay: number; births: number; floor: number }> = {}
+  ) => ({
     share,
     total: share.reduce((a, b) => a + b, 0),
     slack: 1,
@@ -152,13 +160,67 @@ describe("the daily rebalance", () => {
   });
 
   test("every bot below the floor retires, growing or quiet, whatever the slack; its place is made up from the floor up", () => {
-    const below = [bot(1, 1), bot(3, 1, 2), bot(BOT_MIN_LEVEL - 1, 0.1), bot(BOT_MIN_LEVEL - 1, 1, 1)];
+    const below = [bot(1, 1), bot(3, 1, 2), bot(15, 1), bot(FLOOR - 1, 0.1), bot(FLOOR - 1, 1, 1)];
     const bots = [...below, bot(L(1), 1), bot(L(2), 1)];
     const plan = planRebalance(bots, rules(at([2, 2]), { slack: 5, total: 6 }), NOW);
     expect([...plan.retire].sort((a, b) => a - b)).toEqual(below.map((one) => one.userid));
     expect(plan.make).toEqual([]);
     // With the slack at 0 the floor's levels are made up.
     expect(planRebalance(bots, rules(at([2, 2]), { slack: 0, total: 6 }), NOW).make).toEqual([L(1), L(2)]);
+  });
+
+  test("the floor is the rules' or BOTS_FLOOR_LEVEL's: a lower floor keeps the bots above it", () => {
+    const fifteen = bot(15, 1);
+    const twenty = bot(20, 1);
+    const bots = [bot(3, 1), fifteen, twenty, bot(30, 1)];
+    const share = [...Array<number>(14).fill(0), ...Array<number>(26).fill(1)];
+    const low = planRebalance(bots, rules(share, { slack: 5, floor: 15 }), NOW);
+    expect(low.retire).toEqual([bots[0]!.userid]);
+    const before = process.env.BOTS_FLOOR_LEVEL;
+    try {
+      process.env.BOTS_FLOOR_LEVEL = "21";
+      expect([...planRebalance(bots, rules(share, { slack: 5 }), NOW).retire].sort((a, b) => a - b)).toEqual(
+        [bots[0]!.userid, fifteen.userid, twenty.userid].sort((a, b) => a - b)
+      );
+    } finally {
+      if (before === undefined) delete process.env.BOTS_FLOOR_LEVEL;
+      else process.env.BOTS_FLOOR_LEVEL = before;
+    }
+  });
+
+  test("the first rebalance at floor 25 on today's live spread: every bot below 25 retires, new ones only from 25 up", () => {
+    // Active bots by level on the live server (3 Nov 2026): 35 on 16-20, 42 on 21-25, 83 on 26-30, 67 on 31-35, 61 on 36-40.
+    const live: RebalanceBot[] = [];
+    const spread = (from: number, to: number, count: number) => {
+      for (let n = 0; n < count; n++) live.push(bot(from + (n % (to - from + 1)), 1 + (n % 5), n % 3 === 0 ? undefined : 1 + (n % 4)));
+    };
+    spread(16, 20, 35);
+    spread(21, 25, 42);
+    spread(26, 30, 83);
+    spread(31, 35, 67);
+    spread(36, 40, 61);
+    const total = defaultBotsTotal();
+    expect(total).toBe(185);
+    const share = evenSpread(total);
+    const plan = planRebalance(live, { share, total, slack: DEFAULT_BOTS_LEVEL_SLACK, newPerDay: DEFAULT_BOTS_NEW_PER_DAY, births: 3 }, NOW);
+    const byId = new Map(live.map((one) => [one.userid, one]));
+    const retired = plan.retire.map((userid) => byId.get(userid)!);
+    // All 69 below 25 go (35 on 16-20, 34 on 21-24).
+    const belowFloor = live.filter((one) => one.level < FLOOR);
+    expect(belowFloor).toHaveLength(69);
+    for (const one of belowFloor) expect(plan.retire).toContain(one.userid);
+    // The rest of the retired come off levels over their share, never below it.
+    const left = live.filter((one) => !plan.retire.includes(one.userid));
+    for (let level = FLOOR; level <= 40; level++) {
+      const have = left.filter((one) => one.level === level).length;
+      const was = live.filter((one) => one.level === level).length;
+      if (have < was) expect(have).toBeGreaterThanOrEqual(share[level - 1]!);
+    }
+    expect(retired.every((one) => one.level < FLOOR || share[one.level - 1]! > 0)).toBe(true);
+    // New bots only at the floor and above, within the daily cap; the total is never passed.
+    expect(plan.make.every((level) => level >= FLOOR)).toBe(true);
+    expect(plan.born + plan.make.length).toBeLessThanOrEqual(DEFAULT_BOTS_NEW_PER_DAY);
+    expect(left.length + plan.born + plan.make.length).toBeLessThanOrEqual(total);
   });
 
   test("within the slack nothing happens", () => {
@@ -229,7 +291,6 @@ describe("the daily rebalance", () => {
 });
 
 describe("the population over simulated time", () => {
-  const TOTAL = 500;
   const HOUR = 60 * 60;
 
   /**
@@ -239,11 +300,11 @@ describe("the population over simulated time", () => {
    * starts as `create --fill` leaves the table: every level at its share, each
    * bot at a random point of its level, quiet by its level's settled mix.
    */
-  const simulate = (days: number, seed: number) => {
+  const simulate = (days: number, seed: number, floor: number, TOTAL: number) => {
     const draw = mulberry32(seed);
     const rng = () => draw.float();
     const pace = DAYS_ON_LEVEL;
-    const share = evenSpread(TOTAL);
+    const share = evenSpread(TOTAL, floor);
     let bots: (RebalanceBot & { growAt: number })[] = [];
     let id = 0;
     const make = (level: number, now: number) => {
@@ -260,7 +321,7 @@ describe("the population over simulated time", () => {
     const born = new Set<number>();
     let bornTop = 0;
     const startAtFloor = (now: number) => {
-      bots.push({ userid: ++id, level: BOT_MIN_LEVEL, level_since: date(now), quiet_since: null, growAt: now + rng() * 6 * HOUR });
+      bots.push({ userid: ++id, level: floor, level_since: date(now), quiet_since: null, growAt: now + rng() * 6 * HOUR });
       born.add(id);
     };
     share.forEach((want, index) => {
@@ -283,6 +344,7 @@ describe("the population over simulated time", () => {
           slack: DEFAULT_BOTS_LEVEL_SLACK,
           newPerDay: DEFAULT_BOTS_NEW_PER_DAY,
           births: birthsToday(DEFAULT_BOTS_FRESH_PER_DAY, rng),
+          floor,
         };
         const plan = planRebalance(bots, rules, now);
         const gone = new Set(plan.retire);
@@ -319,10 +381,11 @@ describe("the population over simulated time", () => {
     return { made, births, growingLow, worstOff, totals, growingOver, bornTop: () => bornTop, lowest: () => lowest };
   };
 
-  test("over half a year 500 bots keep every level near its share with few new bots a day", () => {
-    const { made, births, growingLow, worstOff, totals, growingOver, bornTop, lowest } = simulate(180, 7);
+  test("over half a year 500 bots from floor 15 keep every level near its share with few new bots a day", () => {
+    const TOTAL = 500;
+    const { made, births, growingLow, worstOff, totals, growingOver, bornTop, lowest } = simulate(180, 7, LOWEST_BOT_FLOOR_LEVEL, TOTAL);
     // No bot ever stands below the floor.
-    expect(lowest()).toBe(BOT_MIN_LEVEL);
+    expect(lowest()).toBe(LOWEST_BOT_FLOOR_LEVEL);
     expect(Math.max(...worstOff.slice(3))).toBeLessThanOrEqual(SPREAD_TOLERANCE);
     for (const total of totals) {
       expect(total).toBeLessThanOrEqual(TOTAL);
@@ -342,5 +405,24 @@ describe("the population over simulated time", () => {
     // Once they have had two months to climb, levels 15-30 hold a visible number of growing bots.
     const lowLater = growingLow.slice(60);
     expect(lowLater.reduce((a, b) => a + b, 0) / lowLater.length).toBeGreaterThan(8);
+  }, 60_000);
+
+  test("over half a year the default floor and total, 25 and 185, keep every level near its share too", () => {
+    const TOTAL = defaultBotsTotal();
+    const { made, births, worstOff, totals, growingOver, bornTop, lowest } = simulate(180, 7, FLOOR, TOTAL);
+    expect(lowest()).toBe(FLOOR);
+    expect(Math.max(...worstOff.slice(3))).toBeLessThanOrEqual(SPREAD_TOLERANCE);
+    for (const total of totals) {
+      expect(total).toBeLessThanOrEqual(TOTAL);
+      expect(total).toBeGreaterThan(TOTAL - 25);
+    }
+    const bornPerDay = births.reduce((a, b) => a + b, 0) / births.length;
+    expect(bornPerDay).toBeGreaterThan(DEFAULT_BOTS_FRESH_PER_DAY * 0.8);
+    expect(bornPerDay).toBeLessThan(DEFAULT_BOTS_FRESH_PER_DAY * 1.2);
+    expect(Math.max(...made)).toBeLessThanOrEqual(DEFAULT_BOTS_NEW_PER_DAY);
+    const perDay = made.reduce((a, b) => a + b, 0) / made.length;
+    expect(perDay).toBeLessThan(DEFAULT_BOTS_FRESH_PER_DAY + 2);
+    expect(growingOver(36)).toBeGreaterThan(20);
+    expect(bornTop()).toBeGreaterThanOrEqual(30);
   }, 60_000);
 });

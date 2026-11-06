@@ -3,7 +3,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createPlan, parseArgs } from "./bots.js";
+import { evenSpread } from "../services/bots/factory.js";
+import type { TodaysRebalance } from "../services/bots/sweep.js";
+import { planRebalance } from "../services/bots/population.js";
+import { createPlan, describeRebalance, parseArgs, totalKeepingAll } from "./bots.js";
 
 /** The bots CLI (issue #239, `docs/design/bot-neighbours.md` §10). */
 
@@ -15,21 +18,32 @@ describe("parseArgs", () => {
       perDay: 170,
       dryRun: true,
     });
-    expect(parseArgs(["create", "--levels", "15,20,25,35,40", "--count", "5"])).toMatchObject({
-      levels: [15, 20, 25, 35, 40],
+    expect(parseArgs(["create", "--levels", "25,30,35,40", "--count", "5"])).toMatchObject({
+      levels: [25, 30, 35, 40],
       count: 5,
     });
+    expect(parseArgs(["rebalance", "--dry-run", "--seed", "7"])).toMatchObject({ command: "rebalance", dryRun: true, seed: 7 });
     expect(parseArgs(["remove-all", "--yes"])).toMatchObject({ command: "remove-all", yes: true });
   });
 
-  test("refuses unknown options, bad numbers and levels outside 15-40", () => {
+  test("refuses unknown options, bad numbers and levels outside the floor (25 by default) to 40", () => {
     expect(() => parseArgs(["create", "--targt", "5"])).toThrow();
     expect(() => parseArgs(["create", "--target", "lots"])).toThrow();
     expect(() => parseArgs(["create", "--target"])).toThrow();
     expect(() => parseArgs(["create", "--levels", "0,5"])).toThrow();
-    // No bot below level 15 (owner, 2026-10-23).
-    expect(() => parseArgs(["create", "--levels", "14"])).toThrow();
+    // No bot below the floor: 25 by default (owner 3 Nov 2026).
+    expect(() => parseArgs(["create", "--levels", "24"])).toThrow();
+    expect(() => parseArgs(["create", "--levels", "15"])).toThrow();
     expect(() => parseArgs(["create", "--levels", "41"])).toThrow();
+    const before = process.env.BOTS_FLOOR_LEVEL;
+    try {
+      process.env.BOTS_FLOOR_LEVEL = "15";
+      expect(parseArgs(["create", "--levels", "15"]).levels).toEqual([15]);
+      expect(() => parseArgs(["create", "--levels", "14"])).toThrow();
+    } finally {
+      if (before === undefined) delete process.env.BOTS_FLOOR_LEVEL;
+      else process.env.BOTS_FLOOR_LEVEL = before;
+    }
   });
 });
 
@@ -38,23 +52,23 @@ describe("createPlan", () => {
     createPlan(parseArgs(["create", ...argv]), active, madeToday, 500);
 
   test("--levels makes the levels given, in turn, one each unless --count says", () => {
-    expect(plan(["--levels", "15,20,25,35,40"])).toEqual([15, 20, 25, 35, 40]);
-    expect(plan(["--levels", "16,20", "--count", "5"])).toEqual([16, 20, 16, 20, 16]);
+    expect(plan(["--levels", "25,30,35,40"])).toEqual([25, 30, 35, 40]);
+    expect(plan(["--levels", "26,30", "--count", "5"])).toEqual([26, 30, 26, 30, 26]);
     // Whatever is already there.
-    expect(plan(["--levels", "15"], { 15: 99 })).toEqual([15]);
+    expect(plan(["--levels", "25"], { 25: 99 })).toEqual([25]);
   });
 
   test("--fill tops up to BOTS_TOTAL; --target to its own number", () => {
     expect(plan(["--fill"])).toHaveLength(500);
-    // Forty over levels 15-40: one each, and one more on the lowest fourteen.
+    // Forty over levels 25-40 (the default floor): three each on the lowest eight, two on the rest.
     expect(plan(["--target", "40"])).toEqual(
-      Array.from({ length: 26 }, (_, index) => (index < 14 ? [15 + index, 15 + index] : [15 + index])).flat()
+      Array.from({ length: 16 }, (_, index) => Array<number>(index < 8 ? 3 : 2).fill(25 + index)).flat()
     );
   });
 
   test("--count without --levels caps a fill", () => {
-    expect(plan(["--count", "5"])).toEqual([15, 15, 15, 15, 15]);
-    expect(plan(["--count", "3", "--target", "26"], { 15: 1 })).toEqual([16, 17, 18]);
+    expect(plan(["--count", "5"])).toEqual([25, 25, 25, 25, 25]);
+    expect(plan(["--count", "3", "--target", "16"], { 25: 1 })).toEqual([26, 27, 28]);
     expect(plan(["--count", "50", "--fill", "--per-day", "10"])).toHaveLength(10);
   });
 
@@ -68,6 +82,85 @@ describe("createPlan", () => {
     expect(() => plan([])).toThrow();
     expect(() => plan(["--fill", "--target", "5"])).toThrow();
     expect(() => plan(["--levels", "5", "--fill"])).toThrow();
+  });
+});
+
+describe("rebalance --dry-run (owner 3 Nov 2026)", () => {
+  const date = (daysAgo: number) => new Date(Date.UTC(2026, 10, 3) - daysAgo * 24 * 60 * 60 * 1000);
+  const today = (): TodaysRebalance => ({
+    bots: [
+      { userid: 1, level: 16, level_since: date(1), quiet_since: null },
+      { userid: 2, level: 24, level_since: date(1), quiet_since: date(1) },
+      { userid: 3, level: 25, level_since: date(1), quiet_since: null },
+      { userid: 4, level: 30, level_since: date(1), quiet_since: null },
+      { userid: 5, level: 30, level_since: date(9), quiet_since: date(3) },
+    ],
+    share: evenSpread(16),
+    floor: 25,
+    plan: { retire: [1, 2, 5], born: 1, make: [26, 27] },
+  });
+
+  test("names every bot to retire with its level and why, and the new bots per level", () => {
+    const names = new Map([
+      [1, "MossyGoblin"],
+      [2, "Fenwick"],
+      [5, "Sludge"],
+    ]);
+    const lines = describeRebalance(today(), names, 16, 20);
+    expect(lines[0]).toBe("Floor: level 25. Total: 16 (1-1 a level from 25 to 40).");
+    expect(lines).toContain("Active bots now: 5 (2 below the floor, 3 at or above it).");
+    expect(lines).toContain("Would retire 3: 2 below the floor, 1 at or above the floor off crowded levels.");
+    expect(lines).toContain("Would make 3 new: 1 at the bottom of level 25, 2 on short levels.");
+    expect(lines).toContain("Active after: 5.");
+    expect(lines).toContain("  retire 1 MossyGoblin level 16 (below the floor)");
+    expect(lines).toContain("  retire 2 Fenwick level 24 (below the floor)");
+    expect(lines).toContain("  retire 5 Sludge level 30 (crowded level)");
+    expect(lines.at(-1)).toBe("Dry run: nothing written.");
+  });
+
+  test("a table per level: now, share, retired below the floor or off a crowded level, new, after", () => {
+    const lines = describeRebalance(today(), new Map(), 16, 20);
+    const row = (level: string) => lines.find((line) => line.trimStart().startsWith(`${level} `))?.trim().split(/[\s|]+/);
+    expect(lines).toContain(" level   now share | retire:below retire:crowded |  new after");
+    expect(row("L16")?.slice(0, 7)).toEqual(["L16", "1", "0", "1", "0", "0", "0"]);
+    expect(row("L24")?.slice(0, 7)).toEqual(["L24", "1", "0", "1", "0", "0", "0"]);
+    expect(row("L25")?.slice(0, 7)).toEqual(["L25", "1", "1", "0", "0", "1", "2"]);
+    expect(row("L28")).toEqual(["L28", "0", "1", "0", "0", "0", "0", "(short)"]);
+    expect(row("L30")?.slice(0, 7)).toEqual(["L30", "2", "1", "0", "1", "0", "1"]);
+    expect(lines.find((line) => line.trimStart().startsWith("L30 "))).toContain("<- trims bots at or above the floor");
+    // Levels with no bots, no share and nothing new are left out.
+    expect(row("L20")).toBeUndefined();
+    expect(row("all")).toEqual(["all", "5", "16", "2", "1", "3", "5"]);
+    expect(lines).toContain("At or above the floor: 1 of 3 bots would retire off crowded levels (L30:1).");
+    expect(lines).toContain("To keep every bot at or above the floor today, set BOTS_TOTAL to at least 20.");
+    expect(describeRebalance(today(), new Map(), 16, 12)).toContain(
+      "To keep every bot at or above the floor today, set BOTS_TOTAL to at least 12 (this total does)."
+    );
+    expect(describeRebalance(today(), new Map(), 16)).not.toContain(expect.stringContaining("set BOTS_TOTAL"));
+  });
+
+  test("the smallest total that keeps every bot at or above the floor", () => {
+    const { bots } = today();
+    // Four on level 30: no slack, so level 30's share must reach four.
+    const crowded = [...bots, ...[6, 7].map((userid) => ({ userid, level: 30, level_since: date(2), quiet_since: null }))];
+    const rules = { slack: 0, newPerDay: 3, floor: 25 };
+    const now = Date.UTC(2026, 10, 3) / 1000;
+    const keeps = totalKeepingAll(crowded, rules, now)!;
+    const highRetired = (total: number) =>
+      planRebalance(crowded, { ...rules, share: evenSpread(total, 25), total }, now).retire.filter(
+        (userid) => crowded.find((bot) => bot.userid === userid)!.level >= 25
+      );
+    expect(evenSpread(keeps, 25)[29]).toBeGreaterThanOrEqual(4);
+    expect(highRetired(keeps)).toEqual([]);
+    expect(highRetired(keeps - 1).length).toBeGreaterThan(0);
+    // Bots below the floor still retire at that total.
+    const plan = planRebalance(crowded, { ...rules, share: evenSpread(keeps, 25), total: keeps }, now);
+    expect(plan.retire).toEqual(expect.arrayContaining([1, 2]));
+  });
+
+  test("the rebalance command takes only --dry-run", async () => {
+    const { run } = await import("./bots.js");
+    await expect(run(parseArgs(["rebalance"]))).rejects.toThrow("--dry-run");
   });
 });
 

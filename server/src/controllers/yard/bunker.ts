@@ -23,7 +23,8 @@ export const yardBunkerRemoveAction = defineYardAction({
     const plan = planBunkerRemove(save, body.bunker, body.monster, body.count);
     // Goals BL1-BL4: Flash counted a bunker's monsters juiced as well (#227).
     const onboarding = plan.report.juiced ? countJuiced(save, plan.report.removed) : null;
-    return onboarding ? { ...plan, slices: { ...plan.slices, onboarding } } : plan;
+    const questEvents = { juice: plan.report.juiced ? plan.report.removed : 0 };
+    return onboarding ? { ...plan, slices: { ...plan.slices, onboarding }, questEvents } : { ...plan, questEvents };
   },
   outposts: "allow",
 });

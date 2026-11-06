@@ -1,4 +1,5 @@
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { inRealm, monsterRealmOf, type MonsterRealm } from "@/game/monsters/realm";
 import {
   LOCKER_OVERDRIVE,
   runningUnlock,
@@ -144,8 +145,8 @@ const refuse = (
 ): YardRefusal => ({ reason, message, detail, local: true });
 
 /** A gate as the refusal the server would send for it. */
-const gateRefusal = (gate: UnlockGate): YardRefusal => {
-  const message = `${gateText(gate)}.`;
+const gateRefusal = (gate: UnlockGate, realm: MonsterRealm): YardRefusal => {
+  const message = `${gateText(gate, realm)}.`;
   switch (gate.reason) {
     case "unlockRunning":
       return refuse(gate.reason, message, { monster: gate.monster });
@@ -175,10 +176,11 @@ export const lockerActions = (store: YardStore, api: LockerApi = lockerApi): Loc
     store.run({
       key: LockerKey.START,
       check: (reader) => {
-        const entry = monsterEntry(monster);
+        const realm = monsterRealmOf(reader.yard.kind);
+        const entry = inRealm(monster, realm) ? monsterEntry(monster) : undefined;
         if (!entry || entry.blocked) return unknownMonster(monster);
         const gate = startGate(entry, reader);
-        return gate ? gateRefusal(gate) : null;
+        return gate ? gateRefusal(gate, realm) : null;
       },
       send: (_api, ...yard) => api.start(monster, ...yard),
     }),
@@ -190,10 +192,11 @@ export const lockerActions = (store: YardStore, api: LockerApi = lockerApi): Loc
     store.run({
       key: LockerKey.INSTANT,
       check: (reader) => {
-        const entry = monsterEntry(monster);
+        const realm = monsterRealmOf(reader.yard.kind);
+        const entry = inRealm(monster, realm) ? monsterEntry(monster) : undefined;
         if (!entry || entry.blocked) return unknownMonster(monster);
         const gate = instantGate(entry, reader);
-        return gate ? gateRefusal(gate) : null;
+        return gate ? gateRefusal(gate, realm) : null;
       },
       send: (_api, ...yard) => api.instant(monster, ...yard),
     }),

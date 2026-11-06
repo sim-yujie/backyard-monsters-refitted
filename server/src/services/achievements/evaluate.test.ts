@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { ACHIEVEMENTS, AVAILABLE_ACHIEVEMENTS, type AchievementStat } from "../../game-data/achievements.js";
+import {
+  ACHIEVEMENTS,
+  AVAILABLE_ACHIEVEMENTS,
+  availableAchievements,
+  type AchievementStat,
+} from "../../game-data/achievements.js";
 import type { BuildingData, BuildingDataMap } from "../../types/BuildingData.js";
 import {
   achievementMet,
@@ -202,6 +207,85 @@ describe("evaluateAchievements: events", () => {
       playeroutpost: 1.9,
     });
     expect(evaluation.record.s).toMatchObject({ heavytraps: 3, blocksbuilt: 0, wmoutpost: 0, playeroutpost: 1 });
+  });
+});
+
+describe("the Descent achievements, 18 and 19 (Inferno WP 1.12)", () => {
+  /** Runs `body` with the new Inferno switched `on`, then puts the switch back. */
+  const withInferno = (on: boolean, body: () => void) => {
+    const saved = process.env.INFERNO_ENABLED;
+    process.env.INFERNO_ENABLED = on ? "on" : "off";
+    try {
+      body();
+    } finally {
+      if (saved === undefined) delete process.env.INFERNO_ENABLED;
+      else process.env.INFERNO_ENABLED = saved;
+    }
+  };
+
+  test("only offered while the new Inferno is on", () => {
+    expect(availableAchievements(false).map((entry) => entry.id)).not.toContain(18);
+    expect(availableAchievements(false)).toBe(AVAILABLE_ACHIEVEMENTS);
+    const on = availableAchievements(true).map((entry) => entry.id);
+    expect(on).toContain(18);
+    expect(on).toContain(19);
+  });
+
+  test("the first Descent attack earns 18; the counter at 14 earns 19", () => {
+    withInferno(true, () => {
+      const first = evaluateAchievements(worked(), {}, NOW, { descent: 1 });
+      expect(ids(first)).toEqual([18]);
+
+      const passed = evaluateAchievements(first.record, {}, NOW, { descent: 14 });
+      expect(ids(passed)).toEqual([19]);
+    });
+  });
+
+  test("the counter is a level that only rises: 2 then 1 leaves 2", () => {
+    withInferno(true, () => {
+      const two = evaluateAchievements(worked(), {}, NOW, { descent: 2 });
+      const one = evaluateAchievements(two.record, {}, NOW, { descent: 1 });
+      expect(one.record.s.descent).toBe(2);
+      // A second attack at the same depth adds nothing either.
+      expect(evaluateAchievements(one.record, {}, NOW, { descent: 2 }).record.s.descent).toBe(2);
+    });
+  });
+
+  test("with the Inferno off, the counter at 14 earns nothing", () => {
+    withInferno(false, () => {
+      const evaluation = evaluateAchievements(worked(), {}, NOW, { descent: 14 });
+      expect(evaluation.unlocked).toEqual([]);
+    });
+  });
+
+  test("the Under Hall at level 5 earns 20; its level only rises", () => {
+    withInferno(true, () => {
+      const four = evaluateAchievements(worked(), {}, NOW, { underhall: 4 });
+      expect(ids(four)).toEqual([]);
+      // Reported again at the same level, it is not added up to 8.
+      const again = evaluateAchievements(four.record, {}, NOW, { underhall: 4 });
+      expect(again.record.s.underhall).toBe(4);
+      expect(ids(again)).toEqual([]);
+      expect(ids(evaluateAchievements(again.record, {}, NOW, { underhall: 5 }))).toEqual([20]);
+    });
+  });
+
+  test("10 Inferno quests met, claimed or not, earn 21 (Flash's amountCompleted)", () => {
+    const infernoGoals = (count: number, claimed = 0) =>
+      Object.fromEntries(
+        Array.from({ length: count }, (_, i) => [`IQ${i}`, i < claimed ? { done: 1, claimed: 2 } : { done: 1 }])
+      );
+    withInferno(true, () => {
+      const nine = evaluateAchievements(worked(), { onboarding: { v: 1, infernoGoals: infernoGoals(9) } }, NOW);
+      expect(nine.record.s.infernoquests).toBe(9);
+      expect(ids(nine)).toEqual([]);
+      const ten = evaluateAchievements(nine.record, { onboarding: { v: 1, infernoGoals: infernoGoals(10, 3) } }, NOW);
+      expect(ids(ten)).toEqual([21]);
+    });
+    withInferno(false, () => {
+      const off = evaluateAchievements(worked(), { onboarding: { v: 1, infernoGoals: infernoGoals(10) } }, NOW);
+      expect(off.unlocked).toEqual([]);
+    });
   });
 });
 

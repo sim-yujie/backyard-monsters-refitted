@@ -15,11 +15,13 @@ import type { AttackRoster, AttackTarget } from "./attackTarget";
  * The load's `attackerbrains` is dropped: it is what the server freezes into
  * a real attack for the attacker's champions (issue #219), and the own yard's
  * load is never that, so a champion in `roster` fights with a fresh brain
- * (Baiter owner answer Q6).
+ * (Baiter owner answer Q6). Its `attackerhealth` goes the same way, so the
+ * champion goes out at full health.
  */
 export const ownYardTarget = (save: BaseLoadResponse, roster: AttackRoster): AttackTarget => {
   const load: BaseLoadResponse = { ...save };
   delete load.attackerbrains;
+  delete load.attackerhealth;
   return {
     baseid: String(save.baseid ?? ""),
     kind: "wild",

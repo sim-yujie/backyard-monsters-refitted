@@ -18,6 +18,7 @@ import {
   isRefusal,
   planRepair,
   planSpeedup,
+  refusalDetails,
   rewardOf,
   type HelpKind,
 } from "../../services/friends/helpRules.js";
@@ -28,6 +29,7 @@ import { notMainYardErr, yardRaidInProgressErr, yardUnderAttackErr } from "../..
 import type { BuildingData } from "../../types/BuildingData.js";
 import type { ResourceAmounts } from "../../services/yardplanner/costs.js";
 import { catchUpLockedRow } from "../yard/yardAction.js";
+import { recordQuests } from "../../services/quests/state.js";
 import { isTrap } from "../../game-rules/combat/damagePercent.js";
 import { maskBuilding } from "../../services/base/viewMask.js";
 import type { FriendsBody } from "./friends.js";
@@ -126,14 +128,14 @@ export const helpAnswer = async (em: EntityManager, user: User, body: unknown, n
     const [since, today] = await Promise.all([friendsSince(tx, helper, [owner]), helpsToday(tx, helper, now)]);
     const gate = gateRefusal(
       {
-        helper: { ...mySide, createtime: mine.createtime, points: mine.points, basevalue: mine.basevalue },
-        owner: { ...theirSide, createtime: theirs.createtime, points: theirs.points, basevalue: theirs.basevalue },
+        helper: { ...mySide, points: mine.points, basevalue: mine.basevalue },
+        owner: { ...theirSide, points: theirs.points, basevalue: theirs.basevalue },
         friendsSince: since.get(owner) ?? null,
         helpsToday: today,
       },
       now
     );
-    if (gate) throw friendRefusedErr(gate.reason, gate.from === undefined ? {} : { from: gate.from });
+    if (gate) throw friendRefusedErr(gate.reason, refusalDetails(gate));
 
     const key = String(buildingId);
     const building = theirs.buildingdata?.[key];
@@ -167,6 +169,8 @@ export const helpAnswer = async (em: EntityManager, user: User, body: unknown, n
       reward,
       now,
     });
+    // Quests: a friend's yard helped, on the helper's locked main row.
+    recordQuests(mine, now, { friendHelp: 1 });
     await tx.flush();
 
     return {

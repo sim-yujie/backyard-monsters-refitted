@@ -1,11 +1,12 @@
 import {
   activeOverdrive,
   HATCHERY_OVERDRIVES,
+  INFERNO_HATCHERY_OVERDRIVES,
   MAX_ADD,
   type HatchTarget,
   type OverdriveItem,
 } from "@/game/monsters/hatchPlan";
-import { isListed } from "@/game/monsters/monsterCatalogue";
+import { isListedIn, monsterRealmOf, monsterWords } from "@/game/monsters/realm";
 import {
   actionKey,
   type YardActionResult,
@@ -23,6 +24,7 @@ import { yardBody, type YardRefusal } from "./yard";
  *
  *   POST /api/:apiVersion/bm/yard/hatchery/add      hatchery, monster, count
  *   POST /api/:apiVersion/bm/yard/hatchery/remove   hatchery, slot, count
+ *   POST /api/:apiVersion/bm/yard/hatchery/clear    hatchery
  *   POST /api/:apiVersion/bm/yard/hatchery/finish   hatchery
  *   POST /api/:apiVersion/bm/yard/shop/buy          item=HOD|HOD2|HOD3
  *
@@ -55,6 +57,15 @@ export interface HatcheryRemoveReport {
   slot: number;
   monster: string;
   removed: number;
+  /** Goo actually returned, after the storage cap. */
+  refund: { r4: number };
+}
+
+/** `report` of `hatchery/clear`. */
+export interface HatcheryClearReport {
+  hatchery: HatchTarget;
+  /** Monsters taken out, by id. */
+  removed: Record<string, number>;
   /** Goo actually returned, after the storage cap. */
   refund: { r4: number };
 }
@@ -103,6 +114,20 @@ export const hatcheryRemove = (
   );
 
 /**
+ * Clear all: empties every waiting stack for the goo paid, as `remove` with
+ * `all` on each would; the monsters in production keep hatching. Refusals: the
+ * add's target ones, `emptyQueue`.
+ */
+export const hatcheryClear = (
+  hatchery: HatchTarget,
+  baseid?: string,
+): Promise<YardResponse<HatcheryClearReport>> =>
+  post<YardResponse<HatcheryClearReport>>(
+    `${HATCHERY_PATH}/clear`,
+    yardBody({ hatchery: String(hatchery) }, baseid),
+  );
+
+/**
  * Houses what fits now for Shiny. Refusals: the add's target ones, `busy`,
  * `damaged`, `nothingToFinish`, `housingFull { free }`, `shinyLocked`, `credits`.
  */
@@ -119,12 +144,14 @@ export const hatcheryFinish = (
 export interface HatcheryApi {
   add: typeof hatcheryAdd;
   remove: typeof hatcheryRemove;
+  clear: typeof hatcheryClear;
   finish: typeof hatcheryFinish;
 }
 
 export const hatcheryApi: HatcheryApi = {
   add: hatcheryAdd,
   remove: hatcheryRemove,
+  clear: hatcheryClear,
   finish: hatcheryFinish,
 };
 
@@ -132,13 +159,14 @@ export const hatcheryApi: HatcheryApi = {
 export const HatcheryKey = {
   ADD: actionKey("hatchery", "add"),
   REMOVE: actionKey("hatchery", "remove"),
+  CLEAR: actionKey("hatchery", "clear"),
   FINISH: actionKey("hatchery", "finish"),
 } as const;
 
 /** Every hatchery key, the overdrive buys included, for disabling the tab's buttons while one runs. */
 export const HATCHERY_KEYS: readonly string[] = [
   ...Object.values(HatcheryKey),
-  ...HATCHERY_OVERDRIVES.map(({ item }) => actionKey("buy", item)),
+  ...[...HATCHERY_OVERDRIVES, ...INFERNO_HATCHERY_OVERDRIVES].map(({ item }) => actionKey("buy", item)),
 ];
 
 /** What the Hatch tab can do, each a queued store action that never throws. */
@@ -149,6 +177,8 @@ export interface HatcheryActions {
     slot: number,
     count: number | "all",
   ): Promise<YardActionResult<HatcheryRemoveReport>>;
+  /** Clear all: every waiting stack of the target's queue. */
+  clear(target: HatchTarget): Promise<YardActionResult<HatcheryClearReport>>;
   finish(target: HatchTarget): Promise<YardActionResult<HatcheryFinishReport>>;
   /** Buys a Hatchery Overdrive through the store's shop route. */
   overdrive(item: OverdriveItem): Promise<YardActionResult<ShopBuyReport>>;
@@ -161,11 +191,15 @@ const refuse = (
   detail: Record<string, unknown> = {},
 ): YardRefusal => ({ reason, message, detail, local: true });
 
-/** The add's checks the client can see: an obtainable, unlocked monster and a sane count. */
+/**
+ * The add's checks the client can see: an obtainable, unlocked monster of the
+ * yard's realm (the Inferno roster in an Incubator) and a sane count.
+ */
 const addRefusal = (reader: YardStoreReader, monster: string, count: number): YardRefusal | null => {
-  if (!isListed(monster)) return refuse("badRequest", "That monster cannot be hatched.", { monster });
+  const realm = monsterRealmOf(reader.kind);
+  if (!isListedIn(monster, realm)) return refuse("badRequest", "That monster cannot be hatched.", { monster });
   if (Number(reader.save.lockerdata?.[monster]?.t) !== 2) {
-    return refuse("locked", "Unlock that monster in the Monster Locker first.", { monster });
+    return refuse("locked", `Unlock that monster in the ${monsterWords(realm).locker} first.`, { monster });
   }
   if (!(Number.isInteger(count) && count >= 1 && count <= MAX_ADD)) {
     return refuse("badRequest", `Add between 1 and ${MAX_ADD} at a time.`, { count });
@@ -193,6 +227,8 @@ export const hatcheryActions = (
       key: HatcheryKey.REMOVE,
       send: (_api, ...yard) => api.remove(target, slot, count, ...yard),
     }),
+  clear: (target) =>
+    store.run({ key: HatcheryKey.CLEAR, send: (_api, ...yard) => api.clear(target, ...yard) }),
   finish: (target) =>
     store.run({ key: HatcheryKey.FINISH, send: (_api, ...yard) => api.finish(target, ...yard) }),
   overdrive: (item) => {

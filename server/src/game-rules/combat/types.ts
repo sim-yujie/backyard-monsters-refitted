@@ -98,8 +98,11 @@ export type BuildingHealthMap = Readonly<Record<string, number>>;
 
 /**
  * What kind of yard is being attacked: a player's main yard, a player's Map
- * Room 2 outpost (cell `b` 3), a Map Room 2 wild monster camp (cell `b` 1) or
- * a Map Room 1 tribe.
+ * Room 2 outpost (cell `b` 3), a Map Room 2 wild monster camp (cell `b` 1), a
+ * Map Room 1 tribe, or an Inferno yard (a player's, or a Moloch tribe's on the
+ * Inferno map), which loads with `EnumYardType.INFERNO_YARD` and so reads the
+ * Inferno props table (`client/scripts/GLOBAL.as:718-719`,
+ * `com/monsters/maproom_inferno/PlayerHandler.as:333`).
  *
  * It decides whether `destroyed` exists: `BASE.SaveB` writes it only for a
  * wild monster camp or an outpost (`client/scripts/BASE.as:3297-3308`); a main
@@ -107,7 +110,7 @@ export type BuildingHealthMap = Readonly<Record<string, number>>;
  * half and its falls are capped lower, and a camp's or a tribe's hits give a
  * fifth (`stats.ts`, `storageScalar`, `storageFallLoot`).
  */
-export type CombatTargetKind = "main" | "outpost" | "wild" | "tribe";
+export type CombatTargetKind = "main" | "outpost" | "wild" | "tribe" | "inferno";
 
 /** One building, as the rules see it. */
 export interface CombatBuilding {
@@ -487,6 +490,9 @@ export type FlingEvent =
        * was flung in (issue #220, `stance.ts`); a log with none fights it as
        * Hybrid, which is the Flash champion. `b` is its learned brain as the
        * attack froze it at launch (issue #219, `brain.ts`); none is a zero brain.
+       * `hp` is the health it comes out with, the stored health the attack
+       * froze at launch, as Flash spawned it (`ATTACK.as:532`,
+       * `CREEPS.SpawnGuardian(..., hp, fb, pl)`); none is full health.
        */
       readonly champion?: {
         readonly t: number;
@@ -495,6 +501,7 @@ export type FlingEvent =
         readonly fb?: number;
         readonly s?: ChampionStance;
         readonly b?: Partial<BrainWeights>;
+        readonly hp?: number;
       };
     }
   | {

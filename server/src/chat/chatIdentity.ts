@@ -1,3 +1,4 @@
+import { isAdminUser } from "../config/AdminConfig.js";
 import { Save } from "../database/models/save.model.js";
 import { User } from "../database/models/user.model.js";
 import { postgres, redis } from "../server.js";
@@ -58,6 +59,26 @@ const getDisplayName = (user: ChatIdentity): string => {
 };
 
 /**
+ * When the player's chat mute ends (ms), or 0 (`user.mute_until`, set from
+ * the dashboard). A failed read, a database without the column say, counts
+ * as not muted rather than keeping the player out of chat.
+ *
+ * @param {number} userid - The player connecting.
+ * @returns {Promise<number>} The end of the mute, or 0.
+ */
+const readMutedUntil = async (userid: number): Promise<number> => {
+  try {
+    const [row] = await postgres.orm.em
+      .fork()
+      .execute<{ mute_until: Date | string | null }[]>(`SELECT mute_until FROM bym."user" WHERE userid = ?`, [userid]);
+    const until = row?.mute_until ? new Date(row.mute_until).getTime() : 0;
+    return Number.isFinite(until) ? until : 0;
+  } catch {
+    return 0;
+  }
+};
+
+/**
  * Authenticates a connection and registers it as a {@link ChatClient}.
  *
  * The token is checked against the one issued during base load, then the account
@@ -93,6 +114,7 @@ export const authenticate = async (ws: ServerWebSocket<SocketData>, message: Aut
   }
 
   const displayName = getDisplayName(user);
+  const mutedUntil = await readMutedUntil(user.userid);
 
   const client: ChatClient = {
     ws,
@@ -102,6 +124,8 @@ export const authenticate = async (ws: ServerWebSocket<SocketData>, message: Aut
     picSquare: user.pic_square ?? null,
     channels: new Map(),
     lastMsgAt: 0,
+    gm: isAdminUser(user.userid),
+    mutedUntil,
   };
 
   ws.data.userId = user.userid;

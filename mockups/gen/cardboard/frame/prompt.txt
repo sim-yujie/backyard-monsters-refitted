@@ -1,0 +1,18 @@
+Use your image generation tool (one call) to create a new image and save it as sample-new.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+Paint ONE empty game WINDOW (a pop-up panel for the game's interface), as a SQUARE image 1024x1024. The window fills the image, with about 40 px of green all round it.
+
+Style "Cardboard and stickers": a kid's backyard craft look. The window is a cut piece of corrugated CARDBOARD (warm kraft brown, slightly rough cut edges showing the wavy corrugation on the rim), with a thick dark brown outline, and a strip of beige MASKING TAPE stuck diagonally across each corner. Fill: flat light kraft cardboard with faint fibres, quiet (dark text will sit on it).
+Paint ONLY the window: no buttons, no banner, no tabs, no close button, nothing inside it or on it.
+
+Inputs: finish.png shows today's painted game art (monsters and icons): match its painting finish, not its subjects.
+
+Rules for the window, because it will be cut into a 9-slice and stretched to any size:
+- Each of the four border sides looks the same all along its length (a pattern that can repeat), so a middle piece of each side can be repeated.
+- The four corners may carry bigger decoration, but keep each corner's decoration inside about 170 px from the corner.
+- The middle of the window is a plain, quiet fill with no objects, no pictures and no decoration, so text and icons can sit on it. The fill must look the same everywhere in the middle (no vignette, no big light spot).
+- The window's outside edge is crisp against the green; nothing sticks out more than about 30 px past the border.
+
+It is for the browser game Backyard Monsters (cartoony, colourful monster world; the old Flash game had chunky painted interface art). Painting finish: the same hand-painted, slightly glossy cartoon game-art finish as the game's painted icons and monsters in finish.png (bold shapes, soft shading, light from the upper left, a crisp dark outline round each piece). Everything is seen straight on, flat, front view (no perspective, no tilt).
+
+Background everywhere: flat pure green #00FF00, no shadow on the background. The painting itself must contain no bright pure green. No text, no letters, no numbers, no symbols except where asked, no icons on the pieces.

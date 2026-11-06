@@ -1,5 +1,5 @@
 import { batchBlockedErr, layoutInvalidErr } from "../../errors/errors.js";
-import { costOf, TRAP_TYPES } from "../../game-data/buildingCosts.js";
+import { costOf, TRAP_TYPES, type YardKind } from "../../game-data/buildingCosts.js";
 import {
   BATCH_TRAP_MAX,
   TrapPlacementListSchema,
@@ -7,6 +7,7 @@ import {
 } from "../../schemas/YardPlannerSchemas.js";
 import type { BuildingData, BuildingDataMap, FiredTrap } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
+import { buildableTypesOf } from "../yard/build.js";
 import {
   FREE_FINISH_SECONDS,
   countOfType,
@@ -53,7 +54,9 @@ import { listIds, MAX_LISTED } from "./validateLayout.js";
 /**
  * The parts of a `Save` this route reads. An outpost (`type` `outpost`)
  * prices and caps its traps from the outpost table (25 Booby Traps, 5 Heavy
- * Traps), with the core as its hall.
+ * Traps), with the core as its hall; the Inferno yard (`inferno`) from the
+ * Inferno table (Booby Traps only, counted by the Under Hall), its own
+ * footprints and its own yardage (`ENLI`).
  */
 export interface TrapRearmSave {
   type?: string;
@@ -176,6 +179,20 @@ export const planTrapRearm = (save: TrapRearmSave, traps: readonly TrapPlacement
     );
   }
 
+  // A trap this yard's build menu does not offer (the Inferno has no Heavy
+  // Trap) is refused as the build route refuses it (`400 notBuildable`).
+  const notBuildable = traps
+    .map((trap, index) => ({ trap, index }))
+    .filter(({ trap }) => !buildableTypesOf(kind).has(trap.t))
+    .map(({ index }) => index);
+
+  if (notBuildable.length > 0) {
+    throw layoutInvalidErr(
+      `${listIds(notBuildable)} cannot be built here.`,
+      { notBuildable: notBuildable.slice(0, MAX_LISTED) }
+    );
+  }
+
   // 2. Prerequisites.
   const hall = townHallLevel(buildings, kind);
   if (hall === 0) {
@@ -206,19 +223,19 @@ export const planTrapRearm = (save: TrapRearmSave, traps: readonly TrapPlacement
       throw batchBlockedErr(
         kind === "outpost"
           ? `An outpost can only have ${max} of those, and you already have ${have}.`
-          : `You can only have ${max} of those at Town Hall ${hall}, and you already have ${have}.`,
+          : `You can only have ${max} of those at ${hallName(kind)} ${hall}, and you already have ${have}.`,
         { capReached: { type, have, max } }
       );
     }
   }
 
   // 4. Placement, against the plot the player actually owns.
-  const expansion = currentExpansion(save.storedata);
+  const expansion = currentExpansion(save.storedata, kind);
   const outOfBounds: number[] = [];
   const placing: PlacedRect<number>[] = [];
 
   traps.forEach((trap, index) => {
-    const rect = rectOf(trap.t, trap.x, trap.y);
+    const rect = rectOf(trap.t, trap.x, trap.y, kind);
     if (!withinBounds(rect, expansion)) outOfBounds.push(index);
     placing.push({ key: index, rect });
   });
@@ -234,7 +251,7 @@ export const planTrapRearm = (save: TrapRearmSave, traps: readonly TrapPlacement
 
   const obstacles: PlacedRect<number>[] = [];
   for (const building of Object.values(buildings)) {
-    const rect = rectOfBuilding(building);
+    const rect = rectOfBuilding(building, kind);
     if (rect) obstacles.push({ key: EXISTING, rect });
   }
   // A mushroom is no obstacle: the route moves it off the new trap (#263).
@@ -314,10 +331,10 @@ export const planTrapRearm = (save: TrapRearmSave, traps: readonly TrapPlacement
  * `buildingdata` spells the origin `X`/`Y` (`applyLayout.ts:74-76`), where the
  * `BuildingData` type still declares the lower-case pair the Flash source used.
  */
-const rectOfBuilding = (building: BuildingData) => {
+const rectOfBuilding = (building: BuildingData, kind: YardKind) => {
   const x = Number(building.X);
   const y = Number(building.Y);
   const type = Number(building.t);
   if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(type)) return null;
-  return rectOf(type, x, y);
+  return rectOf(type, x, y, kind);
 };

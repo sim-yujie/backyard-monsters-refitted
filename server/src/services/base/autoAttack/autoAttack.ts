@@ -17,6 +17,7 @@ import { cellCoordsFromBaseId, outpostsNearCell, type CellCoords } from "../../m
 import { TAKEOVER_DAMAGE } from "../../maproom/v2/takeoverRules.js";
 import { rangeCheckV2, validateRange } from "../../maproom/v2/validateRange.js";
 import { isWildMonsterExpired } from "../../maproom/wildMonsterExpiry.js";
+import { isCampInPlay } from "../../maproom/campInPlay.js";
 import { catchUpArmyRow } from "../../yard/armies.js";
 import { countsOf, type EntryHoused } from "../../yard/attackRoster.js";
 import { newCheckpoint } from "../attackCheckpoint.js";
@@ -273,6 +274,8 @@ export const runAutoAttack = async (user: User, baseid: string): Promise<AutoAtt
     const now = getCurrentDateTime();
     const camp = await campOf(userSave, baseid, now);
     if (camp.row && !camp.expired && isAttackActive(camp.row)) throw baseUnderAttackErr();
+    // An expired camp is regrown below, but never under someone's attack (`campInPlay.ts`).
+    if (camp.row && camp.expired && (await isCampInPlay(camp.row.basesaveid))) throw baseUnderAttackErr();
 
     const stored = await findAttackPlan(userid, camp.key);
     if (!stored) throw autoAttackRefusedErr("noPlan");

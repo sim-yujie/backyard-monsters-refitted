@@ -12,6 +12,7 @@ import {
 } from "./activity.js";
 import { readLogDays, type LogDay } from "./logBackfill.js";
 import { realPlayerIds, realPlayerSql } from "./realPlayers.js";
+import { lookTotals, type LookTotals } from "./lookStats.js";
 
 /**
  * The dashboard's daily numbers (`bym.daily_stat`, migration
@@ -447,6 +448,8 @@ export const playerTotals = async (deps: StatsDeps, now: number = Date.now()): P
 export interface StatsOverview {
   readonly generatedAt: string;
   readonly players: PlayerTotals;
+  /** Modern vs Classic and the other Look and sound choices, over the last week (`lookStats.ts`). */
+  readonly looks: LookTotals;
   /** Today so far (UTC), counted live. */
   readonly today: DailyStat;
   /** Stored days, oldest first, ending yesterday. */
@@ -463,6 +466,7 @@ export const statsOverview = async (deps: StatsDeps, days = 30, now: number = Da
   return {
     generatedAt: new Date(now).toISOString(),
     players: await playerTotals(deps, now),
+    looks: await lookTotals(deps.em, now),
     today: todayStat!,
     days: await readDailyStats(deps.em, from, yesterday),
   };

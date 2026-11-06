@@ -134,9 +134,38 @@ describe("the owner's first look", () => {
     await settle();
     expect(document.querySelector(".nav a[href='#shiny']")?.textContent).toBe("Shiny");
     expect(document.getElementById("shiny")?.querySelector("#player-search")).not.toBeNull();
+    expect(document.querySelector(".nav a[href='#moderation']")?.textContent).toBe("Moderation");
+    expect(document.getElementById("moderation")?.querySelector("#mod-search")).not.toBeNull();
+    expect(document.querySelector(".nav a[href='#chat']")?.textContent).toBe("Chat");
+    expect(document.getElementById("chat")?.textContent).toContain("Join chat");
     const select = document.querySelector<HTMLSelectElement>(".top .theme-pick select")!;
     expect([...select.options].map((o) => o.value)).toEqual(["auto", "light", "dark"]);
     expect(select.value).toBe("auto");
+  });
+
+  it("puts Chat cases first, folds the rarely used sections, and remembers what the owner opens", async () => {
+    await boot();
+    await settle();
+    expect(document.querySelector(".nav li a")?.getAttribute("href")).toBe("#cases");
+    expect(document.querySelector(".page > .section")?.id).toBe("cases");
+    const players = document.getElementById("players")!;
+    const toggle = players.querySelector<HTMLButtonElement>(".section-toggle")!;
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(players.querySelector<HTMLElement>(".section-body")!.hidden).toBe(true);
+    expect(document.getElementById("bugs-body")!.hidden).toBe(false);
+    // A section with a problem opens by itself: last night's backup is missing.
+    expect(document.getElementById("backups-body")!.hidden).toBe(false);
+    toggle.click();
+    expect(players.querySelector<HTMLElement>(".section-body")!.hidden).toBe(false);
+    expect(JSON.parse(localStorage.getItem("bymr.admin.folds")!)).toEqual({ players: true });
+    // A link to a folded section opens it.
+    const activity = document.getElementById("activity-body")!;
+    expect(activity.hidden).toBe(true);
+    const link = document.querySelector<HTMLAnchorElement>(".nav a[href='#activity']")!;
+    // Not to the address: the next test would start on #activity.
+    link.addEventListener("click", (event) => event.preventDefault());
+    link.click();
+    expect(activity.hidden).toBe(false);
   });
 
   it("keeps the technical words behind Technical details", async () => {

@@ -44,10 +44,11 @@ export const normaliseLayoutName = (name: string): string =>
 
 /*
  * Every call below takes the yard it acts on last, as the `yard*.ts` calls do
- * (`yardBody`): an outpost's `baseid`, or nothing for the main yard. Apply,
- * the wall upgrade and the trap re-arm then act on that outpost; the layout
- * slots are refused there (`409 notInOutpost`, `plannerYard.ts`), as Flash's
- * planner could not save or load layouts in an outpost.
+ * (`yardBody`): an outpost's or the Inferno yard's `baseid`, or nothing for
+ * the main yard. Apply, the wall upgrade and the trap re-arm then act on that
+ * yard. The layout slots are the Inferno yard's own there, and refused in an
+ * outpost (`409 notInOutpost`, `plannerYard.ts`), as Flash's planner could not
+ * save or load layouts in an outpost.
  */
 
 /** Every saved layout, with the number of slots the account has. */
@@ -73,36 +74,20 @@ export const deleteLayout = async (slot: number, baseid?: string): Promise<void>
 };
 
 /**
- * Writes a layout's positions into the real yard, and optionally starts the
- * upgrades its nodes have planned.
+ * Writes a layout's positions into the real yard. It starts no upgrades:
+ * per-building planning was removed on 2026-11-03 (owner: there should be no
+ * way to queue upgrades at once).
  *
  * Success carries the new `buildingdata`, which the caller uses to rebuild its
  * own model rather than re-fetching the save — the response is the save as the
  * server now holds it, so re-reading it is the honest move and assuming the
- * client's plan won is not. With `startUpgrades` it also carries `resources`
- * and an `upgrades` report of what started, finished, waited and was skipped
- * (`docs/design/planner-upgrades.md` §3.2).
- *
- * The flag is a form field rather than a second route because one Apply has to
- * be one transaction: one timer advance, one `savetime`, one flush (§8, Q1).
- * The moves are all-or-nothing as they have always been; the upgrades are
- * partial by design and reported, never a reason to refuse the request.
+ * client's plan won is not. The moves are all-or-nothing.
  */
 export const applyLayout = (
   payload: LayoutPayload,
-  options: { startUpgrades?: boolean } = {},
   baseid?: string,
 ): Promise<ApplyLayoutResponse> =>
-  post<ApplyLayoutResponse>(
-    APPLY_PATH,
-    yardBody(
-      {
-        data: JSON.stringify(payload),
-        ...(options.startUpgrades ? { startUpgrades: "1" } : {}),
-      },
-      baseid,
-    ),
-  );
+  post<ApplyLayoutResponse>(APPLY_PATH, yardBody({ data: JSON.stringify(payload) }, baseid));
 
 /** Every detail key a rejection can carry a list of building ids under. */
 const CONFLICT_KEYS = [

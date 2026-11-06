@@ -1,11 +1,10 @@
-import { Assets, Sprite, Texture, type Container, type Renderer } from "pixi.js";
+import { Sprite, Texture, type Container, type Renderer } from "pixi.js";
 import {
   creepZIndex,
   gpuTextureLimit,
   MonsterSheetTextures,
 } from "@/game/attack/AttackBattleLayer";
 import { MONSTER_SPRITES, type MonsterSheet } from "@/game/attack/monsterSpriteData";
-import { championEggUrl } from "@/game/portraits";
 import {
   anchorOffset,
   championFlightTop,
@@ -24,6 +23,7 @@ import {
   CREATURE_TICK_HZ,
   EMPTY_LIFE,
   freezeTrip,
+  juiceTrip,
   MAX_TICKS_PER_FRAME,
   reconcileWalkers,
   reconcileWorkers,
@@ -35,6 +35,7 @@ import {
   WORKER_TICK_HZ,
   type Random,
   type TripRoute,
+  type YardPoint,
   type Walker,
   type Worker,
   type YardLife,
@@ -69,17 +70,7 @@ import {
  * the Champion Chamber (#314) when `set` is handed a route to walk; under
  * reduced motion, with no route, or on a yard read fresh it is simply gone
  * from the cage or back in it.
- *
- * A champion's egg (owner 2026-10-20) stands still in the middle of the cage,
- * one picture ({@link EGG_HEIGHT} world px tall), until it hatches or is
- * cancelled.
  */
-
-/** How tall the egg stands in the cage, in world px (its picture is drawn at twice this). */
-export const EGG_HEIGHT = 60;
-
-/** Depth tie-break id of the egg, past every walker's and worker's. */
-const EGG_DEPTH_ID = 999;
 
 /** World px of slack around the view before a creature counts as off screen. */
 const CULL_MARGIN = 120;
@@ -123,6 +114,12 @@ export interface YardLifeOptions {
   readonly textures?: MonsterSheetTextures;
 }
 
+/** The most monsters one juice walks to the Juicer; the rest are juiced unseen, as goo already banked. */
+export const MAX_JUICE_WALKERS = 40;
+
+/** A monster that reached the Juicer: its id and the Juicer's building id. */
+export type JuiceArrival = (monsterId: string, juicer: number) => void;
+
 export class YardLifeLayer {
   private readonly textures: MonsterSheetTextures;
   private readonly random: Random;
@@ -139,9 +136,16 @@ export class YardLifeLayer {
   private shadows: Container | null = null;
   private hidden = false;
   private limitRead = false;
-  /** The egg in the cage, its champion's id, and whether its picture is in. */
-  private egg: { readonly id: string; readonly sprite: Sprite; ready: boolean } | null = null;
   /** Fractions of a tick carried between frames. */
+  /**
+   * Pen monsters the last redraws took away, kept until the next frame: a
+   * juice's answer takes them out of housing just before word of the juice
+   * comes, and these are the ones that walk to the Juicer ({@link juice}).
+   */
+  private dropped = new Map<string, Walker>();
+  private juiceCount = 0;
+  /** Hears each monster that gets into the Juicer. */
+  onJuiceArrive: JuiceArrival | null = null;
   private creatureClock = 0;
   private workerClock = 0;
 
@@ -191,10 +195,13 @@ export class YardLifeLayer {
     const sameCage = !first && life !== null && before.cage?.id === next.cage?.id;
     // Off this yard every trip snaps to its end: one going in is gone, one coming out is home.
     if (!sameCage) {
-      for (const walker of this.walkers.values()) {
+      for (const [key, walker] of this.walkers) {
+        // One on its way into the Juicer is gone, unheard: its goo was banked already.
+        if (walker.juice) this.walkers.delete(key);
         walker.trip = null;
         walker.leaving = false;
       }
+      this.dropped.clear();
     }
     const way = sameCage && !this.reducedMotion ? route : null;
     const trips = way ? championTrips(before, next) : { freezing: [], thawing: [] };
@@ -206,7 +213,13 @@ export class YardLifeLayer {
       }
     }
 
-    this.walkers = reconcileWalkers(this.walkers, walkerSpecs(next, this.random), this.random);
+    const kept = reconcileWalkers(this.walkers, walkerSpecs(next, this.random), this.random);
+    if (!first && life !== null) {
+      for (const [key, walker] of this.walkers) {
+        if (!kept.has(key) && !walker.champion && !walker.juice) this.dropped.set(key, walker);
+      }
+    }
+    this.walkers = kept;
     if (way && door && next.cage) {
       for (const id of trips.thawing) {
         const walker = this.walkers.get(championWalkerKey(next.cage.id, id));
@@ -256,13 +269,66 @@ export class YardLifeLayer {
       this.workerBodies.push(this.makeBody(WORKER_SHEET ?? null));
     }
 
-    this.setEgg(next, bounds);
     this.mount();
+  }
+
+  /**
+   * Walks `count` of `monsterId` from the pens to the Juicer `juicer`, in at
+   * `door`, round the buildings by `route` (`CreepBase.as` `changeModeJuice`):
+   * first the ones the juice just took out of the pens, where they stood, then
+   * new ones from a pen. A flyer climbs to `top` px first. Returns how many
+   * set off; with no way there, or under reduced motion, none do.
+   */
+  juice(monsterId: string, count: number, juicer: number, door: YardPoint, route: TripRoute, top: number): number {
+    if (this.reducedMotion || !this.bounds || count <= 0) return 0;
+    const sheet = spriteFor(monsterId, 1) ?? null;
+    const flies = sheet?.movement === "fly";
+    let started = 0;
+    const send = (walker: Walker): boolean => {
+      if (!juiceTrip(walker, juicer, door, route, flies, top)) return false;
+      const key = `j:${this.juiceCount++}:${walker.key}`;
+      const moved: Walker = { ...walker, key };
+      this.walkers.set(key, moved);
+      if (sheet) this.textures.preload(sheet);
+      this.walkerBodies.set(key, this.makeBody(sheet));
+      started++;
+      return true;
+    };
+    for (const [key, walker] of this.dropped) {
+      if (started >= count) break;
+      if (walker.monsterId !== monsterId) continue;
+      this.dropped.delete(key);
+      if (!send(walker)) return started;
+    }
+    const pens = this.life.pens.filter((pen) => !this.life.fallen.has(pen.id));
+    while (started < count && pens.length > 0) {
+      const pen = pens[Math.floor(this.random() * pens.length) % pens.length]!;
+      const [spec] = walkerSpecs({ ...this.life, pens: [pen], groups: [{ id: monsterId, level: this.life.groups.find((group) => group.id === monsterId)?.level ?? 1, count: 1 }], rosters: null, cage: null }, this.random, 1);
+      if (!spec) break;
+      const area = spec.area;
+      const x = area.x + this.random() * area.width;
+      const y = area.y + this.random() * area.height;
+      const walker: Walker = {
+        ...spec,
+        key: `new:${spec.key}`,
+        x,
+        y,
+        targetX: x,
+        targetY: y,
+        moving: false,
+        heading: this.random() * Math.PI * 2,
+        age: 0,
+        trip: null,
+        leaving: false,
+      };
+      if (!send(walker)) break;
+    }
+    if (started > 0) this.mount();
+    return started;
   }
 
   /** Takes every sprite out of the yard's containers, before the yard clears them. */
   detach(): void {
-    this.egg?.sprite.parent?.removeChild(this.egg.sprite);
     for (const body of this.bodies()) {
       body.body.parent?.removeChild(body.body);
       body.shadow?.parent?.removeChild(body.shadow);
@@ -285,12 +351,6 @@ export class YardLifeLayer {
   setHidden(hidden: boolean): void {
     this.hidden = hidden;
     if (hidden) for (const body of this.bodies()) this.show(body, false);
-    if (this.egg) this.egg.sprite.visible = !hidden && this.egg.ready;
-  }
-
-  /** The egg's sprite, for tests. */
-  get eggSprite(): Sprite | null {
-    return this.egg?.sprite ?? null;
   }
 
   /**
@@ -309,6 +369,7 @@ export class YardLifeLayer {
         for (const walker of this.walkers.values()) stepWalker(walker, this.random);
       }
       this.dropGone();
+      this.dropped.clear();
 
       this.workerClock += deltaSeconds * WORKER_TICK_HZ;
       const workerTicks = Math.min(MAX_TICKS_PER_FRAME, Math.floor(this.workerClock));
@@ -347,7 +408,7 @@ export class YardLifeLayer {
       const hovers = hoversInCage(walker, body.sheet);
       const animation = walker.moving || hovers ? "walk" : "idle";
       const sortFloor = walker.champion && !walker.trip && cageY !== null ? cageY : -Infinity;
-      this.place(body, x, y, walker.heading, animation, tick, depthId, hovers, sortFloor);
+      this.place(body, x, y, walker.heading, animation, tick, depthId, hovers, sortFloor, walker.juice?.altitude ?? 0);
     }
 
     this.workers.forEach((worker, index) => {
@@ -365,8 +426,6 @@ export class YardLifeLayer {
 
   destroy(): void {
     this.detach();
-    this.egg?.sprite.destroy();
-    this.egg = null;
     for (const body of this.bodies()) {
       body.body.destroy();
       body.shadow?.destroy();
@@ -382,6 +441,7 @@ export class YardLifeLayer {
   private dropGone(): void {
     for (const [key, walker] of this.walkers) {
       if (!walkerGone(walker)) continue;
+      if (walker.juice) this.onJuiceArrive?.(walker.monsterId, walker.juice.juicer);
       this.walkers.delete(key);
       const body = this.walkerBodies.get(key);
       if (body) this.release(body);
@@ -390,40 +450,6 @@ export class YardLifeLayer {
   }
 
   /* ── Sprites ──────────────────────────────────────────────────────── */
-
-  /** Puts the cage's egg in the middle of the cage, or takes it away. */
-  private setEgg(life: YardLife, bounds: YardBounds): void {
-    const id = life.egg?.id ?? null;
-    if (this.egg && this.egg.id !== id) {
-      this.egg.sprite.parent?.removeChild(this.egg.sprite);
-      this.egg.sprite.destroy();
-      this.egg = null;
-    }
-    if (!id || !life.egg) return;
-    if (!this.egg) {
-      const sprite = new Sprite(Texture.EMPTY);
-      sprite.eventMode = "none";
-      sprite.anchor.set(0.5, 1);
-      sprite.visible = false;
-      const egg = { id, sprite, ready: false };
-      this.egg = egg;
-      void Assets.load<Texture>(championEggUrl(id, "yard"))
-        .then((texture) => {
-          if (this.egg !== egg || sprite.destroyed) return;
-          sprite.texture = texture;
-          sprite.scale.set(EGG_HEIGHT / Math.max(1, texture.height));
-          egg.ready = true;
-          sprite.visible = !this.hidden;
-        })
-        .catch((caught: unknown) => {
-          console.warn(`Egg art for ${id} did not load.`, caught);
-        });
-    }
-    const x = life.egg.x - life.egg.y + bounds.originX;
-    const y = (life.egg.x + life.egg.y) / 2 + bounds.originY;
-    this.egg.sprite.position.set(x, y);
-    this.egg.sprite.zIndex = creepZIndex(x, y, EGG_DEPTH_ID);
-  }
 
   private *bodies(): Generator<Body> {
     yield* this.walkerBodies.values();
@@ -457,8 +483,7 @@ export class YardLifeLayer {
   private mount(): boolean {
     if (!this.tops) return false;
     for (const body of this.bodies()) this.mountBody(body);
-    if (this.egg && this.egg.sprite.parent !== this.tops) this.tops.addChild(this.egg.sprite);
-    return this.count > 0 || this.egg !== null;
+    return this.count > 0;
   }
 
   private mountBody(body: Body): void {
@@ -484,6 +509,7 @@ export class YardLifeLayer {
     depthId: number,
     hovers = false,
     sortFloor = -Infinity,
+    lift = 0,
   ): void {
     const sheet = body.sheet;
     if (!sheet) return;
@@ -500,10 +526,10 @@ export class YardLifeLayer {
       body.cellKey = key;
     }
     const anchor = anchorOffset(sheet);
-    body.body.position.set(x + anchor.x, y + (hovers ? championFlightTop(tick) : anchor.y));
+    body.body.position.set(x + anchor.x, y + (hovers ? championFlightTop(tick) : anchor.y) - lift);
     // A hovering body sorts as if it stood its altitude further down the
     // screen, as a flyer does on the attack screen; none sorts further back than `sortFloor`.
-    const sortY = Math.max(hovers ? y + flyerAltitude(sheet.family) : y, sortFloor);
+    const sortY = Math.max(hovers ? y + flyerAltitude(sheet.family) : y + lift, sortFloor);
     const zIndex = creepZIndex(x, sortY, depthId);
     if (body.body.zIndex !== zIndex) body.body.zIndex = zIndex;
     body.body.visible = true;

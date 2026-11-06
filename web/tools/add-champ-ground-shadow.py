@@ -14,13 +14,18 @@ over the heading's run frames, and again over its attack frames, so it stays
 put while she runs and follows her when she lunges. Nothing else in the cell
 changes, and the anchor stays where it was.
 
+Korath (korath_1..6) gets the same: like her, its Flash sheets had the shadow
+baked in and its repaints are painted without one (owner, 2026-10-28).
+
 Run it once, on a sheet that has no shadow yet (it refuses a sheet it has
-already shadowed). Both the @4x sheet and its 1x copy are rewritten, quantised
-with libimagequant like the other repaints:
+already shadowed). Both the @4x (Korath 4-6: @3x) sheet and its 1x copy are rewritten, quantised
+with libimagequant like the other repaints; Korath 5 and 6 are then packed into the 2x sheet the game
+draws (`pack-sheet.py`):
 
   uv run --no-project --with imagequant --with pillow --with numpy --with scipy \
     python web/tools/add-champ-ground-shadow.py krallen_1_rev_65
 """
+import importlib.util
 import os
 import sys
 from pathlib import Path
@@ -32,19 +37,25 @@ from scipy.ndimage import gaussian_filter
 
 ASSETS = Path(__file__).resolve().parents[2] / "server/public/assets/monsters"
 OUT = Path(os.environ.get("SHADOW_OUT", ASSETS))  # write elsewhere to try settings
-UP = 4
 MARK = "bymr-ground-shadow"
 
-# name: (1x cell width, 1x cell height), as in monsterSpriteData.ts.
-SHEETS = {
-    "krallen_1_rev_65": (130, 80),
-    "krallen_2_rev_65": (131, 90),
-    "krallen_3_rev_65": (142, 100),
-}
-COLUMNS = ROWS = 16
+COLUMNS = 16
 # Krallen's rows: run 0-9, attack 10-15 (`monsterSpriteData.ts` G5_1-G5_3).
 # Each cycle gets its own ellipse, so a lunge keeps the shadow under her.
-CYCLES = {"run": range(0, 10), "attack": range(10, 16)}
+_KRALLEN = {"run": range(0, 10), "attack": range(10, 16)}
+# name: (1x cell width, 1x cell height, cycles, scale of the repaint), as in monsterSpriteData.ts
+# (Korath, G4_1-G4_6: walk from row 0, then the attack; levels 5 and 6 also stomp, rows 20-29; levels 4-6 are painted at 3x).
+SHEETS = {
+    "krallen_1_rev_65": (130, 80, _KRALLEN, 4),
+    "krallen_2_rev_65": (131, 90, _KRALLEN, 4),
+    "krallen_3_rev_65": (142, 100, _KRALLEN, 4),
+    "korath_1": (72, 49, {"walk": range(0, 8), "attack": range(8, 17)}, 4),
+    "korath_2": (119, 81, {"walk": range(0, 8), "attack": range(8, 17)}, 4),
+    "korath_3": (128, 102, {"walk": range(0, 9), "attack": range(9, 18)}, 4),
+    "korath_4": (153, 123, {"walk": range(0, 10), "attack": range(10, 20)}, 3),
+    "korath_5": (199, 162, {"walk": range(0, 10), "attack": range(10, 20), "stomp": range(20, 30)}, 3),
+    "korath_6": (202, 167, {"walk": range(0, 10), "attack": range(10, 20), "stomp": range(20, 30)}, 3),
+}
 
 # Shadow look, in 1x pixels: a little darker than the creep repaints' shadows,
 # as the yard's dark grass swallowed a lighter one.
@@ -79,8 +90,9 @@ def main():
     if len(sys.argv) != 2 or sys.argv[1] not in SHEETS:
         sys.exit(f"usage: add-champ-ground-shadow.py <{'|'.join(SHEETS)}>")
     name = sys.argv[1]
-    fw, fh = SHEETS[name]
-    path4 = ASSETS / f"{name}-repaint@4x.png"
+    fw, fh, cycles, UP = SHEETS[name]
+    ROWS = max(r.stop for r in cycles.values())
+    path4 = ASSETS / f"{name}-repaint@{UP}x.png"
     src = Image.open(path4)
     if MARK in getattr(src, "text", {}):
         sys.exit(f"{path4.name} already has its ground shadow")
@@ -91,7 +103,7 @@ def main():
 
     yy, xx = np.mgrid[0 : fh * UP, 0 : fw * UP].astype(np.float32) / UP
     for c in range(COLUMNS):
-        for cycle, rows in CYCLES.items():
+        for cycle, rows in cycles.items():
             prints = [footprint(small[r * fh : (r + 1) * fh, c * fw : (c + 1) * fw]) for r in rows]
             prints = np.array([p for p in prints if p is not None])
             if len(prints) == 0:
@@ -116,6 +128,17 @@ def main():
     for img, path in ((sheet, OUT / path4.name), (sheet.resize((fw * COLUMNS, fh * ROWS), Image.LANCZOS), OUT / f"{name}-repaint.png")):
         imagequant.quantize_pil_image(img, max_quality=95, min_quality=60).save(path, optimize=True, pnginfo=info)
         print("wrote", path.name, f"{path.stat().st_size / 1e6:.1f} MB")
+    # The Quality setting's half-size copy, from the shadowed sheet (the 1x above is the other).
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import sheet_copies
+
+    spec = importlib.util.spec_from_file_location("pack_sheet", Path(__file__).resolve().with_name("pack-sheet.py"))
+    packer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(packer)
+    if name in packer.PACKS and OUT == ASSETS:
+        packer.pack(name)  # Korath 5 and 6: packed into the 2x sheet the game draws, with its copies
+    else:
+        sheet_copies.make_copies(OUT / path4.name)
 
 
 if __name__ == "__main__":

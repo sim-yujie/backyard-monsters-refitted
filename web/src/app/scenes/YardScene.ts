@@ -1,6 +1,13 @@
 import { getSession, logout } from "@/api/auth";
 import { chatApi, chatConfigFrom } from "@/api/chat";
 import { loadAttackOn, loadOwnBase, loadOwnYard, takeAwayJobs, viewBase } from "@/api/base";
+import {
+  INFERNO_CLOSED_TEXT,
+  infernoRefusalOf,
+  isInfernoClosed,
+  loadInfernoYard,
+  viewInfernoYard,
+} from "@/api/inferno";
 import { ApiError, NetworkError } from "@/api/http";
 import { ELSEWHERE } from "@/api/presence";
 import {
@@ -9,7 +16,6 @@ import {
   type BuildingDataMap,
   type MushroomSave,
   type Resources,
-  type UpgradeReport,
 } from "@/api/types";
 import { bankActions } from "@/api/yardBank";
 import { buildActions } from "@/api/yardBuild";
@@ -47,6 +53,9 @@ import { Camera } from "@/game/Camera";
 import { setMapFocus } from "@/game/maproom/mapFocus";
 import { MapRoomChoice, mapRoomOf, takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import { finishedMonstersJobs } from "@/game/monsters/finishedJobs";
+import { onJuiced } from "@/game/monsters/juiceNews";
+import { openInfernoMap } from "@/game/inferno/tribeEntry";
+import { backToInferno } from "@/game/inferno/tribeReturn";
 import {
   blueprintBlock,
   PlannerAccess,
@@ -66,6 +75,7 @@ import {
   outpostBaseid,
   sameYard,
   setOwnYardTarget,
+  infernoTarget,
   withCell,
   yardTitle,
   type OwnYardTarget,
@@ -88,18 +98,32 @@ import type { HatcheryMarks } from "@/game/yard/YardHatchMarks";
 import { YardRenderer, YardView } from "@/game/yard/YardRenderer";
 import { CompareView, pointerInPlanPane } from "@/game/yard/CompareView";
 import { YardInput } from "@/game/yard/YardInput";
-import { formatAmount, formatCountdown } from "@/ui/format";
+import { formatCountdown } from "@/ui/format";
 import { Hud } from "@/ui/Hud";
+import { loadTribeYard, resetTribeCamps, saveTribeYard, tribeEditorStatus, type TribeId } from "@/api/tribeEditor";
+import {
+  consumeTribeEditTarget,
+  endTribeEdit,
+  setTribeEditTarget,
+  startTribeEdit,
+  type TribeEdit,
+} from "@/game/tribeEditor/tribeEditSession";
+import { TribeEditBar, TribePicker } from "@/ui/tribeEditor/TribeEditorPanel";
 import { Notices } from "@/ui/maproom/Notices";
 import { showTakenOver } from "@/ui/maproom/TakeoverDialog";
 import { showBuildMapRoom } from "@/ui/maproom1/MapRoomPrompt";
 import { MonstersScreen } from "@/ui/monsters/MonstersScreen";
+import { SiegeScreen } from "@/ui/siege/SiegeScreen";
+import type { SiegeSite } from "@/game/siege/siege";
 import { ShopScreen } from "@/ui/yard/ShopScreen";
 import { MailDoor } from "@/ui/mail/MailDoor";
 import { NotificationDoor } from "@/ui/notifications/NotificationDoor";
 import { DefencesDoor } from "@/ui/defences/DefencesDoor";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
-import { ChatBox } from "@/ui/chat/ChatBox";
+import { WorldChatBox } from "@/ui/chat/WorldChatBox";
+import { openCountryPrompt } from "@/ui/chat/CountryPrompt";
+import { supportReminder } from "@/game/support/supportReminder";
+import { reportLook } from "@/app/lookReport";
 import {
   MONSTERS_TAB_ORDER,
   MonsterBuilding,
@@ -108,14 +132,14 @@ import {
   type MonstersFocus,
 } from "@/ui/monsters/monstersTab";
 import { monstersTabsFor } from "@/ui/monsters/tabs";
-import { resourceAmount } from "@/ui/resourceIcon";
+import { setResourceRealm } from "@/ui/resourceIcon";
+import { setScreenTune } from "@/game/sound/sound";
 import { TestReportPanel } from "@/ui/attack/TestReport";
 import { BuildingPanel } from "@/ui/yard/BuildingPanel";
 import { MAP_ROOM_TYPE } from "@/ui/yard/buildingActions";
 import { BuildMenu, PlacementBar, spotSentence } from "@/ui/yard/BuildMenu";
-import { showBankResult } from "@/ui/yard/CollectAll";
+import { bankFloat, showBankResult } from "@/ui/yard/CollectAll";
 import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
-import { describeUpgradeReport } from "@/ui/yard/upgradeText";
 import { FriendsBar } from "@/ui/friends/FriendsBar";
 import { HelpPanel } from "@/ui/friends/HelpPanel";
 import { YardDock, type YardDockOptions } from "@/ui/yard/YardDock";
@@ -128,7 +152,7 @@ import { ZoomControl } from "@/ui/ZoomControl";
 import { YardPlanner, type AppliedStorage, type CompareVisuals } from "./YardPlanner";
 import { sceneForMap } from "./MapGateScene";
 import type { Scene, SceneContext } from "../SceneManager";
-import { SceneName } from "../App";
+import { SceneName } from "../sceneName";
 import { BAITER_TYPE, setBaiterRun } from "@/game/baiter/baiterSession";
 import { trojanApi } from "@/api/trojan";
 import { setRaidRun } from "@/game/raid/raidSession";
@@ -141,7 +165,7 @@ import { registerCanvasTarget, tutTarget, TutTarget, type TargetRect } from "@/g
 import { footprintBox } from "@/game/yard/YardGrid";
 import { mountYardPlugins, type YardSceneControls } from "@/game/yard/yardPlugins";
 import "@/game/yard/plugins";
-import { devDetails } from "../devDetails";
+import { devStats } from "../devDetails";
 
 /**
  * A yard: the player's own, or — handed a {@link ViewTarget} by the map —
@@ -185,6 +209,10 @@ export interface YardLoaders {
   viewBase: typeof viewBase;
   /** A friend's main yard, to help in (#372). */
   loadFriendYard: (userid: number) => Promise<BaseLoadResponse>;
+  /** The player's Inferno yard (WP 1.18). */
+  loadInfernoYard: typeof loadInfernoYard;
+  /** Another player's Inferno yard, to look at only (WP 3.4). */
+  viewInfernoYard: (baseid: string) => Promise<BaseLoadResponse>;
 }
 
 /**
@@ -195,18 +223,48 @@ export interface YardLoaders {
  */
 export const loadYardFor = (
   target: ViewTarget | null,
-  api: YardLoaders = { loadOwnYard, loadOwnBase, viewBase, loadFriendYard: (userid) => loadFriendYard(userid) },
+  api: YardLoaders = {
+    loadOwnYard,
+    loadOwnBase,
+    viewBase,
+    loadFriendYard: (userid) => loadFriendYard(userid),
+    loadInfernoYard,
+    viewInfernoYard,
+  },
   own: OwnYardTarget = MAIN_YARD,
 ): Promise<BaseLoadResponse> =>
   !target
     ? own.kind === "outpost"
       ? api.loadOwnBase(own.baseid)
-      : api.loadOwnYard()
+      : own.kind === "inferno"
+        ? api.loadInfernoYard()
+        : api.loadOwnYard()
     : target.kind === "friend"
       ? api.loadFriendYard(target.friend ?? 0)
-      : target.mapversion === undefined
+      : target.inferno
+        ? api.viewInfernoYard(target.baseid)
+        : target.mapversion === undefined
         ? api.viewBase(target.baseid, target.kind)
         : api.viewBase(target.baseid, target.kind, { mapversion: target.mapversion });
+
+/**
+ * Why another player's Inferno yard did not open (WP 3.4): attacked right
+ * now (`targetUnderAttack`, when Flash greyed View out), no longer theirs or
+ * not a player's, or the server out of reach.
+ */
+export const infernoViewFailureText = (name: string, caught: unknown): string => {
+  if (caught instanceof NetworkError) return `Could not reach the server to look at ${name}'s Inferno yard.`;
+  const reason = infernoRefusalOf(caught);
+  if (reason === "targetUnderAttack") return `${name}'s Inferno yard is under attack. Look again when it is over.`;
+  if (reason === "notInfernoPlayer") return `${name}'s Inferno yard cannot be looked at any more.`;
+  return `Could not load ${name}'s Inferno yard.`;
+};
+
+/** "your yard", "your outpost", "your Inferno yard", "Name's yard" or "Name's Inferno yard" (WP 3.4). */
+export const whoseYard = (target: ViewTarget | null, own: OwnYardTarget): string => {
+  if (target) return `${target.name}'s ${target.inferno ? "Inferno yard" : "yard"}`;
+  return own.kind === "outpost" ? "your outpost" : own.kind === "inferno" ? "your Inferno yard" : "your yard";
+};
 
 /**
  * What an outpost holding nothing but its core says, with a way to the
@@ -334,6 +392,8 @@ export class YardScene implements Scene {
   private panelDock: HTMLElement | null = null;
   /** The own yard's Monsters screen (§4.1), built the first time it opens. */
   private monsters: MonstersScreen | null = null;
+  /** The Chaos Lab and Chaos Factory screen (Inferno WP 6.4), made on first open. */
+  private siege: SiegeScreen | null = null;
   /** The Shop (§8.2), made on first open; own yard only. */
   private shop: ShopScreen | null = null;
   /** The Mail button and the mailbox behind it (#193): the player's own yards only. */
@@ -342,8 +402,11 @@ export class YardScene implements Scene {
   private bell: NotificationDoor | null = null;
   /** The Defences button and screen (#363): the own yard of a Map Room 2 player. */
   private defences: DefencesDoor | null = null;
-  /** World chat's box (#282), on every yard; the connection is `worldChat`'s and outlives it. */
-  private chat: ChatBox | null = null;
+  /**
+   * World chat's box (#282), on every yard while the player's "World chat"
+   * switch is on; the connection is `worldChat`'s and outlives it.
+   */
+  private chat: WorldChatBox | null = null;
   /** The Starter Kit picker, while open (outposts WP9). */
   private kitPicker: StarterKitPicker | null = null;
   /** Picks a tapped mushroom on the own yard (§5.6); null on a foreign one. */
@@ -359,7 +422,11 @@ export class YardScene implements Scene {
   private save: BaseLoadResponse | null = null;
   /** The own yard's store; null on a visit and before the load answers. */
   private store: YardStore | null = null;
+  /** Takes back this yard's offer of a place for the support reminder. */
+  private stopSupportOffer: (() => void) | null = null;
   private unsubscribeStore: (() => void) | null = null;
+  /** Stops showing juices in the yard (`juiceNews.ts`). */
+  private unsubscribeJuice: (() => void) | null = null;
   /** What the panel and the HUD are handed on the own yard. */
   private binding: YardUiBinding | null = null;
   /** The tab came back while the planner was open; refresh once it closes. */
@@ -419,6 +486,15 @@ export class YardScene implements Scene {
   private own: OwnYardTarget = MAIN_YARD;
   /** An outpost just taken over: "Veni, Vidi, Vici!" once it has loaded. */
   private takenOver: OwnYardTarget["takenOver"] | null = null;
+  /**
+   * The tribe yard editor (LOCAL game only): the Map Room 2 camp yard open in
+   * place of the player's own, whose yard routes the browser answers
+   * (`game/tribeEditor`). Taken once, in `enter`; ended in `exit`.
+   */
+  private tribe: TribeEdit | null = null;
+  private tribeBar: TribeEditBar | null = null;
+  private tribePicker: TribePicker | null = null;
+  private tribeOpenButton: HTMLButtonElement | null = null;
   /** True while the attack load is in flight, so a second click does nothing. */
   private attacking = false;
   private selected: YardBuilding | null = null;
@@ -485,7 +561,22 @@ export class YardScene implements Scene {
     const own = consumeOwnYardTarget();
     this.own = this.target ? MAIN_YARD : (own ?? MAIN_YARD);
     this.takenOver = this.target ? null : (own?.takenOver ?? null);
+    // A tribe yard the editor's picker asked for (LOCAL game only).
+    const tribeTarget = this.target ? null : consumeTribeEditTarget();
+    this.tribe = tribeTarget ? startTribeEdit(tribeTarget) : null;
+    if (this.tribe) {
+      this.own = MAIN_YARD;
+      this.takenOver = null;
+    }
     const whose = this.whose();
+    // Another player's Inferno yard is looked at from the Inferno: its HUD
+    // shows the own purse as Bone, Coal, Sulfur and Magma, so the realm is
+    // set before the HUD draws its icons.
+    if (this.target?.inferno) {
+      setResourceRealm("inferno");
+      // Flash's `iview` played the Inferno yard tune (`game/sound/tunes.ts`, WP 7.2).
+      setScreenTune("infernoYard");
+    }
     context.stage.addChild(this.renderer.root);
     this.renderer.attach(context.renderer);
 
@@ -510,11 +601,16 @@ export class YardScene implements Scene {
       },
       // The Friends list's Visit (#372).
       onVisitFriend: (friend) => this.visitFriendYard(friend),
+      // The Friends list's Message: a new message to them. Only the own yard has the mailbox.
+      ...(!this.target && {
+        onMessageFriend: (friend: Friend) =>
+          void this.mail?.openCompose({ userid: friend.userid, name: friend.username }),
+      }),
     });
     this.hud.setActiveScene(SceneName.YARD);
     this.hud.mount(context.overlay.content);
 
-    this.chat = new ChatBox({
+    this.chat = new WorldChatBox({
       session: worldChat,
       api: chatApi,
       container: context.overlay.content,
@@ -541,7 +637,11 @@ export class YardScene implements Scene {
     this.dock = new YardDock(
       yardDockOptions(target, {
         map: () => this.openMap(),
-        home: () => context.goTo(SceneName.YARD),
+        home: () => {
+          // A look at another player's Inferno yard goes home to the own Inferno yard (WP 3.4).
+          if (target?.inferno) backToInferno(false);
+          context.goTo(SceneName.YARD);
+        },
         layout: () => this.togglePlanner(),
         build: () => this.toggleBuildMenu(),
         yardSelect: (next) => this.openOwnYard(next),
@@ -558,10 +658,11 @@ export class YardScene implements Scene {
     if (target?.attack) {
       this.dock.setAttack({ disabled: true, title: `Attack ${target.name}'s yard` });
     }
-    if (!target) {
-      this.friendsBar = new FriendsBar({ onVisit: (friend) => this.visitFriendYard(friend) }).mount(
-        context.overlay.content,
-      );
+    if (!target && !this.tribe) {
+      this.friendsBar = new FriendsBar({
+        onVisit: (friend) => this.visitFriendYard(friend),
+        onMessage: (friend) => void this.mail?.openCompose({ userid: friend.userid, name: friend.username }),
+      }).mount(context.overlay.content);
       // A collected gift lands in this pool; the Gifts tab warns against its caps.
       this.clearPlayerPool = setPlayerPool({
         read: () => (this.store ? { resources: this.store.resources, caps: this.store.caps } : null),
@@ -619,13 +720,24 @@ export class YardScene implements Scene {
     this.panelDock.className = "map-dock map-dock--right";
     context.overlay.content.append(this.panelDock);
 
-    if (!target) this.startAttackGuard(context);
+    if (!target && !this.tribe) this.startAttackGuard(context);
 
     await this.load();
   }
 
   exit(): void {
     presence.setScreen(ELSEWHERE);
+    this.stopSupportOffer?.();
+    this.stopSupportOffer = null;
+    this.tribeBar?.close();
+    this.tribeBar = null;
+    this.tribePicker?.close();
+    this.tribePicker = null;
+    this.tribeOpenButton?.remove();
+    this.tribeOpenButton = null;
+    // Leaving the screen leaves the tribe editor: the yard routes go to the server again.
+    if (this.tribe) endTribeEdit();
+    this.tribe = null;
     for (const unregister of this.unregisterTargets.splice(0)) unregister();
     this.attackGuard?.destroy();
     this.attackGuard = null;
@@ -756,6 +868,7 @@ export class YardScene implements Scene {
       if (!this.planner) this.store?.tick();
       this.panel?.tick(Date.now() / 1000);
       this.monsters?.tick();
+      this.siege?.tick();
       this.shop?.tick();
       this.refreshStatus();
     }
@@ -807,10 +920,16 @@ export class YardScene implements Scene {
     try {
       // The own-yard load that sent a player with no Map Room here from the
       // map door (issue #162), when there was one: always the main yard's.
-      const primed = !target && own.kind === "main" ? takePrimedOwnYard() : null;
-      const response = primed ?? (await loadYardFor(target, undefined, own));
+      const tribe = this.tribe;
+      const primed = !target && !tribe && own.kind === "main" ? takePrimedOwnYard() : null;
+      // The tribe editor's camp yard comes from the editor, never the player's row.
+      const response = tribe ? tribe.sim.yard() : (primed ?? (await loadYardFor(target, undefined, own)));
       // The scene may have been swapped out while the request was in flight.
       if (this.context !== context) return;
+      // The Inferno load names the yard, whose baseid every yard route sends.
+      if (!target && own.kind === "inferno" && response.baseid) {
+        this.own = infernoTarget(String(response.baseid));
+      }
 
       // A visit is somebody else's yard: open grass and no plot edge, as the
       // Flash client drew it outside BUILD mode. The own yard keeps its edge,
@@ -821,10 +940,33 @@ export class YardScene implements Scene {
       this.save = response;
       this.notices.clear("yard-load");
       // The owner's load carries world chat's token and room (#282).
-      const chat = target ? null : chatConfigFrom(response, getSession()?.userId ?? 0, location.protocol === "https:");
+      const chat = target || tribe ? null : chatConfigFrom(response, getSession()?.userId ?? 0, location.protocol === "https:");
       if (chat) worldChat.configure(chat);
+      // Once, after login: where the player is from, for a country chat room
+      // (owner 3 Nov 2026). The server sends `countryask` until it is answered or put off.
+      if (store?.kind === "main" && response.countryask) {
+        openCountryPrompt({
+          container: context.overlay.modal,
+          onSaved: (settings) => worldChat.setCountryRoom(settings.countryChannel, settings.country),
+        });
+      }
+      // The rare "Support the game" reminder may show only here, on the own
+      // main yard, and never while Bob's guided start runs
+      // (`game/support/supportReminder.ts` keeps the rest of the rule).
+      this.stopSupportOffer?.();
+      this.stopSupportOffer = null;
+      if (store?.kind === "main" && !tribe) {
+        this.stopSupportOffer = supportReminder.offer(() => {
+          if (this.context !== context || this.store !== store) return null;
+          const guide = store.save.onboarding?.guide.state;
+          return guide === "pending" || guide === "active" ? null : context.overlay.modal;
+        });
+      }
+      // Which look the player uses, for the owner's dashboard (owner 4 Nov 2026): once per load.
+      if (store?.kind === "main") reportLook();
 
-      // The planner's entry rule: the own yard's, never a visit's.
+      // The planner's entry rule: the own yard's, never a visit's. The
+      // Inferno yard has one too (owner decision 2026-10-29), unlike Flash's.
       this.access = plannerAccessFor(target);
       this.refreshPlannerButton();
 
@@ -872,6 +1014,12 @@ export class YardScene implements Scene {
       this.refreshBuildButton();
       // Once the yard is drawn, because the first answer may redraw it.
       store?.start();
+      if (tribe) {
+        // The tribe editor: none of the player's own yard's packages, pings or helps.
+        presence.setScreen(ELSEWHERE);
+        this.startTribeBar(tribe, context);
+        return;
+      }
       // The tutorial's packages (issue #227), then the screen event they listen for.
       if (store) this.mountPlugins(store, context);
       // The presence ping says the player is here (#226): a raid may be due.
@@ -881,7 +1029,17 @@ export class YardScene implements Scene {
       if (store?.kind === "outpost") this.arriveAtOutpost(store, context);
       // A friend's help landing while the player is here refreshes the yard (#374).
       if (store?.kind === "main") this.watchHelps(store);
+      // The tribe yard editor's way in, on a local server that has it on.
+      if (store?.kind === "main") void this.offerTribeEditor(context);
     } catch (caught) {
+      // No Inferno yard to open (the Descent not won, or the Inferno switched
+      // off, both refusals rather than a lost sign-in): back to the main yard,
+      // saying why.
+      if (!target && own.kind === "inferno" && isInfernoClosed(caught)) {
+        setYardIntent({ kind: "notice", text: (caught as Error).message || INFERNO_CLOSED_TEXT });
+        context.goTo(SceneName.YARD);
+        return;
+      }
       if (caught instanceof ApiError && caught.isAuthFailure) {
         context.goTo(SceneName.LOGIN);
         return;
@@ -893,6 +1051,14 @@ export class YardScene implements Scene {
         context.goTo(SceneName.YARD);
         return;
       }
+      // Another player's Inferno yard that will not open: back to the own Inferno yard, saying why (WP 3.4).
+      if (target?.inferno) {
+        setYardIntent({ kind: "notice", text: infernoViewFailureText(target.name, caught) });
+        backToInferno(false);
+        context.goTo(SceneName.YARD);
+        return;
+      }
+
       // Someone is attacking it: the lock says so, and loads it once they are done.
       if (!target && this.attackGuard && isUnderAttackRefusal(caught)) {
         this.attackGuard.refused();
@@ -917,7 +1083,9 @@ export class YardScene implements Scene {
           ? "This yard did not load."
           : own.kind === "outpost"
             ? "Your outpost did not load."
-            : "Your yard did not load.";
+            : own.kind === "inferno"
+              ? "Your Inferno yard did not load."
+              : "Your yard did not load.";
       }
     }
   }
@@ -1012,7 +1180,13 @@ export class YardScene implements Scene {
       canvas: context.canvas,
       pick: (x, y) => this.renderer.pick(x, y),
       // Carrying a new building, the ghost is what the pointer is over.
-      onHover: (building) => this.renderer.setHovered(this.placement ? null : building),
+      onHover: (building, mouse) => {
+        const over = this.placement ? null : building;
+        this.renderer.setHovered(over);
+        // A defence's range oval: mouse only, not while carrying a building
+        // or in the planner, which draws its own rings.
+        this.renderer.setRangeHover(mouse && !this.planner ? over : null);
+      },
       onSelect: (building) => this.tap(building),
       // Not while carrying a new building: that click is a drop.
       pickMushroom: (x, y) =>
@@ -1257,7 +1431,7 @@ export class YardScene implements Scene {
     return startBank(predicted, this.renderer, hud);
   }
 
-  /** "+720" with the resource's icon, rising off a building and fading (`harvest.css`). */
+  /** "+720" with the resource's icon (`bankFloat`), rising off a building and fading. */
   private floatBanked(id: number, resource: HarvestKey, amount: number): void {
     const camera = this.camera;
     const context = this.context;
@@ -1266,11 +1440,7 @@ export class YardScene implements Scene {
 
     const screen = camera.worldToScreen({ x: building.centreX, y: building.centreY });
     const canvas = context.canvas.getBoundingClientRect();
-    const float = resourceAmount(resource, `+${formatAmount(amount)}`, {
-      className: "yard-bank-float",
-      decorative: true,
-    });
-    float.setAttribute("aria-hidden", "true");
+    const float = bankFloat(resource, amount);
     float.style.left = `${Math.round(canvas.left + screen.x)}px`;
     float.style.top = `${Math.round(canvas.top + screen.y)}px`;
     document.body.append(float);
@@ -1294,12 +1464,14 @@ export class YardScene implements Scene {
     }
     this.selected = building;
     this.renderer.setSelected(building);
+    this.tribeBar?.select(building?.id ?? null);
 
     if (!building) {
       const open = this.panel !== null;
       this.panel?.close();
       this.panel = null;
       this.monsters?.besidePanel(false);
+      this.siege?.besidePanel(false);
       this.shop?.besidePanel(false);
       if (open) guideBus.emit("panel", { building: null });
       return;
@@ -1320,6 +1492,7 @@ export class YardScene implements Scene {
           this.selected = null;
           this.renderer.setSelected(null);
           this.monsters?.besidePanel(false);
+          this.siege?.besidePanel(false);
           this.shop?.besidePanel(false);
           guideBus.emit("panel", { building: null });
         },
@@ -1333,11 +1506,13 @@ export class YardScene implements Scene {
                 title: plannerEntryTooltip(this.access),
                 open: () => this.togglePlanner(),
               },
+              upgradeWalls: (id: number) => this.openWallPick(id),
             }),
       }).mount(dock);
     }
     this.panel.show(building);
     this.monsters?.besidePanel(true);
+    this.siege?.besidePanel(true);
     this.shop?.besidePanel(true);
     guideBus.emit("panel", { building: { id: building.id, type: building.type } });
 
@@ -1374,11 +1549,34 @@ export class YardScene implements Scene {
     this.bell?.close();
     this.defences?.close();
     this.hud?.achievements?.close();
+    this.siege?.close();
     this.monsters ??= new MonstersScreen({ binding, tabs }).mount(context.overlay.content);
     this.monsters.besidePanel(this.panel !== null);
     this.monsters.open(shown, focus);
     // The player is looking: the Monsters button's cyan count starts again (#192).
     finishedMonstersJobs.clear();
+  }
+
+  /**
+   * Opens the Siege screen on its Chaos Lab or Chaos Factory tab (Inferno WP
+   * 6.4): a Siege Lab's or Factory's Open button comes here. Own main yard
+   * only, and not over the planner. It docks where the Monsters screen does,
+   * so the two make way for each other.
+   */
+  private openSiege(site: SiegeSite): void {
+    const binding = this.binding;
+    const context = this.context;
+    if (!binding || !context || this.planner || binding.store.kind === "outpost") return;
+    this.buildMenu?.close();
+    this.shop?.close();
+    this.mail?.close();
+    this.bell?.close();
+    this.defences?.close();
+    this.hud?.achievements?.close();
+    this.monsters?.close();
+    this.siege ??= new SiegeScreen({ binding, openMap: () => this.openMap() }).mount(context.overlay.content);
+    this.siege.besidePanel(this.panel !== null);
+    this.siege.open(site);
   }
 
   /**
@@ -1414,6 +1612,7 @@ export class YardScene implements Scene {
     this.select(null);
     this.buildMenu?.close();
     this.monsters?.close();
+    this.siege?.close();
     this.shop?.close();
   }
 
@@ -1429,6 +1628,7 @@ export class YardScene implements Scene {
     this.endPlacement();
     this.buildMenu?.close();
     this.monsters?.close();
+    this.siege?.close();
     this.mail?.close();
     this.bell?.close();
     this.defences?.close();
@@ -1469,6 +1669,7 @@ export class YardScene implements Scene {
     // The menu docks where the building panel and the Monsters screen do.
     this.select(null);
     this.monsters?.close();
+    this.siege?.close();
     this.shop?.close();
     this.mail?.close();
     this.bell?.close();
@@ -1483,7 +1684,7 @@ export class YardScene implements Scene {
         guideBus.emit("buildMenu", { open: false });
       },
     }).mount(context.overlay.content);
-    const category = type === undefined ? null : categoryOf(type);
+    const category = type === undefined ? null : categoryOf(type, binding.store.kind);
     if (category) {
       this.buildMenu.open(category);
       this.buildMenu.pick(type!);
@@ -1595,11 +1796,11 @@ export class YardScene implements Scene {
       }
       const refusal = friendRefusal(caught);
       const known = refusal.reason !== "unknown" && refusal.reason !== "network";
-      const text = known ? helpRefusalText(refusal.reason) : refusal.message;
+      const text = known ? helpRefusalText(refusal.reason, refusal) : refusal.message;
       if (refusal.reason === "dailyCap") {
         this.helpBlock = afterHelp(this.helpBlock, -1, kind, 0);
       } else if (known && refusal.reason !== "underAttack" && refusal.reason !== "notFriends") {
-        this.helpBlock = afterRefusal(this.helpBlock, building.id, kind, refusal.reason);
+        this.helpBlock = afterRefusal(this.helpBlock, building.id, kind, refusal.reason, refusal);
       }
       this.showHelpBlock();
       this.helpPanel?.setMessage(text, "error");
@@ -1678,8 +1879,33 @@ export class YardScene implements Scene {
     const context = this.context;
     if (!context) return;
     const store = this.store;
+    // A look at another player's Inferno yard: back to the Inferno map, over the own Inferno yard (WP 3.4).
+    if (this.target?.inferno) {
+      backToInferno(true);
+      context.goTo(SceneName.YARD);
+      return;
+    }
     if (this.target || !store) {
       context.goTo(SceneName.MAP);
+      return;
+    }
+    // The Inferno's own map, Moloch's tribes and the other players
+    // (`MAPROOM_INFERNO`, WP 2.9, 3.5): no Map Room, and the surface map is
+    // no way out of the Inferno.
+    if (store.kind === "inferno") {
+      void openInfernoMap({
+        modal: context.overlay.modal,
+        own: () => store.save,
+        notice: (message) => this.notices.show("inferno-map", message, { level: "warning", timeoutMs: 6_000 }),
+        openAttack: (target) => {
+          setAttackTarget(target);
+          context.goTo(SceneName.ATTACK);
+        },
+        openView: (target) => {
+          setViewTarget(target);
+          context.goTo(SceneName.YARD);
+        },
+      });
       return;
     }
     // An outpost is a Map Room 2 cell: its map is that world, opened on it.
@@ -1706,6 +1932,10 @@ export class YardScene implements Scene {
     if (!intent) return;
     if (intent.kind === "notice") {
       this.notices.show("friend-visit", intent.text, { level: "warning", timeoutMs: 8_000 });
+      return;
+    }
+    if (intent.kind === "infernoMap") {
+      if (this.store?.kind === "inferno") this.openMap();
       return;
     }
     if (intent.kind === "build") this.openBuildMenu(intent.type);
@@ -1746,7 +1976,8 @@ export class YardScene implements Scene {
    * the pointer, and a click builds it (`BuildPlacement.ts`). A wall or trap
    * stays in hand after each block; anything else is done after one, and its
    * panel opens on the new building. A decoration from the Decorations tab
-   * comes out of storage (`decor/place`, §8.3): free and finished.
+   * comes out of storage (`decor/place`, §8.3): free and finished; one sold
+   * for Shiny is bought as it goes down (`decor/buy`, owner 2026-11-04).
    */
   private startPlacement(type: number, instant: boolean): void {
     const store = this.store;
@@ -1762,14 +1993,18 @@ export class YardScene implements Scene {
 
     const actions = buildActions(store);
     const storage = offer.stored !== null ? decorActions(store) : null;
-    const repeat = buildsAtOnce(type) && !instant && !storage;
+    const buying = offer.price !== undefined;
+    const repeat = buildsAtOnce(type, store.kind) && !instant && !storage;
     let placed: number | null = null;
 
     const bar = new PlacementBar({
       type,
+      kind: store.kind,
       instant,
       instantPrice: offer.instantPrice,
+      ...(buying && { price: offer.price }),
       cost: offer.cost,
+      ...(offer.inferno && { realm: "inferno" as const }),
       time: offer.atOnce ? "At once" : formatCountdown(offer.seconds),
       onCancel: () => this.endPlacement(),
       onBuildHere: () => placement.dropHere(),
@@ -1804,7 +2039,7 @@ export class YardScene implements Scene {
         // A one-off building is down; the bar says so until the answer (#277).
         if (!repeat) bar.setBuilding(true);
         const result = storage
-          ? await storage.place(type, x, y)
+          ? await (buying ? storage.buy(type, x, y) : storage.place(type, x, y))
           : instant
             ? await actions.instant(type, x, y)
             : await actions.build(type, x, y);
@@ -1838,6 +2073,7 @@ export class YardScene implements Scene {
     const spot = placement.grid.spotAt(type, point.x, point.y);
     placement.moveTo(spot.x, spot.y);
     this.renderer.setHovered(null);
+    this.renderer.setRangeHover(null);
     this.refreshBuildButton();
     guideBus.emit("carry", { type });
   }
@@ -1862,6 +2098,15 @@ export class YardScene implements Scene {
    * is why entering is instant on a 575-building yard and why leaving cannot
    * leave anything half-drawn — the sprites go back to the save's positions.
    */
+  /**
+   * A wall pop-up's Upgrade walls (owner, 2026-11-04): the planner, open on
+   * its wall picking with that wall already picked.
+   */
+  private openWallPick(id: number): void {
+    if (!this.planner) this.togglePlanner();
+    this.planner?.startWallPick([id]);
+  }
+
   private togglePlanner(): void {
     if (this.planner) {
       this.planner.requestExit();
@@ -1880,6 +2125,7 @@ export class YardScene implements Scene {
 
     this.select(null);
     this.monsters?.close();
+    this.siege?.close();
     this.shop?.close();
     this.mail?.close();
     this.bell?.close();
@@ -1908,8 +2154,8 @@ export class YardScene implements Scene {
       ...(this.save?.firedtraps ? { firedtraps: this.save.firedtraps } : {}),
       // An outpost's Apply and batch actions act on it (outposts WP3).
       ...(this.store?.baseid !== undefined ? { baseid: this.store.baseid } : {}),
-      onApplied: (buildingdata, moved, resources, upgrades, storage) =>
-        this.onApplied(buildingdata, moved, resources, upgrades, storage),
+      onApplied: (buildingdata, moved, resources, storage) =>
+        this.onApplied(buildingdata, moved, resources, storage),
       onYardChanged: (buildingdata, resources, mushrooms) =>
         this.onYardChanged(buildingdata, resources, mushrooms),
       onView: (view) => this.setView(view),
@@ -1962,6 +2208,8 @@ export class YardScene implements Scene {
    */
   private refreshPlannerButton(): void {
     const open = this.planner !== null;
+    // The planner has its own toolbars; the tribe editor's bar steps aside meanwhile.
+    if (this.tribeBar) this.tribeBar.panel.element.hidden = open;
     this.dock?.setLayout({
       disabled: this.access === PlannerAccess.LOCKED,
       open,
@@ -1979,13 +2227,14 @@ export class YardScene implements Scene {
    * The yard the planner works on: the store's, plus every decoration in
    * storage as a building its drawer holds (#128,
    * `decorStorage.ts` `withStoredDecorations`). The store's own yard when
-   * nothing is stored, or in an outpost, which has no storage.
+   * nothing is stored, or in an outpost or the Inferno, whose plans take
+   * nothing out of the main yard's storage.
    */
   private plannerYard(): Yard | null {
     const store = this.store;
-    if (!store || store.kind === "outpost") return this.yard;
+    if (!store || store.kind !== "main") return this.yard;
     const save = withStoredDecorations(store.save);
-    return save === store.save ? store.yard : readYard(save);
+    return save === store.save ? store.yard : readYard(save, this.tribe ? { wild: true } : {});
   }
 
   /* ── Compare (#9) ───────────────────────────────────────────────────── */
@@ -2029,7 +2278,6 @@ export class YardScene implements Scene {
       moved: new Set(),
       invalid: new Set(),
       marquee: null,
-      planned: visuals.planned,
       diff: visuals.diff,
     });
   }
@@ -2103,7 +2351,6 @@ export class YardScene implements Scene {
     buildingdata: BuildingDataMap,
     moved: number,
     resources: Resources | undefined,
-    upgrades: UpgradeReport | null,
     storage: AppliedStorage,
   ): void {
     const store = this.store;
@@ -2111,10 +2358,9 @@ export class YardScene implements Scene {
 
     this.closePlanner();
 
-    // The pool comes back charged whenever Apply started anything, so it is
-    // taken from the response rather than subtracted here: the server owns
-    // what an upgrade cost, and the walk it ran is partial by design
-    // (`docs/design/planner-upgrades.md` §5.5).
+    // The pool is taken from the response rather than kept as it was: Apply
+    // can put resources into storage or take them out (#128), and the server
+    // owns the result.
     store.mergeWrite({
       buildingdata,
       ...(resources ? { resources } : {}),
@@ -2133,11 +2379,7 @@ export class YardScene implements Scene {
     ]
       .filter(Boolean)
       .join(" ");
-    this.notices.show(
-      "yard-applied",
-      upgrades ? `${moveText} ${describeUpgradeReport(upgrades)}` : moveText,
-      { level: "info", timeoutMs: upgrades ? 12_000 : 5_000 },
-    );
+    this.notices.show("yard-applied", moveText, { level: "info", timeoutMs: 5_000 });
   }
 
   /**
@@ -2178,7 +2420,7 @@ export class YardScene implements Scene {
       target: withCell(this.own, response),
       // What this load, or the map's load before it, finished while the
       // player was away (#135); the store announces it once it starts.
-      away: takeAwayJobs(outpostBaseid(this.own)),
+      away: this.tribe ? [] : takeAwayJobs(outpostBaseid(this.own)),
       onAuthFailure: () => {
         if (this.context === context) context.goTo(SceneName.LOGIN);
       },
@@ -2189,12 +2431,21 @@ export class YardScene implements Scene {
       },
     });
     this.store = store;
+    // Bone, Coal, Sulfur and Magma on the Inferno yard, in every panel (WP 1.19),
+    // and the Inferno yard tune (`game/sound/tunes.ts`, WP 7.2).
+    setResourceRealm(store.kind === "inferno" ? "inferno" : "surface");
+    setScreenTune(store.kind === "inferno" ? "infernoYard" : "yard");
     this.unsubscribeStore = store.subscribe((change) => this.onStoreChange(change));
+    // A juice walks the juiced monsters into the Juicer: drawing only (`juicerShow.ts`).
+    this.unsubscribeJuice = onJuiced((news) => {
+      if (this.store === store) this.renderer.juice(news);
+    });
     this.binding = {
       store,
       scene: {
         selectBuilding: (id) => this.focusBuilding(id),
         openMonsters: (tab, focus) => this.openMonsters(tab, focus),
+        openSiege: (site) => this.openSiege(site),
         runBaiter: (run) => {
           setBaiterRun(run);
           this.context?.goTo(SceneName.BAITER);
@@ -2274,7 +2525,10 @@ export class YardScene implements Scene {
         this.endPlacement();
         this.buildMenu?.close();
       },
-      focusBuilding: (id) => this.focusBuilding(id),
+      focusBuilding: (id, champion) => {
+        this.focusBuilding(id);
+        if (champion && this.selected?.id === id) this.panel?.openChampion();
+      },
       closePanel: () => this.select(null),
       selectedBuilding: () => this.selected?.id ?? null,
       openMap: () => this.openMap(),
@@ -2289,6 +2543,11 @@ export class YardScene implements Scene {
       plannerOpen: () => this.planner !== null,
       carrying: () => this.placement !== null,
       openRaid: () => this.context?.goTo(SceneName.RAID),
+      openAttack: (target) => {
+        setAttackTarget(target);
+        this.context?.goTo(SceneName.ATTACK);
+      },
+      openYard: (target) => this.openOwnYard(target),
       reload: () => this.reloadOwnYard(),
     };
   }
@@ -2332,17 +2591,87 @@ export class YardScene implements Scene {
         const spot = this.placement?.current;
         const yard = this.yard;
         if (!spot || !yard || !this.placement) return null;
-        return onScreen(footprintBox(yard.bounds, this.placement.type, spot.x, spot.y));
+        return onScreen(footprintBox(yard.bounds, this.placement.type, spot.x, spot.y, yard.kind));
       }),
     );
   }
 
   /* ── Own yards ──────────────────────────────────────────────────────── */
 
-  /** "your yard", "your outpost" or "Name's yard", for the loading lines. */
+  /** Whose yard this is ({@link whoseYard}), for the loading lines and the status line. */
   private whose(): string {
-    if (this.target) return `${this.target.name}'s yard`;
-    return this.own.kind === "outpost" ? "your outpost" : "your yard";
+    if (this.tribe) return `the ${this.tribe.name} level ${this.tribe.level} yard`;
+    return whoseYard(this.target, this.own);
+  }
+
+  /* ── The tribe yard editor (LOCAL game only) ────────────────────────── */
+
+  /**
+   * The own main yard's way into the tribe yard editor: a button, shown only
+   * when this server says the editor is on (it never is on the live server,
+   * whose routes answer 404).
+   */
+  private async offerTribeEditor(context: SceneContext): Promise<void> {
+    const status = await tribeEditorStatus().catch(() => null);
+    if (!status || this.context !== context || this.tribe || this.tribeOpenButton) return;
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "btn tribe-editor-open";
+    open.textContent = "Tribe editor";
+    open.title = "Design the Map Room 2 tribe yards (local game only)";
+    open.addEventListener("click", () => void this.openTribePicker());
+    context.overlay.content.append(open);
+    this.tribeOpenButton = open;
+  }
+
+  /** The tribe and level picker; Open re-opens the yard screen on that camp's yard. */
+  private async openTribePicker(initial?: { tribe: TribeId; level: number }): Promise<void> {
+    const context = this.context;
+    if (!context || this.tribePicker) return;
+    const status = await tribeEditorStatus().catch(() => null);
+    if (!status || this.context !== context) {
+      this.notices.show("tribe-editor", "The tribe editor is not on for this server.", {
+        level: "info",
+        timeoutMs: 4_000,
+      });
+      return;
+    }
+    this.tribePicker = new TribePicker({
+      status,
+      ...(initial && { initial }),
+      onClose: () => {
+        this.tribePicker = null;
+      },
+      onOpen: async (tribe, level) => {
+        const response = await loadTribeYard(tribe, level);
+        const name = status.tribes.find((one) => one.id === tribe)?.name ?? tribe;
+        if (this.context !== context) return;
+        setTribeEditTarget({ ...response, name });
+        this.tribePicker?.close();
+        context.goTo(SceneName.YARD);
+      },
+    }).mount(context.overlay.modal);
+  }
+
+  /** The edit bar on the left while a tribe yard is open. */
+  private startTribeBar(tribe: TribeEdit, context: SceneContext): void {
+    this.tribeBar?.close();
+    this.tribeBar = new TribeEditBar({
+      edit: tribe,
+      onChanged: () => void this.store?.refresh(),
+      onSave: async () => {
+        const saved = await saveTribeYard({ tribe: tribe.tribe, level: tribe.level, ...tribe.sim.saveBody() });
+        return `Saved ${saved.buildings} buildings to ${saved.file}.`;
+      },
+      onReset: async () => {
+        const { removed } = await resetTribeCamps(tribe.tribe, tribe.level);
+        return removed === 0
+          ? "No attacked camps of this level were stored."
+          : `Reset ${removed} attacked camp${removed === 1 ? "" : "s"}: they use the saved yard now.`;
+      },
+      onPick: () => void this.openTribePicker({ tribe: tribe.tribe, level: tribe.level }),
+      onExit: () => context.goTo(SceneName.YARD),
+    }).mount(context.overlay.content);
   }
 
   /**
@@ -2372,7 +2701,7 @@ export class YardScene implements Scene {
   private reloadOwnYard(): void {
     const context = this.context;
     if (!context) return;
-    if (this.own.kind === "outpost") {
+    if (this.own.kind !== "main") {
       const { takenOver: _shown, ...again } = this.own;
       setOwnYardTarget(again);
     }
@@ -2473,16 +2802,21 @@ export class YardScene implements Scene {
     this.buildMenu = null;
     this.monsters?.destroy();
     this.monsters = null;
+    this.siege?.destroy();
+    this.siege = null;
     this.shop?.destroy();
     this.shop = null;
     this.kitPicker?.close();
     this.kitPicker = null;
     this.unsubscribeStore?.();
     this.unsubscribeStore = null;
+    this.unsubscribeJuice?.();
+    this.unsubscribeJuice = null;
     this.store?.destroy();
     this.store = null;
     this.binding = null;
     this.renderer.finishBank();
+    setResourceRealm("surface");
     this.hud?.bindYard(null);
     this.dock?.bind(null);
   }
@@ -2516,6 +2850,7 @@ export class YardScene implements Scene {
     const before = this.yard;
     this.yard = yard;
     this.save = store.save;
+    this.tribeBar?.refresh();
     this.mail?.setSaveUnread(store.save.unreadmessages);
     this.bell?.setSaveCount(store.save.notifications);
     this.showDefences(store);
@@ -2631,11 +2966,11 @@ export class YardScene implements Scene {
     const own = this.store?.target;
     // A player reads whose yard this is and the planner's "Yard centre" (#54,
     // #56); the counts, the plot, the frame time and the selected id are a
-    // developer's (#150).
+    // developer's (#150), behind their own opt-in switch (`devStats`, beta 6).
     const parts = [
-      ...(this.target ? [`${this.target.name}'s yard, read-only`] : []),
+      ...(this.target ? [`${this.whose()}, read-only`] : []),
       ...(this.hint ? [this.hint] : []),
-      ...(devDetails()
+      ...(devStats()
         ? [
             ...(own?.kind === "outpost" ? [yardTitle(own)] : []),
             `${buildings} buildings · ${yard.mushrooms.length} mushrooms`,

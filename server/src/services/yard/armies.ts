@@ -59,7 +59,8 @@ export const catchUpArmyRow = (row: ArmyRow & { type?: string }, owner: ArmyOwne
   catchUpArmy(row, now, {
     levels: academyLevels(owner?.academy ?? row.academy),
     buffs: owner?.storedata ?? row.storedata,
-    mainYard: row.type === BaseType.MAIN,
+    // The Inferno yard has its own Control Centre (the Incubator Control Centre), as the main yard has.
+    mainYard: row.type === BaseType.MAIN || row.type === BaseType.INFERNO,
   });
 
 /** Catches a row's monsters up and puts the result on the entity (the caller persists). */

@@ -116,8 +116,21 @@ export const trim = (texture: Texture): Texture => {
   const bounds = opaqueBounds(texture);
   return new Texture({
     source,
-    frame: bounds ?? new Rectangle(0, 0, source.pixelWidth, source.pixelHeight),
+    frame: bounds ? framePoints(bounds, source.resolution) : new Rectangle(0, 0, source.width, source.height),
   });
+};
+
+/**
+ * A rectangle measured in an image's pixels as a texture frame, which Pixi
+ * measures in points: pixels over the image's resolution. The two only differ
+ * for a high-resolution file, which Pixi reads from an `@2x` in its name (the
+ * repainted Town Hall's `top.new10@2x.webp`, say): measured in pixels, its
+ * frame would be twice the picture's size, and the hall would be drawn at
+ * half size in the top-left of that frame, edge colours smeared over the rest.
+ */
+export const framePoints = (pixels: Rectangle, resolution: number): Rectangle => {
+  const scale = resolution > 0 ? resolution : 1;
+  return new Rectangle(pixels.x / scale, pixels.y / scale, pixels.width / scale, pixels.height / scale);
 };
 
 /** The smallest rectangle containing every pixel that is not background. */

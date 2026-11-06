@@ -1,12 +1,12 @@
-import { Assets, Container, Texture, TextureSource, type Sprite } from "pixi.js";
-import { describe, expect, it, vi } from "vitest";
+import { Container, Texture, TextureSource, type Sprite } from "pixi.js";
+import { describe, expect, it } from "vitest";
 import { creepZIndex, MonsterSheetTextures } from "@/game/attack/AttackBattleLayer";
 import { MONSTER_SPRITES } from "@/game/attack/monsterSpriteData";
 import { mulberry32 } from "@/game/combat/rules/rng";
 import { championFlightTop, shadowOffset, sheetUrl, spriteFor } from "@/game/attack/monsterSprites";
 import { depthKey, footprintCentre, yardBounds } from "./YardGrid";
 import { CHAMPION_CAGE_TYPE, EMPTY_LIFE, type YardLife } from "./yardLifeModel";
-import { EGG_HEIGHT, YardLifeLayer } from "./YardLifeLayer";
+import { YardLifeLayer } from "./YardLifeLayer";
 
 /** Every sheet arrives at once as a blank of the right size. */
 const textures = () =>
@@ -287,35 +287,6 @@ describe("YardLifeLayer", () => {
     const [there] = loaded.layer.workerList;
     expect(there?.x).toBe(there?.targetX);
     expect(there?.y).toBe(there?.targetY);
-  });
-});
-
-describe("YardLifeLayer egg (owner 2026-10-20)", () => {
-  it("stands the egg where the life says, hides it with the rest, and takes it away", async () => {
-    const load = vi
-      .spyOn(Assets, "load")
-      .mockResolvedValue(new Texture({ source: new TextureSource({ width: 96, height: 120 }) }) as never);
-    const { layer, tops, shadows } = setUp();
-    const cage = { id: 6, x: -200, y: -200 };
-    const at = { x: -140, y: -140 };
-    layer.set(life({ champions: [], workers: 0, groups: [], cage, egg: { id: "G2", ...at } }), bounds);
-    expect(layer.attach(tops, shadows)).toBe(true);
-    expect(load).toHaveBeenCalledWith("/eggs/G2-egg-yard.webp");
-    await flush();
-    const egg = layer.eggSprite!;
-    expect(egg.parent).toBe(tops);
-    expect(egg.visible).toBe(true);
-    expect(egg.height).toBe(EGG_HEIGHT);
-    expect(egg.position.x).toBe(at.x - at.y + bounds.originX);
-    expect(egg.position.y).toBe((at.x + at.y) / 2 + bounds.originY);
-    layer.setHidden(true);
-    expect(egg.visible).toBe(false);
-    layer.setHidden(false);
-    expect(egg.visible).toBe(true);
-    layer.set(life({ champions: [], workers: 0, groups: [], cage, egg: null }), bounds);
-    expect(layer.eggSprite).toBeNull();
-    expect(egg.destroyed).toBe(true);
-    load.mockRestore();
   });
 });
 

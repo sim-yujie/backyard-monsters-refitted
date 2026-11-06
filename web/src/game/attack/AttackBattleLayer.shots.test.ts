@@ -18,8 +18,8 @@ import { sheetUrl } from "./monsterSprites";
 /**
  * A tower's bullet hurts when it lands, not when it is fired (issue #77): over
  * a real session, the creep's bar, its number and — for a killing shot — its
- * death all wait for the sniper's bullet, although the engine took the health
- * off on the shot tick.
+ * death all wait for the sniper's shell, which the engine flies and lands
+ * itself (engine fidelity note 1), so the layer shows its wounds as they come.
  */
 
 type BuildingRow = { id: number; t: number; l: number; X: number; Y: number };
@@ -86,6 +86,7 @@ const setUp = (
   buildings: BuildingRow[],
   monsters?: Record<string, number>,
   juice: JuiceLevel = "off",
+  classic = false,
 ) => {
   const session = new AttackSession({ target: targetOf(monsters), seed: 1 });
   const response = yardOf(buildings);
@@ -99,6 +100,7 @@ const setUp = (
     reducedMotion: false,
     textures: new MonsterSheetTextures(blankSheet),
     juice,
+    classic,
     effectsQuality: "full",
     shotSheet: () =>
       Promise.resolve(new Texture({ source: new TextureSource({ width: 768, height: 1728 }) })),
@@ -142,16 +144,17 @@ describe("a sniper's bullet (#77)", () => {
     }
     expect(target).toBeGreaterThanOrEqual(0);
 
-    // The engine has taken the hundred off already; the screen has not.
-    expect(engineFraction(session, target)).toBeCloseTo(0.5);
-    expect(layer.heldShots).toBe(1);
+    // The shell is in the air: neither the engine nor the screen has hurt it,
+    // and the layer holds nothing back.
+    expect(engineFraction(session, target)).toBe(1);
+    expect(layer.heldShots).toBe(0);
     expect(layer.shownHealthOf(target)).toBe(1);
     expect(layer.creepEffects.labelsFor(`creep:${target}`)).toHaveLength(0);
 
     let landedTick = -1;
     for (let step = 0; step < 2 * TICKS_PER_SECOND && landedTick < 0; step += 1) {
       frame(session, layer);
-      if (layer.heldShots === 0) {
+      if ((engineFraction(session, target) ?? 0) < 1) {
         landedTick = session.battle()?.tick ?? -1;
         break;
       }
@@ -159,7 +162,7 @@ describe("a sniper's bullet (#77)", () => {
       expect(layer.creepEffects.labelsFor(`creep:${target}`)).toHaveLength(0);
     }
     // Half the sniper's speed of 10 a tick: a real flight, not the next tick.
-    expect(landedTick - shotTick).toBeGreaterThan(5);
+    expect(landedTick - shotTick).toBeGreaterThanOrEqual(5);
     expect(layer.shownHealthOf(target)).toBeCloseTo(0.5);
     expect(
       layer.creepEffects.labelsFor(`creep:${target}`).map((label) => label.amount),
@@ -167,29 +170,28 @@ describe("a sniper's bullet (#77)", () => {
     layer.destroy();
   });
 
-  it("keeps a creep the bullet killed on screen until it lands, then splats it", () => {
+  it("lets a creep the shell killed go only when it lands, a flight after the shot", () => {
     const { session, layer } = setUp([{ id: 1, t: 21, l: 1, X: 0, Y: 0 }]);
     // Dropped off to the side, so the killing shot finds the Pokey still some
     // way out and the bullet has a real flight to make.
     session.appendFling({ x: -200, y: -100, monsters: { C1: 1 } });
 
     let killed = -1;
+    let lastShot = -1;
+    let diedAt = -1;
     for (let step = 0; step < 30 * TICKS_PER_SECOND && killed < 0; step += 1) {
-      const death = frame(session, layer).find((event) => event.kind === "death");
-      if (death?.kind === "death") killed = death.creepId;
+      for (const event of frame(session, layer)) {
+        if (event.kind === "shot") lastShot = event.tick;
+        if (event.kind === "death") {
+          killed = event.creepId;
+          diedAt = event.tick;
+        }
+      }
     }
     expect(killed).toBeGreaterThanOrEqual(0);
-    // Gone from the engine, still standing on screen with the health it had.
+    // The killing shell's flight: half the sniper's speed of 10 a tick.
+    expect(diedAt - lastShot).toBeGreaterThan(5);
     expect(engineFraction(session, killed)).toBeNull();
-    expect(layer.shownHealthOf(killed)).toBeCloseTo(0.5);
-    expect(layer.creepCount).toBe(1);
-
-    let frames = 0;
-    while (layer.shownHealthOf(killed) !== null && frames < 2 * TICKS_PER_SECOND) {
-      frame(session, layer);
-      frames += 1;
-    }
-    expect(frames).toBeGreaterThan(5);
     expect(layer.shownHealthOf(killed)).toBeNull();
     expect(layer.creepCount).toBe(0);
     expect(layer.heldShots).toBe(0);
@@ -206,7 +208,7 @@ describe("a sniper's bullet (#77)", () => {
           (event) => event.kind === "shot",
         );
         if (shot?.kind === "shot") target = shot.creepId;
-        if (target >= 0 && layer.heldShots === 0) break;
+        if (target >= 0 && (layer.shownHealthOf(target) ?? 0) < 1) break;
       }
       const tick = session.battle()?.tick ?? -1;
       const hp = layer.shownHealthOf(target);
@@ -224,13 +226,15 @@ describe("a sniper's bullet (#77)", () => {
 });
 
 describe("the new look's Sniper round striking a creep", () => {
-  /** Runs frames until the Sniper's next round lands; that frame's events. */
+  /** Runs frames until the Sniper's next round is drawn landing; that frame's events. */
   const untilLanded = (session: AttackSession, layer: AttackBattleLayer) => {
     let shot = false;
     for (let step = 0; step < 20 * TICKS_PER_SECOND; step += 1) {
       const events = frame(session, layer);
       if (events.some((event) => event.kind === "shot")) shot = true;
-      if (shot && layer.heldShots === 0) return { events, tick: session.battle()?.tick ?? -1 };
+      if (shot && layer.towerEffects.flyingCount === 0) {
+        return { events, tick: session.battle()?.tick ?? -1 };
+      }
     }
     return null;
   };
@@ -257,6 +261,26 @@ describe("the new look's Sniper round striking a creep", () => {
     }
   });
 
+  it("shoots Flash's shots in the Classic look, whatever the effects setting says", async () => {
+    for (const classic of [false, true]) {
+      const { session, layer } = setUp([{ id: 1, t: 21, l: 1, X: 0, Y: 0 }], undefined, "full", classic);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      session.appendFling({ x: -150, y: -150, monsters: { C1: 1 } });
+      let sparks = 0;
+      let numbers = 0;
+      for (let step = 0; step < TICKS_PER_SECOND * 10 && !session.ended; step += 1) {
+        frame(session, layer);
+        sparks = Math.max(sparks, layer.towerEffects.sparkCount);
+        numbers = Math.max(numbers, layer.creepEffects.labelCount);
+      }
+      if (classic) expect(sparks).toBe(0);
+      else expect(sparks).toBeGreaterThan(0);
+      // Damage numbers show in both looks since beta 6 (owner).
+      expect(numbers).toBeGreaterThan(0);
+      layer.destroy();
+    }
+  });
+
   it("keeps a creep it killed up for a moment, frozen and fading, then lets it go into its splat", async () => {
     const { session, layer } = setUp([{ id: 1, t: 21, l: 1, X: 0, Y: 0 }], undefined, "full");
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -268,10 +292,10 @@ describe("the new look's Sniper round striking a creep", () => {
     }
     expect(killed).toBeGreaterThanOrEqual(0);
     // The killing round lands; the creep stays up over its splat.
-    for (let step = 0; step < 2 * TICKS_PER_SECOND && layer.heldShots > 0; step += 1) {
+    for (let step = 0; step < 2 * TICKS_PER_SECOND && layer.towerEffects.flyingCount > 0; step += 1) {
       frame(session, layer);
     }
-    expect(layer.heldShots).toBe(0);
+    expect(layer.towerEffects.flyingCount).toBe(0);
     expect(layer.splatCount).toBeGreaterThan(0);
     const struck = layer.bodyOf(killed);
     expect(struck?.felled).toBe(true);

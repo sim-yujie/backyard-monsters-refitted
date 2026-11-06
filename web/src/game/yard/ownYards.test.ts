@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
 import {
   consumeOwnYardTarget,
+  INFERNO_YARD,
+  infernoTarget,
   isEmptyOutpost,
   MAIN_YARD,
   outpostBaseid,
@@ -9,6 +11,7 @@ import {
   outpostsOf,
   outpostTarget,
   ownYardsOf,
+  sameYard,
   setOwnYardTarget,
   withCell,
   yardTitle,
@@ -79,6 +82,15 @@ describe("the yard a request names", () => {
   it("sends an outpost's baseid, and none for the main yard", () => {
     expect(outpostBaseid(outpostTarget("2000242209"))).toBe("2000242209");
     expect(outpostBaseid(MAIN_YARD)).toBeUndefined();
+  });
+
+  it("sends the Inferno yard's baseid once its load has named it", () => {
+    expect(outpostBaseid(INFERNO_YARD)).toBeUndefined();
+    expect(outpostBaseid(infernoTarget("3000000001"))).toBe("3000000001");
+    // One Inferno yard, whatever baseid the target holds.
+    expect(sameYard(INFERNO_YARD, infernoTarget("3000000001"))).toBe(true);
+    expect(sameYard(INFERNO_YARD, MAIN_YARD)).toBe(false);
+    expect(yardTitle(INFERNO_YARD)).toBe("Inferno");
   });
 
   it("hands the yard screen a target once", () => {

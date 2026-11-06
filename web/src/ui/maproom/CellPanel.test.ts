@@ -196,17 +196,21 @@ describe("another player's yard", () => {
 });
 
 describe("the ground an outpost stands on", () => {
-  it("says the tower range and income bonus of a hill on an outpost, and the height behind More", () => {
+  it("shows a hill's tower range and income as painted icons and numbers, and the height behind More", () => {
     const { host } = open(player({ b: 3, i: 150 }));
-    expect(shown(host, ".mr2-chip").map((chip) => chip.textContent)).toContain(
-      "High ground: tower range +20%, income −17%",
-    );
+    const chip = host.querySelector(".mr2-chip--ground")!;
+    expect([...chip.querySelectorAll<HTMLImageElement>("img")].map((img) => img.dataset["icon"])).toEqual([
+      "range",
+      "income",
+    ]);
+    expect(chip.querySelector(".icon-amount--gain")!.textContent).toContain("+20%");
+    expect(chip.querySelector(".icon-amount--loss")!.textContent).toContain("−17%");
     expect(host.textContent).toContain("50 m");
   });
 
   it("says nothing of the ground on a main yard", () => {
     const { host } = open(player({ b: 2, i: 150 }));
-    expect(host.textContent).not.toContain("High ground");
+    expect(host.querySelector(".mr2-chip--ground")).toBeNull();
   });
 });
 
@@ -521,5 +525,47 @@ describe("Add friend on another player's yard (friends WP11, #378)", () => {
     expect(row(open(camp(), { addFriend }).host).hidden).toBe(true);
     expect(addFriend).not.toHaveBeenCalled();
     expect(row(open(player()).host).hidden).toBe(true);
+  });
+});
+
+describe("the neighbour defence bonus row", () => {
+  it("shows the painted shield and the total percent for the count the server sent", () => {
+    const { host } = open(player({ nb: 3 }));
+    const chip = host.querySelector<HTMLElement>(".mr2-chip--neighbours");
+    expect(chip).not.toBeNull();
+    expect(chip!.querySelector("img")?.dataset["icon"]).toBe("neighbours");
+    expect(chip!.textContent).toContain("+11%");
+    // The total only: no neighbour count on the chip (owner, 3 Nov).
+    expect(chip!.textContent).not.toContain("×");
+    expect(chip!.textContent?.trim()).toBe("+11%");
+    expect(chip!.title).toBe("3 friendly neighbours: buildings +11% health, towers +11% damage.");
+  });
+
+  it("shows on a camp too", () => {
+    const { host } = open(camp({ nb: 1 }));
+    expect(text(host, ".mr2-chip--neighbours")).toContain("+5%");
+  });
+
+  it("shows nothing when the server sends no count (switch off)", () => {
+    expect(open(player()).host.querySelector(".mr2-chip--neighbours")).toBeNull();
+    expect(open(camp()).host.querySelector(".mr2-chip--neighbours")).toBeNull();
+  });
+});
+
+describe("the height chip (painted map, plan step 5)", () => {
+  it("shows the hill icon and the height on a camp and a yard only while the painted ground is on", async () => {
+    const { setFlatGround } = await import("@/game/maproom/ground");
+    try {
+      setFlatGround(true);
+      const onCamp = open(camp({ i: 148 }));
+      expect(text(onCamp.host, ".mr2-chip--height")).toContain("+48 m");
+      expect(onCamp.host.querySelector(".mr2-chip--height [data-icon='height']")).not.toBeNull();
+      const onYard = open(player({ i: 112 }));
+      expect(text(onYard.host, ".mr2-chip--height")).toContain("+12 m");
+      setFlatGround(false);
+      expect(open(camp({ i: 148 })).host.querySelector(".mr2-chip--height")).toBeNull();
+    } finally {
+      setFlatGround(false);
+    }
   });
 });

@@ -1,5 +1,6 @@
 import { raidRefusal, type RaidApi, type RaidStartResponse, type RaidView } from "@/api/raid";
 import { formatClock } from "@/game/attack/attackClock";
+import { isMolochRaid } from "@/game/inferno/molochRaid";
 
 /**
  * A wild monster raid as the own main yard shows it (issue #226 WP4,
@@ -17,6 +18,10 @@ import { formatClock } from "@/game/attack/attackClock";
  *
  * Quitting the game during the warning or the fight cancels the raid
  * (server side, Q2): nothing here needs to say so.
+ *
+ * Moloch's raids (Inferno WP 1.9) come through the same watch, but in their
+ * warning they are the yard's to show (his own warning, `molochRaid.ts`): no
+ * alert, and no start when they fall due at once.
  */
 
 /** What the yard shows of the raid now. */
@@ -37,6 +42,7 @@ export type RaidBusy = "engage" | "prepare" | "start" | null;
 /** The stage for a raid at a moment, server unix seconds. */
 export const raidStage = (raid: RaidView | null, now: number, plannerOpen: boolean): RaidStage => {
   if (!raid) return { kind: "none" };
+  if (raid.phase === "warning" && isMolochRaid(raid)) return { kind: "none" };
   if (raid.phase === "fighting") return { kind: "locked", raid };
   const secondsLeft = Math.ceil(raid.attackAt - now);
   if (secondsLeft > 0) return raid.warned === 1 ? { kind: "spotted", raid, secondsLeft } : { kind: "alert", raid, secondsLeft };

@@ -217,9 +217,9 @@ export class Bucket {
     return bucketCost(this.composition().monsters, this.session.levels);
   }
 
-  /** The flinger's payload: what one drop may cost at most. */
+  /** The flinger's payload: what one drop may cost at most; the server's, when it set one. */
   capacity(): number {
-    return flingerPayload();
+    return this.session.target.roster.flingCapacity ?? flingerPayload();
   }
 
   /**

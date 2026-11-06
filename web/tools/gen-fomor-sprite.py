@@ -213,4 +213,6 @@ for col in range(COLS):
         sheet.paste(cell, (col * cw, row * ch))
 sheet.save(ASSETS / "fly_1-repaint@4x.png", optimize=True)
 sheet.resize(ORIGINAL.size, Image.LANCZOS).save(ASSETS / "fly_1-repaint.png", optimize=True)
+# The Quality setting's half-size copy (web/tools/sheet_copies.py).
+__import__("subprocess").run([sys.executable, str(Path(__file__).resolve().with_name("sheet_copies.py")), str(ASSETS / "fly_1-repaint@4x.png")], check=True)
 print("wrote fly_1-repaint@4x.png and fly_1-repaint.png", file=sys.stderr)

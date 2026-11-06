@@ -904,6 +904,9 @@
     "buildings/iportal/": {
       "exists": true,
       "files": [
+        "shadow.1.v2.jpg",
+        "shadow.2.v2.jpg",
+        "shadow.3.v2.jpg",
         "shadow.5.v2.jpg",
         "top.1.v2.png",
         "top.2.v2.png",
@@ -1022,6 +1025,206 @@
         "top.1.damaged.png",
         "top.1.destroyed.png",
         "top.1.png"
+      ]
+    },
+    "buildings/iboneharvester/": {
+      "exists": true,
+      "files": [
+        "anim.1.v2.png",
+        "anim.2.png",
+        "shadow.1.damaged.v2.jpg",
+        "shadow.1.destroyed.v4.jpg",
+        "shadow.1.v4.jpg",
+        "shadow.2.jpg",
+        "top.1.damaged.v2.png",
+        "top.1.destroyed.v2.png",
+        "top.1.v2.png",
+        "top.2.png"
+      ]
+    },
+    "buildings/icoalproducer/": {
+      "exists": true,
+      "files": [
+        "anim.1.2.png",
+        "anim.1.v2.png",
+        "anim.2.v2.png",
+        "anim.3.v2.png",
+        "shadow.1.damaged.v2.jpg",
+        "shadow.1.destroyed.v2.jpg",
+        "shadow.1.jpg",
+        "shadow.2.damaged.jpg",
+        "shadow.2.jpg",
+        "top.1.damaged.v2.png",
+        "top.1.destroyed.v2.png",
+        "top.1.v2.png",
+        "top.2.damaged.png",
+        "top.2.destroyed.png",
+        "top.2.png"
+      ]
+    },
+    "buildings/isulpherproducer/": {
+      "exists": true,
+      "files": [
+        "anim.1.v2.png",
+        "anim.2.v2.png",
+        "anim.3.v2.png",
+        "anim1.2.png",
+        "shadow.1.damaged.v2.jpg",
+        "shadow.1.destroyed.v2.jpg",
+        "shadow.1.jpg",
+        "shadow.2.damaged.jpg",
+        "shadow.2.destroyed.jpg",
+        "shadow.2.jpg",
+        "top.1.damaged.v2.png",
+        "top.1.destroyed.v2.png",
+        "top.1.v2.png",
+        "top.2.damaged.png",
+        "top.2.destroyed.png",
+        "top.2.png"
+      ]
+    },
+    "buildings/imagmaproducer/": {
+      "exists": true,
+      "files": [
+        "anim.1.v2.png",
+        "anim.2.v2.png",
+        "anim.3.v2.png",
+        "shadow.1.damaged.v2.jpg",
+        "shadow.1.destroyed.v2.jpg",
+        "shadow.1.v2.jpg",
+        "top.1.damaged.v2.png",
+        "top.1.destroyed.v2.png",
+        "top.1.v2.png"
+      ]
+    },
+    "buildings/istoragesilo/": {
+      "exists": true,
+      "files": [
+        "shadow.1.damaged.v2.jpg",
+        "shadow.1.destroyed.v2.jpg",
+        "shadow.1.v2.jpg",
+        "top.1.damaged.v2.png",
+        "top.1.destroyed.v2.png",
+        "top.1.v2.png"
+      ]
+    },
+    "buildings/imonsterlab/": {
+      "exists": true,
+      "files": [
+        "anim.1.v2.png",
+        "top.1.v2.png"
+      ]
+    },
+    "buildings/iyardplanner/": {
+      "exists": true,
+      "files": [
+        "shadow.1.damaged.jpg",
+        "shadow.1.destroyed.jpg",
+        "shadow.1.jpg",
+        "top.1.damaged.png",
+        "top.1.destroyed.png",
+        "top.1.png"
+      ]
+    },
+    "buildings/ihatchery/": {
+      "exists": true,
+      "files": [
+        "anim.1.v2.png",
+        "anim.2.v2.png",
+        "shadow.1.damaged.v2.jpg",
+        "shadow.1.destroyed.v2.jpg",
+        "shadow.1.v2.jpg",
+        "top.1.damaged.v2.png",
+        "top.1.destroyed.v2.png",
+        "top.1.v2.png"
+      ]
+    },
+    "buildings/itownhall/": {
+      "exists": true,
+      "files": [
+        "shadow.1.damaged.v2.jpg",
+        "shadow.1.destroyed.v2.jpg",
+        "shadow.1.v2.jpg",
+        "shadow.2.damaged.v2.jpg",
+        "shadow.2.destroyed.v2.jpg",
+        "shadow.2.v2.jpg",
+        "shadow.3.damaged.v2.jpg",
+        "shadow.3.destroyed.v2.jpg",
+        "shadow.3.v2.jpg",
+        "top.1.damaged.v2.png",
+        "top.1.destroyed.v2.png",
+        "top.1.v2.png",
+        "top.2.damaged.v2.png",
+        "top.2.destroyed.v2.png",
+        "top.2.v2.png",
+        "top.3.damaged.v2.png",
+        "top.3.destroyed.v2.png",
+        "top.3.v2.png"
+      ]
+    },
+    "buildings/iwalls/": {
+      "exists": true,
+      "files": [
+        "shadow.1.damaged.v2.jpg",
+        "shadow.1.destroyed.v2.jpg",
+        "shadow.1.v2.jpg",
+        "shadow.2.v2.jpg",
+        "shadow.3.v2.jpg",
+        "top.1.damaged.v2.png",
+        "top.1.destroyed.v2.png",
+        "top.1.v2.png",
+        "top.2.damaged.v2.png",
+        "top.2.destroyed.v2.png",
+        "top.2.v2.png",
+        "top.3.damaged.v2.png",
+        "top.3.destroyed.v2.png",
+        "top.3.v2.png"
+      ]
+    },
+    "buildings/icannontower/": {
+      "exists": true,
+      "files": [
+        "anim.1.damaged.v2.png",
+        "anim.1.v2.png",
+        "shadow.1.v2.jpg",
+        "top.1.damaged.v2.png",
+        "top.1.destroyed.v2.png",
+        "top.1.v2.png"
+      ]
+    },
+    "buildings/isnipertower/": {
+      "exists": true,
+      "files": [
+        "anim.1.damaged.v2.png",
+        "anim.1.v2.png",
+        "shadow.1.v2.jpg",
+        "top.1.damaged.v2.png",
+        "top.1.destroyed.v2.png",
+        "top.1.v2.png"
+      ]
+    },
+    "buildings/iacademy/": {
+      "exists": true,
+      "files": [
+        "shadow.1.jpg",
+        "shadow.2.jpg",
+        "top.1.damaged.png",
+        "top.1.destroyed.png",
+        "top.1.png",
+        "top.2.damaged.png",
+        "top.2.destroyed.png",
+        "top.2.png"
+      ]
+    },
+    "buildings/ihousingbunker/": {
+      "exists": true,
+      "files": [
+        "shadow.1.damaged.jpg",
+        "shadow.1.destroyed.jpg",
+        "shadow.1.jpg",
+        "top.1.damaged.v2.png",
+        "top.1.destroyed.v2.png",
+        "top.1.v2.png"
       ]
     }
   },
@@ -1361,7 +1564,106 @@
     "buildings/outpostdefender/anim.1.png": {
       "width": 5696,
       "height": 156
+    },
+    "buildings/iboneharvester/anim.1.v2.png": {
+      "width": 3055,
+      "height": 80
+    },
+    "buildings/iboneharvester/anim.2.png": {
+      "width": 4950,
+      "height": 97
+    },
+    "buildings/icoalproducer/anim.1.v2.png": {
+      "width": 1880,
+      "height": 18
+    },
+    "buildings/icoalproducer/anim.2.v2.png": {
+      "width": 1833,
+      "height": 63
+    },
+    "buildings/icoalproducer/anim.3.v2.png": {
+      "width": 1457,
+      "height": 18
+    },
+    "buildings/icoalproducer/anim.1.2.png": {
+      "width": 3330,
+      "height": 105
+    },
+    "buildings/isulpherproducer/anim.1.v2.png": {
+      "width": 1020,
+      "height": 50
+    },
+    "buildings/isulpherproducer/anim.2.v2.png": {
+      "width": 1734,
+      "height": 36
+    },
+    "buildings/isulpherproducer/anim.3.v2.png": {
+      "width": 1326,
+      "height": 17
+    },
+    "buildings/isulpherproducer/anim1.2.png": {
+      "width": 2700,
+      "height": 118
+    },
+    "buildings/imagmaproducer/anim.1.v2.png": {
+      "width": 1225,
+      "height": 31
+    },
+    "buildings/imagmaproducer/anim.2.v2.png": {
+      "width": 1764,
+      "height": 26
+    },
+    "buildings/imagmaproducer/anim.3.v2.png": {
+      "width": 1666,
+      "height": 58
+    },
+    "buildings/imonsterlab/anim.1.v2.png": {
+      "width": 5504,
+      "height": 88
+    },
+    "buildings/ihatchery/anim.1.v2.png": {
+      "width": 1650,
+      "height": 78
+    },
+    "buildings/ihatchery/anim.2.v2.png": {
+      "width": 1350,
+      "height": 31
+    },
+    "buildings/icannontower/anim.1.v2.png": {
+      "width": 2220,
+      "height": 64
+    },
+    "buildings/icannontower/anim.1.damaged.v2.png": {
+      "width": 2220,
+      "height": 64
+    },
+    "buildings/isnipertower/anim.1.v2.png": {
+      "width": 2550,
+      "height": 81
+    },
+    "buildings/isnipertower/anim.1.damaged.v2.png": {
+      "width": 2550,
+      "height": 81
     }
   },
-  "missing": []
+  "missing": [],
+  "infernoMissing": [
+    "1 buildings/iboneharvester/top.2.damaged.png",
+    "1 buildings/iboneharvester/top.2.destroyed.png",
+    "100 buildings/decorations/statue-eiffeltower/shadow.jpg",
+    "100 buildings/decorations/statue-eiffeltower/top.png",
+    "113 buildings/radiotower/shadow.destroyed.jpg",
+    "113 buildings/radiotower/top.destroyed.png",
+    "127 buildings/iportal/shadow.v2.4.jpg",
+    "132 buildings/imagmatower/anim.1.damaged.v2.png",
+    "133 buildings/siegefactory/anim.1.png",
+    "133 buildings/siegefactory/top.1.damaged.png",
+    "133 buildings/siegefactory/top.1.png",
+    "134 buildings/siegelab/anim.1.png",
+    "134 buildings/siegelab/top.1.damaged.png",
+    "134 buildings/siegelab/top.1.png",
+    "2 buildings/icoalproducer/shadow.2.destroyed.jpg",
+    "8 buildings/imonsterlab/top.1.damaged.v2.png",
+    "8 buildings/imonsterlab/top.1.destroyed.v2.png"
+  ]
 }

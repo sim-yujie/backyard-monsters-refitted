@@ -99,6 +99,8 @@ export interface HealthSummary {
     readonly peakMemoryBytes: number | null;
     /** Redis's own cap; 0 means none (the container's 256M limit still applies). */
     readonly maxMemoryBytes: number | null;
+    /** Keys Redis dropped to stay under its cap since it started (INFO stats). */
+    readonly evictedKeys: number | null;
     readonly error?: string;
   };
   /** null without host.json; `count: 0` when the folder holds no backup. */
@@ -184,15 +186,25 @@ const redisHealth = async (send: HealthDeps["redisSend"]): Promise<HealthSummary
   try {
     const { ms } = await timed(() => send("PING", []));
     const info = String(await send("INFO", ["memory"]));
+    const stats = String(await send("INFO", ["stats"]));
     return {
       ok: true,
       pingMs: ms,
       usedMemoryBytes: infoField(info, "used_memory"),
       peakMemoryBytes: infoField(info, "used_memory_peak"),
       maxMemoryBytes: infoField(info, "maxmemory"),
+      evictedKeys: infoField(stats, "evicted_keys"),
     };
   } catch (err) {
-    return { ok: false, pingMs: null, usedMemoryBytes: null, peakMemoryBytes: null, maxMemoryBytes: null, error: errorText(err) };
+    return {
+      ok: false,
+      pingMs: null,
+      usedMemoryBytes: null,
+      peakMemoryBytes: null,
+      maxMemoryBytes: null,
+      evictedKeys: null,
+      error: errorText(err),
+    };
   }
 };
 

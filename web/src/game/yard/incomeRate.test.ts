@@ -81,6 +81,13 @@ describe("incomePerHour", () => {
     expect(incomePerHour(save, T0)).toEqual({ r1: 720 + 12 * 360, r2: 4 * 360, r3: 3 * 360, r4: 360 });
   });
 
+  it("on the Inferno yard counts its own harvesters only: no outpost pays into the Inferno (WP 1.19)", () => {
+    const save = saveOf([harvester(1, 1), harvester(2, 2, { l: 2 })], {
+      buildingresources: { t: T0 - 5, b1234: { r1: 10, r2: 4, r3: 0, r4: 1 } },
+    });
+    expect(incomePerHour(save, T0, "inferno")).toEqual({ r1: 720, r2: 1_440, r3: 0, r4: 0 });
+  });
+
   it("counts no outposts the server pays nothing for yet: no `t` on record", () => {
     const save = saveOf([], { buildingresources: { b1234: { r1: 10, r2: 4, r3: 0, r4: 1 } } });
     expect(incomePerHour(save, T0)).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });

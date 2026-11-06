@@ -94,12 +94,13 @@ describe("walls block a shot on foot (engine note 20)", () => {
   });
 
   it("never lets a flying Fomor shoot a defender through the walls (`Fomor.as:34-46`)", () => {
-    // A Monster Bunker beyond the line sends a Rezghul, which reaches the air.
+    // A Monster Bunker beyond the line sends a Sabnox, which reaches the air:
+    // only a monster that can is sent after a flyer (`BUILDING22.as:348-359`).
     const yard = yardBehindWalls({
       "1": { id: 1, t: 22, l: 1, X: 0, Y: 80 },
       "2": { id: 2, t: 1, l: 1, X: 0, Y: 600, st: 100_000 },
     });
-    const battle = createBattle(yard, { seed: 8, bunkers: { 1: { C19: 1 } } });
+    const battle = createBattle(yard, { seed: 8, bunkers: { 1: { IC7: 1 } } });
     battle.apply({
       kind: "fling",
       t: 0,

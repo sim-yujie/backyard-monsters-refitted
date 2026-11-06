@@ -1,11 +1,8 @@
 import { Save } from "../../../database/models/save.model.js";
 import { postgres } from "../../../server.js";
 import { Tribe, Tribes } from "../../../enums/Tribes.js";
-import { calculateTribeLevel, minimumTribeLevels } from "./calculateTribeLevel.js";
-import { abunaki } from "../../../game-data/tribes/v2/abunaki.js";
-import { dreadnaught } from "../../../game-data/tribes/v2/dreadnaught.js";
-import { kozu } from "../../../game-data/tribes/v2/kozu.js";
-import { legionnaire } from "../../../game-data/tribes/v2/legionnaire.js";
+import { calculateTribeLevel } from "./calculateTribeLevel.js";
+import { tribeIdAt, tribeLayoutFor } from "./tribeLayouts.js";
 
 /**
  * Generates a save for a wild monster on Map Room 2 based on the given base ID.
@@ -17,7 +14,20 @@ import { legionnaire } from "../../../game-data/tribes/v2/legionnaire.js";
  * @param {string} baseid - The base ID as a string, which will be converted to an integer.
  * @returns {Save} - A new `Save` object for the wild monster, with tribe-specific data.
  */
-export const tribeSaveV2 = (baseid: string, worldid: string | null | undefined) => {
+export const tribeSaveV2 = (baseid: string, worldid: string | null | undefined) =>
+  // Return a new save for the wild monster.
+  postgres.em.create(Save, { ...freshTribeData(baseid), baseid, worldid }, { partial: true });
+
+/**
+ * What a fresh camp at this base id's cell holds: its tribe's yard for its
+ * level, with that level and the tribe's `wmid`. Plain data, written nowhere:
+ * `tribeSaveV2` makes a new row of it, and `regrowCamp` resets a healed camp's
+ * row to it in place.
+ *
+ * The template's nested objects are shared by every camp of that tribe and
+ * level, so callers that change them must copy first (`regrowCamp` does).
+ */
+export const freshTribeData = (baseid: string) => {
   const cellX = parseInt(baseid.slice(-6, -3));
   const cellY = parseInt(baseid.slice(-3));
 
@@ -29,48 +39,18 @@ export const tribeSaveV2 = (baseid: string, worldid: string | null | undefined) 
 
   const { tribeSave } = fetchTribeData(tribeIndex, level);
 
-  // Return a new save for the wild monster.
-  return postgres.em.create(Save, {
-    ...tribeSave,
-    baseid,
-    level,
-    wmid,
-    worldid,
-  }, { partial: true });
+  return { ...tribeSave, level, wmid };
 };
 
 /**
- * Fetches the tribe data based on the given tribe index.
+ * Fetches the tribe data based on the given tribe index: the yard saved for
+ * this level, or the nearest one below it (`tribeLayouts.ts`).
  *
  * @param {number} tribeIndex - The tribe index.
  * @param {number} level - The level of the wild monster.
  * @returns {object} - An object containing the tribe save data.
  */
-const fetchTribeData = (tribeIndex: number, level: number) => {
-  const tribeData = [legionnaire, kozu, abunaki, dreadnaught];
-
-  // Get the selected tribe
-  const selectedTribe = tribeData[tribeIndex];
-  const tribe = Tribes[tribeIndex] as Tribe;
-
-  // Sort keys from selected tribe
-  const keys = Object.keys(selectedTribe);
-  const sortedKeys = keys.sort((a, b) => parseInt(a) - parseInt(b));
-
-  // Get level range for this tribe
-  const lowerLimit = minimumTribeLevels[tribe];
-  const higherLimit = 45;
-  const levelRange = higherLimit - lowerLimit;
-
-  // Find the appropriate key based on the level
-  const levelsPerKey = Math.ceil(levelRange / sortedKeys.length);
-  let keyIndex = Math.floor((level - lowerLimit) / levelsPerKey);
-
-  // Safety bounds
-  keyIndex = Math.max(0, Math.min(keyIndex, sortedKeys.length - 1));
-
-  const selectedKey = parseInt(sortedKeys[keyIndex]);
-  const tribeSave = selectedTribe[selectedKey];
-
+export const fetchTribeData = (tribeIndex: number, level: number) => {
+  const { save: tribeSave } = tribeLayoutFor(tribeIdAt(tribeIndex), level);
   return { tribeSave };
 };

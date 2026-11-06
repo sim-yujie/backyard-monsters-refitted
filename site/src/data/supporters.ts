@@ -21,6 +21,7 @@
  * visitors to be the first supporter instead.
  */
 export const labPartners: string[] = [
+  "Anonymous",
 ];
 
 export const labAssistants: string[] = [

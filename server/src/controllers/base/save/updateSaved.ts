@@ -3,7 +3,7 @@ import z from "zod";
 import { getFlags } from "../../../game-data/flags.js";
 import { BaseMode, BaseType } from "../../../enums/Base.js";
 import { Status } from "../../../enums/StatusCodes.js";
-import { saveFailureErr } from "../../../errors/errors.js";
+import { refuseMissingBase } from "../../../services/base/missingBase.js";
 import { Save } from "../../../database/models/save.model.js";
 import { User } from "../../../database/models/user.model.js";
 import { postgres, redis } from "../../../server.js";
@@ -11,8 +11,7 @@ import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import type { KoaController } from "../../../utils/KoaController.js";
 import { baseModeBuild } from "../load/modes/baseModeBuild.js";
 import { baseModeView } from "../load/modes/baseModeView.js";
-import { infernoModeView } from "../load/modes/infernoModeView.js";
-import { INFERNO_MODES, requireInfernoOpen } from "../../../services/inferno/infernoGate.js";
+import { INFERNO_MODES, refuseOldInferno } from "../../../services/inferno/infernoGate.js";
 import { extractTownHall } from "../../../utils/extractTownHall.js";
 import { mapSaveData } from "../../../services/base/mapSaveData.js";
 import { getAllianceData } from "../../../services/alliance/allianceData.js";
@@ -42,8 +41,8 @@ export const updateSaved: KoaController = async (ctx) => {
   const worldid = user.save?.worldid;
   const { baseid, type, mapversion } = UpdateSavedSchema.parse(ctx.request.body);
 
-  // The old Inferno modes are closed until the new Inferno ships (`config/InfernoConfig.ts`).
-  if (INFERNO_MODES.has(type)) requireInfernoOpen(ctx, user, `updatesaved ${type}`);
+  // The Flash Inferno's modes are gone: the Inferno loads through `/bm/inferno/*` (WP 7.1).
+  if (INFERNO_MODES.has(type)) refuseOldInferno(ctx, user, `updatesaved ${type}`);
 
   let baseSave: Save | null = null;
 
@@ -53,17 +52,14 @@ export const updateSaved: KoaController = async (ctx) => {
       redis.setex(`last-seen:main:${user.userid}`, 120, getCurrentDateTime().toString());
       break;
 
-    case BaseMode.IVIEW:
-    case BaseMode.IATTACK:
-      baseSave = await infernoModeView(user, baseid);
-      break;
-
     default:
       baseSave = await baseModeView(baseid, mapversion, worldid, user);
       break;
   }
 
-  if (!baseSave) throw saveFailureErr();
+  // Nothing to show: an own yard that is not there, or a base gone or out of
+  // sight. Refused and logged as `/base/save` refuses one (`missingBase.ts`).
+  if (!baseSave) return refuseMissingBase(ctx, user, { baseid, saveType: `updatesaved ${type}` });
 
   const isOwner = user.userid === baseSave.userid;
   const isInferno = baseSave.type === BaseType.INFERNO;

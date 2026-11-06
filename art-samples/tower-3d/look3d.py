@@ -36,7 +36,8 @@ SUN = (112, 46)             # the light comes from bearing 112 (screen left, a l
 LINE = 0.024                # inside outline width, in model units (the Cannon's drum radius = 1: about 2 px at 4x)
 GLINT = tuple(Vector((math.sin(math.radians(75)) * 0.82, math.cos(math.radians(75)) * 0.82, 0.57)).normalized())
                             # the painted window highlight faces this way (toward the viewer's left, up)
-OUTER = 1.0                 # the silhouette's extra outline, in 4x pixels, on top of the inside line
+NO_LINE = bool(os.environ.get('LOOK3D_NO_LINE'))   # no outline at all (owner, 30 Oct 2026: the game's 3D towers have none)
+OUTER = 0.0 if NO_LINE else 1.0   # the silhouette's extra outline, in 4x pixels, on top of the inside line
 DEBUG_LIGHT = bool(os.environ.get('LOOK3D_DEBUG_LIGHT'))   # draw only the sun's light, for checks
 
 W, H = 620, 640             # the 4x canvas (set with canvas())
@@ -740,7 +741,7 @@ def shell_nodes(w, line_mat):
 def add_outline(ob, line_mat, w=None):
     """Inverted hull: a second object sharing the mesh, pushed out by w with its faces flipped, drawn only from behind in
     a dark line colour. It is its own object so it casts no shadow (wrapped round its object, it would shade all of it)."""
-    if os.environ.get('LOOK3D_NO_LINE'):
+    if NO_LINE:
         return
     sh = bpy.data.objects.new(ob.name + "_line", ob.data)
     bpy.context.scene.collection.objects.link(sh)
@@ -926,7 +927,7 @@ def shot(path, seen, cut=(), avoid=None, outer_col=None, outer=None):
     alone with every solid part as a holdout. Then the silhouette's thicker outline (see outer_line). Returns the RGBA
     picture (straight alpha, sRGB 0-1, rows top first)."""
     sc = bpy.context.scene
-    tmp = [OUT / "_paint.png", OUT / "_lines.png"]
+    tmp = [OUT / "_paint.png"] + ([] if NO_LINE else [OUT / "_lines.png"])    # no shells: the lines pass would be empty
     for i, f in enumerate(tmp):
         for o in list(seen) + list(cut):
             ln = o.name.endswith("_line")
@@ -938,11 +939,12 @@ def shot(path, seen, cut=(), avoid=None, outer_col=None, outer=None):
                 o.hide_render = True
         sc.render.filepath = str(f)
         bpy.ops.render.render(write_still=True)
-    a, b = (bpy.data.images.load(str(f)) for f in tmp)
+    a, b = (bpy.data.images.load(str(f)) for f in tmp) if len(tmp) == 2 else (bpy.data.images.load(str(tmp[0])), None)
     n = W * H * 4
-    pa, pb = np.empty(n, np.float32), np.empty(n, np.float32)
+    pa, pb = np.empty(n, np.float32), np.zeros(n, np.float32)
     a.pixels.foreach_get(pa)
-    b.pixels.foreach_get(pb)
+    if b is not None:
+        b.pixels.foreach_get(pb)
     pa, pb = pa.reshape(H, W, 4), pb.reshape(H, W, 4)        # straight alpha, rows bottom first
     ab = pb[..., 3:4]
     aa = ab + pa[..., 3:4] * (1 - ab)
@@ -956,7 +958,8 @@ def shot(path, seen, cut=(), avoid=None, outer_col=None, outer=None):
     out.file_format = 'PNG'
     out.save()
     for im in (a, b, out):
-        bpy.data.images.remove(im)
+        if im is not None:
+            bpy.data.images.remove(im)
     for f in tmp:
         f.unlink()
     return np.flipud(img)

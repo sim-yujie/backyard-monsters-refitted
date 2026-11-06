@@ -1,24 +1,22 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { COSTS } from "../../game-data/buildingCosts.js";
-import { ClientSafeError } from "../../middleware/clientSafeError.js";
-import type { LayoutNode } from "../../schemas/YardPlannerSchemas.js";
 import type { BuildingDataMap } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import { pointsForUpgrade } from "./costs.js";
-import { walkUpgrades, type UpgradeWalkSave } from "./startUpgrades.js";
+import { planOneUpgrade, type OneUpgrade, type UpgradeWalkSave } from "./startUpgrades.js";
 
 /**
- * The upgrade walk (`docs/design/planner-upgrades.md` §3.4), against the same
- * sandbox capture the batch wall route's tests use: a real 575-building save
- * with six Cannon Towers at level 1, 400 Blocks at level 1, a level 10 Town
- * Hall, `BEW.q = 4` so five workers, no damage, no countdowns and resources in
- * the billions.
+ * One building's next upgrade step (`planOneUpgrade`), the rule set the
+ * building panel's Upgrade button uses, against the sandbox capture the batch
+ * wall route's tests use: a real 575-building save with six Cannon Towers at
+ * level 1, 400 Blocks at level 1, a level 10 Town Hall, `BEW.q = 4` so five
+ * workers, no damage, no countdowns and resources in the billions.
  *
- * Every case here is one rule of §3.4 read off one walk. The two the file is
- * really for are the pair decision Q1 turns on: a long step takes a worker and
- * ends its building's turn, however short (#137), and a wall or trap step
- * takes none and does not (D13).
+ * These cases used to be read off the planner's upgrade walk, which Apply ran
+ * over a layout's planned upgrades until the owner removed it (2026-11-03).
+ * The walk is gone; the single-step rules it was built from are still the
+ * Upgrade button's, so they are tested here directly.
  */
 
 const FIXTURE = "../../../../web/test/fixtures/baseload-sandbox-yard.json";
@@ -28,7 +26,6 @@ const SNAPPER = 1;
 const ACADEMY = 8;
 const TOWN_HALL = 14;
 const WALL = 17;
-const BAITER = 19;
 const CANNON = 20;
 const BIRDHOUSE = 57;
 
@@ -64,405 +61,197 @@ const sandbox = (): UpgradeWalkSave => {
   };
 };
 
-/** One planned node. Positions are never read by the walk, so they stay at 0. */
-const planned = (id: number, t: number, level: number, order = 0): LayoutNode => ({
-  id,
-  t,
-  x: 0,
-  y: 0,
-  plan: { level, order },
-});
-
 /** The first Block in the yard, which is at level 1 like the other 399. */
 const firstWallId = (buildings: BuildingDataMap): number =>
   Number(Object.values(buildings).find((building) => Number(building.t) === WALL)!.id);
 
-/** The error a call threw, typed, so a test can read its status and data. */
-const rejection = (run: () => unknown): ClientSafeError => {
-  try {
-    run();
-  } catch (err) {
-    if (err instanceof ClientSafeError) return err;
-    throw err;
-  }
-  throw new Error("expected walkUpgrades to throw");
-};
-
 /** One step off the generated table, so no price is retyped into a test. */
 const step = (type: number, from: number) => COSTS[type]!.costs[from]!;
 
-/** The four resource amounts of a run of steps. */
-const priceOf = (type: number, from: number, to: number) => {
-  const total = { r1: 0, r2: 0, r3: 0, r4: 0 };
-  for (let level = from; level < to; level++) {
-    const [r1, r2, r3, r4] = step(type, level);
-    total.r1 += r1;
-    total.r2 += r2;
-    total.r3 += r3;
-    total.r4 += r4;
-  }
-  return total;
+/** The four resource amounts of one step. */
+const priceOf = (type: number, from: number) => {
+  const [r1, r2, r3, r4] = step(type, from);
+  return { r1, r2, r3, r4 };
 };
 
-/** Every id in a list of report rows, in the order the walk reported them. */
-const idsOf = (rows: readonly { id: number }[]): number[] => rows.map((row) => row.id);
+/** A step that was taken, or a failed test naming why it was refused. */
+const taken = (result: OneUpgrade) => {
+  if (!result.ok) throw new Error(`expected a step, got ${result.reason}`);
+  return result;
+};
 
-describe("walkUpgrades: workers", () => {
-  test("starts one job per free worker and reports the rest waiting", () => {
+/** Puts the first five Cannon Towers on a job, so every worker is busy. */
+const busyAll = (save: UpgradeWalkSave): void => {
+  for (const id of CANNON_IDS.slice(0, 5)) {
+    save.buildingdata![String(id)] = { ...save.buildingdata![String(id)]!, cU: 500 };
+  }
+};
+
+describe("planOneUpgrade: a long step", () => {
+  test("starts one step at the countdown the cost table names", () => {
     const save = sandbox();
-    const nodes = CANNON_IDS.map((id, index) => planned(id, CANNON, 2, index));
+    const next = taken(planOneUpgrade(save, 32, NOW));
 
-    const walk = walkUpgrades(save, nodes, NOW);
-
-    expect(walk.workers).toEqual({ total: 5, busyBefore: 0, busyAfter: 5 });
-    expect(idsOf(walk.started)).toEqual([32, 33, 34, 35, 36]);
-    expect(idsOf(walk.waiting)).toEqual([37]);
-    expect(walk.skipped).toEqual([]);
-    expect(walk.finished).toEqual([]);
-  });
-
-  test("a started job is one step, at the countdown the cost table names", () => {
-    const save = sandbox();
-    const walk = walkUpgrades(save, [planned(32, CANNON, 2)], NOW);
-
-    expect(walk.started).toEqual([
-      { id: 32, t: CANNON, from: 1, to: 2, seconds: 900, cost: priceOf(CANNON, 1, 2) },
-    ]);
-    expect(walk.buildingdata["32"]).toMatchObject({ t: CANNON, cU: 900, cL: 900 });
+    expect(next).toMatchObject({ id: 32, t: CANNON, from: 1, to: 2, seconds: 900, finished: false, points: 0 });
+    expect(next.cost).toEqual(priceOf(CANNON, 1));
+    expect(next.building).toMatchObject({ t: CANNON, cU: 900, cL: 900 });
     // The level does not move: the countdown raises it when it finishes.
-    expect(walk.buildingdata["32"]!.l).toBeUndefined();
+    expect(next.building.l).toBeUndefined();
   });
 
-  test("charges every started job once and nothing for one that waits", () => {
+  test("a harvester's 300-second step starts a countdown too (#137)", () => {
     const save = sandbox();
-    const nodes = CANNON_IDS.map((id, index) => planned(id, CANNON, 2, index));
+    expect(step(SNAPPER, 1)[4]).toBe(300);
 
-    const walk = walkUpgrades(save, nodes, NOW);
-    const one = priceOf(CANNON, 1, 2);
+    const next = taken(planOneUpgrade(save, 1, NOW));
 
-    expect(walk.cost).toEqual({ r1: one.r1 * 5, r2: one.r2 * 5, r3: one.r3 * 5, r4: one.r4 * 5 });
-    // No points yet: a long step earns them when it completes.
-    expect(walk.points).toBe(0);
+    expect(next).toMatchObject({ from: 1, to: 2, seconds: 300, finished: false });
+    expect(next.building).toMatchObject({ cU: 300 });
   });
 
-  test("the building that waits is left exactly as it was", () => {
+  test("is refused when every worker is busy", () => {
     const save = sandbox();
-    const before = structuredClone(save.buildingdata!["37"]);
-    const nodes = CANNON_IDS.map((id, index) => planned(id, CANNON, 2, index));
+    busyAll(save);
 
-    const walk = walkUpgrades(save, nodes, NOW);
-
-    expect(walk.buildingdata["37"]).toEqual(before);
-    expect(walk.waiting).toEqual([{ id: 37, t: CANNON, from: 1, to: 2, reason: "workers" }]);
+    expect(planOneUpgrade(save, 1, NOW)).toMatchObject({
+      ok: false,
+      reason: "workers",
+      scope: "step",
+      workers: { total: 5, busy: 5 },
+    });
   });
 
-  test("the player's order decides which job waits", () => {
-    const save = sandbox();
-    const nodes = CANNON_IDS.map((id, index) => planned(id, CANNON, 2, CANNON_IDS.length - index));
-
-    const walk = walkUpgrades(save, nodes, NOW);
-
-    expect(idsOf(walk.started)).toEqual([37, 36, 35, 34, 33]);
-    expect(idsOf(walk.waiting)).toEqual([32]);
-  });
-
-  test("ties in the order are broken by building id", () => {
-    const save = sandbox();
-    const nodes = [...CANNON_IDS].reverse().map((id) => planned(id, CANNON, 2, 0));
-
-    expect(idsOf(walkUpgrades(save, nodes, NOW).started)).toEqual([32, 33, 34, 35, 36]);
-  });
-
-  test("a job already running holds a worker the walk cannot use", () => {
-    const save = sandbox();
-    save.buildingdata!["32"] = { ...save.buildingdata!["32"]!, cU: 500 };
-    const nodes = CANNON_IDS.slice(1).map((id, index) => planned(id, CANNON, 2, index));
-
-    const walk = walkUpgrades(save, nodes, NOW);
-
-    expect(walk.workers).toEqual({ total: 5, busyBefore: 1, busyAfter: 5 });
-    expect(walk.started).toHaveLength(4);
-    expect(walk.waiting).toHaveLength(1);
-  });
-
-  test("a yard with no extra workers bought starts one job", () => {
+  test("a yard with no extra workers bought has one", () => {
     const save = sandbox();
     save.storedata = {};
-    const nodes = CANNON_IDS.map((id, index) => planned(id, CANNON, 2, index));
+    save.buildingdata!["32"] = { ...save.buildingdata!["32"]!, cU: 500 };
 
-    const walk = walkUpgrades(save, nodes, NOW);
-
-    expect(walk.workers.total).toBe(1);
-    expect(walk.started).toHaveLength(1);
-    expect(walk.waiting).toHaveLength(5);
-  });
-
-  test("a layout with no plans does nothing at all", () => {
-    const save = sandbox();
-    const walk = walkUpgrades(save, [{ id: 32, t: CANNON, x: 0, y: 0 }], NOW);
-
-    expect(walk.started).toEqual([]);
-    expect(walk.finished).toEqual([]);
-    expect(walk.waiting).toEqual([]);
-    expect(walk.skipped).toEqual([]);
-    expect(walk.cost).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
-    expect(walk.workers).toEqual({ total: 5, busyBefore: 0, busyAfter: 0 });
+    expect(planOneUpgrade(save, 33, NOW)).toMatchObject({
+      ok: false,
+      reason: "workers",
+      workers: { total: 1, busy: 1 },
+    });
   });
 });
 
-describe("walkUpgrades: wall and trap steps finish at once (D13)", () => {
-  test("a Block planned to level 5 finishes every step on the spot", () => {
+describe("planOneUpgrade: wall and trap steps finish at once (D13)", () => {
+  test("a Block step is written at its new level, with its points", () => {
     const save = sandbox();
     const id = firstWallId(save.buildingdata!);
 
-    const walk = walkUpgrades(save, [planned(id, WALL, 5)], NOW);
+    const next = taken(planOneUpgrade(save, id, NOW));
 
-    expect(walk.started).toEqual([]);
-    expect(walk.waiting).toEqual([]);
-    expect(walk.finished.map((row) => [row.from, row.to])).toEqual([
-      [1, 2],
-      [2, 3],
-      [3, 4],
-      [4, 5],
-    ]);
-    expect(walk.buildingdata[String(id)]).toMatchObject({ t: WALL, l: 5 });
-    expect(walk.buildingdata[String(id)]!.cU).toBeUndefined();
+    expect(next).toMatchObject({ from: 1, to: 2, seconds: 0, finished: true });
+    expect(next.points).toBe(pointsForUpgrade(step(WALL, 1)));
+    expect(next.cost).toEqual(priceOf(WALL, 1));
+    expect(next.building).toMatchObject({ t: WALL, l: 2 });
+    expect(next.building.cU).toBeUndefined();
   });
 
-  test("wall steps use no worker and are charged and scored as the wall route charges them", () => {
+  test("needs no worker even when every worker is busy", () => {
     const save = sandbox();
-    const id = firstWallId(save.buildingdata!);
+    busyAll(save);
 
-    const walk = walkUpgrades(save, [planned(id, WALL, 5)], NOW);
-
-    expect(walk.workers).toEqual({ total: 5, busyBefore: 0, busyAfter: 0 });
-    expect(walk.cost).toEqual(priceOf(WALL, 1, 5));
-    expect(walk.points).toBe(
-      [1, 2, 3, 4].reduce((total, level) => total + pointsForUpgrade(step(WALL, level)), 0)
-    );
+    expect(planOneUpgrade(save, firstWallId(save.buildingdata!), NOW).ok).toBe(true);
   });
+});
 
-  test("a harvester's 300-second step starts a countdown and holds a worker (#137)", () => {
+describe("planOneUpgrade: Sharper Tools", () => {
+  test("a running buff shortens the countdown by a fifth, not the price", () => {
     const save = sandbox();
-    const walk = walkUpgrades(save, [planned(1, SNAPPER, 2)], NOW);
+    save.storedata = { ...save.storedata, BST: { e: NOW + 3600 } };
 
-    expect(step(SNAPPER, 1)[4]).toBe(300);
-    expect(walk.finished).toEqual([]);
-    expect(walk.started).toEqual([
-      { id: 1, t: SNAPPER, from: 1, to: 2, seconds: 300, cost: priceOf(SNAPPER, 1, 2) },
-    ]);
-    // Level left where the save had it (1, spelled by leaving `l` out); cU set.
-    expect(walk.buildingdata["1"]).toMatchObject({ cU: 300 });
-    expect(walk.buildingdata["1"]!.l).toBe(save.buildingdata!["1"]!.l);
-    expect(walk.cost).toEqual(priceOf(SNAPPER, 1, 2));
-    expect(walk.points).toBe(0);
-    expect(walk.workers.busyAfter).toBe(1);
-  });
+    const next = taken(planOneUpgrade(save, 32, NOW));
 
-  test("a short step is one job: a plan past it waits for a later Apply (#137)", () => {
-    const save = sandbox();
-    // Level 1 to 2 is 300 seconds; it takes the building's turn, so 2 to 3 stays planned.
-    const walk = walkUpgrades(save, [planned(1, SNAPPER, 3)], NOW);
-
-    expect(walk.finished).toEqual([]);
-    expect(walk.started.map((row) => [row.from, row.to, row.seconds])).toEqual([[1, 2, 300]]);
-    // Level left where the save had it (1, spelled by leaving `l` out); cU set.
-    expect(walk.buildingdata["1"]).toMatchObject({ cU: 300 });
-    expect(walk.buildingdata["1"]!.l).toBe(save.buildingdata!["1"]!.l);
-  });
-
-  test("a short step waits when every worker is busy (#137)", () => {
-    const save = sandbox();
-    for (const id of CANNON_IDS.slice(0, 5)) {
-      save.buildingdata![String(id)] = { ...save.buildingdata![String(id)]!, cU: 500 };
-    }
-
-    const walk = walkUpgrades(save, [planned(1, SNAPPER, 2)], NOW);
-
-    expect(walk.started).toEqual([]);
-    expect(walk.waiting).toEqual([{ id: 1, t: SNAPPER, from: 1, to: 2, reason: "workers" }]);
-    expect(walk.buildingdata["1"]).toEqual(save.buildingdata!["1"]!);
+    expect(next.seconds).toBe(720);
+    // The job keeps its shortened length too, so its bar starts at 0 (#136).
+    expect(next.building).toMatchObject({ cU: 720, cL: 720 });
+    expect(next.cost).toEqual(priceOf(CANNON, 1));
   });
 
   test("a short step under Sharper Tools is floor(300 × 0.8)", () => {
     const save = sandbox();
     save.storedata = { ...save.storedata, BST: { e: NOW + 3600 } };
 
-    expect(walkUpgrades(save, [planned(1, SNAPPER, 2)], NOW).started[0]!.seconds).toBe(240);
-  });
-
-  test("wall steps still cost a worker nothing when every worker is already busy", () => {
-    const save = sandbox();
-    for (const id of CANNON_IDS.slice(0, 5)) {
-      save.buildingdata![String(id)] = { ...save.buildingdata![String(id)]!, cU: 500 };
-    }
-    const id = firstWallId(save.buildingdata!);
-
-    const walk = walkUpgrades(save, [planned(id, WALL, 3)], NOW);
-
-    expect(walk.workers).toEqual({ total: 5, busyBefore: 5, busyAfter: 5 });
-    expect(walk.finished).toHaveLength(2);
-    expect(walk.waiting).toEqual([]);
-  });
-});
-
-describe("walkUpgrades: one job per building", () => {
-  test("a multi-level plan starts one step and leaves the rest planned", () => {
-    const save = sandbox();
-    const walk = walkUpgrades(save, [planned(32, CANNON, 3)], NOW);
-
-    expect(walk.started.map((row) => [row.from, row.to])).toEqual([[1, 2]]);
-    expect(walk.finished).toEqual([]);
-    expect(walk.waiting).toEqual([]);
-    expect(walk.skipped).toEqual([]);
-    expect(walk.cost).toEqual(priceOf(CANNON, 1, 2));
-    expect(walk.buildingdata["32"]).toMatchObject({ cU: 900 });
-  });
-});
-
-describe("walkUpgrades: Sharper Tools", () => {
-  test("a running buff shortens the countdown by a fifth", () => {
-    const save = sandbox();
-    save.storedata = { ...save.storedata, BST: { e: NOW + 3600 } };
-
-    const walk = walkUpgrades(save, [planned(32, CANNON, 2)], NOW);
-
-    expect(walk.started[0]!.seconds).toBe(720);
-    // Apply's job keeps its shortened length too, so its bar starts at 0 (#136).
-    expect(walk.buildingdata["32"]).toMatchObject({ cU: 720, cL: 720 });
-    // The price is the cost table's, buff or no buff.
-    expect(walk.cost).toEqual(priceOf(CANNON, 1, 2));
+    expect(taken(planOneUpgrade(save, 1, NOW)).seconds).toBe(240);
   });
 
   test("a buff that has expired leaves the countdown alone", () => {
     const save = sandbox();
     save.storedata = { ...save.storedata, BST: { e: NOW } };
 
-    expect(walkUpgrades(save, [planned(32, CANNON, 2)], NOW).started[0]!.seconds).toBe(900);
+    expect(taken(planOneUpgrade(save, 32, NOW)).seconds).toBe(900);
   });
 });
 
-describe("walkUpgrades: skipped", () => {
+describe("planOneUpgrade: refused", () => {
   test("a building with a countdown of its own is busy", () => {
     const save = sandbox();
     save.buildingdata!["32"] = { ...save.buildingdata!["32"]!, cU: 60 };
 
-    const walk = walkUpgrades(save, [planned(32, CANNON, 2)], NOW);
-
-    expect(walk.skipped).toEqual([{ id: 32, t: CANNON, reason: "busy", from: 1, to: 2 }]);
-    expect(walk.started).toEqual([]);
+    expect(planOneUpgrade(save, 32, NOW)).toMatchObject({ ok: false, reason: "busy", scope: "building" });
   });
 
   test("a damaged building has to be repaired first", () => {
     const save = sandbox();
     save.buildingdata!["32"] = { ...save.buildingdata!["32"]!, hp: 10 };
 
-    expect(walkUpgrades(save, [planned(32, CANNON, 2)], NOW).skipped).toEqual([
-      { id: 32, t: CANNON, reason: "damaged", from: 1, to: 2 },
-    ]);
+    expect(planOneUpgrade(save, 32, NOW)).toMatchObject({ ok: false, reason: "damaged" });
   });
 
   test("damage recorded only in buildinghealthdata counts as well", () => {
     const save = sandbox();
     save.buildinghealthdata = { "32": 10 };
 
-    expect(walkUpgrades(save, [planned(32, CANNON, 2)], NOW).skipped).toEqual([
-      { id: 32, t: CANNON, reason: "damaged", from: 1, to: 2 },
-    ]);
-  });
-
-  test("a yard that has already reached the planned level is caught up", () => {
-    const save = sandbox();
-    save.buildingdata!["32"] = { ...save.buildingdata!["32"]!, l: 3 };
-
-    expect(walkUpgrades(save, [planned(32, CANNON, 3)], NOW).skipped).toEqual([
-      { id: 32, t: CANNON, reason: "caughtUp", from: 3, to: 3 },
-    ]);
+    expect(planOneUpgrade(save, 32, NOW)).toMatchObject({ ok: false, reason: "damaged" });
   });
 
   test("a yard with no Town Hall cannot upgrade anything", () => {
     const save = sandbox();
     delete save.buildingdata![String(HALL_ID)];
 
-    expect(walkUpgrades(save, [planned(32, CANNON, 2)], NOW).skipped).toEqual([
-      { id: 32, t: CANNON, reason: "townHall", from: 1, to: 2, townHall: { have: 0, need: 1 } },
-    ]);
+    expect(planOneUpgrade(save, 32, NOW)).toMatchObject({
+      ok: false,
+      reason: "townHall",
+      townHall: { have: 0, need: 1 },
+    });
   });
 
   test("a step gated on a higher Town Hall names the level it wants", () => {
     const save = sandbox();
-    save.buildingdata![String(HALL_ID)] = {
-      ...save.buildingdata![String(HALL_ID)]!,
-      l: 1,
-    };
+    save.buildingdata![String(HALL_ID)] = { ...save.buildingdata![String(HALL_ID)]!, l: 1 };
 
-    expect(walkUpgrades(save, [planned(32, CANNON, 2)], NOW).skipped).toEqual([
-      { id: 32, t: CANNON, reason: "townHall", from: 1, to: 2, townHall: { have: 1, need: 2 } },
-    ]);
+    expect(planOneUpgrade(save, 32, NOW)).toMatchObject({
+      ok: false,
+      reason: "townHall",
+      scope: "step",
+      townHall: { have: 1, need: 2 },
+    });
   });
 
   test("a gate that is not the Town Hall is reported as a requirement list", () => {
     const save = sandbox();
     delete save.buildingdata![String(ACADEMY_ID)];
 
-    const walk = walkUpgrades(save, [planned(BAITER_ID, BAITER, 2)], NOW);
-
-    expect(walk.skipped).toEqual([
-      {
-        id: BAITER_ID,
-        t: BAITER,
-        reason: "requirements",
-        from: 1,
-        to: 2,
-        requirements: [[ACADEMY, 1, 2]],
-      },
-    ]);
+    expect(planOneUpgrade(save, BAITER_ID, NOW)).toMatchObject({
+      ok: false,
+      reason: "requirements",
+      requirements: [[ACADEMY, 1, 2]],
+    });
   });
 
-  test("a job the yard cannot pay for is skipped and the walk carries on", () => {
-    // Putty is the one resource a Cannon Tower step spends and a Block step does
-    // not, so emptying it starves the tower and nothing else. The plan's own
-    // sketch used pebbles, which every Block step spends too.
+  test("a step the yard cannot pay for names what is missing", () => {
     const save = sandbox();
     save.resources = { ...save.resources, r3: 0 };
-    const wall = firstWallId(save.buildingdata!);
 
-    const walk = walkUpgrades(save, [planned(32, CANNON, 2, 0), planned(wall, WALL, 2, 1)], NOW);
-
-    expect(walk.skipped).toEqual([
-      {
-        id: 32,
-        t: CANNON,
-        reason: "shortfall",
-        from: 1,
-        to: 2,
-        shortfall: { r1: 0, r2: 0, r3: step(CANNON, 1)[2], r4: 0 },
-      },
-    ]);
-    expect(idsOf(walk.finished)).toEqual([wall]);
-    expect(walk.cost).toEqual(priceOf(WALL, 1, 2));
+    expect(planOneUpgrade(save, 32, NOW)).toMatchObject({
+      ok: false,
+      reason: "shortfall",
+      shortfall: { r1: 0, r2: 0, r3: step(CANNON, 1)[2], r4: 0 },
+    });
   });
 
-  test("an earlier job's charge is what a later one is measured against", () => {
-    const save = sandbox();
-    // Exactly one Cannon Tower step's worth of putty in the yard.
-    save.resources = { ...save.resources, r3: step(CANNON, 1)[2] };
-
-    const walk = walkUpgrades(
-      save,
-      [planned(32, CANNON, 2, 0), planned(33, CANNON, 2, 1)],
-      NOW
-    );
-
-    expect(idsOf(walk.started)).toEqual([32]);
-    expect(walk.skipped).toMatchObject([{ id: 33, reason: "shortfall" }]);
-    expect(walk.cost).toEqual(priceOf(CANNON, 1, 2));
-  });
-
-  test("a building the cost table cannot price is skipped, not priced on the node's type", () => {
-    // `checkNodesOwned` refuses a node whose type disagrees with the save's, so
-    // this is only reachable by calling the walk directly. It still must not
-    // charge a decoration a Cannon Tower's price.
+  test("a building the cost table cannot price has no ladder", () => {
     const save: UpgradeWalkSave = {
       buildingdata: {
         "0": { x: 0, y: 0, t: TOWN_HALL, id: 0, l: 10 },
@@ -472,35 +261,17 @@ describe("walkUpgrades: skipped", () => {
       storedata: {},
     };
 
-    const walk = walkUpgrades(save, [planned(9, CANNON, 2)], NOW);
-
-    expect(walk.skipped).toEqual([{ id: 9, t: BIRDHOUSE, reason: "noLadder" }]);
-    expect(walk.cost).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
+    expect(planOneUpgrade(save, 9, NOW)).toMatchObject({ ok: false, reason: "noLadder" });
   });
 
-  test("a plan on a building the save does not hold is ignored", () => {
+  test("a building at the top of its ladder", () => {
     const save = sandbox();
-    const walk = walkUpgrades(save, [planned(999_999, CANNON, 2)], NOW);
+    save.buildingdata!["32"] = { ...save.buildingdata!["32"]!, l: COSTS[CANNON]!.costs.length + 1 };
 
-    expect(walk.skipped).toEqual([]);
-    expect(walk.started).toEqual([]);
-  });
-});
-
-describe("walkUpgrades: malformed plans", () => {
-  test("a target past the top of the ladder is the client's fault", () => {
-    const save = sandbox();
-    const error = rejection(() => walkUpgrades(save, [planned(32, CANNON, 11)], NOW));
-
-    expect(error.status).toBe(400);
-    expect(error.data).toMatchObject({ planLevel: [32] });
+    expect(planOneUpgrade(save, 32, NOW)).toMatchObject({ ok: false, reason: "maxLevel" });
   });
 
-  test("a plan on a type with no ladder at all is refused the same way", () => {
-    const save = sandbox();
-    const error = rejection(() => walkUpgrades(save, [planned(32, BIRDHOUSE, 2)], NOW));
-
-    expect(error.status).toBe(400);
-    expect(error.data).toMatchObject({ planLevel: [32] });
+  test("a building the save does not hold is missing", () => {
+    expect(planOneUpgrade(sandbox(), 999_999, NOW)).toMatchObject({ ok: false, reason: "missing" });
   });
 });

@@ -30,19 +30,29 @@
  *
  *     { id: "slowed", label: "Slowed", stacks: (c) => (c.slowed ? 1 : 0) },
  *
+ * ## Towers (owner, beta 6)
+ *
+ * Towers carry the same stickers, placed the same way: a row centred over the
+ * tower's health bar ({@link TowerStatusIcons}). The first is "weakened", a
+ * tower that killed a ranked Octo-ooze ({@link TOWER_STATUS_EFFECTS}).
+ *
  * Drawing only; nothing here reaches the battle.
  */
 
 import { Assets, Container, Sprite, Texture } from "pixi.js";
 import type { CreepSnapshot } from "@/game/combat/rules";
 
-export interface StatusEffect {
+/** A sticker: its picture and what a player would call it. */
+export interface StatusIcon {
   /** Also the picture's name: `status-icons/<id>.webp`. */
   readonly id: string;
   /** What a player would call it; for tests and the review page. */
   readonly label: string;
-  /** How strongly it is on the creep: 0 when it is not, its stacks when it stacks. */
-  readonly stacks: (creep: CreepSnapshot) => number;
+}
+
+export interface StatusEffect<T = CreepSnapshot> extends StatusIcon {
+  /** How strongly it is on the creep (or tower): 0 when it is not, its stacks when it stacks. */
+  readonly stacks: (on: T) => number;
 }
 
 /** Every effect with an icon, in the order the row shows them left to right. */
@@ -52,6 +62,21 @@ export const STATUS_EFFECTS: readonly StatusEffect[] = [
   { id: "enraged", label: "Enraged", stacks: (c) => (c.enraged ? 1 : 0) },
   { id: "puttied", label: "Putty boost", stacks: (c) => (c.puttied ? 1 : 0) },
   { id: "lootBoosted", label: "Loot boost", stacks: (c) => (c.lootBoosted ? 1 : 0) },
+  // The revamp's Lab abilities (owner, beta 6): a ranked Pokey in a swarm of 5,
+  // and a monster that killed a defending ranked Octo-ooze.
+  { id: "swarming", label: "Swarming", stacks: (c) => (c.swarming ? 1 : 0) },
+  { id: "weakened", label: "Weakened", stacks: (c) => (c.weakened ? 1 : 0) },
+];
+
+/** What a tower's stickers read: the engine's word on it this frame. */
+export interface TowerStatusState {
+  /** It killed a ranked Octo-ooze and deals less for a while (`Battle.weakenedTowers`). */
+  readonly weakened: boolean;
+}
+
+/** Every effect a tower can show, left to right. */
+export const TOWER_STATUS_EFFECTS: readonly StatusEffect<TowerStatusState>[] = [
+  { id: "weakened", label: "Weakened", stacks: (t) => (t.weakened ? 1 : 0) },
 ];
 
 /** The pictures in `public/status-icons/`: the effects above and the ones still waiting for the engine. */
@@ -61,6 +86,8 @@ export const STATUS_ICON_FILES = [
   "enraged",
   "puttied",
   "lootBoosted",
+  "swarming",
+  "weakened",
   "slowed",
   "stunned",
   "frozen",
@@ -71,7 +98,7 @@ export const statusIconUrl = (id: string): string => `${import.meta.env.BASE_URL
 
 /** One icon to show: the effect and how many stacks it has. */
 export interface ActiveStatus {
-  readonly effect: StatusEffect;
+  readonly effect: StatusIcon;
   readonly stacks: number;
 }
 
@@ -79,18 +106,23 @@ export interface ActiveStatus {
 export const statusesOf = (
   creep: CreepSnapshot | null,
   effects: readonly StatusEffect[] = STATUS_EFFECTS,
-): ActiveStatus[] => {
-  if (!creep) return [];
-  const on: ActiveStatus[] = [];
+): ActiveStatus[] => activeOf(creep, effects);
+
+/** The effects on anything, a creep or a tower, in `effects`' order; empty for none. */
+export const activeOf = <T>(on: T | null, effects: readonly StatusEffect<T>[]): ActiveStatus[] => {
+  if (!on) return [];
+  const active: ActiveStatus[] = [];
   for (const effect of effects) {
-    const stacks = effect.stacks(creep);
-    if (stacks > 0) on.push({ effect, stacks });
+    const stacks = effect.stacks(on);
+    if (stacks > 0) active.push({ effect, stacks });
   }
-  return on;
+  return active;
 };
 
 /** An icon's width and height in world px (the files are 48 px); a creep's health bar is 18 wide. */
 export const ICON_SIZE = 12;
+/** A tower's icons: its health bar is 51 wide, so they are drawn a little larger. */
+export const TOWER_ICON_SIZE = 18;
 /** The space between two icons, and between the row and the bar under it. */
 export const ICON_GAP = 1;
 /** A stacking effect's icon grows this much a stack past the first, up to {@link MAX_GROWTH_STACKS}. */
@@ -136,7 +168,7 @@ export class StatusIconTextures {
       Assets.load<Texture>({ src: url, data: { autoGenerateMipmaps: true } }),
   ) {}
 
-  get(effect: StatusEffect): Texture | null {
+  get(effect: StatusIcon): Texture | null {
     const url = statusIconUrl(effect.id);
     const ready = this.ready.get(url);
     if (ready) return ready;
@@ -164,7 +196,10 @@ export class StatusIconRow {
   readonly container = new Container();
   private readonly icons = new Map<string, Sprite>();
 
-  constructor(private readonly textures: StatusIconTextures = sharedTextures) {
+  constructor(
+    private readonly textures: StatusIconTextures = sharedTextures,
+    private readonly size = ICON_SIZE,
+  ) {
     this.container.eventMode = "none";
     this.container.visible = false;
   }
@@ -188,7 +223,7 @@ export class StatusIconRow {
       return;
     }
     for (const icon of this.icons.values()) icon.visible = false;
-    const spots = statusRow(statuses.length, centreX, barTop);
+    const spots = statusRow(statuses.length, centreX, barTop, this.size);
     statuses.forEach(({ effect, stacks }, index) => {
       const texture = this.textures.get(effect);
       if (!texture) return;
@@ -197,7 +232,7 @@ export class StatusIconRow {
       if (icon.texture !== texture) icon.texture = texture;
       icon.visible = true;
       icon.position.set(Math.round(spot.x), Math.round(spot.y));
-      icon.scale.set((ICON_SIZE / Math.max(1, texture.width, texture.height)) * badgeScale(stacks));
+      icon.scale.set((this.size / Math.max(1, texture.width, texture.height)) * badgeScale(stacks));
     });
     this.container.alpha = alpha;
     this.container.visible = true;
@@ -215,7 +250,7 @@ export class StatusIconRow {
     this.container.destroy();
   }
 
-  private icon(effect: StatusEffect): Sprite {
+  private icon(effect: StatusIcon): Sprite {
     const ready = this.icons.get(effect.id);
     if (ready) return ready;
     const icon = new Sprite(Texture.EMPTY);
@@ -224,5 +259,53 @@ export class StatusIconRow {
     this.icons.set(effect.id, icon);
     this.container.addChild(icon);
     return icon;
+  }
+}
+
+/**
+ * The towers' rows of stickers (owner, beta 6): one {@link StatusIconRow} per
+ * tower that has had an effect, centred over where its health bar sits.
+ * `barOf` is the bar's top centre in world px, or null for a tower not drawn.
+ */
+export class TowerStatusIcons {
+  /** Add to the battle overlay, over the health bars. */
+  readonly root = new Container();
+  private readonly rows = new Map<number, StatusIconRow>();
+
+  constructor(
+    private readonly barOf: (id: number) => { x: number; y: number } | null,
+    private readonly textures: StatusIconTextures = sharedTextures,
+  ) {
+    this.root.eventMode = "none";
+  }
+
+  /** The towers showing a sticker now, and which; for tests. */
+  get shown(): Record<number, string[]> {
+    const out: Record<number, string[]> = {};
+    for (const [id, row] of this.rows) if (row.shown.length > 0) out[id] = row.shown;
+    return out;
+  }
+
+  /** Shows the stickers of the towers in `weakened` and hides every other row. */
+  sync(weakened: readonly number[]): void {
+    const on = new Set(weakened);
+    for (const [id, row] of this.rows) if (!on.has(id)) row.hide();
+    for (const id of on) {
+      const bar = this.barOf(id);
+      if (!bar) continue;
+      let row = this.rows.get(id);
+      if (!row) {
+        row = new StatusIconRow(this.textures, TOWER_ICON_SIZE);
+        this.rows.set(id, row);
+        this.root.addChild(row.container);
+      }
+      row.show(activeOf({ weakened: true }, TOWER_STATUS_EFFECTS), bar.x, bar.y);
+    }
+  }
+
+  destroy(): void {
+    for (const row of this.rows.values()) row.destroy();
+    this.rows.clear();
+    this.root.destroy({ children: true });
   }
 }

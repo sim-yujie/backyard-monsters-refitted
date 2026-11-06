@@ -245,6 +245,39 @@ export const SCENARIOS = [
       events: [{ kind: "fling", t: 240, x: 420, y: -560, r: 300, monsters: { C1: 60, C4: 10 } }],
     },
   },
+  // The revamp's four Lab abilities on both sides (owner, 2 Nov 2026): swarming
+  // Pokeys, Octo-oozes that weaken their killers, Ichis' thorns and Crabatrons'
+  // critical hits, attacking and in the bunkers.
+  {
+    name: "lab-abilities",
+    description:
+      "Ranked Pokeys, Octo-oozes, Ichis and Crabatrons into the sandbox yard, against bunkers " +
+      "holding the same four at the defender's ranks: Swarm, Weakening Ooze, Thorns and " +
+      "Critical Hits on attack and defence (beta 6).",
+    yard: "sandbox",
+    kind: "main",
+    levels: { C1: 4, C2: 4, C6: 4, C10: 4 },
+    playerLevel: 20,
+    tailTicks: 9000,
+    ranks: { C1: 3, C2: 3, C6: 3, C10: 3 },
+    defence: {
+      bunkers: {
+        83: { C1: 10, C2: 4 },
+        84: { C6: 2 },
+        85: { C10: 2 },
+      },
+      defenderLevels: { C1: 4, C2: 4, C6: 4, C10: 4 },
+      defenderRanks: { C1: 2, C2: 2, C6: 2, C10: 2 },
+    },
+    log: {
+      v: 1,
+      seed: 20261102,
+      events: [
+        { kind: "fling", t: 200, x: 420, y: -560, r: 120, monsters: { C1: 30, C10: 4 } },
+        { kind: "fling", t: 260, x: 380, y: -520, r: 120, monsters: { C2: 8, C6: 4 } },
+      ],
+    },
+  },
   {
     name: "caged-champion",
     description:
@@ -495,14 +528,15 @@ export const SCENARIOS = [
     name: "raid-east",
     description:
       "A wild monster raid on the sandbox yard: C2 tanks, C4 damage dealers and C3 looters at " +
-      "level 1 from off the east side, a hit limit of 30, the bunkers defending; ends when no " +
-      "raider is left (issue #226).",
+      "the defender's own academy levels (C4 untrained, level 1) from off the east side, no hit " +
+      "limit, the bunkers defending; ends when no raider is left (issue #226, owner decision " +
+      "2026-10-06).",
     yard: "sandbox",
     kind: "main",
     levels: LEVEL_ONE,
     playerLevel: 20,
     tailTicks: 48000,
-    raid: { hitLimit: 30 },
+    raid: true,
     defence: {
       bunkers: {
         83: { C1: 10, C2: 4 },
@@ -552,6 +586,7 @@ export const scenarioInput = (scenario) => {
       playerLevel: scenario.playerLevel,
       tailTicks: scenario.tailTicks,
       ...(scenario.defence ?? {}),
+      ...(scenario.ranks ? { ranks: scenario.ranks } : {}),
       ...(scenario.raid ? { raid: scenario.raid } : {}),
     };
   }
@@ -566,6 +601,7 @@ export const scenarioInput = (scenario) => {
     playerLevel: scenario.playerLevel,
     tailTicks: scenario.tailTicks,
     ...(scenario.defence ?? {}),
+    ...(scenario.ranks ? { ranks: scenario.ranks } : {}),
     ...(scenario.raid ? { raid: scenario.raid } : {}),
   };
 };

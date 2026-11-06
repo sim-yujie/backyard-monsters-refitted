@@ -72,6 +72,13 @@
   scrollbar-width: none;
 }
 
+/* In the title bar (Monsters, Chaos Weapons): the room between the title
+   and the close button, the tabs equal in it (ui.css `.tab-row`). */
+.monsters-screen .monsters-tabs {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 /* ── Header: housing, goo, putty ─────────────────────────────────────────── */
 
 .monsters-header {
@@ -150,8 +157,11 @@
   font-size: var(--text-sm);
 }
 
+/* A done action reads in plain text: only its amounts carry the red/green
+   of a loss or gain ("Unlocking Vorg: −384,000"), so the words around them
+   do not take a colour of their own. */
 .monsters-status--good {
-  color: var(--colour-success);
+  color: var(--colour-text);
 }
 
 .monsters-status--bad {
@@ -426,8 +436,26 @@
   font-variant-numeric: tabular-nums;
 }
 
-.locker-detail__stats {
-  color: var(--colour-text-muted);
+/* The monster's numbers as painted icons (`statGrid` in monsterNumbers.ts):
+   in rows that wrap when "10s → 8s" would not fit, a number the next level
+   changes picked out in green. */
+.monster-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--colour-text);
+  font-weight: 700;
+}
+
+.monster-stats__item--up {
+  color: var(--colour-success);
+}
+
+.monster-stats .res-amount > .res-icon {
+  height: 24px;
 }
 
 .locker-detail__action {
@@ -528,13 +556,11 @@
   }
 
   /* The title and the close button share the first row; the tabs take the
-     whole second one, in equal columns. */
+     whole second one, the tabs equal and sliding sideways if they cannot
+     all fit (ui.css `.tab-row`). */
   .monsters-screen .monsters-tabs {
     order: 1;
     flex: 1 0 100%;
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(0, 1fr);
   }
 
   .monsters-screen .tabs__tab {

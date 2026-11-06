@@ -38,23 +38,32 @@ const HIT = { left: 18, right: 18, top: 28, bottom: 8 } as const;
 
 /**
  * The mushroom under a world point, or null. The frontmost wins where two
- * boxes overlap, as for buildings: mushrooms are drawn in list order.
+ * boxes overlap, as for buildings: mushrooms are drawn by depth
+ * ({@link mushroomZIndex}).
  */
 export const mushroomAt = (
   mushrooms: readonly YardMushroom[],
   worldX: number,
   worldY: number,
 ): YardMushroom | null => {
-  for (let index = mushrooms.length - 1; index >= 0; index--) {
-    const mushroom = mushrooms[index]!;
+  let front: YardMushroom | null = null;
+  for (const mushroom of mushrooms) {
     const dx = worldX - mushroom.worldX;
     const dy = worldY - mushroom.worldY;
-    if (dx >= -HIT.left && dx <= HIT.right && dy >= -HIT.top && dy <= HIT.bottom) {
-      return mushroom;
-    }
+    const hit = dx >= -HIT.left && dx <= HIT.right && dy >= -HIT.top && dy <= HIT.bottom;
+    if (hit && (!front || mushroom.depth > front.depth)) front = mushroom;
   }
-  return null;
+  return front;
 };
+
+/**
+ * A mushroom sprite's `zIndex` among the buildings' (`YardBuildings.resortByDepth`
+ * gives each building `depth * 8`): the same scale, so a wall block behind it
+ * is drawn first and one in front of it after (owner bug, 28 Oct 2026). Drawn
+ * on a layer under every building, a pumpkin grown in front of a wall sank
+ * into the block.
+ */
+export const mushroomZIndex = (mushroom: Pick<YardMushroom, "depth">): number => mushroom.depth * 8;
 
 /** The worker quips for an ordinary mushroom (`pop_mushroom_msg2`..`4`, `MUSHROOMS.as:253`). */
 export const ORDINARY_QUIPS: readonly string[] = [

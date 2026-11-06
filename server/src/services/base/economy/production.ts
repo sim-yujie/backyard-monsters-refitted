@@ -1,4 +1,4 @@
-import { productionOf } from "../../../game-data/buildingCosts.js";
+import { productionOf, type YardKind } from "../../../game-data/buildingCosts.js";
 
 /**
  * Harvester production: the arithmetic of one Twig Snapper, Pebble Shiner,
@@ -72,14 +72,16 @@ export const cycleSeconds = (cycleTime: number, health?: number, maxHealth?: num
  *
  * @param health - Current health; omit for full.
  * @param maxHealth - Health at full for this level (`maxHp`).
+ * @param kind - The yard's table: an Inferno harvester has its own ladder.
  */
 export const harvesterRates = (
   type: number,
   level: number,
   health?: number,
-  maxHealth?: number
+  maxHealth?: number,
+  kind: YardKind = "main"
 ): HarvesterRates | null => {
-  const production = productionOf(type);
+  const production = productionOf(type, kind);
   if (!production) return null;
   return {
     produce: atLevel(production.produce, level),

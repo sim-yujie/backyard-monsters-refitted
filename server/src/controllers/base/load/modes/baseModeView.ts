@@ -10,6 +10,8 @@ import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
 import { MR1_TRIBE_IDS } from "../../../../game-data/tribes/v1/index.js";
 import { isWildMonsterExpired } from "../../../../services/maproom/wildMonsterExpiry.js";
 import { isVisible } from "../../../../game-rules/maproom/sight.js";
+import { mr2HexShape } from "../../../../config/MapRoom2Config.js";
+import { isCampInPlay } from "../../../../services/maproom/campInPlay.js";
 
 /**
  * `baseid`'s cell, for the fog of war check below: a player base always has
@@ -41,7 +43,7 @@ const isCellVisibleTo = async (user: User, baseid: string): Promise<boolean> => 
   const { getPlayerSight } = await import("../../../../services/maproom/sight/sightService.js");
   const sight = await getPlayerSight(user);
 
-  return isVisible(cell, sight.sources, sight.revealed);
+  return isVisible(cell, sight.sources, sight.revealed, mr2HexShape());
 };
 
 /**
@@ -70,7 +72,12 @@ export const baseModeView = async (baseid: string, mapversion: MapRoomVersion = 
   // Opening the yard is the one place allowed to write, so it reclaims the row and
   // regenerates the camp. Read-only paths share the same rule via isWildMonsterExpired
   // but only report the camp as fresh - see wildMonsterCell and worldSnapshot.
-  if (mapversion !== MapRoomVersion.V3 && isWildMonsterExpired(save, getCurrentDateTime())) {
+  // Never under an attack: its save would find no row (`campInPlay.ts`).
+  if (
+    mapversion !== MapRoomVersion.V3 &&
+    isWildMonsterExpired(save, getCurrentDateTime()) &&
+    !(await isCampInPlay(save?.basesaveid))
+  ) {
     postgres.em.remove(save!);
     await postgres.em.flush();
     save = await tribeSaveHandler(baseid, mapversion, worldid, user);

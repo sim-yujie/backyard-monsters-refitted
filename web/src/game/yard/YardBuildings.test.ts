@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // jsdom: a colour-matrix filter asks for a canvas when it is made.
-import { describe, expect, it } from "vitest";
-import { Sprite, Texture, type ColorMatrixFilter } from "pixi.js";
+import { describe, expect, it, vi } from "vitest";
+import { Assets, Sprite, Texture, type ColorMatrixFilter } from "pixi.js";
 import { creepZIndex } from "@/game/attack/AttackBattleLayer";
 import type { BaseLoadResponse } from "@/api/types";
 import type { YardArtAtlas } from "./yardAtlas";
@@ -9,6 +9,7 @@ import { HIGHLIGHT_MATRIX, YardBuildings } from "./YardBuildings";
 import { readWork } from "./buildingWork";
 import { rowOf } from "./buildingCosts";
 import { artFor, readYard } from "./yardModel";
+import { RETRY_DELAYS_MS, versionedArt } from "./retryLoad";
 
 /**
  * The frame setter a battle turns a tower's gun with (issue #67), and the
@@ -68,6 +69,18 @@ describe("YardBuildings.setAnimFrame", () => {
     expect(buildings.animLayerCount(2)).toBe(1);
     expect(buildings.animFrameOf(2, 0)).toBe(11);
     expect(buildings.tops.children.length).toBe(before);
+    buildings.destroy();
+  });
+
+  // The yard is shown again after every save change; a strip that started
+  // over each time made the Inferno ICC's crystal blink to its dimmest cell
+  // whenever one Incubator handed over to the next.
+  it("keeps each strip's place when the yard is shown again", () => {
+    const buildings = new YardBuildings();
+    buildings.show(readYard(yardResponse()), fakeAtlas());
+    buildings.setAnimFrame(2, 0, 9);
+    buildings.show(readYard(yardResponse()), fakeAtlas());
+    expect(buildings.animFrameOf(2, 0)).toBe(9);
     buildings.destroy();
   });
 });
@@ -321,5 +334,75 @@ describe("YardBuildings guests (#272)", () => {
     expect(inFront.destroyed).toBe(false);
     behind.destroy();
     inFront.destroy();
+  });
+});
+
+describe("YardBuildings: loading the pictures", () => {
+  /** The trap and the tower above, behind three walls (type 17) that share one picture. */
+  const walledYard = () => {
+    const response = yardResponse();
+    for (const id of [3, 4, 5]) response.buildingdata![String(id)] = { id, t: 17, l: 1, X: 400 + id * 40, Y: 0 };
+    return readYard(response);
+  };
+
+  const everywhere = { x: -10_000, y: -10_000, width: 20_000, height: 20_000 };
+
+  it("asks for every building's own picture first, the most shared first, before any shadow or strip", () => {
+    const asked: string[] = [];
+    const load = vi.spyOn(Assets, "load").mockImplementation(((url: string) => {
+      asked.push(url);
+      return new Promise(() => {});
+    }) as typeof Assets.load);
+    try {
+      const buildings = new YardBuildings();
+      buildings.show(walledYard(), fakeAtlas());
+      // Asked for on `show`, not on the first frame.
+      expect(asked[0]).toBe(versionedArt("/assets/buildings/walls/top.3d1@2x.webp"));
+      expect(asked).toHaveLength(3);
+
+      buildings.draw(everywhere);
+      const tops = asked.slice(0, 3);
+      // A 3D tower's own picture is its body (`body.t1@2x.webp`), not a `top`; a 3D wall's is `top.3d1@2x.webp`.
+      expect(tops.every((url) => /\/(top\.\d|body\.t\d)/.test(url))).toBe(true);
+      expect(asked.length).toBeGreaterThan(3);
+      buildings.destroy();
+    } finally {
+      load.mockRestore();
+    }
+  });
+
+  it("never writes a name over a building whose picture is late or failed", async () => {
+    vi.useFakeTimers();
+    // The walls' picture fails every try; the trap's fails once, then arrives.
+    let trapTries = 0;
+    const load = vi.spyOn(Assets, "load").mockImplementation(((url: string) => {
+      if (url.includes("walls/top")) return Promise.reject(new Error("gone"));
+      if (url.includes("boobytrap/top") && trapTries++ === 0) return Promise.reject(new Error("broken answer"));
+      if (url.includes("boobytrap/top")) return Promise.resolve(Texture.WHITE);
+      return new Promise(() => {});
+    }) as typeof Assets.load);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const buildings = new YardBuildings();
+      buildings.show(walledYard(), fakeAtlas());
+      buildings.draw(everywhere);
+      expect(buildings.labels.children).toHaveLength(0);
+
+      // Five tries over about four seconds.
+      for (const delay of RETRY_DELAYS_MS) {
+        await vi.advanceTimersByTimeAsync(delay);
+        buildings.draw(everywhere);
+      }
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("walls/top.3d1@2x.webp"), expect.anything());
+      // The trap has its picture; the three walls and the tower keep a faint
+      // footprint, and nothing is written over any of them.
+      expect(buildings.placeholderCount).toBe(4);
+      expect(buildings.labels.children).toHaveLength(0);
+      buildings.destroy();
+    } finally {
+      load.mockRestore();
+      warn.mockRestore();
+      vi.useRealTimers();
+    }
   });
 });

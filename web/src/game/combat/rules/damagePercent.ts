@@ -140,6 +140,22 @@ export const damagePercent = (
 };
 
 /**
+ * How many of the felled buildings the report's "N buildings destroyed" and
+ * the end panel's "N of M" count: no walls and no traps, which
+ * {@link damagePercent} leaves out too. A Descent yard is mostly walls, and
+ * counting them read "23 of 234" at 100% damage. An id the yard does not hold
+ * is counted.
+ */
+export const felledCount = (yard: CombatYard, destroyedIds: readonly number[]): number => {
+  let count = 0;
+  for (const id of destroyedIds) {
+    const building = yard.byId.get(id);
+    if (!building || (!isWall(building.type) && !isTrap(building.type))) count += 1;
+  }
+  return count;
+};
+
+/**
  * `destroyed`, which is `damage` past the victory threshold and nothing else.
  *
  * `BASE.SaveB` writes the key only for a wild monster camp or an outpost

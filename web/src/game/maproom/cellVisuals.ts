@@ -1,6 +1,7 @@
 import { CELL_HEIGHT, CELL_WIDTH, WATER_MAX_HEIGHT } from "@/config";
 import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell, type PlayerCell } from "@/api/types";
-import { HexGrid } from "@/game/HexGrid";
+import { HexGrid, mapRoomGrid } from "@/game/HexGrid";
+import { classicLook } from "@/game/classicLook";
 
 /**
  * What a cell looks like, as data.
@@ -51,9 +52,16 @@ export interface CellAppearance {
   truce: boolean;
   /**
    * The player's own outpost with its worker free (#338; Flash's `mcWorker`):
-   * a small blue creature beside the tower. Only the owner sees it.
+   * a small blue creature beside the tower. Only the owner sees it, and only
+   * in Classic.
    */
   idleWorker: boolean;
+  /**
+   * Modern's opposite of `idleWorker` (owner, 29 Oct 2026): the player's own
+   * outpost with something being built, upgraded or fortified, shown as a
+   * painted construction badge beside the tower. Only the owner sees it.
+   */
+  underConstruction: boolean;
   /**
    * The player's own outpost with an invitation to move onto it still waiting
    * (#205; Flash's `mcInvite`): Flash's open envelope on its tower. Only the owner sees it.
@@ -76,7 +84,28 @@ export interface CellAppearance {
   hallLevel: number;
   /** The kit filter dims this cell (#334): everything but a matching own outpost, unless `ALL`. */
   dimmed: boolean;
+  /**
+   * A damaged camp's remaining strength, 1..99 (100 minus the server's `dm`),
+   * shown as a health bar under the tent (owner, 4 Nov 2026). Null hides the
+   * bar: a healthy camp, a destroyed one (its red cross and grey tribe say
+   * enough) and every other cell. A camp heals 12 hours after its last attack;
+   * the server then reports `dm` 0 and the open map's stale-zone refresh
+   * redraws the tile without its bar.
+   */
+  campHealth: number | null;
 }
+
+/**
+ * The health bar's value for a camp cell's `dm` and `d`, or null for no bar.
+ * Rounded to a whole percent, kept to 1..99 so a scratched camp still shows a
+ * bar and a nearly flattened one never reads as empty.
+ */
+export const campHealthOf = (dm: number | undefined, destroyed: number | undefined): number | null => {
+  if (destroyed === 1) return null;
+  const damage = Number(dm) || 0;
+  if (damage <= 0) return null;
+  return Math.min(99, Math.max(1, Math.round(100 - damage)));
+};
 
 /** An outpost's Starter Kit (issue #334), as the tower is tinted. */
 export const OutpostKit = {
@@ -140,25 +169,34 @@ export const DEFAULT_VIEWER_CONTEXT: MapViewerContext = { myAlliance: null, kitF
  *
  * The cut-offs are the server's, not a rounding of them: height <= 99 is water
  * and can never be occupied, 100..109 is sand, 110..169 is grass in four
- * shades, 170 and above is rock.
+ * shades, 170 and above is rock. They are also Flash's ground tiles, in the
+ * same order (`MapRoomCell.Update`, `groundArt.ts`).
  *
- * The shades are the toned-down ground of the approved "one calm look"
- * (#176, R-MR2-Map-A): quieter water, sand and grass, so the camps and the
- * players carry the colour.
+ * The colours are those tiles' average, so the far view's one texel per cell
+ * reads as the textured ground it zooms into: water as Flash showed it, under
+ * its half-clear sheet of light blue. Modern's repainted tiles are shifted to
+ * the same averages (`web/tools/maproom-ground/build.py`), so both looks share
+ * the land colours; Modern's toned-down water has its own (`modern`).
  */
-const TERRAIN_BANDS: { maxHeight: number; colour: number }[] = [
-  { maxHeight: 79, colour: 0x1a3048 },
-  { maxHeight: 89, colour: 0x1d3a57 },
-  { maxHeight: WATER_MAX_HEIGHT, colour: 0x234565 },
-  { maxHeight: 104, colour: 0xb9ad86 },
-  { maxHeight: 109, colour: 0xaa9d75 },
-  { maxHeight: 119, colour: 0x557a48 },
-  { maxHeight: 139, colour: 0x4b6d41 },
-  { maxHeight: 159, colour: 0x43623a },
-  { maxHeight: 169, colour: 0x3c5835 },
-  { maxHeight: 174, colour: 0x6d6b64 },
-  { maxHeight: Number.POSITIVE_INFINITY, colour: 0x64625c },
+const TERRAIN_BANDS: { maxHeight: number; colour: number; modern?: number }[] = [
+  { maxHeight: 79, colour: 0x23a2c1, modern: 0x387396 },
+  { maxHeight: 89, colour: 0x2aacce, modern: 0x417da3 },
+  { maxHeight: WATER_MAX_HEIGHT, colour: 0x32b6db, modern: 0x4987b2 },
+  { maxHeight: 104, colour: 0xcfbd79 },
+  { maxHeight: 109, colour: 0xcaa670 },
+  { maxHeight: 119, colour: 0x647f16 },
+  { maxHeight: 139, colour: 0x4d7b0d },
+  { maxHeight: 159, colour: 0x415d0e },
+  { maxHeight: 169, colour: 0x395e10 },
+  { maxHeight: 174, colour: 0x334b1c },
+  { maxHeight: Number.POSITIVE_INFINITY, colour: 0x4d5d3f },
 ];
+
+/** Which of the eleven terrain bands a height falls in, 0 (deepest water) to 10 (high rock). */
+export const terrainBand = (height: number): number => {
+  const index = TERRAIN_BANDS.findIndex((band) => height <= band.maxHeight);
+  return index < 0 ? TERRAIN_BANDS.length - 1 : index;
+};
 
 /** Fill for a cell whose zone has not arrived yet. */
 export const LOADING_COLOUR = 0x272c38;
@@ -187,6 +225,13 @@ export const OWN_COLOUR = RANGE_COLOUR;
 export const SHIELD_COLOUR = 0x9cb9ff;
 export const DAMAGE_COLOUR = 0xe05252;
 export const SELECT_COLOUR = 0xffffff;
+/** A damaged camp's health bar fill: green over half, amber to a quarter, then the damage red. */
+export const HEALTH_GOOD_COLOUR = 0x5fcf4f;
+export const HEALTH_HURT_COLOUR = 0xf2b230;
+
+/** The fill colour of a camp's health bar at `health` percent. */
+export const campHealthColour = (health: number): number =>
+  health > 50 ? HEALTH_GOOD_COLOUR : health > 25 ? HEALTH_HURT_COLOUR : DAMAGE_COLOUR;
 export const HOVER_COLOUR = 0xffffff;
 export const GRID_LINE_COLOUR = 0x0d1017;
 /** Another player's marker ring and a plate's text, `--colour-text`. */
@@ -230,7 +275,7 @@ const RELATION_STYLE: Record<PlayerRelation, { colour: number; icon: CellAppeara
  * `"attacker"` is a base whose owner has ever attacked the viewer: the server
  * tags it `ak` (`services/maproom/v2/attackers.ts`), with no time limit.
  */
-const relationOf = (cell: PlayerCell, myAlliance: number | null): PlayerRelation => {
+export const relationOf = (cell: PlayerCell, myAlliance: number | null): PlayerRelation => {
   if (cell.mine === 1) return "you";
   if (myAlliance !== null && cell.aid !== null && cell.aid === myAlliance) return "alliance";
   if (cell.ak === 1) return "attacker";
@@ -263,10 +308,9 @@ const PLAYER_COLOUR = 0xe8ecf5;
 const OUTPOST_COLOUR = 0xb9c2d6;
 
 export const terrainColour = (height: number): number => {
-  for (const band of TERRAIN_BANDS) {
-    if (height <= band.maxHeight) return band.colour;
-  }
-  return LOADING_COLOUR;
+  if (Number.isNaN(height)) return LOADING_COLOUR;
+  const band = TERRAIN_BANDS[terrainBand(height)]!;
+  return classicLook() ? band.colour : (band.modern ?? band.colour);
 };
 
 /** The appearance of a cell that has not loaded. */
@@ -281,6 +325,7 @@ export const loadingAppearance = (): CellAppearance => ({
   protected: false,
   truce: false,
   idleWorker: false,
+  underConstruction: false,
   invitePending: false,
   loading: true,
   star: "",
@@ -289,6 +334,7 @@ export const loadingAppearance = (): CellAppearance => ({
   kit: null,
   hallLevel: 0,
   dimmed: false,
+  campHealth: null,
 });
 
 /**
@@ -307,6 +353,21 @@ export const FOG_COLOUR = 0x1a1e24;
 export const FOG_CLOUD_COLOUR = 0x242b35;
 /** A one-hex ring of lighter fog right where the sight edge is (owner-approved approximation of a continuous feather). */
 export const FOG_EDGE_COLOUR = 0x34404e;
+/**
+ * The colour fog cells take while clouds cover them: the cloud's own shade, so wherever the cloud's
+ * soft edge thins over a fog cell it shows cloud, not dark fog.
+ */
+export const FOG_UNDER_CLOUD = 0xd6dbe3;
+
+let fogUnderCloud = false;
+
+/** Classic's clouds came or went: fog cells built from now on wear {@link FOG_UNDER_CLOUD}, or the dark fog. */
+export const setFogUnderCloud = (on: boolean): void => {
+  fogUnderCloud = on;
+};
+
+/** The flat fog colour of the moment, for the far map's picture. */
+export const fogColour = (): number => (fogUnderCloud ? FOG_UNDER_CLOUD : FOG_COLOUR);
 
 /**
  * A cheap, deterministic "does this fog cell get the lighter cloud blotch"
@@ -335,8 +396,9 @@ const isFogEdge = (coord: { x: number; y: number }, sight: SightLookup): boolean
  * than guessing.
  */
 export const fogAppearance = (coord?: { x: number; y: number }, sight?: SightLookup): CellAppearance => {
-  const terrain =
-    coord && sight && isFogEdge(coord, sight)
+  const terrain = fogUnderCloud
+    ? FOG_UNDER_CLOUD
+    : coord && sight && isFogEdge(coord, sight)
       ? FOG_EDGE_COLOUR
       : coord && fogMottle(coord.x, coord.y)
         ? FOG_CLOUD_COLOUR
@@ -352,6 +414,7 @@ export const fogAppearance = (coord?: { x: number; y: number }, sight?: SightLoo
     protected: false,
   truce: false,
   idleWorker: false,
+  underConstruction: false,
     invitePending: false,
     loading: false,
     star: "",
@@ -360,6 +423,7 @@ export const fogAppearance = (coord?: { x: number; y: number }, sight?: SightLoo
     kit: null,
     hallLevel: 0,
     dimmed: false,
+    campHealth: null,
   };
 };
 
@@ -401,6 +465,7 @@ export const appearanceOf = (
     protected: false,
   truce: false,
   idleWorker: false,
+  underConstruction: false,
     invitePending: false,
     loading: false,
     star: "",
@@ -409,6 +474,7 @@ export const appearanceOf = (
     kit: null,
     hallLevel: 0,
     dimmed: false,
+    campHealth: null,
   };
 
   if (isWaterCell(cell)) {
@@ -433,7 +499,8 @@ export const appearanceOf = (
       own,
       protected: cell.p === 1,
       truce: truceActive,
-      idleWorker: own && outpost && cell.wi === 1,
+      idleWorker: classicLook() && own && outpost && cell.wi === 1,
+      underConstruction: !classicLook() && own && outpost && cell.wb === 1,
       invitePending: own && outpost && Number(cell.pi) > 0,
       star: String(cell.l),
       plateColour: style.colour,
@@ -452,6 +519,7 @@ export const appearanceOf = (
     markerColour: TRIBE_COLOURS[cell.n] ?? TRIBE_FALLBACK,
     tribe: cell.n,
     badge: String(cell.l),
+    campHealth: campHealthOf(cell.dm, cell.d),
   };
 };
 
@@ -463,7 +531,7 @@ export const appearanceOf = (
  */
 export const rasterColour = (cell: MapCell | undefined): number => {
   if (!cell) return LOADING_COLOUR;
-  if (isFogCell(cell)) return FOG_COLOUR;
+  if (isFogCell(cell)) return fogColour();
   if (isWaterCell(cell)) return terrainColour(cell.i);
   if (isPlayerCell(cell)) {
     if (cell.mine === 1) return OWN_COLOUR;
@@ -482,9 +550,15 @@ export const rasterColour = (cell: MapCell | undefined): number => {
  * away (see `mapAtlas.ts`'s `hexPoints`). A name plate placed at `dy` from the
  * centre must stay within this width, or it spills into the neighbour hex
  * sharing that edge. Offsets past the hex's own vertical extent clamp to the
- * narrowest width rather than going negative.
+ * narrowest width rather than going negative. On pointy-top (`HexGrid.ts`)
+ * the world grid's own outline decides.
  */
 export const hexWidthAt = (dy: number): number => {
+  if (mapRoomGrid.shape === "pointy") {
+    // Pointy-top: full width down the straight sides, then narrowing to the
+    // point; kept to at least half the width, as flat-top's narrowest is.
+    return Math.max(2 * mapRoomGrid.halfWidthAt(Math.min(Math.abs(dy), mapRoomGrid.cellHeight / 2)), mapRoomGrid.cellWidth / 2);
+  }
   const half = Math.min(Math.abs(dy), CELL_HEIGHT / 2);
   return CELL_WIDTH - (CELL_WIDTH / 2) * (half / (CELL_HEIGHT / 2));
 };

@@ -16,7 +16,7 @@ import { isTrap, maxHp, type CombatTargetKind } from "../../game-rules/combat/in
  * - **Levels** are replaced by the level the building's art needs
  *   (`artLevelOf`). Most buildings have one picture for all levels and so
  *   read 1; the few whose art changes (Town Hall, harvesters, walls, Flinger,
- *   and the defensive towers' three tiers while `TOWER_TIER_ART=on`...) give
+ *   and the 3D defensive towers' three tiers...) give
  *   away only what their picture already shows.
  * - **Health** keeps its share of the building's full health, re-measured
  *   against the art level's, so a damaged building still looks damaged and a
@@ -39,8 +39,9 @@ export const masksFor = (save: Pick<Save, "type" | "userid">, viewer: number): b
 /** The share of full health below which the client draws a building damaged (`yardModel.ts`). */
 const DAMAGED_AT = 0.5;
 
-/** The health table a yard of this type reads (`stats.ts` `hpLadder`). */
-const kindOf = (type: string): CombatTargetKind => (type === BaseType.OUTPOST ? "outpost" : "main");
+/** The health table a yard of this type reads (`stats.ts` `hpLadder`): an Inferno yard its own. */
+const kindOf = (type: string): CombatTargetKind =>
+  type === BaseType.OUTPOST ? "outpost" : type === BaseType.INFERNO ? "inferno" : "main";
 
 /** A building's stored level: absent means 1, as the client reads it. */
 const levelOf = (building: BuildingData): number => (typeof building.l === "number" ? building.l : 1);

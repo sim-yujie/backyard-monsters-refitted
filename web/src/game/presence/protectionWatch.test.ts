@@ -139,6 +139,108 @@ describe("ProtectionWatch", () => {
   });
 });
 
+describe("ProtectionWatch: the protection running out", () => {
+  it("says so at ten minutes since the last real action, and takes it back on the next", () => {
+    const lapses: boolean[] = [];
+    const lapsing = new ProtectionWatch({
+      onShow: () => {},
+      onHide: () => {},
+      onLapse: (lapsed) => lapses.push(lapsed),
+      stay: (plan) => stayAnswer(plan),
+      account: () => account,
+      now: () => Date.now(),
+    });
+    lapsing.hold();
+    lapsing.hear({ now: serverNow(), lastAction: serverNow() });
+    vi.advanceTimersByTime(minutes(10) - 1);
+    expect(lapses).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(lapses).toEqual([true]);
+    lapsing.hear({ lastAction: serverNow() });
+    expect(lapses).toEqual([true, false]);
+    lapsing.stop();
+  });
+
+  // 3 Nov: a player who reloaded, or came back to the tab, near the end of
+  // the ten minutes was disconnected at once, before the prompt could be
+  // seen, let alone tapped.
+  describe("never before the prompt has been on a visible screen for its minute", () => {
+    let visibility: DocumentVisibilityState;
+    let lapses: boolean[];
+    let lapsing: ProtectionWatch;
+    const setVisibility = (state: DocumentVisibilityState) => {
+      visibility = state;
+      document.dispatchEvent(new Event("visibilitychange"));
+    };
+
+    beforeEach(() => {
+      visibility = "visible";
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibility });
+      lapses = [];
+      shown = [];
+      lapsing = new ProtectionWatch({
+        onShow: (endsAt) => shown.push(endsAt),
+        onHide: () => {},
+        onLapse: (lapsed) => lapses.push(lapsed),
+        stay: (plan) => stayAnswer(plan),
+        account: () => account,
+        now: () => Date.now(),
+      });
+      lapsing.hold();
+    });
+
+    afterEach(() => {
+      lapsing.stop();
+    });
+
+    it("gives a page loaded seconds before the end the whole minute", () => {
+      lapsing.hear({ now: serverNow(), lastAction: serverNow() - 599 });
+      expect(lapsing.showing).toBe(true);
+      expect(shown.at(-1)).toBe(Date.now() + minutes(1));
+      vi.advanceTimersByTime(minutes(1) - 1);
+      expect(lapses).toEqual([]);
+      vi.advanceTimersByTime(1);
+      expect(lapses).toEqual([true]);
+    });
+
+    it("gives a tab hidden through the warning the minute when it comes back", () => {
+      lapsing.hear({ now: serverNow(), lastAction: serverNow() });
+      vi.advanceTimersByTime(minutes(8));
+      setVisibility("hidden");
+      vi.advanceTimersByTime(minutes(3));
+      expect(lapses).toEqual([]);
+      setVisibility("visible");
+      expect(lapsing.showing).toBe(true);
+      expect(shown.at(-1)).toBe(Date.now() + minutes(1));
+      vi.advanceTimersByTime(minutes(1));
+      expect(lapses).toEqual([true]);
+    });
+
+    it("still runs out on time for a prompt seen, whatever the screen changes", () => {
+      lapsing.hear({ now: serverNow(), lastAction: serverNow() });
+      vi.advanceTimersByTime(minutes(9) + 30_000);
+      expect(lapsing.showing).toBe(true);
+      // Yard to map: the hold passes over.
+      const map = lapsing.hold();
+      vi.advanceTimersByTime(30_000);
+      expect(lapses).toEqual([true]);
+      map();
+    });
+
+    it("waits out the idle countdown, then gives the minute", () => {
+      lapsing.hear({ now: serverNow(), lastAction: serverNow() });
+      lapsing.suppress(true);
+      vi.advanceTimersByTime(minutes(10) + 30_000);
+      expect(lapses).toEqual([]);
+      lapsing.suppress(false);
+      vi.advanceTimersByTime(RESUME_GRACE_MS + minutes(1) - 1);
+      expect(lapses).toEqual([]);
+      vi.advanceTimersByTime(1);
+      expect(lapses).toEqual([true]);
+    });
+  });
+});
+
 describe("ProtectionWatch.active: work in the Yard Planner", () => {
   let taps: number;
   beforeEach(() => {
