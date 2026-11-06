@@ -948,6 +948,8 @@ export const gateSentence = (gate: BuildGate, kind: YardKind = "main", inferno =
       return gate.total === 1 ? "Your worker is busy." : `All ${gate.total} workers are busy.`;
     case "credits":
       return "Not enough Shiny.";
+    case "coins":
+      return "Not enough event coins.";
   }
 };
 
@@ -959,6 +961,8 @@ export const gateLine = (gate: BuildGate, kind: YardKind = "main", inferno = fal
     line.append("Need ", costAmounts(gate.shortfall, undefined, inferno ? { realm: "inferno" } : {}) ?? "", " more.");
   } else if (gate.reason === "credits") {
     line.append("Need ", resourceAmount("shiny", formatAmount(gate.need)), " more.");
+  } else if (gate.reason === "coins") {
+    line.append("Need ", coinAmount(gate.need), " more.");
   } else {
     line.textContent = gateSentence(gate, kind, inferno);
   }

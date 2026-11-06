@@ -59,6 +59,11 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * find, a stone wall with the level up arrow for upgrade walls, and a set bear
  * trap inside a yellow reload arrow for re-arm traps (`rearm2` is a spiked
  * mine in the same arrow).
+ *
+ * Event coins (beta 7, `game/eventCoins.ts`): `eventcoin` is a PLACEHOLDER, a
+ * gold coin with a raised star drawn by script
+ * (`art-samples/event-coin/paint_placeholder.py`), until Codex paints the
+ * real one; replace `large/eventcoin.png` there and run `make.py` again.
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -101,6 +106,7 @@ export const GAME_ICONS = {
   wallupgrade: "Upgrade walls",
   rearm: "Re-arm traps",
   rearm2: "Re-arm traps",
+  eventcoin: "Event coins",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;

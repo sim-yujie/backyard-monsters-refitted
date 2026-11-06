@@ -1,5 +1,7 @@
 /**
- * The decorations bought with Shiny (owner decision 2026-11-04,
+ * The decorations bought with EVENT COINS (owner decision 2026-11-04,
+ * changed to coins 6 Nov 2026, beta 7 grill item 29: Flash's Shiny price, as
+ * coins; `game/eventCoins.ts`;
  * `docs/design/yard-buildings.md` §8.3): Flash's Decorations tab, in its order
  * (the Evil, Plants, Good, Flags and Premium sub-tabs one after the other,
  * each by its `order`), at Flash's price.

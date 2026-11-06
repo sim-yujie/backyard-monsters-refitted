@@ -134,6 +134,8 @@ const gateMessage = (gate: BuildGate, inferno = false): string => {
       return "All your workers are busy.";
     case "credits":
       return "You do not have enough Shiny for that.";
+    case "coins":
+      return "You do not have enough event coins for that.";
   }
 };
 
