@@ -8,7 +8,8 @@ import { avatarOf, pickedAvatar, type AvatarId } from "@/game/avatars";
 import { loadShinyLock, onShinyLock, shinyLocked, SHINY_LOCK_TEXT } from "@/game/shinyLock";
 import { incomePerHour } from "@/game/yard/incomeRate";
 import { nextWorkerJob } from "@/game/yard/jobs";
-import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
+import { actionKey, YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
+import { PACK_LABELS, packGroupFor, PACK_RESOURCES, type PackGroup, type PackResource } from "@/game/yard/resourcePacks";
 import { levelProgress } from "@/game/yard/experience";
 import { AccountMenu } from "./AccountMenu";
 import { AchievementsDoor } from "./achievements/AchievementsDoor";
@@ -24,8 +25,9 @@ import { AMOUNT_CHANGE_SIGNS } from "./amountChange";
 import { formatAmount, formatCompact } from "./format";
 import { gameIcon } from "./gameIcon";
 import { lockArt } from "./lockArt";
-import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, restyleIcon, type ResourceKey } from "./resourceIcon";
+import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, resourceName, restyleIcon, type ResourceKey } from "./resourceIcon";
 import { DamageBanner } from "./yard/DamageBanner";
+import { ShinyButton } from "./yard/ShinyButton";
 
 /**
  * The persistent top bar: resource readouts on the left, a scene switcher on
@@ -171,6 +173,20 @@ export interface HudOptions {
 /** At or under this width the corner layout is the phone's (`yard-hud.css`). */
 const PHONE_QUERY = "(width <= 620px)";
 
+/**
+ * A tapped resource's three Shiny offers in its bubble (Flash's "+" beside
+ * each resource, `UI_TOP.as:526-536`, issue #393): the buttons survive every
+ * refill, so an armed one stays armed while the amounts tick.
+ */
+interface BubbleOffers {
+  /** The offers' items joined ("BR11,BR12,BR13"): another realm's are other buttons. */
+  readonly items: string;
+  readonly row: HTMLElement;
+  readonly buttons: Map<string, ShinyButton>;
+  /** A refusal's words, under the buttons. */
+  readonly note: HTMLElement;
+}
+
 /** How long a tapped readout's exact-amount bubble stays up on its own. */
 const EXACT_LIFETIME_MS = 5000;
 
@@ -264,6 +280,7 @@ export class Hud {
   private bubble: HTMLElement | null = null;
   private bubbleFor: ResourceKey | null = null;
   private bubbleTimer: number | undefined;
+  private offers: BubbleOffers | null = null;
   private readonly floats = new Set<HTMLElement>();
   private yardBinding: YardUiBinding | null = null;
   /** What a full readout says: {@link INFERNO_FULL_NOTE} while the Inferno yard is bound. */
@@ -798,6 +815,10 @@ export class Hud {
     if (change.reason === YardChangeReason.AWAY) return;
     this.damageBanner?.refresh();
     if (change.reason !== YardChangeReason.PENDING) this.syncYard();
+    else if (this.offers && this.bubbleFor) {
+      const readout = this.readouts.get(this.bubbleFor);
+      if (readout) this.fillExact(readout);
+    }
   }
 
   /** Reads the caps and the workers from the bound store, or clears them. */
@@ -925,6 +946,8 @@ export class Hud {
   private applyShinyLock(on: boolean): void {
     const was = this.locked;
     this.locked = on;
+    // Shiny Lock hides a tapped resource's offers too.
+    if (on && this.offers) this.hideExact();
     const readout = this.readouts.get("shiny");
     if (!readout) return;
     if (was && !on) {
@@ -961,7 +984,8 @@ export class Hud {
     this.placeExact(readout, bubble);
     document.addEventListener("pointerdown", this.onDocumentDown, true);
     document.addEventListener("keydown", this.onKey, true);
-    this.bubbleTimer = window.setTimeout(() => this.hideExact(), EXACT_LIFETIME_MS);
+    // A bubble with offers to buy stays until the player closes it.
+    if (!this.offers) this.bubbleTimer = window.setTimeout(() => this.hideExact(), EXACT_LIFETIME_MS);
   }
 
   private fillExact(readout: Readout): void {
@@ -970,6 +994,7 @@ export class Hud {
       const note = document.createElement("p");
       note.className = "hud__exact-note hud__exact-lock";
       note.append(lockArt(18, "hud__lock-mark"), SHINY_LOCK_TEXT);
+      this.dropOffers();
       this.bubble.replaceChildren(note);
       return;
     }
@@ -980,19 +1005,108 @@ export class Hud {
         : cap === undefined
           ? formatExact(amount)
           : `${formatExact(amount)} / ${formatExact(cap)}`;
-    this.bubble.replaceChildren(resourceAmount(readout.key, text, { className: "hud__exact-amount" }));
+    const info: HTMLElement[] = [resourceAmount(readout.key, text, { className: "hud__exact-amount" })];
     if (readout.perHour !== undefined) {
       const note = document.createElement("p");
       note.className = "hud__exact-note hud__exact-rate";
       note.textContent = rateNote(readout.perHour);
-      this.bubble.append(note);
+      info.push(note);
     }
     if (capState(amount, cap)?.full) {
       const note = document.createElement("p");
       note.className = "hud__exact-note";
       note.textContent = this.fullNote;
-      this.bubble.append(note);
+      info.push(note);
     }
+    // The offers' row stays in place (never detached), so an armed button keeps its focus.
+    const row = this.offers?.row ?? null;
+    for (const child of [...this.bubble.children]) if (child !== row) child.remove();
+    this.bubble.prepend(...info);
+    this.fillOffers(readout.key);
+  }
+
+  /** The own yard's offers for `key`, or null: another resource, a foreign yard, Shiny Lock. */
+  private offerGroup(key: ResourceKey): PackGroup | null {
+    const store = this.yardBinding?.store;
+    // `resources` is missing only from a test's stand-in store.
+    if (!store?.resources || this.locked || !(PACK_RESOURCES as readonly string[]).includes(key)) return null;
+    return packGroupFor(store, key as PackResource);
+  }
+
+  /** Draws, updates or drops the bubble's three offers for `key`. */
+  private fillOffers(key: ResourceKey): void {
+    const bubble = this.bubble;
+    const group = this.offerGroup(key);
+    const store = this.yardBinding?.store;
+    if (!bubble || !group || !store) {
+      this.dropOffers();
+      return;
+    }
+    const items = group.offers.map((offer) => offer.item).join(",");
+    if (this.offers && this.offers.items !== items) this.dropOffers();
+    if (!this.offers) {
+      const row = document.createElement("div");
+      row.className = "hud__offers";
+      const buttons = new Map<string, ShinyButton>();
+      const name = resourceName(key, group.inferno ? "inferno" : "surface");
+      for (const offer of group.offers) {
+        const button = new ShinyButton({
+          label: PACK_LABELS[offer.size],
+          what: name,
+          spell: formatAmount,
+          onSpend: () => void this.buyOffer(key, offer.item),
+          className: "hud__offer",
+        });
+        button.element.dataset["item"] = offer.item;
+        buttons.set(offer.item, button);
+        row.append(button.element);
+      }
+      const note = document.createElement("p");
+      note.className = "hud__exact-note hud__offers-note";
+      note.hidden = true;
+      row.append(note);
+      this.offers = { items, row, buttons, note };
+      bubble.append(row);
+      bubble.setAttribute("role", "group");
+      bubble.setAttribute("aria-label", name);
+      // A bubble the player can buy from stays until they close it.
+      window.clearTimeout(this.bubbleTimer);
+      this.bubbleTimer = undefined;
+    }
+    for (const offer of group.offers) {
+      const button = this.offers.buttons.get(offer.item);
+      if (!button) continue;
+      button.setPrice(offer.price);
+      button.setNote(offer.amount > 0 ? [`+${formatCompact(offer.amount)}`] : null);
+      button.setBlocked(offer.blocked);
+      button.setBusy(store.isRunning(actionKey("buy", offer.item)));
+    }
+  }
+
+  private dropOffers(): void {
+    if (!this.offers) return;
+    for (const button of this.offers.buttons.values()) button.destroy();
+    this.offers.row.remove();
+    this.offers = null;
+    this.bubble?.setAttribute("role", "status");
+    this.bubble?.removeAttribute("aria-label");
+  }
+
+  /** Buys one offer at the price on its button; the server refuses rather than charge more. */
+  private async buyOffer(key: ResourceKey, item: string): Promise<void> {
+    const store = this.yardBinding?.store;
+    const offer = this.offerGroup(key)?.offers.find((one) => one.item === item);
+    if (!store || !offer) return;
+    if (this.offers) this.offers.note.hidden = true;
+    const result = await store.buy(item, offer.price);
+    if (!this.offers || this.bubbleFor !== key) return;
+    const note = this.offers.note;
+    note.hidden = result.ok;
+    note.textContent = result.ok
+      ? ""
+      : result.refusal.reason === "network"
+        ? "Could not reach the server. Try again."
+        : result.refusal.message || "That did not work.";
   }
 
   private placeExact(readout: Readout, bubble: HTMLElement): void {
@@ -1007,6 +1121,7 @@ export class Hud {
   private hideExact(): void {
     window.clearTimeout(this.bubbleTimer);
     this.bubbleTimer = undefined;
+    this.dropOffers();
     this.bubble?.remove();
     this.bubble = null;
     if (this.bubbleFor) this.readouts.get(this.bubbleFor)?.button.removeAttribute("aria-expanded");
@@ -1019,6 +1134,8 @@ export class Hud {
     // A press on a readout is that readout's click to handle: closing here
     // first would make the click reopen the bubble it meant to close.
     if (event.target instanceof Node && this.list.contains(event.target)) return;
+    // A press on one of the bubble's own offers.
+    if (event.target instanceof Node && this.bubble?.contains(event.target)) return;
     this.hideExact();
   };
 

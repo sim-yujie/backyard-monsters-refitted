@@ -646,6 +646,12 @@
   font-size: var(--text-sm);
 }
 
+/* Short of resources: buy what is missing with Shiny, then pick a spot
+   (Flash's top-up, issue #393). The one way to build now, so it leads. */
+.build-info__topup {
+  min-height: 44px;
+}
+
 /* ── Carrying a new building ───────────────────────────────────────────── */
 
 .build-placing {
