@@ -302,6 +302,27 @@ describe("AccountMenu", () => {
       expect(menu.open).toBe(false);
     });
   });
+  describe("the Profile item", () => {
+    it("is there only when asked for, the first of the first group, and opens the profile", () => {
+      const { button } = build();
+      button.click();
+      expect(menu!.element.querySelector(".account-menu__profile")).toBeNull();
+      menu!.destroy();
+
+      const onProfile = vi.fn();
+      menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn(), onProfile, onFriends: vi.fn() });
+      document.body.append(menu.element);
+      menu.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
+      const item = menu.element.querySelector<HTMLButtonElement>(".account-menu__profile")!;
+      expect(item.getAttribute("role")).toBe("menuitem");
+      expect(item.textContent).toBe("Profile");
+      expect(item.previousElementSibling).toBeNull();
+      expect(item.nextElementSibling?.classList.contains("account-menu__friends")).toBe(true);
+      item.click();
+      expect(onProfile).toHaveBeenCalledOnce();
+      expect(menu.open).toBe(false);
+    });
+  });
   describe("the Leaderboard item", () => {
     it("is there only when asked for, the last of the first group, and opens the board", () => {
       const { button } = build();

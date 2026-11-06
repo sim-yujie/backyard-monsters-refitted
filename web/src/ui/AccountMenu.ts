@@ -74,6 +74,8 @@ export interface AccountMenuOptions {
    * "pill": the name and the face in a ring, the yard HUD's corner (#171).
    */
   readonly variant?: "button" | "pill";
+  /** The "Profile" item's action (the player's own profile); without it there is no such item. */
+  readonly onProfile?: () => void;
   /** The "Achievements" item's action; without it there is no such item. */
   readonly onAchievements?: () => void;
   /** The "Friends" item's action; without it there is no such item. */
@@ -264,6 +266,20 @@ export class AccountMenu {
       this.toggle(false);
       startGuideTour();
     });
+    if (options.onProfile) {
+      const onProfile = options.onProfile;
+      // Not `account-menu__item` either, for the same reason as Help's.
+      const profile = document.createElement("button");
+      profile.type = "button";
+      profile.className = "btn btn--ghost account-menu__help account-menu__profile";
+      profile.setAttribute("role", "menuitem");
+      profile.textContent = "Profile";
+      profile.addEventListener("click", () => {
+        this.toggle(false);
+        onProfile();
+      });
+      play.append(profile);
+    }
     if (options.onFriends) {
       const onFriends = options.onFriends;
       // Not `account-menu__item` either, for the same reason as Help's.
