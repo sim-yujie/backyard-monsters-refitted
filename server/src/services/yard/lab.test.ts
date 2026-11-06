@@ -109,6 +109,14 @@ describe("planLabStart", () => {
     });
   });
 
+  test("Study Weekend: 30% shorter research (86,400 s → 60,480 s), upd the shorter length, same putty", () => {
+    const plan = planLabStart(saveOf(), "C3", NOW, 30);
+
+    expect(plan.debit).toEqual({ r3: 48_000 });
+    expect(plan.report).toMatchObject({ endsAt: NOW + 60_480, seconds: 60_480 });
+    expect(plan.slices.buildingdata[String(LAB)]).toMatchObject({ upt: NOW + 60_480, upd: 60_480 });
+  });
+
   test("the next rank follows the current one", () => {
     // C4 rank 1 → 2: 128,000 putty, 108,000 s.
     expect(planLabStart(saveOf(), "C4", NOW).report).toMatchObject({ rank: 2, cost: { r3: 128_000 } });
