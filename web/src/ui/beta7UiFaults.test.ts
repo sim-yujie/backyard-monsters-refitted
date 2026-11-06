@@ -64,6 +64,24 @@ describe("6 Nov UI check: phone faults", () => {
     expect(css("styles/bubble-menu.css")).toMatch(/\.bubble-menu \{[^}]*z-index: 1;/);
   });
 
+  it("Chat: with a player picked, Mute / View yard / Report stay inside the capped box at 375x667", () => {
+    const chat = phone("styles/chat.css");
+    const strip = String.raw`\.chat-box\.chat-box--open:has\(> \.chat-box__player:not\(\[hidden\]\)\)`;
+    // The room may shrink to one line (not the usual 80px) and drops the profiles branch's fixed reserve.
+    expect(chat).toMatch(new RegExp(String.raw`${strip} > \.chat-box__lines \{\s*min-height: 32px;\s*max-height: none;\s*\}`));
+    // Room tabs and the English line step aside while the strip shows.
+    expect(chat).toMatch(
+      new RegExp(String.raw`${strip} > :is\(\.chat-box__rooms, \.chat-box__rule\) \{\s*display: none;\s*\}`),
+    );
+    // Last resort: it scrolls inside its frame, over the dock.
+    expect(chat).toMatch(
+      new RegExp(String.raw`:root ${strip} \{\s*z-index: 2;\s*overflow-x: hidden;\s*overflow-y: auto;`),
+    );
+    // These must outrank feat/profiles' `.chat-box--open:has(...) > .chat-box__lines` (0,4,0) and the
+    // looks' `:root[data-skin] :is(..., .chat-box--open)` overflow: visible (0,3,0) in any order.
+    expect(css("styles/skin.css")).toMatch(/:root\[data-skin\] :is\([^)]*\.chat-box--open[^)]*\) \{[^}]*overflow: visible;/);
+  });
+
   it("Attack over: the phone sheet is the screen's size and scrolls; the sign stays on the screen", () => {
     const attack = phone("styles/attack.css");
     expect(attack).toMatch(

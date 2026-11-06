@@ -459,6 +459,34 @@ button.chat-line__name {
     max-height: none;
   }
 
+  /* A picked player's strip stands in the input's place and is taller, so
+     on a 375x667 phone the capped box ran out of room and Mute / View yard /
+     Report ended 5px past it, under the frame's bottom bar (7 Nov UI check).
+     With a strip up the room may give way to a single line, and the room
+     tabs and Global's "English here" line step aside: the line is about
+     writing and the input is hidden meanwhile, and changing room closes the
+     strip anyway. The longer selectors win over the profiles branch's own
+     strip rule (48px floor, fixed reserve) whatever the order after a merge,
+     so its two-row strip fits the same way. */
+  .chat-box.chat-box--open:has(> .chat-box__player:not([hidden])) > .chat-box__lines {
+    min-height: 32px;
+    max-height: none;
+  }
+
+  .chat-box.chat-box--open:has(> .chat-box__player:not([hidden])) > :is(.chat-box__rooms, .chat-box__rule) {
+    display: none;
+  }
+
+  /* And on a phone too short even for that, the box scrolls inside its
+     frame rather than run the strip under it (the looks' frame rule sets
+     overflow: visible, hence :root). It stays over the dock's More. */
+  :root .chat-box.chat-box--open:has(> .chat-box__player:not([hidden])) {
+    z-index: 2;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
   .chat-box--open .chat-line,
   .chat-box__action {
     min-height: 32px;
