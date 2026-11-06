@@ -10,6 +10,19 @@ export const RETRY_DELAYS_MS: readonly number[] = [250, 500, 1000, 2000];
 export const LOAD_TRIES = RETRY_DELAYS_MS.length + 1;
 
 /**
+ * Sent with every building picture. The game server lets a browser keep a picture
+ * for a week without checking back, and a building's picture and the position and
+ * cell size it is drawn with (`buildingArtTiers.ts`) must come from the same release:
+ * an old turret strip cut at new cell sizes draws the gun off its tower. Raise this
+ * in any release that changes a building's pictures.
+ */
+export const BUILDING_ART_VERSION = "6";
+
+/** The address to ask for: a building picture carries {@link BUILDING_ART_VERSION}. */
+export const versionedArt = (url: string): string =>
+  url.startsWith("/assets/buildings/") ? `${url}?v=${BUILDING_ART_VERSION}` : url;
+
+/**
  * `Assets.load`, asked again when it fails, after waits that double from a
  * quarter of a second: five tries over about four seconds.
  *
@@ -25,7 +38,7 @@ export const LOAD_TRIES = RETRY_DELAYS_MS.length + 1;
 export const loadWithRetries = async (url: string, gone: () => boolean = () => false): Promise<Texture> => {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await Assets.load<Texture>(url);
+      return await Assets.load<Texture>(versionedArt(url));
     } catch (caught) {
       const delay = RETRY_DELAYS_MS[attempt];
       if (delay === undefined) throw caught;

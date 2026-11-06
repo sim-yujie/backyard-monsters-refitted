@@ -1,11 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Assets, Texture } from "pixi.js";
-import { LOAD_TRIES, loadWithRetries, RETRY_DELAYS_MS } from "./retryLoad";
+import { BUILDING_ART_VERSION, LOAD_TRIES, loadWithRetries, RETRY_DELAYS_MS, versionedArt } from "./retryLoad";
 
 /** Every wait the retries make, run straight through. */
 const waitAll = async () => {
   for (const delay of RETRY_DELAYS_MS) await vi.advanceTimersByTimeAsync(delay);
 };
+
+describe("versionedArt", () => {
+  it("asks for a building picture by version, so a release's positions meet its pictures", () => {
+    expect(versionedArt("/assets/buildings/snipertower/turret.t2@2x.webp")).toBe(
+      `/assets/buildings/snipertower/turret.t2@2x.webp?v=${BUILDING_ART_VERSION}`,
+    );
+  });
+
+  it("leaves every other address as it is", () => {
+    expect(versionedArt("/assets/monsters/pokey-anim@4x.png?v=feco")).toBe("/assets/monsters/pokey-anim@4x.png?v=feco");
+  });
+});
 
 describe("loadWithRetries", () => {
   beforeEach(() => {

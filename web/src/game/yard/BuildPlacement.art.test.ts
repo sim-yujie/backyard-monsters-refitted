@@ -6,6 +6,7 @@ import type { Camera } from "@/game/Camera";
 import { BuildPlacement } from "./BuildPlacement";
 import { setClassicLook } from "@/game/classicLook";
 import { ArtState, resolveArt } from "./buildingArt";
+import { versionedArt } from "./retryLoad";
 import { readYard, type Yard } from "./yardModel";
 
 // A real filter compiles a shader program, which wants a GPU context.
@@ -74,7 +75,7 @@ describe("BuildPlacement ghost art", () => {
     const art = resolveArt(SNIPER, 1, ArtState.DEFAULT);
     const urls = placement.artShown.map((layer) => layer.url);
     expect(urls).toEqual([art?.top.url, art?.anims[0]?.url]);
-    expect(vi.mocked(Assets.load).mock.calls.map(([url]) => url)).toEqual(urls);
+    expect(vi.mocked(Assets.load).mock.calls.map(([url]) => url)).toEqual(urls.map((url) => versionedArt(url as string)));
   });
 
   it("fades the pictures together, not one by one", async () => {
