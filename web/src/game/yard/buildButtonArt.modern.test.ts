@@ -42,8 +42,8 @@ describe("the build menu's Modern pictures", () => {
       modern: true,
     });
     expect(buildPicture(1, "main", true)).toEqual({ url: buttonUrl(1), modern: false });
-    // A building with no new look (type 8): Flash's button either way.
-    expect(buildPicture(8, "main", false)).toEqual({ url: buttonUrl(8), modern: false });
+    // A building with no new look (type 133): Flash's button either way.
+    expect(buildPicture(133, "main", false)).toEqual({ url: buttonUrl(133), modern: false });
   });
 
   it("the Inferno's Incubator Control Centre shows its own 3D look, not the Hatchery Control Center's", () => {

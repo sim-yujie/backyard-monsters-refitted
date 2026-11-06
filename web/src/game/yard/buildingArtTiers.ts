@@ -706,8 +706,44 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
   ],
 };
 
-/** Every type with new art the old-art switch turns back: the towers, the Town Hall (14), the 3D buildings. */
-const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = { ...TOWER_TIER_ART, 14: TOWN_HALL_ART, ...BUILDING_3D_ART };
+/**
+ * The painted yard buildings (beta 7, owner decision 34: "Codex-painted Modern look"): the Monster Locker (8),
+ * painted by Codex from Flash's four looks (levels 1 to 4) in the finish of the painted Town Hall and fitted onto
+ * Flash's footprint by `web/tools/locker-repaint/` (`finish.py`, then `export.py`), on Flash's own shadows. As the
+ * owner asked (1 Nov 2026), the key and the cogs are inside the machine: the key's shaft goes down into the gold cogs
+ * and only its handle stands out. The handle turns about its shaft while a monster unlocks, as Flash's key did: the
+ * strip over a `body` without it. Each look has a damaged picture; the destroyed one is shared, as Flash's is. Like
+ * the 3D buildings, the Inferno keeps its own art.
+ */
+export const PAINTED_BUILDING_ART: Readonly<Record<number, readonly TierArt[]>> = {
+  // 8 Monster Locker: painted, Flash's four looks; its key turns while a monster unlocks
+  8: [
+    { from: 1, top: ["top.c1@2x.webp", -36, -38], shadow: ["shadow.1.jpg", -27, 37], lift: 0,
+      anim: { strip: ["anim.c1@2x.webp", -39, -38, 23, 21, 42], body: ["body.c1@2x.webp", -31, -27] },
+      damaged: { top: ["top.c1.damaged@2x.webp", -40, -24], shadow: ["shadow.1.damaged.jpg", -52, 26] },
+      destroyed: { top: ["top.c.destroyed@2x.webp", -48, -1], shadow: ["shadow.2.destroyed.jpg", -52, 25] } },
+    { from: 2, top: ["top.c2@2x.webp", -52, -95], shadow: ["shadow.2.jpg", -40, 18], lift: 0,
+      anim: { strip: ["anim.c2@2x.webp", -46, -95, 33, 37, 40], body: ["body.c2@2x.webp", -52, -69] },
+      damaged: { top: ["top.c2.damaged@2x.webp", -55, -50], shadow: ["shadow.2.damaged.jpg", -52, 26] },
+      destroyed: { top: ["top.c.destroyed@2x.webp", -48, -1], shadow: ["shadow.2.destroyed.jpg", -52, 25] } },
+    { from: 3, top: ["top.c3@2x.webp", -54, -90], shadow: ["shadow.3.jpg", -55, 23], lift: 0,
+      anim: { strip: ["anim.c3@2x.webp", -48, -90, 39, 40, 40], body: ["body.c3@2x.webp", -54, -82] },
+      damaged: { top: ["top.c3.damaged@2x.webp", -54, -70], shadow: ["shadow.3.damaged.jpg", -56, 31] },
+      destroyed: { top: ["top.c.destroyed@2x.webp", -48, -1], shadow: ["shadow.2.destroyed.jpg", -52, 25] } },
+    { from: 4, top: ["top.c4@2x.webp", -54, -89], shadow: ["shadow.4.jpg", -54, 30], lift: 0,
+      anim: { strip: ["anim.c4@2x.webp", -46, -91, 48, 47, 42], body: ["body.c4@2x.webp", -54, -88] },
+      damaged: { top: ["top.c4.damaged@2x.webp", -73, -97], shadow: ["shadow.4.damaged.jpg", -59, 30] },
+      destroyed: { top: ["top.c.destroyed@2x.webp", -48, -1], shadow: ["shadow.2.destroyed.jpg", -52, 25] } },
+  ],
+};
+
+/** Every type with new art the old-art switch turns back: the towers, the Town Hall (14), the 3D and painted buildings. */
+const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = {
+  ...TOWER_TIER_ART,
+  14: TOWN_HALL_ART,
+  ...BUILDING_3D_ART,
+  ...PAINTED_BUILDING_ART,
+};
 
 /**
  * Whether an Inferno yard's `type` has tiers of its own (`INFERNO_TOWER_TIER_ART`,
@@ -719,16 +755,16 @@ export const hasInfernoTiers = (type: number, kind: YardKind): boolean =>
 /**
  * The new picture a building shows at `level` in a `kind` yard, or null with
  * the Classic look, for a tower not in `MODERN_TOWERS`, below level 1, for
- * every type without new art and for a 3D building in an Inferno yard with
- * no Inferno 3D look of its own (it keeps its Inferno art until one is
- * approved).
+ * every type without new art and for a 3D or painted building in an Inferno
+ * yard with no Inferno 3D look of its own (it keeps its Inferno art until one
+ * is approved).
  */
 export const tierArtFor = (type: number, level: number, kind: YardKind = "main"): TierArt | null => {
   if (!newTowerArt()) return null;
   let looks: readonly TierArt[] | undefined;
   if (kind === "inferno" && type in INFERNO_BUILDING_3D_ART) {
     looks = INFERNO_BUILDING_3D_ART[type];
-  } else if (kind === "inferno" && type in BUILDING_3D_ART) {
+  } else if (kind === "inferno" && (type in BUILDING_3D_ART || type in PAINTED_BUILDING_ART)) {
     return null;
   } else {
     const inferno = kind === "inferno" && type in INFERNO_TOWER_TIER_ART;
