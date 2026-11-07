@@ -15,7 +15,7 @@ import { bookTruceDecline } from "../../services/bots/truceDecline.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { mailboxErr, permissionErr, truceExistsErr } from "../../errors/errors.js";
-import { isMailModerator, logModMail } from "../../services/mail/modMail.js";
+import { isMailModerator, logModConversation } from "../../services/mail/modMail.js";
 import { nudgeMail } from "../../services/mail/mailNudge.js";
 
 const TruceSchema = z.object({
@@ -123,20 +123,19 @@ export const requestTruce: KoaController = async (ctx) => {
 
   await bookTruceDecline(postgres.em, truce, now);
 
-  if (await isMailModerator(postgres.em, user.userid)) {
-    await logModMail(postgres.em, {
-      moderatorId: user.userid,
-      moderatorName: user.username ?? `Player ${user.userid}`,
-      recipientId: targetUserid,
-      recipientName: recipient.username ?? `Player ${targetUserid}`,
-      threadid: thread.threadid,
-      newThread: true,
-      messagetype: newMessage.messagetype,
-      subject: newMessage.subject,
-      message: filteredMessage,
-      written: filteredMessage !== message ? message : null,
-    });
-  }
+  await logModConversation(postgres.em, {
+    threadid: thread.threadid,
+    newThread: true,
+    senderId: user.userid,
+    senderName: user.username ?? `Player ${user.userid}`,
+    recipientId: targetUserid,
+    recipientName: recipient.username ?? `Player ${targetUserid}`,
+    senderIsModerator: await isMailModerator(postgres.em, user.userid),
+    messagetype: newMessage.messagetype,
+    subject: newMessage.subject,
+    message: filteredMessage,
+    written: filteredMessage !== message ? message : null,
+  });
   nudgeMail(targetUserid);
 
   ctx.status = Status.OK;
