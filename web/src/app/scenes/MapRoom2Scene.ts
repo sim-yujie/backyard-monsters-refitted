@@ -791,6 +791,8 @@ export class MapRoom2Scene implements Scene {
       this.standMarkers();
     }
     this.ui?.drawMinimap();
+    // "Preparing map… N%" while the painted look compiles (owner, 7 Nov 2026; mostly Firefox).
+    this.ui?.setPreparing(this.renderer.prepareState());
 
     if (this.ready) {
       this.sincePump += deltaSeconds;

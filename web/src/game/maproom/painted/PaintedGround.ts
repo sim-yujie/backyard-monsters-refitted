@@ -310,6 +310,11 @@ export class PaintedGround {
     return [ATLAS_URL, ...SPRITE_SHEETS.map(({ url }) => url), CLIFFS_URL].map((url) => sheetAtQuality(url, level));
   }
 
+  /** Whether the ground draws with this Quality's own program (the full look; the Low one stands in until then). */
+  drawsLevel(level: Quality): boolean {
+    return this.shader.glProgram === groundProgram(level);
+  }
+
   /** The placement programs (for the warm-up, `paintedLook.ts`). */
   static placementPrograms(): GlProgram[] {
     return PLACEMENT_GRIDS.map(placementProgram);

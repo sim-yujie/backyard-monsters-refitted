@@ -18,6 +18,7 @@ import type { BorderLayer } from "./painted/BorderLayer";
 import type { CloudLayer } from "./painted/CloudLayer";
 import type { PaintedGround } from "./painted/PaintedGround";
 import type { PaintedPrograms } from "./painted/paintedLook";
+import type { ProgramWarmer } from "./painted/shaderWarmup";
 import { BuildingAvatars } from "./buildingAvatars";
 import { cellLift, liftCorners, setFlatGround } from "./ground";
 import { GroundArt } from "./groundArt";
@@ -36,6 +37,7 @@ import type { ZoneRecord, ZoneStore } from "./ZoneStore";
 import type { CellRange } from "./zones";
 import type { GroundData } from "./painted/GroundData";
 import type * as PaintedLookNamespace from "./painted/paintedLook";
+import { HIDDEN, PrepareTracker, prepareShows, type PrepareState } from "./prepareProgress";
 
 type PaintedLookModule = typeof PaintedLookNamespace;
 
@@ -158,6 +160,15 @@ export class MapRenderer {
   private paintedKit: { look: PaintedLookModule; programs: PaintedPrograms } | null = null;
   /** Fetching the code and compiling the shaders, while it runs. */
   private paintedPreparing: Promise<void> | null = null;
+  /** The painted look cannot show on this open (no WebGL2, its code or its ground shader failed). */
+  private paintedBroken = false;
+  /**
+   * The "Preparing map" bar's tracker (`prepareProgress.ts`), from when the look's code arrives;
+   * `level` is the Quality its programs were last listed for, `since` when it began.
+   */
+  private preparing: { tracker: PrepareTracker; look: PaintedLookModule; warmer: ProgramWarmer; level: Quality; since: number } | null = null;
+  /** The full look came in on this open: the bar does not come back (a Quality change keeps the tiles' look). */
+  private prepareFinished = false;
   /** Classic on High: which cells are fog, for `clouds`; the painted look keeps its own in `painted`. */
   private classicFog: GroundData | null = null;
   private classicFogPreparing = false;
@@ -505,11 +516,11 @@ export class MapRenderer {
       const kit = this.paintedKit;
       if (!kit) {
         if (this.webGL2 && this.gl && this.renderer) this.paintedPreparing ??= this.preparePainted(this.renderer, this.gl);
-        else markOnce(MR2_PAINTED_FAILED);
+        else this.notePaintedFailed();
         return false;
       }
       if (!kit.programs.ground) {
-        markOnce(MR2_PAINTED_FAILED);
+        this.notePaintedFailed();
         return false;
       }
       this.buildPainted(kit.look, kit.programs);
@@ -540,12 +551,47 @@ export class MapRenderer {
     return this.paintedPreparing !== null;
   }
 
+  private notePaintedFailed(): void {
+    this.paintedBroken = true;
+    markOnce(MR2_PAINTED_FAILED);
+  }
+
+  /**
+   * The "Preparing map… N%" bar's state now (owner, 7 Nov 2026): shown while the painted look's
+   * programs compile on an open that had some left to compile, never in Classic, and gone for good
+   * once the ground draws the player's own Quality (`prepareProgress.ts` has the rules).
+   */
+  prepareState(now: number = performance.now()): PrepareState {
+    const prep = this.preparing;
+    if (this.prepareFinished || !prep || this.destroyed) return this.prepareFinished ? { show: false, percent: 100 } : HIDDEN;
+    const level = quality();
+    if (level !== prep.level) {
+      prep.level = level;
+      prep.tracker.update(prep.look.fullLookPrograms(prep.warmer, level));
+    }
+    const fullLook = this.painted?.drawsLevel(level) ?? false;
+    const show = prepareShows({
+      classic: classicLook(),
+      paintedWanted: this.paintedWanted,
+      failed: this.paintedBroken,
+      fullLook,
+      hadWork: prep.tracker.hadWork,
+      waitedMs: now - prep.since,
+    });
+    if (fullLook || !prep.tracker.hadWork) {
+      this.prepareFinished = true;
+      return { show: false, percent: 100 };
+    }
+    return { show, percent: prep.tracker.percent(now) };
+  }
+
   /** Fetches the painted look's code, compiles its shaders, then shows it if it is still wanted. */
   private async preparePainted(renderer: Renderer, gl: WebGL2RenderingContext): Promise<void> {
     let kit: { look: PaintedLookModule; programs: PaintedPrograms };
     try {
       const look = await timeSpan("painted-code", () => import("./painted/paintedLook"));
       markOnce(MR2_PAINTED_CODE);
+      if (!this.destroyed) this.startPrepareBar(look, renderer, gl);
       kit = {
         look,
         programs: this.destroyed
@@ -553,7 +599,7 @@ export class MapRenderer {
           : await timeSpan("painted-first-programs", () => look.preparePrograms(renderer, gl)),
       };
     } catch (caught) {
-      markOnce(MR2_PAINTED_FAILED);
+      this.notePaintedFailed();
       // The code did not arrive (offline, a new release): the tiles stay; the next map open tries again.
       console.warn("The painted map could not be prepared; the map keeps its tiles.", caught);
       this.paintedPreparing = null;
@@ -563,10 +609,22 @@ export class MapRenderer {
     if (this.destroyed) return;
     this.paintedKit = kit;
     if (!kit.programs.ground) {
-      markOnce(MR2_PAINTED_FAILED);
+      this.notePaintedFailed();
       console.warn("The painted map's shader did not compile here; the map keeps its tiles.");
     }
     if (this.paintedWanted) this.setPaintedMap(true);
+  }
+
+  /**
+   * Starts the "Preparing map" bar's tracker before the first programs are asked for, so it sees
+   * which were still to compile when the map opened (none, after Chrome's yard warm-up).
+   */
+  private startPrepareBar(look: PaintedLookModule, renderer: Renderer, gl: WebGL2RenderingContext): void {
+    const level = quality();
+    const warmer = look.warmerFor(renderer, gl);
+    const tracker = new PrepareTracker(warmer);
+    tracker.update(look.fullLookPrograms(warmer, level));
+    this.preparing = { tracker, look, warmer, level, since: performance.now() };
   }
 
   /** Modern's clouds over the undiscovered map: on High only; Medium and Low keep it dark, like Classic (owner, 5 Nov 2026). */

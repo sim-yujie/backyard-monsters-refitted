@@ -144,6 +144,8 @@ export const warmPrograms = async (
 export class ProgramWarmer {
   private readonly linked = new Map<string, boolean>();
   private readonly pending = new Map<string, Promise<boolean>>();
+  /** When each pending program really began compiling (after any queue), for the map's progress bar. */
+  private readonly began = new Map<string, number>();
   /** The last compile in line, where they run one at a time. */
   private queue: Promise<unknown> = Promise.resolve();
   private readonly parallel: boolean;
@@ -184,6 +186,19 @@ export class ProgramWarmer {
     return !this.ready(source) && this.pending.has(this.key(source));
   }
 
+  /** Whether the program was compiled here and failed to link (it will not be tried again). */
+  failed(source: ProgramSource): boolean {
+    return this.linked.get(this.key(source)) === false;
+  }
+
+  /**
+   * When the program really began compiling (performance.now() ms), or null while it waits its turn
+   * or is not compiling at all. Read by the map's "Preparing map" bar (`prepareProgress.ts`).
+   */
+  startedAt(source: ProgramSource): number | null {
+    return this.began.get(this.key(source)) ?? null;
+  }
+
   /** Compiles the program in the background (once) and resolves to whether it linked. */
   warm(source: ProgramSource): Promise<boolean> {
     if (this.host?.has(source)) return Promise.resolve(true);
@@ -198,6 +213,7 @@ export class ProgramWarmer {
         if (this.host?.has(source)) return Promise.resolve(true);
         // Timed for the map's open (`openMarks.ts`): from when it was asked for, and when it really began.
         const started = performance.now();
+        this.began.set(key, started);
         return warmPrograms(this.gl, [source], this.wait, (_index, program) => this.host?.adopt(source, program) ?? false).then(
           ([ok]) => {
             noteShader(source, requested, started, performance.now(), Boolean(ok));
@@ -209,6 +225,7 @@ export class ProgramWarmer {
       pending = (run as Promise<boolean>).then((ok) => {
         this.linked.set(key, ok);
         this.pending.delete(key);
+        this.began.delete(key);
         return ok;
       });
       this.pending.set(key, pending);

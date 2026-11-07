@@ -20,6 +20,8 @@ import { FindControl } from "./FindControl";
 import { HoverCard, type HoverCardContent } from "./HoverCard";
 import { Minimap } from "./Minimap";
 import { TiltToggle } from "./TiltToggle";
+import { PreparingMap } from "./PreparingMap";
+import type { PrepareState } from "@/game/maproom/prepareProgress";
 import { KitFilterControl } from "./KitFilterControl";
 import { NavPanel } from "./NavPanel";
 import { Notices } from "./Notices";
@@ -137,6 +139,8 @@ export class MapRoomUi {
   private readonly minimap: Minimap;
   private readonly zoomControl: ZoomControl;
   private readonly tiltToggle: TiltToggle;
+  /** "Preparing map… N%" while the painted look compiles on a first open. */
+  private readonly preparing = new PreparingMap();
   private readonly rangeControl: RangeControl;
   private readonly kitFilterControl: KitFilterControl;
   private readonly docks: HTMLElement[] = [];
@@ -214,6 +218,7 @@ export class MapRoomUi {
 
     this.hover.mount(container);
     this.find.mount(this.dock("map-dock mr2-find-dock"));
+    this.dock("map-dock mr2-prepare-dock").append(this.preparing.element);
 
     const bottomRight = this.dock("map-dock map-dock--bottom-right mr2-tools-dock");
     bottomRight.append(this.rangeControl.legend);
@@ -290,6 +295,11 @@ export class MapRoomUi {
   /** The "Tilted map" button: shown only when the map can tilt, pressed while it is tilted. */
   setTilt(state: { available: boolean; tilted: boolean }): void {
     this.tiltToggle.set(state);
+  }
+
+  /** The "Preparing map" plate: shown while the painted look compiles (`MapRenderer.prepareState`). */
+  setPreparing(state: PrepareState): void {
+    this.preparing.set(state);
   }
 
   /** The zoom floor moved (the tilted map cannot zoom out as far as the flat one). */

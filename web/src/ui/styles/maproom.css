@@ -370,6 +370,93 @@
   flex: none;
 }
 
+/* ── "Preparing map… N%" (owner, 7 Nov 2026) ───────────────────────────── */
+
+/* Centred low over the map, clear of the tool row and the Find sheet. Only
+   shown while the painted look compiles on a first open (MapRenderer
+   .prepareState); it is a readout, so the pointer passes through it. */
+.mr2-prepare-dock {
+  left: 50%;
+  bottom: calc(var(--space-6) + 56px);
+  transform: translateX(-50%);
+  align-items: center;
+}
+
+.map-dock > .mr2-prepare {
+  pointer-events: none;
+}
+
+.mr2-prepare {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-float);
+  color: var(--colour-text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  visibility: hidden;
+  /* Fading out: the plate stays until the fade ends. */
+  transition:
+    opacity 450ms ease,
+    visibility 0s linear 450ms;
+}
+
+.mr2-prepare--shown {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 250ms ease;
+}
+
+.mr2-prepare__track {
+  position: relative;
+  width: 140px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: rgb(0 0 0 / 45%);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 60%);
+  overflow: hidden;
+}
+
+/* The style's accent (Modern: the orange of its plate buttons), with a
+   painted highlight along the top. */
+.mr2-prepare__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(rgb(255 255 255 / 45%), rgb(255 255 255 / 0%) 55%),
+    var(--colour-accent);
+  transition: width 300ms linear;
+}
+
+.mr2-prepare__number {
+  min-width: 4ch;
+  text-align: right;
+  font-size: var(--text-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mr2-prepare,
+  .mr2-prepare--shown,
+  .mr2-prepare__fill {
+    transition: none;
+  }
+}
+
+@media (width <= 620px) {
+  .mr2-prepare__track {
+    width: 96px;
+  }
+}
+
 .mr2-toolrow {
   display: flex;
   align-items: center;
