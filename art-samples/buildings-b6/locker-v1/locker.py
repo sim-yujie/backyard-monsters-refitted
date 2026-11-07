@@ -679,8 +679,8 @@ def materials():
                       dirt=0.3, streak=0.3)
     M["golddark"] = shiny("golddark", (150, 82, 16), rough=0.32, metal=0.8, wear=(196, 120, 36), scale=1.5, dirt=0.3)
     M["block"] = shiny("block", (252, 196, 56), rough=0.22, metal=0.85, wear=(255, 214, 110), scale=2.0, dirt=0.1)
-    M["rubber"] = shiny("rubber", (16, 16, 20), rough=0.55, metal=0.0, wear=(30, 30, 38), scale=3, dirt=0.15,
-                        side=0.2)
+    M["rubber"] = shiny("rubber", (16, 16, 20), rough=0.5, metal=0.0, wear=(30, 30, 38), scale=3, dirt=0.15,
+                        side=0.2, spec=0.22)
     M["glass"] = shiny("glass", (210, 226, 236), rough=0.15, metal=0.3, wear=(180, 200, 214), scale=3, dirt=0.0,
                        coat=0.6)
     M["needle"] = shiny("needle", (150, 156, 168), rough=0.25, metal=0.9, wear=(120, 126, 138), scale=4, dirt=0.1)
@@ -915,17 +915,24 @@ def barrel(name, c, axis, r, length, rows, cols, parent=None, fill=None, mat=Non
         # levels 3-4 (Codex Look 3, Flash's rows): a stack of toothed gold discs on the core, dark gaps between the
         # discs, square teeth round each disc's rim with notches between them
         rim_h, tooth_h, tooth_f = rims
-        r0 = r * 0.86
+        end, lump = S.L4_MOUND if L == 4 else S.L3_MOUND
         th = length / cols * fa
         for j in range(cols):
             z = -length / 2 + (j + 0.5) * length / cols
+            # a rounded heap, not a stack of coins: the discs biggest in the middle, smaller toward both ends
+            zz = 2 * z / length
+            r0 = r * 0.86 * (end + (1 - end) * math.sqrt(max(0.0, 1 - zz * zz * 0.85)))
             cyl(f"{name}rim{j}", r0 + rim_h, th, (0, 0, z - th / 2), mat or M["block"], parent=hub, verts=rows * 4,
-                bevel=0.04)
+                bevel=0.05)
             for i in range(rows):
                 a = 2 * math.pi * (i + 0.5 * (j % 2)) / rows
-                box(f"{name}blk{i}-{j}", (th * 0.94, 2 * math.pi * (r0 + rim_h) / rows * tooth_f, tooth_h * pin + 0.06),
+                # lumpy chunks (Flash): every other one taller (the pattern repeats every two rows, so the loop's
+                # two-row turn stays seamless), and each disc its own heights and widths
+                hi = tooth_h * pin * (1 + lump * (1 if i % 2 == 0 else -0.6) * (0.6 + 0.4 * ((j * 7) % 3) / 2))
+                w = 2 * math.pi * (r0 + rim_h) / rows * tooth_f * (1.0 + 0.12 * ((j + i % 2) % 3 - 1))
+                box(f"{name}blk{i}-{j}", (th * (0.98 if i % 2 == 0 else 0.86), w, hi + 0.06),
                     (math.cos(a) * (r0 + rim_h - 0.06), math.sin(a) * (r0 + rim_h - 0.06), z), mat or M["block"],
-                    parent=hub, rot=(0, 90, math.degrees(a)), bevel=0.04, origin="bottom")
+                    parent=hub, rot=(0, 90, math.degrees(a)), bevel=0.06, origin="bottom")
         return e, hub
     for i in range(rows):
         a = 2 * math.pi * i / rows
@@ -1108,6 +1115,57 @@ def tilted(bearing, deg):
     return v.normalized()
 
 
+def softmin(a, b, k):
+    """A smooth minimum of a and b (the two cut planes' distances) over about k: the rounded corner of the opening."""
+    if k <= 0:
+        return min(a, b)
+    h = max(k - abs(a - b), 0.0) / k
+    return min(a, b) - h * h * k * 0.25
+
+
+def shell_cutter(n, d, n2, d2, fr, far=30.0, seg=24):
+    """The solid taken out of the egg: {p.n > d and p.n2 > d2} (egg-local), its edge rounded to radius fr."""
+    e = n.cross(n2).normalized()
+    a = n.normalized()
+    b = e.cross(a).normalized()
+    # 2D: plane 1 is x_a = d; plane 2 is (n2.a) x_a + (n2.b) x_b = d2
+    n2a, n2b = n2.dot(a), n2.dot(b)
+    q = Vector((d, (d2 - n2a * d) / n2b))                # the corner, in (a, b)
+    nn1, nn2 = Vector((1.0, 0.0)), Vector((n2a, n2b)).normalized()
+    t1 = Vector((0.0, 1.0))                              # along line 1, into the region of plane 2
+    if t1.dot(nn2) < 0:
+        t1 = -t1
+    t2 = Vector((-nn2.y, nn2.x))                         # along line 2, into the region of plane 1
+    if t2.dot(nn1) < 0:
+        t2 = -t2
+    half = t1.angle(t2) / 2
+    m = (t1 + t2).normalized()
+    pts = [q + t1 * far]
+    if fr > 0:
+        ctr = q + m * (fr / math.sin(half))
+        p1, p2 = q + t1 * (fr / math.tan(half)), q + t2 * (fr / math.tan(half))
+        a1 = math.atan2(*(p1 - ctr).yx)
+        a2 = math.atan2(*(p2 - ctr).yx)
+        da = (a2 - a1 + math.pi) % (2 * math.pi) - math.pi
+        for i in range(seg + 1):
+            ang = a1 + da * i / seg
+            pts.append(ctr + Vector((math.cos(ang), math.sin(ang))) * fr)
+    else:
+        pts.append(q)
+    pts += [q + t2 * far, q + m * far * 2]
+    bm = bmesh.new()
+    rings = []
+    for z in (-far, far):
+        rings.append([bm.verts.new(a * p.x + b * p.y + e * z) for p in pts])
+    bm.faces.new(rings[0])
+    bm.faces.new(list(reversed(rings[1])))
+    k = len(pts)
+    for i in range(k):
+        bm.faces.new((rings[0][i], rings[0][(i + 1) % k], rings[1][(i + 1) % k], rings[1][i]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    return mesh_ob("shellcutter", bm, [M["chrome"]], smooth=False)
+
+
 def shell34():
     """Flash's tall narrow egg (wider low down, narrowing to the top), its long axis leaning toward the back right; the
     opening cut at a slant on its upper left (a plane tilted from straight up toward the front left), the long gold
@@ -1119,7 +1177,7 @@ def shell34():
     d = cut[2]
     rc, rt, rb = S.L4_EGG_R if L == 4 else S.L3_EGG_R
     bm = bmesh.new()
-    bmesh.ops.create_uvsphere(bm, u_segments=72, v_segments=40, radius=1.0)
+    bmesh.ops.create_uvsphere(bm, u_segments=128, v_segments=64, radius=1.0)
     for v in bm.verts:
         z = v.co.z
         k = rc * (1.0 + (S.L4_EGG_TAPER if L == 4 else S.L3_EGG_TAPER) * z)   # wider or narrower toward the top
@@ -1127,26 +1185,16 @@ def shell34():
     x = (n - u * n.dot(u)).normalized()
     rm = Matrix((x, u.cross(x), u)).transposed()
     bmesh.ops.transform(bm, matrix=rm.to_4x4(), verts=bm.verts)
-    geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
     cut2 = S.L4_CUT2 if L == 4 else S.L3_CUT2
-    if cut2 is None:
-        bmesh.ops.bisect_plane(bm, geom=geom, plane_co=n * d, plane_no=n, clear_outer=True)
-    else:
-        # Flash's opening is two cuts: the bowl cut low across the front, and the high dome at the back right left
-        # whole (its cut face a steep plane); only what lies above the first AND in front of the second goes
-        n2 = tilted(*cut2[:2])
-        d2 = cut2[2]
-        bmesh.ops.bisect_plane(bm, geom=geom, plane_co=n * d, plane_no=n)
-        geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
-        bmesh.ops.bisect_plane(bm, geom=geom, plane_co=n2 * d2, plane_no=n2)
-        gone = [f for f in bm.faces if f.calc_center_median().dot(n) > d + 1e-4 and
-                f.calc_center_median().dot(n2) > d2 + 1e-4]
-        bmesh.ops.delete(bm, geom=gone, context="FACES")
-        BODY.update(n2=n2, d2=d2)
-    rim = [v.co.copy() for v in bm.verts if v.is_boundary]
-    for ed in bm.edges:      # the cut edge sharp, so the wall's rim faces don't bleed a sawtooth into the smooth shell
-        if ed.is_boundary:
-            ed.smooth = False
+    n2 = tilted(*cut2[:2])
+    d2 = cut2[2]
+    BODY.update(n2=n2, d2=d2)
+    # Flash's opening: the bowl cut low across the front and the high dome at the back right left whole; what lies
+    # above the first plane AND in front of the second goes, with the corner between the two cuts rounded (a smooth
+    # curved edge where the bowl's rim runs up into the dome, no V). The egg stays whole here; a boolean takes the
+    # rounded wedge out after the wall is made (shell_cutter)
+    fr = S.L4_CUT_R if L == 4 else S.L3_CUT_R
+    rim = [v.co.copy() for v in bm.verts if abs(softmin(v.co.dot(n) - d, v.co.dot(n2) - d2, fr)) < 0.25]
     # the barrel lies in the opening along its long way, its middle a little below the opening's middle
     bc = c + sum(rim, Vector()) / len(rim) + n * S.L3_BARREL_SINK
     ba = tilted(S.L3_BARREL_AXIS[0], 90.0 - S.L3_BARREL_AXIS[1])
@@ -1163,6 +1211,13 @@ def shell34():
     so = sh.modifiers.new("wall", "SOLIDIFY")
     so.thickness, so.offset, so.material_offset, so.use_rim = 0.14, -1.0, 1, True
     sh.location = c
+    cu = shell_cutter(n, d, n2, d2, fr)
+    cu.location = c
+    bo = sh.modifiers.new("opening", "BOOLEAN")
+    bo.operation, bo.solver, bo.object = "DIFFERENCE", "EXACT", cu
+    bo.material_mode = "TRANSFER"
+    cu.hide_render = True
+    cu.hide_viewport = True
     BODY["sh"] = sh
     ln, br = (S.L4_BARREL if L == 4 else S.L3_BARREL)[:2]
     if L == 4:
@@ -1459,10 +1514,10 @@ def level34():
     cyl("groundcoghub", S.L3_BELLOWS_R * 0.8, S.L3_BELLOWS_Z - S.L3_GCOG_Z, (A.x, A.y, S.L3_GCOG_Z + zb),
         M["golddark"], verts=48)
     b, sh = shell34()
-    top_b = shell_bottom(sh, A, S.L3_BELLOWS_R * 0.95) + 0.3
+    top_b = shell_bottom(sh, A, S.L3_BELLOWS_R * S.L3_BELLOWS_IN) + 0.2   # the egg sits on the bellows, as Flash
     # Flash's bellows: wide flat rings on a grey plate
     zp = zb + S.L3_BELLOWS_Z
-    cyl("bellowsplate", S.L3_PLATE_R, S.L3_PLATE_H, (A.x, A.y, zp - 0.04), M["steel"], verts=64, bevel=0.06)
+    cyl("bellowsplate", S.L3_PLATE_R, S.L3_PLATE_H, (A.x, A.y, zp - 0.04), M["nut"], verts=64, bevel=0.06)
     bellows("bellows", zp + S.L3_PLATE_H - 0.06, top_b, S.L3_BELLOWS_R, S.L3_BELLOWS_RIBS, M["rubber"])
     # four feet: an arm out of the bellows to a threaded post with a nut on top and a nut foot on the ground
     # (level 4: steel pillars on the wooden base instead, with dark collars where the arms meet them)

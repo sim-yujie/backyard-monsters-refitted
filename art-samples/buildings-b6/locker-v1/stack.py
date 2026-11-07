@@ -88,33 +88,36 @@ L3_BODY_C, L3_BODY_R = (2.0, -14.0), 4.4         # (kept for the panels' stand-o
 # the body: Flash's tall egg, its top leaning toward the back right, its upper left side cut away by a plane along its
 # length (the opening faces up and toward the front left); the gold barrel lies in it along the egg's axis, half of it
 # above the rim
-L3_EGG_C = (0.0, -7.0)                         # Flash px of the egg's middle (in the upright plane through the axis)
-L3_EGG_R = (4.0, 6.0, 3.8)                       # radius across, half length toward the top, toward the bottom
-L3_EGG_TAPER, L4_EGG_TAPER = -0.1, -0.1          # the egg's width change toward its top (+ wider)
-L3_EGG_AXIS = (250.0, 30.0)                       # the long axis: from straight up toward this bearing, by this much
-L3_CUT = (30.0, 30.0, 1.2)                      # the opening's plane: its normal from straight up toward this bearing
+L3_EGG_C = (5.0, -12.0)                         # Flash px of the egg's middle (in the upright plane through the axis)
+L3_EGG_R = (4.8, 4.4, 3.6)                       # radius across, half length toward the top, toward the bottom
+L3_EGG_TAPER, L4_EGG_TAPER = 0.06, 0.06          # the egg's width change toward its top (+ wider)
+L3_EGG_AXIS = (70.0, 25.0)                       # the long axis: from straight up toward this bearing, by this much
+L3_CUT = (30.0, 12.0, 2.0)                      # the opening's plane: its normal from straight up toward this bearing
                                                  # by this much, its distance from the middle
-L3_CUT2 = (195.0, 72.0, -1.5)                          # the dome's cut face (as L3_CUT); None: one plane cut only
-L3_BARREL = (6.4, 2.5, 0.0)                       # length, core radius, its middle moved up its axle
+L3_CUT2 = (200.0, 100.0, -2.8)                          # the dome's cut face (as L3_CUT); None: one plane cut only
+L3_CUT_R, L4_CUT_R = 2.5, 2.5                    # the corner between the two cuts rounded to this radius
+L3_BARREL = (5.6, 2.6, 0.0)                       # length, core radius, its middle moved up its axle
 L4_BARREL = (6.4, 2.5, 0.0)                      # level 4: longer toward the top, under the cog
-L3_BARREL_PX, L4_BARREL_PX = (-6.0, -27.0, 0.8), (-9.0, -29.0, 0.8)               # (Flash px x, y, depth behind the egg's middle) of the barrel's middle
+L3_BARREL_PX, L4_BARREL_PX = (0.0, -38.0, 1.5), (-3.0, -40.0, 1.5)               # (Flash px x, y, depth behind the egg's middle) of the barrel's middle
 L3_BARREL_SINK = -1.0                            # the barrel's middle: the opening's middle moved along its normal
 L3_BARREL_AXIS = (57.0, 22.0)                    # its axle: toward this bearing, rising by this much
-L3_BARREL_ROWS, L3_BARREL_COLS = 18, 6                 # blocks in every other cell
+L3_BARREL_ROWS, L3_BARREL_COLS = 12, 7                 # blocks in every other cell
 L3_BLOCK_FILL = (0.72, 0.74)                      # how much of its cell each block fills (black gaps between)
 L3_LOW = 0.45                                    # every other block this high and darker (0: none, black there)
-L3_RIMS, L4_RIMS = (0.22, 0.34, 0.55), (0.22, 0.4, 0.6)   # toothed discs (Codex Look 3): rim height, tooth height, tooth width share
-L3_PIN = 0.75                                    # level 3's blocks this high (Flash's are small)
+L3_RIMS, L4_RIMS = (0.2, 0.45, 0.75), (0.2, 0.5, 0.8)   # toothed discs (Codex Look 3): rim height, tooth height, tooth width share
+L3_MOUND, L4_MOUND = (0.62, 0.45), (0.62, 0.45)  # disc radius at the ends (share of the middle), lumpiness
+L3_PIN = 1.0                                    # level 3's blocks this high (Flash's are small)
 L4_BARREL_ROWS, L4_BARREL_COLS, L4_BLOCK_FILL = 14, 5, (0.72, 0.86)   # level 4: fewer, bigger blocks, as Flash
 L3_COG_R, L3_COG_PX = 1.3, (3.0, -70.0)          # the cog at the top: radius, Flash px of its middle
 L4_COG_PX = (6.0, -74.0)
 L3_COG_BACK, L3_COG_FACE = 2.8, 0.7              # the cog pulled this far down to the barrel's end, its face turned
                                                  # this much toward the camera (0: along the axle)
 L3_GCOG_R, L3_GCOG_Z = 2.9, 0.35                 # the gold cog under the bellows: radius, height of its middle
-L3_BELLOWS_Z = 1.3                               # the bellows' foot (on the cog's hub)
+L3_BELLOWS_Z = 2.3                               # the bellows' foot (on the cog's hub)
 L3_BELLOWS_R = 3.6
+L3_BELLOWS_IN = 0.6                              # the bellows reach up into the egg to where its underside is this wide
 L3_BELLOWS_RIBS = 3                              # flat rings, as Flash
-L3_PLATE_R, L3_PLATE_H = 3.95, 0.22               # the grey plate under the bellows
+L3_PLATE_R, L3_PLATE_H = 3.75, 0.3               # the grey plate under the bellows
 L3_FOOT_D, L3_ARM_Z = 4.9, 2.9                 # the feet: distance out, the arms' height
 L3_NUT_R, L3_BOLT_Z = 0.8, 2.1                # level 3: the hex nut each bolt stands on, the arms' height
 L3_CHIM_TOP, L3_CHIM_Y, L3_CHIM_W = (35.0, -65.0), 4.5, 2.0
