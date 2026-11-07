@@ -687,3 +687,20 @@ export const profilePhotoLimiter = RateLimit.middleware({
   prefixKey: "profile-photos",
   handler: profileRefusal("Too many requests. Please try again shortly."),
 });
+
+/**
+ * Rate limit for drawing a line of wall Blocks (`POST /bm/yard/build/walls`) -
+ * 30 lines per minute per user. Each line is one request however long it is,
+ * and drawing one takes a press, a drag and the tick, so this is far above
+ * normal play; it stops a script hammering the save lock.
+ */
+export const wallLineLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 30,
+  prefixKey: "wallline",
+  keyGenerator: byUser("wallline"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many wall lines at once. Please slow down.", reason: "rateLimited" };
+  },
+});

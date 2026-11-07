@@ -314,8 +314,12 @@ router.post("/api/:apiVersion/bm/yardplanner/deletetemplate", apiVersion, verify
 /**  ────────────────────────────────────────────────
 * 📦 Yard actions (server-authoritative, `controllers/yard/index.ts`)
 * ──────────────────────────────────────────────── */
-for (const { path, controller } of yardRoutes) {
-  router.post(`/api/:apiVersion/bm/yard/${path}`, apiVersion, verifyUserAuth, logRequest, controller);
+for (const { path, controller, limiter } of yardRoutes) {
+  if (limiter) {
+    router.post(`/api/:apiVersion/bm/yard/${path}`, apiVersion, verifyUserAuth, limiter, logRequest, controller);
+  } else {
+    router.post(`/api/:apiVersion/bm/yard/${path}`, apiVersion, verifyUserAuth, logRequest, controller);
+  }
 }
 
 /**  ────────────────────────────────────────────────
