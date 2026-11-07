@@ -1852,9 +1852,9 @@ def setup(sc):
     g.name = "ground"
     g.is_shadow_catcher = True
     g.data.materials.append(flat("groundref", (70, 92, 48), rough=0.9))
-    if L >= 3 and not os.environ.get("PB_GROUNDREF"):
-        # levels 3-4 (locker-3d-13): the big egg's lower half mirrored the green ground and read as tinted glass;
-        # Flash's is darker grey metal there, so the chrome sees the studio's dark grey below the horizon instead
+    if not os.environ.get("PB_GROUNDREF"):
+        # (locker-3d-13) the chrome's lower half mirrored the green ground and read as tinted glass; Flash's is darker
+        # grey metal there, so the chrome sees the studio's dark grey below the horizon instead (every level)
         g.visible_glossy = False
     return cam
 
