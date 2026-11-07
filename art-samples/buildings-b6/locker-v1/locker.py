@@ -901,7 +901,7 @@ def panel(name, c, r, sx, sy, kind, size=2.3, spin=0.0, lean=0.0, thick=0.14):
 
 
 def barrel(name, c, axis, r, length, rows, cols, parent=None, fill=None, mat=None, core=None, checker=True, pin=1.0,
-           low=None, rims=None):
+           low=None, rims=None, mound=None):
     """The gold barrel inside the shell: a dark core with rows of gold blocks round it (period: two rows), turning
     about its axle (local Z). Blocks in every other cell (checker) or every cell, filling `fill` (along, round) of it;
     levels 3-4 use smaller blocks with black gaps between them, as Flash."""
@@ -909,7 +909,7 @@ def barrel(name, c, axis, r, length, rows, cols, parent=None, fill=None, mat=Non
     hub = bpy.data.objects.new(name + "-spin", None)
     link(hub, e)
     MOVING.append(hub)
-    cyl(name + "core", r * 0.86, length, (0, 0, -length / 2), core or M["core"], parent=hub, verts=40, bevel=0.05)
+    core_ob = cyl(name + "core", r * 0.86, length, (0, 0, -length / 2), core or M["core"], parent=hub, verts=40, bevel=0.05)
     fa, fr = fill or (0.88, 0.86)
     if rims is not None:
         # levels 3-4 (Codex Look 3, Flash's rows): a stack of toothed gold discs on the core, dark gaps between the
@@ -934,23 +934,37 @@ def barrel(name, c, axis, r, length, rows, cols, parent=None, fill=None, mat=Non
                     (math.cos(a) * (r0 + rim_h - 0.06), math.sin(a) * (r0 + rim_h - 0.06), z), mat or M["block"],
                     parent=hub, rot=(0, 90, math.degrees(a)), bevel=0.06, origin="bottom")
         return e, hub
+    def rad(z):
+        # levels 3-4 (Flash): a rounded heap, the core and its blocks biggest in the middle, smaller toward both ends
+        if mound is None:
+            return r * 0.86
+        zz = 2 * z / length
+        return r * 0.86 * (mound[0] + (1 - mound[0]) * math.sqrt(max(0.0, 1 - zz * zz * 0.85)))
+    if mound is not None:
+        core_ob.hide_render = True
+        prof = [(0.01, -length / 2)] + [(rad(-length / 2 + length * t / 12) * 0.98, -length / 2 + length * t / 12)
+                                        for t in range(13)] + [(0.01, length / 2)]
+        lathe(name + "core2", prof, (0, 0, 0), core or M["core"], parent=hub, verts=40)
     for i in range(rows):
-        a = 2 * math.pi * i / rows
         for j in range(cols):
-            sunk = (i + j) % 2
+            a = 2 * math.pi * (i + (0.5 * (j % 2) if mound is not None else 0)) / rows
+            sunk = (i + j) % 2 if mound is None else i % 2
             if checker and sunk and low is None:
                 continue
             hgt = 0.18 + 0.16 * ((j * 7 + (i % 2) * 3) % 4) / 3
             if fill is not None:
                 hgt = 0.1 + 0.22 * ((j * 5 + i * 3) % 5) / 4
+            if mound is not None:     # the pattern repeats every two rows, so the loop's two-row turn stays seamless
+                hgt = 0.1 + 0.22 * ((j * 5 + (i % 2) * 3) % 5) / 4
             z = -length / 2 + (j + 0.5) * length / cols
+            rz = rad(z)
             h = (hgt + r * 0.14) * pin
             m = mat or M["block"]
             if low is not None and sunk:      # Flash: every cell holds a block; every other one lower and darker
                 h, m = h * low[0], low[1]
-            box(f"{name}blk{i}-{j}", (length / cols * fa, 2 * math.pi * r / rows * fr, h),
-                (math.cos(a) * r * 0.86, math.sin(a) * r * 0.86, z), m, parent=hub,
-                rot=(0, 90, math.degrees(a)), bevel=0.04, origin="bottom")
+            box(f"{name}blk{i}-{j}", (length / cols * fa, 2 * math.pi * rz / rows * fr, h),
+                (math.cos(a) * rz, math.sin(a) * rz, z), m, parent=hub,
+                rot=(0, 90, math.degrees(a)), bevel=0.06 if mound is not None else 0.04, origin="bottom")
     return e, hub
 
 
@@ -1222,11 +1236,12 @@ def shell34():
     ln, br = (S.L4_BARREL if L == 4 else S.L3_BARREL)[:2]
     if L == 4:
         barrel("barrel", bc, ba, br, ln, S.L4_BARREL_ROWS, S.L4_BARREL_COLS, fill=S.L4_BLOCK_FILL, mat=M["block34"],
-               core=M["core34"], low=(S.L3_LOW, M["block34lo"]) if S.L3_LOW else None, rims=S.L4_RIMS)
+               core=M["core34"], low=(S.L3_LOW, M["block34lo"]) if S.L3_LOW else None, rims=S.L4_RIMS,
+               mound=S.L4_MOUND)
     else:
         barrel("barrel", bc, ba, br, ln, S.L3_BARREL_ROWS, S.L3_BARREL_COLS, fill=S.L3_BLOCK_FILL, mat=M["block34"],
                core=M["core34"], pin=S.L3_PIN, low=(S.L3_LOW, M["block34lo"]) if S.L3_LOW else None,
-               rims=S.L3_RIMS)
+               rims=S.L3_RIMS, mound=S.L3_MOUND)
     # the cog inside the machine, as Flash: facing the camera just behind the barrel's top end, so the top blocks
     # hide its lower half (still, as Flash); its post leaves the axle's end, runs down behind the top blocks and up
     # behind the cog to its back
