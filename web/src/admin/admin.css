@@ -2627,6 +2627,81 @@ tbody th {
   gap: 6px;
 }
 
+/* ---- Moderator mail ---- */
+
+.modmail {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.modmail-search__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.modmail-search__row .field-input {
+  flex: 1 1 10rem;
+  min-width: 0;
+  max-width: 16rem;
+}
+
+.modmail-row {
+  display: grid;
+  gap: 4px;
+  padding: 12px 16px;
+}
+
+.modmail-row__head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.modmail-row__head .row-title {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  font-weight: 600;
+}
+
+.modmail-row__arrow {
+  color: var(--ink-3);
+}
+
+.modmail-row__subject,
+.modmail-row__text,
+.modmail-row__written {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.modmail-row__subject {
+  font-weight: 600;
+}
+
+.modmail-row__text {
+  white-space: pre-wrap;
+}
+
+.modmail-row__written {
+  color: var(--ink-2);
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+}
+
+.modmail-more {
+  justify-self: start;
+}
+
+.modmail-more[hidden] {
+  display: none;
+}
+
 .chat-time {
   color: var(--ink-3);
   font-size: 0.8125rem;
