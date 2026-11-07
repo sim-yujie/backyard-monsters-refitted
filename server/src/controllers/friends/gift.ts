@@ -45,7 +45,7 @@ import type { FriendsBody } from "./friends.js";
  * - `GET /bm/friends/gifts`: the gifts waiting, oldest first, and how many
  *   more can be collected today.
  * - `POST /bm/friends/wishes` `{ wishes: ["r1", "r3"] }`: the player's gift
- *   wishes, up to 3 (#391), answered as stored. `GET /bm/friends/gifts`
+ *   wishes, up to 3 (#391), best first (the order is the rank), answered as stored. `GET /bm/friends/gifts`
  *   carries them as `wishes`, and each friend in `GET /bm/friends` carries
  *   theirs.
  * - `POST /bm/friends/gifts/collect` `{ giftid }` or `{ all: true }`: credits
@@ -142,7 +142,7 @@ export const giftsAnswer = async (em: EntityManager, user: User, now: number): P
   return { error: 0, gifts, collectsLeft: collectsLeftOf(collected), wishes };
 };
 
-/** `POST /bm/friends/wishes` `{ wishes }`: up to 3 gift resources, each once; `[]` clears them. */
+/** `POST /bm/friends/wishes` `{ wishes }`: up to 3 gift resources, each once, best first; `[]` clears them. */
 export const wishesAnswer = async (em: EntityManager, user: User, body: unknown): Promise<FriendsBody> => {
   const { wishes } = WishesSchema.parse(body);
   return { error: 0, wishes: await setWishes(em, user.userid, wishes) };

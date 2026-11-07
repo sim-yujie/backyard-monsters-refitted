@@ -4,7 +4,7 @@
  *
  * Run from the server folder (bun loads server/.env for the database login):
  *
- *   DB_NAME=achievements_db bun scripts/achievements-demo.ts <mode> [--user 2503] [--friend 2505] [--password X]
+ *   DB_NAME=achievements_db bun scripts/achievements-demo.ts <mode> [--user 2503] [--friend 2505] [--password X] [--wishes r4,r2]
  *
  * Each mode puts one achievement one step short, so ONE action in the game earns it:
  *   regular      login run 29 days, last login yesterday     -> reload your own yard
@@ -12,7 +12,9 @@
  *   popular      friendships added up to 80, login yesterday  -> reload your own yard (day's first load counts friends)
  *   kozu         99 Kozu attacks                              -> attack a Kozu camp and do some damage
  *   landlord     outposts stat 100, login yesterday           -> reload your own yard (shortcut: see below)
- *   friend       makes --friend a 2-day-old friend wishing for Pebbles + Goo (gift picker stars)
+ *   friend       makes --friend a 2-day-old friend wishing for --wishes, best first (default r4,r2 = Goo then
+ *                Pebbles; --wishes r4 = Goo only), and lets --user send them a gift again today (gift picker)
+ *   mywishes     sets --user's own wishes to --wishes ("" clears them) (the Gifts tab's wish strip)
  *   password     sets the user's password to --password
  *   status       prints the stats, trackers and which of 23-27 are earned
  *   reset        un-earns 23-27, zeroes their stats, clears the trackers, removes the `popular` friendships
@@ -36,6 +38,13 @@ const flag = (name: string, fallback?: string): string | undefined => {
 };
 const userid = Number(flag("user", "2503"));
 const friendid = Number(flag("friend", "2505"));
+/** Wishes, best first, as stored (`r4,r2`); only known resources, at most 3. */
+const wishes = (flag("wishes", "r4,r2") ?? "")
+  .split(",")
+  .map((one) => one.trim())
+  .filter((one, index, all) => ["r1", "r2", "r3", "r4"].includes(one) && all.indexOf(one) === index)
+  .slice(0, 3)
+  .join(",");
 
 const dbName = process.env.DB_NAME;
 if (!dbName || dbName === "bym" || dbName === "bym_sound") {
@@ -138,7 +147,7 @@ try {
       break;
     case "friend": {
       await makeFriends(userid, friendid, new Date(Date.now() - 2 * DAY * 1000).toISOString());
-      await db.query(`UPDATE bym."user" SET gift_wishes = 'r2,r4' WHERE userid = $1`, [friendid]);
+      await db.query(`UPDATE bym."user" SET gift_wishes = $2 WHERE userid = $1`, [friendid, wishes || null]);
       // So "Send gift" is on again today.
       await db.query(`DELETE FROM bym.friend_gift WHERE from_userid = $1 AND to_userid = $2 AND gift_day = (now() AT TIME ZONE 'UTC')::date`, [
         userid,
@@ -150,8 +159,13 @@ try {
       );
       const row = rows[0];
       const level = row ? calculateBaseLevel(String(row.points ?? "0"), String(row.basevalue ?? "0")) : 0;
-      console.log(`Friend ${friendid} (${row?.username}, level ${level}) now wishes for Pebbles + Goo.`);
+      console.log(`Friend ${friendid} (${row?.username}, level ${level}) now wishes for ${wishes || "nothing"}, best first.`);
       if (level < 5) console.log("Note: gifts need level 5 on both sides; pass --friend <a level 5+ userid> to pick another.");
+      break;
+    }
+    case "mywishes": {
+      await db.query(`UPDATE bym."user" SET gift_wishes = $2 WHERE userid = $1`, [userid, wishes || null]);
+      console.log(`User ${userid} now wishes for ${wishes || "nothing"}, best first. Reopen the Gifts tab.`);
       break;
     }
     case "password": {

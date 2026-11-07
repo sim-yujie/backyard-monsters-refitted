@@ -38,7 +38,7 @@ export interface FriendView {
   canGiftFrom: number | null;
   /** Whether you could help them now; null when the help gates refuse (`GET /bm/friends` fills it, WP6). */
   help: { speedup: boolean; repair: boolean } | null;
-  /** The gifts they wish for, up to 3 (#391); a gift picker shows these first, starred. */
+  /** The gifts they wish for, up to 3, best first (#391); a gift picker shows these first, ranked. */
   wishes: GiftResource[];
 }
 

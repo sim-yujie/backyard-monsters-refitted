@@ -3,6 +3,7 @@ import { friendsStore as sharedStore, type FriendsStore } from "@/game/friends/f
 import { Popup } from "@/ui/Popup";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, resourceIcon } from "@/ui/resourceIcon";
 import { make, StatusLine } from "./rows";
+import { wishMark } from "./wishMark";
 import "./friends.css";
 
 /**
@@ -13,9 +14,12 @@ import "./friends.css";
  * nothing from the sender. One gift per friend per day: once sent, the store
  * marks the friend so every "Send gift" button turns off.
  *
- * Gift wishes (#391): the friend's wished resources (up to 3) come first,
- * each with a ★, and a short legend says what the star means. Any resource
- * can still be sent; a wished one earns nothing extra.
+ * Gift wishes (#391; reworked for the owner, 7 Nov): the friend's wishes are
+ * ranked. Their first wish is the big main plate, the others under it, each
+ * with the painted wish marker and its rank; a line over them says "Bob wants
+ * Goo only" (one wish) or gives the order. The resources they did not wish
+ * for shrink to a row of small tiles under "Or send". Any resource can still
+ * be sent; a wished one earns nothing extra. With no wishes, the plain four.
  */
 
 export const GIFT_TEXT = {
@@ -33,8 +37,12 @@ export const GIFT_TEXT = {
   },
   cancel: "Cancel",
   done: "Done",
-  /** The legend under the choices when the friend has wishes. */
-  wished: (name: string): string => `★ = ${name}'s wish`,
+  /** The line over the choices when the friend wished for one resource only. */
+  wishedOnly: (name: string, resource: GiftResource): string => `${name} wants ${RESOURCE_NAMES[resource]} only`,
+  /** The line over the choices when the friend wished for two or three, in order. */
+  wishedOrder: (name: string): string => `${name}'s wishes, best first`,
+  /** Over the small tiles of the resources not wished for. */
+  others: "Or send",
 } as const;
 
 /** Who the gift is for. */
@@ -45,9 +53,9 @@ export interface GiftTarget {
   readonly wishes?: readonly GiftResource[];
 }
 
-/** The four choices, the friend's wishes first (each in the usual order). */
+/** The four choices: the friend's wishes first in their order, then the rest in the usual order. */
 export const choiceOrder = (wishes: readonly GiftResource[]): GiftResource[] => [
-  ...RESOURCE_KEYS.filter((key) => wishes.includes(key)),
+  ...wishes.filter((key, index) => RESOURCE_KEYS.includes(key) && wishes.indexOf(key) === index),
   ...RESOURCE_KEYS.filter((key) => !wishes.includes(key)),
 ];
 
@@ -89,39 +97,68 @@ export class GiftPicker {
     });
 
     const lead = make("p", "takeover-dialog__lead", GIFT_TEXT.lead(target.username));
-    const grid = make("div", "gift-picker__choices");
     const wishes = target.wishes ?? this.store.friends.find((friend) => friend.userid === target.userid)?.wishes ?? [];
-    for (const key of choiceOrder(wishes)) {
-      const wished = wishes.includes(key);
-      const choice = make("button", wished ? "btn btn--outline gift-picker__choice gift-picker__choice--wished" : "btn btn--outline gift-picker__choice");
-      choice.type = "button";
-      choice.dataset["resource"] = key;
-      choice.append(resourceIcon(key, { decorative: true }), make("span", "gift-picker__name", RESOURCE_NAMES[key]));
-      if (wished) {
-        const star = make("span", "gift-picker__star", "★");
-        star.setAttribute("aria-hidden", "true");
-        choice.append(star);
-        choice.setAttribute("aria-label", `${RESOURCE_NAMES[key]} (wished)`);
-      }
-      choice.addEventListener("click", () => void this.send(key));
-      this.choices.set(key, choice);
-      grid.append(choice);
-    }
-    const legend: HTMLElement[] = [];
-    if (wishes.length > 0) {
-      // "★ = Bob's wish", its star gold like the buttons'.
+    const order = choiceOrder(wishes);
+    const wished = order.filter((key) => wishes.includes(key));
+    const parts: HTMLElement[] = [lead];
+    if (wished.length === 0) {
+      // No wishes: the plain four, two by two.
+      const grid = make("div", "gift-picker__choices");
+      for (const key of order) grid.append(this.choice(key, "btn btn--outline gift-picker__choice"));
+      parts.push(grid);
+    } else {
+      // "[marker] Bob wants Goo only" or "[marker] Bob's wishes, best first".
       const line = make("p", "gift-picker__legend");
-      const star = make("span", "gift-picker__star", "★");
-      star.setAttribute("aria-hidden", "true");
-      line.append(star, GIFT_TEXT.wished(target.username).slice(1));
-      legend.push(line);
+      line.append(
+        wishMark(null, "gift-picker__legend-mark"),
+        wished.length === 1 ? GIFT_TEXT.wishedOnly(target.username, wished[0]!) : GIFT_TEXT.wishedOrder(target.username),
+      );
+      // The first wish is the main plate (a clearly different colour), the rest under it.
+      const list = make("div", "gift-picker__choices gift-picker__choices--wished");
+      wished.forEach((key, index) => {
+        const top = index === 0;
+        const choice = this.choice(
+          key,
+          `btn ${top ? "btn--primary gift-picker__choice--top" : "btn--outline"} gift-picker__choice gift-picker__choice--wished`,
+        );
+        choice.dataset["rank"] = String(index + 1);
+        choice.setAttribute("aria-label", `${RESOURCE_NAMES[key]} (wish ${index + 1})`);
+        choice.append(wishMark(index + 1, "gift-picker__mark"));
+        list.append(choice);
+      });
+      parts.push(line, list);
+      const rest = order.filter((key) => !wishes.includes(key));
+      if (rest.length > 0) {
+        // The others: small square tiles, still one press to send.
+        const row = make("div", "gift-picker__others");
+        row.append(make("span", "gift-picker__others-label", GIFT_TEXT.others));
+        for (const key of rest) {
+          const tile = this.choice(key, "gift-wish gift-picker__other", false);
+          tile.setAttribute("aria-label", RESOURCE_NAMES[key]);
+          tile.title = RESOURCE_NAMES[key];
+          row.append(tile);
+        }
+        parts.push(row);
+      }
     }
     this.cancel = make("button", "btn btn--ghost", GIFT_TEXT.cancel);
     this.cancel.type = "button";
     this.cancel.addEventListener("click", () => this.popup.close());
     const actions = make("div", "takeover-dialog__actions");
     actions.append(this.cancel);
-    this.popup.setContent(lead, grid, ...legend, this.status.element, actions);
+    this.popup.setContent(...parts, this.status.element, actions);
+  }
+
+  /** One choice button for `key`: its pile, its name unless `named` is false, one press sends. */
+  private choice(key: GiftResource, className: string, named = true): HTMLButtonElement {
+    const choice = make("button", className);
+    choice.type = "button";
+    choice.dataset["resource"] = key;
+    choice.append(resourceIcon(key, { decorative: true }));
+    if (named) choice.append(make("span", "gift-picker__name", RESOURCE_NAMES[key]));
+    choice.addEventListener("click", () => void this.send(key));
+    this.choices.set(key, choice);
+    return choice;
   }
 
   get statusText(): string {

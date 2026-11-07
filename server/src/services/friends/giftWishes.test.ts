@@ -13,6 +13,14 @@ describe("gift wishes", () => {
     expect(MAX_GIFT_WISHES).toBe(3);
   });
 
+  test("keep the order picked: it is the rank, and one wish alone means that one only", () => {
+    expect(readWishes(storedWishes(["r4", "r1"]))).toEqual(["r4", "r1"]);
+    expect(readWishes(storedWishes(["r3"]))).toEqual(["r3"]);
+    // Wishes saved before the ranking were in resource order and read as that rank.
+    expect(readWishes("r2,r4")).toEqual(["r2", "r4"]);
+    expect(WishesSchema.parse({ wishes: ["r4", "r2", "r1"] })).toEqual({ wishes: ["r4", "r2", "r1"] });
+  });
+
   test("stored as a comma list, null for none", () => {
     expect(storedWishes(["r2", "r4"])).toBe("r2,r4");
     expect(storedWishes([])).toBeNull();

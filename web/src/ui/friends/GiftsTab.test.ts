@@ -192,15 +192,33 @@ describe("my wishes (#391)", () => {
   const pressed = (tab: GiftsTab): string[] =>
     [...tab.element.querySelectorAll<HTMLElement>('.gift-wish[aria-pressed="true"]')].map((node) => node.dataset["resource"]!);
 
-  it("shows the saved wishes pressed and starred", async () => {
-    const { tab } = setup({ gifts: { ...twoGifts, wishes: ["r2", "r4"] } });
+  const rank = (tab: GiftsTab, resource: string): string | null =>
+    toggle(tab, resource).querySelector(".wish-mark__rank")?.textContent ?? null;
+  const hint = (tab: GiftsTab): string | null | undefined => tab.element.querySelector(".gift-wishes__hint")?.textContent;
+
+  it("shows the saved wishes pressed, each with the painted marker and its rank, in the saved order", async () => {
+    const { tab } = setup({ gifts: { ...twoGifts, wishes: ["r4", "r2"] } });
     await tab.show();
     expect(tab.element.querySelector(".gift-wishes__title")?.textContent).toBe(GIFTS_TEXT.wishes);
+    expect(tab.element.querySelector(".gift-wishes__title .wish-mark")).not.toBeNull();
     expect(pressed(tab)).toEqual(["r2", "r4"]);
-    expect(toggle(tab, "r2").querySelector(".gift-wish__star")?.textContent).toBe("★");
-    expect(toggle(tab, "r1").querySelector(".gift-wish__star")).toBeNull();
-    // The title's star is the stars' gold one (its own span).
-    expect(tab.element.querySelector(".gift-wishes__title .gift-wishes__star")?.textContent).toBe("★");
+    expect(rank(tab, "r4")).toBe("1");
+    expect(rank(tab, "r2")).toBe("2");
+    expect(rank(tab, "r1")).toBeNull();
+    expect(toggle(tab, "r4").getAttribute("aria-label")).toBe("Goo (wish 1)");
+    expect(hint(tab)).toBe("Goo > Pebbles");
+    expect(tab.element.textContent).not.toContain("★");
+  });
+
+  it("says \"only\" when one resource is wished, and how to start when none is", async () => {
+    const { tab } = setup({ gifts: { ...twoGifts, wishes: ["r1"] } });
+    await tab.show();
+    expect(hint(tab)).toBe("Twigs only");
+    expect(tab.element.querySelector(".gift-wishes__hint--only")).not.toBeNull();
+    toggle(tab, "r1").click();
+    await settle();
+    expect(hint(tab)).toBe(GIFTS_TEXT.wishesHint);
+    expect(tab.element.querySelector(".gift-wishes__hint--only")).toBeNull();
   });
 
   it("draws each toggle as its own square tile, not the skin's wide button plate", async () => {
@@ -216,25 +234,28 @@ describe("my wishes (#391)", () => {
     expect(toggle(tab, "r1").classList.contains("gift-wish--on")).toBe(false);
   });
 
-  it("saves each change at once, and turns the last one off at 3", async () => {
+  it("ranks wishes in the order tapped, saves each change at once, and turns the last one off at 3", async () => {
     const { tab, calls } = setup();
     await tab.show();
     toggle(tab, "r3").click();
     toggle(tab, "r1").click();
     await settle();
     expect(pressed(tab)).toEqual(["r1", "r3"]);
+    expect([rank(tab, "r3"), rank(tab, "r1")]).toEqual(["1", "2"]);
     toggle(tab, "r4").click();
     await settle();
     expect(pressed(tab)).toEqual(["r1", "r3", "r4"]);
     expect(toggle(tab, "r2").disabled).toBe(true);
+    // Taking out the first moves the others up.
     toggle(tab, "r3").click();
     await settle();
     expect(pressed(tab)).toEqual(["r1", "r4"]);
+    expect([rank(tab, "r1"), rank(tab, "r4")]).toEqual(["1", "2"]);
     expect(toggle(tab, "r2").disabled).toBe(false);
     expect(calls.filter(([method]) => method === "setWishes").map(([, wishes]) => wishes)).toEqual([
       ["r3"],
-      ["r1", "r3"],
-      ["r1", "r3", "r4"],
+      ["r3", "r1"],
+      ["r3", "r1", "r4"],
       ["r1", "r4"],
     ]);
   });
@@ -264,14 +285,14 @@ describe("the wish tiles' look", () => {
     expect(rule(".gift-wish > .res-icon")).toMatch(/width: 32px;/);
   });
 
-  it("is a different colour when on, with no inset ring, and the star on the top-right corner", () => {
+  it("is a different colour when on, with no inset ring, and the marker on the top-right corner", () => {
     const off = rule(".gift-wish");
     const on = css.split("\n.gift-wish--on,\n.gift-wish--on:hover:not(:disabled) {")[1]?.split("}")[0] ?? "";
     expect(off).toMatch(/background: var\(--colour-surface-sunken\);/);
     expect(on).toMatch(/background: radial-gradient\([^;]*var\(--colour-medal-gold\)/);
     expect(on).not.toMatch(/inset/);
-    expect(rule(".gift-wish__star")).toMatch(/position: absolute;/);
-    expect(rule(".gift-wish__star")).toMatch(/top: -\d+px;/);
-    expect(rule(".gift-wish__star")).toMatch(/right: -\d+px;/);
+    expect(rule(".gift-wish__mark")).toMatch(/position: absolute;/);
+    expect(rule(".gift-wish__mark")).toMatch(/top: -\d+px;/);
+    expect(rule(".gift-wish__mark")).toMatch(/right: -\d+px;/);
   });
 });

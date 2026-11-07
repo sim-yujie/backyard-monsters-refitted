@@ -74,26 +74,57 @@ describe("the gift picker", () => {
     expect(choice("r2").disabled).toBe(true);
   });
 
-  it("puts the friend's wishes first, starred, with a legend; any resource can still go (#391)", async () => {
+  it("puts the friend's wishes first in their order, ranked, the first on the main plate; any resource can still go (#391)", async () => {
     const { calls } = await setup({ list: fixtureList([fixtureFriend(7, { username: "Bob", wishes: ["r4", "r2"] })]) });
-    const ids = [...document.querySelectorAll<HTMLElement>(".gift-picker__choice")].map((node) => node.dataset["resource"]);
-    expect(ids).toEqual(["r2", "r4", "r1", "r3"]);
-    const starred = [...document.querySelectorAll<HTMLElement>(".gift-picker__choice--wished")].map((node) => node.dataset["resource"]);
-    expect(starred).toEqual(["r2", "r4"]);
-    expect(choice("r2").querySelector(".gift-picker__star")?.textContent).toBe("★");
-    expect(choice("r1").querySelector(".gift-picker__star")).toBeNull();
-    expect(document.querySelector(".gift-picker__legend")?.textContent).toBe(GIFT_TEXT.wished("Bob"));
-    // The legend's star is the buttons' gold one.
-    expect(document.querySelector(".gift-picker__legend .gift-picker__star")?.textContent).toBe("★");
-    choice("r1").click();
+    const ids = [...document.querySelectorAll<HTMLElement>("[data-resource]")].map((node) => node.dataset["resource"]);
+    expect(ids).toEqual(["r4", "r2", "r1", "r3"]);
+    const wished = [...document.querySelectorAll<HTMLElement>(".gift-picker__choice--wished")];
+    expect(wished.map((node) => [node.dataset["resource"], node.dataset["rank"]])).toEqual([["r4", "1"], ["r2", "2"]]);
+    // The first wish is the main plate, a clearly different colour; the second the usual one.
+    expect(choice("r4").classList.contains("btn--primary")).toBe(true);
+    expect(choice("r2").classList.contains("btn--outline")).toBe(true);
+    // The painted marker with the rank, not a star.
+    expect(choice("r4").querySelector(".wish-mark .wish-mark__rank")?.textContent).toBe("1");
+    expect(choice("r2").querySelector(".wish-mark__rank")?.textContent).toBe("2");
+    expect(document.body.textContent).not.toContain("★");
+    expect(choice("r4").getAttribute("aria-label")).toBe("Goo (wish 1)");
+    expect(document.querySelector(".gift-picker__legend")?.textContent).toBe(GIFT_TEXT.wishedOrder("Bob"));
+    expect(document.querySelector(".gift-picker__legend .wish-mark")).not.toBeNull();
+    // The rest are small tiles under "Or send", and still send.
+    const others = document.querySelector(".gift-picker__others")!;
+    expect(others.textContent).toBe(GIFT_TEXT.others);
+    expect([...others.querySelectorAll<HTMLElement>(".gift-picker__other")].map((node) => node.dataset["resource"])).toEqual(["r1", "r3"]);
+    expect(others.querySelector(".gift-picker__other")?.getAttribute("aria-label")).toBe("Twigs");
+    (others.querySelector('[data-resource="r1"]') as HTMLButtonElement).click();
     await vi.waitFor(() => expect(calls.some(([method]) => method === "sendGift")).toBe(true));
     expect(calls.find(([method]) => method === "sendGift")).toEqual(["sendGift", 7, "r1"]);
+    // Sending turns the small tiles off too.
+    expect((others.querySelector('[data-resource="r3"]') as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("has no stars or legend when the friend wishes for nothing", async () => {
+  it("says plainly when the friend wants one resource only", async () => {
+    const { picker } = await setup({ list: fixtureList([fixtureFriend(7, { username: "Bob", wishes: ["r1"] })]) });
+    expect(document.querySelector(".gift-picker__legend")?.textContent).toBe("Bob wants Twigs only");
+    expect(document.querySelectorAll(".gift-picker__choice--wished")).toHaveLength(1);
+    expect(choice("r1").classList.contains("gift-picker__choice--top")).toBe(true);
+    expect(document.querySelectorAll(".gift-picker__other")).toHaveLength(3);
+    // The wished one has the focus, so Enter sends it.
+    expect(document.activeElement).toBe(choice("r1"));
+    await picker.send("r1");
+    expect(picker.statusText).toContain("Sent to Bob");
+  });
+
+  it("reads old wishes saved in resource order the same way: that order is the rank", () => {
+    expect(choiceOrder(["r2", "r4"])).toEqual(["r2", "r4", "r1", "r3"]);
+    expect(choiceOrder(["r3", "r1"])).toEqual(["r3", "r1", "r2", "r4"]);
+  });
+
+  it("has no markers, legend or small tiles when the friend wishes for nothing", async () => {
     await setup();
     expect(document.querySelector(".gift-picker__choice--wished")).toBeNull();
     expect(document.querySelector(".gift-picker__legend")).toBeNull();
+    expect(document.querySelector(".gift-picker__others")).toBeNull();
+    expect(document.querySelector(".wish-mark")).toBeNull();
     expect(choiceOrder([])).toEqual(["r1", "r2", "r3", "r4"]);
   });
 });
@@ -103,21 +134,29 @@ describe("the choices' look", () => {
   const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "friends.css"), "utf8").replace(/\r\n/g, "\n");
   const rule = (selector: string): string => css.split(`\n${selector} {`)[1]?.split("}")[0] ?? "";
 
-  it("keeps a choice's pile, name and star tight, so they fit inside the plate on a phone", () => {
+  it("keeps a choice's pile and name tight, so they fit inside the plate on a phone", () => {
     expect(rule(".gift-picker__choice")).toMatch(/gap: var\(--space-1\);/);
     expect(rule(":root[data-skin] .panel .gift-picker__choice.btn--outline")).toMatch(/padding-inline: 0;/);
   });
 
-  it("draws Modern's choices a size smaller on a phone, so the pile and star clear the plate's rivets", () => {
+  it("draws Modern's choices a size smaller on a phone, so the pile clears the plate's rivets", () => {
     // Only below the dialog's full 420 px (92vw < 420 px), and only for Modern ("scrap").
     const phone = css.split("\n@media (width <= 456px) {")[1]?.split("\n}\n")[0] ?? "";
     const phoneRule = (selector: string): string => phone.split(`\n  ${selector} {`)[1]?.split("}")[0] ?? "";
     const choice = phoneRule(':root[data-skin="scrap"] .panel .gift-picker__choice.btn--outline');
     expect(choice).toMatch(/font-size: var\(--text-sm\);/);
     expect(choice).toMatch(/gap: 2px;/);
-    expect(phoneRule(':root[data-skin="scrap"] .panel .gift-picker__choice .gift-picker__star')).toMatch(/font-size: 1em;/);
     // Classic and the wide dialog keep the old size.
     expect(rule(".gift-picker__choice")).not.toMatch(/font-size/);
     expect(rule(":root[data-skin] .panel .gift-picker__choice.btn--outline")).not.toMatch(/font-size/);
+  });
+
+  it("hangs the painted marker off the plate's corner, out of the flow, so the pile and word stay centred", () => {
+    expect(rule(".wish-mark")).toMatch(/background: url\("\/friends\/wish-mark\.webp"\)/);
+    expect(rule(".gift-picker__mark")).toMatch(/position: absolute;/);
+    expect(rule(".gift-picker__choice--wished")).toMatch(/position: relative;/);
+    // On a skin the plate's ends are its border: the marker sits on the right end.
+    expect(rule(":root[data-skin] .panel .gift-picker__choice.btn--outline .gift-picker__mark")).toMatch(/var\(--skin-button2-cap\)/);
+    expect(rule(":root[data-skin] .panel .gift-picker__choice.btn--primary .gift-picker__mark")).toMatch(/var\(--skin-button-cap\)/);
   });
 });

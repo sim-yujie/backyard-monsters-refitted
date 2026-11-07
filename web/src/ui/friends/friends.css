@@ -524,43 +524,114 @@
 }
 
 /* Modern's steel plate has a rivet inside each end. Once the dialog drops below
-   its full 420 px (92vw < 420 px, i.e. phones), "Pebbles" with its pile and star
-   ran over them, so there the choices are drawn a size smaller and tighter.
+   its full 420 px (92vw < 420 px, i.e. phones), "Pebbles" with its pile ran
+   over them, so there the plain choices are drawn a size smaller and tighter.
    Classic's plate has no rivets and keeps its size. */
 @media (width <= 456px) {
   :root[data-skin="scrap"] .panel .gift-picker__choice.btn--outline {
     gap: 2px;
     font-size: var(--text-sm);
   }
-
-  :root[data-skin="scrap"] .panel .gift-picker__choice .gift-picker__star {
-    font-size: 1em;
-  }
 }
 
-/* Gift wishes (#391): the friend's wished resources first, each starred. */
-.gift-picker__choice--wished {
-  border-color: var(--colour-medal-gold);
+/* The painted wish marker (wishMark.ts, owner 7 Nov: "just star? thats so
+   plain"): a gold star rosette with red ribbons, its rank in white on the red
+   centre. The centre sits above the middle (the ribbons hang below), so the
+   number is lifted to it. */
+.wish-mark {
+  --wish-mark-size: 24px;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--wish-mark-size);
+  height: var(--wish-mark-size);
+  background: url("/friends/wish-mark.webp") center / contain no-repeat;
+  vertical-align: middle;
+  pointer-events: none;
 }
 
-/* The same gold star on the buttons, in the legend and on the wish tiles. */
-.gift-picker__star,
-.gift-wish__star,
-.gift-wishes__star {
-  color: var(--colour-medal-gold);
-  font-size: 1.1em;
+.wish-mark__rank {
+  /* Measured by tools/wish-mark-codex/make.py: the disc is 1.4% left and 3% up of the middle. */
+  transform: translate(calc(var(--wish-mark-size) * -0.014), calc(var(--wish-mark-size) * -0.03));
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: calc(var(--wish-mark-size) * 0.4);
+  font-weight: 800;
   line-height: 1;
   text-shadow:
-    0 1px 0 #4a3000, 1px 0 0 #4a3000, -1px 0 0 #4a3000, 0 -1px 0 #4a3000;
+    0 1px 0 #3a0008, 1px 0 0 #3a0008, -1px 0 0 #3a0008, 0 -1px 0 #3a0008;
 }
 
+/* Gift wishes (#391): the friend's wishes in their order, one per row, the
+   first on the main plate (a clearly different colour from the rest), each
+   with the marker and its rank hanging off the plate's top-right end, so the
+   pile and word stay centred. */
+.gift-picker__choices--wished {
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: 0;
+  padding-top: 14px;
+  row-gap: var(--space-3);
+}
+
+.gift-picker__choice--wished {
+  position: relative;
+}
+
+.gift-picker__choice--top {
+  min-height: 54px;
+  font-size: var(--text-lg);
+}
+
+.gift-picker__mark {
+  --wish-mark-size: 32px;
+  position: absolute;
+  top: -12px;
+  right: -8px;
+}
+
+.gift-picker__choice--top .gift-picker__mark {
+  --wish-mark-size: 38px;
+  top: -16px;
+}
+
+/* On a skin's plate the border is the plate's painted ends: hang the marker on the right end. */
+:root[data-skin] .panel .gift-picker__choice.btn--outline .gift-picker__mark {
+  right: calc(2px - var(--skin-button2-cap));
+}
+
+:root[data-skin] .panel .gift-picker__choice.btn--primary .gift-picker__mark {
+  right: calc(2px - var(--skin-button-cap));
+}
+
+/* "[marker] Bob wants Goo only" over the wishes. */
 .gift-picker__legend {
-  margin: 0 0 var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: var(--space-3) 0 0;
+  font-weight: 700;
+  color: var(--colour-text-strong);
+}
+
+.gift-picker__legend-mark {
+  --wish-mark-size: 26px;
+}
+
+/* The resources not wished for: small tiles (the wish strip's), one press sends. */
+.gift-picker__others {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+}
+
+.gift-picker__others-label {
   font-size: var(--text-sm);
   color: var(--colour-text-muted);
 }
 
-/* The Gifts tab's "★ My wishes" strip: four resource toggles, up to 3 on. */
+/* The Gifts tab's "My wishes" strip: four resource toggles, up to 3 on, ranked. */
 .gift-wishes {
   display: flex;
   flex-wrap: wrap;
@@ -581,8 +652,15 @@
 }
 
 .gift-wishes__title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   font-weight: 700;
   color: var(--colour-text-strong);
+}
+
+.gift-wishes__mark {
+  --wish-mark-size: 26px;
 }
 
 .gift-wishes__hint {
@@ -590,17 +668,25 @@
   color: var(--colour-text-muted);
 }
 
+/* One wish alone: "Goo only", said clearly. */
+.gift-wishes__hint--only {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--colour-text-strong);
+}
+
 .gift-wishes__toggles {
   display: flex;
   gap: var(--space-3);
-  /* Room for the stars that stick out of the tiles' top-right corners. */
-  padding: 6px 6px 0 0;
+  /* Room for the markers that stick out of the tiles' top-right corners. */
+  padding: 12px 12px 0 0;
 }
 
 /* A wish toggle: its own square tile, not the skin's wide plate (whose ends
    are wider than half of 44 px). Off: a sunken tile with a plain rim. On: a
-   gold tile with a dark gold rim and a star on its top-right corner, so on and
-   off differ in colour, not only in the star (owner rule). */
+   gold tile with a dark gold rim and the wish marker with its rank on its
+   top-right corner, so on and off differ in colour, not only in the marker
+   (owner rule). The gift picker's small "Or send" tiles are the same tile. */
 .gift-wish {
   position: relative;
   box-sizing: border-box;
@@ -653,12 +739,11 @@
     0 2px 3px var(--colour-art-shadow);
 }
 
-.gift-wish__star {
+.gift-wish__mark {
+  --wish-mark-size: 28px;
   position: absolute;
-  top: -9px;
-  right: -9px;
-  font-size: 18px;
-  pointer-events: none;
+  top: -12px;
+  right: -12px;
 }
 
 .gift-wish:disabled {

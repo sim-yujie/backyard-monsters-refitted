@@ -1,0 +1,19 @@
+You are making game art for "Backyard Monsters" (a 2010s Facebook strategy game). The first attached image, a style sheet, shows the game's art: glossy, painted, softly-lit 3D-cartoon look, chunky friendly shapes, warm saturated colours, light from the upper left. The second attached image is one of the game's resource piles (Goo), to show the painted style of the small icons it will sit next to. Use your image generation tool.
+
+Task: paint a GIFT WISH MARKER. In the game a player marks which resources they wish to receive as gifts from friends; this marker sits on the corner of the wished resource's tile (a 44 pixel square button) and next to it a white rank number (1, 2 or 3) will be drawn by the game on top of the marker's centre. So the marker MUST have a smooth, blank, round centre disc in deep crimson red (no number, no symbol in it) about 45% of the marker's width, so a white number on top of it reads clearly.
+
+Option 1: a chunky glossy golden five-pointed star with rounded tips, a thick darker-gold bevelled rim, the blank round crimson centre disc set into the middle of the star like a gem socket, and two short red ribbon tails with notched ends hanging out from behind the bottom of the star, like a prize rosette. Two or three tiny white sparkles on the star's upper-left points.
+Option 2: a round prize rosette: a ring of glossy gold pleated ruffles (like a fair ribbon rosette) around the blank round crimson centre disc, with a small glossy gold five-pointed star sitting on the top of the ring, and two short red ribbon tails with notched ends hanging below.
+
+Rules for every image:
+- One single bold object, front view, centered, filling about 85% of the canvas with a small margin, whole object in frame.
+- It will be shown very small (about 22 to 28 pixels, sometimes 44 pixels) on top of a game button, so: a strong simple silhouette, big clear shapes, few fine details, strong contrast, a thin dark brown outline around the whole shape so it separates from any background.
+- Same polished painted style as the style sheet. Not flat vector, not pixel art, not photo-real, not simple line icons.
+- NO text, NO letters, NO numbers, NO logos, NO frame, NO circle behind it, NO ground, NO cast shadow, NO background scenery.
+- Transparent background (PNG with alpha). If transparency is impossible, use a perfectly flat pure white background.
+- Square image, 1024x1024.
+
+Make TWO options as described. Save them exactly as:
+  gen/option-1.png
+  gen/option-2.png
+(relative to the current working directory; create the folder). Do not edit or create any other files. When done, reply with the two paths.

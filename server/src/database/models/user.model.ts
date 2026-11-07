@@ -123,7 +123,7 @@ export class User {
   look_seen_at?: Date | null;
 
   /**
-   * Gift wishes (#391): up to 3 of `r1`-`r4`, comma separated, or null for
+   * Gift wishes (#391): up to 3 of `r1`-`r4`, comma separated, best first, or null for
    * none. Set through `POST /bm/friends/wishes`; friends read them in
    * `GET /bm/friends` (`services/friends/giftWishes.ts`).
    */

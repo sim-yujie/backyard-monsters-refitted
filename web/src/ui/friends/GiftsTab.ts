@@ -5,6 +5,7 @@ import { formatAmount } from "@/ui/format";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, resourceIcon } from "@/ui/resourceIcon";
 import { openGiftPicker, type GiftTarget } from "./GiftPicker";
 import { button, make, playerRow, section, StatusLine, type FriendsTabView } from "./rows";
+import { wishesSummary, wishMark } from "./wishMark";
 
 /**
  * The Friends screen's **Gifts** tab (`docs/design/friends.md` §3.4, issue
@@ -15,8 +16,12 @@ import { button, make, playerRow, section, StatusLine, type FriendsTabView } fro
  * collects anyway. At most 5 a day; the rest wait, and a gift lapses after 7
  * days. Fetched fresh each time the tab comes forward.
  *
- * Above the gifts, **★ My wishes** (#391): four resource toggles, at most 3
- * on. Friends see those first, starred, when they send a gift. Saved at
+ * Above the gifts, **My wishes** (#391; ranked since the owner's 7 Nov
+ * note): four resource tiles; tapping one adds it as the next wish (1, 2, 3,
+ * shown by the painted wish marker on its corner), tapping it again takes it
+ * out and the ones after move up. One wish alone means "that one only", and
+ * the line beside the title says so ("Goo only"); two or three read "Goo >
+ * Twigs". Friends see them in that order when they send a gift. Saved at
  * once; a failed save puts the last saved wishes back.
  */
 
@@ -104,8 +109,9 @@ export const GIFTS_TEXT = {
   short: (lost: ResourceAmounts): string =>
     `Your storage is too full: ${amountsText(lost)} would be lost. Press again to collect anyway.`,
   underAttack: "Your yard is under attack right now. Collect when the attack is over.",
-  wishes: "★ My wishes",
-  wishesHint: `Up to ${GIFT_WISH_MAX}. Friends see them first.`,
+  wishes: "My wishes",
+  /** The line beside the title with no wishes yet. */
+  wishesHint: `Tap up to ${GIFT_WISH_MAX}, best first`,
   wishesFailed: "Your wishes could not be saved. Try again.",
 } as const;
 
@@ -211,24 +217,24 @@ export class GiftsTab implements FriendsTabView {
     this.body.replaceChildren(section(GIFTS_TEXT.waiting, rows, GIFTS_TEXT.none));
   }
 
-  /** The "★ My wishes" strip: one toggle per resource, the others off once 3 are on. */
+  /** The "My wishes" strip: one toggle per resource, ranked by the marker, the others off once 3 are on. */
   private renderWishes(): void {
     const full = this.wishes.length >= GIFT_WISH_MAX;
     const toggles = make("div", "gift-wishes__toggles");
     for (const key of RESOURCE_KEYS) {
-      const on = this.wishes.includes(key);
+      const rank = this.wishes.indexOf(key) + 1;
+      const on = rank > 0;
       const toggle = make("button", on ? "gift-wish gift-wish--on" : "gift-wish");
       toggle.type = "button";
       toggle.dataset["resource"] = key;
       toggle.setAttribute("aria-pressed", String(on));
-      toggle.setAttribute("aria-label", RESOURCE_NAMES[key]);
+      toggle.setAttribute("aria-label", on ? `${RESOURCE_NAMES[key]} (wish ${rank})` : RESOURCE_NAMES[key]);
       toggle.title = RESOURCE_NAMES[key];
       toggle.disabled = !on && full;
       toggle.append(resourceIcon(key, { decorative: true }));
       if (on) {
-        const star = make("span", "gift-wish__star", "★");
-        star.setAttribute("aria-hidden", "true");
-        toggle.append(star);
+        toggle.dataset["rank"] = String(rank);
+        toggle.append(wishMark(rank, "gift-wish__mark"));
       }
       toggle.addEventListener("click", () => void this.toggleWish(key));
       toggles.append(toggle);
@@ -236,24 +242,28 @@ export class GiftsTab implements FriendsTabView {
     toggles.setAttribute("role", "group");
     toggles.setAttribute("aria-label", "My gift wishes");
     const head = make("div", "gift-wishes__head");
-    // The title's ★ in the stars' gold; the words stay "★ My wishes".
+    // The painted marker, then "My wishes"; under it "Goo only", "Goo > Twigs" or how to start.
     const title = make("span", "gift-wishes__title");
-    const star = make("span", "gift-wishes__star", "★");
-    star.setAttribute("aria-hidden", "true");
-    title.append(star, GIFTS_TEXT.wishes.slice(1));
-    head.append(title, make("span", "gift-wishes__hint", GIFTS_TEXT.wishesHint));
+    title.append(wishMark(null, "gift-wishes__mark"), GIFTS_TEXT.wishes);
+    const hint = make("span", "gift-wishes__hint", wishesSummary(this.wishes) || GIFTS_TEXT.wishesHint);
+    if (this.wishes.length === 1) hint.classList.add("gift-wishes__hint--only");
+    head.append(title, hint);
     this.wishBar.replaceChildren(head, toggles);
   }
 
+  /** The same wishes in the same order (the order is the rank). */
   private sameWishes(a: readonly GiftResource[], b: readonly GiftResource[]): boolean {
-    return a.length === b.length && a.every((key) => b.includes(key));
+    return a.length === b.length && a.every((key, index) => b[index] === key);
   }
 
-  /** Turns a wish on or off and saves at once; a refusal puts the last saved wishes back. */
+  /**
+   * Adds `key` as the last wish or takes it out (the later ones move up), and
+   * saves at once; a refusal puts the last saved wishes back.
+   */
   private async toggleWish(key: GiftResource): Promise<void> {
     const on = this.wishes.includes(key);
     if (!on && this.wishes.length >= GIFT_WISH_MAX) return;
-    const next = on ? this.wishes.filter((one) => one !== key) : RESOURCE_KEYS.filter((one) => one === key || this.wishes.includes(one));
+    const next = on ? this.wishes.filter((one) => one !== key) : [...this.wishes, key];
     this.wishes = next;
     this.renderWishes();
     const save = ++this.wishSave;
