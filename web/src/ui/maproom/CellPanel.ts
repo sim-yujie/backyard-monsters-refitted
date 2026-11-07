@@ -699,10 +699,9 @@ export class CellPanel {
     this.chips.append(chip);
   }
 
-  /** The cell's land feature and what it does (`landFeatureRow.ts`); nothing on open ground. */
+  /** The cell's land feature and what it does (`landFeatureRow.ts`); "Open ground · no bonus" on open ground. */
   private addLandChip(feature: number | undefined): void {
-    const chip = landFeatureChip(feature);
-    if (chip) this.chips.append(chip);
+    this.chips.append(landFeatureChip(feature));
   }
 
   private addCountdown(
