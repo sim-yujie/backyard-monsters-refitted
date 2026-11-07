@@ -15,6 +15,8 @@ import {
 } from "./planner/placement";
 import { footprintCorners, footprintOf, type Point } from "./YardGrid";
 import type { Yard, YardBuilding } from "./yardModel";
+import type { UpgradeCost } from "@/api/types";
+import { linePath, planLine, type LineBudget, type LinePlan } from "./wallLine";
 
 /**
  * Putting a new building down (`docs/design/yard-buildings.md` §5.3): the
@@ -217,6 +219,36 @@ export const insideFootprint = (
 /** What a drop came to, as the placement's owner reports it. */
 export type DropOutcome = "placed" | "refused";
 
+/** Where a drawn wall line stands, for the bar. */
+export interface LineStage {
+  /** No start yet: the next click or tap picks the first Block. */
+  readonly empty: boolean;
+  /** The end is chosen and the line waits for ✓. */
+  readonly fixed: boolean;
+  /** ✓ was pressed and the server has not answered yet. */
+  readonly busy: boolean;
+}
+
+/**
+ * Line mode for wall Blocks (walls Option B, owner 8 Nov 2026; the maths is
+ * `wallLine.ts`). Given only to a wall placement.
+ */
+export interface LineModeOptions {
+  /** On when the placement starts. */
+  readonly on: boolean;
+  /** Blocks the resources pay for and the hall still allows, read fresh for every preview. */
+  readonly budget: () => LineBudget;
+  /** One Block's price. */
+  readonly unitCost: UpgradeCost;
+  /** The preview changed: the plan (null with no line) and its stage. */
+  readonly onPlan: (plan: LinePlan | null, stage: LineStage) => void;
+  /**
+   * ✓: builds the green Blocks, in order. Resolves once the server answered:
+   * `placed` clears the line, `refused` keeps it on screen to try again.
+   */
+  readonly onBuild: (cells: readonly Point[]) => Promise<DropOutcome>;
+}
+
 export interface BuildPlacementOptions {
   readonly type: number;
   readonly yard: Yard;
@@ -239,10 +271,14 @@ export interface BuildPlacementOptions {
   readonly repeat: boolean;
   /** After an accepted drop that ends the placement. */
   readonly onDone?: () => void;
+  /** A wall's line mode; absent for anything else. */
+  readonly line?: LineModeOptions;
 }
 
 const VALID = 0x5cc26a;
 const INVALID = 0xe05252;
+/** A line's Blocks past the resources or the hall's limit. */
+const SHORT = 0x9aa0a6;
 /** The pictures' fade while the building is in hand. */
 const GHOST_ALPHA = 0.7;
 
@@ -288,6 +324,23 @@ export class BuildPlacement {
   private pinned = false;
   private done = false;
 
+  /* Line mode (walls Option B). */
+  private lineOn = false;
+  private lineStart: Point | null = null;
+  private lineEnd: Point | null = null;
+  /** The end is chosen; the line waits for ✓. */
+  private lineFixed = false;
+  /** A mouse press drawing the line: where it went down, and whether it is the second click. */
+  private lineDrag: { x: number; y: number; second: boolean } | null = null;
+  private lineBusy = false;
+  private linePlanNow: LinePlan | null = null;
+  /** The line's Blocks: footprints, then pictures, drawn over the yard. */
+  private readonly lineLayer = new Container();
+  private readonly lineOutlines = new Graphics();
+  private readonly linePictures = new Container();
+  /** The loaded picture layers, so every Block of a line can be drawn with them. */
+  private artTextures: { texture: Texture; layer: ResolvedImage }[] = [];
+
   constructor(options: BuildPlacementOptions) {
     this.options = options;
     this.yard = options.yard;
@@ -297,6 +350,9 @@ export class BuildPlacement {
     this.ghost.addChild(this.nearby, this.outline, this.art);
     this.ghost.visible = false;
     options.layer.addChild(this.ghost);
+    this.lineLayer.eventMode = "none";
+    this.lineLayer.addChild(this.lineOutlines, this.linePictures);
+    options.layer.addChild(this.lineLayer);
     void this.loadArt();
 
     const canvas = options.canvas;
@@ -304,6 +360,7 @@ export class BuildPlacement {
     canvas.addEventListener("pointerup", this.onPointerUp);
     canvas.addEventListener("pointermove", this.onPointerMove);
     window.addEventListener("keydown", this.onKeyDown);
+    if (options.line?.on) this.setLineMode(true);
   }
 
   get type(): number {
@@ -320,6 +377,8 @@ export class BuildPlacement {
     this.yard = yard;
     this.grid.rebase(yard);
     if (this.spot) this.show(this.spot.x, this.spot.y);
+    // The resources and the wall count moved too: the greens are guessed again.
+    if (this.lineOn && !this.lineBusy) this.updateLine();
   }
 
   /** Puts the building at a spot directly (the keyboard, a test, a centred start). */
@@ -330,6 +389,7 @@ export class BuildPlacement {
 
   /** Drops the building where it is showing now, as a click there would. */
   dropHere(): void {
+    if (this.lineOn) return;
     if (this.spot) void this.drop(this.spot);
   }
 
@@ -341,10 +401,172 @@ export class BuildPlacement {
     canvas.removeEventListener("pointerup", this.onPointerUp);
     canvas.removeEventListener("pointermove", this.onPointerMove);
     window.removeEventListener("keydown", this.onKeyDown);
+    window.removeEventListener("pointerdown", this.onLinePress, true);
     // The renderer's own teardown may already have destroyed the layer.
     if (!this.ghost.destroyed) this.ghost.destroy({ children: true });
+    if (!this.lineLayer.destroyed) this.lineLayer.destroy({ children: true });
     this.fade?.destroy();
   }
+
+  /* ── Line mode ──────────────────────────────────────────────────────── */
+
+  /** Whether a wall line is drawn rather than one Block per click. */
+  get lineMode(): boolean {
+    return this.lineOn;
+  }
+
+  /** The line's preview now, or null with no line. */
+  get linePlan(): LinePlan | null {
+    return this.linePlanNow;
+  }
+
+  /**
+   * Turns line mode on or off (the bar's Line toggle). Any line half drawn
+   * goes. On, a mouse press on the yard draws instead of panning; a finger
+   * still pans, and taps pick the ends.
+   */
+  setLineMode(on: boolean): void {
+    if (!this.options.line || this.done) return;
+    this.lineOn = on;
+    window.removeEventListener("pointerdown", this.onLinePress, true);
+    // Before the camera's own listener on the canvas: a mouse press draws rather than pans.
+    if (on) window.addEventListener("pointerdown", this.onLinePress, true);
+    this.clearLine();
+  }
+
+  /** Lets the line go (✗, Escape); the Block in hand stays. */
+  clearLine(): void {
+    if (this.lineBusy) return;
+    this.lineStart = null;
+    this.lineEnd = null;
+    this.lineFixed = false;
+    this.lineDrag = null;
+    this.updateLine();
+  }
+
+  /** Puts the line's start at a spot directly, as a click there would (a test, the keyboard). */
+  lineTap(x: number, y: number): void {
+    if (!this.lineOn || this.lineBusy) return;
+    if (!this.lineStart || this.lineFixed) {
+      this.lineStart = { x, y };
+      this.lineEnd = { x, y };
+      this.lineFixed = false;
+    } else {
+      this.lineEnd = { x, y };
+      this.lineFixed = true;
+    }
+    this.updateLine();
+  }
+
+  /** ✓: builds the line's green Blocks. */
+  async confirmLine(): Promise<void> {
+    const line = this.options.line;
+    const plan = this.linePlanNow;
+    if (!line || !plan || plan.build.length === 0 || this.lineBusy || this.done) return;
+    this.lineBusy = true;
+    this.lineDrag = null;
+    const holds = plan.build.map((cell) => this.grid.hold(this.options.type, cell.x, cell.y));
+    this.reportLine();
+    const outcome = await line.onBuild(plan.build);
+    if (this.done) return;
+    for (const handle of holds) this.grid.release(handle);
+    this.lineBusy = false;
+    if (outcome === "placed") {
+      this.lineStart = null;
+      this.lineEnd = null;
+      this.lineFixed = false;
+    }
+    this.updateLine();
+  }
+
+  /** The stage of the line, for the bar. */
+  private get lineStage(): LineStage {
+    return { empty: this.lineStart === null, fixed: this.lineFixed, busy: this.lineBusy };
+  }
+
+  private reportLine(): void {
+    this.options.line?.onPlan(this.linePlanNow, this.lineStage);
+  }
+
+  /** Works the line out again from its ends, draws it and tells the bar. */
+  private updateLine(): void {
+    const line = this.options.line;
+    if (!line || this.done) return;
+    const start = this.lineOn ? this.lineStart : null;
+    if (!start) {
+      this.linePlanNow = null;
+      this.lineOutlines.clear();
+      this.linePictures.removeChildren().forEach((child) => child.destroy({ children: true }));
+      // The one Block in hand shows again where the next press goes.
+      if (this.spot && !this.done) this.draw(this.spot);
+      this.reportLine();
+      return;
+    }
+    const [width] = footprintOf(this.options.type, this.yard.kind);
+    const path = linePath(start, this.lineEnd ?? start, width);
+    this.linePlanNow = planLine(path, (x, y) => this.grid.check(this.options.type, x, y), line.budget(), line.unitCost);
+    this.ghost.visible = false;
+    this.drawLine(this.linePlanNow);
+    this.reportLine();
+  }
+
+  private drawLine(plan: LinePlan): void {
+    const g = this.lineOutlines;
+    g.clear();
+    this.linePictures.removeChildren().forEach((child) => child.destroy({ children: true }));
+    // Back to front, so a nearer Block's picture covers the one behind it.
+    const ordered = [...plan.cells].sort((a, b) => a.x + a.y - (b.x + b.y));
+    for (const cell of ordered) {
+      const corners = footprintCorners(this.yard.bounds, this.options.type, cell.x, cell.y, this.yard.kind);
+      const [top, right, bottom, left] = corners;
+      const colour = cell.state === "build" ? VALID : cell.state === "blocked" ? INVALID : SHORT;
+      g.poly(corners.flatMap((point) => [point.x, point.y]))
+        .fill({ color: colour, alpha: cell.state === "short" ? 0.22 : 0.3 })
+        .stroke({ width: cell.state === "blocked" ? 3 : 2, color: colour, alpha: 0.95 });
+      // A skipped Block is crossed out as well as red: colour is never the only channel.
+      if (cell.state === "blocked" && top && right && bottom && left) {
+        g.moveTo(top.x, top.y)
+          .lineTo(bottom.x, bottom.y)
+          .moveTo(left.x, left.y)
+          .lineTo(right.x, right.y)
+          .stroke({ width: 3, color: INVALID, alpha: 0.95 });
+      }
+      if (cell.state === "blocked" || !top || this.artTextures.length === 0) continue;
+      const picture = new Container();
+      for (const { texture, layer } of this.artTextures) {
+        const sprite = new Sprite(texture);
+        sprite.position.set(layer.x, layer.y);
+        picture.addChild(sprite);
+      }
+      picture.position.set(top.x, top.y);
+      // A grey Block is a faint, greyed picture: there, but not built.
+      picture.alpha = cell.state === "build" ? GHOST_ALPHA : 0.35;
+      if (cell.state === "short") for (const child of picture.children) (child as Sprite).tint = 0x808080;
+      this.linePictures.addChild(picture);
+    }
+  }
+
+  /** A mouse or pen press with line mode on, claimed before the camera can pan with it. */
+  private readonly onLinePress = (event: PointerEvent): void => {
+    if (event.target !== this.options.canvas || event.pointerType === "touch") return;
+    if (event.button !== 0 || this.lineBusy || this.done) return;
+    event.stopPropagation();
+    try {
+      this.options.canvas.setPointerCapture(event.pointerId);
+    } catch {
+      // The pointer is already gone; the release still reaches the canvas.
+    }
+    const point = this.yardPoint(event);
+    const spot = this.grid.spotAt(this.options.type, point.x, point.y);
+    const second = this.lineStart !== null && !this.lineFixed;
+    if (!second) {
+      this.lineStart = spot;
+      this.lineFixed = false;
+    }
+    this.lineEnd = spot;
+    this.lineDrag = { x: event.clientX, y: event.clientY, second };
+    this.updateLine();
+  };
 
   /* ── Drawing ────────────────────────────────────────────────────────── */
 
@@ -367,11 +589,13 @@ export class BuildPlacement {
         if (!texture) return;
         const frame = layer.frame;
         // A strip bigger than the graphics card holds is cut (`cellTexture`), not drawn black.
-        const sprite = new Sprite(
-          frame ? cellTexture(texture.source, { x: 0, y: 0, width: frame.width, height: frame.height }).texture : texture,
-        );
+        const shown = frame
+          ? cellTexture(texture.source, { x: 0, y: 0, width: frame.width, height: frame.height }).texture
+          : texture;
+        const sprite = new Sprite(shown);
         sprite.position.set(layer.x, layer.y);
         this.art.addChild(sprite);
+        this.artTextures.push({ texture: shown, layer });
       });
       this.fade = new AlphaFilter({
         alpha: this.pinned ? 1 : GHOST_ALPHA,
@@ -379,6 +603,8 @@ export class BuildPlacement {
       });
       this.art.filters = [this.fade];
       this.artDrawn = layers;
+      // A line drawn before the pictures came in gets them now.
+      if (this.linePlanNow) this.drawLine(this.linePlanNow);
     } catch {
       // No picture: the footprint alone still says where it goes.
     }
@@ -432,7 +658,8 @@ export class BuildPlacement {
     }
     if (top) this.art.position.set(top.x, top.y);
     this.art.tint = check.problem ? 0xffb0b0 : 0xffffff;
-    this.ghost.visible = true;
+    // A drawn line shows its own Blocks in place of the one in hand.
+    this.ghost.visible = !(this.lineOn && this.lineStart);
   }
 
   /**
@@ -486,10 +713,23 @@ export class BuildPlacement {
     if (event.pointerType === "touch" || this.pinned) return;
     const point = this.yardPoint(event);
     const spot = this.grid.spotAt(this.options.type, point.x, point.y);
+    if (this.lineOn) {
+      if (this.lineBusy) return;
+      // Dragging, or between the two clicks: the end follows the pointer.
+      if (this.lineDrag || (this.lineStart && !this.lineFixed)) {
+        if (this.lineEnd?.x !== spot.x || this.lineEnd?.y !== spot.y) {
+          this.lineEnd = spot;
+          this.updateLine();
+        }
+        return;
+      }
+      if (this.lineStart) return;
+    }
     this.show(spot.x, spot.y);
   };
 
   private readonly onPointerUp = (event: PointerEvent): void => {
+    if (this.lineOn && this.lineUp(event)) return;
     if (!this.pressed) return;
     this.pressed = false;
     if (this.pinned) return;
@@ -503,11 +743,45 @@ export class BuildPlacement {
     if (this.spot) void this.drop(this.spot);
   };
 
+  /**
+   * A release with line mode on; never drops a single Block. A mouse press
+   * that travelled, or the second click, fixes the end; a press that did not
+   * travel only picks the start, and the end follows the pointer until the
+   * next click. A finger's tap picks the start, then the end; a finger that
+   * travelled was a pan.
+   */
+  private lineUp(event: PointerEvent): true {
+    const pressed = this.pressed;
+    this.pressed = false;
+    if (this.lineBusy) return true;
+    const point = this.yardPoint(event);
+    const spot = this.grid.spotAt(this.options.type, point.x, point.y);
+    const drag = this.lineDrag;
+    if (drag) {
+      this.lineDrag = null;
+      this.lineEnd = spot;
+      if (drag.second || Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > DRAG_SLOP) {
+        this.lineFixed = true;
+      }
+      this.updateLine();
+      return true;
+    }
+    if (event.pointerType !== "touch" || !pressed) return true;
+    if (Math.hypot(event.clientX - this.pressX, event.clientY - this.pressY) > DRAG_SLOP) return true;
+    this.lineTap(spot.x, spot.y);
+    return true;
+  }
+
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     // Nothing to cancel once a one-off building is on its way down.
     if (event.key !== "Escape" || this.pinned) return;
     const target = event.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+    // Escape lets a drawn line go first, then the Block in hand.
+    if (this.lineOn && this.lineStart && !this.lineBusy) {
+      this.clearLine();
+      return;
+    }
     this.options.onCancel();
   };
 

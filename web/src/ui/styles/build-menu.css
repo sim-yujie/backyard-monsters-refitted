@@ -739,8 +739,83 @@
   gap: var(--space-2);
 }
 
-.build-placing__buttons[hidden] {
+.build-placing__buttons[hidden],
+.build-placing__buttons .btn[hidden],
+.build-placing__line[hidden] {
   display: none;
+}
+
+/* ── A wall line (walls Option B): Line toggle, count and cost, ✗ and ✓ ── */
+
+.build-placing__line-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.build-placing__line-toggle[aria-pressed="true"] {
+  border-color: var(--colour-success);
+  background: var(--colour-success-soft, var(--colour-surface-sunken));
+}
+
+/* Three Block pictures overlapping in a row: a line of walls. */
+.build-placing__line-icon {
+  display: inline-flex;
+  align-items: flex-end;
+}
+
+.build-placing__line-icon img {
+  width: 16px;
+  height: 20px;
+  object-fit: cover;
+}
+
+.build-placing__line-icon img + img {
+  margin-left: -7px;
+}
+
+.build-placing__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.build-placing__line:empty {
+  display: none;
+}
+
+.build-placing__line-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.build-placing__line-count img {
+  width: 20px;
+  height: 25px;
+  object-fit: cover;
+}
+
+.build-placing__line-count strong {
+  font-size: var(--text-md);
+}
+
+.build-placing__line-skip {
+  color: var(--colour-danger);
+  font-weight: 700;
+}
+
+.build-placing__line-short {
+  color: var(--colour-text-muted);
+}
+
+.build-placing__line-confirm,
+.build-placing__line-clear {
+  min-width: 44px;
+  font-size: var(--text-md);
+  font-weight: 700;
 }
 
 /* Build here is the touch screen's click; a mouse clicks the spot itself. */
@@ -945,8 +1020,13 @@
     font-size: var(--text-md);
   }
 
-  .build-placing__buttons .build-placing__here {
+  .build-placing__buttons .build-placing__here,
+  .build-placing__buttons .build-placing__line-confirm {
     flex: 2;
+  }
+
+  .build-placing__line {
+    justify-content: center;
   }
 }
 

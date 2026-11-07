@@ -845,7 +845,7 @@
    an attack's or replay's speed, the Inferno map's Map/List, the Build
    window's Decorations sub-tab): the window's
    small second plate, lit. */
-:root[data-skin] :is(.planner-bar button[aria-pressed="true"], .hud__scene-button[aria-current="true"], .mr2-kit-filter__option[aria-pressed="true"], .attack-strip__speed-button[aria-pressed="true"], .inferno-map__toggle-button[aria-pressed="true"], .build-menu__kind[aria-selected="true"]) {
+:root[data-skin] :is(.planner-bar button[aria-pressed="true"], .build-placing__line-toggle[aria-pressed="true"], .hud__scene-button[aria-current="true"], .mr2-kit-filter__option[aria-pressed="true"], .attack-strip__speed-button[aria-pressed="true"], .inferno-map__toggle-button[aria-pressed="true"], .build-menu__kind[aria-selected="true"]) {
   border-style: solid;
   border-color: transparent;
   border-width: 0 12px;

@@ -15,7 +15,8 @@ import {
   type BuildNeed,
   type BuildOffer,
 } from "@/game/yard/buildCatalogue";
-import type { SpotCheck } from "@/game/yard/BuildPlacement";
+import type { LineStage, SpotCheck } from "@/game/yard/BuildPlacement";
+import type { LinePlan } from "@/game/yard/wallLine";
 import { DECOR_KINDS, DecorKind } from "@/game/yard/decorShop";
 import { townHallLevel, type YardKind } from "@/game/yard/buildingCosts";
 import { NEED_MORE_PODS, NEED_MORE_SILOS } from "@/game/yard/storage";
@@ -996,7 +997,32 @@ export interface PlacementBarOptions {
   readonly onCancel: () => void;
   /** Build here: put it down where it is showing. Left out, the button is not drawn. */
   readonly onBuildHere?: () => void;
+  /** A wall's line mode (walls Option B): the toggle, ✓ and ✗. Left out, none is drawn. */
+  readonly line?: PlacementLineOptions;
 }
+
+/** The bar's side of a wall's line mode. */
+export interface PlacementLineOptions {
+  /** On when the bar opens. */
+  readonly on: boolean;
+  /** The Line toggle was pressed. */
+  readonly onToggle: (on: boolean) => void;
+  /** ✓: build the green Blocks. */
+  readonly onConfirm: () => void;
+  /** ✗: let the line go, keep the Block in hand. */
+  readonly onClear: () => void;
+}
+
+/** What to do next in line mode, before and while the line is drawn. */
+export const lineHint = (phone: boolean, stage: LineStage | null, plan: LinePlan | null): string => {
+  if (stage?.busy) return "Building…";
+  if (!stage || stage.empty) {
+    return phone ? "Tap the first Block, then the last." : "Drag from the first Block to the last. Esc cancels.";
+  }
+  if (!stage.fixed) return phone ? "Tap the last Block." : "Click the last Block.";
+  if (plan && plan.build.length === 0) return "Nothing here can be built.";
+  return "✓ builds the green Blocks.";
+};
 
 /** What to do next, before the spot has anything to say. */
 const placeHint = (phone: boolean): string =>
@@ -1013,8 +1039,24 @@ export class PlacementBar {
   /** What the spot last said, for when Building… gives the line back. */
   private spotText: string | null = null;
   private building = false;
+  /* Line mode. */
+  private readonly lineOptions: PlacementLineOptions | null;
+  private lineOn = false;
+  private lineToggle: HTMLButtonElement | null = null;
+  private lineSummary: HTMLElement | null = null;
+  private lineConfirm: HTMLButtonElement | null = null;
+  private lineClear: HTMLButtonElement | null = null;
+  private lineStage: LineStage | null = null;
+  private linePlan: LinePlan | null = null;
+  private readonly type: number;
+  private readonly kind: YardKind | undefined;
+  private readonly realm: ResourceRealm | undefined;
 
   constructor(options: PlacementBarOptions) {
+    this.lineOptions = options.line ?? null;
+    this.type = options.type;
+    this.kind = options.kind;
+    this.realm = options.realm;
     this.element = document.createElement("div");
     this.element.className = "build-placing";
     this.element.setAttribute("role", "region");
@@ -1086,7 +1128,138 @@ export class PlacementBar {
       this.here = here;
     }
 
-    this.element.append(what, this.hint, this.message, buttons);
+    const line = options.line;
+    if (line) {
+      // The Line toggle: three Block pictures in a row and the word, pressed while on.
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "btn build-placing__line-toggle";
+      toggle.title = "Draw a line of Blocks";
+      const icon = document.createElement("span");
+      icon.className = "build-placing__line-icon";
+      icon.setAttribute("aria-hidden", "true");
+      for (let i = 0; i < 3; i++) {
+        const block = document.createElement("img");
+        block.src = buildPictureUrl(options.type, options.kind);
+        block.alt = "";
+        icon.append(block);
+      }
+      const label = document.createElement("span");
+      label.textContent = "Line";
+      toggle.append(icon, label);
+      toggle.addEventListener("click", () => {
+        const on = !this.lineOn;
+        this.setLineMode(on);
+        line.onToggle(on);
+      });
+      buttons.prepend(toggle);
+      this.lineToggle = toggle;
+
+      const clear = document.createElement("button");
+      clear.type = "button";
+      clear.className = "btn build-placing__line-clear";
+      clear.textContent = "✗";
+      clear.title = "Clear the line";
+      clear.setAttribute("aria-label", "Clear the line");
+      clear.addEventListener("click", () => line.onClear());
+      const confirm = document.createElement("button");
+      confirm.type = "button";
+      confirm.className = "btn btn--primary build-placing__line-confirm";
+      confirm.textContent = "✓";
+      confirm.title = "Build the line";
+      confirm.setAttribute("aria-label", "Build the line");
+      confirm.addEventListener("click", () => line.onConfirm());
+      buttons.append(clear, confirm);
+      this.lineClear = clear;
+      this.lineConfirm = confirm;
+
+      const summary = document.createElement("div");
+      summary.className = "build-placing__line";
+      summary.setAttribute("aria-live", "polite");
+      this.lineSummary = summary;
+    }
+
+    this.element.append(what, this.hint, this.message);
+    if (this.lineSummary) this.element.append(this.lineSummary);
+    this.element.append(buttons);
+    if (line) this.setLineMode(line.on);
+  }
+
+  /** Whether the bar shows line mode. */
+  get lineMode(): boolean {
+    return this.lineOn;
+  }
+
+  /** Shows or hides line mode's parts: ✓ and ✗ in place of Build here, the count and cost. */
+  setLineMode(on: boolean): void {
+    if (!this.lineOptions) return;
+    this.lineOn = on;
+    this.element.classList.toggle("build-placing--line", on);
+    this.lineToggle?.setAttribute("aria-pressed", String(on));
+    if (this.here) this.here.hidden = on;
+    if (this.lineConfirm) this.lineConfirm.hidden = !on;
+    if (this.lineClear) this.lineClear.hidden = !on;
+    if (this.lineSummary) this.lineSummary.hidden = !on;
+    this.lineStage = null;
+    this.linePlan = null;
+    this.renderLine();
+    if (!on) this.setSpot(this.spotText);
+  }
+
+  /** The line's preview changed: the count, the cost and what is left out. */
+  setLine(plan: LinePlan | null, stage: LineStage): void {
+    this.linePlan = plan;
+    this.lineStage = stage;
+    if (stage.busy) this.setMessage(null);
+    this.renderLine();
+  }
+
+  private renderLine(): void {
+    if (!this.lineOn || !this.lineSummary) return;
+    const plan = this.linePlan;
+    const stage = this.lineStage;
+    this.element.classList.remove("build-placing--blocked");
+    this.hint.textContent = lineHint(this.phone, stage, plan);
+    const count = plan?.build.length ?? 0;
+    if (this.lineConfirm) this.lineConfirm.disabled = count === 0 || stage?.busy === true;
+    if (this.lineClear) this.lineClear.disabled = !plan || stage?.busy === true;
+    if (this.lineToggle) this.lineToggle.disabled = stage?.busy === true;
+
+    const summary = this.lineSummary;
+    summary.replaceChildren();
+    if (!plan) return;
+    // Icons and numbers: the Block ×count, what it costs, then what is left out.
+    const built = document.createElement("span");
+    built.className = "build-placing__line-count";
+    built.title = `${count} to build`;
+    const block = document.createElement("img");
+    block.src = buildPictureUrl(this.type, this.kind);
+    block.alt = "";
+    const times = document.createElement("strong");
+    times.textContent = `×${count}`;
+    built.append(block, times);
+    summary.append(built);
+    if (count > 0) {
+      const cost = costAmounts(plan.cost, undefined, this.realm ? { realm: this.realm } : {});
+      if (cost) {
+        cost.classList.add("build-placing__line-cost");
+        summary.append(cost);
+      }
+    }
+    if (plan.blocked > 0) {
+      const blocked = document.createElement("span");
+      blocked.className = "build-placing__line-skip";
+      blocked.title = `${plan.blocked} blocked: skipped`;
+      blocked.textContent = `✕ ${plan.blocked}`;
+      summary.append(blocked);
+    }
+    if (plan.short > 0) {
+      const short = document.createElement("span");
+      short.className = "build-placing__line-short";
+      short.textContent =
+        plan.shortReason === "limit" ? `${plan.short} over hall limit` : `${plan.short} can't afford`;
+      summary.append(short);
+    }
   }
 
   mount(container: HTMLElement): this {
@@ -1097,7 +1270,8 @@ export class PlacementBar {
   /** What the spot says: nothing when it is fine, why when it is not. */
   setSpot(text: string | null): void {
     this.spotText = text;
-    if (this.building) return;
+    // In line mode each Block shows what it comes to; the bar keeps the line's own words.
+    if (this.building || this.lineOn) return;
     this.element.classList.toggle("build-placing--blocked", Boolean(text));
     this.hint.textContent = text ? `Can't build here: ${text}` : placeHint(this.phone);
     if (this.here) this.here.disabled = Boolean(text);
