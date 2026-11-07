@@ -5,9 +5,10 @@ import { onQualityChange, quality, type Quality } from "@/game/quality";
 import type { ZoneRecord } from "../ZoneStore";
 import type { CellRange } from "../zones";
 import { BORDER_FRAGMENT } from "./borderShader";
-import { BORDER_COLOURS, BorderData, BorderRelation } from "./borders";
+import { BORDER_COLOURS, BorderData, BorderRelation, type BorderViewer } from "./borders";
 import { cellCentre, paintedCellShape, type CellShape } from "./cellShape";
 import { GROUND_VERTEX } from "./groundShader";
+import { BORDER_RIM_ALPHA, BORDER_RIM_COLOUR } from "../relationLook";
 
 /** The borders' program (one per page; `shaderWarmup.ts` compiles it ahead). */
 export const borderProgram = (): GlProgram =>
@@ -50,7 +51,7 @@ export class BorderLayer {
   private readonly shader: Shader;
   private readonly startMs = performance.now();
   private readonly stopQuality: () => void;
-  private myAlliance: number | null = null;
+  private viewer: BorderViewer = { myAlliance: null };
 
   constructor(readonly shape: CellShape = paintedCellShape()) {
     this.data = new BorderData(shape.kind);
@@ -67,7 +68,11 @@ export class BorderLayer {
           uYou: { value: rgb(BORDER_COLOURS[BorderRelation.YOU]), type: "vec3<f32>" },
           uAlliance: { value: rgb(BORDER_COLOURS[BorderRelation.ALLIANCE]), type: "vec3<f32>" },
           uOther: { value: rgb(BORDER_COLOURS[BorderRelation.OTHER]), type: "vec3<f32>" },
-          uAttacker: { value: rgb(BORDER_COLOURS[BorderRelation.ATTACKER]), type: "vec3<f32>" },
+          uHostile: { value: rgb(BORDER_COLOURS[BorderRelation.HOSTILE]), type: "vec3<f32>" },
+          uFriend: { value: rgb(BORDER_COLOURS[BorderRelation.FRIEND]), type: "vec3<f32>" },
+          uPinned: { value: rgb(BORDER_COLOURS[BorderRelation.PINNED]), type: "vec3<f32>" },
+          uRim: { value: rgb(BORDER_RIM_COLOUR), type: "vec3<f32>" },
+          uRimAlpha: { value: BORDER_RIM_ALPHA, type: "f32" },
         },
         uData: this.data.source,
       },
@@ -96,14 +101,23 @@ export class BorderLayer {
   }
 
   applyZone(zone: ZoneRecord): void {
-    this.data.applyZone(zone, this.myAlliance);
+    this.data.applyZone(zone, this.viewer);
   }
 
   /** The viewer's alliance changed: the relation colours are worked out again from these zones. */
   setMyAlliance(id: number | null, zones: Iterable<ZoneRecord>): void {
-    if (id === this.myAlliance) return;
-    this.myAlliance = id;
-    for (const zone of zones) this.data.applyZone(zone, id);
+    if (id === this.viewer.myAlliance) return;
+    this.viewer = { ...this.viewer, myAlliance: id };
+    for (const zone of zones) this.data.applyZone(zone, this.viewer);
+  }
+
+  /**
+   * Who the viewer's friends are (the shared friends list's answer per cell). Pass the zones to
+   * colour them again now, after a friend was added, removed, pinned or unpinned.
+   */
+  setFriendMark(friendMark: BorderViewer["friendMark"], zones: Iterable<ZoneRecord> = []): void {
+    this.viewer = { ...this.viewer, friendMark };
+    for (const zone of zones) this.data.applyZone(zone, this.viewer);
   }
 
   reset(): void {

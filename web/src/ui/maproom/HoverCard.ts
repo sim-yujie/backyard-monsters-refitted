@@ -1,7 +1,8 @@
 import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell } from "@/api/types";
 import { avatarOf, avatarUrl } from "@/game/avatars";
 import { cellsText, type ReachAnswer } from "@/game/maproom/attackRange";
-import { TRIBE_COLOURS } from "@/game/maproom/cellVisuals";
+import { TRIBE_COLOURS, relationOf } from "@/game/maproom/cellVisuals";
+import { RELATION_LOOK, cssHex } from "@/game/maproom/relationLook";
 import { tribePictureUrl } from "@/game/maproom/tribeAvatars";
 import { el, icon } from "@/ui/maproom1/icons";
 import { friendMarkOf, type FriendMark } from "@/game/friends/friendMarks";
@@ -137,6 +138,12 @@ export const hoverContentFor = (
   const mark =
     isPlayerCell(payload) && !mine ? friendMarkOf(payload.uid, { friend: payload.fr === 1, pinned: payload.fp === 1 }) : null;
   const friend = mark ? { friend: mark } : {};
+  // Someone else's picture wears their border's colour (owner, 8 Nov 2026): friend pink, pinned
+  // friend light pink, hostile red; a neutral player's stays plain, as the map's quiet blue line.
+  if (isPlayerCell(payload) && !mine) {
+    const relation = relationOf(payload, null, mark ?? "none");
+    if (relation === "pinned" || relation === "friend" || relation === "hostile") ring = cssHex(RELATION_LOOK[relation].colour);
+  }
   if (mine || !reach.source) {
     return { picture, ring, title, detail: "Click for more", warn: false, ...friend };
   }

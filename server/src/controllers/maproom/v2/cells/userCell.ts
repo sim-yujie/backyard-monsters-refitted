@@ -7,6 +7,7 @@ import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
 import { MapRoomCell } from "../../../../enums/MapRoom.js";
 import { isAttackActive } from "../../../../services/base/isAttackActive.js";
 import { TAKEOVER_DAMAGE } from "../../../../services/maproom/v2/takeoverRules.js";
+import { isHostile } from "../../../../services/maproom/v2/hostiles.js";
 import { loadArmyOwner, monstersForMap, type ArmyOwner } from "../../../../services/yard/armies.js";
 
 export type UserCellFields =
@@ -42,7 +43,8 @@ type Cell = Loaded<WorldMapCell, "save", UserCellFields>;
  */
 export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number, UserCellOwner>) => {
   const currentUser: User = ctx.authUser;
-  const { online: onlineNow, truces, pendingInvites, idleWorkers, busyWorkers, attackers, friends, pinnedFriends } = ctx.state;
+  const { online: onlineNow, truces, pendingInvites, idleWorkers, busyWorkers, attackers, friends, pinnedFriends, attacked } =
+    ctx.state;
 
   const mine = currentUser.userid === cell.uid;
   const cellOwner = mine ? currentUser : cellOwners.get(cell.uid);
@@ -109,6 +111,12 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     fr: !mine && (friends as Set<number> | undefined)?.has(cellOwner.userid) ? 1 : 0,
     // 1 on a friend the viewer pinned to the top of their list (beta 7): the stronger friend marker.
     ...(!mine && (pinnedFriends as Set<number> | undefined)?.has(cellOwner.userid) && { fp: 1 }),
+    // 1 on a HOSTILE player's yard or outpost (owner, 8 Nov 2026): an attack between them and the
+    // viewer, either way, ever, and no truce running (`hostiles.ts`). The map's red border.
+    ...(!mine &&
+      isHostile(!!(attacked as Set<number> | undefined)?.has(cellOwner.userid), truces.get(cellOwner.userid), currentTime) && {
+        ho: 1,
+      }),
     p: isProtected ? 1 : 0,
     // When damage protection ends, unix seconds (#187): Flash sent only `p`,
     // and the map could only say "protected" with no end. Sent while it runs.

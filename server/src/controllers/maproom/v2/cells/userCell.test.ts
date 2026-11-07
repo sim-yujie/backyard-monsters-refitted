@@ -222,6 +222,31 @@ describe("userCell friend flag (friends WP2, #369)", () => {
   });
 });
 
+describe("userCell hostile flag (owner, 8 Nov 2026)", () => {
+  const withAttacks = (attacked?: Set<number>, truces = new Map(), friends = new Set<number>()) =>
+    ({ authUser: { userid: 2505 }, state: { online: new Set(), truces, attacked, friends } }) as unknown as Context;
+
+  test("ho is 1 on a player with an attack between them and the viewer, absent otherwise", async () => {
+    expect(await userCell(withAttacks(new Set([OWNER])), outpostWith(0, 0), owners)).toMatchObject({ ho: 1 });
+    expect(await userCell(withAttacks(new Set([5])), outpostWith(0, 0), owners)).not.toHaveProperty("ho");
+    expect(await userCell(withAttacks(), outpostWith(0, 0), owners)).not.toHaveProperty("ho");
+  });
+
+  test("a running truce switches it off; a waiting request or an ended truce does not", async () => {
+    const running = new Map([[OWNER, { trucestate: "accepted", expires_at: now() + 3600 }]]);
+    const ended = new Map([[OWNER, { trucestate: "accepted", expires_at: now() - 60 }]]);
+    const waiting = new Map([[OWNER, { trucestate: "requested" }]]);
+    expect(await userCell(withAttacks(new Set([OWNER]), running), outpostWith(0, 0), owners)).not.toHaveProperty("ho");
+    expect(await userCell(withAttacks(new Set([OWNER]), ended), outpostWith(0, 0), owners)).toMatchObject({ ho: 1 });
+    expect(await userCell(withAttacks(new Set([OWNER]), waiting), outpostWith(0, 0), owners)).toMatchObject({ ho: 1 });
+  });
+
+  test("the server sends ho on a friend too: the client decides that friend wins", async () => {
+    const both = withAttacks(new Set([OWNER]), new Map(), new Set([OWNER]));
+    expect(await userCell(both, outpostWith(0, 0), owners)).toMatchObject({ fr: 1, ho: 1 });
+  });
+});
+
 describe("userCell Flinger and Catapult levels (owner 2026-10-22)", () => {
   const save = { damage: 0, protected: 0, locked: 0, empirevalue: 0, flinger: 4, catapult: 3, attackid: 0, attacks: [] };
   const cellOf = (uid: number, base_type: number) =>

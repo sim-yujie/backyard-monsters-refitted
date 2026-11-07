@@ -1,3 +1,4 @@
+import { RELATION_LOOK } from "./relationLook";
 import { afterEach, describe, expect, it } from "vitest";
 import { CELL_HEIGHT, CELL_WIDTH } from "@/config";
 import type { MapCell, PlayerCell } from "@/api/types";
@@ -21,8 +22,7 @@ import {
   UNEXPLORED_STRIPE,
   UNEXPLORED_STRIPE_COLOUR,
   appearanceOf,
-  FRIEND_PINNED_RASTER,
-  FRIEND_RASTER,
+  relationOf,
   rasterColour,
   campHealthColour,
   campHealthOf,
@@ -171,13 +171,18 @@ describe("player relation and kit (#334)", () => {
     });
   });
 
-  it("colours and icons a base whose owner has attacked the viewer red with swords", () => {
+  it("colours and icons a hostile player's base red with swords", () => {
     const context: MapViewerContext = { myAlliance: null, kitFilter: KitFilter.ALL };
-    expect(appearanceOf(player({ mine: 0, aid: null, ak: 1 }), 0, context)).toMatchObject({
+    expect(appearanceOf(player({ mine: 0, aid: null, ho: 1 }), 0, context)).toMatchObject({
       plateColour: RELATION_ATTACKER_COLOUR,
       relationIcon: "swords",
+      relation: "hostile",
     });
-    expect(appearanceOf(player({ mine: 0, aid: null }), 0, context).relationIcon).toBe("none");
+    // Attacked once but in a truce now: the server leaves `ho` off, so the cell is neutral.
+    expect(appearanceOf(player({ mine: 0, aid: null, ak: 1 }), 0, context)).toMatchObject({
+      relationIcon: "none",
+      relation: "other",
+    });
   });
 
   it("maps the server's kit id to a kit name, falling back to none", () => {
@@ -240,10 +245,67 @@ describe("friend marker (beta 7)", () => {
     expect(appearanceOf(player({ mine: 1 }), 0, context).friend).toBe("none");
   });
 
-  it("colours a friend's base on the world view", () => {
-    expect(rasterColour(player({ fr: 1 }))).toBe(FRIEND_RASTER);
-    expect(rasterColour(player({ fr: 1, fp: 1 }))).toBe(FRIEND_PINNED_RASTER);
-    expect(rasterColour(player())).not.toBe(FRIEND_RASTER);
+  it("colours friends and hostile players on the world view in their border colours", () => {
+    expect(rasterColour(player({ fr: 1 }))).toBe(RELATION_LOOK.friend.colour);
+    expect(rasterColour(player({ fr: 1, fp: 1 }))).toBe(RELATION_LOOK.pinned.colour);
+    expect(rasterColour(player({ ho: 1 }))).toBe(RELATION_LOOK.hostile.colour);
+    expect(rasterColour(player())).not.toBe(RELATION_LOOK.friend.colour);
+    expect(rasterColour(player())).not.toBe(RELATION_LOOK.other.colour);
+  });
+});
+
+describe("relation borders (owner, 8 Nov 2026)", () => {
+  const context = (extra: Partial<MapViewerContext> = {}): MapViewerContext => ({
+    myAlliance: 5,
+    kitFilter: KitFilter.ALL,
+    ...extra,
+  });
+
+  const asPlayer = (overrides: Partial<PlayerCell>): PlayerCell => player(overrides) as PlayerCell;
+
+  it("puts the relations in order: yours, alliance, pinned friend, friend, hostile, neutral", () => {
+    expect(relationOf(asPlayer({ mine: 1, aid: 5, fr: 1, ho: 1 }), 5)).toBe("you");
+    expect(relationOf(asPlayer({ aid: 5, fr: 1, fp: 1, ho: 1 }), 5)).toBe("alliance");
+    expect(relationOf(asPlayer({ fr: 1, fp: 1, ho: 1 }), 5)).toBe("pinned");
+    // Friend wins over hostile.
+    expect(relationOf(asPlayer({ fr: 1, ho: 1 }), 5)).toBe("friend");
+    expect(relationOf(asPlayer({ ho: 1 }), 5)).toBe("hostile");
+    expect(relationOf(asPlayer({ aid: 9 }), 5)).toBe("other");
+    expect(relationOf(asPlayer({ aid: null }), null)).toBe("other");
+  });
+
+  it("gives own outposts, friends' outposts and hostile outposts the same relation as the yard", () => {
+    expect(appearanceOf(player({ mine: 1, b: 3 }), 0, context()).relation).toBe("you");
+    expect(appearanceOf(player({ b: 3, fr: 1 }), 0, context()).relation).toBe("friend");
+    expect(appearanceOf(player({ b: 3, ho: 1 }), 0, context()).relation).toBe("hostile");
+  });
+
+  it("follows the shared friends list over the cell's flags", () => {
+    const viewer = context({ friendMark: (cell) => (cell.uid === 7 ? "pinned" : "none") });
+    expect(appearanceOf(player({ fr: 0, ho: 1 }), 0, viewer).relation).toBe("pinned");
+    // Unfriended since the zone was fetched: back to hostile, not friend.
+    expect(appearanceOf(player({ uid: 8, fr: 1, ho: 1 }), 0, viewer).relation).toBe("hostile");
+  });
+
+  it("gives tribes, water, fog and unloaded cells no relation", () => {
+    expect(appearanceOf({ i: 150, n: "Kozu", l: 3, dm: 0, d: 0 } as unknown as MapCell, 0).relation).toBeNull();
+    expect(appearanceOf({ i: 40 } as unknown as MapCell, 0).relation).toBeNull();
+    expect(appearanceOf({ fog: 1 } as unknown as MapCell, 0).relation).toBeNull();
+    expect(appearanceOf(undefined, 0).relation).toBeNull();
+  });
+
+  it("keeps a friend's plate plain: the border carries the friend colour", () => {
+    expect(appearanceOf(player({ fr: 1 }), 0)).toMatchObject({ plateColour: RELATION_OTHER_COLOUR, relationIcon: "none" });
+  });
+
+  it("has one distinct colour and line per relation", () => {
+    const relations = Object.keys(RELATION_LOOK) as (keyof typeof RELATION_LOOK)[];
+    expect(new Set(relations.map((r) => RELATION_LOOK[r].colour)).size).toBe(relations.length);
+    // Colour-blind safety: the pairs that look alike without colour vision differ in line.
+    expect(RELATION_LOOK.hostile.style).not.toBe(RELATION_LOOK.alliance.style);
+    expect(RELATION_LOOK.friend.style).not.toBe(RELATION_LOOK.other.style);
+    expect(RELATION_LOOK.friend.style).not.toBe(RELATION_LOOK.hostile.style);
+    expect(RELATION_LOOK.pinned.style).not.toBe(RELATION_LOOK.you.style);
   });
 });
 

@@ -12,6 +12,7 @@ import { MapRoom2, MapRoomCell, MapRoomVersion } from "../../../enums/MapRoom.js
 import { onlinePlayers } from "../../../services/user/online.js";
 import { getTruces } from "../../../services/maproom/getTruces.js";
 import { attackersAmong } from "../../../services/maproom/v2/attackers.js";
+import { attackedBetween } from "../../../services/maproom/v2/hostiles.js";
 import { friendMarksAmong } from "../../../services/friends/friendFlags.js";
 import { outpostWorkerSaves } from "../../../services/maproom/v2/idleWorkers.js";
 import { pendingInvitesOn } from "../../../services/mail/inviteRules.js";
@@ -254,7 +255,7 @@ export const getArea: KoaController = async (ctx) => {
     .filter((cell) => cell.uid === user.userid && cell.base_type === MapRoomCell.OUTPOST && cell.save)
     .map((cell) => cell.save!.basesaveid);
 
-  const [ownersList, online, truces, pendingInvites, workers, attackers, friendMarks] = await Promise.all([
+  const [ownersList, online, truces, pendingInvites, workers, attackers, friendMarks, attacked] = await Promise.all([
     postgres.em.find(User, { userid: { $in: ownerIds } }, {
       populate: ["save"],
       fields: CELL_OWNER_FIELDS,
@@ -269,6 +270,9 @@ export const getArea: KoaController = async (ctx) => {
     attackersAmong(postgres.em, user.userid, ownerIds),
     // Friends among them: the `fr` flag (friends WP2, #369), and the pinned ones' `fp` (beta 7).
     friendMarksAmong(postgres.em, user.userid, ownerIds),
+    // Anyone with an attack between them and the viewer, either way: the hostile border's `ho`
+    // (owner, 8 Nov 2026; `hostiles.ts`), switched off by a running truce in `userCell`.
+    attackedBetween(postgres.em, user.userid, ownerIds),
   ]);
 
   const cellOwners = new Map(ownersList.map((u) => [u.userid, u]));
@@ -281,6 +285,7 @@ export const getArea: KoaController = async (ctx) => {
   ctx.state.attackers = attackers;
   ctx.state.friends = friendMarks.friends;
   ctx.state.pinnedFriends = friendMarks.pinned;
+  ctx.state.attacked = attacked;
 
   const allianceIds = new Set<number>();
 

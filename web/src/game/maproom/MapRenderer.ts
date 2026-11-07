@@ -22,7 +22,7 @@ import { BuildingAvatars } from "./buildingAvatars";
 import { cellLift, liftCorners, setFlatGround } from "./ground";
 import { GroundArt } from "./groundArt";
 import { LiveMap } from "./live/LiveMap";
-import { CONSTRUCTION_BADGE_URL, FRIEND_BADGE_URL, IDLE_HELPER_URL, MapPicture } from "./mapPicture";
+import { CONSTRUCTION_BADGE_URL, IDLE_HELPER_URL, MapPicture } from "./mapPicture";
 import { friendMarkOf, friendMarksKey } from "@/game/friends/friendMarks";
 import { friendsStore } from "@/game/friends/friendsStore";
 import { RangeOverlay } from "./RangeOverlay";
@@ -124,8 +124,6 @@ export class MapRenderer {
   private readonly groundArt = new GroundArt();
   private readonly constructionBadge = new MapPicture(CONSTRUCTION_BADGE_URL);
   private readonly idleHelper = new MapPicture(IDLE_HELPER_URL, true);
-  /** The painted friend marker (beta 7) drawn beside a friend's building, in both looks. */
-  private readonly friendBadge = new MapPicture(FRIEND_BADGE_URL, true);
   /** `friendMarksKey()` when the chunks were last told who is a friend; they rebuild only when it changes. */
   private friendsKey = "";
   private stopFriends: (() => void) | null = null;
@@ -224,6 +222,8 @@ export class MapRenderer {
       const key = friendMarksKey();
       if (key === this.friendsKey) return;
       this.friendsKey = key;
+      // The painted borders colour friends too: worked out again from the zones already here.
+      this.borders?.setFriendMark(this.friendMark, this.store.loadedZoneRefs());
       this.rebuildAll();
     });
   }
@@ -294,7 +294,6 @@ export class MapRenderer {
     await Promise.all([
       this.groundArt.load().then((ok) => ok && this.rebuildAll()),
       this.constructionBadge.load().then((ok) => ok && this.rebuildAll()),
-      this.friendBadge.load().then((ok) => ok && this.rebuildAll()),
       classicLook() ? this.idleHelper.load().then((ok) => ok && this.rebuildAll()) : null,
     ]);
   }
@@ -667,6 +666,7 @@ export class MapRenderer {
     const loads: Promise<unknown>[] = [painted.load()];
     this.borders = new look.BorderLayer();
     this.borders.setMyAlliance(this.myAlliance, []);
+    this.borders.setFriendMark(this.friendMark);
     // Over the ground (and rivers), under the cells' markers; with the markers standing upright
     // (tilt) they live outside the root, and the borders go under the attack range instead.
     const above = this.world.parent === this.root ? this.world : this.range.container;
@@ -704,7 +704,6 @@ export class MapRenderer {
     this.groundArt.destroy();
     this.constructionBadge.destroy();
     this.idleHelper.destroy();
-    this.friendBadge.destroy();
     this.stopFriends?.();
     this.stopFriends = null;
     this.atlas?.destroy();
@@ -756,7 +755,6 @@ export class MapRenderer {
             this.groundArt,
             this.constructionBadge,
             this.idleHelper,
-            this.friendBadge,
           );
           this.chunks.set(ref.id, chunk);
           this.world.addChild(chunk.container);
