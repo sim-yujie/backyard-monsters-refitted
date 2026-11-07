@@ -113,9 +113,25 @@ body {
  */
 
 .btn {
+  /* Words at 0 px off the vertical centre (owner rule, 7 Nov 2026). Chrome
+     rounds the font's ascent and descent to whole pixels and floors the space
+     above the words, so a fractional leading (15 px text at line-height 1.45:
+     3.75 px) lifted them up to 0.9 px. Here the line is the rounded text
+     height plus an even whole number of pixels, the one nearest to the old
+     1.45, so the space above and below is equal and the line (and so any
+     button sized by its words) moves by under a pixel. A plate in the
+     display font swaps in that font's metrics (skin.css). Browsers without
+     CSS round() drop the line and keep the inherited one, as before. */
+  --btn-ascent: var(--font-body-ascent);
+  --btn-descent: var(--font-body-descent);
+  --btn-text: calc(round(nearest, var(--btn-ascent), 1px) + round(nearest, var(--btn-descent), 1px));
+  /* A button that wants tighter lines sets this, not line-height. */
+  --btn-leading: var(--leading-normal);
+
   min-height: var(--control-height-compact);
   font: inherit;
   font-weight: 700;
+  line-height: calc(var(--btn-text) + 2 * round(nearest, (var(--btn-leading) * 1em - var(--btn-text)) / 2, 1px));
   padding: var(--space-2) var(--space-4);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
@@ -1064,7 +1080,8 @@ body {
   min-width: 0;
   min-height: 40px;
   font-size: var(--text-sm);
-  line-height: 1.15;
+  /* 1.15, rounded so the words sit at 0 px off centre (`.btn`). */
+  --btn-leading: 1.15;
   /* The other two fonts run wider: a long item wraps rather than hits its neighbour. */
   white-space: normal;
 }

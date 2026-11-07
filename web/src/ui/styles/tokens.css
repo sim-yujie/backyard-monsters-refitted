@@ -260,6 +260,14 @@
   --leading-tight: 1.2;
   --leading-normal: 1.45;
 
+  /* Each font's ascent and descent (its hhea/OS2 metrics, in em), so a
+     button can give its words whole-pixel room above and below and sit them
+     at 0 px off its centre (ui.css `.btn`). Titan One: 970/175 of 1000. */
+  --font-body-ascent: 0.97em;
+  --font-body-descent: 0.175em;
+  --font-display-ascent: 0.97em;
+  --font-display-descent: 0.175em;
+
   /* Titan One has one weight (400, already heavy), so there is nothing to
      ask for here any more; the variable stays so every rule that set a
      heavier heading weight for Sora still has something to read. Letters
@@ -335,6 +343,8 @@
 :root[data-font="clear"] {
   --font-body: "Nunito", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --body-weight: 600;
+  --font-body-ascent: 1.011em;
+  --font-body-descent: 0.353em;
 }
 
 /* Extra readable: Atkinson Hyperlegible everywhere, headings in its bold. */
@@ -342,6 +352,10 @@
   --font-display: "Atkinson Hyperlegible", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   --font-body: "Atkinson Hyperlegible", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --display-weight: 700;
+  --font-body-ascent: 0.95em;
+  --font-body-descent: 0.29em;
+  --font-display-ascent: 0.95em;
+  --font-display-descent: 0.29em;
 }
 
 @media (width <= 620px), (pointer: coarse) {
