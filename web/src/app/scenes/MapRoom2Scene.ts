@@ -133,6 +133,7 @@ import { TransferDialog, type TransferChoice } from "@/ui/maproom/TransferDialog
 import { formatSpan } from "@/ui/attack/EndAttackPanel";
 import { previewEndTakeover, type EndTakeoverPreviewOptions } from "@/ui/attack/endTakeoverPreview";
 import { devStats } from "../devDetails";
+import { connectMr2TimingReport } from "../mr2TimingReport";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../sceneName";
 import { isPhoneLayout } from "@/ui/phoneLayout";
@@ -346,6 +347,8 @@ export class MapRoom2Scene implements Scene {
 
   async enter(context: SceneContext): Promise<void> {
     this.context = context;
+    // Real players' open timings go to the server's logs (at most two a page load).
+    connectMr2TimingReport();
     markOpen({ quality: quality(), classic: classicLook() });
     // The world's hex shape (MR2 look plan step 1) before anything is drawn
     // or picked: the grid's geometry follows the server's rules. Classic gets
