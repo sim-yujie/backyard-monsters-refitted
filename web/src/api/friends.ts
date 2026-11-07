@@ -255,6 +255,7 @@ export type FriendRefusalReason =
   | "tooNew"
   | "dailyCap"
   | "giftSentToday"
+  | "notEnough"
   | "collectLimit"
   | "notFriends"
   | "helpersFull"
@@ -319,6 +320,7 @@ export const REFUSAL_TEXT: Readonly<Record<FriendRefusalReason, string>> = {
   tooNew: `Not yet: friends for ${FRIEND_GATES.friendshipAgeHours} hours and each player level ${FRIEND_GATES.minLevel}.`,
   dailyCap: "You have done that as many times as you can today.",
   giftSentToday: "You have already sent this friend a gift today.",
+  notEnough: "You don't have enough of that to send. Pick another.",
   collectLimit: "You have collected as many gifts as you can today. The rest will wait.",
   notFriends: "You are not friends with this player any more.",
   helpersFull: "Enough friends have already helped with this.",
