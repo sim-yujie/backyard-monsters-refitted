@@ -22,6 +22,7 @@
  */
 export const labPartners: string[] = [
   "Anonymous",
+  "Anonymous",
 ];
 
 export const labAssistants: string[] = [
