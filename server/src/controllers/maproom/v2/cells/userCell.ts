@@ -42,7 +42,7 @@ type Cell = Loaded<WorldMapCell, "save", UserCellFields>;
  */
 export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number, UserCellOwner>) => {
   const currentUser: User = ctx.authUser;
-  const { online: onlineNow, truces, pendingInvites, idleWorkers, busyWorkers, attackers, friends } = ctx.state;
+  const { online: onlineNow, truces, pendingInvites, idleWorkers, busyWorkers, attackers, friends, pinnedFriends } = ctx.state;
 
   const mine = currentUser.userid === cell.uid;
   const cellOwner = mine ? currentUser : cellOwners.get(cell.uid);
@@ -107,6 +107,8 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     ...(!mine && (attackers as Set<number> | undefined)?.has(cellOwner.userid) && { ak: 1 }),
     n: cellOwner.username,
     fr: !mine && (friends as Set<number> | undefined)?.has(cellOwner.userid) ? 1 : 0,
+    // 1 on a friend the viewer pinned to the top of their list (beta 7): the stronger friend marker.
+    ...(!mine && (pinnedFriends as Set<number> | undefined)?.has(cellOwner.userid) && { fp: 1 }),
     p: isProtected ? 1 : 0,
     // When damage protection ends, unix seconds (#187): Flash sent only `p`,
     // and the map could only say "protected" with no end. Sent while it runs.

@@ -212,6 +212,14 @@ describe("userCell friend flag (friends WP2, #369)", () => {
     expect(await userCell(withFriends(new Set([5])), outpostWith(0, 0), owners)).toMatchObject({ fr: 0 });
     expect(await userCell(withFriends(), outpostWith(0, 0), owners)).toMatchObject({ fr: 0 });
   });
+
+  test("fp is 1 only on a friend the viewer pinned (beta 7), and absent otherwise", async () => {
+    const withPins = (friends: Set<number>, pinnedFriends?: Set<number>) =>
+      ({ authUser: { userid: 2505 }, state: { online: new Set(), truces: new Map(), friends, pinnedFriends } }) as unknown as Context;
+    expect(await userCell(withPins(new Set([OWNER]), new Set([OWNER])), outpostWith(0, 0), owners)).toMatchObject({ fr: 1, fp: 1 });
+    expect(await userCell(withPins(new Set([OWNER]), new Set([5])), outpostWith(0, 0), owners)).not.toHaveProperty("fp");
+    expect(await userCell(withPins(new Set([OWNER])), outpostWith(0, 0), owners)).not.toHaveProperty("fp");
+  });
 });
 
 describe("userCell Flinger and Catapult levels (owner 2026-10-22)", () => {

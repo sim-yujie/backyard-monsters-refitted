@@ -17,6 +17,8 @@ export interface NeighbourData {
   baseseed?: number;
   attacker?: string;
   friend?: number;
+  /** 1 when the viewer pinned this friend (beta 7), else 0. */
+  friendpinned?: number;
   saved?: number;
   /**
    * 1 while the neighbour is online and so cannot be attacked, by the rule
