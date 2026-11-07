@@ -35,12 +35,17 @@ import type { FriendsBody } from "./friends.js";
 /**
  * The gift routes (`docs/design/friends.md` §3.4, §5 and §6.2, issue #375):
  *
- * - `POST /bm/friends/gift` `{ userid, resource }`: a free gift to a friend,
+ * - `POST /bm/friends/gift` `{ userid, resource }`: a gift to a friend,
  *   once per friend per UTC day, worth 3% of the lower of the two storage
- *   caps, fixed when sent. Refusals in order: `self`, `noSuchPlayer`,
+ *   caps, fixed when sent and taken from the sender's main yard (owner,
+ *   7 Nov 2026: gifts cost the sender; an uncollected gift that lapses is
+ *   not given back). Refusals in order: `self`, `noSuchPlayer`,
  *   `notFriends`, `cannotSend` (so a stranger learns nothing more), `tooNew`
  *   (the help gates: 12 hours of friendship, both level 5; `rule` says
- *   which holds, `from` when the friendship's age lifts), then `giftSentToday`. Nothing is taken from the sender.
+ *   which holds, `from` when the friendship's age lifts), the sender's yard
+ *   under attack or being raided (as the yard actions), `notEnough`
+ *   (`need`: the gift's amount), then `giftSentToday`. The answer carries
+ *   the sender's `resources` after the gift left.
  * - `GET /bm/friends/gifts`: the gifts waiting, oldest first, and how many
  *   more can be collected today.
  * - `POST /bm/friends/gifts/collect` `{ giftid }` or `{ all: true }`: credits
@@ -94,11 +99,32 @@ export const sendGiftAnswer = async (em: EntityManager, user: User, body: unknow
     if (gate) throw friendRefusedErr(gate.reason, refusalDetails(gate));
     if (!theirs.basesaveid) throw friendRefusedErr("cannotSend");
 
+    // The gift comes out of the sender's main yard: lock it, refuse it as the
+    // yard actions do while it is fought over, and catch it up before reading what it holds.
+    const save = await lockSave(tx, mine.basesaveid);
+    if (!save || save.type !== BaseType.MAIN || save.userid !== from) throw notMainYardErr();
+    if (isAttackActive(save)) throw yardUnderAttackErr();
+    if (raidFighting(save, now)) throw yardRaidInProgressErr();
+    const completed = await catchUpLockedRow(tx, save, now);
+    await recordAchievements(tx, save, now, builtEvents(completed));
+
     const caps = await readCaps(tx, [mine.basesaveid, theirs.basesaveid]);
     const amount = giftAmountOf(caps.get(mine.basesaveid) ?? 0, caps.get(theirs.basesaveid) ?? 0);
+    const held = heldOf(save, resource);
+    if (held < amount) throw friendRefusedErr("notEnough", { need: amount, have: held });
+
     const gift = await insertGift(tx, { from, to, resource, amount, now, expiresAt: giftExpiresAt(now) });
     if (!gift) throw friendRefusedErr("giftSentToday");
-    return { gift, senderName: mine.username, senderBasesaveid: mine.basesaveid, receiver: theirs };
+    save.resources = { ...(save.resources ?? {}), [resource]: held - amount };
+    save.savetime = now;
+    await tx.flush();
+    return {
+      gift,
+      senderName: mine.username,
+      senderBasesaveid: mine.basesaveid,
+      receiver: theirs,
+      resources: resourcesOf(save),
+    };
   });
 
   await notifyFriend(
@@ -111,7 +137,24 @@ export const sendGiftAnswer = async (em: EntityManager, user: User, body: unknow
   await recordQuestEvents(em, done.senderBasesaveid, { friendGift: 1 }, now);
 
   // The sender's answer names the receiver, as a sent request does.
-  return { error: 0, gift: { ...done.gift, userid: to, username: done.receiver.username } };
+  return {
+    error: 0,
+    gift: { ...done.gift, userid: to, username: done.receiver.username },
+    resources: done.resources,
+  };
+};
+
+/** One resource as the save holds it; anything unreadable is zero. */
+const heldOf = (save: Save, key: string): number => {
+  const value = Number(save.resources?.[key]);
+  return Number.isFinite(value) ? value : 0;
+};
+
+/** The four resources a save holds, as whole numbers. */
+const resourcesOf = (save: Save) => {
+  const amounts = noAmounts();
+  for (const key of GIFT_RESOURCES) amounts[key] = heldOf(save, key);
+  return amounts;
 };
 
 /** `GET /bm/friends/gifts`. */

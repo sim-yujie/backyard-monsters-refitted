@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/api/http";
 import { fixtureApi, fixtureFriend, fixtureGift, fixtureList } from "@/game/friends/friendsFixture";
 import { FriendsStore } from "@/game/friends/friendsStore";
+import { setPlayerPool } from "@/game/friends/friendsView";
 import { GIFT_TEXT, GiftPicker } from "./GiftPicker";
 
 /** The gift picker (issue #375): four resources, one press sends, the store marks the friend. */
@@ -47,6 +48,33 @@ describe("the gift picker", () => {
     expect(choice("r1").disabled).toBe(true);
     await picker.send("r1");
     expect(calls.filter(([method]) => method === "sendGift")).toHaveLength(1);
+  });
+
+  it("asks the yard on screen for its resources fresh once a gift went (it came out of storage)", async () => {
+    const refresh = vi.fn();
+    const clear = setPlayerPool({ read: () => null, refresh });
+    try {
+      const { picker } = await setup();
+      await picker.send("r3");
+      expect(refresh).toHaveBeenCalledOnce();
+    } finally {
+      clear();
+    }
+  });
+
+  it("says when the player has too little of a resource, and lets them pick another", async () => {
+    const refresh = vi.fn();
+    const clear = setPlayerPool({ read: () => null, refresh });
+    try {
+      const { picker, store } = await setup({ sendGift: refused("notEnough") });
+      await picker.send("r1");
+      expect(picker.statusText).toBe("You don't have enough of that to send. Pick another.");
+      expect(choice("r2").disabled).toBe(false);
+      expect(store.friends[0]!.giftSentToday).toBe(false);
+      expect(refresh).not.toHaveBeenCalled();
+    } finally {
+      clear();
+    }
   });
 
   it("resolves closed with the gift when it closes", async () => {

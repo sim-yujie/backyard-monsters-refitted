@@ -2,7 +2,7 @@
 
 A design document for the friends update (issue #367). The owner settled the scope on
 2026-10-19: a friends list with friend requests, visiting a friend's yard, helping in it (repairs
-and speed-ups), free daily gifts, ways to find people, a friends bar like the original game's, and
+and speed-ups), daily gifts, ways to find people, a friends bar like the original game's, and
 privacy controls. The release is held until this is done, so the work is split into packages that
 up to three helpers can build at once.
 
@@ -41,7 +41,7 @@ Settled on 2026-10-19. This document does not re-open them.
    **Repair help counts toward the same daily cap**, and a friend can repair a given building once
    per damage.
 5. **The helper earns a small resource reward** for each help within the cap.
-6. **Gifts:** a free resource gift scaled to the sender's level; **each friend can get at most one
+6. **Gifts:** a resource gift, taken from the sender's storage (owner, 7 Nov 2026), scaled to the sender's level; **each friend can get at most one
    gift a day from you.** Gifts must not be farmable with fake accounts.
 7. **Finding friends:** search by username; "Add friend" in the Map Room yard popup, in the alliance
    member list and on attack messages.
@@ -151,8 +151,9 @@ fine. A visit to someone who stopped being your friend meanwhile is refused at t
 
 ### 3.4 Gifts
 
-**Send gift** (on the bar card or the list) asks which resource: Twigs, Pebbles, Putty or Goo. It is
-free for the sender. One gift per friend per day. The friend sees a notification and a count on
+**Send gift** (on the bar card or the list) asks which resource: Twigs, Pebbles, Putty or Goo. The
+amount is taken from the sender's main yard; with too little of it the gift is refused (`notEnough`),
+and a gift that lapses uncollected is not given back. One gift per friend per day. The friend sees a notification and a count on
 Friends; their **Gifts** tab lists waiting gifts with **Collect** (and **Collect all**) and **Send
 one back**. Collecting adds the resource to the main yard up to its storage cap; if there is not
 room for all of it, the button warns first. A gift waits 7 days, then lapses. A player can collect
