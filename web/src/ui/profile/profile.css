@@ -1,0 +1,345 @@
+/*
+ * The profile window (`ui/profile/ProfileDialog.ts`): a popup (the shared
+ * `.panel` on a scrim, so it takes the Modern or Classic skin by itself) with
+ * the photo or critter beside the name and the stats, then the bio, and on the
+ * player's own profile the photo buttons and the crop step.
+ */
+
+.profile-popup {
+  width: min(440px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100dvh - 2 * var(--space-4));
+}
+
+.profile-popup .panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.profile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.profile__status {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.profile__status--error,
+.profile__note--error {
+  color: var(--colour-danger);
+}
+
+.profile__top {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.profile__picture {
+  flex: none;
+  width: 112px;
+  height: 112px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--colour-avatar-ground);
+  border: 2px solid var(--colour-border-strong);
+}
+
+.profile__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile__who {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.profile__name {
+  margin: 0;
+  font-size: var(--text-lg);
+  color: var(--colour-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.profile__stats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+}
+
+.profile__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 28px;
+  padding: 0 var(--space-2) 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-sunken);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-text);
+  max-width: 100%;
+}
+
+.profile__stat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  color: var(--colour-accent);
+}
+
+.profile__stat-icon .ach-badge {
+  zoom: 0.5;
+}
+
+/* The painted medal is 60px, so half was still 30px beside the others' 24px. */
+.profile__stat-icon .ach-badge--art {
+  zoom: 1;
+  width: 24px;
+  height: 24px;
+}
+
+.profile__stat-value {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile__bio {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  font-size: var(--text-md);
+}
+
+.profile__bio--empty {
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+}
+
+.profile__photo-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.profile__photo-buttons {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.profile__note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.profile__bio-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.profile__bio-input {
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  font: inherit;
+  font-size: var(--text-md);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--colour-border);
+  background: var(--colour-surface-input);
+  color: var(--colour-text);
+}
+
+.profile__bio-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.profile__count {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.profile__bio-foot .profile__note {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile__bio-foot .profile__save {
+  margin-left: auto;
+}
+
+/* The same height whether it holds Report, the question with its two plates
+   or "Reported": the window no longer jumps when the report goes in. The
+   height is one plate (46px) plus the question's own line (18px) above it, so
+   the question and both plates fit side by side down to a 375px screen. */
+.profile__report {
+  --report-ask-line: 18px;
+  display: flex;
+  align-items: center;
+  align-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  justify-content: flex-end;
+  min-height: calc(46px + var(--space-1) + var(--report-ask-line));
+}
+
+.profile__report-ask {
+  flex: 0 0 100%;
+  text-align: right;
+  line-height: var(--report-ask-line);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile__report-yes,
+.profile__report-no {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.profile__reported {
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+/* The crop step. */
+.profile--crop {
+  align-items: center;
+}
+
+.profile__crop-hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-muted);
+}
+
+.photo-crop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.photo-crop__frame {
+  /* Up to 260px, less on a small window: room for the hint, the slider and
+     the buttons under it. */
+  --crop-side: clamp(160px, min(calc(100vw - 96px), calc(100dvh - 220px)), var(--crop-frame, 260px));
+
+  display: block;
+  width: var(--crop-side);
+  height: var(--crop-side);
+  box-sizing: border-box;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--colour-border-strong);
+  background: var(--colour-surface-sunken);
+  cursor: grab;
+  touch-action: none;
+}
+
+.photo-crop__frame:active {
+  cursor: grabbing;
+}
+
+.photo-crop__zoom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.photo-crop__zoom-end {
+  font-size: var(--text-lg);
+  color: var(--colour-text-muted);
+  width: 1em;
+  text-align: center;
+}
+
+.photo-crop__slider {
+  flex: 1;
+  accent-color: var(--colour-accent);
+}
+
+.profile__crop-foot {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+/* A phone held sideways: the frame on the left as tall as the window's body
+   allows, the hint, slider and buttons on the right, nothing to scroll. At
+   812x375 a 260px frame with the slider under it made the body scroll
+   (profiles test, 7 Nov). The window takes about 140px of the height around
+   its body (the margins, the title sign, the frame and the body's padding). */
+@media (max-height: 480px) and (orientation: landscape) {
+  .profile-popup {
+    width: min(600px, calc(100vw - 2 * var(--space-4)));
+  }
+
+  .profile--crop {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: 1fr auto auto auto auto 1fr;
+    grid-template-areas:
+      "crop ."
+      "crop hint"
+      "crop zoom"
+      "crop note"
+      "crop foot"
+      "crop .";
+    align-items: center;
+    column-gap: var(--space-4);
+    row-gap: var(--space-3);
+  }
+
+  /* The frame and the slider become cells of the grid above. */
+  .profile--crop .photo-crop {
+    display: contents;
+  }
+
+  .profile--crop .photo-crop__frame {
+    --crop-side: clamp(120px, calc(100dvh - 160px), var(--crop-frame, 260px));
+
+    grid-area: crop;
+  }
+
+  .profile--crop .photo-crop__zoom {
+    grid-area: zoom;
+  }
+
+  .profile--crop .profile__crop-hint {
+    grid-area: hint;
+  }
+
+  .profile--crop .profile__note {
+    grid-area: note;
+  }
+
+  .profile--crop .profile__crop-foot {
+    grid-area: foot;
+    justify-content: flex-start;
+  }
+}

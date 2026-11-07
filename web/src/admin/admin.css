@@ -3189,3 +3189,88 @@ tbody th {
     flex: 1 1 auto;
   }
 }
+
+/* Photo reports (photos.ts): the photo beside who reported it and the buttons. */
+/* `.row` is a one-column grid with no padding: the photo sat on top of the
+   name, touching the card's edge (profiles test, 7 Nov). Photo left, the
+   rest beside it, padded like a bug row. */
+.photo-case {
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 14px 12px 14px 16px;
+}
+
+.photo-case__picture {
+  flex: none;
+  width: 96px;
+  height: 96px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2, rgba(127, 127, 127, 0.12));
+}
+
+.photo-case__img {
+  display: block;
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+}
+
+.photo-case__none {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* Name, chips and time wrap as whole pieces: at 375px the green "Kept by …"
+   chip and the time squeezed the name until it broke mid-word ("agen/tteste/r").
+   Now a chip that does not fit drops to its own line and the name keeps whole
+   words (it breaks inside a word only when that word alone is wider than the card). */
+.photo-case .row-top {
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
+.photo-case .report-who {
+  overflow-wrap: break-word;
+  text-align: left;
+}
+
+/* The flag stays beside the first line of the reporters, never alone. */
+.photo-case__reporters {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.photo-case__reporters > .icon {
+  flex: none;
+  margin-top: 2px;
+}
+
+.photo-case__reporter-words {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.photo-case__actions {
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+@media (max-width: 480px) {
+  .photo-case {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .photo-case__picture,
+  .photo-case__img {
+    width: 72px;
+    height: 72px;
+  }
+}

@@ -786,3 +786,47 @@ export const awardCaseReporters = (
     failed: { userid: number; reason: AwardFailure }[];
   }>
 > => adminPost(`${ADMIN}/chatcases/${id}/award`, { awards });
+
+/** Profile photo reports (server `services/admin/photoReports.ts`): one case per player. */
+export interface PhotoReporterView {
+  userid: number;
+  username: string | null;
+  at: string;
+  /** Which upload they reported: older than the photo shown means it was replaced since. */
+  version: number;
+}
+
+export type PhotoAction = "keep" | "remove" | "block" | "unblock";
+export type PhotoOutcome = "kept" | "removed" | "blocked" | "replaced";
+
+export interface PhotoCaseView {
+  userid: number;
+  username: string | null;
+  banned: boolean;
+  /** The photo now, as a data URL, hidden or not; null when there is none. */
+  photo: string | null;
+  photoVersion: number;
+  hidden: boolean;
+  blocked: boolean;
+  /** The owner kept this upload before. */
+  kept: boolean;
+  reporters: PhotoReporterView[];
+  firstReportAt: string | null;
+  lastReportAt: string | null;
+  closed: { outcome: PhotoOutcome; at: string; by: number | null; byName: string | null } | null;
+}
+
+export interface PhotoCaseList {
+  cases: PhotoCaseView[];
+  /** Players with open reports, in all. */
+  open: number;
+  nextOffset: number | null;
+  /** Reports from this many players hide a photo. */
+  hideAt: number;
+}
+
+export const fetchPhotoCases = (status: "open" | "closed", offset?: number): Promise<Envelope<PhotoCaseList>> =>
+  adminGet(`${ADMIN}/photoreports`, { status, offset, limit: 30 });
+
+export const actOnPhoto = (userid: number, action: PhotoAction): Promise<Envelope<{ case: PhotoCaseView }>> =>
+  adminPost(`${ADMIN}/photoreports/${userid}/act`, { action });
