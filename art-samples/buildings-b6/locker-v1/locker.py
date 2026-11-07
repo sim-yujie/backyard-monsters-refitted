@@ -690,6 +690,8 @@ def materials():
     M["core"] = shiny("core", (52, 34, 12), rough=0.45, metal=0.6, wear=(80, 52, 18), scale=3, dirt=0.3)
     # levels 3-4: Flash's barrel reads as smaller, deeper gold blocks with black between them
     M["block34"] = shiny("block34", (214, 140, 26), rough=0.26, metal=0.85, wear=(240, 186, 70), scale=2.0, dirt=0.15)
+    M["block34lo"] = shiny("block34lo", (150, 88, 14), rough=0.3, metal=0.85, wear=(196, 128, 36), scale=2.0,
+                           dirt=0.2)
     M["core34"] = shiny("core34", (46, 26, 8), rough=0.35, metal=0.75, wear=(70, 40, 12), scale=3, dirt=0.3)
     return M
 
@@ -886,7 +888,8 @@ def panel(name, c, r, sx, sy, kind, size=2.3, spin=0.0, lean=0.0, thick=0.14):
     return e
 
 
-def barrel(name, c, axis, r, length, rows, cols, parent=None, fill=None, mat=None, core=None, checker=True, pin=1.0):
+def barrel(name, c, axis, r, length, rows, cols, parent=None, fill=None, mat=None, core=None, checker=True, pin=1.0,
+           low=None):
     """The gold barrel inside the shell: a dark core with rows of gold blocks round it (period: two rows), turning
     about its axle (local Z). Blocks in every other cell (checker) or every cell, filling `fill` (along, round) of it;
     levels 3-4 use smaller blocks with black gaps between them, as Flash."""
@@ -899,14 +902,19 @@ def barrel(name, c, axis, r, length, rows, cols, parent=None, fill=None, mat=Non
     for i in range(rows):
         a = 2 * math.pi * i / rows
         for j in range(cols):
-            if checker and (i + j) % 2:
+            sunk = (i + j) % 2
+            if checker and sunk and low is None:
                 continue
             hgt = 0.18 + 0.16 * ((j * 7 + (i % 2) * 3) % 4) / 3
             if fill is not None:
                 hgt = 0.1 + 0.22 * ((j * 5 + i * 3) % 5) / 4
             z = -length / 2 + (j + 0.5) * length / cols
-            box(f"{name}blk{i}-{j}", (length / cols * fa, 2 * math.pi * r / rows * fr, (hgt + r * 0.14) * pin),
-                (math.cos(a) * r * 0.86, math.sin(a) * r * 0.86, z), mat or M["block"], parent=hub,
+            h = (hgt + r * 0.14) * pin
+            m = mat or M["block"]
+            if low is not None and sunk:      # Flash: every cell holds a block; every other one lower and darker
+                h, m = h * low[0], low[1]
+            box(f"{name}blk{i}-{j}", (length / cols * fa, 2 * math.pi * r / rows * fr, h),
+                (math.cos(a) * r * 0.86, math.sin(a) * r * 0.86, z), m, parent=hub,
                 rot=(0, 90, math.degrees(a)), bevel=0.04, origin="bottom")
     return e, hub
 
@@ -1090,13 +1098,34 @@ def shell34():
     rm = Matrix((x, u.cross(x), u)).transposed()
     bmesh.ops.transform(bm, matrix=rm.to_4x4(), verts=bm.verts)
     geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
-    bmesh.ops.bisect_plane(bm, geom=geom, plane_co=n * d, plane_no=n, clear_outer=True)
+    cut2 = S.L4_CUT2 if L == 4 else S.L3_CUT2
+    if cut2 is None:
+        bmesh.ops.bisect_plane(bm, geom=geom, plane_co=n * d, plane_no=n, clear_outer=True)
+    else:
+        # Flash's opening is two cuts: the bowl cut low across the front, and the high dome at the back right left
+        # whole (its cut face a steep plane); only what lies above the first AND in front of the second goes
+        n2 = tilted(*cut2[:2])
+        d2 = cut2[2]
+        bmesh.ops.bisect_plane(bm, geom=geom, plane_co=n * d, plane_no=n)
+        geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
+        bmesh.ops.bisect_plane(bm, geom=geom, plane_co=n2 * d2, plane_no=n2)
+        gone = [f for f in bm.faces if f.calc_center_median().dot(n) > d + 1e-4 and
+                f.calc_center_median().dot(n2) > d2 + 1e-4]
+        bmesh.ops.delete(bm, geom=gone, context="FACES")
+        BODY.update(n2=n2, d2=d2)
     rim = [v.co.copy() for v in bm.verts if v.is_boundary]
     # the barrel lies in the opening along its long way, its middle a little below the opening's middle
     bc = c + sum(rim, Vector()) / len(rim) + n * S.L3_BARREL_SINK
     ba = tilted(S.L3_BARREL_AXIS[0], 90.0 - S.L3_BARREL_AXIS[1])
     bc = bc + ba * (S.L4_BARREL if L == 4 else S.L3_BARREL)[2]
+    bpx = S.L4_BARREL_PX if L == 4 else S.L3_BARREL_PX
+    if bpx is not None:      # the barrel's middle on Flash's picture, this far behind the egg's middle along the view
+        p0, f = cam_ray(*bpx[:2])
+        bc = p0 + f * ((c - p0).dot(f) + bpx[2])
     BODY.update(bc=bc, ba=ba, c=c, n=n, d=d)
+    _ln = (S.L4_BARREL if L == 4 else S.L3_BARREL)[0]
+    print("CHECK barrel ends (Flash px): low %.1f %.1f  top %.1f %.1f  middle %.1f %.1f" % (
+        *scr(bc - ba * _ln / 2), *scr(bc + ba * _ln / 2), *scr(bc)))
     sh = mesh_ob("ballshell", bm, [M["chrome"], M["inner"]])
     so = sh.modifiers.new("wall", "SOLIDIFY")
     so.thickness, so.offset, so.material_offset, so.use_rim = 0.14, -1.0, 1, True
@@ -1105,10 +1134,10 @@ def shell34():
     ln, br = (S.L4_BARREL if L == 4 else S.L3_BARREL)[:2]
     if L == 4:
         barrel("barrel", bc, ba, br, ln, S.L4_BARREL_ROWS, S.L4_BARREL_COLS, fill=S.L4_BLOCK_FILL, mat=M["block34"],
-               core=M["core34"])
+               core=M["core34"], low=(S.L3_LOW, M["block34lo"]) if S.L3_LOW else None)
     else:
         barrel("barrel", bc, ba, br, ln, S.L3_BARREL_ROWS, S.L3_BARREL_COLS, fill=S.L3_BLOCK_FILL, mat=M["block34"],
-               core=M["core34"], pin=S.L3_PIN)
+               core=M["core34"], pin=S.L3_PIN, low=(S.L3_LOW, M["block34lo"]) if S.L3_LOW else None)
     # the cog inside the machine, as Flash: facing the camera just behind the barrel's top end, so the top blocks
     # hide its lower half (still, as Flash); its post leaves the axle's end, runs down behind the top blocks and up
     # behind the cog to its back
@@ -1280,6 +1309,76 @@ def bow_head(hub, ln):
     tube("keybowstem", [(0, 0, ln - 0.05), (0, 0, ln + 0.3), foot], 0.12, M["gold"], parent=hub, smooth=True)
 
 
+def bow_skull(hub, ln):
+    """Level 4: the key's bow, Flash's solid gold monster skull: a round head with a heavy rim, two big eye holes and
+    a small nose hole cut through, two short horns, a square jaw with teeth below it on the stem. Built in the plane
+    through the shaft that faces the camera at the key's frame-0 angle (turn() shifts when it faces the camera)."""
+    to_local = bow_plane(hub, on_shaft=True)     # the plane through the shaft that faces the camera most
+    sk = S.L4_SKULL
+    z = Vector((0, 0, 1))                        # the head stands on the shaft's line and turns about it, as Flash
+    c0 = Vector((0, 0, ln))
+    r = to_local(-30.0, -75.0) - to_local(-40.0, -75.0)
+    r = (r - z * r.dot(z)).normalized()
+    nn = r.cross(z)
+
+    def mat(u, v, w=0.0):
+        m = Matrix((r, z, nn)).transposed().to_4x4()
+        m.translation = c0 + r * u + z * v + nn * w
+        return m
+
+    def plate(name, prof, th, at, mt, bevel):
+        """a flat plate: the closed (u, v) outline extruded th through the bow plane."""
+        bm = bmesh.new()
+        vs = [bm.verts.new((u, v, -th / 2)) for u, v in prof]
+        f = bm.faces.new(vs)
+        bmesh.ops.recalc_face_normals(bm, faces=[f])
+        if f.normal.z < 0:
+            f.normal_flip()
+        ex = bmesh.ops.extrude_face_region(bm, geom=[f])
+        bmesh.ops.translate(bm, verts=[g for g in ex["geom"] if isinstance(g, bmesh.types.BMVert)], vec=(0, 0, th))
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+        bmesh.ops.transform(bm, matrix=mat(*at), verts=bm.verts[:])
+        return mesh_ob(name, bm, [mt], parent=hub, bevel=bevel, segs=3)
+
+    def cutter(name, prof, at, target):
+        o = plate(name, prof, 2.0, at, M["hole"], 0.0)
+        o.hide_render = True
+        o.display_type = "WIRE"
+        b = target.modifiers.new(name, "BOOLEAN")
+        b.operation, b.object, b.solver = "DIFFERENCE", o, "EXACT"
+        target.modifiers.move(len(target.modifiers) - 1, 0)      # cut before the bevel rounds the edges
+        return o
+
+    def oval(rx, ry, n=28, cx=0.0, cy=0.0):
+        return [(cx + rx * math.cos(2 * math.pi * i / n), cy + ry * math.sin(2 * math.pi * i / n)) for i in range(n)]
+
+    R, cv, jv = sk["r"], sk["head_v"], sk["jaw_v"]
+    head = plate("keybowhead", oval(R, R * 0.96, 48), sk["th"], (0, cv), M["block"], 0.12)
+    jw, jh = sk["jaw"]
+    jaw_prof = [(u * jw / 2, v * jh / 2) for u, v in rounded_poly([(-1, -1), (1, -1), (1, 1), (-1, 1)], 0.35, 4)]
+    jaw = plate("keybowjaw", jaw_prof, sk["th"] * 0.85, (0, jv), M["gold"], 0.08)
+    for i, (sx, sy) in enumerate(((-1, 1), (1, 1))):
+        ex, ey, erx, ery = sk["eye"]
+        cutter(f"keybowcut{i}", oval(erx, ery, 24, sx * ex, ey), (0, cv), head)
+    cutter("keybowcut2", [(-0.14, 0.06), (0.14, 0.06), (0.0, -0.18)], (0, cv + sk["nose"]), head)
+    for i in range(4):                                   # gaps between the teeth
+        u = (i - 1.5) * jw / 4.4
+        cutter(f"keybowcut{3 + i}", [(u - 0.045, -jh), (u + 0.045, -jh), (u + 0.045, -jh * 0.1), (u - 0.045, -jh * 0.1)],
+               (0, jv), jaw)
+    # the heavy rim round the head (Flash's head reads as a thick ring round a flatter face)
+    tube("keybowrim", [c0 + z * cv + r * (R * math.cos(a)) + z * (R * 0.96 * math.sin(a)) for a in
+                       (2 * math.pi * i / 60 for i in range(60))], sk["rim"], M["gold"], parent=hub, cyclic=True)
+    for i, sx in enumerate((-1, 1)):                     # short horns on the head's upper corners
+        a = math.radians(90 - sx * sk["horn"][0])
+        p0 = c0 + z * cv + (r * math.cos(a) + z * math.sin(a)) * (R * 0.92)
+        d = (r * math.cos(a - sx * 0.35) + z * math.sin(a - sx * 0.35))
+        tube(f"keybowhorn{i}", [p0, p0 + d * sk["horn"][1] * 0.6, p0 + d * sk["horn"][1] + r * sx * 0.08], 0.15,
+             M["gold"], parent=hub, r_end=0.04, smooth=True)
+    # the neck between the stem's end and the jaw
+    cyl("keybowneck", 0.15, jv - jh / 2 + 0.2, c0 - z * 0.1, M["gold"], parent=hub, verts=16, bevel=0.0)
+    return head, jaw
+
+
 def relax(pts, n):
     """A closed 2D loop with each point moved n times halfway to its neighbours' middle."""
     pts = [Vector(p) for p in pts]
@@ -1378,7 +1477,10 @@ def level34():
         rot=tuple(math.degrees(a) for a in n.to_track_quat("Z", "Y").to_euler()))
     foot = lip + n * S.L3_KEY_RISE
     if lv4:
-        tip = leaning(foot, *S.L4_BOW_FOOT, S.L3_KEY_LEAN)
+        # level 4: as level 3, about the line from the collar to the head's top when edge-on (Flash's frame 13)
+        far = leaning(foot, *S.L4_KEY_AXIS, S.L3_AXIS_LEAN)
+        a, b, q = Vector(scr(foot)), Vector(scr(far)), Vector(S.L4_BOW_FOOT)
+        tip = foot + (far - foot) * ((q - a).dot(b - a) / (b - a).length_squared)
     else:
         # level 3: Flash's key turns about the line from the collar up through its bow (edge-on, at Flash's frame 13,
         # the bow lies along it), so the bow stays over the opening all round the turn; the stem ends where that
@@ -1387,7 +1489,7 @@ def level34():
         a, b, q = Vector(scr(foot)), Vector(scr(far)), Vector(S.L3_BOW_FOOT)
         tip = foot + (far - foot) * ((q - a).dot(b - a) / (b - a).length_squared)
     u = (tip - foot).normalized()
-    key("key", foot, u, tip + u * 0.3, 0.3, 0.13, S.KEY0[L], bow=bow_head if lv4 else bow_monster, slot=False,
+    key("key", foot, u, tip + u * 0.3, 0.3, 0.13, S.KEY0[L], bow=bow_skull if lv4 else bow_monster, slot=False,
         collar=0.0, tail=S.L3_KEY_RISE)
     print("CHECK key34: lip %.2f from Flash's collar point" % (lip - rim).length)
 
@@ -1400,8 +1502,9 @@ def turn(frame):
     """Turn the moving parts to Flash frame `frame`: the key once round a loop, the barrel two rows of blocks."""
     f = frame / FRAMES
     for hub in MOVING:
-        if hub.name in KEYS:
-            hub.rotation_euler = (0, 0, math.radians(KEYS[hub.name] + S.KEY_TURN[L] * 360.0 * f))
+        if hub.name in KEYS:              # the bow faces the camera (as built) at Flash's frame S.KEY_FACE[L]
+            fk = (frame - S.KEY_FACE.get(L, 0)) / FRAMES
+            hub.rotation_euler = (0, 0, math.radians(KEYS[hub.name] + S.KEY_TURN[L] * 360.0 * fk))
         elif hub.name in COGS:
             ph, rate = COGS[hub.name]
             hub.rotation_euler = (0, 0, math.radians(ph + rate * f))
@@ -1679,6 +1782,7 @@ def main():
             print("PROBE", sx, sy, hits)
         return
     if MODE == "fit":
+        turn(int(os.environ.get("PB_FIT_FRAME", 0)))    # a quick look at another frame of the loop
         sc.cycles.samples = 24
         sc.cycles.use_denoising = True
         bpy.data.objects["ground"].hide_render = True
