@@ -2585,6 +2585,17 @@ tbody th {
   background: var(--accent-soft);
 }
 
+/* On a tinted row the soft chip would vanish into the tint: make it solid. */
+.chat-line.is-gm .chat-gm {
+  background: var(--good-text);
+  color: var(--accent-ink);
+}
+
+.chat-line.is-mod .chat-gm {
+  background: var(--accent-text);
+  color: var(--accent-ink);
+}
+
 /* ---- Moderators ---- */
 
 .moderators {
