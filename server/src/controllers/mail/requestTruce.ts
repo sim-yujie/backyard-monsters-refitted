@@ -34,7 +34,7 @@ const TruceSchema = z.object({
  * - Creates a Truce record and a new mailbox thread with the request message, and
  *   answers with that thread's id (#203)
  * - To a bot: books its answer, a rejection some hours later (`bookTruceDecline`)
- * - From a chat moderator: copied into the owner's "Moderator mail" log (`modMail.ts`)
+ * - From or to a chat moderator: copied into the owner's "Moderator mail" log (`modMail.ts`)
  * - Tells the recipient's game at once (`nudgeMail`)
  *
  * @param {Context} ctx - Koa context. Expects baseid and message in the request body.
