@@ -889,7 +889,7 @@ def panel(name, c, r, sx, sy, kind, size=2.3, spin=0.0, lean=0.0, thick=0.14):
 
 
 def barrel(name, c, axis, r, length, rows, cols, parent=None, fill=None, mat=None, core=None, checker=True, pin=1.0,
-           low=None):
+           low=None, rims=None):
     """The gold barrel inside the shell: a dark core with rows of gold blocks round it (period: two rows), turning
     about its axle (local Z). Blocks in every other cell (checker) or every cell, filling `fill` (along, round) of it;
     levels 3-4 use smaller blocks with black gaps between them, as Flash."""
@@ -899,6 +899,22 @@ def barrel(name, c, axis, r, length, rows, cols, parent=None, fill=None, mat=Non
     MOVING.append(hub)
     cyl(name + "core", r * 0.86, length, (0, 0, -length / 2), core or M["core"], parent=hub, verts=40, bevel=0.05)
     fa, fr = fill or (0.88, 0.86)
+    if rims is not None:
+        # levels 3-4 (Codex Look 3, Flash's rows): a stack of toothed gold discs on the core, dark gaps between the
+        # discs, square teeth round each disc's rim with notches between them
+        rim_h, tooth_h, tooth_f = rims
+        r0 = r * 0.86
+        th = length / cols * fa
+        for j in range(cols):
+            z = -length / 2 + (j + 0.5) * length / cols
+            cyl(f"{name}rim{j}", r0 + rim_h, th, (0, 0, z - th / 2), mat or M["block"], parent=hub, verts=rows * 4,
+                bevel=0.04)
+            for i in range(rows):
+                a = 2 * math.pi * (i + 0.5 * (j % 2)) / rows
+                box(f"{name}blk{i}-{j}", (th * 0.94, 2 * math.pi * (r0 + rim_h) / rows * tooth_f, tooth_h * pin + 0.06),
+                    (math.cos(a) * (r0 + rim_h - 0.06), math.sin(a) * (r0 + rim_h - 0.06), z), mat or M["block"],
+                    parent=hub, rot=(0, 90, math.degrees(a)), bevel=0.04, origin="bottom")
+        return e, hub
     for i in range(rows):
         a = 2 * math.pi * i / rows
         for j in range(cols):
@@ -1114,6 +1130,9 @@ def shell34():
         bmesh.ops.delete(bm, geom=gone, context="FACES")
         BODY.update(n2=n2, d2=d2)
     rim = [v.co.copy() for v in bm.verts if v.is_boundary]
+    for ed in bm.edges:      # the cut edge sharp, so the wall's rim faces don't bleed a sawtooth into the smooth shell
+        if ed.is_boundary:
+            ed.smooth = False
     # the barrel lies in the opening along its long way, its middle a little below the opening's middle
     bc = c + sum(rim, Vector()) / len(rim) + n * S.L3_BARREL_SINK
     ba = tilted(S.L3_BARREL_AXIS[0], 90.0 - S.L3_BARREL_AXIS[1])
@@ -1134,10 +1153,11 @@ def shell34():
     ln, br = (S.L4_BARREL if L == 4 else S.L3_BARREL)[:2]
     if L == 4:
         barrel("barrel", bc, ba, br, ln, S.L4_BARREL_ROWS, S.L4_BARREL_COLS, fill=S.L4_BLOCK_FILL, mat=M["block34"],
-               core=M["core34"], low=(S.L3_LOW, M["block34lo"]) if S.L3_LOW else None)
+               core=M["core34"], low=(S.L3_LOW, M["block34lo"]) if S.L3_LOW else None, rims=S.L4_RIMS)
     else:
         barrel("barrel", bc, ba, br, ln, S.L3_BARREL_ROWS, S.L3_BARREL_COLS, fill=S.L3_BLOCK_FILL, mat=M["block34"],
-               core=M["core34"], pin=S.L3_PIN, low=(S.L3_LOW, M["block34lo"]) if S.L3_LOW else None)
+               core=M["core34"], pin=S.L3_PIN, low=(S.L3_LOW, M["block34lo"]) if S.L3_LOW else None,
+               rims=S.L3_RIMS)
     # the cog inside the machine, as Flash: facing the camera just behind the barrel's top end, so the top blocks
     # hide its lower half (still, as Flash); its post leaves the axle's end, runs down behind the top blocks and up
     # behind the cog to its back
