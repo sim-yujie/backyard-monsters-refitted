@@ -1,6 +1,7 @@
 import { friendRefusal, type Friend, type FriendsApi } from "@/api/friends";
 import { canHelp, friendCountText, onlineText } from "@/game/friends/friendText";
 import type { FriendsSnapshot, FriendsStore } from "@/game/friends/friendsStore";
+import { gameIcon, iconAmount } from "@/ui/gameIcon";
 import { blockButton } from "./BlockButton";
 import { button, make, playerRow, section, StatusLine, type FriendsTabView, type RowBadge } from "./rows";
 
@@ -19,6 +20,11 @@ import { button, make, playerRow, section, StatusLine, type FriendsTabView, type
  * buttons (Can help, Online, Gift not sent; pressed ones must all hold) above
  * the list; the bar's wrench and gift marks on each critter; and one-line
  * rows, with Remove and Block folded behind a "More" button.
+ *
+ * Beta 7 (owner: "Allow pinning of friends in the friend list (up to 10)"):
+ * a pin button on each row. Pinned friends come first, in the order they
+ * were pinned, and the summary shows how many of the 10 are used. An 11th
+ * pin says so on the status line instead of asking the server.
  */
 
 export interface FriendActions {
@@ -61,6 +67,10 @@ export const FRIENDS_TEXT = {
   noMatch: "No friends match.",
   clear: "Clear",
   matching: (shown: number): string => `${shown} shown`,
+  pin: "Pin to top",
+  unpin: "Unpin",
+  pinned: (count: number, max: number): string => `${count} of ${max} pinned`,
+  pinLimit: (max: number): string => `${max} pinned already. Unpin one first.`,
 } as const;
 
 export type FriendFilter = "help" | "online" | "gift";
@@ -88,8 +98,13 @@ export const friendMatches = (friend: Friend, query: string, filters: ReadonlySe
 
 const ONLINE_ORDER: Readonly<Record<string, number>> = { online: 0, today: 1, week: 2, away: 3 };
 
-/** Online first (then seen today, this week, away, hidden), then highest level, then by name. */
+/**
+ * Pinned first, in the order they were pinned; then online first (then seen
+ * today, this week, away, hidden), then highest level, then by name.
+ */
 export const friendOrder = (one: Friend, other: Friend): number =>
+  Number(other.pinnedAt !== null) - Number(one.pinnedAt !== null) ||
+  (one.pinnedAt ?? 0) - (other.pinnedAt ?? 0) ||
   (ONLINE_ORDER[one.online ?? ""] ?? 4) - (ONLINE_ORDER[other.online ?? ""] ?? 4) ||
   other.level - one.level ||
   one.username.localeCompare(other.username);
@@ -112,6 +127,8 @@ export class FriendsTab implements FriendsTabView {
   private query = "";
   private readonly filters = new Set<FriendFilter>();
   private busy = new Set<number>();
+  /** Friends whose pin is on its way to the server. */
+  private readonly pinning = new Set<number>();
   private snapshot: FriendsSnapshot | null = null;
 
   constructor(options: FriendsTabOptions) {
@@ -190,7 +207,15 @@ export class FriendsTab implements FriendsTabView {
       this.body.replaceChildren();
       return;
     }
-    this.summary.textContent = friendCountText(snapshot.friends.length, snapshot.max);
+    this.summary.replaceChildren(friendCountText(snapshot.friends.length, snapshot.max));
+    const pinnedCount = snapshot.friends.filter((friend) => friend.pinnedAt !== null).length;
+    if (pinnedCount > 0) {
+      const pins = iconAmount("pin", `${pinnedCount}/${snapshot.maxPinned}`, {
+        label: FRIENDS_TEXT.pinned(pinnedCount, snapshot.maxPinned),
+        className: "friends-summary__pins",
+      });
+      this.summary.append(" ", pins);
+    }
     this.tools.hidden = snapshot.friends.length === 0;
     if (snapshot.friends.length === 0) {
       const empty = make("div", "friends-empty");
@@ -242,7 +267,7 @@ export class FriendsTab implements FriendsTabView {
       row.classList.add("friends-row--confirm");
       return row;
     }
-    const actions: HTMLElement[] = [];
+    const actions: HTMLElement[] = [this.pinButton(friend)];
     const { onVisit, onGift, onMessage } = this.options;
     if (onVisit) actions.push(button(FRIENDS_TEXT.visit, () => onVisit(friend), "primary"));
     if (onMessage) {
@@ -293,7 +318,49 @@ export class FriendsTab implements FriendsTabView {
       badges,
     });
     row.classList.toggle("friends-row--open", opened);
+    row.classList.toggle("friends-row--pinned", friend.pinnedAt !== null);
     return row;
+  }
+
+  /** The row's pin: the painted pin, bright while pinned, faded while not. */
+  private pinButton(friend: Friend): HTMLButtonElement {
+    const pinned = friend.pinnedAt !== null;
+    const words = pinned ? FRIENDS_TEXT.unpin : FRIENDS_TEXT.pin;
+    const pin = make("button", `btn btn--ghost btn--icon friends-row__action friends-row__pin${pinned ? " friends-row__pin--on" : ""}`);
+    pin.type = "button";
+    pin.title = words;
+    pin.setAttribute("aria-label", `${words}: ${friend.username}`);
+    pin.setAttribute("aria-pressed", String(pinned));
+    pin.disabled = this.pinning.has(friend.userid);
+    pin.append(gameIcon("pin", { size: 24, decorative: true }));
+    pin.addEventListener("click", () => void this.togglePin(friend));
+    return pin;
+  }
+
+  private async togglePin(friend: Friend): Promise<void> {
+    if (this.pinning.has(friend.userid)) return;
+    const pin = friend.pinnedAt === null;
+    const { store } = this.options;
+    const max = store.snapshot.maxPinned;
+    if (pin && store.pinnedCount >= max) {
+      this.status.set(FRIENDS_TEXT.pinLimit(max), "error");
+      return;
+    }
+    this.pinning.add(friend.userid);
+    // At once, so the row moves under the finger; put back if the server says no.
+    store.setPinned(friend.userid, pin);
+    try {
+      const result = await this.options.api.pin(friend.userid, pin);
+      store.setPinned(friend.userid, result.pinned);
+      if (this.status.text === FRIENDS_TEXT.pinLimit(max)) this.status.set(null);
+    } catch (caught) {
+      store.setPinned(friend.userid, !pin);
+      const refusal = friendRefusal(caught);
+      this.status.set(refusal.reason === "pinLimit" ? FRIENDS_TEXT.pinLimit(max) : refusal.message, "error");
+    } finally {
+      this.pinning.delete(friend.userid);
+      this.render();
+    }
   }
 
   private async remove(friend: Friend): Promise<void> {

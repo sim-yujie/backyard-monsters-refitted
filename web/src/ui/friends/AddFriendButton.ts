@@ -1,6 +1,8 @@
 import { friendRefusal, friendsApi, type FriendsApi, type Relation } from "@/api/friends";
 import { friendRelations, type FriendRelations } from "@/game/friends/friendRelations";
+import { friendMarkOf } from "@/game/friends/friendMarks";
 import { icon } from "@/ui/icons";
+import { friendBadge } from "./friendBadge";
 import "./add-friend.css";
 
 /**
@@ -93,7 +95,13 @@ export const addFriendButton = (options: AddFriendOptions): HTMLElement => {
 
   const render = (): void => {
     let shown: HTMLElement;
-    if (relation === "friend" || relation === "requested" || relation === "self") {
+    if (relation === "friend") {
+      // The painted friend marker (beta 7), gold-framed for a pinned friend.
+      shown = make("span", "chip add-friend__relation add-friend__relation--friend");
+      const badge = friendBadge(friendMarkOf(userid, { friend: true }) ?? "friend");
+      if (badge) shown.append(badge);
+      shown.append(make("span", "", ADD_FRIEND_TEXT.friend));
+    } else if (relation === "requested" || relation === "self") {
       shown = make("span", "chip add-friend__relation", relation === "requested" ? ADD_FRIEND_TEXT.requested : ADD_FRIEND_TEXT.friend);
     } else {
       const accept = relation === "asked";

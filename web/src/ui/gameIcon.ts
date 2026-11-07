@@ -65,6 +65,10 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * domed Town Hall with its horn antenna (`townhall`), a gold crown for empire
  * points (`empire`), two smiling monster heads for friends (`friends`) and the
  * crimson alliance shield with its gold stripe (`alliance`).
+ *
+ * Pinning a friend to the top of the list (beta 7, `ui/friends/FriendsTab.ts`):
+ * `pin`. A STAND-IN for now: its files are copies of the gold crown
+ * (`empire`) until a painted pin is made; replace `pin-*.webp` to change it.
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -111,6 +115,7 @@ export const GAME_ICONS = {
   empire: "Empire points",
   friends: "Friends",
   alliance: "Alliance",
+  pin: "Pin to top",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;

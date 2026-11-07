@@ -17,6 +17,8 @@ import type { ApiEnvelope, BaseLoadResponse } from "./types";
  * - `POST /bm/friends/request/answer { requestid, accept }`.
  * - `POST /bm/friends/request/cancel { requestid }`.
  * - `POST /bm/friends/remove { userid }`: silent, for both.
+ * - `POST /bm/friends/pin { userid, pinned }`: pins a friend to the top of
+ *   the list, or unpins them (beta 7, up to {@link PIN_MAX}).
  * - `GET  /bm/friends/search ?q=`: up to 10 players, exact name first.
  * - `GET  /bm/friends/suggestions`: alliance mates not yet friends.
  * - `POST /bm/friends/gift { userid, resource }`, `GET /bm/friends/gifts`,
@@ -38,6 +40,7 @@ const REQUEST_PATH = "/api/:apiVersion/bm/friends/request";
 const ANSWER_PATH = "/api/:apiVersion/bm/friends/request/answer";
 const CANCEL_PATH = "/api/:apiVersion/bm/friends/request/cancel";
 const REMOVE_PATH = "/api/:apiVersion/bm/friends/remove";
+const PIN_PATH = "/api/:apiVersion/bm/friends/pin";
 const SEARCH_PATH = "/api/:apiVersion/bm/friends/search";
 const SUGGESTIONS_PATH = "/api/:apiVersion/bm/friends/suggestions";
 const GIFT_PATH = "/api/:apiVersion/bm/friends/gift";
@@ -57,6 +60,9 @@ export const SEARCH_MIN_LENGTH = 3;
 
 /** The most friends a player can have (decision 2); the list's `max` overrides it. */
 export const FRIEND_MAX = 100;
+
+/** The most friends a player can pin to the top (owner, beta 7); the list's `maxPinned` overrides it. */
+export const PIN_MAX = 10;
 
 /**
  * How recently a friend was last in their yard, coarse on purpose (§6.2,
@@ -88,12 +94,16 @@ export interface Friend {
   readonly canGiftFrom: number | null;
   /** Whether the player could help them today; null until help lands (WP6). */
   readonly help: { readonly speedup: boolean; readonly repair: boolean } | null;
+  /** Pinned to the top of the list (beta 7): when, unix seconds; null when not pinned. */
+  readonly pinnedAt: number | null;
 }
 
 /** `GET /bm/friends`. */
 export interface FriendsList {
   readonly friends: readonly Friend[];
   readonly max: number;
+  /** The most friends that can be pinned. */
+  readonly maxPinned: number;
   /** Requests waiting for the player's answer. */
   readonly requestsIn: number;
   /** Gifts waiting to be collected. */
@@ -265,6 +275,7 @@ export type FriendRefusalReason =
   | "noSuchPlayer"
   | "noSuchRequest"
   | "noSuchGift"
+  | "pinLimit"
   | "self";
 
 /** A refused call, in words: its reason (or `network`/`unknown`) and what to tell the player. */
@@ -330,6 +341,7 @@ export const REFUSAL_TEXT: Readonly<Record<FriendRefusalReason, string>> = {
   noSuchPlayer: "There is no player with that name.",
   noSuchRequest: "That request is no longer waiting for an answer.",
   noSuchGift: "That gift is no longer waiting.",
+  pinLimit: `${PIN_MAX} pinned already. Unpin one first.`,
   self: "That's you!",
 };
 
@@ -430,6 +442,7 @@ export const friendOf = (raw: Record<string, unknown>): Friend => {
       typeof help === "object" && help !== null
         ? { speedup: helpRecord["speedup"] === true, repair: helpRecord["repair"] === true }
         : null,
+    pinnedAt: toSeconds(raw["pinnedAt"]),
   };
 };
 
@@ -481,6 +494,12 @@ const privacyOf = (raw: Record<string, unknown>): PrivacySettings => ({
 
 type Answer = ApiEnvelope & Record<string, unknown>;
 
+/** `POST /bm/friends/pin`: the friend's pin as stored, and how many are pinned now. */
+export interface PinResult {
+  readonly pinned: boolean;
+  readonly pinnedCount: number;
+}
+
 /** Everything the friends screens ask the server, as one object a test can replace. */
 export interface FriendsApi {
   list(): Promise<FriendsList>;
@@ -491,6 +510,8 @@ export interface FriendsApi {
   answer(requestid: number, accept: boolean): Promise<Friend | null>;
   cancel(requestid: number): Promise<void>;
   remove(userid: number): Promise<void>;
+  /** Pins a friend to the top of the list, or unpins them; how many are pinned afterwards. */
+  pin(userid: number, pinned: boolean): Promise<PinResult>;
   /** Players whose name has `query` in it; `[]` under {@link SEARCH_MIN_LENGTH} letters, without asking. */
   search(query: string): Promise<PlayerResult[]>;
   /** Alliance mates who are not friends yet. */
@@ -518,6 +539,7 @@ export const friendsApi: FriendsApi = {
     return {
       friends: list(answer["friends"]).map(friendOf),
       max: count(answer["max"]) || FRIEND_MAX,
+      maxPinned: count(answer["maxPinned"]) || PIN_MAX,
       requestsIn: count(answer["requestsIn"]),
       giftsWaiting: count(answer["giftsWaiting"]),
       helpsLeft: count(answer["helpsLeft"]),
@@ -544,6 +566,10 @@ export const friendsApi: FriendsApi = {
   },
   async remove(userid) {
     await postJson(REMOVE_PATH, { userid });
+  },
+  async pin(userid, pinned) {
+    const answer = await postJson<Answer>(PIN_PATH, { userid, pinned });
+    return { pinned: answer["pinned"] === true, pinnedCount: count(answer["pinnedCount"]) };
   },
   async search(query) {
     const q = query.trim();
