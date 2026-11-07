@@ -97,6 +97,8 @@ export class MailWatch {
   private nudgeTimer: ReturnType<typeof setTimeout> | null = null;
   private stopChat: (() => void) | null = null;
   private asking = false;
+  /** A nudge came while asking: ask again after, as the answer may predate it. */
+  private askAgain = false;
   /** A nudge came while the tab was hidden: ask once it is shown. */
   private dueOnShow = false;
   private lastAsked = 0;
@@ -127,13 +129,18 @@ export class MailWatch {
     this.page?.removeEventListener("visibilitychange", this.shown);
     if (this.pollTimer !== null) clearInterval(this.pollTimer);
     if (this.nudgeTimer !== null) clearTimeout(this.nudgeTimer);
+    this.askAgain = false;
     this.pollTimer = null;
     this.nudgeTimer = null;
   }
 
   /** Asks now (a scene's own reason, or a test). */
   async check(): Promise<void> {
-    if (!this.running || this.asking) return;
+    if (!this.running) return;
+    if (this.asking) {
+      this.askAgain = true;
+      return;
+    }
     this.asking = true;
     this.lastAsked = this.now();
     this.dueOnShow = false;
@@ -145,6 +152,10 @@ export class MailWatch {
       // Off line or signed out for a moment: the next nudge or tick asks again.
     } finally {
       this.asking = false;
+    }
+    if (this.askAgain) {
+      this.askAgain = false;
+      await this.check();
     }
   }
 
