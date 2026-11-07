@@ -6,8 +6,9 @@ import type { Context } from "koa";
  * chat moderators list may find any player and start a conversation with
  * them; every mail they send is copied into the owner's log; their new
  * conversations are capped. A normal player keeps the rules they had, and
- * nothing a client sends makes it a moderator. Every send tells the
- * recipient's game (`mailNudge.ts`).
+ * nothing a client sends makes it a moderator. The player's side of a
+ * moderator's conversation is logged too, so the dashboard shows it whole.
+ * Every send tells the recipient's game (`mailNudge.ts`).
  *
  * `../../server.js` is replaced by a fake entity manager that answers the
  * moderators list, the log and the player lookup from arrays here.
@@ -60,6 +61,10 @@ const em = {
     if (/INSERT INTO bym\.mod_mail_log/.test(sql)) {
       logRows.push(params);
       return [];
+    }
+    if (/FROM bym\.mod_mail_log WHERE threadid = \?/.test(sql)) {
+      const first = logRows.find((row) => row[5] === params[0]);
+      return first ? [{ moderator_id: first[1] }] : [];
     }
     if (/FROM bym\.mod_mail_log/.test(sql)) return [logCounts];
     if (/FROM bym\.message/.test(sql)) return [];
@@ -130,9 +135,10 @@ describe("a moderator's mail", () => {
     expect(ctx.body).toMatchObject({ error: 0 });
     expect(created.some((m) => m.targetid === STRANGER && m.userid === MOD)).toBe(true);
     expect(logRows).toHaveLength(1);
-    const [, moderatorId, moderatorName, recipientId, recipientName, , newThread, type, subject, message, written] =
+    const [, moderatorId, moderatorName, recipientId, recipientName, , newThread, type, subject, message, written, sender] =
       logRows[0]!;
-    expect({ moderatorId, moderatorName, recipientId, recipientName, newThread, type, subject, message, written }).toEqual({
+    expect({ moderatorId, moderatorName, recipientId, recipientName, newThread, type, subject, message, written, sender }).toEqual({
+      sender: "moderator",
       moderatorId: MOD,
       moderatorName: "ModMolly",
       recipientId: STRANGER,
@@ -193,6 +199,77 @@ describe("a moderator's mail", () => {
   test("a moderator taken off the list is a normal player at the next send", async () => {
     moderators = new Set();
     const ctx = ctxFor(MOD, newMail(STRANGER));
+    await sendMessage(ctx);
+    expect(ctx.body).toMatchObject({ error: 0 });
+    expect(logRows).toEqual([]);
+  });
+});
+
+describe("the player's side of a moderator's conversation", () => {
+  /** A log row as `logModMail` writes it, for a thread already in the log. */
+  const logged = (threadid: number, moderatorId: number, playerId: number) => [
+    new Date(),
+    moderatorId,
+    "ModMolly",
+    playerId,
+    "Stranger",
+    threadid,
+    true,
+    "message",
+    "Hello",
+    "Please stop spamming chat.",
+    null,
+    "moderator",
+  ];
+
+  test("the player's answer in a moderator's thread is logged, as the player's", async () => {
+    threads = [{ threadid: 9, userid: MOD, targetid: STRANGER, messagecount: 1 }];
+    logRows = [logged(9, MOD, STRANGER)];
+    const ctx = ctxFor(STRANGER, newMail(STRANGER, { threadid: "9", message: "Sorry, I will stop." }));
+    await sendMessage(ctx);
+    expect(ctx.body).toMatchObject({ error: 0, threadid: 9 });
+    expect(logRows).toHaveLength(2);
+    const [, moderatorId, moderatorName, playerId, playerName, threadid, newThread, , , message, , sender] = logRows[1]!;
+    expect({ moderatorId, moderatorName, playerId, playerName, threadid, newThread, message, sender }).toEqual({
+      moderatorId: MOD,
+      moderatorName: "ModMolly",
+      playerId: STRANGER,
+      playerName: "Stranger",
+      threadid: 9,
+      newThread: false,
+      message: "Sorry, I will stop.",
+      sender: "player",
+    });
+  });
+
+  test("a player writing to a moderator starts a logged conversation", async () => {
+    const ctx = ctxFor(PLAYER, newMail(MOD, { message: "Someone is spamming." }));
+    await sendMessage(ctx);
+    expect(ctx.body).toMatchObject({ error: 0 });
+    expect(logRows).toHaveLength(1);
+    expect(logRows[0]![1]).toBe(MOD);
+    expect(logRows[0]![3]).toBe(PLAYER);
+    expect(logRows[0]![6]).toBe(true);
+    expect(logRows[0]![11]).toBe("player");
+  });
+
+  test("a thread already in the log stays logged after the moderator is taken off the list", async () => {
+    moderators = new Set();
+    threads = [{ threadid: 9, userid: MOD, targetid: STRANGER, messagecount: 1 }];
+    logRows = [logged(9, MOD, STRANGER)];
+    const reply = ctxFor(MOD, newMail(MOD, { threadid: "9", message: "Thanks." }));
+    await sendMessage(reply);
+    const answer = ctxFor(STRANGER, newMail(STRANGER, { threadid: "9", message: "No problem." }));
+    await sendMessage(answer);
+    expect(logRows.slice(1).map((row) => [row[1], row[3], row[11], row[9]])).toEqual([
+      [MOD, STRANGER, "moderator", "Thanks."],
+      [MOD, STRANGER, "player", "No problem."],
+    ]);
+  });
+
+  test("a player's answer in a thread with no moderator is not logged", async () => {
+    threads = [{ threadid: 9, userid: PLAYER, targetid: STRANGER, messagecount: 1 }];
+    const ctx = ctxFor(STRANGER, newMail(STRANGER, { threadid: "9" }));
     await sendMessage(ctx);
     expect(ctx.body).toMatchObject({ error: 0 });
     expect(logRows).toEqual([]);

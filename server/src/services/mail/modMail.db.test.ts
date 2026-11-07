@@ -4,22 +4,27 @@ import { MikroORM } from "@mikro-orm/postgresql";
 import ormConfig from "../../mikro-orm.config.js";
 import {
   isMailModerator,
-  listModMail,
+  listModConversations,
+  logModConversation,
   logModMail,
   MOD_MAIL_LIMIT_TEXT,
   MOD_MAIL_LIMITS,
   modNewThreadRefusal,
   parseModMailQuery,
+  readModConversation,
   type ModMailEntry,
+  type SentMail,
 } from "./modMail.js";
 import { readMailStatus } from "./mailStatus.js";
 
 /**
- * Moderator mail against a real Postgres (migration 20261111_AddModMailLog):
- * the moderators list read on every check, the log written and searched by
- * moderator or recipient, kept when the message, its thread and both
- * accounts are deleted, the new-conversation cap counted from it, and the
- * live mail check's newest unread message.
+ * Moderator mail against a real Postgres (migrations 20261111_AddModMailLog,
+ * 20261112_AddModMailReplies): the moderators list read on every check, both
+ * sides of a moderator's conversation logged, listed one row per
+ * conversation and searched by moderator or player, read whole in order,
+ * kept when the messages, the thread and both accounts are deleted, the
+ * new-conversation cap counted from the moderator's own rows, and the live
+ * mail check's newest unread message.
  *
  * Opt-in, like the other database tests: runs only when DASHBOARD_TEST_DB
  * names a throwaway database with every migration applied (never `bym`).
@@ -35,7 +40,26 @@ const STRANGER = 997203;
 const ALL = [MOD, PLAYER, STRANGER];
 const LIST = ALL.join(",");
 const THREAD = 997201;
+const THREAD_2 = 997202;
 const NOW = new Date("2026-11-11T10:00:00Z");
+
+/** A message sent in THREAD, for `logModConversation`. */
+const sent = (from: number, to: number, message: string, over: Partial<SentMail> = {}): SentMail => ({
+  threadid: THREAD,
+  newThread: false,
+  senderId: from,
+  senderName: `modmtest_${from}`,
+  recipientId: to,
+  recipientName: `modmtest_${to}`,
+  senderIsModerator: from === MOD,
+  messagetype: "message",
+  subject: "About chat",
+  message,
+  written: null,
+  ...over,
+});
+
+const at = (minutes: number) => new Date(NOW.getTime() + minutes * 60_000);
 
 const entry = (over: Partial<ModMailEntry> = {}): ModMailEntry => ({
   moderatorId: MOD,
@@ -102,58 +126,121 @@ describe.skipIf(!dbName)("moderator mail on a real database", () => {
     expect(await isMailModerator(orm.em.fork(), MOD)).toBe(false);
   });
 
-  test("logs a moderator's mail and finds it by moderator name or recipient number", async () => {
-    await logModMail(orm.em.fork(), entry(), NOW);
-    await logModMail(orm.em.fork(), entry({ recipientId: PLAYER, recipientName: `modmtest_${PLAYER}`, subject: "Two" }), NOW);
-    const byModerator = await listModMail(orm.em.fork(), parseModMailQuery({ moderator: `ModMTest_${MOD}` }));
-    expect(byModerator.mails.map((m) => m.subject)).toEqual(["Two", "About chat"]);
-    const byRecipient = await listModMail(orm.em.fork(), parseModMailQuery({ recipient: `#${STRANGER}` }));
-    expect(byRecipient.mails).toHaveLength(1);
-    expect(byRecipient.mails[0]).toMatchObject({
+  test("logs both sides of a moderator's conversation and lists it as one row", async () => {
+    await logModConversation(orm.em.fork(), sent(MOD, STRANGER, "Please keep chat friendly.", { newThread: true }), at(0));
+    await logModConversation(orm.em.fork(), sent(STRANGER, MOD, "Sorry, I will."), at(1));
+    await logModConversation(orm.em.fork(), sent(MOD, STRANGER, "Thanks!", { written: "Thanks d*mn | Thanks!" }), at(2));
+    // Two players with no moderator: never logged.
+    await logModConversation(orm.em.fork(), sent(PLAYER, STRANGER, "hi", { threadid: 997299 }), at(3));
+
+    const { conversations, next } = await listModConversations(orm.em.fork(), parseModMailQuery({ moderator: String(MOD) }));
+    expect(conversations).toHaveLength(1);
+    expect((await sql(`SELECT 1 FROM bym.mod_mail_log WHERE threadid = 997299`)).length).toBe(0);
+    expect(conversations[0]).toMatchObject({
+      threadid: THREAD,
       moderatorId: MOD,
       moderatorName: `modmtest_${MOD}`,
-      recipientId: STRANGER,
-      recipientName: `modmtest_${STRANGER}`,
-      threadid: THREAD,
-      newThread: true,
-      subject: "About chat",
-      message: "Please keep chat friendly.",
-      sentAt: NOW.toISOString(),
+      playerId: STRANGER,
+      playerName: `modmtest_${STRANGER}`,
+      messages: 3,
+      fromModerator: 2,
+      startedAt: at(0).toISOString(),
+      lastAt: at(2).toISOString(),
+      lastSender: "moderator",
+      lastMessage: "Thanks!",
     });
-    const both = await listModMail(orm.em.fork(), parseModMailQuery({ moderator: String(MOD), recipient: `${PLAYER}` }));
-    expect(both.mails.map((m) => m.subject)).toEqual(["Two"]);
+    expect(next).toBeNull();
+
+    const whole = await readModConversation(orm.em.fork(), THREAD);
+    expect(whole).toMatchObject({ moderatorId: MOD, playerId: STRANGER, cut: false });
+    expect(whole!.messages.map((m) => [m.sender, m.senderId, m.senderName, m.message, m.newThread])).toEqual([
+      ["moderator", MOD, `modmtest_${MOD}`, "Please keep chat friendly.", true],
+      ["player", STRANGER, `modmtest_${STRANGER}`, "Sorry, I will.", false],
+      ["moderator", MOD, `modmtest_${MOD}`, "Thanks!", false],
+    ]);
+    expect(whole!.messages[2]!.written).toBe("Thanks d*mn | Thanks!");
+    expect(await readModConversation(orm.em.fork(), 997298)).toBeNull();
   });
 
-  test("pages newest first", async () => {
-    for (const subject of ["a", "b", "c"]) await logModMail(orm.em.fork(), entry({ subject }), NOW);
-    const first = await listModMail(orm.em.fork(), parseModMailQuery({ moderator: String(MOD), limit: "2" }));
-    expect(first.mails.map((m) => m.subject)).toEqual(["c", "b"]);
+  test("a player's mail to a moderator is logged as the player's, and does not count against the moderator's cap", async () => {
+    await logModConversation(orm.em.fork(), sent(PLAYER, MOD, "Someone is spamming.", { newThread: true }), at(0));
+    const whole = await readModConversation(orm.em.fork(), THREAD);
+    expect(whole!.messages.map((m) => [m.sender, m.senderId])).toEqual([["player", PLAYER]]);
+    expect(whole).toMatchObject({ moderatorId: MOD, playerId: PLAYER });
+    const [row] = await sql(`SELECT new_thread, sender FROM bym.mod_mail_log WHERE threadid = ?`, [THREAD]);
+    expect(row).toMatchObject({ new_thread: true, sender: "player" });
+    const minuteAgo = new Date(NOW.getTime() - 60_000);
+    for (let i = 0; i < MOD_MAIL_LIMITS.perHour; i += 1) {
+      await logModConversation(orm.em.fork(), sent(PLAYER, MOD, "again", { threadid: 997210 + i, newThread: true }), minuteAgo);
+    }
+    expect(await modNewThreadRefusal(orm.em.fork(), MOD, NOW)).toBeNull();
+  });
+
+  test("finds conversations by moderator name or player number, either side's message matching", async () => {
+    await logModConversation(orm.em.fork(), sent(MOD, STRANGER, "one", { newThread: true }), at(0));
+    await logModConversation(orm.em.fork(), sent(STRANGER, MOD, "answer"), at(1));
+    await logModConversation(orm.em.fork(), sent(MOD, PLAYER, "two", { threadid: THREAD_2, newThread: true }), at(2));
+    const byModerator = await listModConversations(orm.em.fork(), parseModMailQuery({ moderator: `ModMTest_${MOD}` }));
+    expect(byModerator.conversations.map((c) => c.threadid)).toEqual([THREAD_2, THREAD]);
+    const byPlayer = await listModConversations(orm.em.fork(), parseModMailQuery({ recipient: `#${STRANGER}` }));
+    expect(byPlayer.conversations.map((c) => [c.threadid, c.messages, c.lastSender])).toEqual([[THREAD, 2, "player"]]);
+    const both = await listModConversations(orm.em.fork(), parseModMailQuery({ moderator: String(MOD), recipient: `${PLAYER}` }));
+    expect(both.conversations.map((c) => c.threadid)).toEqual([THREAD_2]);
+    const nobody = await listModConversations(orm.em.fork(), parseModMailQuery({ recipient: "modmtest_nobody" }));
+    expect(nobody.conversations).toEqual([]);
+  });
+
+  test("pages conversations by their newest message", async () => {
+    for (const [i, threadid] of [997231, 997232, 997233].entries()) {
+      await logModConversation(orm.em.fork(), sent(MOD, STRANGER, `t${i}`, { threadid, newThread: true }), at(i));
+    }
+    // An answer brings the oldest conversation to the top.
+    await logModConversation(orm.em.fork(), sent(STRANGER, MOD, "late answer", { threadid: 997231 }), at(5));
+    const first = await listModConversations(orm.em.fork(), parseModMailQuery({ moderator: String(MOD), limit: "2" }));
+    expect(first.conversations.map((c) => c.threadid)).toEqual([997231, 997233]);
     expect(first.next).not.toBeNull();
-    const second = await listModMail(
+    const second = await listModConversations(
       orm.em.fork(),
       parseModMailQuery({ moderator: String(MOD), limit: "2", before: String(first.next) }),
     );
-    expect(second.mails.map((m) => m.subject)).toEqual(["a"]);
+    expect(second.conversations.map((c) => c.threadid)).toEqual([997232]);
     expect(second.next).toBeNull();
   });
 
-  test("the log is kept when the message, its thread and both accounts are deleted", async () => {
-    await sql(`INSERT INTO bym.thread (id, threadid, userid, targetid, messagecount, created_at) VALUES (gen_random_uuid(), ?, ?, ?, 1, now())`, [
+  test("both sides are kept when the messages, the thread and both accounts are deleted", async () => {
+    await sql(`INSERT INTO bym.thread (id, threadid, userid, targetid, messagecount, created_at) VALUES (gen_random_uuid(), ?, ?, ?, 2, now())`, [
       THREAD,
       MOD,
       STRANGER,
     ]);
     await addMessage("00000000-0000-4000-8000-997201000001", MOD, STRANGER, 100, "Please keep chat friendly.");
-    await logModMail(orm.em.fork(), entry(), NOW);
+    await logModConversation(orm.em.fork(), sent(MOD, STRANGER, "Please keep chat friendly.", { newThread: true }), at(0));
+    await addMessage("00000000-0000-4000-8000-997201000004", STRANGER, MOD, 200, "Get lost.");
+    await logModConversation(orm.em.fork(), sent(STRANGER, MOD, "Get lost."), at(1));
 
     await sql(`DELETE FROM bym.message WHERE threadid = ?`, [THREAD]);
     await sql(`DELETE FROM bym.thread WHERE threadid = ?`, [THREAD]);
     await sql(`DELETE FROM bym.chat_moderator WHERE userid IN (${LIST})`);
     await sql(`DELETE FROM bym."user" WHERE userid IN (${MOD}, ${STRANGER})`);
 
-    const kept = await listModMail(orm.em.fork(), parseModMailQuery({ recipient: `modmtest_${STRANGER}` }));
-    expect(kept.mails).toHaveLength(1);
-    expect(kept.mails[0]).toMatchObject({ moderatorName: `modmtest_${MOD}`, message: "Please keep chat friendly." });
+    const kept = await listModConversations(orm.em.fork(), parseModMailQuery({ recipient: `modmtest_${STRANGER}` }));
+    expect(kept.conversations).toHaveLength(1);
+    expect(kept.conversations[0]).toMatchObject({ moderatorName: `modmtest_${MOD}`, messages: 2, lastMessage: "Get lost." });
+    const whole = await readModConversation(orm.em.fork(), THREAD);
+    expect(whole!.messages.map((m) => [m.sender, m.message])).toEqual([
+      ["moderator", "Please keep chat friendly."],
+      ["player", "Get lost."],
+    ]);
+  });
+
+  test("a row from before replies were logged reads as the moderator's", async () => {
+    await sql(
+      `INSERT INTO bym.mod_mail_log (moderator_id, moderator_name, recipient_id, recipient_name, threadid, messagetype, subject, message)
+       VALUES (?, ?, ?, ?, ?, 'message', 'Old', 'Sent before the change')`,
+      [MOD, `modmtest_${MOD}`, STRANGER, `modmtest_${STRANGER}`, THREAD],
+    );
+    const whole = await readModConversation(orm.em.fork(), THREAD);
+    expect(whole!.messages.map((m) => [m.sender, m.senderId, m.message])).toEqual([["moderator", MOD, "Sent before the change"]]);
   });
 
   test("caps the new conversations a moderator starts, replies apart", async () => {

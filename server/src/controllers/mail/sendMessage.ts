@@ -20,7 +20,7 @@ import { logger } from "../../utils/logger.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import { isServerSender, SUPPORT_SENDER } from "../../services/mail/systemSender.js";
 import { mayAnswerTeam } from "../../services/mail/teamThreads.js";
-import { isMailModerator, logModMail, modNewThreadRefusal } from "../../services/mail/modMail.js";
+import { isMailModerator, logModConversation, modNewThreadRefusal } from "../../services/mail/modMail.js";
 import { nudgeMail } from "../../services/mail/mailNudge.js";
 
 /**
@@ -44,7 +44,8 @@ import { nudgeMail } from "../../services/mail/mailNudge.js";
  * A sender on the chat moderators list (`services/mail/modMail.ts`, read
  * afresh on every send) has every mail copied into the owner's "Moderator
  * mail" log, and a cap on new conversations; nothing a client sends can
- * claim that. The recipient's game is told at once (`nudgeMail`).
+ * claim that. The player's side of a moderator's conversation is logged too
+ * (`logModConversation`). The recipient's game is told at once (`nudgeMail`).
  *
  * @param {Context} ctx - The Koa context object, which includes the request body.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
@@ -206,22 +207,21 @@ export const sendMessage: KoaController = async (ctx) => {
     postgres.em.persist(recipient);
     await postgres.em.flush();
 
-    if (moderator) {
-      await logModMail(postgres.em, {
-        moderatorId: userid,
-        moderatorName: ctx.authUser.username ?? `Player ${userid}`,
-        recipientId: messageTargetId,
-        recipientName: recipient.username ?? `Player ${messageTargetId}`,
-        threadid: thread.threadid,
-        newThread,
-        messagetype: message.type,
-        subject: filteredSubject,
-        message: filteredMessage,
-        written: filteredMessage !== message.message || filteredSubject !== message.subject
-          ? `${message.subject} | ${message.message}`
-          : null,
-      });
-    }
+    await logModConversation(postgres.em, {
+      threadid: thread.threadid,
+      newThread,
+      senderId: userid,
+      senderName: ctx.authUser.username ?? `Player ${userid}`,
+      recipientId: messageTargetId,
+      recipientName: recipient.username ?? `Player ${messageTargetId}`,
+      senderIsModerator: moderator,
+      messagetype: message.type,
+      subject: filteredSubject,
+      message: filteredMessage,
+      written: filteredMessage !== message.message || filteredSubject !== message.subject
+        ? `${message.subject} | ${message.message}`
+        : null,
+    });
     nudgeMail(messageTargetId);
 
     ctx.status = Status.OK;

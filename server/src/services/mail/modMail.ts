@@ -14,8 +14,11 @@ import { logger } from "../../utils/logger.js";
  *   The list is read from Postgres on every send and lookup, so a moderator
  *   taken off it loses this at once.
  * - Every mail a moderator sends is copied into `bym.mod_mail_log`
- *   (migration `20261111_AddModMailLog.ts`), which nothing but the owner's
- *   dashboard reads ("Moderator mail") and nothing deletes.
+ *   (migrations `20261111_AddModMailLog.ts`, `20261112_AddModMailReplies.ts`),
+ *   which nothing but the owner's dashboard reads ("Moderator mail") and
+ *   nothing deletes. So are the player's answers in that thread, and a
+ *   player's mail to a moderator: the dashboard shows each conversation whole
+ *   ({@link logModConversation}).
  * - New conversations a moderator starts are capped ({@link MOD_MAIL_LIMITS}),
  *   on top of everyone's mail limit (`SPAM_LIMITS.playerMail`).
  * - The recipient sees the moderator's light blue Mod badge on the mail
@@ -69,7 +72,7 @@ export const modNewThreadRefusal = async (
   const [row] = await em.execute<{ hour: number | string; day: number | string }[]>(
     `SELECT count(*) FILTER (WHERE sent_at > ?) AS hour, count(*) AS day
        FROM bym.mod_mail_log
-      WHERE moderator_id = ? AND new_thread AND sent_at > ?`,
+      WHERE moderator_id = ? AND sender = 'moderator' AND new_thread AND sent_at > ?`,
     [hourAgo, moderatorId, dayAgo],
   );
   if (Number(row?.day ?? 0) >= MOD_MAIL_LIMITS.perDay) return MOD_MAIL_LIMIT_TEXT.day;
@@ -77,36 +80,50 @@ export const modNewThreadRefusal = async (
   return null;
 };
 
-/** One mail a moderator sent, as it is logged. */
+/** Who wrote a logged message: the conversation's moderator or its player. */
+export type ModMailSender = "moderator" | "player";
+
+/**
+ * One message of a moderator's conversation, as it is logged. `moderator*`
+ * is always the conversation's moderator and `recipient*` its player,
+ * whichever of them wrote it (`sender`).
+ */
 export interface ModMailEntry {
   moderatorId: number;
   moderatorName: string;
+  /** The player in the conversation (who got it, or who wrote it when `sender` is "player"). */
   recipientId: number;
   recipientName: string;
   threadid: number;
+  /** This message started the thread. */
   newThread: boolean;
   messagetype: string;
-  /** What the recipient got (after the word filter). */
+  /** What the other side got (after the word filter). */
   subject: string;
   message: string;
-  /** What the moderator typed, when the word filter changed it; else null. */
+  /** What the writer typed, when the word filter changed it; else null. */
   written: string | null;
+  /** Who wrote it; a moderator when left out. */
+  sender?: ModMailSender;
 }
 
 /**
- * Copies a moderator's mail into the log. A failure is logged loudly but does
- * not undo the send: the message is already saved, and the server log line
- * below keeps who wrote to whom.
+ * Copies one message of a moderator's conversation into the log. A failure
+ * is logged loudly but does not undo the send: the message is already saved,
+ * and the server log line below keeps who wrote to whom.
  */
 export const logModMail = async (em: EntityManager, entry: ModMailEntry, now: Date = new Date()): Promise<void> => {
+  const sender = entry.sender ?? "moderator";
   logger.info(
-    `Mail: moderator ${entry.moderatorId} wrote to ${entry.recipientId} in thread ${entry.threadid} (${entry.messagetype})`,
+    sender === "moderator"
+      ? `Mail: moderator ${entry.moderatorId} wrote to ${entry.recipientId} in thread ${entry.threadid} (${entry.messagetype})`
+      : `Mail: player ${entry.recipientId} wrote to moderator ${entry.moderatorId} in thread ${entry.threadid} (${entry.messagetype})`,
   );
   try {
     await em.execute(
       `INSERT INTO bym.mod_mail_log
-         (sent_at, moderator_id, moderator_name, recipient_id, recipient_name, threadid, new_thread, messagetype, subject, message, written)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (sent_at, moderator_id, moderator_name, recipient_id, recipient_name, threadid, new_thread, messagetype, subject, message, written, sender)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         now,
         entry.moderatorId,
@@ -119,11 +136,75 @@ export const logModMail = async (em: EntityManager, entry: ModMailEntry, now: Da
         entry.subject,
         entry.message,
         entry.written,
+        sender,
       ],
     );
   } catch (err) {
-    logger.error(`Mail: could not log moderator ${entry.moderatorId}'s mail to ${entry.recipientId}: ${err}`);
+    logger.error(
+      `Mail: could not log thread ${entry.threadid}'s mail between moderator ${entry.moderatorId} and ${entry.recipientId}: ${err}`,
+    );
   }
+};
+
+/** A message just sent, for {@link logModConversation}. */
+export interface SentMail {
+  threadid: number;
+  newThread: boolean;
+  senderId: number;
+  senderName: string;
+  recipientId: number;
+  recipientName: string;
+  /** Whether the sender is on the moderators list now (the caller has already asked). */
+  senderIsModerator: boolean;
+  messagetype: string;
+  subject: string;
+  message: string;
+  written: string | null;
+}
+
+/**
+ * Logs a message when it belongs to a moderator's conversation, on the right
+ * side, so the dashboard shows the conversation whole:
+ * - a thread already in the log: every message in it, the moderator being
+ *   the one logged first (even if since taken off the list);
+ * - else a sender on the moderators list writes as the moderator;
+ * - else a recipient on the list: the player's mail to a moderator.
+ * Anything else (two players) is not logged. A failure never undoes the send.
+ */
+export const logModConversation = async (em: EntityManager, mail: SentMail, now: Date = new Date()): Promise<void> => {
+  let moderatorId: number | null = null;
+  try {
+    const [logged] = await em.execute<{ moderator_id: number | string }[]>(
+      `SELECT moderator_id FROM bym.mod_mail_log WHERE threadid = ? ORDER BY id LIMIT 1`,
+      [mail.threadid],
+    );
+    if (logged) moderatorId = Number(logged.moderator_id);
+    else if (mail.senderIsModerator) moderatorId = mail.senderId;
+    else if (await isMailModerator(em, mail.recipientId)) moderatorId = mail.recipientId;
+  } catch (err) {
+    logger.error(`Mail: could not check thread ${mail.threadid} for moderator mail: ${err}`);
+    // Never lose a moderator's own mail over the check.
+    if (mail.senderIsModerator) moderatorId = mail.senderId;
+  }
+  if (moderatorId === null) return;
+  const byModerator = moderatorId === mail.senderId;
+  await logModMail(
+    em,
+    {
+      moderatorId,
+      moderatorName: byModerator ? mail.senderName : mail.recipientName,
+      recipientId: byModerator ? mail.recipientId : mail.senderId,
+      recipientName: byModerator ? mail.recipientName : mail.senderName,
+      threadid: mail.threadid,
+      newThread: mail.newThread,
+      messagetype: mail.messagetype,
+      subject: mail.subject,
+      message: mail.message,
+      written: mail.written,
+      sender: byModerator ? "moderator" : "player",
+    },
+    now,
+  );
 };
 
 /** The longest text the find box takes: a username is at most 12 characters, an account number 9 digits. */
@@ -168,34 +249,70 @@ export const findMailRecipient = async (
 
 /* ── The owner's dashboard ─────────────────────────────────────────────── */
 
-/** One logged mail as the dashboard lists it. */
-export interface ModMailView {
+/** One conversation (a thread with a moderator in it) as the dashboard lists it. */
+export interface ModConversationSummary {
+  threadid: number;
+  /** The moderator and the player, named as in the newest message. */
+  moderatorId: number;
+  moderatorName: string;
+  playerId: number;
+  playerName: string;
+  /** Messages logged, and how many of them the moderator wrote. */
+  messages: number;
+  fromModerator: number;
+  startedAt: string;
+  lastAt: string;
+  /** The newest message, for the one-line preview. */
+  lastSender: ModMailSender;
+  lastSubject: string;
+  lastMessage: string;
+  lastType: string;
+  /** The newest message's log id: what orders the list and pages it. */
+  lastId: number;
+}
+
+/** One logged message of a conversation, as the dashboard shows it. */
+export interface ModConversationMessage {
   id: number;
   sentAt: string;
-  moderatorId: number;
+  sender: ModMailSender;
+  senderId: number;
   /** The name when it was sent. */
-  moderatorName: string;
-  recipientId: number;
-  recipientName: string;
-  threadid: number;
+  senderName: string;
   newThread: boolean;
   messagetype: string;
   subject: string;
   message: string;
+  /** What the writer typed, when the word filter changed it. */
   written: string | null;
 }
 
-/** What the dashboard asked for: a moderator and/or a recipient (name or account number), and the page. */
+/** One conversation whole, oldest first. */
+export interface ModConversation {
+  threadid: number;
+  moderatorId: number;
+  moderatorName: string;
+  playerId: number;
+  playerName: string;
+  messages: ModConversationMessage[];
+  /** More messages than one answer carries ({@link MOD_CONVERSATION_MAX}): the newest are left out. */
+  cut: boolean;
+}
+
+/** What the dashboard asked for: a moderator and/or a player (name or account number), and the page. */
 export interface ModMailQuery {
   moderator: string | null;
+  /** The player side. */
   recipient: string | null;
-  /** Rows older than this id (the previous page's `next`). */
+  /** Conversations whose newest message is older than this log id (the previous page's `next`). */
   before: number | null;
   limit: number;
 }
 
 export const MOD_MAIL_PAGE = 50;
 const MOD_MAIL_PAGE_MAX = 200;
+/** The most messages one conversation answer carries. */
+export const MOD_CONVERSATION_MAX = 1000;
 
 const textOf = (value: unknown): string | null => {
   const text = typeof value === "string" ? value.trim() : "";
@@ -208,7 +325,7 @@ export const parseModMailQuery = (raw: Record<string, unknown>): ModMailQuery =>
   const limit = Number(raw.limit);
   return {
     moderator: textOf(raw.moderator),
-    recipient: textOf(raw.recipient),
+    recipient: textOf(raw.recipient ?? raw.player),
     before: Number.isSafeInteger(before) && before > 0 ? before : null,
     limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, MOD_MAIL_PAGE_MAX) : MOD_MAIL_PAGE,
   };
@@ -217,30 +334,98 @@ export const parseModMailQuery = (raw: Record<string, unknown>): ModMailQuery =>
 /** A LIKE pattern matching `text` anywhere, its own % and _ taken literally. */
 const containing = (text: string): string => `%${text.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
-/** The SQL matching one side (moderator or recipient) to a typed name or account number. */
+/** The SQL matching one side (moderator or player) to a typed name or account number. */
 const sideMatch = (column: "moderator" | "recipient", text: string, params: unknown[]): string => {
   const number = accountNumber(text);
   params.push(containing(text));
-  const byName = `lower(l.${column}_name) LIKE ?`;
+  const byName = `lower(m.${column}_name) LIKE ?`;
   if (number === null) return `(${byName})`;
   params.push(number);
-  return `(${byName} OR l.${column}_id = ?)`;
+  return `(${byName} OR m.${column}_id = ?)`;
 };
 
-/** The log, newest first, a page at a time; `next` is the `before` for the page after, or null at the end. */
-export const listModMail = async (
+const isoOf = (value: Date | string): string => new Date(value).toISOString();
+
+/**
+ * The conversations, the one with the newest message first, a page at a
+ * time; `next` is the `before` for the page after, or null at the end. A
+ * search keeps a conversation when any of its messages matches (a name as it
+ * was then, or the account number).
+ */
+export const listModConversations = async (
   em: EntityManager,
   query: ModMailQuery,
-): Promise<{ mails: ModMailView[]; next: number | null }> => {
-  const where: string[] = [];
+): Promise<{ conversations: ModConversationSummary[]; next: number | null }> => {
+  const matches: string[] = [];
   const params: unknown[] = [];
-  if (query.moderator) where.push(sideMatch("moderator", query.moderator, params));
-  if (query.recipient) where.push(sideMatch("recipient", query.recipient, params));
-  if (query.before !== null) {
-    where.push(`l.id < ?`);
-    params.push(query.before);
-  }
+  if (query.moderator) matches.push(sideMatch("moderator", query.moderator, params));
+  if (query.recipient) matches.push(sideMatch("recipient", query.recipient, params));
+  const where = matches.length
+    ? `WHERE l.threadid IN (SELECT m.threadid FROM bym.mod_mail_log m WHERE ${matches.join(" AND ")})`
+    : "";
+  if (query.before !== null) params.push(query.before);
   params.push(query.limit + 1);
+  const rows = await em.execute<
+    {
+      threadid: number | string;
+      last_id: number | string;
+      messages: number | string;
+      from_moderator: number | string;
+      started_at: Date | string;
+      sent_at: Date | string;
+      moderator_id: number | string;
+      moderator_name: string;
+      recipient_id: number | string;
+      recipient_name: string;
+      sender: string;
+      messagetype: string;
+      subject: string;
+      message: string;
+    }[]
+  >(
+    `WITH c AS (
+       SELECT l.threadid, max(l.id) AS last_id, count(*) AS messages,
+              count(*) FILTER (WHERE l.sender = 'moderator') AS from_moderator,
+              min(l.sent_at) AS started_at
+         FROM bym.mod_mail_log l
+         ${where}
+        GROUP BY l.threadid
+        ${query.before !== null ? "HAVING max(l.id) < ?" : ""}
+        ORDER BY last_id DESC
+        LIMIT ?
+     )
+     SELECT c.threadid, c.last_id, c.messages, c.from_moderator, c.started_at,
+            l.sent_at, l.moderator_id, l.moderator_name, l.recipient_id, l.recipient_name,
+            l.sender, l.messagetype, l.subject, l.message
+       FROM c JOIN bym.mod_mail_log l ON l.id = c.last_id
+      ORDER BY c.last_id DESC`,
+    params,
+  );
+  const page = rows.slice(0, query.limit);
+  return {
+    conversations: page.map((row) => ({
+      threadid: Number(row.threadid),
+      moderatorId: Number(row.moderator_id),
+      moderatorName: row.moderator_name,
+      playerId: Number(row.recipient_id),
+      playerName: row.recipient_name,
+      messages: Number(row.messages),
+      fromModerator: Number(row.from_moderator),
+      startedAt: isoOf(row.started_at),
+      lastAt: isoOf(row.sent_at),
+      lastSender: row.sender === "player" ? "player" : "moderator",
+      lastSubject: row.subject,
+      lastMessage: row.message,
+      lastType: row.messagetype,
+      lastId: Number(row.last_id),
+    })),
+    next: rows.length > query.limit ? Number(page[page.length - 1]!.last_id) : null,
+  };
+};
+
+/** One conversation whole, oldest first, both sides; null when the log has nothing for that thread. */
+export const readModConversation = async (em: EntityManager, threadid: number): Promise<ModConversation | null> => {
+  if (!Number.isSafeInteger(threadid) || threadid <= 0) return null;
   const rows = await em.execute<
     {
       id: number | string;
@@ -249,36 +434,46 @@ export const listModMail = async (
       moderator_name: string;
       recipient_id: number | string;
       recipient_name: string;
-      threadid: number | string;
       new_thread: boolean;
       messagetype: string;
       subject: string;
       message: string;
       written: string | null;
+      sender: string;
     }[]
   >(
-    `SELECT l.* FROM bym.mod_mail_log l
-      ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-      ORDER BY l.id DESC
+    `SELECT id, sent_at, moderator_id, moderator_name, recipient_id, recipient_name,
+            new_thread, messagetype, subject, message, written, sender
+       FROM bym.mod_mail_log
+      WHERE threadid = ?
+      ORDER BY id
       LIMIT ?`,
-    params,
+    [threadid, MOD_CONVERSATION_MAX + 1],
   );
-  const page = rows.slice(0, query.limit);
+  if (rows.length === 0) return null;
+  const shown = rows.slice(0, MOD_CONVERSATION_MAX);
+  const newest = shown[shown.length - 1]!;
   return {
-    mails: page.map((row) => ({
-      id: Number(row.id),
-      sentAt: new Date(row.sent_at).toISOString(),
-      moderatorId: Number(row.moderator_id),
-      moderatorName: row.moderator_name,
-      recipientId: Number(row.recipient_id),
-      recipientName: row.recipient_name,
-      threadid: Number(row.threadid),
-      newThread: row.new_thread === true,
-      messagetype: row.messagetype,
-      subject: row.subject,
-      message: row.message,
-      written: row.written,
-    })),
-    next: rows.length > query.limit ? Number(page[page.length - 1]!.id) : null,
+    threadid,
+    moderatorId: Number(newest.moderator_id),
+    moderatorName: newest.moderator_name,
+    playerId: Number(newest.recipient_id),
+    playerName: newest.recipient_name,
+    messages: shown.map((row): ModConversationMessage => {
+      const byPlayer = row.sender === "player";
+      return {
+        id: Number(row.id),
+        sentAt: isoOf(row.sent_at),
+        sender: byPlayer ? "player" : "moderator",
+        senderId: Number(byPlayer ? row.recipient_id : row.moderator_id),
+        senderName: byPlayer ? row.recipient_name : row.moderator_name,
+        newThread: row.new_thread === true,
+        messagetype: row.messagetype,
+        subject: row.subject,
+        message: row.message,
+        written: row.written,
+      };
+    }),
+    cut: rows.length > MOD_CONVERSATION_MAX,
   };
 };

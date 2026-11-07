@@ -52,7 +52,7 @@ import {
   removeModerator,
   type ModeratorEffects,
 } from "../../services/admin/chatModerators.js";
-import { listModMail, parseModMailQuery } from "../../services/mail/modMail.js";
+import { listModConversations, parseModMailQuery, readModConversation } from "../../services/mail/modMail.js";
 import {
   listChatReports,
   moderate,
@@ -417,11 +417,20 @@ export const mountAdminRoutes = (router: Router): void => {
     ok(ctx, { removed: id });
   });
 
-  // Moderator mail (services/mail/modMail.ts): every mail a moderator sent,
-  // newest first, searched by moderator and/or recipient (name or #number).
-  // The log is a copy nothing else deletes, so it outlasts the mail itself.
+  // Moderator mail (services/mail/modMail.ts): every conversation a moderator
+  // is in, the newest first, searched by moderator and/or player (name or
+  // #number); and one conversation whole, both sides. The log is a copy
+  // nothing else deletes, so it outlasts the mail itself.
   router.get(`${admin}/modmail`, apiVersion, adminOnly, async (ctx) => {
-    ok(ctx, await listModMail(postgres.em.fork(), parseModMailQuery(ctx.query as Record<string, unknown>)));
+    ok(ctx, await listModConversations(postgres.em.fork(), parseModMailQuery(ctx.query as Record<string, unknown>)));
+  });
+
+  router.get(`${admin}/modmail/:threadid`, apiVersion, adminOnly, async (ctx) => {
+    const threadid = intOf(ctx.params.threadid);
+    const conversation =
+      threadid !== undefined && threadid > 0 ? await readModConversation(postgres.em.fork(), threadid) : null;
+    if (!conversation) return refuse(ctx, Status.NOT_FOUND, "No moderator mail in that conversation.", "notFound");
+    ok(ctx, { conversation });
   });
 
   router.post(`${admin}/chat/session`, apiVersion, adminOnly, async (ctx) => {
