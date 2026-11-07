@@ -26,7 +26,13 @@ import { daysBetween, readDailyStats, statsOverview, type StatsDeps } from "../.
 import { LOG_BASE, LOG_DIR, logger } from "../../utils/logger.js";
 import { getOrCreateChatToken } from "../../chat/chatChannels.js";
 import { publishModeration } from "../../chat/chatControl.js";
-import { CHANNELS, INFERNO_CHAT_CHANNEL, countryChannelFor } from "../../config/ChatConfig.js";
+import {
+  CHANNELS,
+  GLOBAL_CHAT_CHANNEL,
+  INFERNO_CHAT_CHANNEL,
+  LEGACY_MR1_CHAT_CHANNEL,
+  countryChannelFor,
+} from "../../config/ChatConfig.js";
 import { ChatControlType } from "../../enums/Chat.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { endAllSessions } from "../../services/auth/sessions.js";
@@ -124,9 +130,10 @@ const moderationEffects: ModerationEffects = {
 
 /** The dashboard chat panel's rooms: every world room, and the owner's country room. */
 const GLOBAL_ROOMS: readonly { channel: string; label: string }[] = [
-  { channel: CHANNELS[MapRoomVersion.V2]!, label: "Map Room 2" },
+  // Map Room 1 and 2 share one room since patch 6.6; Map Room 1's old room stays readable.
+  { channel: GLOBAL_CHAT_CHANNEL, label: "Global (Map Room 1 and 2)" },
   { channel: CHANNELS[MapRoomVersion.V3]!, label: "Map Room 3" },
-  { channel: CHANNELS[MapRoomVersion.V1]!, label: "Map Room 1" },
+  { channel: LEGACY_MR1_CHAT_CHANNEL, label: "Map Room 1 (before patch 6.6)" },
   { channel: INFERNO_CHAT_CHANNEL, label: "Inferno" },
 ];
 
