@@ -24,9 +24,9 @@ ORIGIN = (0.0, 55.0)        # Flash pixel of the world origin (on the ground)
 GROUND = 0.0
 FRAMES = {1: 21, 2: 20, 3: 20, 4: 20}     # Flash's loops (level 4's data says 21, but its strip has 20 cells)
 
-KEY_TURN = {1: 0.5, 2: 0.5, 3: 1.0, 4: 0.5}   # the key's turns a loop (Flash's rings turn half round: they look
-                                             # the same after half a turn; the monster bows turn once round)
-KEY0 = {1: -1.0, 2: 76.0, 3: 90.0, 4: 90.0}   # the key's bow at frame 0 (degrees about its shaft)
+KEY_TURN = {1: 0.5, 2: 0.5, 3: -0.5, 4: 0.5}  # the key's turns a loop (level 3 the other way round) (Flash's rings turn half round: they look
+                                             # the same after half a turn; the monster bows too: Flash shows one edge-on a loop)
+KEY0 = {1: -1.0, 2: 116.0, 3: 90.0, 4: 90.0}   # the key's bow at frame 0 (degrees about its shaft)
 BARREL_TURN = 60.0          # the barrel turns two rows of blocks a loop (12 rows)
 
 # the ground middle under each level's axis (Flash px)
@@ -97,8 +97,8 @@ L3_CUT = (30.0, 12.0, 1.2)                      # the opening's plane: its norma
 L3_CUT2 = (200.0, 100.0, -2.8)                          # the dome's cut face (as L3_CUT); None: one plane cut only
 L3_CUT_R, L4_CUT_R = 2.5, 2.5                    # the corner between the two cuts rounded to this radius
 L3_BARREL = (5.6, 2.3, 0.0)                       # length, core radius, its middle moved up its axle
-L4_BARREL = (6.4, 2.5, 0.0)                      # level 4: longer toward the top, under the cog
-L3_BARREL_PX, L4_BARREL_PX = (-12.0, -32.0, 1.5), (-3.0, -40.0, 1.5)               # (Flash px x, y, depth behind the egg's middle) of the barrel's middle
+L4_BARREL = (5.8, 2.4, 0.0)                      # level 4: a little bigger
+L3_BARREL_PX, L4_BARREL_PX = (-12.0, -32.0, 1.5), (-12.0, -30.0, 1.5)               # (Flash px x, y, depth behind the egg's middle) of the barrel's middle
 L3_BARREL_SINK = -1.0                            # the barrel's middle: the opening's middle moved along its normal
 L3_BARREL_AXIS = (57.0, 22.0)                    # its axle: toward this bearing, rising by this much
 L3_BARREL_ROWS, L3_BARREL_COLS = 12, 5                 # blocks in every other cell
@@ -107,7 +107,7 @@ L3_LOW = 0.45                                    # every other block this high a
 L3_RIMS, L4_RIMS = None, None   # None: chunky blocks on a rounded heap (Flash); (rim h, tooth h, tooth width): toothed discs
 L3_MOUND, L4_MOUND = (0.62, 0.45), (0.62, 0.45)  # disc radius at the ends (share of the middle), lumpiness
 L3_PIN = 1.0                                    # level 3's blocks this high (Flash's are small)
-L4_BARREL_ROWS, L4_BARREL_COLS, L4_BLOCK_FILL = 14, 5, (0.72, 0.86)   # level 4: fewer, bigger blocks, as Flash
+L4_BARREL_ROWS, L4_BARREL_COLS, L4_BLOCK_FILL = 12, 5, (0.8, 0.8)   # level 4: as level 3
 L3_COG_R, L3_COG_PX = 1.3, (3.0, -70.0)          # the cog at the top: radius, Flash px of its middle
 L4_COG_PX = (6.0, -74.0)
 L3_COG_BACK, L3_COG_FACE = 2.8, 0.7              # the cog pulled this far down to the barrel's end, its face turned
@@ -127,7 +127,8 @@ L3_KEY_RIM, L4_KEY_RIM = (-17.0, -49.0), (-22.0, -54.0)   # Flash px of the key'
 L3_KEY_LEAN = 35.0                               # the stem leans this far out of the screen's plane toward the camera
 L3_KEY_AXIS = (-39.0, -85.0)                     # level 3: Flash px of the bow's far end when edge-on (frame 13): the key turns about
                                                  # the line from the collar to here
-L3_AXIS_LEAN = 25.0                              # that line leans this far out of the screen's plane toward the camera
+L3_AXIS_LEAN, L4_AXIS_LEAN = 55.0, 25.0          # that line leans this far out of the screen's plane toward the camera
+                                                 # (level 3: steep, so the bow swings round in the picture as Flash's)
 L3_KEY_DEPTH = 0.35                              # the key's bearing block reaches this far down the lip
 L3_KEY_RISE = 0.3                                # the collar this far over the lip (clear of the turning blocks)
 L3_KEY_OUT, L4_KEY_OUT = 0.35, 0.0               # key and bearing moved this far out along the lip, off the blocks' path
@@ -135,12 +136,13 @@ L3_KEY_BOW = (-31.0, -70.0)                      # Flash px of the bow's middle
 L3_BOW_SCALE = 1.4
 L3_BOW_FOOT, L4_BOW_FOOT = (-27.4, -58.0), (-27.5, -59.5)   # Flash px where the stem meets the bow
 L3_PANELS = (((-41.0, -24.0), "port"), ((-26.0, 2.0), "port"), ((22.0, 10.0), "port"))
+L4_PANELS = (((-41.0, -28.0), "port"), ((-30.0, 6.0), "port"), ((26.0, 10.0), "port"))   # level 4: vents there
 L3_PANEL_SPIN = (0.0, 0.0, 0.0)
 L3_PANEL_LEAN = (0.0, 0.2, 0.2)
 L4_BASE_C, L4_BASE_R, L4_BASE_H = (-1.0, 56.0), 4.3, 0.45
 L4_BASE_W, L4_PAD_R = 1.6, 1.05                   # the ring's width, the pads' radius
-L4_EGG_C = (-3.0, -8.0)
-L4_EGG_R = L3_EGG_R                       # level 4: the egg a little shorter
+L4_EGG_C = (-3.0, -6.0)
+L4_EGG_R = (4.2, 4.8, 4.0)                # level 4: level 3's egg a little bigger (as Flash)
 L4_GCOG_R = 2.9
 L4_CUT, L4_CUT2 = L3_CUT, L3_CUT2                      # level 4: the opening bigger and lower
 L4_PILLAR_R, L4_PILLAR_TOP = 0.5, 5.3
@@ -152,7 +154,7 @@ L4_BOW_R = 1.05
 L4_KEY_AXIS = (-42.0, -86.0)                     # level 4: Flash px of the head's top when edge-on (frame 13)
 L4_SKULL = dict(r=1.0, head_v=2.0, jaw_v=0.75, th=0.42, rim=0.2, jaw=(1.3, 0.72), eye=(0.42, 0.08, 0.3, 0.36),
                 nose=-0.42, horn=(32.0, 0.32))
-KEY_FACE = {4: 3}
+KEY_FACE = {3: 4, 4: 3}   # the frame the bow is built facing the camera (L3 traced from Flash frame 5; both timed by bow area per frame, keywidth.py)
 
 
 def mounts(lv):

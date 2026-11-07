@@ -1,4 +1,4 @@
-"""bowtrace.py : traces Flash's key bows (frame 0) into Flash-pixel shapes for locker.py.
+"""bowtrace.py : traces Flash's key bows (level 3: frame 5, where it faces the camera; level 4: frame 0) into Flash-pixel shapes for locker.py.
 
     python bowtrace.py [show]
 
@@ -16,21 +16,22 @@ from PIL import Image
 HERE = Path(__file__).resolve().parent
 import fref  # noqa: E402
 
+FRAME_OF = {3: 5, 4: 0}              # the Flash frame each bow is traced from (locker.py builds it there)
 UP = 4                               # trace at 4x for smoother lines
 # per level: the box round the bow (Flash px) and a test for pixels that belong to the bow, not the body/stem
-BOX = {3: (-47, -92, -12, -50), 4: (-47, -92, -24, -58)}
+BOX = {3: (-49, -92, -8, -50), 4: (-47, -92, -24, -58)}
 
 
 def keep(lv, x, y):
     if lv == 3:
-        return (y < -58.5 and x < -14.5) or (x < -29.5 and y < -50)
+        return (y < -60.5 and x < -11) or (y < -58.5 and x < -14.5) or (x < -29.5 and y < -50)
     return y < -60.5 or x < -31
 
 
 def mask(lv):
     x0, y0, x1, y1 = BOX[lv]
     fr = fref.FRAME
-    im = np.asarray(fref.flash_rgba(lv, 0)).astype(float)
+    im = np.asarray(fref.flash_rgba(lv, FRAME_OF[lv])).astype(float)
     a = im[y0 - fr[1]:y1 - fr[1], x0 - fr[0]:x1 - fr[0], 3]
     for j in range(a.shape[0]):
         for i in range(a.shape[1]):

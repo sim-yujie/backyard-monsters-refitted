@@ -1560,7 +1560,7 @@ def level34():
             cyl(f"legnut{i}", 0.5, 0.75, (p.x, p.y, za + 0.12), M["nut"], verts=28, bevel=0.12)
     chimney(b, cage=lv4)
     # panels: on whatever shell part the camera sees at Flash's place
-    for i, ((sx, sy), kind) in enumerate(S.L3_PANELS):
+    for i, ((sx, sy), kind) in enumerate(S.L4_PANELS if lv4 else S.L3_PANELS):
         panel(f"panel{i}", None, S.L3_BODY_R, sx, sy, "vent" if (lv4 and kind == "port") else kind, size=2.5,
               spin=S.L3_PANEL_SPIN[i], lean=S.L3_PANEL_LEAN[i], thick=0.3)
     # the key: as Flash, its stem comes down over the opening's rim at the upper left (the collar) into the machine,
@@ -1582,7 +1582,7 @@ def level34():
     foot = lip + n * S.L3_KEY_RISE
     if lv4:
         # level 4: as level 3, about the line from the collar to the head's top when edge-on (Flash's frame 13)
-        far = leaning(foot, *S.L4_KEY_AXIS, S.L3_AXIS_LEAN)
+        far = leaning(foot, *S.L4_KEY_AXIS, S.L4_AXIS_LEAN)
         a, b, q = Vector(scr(foot)), Vector(scr(far)), Vector(S.L4_BOW_FOOT)
         tip = foot + (far - foot) * ((q - a).dot(b - a) / (b - a).length_squared)
     else:
