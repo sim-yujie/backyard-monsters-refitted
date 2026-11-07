@@ -48,6 +48,7 @@ import type { OwnOutpost } from "@/game/yard/ownYards";
 import { Panel } from "@/ui/Panel";
 import { attackStatsRow, attackStatsText } from "@/ui/attackNotice";
 import { requestCard, type RequestAction } from "./RequestCard";
+import { modBadge } from "./MailToast";
 import "@/ui/styles/mail.css";
 
 /**
@@ -62,8 +63,10 @@ import "@/ui/styles/mail.css";
  * - The game's notices (an outpost attacked or taken, #187) read as notices:
  *   no reply, no block, and "Show on map" when they name a cell.
  * - New message writes to a friend or a past contact (`friends`), or to the
- *   player the map or the Friends screen opened it for (`openCompose`). There
- *   is no player search: the server has no route for one.
+ *   player the map or the Friends screen opened it for (`openCompose`). A
+ *   chat moderator may instead type any player's name or account number
+ *   (owner, beta 7; the server's `mail/findplayer`, moderators only), and a
+ *   moderator's name carries the light blue Mod badge in the list and thread.
  * - Truces (#203): "Propose truce" in a player thread, or from the map on the
  *   player's yard (`openTruce`, the server's `requesttruce`). The thread's
  *   request carries a card with its state (waiting, active, ended, lapsed,
@@ -154,6 +157,8 @@ type View =
 type Tone = "info" | "bad";
 
 const LOAD_FAILED = "Could not load your mail. Try again.";
+/** Numbers the moderators' suggestion lists, so each has its own id. */
+let anyPlayerLists = 0;
 const SUBJECT_LIMIT = 60;
 
 const make = <K extends keyof HTMLElementTagNameMap>(
@@ -212,6 +217,8 @@ export class MailboxScreen {
   private threads: MailThread[] = [];
   private targets: Record<string, MailTarget> = {};
   private friends: readonly MailContact[] = [];
+  /** The player is a chat moderator: New message may find any player (`api.status`). */
+  private canMailAnyone = false;
   private view: View = { kind: "none" };
   private opened = false;
   private destroyed = false;
@@ -318,6 +325,20 @@ export class MailboxScreen {
     this.pane.querySelector<HTMLElement>(to ? ".mail-compose__subject" : ".mail-compose__to")?.focus();
   }
 
+  /** Opens the screen on one thread (the live mail pop-up's), or on the list if it is gone. */
+  async openThreadById(threadid: number): Promise<void> {
+    await this.open();
+    if (this.destroyed || !this.opened) return;
+    const thread = this.threads.find((one) => one.threadid === threadid);
+    if (thread) await this.openThread(thread);
+  }
+
+  /** Fetches the list again while open (new mail came). The open thread stays as it is. */
+  async reload(): Promise<void> {
+    if (this.destroyed || !this.opened) return;
+    await this.refresh();
+  }
+
   /** Proposes a truce to the owner of a yard the map showed (#203): a new thread. */
   async openTruce(to: TruceTarget): Promise<void> {
     if (this.destroyed) return;
@@ -363,16 +384,20 @@ export class MailboxScreen {
   /** The thread list and the names in it, fetched together. */
   private async refresh(): Promise<void> {
     const generation = ++this.generation;
+    let wasAnyone = this.canMailAnyone;
     this.list.classList.add("mail-list--loading");
     try {
-      const [threads, targets, friends] = await Promise.all([
+      const [threads, targets, friends, anyone] = await Promise.all([
         this.api.threads(),
         this.api.targets(),
         this.loadFriends(),
+        this.loadCanMailAnyone(),
       ]);
       if (this.destroyed || generation !== this.generation) return;
       this.targets = targets;
       this.friends = friends;
+      wasAnyone = this.canMailAnyone;
+      this.canMailAnyone = anyone;
       this.threads = threadList(threads, targets);
       if (this.loadFailed) this.setStatus(null);
     } catch {
@@ -387,6 +412,17 @@ export class MailboxScreen {
     // A new message opened before the recipients came shows "no one to write to": offer them now.
     const waiting = this.view.kind === "compose" || this.view.kind === "invite";
     if (waiting && !this.pane.querySelector(".mail-compose__to, .mail-compose__fixed")) this.renderPane();
+    // A moderator's compose opened before the answer: give it the any-player box.
+    else if (this.view.kind === "compose" && !this.view.to && this.canMailAnyone && !wasAnyone) this.renderPane();
+  }
+
+  /** Whether the player is a moderator; false when the route is not there or fails. */
+  private async loadCanMailAnyone(): Promise<boolean> {
+    try {
+      return (await this.api.status?.())?.mod ?? false;
+    } catch {
+      return false;
+    }
   }
 
   /** The player's friends as recipients; none when there is no list to ask or it fails. */
@@ -444,7 +480,9 @@ export class MailboxScreen {
         row.classList.toggle("mail-row--notice", thread.notice);
         if (thread.threadid === open) row.setAttribute("aria-current", "true");
         const head = make("span", "mail-row__head");
-        head.append(make("span", "mail-row__name", thread.otherName), make("span", "mail-row__time", sentText(thread.time, now)));
+        const who = make("span", "mail-row__name", thread.otherName);
+        if (thread.otherMod) who.prepend(modBadge());
+        head.append(who, make("span", "mail-row__time", sentText(thread.time, now)));
         row.append(
           head,
           make("span", "mail-row__subject", thread.subject),
@@ -459,7 +497,7 @@ export class MailboxScreen {
         const said = tags.map((tag) => `${tag.label}. `).join("");
         row.setAttribute(
           "aria-label",
-          `${thread.unread ? "Unread. " : ""}${thread.otherName}: ${thread.subject}. ${said}${sentText(thread.time, now)}`,
+          `${thread.unread ? "Unread. " : ""}${thread.otherMod ? "Moderator " : ""}${thread.otherName}: ${thread.subject}. ${said}${sentText(thread.time, now)}`,
         );
         item.append(row);
         return item;
@@ -506,7 +544,8 @@ export class MailboxScreen {
     const titles = make("div", "mail-pane__titles");
     // A name too long for the pane is cut with "…"; the whole of it shows on hover.
     const name = make("h3", "mail-pane__name mail-pane__name--thread", thread.otherName);
-    name.title = thread.otherName;
+    name.title = thread.otherMod ? `Moderator ${thread.otherName}` : thread.otherName;
+    if (thread.otherMod) name.prepend(modBadge());
     titles.append(name, make("p", "mail-pane__subject", thread.subject));
     const main = make("div", "mail-pane__main");
     main.append(titles);
@@ -1048,10 +1087,15 @@ export class MailboxScreen {
     head.append(this.backButton(), titles);
 
     const form = make("div", "mail-compose");
-    let recipient: () => MailContact | null;
+    /** The recipient, or what to say when there is none. */
+    let recipient: () => Promise<MailContact | string>;
     if (to) {
       form.append(make("p", "mail-compose__fixed", `To ${to.name}`));
-      recipient = () => ({ userid: to.userid, name: to.name });
+      recipient = async () => ({ userid: to.userid, name: to.name });
+    } else if (this.canMailAnyone) {
+      const field = this.anyPlayerField(contactsOf(this.targets, this.friends));
+      form.append(field.element);
+      recipient = field.recipient;
     } else {
       const contacts = contactsOf(this.targets, this.friends);
       if (contacts.length === 0) {
@@ -1076,7 +1120,8 @@ export class MailboxScreen {
       const label = make("label", "mail-compose__field");
       label.append(make("span", "mail-compose__caption", "To"), select);
       form.append(label);
-      recipient = () => contacts.find((contact) => String(contact.userid) === select.value) ?? null;
+      recipient = async () =>
+        contacts.find((contact) => String(contact.userid) === select.value) ?? "Pick who to write to.";
     }
 
     const subject = make("input", "mail-compose__subject");
@@ -1091,8 +1136,8 @@ export class MailboxScreen {
       this.writer({
         label: "Send",
         send: async (text) => {
-          const to = recipient();
-          if (!to) return "Pick who to write to.";
+          const to = await recipient();
+          if (typeof to === "string") return to;
           const result = await this.api.send({
             threadid: 0,
             targetid: to.userid,
@@ -1114,6 +1159,52 @@ export class MailboxScreen {
       }),
     );
     this.pane.replaceChildren(head, form);
+  }
+
+  /**
+   * A moderator's To (owner, beta 7): any player's name or account number,
+   * past contacts offered as they type. A contact's name is taken as it is;
+   * anything else is looked up on the server, which checks the moderators
+   * list again.
+   */
+  private anyPlayerField(contacts: readonly MailContact[]): {
+    element: HTMLElement;
+    recipient: () => Promise<MailContact | string>;
+  } {
+    const input = make("input", "mail-compose__to mail-compose__any");
+    input.type = "text";
+    input.maxLength = 40;
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.placeholder = "Name or #number";
+    input.setAttribute("aria-label", "To: any player, by name or account number");
+    const label = make("label", "mail-compose__field");
+    const caption = make("span", "mail-compose__caption", "To");
+    const hint = modBadge();
+    hint.title = "As a moderator you can write to any player";
+    caption.append(" ", hint);
+    label.append(caption, input);
+    if (contacts.length > 0) {
+      const list = make("datalist", "mail-compose__suggest");
+      list.id = `mail-any-${++anyPlayerLists}`;
+      for (const contact of contacts) {
+        const option = document.createElement("option");
+        option.value = contact.name;
+        list.append(option);
+      }
+      input.setAttribute("list", list.id);
+      label.append(list);
+    }
+    const recipient = async (): Promise<MailContact | string> => {
+      const text = input.value.trim();
+      if (text === "") return "Type a player's name or account number.";
+      const known = contacts.find((contact) => contact.name.toLowerCase() === text.toLowerCase());
+      if (known) return known;
+      if (!this.api.findPlayer) return "No player has that name or number.";
+      const found = await this.api.findPlayer(text);
+      return found.ok ? { userid: found.userid, name: found.name } : found.reason;
+    };
+    return { element: label, recipient };
   }
 
   /**

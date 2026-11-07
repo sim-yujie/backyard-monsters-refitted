@@ -29,7 +29,8 @@ export type ChatControlMessage =
       /** No lines before this (ms); 0 lifts the mute. */
       until: number;
     }
-  | { type: ChatControlType.Moderators };
+  | { type: ChatControlType.Moderators }
+  | { type: ChatControlType.Mail; userId: number };
 
 /**
  * Forces a player out of their alliance chat channel.
@@ -76,7 +77,9 @@ export const disconnectCountryChat = async (userId: number, keep: string | null)
  *
  * @param {ChatControlMessage} message - A Kick, Notice or Mute.
  */
-export const publishModeration = async (message: Exclude<ChatControlMessage, { type: ChatControlType.Moderators }>) => {
+export const publishModeration = async (
+  message: Extract<ChatControlMessage, { type: ChatControlType.Kick | ChatControlType.Notice | ChatControlType.Mute }>,
+) => {
   await redis
     .publish(CHAT_CONTROL_CHANNEL, JSON.stringify(message))
     .catch((err) => logger.error(`Chat control publish failed for user ${message.userId}: ${err}`));
@@ -94,4 +97,17 @@ export const publishModeratorsChanged = async () => {
   await redis
     .publish(CHAT_CONTROL_CHANNEL, JSON.stringify(message))
     .catch((err) => logger.error(`Chat control publish failed for the moderators list: ${err}`));
+};
+
+/**
+ * Tells the chat gateway the player has new mail (`services/mail/mailNudge.ts`),
+ * so their game asks for it at once instead of at the next save. Carries no
+ * mail text: the game fetches what is new over HTTP (`/player/mailstatus`).
+ */
+export const publishMailNudge = async (userId: number) => {
+  const message: ChatControlMessage = { type: ChatControlType.Mail, userId };
+
+  await redis
+    .publish(CHAT_CONTROL_CHANNEL, JSON.stringify(message))
+    .catch((err) => logger.error(`Chat control publish failed for mail to user ${userId}: ${err}`));
 };

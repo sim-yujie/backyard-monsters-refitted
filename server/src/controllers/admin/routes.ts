@@ -52,6 +52,7 @@ import {
   removeModerator,
   type ModeratorEffects,
 } from "../../services/admin/chatModerators.js";
+import { listModMail, parseModMailQuery } from "../../services/mail/modMail.js";
 import {
   listChatReports,
   moderate,
@@ -414,6 +415,13 @@ export const mountAdminRoutes = (router: Router): void => {
     const removed = await removeModerator(postgres.em.fork(), id, ctx.authUser.userid, moderatorEffects);
     if (!removed) return refuse(ctx, Status.CONFLICT, MODERATOR_REFUSAL_WORDS.notModerator, "notModerator");
     ok(ctx, { removed: id });
+  });
+
+  // Moderator mail (services/mail/modMail.ts): every mail a moderator sent,
+  // newest first, searched by moderator and/or recipient (name or #number).
+  // The log is a copy nothing else deletes, so it outlasts the mail itself.
+  router.get(`${admin}/modmail`, apiVersion, adminOnly, async (ctx) => {
+    ok(ctx, await listModMail(postgres.em.fork(), parseModMailQuery(ctx.query as Record<string, unknown>)));
   });
 
   router.post(`${admin}/chat/session`, apiVersion, adminOnly, async (ctx) => {

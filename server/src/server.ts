@@ -25,6 +25,8 @@ import { Env } from "./enums/Env.js";
 import { initAnticheat } from "./scripts/anticheat/anticheat.js";
 import { initialize as initVersionManifest } from "./config/VersionManifestConfig.js";
 import { startChatServer } from "./chat/chatServer.js";
+import { publishMailNudge } from "./chat/chatControl.js";
+import { setMailNudge } from "./services/mail/mailNudge.js";
 import { exitOnRedisReconnect } from "./utils/redisReconnectGuard.js";
 import { economyConfig, economyModeWasUnrecognised } from "./config/EconomyConfig.js";
 import { combatConfig, combatModeWasUnrecognised } from "./config/CombatConfig.js";
@@ -162,6 +164,8 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // at boot and checked hourly. `DASHBOARD_STATS=off` leaves the table to
   // another server sharing the database.
   setActivityRecorder(redisActivityRecorder(redis), (err) => logger.warn(`Dashboard activity not recorded: ${err}`));
+  // New mail tells the player's game over the chat gateway (`services/mail/mailNudge.ts`).
+  setMailNudge(publishMailNudge);
   startServerErrorFlush(postgres.em);
   if (process.env.DASHBOARD_STATS !== "off") {
     startDailyStats({
