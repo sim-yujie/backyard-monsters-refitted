@@ -383,4 +383,89 @@ describe("ZoneStore", () => {
 
     expect(onSightVersion).toHaveBeenCalledWith("abc123");
   });
+
+  /** A fetcher whose answers wait until the test lets each one go. */
+  const heldFetcher = () => {
+    const open: Array<() => void> = [];
+    const calls: [number, number][] = [];
+    const fetcher: AreaFetcher = (x, y) => {
+      calls.push([x, y]);
+      return new Promise<GetAreaResponse>((resolve) => open.push(() => resolve(areaResponse(x, y))));
+    };
+    return { fetcher, calls, open };
+  };
+  const settle = async (): Promise<void> => {
+    for (let index = 0; index < 5; index++) await Promise.resolve();
+  };
+
+  it("runs the full concurrency limit at once (each request was counted twice, halving it)", async () => {
+    const held = heldFetcher();
+    const store = new ZoneStore({ fetcher: held.fetcher, now: time.now, maxConcurrent: 4 });
+
+    // 16 zones visible, one pump.
+    store.ensureVisible({ minCol: 700, maxCol: 739, minRow: 340, maxRow: 379 });
+    void store.pump();
+
+    expect(held.calls).toHaveLength(4);
+    // A second pump while all four are out starts nothing more.
+    void store.pump();
+    expect(held.calls).toHaveLength(4);
+  });
+
+  it("starts the next queued zone the moment one answers, without waiting for the next pump", async () => {
+    const held = heldFetcher();
+    const store = new ZoneStore({ fetcher: held.fetcher, now: time.now, maxConcurrent: 2 });
+
+    store.ensureVisible({ minCol: 700, maxCol: 739, minRow: 340, maxRow: 379 });
+    void store.pump();
+    expect(held.calls).toHaveLength(2);
+
+    held.open[0]!();
+    await settle();
+    expect(held.calls).toHaveLength(3);
+    expect(store.loadedZones).toBe(1);
+  });
+
+  it("does not chain after a failure: it backs off and waits for the caller's pump", async () => {
+    let calls = 0;
+    const fetcher: AreaFetcher = () => {
+      calls += 1;
+      return Promise.reject(new NetworkError("offline"));
+    };
+    const store = new ZoneStore({ fetcher, now: time.now, maxConcurrent: 1 });
+
+    store.ensureVisible({ minCol: 700, maxCol: 739, minRow: 340, maxRow: 379 });
+    await store.pump();
+    await settle();
+
+    expect(calls).toBe(1);
+    expect(store.paused).toBe(true);
+  });
+
+  it("starts nothing new once stopped (the map closed)", async () => {
+    const held = heldFetcher();
+    const store = new ZoneStore({ fetcher: held.fetcher, now: time.now, maxConcurrent: 1 });
+
+    store.ensureVisible({ minCol: 700, maxCol: 739, minRow: 340, maxRow: 379 });
+    void store.pump();
+    store.stop();
+    held.open[0]!();
+    await settle();
+    await store.pump();
+
+    expect(held.calls).toHaveLength(1);
+    expect(store.pendingRequests).toBe(0);
+  });
+
+  it("can leave the chaining off, so one pump starts exactly one round", async () => {
+    const held = heldFetcher();
+    const store = new ZoneStore({ fetcher: held.fetcher, now: time.now, maxConcurrent: 1, pumpOnSettle: false });
+
+    store.ensureVisible({ minCol: 700, maxCol: 739, minRow: 340, maxRow: 379 });
+    void store.pump();
+    held.open[0]!();
+    await settle();
+
+    expect(held.calls).toHaveLength(1);
+  });
 });

@@ -618,6 +618,8 @@ export class MapRoom2Scene implements Scene {
     this.ui?.destroy();
     this.ui = null;
     this.renderer.destroy();
+    // Nothing new is fetched for a map nobody is looking at.
+    this.store.stop();
     this.context = null;
   }
 
