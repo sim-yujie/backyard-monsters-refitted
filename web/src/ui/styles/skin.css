@@ -306,8 +306,14 @@
 :root[data-skin] .panel .btn--primary,
 :root[data-skin] .panel .btn--outline,
 :root[data-skin] .panel .build-info__build {
+  /* Words at 0 px off the centre (owner rule, 7 Nov 2026): even padding top
+     and bottom (was 0 2px 4px, which lifted the words 2 px), and the display
+     font's metrics for the whole-pixel line on the base `.btn` (ui.css). */
+  --btn-ascent: var(--font-display-ascent);
+  --btn-descent: var(--font-display-descent);
+
   min-height: 46px;
-  padding: 0 2px 4px;
+  padding: 0 2px;
   border-style: solid;
   border-color: transparent;
   border-width: 0 var(--skin-button-cap);
@@ -964,7 +970,8 @@
 :root[data-skin] :is(.account-menu__items > .account-menu__help, .account-menu__list > .account-menu__item) {
   --skin-button2-cap: 14px;
   justify-content: center;
-  padding: 0 0 3px;
+  /* Even padding, so the words sit at 0 px off centre (was 0 0 3px). */
+  padding: 0;
   border-style: solid;
   border-color: transparent;
   border-width: 0 var(--skin-button2-cap);
@@ -987,7 +994,11 @@
 }
 
 :root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing, .raid-bar, .ach-card, .descent-card, .inferno-card, .test-report__peek) .btn--primary {
-  padding: 0 2px 3px;
+  /* Even padding (was 0 2px 3px, 1.5 px high), as the panel plate above. */
+  --btn-ascent: var(--font-display-ascent);
+  --btn-descent: var(--font-display-descent);
+
+  padding: 0 2px;
   border-style: solid;
   border-color: transparent;
   border-width: 0 var(--skin-button-cap);
