@@ -106,7 +106,8 @@ The feature carries the new numbers: building HP, tower damage and a bonus for o
 | Rocks (boulders) | 10% | +10% | +10% | 0 | Pebbles +25% |
 | Marsh (goo puddles) | 10% | -10% | 0 | 0 | Goo +25%, Putty +25% |
 | Resource node (rare) | 5% | 0 | 0 | 0 | one resource +50% |
-n_Patch 6.5 (owner, 7 Nov 2026): income bonuses cut from +50% to +25% (marsh Putty stays +25%), nodes from x2 to +50%; open ground now shows "Open ground · no bonus" in the cell pop-up._
+
+_Patch 6.5 (owner, 7 Nov 2026): income bonuses cut from +50% to +25% (marsh Putty stays +25%), nodes from x2 to +50%; open ground now shows "Open ground · no bonus" in the cell pop-up._
 
 Plus height as today: range -20% .. +57%, income +25% .. -36%.
 
