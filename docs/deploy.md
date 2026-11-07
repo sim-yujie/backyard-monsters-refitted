@@ -393,6 +393,22 @@ All from `/opt/bymr/server` on the VPS:
 | Take every bot off the map now (then switch them off, next row, or new ones appear) | `deploy/prod.sh exec web bun src/scripts/bots.ts retire-all` |
 | Switch bots off for good | Set `BOTS_FILL`, `BOTS_BRAIN` and `BOTS_REVENGE` to `off` in `production.env`, then `deploy/prod.sh up -d` |
 
+### How to read Map Room 2 opening times
+
+Each time a signed-in player opens Map Room 2 (at most the first open and one
+later open per page load), the game sends how long each step took, and the
+server writes it as one line in its log files, `/opt/bymr/server/logs/bymr-YYYY-MM-DD.jsonl`,
+with the message `mr2-open-timing` (no database table; old days are deleted
+with the rest of the logs). `grep -h '"mr2-open-timing"' logs/bymr-*.jsonl`
+lists them; with `jq` installed, `grep -h '"mr2-open-timing"' logs/bymr-*.jsonl | jq -c '.properties | {userid, gameVersion, open: .record.open, reason: .record.reason, total: .record.total, painted: .record.t.painted, info: .record.info}'`
+gives one short line per open. All times are milliseconds from the moment the
+map started opening: `total` is when everything wanted had arrived (`reason`
+`done`), `t` holds when each step first happened (own cell, first frame,
+painted look, full look), `spans` how long each load took, `area` the map
+cell requests, `kb` what was downloaded, and `info` the browser, screen,
+Quality and graphics card. The fields are listed in
+`server/src/schemas/ClientTimingSchema.ts`.
+
 ## When something goes wrong
 
 | What you see | Likely cause |

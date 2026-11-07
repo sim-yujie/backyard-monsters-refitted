@@ -39,6 +39,7 @@ import {
   allianceCreateEditLimiter,
   bugReportLimiter,
   clientErrorLimiter,
+  clientTimingLimiter,
   announcementsLimiter,
   announcementImageLimiter,
 } from "./middleware/rateLimiters.js";
@@ -132,6 +133,7 @@ import { adminOnly, mountAdminRoutes } from "./controllers/admin/routes.js";
 import { mountAnnouncementRoutes } from "./controllers/announcements/routes.js";
 import { postgres } from "./server.js";
 import { clientErrors, guestClientErrors } from "./controllers/errors/clientErrors.js";
+import { clientTiming } from "./controllers/maproom/clientTiming.js";
 
 import { getAvailableWorlds } from "./controllers/leaderboards/getAvailableWorlds.js";
 import { getLeaderboards } from "./controllers/leaderboards/getLeaderboards.js";
@@ -407,6 +409,12 @@ router.post("/api/:apiVersion/bugreport/guest", apiVersion, bugReportLimiter, su
 * ──────────────────────────────────────────────── */
 router.post("/api/:apiVersion/clienterrors", apiVersion, verifyUserAuth, clientErrorLimiter, clientErrors);
 router.post("/api/:apiVersion/clienterrors/guest", apiVersion, clientErrorLimiter, guestClientErrors);
+
+/**  ────────────────────────────────────────────────
+* 📦 Map Room 2 open timings from real players: one log line each, message
+* "mr2-open-timing", in logs/bymr-*.jsonl (`controllers/maproom/clientTiming.ts`).
+* ──────────────────────────────────────────────── */
+router.post("/api/:apiVersion/clienttiming", apiVersion, verifyUserAuth, clientTimingLimiter, clientTiming);
 
 /**  ────────────────────────────────────────────────
 * 📦 The owner's dashboard (`controllers/admin/routes.ts`): 404 to anyone not in ADMIN_USER_IDS.

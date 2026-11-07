@@ -283,6 +283,7 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /api/:apiVersion/bugreport/guest",
   "POST /api/:apiVersion/clienterrors",
   "POST /api/:apiVersion/clienterrors/guest",
+  "POST /api/:apiVersion/clienttiming",
   "POST /api/:apiVersion/player/recorddebugdata",
   // DEV only.
   "POST /api/:apiVersion/bm/presence/check/dev",
