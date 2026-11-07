@@ -4,13 +4,13 @@
  * painted look, never download its shaders or layers. The art itself is fetched later still, by each
  * layer's `load`, at the player's Quality.
  */
-import type { Renderer } from "pixi.js";
+import { Assets, type Renderer } from "pixi.js";
 import { borderProgram } from "./BorderLayer";
-import { cloudProgram } from "./CloudLayer";
+import { CloudLayer as Clouds, cloudProgram } from "./CloudLayer";
 import { groundProgram, PaintedGround } from "./PaintedGround";
 import { pixiProgramHost, rememberAnisotropy } from "./pixiPrograms";
 import { ProgramWarmer } from "./shaderWarmup";
-import { quality } from "@/game/quality";
+import { quality, type Quality } from "@/game/quality";
 
 export { BorderLayer } from "./BorderLayer";
 export { CloudLayer, FOG_UNDER_CLOUD } from "./CloudLayer";
@@ -53,7 +53,10 @@ const warmerFor = (renderer: Renderer, gl: WebGL2RenderingContext): ProgramWarme
 export const preparePrograms = async (renderer: Renderer, gl: WebGL2RenderingContext): Promise<PaintedPrograms> => {
   const warmer = warmerFor(renderer, gl);
   const own = groundProgram(quality());
-  const first = warmer.ready(own) ? own : groundProgram("low");
+  // Already compiled, or still compiling from the yard's warm-up (`warmAhead`): waiting for the
+  // rest of it is never longer than a fresh Low compile where programs compile one at a time,
+  // since the Low one would queue behind it.
+  const first = warmer.ready(own) || warmer.compiling(own) ? own : groundProgram("low");
   const [ground, borders, clouds] = await warmer.warmAll([first, borderProgram(), cloudProgram()]);
   return { ground: Boolean(ground && borders), clouds: Boolean(clouds), warmer };
 };
@@ -68,4 +71,42 @@ export const preparePrograms = async (renderer: Renderer, gl: WebGL2RenderingCon
 export const warmRest = (warmer: ProgramWarmer, loaded: Promise<unknown>): void => {
   warmer.hold(loaded);
   void warmer.warmAll([...PaintedGround.placementPrograms(), groundProgram(quality())]);
+};
+
+/* ── Ahead of the map (MR2 open speed, 7 Nov 2026) ─────────────────────── */
+
+/**
+ * Compiles, while the player is idle in their yard, the programs the map will want at this Quality,
+ * in the same WebGL context and into the same renderer the map uses, so its first open finds them
+ * ready (the owner's first open spent 7.8 s compiling the High ground and 2.9 s the Low one): the
+ * borders, the fog and the sprite placements (quick), then the ground. `mr2Prewarm.ts` decides when.
+ */
+export const warmAhead = (renderer: Renderer, gl: WebGL2RenderingContext, level: Quality): Promise<boolean[]> => {
+  const warmer = warmerFor(renderer, gl);
+  return warmer.warmAll([borderProgram(), cloudProgram(), ...PaintedGround.placementPrograms(), groundProgram(level)]);
+};
+
+/** Every picture the painted look fetches at this Quality: the ground's, and the clouds' on High. */
+export const paintedArtUrls = (level: Quality): string[] => [
+  ...PaintedGround.artUrls(level),
+  ...(level === "high" ? [Clouds.artUrl(level)] : []),
+];
+
+/**
+ * Fetches the look's pictures one after another into `Assets`' cache, where the map's layers find
+ * them (they keep them there after the first open anyway). One at a time, and only while `go`
+ * says so, so a yard that becomes busy again gets its line back. Resolves to how many arrived.
+ */
+export const prefetchArt = async (level: Quality, go: () => boolean = () => true): Promise<number> => {
+  let arrived = 0;
+  for (const url of paintedArtUrls(level)) {
+    if (!go()) break;
+    try {
+      await Assets.load(url);
+      arrived += 1;
+    } catch {
+      // The map tries again when it opens.
+    }
+  }
+  return arrived;
 };

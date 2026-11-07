@@ -305,6 +305,11 @@ export class PaintedGround {
     return true;
   }
 
+  /** Every picture `load` fetches at this Quality (for the MR2 warm-up, `paintedLook.ts`). */
+  static artUrls(level: Quality): string[] {
+    return [ATLAS_URL, ...SPRITE_SHEETS.map(({ url }) => url), CLIFFS_URL].map((url) => sheetAtQuality(url, level));
+  }
+
   /** The placement programs (for the warm-up, `paintedLook.ts`). */
   static placementPrograms(): GlProgram[] {
     return PLACEMENT_GRIDS.map(placementProgram);

@@ -141,6 +141,17 @@ describe("ProgramWarmer: the painted look's programs, each compiled once in the 
     expect(warmer.ready(source)).toBe(true);
   });
 
+  it("says a program is compiling between the ask and the answer (the map waits for it, not a fresh Low one)", async () => {
+    const gl = fakeGl({ polls: 3 });
+    const warmer = new ProgramWarmer(gl as unknown as WebGL2RenderingContext, vi.fn(async () => {}));
+    expect(warmer.compiling(source)).toBe(false);
+    const linked = warmer.warm(source);
+    expect(warmer.compiling(source)).toBe(true);
+    await linked;
+    expect(warmer.compiling(source)).toBe(false);
+    expect(warmer.ready(source)).toBe(true);
+  });
+
   it("compiles the same text once, however often (and from whichever object) it is asked", async () => {
     const gl = fakeGl({ polls: 2 });
     const warmer = new ProgramWarmer(gl as unknown as WebGL2RenderingContext, vi.fn(async () => {}));

@@ -174,6 +174,11 @@ export class ProgramWarmer {
     return this.linked.get(this.key(source)) === true;
   }
 
+  /** Whether the program is compiling now (asked for, not answered yet). */
+  compiling(source: ProgramSource): boolean {
+    return !this.ready(source) && this.pending.has(this.key(source));
+  }
+
   /** Compiles the program in the background (once) and resolves to whether it linked. */
   warm(source: ProgramSource): Promise<boolean> {
     if (this.host?.has(source)) return Promise.resolve(true);
