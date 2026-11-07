@@ -933,3 +933,41 @@ export const addModerator = (player: string): Promise<Envelope<{ moderator: Mode
 
 export const removeModerator = (userid: number): Promise<Envelope<{ removed: number }>> =>
   adminPost(`${ADMIN}/moderators/${userid}/remove`, {});
+
+/**
+ * Mail moderators sent (owner, beta 7; server `services/mail/modMail.ts`):
+ * every message a moderator sent, newest first, kept even when the players
+ * delete the thread. Admin only; moderators never see it.
+ */
+export interface ModMailView {
+  id: number;
+  sentAt: string;
+  moderatorId: number;
+  /** The name when it was sent. */
+  moderatorName: string;
+  recipientId: number;
+  recipientName: string;
+  threadid: number;
+  newThread: boolean;
+  messagetype: string;
+  /** What the player got (after the word filter). */
+  subject: string;
+  message: string;
+  /** What the moderator typed, when the word filter changed it. */
+  written: string | null;
+}
+
+export interface ModMailSearch {
+  /** A name (part of one) or account number. */
+  moderator?: string | undefined;
+  recipient?: string | undefined;
+  /** The previous page's `next`. */
+  before?: number | undefined;
+}
+
+export const fetchModMail = (search: ModMailSearch = {}): Promise<Envelope<{ mails: ModMailView[]; next: number | null }>> =>
+  adminGet(`${ADMIN}/modmail`, {
+    moderator: search.moderator || undefined,
+    recipient: search.recipient || undefined,
+    before: search.before,
+  });
