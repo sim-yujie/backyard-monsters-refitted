@@ -118,12 +118,15 @@ describe("the Inferno art", () => {
     expect(buildingName(14, "inferno")).toBe("Under Hall");
   });
 
-  it("keeps the Under Hall's own picture when the new tower and Town Hall art is on", () => {
+  it("draws the Under Hall in its own paint with the Modern look, never as the Town Hall", () => {
     const classic = resolveArt(14, 3, ArtState.DEFAULT, "inferno")?.top.url;
+    expect(classic).toBe("/assets/buildings/itownhall/top.3.v2.png");
     setClassicLook(false);
     try {
-      expect(resolveArt(14, 3, ArtState.DEFAULT, "inferno")?.top.url).toBe(classic);
-      expect(resolveArt(14, 3, ArtState.DEFAULT)?.top.url).not.toBe(classic);
+      expect(resolveArt(14, 3, ArtState.DEFAULT, "inferno")?.top.url).toBe(
+        "/assets/buildings/itownhall/top.c3@2x.webp",
+      );
+      expect(resolveArt(14, 3, ArtState.DEFAULT)?.top.url).not.toContain("itownhall");
     } finally {
       setClassicLook(true);
     }
