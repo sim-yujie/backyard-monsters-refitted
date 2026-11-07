@@ -1763,13 +1763,16 @@ def setup(sc):
         # (locker-3d-13) the chrome's lower half mirrored the green ground and read as tinted glass; Flash's is darker
         # grey metal there, so the chrome sees the studio's dark grey below the horizon instead (every level)
         g.visible_glossy = False
-    if L >= 3 and not os.environ.get("PB_NOBOX"):
+    if not os.environ.get("PB_NOBOX"):       # levels 1-2: the streak card; 3-4: the dome's soft highlight
         softbox()
     return cam
 
 
 # levels 3-4: Flash px of the dome point that carries the broad white highlight, the softbox's size and brightness
-SOFTBOX = {3: (6.0, -32.0, 28.0, 2.6), 4: (16.0, -24.0, 28.0, 2.6)}
+# Flash px of the highlight's middle on the shell, the card's size (one number: round; (long, thin): a strip, Flash's
+# sharp white streak at levels 1-2), its brightness, and (strips) the card's roll about its own normal in degrees
+SOFTBOX = {1: (-8.0, -12.0, (34.0, 2.2), 6.0, 20.0), 2: (-25.0, -25.0, (30.0, 2.4), 6.0, 20.0),
+           3: (6.0, -32.0, 28.0, 2.6), 4: (16.0, -24.0, 28.0, 2.6)}
 if os.environ.get("PB_BOX"):
     SOFTBOX[L] = tuple(float(v) for v in os.environ["PB_BOX"].split(","))
 
@@ -1778,23 +1781,29 @@ def softbox():
     """Levels 3-4 (locker-3d-14): the big egg's dome mostly mirrors the dim sky near the horizon and read matte
     blue-grey; Flash's has a broad white highlight on the dome's upper left. A white card seen only by glossy rays,
     placed where the camera ray through that dome point bounces to, gives it (diffuse light unchanged)."""
-    sx, sy, size, k = SOFTBOX[L]
+    sx, sy, size, k, *roll = SOFTBOX[L]
+    strip = isinstance(size, tuple)
+    if strip:
+        (size, thin), roll = size, (roll or [0.0])[0]
     p0, f = cam_ray(sx, sy)
     dg = bpy.context.evaluated_depsgraph_get()
     o = p0 - f * 80
     for _ in range(8):       # past any part in front of the egg (the drum's blocks)
         hit, loc, nrm, _i, ob, _m = bpy.context.scene.ray_cast(dg, o, f)
-        if not hit or ob.name.startswith("ballshell"):
+        if not hit or ob.name.startswith("ball"):
             break
         o = loc + f * 0.01
-    if not hit or not ob.name.startswith("ballshell"):
-        print("CHECK softbox: no egg under", sx, sy, ob.name if hit else None)
+    if not hit or not ob.name.startswith("ball"):
+        print("CHECK softbox: no shell under", sx, sy, ob.name if hit else None)
         return
     r = f - 2 * f.dot(nrm) * nrm
     bpy.ops.mesh.primitive_plane_add(size=size, location=loc + r * 25)
     b = bpy.context.active_object
     b.name = "softbox"
     b.rotation_euler = (-r).to_track_quat("Z", "Y").to_euler()
+    if strip:                # a long thin card: Flash's sharp diagonal streak across the chrome ball
+        b.rotation_euler.rotate_axis("Z", math.radians(roll))
+        b.scale = (1.0, thin / size, 1.0)
     m = bpy.data.materials.new("softbox")
     m.use_nodes = True
     nt = m.node_tree
@@ -1806,7 +1815,7 @@ def softbox():
     # card read as a hard white patch)
     tc = nt.nodes.new("ShaderNodeTexCoord")
     mp = nt.nodes.new("ShaderNodeMapping")
-    mp.inputs["Scale"].default_value = (2.0 / size, 2.0 / size, 1.0)
+    mp.inputs["Scale"].default_value = (2.0 / size, 2.0 / (thin if strip else size), 1.0)
     nt.links.new(tc.outputs["Object"], mp.inputs["Vector"])
     gr = nt.nodes.new("ShaderNodeTexGradient")
     gr.gradient_type = "SPHERICAL"

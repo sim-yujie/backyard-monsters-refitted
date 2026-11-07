@@ -295,7 +295,7 @@ def damaged():
         sh = shell()
         # Flash: the whole egg knocked over toward the right on its squashed bellows, the heap spilling over its rim.
         # Everything above the bellows (shell, its opening cutter, heap, cog, panels, key, chimney) leans together
-        upper = named(r"ballshell|shellcutter|barrel|cog|panel\d|key|keyblock|chimlean")
+        upper = named(r"ballshell|shellcutter|gears|boss|bosslump\d|panel\d|key|chimlean")
         piv = A + Vector((0, 0, (S.L4_BASE_H if lv4 else 0.0) + S.L3_BELLOWS_Z + 1.2))
         screen_turn(upper, piv, -12 if lv4 else -9, move=(0.0, 0.0, -0.35))
         bel = named(r"bellows")
@@ -317,10 +317,22 @@ def damaged():
             except ValueError:
                 continue
             nugget(f"rimnug{i}", q + n * 0.1 - Vector((0, 0, 0.2)), s, R.uniform(0, 90))
-        # the chimney torn loose, hanging off to the right
+        # the gear wheels knocked askew on their axle (Flash: a heap of broken gear wheels spilling out): the second
+        # and third tipped over, the front one slid forward; one more wheel torn off, lying against the bellows at
+        # the front left
+        gw = {o.name.split(".")[0]: o for o in SC.objects if o.name.startswith("gearsw")}
+        for nm, tilt, slide in (("gearsw1", 16.0, 0.0), ("gearsw2", -28.0, 0.15), ("gearsw3", 34.0, 0.45)):
+            if nm in gw:
+                gw[nm].rotation_euler = (math.radians(tilt), math.radians(tilt * 0.3), 0.0)
+                gw[nm].location.z += slide
+        gf = gear("gearfall", 1.9 if lv4 else 1.7, 16, 0.55, (0, 0, 0), M["block34"], (0, 0, 0), tooth=0.08,
+                  face_mat=M["gearface"])
+        gf.location = ground_pt(-36.0, 60.0) + Vector((0, 0, 0.9))
+        gf.rotation_euler = (math.radians(68), math.radians(-18), math.radians(-40))
+        # the chimney snapped off: lying on its side as a bent pipe down the dome's right, its plate beside it
         ch = named(r"chimlean")[0]
         foot = slot_of(ch)
-        screen_turn([ch], foot, 24)          # turned about its flange: the duct swings out to the right, off the heap
+        screen_turn([ch], foot, 78, move=(0.3, -0.3, -1.1))   # turned about its flange: the duct lies out to the right
         burn(foot, 1.2)
         # the key knocked over to the left (level 4: further, its bow still in the frame)
         sp = slot_of(k)                          # (moved with the lean)
