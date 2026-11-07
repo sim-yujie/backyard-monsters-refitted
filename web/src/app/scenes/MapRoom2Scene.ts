@@ -112,7 +112,7 @@ import {
   type TiltChoice,
   type TiltStrength,
 } from "@/game/maproom/tilt";
-import { cachedTiltChoice, loadTiltChoice, saveTiltChoice } from "@/game/maproom/tiltSetting";
+import { cachedTiltChoice, loadTiltChoiceOnce, saveTiltChoice } from "@/game/maproom/tiltSetting";
 import { TiltView } from "@/game/maproom/TiltView";
 import { markerFit, uprightProjector } from "@/game/maproom/markerPins";
 import { Sight } from "@/game/maproom/Sight";
@@ -695,7 +695,8 @@ export class MapRoom2Scene implements Scene {
    */
   private async refreshTiltChoice(): Promise<void> {
     try {
-      this.tiltChoice = await timeSpan("account-tilt", () => loadTiltChoice());
+      // Asked once a page: the hex shape's account call brings it on the first open.
+      this.tiltChoice = await timeSpan("account-tilt", () => loadTiltChoiceOnce());
     } catch {
       return;
     }

@@ -91,6 +91,35 @@ export const primeOwnYard = (save: BaseLoadResponse, at = Date.now()): void => {
   primed = { userId: getSession()?.userId ?? null, at, save };
 };
 
+/** What {@link primeFromYard} reads off the own yard's store (`YardStore`). */
+export interface OwnYardState {
+  readonly kind: string;
+  /** `/base/load`'s answer with every later answer merged in. */
+  readonly save: BaseLoadResponse;
+  /** No request in flight or waiting: the merged save is what the server holds. */
+  readonly settled: boolean;
+  /** The server's clock, estimated: unix seconds. */
+  now(): number;
+}
+
+/**
+ * Hands the own main yard, as the yard holds it, to the Map Room 2 it is
+ * opening, so the map does not load the same yard again before it can centre
+ * on the home cell (MR2 open speed, 7 Nov 2026: the yard was re-fetched on
+ * every open, 0.5 s on a fast line and 5 s or more on a slow one).
+ *
+ * Only when the store is settled: with an action still in flight or queued
+ * (the queue is dropped when the yard closes), the server's yard may differ
+ * from the merged save, and the map loads its own as before. `currenttime` is
+ * the store's server-clock estimate now, not the time of the last answer, as
+ * the map sets its clock from it. Returns whether it primed.
+ */
+export const primeFromYard = (yard: OwnYardState, at = Date.now()): boolean => {
+  if (yard.kind !== "main" || !yard.settled) return false;
+  primeOwnYard({ ...yard.save, currenttime: Math.floor(yard.now()) }, at);
+  return true;
+};
+
 /**
  * Takes the primed own-yard load, once, when it is the signed-in account's
  * and still fresh; otherwise null and the caller loads its own.

@@ -430,7 +430,7 @@ describe("ZoneStore", () => {
     let calls = 0;
     const fetcher: AreaFetcher = () => {
       calls += 1;
-      return Promise.reject(new NetworkError("offline"));
+      return Promise.reject(new NetworkError("offline", undefined));
     };
     const store = new ZoneStore({ fetcher, now: time.now, maxConcurrent: 1 });
 

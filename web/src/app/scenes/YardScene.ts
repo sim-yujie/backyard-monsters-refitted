@@ -51,7 +51,7 @@ import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { Camera } from "@/game/Camera";
 import { setMapFocus } from "@/game/maproom/mapFocus";
-import { MapRoomChoice, mapRoomOf, takePrimedOwnYard } from "@/game/maproom/mapRoute";
+import { MapRoomChoice, mapRoomOf, primeFromYard, takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import { finishedMonstersJobs } from "@/game/monsters/finishedJobs";
 import { onJuiced } from "@/game/monsters/juiceNews";
 import { openInfernoMap } from "@/game/inferno/tribeEntry";
@@ -1922,6 +1922,8 @@ export class YardScene implements Scene {
     }
     const choice = mapRoomOf(store.save);
     if (choice !== MapRoomChoice.NONE) {
+      // Map Room 2 opens on the yard as held here instead of loading it again (when settled).
+      if (choice === MapRoomChoice.MAP_ROOM_2 && !this.tribe) primeFromYard(store);
       context.goTo(sceneForMap(choice));
       return;
     }
