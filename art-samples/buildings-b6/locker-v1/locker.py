@@ -1247,7 +1247,7 @@ def chimney(b, cage=True, hoops=False):
                 box(f"chimstrip{i}", (0.08 if u else w * 1.12, w * 1.12 if u else 0.08, 0.3),
                     base + rm @ Vector((u * w * 0.54, v * w * 0.54, h * 0.5)), M["plate"], rot=rot, bevel=0.02)
     fl = box("chimflange", (w * 1.3, w * 1.3, 0.22), (top.x, top.y, top.z), M["glass"], bevel=0.04)
-    cyl("chimhole", w * 0.33, 0.04, (top.x, top.y, top.z + 0.2), M["hole"], verts=32, bevel=0.0)
+    cyl("chimhole", w * 0.33, 0.04, (top.x, top.y, top.z + 0.26), M["hole"], verts=32, bevel=0.0)   # above the flange, so it reads black
     lathe("chimlip", [(w * 0.33, top.z + 0.18), (w * 0.4, top.z + 0.18), (w * 0.4, top.z + 0.3), (w * 0.33, top.z + 0.3)],
           (top.x, top.y, 0.0), M["steel"], verts=32)
     for i, (u, v) in enumerate(((-1, -1), (1, -1), (1, 1), (-1, 1))):
@@ -1483,7 +1483,7 @@ def level34():
     # bellows; level 4: hung with the bellows over the ring's hole)
     gr = S.L4_GCOG_R if lv4 else S.L3_GCOG_R
     zc = zb + S.L3_BELLOWS_Z - 0.55
-    gear("groundcog", gr, 20, 0.34, (A.x, A.y, zc), M["cog34"], (0, 0, 0), tooth=0.07)
+    gear("groundcog", gr, 20, 0.34, (A.x, A.y, zc), M["cog34"], (0, 0, 0), tooth=0.12)
     cyl("groundcoghub", gr * 0.72, S.L3_BELLOWS_Z - S.L3_GCOG_Z, (A.x, A.y, S.L3_GCOG_Z + zb), M["core34"], verts=48)
     b, sh = shell34()
     top_b = shell_bottom(sh, A, S.L3_BELLOWS_R * S.L3_BELLOWS_IN) + 0.2   # the egg sits on the bellows, as Flash
@@ -1772,7 +1772,7 @@ def setup(sc):
 # levels 3-4: Flash px of the dome point that carries the broad white highlight, the softbox's size and brightness
 # Flash px of the highlight's middle on the shell, the card's size (one number: round; (long, thin): a strip, Flash's
 # sharp white streak at levels 1-2), its brightness, and (strips) the card's roll about its own normal in degrees
-SOFTBOX = {1: (-8.0, -12.0, (34.0, 1.3), 9.0, 20.0), 2: (-25.0, -25.0, (30.0, 2.4), 6.0, 20.0),
+SOFTBOX = {1: (-8.0, -12.0, (34.0, 2.0), 30.0, 20.0), 2: (-25.0, -25.0, (30.0, 2.4), 6.0, 20.0),
            3: (6.0, -32.0, 28.0, 2.6), 4: (16.0, -24.0, 28.0, 2.6)}
 if os.environ.get("PB_BOX"):
     SOFTBOX[L] = tuple(float(v) for v in os.environ["PB_BOX"].split(","))

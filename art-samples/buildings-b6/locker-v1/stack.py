@@ -101,15 +101,15 @@ L3_CUT_R, L4_CUT_R = 2.5, 2.5                    # the corner between the two cu
 # (cosine) toward the camera, so the wheels to the right stand nearer the camera and hide their neighbours' right
 # halves. c1 = Flash px of the first (biggest, back-left) wheel's middle, depth = how far behind the egg's middle
 # along the view; pitch = the wheels' spacing along the axle (world units); radii front to back; teeth per wheel
-# (all multiples of 10, so the 36-degree turn a loop is seamless: 2 teeth of 20 travel down the front rim, ~1 px a frame)
+# (10 each: Flash shows ~5 big flat tooth tops per half-rim arc; the 36-degree turn a loop = 1 tooth, seamless, ~1 px a frame)
 L3_GEARS = dict(psi=37.0, q=0.27, c1=(-13.0, -44.0), depth=0.0, pitch=1.0, radii=(3.0, 3.0, 2.9, 2.2),
-                thick=0.6, teeth=(20, 20, 20, 20), tooth=0.18, turn=36.0)
+                thick=0.6, teeth=(10, 10, 10, 10), tooth=0.22, turn=36.0)
 L4_GEARS = dict(psi=31.0, q=0.20, c1=(-19.0, -43.5), depth=0.0, pitch=1.5, radii=(3.3, 3.3, 3.2, 2.7),
-                thick=0.85, teeth=(16, 16, 16, 16), tooth=0.26, turn=45.0)   # level 4: chunkier teeth (16, 45 deg a loop)
+                thick=0.85, teeth=(10, 10, 10, 10), tooth=0.26, turn=36.0)   # level 4: chunkier, deeper teeth
 L3_BOSS, L4_BOSS = (5.0, -65.0, 1.1, 1.0), (10.0, -68.0, 1.25, 1.0)   # the static rounded gold boss at the back top
 #                                            (the axle's back bearing cap): Flash px of its middle, radius, depth behind
 #                                            the egg's middle along the view
-L3_GCOG_R, L3_GCOG_Z = 2.0, 0.2                  # the gold cog under the bellows: radius, height of its middle (Flash:
+L3_GCOG_R, L3_GCOG_Z = 2.4, 0.2                  # the gold cog under the bellows: radius, height of its middle (Flash:
 #                                                 small, dark, shallow teeth, tucked under the plate)
 L3_BELLOWS_Z = 2.3                               # the bellows' foot (on the cog's hub)
 L3_BELLOWS_R = 3.3
@@ -140,7 +140,7 @@ L4_BASE_W, L4_PAD_R = 1.6, 1.05                   # the ring's width, the pads' 
 L4_BASE_LUMPS = (26, 0.55, 0.35)                  # Flash: a tan LUMPY ring of bone/sandbag lumps: count, lump radius, height jitter
 L4_EGG_C = (3.0, -8.0)
 L4_EGG_R = (4.8, 4.7, 4.0)                # level 4: level 3's egg a little bigger (as Flash)
-L4_GCOG_R = 2.1
+L4_GCOG_R = 2.5
 L4_CUT, L4_CUT2 = L3_CUT, L3_CUT2                      # level 4: the opening bigger and lower
 L4_PILLAR_R, L4_PILLAR_TOP = 0.5, 5.3
 L4_BOW_R = 1.05
