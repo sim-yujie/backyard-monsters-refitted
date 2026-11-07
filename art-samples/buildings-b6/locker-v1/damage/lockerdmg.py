@@ -171,10 +171,18 @@ def holes_and_dents(spots, dents, seed0=0):
     """spots: (sx, sy, r) ragged holes; dents: (sx, sy, r, depth) on whatever shell part the camera sees there."""
     sh = shell()
     for k, (sx, sy, r, d) in enumerate(dents):
-        q, n = surf(sx, sy)
+        try:
+            q, n = surf(sx, sy)
+        except ValueError as err:
+            print("PROBE dent", err)
+            continue
         dent(sh, q, r, d, seed=seed0 + k)
     for k, (sx, sy, r) in enumerate(spots):
-        q, n = surf(sx, sy)
+        try:
+            q, n = surf(sx, sy)
+        except ValueError as err:
+            print("PROBE hole", err)
+            continue
         hole(sh, q - n * 0.1, r, seed=seed0 + 40 + k, squash=0.8)
 
 
@@ -285,16 +293,32 @@ def damaged():
     else:
         lv4 = L == 4
         sh = shell()
-        crumple(sh, 0.025, seed=7)
-        holes_and_dents([(-22.0, 24.0, 1.0), (22.0, -6.0, 0.7), (4.0, 16.0, 0.45)],
-                        [(-26.0, -6.0, 2.2, 0.6), (14.0, 10.0, 1.8, 0.5), (30.0, -30.0, 1.6, 0.45)])
-        # the chimney knocked over to the right at its foot, its flange hanging off
+        # Flash: the whole egg knocked over toward the right on its squashed bellows, the heap spilling over its rim.
+        # Everything above the bellows (shell, its opening cutter, heap, cog, panels, key, chimney) leans together
+        upper = named(r"ballshell|shellcutter|barrel|cog|panel\d|key|keyblock|chimlean")
+        piv = A + Vector((0, 0, (S.L4_BASE_H if lv4 else 0.0) + S.L3_BELLOWS_Z + 1.2))
+        screen_turn(upper, piv, -12 if lv4 else -9, move=(0.0, 0.0, -0.35))
+        bel = named(r"bellows")
+        for o in bel:
+            o.scale.z *= 0.8                     # squashed under it
+        crumple(sh, 0.04, seed=7)
+        holes_and_dents([(-30.0, 0.0, 1.25), (20.0, -12.0, 1.0), (2.0, 10.0, 0.7), (22.0, -32.0, 0.8)],
+                        [(-18.0, 6.0, 2.6, 1.0), (24.0, 2.0, 2.2, 0.9), (8.0, -34.0, 2.0, 0.8), (-34.0, -14.0, 1.6, 0.6)])
+        # gold blocks heaped over the rim at the front left
+        for i, (sx, sy, s) in enumerate(((-40, -22, 0.55), (-30, -12, 0.5), (-18, -8, 0.48), (-44, -6, 0.42))):
+            try:
+                q, n = surf(sx, sy)
+            except ValueError:
+                continue
+            nugget(f"rimnug{i}", q + n * 0.1 - Vector((0, 0, 0.2)), s, R.uniform(0, 90))
+        # the chimney torn loose, hanging off to the right
         ch = named(r"chimlean")[0]
         foot = slot_of(ch)
-        screen_turn([ch], foot, -28)
+        screen_turn([ch], foot, 24)          # turned about its flange: the duct swings out to the right, off the heap
         burn(foot, 1.2)
         # the key knocked over to the left (level 4: further, its bow still in the frame)
-        screen_turn(key_parts() if lv4 else [k], sp, 38 if lv4 else 22)
+        sp = slot_of(k)                          # (moved with the lean)
+        screen_turn(key_parts() if lv4 else [k], sp, 70 if lv4 else 40)
         burn(sp, 0.9)
         # panels askew, one torn off on the ground
         pans = sorted(named(r"panel\d"), key=lambda o: o.name)
