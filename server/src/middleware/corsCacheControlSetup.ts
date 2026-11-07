@@ -59,7 +59,13 @@ export const cacheControlFor = (path: string, cacheable = cacheStaticAssets): st
  */
 export const makeCorsCacheControl = (settings: CorsSettings) => async (ctx: Context, next: Next) => {
   const origin = ctx.get("Origin");
-  if (isAllowedOrigin(origin, settings)) ctx.set("Access-Control-Allow-Origin", origin);
+  if (isAllowedOrigin(origin, settings)) {
+    ctx.set("Access-Control-Allow-Origin", origin);
+    // Lets the same page read the answers' sizes (PerformanceResourceTiming.transferSize), which a
+    // browser reports as 0 across origins otherwise: Map Room 2's open timing counted the getarea
+    // answers as 0 kB on the live game (`web/src/game/maproom/openMarks.ts`).
+    ctx.set("Timing-Allow-Origin", origin);
+  }
   ctx.vary("Origin");
 
   ctx.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");

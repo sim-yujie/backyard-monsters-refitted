@@ -372,6 +372,7 @@ export class ChatBox {
     }
     item.className = entry.own ? "chat-line chat-line--own" : "chat-line";
     if (entry.gm) item.classList.add("chat-line--gm");
+    else if (entry.mod) item.classList.add("chat-line--mod");
     item.dataset["line"] = String(entry.id);
 
     const name = document.createElement(entry.own ? "span" : "button");
@@ -394,6 +395,12 @@ export class ChatBox {
       badge.className = "chat-line__gm";
       badge.textContent = "GM";
       badge.title = "The game team";
+      item.append(badge);
+    } else if (entry.mod) {
+      const badge = document.createElement("span");
+      badge.className = "chat-line__mod";
+      badge.textContent = "Mod";
+      badge.title = "Moderator";
       item.append(badge);
     }
     item.append(name, body);

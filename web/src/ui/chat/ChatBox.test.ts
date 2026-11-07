@@ -95,6 +95,44 @@ describe("ChatBox", () => {
     expect(own.querySelector("button")).toBeNull();
   });
 
+  it("marks the game team's lines with GM and a moderator's with Mod, GM winning", () => {
+    mount([
+      { ...wire(7, "Please keep chat friendly.", 1, "[40] Owner"), gm: true },
+      { ...wire(30, "Thanks!", 2, "[25] helper"), mod: true },
+      wire(77, "hi", 3),
+      { ...wire(8, "both", 4, "[40] Owner2"), gm: true, mod: true },
+    ]);
+    const [gm, mod, plain, both] = [...box.element.querySelectorAll<HTMLElement>(".chat-line")];
+
+    expect(gm!.classList.contains("chat-line--gm")).toBe(true);
+    expect(gm!.querySelector(".chat-line__gm")?.textContent).toBe("GM");
+    expect(gm!.querySelector(".chat-line__mod")).toBeNull();
+
+    expect(mod!.classList.contains("chat-line--mod")).toBe(true);
+    expect(mod!.classList.contains("chat-line--gm")).toBe(false);
+    const badge = mod!.querySelector<HTMLElement>(".chat-line__mod")!;
+    expect(badge.textContent).toBe("Mod");
+    expect(badge.title).toBe("Moderator");
+    // The badge comes first, then the name and the words.
+    expect(mod!.firstElementChild).toBe(badge);
+    expect(mod!.textContent).toBe("Mod[25] helperThanks!");
+
+    expect(plain!.classList.contains("chat-line--mod")).toBe(false);
+    expect(plain!.querySelector(".chat-line__mod, .chat-line__gm")).toBeNull();
+
+    expect(both!.classList.contains("chat-line--gm")).toBe(true);
+    expect(both!.classList.contains("chat-line--mod")).toBe(false);
+    expect(both!.querySelector(".chat-line__mod")).toBeNull();
+  });
+
+  it("marks a moderator's new line as it comes in", () => {
+    mount([]);
+    socket.hear({ type: "message", channel: CHANNEL, ...wire(30, "hello all", 5, "[25] helper"), mod: true });
+    const line = box.element.querySelector<HTMLElement>(".chat-line")!;
+    expect(line.classList.contains("chat-line--mod")).toBe(true);
+    expect(line.querySelector(".chat-line__mod")?.textContent).toBe("Mod");
+  });
+
   it("adds a new line on its own, leaving the lines already drawn alone", () => {
     mount([wire(77, "hello", 1), wire(78, "hi", 2)]);
     const first = box.element.querySelector(".chat-line");

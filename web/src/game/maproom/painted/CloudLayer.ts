@@ -136,9 +136,14 @@ export class CloudLayer {
     return true;
   }
 
+  /** The cloud picture's address at this Quality (the MR2 warm-up fetches it ahead, `paintedLook.ts`). */
+  static artUrl(level: Quality): string {
+    return sheetAtQuality(DECK_URL, level);
+  }
+
   /** Fetches the cloud picture at this Quality; until it lands the cloud is its flat average colour. */
   async load(level: Quality = quality()): Promise<boolean> {
-    const url = sheetAtQuality(DECK_URL, level);
+    const url = CloudLayer.artUrl(level);
     if (url === this.deckUrl) return true;
     let image: CanvasImageSource & { width: number; height: number };
     try {

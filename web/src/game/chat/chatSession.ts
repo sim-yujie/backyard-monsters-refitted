@@ -42,6 +42,8 @@ export interface ChatLine {
   readonly own: boolean;
   /** Said by the game team (the server's mark). */
   readonly gm: boolean;
+  /** Said by a chat moderator (the server's mark); false whenever `gm` is true. */
+  readonly mod: boolean;
 }
 
 /** A word from the client itself, such as "slow down". */
@@ -577,6 +579,7 @@ export class ChatSession {
       ts: Number(wire.ts) || 0,
       own: this.state.self?.userId === userId,
       gm: wire.gm === true,
+      mod: wire.mod === true && wire.gm !== true,
     };
   }
 

@@ -26,7 +26,7 @@ import { mountAdminWeekendRoutes } from "./weekend.js";
 import { daysBetween, readDailyStats, statsOverview, type StatsDeps } from "../../services/stats/dailyStats.js";
 import { LOG_BASE, LOG_DIR, logger } from "../../utils/logger.js";
 import { getOrCreateChatToken } from "../../chat/chatChannels.js";
-import { publishModeration } from "../../chat/chatControl.js";
+import { publishModeration, publishModeratorsChanged } from "../../chat/chatControl.js";
 import {
   CHANNELS,
   GLOBAL_CHAT_CHANNEL,
@@ -45,6 +45,13 @@ import {
   parseCaseAction,
   parseCaseAward,
 } from "../../services/admin/chatCases.js";
+import {
+  addModerator,
+  listModerators,
+  parseModeratorAdd,
+  removeModerator,
+  type ModeratorEffects,
+} from "../../services/admin/chatModerators.js";
 import {
   listChatReports,
   moderate,
@@ -112,6 +119,15 @@ const MODERATION_REFUSAL_WORDS = {
   notBanned: "This player is not banned.",
   notMuted: "This player is not muted.",
 } as const;
+
+const MODERATOR_REFUSAL_WORDS = {
+  noPlayer: "There is no player with that name or account number.",
+  gameTeam: "That is a game team account: its lines already show GM.",
+  already: "That player is already a moderator.",
+  notModerator: "That player is not a moderator.",
+} as const;
+
+const moderatorEffects: ModeratorEffects = { changed: publishModeratorsChanged };
 
 const CASE_REFUSAL_WORDS = {
   notFound: "There is no such case.",
@@ -374,6 +390,30 @@ export const mountAdminRoutes = (router: Router): void => {
       return refuse(ctx, status, MODERATION_REFUSAL_WORDS[done.outcome], done.outcome);
     }
     ok(ctx, { player: await playerModeration(em, id) });
+  });
+
+  // Chat moderators (services/admin/chatModerators.ts): a blue [Mod] badge in
+  // chat, nothing more. Refusals are 400/409, never 404 (the page reads a 404
+  // as signed out).
+  router.get(`${admin}/moderators`, apiVersion, adminOnly, async (ctx) => {
+    ok(ctx, { moderators: await listModerators(postgres.em.fork()) });
+  });
+
+  router.post(`${admin}/moderators`, apiVersion, adminOnly, async (ctx) => {
+    const request = parseModeratorAdd(ctx.request.body);
+    if (!request.ok) return refuse(ctx, Status.BAD_REQUEST, request.message, "badRequest");
+    const done = await addModerator(postgres.em.fork(), request.value.player, ctx.authUser.userid, moderatorEffects);
+    if (done.outcome === "noPlayer") return refuse(ctx, Status.BAD_REQUEST, MODERATOR_REFUSAL_WORDS.noPlayer, "noPlayer");
+    if (done.outcome !== "added") return refuse(ctx, Status.CONFLICT, MODERATOR_REFUSAL_WORDS[done.outcome], done.outcome);
+    ok(ctx, { moderator: done.moderator });
+  });
+
+  router.post(`${admin}/moderators/:id/remove`, apiVersion, adminOnly, async (ctx) => {
+    const id = intOf(ctx.params.id);
+    if (id === undefined || id < 1) return refuse(ctx, Status.BAD_REQUEST, MODERATOR_REFUSAL_WORDS.notModerator, "notModerator");
+    const removed = await removeModerator(postgres.em.fork(), id, ctx.authUser.userid, moderatorEffects);
+    if (!removed) return refuse(ctx, Status.CONFLICT, MODERATOR_REFUSAL_WORDS.notModerator, "notModerator");
+    ok(ctx, { removed: id });
   });
 
   router.post(`${admin}/chat/session`, apiVersion, adminOnly, async (ctx) => {

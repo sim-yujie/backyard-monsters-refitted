@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setAuthToken } from "@/api/http";
 import { finishOpen, markOpen, resetOpenTiming } from "@/game/maproom/openMarks";
 import type { CompactRecord } from "@/game/maproom/openTimingSummary";
+import { GAME_VERSION } from "@/data/gameVersion";
 import { connectMr2TimingReport, sendMr2Timing } from "./mr2TimingReport";
 
 /** Map Room 2 open timings reach the server: once per open type per page load, never breaking the map. */
@@ -36,6 +37,8 @@ describe("connectMr2TimingReport", () => {
     expect(body.record.open).toBe("first");
     expect(body.record.info["quality"]).toBe("high");
     expect(typeof body.gameVersion).toBe("string");
+    // The full version, patch number included (it said "2.0.0-beta.6" for every 6.x patch).
+    expect(body.gameVersion).toBe(GAME_VERSION);
   });
 
   it("sends at most one first and one later open a page load, even when connected on every open", () => {

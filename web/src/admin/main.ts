@@ -21,6 +21,7 @@ import { ChatPanel } from "./chat";
 import { h, replace } from "./dom";
 import { ErrorsView } from "./errors";
 import { ModerationView } from "./moderation";
+import { ModeratorsView } from "./moderators";
 import { count, dateTime } from "./format";
 import { icon } from "./icons";
 import { topItems, verdict, type TopItem } from "./problems";
@@ -72,6 +73,7 @@ const SECTIONS = [
   ["photos", "Photo reports"],
   ["bugs", "Bug reports"],
   ["moderation", "Moderation"],
+  ["moderators", "Moderators"],
   ["chat", "Chat"],
   ["shiny", "Shiny"],
   ["announcements", "Announcements"],
@@ -213,6 +215,7 @@ class Dashboard {
   });
   private readonly moderation = new ModerationView({ say: (message) => this.say(message) });
   private readonly weekend = new WeekendView({ say: (message) => this.say(message) });
+  private readonly moderators = new ModeratorsView({ say: (message) => this.say(message) });
   private readonly cases = new CasesView({
     say: (message) => this.say(message),
     onCount: (open) => {
@@ -324,6 +327,7 @@ class Dashboard {
       photos: section("photos", "Photo reports"),
       bugs: section("bugs", "Bug reports"),
       moderation: section("moderation", "Moderation"),
+      moderators: section("moderators", "Chat moderators"),
       chat: section("chat", "Chat as the game team"),
       shiny: section("shiny", "Give Shiny"),
       announcements: section("announcements", "Announcements"),
@@ -338,6 +342,7 @@ class Dashboard {
     replace(this.sections.photos.body, this.photos.element);
     replace(this.sections.bugs.body, this.bugs.element);
     replace(this.sections.moderation.body, this.moderation.element);
+    replace(this.sections.moderators.body, this.moderators.element);
     replace(this.sections.chat.body, this.chat.element);
     replace(this.sections.shiny.body, this.shiny.element);
     replace(this.sections.announcements.body, this.announcements.element);
@@ -426,6 +431,7 @@ class Dashboard {
       this.photos.refresh(),
       this.bugs.show(route.bug),
       this.moderation.refresh(),
+      this.moderators.refresh(),
       this.shiny.refresh(),
       this.announcements.refresh(),
       this.weekend.refresh(),
@@ -475,6 +481,7 @@ class Dashboard {
       this.photos.refresh(),
       this.bugs.refresh(),
       this.moderation.refresh(),
+      this.moderators.refresh(),
       this.shiny.refresh(),
       this.weekend.refresh(),
     ]);
@@ -667,6 +674,7 @@ class Dashboard {
         id === "announcements" ||
         id === "weekend" ||
         id === "moderation" ||
+        id === "moderators" ||
         id === "chat"
           ? undefined
           : levels[id];
