@@ -673,6 +673,9 @@ def materials():
     M["chrome"] = shiny("chrome", CHROME_COL, rough=CHROME_ROUGH, metal=1.0, wear=CHROME_WEAR, scale=2.0, dirt=0.18,
                         ao_min=0.6, bump=0.0)
     M["inner"] = shiny("inner", (70, 48, 18), rough=0.35, metal=0.7, wear=(110, 74, 24), scale=3, dirt=0.2)
+    # levels 3-4: the egg's inside nearly black, as Flash (a metal one mirrored the bright sky and the dome's inside wall
+    # read as a pale crescent)
+    M["inner34"] = shiny("inner34", (22, 16, 10), rough=0.55, metal=0.15, wear=(40, 28, 12), scale=3, dirt=0.2)
     M["steel"] = shiny("steel", (184, 192, 206), rough=0.3, metal=0.85, wear=(150, 158, 174), scale=4, dirt=0.2,
                        side=0.3)
     M["gold"] = shiny("gold", (232, 146, 30), rough=0.28, metal=0.85, side=0.3, wear=(246, 196, 92), scale=1.5,
@@ -962,9 +965,13 @@ def barrel(name, c, axis, r, length, rows, cols, parent=None, fill=None, mat=Non
             m = mat or M["block"]
             if low is not None and sunk:      # Flash: every cell holds a block; every other one lower and darker
                 h, m = h * low[0], low[1]
-            box(f"{name}blk{i}-{j}", (length / cols * fa, 2 * math.pi * rz / rows * fr, h),
+            sc, lean = 1.0, 0.0
+            if mound is not None:     # a jumbled heap (Flash): blocks of a few sizes, some leaning (two-row pattern)
+                v = (j * 7 + (i % 2) * 3) % 5
+                sc, lean = 0.86 + 0.07 * v, (-12.0, 8.0, 0.0, 14.0, -6.0)[v]
+            box(f"{name}blk{i}-{j}", (length / cols * fa * sc, 2 * math.pi * rz / rows * fr * sc, h * sc),
                 (math.cos(a) * rz, math.sin(a) * rz, z), m, parent=hub,
-                rot=(0, 90, math.degrees(a)), bevel=0.06 if mound is not None else 0.04, origin="bottom")
+                rot=(lean, 90, math.degrees(a)), bevel=0.06 if mound is not None else 0.04, origin="bottom")
     return e, hub
 
 
@@ -1221,7 +1228,7 @@ def shell34():
     _ln = (S.L4_BARREL if L == 4 else S.L3_BARREL)[0]
     print("CHECK barrel ends (Flash px): low %.1f %.1f  top %.1f %.1f  middle %.1f %.1f" % (
         *scr(bc - ba * _ln / 2), *scr(bc + ba * _ln / 2), *scr(bc)))
-    sh = mesh_ob("ballshell", bm, [M["chrome"], M["inner"]])
+    sh = mesh_ob("ballshell", bm, [M["chrome"], M["inner34"]])
     so = sh.modifiers.new("wall", "SOLIDIFY")
     so.thickness, so.offset, so.material_offset, so.use_rim = 0.14, -1.0, 1, True
     sh.location = c
@@ -1293,7 +1300,7 @@ def chimney(b, cage=False):
                                 th)):
         rm = Matrix.Rotation(-tilt, 3, "X")
         rot = (-math.degrees(tilt), 0, 0)
-        box(f"chimduct{seg}", (w * 0.86, w * 0.86, h), base, M["rubber"], rot=rot, bevel=0.04)
+        box(f"chimduct{seg}", (w * 0.86, w * 0.86, h), base, M["hole"], rot=rot, bevel=0.04)   # black, as Flash
         for i, (u, v) in enumerate(((-1, -1), (1, -1), (1, 1), (-1, 1))):
             box(f"chimpost{seg}{i}", (0.2, 0.2, h + 0.05), base + rm @ Vector((u * w * 0.43, v * w * 0.43, 0)),
                 M["gold"], rot=rot, bevel=0.04)
@@ -1307,7 +1314,7 @@ def chimney(b, cage=False):
           (top.x, top.y, 0.0), M["steel"], verts=32)
     for i, (u, v) in enumerate(((-1, -1), (1, -1), (1, 1), (-1, 1))):
         rivet(f"chimrv{i}", (top.x + u * w * 0.52, top.y + v * w * 0.52, top.z + 0.22), None, r=0.1)
-    box("chimplate", (w * 1.75, w * 1.45, 0.13), (top.x + 0.1, top.y - 0.1, zp), M["plate"], rot=(0, -24, 0),
+    box("chimplate", (w * 1.4, w * 1.2, 0.1), (top.x + 0.1, top.y - 0.1, zp), M["plate"], rot=(0, -24, 0),
         bevel=0.03, origin="centre")
     if cage:                 # level 4: two gold hoops over the flange and gold bars down the sides
         for k, (dx, dy) in enumerate(((1, 0), (0, 1))):
@@ -1633,6 +1640,12 @@ def studio(nt, bg, to_sun):
         (0.0, (0.2, 0.21, 0.23)), (0.35, (0.28, 0.29, 0.31)), (0.44, (0.36, 0.37, 0.39)), (0.47, (0.22, 0.23, 0.25)),
         (0.485, (0.11, 0.12, 0.14)), (0.51, (0.15, 0.17, 0.21)), (0.56, (0.27, 0.3, 0.37)), (0.75, (0.43, 0.47, 0.56)),
         (1.0, (0.62, 0.66, 0.75))]
+    if L >= 3 and not os.environ.get("PB_STOPS"):
+        # levels 3-4: the big egg mirrors mostly the sky above the horizon, which read matte grey-blue; a lighter sky
+        # and a softer horizon band make it the same pale silver as levels 1-2, lighter on the dome's top (as Flash)
+        stops = [(0.0, (0.2, 0.21, 0.23)), (0.35, (0.28, 0.29, 0.31)), (0.44, (0.36, 0.37, 0.39)),
+                 (0.47, (0.3, 0.31, 0.33)), (0.485, (0.25, 0.26, 0.28)), (0.51, (0.32, 0.34, 0.38)),
+                 (0.56, (0.5, 0.53, 0.58)), (0.75, (0.7, 0.73, 0.78)), (1.0, (0.9, 0.92, 0.96))]
     stops = [(p, tuple(c)) for p, c in stops]
     el[0].position, el[0].color = stops[0][0], stops[0][1] + (1,)
     el[1].position, el[1].color = stops[-1][0], stops[-1][1] + (1,)
