@@ -1275,8 +1275,9 @@ button.hatch-slot:disabled {
 /* A painted icon (the word on hover and for a screen reader) and its number. */
 .hatch-info__stat {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 2px 6px;
   padding: 5px 10px;
   border-radius: var(--radius-sm);
   background: var(--colour-surface-sunken);
@@ -1296,6 +1297,19 @@ button.hatch-slot:disabled {
   font-size: var(--text-md);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+/* Hatch Rush's "−30%" under the time (a 98 px tile at 1280 has no room for
+   it beside "4s"): its own line, the chip a little tighter. */
+.hatch-info__stat dd.hatch-info__stat-extra {
+  display: flex;
+  flex-basis: 100%;
+  font-size: inherit;
+}
+
+.hatch-info__stat-extra > .chip {
+  padding: 1px 6px;
+  gap: 3px;
 }
 
 .hatch-add {
@@ -1479,6 +1493,16 @@ button.hatch-slot:disabled {
     text-overflow: ellipsis;
     text-transform: none;
     white-space: nowrap;
+  }
+
+  /* "Hatch…" hid which hatchery a card was: a phone shows its number
+     alone, "#1", which always fits (6 Nov UI check). */
+  .hatch-line--hcc .hatch-now__label-word {
+    display: none;
+  }
+
+  .hatch-line--hcc .hatch-now__label-number::before {
+    content: "#";
   }
 
   /* Nothing to show in an empty slot: a short row, not a tall box. */
@@ -1682,8 +1706,17 @@ button.hatch-slot:disabled {
     font-size: var(--text-xs);
   }
 
+  /* The steps give way before Max does, and if Max still does not fit it
+     takes its own line rather than running past the edge (6 Nov UI check:
+     "Max (145)" was cut at 390 px wide). */
   .hatch-add__controls {
+    flex-wrap: wrap;
     gap: var(--space-1);
+  }
+
+  .hatch-add__controls .qty-stepper__step {
+    flex: 1 1 34px;
+    min-width: 34px;
   }
 
   .hatch-add__jump {
@@ -1697,6 +1730,7 @@ button.hatch-slot:disabled {
   }
 
   .hatch-add__fill {
+    flex: 1 0 auto;
     padding-inline: var(--space-2);
   }
 

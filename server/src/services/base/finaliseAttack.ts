@@ -48,6 +48,7 @@ import type { AbandonedOutcome } from "./combat/abandonedAttack.js";
 import { recordAttackPlan } from "./autoAttack/attackPlanStore.js";
 import { recordAttackAchievements } from "../achievements/events.js";
 import { countAttackLoot } from "../events/lootEvents.js";
+import { plunderPercent, weekendBoostUsed, withPlunderBonus } from "../events/weekendBoosts.js";
 import { attackQuestEvents, defenceQuestEvents } from "../quests/hooks.js";
 import { recordQuestEvents, recordUserQuestEvents } from "../quests/record.js";
 
@@ -313,7 +314,10 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   });
   // Bombs, then loot up to the attacker's storage cap, as `baseSave.ts` lands them (issue #166).
   if (bombs.charges.length > 0) userSave.resources = chargeBombSpend(bombs.spend, userSave.resources);
-  const banked = bankAttackLoot(userSave, loot.credit, loot.krallenBuff);
+  // Tribe Plunder, as `baseSave.ts` lands it (`weekendBoosts.ts`).
+  const plunder = plunderPercent(defender.type === BaseType.TRIBE, now);
+  const banked = bankAttackLoot(userSave, withPlunderBonus(loot.credit, plunder), loot.krallenBuff);
+  if (plunder > 0) weekendBoostUsed(attacker.userid, "plunder", now);
   postgres.em.persist(userSave);
 
   // The defender.

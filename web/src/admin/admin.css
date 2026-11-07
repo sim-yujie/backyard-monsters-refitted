@@ -3189,3 +3189,171 @@ tbody th {
     flex: 1 1 auto;
   }
 }
+
+/* Photo reports (photos.ts): the photo beside who reported it and the buttons. */
+/* `.row` is a one-column grid with no padding: the photo sat on top of the
+   name, touching the card's edge (profiles test, 7 Nov). Photo left, the
+   rest beside it, padded like a bug row. */
+.photo-case {
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 14px 12px 14px 16px;
+}
+
+.photo-case__picture {
+  flex: none;
+  width: 96px;
+  height: 96px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2, rgba(127, 127, 127, 0.12));
+}
+
+.photo-case__img {
+  display: block;
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+}
+
+.photo-case__none {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* Name, chips and time wrap as whole pieces: at 375px the green "Kept by …"
+   chip and the time squeezed the name until it broke mid-word ("agen/tteste/r").
+   Now a chip that does not fit drops to its own line and the name keeps whole
+   words (it breaks inside a word only when that word alone is wider than the card). */
+.photo-case .row-top {
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
+.photo-case .report-who {
+  overflow-wrap: break-word;
+  text-align: left;
+}
+
+/* The flag stays beside the first line of the reporters, never alone. */
+.photo-case__reporters {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.photo-case__reporters > .icon {
+  flex: none;
+  margin-top: 2px;
+}
+
+.photo-case__reporter-words {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.photo-case__actions {
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+@media (max-width: 480px) {
+  .photo-case {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .photo-case__picture,
+  .photo-case__img {
+    width: 72px;
+    height: 72px;
+  }
+
+/* ── Weekend events (`weekend.ts`) ───────────────────────────────────── */
+
+.weekend-admin {
+  display: grid;
+  gap: 18px;
+}
+
+.weekend-sentence {
+  font-size: 1.0625rem;
+  font-weight: 650;
+}
+
+.weekend-sentence.is-on {
+  color: var(--good-text);
+}
+
+.weekend-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap);
+  font-weight: 600;
+}
+
+.weekend-switch input {
+  width: 22px;
+  height: 22px;
+}
+
+.weekend-plan .weekend-row {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.weekend-row .row-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* A phone: the date above its choice, so "Rotation: Builder's Weekend" fits
+   the full width instead of being cut. */
+@media (max-width: 599px) {
+  .weekend-plan .weekend-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}
+
+.weekend-force,
+.weekend-percents {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+/* Wide enough for "Builder's Weekend" and the arrow; a phone stacks the two. */
+.weekend-force {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.weekend-settings > summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.weekend-rotation {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 1.5em;
+}
+
+.weekend-rotation li > span {
+  display: inline-block;
+  min-width: 10em;
+}

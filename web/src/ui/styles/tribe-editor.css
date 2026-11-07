@@ -26,6 +26,10 @@
   position: fixed;
   top: calc(var(--hud-height, 64px) + var(--space-4));
   right: calc(var(--space-4) + 58px + var(--space-3));
+  /* Its width leaves the rail's room on the right and a margin on the left:
+     the panel's own width (the screen less two margins) put its left 54px
+     off a phone (6 Nov UI check). */
+  width: min(380px, calc(100vw - 2 * var(--space-4) - 58px - var(--space-3)));
   max-height: calc(100vh - var(--hud-height, 64px) - var(--space-4) - 300px);
   overflow-y: auto;
   z-index: 20;

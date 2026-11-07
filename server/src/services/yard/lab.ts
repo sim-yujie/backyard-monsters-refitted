@@ -1,3 +1,4 @@
+import { shorterBy } from "../events/weekendBoosts.js";
 import { labAbility, labStep, type LabAbility, type PaidStep } from "../../game-data/monsterCatalogue.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
@@ -90,13 +91,16 @@ export const labResearch = (building: BuildingData | null | undefined): LabResea
 
 /** The Lab building with its research fields removed. */
 export const withoutResearch = (building: BuildingData): BuildingData => {
-  const { upg: _upg, upt: _upt, upl: _upl, ...rest } = building;
+  const { upg: _upg, upt: _upt, upl: _upl, upd: _upd, ...rest } = building;
   return rest as BuildingData;
 };
 
 /** Whether a building entry carries any research field. */
 export const hasResearchFields = (building: BuildingData): boolean =>
-  building["upg"] !== undefined || building["upt"] !== undefined || building["upl"] !== undefined;
+  building["upg"] !== undefined ||
+  building["upt"] !== undefined ||
+  building["upl"] !== undefined ||
+  building["upd"] !== undefined;
 
 /**
  * `academy` with `monster` at `rank` (`MONSTERLAB.FinishMonsterPowerup`, `:336`),
@@ -231,6 +235,8 @@ export interface LabStartReport {
   lab: number;
   /** When it ends, unix seconds. */
   endsAt: number;
+  /** How long it runs, seconds: the rank's time, less a Study Weekend's percentage. */
+  seconds: number;
   /** Putty charged. */
   cost: { r3: number };
 }
@@ -256,20 +262,26 @@ export interface LabShinyReport {
 /**
  * Starts researching `monster`'s next rank: the rank's full putty price now,
  * and the Lab's `upg = monster`, `upt = now + seconds`, `upl = rank`
- * (`MONSTERLAB.StartMonsterPowerup`, `:315-325`).
+ * (`MONSTERLAB.StartMonsterPowerup`, `:315-325`), and `upd = seconds`, the
+ * research's whole length for the client's bar.
+ *
+ * @param percentOff - A Study Weekend's percentage running now: the research
+ *   takes that much less time, kept after the weekend ends
+ *   (`services/events/weekendBoosts.ts`). 0 when none.
  */
-export const planLabStart = (save: LabSave, monster: string, now: number) => {
+export const planLabStart = (save: LabSave, monster: string, now: number, percentOff = 0) => {
   const { lab, rank, step } = researchGate(save, monster);
-  const [putty, seconds] = step;
+  const putty = step[0];
+  const seconds = shorterBy(step[1], percentOff);
   const endsAt = now + seconds;
-  const report: LabStartReport = { monster, rank, lab: lab.id, endsAt, cost: { r3: putty } };
+  const report: LabStartReport = { monster, rank, lab: lab.id, endsAt, seconds, cost: { r3: putty } };
 
   return {
     report,
     slices: {
       buildingdata: {
         ...(save.buildingdata ?? {}),
-        [String(lab.id)]: { ...lab.building, upg: monster, upt: endsAt, upl: rank },
+        [String(lab.id)]: { ...lab.building, upg: monster, upt: endsAt, upl: rank, upd: seconds },
       },
     },
     debit: { r3: putty },

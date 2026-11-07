@@ -1,3 +1,4 @@
+import { startWeekendSettingsRefresh } from "./services/events/weekendSettings.js";
 import Koa, { type Next } from "koa";
 import serve from "koa-static";
 import ormConfig from "./mikro-orm.config.js";
@@ -135,6 +136,10 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
 
   await initVersionManifest();
   await initAnticheat();
+
+  // The weekend events' live settings, read now and every minute
+  // (`services/events/weekendSettings.ts`); the dashboard changes them.
+  startWeekendSettingsRefresh(() => postgres.em.fork());
 
   // Finishes attacks whose window closed without a save (issue #138).
   // `ATTACK_FINALISER_SWEEP=off` leaves the sweep to another server sharing

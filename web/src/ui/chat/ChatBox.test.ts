@@ -9,6 +9,9 @@ import {
   type ChatSocket,
 } from "@/game/chat/chatSession";
 import { ChatBox } from "./ChatBox";
+import { openProfile } from "@/ui/profile/ProfileDialog";
+
+vi.mock("@/ui/profile/ProfileDialog", () => ({ openProfile: vi.fn() }));
 
 const CHANNEL = "chat:mr2-global";
 
@@ -209,6 +212,14 @@ describe("ChatBox", () => {
     stripButton("Report").click();
     await flush();
     expect(strip().textContent).toContain("You have sent a lot of reports.");
+  });
+
+  it("Profile opens the player's profile", () => {
+    mount([wire(77, "hello", 1)]);
+    box.setOpen(true);
+    nameButton("[12] p77").click();
+    stripButton("Profile").click();
+    expect(vi.mocked(openProfile)).toHaveBeenCalledWith(expect.objectContaining({ userid: 77 }));
   });
 
   it("View yard hands the player to the scene, and says so when it fails", async () => {

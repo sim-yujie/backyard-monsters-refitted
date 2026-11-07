@@ -13,6 +13,7 @@ import {
 } from "../yardplanner/costs.js";
 import { busyWorkers, sharperToolsMultiplier, workerCount } from "../yardplanner/workers.js";
 import { withoutHelpers } from "../friends/helpList.js";
+import { costLessBy } from "../events/weekendBoosts.js";
 import { buildingOrThrow, damagedErr, isDamaged } from "./buildingJobs.js";
 import { fitCredit } from "./credit.js";
 import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
@@ -42,6 +43,12 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * Flash allows it in outposts (only cancelling a construction is refused
  * there).
  *
+ * **Builder's Weekend** (owner, 7 Nov) takes its percentage off a fortify
+ * step like an upgrade (`services/events/weekendBoosts.ts`): the shortfall
+ * check, the charge and the report use the lower price, and the building keeps
+ * the percentage as `wd` so its cancel gives back what was paid, even after
+ * the weekend. `wd` goes when the countdown ends (`advanceBuildingTimers.ts`).
+ *
  * Both are pure: they read the caught-up yard the wrapper hands them and
  * return what should change, or throw the refusal.
  */
@@ -65,14 +72,16 @@ export interface FortifyReport {
   to: number;
   /** The countdown written, after Sharper Tools. */
   seconds: number;
-  /** What the step cost: the ladder's `fortify[from]`. */
+  /** What the step cost: the ladder's `fortify[from]`, less the Builder's Weekend percentage. */
   cost: ResourceAmounts;
+  /** Builder's Weekend: the percentage taken off; absent when none was. */
+  weekendOff?: number;
 }
 
 /** `report` of `POST /bm/yard/fortify/cancel`. */
 export interface CancelFortifyReport {
   id: number;
-  /** What came back: the step's full price, less whatever the storage cap turned away. */
+  /** What came back: the step's price as paid, less whatever the storage cap turned away. */
   refund: ResourceAmounts;
 }
 
@@ -96,9 +105,10 @@ const isBusy = (building: BuildingData): boolean =>
  * @param save - The caught-up yard.
  * @param id - The building to fortify.
  * @param now - Unix seconds, for the Sharper Tools window.
+ * @param percentOff - The Builder's Weekend percentage running now, 0 when none.
  * @returns The new `buildingdata`, the debit and the report.
  */
-export const planFortify = (save: FortifySave, id: number, now: number) => {
+export const planFortify = (save: FortifySave, id: number, now: number, percentOff = 0) => {
   const kind = yardKindOf(save);
   const buildings = save.buildingdata ?? {};
   const building = buildingOrThrow(buildings, id);
@@ -141,7 +151,7 @@ export const planFortify = (save: FortifySave, id: number, now: number) => {
     });
   }
 
-  const cost = stepAmounts(step);
+  const cost = costLessBy(stepAmounts(step), percentOff);
   const missing = shortfall(save.resources, cost);
   if (isShort(missing)) {
     throw yardRefusedErr("shortfall", "You do not have enough resources for that.", {
@@ -156,11 +166,21 @@ export const planFortify = (save: FortifySave, id: number, now: number) => {
   }
 
   const seconds = Math.floor(step[4] * sharperToolsMultiplier(save.storedata, now));
-  const report: FortifyReport = { id, from, to: from + 1, seconds, cost };
+  const report: FortifyReport = {
+    id,
+    from,
+    to: from + 1,
+    seconds,
+    cost,
+    ...(percentOff > 0 && { weekendOff: percentOff }),
+  };
+  // Every start writes `wd` afresh, so a cancel reads the price of the job that runs.
+  const { wd: _old, ...fresh } = withoutHelpers(building);
+  const started: BuildingData = { ...fresh, cF: seconds, ...(percentOff > 0 && { wd: percentOff }) };
 
   return {
     report,
-    slices: { buildingdata: { ...buildings, [String(id)]: { ...withoutHelpers(building), cF: seconds } } },
+    slices: { buildingdata: { ...buildings, [String(id)]: started } },
     debit: cost,
   };
 };
@@ -168,7 +188,8 @@ export const planFortify = (save: FortifySave, id: number, now: number) => {
 /**
  * Cancels a running fortification: the countdown goes, the fortification
  * stays, and the step's full price comes back (`FortifyCancelC`,
- * `client/scripts/BFOUNDATION.as:2227-2246`), clamped by the wrapper.
+ * `client/scripts/BFOUNDATION.as:2227-2246`), clamped by the wrapper. One
+ * bought in a Builder's Weekend (`wd`) gives back the price that was paid.
  *
  * Refuses `400 badRequest` for no such building, `409 notFortifying` when no
  * `cF` is running.
@@ -183,9 +204,10 @@ export const planCancelFortify = (save: FortifySave, id: number) => {
     throw yardRefusedErr("notFortifying", "That building is not being fortified.");
   }
 
-  const { cF: _cancelled, hl: _helpers, ...rest } = building;
+  const { cF: _cancelled, hl: _helpers, wd: paidOff, ...rest } = building;
   const step = fortifyStepsOf(Number(building.t), yardKindOf(save))[fortOf(building)];
-  const refund = step ? stepAmounts(step) : { r1: 0, r2: 0, r3: 0, r4: 0 };
+  const fullPrice = step ? stepAmounts(step) : { r1: 0, r2: 0, r3: 0, r4: 0 };
+  const refund = costLessBy(fullPrice, Number(paidOff) > 0 ? Number(paidOff) : 0);
   // What the wrapper's clamp will let through (`credit.ts`, T3), for the report.
   const report: CancelFortifyReport = { id, refund: fitCredit(save, refund).credited };
 

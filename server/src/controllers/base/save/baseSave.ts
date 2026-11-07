@@ -91,6 +91,7 @@ import { championsAfterDefence } from "../../../services/base/combat/defenderCha
 import { healChampions } from "../../../services/yard/catchUpChampions.js";
 import { championsAfterLessons } from "../../../services/base/combat/championBrain.js";
 import { countAttackLoot } from "../../../services/events/lootEvents.js";
+import { plunderPercent, weekendBoostUsed, withPlunderBonus } from "../../../services/events/weekendBoosts.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanStore.js";
 import { discardDefenceReplayLoad } from "../../../services/defences/defenceReplayLoad.js";
@@ -579,7 +580,11 @@ const saveBase = async (
     }
 
     if (loot) {
-      banked = bankAttackLoot(userSave, loot.credit, loot.krallenBuff).credited;
+      // Tribe Plunder: a wild tribe's loot lands that much more, on top of
+      // the credit the server's battle allowed (`weekendBoosts.ts`).
+      const plunder = plunderPercent(baseSave.type === BaseType.TRIBE, now);
+      banked = bankAttackLoot(userSave, withPlunderBonus(loot.credit, plunder), loot.krallenBuff).credited;
+      if (plunder > 0) weekendBoostUsed(user.userid, "plunder", now);
     }
 
     // Each champion that fought learns from the server's battle, once: this

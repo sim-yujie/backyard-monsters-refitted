@@ -5,6 +5,7 @@ import { acceleratedEnd, overdriveAt, savedAtOf } from "@/game/yard/jobs";
 import { academyLevel, housingCapacity } from "./housingSummary";
 import { hatchCost, hatchTime, housingSpace, monsterEntry, type MonsterEntry } from "./monsterCatalogue";
 import { listedMonstersOf, type MonsterRealm } from "./realm";
+import { shorterBy, weekendPercent } from "@/game/weekend";
 
 /**
  * What the Hatch tab shows, as data (`docs/design/yard-buildings.md` §4.4).
@@ -164,9 +165,13 @@ export const priceOf = (id: string, level: number): number => hatchCost(id, leve
 /** Housing space one `id` takes at academy `level`. */
 export const spaceOf = (id: string, level: number): number => housingSpace(id, level) ?? 0;
 
-/** Seconds to hatch one `id` at academy `level`, at least 1 (as the server counts). */
+/**
+ * Seconds to hatch one `id` at academy `level`, at least 1 (as the server
+ * counts), less a Hatch Rush running now (`game/weekend.ts`; the server takes
+ * it off each monster as it starts, `production.ts`).
+ */
 export const secondsOf = (id: string, level: number): number =>
-  Math.max(1, Math.ceil(hatchTime(id, level) ?? 1));
+  shorterBy(Math.max(1, Math.ceil(hatchTime(id, level) ?? 1)), weekendPercent("hatch"));
 
 /** A queue, normalised as the server reads it: a two-element stack is paid at today's level. */
 const readQueue = (raw: unknown, levels: Readonly<Record<string, number>>): QueueStack[] => {

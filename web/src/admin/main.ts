@@ -16,6 +16,7 @@ import {
 import { AnnouncementsView } from "./announcements";
 import { BugsView } from "./bugs";
 import { CasesView } from "./cases";
+import { PhotosView } from "./photos";
 import { ChatPanel } from "./chat";
 import { h, replace } from "./dom";
 import { ErrorsView } from "./errors";
@@ -32,6 +33,7 @@ import {
   type Level,
 } from "./sections";
 import { ShinyView } from "./shiny";
+import { WeekendView } from "./weekend";
 import { applyTheme, readTheme, themePicker } from "./theme";
 
 /**
@@ -45,6 +47,8 @@ import { applyTheme, readTheme, themePicker } from "./theme";
  * The Shiny section (`#shiny`) gives Shiny to a player and lists every gift.
  * The Announcements section (`#announcements`) writes the pop-ups players
  * see in the game.
+ * The Weekend events section (`#weekend`) swaps, skips, runs now or switches
+ * off the weekend boost (`weekend.ts`).
  * Chat cases (`#cases`) come first: every report of a player's chat lines
  * as one case, with a copy of the room and one-step warn / pause, Shiny for
  * the reporters, or dismiss. The Moderation section (`#moderation`) warns,
@@ -65,11 +69,13 @@ import { applyTheme, readTheme, themePicker } from "./theme";
 
 const SECTIONS = [
   ["cases", "Chat cases"],
+  ["photos", "Photo reports"],
   ["bugs", "Bug reports"],
   ["moderation", "Moderation"],
   ["chat", "Chat"],
   ["shiny", "Shiny"],
   ["announcements", "Announcements"],
+  ["weekend", "Weekend events"],
   ["players", "Players"],
   ["activity", "Activity"],
   ["errors", "Errors"],
@@ -206,6 +212,7 @@ class Dashboard {
     say: (message) => this.say(message),
   });
   private readonly moderation = new ModerationView({ say: (message) => this.say(message) });
+  private readonly weekend = new WeekendView({ say: (message) => this.say(message) });
   private readonly cases = new CasesView({
     say: (message) => this.say(message),
     onCount: (open) => {
@@ -218,6 +225,16 @@ class Dashboard {
   });
   /** Open chat cases, or null before they are read. */
   private openCases: number | null = null;
+  private readonly photos = new PhotosView({
+    say: (message) => this.say(message),
+    onCount: (open) => {
+      this.openPhotos = open;
+      this.renderPhotoState();
+    },
+    openPlayer: (userid) => this.openPlayer(userid),
+  });
+  /** Players with open photo reports, or null before they are read. */
+  private openPhotos: number | null = null;
   private readonly folds = readFolds();
   private readonly chat = new ChatPanel({
     openPlayer: (userid) => this.openPlayer(userid),
@@ -304,11 +321,13 @@ class Dashboard {
     };
     this.sections = {
       cases: section("cases", "Chat cases"),
+      photos: section("photos", "Photo reports"),
       bugs: section("bugs", "Bug reports"),
       moderation: section("moderation", "Moderation"),
       chat: section("chat", "Chat as the game team"),
       shiny: section("shiny", "Give Shiny"),
       announcements: section("announcements", "Announcements"),
+      weekend: section("weekend", "Weekend events"),
       players: section("players", "Players", rangeButtons),
       activity: section("activity", "Activity"),
       errors: section("errors", "Errors"),
@@ -316,11 +335,13 @@ class Dashboard {
       backups: section("backups", "Backups"),
     };
     replace(this.sections.cases.body, this.cases.element);
+    replace(this.sections.photos.body, this.photos.element);
     replace(this.sections.bugs.body, this.bugs.element);
     replace(this.sections.moderation.body, this.moderation.element);
     replace(this.sections.chat.body, this.chat.element);
     replace(this.sections.shiny.body, this.shiny.element);
     replace(this.sections.announcements.body, this.announcements.element);
+    replace(this.sections.weekend.body, this.weekend.element);
     replace(this.sections.errors.body, this.errors.element);
 
     this.refreshButton = h(
@@ -402,10 +423,12 @@ class Dashboard {
       this.loadHealth(),
       this.loadStats(),
       this.cases.refresh(),
+      this.photos.refresh(),
       this.bugs.show(route.bug),
       this.moderation.refresh(),
       this.shiny.refresh(),
       this.announcements.refresh(),
+      this.weekend.refresh(),
     ]);
     // The sections grew as they loaded; go to the one the link named.
     if (route.section) this.sections[route.section].element.scrollIntoView();
@@ -449,9 +472,11 @@ class Dashboard {
       this.loadHealth(),
       this.loadStats(),
       this.cases.refresh(),
+      this.photos.refresh(),
       this.bugs.refresh(),
       this.moderation.refresh(),
       this.shiny.refresh(),
+      this.weekend.refresh(),
     ]);
     this.refreshButton.classList.remove("is-busy");
     this.refreshButton.disabled = false;
@@ -480,6 +505,20 @@ class Dashboard {
   private openNamed(href: string): void {
     const id = SECTIONS.find(([name]) => `#${name}` === href)?.[0];
     if (id) this.setOpen(id, true, false);
+  }
+
+  /** The players with open photo reports on the link and the heading. */
+  private renderPhotoState(): void {
+    const { state, link } = this.sections.photos;
+    const badge = link.querySelector(".nav-state")!;
+    if (this.openPhotos) {
+      const text = String(this.openPhotos);
+      replace(badge, h("span", { class: "count" }, text, h("span", { class: "sr-only" }, " open")));
+      replace(state, h("span", { class: "chip chip-info" }, `${text} open`));
+    } else {
+      replace(badge);
+      replace(state);
+    }
   }
 
   /** The open chat cases on the link and the heading. */
@@ -619,13 +658,14 @@ class Dashboard {
   private renderStates(items: readonly TopItem[]): void {
     const levels = sectionLevels(items);
     for (const [id] of SECTIONS) {
-      if (id === "cases") continue;
+      if (id === "cases" || id === "photos") continue;
       const { state, link } = this.sections[id];
       const level =
         id === "players" ||
         id === "activity" ||
         id === "shiny" ||
         id === "announcements" ||
+        id === "weekend" ||
         id === "moderation" ||
         id === "chat"
           ? undefined

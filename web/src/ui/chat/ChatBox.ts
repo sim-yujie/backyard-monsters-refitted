@@ -1,3 +1,5 @@
+import { modalLayer } from "@/ui/events/WhatsNewDialog";
+import { openProfile } from "@/ui/profile/ProfileDialog";
 import { ApiError } from "@/api/http";
 import type { ChatApi } from "@/api/chat";
 import {
@@ -449,6 +451,7 @@ export class ChatBox {
     } else {
       const muted = this.state.muted.has(line.userId);
       actions.append(
+        this.button("Profile", () => void openProfile({ container: modalLayer(), userid: line.userId })),
         this.button(muted ? "Unmute" : "Mute", () => this.toggleMute(line)),
         this.button("View yard", () => void this.viewYard(line)),
         this.button("Report", () => {

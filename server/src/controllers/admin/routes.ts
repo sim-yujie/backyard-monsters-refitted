@@ -22,6 +22,7 @@ import { parseTeamText, replyToReport } from "../../services/admin/supportMail.j
 import { errorTotals, listErrors } from "../../services/errors/errorStore.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { adminHealthReport } from "../../services/health/adminHealth.js";
+import { mountAdminWeekendRoutes } from "./weekend.js";
 import { daysBetween, readDailyStats, statsOverview, type StatsDeps } from "../../services/stats/dailyStats.js";
 import { LOG_BASE, LOG_DIR, logger } from "../../utils/logger.js";
 import { getOrCreateChatToken } from "../../chat/chatChannels.js";
@@ -156,6 +157,9 @@ export const mountAdminRoutes = (router: Router): void => {
   router.get(`${admin}/me`, apiVersion, adminOnly, (ctx) => {
     ok(ctx, { admin: true, userid: ctx.authUser.userid, username: ctx.authUser.username });
   });
+
+  // Weekend events: rotation, swaps, skips, percentages, run now (`weekend.ts`).
+  mountAdminWeekendRoutes(router, admin, adminOnly, () => postgres.em.fork());
 
   router.get(`${admin}/stats/overview`, apiVersion, adminOnly, async (ctx) => {
     const days = Math.min(MAX_DAYS, Math.max(1, intOf(ctx.query.days) ?? 30));

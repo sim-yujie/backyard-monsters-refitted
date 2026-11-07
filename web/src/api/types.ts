@@ -645,6 +645,11 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * is (`server/src/services/yard/season.ts`). The yard dresses for them.
    */
   activeevents?: string[];
+  /**
+   * The weekend event on now and the next one (`{ active, next }`,
+   * `server/src/services/events/weekendSchedule.ts`), read by `game/weekend.ts`.
+   */
+  weekend?: unknown;
   /** When the yard was last saved, in unix seconds. 0 on a yard never saved. */
   savetime?: number;
   resources?: Resources;
@@ -1462,7 +1467,9 @@ export interface UpgradeStartReport {
   to: number;
   /** The countdown written, Sharper Tools applied. */
   seconds: number;
+  /** What was charged: less a Builder's Weekend's `weekendOff`%, when one ran. */
   cost: UpgradeCost;
+  weekendOff?: number;
 }
 
 /** `POST /bm/yard/upgrade/cancel`: the step's full cost, back, clamped to the cap. */

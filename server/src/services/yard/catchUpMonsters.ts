@@ -1,3 +1,4 @@
+import { weekendBoost } from "../events/weekendBoosts.js";
 import { hatchCost } from "../../game-data/monsterCatalogue.js";
 import { storeItems } from "../../game-data/store/storeItems.js";
 import { maxHp } from "../../game-rules/combat/stats.js";
@@ -334,6 +335,8 @@ export const catchUpMonsters = (
     capacity,
     overdrive,
     levels,
+    // Hatch Rush: a monster started during it hatches faster (`weekendBoosts.ts`).
+    rush: (t: number) => weekendBoost("hatch", t),
   });
 
   let monsters: JsonObject | null | undefined = save.monsters;

@@ -41,6 +41,11 @@ import {
   clientErrorLimiter,
   announcementsLimiter,
   announcementImageLimiter,
+  profileReadLimiter,
+  profileWriteLimiter,
+  photoUploadLimiter,
+  photoReportLimiter,
+  profilePhotoLimiter,
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
 
@@ -130,6 +135,8 @@ import { mountEventsRoutes } from "./controllers/events/routes.js";
 import { mountSupportRoutes } from "./controllers/support/routes.js";
 import { adminOnly, mountAdminRoutes } from "./controllers/admin/routes.js";
 import { mountAnnouncementRoutes } from "./controllers/announcements/routes.js";
+import { mountProfileRoutes } from "./controllers/profile/routes.js";
+import { sharedWordFilter } from "./services/chat/badWords.js";
 import { postgres } from "./server.js";
 import { clientErrors, guestClientErrors } from "./controllers/errors/clientErrors.js";
 
@@ -422,6 +429,23 @@ mountAnnouncementRoutes(router, {
   signedIn: [verifyUserAuth, verifyAccountStatus, announcementsLimiter],
   adminOnly,
   imageLimiter: announcementImageLimiter,
+});
+
+/**  ────────────────────────────────────────────────
+* 📦 Player profiles (beta 7): bio, photo, photo reports
+* ──────────────────────────────────────────────── */
+mountProfileRoutes(router, {
+  em: () => postgres.em.fork(),
+  signedIn: [verifyUserAuth, verifyAccountStatus],
+  adminOnly,
+  limiters: {
+    read: profileReadLimiter,
+    write: profileWriteLimiter,
+    upload: photoUploadLimiter,
+    report: photoReportLimiter,
+    image: profilePhotoLimiter,
+  },
+  filter: sharedWordFilter,
 });
 
 /**  ────────────────────────────────────────────────

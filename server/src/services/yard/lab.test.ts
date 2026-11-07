@@ -88,7 +88,14 @@ describe("planLabStart", () => {
 
     // C3 rank 1: 48,000 putty, 86,400 s (MONSTERLAB.as:78-88).
     expect(plan.debit).toEqual({ r3: 48_000 });
-    expect(plan.report).toEqual({ monster: "C3", rank: 1, lab: LAB, endsAt: NOW + 86_400, cost: { r3: 48_000 } });
+    expect(plan.report).toEqual({
+      monster: "C3",
+      rank: 1,
+      lab: LAB,
+      endsAt: NOW + 86_400,
+      seconds: 86_400,
+      cost: { r3: 48_000 },
+    });
     expect(plan.slices.buildingdata[String(LAB)]).toEqual({
       id: LAB,
       t: 116,
@@ -98,7 +105,16 @@ describe("planLabStart", () => {
       upg: "C3",
       upt: NOW + 86_400,
       upl: 1,
+      upd: 86_400,
     });
+  });
+
+  test("Study Weekend: 30% shorter research (86,400 s → 60,480 s), upd the shorter length, same putty", () => {
+    const plan = planLabStart(saveOf(), "C3", NOW, 30);
+
+    expect(plan.debit).toEqual({ r3: 48_000 });
+    expect(plan.report).toMatchObject({ endsAt: NOW + 60_480, seconds: 60_480 });
+    expect(plan.slices.buildingdata[String(LAB)]).toMatchObject({ upt: NOW + 60_480, upd: 60_480 });
   });
 
   test("the next rank follows the current one", () => {
