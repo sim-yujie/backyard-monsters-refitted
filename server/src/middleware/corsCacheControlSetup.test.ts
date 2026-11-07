@@ -56,10 +56,16 @@ describe("CORS headers (security audit 2026-10-29, L8)", () => {
     expect(answer.headers.get("Vary")).toContain("Origin");
   });
 
+  test("the web client may also read the answers' timing and size (MR2 open timing)", async () => {
+    const answer = await ask("https://play.example.test");
+    expect(answer.headers.get("Timing-Allow-Origin")).toBe("https://play.example.test");
+  });
+
   test("another page gets the answer without permission to read it", async () => {
     const answer = await ask("https://evil.example");
     expect(answer.status).toBe(200);
     expect(answer.headers.get("Access-Control-Allow-Origin")).toBeNull();
+    expect(answer.headers.get("Timing-Allow-Origin")).toBeNull();
   });
 
   test("a request with no Origin (the launcher, a server) is answered as before", async () => {
