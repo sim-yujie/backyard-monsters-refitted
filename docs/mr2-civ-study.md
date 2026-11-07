@@ -102,10 +102,11 @@ The feature carries the new numbers: building HP, tower damage and a bonus for o
 | Feature | Share of land | Shield HP | Flame damage | Crosshair range | Income |
 |---|---|---|---|---|---|
 | Open (grass, sand) | 55% | 0 | 0 | 0 | 0 |
-| Forest | 20% | +20% | 0 | -10% | Twigs +50% |
-| Rocks (boulders) | 10% | +10% | +10% | 0 | Pebbles +50% |
-| Marsh (goo puddles) | 10% | -10% | 0 | 0 | Goo +50%, Putty +25% |
-| Resource node (rare) | 5% | 0 | 0 | 0 | one resource x2 |
+| Forest | 20% | +20% | 0 | -10% | Twigs +25% |
+| Rocks (boulders) | 10% | +10% | +10% | 0 | Pebbles +25% |
+| Marsh (goo puddles) | 10% | -10% | 0 | 0 | Goo +25%, Putty +25% |
+| Resource node (rare) | 5% | 0 | 0 | 0 | one resource +50% |
+n_Patch 6.5 (owner, 7 Nov 2026): income bonuses cut from +50% to +25% (marsh Putty stays +25%), nodes from x2 to +50%; open ground now shows "Open ground · no bonus" in the cell pop-up._
 
 Plus height as today: range -20% .. +57%, income +25% .. -36%.
 
