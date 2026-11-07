@@ -8,7 +8,7 @@
     { "source": "/assets/:path*", "destination": "https://api.bymrevamped.com/assets/:path*" },
     { "source": "/gamestage/:path*", "destination": "https://api.bymrevamped.com/gamestage/:path*" },
     { "source": "/templates/:path*", "destination": "https://api.bymrevamped.com/templates/:path*" },
-    { "source": "/reset-password", "destination": "/index.html" }
+    { "source": "/reset-password", "destination": "/" }
   ],
   "headers": [
     {
