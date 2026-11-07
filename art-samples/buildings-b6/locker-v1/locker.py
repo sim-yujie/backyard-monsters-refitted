@@ -966,9 +966,32 @@ def barrel(name, c, axis, r, length, rows, cols, parent=None, fill=None, mat=Non
             if low is not None and sunk:      # Flash: every cell holds a block; every other one lower and darker
                 h, m = h * low[0], low[1]
             sc, lean = 1.0, 0.0
-            if mound is not None:     # a jumbled heap (Flash): blocks of a few sizes, some leaning (two-row pattern)
-                v = (j * 7 + (i % 2) * 3) % 5
-                sc, lean = 0.86 + 0.07 * v, (-12.0, 8.0, 0.0, 14.0, -6.0)[v]
+            if mound is not None:
+                # a loose jumble (Flash): every block its own size, height, shift and turn in all three axes, some
+                # sunk, some with a smaller block tumbled on top. Random per (column, row parity) only, so the
+                # pattern still repeats every two rows and the loop's two-row turn stays seamless.
+                q = random.Random(9000 + 31 * j + 7 * (i % 2) + 101 * L)
+                cw, rw = length / cols, 2 * math.pi * rz / rows
+                zz = z + q.uniform(-0.12, 0.12) * cw
+                aa = a + q.uniform(-0.15, 0.15) * 2 * math.pi / rows
+                sx, sy = q.uniform(0.9, 1.2) * cw * fa, q.uniform(0.95, 1.3) * rw * fr
+                hh = h * q.uniform(0.8, 1.45)
+                sink = q.choice((0.0, 0.0, -0.05, -0.1)) * r
+                def put(nm, size, rr, ang, zc, lean_, tilt, yaw):
+                    o = box(nm, size, (math.cos(ang) * rr, math.sin(ang) * rr, zc), m, parent=hub, bevel=0.06,
+                            origin="bottom")
+                    mt = (Matrix.Rotation(ang, 4, "Z") @ Matrix.Rotation(math.radians(90 + tilt), 4, "Y")
+                          @ Matrix.Rotation(math.radians(lean_), 4, "X") @ Matrix.Rotation(math.radians(yaw), 4, "Z"))
+                    o.rotation_euler = mt.to_euler("XYZ")
+                    return o
+                put(f"{name}blk{i}-{j}", (sx, sy, hh), rz + sink, aa, zz, q.uniform(-24, 24), q.uniform(-18, 18),
+                    q.uniform(-35, 35))
+                if q.random() < 0.7:      # a smaller block tumbled onto it, half over the next cell
+                    s2 = q.uniform(0.6, 0.85)
+                    put(f"{name}top{i}-{j}", (cw * fa * s2, rw * fr * s2, hh * q.uniform(0.4, 0.7)),
+                        rz + sink + hh * q.uniform(0.55, 0.85), aa + q.uniform(-0.45, 0.45) * 2 * math.pi / rows,
+                        zz + q.uniform(-0.35, 0.35) * cw, q.uniform(-40, 40), q.uniform(-35, 35), q.uniform(0, 90))
+                continue
             box(f"{name}blk{i}-{j}", (length / cols * fa * sc, 2 * math.pi * rz / rows * fr * sc, h * sc),
                 (math.cos(a) * rz, math.sin(a) * rz, z), m, parent=hub,
                 rot=(lean, 90, math.degrees(a)), bevel=0.06 if mound is not None else 0.04, origin="bottom")
@@ -1643,9 +1666,10 @@ def studio(nt, bg, to_sun):
     if L >= 3 and not os.environ.get("PB_STOPS"):
         # levels 3-4: the big egg mirrors mostly the sky above the horizon, which read matte grey-blue; a lighter sky
         # and a softer horizon band make it the same pale silver as levels 1-2, lighter on the dome's top (as Flash)
-        stops = [(0.0, (0.2, 0.21, 0.23)), (0.35, (0.28, 0.29, 0.31)), (0.44, (0.36, 0.37, 0.39)),
-                 (0.47, (0.3, 0.31, 0.33)), (0.485, (0.25, 0.26, 0.28)), (0.51, (0.32, 0.34, 0.38)),
-                 (0.56, (0.5, 0.53, 0.58)), (0.75, (0.7, 0.73, 0.78)), (1.0, (0.9, 0.92, 0.96))]
+        # (locker-3d-13: a little darker with a firmer horizon band, Flash's egg is mid silver-grey, not near white)
+        stops = [(0.0, (0.14, 0.15, 0.17)), (0.35, (0.2, 0.21, 0.23)), (0.44, (0.27, 0.28, 0.3)),
+                 (0.47, (0.16, 0.17, 0.19)), (0.485, (0.1, 0.11, 0.13)), (0.51, (0.17, 0.19, 0.23)),
+                 (0.56, (0.36, 0.39, 0.44)), (0.75, (0.58, 0.61, 0.67)), (1.0, (0.86, 0.88, 0.93))]
     stops = [(p, tuple(c)) for p, c in stops]
     el[0].position, el[0].color = stops[0][0], stops[0][1] + (1,)
     el[1].position, el[1].color = stops[-1][0], stops[-1][1] + (1,)
@@ -1660,7 +1684,9 @@ def studio(nt, bg, to_sun):
     dot.inputs[1].default_value = tuple(to_sun)
     win = nt.nodes.new("ShaderNodeMapRange")
     win.interpolation_type = "SMOOTHSTEP"
-    win.inputs[1].default_value, win.inputs[2].default_value = STUDIO_WIN, 0.99
+    # levels 3-4: a wider window, so the egg carries Flash's broad white highlight
+    sw = STUDIO_WIN if (L < 3 or os.environ.get("PB_SWIN")) else 0.65
+    win.inputs[1].default_value, win.inputs[2].default_value = sw, 0.99
     win.inputs[3].default_value, win.inputs[4].default_value = 0.0, STUDIO_WIN_POW
     nt.links.new(dot.outputs["Value"], win.inputs[0])
     add = nt.nodes.new("ShaderNodeMix")

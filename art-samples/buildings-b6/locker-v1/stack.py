@@ -26,7 +26,7 @@ FRAMES = {1: 21, 2: 20, 3: 20, 4: 20}     # Flash's loops (level 4's data says 2
 
 KEY_TURN = {1: 0.5, 2: 0.5, 3: -0.5, 4: 0.5}  # the key's turns a loop (level 3 the other way round) (Flash's rings turn half round: they look
                                              # the same after half a turn; the monster bows too: Flash shows one edge-on a loop)
-KEY0 = {1: -1.0, 2: 116.0, 3: 90.0, 4: 90.0}   # the key's bow at frame 0 (degrees about its shaft)
+KEY0 = {1: -1.0, 2: 252.0, 3: 90.0, 4: 90.0}   # the key's bow at frame 0 (degrees about its shaft)
 BARREL_TURN = 60.0          # the barrel turns two rows of blocks a loop (12 rows)
 
 # the ground middle under each level's axis (Flash px)
@@ -56,7 +56,7 @@ L2_LEGS = (225.0, 45.0, -45.0)                   # the three needle legs' bearin
 L2_LEG_D = 4.05
 L2_KEY_RING = (-27.0, -75.0)
 L2_KEY_RING_R = 1.5
-L2_KEY_LEAN = 35.0                               # the shaft leans this far out of the screen toward the camera
+L2_KEY_LEAN = 46.0                               # the shaft leans this far out of the screen toward the camera
 L2_WALL = 0.28                                   # the shell's wall at the opening (Flash shows a thick lip)
 L2_KEY_FOOT = (-12.0, -38.0, 0.95)                # Flash px where the key's shaft goes down into the cogs, how far under
                                                  # the opening
@@ -136,7 +136,7 @@ L3_KEY_BOW = (-31.0, -70.0)                      # Flash px of the bow's middle
 L3_BOW_SCALE = 1.4
 L3_BOW_FOOT, L4_BOW_FOOT = (-27.4, -58.0), (-27.5, -59.5)   # Flash px where the stem meets the bow
 L3_PANELS = (((-41.0, -24.0), "port"), ((-26.0, 2.0), "port"), ((22.0, 10.0), "port"))
-L4_PANELS = (((-39.0, -28.0), "port"), ((-30.0, 6.0), "port"), ((26.0, 10.0), "port"))   # level 4: vents there
+L4_PANELS = (((-41.0, -20.0), "port"), ((-30.0, 6.0), "port"), ((26.0, 10.0), "port"))   # level 4: vents there
 L3_PANEL_SPIN = (0.0, 0.0, 0.0)
 L3_PANEL_LEAN = (0.0, 0.2, 0.2)
 L4_BASE_C, L4_BASE_R, L4_BASE_H = (-1.0, 56.0), 4.3, 0.45

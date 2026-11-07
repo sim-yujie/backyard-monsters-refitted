@@ -302,6 +302,12 @@ def damaged():
         for o in bel:
             o.scale.z *= 0.8                     # squashed under it
         crumple(sh, 0.04, seed=7)
+        # locker-3d-13: the crumpled polished chrome read glassy; Flash's damaged shell is rough, sooty grey metal
+        dm = G["shiny"]("chromedmg", (150, 152, 158), rough=0.38, metal=0.9, wear=(96, 90, 84), scale=2.5, dirt=0.55,
+                        ao_min=0.45, bump=0.06)
+        for i, m in enumerate(sh.data.materials):
+            if m and m.name.startswith("chrome"):
+                sh.data.materials[i] = dm
         holes_and_dents([(-30.0, 0.0, 1.25), (20.0, -12.0, 1.0), (2.0, 10.0, 0.7), (22.0, -32.0, 0.8)],
                         [(-18.0, 6.0, 2.6, 1.0), (24.0, 2.0, 2.2, 0.9), (8.0, -34.0, 2.0, 0.8), (-34.0, -14.0, 1.6, 0.6)])
         # gold blocks heaped over the rim at the front left
