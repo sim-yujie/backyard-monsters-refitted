@@ -1,6 +1,6 @@
 import { getAuthToken, postJson } from "@/api/http";
 import type { ApiEnvelope } from "@/api/types";
-import { LATEST_RELEASE } from "@/data/changelog";
+import { GAME_VERSION } from "@/data/gameVersion";
 import { setOpenTimingSender } from "@/game/maproom/openMarks";
 import type { CompactRecord } from "@/game/maproom/openTimingSummary";
 
@@ -23,7 +23,7 @@ const defaultPost: TimingPost = (path, body) => postJson<ApiEnvelope>(path, body
 export const sendMr2Timing = (record: CompactRecord, post: TimingPost = defaultPost): void => {
   try {
     if (!getAuthToken()) return;
-    void post(TIMING_PATH, { record, gameVersion: LATEST_RELEASE?.version ?? "" }).catch(() => {});
+    void post(TIMING_PATH, { record, gameVersion: GAME_VERSION }).catch(() => {});
   } catch {
     // Timing must never break the map.
   }

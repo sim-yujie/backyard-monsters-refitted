@@ -59,6 +59,13 @@ export interface ZoneStoreOptions {
    */
   onSightVersion?: (sv: string | undefined) => void;
   onError?: (error: ZoneError) => void;
+  /**
+   * Starts the next queued zone as soon as a request answers, instead of
+   * waiting for the caller's next `pump` (default on; a test that counts
+   * exactly what one `pump` starts turns it off). Failures never chain: they
+   * back off and wait for the caller's pump as before.
+   */
+  pumpOnSettle?: boolean;
   /** Fired when a request came back 401, so the app can return to login. */
   onAuthFailure?: () => void;
   /**
@@ -125,6 +132,8 @@ export class ZoneStore {
   private centre = { x: 0, y: 0 };
 
   private pausedUntilMs = 0;
+  /** Set by `stop`: the map closed, so an answer landing later starts nothing new. */
+  private stopped = false;
   private consecutiveFailures = 0;
   private lastResourceSyncMs = 0;
   /** Per-zone jitter on the stale threshold, so they do not all expire together. */
@@ -283,11 +292,14 @@ export class ZoneStore {
    * await; callers in the game ignore it.
    */
   async pump(): Promise<void> {
-    if (this.paused) return;
+    if (this.paused || this.stopped) return;
     this.topUpQueue();
 
     const started: Promise<void>[] = [];
-    while (this.queue.size > 0 && this.inFlight.size + started.length < this.maxConcurrent) {
+    // `request` marks its zone in flight before its first await, so `inFlight`
+    // already counts what this loop started: adding `started.length` as well
+    // counted each new request twice and let only half the limit run at once.
+    while (this.queue.size > 0 && this.inFlight.size < this.maxConcurrent) {
       const next = this.takeHighestPriority();
       if (!next) break;
       if (!this.bucket.take()) {
@@ -299,6 +311,15 @@ export class ZoneStore {
     }
 
     await Promise.all(started);
+  }
+
+  /**
+   * The map closed: nothing new starts from here on (requests already out
+   * still land in the cache, which nobody reads any more).
+   */
+  stop(): void {
+    this.stopped = true;
+    this.queue.clear();
   }
 
   /* ── Internals ──────────────────────────────────────────────────────── */
@@ -391,6 +412,9 @@ export class ZoneStore {
     if (response) {
       this.apply(entry, response);
       this.consecutiveFailures = 0;
+      // A slot just came free: start the next queued zone now rather than at
+      // the scene's next pump tick (up to 250 ms later on every request).
+      if (this.options.pumpOnSettle !== false && !this.stopped) void this.pump();
       return;
     }
     this.handleFailure(entry, failure);
