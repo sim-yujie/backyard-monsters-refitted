@@ -1,3 +1,4 @@
+import { shorterBy, weekendBoost } from "../events/weekendBoosts.js";
 import { hatchCost, hatchTime, housingSpace } from "../../game-data/monsterCatalogue.js";
 import { maxHp } from "../../game-rules/combat/stats.js";
 import type {
@@ -214,11 +215,16 @@ const spaceOf = (id: string, levels: Readonly<Record<string, number>>): number =
 /** Goo one `id` cost at the paid academy `level`. */
 const gooOf = (id: string, level: number): number => hatchCost(id, level) ?? 0;
 
-/** Starts the head of `queue` on an idle hatchery; false when the queue is empty. */
+/**
+ * Starts the head of `queue` on an idle hatchery; false when the queue is
+ * empty. `rush` is Hatch Rush's percentage now (`weekendBoosts.ts`), kept by
+ * the monster once started, as `production.ts` does.
+ */
 const startNext = (
   hatchery: HatcheryModel,
   queue: QueueStack[],
-  levels: Readonly<Record<string, number>>
+  levels: Readonly<Record<string, number>>,
+  rush: number
 ): boolean => {
   const head = queue[0];
   if (!head) return false;
@@ -227,7 +233,7 @@ const startNext = (
   Object.assign(hatchery, {
     monster: head[0],
     paidLevel: head[2],
-    countdown: hatchSeconds(head[0], levels),
+    countdown: shorterBy(hatchSeconds(head[0], levels), rush),
     stage: 1,
   });
   return true;
@@ -244,12 +250,13 @@ const clear = (hatchery: HatcheryModel) =>
 const handOut = (
   save: HatcherySave,
   model: ProductionModel,
-  levels: Readonly<Record<string, number>>
+  levels: Readonly<Record<string, number>>,
+  rush: number
 ) => {
   if (!hccWorks(save)) return;
   for (const hatchery of model.hatcheries) {
     if (hatchery.monster === "" && hatcheryIdle(save, hatchery.id) === null) {
-      startNext(hatchery, model.hcc, levels);
+      startNext(hatchery, model.hcc, levels, rush);
     }
   }
 };
@@ -422,8 +429,8 @@ export const planHatcheryAdd = (
     }
     added += 1;
     // What each single add did next, so a batch fills exactly as clicks did.
-    if (resolved.hcc) handOut(save, model, levels);
-    else if (resolved.hatchery.monster === "") startNext(resolved.hatchery, queue, levels);
+    if (resolved.hcc) handOut(save, model, levels, weekendBoost("hatch", now));
+    else if (resolved.hatchery.monster === "") startNext(resolved.hatchery, queue, levels, weekendBoost("hatch", now));
   }
 
   const cost = added * price;
@@ -478,7 +485,7 @@ export const planHatcheryRemove = (
     removed = 1;
     goo = gooOf(monster, hatchery.paidLevel);
     clear(hatchery);
-    if (!startNext(hatchery, hatchery.queue, levels)) handOut(save, model, levels);
+    if (!startNext(hatchery, hatchery.queue, levels, weekendBoost("hatch", now))) handOut(save, model, levels, weekendBoost("hatch", now));
   } else {
     const queue = resolved.hcc ? model.hcc : resolved.hatchery.queue;
     const stack = queue[slot - 1];
@@ -651,7 +658,7 @@ export const planHatcheryFinish = (save: HatcherySave, target: HatcheryTarget, n
     for (const hatchery of working) if (hatchery.monster !== "") houseProducing(hatchery);
     seconds += houseQueue(model.hcc, room, housed, moved, levels);
     finishedAll = model.hcc.length === 0 && working.every((hatchery) => hatchery.monster === "");
-    handOut(save, model, levels);
+    handOut(save, model, levels, weekendBoost("hatch", now));
   } else {
     const { hatchery } = resolved;
     const why = hatcheryIdle(save, hatchery.id);
@@ -662,11 +669,11 @@ export const planHatcheryFinish = (save: HatcherySave, target: HatcheryTarget, n
       throw yardRefusedErr("damaged", "Repair this hatchery first.", { id: hatchery.id });
     }
     // A queue behind an idle hatchery starts first, as adding to it would have.
-    if (hatchery.monster === "") startNext(hatchery, hatchery.queue, levels);
+    if (hatchery.monster === "") startNext(hatchery, hatchery.queue, levels, weekendBoost("hatch", now));
     waiting = hatchery.monster !== "";
     if (waiting && houseProducing(hatchery)) {
       seconds += houseQueue(hatchery.queue, room, housed, moved, levels);
-      startNext(hatchery, hatchery.queue, levels);
+      startNext(hatchery, hatchery.queue, levels, weekendBoost("hatch", now));
     }
     finishedAll = hatchery.monster === "" && hatchery.queue.length === 0;
   }

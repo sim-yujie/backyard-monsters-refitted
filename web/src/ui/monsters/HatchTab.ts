@@ -63,6 +63,15 @@ import {
   type MonstersTab,
   type MonstersTabContext,
 } from "./monstersTab";
+import { weekendChip } from "@/ui/events/weekendUi";
+
+/** Hatch Rush's "−30%" chip after a hatch time, or nothing. */
+const hatchRushChip = (): (Node | string)[] => {
+  const chip = weekendChip("hatch");
+  return chip ? [" ", chip] : [];
+};
+
+
 
 /**
  * The Hatch tab: the Hatcheries and the Hatchery Control Centre, laid out as
@@ -1307,6 +1316,7 @@ export class HatchTab implements MonstersTab {
       resourceAmount("r4", row.price, { realm: this.realm }),
       " · ",
       iconAmount("time", duration(row.seconds), { label: "Time each" }),
+      ...hatchRushChip(),
       " · ",
       iconAmount("housing", row.space, { label: this.realm === "inferno" ? "Space each" : "Housing each" }),
     );
@@ -1314,7 +1324,9 @@ export class HatchTab implements MonstersTab {
     // Each number under its painted icon, the word kept for a screen reader
     // and on hover: [shoe] 16, [heart] 480, [claw] 30 (a healer's heart +60).
     const damage = monsterStat(monster.id, "damage", row.level);
-    const stats: [Node, Node | string][] = [
+    // A third entry is a second <dd> on its own line in the tile: Hatch
+    // Rush's chip under the time, as a 98 px tile has no room beside it.
+    const stats: [Node, Node | string, (Node | null)?][] = [
       [gameIcon("speed"), statNumber(monsterStat(monster.id, "speed", row.level))],
       [gameIcon("health"), statNumber(monsterStat(monster.id, "health", row.level))],
       damage < 0
@@ -1322,10 +1334,10 @@ export class HatchTab implements MonstersTab {
         : [gameIcon("damage"), statNumber(damage)],
       [resourceIcon("r4", { realm: this.realm }), formatAmount(row.price)],
       [gameIcon("housing", { label: this.realm === "inferno" ? "Space each" : "Housing each" }), String(row.space)],
-      [gameIcon("time", { label: "Time each" }), duration(row.seconds)],
+      [gameIcon("time", { label: "Time each" }), duration(row.seconds), weekendChip("hatch")],
     ];
     this.stats.replaceChildren(
-      ...stats.map(([term, value]) => {
+      ...stats.map(([term, value, extra]) => {
         const item = document.createElement("div");
         item.className = "hatch-info__stat";
         const dt = document.createElement("dt");
@@ -1333,6 +1345,12 @@ export class HatchTab implements MonstersTab {
         const dd = document.createElement("dd");
         dd.append(value);
         item.append(dt, dd);
+        if (extra) {
+          const more = document.createElement("dd");
+          more.className = "hatch-info__stat-extra";
+          more.append(extra);
+          item.append(more);
+        }
         return item;
       }),
     );

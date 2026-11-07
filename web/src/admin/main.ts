@@ -33,6 +33,7 @@ import {
   type Level,
 } from "./sections";
 import { ShinyView } from "./shiny";
+import { WeekendView } from "./weekend";
 import { applyTheme, readTheme, themePicker } from "./theme";
 
 /**
@@ -46,6 +47,8 @@ import { applyTheme, readTheme, themePicker } from "./theme";
  * The Shiny section (`#shiny`) gives Shiny to a player and lists every gift.
  * The Announcements section (`#announcements`) writes the pop-ups players
  * see in the game.
+ * The Weekend events section (`#weekend`) swaps, skips, runs now or switches
+ * off the weekend boost (`weekend.ts`).
  * Chat cases (`#cases`) come first: every report of a player's chat lines
  * as one case, with a copy of the room and one-step warn / pause, Shiny for
  * the reporters, or dismiss. The Moderation section (`#moderation`) warns,
@@ -72,6 +75,7 @@ const SECTIONS = [
   ["chat", "Chat"],
   ["shiny", "Shiny"],
   ["announcements", "Announcements"],
+  ["weekend", "Weekend events"],
   ["players", "Players"],
   ["activity", "Activity"],
   ["errors", "Errors"],
@@ -208,6 +212,7 @@ class Dashboard {
     say: (message) => this.say(message),
   });
   private readonly moderation = new ModerationView({ say: (message) => this.say(message) });
+  private readonly weekend = new WeekendView({ say: (message) => this.say(message) });
   private readonly cases = new CasesView({
     say: (message) => this.say(message),
     onCount: (open) => {
@@ -322,6 +327,7 @@ class Dashboard {
       chat: section("chat", "Chat as the game team"),
       shiny: section("shiny", "Give Shiny"),
       announcements: section("announcements", "Announcements"),
+      weekend: section("weekend", "Weekend events"),
       players: section("players", "Players", rangeButtons),
       activity: section("activity", "Activity"),
       errors: section("errors", "Errors"),
@@ -335,6 +341,7 @@ class Dashboard {
     replace(this.sections.chat.body, this.chat.element);
     replace(this.sections.shiny.body, this.shiny.element);
     replace(this.sections.announcements.body, this.announcements.element);
+    replace(this.sections.weekend.body, this.weekend.element);
     replace(this.sections.errors.body, this.errors.element);
 
     this.refreshButton = h(
@@ -421,6 +428,7 @@ class Dashboard {
       this.moderation.refresh(),
       this.shiny.refresh(),
       this.announcements.refresh(),
+      this.weekend.refresh(),
     ]);
     // The sections grew as they loaded; go to the one the link named.
     if (route.section) this.sections[route.section].element.scrollIntoView();
@@ -468,6 +476,7 @@ class Dashboard {
       this.bugs.refresh(),
       this.moderation.refresh(),
       this.shiny.refresh(),
+      this.weekend.refresh(),
     ]);
     this.refreshButton.classList.remove("is-busy");
     this.refreshButton.disabled = false;
@@ -656,6 +665,7 @@ class Dashboard {
         id === "activity" ||
         id === "shiny" ||
         id === "announcements" ||
+        id === "weekend" ||
         id === "moderation" ||
         id === "chat"
           ? undefined

@@ -3273,4 +3273,87 @@ tbody th {
     width: 72px;
     height: 72px;
   }
+
+/* ── Weekend events (`weekend.ts`) ───────────────────────────────────── */
+
+.weekend-admin {
+  display: grid;
+  gap: 18px;
+}
+
+.weekend-sentence {
+  font-size: 1.0625rem;
+  font-weight: 650;
+}
+
+.weekend-sentence.is-on {
+  color: var(--good-text);
+}
+
+.weekend-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap);
+  font-weight: 600;
+}
+
+.weekend-switch input {
+  width: 22px;
+  height: 22px;
+}
+
+.weekend-plan .weekend-row {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.weekend-row .row-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* A phone: the date above its choice, so "Rotation: Builder's Weekend" fits
+   the full width instead of being cut. */
+@media (max-width: 599px) {
+  .weekend-plan .weekend-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}
+
+.weekend-force,
+.weekend-percents {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+/* Wide enough for "Builder's Weekend" and the arrow; a phone stacks the two. */
+.weekend-force {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.weekend-settings > summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.weekend-rotation {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 1.5em;
+}
+
+.weekend-rotation li > span {
+  display: inline-block;
+  min-width: 10em;
 }
