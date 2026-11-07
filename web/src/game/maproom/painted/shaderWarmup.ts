@@ -174,6 +174,11 @@ export class ProgramWarmer {
     return this.linked.get(this.key(source)) === true;
   }
 
+  /** True where programs compile one at a time (no `KHR_parallel_shader_compile`: Firefox). */
+  get serial(): boolean {
+    return !this.parallel;
+  }
+
   /** Whether the program is compiling now (asked for, not answered yet). */
   compiling(source: ProgramSource): boolean {
     return !this.ready(source) && this.pending.has(this.key(source));

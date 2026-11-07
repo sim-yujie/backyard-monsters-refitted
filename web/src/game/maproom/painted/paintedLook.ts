@@ -53,10 +53,10 @@ const warmerFor = (renderer: Renderer, gl: WebGL2RenderingContext): ProgramWarme
 export const preparePrograms = async (renderer: Renderer, gl: WebGL2RenderingContext): Promise<PaintedPrograms> => {
   const warmer = warmerFor(renderer, gl);
   const own = groundProgram(quality());
-  // Already compiled, or still compiling from the yard's warm-up (`warmAhead`): waiting for the
-  // rest of it is never longer than a fresh Low compile where programs compile one at a time,
-  // since the Low one would queue behind it.
-  const first = warmer.ready(own) || warmer.compiling(own) ? own : groundProgram("low");
+  // Already compiled, or (where programs compile one at a time) still compiling from the yard's
+  // warm-up (`warmAhead`): there a fresh Low compile would only queue behind it. Where they compile
+  // side by side, the Low one may well finish first, so it goes as before.
+  const first = warmer.ready(own) || (warmer.serial && warmer.compiling(own)) ? own : groundProgram("low");
   const [ground, borders, clouds] = await warmer.warmAll([first, borderProgram(), cloudProgram()]);
   return { ground: Boolean(ground && borders), clouds: Boolean(clouds), warmer };
 };

@@ -358,8 +358,11 @@ export const noteShader = (
   const state = collecting();
   if (!state) return;
   const name = shaderName(source);
-  state.shaders.push({ name, requested: since(state, requested), start: since(state, start), end: since(state, end), ok });
-  measure(`shader ${name}`, start, end);
+  // A compile the yard's warm-up started before this open (`mr2Prewarm.ts`) counts from the open:
+  // the time this open spent on it.
+  const from = (at: number): number => Math.max(0, since(state, at));
+  state.shaders.push({ name, requested: from(requested), start: from(start), end: from(end), ok });
+  measure(`shader ${name}`, Math.max(start, state.startedAt), end);
 };
 
 /** The GPU's name (WebGL's unmasked renderer where the browser gives it), read once per page. */

@@ -4,6 +4,7 @@ import {
   isYardDownload,
   prewarmLevel,
   prewarmStarted,
+  prewarmStatus,
   resetPrewarm,
   runPrewarm,
   watchIdle,
@@ -149,6 +150,7 @@ describe("runPrewarm: code, shaders, then pictures, once a page", () => {
     const result = await runPrewarm(renderer(), "medium", () => true, async () => painted);
     expect(painted.calls).toEqual(["shaders:medium", "art:medium:true"]);
     expect(result).toEqual({ programs: true, pictures: 7 });
+    expect(prewarmStatus()).toBe("done");
   });
 
   it("runs once a page however often it is asked", async () => {
@@ -166,6 +168,7 @@ describe("runPrewarm: code, shaders, then pictures, once a page", () => {
     expect(painted.warmAhead).not.toHaveBeenCalled();
     expect(painted.prefetchArt).not.toHaveBeenCalled();
     expect(result.pictures).toBe(0);
+    expect(prewarmStatus()).toBe("partial");
   });
 
   it("does nothing on a lost or missing context, and never throws when the code does not arrive", async () => {

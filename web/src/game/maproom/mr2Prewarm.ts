@@ -142,13 +142,19 @@ const loadPaintedLook = (): Promise<PaintedWarmup> => import("./painted/paintedL
 
 /** Once a page: a warm-up that started (whatever became of it) is not started again. */
 let started = false;
+/** For the map's open timing (`info.prewarm`): none, running, done (all of it) or partial. */
+let status: "none" | "running" | "done" | "partial" = "none";
 
 /** Whether a warm-up has started on this page. */
 export const prewarmStarted = (): boolean => started;
 
+/** Where this page's warm-up is, for Map Room 2's open timing. */
+export const prewarmStatus = (): string => status;
+
 /** Forgets that one started (tests). */
 export const resetPrewarm = (): void => {
   started = false;
+  status = "none";
 };
 
 /**
@@ -165,6 +171,7 @@ export const runPrewarm = async (
 ): Promise<{ programs: boolean; pictures: number }> => {
   if (started) return { programs: false, pictures: 0 };
   started = true;
+  status = "running";
   const result = { programs: false, pictures: 0 };
   try {
     const gl = (renderer as { gl?: WebGL2RenderingContext }).gl;
@@ -179,6 +186,8 @@ export const runPrewarm = async (
     result.programs = await programs;
   } catch (caught) {
     console.warn("Map Room 2's warm-up stopped; the map does it when it opens.", caught);
+  } finally {
+    status = result.programs && result.pictures > 0 ? "done" : "partial";
   }
   return result;
 };

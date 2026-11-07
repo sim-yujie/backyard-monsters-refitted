@@ -99,6 +99,7 @@ import { takenOverResources, type TakeoverCandidate } from "@/game/maproom/takeo
 import { MapInput } from "@/game/maproom/MapInput";
 import { paintedMapOn } from "@/game/maproom/painted/paintedSwitch";
 import { MapRenderer } from "@/game/maproom/MapRenderer";
+import { prewarmStatus } from "@/game/maproom/mr2Prewarm";
 import { classicLook } from "@/game/classicLook";
 import {
   decideTilt,
@@ -354,7 +355,8 @@ export class MapRoom2Scene implements Scene {
     this.context = context;
     // Real players' open timings go to the server's logs (at most two a page load).
     connectMr2TimingReport();
-    markOpen({ quality: quality(), classic: classicLook() });
+    // Whether the yard's warm-up ran first this page (`mr2Prewarm.ts`): none, running, done or partial.
+    markOpen({ quality: quality(), classic: classicLook(), prewarm: prewarmStatus() });
     // The world's hex shape (MR2 look plan step 1) before anything is drawn
     // or picked: the grid's geometry follows the server's rules. Classic gets
     // its own pointy-top cell size (never tilted, Flash's 3/4 tiles).
