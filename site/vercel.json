@@ -1,6 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "redirects": [
-    { "source": "/reset-password", "destination": "https://play.bymrevamped.com/reset-password", "permanent": false }
-  ]
-}
