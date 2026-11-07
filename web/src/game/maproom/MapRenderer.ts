@@ -1,7 +1,7 @@
 import { Container, Graphics, type Renderer } from "pixi.js";
 import { MAX_TEXT_OBJECTS, WATER_MAX_HEIGHT } from "@/config";
 import { mapRoomGrid, type OffsetCell } from "@/game/HexGrid";
-import { HOVER_COLOUR, KitFilter, SELECT_COLOUR, type MapViewerContext } from "./cellVisuals";
+import { HOVER_COLOUR, KitFilter, SELECT_COLOUR, type CellFriend, type MapViewerContext } from "./cellVisuals";
 import {
   CHUNK_TTL_MS,
   MAX_RESIDENT_CHUNKS,
@@ -22,7 +22,9 @@ import { BuildingAvatars } from "./buildingAvatars";
 import { cellLift, liftCorners, setFlatGround } from "./ground";
 import { GroundArt } from "./groundArt";
 import { LiveMap } from "./live/LiveMap";
-import { CONSTRUCTION_BADGE_URL, IDLE_HELPER_URL, MapPicture } from "./mapPicture";
+import { CONSTRUCTION_BADGE_URL, FRIEND_BADGE_URL, IDLE_HELPER_URL, MapPicture } from "./mapPicture";
+import { friendMarkOf, friendMarksKey } from "@/game/friends/friendMarks";
+import { friendsStore } from "@/game/friends/friendsStore";
 import { RangeOverlay } from "./RangeOverlay";
 import type { Sight } from "./Sight";
 import { TerrainRaster } from "./TerrainRaster";
@@ -31,7 +33,7 @@ import { MR2_PAINTED, MR2_PAINTED_ART, MR2_PAINTED_CODE, MR2_PAINTED_FAILED, mar
 import { classicLook } from "@/game/classicLook";
 import { onQualityChange, quality, type Quality } from "@/game/quality";
 import { FOG_COLOUR, setFogUnderCloud } from "./cellVisuals";
-import { isFogCell } from "@/api/types";
+import { isFogCell, type PlayerCell } from "@/api/types";
 import type { ZoneRecord, ZoneStore } from "./ZoneStore";
 import type { CellRange } from "./zones";
 import type { GroundData } from "./painted/GroundData";
@@ -122,6 +124,11 @@ export class MapRenderer {
   private readonly groundArt = new GroundArt();
   private readonly constructionBadge = new MapPicture(CONSTRUCTION_BADGE_URL);
   private readonly idleHelper = new MapPicture(IDLE_HELPER_URL, true);
+  /** The painted friend marker (beta 7) drawn beside a friend's building, in both looks. */
+  private readonly friendBadge = new MapPicture(FRIEND_BADGE_URL, true);
+  /** `friendMarksKey()` when the chunks were last told who is a friend; they rebuild only when it changes. */
+  private friendsKey = "";
+  private stopFriends: (() => void) | null = null;
   /** The living map (water, clouds, birds): its own layers, told when chunks come and go. */
   private readonly live = new LiveMap(this.ground, () => this.rebuildAll());
   private readonly chunks = new Map<number, MapChunk>();
@@ -182,6 +189,14 @@ export class MapRenderer {
   /** The active kit filter (#334). */
   private kitFilter: KitFilter = KitFilter.ALL;
 
+  /**
+   * A friend's cell (beta 7): the shared friends list once loaded, fresher after
+   * a pin or a removal than the cell's own `fr` / `fp`, else those flags. No
+   * request per base.
+   */
+  private readonly friendMark = (cell: PlayerCell): CellFriend =>
+    friendMarkOf(cell.uid, { friend: cell.fr === 1, pinned: cell.fp === 1 }) ?? "none";
+
   constructor(
     private readonly store: ZoneStore,
     /** The fog of war sight (#331): a long-lived 1:1 dependency, like `store`. */
@@ -204,6 +219,13 @@ export class MapRenderer {
       this.live.overlay,
       this.highlight,
     );
+    this.friendsKey = friendMarksKey();
+    this.stopFriends = friendsStore.subscribe(() => {
+      const key = friendMarksKey();
+      if (key === this.friendsKey) return;
+      this.friendsKey = key;
+      this.rebuildAll();
+    });
   }
 
   /**
@@ -272,6 +294,7 @@ export class MapRenderer {
     await Promise.all([
       this.groundArt.load().then((ok) => ok && this.rebuildAll()),
       this.constructionBadge.load().then((ok) => ok && this.rebuildAll()),
+      this.friendBadge.load().then((ok) => ok && this.rebuildAll()),
       classicLook() ? this.idleHelper.load().then((ok) => ok && this.rebuildAll()) : null,
     ]);
   }
@@ -681,6 +704,9 @@ export class MapRenderer {
     this.groundArt.destroy();
     this.constructionBadge.destroy();
     this.idleHelper.destroy();
+    this.friendBadge.destroy();
+    this.stopFriends?.();
+    this.stopFriends = null;
     this.atlas?.destroy();
     this.atlas = null;
     this.raster.destroy();
@@ -730,6 +756,7 @@ export class MapRenderer {
             this.groundArt,
             this.constructionBadge,
             this.idleHelper,
+            this.friendBadge,
           );
           this.chunks.set(ref.id, chunk);
           this.world.addChild(chunk.container);
@@ -740,6 +767,7 @@ export class MapRenderer {
           myAlliance: this.myAlliance,
           kitFilter: this.kitFilter,
           sight: this.sight,
+          friendMark: this.friendMark,
         };
         chunk.build(this.store, nowSeconds, context);
         this.live.chunkBuilt(ref, { store: this.store, viewer: context, nowSeconds, groundReady: this.groundArt.ready });

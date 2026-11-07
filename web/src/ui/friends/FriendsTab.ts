@@ -70,7 +70,7 @@ export const FRIENDS_TEXT = {
   pin: "Pin to top",
   unpin: "Unpin",
   pinned: (count: number, max: number): string => `${count} of ${max} pinned`,
-  pinLimit: (max: number): string => `${max} pinned already. Unpin one first.`,
+  pinLimit: (max: number): string => `Pinned ${max} already. Unpin one first.`,
 } as const;
 
 export type FriendFilter = "help" | "online" | "gift";

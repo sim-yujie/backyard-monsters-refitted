@@ -8,10 +8,14 @@ import { Assets, type Texture } from "pixi.js";
  *   something is being built, upgraded or fortified there.
  * - Classic's idle helper: Flash's blue helper, redrawn sharp (owner, 5 Nov 2026),
  *   shown while a helper there is free, the opposite of the badge.
+ * - The friend marker (beta 7): the painted two monster heads beside a friend's
+ *   building, on anyone's cell.
  */
 const BASE = `${import.meta.env.BASE_URL}maproom/`;
 export const CONSTRUCTION_BADGE_URL = `${BASE}construction@2x.webp`;
 export const IDLE_HELPER_URL = `${BASE}idle-helper@4x.webp`;
+/** The painted friend marker (beta 7), beside a friend's building in both looks; the same picture as the HUD's `friends` icon. */
+export const FRIEND_BADGE_URL = `${import.meta.env.BASE_URL}ui/icons/friends-64.webp`;
 
 export class MapPicture {
   private loaded: Texture | null = null;

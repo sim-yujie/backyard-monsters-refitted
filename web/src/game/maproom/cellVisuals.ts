@@ -93,7 +93,17 @@ export interface CellAppearance {
    * redraws the tile without its bar.
    */
   campHealth: number | null;
+  /**
+   * The owner is the viewer's friend (beta 7): `"friend"` draws the painted
+   * friend marker beside the building, `"pinned"` a bigger gold-ringed one for
+   * a friend pinned to the top of the Friends list. `"none"` off a player
+   * cell, on the viewer's own cells and on everyone else's.
+   */
+  friend: CellFriend;
 }
+
+/** {@link CellAppearance.friend}. */
+export type CellFriend = "none" | "friend" | "pinned";
 
 /**
  * The health bar's value for a camp cell's `dm` and `d`, or null for no bar.
@@ -161,6 +171,13 @@ export interface MapViewerContext {
    * treating every fog cell as an edge.
    */
   sight?: SightLookup;
+  /**
+   * Whether a player cell's owner is the viewer's friend (beta 7). The map
+   * passes one that prefers the shared friends list (`friendMarkOf`), fresher
+   * after a pin or a removal than the cell's own `fr` / `fp` flags. Absent,
+   * the flags alone decide.
+   */
+  friendMark?: (cell: PlayerCell) => CellFriend;
 }
 export const DEFAULT_VIEWER_CONTEXT: MapViewerContext = { myAlliance: null, kitFilter: KitFilter.ALL };
 
@@ -305,6 +322,9 @@ export const TRIBE_COLOURS: Record<string, number> = {
 const TRIBE_FALLBACK = 0x9aa3b8;
 
 const PLAYER_COLOUR = 0xe8ecf5;
+/** A friend's base on the zoomed-out raster (beta 7): the friend marker's green, a pinned friend's gold. */
+export const FRIEND_RASTER = 0x5fd17a;
+export const FRIEND_PINNED_RASTER = 0xf2c230;
 const OUTPOST_COLOUR = 0xb9c2d6;
 
 export const terrainColour = (height: number): number => {
@@ -335,6 +355,7 @@ export const loadingAppearance = (): CellAppearance => ({
   hallLevel: 0,
   dimmed: false,
   campHealth: null,
+  friend: "none",
 });
 
 /**
@@ -424,7 +445,15 @@ export const fogAppearance = (coord?: { x: number; y: number }, sight?: SightLoo
     hallLevel: 0,
     dimmed: false,
     campHealth: null,
+    friend: "none",
   };
+};
+
+/** {@link CellAppearance.friend} for someone else's player cell. */
+const friendOfCell = (cell: PlayerCell, context: MapViewerContext): CellFriend => {
+  if (context.friendMark) return context.friendMark(cell);
+  if (cell.fp === 1) return "pinned";
+  return cell.fr === 1 ? "friend" : "none";
 };
 
 /**
@@ -475,6 +504,7 @@ export const appearanceOf = (
     hallLevel: 0,
     dimmed: false,
     campHealth: null,
+    friend: "none" as CellFriend,
   };
 
   if (isWaterCell(cell)) {
@@ -508,6 +538,7 @@ export const appearanceOf = (
       kit: outpost ? kitOf(cell.kit) : null,
       hallLevel: outpost ? 0 : Number(cell.th) || 0,
       dimmed: !matchesKitFilter(cell, context.kitFilter),
+      friend: own ? "none" : friendOfCell(cell, context),
     };
   }
 
@@ -535,6 +566,9 @@ export const rasterColour = (cell: MapCell | undefined): number => {
   if (isWaterCell(cell)) return terrainColour(cell.i);
   if (isPlayerCell(cell)) {
     if (cell.mine === 1) return OWN_COLOUR;
+    // A friend's base stands out on the world view too (beta 7), from the cell's own flags.
+    if (cell.fp === 1) return FRIEND_PINNED_RASTER;
+    if (cell.fr === 1) return FRIEND_RASTER;
     return cell.b === CellType.OUTPOST ? OUTPOST_COLOUR : PLAYER_COLOUR;
   }
   // Camps are the common case and would swamp the view in tribe colours, so

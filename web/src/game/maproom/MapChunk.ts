@@ -2,6 +2,7 @@ import { Container, NineSliceSprite, Sprite, Texture } from "pixi.js";
 import { isFogCell } from "@/api/types";
 import { CELL_HEIGHT, CELL_WIDTH, WATER_MAX_HEIGHT } from "@/config";
 import { hexShape, mapRoomGrid } from "@/game/HexGrid";
+import { classicLook } from "@/game/classicLook";
 import { chunkCells, type ChunkRef } from "./chunks";
 import {
   CellMarker,
@@ -157,6 +158,20 @@ const FLASH_TOWER_HEIGHT = 61;
 const WORKER_Y_FRACTION = 0.3;
 /** Modern's construction badge, in Flash units like the helper it replaces (longest side). */
 const BADGE_SIZE = 38;
+/**
+ * The friend marker (beta 7) beside a friend's building, in Flash units like
+ * the badge: its disc's diameter, a pinned friend's a quarter larger. It sits
+ * where the player's own outpost shows its helper or badge, a spot always free
+ * on someone else's cell.
+ */
+const FRIEND_SIZE = 34;
+const FRIEND_PINNED_SCALE = 1.25;
+/** The friend marker's ring: green for a friend, the star's gold for a pinned one. */
+export const FRIEND_RING_COLOUR = 0x7be08a;
+export const FRIEND_PINNED_RING_COLOUR = 0xf2c230;
+/** The disc behind the two heads: dark on Modern's map, Flash's parchment in Classic. */
+const FRIEND_DISC_MODERN = 0x1c2430;
+const FRIEND_DISC_CLASSIC = 0xfff6dc;
 
 /** The gold level star every player cell wears (#334), tucked at the tower's upper left. */
 const STAR_RADIUS = CELL_HEIGHT * 0.19;
@@ -248,6 +263,7 @@ export class MapChunk {
     private readonly groundArt: GroundArt,
     private readonly constructionBadge: MapPicture,
     private readonly idleHelper: MapPicture,
+    private readonly friendBadge: MapPicture | null = null,
   ) {
     this.labels = new LabelLayer(pool);
     this.container.interactiveChildren = false;
@@ -632,6 +648,8 @@ export class MapChunk {
       }
     }
 
+    if (appearance.friend !== "none") this.addFriendMarker(appearance.friend === "pinned", foot, flashScale, alpha);
+
     if (appearance.invitePending) {
       // Flash's open envelope, at the tower's upper left (the tick sits upper right, the worker lower right).
       const envelope = new Sprite(this.atlas.inviteEnvelope);
@@ -687,6 +705,35 @@ export class MapChunk {
       placed: (text) => this.pins.add(foot, text, "text"),
       measured: (width) => this.addLabel(foot, x, py, width, maxTotalWidth, appearance, alpha, style),
     });
+  }
+
+  /**
+   * The friend marker (beta 7): a disc, a green ring (gold and a quarter larger
+   * for a pinned friend) and the painted two heads, in `bases` so it shows at
+   * every chunked tier. Drawn without the heads until their picture arrives.
+   */
+  private addFriendMarker(pinned: boolean, foot: { x: number; y: number }, flashScale: number, alpha: number): void {
+    const radius = (FRIEND_SIZE * flashScale * (pinned ? FRIEND_PINNED_SCALE : 1)) / 2;
+    const fx = foot.x + (DOME_WIDTH / 2) * flashScale;
+    const fy = foot.y - DOME_ABOVE_FOOT * flashScale * WORKER_Y_FRACTION;
+    const back = disc(this.atlas.disc, fx, fy, radius, classicLook() ? FRIEND_DISC_CLASSIC : FRIEND_DISC_MODERN);
+    const ring = disc(this.atlas.ring, fx, fy, radius, pinned ? FRIEND_PINNED_RING_COLOUR : FRIEND_RING_COLOUR);
+    const parts: Sprite[] = [back, ring];
+    const texture = this.friendBadge?.texture ?? null;
+    if (texture) {
+      const heads = new Sprite(texture);
+      heads.anchor.set(0.5);
+      const size = radius * 1.55;
+      const scale = size / Math.max(texture.width, texture.height);
+      heads.setSize(texture.width * scale, texture.height * scale);
+      heads.position.set(fx, fy);
+      parts.push(heads);
+    }
+    for (const part of parts) {
+      part.alpha = alpha;
+      this.bases.addChild(part);
+      this.pins.add(foot, part);
+    }
   }
 
   /** The thin rectangle behind a name: white for others, the relation colour otherwise. */

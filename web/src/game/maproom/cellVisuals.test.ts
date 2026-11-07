@@ -21,6 +21,9 @@ import {
   UNEXPLORED_STRIPE,
   UNEXPLORED_STRIPE_COLOUR,
   appearanceOf,
+  FRIEND_PINNED_RASTER,
+  FRIEND_RASTER,
+  rasterColour,
   campHealthColour,
   campHealthOf,
   FOG_UNDER_CLOUD,
@@ -208,6 +211,39 @@ describe("player relation and kit (#334)", () => {
     expect(appearanceOf(player({ mine: 1, b: 2 }), 0, context).dimmed).toBe(true);
     // Someone else's outpost with the same kit still dims; the filter is "own only".
     expect(appearanceOf(player({ mine: 0, b: 3, kit: 2 }), 0, context).dimmed).toBe(true);
+  });
+});
+
+describe("friend marker (beta 7)", () => {
+  const camp = { i: 150, n: "Kozu", l: 3, dm: 0, d: 0 } as unknown as MapCell;
+
+  it("marks a friend's cell from its flags, a pinned friend more strongly", () => {
+    expect(appearanceOf(player(), 0).friend).toBe("none");
+    expect(appearanceOf(player({ fr: 1 }), 0).friend).toBe("friend");
+    expect(appearanceOf(player({ fr: 1, fp: 1 }), 0).friend).toBe("pinned");
+  });
+
+  it("never marks the viewer's own cells, camps or unloaded cells", () => {
+    expect(appearanceOf(player({ mine: 1, fr: 1, fp: 1 }), 0).friend).toBe("none");
+    expect(appearanceOf(camp, 0).friend).toBe("none");
+    expect(appearanceOf(undefined, 0).friend).toBe("none");
+  });
+
+  it("asks the viewer's friend list first when the map hands one in", () => {
+    const context: MapViewerContext = {
+      myAlliance: null,
+      kitFilter: KitFilter.ALL,
+      friendMark: (cell) => (cell.uid === 7 ? "pinned" : "none"),
+    };
+    expect(appearanceOf(player({ fr: 0 }), 0, context).friend).toBe("pinned");
+    expect(appearanceOf(player({ uid: 8, fr: 1 }), 0, context).friend).toBe("none");
+    expect(appearanceOf(player({ mine: 1 }), 0, context).friend).toBe("none");
+  });
+
+  it("colours a friend's base on the world view", () => {
+    expect(rasterColour(player({ fr: 1 }))).toBe(FRIEND_RASTER);
+    expect(rasterColour(player({ fr: 1, fp: 1 }))).toBe(FRIEND_PINNED_RASTER);
+    expect(rasterColour(player())).not.toBe(FRIEND_RASTER);
   });
 });
 

@@ -341,7 +341,7 @@ export const REFUSAL_TEXT: Readonly<Record<FriendRefusalReason, string>> = {
   noSuchPlayer: "There is no player with that name.",
   noSuchRequest: "That request is no longer waiting for an answer.",
   noSuchGift: "That gift is no longer waiting.",
-  pinLimit: `${PIN_MAX} pinned already. Unpin one first.`,
+  pinLimit: `Pinned ${PIN_MAX} already. Unpin one first.`,
   self: "That's you!",
 };
 

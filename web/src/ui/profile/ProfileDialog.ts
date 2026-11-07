@@ -6,6 +6,8 @@ import { formatAmount } from "@/ui/format";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { Popup } from "@/ui/Popup";
 import { loadPicture, PhotoCropper } from "./PhotoCropper";
+import { friendMarkOf } from "@/game/friends/friendMarks";
+import { friendBadge } from "@/ui/friends/friendBadge";
 import "@/ui/achievements/achievements.css";
 import "./profile.css";
 
@@ -200,7 +202,11 @@ export class ProfileDialog {
     frame.append(image);
 
     const who = el("div", "profile__who");
-    who.append(el("h3", "profile__name", profile.username));
+    const name = el("h3", "profile__name", profile.username);
+    // A friend's profile wears the friend marker before the name (beta 7).
+    const badge = profile.own ? null : friendBadge(friendMarkOf(profile.userid), 24, "profile__friend");
+    if (badge) name.prepend(badge, " ");
+    who.append(name);
     who.append(statsList(profile));
     top.append(frame, who);
     body.append(top);
