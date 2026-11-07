@@ -39,8 +39,13 @@ export const GIFT_TEXT = {
   done: "Done",
   /** The line over the choices when the friend wished for one resource only. */
   wishedOnly: (name: string, resource: GiftResource): string => `${name} wants ${RESOURCE_NAMES[resource]} only`,
-  /** The line over the choices when the friend wished for two or three, in order. */
-  wishedOrder: (name: string): string => `${name}'s wishes, best first`,
+  /**
+   * The line over the choices when the friend wished for two or three, with a
+   * small "best first" after it (tester, 7 Nov: the longer line wrapped on a
+   * phone, leaving "first" alone; the hint now drops out when it has no room).
+   */
+  wishedOrder: (name: string): string => `${name}'s wishes`,
+  bestFirst: "best first",
   /** Over the small tiles of the resources not wished for. */
   others: "Or send",
 } as const;
@@ -107,12 +112,19 @@ export class GiftPicker {
       for (const key of order) grid.append(this.choice(key, "btn btn--outline gift-picker__choice"));
       parts.push(grid);
     } else {
-      // "[marker] Bob wants Goo only" or "[marker] Bob's wishes, best first".
-      const line = make("p", "gift-picker__legend");
-      line.append(
+      // "[marker] Bob wants Goo only" or "[marker] Bob's wishes  best first",
+      // always one line: a long name ends in "…" and the hint drops out first.
+      const words =
+        wished.length === 1 ? GIFT_TEXT.wishedOnly(target.username, wished[0]!) : GIFT_TEXT.wishedOrder(target.username);
+      const main = make("span", "gift-picker__legend-main");
+      main.append(
         wishMark(null, "gift-picker__legend-mark"),
-        wished.length === 1 ? GIFT_TEXT.wishedOnly(target.username, wished[0]!) : GIFT_TEXT.wishedOrder(target.username),
+        make("span", "gift-picker__legend-name", target.username),
+        make("span", "gift-picker__legend-rest", words.slice(target.username.length)),
       );
+      const line = make("p", "gift-picker__legend");
+      line.append(main);
+      if (wished.length > 1) line.append(make("span", "gift-picker__legend-hint", GIFT_TEXT.bestFirst));
       // The first wish is the main plate (a clearly different colour), the rest under it.
       const list = make("div", "gift-picker__choices gift-picker__choices--wished");
       wished.forEach((key, index) => {

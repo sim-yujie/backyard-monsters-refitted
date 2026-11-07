@@ -88,7 +88,8 @@ describe("the gift picker", () => {
     expect(choice("r2").querySelector(".wish-mark__rank")?.textContent).toBe("2");
     expect(document.body.textContent).not.toContain("★");
     expect(choice("r4").getAttribute("aria-label")).toBe("Goo (wish 1)");
-    expect(document.querySelector(".gift-picker__legend")?.textContent).toBe(GIFT_TEXT.wishedOrder("Bob"));
+    expect(document.querySelector(".gift-picker__legend-main")?.textContent).toBe("Bob's wishes");
+    expect(document.querySelector(".gift-picker__legend-hint")?.textContent).toBe(GIFT_TEXT.bestFirst);
     expect(document.querySelector(".gift-picker__legend .wish-mark")).not.toBeNull();
     // The rest are small tiles under "Or send", and still send.
     const others = document.querySelector(".gift-picker__others")!;
@@ -105,6 +106,9 @@ describe("the gift picker", () => {
   it("says plainly when the friend wants one resource only", async () => {
     const { picker } = await setup({ list: fixtureList([fixtureFriend(7, { username: "Bob", wishes: ["r1"] })]) });
     expect(document.querySelector(".gift-picker__legend")?.textContent).toBe("Bob wants Twigs only");
+    // The name on its own, so a long one ends in "…" and the line never wraps.
+    expect(document.querySelector(".gift-picker__legend-name")?.textContent).toBe("Bob");
+    expect(document.querySelector(".gift-picker__legend-hint")).toBeNull();
     expect(document.querySelectorAll(".gift-picker__choice--wished")).toHaveLength(1);
     expect(choice("r1").classList.contains("gift-picker__choice--top")).toBe(true);
     expect(document.querySelectorAll(".gift-picker__other")).toHaveLength(3);
