@@ -508,7 +508,7 @@ def spinner(name, center, normal_bearing, tilt, parts):
 
 # ------------------------------------------------------------------------------------------------------------ the model
 def shiny(name, col, rough=0.3, metal=0.85, wear=None, scale=5.0, dirt=0.25, spec=0.5, coat=0.0, ao_min=0.5,
-          streak=0.0, side=0.0, glow=()):
+          streak=0.0, side=0.0, glow=(), bump=0.03):
     """Flash's Hatchery is a glossy render: polished gold, chrome, red enamel. Soft, broad reflections, a faint
     mottle (`wear` colour in soft patches), darker in the creases and low down, and faint vertical polish streaks."""
     if name in MATS:
@@ -556,7 +556,8 @@ def shiny(name, col, rough=0.3, metal=0.85, wear=None, scale=5.0, dirt=0.25, spe
     if coat:
         t.set(coat=coat)
         t.bsdf.inputs["Coat Roughness"].default_value = 0.12
-    t.bump(t.noise(v, scale * 4, 4.0, 0.6), 0.03, 0.01)
+    if bump:
+        t.bump(t.noise(v, scale * 4, 4.0, 0.6), bump, 0.01)
     MATS[name] = t.m
     return t.m
 
@@ -660,14 +661,17 @@ def rounded_poly(corners, rad, n=8):
 
 
 # ------------------------------------------------------------------------------------------------------------ the model
+CHROME_COL = tuple(int(v) for v in os.environ.get("PB_CHROME", "222,230,250").split(","))
+CHROME_WEAR = (220, 226, 234)
+CHROME_ROUGH = float(os.environ.get("PB_CROUGH", 0.08))
+
+
 def materials():
     M = {}
-    # Flash's shell: a blue-grey chrome ball, a soft white sheen up left, darker low down and on the right
-    M["chrome"] = shiny("chrome", (146, 160, 184), rough=0.3, metal=1.0, wear=(136, 150, 172), scale=2.0, dirt=0.25,
-                        side=0.25, glow=tuple((x, y, 3.4, 3.4, 0.9, (246, 248, 252)) for x, y in S.SHEEN[L]))
-    if L >= 3:               # Flash's egg reads lighter and greyer than the ball below it
-        M["chrome"] = shiny("chrome34", (184, 190, 204), rough=0.3, metal=0.55, wear=(166, 174, 190), scale=2.0,
-                            dirt=0.2, side=0.3)
+    # Flash's shell: polished pale-silver chrome (a mirror of the studio sky that only glossy rays see, set up in
+    # setup(): a bright soft window up left, a grey band at the horizon, light ground below), one chrome every level
+    M["chrome"] = shiny("chrome", CHROME_COL, rough=CHROME_ROUGH, metal=1.0, wear=CHROME_WEAR, scale=2.0, dirt=0.18,
+                        ao_min=0.6, bump=0.0)
     M["inner"] = shiny("inner", (70, 48, 18), rough=0.35, metal=0.7, wear=(110, 74, 24), scale=3, dirt=0.2)
     M["steel"] = shiny("steel", (184, 192, 206), rough=0.3, metal=0.85, wear=(150, 158, 174), scale=4, dirt=0.2,
                        side=0.3)
@@ -846,15 +850,23 @@ def panel(name, c, r, sx, sy, kind, size=2.3, spin=0.0, lean=0.0, thick=0.14):
     sag = r - math.sqrt(max(0.0, r * r - 2 * h * h)) + lean * h   # how far the plate's corners stand off the ball
     box(name + "seat", (size * 0.8, size * 0.8, sag + 0.05), (0, 0, -sag - 0.05), M["steel"], parent=e, bevel=0.03)
     box(name + "plate", (size, size, thick), (0, 0, 0), M["steel"], parent=e, bevel=0.04)
-    if kind == "port":       # the plate sits on a gold block that shows past its top (-Y) and left (-X) edges
-        box(name + "goldback", (size * 0.94, size * 0.94, sag + thick * 0.8), (0.24, 0.24, -sag - 0.05), M["gold"],
+    corner = kind in ("port", "vent")
+    if kind in ("port", "vent"):   # the plate sits on a gold block that shows past two of its edges, as Flash
+        box(name + "goldback", (size * 1.02, size * 1.02, sag + thick * 0.9), (0.3, 0.3, -sag - 0.05), M["gold"],
             parent=e, bevel=0.06)
-    else:
+    if corner:               # Flash's gold corner trim: an L of gold over each corner of the plate
+        arm, wd, ht = size * 0.3, 0.2, 0.09
+        for i, (u, v) in enumerate(((-1, -1), (1, -1), (1, 1), (-1, 1))):
+            box(f"{name}cnA{i}", (arm, wd, ht), (u * (h - arm / 2 + 0.02), v * (h - wd / 2 + 0.02), thick - 0.02),
+                M["gold"], parent=e, bevel=0.03)
+            box(f"{name}cnB{i}", (wd, arm, ht), (u * (h - wd / 2 + 0.02), v * (h - arm / 2 + 0.02), thick - 0.02),
+                M["gold"], parent=e, bevel=0.03)
+    if kind not in ("port", "vent"):
         # gold brackets: an L along the plate's left (-X) and top (+Y) edges
         box(name + "brkL", (0.3, size * 0.96, thick + 0.22), (-h + 0.2, 0, 0.0), M["gold"], parent=e, bevel=0.05)
         box(name + "brkT", (size * 0.84, 0.3, thick + 0.22), (0.05, h - 0.2, 0.0), M["gold"], parent=e, bevel=0.05)
     for i, (u, v) in enumerate(((-1, -1), (1, -1), (1, 1), (-1, 1))):
-        rivet(f"{name}rv{i}", (u * (h - 0.2), v * (h - 0.2), thick - 0.01), e, r=0.12)
+        rivet(f"{name}rv{i}", (u * (h - 0.2), v * (h - 0.2), thick + (0.06 if corner else -0.01)), e, r=0.12)
     if kind == "port":
         pr = size * 0.3
         tube(name + "portring", [(pr * math.cos(2 * math.pi * i / 40) + 0.08, pr * math.sin(2 * math.pi * i / 40) + 0.04,
@@ -1018,7 +1030,9 @@ def cogs2(c, r, nrm, dist):
     pc = foot - u * back
     h = (pc - c).dot(u)
     pe = frame_at("cogplate", pc, -u, xhint=(0, 0, 1))
-    cyl("cogplatedisc", math.sqrt((r - S.L2_WALL) ** 2 - h * h) + 0.05, 0.2, (0, 0, 0), M["core"], parent=pe, verts=64)
+    # its rim inside the wall on both its faces (it poked out of the ball at Flash px -12,-11)
+    prad = min(math.sqrt((r - S.L2_WALL * 0.5) ** 2 - hh * hh) for hh in (h, h - 0.2, h + 0.2))
+    cyl("cogplatedisc", prad, 0.2, (0, 0, 0), M["core"], parent=pe, verts=64)
     cyl("keybearing", 0.34, 0.3, (0, 0, -0.25), M["golddark"], parent=e, verts=20)
     wall = back
     tooth_h = S.L2_COG_TOOTH
@@ -1533,6 +1547,94 @@ def turn(frame):
                                                        S.BARREL_TURN) * f))
 
 
+def studio(nt, bg, to_sun):
+    """What the polished metals mirror (glossy rays only; the diffuse light stays the sky above): Flash's chrome is
+    pale silver with a bright soft highlight up left, a grey band a little under the ball's middle (the horizon) and
+    light ground below; Codex Look 3 the same with a stronger contrast."""
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    nt.links.new(tc.outputs["Generated"], sep.inputs[0])
+    mr = nt.nodes.new("ShaderNodeMapRange")
+    mr.inputs[1].default_value, mr.inputs[2].default_value = -1.0, 1.0
+    nt.links.new(sep.outputs["Z"], mr.inputs[0])
+    rmp = nt.nodes.new("ShaderNodeValToRGB")
+    el = rmp.color_ramp.elements
+    stops = json.loads(os.environ.get("PB_STOPS", "null")) or [
+        (0.0, (0.2, 0.21, 0.23)), (0.35, (0.28, 0.29, 0.31)), (0.44, (0.36, 0.37, 0.39)), (0.47, (0.22, 0.23, 0.25)),
+        (0.485, (0.11, 0.12, 0.14)), (0.51, (0.15, 0.17, 0.21)), (0.56, (0.27, 0.3, 0.37)), (0.75, (0.43, 0.47, 0.56)),
+        (1.0, (0.62, 0.66, 0.75))]
+    stops = [(p, tuple(c)) for p, c in stops]
+    el[0].position, el[0].color = stops[0][0], stops[0][1] + (1,)
+    el[1].position, el[1].color = stops[-1][0], stops[-1][1] + (1,)
+    for pos, col in stops[1:-1]:
+        e = el.new(pos)
+        e.color = col + (1,)
+    nt.links.new(mr.outputs[0], rmp.inputs[0])
+    # the soft window toward the sun (the white highlight up left)
+    dot = nt.nodes.new("ShaderNodeVectorMath")
+    dot.operation = "DOT_PRODUCT"
+    nt.links.new(tc.outputs["Generated"], dot.inputs[0])
+    dot.inputs[1].default_value = tuple(to_sun)
+    win = nt.nodes.new("ShaderNodeMapRange")
+    win.interpolation_type = "SMOOTHSTEP"
+    win.inputs[1].default_value, win.inputs[2].default_value = STUDIO_WIN, 0.99
+    win.inputs[3].default_value, win.inputs[4].default_value = 0.0, STUDIO_WIN_POW
+    nt.links.new(dot.outputs["Value"], win.inputs[0])
+    add = nt.nodes.new("ShaderNodeMix")
+    add.data_type, add.blend_type = "RGBA", "ADD"
+    nt.links.new(win.outputs[0], add.inputs[0])
+    nt.links.new(rmp.outputs[0], add.inputs[6])
+    add.inputs[7].default_value = (1.0, 1.0, 1.0, 1)
+    # darker on the right (away from the sun), as Flash's metals
+    d2 = nt.nodes.new("ShaderNodeVectorMath")
+    d2.operation = "DOT_PRODUCT"
+    nt.links.new(tc.outputs["Generated"], d2.inputs[0])
+    d2.inputs[1].default_value = (-0.81, -0.59, 0.0)
+    side = nt.nodes.new("ShaderNodeMapRange")
+    side.inputs[1].default_value, side.inputs[2].default_value = -1.0, 1.0
+    side.inputs[3].default_value, side.inputs[4].default_value = STUDIO_SIDE, 1.25
+    nt.links.new(d2.outputs["Value"], side.inputs[0])
+    mul = nt.nodes.new("ShaderNodeMix")
+    mul.data_type, mul.blend_type = "RGBA", "MULTIPLY"
+    mul.inputs[0].default_value = 1.0
+    nt.links.new(add.outputs[2], mul.inputs[6])
+    nt.links.new(side.outputs[0], mul.inputs[7])
+    # soft clouds and patches in it, so the mirror shows reflections rather than a smooth grey
+    nz = nt.nodes.new("ShaderNodeTexNoise")
+    nz.inputs["Scale"].default_value = 1.6
+    nz.inputs["Detail"].default_value = 3.0
+    nz.inputs["Roughness"].default_value = 0.5
+    nt.links.new(tc.outputs["Generated"], nz.inputs["Vector"])
+    nzr = nt.nodes.new("ShaderNodeMapRange")
+    nzr.inputs[1].default_value, nzr.inputs[2].default_value = 0.3, 0.7
+    nzr.inputs[3].default_value, nzr.inputs[4].default_value = 1.0 - STUDIO_NOISE, 1.0 + STUDIO_NOISE
+    nt.links.new(nz.outputs["Fac"], nzr.inputs[0])
+    mul2 = nt.nodes.new("ShaderNodeMix")
+    mul2.data_type, mul2.blend_type = "RGBA", "MULTIPLY"
+    mul2.inputs[0].default_value = 1.0
+    nt.links.new(mul.outputs[2], mul2.inputs[6])
+    nt.links.new(nzr.outputs[0], mul2.inputs[7])
+    bg2 = nt.nodes.new("ShaderNodeBackground")
+    bg2.inputs[1].default_value = STUDIO_K
+    nt.links.new(mul2.outputs[2], bg2.inputs[0])
+    lp = nt.nodes.new("ShaderNodeLightPath")
+    mix = nt.nodes.new("ShaderNodeMixShader")
+    nt.links.new(lp.outputs["Is Glossy Ray"], mix.inputs[0])
+    nt.links.new(bg.outputs[0], mix.inputs[1])
+    nt.links.new(bg2.outputs[0], mix.inputs[2])
+    wo = next(n for n in nt.nodes if n.type == "OUTPUT_WORLD")
+    nt.links.new(mix.outputs[0], wo.inputs["Surface"])
+
+
+STUDIO_WIN = float(os.environ.get("PB_SWIN", 0.8))
+STUDIO_WIN_POW = float(os.environ.get("PB_SWINP", 0.5))
+STUDIO_SIDE = float(os.environ.get("PB_SSIDE", 0.6))
+STUDIO_K = float(os.environ.get("PB_SK", 1.0))
+STUDIO_NOISE = float(os.environ.get("PB_SNOISE", 0.25))
+STRIP = tuple(float(v) for v in os.environ.get("PB_STRIP", "120000,80,3,0,0,-45").split(","))   # energy, length,
+#                     width, bearing and height off the sun's direction (degrees), roll about its own axis (degrees)
+
+
 def setup(sc):
     cam_d = bpy.data.cameras.new("cam")
     cam_d.type = "ORTHO"
@@ -1614,6 +1716,27 @@ def setup(sc):
     nt.links.new(rmp.outputs[0], mul.inputs[6])
     nt.links.new(side.outputs[0], mul.inputs[7])
     nt.links.new(mul.outputs[2], bg.inputs[0])
+    studio(nt, bg, to_sun)
+    # a long strip window up left that only the polished metals see: Flash's white streak across the chrome
+    en, ln, wd, daz, de, roll = STRIP
+    if en > 0:
+        st_d = bpy.data.lights.new("strip", "AREA")
+        st_d.shape = "RECTANGLE"
+        st_d.size, st_d.size_y = wd, ln
+        st_d.energy = en
+        st = bpy.data.objects.new("strip", st_d)
+        link(st)
+        az0 = math.degrees(math.atan2(to_sun.y, to_sun.x)) + daz
+        el0 = math.degrees(math.asin(to_sun.z)) + de
+        d = Vector((math.cos(math.radians(el0)) * math.cos(math.radians(az0)),
+                    math.cos(math.radians(el0)) * math.sin(math.radians(az0)), math.sin(math.radians(el0))))
+        st.location = A + Vector((0, 0, 5)) + d * 30
+        st.rotation_euler = (-d).to_track_quat("-Z", "Y").to_euler()
+        st.rotation_euler.rotate_axis("Z", math.radians(roll))
+        st.visible_diffuse = False
+        st.visible_camera = False
+        st.visible_transmission = False
+        st.visible_volume_scatter = False
     # the ground: a shadow catcher
     bpy.ops.mesh.primitive_plane_add(size=40, location=(0, 0, GROUND))
     g = bpy.context.active_object
