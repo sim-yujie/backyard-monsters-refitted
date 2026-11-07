@@ -158,6 +158,8 @@ const ZOOM_STEP = 1.5;
 
 /** How often the request queue is drained. Faster than this just burns budget. */
 const PUMP_INTERVAL_SECONDS = 0.25;
+/** On a first open, the longest the portraits and town halls wait for the first zones. */
+const MARKER_PICTURES_WAIT_MS = 4_000;
 /** How often visible zones are checked for staleness. */
 const STALE_CHECK_INTERVAL_SECONDS = 5;
 /**
@@ -342,6 +344,9 @@ export class MapRoom2Scene implements Scene {
    * zone marks are done.
    */
   private centreZones: ZoneRef[] | null = null;
+  /** The portraits and town halls: started yet, and the fallback that starts them. */
+  private markerPicturesStarted = false;
+  private markerPicturesTimer: ReturnType<typeof setTimeout> | null = null;
   private framesMarked = 0;
   private zoneMarksDone = false;
 
@@ -365,10 +370,14 @@ export class MapRoom2Scene implements Scene {
     // Bakes the sprite atlas the chunk renderer draws from.
     timeSync("atlas-bake", () => this.renderer.attach(context.renderer));
     noteGpu((context.renderer as { gl?: WebGLRenderingContext }).gl);
-    // The tribe portraits and players' critters are a network fetch, so they
-    // are started here and not waited on: the map opens on tent glyphs and
-    // plain markers and swaps in the art the moment it lands.
-    void timeSpan("pictures", () => this.renderer.loadPictures());
+    // The pictures are a network fetch, so they are started and not waited on:
+    // the map opens on tent glyphs and plain markers and swaps in the art the
+    // moment it lands. The ground's pictures go now; the tribe portraits,
+    // players' critters and town halls wait for the first zones on a first
+    // open, so they do not crowd the getarea answers (`releaseMarkerPictures`).
+    void timeSpan("pictures", () => this.renderer.loadGroundPictures());
+    if (MapRenderer.markerPicturesKnown) this.releaseMarkerPictures();
+    else this.markerPicturesTimer = setTimeout(() => this.releaseMarkerPictures(), MARKER_PICTURES_WAIT_MS);
 
     this.camera.resize(context.width, context.height);
     this.camera.attach(context.canvas);
@@ -595,6 +604,8 @@ export class MapRoom2Scene implements Scene {
         selected: this.selected,
       });
     }
+    if (this.markerPicturesTimer !== null) clearTimeout(this.markerPicturesTimer);
+    this.markerPicturesTimer = null;
     this.input?.detach();
     this.input = null;
     this.camera.setPointerMap(null);
@@ -863,6 +874,8 @@ export class MapRoom2Scene implements Scene {
     } catch (caught) {
       noteInfo("ownYard", "failed");
       noteInfo("painted", false);
+      // No home cell to fetch round: nothing to wait for.
+      this.releaseMarkerPictures();
       if (caught instanceof ApiError && caught.isAuthFailure) {
         this.context?.goTo(SceneName.LOGIN);
         return;
@@ -921,8 +934,18 @@ export class MapRoom2Scene implements Scene {
       noteInfo("viewZones", inView.length);
     }
     if (!hasMark(MR2_CENTRE_ZONES) && this.centreZones.every(answered)) markOnce(MR2_CENTRE_ZONES);
+    if (hasMark(MR2_CENTRE_ZONES)) this.releaseMarkerPictures();
     if (!hasMark(MR2_VIEW_ZONES) && inView.every(answered)) markOnce(MR2_VIEW_ZONES);
     this.zoneMarksDone = hasMark(MR2_CENTRE_ZONES) && hasMark(MR2_VIEW_ZONES);
+  }
+
+  /** Starts the portraits and town halls (once): the centre zones are in, the yard failed, or the wait ran out. */
+  private releaseMarkerPictures(): void {
+    if (this.markerPicturesStarted || !this.context) return;
+    this.markerPicturesStarted = true;
+    if (this.markerPicturesTimer !== null) clearTimeout(this.markerPicturesTimer);
+    this.markerPicturesTimer = null;
+    void timeSpan("marker-pictures", () => this.renderer.loadMarkerPictures());
   }
 
   /** Puts the camera and the selection back where the map was left. */
