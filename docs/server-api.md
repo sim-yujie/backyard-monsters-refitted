@@ -1237,6 +1237,7 @@ a raid being fought (and a warning when the game had been closed).
 |---|---|---|---|---|---|
 | POST | `/api/:apiVersion/clienterrors` | apiVersion, verifyUserAuth, clientErrorLimiter (20/h per user; no logRequest) | JSON: `errors` (array of `{ kind, message, place, stack, count }`, first 10 read), `gameVersion`, `screen`; nothing is refused for its shape | `{ error: 0, kept }` | The web client's own error sender. Cleaned, grouped by kind and kept 30 days with the account number |
 | POST | `/api/:apiVersion/clienterrors/guest` | apiVersion, clientErrorLimiter (20/h per IP) | As above | As above | The same from the login screen; nothing about the sender is kept |
+| POST | `/api/:apiVersion/clienttiming` | apiVersion, verifyUserAuth, clientTimingLimiter (4/min per user) | JSON: `record` (one Map Room 2 open timing, `schemas/ClientTimingSchema.ts`; strict: unknown fields, long text, too many keys or out-of-range numbers are a 400), `gameVersion` (optional, 32 chars) | `{ error: 0 }`; 400 `{ reason: "invalidRequest" }` | The web client sends at most two a page load. One log line each, message `mr2-open-timing`, in `logs/bymr-*.jsonl`; no table (`docs/deploy.md`, "How to read Map Room 2 opening times") |
 | GET/POST | `/api/:apiVersion/admin/...` | apiVersion, adminOnly (sign-in + `ADMIN_USER_IDS`; everyone else gets a plain 404) | | | The owner's dashboard: see `docs/design/admin-dashboard-api.md` |
 
 ### Leaderboards

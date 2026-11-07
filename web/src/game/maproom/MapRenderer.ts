@@ -27,7 +27,7 @@ import { RangeOverlay } from "./RangeOverlay";
 import type { Sight } from "./Sight";
 import { TerrainRaster } from "./TerrainRaster";
 import { TribeAvatars } from "./tribeAvatars";
-import { MR2_PAINTED, markOnce } from "./openMarks";
+import { MR2_PAINTED, MR2_PAINTED_ART, MR2_PAINTED_CODE, MR2_PAINTED_FAILED, markOnce, timeSpan } from "./openMarks";
 import { classicLook } from "@/game/classicLook";
 import { onQualityChange, quality, type Quality } from "@/game/quality";
 import { FOG_COLOUR, setFogUnderCloud } from "./cellVisuals";
@@ -480,9 +480,13 @@ export class MapRenderer {
       const kit = this.paintedKit;
       if (!kit) {
         if (this.webGL2 && this.gl && this.renderer) this.paintedPreparing ??= this.preparePainted(this.renderer, this.gl);
+        else markOnce(MR2_PAINTED_FAILED);
         return false;
       }
-      if (!kit.programs.ground) return false;
+      if (!kit.programs.ground) {
+        markOnce(MR2_PAINTED_FAILED);
+        return false;
+      }
       this.buildPainted(kit.look, kit.programs);
     } else if (!on && this.painted !== null) {
       this.clouds?.destroy();
@@ -515,12 +519,16 @@ export class MapRenderer {
   private async preparePainted(renderer: Renderer, gl: WebGL2RenderingContext): Promise<void> {
     let kit: { look: PaintedLookModule; programs: PaintedPrograms };
     try {
-      const look = await import("./painted/paintedLook");
+      const look = await timeSpan("painted-code", () => import("./painted/paintedLook"));
+      markOnce(MR2_PAINTED_CODE);
       kit = {
         look,
-        programs: this.destroyed ? { ground: false, clouds: false, warmer: null } : await look.preparePrograms(renderer, gl),
+        programs: this.destroyed
+          ? { ground: false, clouds: false, warmer: null }
+          : await timeSpan("painted-first-programs", () => look.preparePrograms(renderer, gl)),
       };
     } catch (caught) {
+      markOnce(MR2_PAINTED_FAILED);
       // The code did not arrive (offline, a new release): the tiles stay; the next map open tries again.
       console.warn("The painted map could not be prepared; the map keeps its tiles.", caught);
       this.paintedPreparing = null;
@@ -529,7 +537,10 @@ export class MapRenderer {
     this.paintedPreparing = null;
     if (this.destroyed) return;
     this.paintedKit = kit;
-    if (!kit.programs.ground) console.warn("The painted map's shader did not compile here; the map keeps its tiles.");
+    if (!kit.programs.ground) {
+      markOnce(MR2_PAINTED_FAILED);
+      console.warn("The painted map's shader did not compile here; the map keeps its tiles.");
+    }
     if (this.paintedWanted) this.setPaintedMap(true);
   }
 
@@ -618,6 +629,7 @@ export class MapRenderer {
     // The rest of the programs once the art is in and has drawn (a few frames), or after a while
     // if it never comes: where programs compile one at a time (Firefox), a texture set up while
     // one compiles waits for it (`paintedLook.ts` warmRest).
+    void Promise.allSettled(loads).then(() => markOnce(MR2_PAINTED_ART));
     const settle = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
     const loaded = Promise.race([Promise.allSettled(loads).then(() => settle(ART_DRAWN_MS)), settle(ART_WAIT_MS)]);
     if (programs.warmer) look.warmRest(programs.warmer, loaded);
