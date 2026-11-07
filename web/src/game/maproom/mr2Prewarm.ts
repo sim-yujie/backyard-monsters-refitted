@@ -23,6 +23,12 @@ export interface PrewarmFacts {
   readonly painted: boolean;
   /** The renderer is WebGL2: the painted look needs it, and the warm-up compiles in it. */
   readonly webGL2: boolean;
+  /**
+   * The browser compiles shaders in the background (`KHR_parallel_shader_compile`: Chrome, Edge).
+   * Without it (Firefox) the warm-up froze the yard for seconds in the owner's test (7 Nov 2026,
+   * RTX 3070), so there is no warm-up at all and the map does its own work when it opens.
+   */
+  readonly parallelCompile: boolean;
   /** The local-storage switch (`MR2_PREWARM_KEY`) said off. */
   readonly switchedOff?: boolean;
 }
@@ -33,6 +39,7 @@ export const MR2_PREWARM_KEY = "bymr.mr2Prewarm";
 /** The Quality to warm for, or null for no warm-up at all. */
 export const prewarmLevel = (facts: PrewarmFacts): Quality | null => {
   if (facts.switchedOff || facts.classic || !facts.mapRoom2 || !facts.painted || !facts.webGL2) return null;
+  if (!facts.parallelCompile) return null;
   // Low is the player's word that the machine or the line is weak: the map pays its own way there.
   if (facts.level === "low") return null;
   return facts.level;

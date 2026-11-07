@@ -2450,20 +2450,47 @@ export class YardScene implements Scene {
       mapRoom2: store.kind === "outpost" || (store.kind === "main" && mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2),
       painted: paintedMapOn({ serverFlag: store.save.flags?.["mr2painted"] }),
       webGL2: (context.renderer as { context?: { webGLVersion?: number } }).context?.webGLVersion === 2,
+      parallelCompile: Boolean((context.renderer as { gl?: WebGL2RenderingContext }).gl?.getExtension("KHR_parallel_shader_compile")),
       switchedOff: prewarmSwitchedOff(),
     });
-    if (prewarmLevel(facts()) === null) return;
-    const quiet = (): boolean =>
-      this.context === context && this.store === store && store.settled && document.visibilityState === "visible";
+    // What the warm-up is waiting on, readable in the console as `__mr2Prewarm` (owner's Firefox
+    // test, 7 Nov 2026: it never started and nothing said why).
+    const diag: { facts: PrewarmFacts; state: string; busy: string | null; busySince: number | null; lastDownloadAt: number | null } = {
+      facts: facts(),
+      state: "waiting",
+      busy: null,
+      busySince: null,
+      lastDownloadAt: null,
+    };
+    (globalThis as { __mr2Prewarm?: unknown }).__mr2Prewarm = diag;
+    if (prewarmLevel(diag.facts) === null) {
+      diag.state = "skipped";
+      return;
+    }
+    const quiet = (): boolean => {
+      const busy =
+        this.context !== context || this.store !== store
+          ? "left the yard"
+          : !store.settled
+            ? "yard request in flight or waiting"
+            : document.visibilityState !== "visible"
+              ? "page hidden"
+              : null;
+      if (busy !== diag.busy) diag.busySince = busy === null ? null : Math.round(performance.now());
+      diag.busy = busy;
+      return busy === null;
+    };
     const downloads = watchDownloads();
     const stopIdle = watchIdle({
       settled: quiet,
-      lastDownloadAt: downloads.lastAt,
+      lastDownloadAt: () => (diag.lastDownloadAt = downloads.lastAt()),
       now: () => performance.now(),
       run: () => {
         downloads.stop();
         // Asked again: the player may have changed Quality or the look while waiting.
-        const level = prewarmLevel(facts());
+        diag.facts = facts();
+        const level = prewarmLevel(diag.facts);
+        diag.state = level === null ? "skipped" : "started";
         if (level === null) return;
         // The map wants the same pictures, so opening it does not stop the fetching.
         void runPrewarm(context.renderer, level, () => quiet() || currentScreenName() === SceneName.MAP_ROOM_2);

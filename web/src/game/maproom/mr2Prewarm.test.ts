@@ -22,6 +22,7 @@ const facts = (extra: Partial<PrewarmFacts> = {}): PrewarmFacts => ({
   mapRoom2: true,
   painted: true,
   webGL2: true,
+  parallelCompile: true,
   ...extra,
 });
 
@@ -36,6 +37,8 @@ describe("prewarmLevel: whether, and at which Quality, to warm up", () => {
     expect(prewarmLevel(facts({ classic: true }))).toBeNull();
     expect(prewarmLevel(facts({ painted: false }))).toBeNull();
     expect(prewarmLevel(facts({ webGL2: false }))).toBeNull();
+    // Firefox: no background compile, and the warm-up froze the yard (owner's test, 7 Nov 2026).
+    expect(prewarmLevel(facts({ parallelCompile: false }))).toBeNull();
     expect(prewarmLevel(facts({ mapRoom2: false }))).toBeNull();
   });
 
