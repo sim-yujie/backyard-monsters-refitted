@@ -590,6 +590,22 @@ export const clientErrorLimiter = spamLimiter("client-errors", SPAM_LIMITS.clien
 });
 
 /**
+ * Map Room 2 open timings (`controllers/maproom/clientTiming.ts`): 4 a minute
+ * per account. The client sends at most two a page load, so only a reload
+ * loop or a script meets this.
+ */
+export const clientTimingLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 4,
+  prefixKey: "client-timing",
+  keyGenerator: byUser("client-timing"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many timing reports.", reason: "rateLimited" };
+  },
+});
+
+/**
  * The game's announcement reads and "Got it" (`controllers/announcements/routes.ts`):
  * 30 a minute per user. The client reads them once a yard visit and from the
  * Account menu.
