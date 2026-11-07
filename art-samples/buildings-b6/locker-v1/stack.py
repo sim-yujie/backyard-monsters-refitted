@@ -96,11 +96,12 @@ L3_CUT = (30.0, 12.0, 1.2)                      # the opening's plane: its norma
                                                  # by this much, its distance from the middle
 L3_CUT2 = (200.0, 100.0, -2.4)                          # the dome's cut face (as L3_CUT); None: one plane cut only
 L3_CUT_R, L4_CUT_R = 2.5, 2.5                    # the corner between the two cuts rounded to this radius
-L3_BARREL = (4.8, 2.6, 0.0)                       # length, core radius, its middle moved up its axle
-L4_BARREL = (5.0, 2.7, 0.0)                      # level 4: a little bigger
-L3_BARREL_PX, L4_BARREL_PX = (-8.0, -35.0, 2.4), (-5.0, -31.0, 1.6)               # (Flash px x, y, depth behind the egg's middle) of the barrel's middle
+L3_BARREL = (5.4, 2.5, 0.0)                       # length, core radius, its middle moved up its axle
+L4_BARREL = (4.6, 2.7, 0.0)                      # level 4: a little bigger
+L3_BARREL_PX, L4_BARREL_PX = (-8.0, -30.0, 2.0), (-3.0, -27.0, 1.4)               # (Flash px x, y, depth behind the egg's middle) of the barrel's middle
 L3_BARREL_SINK = -1.0                            # the barrel's middle: the opening's middle moved along its normal
-L3_BARREL_AXIS = (57.0, 30.0)                    # its axle: toward this bearing, rising by this much
+L3_BARREL_AXIS = (45.0, 0.0)                     # its axle: toward this bearing, rising by this much (owner 7 Nov:
+#                                                 level and straight across the screen, not diagonal; bearing 45 = screen horizontal)
 L3_BARREL_ROWS, L3_BARREL_COLS = 14, 6                 # blocks in every other cell
 L3_BLOCK_FILL = (0.8, 0.8)                      # how much of its cell each block fills (black gaps between)
 L3_LOW = 0.45                                    # every other block this high and darker (0: none, black there)

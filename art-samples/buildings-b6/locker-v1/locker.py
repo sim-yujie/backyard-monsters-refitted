@@ -1885,7 +1885,7 @@ def setup(sc):
 
 
 # levels 3-4: Flash px of the dome point that carries the broad white highlight, the softbox's size and brightness
-SOFTBOX = {3: (6.0, -32.0, 20.0, 2.4), 4: (16.0, -24.0, 20.0, 2.4)}
+SOFTBOX = {3: (6.0, -32.0, 28.0, 2.6), 4: (16.0, -24.0, 28.0, 2.6)}
 if os.environ.get("PB_BOX"):
     SOFTBOX[L] = tuple(float(v) for v in os.environ["PB_BOX"].split(","))
 
@@ -1918,8 +1918,28 @@ def softbox():
         if nd.type != "OUTPUT_MATERIAL":
             nt.nodes.remove(nd)
     em = nt.nodes.new("ShaderNodeEmission")
+    # a round card, bright in the middle and fading to its rim, so the highlight is soft like Flash's (a flat square
+    # card read as a hard white patch)
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    mp = nt.nodes.new("ShaderNodeMapping")
+    mp.inputs["Scale"].default_value = (2.0 / size, 2.0 / size, 1.0)
+    nt.links.new(tc.outputs["Object"], mp.inputs["Vector"])
+    gr = nt.nodes.new("ShaderNodeTexGradient")
+    gr.gradient_type = "SPHERICAL"
+    nt.links.new(mp.outputs["Vector"], gr.inputs["Vector"])
+    fall = nt.nodes.new("ShaderNodeMapRange")
+    fall.interpolation_type = "SMOOTHSTEP"
+    fall.inputs[1].default_value, fall.inputs[2].default_value = 0.0, 0.7
+    fall.inputs[3].default_value, fall.inputs[4].default_value = 0.0, 1.0
+    nt.links.new(gr.outputs["Fac"], fall.inputs[0])
     em.inputs["Strength"].default_value = k
-    nt.links.new(em.outputs[0], next(nd for nd in nt.nodes if nd.type == "OUTPUT_MATERIAL").inputs["Surface"])
+    # see-through where it fades, so the sky still shows round it (an opaque card's dark rim read as a black patch)
+    tr = nt.nodes.new("ShaderNodeBsdfTransparent")
+    mx = nt.nodes.new("ShaderNodeMixShader")
+    nt.links.new(fall.outputs[0], mx.inputs[0])
+    nt.links.new(tr.outputs[0], mx.inputs[1])
+    nt.links.new(em.outputs[0], mx.inputs[2])
+    nt.links.new(mx.outputs[0], next(nd for nd in nt.nodes if nd.type == "OUTPUT_MATERIAL").inputs["Surface"])
     b.data.materials.append(m)
     b.visible_camera = b.visible_diffuse = b.visible_shadow = b.visible_transmission = False
     b.visible_volume_scatter = False
