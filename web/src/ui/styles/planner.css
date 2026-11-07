@@ -184,6 +184,8 @@
   background: var(--colour-accent);
   color: var(--colour-accent-text);
   font-size: var(--text-xs);
+  /* Its own line: inside a `.btn` it would inherit the button's fixed line (22 px) and make the button 1.25 px taller. */
+  line-height: 1.45;
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
