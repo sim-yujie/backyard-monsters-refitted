@@ -812,7 +812,7 @@ def ball(name, c, r, mat, cut=None, inner=None, segs=64, wall=0.14):
     return ob
 
 
-def key(name, e_at, n, ring_at, ring_r, wire, phase, bow=None, slot=True, collar=0.25, tail=0.4):
+def key(name, e_at, n, ring_at, ring_r, wire, phase, bow=None, slot=True, collar=0.25, tail=0.4, squash=1.0):
     """The wind-up key: out of a dark slot at e_at along the shaft toward ring_at, its bow (a ring, or bow(parent)
     builds it in the local XZ plane round local (0, 0, len + ...)). Turns about the shaft (local Z). slot=False: no
     slot (the shaft comes up out of the mechanism inside the shell); collar: where the collar sits along the shaft;
@@ -834,7 +834,8 @@ def key(name, e_at, n, ring_at, ring_r, wire, phase, bow=None, slot=True, collar
         bow(hub, ln)
     else:
         rr = ring_r - wire * 0.5
-        tube(name + "ring", [(rr * math.sin(2 * math.pi * i / 48), 0, ln + ring_r + rr * -math.cos(2 * math.pi * i / 48))
+        # squash < 1: an oval ring, shorter along the shaft (Flash level 1's ring is 22 wide x 16 tall), its foot on the shaft's end
+        tube(name + "ring", [(rr * math.sin(2 * math.pi * i / 48), 0, ln + rr * squash * (1 - math.cos(2 * math.pi * i / 48)))
                              for i in range(48)], wire * 1.15, M["gold"], parent=hub, cyclic=True)
     return e, hub
 
@@ -926,7 +927,7 @@ def level1():
     ball("ball", c, r, M["chrome"])
     q, n = on_ball(c, r, *S.L1_KEY_AT)
     ring = toward(q, n, *S.L1_KEY_RING)
-    key("key", q, n, ring, S.L1_KEY_RING_R, 0.1, S.KEY0[1])
+    key("key", q, n, ring, S.L1_KEY_RING_R, 0.1, S.KEY0[1], squash=S.L1_KEY_SQUASH)
     panel("box", c, r, *S.L1_BOX_AT, "box", size=2.4, spin=S.L1_BOX_SPIN, lean=S.L1_BOX_LEAN)
 
 
@@ -1771,7 +1772,7 @@ def setup(sc):
 # levels 3-4: Flash px of the dome point that carries the broad white highlight, the softbox's size and brightness
 # Flash px of the highlight's middle on the shell, the card's size (one number: round; (long, thin): a strip, Flash's
 # sharp white streak at levels 1-2), its brightness, and (strips) the card's roll about its own normal in degrees
-SOFTBOX = {1: (-8.0, -12.0, (34.0, 2.2), 6.0, 20.0), 2: (-25.0, -25.0, (30.0, 2.4), 6.0, 20.0),
+SOFTBOX = {1: (-8.0, -12.0, (34.0, 1.3), 9.0, 20.0), 2: (-25.0, -25.0, (30.0, 2.4), 6.0, 20.0),
            3: (6.0, -32.0, 28.0, 2.6), 4: (16.0, -24.0, 28.0, 2.6)}
 if os.environ.get("PB_BOX"):
     SOFTBOX[L] = tuple(float(v) for v in os.environ["PB_BOX"].split(","))
