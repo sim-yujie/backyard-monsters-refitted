@@ -2581,6 +2581,52 @@ tbody th {
   background: var(--good-soft);
 }
 
+.chat-line.is-mod {
+  background: var(--accent-soft);
+}
+
+/* On a tinted row the soft chip would vanish into the tint: make it solid. */
+.chat-line.is-gm .chat-gm {
+  background: var(--good-text);
+  color: var(--accent-ink);
+}
+
+.chat-line.is-mod .chat-gm {
+  background: var(--accent-text);
+  color: var(--accent-ink);
+}
+
+/* ---- Moderators ---- */
+
+.moderators {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.moderator-add__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  max-width: 28rem;
+}
+
+.moderator-add__row .field-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.moderator-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 12px 16px;
+}
+
+.moderator-row .button {
+  gap: 6px;
+}
+
 .chat-time {
   color: var(--ink-3);
   font-size: 0.8125rem;

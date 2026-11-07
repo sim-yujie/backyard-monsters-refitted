@@ -51,7 +51,20 @@ import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { Camera } from "@/game/Camera";
 import { setMapFocus } from "@/game/maproom/mapFocus";
-import { MapRoomChoice, mapRoomOf, takePrimedOwnYard } from "@/game/maproom/mapRoute";
+import { MapRoomChoice, mapRoomOf, primeFromYard, takePrimedOwnYard } from "@/game/maproom/mapRoute";
+import {
+  prewarmLevel,
+  prewarmStarted,
+  prewarmSwitchedOff,
+  runPrewarm,
+  watchDownloads,
+  watchIdle,
+  type PrewarmFacts,
+} from "@/game/maproom/mr2Prewarm";
+import { paintedMapOn } from "@/game/maproom/painted/paintedSwitch";
+import { classicLook } from "@/game/classicLook";
+import { quality } from "@/game/quality";
+import { currentScreenName } from "@/game/bugReport/screenCapture";
 import { finishedMonstersJobs } from "@/game/monsters/finishedJobs";
 import { onJuiced } from "@/game/monsters/juiceNews";
 import { openInfernoMap } from "@/game/inferno/tribeEntry";
@@ -428,6 +441,8 @@ export class YardScene implements Scene {
   private unsubscribeStore: (() => void) | null = null;
   /** Stops showing juices in the yard (`juiceNews.ts`). */
   private unsubscribeJuice: (() => void) | null = null;
+  /** Stops waiting for the yard to go quiet before Map Room 2's warm-up (`mr2Prewarm.ts`). */
+  private stopMr2Prewarm: (() => void) | null = null;
   /** What the panel and the HUD are handed on the own yard. */
   private binding: YardUiBinding | null = null;
   /** The tab came back while the planner was open; refresh once it closes. */
@@ -965,6 +980,8 @@ export class YardScene implements Scene {
       }
       // Which look the player uses, for the owner's dashboard (owner 4 Nov 2026): once per load.
       if (store?.kind === "main") reportLook();
+      // Map Room 2's code, shaders and pictures, once the yard has gone quiet (`mr2Prewarm.ts`).
+      if (store && !tribe) this.watchMr2Prewarm(store, context);
 
       // The planner's entry rule: the own yard's, never a visit's. The
       // Inferno yard has one too (owner decision 2026-10-29), unlike Flash's.
@@ -1922,6 +1939,8 @@ export class YardScene implements Scene {
     }
     const choice = mapRoomOf(store.save);
     if (choice !== MapRoomChoice.NONE) {
+      // Map Room 2 opens on the yard as held here instead of loading it again (when settled).
+      if (choice === MapRoomChoice.MAP_ROOM_2 && !this.tribe) primeFromYard(store);
       context.goTo(sceneForMap(choice));
       return;
     }
@@ -2411,6 +2430,78 @@ export class YardScene implements Scene {
     this.store?.mergeWrite({ buildingdata, resources, ...(mushrooms ? { mushrooms } : {}) });
   }
 
+  /* ── Map Room 2, ahead ──────────────────────────────────────────────── */
+
+  /**
+   * Gets Map Room 2 ready while the player is idle here (MR2 open speed, 7 Nov 2026): once the
+   * yard has been settled (no request of its own in flight or waiting, no download landing, the
+   * page on screen) for a few seconds, the map's code is fetched, its shaders compiled and its
+   * pictures fetched one at a time, stopping between pictures whenever the yard is busy again.
+   * Once a page, never on Low Quality or in Classic, and only for a player whose map is Map Room 2
+   * with the painted look (`mr2Prewarm.ts` decides).
+   */
+  private watchMr2Prewarm(store: YardStore, context: SceneContext): void {
+    this.stopMr2Prewarm?.();
+    this.stopMr2Prewarm = null;
+    if (prewarmStarted()) return;
+    const facts = (): PrewarmFacts => ({
+      level: quality(),
+      classic: classicLook(),
+      mapRoom2: store.kind === "outpost" || (store.kind === "main" && mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2),
+      painted: paintedMapOn({ serverFlag: store.save.flags?.["mr2painted"] }),
+      webGL2: (context.renderer as { context?: { webGLVersion?: number } }).context?.webGLVersion === 2,
+      parallelCompile: Boolean((context.renderer as { gl?: WebGL2RenderingContext }).gl?.getExtension("KHR_parallel_shader_compile")),
+      switchedOff: prewarmSwitchedOff(),
+    });
+    // What the warm-up is waiting on, readable in the console as `__mr2Prewarm` (owner's Firefox
+    // test, 7 Nov 2026: it never started and nothing said why).
+    const diag: { facts: PrewarmFacts; state: string; busy: string | null; busySince: number | null; lastDownloadAt: number | null } = {
+      facts: facts(),
+      state: "waiting",
+      busy: null,
+      busySince: null,
+      lastDownloadAt: null,
+    };
+    (globalThis as { __mr2Prewarm?: unknown }).__mr2Prewarm = diag;
+    if (prewarmLevel(diag.facts) === null) {
+      diag.state = "skipped";
+      return;
+    }
+    const quiet = (): boolean => {
+      const busy =
+        this.context !== context || this.store !== store
+          ? "left the yard"
+          : !store.settled
+            ? "yard request in flight or waiting"
+            : document.visibilityState !== "visible"
+              ? "page hidden"
+              : null;
+      if (busy !== diag.busy) diag.busySince = busy === null ? null : Math.round(performance.now());
+      diag.busy = busy;
+      return busy === null;
+    };
+    const downloads = watchDownloads();
+    const stopIdle = watchIdle({
+      settled: quiet,
+      lastDownloadAt: () => (diag.lastDownloadAt = downloads.lastAt()),
+      now: () => performance.now(),
+      run: () => {
+        downloads.stop();
+        // Asked again: the player may have changed Quality or the look while waiting.
+        diag.facts = facts();
+        const level = prewarmLevel(diag.facts);
+        diag.state = level === null ? "skipped" : "started";
+        if (level === null) return;
+        // The map wants the same pictures, so opening it does not stop the fetching.
+        void runPrewarm(context.renderer, level, () => quiet() || currentScreenName() === SceneName.MAP_ROOM_2);
+      },
+    });
+    this.stopMr2Prewarm = () => {
+      stopIdle();
+      downloads.stop();
+    };
+  }
+
   /* ── The store ──────────────────────────────────────────────────────── */
 
   /**
@@ -2818,6 +2909,8 @@ export class YardScene implements Scene {
     this.unsubscribeStore = null;
     this.unsubscribeJuice?.();
     this.unsubscribeJuice = null;
+    this.stopMr2Prewarm?.();
+    this.stopMr2Prewarm = null;
     this.store?.destroy();
     this.store = null;
     this.binding = null;

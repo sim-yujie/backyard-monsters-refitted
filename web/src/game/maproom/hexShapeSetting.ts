@@ -1,5 +1,16 @@
-import { fetchMapHexShape } from "@/api/account";
+import { fetchMapSettings } from "@/api/account";
 import type { HexShape } from "@/game/HexGrid";
+import { noteTiltAnswer } from "./tiltSetting";
+
+/**
+ * The shape from the account's settings, keeping the tilt answer that came in
+ * the same response, so the map's first open asks the account once, not twice.
+ */
+const fetchShapeAndTilt = async (): Promise<HexShape> => {
+  const { hexShape, tilt } = await fetchMapSettings();
+  noteTiltAnswer(tilt);
+  return hexShape;
+};
 
 /**
  * The world's hex shape as the server names it (`MR2_HEX_SHAPE`, MR2 look
@@ -13,7 +24,7 @@ import type { HexShape } from "@/game/HexGrid";
  */
 let known: HexShape | null = null;
 
-export const loadHexShape = async (fetch: () => Promise<HexShape> = fetchMapHexShape): Promise<HexShape> => {
+export const loadHexShape = async (fetch: () => Promise<HexShape> = fetchShapeAndTilt): Promise<HexShape> => {
   if (known) return known;
   try {
     known = await fetch();

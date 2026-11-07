@@ -57,6 +57,9 @@ const SWEEP_INTERVAL_MS = 2_000;
 const ART_DRAWN_MS = 500;
 const ART_WAIT_MS = 15_000;
 
+/** The portraits and town halls arrived once this page (`MapRenderer.loadMarkerPictures`). */
+let markerPicturesArrived = false;
+
 /**
  * Draws the map.
  *
@@ -261,13 +264,35 @@ export class MapRenderer {
    * screenful, and only ever on the first visit to the map.
    */
   async loadPictures(): Promise<void> {
+    await Promise.all([this.loadGroundPictures(), this.loadMarkerPictures()]);
+  }
+
+  /** The ground's own pictures and the small badges: wanted from the first frame. */
+  async loadGroundPictures(): Promise<void> {
     await Promise.all([
-      this.avatars.load().then((ok) => ok && this.rebuildAll()),
-      this.buildings.load().then((ok) => ok && this.rebuildAll()),
       this.groundArt.load().then((ok) => ok && this.rebuildAll()),
       this.constructionBadge.load().then((ok) => ok && this.rebuildAll()),
       classicLook() ? this.idleHelper.load().then((ok) => ok && this.rebuildAll()) : null,
     ]);
+  }
+
+  /**
+   * The players' and tribes' portraits and the town halls: the scene starts them once the map's
+   * first zones are in on a first open (MR2 open speed, 7 Nov 2026), so they do not crowd the
+   * `getarea` answers on a slow line. Idempotent.
+   */
+  async loadMarkerPictures(): Promise<void> {
+    const rebuildIf = (ok: boolean): boolean => {
+      if (ok) this.rebuildAll();
+      return ok;
+    };
+    const [avatars, buildings] = await Promise.all([this.avatars.load().then(rebuildIf), this.buildings.load().then(rebuildIf)]);
+    if (avatars && buildings) markerPicturesArrived = true;
+  }
+
+  /** Whether the marker pictures arrived on an earlier open this page, so they come from memory. */
+  static get markerPicturesKnown(): boolean {
+    return markerPicturesArrived;
   }
 
   private rebuildAll(): void {

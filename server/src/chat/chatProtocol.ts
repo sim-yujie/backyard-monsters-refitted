@@ -55,6 +55,8 @@ export interface HistoryEntry {
   ts: number;
   /** Said by the game team (an `ADMIN_USER_IDS` account): the chat box marks it. Set by the server only. */
   gm?: boolean;
+  /** Said by a chat moderator (`chatModerators.ts`), never with `gm`: the chat box marks it. Set by the server only. */
+  mod?: boolean;
 }
 
 export interface IgnoreEntry {
@@ -77,7 +79,7 @@ export type ServerMessage =
   | { type: ServerMessageType.AuthOk; userId: number; displayName: string }
   | { type: ServerMessageType.AuthFail; reason: AuthFailReason }
   | { type: ServerMessageType.Joined; channel: string; history: HistoryEntry[] }
-  | { type: ServerMessageType.Message; channel: string; messageType: AllianceMessageType; userId: number; displayName: string; picSquare: string | null; allianceImage: number | null; body: string; ts: number; gm?: boolean }
+  | { type: ServerMessageType.Message; channel: string; messageType: AllianceMessageType; userId: number; displayName: string; picSquare: string | null; allianceImage: number | null; body: string; ts: number; gm?: boolean; mod?: boolean }
   | { type: ServerMessageType.UserEnter; channel: string; userId: number; displayName: string }
   | { type: ServerMessageType.UserExit; channel: string; userId: number }
   | { type: ServerMessageType.NameUpdate; channel: string; userId: number; displayName: string }
