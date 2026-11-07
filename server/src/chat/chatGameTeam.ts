@@ -1,4 +1,5 @@
 import { isAdminUser } from "../config/AdminConfig.js";
+import { isChatModerator } from "./chatModerators.js";
 import { ErrorCode, send, ServerMessageType, type HistoryEntry } from "./chatProtocol.js";
 import type { ChatClient } from "./chatState.js";
 
@@ -22,9 +23,14 @@ export const refuseIfMuted = (client: ChatClient, now: number): boolean => {
   return true;
 };
 
-/** The entries with the game team's mark on exactly the lines by `ADMIN_USER_IDS` accounts. */
+/**
+ * The entries with the game team's mark on exactly the lines by
+ * `ADMIN_USER_IDS` accounts, and the moderators' mark on exactly the lines by
+ * accounts on the moderators list (`chatModerators.ts`); GM wins over Mod.
+ */
 export const markGameTeam = (entries: readonly HistoryEntry[]): HistoryEntry[] =>
   entries.map((entry) => {
-    const { gm: _claimed, ...rest } = entry;
-    return isAdminUser(entry.userId) ? { ...rest, gm: true } : rest;
+    const { gm: _claimed, mod: _claimedMod, ...rest } = entry;
+    if (isAdminUser(entry.userId)) return { ...rest, gm: true };
+    return isChatModerator(entry.userId) ? { ...rest, mod: true } : rest;
   });

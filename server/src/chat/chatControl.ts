@@ -28,7 +28,8 @@ export type ChatControlMessage =
       userId: number;
       /** No lines before this (ms); 0 lifts the mute. */
       until: number;
-    };
+    }
+  | { type: ChatControlType.Moderators };
 
 /**
  * Forces a player out of their alliance chat channel.
@@ -75,8 +76,22 @@ export const disconnectCountryChat = async (userId: number, keep: string | null)
  *
  * @param {ChatControlMessage} message - A Kick, Notice or Mute.
  */
-export const publishModeration = async (message: ChatControlMessage) => {
+export const publishModeration = async (message: Exclude<ChatControlMessage, { type: ChatControlType.Moderators }>) => {
   await redis
     .publish(CHAT_CONTROL_CHANNEL, JSON.stringify(message))
     .catch((err) => logger.error(`Chat control publish failed for user ${message.userId}: ${err}`));
+};
+
+/**
+ * Tells the chat gateway the owner changed the chat moderators list
+ * (`services/admin/chatModerators.ts`), so the next line and history read
+ * use the new list. The gateway also reads it every minute, in case this
+ * message is lost.
+ */
+export const publishModeratorsChanged = async () => {
+  const message: ChatControlMessage = { type: ChatControlType.Moderators };
+
+  await redis
+    .publish(CHAT_CONTROL_CHANNEL, JSON.stringify(message))
+    .catch((err) => logger.error(`Chat control publish failed for the moderators list: ${err}`));
 };

@@ -786,3 +786,25 @@ export const awardCaseReporters = (
     failed: { userid: number; reason: AwardFailure }[];
   }>
 > => adminPost(`${ADMIN}/chatcases/${id}/award`, { awards });
+
+/**
+ * Chat moderators (server `services/admin/chatModerators.ts`): players whose
+ * chat lines show a blue [Mod] badge. Nothing more: no dashboard, no powers.
+ */
+export interface ModeratorView {
+  userid: number;
+  username: string;
+  addedBy: number;
+  addedByName: string | null;
+  addedAt: string;
+}
+
+export const fetchModerators = (): Promise<Envelope<{ moderators: ModeratorView[] }>> =>
+  adminGet(`${ADMIN}/moderators`);
+
+/** Adds a player by name or account number (`2503` or `#2503`). */
+export const addModerator = (player: string): Promise<Envelope<{ moderator: ModeratorView }>> =>
+  adminPost(`${ADMIN}/moderators`, { player });
+
+export const removeModerator = (userid: number): Promise<Envelope<{ removed: number }>> =>
+  adminPost(`${ADMIN}/moderators/${userid}/remove`, {});

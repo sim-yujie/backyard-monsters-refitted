@@ -275,8 +275,8 @@ export class ChatPanel {
       case "message": {
         const room = this.rooms.find((r) => r.channel === message.channel);
         if (!room) return;
-        const { userId, displayName, body, ts, gm } = message;
-        room.lines = [...room.lines, { userId, displayName, body, ts, ...(gm && { gm }) }].slice(-MAX_LINES);
+        const { userId, displayName, body, ts, gm, mod } = message;
+        room.lines = [...room.lines, { userId, displayName, body, ts, ...(gm && { gm }), ...(mod && { mod }) }].slice(-MAX_LINES);
         if (room.channel !== this.current) room.unread += 1;
         this.render();
         return;
@@ -382,12 +382,13 @@ export class ChatPanel {
     const { level, name } = splitName(line.displayName);
     return h(
       "li",
-      { class: line.gm ? "chat-line is-gm" : "chat-line" },
+      { class: line.gm ? "chat-line is-gm" : line.mod ? "chat-line is-mod" : "chat-line" },
       h("time", { class: "chat-time", attrs: { datetime: new Date(line.ts).toISOString() } }, clock(line.ts)),
       h(
         "span",
         { class: "chat-body" },
         line.gm ? h("span", { class: "chip chip-good chat-gm", attrs: { title: "Game team" } }, "GM") : null,
+        !line.gm && line.mod ? h("span", { class: "chip chip-info chat-gm chat-mod", attrs: { title: "Moderator" } }, "Mod") : null,
         level ? h("span", { class: "chat-level" }, level) : null,
         h(
           "button",

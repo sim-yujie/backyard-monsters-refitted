@@ -41,6 +41,8 @@ export interface ChatLineWire {
   ts: number;
   /** Said by the game team: the server sets it, only for the game team's accounts. */
   gm?: boolean;
+  /** Said by a chat moderator: the server sets it, only for accounts on the dashboard's Moderators list (never with `gm`). */
+  mod?: boolean;
 }
 
 /** The error codes the chat server answers with. */
