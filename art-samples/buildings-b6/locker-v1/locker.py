@@ -926,7 +926,7 @@ def barrel(name, c, axis, r, length, rows, cols, parent=None, fill=None, mat=Non
         # The ends a little rounded off (taper) so the drum sits inside the egg. The pattern repeats every two rows,
         # so the loop's two-row turn is seamless.
         bh, taper, hj = drum
-        core_ob.hide_render = True
+        bpy.data.objects.remove(core_ob)       # the lathe below is the core
 
         def rad(z):
             zz = 2 * z / length
