@@ -699,6 +699,8 @@ def materials():
     M["block34"] = shiny("block34", (214, 140, 26), rough=0.26, metal=0.85, wear=(240, 186, 70), scale=2.0, dirt=0.15)
     M["block34lo"] = shiny("block34lo", (150, 88, 14), rough=0.3, metal=0.85, wear=(196, 128, 36), scale=2.0,
                            dirt=0.2)
+    # levels 3-4: the cog behind the drum, darker gold than the blocks (Flash)
+    M["cog34"] = shiny("cog34", (128, 68, 12), rough=0.3, metal=0.85, wear=(214, 140, 44), scale=1.5, dirt=0.3)
     M["core34"] = shiny("core34", (46, 26, 8), rough=0.35, metal=0.75, wear=(70, 40, 12), scale=3, dirt=0.3)
     return M
 
@@ -855,16 +857,18 @@ def panel(name, c, r, sx, sy, kind, size=2.3, spin=0.0, lean=0.0, thick=0.14):
     box(name + "plate", (size, size, thick), (0, 0, 0), M["steel"], parent=e, bevel=0.04)
     corner = kind in ("port", "vent")
     if kind in ("port", "vent"):   # the plate sits on a gold block that shows past two of its edges, as Flash
-        box(name + "goldback", (size * 1.02, size * 1.02, sag + thick * 0.9), (0.3, 0.3, -sag - 0.05), M["gold"],
+        # level 4's vents: a grey frame round the gold bars, as Flash (locker-3d-14), not gold
+        trim = M["nut"] if kind == "vent" else M["gold"]
+        box(name + "goldback", (size * 1.02, size * 1.02, sag + thick * 0.9), (0.3, 0.3, -sag - 0.05), trim,
             parent=e, bevel=0.06)
     if corner:               # Flash's gold corner trim: an L of gold over each corner of the plate
         arm, wd, ht = size * 0.3, 0.2, 0.09
         for i, (u, v) in enumerate(((-1, -1), (1, -1), (1, 1), (-1, 1))):
             box(f"{name}cnA{i}", (arm, wd, ht), (u * (h - arm / 2 + 0.02), v * (h - wd / 2 + 0.02), thick - 0.02),
-                M["gold"], parent=e, bevel=0.03)
+                M["steel"] if kind == "vent" else M["gold"], parent=e, bevel=0.03)
             box(f"{name}cnB{i}", (wd, arm, ht), (u * (h - wd / 2 + 0.02), v * (h - arm / 2 + 0.02), thick - 0.02),
-                M["gold"], parent=e, bevel=0.03)
-    if kind not in ("port", "vent"):
+                M["steel"] if kind == "vent" else M["gold"], parent=e, bevel=0.03)
+    if kind not in ("port", "vent", "strip"):     # "strip" (level 3's left plate, Flash): plain grey, no gold
         # gold brackets: an L along the plate's left (-X) and top (+Y) edges
         box(name + "brkL", (0.3, size * 0.96, thick + 0.22), (-h + 0.2, 0, 0.0), M["gold"], parent=e, bevel=0.05)
         box(name + "brkT", (size * 0.84, 0.3, thick + 0.22), (0.05, h - 0.2, 0.0), M["gold"], parent=e, bevel=0.05)
@@ -877,6 +881,8 @@ def panel(name, c, r, sx, sy, kind, size=2.3, spin=0.0, lean=0.0, thick=0.14):
         cyl(name + "port", pr, 0.02, (0.08, 0.04, thick - 0.03), M["hole"], parent=e, verts=32, bevel=0.0)
         lathe(name + "lens", [(0.0, -0.05), (pr * 0.9, -0.05), (pr * 0.8, 0.03), (0.0, 0.06)], (0.08, 0.04, thick - 0.03),
               M["lens"], parent=e, verts=32)
+    elif kind == "strip":
+        pass
     elif kind == "vent":     # level 4: a dark recess behind upright gold bars
         box(name + "ventback", (size * 0.62, size * 0.62, 0.04), (0.1, -0.1, thick - 0.02), M["hole"], parent=e,
             bevel=0.0)
@@ -904,7 +910,7 @@ def panel(name, c, r, sx, sy, kind, size=2.3, spin=0.0, lean=0.0, thick=0.14):
 
 
 def barrel(name, c, axis, r, length, rows, cols, parent=None, fill=None, mat=None, core=None, checker=True, pin=1.0,
-           low=None, rims=None, mound=None):
+           low=None, rims=None, mound=None, drum=None):
     """The gold barrel inside the shell: a dark core with rows of gold blocks round it (period: two rows), turning
     about its axle (local Z). Blocks in every other cell (checker) or every cell, filling `fill` (along, round) of it;
     levels 3-4 use smaller blocks with black gaps between them, as Flash."""
@@ -914,6 +920,33 @@ def barrel(name, c, axis, r, length, rows, cols, parent=None, fill=None, mat=Non
     MOVING.append(hub)
     core_ob = cyl(name + "core", r * 0.86, length, (0, 0, -length / 2), core or M["core"], parent=hub, verts=40, bevel=0.05)
     fa, fr = fill or (0.88, 0.86)
+    if drum is not None:
+        # levels 3-4 (Flash, Codex Look 3): an ordered drum lying across the opening: a dark core with rings of raised
+        # rectangular gold blocks, every other ring offset half a block (brick-like), black gaps between the blocks.
+        # The ends a little rounded off (taper) so the drum sits inside the egg. The pattern repeats every two rows,
+        # so the loop's two-row turn is seamless.
+        bh, taper, hj = drum
+        core_ob.hide_render = True
+
+        def rad(z):
+            zz = 2 * z / length
+            return r * (1.0 - taper * zz * zz)
+        prof = [(0.01, -length / 2)] + [(rad(-length / 2 + length * t / 16) * 0.99, -length / 2 + length * t / 16)
+                                        for t in range(17)] + [(0.01, length / 2)]
+        lathe(name + "core2", prof, (0, 0, 0), core or M["core"], parent=hub, verts=48)
+        cw = length / cols
+        for j in range(cols):
+            z = -length / 2 + (j + 0.5) * cw
+            rz = rad(z)
+            for i in range(rows):
+                a = 2 * math.pi * (i + 0.5 * (j % 2)) / rows
+                h = bh * (1.0 + hj * (1 if (i + j) % 2 == 0 else -1))
+                deep = low is not None and (2 * j + (i % 2) * 3) % 5 in (0, 2, 4)
+                box(f"{name}blk{i}-{j}", (cw * fa, 2 * math.pi * rz / rows * fr, h),
+                    (math.cos(a) * (rz - 0.04), math.sin(a) * (rz - 0.04), z),
+                    low[1] if deep else (mat or M["block"]), parent=hub,
+                    rot=(0, 90, math.degrees(a)), bevel=0.05, origin="bottom")
+        return e, hub
     if rims is not None:
         # levels 3-4 (Codex Look 3, Flash's rows): a stack of toothed gold discs on the core, dark gaps between the
         # discs, square teeth round each disc's rim with notches between them
@@ -1264,29 +1297,24 @@ def shell34():
     cu.hide_viewport = True
     BODY["sh"] = sh
     ln, br = (S.L4_BARREL if L == 4 else S.L3_BARREL)[:2]
-    if L == 4:
-        barrel("barrel", bc, ba, br, ln, S.L4_BARREL_ROWS, S.L4_BARREL_COLS, fill=S.L4_BLOCK_FILL, mat=M["block34"],
-               core=M["core34"], low=(S.L3_LOW, M["block34lo"]) if S.L3_LOW else None, rims=S.L4_RIMS,
-               mound=S.L4_MOUND)
-    else:
-        barrel("barrel", bc, ba, br, ln, S.L3_BARREL_ROWS, S.L3_BARREL_COLS, fill=S.L3_BLOCK_FILL, mat=M["block34"],
-               core=M["core34"], pin=S.L3_PIN, low=(S.L3_LOW, M["block34lo"]) if S.L3_LOW else None,
-               rims=S.L3_RIMS, mound=S.L3_MOUND)
-    # the cog inside the machine, as Flash: facing the camera just behind the barrel's top end, so the top blocks
-    # hide its lower half (still, as Flash); its post leaves the axle's end, runs down behind the top blocks and up
-    # behind the cog to its back
-    end = bc + ba * (ln / 2)
-    p0, f = cam_ray(*(S.L4_COG_PX if L == 4 else S.L3_COG_PX))
-    cp = p0 + f * ((end - p0).dot(f) + S.L3_COG_BACK)   # behind the point of that ray nearest the axle's end
-    e = frame_at("cog", cp, (ba - f * S.L3_COG_FACE).normalized(), xhint=(0, 0, 1))
-    gear("cogwheel", S.L3_COG_R, 11, 0.3, (0, 0, 0), M["gold"], (0, 0, 0), parent=e, tooth=0.2)
-    cyl("cogboss", 0.4, 0.75, (0, 0, -0.55), M["golddark"], parent=e, verts=20)
-    bpy.context.view_layer.update()
-    zf = (e.matrix_world.to_3x3() @ Vector((0, 0, 1))).normalized()
-    cu = Vector((0, 0, 1)) - f * f.z                     # the screen's up
-    cu = (cu - zf * cu.dot(zf)).normalized()
-    tube("cogpost", [end - ba * 0.3, cp - cu * (S.L3_COG_R * 1.15) - zf * 0.4, cp - zf * 0.5], 0.2, M["golddark"],
-         smooth=True)
+    lv4 = L == 4
+    barrel("barrel", bc, ba, br, ln, S.L4_BARREL_ROWS if lv4 else S.L3_BARREL_ROWS,
+           S.L4_BARREL_COLS if lv4 else S.L3_BARREL_COLS, fill=S.L4_BLOCK_FILL if lv4 else S.L3_BLOCK_FILL,
+           mat=M["block34"], core=M["core34"], pin=1.0 if lv4 else S.L3_PIN,
+           low=(S.L3_LOW, M["block34lo"]) if S.L3_LOW else None, rims=S.L4_RIMS if lv4 else S.L3_RIMS,
+           mound=S.L4_MOUND if lv4 else S.L3_MOUND, drum=S.L4_DRUM if lv4 else S.L3_DRUM)
+    # the cog inside the machine, as Flash: big, dark gold, standing behind the drum's far half, so the drum hides its
+    # lower half (still, as Flash); a short axle from its back into the dome's inner wall holds it
+    R, teeth, back, face = S.L4_COG if lv4 else S.L3_COG
+    p0, f = cam_ray(*(S.L4_COG_PX if lv4 else S.L3_COG_PX))
+    cp = p0 + f * ((bc - p0).dot(f) + back)              # this far behind the drum's middle along the view
+    nrm = (-f + ba * face).normalized()                  # facing the camera, turned a little toward the drum's axle
+    e = frame_at("cog", cp, nrm, xhint=(0, 0, 1))
+    print("CHECK cog at Flash px %.1f %.1f, %.1f px across; drum middle %.1f %.1f" % (
+        *scr(cp), abs(scr(cp + Vector((1, -1, 0)).normalized() * R)[0] - scr(cp)[0]) * 2, *scr(bc)))
+    gear("cogwheel", R, teeth, 0.34, (0, 0, 0), M["cog34"], (0, 0, 0), parent=e, tooth=0.16)
+    cyl("cogboss", R * 0.3, 0.5, (0, 0, -0.1), M["golddark"], parent=e, verts=20)
+    cyl("cogaxle", 0.18, 2.4, (0, 0, -2.5), M["golddark"], parent=e, verts=12)
     return c, sh
 
 
@@ -1663,13 +1691,8 @@ def studio(nt, bg, to_sun):
         (0.0, (0.2, 0.21, 0.23)), (0.35, (0.28, 0.29, 0.31)), (0.44, (0.36, 0.37, 0.39)), (0.47, (0.22, 0.23, 0.25)),
         (0.485, (0.11, 0.12, 0.14)), (0.51, (0.15, 0.17, 0.21)), (0.56, (0.27, 0.3, 0.37)), (0.75, (0.43, 0.47, 0.56)),
         (1.0, (0.62, 0.66, 0.75))]
-    if L >= 3 and not os.environ.get("PB_STOPS"):
-        # levels 3-4: the big egg mirrors mostly the sky above the horizon, which read matte grey-blue; a lighter sky
-        # and a softer horizon band make it the same pale silver as levels 1-2, lighter on the dome's top (as Flash)
-        # (locker-3d-13: a little darker with a firmer horizon band, Flash's egg is mid silver-grey, not near white)
-        stops = [(0.0, (0.14, 0.15, 0.17)), (0.35, (0.2, 0.21, 0.23)), (0.44, (0.27, 0.28, 0.3)),
-                 (0.47, (0.16, 0.17, 0.19)), (0.485, (0.1, 0.11, 0.13)), (0.51, (0.17, 0.19, 0.23)),
-                 (0.56, (0.36, 0.39, 0.44)), (0.75, (0.58, 0.61, 0.67)), (1.0, (0.86, 0.88, 0.93))]
+    # levels 3-4 use the same studio as levels 1-2 (locker-3d-14: the lighter L3/L4 sky read matte blue-grey; the
+    # L1/L2 studio gives Flash's white highlight up left on the dome and the darker lower half)
     stops = [(p, tuple(c)) for p, c in stops]
     el[0].position, el[0].color = stops[0][0], stops[0][1] + (1,)
     el[1].position, el[1].color = stops[-1][0], stops[-1][1] + (1,)
@@ -1685,7 +1708,7 @@ def studio(nt, bg, to_sun):
     win = nt.nodes.new("ShaderNodeMapRange")
     win.interpolation_type = "SMOOTHSTEP"
     # levels 3-4: a wider window, so the egg carries Flash's broad white highlight
-    sw = STUDIO_WIN if (L < 3 or os.environ.get("PB_SWIN")) else 0.65
+    sw = STUDIO_WIN
     win.inputs[1].default_value, win.inputs[2].default_value = sw, 0.99
     win.inputs[3].default_value, win.inputs[4].default_value = 0.0, STUDIO_WIN_POW
     nt.links.new(dot.outputs["Value"], win.inputs[0])
@@ -1856,7 +1879,51 @@ def setup(sc):
         # (locker-3d-13) the chrome's lower half mirrored the green ground and read as tinted glass; Flash's is darker
         # grey metal there, so the chrome sees the studio's dark grey below the horizon instead (every level)
         g.visible_glossy = False
+    if L >= 3 and not os.environ.get("PB_NOBOX"):
+        softbox()
     return cam
+
+
+# levels 3-4: Flash px of the dome point that carries the broad white highlight, the softbox's size and brightness
+SOFTBOX = {3: (6.0, -32.0, 20.0, 2.4), 4: (16.0, -24.0, 20.0, 2.4)}
+if os.environ.get("PB_BOX"):
+    SOFTBOX[L] = tuple(float(v) for v in os.environ["PB_BOX"].split(","))
+
+
+def softbox():
+    """Levels 3-4 (locker-3d-14): the big egg's dome mostly mirrors the dim sky near the horizon and read matte
+    blue-grey; Flash's has a broad white highlight on the dome's upper left. A white card seen only by glossy rays,
+    placed where the camera ray through that dome point bounces to, gives it (diffuse light unchanged)."""
+    sx, sy, size, k = SOFTBOX[L]
+    p0, f = cam_ray(sx, sy)
+    dg = bpy.context.evaluated_depsgraph_get()
+    o = p0 - f * 80
+    for _ in range(8):       # past any part in front of the egg (the drum's blocks)
+        hit, loc, nrm, _i, ob, _m = bpy.context.scene.ray_cast(dg, o, f)
+        if not hit or ob.name.startswith("ballshell"):
+            break
+        o = loc + f * 0.01
+    if not hit or not ob.name.startswith("ballshell"):
+        print("CHECK softbox: no egg under", sx, sy, ob.name if hit else None)
+        return
+    r = f - 2 * f.dot(nrm) * nrm
+    bpy.ops.mesh.primitive_plane_add(size=size, location=loc + r * 25)
+    b = bpy.context.active_object
+    b.name = "softbox"
+    b.rotation_euler = (-r).to_track_quat("Z", "Y").to_euler()
+    m = bpy.data.materials.new("softbox")
+    m.use_nodes = True
+    nt = m.node_tree
+    for nd in list(nt.nodes):
+        if nd.type != "OUTPUT_MATERIAL":
+            nt.nodes.remove(nd)
+    em = nt.nodes.new("ShaderNodeEmission")
+    em.inputs["Strength"].default_value = k
+    nt.links.new(em.outputs[0], next(nd for nd in nt.nodes if nd.type == "OUTPUT_MATERIAL").inputs["Surface"])
+    b.data.materials.append(m)
+    b.visible_camera = b.visible_diffuse = b.visible_shadow = b.visible_transmission = False
+    b.visible_volume_scatter = False
+    print("CHECK softbox at", tuple(round(v, 1) for v in b.location))
 
 
 def cam_fwd():
