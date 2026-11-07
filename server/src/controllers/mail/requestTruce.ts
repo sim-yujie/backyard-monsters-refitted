@@ -15,6 +15,8 @@ import { bookTruceDecline } from "../../services/bots/truceDecline.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { mailboxErr, permissionErr, truceExistsErr } from "../../errors/errors.js";
+import { isMailModerator, logModMail } from "../../services/mail/modMail.js";
+import { nudgeMail } from "../../services/mail/mailNudge.js";
 
 const TruceSchema = z.object({
   baseid: z.string(),
@@ -32,6 +34,8 @@ const TruceSchema = z.object({
  * - Creates a Truce record and a new mailbox thread with the request message, and
  *   answers with that thread's id (#203)
  * - To a bot: books its answer, a rejection some hours later (`bookTruceDecline`)
+ * - From a chat moderator: copied into the owner's "Moderator mail" log (`modMail.ts`)
+ * - Tells the recipient's game at once (`nudgeMail`)
  *
  * @param {Context} ctx - Koa context. Expects baseid and message in the request body.
  */
@@ -53,7 +57,7 @@ export const requestTruce: KoaController = async (ctx) => {
   const recipient = await postgres.em.findOne(
     User,
     { userid: targetUserid },
-    { populate: ["save"], fields: ["blockedUsers", "save.unreadmessages"] }
+    { populate: ["save"], fields: ["username", "blockedUsers", "save.unreadmessages"] }
   );
 
   if (!recipient) throw mailboxErr();
@@ -118,6 +122,22 @@ export const requestTruce: KoaController = async (ctx) => {
   }
 
   await bookTruceDecline(postgres.em, truce, now);
+
+  if (await isMailModerator(postgres.em, user.userid)) {
+    await logModMail(postgres.em, {
+      moderatorId: user.userid,
+      moderatorName: user.username ?? `Player ${user.userid}`,
+      recipientId: targetUserid,
+      recipientName: recipient.username ?? `Player ${targetUserid}`,
+      threadid: thread.threadid,
+      newThread: true,
+      messagetype: newMessage.messagetype,
+      subject: newMessage.subject,
+      message: filteredMessage,
+      written: filteredMessage !== message ? message : null,
+    });
+  }
+  nudgeMail(targetUserid);
 
   ctx.status = Status.OK;
   ctx.body = { error: 0, threadid: thread.threadid };

@@ -2,6 +2,7 @@ import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { logout } from "@/api/auth";
 import { loadOwnYard } from "@/api/base";
 import { MailDoor } from "@/ui/mail/MailDoor";
+import { worldChat } from "@/game/chat/chatSession";
 import { mailApi } from "@/api/mail";
 import { INVITE_SUBJECT, INVITE_WITHDRAW_TEXT } from "@/game/mail/invite";
 import {
@@ -497,6 +498,8 @@ export class MapRoom2Scene implements Scene {
     this.mail = new MailDoor({
       style: "tool",
       container: context.overlay.content,
+      // New mail shows at once (owner, beta 7): pushed over world chat, else asked every 45 s.
+      live: { chat: worldChat },
       // The mailbox docks where the cell panel and the achievements screen do.
       onOpen: () => {
         this.ui?.achievements?.close();

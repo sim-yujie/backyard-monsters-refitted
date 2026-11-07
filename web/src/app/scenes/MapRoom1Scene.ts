@@ -13,6 +13,7 @@ import { visitFriend } from "@/game/friends/friendVisit";
 import { mapRefreshSeconds } from "@/game/quality";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
 import { MailDoor } from "@/ui/mail/MailDoor";
+import { worldChat } from "@/game/chat/chatSession";
 import { Mr1Guide } from "@/game/guide/mr1Guide";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import {
@@ -106,6 +107,8 @@ export class MapRoom1Scene implements Scene {
     this.mail = new MailDoor({
       style: "tool",
       container: context.overlay.content,
+      // New mail shows at once (owner, beta 7): pushed over world chat, else asked every 45 s.
+      live: { chat: worldChat },
       onTruceAccepted: () => void this.refresh(),
     });
     this.guide = new Mr1Guide(context.overlay.guide, {
