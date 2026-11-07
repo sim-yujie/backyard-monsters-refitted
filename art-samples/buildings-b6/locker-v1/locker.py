@@ -313,11 +313,16 @@ def slate_cap(name, col, wear, shine=(214, 222, 232)):
     return t.m
 
 
-def flat(name, col, rough=0.5, metal=0.0, emit=0.0):
+def flat(name, col, rough=0.5, metal=0.0, emit=0.0, spec=None):
     if name in MATS:
         return MATS[name]
     t = NT(name)
     t.set(**{"Base Color": srgb(*col), "rough": rough, "metal": metal})
+    if spec is not None:     # spec=0: no sheen of the sky at a grazing look (the chimney's black hole read grey)
+        for nm in ("Specular IOR Level", "Specular"):
+            if nm in t.bsdf.inputs:
+                t.bsdf.inputs[nm].default_value = spec
+                break
     if emit:
         t.bsdf.inputs["Emission Color"].default_value = srgb(*col)
         t.bsdf.inputs["Emission Strength"].default_value = emit
@@ -696,7 +701,7 @@ def materials():
     M["plate"] = shiny("plate", (176, 186, 204), rough=0.32, metal=0.3, wear=(160, 170, 190), scale=2, dirt=0.05,
                        side=0.4)
     M["nut"] = shiny("nut", (92, 98, 110), rough=0.35, metal=0.8, wear=(70, 76, 88), scale=4, dirt=0.2, side=0.3)
-    M["hole"] = flat("hole", (14, 12, 16), rough=1.0)
+    M["hole"] = flat("hole", (14, 12, 16), rough=1.0, spec=0.0)
     M["lamp"] = flat("lamp", (252, 236, 210), rough=0.4, emit=0.5)
     M["lens"] = shiny("lens", (30, 30, 20), rough=0.2, metal=0.6, wear=(52, 50, 28), scale=3, dirt=0.0)
     M["core"] = shiny("core", (52, 34, 12), rough=0.45, metal=0.6, wear=(80, 52, 18), scale=3, dirt=0.3)
@@ -1463,9 +1468,10 @@ def level34():
         r0, r1 = S.L4_BASE_R - S.L4_BASE_W, S.L4_BASE_R
         h = S.L4_BASE_H
         # Flash: a tan LUMPY ring of rounded bone/sandbag lumps, not a flat turned disc
-        wd = painted("sandbag", (198, 168, 118), rough=0.85, wear=(150, 118, 76), scale=3.0)
-        lathe("disc", [(r0 + 0.1, 0.0), (r1 - 0.1, 0.0), (r1, 0.06), (r1, h * 0.6), (r1 - 0.12, h * 0.7),
-                       (r0 + 0.12, h * 0.7), (r0, h * 0.6), (r0, 0.06)], (g.x, g.y, 0.0), wd, verts=72)
+        wd = painted("sandbag", (166, 132, 84), rough=0.85, wear=(118, 88, 50), scale=3.0)   # Flash: tan-brown, in shadow
+        ri = r0 * 0.35       # the ring's floor runs well under the bellows: Flash shows no grass inside it (review 7 Nov)
+        lathe("disc", [(ri + 0.1, 0.0), (r1 - 0.1, 0.0), (r1, 0.06), (r1, h * 0.6), (r1 - 0.12, h * 0.7),
+                       (ri + 0.12, h * 0.7), (ri, h * 0.6), (ri, 0.06)], (g.x, g.y, 0.0), wd, verts=72)
         cnt, lr, lj = S.L4_BASE_LUMPS
         lq = random.Random(4040)
         for i in range(cnt):
@@ -1482,7 +1488,7 @@ def level34():
     # the dark gold cog under the bellows' plate (Flash: small, shallow teeth, mostly in shadow, narrower than the
     # bellows; level 4: hung with the bellows over the ring's hole)
     gr = S.L4_GCOG_R if lv4 else S.L3_GCOG_R
-    zc = zb + S.L3_BELLOWS_Z - 0.55
+    zc = zb + S.L3_BELLOWS_Z - 1.2        # below the plate's overhang, so its dark gold teeth show (Flash: y 48..58)
     gear("groundcog", gr, 20, 0.34, (A.x, A.y, zc), M["cog34"], (0, 0, 0), tooth=0.12)
     cyl("groundcoghub", gr * 0.72, S.L3_BELLOWS_Z - S.L3_GCOG_Z, (A.x, A.y, S.L3_GCOG_Z + zb), M["core34"], verts=48)
     b, sh = shell34()

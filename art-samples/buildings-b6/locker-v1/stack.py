@@ -28,7 +28,7 @@ FRAMES = {1: 21, 2: 20, 3: 20, 4: 20}     # Flash's loops (level 4's data says 2
 
 KEY_TURN = {1: 0.5, 2: 0.5, 3: -0.5, 4: 0.5}  # the key's turns a loop (level 3 the other way round) (Flash's rings turn half round: they look
                                              # the same after half a turn; the monster bows too: Flash shows one edge-on a loop)
-KEY0 = {1: -1.0, 2: 252.0, 3: 90.0, 4: 90.0}   # the key's bow at frame 0 (degrees about its shaft)
+KEY0 = {1: -1.0, 2: 252.0, 3: 90.0, 4: 126.0}   # the key's bow at frame 0 (degrees about its shaft)
 
 # the ground middle under each level's axis (Flash px)
 GC = {1: (-2.0, 53.0), 2: (0.0, 57.0), 3: (1.0, 50.0), 4: (-3.0, 52.0)}
