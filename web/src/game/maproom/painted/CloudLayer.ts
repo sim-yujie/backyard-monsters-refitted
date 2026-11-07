@@ -1,6 +1,7 @@
 import { Assets, BufferImageSource, CanvasSource, Geometry, GlProgram, Mesh, Shader, type TextureSource } from "pixi.js";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import { onQualityChange, quality, sheetAtQuality, type Quality } from "@/game/quality";
+import { timeArt } from "../openMarks";
 import type { CellRange } from "../zones";
 import { cellCentre, paintedCellShape, textureAspect, type CellShape } from "./cellShape";
 import { CLOUD_FRAGMENT, CLOUD_VERTEX } from "./cloudShader";
@@ -141,7 +142,7 @@ export class CloudLayer {
     if (url === this.deckUrl) return true;
     let image: CanvasImageSource & { width: number; height: number };
     try {
-      image = (await Assets.load(url)).source.resource;
+      image = (await timeArt(url, () => Assets.load(url))).source.resource;
     } catch {
       return false;
     }

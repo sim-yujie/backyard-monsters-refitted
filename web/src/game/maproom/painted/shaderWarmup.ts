@@ -1,3 +1,5 @@
+import { noteShader } from "../openMarks";
+
 /**
  * Compiles the painted map's shaders without freezing the page (MR2 plan step 10; the owner's
  * "Map Room crashed" report, 4 Nov 2026; Firefox taking 15-30 s every open, 4 Nov 2026).
@@ -181,12 +183,18 @@ export class ProgramWarmer {
     if (known === false || (known === true && !this.host)) return Promise.resolve(known);
     let pending = this.pending.get(key);
     if (!pending) {
-      const compile = (): Promise<boolean> =>
-        this.host?.has(source)
-          ? Promise.resolve(true)
-          : warmPrograms(this.gl, [source], this.wait, (_index, program) => this.host?.adopt(source, program) ?? false).then(
-              ([ok]) => Boolean(ok),
-            );
+      const requested = performance.now();
+      const compile = (): Promise<boolean> => {
+        if (this.host?.has(source)) return Promise.resolve(true);
+        // Timed for the map's open (`openMarks.ts`): from when it was asked for, and when it really began.
+        const started = performance.now();
+        return warmPrograms(this.gl, [source], this.wait, (_index, program) => this.host?.adopt(source, program) ?? false).then(
+          ([ok]) => {
+            noteShader(source, requested, started, performance.now(), Boolean(ok));
+            return Boolean(ok);
+          },
+        );
+      };
       const run = this.parallel ? compile() : (this.queue = this.queue.then(compile, compile));
       pending = (run as Promise<boolean>).then((ok) => {
         this.linked.set(key, ok);
