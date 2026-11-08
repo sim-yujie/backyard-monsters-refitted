@@ -105,7 +105,7 @@ export class ErrorsView {
     const onServer = series(this.days, (d) => d.serverErrors);
     const sum = (points: typeof inBrowsers) => {
       const n = total(points);
-      return n === null ? null : `${count(n)} in ${this.days.length} days`;
+      return n === null ? null : `${count(n)} ${n === 1 ? "error" : "errors"} in the last ${this.days.length} days`;
     };
     const list = groups.length
       ? h(
@@ -242,7 +242,7 @@ export class ErrorsView {
       h(
         "p",
         { class: "note" },
-        `Kept for 30 days after last seen: ${plural(browser.kinds, "kind")} from browsers (${plural(browser.occurrences, "time")}), ${plural(server.kinds, "kind")} from the server (${plural(server.occurrences, "time")}). A few are normal; a sudden rise is worth a look.`,
+        `Distinct error groups in the list above, kept 30 days after last seen: ${plural(browser.kinds, "group")} from browsers and ${plural(server.kinds, "group")} from the server (${plural(browser.occurrences + server.occurrences, "occurrence")} between them). The charts count every occurrence per day, so their totals are higher. A few are normal; a sudden rise is worth a look.`,
       ),
       charts,
     );

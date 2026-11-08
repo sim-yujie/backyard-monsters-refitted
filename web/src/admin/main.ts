@@ -78,7 +78,7 @@ import {
 /** The phone tabs' own names. */
 const TAB_WORDS: Readonly<Partial<Record<ViewId | "more", string>>> & { more: string } = {
   home: "Home",
-  inbox: "Moderation",
+  inbox: "Inbox",
   bugs: "Bugs",
   more: "More",
 };
@@ -577,6 +577,8 @@ class Dashboard {
   private setMenu(open: boolean): void {
     this.moreButton.setAttribute("aria-expanded", String(open));
     this.nav.classList.toggle("is-open", open);
+    // The menu opens right under the tab row, wherever the page is scrolled.
+    if (open) this.nav.style.setProperty("--menu-top", `${Math.max(0, Math.round(this.tabs.getBoundingClientRect().bottom))}px`);
   }
 
   /** Puts a state badge (or nothing) on every link to a view. */

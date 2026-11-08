@@ -125,7 +125,7 @@ describe("the owner's first look", () => {
     await boot();
     await settle();
     const box = document.getElementById("problems")!;
-    expect(box.querySelector("h2")?.textContent).toBe("1 problem needs you");
+    expect(box.querySelector("h2")?.textContent).toBe("1 problem needs you, 1 warning");
     expect(box.textContent).toContain("Last night's backup did not happen");
     expect(box.textContent).toContain("Telegram alerts are off");
     // The first real problem opens its "What to do" by itself, with a command to copy.
@@ -158,7 +158,7 @@ describe("the owner's first look", () => {
     expect(bugCard.querySelector("a[href='#bugs?list=working']")).not.toBeNull();
     // The inbox is the phone's Moderation tab, with its count.
     const tab = document.querySelector(".tabs a[href='#inbox']")!;
-    expect(tab.textContent).toContain("Moderation");
+    expect(tab.textContent).toContain("Inbox");
     expect(tab.querySelector(".count")?.textContent).toContain("1");
   });
 
@@ -289,7 +289,7 @@ describe("when the health cannot be read (26 Oct)", () => {
   it("says the sign-in ran out, not that the server may be down, and offers to sign in again", async () => {
     await boot();
     await settle();
-    expect(box().querySelector("h2")?.textContent).toBe("1 problem needs you");
+    expect(box().querySelector("h2")?.textContent).toBe("1 problem needs you, 1 warning");
 
     // The game signs in again on another device: this browser keeps the old token.
     accepted = "other-device-token";
@@ -313,7 +313,7 @@ describe("when the health cannot be read (26 Oct)", () => {
     refresh();
     await settle();
 
-    expect(box().querySelector("h2")?.textContent).toBe("1 problem needs you");
+    expect(box().querySelector("h2")?.textContent).toBe("1 problem needs you, 1 warning");
     const last = fetch.mock.calls.at(-1) as unknown as [string, RequestInit];
     expect(new Headers(last[1].headers).get("Authorization")).toBe("Bearer game-token");
   });
@@ -330,7 +330,7 @@ describe("when the health cannot be read (26 Oct)", () => {
     saveSession("game-token");
     window.dispatchEvent(new StorageEvent("storage", { key: SESSION_STORAGE_KEY }));
     await settle();
-    expect(box().querySelector("h2")?.textContent).toBe("1 problem needs you");
+    expect(box().querySelector("h2")?.textContent).toBe("1 problem needs you, 1 warning");
   });
 
   it("says the server could not be reached only when nothing answers", async () => {
