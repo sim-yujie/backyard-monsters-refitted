@@ -16,6 +16,7 @@ import {
 import { AnnouncementsView } from "./announcements";
 import { BugsView } from "./bugs";
 import { CasesView } from "./cases";
+import { PhotosView } from "./photos";
 import { ChatPanel } from "./chat";
 import { h, replace } from "./dom";
 import { ErrorsView } from "./errors";
@@ -24,7 +25,6 @@ import { ModeratorsView } from "./moderators";
 import { ModMailSection } from "./modmail";
 import { count, dateTime } from "./format";
 import { icon } from "./icons";
-import { readingSection } from "./reading";
 import { topItems, verdict, type TopItem } from "./problems";
 import {
   mark,
@@ -35,7 +35,21 @@ import {
   type Level,
 } from "./sections";
 import { ShinyView } from "./shiny";
+import { WeekendView } from "./weekend";
 import { applyTheme, readTheme, themePicker } from "./theme";
+import {
+  PHONE_TABS,
+  ScrollMemory,
+  VIEWS,
+  phoneTab,
+  isView,
+  readRoute,
+  viewGroups,
+  viewHash,
+  viewLabel,
+  type ViewId,
+  type ViewParams,
+} from "./views";
 
 /**
  * The owner's dashboard at /admin (docs/design/admin-dashboard-api.md). It
@@ -43,81 +57,42 @@ import { applyTheme, readTheme, themePicker } from "./theme";
  * or not, sees only "Not found", the same as any unknown page: the server
  * answers them 404 and the page shows nothing more.
  *
- * Phone first: the owner opens it from a Telegram alert, which links a
- * section (`#health`, `#backups`, `#errors`, `#bugs`) or a report (`?bug=<id>`).
- * The Shiny section (`#shiny`) gives Shiny to a player and lists every gift.
- * The Announcements section (`#announcements`) writes the pop-ups players
- * see in the game.
- * Chat cases (`#cases`) come first: every report of a player's chat lines
- * as one case, with a copy of the room and one-step warn / pause, Shiny for
- * the reporters, or dismiss. The Moderation section (`#moderation`) warns,
- * pauses chat for, or bans any player, and keeps the raw lists (word filter,
- * reports, chat log) folded; the Chat section (`#chat`) chats as the game team.
- * The top answers "is anything wrong, and what do I do?" in one sentence,
- * then each problem with its fix; the sections below are ordered by how often
- * they need the owner (chat cases and bug reports first, server internals
- * last). Sections the owner rarely opens start folded (their heading opens
- * them; the choice is remembered in this browser), and a link to a section
- * (a Telegram alert's `#health`, a nav link) always opens it.
- *
- * On a phone the section links are one row that stays at the top and scrolls
- * sideways; on a computer they are a sidebar. Either way they never cover a
- * section's heading, and each link carries its section's state (a count of
- * new bug reports, a mark when something there needs a look).
+ * Each main task is its own view (`views.ts`, owner 8 Nov 2026): Home first,
+ * then the moderation views, the player-facing tools, and monitoring last.
+ * A computer lists them down the left; a phone has four tabs (Home,
+ * Moderation, Bugs, More) at the top. The address names the view (`#errors`,
+ * `#bugs?list=working`), so the browser's Back goes to the view before and a
+ * Telegram alert can link one (`#health`, `#backups`, `#errors`, `#bugs`, or a
+ * report: `?bug=<id>`). Views stay in the page while hidden: a search typed,
+ * a filter picked or a report opened is still there on coming back, and each
+ * view keeps its scroll position. Each nav link carries its view's state (a
+ * count of open cases or new bug reports, a mark when something there needs
+ * a look).
  */
 
-const SECTIONS = [
-  ["cases", "Chat cases"],
-  ["bugs", "Bug reports"],
-  ["moderation", "Moderation"],
-  ["moderators", "Moderators"],
-  ["modmail", "Moderator mail"],
-  ["chat", "Chat"],
-  ["shiny", "Shiny"],
-  ["announcements", "Announcements"],
-  ["players", "Players"],
-  ["activity", "Activity"],
-  ["errors", "Errors"],
-  ["health", "Server"],
-  ["backups", "Backups"],
-] as const;
+/** The phone tabs' own names. */
+const TAB_WORDS: Readonly<Partial<Record<ViewId | "more", string>>> & { more: string } = {
+  home: "Home",
+  cases: "Moderation",
+  bugs: "Bugs",
+  more: "More",
+};
 
-type SectionId = (typeof SECTIONS)[number][0];
-
-/** Sections folded until the owner opens them: rarely needed, or told about at the top. */
-export const FOLDED_AT_FIRST: ReadonlySet<SectionId> = new Set<SectionId>([
-  "announcements",
+/** Views whose nav link never shows the server's health marks. */
+const NO_HEALTH_MARK: ReadonlySet<ViewId> = new Set<ViewId>([
+  "home",
+  "cases",
+  "photos",
   "players",
   "activity",
-  "health",
-  "backups",
+  "shiny",
+  "announcements",
+  "weekend",
+  "moderation",
+  "moderators",
+  "modmail",
+  "chat",
 ]);
-
-const FOLD_KEY = "bymr.admin.folds";
-
-/** The sections the owner opened or folded in this browser: id -> open. */
-export const readFolds = (): Partial<Record<SectionId, boolean>> => {
-  try {
-    const raw: unknown = JSON.parse(localStorage.getItem(FOLD_KEY) ?? "{}");
-    if (!raw || typeof raw !== "object") return {};
-    const folds: Partial<Record<SectionId, boolean>> = {};
-    for (const [id] of SECTIONS) {
-      const value = (raw as Record<string, unknown>)[id];
-      if (typeof value === "boolean") folds[id] = value;
-    }
-    return folds;
-  } catch {
-    return {};
-  }
-};
-
-const saveFolds = (folds: Partial<Record<SectionId, boolean>>): void => {
-  try {
-    localStorage.setItem(FOLD_KEY, JSON.stringify(folds));
-  } catch {
-    // A private window: folds are not remembered, nothing else changes.
-  }
-};
 
 const RANGES = [
   [30, "30 days"],
@@ -128,21 +103,7 @@ const RANGES = [
 /** Health is checked again this often while the page is open and showing. */
 const HEALTH_REFRESH_MS = 60_000;
 
-export interface Route {
-  bug: number | null;
-  section: SectionId | null;
-}
-
-/** What the address asks for: a bug report (`?bug=12`) and a section (`#errors`). */
-export const readRoute = (search: string, hash: string): Route => {
-  const bug = Number(new URLSearchParams(search).get("bug"));
-  const name = hash.replace(/^#/, "");
-  const section = SECTIONS.find(([id]) => id === name)?.[0] ?? null;
-  return {
-    bug: Number.isSafeInteger(bug) && bug > 0 ? bug : null,
-    section: section ?? (bug > 0 ? "bugs" : null),
-  };
-};
+export { readRoute };
 
 /** The worst state among a section's problems, for its link and heading. */
 export const sectionLevels = (
@@ -182,9 +143,9 @@ interface Section {
   element: HTMLElement;
   body: HTMLElement;
   state: HTMLElement;
-  link: HTMLAnchorElement;
-  toggle: HTMLButtonElement;
 }
+
+type SectionId = Exclude<ViewId, "home">;
 
 class Dashboard {
   private range: number = RANGES[0][0];
@@ -211,10 +172,11 @@ class Dashboard {
     say: (message) => this.say(message),
   });
   private readonly moderation = new ModerationView({ say: (message) => this.say(message) });
+  private readonly weekend = new WeekendView({ say: (message) => this.say(message) });
   private readonly moderators = new ModeratorsView({ say: (message) => this.say(message) });
   private readonly modMail = new ModMailSection({
     say: (message) => this.say(message),
-    onViewChange: () => this.markCurrentSection(),
+    onViewChange: () => undefined,
   });
   private readonly cases = new CasesView({
     say: (message) => this.say(message),
@@ -228,10 +190,16 @@ class Dashboard {
   });
   /** Open chat cases, or null before they are read. */
   private openCases: number | null = null;
-  private readonly folds = readFolds();
-  /** The section a link just opened, marked until the person scrolls. */
-  private chosen: SectionId | undefined;
-  private chosenAt = 0;
+  private readonly photos = new PhotosView({
+    say: (message) => this.say(message),
+    onCount: (open) => {
+      this.openPhotos = open;
+      this.renderPhotoState();
+    },
+    openPlayer: (userid) => this.openPlayer(userid),
+  });
+  /** Players with open photo reports, or null before they are read. */
+  private openPhotos: number | null = null;
   private readonly chat = new ChatPanel({
     openPlayer: (userid) => this.openPlayer(userid),
     say: (message) => this.say(message),
@@ -239,7 +207,14 @@ class Dashboard {
   private readonly announcements = new AnnouncementsView({ say: (message) => this.say(message) });
   private readonly errors = new ErrorsView((message) => this.say(message));
   private readonly sections: Record<SectionId, Section>;
+  private readonly home: HTMLElement;
   private readonly nav: HTMLElement;
+  private readonly tabs: HTMLElement;
+  private readonly moreButton: HTMLButtonElement;
+  /** Every nav link and phone tab of each view: their state badges follow the view. */
+  private readonly links = new Map<ViewId, HTMLAnchorElement[]>();
+  private view: ViewId = "home";
+  private readonly scrolls = new ScrollMemory();
   private newBugs: number | null = null;
   private readonly todayBox = h("div", { class: "today", attrs: { "aria-label": "Today so far" } });
   /** Which problems' "What to do" is open, kept across the minutely refresh. */
@@ -267,56 +242,84 @@ class Dashboard {
       ),
     );
 
-    const links = new Map<SectionId, HTMLAnchorElement>();
+    const addLink = (id: ViewId, link: HTMLAnchorElement) => {
+      const list = this.links.get(id) ?? [];
+      list.push(link);
+      this.links.set(id, list);
+    };
     this.nav = h(
       "nav",
-      { class: "nav", attrs: { "aria-label": "Sections" } },
-      h(
-        "ul",
-        {},
-        ...SECTIONS.map(([id, label]) => {
-          const link = h(
-            "a",
-            { class: "nav-link", attrs: { href: `#${id}` } },
-            h("span", { class: "nav-label" }, label),
-            h("span", { class: "nav-state" }),
-          );
-          links.set(id, link);
-          return h("li", {}, link);
-        }),
+      { class: "nav", attrs: { id: "views-nav", "aria-label": "Views" } },
+      ...viewGroups().map(({ title, views }) =>
+        h(
+          "div",
+          { class: "nav-group" },
+          title ? h("h2", { class: "nav-title" }, title) : null,
+          h(
+            "ul",
+            {},
+            ...views.map((id) => {
+              const link = h(
+                "a",
+                { class: "nav-link", attrs: { href: viewHash(id), "data-view": id } },
+                h("span", { class: "nav-label" }, viewLabel(id)),
+                h("span", { class: "nav-state" }),
+              );
+              link.addEventListener("click", () => this.setMenu(false));
+              addLink(id, link);
+              return h("li", {}, link);
+            }),
+          ),
+        ),
       ),
+    );
+    this.moreButton = h(
+      "button",
+      {
+        class: "tab tab-more",
+        attrs: { type: "button", "aria-expanded": "false", "aria-controls": "views-nav" },
+        onClick: () => this.setMenu(this.moreButton.getAttribute("aria-expanded") !== "true"),
+      },
+      icon("menu", 18),
+      h("span", { class: "tab-label" }, TAB_WORDS.more),
+    );
+    this.tabs = h(
+      "nav",
+      { class: "tabs", attrs: { "aria-label": "Main views" } },
+      ...PHONE_TABS.map((id) => {
+        const tab = h(
+          "a",
+          { class: "tab", attrs: { href: viewHash(id), "data-view": id } },
+          h("span", { class: "tab-label" }, TAB_WORDS[id] ?? viewLabel(id)),
+          h("span", { class: "nav-state" }),
+        );
+        tab.addEventListener("click", () => this.setMenu(false));
+        addLink(id, tab);
+        return tab;
+      }),
+      this.moreButton,
     );
 
     const section = (id: SectionId, title: string, ...extra: HTMLElement[]): Section => {
       const body = h("div", { class: "section-body", attrs: { id: `${id}-body` } }, skeleton());
       const state = h("span", { class: "section-state" });
-      // The heading is the fold's button: one tap opens or folds the section.
-      const toggle = h(
-        "button",
-        {
-          class: "section-toggle",
-          attrs: { type: "button", "aria-controls": `${id}-body`, "aria-expanded": "true" },
-          onClick: () => this.setOpen(id, toggle.getAttribute("aria-expanded") !== "true", true),
-        },
-        icon("chevron", 18),
-        h("span", {}, title),
-      );
       const element = h(
         "section",
-        { class: "section", attrs: { id, "aria-labelledby": `${id}-title` } },
+        { class: "section view", attrs: { id, "data-view": id, "aria-labelledby": `${id}-title`, hidden: "" } },
         h(
           "header",
           { class: "section-head" },
-          h("h2", { attrs: { id: `${id}-title` } }, toggle),
+          h("h2", { attrs: { id: `${id}-title` } }, title),
           state,
           ...extra,
         ),
         body,
       );
-      return { element, body, state, link: links.get(id)!, toggle };
+      return { element, body, state };
     };
     this.sections = {
       cases: section("cases", "Chat cases"),
+      photos: section("photos", "Photo reports"),
       bugs: section("bugs", "Bug reports"),
       moderation: section("moderation", "Moderation"),
       moderators: section("moderators", "Chat moderators"),
@@ -324,6 +327,7 @@ class Dashboard {
       chat: section("chat", "Chat as the game team"),
       shiny: section("shiny", "Give Shiny"),
       announcements: section("announcements", "Announcements"),
+      weekend: section("weekend", "Weekend events"),
       players: section("players", "Players", rangeButtons),
       activity: section("activity", "Activity"),
       errors: section("errors", "Errors"),
@@ -331,6 +335,7 @@ class Dashboard {
       backups: section("backups", "Backups"),
     };
     replace(this.sections.cases.body, this.cases.element);
+    replace(this.sections.photos.body, this.photos.element);
     replace(this.sections.bugs.body, this.bugs.element);
     replace(this.sections.moderation.body, this.moderation.element);
     replace(this.sections.moderators.body, this.moderators.element);
@@ -338,7 +343,14 @@ class Dashboard {
     replace(this.sections.chat.body, this.chat.element);
     replace(this.sections.shiny.body, this.shiny.element);
     replace(this.sections.announcements.body, this.announcements.element);
+    replace(this.sections.weekend.body, this.weekend.element);
     replace(this.sections.errors.body, this.errors.element);
+
+    this.home = h(
+      "section",
+      { class: "view home", attrs: { id: "home", "data-view": "home", "aria-label": "Home", hidden: "" } },
+      this.verdict,
+    );
 
     this.refreshButton = h(
       "button",
@@ -373,31 +385,24 @@ class Dashboard {
             h("div", { class: "top-actions" }, this.updated, this.refreshButton),
             themePicker(),
           ),
+          this.tabs,
           this.nav,
         ),
         h(
           "main",
           { class: "page" },
-          this.verdict,
-          ...SECTIONS.map(([id]) => this.sections[id].element),
+          this.home,
+          ...VIEWS.filter(([id]) => id !== "home").map(([id]) => this.sections[id as SectionId].element),
         ),
       ),
       this.toast,
     );
 
-    for (const [id] of SECTIONS) {
-      this.setOpen(id, this.folds[id] ?? !FOLDED_AT_FIRST.has(id), false);
-    }
-    // A link to a section opens it: the nav, "See Server", a Telegram alert.
-    window.addEventListener("hashchange", () => this.openNamed(location.hash));
-    document.addEventListener("click", (event) => {
-      const link = (event.target as Element | null)?.closest?.("a[href^='#']");
-      if (link) this.openNamed(link.getAttribute("href") ?? "");
-    });
-
-    window.addEventListener("popstate", () => {
-      const route = readRoute(location.search, location.hash);
-      void this.bugs.show(route.bug);
+    // The address names the view: a nav link, "See Server", a Telegram alert, Back.
+    window.addEventListener("hashchange", () => this.route());
+    window.addEventListener("popstate", () => this.route());
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") this.setMenu(false);
     });
     window.setInterval(() => {
       if (document.visibilityState === "visible") void this.loadHealth();
@@ -408,87 +413,78 @@ class Dashboard {
       if (event.key !== SESSION_STORAGE_KEY) return;
       if (adoptNewerSignIn() || this.signedOut) void this.loadAll();
     });
-    this.watchScroll();
-    // Scrolling by hand (after the link's own smooth scroll has settled) hands the mark back to
-    // what is on screen.
-    const release = (): void => {
-      if (this.chosen !== undefined && Date.now() - this.chosenAt > 1200) {
-        this.chosen = undefined;
-        this.markCurrentSection();
-      }
-    };
-    window.addEventListener("scroll", release, { passive: true });
-    for (const type of ["wheel", "touchmove", "keydown"] as const) {
-      window.addEventListener(
-        type,
-        () => {
-          this.chosen = undefined;
-        },
-        { passive: true },
-      );
-    }
   }
 
   async start(): Promise<void> {
     const route = readRoute(location.search, location.hash);
-    if (route.section) this.setOpen(route.section, true, false);
+    this.show(route.view, route.params);
     // The errors list loads with the stats, whose daily counts its charts use.
     await Promise.all([
       this.loadHealth(),
       this.loadStats(),
       this.cases.refresh(),
+      this.photos.refresh(),
       this.bugs.show(route.bug),
       this.moderation.refresh(),
       this.moderators.refresh(),
       this.modMail.refresh(),
       this.shiny.refresh(),
       this.announcements.refresh(),
+      this.weekend.refresh(),
     ]);
-    // The sections grew as they loaded; go to the one the link named.
-    if (route.section) {
-      this.chosen = route.section;
-      this.chosenAt = Date.now();
-      this.sections[route.section].element.scrollIntoView();
-    }
   }
 
-  /** Marks the link of the section being read, and keeps it in view in the phone's row. */
-  private watchScroll(): void {
-    if (typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver(() => this.markCurrentSection(), {
-      // A section counts as "being read" while it crosses the upper third.
-      rootMargin: "-20% 0px -65% 0px",
-    });
-    for (const [id] of SECTIONS) observer.observe(this.sections[id].element);
+  /** Shows the view the address names, with what it asks for. */
+  private route(): void {
+    const route = readRoute(location.search, location.hash);
+    this.show(route.view, route.params);
+    if (route.view === "bugs") void this.bugs.show(route.bug);
   }
 
   /**
-   * Marks the link of the section that crosses the reading line (a fifth down
-   * the screen). Measured on demand, so it also follows a section that grows
-   * or shrinks (a mail conversation opening) without the page scrolling.
+   * Shows one view and hides the rest. Leaving a view keeps its scroll
+   * position; coming back puts it back.
    */
-  private markCurrentSection(): void {
-    const current = this.chosen ?? readingSection(
-      SECTIONS.map(([id]) => {
-        const rect = this.sections[id].element.getBoundingClientRect();
-        return { id, top: rect.top, bottom: rect.bottom };
-      }),
-      window.innerHeight,
-    );
-    if (current === undefined) return;
-    for (const [id] of SECTIONS) {
-      const link = this.sections[id].link;
-      if (id === current) {
-        if (link.getAttribute("aria-current") === "true") continue;
-        link.setAttribute("aria-current", "true");
-        const row = this.nav;
-        if (row.scrollWidth > row.clientWidth) {
-          const left = link.offsetLeft - (row.clientWidth - link.offsetWidth) / 2;
-          row.scrollTo({ left, behavior: "smooth" });
-        }
-      } else {
-        link.removeAttribute("aria-current");
+  private show(view: ViewId, _params: ViewParams): void {
+    const before = this.view;
+    const changed = before !== view;
+    if (changed) this.scrolls.save(before, window.scrollY);
+    this.view = view;
+    this.home.hidden = view !== "home";
+    for (const [id] of VIEWS) {
+      if (id !== "home") this.sections[id as SectionId].element.hidden = id !== view;
+    }
+    for (const [id, links] of this.links) {
+      for (const link of links) {
+        if (id === view) link.setAttribute("aria-current", "page");
+        else link.removeAttribute("aria-current");
       }
+    }
+    // On a phone, More is marked (with the view's name) for a view under it.
+    const underMore = phoneTab(view) === "more";
+    this.moreButton.classList.toggle("is-current", underMore);
+    replace(
+      this.moreButton.querySelector(".tab-label")!,
+      underMore ? viewLabel(view) : TAB_WORDS.more,
+    );
+    this.setMenu(false);
+    document.title = view === "home" ? "BYMR dashboard" : `${viewLabel(view)} · BYMR dashboard`;
+    if (changed) window.scrollTo?.(0, this.scrolls.restore(view));
+  }
+
+  /** Opens or closes the phone's list of every view (under More). */
+  private setMenu(open: boolean): void {
+    this.moreButton.setAttribute("aria-expanded", String(open));
+    this.nav.classList.toggle("is-open", open);
+  }
+
+  /** Puts a state badge (or nothing) on every link to a view. */
+  private setBadge(view: ViewId, make: (() => Node) | null): void {
+    for (const link of this.links.get(view) ?? []) {
+      const badge = link.querySelector(".nav-state");
+      if (!badge) continue;
+      if (make) replace(badge, make());
+      else replace(badge);
     }
   }
 
@@ -499,58 +495,40 @@ class Dashboard {
       this.loadHealth(),
       this.loadStats(),
       this.cases.refresh(),
+      this.photos.refresh(),
       this.bugs.refresh(),
       this.moderation.refresh(),
       this.moderators.refresh(),
       this.modMail.refresh(),
       this.shiny.refresh(),
+      this.weekend.refresh(),
     ]);
     this.refreshButton.classList.remove("is-busy");
     this.refreshButton.disabled = false;
     this.say("Up to date");
   }
 
-  /** Opens or folds a section; `remember` keeps the owner's choice in this browser. */
-  private setOpen(id: SectionId, open: boolean, remember: boolean): void {
-    const { body, toggle, element } = this.sections[id];
-    const was = toggle.getAttribute("aria-expanded") === "true";
-    toggle.setAttribute("aria-expanded", String(open));
-    element.classList.toggle("is-folded", !open);
-    body.hidden = !open;
-    if (remember) {
-      this.folds[id] = open;
-      saveFolds(this.folds);
-    }
-    // Charts drawn while folded had no width: draw them again.
-    if (open && !was && (id === "players" || id === "activity") && this.overview) {
-      replace(this.sections.players.body, ...renderPlayers(this.overview));
-      replace(this.sections.activity.body, ...renderActivity(this.overview));
+  /** A count of open items on a view's links and heading, or nothing. */
+  private renderCount(view: "cases" | "photos", open: number | null): void {
+    const { state } = this.sections[view];
+    if (open) {
+      const text = String(open);
+      this.setBadge(view, () => h("span", { class: "count" }, text, h("span", { class: "sr-only" }, " open")));
+      replace(state, h("span", { class: "chip chip-info" }, `${text} open`));
+    } else {
+      this.setBadge(view, null);
+      replace(state);
     }
   }
 
-  /** Opens the section a link names (`#health`), without remembering it. */
-  private openNamed(href: string): void {
-    const id = SECTIONS.find(([name]) => `#${name}` === href)?.[0];
-    if (!id) return;
-    this.setOpen(id, true, false);
-    // The section the person asked for is the one to mark, until they scroll on their own: a
-    // short section, or one at the page's end, never fills the screen by itself.
-    this.chosen = id;
-    this.chosenAt = Date.now();
+  /** The players with open photo reports on the link and the heading. */
+  private renderPhotoState(): void {
+    this.renderCount("photos", this.openPhotos);
   }
 
   /** The open chat cases on the link and the heading. */
   private renderCaseState(): void {
-    const { state, link } = this.sections.cases;
-    const badge = link.querySelector(".nav-state")!;
-    if (this.openCases) {
-      const text = String(this.openCases);
-      replace(badge, h("span", { class: "count" }, text, h("span", { class: "sr-only" }, " open")));
-      replace(state, h("span", { class: "chip chip-info" }, `${text} open`));
-    } else {
-      replace(badge);
-      replace(state);
-    }
+    this.renderCount("cases", this.openCases);
   }
 
   private say(message: string): void {
@@ -560,17 +538,18 @@ class Dashboard {
     this.toastTimer = window.setTimeout(() => (this.toast.hidden = true), 4000);
   }
 
+  /** Opens a bug report (or the list) in the Bug reports view, as a step Back can undo. */
   private openBug(id: number | null): void {
-    const url =
-      id === null ? `${location.pathname}#bugs` : `${location.pathname}?bug=${id}#bugs`;
+    const url = id === null ? `${location.pathname}#bugs` : `${location.pathname}?bug=${id}#bugs`;
     history.pushState(null, "", url);
-    void this.bugs.show(id).then(() => this.sections.bugs.element.scrollIntoView());
+    this.show("bugs", {});
+    void this.bugs.show(id);
   }
 
-  /** Opens a player in the Moderation section (a name clicked in the chat panel). */
+  /** Opens a player in the Find a player view (a name clicked in the chat panel or a case). */
   private openPlayer(userid: number): void {
-    this.setOpen("moderation", true, false);
-    this.sections.moderation.element.scrollIntoView();
+    history.pushState(null, "", `${location.pathname}${viewHash("moderation")}`);
+    this.show("moderation", {});
     void this.moderation.open(userid);
   }
 
@@ -672,40 +651,27 @@ class Dashboard {
     );
   }
 
-  /** Each section's heading and link say whether something there needs a look. */
+  /** Each view's heading and links say whether something there needs a look. */
   private renderStates(items: readonly TopItem[]): void {
-    const levels = sectionLevels(items);
-    for (const [id] of SECTIONS) {
-      if (id === "cases") continue;
-      const { state, link } = this.sections[id];
-      const level =
-        id === "players" ||
-        id === "activity" ||
-        id === "shiny" ||
-        id === "announcements" ||
-        id === "moderation" ||
-        id === "moderators" ||
-        id === "modmail" ||
-        id === "chat"
-          ? undefined
-          : levels[id];
-      const badge = link.querySelector(".nav-state")!;
+    const levels = sectionLevels(items) as Partial<Record<ViewId, Level>>;
+    for (const [id] of VIEWS) {
+      if (id === "home" || id === "cases" || id === "photos") continue;
+      const { state } = this.sections[id];
+      const level = NO_HEALTH_MARK.has(id) ? undefined : levels[id];
       if (id === "bugs" && this.newBugs) {
         const text = this.newBugs >= 30 ? "30+" : String(this.newBugs);
-        replace(badge, h("span", { class: "count" }, text, h("span", { class: "sr-only" }, " new")));
+        this.setBadge(id, () => h("span", { class: "count" }, text, h("span", { class: "sr-only" }, " new")));
         replace(state, h("span", { class: "chip chip-info" }, `${text} new`));
         continue;
       }
       if (level) {
-        // A problem in a folded section opens it.
-        this.setOpen(id, true, false);
-        replace(badge, mark(level));
+        this.setBadge(id, () => mark(level));
         replace(
           state,
           h("span", { class: `chip chip-${level}` }, level === "bad" ? "Needs you" : "Check"),
         );
       } else {
-        replace(badge);
+        this.setBadge(id, null);
         replace(state);
       }
     }
@@ -781,7 +747,7 @@ class Dashboard {
       if (steps.open) this.openFixes?.add(item.key);
       else this.openFixes?.delete(item.key);
     });
-    const sectionName = SECTIONS.find(([id]) => id === item.section)?.[1] ?? "Server";
+    const sectionName = isView(item.section) ? viewLabel(item.section) : "Server";
     return h(
       "li",
       { class: `issue issue-${item.level}` },
