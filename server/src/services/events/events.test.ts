@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   EVENTS,
   HALLOWEEN_2026_CALENDAR,
+  THANKSGIVING_2026_CALENDAR,
   KRALLEN_HUNT_GOALS,
   KRALLEN_HUNTS,
   krallenHunt,
@@ -44,6 +45,21 @@ describe("the event list", () => {
     expect(HALLOWEEN_2026_CALENDAR).toHaveLength(14);
     expect(HALLOWEEN_2026_CALENDAR[6]!.rewards).toContainEqual({ kind: "decoration", type: 111, count: 1 });
     expect(HALLOWEEN_2026_CALENDAR[13]!.rewards).toContainEqual({ kind: "decoration", type: 110, count: 1 });
+  });
+
+  test("Thanksgiving 2026: 19 Nov to 3 Dec UTC, a 14-day calendar paced like Halloween's", () => {
+    const thanksgiving = EVENTS.find((event) => event.id === "thanksgiving-2026")!;
+    expect(thanksgiving).toMatchObject({ startsAt: "2026-11-19T00:00:00Z", endsAt: "2026-12-03T00:00:00Z" });
+    expect(thanksgiving.calendar).toBe(THANKSGIVING_2026_CALENDAR);
+    expect(THANKSGIVING_2026_CALENDAR).toHaveLength(14);
+    const days = (Date.parse(thanksgiving.endsAt) - Date.parse(thanksgiving.startsAt)) / 86_400_000;
+    expect(THANKSGIVING_2026_CALENDAR).toHaveLength(days);
+    // The same kind of reward on the same day as Halloween's.
+    const kinds = (calendar: typeof HALLOWEEN_2026_CALENDAR) => calendar.map((day) => day.rewards.map((one) => one.kind));
+    expect(kinds(THANKSGIVING_2026_CALENDAR)).toEqual(kinds(HALLOWEEN_2026_CALENDAR));
+    expect(THANKSGIVING_2026_CALENDAR[6]!.rewards).toContainEqual({ kind: "decoration", type: 55, count: 1 });
+    expect(THANKSGIVING_2026_CALENDAR[11]!.rewards).toContainEqual({ kind: "shopItem", item: "POD" });
+    expect(THANKSGIVING_2026_CALENDAR[13]!.rewards).toContainEqual({ kind: "decoration", type: 69, count: 1 });
   });
 
   test("Krallen Hunt: monthly from 15 Nov 2026, the 15th to the 1st, never during Halloween", () => {

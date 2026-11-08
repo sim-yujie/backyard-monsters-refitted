@@ -75,6 +75,13 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * `addfriend` copies the two monster heads (`friends`; wants a green plus), `mute` the
  * blue Protection shield (wants a speaker with a cross) and `report` the white flag of
  * Retreat (wants a red warning flag). Replace their `*.webp` files to change them.
+ *
+ * The Events page (`ui/events/EventsPanel.ts`, `art-samples/events-icons`, painted
+ * 8 Nov in place of line icons): a gold stopwatch with speed streaks for a speed-up
+ * (`speedup`), a flaming cog with a lightning bolt for Production Overdrive
+ * (`overdrive`), a crossed wrench and hammer for another store boost such as
+ * Sharper Tools (`tools`), and the festive calendar with a gold star and rosette on
+ * the Events button (`event`), which suits every event, not just Halloween.
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -125,6 +132,10 @@ export const GAME_ICONS = {
   addfriend: "Add friend",
   mute: "Mute",
   report: "Report",
+  speedup: "Speed-up",
+  overdrive: "Production Overdrive",
+  tools: "Store boost",
+  event: "Events",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;

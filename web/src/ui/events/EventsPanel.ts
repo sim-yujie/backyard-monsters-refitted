@@ -14,6 +14,7 @@ import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import { typeName } from "@/game/yard/planner/summary";
 import { AMOUNT_CHANGE_SIGNS } from "@/ui/amountChange";
 import { formatAmount, formatCountdown } from "@/ui/format";
+import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { Panel } from "@/ui/Panel";
 import { resourceIcon, RESOURCE_KEYS } from "@/ui/resourceIcon";
 import { eventsArt } from "./eventsArt";
@@ -82,6 +83,26 @@ const el = <K extends keyof HTMLElementTagNameMap>(
 /** A decoration's name, as the yard names it. */
 const decorationName = (type: number): string => typeName(type);
 
+/** A store buff's length on its badge: "7d" for Sharper Tools, "12h" for Production Overdrive. */
+const SHOP_ITEM_SHORT: Readonly<Record<string, string>> = { BST: "7d", POD: "12h", EXH: "24h" };
+
+/**
+ * A store buff's painted icon (`ui/gameIcon.ts`, art-samples/events-icons):
+ * Production Overdrive the flaming cog, any other the wrench and hammer.
+ */
+const SHOP_ITEM_ICON: Readonly<Record<string, GameIconName>> = { POD: "overdrive" };
+
+/** A reward's painted icon, 24 px, its word left to the badge's own words. */
+const rewardIcon = (name: GameIconName): HTMLImageElement =>
+  gameIcon(name, { size: 24, decorative: true, className: "events-reward__icon" });
+
+/**
+ * A decoration's picture taller than this times its width (the Scarecrow,
+ * 48 x 72) is drawn taller, so it reads as big as a squat one (the D.A.V.E.
+ * Pumpkin, 48 x 64) rather than as a thin sliver.
+ */
+const TALL_ART = 1.3;
+
 /** The words for a list of rewards: "10,000 Twigs, 10,000 Pebbles + 25 Shiny". */
 export const rewardsText = (rewards: readonly EventReward[]): string =>
   rewards.map((reward) => rewardText(reward, decorationName)).join(" + ");
@@ -137,6 +158,9 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
         return amount > 0 ? [[key, amount] as const] : [];
       });
       for (const [key] of amounts) pictures.append(resourceIcon(key, { decorative: true }));
+      // Three or four piles side by side spill out of a phone's day tile: a 2 x 2 block instead.
+      if (amounts.length > 2) pictures.classList.add("events-reward__pictures--block");
+      if (amounts.length === 2) pictures.classList.add("events-reward__pictures--pair");
       const values = [...new Set(amounts.map(([, amount]) => amount))];
       figure = values.map((amount) => shortAmount(amount)).join("/");
       break;
@@ -146,12 +170,12 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
       figure = shortAmount(reward.amount);
       break;
     case "speedup":
-      pictures.append(eventsArt("clock", 20));
+      pictures.append(rewardIcon("speedup"));
       figure = `${reward.item === "SP3" ? "-2h" : "-1h"}${reward.count > 1 ? ` x${reward.count}` : ""}`;
       break;
     case "shopItem":
-      pictures.append(eventsArt("tools", 20));
-      figure = reward.item === "BST" ? "7d" : "";
+      pictures.append(rewardIcon(SHOP_ITEM_ICON[reward.item] ?? "tools"));
+      figure = SHOP_ITEM_SHORT[reward.item] ?? "";
       break;
     case "krallen":
       pictures.append(krallenPicture(1, "icon", "events-reward__image"));
@@ -163,11 +187,17 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
         image.src = art.top.url;
         image.alt = "";
         image.decoding = "async";
+        image.addEventListener(
+          "load",
+          () => image.classList.toggle("events-reward__image--tall", image.naturalHeight > image.naturalWidth * TALL_ART),
+          { once: true },
+        );
         pictures.append(image);
       } else {
         pictures.append(eventsArt("gift", 20));
       }
-      figure = reward.count > 1 ? `x${reward.count}` : "";
+      // Its name, like every other tile's figure ("Acorn"); the count too when there are more.
+      figure = reward.count > 1 ? `${decorationName(reward.type)} x${reward.count}` : decorationName(reward.type);
       break;
     }
   }

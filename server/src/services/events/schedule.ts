@@ -1,4 +1,4 @@
-import { eventsForcedOn } from "../../config/GameConfig.js";
+import { eventsForcedOff, eventsForcedOn } from "../../config/GameConfig.js";
 import { EVENTS, UPCOMING_DAYS, type EventDefinition } from "../../game-data/events/events.js";
 
 /**
@@ -25,15 +25,21 @@ export type EventStatus = "active" | "upcoming" | "past";
 
 const seconds = (iso: string): number => Math.floor(Date.parse(iso) / 1000);
 
+/** The window of an event switched off: over long ago, with nothing left to claim. */
+export const SWITCHED_OFF_WINDOW: EventWindow = { startsAt: 0, endsAt: 0 };
+
 /**
  * The event's window. A forced event (`eventsForcedOn`) starts at today's UTC
- * midnight and lasts as long as its real window does.
+ * midnight and lasts as long as its real window does. An event switched off
+ * (`eventsForcedOff`, local testing only) is over, even when also forced on.
  */
 export const eventWindow = (
   event: EventDefinition,
   now: number,
-  forced: ReadonlySet<string> = eventsForcedOn(process.env)
+  forced: ReadonlySet<string> = eventsForcedOn(process.env),
+  off: ReadonlySet<string> = eventsForcedOff(process.env)
 ): EventWindow => {
+  if (off.has(event.id)) return SWITCHED_OFF_WINDOW;
   const startsAt = seconds(event.startsAt);
   const endsAt = seconds(event.endsAt);
   if (!forced.has(event.id)) return { startsAt, endsAt };
@@ -69,11 +75,12 @@ export interface ScheduledEvent {
 export const visibleEvents = (
   now: number,
   events: readonly EventDefinition[] = EVENTS,
-  forced: ReadonlySet<string> = eventsForcedOn(process.env)
+  forced: ReadonlySet<string> = eventsForcedOn(process.env),
+  off: ReadonlySet<string> = eventsForcedOff(process.env)
 ): ScheduledEvent[] => {
   const shown: ScheduledEvent[] = [];
   for (const event of events) {
-    const window = eventWindow(event, now, forced);
+    const window = eventWindow(event, now, forced, off);
     const status = statusAt(window, now);
     if (status === "past") {
       if (now < claimsUntil(event, window)) shown.push({ event, window, status: "ended" });

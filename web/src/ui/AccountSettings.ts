@@ -96,7 +96,7 @@ export const SETTINGS_TEXT = {
   lookLabel: "Style",
   lookModern: "Modern",
   lookClassic: "Classic (original Flash)",
-  lookHint: "Classic shows and plays the game as the original did.",
+  lookHint: "Classic shows and plays the game as the original did. Applies after a reload.",
   lookSaved: "Saved. Reload the page to see the change.",
   musicLabel: "Music",
   musicStyle: "Same as Style",
