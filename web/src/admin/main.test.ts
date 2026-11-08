@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SESSION_STORAGE_KEY } from "@/config";
 import fixture from "../../test/fixtures/admin-dashboard.json";
-import { boot, readRoute, sectionLevels } from "./main";
+import { boot, sectionLevels } from "./main";
 import type { TopItem } from "./problems";
 
 /**
@@ -12,16 +12,6 @@ import type { TopItem } from "./problems";
 
 const notFoundResponse = () =>
   new Response("Not Found", { status: 404, headers: { "Content-Type": "text/plain" } });
-
-describe("the address", () => {
-  it("reads a section and a bug report", () => {
-    expect(readRoute("", "#errors")).toEqual({ bug: null, section: "errors" });
-    expect(readRoute("?bug=41", "#bugs")).toEqual({ bug: 41, section: "bugs" });
-    expect(readRoute("?bug=41", "")).toEqual({ bug: 41, section: "bugs" });
-    expect(readRoute("?bug=x", "#nothing")).toEqual({ bug: null, section: null });
-    expect(readRoute("?bug=-3", "#health")).toEqual({ bug: null, section: "health" });
-  });
-});
 
 describe("the section links", () => {
   it("take the worst state of each section's problems", () => {
@@ -87,7 +77,23 @@ describe("the owner's first look", () => {
     if (path.endsWith("/admin/stats/overview")) return fixture.overview;
     if (path.endsWith("/admin/bugreports")) return fixture.bugReports;
     if (path.endsWith("/admin/errors")) return fixture.errors;
+    if (path.endsWith("/admin/inbox")) return inbox;
     return null;
+  };
+
+  /** Two players waiting in the moderation inbox. */
+  const inbox = {
+    ok: true,
+    players: [
+      {
+        userid: 42, username: "TrollKing88", banned: false, muted: false, gameTeam: false, caseId: 7,
+        reportedMessages: 2, reports: 4, uniqueReporters: 4, filterLines: 3, slurs: 0, flagsUpTo: 905,
+        previousActions: 1, lastAction: null, oldestAt: "2026-11-04T10:00:00Z", latestAt: "2026-11-04T12:00:00Z",
+        preview: { text: "you are all trash", source: "report" }, suggest: { action: "mute", hours: 24 },
+      },
+    ],
+    nextOffset: null,
+    counts: { all: 1, reports: 1, filter: 1 },
   };
 
   beforeEach(() => {
@@ -119,7 +125,7 @@ describe("the owner's first look", () => {
     await boot();
     await settle();
     const box = document.getElementById("problems")!;
-    expect(box.querySelector("h2")?.textContent).toBe("1 problem needs you");
+    expect(box.querySelector("h2")?.textContent).toBe("1 problem needs you, 1 warning");
     expect(box.textContent).toContain("Last night's backup did not happen");
     expect(box.textContent).toContain("Telegram alerts are off");
     // The first real problem opens its "What to do" by itself, with a command to copy.
@@ -129,12 +135,39 @@ describe("the owner's first look", () => {
     expect(fix?.querySelector("button.copy")?.getAttribute("aria-label")).toMatch(/^Copy: /);
   });
 
+  it("keeps the server to one line, with its problems a tap away, and puts the waiting work below", async () => {
+    await boot();
+    await settle();
+    const box = document.getElementById("problems")!;
+    const list = box.querySelector<HTMLElement>(".issues")!;
+    expect(list.hidden).toBe(true);
+    const toggle = box.querySelector<HTMLButtonElement>(".verdict-toggle")!;
+    expect(toggle.textContent).toBe("What to do");
+    toggle.click();
+    expect(list.hidden).toBe(false);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    // The moderation card: who is waiting, each linking to their evidence in the inbox.
+    const inboxCard = document.getElementById("home-inbox")!;
+    expect(inboxCard.textContent).toContain("1player waiting");
+    expect(inboxCard.querySelector("a.home-row")?.getAttribute("href")).toBe("#inbox?player=42");
+    expect(inboxCard.textContent).toContain("2 reported messages · 4 reports");
+    expect(inboxCard.querySelector("a[href='#inbox?source=filter']")).not.toBeNull();
+    // The bug card links the New and Working lists.
+    const bugCard = document.getElementById("home-bugs")!;
+    expect(bugCard.querySelector("a[href='#bugs?list=new']")).not.toBeNull();
+    expect(bugCard.querySelector("a[href='#bugs?list=working']")).not.toBeNull();
+    // The inbox is the phone's Moderation tab, with its count.
+    const tab = document.querySelector(".tabs a[href='#inbox']")!;
+    expect(tab.textContent).toContain("Inbox");
+    expect(tab.querySelector(".count")?.textContent).toContain("1");
+  });
+
   it("has the Shiny section in the links, and the light or dark switch in the header", async () => {
     await boot();
     await settle();
     expect(document.querySelector(".nav a[href='#shiny']")?.textContent).toBe("Shiny");
     expect(document.getElementById("shiny")?.querySelector("#player-search")).not.toBeNull();
-    expect(document.querySelector(".nav a[href='#moderation']")?.textContent).toBe("Moderation");
+    expect(document.querySelector(".nav a[href='#moderation']")?.textContent).toBe("Find a player");
     expect(document.getElementById("moderation")?.querySelector("#mod-search")).not.toBeNull();
     expect(document.querySelector(".nav a[href='#chat']")?.textContent).toBe("Chat");
     expect(document.getElementById("chat")?.textContent).toContain("Join chat");
@@ -143,29 +176,51 @@ describe("the owner's first look", () => {
     expect(select.value).toBe("auto");
   });
 
-  it("puts Chat cases first, folds the rarely used sections, and remembers what the owner opens", async () => {
+  it("opens on Home, shows one view at a time, and follows the address", async () => {
     await boot();
     await settle();
-    expect(document.querySelector(".nav li a")?.getAttribute("href")).toBe("#cases");
-    expect(document.querySelector(".page > .section")?.id).toBe("cases");
-    const players = document.getElementById("players")!;
-    const toggle = players.querySelector<HTMLButtonElement>(".section-toggle")!;
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(players.querySelector<HTMLElement>(".section-body")!.hidden).toBe(true);
-    expect(document.getElementById("bugs-body")!.hidden).toBe(false);
-    // A section with a problem opens by itself: last night's backup is missing.
-    expect(document.getElementById("backups-body")!.hidden).toBe(false);
-    toggle.click();
-    expect(players.querySelector<HTMLElement>(".section-body")!.hidden).toBe(false);
-    expect(JSON.parse(localStorage.getItem("bymr.admin.folds")!)).toEqual({ players: true });
-    // A link to a folded section opens it.
-    const activity = document.getElementById("activity-body")!;
-    expect(activity.hidden).toBe(true);
-    const link = document.querySelector<HTMLAnchorElement>(".nav a[href='#activity']")!;
-    // Not to the address: the next test would start on #activity.
-    link.addEventListener("click", (event) => event.preventDefault());
-    link.click();
-    expect(activity.hidden).toBe(false);
+    const shown = () => [...document.querySelectorAll<HTMLElement>(".page > .view")].filter((v) => !v.hidden).map((v) => v.id);
+    expect(shown()).toEqual(["home"]);
+    expect(document.querySelector(".nav a[aria-current]")?.getAttribute("href")).toBe("#home");
+    // The groups, in order: Home, then moderation, the player tools, monitoring last.
+    expect([...document.querySelectorAll(".nav .nav-title")].map((t) => t.textContent)).toEqual([
+      "Moderation",
+      "Players",
+      "Monitoring",
+    ]);
+    location.hash = "#errors";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    expect(shown()).toEqual(["errors"]);
+    expect(document.querySelector(".nav a[aria-current]")?.getAttribute("href")).toBe("#errors");
+    // On a phone, Errors is under More, which takes its name.
+    const more = document.querySelector<HTMLButtonElement>(".tabs .tab-more")!;
+    expect(more.classList.contains("is-current")).toBe(true);
+    expect(more.textContent).toBe("Errors");
+    more.click();
+    expect(document.querySelector(".nav")!.classList.contains("is-open")).toBe(true);
+    location.hash = "#bugs";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    expect(shown()).toEqual(["bugs"]);
+    expect(document.querySelector(".nav")!.classList.contains("is-open")).toBe(false);
+    expect(document.querySelector(".tabs a[aria-current]")?.textContent).toContain("Bugs");
+    expect(more.textContent).toBe("More");
+    location.hash = "";
+  });
+
+  it("keeps what was typed in a view while another is on show", async () => {
+    await boot();
+    await settle();
+    location.hash = "#moderation";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    const search = document.querySelector<HTMLInputElement>("#mod-search")!;
+    search.value = "Mud";
+    location.hash = "#errors";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    expect(document.getElementById("moderation")!.hidden).toBe(true);
+    location.hash = "#moderation";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    expect(document.querySelector<HTMLInputElement>("#mod-search")!.value).toBe("Mud");
+    location.hash = "";
   });
 
   it("keeps the technical words behind Technical details", async () => {
@@ -234,7 +289,7 @@ describe("when the health cannot be read (26 Oct)", () => {
   it("says the sign-in ran out, not that the server may be down, and offers to sign in again", async () => {
     await boot();
     await settle();
-    expect(box().querySelector("h2")?.textContent).toBe("1 problem needs you");
+    expect(box().querySelector("h2")?.textContent).toBe("1 problem needs you, 1 warning");
 
     // The game signs in again on another device: this browser keeps the old token.
     accepted = "other-device-token";
@@ -258,7 +313,7 @@ describe("when the health cannot be read (26 Oct)", () => {
     refresh();
     await settle();
 
-    expect(box().querySelector("h2")?.textContent).toBe("1 problem needs you");
+    expect(box().querySelector("h2")?.textContent).toBe("1 problem needs you, 1 warning");
     const last = fetch.mock.calls.at(-1) as unknown as [string, RequestInit];
     expect(new Headers(last[1].headers).get("Authorization")).toBe("Bearer game-token");
   });
@@ -275,7 +330,7 @@ describe("when the health cannot be read (26 Oct)", () => {
     saveSession("game-token");
     window.dispatchEvent(new StorageEvent("storage", { key: SESSION_STORAGE_KEY }));
     await settle();
-    expect(box().querySelector("h2")?.textContent).toBe("1 problem needs you");
+    expect(box().querySelector("h2")?.textContent).toBe("1 problem needs you, 1 warning");
   });
 
   it("says the server could not be reached only when nothing answers", async () => {
