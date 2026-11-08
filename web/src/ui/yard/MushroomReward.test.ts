@@ -4,6 +4,8 @@ import { spokenText } from "@/ui/resourceIcon";
 import {
   GOLDEN_MUSHROOM_ART,
   GOLDEN_TITLE,
+  GOLDEN_TURKEY_ART,
+  GOLDEN_TURKEY_TITLE,
   JACK_O_LANTERN_ART,
   JACK_O_LANTERN_TITLE,
   showGoldenMushroom,
@@ -39,6 +41,18 @@ describe("showGoldenMushroom", () => {
     expect(layer.querySelector("img")?.getAttribute("src")).toBe(JACK_O_LANTERN_ART);
     const text = layer.querySelector(".mushroom-reward__text")!;
     expect(spokenText(text)).toMatch(/jack-o'-lantern worth Shiny 3\. Pumpkins keep growing while Halloween lasts\./);
+    popup.close();
+  });
+
+  it("at Thanksgiving the golden find is a golden turkey", () => {
+    const layer = document.createElement("div");
+    document.body.append(layer);
+
+    const popup = showGoldenMushroom(layer, 8, "thanksgiving");
+
+    expect(layer.querySelector(".panel__title")?.textContent).toBe(GOLDEN_TURKEY_TITLE);
+    expect(layer.querySelector("img")?.getAttribute("src")).toBe(GOLDEN_TURKEY_ART);
+    expect(spokenText(layer.querySelector(".mushroom-reward__text")!)).toMatch(/golden turkey worth Shiny 8\./);
     popup.close();
   });
 });

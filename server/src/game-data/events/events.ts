@@ -170,6 +170,40 @@ export const HALLOWEEN_2026_LADDER: readonly LadderTier[] = [
 
 /**
  * ═══════════════════════════════════════════════════════════════════════
+ * THANKSGIVING 2026 TURKEY HUNT LADDER: what picking turkeys earns.
+ * The same tiers as Halloween's pumpkin ladder (owner may change them):
+ * during the event the yard's mushrooms grow as turkeys that wander near
+ * where they grew, about one an hour (`services/yard/season.ts`), and every
+ * turkey a player picks adds one to the counter
+ * (`controllers/yard/mushrooms.ts`). One pick in four is a golden turkey,
+ * worth 3 or 8 Shiny, exactly as a golden mushroom (`GOLDEN_SMALL`,
+ * `GOLDEN_BIG` in `services/yard/mushrooms.ts`). Each tier is claimed once,
+ * by hand, on the Events page. `need` is the turkey count.
+ * r1 Twigs, r2 Pebbles, r3 Putty, r4 Goo. Decoration 69 is the Scarecrow,
+ * 110 the D.A.V.E. Pumpkin.
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+export const THANKSGIVING_2026_LADDER: readonly LadderTier[] = [
+  /* 10 turkeys  */ { need: 10, rewards: [{ kind: "shiny", amount: 10 }] },
+  /* 25 turkeys  */ { need: 25, rewards: [{ kind: "resources", amounts: { r1: 25_000, r2: 25_000, r3: 25_000, r4: 25_000 } }] },
+  /* 50 turkeys  */ {
+    need: 50,
+    rewards: [
+      { kind: "decoration", type: 69, count: 1 },
+      { kind: "shiny", amount: 20 },
+    ],
+  },
+  /* 100 turkeys */ {
+    need: 100,
+    rewards: [
+      { kind: "decoration", type: 110, count: 1 },
+      { kind: "shiny", amount: 30 },
+    ],
+  },
+];
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
  * THE MONTHLY KRALLEN HUNT: set by the owner (2026-10-20).
  * Every month from the 15th 00:00 UTC to the end of the month, the first
  * 15-30 November 2026 (never during Halloween). For Town Hall 6 and up,
@@ -241,6 +275,17 @@ export const EVENTS: readonly EventDefinition[] = [
     ladder: { label: "Pumpkins found", tiers: HALLOWEEN_2026_LADDER },
   },
   ...KRALLEN_HUNTS,
+  {
+    id: "thanksgiving-2026",
+    title: "Thanksgiving",
+    text: "Happy Thanksgiving! Turkeys are roaming your yard. Tap one to catch it for prizes, and watch out for the golden turkey!",
+    upcomingText: "Thanksgiving is coming! Turkeys will roam your yard. Catch them for prizes, and watch out for the golden turkey!",
+    kind: "thanksgiving",
+    // Dates editable: around US Thanksgiving, Thursday 26 November 2026.
+    startsAt: "2026-11-19T00:00:00Z",
+    endsAt: "2026-12-03T00:00:00Z",
+    ladder: { label: "Turkeys caught", tiers: THANKSGIVING_2026_LADDER },
+  },
 ];
 
 /** The event with this id, or undefined. */

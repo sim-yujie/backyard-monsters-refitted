@@ -11,11 +11,13 @@ import {
   PUMPKIN_QUIPS,
   pumpkinsFound,
   pickRefusal,
+  TURKEY_QUIPS,
+  turkeysCaught,
   SHAKE_MS,
   type MushroomPickView,
 } from "./mushroomPick";
 import { YardStore } from "./YardStore";
-import { onPumpkins } from "@/game/events/pumpkinHunt";
+import { onHuntCount, onPumpkins } from "@/game/events/pumpkinHunt";
 import { readYard, type YardBuilding, type YardMushroom } from "./yardModel";
 
 /**
@@ -283,6 +285,46 @@ describe("MushroomPicker", () => {
     expect(calls.at(-1)).toBe(`ordinary ${PUMPKIN_QUIPS[1]} 12 pumpkins found.`);
     expect(heard).toHaveBeenCalledWith(12);
     expect(pumpkinsFound(1)).toBe("1 pumpkin found.");
+  });
+
+  it("at Thanksgiving a turkey pick pops the turkey, then the golden turkey popup", async () => {
+    const save = loadWith();
+    const store = storeOf(save, vi.fn(() => Promise.resolve(answer(save, 2, { golden: true, shiny: 3, turkeys: 4 }))));
+    const { view, calls } = viewSpy();
+    view.picked = (spot, golden) => calls.push(`picked ${spot.x},${spot.y} ${golden}`);
+    const time = handTimers();
+    const heard = vi.fn();
+    const stop = onHuntCount(heard);
+    const picker = new MushroomPicker(store, view, { timers: time.timers, season: () => "thanksgiving" });
+
+    const done = picker.pick(store.yard.mushrooms[2]!);
+    time.fire();
+    await done;
+    stop();
+
+    expect(calls).toEqual(["shake 100,-300", "stop 100,-300", "picked 100,-300 true", "golden 3"]);
+    expect(heard).toHaveBeenCalledWith(4, "thanksgiving");
+    expect(store.credits).toBe(13);
+  });
+
+  it("an ordinary turkey gets a turkey quip and the turkey count", async () => {
+    const save = loadWith();
+    const store = storeOf(save, vi.fn(() => Promise.resolve(answer(save, 0, { turkeys: 1 }))));
+    const { view, calls } = viewSpy();
+    view.picked = (_spot, golden) => calls.push(`picked ${golden}`);
+    const time = handTimers();
+    const picker = new MushroomPicker(store, view, {
+      timers: time.timers,
+      random: () => 0.5,
+      season: () => "thanksgiving",
+    });
+
+    const done = picker.pick(store.yard.mushrooms[0]!);
+    time.fire();
+    await done;
+
+    expect(calls.slice(-2)).toEqual(["picked false", `ordinary ${TURKEY_QUIPS[1]} 1 turkey caught.`]);
+    expect(turkeysCaught(12)).toBe("12 turkeys caught.");
   });
 
   it("no free worker: says so at once, no shake, nothing sent", async () => {

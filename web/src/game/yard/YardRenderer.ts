@@ -20,6 +20,10 @@ import { routeBetween } from "@/game/guide/MonsterWalkIn";
 import { yardArtAtlas, type YardArtAtlas } from "./yardAtlas";
 import { loadSheet, MonsterSheetTextures, prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { currentSeason, onSeasonChange, type Season } from "@/game/season";
+import { classicLook } from "@/game/classicLook";
+import { thanksgivingSkin } from "./thanksgivingSkin";
+import { YardTurkeys } from "./YardTurkeys";
+import { YardDressUp } from "./YardDressUp";
 import { BlueprintLayer } from "./planner/BlueprintLayer";
 import { blueprintToYard, blueprintToWorld } from "./planner/blueprint";
 import { PlannerOverlay, type PlannerVisuals } from "./planner/PlannerOverlay";
@@ -79,6 +83,10 @@ export class YardRenderer {
 
   private readonly ground = new YardGround();
   private readonly buildings = new YardBuildings();
+  /** Thanksgiving: turkeys roam in place of the mushrooms (`YardTurkeys.ts`). */
+  private readonly turkeys = new YardTurkeys(this.buildings);
+  /** Thanksgiving: the props round the plot (`YardDressUp.ts`). */
+  private readonly dressUp = new YardDressUp(this.buildings);
   /** Each mushroom's sprite by `mushroomKey`, rebuilt with every `show`. */
   private readonly mushroomSprites = new Map<string, Sprite>();
   /** Mushrooms shaking for a pick, by `mushroomKey` (`BMUSHROOM.as:76-81`). */
@@ -261,7 +269,37 @@ export class YardRenderer {
           this.pumpkinLoading = false;
         });
     }
+    if (season === "thanksgiving") {
+      // The mushrooms stay until the turkeys arrive, and for good if they never do.
+      void this.turkeys.load().then((ready) => {
+        if (ready && !this.destroyed && this.season === "thanksgiving") this.replaceFinds();
+      });
+    } else if (this.turkeys.count > 0) {
+      this.turkeys.clear();
+      this.replaceFinds();
+    }
+    this.dressYard();
     this.redrawMushrooms();
+  }
+
+  /** Whether turkeys stand in for the mushrooms now: Thanksgiving, once their pictures are in. */
+  private get turkeysOn(): boolean {
+    return this.season === "thanksgiving" && this.turkeys.ready;
+  }
+
+  /** Puts the yard's finds back for the season: mushrooms (or pumpkins), or turkeys. */
+  private replaceFinds(): void {
+    const yard = this.yard;
+    if (!yard) return;
+    this.clearMushrooms();
+    this.placeFinds(yard, []);
+  }
+
+  /** Lays (or takes away) the Thanksgiving props round the plot, for the yard on screen. */
+  private dressYard(): void {
+    const yard = this.yard;
+    const on = this.season === "thanksgiving" && yard !== null && yard.kind !== "inferno";
+    void this.dressUp.layout(on ? yard.bounds : null, yard?.savedAt || 1, on ? thanksgivingSkin() : null, classicLook());
   }
 
   /** Buildings still waiting on, or missing, their picture. */
@@ -317,6 +355,23 @@ export class YardRenderer {
     this.blueprint.setActive(this.currentView === YardView.BLUEPRINT);
 
     const fresh = popNew ? newMushroomKeys(shownBefore, yard.mushrooms) : [];
+    this.placeFinds(yard, fresh);
+    this.dressYard();
+  }
+
+  /**
+   * Stands the yard's finds: a turkey per mushroom at Thanksgiving (once the
+   * turkeys are in), else a sprite per mushroom (a pumpkin at Halloween).
+   * `fresh` keys pop up out of the ground (#263).
+   */
+  private placeFinds(yard: Yard, fresh: readonly string[]): void {
+    const atlas = this.atlas;
+    if (!atlas) return;
+    if (this.turkeysOn) {
+      this.turkeys.sync(yard, new Set(fresh));
+      this.popping.clear();
+      return;
+    }
     const keys = new Set<string>();
     const pumpkin = this.season === "halloween" ? this.pumpkin : null;
     for (const mushroom of yard.mushrooms) {
@@ -359,6 +414,7 @@ export class YardRenderer {
       if (this.helpMarks.active) this.helpMarks.reposition();
       this.shakeMushrooms();
       this.popMushrooms(deltaSeconds);
+      if (this.turkeysOn) this.turkeys.update(deltaSeconds);
     }
 
     if (this.chromeDirty) {
@@ -1057,11 +1113,22 @@ export class YardRenderer {
   /** The mushroom under a world point in the isometric yard, or null. */
   pickMushroom(worldX: number, worldY: number): YardMushroom | null {
     if (this.currentView !== YardView.ISO || !this.yard) return null;
+    if (this.turkeysOn) return this.turkeys.at(worldX, worldY);
     return mushroomAt(this.yard.mushrooms, worldX, worldY);
+  }
+
+  /** A pick landed: at Thanksgiving its turkey hops up and fades, gold if it was golden. */
+  pickedMushroom(spot: Pick<YardMushroom, "x" | "y">, golden: boolean): void {
+    if (this.turkeysOn) this.turkeys.pop(spot, golden);
   }
 
   /** Starts or stops a mushroom's pick shake. Stopping puts it back where it stood. */
   shakeMushroom(spot: Pick<YardMushroom, "x" | "y">, on: boolean): void {
+    // A turkey being picked stops and flaps instead.
+    if (this.turkeysOn) {
+      this.turkeys.hold(spot, on);
+      return;
+    }
     const key = mushroomKey(spot);
     if (on) {
       this.shaking.add(key);
@@ -1091,6 +1158,8 @@ export class YardRenderer {
     this.life.destroy();
     this.clearMushrooms();
     this.popping.clear();
+    this.turkeys.destroy();
+    this.dressUp.destroy();
     this.planner.destroy();
     this.jobBars.destroy();
     this.hatchMarks.destroy();

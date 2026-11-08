@@ -1,6 +1,7 @@
 import { Assets, Container, Graphics, Texture, TilingSprite } from "pixi.js";
 import type { Season } from "@/game/season";
 import { noiseMask } from "./groundNoise";
+import { leafSpots, PROP_BOXES, PROP_SCALE, PROPS_ART, recolourGround, thanksgivingSkin } from "./thanksgivingSkin";
 import type { YardBounds } from "./YardGrid";
 
 /**
@@ -52,10 +53,13 @@ import type { YardBounds } from "./YardGrid";
  * development. The Halloween set is the same seven images recoloured to a
  * dusky purple-grey with dead grass (a luminance gradient map, so each keeps
  * its texture and the blend works unchanged), under the same file names.
+ * Thanksgiving takes the usual grass and recolours the baked block itself,
+ * by the chosen look (`thanksgivingSkin.ts`), and scatters its leaves on it.
  */
 const TILE_ROOT: Readonly<Record<Season, string>> = {
   normal: "/assets/yardbg/grass/",
   halloween: "/assets/yardbg/spooky/",
+  thanksgiving: "/assets/yardbg/grass/",
 };
 
 /**
@@ -107,7 +111,11 @@ const BLOCK_WIDTH = TILE_WIDTH * BLOCK_COLUMNS;
 const BLOCK_HEIGHT = TILE_HEIGHT * BLOCK_ROWS;
 
 /** Grass green (dusk purple at Halloween), shown until the tiles arrive and behind them if they never do. */
-const GROUND_COLOUR: Readonly<Record<Season, number>> = { normal: 0x4a7a3a, halloween: 0x5a4c5e };
+const GROUND_COLOUR: Readonly<Record<Season, number>> = {
+  normal: 0x4a7a3a,
+  halloween: 0x5a4c5e,
+  thanksgiving: thanksgivingSkin().fill,
+};
 
 /**
  * The plot edge on the own yard: a soft dark line with a faint light one just
@@ -226,9 +234,15 @@ export class YardGround {
         ? LAVA_TILES.map((file) => LAVA_ROOT + file)
         : GRASS_TILES.map((file) => TILE_ROOT[season] + file);
 
+    // Thanksgiving's fallen leaves come from the props picture; a ground
+    // without them is still a ground, so a miss only drops the leaves.
+    const autumn = season === "thanksgiving" && terrain === "grass";
+    const leaves = autumn ? Assets.load<Texture>(PROPS_ART).catch(() => null) : Promise.resolve(null);
+
     let textures: Texture[];
+    let leafArt: Texture | null;
     try {
-      textures = await Promise.all(urls.map((url) => Assets.load<Texture>(url)));
+      [textures, leafArt] = await Promise.all([Promise.all(urls.map((url) => Assets.load<Texture>(url))), leaves]);
     } catch (caught) {
       console.warn("Yard ground did not load; the plot stays a flat colour.", caught);
       return false;
@@ -242,7 +256,7 @@ export class YardGround {
     // the caller", 5 players, 3-6 Nov 2026).
     if (this.root.destroyed || this.clip.destroyed || this.clip.parent !== this.root) return false;
 
-    const composite = this.bakeComposite(textures);
+    const composite = this.bakeComposite(textures, autumn ? { leaves: leafArt } : null);
     if (!composite) return false;
     this.composite = composite;
 
@@ -302,7 +316,7 @@ export class YardGround {
    * the browser will not give a 2D context or the decoded images cannot be read,
    * in which case the plot keeps its flat colour.
    */
-  private bakeComposite(textures: Texture[]): Texture | null {
+  private bakeComposite(textures: Texture[], autumn: { leaves: Texture | null } | null = null): Texture | null {
     const canvas = document.createElement("canvas");
     canvas.width = BLOCK_WIDTH;
     canvas.height = BLOCK_HEIGHT;
@@ -346,11 +360,50 @@ export class YardGround {
 
         context.drawImage(over, 0, 0);
       }
+      if (autumn) this.dressForAutumn(context, autumn.leaves);
     } catch (caught) {
       console.warn("Yard grass could not be composited; the plot stays flat.", caught);
       return null;
     }
 
     return Texture.from(canvas);
+  }
+
+  /**
+   * Thanksgiving: recolours the baked block by the chosen look's gradient map
+   * and lays its fallen leaves on it (`thanksgivingSkin.ts`), once, when the
+   * ground is baked. A leaf near an edge is drawn again across it, so the
+   * repeat of the block shows no cut leaves.
+   */
+  private dressForAutumn(context: CanvasRenderingContext2D, leafArt: Texture | null): void {
+    const skin = thanksgivingSkin();
+    try {
+      const pixels = context.getImageData(0, 0, BLOCK_WIDTH, BLOCK_HEIGHT);
+      recolourGround(pixels.data, skin);
+      context.putImageData(pixels, 0, 0);
+    } catch (caught) {
+      // A canvas the browser will not read back: the grass stays green.
+      console.warn("Thanksgiving ground could not be recoloured; the grass stays green.", caught);
+    }
+
+    const image = leafArt?.source.resource as CanvasImageSource | null | undefined;
+    if (!image) return;
+    for (const leaf of leafSpots(skin, BLOCK_WIDTH, BLOCK_HEIGHT, this.seed)) {
+      const box = PROP_BOXES[leaf.kind];
+      const [w, h] = [box.w * PROP_SCALE, box.h * PROP_SCALE];
+      for (const dx of [-BLOCK_WIDTH, 0, BLOCK_WIDTH]) {
+        for (const dy of [-BLOCK_HEIGHT, 0, BLOCK_HEIGHT]) {
+          const [x, y] = [leaf.x + dx, leaf.y + dy];
+          if (x < -w || y < -w || x > BLOCK_WIDTH + w || y > BLOCK_HEIGHT + w) continue;
+          context.save();
+          context.translate(x, y);
+          context.rotate(leaf.angle);
+          // Squashed to the ground's tilt: a leaf lying flat in the yard.
+          context.scale(1, 0.6);
+          context.drawImage(image, box.x, box.y, box.w, box.h, -w / 2, -h / 2, w, h);
+          context.restore();
+        }
+      }
+    }
   }
 }

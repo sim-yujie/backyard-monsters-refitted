@@ -183,6 +183,9 @@ import { mountYardPlugins, type YardSceneControls } from "@/game/yard/yardPlugin
 import "@/game/yard/plugins";
 import { devStats } from "../devDetails";
 
+/** How long the golden-turkey popup waits for the turkey's golden hop (`YardTurkeys.POP_SECONDS`). */
+const GOLDEN_TURKEY_DELAY_MS = 600;
+
 /**
  * A yard: the player's own, or — handed a {@link ViewTarget} by the map —
  * anyone else's, read-only.
@@ -2926,7 +2929,14 @@ export class YardScene implements Scene {
     return {
       shake: (spot) => this.renderer.shakeMushroom(spot, true),
       stop: (spot) => this.renderer.shakeMushroom(spot, false),
-      golden: (shiny) => void showGoldenMushroom(context.overlay.modal, shiny, currentSeason()),
+      picked: (spot, golden) => this.renderer.pickedMushroom(spot, golden),
+      // At Thanksgiving the popup waits for the golden turkey's hop on the yard.
+      golden: (shiny) => {
+        const season = currentSeason();
+        const show = () => void showGoldenMushroom(context.overlay.modal, shiny, season);
+        if (season === "thanksgiving") setTimeout(show, GOLDEN_TURKEY_DELAY_MS);
+        else show();
+      },
       ordinary: (quip) => this.notices.show("mushroom", quip, { level: "info", timeoutMs: 4000 }),
       refused: (message) =>
         this.notices.show("mushroom", message, { level: "error", timeoutMs: 5000 }),

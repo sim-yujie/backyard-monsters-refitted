@@ -5,6 +5,7 @@ import type { Random } from "../../services/yard/mushrooms.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { readOnboarding } from "../../services/onboarding/state.js";
 import { memoryProgressStore } from "../../services/events/progressStore.js";
+import { TURKEY_HUNT_EVENT, YARD_HUNTS, type YardHunt } from "../../services/yard/season.js";
 import { mushroomPickAction } from "./mushrooms.js";
 import { runYardAction, type YardAnswer } from "./yardAction.js";
 
@@ -79,7 +80,7 @@ const sequence = (...values: number[]): Random => {
 
 /** A pick outside every event: the pumpkin hunt's clock is pinned off, so the date the suite runs on does not matter. */
 const pick = (body: Row, random: Random, user = userOf()): Promise<YardAnswer> =>
-  runYardAction(em as unknown as EntityManager, user, mushroomPickAction(random, undefined, () => false), body);
+  runYardAction(em as unknown as EntityManager, user, mushroomPickAction(random, undefined, () => null), body);
 
 beforeEach(() => {
   db.row = rowOf();
@@ -154,11 +155,16 @@ describe("POST /bm/yard/mushroom/pick", () => {
 });
 
 describe("the Halloween pumpkin hunt", () => {
-  const huntPick = (store: ReturnType<typeof memoryProgressStore>, on: boolean, body: Row = { id: "0" }) =>
+  const huntPick = (
+    store: ReturnType<typeof memoryProgressStore>,
+    on: boolean,
+    body: Row = { id: "0" },
+    hunt: YardHunt = YARD_HUNTS[0]!
+  ) =>
     runYardAction(
       em as unknown as EntityManager,
       userOf(),
-      mushroomPickAction(sequence(0.9), store, () => on),
+      mushroomPickAction(sequence(0.9), store, () => (on ? hunt : null)),
       body
     );
 
@@ -182,6 +188,18 @@ describe("the Halloween pumpkin hunt", () => {
     expect(answer.status).toBe(200);
     expect((answer.body as { report: Record<string, unknown> }).report).not.toHaveProperty("pumpkins");
     expect(store.rows.size).toBe(0);
+  });
+
+  test("during Thanksgiving every pick adds a turkey to its own ladder, not the pumpkins'", async () => {
+    const store = memoryProgressStore();
+    const turkeys = YARD_HUNTS.find((hunt) => hunt.event === TURKEY_HUNT_EVENT)!;
+
+    const answer = await huntPick(store, true, { id: "0" }, turkeys);
+
+    expect(answer.body).toMatchObject({ report: { golden: false, turkeys: 1 } });
+    expect((answer.body as { report: Record<string, unknown> }).report).not.toHaveProperty("pumpkins");
+    expect(store.rows.get("2505:thanksgiving-2026")?.counter).toBe(1);
+    expect(store.rows.has("2505:halloween-2026")).toBe(false);
   });
 
   test("a refused pick counts nothing", async () => {
