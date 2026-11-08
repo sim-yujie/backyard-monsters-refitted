@@ -9,6 +9,7 @@ import { MessageType } from "../../enums/MessageType.js";
 import { TruceStatus } from "../../enums/TruceStatus.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import { logger } from "../../utils/logger.js";
+import { nudgeMail } from "../mail/mailNudge.js";
 import { answerTruce, isRequestOpen } from "../mail/truceTimes.js";
 import { isBot } from "./isBot.js";
 
@@ -170,5 +171,6 @@ export const declineTruce = async (tx: EntityManager, job: DeclineTruceJob, now:
   proposer.save.unreadmessages = await unreadCount(tx, proposer.userid);
   if (bot.save) bot.save.unreadmessages = await unreadCount(tx, bot.userid);
   await tx.flush();
+  nudgeMail(proposer.userid);
   return "rejected";
 };

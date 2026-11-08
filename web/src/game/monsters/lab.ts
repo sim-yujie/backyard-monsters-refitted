@@ -139,7 +139,9 @@ export const researchOn = (building: YardBuilding): RunningResearch | null => {
     monster,
     rank,
     endsAt,
-    duration: ability.costs[rank - 1]?.[1] ?? 0,
+    // `upd` is the length the server wrote (shorter in a Study Weekend); older
+    // research has none and ran the table's time.
+    duration: (finite(building.raw["upd"]) ?? 0) > 0 ? Number(building.raw["upd"]) : (ability.costs[rank - 1]?.[1] ?? 0),
     labId: building.id,
   };
 };

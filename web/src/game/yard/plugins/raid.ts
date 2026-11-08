@@ -3,6 +3,7 @@ import { repairActions } from "@/api/yardRepair";
 import { isMolochRaid } from "@/game/inferno/molochRaid";
 import { runRaidAftermath } from "@/game/raid/raidAftermath";
 import { consumeRaidNote, consumeRaidResult, setRaidRun } from "@/game/raid/raidSession";
+import { raidSheetWarmer } from "@/game/raid/raidSheets";
 import { raidWatch } from "@/game/raid/raidWatch";
 import { RaidYardFlow } from "@/game/raid/raidYardFlow";
 import { repairAllOffer } from "@/game/yard/shop";
@@ -33,10 +34,18 @@ const repairOffer = (mounts: YardMounts): RaidRepairOffer | null => {
   };
 };
 
+/** Warms each raid's monster sheets once, across yard visits (`raidSheets.ts`). */
+const warmRaidSheets = raidSheetWarmer();
+
 export const raidYardPlugin: YardPlugin = (mounts) => {
   const { store, overlay, notices, scene } = mounts;
   if (store.kind !== "main") return;
   const notice = (message: string): void => notices.show("raid", message, { level: "info", timeoutMs: 6_000 });
+
+  // The alert lists the army a minute or more before the fight: fetch its
+  // sheets now, so a slow line has them by the first wave.
+  warmRaidSheets(raidWatch.current);
+  const stopWarming = raidWatch.subscribe(warmRaidSheets);
 
   let flow: RaidYardFlow | null = null;
   const ui = new RaidYardUi({
@@ -71,6 +80,7 @@ export const raidYardPlugin: YardPlugin = (mounts) => {
   }
 
   return () => {
+    stopWarming();
     flow?.stop();
     ui.destroy();
   };

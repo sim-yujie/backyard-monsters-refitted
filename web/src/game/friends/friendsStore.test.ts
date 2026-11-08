@@ -120,4 +120,20 @@ describe("FriendsStore", () => {
     expect(store.snapshot).toMatchObject({ loaded: false, friends: [] });
     expect(store.isFriend(7)).toBe(false);
   });
+
+  it("pins and unpins a friend, counts the pins, and ignores a stranger", async () => {
+    const { store } = setup([listOf([friend(7), friend(9, { pinnedAt: 50 })])]);
+    await store.refresh();
+    expect(store.isPinned(9)).toBe(true);
+    expect(store.pinnedCount).toBe(1);
+    store.setPinned(7, true, 60);
+    expect(store.isPinned(7)).toBe(true);
+    expect(store.friends.find((one) => one.userid === 7)?.pinnedAt).toBe(60);
+    expect(store.pinnedCount).toBe(2);
+    store.setPinned(9, false);
+    expect(store.isPinned(9)).toBe(false);
+    expect(store.pinnedCount).toBe(1);
+    store.setPinned(11, true);
+    expect(store.isPinned(11)).toBe(false);
+  });
 });

@@ -83,6 +83,8 @@ export interface MapRoom1NeighbourWire {
   protectedUntil?: number;
   /** 1 when they are the caller's friend (friends §6.2), read fresh on every answer. */
   friend?: number;
+  /** 1 when the caller pinned this friend to the top of their list (beta 7). */
+  friendpinned?: number;
   [key: string]: unknown;
 }
 

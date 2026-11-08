@@ -1,9 +1,12 @@
 import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell } from "@/api/types";
 import { avatarOf, avatarUrl } from "@/game/avatars";
 import { cellsText, type ReachAnswer } from "@/game/maproom/attackRange";
-import { TRIBE_COLOURS } from "@/game/maproom/cellVisuals";
+import { TRIBE_COLOURS, relationOf } from "@/game/maproom/cellVisuals";
+import { RELATION_LOOK, cssHex } from "@/game/maproom/relationLook";
 import { tribePictureUrl } from "@/game/maproom/tribeAvatars";
 import { el, icon } from "@/ui/maproom1/icons";
+import { friendMarkOf, type FriendMark } from "@/game/friends/friendMarks";
+import { friendBadge } from "@/ui/friends/friendBadge";
 
 /**
  * The card that names a cell under the pointer (#176, R-MR2-Map-A): the map
@@ -25,6 +28,8 @@ export interface HoverCardContent {
   readonly detail: string;
   /** The detail is a warning: out of range. */
   readonly warn: boolean;
+  /** The owner is the player's friend (beta 7): the friend marker before the title. Absent for everyone else. */
+  readonly friend?: NonNullable<FriendMark>;
 }
 
 /** Gap between the hovered cell's edge and the card, in screen pixels. */
@@ -63,7 +68,10 @@ export class HoverCard {
    * `middle` its centre line.
    */
   show(content: HoverCardContent, at: { left: number; right: number; middle: number }): void {
-    this.title.textContent = content.title;
+    this.title.replaceChildren();
+    const badge = friendBadge(content.friend ?? null, 16, "mr2-hover__friend");
+    if (badge) this.title.append(badge, " ");
+    this.title.append(content.title);
     this.detailText.textContent = content.detail;
     this.detail.classList.toggle("mr2-hover__detail--warn", content.warn);
     this.picture.hidden = content.picture === null;
@@ -127,8 +135,17 @@ export const hoverContentFor = (
   }
 
   const mine = isPlayerCell(payload) && payload.mine === 1;
+  const mark =
+    isPlayerCell(payload) && !mine ? friendMarkOf(payload.uid, { friend: payload.fr === 1, pinned: payload.fp === 1 }) : null;
+  const friend = mark ? { friend: mark } : {};
+  // Someone else's picture wears their border's colour (owner, 8 Nov 2026): friend green, pinned
+  // friend light mint, hostile red; a neutral player's stays plain, as the map's quiet grey line.
+  if (isPlayerCell(payload) && !mine) {
+    const relation = relationOf(payload, null, mark ?? "none");
+    if (relation === "pinned" || relation === "friend" || relation === "hostile") ring = cssHex(RELATION_LOOK[relation].colour);
+  }
   if (mine || !reach.source) {
-    return { picture, ring, title, detail: "Click for more", warn: false };
+    return { picture, ring, title, detail: "Click for more", warn: false, ...friend };
   }
   if (!reach.inRange) {
     return {
@@ -137,6 +154,7 @@ export const hoverContentFor = (
       title,
       detail: `Out of range · ${cellsText(reach.steps)} too far`,
       warn: true,
+      ...friend,
     };
   }
   return {
@@ -145,5 +163,6 @@ export const hoverContentFor = (
     title,
     detail: `In range · ${cellsText(reach.steps)} away · click for more`,
     warn: false,
+    ...friend,
   };
 };

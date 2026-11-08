@@ -20,6 +20,8 @@ import {
   postMessage,
 } from "./chatRooms.js";
 import { applyModeration } from "./chatModeration.js";
+import { applyMailNudge } from "./chatMail.js";
+import { MODERATORS_REFRESH_MS, refreshChatModerators } from "./chatModerators.js";
 import { clients, type SocketData } from "./chatState.js";
 import { initTransport, subscribeControl } from "./chatTransport.js";
 import { ChatControlType } from "../enums/Chat.js";
@@ -31,7 +33,11 @@ type ServerWebSocket<T> = import("bun").ServerWebSocket<T>;
  * subscribes to the control channel. Must be called once before any WebSocket
  * connections are accepted.
  */
-export const initGateway = () => initTransport(() => subscribeControl(handleControlMessage));
+export const initGateway = () => {
+  void refreshChatModerators();
+  setInterval(() => void refreshChatModerators(), MODERATORS_REFRESH_MS).unref?.();
+  initTransport(() => subscribeControl(handleControlMessage));
+};
 
 /**
  * Handles a control message published by the API side.
@@ -52,6 +58,12 @@ const handleControlMessage = (payload: string) => {
   }
 
   if (applyModeration(message)) return;
+  if (applyMailNudge(message)) return;
+
+  if (message.type === ChatControlType.Moderators) {
+    void refreshChatModerators();
+    return;
+  }
 
   if (message.type !== ChatControlType.AllianceEvict && message.type !== ChatControlType.CountryEvict) return;
 

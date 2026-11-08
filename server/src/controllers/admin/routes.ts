@@ -22,11 +22,18 @@ import { parseTeamText, replyToReport } from "../../services/admin/supportMail.j
 import { errorTotals, listErrors } from "../../services/errors/errorStore.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { adminHealthReport } from "../../services/health/adminHealth.js";
+import { mountAdminWeekendRoutes } from "./weekend.js";
 import { daysBetween, readDailyStats, statsOverview, type StatsDeps } from "../../services/stats/dailyStats.js";
 import { LOG_BASE, LOG_DIR, logger } from "../../utils/logger.js";
 import { getOrCreateChatToken } from "../../chat/chatChannels.js";
-import { publishModeration } from "../../chat/chatControl.js";
-import { CHANNELS, INFERNO_CHAT_CHANNEL, countryChannelFor } from "../../config/ChatConfig.js";
+import { publishModeration, publishModeratorsChanged } from "../../chat/chatControl.js";
+import {
+  CHANNELS,
+  GLOBAL_CHAT_CHANNEL,
+  INFERNO_CHAT_CHANNEL,
+  LEGACY_MR1_CHAT_CHANNEL,
+  countryChannelFor,
+} from "../../config/ChatConfig.js";
 import { ChatControlType } from "../../enums/Chat.js";
 import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { endAllSessions } from "../../services/auth/sessions.js";
@@ -34,13 +41,22 @@ import { dismissChatFlags, listChatFlags, readChatLog } from "../../services/adm
 import {
   actOnCase,
   awardReporters,
+  getChatCase,
   listChatCases,
   parseCaseAction,
   parseCaseAward,
 } from "../../services/admin/chatCases.js";
 import {
+  addModerator,
+  listModerators,
+  parseModeratorAdd,
+  removeModerator,
+  type ModeratorEffects,
+} from "../../services/admin/chatModerators.js";
+import { listModConversations, parseModMailQuery, readModConversation } from "../../services/mail/modMail.js";
+import { actOnInboxPlayer, listInbox, moderatePlayer, parseInboxAction } from "../../services/admin/moderationInbox.js";
+import {
   listChatReports,
-  moderate,
   parseModeration,
   playerModeration,
   type ModerationEffects,
@@ -106,9 +122,25 @@ const MODERATION_REFUSAL_WORDS = {
   notMuted: "This player is not muted.",
 } as const;
 
+const MODERATOR_REFUSAL_WORDS = {
+  noPlayer: "There is no player with that name or account number.",
+  gameTeam: "That is a game team account: its lines already show GM.",
+  already: "That player is already a moderator.",
+  notModerator: "That player is not a moderator.",
+} as const;
+
+const moderatorEffects: ModeratorEffects = { changed: publishModeratorsChanged };
+
 const CASE_REFUSAL_WORDS = {
   notFound: "There is no such case.",
   closed: "This case is already closed.",
+  noPlayer: "This player's account is gone.",
+  gameTeam: "That is a game team account.",
+} as const;
+
+const INBOX_REFUSAL_WORDS = {
+  changed: "Something new came in for this player since you opened them. Look again before deciding.",
+  nothingOpen: "Nothing is open for this player any more.",
   noPlayer: "This player's account is gone.",
   gameTeam: "That is a game team account.",
 } as const;
@@ -124,9 +156,10 @@ const moderationEffects: ModerationEffects = {
 
 /** The dashboard chat panel's rooms: every world room, and the owner's country room. */
 const GLOBAL_ROOMS: readonly { channel: string; label: string }[] = [
-  { channel: CHANNELS[MapRoomVersion.V2]!, label: "Map Room 2" },
+  // Map Room 1 and 2 share one room since patch 6.6; Map Room 1's old room stays readable.
+  { channel: GLOBAL_CHAT_CHANNEL, label: "Global (Map Room 1 and 2)" },
   { channel: CHANNELS[MapRoomVersion.V3]!, label: "Map Room 3" },
-  { channel: CHANNELS[MapRoomVersion.V1]!, label: "Map Room 1" },
+  { channel: LEGACY_MR1_CHAT_CHANNEL, label: "Map Room 1 (before patch 6.6)" },
   { channel: INFERNO_CHAT_CHANNEL, label: "Inferno" },
 ];
 
@@ -156,6 +189,9 @@ export const mountAdminRoutes = (router: Router): void => {
   router.get(`${admin}/me`, apiVersion, adminOnly, (ctx) => {
     ok(ctx, { admin: true, userid: ctx.authUser.userid, username: ctx.authUser.username });
   });
+
+  // Weekend events: rotation, swaps, skips, percentages, run now (`weekend.ts`).
+  mountAdminWeekendRoutes(router, admin, adminOnly, () => postgres.em.fork());
 
   router.get(`${admin}/stats/overview`, apiVersion, adminOnly, async (ctx) => {
     const days = Math.min(MAX_DAYS, Math.max(1, intOf(ctx.query.days) ?? 30));
@@ -276,6 +312,14 @@ export const mountAdminRoutes = (router: Router): void => {
     });
   });
 
+  // One case, open or closed (the inbox shows an open case's evidence).
+  router.get(`${admin}/chatcases/:id`, apiVersion, adminOnly, async (ctx) => {
+    const id = intOf(ctx.params.id);
+    const view = id === undefined || id < 1 ? null : await getChatCase(postgres.em.fork(), id);
+    if (!view) return refuse(ctx, Status.CONFLICT, CASE_REFUSAL_WORDS.notFound, "notFound");
+    ok(ctx, { case: view });
+  });
+
   router.post(`${admin}/chatcases/:id/act`, apiVersion, adminOnly, async (ctx) => {
     const id = intOf(ctx.params.id);
     if (id === undefined || id < 1) return refuse(ctx, Status.NOT_FOUND, CASE_REFUSAL_WORDS.notFound, "notFound");
@@ -357,12 +401,87 @@ export const mountAdminRoutes = (router: Router): void => {
     const request = parseModeration(kind, ctx.request.body);
     if (!request.ok) return refuse(ctx, Status.BAD_REQUEST, request.message, "badRequest");
     const em = postgres.em.fork();
-    const done = await moderate(em, id, request.value, ctx.authUser.userid, moderationEffects);
+    // A warning, pause or ban also closes the player's open chat case and word-filter lines.
+    const { done, closed } = await moderatePlayer(em, id, request.value, ctx.authUser.userid, moderationEffects);
     if (done.outcome !== "done") {
       const status = done.outcome === "noPlayer" ? Status.NOT_FOUND : Status.CONFLICT;
       return refuse(ctx, status, MODERATION_REFUSAL_WORDS[done.outcome], done.outcome);
     }
-    ok(ctx, { player: await playerModeration(em, id) });
+    ok(ctx, { player: await playerModeration(em, id), closed });
+  });
+
+  // The moderation inbox (services/admin/moderationInbox.ts): one row per
+  // player with open items from every source; one step closes them all.
+  // Refusals are 400/409, never 404 for a known route (the page reads a 404
+  // as signed out).
+  router.get(`${admin}/inbox`, apiVersion, adminOnly, async (ctx) => {
+    const source = ctx.query.source === "reports" || ctx.query.source === "filter" ? ctx.query.source : "all";
+    const userid = intOf(ctx.query.userid);
+    ok(ctx, {
+      ...(await listInbox(postgres.em.fork(), {
+        source,
+        userid: userid !== undefined && userid > 0 ? userid : undefined,
+        offset: intOf(ctx.query.offset),
+        limit: intOf(ctx.query.limit),
+      })),
+    });
+  });
+
+  router.post(`${admin}/inbox/:id/act`, apiVersion, adminOnly, async (ctx) => {
+    const id = playerId(ctx);
+    if (id === null) return;
+    const parsed = parseInboxAction(ctx.request.body);
+    if (!parsed.ok) return refuse(ctx, Status.BAD_REQUEST, parsed.message, "badRequest");
+    const done = await actOnInboxPlayer(
+      postgres.em.fork(),
+      id,
+      parsed.value.action,
+      parsed.value.seen,
+      ctx.authUser.userid,
+      moderationEffects,
+    );
+    if (done.outcome !== "done") return refuse(ctx, Status.CONFLICT, INBOX_REFUSAL_WORDS[done.outcome], done.outcome);
+    ok(ctx, { closed: done.closed, player: done.player });
+  });
+
+  // Chat moderators (services/admin/chatModerators.ts): a blue [Mod] badge in
+  // chat, nothing more. Refusals are 400/409, never 404 (the page reads a 404
+  // as signed out).
+  router.get(`${admin}/moderators`, apiVersion, adminOnly, async (ctx) => {
+    ok(ctx, { moderators: await listModerators(postgres.em.fork()) });
+  });
+
+  router.post(`${admin}/moderators`, apiVersion, adminOnly, async (ctx) => {
+    const request = parseModeratorAdd(ctx.request.body);
+    if (!request.ok) return refuse(ctx, Status.BAD_REQUEST, request.message, "badRequest");
+    const done = await addModerator(postgres.em.fork(), request.value.player, ctx.authUser.userid, moderatorEffects);
+    if (done.outcome === "noPlayer") return refuse(ctx, Status.BAD_REQUEST, MODERATOR_REFUSAL_WORDS.noPlayer, "noPlayer");
+    if (done.outcome !== "added") return refuse(ctx, Status.CONFLICT, MODERATOR_REFUSAL_WORDS[done.outcome], done.outcome);
+    ok(ctx, { moderator: done.moderator });
+  });
+
+  router.post(`${admin}/moderators/:id/remove`, apiVersion, adminOnly, async (ctx) => {
+    const id = intOf(ctx.params.id);
+    if (id === undefined || id < 1) return refuse(ctx, Status.BAD_REQUEST, MODERATOR_REFUSAL_WORDS.notModerator, "notModerator");
+    const removed = await removeModerator(postgres.em.fork(), id, ctx.authUser.userid, moderatorEffects);
+    if (!removed) return refuse(ctx, Status.CONFLICT, MODERATOR_REFUSAL_WORDS.notModerator, "notModerator");
+    ok(ctx, { removed: id });
+  });
+
+  // Moderator mail (services/mail/modMail.ts): every conversation a moderator
+  // is in, the newest first, searched by moderator and/or player (name or
+  // #number); and one conversation whole, both sides. The log is a copy
+  // nothing else deletes, so it outlasts the mail itself.
+  router.get(`${admin}/modmail`, apiVersion, adminOnly, async (ctx) => {
+    ok(ctx, await listModConversations(postgres.em.fork(), parseModMailQuery(ctx.query as Record<string, unknown>)));
+  });
+
+  router.get(`${admin}/modmail/:threadid`, apiVersion, adminOnly, async (ctx) => {
+    const threadid = intOf(ctx.params.threadid);
+    const conversation =
+      threadid !== undefined && threadid > 0 ? await readModConversation(postgres.em.fork(), threadid) : null;
+    if (!conversation) return refuse(ctx, Status.NOT_FOUND, "No moderator mail in that conversation.", "notFound");
+    ok(ctx, { conversation });
   });
 
   router.post(`${admin}/chat/session`, apiVersion, adminOnly, async (ctx) => {

@@ -44,6 +44,7 @@
     "alea": "1.0.1",
     "bad-words": "4.1.5",
     "bcrypt": "6.0.0",
+    "jpeg-js": "0.4.4",
     "jsonwebtoken": "9.0.3",
     "koa": "3.2.1",
     "koa-bodyparser": "4.4.1",

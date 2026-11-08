@@ -1,4 +1,10 @@
-import { ALLIANCE_CHANNEL_PREFIX, CHANNELS, INFERNO_CHAT_CHANNEL } from "../config/ChatConfig.js";
+import {
+  ALLIANCE_CHANNEL_PREFIX,
+  CHANNELS,
+  GLOBAL_CHAT_CHANNEL,
+  INFERNO_CHAT_CHANNEL,
+  LEGACY_MR1_CHAT_CHANNEL,
+} from "../config/ChatConfig.js";
 import { MapRoomVersion } from "../enums/MapRoom.js";
 import { redis } from "../server.js";
 
@@ -20,11 +26,15 @@ const VALID_CHANNELS = new Set([...Object.values(CHANNELS), INFERNO_CHAT_CHANNEL
  * Alliance channels are not covered here: they are resolved from the joining
  * player's membership instead of being accepted from the client.
  *
+ * Map Room 1's old room key (from a page loaded before patch 6.6) is read as
+ * the shared global room, so that player lands with everyone else.
+ *
  * @param {string} channel - The channel key sent by the client.
  * @returns {string | null} The validated channel key, or null if invalid.
  */
 export const validateChannel = (channel: string): string | null => {
   if (!channel) return null;
+  if (channel === LEGACY_MR1_CHAT_CHANNEL) return GLOBAL_CHAT_CHANNEL;
 
   return VALID_CHANNELS.has(channel) ? channel : null;
 };

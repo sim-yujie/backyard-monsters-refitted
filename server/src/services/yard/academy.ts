@@ -1,3 +1,4 @@
+import { shorterBy } from "../events/weekendBoosts.js";
 import {
   maxTrainingLevel,
   monsterEntry,
@@ -348,15 +349,20 @@ export interface AcademyShinyReport {
  * academy's `upg = monster` (`ACADEMY.as:68-74`).
  *
  * @param academyId - The academy to use; absent takes the lowest-level idle one that can train it.
+ * @param percentOff - A Study Weekend's percentage running now: the training
+ *   takes that much less time (`time` and `duration` both), kept after the
+ *   weekend ends (`services/events/weekendBoosts.ts`). 0 when none.
  */
 export const planAcademyTrain = (
   save: AcademySave,
   monster: string,
   academyId: number | undefined,
-  now: number
+  now: number,
+  percentOff = 0
 ) => {
   const { academy, level, step } = trainGate(save, monster, academyId);
-  const [putty, seconds] = step;
+  const putty = step[0];
+  const seconds = shorterBy(step[1], percentOff);
   const endsAt = now + seconds;
   const report: AcademyTrainReport = {
     monster,

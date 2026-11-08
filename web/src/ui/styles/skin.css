@@ -306,8 +306,14 @@
 :root[data-skin] .panel .btn--primary,
 :root[data-skin] .panel .btn--outline,
 :root[data-skin] .panel .build-info__build {
+  /* Words at 0 px off the centre (owner rule, 7 Nov 2026): even padding top
+     and bottom (was 0 2px 4px, which lifted the words 2 px), and the display
+     font's metrics for the whole-pixel line on the base `.btn` (ui.css). */
+  --btn-ascent: var(--font-display-ascent);
+  --btn-descent: var(--font-display-descent);
+
   min-height: 46px;
-  padding: 0 2px 4px;
+  padding: 0 2px;
   border-style: solid;
   border-color: transparent;
   border-width: 0 var(--skin-button-cap);
@@ -626,6 +632,7 @@
   .yard-switcher__list,
   .chat-box__tab,
   .notice,
+  .weekend-banner,
   .zoom-controls,
   .map-status,
   .mr2-float,
@@ -804,10 +811,17 @@
 }
 
 /* The chosen one of a row of map tools: lit in the accent. */
-:root[data-skin] .mr2-tool[aria-pressed="true"] {
+:root[data-skin] :is(.mr2-tool[aria-pressed="true"], .mr2-key__toggle[aria-expanded="true"]) {
   border-width: var(--skin-bar-edge);
   padding: 0 var(--space-4);
   filter: drop-shadow(0 0 3px var(--colour-accent)) drop-shadow(0 4px 6px rgb(0 0 0 / 45%));
+}
+
+/* On a phone the map tools are square icon buttons: the lit Key keeps its size. */
+@media (width <= 620px) {
+  :root[data-skin] .mr2-tools-dock .mr2-key__toggle[aria-expanded="true"] {
+    padding: 0;
+  }
 }
 
 /* A name under a round yard button: a little sign, as on a window's title. */
@@ -963,7 +977,8 @@
 :root[data-skin] :is(.account-menu__items > .account-menu__help, .account-menu__list > .account-menu__item) {
   --skin-button2-cap: 14px;
   justify-content: center;
-  padding: 0 0 3px;
+  /* Even padding, so the words sit at 0 px off centre (was 0 0 3px). */
+  padding: 0;
   border-style: solid;
   border-color: transparent;
   border-width: 0 var(--skin-button2-cap);
@@ -986,7 +1001,11 @@
 }
 
 :root[data-skin] :is(.planner-bar, .hud, .mr2-float, .chat-box--open, .stay-protected, .presence-check, .mr1, .build-placing, .raid-bar, .ach-card, .descent-card, .inferno-card, .test-report__peek) .btn--primary {
-  padding: 0 2px 3px;
+  /* Even padding (was 0 2px 3px, 1.5 px high), as the panel plate above. */
+  --btn-ascent: var(--font-display-ascent);
+  --btn-descent: var(--font-display-descent);
+
+  padding: 0 2px;
   border-style: solid;
   border-color: transparent;
   border-width: 0 var(--skin-button-cap);
@@ -1099,6 +1118,22 @@
     padding-inline: 6px;
   }
 
+  /* Classic's plates have rounder painted ends than Modern's, and Settings'
+     words touched them on a phone (tester, 6 Nov): 10px off the ends, the
+     strip's side margins halved and the words a touch smaller so all three
+     still fit across. */
+  :root[data-skin] .panel .account-settings__tabs {
+    margin-inline: var(--space-2);
+  }
+
+  :root[data-skin] .panel .tab-row > .account-settings__tab {
+    font-size: min(var(--text-sm), 3.5vw);
+  }
+
+  :root[data-skin="flash"] .panel .tab-row > .account-settings__tab {
+    padding-inline: 10px;
+  }
+
   /* The test report's words at the other tabs' size: all three fit 320px. */
   :root[data-skin] .panel .test-report__tab {
     font-size: var(--text-sm);
@@ -1144,4 +1179,46 @@
     --skin-frame-width: 30px;
     --skin-edge: 16px;
   }
+}
+
+/* ── The wall line's bar (walls anchors, owner 8 Nov) ───────────────────── */
+
+/* ✓ Build N is green in both looks: Classic's own green plate (Flash's small
+   button), Modern's orange steel plate turned green. Grey when off. */
+:root[data-skin="flash"] .build-placing .btn.btn--primary.build-placing__line-confirm {
+  border-image-source: var(--skin-button2);
+  border-image-slice: 0 var(--skin-button2-slice) fill;
+  text-shadow:
+    0 2px 0 var(--skin-button2-stroke), 2px 0 0 var(--skin-button2-stroke), -2px 0 0 var(--skin-button2-stroke), 0 -2px 0 var(--skin-button2-stroke),
+    1.5px 1.5px 0 var(--skin-button2-stroke), -1.5px 1.5px 0 var(--skin-button2-stroke), 1.5px -1.5px 0 var(--skin-button2-stroke), -1.5px -1.5px 0 var(--skin-button2-stroke);
+}
+
+:root[data-skin="scrap"] .build-placing .btn.btn--primary.build-placing__line-confirm {
+  filter: hue-rotate(100deg) saturate(0.9);
+}
+
+:root[data-skin="scrap"] .build-placing .btn.btn--primary.build-placing__line-confirm:hover:not(:disabled) {
+  filter: hue-rotate(100deg) saturate(0.9) brightness(1.08);
+}
+
+:root[data-skin] .build-placing .btn.btn--primary.build-placing__line-confirm:disabled {
+  filter: grayscale(1) brightness(0.8);
+}
+
+/* Put the Block away: the windows' painted close disc. */
+:root[data-skin] .build-placing--line .btn.build-placing__cancel,
+:root[data-skin] .build-placing--line .btn.build-placing__cancel:hover:not(:disabled) {
+  border: 0;
+  border-radius: 50%;
+  background: var(--skin-close) center / contain no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 40%));
+}
+
+:root[data-skin] .build-placing--line .btn.build-placing__cancel:hover:not(:disabled) {
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 40%)) brightness(1.1);
+}
+
+:root[data-skin] .build-placing--line .btn.build-placing__cancel::before {
+  content: none;
 }

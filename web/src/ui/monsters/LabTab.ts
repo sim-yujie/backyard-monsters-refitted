@@ -28,6 +28,7 @@ import "@/ui/styles/lab.css";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
 import { monsterPicture } from "./LockerTab";
 import type { MonstersFocus, MonstersTab, MonstersTabContext } from "./monstersTab";
+import { studySeconds, weekendChip, withWeekendChip } from "@/ui/events/weekendUi";
 
 /**
  * The Lab tab: the Monster Lab (`docs/design/yard-buildings.md` §6 "Lab tab").
@@ -367,7 +368,7 @@ export class LabTab implements MonstersTab {
         this.rowClocks.push({ node: clock, endsAt: row.research.endsAt });
         state.append(`Researching → ${row.research.rank} · `, clock);
       } else if (row.step) {
-        state.append(`→ ${row.rank + 1}: `, resourceAmount("r3", row.step[0]), ` · ${duration(row.step[1])}`);
+        state.append(`→ ${row.rank + 1}: `, resourceAmount("r3", row.step[0]), ` · ${duration(studySeconds(row.step[1]))}`);
       } else {
         state.textContent = "Fully researched";
       }
@@ -432,7 +433,11 @@ export class LabTab implements MonstersTab {
       const lockedInstant = instantGate(ability, store);
       const cost = document.createElement("p");
       cost.className = "locker-detail__note";
-      cost.append(`Rank ${rank + 1}: `, resourceAmount("r3", step[0]), ` · ${duration(step[1])}`);
+      cost.append(
+        `Rank ${rank + 1}: `,
+        resourceAmount("r3", step[0]),
+        withWeekendChip(` · ${duration(studySeconds(step[1]))}`, weekendChip("study")),
+      );
       action.append(cost);
       if (gate) action.append(gateLine(gate));
       const buttons = document.createElement("div");

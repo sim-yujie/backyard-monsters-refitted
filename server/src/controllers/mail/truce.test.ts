@@ -51,6 +51,8 @@ const em = {
   },
   flush: async () => {},
   populate: async () => {},
+  // The moderators list (beta 7): nobody here is a moderator.
+  execute: async () => [],
   // `isBot` reads through the request's context (#245).
   getContext: () => em,
 };

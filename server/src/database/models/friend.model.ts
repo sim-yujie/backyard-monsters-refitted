@@ -19,4 +19,8 @@ export class Friend {
 
   @Property({ type: Date, defaultRaw: "now()" })
   created_at: Opt<Date> = new Date();
+
+  /** When this player pinned the friend to the top of their list (up to 10); null when not pinned. */
+  @Property({ type: Date, nullable: true })
+  pinned_at?: Date | null;
 }

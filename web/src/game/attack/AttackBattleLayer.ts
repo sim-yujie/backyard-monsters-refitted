@@ -1,6 +1,4 @@
 import {
-  Assets,
-  CanvasSource,
   Container,
   Graphics,
   Rectangle,
@@ -27,6 +25,7 @@ import { damageStep } from "@/game/yard/YardBuildings";
 import { depthKey, type Point } from "@/game/yard/YardGrid";
 import type { Yard } from "@/game/yard/yardModel";
 import { combatKind, type AttackSession } from "./AttackSession";
+import { loadSheet, raidSheetQueue, SheetDropped, type SheetLoader, type SheetQueue } from "./sheetQueue";
 import {
   AttackSounds,
   attackSoundsFor,
@@ -64,7 +63,8 @@ import {
 import { dirtFor, surfaceHop } from "./burrowFx";
 import { jumpLift } from "./jumpFx";
 import { classicLook } from "@/game/classicLook";
-import { deviceTextureLimit, setDeviceTextureLimit, sheetResolution } from "@/game/quality";
+import { deviceTextureLimit, sheetResolution } from "@/game/quality";
+import { copyCell, gpuTextureLimit } from "@/game/textureLimit";
 import { MONSTER_SPRITES, type MonsterAnimation, type MonsterSheet } from "./monsterSpriteData";
 import { ShotLedger, type Released, type WoundLike } from "./shotLedger";
 import { StatusIconRow, TowerStatusIcons, statusesOf } from "./statusIcons";
@@ -81,9 +81,9 @@ import {
   frameRect,
   frameRow,
   hoverOffset,
-  isHighResolutionSheet,
   shadowOffset,
   sheetColumn,
+  sheetStandInUrl,
   sheetUrl,
   spriteFor,
   type SwingTiming,
@@ -116,6 +116,9 @@ import {
   type EffectsQuality,
   type JuiceLevel,
 } from "./juice";
+
+/** Kept here too: the yard life layer and older callers import it from the battle layer. */
+export { gpuTextureLimit };
 
 /**
  * Everything that moves during a battle (`docs/design/attack-flow.md` §F5, §6
@@ -404,18 +407,8 @@ export const layoutCreep = (
 
 /* ── Sheet textures ─────────────────────────────────────────────────────── */
 
-/** Fetches one sheet; `Assets.load` in the client, something else in a test. */
-export type SheetLoader = (url: string) => Promise<Texture>;
-
-/**
- * `Assets.load`, with mipmaps for a high-resolution sheet: a 4x repaint is
- * drawn at a quarter of its size or less at the usual zoom, and without them
- * it shimmers.
- */
-export const loadSheet: SheetLoader = (url) =>
-  Assets.load<Texture>(
-    isHighResolutionSheet(url) ? { src: url, data: { autoGenerateMipmaps: true } } : url,
-  );
+// The loader lives beside the raid queue (`sheetQueue.ts`); kept importable from here.
+export { loadSheet, type SheetLoader };
 
 /**
  * The cells of the monster sheets as textures, cut once and shared.
@@ -437,6 +430,17 @@ export class MonsterSheetTextures {
   private readonly pending = new Set<string>();
   private readonly failed = new Set<string>();
   private readonly cells = new Map<string, Texture>();
+  /**
+   * The stand-ins (`sheetStandInUrl`): each sheet's small 1x copy, by sheet
+   * key, fetched beside the copy the Quality setting asks for and drawn only
+   * until that one is in. Asked for only by {@link frame}'s and
+   * {@link preload}'s `standIn`, so a caller that does not want them (the
+   * yard's wandering monsters) never downloads them.
+   */
+  private readonly standIns = new Map<string, Texture>();
+  /** Sheet keys whose stand-in was asked for (in, coming, or failed): each is fetched once. */
+  private readonly standInAsked = new Set<string>();
+  private readonly standInCells = new Map<string, Texture>();
   /** Cells that own their source (canvas copies) and must be destroyed fully. */
   private readonly owned = new Set<Texture>();
   /** The limit given or set; null to go by the device's, once a layer has read it. */
@@ -470,34 +474,56 @@ export class MonsterSheetTextures {
     return width > this.maxTextureSize || height > this.maxTextureSize;
   }
 
-  /** Starts fetching a sheet, so its first cell is ready sooner. */
-  preload(sheet: MonsterSheet): void {
+  /**
+   * Starts fetching a sheet, so its first cell is ready sooner; with
+   * `standIn`, its small copy first (`sheetStandInUrl`), which arrives well
+   * ahead of a `@4x` painting on a slow line.
+   */
+  preload(sheet: MonsterSheet, standIn = false): void {
+    if (standIn) this.standInSource(sheet);
     this.source(sheet);
   }
 
-  /** The texture for cell `(column, row)`, or null until the sheet is in. */
-  frame(sheet: MonsterSheet, column: number, row: number): Texture | null {
+  /**
+   * The texture for cell `(column, row)`, or null until the sheet is in. With
+   * `standIn`, the same cell of the sheet's small copy while the full one is
+   * still coming (or did not come), so the caller should swap textures when
+   * the cell it is handed changes, not only when the cell's place does.
+   */
+  frame(sheet: MonsterSheet, column: number, row: number, standIn = false): Texture | null {
     const key = `${sheet.key}:${column}:${row}`;
     const cached = this.cells.get(key);
     if (cached) return cached;
 
+    if (standIn) this.standInSource(sheet);
     const source = this.source(sheet);
-    if (!source) return null;
-    const rect = frameRect(sheet, column, row);
-
-    let cell: Texture | null;
-    if (this.oversized(sheet, source.source)) {
-      cell = copyCell(source.source, rect);
-      if (!cell) return null;
-      this.owned.add(cell);
-    } else {
-      cell = new Texture({
-        source: source.source,
-        frame: new Rectangle(rect.x, rect.y, rect.width, rect.height),
-      });
+    if (source) {
+      const cell = this.cut(sheet, source, column, row);
+      if (cell) this.cells.set(key, cell);
+      return cell;
     }
-    this.cells.set(key, cell);
+    if (!standIn) return null;
+    const small = this.standIns.get(sheet.key);
+    if (!small) return null;
+    const standInCell = this.standInCells.get(key);
+    if (standInCell) return standInCell;
+    const cell = this.cut(sheet, small, column, row);
+    if (cell) this.standInCells.set(key, cell);
     return cell;
+  }
+
+  /** Cell `(column, row)` of a loaded copy of `sheet`; any copy frames the same in 1x units. */
+  private cut(sheet: MonsterSheet, source: Texture, column: number, row: number): Texture | null {
+    const rect = frameRect(sheet, column, row);
+    if (this.oversized(sheet, source.source)) {
+      const cell = copyCell(source.source, rect);
+      if (cell) this.owned.add(cell);
+      return cell;
+    }
+    return new Texture({
+      source: source.source,
+      frame: new Rectangle(rect.x, rect.y, rect.width, rect.height),
+    });
   }
 
   /** True once this sheet is known not to be coming. */
@@ -507,11 +533,40 @@ export class MonsterSheetTextures {
 
   destroy(): void {
     for (const cell of this.cells.values()) cell.destroy(this.owned.has(cell));
+    for (const cell of this.standInCells.values()) cell.destroy(this.owned.has(cell));
     this.cells.clear();
+    this.standInCells.clear();
     this.owned.clear();
     this.sources.clear();
+    this.standIns.clear();
+    this.standInAsked.clear();
     this.pending.clear();
     this.failed.clear();
+  }
+
+  /**
+   * Starts the stand-in's fetch once. It is only wanted while the full sheet
+   * is not in, so none is asked for once that one is; one that fails is
+   * dropped quietly (the full sheet, or a marker, is drawn as before).
+   */
+  private standInSource(sheet: MonsterSheet): void {
+    if (this.standInAsked.has(sheet.key) || this.sources.has(sheet.key)) return;
+    this.standInAsked.add(sheet.key);
+    const url = sheetStandInUrl(sheet);
+    if (!url) return;
+    let fetching: Promise<Texture>;
+    try {
+      fetching = this.load(url, { standIn: true });
+    } catch {
+      // A loader that throws rather than rejects (a test's) has no stand-in to give.
+      return;
+    }
+    fetching
+      .then((texture) => {
+        // Not kept once the full sheet beat it: it would never be drawn.
+        if (!this.sources.has(sheet.key)) this.standIns.set(sheet.key, texture);
+      })
+      .catch(() => {});
   }
 
   private source(sheet: MonsterSheet): Texture | null {
@@ -522,71 +577,25 @@ export class MonsterSheetTextures {
     this.load(sheetUrl(sheet))
       .then((texture) => {
         this.sources.set(sheet.key, texture);
+        // The full sheet is in: its stand-in is not drawn again. Its cells are
+        // left to `destroy`, as a sprite may show one until the next frame.
+        this.standIns.delete(sheet.key);
       })
-      .catch((caught: unknown) => {
-        console.warn(`Monster sheet ${sheet.file} did not load; drawing a marker.`, caught);
-        this.failed.add(sheet.key);
-      })
-      .finally(() => {
-        this.pending.delete(sheet.key);
-      });
+      .then(
+        () => this.pending.delete(sheet.key),
+        (caught: unknown) => {
+          // Dropped from the raid queue as the fight ended: not a fault, and
+          // left pending, so these textures never ask for it again (the stand-in
+          // or a marker is drawn). A later fight has textures of its own.
+          if (caught instanceof SheetDropped) return;
+          this.pending.delete(sheet.key);
+          console.warn(`Monster sheet ${sheet.file} did not load; drawing a marker.`, caught);
+          this.failed.add(sheet.key);
+        },
+      );
     return null;
   }
 }
-
-/**
- * One cell of an oversized sheet, copied through a canvas into a texture of
- * its own at the sheet's resolution (`rect` is in 1x units, the picture `@4x`
- * or so). Null where there is no canvas to draw with, or nothing drawable
- * behind the source, in which case the caller shows its marker instead.
- */
-const copyCell = (
-  source: TextureSource,
-  rect: { x: number; y: number; width: number; height: number },
-): Texture | null => {
-  if (typeof document === "undefined") return null;
-  const image = (source as { resource?: unknown }).resource;
-  if (!image || typeof image !== "object") return null;
-  const scale = source.resolution > 0 ? source.resolution : 1;
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.ceil(rect.width * scale);
-  canvas.height = Math.ceil(rect.height * scale);
-  const context = canvas.getContext("2d");
-  if (!context) return null;
-  try {
-    context.drawImage(
-      image as CanvasImageSource,
-      rect.x * scale,
-      rect.y * scale,
-      rect.width * scale,
-      rect.height * scale,
-      0,
-      0,
-      rect.width * scale,
-      rect.height * scale,
-    );
-  } catch {
-    return null;
-  }
-  return new Texture({ source: new CanvasSource({ resource: canvas, resolution: scale }) });
-};
-
-/** The GPU texture limit a Pixi renderer reports, or null when it does not say. */
-export const gpuTextureLimit = (renderer: Renderer): number | null => {
-  const gl = (renderer as { gl?: WebGLRenderingContext }).gl;
-  let size: unknown = null;
-  if (gl && typeof gl.getParameter === "function") size = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-  if (typeof size !== "number" || size <= 0) {
-    const device = (renderer as { device?: { limits?: { maxTextureDimension2D?: unknown } } })
-      .device;
-    size = device?.limits?.maxTextureDimension2D;
-  }
-  if (typeof size !== "number" || size <= 0) return null;
-  // Remembered for every sheet cutter (the guide's walk-ins too, which have no
-  // renderer of their own) and for picking a copy the card can hold (`sheetUrl`).
-  setDeviceTextureLimit(size);
-  return size;
-};
 
 /* ── The layer ──────────────────────────────────────────────────────────── */
 
@@ -636,6 +645,8 @@ export interface AttackBattleLayerOptions {
   /** "Effects: full / low" for the towers' shots; the player's setting or the screen size when left out. */
   readonly effectsQuality?: EffectsQuality;
   readonly textures?: MonsterSheetTextures;
+  /** The queue a raid's sheets wait in; the shared `raidSheetQueue` when left out. Unused unless raiding. */
+  readonly sheetQueue?: SheetQueue;
   /** The bomb sheets; a test hands in its own (#87). */
   readonly bombArt?: BombArt;
   /** The siege weapons' sheets; a test hands in its own (Inferno WP 6.8). */
@@ -818,6 +829,8 @@ export class AttackBattleLayer {
   private readonly origin: Point;
   private readonly reducedMotion: boolean;
   readonly textures: MonsterSheetTextures;
+  /** The raid queue this layer's sheets wait in; null when not raiding. */
+  private readonly sheetQueue: SheetQueue | null;
 
   /** Creep bodies, inside the renderer's sorted container. */
   private readonly depth: Container;
@@ -912,6 +925,8 @@ export class AttackBattleLayer {
   private readonly now: () => number;
   private damageDirty = true;
   private limitRead = false;
+  /** The session's script whose monsters' sheets were last asked for ({@link preloadScript}). */
+  private scriptSeen = 0;
   private readonly unsubscribe: () => void;
   private destroyed = false;
   /** Put to rest by {@link settle}: no creeps, no guns, only what plays out. */
@@ -937,7 +952,11 @@ export class AttackBattleLayer {
     this.overlay = options.overlay;
     this.origin = { x: options.yard.bounds.originX, y: options.yard.bounds.originY };
     this.reducedMotion = options.reducedMotion ?? prefersReducedMotion();
-    this.textures = options.textures ?? new MonsterSheetTextures();
+    // A raid's sheets wait in the raid queue (`sheetQueue.ts`): stand-ins
+    // first, then two paintings at a time, so the fight's own requests are
+    // never stuck behind them.
+    this.sheetQueue = this.session.raiding ? (options.sheetQueue ?? raidSheetQueue) : null;
+    this.textures = options.textures ?? new MonsterSheetTextures(this.sheetQueue?.loader ?? loadSheet);
     this.now = options.now ?? (() => performance.now());
     this.classic = options.classic ?? classicLook();
     this.juice = this.classic ? "off" : (options.juice ?? juiceLevel());
@@ -1112,6 +1131,7 @@ export class AttackBattleLayer {
    */
   update(): void {
     if (this.destroyed) return;
+    this.preloadScript();
     const battle = this.session.battle();
     if (!battle) return;
     // Skip to end (issue #362) draws nothing until the battle is over, and
@@ -1444,6 +1464,8 @@ export class AttackBattleLayer {
       layer.destroy({ children: true });
     }
     this.textures.destroy();
+    // The fight is gone: what its sheets still had waiting is not fetched.
+    this.sheetQueue?.dropWaiting();
   }
 
   /* ── Frame ──────────────────────────────────────────────────────────── */
@@ -1455,6 +1477,25 @@ export class AttackBattleLayer {
       if (limit !== null) this.textures.setMaxTextureSize(limit);
     }
     this.update();
+  }
+
+  /**
+   * Starts the sheets of every monster a played-back script will bring on,
+   * once per script: a raid's (and the Trojan Horse's) raiders are in no
+   * roster, so `preloadRoster` cannot know them. Their small stand-in copies
+   * too: a raid's first wave lands at once, and on a slow line the full
+   * paintings take far longer than the stand-ins (the raid warning has
+   * usually fetched both already, `raidSheets.ts`).
+   */
+  private preloadScript(): void {
+    const stamp = this.session.scriptStamp;
+    if (stamp === this.scriptSeen) return;
+    this.scriptSeen = stamp;
+    for (const id of this.session.scriptedMonsters()) {
+      const sheet = spriteFor(id, this.session.levels[id] ?? 1);
+      if (sheet) this.textures.preload(sheet, true);
+      if (id === DAVE_ID) this.textures.preload(ROCKET_SHEET);
+    }
   }
 
   /** Starts the sheets the attacker could send, so the first drop is not blank. */
@@ -1892,9 +1933,9 @@ export class AttackBattleLayer {
         reducedMotion: this.reducedMotion,
         classic: this.classic,
       });
-      const cell = this.textures.frame(sheet, layout.column, layout.row);
+      const cell = this.textures.frame(sheet, layout.column, layout.row, true);
       if (cell) {
-        if (view.cellKey !== layout.key && !held) {
+        if ((view.cellKey !== layout.key || body.texture !== cell) && !held) {
           view.cellKey = layout.key;
           body.texture = cell;
         }

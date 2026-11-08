@@ -1,6 +1,7 @@
 import { costOf, OUTPOST_CORE_TYPE, type YardKind } from "../../game-data/buildingCosts.js";
 import type { BuildingData } from "../../types/BuildingData.js";
 import { cancelRefund, type StorageCapSave } from "../base/economy/resourceBudget.js";
+import { costLessBy } from "../events/weekendBoosts.js";
 import { hallName, levelOf, yardKindOf, type ResourceAmounts } from "../yardplanner/costs.js";
 import {
   planOneUpgrade,
@@ -9,6 +10,7 @@ import {
 } from "../yardplanner/startUpgrades.js";
 import { fitCredit } from "./credit.js";
 import { siegeUpgradeMessage } from "./siege.js";
+import { monsterName } from "../../game-rules/combat/report.js";
 import {
   chargePurse,
   fundPurse,
@@ -54,8 +56,10 @@ export interface UpgradeReport {
   to: number;
   /** The countdown written, after Sharper Tools. */
   seconds: number;
-  /** What the step cost: the ladder's `costs[from]`. */
+  /** What the step cost: the ladder's `costs[from]`, less the Builder's Weekend percentage. */
   cost: ResourceAmounts;
+  /** Builder's Weekend: the percentage taken off; absent when none was. */
+  weekendOff?: number;
   /** A main-yard Inferno building's: the Inferno purse after it. */
   purse?: ReturnType<typeof purseReport>;
 }
@@ -98,6 +102,14 @@ export const refusalErr = (refusal: OneUpgradeRefusal, kind: YardKind = "main") 
       // The original's own words for a Siege Lab or Factory at work or holding
       // a weapon (`msg_sworks_cantupgrade1/2`, Inferno WP 6.3).
       if (refusal.siege) return yardRefusedErr("siegeBusy", siegeUpgradeMessage(refusal.siege.hold), refusal.siege);
+      // The original's own words for a Monster Locker unlocking a monster (`cloc_err_cantupgrade`).
+      if (refusal.unlocking) {
+        return yardRefusedErr(
+          "unlocking",
+          `Building is unlocking the ${monsterName(refusal.unlocking)}. You must wait for this to finish or cancel it before you can upgrade`,
+          { monster: refusal.unlocking }
+        );
+      }
       // The original's own words for an Academy that is training (`acad_err_cantupgrade`, #145).
       return refusal.training
         ? yardRefusedErr(
@@ -165,10 +177,16 @@ export const refusalErr = (refusal: OneUpgradeRefusal, kind: YardKind = "main") 
  *
  * @param save - The caught-up main yard.
  * @param id - The building to upgrade.
+ * During a Builder's Weekend the step costs `percentOff`% less
+ * (`services/events/weekendBoosts.ts`): the shortfall check, the charge and
+ * the report all use the lower price, and the building keeps the percentage
+ * (`wd`) for its cancel.
+ *
  * @param now - Unix seconds, for the Sharper Tools window.
+ * @param percentOff - The Builder's Weekend percentage running now, 0 when none.
  * @returns The new `buildingdata`, the debit and the report.
  */
-export const planUpgradeAction = (save: UpgradeActionSave, id: number, now: number) => {
+export const planUpgradeAction = (save: UpgradeActionSave, id: number, now: number, percentOff = 0) => {
   const building = buildingOf(save, id);
   const yard = yardKindOf(save);
 
@@ -180,7 +198,7 @@ export const planUpgradeAction = (save: UpgradeActionSave, id: number, now: numb
       "useBatchRoute"
     );
   }
-  const step = planOneUpgrade(save, id, now);
+  const step = planOneUpgrade(save, id, now, percentOff);
   if (!step.ok) throw refusalErr(step, yard);
 
   const report: UpgradeReport = {
@@ -189,6 +207,7 @@ export const planUpgradeAction = (save: UpgradeActionSave, id: number, now: numb
     to: step.to,
     seconds: step.seconds,
     cost: step.cost,
+    ...(percentOff > 0 && { weekendOff: percentOff }),
   };
 
   const buildingdata = { ...save.buildingdata, [String(id)]: step.building };
@@ -205,6 +224,9 @@ export const planUpgradeAction = (save: UpgradeActionSave, id: number, now: numb
  * clamped to the storage cap by the wrapper. Progress is lost; Shiny spent on
  * it is not refunded (BB §5 "Cancel and refund").
  *
+ * An upgrade bought in a Builder's Weekend (`wd`) gives back the price that
+ * was paid, the full price less that percentage, whenever it is cancelled.
+ *
  * Refuses `400 badRequest` for no such building, `409 notUpgrading` when no
  * `cU` is running.
  *
@@ -219,8 +241,9 @@ export const planCancelUpgrade = (save: UpgradeActionSave, id: number) => {
     throw yardRefusedErr("notUpgrading", "That building is not being upgraded.");
   }
 
-  const { cU: _cancelled, cL: _length, hl: _helpers, ...rest } = building;
-  const refund = cancelRefund(Number(building.t), levelOf(building), yardKindOf(save));
+  const { cU: _cancelled, cL: _length, hl: _helpers, wd: paidOff, ...rest } = building;
+  const fullPrice = cancelRefund(Number(building.t), levelOf(building), yardKindOf(save));
+  const refund = costLessBy(fullPrice, Number(paidOff) > 0 ? Number(paidOff) : 0);
   const buildingdata = { ...save.buildingdata, [String(id)]: rest as BuildingData };
   if (isSurfaceInferno(save, Number(building.t))) {
     const { iresources, credited } = fundPurse(save.iresources, refund);

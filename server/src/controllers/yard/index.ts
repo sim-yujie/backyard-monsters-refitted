@@ -1,3 +1,5 @@
+import type { Middleware } from "koa";
+import { wallLineLimiter } from "../../middleware/rateLimiters.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import {
   yardAcademyCancelAction,
@@ -7,6 +9,7 @@ import {
 } from "./academy.js";
 import { yardBankAction } from "./bank.js";
 import { yardBuildAction, yardCancelBuildAction, yardInstantBuildAction } from "./build.js";
+import { yardBuildWallsAction } from "./buildWalls.js";
 import { yardBunkerFillAction, yardBunkerRemoveAction } from "./bunker.js";
 import { yardCancelFortifyAction, yardFortifyAction } from "./fortify.js";
 import { yardChampionFreezeAction, yardChampionThawAction } from "./chamber.js";
@@ -84,6 +87,8 @@ export interface YardRouteEntry {
   /** Path under `/bm/yard/`, e.g. `state` or `upgrade/cancel`. */
   path: string;
   controller: KoaController;
+  /** A rate limiter, run after the login check and before the action. */
+  limiter?: Middleware;
 }
 
 export const yardRoutes: YardRouteEntry[] = [
@@ -155,4 +160,6 @@ export const yardRoutes: YardRouteEntry[] = [
   { path: "siege/factory/cancel", controller: yardRoute(yardSiegeFactoryCancelAction) },
   { path: "siege/factory/finish", controller: yardRoute(yardSiegeFactoryFinishAction) },
   { path: "siege/factory/instant", controller: yardRoute(yardSiegeFactoryInstantAction) },
+  // A drawn line or L of wall Blocks in one request (walls Option B, `buildWalls.ts`).
+  { path: "build/walls", controller: yardRoute(yardBuildWallsAction), limiter: wallLineLimiter },
 ];

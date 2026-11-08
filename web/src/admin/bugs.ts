@@ -20,23 +20,41 @@ import { technical } from "./sections";
 import { awardForm, awardRow, errorWords } from "./shiny";
 
 /**
- * The bug reports section: the list, newest first, with Open / All / Closed,
- * and one report's page with the player's words, the game's details, the
+ * The bug reports section: lists by where a report is (New, Working, Closed,
+ * or All), newest first, and one report beside the list on a computer (full
+ * screen on a phone) with the player's words, the game's details, the
  * screenshot, the ticket status, the owner's notes and what changed when.
+ * Previous and Next step through the list without going back to it.
  *
  * The player can be written to in the game's mail (as "The game team") and
  * their answers show here; Shiny can be given from the report, and the mail
  * about it goes into the same conversation.
  *
- * The open report is in the address (`?bug=<id>`), as the alerts link it, so
- * the phone's back button returns to the list.
+ * The list and the open report are in the address (`#bugs?list=working&bug=12`;
+ * the alerts link `?bug=<id>`), so the phone's back button returns to the list.
+ *
+ * The lists are one status each (the owner has not picked a board yet): a
+ * board would draw {@link BUG_LISTS} side by side with the same {@link bugRow}.
  */
 
-const FILTERS: readonly [BugFilter, string][] = [
-  ["open", "Open"],
-  ["all", "All"],
-  ["closed", "Closed"],
+export type BugList = "new" | "working" | "closed" | "all";
+
+/** The lists, in order: each one's words and what it asks the server for. */
+export const BUG_LISTS: readonly (readonly [BugList, string, BugFilter | TicketStatus])[] = [
+  ["new", "New", "new"],
+  ["working", "Working", "working"],
+  ["closed", "Closed", "closed"],
+  ["all", "All", "all"],
 ];
+
+export const isBugList = (raw: string | undefined): raw is BugList => BUG_LISTS.some(([id]) => id === raw);
+
+const EMPTY_WORDS: Record<BugList, [string, string]> = {
+  new: ["No new bug reports", "Nothing is waiting for you. New ones from players show up here."],
+  working: ["Nothing being worked on", "Reports you mark Working show up here."],
+  closed: ["No closed bug reports", "Reports marked Fixed or Won't fix show up here."],
+  all: ["No bug reports yet", "When players send one from the game, it shows up here."],
+};
 
 const pill = (status: TicketStatus): HTMLElement =>
   h("span", { class: `pill pill-${status}` }, h("span", { class: "pill-dot" }), statusWord(status));
@@ -103,6 +121,8 @@ export const sender = (report: Pick<BugReportSummary, "userid" | "username">): s
 export interface BugsOptions {
   /** Called when a report is opened or closed, to put it in the address. */
   onRoute(id: number | null): void;
+  /** Called when another list is picked, to put it in the address. */
+  onList?(list: BugList): void;
   onError(message: string): void;
   /** A short "done" message (the page's toast). */
   onSay(message: string): void;
@@ -117,27 +137,91 @@ interface Draft {
   award: { amount: string; reason: string };
 }
 
+/** One report in a list: status, how long ago, the first words, who and where. */
+export const bugRow = (report: BugReportSummary, open: (id: number) => void, current: boolean): HTMLElement =>
+  h(
+    "li",
+    {},
+    h(
+      "button",
+      {
+        class: "row bug-row",
+        attrs: { type: "button", "data-bug": String(report.id), ...(current ? { "aria-current": "true" } : {}) },
+        onClick: () => open(report.id),
+      },
+      h(
+        "span",
+        { class: "row-main" },
+        h(
+          "span",
+          { class: "row-top" },
+          pill(report.status),
+          report.unreadReplies > 0
+            ? h(
+                "span",
+                { class: "chip chip-info" },
+                report.unreadReplies === 1 ? "New reply" : `${count(report.unreadReplies)} new replies`,
+              )
+            : null,
+          h("span", { class: "row-when" }, ago(report.createdAt)),
+        ),
+        h("span", { class: "row-title" }, report.preview || "(no text)"),
+        h(
+          "span",
+          { class: "row-meta" },
+          [
+            `#${report.id}`,
+            sender(report),
+            report.device,
+            report.screen ? `${report.screen} screen` : null,
+            report.hasScreenshot || report.hasPicture ? "has a picture" : null,
+            report.hasNotes ? "has your notes" : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        ),
+      ),
+      icon("chevron", 18),
+    ),
+  );
+
 export class BugsView {
   readonly element = h("div", { class: "bugs" });
-  private filter: BugFilter = "open";
+  private readonly side = h("div", { class: "bugs-side" });
+  private readonly detail = h("div", { class: "bugs-detail", attrs: { hidden: "" } });
+  private list: BugList = "new";
+  private loaded = false;
   private reports: BugReportSummary[] = [];
   private nextBefore: number | null = null;
   private openId: number | null = null;
   private images: string[] = [];
   private draft: Draft | null = null;
+  /** Where the list was scrolled on a phone before a report opened full screen. */
+  private listY = 0;
 
-  constructor(private readonly options: BugsOptions) {}
+  constructor(private readonly options: BugsOptions) {
+    replace(this.element, this.side, this.detail);
+  }
 
-  /** Shows the list, or report `id`. */
-  async show(id: number | null): Promise<void> {
+  /** The list on show. */
+  get currentList(): BugList {
+    return this.list;
+  }
+
+  /** Shows report `id` (or none) beside the list the address names (or the one on show). */
+  async show(id: number | null, params: Readonly<Record<string, string>> = {}): Promise<void> {
+    const list = isBugList(params["list"]) ? params["list"] : this.list;
+    const reload = list !== this.list || !this.loaded;
+    this.list = list;
+    const before = this.openId;
     this.openId = id;
-    if (id === null) await this.loadList();
-    else await this.loadReport(id);
+    await Promise.all([reload ? this.loadList() : Promise.resolve(this.markRows()), id === null ? null : this.loadReport(id)]);
+    if (id === null) this.closeReport(before !== null);
   }
 
   /** Reloads whatever is showing (the page's refresh). */
-  refresh(): Promise<void> {
-    return this.show(this.openId);
+  async refresh(): Promise<void> {
+    await Promise.all([this.loadList(), this.openId === null ? null : this.loadReport(this.openId)]);
   }
 
   private releaseImages(): void {
@@ -145,13 +229,17 @@ export class BugsView {
     this.images = [];
   }
 
+  private filterFor(list: BugList): BugFilter | TicketStatus {
+    return BUG_LISTS.find(([id]) => id === list)![2];
+  }
+
   private async loadList(more = false): Promise<void> {
-    this.releaseImages();
     try {
       const answer = await fetchBugReports(
-        this.filter,
+        this.filterFor(this.list),
         more ? (this.nextBefore ?? undefined) : undefined,
       );
+      this.loaded = true;
       this.reports = more ? [...this.reports, ...answer.reports] : answer.reports;
       this.nextBefore = answer.nextBefore;
       this.renderList();
@@ -160,99 +248,39 @@ export class BugsView {
     }
   }
 
+  private pickList(list: BugList): void {
+    if (this.options.onList) {
+      this.options.onList(list);
+      return;
+    }
+    this.list = list;
+    void this.loadList();
+  }
+
   private renderList(): void {
     const tabs = h(
       "div",
       { class: "segmented", attrs: { role: "group", "aria-label": "Which bug reports" } },
-      ...FILTERS.map(([filter, label]) =>
+      ...BUG_LISTS.map(([list, label]) =>
         h(
           "button",
           {
             class: "seg",
-            attrs: { type: "button", "aria-pressed": String(filter === this.filter) },
-            onClick: () => {
-              this.filter = filter;
-              void this.loadList();
-            },
+            attrs: { type: "button", "data-list": list, "aria-pressed": String(list === this.list) },
+            onClick: () => this.pickList(list),
           },
           label,
         ),
       ),
     );
+    const [emptyTitle, emptyText] = EMPTY_WORDS[this.list];
     const items = this.reports.length
       ? h(
           "ul",
-          { class: "rows" },
-          ...this.reports.map((report) =>
-            h(
-              "li",
-              {},
-              h(
-                "button",
-                {
-                  class: "row bug-row",
-                  attrs: { type: "button" },
-                  onClick: () => this.options.onRoute(report.id),
-                },
-                h(
-                  "span",
-                  { class: "row-main" },
-                  h(
-                    "span",
-                    { class: "row-top" },
-                    pill(report.status),
-                    report.unreadReplies > 0
-                      ? h(
-                          "span",
-                          { class: "chip chip-info" },
-                          report.unreadReplies === 1
-                            ? "New reply"
-                            : `${count(report.unreadReplies)} new replies`,
-                        )
-                      : null,
-                    h("span", { class: "row-when" }, ago(report.createdAt)),
-                  ),
-                  h("span", { class: "row-title" }, report.preview || "(no text)"),
-                  h(
-                    "span",
-                    { class: "row-meta" },
-                    [
-                      `#${report.id}`,
-                      sender(report),
-                      report.device,
-                      report.screen ? `${report.screen} screen` : null,
-                      report.hasScreenshot || report.hasPicture ? "has a picture" : null,
-                      report.hasNotes ? "has your notes" : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · "),
-                  ),
-                ),
-                icon("chevron", 18),
-              ),
-            ),
-          ),
+          { class: "rows bug-rows" },
+          ...this.reports.map((report) => bugRow(report, (id) => this.options.onRoute(id), report.id === this.openId)),
         )
-      : h(
-          "div",
-          { class: "empty" },
-          h(
-            "strong",
-            {},
-            this.filter === "open"
-              ? "No open bug reports"
-              : this.filter === "closed"
-                ? "No closed bug reports"
-                : "No bug reports yet",
-          ),
-          h(
-            "p",
-            {},
-            this.filter === "open"
-              ? "Nothing is waiting for you. New ones from players show up here."
-              : "When players send one from the game, it shows up here.",
-          ),
-        );
+      : h("div", { class: "empty" }, h("strong", {}, emptyTitle), h("p", {}, emptyText));
     const more =
       this.nextBefore !== null
         ? h(
@@ -265,23 +293,59 @@ export class BugsView {
             "Show older",
           )
         : null;
-    replace(this.element, tabs, items, more);
+    replace(this.side, tabs, items, more);
+  }
+
+  private markRows(): void {
+    for (const row of this.side.querySelectorAll<HTMLButtonElement>("[data-bug]")) {
+      if (row.dataset["bug"] === String(this.openId)) row.setAttribute("aria-current", "true");
+      else row.removeAttribute("aria-current");
+    }
+  }
+
+  private isPhone(): boolean {
+    return window.matchMedia?.("(max-width: 1023px)").matches ?? false;
+  }
+
+  /** Puts the report pane on show (the list stays beside it on a computer). */
+  private openPane(): void {
+    if (this.detail.hidden && this.isPhone()) {
+      this.listY = window.scrollY;
+      window.scrollTo?.(0, 0);
+    }
+    this.element.classList.add("has-open");
+    this.detail.hidden = false;
+    this.markRows();
+  }
+
+  private closeReport(wasOpen: boolean): void {
+    this.releaseImages();
+    this.element.classList.remove("has-open");
+    this.detail.hidden = true;
+    replace(this.detail);
+    this.markRows();
+    if (wasOpen && this.isPhone()) window.scrollTo?.(0, this.listY);
   }
 
   private async loadReport(id: number): Promise<void> {
-    this.releaseImages();
-    replace(
-      this.element,
-      h("div", { class: "skeleton", attrs: { "aria-label": `Loading bug report #${id}` } }),
-    );
+    this.openPane();
+    if (!this.detail.querySelector(`[data-report='${id}']`)) {
+      this.releaseImages();
+      replace(
+        this.detail,
+        h("div", { class: "skeleton", attrs: { "aria-label": `Loading bug report #${id}` } }),
+      );
+    }
     try {
       const { report } = await fetchBugReport(id);
+      if (this.openId !== id) return;
       // Opening it read the player's answers.
       this.reports = this.reports.map((r) => (r.id === id ? { ...r, unreadReplies: 0 } : r));
       this.renderReport(report);
     } catch {
+      if (this.openId !== id) return;
       replace(
-        this.element,
+        this.detail,
         this.backButton(),
         h(
           "div",
@@ -303,6 +367,42 @@ export class BugsView {
       },
       icon("back", 18),
       "All bug reports",
+    );
+  }
+
+  /** Previous and Next in the list on show; the next page is read at its end. */
+  private stepper(id: number): HTMLElement | null {
+    const at = this.reports.findIndex((r) => r.id === id);
+    if (at < 0) return null;
+    const prev = this.reports[at - 1] ?? null;
+    const next = this.reports[at + 1] ?? null;
+    const step = (words: string, target: BugReportSummary | null, more: boolean, iconName: "back" | "chevron") =>
+      h(
+        "button",
+        {
+          class: "button quiet bug-step",
+          attrs: { type: "button", ...(target || more ? {} : { disabled: "" }) },
+          onClick: () => {
+            if (target) {
+              this.options.onRoute(target.id);
+              return;
+            }
+            void this.loadList(true).then(() => {
+              const after = this.reports[at + 1];
+              if (after) this.options.onRoute(after.id);
+            });
+          },
+        },
+        iconName === "back" ? icon("back", 16) : null,
+        words,
+        iconName === "chevron" ? icon("chevron", 16) : null,
+      );
+    return h(
+      "div",
+      { class: "bug-steps", attrs: { role: "group", "aria-label": "Step through the list" } },
+      step("Previous", prev, false, "back"),
+      h("span", { class: "hint" }, `${at + 1} of ${this.reports.length}${this.nextBefore !== null ? "+" : ""}`),
+      step("Next", next, next === null && this.nextBefore !== null, "chevron"),
     );
   }
 
@@ -400,11 +500,11 @@ export class BugsView {
     if (report.hasPicture) void addImage("picture", "Added picture");
 
     replace(
-      this.element,
-      this.backButton(),
+      this.detail,
+      h("div", { class: "bug-nav" }, this.backButton(), this.stepper(report.id)),
       h(
         "article",
-        { class: "report" },
+        { class: "report", attrs: { "data-report": String(report.id) } },
         h(
           "header",
           { class: "report-head" },

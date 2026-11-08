@@ -191,7 +191,8 @@ describe("the box at the top", () => {
     expect(verdict([])).toBe("Everything is running fine");
     expect(verdict([item("warn")])).toBe("Running fine, 1 thing to check");
     expect(verdict([item("warn"), item("warn")])).toBe("Running fine, 2 things to check");
-    expect(verdict([item("bad"), item("warn")])).toBe("1 problem needs you");
+    expect(verdict([item("bad"), item("warn")])).toBe("1 problem needs you, 1 warning");
+    expect(verdict([item("bad"), item("warn"), item("warn")])).toBe("1 problem needs you, 2 warnings");
     expect(verdict([item("bad"), item("bad")])).toBe("2 problems need you");
   });
 });

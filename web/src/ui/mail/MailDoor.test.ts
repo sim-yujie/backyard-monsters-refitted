@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import type { MailApi, MailMessage } from "@/api/mail";
+import type { LatestMail, MailApi, MailMessage, MailStatus } from "@/api/mail";
+import { newAlertMemory, type MailChat } from "@/game/mail/mailWatch";
 import { MailButton, unreadText } from "./MailButton";
 import { MailDoor } from "./MailDoor";
 import { YardDock } from "@/ui/yard/YardDock";
@@ -120,5 +121,142 @@ describe("the yard dock's place for Mail", () => {
     const names = [...dock.element.querySelectorAll<HTMLElement>("[data-dock]")].map((one) => one.dataset["dock"]);
     expect(names.indexOf("mail")).toBe(names.indexOf("monsters") + 1);
     dock.destroy();
+  });
+});
+
+describe("MailDoor, live (owner, beta 7)", () => {
+  const thread = (threadid: number, extra: Partial<MailMessage> = {}): MailMessage => ({
+    threadid,
+    updatetime: 1,
+    userid: 30,
+    targetid: 2503,
+    messagetype: "message",
+    unread: 1,
+    subject: "From a moderator",
+    message: "Hello",
+    ...extra,
+  });
+
+  const latest = (id: string, threadid: number, time: number): LatestMail => ({
+    id,
+    threadid,
+    from: 30,
+    name: "Alpha",
+    subject: "From a moderator",
+    preview: "Hello",
+    time,
+    mod: true,
+    notice: false,
+  });
+
+  const liveApi = (answers: MailStatus[], threads: MailMessage[] = []) => {
+    let at = 0;
+    const api: MailApi = {
+      threads: vi.fn(async () => threads),
+      targets: vi.fn(async () => ({})),
+      thread: vi.fn(async () => []),
+      send: vi.fn(),
+      requestTruce: vi.fn(),
+      block: vi.fn(),
+      acceptInvite: vi.fn(),
+      declineInvite: vi.fn(),
+      status: vi.fn(async () => answers[Math.min(at++, answers.length - 1)]!),
+    };
+    return api;
+  };
+
+  class Chat implements MailChat {
+    online = true;
+    listener: (() => void) | null = null;
+    onMail(listener: () => void): () => void {
+      this.listener = listener;
+      return () => (this.listener = null);
+    }
+  }
+
+  const settleTimers = async (ms = 0): Promise<void> => {
+    await vi.advanceTimersByTimeAsync(ms);
+    for (let i = 0; i < 6; i += 1) await Promise.resolve();
+  };
+
+  it("counts unread on the badge at once, and pops up a message that arrives later", async () => {
+    vi.useFakeTimers();
+    const chat = new Chat();
+    const api = liveApi([
+      { unread: 2, latest: latest("old", 1, 100), mod: false },
+      { unread: 3, latest: latest("new", 7, 200), mod: false },
+    ]);
+    const container = document.createElement("div");
+    const door = new MailDoor({
+      style: "dock",
+      container,
+      api,
+      live: { chat, memory: newAlertMemory(), nudgeDelayMs: 10 },
+    });
+    await settleTimers();
+    expect(door.button.unread).toBe(2);
+    expect(door.liveToast?.isShown).toBe(false);
+
+    chat.listener?.();
+    await settleTimers(10);
+    expect(door.button.unread).toBe(3);
+    expect(door.liveToast?.isShown).toBe(true);
+    expect(container.querySelector(".mail-toast__who")?.textContent).toBe("ModAlpha");
+    door.destroy();
+    expect(chat.listener).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it("opens the message's thread from the pop-up", async () => {
+    vi.useFakeTimers();
+    const chat = new Chat();
+    const api = liveApi(
+      [
+        { unread: 0, latest: null, mod: false },
+        { unread: 1, latest: latest("new", 7, 200), mod: false },
+      ],
+      [thread(7)],
+    );
+    const container = document.createElement("div");
+    const door = new MailDoor({ style: "dock", container, api, live: { chat, memory: newAlertMemory(), nudgeDelayMs: 10 } });
+    await settleTimers();
+    chat.listener?.();
+    await settleTimers(10);
+    container.querySelector<HTMLButtonElement>(".mail-toast__open")!.click();
+    await settleTimers();
+    expect(door.isOpen).toBe(true);
+    expect(api.thread).toHaveBeenCalled();
+    expect(door.liveToast?.isShown).toBe(false);
+    door.destroy();
+    vi.useRealTimers();
+  });
+
+  it("fetches the open mailbox's list again instead of popping up", async () => {
+    vi.useFakeTimers();
+    const chat = new Chat();
+    const api = liveApi([
+      { unread: 0, latest: null, mod: false },
+      { unread: 1, latest: latest("new", 7, 200), mod: false },
+    ]);
+    const container = document.createElement("div");
+    const door = new MailDoor({ style: "dock", container, api, live: { chat, memory: newAlertMemory(), nudgeDelayMs: 10 } });
+    await settleTimers();
+    await door.open();
+    await settleTimers();
+    const before = vi.mocked(api.threads).mock.calls.length;
+    chat.listener?.();
+    await settleTimers(10);
+    expect(vi.mocked(api.threads).mock.calls.length).toBe(before + 1);
+    expect(door.liveToast?.isShown).toBe(false);
+    door.destroy();
+    vi.useRealTimers();
+  });
+
+  it("does not watch without live, or with an API that cannot tell", () => {
+    const container = document.createElement("div");
+    const plain = new MailDoor({ style: "dock", container, api: liveApi([{ unread: 0, latest: null, mod: false }]) });
+    expect(plain.liveWatch).toBeNull();
+    expect(container.querySelector(".mail-toast")).toBeNull();
+    plain.destroy();
   });
 });

@@ -90,12 +90,12 @@ describe("the design A table", () => {
       hp: 20,
       damage: 0,
       range: -10,
-      income: [50, 0, 0, 0],
+      income: [25, 0, 0, 0],
     });
-    expect(LAND_FEATURE_EFFECTS[LandFeature.ROCKS]).toEqual({ hp: 10, damage: 10, range: 0, income: [0, 50, 0, 0] });
-    expect(LAND_FEATURE_EFFECTS[LandFeature.MARSH]).toEqual({ hp: -10, damage: 0, range: 0, income: [0, 0, 25, 50] });
-    expect(LAND_FEATURE_EFFECTS[LandFeature.TWIG_NODE].income).toEqual([100, 0, 0, 0]);
-    expect(LAND_FEATURE_EFFECTS[LandFeature.GOO_NODE].income).toEqual([0, 0, 0, 100]);
+    expect(LAND_FEATURE_EFFECTS[LandFeature.ROCKS]).toEqual({ hp: 10, damage: 10, range: 0, income: [0, 25, 0, 0] });
+    expect(LAND_FEATURE_EFFECTS[LandFeature.MARSH]).toEqual({ hp: -10, damage: 0, range: 0, income: [0, 0, 25, 25] });
+    expect(LAND_FEATURE_EFFECTS[LandFeature.TWIG_NODE].income).toEqual([50, 0, 0, 0]);
+    expect(LAND_FEATURE_EFFECTS[LandFeature.GOO_NODE].income).toEqual([0, 0, 0, 50]);
   });
 
   it("reads anything it does not know as open ground", () => {
@@ -111,11 +111,13 @@ describe("the design A table", () => {
   });
 
   it("scales income after the height rule, never below 1", () => {
-    expect(landIncome(10, LandFeature.FOREST, 1)).toBe(15);
+    // Patch 6.5: +25% on forest, rocks and marsh, +50% on a node.
+    expect(landIncome(10, LandFeature.FOREST, 1)).toBe(12);
     expect(landIncome(10, LandFeature.FOREST, 2)).toBe(10);
     expect(landIncome(7, LandFeature.MARSH, 3)).toBe(8);
-    expect(landIncome(7, LandFeature.MARSH, 4)).toBe(10);
-    expect(landIncome(1, LandFeature.GOO_NODE, 4)).toBe(2);
+    expect(landIncome(7, LandFeature.MARSH, 4)).toBe(8);
+    expect(landIncome(4, LandFeature.GOO_NODE, 4)).toBe(6);
+    expect(landIncome(1, LandFeature.GOO_NODE, 4)).toBe(1);
     expect(landIncome(9, LandFeature.OPEN, 1)).toBe(9);
   });
 });
