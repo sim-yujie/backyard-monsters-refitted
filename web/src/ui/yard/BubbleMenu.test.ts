@@ -79,8 +79,8 @@ describe("bubbleMenuOn", () => {
 });
 
 describe("BubbleMenu", () => {
-  it("holds Quests, Layout, Goals, Alerts, Defences and Mail, nearest More first; a new one only needs its name", () => {
-    expect(BUBBLE_ITEMS).toEqual(["quests", "layout", "goals", "bell", "defences", "mail"]);
+  it("holds Quests, Events, Layout, Goals, Alerts, Defences and Mail, nearest More first; a new one only needs its name", () => {
+    expect(BUBBLE_ITEMS).toEqual(["quests", "events", "layout", "goals", "bell", "defences", "mail"]);
   });
 
   it("gathers Layout into the fan and leaves Monsters on the bottom row", () => {
@@ -152,6 +152,29 @@ describe("BubbleMenu", () => {
     goals.hidden = true;
     await settle();
     expect(badge.textContent).toBe("3");
+  });
+
+  it("takes Events from the top of the dock, next to Quests, and shows its rewards waiting on More", async () => {
+    const { dock, menu, names } = setup();
+    // The Events plugin puts its button straight in the dock, not its right-hand box.
+    const events = button("events", "");
+    events.hidden = true;
+    dock.append(events, button("quests"));
+    await settle();
+    expect(names()).toEqual(["quests", "events", "layout"]);
+    expect(events.parentElement).not.toBe(dock);
+
+    const badge = menu.button.querySelector(".bubble-menu__badge") as HTMLElement;
+    expect(badge.hidden).toBe(true);
+    // An event on, with today's treat to claim.
+    events.hidden = false;
+    const count = events.querySelector(".yard-dock__badge") as HTMLElement;
+    count.textContent = "1";
+    count.hidden = false;
+    await settle();
+    expect(badge.hidden).toBe(false);
+    expect(badge.textContent).toBe("1");
+    expect(events.style.getPropertyValue("--bubble-k")).toBe("2");
   });
 
   it("a press opens it and keeps it open; a press on a bubble does its job and shuts it", () => {

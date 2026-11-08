@@ -3,21 +3,18 @@
  * (`game/yard/plugins/events.ts`).
  *
  * Same rule as ui.css: values come from tokens.css. The panel is the shared
- * `.panel`, docked on the right under the Events button so the yard stays in
- * view; on a phone it is a bottom sheet, as Goals is (goals.css).
+ * `.panel`, docked on the right under the HUD so the yard stays in view; on
+ * a phone it is a bottom sheet, as Goals is (goals.css).
  */
 
-/* ── The button: top right, under the HUD, the emptiest corner on every screen size ── */
-
-.yard-dock > .events-door {
-  position: absolute;
-  top: calc(var(--hud-height) + var(--space-3));
-  right: var(--space-4);
-}
+/* ── The button ────────────────────────────────────────────────────────
+   With the bubble menu on (the default) the button is one of More's bubbles
+   (`ui/yard/BubbleMenu.ts`, owner 8 Nov) and bubble-menu.css sizes and
+   places it like the others. Only with the bubble menu off does it stand
+   alone at the top right, under the HUD, as it used to: the rules below
+   for `.yard-dock > .events-door` are that case. */
 
 .events-door .yard-dock__disc {
-  width: 56px;
-  height: 56px;
   color: #ffb347;
 }
 
@@ -30,24 +27,35 @@
   color: #1d1003;
 }
 
+.yard-dock > .events-door {
+  position: absolute;
+  top: calc(var(--hud-height) + var(--space-3));
+  right: var(--space-4);
+}
+
+.yard-dock > .events-door .yard-dock__disc {
+  width: 56px;
+  height: 56px;
+}
+
 @media (width <= 620px) {
   .yard-dock > .events-door {
     top: calc(var(--hud-height) + var(--space-2));
     right: var(--space-3);
   }
 
-  .events-door .yard-dock__disc {
+  .yard-dock > .events-door .yard-dock__disc {
     width: 48px;
     height: 48px;
   }
 
-  .events-door .yard-dock__label {
+  .yard-dock > .events-door .yard-dock__label {
     font-size: var(--text-xs);
   }
 }
 
 /* A phone on its side: Collect all, Layout and the zoom take the top right,
-   so the button sits right of the level bar instead. */
+   so the lone button sits right of the level bar instead. */
 @media (width > 620px) and (height <= 500px) {
   .yard-dock > .events-door {
     top: calc(var(--hud-height) - var(--space-2));
@@ -55,12 +63,12 @@
     left: 226px;
   }
 
-  .events-door .yard-dock__disc {
+  .yard-dock > .events-door .yard-dock__disc {
     width: 44px;
     height: 44px;
   }
 
-  .events-door .yard-dock__label {
+  .yard-dock > .events-door .yard-dock__label {
     font-size: var(--text-xs);
   }
 }
@@ -70,11 +78,20 @@
 .events-panel {
   position: absolute;
   top: calc(var(--hud-height) + var(--space-3));
-  right: calc(var(--space-4) + 72px);
+  right: var(--space-4);
   z-index: var(--z-hud);
-  width: min(420px, calc(100vw - 2 * var(--space-4) - 72px));
+  width: min(420px, calc(100vw - 2 * var(--space-4)));
   max-height: calc(100vh - var(--hud-height) - 150px);
   min-width: 0;
+}
+
+/* The bubble menu off: the lone button keeps the top right, the panel stands
+   left of it (a desktop only; a phone's panel is a sheet over everything). */
+@media (width > 620px) and (height > 500px) {
+  .events-panel.events-panel--beside-door {
+    right: calc(var(--space-4) + 72px);
+    width: min(420px, calc(100vw - 2 * var(--space-4) - 72px));
+  }
 }
 
 .events-panel .panel__body {

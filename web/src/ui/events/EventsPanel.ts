@@ -82,6 +82,9 @@ const el = <K extends keyof HTMLElementTagNameMap>(
 /** A decoration's name, as the yard names it. */
 const decorationName = (type: number): string => typeName(type);
 
+/** A store buff's length on its badge: "7d" for Sharper Tools, "12h" for Production Overdrive. */
+const SHOP_ITEM_SHORT: Readonly<Record<string, string>> = { BST: "7d", POD: "12h", EXH: "24h" };
+
 /** The words for a list of rewards: "10,000 Twigs, 10,000 Pebbles + 25 Shiny". */
 export const rewardsText = (rewards: readonly EventReward[]): string =>
   rewards.map((reward) => rewardText(reward, decorationName)).join(" + ");
@@ -151,7 +154,7 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
       break;
     case "shopItem":
       pictures.append(eventsArt("tools", 20));
-      figure = reward.item === "BST" ? "7d" : "";
+      figure = SHOP_ITEM_SHORT[reward.item] ?? "";
       break;
     case "krallen":
       pictures.append(krallenPicture(1, "icon", "events-reward__image"));
