@@ -84,6 +84,17 @@
   }
 }
 
+/* Its page open on a phone, upright or on its side, the button steps aside:
+   the page's top edge reaches up to it, and its "Events" label showed beside
+   the sheet's title and ran under the close button (tester, 9 Nov). The
+   page's own close shuts it. On a computer the page is centred, clear of the
+   button, which stays lit as the way to shut it. */
+@media (width <= 620px), (height <= 500px) {
+  .events-door[aria-expanded="true"] {
+    visibility: hidden;
+  }
+}
+
 /* ── The panel ─────────────────────────────────────────────────────────── */
 
 /* Centred under the HUD like Quests (owner, 8 Nov: "make the pop up centre
@@ -307,13 +318,15 @@
   margin-left: -6px;
 }
 
-/* Two piles: a little smaller and closer, so they keep clear of a phone tile's edges. */
+/* Two piles (Days 1 and 8): the 2 x 2 block's smaller size with a small gap
+   between them, so they never touch (tester, 9 Nov) and the row is no wider
+   than the block's, which fits the narrowest phone tile. */
 .events-reward__pictures--pair > .res-icon {
-  height: 1.15em;
+  height: 1.05em;
 }
 
 .events-reward__pictures--pair > .res-icon + .res-icon {
-  margin-left: -8px;
+  margin-left: 3px;
 }
 
 /* Three or four piles (Day 5's every resource): a 2 x 2 block of smaller

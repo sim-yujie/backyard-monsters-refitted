@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EventsActions, EventsApi, EventView } from "@/api/events";
 import { notePumpkins } from "@/game/events/pumpkinHunt";
@@ -138,5 +141,29 @@ describe("Events: opening the page", () => {
     const { door } = await setup([hunt(3)]);
     door.toggle();
     expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Tester, 9 Nov: on a phone the open sheet's top reached the Events button,
+ * whose label showed beside the sheet's title and ran under its close button.
+ * The button is marked open while its page is, and a phone's CSS hides it then.
+ */
+describe("Events: the button while its page is open", () => {
+  /** The page's own CSS, read as text: jsdom lays nothing out. */
+  const eventsCss = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../../ui/events/events.css"), "utf8");
+
+  it("is marked open, and shut again when the page's own close is used", async () => {
+    const { door, content } = await setup([hunt(3)]);
+    door.toggle();
+    expect(door.button.getAttribute("aria-expanded")).toBe("true");
+    content.querySelector<HTMLButtonElement>('button[aria-label^="Close"]')?.click();
+    expect(content.querySelector(".events-panel")).toBeNull();
+    expect(door.button.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("is hidden then on a phone, upright or on its side, and only there", () => {
+    const hide = /@media ([^{]+)\{\s*\.events-door\[aria-expanded="true"\] \{\s*visibility: hidden;/.exec(eventsCss);
+    expect(hide?.[1]?.trim()).toBe("(width <= 620px), (height <= 500px)");
   });
 });

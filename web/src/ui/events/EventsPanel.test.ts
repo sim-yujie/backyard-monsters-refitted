@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { EventView } from "@/api/events";
 import { claimedLine, EVENT_EXTRAS, EventsPanel, nextText, rewardBadge, type EventsPanelView } from "./EventsPanel";
+
+/** The page's own CSS, read as text: jsdom lays nothing out. */
+const eventsCss = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "events.css"), "utf8");
 
 const DAYS: EventView["calendar"] = {
   days: [
@@ -271,6 +277,12 @@ describe("A day's reward tile (Thanksgiving tester faults, 8 Nov)", () => {
     const two = rewardBadge({ kind: "resources", amounts: { r1: 30_000, r2: 30_000 } });
     expect(two.querySelector(".events-reward__pictures--pair")).not.toBeNull();
     expect(two.querySelector(".events-reward__pictures--block")).toBeNull();
+  });
+
+  it("keeps a small gap between two piles, never overlapping (Days 1 and 8, 9 Nov)", () => {
+    const rule = /\.events-reward__pictures--pair > \.res-icon \+ \.res-icon \{([^}]*)\}/.exec(eventsCss)?.[1] ?? "";
+    const gap = /margin-left:\s*(-?\d+)px/.exec(rule)?.[1];
+    expect(Number(gap)).toBeGreaterThan(0);
   });
 
   it("draws speed-ups and Production Overdrive as painted icons, not line icons", () => {
