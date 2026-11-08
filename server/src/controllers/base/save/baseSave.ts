@@ -40,6 +40,7 @@ import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
 import { scaledMR1Tribes } from "../../../services/maproom/v1/scaledMR1Tribes.js";
+import { withTribeGooBonus } from "../../../services/base/tribeGooBonus.js";
 import { isDescentBaseid } from "../../../services/inferno/descent.js";
 import { landDescentAttack } from "../../../services/inferno/descentLanding.js";
 import { landInfernoPlayerAttack } from "../../../services/inferno/infernoPlayerLanding.js";
@@ -579,7 +580,11 @@ const saveBase = async (
     }
 
     if (loot) {
-      banked = bankAttackLoot(userSave, loot.credit, loot.krallenBuff).credited;
+      banked = bankAttackLoot(
+        userSave,
+        withTribeGooBonus(loot.credit, baseSave.type === BaseType.TRIBE),
+        loot.krallenBuff
+      ).credited;
     }
 
     // Each champion that fought learns from the server's battle, once: this

@@ -34,6 +34,7 @@ import { isDeclareWarRunning } from "../../alliance/powerups.js";
 import { battleReplayInput, battleTick } from "../../base/combat/battle.js";
 import { recordBattleMismatches, replayBattleForSave } from "../../base/combat/saveBattle.js";
 import { creditableMR1Loot, mr1TribePool } from "./mr1TribeRules.js";
+import { withTribeGooBonus } from "../../base/tribeGooBonus.js";
 import { recordTribeDestroyed } from "../../goals/tribeCounter.js";
 import { tribeOfBase } from "../../goals/counters.js";
 import { addQuestEvents, questEvent } from "../../quests/state.js";
@@ -272,7 +273,7 @@ const writeTribeLanding = async (
     // gives up the whole credit; the attacker keeps what fits in their
     // storage (issue #166, `bankAttackLoot`), as on Map Room 2.
     const credit = creditableMR1Loot(battle?.attackloot, mr1TribePool(tribeData), existingTribe.looted);
-    const credited: ResourceAmounts = bankAttackLoot(userSave, credit, krallenBuff).credited;
+    const credited: ResourceAmounts = bankAttackLoot(userSave, withTribeGooBonus(credit, true), krallenBuff).credited;
 
     const looted = { ...existingTribe.looted };
     for (const key of RESOURCE_KEYS) looted[key] = (looted[key] ?? 0) + credit[key];
