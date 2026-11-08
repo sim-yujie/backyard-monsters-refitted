@@ -1535,6 +1535,8 @@ export interface MushroomPickReport {
   shiny: number;
   /** During the Halloween pumpkin hunt: the player's pumpkin count, this one included. */
   pumpkins?: number;
+  /** The same during the Thanksgiving turkey hunt: the player's turkey count. */
+  turkeys?: number;
 }
 
 /** `POST /bm/yard/shop/buy`. */

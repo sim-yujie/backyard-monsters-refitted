@@ -1,7 +1,7 @@
 import { eventsActions, eventsApi, type EventsActions, type EventsApi, type EventView } from "@/api/events";
 import { claimableCount, claimableTiers, grantedKrallenText, isOver, serverClock, type ServerClock } from "@/game/events/eventsModel";
 import { onPumpkins, PUMPKIN_HUNT_KIND, withPumpkinCount } from "@/game/events/pumpkinHunt";
-import { seasonFor, setSeason } from "@/game/season";
+import { currentSeason, seasonFor, setSeason } from "@/game/season";
 import { latestRelease, localSeen, markSeen, whatsNewDecision } from "@/game/events/whatsNew";
 import { eventsArt } from "@/ui/events/eventsArt";
 import { calendarKey, claimedLine, EventsPanel, readyLine, tierKey, type EventsPanelView } from "@/ui/events/EventsPanel";
@@ -98,8 +98,12 @@ export class EventsDoor {
       if (this.destroyed) return;
       this.clock = serverClock(body.now, Date.now());
       this.events = body.events;
-      // An event that started since the yard loaded dresses it now.
-      setSeason(seasonFor(body.events.filter((event) => event.status === "active").map((event) => event.kind)));
+      // An event that started since the yard loaded dresses it now. The yard's
+      // own load already chose among overlapping events (a forced one first),
+      // so a season whose event is still on is kept rather than replaced by
+      // whichever comes first in this list.
+      const activeKinds = body.events.filter((event) => event.status === "active").map((event) => event.kind);
+      if (!activeKinds.includes(currentSeason())) setSeason(seasonFor(activeKinds));
       this.loadFailed = null;
       serverSeen = body.whatsNewSeen;
     } catch {

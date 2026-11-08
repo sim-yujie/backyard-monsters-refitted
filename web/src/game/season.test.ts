@@ -16,6 +16,9 @@ describe("season", () => {
     expect(seasonFor(["calendar"])).toBe("normal");
     expect(seasonFor(["halloween"])).toBe("halloween");
     expect(seasonFor(["other", "halloween"])).toBe("halloween");
+    expect(seasonFor(["krallen", "thanksgiving"])).toBe("thanksgiving");
+    // The server lists a forced event first; the first with a season wins.
+    expect(seasonFor(["thanksgiving", "halloween"])).toBe("thanksgiving");
   });
 
   it("starts normal and tells listeners only of a change", () => {
@@ -34,6 +37,6 @@ describe("season", () => {
   });
 
   it("pumpkins grow once an hour at Halloween, mushrooms every 17,280 s otherwise", () => {
-    expect(MUSHROOM_RESPAWN_SECONDS_BY_SEASON).toEqual({ normal: 17_280, halloween: 3_600 });
+    expect(MUSHROOM_RESPAWN_SECONDS_BY_SEASON).toEqual({ normal: 17_280, halloween: 3_600, thanksgiving: 3_600 });
   });
 });

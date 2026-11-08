@@ -104,6 +104,21 @@ describe("a tap that opens a building's panel", () => {
     expect(tap(canvas, "touch")).toBe(true);
     expect(onMushroom).toHaveBeenCalledWith(MUSHROOM);
   });
+
+  it("a building drawn over a mushroom wins; a turkey drawn over a building wins", () => {
+    const onMushroom = vi.fn();
+    const plain = mount(CAGE, { pickMushroom: () => MUSHROOM, onMushroom });
+    tap(plain.canvas, "touch");
+    expect(plain.onSelect).toHaveBeenCalledWith(CAGE);
+    expect(onMushroom).not.toHaveBeenCalled();
+    input?.detach();
+
+    // Thanksgiving: a tap on a turkey in front of a Hatchery picks the turkey.
+    const turkeys = mount(CAGE, { pickMushroom: () => MUSHROOM, onMushroom, findsOnTop: () => true });
+    tap(turkeys.canvas, "touch");
+    expect(onMushroom).toHaveBeenCalledWith(MUSHROOM);
+    expect(turkeys.onSelect).not.toHaveBeenCalled();
+  });
 });
 
 describe("a tap that opens nothing", () => {
