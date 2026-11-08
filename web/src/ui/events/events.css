@@ -526,11 +526,26 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* min-width: 0 down to the figures: a long name ("D.A.V.E. Pumpkin") wraps
+   inside the rewards instead of pushing the Glimmers and the lock out past
+   the row's right edge on a phone (tester, 9 Nov). */
 .events-tier__rewards {
   display: flex;
   flex: 1;
   flex-wrap: wrap;
   gap: var(--space-2);
+  min-width: 0;
+}
+
+.events-tier__rewards > .events-reward {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.events-tier__rewards .events-reward__figure {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 
 /* The Glimmers column and the tick / lock / Claim slot have fixed widths, so
@@ -553,6 +568,43 @@
 .events-tier__end > .events-tier__claim {
   width: 100%;
   padding-inline: var(--space-2);
+  white-space: nowrap;
+}
+
+/* The skinned plate (Classic and Modern) has 24-26 px ends and 15 px words,
+   about 100 px in all: narrower ends and 13 px words, so "Claim" (39 px in
+   Titan One) sits inside the 76 px slot: 2 x 15 + 4 + 39 = 73. */
+:root[data-skin] .panel .events-tier__end > .events-tier__claim {
+  --skin-button-cap: 15px;
+  padding-inline: 2px;
+  font-size: var(--text-sm);
+}
+
+@media (width <= 620px) {
+  /* A phone, down to 320 px: tighter gaps and padding, a smaller count and
+     narrower fixed columns, so a row's lock, tick or Claim stays inside it. */
+  .events-tier {
+    gap: var(--space-2);
+    padding-inline: var(--space-2);
+  }
+
+  .events-tier__need {
+    min-width: 42px;
+    font-size: var(--text-xs);
+  }
+
+  .events-tier__coins {
+    width: 36px;
+  }
+
+  .events-tier__end {
+    width: 72px;
+  }
+
+  /* 2 x 15 + 4 + 36 ("Claim" at 12 px) = 70, inside the 72 px slot. */
+  :root[data-skin] .panel .events-tier__end > .events-tier__claim {
+    font-size: var(--text-xs);
+  }
 }
 
 .events-tier__mark {

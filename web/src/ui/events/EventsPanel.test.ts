@@ -357,6 +357,32 @@ describe("Layout faults (picture tester, 9 Nov)", () => {
     panel.close();
   });
 
+  it("keeps every ladder row's lock, tick and Claim inside a 320 px phone", () => {
+    // A long name wraps inside the rewards rather than pushing the end slot out.
+    expect(rule(".events-tier__rewards")).toMatch(/min-width: 0;/);
+    expect(rule(".events-tier__rewards > .events-reward")).toMatch(/min-width: 0;/);
+    expect(rule(".events-tier__rewards .events-reward__figure")).toMatch(/white-space: normal;/);
+    // The skinned Claim plate's ends and words fit the desktop slot: 2 x cap + 4 + "Claim" (39 px at 13 px).
+    const plate = rule(":root[data-skin] .panel .events-tier__end > .events-tier__claim");
+    const cap = Number(/--skin-button-cap: (\d+)px;/.exec(plate)?.[1]);
+    const slot = Number(/width: (\d+)px;/.exec(rule(".events-tier__end"))?.[1]);
+    expect(plate).toMatch(/font-size: var\(--text-sm\);/);
+    expect(2 * cap + 4 + 39).toBeLessThanOrEqual(slot);
+    // The phone block: what the fixed columns leave for the rewards in a 320 px row (about 246 px inside).
+    const css = eventsCss.replace(/\r\n/g, "\n");
+    const phone = css.slice(css.indexOf("A phone, down to 320 px"));
+    const px = (selector: string, prop: string): number => {
+      const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const body = new RegExp(`\\n  ${escaped} \\{([^}]*)\\}`).exec(phone)?.[1] ?? "";
+      return Number(new RegExp(`${prop}: (\\d+)px;`).exec(body)?.[1]);
+    };
+    const phoneSlot = px(".events-tier__end", "width");
+    const left = 246 - 3 * 8 - px(".events-tier__need", "min-width") - px(".events-tier__coins", "width") - phoneSlot;
+    expect(left).toBeGreaterThanOrEqual(71); // "Scarecrow" at 12 px
+    // "Claim" at 12 px is 36 px.
+    expect(2 * cap + 4 + 36).toBeLessThanOrEqual(phoneSlot);
+  });
+
   it("sets every figure in a row of badges on the same line (the claim notice's +10K and +15)", () => {
     expect(rule(".events-claimed")).toMatch(/align-items: stretch;/);
     expect(rule(".events-claimed__title")).toMatch(/align-self: center;/);
