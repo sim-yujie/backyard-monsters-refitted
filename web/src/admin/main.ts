@@ -8,8 +8,11 @@ import {
   fetchBugReports,
   fetchHealth,
   fetchMe,
+  fetchInbox,
   fetchOverview,
   type AdminHealthReport,
+  type BugReportSummary,
+  type InboxPlayer,
   type DashboardSection,
   type InboxList,
   type StatsOverview,
@@ -21,11 +24,11 @@ import { PhotosView } from "./photos";
 import { ChatPanel } from "./chat";
 import { h, replace } from "./dom";
 import { ErrorsView } from "./errors";
-import { InboxView } from "./inbox";
+import { InboxView, inboxLabel } from "./inbox";
 import { ModerationView } from "./moderation";
 import { ModeratorsView } from "./moderators";
 import { ModMailSection } from "./modmail";
-import { count, dateTime } from "./format";
+import { ago, count, dateTime } from "./format";
 import { icon } from "./icons";
 import { topItems, verdict, type TopItem } from "./problems";
 import {
@@ -122,6 +125,38 @@ export const sectionLevels = (
   return levels;
 };
 
+/** A number and its words, linking to where they come from. */
+const homeLink = (href: string, value: string, label: string): HTMLElement =>
+  h(
+    "a",
+    { class: "today-link", attrs: { href } },
+    h("span", { class: "today-value" }, value),
+    h("span", { class: "today-label" }, label),
+  );
+
+/** One row on a Home card: who, how long ago, and a line about it. */
+const homeRow = (href: string, who: string, at: string, line: string): HTMLElement =>
+  h(
+    "li",
+    {},
+    h(
+      "a",
+      { class: "row home-row", attrs: { href } },
+      h(
+        "span",
+        { class: "row-main" },
+        h(
+          "span",
+          { class: "row-top" },
+          h("strong", {}, who),
+          h("time", { class: "row-when", attrs: { datetime: at, title: dateTime(at) } }, ago(at)),
+        ),
+        h("span", { class: "row-meta home-line" }, line),
+      ),
+      icon("chevron", 16),
+    ),
+  );
+
 /** The plain page anyone but the owner gets. */
 export const showNotFound = (): void => {
   document.title = "Not found";
@@ -179,7 +214,10 @@ class Dashboard {
   });
   private readonly moderation = new ModerationView({
     say: (message) => this.say(message),
-    onChanged: () => void this.inbox.refresh(),
+    onChanged: () => {
+      void this.inbox.refresh();
+      void this.loadHomeInbox();
+    },
   });
   private readonly weekend = new WeekendView({ say: (message) => this.say(message) });
   private readonly moderators = new ModeratorsView({ say: (message) => this.say(message) });
@@ -198,6 +236,7 @@ class Dashboard {
     onChanged: () => {
       void this.moderation.refresh();
       void this.inbox.refresh();
+      void this.loadHomeInbox();
     },
   });
   private readonly inbox = new InboxView({
@@ -205,11 +244,12 @@ class Dashboard {
     onCount: (counts) => {
       this.inboxCounts = counts;
       this.renderInboxState();
-      this.renderToday();
+      this.renderHomeInbox();
     },
     onChanged: () => {
       void this.cases.refresh();
       void this.moderation.refresh();
+      void this.loadHomeInbox();
     },
     openAward: (caseId) => {
       history.pushState(null, "", `${location.pathname}${viewHash("cases")}`);
@@ -230,6 +270,7 @@ class Dashboard {
     onCount: (open) => {
       this.openPhotos = open;
       this.renderPhotoState();
+      this.renderHomeInbox();
     },
     openPlayer: (userid) => this.openPlayer(userid),
   });
@@ -251,6 +292,15 @@ class Dashboard {
   private view: ViewId = "home";
   private readonly scrolls = new ScrollMemory();
   private newBugs: number | null = null;
+  /** The newest new bug reports, for Home. */
+  private newBugList: BugReportSummary[] = [];
+  private workingBugs: number | null = null;
+  /** The first players in the inbox, for Home; null before they are read. */
+  private homeInboxRows: InboxPlayer[] | null = null;
+  /** Whether the owner opened the status strip's problems. */
+  private statusOpen: boolean | null = null;
+  private readonly homeInbox = h("section", { class: "home-card", attrs: { id: "home-inbox", "aria-labelledby": "home-inbox-title" } });
+  private readonly homeBugs = h("section", { class: "home-card", attrs: { id: "home-bugs", "aria-labelledby": "home-bugs-title" } });
   private readonly todayBox = h("div", { class: "today", attrs: { "aria-label": "Today so far" } });
   /** Which problems' "What to do" is open, kept across the minutely refresh. */
   private openFixes: Set<string> | null = null;
@@ -390,7 +440,14 @@ class Dashboard {
       "section",
       { class: "view home", attrs: { id: "home", "data-view": "home", "aria-label": "Home", hidden: "" } },
       this.verdict,
+      h("h2", { class: "home-title" }, "Needs you"),
+      h("div", { class: "home-cards" }, this.homeInbox, this.homeBugs),
+      h("h2", { class: "home-title" }, "Today"),
+      this.todayBox,
     );
+    this.renderHomeInbox();
+    this.renderHomeBugs();
+    this.renderToday();
 
     this.refreshButton = h(
       "button",
@@ -463,6 +520,7 @@ class Dashboard {
       this.loadHealth(),
       this.loadStats(),
       route.view === "inbox" ? this.inbox.show(route.params) : this.inbox.refresh(),
+      this.loadHomeInbox(),
       this.cases.refresh(),
       this.photos.refresh(),
       this.bugs.show(route.bug),
@@ -537,6 +595,7 @@ class Dashboard {
       this.loadHealth(),
       this.loadStats(),
       this.inbox.refresh(),
+      this.loadHomeInbox(),
       this.cases.refresh(),
       this.photos.refresh(),
       this.bugs.refresh(),
@@ -623,12 +682,16 @@ class Dashboard {
   private async loadHealth(): Promise<void> {
     let report: AdminHealthReport;
     try {
-      const [health, bugs] = await Promise.all([
+      const [health, bugs, working] = await Promise.all([
         fetchHealth(),
         fetchBugReports("new").catch(() => null),
+        fetchBugReports("working").catch(() => null),
       ]);
       report = health;
       this.newBugs = bugs ? bugs.reports.length : null;
+      this.newBugList = bugs ? bugs.reports.slice(0, 3) : [];
+      this.workingBugs = working ? working.reports.length : null;
+      this.renderHomeBugs();
     } catch (err) {
       this.showHealthFailure(err);
       return;
@@ -691,7 +754,7 @@ class Dashboard {
       h(
         "div",
         { class: "verdict-head" },
-        h("span", { class: "verdict-icon" }, icon("bad", 28)),
+        h("span", { class: "verdict-icon" }, icon("bad", 18)),
         h(
           "div",
           {},
@@ -734,6 +797,11 @@ class Dashboard {
     }
   }
 
+  /**
+   * The server's state in one line at the top of Home (owner, 8 Nov 2026: the
+   * big box took the page). Problems open on demand below it; the first real
+   * problem's "What to do" is open inside.
+   */
   private renderVerdict(report: AdminHealthReport): void {
     const items = topItems(report);
     const level: Level = items.some((item) => item.level === "bad")
@@ -745,36 +813,54 @@ class Dashboard {
     this.verdict.className = `verdict verdict-${level}`;
 
     // At first only the first real problem shows its fix; after that, what
-    // the owner opened stays open when the box is drawn again.
+    // the owner opened stays open when the strip is drawn again.
     const firstBad = items.find((item) => item.level === "bad")?.key;
     const open = this.openFixes ?? new Set(firstBad ? [firstBad] : []);
-    const list = items.length
-      ? h("ol", { class: "issues" }, ...items.map((item) => this.issue(item, open.has(item.key))))
-      : null;
     this.openFixes = open;
-    this.renderToday();
+    const shown = Boolean(this.statusOpen);
+    const list = items.length
+      ? h(
+          "ol",
+          { class: "issues", attrs: { id: "status-issues", ...(shown ? {} : { hidden: "" }) } },
+          ...items.map((item) => this.issue(item, open.has(item.key))),
+        )
+      : null;
+    const toggle = list
+      ? h(
+          "button",
+          {
+            class: "button quiet verdict-toggle",
+            attrs: { type: "button", "aria-expanded": String(shown), "aria-controls": "status-issues" },
+          },
+          shown ? "Hide" : "What to do",
+          icon("chevron", 16),
+        )
+      : null;
+    toggle?.addEventListener("click", () => {
+      this.statusOpen = !this.statusOpen;
+      list!.hidden = !this.statusOpen;
+      toggle.setAttribute("aria-expanded", String(this.statusOpen));
+      replace(toggle, this.statusOpen ? "Hide" : "What to do", icon("chevron", 16));
+    });
 
     replace(
       this.verdict,
       h(
         "div",
         { class: "verdict-head" },
-        h("span", { class: "verdict-icon" }, icon(level, 28)),
+        h("span", { class: "verdict-icon" }, icon(level, 18)),
+        h("h2", { attrs: { id: "verdict-title" } }, verdict(items)),
         h(
-          "div",
-          {},
-          h("h2", { attrs: { id: "verdict-title" } }, verdict(items)),
-          h(
-            "p",
-            { class: "verdict-sub" },
-            level === "ok"
-              ? "The game server, database, disk and backups all look right."
-              : "Checked every minute; this box empties by itself once fixed.",
-          ),
+          "span",
+          { class: "verdict-sub" },
+          level === "ok" ? "Game server, database, disk and backups look right." : "Checked every minute.",
         ),
+        toggle,
+        level === "ok"
+          ? h("a", { class: "verdict-link", attrs: { href: "#health" } }, "Server", icon("chevron", 16))
+          : null,
       ),
       list,
-      this.todayBox,
     );
   }
 
@@ -848,34 +934,102 @@ class Dashboard {
     );
   }
 
-  /** Today in four taps: open chat cases, new bug reports, players, errors. */
+  /** Today's numbers: players, errors, photo reports. */
   private renderToday(): void {
     const today = this.overview?.today ?? null;
     const errorsToday =
       today && (today.browserErrors !== null || today.serverErrors !== null)
         ? (today.browserErrors ?? 0) + (today.serverErrors ?? 0)
         : null;
-    const link = (href: string, value: string, label: string) =>
-      h(
-        "a",
-        { class: "today-link", attrs: { href } },
-        h("span", { class: "today-value" }, value),
-        h("span", { class: "today-label" }, label),
-      );
     replace(
       this.todayBox,
-      link(
-        "#cases",
-        this.openCases === null ? "–" : String(this.openCases),
-        this.openCases === 1 ? "open chat case" : "open chat cases",
+      homeLink("#players", count(this.overview?.players.activeToday), "played today"),
+      homeLink("#errors", count(errorsToday), errorsToday === 1 ? "error today" : "errors today"),
+      homeLink(
+        "#photos",
+        this.openPhotos === null ? "–" : String(this.openPhotos),
+        this.openPhotos === 1 ? "photo report" : "photo reports",
       ),
-      link(
-        "#bugs",
-        this.newBugs === null ? "–" : this.newBugs >= 30 ? "30+" : String(this.newBugs),
-        this.newBugs === 1 ? "new bug report" : "new bug reports",
+    );
+  }
+
+  /** The first players in the inbox, for Home. */
+  private async loadHomeInbox(): Promise<void> {
+    try {
+      this.homeInboxRows = (await fetchInbox()).players.slice(0, 5);
+    } catch {
+      this.homeInboxRows = null;
+    }
+    this.renderHomeInbox();
+  }
+
+  /** Home's moderation card: who is waiting, each a tap from their evidence. */
+  private renderHomeInbox(): void {
+    const counts = this.inboxCounts;
+    const rows = this.homeInboxRows;
+    const total = counts?.all ?? null;
+    replace(
+      this.homeInbox,
+      h(
+        "header",
+        { class: "home-card-head" },
+        h("h3", { attrs: { id: "home-inbox-title" } }, "Moderation"),
+        h("a", { class: "home-more", attrs: { href: viewHash("inbox") } }, "Open inbox", icon("chevron", 16)),
       ),
-      link("#players", count(this.overview?.players.activeToday), "played today"),
-      link("#errors", count(errorsToday), errorsToday === 1 ? "error today" : "errors today"),
+      h(
+        "div",
+        { class: "today home-numbers" },
+        homeLink(viewHash("inbox"), total === null ? "–" : String(total), total === 1 ? "player waiting" : "players waiting"),
+        homeLink(viewHash("inbox", { source: "reports" }), counts ? String(counts.reports) : "–", "player reports"),
+        homeLink(viewHash("inbox", { source: "filter" }), counts ? String(counts.filter) : "–", "word filter"),
+      ),
+      rows === null
+        ? null
+        : rows.length
+          ? h(
+              "ul",
+              { class: "rows home-rows" },
+              ...rows.map((player) =>
+                homeRow(
+                  viewHash("inbox", { player: player.userid }),
+                  player.username ?? `#${player.userid}`,
+                  player.oldestAt,
+                  inboxLabel(player),
+                ),
+              ),
+            )
+          : h("p", { class: "note" }, "Nobody is waiting."),
+    );
+  }
+
+  /** Home's bug card: new and in progress, and the newest few. */
+  private renderHomeBugs(): void {
+    const many = (n: number | null) => (n === null ? "–" : n >= 30 ? "30+" : String(n));
+    replace(
+      this.homeBugs,
+      h(
+        "header",
+        { class: "home-card-head" },
+        h("h3", { attrs: { id: "home-bugs-title" } }, "Bug reports"),
+        h("a", { class: "home-more", attrs: { href: viewHash("bugs") } }, "All reports", icon("chevron", 16)),
+      ),
+      h(
+        "div",
+        { class: "today home-numbers" },
+        homeLink(viewHash("bugs", { list: "new" }), many(this.newBugs), "new"),
+        homeLink(viewHash("bugs", { list: "working" }), many(this.workingBugs), "being worked on"),
+      ),
+      this.newBugList.length
+        ? h(
+            "ul",
+            { class: "rows home-rows" },
+            ...this.newBugList.map((report) =>
+              homeRow(viewHash("bugs", { bug: report.id }), report.username ?? "Signed out", report.createdAt, report.preview),
+            ),
+          )
+        : this.newBugs === 0
+          ? h("p", { class: "note" }, "No new reports.")
+          : null,
     );
   }
 

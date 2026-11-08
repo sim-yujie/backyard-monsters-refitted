@@ -744,18 +744,13 @@ button {
   background: var(--good);
 }
 
-/* ---- The box at the top ---- */
+/* ---- Home: the server in one line, then the work that needs the owner ---- */
 
 .verdict {
-  border-radius: 18px;
-  padding: 20px;
+  border-radius: var(--radius);
+  padding: 10px 14px;
   background: var(--surface);
   border: 1px solid var(--line);
-}
-
-.verdict-ok {
-  background: var(--good-soft);
-  border-color: color-mix(in oklch, var(--good) 30%, transparent);
 }
 
 .verdict-warn {
@@ -769,21 +764,23 @@ button {
 }
 
 .verdict-loading h2 {
-  font-size: 1.25rem;
-  margin-bottom: 14px;
+  font-size: 1rem;
+  margin-bottom: 8px;
 }
 
 .verdict-head {
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-height: 32px;
 }
 
 .verdict-icon {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
   flex: none;
   background: var(--ink-3);
@@ -804,22 +801,53 @@ button {
 }
 
 .verdict h2 {
-  font-size: 1.5rem;
+  font-size: 1rem;
   font-weight: 700;
-  letter-spacing: -0.015em;
 }
 
 .verdict-sub {
-  margin-top: 4px;
   color: var(--ink-2);
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
+}
+
+/* The sign-in or connection failure keeps its words: they say what to do. */
+.verdict-head > div {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.verdict-toggle,
+.verdict-link {
+  margin-left: auto;
+  min-height: 36px;
+}
+
+.verdict-toggle .icon {
+  transform: rotate(90deg);
+  transition: transform 200ms var(--ease);
+}
+
+.verdict-toggle[aria-expanded="true"] .icon {
+  transform: rotate(-90deg);
+}
+
+.verdict-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--accent-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
 }
 
 .verdict-actions {
   display: grid;
   gap: 10px;
   justify-items: start;
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .verdict-buttons {
@@ -828,9 +856,105 @@ button {
   gap: 10px;
 }
 
+.issues[hidden] {
+  display: none;
+}
+
+.home-title {
+  margin: 24px 0 10px;
+  font-size: 1.0625rem;
+  font-weight: 700;
+}
+
+.home-cards {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 900px) {
+  .home-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.home-card {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.home-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-card-head h3 {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.home-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  color: var(--accent-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.home-more:hover {
+  text-decoration: underline;
+}
+
+.home-card .today {
+  margin-top: 0;
+  border-top: 0;
+}
+
+.home-card .today-link {
+  padding-top: 0;
+  min-height: 0;
+}
+
+.home-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 10px 14px;
+  text-decoration: none;
+}
+
+.home-row > .icon {
+  color: var(--ink-3);
+}
+
+.home-line {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  overflow: hidden;
+}
+
+.home > .today {
+  margin-top: 0;
+  padding: 0 16px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
 .issues {
   list-style: none;
-  margin: 18px 0 0;
+  margin: 10px 0 0;
   padding: 0;
 }
 
