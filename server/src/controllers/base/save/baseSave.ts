@@ -804,6 +804,7 @@ const saveBase = async (
       before: storedHealthData,
       after: battle?.buildinghealthdata,
       bombs: bombs?.charges,
+      damage: battle?.damage,
     });
   }
 

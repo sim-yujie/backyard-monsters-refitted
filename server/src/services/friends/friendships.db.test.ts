@@ -140,6 +140,7 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
         giftSentToday: false,
         canGiftFrom: null,
         help: null,
+        wishes: [],
         pinnedAt: null,
       },
     ]);

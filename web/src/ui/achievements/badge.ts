@@ -54,3 +54,16 @@ export const achievementBadge = (id: number, tier: BadgeTier, earned: boolean): 
   badge.append(art);
   return badge;
 };
+
+/** A hidden achievement not earned yet (#299): a grey medal with a "?" and no art, so nothing gives it away. */
+export const secretBadge = (id: number): HTMLElement => {
+  const badge = document.createElement("span");
+  badge.className = "ach-badge ach-badge--plain ach-badge--locked ach-badge--hidden";
+  badge.dataset["achievement"] = String(id);
+  badge.setAttribute("aria-hidden", "true");
+  const mark = document.createElement("span");
+  mark.className = "ach-badge__secret";
+  mark.textContent = "?";
+  badge.append(mark);
+  return badge;
+};

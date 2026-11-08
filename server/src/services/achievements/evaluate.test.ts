@@ -80,14 +80,14 @@ describe("evaluateAchievements: the rules", () => {
     expect(evaluation.shiny).toBe(0);
   });
 
-  test("everything met pays the 17 shown achievements, 230 Shiny, once", () => {
+  test("everything met pays the 22 shown achievements, 330 Shiny, once", () => {
     const all = Object.fromEntries(
       ACHIEVEMENTS.flatMap((entry) => entry.rules.map((rule) => [rule.stat, 10_000]))
     );
     const first = evaluateAchievements(worked(all), {}, NOW);
 
-    expect(first.unlocked).toHaveLength(17);
-    expect(first.shiny).toBe(230);
+    expect(first.unlocked).toHaveLength(22);
+    expect(first.shiny).toBe(330);
     expect(first.unlocked.every((unlock) => unlock.backfill === undefined)).toBe(true);
     expect(first.record.c["22"]).toEqual({ at: NOW, shiny: 25 });
 
@@ -391,5 +391,41 @@ describe("the backfill (§8)", () => {
     const evaluation = backfillAchievements(veteran, NOW);
     expect(ids(evaluation)).toEqual([1, 2, 3, 4, 6, 7, 10, 17]);
     expect(evaluation.record.backfilledAt).toBe(NOW);
+  });
+});
+
+describe("the hidden achievements' stats (#392)", () => {
+  test("Landlord reads the outposts held from the main row's list", () => {
+    const outposts = Array.from({ length: 100 }, (_, i): [number, number, string] => [i, 0, String(1000 + i)]);
+    const evaluation = evaluateAchievements(worked(), { outposts }, NOW);
+    expect(evaluation.record.s.outposts).toBe(100);
+    expect(evaluation.unlocked.map((unlock) => unlock.id)).toContain(27);
+  });
+
+  test("the level stats raise to the value an event reports, never add, and never drop", () => {
+    const first = evaluateAchievements(worked(), {}, NOW, { neighbourly: 12, loginstreak: 4, friends: 10, outposts: 3 });
+    expect(first.record.s).toMatchObject({ neighbourly: 12, loginstreak: 4, friends: 10, outposts: 3 });
+    const next = evaluateAchievements(first.record, {}, NOW, { neighbourly: 2, loginstreak: 1, friends: 9 });
+    expect(next.record.s).toMatchObject({ neighbourly: 12, loginstreak: 4, friends: 10 });
+  });
+
+  test("Kozu attacks add up, and the 100th unlocks Kozu Hunter", () => {
+    const evaluation = evaluateAchievements(worked({ kozuattacks: 99 }), {}, NOW, { kozuattacks: 1 });
+    expect(evaluation.record.s.kozuattacks).toBe(100);
+    expect(evaluation.unlocked).toEqual([{ id: 26, name: "Kozu Hunter", shiny: 20 }]);
+  });
+
+  test("each target unlocks its own entry with the owner's Shiny", () => {
+    const evaluation = evaluateAchievements(worked(), {}, NOW, { neighbourly: 30, loginstreak: 30, friends: 80 });
+    expect(evaluation.unlocked).toEqual([
+      { id: 23, name: "Neighbourly", shiny: 15 },
+      { id: 24, name: "Regular", shiny: 25 },
+      { id: 25, name: "Popular", shiny: 15 },
+    ]);
+  });
+
+  test("a daily tracker in the record is carried through an evaluation", () => {
+    const record = { ...worked(), d: { login: 5, streak: 2 } };
+    expect(evaluateAchievements(record, {}, NOW).record.d).toEqual({ login: 5, streak: 2 });
   });
 });

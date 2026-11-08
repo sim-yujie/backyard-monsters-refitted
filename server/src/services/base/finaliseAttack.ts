@@ -464,6 +464,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
     before: storedHealthData,
     after: outcome.buildinghealthdata,
     bombs: bombs.charges,
+    damage: outcome.damage,
   });
 
   logger.info("Finalised {username}'s abandoned attack on base {baseid} at tick {tick}", {

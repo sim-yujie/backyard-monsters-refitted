@@ -22,7 +22,8 @@ import type { ApiEnvelope, BaseLoadResponse } from "./types";
  * - `GET  /bm/friends/search ?q=`: up to 10 players, exact name first.
  * - `GET  /bm/friends/suggestions`: alliance mates not yet friends.
  * - `POST /bm/friends/gift { userid, resource }`, `GET /bm/friends/gifts`,
- *   `POST /bm/friends/gifts/collect { giftid } | { all: true }` (WP8).
+ *   `POST /bm/friends/gifts/collect { giftid } | { all: true }` (WP8),
+*   `POST /bm/friends/wishes { wishes }` (#391).
  * - `POST /bm/friends/help { userid, buildingId, kind }` (WP6/WP7).
  * - `POST /base/load` with `type: "help"`: a friend's main yard to help in (WP2/WP5).
  * - `POST /player/settings { hideOnline?, friendRequests? }`,
@@ -46,6 +47,7 @@ const SUGGESTIONS_PATH = "/api/:apiVersion/bm/friends/suggestions";
 const GIFT_PATH = "/api/:apiVersion/bm/friends/gift";
 const GIFTS_PATH = "/api/:apiVersion/bm/friends/gifts";
 const COLLECT_PATH = "/api/:apiVersion/bm/friends/gifts/collect";
+const WISHES_PATH = "/api/:apiVersion/bm/friends/wishes";
 const HELP_PATH = "/api/:apiVersion/bm/friends/help";
 const LOAD_PATH = "/base/load";
 const SETTINGS_PATH = "/api/:apiVersion/player/settings";
@@ -94,6 +96,8 @@ export interface Friend {
   readonly canGiftFrom: number | null;
   /** Whether the player could help them today; null until help lands (WP6). */
   readonly help: { readonly speedup: boolean; readonly repair: boolean } | null;
+  /** The gifts they wish for (#391), up to 3; sending them first earns nothing extra. */
+  readonly wishes: readonly GiftResource[];
   /** Pinned to the top of the list (beta 7): when, unix seconds; null when not pinned. */
   readonly pinnedAt: number | null;
 }
@@ -184,6 +188,8 @@ export interface GiftsList {
   readonly gifts: readonly Gift[];
   /** Gifts the player can still collect today. */
   readonly collectsLeft: number;
+  /** The player's own gift wishes (#391), up to {@link GIFT_WISH_MAX}. */
+  readonly wishes: readonly GiftResource[];
 }
 
 /** `POST /bm/friends/gifts/collect`. */
@@ -426,6 +432,22 @@ const amounts = (value: unknown): ResourceAmounts => {
   return out;
 };
 
+/** At most this many gift wishes (#391; the server's `MAX_GIFT_WISHES`). */
+export const GIFT_WISH_MAX = 3;
+
+/** Known gift resources only, each once, at most {@link GIFT_WISH_MAX}. */
+export const wishesOf = (value: unknown): GiftResource[] => {
+  const out: GiftResource[] = [];
+  if (!Array.isArray(value)) return out;
+  for (const one of value) {
+    if (typeof one === "string" && GIFT_RESOURCES.has(one) && !out.includes(one as GiftResource)) {
+      out.push(one as GiftResource);
+    }
+    if (out.length >= GIFT_WISH_MAX) break;
+  }
+  return out;
+};
+
 export const friendOf = (raw: Record<string, unknown>): Friend => {
   const help = raw["help"];
   const helpRecord = record(help);
@@ -442,6 +464,7 @@ export const friendOf = (raw: Record<string, unknown>): Friend => {
       typeof help === "object" && help !== null
         ? { speedup: helpRecord["speedup"] === true, repair: helpRecord["repair"] === true }
         : null,
+    wishes: wishesOf(raw["wishes"]),
     pinnedAt: toSeconds(raw["pinnedAt"]),
   };
 };
@@ -518,6 +541,8 @@ export interface FriendsApi {
   suggestions(): Promise<PlayerResult[]>;
   sendGift(userid: number, resource: GiftResource): Promise<Gift | null>;
   gifts(): Promise<GiftsList>;
+  /** Sets the player's gift wishes (#391), up to 3; `[]` clears them. Answers what was stored. */
+  setWishes(wishes: readonly GiftResource[]): Promise<GiftResource[]>;
   /** Collects one gift, or every one waiting with `"all"`. */
   collect(giftid: number | "all"): Promise<GiftCollect>;
   help(userid: number, buildingId: number, kind: HelpKind): Promise<HelpResult>;
@@ -587,7 +612,15 @@ export const friendsApi: FriendsApi = {
   },
   async gifts() {
     const answer = await get<Answer>(GIFTS_PATH);
-    return { gifts: list(answer["gifts"]).map(giftOf), collectsLeft: count(answer["collectsLeft"]) };
+    return {
+      gifts: list(answer["gifts"]).map(giftOf),
+      collectsLeft: count(answer["collectsLeft"]),
+      wishes: wishesOf(answer["wishes"]),
+    };
+  },
+  async setWishes(wishes) {
+    const answer = await postJson<Answer>(WISHES_PATH, { wishes: [...wishes] });
+    return wishesOf(answer["wishes"]);
   },
   async collect(giftid) {
     const answer = await postJson<Answer>(COLLECT_PATH, giftid === "all" ? { all: true } : { giftid });

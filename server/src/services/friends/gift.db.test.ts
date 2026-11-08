@@ -22,7 +22,7 @@ const redis = memoryRedis();
 const postgres = { em: null as unknown };
 mock.module("../../server.js", () => ({ postgres, redis }));
 
-const { sendGiftAnswer, giftsAnswer, collectGiftsAnswer } = await import("../../controllers/friends/gift.js");
+const { sendGiftAnswer, giftsAnswer, collectGiftsAnswer, wishesAnswer } = await import("../../controllers/friends/gift.js");
 const { friendsAnswer } = await import("../../controllers/friends/friends.js");
 const { blockPlayer } = await import("./friendships.js");
 
@@ -102,7 +102,7 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
     await sql(`DELETE FROM bym.friend_gift WHERE from_userid IN (${LIST}) OR to_userid IN (${LIST})`);
     await sql(`DELETE FROM bym.friend WHERE userid IN (${LIST}) OR friend_userid IN (${LIST})`);
     await sql(`DELETE FROM bym.notification WHERE userid IN (${LIST})`);
-    await sql(`UPDATE bym."user" SET blocked_users = '[]', banned = false WHERE userid IN (${LIST})`);
+    await sql(`UPDATE bym."user" SET blocked_users = '[]', banned = false, gift_wishes = NULL WHERE userid IN (${LIST})`);
     await sql(
       `UPDATE bym.save SET buildingdata = ?, buildinghealthdata = '{}', resources = '{"r1":0,"r2":0,"r3":0,"r4":0}', outposts = '[]',
               savetime = ?, createtime = ?, points = ?, basevalue = '0', type = 'main', attackid = 0, attacks = '[]', damage = 0
@@ -199,6 +199,19 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
     await setSave(B, { resources: STOCKED });
     await send(B, A);
     expect((await list(B)).gifts[0].canSendBack).toBe(false);
+  });
+
+  test("gift wishes (#391): the player's own in the gifts list, each friend's in the friends list", async () => {
+    expect((await list(B)).wishes).toEqual([]);
+    expect(await wishesAnswer(em() as never, as(B), { wishes: ["r3", "r1"] })).toEqual({ error: 0, wishes: ["r3", "r1"] });
+    expect((await list(B)).wishes).toEqual(["r3", "r1"]);
+    const mine = await friendsAnswer(em() as never, as(A), T0);
+    expect((mine.friends as any[]).find((friend) => friend.userid === B)).toMatchObject({ wishes: ["r3", "r1"] });
+    expect((mine.friends as any[]).find((friend) => friend.userid === HIDDEN)).toMatchObject({ wishes: [] });
+    // Wishes only sort the picker: an unwished gift still goes.
+    expect((await send(A, B, "r4")).gift).toMatchObject({ resource: "r4" });
+    expect(await wishesAnswer(em() as never, as(B), { wishes: [] })).toEqual({ error: 0, wishes: [] });
+    await expect(wishesAnswer(em() as never, as(B), { wishes: ["r1", "r2", "r3", "r4"] })).rejects.toThrow();
   });
 
   test("a second gift to the same friend the same UTC day is refused; the next day is fine", async () => {

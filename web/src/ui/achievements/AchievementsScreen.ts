@@ -10,6 +10,7 @@ import {
   earnedGroup,
   earnedText,
   FOOTER_TEXT,
+  isSecret,
   notEarnedGroup,
   playerTitle,
   progressRatio,
@@ -21,7 +22,7 @@ import {
 import { ApiError } from "@/api/http";
 import { Panel } from "@/ui/Panel";
 import { resourceAmount } from "@/ui/resourceIcon";
-import { achievementBadge } from "./badge";
+import { achievementBadge, secretBadge } from "./badge";
 import "./achievements.css";
 
 /**
@@ -249,6 +250,16 @@ export class AchievementsScreen {
     row.dataset["achievement"] = String(entry.id);
     row.dataset["status"] = entry.status;
     const text = make("div", "ach-row__text");
+    if (isSecret(entry)) {
+      // Hidden until earned (#299): "???" and a "?" medal, nothing else.
+      row.classList.add("ach-row--hidden");
+      row.dataset["hidden"] = "true";
+      row.title = "Hidden until earned";
+      text.append(make("span", "ach-row__name", "???"));
+      row.append(secretBadge(entry.id), text);
+      return { row, text };
+    }
+    if (entry.hidden) row.dataset["hidden"] = "true";
     text.append(make("span", "ach-row__name", entry.name), make("p", "ach-row__description", entry.description));
     row.append(achievementBadge(entry.id, badgeTier(shiny), earned), text);
     return { row, text };
@@ -256,6 +267,7 @@ export class AchievementsScreen {
 
   private toDoRow(entry: AchievementView): HTMLElement {
     const { row, text } = this.row(entry, entry.shiny);
+    if (isSecret(entry)) return row;
     const line = make("div", "ach-row__progress");
     const words = progressText(entry);
     const bar = make("span", "ach-bar");

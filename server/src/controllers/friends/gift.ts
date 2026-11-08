@@ -22,6 +22,7 @@ import {
   markCollected,
 } from "../../services/friends/gifts.js";
 import { friendsSince, readSides } from "../../services/friends/helpFacts.js";
+import { MAX_GIFT_WISHES, setWishes, wishesOf } from "../../services/friends/giftWishes.js";
 import { gateRefusal, refusalDetails } from "../../services/friends/helpRules.js";
 import { raidFighting } from "../../services/raids/raidLock.js";
 import { creditResources } from "../../services/yard/credit.js";
@@ -48,6 +49,10 @@ import type { FriendsBody } from "./friends.js";
  *   the sender's `resources` after the gift left.
  * - `GET /bm/friends/gifts`: the gifts waiting, oldest first, and how many
  *   more can be collected today.
+ * - `POST /bm/friends/wishes` `{ wishes: ["r1", "r3"] }`: the player's gift
+ *   wishes, up to 3 (#391), best first (the order is the rank), answered as stored. `GET /bm/friends/gifts`
+ *   carries them as `wishes`, and each friend in `GET /bm/friends` carries
+ *   theirs.
  * - `POST /bm/friends/gifts/collect` `{ giftid }` or `{ all: true }`: credits
  *   the main yard, clamped to its storage cap, at most 5 gifts a UTC day; the
  *   rest wait. The main yard is locked and caught up first, and refused while
@@ -57,6 +62,19 @@ import type { FriendsBody } from "./friends.js";
 const id = z.coerce.number().int().positive();
 
 export const GiftSchema = z.object({ userid: id, resource: z.enum(GIFT_RESOURCES) });
+/** A JSON body's array arrives re-stringified (`middleware/jsonBody.ts`), so a string is parsed first. */
+const parsedList = (value: unknown): unknown => {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+};
+export const WishesSchema = z
+  .object({ wishes: z.preprocess(parsedList, z.array(z.enum(GIFT_RESOURCES)).max(MAX_GIFT_WISHES)) })
+  .strict()
+  .refine((body) => new Set(body.wishes).size === body.wishes.length, { message: "each wish once" });
 export const CollectSchema = z.union([
   z.object({ giftid: id }).strict(),
   z.object({ all: z.literal(true) }).strict(),
@@ -159,11 +177,18 @@ const resourcesOf = (save: Save) => {
 
 /** `GET /bm/friends/gifts`. */
 export const giftsAnswer = async (em: EntityManager, user: User, now: number): Promise<FriendsBody> => {
-  const [gifts, collected] = await Promise.all([
+  const [gifts, collected, wishes] = await Promise.all([
     listWaitingGifts(em, user.userid, now),
     collectedToday(em, user.userid, now),
+    wishesOf(em, user.userid),
   ]);
-  return { error: 0, gifts, collectsLeft: collectsLeftOf(collected) };
+  return { error: 0, gifts, collectsLeft: collectsLeftOf(collected), wishes };
+};
+
+/** `POST /bm/friends/wishes` `{ wishes }`: up to 3 gift resources, each once, best first; `[]` clears them. */
+export const wishesAnswer = async (em: EntityManager, user: User, body: unknown): Promise<FriendsBody> => {
+  const { wishes } = WishesSchema.parse(body);
+  return { error: 0, wishes: await setWishes(em, user.userid, wishes) };
 };
 
 /** `SELECT … FOR UPDATE` on one save row, refreshed into the identity map. */
