@@ -1,0 +1,175 @@
+/*
+ * The weekend event (`ui/events/weekendUi.ts`): the banner under the HUD
+ * while one runs, the Friday pop-up, and the "−30%" chip beside a lowered
+ * price or time. Values from tokens.css; the banner's plate follows the
+ * Classic/Modern style through skin.css.
+ */
+
+/* ── Banner: top centre, above the notices ─────────────────────────────── */
+
+.weekend-banner {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  max-width: 100%;
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-warning-line);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-float);
+  color: var(--colour-text-strong);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.weekend-banner[hidden] {
+  display: none;
+}
+
+.weekend-banner:hover {
+  background: var(--colour-surface-control-hover);
+}
+
+.weekend-banner:focus-visible {
+  outline: 2px solid var(--colour-accent);
+  outline-offset: 2px;
+}
+
+.weekend-banner__icon {
+  display: inline-flex;
+  flex: none;
+}
+
+.weekend-banner__title {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.weekend-banner__amount {
+  flex: none;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.weekend-banner__left {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+  color: var(--colour-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A phone: icon, amount and time; the name is in the pop-up. */
+@media (width <= 620px) {
+  .weekend-banner__title {
+    display: none;
+  }
+}
+
+/* ── The chip beside a price or a time ─────────────────────────────────── */
+
+/*
+ * The "−30%" on the banner and beside a price or a time: a solid amber pill,
+ * like the pop-up's, so it reads on every background. Each look pairs its own
+ * amber with its own inverse ink: the HUD and Modern panels have light amber
+ * with near-black ink (about 10:1), Classic's cream panels a dark amber with
+ * cream ink (about 6:1), the light theme dark amber with white (about 5.4:1).
+ * (`--colour-warning-text` stays dark in every look, so it cannot go on
+ * Classic's dark amber, and on the old 10% wash it was dark on dark.)
+ */
+.weekend-banner__amount,
+.chip.weekend-chip {
+  background: var(--colour-warning);
+  color: var(--colour-text-inverse);
+  /* Modern panels shadow their words; on a light fill that only blurs them. */
+  text-shadow: none;
+}
+
+.chip.weekend-chip {
+  font-weight: 800;
+}
+
+/* A lowered time and its chip, on one line together (`withWeekendChip`). */
+.weekend-with-chip {
+  white-space: nowrap;
+}
+
+/* ── Pop-up ─────────────────────────────────────────────────────────────── */
+
+.weekend-popup {
+  width: min(360px, calc(100vw - 2 * var(--space-4)));
+}
+
+.weekend-popup__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+
+.weekend-popup__hero {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--colour-warning-soft) 0%, transparent 70%);
+}
+
+.weekend-popup__icon {
+  width: 72px;
+  height: 72px;
+}
+
+.weekend-popup__amount {
+  position: absolute;
+  right: -6px;
+  bottom: 4px;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--colour-warning);
+  color: var(--colour-text-inverse);
+  font-size: var(--text-md);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--shadow-float);
+}
+
+.weekend-popup__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+}
+
+.weekend-popup__line {
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+.weekend-popup__when {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.weekend-popup__done {
+  min-width: 120px;
+  min-height: 44px;
+  margin-top: var(--space-2);
+}

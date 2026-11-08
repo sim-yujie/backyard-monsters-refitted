@@ -17,11 +17,14 @@ import "@/ui/styles/skin.css";
 
 import { App } from "@/app/App";
 import { installErrorLog } from "@/game/bugReport/errorLog";
-import { installErrorReporter } from "@/game/bugReport/errorReporter";
+import { installErrorReporter, reportCaughtError } from "@/game/bugReport/errorReporter";
+import { GraphicsOffError } from "@/app/graphicsOff";
+import { showGraphicsOffNotice } from "@/ui/GraphicsOffNotice";
 import { UpdateCheck, fetchLivePage, runningBundleName } from "@/app/updateCheck";
 import { UpdatePrompt } from "@/ui/UpdatePrompt";
 import { applySkin } from "@/ui/skin";
 import { applyFontChoice } from "@/ui/fontChoice";
+import { installGameUiSounds } from "@/game/sound/sound";
 
 // The bug report's list of recent errors, from the very start, and the
 // owner's dashboard's copy of uncaught errors (the Privacy Policy says so).
@@ -32,6 +35,8 @@ installErrorReporter();
 applySkin();
 // The player's Font choice (Account Settings): the game font, Clear or Extra readable.
 applyFontChoice();
+// Flash's click on every button and tab, and its close on close buttons.
+installGameUiSounds();
 
 const host = document.querySelector<HTMLElement>("#game-root");
 
@@ -43,6 +48,13 @@ const app = new App(host);
 
 void app.start().catch((error: unknown) => {
   console.error("Failed to start:", error);
+  if (error instanceof GraphicsOffError) {
+    // The browser has graphics switched off: say how to turn them on, in
+    // plain HTML, and still send the error once as the evidence.
+    reportCaughtError(error);
+    showGraphicsOffNotice(host);
+    return;
+  }
   host.textContent = "The game could not start. Check the console for details.";
 });
 

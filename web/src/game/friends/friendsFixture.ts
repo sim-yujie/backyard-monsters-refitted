@@ -17,12 +17,14 @@ export const fixtureFriend = (userid: number, extra: Partial<Friend> = {}): Frie
   canGiftFrom: null,
   help: null,
   wishes: [],
+  pinnedAt: null,
   ...extra,
 });
 
 export const fixtureList = (friends: Friend[], extra: Partial<FriendsList> = {}): FriendsList => ({
   friends,
   max: 100,
+  maxPinned: 10,
   requestsIn: 0,
   giftsWaiting: 0,
   helpsLeft: 20,
@@ -92,6 +94,7 @@ export const fixtureApi = (
     answer: answer("answer", null),
     cancel: answer("cancel", undefined),
     remove: answer("remove", undefined),
+    pin: answer("pin", { pinned: true, pinnedCount: 1 }),
     search: answer("search", []),
     suggestions: answer("suggestions", []),
     sendGift: answer("sendGift", null),

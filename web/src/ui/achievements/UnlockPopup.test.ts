@@ -86,9 +86,10 @@ describe("UnlockPopup", () => {
     expect(popup.element.querySelector(".ach-card__badge")?.textContent).not.toContain("★");
     click(".ach-card__close");
     vi.advanceTimersByTime(GAP_MS);
-    inbox.add([live(24, 25)]);
+    // Every achievement has a painted badge now (#298), so an unknown id shows the stand-in.
+    inbox.add([live(99, 25)]);
     const standIn = popup.element.querySelector<HTMLElement>(".ach-card__badge .ach-badge")!;
-    expect(standIn.dataset["achievement"]).toBe("24");
+    expect(standIn.dataset["achievement"]).toBe("99");
     expect(standIn.classList.contains("ach-badge--gold")).toBe(true);
     expect(standIn.querySelector(".ach-badge__cup")).not.toBeNull();
   });

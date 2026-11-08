@@ -159,7 +159,10 @@ export const topItems = (report: AdminHealthReport): TopItem[] => {
 export const verdict = (items: readonly TopItem[]): string => {
   const bad = items.filter((item) => item.level === "bad").length;
   const warn = items.length - bad;
-  if (bad) return bad === 1 ? "1 problem needs you" : `${bad} problems need you`;
+  if (bad) {
+    const head = bad === 1 ? "1 problem needs you" : `${bad} problems need you`;
+    return warn ? `${head}, ${warn} ${warn === 1 ? "warning" : "warnings"}` : head;
+  }
   if (warn) return warn === 1 ? "Running fine, 1 thing to check" : `Running fine, ${warn} things to check`;
   return "Everything is running fine";
 };

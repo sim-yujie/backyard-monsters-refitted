@@ -21,3 +21,4 @@ import "./plugins/raid";
 import "./plugins/slowInternet";
 import "./plugins/teamNotice";
 import "./plugins/tips";
+import "./plugins/weekend";

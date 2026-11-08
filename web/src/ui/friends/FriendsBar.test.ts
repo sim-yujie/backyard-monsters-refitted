@@ -35,6 +35,16 @@ describe("ordering", () => {
     expect(orderFriends(list).map((f) => f.username)).toEqual(["Help", "On", "High", "Low"]);
   });
 
+  it("puts pinned friends before everyone, in the order they were pinned (beta 7)", () => {
+    const list = [
+      friend(1, { username: "Help", level: 1, help: { speedup: true, repair: false } }),
+      friend(2, { username: "Late", level: 2, pinnedAt: 900 }),
+      friend(3, { username: "On", level: 5, online: "online" }),
+      friend(4, { username: "Early", level: 1, pinnedAt: 100 }),
+    ];
+    expect(orderFriends(list).map((f) => f.username)).toEqual(["Early", "Late", "Help", "On"]);
+  });
+
   it("does not count a help with nothing to do as a wrench", () => {
     expect(canHelp(friend(1, { help: { speedup: false, repair: false } }))).toBe(false);
     expect(canHelp(friend(1))).toBe(false);

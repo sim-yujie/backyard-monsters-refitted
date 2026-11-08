@@ -466,6 +466,14 @@ describe("the game team (dashboard moderation)", () => {
     expect(session.current.entries.map((entry) => entry.kind === "line" && entry.gm)).toEqual([true, false, true]);
   });
 
+  it("marks a moderator's lines only where the server says so, and never alongside GM", () => {
+    const session = joined([{ ...wire(30, "hello", 1), mod: true }, wire(77, "hi", 2), { ...wire(7, "x", 3), gm: true, mod: true }]);
+    latest().hear({ type: "message", channel: CONFIG.channel, ...wire(30, "again", 4), mod: true });
+    const lines = session.current.entries.filter((entry) => entry.kind === "line");
+    expect(lines.map((entry) => entry.mod)).toEqual([true, false, false, true]);
+    expect(lines.map((entry) => entry.gm)).toEqual([false, false, true, false]);
+  });
+
   it("a muted player's line comes back to the input, with when chat opens again", () => {
     const session = joined();
     session.say("hello?");

@@ -47,6 +47,22 @@ if (typeof Object.hasOwn !== "function") {
 }
 
 /**
+ * `TouchEvent`, as an empty stand-in, where the browser says it has touch
+ * (`ontouchstart`) but defines no `TouchEvent` (Firefox on some Windows
+ * set-ups). The graphics library checks `event instanceof TouchEvent` on every
+ * pointer move; without the name each move threw "TouchEvent is not defined"
+ * (500 reports from one player in 2 minutes, 6 Nov 2026). No real event is
+ * ever an instance of the stand-in, so mouse and pen input go their usual way.
+ */
+if (typeof globalThis.TouchEvent !== "function" && typeof globalThis.UIEvent === "function") {
+  Object.defineProperty(globalThis, "TouchEvent", {
+    value: class TouchEvent extends UIEvent {},
+    writable: true,
+    configurable: true,
+  });
+}
+
+/**
  * A deep copy of the game's own data (saves, yard parts, test records): plain
  * objects, arrays, dates, maps and sets. Shared parts and loops are copied
  * once, as the browser's own `structuredClone` does.

@@ -9,6 +9,7 @@ import { YardStore, type YardActionResult } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { HOLD_DELAY_MS } from "@/ui/QuantityStepper";
 import { spokenText } from "@/ui/resourceIcon";
+import { resetWeekend, setWeekend } from "@/game/weekend";
 import { HatchTab, plural } from "./HatchTab";
 
 /**
@@ -505,6 +506,44 @@ describe("HatchTab: the info panel and the batch add", () => {
     expect(spokenText(element.querySelector(".hatch-info__each")!)).toBe("Goo 350 · Time each 23s · Housing each 15");
   });
 
+  it("puts Hatch Rush's chip on its own line under the time, inside the tile", () => {
+    const now = 1_794_614_400 + 3_600;
+    setWeekend(
+      {
+        active: {
+          id: "hatch",
+          title: "Hatch Rush",
+          line: "Monsters hatch 30% faster",
+          percent: 30,
+          key: "2026-11-14",
+          startsAt: now - 3_600,
+          endsAt: now - 3_600 + 172_800,
+          announceAt: now - 3_600 - 86_400,
+          forced: false,
+        },
+        next: null,
+      },
+      now,
+    );
+    try {
+      const { element } = setup(twoHatcheries(), { monster: "C3" });
+      const time = [...element.querySelectorAll<HTMLElement>(".hatch-info__stat")].at(-1)!;
+      const values = [...time.querySelectorAll("dd")];
+      // The time alone in the first <dd>; the chip in a second one, which the
+      // tile wraps onto its own line (hatch.css), not squeezed beside "23s".
+      // (23s shortened by the rush.)
+      expect(values.map((dd) => dd.textContent)).toEqual(["17s", "−30%"]);
+      expect(values[1]!.className).toBe("hatch-info__stat-extra");
+      expect(values[1]!.querySelector(".weekend-chip")).not.toBeNull();
+      // The other five tiles keep one value each.
+      for (const stat of [...element.querySelectorAll(".hatch-info__stat")].slice(0, -1)) {
+        expect(stat.querySelectorAll("dd")).toHaveLength(1);
+      }
+    } finally {
+      resetWeekend();
+    }
+  });
+
   it("offers Max, explains it, previews the batch dashed and adds it in one request", async () => {
     // Four Housing L6 = 2,160; 1,500 housed, 65 on the way: room for 59 Pokeys,
     // but Max is the queue's 61: housing is no limit (#169), only a warning.
@@ -702,6 +741,10 @@ describe("HatchTab: with a Hatchery Control Centre", () => {
     expect(spokenText(nowCard(element, 10))).toBe("Hatchery 1 Pokey 9s");
     // The idle hatchery would take the Bolt chosen at once.
     expect(spokenText(nowCard(element, 11))).toBe("Hatchery 2 Starts now");
+    // Word and number apart, so a phone can show "#2" where "Hatch…" was cut (6 Nov UI check).
+    const label = nowCard(element, 11).querySelector(".hatch-now__label")!;
+    expect(label.querySelector(".hatch-now__label-word")?.textContent).toBe("Hatchery");
+    expect(label.querySelector(".hatch-now__label-number")?.textContent).toBe("2");
     // The HCC merges into its last stack (Bolt ×4 → 5), and hatchery 2 takes a Bolt off it at once.
     expect(slotKinds(hcc)).toEqual(["Bolt ×4", "empty", "empty", "empty", "empty", "empty", "empty"]);
     expect(text(hcc, ".hatch-line__done")).toBe("55s");

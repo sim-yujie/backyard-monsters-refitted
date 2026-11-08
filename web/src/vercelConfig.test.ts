@@ -84,7 +84,10 @@ describe("vercel.json", () => {
   });
 
   it("opens the emailed reset link on the game page", () => {
-    expect(config.rewrites).toContainEqual({ source: RESET_PATH, destination: "/index.html" });
+    // With cleanUrls on, "/index.html" is itself redirected, so a rewrite to it answers 404 on
+    // Vercel (live bug, 7 Nov 2026): the reset page must rewrite to "/".
+    expect(config.rewrites).toContainEqual({ source: RESET_PATH, destination: "/" });
+    expect(config.rewrites.some((r: { destination: string }) => r.destination.endsWith(".html"))).toBe(false);
   });
 });
 

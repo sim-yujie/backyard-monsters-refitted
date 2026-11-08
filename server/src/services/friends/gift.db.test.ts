@@ -46,6 +46,9 @@ const BASE_CAP = 10_000;
 /** One outpost adds 2,000,000 to the cap. */
 const BIG_CAP = BASE_CAP + 2_000_000;
 const HALL = { id: 0, t: 14, x: -70, y: 0, l: 1 };
+/** What every sender holds of each resource at the start of a test: a gift (300) comes out of it. B starts empty. */
+const STOCK = 5_000;
+const STOCKED = { r1: STOCK, r2: STOCK, r3: STOCK, r4: STOCK };
 
 describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
   let orm: MikroORM;
@@ -106,6 +109,7 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
         WHERE userid IN (${LIST})`,
       [JSON.stringify({ "0": HALL }), T0, T0 - 30 * DAY, LEVEL_5_POINTS]
     );
+    await sql(`UPDATE bym.save SET resources = ? WHERE userid IN (${LIST}) AND userid <> ?`, [JSON.stringify(STOCKED), B]);
     await befriend(A, B);
     for (const other of OTHERS) await befriend(other, B);
     await befriend(A, HIDDEN);
@@ -152,10 +156,12 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
     await orm.close(true);
   });
 
-  test("a gift is free, worth 3% of the cap, waits 7 days and leaves the receiver a notice", async () => {
+  test("a gift is taken from the sender, worth 3% of the cap, waits 7 days and leaves the receiver a notice", async () => {
     const answer = await send(A, B, "r3");
     expect(answer).toMatchObject({ error: 0, gift: { resource: "r3", amount: 300, userid: B, username: `zz_fg_${B}`, createdAt: T0, expiresAt: T0 + 7 * DAY } });
-    expect(await resourcesOf(A)).toMatchObject({ r1: 0, r2: 0, r3: 0, r4: 0 });
+    // Owner, 7 Nov 2026: the gift comes out of the sender's main yard, and the answer says what is left.
+    expect(answer.resources).toEqual({ ...STOCKED, r3: STOCK - 300 });
+    expect(await resourcesOf(A)).toMatchObject({ ...STOCKED, r3: STOCK - 300 });
 
     const [row] = await giftRows(A);
     expect(row).toMatchObject({ to_userid: B, resource: "r3", amount: 300, collected_at: null });
@@ -190,6 +196,7 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
     expect((theirs.friends as any[]).find((friend) => friend.userid === A)).toMatchObject({ giftSentToday: false });
     expect((await list(B)).gifts[0].canSendBack).toBe(true);
 
+    await setSave(B, { resources: STOCKED });
     await send(B, A);
     expect((await list(B)).gifts[0].canSendBack).toBe(false);
   });
@@ -220,6 +227,34 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
     expect(answers.filter((answer) => answer === "not refused")).toHaveLength(1);
     expect(answers.filter((answer) => answer?.reason === "giftSentToday")).toHaveLength(1);
     expect(await giftRows(A)).toHaveLength(1);
+    // Only the gift that went was paid for.
+    const held = await resourcesOf(A);
+    expect(held.r1 + held.r2).toBe(2 * STOCK - 300);
+  });
+
+  test("a sender without enough of the resource is refused, and nothing is taken or sent", async () => {
+    await setSave(A, { resources: { ...STOCKED, r2: 299 } });
+    expect(await refusalOf(send(A, B, "r2"))).toEqual({ reason: "notEnough", need: 300, have: 299 });
+    expect(await resourcesOf(A)).toMatchObject({ ...STOCKED, r2: 299 });
+    expect(await giftRows(A)).toHaveLength(0);
+    expect(await sql(`SELECT 1 FROM bym.notification WHERE userid = ?`, [B])).toHaveLength(0);
+    // Exactly enough is fine, and leaves none.
+    await setSave(A, { resources: { ...STOCKED, r2: 300 } });
+    expect((await send(A, B, "r2")).resources).toMatchObject({ r2: 0 });
+  });
+
+  test("a second gift the same day costs nothing more", async () => {
+    await send(A, B, "r1");
+    expect(await reasonOf(send(A, B, "r1", T0 + 60))).toBe("giftSentToday");
+    expect(await resourcesOf(A)).toMatchObject({ r1: STOCK - 300 });
+  });
+
+  test("sending is refused while the sender's yard is under attack", async () => {
+    // The attack check reads the real clock.
+    await setSave(A, { attackid: 1, attacks: [{ starttime: Math.floor(Date.now() / 1000) }] });
+    expect(await reasonOf(send(A, B))).toBe("underAttack");
+    expect(await resourcesOf(A)).toMatchObject(STOCKED);
+    expect(await giftRows(A)).toHaveLength(0);
   });
 
   test("removing and re-adding a friend the same day does not give a second gift", async () => {
@@ -234,7 +269,7 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
   test("the amount uses the lower of the two caps, and is fixed when sent", async () => {
     await setSave(A, { outposts: [[1, 1]] });
     expect((await send(A, B)).gift.amount).toBe(Math.floor(BASE_CAP * 0.03));
-    await setSave(B, { outposts: [[1, 1]] });
+    await setSave(B, { outposts: [[1, 1]], resources: { ...STOCKED, r1: 100_000 } });
     expect((await send(B, A)).gift.amount).toBe(Math.floor(BIG_CAP * 0.03));
     await setSave(A, { outposts: [] });
     expect((await list(A)).gifts[0].amount).toBe(Math.floor(BIG_CAP * 0.03));
@@ -339,6 +374,7 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
 
   test("blocking drops the blocked player's waiting gifts to you, and only those", async () => {
     await send(A, B);
+    await setSave(B, { resources: STOCKED });
     await send(B, A);
     await blockPlayer(em() as never, B, A, T0 + 60);
     expect((await list(B, T0 + 120)).gifts).toEqual([]);

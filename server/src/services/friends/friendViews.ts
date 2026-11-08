@@ -40,6 +40,8 @@ export interface FriendView {
   help: { speedup: boolean; repair: boolean } | null;
   /** The gifts they wish for, up to 3, best first (#391); a gift picker shows these first, ranked. */
   wishes: GiftResource[];
+  /** When the caller pinned them to the top of the list (beta 7), unix seconds; null when not pinned. */
+  pinnedAt: number | null;
 }
 
 /** One friend request, as both lists and the request routes send it; the player is the other side. */
@@ -102,9 +104,15 @@ const dateOf = (seconds: number): Date => new Date(seconds * 1000);
  */
 export const listFriends = async (em: EntityManager, userid: number, now: number): Promise<FriendView[]> => {
   const rows = await em.execute<
-    (CardRow & { since: Date; hide_online: boolean; last_seen_at: Date | null; gift_wishes: string | null })[]
+    (CardRow & {
+      since: Date;
+      pinned_at: Date | null;
+      hide_online: boolean;
+      last_seen_at: Date | null;
+      gift_wishes: string | null;
+    })[]
   >(
-    `SELECT ${CARD_COLUMNS}, f.created_at AS since, u.hide_online, u.last_seen_at, u.gift_wishes
+    `SELECT ${CARD_COLUMNS}, f.created_at AS since, f.pinned_at, u.hide_online, u.last_seen_at, u.gift_wishes
        FROM bym.friend f JOIN ${CARD_JOIN} ON u.userid = f.friend_userid
       WHERE f.userid = ?
       ORDER BY lower(u.username), u.userid`,
@@ -123,6 +131,7 @@ export const listFriends = async (em: EntityManager, userid: number, now: number
       canGiftFrom: since + ageGate > now ? since + ageGate : null,
       help: null,
       wishes: readWishes(row.gift_wishes),
+      pinnedAt: secondsOf(row.pinned_at),
     };
   });
 };

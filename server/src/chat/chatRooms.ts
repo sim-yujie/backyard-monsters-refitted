@@ -15,6 +15,7 @@ import {
 import { getHistory, pushMessage } from "./chatHistory.js";
 import { watchLine } from "./chatWatch.js";
 import { markGameTeam, refuseIfMuted } from "./chatGameTeam.js";
+import { isChatModerator } from "./chatModerators.js";
 import { takeAllianceLine } from "./chatLimits.js";
 import {
   ErrorCode,
@@ -230,6 +231,8 @@ export const postMessage = async (client: ChatClient, channel: string, body: str
     body: messageBody,
     messageType: AllianceMessageType.MESSAGE,
     ...(client.gm && { gm: true }),
+    // Read from the list on each line, so a moderator added while their chat is open shows at once.
+    ...(!client.gm && isChatModerator(client.userId) && { mod: true }),
   };
 
   let entry: HistoryEntry;

@@ -2,6 +2,7 @@ import { Assets, Rectangle, Texture } from "pixi.js";
 import { classicLook } from "@/game/classicLook";
 import { mapRoomGrid } from "@/game/HexGrid";
 import { terrainBand } from "./cellVisuals";
+import { timeArt } from "./openMarks";
 
 /**
  * Flash's eleven ground tiles (`MapRoomCell_CLIP`'s frames water1..3,
@@ -101,7 +102,7 @@ export class GroundArt {
 
   private async loadSheet(url: string, surface: WaterSurface): Promise<boolean> {
     try {
-      const sheet = await Assets.load<Texture>(url);
+      const sheet = await timeArt(url, () => Assets.load<Texture>(url));
       // In points: the @2x sheet's source is half its pixel size.
       const width = sheet.source.width / SHEET_COLUMNS;
       const height = sheet.source.height / SHEET_ROWS;

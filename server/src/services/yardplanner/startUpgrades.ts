@@ -11,11 +11,13 @@ import type {
   BuildingHealthData,
 } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
+import { costLessBy } from "../events/weekendBoosts.js";
 import { withoutHelpers } from "../friends/helpList.js";
 import { requirementDetail } from "../base/economy/transitions.js";
 import { ACADEMY_TYPE } from "../yard/academy.js";
 import { LAB_TYPE, labResearch } from "../yard/lab.js";
 import { siegeHold, type SiegeHold } from "../yard/siege.js";
+import { LOCKER_TYPE, monsterRealmOf, runningUnlock } from "../yard/locker.js";
 import {
   isSurfaceInferno,
   purseShortfall,
@@ -95,6 +97,8 @@ export interface UpgradeWalkSave extends SurfaceInfernoSave {
   storedata?: JsonObject | null;
   /** The siege weapons: a Siege Factory holding one may not be upgraded. */
   siege?: JsonObject | null;
+  /** The Monster Locker's unlocks: a Locker unlocking a monster may not be upgraded. */
+  lockerdata?: JsonObject | null;
 }
 
 /** The four resource amounts of one cost step. */
@@ -141,6 +145,16 @@ const isDamaged = (
   health: BuildingHealthData | null | undefined
 ): boolean => building.hp != null || (health != null && String(building.id) in health);
 
+/**
+ * The building with the Builder's Weekend percentage it was bought at (`wd`),
+ * or without one: every start writes it afresh, so a cancel reads the price
+ * of the job that is running (`services/yard/upgrade.ts` `planCancelUpgrade`).
+ */
+const withWeekendDiscount = (building: BuildingData, percentOff: number): BuildingData => {
+  const { wd: _old, ...rest } = building;
+  return percentOff > 0 ? { ...rest, wd: percentOff } : (rest as BuildingData);
+};
+
 /** The kinds whose steps are written finished instead of started (D13, decision Q1). */
 const AT_ONCE_KINDS: ReadonlySet<string> = new Set(["wall", "trap"]);
 
@@ -186,6 +200,8 @@ export interface OneUpgradeRefusal {
   workers?: { total: number; busy: number };
   /** `busy` on an Academy that is training: the monster, for the panel's own words. */
   training?: string;
+  /** `busy` on a Monster Locker unlocking a monster: the monster, for the panel's own words. */
+  unlocking?: string;
   /** `busy` on a Siege Lab or Factory at work or holding a weapon (`siegeHold`). */
   siege?: { hold: SiegeHold; weapon: SiegeId };
   /**
@@ -252,8 +268,12 @@ export const upgradeLadder = (type: number, kind: YardKind = "main") => {
  * @param save - The yard as it stands.
  * @param id - The building's id in `save.buildingdata`.
  * @param now - Unix seconds, for the Sharper Tools window.
+ * @param percentOff - Builder's Weekend: the price is this much less
+ *   (`services/events/weekendBoosts.ts`), and the building keeps it as `wd`
+ *   so a cancel gives back what was paid. 0 (the bots, the instant upgrade's
+ *   gates) leaves the full price.
  */
-export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): OneUpgrade => {
+export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number, percentOff = 0): OneUpgrade => {
   const buildings = save.buildingdata ?? {};
   const building = buildings[String(id)] as BuildingData | undefined;
   if (!building) return { ok: false, reason: "missing", id, t: 0, from: 0, scope: "building" };
@@ -277,6 +297,12 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): 
   // (`SiegeLab.Upgrade`, `SiegeFactory.Upgrade`).
   const siege = siegeHold(building, save.siege);
   if (siege) return refuse("busy", "building", { siege });
+  // A Monster Locker unlocking a monster (`BUILDING8.Upgrade`,
+  // `client/scripts/BUILDING8.as:97-103`, `cloc_err_cantupgrade`).
+  if (t === LOCKER_TYPE) {
+    const unlock = runningUnlock(save.lockerdata, monsterRealmOf(save));
+    if (unlock) return refuse("busy", "building", { unlocking: unlock.monster });
+  }
   if (isDamaged(building, save.buildinghealthdata)) return refuse("damaged", "building");
 
   const hall = townHallLevel(buildings, kind);
@@ -305,7 +331,7 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): 
         });
   }
 
-  const cost = stepCost(step);
+  const cost = costLessBy(stepCost(step), percentOff);
   const missing = inferno ? purseShortfall(save.iresources, cost) : shortfall(save.resources, cost);
   if (isShort(missing)) {
     return refuse("shortfall", "step", { shortfall: missing, ...(inferno && { purse: "inferno" as const }) });
@@ -328,7 +354,7 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): 
       cost,
       finished: false,
       points: 0,
-      building: { ...withoutHelpers(building), cU: seconds, cL: seconds },
+      building: withWeekendDiscount({ ...withoutHelpers(building), cU: seconds, cL: seconds }, percentOff),
     };
   }
 

@@ -1,5 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
-import { cachedTiltChoice, loadTiltChoice, rememberTiltChoice, saveTiltChoice, TILT_CHOICE_KEY, UNKNOWN_CHOICE } from "./tiltSetting";
+import {
+  cachedTiltChoice,
+  forgetTiltAnswer,
+  knownTiltChoice,
+  loadTiltChoice,
+  loadTiltChoiceOnce,
+  noteTiltAnswer,
+  rememberTiltChoice,
+  saveTiltChoice,
+  TILT_CHOICE_KEY,
+  UNKNOWN_CHOICE,
+} from "./tiltSetting";
+
+const session = vi.hoisted(() => ({ userId: 7 as number | null }));
+vi.mock("@/api/auth", () => ({
+  getSession: () => (session.userId === null ? null : { userId: session.userId }),
+}));
 
 /**
  * The "Tilted map" choice (MR2 look plan step 4): the account holds it, this
@@ -64,5 +80,47 @@ describe("the tilted map choice", () => {
     rememberTiltChoice({ allowed: true, tilted: true }, store);
     await expect(loadTiltChoice(() => Promise.reject(new Error("offline")), store)).rejects.toThrow();
     expect(cachedTiltChoice(store)).toEqual({ allowed: true, tilted: true });
+  });
+});
+
+describe("the tilt answer kept for the page (one account call per page, not per map open)", () => {
+  it("reuses an answer that came with the hex shape's call instead of asking again", async () => {
+    forgetTiltAnswer();
+    session.userId = 7;
+    noteTiltAnswer({ allowed: true, tilted: false }, memory());
+    const fetch = vi.fn(async () => ({ allowed: true, tilted: true }));
+
+    expect(await loadTiltChoiceOnce(fetch, memory())).toEqual({ allowed: true, tilted: false });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("asks once when the page has no answer yet, then reuses it", async () => {
+    forgetTiltAnswer();
+    session.userId = 7;
+    const fetch = vi.fn(async () => ({ allowed: true, tilted: true }));
+
+    await loadTiltChoiceOnce(fetch, memory());
+    await loadTiltChoiceOnce(fetch, memory());
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the player's own new choice as the page's answer", async () => {
+    forgetTiltAnswer();
+    session.userId = 7;
+    await saveTiltChoice(false, async () => ({ allowed: true, tilted: false }), memory());
+
+    expect(knownTiltChoice()).toEqual({ allowed: true, tilted: false });
+  });
+
+  it("never hands one account's answer to another account signed in later on the same page", async () => {
+    forgetTiltAnswer();
+    session.userId = 7;
+    noteTiltAnswer({ allowed: true, tilted: false }, memory());
+    session.userId = 8;
+    const fetch = vi.fn(async () => ({ allowed: true, tilted: true }));
+
+    expect(knownTiltChoice()).toBeNull();
+    expect(await loadTiltChoiceOnce(fetch, memory())).toEqual({ allowed: true, tilted: true });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

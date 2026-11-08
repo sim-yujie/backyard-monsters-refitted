@@ -5,6 +5,7 @@ import { YardStore } from "@/game/yard/YardStore";
 import {
   buildActions,
   buildAt,
+  buildWallsAt,
   cancelBuild,
   instantBuildAt,
   type BuildApi,
@@ -48,6 +49,22 @@ describe("build routes", () => {
     ]);
     expect(Object.fromEntries(sent[0]!.body)).toEqual({ type: "20", x: "300", y: "-300" });
     expect(Object.fromEntries(sent[2]!.body)).toEqual({ id: "9" });
+  });
+
+  it("posts a wall line to build/walls as JSON [x, y] pairs, in order", async () => {
+    stubFetch();
+    await buildWallsAt(17, [
+      { x: 200, y: 100 },
+      { x: 220, y: 100 },
+      { x: 220, y: 120 },
+    ]);
+    expect(sent[0]!.url).toMatch(/\/bm\/yard\/build\/walls$/);
+    expect(sent[0]!.body.get("type")).toBe("17");
+    expect(JSON.parse(sent[0]!.body.get("cells")!)).toEqual([
+      [200, 100],
+      [220, 100],
+      [220, 120],
+    ]);
   });
 });
 
@@ -146,6 +163,56 @@ describe("buildActions", () => {
     expect(await second).toMatchObject({ ok: false, refusal: { reason: "shortfall", local: true } });
     expect(api.build).toHaveBeenCalledTimes(1);
     expect(store.resources.r1).toBe(500);
+  });
+
+  it("a drawn wall line goes out in one call and merges the Blocks built", async () => {
+    const { api, actions, store } = setup([HALL]);
+    const walls = vi.fn(() =>
+      Promise.resolve({
+        error: 0,
+        savetime: T0,
+        currenttime: T0,
+        completed: [],
+        report: {
+          t: 17,
+          built: [
+            { id: 2, x: 200, y: 200 },
+            { id: 3, x: 220, y: 200 },
+          ],
+          refused: [{ x: 240, y: 200, reason: "placement", placement: "overlap" }],
+          cost: { r1: 2000, r2: 0, r3: 0, r4: 0 },
+          points: 204,
+        },
+        buildingdata: {
+          "1": HALL,
+          "2": { id: 2, t: 17, X: 200, Y: 200 },
+          "3": { id: 3, t: 17, X: 220, Y: 200 },
+        },
+      }),
+    );
+    (api as BuildApi).walls = walls as unknown as NonNullable<BuildApi["walls"]>;
+    const cells = [
+      { x: 200, y: 200 },
+      { x: 220, y: 200 },
+      { x: 240, y: 200 },
+    ];
+    const result = await actions.walls(17, cells);
+    expect(walls).toHaveBeenCalledTimes(1);
+    expect(walls).toHaveBeenCalledWith(17, cells);
+    expect(result).toMatchObject({ ok: true, report: { built: [{ id: 2 }, { id: 3 }] } });
+    expect(store.building(3)).toMatchObject({ type: 17, x: 220, y: 200 });
+  });
+
+  it("a wall line is refused locally when empty or when not even one Block is affordable", async () => {
+    const { api, actions } = setup([HALL], { r1: 500, r2: 0, r3: 0, r4: 0 });
+    const walls = vi.fn();
+    (api as BuildApi).walls = walls as unknown as NonNullable<BuildApi["walls"]>;
+    expect(await actions.walls(17, [])).toMatchObject({ ok: false, refusal: { reason: "badRequest", local: true } });
+    expect(await actions.walls(17, [{ x: 200, y: 200 }])).toMatchObject({
+      ok: false,
+      refusal: { reason: "shortfall", local: true },
+    });
+    expect(walls).not.toHaveBeenCalled();
   });
 
   it("cancel is refused locally for a building that is not under construction", async () => {

@@ -41,9 +41,11 @@ const { joinChannel, postMessage } = await import("./chatRooms.js");
 const { markGameTeam } = await import("./chatGameTeam.js");
 const { applyModeration } = await import("./chatModeration.js");
 const { clients } = await import("./chatState.js");
+const { isChatModerator, setChatModerators } = await import("./chatModerators.js");
 
 const OWNER = 7;
 const PLAYER = 2503;
+const MOD = 3001;
 const GLOBAL = "chat:mr2-global";
 
 const fakeClient = (userId: number, extra: Partial<ChatClient> = {}) => {
@@ -68,7 +70,7 @@ const fakeClient = (userId: number, extra: Partial<ChatClient> = {}) => {
   return { client, sent, closed: () => closed };
 };
 
-const entry = (userId: number, gm?: boolean): HistoryEntry => ({
+const entry = (userId: number, gm?: boolean, mod?: boolean): HistoryEntry => ({
   userId,
   displayName: `[1] p${userId}`,
   picSquare: null,
@@ -77,6 +79,7 @@ const entry = (userId: number, gm?: boolean): HistoryEntry => ({
   messageType: AllianceMessageType.MESSAGE,
   ts: 1,
   ...(gm !== undefined && { gm }),
+  ...(mod !== undefined && { mod }),
 });
 
 const savedAdmins = process.env.ADMIN_USER_IDS;
@@ -86,6 +89,7 @@ beforeEach(() => {
   published.length = 0;
   pushed.length = 0;
   clients.clear();
+  setChatModerators([]);
 });
 
 afterEach(() => {
@@ -199,5 +203,63 @@ describe("a ban", () => {
 
   test("other control messages are left to the gateway", () => {
     expect(applyModeration({ type: ChatControlType.AllianceEvict, userId: PLAYER })).toBe(false);
+  });
+});
+
+describe("the moderators' mark", () => {
+  test("a history read marks exactly the moderators' lines, whatever a stored line claims", () => {
+    setChatModerators([MOD]);
+    const marked = markGameTeam([entry(MOD), entry(PLAYER, undefined, true), entry(PLAYER), entry(OWNER)]);
+    expect(marked.map((e) => e.mod)).toEqual([true, undefined, undefined, undefined]);
+    expect(marked.map((e) => e.gm)).toEqual([undefined, undefined, undefined, true]);
+  });
+
+  test("a moderator taken off the list loses the mark on their old lines", () => {
+    setChatModerators([MOD]);
+    expect(markGameTeam([entry(MOD)])[0]!.mod).toBe(true);
+    setChatModerators([]);
+    expect(markGameTeam([entry(MOD, undefined, true)])[0]!.mod).toBeUndefined();
+  });
+
+  test("a game team account on the list shows GM only", () => {
+    setChatModerators([OWNER]);
+    expect(isChatModerator(OWNER)).toBe(false);
+    const [line] = markGameTeam([entry(OWNER)]);
+    expect(line).toMatchObject({ gm: true });
+    expect(line!.mod).toBeUndefined();
+  });
+
+  test("a moderator added while their chat is open has the mark on their next line", async () => {
+    const { client } = fakeClient(MOD);
+    joinChannel(client, GLOBAL, { type: ChannelType.Global });
+    published.length = 0;
+
+    await postMessage(client, GLOBAL, "before");
+    expect(JSON.parse(published[0]!.payload).mod).toBeUndefined();
+
+    setChatModerators([MOD]);
+    client.lastMsgAt = 0;
+    await postMessage(client, GLOBAL, "after");
+
+    expect(JSON.parse(published[1]!.payload)).toMatchObject({ type: "message", userId: MOD, mod: true });
+    expect(pushed[1]!.entry).toMatchObject({ userId: MOD, mod: true });
+    expect(JSON.parse(published[1]!.payload).gm).toBeUndefined();
+  });
+
+  test("a game team line never carries the moderators' mark", async () => {
+    setChatModerators([OWNER]);
+    const { client } = fakeClient(OWNER, { gm: true });
+    joinChannel(client, GLOBAL, { type: ChannelType.Global });
+    published.length = 0;
+
+    await postMessage(client, GLOBAL, "hello all");
+
+    const sent = JSON.parse(published[0]!.payload);
+    expect(sent.gm).toBe(true);
+    expect(sent.mod).toBeUndefined();
+  });
+
+  test("the list change is not a moderation message", () => {
+    expect(applyModeration({ type: ChatControlType.Moderators })).toBe(false);
   });
 });

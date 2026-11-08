@@ -4,6 +4,7 @@ import {
   mapRoomFor,
   mapRoomLevelIn,
   mapRoomOf,
+  primeFromYard,
   primeOwnYard,
   takePrimedOwnYard,
 } from "./mapRoute";
@@ -64,5 +65,33 @@ describe("the primed own-yard load", () => {
   it("is dropped when stale", () => {
     primeOwnYard(save(), 1_000);
     expect(takePrimedOwnYard(60_000)).toBeNull();
+  });
+});
+
+describe("the own yard handed from the yard to Map Room 2 (no second load on open)", () => {
+  const yard = (extra: { kind?: string; settled?: boolean; serverNow?: number } = {}) => ({
+    kind: extra.kind ?? "main",
+    save: save({ currenttime: 100, resources: { r1: 5 } }),
+    settled: extra.settled ?? true,
+    now: () => extra.serverNow ?? 1234.7,
+  });
+
+  it("primes the yard's merged save with the server clock as it is now", () => {
+    expect(primeFromYard(yard(), 1_000)).toBe(true);
+    const primed = takePrimedOwnYard(1_500);
+    expect(primed?.currenttime).toBe(1234);
+    expect(primed?.resources).toEqual({ r1: 5 });
+    expect(primed?.baseid).toBe("5001");
+  });
+
+  it("does not prime while a yard request is in flight or queued: the map loads its own", () => {
+    expect(primeFromYard(yard({ settled: false }), 1_000)).toBe(false);
+    expect(takePrimedOwnYard(1_500)).toBeNull();
+  });
+
+  it("only primes the main yard, never an outpost or the Inferno yard", () => {
+    expect(primeFromYard(yard({ kind: "outpost" }), 1_000)).toBe(false);
+    expect(primeFromYard(yard({ kind: "inferno" }), 1_000)).toBe(false);
+    expect(takePrimedOwnYard(1_500)).toBeNull();
   });
 });

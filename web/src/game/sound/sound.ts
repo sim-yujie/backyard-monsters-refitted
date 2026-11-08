@@ -3,6 +3,7 @@ import { MusicPlayer } from "./MusicPlayer";
 import { onSoundSwitches, soundSwitches, type SoundSwitches } from "./soundSwitches";
 import { volumeGain } from "./soundVolume";
 import type { Tune } from "./tunes";
+import { installUiSounds, UI_SOUND_EFFECT, type UiSound } from "./uiSounds";
 
 /**
  * The game's one music player, made on first use and driven by two things:
@@ -83,4 +84,21 @@ export const playEffect = (effect: Effect, volume?: number): void => {
 /** Fetches an attack's sounds as it opens (`attackSounds.ts`); nothing with sound effects off. */
 export const preloadEffects = (list: readonly Effect[]): void => {
   effectsPlayer().preload(list);
+};
+
+/** Plays one of Flash's UI sounds now (`uiSounds.ts`), e.g. a refusal no button press carries. */
+export const playUiSound = (sound: UiSound): void => {
+  playEffect(UI_SOUND_EFFECT[sound]);
+};
+
+let uiSoundsInstalled = false;
+
+/**
+ * Flash's click and close on every button, tab and close button of the page
+ * (`uiSounds.ts`), once, from `main.ts`.
+ */
+export const installGameUiSounds = (): void => {
+  if (uiSoundsInstalled || typeof document === "undefined") return;
+  uiSoundsInstalled = true;
+  installUiSounds(document, { play: (effect) => playEffect(effect) });
 };

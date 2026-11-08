@@ -149,6 +149,36 @@ export const YardBuildSchema = z.object({
 });
 
 /**
+ * The most cells one `build/walls` line may name: the biggest Town Hall's
+ * Block allowance (400 at TH10, `game-data/buildingCosts.ts` type 17). The
+ * owner's cap is the hall's limit alone (8 Nov 2026); this only bounds the
+ * request, and the route still stops at the yard's own allowance.
+ */
+export const MAX_WALL_LINE_CELLS = 400;
+
+/** One cell of a wall line: a Block's footprint origin, on the 5-unit snap grid. */
+const WallCellField = z.tuple([YardCoordinateField, YardCoordinateField]);
+
+/**
+ * `POST /bm/yard/build/walls`: a wall type and the Blocks of a drawn line or
+ * L, in the order they are built. `cells` is a JSON array of `[x, y]` pairs
+ * (a JSON body's array arrives stringified, `middleware/jsonBody.ts`). Every
+ * cell must sit on the 5-unit grid and none may repeat; whether each fits is
+ * the route's rule (`services/yard/buildWalls.ts`).
+ */
+export const YardBuildWallsSchema = z.object({
+  type: z.coerce.number().int().positive(),
+  cells: jsonField("cells must be a JSON array of [x, y] pairs")
+    .pipe(z.array(WallCellField).min(1).max(MAX_WALL_LINE_CELLS))
+    .refine((cells) => cells.every(([x, y]) => x % 5 === 0 && y % 5 === 0), {
+      message: "Every cell must be on the 5-unit grid",
+    })
+    .refine((cells) => new Set(cells.map(([x, y]) => `${x},${y}`)).size === cells.length, {
+      message: "A cell is named twice",
+    }),
+});
+
+/**
  * `POST /bm/yard/move`: one building and where its footprint now starts.
  * Whether it may go there is the route's rule (`services/yard/move.ts`).
  */

@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { resetWeekend, setWeekend, type WeekendRun } from "@/game/weekend";
 import type { BaseLoadResponse, BuildingData, ResourceCaps, Resources } from "@/api/types";
 import { costOf } from "@/game/yard/buildingCosts";
 import { readYard, type YardBuilding } from "@/game/yard/yardModel";
@@ -589,6 +590,85 @@ describe("cancelOffer: the refund", () => {
       caps: null,
     });
     expect(cancelOffer(pick(context, 2), context).lost).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
+  });
+});
+
+describe("Builder's Weekend (game/weekend.ts)", () => {
+  const BUILDERS: WeekendRun = {
+    id: "builders",
+    title: "Builder's Weekend",
+    line: "Upgrades cost 30% less",
+    percent: 30,
+    key: "2026-11-14",
+    startsAt: T0 - 60,
+    endsAt: T0 + 3_600,
+    announceAt: T0 - 86_460,
+    forced: false,
+  };
+  afterEach(() => resetWeekend());
+
+  it("the upgrade costs 30% less, rounded up, with the full price kept", () => {
+    setWeekend({ active: BUILDERS, next: null });
+    const context = contextOf({ buildings: [HALL(5), building(2, 20, 4)] });
+    const offer = upgradeOffer(pick(context, 2), context);
+    expect(offer).toMatchObject({
+      cost: { r1: 875_000, r2: 656_250, r3: 218_750, r4: 0 },
+      weekendOff: 30,
+      fullCost: { r1: 1_250_000, r2: 937_500, r3: 312_500, r4: 0 },
+    });
+  });
+
+  it("the shortfall is against the lower price", () => {
+    setWeekend({ active: BUILDERS, next: null });
+    const context = contextOf({
+      buildings: [HALL(5), building(2, 20, 4)],
+      resources: { r1: 875_000, r2: 656_250, r3: 218_750, r4: 0 },
+    });
+    expect(upgradeOffer(pick(context, 2), context)?.gate).toBeNull();
+  });
+
+  it("not running (ended, or another event): the full price, no weekendOff", () => {
+    setWeekend({ active: { ...BUILDERS, endsAt: T0 }, next: null });
+    const context = contextOf({ buildings: [HALL(5), building(2, 20, 4)] });
+    const offer = upgradeOffer(pick(context, 2), context);
+    expect(offer?.cost).toEqual({ r1: 1_250_000, r2: 937_500, r3: 312_500, r4: 0 });
+    expect(offer).not.toHaveProperty("weekendOff");
+
+    setWeekend({ active: { ...BUILDERS, id: "study" }, next: null });
+    expect(upgradeOffer(pick(context, 2), context)).not.toHaveProperty("weekendOff");
+  });
+
+  it("cancel gives back what was paid (wd), even after the weekend", () => {
+    const context = contextOf({ buildings: [HALL(5), building(2, 20, 4, { cU: 5_400, wd: 30 })] });
+    expect(cancelOffer(pick(context, 2), context).refund).toEqual({ r1: 875_000, r2: 656_250, r3: 218_750, r4: 0 });
+  });
+
+  it("Fortify costs 30% less too, and its shortfall is against the lower price (owner, 7 Nov)", () => {
+    setWeekend({ active: BUILDERS, next: null });
+    const context = contextOf({
+      buildings: [HALL(5), building(2, 20, 4)],
+      resources: { r1: 35_000, r2: 26_250, r3: 8_750, r4: 0 },
+    });
+    expect(fortifyOffer(pick(context, 2), context)).toMatchObject({
+      cost: { r1: 35_000, r2: 26_250, r3: 8_750, r4: 0 },
+      weekendOff: 30,
+      fullCost: { r1: 50_000, r2: 37_500, r3: 12_500, r4: 0 },
+      gate: null,
+    });
+  });
+
+  it("Fortify outside the weekend: the full price, no weekendOff", () => {
+    const context = contextOf({ buildings: [HALL(5), building(2, 20, 4)] });
+    const offer = fortifyOffer(pick(context, 2), context);
+    expect(offer?.cost).toEqual({ r1: 50_000, r2: 37_500, r3: 12_500, r4: 0 });
+    expect(offer).not.toHaveProperty("weekendOff");
+  });
+
+  it("a weekend fortify's cancel gives back what was paid (wd)", () => {
+    const paid = contextOf({ buildings: [HALL(5), building(2, 20, 4, { cF: 5_400, wd: 30 })] });
+    expect(cancelOffer(pick(paid, 2), paid).refund).toEqual({ r1: 35_000, r2: 26_250, r3: 8_750, r4: 0 });
+    const full = contextOf({ buildings: [HALL(5), building(2, 20, 4, { cF: 5_400 })] });
+    expect(cancelOffer(pick(full, 2), full).refund).toEqual({ r1: 50_000, r2: 37_500, r3: 12_500, r4: 0 });
   });
 });
 

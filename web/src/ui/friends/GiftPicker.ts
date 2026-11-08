@@ -1,5 +1,6 @@
 import { friendRefusal, friendsApi, type FriendsApi, type Gift, type GiftResource } from "@/api/friends";
 import { friendsStore as sharedStore, type FriendsStore } from "@/game/friends/friendsStore";
+import { playerPool } from "@/game/friends/friendsView";
 import { Popup } from "@/ui/Popup";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, resourceIcon } from "@/ui/resourceIcon";
 import { make, StatusLine } from "./rows";
@@ -11,7 +12,7 @@ import "./friends.css";
  * on the friends bar's card, a friend's row or a waiting gift's "Send one
  * back" opens it. The player picks Twigs, Pebbles, Putty or Goo; the server
  * works out the amount (3% of the lower of the two storage caps) and takes
- * nothing from the sender. One gift per friend per day: once sent, the store
+ * it from the sender's yard (owner, 7 Nov 2026). One gift per friend per day: once sent, the store
  * marks the friend so every "Send gift" button turns off.
  *
  * Gift wishes (#391; reworked for the owner, 7 Nov): the friend's wishes are
@@ -24,7 +25,7 @@ import "./friends.css";
 
 export const GIFT_TEXT = {
   title: "Send a gift",
-  lead: (name: string): string => `Pick what to send ${name}. Gifts are free: one a day for each friend.`,
+  lead: (name: string): string => `Pick what to send ${name}. It comes out of your storage: one gift a day for each friend.`,
   sending: "Sending…",
   /**
    * "Sent to Bob · [putty] −300": the name in words, the gift as its icon and
@@ -207,6 +208,8 @@ export class GiftPicker {
       this.status.set(GIFT_TEXT.sent(gift, this.target.username));
       this.cancel.textContent = GIFT_TEXT.done;
       this.cancel.focus();
+      // The gift left the player's storage: the yard on screen reads it fresh.
+      playerPool()?.refresh();
       this.options.onSent?.(gift);
     } catch (caught) {
       const refusal = friendRefusal(caught);

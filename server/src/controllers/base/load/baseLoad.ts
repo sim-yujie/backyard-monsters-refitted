@@ -1,3 +1,5 @@
+import { weekendState } from "../../../services/events/weekendSchedule.js";
+import { weekendSettings } from "../../../services/events/weekendSettings.js";
 import { devConfig } from "../../../config/GameConfig.js";
 import { Save } from "../../../database/models/save.model.js";
 import { postgres, redis } from "../../../server.js";
@@ -499,6 +501,9 @@ export const baseLoad: KoaController = async (ctx) => {
     // web client dresses every yard for them (Halloween: dusky ground,
     // pumpkins). Left out when none is on.
     ...(activeKinds.length > 0 && { activeevents: activeKinds }),
+    // The weekend event on now and the next (`services/events/weekendSchedule.ts`):
+    // the web client's banner, Friday pop-up and boosted prices and times.
+    weekend: weekendState(weekendSettings(), getCurrentDateTime()),
     chatservers: [process.env.CHAT_WS_HOST!],
     ...(isAttack && { attpowerups }),
     ...(type === BaseMode.HELP && { help: await helpBlockFor(user.userid, baseSave) }),

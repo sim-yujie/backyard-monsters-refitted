@@ -590,6 +590,22 @@ export const clientErrorLimiter = spamLimiter("client-errors", SPAM_LIMITS.clien
 });
 
 /**
+ * Map Room 2 open timings (`controllers/maproom/clientTiming.ts`): 4 a minute
+ * per account. The client sends at most two a page load, so only a reload
+ * loop or a script meets this.
+ */
+export const clientTimingLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 4,
+  prefixKey: "client-timing",
+  keyGenerator: byUser("client-timing"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many timing reports.", reason: "rateLimited" };
+  },
+});
+
+/**
  * The game's announcement reads and "Got it" (`controllers/announcements/routes.ts`):
  * 30 a minute per user. The client reads them once a yard visit and from the
  * Account menu.
@@ -616,5 +632,102 @@ export const announcementImageLimiter = RateLimit.middleware({
   handler: async (ctx: Context) => {
     ctx.status = Status.TOO_MANY_REQUESTS;
     ctx.body = { error: "Too many requests. Please try again shortly." };
+  },
+});
+
+/** A player's answer when a profile limiter is full (`controllers/profile/routes.ts`). */
+const profileRefusal = (error: string) => async (ctx: Context) => {
+  ctx.status = Status.TOO_MANY_REQUESTS;
+  ctx.body = { error, reason: "rateLimited" };
+};
+
+/** Profiles opened: 60 a minute per user. */
+export const profileReadLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 60,
+  prefixKey: "profile-read",
+  keyGenerator: byUser("profile-read"),
+  handler: profileRefusal("Too many requests. Please slow down."),
+});
+
+/** Bio saves and photo removals: 20 every 15 minutes per user. */
+export const profileWriteLimiter = RateLimit.middleware({
+  interval: { min: 15 },
+  max: 20,
+  prefixKey: "profile-write",
+  keyGenerator: byUser("profile-write"),
+  handler: profileRefusal("You have changed your profile a lot. Please wait a few minutes."),
+});
+
+/**
+ * Photo uploads: 10 an hour per user. Only one a day is stored; this caps
+ * how often a refused or broken upload makes the server decode a picture.
+ */
+export const photoUploadLimiter = RateLimit.middleware({
+  interval: { min: 60 },
+  max: 10,
+  prefixKey: "photo-upload",
+  keyGenerator: byUser("photo-upload"),
+  handler: profileRefusal("Too many uploads. Please wait a while."),
+});
+
+/** "Report inappropriate image": 10 every 15 minutes per user, like chat reports. */
+export const photoReportLimiter = RateLimit.middleware({
+  interval: { min: 15 },
+  max: 10,
+  prefixKey: "photo-report",
+  keyGenerator: byUser("photo-report"),
+  handler: profileRefusal("You have sent a lot of reports. Please wait a few minutes."),
+});
+
+/** Profile photos, which need no sign-in: 240 a minute per IP. Browsers keep them a day. */
+export const profilePhotoLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 240,
+  prefixKey: "profile-photos",
+  handler: profileRefusal("Too many requests. Please try again shortly."),
+});
+
+/**
+ * Rate limit for drawing a line of wall Blocks (`POST /bm/yard/build/walls`) -
+ * 30 lines per minute per user. Each line is one request however long it is,
+ * and drawing one takes a press, a drag and the tick, so this is far above
+ * normal play; it stops a script hammering the save lock.
+ */
+export const wallLineLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 30,
+  prefixKey: "wallline",
+  keyGenerator: byUser("wallline"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many wall lines at once. Please slow down.", reason: "rateLimited" };
+  },
+});
+
+/**
+ * The live mail check (`/player/mailstatus`, owner, beta 7): asked on a chat
+ * nudge or every 45 s or so without chat, so 20 a minute is far above use.
+ */
+export const mailStatusLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 20,
+  prefixKey: "mail-status",
+  keyGenerator: byUser("mail-status"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many requests. Please slow down.", reason: "rateLimited" };
+  },
+});
+
+/** A moderator finding a player to write to (`/player/mail/findplayer`): 20 a minute. */
+export const mailFindPlayerLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 20,
+  prefixKey: "mail-find-player",
+  keyGenerator: byUser("mail-find-player"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many searches. Please slow down.", message: "Too many searches. Please slow down.", reason: "rateLimited" };
   },
 });

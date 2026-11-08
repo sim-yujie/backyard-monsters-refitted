@@ -2,6 +2,7 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 
 import { retentionConfig, type RetentionConfig } from "../../config/RetentionConfig.js";
 import { logger } from "../../utils/logger.js";
+import { deleteNoiseErrors } from "../errors/errorNoise.js";
 import { ERROR_RETENTION_DAYS } from "../errors/errorStore.js";
 
 /**
@@ -266,7 +267,10 @@ export const runRetentionCleanup = async (
     batchSize,
     pauseMs
   );
-  const appErrors = await deleteOldRows(
+  // Kinds that are not the game's (browser add-ons, closed tabs), whatever
+  // their age (owner, 6 Nov 2026); counted with the old ones.
+  const noiseErrors = await deleteNoiseErrors(em);
+  const oldErrors = await deleteOldRows(
     em,
     "app_error",
     "id",
@@ -275,6 +279,7 @@ export const runRetentionCleanup = async (
     batchSize,
     pauseMs
   );
+  const appErrors = noiseErrors + oldErrors;
   const appErrorReporters = await deleteOldRows(
     em,
     "app_error_reporter",

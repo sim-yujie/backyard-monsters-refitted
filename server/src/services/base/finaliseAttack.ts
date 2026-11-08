@@ -2,6 +2,7 @@ import { RequestContext } from "@mikro-orm/core";
 import { Save } from "../../database/models/save.model.js";
 import { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
+import { withTribeGooBonus } from "./tribeGooBonus.js";
 import { postgres, redis } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
@@ -48,6 +49,7 @@ import type { AbandonedOutcome } from "./combat/abandonedAttack.js";
 import { recordAttackPlan } from "./autoAttack/attackPlanStore.js";
 import { recordAttackAchievements } from "../achievements/events.js";
 import { countAttackLoot } from "../events/lootEvents.js";
+import { plunderPercent, weekendBoostUsed, withPlunderBonus } from "../events/weekendBoosts.js";
 import { attackQuestEvents, defenceQuestEvents } from "../quests/hooks.js";
 import { recordQuestEvents, recordUserQuestEvents } from "../quests/record.js";
 
@@ -313,7 +315,15 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   });
   // Bombs, then loot up to the attacker's storage cap, as `baseSave.ts` lands them (issue #166).
   if (bombs.charges.length > 0) userSave.resources = chargeBombSpend(bombs.spend, userSave.resources);
-  const banked = bankAttackLoot(userSave, loot.credit, loot.krallenBuff);
+  // Tribe Plunder and the wild-tribe Goo bonus, as `baseSave.ts` lands them.
+  const fromTribe = defender.type === BaseType.TRIBE;
+  const plunder = plunderPercent(fromTribe, now);
+  const banked = bankAttackLoot(
+    userSave,
+    withPlunderBonus(withTribeGooBonus(loot.credit, fromTribe), plunder),
+    loot.krallenBuff
+  );
+  if (plunder > 0) weekendBoostUsed(attacker.userid, "plunder", now);
   postgres.em.persist(userSave);
 
   // The defender.

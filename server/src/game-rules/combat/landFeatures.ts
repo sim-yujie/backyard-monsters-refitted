@@ -2,7 +2,9 @@ import type { DefenceBonus } from "./engine.js";
 
 /**
  * Map Room 2 land features: design A of `docs/mr2-civ-study.md`, approved by
- * the owner ("Go with A", 3 Nov 2026).
+ * the owner ("Go with A", 3 Nov 2026). Income bonuses cut in patch 6.5 (owner,
+ * 7 Nov 2026: "+50% is huge. Maybe 25%"; marsh Putty stays +25): +50 -> +25,
+ * nodes +100 -> +50.
  *
  * Every land cell keeps its height and today's height rule (tower range and
  * income, `towerRange` and the server's `harvesterIncome`), and gets ONE
@@ -18,10 +20,10 @@ import type { DefenceBonus } from "./engine.js";
  * | Feature              | Health | Tower damage | Tower range | Income               |
  * |----------------------|--------|--------------|-------------|----------------------|
  * | Open (grass, sand)   | 0      | 0            | 0           | 0                    |
- * | Forest               | +20    | 0            | -10         | Twigs +50            |
- * | Rocks                | +10    | +10          | 0           | Pebbles +50          |
- * | Marsh                | -10    | 0            | 0           | Putty +25, Goo +50   |
- * | Twig/Pebble/Putty/Goo node | 0 | 0           | 0           | that resource +100   |
+ * | Forest               | +20    | 0            | -10         | Twigs +25            |
+ * | Rocks                | +10    | +10          | 0           | Pebbles +25          |
+ * | Marsh                | -10    | 0            | 0           | Putty +25, Goo +25   |
+ * | Twig/Pebble/Putty/Goo node | 0 | 0           | 0           | that resource +50    |
  *
  * How it stacks:
  * - Tower range: the height rule first (`int(h * range / 125)` on an outpost),
@@ -68,13 +70,13 @@ const NOTHING: LandFeatureEffect = { hp: 0, damage: 0, range: 0, income: [0, 0, 
 /** The design A table (`docs/mr2-civ-study.md` section 3). */
 export const LAND_FEATURE_EFFECTS: Readonly<Record<LandFeatureId, LandFeatureEffect>> = {
   [LandFeature.OPEN]: NOTHING,
-  [LandFeature.FOREST]: { hp: 20, damage: 0, range: -10, income: [50, 0, 0, 0] },
-  [LandFeature.ROCKS]: { hp: 10, damage: 10, range: 0, income: [0, 50, 0, 0] },
-  [LandFeature.MARSH]: { hp: -10, damage: 0, range: 0, income: [0, 0, 25, 50] },
-  [LandFeature.TWIG_NODE]: { ...NOTHING, income: [100, 0, 0, 0] },
-  [LandFeature.PEBBLE_NODE]: { ...NOTHING, income: [0, 100, 0, 0] },
-  [LandFeature.PUTTY_NODE]: { ...NOTHING, income: [0, 0, 100, 0] },
-  [LandFeature.GOO_NODE]: { ...NOTHING, income: [0, 0, 0, 100] },
+  [LandFeature.FOREST]: { hp: 20, damage: 0, range: -10, income: [25, 0, 0, 0] },
+  [LandFeature.ROCKS]: { hp: 10, damage: 10, range: 0, income: [0, 25, 0, 0] },
+  [LandFeature.MARSH]: { hp: -10, damage: 0, range: 0, income: [0, 0, 25, 25] },
+  [LandFeature.TWIG_NODE]: { ...NOTHING, income: [50, 0, 0, 0] },
+  [LandFeature.PEBBLE_NODE]: { ...NOTHING, income: [0, 50, 0, 0] },
+  [LandFeature.PUTTY_NODE]: { ...NOTHING, income: [0, 0, 50, 0] },
+  [LandFeature.GOO_NODE]: { ...NOTHING, income: [0, 0, 0, 50] },
 };
 
 /** A feature id read from the wire or a stored defence; open for anything else. */

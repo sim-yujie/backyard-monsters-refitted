@@ -29,6 +29,7 @@ import {
  * them, mail with bots or with players already deleted, and threads the other
  * player had blocked), truces, alliance chat and invites, notifications,
  * the replays of attacks on them, attack plans, neighbour lists, their
+ * profile (bio and photo) and the reports of their photo, their
  * friendships, friend requests and friend helps both ways (their friends' `friendcount`
  * drops by one), the anti-cheat report and every Redis key of theirs, including login sessions,
  * so they are logged out. Their lines are taken out of world chat history, the
@@ -207,6 +208,8 @@ const deleteSteps = (u: number): DeleteStep[] => [
   { label: "the dashboard's error senders (name and address)", table: "app_error_reporter", where: `userid = ?`, params: [u] },
   { label: "announcements they pressed \"Got it\" on", table: "announcement_dismissal", where: `userid = ?`, params: [u] },
   { label: "announcement gifts they claimed", table: "announcement_claim", where: `userid = ?`, params: [u] },
+  { label: "profile (bio and photo)", table: "player_profile", where: `userid = ?`, params: [u] },
+  { label: "reports of their profile photo", table: "photo_report", where: `reported_id = ?`, params: [u] },
   { label: "map cells (home and outposts)", table: "world_map_cell", where: `uid = ?`, params: [u] },
   { label: "account (login and email)", table: `"user"`, where: `userid = ?`, params: [u] },
   { label: "saves (yards, outposts, inferno)", table: "save", where: `userid = ?`, params: [u] },
