@@ -17,6 +17,7 @@ import {
   updateBugReportTicket,
   type BugReportImageKind,
 } from "../../services/admin/bugReportsAdmin.js";
+import { parseAttackLogQuery, playerAttackLog } from "../../services/admin/attackLogAdmin.js";
 import { giveShiny, listShinyAwards, parseShinyAward, searchPlayers } from "../../services/admin/shinyAwards.js";
 import { parseTeamText, replyToReport } from "../../services/admin/supportMail.js";
 import { errorTotals, listErrors } from "../../services/errors/errorStore.js";
@@ -385,6 +386,17 @@ export const mountAdminRoutes = (router: Router): void => {
     const player = await playerModeration(postgres.em.fork(), id);
     if (!player) return refuse(ctx, Status.NOT_FOUND, MODERATION_REFUSAL_WORDS.noPlayer, "noPlayer");
     ok(ctx, { player });
+  });
+
+  // A player's attack log (services/admin/attackLogAdmin.ts): attacks they
+  // made and attacks on them, with who they attack most and who attacks them
+  // most. Read-only; every read is on one side's attack_logs index.
+  router.get(`${admin}/players/:id/attacks`, apiVersion, adminOnly, async (ctx) => {
+    const request = parseAttackLogQuery(ctx.params.id, ctx.query);
+    if (!request.ok) return refuse(ctx, Status.BAD_REQUEST, request.message, "badRequest");
+    const log = await playerAttackLog(postgres.em.fork(), request.value);
+    if (!log) return refuse(ctx, Status.BAD_REQUEST, "There is no player with that account number.", "noPlayer");
+    ok(ctx, { log });
   });
 
   router.post(`${admin}/players/:id/:kind`, apiVersion, adminOnly, async (ctx) => {
