@@ -255,12 +255,37 @@ describe("a player's record", () => {
     const filterOnly = lines.find((l) => l.dataset["sources"] === "filter")!;
     expect(filterOnly.textContent).not.toContain("Reported by");
     expect(filterOnly.textContent).toContain("Show the chat around it");
+    // The filter kept the both-line's words, so it carries no "no copy" chip.
+    expect(both[0]!.textContent).not.toContain("No chat copy");
+    expect(both[0]!.textContent).not.toContain("Not matched");
   });
 
-  it("shows one notice when a reported line has no chat copy", async () => {
+  it("adds no notice or chip for a line the word filter also caught, since the filter kept its words", async () => {
+    // "damn noobs" is reported (the chat server kept no copy) and caught by the filter.
     await mount({ player: "42" });
-    expect(document.querySelectorAll(".notice")).toHaveLength(1);
-    expect(document.querySelector(".notice")!.textContent).toContain("For 1 reported message the chat server kept no copy");
+    expect(document.querySelectorAll(".notice")).toHaveLength(0);
+    expect(document.querySelector("#record-panel")!.textContent).not.toContain("No chat copy");
+    expect(document.querySelector("#record-panel")!.textContent).not.toContain("Not matched");
+  });
+
+  it("says in plain words when a line only players reported has no chat copy", async () => {
+    const first = chatCase.messages[0]!;
+    const before = { verified: first.verified, snapshot: first.snapshot };
+    first.verified = false;
+    first.snapshot = { source: "none", lines: [] };
+    try {
+      await mount({ player: "42" });
+      expect(document.querySelectorAll(".notice")).toHaveLength(1);
+      expect(document.querySelector(".notice")!.textContent).toContain("For 1 reported message the chat server kept no copy");
+      const chips = [...document.querySelectorAll<HTMLElement>("article.ev-line .badge")].filter((b) => b.textContent === "No chat copy");
+      expect(chips).toHaveLength(1);
+      expect(chips[0]!.title).toContain("kept no copy");
+      expect(chips[0]!.closest<HTMLElement>("article")!.dataset["sources"]).toBe("report");
+      // Still each line once.
+      expect(document.querySelectorAll("article.ev-line")).toHaveLength(3);
+    } finally {
+      Object.assign(first, before);
+    }
   });
 
   it("has one action bar that counts each line once and suggests nothing", async () => {

@@ -44,7 +44,7 @@ import {
 } from "./evidence";
 import { ago, count, dateTime, plural } from "./format";
 import { icon } from "./icons";
-import { BAN_LENGTHS, DEFAULT_WARNING, disguisedChip, entryRow, markWords, roomLabel, severityChip } from "./moderation";
+import { BAN_LENGTHS, DEFAULT_WARNING, NO_COPY_TITLE, disguisedChip, entryRow, markWords, roomLabel, severityChip } from "./moderation";
 import { errorWords } from "./shiny";
 import type { ViewParams } from "./views";
 
@@ -646,7 +646,11 @@ export class QueueView {
     const { row, lines, chatCase, closed, record } = o;
     const out: Child[] = [o.result];
     if (row) {
-      const missing = lines.filter((l) => l.reported && (!l.reported.message.verified || l.reported.message.snapshot.lines.length === 0)).length;
+      // Lines the word filter also caught are left out: the filter kept their words,
+      // and "Show the chat around it" can fetch the room.
+      const missing = lines.filter(
+        (l) => l.reported && !l.filter && (!l.reported.message.verified || l.reported.message.snapshot.lines.length === 0),
+      ).length;
       if (missing) {
         out.push(
           h(
@@ -715,7 +719,12 @@ export class QueueView {
         flag ? h("span", { class: "badge amber" }, icon("warn", 13), "Word filter") : null,
         flag ? severityChip(flag.severity) : null,
         flag?.rule === "disguised" ? disguisedChip(flag.words) : null,
-        line.reported && !line.reported.message.verified ? h("span", { class: "badge" }, "Not matched") : null,
+        // A reported line the chat server kept no copy of: its words come from
+        // the reporter's game. A line the word filter also caught needs no chip,
+        // since the filter's record is the server's own copy of the words.
+        line.reported && !line.reported.message.verified && !flag
+          ? h("span", { class: "badge", attrs: { title: NO_COPY_TITLE } }, "No chat copy")
+          : null,
       ),
       h("blockquote", {}, "“", ...(flag ? markWords(line.message, flag.words) : [line.message]), "”"),
       h(

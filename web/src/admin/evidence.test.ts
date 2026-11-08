@@ -73,6 +73,20 @@ describe("mergeEvidence", () => {
     expect(lines.filter((l) => l.message === "both")).toHaveLength(1);
   });
 
+  it("shows the filter's words for a both-line the chat server kept no copy of, still once", () => {
+    const unchecked = { ...message(2, 2000, [1, 2], "shut up n00b, darn"), verified: false };
+    const lines = mergeEvidence(chatCase([unchecked]), [flag(10, 2000, "shut up noob, damn")]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.message).toBe("shut up noob, damn");
+    expect(sourcesOf(lines[0]!)).toEqual(["report", "filter"]);
+    expect(countEvidence(lines)).toMatchObject({ messages: 1, reports: 2, both: 1, filterOnly: 0 });
+  });
+
+  it("keeps the reported words when the chat server's copy matched them", () => {
+    const lines = mergeEvidence(chatCase([message(2, 2000, [1], "as reported")]), [flag(10, 2000, "as caught")]);
+    expect(lines[0]!.message).toBe("as reported");
+  });
+
   it("counts each line once: the both-line adds its reports, never a filter catch", () => {
     const lines = mergeEvidence(chatCase([message(1, 1000, [1, 2]), message(2, 2000, [1, 2, 3])]), [flag(10, 2000), flag(11, 3000)]);
     expect(countEvidence(lines)).toEqual({ messages: 3, reports: 5, reporters: 3, both: 1, filterOnly: 1 });

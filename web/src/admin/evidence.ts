@@ -56,7 +56,12 @@ export const mergeEvidence = (chatCase: ChatCaseView | null, flags: readonly Fla
     const same = byTs.get(flag.ts);
     if (same) {
       // A line is caught once; should it come twice, the first (newest) stays.
-      if (!same.filter) same.filter = flag;
+      if (!same.filter) {
+        same.filter = flag;
+        // The chat server kept no copy of the reported words; the filter's
+        // record is the server's own copy, so show its words instead.
+        if (same.reported && !same.reported.message.verified) same.message = flag.message;
+      }
       continue;
     }
     byTs.set(flag.ts, { ts: flag.ts, channel: flag.channel, message: flag.message, reported: null, filter: flag });

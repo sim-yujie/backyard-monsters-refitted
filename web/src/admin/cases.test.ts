@@ -206,10 +206,10 @@ describe("the open cases", () => {
       expect.stringContaining("you are all trash"),
     ]);
     expect(card.textContent).toContain("their own words");
-    // The second line had no copy: its words, and "Not matched".
+    // The second line had no copy: its words, and "No chat copy".
     expect(card.textContent).toContain("“uninstall the game”");
     expect(card.textContent).toContain("No copy of the room was found.");
-    expect(card.textContent).toContain("Not matched");
+    expect(card.textContent).toContain("No chat copy");
     expect([...card.querySelectorAll(".case-reporter")].map((r) => r.textContent)).toEqual([
       "GooGirl1st",
       "PuttyPal",
