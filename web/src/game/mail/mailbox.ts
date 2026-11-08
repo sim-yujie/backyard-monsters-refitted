@@ -50,6 +50,10 @@ export interface MailThread {
   /** The other party, or {@link SYSTEM_SENDER} for a notice. */
   readonly otherId: number;
   readonly otherName: string;
+  /** The other party is a chat moderator now: the light blue Mod badge (`getmessagetargets`' `mod`). */
+  readonly otherMod: boolean;
+  /** The other party is an admin: the green GM badge, as chat shows the game team (`getmessagetargets`' `gm`). Never with {@link otherMod}. */
+  readonly otherGm: boolean;
   readonly subject: string;
   /** The last message's first line. */
   readonly preview: string;
@@ -160,6 +164,8 @@ export const threadList = (
       threadid: Number(last.threadid),
       otherId: Number(last.userid),
       otherName: nameOf(Number(last.userid), targets),
+      otherMod: Number(targets[String(last.userid)]?.mod) === 1 && Number(targets[String(last.userid)]?.gm) !== 1,
+      otherGm: Number(targets[String(last.userid)]?.gm) === 1,
       subject: last.subject || NO_SUBJECT,
       preview: previewOf(last.message),
       time: Number(last.updatetime) || 0,

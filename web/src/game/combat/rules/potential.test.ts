@@ -138,12 +138,13 @@ describe("monsterPotential", () => {
     expect(monsterPotential("C16", 6, 50, 300)).toBe(0);
   });
 
-  it("adds a Slimeattikus's children at its own level", () => {
+  it("adds a Slimeattikus's children and its top-rank Lab copies at its own level", () => {
     // `splits` is 2 at level 1 (`creeps/Slimeattikus.as:11-13`); the children
-    // are C18 at 310 damage.
+    // are C18 at 310 damage. Lab "Split" at rank 3 leaves 3 copies at half damage.
     const own = 850 * 14;
+    const copies = 850 * 14 * 0.5 * 3;
     const children = 310 * 14 * 2;
-    expect(monsterPotential("C17", 1, 1, 10)).toBe(own + children);
+    expect(monsterPotential("C17", 1, 1, 10)).toBe(own + copies + children);
   });
 
   it("scales with the count and clamps a level past the ladder", () => {

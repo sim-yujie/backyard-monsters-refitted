@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bu
 import type { EntityManager } from "@mikro-orm/core";
 
 import type { User } from "../../database/models/user.model.js";
-import { HALLOWEEN_2026_LADDER } from "../../game-data/events/events.js";
+import { HALLOWEEN_2026_LADDER, THANKSGIVING_2026_LADDER } from "../../game-data/events/events.js";
 import { memoryProgressStore } from "../../services/events/progressStore.js";
 import { memoryCoinStore, useCoinStore, type EventCoinStore } from "../../services/events/eventCoins.js";
-import { PUMPKIN_HUNT_EVENT } from "../../services/yard/season.js";
+import { PUMPKIN_HUNT_EVENT, TURKEY_HUNT_EVENT } from "../../services/yard/season.js";
 import { eventsActions } from "./eventsActions.js";
 import { mushroomPickAction } from "./mushrooms.js";
 import { runYardAction, type YardAnswer } from "./yardAction.js";
@@ -101,5 +101,34 @@ describe("Halloween pumpkin hunt ladder", () => {
 
     const again = await run(claims.ladderClaim, { event: PUMPKIN_HUNT_EVENT, tier: 0 });
     expect(again.body).toMatchObject({ reason: "tierClaimed" });
+  });
+});
+
+describe("Thanksgiving turkey hunt ladder", () => {
+  test("the same tiers as the pumpkins: 10, 25, 50 and 100 turkeys", () => {
+    expect(THANKSGIVING_2026_LADDER.map((tier) => tier.need)).toEqual([10, 25, 50, 100]);
+  });
+
+  test("during Thanksgiving the tenth turkey unlocks the first tier", async () => {
+    setSystemTime(new Date(Date.UTC(2026, 10, 26, 12)));
+    const store = memoryProgressStore();
+    const claims = eventsActions(store);
+    await store.addToCounter(em as unknown as EntityManager, 2, TURKEY_HUNT_EVENT, 9);
+
+    // An ordinary turkey (no golden roll), picked on the real clock.
+    const picked = await run(mushroomPickAction(() => 0.9, store), { id: 0 });
+    expect(picked.body).toMatchObject({ report: { golden: false, turkeys: 10 } });
+
+    const claimed = await run(claims.ladderClaim, { event: TURKEY_HUNT_EVENT, tier: 0 });
+    expect(claimed.status).toBe(200);
+    expect(claimed.body).toMatchObject({ credits: 110, report: { tier: 0 } });
+  });
+
+  test("a golden turkey pays its Shiny and still counts", async () => {
+    setSystemTime(new Date(Date.UTC(2026, 10, 26, 12)));
+    const store = memoryProgressStore();
+    // 0.1: golden (one in four); then the variant roll 0.1 gives the small 3 Shiny.
+    const picked = await run(mushroomPickAction(() => 0.1, store), { id: 0 });
+    expect(picked.body).toMatchObject({ report: { golden: true, shiny: 3, turkeys: 1 } });
   });
 });

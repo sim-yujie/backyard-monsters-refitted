@@ -83,4 +83,23 @@ describe("skin.css", () => {
     const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "styles/skin.css"), "utf8");
     expect(css.match(/--skin-[\w-]+:\s*0\s*;/g) ?? []).toEqual([]);
   });
+
+  // Owner rule (7 Nov 2026): button words at 0 px off centre. A plate with more
+  // padding below than above lifts its words by half the difference.
+  it("pads the painted button plates evenly top and bottom", () => {
+    const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "styles/skin.css"), "utf8");
+    const plates = css
+      .split("}")
+      .filter((rule) => rule.includes("border-image-source: var(--skin-button);"))
+      .map((rule) => /\n\s*padding: ([^;]+);/.exec(rule)?.[1]);
+    expect(plates.length).toBeGreaterThanOrEqual(2);
+    for (const padding of plates) expect(padding).toBe("0 2px");
+  });
+
+  it("gives every .btn a whole-pixel line with equal room above and below its words", () => {
+    const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "styles/ui.css"), "utf8");
+    const base = /\n\.btn \{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(base).toMatch(/--btn-text: calc\(round\(nearest, var\(--btn-ascent\), 1px\) \+ round\(nearest, var\(--btn-descent\), 1px\)\);/);
+    expect(base).toMatch(/line-height: calc\(var\(--btn-text\) \+ 2 \* round\(nearest, [^;]+, 1px\)\);/);
+  });
 });

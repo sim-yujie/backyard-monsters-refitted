@@ -1,6 +1,6 @@
 import type { MushroomPickReport } from "@/api/types";
 import type { YardRefusal } from "@/api/yard";
-import { notePumpkins } from "@/game/events/pumpkinHunt";
+import { noteHuntCount, PUMPKIN_HUNT_KIND, TURKEY_HUNT_KIND } from "@/game/events/pumpkinHunt";
 import { currentSeason, type Season } from "@/game/season";
 import { freeWorkers } from "./workers";
 import type { YardActionResult, YardStoreAction, YardStoreReader } from "./YardStore";
@@ -79,9 +79,37 @@ export const PUMPKIN_QUIPS: readonly string[] = [
   "Just a plain old pumpkin.",
 ];
 
+/** The same quips for a Thanksgiving turkey (`game/season.ts`). */
+export const TURKEY_QUIPS: readonly string[] = [
+  "Gobble gobble! Got one.",
+  "This one nearly got away.",
+  "Another one for the feast.",
+];
+
+/** The quips a pick in `season` draws from. */
+export const quipsFor = (season: Season): readonly string[] =>
+  season === "halloween" ? PUMPKIN_QUIPS : season === "thanksgiving" ? TURKEY_QUIPS : ORDINARY_QUIPS;
+
 /** "12 pumpkins found." for the pick's toast during the pumpkin hunt. */
 export const pumpkinsFound = (count: number): string =>
   `${count.toLocaleString("en-US")} ${count === 1 ? "pumpkin" : "pumpkins"} found.`;
+
+/** "12 turkeys caught." for the pick's toast during the turkey hunt. */
+export const turkeysCaught = (count: number): string =>
+  `${count.toLocaleString("en-US")} ${count === 1 ? "turkey" : "turkeys"} caught.`;
+
+/** A pick report's hunt count, with its event kind and toast line, or null outside a hunt. */
+export const huntCountOf = (
+  report: Pick<MushroomPickReport, "pumpkins" | "turkeys">,
+): { kind: string; count: number; line: string } | null => {
+  if (report.turkeys !== undefined) {
+    return { kind: TURKEY_HUNT_KIND, count: report.turkeys, line: turkeysCaught(report.turkeys) };
+  }
+  if (report.pumpkins !== undefined) {
+    return { kind: PUMPKIN_HUNT_KIND, count: report.pumpkins, line: pumpkinsFound(report.pumpkins) };
+  }
+  return null;
+};
 
 /**
  * A mushroom is known by where it stands. Its index is only its place in the
@@ -140,6 +168,11 @@ export interface MushroomPickView {
   /** Starts the mushroom at a spot shaking; `stop` puts it back where it stood. */
   shake(spot: Spot): void;
   stop(spot: Spot): void;
+  /**
+   * The pick landed (before `golden` or `ordinary`): the yard's moment for
+   * it, e.g. a turkey's pop (`YardTurkeys.ts`). Optional.
+   */
+  picked?(spot: Spot, golden: boolean): void;
   /** A golden mushroom: the popup (`pop_goldenmushroom_*`). */
   golden(shiny: number): void;
   /** An ordinary one: a toast with a worker's quip. */
@@ -215,14 +248,15 @@ export class MushroomPicker {
               this.view.refused(result.refusal.message);
               return;
             }
-            const pumpkins = result.report.pumpkins;
-            if (pumpkins !== undefined) notePumpkins(pumpkins);
+            const hunt = huntCountOf(result.report);
+            if (hunt) noteHuntCount(hunt.kind, hunt.count);
+            this.view.picked?.(mushroom, result.report.golden);
             if (result.report.golden) {
               this.view.golden(result.report.shiny);
             } else {
-              const quips = this.season() === "halloween" ? PUMPKIN_QUIPS : ORDINARY_QUIPS;
+              const quips = quipsFor(this.season());
               const quip = quips[Math.floor(this.random() * quips.length)] ?? quips[0]!;
-              this.view.ordinary(pumpkins === undefined ? quip : `${quip} ${pumpkinsFound(pumpkins)}`);
+              this.view.ordinary(hunt ? `${quip} ${hunt.line}` : quip);
             }
           })
           .finally(() => {

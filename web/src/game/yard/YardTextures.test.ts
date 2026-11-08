@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Assets, Texture } from "pixi.js";
+import { Assets, Texture, TextureSource } from "pixi.js";
+import { setDeviceTextureLimit } from "@/game/quality";
 import { RETRY_DELAYS_MS } from "./retryLoad";
 import { YardTextures } from "./YardTextures";
 import type { ResolvedAnim, ResolvedImage } from "./buildingArt";
@@ -110,5 +111,67 @@ describe("YardTextures: a picture that does not load", () => {
     textures.destroy();
     await waitAll();
     expect(load).toHaveBeenCalledOnce();
+  });
+});
+
+describe("YardTextures: a picture bigger than the graphics card holds", () => {
+  /** A 3D turret strip: 32 cells of 64 x 51 at 2x, 4096 x 102 px... */
+  const turret: ResolvedAnim = {
+    url: "/assets/buildings/railguntower/turret.t1@2x.webp",
+    x: 0,
+    y: 0,
+    width: 64,
+    height: 51,
+    frames: 32,
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    setDeviceTextureLimit(null);
+  });
+
+  /** ...made 6144 px wide, as the Railgun's is, so it passes a 4096 px card. */
+  const wideStrip = (): Texture =>
+    new Texture({
+      source: new TextureSource({ width: 3072, height: 51, resolution: 2, resource: { picture: true } as never }),
+    });
+
+  const canvasDocument = (): void => {
+    vi.stubGlobal("document", {
+      createElement: () => ({ width: 0, height: 0, getContext: () => ({ drawImage: () => {} }) }),
+    });
+  };
+
+  it("copies each cell out on its own, so no tower is drawn as a black box", async () => {
+    canvasDocument();
+    setDeviceTextureLimit(4096);
+    const strip = wideStrip();
+    vi.spyOn(Assets, "load").mockImplementation((() => Promise.resolve(strip)) as typeof Assets.load);
+    const textures = new YardTextures(() => {});
+    expect(textures.strip(turret)).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const cells = textures.strip(turret)!;
+    expect(cells.length).toBeGreaterThan(1);
+    for (const cell of cells) {
+      expect(cell.source).not.toBe(strip.source);
+      expect(cell.source.resolution).toBe(2);
+    }
+    const destroyed = vi.spyOn(cells[0]!, "destroy");
+    textures.destroy();
+    // A copy owns its canvas, so it goes with it.
+    expect(destroyed).toHaveBeenCalledWith(true);
+  });
+
+  it("frames the cells over the one picture on a card that holds it", async () => {
+    canvasDocument();
+    setDeviceTextureLimit(8192);
+    const strip = wideStrip();
+    vi.spyOn(Assets, "load").mockImplementation((() => Promise.resolve(strip)) as typeof Assets.load);
+    const textures = new YardTextures(() => {});
+    textures.strip(turret);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    for (const cell of textures.strip(turret)!) expect(cell.source).toBe(strip.source);
   });
 });

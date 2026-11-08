@@ -1,6 +1,7 @@
 import { YardCancelFortifySchema, YardFortifySchema } from "../../schemas/YardSchemas.js";
 import { weekendBoost, weekendBoostUsed } from "../../services/events/weekendBoosts.js";
 import { planCancelFortify, planFortify } from "../../services/yard/fortify.js";
+import { withTopUp } from "../../services/yard/topUp.js";
 import { defineYardAction } from "./yardAction.js";
 
 /**
@@ -19,9 +20,11 @@ import { defineYardAction } from "./yardAction.js";
  */
 export const yardFortifyAction = defineYardAction({
   schema: YardFortifySchema,
-  run: ({ save, user, body, now }) => {
+  // A short pool topped up with Shiny, Flash's `TopoffFortify` (`services/yard/topUp.ts`, issue #393).
+  // A Builder's Weekend takes its percentage off first, so the top-up covers the discounted price.
+  run: async ({ save, user, body, now }) => {
     const off = weekendBoost("builders", now);
-    const plan = planFortify(save, body.id, now, off);
+    const plan = await withTopUp(save, body.topUp, (seen) => planFortify(seen, body.id, now, off));
     if (off > 0) weekendBoostUsed(user.userid, "builders", now);
     return plan;
   },

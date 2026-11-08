@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { attackWindowSeconds } from "./attackWindow.js";
+import { withTribeGooBonus } from "./tribeGooBonus.js";
 
 /**
  * Finishing an attack its attacker left without a save (issue #138).
@@ -414,7 +415,9 @@ describe("finaliseAbandonedAttack", () => {
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
 
     // The r2 bomb's 100,000 comes off an empty pool first.
-    expect(userSave.resources).toEqual({ r1: save.credit.r1, r2: save.credit.r2, r3: save.credit.r3, r4: save.credit.r4 });
+    // A wild tribe: 25% more Goo (patch 6.9).
+    const r4WithBonus = withTribeGooBonus(save.credit, true).r4;
+    expect(userSave.resources).toEqual({ r1: save.credit.r1, r2: save.credit.r2, r3: save.credit.r3, r4: r4WithBonus });
     expect(defender.resources).toEqual({
       r1: 5_000_000 + save.defenderDelta.r1,
       r2: 5_000_000 + save.defenderDelta.r2,

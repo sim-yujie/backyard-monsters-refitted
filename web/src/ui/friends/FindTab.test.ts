@@ -87,7 +87,7 @@ describe("FindTab", () => {
     const { tab, calls } = setup();
     tab.searchInput.value = "Bob";
     await tab.search();
-    row(tab, 1)?.querySelector("button")?.click();
+    row(tab, 1)?.querySelector<HTMLButtonElement>(".friends-row__actions button")?.click();
     await settle();
     expect(calls).toContainEqual(["request", { userid: 1 }]);
     expect(row(tab, 1)?.textContent).toContain(FIND_TEXT.requested);
@@ -97,7 +97,7 @@ describe("FindTab", () => {
   it("adds an alliance mate from the suggestions (#378)", async () => {
     const { tab, calls } = setup();
     await tab.show();
-    row(tab, 9)?.querySelector("button")?.click();
+    row(tab, 9)?.querySelector<HTMLButtonElement>(".friends-row__actions button")?.click();
     await settle();
     expect(calls).toContainEqual(["request", { userid: 9 }]);
     expect(row(tab, 9)?.textContent).toContain(FIND_TEXT.requested);
@@ -108,7 +108,7 @@ describe("FindTab", () => {
     const { tab, calls } = setup();
     tab.searchInput.value = "Bob";
     await tab.search();
-    row(tab, 2)?.querySelector("button")?.click();
+    row(tab, 2)?.querySelector<HTMLButtonElement>(".friends-row__actions button")?.click();
     await settle();
     expect(calls).toContainEqual(["request", { userid: 2 }]);
     expect(row(tab, 2)?.textContent).toContain(FIND_TEXT.friend);
@@ -119,7 +119,7 @@ describe("FindTab", () => {
     const { tab } = setup({ request: refused("requestsOff") });
     tab.searchInput.value = "Bob";
     await tab.search();
-    row(tab, 1)?.querySelector("button")?.click();
+    row(tab, 1)?.querySelector<HTMLButtonElement>(".friends-row__actions button")?.click();
     await settle();
     expect(tab.statusText).toBe("This player isn't taking friend requests.");
     expect(row(tab, 1)?.textContent).toContain(FIND_TEXT.add);

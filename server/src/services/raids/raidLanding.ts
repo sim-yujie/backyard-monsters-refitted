@@ -5,7 +5,7 @@ import type { BuildingDataMap, BuildingHealthData } from "../../types/BuildingDa
 import type { JsonObject } from "../../types/JsonObject.js";
 import { buildingDataHandler } from "../../controllers/base/save/handlers/buildingDataHandler.js";
 import { buildingDataWithout } from "../base/combat/abandonedAttack.js";
-import { countRaidSurvived } from "../goals/counters.js";
+import { countRaidSurvived, markRaidSeen } from "../goals/counters.js";
 import { garrisonsAfterBattle } from "../base/combat/bunkerGarrison.js";
 import { championsAfterDefence } from "../base/combat/defenderChampion.js";
 import { landHousingLoss, lostCount } from "../base/combat/housingLoss.js";
@@ -50,6 +50,8 @@ import {
  * - **Good defence** (D4, new): a health share of 90% or more pays 10 Shiny
  *   and counts towards goal N1, "survive a tribe attack" (`raidsSurvived`,
  *   WP5, Q7); a poor defence counts nothing.
+ * - **First Blood** (goal D1): any raider killed, good defence or not, marks
+ *   `onboarding.raidSeen` if the guide's staged raid has not already.
  * - **Schedule**: the wait starts again from the fight's start, and the raid
  *   is kept in `recent` (`recordRaidFinished`), which also lifts the yard's
  *   fight lock.
@@ -218,6 +220,13 @@ export const landRaid = (save: RaidLandingSave, raid: RaidLandingInput, now: num
   const shiny = rewarded ? GOOD_DEFENCE_SHINY : 0;
   if (shiny > 0) save.credits = amount(save.credits) + shiny;
   if (rewarded) save.onboarding = countRaidSurvived(save);
+  // Goal D1, "First Blood": one raider killed, as Flash's `kills: 1`
+  // (`markRaidSeen`). Not for the Trojan Horse or Moloch, which earn no goal
+  // credit (above).
+  if (!isTrojan && !isMoloch && outcome.creepsKilled > 0) {
+    const seen = markRaidSeen(save, now);
+    if (seen) save.onboarding = seen;
+  }
 
   const share = Math.round(outcome.healthShare * 1000) / 1000;
   const record: RaidRecord = {

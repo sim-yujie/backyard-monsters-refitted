@@ -1,10 +1,11 @@
-import { friendRefusal, type FriendsApi, type Gift, type GiftResource, type ResourceAmounts } from "@/api/friends";
+import { friendRefusal, GIFT_WISH_MAX, type FriendsApi, type Gift, type GiftResource, type ResourceAmounts } from "@/api/friends";
 import type { FriendsStore } from "@/game/friends/friendsStore";
 import { playerPool, type PlayerPool } from "@/game/friends/friendsView";
 import { formatAmount } from "@/ui/format";
-import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount } from "@/ui/resourceIcon";
+import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, resourceIcon } from "@/ui/resourceIcon";
 import { openGiftPicker, type GiftTarget } from "./GiftPicker";
 import { button, make, playerRow, section, StatusLine, type FriendsTabView } from "./rows";
+import { wishesSummary, wishMark } from "./wishMark";
 
 /**
  * The Friends screen's **Gifts** tab (`docs/design/friends.md` §3.4, issue
@@ -14,6 +15,14 @@ import { button, make, playerRow, section, StatusLine, type FriendsTabView } fro
  * there is not room for all of it, the first press warns and a second one
  * collects anyway. At most 5 a day; the rest wait, and a gift lapses after 7
  * days. Fetched fresh each time the tab comes forward.
+ *
+ * Above the gifts, **My wishes** (#391; ranked since the owner's 7 Nov
+ * note): four resource tiles; tapping one adds it as the next wish (1, 2, 3,
+ * shown by the painted wish marker on its corner), tapping it again takes it
+ * out and the ones after move up. One wish alone means "that one only", and
+ * the line beside the title says so ("Goo only"); two or three read "Goo >
+ * Twigs". Friends see them in that order when they send a gift. Saved at
+ * once; a failed save puts the last saved wishes back.
  */
 
 export interface GiftsTabOptions {
@@ -100,6 +109,10 @@ export const GIFTS_TEXT = {
   short: (lost: ResourceAmounts): string =>
     `Your storage is too full: ${amountsText(lost)} would be lost. Press again to collect anyway.`,
   underAttack: "Your yard is under attack right now. Collect when the attack is over.",
+  wishes: "My wishes",
+  /** The line beside the title with no wishes yet. */
+  wishesHint: `Tap up to ${GIFT_WISH_MAX}, best first`,
+  wishesFailed: "Your wishes could not be saved. Try again.",
 } as const;
 
 export class GiftsTab implements FriendsTabView {
@@ -110,7 +123,13 @@ export class GiftsTab implements FriendsTabView {
   private readonly summary: HTMLElement;
   private readonly status = new StatusLine();
   private readonly body: HTMLElement;
+  private readonly wishBar: HTMLElement;
   private gifts: Gift[] = [];
+  /** The wishes shown (saved or being saved), and the last the server confirmed. */
+  private wishes: GiftResource[] = [];
+  private savedWishes: GiftResource[] = [];
+  /** Bumped by every wish save, so only the latest answer counts. */
+  private wishSave = 0;
   private collectsLeft = 0;
   private loaded = false;
   private busy = false;
@@ -126,7 +145,8 @@ export class GiftsTab implements FriendsTabView {
     this.element = make("div", "friends-tab friends-tab--gifts");
     this.summary = make("div", "friends-summary gifts-summary");
     this.body = make("div", "friends-tab__body");
-    this.element.append(this.summary, this.status.element, this.body);
+    this.wishBar = make("div", "gift-wishes");
+    this.element.append(this.summary, this.wishBar, this.status.element, this.body);
   }
 
   get statusText(): string {
@@ -138,9 +158,14 @@ export class GiftsTab implements FriendsTabView {
     this.warned = null;
     if (!this.loaded) this.status.set(GIFTS_TEXT.loading);
     try {
-      const { gifts, collectsLeft } = await this.options.api.gifts();
+      const { gifts, collectsLeft, wishes } = await this.options.api.gifts();
       if (this.destroyed || generation !== this.generation) return;
       this.gifts = [...gifts];
+      // Not while a wish change is still being saved.
+      if (this.sameWishes(this.wishes, this.savedWishes)) {
+        this.wishes = [...wishes];
+        this.savedWishes = [...wishes];
+      }
       this.collectsLeft = collectsLeft;
       this.loaded = true;
       if (this.status.text === GIFTS_TEXT.loading) this.status.set(null);
@@ -170,6 +195,7 @@ export class GiftsTab implements FriendsTabView {
     all.disabled = this.busy || this.gifts.length === 0 || this.collectsLeft === 0;
     const line = make("p", "gifts-summary__left", GIFTS_TEXT.left(this.collectsLeft));
     this.summary.replaceChildren(line, all);
+    this.renderWishes();
 
     const rows = this.gifts.map((gift) => {
       const collect = button(
@@ -189,6 +215,70 @@ export class GiftsTab implements FriendsTabView {
       return row;
     });
     this.body.replaceChildren(section(GIFTS_TEXT.waiting, rows, GIFTS_TEXT.none));
+  }
+
+  /** The "My wishes" strip: one toggle per resource, ranked by the marker, the others off once 3 are on. */
+  private renderWishes(): void {
+    const full = this.wishes.length >= GIFT_WISH_MAX;
+    const toggles = make("div", "gift-wishes__toggles");
+    for (const key of RESOURCE_KEYS) {
+      const rank = this.wishes.indexOf(key) + 1;
+      const on = rank > 0;
+      const toggle = make("button", on ? "gift-wish gift-wish--on" : "gift-wish");
+      toggle.type = "button";
+      toggle.dataset["resource"] = key;
+      toggle.setAttribute("aria-pressed", String(on));
+      toggle.setAttribute("aria-label", on ? `${RESOURCE_NAMES[key]} (wish ${rank})` : RESOURCE_NAMES[key]);
+      toggle.title = RESOURCE_NAMES[key];
+      toggle.disabled = !on && full;
+      toggle.append(resourceIcon(key, { decorative: true }));
+      if (on) {
+        toggle.dataset["rank"] = String(rank);
+        toggle.append(wishMark(rank, "gift-wish__mark"));
+      }
+      toggle.addEventListener("click", () => void this.toggleWish(key));
+      toggles.append(toggle);
+    }
+    toggles.setAttribute("role", "group");
+    toggles.setAttribute("aria-label", "My gift wishes");
+    const head = make("div", "gift-wishes__head");
+    // The painted marker, then "My wishes"; under it "Goo only", "Goo > Twigs" or how to start.
+    const title = make("span", "gift-wishes__title");
+    title.append(wishMark(null, "gift-wishes__mark"), GIFTS_TEXT.wishes);
+    const hint = make("span", "gift-wishes__hint", wishesSummary(this.wishes) || GIFTS_TEXT.wishesHint);
+    if (this.wishes.length === 1) hint.classList.add("gift-wishes__hint--only");
+    head.append(title, hint);
+    this.wishBar.replaceChildren(head, toggles);
+  }
+
+  /** The same wishes in the same order (the order is the rank). */
+  private sameWishes(a: readonly GiftResource[], b: readonly GiftResource[]): boolean {
+    return a.length === b.length && a.every((key, index) => b[index] === key);
+  }
+
+  /**
+   * Adds `key` as the last wish or takes it out (the later ones move up), and
+   * saves at once; a refusal puts the last saved wishes back.
+   */
+  private async toggleWish(key: GiftResource): Promise<void> {
+    const on = this.wishes.includes(key);
+    if (!on && this.wishes.length >= GIFT_WISH_MAX) return;
+    const next = on ? this.wishes.filter((one) => one !== key) : [...this.wishes, key];
+    this.wishes = next;
+    this.renderWishes();
+    const save = ++this.wishSave;
+    try {
+      const stored = await this.options.api.setWishes(next);
+      if (this.destroyed || save !== this.wishSave) return;
+      this.wishes = [...stored];
+      this.savedWishes = [...stored];
+      if (this.status.text === GIFTS_TEXT.wishesFailed) this.status.set(null);
+    } catch {
+      if (this.destroyed || save !== this.wishSave) return;
+      this.wishes = [...this.savedWishes];
+      this.status.set(GIFTS_TEXT.wishesFailed, "error");
+    }
+    this.renderWishes();
   }
 
   /** Collects one gift or all it can; warns first, once, when storage is short. */

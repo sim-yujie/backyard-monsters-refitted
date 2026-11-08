@@ -7,6 +7,7 @@ import { postgres } from "../../server.js";
 import { friendFlag, friendsAmong } from "../../services/friends/friendFlags.js";
 import { SUPPORT_SENDER, SUPPORT_SENDER_NAME, SYSTEM_SENDER, SYSTEM_SENDER_NAME } from "../../services/mail/systemSender.js";
 import { DELETED_PLAYER_NAME } from "../../services/privacy/deleteAccount.js";
+import { isGameTeamSender, moderatorsAmong } from "../../services/mail/modMail.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
 interface TargetUser {
@@ -17,6 +18,10 @@ interface TargetUser {
   pic_square?: string | null | undefined;
   /** 1 when the player's account was deleted: their mail stays, but they cannot be written to. */
   deleted?: 1;
+  /** 1 when the player is on the chat moderators list now: their mail shows the light blue Mod badge. */
+  mod?: 1;
+  /** 1 when the player is an admin (`ADMIN_USER_IDS`): their mail shows the green GM badge, never the Mod one. */
+  gm?: 1;
 }
 
 type TargetUsers = Record<number, TargetUser>;
@@ -26,7 +31,10 @@ type TargetUsers = Record<number, TargetUser>;
  *
  * This controller get message targets. A partner whose account was deleted
  * (`scripts/delete-account.ts`) has no user row: they are named
- * {@link DELETED_PLAYER_NAME}, as in battle records.
+ * {@link DELETED_PLAYER_NAME}, as in battle records. A partner on the chat
+ * moderators list carries `mod: 1` (`services/mail/modMail.ts`), decided
+ * from the list as it is now. An admin carries `gm: 1` instead (the game
+ * team's GM badge, as in chat).
  *
  * @param {Context} ctx - The Koa context object, which includes the request body.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
@@ -69,7 +77,10 @@ export const getMessageTargets: KoaController = async (ctx) => {
       }
     );
 
-    const friends = await friendsAmong(postgres.em, user.userid, conversationPartnerIds);
+    const [friends, moderators] = await Promise.all([
+      friendsAmong(postgres.em, user.userid, conversationPartnerIds),
+      moderatorsAmong(postgres.em, conversationPartnerIds),
+    ]);
 
     const targets: TargetUsers = Object.fromEntries(
       users.map((partner) => [
@@ -80,6 +91,8 @@ export const getMessageTargets: KoaController = async (ctx) => {
           first_name: partner.username,
           last_name: partner.last_name,
           pic_square: partner.pic_square,
+          ...(moderators.has(partner.userid) && { mod: 1 as const }),
+          ...(isGameTeamSender(partner.userid) && { gm: 1 as const }),
         },
       ])
     );

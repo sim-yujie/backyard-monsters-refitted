@@ -143,22 +143,23 @@ describe("outpost income", () => {
   test("scales one resource after the height rule", () => {
     const base = (t: number) => harvesterIncome(harvester(t, 10), undefined, 125);
     const forest = (t: number) => harvesterIncome(harvester(t, 10), undefined, 125, LandFeature.FOREST);
-    expect(forest(1)).toBe(Math.trunc((base(1) * 150) / 100));
+    // Patch 6.5: +25% on forest, rocks and marsh, +50% on a node.
+    expect(forest(1)).toBe(Math.trunc((base(1) * 125) / 100));
     expect(forest(2)).toBe(base(2));
     expect(harvesterIncome(harvester(4, 10), undefined, 125, LandFeature.MARSH)).toBe(
-      Math.trunc((base(4) * 150) / 100)
+      Math.trunc((base(4) * 125) / 100)
     );
     expect(harvesterIncome(harvester(3, 10), undefined, 125, LandFeature.MARSH)).toBe(
       Math.trunc((base(3) * 125) / 100)
     );
-    expect(harvesterIncome(harvester(2, 10), undefined, 125, LandFeature.PEBBLE_NODE)).toBe(base(2) * 2);
+    expect(harvesterIncome(harvester(2, 10), undefined, 125, LandFeature.PEBBLE_NODE)).toBe(Math.trunc((base(2) * 150) / 100));
   });
 
   test("pays a whole outpost through the same rule", () => {
     const buildingdata = { a: harvester(1, 10), b: { ...harvester(4, 10), id: 2 } };
     const open = outpostIncome({ buildingdata }, 140);
     const forest = outpostIncome({ buildingdata }, 140, LandFeature.FOREST);
-    expect(forest.r1).toBe(Math.trunc((open.r1 * 150) / 100));
+    expect(forest.r1).toBe(Math.trunc((open.r1 * 125) / 100));
     expect(forest.r4).toBe(open.r4);
   });
 });

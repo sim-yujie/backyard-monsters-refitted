@@ -4,7 +4,7 @@ import { resourceAmount } from "@/ui/resourceIcon";
 
 /**
  * The golden mushroom popup (`docs/design/yard-buildings.md` §5.6), or at
- * Halloween the jack-o'-lantern one: the
+ * Halloween the jack-o'-lantern one, at Thanksgiving the golden turkey: the
  * original's `popup_mushroomshiny` with its title, its line and the
  * `goldmushroom.png` picture (`client/scripts/MUSHROOMS.as:246-250`; strings
  * `pop_goldenmushroom_title` and `pop_goldenmushroom_desc`). The Shiny is
@@ -23,6 +23,16 @@ export const GOLDEN_TITLE = "Your worker struck gold!";
 export const JACK_O_LANTERN_ART = "/assets/popups/jack-o-lantern.png";
 export const JACK_O_LANTERN_TITLE = "Your worker found a jack-o'-lantern!";
 
+/**
+ * The Thanksgiving dress: the golden find is a golden turkey
+ * (`server/public/assets/specialevent/thanksgiving/golden-turkey.png`, Codex,
+ * from the game's own worker art). Same reward, same roll. The title is
+ * short so the title bar shows it whole, phone width included (the longer
+ * "Your worker caught a golden turkey!" was cut to "Your worker caught a g...").
+ */
+export const GOLDEN_TURKEY_ART = "/assets/specialevent/thanksgiving/golden-turkey.png";
+export const GOLDEN_TURKEY_TITLE = "A golden turkey!";
+
 /** What the popup says in each season: picture, title, and the line around the Shiny. */
 const DRESS: Readonly<Record<Season, { art: string; title: string; before: string; after: string }>> = {
   normal: {
@@ -36,6 +46,12 @@ const DRESS: Readonly<Record<Season, { art: string; title: string; before: strin
     title: JACK_O_LANTERN_TITLE,
     before: "You've picked a glowing jack-o'-lantern worth ",
     after: ". Pumpkins keep growing while Halloween lasts.",
+  },
+  thanksgiving: {
+    art: GOLDEN_TURKEY_ART,
+    title: GOLDEN_TURKEY_TITLE,
+    before: "You've caught a shining golden turkey worth ",
+    after: ". More turkeys wander in while Thanksgiving lasts.",
   },
 };
 

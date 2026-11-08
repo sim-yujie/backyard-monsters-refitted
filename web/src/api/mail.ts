@@ -23,6 +23,11 @@ import type { ApiEnvelope } from "./types";
  * - `POST /base/migratetofriend { threadid, shiny }`: accepts the thread's
  *   invitation to move, at the server's price; `shiny` "1" pays in Shiny (#205).
  * - `POST /base/rejectmigratetofriend { threadid }`: declines it (#205).
+ * - `GET  /api/:apiVersion/player/mailstatus`: the unread count and the newest
+ *   unread message, for the live mail pop-up (owner, beta 7), and whether the
+ *   player is a moderator.
+ * - `POST /api/:apiVersion/player/mail/findplayer { player }`: a moderator
+ *   finds any player to write to by name or account number; 403 for anyone else.
  */
 
 const THREADS_PATH = "/api/:apiVersion/player/getmessagethreads";
@@ -33,6 +38,8 @@ const BLOCK_PATH = "/api/:apiVersion/player/reportmessagethread";
 const TRUCE_PATH = "/api/:apiVersion/player/requesttruce";
 const ACCEPT_INVITE_PATH = "/base/migratetofriend";
 const DECLINE_INVITE_PATH = "/base/rejectmigratetofriend";
+const STATUS_PATH = "/api/:apiVersion/player/mailstatus";
+const FIND_PLAYER_PATH = "/api/:apiVersion/player/mail/findplayer";
 
 /** One message as the server sends it (`message.model.ts`'s `@FrontendKey` fields). */
 export interface MailMessage {
@@ -93,7 +100,94 @@ export interface MailTarget {
   readonly pic_square?: string | null;
   /** 1 when the player deleted their account: named "Deleted player", and not offered as a recipient. */
   readonly deleted?: number;
+  /** 1 when the player is a chat moderator now: their mail shows the light blue Mod badge. */
+  readonly mod?: number;
+  /** 1 when the player is an admin: their mail shows the green GM badge (the game team, as in chat), never the Mod one. */
+  readonly gm?: number;
 }
+
+/** The newest unread message, as the live mail pop-up shows it (`/player/mailstatus`). */
+export interface LatestMail {
+  /** The message's own id: the pop-up shows once per message. */
+  readonly id: string;
+  readonly threadid: number;
+  readonly from: number;
+  readonly name: string;
+  readonly subject: string;
+  /** The message's first words. */
+  readonly preview: string;
+  /** Unix seconds. */
+  readonly time: number;
+  /** The sender is a moderator: the light blue Mod badge. */
+  readonly mod: boolean;
+  /** The sender is an admin: the green GM badge, as chat shows the game team. Never with {@link mod}. */
+  readonly gm: boolean;
+  /** The game's own notice (an attack, a takeover). */
+  readonly notice: boolean;
+}
+
+/** What the live mail check gives back. */
+export interface MailStatus {
+  readonly unread: number;
+  readonly latest: LatestMail | null;
+  /** The player is a moderator: New message may find any player. */
+  readonly mod: boolean;
+  /** The player is the game team (an admin): their badge is GM, not Mod. */
+  readonly gm?: boolean;
+}
+
+interface StatusResponse extends ApiEnvelope {
+  unread?: number;
+  gm?: unknown;
+  latest?: {
+    id?: unknown;
+    threadid?: unknown;
+    from?: unknown;
+    name?: unknown;
+    subject?: unknown;
+    preview?: unknown;
+    time?: unknown;
+    mod?: unknown;
+    gm?: unknown;
+    notice?: unknown;
+  } | null;
+  mod?: number;
+}
+
+interface FindPlayerResponse extends ApiEnvelope {
+  player?: { userid?: number; username?: string };
+}
+
+/** A player a moderator found, or why not. */
+export type FoundPlayer =
+  | { readonly ok: true; readonly userid: number; readonly name: string }
+  | { readonly ok: false; readonly reason: string };
+
+/** The status route's answer, made safe to show. */
+export const statusOf = (response: StatusResponse): MailStatus => {
+  const latest = response.latest;
+  const id = latest && typeof latest.id === "string" ? latest.id : "";
+  return {
+    unread: Math.max(0, Math.floor(Number(response.unread) || 0)),
+    latest:
+      latest && id
+        ? {
+            id,
+            threadid: Number(latest.threadid) || 0,
+            from: Number(latest.from) || 0,
+            name: String(latest.name ?? ""),
+            subject: String(latest.subject ?? ""),
+            preview: String(latest.preview ?? ""),
+            time: Number(latest.time) || 0,
+            mod: Number(latest.mod) === 1 && Number(latest.gm) !== 1,
+            gm: Number(latest.gm) === 1,
+            notice: Number(latest.notice) === 1,
+          }
+        : null,
+    mod: Number(response.mod) === 1,
+    gm: Number(response.gm) === 1,
+  };
+};
 
 interface ThreadsResponse extends ApiEnvelope {
   threads?: Record<string, MailMessage>;
@@ -167,6 +261,10 @@ export interface MailApi {
   acceptInvite(threadid: number, payment: InvitePayment): Promise<InviteAnswer>;
   /** Declines the thread's invitation to move (#205). */
   declineInvite(threadid: number): Promise<InviteAnswer>;
+  /** The unread count, the newest unread message and whether the player is a moderator. Absent in older test fakes. */
+  status?(): Promise<MailStatus>;
+  /** A moderator finds any player to write to, by name or account number. Absent in older test fakes. */
+  findPlayer?(text: string): Promise<FoundPlayer>;
 }
 
 /** An object keyed by position ("0", "1", …) as a list in that order. */
@@ -210,6 +308,22 @@ const answerRefusal = (caught: unknown): string => {
 };
 
 export const mailApi: MailApi = {
+  status: async () => statusOf(await get<StatusResponse>(STATUS_PATH)),
+  findPlayer: async (text) => {
+    try {
+      const response = await post<FindPlayerResponse>(FIND_PLAYER_PATH, { player: text });
+      const userid = Number(response.player?.userid);
+      if (!Number.isSafeInteger(userid) || userid <= 0) return { ok: false, reason: "No player has that name or number." };
+      return { ok: true, userid, name: String(response.player?.username ?? `Player ${userid}`) };
+    } catch (caught) {
+      if (caught instanceof NetworkError) return { ok: false, reason: "Could not reach the server. Try again." };
+      const body = caught instanceof ApiError ? (caught.body as { message?: unknown } | undefined) : undefined;
+      return {
+        ok: false,
+        reason: typeof body?.message === "string" && body.message ? body.message : "No player has that name or number.",
+      };
+    }
+  },
   threads: async () => Object.values((await get<ThreadsResponse>(THREADS_PATH)).threads ?? {}),
   targets: async () => (await get<TargetsResponse>(TARGETS_PATH)).targets ?? {},
   thread: async (threadid) =>

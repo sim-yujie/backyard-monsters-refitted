@@ -50,7 +50,7 @@ describe("achievementsState and publicAchievements", () => {
   test("the player's own: earned, Shiny earned, and the paid unlocks not yet shown", () => {
     const state = achievementsState(save, false);
 
-    expect(state).toMatchObject({ earned: 2, total: 17, shinyEarned: 15 });
+    expect(state).toMatchObject({ earned: 2, total: 22, shinyEarned: 15 });
     expect(state.fresh).toEqual([{ id: 2, name: entry(2).name, shiny: 10 }]);
     expect(state.achievements.find((view) => view.id === 6)).toMatchObject({ status: "locked" });
     expect(state.achievements.some((view) => view.id === 14)).toBe(false);
@@ -59,5 +59,29 @@ describe("achievementsState and publicAchievements", () => {
   test("an owed unlock reads earned once rewards are on: the next evaluation pays it", () => {
     expect(publicAchievements(record, false).earned).toBe(2);
     expect(publicAchievements(record, true).earned).toBe(3);
+  });
+
+  test("a hidden entry not earned shows nothing but its number, in both lists (#392)", () => {
+    const own = achievementsState(save, true).achievements.find((view) => view.id === 23);
+    expect(own).toEqual({
+      id: 23,
+      name: "???",
+      description: "",
+      shiny: 0,
+      status: "locked",
+      hidden: true,
+      progress: { value: 0, target: 1 },
+    });
+    const theirs = publicAchievements(record, true).achievements.find((view) => view.id === 27);
+    expect(theirs).toEqual({ id: 27, name: "???", description: "", status: "locked", hidden: true });
+  });
+
+  test("an earned hidden entry shows in full, still marked hidden", () => {
+    const earned = { achievements: { v: 1, s: { neighbourly: 30 }, c: { "23": { at: 400, shiny: 15 } }, backfilledAt: 100 } };
+    const own = achievementsState(earned, true).achievements.find((view) => view.id === 23);
+    expect(own).toMatchObject({ name: "Neighbourly", shiny: 15, status: "earned", at: 400, hidden: true });
+    expect(own?.progress).toEqual({ value: 30, target: 30 });
+    const theirs = publicAchievements(readAchievements(earned), true).achievements.find((view) => view.id === 23);
+    expect(theirs).toMatchObject({ name: "Neighbourly", description: "Visit 30 yards in one day.", status: "earned" });
   });
 });

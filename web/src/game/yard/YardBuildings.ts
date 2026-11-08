@@ -504,6 +504,23 @@ export class YardBuildings {
    * test and the "rises above its footprint" test — cheap property reads, no
    * allocation, for every building that can't be the answer.
    */
+  /**
+   * How many world pixels each shown building's picture rises above the top
+   * corner of its footprint, by building id: the ground behind it that the
+   * art hides (Thanksgiving turkeys keep off it, `turkeyWalk.ts`). A building
+   * whose picture is not in yet, or whose art stays inside its footprint, is
+   * left out.
+   */
+  artRises(): Map<number, number> {
+    const rises = new Map<number, number>();
+    for (const view of this.views) {
+      if (view.hidden || !view.resolved) continue;
+      const rise = view.building.box.y + view.offsetY - view.top.y;
+      if (rise > 0) rises.set(view.building.id, rise);
+    }
+    return rises;
+  }
+
   pick(worldX: number, worldY: number): YardBuilding | null {
     for (let i = this.views.length - 1; i >= 0; i--) {
       const view = this.views[i];

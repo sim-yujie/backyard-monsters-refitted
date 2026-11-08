@@ -339,3 +339,16 @@
     --friends-bar-right: 590px;
   }
 }
+
+/* A friend pinned to the top of the list (beta 7): a gold frame on the face. */
+.friends-bar__slot--pinned .friends-bar__img {
+  box-shadow:
+    0 0 0 2px #f2c230,
+    0 0 6px 1px rgb(242 194 48 / 55%);
+}
+
+:root[data-skin="flash"] .friends-bar__slot--pinned .friends-bar__img {
+  box-shadow:
+    0 0 0 2px #c98a12,
+    0 0 5px 1px rgb(201 138 18 / 50%);
+}

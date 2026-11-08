@@ -741,6 +741,10 @@ describe("HatchTab: with a Hatchery Control Centre", () => {
     expect(spokenText(nowCard(element, 10))).toBe("Hatchery 1 Pokey 9s");
     // The idle hatchery would take the Bolt chosen at once.
     expect(spokenText(nowCard(element, 11))).toBe("Hatchery 2 Starts now");
+    // Word and number apart, so a phone can show "#2" where "Hatch…" was cut (6 Nov UI check).
+    const label = nowCard(element, 11).querySelector(".hatch-now__label")!;
+    expect(label.querySelector(".hatch-now__label-word")?.textContent).toBe("Hatchery");
+    expect(label.querySelector(".hatch-now__label-number")?.textContent).toBe("2");
     // The HCC merges into its last stack (Bolt ×4 → 5), and hatchery 2 takes a Bolt off it at once.
     expect(slotKinds(hcc)).toEqual(["Bolt ×4", "empty", "empty", "empty", "empty", "empty", "empty"]);
     expect(text(hcc, ".hatch-line__done")).toBe("55s");

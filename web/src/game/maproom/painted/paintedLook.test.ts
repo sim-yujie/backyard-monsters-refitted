@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { borderProgram } from "./BorderLayer";
 import { cloudProgram } from "./CloudLayer";
 import { groundProgram } from "./PaintedGround";
-import { preparePrograms, warmRest } from "./paintedLook";
+import { fullLookPrograms, preparePrograms, warmRest } from "./paintedLook";
+import type { ProgramWarmer } from "./shaderWarmup";
 import { PLACEMENT_GRIDS, placementProgram } from "./PlacementLayer";
 
 // GlProgram reads the GPU's float precision from a test canvas; these tests run without a DOM.
@@ -123,5 +124,36 @@ describe("the painted look's warm-up order (MR2 plan step 10)", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+/** The programs the "Preparing map" bar follows (`prepareProgress.ts`): what the full look needs. */
+describe("fullLookPrograms", () => {
+  const warmer = (ready: object[] = [], { serial = false, compiling = [] as object[] } = {}) =>
+    ({
+      ready: (source: object) => ready.includes(source),
+      compiling: (source: object) => compiling.includes(source),
+      serial,
+    }) as unknown as ProgramWarmer;
+  const keys = (list: { key: string }[]): string[] => list.map(({ key }) => key);
+
+  it("on a first open at High: the Low ground first, the small ones, then the High ground (the long one)", () => {
+    const list = fullLookPrograms(warmer(), "high");
+    expect(keys(list)).toEqual(["ground-low", "borders", "clouds", ...PLACEMENT_GRIDS.map((_, i) => `place-${i}`), "ground-high"]);
+    expect(list[0]?.source).toBe(groundProgram("low"));
+    expect(list.at(-1)?.source).toBe(groundProgram("high"));
+    expect(list.at(-1)?.expectMs).toBeGreaterThan(list[0]?.expectMs ?? Infinity);
+  });
+
+  it("at Low the Low ground is the player's own, listed once", () => {
+    expect(keys(fullLookPrograms(warmer(), "low")).filter((key) => key.startsWith("ground"))).toEqual(["ground-low"]);
+  });
+
+  it("skips the Low ground when the player's own is ready, or already compiling one at a time (Firefox)", () => {
+    const own = groundProgram("medium");
+    expect(keys(fullLookPrograms(warmer([own]), "medium"))).not.toContain("ground-low");
+    expect(keys(fullLookPrograms(warmer([], { serial: true, compiling: [own] }), "medium"))).not.toContain("ground-low");
+    // Side by side (Chrome), a fresh Low compile still goes first.
+    expect(keys(fullLookPrograms(warmer([], { compiling: [own] }), "medium"))).toContain("ground-low");
   });
 });

@@ -133,6 +133,51 @@ describe("AchievementsScreen: the player's own", () => {
     expect(mapRoom!.querySelector(".ach-badge--locked")).toBeNull();
   });
 
+  it("shows a hidden entry as ??? last in To do, and in full once earned (#299)", async () => {
+    const state = ownState();
+    state.achievements.push(
+      {
+        id: 24,
+        name: "???",
+        description: "",
+        shiny: 0,
+        status: "locked",
+        hidden: true,
+        progress: { value: 0, target: 1 },
+      },
+      {
+        id: 26,
+        name: "Kozu Hunter",
+        description: "Attack Kozu camps 100 times",
+        shiny: 20,
+        status: "earned",
+        at: noon("2026-10-05"),
+        hidden: true,
+        progress: { value: 100, target: 100 },
+      },
+    );
+    const screen = new AchievementsScreen({ api: api({ state: vi.fn(async () => state) }) }).mount(document.body);
+    await screen.open();
+
+    expect(rows(screen, 1).map((row) => row.dataset["achievement"])).toEqual(["2", "5", "24"]);
+    const secret = rows(screen, 1)[2]!;
+    expect(secret.classList.contains("ach-row--hidden")).toBe(true);
+    expect(text(secret, ".ach-row__name")).toBe("???");
+    expect(secret.querySelector(".ach-badge__secret")?.textContent).toBe("?");
+    expect(secret.querySelector(".ach-bar")).toBeNull();
+    expect(secret.querySelector(".ach-row__reward")).toBeNull();
+    expect(secret.querySelector(".ach-row__description")).toBeNull();
+    expect(secret.querySelector("img")).toBeNull();
+
+    const [hunter] = rows(screen, 2);
+    expect(hunter!.dataset["achievement"]).toBe("26");
+    expect(hunter!.classList.contains("ach-row--hidden")).toBe(false);
+    expect(text(hunter!, ".ach-row__name")).toBe("Kozu Hunter");
+    expect(text(hunter!, ".ach-row__description")).toBe("Attack Kozu camps 100 times");
+    expect(text(hunter!, ".ach-row__date")).toBe("Earned 5 Oct 2026");
+    expect(hunter!.querySelector(".ach-badge--gold")).not.toBeNull();
+  });
+
   it("says so when a group is empty", async () => {
     const state = ownState();
     state.achievements = state.achievements.filter((one) => one.status === "earned");

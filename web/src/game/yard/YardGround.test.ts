@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { Assets, type Graphics } from "pixi.js";
+import { Assets, Texture, type Graphics } from "pixi.js";
 import type { BaseLoadResponse } from "@/api/types";
 import { readYard } from "./yardModel";
 import { YardGround } from "./YardGround";
@@ -61,5 +61,20 @@ describe("YardGround", () => {
     ground.destroy();
     load.mockRestore();
     warn.mockRestore();
+  });
+
+  it("lays nothing when the yard was left while its tiles were loading", async () => {
+    let arrive!: (texture: Texture) => void;
+    const pending = new Promise<Texture>((resolve) => (arrive = resolve));
+    const load = vi.spyOn(Assets, "load").mockReturnValue(pending as never);
+    const ground = new YardGround();
+    ground.layout(bounds, 1, "plot");
+
+    const loading = ground.loadTiles();
+    ground.destroy();
+    arrive(Texture.WHITE);
+
+    await expect(loading).resolves.toBe(false);
+    load.mockRestore();
   });
 });

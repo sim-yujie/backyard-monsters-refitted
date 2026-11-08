@@ -8,6 +8,10 @@ import { planWallBlocks, WALL_BLOCK_ITEMS } from "../../services/yard/wallBlocks
 import { yardKindOf } from "../../services/yardplanner/costs.js";
 import { yardBadRequestErr, yardRefusedErr } from "../../services/yard/yardErrors.js";
 import type { JsonObject } from "../../types/JsonObject.js";
+import { capOf, fitCredit } from "../../services/yard/credit.js";
+import { packAmount, packFunds, packPoints, packPrice, readPack, type ResourcePack } from "../../services/yard/resourcePacks.js";
+import { capsOf, purseOf } from "../../services/yard/siege.js";
+import { fundPurse, readInfernoStanding } from "../../services/yard/surfaceInferno.js";
 import { defineYardAction, type YardActionInput } from "./yardAction.js";
 
 /**
@@ -29,6 +33,10 @@ import { defineYardAction, type YardActionInput } from "./yardAction.js";
  *
  * Later phases add items here (CLOD, HOD*, EXH, …, WP2.3, WP2.4, WP6.2), each
  * with its own `check` for rules beyond the generic ones.
+ *
+ * Beta 7 (issue #393): the resource packs `BR11`..`BR43` and the Inferno's
+ * `BR11I`..`BR43I` are sold too, priced from the pool, not from the store
+ * table ({@link buyPack}, `services/yard/resourcePacks.ts`).
  */
 
 /** One sellable item's extra rules. */
@@ -167,7 +175,7 @@ export const OUTPOST_SHOP_ITEMS: ReadonlySet<string> = new Set([
  * did not sell there: owner decision I3, the Inferno's own ladder of 250 /
  * 500 / 1,000 / 2,000 Shiny, five workers at most. Its speed-ups (`SP1`..`SP4`)
  * and `FIX` are the `speedup` and `repair/instant` routes'; the resource packs
- * (`BR11I`..`BR43I`) are dropped, as on the surface.
+ * (`BR11I`..`BR43I`) are sold apart from this list (`buyPack`, issue #393).
  *
  * Bought in the Inferno, an item lands in the Inferno row's own `storedata`,
  * as Flash kept store data per yard: its workers (`workers.ts`), packing and
@@ -215,8 +223,72 @@ export interface ShopBuyReport {
   /** Wall upgrades only: the tier, how many Blocks it raised and the points they earned. */
   tier?: number;
   blocks?: number;
+  /** Wall upgrades and resource packs: the empire points earned. */
   points?: number;
+  /** Resource packs only: which resource (`r1`..`r4`), how much landed, and whether it was the Inferno purse. */
+  resource?: string;
+  amount?: number;
+  inferno?: boolean;
 }
+
+/**
+ * A resource pack (`BR11`..`BR43`, `BR11I`..`BR43I`; issue #393,
+ * `services/yard/resourcePacks.ts`): priced from the pool and its cap as they
+ * stand now, never from the client. Refusals: `400 notForSale` for an Inferno
+ * pack in an outpost or a surface pack in the Inferno; `409 infernoLocked` for
+ * an Inferno pack on the main yard before the Descent is passed; `409
+ * storageFull` when the offer no longer fits (Flash's `str_top_10pct_noroom`);
+ * `409 priceChanged {price}` when it now costs more than the `price` the player
+ * agreed to; then the wrapper's `shinyLocked` and `credits`.
+ *
+ * Surface packs, and Inferno packs in the Inferno yard, credit the yard's own
+ * pool through the wrapper (clamped to the cap; an outpost's pool is the main
+ * yard's). An Inferno pack bought on the main yard funds the Inferno purse,
+ * `iresources`, up to its own caps (`STORE.as:2030-2032`).
+ */
+const buyPack = async (input: YardActionInput<{ item: string; price?: number | undefined }>, pack: ResourcePack) => {
+  const { save, user, body, em } = input;
+  const { item } = pack;
+  const kind = yardKindOf(save);
+  if (kind === "outpost" && pack.inferno) {
+    throw yardBadRequestErr("That item is not sold in outposts.", { item }, "notForSale");
+  }
+  if (kind === "inferno" && !pack.inferno) {
+    throw yardBadRequestErr("That item is not sold in the Inferno.", { item }, "notForSale");
+  }
+  // The main yard sells the Inferno packs only once the Descent is passed (`STORE.as:202`).
+  const purse = kind === "main" && pack.inferno;
+  if (purse && !(await readInfernoStanding(em, user.userid, save)).descentPassed) {
+    throw yardRefusedErr("infernoLocked", "Capture an Inferno base first.", { item });
+  }
+
+  const key = pack.resource;
+  const held = purse ? purseOf(save.iresources)[key] : Number(save.resources?.[key]) || 0;
+  const cap = purse ? capsOf(save.iresources)[key] : capOf(save);
+  const amount = packAmount(pack.size, held, cap);
+  if (amount <= 0) {
+    throw yardRefusedErr("storageFull", "No room for that much.", { item, resource: key });
+  }
+  const price = packPrice(amount);
+  if (body.price !== undefined && price > body.price) {
+    throw yardRefusedErr("priceChanged", "The price has changed.", { item, price });
+  }
+  const funds = packFunds(amount);
+  const points = packPoints(amount);
+  const report: ShopBuyReport = { item, credits: price, q: 0, endsAt: null, resource: key, points, inferno: pack.inferno };
+
+  if (purse) {
+    const { iresources, credited } = fundPurse(save.iresources, { [key]: funds });
+    return { report: { ...report, amount: credited[key] }, slices: { iresources }, shiny: price, points };
+  }
+  const credit = { [key]: funds };
+  return {
+    report: { ...report, amount: fitCredit(save, credit).credited[key] },
+    credit,
+    shiny: price,
+    points,
+  };
+};
 
 /** A non-negative whole number off a jsonb field; anything else is 0. */
 const count = (raw: unknown): number => {
@@ -282,6 +354,9 @@ export const yardShopBuyAction = defineYardAction({
   run: (input) => {
     const { save, body, now } = input;
     const { item } = body;
+
+    const pack = readPack(item);
+    if (pack) return buyPack(input, pack);
 
     const rule = Object.hasOwn(SHOP_ITEMS, item) ? SHOP_ITEMS[item] : undefined;
     const storeItem = Object.hasOwn(storeItems, item) ? storeItems[item] : undefined;

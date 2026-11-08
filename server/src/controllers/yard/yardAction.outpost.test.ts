@@ -523,6 +523,21 @@ describe("routes Flash refuses in an outpost", () => {
     );
   });
 
+  test("an outpost sells the surface resource packs into the main pool, not the Inferno's (issue #393)", async () => {
+    db.rows.set(MAIN, mainRow({ resources: { r1: 0, r2: 0, r3: 0, r4: 0 } }));
+    const inferno = await onOutpost(yardShopBuyAction, { item: "BR11I" });
+    expect(inferno.status).toBe(400);
+    expect(inferno.body.reason).toBe("notForSale");
+
+    const fill = await onOutpost(yardShopBuyAction, { item: "BR23" });
+    expect(fill.status).toBe(200);
+    const report = fill.body.report as { amount: number; credits: number };
+    expect(report.amount).toBeGreaterThan(0);
+    expect((mainSave().resources as Row).r2).toBe(report.amount);
+    expect(outpostSave().resources).toEqual({});
+    expect(mainSave().credits).toBe(1000 - report.credits);
+  });
+
   test("an outpost sells Tower Overdrive for its own towers, but no monster boost", async () => {
     for (const item of ["MOD", "MDOD", "MSOD"]) {
       const refused = await onOutpost(yardShopBuyAction, { item });

@@ -1,7 +1,12 @@
 import type { BadgeTier } from "@/game/achievements/achievements";
 
-/** The seventeen shown achievements that have a painted badge (#298; Huge Rage, 9, added for beta.4). */
-const PAINTED = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 22]);
+/**
+ * Every achievement has a painted badge (#298): seventeen from beta.4, Huge Rage (9) added then, and in
+ * beta 7 the Inferno five, Better Together and the five hidden ones (14, 18-21, 23-27).
+ */
+export const PAINTED: ReadonlySet<number> = new Set([
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
+]);
 
 /**
  * The painted badge for an achievement: its symbol on a round medal whose rim
@@ -47,5 +52,18 @@ export const achievementBadge = (id: number, tier: BadgeTier, earned: boolean): 
     { once: true },
   );
   badge.append(art);
+  return badge;
+};
+
+/** A hidden achievement not earned yet (#299): a grey medal with a "?" and no art, so nothing gives it away. */
+export const secretBadge = (id: number): HTMLElement => {
+  const badge = document.createElement("span");
+  badge.className = "ach-badge ach-badge--plain ach-badge--locked ach-badge--hidden";
+  badge.dataset["achievement"] = String(id);
+  badge.setAttribute("aria-hidden", "true");
+  const mark = document.createElement("span");
+  mark.className = "ach-badge__secret";
+  mark.textContent = "?";
+  badge.append(mark);
   return badge;
 };

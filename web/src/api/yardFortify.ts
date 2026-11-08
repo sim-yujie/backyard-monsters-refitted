@@ -44,8 +44,16 @@ export interface CancelFortifyReport {
  * Starts the next fortification. Refusals: 400 `notFortifiable`; 409 `busy`,
  * `damaged`, `townHall`, `maxFortify`, `requirements`, `shortfall`, `workers`.
  */
-export const startFortify = (id: number, baseid?: string): Promise<YardResponse<FortifyReport>> =>
-  post<YardResponse<FortifyReport>>(FORTIFY_PATH, yardBody({ id }, baseid));
+export const startFortify = (
+  id: number,
+  baseid?: string,
+  /** `topUp`: the Shiny the player agreed to for a short pool (Flash's `TopoffFortify`). */
+  extra: { topUp?: number } = {},
+): Promise<YardResponse<FortifyReport>> =>
+  post<YardResponse<FortifyReport>>(
+    FORTIFY_PATH,
+    yardBody(extra.topUp === undefined ? { id } : { id, topUp: extra.topUp }, baseid),
+  );
 
 /** Stops a running fortification, for its price back. Refusal: `notFortifying`. */
 export const cancelFortify = (
@@ -75,7 +83,8 @@ const refuse = (reason: string, message: string): YardRefusal => ({
 });
 
 export interface FortifyActions {
-  start(id: number): Promise<YardActionResult<FortifyReport>>;
+  /** `topUp`: pay the shortfall with this much Shiny (Flash's `TopoffFortify`). */
+  start(id: number, topUp?: number): Promise<YardActionResult<FortifyReport>>;
   cancel(id: number): Promise<YardActionResult<CancelFortifyReport>>;
 }
 
@@ -85,7 +94,7 @@ export interface FortifyActions {
  * and still fortifying to stop.
  */
 export const fortifyActions = (store: YardStore, api: FortifyApi = fortifyApi): FortifyActions => ({
-  start: (id) =>
+  start: (id, topUp) =>
     store.run({
       key: FortifyKey.start(id),
       check: (reader) => {
@@ -95,7 +104,7 @@ export const fortifyActions = (store: YardStore, api: FortifyApi = fortifyApi): 
           ? refuse("busy", "That building is already busy. Wait for its job to finish.")
           : null;
       },
-      send: (_api, ...yard) => api.start(id, ...yard),
+      send: (_api, ...yard) => (topUp === undefined ? api.start(id, ...yard) : api.start(id, yard[0], { topUp })),
     }),
   cancel: (id) =>
     store.run({

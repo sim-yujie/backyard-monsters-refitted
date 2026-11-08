@@ -60,6 +60,22 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * trap inside a yellow reload arrow for re-arm traps (`rearm2` is a spiked
  * mine in the same arrow).
  *
+ * The profile window's stats (`ui/profile/ProfileDialog.ts`,
+ * `art-samples/profile-icons`, painted 7 Nov in place of line icons): the
+ * domed Town Hall with its horn antenna (`townhall`), a gold crown for empire
+ * points (`empire`), two smiling monster heads for friends (`friends`) and the
+ * crimson alliance shield with its gold stripe (`alliance`).
+ *
+ * Pinning a friend to the top of the list (beta 7, `ui/friends/FriendsTab.ts`):
+ * `pin`. A STAND-IN for now: its files are copies of the gold crown
+ * (`empire`) until a painted pin is made; replace `pin-*.webp` to change it.
+ *
+ * World chat's player strip (`ui/chat/ChatBox.ts`, owner 8 Nov: icons rather than
+ * words): `addfriend`, `mute` and `report` are STAND-INS too until they are painted:
+ * `addfriend` copies the two monster heads (`friends`; wants a green plus), `mute` the
+ * blue Protection shield (wants a speaker with a cross) and `report` the white flag of
+ * Retreat (wants a red warning flag). Replace their `*.webp` files to change them.
+ *
  * Event coins (beta 7, `game/eventCoins.ts`, `art-samples/event-coin`,
  * repainted by Codex 8 Nov to look nothing like Shiny's gold coins): the
  * purple and teal gem, the owner's pick of three (option B, 8 Nov).
@@ -105,6 +121,14 @@ export const GAME_ICONS = {
   wallupgrade: "Upgrade walls",
   rearm: "Re-arm traps",
   rearm2: "Re-arm traps",
+  townhall: "Town Hall",
+  empire: "Empire points",
+  friends: "Friends",
+  alliance: "Alliance",
+  pin: "Pin to top",
+  addfriend: "Add friend",
+  mute: "Mute",
+  report: "Report",
   eventcoin: "Glimmers",
 } as const satisfies Record<string, string>;
 

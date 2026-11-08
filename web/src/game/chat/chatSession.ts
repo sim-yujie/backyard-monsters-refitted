@@ -42,6 +42,8 @@ export interface ChatLine {
   readonly own: boolean;
   /** Said by the game team (the server's mark). */
   readonly gm: boolean;
+  /** Said by a chat moderator (the server's mark); false whenever `gm` is true. */
+  readonly mod: boolean;
 }
 
 /** A word from the client itself, such as "slow down". */
@@ -210,6 +212,7 @@ export class ChatSession {
   private socket: ChatSocket | null = null;
   private listeners = new Set<(state: ChatState) => void>();
   private teamListeners = new Set<(event: TeamEvent) => void>();
+  private mailListeners = new Set<() => void>();
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   /**
@@ -255,6 +258,22 @@ export class ChatSession {
   }
 
   /** Calls `listener` on each word from the game team (ban, warning); returns the way to stop. */
+  /**
+   * New mail for the player (owner, beta 7): the server says only that some
+   * came; the listener asks the mail routes what (`game/mail/mailWatch.ts`).
+   */
+  onMail(listener: () => void): () => void {
+    this.mailListeners.add(listener);
+    return () => {
+      this.mailListeners.delete(listener);
+    };
+  }
+
+  /** Connected and in a room: the server's mail news arrives here, so no need to ask on a timer. */
+  get online(): boolean {
+    return this.state.status === ChatStatus.ONLINE;
+  }
+
   onTeam(listener: (event: TeamEvent) => void): () => void {
     this.teamListeners.add(listener);
     return () => {
@@ -561,6 +580,9 @@ export class ChatSession {
       case "notice":
         for (const listener of [...this.teamListeners]) listener({ kind: "notice" });
         return;
+      case "mail":
+        for (const listener of [...this.mailListeners]) listener();
+        return;
       default:
         return;
     }
@@ -577,6 +599,7 @@ export class ChatSession {
       ts: Number(wire.ts) || 0,
       own: this.state.self?.userId === userId,
       gm: wire.gm === true,
+      mod: wire.mod === true && wire.gm !== true,
     };
   }
 

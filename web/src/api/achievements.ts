@@ -55,6 +55,8 @@ export interface AchievementView {
   /** Unix seconds it was earned; earned only. */
   at?: number;
   progress: AchievementProgress;
+  /** A hidden entry: until earned the server sends only `name: "???"`, no description, no Shiny. */
+  hidden?: true;
 }
 
 /** A paid unlock the client has not shown yet; the backfill's are marked. */
@@ -82,6 +84,8 @@ export interface PublicAchievementView {
   description: string;
   status: AchievementStatus;
   at?: number;
+  /** A hidden entry: until earned it reads `name: "???"` with no description. */
+  hidden?: true;
 }
 
 /** `GET achievements/player/:userid`. */

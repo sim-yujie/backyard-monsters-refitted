@@ -2,6 +2,8 @@ import { RequestContext } from "@mikro-orm/core";
 import { Save } from "../../database/models/save.model.js";
 import { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
+import { withTribeGooBonus } from "./tribeGooBonus.js";
+import { isMR2Camp, withCampLootBonus } from "./campLootBonus.js";
 import { postgres, redis } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
@@ -314,9 +316,17 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   });
   // Bombs, then loot up to the attacker's storage cap, as `baseSave.ts` lands them (issue #166).
   if (bombs.charges.length > 0) userSave.resources = chargeBombSpend(bombs.spend, userSave.resources);
-  // Tribe Plunder, as `baseSave.ts` lands it (`weekendBoosts.ts`).
-  const plunder = plunderPercent(defender.type === BaseType.TRIBE, now);
-  const banked = bankAttackLoot(userSave, withPlunderBonus(loot.credit, plunder), loot.krallenBuff);
+  // Tribe Plunder and the wild-tribe Goo bonus, as `baseSave.ts` lands them.
+  const fromTribe = defender.type === BaseType.TRIBE;
+  const plunder = plunderPercent(fromTribe, now);
+  const banked = bankAttackLoot(
+    userSave,
+    withPlunderBonus(
+      withCampLootBonus(withTribeGooBonus(loot.credit, fromTribe), isMR2Camp(defender.type, userSave.mapversion)),
+      plunder
+    ),
+    loot.krallenBuff
+  );
   if (plunder > 0) weekendBoostUsed(attacker.userid, "plunder", now);
   postgres.em.persist(userSave);
 
@@ -458,6 +468,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
     before: storedHealthData,
     after: outcome.buildinghealthdata,
     bombs: bombs.charges,
+    damage: outcome.damage,
   });
 
   logger.info("Finalised {username}'s abandoned attack on base {baseid} at tick {tick}", {

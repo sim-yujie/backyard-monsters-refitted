@@ -1495,6 +1495,16 @@ button.hatch-slot:disabled {
     white-space: nowrap;
   }
 
+  /* "Hatch…" hid which hatchery a card was: a phone shows its number
+     alone, "#1", which always fits (6 Nov UI check). */
+  .hatch-line--hcc .hatch-now__label-word {
+    display: none;
+  }
+
+  .hatch-line--hcc .hatch-now__label-number::before {
+    content: "#";
+  }
+
   /* Nothing to show in an empty slot: a short row, not a tall box. */
   .hatch-line .hatch-slot--empty {
     min-height: 48px;
@@ -1696,8 +1706,17 @@ button.hatch-slot:disabled {
     font-size: var(--text-xs);
   }
 
+  /* The steps give way before Max does, and if Max still does not fit it
+     takes its own line rather than running past the edge (6 Nov UI check:
+     "Max (145)" was cut at 390 px wide). */
   .hatch-add__controls {
+    flex-wrap: wrap;
     gap: var(--space-1);
+  }
+
+  .hatch-add__controls .qty-stepper__step {
+    flex: 1 1 34px;
+    min-width: 34px;
   }
 
   .hatch-add__jump {
@@ -1711,6 +1730,7 @@ button.hatch-slot:disabled {
   }
 
   .hatch-add__fill {
+    flex: 1 0 auto;
     padding-inline: var(--space-2);
   }
 

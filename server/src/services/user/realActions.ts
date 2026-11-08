@@ -73,6 +73,7 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "build",
   "build/cancel",
   "build/instant",
+  "build/walls",
   "academy/train",
   "academy/cancel",
   "academy/finish",
@@ -243,6 +244,10 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /api/:apiVersion/bm/friends/request/answer",
   "POST /api/:apiVersion/bm/friends/request/cancel",
   "POST /api/:apiVersion/bm/friends/remove",
+  // The player's gift wish list (beta 7): a setting, changes no game state.
+  "POST /api/:apiVersion/bm/friends/wishes",
+  // Pinning a friend to the top of the list (beta 7) only sorts it.
+  "POST /api/:apiVersion/bm/friends/pin",
   "POST /alliance/createalliance",
   "POST /alliance/editalliance",
   "POST /alliance/leavealliance",
@@ -266,6 +271,8 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /api/:apiVersion/bm/presence",
   "POST /api/:apiVersion/bm/presence/check",
   "POST /api/:apiVersion/player/getmessagethread",
+  // A moderator looking up a player to mail (beta 7).
+  "POST /api/:apiVersion/player/mail/findplayer",
   "POST /alliance/searchalliances",
   "POST /worldmapv2/getarea",
   "POST /worldmapv2/sight",
@@ -283,6 +290,7 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /api/:apiVersion/bugreport/guest",
   "POST /api/:apiVersion/clienterrors",
   "POST /api/:apiVersion/clienterrors/guest",
+  "POST /api/:apiVersion/clienttiming",
   "POST /api/:apiVersion/player/recorddebugdata",
   // DEV only.
   "POST /api/:apiVersion/bm/presence/check/dev",

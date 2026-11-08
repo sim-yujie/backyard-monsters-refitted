@@ -22,6 +22,8 @@ import { VICTORY_THRESHOLD } from "@/game/combat/rules";
 import { monsterPortrait, showPortrait } from "@/game/portraits";
 import { monsterName } from "@/ui/attack/ArmyPanel";
 import { gameIcon } from "@/ui/gameIcon";
+import { friendMarkOf } from "@/game/friends/friendMarks";
+import { friendBadge } from "@/ui/friends/friendBadge";
 import { onlineDot } from "@/ui/onlineDot";
 import { button, el, icon, type IconName } from "./icons";
 
@@ -242,6 +244,15 @@ export const targetCard = (
   const head = el("div", "mr1-card__head");
   const titles = el("div", "mr1-card__titles");
   const titleRow = el("div", "mr1-card__title-row");
+  if (target.kind === "player") {
+    // The friend marker before the name (beta 7), gold-framed for a pinned friend.
+    const friend = friendBadge(
+      friendMarkOf(target.userid, { friend: target.friend === true, pinned: target.pinned === true }),
+      24,
+      "mr1-card__friend",
+    );
+    if (friend) titleRow.append(friend);
+  }
   titleRow.append(el("h2", "mr1-card__title u-display", target.name));
   if (target.kind !== "tribe" && isPlayingNow(target, state.now)) titleRow.append(onlineDot());
   titleRow.append(el("span", "chip", `Level ${target.level}`));

@@ -42,6 +42,8 @@ export interface MapInputOptions {
    * every pointer event, so the tilt can change while the map is open.
    */
   screenToFlat?: () => ((point: { x: number; y: number }) => { x: number; y: number }) | null;
+  /** True while something covers the map (the "Preparing map" screen): its keys are ignored. */
+  blocked?: () => boolean;
 }
 
 export class MapInput {
@@ -141,6 +143,7 @@ export class MapInput {
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (isTextEntry(event.target)) return;
+    if (this.options.blocked?.()) return;
 
     switch (event.key) {
       case "+":

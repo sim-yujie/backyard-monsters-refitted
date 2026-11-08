@@ -56,6 +56,30 @@ describe("tribeLayoutFor", () => {
     expect(checked).toBe(17);
   });
 
+  test("each shipped saved yard is built on the Flash layout of its own level, not another one's", () => {
+    // The Kozu 38 yard once copied the 34 one, so 38 camps showed Flash's
+    // 29-36 yard (690 buildings) instead of its 37-44 one (931): owner, 8 Nov.
+    // Tower levels, resources and a few moved or added buildings are fine;
+    // the yard must just stay closest to the original its level had in Flash.
+    const spots = (save: SaveData): Set<string> =>
+      new Set(Object.values(save.buildingdata ?? {}).map((b) => `${b.t}@${b.X},${b.Y}`));
+    const likeness = (a: Set<string>, b: Set<string>): number =>
+      [...a].filter((spot) => b.has(spot)).length / Math.max(a.size, b.size);
+    let checked = 0;
+    for (const tribe of TRIBE_IDS) {
+      const originals = [...originalLayoutLevels(tribe).values()];
+      for (const [level, save] of Object.entries(savedTribeLevels[tribe] ?? {})) {
+        // Shipped saves are off here, so this is the Flash original for the level.
+        const flash = tribeLayoutFor(tribe, Number(level)).save;
+        const yard = spots(save);
+        const closest = Math.max(...originals.map((original) => likeness(yard, spots(original))));
+        expect({ tribe, level, likeness: likeness(yard, spots(flash)) }).toEqual({ tribe, level, likeness: closest });
+        checked++;
+      }
+    }
+    expect(checked).toBe(17);
+  });
+
   test("with no saved yards, every camp level gets exactly the yard the old banding gave it", () => {
     let checked = 0;
     TRIBE_IDS.forEach((tribe, index) => {

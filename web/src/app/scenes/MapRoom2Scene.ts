@@ -2,6 +2,7 @@ import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { logout } from "@/api/auth";
 import { loadOwnYard } from "@/api/base";
 import { MailDoor } from "@/ui/mail/MailDoor";
+import { worldChat } from "@/game/chat/chatSession";
 import { mailApi } from "@/api/mail";
 import { INVITE_SUBJECT, INVITE_WITHDRAW_TEXT } from "@/game/mail/invite";
 import {
@@ -29,8 +30,8 @@ import {
   type Resources,
   type TakeoverQuoteResponse,
 } from "@/api/types";
-import { DEFAULT_ZOOM, MIN_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS } from "@/config";
-import { mapRefreshSeconds } from "@/game/quality";
+import { AREA_ZONE_SIZE, DEFAULT_ZOOM, MIN_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE_STALE_SECONDS } from "@/config";
+import { mapRefreshSeconds, quality } from "@/game/quality";
 import {
   attackRefusal,
   hasDeclareWar,
@@ -52,7 +53,23 @@ import { storageCapOf } from "@/game/attack/attackerStorage";
 import { Camera } from "@/game/Camera";
 import { mapRoomGrid, setHexShape, type OffsetCell } from "@/game/HexGrid";
 import { loadHexShape } from "@/game/maproom/hexShapeSetting";
-import { markOpen } from "@/game/maproom/openMarks";
+import {
+  MR2_CENTRE_ZONES,
+  MR2_FIRST_FRAME,
+  MR2_FIRST_ZONE_FRAME,
+  MR2_OWN_CELL,
+  MR2_READY,
+  MR2_VIEW_ZONES,
+  finishOpen,
+  hasMark,
+  markOnce,
+  markOpen,
+  noteGpu,
+  noteInfo,
+  timeArea,
+  timeSpan,
+  timeSync,
+} from "@/game/maproom/openMarks";
 import {
   rangeSources,
   reachText,
@@ -83,6 +100,8 @@ import { takenOverResources, type TakeoverCandidate } from "@/game/maproom/takeo
 import { MapInput } from "@/game/maproom/MapInput";
 import { paintedMapOn } from "@/game/maproom/painted/paintedSwitch";
 import { MapRenderer } from "@/game/maproom/MapRenderer";
+import { prewarmStatus } from "@/game/maproom/mr2Prewarm";
+import { demoState, readPrepareDemo } from "@/game/maproom/prepareDemo";
 import { classicLook } from "@/game/classicLook";
 import {
   decideTilt,
@@ -96,12 +115,12 @@ import {
   type TiltChoice,
   type TiltStrength,
 } from "@/game/maproom/tilt";
-import { cachedTiltChoice, loadTiltChoice, saveTiltChoice } from "@/game/maproom/tiltSetting";
+import { cachedTiltChoice, loadTiltChoiceOnce, saveTiltChoice } from "@/game/maproom/tiltSetting";
 import { TiltView } from "@/game/maproom/TiltView";
 import { markerFit, uprightProjector } from "@/game/maproom/markerPins";
 import { Sight } from "@/game/maproom/Sight";
 import { ZoneStore, type ZoneError } from "@/game/maproom/ZoneStore";
-import { inWorld, type CellRange } from "@/game/maproom/zones";
+import { inWorld, zonesForRange, type CellRange, type ZoneRef } from "@/game/maproom/zones";
 import { IncomePrediction, overdriveEndOf } from "@/game/yard/outpostIncome";
 import {
   MAIN_YARD_TITLE,
@@ -117,6 +136,7 @@ import { TransferDialog, type TransferChoice } from "@/ui/maproom/TransferDialog
 import { formatSpan } from "@/ui/attack/EndAttackPanel";
 import { previewEndTakeover, type EndTakeoverPreviewOptions } from "@/ui/attack/endTakeoverPreview";
 import { devStats } from "../devDetails";
+import { connectMr2TimingReport } from "../mr2TimingReport";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../sceneName";
 import { isPhoneLayout } from "@/ui/phoneLayout";
@@ -141,6 +161,8 @@ const ZOOM_STEP = 1.5;
 
 /** How often the request queue is drained. Faster than this just burns budget. */
 const PUMP_INTERVAL_SECONDS = 0.25;
+/** On a first open, the longest the portraits and town halls wait for the first zones. */
+const MARKER_PICTURES_WAIT_MS = 4_000;
 /** How often visible zones are checked for staleness. */
 const STALE_CHECK_INTERVAL_SECONDS = 5;
 /**
@@ -205,7 +227,12 @@ export class MapRoom2Scene implements Scene {
   });
 
   private readonly store = new ZoneStore({
-    onZone: (zone) => this.renderer.applyZone(zone),
+    // Each getarea call is timed for the open's summary (`openMarks.ts`).
+    fetcher: (x, y, options) => timeArea(() => getArea(x, y, options)),
+    onZone: (zone) => {
+      this.renderer.applyZone(zone);
+      this.checkZoneMarks();
+    },
     onResources: (resources, credits) => this.syncPool(resources, credits),
     onAlliance: (id) => this.renderer.setMyAlliance(id),
     onError: (error) => this.reportError(error),
@@ -314,13 +341,31 @@ export class MapRoom2Scene implements Scene {
   /** Rolling average of the scene's own per-frame cost, in milliseconds. */
   private frameCostMs = 0;
 
+  /**
+   * The open's timing (`openMarks.ts`): the zones round the view's centre when fetching began (up
+   * to 3 x 3, those in view), and whether the first frame, the first frame with a zone, and the
+   * zone marks are done.
+   */
+  private centreZones: ZoneRef[] | null = null;
+  /** The portraits and town halls: started yet, and the fallback that starts them. */
+  private markerPicturesStarted = false;
+  private markerPicturesTimer: ReturnType<typeof setTimeout> | null = null;
+  private framesMarked = 0;
+  /** When the "Preparing map" demo's made-up progress began (`?prepbar-demo=1`, this open), or null without it. */
+  private prepareDemoFrom: number | null = null;
+  private zoneMarksDone = false;
+
   async enter(context: SceneContext): Promise<void> {
     this.context = context;
-    markOpen();
+    // Real players' open timings go to the server's logs (at most two a page load).
+    connectMr2TimingReport();
+    // Whether the yard's warm-up ran first this page (`mr2Prewarm.ts`): none, running, done or partial.
+    markOpen({ quality: quality(), classic: classicLook(), prewarm: prewarmStatus() });
+    this.prepareDemoFrom = readPrepareDemo() ? performance.now() : null;
     // The world's hex shape (MR2 look plan step 1) before anything is drawn
     // or picked: the grid's geometry follows the server's rules. Classic gets
     // its own pointy-top cell size (never tilted, Flash's 3/4 tiles).
-    const shape = await loadHexShape();
+    const shape = await timeSpan("account-hexshape", () => loadHexShape());
     if (this.context !== context) return;
     setHexShape(shape, classicLook());
     this.camera.setBounds(worldBounds());
@@ -330,11 +375,16 @@ export class MapRoom2Scene implements Scene {
     this.viewportHeight = context.height;
     context.stage.addChild(this.renderer.root);
     // Bakes the sprite atlas the chunk renderer draws from.
-    this.renderer.attach(context.renderer);
-    // The tribe portraits and players' critters are a network fetch, so they
-    // are started here and not waited on: the map opens on tent glyphs and
-    // plain markers and swaps in the art the moment it lands.
-    void this.renderer.loadPictures();
+    timeSync("atlas-bake", () => this.renderer.attach(context.renderer));
+    noteGpu((context.renderer as { gl?: WebGLRenderingContext }).gl);
+    // The pictures are a network fetch, so they are started and not waited on:
+    // the map opens on tent glyphs and plain markers and swaps in the art the
+    // moment it lands. The ground's pictures go now; the tribe portraits,
+    // players' critters and town halls wait for the first zones on a first
+    // open, so they do not crowd the getarea answers (`releaseMarkerPictures`).
+    void timeSpan("pictures", () => this.renderer.loadGroundPictures());
+    if (MapRenderer.markerPicturesKnown) this.releaseMarkerPictures();
+    else this.markerPicturesTimer = setTimeout(() => this.releaseMarkerPictures(), MARKER_PICTURES_WAIT_MS);
 
     this.camera.resize(context.width, context.height);
     this.camera.attach(context.canvas);
@@ -452,6 +502,8 @@ export class MapRoom2Scene implements Scene {
     this.mail = new MailDoor({
       style: "tool",
       container: context.overlay.content,
+      // New mail shows at once (owner, beta 7): pushed over world chat, else asked every 45 s.
+      live: { chat: worldChat },
       // The mailbox docks where the cell panel and the achievements screen do.
       onOpen: () => {
         this.ui?.achievements?.close();
@@ -500,6 +552,8 @@ export class MapRoom2Scene implements Scene {
       onCancel: () => this.clearSelection(),
       liftOf: this.renderer.liftAt,
       screenToFlat: () => this.tiltToFlat,
+      // The "Preparing map" screen is up: the map waits (its pointer events stop at the screen).
+      blocked: () => this.ui?.preparingShown ?? false,
     });
     this.input.attach();
 
@@ -539,7 +593,7 @@ export class MapRoom2Scene implements Scene {
 
     // A sensible view before the network answers, replaced by the home cell.
     this.camera.centreOn(mapRoomGrid.cellToPixel(WORLD_WIDTH / 2, WORLD_HEIGHT / 2));
-    void this.sight.refresh();
+    void timeSpan("sight", () => this.sight.refresh());
     await this.loadOwnCell();
     // The tutorial's tips (issue #227).
     if (this.context === context) {
@@ -549,6 +603,8 @@ export class MapRoom2Scene implements Scene {
   }
 
   exit(): void {
+    // An open the player left before it was done is summarised with what it had.
+    finishOpen("left");
     // Where the map was left, for the next time it opens (#153).
     if (this.ownSave) {
       const view = this.camera.visibleWorldRect();
@@ -559,6 +615,8 @@ export class MapRoom2Scene implements Scene {
         selected: this.selected,
       });
     }
+    if (this.markerPicturesTimer !== null) clearTimeout(this.markerPicturesTimer);
+    this.markerPicturesTimer = null;
     this.input?.detach();
     this.input = null;
     this.camera.setPointerMap(null);
@@ -582,6 +640,8 @@ export class MapRoom2Scene implements Scene {
     this.ui?.destroy();
     this.ui = null;
     this.renderer.destroy();
+    // Nothing new is fetched for a map nobody is looking at.
+    this.store.stop();
     this.context = null;
   }
 
@@ -657,7 +717,8 @@ export class MapRoom2Scene implements Scene {
    */
   private async refreshTiltChoice(): Promise<void> {
     try {
-      this.tiltChoice = await loadTiltChoice();
+      // Asked once a page: the hex shape's account call brings it on the first open.
+      this.tiltChoice = await timeSpan("account-tilt", () => loadTiltChoiceOnce());
     } catch {
       return;
     }
@@ -720,7 +781,10 @@ export class MapRoom2Scene implements Scene {
       this.camera.dirty = false;
       this.applyCamera();
       this.range = this.visibleRange();
-      if (this.ready) this.store.ensureVisible(this.range);
+      if (this.ready) {
+        this.store.ensureVisible(this.range);
+        this.checkZoneMarks();
+      }
       this.ui?.setViewport(this.range);
       this.ui?.setViewShape(this.tiltViewCells());
       this.ui?.setZoom(this.camera.zoom);
@@ -729,12 +793,18 @@ export class MapRoom2Scene implements Scene {
     }
 
     this.renderer.draw(this.range, this.camera.zoom);
+    if (this.framesMarked < 2) this.markFrames();
     if (this.tilt && this.tiltView && this.context) {
       if (this.renderer.paintedStepped) this.tiltView.invalidate();
       this.tiltView.render(this.context.renderer, this.renderer.root, this.tilt, this.camera.zoom, this.camera.position);
       this.standMarkers();
     }
     this.ui?.drawMinimap();
+    // The "Preparing map" loading screen while the painted look compiles (owner, 8 Nov 2026; mostly Firefox).
+    // `?prepbar-demo=1` on a test server: a made-up 0-100% on every open, in any browser and in Classic.
+    this.ui?.setPreparing(
+      this.prepareDemoFrom === null ? this.renderer.prepareState() : demoState(performance.now() - this.prepareDemoFrom),
+    );
 
     if (this.ready) {
       this.sincePump += deltaSeconds;
@@ -772,10 +842,14 @@ export class MapRoom2Scene implements Scene {
   private async loadOwnCell(): Promise<void> {
     try {
       // The load that chose this map, when there was one (issue #162).
-      const base = takePrimedOwnYard() ?? (await loadOwnYard());
+      const primed = takePrimedOwnYard();
+      noteInfo("ownYard", primed ? "primed" : "fetched");
+      const base = primed ?? (await timeSpan("own-yard", () => loadOwnYard()));
       this.ownSave = base;
       // Map Room 2's painted look (MR2_PAINTED_MAP), never in Classic.
-      this.renderer.setPaintedMap(paintedMapOn({ serverFlag: base.flags?.["mr2painted"] }));
+      const painted = paintedMapOn({ serverFlag: base.flags?.["mr2painted"] });
+      this.renderer.setPaintedMap(painted);
+      noteInfo("painted", painted);
       this.income = new IncomePrediction(base.buildingresources, base.resources);
       this.incomeCap = storageCapOf(base);
       this.clockOffset = base.currenttime - Date.now() / 1000;
@@ -791,6 +865,7 @@ export class MapRoom2Scene implements Scene {
           // On a phone the "Your yard" card would cover a third of the map
           // on every visit (#381): the map opens on the home cell, card shut.
           this.jumpTo(cell, DEFAULT_ZOOM, !isPhoneLayout());
+          markOnce(MR2_OWN_CELL);
         }
       }
       // Back from a yard: where the map was left, not home (#153).
@@ -813,6 +888,10 @@ export class MapRoom2Scene implements Scene {
       }
       this.updateRange();
     } catch (caught) {
+      noteInfo("ownYard", "failed");
+      noteInfo("painted", false);
+      // No home cell to fetch round: nothing to wait for.
+      this.releaseMarkerPictures();
       if (caught instanceof ApiError && caught.isAuthFailure) {
         this.context?.goTo(SceneName.LOGIN);
         return;
@@ -830,7 +909,59 @@ export class MapRoom2Scene implements Scene {
       // Whichever it is, that is now the right place to start fetching from.
       this.ready = true;
       this.camera.dirty = true;
+      markOnce(MR2_READY);
     }
+  }
+
+  /** The first frame drawn, and the first with any zone in it (`openMarks.ts`). */
+  private markFrames(): void {
+    if (this.framesMarked === 0) {
+      markOnce(MR2_FIRST_FRAME);
+      this.framesMarked = 1;
+    }
+    if (this.store.loadedZones > 0) {
+      markOnce(MR2_FIRST_ZONE_FRAME);
+      this.framesMarked = 2;
+    }
+  }
+
+  /**
+   * Marks when the zones round the view's centre, then every zone in view, have answered (a zone
+   * that is all fog is never asked for, so it counts as answered). Stops once both are marked.
+   */
+  private checkZoneMarks(): void {
+    if (!this.ready || this.zoneMarksDone) return;
+    const answered = (zone: ZoneRef): boolean =>
+      this.store.getZone(zone.id) !== undefined || this.sight.isZoneFullyFogged(zone);
+    const inView = zonesForRange(this.range);
+    if (this.centreZones === null) {
+      const col = Math.floor((this.range.minCol + this.range.maxCol) / 2);
+      const row = Math.floor((this.range.minRow + this.range.maxRow) / 2);
+      const around = new Set(
+        zonesForRange({
+          minCol: col - AREA_ZONE_SIZE,
+          maxCol: col + AREA_ZONE_SIZE,
+          minRow: row - AREA_ZONE_SIZE,
+          maxRow: row + AREA_ZONE_SIZE,
+        }).map((zone) => zone.id),
+      );
+      this.centreZones = inView.filter((zone) => around.has(zone.id));
+      noteInfo("centreZones", this.centreZones.length);
+      noteInfo("viewZones", inView.length);
+    }
+    if (!hasMark(MR2_CENTRE_ZONES) && this.centreZones.every(answered)) markOnce(MR2_CENTRE_ZONES);
+    if (hasMark(MR2_CENTRE_ZONES)) this.releaseMarkerPictures();
+    if (!hasMark(MR2_VIEW_ZONES) && inView.every(answered)) markOnce(MR2_VIEW_ZONES);
+    this.zoneMarksDone = hasMark(MR2_CENTRE_ZONES) && hasMark(MR2_VIEW_ZONES);
+  }
+
+  /** Starts the portraits and town halls (once): the centre zones are in, the yard failed, or the wait ran out. */
+  private releaseMarkerPictures(): void {
+    if (this.markerPicturesStarted || !this.context) return;
+    this.markerPicturesStarted = true;
+    if (this.markerPicturesTimer !== null) clearTimeout(this.markerPicturesTimer);
+    this.markerPicturesTimer = null;
+    void timeSpan("marker-pictures", () => this.renderer.loadMarkerPictures());
   }
 
   /** Puts the camera and the selection back where the map was left. */

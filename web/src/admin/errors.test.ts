@@ -28,6 +28,17 @@ describe("the errors page", () => {
     localStorage.clear();
   });
 
+  it("puts the grouped list first, with count, source and last seen, and folds the charts below", async () => {
+    const page = await show(fixture.errors.groups);
+    const list = page.querySelector(".rows")!;
+    const charts = page.querySelector<HTMLDetailsElement>("details.error-charts")!;
+    expect(charts.open).toBe(false);
+    expect(list.compareDocumentPosition(charts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const first = list.querySelector(".error-row summary")!;
+    expect(first.querySelector(".row-count")?.textContent).toMatch(/×$/);
+    expect(first.querySelector(".row-meta")?.textContent).toMatch(/^(Browser|Server) · last seen /);
+  });
+
   it("lists each sender's name, account number and address", async () => {
     const page = await show(fixture.errors.groups);
     const who = page.querySelector(".reporters")!;

@@ -1,4 +1,5 @@
 import { fetchMapTilt, setTiltedMap, type MapTiltSettings } from "@/api/account";
+import { getSession } from "@/api/auth";
 import type { TiltChoice } from "./tilt";
 
 /**
@@ -58,11 +59,49 @@ const keep = (answer: MapTiltSettings, store: Store | null): TiltChoice => {
 export const loadTiltChoice = async (
   fetch: () => Promise<MapTiltSettings> = fetchMapTilt,
   store: Store | null = storage(),
-): Promise<TiltChoice> => keep(await fetch(), store);
+): Promise<TiltChoice> => remember(keep(await fetch(), store));
 
 /** Stores the player's choice on the account, and keeps what the server now has. */
 export const saveTiltChoice = async (
   tilted: boolean,
   save: (tilted: boolean) => Promise<MapTiltSettings> = setTiltedMap,
   store: Store | null = storage(),
-): Promise<TiltChoice> => keep(await save(tilted), store);
+): Promise<TiltChoice> => remember(keep(await save(tilted), store));
+
+/* ── This page's answer ─────────────────────────────────────────────────── */
+
+/**
+ * The account's answer as this page last heard it, for whichever account was
+ * signed in then. The player's choice only changes through this page's own
+ * "Tilted map" button (which keeps the new answer here) and the server's
+ * switch only with a server restart, so later map opens reuse it instead of
+ * asking the account again on every open (MR2 open speed, 7 Nov 2026).
+ */
+let pageAnswer: { userId: number | null; choice: TiltChoice } | null = null;
+
+const signedIn = (): number | null => getSession()?.userId ?? null;
+
+const remember = (choice: TiltChoice): TiltChoice => {
+  pageAnswer = { userId: signedIn(), choice };
+  return choice;
+};
+
+/** Keeps an answer that came with another account call (the hex shape's, `hexShapeSetting.ts`). */
+export const noteTiltAnswer = (answer: MapTiltSettings, store: Store | null = storage()): void => {
+  remember(keep(answer, store));
+};
+
+/** This page's answer for the signed-in account, or null when it has none yet. */
+export const knownTiltChoice = (): TiltChoice | null =>
+  pageAnswer && pageAnswer.userId === signedIn() ? pageAnswer.choice : null;
+
+/** The page's answer when it has one, else asks the account (once). */
+export const loadTiltChoiceOnce = async (
+  fetch: () => Promise<MapTiltSettings> = fetchMapTilt,
+  store: Store | null = storage(),
+): Promise<TiltChoice> => knownTiltChoice() ?? loadTiltChoice(fetch, store);
+
+/** Forgets this page's answer (tests). */
+export const forgetTiltAnswer = (): void => {
+  pageAnswer = null;
+};

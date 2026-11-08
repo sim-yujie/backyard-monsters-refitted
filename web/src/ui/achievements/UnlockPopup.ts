@@ -1,6 +1,9 @@
 import type { UnlockCard, UnlockInbox } from "@/game/achievements/unlockInbox";
 import { summaryHeading, nameList, shinyText } from "@/game/achievements/unlockText";
+import { badgeTier } from "@/game/achievements/achievements";
 import { resourceAmount } from "@/ui/resourceIcon";
+import { achievementBadge } from "./badge";
+import "./achievements.css";
 import "@/ui/styles/achievement-popup.css";
 
 /**
@@ -117,10 +120,23 @@ export class UnlockPopup {
     const element = document.createElement("div");
     element.className = card.summary ? "ach-card ach-card--summary" : "ach-card";
 
+    // The achievement's own badge, as in the list (painted, or the stand-in
+    // medal of the same size); several at once: their count on a gold medal.
     const badge = document.createElement("div");
     badge.className = "ach-card__badge";
     badge.setAttribute("aria-hidden", "true");
-    badge.textContent = card.summary ? String(card.unlocks.length) : "★";
+    const first = card.unlocks[0];
+    if (card.summary || !first) {
+      const medal = document.createElement("span");
+      medal.className = "ach-badge ach-badge--gold";
+      const count = document.createElement("span");
+      count.className = "ach-badge__count";
+      count.textContent = String(card.unlocks.length);
+      medal.append(count);
+      badge.append(medal);
+    } else {
+      badge.append(achievementBadge(first.id, badgeTier(first.shiny), true));
+    }
 
     const body = document.createElement("div");
     body.className = "ach-card__body";

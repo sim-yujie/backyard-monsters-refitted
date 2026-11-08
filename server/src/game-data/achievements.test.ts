@@ -3,17 +3,31 @@ import { ACHIEVEMENT_STATS, ACHIEVEMENTS, achievementById, AVAILABLE_ACHIEVEMENT
 
 /** The catalogue (`docs/design/achievements.md` §5.1, owner decisions of 2026-10-05). */
 describe("the achievements catalogue", () => {
-  test("holds Flash's 22, numbered 1 to 22 in order", () => {
-    expect(ACHIEVEMENTS.map((entry) => entry.id)).toEqual(Array.from({ length: 22 }, (_, i) => i + 1));
+  test("holds Flash's 22, numbered 1 to 22 in order, then the web's 23 to 27", () => {
+    expect(ACHIEVEMENTS.map((entry) => entry.id)).toEqual(Array.from({ length: 27 }, (_, i) => i + 1));
     expect(achievementById(7)?.name).toBe("Camp Crusher");
     expect(achievementById(0)).toBeUndefined();
-    expect(achievementById(23)).toBeUndefined();
+    expect(achievementById(28)).toBeUndefined();
   });
 
-  test("17 are shown, worth 230 Shiny; all 22 are worth 300", () => {
-    expect(AVAILABLE_ACHIEVEMENTS).toHaveLength(17);
-    expect(AVAILABLE_ACHIEVEMENTS.reduce((sum, entry) => sum + entry.shiny, 0)).toBe(230);
-    expect(ACHIEVEMENTS.reduce((sum, entry) => sum + entry.shiny, 0)).toBe(300);
+  test("22 are shown, worth 330 Shiny; all 27 are worth 400", () => {
+    expect(AVAILABLE_ACHIEVEMENTS).toHaveLength(22);
+    expect(AVAILABLE_ACHIEVEMENTS.reduce((sum, entry) => sum + entry.shiny, 0)).toBe(330);
+    expect(ACHIEVEMENTS.reduce((sum, entry) => sum + entry.shiny, 0)).toBe(400);
+  });
+
+  test("beta 7's five are hidden, with the owner's targets and Shiny (#392)", () => {
+    const hidden = ACHIEVEMENTS.filter((entry) => entry.hidden).map(
+      (entry) => `${entry.id} ${entry.name} ${entry.rules[0]!.target} ${entry.shiny}`
+    );
+    expect(hidden).toEqual([
+      "23 Neighbourly 30 15",
+      "24 Regular 30 25",
+      "25 Popular 80 15",
+      "26 Kozu Hunter 100 20",
+      "27 Landlord 100 25",
+    ]);
+    expect(ACHIEVEMENTS.filter((entry) => entry.hidden).every((entry) => entry.available)).toBe(true);
   });
 
   test("the one tied to a missing feature stays hidden; the Inferno's four wait on the Inferno switch", () => {
@@ -51,6 +65,11 @@ describe("the achievements catalogue", () => {
       20: "underhall>=5",
       21: "infernoquests>=10",
       22: "thlevel>=10",
+      23: "neighbourly>=30",
+      24: "loginstreak>=30",
+      25: "friends>=80",
+      26: "kozuattacks>=100",
+      27: "outposts>=100",
     });
     expect(ACHIEVEMENTS.filter((entry) => entry.mode === "any").map((entry) => entry.id)).toEqual([4]);
   });
@@ -65,8 +84,8 @@ describe("the achievements catalogue", () => {
       expect(entry.description).toMatch(/\.$/);
       expect(entry.shiny).toBeGreaterThanOrEqual(5);
       expect(entry.shiny).toBeLessThanOrEqual(25);
-      expect(entry.flash).toMatch(/^ACHIEVEMENTS\.as:/);
+      expect(entry.flash).toMatch(entry.id <= 22 ? /^ACHIEVEMENTS\.as:/ : /^web$/);
     }
-    expect(new Set(ACHIEVEMENTS.map((entry) => entry.name)).size).toBe(22);
+    expect(new Set(ACHIEVEMENTS.map((entry) => entry.name)).size).toBe(27);
   });
 });
