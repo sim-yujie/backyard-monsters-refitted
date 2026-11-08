@@ -54,7 +54,7 @@ import {
   type ModeratorEffects,
 } from "../../services/admin/chatModerators.js";
 import { listModConversations, parseModMailQuery, readModConversation } from "../../services/mail/modMail.js";
-import { actOnInboxPlayer, listInbox, moderatePlayer, parseInboxAction } from "../../services/admin/moderationInbox.js";
+import { actOnInboxPlayer, listClosed, listInbox, moderatePlayer, parseInboxAction } from "../../services/admin/moderationInbox.js";
 import {
   listChatReports,
   parseModeration,
@@ -350,6 +350,7 @@ export const mountAdminRoutes = (router: Router): void => {
         userid: userid !== undefined && userid > 0 ? userid : undefined,
         offset: intOf(ctx.query.offset),
         limit: intOf(ctx.query.limit),
+        lines: intOf(ctx.query.lines),
       })),
     });
   });
@@ -428,6 +429,19 @@ export const mountAdminRoutes = (router: Router): void => {
     ok(ctx, {
       ...(await listInbox(postgres.em.fork(), {
         source,
+        userid: userid !== undefined && userid > 0 ? userid : undefined,
+        offset: intOf(ctx.query.offset),
+        limit: intOf(ctx.query.limit),
+      })),
+    });
+  });
+
+  // The Closed list: decisions of the last 30 days, a reported line the word
+  // filter also caught counted once.
+  router.get(`${admin}/inbox/closed`, apiVersion, adminOnly, async (ctx) => {
+    const userid = intOf(ctx.query.userid);
+    ok(ctx, {
+      ...(await listClosed(postgres.em.fork(), {
         userid: userid !== undefined && userid > 0 ? userid : undefined,
         offset: intOf(ctx.query.offset),
         limit: intOf(ctx.query.limit),
