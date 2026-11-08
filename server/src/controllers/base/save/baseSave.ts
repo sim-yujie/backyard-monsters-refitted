@@ -40,6 +40,7 @@ import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
 import { scaledMR1Tribes } from "../../../services/maproom/v1/scaledMR1Tribes.js";
+import { withTribeGooBonus } from "../../../services/base/tribeGooBonus.js";
 import { isDescentBaseid } from "../../../services/inferno/descent.js";
 import { landDescentAttack } from "../../../services/inferno/descentLanding.js";
 import { landInfernoPlayerAttack } from "../../../services/inferno/infernoPlayerLanding.js";
@@ -581,9 +582,15 @@ const saveBase = async (
 
     if (loot) {
       // Tribe Plunder: a wild tribe's loot lands that much more, on top of
-      // the credit the server's battle allowed (`weekendBoosts.ts`).
-      const plunder = plunderPercent(baseSave.type === BaseType.TRIBE, now);
-      banked = bankAttackLoot(userSave, withPlunderBonus(loot.credit, plunder), loot.krallenBuff).credited;
+      // the credit the server's battle allowed (`weekendBoosts.ts`); wild
+      // tribes also give 25% more Goo (patch 6.9, `tribeGooBonus.ts`).
+      const fromTribe = baseSave.type === BaseType.TRIBE;
+      const plunder = plunderPercent(fromTribe, now);
+      banked = bankAttackLoot(
+        userSave,
+        withPlunderBonus(withTribeGooBonus(loot.credit, fromTribe), plunder),
+        loot.krallenBuff
+      ).credited;
       if (plunder > 0) weekendBoostUsed(user.userid, "plunder", now);
     }
 
