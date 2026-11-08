@@ -5271,3 +5271,44 @@ tbody th {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---- Announcements (dash-v2c, astra's mock-up) ---- */
+
+.v2 .ann-panel .ann-head {
+  align-items: flex-start;
+}
+
+.v2 .ann-panel .ann-head .section-title {
+  margin-bottom: 4px;
+}
+
+.v2 .ann-panel .ann-list {
+  gap: 0;
+  margin-top: 16px;
+}
+
+.v2 .ann-panel .ann-row {
+  padding: 14px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
+}
+
+.v2 .ann-panel .ann-row.is-editing {
+  box-shadow: inset 3px 0 0 var(--accent);
+  padding-left: 12px;
+}
+
+.v2 .ann-panel .ann-row .row-title {
+  font-weight: 650;
+}
+
+.v2 .ann-editor.panel {
+  padding: 24px;
+  border-radius: var(--radius);
+}
+
+.v2 .ann-editor h3 {
+  font-size: 1.125rem;
+}
