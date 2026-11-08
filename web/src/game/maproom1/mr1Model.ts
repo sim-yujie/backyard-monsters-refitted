@@ -78,6 +78,8 @@ export interface Mr1Neighbour {
   readonly avatar: AvatarId;
   /** Whether they are the player's friend, as the route says (friends §6.2). */
   readonly friend?: boolean;
+  /** Whether the player pinned this friend to the top of their list (beta 7). */
+  readonly pinned?: boolean;
 }
 
 export type Mr1Target = Mr1Tribe | Mr1Neighbour;
@@ -180,6 +182,7 @@ const readNeighbour = (wire: MapRoom1NeighbourWire, now: number): Mr1Neighbour =
     truceUntil: truce ? (num(wire.truceexpire) > 0 ? now + num(wire.truceexpire) : now) : null,
     avatar: avatarOf(wire.pic, wire.userid),
     friend: num(wire.friend) === 1,
+    pinned: num(wire.friendpinned) === 1,
   };
 };
 

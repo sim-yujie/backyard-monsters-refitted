@@ -1,6 +1,7 @@
 import { Graphics, Rectangle, type Renderer, type Texture } from "pixi.js";
 import { CELL_HEIGHT, CELL_WIDTH } from "@/config";
 import { mapRoomGrid } from "@/game/HexGrid";
+import type { BorderStyle } from "./relationLook";
 
 /**
  * The map's art, baked once into textures at startup.
@@ -97,6 +98,15 @@ export class MapAtlas {
   readonly outlineFine: Texture;
   /** Hex outline for the far tier, where a fine line disappears. */
   readonly outlineBold: Texture;
+  /**
+   * The relation border round a player's cell on the tile map (Classic, or the painted look
+   * switched off; owner 8 Nov 2026), one per line style, white to be tinted the relation's colour.
+   * `relationRims` are the dark rims drawn under them.
+   */
+  readonly relationBorders: Record<BorderStyle, Texture>;
+  readonly relationRims: Record<BorderStyle, Texture>;
+  /** Just the middle stroke of the triple line: tinted gold over a pinned friend's border. */
+  readonly pinnedCentre: Texture;
   /** Wild monster camp. */
   readonly tent: Texture;
   /** A razed camp: the tent with its ridge caved in. */
@@ -147,6 +157,18 @@ export class MapAtlas {
 
     this.outlineFine = this.bakeOutline(renderer, OUTLINE_FINE);
     this.outlineBold = this.bakeOutline(renderer, OUTLINE_BOLD);
+    const styles = Object.keys(RELATION_LINES) as BorderStyle[];
+    const borderFrame = frame(halfWidth() + 2, halfHeight() + 2);
+    this.relationBorders = Object.fromEntries(
+      styles.map((style) => [style, bake(renderer, borderFrame, (g) => drawRelationLine(g, style, false))]),
+    ) as Record<BorderStyle, Texture>;
+    this.relationRims = Object.fromEntries(
+      styles.map((style) => [style, bake(renderer, borderFrame, (g) => drawRelationLine(g, style, true))]),
+    ) as Record<BorderStyle, Texture>;
+
+    this.pinnedCentre = bake(renderer, borderFrame, (g) =>
+      g.poly(insetHex(0)).stroke({ width: RELATION_LINES.triple.width, color: 0xffffff, alignment: 0.5 }),
+    );
 
     // A tent: a squat triangle sitting on the cell's centre line.
     const tentHalf = CELL_WIDTH * 0.15;
@@ -320,6 +342,9 @@ export class MapAtlas {
       this.protectionDome,
       this.truceTick,
       this.inviteEnvelope,
+      ...Object.values(this.relationBorders),
+      ...Object.values(this.relationRims),
+      this.pinnedCentre,
     ];
   }
 
@@ -333,6 +358,62 @@ export class MapAtlas {
     );
   }
 }
+
+/**
+ * The relation borders' lines on the tile map, in world points (a cell is 150 wide): stroke width,
+ * and for a double line how far each stroke sits from the middle. Drawn a little inside the hex
+ * (`RELATION_INSET`) so two neighbours' borders each show on their own side.
+ */
+export const RELATION_LINES: Record<BorderStyle, { width: number; offset: number; dashed?: boolean; middle?: boolean }> = {
+  thick: { width: 5, offset: 0 },
+  solid: { width: 3.8, offset: 0 },
+  thin: { width: 3.2, offset: 0 },
+  dashed: { width: 4, offset: 0, dashed: true },
+  double: { width: 3, offset: 3.4 },
+  triple: { width: 2.6, offset: 4.6, middle: true },
+};
+const RELATION_INSET = 0.9;
+/** The dark rim's width either side of the line. */
+const RELATION_RIM = 2.6;
+
+/** A hex corner list scaled about its centre, `offset` world points further out (negative: in). */
+const insetHex = (offset: number): number[] => hexPoints(RELATION_INSET + offset / halfWidth());
+
+/** Three dashes per side: one across each corner and two along it, as the painted map's shader. */
+const strokeDashed = (g: Graphics, points: number[], width: number, colour: number): void => {
+  for (let k = 0; k < 6; k++) {
+    const ax = points[k * 2]!;
+    const ay = points[k * 2 + 1]!;
+    const bx = points[((k + 1) % 6) * 2]!;
+    const by = points[((k + 1) % 6) * 2 + 1]!;
+    for (let dash = 0; dash <= 3; dash++) {
+      const t0 = Math.max(0, dash / 3 - 0.1);
+      const t1 = Math.min(1, dash / 3 + 0.1);
+      g.moveTo(ax + (bx - ax) * t0, ay + (by - ay) * t0).lineTo(ax + (bx - ax) * t1, ay + (by - ay) * t1);
+    }
+  }
+  g.stroke({ width, color: colour, cap: "butt" });
+};
+
+/** One relation line, or (`rim`) the dark band under it, white either way. */
+const drawRelationLine = (g: Graphics, style: BorderStyle, rim: boolean): void => {
+  const { width, offset, dashed, middle } = RELATION_LINES[style];
+  if (rim) {
+    const rimWidth = offset * 2 + width + RELATION_RIM * 2;
+    if (dashed) strokeDashed(g, insetHex(0), rimWidth, 0xffffff);
+    else g.poly(insetHex(0)).stroke({ width: rimWidth, color: 0xffffff, alignment: 0.5 });
+    return;
+  }
+  if (dashed) {
+    strokeDashed(g, insetHex(0), width, 0xffffff);
+  } else if (offset > 0) {
+    g.poly(insetHex(offset)).stroke({ width, color: 0xffffff, alignment: 0.5 });
+    g.poly(insetHex(-offset)).stroke({ width, color: 0xffffff, alignment: 0.5 });
+    if (middle) g.poly(insetHex(0)).stroke({ width, color: 0xffffff, alignment: 0.5 });
+  } else {
+    g.poly(insetHex(0)).stroke({ width, color: 0xffffff, alignment: 0.5 });
+  }
+};
 
 /** Draws one shape and hands back the texture, discarding the Graphics. */
 const bake = (

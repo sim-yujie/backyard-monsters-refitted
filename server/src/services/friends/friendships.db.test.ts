@@ -140,6 +140,7 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
         giftSentToday: false,
         canGiftFrom: null,
         help: null,
+        pinnedAt: null,
       },
     ]);
     expect((await list_(B)).friends.map((f: any) => f.userid)).toEqual([A]);

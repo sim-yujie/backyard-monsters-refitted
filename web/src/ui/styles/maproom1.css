@@ -1379,3 +1379,68 @@
   margin: 0;
   color: var(--colour-text-secondary);
 }
+
+/* ── Friends on Map Room 1 (beta 7) ───────────────────────────────────── */
+
+/* The painted friend marker on a pin's face, top left (the level is bottom right). */
+.mr1-pin__friend {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+}
+
+/* A friend's name tag and face ring in friend green; a pinned friend's in gold. */
+.mr1-pin--friend:not(.mr1-pin--selected) .mr1-avatar {
+  box-shadow:
+    0 0 0 3px #7be08a,
+    var(--shadow-float);
+}
+
+.mr1-pin--pinned:not(.mr1-pin--selected) .mr1-avatar {
+  box-shadow:
+    0 0 0 3px #f2c230,
+    0 0 10px 2px rgb(242 194 48 / 60%),
+    var(--shadow-float);
+}
+
+.mr1-pin--friend .mr1-pin__tag {
+  box-shadow: inset 0 0 0 1.5px #7be08a;
+}
+
+.mr1-pin--pinned .mr1-pin__tag {
+  box-shadow: inset 0 0 0 1.5px #f2c230;
+}
+
+:root[data-skin="flash"] .mr1-pin--friend:not(.mr1-pin--selected) .mr1-avatar {
+  box-shadow:
+    0 0 0 3px #5b8f2a,
+    var(--shadow-float);
+}
+
+:root[data-skin="flash"] .mr1-pin--pinned:not(.mr1-pin--selected) .mr1-avatar {
+  box-shadow:
+    0 0 0 3px #c98a12,
+    0 0 8px 2px rgb(201 138 18 / 55%),
+    var(--shadow-float);
+}
+
+/* Friends stand out on the minimap: larger, green; pinned gold. */
+.mr1-mini__dot--friend,
+.mr1-mini__dot--pinned {
+  width: 8px;
+  height: 8px;
+  background: #7be08a;
+  z-index: 1;
+}
+
+.mr1-mini__dot--pinned {
+  background: #f2c230;
+}
+
+.mr1-row__friend {
+  margin-right: 2px;
+}
+
+.mr1-card__friend {
+  margin-right: var(--space-1);
+}

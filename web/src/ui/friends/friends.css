@@ -302,6 +302,46 @@
   font-size: var(--text-xs);
 }
 
+/* ── Pinned friends (beta 7) ──────────────────────────────────────────── */
+
+/* The painted pin: bright while pinned, faded grey while not. */
+.friends-row__pin {
+  min-width: var(--control-height-compact);
+  padding: 0 var(--space-1);
+}
+
+.friends-row__pin .game-icon {
+  filter: grayscale(1);
+  opacity: 0.45;
+  transition: opacity 120ms ease, filter 120ms ease;
+}
+
+.friends-row__pin:hover .game-icon,
+.friends-row__pin:focus-visible .game-icon {
+  opacity: 0.8;
+}
+
+.friends-row__pin--on .game-icon,
+.friends-row__pin--on:hover .game-icon {
+  filter: none;
+  opacity: 1;
+}
+
+.friends-row--pinned {
+  border-color: rgb(242 194 48 / 55%);
+  background: rgb(242 194 48 / 8%);
+}
+
+:root[data-skin="flash"] .friends-row--pinned {
+  border-color: #c98a12;
+  background: rgb(255 214 102 / 22%);
+}
+
+.friends-summary__pins {
+  font-weight: 700;
+  margin-left: var(--space-2);
+}
+
 /* ── Search and filters above the Friends list (#380) ─────────────────── */
 
 .friends-tools {

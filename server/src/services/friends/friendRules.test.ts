@@ -26,6 +26,7 @@ describe("friends rules", () => {
   test("the limits the owner approved", () => {
     expect(FRIEND_LIMITS).toEqual({
       maxFriends: 100,
+      maxPinned: 10,
       maxOpenRequests: 30,
       maxRequestsPerDay: 30,
       requestLapseDays: 14,

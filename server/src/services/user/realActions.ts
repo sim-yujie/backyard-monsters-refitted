@@ -243,6 +243,8 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /api/:apiVersion/bm/friends/request/answer",
   "POST /api/:apiVersion/bm/friends/request/cancel",
   "POST /api/:apiVersion/bm/friends/remove",
+  // Pinning a friend to the top of the list (beta 7) only sorts it.
+  "POST /api/:apiVersion/bm/friends/pin",
   "POST /alliance/createalliance",
   "POST /alliance/editalliance",
   "POST /alliance/leavealliance",
