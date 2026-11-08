@@ -213,7 +213,7 @@ describe("the list", () => {
     expect(rows[0]!.textContent).toContain("4 unique reporters");
     expect(counts.at(-1)).toEqual({ all: 2, reports: 1, filter: 2 });
     const filter = document.querySelector<HTMLButtonElement>("[data-source='filter']")!;
-    expect(filter.textContent).toBe("Word filter 2");
+    expect(filter.textContent).toBe("Word filter · 2");
     filter.click();
     await settle();
     expect(moves.at(-1)).toEqual({ source: "filter", player: null });

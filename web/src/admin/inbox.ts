@@ -196,7 +196,7 @@ export class InboxView {
   private renderCounts(): void {
     for (const seg of this.filters.querySelectorAll<HTMLButtonElement>("[data-source]")) {
       const n = this.counts?.[seg.dataset["source"] as InboxSource];
-      replace(seg.querySelector(".seg-count")!, n === undefined ? null : ` ${n}`);
+      replace(seg.querySelector(".seg-count")!, n === undefined ? null : ` · ${n}`);
     }
   }
 
@@ -295,7 +295,7 @@ export class InboxView {
                 `“${player.preview.text}”`,
               )
             : null,
-          h("span", { class: "row-meta inbox-counts" }, inboxLabel(player)),
+          h("span", { class: "row-meta inbox-counts", attrs: { title: inboxLabel(player) } }, inboxLabel(player)),
         ),
         icon("chevron", 18),
       ),
