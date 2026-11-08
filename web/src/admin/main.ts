@@ -204,6 +204,7 @@ class Dashboard {
   private signedOut = false;
   private readonly bugs = new BugsView({
     onRoute: (id) => this.openBug(id),
+    onList: (list) => this.openBugList(list),
     onError: (message) => this.say(message),
     onSay: (message) => this.say(message),
     onAward: () => void this.shiny.refresh(),
@@ -523,7 +524,7 @@ class Dashboard {
       this.loadHomeInbox(),
       this.cases.refresh(),
       this.photos.refresh(),
-      this.bugs.show(route.bug),
+      this.bugs.show(route.bug, route.view === "bugs" ? route.params : {}),
       this.moderation.refresh(),
       this.moderators.refresh(),
       this.modMail.refresh(),
@@ -537,7 +538,7 @@ class Dashboard {
   private route(): void {
     const route = readRoute(location.search, location.hash);
     this.show(route.view, route.params);
-    if (route.view === "bugs") void this.bugs.show(route.bug);
+    if (route.view === "bugs") void this.bugs.show(route.bug, route.params);
     if (route.view === "inbox") void this.inbox.show(route.params);
   }
 
@@ -656,10 +657,19 @@ class Dashboard {
 
   /** Opens a bug report (or the list) in the Bug reports view, as a step Back can undo. */
   private openBug(id: number | null): void {
-    const url = id === null ? `${location.pathname}#bugs` : `${location.pathname}?bug=${id}#bugs`;
-    history.pushState(null, "", url);
+    // The list stays in the address, so Back and a reload keep it; an alert's
+    // `?bug=` is dropped, or it would open that report again.
+    const list = this.bugs.currentList;
+    history.pushState(null, "", `${location.pathname}${viewHash("bugs", { list, bug: id })}`);
     this.show("bugs", {});
-    void this.bugs.show(id);
+    void this.bugs.show(id, { list });
+  }
+
+  /** Shows another bug list (closing the open report), as a step Back can undo. */
+  private openBugList(list: string): void {
+    history.pushState(null, "", `${location.pathname}${viewHash("bugs", { list })}`);
+    this.show("bugs", {});
+    void this.bugs.show(null, { list });
   }
 
   /** Opens a player in the Find a player view (a name clicked in the chat panel or a case). */
