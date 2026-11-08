@@ -85,7 +85,7 @@ const ability = (id: string) => labAbility(id)!;
 const researching = { upg: "C3", upt: T0 + 3_600, upl: 1 };
 
 describe("labRows", () => {
-  it("lists the fourteen abilities in the Lab's order with their rank and next rank", () => {
+  it("lists the fifteen abilities in the Lab's order with their rank and next rank", () => {
     const rows = labRows(contextOf());
     expect(rows.map((row) => row.monster.id)).toEqual([
       "C1",
@@ -98,6 +98,7 @@ describe("labRows", () => {
       "C5",
       "C9",
       "C10",
+      "C17",
       "C11",
       "C13",
       "C14",
@@ -233,6 +234,10 @@ describe("words", () => {
     expect(effectLine(ability("C9"), 3)).toBe("Invisibility: 8 s cloak delay (top rank)");
     expect(effectLine(ability("C4"), 1)).toBe("Extra targets: 1 → 2");
     expect(effectLine(ability("C11"), 2)).toBe("Acid on death: 2× its damage → 3× its damage");
+    // Slimeattikus's Split: copies times each one's health share (owner, 6 Nov 2026).
+    expect(effectLine(ability("C17"), 0)).toBe("Split: none → 2 × 25% health");
+    expect(effectLine(ability("C17"), 2)).toBe("Split: 2 × 35% health → 3 × 35% health");
+    expect(effectLine(ability("C17"), 3)).toBe("Split: 3 × 35% health (top rank)");
   });
 
   it("powerupRank reads 0..3", () => {

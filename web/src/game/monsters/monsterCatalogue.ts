@@ -13,7 +13,8 @@
  * Inferno roster (IC1-IC8) is its own list, `INFERNO_MONSTER_CATALOGUE`, priced
  * in Sulfur (unlock, training) and Magma (hatching) on the Inferno yard
  * (`docs/design/inferno.md` §2.6). C200 is not included. The Lab also has the
- * revamp's four abilities (Pokey, Octo-ooze, Ichi, Crabatron; owner, 2 Nov 2026).
+ * revamp's five abilities (Pokey, Octo-ooze, Ichi, Crabatron; owner, 2 Nov 2026;
+ * Slimeattikus; owner, 6 Nov 2026).
  *
  * This file exists twice, byte for byte: `web/src/game/monsters/monsterCatalogue.ts`
  * (what the Monsters screen shows) and `server/src/game-data/monsterCatalogue.ts`
@@ -695,10 +696,21 @@ export const LAB_ABILITIES: readonly LabAbility[] = [
     costs: [[5000000, 216000], [7500000, 216000], [11250000, 216000]],
     effect: [0.1, 0.15, 0.2],
   },
+  // C17 Slimeattikus — revamp (beta 7, owner, 6 Nov 2026)
+  {
+    id: "C17",
+    order: 11,
+    name: "Split",
+    effectLabel: "Split Copies",
+    description: "When it dies, it splits into smaller copies of itself.",
+    upgradeDescription: "More copies, or tougher ones.",
+    costs: [[6000000, 216000], [9000000, 216000], [13500000, 216000]],
+    effect: [0.25, 0.35, 0.35],
+  },
   // C11 Project X — MONSTERLAB.as:144
   {
     id: "C11",
-    order: 11,
+    order: 12,
     name: "Acid Spores",
     effectLabel: "Acid Damage",
     description: "Adds the ability to unleash acid when the Project X dies.",
@@ -709,7 +721,7 @@ export const LAB_ABILITIES: readonly LabAbility[] = [
   // C13 Wormzer — MONSTERLAB.as:166
   {
     id: "C13",
-    order: 12,
+    order: 13,
     name: "Splash Damage",
     effectLabel: "Splash Damage",
     description: "Adds the ability to do extra splash damage when Wormzer pops up.",
@@ -720,7 +732,7 @@ export const LAB_ABILITIES: readonly LabAbility[] = [
   // C14 Teratorn — MONSTERLAB.as:177
   {
     id: "C14",
-    order: 13,
+    order: 14,
     name: "Ricochet",
     effectLabel: "Fireball Bounces",
     description: "Adds the ability for attacks to bounce off of buildings doing damage to multiple targets.",
@@ -731,7 +743,7 @@ export const LAB_ABILITIES: readonly LabAbility[] = [
   // C12 D.A.V.E. — MONSTERLAB.as:155
   {
     id: "C12",
-    order: 14,
+    order: 15,
     name: "Rockets",
     effectLabel: "Rocket Range",
     description: "Gives D.A.V.E. the ability to fire rockets increasing the damage he does.",

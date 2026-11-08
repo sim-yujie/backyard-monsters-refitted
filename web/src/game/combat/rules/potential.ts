@@ -46,6 +46,12 @@ import {
   type ResourceKey,
   type Roster,
 } from "./types.js";
+import {
+  MAX_RANK,
+  SLIMEATTIKUS_ID,
+  SPLIT_COPY_DAMAGE_SHARE,
+  splitCopyCount,
+} from "./specialMoves.js";
 import { buildingClass, footprintOf, screenOf } from "./yard.js";
 
 /**
@@ -175,7 +181,9 @@ export const specialistBound = (targetGroup: number): number =>
  *
  * A Slimeattikus adds its children on top, at its own level: they are spawned
  * on its death and swing for whatever is left of the interval, which the bound
- * takes as all of it.
+ * takes as all of it. Its Lab "Split" copies come on top of those: the bound
+ * cannot see Lab ranks, so it takes the top rank's copies, each its own swing
+ * at {@link SPLIT_COPY_DAMAGE_SHARE} of the damage.
  */
 export const monsterPotential = (
   id: string,
@@ -198,6 +206,10 @@ export const monsterPotential = (
       const hits = swings(elapsedSeconds, enragedDelay(monsterAttackDelay(id, level), enrage));
       total = damage * multiplier * hits * area * count;
     }
+  }
+
+  if (id === SLIMEATTIKUS_ID) {
+    total += total * SPLIT_COPY_DAMAGE_SHARE * splitCopyCount(MAX_RANK);
   }
 
   const splits = monsterStat(id, "splits", level);
