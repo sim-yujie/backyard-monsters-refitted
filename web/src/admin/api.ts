@@ -379,6 +379,75 @@ export const replyToReport = (
 export const searchPlayers = (q: string): Promise<Envelope<{ players: PlayerMatch[] }>> =>
   adminGet(`${ADMIN}/players`, { q });
 
+// ---- Attack log (server: services/admin/attackLogAdmin.ts) ----
+
+/** "made": attacks by the player; "received": attacks on them. */
+export type AttackSide = "made" | "received" | "both";
+export type AttackRange = "24h" | "7d" | "30d" | "all";
+
+export interface AttackPlayer {
+  userid: number;
+  /** Their name now; the name in the log when the account is gone. */
+  username: string;
+  /** A computer-run Map Room neighbour. */
+  bot: boolean;
+  /** The account no longer exists. */
+  gone: boolean;
+}
+
+export interface AttackRow {
+  id: number;
+  time: string;
+  direction: "made" | "received";
+  other: AttackPlayer;
+  /** The other player's name in the log, when they have since changed it. */
+  otherLoggedName: string | null;
+  /** The yard attacked, as stored: `main`, `outpost`, `inferno`... */
+  type: string;
+  x: number | null;
+  y: number | null;
+  loot: unknown;
+  report: unknown;
+}
+
+export interface TopPlayer extends AttackPlayer {
+  count: number;
+}
+
+export interface AttackLogView {
+  player: AttackPlayer;
+  side: AttackSide;
+  range: AttackRange;
+  since: string;
+  /** How long attack logs are kept. */
+  retentionDays: number;
+  summary: {
+    made: number;
+    received: number;
+    targets: number;
+    attackers: number;
+    topTargets: TopPlayer[];
+    topAttackers: TopPlayer[];
+  };
+  attacks: AttackRow[];
+  next: { time: string; id: number } | null;
+}
+
+export interface AttackLogQuery {
+  side: AttackSide;
+  range: AttackRange;
+  /** The previous page's `next`. */
+  before?: { time: string; id: number } | null;
+}
+
+export const fetchAttackLog = (userid: number, query: AttackLogQuery): Promise<Envelope<{ log: AttackLogView }>> =>
+  adminGet(`${ADMIN}/players/${userid}/attacks`, {
+    side: query.side,
+    range: query.range,
+    beforeTime: query.before?.time,
+    beforeId: query.before?.id,
+  });
+
 export const fetchShinyAwards = (
   before?: number,
 ): Promise<

@@ -24,6 +24,8 @@ let threads: Array<Record<string, unknown>> = [];
 let logRows: unknown[][] = [];
 let logCounts = { hour: 0, day: 0 };
 let created: Array<Record<string, unknown>> = [];
+/** The mail check's newest unread message (`readMailStatus`), when a test sets one. */
+let latestRows: Array<Record<string, unknown>> = [];
 
 const em = {
   find: async (entity: { name: string }, where: Record<string, unknown>) => {
@@ -67,6 +69,7 @@ const em = {
       return first ? [{ moderator_id: first[1] }] : [];
     }
     if (/FROM bym\.mod_mail_log/.test(sql)) return [logCounts];
+    if (/FROM bym\.message m/.test(sql)) return latestRows;
     if (/FROM bym\.message/.test(sql)) return [];
     if (/FROM bym\."user"/.test(sql)) {
       const [first, second] = params as [number | string, string | undefined];
@@ -122,6 +125,7 @@ beforeEach(() => {
   logRows = [];
   logCounts = { hour: 0, day: 0 };
   created = [];
+  latestRows = [];
   nudged = [];
   setMailNudge(async (userId) => void nudged.push(userId));
 });
@@ -336,6 +340,22 @@ describe("finding any player to write to", () => {
     expect(self.body).toMatchObject({ error: 1 });
   });
 
+  test("an admin (ADMIN_USER_IDS) finds any player too, and mailstatus says so (patch 6.11)", async () => {
+    const saved = process.env.ADMIN_USER_IDS;
+    process.env.ADMIN_USER_IDS = String(PLAYER);
+    try {
+      const ctx = ctxFor(PLAYER, { player: "stranger" });
+      await findMailPlayer(ctx);
+      expect(ctx.body).toEqual({ error: 0, player: { userid: STRANGER, username: "Stranger" } });
+      const status = ctxFor(PLAYER);
+      await getMailStatus(status);
+      expect(status.body).toMatchObject({ error: 0, mod: 1 });
+    } finally {
+      if (saved === undefined) delete process.env.ADMIN_USER_IDS;
+      else process.env.ADMIN_USER_IDS = saved;
+    }
+  });
+
   test("a normal player is refused with 403, whatever they claim", async () => {
     const ctx = ctxFor(PLAYER, { player: "Stranger", mod: 1 });
     await findMailPlayer(ctx);
@@ -355,6 +375,60 @@ describe("the Mod badge and the mail check", () => {
     const { targets } = ctx.body as { targets: Record<number, { mod?: number }> };
     expect(targets[MOD]?.mod).toBe(1);
     expect(targets[PLAYER]?.mod).toBeUndefined();
+  });
+
+  /** Runs `body` with `ADMIN_USER_IDS` set to `ids`, then puts it back. */
+  const asAdmins = async (ids: number[], body: () => Promise<void>) => {
+    const saved = process.env.ADMIN_USER_IDS;
+    process.env.ADMIN_USER_IDS = ids.join(",");
+    try {
+      await body();
+    } finally {
+      if (saved === undefined) delete process.env.ADMIN_USER_IDS;
+      else process.env.ADMIN_USER_IDS = saved;
+    }
+  };
+
+  test("getmessagetargets marks an admin partner with gm: 1 and never mod, a moderator with mod only (owner, 8 Nov)", async () => {
+    // The admin is on the moderators list too: still GM only.
+    moderators = new Set([MOD, PLAYER]);
+    threads = [
+      { threadid: 1, userid: MOD, targetid: STRANGER, messagecount: 1 },
+      { threadid: 2, userid: PLAYER, targetid: STRANGER, messagecount: 1 },
+    ];
+    users.push({ userid: 3104, username: "Plain", blockedUsers: [], save: { unreadmessages: 0 } });
+    threads.push({ threadid: 3, userid: 3104, targetid: STRANGER, messagecount: 1 });
+    await asAdmins([PLAYER], async () => {
+      const ctx = ctxFor(STRANGER);
+      await getMessageTargets(ctx);
+      const { targets } = ctx.body as { targets: Record<number, { mod?: number; gm?: number }> };
+      expect(targets[PLAYER]).toMatchObject({ gm: 1 });
+      expect(targets[PLAYER]?.mod).toBeUndefined();
+      expect(targets[MOD]).toMatchObject({ mod: 1 });
+      expect(targets[MOD]?.gm).toBeUndefined();
+      expect(targets[3104]?.mod).toBeUndefined();
+      expect(targets[3104]?.gm).toBeUndefined();
+    });
+  });
+
+  test("the mail check's newest message carries gm for an admin sender, mod for a moderator, neither for a player", async () => {
+    const latest = (from: number) => [
+      { id: `m${from}`, threadid: 9, userid: from, username: `u${from}`, subject: "Hi", message: "Hello", updatetime: 5 },
+    ];
+    moderators = new Set([MOD, PLAYER]);
+    await asAdmins([PLAYER], async () => {
+      const cases: Array<[number, { mod: number; gm: number }]> = [
+        [PLAYER, { mod: 0, gm: 1 }],
+        [MOD, { mod: 1, gm: 0 }],
+        [3104, { mod: 0, gm: 0 }],
+      ];
+      for (const [from, badges] of cases) {
+        latestRows = latest(from);
+        const ctx = ctxFor(STRANGER);
+        await getMailStatus(ctx);
+        expect((ctx.body as { latest: Record<string, unknown> }).latest).toMatchObject({ from, ...badges });
+      }
+    });
   });
 
   test("mailstatus says whether the player is a moderator", async () => {

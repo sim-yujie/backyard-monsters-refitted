@@ -16,6 +16,7 @@ const latest = (id: string, time: number, extra: Partial<LatestMail> = {}): Late
   preview: "Hello there",
   time,
   mod: false,
+  gm: false,
   notice: false,
   ...extra,
 });
@@ -133,6 +134,21 @@ describe("MailWatch", () => {
     page.hidden = true;
     await vi.advanceTimersByTimeAsync(90_000);
     expect(asked).toBe(1);
+    w.stop();
+  });
+
+  it("still asks every 5 minutes while chat is on line, in case a push was lost", async () => {
+    const w = watch();
+    chat.online = true;
+    w.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(asked).toBe(1);
+    await vi.advanceTimersByTimeAsync(270_000);
+    expect(asked).toBe(1);
+    answer = status(latest("lost", 900), 1);
+    await vi.advanceTimersByTimeAsync(45_000);
+    expect(asked).toBe(2);
+    expect(seen.at(-1)?.alert?.id).toBe("lost");
     w.stop();
   });
 

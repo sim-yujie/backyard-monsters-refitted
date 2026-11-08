@@ -53,7 +53,7 @@ export type GoalCondition =
   | { kind: "counter"; counter: GoalCounter; target: number }
   /** A Map Room 1 tribe of this kind destroyed (WM1-WM4). */
   | { kind: "tribe"; tribe: TribeCounterName }
-  /** The staged raid watched (D1: `onboarding.raidSeen`). */
+  /** D1: the staged raid watched, or a wild raid with a raider killed (`onboarding.raidSeen`), or a good defence. */
   | { kind: "raid" }
   /** A layout saved in the Yard Planner (`save.savetemplate`). */
   | { kind: "layout" }

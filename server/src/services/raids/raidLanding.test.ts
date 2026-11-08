@@ -15,7 +15,7 @@ mock.module("../../server.js", () => ({
 }));
 
 const { GOOD_DEFENCE_SHINY, landRaid, landedResult } = await import("./raidLanding.js");
-const { RAID_PREFERENCES, readSchedule } = await import("./raidSchedule.js");
+const { RAID_PREFERENCES, TROJAN_TRIBE, readSchedule } = await import("./raidSchedule.js");
 const { GOALS } = await import("../../game-data/goals.js");
 const { goalStatus } = await import("../goals/goalRules.js");
 const { readOnboarding } = await import("../onboarding/state.js");
@@ -257,5 +257,53 @@ describe("Moloch's emergence raid (tribe moloch, docs/design/inferno.md §2.3, o
     expect(schedule.lastRaidId).toBe("r_moloch");
     expect(schedule.recent[0]).toMatchObject({ id: "r_moloch", tribe: "moloch", shiny: 0 });
     expect(landedResult(save.aiattacks, "r_moloch")).toMatchObject({ tribe: "moloch", shiny: 0, defended: true });
+  });
+});
+
+describe("goal D1, First Blood: a real raid with a raider killed (Flash's kills: 1)", () => {
+  const D1 = GOALS.find((goal) => goal.id === "D1")!;
+
+  /** A player who skipped the guide, so never watched the staged raid. */
+  const skipperSave = (extra: Record<string, unknown> = {}) =>
+    saveOf({ onboarding: { v: 1, guide: { state: "skipped" }, goals: {}, counters: {}, ...extra } });
+
+  const d1 = (save: LandingSave) => goalStatus(D1, save, readOnboarding(save));
+
+  test("a skipper's First Blood stays open until a raid", () => {
+    expect(D1.name).toBe("First Blood");
+    expect(d1(skipperSave())).toBe("open");
+  });
+
+  test("a raid with one raider killed completes it, even a poor defence", () => {
+    const save = skipperSave();
+    land(save, outcomeOf({ healthShare: 0.3, creepsKilled: 1 }));
+    expect(readOnboarding(save).raidSeen).toBe(NOW);
+    expect(readOnboarding(save).counters.raidsSurvived).toBe(0);
+    expect(d1(save)).toBe("ready");
+  });
+
+  test("a raid that killed nothing does not", () => {
+    const save = skipperSave();
+    land(save, outcomeOf({ healthShare: 0.2, creepsKilled: 0 }));
+    expect(readOnboarding(save).raidSeen).toBeUndefined();
+    expect(d1(save)).toBe("open");
+  });
+
+  test("the staged raid's time is kept", () => {
+    const save = skipperSave({ raidSeen: 123 });
+    land(save, outcomeOf({ creepsKilled: 4 }));
+    expect(readOnboarding(save).raidSeen).toBe(123);
+  });
+
+  test("a good defence already counted before this fix completes it", () => {
+    expect(d1(skipperSave({ counters: { raidsSurvived: 1 } }))).toBe("ready");
+  });
+
+  test("Moloch and the Trojan Horse give no goal credit", () => {
+    for (const tribe of ["moloch", TROJAN_TRIBE]) {
+      const save = skipperSave();
+      landRaid(save, { id: "r_x", tribe, startedAt: STARTED, outcome: outcomeOf({ creepsKilled: 5 }) }, NOW);
+      expect(readOnboarding(save).raidSeen).toBeUndefined();
+    }
   });
 });

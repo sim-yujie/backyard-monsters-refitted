@@ -100,3 +100,21 @@ export const countRaidSurvived = (save: OnboardingSave): Onboarding =>
   updateOnboarding(save, ({ counters }) => {
     counters.raidsSurvived += 1;
   });
+
+/**
+ * Goal D1, "First Blood": a wild monster raid in which the yard killed at
+ * least one raider marks `raidSeen`, as the guide's staged raid does. Flash
+ * met D1 with one kill (`rules: {"kills": 1}`, `QUESTS.as:231`; every monster
+ * killed adds to `kills`, `MonsterBase.as:1208`), so a player who skipped the
+ * guide, and so never watched the staged raid, earns it at their first real
+ * defence. Null when `raidSeen` is already set, so the first time is kept.
+ */
+export const markRaidSeen = (save: OnboardingSave, now: number): Onboarding | null => {
+  let changed = false;
+  const onboarding = updateOnboarding(save, (record) => {
+    if (record.raidSeen !== undefined) return;
+    record.raidSeen = now;
+    changed = true;
+  });
+  return changed ? onboarding : null;
+};

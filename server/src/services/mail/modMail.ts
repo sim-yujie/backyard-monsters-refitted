@@ -66,6 +66,13 @@ export const blocksIgnoringStaff = async (em: EntityManager, blocked: readonly n
 export const isMailStaff = async (em: EntityManager, userid: number): Promise<boolean> =>
   isAdminUser(userid) || (await isMailModerator(em, userid));
 
+/**
+ * Whether mail from `userid` shows the green GM badge, as chat shows the game
+ * team (owner, 8 Nov: "Show GM badge."): an admin (`ADMIN_USER_IDS`). An
+ * admin never also shows the Mod badge ({@link moderatorsAmong} leaves them out).
+ */
+export const isGameTeamSender = (userid: number): boolean => userid > 0 && isAdminUser(userid);
+
 /** Those of `ids` on the moderators list now (game team accounts left out): for the Mod badge. */
 export const moderatorsAmong = async (em: EntityManager, ids: readonly number[]): Promise<Set<number>> => {
   const wanted = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0 && !isAdminUser(id)))];
