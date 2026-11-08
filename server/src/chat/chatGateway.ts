@@ -20,6 +20,7 @@ import {
   postMessage,
 } from "./chatRooms.js";
 import { applyModeration } from "./chatModeration.js";
+import { applyMailNudge } from "./chatMail.js";
 import { MODERATORS_REFRESH_MS, refreshChatModerators } from "./chatModerators.js";
 import { clients, type SocketData } from "./chatState.js";
 import { initTransport, subscribeControl } from "./chatTransport.js";
@@ -57,6 +58,7 @@ const handleControlMessage = (payload: string) => {
   }
 
   if (applyModeration(message)) return;
+  if (applyMailNudge(message)) return;
 
   if (message.type === ChatControlType.Moderators) {
     void refreshChatModerators();

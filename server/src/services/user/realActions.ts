@@ -266,6 +266,8 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /api/:apiVersion/bm/presence",
   "POST /api/:apiVersion/bm/presence/check",
   "POST /api/:apiVersion/player/getmessagethread",
+  // A moderator looking up a player to mail (beta 7).
+  "POST /api/:apiVersion/player/mail/findplayer",
   "POST /alliance/searchalliances",
   "POST /worldmapv2/getarea",
   "POST /worldmapv2/sight",

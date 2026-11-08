@@ -22,8 +22,10 @@ import { h, replace } from "./dom";
 import { ErrorsView } from "./errors";
 import { ModerationView } from "./moderation";
 import { ModeratorsView } from "./moderators";
+import { ModMailSection } from "./modmail";
 import { count, dateTime } from "./format";
 import { icon } from "./icons";
+import { readingSection } from "./reading";
 import { topItems, verdict, type TopItem } from "./problems";
 import {
   mark,
@@ -74,6 +76,7 @@ const SECTIONS = [
   ["bugs", "Bug reports"],
   ["moderation", "Moderation"],
   ["moderators", "Moderators"],
+  ["modmail", "Moderator mail"],
   ["chat", "Chat"],
   ["shiny", "Shiny"],
   ["announcements", "Announcements"],
@@ -216,6 +219,10 @@ class Dashboard {
   private readonly moderation = new ModerationView({ say: (message) => this.say(message) });
   private readonly weekend = new WeekendView({ say: (message) => this.say(message) });
   private readonly moderators = new ModeratorsView({ say: (message) => this.say(message) });
+  private readonly modMail = new ModMailSection({
+    say: (message) => this.say(message),
+    onViewChange: () => this.markCurrentSection(),
+  });
   private readonly cases = new CasesView({
     say: (message) => this.say(message),
     onCount: (open) => {
@@ -239,6 +246,9 @@ class Dashboard {
   /** Players with open photo reports, or null before they are read. */
   private openPhotos: number | null = null;
   private readonly folds = readFolds();
+  /** The section a link just opened, marked until the person scrolls. */
+  private chosen: SectionId | undefined;
+  private chosenAt = 0;
   private readonly chat = new ChatPanel({
     openPlayer: (userid) => this.openPlayer(userid),
     say: (message) => this.say(message),
@@ -328,6 +338,7 @@ class Dashboard {
       bugs: section("bugs", "Bug reports"),
       moderation: section("moderation", "Moderation"),
       moderators: section("moderators", "Chat moderators"),
+      modmail: section("modmail", "Moderator mail"),
       chat: section("chat", "Chat as the game team"),
       shiny: section("shiny", "Give Shiny"),
       announcements: section("announcements", "Announcements"),
@@ -343,6 +354,7 @@ class Dashboard {
     replace(this.sections.bugs.body, this.bugs.element);
     replace(this.sections.moderation.body, this.moderation.element);
     replace(this.sections.moderators.body, this.moderators.element);
+    replace(this.sections.modmail.body, this.modMail.element);
     replace(this.sections.chat.body, this.chat.element);
     replace(this.sections.shiny.body, this.shiny.element);
     replace(this.sections.announcements.body, this.announcements.element);
@@ -418,6 +430,24 @@ class Dashboard {
       if (adoptNewerSignIn() || this.signedOut) void this.loadAll();
     });
     this.watchScroll();
+    // Scrolling by hand (after the link's own smooth scroll has settled) hands the mark back to
+    // what is on screen.
+    const release = (): void => {
+      if (this.chosen !== undefined && Date.now() - this.chosenAt > 1200) {
+        this.chosen = undefined;
+        this.markCurrentSection();
+      }
+    };
+    window.addEventListener("scroll", release, { passive: true });
+    for (const type of ["wheel", "touchmove", "keydown"] as const) {
+      window.addEventListener(
+        type,
+        () => {
+          this.chosen = undefined;
+        },
+        { passive: true },
+      );
+    }
   }
 
   async start(): Promise<void> {
@@ -432,43 +462,57 @@ class Dashboard {
       this.bugs.show(route.bug),
       this.moderation.refresh(),
       this.moderators.refresh(),
+      this.modMail.refresh(),
       this.shiny.refresh(),
       this.announcements.refresh(),
       this.weekend.refresh(),
     ]);
     // The sections grew as they loaded; go to the one the link named.
-    if (route.section) this.sections[route.section].element.scrollIntoView();
+    if (route.section) {
+      this.chosen = route.section;
+      this.chosenAt = Date.now();
+      this.sections[route.section].element.scrollIntoView();
+    }
   }
 
   /** Marks the link of the section being read, and keeps it in view in the phone's row. */
   private watchScroll(): void {
     if (typeof IntersectionObserver === "undefined") return;
-    const visible = new Set<string>();
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) visible.add(entry.target.id);
-          else visible.delete(entry.target.id);
-        }
-        const current = SECTIONS.find(([id]) => visible.has(id))?.[0];
-        for (const [id] of SECTIONS) {
-          const link = this.sections[id].link;
-          if (id === current) {
-            link.setAttribute("aria-current", "true");
-            const row = this.nav;
-            if (row.scrollWidth > row.clientWidth) {
-              const left = link.offsetLeft - (row.clientWidth - link.offsetWidth) / 2;
-              row.scrollTo({ left, behavior: "smooth" });
-            }
-          } else {
-            link.removeAttribute("aria-current");
-          }
-        }
-      },
+    const observer = new IntersectionObserver(() => this.markCurrentSection(), {
       // A section counts as "being read" while it crosses the upper third.
-      { rootMargin: "-20% 0px -65% 0px" },
-    );
+      rootMargin: "-20% 0px -65% 0px",
+    });
     for (const [id] of SECTIONS) observer.observe(this.sections[id].element);
+  }
+
+  /**
+   * Marks the link of the section that crosses the reading line (a fifth down
+   * the screen). Measured on demand, so it also follows a section that grows
+   * or shrinks (a mail conversation opening) without the page scrolling.
+   */
+  private markCurrentSection(): void {
+    const current = this.chosen ?? readingSection(
+      SECTIONS.map(([id]) => {
+        const rect = this.sections[id].element.getBoundingClientRect();
+        return { id, top: rect.top, bottom: rect.bottom };
+      }),
+      window.innerHeight,
+    );
+    if (current === undefined) return;
+    for (const [id] of SECTIONS) {
+      const link = this.sections[id].link;
+      if (id === current) {
+        if (link.getAttribute("aria-current") === "true") continue;
+        link.setAttribute("aria-current", "true");
+        const row = this.nav;
+        if (row.scrollWidth > row.clientWidth) {
+          const left = link.offsetLeft - (row.clientWidth - link.offsetWidth) / 2;
+          row.scrollTo({ left, behavior: "smooth" });
+        }
+      } else {
+        link.removeAttribute("aria-current");
+      }
+    }
   }
 
   private async loadAll(): Promise<void> {
@@ -482,6 +526,7 @@ class Dashboard {
       this.bugs.refresh(),
       this.moderation.refresh(),
       this.moderators.refresh(),
+      this.modMail.refresh(),
       this.shiny.refresh(),
       this.weekend.refresh(),
     ]);
@@ -511,7 +556,12 @@ class Dashboard {
   /** Opens the section a link names (`#health`), without remembering it. */
   private openNamed(href: string): void {
     const id = SECTIONS.find(([name]) => `#${name}` === href)?.[0];
-    if (id) this.setOpen(id, true, false);
+    if (!id) return;
+    this.setOpen(id, true, false);
+    // The section the person asked for is the one to mark, until they scroll on their own: a
+    // short section, or one at the page's end, never fills the screen by itself.
+    this.chosen = id;
+    this.chosenAt = Date.now();
   }
 
   /** The players with open photo reports on the link and the heading. */
@@ -675,6 +725,7 @@ class Dashboard {
         id === "weekend" ||
         id === "moderation" ||
         id === "moderators" ||
+        id === "modmail" ||
         id === "chat"
           ? undefined
           : levels[id];
