@@ -20,6 +20,7 @@ export const VIEWS = [
   ["inbox", "Inbox", "Moderation"],
   ["cases", "Chat cases", "Moderation"],
   ["moderation", "Find a player", "Moderation"],
+  ["attacks", "Attack log", "Moderation"],
   ["moderators", "Moderators", "Moderation"],
   ["modmail", "Moderator mail", "Moderation"],
   ["bugs", "Bug reports", "Players"],
