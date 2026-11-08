@@ -81,7 +81,11 @@ describe("EventsPanel", () => {
     const { panel, options } = mounted();
     panel.render(list([event()]));
     const button = panel.element.querySelector<HTMLButtonElement>(".events-claim")!;
-    expect(button.textContent).toBe("Claim day 210 Shiny");
+    // The reward as its picture and figure, not words, so a phone's button keeps to two lines; the words are its name.
+    expect(button.querySelector(".events-claim__label")!.textContent).toBe("Claim day 2");
+    expect(button.querySelector(".events-claim__what .events-reward .res-icon")).not.toBeNull();
+    expect(button.querySelector(".events-claim__what .events-reward__figure")!.textContent).toBe("10");
+    expect(button.getAttribute("aria-label")).toBe("Claim day 2: 10 Shiny");
     button.click();
     expect(options.onClaimCalendar).toHaveBeenCalledWith(expect.objectContaining({ id: "halloween-2026" }));
     panel.close();
@@ -314,5 +318,68 @@ describe("A day's reward tile (Thanksgiving tester faults, 8 Nov)", () => {
     expect(acorn.querySelector(".events-reward__figure")?.textContent).toBe("Acorn");
     const two = rewardBadge({ kind: "decoration", type: 55, count: 2 });
     expect(two.querySelector(".events-reward__figure")?.textContent).toBe("Acorn x2");
+  });
+});
+
+describe("Layout faults (picture tester, 9 Nov)", () => {
+  const rule = (selector: string): string => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(?:^|\\n)${escaped} \\{([^}]*)\\}`).exec(eventsCss.replace(/\r\n/g, "\n"))?.[1] ?? "";
+  };
+
+  it("pins each day's Glimmers to the tile's foot, so a row's badges line up", () => {
+    expect(rule(".events-day__rewards")).toMatch(/flex: 1;/);
+    expect(rule(".events-day__rewards > .events-reward--eventCoins")).toMatch(/margin-top: auto;/);
+  });
+
+  it("puts a tier's Glimmers in a fixed-width column before a fixed-width end slot", () => {
+    const { panel } = mounted();
+    const ladder = {
+      label: "Turkeys caught",
+      counter: 30,
+      tiers: [
+        { need: 10, rewards: [{ kind: "eventCoins" as const, amount: 20 }], claimed: true },
+        { need: 25, rewards: [{ kind: "resources" as const, amounts: { r1: 25_000, r2: 25_000, r3: 25_000, r4: 25_000 } }, { kind: "eventCoins" as const, amount: 35 }], claimed: false },
+        { need: 50, rewards: [{ kind: "decoration" as const, type: 55, count: 1 }, { kind: "eventCoins" as const, amount: 55 }], claimed: false },
+      ],
+    };
+    panel.render(list([event({ ladder })]));
+    const rows = [...panel.element.querySelectorAll(".events-tier")];
+    for (const row of rows) {
+      expect(row.querySelector(".events-tier__rewards .events-reward--eventCoins")).toBeNull();
+      expect(row.querySelector(".events-tier__coins > .events-reward--eventCoins")).not.toBeNull();
+      expect(row.lastElementChild!.classList.contains("events-tier__end")).toBe(true);
+    }
+    expect(rows[1]!.querySelector(".events-tier__end .events-tier__claim")).not.toBeNull();
+    expect(rows[2]!.querySelector(".events-tier__end .events-tier__mark")).not.toBeNull();
+    expect(rule(".events-tier__coins")).toMatch(/flex: none;[\s\S]*width: \d+px;/);
+    expect(rule(".events-tier__end")).toMatch(/flex: none;[\s\S]*width: \d+px;/);
+    panel.close();
+  });
+
+  it("sets every figure in a row of badges on the same line (the claim notice's +10K and +15)", () => {
+    expect(rule(".events-claimed")).toMatch(/align-items: stretch;/);
+    expect(rule(".events-claimed__title")).toMatch(/align-self: center;/);
+    expect(rule(".events-reward")).toMatch(/justify-content: flex-end;/);
+    expect(rule(".events-reward__pictures")).toMatch(/flex: 1 0 auto;/);
+    expect(rule(".events-tier")).toMatch(/align-items: stretch;/);
+  });
+
+  it("lays the Claim button's rewards in one row of pictures and figures", () => {
+    expect(rule(".events-claim__what")).toMatch(/display: flex;/);
+    expect(rule(".events-claim__what .events-reward")).toMatch(/flex-direction: row;/);
+  });
+
+  it("gives Classic's cream a dark orange for countdowns, not the light one", () => {
+    expect(rule(".events-card__countdown")).toMatch(/color: var\(--events-hot-text\);/);
+    const classic = /--events-hot-text: #([0-9a-f]{6});/.exec(rule(':root[data-skin="flash"] .events-panel'))?.[1];
+    expect(classic).toBeDefined();
+    // Relative luminance well under the cream's, at least 4.5:1 against #f3e3c3.
+    const lin = (c: number): number => (c / 255 <= 0.03928 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+    const lum = (hex: string): number => {
+      const [r, g, b] = [0, 2, 4].map((i) => lin(parseInt(hex.slice(i, i + 2), 16)));
+      return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+    };
+    expect((lum("f3e3c3") + 0.05) / (lum(classic!) + 0.05)).toBeGreaterThanOrEqual(4.5);
   });
 });
