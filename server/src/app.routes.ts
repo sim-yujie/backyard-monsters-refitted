@@ -47,6 +47,8 @@ import {
   photoUploadLimiter,
   photoReportLimiter,
   profilePhotoLimiter,
+  mailStatusLimiter,
+  mailFindPlayerLimiter,
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
 
@@ -109,6 +111,7 @@ import { getMessageThread } from "./controllers/mail/getMessageThread.js";
 import { sendMessage } from "./controllers/mail/sendMessage.js";
 import { requestTruce } from "./controllers/mail/requestTruce.js";
 import { reportMessageThread } from "./controllers/mail/reportMessageThread.js";
+import { findMailPlayer, getMailStatus } from "./controllers/mail/mailStatus.js";
 
 import { getTemplates } from "./controllers/yardplanner/getTemplates.js";
 import { saveTemplate } from "./controllers/yardplanner/saveTemplate.js";
@@ -294,6 +297,10 @@ router.post("/api/:apiVersion/player/getmessagethread", apiVersion, verifyUserAu
 router.post("/api/:apiVersion/player/sendmessage", apiVersion, verifyUserAuth, playerMailLimiter, mailTruceRequestLimiter, logRequest, sendMessage);
 router.post("/api/:apiVersion/player/requesttruce", apiVersion, verifyUserAuth, truceRequestLimiter, logRequest, requestTruce);
 router.post("/api/:apiVersion/player/reportmessagethread", apiVersion, verifyUserAuth, threadReportLimiter, logRequest, reportMessageThread);
+// Live mail (owner, beta 7): the game's check on a chat nudge or every so
+// often (not logged: it is frequent), and a moderator's find-any-player.
+router.get("/api/:apiVersion/player/mailstatus", apiVersion, verifyUserAuth, mailStatusLimiter, getMailStatus);
+router.post("/api/:apiVersion/player/mail/findplayer", apiVersion, verifyUserAuth, mailFindPlayerLimiter, logRequest, findMailPlayer);
 
 /**  ────────────────────────────────────────────────
 * 📦 Yard Planner

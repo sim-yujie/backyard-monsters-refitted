@@ -689,6 +689,8 @@ export class YardScene implements Scene {
       this.mail = new MailDoor({
         style: "dock",
         container: context.overlay.content,
+        // New mail shows at once (owner, beta 7): pushed over world chat, else asked every 45 s.
+        live: { chat: worldChat },
         onOpen: () => this.makeRoomForMail(),
         onShowOnMap: (cell) => {
           setMapFocus({ cell });

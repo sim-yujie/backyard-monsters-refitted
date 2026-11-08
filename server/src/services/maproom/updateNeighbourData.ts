@@ -10,7 +10,7 @@ import { getTruces } from "./getTruces.js";
 import { isAttackActive } from "../base/isAttackActive.js";
 import { calculateBaseLevel } from "../base/calculateBaseLevel.js";
 import type { NeighbourData } from "../../types/NeighbourData.js";
-import { friendFlag, friendsAmong } from "../friends/friendFlags.js";
+import { friendFlag, friendMarksAmong } from "../friends/friendFlags.js";
 import { BaseType } from "../../enums/Base.js";
 
 
@@ -61,7 +61,7 @@ export const updateNeighbourData = async (
 
   const currentTime = getCurrentDateTime();
 
-  const [neighbourUsers, neighbourSaves, lastSeens, truces, online, friends] = await Promise.all([
+  const [neighbourUsers, neighbourSaves, lastSeens, truces, online, friendMarks] = await Promise.all([
     postgres.em.find(
       User,
       { userid: { $in: userIds } },
@@ -83,8 +83,9 @@ export const updateNeighbourData = async (
     // `services/inferno/infernoNeighbours.ts`, not this.)
     baseType === BaseType.MAIN ? onlinePlayers(userIds, currentTime) : null,
 
-    // The friend flag, read fresh: the cached list outlives friendships (friends WP2, #369).
-    friendsAmong(postgres.em, friendViewerId, userIds),
+    // The friend flag, read fresh: the cached list outlives friendships (friends WP2, #369);
+    // with it, which of them the viewer pinned (beta 7).
+    friendMarksAmong(postgres.em, friendViewerId, userIds),
   ]);
 
   const saves = new Map(neighbourSaves.map((save) => [save.userid, save]));
@@ -134,7 +135,8 @@ export const updateNeighbourData = async (
       neighbour.attackpermitted = AttackPermission.ATTACKABLE;
     }
 
-    neighbour.friend = friendFlag(friends, neighbour.userid);
+    neighbour.friend = friendFlag(friendMarks.friends, neighbour.userid);
+    neighbour.friendpinned = friendFlag(friendMarks.pinned, neighbour.userid);
     neighbour.protectedUntil = isProtected ? neighbourSave.protected : 0;
     neighbour.baseid = neighbourSave.baseid;
     neighbour.level = calculateBaseLevel(neighbourSave.points, neighbourSave.basevalue);

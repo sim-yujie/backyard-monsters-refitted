@@ -11,6 +11,11 @@
  *
  * Quality: High adds a slow pulse (`uPulse`, stepped by `BorderLayer.animate`); Low draws the line
  * and a narrower glow, no haze. The line never gets thinner than about a pixel when zoomed out.
+ *
+ * Each relation has its own line as well as its colour (`relationLook.ts`, owner 8 Nov 2026), so
+ * colour-blind players can tell them apart: yours thick, neutral thin with a softer glow, friends a
+ * double line (pinned friends a bolder one with a stronger glow), hostile dashed. Every line sits
+ * on a thin dark rim (`uRim`), which keeps the bright colours readable on sand and pale grass.
  */
 export const BORDER_FRAGMENT = `#version 300 es
 precision highp float;
@@ -28,7 +33,12 @@ uniform float uPulse;       // 0..1, the slow pulse (0 off High)
 uniform vec3 uYou;
 uniform vec3 uAlliance;
 uniform vec3 uOther;
-uniform vec3 uAttacker;
+uniform vec3 uHostile;
+uniform vec3 uFriend;
+uniform vec3 uPinned;
+uniform vec3 uPinnedCentre;
+uniform vec3 uRim;          // the dark rim under every line
+uniform float uRimAlpha;
 
 const float SQRT3 = 1.7320508;
 
@@ -38,6 +48,8 @@ const float LINE_INSET = 0.04;
 const float LINE_HALF = 0.013;
 const float GLOW = 0.05;
 const float HAZE = 0.22;
+// The dark rim's width either side of the line, a share of a cell's width.
+const float RIM = 0.012;
 
 const vec2 STEPS[6] = vec2[6](
   vec2(1.0, 0.0), vec2(1.0, -1.0), vec2(0.0, -1.0), vec2(-1.0, 0.0), vec2(-1.0, 1.0), vec2(0.0, 1.0));
@@ -87,33 +99,85 @@ void main() {
 
   // World points from the cell's centre, and to the nearest border side.
   vec2 p = (h - centreOf(qr)) * uUnit;
+  // along: how far along the nearest side, 0..1 corner to corner, for the hostile dashes.
   float d = 1e9;
+  float along = 0.0;
   for (int k = 0; k < 6; k++) {
     if ((mask & (1 << k)) == 0) continue;
     vec2 m = centreOf(STEPS[k]) * 0.5;
     vec2 t = vec2(-m.y, m.x) / length(m) * 0.5;
-    d = min(d, segmentDistance(p, (m - t) * uUnit, (m + t) * uUnit));
+    vec2 a = (m - t) * uUnit;
+    vec2 e = (m + t) * uUnit - a;
+    float s = clamp(dot(p - a, e) / dot(e, e), 0.0, 1.0);
+    float dist = length(p - a - s * e);
+    if (dist < d) {
+      d = dist;
+      along = s;
+    }
   }
 
-  float cellPts = uCellPoints;
-  float haze = uQuality > 0.5 ? HAZE * cellPts : 0.0;
-  float glowReach = (uQuality > 0.5 ? GLOW : GLOW * 0.6) * cellPts;
-  if (d > max(haze, (LINE_INSET + GLOW) * cellPts)) discard;
+  // The relation's colour and line: 1 yours, 2 alliance, 3 neutral, 4 hostile, 5 friend, 6 pinned.
+  vec3 colour = uOther;
+  float halfK = 1.0;
+  float glowK = 1.0;
+  float hazeK = 1.0;
+  float doubleGap = 0.0;
+  bool dashed = false;
+  bool triple = false;
+  if (relation == 1) { colour = uYou; halfK = 1.5; }
+  else if (relation == 2) { colour = uAlliance; }
+  else if (relation == 3) { colour = uOther; halfK = 0.8; glowK = 0.6; hazeK = 0.5; }
+  else if (relation == 4) { colour = uHostile; halfK = 1.2; dashed = true; }
+  else if (relation == 5) { colour = uFriend; halfK = 0.7; doubleGap = 0.018; }
+  else { colour = uPinned; halfK = 0.75; doubleGap = 0.034; glowK = 1.35; triple = true; }
 
-  // The line: at least about one pixel wide however far out the camera is.
+  float cellPts = uCellPoints;
+  float haze = uQuality > 0.5 ? HAZE * hazeK * cellPts : 0.0;
+  float glowReach = (uQuality > 0.5 ? GLOW : GLOW * 0.6) * cellPts;
+  float gap = doubleGap * cellPts;
+  if (d > max(haze, (LINE_INSET + GLOW + RIM) * cellPts + gap)) discard;
+
+  // The line: at least about one pixel wide however far out the camera is. A double line is two
+  // strokes either side of the line's middle; zoomed far out they merge into one.
   float pixel = max(fwidth(d), 1e-4);
-  float fromLine = abs(d - LINE_INSET * cellPts);
-  float half_ = max(LINE_HALF * cellPts, 0.9 * pixel);
+  float fromCentre = abs(d - LINE_INSET * cellPts);
+  float fromLine = abs(fromCentre - gap);
+  // A pinned friend adds a third stroke down the middle: three lines to a friend's two.
+  if (triple) fromLine = min(fromLine, fromCentre);
+  float half_ = max(LINE_HALF * halfK * cellPts, 0.9 * pixel);
   float line = 1.0 - smoothstep(half_ - 0.5 * pixel, half_ + 0.75 * pixel, fromLine);
-  float glow = exp(-pow(fromLine / max(glowReach, pixel), 2.0) * 2.2);
+  // The dark rim round the whole band (and between a double line's strokes).
+  float rimOuter = gap + half_ + max(RIM * cellPts, pixel);
+  float rim = 1.0 - smoothstep(rimOuter - 0.5 * pixel, rimOuter + 0.75 * pixel, fromCentre);
+
+  // Hostile: dashes, one at each corner and two along each side; solid-ish once too small to see.
+  float on = 1.0;
+  if (dashed) {
+    float u = along * 3.0;
+    float w = max(fwidth(u), 1e-4);
+    on = 1.0 - smoothstep(0.3 - w, 0.3 + w, abs(u - floor(u + 0.5)));
+    on = mix(on, 0.75, smoothstep(0.12, 0.3, w));
+  }
+  line *= on;
+  rim *= on;
+
+  float glow = exp(-pow(fromLine / max(glowReach, pixel), 2.0) * 2.2) * on;
   float hazeA = haze > 0.0 ? (1.0 - smoothstep(0.0, haze, d)) * 0.2 : 0.0;
 
   float pulse = 1.0 + 0.22 * (uPulse - 0.5) * 2.0 * step(1.5, uQuality);
-  vec3 colour = relation == 1 ? uYou : relation == 2 ? uAlliance : relation == 3 ? uOther : uAttacker;
-  float glowA = clamp(glow * 0.75 * pulse, 0.0, 1.0);
+  // The glow gives way where the rim is, so the dark edge shows.
+  float glowA = clamp(glow * 0.75 * glowK * pulse, 0.0, 1.0) * (1.0 - 0.75 * rim);
   float a = max(max(line, glowA), hazeA);
   // The middle of the line runs towards white, as a glowing tube does.
   vec3 rgb = mix(colour, mix(colour, vec3(1.0), 0.4), line);
-  finalColor = vec4(rgb * a, a);
+  // A pinned friend's middle stroke is gold: the green triple with a gold heart.
+  if (triple) {
+    float heart = (1.0 - smoothstep(half_ - 0.5 * pixel, half_ + 0.75 * pixel, fromCentre)) * on;
+    rgb = mix(rgb, mix(uPinnedCentre, vec3(1.0), 0.2), heart);
+  }
+  // The colour over the rim, premultiplied.
+  float rimA = rim * uRimAlpha;
+  float outA = a + rimA * (1.0 - a);
+  finalColor = vec4(rgb * a + uRim * rimA * (1.0 - a), outA);
 }
 `;

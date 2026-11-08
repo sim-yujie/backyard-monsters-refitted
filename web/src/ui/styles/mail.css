@@ -692,3 +692,188 @@
   margin: 1px 0 0;
   accent-color: var(--colour-danger);
 }
+
+/* ── New mail, live (owner, beta 7) ─────────────────────────────────────── */
+
+/* The pop-up under the HUD, top centre: the envelope, who and the first
+   words. Above the HUD, under every popup. */
+.mail-toast {
+  position: absolute;
+  top: calc(var(--hud-height) + var(--space-3));
+  left: 50%;
+  z-index: calc(var(--z-hud) + 5);
+  display: flex;
+  align-items: stretch;
+  width: min(360px, calc(100% - 2 * var(--space-4)));
+  transform: translateX(-50%);
+  border: 1px solid var(--colour-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  -webkit-backdrop-filter: var(--blur-panel);
+  backdrop-filter: var(--blur-panel);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+  color: var(--colour-text);
+  animation: mail-toast-in 220ms ease-out;
+}
+
+.mail-toast[hidden] {
+  display: none;
+}
+
+/* A moderator's message: a blue edge, as their chat lines have. */
+.mail-toast--mod {
+  border-left: 4px solid var(--colour-info);
+}
+
+.mail-toast__open {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mail-toast__open:focus-visible,
+.mail-toast__close:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-md);
+}
+
+.mail-toast__icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.mail-toast__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mail-toast__who,
+.mail-toast__text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mail-toast__who {
+  font-weight: 700;
+  color: var(--colour-text-strong);
+}
+
+.mail-toast__text {
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+.mail-toast__close {
+  flex: none;
+  width: 36px;
+  border: 0;
+  border-left: 1px solid var(--colour-border-subtle);
+  background: none;
+  color: var(--colour-text-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mail-toast__close:hover {
+  color: var(--colour-text-strong);
+}
+
+@keyframes mail-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mail-toast {
+    animation: none;
+  }
+}
+
+/* Classic: a small Flash parchment card, brown words, the dark blue. */
+:root[data-skin="flash"] .mail-toast {
+  --colour-text: #3d2410;
+  --colour-text-strong: #2a1606;
+  --colour-text-secondary: #5e3d1e;
+  --colour-text-muted: #6e4f30;
+  --colour-border-subtle: rgb(90 55 20 / 25%);
+  --colour-accent: #c8640a;
+  --colour-accent-text: #ffffff;
+  --colour-info: #2a55c4;
+  border: 3px solid #8a4f1c;
+  border-radius: 10px;
+  background: #f8e4c0;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow:
+    inset 0 0 0 1px #fff3d8,
+    0 8px 18px rgb(0 0 0 / 45%);
+}
+
+:root[data-skin="flash"] .mail-toast--mod {
+  border-left: 6px solid var(--colour-info);
+}
+
+/* ── The Mod badge: a moderator, in the list, the thread and the pop-up ── */
+
+/* Chat's Mod badge: the theme's light blue with dark words. */
+.mail-mod {
+  display: inline-block;
+  flex: none;
+  margin-right: 0.35em;
+  padding: 0 0.35em;
+  border-radius: 3px;
+  background: var(--colour-info);
+  color: #0b1a3a;
+  font-size: 0.75em;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  text-shadow: none;
+  vertical-align: 0.1em;
+}
+
+/* On a light card (the light theme, Classic's parchment) the blue is a dark
+   one: the words go white. */
+:root[data-theme="light"]:not([data-skin]) .mail-mod,
+:root[data-theme="light"] .mail-toast .mail-mod,
+:root[data-skin="flash"] .mail-mod {
+  color: #ffffff;
+}
+
+/* A moderator's To: the badge sits beside the caption. */
+.mail-compose__caption > .mail-mod {
+  margin-left: 0.2em;
+  cursor: help;
+}
+
+.mail-compose__any::placeholder {
+  color: var(--colour-text-muted);
+}
+
+@media (width <= 620px) {
+  .mail-toast {
+    top: calc(var(--hud-height) + var(--space-2));
+  }
+}

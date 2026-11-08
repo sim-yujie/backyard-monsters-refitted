@@ -17,6 +17,7 @@ import { requirementDetail } from "../base/economy/transitions.js";
 import { ACADEMY_TYPE } from "../yard/academy.js";
 import { LAB_TYPE, labResearch } from "../yard/lab.js";
 import { siegeHold, type SiegeHold } from "../yard/siege.js";
+import { LOCKER_TYPE, monsterRealmOf, runningUnlock } from "../yard/locker.js";
 import {
   isSurfaceInferno,
   purseShortfall,
@@ -96,6 +97,8 @@ export interface UpgradeWalkSave extends SurfaceInfernoSave {
   storedata?: JsonObject | null;
   /** The siege weapons: a Siege Factory holding one may not be upgraded. */
   siege?: JsonObject | null;
+  /** The Monster Locker's unlocks: a Locker unlocking a monster may not be upgraded. */
+  lockerdata?: JsonObject | null;
 }
 
 /** The four resource amounts of one cost step. */
@@ -197,6 +200,8 @@ export interface OneUpgradeRefusal {
   workers?: { total: number; busy: number };
   /** `busy` on an Academy that is training: the monster, for the panel's own words. */
   training?: string;
+  /** `busy` on a Monster Locker unlocking a monster: the monster, for the panel's own words. */
+  unlocking?: string;
   /** `busy` on a Siege Lab or Factory at work or holding a weapon (`siegeHold`). */
   siege?: { hold: SiegeHold; weapon: SiegeId };
   /**
@@ -292,6 +297,12 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number, p
   // (`SiegeLab.Upgrade`, `SiegeFactory.Upgrade`).
   const siege = siegeHold(building, save.siege);
   if (siege) return refuse("busy", "building", { siege });
+  // A Monster Locker unlocking a monster (`BUILDING8.Upgrade`,
+  // `client/scripts/BUILDING8.as:97-103`, `cloc_err_cantupgrade`).
+  if (t === LOCKER_TYPE) {
+    const unlock = runningUnlock(save.lockerdata, monsterRealmOf(save));
+    if (unlock) return refuse("busy", "building", { unlocking: unlock.monster });
+  }
   if (isDamaged(building, save.buildinghealthdata)) return refuse("damaged", "building");
 
   const hall = townHallLevel(buildings, kind);

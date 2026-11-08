@@ -34,6 +34,7 @@ import { isDeclareWarRunning } from "../../alliance/powerups.js";
 import { battleReplayInput, battleTick } from "../../base/combat/battle.js";
 import { recordBattleMismatches, replayBattleForSave } from "../../base/combat/saveBattle.js";
 import { creditableMR1Loot, mr1TribePool } from "./mr1TribeRules.js";
+import { withTribeGooBonus } from "../../base/tribeGooBonus.js";
 import { recordTribeDestroyed } from "../../goals/tribeCounter.js";
 import { tribeOfBase } from "../../goals/counters.js";
 import { addQuestEvents, questEvent } from "../../quests/state.js";
@@ -274,8 +275,13 @@ const writeTribeLanding = async (
     // storage (issue #166, `bankAttackLoot`), as on Map Room 2.
     const credit = creditableMR1Loot(battle?.attackloot, mr1TribePool(tribeData), existingTribe.looted);
     // Tribe Plunder: the attacker banks that much more; the tribe gives up only `credit` (`weekendBoosts.ts`).
+    // Wild tribes also give 25% more Goo (patch 6.9, `tribeGooBonus.ts`).
     const plunder = plunderPercent(true, now);
-    const credited: ResourceAmounts = bankAttackLoot(userSave, withPlunderBonus(credit, plunder), krallenBuff).credited;
+    const credited: ResourceAmounts = bankAttackLoot(
+      userSave,
+      withPlunderBonus(withTribeGooBonus(credit, true), plunder),
+      krallenBuff
+    ).credited;
     if (plunder > 0) weekendBoostUsed(user.userid, "plunder", now);
 
     const looted = { ...existingTribe.looted };

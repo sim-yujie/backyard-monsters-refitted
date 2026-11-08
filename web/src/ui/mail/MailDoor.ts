@@ -1,10 +1,12 @@
-import type { MailApi } from "@/api/mail";
+import { mailApi, type LatestMail, type MailApi, type MailStatus } from "@/api/mail";
 import type { OffsetCell } from "@/game/HexGrid";
 import { friendsStore } from "@/game/friends/friendsStore";
 import type { MailContact } from "@/game/mail/mailbox";
+import { MailWatch, type AlertMemory, type MailChat, type PageVisibility } from "@/game/mail/mailWatch";
 import { addFriendButton } from "@/ui/friends/AddFriendButton";
 import { MailButton, type MailButtonStyle } from "./MailButton";
 import { MailboxScreen, type ComposeTarget, type InviteTarget, type TruceTarget } from "./MailboxScreen";
+import { MailToast } from "./MailToast";
 
 /**
  * A screen's way into the mailbox (#193): the Mail button, the mailbox screen
@@ -15,6 +17,12 @@ import { MailboxScreen, type ComposeTarget, type InviteTarget, type TruceTarget 
  * are still unread, since opening one marks it read on the server; the next
  * save the scene hands over (`setSaveUnread`) with a different count than the
  * last takes over again, as the server's own recount.
+ *
+ * Live (owner, beta 7; `live`): the door also watches for new mail
+ * (`game/mail/mailWatch.ts`), pushed over world chat or asked every so often.
+ * Each answer is the server's recount for the badge; a newly arrived message
+ * pops up (`MailToast`) and pressing it opens that thread. With the mailbox
+ * open the list fetches again instead of popping up.
  */
 
 export interface MailDoorOptions {
@@ -39,6 +47,18 @@ export interface MailDoorOptions {
   readonly api?: MailApi;
   /** The player's friends, offered as recipients; the shared friends list's by default. */
   readonly friends?: () => Promise<readonly MailContact[]>;
+  /**
+   * Watch for new mail while the scene is up: the world chat to hear the
+   * server's news on. Absent: the badge follows saves and visits only.
+   */
+  readonly live?: {
+    readonly chat: MailChat;
+    /** For a test: the pop-up memory, the page and the timings. */
+    readonly memory?: AlertMemory;
+    readonly page?: PageVisibility;
+    readonly pollMs?: number;
+    readonly nudgeDelayMs?: number;
+  };
 }
 
 /** The shared friends list, fetched afresh, as mail recipients. */
@@ -54,10 +74,39 @@ export class MailDoor {
   private screen: MailboxScreen | null = null;
   private saveCount: number | null = null;
   private mailboxCount: number | null = null;
+  private readonly toast: MailToast | null = null;
+  private readonly watch: MailWatch | null = null;
 
   constructor(options: MailDoorOptions) {
     this.options = options;
     this.button = new MailButton({ style: options.style, onOpen: () => void this.open() });
+    const api = options.api ?? mailApi;
+    const live = options.live;
+    if (live && api.status) {
+      const status = api.status.bind(api);
+      this.toast = new MailToast();
+      options.container.append(this.toast.element);
+      this.watch = new MailWatch({
+        status,
+        chat: live.chat,
+        onStatus: (answer, alert) => this.heard(answer, alert),
+        ...(live.memory ? { memory: live.memory } : {}),
+        ...(live.page ? { page: live.page } : {}),
+        ...(live.pollMs !== undefined ? { pollMs: live.pollMs } : {}),
+        ...(live.nudgeDelayMs !== undefined ? { nudgeDelayMs: live.nudgeDelayMs } : {}),
+      });
+      this.watch.start();
+    }
+  }
+
+  /** The pop-up, for a test. */
+  get liveToast(): MailToast | null {
+    return this.toast;
+  }
+
+  /** The live watch, for a test. */
+  get liveWatch(): MailWatch | null {
+    return this.watch;
   }
 
   get isOpen(): boolean {
@@ -76,6 +125,12 @@ export class MailDoor {
   async open(): Promise<void> {
     this.options.onOpen?.();
     await this.ensureScreen().open();
+  }
+
+  /** Opens the mailbox on one thread: the live pop-up's message. */
+  async openThread(threadid: number): Promise<void> {
+    this.options.onOpen?.();
+    await this.ensureScreen().openThreadById(threadid);
   }
 
   /** A new message to a player the map or the Friends screen named (their Message). */
@@ -101,6 +156,8 @@ export class MailDoor {
   }
 
   destroy(): void {
+    this.watch?.stop();
+    this.toast?.destroy();
     this.screen?.destroy();
     this.screen = null;
     this.button.destroy();
@@ -126,6 +183,22 @@ export class MailDoor {
       },
     }).mount(this.options.container);
     return this.screen;
+  }
+
+  /** A live answer: the server's recount on the badge, and the new message popped up (or the open list fetched again). */
+  private heard(status: MailStatus, alert: LatestMail | null): void {
+    const count = Math.max(0, Math.floor(Number(status.unread) || 0));
+    if (count !== this.button.unread) {
+      this.saveCount = count;
+      this.mailboxCount = null;
+      this.show();
+    }
+    if (!alert) return;
+    if (this.screen?.isOpen) {
+      void this.screen.reload();
+      return;
+    }
+    this.toast?.show(alert, () => void this.openThread(alert.threadid));
   }
 
   private show(): void {

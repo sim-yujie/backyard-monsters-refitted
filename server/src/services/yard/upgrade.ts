@@ -10,6 +10,7 @@ import {
 } from "../yardplanner/startUpgrades.js";
 import { fitCredit } from "./credit.js";
 import { siegeUpgradeMessage } from "./siege.js";
+import { monsterName } from "../../game-rules/combat/report.js";
 import {
   chargePurse,
   fundPurse,
@@ -101,6 +102,14 @@ export const refusalErr = (refusal: OneUpgradeRefusal, kind: YardKind = "main") 
       // The original's own words for a Siege Lab or Factory at work or holding
       // a weapon (`msg_sworks_cantupgrade1/2`, Inferno WP 6.3).
       if (refusal.siege) return yardRefusedErr("siegeBusy", siegeUpgradeMessage(refusal.siege.hold), refusal.siege);
+      // The original's own words for a Monster Locker unlocking a monster (`cloc_err_cantupgrade`).
+      if (refusal.unlocking) {
+        return yardRefusedErr(
+          "unlocking",
+          `Building is unlocking the ${monsterName(refusal.unlocking)}. You must wait for this to finish or cancel it before you can upgrade`,
+          { monster: refusal.unlocking }
+        );
+      }
       // The original's own words for an Academy that is training (`acad_err_cantupgrade`, #145).
       return refusal.training
         ? yardRefusedErr(

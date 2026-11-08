@@ -105,6 +105,8 @@ describe("entity discovery", () => {
         userid: { type: "int", nullable: false },
         friend_userid: { type: "int", nullable: false },
         created_at: { type: "timestamptz", nullable: false },
+        // Pinned friends (beta 7), against 20261110_AddFriendPinnedAt.
+        pinned_at: { type: "timestamptz", nullable: true },
       });
       expect(columns("FriendRequest")).toEqual({
         id: { type: "bigserial", nullable: false },

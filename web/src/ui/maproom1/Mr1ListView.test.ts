@@ -81,3 +81,21 @@ describe("Mr1ListView's sort", () => {
     expect(toggle.dataset["direction"]).toBe("desc");
   });
 });
+
+describe("Mr1ListView's friend marker (beta 7)", () => {
+  it("marks friends and pinned friends, and nobody else", () => {
+    const [first, second, ...rest] = world.neighbours;
+    const marked = {
+      ...world,
+      neighbours: [{ ...first!, friend: true }, { ...second!, friend: true, pinned: true }, ...rest],
+    };
+    const view = new Mr1ListView({ onSelect: vi.fn() });
+    view.setData(marked, NOW);
+    const rowOf = (key: string) => view.element.querySelector(`.mr1-row[data-key="${key}"]`);
+    expect(rowOf(first!.key)?.querySelector(".friend-badge")?.getAttribute("data-friend")).toBe("friend");
+    expect(rowOf(first!.key)?.getAttribute("aria-label")).toContain("friend");
+    expect(rowOf(second!.key)?.querySelector(".friend-badge")?.getAttribute("data-friend")).toBe("pinned");
+    expect(rowOf(second!.key)?.classList.contains("mr1-row--pinned")).toBe(true);
+    expect(view.element.querySelectorAll(".friend-badge")).toHaveLength(2);
+  });
+});

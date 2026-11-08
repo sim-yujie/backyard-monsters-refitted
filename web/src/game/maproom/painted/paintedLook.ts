@@ -10,6 +10,7 @@ import { CloudLayer as Clouds, cloudProgram } from "./CloudLayer";
 import { groundProgram, PaintedGround } from "./PaintedGround";
 import { pixiProgramHost, rememberAnisotropy } from "./pixiPrograms";
 import { ProgramWarmer } from "./shaderWarmup";
+import { EXPECT_MS, type NeededProgram } from "../prepareProgress";
 import { quality, type Quality } from "@/game/quality";
 
 export { BorderLayer } from "./BorderLayer";
@@ -32,7 +33,7 @@ export interface PaintedPrograms {
  */
 const WARMERS = new WeakMap<Renderer, ProgramWarmer>();
 
-const warmerFor = (renderer: Renderer, gl: WebGL2RenderingContext): ProgramWarmer => {
+export const warmerFor = (renderer: Renderer, gl: WebGL2RenderingContext): ProgramWarmer => {
   let warmer = WARMERS.get(renderer);
   if (!warmer) {
     // Without background compile (Firefox), Pixi's texture setup must not wait for a compile.
@@ -71,6 +72,25 @@ export const preparePrograms = async (renderer: Renderer, gl: WebGL2RenderingCon
 export const warmRest = (warmer: ProgramWarmer, loaded: Promise<unknown>): void => {
   warmer.hold(loaded);
   void warmer.warmAll([...PaintedGround.placementPrograms(), groundProgram(quality())]);
+};
+
+/**
+ * Every program the full look needs at this Quality, for the "Preparing map" bar
+ * (`prepareProgress.ts`): the borders, the fog, the sprite placements and the player's own ground,
+ * plus the Low ground first where {@link preparePrograms} starts with it (the player's own one is
+ * neither ready nor already compiling one at a time).
+ */
+export const fullLookPrograms = (warmer: ProgramWarmer, level: Quality = quality()): NeededProgram[] => {
+  const own = groundProgram(level);
+  const lowFirst = level !== "low" && !warmer.ready(own) && !(warmer.serial && warmer.compiling(own));
+  const small = (key: string, source: NeededProgram["source"]): NeededProgram => ({ key, source, expectMs: EXPECT_MS.small });
+  return [
+    ...(lowFirst ? [{ key: "ground-low", source: groundProgram("low"), expectMs: EXPECT_MS.ground.low }] : []),
+    small("borders", borderProgram()),
+    small("clouds", cloudProgram()),
+    ...PaintedGround.placementPrograms().map((program, index) => small(`place-${index}`, program)),
+    { key: `ground-${level}`, source: own, expectMs: EXPECT_MS.ground[level] },
+  ];
 };
 
 /* ── Ahead of the map (MR2 open speed, 7 Nov 2026) ─────────────────────── */

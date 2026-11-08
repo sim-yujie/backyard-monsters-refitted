@@ -102,3 +102,31 @@ describe("a tap that opens nothing", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 });
+
+describe("while the Preparing map screen covers the map", () => {
+  it("ignores the map's keys (zoom, Escape), and takes them again once it has gone", () => {
+    const canvas = document.createElement("canvas");
+    document.body.append(canvas);
+    const onZoomStep = vi.fn();
+    const onCancel = vi.fn();
+    let covered = true;
+    input = new MapInput({
+      camera: { screenToWorld: () => inside } as unknown as Camera,
+      canvas,
+      onHover: () => {},
+      onSelect: () => {},
+      onZoomToCell: () => {},
+      onZoomStep,
+      onCancel,
+      blocked: () => covered,
+    });
+    input.attach();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "+" }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(onZoomStep).not.toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
+    covered = false;
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "+" }));
+    expect(onZoomStep).toHaveBeenCalledWith(1);
+  });
+});

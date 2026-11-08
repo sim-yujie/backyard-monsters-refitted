@@ -966,8 +966,13 @@ export interface PlayerCell {
   pe?: number;
   /** Truce expiry, unix seconds. Absent on the caller's own cell. */
   t?: number;
-  /** 1 when this base's owner has ever attacked the caller (the map's red plate). */
+  /** 1 when this base's owner has ever attacked the caller. */
   ak?: 1;
+  /**
+   * 1 when the owner is HOSTILE to the caller (owner, 8 Nov 2026): at least one attack between
+   * them, either way, ever, and no truce running. Map Room 2's red dashed border and red plate.
+   */
+  ho?: 1;
   /** 1 when the cell belongs to the caller. */
   mine: 0 | 1;
   pic_square: string | null;
@@ -976,8 +981,10 @@ export interface PlayerCell {
    * still waiting for its answer (#205; Flash's `_invitePendingID`), else 0.
    */
   pi: number;
-  /** Always 0. */
+  /** 1 when the owner is the caller's friend (beta 7), else 0. */
   fr: number;
+  /** 1 when that friend is pinned to the top of the caller's Friends list (beta 7); absent otherwise. */
+  fp?: 1;
   /** 1 on the caller's own outpost whose worker is free (#338); absent otherwise. */
   wi?: 1;
   /** 1 on the caller's own outpost whose worker is building, upgrading or fortifying; absent otherwise. */

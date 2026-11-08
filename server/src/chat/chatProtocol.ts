@@ -26,6 +26,8 @@ export enum ServerMessageType {
   Kicked = "kicked",
   /** The game team left this player a warning or a mute: the game fetches it to show. */
   Notice = "notice",
+  /** New mail arrived for this player: the game fetches it (`/player/mailstatus`) to show. */
+  Mail = "mail",
 }
 
 export enum ErrorCode {
@@ -87,7 +89,8 @@ export type ServerMessage =
   | { type: ServerMessageType.Error; code: Exclude<ErrorCode, ErrorCode.Muted> }
   | { type: ServerMessageType.Error; code: ErrorCode.Muted; until: number }
   | { type: ServerMessageType.Kicked; reason: "banned"; until: number | null; text: string; banReason: string }
-  | { type: ServerMessageType.Notice };
+  | { type: ServerMessageType.Notice }
+  | { type: ServerMessageType.Mail };
 
 interface Sender { send(data: string): void; }
 

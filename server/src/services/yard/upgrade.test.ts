@@ -276,6 +276,24 @@ describe("upgrade", () => {
     expect(reasonOf(() => planUpgradeAction(save, 1, NOW))).toEqual([409, "busy"]);
   });
 
+  test("a Monster Locker unlocking a monster is refused in the original's words", () => {
+    // Locker (8) L1 to L2 at Town Hall 4.
+    const save = yard();
+    save.buildingdata!["0"] = { ...save.buildingdata!["0"]!, l: 4 };
+    save.buildingdata!["4"] = { id: 4, t: LOCKER, x: 0, y: 0, l: 1 };
+    save.lockerdata = { C1: { t: 2 }, C2: { t: 1, s: NOW - 60, e: NOW + 3600 } };
+
+    const err = refusal(() => planUpgradeAction(save, 4, NOW));
+    expect(err.status).toBe(409);
+    expect(err.data).toEqual({ reason: "unlocking", monster: "C2" });
+    expect(err.message).toContain("Building is unlocking the");
+    expect(err.message).toContain("cancel it before you can upgrade");
+
+    // Once the unlock is done, the same Locker upgrades.
+    save.lockerdata = { C1: { t: 2 }, C2: { t: 2 } };
+    expect(planUpgradeAction(save, 4, NOW).report).toMatchObject({ id: 4, from: 1, to: 2 });
+  });
+
   test("an Academy training a monster is refused in the original's words (#145)", () => {
     // Academy (26) L1 to L2 needs Town Hall 4 and a level 3 Monster Locker.
     const save = yard();

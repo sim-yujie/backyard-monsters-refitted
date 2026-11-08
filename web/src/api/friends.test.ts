@@ -70,6 +70,7 @@ describe("friendsApi reads", () => {
           giftSentToday: true,
           canGiftFrom: null,
           help: null,
+          pinnedAt: "2026-11-01T08:00:00.000Z",
         },
         { userid: "9", online: "sometimes", help: { speedup: true, repair: 0 } },
       ],
@@ -88,7 +89,9 @@ describe("friendsApi reads", () => {
       giftSentToday: true,
       canGiftFrom: null,
       help: null,
+      pinnedAt: Math.floor(Date.parse("2026-11-01T08:00:00.000Z") / 1000),
     });
+    expect(list.maxPinned).toBe(10);
     // A row with missing or odd fields still draws.
     expect(list.friends[1]).toMatchObject({
       userid: 9,
@@ -98,6 +101,7 @@ describe("friendsApi reads", () => {
       online: null,
       giftSentToday: false,
       help: { speedup: true, repair: false },
+      pinnedAt: null,
     });
   });
 

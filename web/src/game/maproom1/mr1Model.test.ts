@@ -392,4 +392,15 @@ describe("a neighbour's friend flag (friends WP11, #378)", () => {
     expect(world.neighbours.find((one) => one.userid === first!.userid)?.friend).toBe(true);
     expect(world.neighbours.find((one) => one.userid === second!.userid)?.friend).toBe(false);
   });
+
+  it("reads friendpinned: 1 as a pinned friend (beta 7)", () => {
+    const wire = mapRoom1Fixture(NOW);
+    const [first, second] = wire.neighbours!;
+    const world = readMapRoom1(
+      { ...wire, neighbours: [{ ...first!, friend: 1, friendpinned: 1 }, { ...second!, friend: 1 }] },
+      NOW,
+    );
+    expect(world.neighbours.find((one) => one.userid === first!.userid)?.pinned).toBe(true);
+    expect(world.neighbours.find((one) => one.userid === second!.userid)?.pinned).toBe(false);
+  });
 });

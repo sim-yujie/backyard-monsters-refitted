@@ -4,6 +4,7 @@ import type { HistoryEntry } from "../../chat/chatProtocol.js";
 import { chatReportAward, isAdminUser } from "../../config/AdminConfig.js";
 import { logger } from "../../utils/logger.js";
 import type { FlagSeverity } from "../chat/chatFlags.js";
+import { dismissChatFlags } from "./chatWatchAdmin.js";
 import { MAX_MODERATION_REASON, MAX_MUTE_HOURS, moderate, type ModerationEffects } from "./moderation.js";
 import { MAX_AWARD_REASON, MAX_SHINY_AWARD, giveShiny } from "./shinyAwards.js";
 
@@ -42,7 +43,8 @@ export const DEFAULT_AWARD_REASON = "Thank you for reporting a chat message that
 export const CASE_MUTE_HOURS: readonly number[] = [1, 24, 72, 168];
 
 export type CaseStatus = "open" | "actioned" | "dismissed";
-export type CaseOutcome = "warn" | "mute" | "dismiss";
+/** `ban`: closed by a ban from the inbox or the player panel (`moderationInbox.ts`). */
+export type CaseOutcome = "warn" | "mute" | "ban" | "dismiss";
 
 /** One chat line in a case's copy of the room. */
 export interface SnapshotLine {
@@ -674,7 +676,9 @@ export const actOnCase = async (
     }
     await em.execute(`UPDATE bym.chat_case SET moderation_action_id = ? WHERE id = ?`, [done.actionId, caseId]);
   }
-  logger.info(`Dashboard: chat case ${caseId} closed (${action.kind}) by ${adminId}`);
+  // One decision closes everything open against the player: their word-filter lines too.
+  const filterLines = await dismissChatFlags(em, Number(claimed.reported_id), Number.MAX_SAFE_INTEGER, adminId, now);
+  logger.info(`Dashboard: chat case ${caseId} closed (${action.kind}) by ${adminId}, ${filterLines} filter lines set aside`);
   await completeSnapshots(em, [caseId], now);
   return { outcome: "done", case: (await getChatCase(em, caseId, now))! };
 };
