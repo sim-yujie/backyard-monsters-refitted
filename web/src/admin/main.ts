@@ -33,9 +33,9 @@ import { topItems, verdict, type TopItem } from "./problems";
 import {
   mark,
   renderActivity,
-  renderBackups,
   renderHealth,
   renderPlayers,
+  type ErrorReading,
   type Level,
 } from "./sections";
 import { QueueView } from "./queue";
@@ -81,8 +81,11 @@ import {
  * health when something there needs a look).
  */
 
-/** Views whose tab shows the server's health marks. */
-const HEALTH_MARK_VIEWS: ReadonlySet<ViewId> = new Set<ViewId>(["health", "backups", "errors"]);
+/**
+ * The server's problem sections, all on the one Server health page since
+ * dash-v2c (8 Nov 2026): its mark is the worst of them.
+ */
+const HEALTH_SECTIONS = ["health", "backups", "errors"] as const;
 
 /** Views with a list and an opened item side by side: they get a wider page. */
 const WIDE_VIEWS: ReadonlySet<ViewId> = new Set<ViewId>(["moderation", "bugs"]);
@@ -203,7 +206,23 @@ class Dashboard {
     say: (message) => this.say(message),
   });
   private readonly announcements = new AnnouncementsView({ say: (message) => this.say(message) });
-  private readonly errors = new ErrorsView((message) => this.say(message));
+  private readonly errors = new ErrorsView(
+    (message) => this.say(message),
+    (totals) => {
+      this.errorReading = { totals, at: new Date().toISOString() };
+      this.renderServer();
+    },
+  );
+  /** The last health report and error totals, for the Server health page. */
+  private report: AdminHealthReport | null = null;
+  private errorReading: ErrorReading | null = null;
+  /** The error list, below Server health's cards. */
+  private readonly errorsBox = h(
+    "section",
+    { class: "panel server-errors", attrs: { id: "health-errors", "aria-labelledby": "health-errors-title" } },
+    h("h2", { class: "section-title", attrs: { id: "health-errors-title" } }, "Recorded errors"),
+    this.errors.element,
+  );
   private readonly sections: Record<SectionId, Section>;
   private readonly home: HTMLElement;
   private readonly nav: HTMLElement;
@@ -332,8 +351,6 @@ class Dashboard {
       players: section("players", rangeButtons),
       activity: section("activity"),
       health: section("health"),
-      errors: section("errors"),
-      backups: section("backups"),
     };
     replace(this.sections.moderation.body, this.queue.element);
     replace(this.sections.find.body, this.moderation.element);
@@ -344,7 +361,7 @@ class Dashboard {
     replace(this.sections.chat.body, this.chat.element);
     replace(this.sections.shiny.body, this.shiny.element);
     replace(this.sections.announcements.body, this.announcements.element);
-    replace(this.sections.errors.body, this.errors.element);
+    replace(this.sections.health.body, this.errorsBox);
 
     this.home = h(
       "section",
@@ -595,9 +612,15 @@ class Dashboard {
     }
     this.signedOut = false;
     this.renderVerdict(report);
-    replace(this.sections.health.body, ...renderHealth(report));
-    replace(this.sections.backups.body, ...renderBackups(report));
+    this.report = report;
+    this.renderServer();
     this.updated.textContent = `Checked ${dateTime(report.health.generatedAt).split(" ").pop()}`;
+  }
+
+  /** Server health's cards, from the last report and error totals; the error list stays below. */
+  private renderServer(): void {
+    if (!this.report) return;
+    replace(this.sections.health.body, ...renderHealth(this.report, this.errorReading), this.errorsBox);
   }
 
   /**
@@ -675,7 +698,13 @@ class Dashboard {
     for (const [id] of VIEWS) {
       if (id === "home" || id === "moderation") continue;
       const { state } = this.sections[id];
-      const level = HEALTH_MARK_VIEWS.has(id) ? levels[id] : undefined;
+      const level =
+        id === "health"
+          ? HEALTH_SECTIONS.map((s) => levels[s as ViewId]).reduce<Level | undefined>(
+              (worst, l) => (worst === "bad" || l === undefined ? worst : l === "bad" || !worst ? l : worst),
+              undefined,
+            )
+          : undefined;
       if (level && server !== "bad") server = level;
       if (id === "bugs" && this.newBugs) {
         const text = this.newBugs >= 30 ? "30+" : String(this.newBugs);
@@ -790,7 +819,7 @@ class Dashboard {
       if (steps.open) this.openFixes?.add(item.key);
       else this.openFixes?.delete(item.key);
     });
-    const sectionName = isView(item.section) ? viewLabel(item.section) : "Server";
+    const sectionName = isView(item.section) ? viewLabel(item.section) : "Server health";
     return h(
       "li",
       { class: `issue issue-${item.level}` },

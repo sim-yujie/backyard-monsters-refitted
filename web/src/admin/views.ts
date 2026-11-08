@@ -8,7 +8,7 @@ import type { IconName } from "./icons";
  * address names the view, so a view can be linked and the browser's Back goes
  * to the view before:
  *
- * - `#errors`: a view.
+ * - `#chat`: a view.
  * - `#bugs?list=working`: a view with what it should show.
  * - `#support`: a page, shown at its first view.
  * - `?bug=12` (a Telegram alert's link, kept from before): the bug report, in
@@ -31,7 +31,7 @@ export const PAGES = [
   ["support", "Player support", "support", "Help players with bugs, gifts and conversations."],
   ["announcements", "Announcements", "announce", "Write a message for players and see how it will look in the game."],
   ["activity", "Game activity", "chart", "Player numbers and gameplay in one place."],
-  ["server", "Server health", "server", "Game services, backups and errors."],
+  ["server", "Server health", "server", "Game server, database, disk, backups and errors, each with when it was last checked."],
 ] as const satisfies readonly (readonly [string, string, IconName, string])[];
 
 export type PageId = (typeof PAGES)[number][0];
@@ -50,9 +50,7 @@ export const VIEWS = [
   ["announcements", "Announcements", "announcements"],
   ["players", "Players", "activity"],
   ["activity", "Gameplay", "activity"],
-  ["health", "Server", "server"],
-  ["errors", "Errors", "server"],
-  ["backups", "Backups", "server"],
+  ["health", "Server health", "server"],
 ] as const satisfies readonly (readonly [string, string, PageId])[];
 
 export type ViewId = (typeof VIEWS)[number][0];
@@ -63,6 +61,10 @@ const ALIASES: Readonly<Record<string, ViewId>> = {
   cases: "moderation",
   support: "bugs",
   server: "health",
+  // Server health is one page since dash-v2c (8 Nov 2026); its old tabs'
+  // addresses (Telegram alerts, the problems box) land on it.
+  errors: "health",
+  backups: "health",
 };
 
 export const isView = (name: string): name is ViewId => VIEWS.some(([id]) => id === name);

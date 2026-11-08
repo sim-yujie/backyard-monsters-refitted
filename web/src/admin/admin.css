@@ -5081,3 +5081,113 @@ tbody th {
     grid-template-columns: 360px minmax(0, 1fr);
   }
 }
+
+/* ---- Server health: one page of six cards (dash-v2c, astra's mock-up) ---- */
+
+.server-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.server-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px;
+}
+
+.server-card.is-warn {
+  border-color: color-mix(in oklch, var(--warn) 50%, var(--line));
+}
+
+.server-card.is-bad {
+  border-color: color-mix(in oklch, var(--bad) 50%, var(--line));
+}
+
+.server-card-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.server-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+}
+
+.server-card h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.server-card p {
+  margin: 6px 0 0;
+  color: var(--ink-2);
+  font-size: 0.8125rem;
+}
+
+.server-card .last-checked {
+  margin-top: 16px;
+  color: var(--ink-3);
+  font-size: 0.75rem;
+}
+
+.server-card .meter {
+  max-width: none;
+  height: 7px;
+  margin-top: 12px;
+}
+
+.server-card .button {
+  margin-top: 16px;
+}
+
+.status-dot {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+
+.status-dot.dot-ok {
+  background: var(--good-soft);
+  color: var(--good-text);
+}
+
+.status-dot.dot-warn {
+  background: var(--warn-soft);
+  color: var(--warn-text);
+}
+
+.status-dot.dot-bad {
+  background: var(--bad-soft);
+  color: var(--bad-text);
+}
+
+.server-more,
+.server-errors {
+  margin-top: 20px;
+}
+
+.server-more .slist + .slist {
+  margin-top: 8px;
+}
+
+@media (max-width: 719px) {
+  .server-card .button {
+    width: 100%;
+  }
+}
+
+@media (min-width: 720px) {
+  .server-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

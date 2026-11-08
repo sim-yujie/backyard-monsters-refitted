@@ -205,10 +205,10 @@ describe("the owner's first look", () => {
     expect(current()).toBe("home");
     location.hash = "#errors";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
-    expect(shown()).toEqual(["errors"]);
-    // Errors is part of Server health: that page is marked in the menu, Errors among its tabs.
+    // Server health is one page: the old Errors tab's address (Telegram alerts) lands on it, with no tabs.
+    expect(shown()).toEqual(["health"]);
     expect(current()).toBe("server");
-    expect(document.querySelector("#errors .subnav a[aria-current]")?.textContent).toContain("Errors");
+    expect(document.querySelector("#health .subnav")).toBeNull();
     // On a phone, Menu opens the six pages; picking one closes it.
     const menu = document.querySelector<HTMLButtonElement>(".menu-toggle")!;
     menu.click();
@@ -225,6 +225,41 @@ describe("the owner's first look", () => {
     expect(shown()).toEqual(["moderation"]);
     expect(current()).toBe("moderation");
     location.hash = "";
+  });
+
+  it("shows Server health as one page of six cards, each with when it was last checked, and the error list below", async () => {
+    await boot();
+    await settle();
+    const page = document.getElementById("health")!;
+    const cards = [...page.querySelectorAll<HTMLElement>(".server-card")];
+    expect(cards.map((c) => c.querySelector("h2")?.textContent)).toEqual([
+      "Game server",
+      "Database",
+      "Disk",
+      "Backups",
+      "Recorded errors",
+      "Machine health report",
+    ]);
+    for (const card of cards) expect(card.querySelector(".last-checked")?.textContent).toMatch(/^Last checked \d+ \w+ \d\d:\d\d$/);
+    const card = (id: string) => page.querySelector<HTMLElement>(`.server-card[data-card='${id}']`)!;
+    expect(card("server").querySelector(".badge")?.textContent).toBe("Running");
+    expect(card("database").textContent).toContain("Game data can be read and saved.");
+    // 86% full is worth a look; a backup 31 hours old is overdue.
+    expect(card("disk").querySelector(".badge")?.textContent).toBe("86% used");
+    expect(card("disk").classList.contains("is-warn")).toBe(true);
+    expect(card("backups").querySelector(".badge")?.textContent).toBe("Overdue");
+    expect(card("backups").classList.contains("is-bad")).toBe(true);
+    expect(card("backups").textContent).toContain("1 half-written file");
+    // The error totals come from the list's own answer (311 in browsers + 16 on the server).
+    expect(card("errors").querySelector(".badge")?.textContent).toBe("327 recorded");
+    expect(card("errors").textContent).toContain("311 in players' browsers, 16 on the game server");
+    expect(card("machine").querySelector(".badge")?.textContent).toBe("Received");
+    // The server's parts, Telegram and the error list stay on the page.
+    expect(page.textContent).toContain("The server's parts");
+    expect(page.textContent).toContain("Telegram alerts");
+    expect(page.querySelector("#health-errors .errors")).not.toBeNull();
+    // The menu marks Server health with its worst problem (the missed backup).
+    expect(document.querySelector(".nav a[data-page='server'] .mark-bad")).not.toBeNull();
   });
 
   it("keeps what was typed in a view while another is on show", async () => {

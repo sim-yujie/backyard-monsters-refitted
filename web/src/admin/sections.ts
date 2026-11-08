@@ -1,4 +1,4 @@
-import type { AdminHealthReport, Container, DailyStat, Disk, LookTotals, StatsOverview } from "./api";
+import type { AdminHealthReport, Container, DailyStat, Disk, ErrorTotals, LookTotals, StatsOverview } from "./api";
 import { chart, type ChartOptions, type ChartPoint } from "./charts";
 import { h, type Child } from "./dom";
 import {
@@ -151,124 +151,321 @@ const containerWords = (c: Container): { value: string; sub: string } => {
   };
 };
 
-export const renderHealth = (report: AdminHealthReport, now: number = Date.now()): Child[] => {
+/** The error list's totals and when they were read (the Recorded errors card). */
+export interface ErrorReading {
+  totals: ErrorTotals;
+  at: string;
+}
+
+/** A card's state: as {@link Level}, or "none" while its reading is on the way. */
+type CardLevel = Level | "none";
+
+const CARD_BADGE: Record<CardLevel, string> = { ok: "green", warn: "amber", bad: "red", none: "" };
+
+const STALE_NOTE = "This is the last known reading: the machine health report has stopped.";
+
+/**
+ * One card of the Server health page (astra's mock-up): a status dot, the
+ * part's name, its state in a word or two, a line of what that means, what
+ * else is known, and when it was last checked. `checked` null: no reading.
+ */
+export const serverCard = (card: {
+  id: string;
+  title: string;
+  level: CardLevel;
+  status: string;
+  detail: Child;
+  extra?: Child[];
+  checked: string | null;
+}): HTMLElement =>
+  h(
+    "section",
+    {
+      class: `panel server-card is-${card.level}`,
+      attrs: { "data-card": card.id, "aria-labelledby": `card-${card.id}` },
+    },
+    h(
+      "span",
+      { class: `status-dot dot-${card.level}`, attrs: { "aria-hidden": "true" } },
+      card.level === "none" ? icon("clock", 16) : icon(card.level, 16),
+    ),
+    h(
+      "div",
+      { class: "server-card-text" },
+      h(
+        "div",
+        { class: "server-card-head" },
+        h("h2", { attrs: { id: `card-${card.id}` } }, card.title),
+        h("span", { class: `badge ${CARD_BADGE[card.level]}`.trim() }, card.status),
+      ),
+      h("p", {}, card.detail),
+      ...(card.extra ?? []),
+      h(
+        "p",
+        { class: "last-checked" },
+        card.checked ? `Last checked ${dateTime(card.checked)}` : "No reading yet",
+      ),
+    ),
+  );
+
+const worse = (a: Level, b: Level): Level =>
+  a === "bad" || b === "bad" ? "bad" : a === "warn" || b === "warn" ? "warn" : "ok";
+
+const gameServerCard = (report: AdminHealthReport): HTMLElement => {
+  const { server, redis, responseTimes: rt, generatedAt } = report.health;
+  const release = server.version.release;
+  const slow = rt.p50Ms !== null && rt.p50Ms > 500;
+  const level = worse(rt.serverErrors > 0 || slow ? "warn" : "ok", redis.ok ? "ok" : "bad");
+  return serverCard({
+    id: "server",
+    title: "Game server",
+    level,
+    status: redis.ok ? "Running" : "Partly down",
+    detail:
+      rt.requests === 0
+        ? `Players can connect. Nothing was asked in the last ${rt.windowMinutes} minutes.`
+        : `Players can connect. Typical answer time is ${ms(rt.p50Ms)}${slow ? ", which is slow" : ""}.`,
+    extra: [
+      h(
+        "p",
+        {},
+        `Up for ${longDuration(server.uptimeSeconds)} · ${release ? `version ${release}` : "test copy, not a release"} · ${plural(rt.serverErrors, "failed request")} in the last ${rt.windowMinutes} minutes.`,
+      ),
+      h(
+        "p",
+        {},
+        redis.ok
+          ? "Sign-in and chat store: working."
+          : "Sign-in and chat store: not answering. Players cannot sign in and chat is down.",
+      ),
+    ],
+    checked: generatedAt,
+  });
+};
+
+const databaseCard = (report: AdminHealthReport): HTMLElement => {
+  const { database, generatedAt } = report.health;
+  return serverCard({
+    id: "database",
+    title: "Database",
+    level: database.ok ? "ok" : "bad",
+    status: database.ok ? "Available" : "Not answering",
+    detail: database.ok ? "Game data can be read and saved." : "Players cannot load or save their yards.",
+    extra: database.ok
+      ? [h("p", {}, `${bytes(database.sizeBytes)} stored · answers in ${ms(database.pingMs)}.`)]
+      : [],
+    checked: generatedAt,
+  });
+};
+
+const diskCard = (report: AdminHealthReport): HTMLElement => {
+  const { disks, disksFrom, host, generatedAt } = report.health;
+  if (!disks.length)
+    return serverCard({
+      id: "disk",
+      title: "Disk",
+      level: "warn",
+      status: "Not known",
+      detail: host
+        ? "The machine health report did not include disk space."
+        : "Disk space comes from the machine health report, which is missing.",
+      checked: null,
+    });
+  const fromHost = disksFrom === "host";
+  const stale = fromHost && Boolean(host?.stale);
+  const fullest = disks.reduce((a, b) => ((b.usedPercent ?? -1) > (a.usedPercent ?? -1) ? b : a));
+  const level = worse(diskLevel(fullest), stale ? "warn" : "ok");
+  const lines = disks.map((disk) =>
+    h(
+      "div",
+      { class: "disk-line" },
+      disks.length > 1 ? h("p", {}, `${disk.mount || disk.path}: ${percent(disk.usedPercent)} used`) : null,
+      meter(disk.usedPercent, diskLevel(disk)),
+    ),
+  );
+  return serverCard({
+    id: "disk",
+    title: "Disk",
+    level,
+    status: `${percent(fullest.usedPercent)} used`,
+    detail: `${bytes(fullest.availableBytes)} free of ${bytes(fullest.totalBytes)}.${stale ? ` ${STALE_NOTE}` : ""}`,
+    extra: [
+      ...lines,
+      h(
+        "p",
+        {},
+        fromHost ? "Read by the machine health report." : "Seen from inside the game server, so only the logs disk.",
+      ),
+    ],
+    checked: fromHost ? (host?.generatedAt ?? null) : generatedAt,
+  });
+};
+
+const backupsCard = (report: AdminHealthReport, now: number): HTMLElement => {
+  const { backups, host } = report.health;
+  if (!backups)
+    return serverCard({
+      id: "backups",
+      title: "Backups",
+      level: "warn",
+      status: "Not known",
+      detail: "Only the machine health report can see the backups, and it is missing.",
+      checked: null,
+    });
+  const newest = backups.newest;
+  const level = worse(backupLevel(newest?.ageHours ?? null, Boolean(newest)), host?.stale ? "warn" : "ok");
+  const status = !newest ? "None found" : level === "ok" ? "Up to date" : level === "warn" ? "Late" : "Overdue";
+  return serverCard({
+    id: "backups",
+    title: "Backups",
+    level,
+    status,
+    detail: newest?.at
+      ? `Last backup ${ago(newest.at, now)}, ${dateTime(newest.at)} (${bytes(newest.sizeBytes)}). A fresh copy is made every night; one counts as missed after 24 hours.${host?.stale ? ` ${STALE_NOTE}` : ""}`
+      : "No backup file was found.",
+    extra: [
+      h("p", {}, `Next backup ${nextBackup(now).toLowerCase()}, by itself.`),
+      h("p", {}, `${plural(backups.count, "backup")} kept, ${bytes(backups.totalBytes)} in all; each is kept for 14 days.`),
+      backups.partialCount
+        ? h(
+            "p",
+            {},
+            `${plural(backups.partialCount, "half-written file")} left by a backup that was cut short; harmless once a newer backup has finished.`,
+          )
+        : null,
+    ],
+    checked: host?.generatedAt ?? null,
+  });
+};
+
+const errorsCard = (report: AdminHealthReport, errors: ErrorReading | null): HTMLElement => {
+  if (!errors)
+    return serverCard({
+      id: "errors",
+      title: "Recorded errors",
+      level: "none",
+      status: "Checking",
+      detail: "The error list is loading.",
+      checked: null,
+    });
+  const { browser, server } = errors.totals;
+  const total = browser.occurrences + server.occurrences;
+  const flagged = report.problems.some((p) => p.section === "errors");
+  return serverCard({
+    id: "errors",
+    title: "Recorded errors",
+    level: flagged ? "warn" : "ok",
+    status: `${count(total)} recorded`,
+    detail:
+      total === 0
+        ? "No errors in the list. An error stays there until 30 days after it last happens."
+        : `${plural(browser.kinds + server.kinds, "kind")} of error, ${plural(total, "time")} in all: ${count(browser.occurrences)} in players' browsers, ${count(server.occurrences)} on the game server. An error stays in the list until 30 days after it last happens.`,
+    extra: [
+      h("p", {}, "Browser and game server errors are recorded. This does not rule out problems nobody's game reported."),
+      total
+        ? h(
+            "button",
+            {
+              class: "button quiet",
+              attrs: { type: "button" },
+              onClick: () => document.getElementById("health-errors")?.scrollIntoView({ block: "start" }),
+            },
+            "See the list",
+          )
+        : null,
+    ],
+    checked: errors.at,
+  });
+};
+
+const machineCard = (report: AdminHealthReport, now: number): HTMLElement => {
+  const { host } = report.health;
+  if (!host)
+    return serverCard({
+      id: "machine",
+      title: "Machine health report",
+      level: "bad",
+      status: "Missing",
+      detail: "Without it this page cannot see disk space, backups or the server's parts.",
+      checked: null,
+    });
+  return serverCard({
+    id: "machine",
+    title: "Machine health report",
+    level: host.stale ? "bad" : "ok",
+    status: host.stale ? "Stopped" : "Received",
+    detail: host.stale
+      ? `The last one came ${ago(host.generatedAt, now)}. Disk, backup and memory numbers here are last known readings.`
+      : "Disk, backup and memory readings are available.",
+    extra: [
+      h("p", {}, `Machine memory: ${bytes(host.memory.availableBytes)} free of ${bytes(host.memory.totalBytes)}.`),
+      host.uptimeSeconds === null ? null : h("p", {}, `Machine up for ${longDuration(host.uptimeSeconds)}.`),
+    ],
+    checked: host.generatedAt,
+  });
+};
+
+/**
+ * The Server health page (astra's mock-up): six cards, game server,
+ * database, disk, backups, recorded errors and the machine health report,
+ * each with when it was last checked; then alerts not yet fixed, the
+ * server's parts and Telegram, and the numbers only an engineer needs. The
+ * error list itself follows on the page (main.ts).
+ */
+export const renderHealth = (
+  report: AdminHealthReport,
+  errors: ErrorReading | null = null,
+  now: number = Date.now(),
+): Child[] => {
   const { health } = report;
   const { server, database, redis, responseTimes, host } = health;
   const memory = server.memory;
   const release = server.version.release;
 
-  const slow = responseTimes.p50Ms !== null && responseTimes.p50Ms > 500;
-  const speedLevel: Level = responseTimes.serverErrors > 0 || slow ? "warn" : "ok";
-  const speed =
-    responseTimes.requests === 0
-      ? "No requests yet"
-      : slow
-        ? `Slow: ${ms(responseTimes.p50Ms)}`
-        : `Quick: ${ms(responseTimes.p50Ms)}`;
-
-  const disks = health.disks.map((disk) => {
-    const level = diskLevel(disk);
-    return statusRow(
-      level,
-      health.disks.length > 1 ? `Disk space (${disk.mount || disk.path})` : "Disk space",
-      `${percent(disk.usedPercent)} full`,
-      `${bytes(disk.availableBytes)} left of ${bytes(disk.totalBytes)}`,
-      meter(disk.usedPercent, level),
-    );
-  });
-
-  const machine = host
-    ? [
-        host.stale
-          ? statusRow(
-              "bad",
-              "Machine health report",
-              "Stopped",
-              `Last sent ${ago(host.generatedAt, now)}, so the numbers below may be old`,
-            )
-          : null,
-        statusRow(
-          "ok",
-          "Machine memory",
-          `${bytes(host.memory.availableBytes)} free`,
-          `of ${bytes(host.memory.totalBytes)}`,
-        ),
-      ]
-    : [
-        statusRow(
-          "bad",
-          "Machine health report",
-          "Missing",
-          "This page cannot see disk space, backups or the server's parts",
-        ),
-      ];
-
-  const main = statusList(
-    statusRow(
-      "ok",
-      "Game server",
-      "Running",
-      `For ${longDuration(server.uptimeSeconds)} · ${release ? `version ${release}` : "test copy, not a release"}`,
-    ),
-    statusRow(
-      speedLevel,
-      "Speed",
-      speed,
-      responseTimes.requests === 0
-        ? `Nothing asked in the last ${responseTimes.windowMinutes} minutes`
-        : `Typical answer time; ${plural(responseTimes.requests, "request")} in the last ${responseTimes.windowMinutes} minutes, ${count(responseTimes.serverErrors)} failed`,
-    ),
-    statusRow(
-      database.ok ? "ok" : "bad",
-      "Database",
-      database.ok ? "Working" : "Not answering",
-      database.ok ? `Holds ${bytes(database.sizeBytes)} of game data` : "Players cannot load or save",
-    ),
-    statusRow(
-      redis.ok ? "ok" : "bad",
-      "Sign-in and chat store",
-      redis.ok ? "Working" : "Not answering",
-      redis.ok ? "Keeps players signed in and carries chat" : "Players cannot sign in; chat is down",
-    ),
-    ...disks,
-    ...machine,
-    statusRow(
-      report.telegram ? "ok" : "warn",
-      "Telegram alerts",
-      report.telegram ? "On" : "Off",
-      report.telegram ? "Problems are sent to your phone" : "Problems are only shown here",
-    ),
+  const grid = h(
+    "div",
+    { class: "server-grid" },
+    gameServerCard(report),
+    databaseCard(report),
+    diskCard(report),
+    backupsCard(report, now),
+    errorsCard(report, errors),
+    machineCard(report, now),
   );
 
   const open = Object.values(report.openAlerts);
   const alerts = open.length
     ? h(
-        "div",
-        { class: "group" },
-        h("h3", {}, "Alerts sent, not yet fixed"),
+        "section",
+        { class: "panel server-more" },
+        h("h2", { class: "section-title" }, "Alerts sent, not yet fixed"),
         statusList(
           ...open.map((alert) =>
-            statusRow("bad", alert.title, ago(new Date(alert.since).toISOString(), now), `Since ${dateTime(new Date(alert.since).toISOString())}`),
+            statusRow(
+              "bad",
+              alert.title,
+              ago(new Date(alert.since).toISOString(), now),
+              `Since ${dateTime(new Date(alert.since).toISOString())}`,
+            ),
           ),
         ),
       )
     : null;
 
   const parts = host?.containers?.length
-    ? h(
-        "div",
-        { class: "group" },
-        h("h3", {}, "The server's parts"),
-        statusList(
-          ...host.containers.map((c) => {
-            const words = containerWords(c);
-            return statusRow(containerLevel(c), serviceName(c.service), words.value, words.sub);
-          }),
-        ),
+    ? statusList(
+        ...host.containers.map((c) => {
+          const words = containerWords(c);
+          return statusRow(containerLevel(c), serviceName(c.service), words.value, words.sub);
+        }),
       )
-    : host
-      ? h("p", { class: "note" }, "The machine could not say which parts are running.")
-      : null;
+    : h(
+        "p",
+        { class: "note" },
+        host
+          ? "The machine could not say which parts are running."
+          : "The machine health report is missing, so the parts cannot be listed.",
+      );
 
   const details = technical(
     "Technical details",
@@ -304,11 +501,28 @@ export const renderHealth = (report: AdminHealthReport, now: number = Date.now()
             ? "the machine"
             : null,
       ],
+      ["Newest backup file", health.backups?.newest?.name ?? null],
       ["Checked", dateTime(health.generatedAt)],
     ]),
   );
 
-  return [main, alerts, parts, details];
+  const more = h(
+    "section",
+    { class: "panel server-more" },
+    h("h2", { class: "section-title" }, "The server's parts"),
+    parts,
+    statusList(
+      statusRow(
+        report.telegram ? "ok" : "warn",
+        "Telegram alerts",
+        report.telegram ? "On" : "Off",
+        report.telegram ? "Problems are sent to your phone" : "Problems are only shown here",
+      ),
+    ),
+    details,
+  );
+
+  return [grid, alerts, more];
 };
 
 /** The next nightly backup (03:00 UTC), in the viewer's words. */
@@ -322,51 +536,6 @@ export const nextBackup = (now: number = Date.now()): string => {
 
 export const backupLevel = (ageHours: number | null, exists: boolean): Level =>
   !exists ? "bad" : ageHours !== null && ageHours > 26 ? "bad" : ageHours !== null && ageHours > 24 ? "warn" : "ok";
-
-export const renderBackups = (report: AdminHealthReport, now: number = Date.now()): Child[] => {
-  const backups = report.health.backups;
-  if (!backups)
-    return [
-      statusList(
-        statusRow(
-          "warn",
-          "Backups",
-          "Not known",
-          "The machine's health report is missing, and only it can see the backups",
-        ),
-      ),
-    ];
-  const newest = backups.newest;
-  const level = backupLevel(newest?.ageHours ?? null, Boolean(newest));
-  return [
-    statusList(
-      statusRow(
-        level,
-        "Last backup",
-        newest?.at ? ago(newest.at, now) : "None",
-        newest?.at
-          ? `${dateTime(newest.at)} · ${bytes(newest.sizeBytes)}${level === "ok" ? "" : " · one is missed after 24 hours"}`
-          : "No backup file was found",
-      ),
-      statusRow("ok", "Next backup", nextBackup(now), "Every night, by itself"),
-      statusRow(
-        "ok",
-        "Backups kept",
-        count(backups.count),
-        `${bytes(backups.totalBytes)} in all; each is kept for 14 days`,
-      ),
-      backups.partialCount
-        ? statusRow(
-            "warn",
-            "Half-written files",
-            count(backups.partialCount),
-            "Left by a backup that was cut short; harmless once a newer backup has finished",
-          )
-        : null,
-    ),
-    technical("Technical details", facts([["Newest file", newest?.name ?? "none"]])),
-  ];
-};
 
 /** One series out of the daily rows. */
 export const series = (

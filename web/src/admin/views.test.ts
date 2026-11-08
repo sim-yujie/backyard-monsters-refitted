@@ -3,7 +3,7 @@ import { PAGES, ScrollMemory, VIEWS, pageHome, pageOf, pageViews, readRoute, vie
 
 describe("the address", () => {
   it("names a view, with what it should show", () => {
-    expect(readRoute("", "#errors")).toEqual({ view: "errors", params: {}, bug: null });
+    expect(readRoute("", "#chat")).toEqual({ view: "chat", params: {}, bug: null });
     expect(readRoute("", "#bugs?list=working")).toEqual({ view: "bugs", params: { list: "working" }, bug: null });
     expect(readRoute("", "#find?player=12&x=")).toEqual({ view: "find", params: { player: "12", x: "" }, bug: null });
   });
@@ -20,11 +20,11 @@ describe("the address", () => {
     expect(readRoute("", "#bugs?bug=7&list=new")).toEqual({ view: "bugs", params: { list: "new" }, bug: 7 });
     expect(readRoute("?bug=-3", "#health")).toEqual({ view: "health", params: {}, bug: null });
     // A bug number with another view leaves the bug alone.
-    expect(readRoute("?bug=41", "#errors")).toEqual({ view: "errors", params: {}, bug: null });
+    expect(readRoute("?bug=41", "#chat")).toEqual({ view: "chat", params: {}, bug: null });
   });
 
   it("is written back the same way it is read", () => {
-    expect(viewHash("errors")).toBe("#errors");
+    expect(viewHash("chat")).toBe("#chat");
     expect(viewHash("bugs", { list: "working", empty: "", none: null })).toBe("#bugs?list=working");
     const hash = viewHash("moderation", { player: 12, filter: "filter" });
     expect(readRoute("", hash)).toEqual({ view: "moderation", params: { player: "12", filter: "filter" }, bug: null });
@@ -35,6 +35,9 @@ describe("the address", () => {
     expect(readRoute("", "#cases").view).toBe("moderation");
     expect(readRoute("", "#support").view).toBe("bugs");
     expect(readRoute("", "#server").view).toBe("health");
+    // Server health is one page: its old Errors and Backups tabs land on it.
+    expect(readRoute("", "#errors").view).toBe("health");
+    expect(readRoute("", "#backups").view).toBe("health");
   });
 });
 
@@ -55,8 +58,8 @@ describe("the menu", () => {
     expect(pageHome("moderation")).toBe("moderation");
     expect(pageViews("moderation")).toEqual(["moderation", "find", "attacks", "moderators", "modmail"]);
     expect(pageViews("support")).toEqual(["bugs", "shiny", "chat"]);
-    expect(pageHome("server")).toBe("health");
-    expect(pageOf("errors")).toBe("server");
+    expect(pageViews("server")).toEqual(["health"]);
+    expect(pageOf("health")).toBe("server");
   });
 });
 
@@ -65,8 +68,8 @@ describe("coming back to a view", () => {
     const memory = new ScrollMemory();
     expect(memory.restore("bugs")).toBe(0);
     memory.save("bugs", 812.4);
-    memory.save("errors", -5);
+    memory.save("chat", -5);
     expect(memory.restore("bugs")).toBe(812);
-    expect(memory.restore("errors")).toBe(0);
+    expect(memory.restore("chat")).toBe(0);
   });
 });
