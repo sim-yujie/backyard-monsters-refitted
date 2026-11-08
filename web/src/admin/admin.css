@@ -3707,10 +3707,6 @@ tbody th {
 }
 
 @media (min-width: 1024px) {
-  .inbox-back {
-    display: none;
-  }
-
   .inbox.has-open {
     grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
   }
@@ -3724,5 +3720,96 @@ tbody th {
 
   .inbox.has-open .inbox-quote {
     font-size: 0.875rem;
+  }
+}
+
+/* Bug reports: a list per status, the open report beside it on a computer
+   (full screen on a phone), Previous / Next above the report. */
+.bugs {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.bugs-side {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.bugs-side > .segmented {
+  justify-self: start;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.bugs-detail {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.bugs-detail[hidden] {
+  display: none;
+}
+
+.bug-row[aria-current="true"] {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.bug-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.bug-steps {
+  display: flex;
+  align-items: center;
+  gap: 4px 8px;
+  margin-left: auto;
+}
+
+.bug-steps .hint {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1023px) {
+  .bugs.has-open .bugs-side {
+    display: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  /* Denser rows on a computer: one line of words, one of details. */
+  .bug-row {
+    min-height: 0;
+    padding: 10px 10px 10px 14px;
+  }
+
+  .bug-row .row-title {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    font-size: 0.9375rem;
+  }
+
+  .bug-row .row-meta {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .bugs.has-open {
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  }
+
+  .bugs.has-open .bugs-side {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
   }
 }
