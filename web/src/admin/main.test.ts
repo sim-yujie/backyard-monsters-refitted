@@ -278,6 +278,28 @@ describe("the owner's first look", () => {
     location.hash = "";
   });
 
+  it("shows Game activity as the mock-up's panels: players with big numbers, gameplay as a table with honest gaps", async () => {
+    await boot();
+    await settle();
+    const titles = (id: string) => [...document.querySelectorAll(`#${id} .activity-panel h2`)].map((t) => t.textContent);
+    expect(titles("players")).toEqual(["Players", "Players each day", "Player preferences"]);
+    expect([...document.querySelectorAll("#players .metric span:not(.metric-sub)")].map((t) => t.textContent)).toEqual([
+      "played today",
+      "new today",
+      "played in the last 7 days",
+      "players in all",
+    ]);
+    expect(document.querySelector("#players .activity-head .small")?.textContent).toMatch(/^Last updated /);
+    expect(titles("activity")).toEqual(["Gameplay today", "Gameplay each day"]);
+    const row = (name: string) =>
+      [...document.querySelectorAll<HTMLTableRowElement>("#activity .data-table tbody tr")].find(
+        (tr) => tr.querySelector("th")?.textContent === name,
+      )!;
+    expect(row("Bug reports").querySelectorAll("td")[0]!.textContent).toBe("3");
+    expect(row("Player reports").querySelectorAll("td")[0]!.textContent).toBe("Not counted per day");
+    expect(row("Goo and other resources spent").querySelectorAll("td")[0]!.textContent).toBe("Not recorded");
+  });
+
   it("keeps the technical words behind Technical details", async () => {
     await boot();
     await settle();

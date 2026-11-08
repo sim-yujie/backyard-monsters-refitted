@@ -669,6 +669,36 @@ export const renderLooks = (looks: LookTotals | undefined): HTMLElement => {
   );
 };
 
+/** The mock-up's row of big numbers: each a value, what it counts, and a line more. */
+const metrics = (...items: readonly [string, string, string | null][]): HTMLElement =>
+  h(
+    "div",
+    { class: "metrics" },
+    ...items.map(([value, label, sub]) =>
+      h(
+        "div",
+        { class: "metric" },
+        h("strong", {}, value),
+        h("span", {}, label),
+        sub ? h("span", { class: "metric-sub" }, sub) : null,
+      ),
+    ),
+  );
+
+/** A Game activity panel: its title, when its numbers were read, and its insides. */
+const activityPanel = (title: string, updatedAt: string | null, ...children: Child[]): HTMLElement =>
+  h(
+    "section",
+    { class: "panel activity-panel" },
+    h(
+      "div",
+      { class: "activity-head" },
+      h("h2", { class: "section-title" }, title),
+      updatedAt ? h("span", { class: "small" }, `Last updated ${dateTime(updatedAt)}`) : null,
+    ),
+    ...children,
+  );
+
 export const renderPlayers = (overview: StatsOverview): Child[] => {
   const { players, today, days } = overview;
   const yesterday = days[days.length - 1];
@@ -678,50 +708,62 @@ export const renderPlayers = (overview: StatsOverview): Child[] => {
   const added = total(fresh);
   const usual = average(active);
   return [
-    figures(
-      figure("Played today", count(players.activeToday), yesterday ? `${count(yesterday.activePlayers)} yesterday` : "so far"),
-      figure("New today", count(today.newPlayers), yesterday ? `${count(yesterday.newPlayers)} yesterday` : "so far"),
-      figure("Played this week", count(players.active7), "last 7 days"),
-      figure("Players in all", count(players.total), `${count(players.active30)} played this month`),
-    ),
-    renderLooks(overview.looks),
-    h(
-      "div",
-      { class: "charts" },
-      chartCard(
-        "New players",
-        added === null ? null : `${count(added)} joined ${inDays(overview)}`,
-        fresh,
-        { kind: "bar", unit: "new players", week: "sum" },
-      ),
-      chartCard(
-        "Players who played",
-        usual === null ? null : `About ${count(usual)} on a usual day`,
-        active,
-        { kind: "line", unit: "players", week: "mean" },
-        active.some((p) => p.value === null)
-          ? "Counting started with the dashboard; days before it are blank."
-          : undefined,
-      ),
-      chartCard(
-        "Players in all",
-        growth(all) === null ? null : `Up ${count(growth(all))} ${inDays(overview)}`,
-        all,
-        { kind: "line", unit: "players", week: "last", zero: false },
+    activityPanel(
+      "Players",
+      overview.generatedAt,
+      metrics(
+        [count(players.activeToday), "played today", yesterday ? `${count(yesterday.activePlayers)} yesterday` : "so far"],
+        [count(today.newPlayers), "new today", yesterday ? `${count(yesterday.newPlayers)} yesterday` : "so far"],
+        [count(players.active7), "played in the last 7 days", null],
+        [count(players.total), "players in all", `${count(players.active30)} played this month`],
       ),
     ),
-    numbersTable(days, [
-      ["New", (d) => d.newPlayers],
-      ["Played", (d) => d.activePlayers],
-      ["In all", (d) => d.totalPlayers],
-    ]),
+    activityPanel(
+      "Players each day",
+      null,
+      h(
+        "div",
+        { class: "charts" },
+        chartCard(
+          "New players",
+          added === null ? null : `${count(added)} joined ${inDays(overview)}`,
+          fresh,
+          { kind: "bar", unit: "new players", week: "sum" },
+        ),
+        chartCard(
+          "Players who played",
+          usual === null ? null : `About ${count(usual)} on a usual day`,
+          active,
+          { kind: "line", unit: "players", week: "mean" },
+          active.some((p) => p.value === null)
+            ? "Counting started with the dashboard; days before it are blank."
+            : undefined,
+        ),
+        chartCard(
+          "Players in all",
+          growth(all) === null ? null : `Up ${count(growth(all))} ${inDays(overview)}`,
+          all,
+          { kind: "line", unit: "players", week: "last", zero: false },
+        ),
+      ),
+      numbersTable(days, [
+        ["New", (d) => d.newPlayers],
+        ["Played", (d) => d.activePlayers],
+        ["In all", (d) => d.totalPlayers],
+      ]),
+    ),
+    activityPanel("Player preferences", null, renderLooks(overview.looks)),
   ];
 };
+
+/** A number for the Gameplay table; null is a day the server did not count. */
+const recorded = (n: number | null | undefined): string => (n === null || n === undefined ? "Not recorded" : count(n));
 
 export const renderActivity = (overview: StatsOverview): Child[] => {
   const { today, days } = overview;
   const yesterday = days[days.length - 1];
   const events = [...new Set(days.flatMap((d) => Object.keys(d.eventPlayers ?? {})))];
+  const eventNames = events.map((name) => name.charAt(0).toUpperCase() + name.slice(1)).join(", ");
   const attacks = series(days, (d) => d.attacks);
   const raids = series(days, (d) => d.tribeRaids);
   const eventDays = series(days, eventTotal);
@@ -729,36 +771,66 @@ export const renderActivity = (overview: StatsOverview): Child[] => {
     const sum = total(points);
     return sum === null ? null : `${count(sum)} ${word} ${inDays(overview)}`;
   };
-  return [
-    figures(
-      figure("Attacks today", count(today.attacks), yesterday ? `${count(yesterday.attacks)} yesterday` : "so far"),
-      figure("Tribe raids today", count(today.tribeRaids), yesterday ? `${count(yesterday.tribeRaids)} yesterday` : "so far"),
-      figure(
-        "In the event today",
-        count(eventTotal(today)),
-        events.length
-          ? `${events.map((name) => name.charAt(0).toUpperCase() + name.slice(1)).join(", ")} event`
-          : "no event running",
-      ),
-      figure("Bug reports today", count(today.bugReports), yesterday ? `${count(yesterday.bugReports)} yesterday` : "so far"),
-    ),
+  const rows: readonly [string, string, string, string][] = [
+    ["Attacks", recorded(today.attacks), recorded(yesterday?.attacks), "Attacks players started"],
+    ["Tribe raids", recorded(today.tribeRaids), recorded(yesterday?.tribeRaids), "Raids on tribe yards"],
+    [
+      "In the event",
+      recorded(eventTotal(today)),
+      recorded(yesterday ? eventTotal(yesterday) : null),
+      events.length ? `Players in the ${eventNames} event` : "No event is running",
+    ],
+    ["Bug reports", recorded(today.bugReports), recorded(yesterday?.bugReports), "Sent from the game's Help menu"],
+    ["Player reports", "Not counted per day", "–", "Chat reports wait in Moderation; the daily numbers do not count them"],
+    ["Goo and other resources spent", "Not recorded", "–", "Resource spending is not collected"],
+  ];
+  const table = h(
+    "div",
+    { class: "table-wrap" },
     h(
-      "div",
-      { class: "charts" },
-      chartCard("Attacks", sumUp(attacks, "attacks"), attacks, { kind: "bar", unit: "attacks" }),
-      chartCard("Tribe raids", sumUp(raids, "raids"), raids, { kind: "bar", unit: "tribe raids" }),
-      chartCard(
-        "Players in the event",
-        events.length > 1 ? `All events added up: ${events.join(", ")}` : null,
-        eventDays,
-        { kind: "bar", unit: "players", week: "mean" },
+      "table",
+      { class: "data-table" },
+      h(
+        "thead",
+        {},
+        h(
+          "tr",
+          {},
+          ...["Activity", "Today", "Yesterday", "What it means"].map((title) => h("th", { attrs: { scope: "col" } }, title)),
+        ),
+      ),
+      h(
+        "tbody",
+        {},
+        ...rows.map(([what, now, before, means]) =>
+          h("tr", {}, h("th", { attrs: { scope: "row" } }, what), h("td", {}, now), h("td", {}, before), h("td", {}, means)),
+        ),
       ),
     ),
-    numbersTable(days, [
-      ["Attacks", (d) => d.attacks],
-      ["Raids", (d) => d.tribeRaids],
-      ["Event", eventTotal],
-      ["Bugs", (d) => d.bugReports],
-    ]),
+  );
+  return [
+    activityPanel("Gameplay today", overview.generatedAt, table),
+    activityPanel(
+      "Gameplay each day",
+      null,
+      h(
+        "div",
+        { class: "charts" },
+        chartCard("Attacks", sumUp(attacks, "attacks"), attacks, { kind: "bar", unit: "attacks" }),
+        chartCard("Tribe raids", sumUp(raids, "raids"), raids, { kind: "bar", unit: "tribe raids" }),
+        chartCard(
+          "Players in the event",
+          events.length > 1 ? `All events added up: ${events.join(", ")}` : null,
+          eventDays,
+          { kind: "bar", unit: "players", week: "mean" },
+        ),
+      ),
+      numbersTable(days, [
+        ["Attacks", (d) => d.attacks],
+        ["Raids", (d) => d.tribeRaids],
+        ["Event", eventTotal],
+        ["Bugs", (d) => d.bugReports],
+      ]),
+    ),
   ];
 };

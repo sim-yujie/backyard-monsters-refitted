@@ -5312,3 +5312,77 @@ tbody th {
 .v2 .ann-editor h3 {
   font-size: 1.125rem;
 }
+
+/* ---- Game activity (dash-v2c, astra's mock-up) ---- */
+
+.activity-panel + .activity-panel {
+  margin-top: 20px;
+}
+
+.activity-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-bottom: 16px;
+}
+
+.activity-head .section-title {
+  margin: 0;
+}
+
+.activity-panel .metric:hover strong {
+  color: inherit;
+}
+
+.v2 .metric .metric-sub {
+  margin-top: 2px;
+  color: var(--ink-3);
+  font-size: 0.75rem;
+}
+
+.activity-panel .charts {
+  margin: 0;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.data-table th,
+.data-table td {
+  padding: 10px 12px 10px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.data-table thead th {
+  color: var(--ink-3);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.data-table tbody th {
+  font-weight: 600;
+}
+
+.data-table td:nth-child(2),
+.data-table td:nth-child(3) {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.data-table td:last-child {
+  color: var(--ink-2);
+}
+
+@media (max-width: 559px) {
+  .data-table td:last-child,
+  .data-table thead th:last-child {
+    display: none;
+  }
+}
