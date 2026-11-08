@@ -132,10 +132,13 @@ export interface MailStatus {
   readonly latest: LatestMail | null;
   /** The player is a moderator: New message may find any player. */
   readonly mod: boolean;
+  /** The player is the game team (an admin): their badge is GM, not Mod. */
+  readonly gm?: boolean;
 }
 
 interface StatusResponse extends ApiEnvelope {
   unread?: number;
+  gm?: unknown;
   latest?: {
     id?: unknown;
     threadid?: unknown;
@@ -182,6 +185,7 @@ export const statusOf = (response: StatusResponse): MailStatus => {
           }
         : null,
     mod: Number(response.mod) === 1,
+    gm: Number(response.gm) === 1,
   };
 };
 

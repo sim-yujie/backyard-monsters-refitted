@@ -875,11 +875,25 @@
    are dark ones: the words go white. */
 :root[data-theme="light"]:not([data-skin]) .mail-mod,
 :root[data-theme="light"] .mail-toast .mail-mod,
-:root[data-skin="flash"] .mail-mod,
+:root[data-skin="flash"] .mail-mod {
+  background: #2a55c4;
+  color: #ffffff;
+}
+
+/* The dark green is set here too: the pop-up sits outside Classic's panels,
+   where the theme's green is still the pale one (white on pale mint was
+   unreadable, 8 Nov). */
 :root[data-theme="light"]:not([data-skin]) .mail-gm,
 :root[data-theme="light"] .mail-toast .mail-gm,
 :root[data-skin="flash"] .mail-gm {
+  background: #1f7a3a;
   color: #ffffff;
+}
+
+/* The game team's To: the GM badge sits beside the caption like Mod's. */
+.mail-compose__caption > .mail-gm {
+  margin-left: 0.2em;
+  cursor: help;
 }
 
 /* A moderator's To: the badge sits beside the caption. */

@@ -220,6 +220,8 @@ export class MailboxScreen {
   private friends: readonly MailContact[] = [];
   /** The player is a chat moderator: New message may find any player (`api.status`). */
   private canMailAnyone = false;
+  /** The player is the game team (an admin): the compose box shows GM, not Mod. */
+  private isGameTeam = false;
   private view: View = { kind: "none" };
   private opened = false;
   private destroyed = false;
@@ -420,7 +422,9 @@ export class MailboxScreen {
   /** Whether the player is a moderator; false when the route is not there or fails. */
   private async loadCanMailAnyone(): Promise<boolean> {
     try {
-      return (await this.api.status?.())?.mod ?? false;
+      const status = await this.api.status?.();
+      this.isGameTeam = status?.gm ?? false;
+      return status?.mod ?? false;
     } catch {
       return false;
     }
@@ -1187,8 +1191,10 @@ export class MailboxScreen {
     input.setAttribute("aria-label", "To: any player, by name or account number");
     const label = make("label", "mail-compose__field");
     const caption = make("span", "mail-compose__caption", "To");
-    const hint = modBadge();
-    hint.title = "As a moderator you can write to any player";
+    const hint = this.isGameTeam ? gmBadge() : modBadge();
+    hint.title = this.isGameTeam
+      ? "As the game team you can write to any player"
+      : "As a moderator you can write to any player";
     caption.append(" ", hint);
     label.append(caption, input);
     if (contacts.length > 0) {

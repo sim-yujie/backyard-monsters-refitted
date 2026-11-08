@@ -107,5 +107,11 @@ export const readMailStatus = async (
       notice: from === SYSTEM_SENDER ? 1 : 0,
     };
   }
-  return { unread: Number(count?.unread ?? 0), latest, mod: mod ? 1 : 0 };
+  return {
+    unread: Number(count?.unread ?? 0),
+    latest,
+    mod: mod ? 1 : 0,
+    // The game team (admins): the compose box shows GM, not Mod (owner, 8 Nov).
+    gm: isGameTeamSender(userid) ? 1 : 0,
+  };
 };

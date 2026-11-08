@@ -953,6 +953,16 @@ describe("moderators in the mailbox (owner, beta 7)", () => {
     expect(host.querySelector(".mail-gm")).toBeNull();
   });
 
+  it("shows the game team its GM badge, not Mod, in its own New message box", async () => {
+    const api = fakeApi([[message()]], {});
+    api.status = vi.fn(async () => ({ unread: 0, latest: null, mod: true, gm: true }));
+    const { host } = await openScreen(api);
+    click(host.querySelector(".mail-list__new"));
+    await settle();
+    expect(host.querySelector(".mail-compose__caption .mail-gm")).not.toBeNull();
+    expect(host.querySelector(".mail-compose__caption .mail-mod")).toBeNull();
+  });
+
   it("lets a moderator write to any player: a typed name is looked up on the server", async () => {
     const api = fakeApi([[message()]], {});
     api.status = modStatus(true);
