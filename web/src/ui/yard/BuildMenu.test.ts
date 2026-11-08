@@ -12,7 +12,8 @@ import { DecorKind } from "@/game/yard/decorShop";
 import { YardStore, type YardUiBinding } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
-import { BuildMenu, PlacementBar, spotSentence } from "./BuildMenu";
+import type { LinePlan } from "@/game/yard/wallLine";
+import { BuildMenu, lineHint, PlacementBar, spotSentence } from "./BuildMenu";
 
 /**
  * The build menu as a player meets it: the tabs, each tile's cost, count and
@@ -631,6 +632,125 @@ describe("PlacementBar", () => {
     expect(spokenText(bar.element.querySelector(".build-placing__price")!)).toBe(
       "Finished at once for Shiny 17",
     );
+  });
+
+  describe("line mode (walls Option B)", () => {
+    const blockCost = { r1: 1000, r2: 0, r3: 0, r4: 0 };
+    const plan = (build: number, blocked: number, short: number, shortReason: "limit" | "resources" | null): LinePlan => ({
+      cells: [],
+      build: Array.from({ length: build }, (_, i) => ({ x: i * 20, y: 0 })),
+      blocked,
+      short,
+      shortReason,
+      cost: { r1: build * 1000, r2: 0, r3: 0, r4: 0 },
+    });
+    const lineBar = (on = true) => {
+      const line = { on, onToggle: vi.fn(), onConfirm: vi.fn(), onClear: vi.fn() };
+      const bar = new PlacementBar({
+        type: 17,
+        instant: false,
+        instantPrice: 0,
+        cost: blockCost,
+        onCancel: vi.fn(),
+        onBuildHere: vi.fn(),
+        line,
+      }).mount(document.body);
+      const q = <T extends HTMLElement>(selector: string) => bar.element.querySelector<T>(selector)!;
+      return { bar, line, q };
+    };
+
+    it("draws the Line toggle, pressed when on, with ✓ and ✗ in place of Build here", () => {
+      const { bar, line, q } = lineBar();
+      const toggle = q<HTMLButtonElement>(".build-placing__line-toggle");
+      expect(toggle.getAttribute("aria-pressed")).toBe("true");
+      expect(bar.lineMode).toBe(true);
+      expect(q<HTMLButtonElement>(".build-placing__here").hidden).toBe(true);
+      expect(q<HTMLButtonElement>(".build-placing__line-confirm").hidden).toBe(false);
+      expect(q<HTMLButtonElement>(".build-placing__line-clear").hidden).toBe(false);
+
+      toggle.click();
+      expect(line.onToggle).toHaveBeenCalledWith(false);
+      expect(toggle.getAttribute("aria-pressed")).toBe("false");
+      expect(q<HTMLButtonElement>(".build-placing__here").hidden).toBe(false);
+      expect(q<HTMLButtonElement>(".build-placing__line-confirm").hidden).toBe(true);
+      expect(q<HTMLElement>(".build-placing__line").hidden).toBe(true);
+    });
+
+    it("starts off when asked, and a bar without line options has no toggle", () => {
+      const { q } = lineBar(false);
+      expect(q<HTMLButtonElement>(".build-placing__line-toggle").getAttribute("aria-pressed")).toBe("false");
+      const plain = new PlacementBar({
+        type: 17,
+        instant: false,
+        instantPrice: 0,
+        cost: blockCost,
+        onCancel: vi.fn(),
+      });
+      expect(plain.element.querySelector(".build-placing__line-toggle")).toBeNull();
+    });
+
+    it("✓ is off with nothing green, on with greens, and off while building", () => {
+      const { bar, line, q } = lineBar();
+      const confirm = q<HTMLButtonElement>(".build-placing__line-confirm");
+      const clear = q<HTMLButtonElement>(".build-placing__line-clear");
+      expect(confirm.disabled).toBe(true);
+      expect(clear.disabled).toBe(true);
+
+      bar.setLine(plan(0, 2, 0, null), { empty: false, fixed: true, busy: false });
+      expect(confirm.disabled).toBe(true);
+      expect(clear.disabled).toBe(false);
+
+      bar.setLine(plan(3, 0, 0, null), { empty: false, fixed: true, busy: false });
+      expect(confirm.disabled).toBe(false);
+      confirm.click();
+      expect(line.onConfirm).toHaveBeenCalledTimes(1);
+      clear.click();
+      expect(line.onClear).toHaveBeenCalledTimes(1);
+
+      bar.setLine(plan(3, 0, 0, null), { empty: false, fixed: true, busy: true });
+      expect(confirm.disabled).toBe(true);
+      expect(clear.disabled).toBe(true);
+      expect(q<HTMLButtonElement>(".build-placing__line-toggle").disabled).toBe(true);
+      expect(q(".build-placing__hint").textContent).toBe("Building…");
+    });
+
+    it("the summary: Block ×count, the cost, blocked and what is short", () => {
+      const { bar, q } = lineBar();
+      bar.setLine(plan(4, 2, 3, "resources"), { empty: false, fixed: true, busy: false });
+      expect(q(".build-placing__line-count").textContent).toBe("×4");
+      expect(spokenText(q(".build-placing__line-cost"))).toBe("Twigs 4,000");
+      expect(q(".build-placing__line-skip").textContent).toBe("✕ 2");
+      expect(q(".build-placing__line-short").textContent).toBe("3 can't afford");
+
+      bar.setLine(plan(1, 0, 5, "limit"), { empty: false, fixed: true, busy: false });
+      expect(q(".build-placing__line-short").textContent).toBe("5 over hall limit");
+      expect(bar.element.querySelector(".build-placing__line-skip")).toBeNull();
+
+      bar.setLine(plan(0, 1, 0, null), { empty: false, fixed: true, busy: false });
+      expect(q(".build-placing__line-count").textContent).toBe("×0");
+      expect(bar.element.querySelector(".build-placing__line-cost")).toBeNull();
+    });
+
+    it("a refused spot does not take the line's words", () => {
+      const { bar, q } = lineBar();
+      const hint = q(".build-placing__hint").textContent;
+      bar.setSpot("Outside your yard.");
+      expect(q(".build-placing__hint").textContent).toBe(hint);
+      expect(bar.element.classList.contains("build-placing--blocked")).toBe(false);
+    });
+
+    it("lineHint says what to do next on a desktop and a phone", () => {
+      const fresh = { empty: true, fixed: false, busy: false };
+      const started = { empty: false, fixed: false, busy: false };
+      const fixed = { empty: false, fixed: true, busy: false };
+      expect(lineHint(false, null, null)).toBe("Drag from the first Block to the last. Esc cancels.");
+      expect(lineHint(true, fresh, null)).toBe("Tap the first Block, then the last.");
+      expect(lineHint(false, started, null)).toBe("Click the last Block.");
+      expect(lineHint(true, started, null)).toBe("Tap the last Block.");
+      expect(lineHint(false, fixed, plan(0, 3, 0, null))).toBe("Nothing here can be built.");
+      expect(lineHint(true, fixed, plan(2, 0, 0, null))).toBe("✓ builds the green Blocks.");
+      expect(lineHint(false, { ...fixed, busy: true }, plan(2, 0, 0, null))).toBe("Building…");
+    });
   });
 
   it("spotSentence names what is in the way", () => {
