@@ -4965,12 +4965,16 @@ tbody th {
 
 .confirm-pane .buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding-top: 4px;
 }
 
+/* Each label on one line: "Confirm restrict" takes the room it needs and
+   Cancel the rest; if both cannot fit side by side they stack. */
 .confirm-pane .buttons .button {
-  flex: 1;
+  flex: 1 1 auto;
+  white-space: nowrap;
 }
 
 /* Phone: the list, or the opened player in its place. */
