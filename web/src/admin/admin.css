@@ -117,6 +117,15 @@ html {
   scroll-behavior: smooth;
 }
 
+/* The ground behind short pages follows the theme too, including a theme picked
+   in the header against the computer's setting. admin.html's early style paints
+   html in the computer's setting; :root outranks it whatever order they load in. */
+:root,
+:root > body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
 body {
   margin: 0;
   background: var(--bg);
