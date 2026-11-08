@@ -811,10 +811,17 @@
 }
 
 /* The chosen one of a row of map tools: lit in the accent. */
-:root[data-skin] .mr2-tool[aria-pressed="true"] {
+:root[data-skin] :is(.mr2-tool[aria-pressed="true"], .mr2-key__toggle[aria-expanded="true"]) {
   border-width: var(--skin-bar-edge);
   padding: 0 var(--space-4);
   filter: drop-shadow(0 0 3px var(--colour-accent)) drop-shadow(0 4px 6px rgb(0 0 0 / 45%));
+}
+
+/* On a phone the map tools are square icon buttons: the lit Key keeps its size. */
+@media (width <= 620px) {
+  :root[data-skin] .mr2-tools-dock .mr2-key__toggle[aria-expanded="true"] {
+    padding: 0;
+  }
 }
 
 /* A name under a round yard button: a little sign, as on a window's title. */

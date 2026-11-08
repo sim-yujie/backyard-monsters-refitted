@@ -21,6 +21,7 @@ import { HoverCard, type HoverCardContent } from "./HoverCard";
 import { Minimap } from "./Minimap";
 import { TiltToggle } from "./TiltToggle";
 import { KitFilterControl } from "./KitFilterControl";
+import { MapLegend } from "./MapLegend";
 import { NavPanel } from "./NavPanel";
 import { Notices } from "./Notices";
 import { RangeControl } from "./RangeControl";
@@ -139,6 +140,8 @@ export class MapRoomUi {
   private readonly tiltToggle: TiltToggle;
   private readonly rangeControl: RangeControl;
   private readonly kitFilterControl: KitFilterControl;
+  /** The border colours' key (owner, 8 Nov 2026). */
+  private readonly legend = new MapLegend();
   private readonly docks: HTMLElement[] = [];
   /** The tool row, bottom right: Range and the zoom, and what `placeTool` puts first. */
   private tools: HTMLElement | null = null;
@@ -220,6 +223,7 @@ export class MapRoomUi {
     const tools = document.createElement("div");
     tools.className = "mr2-toolrow";
     tools.append(this.kitFilterControl.toggle, this.kitFilterControl.element);
+    tools.append(this.legend.toggle, this.legend.element);
     tools.append(this.tiltToggle.element);
     this.zoomControl.mount(tools);
     bottomRight.append(tools);
@@ -245,6 +249,7 @@ export class MapRoomUi {
     this.minimap.destroy();
     this.zoomControl.destroy();
     this.kitFilterControl.destroy();
+    this.legend.destroy();
     this.notices.destroy();
     for (const dock of this.docks) dock.remove();
     this.docks.length = 0;
