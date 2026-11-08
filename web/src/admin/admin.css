@@ -2112,6 +2112,13 @@ tbody th {
   display: grid;
   gap: 16px;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  /* Side by side, the shorter list starts at the top at its own height, not
+     stretched to the other's (stretched, its heading and rows spread down). */
+  align-items: start;
+}
+
+.attack-top {
+  align-content: start;
 }
 
 .attack-top .row-top {
