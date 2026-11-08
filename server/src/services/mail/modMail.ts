@@ -25,7 +25,9 @@ import { logger } from "../../utils/logger.js";
  *   (`getmessagetargets`' `mod`), decided from the list as it is now, like
  *   chat's.
  *
- * Blocks still apply to moderators both ways.
+ * Blocks do not apply to moderators or admins, either way (owner, 8 Nov):
+ * a player cannot block a warning, and staff can answer anyone
+ * ({@link blocksIgnoringStaff}). A block between two players works as before.
  */
 
 /** New conversations a moderator may start: per hour and per day. Replies are not counted here. */
@@ -46,6 +48,23 @@ export const isMailModerator = async (em: EntityManager, userid: number): Promis
   );
   return rows.length > 0;
 };
+
+/**
+ * Of a player's `blocked` list, the ones a block still counts for in mail:
+ * everyone but moderators (on the list now) and admins (owner, 8 Nov: "blocks
+ * don't apply to moderator or admin"). Blocks of staff stay saved, so a
+ * moderator taken off the list is blocked again at once.
+ */
+export const blocksIgnoringStaff = async (em: EntityManager, blocked: readonly number[]): Promise<number[]> => {
+  const ids = blocked.filter((id) => Number.isInteger(id) && !isAdminUser(id));
+  if (ids.length === 0) return [];
+  const mods = await moderatorsAmong(em, ids);
+  return ids.filter((id) => !mods.has(id));
+};
+
+/** Whether either side of a mail is a moderator or an admin, so blocks between them do not count. */
+export const isMailStaff = async (em: EntityManager, userid: number): Promise<boolean> =>
+  isAdminUser(userid) || (await isMailModerator(em, userid));
 
 /** Those of `ids` on the moderators list now (game team accounts left out): for the Mod badge. */
 export const moderatorsAmong = async (em: EntityManager, ids: readonly number[]): Promise<Set<number>> => {
