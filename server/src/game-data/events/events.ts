@@ -1,4 +1,4 @@
-import type { EventReward } from "./eventRewards.js";
+import { coinRewards, BIG_EVENT_COINS, type EventCoins, type EventReward } from "./eventRewards.js";
 
 /**
  * The game's events: seasonal happenings with a start and an end, shown on
@@ -15,6 +15,11 @@ import type { EventReward } from "./eventRewards.js";
  * `events.test.ts`. A ladder whose `source` is `"attackLoot"` is counted by
  * the server's attack code instead (`services/events/lootEvents.ts`): all
  * the loot a player takes in attacks during the event.
+ *
+ * EVENT COINS: a big 1-2 week event (not a weekend event) pays event coins by
+ * carrying `coins: BIG_EVENT_COINS` (`eventRewards.ts`, where the numbers
+ * live): {@link withEventCoins} adds them to each calendar day and ladder
+ * tier, so the page, the claims and the tests all see them as rewards.
  *
  * Events that repeat (the monthly Krallen Hunt) come from a small generator,
  * one entry per run with its own id, so each month is an ordinary event with
@@ -101,7 +106,38 @@ export interface EventDefinition {
    * "ended" to players with something left to claim. 0 when absent.
    */
   readonly claimDays?: number;
+  /**
+   * Event coins this big event pays on top of its rewards, one amount for
+   * every calendar day and one per ladder tier (`BIG_EVENT_COINS`); none when
+   * absent. Added to the rewards by {@link withEventCoins}.
+   */
+  readonly coins?: EventCoins;
 }
+
+/**
+ * `event` with its `coins` added to its rewards: `perCalendarDay` to every
+ * calendar day, `milestones[i]` to ladder tier `i`. The same event when it
+ * has no `coins`. {@link EVENTS} passes every event through this.
+ */
+export const withEventCoins = (event: EventDefinition): EventDefinition => {
+  const coins = event.coins;
+  if (!coins) return event;
+  return {
+    ...event,
+    ...(event.calendar && {
+      calendar: event.calendar.map((day) => ({ ...day, rewards: [...day.rewards, ...coinRewards(coins.perCalendarDay)] })),
+    }),
+    ...(event.ladder && {
+      ladder: {
+        ...event.ladder,
+        tiers: event.ladder.tiers.map((tier, index) => ({
+          ...tier,
+          rewards: [...tier.rewards, ...coinRewards(coins.milestones[index])],
+        })),
+      },
+    }),
+  };
+};
 
 /** How many days before it starts an event shows under "Coming up". */
 export const UPCOMING_DAYS = 30;
@@ -226,7 +262,10 @@ export const KRALLEN_HUNTS: readonly EventDefinition[] = Array.from({ length: KR
   return krallenHunt(KRALLEN_HUNT_FIRST.year + Math.floor(months / 12), (months % 12) + 1);
 });
 
-/** Every event, past, present and future. Append new ones at the end. */
+/**
+ * Every event, past, present and future. Append new ones at the end. Each
+ * passes through {@link withEventCoins}, so a big event's `coins` are paid.
+ */
 export const EVENTS: readonly EventDefinition[] = [
   {
     id: "halloween-2026",
@@ -239,9 +278,10 @@ export const EVENTS: readonly EventDefinition[] = [
     banner: "/events/halloween-2026-banner.png",
     calendar: HALLOWEEN_2026_CALENDAR,
     ladder: { label: "Pumpkins found", tiers: HALLOWEEN_2026_LADDER },
+    coins: BIG_EVENT_COINS,
   },
   ...KRALLEN_HUNTS,
-];
+].map(withEventCoins);
 
 /** The event with this id, or undefined. */
 export const eventById = (id: string, events: readonly EventDefinition[] = EVENTS): EventDefinition | undefined =>

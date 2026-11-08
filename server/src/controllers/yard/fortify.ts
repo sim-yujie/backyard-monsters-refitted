@@ -19,10 +19,10 @@ import { defineYardAction } from "./yardAction.js";
  */
 export const yardFortifyAction = defineYardAction({
   schema: YardFortifySchema,
-  run: async ({ save, user, body, now, em }) => {
+  run: ({ save, user, body, now }) => {
     const off = weekendBoost("builders", now);
     const plan = planFortify(save, body.id, now, off);
-    if (off > 0) await weekendBoostUsed(em, user.userid, "builders", now);
+    if (off > 0) weekendBoostUsed(user.userid, "builders", now);
     return plan;
   },
   outposts: "allow",

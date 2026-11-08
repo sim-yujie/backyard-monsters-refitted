@@ -3,9 +3,8 @@ import type { EntityManager } from "@mikro-orm/core";
 import type z from "zod";
 
 import type { User } from "../../database/models/user.model.js";
-import { KRALLEN_HUNT_GOALS, krallenHunt, type EventDefinition } from "../../game-data/events/events.js";
+import { KRALLEN_HUNT_GOALS, krallenHunt, withEventCoins, type EventDefinition } from "../../game-data/events/events.js";
 import { memoryProgressStore } from "../../services/events/progressStore.js";
-import { withDailyCoins } from "../../game-data/events/eventRewards.js";
 import { memoryCoinStore, useCoinStore, type EventCoinStore } from "../../services/events/eventCoins.js";
 import { eventsActions } from "./eventsActions.js";
 import { yardSpeedupAction } from "./speedup.js";
@@ -415,12 +414,14 @@ describe("the Krallen Hunt's reward through the ladder claim", () => {
  * payment in the answer, the yard's Shiny untouched.
  */
 describe("event coins through the claims", () => {
-  const COIN_EVENT: EventDefinition = {
+  // A big event: its `coins` field pays 15 a calendar day and 40 for the ladder's tier.
+  const COIN_EVENT: EventDefinition = withEventCoins({
     ...TEST_EVENT,
     id: "coin-event",
-    calendar: withDailyCoins([{ rewards: [{ kind: "shiny", amount: 1 }] }, { rewards: [{ kind: "shiny", amount: 1 }] }]),
-    ladder: { label: "Things", tiers: [{ need: 0, rewards: [{ kind: "eventCoins", amount: 40 }] }] },
-  };
+    calendar: [{ rewards: [{ kind: "shiny", amount: 1 }] }, { rewards: [{ kind: "shiny", amount: 1 }] }],
+    ladder: { label: "Things", tiers: [{ need: 0, rewards: [] }] },
+    coins: { perCalendarDay: 15, milestones: [40] },
+  });
   let coins: ReturnType<typeof memoryCoinStore>;
   let previous: EventCoinStore;
 

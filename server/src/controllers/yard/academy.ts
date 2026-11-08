@@ -23,11 +23,10 @@ import { defineYardAction } from "./yardAction.js";
  */
 export const yardAcademyTrainAction = defineYardAction({
   schema: YardAcademyTrainSchema,
-  run: async ({ save, body, now, user, em }) => {
+  run: ({ save, body, now, user }) => {
     const off = weekendBoost("study", now);
     const plan = planAcademyTrain(save, body.monster, body.academy, now, off);
-    // The weekend's coins, in this transaction (`weekendCoins.ts`).
-    if (off > 0) await weekendBoostUsed(em, user.userid, "study", now);
+    if (off > 0) weekendBoostUsed(user.userid, "study", now);
     return plan;
   },
   inferno: "allow",

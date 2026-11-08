@@ -22,10 +22,9 @@ import type { ResourceAmounts } from "../../services/yardplanner/costs.js";
  *   for good. This is the only way a Krallen is made or raised.
  * - `eventCoins`: event coins (`services/events/eventCoins.ts`), the
  *   currency the decorations shop takes. They live in `bym.event_coins`,
- *   not in the yard, and never expire. A 14-day event pays about 400 (owner,
- *   6 Nov 2026): {@link EVENT_COINS_PER_CALENDAR_DAY} on each calendar day
- *   ({@link withDailyCoins}) and about {@link EVENT_COINS_LADDER_TOTAL} over
- *   its ladder.
+ *   not in the yard, and never expire. Only big events pay them, through
+ *   their `coins` field ({@link BIG_EVENT_COINS}); nobody writes these by
+ *   hand in a calendar or a ladder.
  */
 export type EventReward =
   | { readonly kind: "resources"; readonly amounts: Readonly<Partial<ResourceAmounts>> }
@@ -36,21 +35,42 @@ export type EventReward =
   | { readonly kind: "krallen" }
   | { readonly kind: "eventCoins"; readonly amount: number };
 
-/** Coins each day of a 14-day event's login calendar pays (owner: 15 a day, 210 in all). */
-export const EVENT_COINS_PER_CALENDAR_DAY = 15;
-
-/** About what a 14-day event's ladder pays in coins over all its tiers (owner: ~190; ~400 with the calendar). */
-export const EVENT_COINS_LADDER_TOTAL = 190;
+/**
+ * What a big event pays in event coins, on top of its own rewards: each day
+ * of its login calendar pays `perCalendarDay`, and each tier of its ladder
+ * pays the matching entry of `milestones` (lowest tier first, one entry per
+ * tier). Put on an event as its `coins` field (`events.ts`).
+ */
+export interface EventCoins {
+  readonly perCalendarDay: number;
+  readonly milestones: readonly number[];
+}
 
 /**
- * `calendar` with {@link EVENT_COINS_PER_CALENDAR_DAY} coins added to every
- * day, for a new 14-day event: `calendar: withDailyCoins([...days])`.
+ * ═══════════════════════════════════════════════════════════════════════
+ * EVENT COIN NUMBERS: the one place to change them.
+ *
+ * Owner, 8 Nov 2026: event coins come only from the big 1-2 week events
+ * (Halloween, Thanksgiving and the like), never from weekend events. A big
+ * event pays them by carrying `coins: BIG_EVENT_COINS` in `events.ts`.
+ *
+ * A full 14-day event with a four-tier ladder pays 400 (the owner's target):
+ * 15 a calendar day (15 x 14 = 210) plus 20 + 35 + 55 + 80 = 190 over its
+ * ladder's four tiers.
+ * ═══════════════════════════════════════════════════════════════════════
  */
-export const withDailyCoins = <Day extends { readonly rewards: readonly EventReward[] }>(
-  calendar: readonly Day[],
-  perDay: number = EVENT_COINS_PER_CALENDAR_DAY
-): Day[] =>
-  calendar.map((day) => ({ ...day, rewards: [...day.rewards, { kind: "eventCoins", amount: perDay } as const] }));
+export const BIG_EVENT_COINS: EventCoins = {
+  perCalendarDay: 15,
+  milestones: [20, 35, 55, 80],
+};
+
+/** {@link BIG_EVENT_COINS}' per-day coins, and its ladder's coins in all (190). */
+export const EVENT_COINS_PER_CALENDAR_DAY = BIG_EVENT_COINS.perCalendarDay;
+export const EVENT_COINS_LADDER_TOTAL = BIG_EVENT_COINS.milestones.reduce((sum, coins) => sum + coins, 0);
+
+/** The coin reward for `amount`, or none for 0. */
+export const coinRewards = (amount: number | undefined): EventReward[] =>
+  amount && amount > 0 ? [{ kind: "eventCoins", amount }] : [];
 
 /** Krallen's champion type, and the highest level an event raises her to (her catalogue's `levels`). */
 export const KRALLEN_TYPE = 5;

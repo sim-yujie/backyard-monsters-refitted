@@ -1,7 +1,6 @@
 import { weekendState } from "../../../services/events/weekendSchedule.js";
 import { weekendSettings } from "../../../services/events/weekendSettings.js";
-import { coinNotes, coinStore, type CoinGain } from "../../../services/events/eventCoins.js";
-import { awardWeekendCoinsSafely } from "../../../services/events/weekendCoins.js";
+import { coinStore } from "../../../services/events/eventCoins.js";
 import { devConfig } from "../../../config/GameConfig.js";
 import { Save } from "../../../database/models/save.model.js";
 import { postgres, redis } from "../../../server.js";
@@ -85,20 +84,12 @@ const STRONGHOLD_FIELDS = ["level", "cell.x", "cell.y"] as const;
  * @throws Will throw an error if the base load process fails.
  */
 /**
- * The owner's event coins on a main-yard load: pays a running weekend
- * event's "played" coins (once per run), then reads the balance. Null when
- * the coin tables cannot be read.
+ * The owner's event coins on a main-yard load: the balance. Null when the
+ * coin tables cannot be read.
  */
-const ownCoinsOnLoad = async (
-  userid: number,
-  now: number
-): Promise<{ balance: number; gained: readonly CoinGain[] } | null> => {
+const ownCoinsOnLoad = async (userid: number): Promise<number | null> => {
   try {
-    const em = postgres.em.fork();
-    await awardWeekendCoinsSafely(em, userid, ["played"], now);
-    const noted = coinNotes(em);
-    if (noted) return noted;
-    return { balance: await coinStore().balance(em, userid), gained: [] };
+    return await coinStore().balance(postgres.em.fork(), userid);
   } catch (error) {
     logger.warn(`event coins not read for user ${userid}: ${error}`);
     return null;
@@ -497,12 +488,10 @@ export const baseLoad: KoaController = async (ctx) => {
   const activeKinds = activeEventKinds(getCurrentDateTime());
 
   // Event coins on the owner's main-yard load (`services/events/eventCoins.ts`):
-  // a weekend event's "played" coins first, once per run (`weekendCoins.ts`),
-  // then the purse for the HUD and the decorations shop. Left out if the
-  // read fails (a server before the migration): the client then shows none.
+  // the purse for the HUD and the decorations shop. Left out if the read fails (a server before the migration): the client then shows none.
   const coins =
     isOwner && type === BaseMode.BUILD && baseSave.type === BaseType.MAIN
-      ? await ownCoinsOnLoad(user.userid, getCurrentDateTime())
+      ? await ownCoinsOnLoad(user.userid)
       : null;
 
   const response: Record<string, unknown> = {
@@ -524,8 +513,7 @@ export const baseLoad: KoaController = async (ctx) => {
     // The weekend event on now and the next (`services/events/weekendSchedule.ts`):
     // the web client's banner, Friday pop-up and boosted prices and times.
     weekend: weekendState(weekendSettings(), getCurrentDateTime()),
-    ...(coins && { eventcoins: coins.balance }),
-    ...(coins && coins.gained.length > 0 && { coinsgained: coins.gained }),
+    ...(coins !== null && { eventcoins: coins }),
     chatservers: [process.env.CHAT_WS_HOST!],
     ...(isAttack && { attpowerups }),
     ...(type === BaseMode.HELP && { help: await helpBlockFor(user.userid, baseSave) }),
