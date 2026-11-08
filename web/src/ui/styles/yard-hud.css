@@ -788,6 +788,14 @@
 
 /* ── What the corner makes way for ────────────────────────────────────── */
 
+/* A notice ("Day 3 claimed +10K +15", a quest claimed, Glimmers gained) shows
+   over an open window (Events, Quests, Build: all at --z-hud), never hidden
+   under it, so a claim's notice is seen while the window stays open. Popups
+   at --z-popup (the yard menu, a confirm) still cover it. */
+.yard-notices {
+  z-index: calc(var(--z-hud) + 1);
+}
+
 /* A building's panel docks on the right edge where the rail is. */
 .overlay__layer:has(> .map-dock--right > *) > .yard-viewtools--rail {
   display: none;

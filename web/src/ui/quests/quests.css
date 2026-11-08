@@ -84,11 +84,7 @@
   transform: translateX(-50%);
 }
 
-/* A claim's notice ("Quest claimed +1.4M") shows over the open window, not
-   hidden under it. */
-.overlay__layer:has(> .quests-panel:not([hidden])) > .yard-notices {
-  z-index: calc(var(--z-hud) + 1);
-}
+/* A claim's notice shows over the open window: yard-hud.css `.yard-notices`. */
 
 .quests-panel .panel__body {
   display: flex;
