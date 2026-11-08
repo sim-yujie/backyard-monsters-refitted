@@ -654,7 +654,7 @@ describe("the HUD on the player's own yard", () => {
     expect(coins.textContent).toBe("1,250");
     expect(coins.querySelector("[data-icon='eventcoin']")).not.toBeNull();
     expect(coins.querySelector(".hud__resource-value")?.textContent).toBe("1,250");
-    expect(coins.getAttribute("aria-label")).toBe("1,250 event coins. Earned in big events, spent on decorations.");
+    expect(coins.getAttribute("aria-label")).toBe("1,250 Glimmers. Earned in big events, spent on decorations.");
 
     // A buy lowers it at once.
     noteCoins(950);

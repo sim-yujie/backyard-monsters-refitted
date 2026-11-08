@@ -118,7 +118,7 @@ describe("rewardText", () => {
     expect(rewardText({ kind: "speedup", item: "SP2", count: 1 }, name)).toBe("1-hour speed-up");
     expect(rewardText({ kind: "speedup", item: "SP3", count: 2 }, name)).toBe("2x 2-hour speed-up");
     expect(rewardText({ kind: "decoration", type: 111, count: 1 }, name)).toBe("Mini-Pumpkin");
-    expect(rewardText({ kind: "eventCoins", amount: 15 }, name)).toBe("15 event coins");
+    expect(rewardText({ kind: "eventCoins", amount: 15 }, name)).toBe("15 Glimmers");
   });
 });
 

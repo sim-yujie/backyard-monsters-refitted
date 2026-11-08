@@ -16,6 +16,6 @@ export const coinAmount = (
 export const coinGain = (amount: number, options: IconAmountOptions = {}): HTMLElement =>
   iconAmount("eventcoin", amount, { ...options, change: "gain" });
 
-/** Plain words for an accessible name: "300 event coins". */
+/** Plain words for an accessible name: "300 Glimmers" (the owner's name for event coins, 8 Nov). */
 export const coinWords = (amount: number): string =>
-  `${formatAmount(amount)} event ${amount === 1 ? "coin" : "coins"}`;
+  `${formatAmount(amount)} ${amount === 1 ? "Glimmer" : "Glimmers"}`;

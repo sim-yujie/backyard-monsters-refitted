@@ -291,7 +291,7 @@ export const applyCoins = async (tx: EntityManager, user: User, outcome: YardOut
     const left = await coinStore().spend(tx, user.userid, spend, outcome.coins!.reason);
     if (left === null) {
       const have = await coinStore().balance(tx, user.userid);
-      throw yardRefusedErr("coins", "You do not have enough event coins for that.", {
+      throw yardRefusedErr("coins", "You do not have enough Glimmers for that.", {
         coins: { have, need: spend },
       });
     }

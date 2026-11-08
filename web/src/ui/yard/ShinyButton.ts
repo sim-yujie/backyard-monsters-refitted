@@ -197,7 +197,7 @@ export class ShinyButton {
 
   /** The currency's name in words. */
   private get unit(): string {
-    return this.currency === "eventcoin" ? "event coins" : "Shiny";
+    return this.currency === "eventcoin" ? "Glimmers" : "Shiny";
   }
 
   private draw(): void {

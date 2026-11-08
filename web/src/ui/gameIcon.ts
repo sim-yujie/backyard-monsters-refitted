@@ -105,7 +105,7 @@ export const GAME_ICONS = {
   wallupgrade: "Upgrade walls",
   rearm: "Re-arm traps",
   rearm2: "Re-arm traps",
-  eventcoin: "Event coins",
+  eventcoin: "Glimmers",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;

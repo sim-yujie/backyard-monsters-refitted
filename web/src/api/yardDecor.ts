@@ -100,7 +100,7 @@ export const decorActions = (store: YardStore, api: DecorApi = decorApi): DecorA
         if (reader.kind === "outpost") return refuse("notInOutpost", "Decorations go in your main yard.");
         const price = decorationPrice(type);
         if (price === null) return refuse("notForSale", "That decoration is not for sale.");
-        return reader.eventCoins < price ? refuse("coins", "You do not have enough event coins for that.") : null;
+        return reader.eventCoins < price ? refuse("coins", "You do not have enough Glimmers for that.") : null;
       },
       send: () => api.buy(type, x, y),
     }),

@@ -22,7 +22,7 @@ describe("event coins plugin", () => {
 
   it("the line: the coin, a green +N, and the words", () => {
     const line = gainLine({ amount: 25, balance: 25, reasons: ["ladder"] });
-    expect(line.getAttribute("aria-label")).toBe("25 event coins gained: Event");
+    expect(line.getAttribute("aria-label")).toBe("25 Glimmers gained: Event");
     expect(line.querySelector("[data-icon='eventcoin']")).not.toBeNull();
     expect(line.textContent).toContain("+25");
     expect(line.querySelector(".coins-gained__why")?.textContent).toBe("Event");

@@ -926,7 +926,7 @@ export class Hud {
       const amount = coinAmount(balance, { size: 24, decorative: true });
       amount.querySelector(".icon-amount__value")?.classList.add("hud__resource-value");
       button.replaceChildren(amount);
-      const words = `Event coins: ${formatAmount(balance)}. Earned in big events, spent on decorations.`;
+      const words = `Glimmers: ${formatAmount(balance)}. Earned in big events, spent on decorations.`;
       button.title = words;
       button.setAttribute("aria-label", `${coinWords(balance)}. Earned in big events, spent on decorations.`);
     }

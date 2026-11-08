@@ -135,7 +135,7 @@ const gateMessage = (gate: BuildGate, inferno = false): string => {
     case "credits":
       return "You do not have enough Shiny for that.";
     case "coins":
-      return "You do not have enough event coins for that.";
+      return "You do not have enough Glimmers for that.";
   }
 };
 

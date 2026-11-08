@@ -594,7 +594,7 @@ export class BuildMenu {
       // The purse itself is in the title bar (`draw`), always in view.
       const note = document.createElement("span");
       note.className = "build-menu__note";
-      note.textContent = "Stored: free. Big events pay event coins.";
+      note.textContent = "Stored: free. Big events pay Glimmers.";
       this.legend.replaceChildren(note);
       return;
     }
@@ -852,7 +852,7 @@ export class BuildMenu {
     actions.className = "build-info__actions";
     const buy = this.buyButton(offer.type, name);
     buy.setPrice(price);
-    buy.setBlocked(offer.gate ? "Not enough event coins." : null);
+    buy.setBlocked(offer.gate ? "Not enough Glimmers." : null);
     actions.append(buy.element);
     wrap.append(actions);
     return wrap;
@@ -962,7 +962,7 @@ export const gateSentence = (gate: BuildGate, kind: YardKind = "main", inferno =
     case "credits":
       return "Not enough Shiny.";
     case "coins":
-      return "Not enough event coins.";
+      return "Not enough Glimmers.";
   }
 };
 
