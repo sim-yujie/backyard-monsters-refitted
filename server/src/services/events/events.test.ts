@@ -50,7 +50,9 @@ describe("the event list", () => {
   test("Thanksgiving 2026: 19 Nov to 3 Dec UTC, a 14-day calendar paced like Halloween's", () => {
     const thanksgiving = EVENTS.find((event) => event.id === "thanksgiving-2026")!;
     expect(thanksgiving).toMatchObject({ startsAt: "2026-11-19T00:00:00Z", endsAt: "2026-12-03T00:00:00Z" });
-    expect(thanksgiving.calendar).toBe(THANKSGIVING_2026_CALENDAR);
+    // Its own 14 days, each with the day's Glimmers added (bigEventCoins.test.ts).
+    const ownRewards: unknown = thanksgiving.calendar!.map((day) => day.rewards.filter((one) => one.kind !== "eventCoins"));
+    expect(ownRewards).toEqual(THANKSGIVING_2026_CALENDAR.map((day) => day.rewards));
     expect(THANKSGIVING_2026_CALENDAR).toHaveLength(14);
     const days = (Date.parse(thanksgiving.endsAt) - Date.parse(thanksgiving.startsAt)) / 86_400_000;
     expect(THANKSGIVING_2026_CALENDAR).toHaveLength(days);

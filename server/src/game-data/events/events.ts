@@ -215,11 +215,9 @@ export const HALLOWEEN_2026_LADDER: readonly LadderTier[] = [
  * (harvesters at double rate for 12 hours) and day 14 a Scarecrow.
  * Resources land clamped to the player's storage cap, like every other
  * reward. r1 Twigs, r2 Pebbles, r3 Putty, r4 Goo. Decoration 55 is the
- * Acorn, 69 the Scarecrow.
- *
- * TODO(event-coins): once feat/event-coins merges, add the day's Glimmers
- * (the event coin reward) to each day here, as that branch does for
- * Halloween's calendar.
+ * Acorn, 69 the Scarecrow. Like Halloween, the event also pays Glimmers
+ * (event coins) every day and at every ladder tier: its `coins:
+ * BIG_EVENT_COINS` in {@link EVENTS} adds them (`withEventCoins`).
  * ═══════════════════════════════════════════════════════════════════════
  */
 export const THANKSGIVING_2026_CALENDAR: readonly CalendarDay[] = [
@@ -366,6 +364,7 @@ export const EVENTS: readonly EventDefinition[] = [
     endsAt: "2026-12-03T00:00:00Z",
     calendar: THANKSGIVING_2026_CALENDAR,
     ladder: { label: "Turkeys caught", tiers: THANKSGIVING_2026_LADDER },
+    coins: BIG_EVENT_COINS,
   },
 ].map(withEventCoins);
 

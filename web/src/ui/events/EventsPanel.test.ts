@@ -249,6 +249,8 @@ describe("rewardBadge: event coins (beta 7)", () => {
   it("the coin and the amount; claimed, a green +N", () => {
     const offer = rewardBadge({ kind: "eventCoins", amount: 15 });
     expect(offer.querySelector("[data-icon='eventcoin'], img")).not.toBeNull();
+    // Drawn like the other painted reward icons (speed-up, Overdrive), so a Thanksgiving day tile lines up.
+    expect(offer.querySelector("img.events-reward__icon")).not.toBeNull();
     expect(offer.querySelector(".events-reward__figure")!.textContent).toBe("15");
     const gained = rewardBadge({ kind: "eventCoins", amount: 15 }, true);
     expect(gained.querySelector(".events-reward__figure")!.textContent).toBe("+15");

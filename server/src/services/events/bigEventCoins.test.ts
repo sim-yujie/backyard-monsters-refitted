@@ -76,6 +76,16 @@ describe("big events pay event coins", () => {
     expect(eventCoinsTotal(halloween)).toBe(400);
   });
 
+  test("Thanksgiving 2026 pays them like Halloween: 15 on each of its 14 days and 190 over its 4 turkey tiers", () => {
+    const thanksgiving = EVENTS.find((event) => event.id === "thanksgiving-2026")!;
+    expect(thanksgiving.coins).toBe(BIG_EVENT_COINS);
+    expect(thanksgiving.calendar!.map((day) => coinsIn(day.rewards))).toEqual(Array(14).fill(15));
+    expect(thanksgiving.ladder!.tiers.map((tier) => coinsIn(tier.rewards))).toEqual([20, 35, 55, 80]);
+    expect(eventCoinsTotal(thanksgiving)).toBe(400);
+    // The Glimmers come last, after the day's own reward, as on Halloween's days.
+    expect(thanksgiving.calendar![0]!.rewards.at(-1)).toEqual({ kind: "eventCoins", amount: 15 });
+  });
+
   test("every event with coins has one milestone per ladder tier", () => {
     for (const event of EVENTS) {
       if (!event.coins) continue;

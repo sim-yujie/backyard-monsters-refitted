@@ -181,7 +181,7 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
       pictures.append(krallenPicture(1, "icon", "events-reward__image"));
       break;
     case "eventCoins":
-      pictures.append(gameIcon("eventcoin", { size: 24, decorative: true }));
+      pictures.append(rewardIcon("eventcoin"));
       figure = shortAmount(reward.amount);
       break;
     case "decoration": {
