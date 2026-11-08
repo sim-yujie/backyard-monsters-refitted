@@ -38,7 +38,7 @@ export const CASE_STEPS: readonly (readonly [number | null, string])[] = [
 ];
 
 /** The mail each rewarded reporter gets (the server's default reason). */
-const AWARD_MAIL = "Thank you for reporting a chat message that broke the rules.";
+export const AWARD_MAIL = "Thank you for reporting a chat message that broke the rules.";
 
 /** "1 hour", "1 day", "3 days". */
 export const lengthWords = (hours: number): string =>
@@ -106,7 +106,7 @@ const stat = (name: IconName, value: number, words: string, extra = ""): HTMLEle
   );
 
 /** One line of the room copy; the reported line is marked. */
-const snapshotLine = (line: SnapshotLine, offender: number): HTMLElement =>
+export const snapshotLine = (line: SnapshotLine, offender: number): HTMLElement =>
   h(
     "li",
     {

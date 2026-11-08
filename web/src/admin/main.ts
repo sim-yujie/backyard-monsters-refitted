@@ -5,14 +5,14 @@ import { SESSION_STORAGE_KEY } from "@/config";
 import {
   adoptNewerSignIn,
   failureKind,
+  fetchAnnouncements,
   fetchBugReports,
   fetchHealth,
+  fetchModerators,
   fetchMe,
-  fetchInbox,
   fetchOverview,
   type AdminHealthReport,
   type BugReportSummary,
-  type InboxPlayer,
   type DashboardSection,
   type InboxList,
   type StatsOverview,
@@ -20,15 +20,14 @@ import {
 import { AnnouncementsView } from "./announcements";
 import { AttackLogSection } from "./attacks";
 import { BugsView } from "./bugs";
-import { CasesView } from "./cases";
 import { ChatPanel } from "./chat";
 import { h, replace } from "./dom";
 import { ErrorsView } from "./errors";
-import { InboxView, inboxLabel } from "./inbox";
 import { ModerationView } from "./moderation";
 import { ModeratorsView } from "./moderators";
 import { ModMailSection } from "./modmail";
-import { ago, count, dateTime } from "./format";
+import { homeSplitWords } from "./evidence";
+import { ago, count, dateTime, plural } from "./format";
 import { icon } from "./icons";
 import { topItems, verdict, type TopItem } from "./problems";
 import {
@@ -39,18 +38,24 @@ import {
   renderPlayers,
   type Level,
 } from "./sections";
+import { QueueView } from "./queue";
 import { ShinyView } from "./shiny";
 import { applyTheme, readTheme, themePicker } from "./theme";
 import {
-  PHONE_TABS,
+  PAGES,
   ScrollMemory,
   VIEWS,
-  phoneTab,
   isView,
+  pageHome,
+  pageIcon,
+  pageLabel,
+  pageLede,
+  pageOf,
+  pageViews,
   readRoute,
-  viewGroups,
   viewHash,
   viewLabel,
+  type PageId,
   type ViewId,
   type ViewParams,
 } from "./views";
@@ -61,45 +66,26 @@ import {
  * or not, sees only "Not found", the same as any unknown page: the server
  * answers them 404 and the page shows nothing more.
  *
- * Each main task is its own view (`views.ts`, owner 8 Nov 2026): Home first,
- * then the moderation views, the player-facing tools, and monitoring last.
- * A computer lists them down the left; a phone has four tabs (Home,
- * Moderation, Bugs, More) at the top. The address names the view (`#errors`,
- * `#bugs?list=working`), so the browser's Back goes to the view before and a
- * Telegram alert can link one (`#health`, `#backups`, `#errors`, `#bugs`, or a
- * report: `?bug=<id>`). Views stay in the page while hidden: a search typed,
- * a filter picked or a report opened is still there on coming back, and each
- * view keeps its scroll position. Each nav link carries its view's state (a
- * count of open cases or new bug reports, a mark when something there needs
- * a look).
+ * Six pages in the menu (owner, 8 Nov 2026, built on Codex astra's
+ * mock-up): Home, Moderation, Player support, Announcements, Game activity
+ * and Server health (`views.ts`). A page with several parts shows them as
+ * tabs under its title; each part is a view the address names (`#errors`,
+ * `#bugs?list=working`, `#moderation?player=12`), so the browser's Back goes
+ * to the view before and a Telegram alert can link one (`#health`,
+ * `#backups`, `#errors`, `#bugs`, or a report: `?bug=<id>`). A computer lists
+ * the pages down the left; a phone has a Menu button that opens them in two
+ * columns. Views stay in the page while hidden: a search typed, a filter
+ * picked or a report opened is still there on coming back, and each view
+ * keeps its scroll position. The menu carries each page's state (players
+ * waiting on Moderation, new bug reports on Player support, a mark on Server
+ * health when something there needs a look).
  */
 
-/** The phone tabs' own names. */
-const TAB_WORDS: Readonly<Partial<Record<ViewId | "more", string>>> & { more: string } = {
-  home: "Home",
-  inbox: "Inbox",
-  bugs: "Bugs",
-  more: "More",
-};
-
-/** Views whose nav link never shows the server's health marks. */
-const NO_HEALTH_MARK: ReadonlySet<ViewId> = new Set<ViewId>([
-  "home",
-  "inbox",
-  "cases",
-  "players",
-  "activity",
-  "shiny",
-  "announcements",
-  "moderation",
-  "attacks",
-  "moderators",
-  "modmail",
-  "chat",
-]);
+/** Views whose tab shows the server's health marks. */
+const HEALTH_MARK_VIEWS: ReadonlySet<ViewId> = new Set<ViewId>(["health", "backups", "errors"]);
 
 /** Views with a list and an opened item side by side: they get a wider page. */
-const WIDE_VIEWS: ReadonlySet<ViewId> = new Set<ViewId>(["inbox", "bugs"]);
+const WIDE_VIEWS: ReadonlySet<ViewId> = new Set<ViewId>(["moderation", "bugs"]);
 
 const RANGES = [
   [30, "30 days"],
@@ -122,38 +108,6 @@ export const sectionLevels = (
   }
   return levels;
 };
-
-/** A number and its words, linking to where they come from. */
-const homeLink = (href: string, value: string, label: string): HTMLElement =>
-  h(
-    "a",
-    { class: "today-link", attrs: { href } },
-    h("span", { class: "today-value" }, value),
-    h("span", { class: "today-label" }, label),
-  );
-
-/** One row on a Home card: who, how long ago, and a line about it. */
-const homeRow = (href: string, who: string, at: string, line: string): HTMLElement =>
-  h(
-    "li",
-    {},
-    h(
-      "a",
-      { class: "row home-row", attrs: { href } },
-      h(
-        "span",
-        { class: "row-main" },
-        h(
-          "span",
-          { class: "row-top" },
-          h("strong", {}, who),
-          h("time", { class: "row-when", attrs: { datetime: at, title: dateTime(at) } }, ago(at)),
-        ),
-        h("span", { class: "row-meta home-line" }, line),
-      ),
-      icon("chevron", 16),
-    ),
-  );
 
 /** The plain page anyone but the owner gets. */
 export const showNotFound = (): void => {
@@ -211,12 +165,10 @@ class Dashboard {
     openReport: (id) => this.openBug(id),
     say: (message) => this.say(message),
   });
+  /** Find a player: any player's whole record and every tool (the old Moderation view). */
   private readonly moderation = new ModerationView({
     say: (message) => this.say(message),
-    onChanged: () => {
-      void this.inbox.refresh();
-      void this.loadHomeInbox();
-    },
+    onChanged: () => void this.queue.refresh(),
   });
   private readonly moderators = new ModeratorsView({ say: (message) => this.say(message) });
   private readonly attacks = new AttackLogSection({
@@ -230,46 +182,22 @@ class Dashboard {
     say: (message) => this.say(message),
     onViewChange: () => undefined,
   });
-  private readonly cases = new CasesView({
-    say: (message) => this.say(message),
-    onCount: (open) => {
-      this.openCases = open;
-      this.renderCaseState();
-      this.renderToday();
-    },
-    openPlayer: (userid) => this.openPlayer(userid),
-    onChanged: () => {
-      void this.moderation.refresh();
-      void this.inbox.refresh();
-      void this.loadHomeInbox();
-    },
-  });
-  private readonly inbox = new InboxView({
+  /** The Moderation list: player reports and word-filter catches, one row per player. */
+  private readonly queue = new QueueView({
     say: (message) => this.say(message),
     onCount: (counts) => {
       this.inboxCounts = counts;
       this.renderInboxState();
-      this.renderHomeInbox();
+      this.renderHomeNeeds();
     },
-    onChanged: () => {
-      void this.cases.refresh();
-      void this.moderation.refresh();
-      void this.loadHomeInbox();
-    },
-    openAward: (caseId) => {
-      history.pushState(null, "", `${location.pathname}${viewHash("cases")}`);
-      this.show("cases", {});
-      void this.cases.openAward(caseId);
-    },
+    onChanged: () => void this.moderation.refresh(),
     openPlayer: (userid) => this.openPlayer(userid),
-    navigate: ({ source, player }) => {
-      location.hash = viewHash("inbox", { source: source === "all" ? null : source, player });
+    navigate: ({ filter, player, act, tab }) => {
+      location.hash = viewHash("moderation", { filter: filter === "all" ? null : filter, player, act, tab });
     },
   });
-  /** Players in the moderation inbox, by source, or null before they are read. */
+  /** Players in the Moderation list, by list, or null before they are read. */
   private inboxCounts: InboxList["counts"] | null = null;
-  /** Open chat cases, or null before they are read. */
-  private openCases: number | null = null;
   private readonly chat = new ChatPanel({
     openPlayer: (userid) => this.openPlayer(userid),
     say: (message) => this.say(message),
@@ -279,23 +207,22 @@ class Dashboard {
   private readonly sections: Record<SectionId, Section>;
   private readonly home: HTMLElement;
   private readonly nav: HTMLElement;
-  private readonly tabs: HTMLElement;
-  private readonly moreButton: HTMLButtonElement;
-  /** Every nav link and phone tab of each view: their state badges follow the view. */
+  private readonly menuButton: HTMLButtonElement;
+  private readonly topbar: HTMLElement;
+  /** Each page's menu link. */
+  private readonly pageLinks = new Map<PageId, HTMLAnchorElement>();
+  /** Each view's tab links under its page title: their state badges follow the view. */
   private readonly links = new Map<ViewId, HTMLAnchorElement[]>();
   private view: ViewId = "home";
   private readonly scrolls = new ScrollMemory();
   private newBugs: number | null = null;
   /** The newest new bug reports, for Home. */
   private newBugList: BugReportSummary[] = [];
-  private workingBugs: number | null = null;
-  /** The first players in the inbox, for Home; null before they are read. */
-  private homeInboxRows: InboxPlayer[] | null = null;
   /** Whether the owner opened the status strip's problems. */
   private statusOpen: boolean | null = null;
-  private readonly homeInbox = h("section", { class: "home-card", attrs: { id: "home-inbox", "aria-labelledby": "home-inbox-title" } });
-  private readonly homeBugs = h("section", { class: "home-card", attrs: { id: "home-bugs", "aria-labelledby": "home-bugs-title" } });
-  private readonly todayBox = h("div", { class: "today", attrs: { "aria-label": "Today so far" } });
+  private readonly homeNeeds = h("div", { class: "two-cols", attrs: { id: "home-needs" } });
+  private readonly todayBox = h("div", { class: "metrics", attrs: { "aria-label": "Today so far" } });
+  private readonly aroundBox = h("div", { class: "panel", attrs: { id: "home-around" } });
   /** Which problems' "What to do" is open, kept across the minutely refresh. */
   private openFixes: Set<string> | null = null;
   private toastTimer = 0;
@@ -321,105 +248,96 @@ class Dashboard {
       ),
     );
 
-    const addLink = (id: ViewId, link: HTMLAnchorElement) => {
-      const list = this.links.get(id) ?? [];
-      list.push(link);
-      this.links.set(id, list);
-    };
     this.nav = h(
       "nav",
-      { class: "nav", attrs: { id: "views-nav", "aria-label": "Views" } },
-      ...viewGroups().map(({ title, views }) =>
-        h(
-          "div",
-          { class: "nav-group" },
-          title ? h("h2", { class: "nav-title" }, title) : null,
-          h(
-            "ul",
-            {},
-            ...views.map((id) => {
-              const link = h(
-                "a",
-                { class: "nav-link", attrs: { href: viewHash(id), "data-view": id } },
-                h("span", { class: "nav-label" }, viewLabel(id)),
-                h("span", { class: "nav-state" }),
-              );
-              link.addEventListener("click", () => this.setMenu(false));
-              addLink(id, link);
-              return h("li", {}, link);
-            }),
-          ),
-        ),
-      ),
-    );
-    this.moreButton = h(
-      "button",
-      {
-        class: "tab tab-more",
-        attrs: { type: "button", "aria-expanded": "false", "aria-controls": "views-nav" },
-        onClick: () => this.setMenu(this.moreButton.getAttribute("aria-expanded") !== "true"),
-      },
-      icon("menu", 18),
-      h("span", { class: "tab-label" }, TAB_WORDS.more),
-    );
-    this.tabs = h(
-      "nav",
-      { class: "tabs", attrs: { "aria-label": "Main views" } },
-      ...PHONE_TABS.map((id) => {
-        const tab = h(
+      { class: "nav", attrs: { id: "views-nav", "aria-label": "Pages" } },
+      ...PAGES.map(([id]) => {
+        const link = h(
           "a",
-          { class: "tab", attrs: { href: viewHash(id), "data-view": id } },
-          h("span", { class: "tab-label" }, TAB_WORDS[id] ?? viewLabel(id)),
+          { class: "nav-link", attrs: { href: viewHash(pageHome(id)), "data-page": id } },
+          icon(pageIcon(id), 20),
+          h("span", { class: "nav-label" }, pageLabel(id)),
           h("span", { class: "nav-state" }),
         );
-        tab.addEventListener("click", () => this.setMenu(false));
-        addLink(id, tab);
-        return tab;
+        link.addEventListener("click", () => this.setMenu(false));
+        this.pageLinks.set(id, link);
+        return link;
       }),
-      this.moreButton,
+    );
+    this.menuButton = h(
+      "button",
+      {
+        class: "button quiet menu-toggle",
+        attrs: { type: "button", "aria-expanded": "false", "aria-controls": "views-nav" },
+        onClick: () => this.setMenu(this.menuButton.getAttribute("aria-expanded") !== "true"),
+      },
+      icon("menu", 18),
+      h("span", {}, "Menu"),
     );
 
-    const section = (id: SectionId, title: string, ...extra: HTMLElement[]): Section => {
+    const section = (id: SectionId, ...extra: HTMLElement[]): Section => {
+      const page = pageOf(id);
+      const views = pageViews(page);
       const body = h("div", { class: "section-body", attrs: { id: `${id}-body` } }, skeleton());
       const state = h("span", { class: "section-state" });
+      const subnav =
+        views.length > 1
+          ? h(
+              "nav",
+              { class: "subnav", attrs: { "aria-label": `${pageLabel(page)} parts` } },
+              ...views.map((view) => {
+                const link = h(
+                  "a",
+                  {
+                    class: "subnav-link",
+                    attrs: { href: viewHash(view), "data-view": view, ...(view === id ? { "aria-current": "page" } : {}) },
+                  },
+                  h("span", {}, viewLabel(view)),
+                  h("span", { class: "nav-state" }),
+                );
+                const list = this.links.get(view) ?? [];
+                list.push(link);
+                this.links.set(view, list);
+                return link;
+              }),
+            )
+          : null;
       const element = h(
         "section",
         {
           class: `section view${WIDE_VIEWS.has(id) ? " is-wide" : ""}`,
-          attrs: { id, "data-view": id, "aria-labelledby": `${id}-title`, hidden: "" },
+          attrs: { id, "data-view": id, "data-page": page, "aria-labelledby": `${id}-title`, hidden: "" },
         },
         h(
           "header",
-          { class: "section-head" },
-          h("h2", { attrs: { id: `${id}-title` } }, title),
-          state,
-          ...extra,
+          { class: "page-heading" },
+          h("h1", { attrs: { id: `${id}-title` } }, pageLabel(page), state, ...extra),
+          pageLede(page) ? h("p", {}, pageLede(page)) : null,
+          subnav,
         ),
         body,
       );
       return { element, body, state };
     };
     this.sections = {
-      inbox: section("inbox", "Moderation inbox"),
-      cases: section("cases", "Chat cases"),
-      bugs: section("bugs", "Bug reports"),
-      moderation: section("moderation", "Moderation"),
-      attacks: section("attacks", "Attack log"),
-      moderators: section("moderators", "Chat moderators"),
-      modmail: section("modmail", "Moderator mail"),
-      chat: section("chat", "Chat as the game team"),
-      shiny: section("shiny", "Give Shiny"),
-      announcements: section("announcements", "Announcements"),
-      players: section("players", "Players", rangeButtons),
-      activity: section("activity", "Activity"),
-      errors: section("errors", "Errors"),
-      health: section("health", "Server"),
-      backups: section("backups", "Backups"),
+      moderation: section("moderation"),
+      find: section("find"),
+      attacks: section("attacks"),
+      moderators: section("moderators"),
+      modmail: section("modmail"),
+      bugs: section("bugs"),
+      shiny: section("shiny"),
+      chat: section("chat"),
+      announcements: section("announcements"),
+      players: section("players", rangeButtons),
+      activity: section("activity"),
+      health: section("health"),
+      errors: section("errors"),
+      backups: section("backups"),
     };
-    replace(this.sections.inbox.body, this.inbox.element);
-    replace(this.sections.cases.body, this.cases.element);
+    replace(this.sections.moderation.body, this.queue.element);
+    replace(this.sections.find.body, this.moderation.element);
     replace(this.sections.bugs.body, this.bugs.element);
-    replace(this.sections.moderation.body, this.moderation.element);
     replace(this.sections.attacks.body, this.attacks.element);
     replace(this.sections.moderators.body, this.moderators.element);
     replace(this.sections.modmail.body, this.modMail.element);
@@ -430,16 +348,22 @@ class Dashboard {
 
     this.home = h(
       "section",
-      { class: "view home", attrs: { id: "home", "data-view": "home", "aria-label": "Home", hidden: "" } },
-      this.verdict,
-      h("h2", { class: "home-title" }, "Needs you"),
-      h("div", { class: "home-cards" }, this.homeInbox, this.homeBugs),
-      h("h2", { class: "home-title" }, "Today"),
-      this.todayBox,
+      { class: "view home", attrs: { id: "home", "data-view": "home", "aria-labelledby": "home-title", hidden: "" } },
+      h(
+        "header",
+        { class: "page-heading" },
+        h("h1", { attrs: { id: "home-title" } }, "Home"),
+        h("p", {}, `Signed in as ${username}.`),
+      ),
+      h("h2", { class: "section-title" }, "What needs you now"),
+      this.homeNeeds,
+      h("div", { class: "health-summary" }, this.verdict),
+      h("div", { class: "home-section" }, h("h2", { class: "section-title" }, "Today so far"), h("div", { class: "panel" }, this.todayBox)),
+      h("div", { class: "home-section" }, h("h2", { class: "section-title" }, "Around the backyard"), this.aroundBox),
     );
-    this.renderHomeInbox();
-    this.renderHomeBugs();
+    this.renderHomeNeeds();
     this.renderToday();
+    this.renderAround(null, null);
 
     this.refreshButton = h(
       "button",
@@ -451,37 +375,37 @@ class Dashboard {
       icon("refresh", 18),
       h("span", {}, "Refresh"),
     );
+    this.topbar = h(
+      "header",
+      { class: "topbar" },
+      h("span", { class: "mobile-brand" }, "BYMR dashboard"),
+      h("span", { class: "desktop-meta small" }, `Signed in as ${username}`),
+      h("div", { class: "top-actions" }, this.updated, this.refreshButton, themePicker(), this.menuButton),
+    );
 
     document.title = "BYMR dashboard";
-    document.body.className = "admin-body";
+    document.body.className = "admin-body v2";
     replace(
       document.body,
       h(
         "div",
         { class: "shell" },
         h(
-          "div",
+          "aside",
           { class: "side" },
-          h(
-            "header",
-            { class: "top" },
-            h(
-              "div",
-              { class: "brand" },
-              h("h1", {}, "BYMR dashboard"),
-              h("span", { class: "signed-in" }, `Signed in as ${username}`),
-            ),
-            h("div", { class: "top-actions" }, this.updated, this.refreshButton),
-            themePicker(),
-          ),
-          this.tabs,
+          h("div", { class: "brand" }, h("strong", {}, "BYMR dashboard"), h("p", {}, "Backyard Monsters Revamped")),
           this.nav,
         ),
         h(
-          "main",
-          { class: "page" },
-          this.home,
-          ...VIEWS.filter(([id]) => id !== "home").map(([id]) => this.sections[id as SectionId].element),
+          "div",
+          { class: "main-col" },
+          this.topbar,
+          h(
+            "main",
+            { class: "page" },
+            this.home,
+            ...VIEWS.filter(([id]) => id !== "home").map(([id]) => this.sections[id as SectionId].element),
+          ),
         ),
       ),
       this.toast,
@@ -511,9 +435,8 @@ class Dashboard {
     await Promise.all([
       this.loadHealth(),
       this.loadStats(),
-      route.view === "inbox" ? this.inbox.show(route.params) : this.inbox.refresh(),
-      this.loadHomeInbox(),
-      this.cases.refresh(),
+      this.queue.show(route.view === "moderation" ? route.params : {}),
+      this.loadAround(),
       this.bugs.show(route.bug, route.view === "bugs" ? route.params : {}),
       this.moderation.refresh(),
       route.view === "attacks" ? this.attacks.show(route.params) : Promise.resolve(),
@@ -529,7 +452,7 @@ class Dashboard {
     const route = readRoute(location.search, location.hash);
     this.show(route.view, route.params);
     if (route.view === "bugs") void this.bugs.show(route.bug, route.params);
-    if (route.view === "inbox") void this.inbox.show(route.params);
+    if (route.view === "moderation") void this.queue.show(route.params);
     if (route.view === "attacks") void this.attacks.show(route.params);
   }
 
@@ -546,33 +469,23 @@ class Dashboard {
     for (const [id] of VIEWS) {
       if (id !== "home") this.sections[id as SectionId].element.hidden = id !== view;
     }
-    for (const [id, links] of this.links) {
-      for (const link of links) {
-        if (id === view) link.setAttribute("aria-current", "page");
-        else link.removeAttribute("aria-current");
-      }
+    const page = pageOf(view);
+    for (const [id, link] of this.pageLinks) {
+      if (id === page) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
     }
-    // On a phone, More is marked (with the view's name) for a view under it.
-    const underMore = phoneTab(view) === "more";
-    this.moreButton.classList.toggle("is-current", underMore);
-    replace(
-      this.moreButton.querySelector(".tab-label")!,
-      underMore ? viewLabel(view) : TAB_WORDS.more,
-    );
     this.setMenu(false);
     document.title = view === "home" ? "BYMR dashboard" : `${viewLabel(view)} · BYMR dashboard`;
     if (changed) window.scrollTo?.(0, this.scrolls.restore(view));
   }
 
-  /** Opens or closes the phone's list of every view (under More). */
+  /** Opens or closes the phone's menu of the six pages. */
   private setMenu(open: boolean): void {
-    this.moreButton.setAttribute("aria-expanded", String(open));
-    this.nav.classList.toggle("is-open", open);
-    // The menu opens right under the tab row, wherever the page is scrolled.
-    if (open) this.nav.style.setProperty("--menu-top", `${Math.max(0, Math.round(this.tabs.getBoundingClientRect().bottom))}px`);
+    this.menuButton.setAttribute("aria-expanded", String(open));
+    this.nav.closest(".side")?.classList.toggle("is-open", open);
   }
 
-  /** Puts a state badge (or nothing) on every link to a view. */
+  /** Puts a state badge (or nothing) on a view's tab links. */
   private setBadge(view: ViewId, make: (() => Node) | null): void {
     for (const link of this.links.get(view) ?? []) {
       const badge = link.querySelector(".nav-state");
@@ -582,15 +495,22 @@ class Dashboard {
     }
   }
 
+  /** Puts a state badge (or nothing) on a page's menu link. */
+  private setPageBadge(page: PageId, make: (() => Node) | null): void {
+    const badge = this.pageLinks.get(page)?.querySelector(".nav-state");
+    if (!badge) return;
+    if (make) replace(badge, make());
+    else replace(badge);
+  }
+
   private async loadAll(): Promise<void> {
     this.refreshButton.classList.add("is-busy");
     this.refreshButton.disabled = true;
     await Promise.all([
       this.loadHealth(),
       this.loadStats(),
-      this.inbox.refresh(),
-      this.loadHomeInbox(),
-      this.cases.refresh(),
+      this.queue.refresh(),
+      this.loadAround(),
       this.bugs.refresh(),
       this.moderation.refresh(),
       this.attacks.refresh(),
@@ -603,36 +523,21 @@ class Dashboard {
     this.say("Up to date");
   }
 
-  /** A count of open items on a view's links and heading, or nothing. */
-  private renderCount(view: "cases", open: number | null): void {
-    const { state } = this.sections[view];
-    if (open) {
-      const text = String(open);
-      this.setBadge(view, () => h("span", { class: "count" }, text, h("span", { class: "sr-only" }, " open")));
-      replace(state, h("span", { class: "chip chip-info" }, `${text} open`));
-    } else {
-      this.setBadge(view, null);
-      replace(state);
-    }
-  }
-
-  /** The players waiting in the moderation inbox on its links and heading. */
+  /** The players waiting in the Moderation list on its menu link, tab and heading. */
   private renderInboxState(): void {
     const open = this.inboxCounts?.all ?? null;
-    const { state } = this.sections.inbox;
+    const { state } = this.sections.moderation;
     if (open) {
       const text = String(open);
-      this.setBadge("inbox", () => h("span", { class: "count" }, text, h("span", { class: "sr-only" }, " waiting")));
+      const badge = () => h("span", { class: "count" }, text, h("span", { class: "sr-only" }, " waiting"));
+      this.setBadge("moderation", badge);
+      this.setPageBadge("moderation", badge);
       replace(state, h("span", { class: "chip chip-info" }, open === 1 ? "1 player" : `${text} players`));
     } else {
-      this.setBadge("inbox", null);
+      this.setBadge("moderation", null);
+      this.setPageBadge("moderation", null);
       replace(state);
     }
-  }
-
-  /** The open chat cases on the link and the heading. */
-  private renderCaseState(): void {
-    this.renderCount("cases", this.openCases);
   }
 
   private say(message: string): void {
@@ -659,10 +564,10 @@ class Dashboard {
     void this.bugs.show(null, { list });
   }
 
-  /** Opens a player in the Find a player view (a name clicked in the chat panel or a case). */
+  /** Opens a player in the Find a player view (a name clicked in the chat panel, a record's account link). */
   private openPlayer(userid: number): void {
-    history.pushState(null, "", `${location.pathname}${viewHash("moderation")}`);
-    this.show("moderation", {});
+    history.pushState(null, "", `${location.pathname}${viewHash("find")}`);
+    this.show("find", {});
     void this.moderation.open(userid);
   }
 
@@ -679,16 +584,11 @@ class Dashboard {
   private async loadHealth(): Promise<void> {
     let report: AdminHealthReport;
     try {
-      const [health, bugs, working] = await Promise.all([
-        fetchHealth(),
-        fetchBugReports("new").catch(() => null),
-        fetchBugReports("working").catch(() => null),
-      ]);
+      const [health, bugs] = await Promise.all([fetchHealth(), fetchBugReports("new").catch(() => null)]);
       report = health;
       this.newBugs = bugs ? bugs.reports.length : null;
-      this.newBugList = bugs ? bugs.reports.slice(0, 3) : [];
-      this.workingBugs = working ? working.reports.length : null;
-      this.renderHomeBugs();
+      this.newBugList = bugs ? bugs.reports.slice(0, 1) : [];
+      this.renderHomeNeeds();
     } catch (err) {
       this.showHealthFailure(err);
       return;
@@ -771,27 +671,30 @@ class Dashboard {
   /** Each view's heading and links say whether something there needs a look. */
   private renderStates(items: readonly TopItem[]): void {
     const levels = sectionLevels(items) as Partial<Record<ViewId, Level>>;
+    let server: Level | null = null;
     for (const [id] of VIEWS) {
-      if (id === "home" || id === "inbox" || id === "cases") continue;
+      if (id === "home" || id === "moderation") continue;
       const { state } = this.sections[id];
-      const level = NO_HEALTH_MARK.has(id) ? undefined : levels[id];
+      const level = HEALTH_MARK_VIEWS.has(id) ? levels[id] : undefined;
+      if (level && server !== "bad") server = level;
       if (id === "bugs" && this.newBugs) {
         const text = this.newBugs >= 30 ? "30+" : String(this.newBugs);
-        this.setBadge(id, () => h("span", { class: "count" }, text, h("span", { class: "sr-only" }, " new")));
+        const badge = () => h("span", { class: "count" }, text, h("span", { class: "sr-only" }, " new"));
+        this.setBadge(id, badge);
+        this.setPageBadge("support", badge);
         replace(state, h("span", { class: "chip chip-info" }, `${text} new`));
         continue;
       }
+      if (id === "bugs") this.setPageBadge("support", null);
       if (level) {
         this.setBadge(id, () => mark(level));
-        replace(
-          state,
-          h("span", { class: `chip chip-${level}` }, level === "bad" ? "Needs you" : "Check"),
-        );
+        replace(state, h("span", { class: `chip chip-${level}` }, level === "bad" ? "Needs you" : "Check"));
       } else {
         this.setBadge(id, null);
         replace(state);
       }
     }
+    this.setPageBadge("server", server ? () => mark(server) : null);
   }
 
   /**
@@ -931,97 +834,89 @@ class Dashboard {
     );
   }
 
-  /** Today's numbers: players, errors. */
+  /** Today's numbers, each from the server's own daily counts. */
   private renderToday(): void {
-    const today = this.overview?.today ?? null;
-    const errorsToday =
-      today && (today.browserErrors !== null || today.serverErrors !== null)
-        ? (today.browserErrors ?? 0) + (today.serverErrors ?? 0)
-        : null;
+    const o = this.overview;
+    const metric = (href: string, value: string, label: string) =>
+      h("a", { class: "metric", attrs: { href } }, h("strong", {}, value), h("span", {}, label));
     replace(
       this.todayBox,
-      homeLink("#players", count(this.overview?.players.activeToday), "played today"),
-      homeLink("#errors", count(errorsToday), errorsToday === 1 ? "error today" : "errors today"),
+      metric("#players", count(o?.players.activeToday), "players today"),
+      metric("#players", count(o?.today.newPlayers), "new players"),
+      metric("#activity", count(o?.today.attacks), "attacks"),
+      metric("#bugs", count(o?.today.bugReports), "bug reports"),
     );
   }
 
-  /** The first players in the inbox, for Home. */
-  private async loadHomeInbox(): Promise<void> {
-    try {
-      this.homeInboxRows = (await fetchInbox()).players.slice(0, 5);
-    } catch {
-      this.homeInboxRows = null;
-    }
-    this.renderHomeInbox();
-  }
-
-  /** Home's moderation card: who is waiting, each a tap from their evidence. */
-  private renderHomeInbox(): void {
+  /**
+   * "What needs you now": the players waiting in Moderation (each player once,
+   * split by where they came from, the two parts adding up to the total) and
+   * the newest new bug report.
+   */
+  private renderHomeNeeds(): void {
     const counts = this.inboxCounts;
-    const rows = this.homeInboxRows;
     const total = counts?.all ?? null;
+    const bug = this.newBugList[0] ?? null;
+    const card = (href: string, iconName: "shield" | "support", title: string, sub: string, line: string | null, link: string) =>
+      h(
+        "a",
+        { class: "panel needs-card", attrs: { href } },
+        h("span", { class: "needs-icon" }, icon(iconName, 22)),
+        h(
+          "span",
+          { class: "needs-text" },
+          h("h3", {}, title),
+          h("p", { class: "small" }, sub),
+          line ? h("p", { class: "needs-line" }, line) : null,
+          h("span", { class: "text-link" }, link),
+        ),
+        h("span", { class: "arrow" }, icon("arrow", 20)),
+      );
     replace(
-      this.homeInbox,
-      h(
-        "header",
-        { class: "home-card-head" },
-        h("h3", { attrs: { id: "home-inbox-title" } }, "Moderation"),
-        h("a", { class: "home-more", attrs: { href: viewHash("inbox") } }, "Open inbox", icon("chevron", 16)),
+      this.homeNeeds,
+      card(
+        viewHash("moderation"),
+        "shield",
+        total === null ? "Players to review" : total === 0 ? "Nobody to review" : `${plural(total, "player")} to review`,
+        counts ? homeSplitWords(counts) : "Not read yet",
+        null,
+        "Open Moderation",
       ),
-      h(
-        "div",
-        { class: "today home-numbers" },
-        homeLink(viewHash("inbox"), total === null ? "–" : String(total), total === 1 ? "player waiting" : "players waiting"),
-        homeLink(viewHash("inbox", { source: "reports" }), counts ? String(counts.reports) : "–", "player reports"),
-        homeLink(viewHash("inbox", { source: "filter" }), counts ? String(counts.filter) : "–", "word filter"),
+      card(
+        bug ? viewHash("bugs", { bug: bug.id }) : viewHash("bugs"),
+        "support",
+        this.newBugs === null ? "Bug reports" : this.newBugs === 0 ? "No new bug reports" : `${plural(this.newBugs >= 30 ? 30 : this.newBugs, "new bug report")}${this.newBugs >= 30 ? "+" : ""}`,
+        bug ? `Newest from ${bug.username ?? "a signed-out player"}, ${ago(bug.createdAt)}` : "Reports from the game’s Help button",
+        bug ? `“${bug.preview}”` : null,
+        bug ? "Open the report" : "Open Player support",
       ),
-      rows === null
-        ? null
-        : rows.length
-          ? h(
-              "ul",
-              { class: "rows home-rows" },
-              ...rows.map((player) =>
-                homeRow(
-                  viewHash("inbox", { player: player.userid }),
-                  player.username ?? `#${player.userid}`,
-                  player.oldestAt,
-                  inboxLabel(player),
-                ),
-              ),
-            )
-          : h("p", { class: "note" }, "Nobody is waiting."),
     );
   }
 
-  /** Home's bug card: new and in progress, and the newest few. */
-  private renderHomeBugs(): void {
-    const many = (n: number | null) => (n === null ? "–" : n >= 30 ? "30+" : String(n));
+  /** Live announcements and the chat moderators, for Home. */
+  private async loadAround(): Promise<void> {
+    const [announcements, moderators] = await Promise.all([
+      fetchAnnouncements().then((a) => a.announcements.filter((x) => x.live)).catch(() => null),
+      fetchModerators().then((a) => a.moderators.length).catch(() => null),
+    ]);
+    this.renderAround(announcements, moderators);
+  }
+
+  private renderAround(live: { id: number; title: string; endsAt: string | null }[] | null, moderators: number | null): void {
+    const row = (href: string, title: string, line: string) =>
+      h("a", { class: "info-row", attrs: { href } }, h("span", {}, h("h3", {}, title), h("p", {}, line)), icon("chevron", 16));
     replace(
-      this.homeBugs,
-      h(
-        "header",
-        { class: "home-card-head" },
-        h("h3", { attrs: { id: "home-bugs-title" } }, "Bug reports"),
-        h("a", { class: "home-more", attrs: { href: viewHash("bugs") } }, "All reports", icon("chevron", 16)),
+      this.aroundBox,
+      row(
+        "#announcements",
+        live === null ? "Announcements" : live.length ? plural(live.length, "live announcement") : "No live announcement",
+        live?.length ? live.map((a) => `“${a.title}”${a.endsAt ? ` until ${dateTime(a.endsAt)}` : ""}`).join(" · ") : "Players see nothing new when they open the game.",
       ),
-      h(
-        "div",
-        { class: "today home-numbers" },
-        homeLink(viewHash("bugs", { list: "new" }), many(this.newBugs), "new"),
-        homeLink(viewHash("bugs", { list: "working" }), many(this.workingBugs), "being worked on"),
+      row(
+        "#moderators",
+        moderators === null ? "Chat moderators" : plural(moderators, "chat moderator"),
+        "Players whose chat lines carry the [Mod] badge.",
       ),
-      this.newBugList.length
-        ? h(
-            "ul",
-            { class: "rows home-rows" },
-            ...this.newBugList.map((report) =>
-              homeRow(viewHash("bugs", { bug: report.id }), report.username ?? "Signed out", report.createdAt, report.preview),
-            ),
-          )
-        : this.newBugs === 0
-          ? h("p", { class: "note" }, "No new reports.")
-          : null,
     );
   }
 

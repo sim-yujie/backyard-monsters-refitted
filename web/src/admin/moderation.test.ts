@@ -298,6 +298,7 @@ const flagged = (over: Partial<FlaggedPlayer> = {}): FlaggedPlayer => ({
   lines: [
     {
       id: 90,
+      ts: 1_762_156_800_000,
       channel: "chat:mr2-global",
       message: "shut up faggot",
       shown: "shut up ******",

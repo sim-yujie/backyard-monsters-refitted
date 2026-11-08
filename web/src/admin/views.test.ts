@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { PHONE_TABS, ScrollMemory, VIEWS, phoneTab, readRoute, viewGroups, viewHash } from "./views";
+import { PAGES, ScrollMemory, VIEWS, pageHome, pageOf, pageViews, readRoute, viewHash } from "./views";
 
 describe("the address", () => {
   it("names a view, with what it should show", () => {
     expect(readRoute("", "#errors")).toEqual({ view: "errors", params: {}, bug: null });
     expect(readRoute("", "#bugs?list=working")).toEqual({ view: "bugs", params: { list: "working" }, bug: null });
-    expect(readRoute("", "#cases?player=12&x=")).toEqual({ view: "cases", params: { player: "12", x: "" }, bug: null });
+    expect(readRoute("", "#find?player=12&x=")).toEqual({ view: "find", params: { player: "12", x: "" }, bug: null });
   });
 
   it("opens Home for an empty or unknown address", () => {
@@ -26,25 +26,37 @@ describe("the address", () => {
   it("is written back the same way it is read", () => {
     expect(viewHash("errors")).toBe("#errors");
     expect(viewHash("bugs", { list: "working", empty: "", none: null })).toBe("#bugs?list=working");
-    const hash = viewHash("inbox", { player: 12, source: "filter" });
-    expect(readRoute("", hash)).toEqual({ view: "inbox", params: { player: "12", source: "filter" }, bug: null });
+    const hash = viewHash("moderation", { player: 12, filter: "filter" });
+    expect(readRoute("", hash)).toEqual({ view: "moderation", params: { player: "12", filter: "filter" }, bug: null });
+  });
+
+  it("sends older links and page names to their view", () => {
+    expect(readRoute("", "#inbox?player=3").view).toBe("moderation");
+    expect(readRoute("", "#cases").view).toBe("moderation");
+    expect(readRoute("", "#support").view).toBe("bugs");
+    expect(readRoute("", "#server").view).toBe("health");
   });
 });
 
-describe("the nav", () => {
-  it("lists every view once, in groups, Home first", () => {
-    const groups = viewGroups();
-    expect(groups[0]).toEqual({ title: "", views: ["home"] });
-    expect(groups.map((g) => g.title)).toEqual(["", "Moderation", "Players", "Monitoring"]);
-    expect(groups.flatMap((g) => g.views)).toEqual(VIEWS.map(([id]) => id));
+describe("the menu", () => {
+  it("has the six pages of the mock-up, Home first", () => {
+    expect(PAGES.map(([, label]) => label)).toEqual([
+      "Home",
+      "Moderation",
+      "Player support",
+      "Announcements",
+      "Game activity",
+      "Server health",
+    ]);
   });
 
-  it("marks a phone tab, or More for a view under it", () => {
-    for (const tab of PHONE_TABS) expect(phoneTab(tab)).toBe(tab);
-    expect(phoneTab("errors")).toBe("more");
-    expect(phoneTab("announcements")).toBe("more");
-    expect(PHONE_TABS).toEqual(["home", "inbox", "bugs"]);
-    expect(phoneTab("cases")).toBe("more");
+  it("puts every view on one page, and opens a page at its first view", () => {
+    expect(PAGES.flatMap(([id]) => pageViews(id))).toEqual(VIEWS.map(([id]) => id));
+    expect(pageHome("moderation")).toBe("moderation");
+    expect(pageViews("moderation")).toEqual(["moderation", "find", "attacks", "moderators", "modmail"]);
+    expect(pageViews("support")).toEqual(["bugs", "shiny", "chat"]);
+    expect(pageHome("server")).toBe("health");
+    expect(pageOf("errors")).toBe("server");
   });
 });
 
