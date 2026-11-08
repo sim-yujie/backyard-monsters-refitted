@@ -337,6 +337,6 @@ describe("a player's record", () => {
     await mount({ player: "50" });
     expect(document.querySelector(".detail")!.textContent).toContain("No open reports");
     expect(document.querySelector(".action-bar")).toBeNull();
-    expect(document.querySelector(".history")!.textContent).toContain("Earlier decisions (last 30 days): 1");
+    expect(document.querySelector(".q-history")!.textContent).toContain("Earlier decisions (last 30 days): 1");
   });
 });

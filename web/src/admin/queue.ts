@@ -220,7 +220,7 @@ export class QueueView {
           h("p", {}, "Chat moderators, their mail with players and any player’s whole record have their own tabs on this page."),
           h(
             "p",
-            { class: "row" },
+            { class: "hrow" },
             h("a", { attrs: { href: "#moderators" } }, "Moderators"),
             h("a", { attrs: { href: "#modmail" } }, "Moderator mail"),
             h("a", { attrs: { href: "#find" } }, "Find a player"),
@@ -416,7 +416,7 @@ export class QueueView {
       player.userid,
       h(
         "span",
-        { class: "row spread q-row-top" },
+        { class: "hrow hspread q-row-top" },
         h("strong", {}, nameOf(player.userid, player.username)),
         h(
           "time",
@@ -426,7 +426,7 @@ export class QueueView {
       ),
       h(
         "span",
-        { class: "row q-tags" },
+        { class: "hrow q-tags" },
         reported ? h("span", { class: "badge blue" }, icon("flag", 13), "Player reports") : null,
         caught ? h("span", { class: "badge amber" }, icon("warn", 13), "Word filter") : null,
         player.slurs ? h("span", { class: "badge red" }, "Slur") : null,
@@ -443,13 +443,13 @@ export class QueueView {
       decision.userid,
       h(
         "span",
-        { class: "row spread q-row-top" },
+        { class: "hrow hspread q-row-top" },
         h("strong", {}, nameOf(decision.userid, decision.username)),
         h("time", { class: "small", attrs: { datetime: decision.closedAt, title: dateTime(decision.closedAt) } }, ago(decision.closedAt)),
       ),
       h(
         "span",
-        { class: "row q-tags" },
+        { class: "hrow q-tags" },
         h("span", { class: decision.outcome === "dismiss" ? "badge" : "badge green" }, outcomeWords(decision)),
         decision.closedByName ? h("span", { class: "small" }, `by ${decision.closedByName}`) : null,
       ),
@@ -461,7 +461,7 @@ export class QueueView {
   private matchRow(match: PlayerMatch): HTMLElement {
     return this.rowButton(
       match.userid,
-      h("span", { class: "row spread q-row-top" }, h("strong", {}, match.username), h("span", { class: "small" }, `#${match.userid}`)),
+      h("span", { class: "hrow hspread q-row-top" }, h("strong", {}, match.username), h("span", { class: "small" }, `#${match.userid}`)),
       h("span", { class: "small" }, match.lastSeenAt ? `Last seen ${ago(match.lastSeenAt)}` : "Not seen yet"),
     );
   }
@@ -474,7 +474,7 @@ export class QueueView {
   }
 
   private phone(): boolean {
-    return window.matchMedia?.("(max-width: 800px)").matches ?? false;
+    return window.matchMedia?.("(max-width: 1023px)").matches ?? false;
   }
 
   private async openPlayer(userid: number): Promise<void> {
@@ -602,10 +602,10 @@ export class QueueView {
       this.backLink(),
       h(
         "div",
-        { class: "row spread" },
+        { class: "hrow hspread" },
         h(
           "h2",
-          { class: "row" },
+          { class: "hrow" },
           name,
           row?.banned || record?.banned ? h("span", { class: "badge red" }, "Banned") : null,
           row?.muted || record?.muteUntil ? h("span", { class: "badge amber" }, "Chat restricted") : null,
@@ -710,7 +710,7 @@ export class QueueView {
       { class: "ev-line", attrs: { "data-ts": String(line.ts), "data-sources": [line.reported ? "report" : "", flag ? "filter" : ""].filter(Boolean).join(" ") } },
       h(
         "div",
-        { class: "row q-tags" },
+        { class: "hrow q-tags" },
         line.reported ? h("span", { class: "badge blue" }, icon("flag", 13), "Player report") : null,
         flag ? h("span", { class: "badge amber" }, icon("warn", 13), "Word filter") : null,
         flag ? severityChip(flag.severity) : null,
@@ -758,7 +758,7 @@ export class QueueView {
     const steps = record?.log ?? [];
     return h(
       "section",
-      { class: "history" },
+      { class: "q-history" },
       h("h3", {}, "Previous moderation"),
       steps.length
         ? h("ul", { class: "rows mod-log" }, ...steps.slice(0, 5).map(entryRow))
@@ -839,15 +839,15 @@ export class QueueView {
         ...rows.map((r) =>
           h(
             "li",
-            { class: "row spread" },
-            h("label", { class: "row" }, r.tick, r.who, r.reporter.first ? h("span", { class: "badge blue" }, "1st") : null, r.done ? h("span", { class: "badge green" }, "given") : null),
+            { class: "hrow hspread" },
+            h("label", { class: "hrow" }, r.tick, r.who, r.reporter.first ? h("span", { class: "badge blue" }, "1st") : null, r.done ? h("span", { class: "badge green" }, "given") : null),
             r.amount,
           ),
         ),
       ),
       h("p", { class: "small" }, `Each gets the Shiny in the game and a mail: “${AWARD_MAIL}”`),
       problem,
-      rows.some((r) => !r.done) ? h("div", { class: "row" }, give, h("button", { class: "button", attrs: { type: "button" }, onClick: () => replace(box) }, "Cancel")) : h("p", { class: "note" }, "Every reporter has been given Shiny for this case."),
+      rows.some((r) => !r.done) ? h("div", { class: "hrow" }, give, h("button", { class: "button", attrs: { type: "button" }, onClick: () => replace(box) }, "Cancel")) : h("p", { class: "note" }, "Every reporter has been given Shiny for this case."),
     );
     form.addEventListener("submit", (event) => {
       event.preventDefault();
