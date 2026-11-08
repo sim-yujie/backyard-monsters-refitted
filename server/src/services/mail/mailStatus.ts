@@ -41,6 +41,8 @@ export interface MailStatus {
   latest: LatestMail | null;
   /** 1 when the player is a moderator or an admin: their mailbox may write to anyone (patch 6.11). */
   mod: 0 | 1;
+  /** 1 when the player is the game team (an admin): the compose box shows GM, not Mod. */
+  gm: 0 | 1;
 }
 
 /** A message's first line, cut for the pop-up. */
