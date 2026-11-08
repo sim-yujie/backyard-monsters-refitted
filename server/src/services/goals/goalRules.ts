@@ -161,7 +161,8 @@ export const conditionMet = (
     case "tribe":
       return onboarding.counters.tribes[condition.tribe] >= 1;
     case "raid":
-      return onboarding.raidSeen !== undefined;
+      // A good defence counted before the raid landing marked `raidSeen` too.
+      return onboarding.raidSeen !== undefined || onboarding.counters.raidsSurvived >= 1;
     case "layout":
       return readLayouts(save.savetemplate).length > 0;
     case "siegeLevel":

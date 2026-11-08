@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mailApi } from "./mail";
+import { mailApi, statusOf } from "./mail";
 
 /** The mail routes as the mailbox calls them (#193). */
 
@@ -113,5 +113,20 @@ describe("mailApi", () => {
     stubFetch({ error: "This invitation can no longer be answered." }, 409);
     const refused = await mailApi.declineInvite(8);
     expect(refused.ok).toBe(false);
+  });
+});
+
+describe("statusOf: the pop-up's badges (owner, 8 Nov)", () => {
+  const latest = (badges: Record<string, number>) =>
+    statusOf({ error: 0, unread: 1, latest: { id: "m1", threadid: 1, from: 30, name: "A", ...badges }, mod: 0 } as never)
+      .latest;
+
+  it("gives an admin's mail the GM badge and never the Mod one", () => {
+    expect(latest({ gm: 1, mod: 1 })).toMatchObject({ gm: true, mod: false });
+  });
+
+  it("gives a moderator's mail the Mod badge only, and a player's neither", () => {
+    expect(latest({ mod: 1 })).toMatchObject({ gm: false, mod: true });
+    expect(latest({})).toMatchObject({ gm: false, mod: false });
   });
 });

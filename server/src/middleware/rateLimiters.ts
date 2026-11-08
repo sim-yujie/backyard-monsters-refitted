@@ -634,3 +634,30 @@ export const announcementImageLimiter = RateLimit.middleware({
     ctx.body = { error: "Too many requests. Please try again shortly." };
   },
 });
+
+/**
+ * The live mail check (`/player/mailstatus`, owner, beta 7): asked on a chat
+ * nudge or every 45 s or so without chat, so 20 a minute is far above use.
+ */
+export const mailStatusLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 20,
+  prefixKey: "mail-status",
+  keyGenerator: byUser("mail-status"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many requests. Please slow down.", reason: "rateLimited" };
+  },
+});
+
+/** A moderator finding a player to write to (`/player/mail/findplayer`): 20 a minute. */
+export const mailFindPlayerLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 20,
+  prefixKey: "mail-find-player",
+  keyGenerator: byUser("mail-find-player"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many searches. Please slow down.", message: "Too many searches. Please slow down.", reason: "rateLimited" };
+  },
+});

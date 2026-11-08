@@ -41,6 +41,7 @@ import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
 import { scaledMR1Tribes } from "../../../services/maproom/v1/scaledMR1Tribes.js";
 import { withTribeGooBonus } from "../../../services/base/tribeGooBonus.js";
+import { isMR2Camp, withCampLootBonus } from "../../../services/base/campLootBonus.js";
 import { isDescentBaseid } from "../../../services/inferno/descent.js";
 import { landDescentAttack } from "../../../services/inferno/descentLanding.js";
 import { landInfernoPlayerAttack } from "../../../services/inferno/infernoPlayerLanding.js";
@@ -582,7 +583,10 @@ const saveBase = async (
     if (loot) {
       banked = bankAttackLoot(
         userSave,
-        withTribeGooBonus(loot.credit, baseSave.type === BaseType.TRIBE),
+        withCampLootBonus(
+          withTribeGooBonus(loot.credit, baseSave.type === BaseType.TRIBE),
+          isMR2Camp(baseSave.type, userSave.mapversion)
+        ),
         loot.krallenBuff
       ).credited;
     }

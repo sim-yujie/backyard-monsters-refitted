@@ -379,6 +379,75 @@ export const replyToReport = (
 export const searchPlayers = (q: string): Promise<Envelope<{ players: PlayerMatch[] }>> =>
   adminGet(`${ADMIN}/players`, { q });
 
+// ---- Attack log (server: services/admin/attackLogAdmin.ts) ----
+
+/** "made": attacks by the player; "received": attacks on them. */
+export type AttackSide = "made" | "received" | "both";
+export type AttackRange = "24h" | "7d" | "30d" | "all";
+
+export interface AttackPlayer {
+  userid: number;
+  /** Their name now; the name in the log when the account is gone. */
+  username: string;
+  /** A computer-run Map Room neighbour. */
+  bot: boolean;
+  /** The account no longer exists. */
+  gone: boolean;
+}
+
+export interface AttackRow {
+  id: number;
+  time: string;
+  direction: "made" | "received";
+  other: AttackPlayer;
+  /** The other player's name in the log, when they have since changed it. */
+  otherLoggedName: string | null;
+  /** The yard attacked, as stored: `main`, `outpost`, `inferno`... */
+  type: string;
+  x: number | null;
+  y: number | null;
+  loot: unknown;
+  report: unknown;
+}
+
+export interface TopPlayer extends AttackPlayer {
+  count: number;
+}
+
+export interface AttackLogView {
+  player: AttackPlayer;
+  side: AttackSide;
+  range: AttackRange;
+  since: string;
+  /** How long attack logs are kept. */
+  retentionDays: number;
+  summary: {
+    made: number;
+    received: number;
+    targets: number;
+    attackers: number;
+    topTargets: TopPlayer[];
+    topAttackers: TopPlayer[];
+  };
+  attacks: AttackRow[];
+  next: { time: string; id: number } | null;
+}
+
+export interface AttackLogQuery {
+  side: AttackSide;
+  range: AttackRange;
+  /** The previous page's `next`. */
+  before?: { time: string; id: number } | null;
+}
+
+export const fetchAttackLog = (userid: number, query: AttackLogQuery): Promise<Envelope<{ log: AttackLogView }>> =>
+  adminGet(`${ADMIN}/players/${userid}/attacks`, {
+    side: query.side,
+    range: query.range,
+    beforeTime: query.before?.time,
+    beforeId: query.before?.id,
+  });
+
 export const fetchShinyAwards = (
   before?: number,
 ): Promise<
@@ -687,7 +756,8 @@ export const fetchChatSession = (): Promise<Envelope<AdminChatSession>> =>
  * case, with a text copy of the room around each line.
  */
 export type CaseStatus = "open" | "actioned" | "dismissed";
-export type CaseOutcome = "warn" | "mute" | "dismiss";
+/** `ban`: closed by a ban from the inbox or the player panel. */
+export type CaseOutcome = "warn" | "mute" | "ban" | "dismiss";
 
 export interface SnapshotLine {
   userid: number;
@@ -773,6 +843,74 @@ export const fetchChatCases = (status: "open" | "closed", offset?: number): Prom
 export const actOnCase = (id: number, body: CaseActionBody): Promise<Envelope<{ case: ChatCaseView }>> =>
   adminPost(`${ADMIN}/chatcases/${id}/act`, { ...body });
 
+export const fetchChatCase = (id: number): Promise<Envelope<{ case: ChatCaseView }>> =>
+  adminGet(`${ADMIN}/chatcases/${id}`);
+
+/**
+ * The moderation inbox (server `services/admin/moderationInbox.ts`): one row
+ * per player with open items from every source (their open chat case and
+ * word-filter lines); one step closes them all.
+ */
+export type InboxSource = "all" | "reports" | "filter";
+
+export interface InboxPlayer {
+  userid: number;
+  username: string | null;
+  banned: boolean;
+  muted: boolean;
+  gameTeam: boolean;
+  /** Their open chat case, or null. */
+  caseId: number | null;
+  /** Chat lines other players reported, in the open case. */
+  reportedMessages: number;
+  /** Reports of those lines (one per reporter per line). */
+  reports: number;
+  uniqueReporters: number;
+  /** Open lines caught by the word filter. */
+  filterLines: number;
+  slurs: number;
+  /** The newest open word-filter line: acting closes up to it. */
+  flagsUpTo: number | null;
+  /** Earlier warnings, chat pauses and bans. */
+  previousActions: number;
+  lastAction: { action: ModerationKind; at: string } | null;
+  oldestAt: string;
+  latestAt: string;
+  preview: { text: string; source: "report" | "filter" } | null;
+  suggest: { action: "warn" | "mute"; hours: number | null };
+}
+
+export interface InboxList {
+  players: InboxPlayer[];
+  nextOffset: number | null;
+  counts: { all: number; reports: number; filter: number };
+}
+
+export const fetchInbox = (
+  options: { source?: InboxSource; userid?: number; offset?: number | undefined } = {},
+): Promise<Envelope<InboxList>> =>
+  adminGet(`${ADMIN}/inbox`, { source: options.source, userid: options.userid, offset: options.offset, limit: 30 });
+
+export type InboxActionBody =
+  | { action: "warn"; reason: string }
+  | { action: "mute"; reason: string; hours: number }
+  | { action: "ban"; reason: string; days: number | null }
+  | { action: "dismiss"; note?: string };
+
+/** What closing a player's items did. */
+export interface ClosedItems {
+  caseId: number | null;
+  reports: number;
+  filterLines: number;
+}
+
+export const actOnInboxPlayer = (
+  userid: number,
+  body: InboxActionBody,
+  seen: { caseId: number | null; reports: number; flagsUpTo: number | null },
+): Promise<Envelope<{ closed: ClosedItems; player: InboxPlayer | null }>> =>
+  adminPost(`${ADMIN}/inbox/${userid}/act`, { ...body, ...seen });
+
 export type AwardFailure = "notReporter" | "noPlayer" | "noMainYard";
 
 export const awardCaseReporters = (
@@ -808,3 +946,80 @@ export const addModerator = (player: string): Promise<Envelope<{ moderator: Mode
 
 export const removeModerator = (userid: number): Promise<Envelope<{ removed: number }>> =>
   adminPost(`${ADMIN}/moderators/${userid}/remove`, {});
+
+/**
+ * Moderator mail (owner, beta 7; server `services/mail/modMail.ts`): every
+ * conversation a moderator is in, both sides, kept even when the players
+ * delete the thread. Admin only; moderators never see it.
+ */
+export type ModMailSender = "moderator" | "player";
+
+/** One conversation in the list. */
+export interface ModConversationSummary {
+  threadid: number;
+  /** Named as in the newest message. */
+  moderatorId: number;
+  moderatorName: string;
+  playerId: number;
+  playerName: string;
+  messages: number;
+  fromModerator: number;
+  startedAt: string;
+  lastAt: string;
+  /** The newest message, for the preview. */
+  lastSender: ModMailSender;
+  lastSubject: string;
+  lastMessage: string;
+  lastType: string;
+  lastId: number;
+}
+
+/** One message of a conversation. */
+export interface ModConversationMessage {
+  id: number;
+  sentAt: string;
+  sender: ModMailSender;
+  senderId: number;
+  /** The name when it was sent. */
+  senderName: string;
+  newThread: boolean;
+  messagetype: string;
+  /** What the other side got (after the word filter). */
+  subject: string;
+  message: string;
+  /** What the writer typed, when the word filter changed it. */
+  written: string | null;
+}
+
+/** One conversation whole, oldest first. */
+export interface ModConversation {
+  threadid: number;
+  moderatorId: number;
+  moderatorName: string;
+  playerId: number;
+  playerName: string;
+  messages: ModConversationMessage[];
+  /** Too long for one answer: the newest messages are left out. */
+  cut: boolean;
+}
+
+export interface ModMailSearch {
+  /** A name (part of one) or account number. */
+  moderator?: string | undefined;
+  /** The player side. */
+  recipient?: string | undefined;
+  /** The previous page's `next`. */
+  before?: number | undefined;
+}
+
+export const fetchModConversations = (
+  search: ModMailSearch = {},
+): Promise<Envelope<{ conversations: ModConversationSummary[]; next: number | null }>> =>
+  adminGet(`${ADMIN}/modmail`, {
+    moderator: search.moderator || undefined,
+    recipient: search.recipient || undefined,
+    before: search.before,
+  });
+
+export const fetchModConversation = (threadid: number): Promise<Envelope<{ conversation: ModConversation }>> =>
+  adminGet(`${ADMIN}/modmail/${threadid}`);

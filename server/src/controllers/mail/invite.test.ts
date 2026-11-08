@@ -91,6 +91,8 @@ const em = {
   },
   flush: async () => {},
   populate: async () => {},
+  // The moderators list (beta 7): nobody here is a moderator.
+  execute: async () => [],
   transactional: async <T>(run: (tx: object) => Promise<T>): Promise<T> => run(em),
 };
 
