@@ -303,6 +303,31 @@ describe("a player opened", () => {
     expect(act.body).toMatchObject({ action: "ban", days: 7, reason: "Slurs", caseId: null, flagsUpTo: 910 });
   });
 
+  it("opens from a real pointer press anywhere on the row; the row is one button, so Enter works too", async () => {
+    server([troll(), swearer()]);
+    const { moves } = await mount();
+    const row = document.querySelector<HTMLElement>(".inbox-row[data-player='50']")!;
+    // The whole row is a native button (Enter and Space press it), nothing else in its way.
+    expect(row.tagName).toBe("BUTTON");
+    expect(row.getAttribute("type")).toBe("button");
+    expect(row.parentElement!.tagName).toBe("LI");
+    expect(row.querySelector("button, a, input, select, textarea")).toBeNull();
+    // A mouse press on the quote inside the row, as a real pointer sends it.
+    const quote = row.querySelector<HTMLElement>(".inbox-quote")!;
+    const at = { bubbles: true, cancelable: true, composed: true, button: 0 };
+    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup"]) {
+      quote.dispatchEvent(new MouseEvent(type, at));
+    }
+    quote.dispatchEvent(new MouseEvent("click", { ...at, detail: 1 }));
+    await settle();
+    expect(moves.at(-1)).toEqual({ source: "all", player: 50 });
+    expect(document.querySelector(".inbox")!.classList.contains("has-open")).toBe(true);
+    expect(document.querySelector(".inbox-row[data-player='50']")!.getAttribute("aria-current")).toBe("true");
+    expect(detail().hidden).toBe(false);
+    // The same row element is still there to press again: opening does not redraw the list.
+    expect(document.querySelector(".inbox-row[data-player='50']")).toBe(row);
+  });
+
   it("goes back to the list", async () => {
     server([troll()]);
     const { moves } = await mount();
