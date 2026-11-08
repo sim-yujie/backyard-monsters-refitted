@@ -25,6 +25,7 @@ import { ModeratorsView } from "./moderators";
 import { ModMailSection } from "./modmail";
 import { count, dateTime } from "./format";
 import { icon } from "./icons";
+import { readingSection } from "./reading";
 import { topItems, verdict, type TopItem } from "./problems";
 import {
   mark,
@@ -245,6 +246,9 @@ class Dashboard {
   /** Players with open photo reports, or null before they are read. */
   private openPhotos: number | null = null;
   private readonly folds = readFolds();
+  /** The section a link just opened, marked until the person scrolls. */
+  private chosen: SectionId | undefined;
+  private chosenAt = 0;
   private readonly chat = new ChatPanel({
     openPlayer: (userid) => this.openPlayer(userid),
     say: (message) => this.say(message),
@@ -426,6 +430,24 @@ class Dashboard {
       if (adoptNewerSignIn() || this.signedOut) void this.loadAll();
     });
     this.watchScroll();
+    // Scrolling by hand (after the link's own smooth scroll has settled) hands the mark back to
+    // what is on screen.
+    const release = (): void => {
+      if (this.chosen !== undefined && Date.now() - this.chosenAt > 1200) {
+        this.chosen = undefined;
+        this.markCurrentSection();
+      }
+    };
+    window.addEventListener("scroll", release, { passive: true });
+    for (const type of ["wheel", "touchmove", "keydown"] as const) {
+      window.addEventListener(
+        type,
+        () => {
+          this.chosen = undefined;
+        },
+        { passive: true },
+      );
+    }
   }
 
   async start(): Promise<void> {
@@ -446,7 +468,11 @@ class Dashboard {
       this.weekend.refresh(),
     ]);
     // The sections grew as they loaded; go to the one the link named.
-    if (route.section) this.sections[route.section].element.scrollIntoView();
+    if (route.section) {
+      this.chosen = route.section;
+      this.chosenAt = Date.now();
+      this.sections[route.section].element.scrollIntoView();
+    }
   }
 
   /** Marks the link of the section being read, and keeps it in view in the phone's row. */
@@ -465,12 +491,13 @@ class Dashboard {
    * or shrinks (a mail conversation opening) without the page scrolling.
    */
   private markCurrentSection(): void {
-    const line = window.innerHeight * 0.2;
-    let current: string | undefined;
-    for (const [id] of SECTIONS) {
-      const rect = this.sections[id].element.getBoundingClientRect();
-      if (rect.top <= line && rect.bottom > line) current = id;
-    }
+    const current = this.chosen ?? readingSection(
+      SECTIONS.map(([id]) => {
+        const rect = this.sections[id].element.getBoundingClientRect();
+        return { id, top: rect.top, bottom: rect.bottom };
+      }),
+      window.innerHeight,
+    );
     if (current === undefined) return;
     for (const [id] of SECTIONS) {
       const link = this.sections[id].link;
@@ -529,7 +556,12 @@ class Dashboard {
   /** Opens the section a link names (`#health`), without remembering it. */
   private openNamed(href: string): void {
     const id = SECTIONS.find(([name]) => `#${name}` === href)?.[0];
-    if (id) this.setOpen(id, true, false);
+    if (!id) return;
+    this.setOpen(id, true, false);
+    // The section the person asked for is the one to mark, until they scroll on their own: a
+    // short section, or one at the page's end, never fills the screen by itself.
+    this.chosen = id;
+    this.chosenAt = Date.now();
   }
 
   /** The players with open photo reports on the link and the heading. */

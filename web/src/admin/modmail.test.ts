@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SESSION_STORAGE_KEY } from "@/config";
 import type { ModConversation, ModConversationMessage, ModConversationSummary } from "./api";
-import { ModMailSection } from "./modmail";
+import { ModMailSection, writtenText } from "./modmail";
 
 /**
  * The Moderator mail section (owner, beta 7; conversations 8 Nov): one row
@@ -215,7 +215,7 @@ describe("an opened conversation", () => {
     expect(second!.querySelector(".bubble-who")?.textContent).toMatch(/^yardtester · /);
     expect(second!.querySelector(".bubble-text")?.textContent).toBe("Sorry, I will.");
     expect(second!.querySelector(".modmail-written")).toBeNull();
-    expect(third!.querySelector(".modmail-written")?.textContent).toBe("Written as Thanks d*mn | Thanks!");
+    expect(third!.querySelector(".modmail-written")?.textContent).toBe("Written as Thanks!");
     // Answered: no note about missing answers.
     expect(openView(view).querySelector(".note")).toBeNull();
   });
@@ -270,5 +270,13 @@ describe("an opened conversation", () => {
     await view.refresh();
     expect(bubbles(view)).toHaveLength(4);
     expect(openView(view).hidden).toBe(false);
+  });
+});
+
+describe("writtenText", () => {
+  it("drops the stored 'subject | ' prefix and keeps the uncensored text", () => {
+    expect(writtenText("Re: About world chat | this is so f*ck unfair")).toBe("this is so f*ck unfair");
+    expect(writtenText("no separator")).toBe("no separator");
+    expect(writtenText("S | a | b")).toBe("a | b");
   });
 });

@@ -322,6 +322,16 @@ const conversationView = (conversation: ModConversation): HTMLElement => {
   );
 };
 
+/**
+ * What the player typed, for the "Written as" line. The word-filter log stores "subject | text"; the
+ * subject is already shown above the message, so only the text after the first separator stays
+ * (uncensored: admins see what was really typed).
+ */
+export const writtenText = (written: string): string => {
+  const at = written.indexOf(" | ");
+  return at === -1 ? written : written.slice(at + 3);
+};
+
 /** One message: who and when, its kind and subject, the words, and what was typed if the word filter changed it. */
 const bubble = (message: ModConversationMessage, threadSubjectText: string): HTMLElement => {
   const own = message.subject.trim();
@@ -344,7 +354,7 @@ const bubble = (message: ModConversationMessage, threadSubjectText: string): HTM
     showSubject ? h("span", { class: "modmail-subject" }, own) : null,
     h("span", { class: "bubble-text" }, message.message),
     message.written !== null
-      ? h("span", { class: "modmail-written" }, h("span", { class: "chip chip-warn" }, "Written as"), " ", message.written)
+      ? h("span", { class: "modmail-written" }, h("span", { class: "chip chip-warn" }, "Written as"), " ", writtenText(message.written))
       : null,
   );
 };
