@@ -3,7 +3,7 @@ import { claimableCount, claimableTiers, grantedKrallenText, isOver, serverClock
 import { onPumpkins, PUMPKIN_HUNT_KIND, withPumpkinCount } from "@/game/events/pumpkinHunt";
 import { currentSeason, seasonFor, setSeason } from "@/game/season";
 import { latestRelease, localSeen, markSeen, whatsNewDecision } from "@/game/events/whatsNew";
-import { eventsArt } from "@/ui/events/eventsArt";
+import { gameIcon } from "@/ui/gameIcon";
 import { calendarKey, claimedLine, EventsPanel, readyLine, tierKey, type EventsPanelView } from "@/ui/events/EventsPanel";
 import { modalLayer, openWhatsNew } from "@/ui/events/WhatsNewDialog";
 import "@/ui/events/pumpkinHuntHint";
@@ -39,6 +39,17 @@ const READY_NOTICE = "events-ready";
 /** How often the page's countdowns and the list's freshness are checked. */
 const TICK_MS = 1_000;
 
+/**
+ * The button's picture: the painted festive calendar with its gold star and
+ * rosette (`ui/gameIcon.ts`, art-samples/events-icons), which suits every
+ * event, where the Halloween pumpkin did not (owner, 8 Nov).
+ */
+const buttonArt = (): HTMLImageElement => {
+  const image = gameIcon("event", { size: 32, decorative: true, className: "events-door__art" });
+  image.sizes = "36px";
+  return image;
+};
+
 export class EventsDoor {
   readonly button: HTMLButtonElement;
   private readonly badge: HTMLElement;
@@ -64,7 +75,7 @@ export class EventsDoor {
     this.mounts = mounts;
     this.api = api;
     this.actions = actions;
-    const { element, disc } = dockButton("events", "Events", eventsArt("pumpkin", 30), () => this.toggle());
+    const { element, disc } = dockButton("events", "Events", buttonArt(), () => this.toggle());
     this.button = element;
     this.button.classList.add("events-door");
     this.button.hidden = true;
