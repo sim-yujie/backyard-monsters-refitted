@@ -10,4 +10,4 @@
  * build time; `gameVersion.test.ts` fails when docs/releases has a newer
  * version than this.
  */
-export const GAME_VERSION = "2.0.0-beta.6.10";
+export const GAME_VERSION = "2.0.0-beta.6.11";

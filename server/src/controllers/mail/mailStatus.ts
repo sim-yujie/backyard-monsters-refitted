@@ -1,7 +1,7 @@
 import { Status } from "../../enums/StatusCodes.js";
 import type { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
-import { blocksIgnoringStaff, findMailRecipient, isMailModerator } from "../../services/mail/modMail.js";
+import { blocksIgnoringStaff, findMailRecipient, isMailStaff } from "../../services/mail/modMail.js";
 import { readMailStatus } from "../../services/mail/mailStatus.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
@@ -31,7 +31,8 @@ export const NO_SUCH_PLAYER_TEXT = "No player has that name or number.";
  */
 export const findMailPlayer: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  if (!(await isMailModerator(postgres.em, user.userid))) {
+  // Moderators and admins (owner, 8 Nov: "allow mods and admins to mail anyone").
+  if (!(await isMailStaff(postgres.em, user.userid))) {
     ctx.status = Status.FORBIDDEN;
     ctx.body = { error: NOT_MODERATOR_TEXT, message: NOT_MODERATOR_TEXT, reason: "notModerator" };
     return;

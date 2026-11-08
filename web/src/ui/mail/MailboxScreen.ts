@@ -48,7 +48,7 @@ import type { OwnOutpost } from "@/game/yard/ownYards";
 import { Panel } from "@/ui/Panel";
 import { attackStatsRow, attackStatsText } from "@/ui/attackNotice";
 import { requestCard, type RequestAction } from "./RequestCard";
-import { modBadge } from "./MailToast";
+import { gmBadge, modBadge } from "./MailToast";
 import "@/ui/styles/mail.css";
 
 /**
@@ -66,7 +66,8 @@ import "@/ui/styles/mail.css";
  *   player the map or the Friends screen opened it for (`openCompose`). A
  *   chat moderator may instead type any player's name or account number
  *   (owner, beta 7; the server's `mail/findplayer`, moderators only), and a
- *   moderator's name carries the light blue Mod badge in the list and thread.
+ *   moderator's name carries the light blue Mod badge in the list and thread;
+ *   an admin's carries the game team's green GM badge instead, as in chat.
  * - Truces (#203): "Propose truce" in a player thread, or from the map on the
  *   player's yard (`openTruce`, the server's `requesttruce`). The thread's
  *   request carries a card with its state (waiting, active, ended, lapsed,
@@ -219,6 +220,8 @@ export class MailboxScreen {
   private friends: readonly MailContact[] = [];
   /** The player is a chat moderator: New message may find any player (`api.status`). */
   private canMailAnyone = false;
+  /** The player is the game team (an admin): the compose box shows GM, not Mod. */
+  private isGameTeam = false;
   private view: View = { kind: "none" };
   private opened = false;
   private destroyed = false;
@@ -419,7 +422,9 @@ export class MailboxScreen {
   /** Whether the player is a moderator; false when the route is not there or fails. */
   private async loadCanMailAnyone(): Promise<boolean> {
     try {
-      return (await this.api.status?.())?.mod ?? false;
+      const status = await this.api.status?.();
+      this.isGameTeam = status?.gm ?? false;
+      return status?.mod ?? false;
     } catch {
       return false;
     }
@@ -481,7 +486,8 @@ export class MailboxScreen {
         if (thread.threadid === open) row.setAttribute("aria-current", "true");
         const head = make("span", "mail-row__head");
         const who = make("span", "mail-row__name", thread.otherName);
-        if (thread.otherMod) who.prepend(modBadge());
+        if (thread.otherGm) who.prepend(gmBadge());
+        else if (thread.otherMod) who.prepend(modBadge());
         head.append(who, make("span", "mail-row__time", sentText(thread.time, now)));
         row.append(
           head,
@@ -497,7 +503,7 @@ export class MailboxScreen {
         const said = tags.map((tag) => `${tag.label}. `).join("");
         row.setAttribute(
           "aria-label",
-          `${thread.unread ? "Unread. " : ""}${thread.otherMod ? "Moderator " : ""}${thread.otherName}: ${thread.subject}. ${said}${sentText(thread.time, now)}`,
+          `${thread.unread ? "Unread. " : ""}${thread.otherGm ? "Game team " : thread.otherMod ? "Moderator " : ""}${thread.otherName}: ${thread.subject}. ${said}${sentText(thread.time, now)}`,
         );
         item.append(row);
         return item;
@@ -544,8 +550,13 @@ export class MailboxScreen {
     const titles = make("div", "mail-pane__titles");
     // A name too long for the pane is cut with "…"; the whole of it shows on hover.
     const name = make("h3", "mail-pane__name mail-pane__name--thread", thread.otherName);
-    name.title = thread.otherMod ? `Moderator ${thread.otherName}` : thread.otherName;
-    if (thread.otherMod) name.prepend(modBadge());
+    name.title = thread.otherGm
+      ? `The game team: ${thread.otherName}`
+      : thread.otherMod
+        ? `Moderator ${thread.otherName}`
+        : thread.otherName;
+    if (thread.otherGm) name.prepend(gmBadge());
+    else if (thread.otherMod) name.prepend(modBadge());
     titles.append(name, make("p", "mail-pane__subject", thread.subject));
     const main = make("div", "mail-pane__main");
     main.append(titles);
@@ -1180,8 +1191,10 @@ export class MailboxScreen {
     input.setAttribute("aria-label", "To: any player, by name or account number");
     const label = make("label", "mail-compose__field");
     const caption = make("span", "mail-compose__caption", "To");
-    const hint = modBadge();
-    hint.title = "As a moderator you can write to any player";
+    const hint = this.isGameTeam ? gmBadge() : modBadge();
+    hint.title = this.isGameTeam
+      ? "As the game team you can write to any player"
+      : "As a moderator you can write to any player";
     caption.append(" ", hint);
     label.append(caption, input);
     if (contacts.length > 0) {

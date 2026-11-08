@@ -271,6 +271,7 @@ describe.skipIf(!dbName)("moderator mail on a real database", () => {
       preview: "Please keep chat friendly, thanks!",
       time: 200,
       mod: 1,
+      gm: 0,
       notice: 0,
     });
     const blocking = await readMailStatus(orm.em.fork(), STRANGER, [MOD]);

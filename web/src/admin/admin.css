@@ -2076,6 +2076,76 @@ tbody th {
   color: var(--ink-3);
 }
 
+/* ---- Attack log (attacks.ts) ---- */
+
+.attacks {
+  display: grid;
+  gap: 16px;
+}
+
+.attack-head {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.attack-head h3 {
+  font-size: 1.125rem;
+  overflow-wrap: anywhere;
+}
+
+.attack-head .button {
+  margin-left: auto;
+}
+
+.attack-controls {
+  display: grid;
+  gap: 6px;
+}
+
+.attack-figures .figure-label .icon,
+.attack-dir .icon {
+  vertical-align: -2px;
+}
+
+.attack-tops {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  /* Side by side, the shorter list starts at the top at its own height, not
+     stretched to the other's (stretched, its heading and rows spread down). */
+  align-items: start;
+}
+
+.attack-top {
+  align-content: start;
+}
+
+.attack-top .row-top {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.attack-row > summary {
+  grid-template-columns: 3.75rem minmax(0, 1fr) auto;
+}
+
+.attack-row .row-top {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.attack-dir {
+  justify-self: start;
+  gap: 2px;
+  padding: 3px 8px;
+}
+
+.attack-row .code {
+  max-height: 320px;
+  overflow: auto;
+}
+
 .picked:empty {
   display: none;
 }

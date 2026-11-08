@@ -10,7 +10,9 @@ import type { LatestMail, MailStatus } from "@/api/mail";
  *   moment later, once the message has surely landed;
  * - asked: with no chat connection (World chat switched off, or down), every
  *   {@link POLL_MS} while the tab is shown, never while it is hidden. A tab
- *   shown again after a while asks at once.
+ *   shown again after a while asks at once;
+ * - and, with chat connected, every {@link CHAT_BACKUP_MS} as well, in case a
+ *   pushed "mail" was lost (Codex astra's release review, 9 Nov).
  *
  * Each answer gives the Mail button its count, and the newest unread message
  * pops up once ({@link mailAlert}): never one that was already unread when
@@ -22,6 +24,8 @@ import type { LatestMail, MailStatus } from "@/api/mail";
 
 /** How often the game asks without a chat connection: 45 s, inside the owner's 30 to 60. */
 export const POLL_MS = 45_000;
+/** How often the game still asks while chat is connected, should a push go missing: 5 minutes. */
+export const CHAT_BACKUP_MS = 300_000;
 /** How long after the chat's "mail" the game asks, so the server has finished writing. */
 export const NUDGE_DELAY_MS = 800;
 
@@ -82,6 +86,7 @@ export interface MailWatchOptions {
   readonly memory?: AlertMemory;
   readonly page?: PageVisibility;
   readonly pollMs?: number;
+  readonly chatBackupMs?: number;
   readonly nudgeDelayMs?: number;
   /** Milliseconds; `Date.now` unless a test sets it. */
   readonly now?: () => number;
@@ -92,6 +97,7 @@ export class MailWatch {
   private readonly memory: AlertMemory;
   private readonly page: PageVisibility | null;
   private readonly pollMs: number;
+  private readonly chatBackupMs: number;
   private readonly now: () => number;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private nudgeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -109,6 +115,7 @@ export class MailWatch {
     this.memory = options.memory ?? visitMemory;
     this.page = options.page ?? (typeof document === "undefined" ? null : document);
     this.pollMs = options.pollMs ?? POLL_MS;
+    this.chatBackupMs = options.chatBackupMs ?? CHAT_BACKUP_MS;
     this.now = options.now ?? Date.now;
   }
 
@@ -163,8 +170,14 @@ export class MailWatch {
     return this.page?.hidden ?? false;
   }
 
+  /** How long since the last ask before the next one is due: longer while chat can push. */
+  private get dueAfter(): number {
+    return this.options.chat.online ? this.chatBackupMs : this.pollMs;
+  }
+
   private tick(): void {
-    if (this.hidden || this.options.chat.online) return;
+    if (this.hidden) return;
+    if (this.options.chat.online && this.now() - this.lastAsked < this.chatBackupMs) return;
     void this.check();
   }
 
@@ -182,7 +195,7 @@ export class MailWatch {
 
   private readonly shown = (): void => {
     if (this.hidden) return;
-    const overdue = !this.options.chat.online && this.now() - this.lastAsked >= this.pollMs;
+    const overdue = this.now() - this.lastAsked >= this.dueAfter;
     if (this.dueOnShow || overdue) void this.check();
   };
 }
