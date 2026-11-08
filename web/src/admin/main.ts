@@ -20,7 +20,6 @@ import {
 import { AnnouncementsView } from "./announcements";
 import { BugsView } from "./bugs";
 import { CasesView } from "./cases";
-import { PhotosView } from "./photos";
 import { ChatPanel } from "./chat";
 import { h, replace } from "./dom";
 import { ErrorsView } from "./errors";
@@ -40,7 +39,6 @@ import {
   type Level,
 } from "./sections";
 import { ShinyView } from "./shiny";
-import { WeekendView } from "./weekend";
 import { applyTheme, readTheme, themePicker } from "./theme";
 import {
   PHONE_TABS,
@@ -88,12 +86,10 @@ const NO_HEALTH_MARK: ReadonlySet<ViewId> = new Set<ViewId>([
   "home",
   "inbox",
   "cases",
-  "photos",
   "players",
   "activity",
   "shiny",
   "announcements",
-  "weekend",
   "moderation",
   "moderators",
   "modmail",
@@ -220,7 +216,6 @@ class Dashboard {
       void this.loadHomeInbox();
     },
   });
-  private readonly weekend = new WeekendView({ say: (message) => this.say(message) });
   private readonly moderators = new ModeratorsView({ say: (message) => this.say(message) });
   private readonly modMail = new ModMailSection({
     say: (message) => this.say(message),
@@ -266,17 +261,6 @@ class Dashboard {
   private inboxCounts: InboxList["counts"] | null = null;
   /** Open chat cases, or null before they are read. */
   private openCases: number | null = null;
-  private readonly photos = new PhotosView({
-    say: (message) => this.say(message),
-    onCount: (open) => {
-      this.openPhotos = open;
-      this.renderPhotoState();
-      this.renderHomeInbox();
-    },
-    openPlayer: (userid) => this.openPlayer(userid),
-  });
-  /** Players with open photo reports, or null before they are read. */
-  private openPhotos: number | null = null;
   private readonly chat = new ChatPanel({
     openPlayer: (userid) => this.openPlayer(userid),
     say: (message) => this.say(message),
@@ -409,7 +393,6 @@ class Dashboard {
     this.sections = {
       inbox: section("inbox", "Moderation inbox"),
       cases: section("cases", "Chat cases"),
-      photos: section("photos", "Photo reports"),
       bugs: section("bugs", "Bug reports"),
       moderation: section("moderation", "Moderation"),
       moderators: section("moderators", "Chat moderators"),
@@ -417,7 +400,6 @@ class Dashboard {
       chat: section("chat", "Chat as the game team"),
       shiny: section("shiny", "Give Shiny"),
       announcements: section("announcements", "Announcements"),
-      weekend: section("weekend", "Weekend events"),
       players: section("players", "Players", rangeButtons),
       activity: section("activity", "Activity"),
       errors: section("errors", "Errors"),
@@ -426,7 +408,6 @@ class Dashboard {
     };
     replace(this.sections.inbox.body, this.inbox.element);
     replace(this.sections.cases.body, this.cases.element);
-    replace(this.sections.photos.body, this.photos.element);
     replace(this.sections.bugs.body, this.bugs.element);
     replace(this.sections.moderation.body, this.moderation.element);
     replace(this.sections.moderators.body, this.moderators.element);
@@ -434,7 +415,6 @@ class Dashboard {
     replace(this.sections.chat.body, this.chat.element);
     replace(this.sections.shiny.body, this.shiny.element);
     replace(this.sections.announcements.body, this.announcements.element);
-    replace(this.sections.weekend.body, this.weekend.element);
     replace(this.sections.errors.body, this.errors.element);
 
     this.home = h(
@@ -523,14 +503,12 @@ class Dashboard {
       route.view === "inbox" ? this.inbox.show(route.params) : this.inbox.refresh(),
       this.loadHomeInbox(),
       this.cases.refresh(),
-      this.photos.refresh(),
       this.bugs.show(route.bug, route.view === "bugs" ? route.params : {}),
       this.moderation.refresh(),
       this.moderators.refresh(),
       this.modMail.refresh(),
       this.shiny.refresh(),
       this.announcements.refresh(),
-      this.weekend.refresh(),
     ]);
   }
 
@@ -600,13 +578,11 @@ class Dashboard {
       this.inbox.refresh(),
       this.loadHomeInbox(),
       this.cases.refresh(),
-      this.photos.refresh(),
       this.bugs.refresh(),
       this.moderation.refresh(),
       this.moderators.refresh(),
       this.modMail.refresh(),
       this.shiny.refresh(),
-      this.weekend.refresh(),
     ]);
     this.refreshButton.classList.remove("is-busy");
     this.refreshButton.disabled = false;
@@ -614,7 +590,7 @@ class Dashboard {
   }
 
   /** A count of open items on a view's links and heading, or nothing. */
-  private renderCount(view: "cases" | "photos", open: number | null): void {
+  private renderCount(view: "cases", open: number | null): void {
     const { state } = this.sections[view];
     if (open) {
       const text = String(open);
@@ -638,11 +614,6 @@ class Dashboard {
       this.setBadge("inbox", null);
       replace(state);
     }
-  }
-
-  /** The players with open photo reports on the link and the heading. */
-  private renderPhotoState(): void {
-    this.renderCount("photos", this.openPhotos);
   }
 
   /** The open chat cases on the link and the heading. */
@@ -787,7 +758,7 @@ class Dashboard {
   private renderStates(items: readonly TopItem[]): void {
     const levels = sectionLevels(items) as Partial<Record<ViewId, Level>>;
     for (const [id] of VIEWS) {
-      if (id === "home" || id === "inbox" || id === "cases" || id === "photos") continue;
+      if (id === "home" || id === "inbox" || id === "cases") continue;
       const { state } = this.sections[id];
       const level = NO_HEALTH_MARK.has(id) ? undefined : levels[id];
       if (id === "bugs" && this.newBugs) {
@@ -946,7 +917,7 @@ class Dashboard {
     );
   }
 
-  /** Today's numbers: players, errors, photo reports. */
+  /** Today's numbers: players, errors. */
   private renderToday(): void {
     const today = this.overview?.today ?? null;
     const errorsToday =
@@ -957,11 +928,6 @@ class Dashboard {
       this.todayBox,
       homeLink("#players", count(this.overview?.players.activeToday), "played today"),
       homeLink("#errors", count(errorsToday), errorsToday === 1 ? "error today" : "errors today"),
-      homeLink(
-        "#photos",
-        this.openPhotos === null ? "–" : String(this.openPhotos),
-        this.openPhotos === 1 ? "photo report" : "photo reports",
-      ),
     );
   }
 
