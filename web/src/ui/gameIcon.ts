@@ -1,5 +1,4 @@
 import { writeAmount, type AmountChange } from "./amountChange";
-import { coinArt, coinArtFile } from "./eventCoinArt";
 
 /**
  * The painted icons that stand in for words on screen (owner, 28 Oct: "icons
@@ -62,10 +61,8 @@ import { coinArt, coinArtFile } from "./eventCoinArt";
  * mine in the same arrow).
  *
  * Event coins (beta 7, `game/eventCoins.ts`, `art-samples/event-coin`,
- * repainted by Codex 8 Nov to look nothing like Shiny's gold coins): three
- * options wait on the owner's pick, `eventcoin` (copper paw token, the
- * default), `eventcoinb` (gem) and `eventcoinc` (ribbon medal), switched with
- * `?coin=a|b|c` (`eventCoinArt.ts`); code always asks for `eventcoin`.
+ * repainted by Codex 8 Nov to look nothing like Shiny's gold coins): the
+ * purple and teal gem, the owner's pick of three (option B, 8 Nov).
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -124,7 +121,7 @@ export const GAME_ICON_SIDES = [16, 24, 32, 48, 64] as const;
 
 /** Where one size of an icon is served from. */
 export const gameIconUrl = (name: GameIconName, side: (typeof GAME_ICON_SIDES)[number]): string =>
-  `${import.meta.env.BASE_URL}ui/icons/${name === "eventcoin" ? coinArtFile(coinArt()) : name}-${side}.webp`;
+  `${import.meta.env.BASE_URL}ui/icons/${name}-${side}.webp`;
 
 /** Every file of an icon, for the browser to pick the sharpest it needs. */
 export const gameIconSrcset = (name: GameIconName): string =>
