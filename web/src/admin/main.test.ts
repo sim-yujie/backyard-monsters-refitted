@@ -77,7 +77,23 @@ describe("the owner's first look", () => {
     if (path.endsWith("/admin/stats/overview")) return fixture.overview;
     if (path.endsWith("/admin/bugreports")) return fixture.bugReports;
     if (path.endsWith("/admin/errors")) return fixture.errors;
+    if (path.endsWith("/admin/inbox")) return inbox;
     return null;
+  };
+
+  /** Two players waiting in the moderation inbox. */
+  const inbox = {
+    ok: true,
+    players: [
+      {
+        userid: 42, username: "TrollKing88", banned: false, muted: false, gameTeam: false, caseId: 7,
+        reportedMessages: 2, reports: 4, uniqueReporters: 4, filterLines: 3, slurs: 0, flagsUpTo: 905,
+        previousActions: 1, lastAction: null, oldestAt: "2026-11-04T10:00:00Z", latestAt: "2026-11-04T12:00:00Z",
+        preview: { text: "you are all trash", source: "report" }, suggest: { action: "mute", hours: 24 },
+      },
+    ],
+    nextOffset: null,
+    counts: { all: 1, reports: 1, filter: 1 },
   };
 
   beforeEach(() => {
@@ -117,6 +133,33 @@ describe("the owner's first look", () => {
     expect(fix?.open).toBe(true);
     expect(fix?.querySelector("code")?.textContent).toBe("deploy/prod.sh exec backup bash /backup.sh");
     expect(fix?.querySelector("button.copy")?.getAttribute("aria-label")).toMatch(/^Copy: /);
+  });
+
+  it("keeps the server to one line, with its problems a tap away, and puts the waiting work below", async () => {
+    await boot();
+    await settle();
+    const box = document.getElementById("problems")!;
+    const list = box.querySelector<HTMLElement>(".issues")!;
+    expect(list.hidden).toBe(true);
+    const toggle = box.querySelector<HTMLButtonElement>(".verdict-toggle")!;
+    expect(toggle.textContent).toBe("What to do");
+    toggle.click();
+    expect(list.hidden).toBe(false);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    // The moderation card: who is waiting, each linking to their evidence in the inbox.
+    const inboxCard = document.getElementById("home-inbox")!;
+    expect(inboxCard.textContent).toContain("1player waiting");
+    expect(inboxCard.querySelector("a.home-row")?.getAttribute("href")).toBe("#inbox?player=42");
+    expect(inboxCard.textContent).toContain("2 reported messages · 4 reports");
+    expect(inboxCard.querySelector("a[href='#inbox?source=filter']")).not.toBeNull();
+    // The bug card links the New and Working lists.
+    const bugCard = document.getElementById("home-bugs")!;
+    expect(bugCard.querySelector("a[href='#bugs?list=new']")).not.toBeNull();
+    expect(bugCard.querySelector("a[href='#bugs?list=working']")).not.toBeNull();
+    // The inbox is the phone's Moderation tab, with its count.
+    const tab = document.querySelector(".tabs a[href='#inbox']")!;
+    expect(tab.textContent).toContain("Moderation");
+    expect(tab.querySelector(".count")?.textContent).toContain("1");
   });
 
   it("has the Shiny section in the links, and the light or dark switch in the header", async () => {
