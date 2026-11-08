@@ -1180,3 +1180,45 @@
     --skin-edge: 16px;
   }
 }
+
+/* ── The wall line's bar (walls anchors, owner 8 Nov) ───────────────────── */
+
+/* ✓ Build N is green in both looks: Classic's own green plate (Flash's small
+   button), Modern's orange steel plate turned green. Grey when off. */
+:root[data-skin="flash"] .build-placing .btn.btn--primary.build-placing__line-confirm {
+  border-image-source: var(--skin-button2);
+  border-image-slice: 0 var(--skin-button2-slice) fill;
+  text-shadow:
+    0 2px 0 var(--skin-button2-stroke), 2px 0 0 var(--skin-button2-stroke), -2px 0 0 var(--skin-button2-stroke), 0 -2px 0 var(--skin-button2-stroke),
+    1.5px 1.5px 0 var(--skin-button2-stroke), -1.5px 1.5px 0 var(--skin-button2-stroke), 1.5px -1.5px 0 var(--skin-button2-stroke), -1.5px -1.5px 0 var(--skin-button2-stroke);
+}
+
+:root[data-skin="scrap"] .build-placing .btn.btn--primary.build-placing__line-confirm {
+  filter: hue-rotate(100deg) saturate(0.9);
+}
+
+:root[data-skin="scrap"] .build-placing .btn.btn--primary.build-placing__line-confirm:hover:not(:disabled) {
+  filter: hue-rotate(100deg) saturate(0.9) brightness(1.08);
+}
+
+:root[data-skin] .build-placing .btn.btn--primary.build-placing__line-confirm:disabled {
+  filter: grayscale(1) brightness(0.8);
+}
+
+/* Put the Block away: the windows' painted close disc. */
+:root[data-skin] .build-placing--line .btn.build-placing__cancel,
+:root[data-skin] .build-placing--line .btn.build-placing__cancel:hover:not(:disabled) {
+  border: 0;
+  border-radius: 50%;
+  background: var(--skin-close) center / contain no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 40%));
+}
+
+:root[data-skin] .build-placing--line .btn.build-placing__cancel:hover:not(:disabled) {
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 40%)) brightness(1.1);
+}
+
+:root[data-skin] .build-placing--line .btn.build-placing__cancel::before {
+  content: none;
+}

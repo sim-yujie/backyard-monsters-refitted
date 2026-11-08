@@ -76,6 +76,8 @@ import {
   plannerEntryTooltip,
 } from "@/game/yard/planner/access";
 import { buildOffer, buildsAtOnce, categoryOf } from "@/game/yard/buildCatalogue";
+import { WALL_TYPES } from "@/game/yard/buildingCosts";
+import { lineBudgetOf, readLineModePreference, writeLineModePreference } from "@/game/yard/wallLine";
 import { BuildPlacement } from "@/game/yard/BuildPlacement";
 import { fixedWorkSource } from "@/game/yard/buildingWork";
 import { startBank, type AnswerBank } from "@/game/yard/bankShow";
@@ -2022,9 +2024,25 @@ export class YardScene implements Scene {
     const storage = offer.stored !== null ? decorActions(store) : null;
     const buying = offer.price !== undefined;
     const repeat = buildsAtOnce(type, store.kind) && !instant && !storage;
+    // A wall Block can be drawn as a line or L (walls Option B, owner 8 Nov 2026).
+    const lineable = repeat && WALL_TYPES.includes(type);
+    const lineOn = lineable && readLineModePreference();
     let placed: number | null = null;
 
     const bar = new PlacementBar({
+      ...(lineable && {
+        line: {
+          on: lineOn,
+          onToggle: (on: boolean) => {
+            writeLineModePreference(on);
+            bar.setMessage(null);
+            placement.setLineMode(on);
+          },
+          onConfirm: () => void placement.confirmLine(),
+          onClear: () => placement.clearLine(),
+          onUndo: () => placement.undoAnchor(),
+        },
+      }),
       type,
       kind: store.kind,
       instant,
@@ -2088,6 +2106,30 @@ export class YardScene implements Scene {
         // The new building's panel: its countdown, Finish now and Cancel build.
         if (placed !== null) this.showPlaced(placed);
       },
+      ...(lineable && {
+        line: {
+          on: lineOn,
+          budget: () => lineBudgetOf(buildOffer(type, store), store.resources),
+          unitCost: offer.cost,
+          onPlan: (plan, stage) => bar.setLine(plan, stage),
+          onBuild: async (cells) => {
+            const result = await actions.walls(type, cells);
+            if (this.placement !== placement) return result.ok ? "placed" : "refused";
+            if (!result.ok) {
+              bar.setMessage(result.refusal.message, "bad");
+              return "refused";
+            }
+            const { built, refused } = result.report;
+            for (const one of built) guideBus.emit("placed", { type, id: one.id });
+            const skipped = refused.length;
+            bar.setMessage(
+              skipped > 0 ? `Built ${built.length}. ${skipped} left out.` : `Built ${built.length}.`,
+              "good",
+            );
+            return "placed";
+          },
+        },
+      }),
     });
     this.placement = placement;
 

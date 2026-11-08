@@ -73,6 +73,7 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "build",
   "build/cancel",
   "build/instant",
+  "build/walls",
   "academy/train",
   "academy/cancel",
   "academy/finish",
