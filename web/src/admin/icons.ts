@@ -37,6 +37,9 @@ const PATHS = {
   x: ["M6 6l12 12", "M18 6 6 18"],
   history: ["M3 12a9 9 0 1 0 2.6-6.4L3 8", "M3 3v5h5", "M12 8v4l3 2"],
   menu: ["M4 6h16", "M4 12h16", "M4 18h16"],
+  /** An attack made (out, up-right) and an attack received (in, down-left). */
+  out: ["M7 17 17 7", "M8 7h9v9"],
+  in: ["M17 7 7 17", "M16 17H7V8"],
 } as const;
 
 export type IconName = keyof typeof PATHS;

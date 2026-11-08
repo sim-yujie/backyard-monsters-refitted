@@ -18,6 +18,7 @@ import {
   type StatsOverview,
 } from "./api";
 import { AnnouncementsView } from "./announcements";
+import { AttackLogSection } from "./attacks";
 import { BugsView } from "./bugs";
 import { CasesView } from "./cases";
 import { PhotosView } from "./photos";
@@ -95,6 +96,7 @@ const NO_HEALTH_MARK: ReadonlySet<ViewId> = new Set<ViewId>([
   "announcements",
   "weekend",
   "moderation",
+  "attacks",
   "moderators",
   "modmail",
   "chat",
@@ -222,6 +224,13 @@ class Dashboard {
   });
   private readonly weekend = new WeekendView({ say: (message) => this.say(message) });
   private readonly moderators = new ModeratorsView({ say: (message) => this.say(message) });
+  private readonly attacks = new AttackLogSection({
+    say: (message) => this.say(message),
+    navigate: ({ player, side, range }) => {
+      location.hash = viewHash("attacks", { player, side: side === "both" ? null : side, range: range === "7d" ? null : range });
+    },
+    openPlayer: (userid) => this.openPlayer(userid),
+  });
   private readonly modMail = new ModMailSection({
     say: (message) => this.say(message),
     onViewChange: () => undefined,
@@ -412,6 +421,7 @@ class Dashboard {
       photos: section("photos", "Photo reports"),
       bugs: section("bugs", "Bug reports"),
       moderation: section("moderation", "Moderation"),
+      attacks: section("attacks", "Attack log"),
       moderators: section("moderators", "Chat moderators"),
       modmail: section("modmail", "Moderator mail"),
       chat: section("chat", "Chat as the game team"),
@@ -429,6 +439,7 @@ class Dashboard {
     replace(this.sections.photos.body, this.photos.element);
     replace(this.sections.bugs.body, this.bugs.element);
     replace(this.sections.moderation.body, this.moderation.element);
+    replace(this.sections.attacks.body, this.attacks.element);
     replace(this.sections.moderators.body, this.moderators.element);
     replace(this.sections.modmail.body, this.modMail.element);
     replace(this.sections.chat.body, this.chat.element);
@@ -526,6 +537,7 @@ class Dashboard {
       this.photos.refresh(),
       this.bugs.show(route.bug, route.view === "bugs" ? route.params : {}),
       this.moderation.refresh(),
+      route.view === "attacks" ? this.attacks.show(route.params) : Promise.resolve(),
       this.moderators.refresh(),
       this.modMail.refresh(),
       this.shiny.refresh(),
@@ -540,6 +552,7 @@ class Dashboard {
     this.show(route.view, route.params);
     if (route.view === "bugs") void this.bugs.show(route.bug, route.params);
     if (route.view === "inbox") void this.inbox.show(route.params);
+    if (route.view === "attacks") void this.attacks.show(route.params);
   }
 
   /**
@@ -603,6 +616,7 @@ class Dashboard {
       this.photos.refresh(),
       this.bugs.refresh(),
       this.moderation.refresh(),
+      this.attacks.refresh(),
       this.moderators.refresh(),
       this.modMail.refresh(),
       this.shiny.refresh(),
