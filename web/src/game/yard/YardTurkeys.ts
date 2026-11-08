@@ -2,6 +2,7 @@ import { Rectangle, Sprite, Texture, type Container } from "pixi.js";
 import { MUSHROOM_POP_SECONDS, mushroomPopScale } from "./mushroomPop";
 import { mushroomKey } from "./mushroomPick";
 import { loadWithRetries } from "./retryLoad";
+import { classicLook } from "@/game/classicLook";
 import { THANKSGIVING_ART } from "./thanksgivingSkin";
 import {
   FRAME,
@@ -32,9 +33,25 @@ import type { Yard, YardMushroom } from "./yardModel";
  * hidden spell is cut short rather than jumping the turkeys across the yard.
  */
 
-/** The strips: 6 frames each, @2x (`art-samples/thanksgiving/build_art.py`). */
-const WALK_ART = `${THANKSGIVING_ART}turkey.png`;
-const GOLDEN_ART = `${THANKSGIVING_ART}turkey-golden.png`;
+/**
+ * Sent with the turkey strips: the server lets a browser keep a picture for a
+ * week, so raise it whenever a strip is repainted under the same name.
+ */
+export const TURKEY_ART_VERSION = "2";
+
+/**
+ * The strips, 6 frames each, @2x, one pair per look (owner's picks, 8 Nov:
+ * Classic A and Modern A, `art-samples/thanksgiving/turkey-v2` on
+ * feat/thanksgiving): drawn after the Classic/Modern switch (`game/classicLook.ts`),
+ * read once when the game loads like the rest of the look.
+ */
+export const turkeyArt = (classic: boolean): { readonly walk: string; readonly golden: string } => {
+  const look = classic ? "classic" : "modern";
+  return {
+    walk: `${THANKSGIVING_ART}turkey-${look}.png?v=${TURKEY_ART_VERSION}`,
+    golden: `${THANKSGIVING_ART}turkey-${look}-golden.png?v=${TURKEY_ART_VERSION}`,
+  };
+};
 const FRAME_W = 112;
 const FRAME_H = 104;
 const FRAMES = 6;
@@ -131,9 +148,10 @@ export class YardTurkeys {
 
   /** Fetches both strips (the yard's five tries each). Resolves whether they arrived. */
   load(): Promise<boolean> {
+    const art = turkeyArt(classicLook());
     this.loading ??= Promise.all([
-      loadWithRetries(WALK_ART, () => this.destroyed),
-      loadWithRetries(GOLDEN_ART, () => this.destroyed),
+      loadWithRetries(art.walk, () => this.destroyed),
+      loadWithRetries(art.golden, () => this.destroyed),
     ]).then(
       ([walk, golden]) => {
         if (this.destroyed) return false;

@@ -36,7 +36,7 @@ export const TURKEY_CLEARANCE = 8;
 /** Tries at a free target before it settles for standing a while longer. */
 export const TARGET_TRIES = 8;
 
-/** Frames in the turkey strip (`turkey.png`): walk 1-4, the startled hop, pecking. */
+/** Frames in a turkey strip (`turkey-modern.png`, `turkey-classic.png`): walk 1-4, the startled hop, pecking. */
 export const FRAME = { walk: [0, 1, 2, 3], hop: 4, peck: 5, stand: 1 } as const;
 
 /**
