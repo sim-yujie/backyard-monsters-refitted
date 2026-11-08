@@ -1,0 +1,16 @@
+Use your image generation tool (one call) to create a new image and save it as sheet.png in the current folder. Do not write code and do not copy or composite pixels from the inputs.
+
+These are UI icons for the cartoon strategy game Backyard Monsters: the "event coin", a special currency players earn only in big seasonal events (Halloween, Thanksgiving) and spend on yard decorations. It is shown at a tiny 16 to 24 pixel size beside a number, right next to the game's premium currency "Shiny". It MUST look clearly different from Shiny in BOTH colour and shape.
+
+Input 1, approved.png: the game's APPROVED painted icons. Input 2, style.png: the game's painted resource piles and status sticker icons. STYLE ONLY: copy their look exactly: chunky simple shapes, a bold dark outline around every shape, bright saturated cartoon colours, soft painted shading with a glossy white highlight from the top left, and a thin clean white rim just outside the dark outline. Do not copy their subjects.
+Input 3, shiny.png: the game's Shiny icon, a stack of round GOLD coins. This is what the event coin must NOT look like: no yellow-gold round plain coins, no coin stacks.
+
+Output: ONE square image, 1024x1024, with FOUR separate icons on a 2 x 2 grid, each centred in its own quarter and filling about 70% of that quarter, with clear empty space between them (they must not touch each other or the image edge). Each is ONE single token, seen from the front:
+
+- TOP-LEFT: a thick HEXAGONAL token (six flat sides, not round) made of warm reddish COPPER / bronze metal, with a raised rim and one big raised monster paw print in its middle (one round pad and three or four chunky claw toes), the paw a slightly lighter shiny copper; a small white sparkle on the upper-left corner.
+- TOP-RIGHT: a faceted GEM token: a chunky cut jewel shaped like a rounded diamond (a rhombus standing on its point), glowing PURPLE in the centre fading to bright TEAL facets at the edges, clear big facets, glossy highlight top left.
+- BOTTOM-RIGHT: a RIBBON MEDAL: a round medal of bright RED enamel with a thick gold rim and a small raised gold star in its middle, hanging from a short red-and-gold striped ribbon with two V-cut tails behind/above it.
+- BOTTOM-LEFT: a SHIELD-shaped token of bright GREEN enamel with a silver rim and a raised silver monster eye (one big round cartoon eye) in its middle.
+
+Each icon: one simple bold silhouette that still reads at 16 pixels, few big shapes, no tiny details, no text, no letters, no numbers, no drop shadow on the ground. These are rich painted game icons, NOT flat line icons or simple glyphs.
+Background everywhere: flat pure magenta #FF00FF, no gradient, no grid lines, no frames, no labels. The icons themselves must contain no pink or magenta.

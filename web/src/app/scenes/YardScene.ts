@@ -62,7 +62,7 @@ import {
   plannerAccess,
   plannerEntryTooltip,
 } from "@/game/yard/planner/access";
-import { buildOffer, buildsAtOnce, categoryOf } from "@/game/yard/buildCatalogue";
+import { BuildCategory, buildOffer, buildsAtOnce, categoryOf } from "@/game/yard/buildCatalogue";
 import { BuildPlacement } from "@/game/yard/BuildPlacement";
 import { fixedWorkSource } from "@/game/yard/buildingWork";
 import { startBank, type AnswerBank } from "@/game/yard/bankShow";
@@ -1656,6 +1656,12 @@ export class YardScene implements Scene {
     this.openBuildMenu();
   }
 
+  /** Opens the Build window on its Decorations tab (the HUD's event coin counter). */
+  private openDecorations(): void {
+    this.openBuildMenu();
+    this.buildMenu?.open(BuildCategory.DECORATIONS);
+  }
+
   /**
    * Opens the Build window, on one building's tile when `type` is given
    * (the Map link's "Build Map Room", a Map Room 1 card's "Build Flinger").
@@ -2471,6 +2477,7 @@ export class YardScene implements Scene {
           }).mount(modal);
         },
         openShop: () => this.openShop(),
+        openDecorations: () => this.openDecorations(),
         startBank: (predicted) => this.startBank(predicted),
         markHatcheries: (marks) => this.markHatcheries(marks),
       },

@@ -256,6 +256,11 @@ export interface YardSceneHooks {
    */
   openShop?(): void;
   /**
+   * Opens the Build window on its Decorations tab: the HUD's event coin
+   * counter uses it. Absent where there is no Build window.
+   */
+  openDecorations?(): void;
+  /**
    * Plays a bank on the press (#208, `bankShow.ts`): each harvester in
    * `predicted` (`predictBank`) throws its resource balls at the Town Hall
    * now, and the HUD counts up across their flight. Returns what to hand the

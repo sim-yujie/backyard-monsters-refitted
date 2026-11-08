@@ -516,11 +516,20 @@ export class BuildMenu {
     const hall = townHallLevel(store.yard);
     const hallName = hallWord(store.kind);
     const free = workers.total - workers.busy;
-    this.meta.replaceChildren(
-      glyph(WORKER, "build-menu__meta-icon"),
-      `${free} of ${workers.total} ${workers.total === 1 ? "worker" : "workers"} free`,
-      outpost ? " · Outpost limits" : hall > 0 ? ` · ${hallName} level ${hall}` : ` · No ${hallName}`,
-    );
+    if (this.active === BuildCategory.DECORATIONS && store.kind === "main") {
+      // Decorations need no worker but cost event coins: the purse goes in
+      // the title bar, which a short window or a phone never scrolls away
+      // (tester, 8 Nov: under the tiles it was cut off at 1280x800).
+      const purse = coinAmount(store.eventCoins, { className: "build-menu__coins", size: 24 });
+      purse.setAttribute("aria-label", coinWords(store.eventCoins));
+      this.meta.replaceChildren("You have ", purse);
+    } else {
+      this.meta.replaceChildren(
+        glyph(WORKER, "build-menu__meta-icon"),
+        `${free} of ${workers.total} ${workers.total === 1 ? "worker" : "workers"} free`,
+        outpost ? " · Outpost limits" : hall > 0 ? ` · ${hallName} level ${hall}` : ` · No ${hallName}`,
+      );
+    }
 
     this.drawKinds();
     const offers = this.sorted();
@@ -582,12 +591,10 @@ export class BuildMenu {
     // nothing runs out, so the build keys would only mislead.
     if (storage) {
       // Not a key: a narrow window hides those, and this is the tab's one line.
-      // Short, with the purse: "Stored: free. You have [coin] 300."
+      // The purse itself is in the title bar (`draw`), always in view.
       const note = document.createElement("span");
       note.className = "build-menu__note";
-      const purse = coinAmount(this.binding.store.eventCoins, { className: "build-menu__coins" });
-      purse.setAttribute("aria-label", coinWords(this.binding.store.eventCoins));
-      note.append("Stored: free. You have ", purse, ".");
+      note.textContent = "Stored: free. Big events pay event coins.";
       this.legend.replaceChildren(note);
       return;
     }

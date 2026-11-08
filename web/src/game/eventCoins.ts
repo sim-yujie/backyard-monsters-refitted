@@ -1,20 +1,19 @@
 import type { CoinGain } from "@/api/types";
 
 /**
- * EVENT COINS (beta 7 grill item 29): the currency events pay and the
- * decorations shop takes. The server owns the balance
+ * EVENT COINS (beta 7 grill item 29): the currency big events pay (their
+ * login calendar and ladder; weekend events pay none, owner 8 Nov 2026) and
+ * the decorations shop takes. The server owns the balance
  * (`server/src/services/events/eventCoins.ts`); the client only shows it.
  *
- * The purse arrives on the owner's main-yard load (`eventcoins`, with
- * `coinsgained` when the load itself paid a weekend's "played" coins) and on
+ * The purse arrives on the owner's main-yard load (`eventcoins`) and on
  * every yard answer that changed it (`YardStore`). Each arrival goes through
  * {@link noteCoins}, which works out what was gained for the "+25" moment
  * (`game/yard/plugins/eventCoins.ts`):
  *
  * - the answer says what it paid (`coinsGained`): that;
- * - otherwise, a balance higher than the last one this session saw (coins a
- *   tribe raid paid after its attack, seen at the next yard load): the
- *   difference. The first balance of a session shows nothing.
+ * - otherwise, a balance higher than the last one this session saw (seen
+ *   at the next yard load): the difference. The first balance of a session shows nothing.
  *
  * A gain noted before anyone listens (the load, before the yard's plugins
  * mount) waits for the first listener.
@@ -24,7 +23,7 @@ import type { CoinGain } from "@/api/types";
 export interface CoinsGained {
   readonly amount: number;
   readonly balance: number;
-  /** What paid it, when the server said (`weekend-played`, `calendar`, ...). */
+  /** What paid it, when the server said (`calendar`, `ladder`). */
   readonly reasons: readonly string[];
 }
 

@@ -335,10 +335,14 @@ describe("BuildMenu", () => {
     }
     expect(pages).toEqual(["Page 1 of 2", "Page 1 of 2", "Page 1 of 2", "Page 1 of 3", "Page 1 of 1"]);
     expect(tileTypes(menu)).toEqual(["96", "97", "98", "99", "100", "101"]);
-    // The purse beside the note: "Stored: free. You have [coin] 300."
+    // The purse in the title bar, always in view (tester, 8 Nov: under the
+    // tiles it was cut off at 1280x800 and below the fold on a phone).
+    const meta = menu.element.querySelector(".build-menu__meta")!;
+    expect(spokenText(meta)).toBe("You have Event coins 300");
+    expect(meta.querySelector(".build-menu__coins")?.getAttribute("aria-label")).toBe("300 event coins");
     const legend = menu.element.querySelector(".build-menu__legend")!;
-    expect(spokenText(legend)).toBe("Stored: free. You have Event coins 300.");
-    expect(legend.querySelector(".build-menu__coins")?.getAttribute("aria-label")).toBe("300 event coins");
+    expect(legend.textContent).toBe("Stored: free. Big events pay event coins.");
+    expect(legend.querySelector(".build-menu__coins")).toBeNull();
   });
 
   it("an outpost's Decorations tab says they go in the main yard", () => {

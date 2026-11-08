@@ -28,27 +28,27 @@ describe("event coins", () => {
   it("what the server said it paid wins over the difference", () => {
     const seen: CoinsGained[] = [];
     onCoinsGained((gained) => seen.push(gained));
-    noteCoins(25, [{ amount: 25, reason: "weekend-played" }]);
+    noteCoins(25, [{ amount: 25, reason: "calendar" }]);
     noteCoins(100, [
-      { amount: 75, reason: "weekend-boost" },
+      { amount: 75, reason: "ladder" },
       { amount: 0, reason: "nothing" },
     ]);
     expect(seen).toEqual([
-      { amount: 25, balance: 25, reasons: ["weekend-played"] },
-      { amount: 75, balance: 100, reasons: ["weekend-boost"] },
+      { amount: 25, balance: 25, reasons: ["calendar"] },
+      { amount: 75, balance: 100, reasons: ["ladder"] },
     ]);
   });
 
   it("a gain before anyone listens waits for the first listener, added up", () => {
     noteCoins(0);
-    noteCoins(25, [{ amount: 25, reason: "weekend-played" }]);
+    noteCoins(25, [{ amount: 25, reason: "calendar" }]);
     noteCoins(40);
     const listener = vi.fn();
     onCoinsGained(listener);
     expect(listener).toHaveBeenCalledWith({
       amount: 40,
       balance: 40,
-      reasons: ["weekend-played"],
+      reasons: ["calendar"],
     });
   });
 
