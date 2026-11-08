@@ -3,6 +3,7 @@ import { Save } from "../../database/models/save.model.js";
 import { User } from "../../database/models/user.model.js";
 import { BaseType } from "../../enums/Base.js";
 import { withTribeGooBonus } from "./tribeGooBonus.js";
+import { isMR2Camp, withCampLootBonus } from "./campLootBonus.js";
 import { postgres, redis } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
@@ -316,7 +317,10 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   if (bombs.charges.length > 0) userSave.resources = chargeBombSpend(bombs.spend, userSave.resources);
   const banked = bankAttackLoot(
     userSave,
-    withTribeGooBonus(loot.credit, defender.type === BaseType.TRIBE),
+    withCampLootBonus(
+      withTribeGooBonus(loot.credit, defender.type === BaseType.TRIBE),
+      isMR2Camp(defender.type, userSave.mapversion)
+    ),
     loot.krallenBuff
   );
   postgres.em.persist(userSave);
