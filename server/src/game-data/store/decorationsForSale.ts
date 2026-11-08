@@ -43,8 +43,9 @@ export const DECORATIONS_FOR_SALE: readonly number[] = [
 const FOR_SALE: ReadonlySet<number> = new Set(DECORATIONS_FOR_SALE);
 
 /**
- * The Shiny a decoration of `type` costs (its store row's `c[0]`), or
- * undefined when it is not sold.
+ * What a decoration of `type` costs (its store row's `c[0]`), or undefined
+ * when it is not sold. Flash charged it in Shiny; since beta 7 it is charged
+ * in event coins, the same number (owner, 6 Nov 2026).
  */
 export const decorationPrice = (type: number): number | undefined => {
   if (!FOR_SALE.has(type)) return undefined;

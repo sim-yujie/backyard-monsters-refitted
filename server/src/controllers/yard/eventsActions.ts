@@ -118,7 +118,13 @@ export const eventsActions = (store: EventProgressStore, events: readonly EventD
         granted: plan.granted,
         nextAt: day < calendar.length ? nextDayAt(now) : null,
       };
-      return { report, credit: plan.credit, grantShiny: plan.grantShiny, slices: plan.slices };
+      return {
+        report,
+        credit: plan.credit,
+        grantShiny: plan.grantShiny,
+        grantCoins: { amount: plan.grantCoins, reason: "calendar" },
+        slices: plan.slices,
+      };
     },
   }),
 
@@ -146,7 +152,13 @@ export const eventsActions = (store: EventProgressStore, events: readonly EventD
 
       const plan = planGrant(save, tier.rewards, now);
       const report: LadderClaimReport = { event: event.id, tier: body.tier, granted: plan.granted };
-      return { report, credit: plan.credit, grantShiny: plan.grantShiny, slices: plan.slices };
+      return {
+        report,
+        credit: plan.credit,
+        grantShiny: plan.grantShiny,
+        grantCoins: { amount: plan.grantCoins, reason: "ladder" },
+        slices: plan.slices,
+      };
     },
   }),
 });

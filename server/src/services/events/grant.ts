@@ -42,12 +42,16 @@ export type GrantedReward =
   | { kind: "speedup"; item: string; count: number; held: number }
   | { kind: "decoration"; type: number; count: number; stored: number }
   /** Krallen's level now; `raised` false when she was at the top already. */
-  | { kind: "krallen"; level: number; raised: boolean };
+  | { kind: "krallen"; level: number; raised: boolean }
+  /** Event coins paid (`eventCoins.ts`); the yard answer carries the new balance. */
+  | { kind: "eventCoins"; amount: number };
 
 /** What a yard action returns for a grant: spread into its outcome. */
 export interface GrantPlan {
   credit: ResourceAmounts;
   grantShiny: number;
+  /** Event coins to pay: the wrapper adds them to `bym.event_coins` in the same transaction. */
+  grantCoins: number;
   slices: { storedata?: JsonObject; researchdata?: JsonObject; champion?: ChampionData[] };
   granted: GrantedReward[];
 }
@@ -83,6 +87,8 @@ export const rewardProblem = (reward: EventReward): string | null => {
       return whole(reward.count) > 0 ? null : "no count";
     case "krallen":
       return null;
+    case "eventCoins":
+      return whole(reward.amount) > 0 ? null : "no amount";
     default:
       return "unknown kind";
   }
@@ -106,6 +112,7 @@ export const rewardProblem = (reward: EventReward): string | null => {
 export const planGrant = (save: GrantSave, rewards: readonly EventReward[], now: number): GrantPlan => {
   const credit = noAmounts();
   let grantShiny = 0;
+  let grantCoins = 0;
   let storedata: JsonObject | undefined;
   let researchdata: JsonObject | undefined;
   let champion: ChampionData[] | undefined;
@@ -161,6 +168,12 @@ export const planGrant = (save: GrantSave, rewards: readonly EventReward[], now:
         granted.push({ kind: "decoration", type: reward.type, count, stored });
         break;
       }
+      case "eventCoins": {
+        const amount = whole(reward.amount);
+        grantCoins += amount;
+        granted.push({ kind: "eventCoins", amount });
+        break;
+      }
       case "krallen": {
         const raised = raiseKrallen(champion ?? save.champion, now);
         champion = raised.champions;
@@ -185,6 +198,7 @@ export const planGrant = (save: GrantSave, rewards: readonly EventReward[], now:
   return {
     credit,
     grantShiny,
+    grantCoins,
     slices: {
       ...(storedata && { storedata }),
       ...(researchdata && { researchdata }),

@@ -650,6 +650,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * `server/src/services/events/weekendSchedule.ts`), read by `game/weekend.ts`.
    */
   weekend?: unknown;
+  /**
+   * The player's event coins (`server/src/services/events/eventCoins.ts`):
+   * on the owner's main-yard build load, and merged from every yard answer
+   * that changed them. Absent elsewhere (a visit, an attack, an outpost).
+   */
+  eventcoins?: number;
   /** When the yard was last saved, in unix seconds. 0 on a yard never saved. */
   savetime?: number;
   resources?: Resources;
@@ -1440,7 +1446,18 @@ export type YardResponse<Report> = ApiEnvelope &
      * Quests button's red number). Absent before the player's quest record exists.
      */
     questsClaimable?: number;
+    /** The event coin purse after this action, when it changed (a buy, a claim). */
+    eventcoins?: number;
+    /** What this action paid in event coins, for the "+15" moment. */
+    coinsGained?: CoinGain[];
   };
+
+/** One event coin payment (`server/src/services/events/eventCoins.ts`). */
+export interface CoinGain {
+  amount: number;
+  /** `calendar` or `ladder` (a big event's claims). */
+  reason: string;
+}
 
 /**
  * An achievement earned and paid but not yet shown: what the yard answers,

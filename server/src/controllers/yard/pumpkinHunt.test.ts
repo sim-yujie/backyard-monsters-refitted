@@ -4,6 +4,7 @@ import type { EntityManager } from "@mikro-orm/core";
 import type { User } from "../../database/models/user.model.js";
 import { HALLOWEEN_2026_LADDER, THANKSGIVING_2026_LADDER } from "../../game-data/events/events.js";
 import { memoryProgressStore } from "../../services/events/progressStore.js";
+import { memoryCoinStore, useCoinStore, type EventCoinStore } from "../../services/events/eventCoins.js";
 import { PUMPKIN_HUNT_EVENT, TURKEY_HUNT_EVENT } from "../../services/yard/season.js";
 import { eventsActions } from "./eventsActions.js";
 import { mushroomPickAction } from "./mushrooms.js";
@@ -60,11 +61,20 @@ const rowOf = (): Row => ({
 const run = (action: Parameters<typeof runYardAction>[2], body: Row): Promise<YardAnswer> =>
   runYardAction(em as unknown as EntityManager, user, action, body);
 
+/** Halloween is a big event: its tiers pay event coins too, here into memory. */
+let coins: ReturnType<typeof memoryCoinStore>;
+let previousCoins: EventCoinStore;
+
 beforeEach(() => {
   setSystemTime(new Date(DURING * 1000));
   db.row = rowOf();
+  coins = memoryCoinStore();
+  previousCoins = useCoinStore(coins);
 });
-afterEach(() => setSystemTime());
+afterEach(() => {
+  setSystemTime();
+  useCoinStore(previousCoins);
+});
 
 describe("Halloween pumpkin hunt ladder", () => {
   test("the placeholder tiers are 10, 25, 50 and 100 pumpkins", () => {
@@ -86,7 +96,8 @@ describe("Halloween pumpkin hunt ladder", () => {
 
     const claimed = await run(claims.ladderClaim, { event: PUMPKIN_HUNT_EVENT, tier: 0 });
     expect(claimed.status).toBe(200);
-    expect(claimed.body).toMatchObject({ credits: 110, report: { tier: 0 } });
+    expect(claimed.body).toMatchObject({ credits: 110, report: { tier: 0 }, eventcoins: 20 });
+    expect(coins.balances.get(2)).toBe(20);
 
     const again = await run(claims.ladderClaim, { event: PUMPKIN_HUNT_EVENT, tier: 0 });
     expect(again.body).toMatchObject({ reason: "tierClaimed" });

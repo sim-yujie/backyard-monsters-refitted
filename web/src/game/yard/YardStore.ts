@@ -1,3 +1,4 @@
+import { noteCoins } from "@/game/eventCoins";
 import type {
   AchievementUnlock,
   BaseLoadResponse,
@@ -200,6 +201,8 @@ export interface YardStoreReader {
   readonly yard: Yard;
   readonly resources: Resources;
   readonly credits: number;
+  /** Event coins (beta 7), the decorations shop's purse; 0 when the load did not carry them. */
+  readonly eventCoins: number;
   /** The storage caps, once a yard route has answered; null before. */
   readonly caps: ResourceCaps | null;
   /** Workers as the yard stands now, predictions included. */
@@ -254,6 +257,11 @@ export interface YardSceneHooks {
    * Shiny counter use it. Absent where there is no screen.
    */
   openShop?(): void;
+  /**
+   * Opens the Build window on its Decorations tab: the HUD's event coin
+   * counter uses it. Absent where there is no Build window.
+   */
+  openDecorations?(): void;
   /**
    * Plays a bank on the press (#208, `bankShow.ts`): each harvester in
    * `predicted` (`predictBank`) throws its resource balls at the Town Hall
@@ -463,6 +471,11 @@ export class YardStore implements YardStoreReader, YardStoreActions {
 
   get credits(): number {
     return this.current.credits ?? 0;
+  }
+
+  /** Event coins (beta 7): the decorations shop's purse; 0 when the load did not carry it. */
+  get eventCoins(): number {
+    return this.current.eventcoins ?? 0;
   }
 
   get caps(): ResourceCaps | null {
@@ -804,6 +817,11 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     if (typeof response.playerpoints === "number") slices.playerpoints = response.playerpoints;
     if (typeof response.notifications === "number") slices.notifications = response.notifications;
     if (typeof response.questsClaimable === "number") slices.questsClaimable = response.questsClaimable;
+    // Event coins: only when the action changed them (`game/eventCoins.ts` shows the "+15").
+    if (typeof response.eventcoins === "number") {
+      slices.eventcoins = response.eventcoins;
+      noteCoins(response.eventcoins, response.coinsGained);
+    }
     // Nor are the siege weapons and the Inferno purse: they ride `completed` and the siege routes' reports.
     Object.assign(slices, siegeSlices(this.current, response.completed, response.report));
     this.applied = Math.max(this.applied, number);

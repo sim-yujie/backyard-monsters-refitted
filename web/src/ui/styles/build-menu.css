@@ -49,6 +49,13 @@
   flex: none;
 }
 
+/* The painted window's title bar has no side padding of its own (skin.css),
+   which left the workers line and "You have [glimmer] 120" 4px off the frame
+   (tester, 9 Nov): the body's inset instead, level with the tabs. */
+:root[data-skin] .build-menu .panel__titlebar {
+  padding-inline: var(--space-5);
+}
+
 .build-menu__close {
   margin-left: auto;
 }
@@ -1079,6 +1086,19 @@
     padding-bottom: var(--space-1);
   }
 
+  /* Painted, the close is a disc on the corner and only the "?" shares the
+     row: the line sits beside it, in the title bar, not on a row of its own
+     under it (tester, 9 Nov), at the body's inset. */
+  :root[data-skin] .build-menu .panel__titlebar {
+    padding-inline: var(--space-3);
+  }
+
+  :root[data-skin] .build-menu__meta {
+    order: 0;
+    flex: 1 1 0;
+    padding-bottom: 0;
+  }
+
   .build-menu .panel__body {
     gap: var(--space-3);
     padding: var(--space-2) var(--space-3) var(--space-3);
@@ -1297,6 +1317,10 @@
 
   .build-menu .panel__titlebar {
     padding: var(--space-1) var(--space-2) 0 var(--space-4);
+  }
+
+  :root[data-skin] .build-menu .panel__titlebar {
+    padding-inline: var(--space-3);
   }
 
   .build-menu .panel__title {

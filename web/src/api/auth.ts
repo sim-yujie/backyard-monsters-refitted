@@ -1,5 +1,6 @@
 import { SESSION_STORAGE_KEY } from "@/config";
 import { ApiError, get, getAuthToken, post, setAuthToken } from "./http";
+import { forgetCoinBalance } from "@/game/eventCoins";
 import {
   SessionType,
   type LoginRequest,
@@ -188,6 +189,7 @@ export const logout = (): void => {
   current = null;
   lastBookmarks = undefined;
   setAuthToken(null);
+  forgetCoinBalance();
   try {
     localStorage.removeItem(SESSION_STORAGE_KEY);
   } catch {

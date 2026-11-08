@@ -98,6 +98,17 @@
 
 /* ── The panel ─────────────────────────────────────────────────────────── */
 
+/* The orange of a countdown and of today's day: light on Modern's dark steel;
+   on Classic's cream a burnt orange, 5:1 against it, where the light orange
+   was hard to read (tester, 9 Nov). */
+.events-panel {
+  --events-hot-text: #ffb347;
+}
+
+:root[data-skin="flash"] .events-panel {
+  --events-hot-text: #9a3f00;
+}
+
 /* Centred under the HUD like Quests (owner, 8 Nov: "make the pop up centre
    rather than at the side"), clear of the Events button at the top right. */
 .events-panel {
@@ -180,7 +191,7 @@
   font-size: var(--text-sm);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: #ffb347;
+  color: var(--events-hot-text);
 }
 
 .events-card__text {
@@ -267,9 +278,17 @@
 
 .events-day__rewards {
   display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: center;
   gap: 2px;
+}
+
+/* The Glimmers at the tile's foot: a row's tiles are as tall as its tallest
+   (Day 5's four piles, Day 14's Scarecrow), so every Glimmers badge in the
+   row sits at the same height (tester, 9 Nov). */
+.events-day__rewards > .events-reward--eventCoins {
+  margin-top: auto;
 }
 
 .events-day--today {
@@ -279,7 +298,7 @@
 }
 
 .events-day--today .events-day__label {
-  color: #ffb347;
+  color: var(--events-hot-text);
 }
 
 .events-day--claimed {
@@ -301,16 +320,21 @@
   color: var(--colour-success);
 }
 
-/* One reward's picture and figure. */
+/* One reward's picture and figure. Badges side by side (a claim's notice, a
+   ladder tier) are stretched to the tallest: the picture takes the spare
+   height, centred in it, so every figure sits on the same line ("+10K" and
+   "+15" level, tester 9 Nov) whatever the picture's size. */
 .events-reward {
   display: inline-flex;
   flex-direction: column;
+  justify-content: flex-end;
   align-items: center;
   gap: 1px;
 }
 
 .events-reward__pictures {
   display: inline-flex;
+  flex: 1 0 auto;
   align-items: center;
   color: var(--colour-text);
 }
@@ -335,6 +359,7 @@
 .events-reward__pictures--block {
   display: inline-grid;
   grid-template-columns: repeat(2, auto);
+  align-content: center;
   justify-items: center;
   gap: 1px 2px;
 }
@@ -399,9 +424,49 @@
   font-weight: 800;
 }
 
+/* The rewards as pictures and figures in one row, "[twig][pebble] 10K
+   [glimmer] 15", so the button keeps to two lines on a phone (tester, 9 Nov). */
 .events-claim__what {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 2px var(--space-3);
   font-size: var(--text-sm);
-  font-weight: 400;
+  font-weight: 700;
+}
+
+.events-claim__what .events-reward {
+  flex-direction: row;
+  gap: 4px;
+}
+
+.events-claim__what .events-reward__pictures {
+  flex: none;
+  color: inherit;
+}
+
+.events-claim__what .events-reward__pictures--block {
+  display: inline-flex;
+}
+
+/* Every pile at the line's own size, a pair or four as big as one. */
+.events-claim__what .events-reward__pictures > .res-icon {
+  height: 1.3em;
+}
+
+.events-claim__what .events-reward__pictures--block > .res-icon + .res-icon {
+  margin-left: 2px;
+}
+
+.events-claim__what :is(.events-reward__icon, .events-reward__image, .events-reward__image--tall) {
+  width: 22px;
+  height: 22px;
+}
+
+.events-claim__what .events-reward__figure {
+  font-size: inherit;
+  color: inherit;
 }
 
 .events-claim--busy {
@@ -436,7 +501,7 @@
 
 .events-tier {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--colour-border-subtle);
@@ -454,17 +519,92 @@
 
 .events-tier__need {
   flex: none;
+  align-self: center;
   min-width: 64px;
   font-size: var(--text-sm);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
+/* min-width: 0 down to the figures: a long name ("D.A.V.E. Pumpkin") wraps
+   inside the rewards instead of pushing the Glimmers and the lock out past
+   the row's right edge on a phone (tester, 9 Nov). */
 .events-tier__rewards {
   display: flex;
   flex: 1;
   flex-wrap: wrap;
   gap: var(--space-2);
+  min-width: 0;
+}
+
+.events-tier__rewards > .events-reward {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.events-tier__rewards .events-reward__figure {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+/* The Glimmers column and the tick / lock / Claim slot have fixed widths, so
+   the Glimmers sit in one straight column down the ladder (tester, 9 Nov). */
+.events-tier__coins {
+  display: flex;
+  flex: none;
+  justify-content: center;
+  width: 44px;
+}
+
+.events-tier__end {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  width: 76px;
+}
+
+.events-tier__end > .events-tier__claim {
+  width: 100%;
+  padding-inline: var(--space-2);
+  white-space: nowrap;
+}
+
+/* The skinned plate (Classic and Modern) has 24-26 px ends and 15 px words,
+   about 100 px in all: narrower ends and 13 px words, so "Claim" (39 px in
+   Titan One) sits inside the 76 px slot: 2 x 15 + 4 + 39 = 73. */
+:root[data-skin] .panel .events-tier__end > .events-tier__claim {
+  --skin-button-cap: 15px;
+  padding-inline: 2px;
+  font-size: var(--text-sm);
+}
+
+@media (width <= 620px) {
+  /* A phone, down to 320 px: tighter gaps and padding, a smaller count and
+     narrower fixed columns, so a row's lock, tick or Claim stays inside it. */
+  .events-tier {
+    gap: var(--space-2);
+    padding-inline: var(--space-2);
+  }
+
+  .events-tier__need {
+    min-width: 42px;
+    font-size: var(--text-xs);
+  }
+
+  .events-tier__coins {
+    width: 36px;
+  }
+
+  .events-tier__end {
+    width: 72px;
+  }
+
+  /* 2 x 15 + 4 + 36 ("Claim" at 12 px) = 70, inside the 72 px slot. */
+  :root[data-skin] .panel .events-tier__end > .events-tier__claim {
+    font-size: var(--text-xs);
+  }
 }
 
 .events-tier__mark {
@@ -680,10 +820,11 @@
 .events-claimed {
   display: inline-flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: stretch;
   gap: var(--space-2);
 }
 
 .events-claimed__title {
+  align-self: center;
   font-weight: 700;
 }

@@ -77,7 +77,7 @@ export interface BuildCategoryDefinition {
 
 /**
  * Every tab and what it lists. Decorations are never built for resources:
- * the Decorations tab lists what is in storage, then the ones sold for Shiny
+ * the Decorations tab lists what is in storage, then the ones sold for event coins
  * (§8.3, #128, owner decision 2026-11-04; {@link buildOffers}).
  */
 export const BUILD_CATALOGUE: readonly BuildCategoryDefinition[] = [
@@ -177,6 +177,8 @@ export interface BuildContext {
   readonly save: BaseLoadResponse;
   readonly resources: Resources;
   readonly credits: number;
+  /** Event coins (beta 7): what the decorations shop is paid in. 0 when absent. */
+  readonly eventCoins?: number;
   readonly caps: ResourceCaps | null;
   readonly workers: YardWorkers;
   now(): number;
@@ -203,7 +205,9 @@ export type BuildGate =
       readonly overCap: boolean;
     }
   | { readonly reason: "workers"; readonly total: number; readonly busy: number }
-  | { readonly reason: "credits"; readonly need: number };
+  | { readonly reason: "credits"; readonly need: number }
+  /** A decoration short of event coins (beta 7): `need` more. */
+  | { readonly reason: "coins"; readonly need: number };
 
 /**
  * Where a tile stands, which is also how the tab sorts (`SortBuildings`,
@@ -270,9 +274,10 @@ export interface BuildOffer {
    */
   readonly stored: number | null;
   /**
-   * A decoration bought for Shiny (none stored; owner decision 2026-11-04):
-   * its price, Flash's (`decorShop.ts`), charged when it is placed. Its
-   * `gate` is `credits` while the player has less. Absent otherwise.
+   * A decoration bought for event coins (none stored; owner decisions
+   * 2026-11-04 and 6 Nov): its price, Flash's Shiny price as coins
+   * (`decorShop.ts`), charged when it is placed. Its `gate` is `coins` while
+   * the player has fewer. Absent otherwise.
    */
   readonly price?: number;
 }
@@ -312,8 +317,8 @@ export const storageOffer = (type: number, context: BuildContext): BuildOffer | 
 };
 
 /**
- * The tile of a decoration sold for Shiny with none in storage (owner
- * decision 2026-11-04), or null when it is not sold, one is stored (that tile
+ * The tile of a decoration sold for event coins with none in storage (owner
+ * decisions 2026-11-04 and 6 Nov), or null when it is not sold, one is stored (that tile
  * is {@link storageOffer}'s) or the yard is an outpost or the Inferno. Picking
  * it starts the placement; `decor/buy` charges the price when it goes down.
  */
@@ -321,7 +326,7 @@ export const shopOffer = (type: number, context: BuildContext): BuildOffer | nul
   if (!decoratesHere(context)) return null;
   const price = decorationPrice(type);
   if (price === null || storedCount(context.save.researchdata, type) > 0) return null;
-  const short = price - context.credits;
+  const short = price - (context.eventCoins ?? 0);
   return {
     type,
     category: BuildCategory.DECORATIONS,
@@ -334,7 +339,7 @@ export const shopOffer = (type: number, context: BuildContext): BuildOffer | nul
     status: "ready",
     needs: [],
     instantPrice: 0,
-    gate: short > 0 ? { reason: "credits", need: short } : null,
+    gate: short > 0 ? { reason: "coins", need: short } : null,
     instantGate: null,
     inferno: false,
     stored: 0,

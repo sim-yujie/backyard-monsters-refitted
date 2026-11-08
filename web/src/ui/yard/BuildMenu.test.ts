@@ -332,8 +332,8 @@ describe("BuildMenu", () => {
     expect(onTownHall).toHaveBeenCalledTimes(1);
   });
 
-  it("with nothing stored, the Decorations tab sells Flash's 73 for Shiny under its five sub-tabs", () => {
-    const { menu } = setup([HALL]);
+  it("with nothing stored, the Decorations tab sells Flash's 73 for event coins under its five sub-tabs", () => {
+    const { menu } = setup([HALL], { eventcoins: 300 });
     menu.open(BuildCategory.DECORATIONS);
     expect(menu.element.querySelector(".build-menu__empty")).toBeNull();
     const kinds = menu.element.querySelector<HTMLElement>(".build-menu__kinds")!;
@@ -357,9 +357,14 @@ describe("BuildMenu", () => {
     }
     expect(pages).toEqual(["Page 1 of 2", "Page 1 of 2", "Page 1 of 2", "Page 1 of 3", "Page 1 of 1"]);
     expect(tileTypes(menu)).toEqual(["96", "97", "98", "99", "100", "101"]);
-    expect(menu.element.querySelector(".build-menu__legend")?.textContent).toBe(
-      "Stored ones first, free to place. The rest cost Shiny.",
-    );
+    // The purse in the title bar, always in view (tester, 8 Nov: under the
+    // tiles it was cut off at 1280x800 and below the fold on a phone).
+    const meta = menu.element.querySelector(".build-menu__meta")!;
+    expect(spokenText(meta)).toBe("You have Glimmers 300");
+    expect(meta.querySelector(".build-menu__coins")?.getAttribute("aria-label")).toBe("300 Glimmers");
+    const legend = menu.element.querySelector(".build-menu__legend")!;
+    expect(legend.textContent).toBe("Stored: free. Big events pay Glimmers.");
+    expect(legend.querySelector(".build-menu__coins")).toBeNull();
   });
 
   it("an outpost's Decorations tab says they go in the main yard", () => {
@@ -387,28 +392,32 @@ describe("BuildMenu", () => {
     expect(menu.element.querySelector<HTMLElement>(".build-menu__kinds")!.hidden).toBe(true);
   });
 
-  it("a decoration for sale: the Shiny icon and price, and Buy picks it up on the second tap", () => {
-    const { menu, onPick } = setup([HALL], { credits: 1_000 });
+  it("a decoration for sale: the coin icon and price, and Buy picks it up on the second tap", () => {
+    // Shiny does not buy decorations any more (owner decision 29): none here.
+    const { menu, onPick } = setup([HALL], { credits: 0, eventcoins: 1_000 });
     menu.open(BuildCategory.DECORATIONS);
 
     const skull = tile(menu, 107);
-    expect(skull.querySelector(".build-tile__count .res-amount")?.getAttribute("data-resource")).toBe("shiny");
-    expect(spokenText(skull.querySelector(".build-tile__count")!)).toBe("Shiny 20");
-    expect(skull.getAttribute("aria-label")).toMatch(/, 20 Shiny$/);
+    expect(skull.querySelector(".build-tile__count .icon-amount")?.getAttribute("data-icon")).toBe("eventcoin");
+    expect(spokenText(skull.querySelector(".build-tile__count")!)).toBe("Glimmers 20");
+    expect(skull.getAttribute("aria-label")).toMatch(/, 20 Glimmers$/);
 
     skull.click();
-    expect(facts(menu)).toEqual(["Shiny 20", "At once", "No worker"]);
+    expect(facts(menu)).toEqual(["Glimmers 20", "At once", "No worker"]);
     expect(info(menu).querySelector(".build-info__gate")).toBeNull();
     const buy = info(menu).querySelector<HTMLButtonElement>(".build-info__buy")!;
     expect(buy.disabled).toBe(false);
+    expect(buy.getAttribute("aria-label")).toBe("Buy Monster Skull, 20 Glimmers");
+    expect(buy.querySelector("[data-icon='eventcoin']")).not.toBeNull();
     buy.click();
     expect(onPick).not.toHaveBeenCalled();
     buy.click();
     expect(onPick).toHaveBeenCalledWith(107, false);
   });
 
-  it("short of Shiny: the price is marked, Buy is blocked and the line says how much more", () => {
-    const { menu, onPick } = setup([HALL], { credits: 100 });
+  it("short of event coins: the price is marked, Buy is blocked and the line says how many more", () => {
+    // Plenty of Shiny does not help: decorations cost coins.
+    const { menu, onPick } = setup([HALL], { credits: 10_000, eventcoins: 100 });
     menu.open(BuildCategory.DECORATIONS);
     menu.openKind(DecorKind.FLAGS);
     menu.turn(2);
@@ -416,8 +425,10 @@ describe("BuildMenu", () => {
     tile(menu, 32).click();
 
     expect(tile(menu, 32).querySelector(".build-tile__count--short")).not.toBeNull();
-    expect(spokenText(info(menu).querySelector(".build-info__gate")!)).toBe("Need Shiny 50 more.");
+    expect(spokenText(info(menu).querySelector(".build-info__gate")!)).toBe("Need Glimmers 50 more.");
     const buy = info(menu).querySelector<HTMLButtonElement>(".build-info__buy")!;
+    expect(buy.disabled).toBe(true);
+    expect(buy.title).toBe("Not enough Glimmers.");
     buy.click();
     buy.click();
     expect(onPick).not.toHaveBeenCalled();
@@ -539,7 +550,7 @@ describe("BuildMenu", () => {
 });
 
 describe("PlacementBar", () => {
-  it("a decoration bought for Shiny shows its price", () => {
+  it("a decoration bought for event coins shows its price", () => {
     const bar = new PlacementBar({
       type: 28,
       instant: false,
@@ -549,7 +560,7 @@ describe("PlacementBar", () => {
       time: "At once",
       onCancel: vi.fn(),
     }).mount(document.body);
-    expect(spokenText(bar.element.querySelector(".build-placing__price")!)).toBe("Shiny 150 · At once");
+    expect(spokenText(bar.element.querySelector(".build-placing__price")!)).toBe("Glimmers 150 · At once");
   });
 
   it("says what is in hand and why a spot is refused, and cancels", () => {

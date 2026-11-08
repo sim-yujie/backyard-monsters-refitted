@@ -180,6 +180,10 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
     case "krallen":
       pictures.append(krallenPicture(1, "icon", "events-reward__image"));
       break;
+    case "eventCoins":
+      pictures.append(rewardIcon("eventcoin"));
+      figure = shortAmount(reward.amount);
+      break;
     case "decoration": {
       const art = resolveArt(reward.type, 1, ArtState.DEFAULT);
       if (art) {
@@ -202,7 +206,7 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
     }
   }
   badge.append(pictures);
-  const amount = reward.kind === "resources" || reward.kind === "shiny";
+  const amount = reward.kind === "resources" || reward.kind === "shiny" || reward.kind === "eventCoins";
   if (gained && amount && figure) {
     badge.classList.add("events-reward--gain");
     figure = `${AMOUNT_CHANGE_SIGNS.gain}${figure}`;
@@ -380,10 +384,15 @@ export class EventsPanel {
       const button = el("button", "btn btn--primary events-claim");
       button.type = "button";
       button.dataset["claim"] = key;
-      button.append(
-        el("span", "events-claim__label", `Claim day ${today.day}`),
-        el("span", "events-claim__what", rewardsText(today.rewards)),
-      );
+      // The rewards as pictures and figures, "[twig][pebble] 10K [glimmer] 15", not
+      // words, so a phone's button keeps to two lines (tester, 9 Nov); the words
+      // on hover and for a screen reader.
+      const what = el("span", "events-claim__what");
+      what.append(...today.rewards.map((reward) => rewardBadge(reward)));
+      const words = `Claim day ${today.day}: ${rewardsText(today.rewards)}`;
+      button.setAttribute("aria-label", words);
+      button.title = words;
+      button.append(el("span", "events-claim__label", `Claim day ${today.day}`), what);
       button.disabled = view.claiming !== null;
       if (view.claiming === key) button.classList.add("events-claim--busy");
       button.addEventListener("click", () => this.options.onClaimCalendar(event));
@@ -438,21 +447,28 @@ export class EventsPanel {
       row.dataset["tier"] = String(index);
       const need = el("span", "events-tier__need", `${shortAmount(Math.min(ladder.counter, tier.need))} / ${shortAmount(tier.need)}`);
       const rewards = el("span", "events-tier__rewards");
-      for (const reward of tier.rewards) rewards.append(rewardBadge(reward));
+      // Glimmers in a column of their own at the row's right, the same place on
+      // every tier however wide the rewards before them (tester, 9 Nov).
+      const coins = el("span", "events-tier__coins");
+      for (const reward of tier.rewards) (reward.kind === "eventCoins" ? coins : rewards).append(rewardBadge(reward));
       rewards.title = rewardsText(tier.rewards);
       row.append(need, rewards);
+      if (coins.childElementCount > 0) row.append(coins);
+      // The tick, lock or Claim in one fixed-width slot, so the Glimmers column does not shift with it.
+      const end = el("span", "events-tier__end");
       if (tier.claimed) {
-        row.append(eventsArt("tick", 18, "events-tier__mark"));
+        end.append(eventsArt("tick", 18, "events-tier__mark"));
       } else if (ready.has(index)) {
         const button = el("button", "btn btn--primary events-tier__claim", "Claim");
         button.type = "button";
         button.dataset["claim"] = key;
         button.disabled = view.claiming !== null;
         button.addEventListener("click", () => this.options.onClaimTier(event, index));
-        row.append(button);
+        end.append(button);
       } else {
-        row.append(eventsArt("lock", 18, "events-tier__mark"));
+        end.append(eventsArt("lock", 18, "events-tier__mark"));
       }
+      row.append(end);
       list.append(row);
       if (view.refusal?.key === key) list.append(refusalNote(view.refusal.message));
     });

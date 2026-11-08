@@ -23,11 +23,16 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * mushroom moves out of the way, #263); main yard only. A totem comes back at its stored level, else
  * level 1, and `bl<type>` goes once its count is 0.
  *
- * Owner decision of 2026-11-04: the decorations Flash sold are bought with
- * Shiny again (`decor/buy`, {@link planBuyDecoration}), at Flash's price
+ * Owner decision of 2026-11-04: the decorations Flash sold can be bought
+ * again (`decor/buy`, {@link planBuyDecoration}), at Flash's price
  * (`game-data/store/decorationsForSale.ts`), charged when one is placed, as
  * Flash charged it (`BFOUNDATION.as:1690-1700`); the same placement rules
  * apply, and there is no limit (Flash's `quantity: [0]`).
+ *
+ * Owner decision of 6 Nov 2026 (beta 7 grill item 29): they cost EVENT
+ * COINS, not Shiny: Flash's Shiny price as coins (a 50-Shiny decoration
+ * costs 50 coins), `services/events/eventCoins.ts`. Decorations already
+ * owned are kept.
  */
 
 /** The Wild Monster totems keep their level in storage (`BTOTEM.as:264-270`). */
@@ -98,8 +103,8 @@ export interface PlaceDecorationReport {
   level: number;
   /** How many of the type are left in storage. */
   left: number;
-  /** `decor/buy` only: the Shiny charged (0 when one came out of storage instead). */
-  credits?: number;
+  /** `decor/buy` only: the event coins charged (0 when one came out of storage instead). */
+  coins?: number;
 }
 
 const PLACEMENT_MESSAGES = {
@@ -143,15 +148,15 @@ export const planPlaceDecoration = (save: DecorSave, request: BuildRequest) => {
 };
 
 /**
- * Buys one decoration of `type` for Shiny and puts it at `x`, `y`, finished
- * (owner decision 2026-11-04): the price is the store table's
- * ({@link decorationPrice}), whatever the client thinks it is, and the
- * wrapper takes it (`409 shinyLocked`, `409 credits`) only once the spot is
+ * Buys one decoration of `type` for event coins and puts it at `x`, `y`,
+ * finished (owner decisions 2026-11-04 and 6 Nov): the price is the store
+ * table's Shiny price as coins ({@link decorationPrice}), whatever the client
+ * thinks it is, and the wrapper takes it (`409 coins`) only once the spot is
  * good, so a refused placement charges nothing. `400 notDecoration` for a type
  * that is not one, `400 notForSale { type }` for one Flash did not sell,
  * `409 placement` as `decor/place`. One already in storage is placed from
  * there for free instead, as Flash placed it (`BFOUNDATION.as:1691`), and
- * `credits` is 0.
+ * `coins` is 0.
  */
 export const planBuyDecoration = (save: DecorSave, request: BuildRequest) => {
   const { type } = request;
@@ -160,7 +165,7 @@ export const planBuyDecoration = (save: DecorSave, request: BuildRequest) => {
   }
   if (storedCount(save.researchdata, type) > 0) {
     const placed = planPlaceDecoration(save, request);
-    return { ...placed, report: { ...placed.report, credits: 0 } };
+    return { ...placed, report: { ...placed.report, coins: 0 } };
   }
   const price = decorationPrice(type);
   if (price === undefined) {
@@ -181,7 +186,7 @@ export const planBuyDecoration = (save: DecorSave, request: BuildRequest) => {
     y: request.y,
     level: 1,
     left: 0,
-    credits: price,
+    coins: price,
   };
-  return { report, slices: { buildingdata }, shiny: price };
+  return { report, slices: { buildingdata }, coins: { amount: price, reason: `decor-${type}` } };
 };

@@ -1,0 +1,1 @@
+coinA,coinB,coinD,coinC

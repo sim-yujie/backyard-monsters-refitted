@@ -1,5 +1,7 @@
 /**
- * The decorations bought with Shiny (owner decision 2026-11-04,
+ * The decorations bought with EVENT COINS (owner decision 2026-11-04,
+ * changed to coins 6 Nov 2026, beta 7 grill item 29: Flash's Shiny price, as
+ * coins; `game/eventCoins.ts`;
  * `docs/design/yard-buildings.md` §8.3): Flash's Decorations tab, in its order
  * (the Evil, Plants, Good, Flags and Premium sub-tabs one after the other,
  * each by its `order`), at Flash's price.
@@ -29,7 +31,7 @@ export const DECORATIONS_FOR_SALE: readonly (readonly [type: number, price: numb
 
 const PRICES: ReadonlyMap<number, number> = new Map(DECORATIONS_FOR_SALE);
 
-/** The Shiny a decoration of `type` costs, or null when it is not sold. */
+/** The price (in event coins since beta 7, Flash's Shiny price) a decoration of `type` costs, or null when it is not sold. */
 export const decorationPrice = (type: number): number | null => PRICES.get(type) ?? null;
 
 /** Flash's five Decorations sub-tabs, in its order (`BUILDINGSPOPUP.as:104-105`). */

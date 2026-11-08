@@ -75,7 +75,7 @@ import {
   plannerAccess,
   plannerEntryTooltip,
 } from "@/game/yard/planner/access";
-import { buildOffer, buildsAtOnce, categoryOf } from "@/game/yard/buildCatalogue";
+import { BuildCategory, buildOffer, buildsAtOnce, categoryOf } from "@/game/yard/buildCatalogue";
 import { topUpPrice } from "@/game/yard/resourcePacks";
 import { WALL_TYPES } from "@/game/yard/buildingCosts";
 import { lineBudgetOf, readLineModePreference, writeLineModePreference } from "@/game/yard/wallLine";
@@ -1692,6 +1692,12 @@ export class YardScene implements Scene {
     this.openBuildMenu();
   }
 
+  /** Opens the Build window on its Decorations tab (the HUD's event coin counter). */
+  private openDecorations(): void {
+    this.openBuildMenu();
+    this.buildMenu?.open(BuildCategory.DECORATIONS);
+  }
+
   /**
    * Opens the Build window, on one building's tile when `type` is given
    * (the Map link's "Build Map Room", a Map Room 1 card's "Build Flinger").
@@ -2015,7 +2021,7 @@ export class YardScene implements Scene {
    * stays in hand after each block; anything else is done after one, and its
    * panel opens on the new building. A decoration from the Decorations tab
    * comes out of storage (`decor/place`, §8.3): free and finished; one sold
-   * for Shiny is bought as it goes down (`decor/buy`, owner 2026-11-04).
+   * for event coins is bought as it goes down (`decor/buy`, owner 2026-11-04).
    */
   /** `topUp`: the Shiny the player agreed to pay for the resources it is short (issue #393). */
   private startPlacement(type: number, instant: boolean, topUp?: number): void {
@@ -2635,6 +2641,7 @@ export class YardScene implements Scene {
           }).mount(modal);
         },
         openShop: () => this.openShop(),
+        openDecorations: () => this.openDecorations(),
         startBank: (predicted) => this.startBank(predicted),
         markHatcheries: (marks) => this.markHatcheries(marks),
       },

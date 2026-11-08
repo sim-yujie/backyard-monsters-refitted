@@ -3,8 +3,9 @@ import type { EntityManager } from "@mikro-orm/core";
 import type z from "zod";
 
 import type { User } from "../../database/models/user.model.js";
-import { KRALLEN_HUNT_GOALS, krallenHunt, type EventDefinition } from "../../game-data/events/events.js";
+import { KRALLEN_HUNT_GOALS, krallenHunt, withEventCoins, type EventDefinition } from "../../game-data/events/events.js";
 import { memoryProgressStore } from "../../services/events/progressStore.js";
+import { memoryCoinStore, useCoinStore, type EventCoinStore } from "../../services/events/eventCoins.js";
 import { eventsActions } from "./eventsActions.js";
 import { yardSpeedupAction } from "./speedup.js";
 import { runYardAction, type YardAction, type YardAnswer } from "./yardAction.js";
@@ -404,5 +405,64 @@ describe("the Krallen Hunt's reward through the ladder claim", () => {
     at(JAN_END + 7 * DAY);
     expect(await claimHunt(JANUARY)).toMatchObject({ status: 409, body: { reason: "eventNotActive" } });
     expect(krallenOf()).toBeUndefined();
+  });
+});
+
+/**
+ * Event coins as a calendar and ladder reward (beta 7 grill item 29): paid
+ * into the coin store in the claim's transaction, the new balance and the
+ * payment in the answer, the yard's Shiny untouched.
+ */
+describe("event coins through the claims", () => {
+  // A big event: its `coins` field pays 15 a calendar day and 40 for the ladder's tier.
+  const COIN_EVENT: EventDefinition = withEventCoins({
+    ...TEST_EVENT,
+    id: "coin-event",
+    calendar: [{ rewards: [{ kind: "shiny", amount: 1 }] }, { rewards: [{ kind: "shiny", amount: 1 }] }],
+    ladder: { label: "Things", tiers: [{ need: 0, rewards: [] }] },
+    coins: { perCalendarDay: 15, milestones: [40] },
+  });
+  let coins: ReturnType<typeof memoryCoinStore>;
+  let previous: EventCoinStore;
+
+  beforeEach(() => {
+    coins = memoryCoinStore();
+    previous = useCoinStore(coins);
+    actions = eventsActions(store, [COIN_EVENT]);
+  });
+
+  afterEach(() => {
+    useCoinStore(previous);
+  });
+
+  test("a calendar day pays its 15 coins and says the new balance", async () => {
+    const answer = await call(actions.calendarClaim, { event: "coin-event" });
+    expect(answer.status).toBe(200);
+    expect(answer.body.report).toMatchObject({ granted: [{ kind: "shiny", amount: 1 }, { kind: "eventCoins", amount: 15 }] });
+    expect(answer.body.eventcoins).toBe(15);
+    expect(answer.body.coinsGained).toEqual([{ amount: 15, reason: "calendar" }]);
+    expect(coins.balances.get(2)).toBe(15);
+    expect(db.row!.credits).toBe(101);
+
+    // Refused the same day: nothing more.
+    expect((await call(actions.calendarClaim, { event: "coin-event" })).status).toBe(409);
+    expect(coins.balances.get(2)).toBe(15);
+  });
+
+  test("a ladder tier pays its coins once", async () => {
+    await store.addToCounter(em as unknown as EntityManager, 2, "coin-event", 1);
+    const answer = await call(actions.ladderClaim, { event: "coin-event", tier: 0 });
+    expect(answer.status).toBe(200);
+    expect(answer.body.eventcoins).toBe(40);
+    expect(coins.log).toEqual([{ userid: 2, amount: 40, reason: "ladder", awardKey: null }]);
+    expect((await call(actions.ladderClaim, { event: "coin-event", tier: 0 })).status).toBe(409);
+    expect(coins.balances.get(2)).toBe(40);
+  });
+
+  test("an answer with no coin change carries no purse", async () => {
+    actions = eventsActions(store, [TEST_EVENT]);
+    const answer = await claim();
+    expect(answer.body.eventcoins).toBeUndefined();
+    expect(answer.body.coinsGained).toBeUndefined();
   });
 });

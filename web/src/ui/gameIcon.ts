@@ -76,6 +76,10 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * blue Protection shield (wants a speaker with a cross) and `report` the white flag of
  * Retreat (wants a red warning flag). Replace their `*.webp` files to change them.
  *
+ * Event coins (beta 7, `game/eventCoins.ts`, `art-samples/event-coin`,
+ * repainted by Codex 8 Nov to look nothing like Shiny's gold coins): the
+ * purple and teal gem, the owner's pick of three (option B, 8 Nov).
+ *
  * The Events page (`ui/events/EventsPanel.ts`, `art-samples/events-icons`, painted
  * 8 Nov in place of line icons): a gold stopwatch with speed streaks for a speed-up
  * (`speedup`), a flaming cog with a lightning bolt for Production Overdrive
@@ -132,6 +136,7 @@ export const GAME_ICONS = {
   addfriend: "Add friend",
   mute: "Mute",
   report: "Report",
+  eventcoin: "Glimmers",
   speedup: "Speed-up",
   overdrive: "Production Overdrive",
   tools: "Store boost",

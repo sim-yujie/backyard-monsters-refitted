@@ -81,7 +81,11 @@ describe("EventsPanel", () => {
     const { panel, options } = mounted();
     panel.render(list([event()]));
     const button = panel.element.querySelector<HTMLButtonElement>(".events-claim")!;
-    expect(button.textContent).toBe("Claim day 210 Shiny");
+    // The reward as its picture and figure, not words, so a phone's button keeps to two lines; the words are its name.
+    expect(button.querySelector(".events-claim__label")!.textContent).toBe("Claim day 2");
+    expect(button.querySelector(".events-claim__what .events-reward .res-icon")).not.toBeNull();
+    expect(button.querySelector(".events-claim__what .events-reward__figure")!.textContent).toBe("10");
+    expect(button.getAttribute("aria-label")).toBe("Claim day 2: 10 Shiny");
     button.click();
     expect(options.onClaimCalendar).toHaveBeenCalledWith(expect.objectContaining({ id: "halloween-2026" }));
     panel.close();
@@ -245,6 +249,19 @@ describe("EventsPanel: the Krallen Hunt", () => {
   });
 });
 
+describe("rewardBadge: event coins (beta 7)", () => {
+  it("the coin and the amount; claimed, a green +N", () => {
+    const offer = rewardBadge({ kind: "eventCoins", amount: 15 });
+    expect(offer.querySelector("[data-icon='eventcoin'], img")).not.toBeNull();
+    // Drawn like the other painted reward icons (speed-up, Overdrive), so a Thanksgiving day tile lines up.
+    expect(offer.querySelector("img.events-reward__icon")).not.toBeNull();
+    expect(offer.querySelector(".events-reward__figure")!.textContent).toBe("15");
+    const gained = rewardBadge({ kind: "eventCoins", amount: 15 }, true);
+    expect(gained.querySelector(".events-reward__figure")!.textContent).toBe("+15");
+    expect(gained.classList.contains("events-reward--gain")).toBe(true);
+  });
+});
+
 describe("claimedLine: a claim's notice", () => {
   it("shows the rewards as badges, the full words on hover and for a screen reader", () => {
     const line = claimedLine("Day 1 claimed", DAYS!.days[0]!);
@@ -301,5 +318,94 @@ describe("A day's reward tile (Thanksgiving tester faults, 8 Nov)", () => {
     expect(acorn.querySelector(".events-reward__figure")?.textContent).toBe("Acorn");
     const two = rewardBadge({ kind: "decoration", type: 55, count: 2 });
     expect(two.querySelector(".events-reward__figure")?.textContent).toBe("Acorn x2");
+  });
+});
+
+describe("Layout faults (picture tester, 9 Nov)", () => {
+  const rule = (selector: string): string => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(?:^|\\n)${escaped} \\{([^}]*)\\}`).exec(eventsCss.replace(/\r\n/g, "\n"))?.[1] ?? "";
+  };
+
+  it("pins each day's Glimmers to the tile's foot, so a row's badges line up", () => {
+    expect(rule(".events-day__rewards")).toMatch(/flex: 1;/);
+    expect(rule(".events-day__rewards > .events-reward--eventCoins")).toMatch(/margin-top: auto;/);
+  });
+
+  it("puts a tier's Glimmers in a fixed-width column before a fixed-width end slot", () => {
+    const { panel } = mounted();
+    const ladder = {
+      label: "Turkeys caught",
+      counter: 30,
+      tiers: [
+        { need: 10, rewards: [{ kind: "eventCoins" as const, amount: 20 }], claimed: true },
+        { need: 25, rewards: [{ kind: "resources" as const, amounts: { r1: 25_000, r2: 25_000, r3: 25_000, r4: 25_000 } }, { kind: "eventCoins" as const, amount: 35 }], claimed: false },
+        { need: 50, rewards: [{ kind: "decoration" as const, type: 55, count: 1 }, { kind: "eventCoins" as const, amount: 55 }], claimed: false },
+      ],
+    };
+    panel.render(list([event({ ladder })]));
+    const rows = [...panel.element.querySelectorAll(".events-tier")];
+    for (const row of rows) {
+      expect(row.querySelector(".events-tier__rewards .events-reward--eventCoins")).toBeNull();
+      expect(row.querySelector(".events-tier__coins > .events-reward--eventCoins")).not.toBeNull();
+      expect(row.lastElementChild!.classList.contains("events-tier__end")).toBe(true);
+    }
+    expect(rows[1]!.querySelector(".events-tier__end .events-tier__claim")).not.toBeNull();
+    expect(rows[2]!.querySelector(".events-tier__end .events-tier__mark")).not.toBeNull();
+    expect(rule(".events-tier__coins")).toMatch(/flex: none;[\s\S]*width: \d+px;/);
+    expect(rule(".events-tier__end")).toMatch(/flex: none;[\s\S]*width: \d+px;/);
+    panel.close();
+  });
+
+  it("keeps every ladder row's lock, tick and Claim inside a 320 px phone", () => {
+    // A long name wraps inside the rewards rather than pushing the end slot out.
+    expect(rule(".events-tier__rewards")).toMatch(/min-width: 0;/);
+    expect(rule(".events-tier__rewards > .events-reward")).toMatch(/min-width: 0;/);
+    expect(rule(".events-tier__rewards .events-reward__figure")).toMatch(/white-space: normal;/);
+    // The skinned Claim plate's ends and words fit the desktop slot: 2 x cap + 4 + "Claim" (39 px at 13 px).
+    const plate = rule(":root[data-skin] .panel .events-tier__end > .events-tier__claim");
+    const cap = Number(/--skin-button-cap: (\d+)px;/.exec(plate)?.[1]);
+    const slot = Number(/width: (\d+)px;/.exec(rule(".events-tier__end"))?.[1]);
+    expect(plate).toMatch(/font-size: var\(--text-sm\);/);
+    expect(2 * cap + 4 + 39).toBeLessThanOrEqual(slot);
+    // The phone block: what the fixed columns leave for the rewards in a 320 px row (about 246 px inside).
+    const css = eventsCss.replace(/\r\n/g, "\n");
+    const phone = css.slice(css.indexOf("A phone, down to 320 px"));
+    const px = (selector: string, prop: string): number => {
+      const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const body = new RegExp(`\\n  ${escaped} \\{([^}]*)\\}`).exec(phone)?.[1] ?? "";
+      return Number(new RegExp(`${prop}: (\\d+)px;`).exec(body)?.[1]);
+    };
+    const phoneSlot = px(".events-tier__end", "width");
+    const left = 246 - 3 * 8 - px(".events-tier__need", "min-width") - px(".events-tier__coins", "width") - phoneSlot;
+    expect(left).toBeGreaterThanOrEqual(71); // "Scarecrow" at 12 px
+    // "Claim" at 12 px is 36 px.
+    expect(2 * cap + 4 + 36).toBeLessThanOrEqual(phoneSlot);
+  });
+
+  it("sets every figure in a row of badges on the same line (the claim notice's +10K and +15)", () => {
+    expect(rule(".events-claimed")).toMatch(/align-items: stretch;/);
+    expect(rule(".events-claimed__title")).toMatch(/align-self: center;/);
+    expect(rule(".events-reward")).toMatch(/justify-content: flex-end;/);
+    expect(rule(".events-reward__pictures")).toMatch(/flex: 1 0 auto;/);
+    expect(rule(".events-tier")).toMatch(/align-items: stretch;/);
+  });
+
+  it("lays the Claim button's rewards in one row of pictures and figures", () => {
+    expect(rule(".events-claim__what")).toMatch(/display: flex;/);
+    expect(rule(".events-claim__what .events-reward")).toMatch(/flex-direction: row;/);
+  });
+
+  it("gives Classic's cream a dark orange for countdowns, not the light one", () => {
+    expect(rule(".events-card__countdown")).toMatch(/color: var\(--events-hot-text\);/);
+    const classic = /--events-hot-text: #([0-9a-f]{6});/.exec(rule(':root[data-skin="flash"] .events-panel'))?.[1];
+    expect(classic).toBeDefined();
+    // Relative luminance well under the cream's, at least 4.5:1 against #f3e3c3.
+    const lin = (c: number): number => (c / 255 <= 0.03928 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+    const lum = (hex: string): number => {
+      const [r, g, b] = [0, 2, 4].map((i) => lin(parseInt(hex.slice(i, i + 2), 16)));
+      return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+    };
+    expect((lum("f3e3c3") + 0.05) / (lum(classic!) + 0.05)).toBeGreaterThanOrEqual(4.5);
   });
 });

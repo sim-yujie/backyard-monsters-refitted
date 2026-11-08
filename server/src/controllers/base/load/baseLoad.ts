@@ -1,5 +1,6 @@
 import { weekendState } from "../../../services/events/weekendSchedule.js";
 import { weekendSettings } from "../../../services/events/weekendSettings.js";
+import { coinStore } from "../../../services/events/eventCoins.js";
 import { devConfig } from "../../../config/GameConfig.js";
 import { Save } from "../../../database/models/save.model.js";
 import { postgres, redis } from "../../../server.js";
@@ -83,6 +84,19 @@ const STRONGHOLD_FIELDS = ["level", "cell.x", "cell.y"] as const;
  * @returns {Promise<void>} A promise that resolves when the base load process is complete.
  * @throws Will throw an error if the base load process fails.
  */
+/**
+ * The owner's event coins on a main-yard load: the balance. Null when the
+ * coin tables cannot be read.
+ */
+const ownCoinsOnLoad = async (userid: number): Promise<number | null> => {
+  try {
+    return await coinStore().balance(postgres.em.fork(), userid);
+  } catch (error) {
+    logger.warn(`event coins not read for user ${userid}: ${error}`);
+    return null;
+  }
+};
+
 export const baseLoad: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
   const { baseid, type, mapversion: requestedVersion, attackData } = BaseLoadSchema.parse(ctx.request.body);
@@ -485,6 +499,13 @@ export const baseLoad: KoaController = async (ctx) => {
 
   const activeKinds = activeEventKinds(getCurrentDateTime());
 
+  // Event coins on the owner's main-yard load (`services/events/eventCoins.ts`):
+  // the purse for the HUD and the decorations shop. Left out if the read fails (a server before the migration): the client then shows none.
+  const coins =
+    isOwner && type === BaseMode.BUILD && baseSave.type === BaseType.MAIN
+      ? await ownCoinsOnLoad(user.userid)
+      : null;
+
   const response: Record<string, unknown> = {
     ...filteredSave,
     relationship,
@@ -504,6 +525,7 @@ export const baseLoad: KoaController = async (ctx) => {
     // The weekend event on now and the next (`services/events/weekendSchedule.ts`):
     // the web client's banner, Friday pop-up and boosted prices and times.
     weekend: weekendState(weekendSettings(), getCurrentDateTime()),
+    ...(coins !== null && { eventcoins: coins }),
     chatservers: [process.env.CHAT_WS_HOST!],
     ...(isAttack && { attpowerups }),
     ...(type === BaseMode.HELP && { help: await helpBlockFor(user.userid, baseSave) }),

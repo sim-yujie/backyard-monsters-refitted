@@ -127,3 +127,23 @@ describe("live attack clean-up (grill item 35)", () => {
     expect(source).toMatch(/\.attack-strip--live \[hidden\],\s*\.attack-status--live\[hidden\] \{\s*display: none;/);
   });
 });
+
+describe("Glimmers picture tester, 9 Nov", () => {
+  it("a claim's notice shows over an open window (Events, Quests, Build), under popups", () => {
+    const hud = css("styles/yard-hud.css");
+    expect(hud).toMatch(/\n\.yard-notices \{\s*z-index: calc\(var\(--z-hud\) \+ 1\);/);
+    // One rule for every window, not one per window.
+    expect(css("quests/quests.css")).not.toMatch(/> \.yard-notices \{/);
+  });
+
+  it("Build: the painted title bar keeps the body's inset; on a phone the line shares the '?' row", () => {
+    const build = css("styles/build-menu.css");
+    expect(build).toMatch(/\n:root\[data-skin\] \.build-menu \.panel__titlebar \{\s*padding-inline: var\(--space-5\);/);
+    const phone = block(build, "@media (width <= 620px)");
+    expect(phone).toMatch(/:root\[data-skin\] \.build-menu \.panel__titlebar \{\s*padding-inline: var\(--space-3\);/);
+    expect(phone).toMatch(/:root\[data-skin\] \.build-menu__meta \{\s*order: 0;\s*flex: 1 1 0;/);
+    const skinPhone = block(css("styles/skin.css"), "@media (width <= 620px)");
+    expect(skinPhone).toMatch(/\.build-menu__tabs \.tabs__tab \{\s*padding-inline: 4px;\s*font-size: min\(var\(--text-sm\), 2\.6vw\);/);
+  });
+});
+

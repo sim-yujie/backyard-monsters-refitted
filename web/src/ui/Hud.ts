@@ -25,6 +25,8 @@ import { openBugReport } from "./bugReport/BugReportDialog";
 import { AMOUNT_CHANGE_SIGNS } from "./amountChange";
 import { formatAmount, formatCompact } from "./format";
 import { gameIcon } from "./gameIcon";
+import { coinBalance, onCoinBalance } from "@/game/eventCoins";
+import { coinAmount, coinWords } from "./events/coinUi";
 import { lockArt } from "./lockArt";
 import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, resourceName, restyleIcon, type ResourceKey } from "./resourceIcon";
 import { DamageBanner } from "./yard/DamageBanner";
@@ -68,7 +70,13 @@ import { ShinyButton } from "./yard/ShinyButton";
  * and critter, and their level under the name while an own yard is bound
  * (#192). On a phone the name and critter lead the top row with Workers
  * and Shiny at its end, and the four resources share the row under it in
- * short amounts. The yard's buttons (Build, Collect all, Monsters, Layout,
+ * short amounts.
+ *
+ * Event coins (beta 7, tester 8 Nov 2026) sit right after Shiny, so a player
+ * sees the balance while shopping for decorations: shown once the server has
+ * sent a balance (`game/eventCoins.ts`), and on the own yard a tap opens the
+ * Build window's Decorations tab. On a phone they take the top row's last
+ * place and the name gives way to the critter alone (`yard-hud.css`). The yard's buttons (Build, Collect all, Monsters, Layout,
  * Map, the yard switcher) are the yard's own round buttons (`YardDock`).
  */
 
@@ -308,6 +316,9 @@ export class Hud {
   /** Shiny Lock is on: the Shiny counter shows a padlock, not the 0 the server sends (`game/shinyLock.ts`). */
   private locked = shinyLocked();
   private readonly unwatchLock: () => void;
+  /** The event coin readout after Shiny, hidden until a balance is known. */
+  private readonly coins: { readonly item: HTMLElement; readonly button: HTMLButtonElement };
+  private readonly unwatchCoins: () => void;
 
   constructor(options: HudOptions) {
     this.corner = options.layout === "corner";
@@ -399,6 +410,10 @@ export class Hud {
       this.readouts.set(key, readout);
       this.label(readout);
     }
+    this.coins = this.coinReadout();
+    resources.append(this.coins.item);
+    this.unwatchCoins = onCoinBalance(() => this.renderCoins());
+    this.renderCoins();
     this.unwatchLock = onShinyLock((on) => this.applyShinyLock(on));
     const shinyReadout = this.readouts.get("shiny");
     if (shinyReadout) this.render(shinyReadout);
@@ -695,6 +710,7 @@ export class Hud {
     this.frame = 0;
     window.removeEventListener("resize", this.onResize);
     this.unwatchLock();
+    this.unwatchCoins();
     this.hideExact();
     this.accountMenu?.destroy();
     this.accountMenu = null;
@@ -907,6 +923,39 @@ export class Hud {
     readout.button.title = [text, ...notes].join("\n");
     // The notes end in a full stop already: "Bone: 1 of 2. Making 720 an hour. Full: ..."
     readout.button.setAttribute("aria-label", notes.length ? [`${text}.`, ...notes].join(" ") : text);
+  }
+
+  /** The event coin readout: a chip like Shiny's, the coin and the balance. */
+  private coinReadout(): { item: HTMLElement; button: HTMLButtonElement } {
+    const item = document.createElement("li");
+    item.className = "hud__resource hud__resource--coins";
+    item.hidden = true;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "hud__resource-button hud__coins-button";
+    button.addEventListener("click", () => {
+      this.hideExact();
+      this.yardBinding?.scene.openDecorations?.();
+    });
+    item.append(button);
+    return { item, button };
+  }
+
+  /** Draws the coin balance, or hides the readout while none is known. */
+  private renderCoins(): void {
+    const balance = coinBalance();
+    const { item, button } = this.coins;
+    const wasHidden = item.hidden;
+    item.hidden = balance === null;
+    if (balance !== null) {
+      const amount = coinAmount(balance, { size: 24, decorative: true });
+      amount.querySelector(".icon-amount__value")?.classList.add("hud__resource-value");
+      button.replaceChildren(amount);
+      const words = `Glimmers: ${formatAmount(balance)}. Earned in big events, spent on decorations.`;
+      button.title = words;
+      button.setAttribute("aria-label", `${coinWords(balance)}. Earned in big events, spent on decorations.`);
+    }
+    if (wasHidden !== item.hidden && this.element.isConnected) this.fit();
   }
 
   /** The own yard's Shop door, or null where there is no Shop (the map, an attack, a visit). */

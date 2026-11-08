@@ -81,9 +81,27 @@ describe("upright phone layout", () => {
     expect(phone).toMatch(/\.account-menu__button-count \{\s*right: auto;\s*left: -6px;/);
   });
 
-  it("tightens Workers and Shiny on a narrow phone so they share their columns", () => {
+  it("tightens Workers, Shiny and event coins on a narrow phone so they share their columns", () => {
     const narrow = media(css("styles/yard-hud.css"), "width <= 420px");
-    expect(narrow).toMatch(/\.hud__workers-button,[^{]*\.hud__resource--shiny \.hud__resource-button \{[^}]*padding: 0 6px;/);
+    expect(narrow).toMatch(
+      /\.hud__workers-button,[^{]*\.hud__resource--shiny \.hud__resource-button,[^{]*\.hud__coins-button \{[^}]*padding: 0 6px;/,
+    );
+  });
+
+  it("gives event coins the top row's last quarter on a phone, the critter alone leading it", () => {
+    const phone = media(css("styles/yard-hud.css"), "width <= 620px");
+    expect(phone).toMatch(/\.hud__resource--coins \{[^}]*grid-area: 1 \/ 4;/);
+    const shown = ".hud--corner:has(.hud__resource--coins:not([hidden]))";
+    expect(phone).toContain(`${shown} .account-menu {
+    grid-area: 1 / 1 / 2 / 2;`);
+    expect(phone).toContain(`${shown} .account-menu__pill-text {
+    display: none;`);
+    expect(phone).toContain(`${shown} .hud__workers {
+    grid-area: 1 / 2;`);
+    expect(phone).toContain(`${shown} .hud__resource--shiny {
+    grid-area: 1 / 3;`);
+    // The four resources keep row two to themselves.
+    expect(phone).toContain(".hud__resource:not(.hud__resource--shiny, .hud__resource--coins) {");
   });
 
   it("sizes the Build tabs to the width so Decorations fits", () => {

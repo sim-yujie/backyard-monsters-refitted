@@ -78,3 +78,31 @@ describe("rewardProblem", () => {
     expect(() => planGrant(save(), [{ kind: "shiny", amount: -1 }], NOW)).toThrow();
   });
 });
+
+describe("event coins as a reward (beta 7 grill item 29)", () => {
+  test("coins add up into grantCoins and are reported; the yard is not touched", () => {
+    const plan = planGrant(
+      save(),
+      [
+        { kind: "eventCoins", amount: 15 },
+        { kind: "shiny", amount: 10 },
+        { kind: "eventCoins", amount: 40 },
+      ],
+      NOW
+    );
+    expect(plan.grantCoins).toBe(55);
+    expect(plan.grantShiny).toBe(10);
+    expect(plan.slices).toEqual({});
+    expect(plan.granted).toEqual([
+      { kind: "eventCoins", amount: 15 },
+      { kind: "shiny", amount: 10 },
+      { kind: "eventCoins", amount: 40 },
+    ]);
+    expect(planGrant(save(), [{ kind: "shiny", amount: 1 }], NOW).grantCoins).toBe(0);
+  });
+
+  test("a coin reward needs an amount", () => {
+    expect(rewardProblem({ kind: "eventCoins", amount: 0 })).toBe("no amount");
+    expect(rewardProblem({ kind: "eventCoins", amount: 15 })).toBeNull();
+  });
+});
