@@ -327,6 +327,8 @@ describe("ChampionPanel: freeze (#125)", () => {
     const { element, spies } = setup([gorgo()]);
     const freeze = buttonNamed(element, "Freeze")!;
     expect(freeze.getAttribute("aria-disabled")).toBe("true");
+    // Flash's refusal sound as the tap explains (`uiSounds.ts`).
+    expect(freeze.dataset["uiSound"]).toBe("error");
     expect(freeze.querySelector<HTMLImageElement>(".champion-act__art")!.getAttribute("src")).toBe(
       "/assets/buildingbuttons/119.silhouette.jpg",
     );
