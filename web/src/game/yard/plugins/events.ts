@@ -12,15 +12,11 @@ import { YARD_PLUGINS, type YardMounts, type YardPlugin } from "../yardPlugins";
 
 /**
  * Own-yard plugin for events (server `game-data/events/events.ts`): the
- * Events button with a badge for rewards waiting, the Events page, and the
- * "What's new" cards' one pop-up after an update.
+ * Events button at the top right with a badge for rewards waiting, the Events
+ * page, and the "What's new" cards' one pop-up after an update.
  *
  * - **Button.** Shown only while an event is on or coming up. The badge
- *   counts today's calendar treat and any ladder tier reached. It is one of
- *   the More button's bubbles (`ui/yard/BubbleMenu.ts` `BUBBLE_ITEMS`, owner
- *   8 Nov), whose own badge then adds this one in, so a treat waiting shows
- *   on More while the fan is shut. With the bubble menu off it stands alone
- *   at the top right, as it used to.
+ *   counts today's calendar treat and any ladder tier reached.
  * - **Clock.** Countdowns run on the server's clock (`serverClock`); the list
  *   is read again when an event starts or ends, or the next day's treat
  *   opens, and whenever the page opens.
@@ -145,8 +141,6 @@ export class EventsDoor {
         this.button.setAttribute("aria-expanded", "false");
       },
     }).mount(this.mounts.overlay.content);
-    // Clear of the lone button at the top right; in More's fan there is none there.
-    this.panel.element.classList.toggle("events-panel--beside-door", !this.button.closest(".bubble-menu"));
     this.button.setAttribute("aria-expanded", "true");
     this.scrollToClaim = true;
     this.render();

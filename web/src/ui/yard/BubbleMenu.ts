@@ -5,16 +5,15 @@ import { menuBadgeLabel, menuBadgeText } from "./YardMenu";
 
 /**
  * The bubble menu (the owner's idea, beta 6 desk sample): one round "More"
- * button on the yard's bottom row whose hover (a mouse) or tap fans Quests,
- * Events, Layout, Goals, Alerts, Defences and Mail out of it as bubbles, so
- * the bottom row is just More, Monsters and Build. More's badge adds up the
- * badges inside it (Events' rewards to claim among them).
+ * button on the yard's bottom row whose hover (a mouse) or tap fans Layout,
+ * Goals, Alerts, Defences and Mail out of it as bubbles, so the bottom row is
+ * just More, Monsters and Build. More's badge adds up the badges inside it.
  *
  * The buttons themselves move into the fan, not copies, as the phone's Menu
  * does (`YardMenu`), so each keeps its own badge, its press and Bob's
  * pointer name; a pointer at one while the fan is shut points at More. A
  * button another file puts in the dock later (Mail, the bell, Goals,
- * Defences, Events) is gathered as it arrives.
+ * Defences) is gathered as it arrives.
  *
  * The fan replaces the phone's Menu (`YardMenu`): with it on, Map, Monsters
  * and the yard switcher stay on the screen on a phone too, and everything
@@ -36,10 +35,9 @@ export const BUBBLE_MENU_KEY = "bymr.bubbleMenu";
 /**
  * The buttons in the fan by their `data-dock` name, the one nearest More
  * first (Quests, the owner's beta 6 priority). A new one only needs its name
- * here, and its button put in the dock. Events moved in from the top right
- * (owner, 8 Nov): it is next to Quests, as its rewards are claimed daily.
+ * here, and its button put in the dock.
  */
-export const BUBBLE_ITEMS: readonly string[] = ["quests", "events", "layout", "goals", "bell", "defences", "mail"];
+export const BUBBLE_ITEMS: readonly string[] = ["quests", "layout", "goals", "bell", "defences", "mail"];
 
 /** Where the fan lays its bubbles out in rows: a phone on its side, too short for one column. */
 export const GRID_QUERY = "(width > 620px) and (height <= 500px)";
@@ -116,7 +114,7 @@ export class BubbleMenu {
     this.button.className = "yard-dock__button yard-dock__button--more";
     this.button.dataset["dock"] = "more";
     tutTarget(this.button, TutTarget.DOCK_MORE);
-    this.button.title = "Quests, Events, Layout, Goals, Alerts, Defences and Mail";
+    this.button.title = "Layout, Goals, Alerts, Defences and Mail";
     this.button.setAttribute("aria-expanded", "false");
     const disc = document.createElement("span");
     disc.className = "yard-dock__disc";
