@@ -1,4 +1,4 @@
-import { beforeAll, afterAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { catchUpMushrooms } from "./catchUpMushrooms.js";
 import {
   MUSHROOM_RESPAWN_SECONDS,
@@ -160,5 +160,24 @@ describe("a forced event comes first", () => {
     expect(yardHuntAt(halloweenDay, EVENTS, forced)?.event).toBe(TURKEY_HUNT_EVENT);
     expect(activeEventKinds(halloweenDay, EVENTS, forced)[0]).toBe("thanksgiving");
     expect(pumpkinHuntOn(halloweenDay, EVENTS, forced)).toBe(false);
+  });
+});
+
+describe("an event switched off (EVENTS_FORCE_OFF)", () => {
+  const saved = process.env.EVENTS_FORCE_OFF;
+  afterEach(() => {
+    if (saved === undefined) delete process.env.EVENTS_FORCE_OFF;
+    else process.env.EVENTS_FORCE_OFF = saved;
+  });
+
+  test("EVENTS_FORCE_OFF=halloween-2026 with thanksgiving forced on: turkeys only, no Halloween look", () => {
+    const halloweenDay = at("2026-11-08T12:00:00Z");
+    const forced = new Set([TURKEY_HUNT_EVENT]);
+    process.env.EVENTS_FORCE_OFF = PUMPKIN_HUNT_EVENT;
+    expect(yardHuntAt(halloweenDay, EVENTS, forced)?.event).toBe(TURKEY_HUNT_EVENT);
+    expect(activeEventKinds(halloweenDay, EVENTS, forced)).not.toContain("halloween");
+    expect(activeEventKinds(halloweenDay, EVENTS, forced)).toContain("thanksgiving");
+    expect(yardHuntAt(halloweenDay, EVENTS, NONE)).toBeNull();
+    expect(pumpkinHuntOn(halloweenDay, EVENTS, NONE)).toBe(false);
   });
 });

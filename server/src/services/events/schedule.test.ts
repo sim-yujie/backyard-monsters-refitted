@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { eventsForcedOn } from "../../config/GameConfig.js";
+import { eventsForcedOff, eventsForcedOn } from "../../config/GameConfig.js";
 import type { EventDefinition } from "../../game-data/events/events.js";
-import { eventWindow, nextUtcMidnight, statusAt, utcDay, visibleEvents } from "./schedule.js";
+import { claimsUntil, eventWindow, nextUtcMidnight, statusAt, utcDay, visibleEvents } from "./schedule.js";
 
 const DAY = 86_400;
 const at = (iso: string) => Date.parse(iso) / 1000;
@@ -54,6 +54,30 @@ describe("event windows", () => {
     expect(eventsForcedOn({ EVENTS_FORCE_ON: "a", ENV: "production" }).size).toBe(0);
     expect(eventsForcedOn({}).size).toBe(0);
   });
+
+  test("EVENTS_FORCE_OFF is read locally and ignored on production", () => {
+    expect([...eventsForcedOff({ EVENTS_FORCE_OFF: "halloween-2026, krallen-2026-11" })]).toEqual([
+      "halloween-2026",
+      "krallen-2026-11",
+    ]);
+    expect(eventsForcedOff({ EVENTS_FORCE_OFF: "halloween-2026", ENV: "production" }).size).toBe(0);
+    expect(eventsForcedOff({ EVENTS_FORCE_ON: "halloween-2026" }).size).toBe(0);
+  });
+
+  test("an event switched off is over in the middle of its dates, with nothing to claim", () => {
+    const now = at("2026-11-01T12:00:00Z");
+    const off = new Set(["halloween"]);
+    expect(statusAt(eventWindow(HALLOWEEN, now, NONE, NONE), now)).toBe("active");
+    const window = eventWindow(HALLOWEEN, now, NONE, off);
+    expect(statusAt(window, now)).toBe("past");
+    expect(claimsUntil({ ...HALLOWEEN, claimDays: 7 }, window)).toBeLessThan(now);
+  });
+
+  test("switched off wins over forced on", () => {
+    const now = at("2026-10-20T15:00:00Z");
+    const both = new Set(["halloween"]);
+    expect(statusAt(eventWindow(HALLOWEEN, now, both, both), now)).toBe("past");
+  });
 });
 
 describe("which events show", () => {
@@ -66,6 +90,14 @@ describe("which events show", () => {
     expect(shown("2026-11-25T00:00:00Z")).toEqual([["xmas", "upcoming"]]);
     expect(shown("2026-12-21T00:00:00Z")).toEqual([["xmas", "active"]]);
     expect(shown("2027-02-01T00:00:00Z")).toEqual([]);
+  });
+
+  test("an event switched off is not listed, the others are", () => {
+    const now = at("2026-11-01T00:00:00Z");
+    const soon = event("soon", "2026-11-12T00:00:00Z", "2026-11-13T00:00:00Z");
+    const ids = (off: ReadonlySet<string>) => visibleEvents(now, [soon, HALLOWEEN], NONE, off).map((one) => one.event.id);
+    expect(ids(NONE)).toEqual(["halloween", "soon"]);
+    expect(ids(new Set(["halloween"]))).toEqual(["soon"]);
   });
 
   test("an active event comes before an upcoming one that starts sooner", () => {

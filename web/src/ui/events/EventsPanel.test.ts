@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { EventView } from "@/api/events";
 import { claimedLine, EVENT_EXTRAS, EventsPanel, nextText, rewardBadge, type EventsPanelView } from "./EventsPanel";
+
+/** The page's own CSS, read as text: jsdom lays nothing out. */
+const eventsCss = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "events.css"), "utf8");
 
 const DAYS: EventView["calendar"] = {
   days: [
@@ -270,5 +276,41 @@ describe("claimedLine: a claim's notice", () => {
     expect(figures.every((figure) => !figure?.startsWith("+"))).toBe(true);
     expect(panel.element.querySelector(".events-reward--gain")).toBeNull();
     panel.close();
+  });
+});
+
+describe("A day's reward tile (Thanksgiving tester faults, 8 Nov)", () => {
+  it("puts Day 5's four piles in a 2 x 2 block, and two piles in a tighter pair", () => {
+    const four = rewardBadge({ kind: "resources", amounts: { r1: 20_000, r2: 20_000, r3: 20_000, r4: 20_000 } });
+    const block = four.querySelector(".events-reward__pictures");
+    expect(block?.classList.contains("events-reward__pictures--block")).toBe(true);
+    expect(block?.querySelectorAll(".res-icon")).toHaveLength(4);
+    const two = rewardBadge({ kind: "resources", amounts: { r1: 30_000, r2: 30_000 } });
+    expect(two.querySelector(".events-reward__pictures--pair")).not.toBeNull();
+    expect(two.querySelector(".events-reward__pictures--block")).toBeNull();
+  });
+
+  it("keeps a small gap between two piles, never overlapping (Days 1 and 8, 9 Nov)", () => {
+    const rule = /\.events-reward__pictures--pair > \.res-icon \+ \.res-icon \{([^}]*)\}/.exec(eventsCss)?.[1] ?? "";
+    const gap = /margin-left:\s*(-?\d+)px/.exec(rule)?.[1];
+    expect(Number(gap)).toBeGreaterThan(0);
+  });
+
+  it("draws speed-ups and Production Overdrive as painted icons, not line icons", () => {
+    const speedup = rewardBadge({ kind: "speedup", item: "SP2", count: 2 });
+    expect(speedup.querySelector("img.game-icon")?.getAttribute("data-icon")).toBe("speedup");
+    expect(speedup.querySelector("svg")).toBeNull();
+    const overdrive = rewardBadge({ kind: "shopItem", item: "POD" });
+    expect(overdrive.querySelector("img.game-icon")?.getAttribute("data-icon")).toBe("overdrive");
+    expect(overdrive.querySelector(".events-reward__figure")?.textContent).toBe("12h");
+    const tools = rewardBadge({ kind: "shopItem", item: "BST" });
+    expect(tools.querySelector("img.game-icon")?.getAttribute("data-icon")).toBe("tools");
+  });
+
+  it("names a decoration under its picture: Day 7's Acorn", () => {
+    const acorn = rewardBadge({ kind: "decoration", type: 55, count: 1 });
+    expect(acorn.querySelector(".events-reward__figure")?.textContent).toBe("Acorn");
+    const two = rewardBadge({ kind: "decoration", type: 55, count: 2 });
+    expect(two.querySelector(".events-reward__figure")?.textContent).toBe("Acorn x2");
   });
 });

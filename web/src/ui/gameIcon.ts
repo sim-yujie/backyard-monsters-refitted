@@ -79,6 +79,13 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * Event coins (beta 7, `game/eventCoins.ts`, `art-samples/event-coin`,
  * repainted by Codex 8 Nov to look nothing like Shiny's gold coins): the
  * purple and teal gem, the owner's pick of three (option B, 8 Nov).
+ *
+ * The Events page (`ui/events/EventsPanel.ts`, `art-samples/events-icons`, painted
+ * 8 Nov in place of line icons): a gold stopwatch with speed streaks for a speed-up
+ * (`speedup`), a flaming cog with a lightning bolt for Production Overdrive
+ * (`overdrive`), a crossed wrench and hammer for another store boost such as
+ * Sharper Tools (`tools`), and the festive calendar with a gold star and rosette on
+ * the Events button (`event`), which suits every event, not just Halloween.
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -130,6 +137,10 @@ export const GAME_ICONS = {
   mute: "Mute",
   report: "Report",
   eventcoin: "Glimmers",
+  speedup: "Speed-up",
+  overdrive: "Production Overdrive",
+  tools: "Store boost",
+  event: "Events",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;
