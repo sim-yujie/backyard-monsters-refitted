@@ -34,6 +34,21 @@ px around the building's origin, 12 render px a 1x px), with the same camera as 
 | booby | 24 Booby Trap | art/traps-3d | traps-3d (traps.py) | one look, still; destroyed = fired |
 | heavy | 117 Heavy Trap | art/traps-3d | traps-3d (traps.py) | one look, still; destroyed = fired |
 | icc | 16 Incubator Control Centre in an Inferno yard | art/icc-inferno-looks | icc-looks (look C) | one look; 32 idle and 64 working cells, each the whole building |
+| bone | 1 Bone Cruncher in an Inferno yard | art/buildings-3d-inferno | inferno/bone-clean2 (crusher.py) | levels 1, 3, 7; 36 cells of its loop |
+
+The Inferno's Bone Cruncher (`bone`, owner 6 Nov 2026: "3d bone crusher has been approved") is the clean-room model
+(`crusher.py`): three tiers, levels 1-2, 3-6 and 7-10 as the model's own script splits them. Its renders are the loop
+renders, `inferno/bone-clean2/anim/render/` (6 render px a 1x px, `k`, on the canvas x -60..60, y -70..70), frames 0-35
+only: `L<tier>-parts-36.png` is frame 0 again, rendered for the loop check, and must be left out. Its files are `*.3d1*`,
+`*.3d3*` and `*.3d7*` in the Inferno's own folder, `iboneharvester/`. It has no damaged or destroyed renders: the game
+tints the whole look when damaged and shows Flash's rubble when destroyed, as the Incubator Control Centre's.
+
+The model came out smaller than Flash's Bone Cruncher in the same spot (9 Nov 2026: about 76 x 72 1x px at level 1
+against Flash's 86 x 84, and 76 x 78 at levels 3 and 7 against Flash's 90 x 95), so it is exported grown (`grow`, 1.2)
+about its middle on the ground (`ground`, the model's `kit.ORIGIN`, (0, 35)): every render is first enlarged that much
+into a scratch folder (`grown()`), the canvas with it, and the export reads that, on a canvas whose top-left moves to
+keep the ground point where it was. The renders are 3 render px a 2x px, so the grown pictures are still made smaller
+from them, not blown up. Grown, it is 91 x 86 and 91 x 94: Flash's size at each tier.
 
 The Inferno's Incubator Control Centre (`icc`, moves "loops") is look C (owner, 2 Nov 2026: "I want to see it in the
 inferno + the soft animated glow of the lava"). Its glows are made after Blender (`icc-looks/anim.py game`), so its
@@ -135,6 +150,8 @@ BUILDINGS = {
                 layers=("dome", "doorL", "doorR")),
     "chamber": dict(type=119, folder="champchamber", frame=(-78, -66), looks=[(1, "L1")], moves=None),
     "icc": dict(type=16, folder="hatcherycontrolcenter", frame=(-80, -84), looks=[(1, "")], moves="loops"),
+    "bone": dict(type=1, folder="iboneharvester", frame=(-60, -70), k=6, looks=[(1, "L1"), (3, "L2"), (7, "L3")],
+                 moves="parts", grow=1.2, ground=(0, 35)),
     "booby": dict(type=24, folder="boobytrap", frame=(-24, -14), looks=[(1, "booby-whole")], moves=None),
     "heavy": dict(type=117, folder="heavytrap", frame=(-24, -14), looks=[(1, "heavy-whole")], moves=None),
 }
@@ -142,7 +159,7 @@ BUILDINGS = {
 CELLS = {"twig": {1: 34, 3: 34, 6: 34, 10: 34}, "pebble": {1: 26, 3: 26, 6: 26, 10: 24},
          "putty": {1: 26, 3: 26, 6: 26, 10: 25}, "goo": {1: 26, 3: 26, 6: 26, 10: 26}, "silo": {1: 26},
          "hatchery": {1: 31, 2: 31, 3: 31}, "juicer": {1: 51}, "baiter": {1: 41},
-         "academy": {1: 21, 2: 21, 3: 21, 4: 21}, "lab": {1: (32, 5, 5)}}
+         "academy": {1: 21, 2: 21, 3: 21, 4: 21}, "lab": {1: (32, 5, 5)}, "bone": {1: 36, 3: 36, 7: 36}}
 TAIL = 16                      # 1x px a shadow cut by the render's canvas is carried on past it, fading out
 NOISE = 0.07                   # the shadow catcher's faint wash over all the ground (sky occlusion), taken off every shade
 MOVED = 8                      # levels (of 255) a Lab cell must differ from the first to count as moving, past the noise
@@ -336,12 +353,39 @@ def export_loops(name, render):
     return [row]
 
 
+def grown(name, render, frame, k):
+    """A building exported larger than it was modelled (`grow`, the Bone Cruncher's): its renders, each look's base,
+    alone and first `CELLS` parts cells, enlarged by `grow` into a scratch folder, about the building's middle on the
+    ground (`ground`, 1x px from the origin), with the canvas's new top-left. Lanczos, alpha premultiplied (Pillow's
+    own for RGBA). The ground point and the canvas must land on whole 1x px."""
+    import tempfile
+    cfg = BUILDINGS[name]
+    g, (gx, gy), (fx, fy) = cfg["grow"], cfg["ground"], frame
+    nfx, nfy = gx - (gx - fx) * g, gy - (gy - fy) * g
+    assert abs(nfx - round(nfx)) < 1e-6 and abs(nfy - round(nfy)) < 1e-6, (name, g, nfx, nfy)
+    tmp = Path(tempfile.mkdtemp(prefix=f"grown-{name}-"))
+    for level, pre in cfg["looks"]:
+        stem = f"{pre}-" if pre else ""
+        files = [f"{stem}base.png", f"{stem}alone.png"]
+        if cfg["moves"] == "parts":
+            files += [f"{stem}parts-{i:02d}.png" for i in range(CELLS[name][level])]
+        for f in files:
+            im = Image.open(render / f).convert("RGBA")
+            size = (round(im.width * g), round(im.height * g))
+            assert size[0] % k == 0 and size[1] % k == 0, (f, size)
+            im.resize(size, Image.LANCZOS).save(tmp / f)
+    return tmp, (round(nfx), round(nfy))
+
+
 def export(name, render, state=None):
     """A building's whole looks, or with `state` ("damaged", "destroyed") the stills of that state `render` holds."""
     cfg = BUILDINGS[name]
     out = ASSETS / cfg["folder"]
     fx, fy = cfg.get("states", {}).get(state, cfg["frame"])
     k = cfg.get("k", K)
+    if cfg.get("grow"):
+        assert not state, (name, "a grown building's states are not wired")
+        render, (fx, fy) = grown(name, render, (fx, fy), k)
     moves = None if state else cfg["moves"]
     rows = []
 

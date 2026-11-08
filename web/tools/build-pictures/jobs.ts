@@ -22,8 +22,18 @@ export const PICTURE_LEVEL = 1;
  */
 const TOP_LEVEL_TYPES: ReadonlySet<number> = new Set([15, 114]);
 
+/**
+ * The Inferno's types shown at their top level, as Flash's own Inferno
+ * buttons were: the Bone Cruncher (1), whose button (`bone_crusher.v2.jpg`)
+ * is its later look with the hopper and chute, not the bare tub of level 1
+ * (9 Nov 2026: its level-1 tile looked small and plain beside the others).
+ */
+const INFERNO_TOP_LEVEL_TYPES: ReadonlySet<number> = new Set([1]);
+
 const pictureLevel = (type: number, kind: YardKind): number =>
-  TOP_LEVEL_TYPES.has(type) ? maxLevel(type, kind) : PICTURE_LEVEL;
+  TOP_LEVEL_TYPES.has(type) || (kind === "inferno" && INFERNO_TOP_LEVEL_TYPES.has(type))
+    ? maxLevel(type, kind)
+    : PICTURE_LEVEL;
 
 const jobs: object[] = [];
 for (const kind of ["main", "inferno"] as const satisfies readonly YardKind[]) {

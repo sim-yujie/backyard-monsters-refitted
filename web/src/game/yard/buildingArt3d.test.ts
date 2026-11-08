@@ -191,6 +191,7 @@ describe("the 3D yard buildings", () => {
       ...TYPES.map((type) => [type, BUILDING_3D_ART[type] ?? [], "main"] as const),
       [17, INFERNO_BUILDING_3D_ART[17] ?? [], "inferno"] as const,
       [16, INFERNO_BUILDING_3D_ART[16] ?? [], "inferno"] as const,
+      [1, INFERNO_BUILDING_3D_ART[1] ?? [], "inferno"] as const,
     ];
     for (const [type, looks, kind] of sets) {
       const folder = `${ASSETS}${artFolder(type, kind) ?? ""}`;
@@ -332,6 +333,33 @@ describe("the 3D yard buildings", () => {
     setClassicLook(true);
     expect(resolveArt(16, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.png`);
     expect(resolveArt(16, 1, ArtState.DEFAULT, "inferno")?.anims).toEqual([]);
+  });
+
+  it("give the Inferno's Bone Cruncher its three 3D tiers, from levels 3 and 7, its bones crunching in 36 cells", () => {
+    const folder = "/assets/buildings/iboneharvester/";
+    const looks = INFERNO_BUILDING_3D_ART[1] ?? [];
+    expect(looks.map((look) => look.from)).toEqual([1, 3, 7]);
+    for (const level of [1, 2, 3, 6, 7, 10]) {
+      const look = [...looks].reverse().find((one) => one.from <= level);
+      const art = resolveArt(1, level, ArtState.DEFAULT, "inferno");
+      const name = `level ${level}`;
+      expect(art?.name, name).toBe("Bone Cruncher");
+      // The moving parts go over a body without them; the top is the still for the icons.
+      expect(art?.top.url, name).toBe(`${folder}${look?.anim?.body?.[0] ?? ""}`);
+      expect(art?.still?.url, name).toBe(`${folder}${look?.top[0] ?? ""}`);
+      expect(art?.shadow?.url, name).toBe(`${folder}${look?.shadow?.[0] ?? ""}`);
+      expect(art?.anims.map(({ url, frames }) => ({ url, frames })), name).toEqual([
+        { url: `${folder}${look?.anim?.strip[0] ?? ""}`, frames: 36 },
+      ]);
+    }
+    // No 3D ruins of its own yet: the whole look when damaged, Flash's rubble when destroyed.
+    expect(resolveArt(1, 1, ArtState.DAMAGED, "inferno")?.top.url).toBe(`${folder}body.3d1@2x.webp`);
+    expect(resolveArt(1, 1, ArtState.DESTROYED, "inferno")?.top.url).toBe(`${folder}top.1.destroyed.v2.png`);
+    // The main yard's Twig Snapper keeps its own 3D look; the Classic look is Flash's Bone Cruncher.
+    expect(resolveArt(1, 7, ArtState.DEFAULT, "main")?.top.url).toBe("/assets/buildings/twigsnapper.v2/body.3d6@2x.webp");
+    setClassicLook(true);
+    expect(resolveArt(1, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.v2.png`);
+    expect(resolveArt(1, 7, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.2.png`);
   });
 
   it("never show in an Inferno yard: the Inferno's own art there, even where it shares Flash's folder", () => {
