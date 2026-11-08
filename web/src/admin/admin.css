@@ -4963,11 +4963,20 @@ tbody th {
   font-size: 0.8125rem;
 }
 
+/* Cancel and Confirm stay in sight at the foot of whatever scrolls (the page on
+   a phone, the review column on a computer) while the confirm step is on
+   screen, however long Restrict or Ban's fields make it. */
 .confirm-pane .buttons {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding-top: 4px;
+  margin: 0 -16px -16px;
+  padding: 12px 16px max(16px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: var(--bg);
 }
 
 /* Each label on one line: "Confirm restrict" takes the room it needs and
@@ -4994,6 +5003,13 @@ tbody th {
 
   .detail-head .account {
     display: none;
+  }
+
+  /* While the confirm step is open its own buttons hold the foot of the
+     screen, so the action bar goes back into the flow below it. */
+  .detail:has(> .review-body.has-confirm) > .action-bar {
+    position: static;
+    box-shadow: none;
   }
 }
 
@@ -5083,9 +5099,25 @@ tbody th {
     flex-direction: column;
     flex: none;
     width: 300px;
-    overflow: auto;
+    padding: 0;
+    overflow: hidden;
     border-bottom: 0;
     border-left: 1px solid var(--line);
+  }
+
+  /* The fields scroll; Cancel and Confirm sit fixed at the column's foot. */
+  .confirm-fields {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 16px 16px 4px;
+  }
+
+  .confirm-pane .buttons {
+    position: static;
+    flex: none;
+    margin: 0;
+    padding: 12px 16px 16px;
   }
 }
 
@@ -5405,11 +5437,29 @@ tbody th {
     white-space: nowrap;
   }
 
+  /* The table itself goes block too: left as a table it sizes to its widest
+     unwrapped line (428 px in a 306 px box). Every cell wraps. */
+  .data-table,
   .data-table tbody,
   .data-table tr,
   .data-table tbody th,
   .data-table td {
     display: block;
+    width: auto;
+    min-width: 0;
+  }
+
+  .data-table tbody th,
+  .data-table td,
+  .data-table td:nth-child(2),
+  .data-table td:nth-child(3) {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* Stacked rows are tall; the page scrolls them, not a short box. */
+  .table-wrap:has(> .data-table) {
+    max-height: none;
   }
 
   .data-table tr {
