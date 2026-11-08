@@ -324,23 +324,33 @@ export class ShinyView {
       window.clearTimeout(this.searchTimer);
       void this.find();
     });
+    // Astra's mock-up: the form in one panel, the gift history beside it.
     replace(
       this.element,
       h(
-        "p",
-        { class: "lede" },
-        "Shiny goes into the player's game at once, with a mail from The game team saying why. " +
-          "They cannot answer that mail: to talk with them, give it from their bug report instead.",
-      ),
-      h(
         "div",
-        { class: "group finder" },
-        h("label", { class: "field-label", attrs: { for: "player-search" } }, "Find a player"),
-        this.search,
-        this.results,
+        { class: "two-cols shiny-cols" },
+        h(
+          "section",
+          { class: "panel shiny-give", attrs: { "aria-labelledby": "shiny-give-title" } },
+          h("h2", { class: "section-title", attrs: { id: "shiny-give-title" } }, "Give Shiny"),
+          h(
+            "p",
+            { class: "small lede" },
+            "Shiny is the game's premium currency. It goes into the player's game at once, with a mail from The game team saying why. " +
+              "They cannot answer that mail: to talk with them, give it from their bug report instead.",
+          ),
+          h(
+            "div",
+            { class: "group finder" },
+            h("label", { class: "field-label", attrs: { for: "player-search" } }, "Find a player"),
+            this.search,
+            this.results,
+          ),
+          this.picked,
+        ),
+        h("section", { class: "panel shiny-log", attrs: { "aria-labelledby": "shiny-log-title" } }, this.log),
       ),
-      this.picked,
-      this.log,
     );
   }
 
@@ -482,7 +492,7 @@ export class ShinyView {
     } catch (err) {
       replace(
         this.log,
-        h("h3", {}, "Given so far"),
+        h("h2", { class: "section-title", attrs: { id: "shiny-log-title" } }, "Gift history"),
         h("p", { class: "note" }, `The list could not be loaded: ${errorWords(err)}`),
       );
       return;
@@ -492,7 +502,7 @@ export class ShinyView {
       h(
         "div",
         { class: "log-head" },
-        h("h3", {}, "Given so far"),
+        h("h2", { class: "section-title", attrs: { id: "shiny-log-title" } }, "Gift history"),
         this.total.awards
           ? h(
               "span",
@@ -509,7 +519,8 @@ export class ShinyView {
           )
         : h(
             "div",
-            { class: "empty" },
+            { class: "empty in-panel" },
+            h("span", { class: "needs-icon" }, icon("gift", 20)),
             h("strong", {}, "No Shiny given yet"),
             h("p", {}, "Every gift shows up here: who got it, how much, why and when."),
           ),

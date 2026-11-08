@@ -5191,3 +5191,83 @@ tbody th {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ---- Player support (dash-v2c, astra's mock-up) ---- */
+
+.v2 .bugs .bug-rows {
+  display: grid;
+  gap: 8px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.v2 .bugs .bug-rows > li + li {
+  border-top: 0;
+}
+
+.v2 .bugs .bug-row {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.v2 .bugs .bug-row:hover {
+  border-color: var(--line-strong);
+}
+
+.v2 .bugs .bug-row[aria-current="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.v2 .empty .needs-icon {
+  margin-bottom: 8px;
+}
+
+.v2 .empty.in-panel {
+  padding: 24px 8px;
+  border: 0;
+  background: none;
+}
+
+.v2 .shiny-cols {
+  align-items: start;
+}
+
+.v2 .shiny-give .lede {
+  margin: -8px 0 20px;
+}
+
+.v2 .shiny-log .log-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.v2 .shiny-log .award-log {
+  margin-top: 12px;
+}
+
+.v2 .chat-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.v2 .chat-panel .chat-bar h2 {
+  flex: 1;
+  margin: 0;
+}
+
+.v2 .chat-panel .lede {
+  margin: 0;
+}
+
+@media (max-width: 1023px) {
+  .v2 .shiny-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
