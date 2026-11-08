@@ -660,7 +660,9 @@
   align-items: center;
   gap: var(--space-2) var(--space-4);
   width: max-content;
-  max-width: calc(100vw - 2 * var(--space-4));
+  /* Never under the corner buttons (Main yard / Map on the left, Collect all / Stop
+     on the right): they take about 130px each side, so the bar wraps instead. */
+  max-width: calc(100vw - 2 * 140px);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   border: 1px solid var(--colour-border-strong);
   border-radius: var(--radius-lg);
@@ -756,6 +758,13 @@
 .build-placing__line-toggle[aria-pressed="true"] {
   border-color: var(--colour-success);
   background: var(--colour-success-soft, var(--colour-surface-sunken));
+}
+
+/* Pressed reads as pressed in every look (the Modern plate is overridden in skin.css). */
+.build-placing__line-toggle[aria-pressed="true"]::after {
+  content: "✓";
+  font-weight: 700;
+  color: var(--colour-success);
 }
 
 /* Three Block pictures overlapping in a row: a line of walls. */

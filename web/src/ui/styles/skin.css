@@ -862,6 +862,19 @@
     0 1px 0 var(--skin-button2-stroke), 1px 0 0 var(--skin-button2-stroke), -1px 0 0 var(--skin-button2-stroke), 0 -1px 0 var(--skin-button2-stroke);
 }
 
+/* The Line toggle stays visibly pressed: a dark inset fill, a light outline, a tick. */
+:root[data-skin] .build-placing__line-toggle[aria-pressed="true"] {
+  filter: brightness(0.62) saturate(1.1);
+  box-shadow:
+    inset 0 3px 6px rgba(0, 0, 0, 0.6),
+    0 0 0 2px #f3e9c6;
+  border-radius: 6px;
+}
+
+:root[data-skin] .build-placing__line-toggle[aria-pressed="true"]::after {
+  color: #f3e9c6;
+}
+
 :root[data-skin] .hud__scenes {
   border-color: var(--colour-border);
   background: var(--colour-surface-sunken);
