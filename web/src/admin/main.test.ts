@@ -78,22 +78,28 @@ describe("the owner's first look", () => {
     if (path.endsWith("/admin/bugreports")) return fixture.bugReports;
     if (path.endsWith("/admin/errors")) return fixture.errors;
     if (path.endsWith("/admin/inbox")) return inbox;
+    if (path.endsWith("/admin/inbox/closed")) return { ok: true, decisions: [], nextOffset: null, count: 2 };
     return null;
   };
 
-  /** Two players waiting in the moderation inbox. */
+  /**
+   * Three players waiting: TrollKing88 has 2 reported lines, one of them also
+   * caught by the word filter, and 2 lines only the filter caught (4 lines,
+   * counted once each).
+   */
   const inbox = {
     ok: true,
     players: [
       {
         userid: 42, username: "TrollKing88", banned: false, muted: false, gameTeam: false, caseId: 7,
-        reportedMessages: 2, reports: 4, uniqueReporters: 4, filterLines: 3, slurs: 0, flagsUpTo: 905,
+        reportedMessages: 2, reports: 4, uniqueReporters: 4, filterLines: 3, alsoReported: 1, filterOnlyLines: 2,
+        messages: 4, slurs: 0, flagsUpTo: 905,
         previousActions: 1, lastAction: null, oldestAt: "2026-11-04T10:00:00Z", latestAt: "2026-11-04T12:00:00Z",
         preview: { text: "you are all trash", source: "report" }, suggest: { action: "mute", hours: 24 },
       },
     ],
     nextOffset: null,
-    counts: { all: 1, reports: 1, filter: 1 },
+    counts: { all: 3, reports: 2, filter: 1 },
   };
 
   beforeEach(() => {
@@ -146,32 +152,46 @@ describe("the owner's first look", () => {
     toggle.click();
     expect(list.hidden).toBe(false);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    // The moderation card: who is waiting, each linking to their evidence in the inbox.
-    const inboxCard = document.getElementById("home-inbox")!;
-    expect(inboxCard.textContent).toContain("1player waiting");
-    expect(inboxCard.querySelector("a.home-row")?.getAttribute("href")).toBe("#inbox?player=42");
-    expect(inboxCard.textContent).toContain("2 reported messages · 4 reports");
-    expect(inboxCard.querySelector("a[href='#inbox?source=filter']")).not.toBeNull();
-    // The bug card links the New and Working lists.
-    const bugCard = document.getElementById("home-bugs")!;
-    expect(bugCard.querySelector("a[href='#bugs?list=new']")).not.toBeNull();
-    expect(bugCard.querySelector("a[href='#bugs?list=working']")).not.toBeNull();
-    // The inbox is the phone's Moderation tab, with its count.
-    const tab = document.querySelector(".tabs a[href='#inbox']")!;
-    expect(tab.textContent).toContain("Inbox");
-    expect(tab.querySelector(".count")?.textContent).toContain("1");
+    // "What needs you now": each player once, split by where they came from (2 + 1 = 3).
+    const needs = document.getElementById("home-needs")!;
+    const cards = needs.querySelectorAll("a.needs-card");
+    expect(cards).toHaveLength(2);
+    expect(cards[0]!.getAttribute("href")).toBe("#moderation");
+    expect(cards[0]!.textContent).toContain("3 players to review");
+    expect(cards[0]!.textContent).toContain("2 reported by players · 1 caught by the word filter");
+    // Moderation's menu link carries the players waiting, counted once.
+    const link = document.querySelector(".nav a[data-page='moderation']")!;
+    expect(link.textContent).toContain("Moderation");
+    expect(link.querySelector(".count")?.textContent).toContain("3");
+    // The list's filters count players too, Closed from the last 30 days.
+    const segs = [...document.querySelectorAll<HTMLButtonElement>("#moderation .filter-grid .seg")].map((b) => b.textContent);
+    expect(segs).toEqual(["All 3", "Player reports 2", "Word filter 1", "Closed 2"]);
+    // A row counts each line once: 4 messages, 4 reports, 2 lines only the filter caught.
+    const row = document.querySelector("#moderation a.q-row[data-player='42']")!;
+    expect(row.textContent).toContain("4 messages · 4 reports from 4 players · 2 word-filter catches");
+    expect(row.textContent).toContain("Player reports");
+    expect(row.textContent).toContain("Word filter");
   });
 
-  it("has the Shiny section in the links, and the light or dark switch in the header", async () => {
+  it("has the six pages in the menu, each part a tab under its title, and the light or dark switch on top", async () => {
     await boot();
     await settle();
-    expect(document.querySelector(".nav a[href='#shiny']")?.textContent).toBe("Shiny");
+    expect([...document.querySelectorAll(".nav a .nav-label")].map((l) => l.textContent)).toEqual([
+      "Home",
+      "Moderation",
+      "Player support",
+      "Announcements",
+      "Game activity",
+      "Server health",
+    ]);
+    expect(document.querySelector("#shiny .subnav a[href='#shiny']")?.textContent).toBe("Give Shiny");
     expect(document.getElementById("shiny")?.querySelector("#player-search")).not.toBeNull();
-    expect(document.querySelector(".nav a[href='#moderation']")?.textContent).toBe("Find a player");
-    expect(document.getElementById("moderation")?.querySelector("#mod-search")).not.toBeNull();
-    expect(document.querySelector(".nav a[href='#chat']")?.textContent).toBe("Chat");
+    expect(document.querySelector("#find .subnav a[href='#find']")?.textContent).toBe("Find a player");
+    expect(document.getElementById("find")?.querySelector("#mod-search")).not.toBeNull();
+    expect(document.querySelector("#chat .subnav a[href='#chat']")?.textContent).toBe("Game chat");
     expect(document.getElementById("chat")?.textContent).toContain("Join chat");
-    const select = document.querySelector<HTMLSelectElement>(".top .theme-pick select")!;
+    expect(document.querySelector("#chat h1")?.textContent).toContain("Player support");
+    const select = document.querySelector<HTMLSelectElement>(".topbar .theme-pick select")!;
     expect([...select.options].map((o) => o.value)).toEqual(["auto", "light", "dark"]);
     expect(select.value).toBe("auto");
   });
@@ -180,30 +200,30 @@ describe("the owner's first look", () => {
     await boot();
     await settle();
     const shown = () => [...document.querySelectorAll<HTMLElement>(".page > .view")].filter((v) => !v.hidden).map((v) => v.id);
+    const current = () => document.querySelector(".nav a[aria-current]")?.getAttribute("data-page");
     expect(shown()).toEqual(["home"]);
-    expect(document.querySelector(".nav a[aria-current]")?.getAttribute("href")).toBe("#home");
-    // The groups, in order: Home, then moderation, the player tools, monitoring last.
-    expect([...document.querySelectorAll(".nav .nav-title")].map((t) => t.textContent)).toEqual([
-      "Moderation",
-      "Players",
-      "Monitoring",
-    ]);
+    expect(current()).toBe("home");
     location.hash = "#errors";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     expect(shown()).toEqual(["errors"]);
-    expect(document.querySelector(".nav a[aria-current]")?.getAttribute("href")).toBe("#errors");
-    // On a phone, Errors is under More, which takes its name.
-    const more = document.querySelector<HTMLButtonElement>(".tabs .tab-more")!;
-    expect(more.classList.contains("is-current")).toBe(true);
-    expect(more.textContent).toBe("Errors");
-    more.click();
-    expect(document.querySelector(".nav")!.classList.contains("is-open")).toBe(true);
+    // Errors is part of Server health: that page is marked in the menu, Errors among its tabs.
+    expect(current()).toBe("server");
+    expect(document.querySelector("#errors .subnav a[aria-current]")?.textContent).toContain("Errors");
+    // On a phone, Menu opens the six pages; picking one closes it.
+    const menu = document.querySelector<HTMLButtonElement>(".menu-toggle")!;
+    menu.click();
+    expect(document.querySelector(".side")!.classList.contains("is-open")).toBe(true);
+    expect(menu.getAttribute("aria-expanded")).toBe("true");
     location.hash = "#bugs";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     expect(shown()).toEqual(["bugs"]);
-    expect(document.querySelector(".nav")!.classList.contains("is-open")).toBe(false);
-    expect(document.querySelector(".tabs a[aria-current]")?.textContent).toContain("Bugs");
-    expect(more.textContent).toBe("More");
+    expect(document.querySelector(".side")!.classList.contains("is-open")).toBe(false);
+    expect(current()).toBe("support");
+    // Older links still land: the inbox is now Moderation's list.
+    location.hash = "#inbox";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    expect(shown()).toEqual(["moderation"]);
+    expect(current()).toBe("moderation");
     location.hash = "";
   });
 
