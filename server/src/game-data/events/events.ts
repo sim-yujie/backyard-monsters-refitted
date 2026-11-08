@@ -22,7 +22,9 @@ import type { EventReward } from "./eventRewards.js";
  *
  * To switch an event on locally before its date, set
  * `EVENTS_FORCE_ON=<id>[,<id>…]` in `server/.env` (`config/GameConfig.ts`,
- * `eventsForcedOn`); it is ignored on production.
+ * `eventsForcedOn`); to hide one that is really on (say Halloween, to try
+ * Thanksgiving alone), `EVENTS_FORCE_OFF=<id>[,<id>…]` (`eventsForcedOff`).
+ * Both are ignored on production.
  */
 
 /** One day of a login calendar: what claiming it pays. */
@@ -170,6 +172,44 @@ export const HALLOWEEN_2026_LADDER: readonly LadderTier[] = [
 
 /**
  * ═══════════════════════════════════════════════════════════════════════
+ * THANKSGIVING 2026 LOGIN CALENDAR: the 14 daily rewards, day 1 first.
+ * Paced exactly like Halloween's (the same resources, Shiny and speed-ups
+ * on the same days; owner may change them), with harvest-time treats in
+ * place of the pumpkins: day 7 an Acorn, day 12 a Production Overdrive
+ * (harvesters at double rate for 12 hours) and day 14 a Scarecrow.
+ * Resources land clamped to the player's storage cap, like every other
+ * reward. r1 Twigs, r2 Pebbles, r3 Putty, r4 Goo. Decoration 55 is the
+ * Acorn, 69 the Scarecrow.
+ *
+ * TODO(event-coins): once feat/event-coins merges, add the day's Glimmers
+ * (the event coin reward) to each day here, as that branch does for
+ * Halloween's calendar.
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+export const THANKSGIVING_2026_CALENDAR: readonly CalendarDay[] = [
+  /* Day 1  */ { rewards: [{ kind: "resources", amounts: { r1: 10_000, r2: 10_000 } }] },
+  /* Day 2  */ { rewards: [{ kind: "shiny", amount: 10 }] },
+  /* Day 3  */ { rewards: [{ kind: "speedup", item: "SP2", count: 1 }] },
+  /* Day 4  */ { rewards: [{ kind: "resources", amounts: { r3: 15_000, r4: 15_000 } }] },
+  /* Day 5  */ { rewards: [{ kind: "resources", amounts: { r1: 20_000, r2: 20_000, r3: 20_000, r4: 20_000 } }] },
+  /* Day 6  */ { rewards: [{ kind: "speedup", item: "SP2", count: 2 }] },
+  /* Day 7  */ { rewards: [{ kind: "decoration", type: 55, count: 1 }] },
+  /* Day 8  */ { rewards: [{ kind: "resources", amounts: { r1: 30_000, r2: 30_000 } }] },
+  /* Day 9  */ { rewards: [{ kind: "shiny", amount: 20 }] },
+  /* Day 10 */ { rewards: [{ kind: "speedup", item: "SP3", count: 1 }] },
+  /* Day 11 */ { rewards: [{ kind: "resources", amounts: { r3: 30_000, r4: 30_000 } }] },
+  /* Day 12 */ { rewards: [{ kind: "shopItem", item: "POD" }] },
+  /* Day 13 */ { rewards: [{ kind: "speedup", item: "SP3", count: 2 }] },
+  /* Day 14 */ {
+    rewards: [
+      { kind: "decoration", type: 69, count: 1 },
+      { kind: "shiny", amount: 25 },
+    ],
+  },
+];
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
  * THANKSGIVING 2026 TURKEY HUNT LADDER: what picking turkeys earns.
  * The same tiers as Halloween's pumpkin ladder (owner may change them):
  * during the event the yard's mushrooms grow as turkeys that wander near
@@ -278,12 +318,13 @@ export const EVENTS: readonly EventDefinition[] = [
   {
     id: "thanksgiving-2026",
     title: "Thanksgiving",
-    text: "Happy Thanksgiving! Turkeys are roaming your yard. Tap one to catch it for prizes, and watch out for the golden turkey!",
-    upcomingText: "Thanksgiving is coming! Turkeys will roam your yard. Catch them for prizes, and watch out for the golden turkey!",
+    text: "Happy Thanksgiving! Log in each day to claim a treat. Turkeys are roaming your yard: tap one to catch it for prizes, and watch out for the golden turkey!",
+    upcomingText: "Thanksgiving is coming! Log in each day to claim a treat, and catch the turkeys roaming your yard for prizes. Watch out for the golden turkey!",
     kind: "thanksgiving",
     // Dates editable: around US Thanksgiving, Thursday 26 November 2026.
     startsAt: "2026-11-19T00:00:00Z",
     endsAt: "2026-12-03T00:00:00Z",
+    calendar: THANKSGIVING_2026_CALENDAR,
     ladder: { label: "Turkeys caught", tiers: THANKSGIVING_2026_LADDER },
   },
 ];
