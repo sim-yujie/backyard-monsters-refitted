@@ -8,7 +8,7 @@ import { BORDER_FRAGMENT } from "./borderShader";
 import { BORDER_COLOURS, BorderData, BorderRelation, type BorderViewer } from "./borders";
 import { cellCentre, paintedCellShape, type CellShape } from "./cellShape";
 import { GROUND_VERTEX } from "./groundShader";
-import { BORDER_RIM_ALPHA, BORDER_RIM_COLOUR } from "../relationLook";
+import { BORDER_RIM_ALPHA, BORDER_RIM_COLOUR, PINNED_CENTRE_COLOUR } from "../relationLook";
 
 /** The borders' program (one per page; `shaderWarmup.ts` compiles it ahead). */
 export const borderProgram = (): GlProgram =>
@@ -71,6 +71,7 @@ export class BorderLayer {
           uHostile: { value: rgb(BORDER_COLOURS[BorderRelation.HOSTILE]), type: "vec3<f32>" },
           uFriend: { value: rgb(BORDER_COLOURS[BorderRelation.FRIEND]), type: "vec3<f32>" },
           uPinned: { value: rgb(BORDER_COLOURS[BorderRelation.PINNED]), type: "vec3<f32>" },
+          uPinnedCentre: { value: rgb(PINNED_CENTRE_COLOUR), type: "vec3<f32>" },
           uRim: { value: rgb(BORDER_RIM_COLOUR), type: "vec3<f32>" },
           uRimAlpha: { value: BORDER_RIM_ALPHA, type: "f32" },
         },

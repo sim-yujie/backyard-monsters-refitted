@@ -12,7 +12,7 @@
  *    to the dark-blue alliance: cyan is far lighter (14 times the rim's luminance to 3.7) and thick.
  *  - Alliance, dark blue `#2f5bff`, a solid line. Hidden in the legend until alliances exist.
  *    Dark against the ground, so the rim carries it: its glowing middle is 7.5 times the rim.
- *  - Friend, emerald green `#2ee86b`, a double line; Pinned friend, light mint `#a4ffbe`, a
+ *  - Friend, bright green `#4dff86` (was `#2ee86b`, which sank into Classic's dark grass), a double line; Pinned friend, light mint `#a4ffbe`, a
  *    triple line (a third stroke down the middle, so it differs by shape and not only by tint)
  *    with a stronger glow. The greens are a cool green (hue 137 to 140) well apart from the
  *    yellow-green grass (hue 75 to 85) and far brighter: 3.1 and 4.2 times the main grass's
@@ -48,10 +48,22 @@ export const RELATION_LOOK: Record<PlayerRelation, RelationLook> = {
   you: { colour: 0x3cf2ff, style: "thick", label: "Yours" },
   alliance: { colour: 0x2f5bff, style: "solid", label: "Alliance" },
   pinned: { colour: 0xa4ffbe, style: "triple", label: "Pinned friend" },
-  friend: { colour: 0x2ee86b, style: "double", label: "Friend" },
+  friend: { colour: 0x4dff86, style: "double", label: "Friend" },
   hostile: { colour: 0xff4a3d, style: "dashed", label: "Hostile" },
   other: { colour: 0xc2c9d2, style: "thin", label: "Neutral" },
 };
+
+/**
+ * A pinned friend's middle stroke, gold (`#ffd23c`): the green triple line with a gold centre reads
+ * as different from a plain friend's green double at normal size, and stays in the green family.
+ */
+export const PINNED_CENTRE_COLOUR = 0xffd23c;
+
+/**
+ * The tile map (Classic, painted look off) draws on busier, darker grass than the painted map, so
+ * its rim is darker and friends' lines a little heavier there (`mapAtlas.RELATION_LINES`).
+ */
+export const TILE_RIM_ALPHA = 0.85;
 
 /** The dark rim under every border, and how opaque it is. */
 export const BORDER_RIM_COLOUR = 0x0b0f14;

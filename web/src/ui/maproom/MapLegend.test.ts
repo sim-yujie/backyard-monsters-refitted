@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
-import { RELATION_LOOK } from "@/game/maproom/relationLook";
+import { PINNED_CENTRE_COLOUR, RELATION_LOOK } from "@/game/maproom/relationLook";
 import { MAP_LEGEND_TEXT, MapLegend, relationSwatch, swatchLineColour } from "./MapLegend";
 
 /** The border colours' key on Map Room 2 (owner, 8 Nov 2026). */
@@ -68,12 +68,20 @@ describe("MapLegend", () => {
     const pinnedLines = [...relationSwatch("pinned").querySelectorAll("polygon")].filter(
       (shape) => shape.getAttribute("stroke") === pinnedColour,
     );
-    expect(pinnedLines).toHaveLength(3);
+    expect(pinnedLines).toHaveLength(2);
+    const centre = [...relationSwatch("pinned").querySelectorAll("polygon")].filter(
+      (shape) => shape.getAttribute("stroke") === swatchLineColour(PINNED_CENTRE_COLOUR),
+    );
+    expect(centre).toHaveLength(1);
+    const neutral = [...relationSwatch("other").querySelectorAll("polygon")].filter(
+      (shape) => shape.getAttribute("stroke") === swatchLineColour(RELATION_LOOK.other.colour),
+    );
+    expect(neutral).toHaveLength(1);
     expect(relationSwatch("other").querySelector("[stroke-dasharray]")).toBeNull();
   });
 
   it("shows the friend swatch in the colour the map line ends up (40 per cent towards white)", () => {
-    expect(swatchLineColour(RELATION_LOOK.friend.colour)).toBe("#82f1a6");
+    expect(swatchLineColour(RELATION_LOOK.friend.colour)).toBe("#94ffb6");
     expect(swatchLineColour(RELATION_LOOK.alliance.colour)).toBe("#829dff");
   });
 

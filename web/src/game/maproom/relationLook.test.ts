@@ -38,7 +38,7 @@ const GRASS = [0x647f16, 0x4d7b0d, 0x415d0e];
 /** The border palette (owner, 8 Nov 2026: green friends, dark-blue alliance, red enemies). */
 describe("relation border palette", () => {
   it("draws friends green, alliance dark blue, hostile red and neutral a quiet grey", () => {
-    expect(RELATION_LOOK.friend.colour).toBe(0x2ee86b);
+    expect(RELATION_LOOK.friend.colour).toBe(0x4dff86);
     expect(RELATION_LOOK.pinned.colour).toBe(0xa4ffbe);
     expect(RELATION_LOOK.alliance.colour).toBe(0x2f5bff);
     expect(RELATION_LOOK.hostile.colour).toBe(0xff4a3d);

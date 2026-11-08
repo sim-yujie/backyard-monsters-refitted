@@ -36,6 +36,7 @@ uniform vec3 uOther;
 uniform vec3 uHostile;
 uniform vec3 uFriend;
 uniform vec3 uPinned;
+uniform vec3 uPinnedCentre;
 uniform vec3 uRim;          // the dark rim under every line
 uniform float uRimAlpha;
 
@@ -169,6 +170,11 @@ void main() {
   float a = max(max(line, glowA), hazeA);
   // The middle of the line runs towards white, as a glowing tube does.
   vec3 rgb = mix(colour, mix(colour, vec3(1.0), 0.4), line);
+  // A pinned friend's middle stroke is gold: the green triple with a gold heart.
+  if (triple) {
+    float heart = (1.0 - smoothstep(half_ - 0.5 * pixel, half_ + 0.75 * pixel, fromCentre)) * on;
+    rgb = mix(rgb, mix(uPinnedCentre, vec3(1.0), 0.2), heart);
+  }
   // The colour over the rim, premultiplied.
   float rimA = rim * uRimAlpha;
   float outA = a + rimA * (1.0 - a);

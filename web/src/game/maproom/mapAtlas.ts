@@ -105,6 +105,8 @@ export class MapAtlas {
    */
   readonly relationBorders: Record<BorderStyle, Texture>;
   readonly relationRims: Record<BorderStyle, Texture>;
+  /** Just the middle stroke of the triple line: tinted gold over a pinned friend's border. */
+  readonly pinnedCentre: Texture;
   /** Wild monster camp. */
   readonly tent: Texture;
   /** A razed camp: the tent with its ridge caved in. */
@@ -163,6 +165,10 @@ export class MapAtlas {
     this.relationRims = Object.fromEntries(
       styles.map((style) => [style, bake(renderer, borderFrame, (g) => drawRelationLine(g, style, true))]),
     ) as Record<BorderStyle, Texture>;
+
+    this.pinnedCentre = bake(renderer, borderFrame, (g) =>
+      g.poly(insetHex(0)).stroke({ width: RELATION_LINES.triple.width, color: 0xffffff, alignment: 0.5 }),
+    );
 
     // A tent: a squat triangle sitting on the cell's centre line.
     const tentHalf = CELL_WIDTH * 0.15;
@@ -338,6 +344,7 @@ export class MapAtlas {
       this.inviteEnvelope,
       ...Object.values(this.relationBorders),
       ...Object.values(this.relationRims),
+      this.pinnedCentre,
     ];
   }
 
@@ -362,12 +369,12 @@ export const RELATION_LINES: Record<BorderStyle, { width: number; offset: number
   solid: { width: 3.8, offset: 0 },
   thin: { width: 3.2, offset: 0 },
   dashed: { width: 4, offset: 0, dashed: true },
-  double: { width: 2, offset: 2.6 },
-  triple: { width: 2, offset: 3.8, middle: true },
+  double: { width: 3, offset: 3.4 },
+  triple: { width: 2.6, offset: 4.6, middle: true },
 };
 const RELATION_INSET = 0.9;
 /** The dark rim's width either side of the line. */
-const RELATION_RIM = 2;
+const RELATION_RIM = 2.6;
 
 /** A hex corner list scaled about its centre, `offset` world points further out (negative: in). */
 const insetHex = (offset: number): number[] => hexPoints(RELATION_INSET + offset / halfWidth());

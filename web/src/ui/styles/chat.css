@@ -457,6 +457,19 @@ button.chat-line__name {
   cursor: default;
 }
 
+/* Classic's buttons do not fade when disabled, so a Sent or Friend picture looked
+   as lit as an active one: dim the picture and drop its colour (the word stays
+   readable, and is still the accessible name). */
+:root[data-skin="flash"] .chat-box__action--icon:disabled .game-icon,
+:root[data-skin="flash"] .chat-box__action--icon:disabled .friend-badge {
+  opacity: 0.4;
+  filter: grayscale(0.85);
+}
+
+:root[data-skin="flash"] .chat-box__action--icon:disabled .chat-box__action-label {
+  opacity: 0.75;
+}
+
 /* Muted: the same picture on a lit button, its word now Unmute. */
 .chat-box__action--on {
   outline: 2px solid var(--colour-accent);

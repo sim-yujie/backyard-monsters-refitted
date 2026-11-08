@@ -4,6 +4,7 @@ import {
   type BorderStyle,
   cssHex,
   legendRows,
+  PINNED_CENTRE_COLOUR,
   type PlayerRelation,
   RELATION_LOOK,
 } from "@/game/maproom/relationLook";
@@ -90,9 +91,9 @@ const polygon = (points: string, attrs: Record<string, string>): SVGPolygonEleme
 const STROKE: Record<BorderStyle, number> = {
   thick: 3.6,
   solid: 2.6,
-  thin: 1.6,
-  double: 1.4,
-  triple: 1.2,
+  thin: 2.2,
+  double: 1.6,
+  triple: 1.3,
   dashed: 2.6,
 };
 
@@ -154,8 +155,8 @@ export const relationSwatch = (relation: PlayerRelation, size = 28): SVGSVGEleme
       svg.append(
         polygon(hexPoints(w, h, 2.5 + gap / 2), {
           fill: "none",
-          stroke: colour,
-          "stroke-width": String(width),
+          stroke: swatchLineColour(PINNED_CENTRE_COLOUR),
+          "stroke-width": String(width + 0.3),
           "stroke-linejoin": "round",
         }),
       );
