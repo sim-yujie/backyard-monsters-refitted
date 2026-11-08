@@ -20,6 +20,8 @@ import { FindControl } from "./FindControl";
 import { HoverCard, type HoverCardContent } from "./HoverCard";
 import { Minimap } from "./Minimap";
 import { TiltToggle } from "./TiltToggle";
+import { PreparingMap } from "./PreparingMap";
+import type { PrepareState } from "@/game/maproom/prepareProgress";
 import { KitFilterControl } from "./KitFilterControl";
 import { MapLegend } from "./MapLegend";
 import { NavPanel } from "./NavPanel";
@@ -138,6 +140,8 @@ export class MapRoomUi {
   private readonly minimap: Minimap;
   private readonly zoomControl: ZoomControl;
   private readonly tiltToggle: TiltToggle;
+  /** The "Preparing map" loading screen over the map while the painted look compiles on a first open. */
+  private readonly preparing = new PreparingMap();
   private readonly rangeControl: RangeControl;
   private readonly kitFilterControl: KitFilterControl;
   /** The border colours' key (owner, 8 Nov 2026). */
@@ -217,6 +221,9 @@ export class MapRoomUi {
 
     this.hover.mount(container);
     this.find.mount(this.dock("map-dock mr2-find-dock"));
+    // Over the map and its controls, under the top bar (maproom.css `.mr2-prepare`).
+    container.append(this.preparing.element);
+    this.docks.push(this.preparing.element);
 
     const bottomRight = this.dock("map-dock map-dock--bottom-right mr2-tools-dock");
     bottomRight.append(this.rangeControl.legend);
@@ -251,6 +258,7 @@ export class MapRoomUi {
     this.kitFilterControl.destroy();
     this.legend.destroy();
     this.notices.destroy();
+    this.preparing.destroy();
     for (const dock of this.docks) dock.remove();
     this.docks.length = 0;
     this.container = null;
@@ -295,6 +303,16 @@ export class MapRoomUi {
   /** The "Tilted map" button: shown only when the map can tilt, pressed while it is tilted. */
   setTilt(state: { available: boolean; tilted: boolean }): void {
     this.tiltToggle.set(state);
+  }
+
+  /** The "Preparing map" loading screen: shown while the painted look compiles (`MapRenderer.prepareState`). */
+  setPreparing(state: PrepareState): void {
+    this.preparing.set(state);
+  }
+
+  /** Whether the loading screen is up: the map takes no keys meanwhile. */
+  get preparingShown(): boolean {
+    return this.preparing.showing;
   }
 
   /** The zoom floor moved (the tilted map cannot zoom out as far as the flat one). */
