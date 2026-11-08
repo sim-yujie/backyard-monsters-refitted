@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  covers,
   FRAME,
+  freeSpotNear,
   holdTurkey,
   isFree,
   newTurkey,
   pathFree,
   pickTarget,
   stepTurkey,
+  TURKEY_CLEARANCE,
   TURKEY_SPEED,
+  turkeyAreaOf,
   turkeyFrame,
   WANDER_RADIUS,
   type TurkeyArea,
@@ -85,6 +89,66 @@ describe("turkeyWalk: roaming turkeys (Thanksgiving)", () => {
     expect(frames).toEqual(new Set([FRAME.hop, FRAME.stand]));
     holdTurkey(turkey, false);
     expect(turkey.mode).toBe("idle");
+  });
+
+  it("keeps off the ground a building's art hides behind it, not only its footprint", () => {
+    // A tall building (a Hatchery, say) whose picture rises 120 px above its
+    // 100 x 100 footprint: screen-up is yard (-1, -1), so it hides the ground
+    // up to 120 units back along that diagonal.
+    const tall: TurkeyArea = {
+      halfW: 400,
+      halfH: 400,
+      obstacles: [{ x0: 0, y0: 0, x1: 100, y1: 100, rise: 120 }],
+    };
+    // Right behind it on screen (same world x, 80 px higher): hidden.
+    expect(isFree(tall, 50 - 80, 50 - 80)).toBe(false);
+    // Further back than the art reaches, or off to its side: open ground.
+    expect(isFree(tall, 50 - 200, 50 - 200)).toBe(true);
+    expect(isFree(tall, 160, -60)).toBe(true);
+    // In front of it (screen-down) the turkey is drawn over it: fine.
+    expect(isFree(tall, 130, 130)).toBe(true);
+    // A walk across the hidden ground is no path, past it is.
+    expect(pathFree(tall, -60, 60, 60, -60)).toBe(false);
+    expect(pathFree(tall, -250, 0, 0, -250)).toBe(true);
+    // Without a rise it is the footprint alone, as before.
+    expect(covers({ x0: 0, y0: 0, x1: 100, y1: 100 }, -30, -30)).toBe(false);
+    expect(covers({ x0: 0, y0: 0, x1: 100, y1: 100 }, 50, 50)).toBe(true);
+
+    // Ten minutes of a turkey whose home is hidden behind it: it starts on open
+    // ground and never stands where the art would hide it.
+    const random = seededRandom(19);
+    const start = freeSpotNear(tall, -40, -40);
+    expect(isFree(tall, start.x, start.y)).toBe(true);
+    const turkey = newTurkey(-40, -40, random);
+    turkey.x = turkey.targetX = start.x;
+    turkey.y = turkey.targetY = start.y;
+    for (let tick = 0; tick < 600 * 30; tick++) {
+      stepTurkey(turkey, 1 / 30, tall, random);
+      expect(isFree(tall, turkey.x, turkey.y)).toBe(true);
+    }
+  });
+
+  it("one caught inside a shape (its art came in late) walks out of it", () => {
+    const random = seededRandom(23);
+    const tall: TurkeyArea = { halfW: 400, halfH: 400, obstacles: [{ x0: 0, y0: 0, x1: 100, y1: 100, rise: 120 }] };
+    const turkey = newTurkey(-30, -30, random);
+    expect(isFree(tall, turkey.x, turkey.y)).toBe(false);
+    for (let tick = 0; tick < 60 * 30 && !isFree(tall, turkey.x, turkey.y); tick++) stepTurkey(turkey, 1 / 30, tall, random);
+    expect(isFree(tall, turkey.x, turkey.y)).toBe(true);
+  });
+
+  it("turkeyAreaOf sweeps each building back by its art's rise", () => {
+    const yard = {
+      bounds: { yardWidth: 800, yardHeight: 800 },
+      buildings: [
+        { id: 1, x: 0, y: 0, footprint: [100, 100] },
+        { id: 2, x: 200, y: 200, footprint: [40, 40] },
+      ],
+    } as unknown as Parameters<typeof turkeyAreaOf>[0];
+    const area = turkeyAreaOf(yard, new Map([[1, 120]]));
+    expect(area.obstacles[0]!.rise).toBe(120 + TURKEY_CLEARANCE);
+    expect(area.obstacles[1]!.rise).toBe(0);
+    expect(turkeyAreaOf(yard).obstacles.every((box) => !box.rise)).toBe(true);
   });
 
   it("walking cycles the four walk frames; facing follows the screen direction", () => {

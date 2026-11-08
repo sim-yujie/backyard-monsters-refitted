@@ -1110,6 +1110,11 @@ export class YardRenderer {
     return helped ?? this.buildings.pick(worldX, worldY);
   }
 
+  /** Whether a find under the pointer wins over the building there: the turkeys, drawn in front. */
+  get findsOnTop(): boolean {
+    return this.turkeysOn;
+  }
+
   /** The mushroom under a world point in the isometric yard, or null. */
   pickMushroom(worldX: number, worldY: number): YardMushroom | null {
     if (this.currentView !== YardView.ISO || !this.yard) return null;

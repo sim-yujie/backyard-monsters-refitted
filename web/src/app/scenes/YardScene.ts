@@ -182,9 +182,13 @@ import { footprintBox } from "@/game/yard/YardGrid";
 import { mountYardPlugins, type YardSceneControls } from "@/game/yard/yardPlugins";
 import "@/game/yard/plugins";
 import { devStats } from "../devDetails";
+import { GOLDEN_POP_SECONDS } from "@/game/yard/YardTurkeys";
 
-/** How long the golden-turkey popup waits for the turkey's golden hop (`YardTurkeys.POP_SECONDS`). */
-const GOLDEN_TURKEY_DELAY_MS = 600;
+/**
+ * How long the golden-turkey popup waits: the turkey's whole golden hop plays
+ * on the yard first, so the popup's dimmer does not cover it.
+ */
+const GOLDEN_TURKEY_DELAY_MS = GOLDEN_POP_SECONDS * 1000 + 100;
 
 /**
  * A yard: the player's own, or — handed a {@link ViewTarget} by the map —
@@ -1225,6 +1229,7 @@ export class YardScene implements Scene {
         this.select(null);
         void this.mushroomPicker?.pick(mushroom);
       },
+      findsOnTop: () => this.renderer.findsOnTop,
       onZoomStep: (direction) => this.zoomBy(Math.pow(ZOOM_STEP, direction)),
       onZoomReset: () => this.fitYard(),
       onCancel: () => this.select(null),

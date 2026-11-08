@@ -5,6 +5,7 @@ import { loadWithRetries } from "./retryLoad";
 import { THANKSGIVING_ART } from "./thanksgivingSkin";
 import {
   FRAME,
+  freeSpotNear,
   holdTurkey,
   newTurkey,
   stepTurkey,
@@ -20,7 +21,9 @@ import type { Yard, YardMushroom } from "./yardModel";
  * The Thanksgiving turkeys on the yard (`turkeyWalk.ts` for how they roam):
  * one per mushroom the server grew, wandering near its spot, picked like a
  * mushroom. A pick flaps it (held), and its landing pops it: it hops up and
- * fades, gold and sparkling when the pick rolled golden.
+ * fades. When the pick rolled golden it turns gold, hops, swells once at the
+ * top and fades more slowly, and the golden popup waits for it to finish
+ * ({@link GOLDEN_POP_SECONDS}).
  *
  * Cheap on purpose (owner plays Firefox; phones): at most one sprite per
  * mushroom, which the server caps at 10, plus a short-lived pop; no filters;
@@ -45,8 +48,20 @@ const MUSHROOM_GROUND = 30;
 /** The longest frame the turkeys take in one step, seconds. */
 const MAX_STEP = 0.1;
 
+/**
+ * How often the ground the buildings' art covers is measured again, seconds:
+ * pictures arrive after the yard is shown, and a building can go up a level.
+ */
+const AREA_REFRESH_SECONDS = 1;
+
 /** How long a pop lasts, seconds. */
 export const POP_SECONDS = 0.7;
+
+/**
+ * How long a golden pop lasts, seconds: long enough to be seen before the
+ * golden popup and its dimmer cover the yard (`YardScene` waits this long).
+ */
+export const GOLDEN_POP_SECONDS = 1;
 
 /**
  * The tap box around a turkey's feet, world px: a little bigger than the
@@ -77,6 +92,8 @@ interface Pop {
 export interface TurkeyStage {
   addGuest(child: Container): void;
   removeGuest(child: Container): void;
+  /** By building id, how far its art rises above its footprint, world px (`YardBuildings.artRises`). */
+  artRises?(): ReadonlyMap<number, number>;
 }
 
 const isHidden = (): boolean => typeof document !== "undefined" && document.hidden;
@@ -90,6 +107,10 @@ export class YardTurkeys {
   private gone = new Map<string, { x: number; y: number; facing: 1 | -1 }>();
   private readonly pops: Pop[] = [];
   private area: TurkeyArea | null = null;
+  /** The yard the area was measured for, to measure it again. */
+  private yard: Yard | null = null;
+  /** Seconds since the area was last measured. */
+  private areaAge = 0;
   private bounds: YardBounds | null = null;
   private destroyed = false;
 
@@ -138,8 +159,10 @@ export class YardTurkeys {
   sync(yard: Yard, fresh: ReadonlySet<string> = new Set()): void {
     const walk = this.walk;
     if (!walk) return;
-    this.area = turkeyAreaOf(yard);
+    this.yard = yard;
+    this.measure();
     this.bounds = yard.bounds;
+    const area = this.area!;
     const keys = new Set<string>();
     for (const mushroom of yard.mushrooms) {
       const key = mushroomKey(mushroom);
@@ -151,6 +174,10 @@ export class YardTurkeys {
         continue;
       }
       const state = newTurkey(mushroom.x + MUSHROOM_GROUND / 2, mushroom.y + MUSHROOM_GROUND / 2, this.random);
+      // A mushroom behind a building: its turkey starts on open ground near it.
+      const start = freeSpotNear(area, state.x, state.y);
+      state.x = state.targetX = start.x;
+      state.y = state.targetY = start.y;
       const sprite = new Sprite(walk[FRAME.stand]);
       sprite.anchor.set(0.5, 0.97);
       sprite.eventMode = "none";
@@ -173,6 +200,8 @@ export class YardTurkeys {
   update(seconds: number): void {
     if (isHidden()) return;
     const step = Math.min(Math.max(seconds, 0), MAX_STEP);
+    this.areaAge += step;
+    if (this.areaAge >= AREA_REFRESH_SECONDS && this.walkers.size > 0) this.measure();
     const area = this.area;
     if (area) {
       for (const walker of this.walkers.values()) {
@@ -241,6 +270,12 @@ export class YardTurkeys {
     this.clear();
   }
 
+  /** Measures where turkeys may walk: the plot, the buildings and the ground their art hides. */
+  private measure(): void {
+    this.areaAge = 0;
+    if (this.yard) this.area = turkeyAreaOf(this.yard, this.stage.artRises?.());
+  }
+
   private place(walker: Walker): void {
     const bounds = this.bounds;
     if (!bounds) return;
@@ -263,13 +298,11 @@ export class YardTurkeys {
     for (let index = this.pops.length - 1; index >= 0; index--) {
       const pop = this.pops[index]!;
       pop.elapsed += seconds;
-      const t = Math.min(1, pop.elapsed / POP_SECONDS);
-      // Up in an arc and a little bigger, fading over the second half.
-      const rise = Math.sin(t * Math.PI * 0.5) * 34;
-      const grow = 1 + 0.35 * t + (pop.golden ? 0.15 * Math.sin(t * Math.PI) : 0);
-      pop.sprite.position.set(pop.x, pop.y - rise);
-      pop.sprite.scale.set(TURKEY_SCALE * grow * pop.facing, TURKEY_SCALE * grow);
-      pop.sprite.alpha = t < 0.5 ? 1 : 1 - (t - 0.5) * 2;
+      const t = Math.min(1, pop.elapsed / (pop.golden ? GOLDEN_POP_SECONDS : POP_SECONDS));
+      const look = popLook(t, pop.golden);
+      pop.sprite.position.set(pop.x, pop.y - look.rise);
+      pop.sprite.scale.set(TURKEY_SCALE * look.grow * pop.facing, TURKEY_SCALE * look.grow);
+      pop.sprite.alpha = look.alpha;
       if (t >= 1) {
         this.dropSprite(pop.sprite);
         this.pops.splice(index, 1);
@@ -286,6 +319,29 @@ export class YardTurkeys {
     sprite.destroy();
   }
 }
+
+/**
+ * A pop's look `t` of the way through (0..1): how far up (world px), how
+ * big, how solid. An ordinary one goes up in an arc, a little bigger, fading
+ * over the second half. A golden one is up by 40%, swells once while it hangs
+ * there, and fades only over the last quarter.
+ */
+export const popLook = (t: number, golden: boolean): { rise: number; grow: number; alpha: number } => {
+  if (!golden) {
+    return {
+      rise: Math.sin(t * Math.PI * 0.5) * 34,
+      grow: 1 + 0.35 * t,
+      alpha: t < 0.5 ? 1 : 1 - (t - 0.5) * 2,
+    };
+  }
+  const up = Math.min(1, t / 0.4);
+  const hang = t <= 0.4 ? 0 : Math.min(1, (t - 0.4) / 0.35);
+  return {
+    rise: Math.sin(up * Math.PI * 0.5) * 40,
+    grow: 1 + 0.35 * up + 0.2 * Math.sin(hang * Math.PI),
+    alpha: t < 0.75 ? 1 : Math.max(0, 1 - (t - 0.75) * 4),
+  };
+};
 
 /** The six frames of a strip, sharing its picture. */
 const framesOf = (strip: Texture): Texture[] =>

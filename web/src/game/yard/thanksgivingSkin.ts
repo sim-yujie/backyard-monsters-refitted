@@ -1,7 +1,10 @@
 /**
- * The Thanksgiving yard dress-up (owner, 8 Nov 2026): three looks for the
- * owner to choose from, switched for review with `?tgskin=a`, `b` or `c` on
- * the page's address (A when absent). Each look is three parts:
+ * The Thanksgiving yard dress-up (owner, 8 Nov 2026): three looks were made
+ * for the owner to choose from, switched with `?tgskin=a`, `b` or `c` on the
+ * page's address. The owner chose C ("Look C but i dont need all the
+ * haybales around (30% less leaves also)", 8 Nov), so C is the default, with
+ * no hay bales and 30% fewer leaves than first drawn; A and B stay behind the
+ * switch for now. Each look is three parts:
  *
  * - **Ground**: the usual seven grass images, recoloured once when the yard's
  *   ground is baked (`YardGround.ts`) by a luminance gradient map mixed over
@@ -13,7 +16,7 @@
  *   Modern look; Flash's own scarecrow, pumpkins, acorns and pinecones in the
  *   Classic look (`game/classicLook.ts`), so Classic stays Flash art.
  *
- * Once the owner picks one, set {@link DEFAULT_SKIN} to it (and the switch can go).
+ * A and B (and the switch) can go once C is settled.
  */
 
 export type ThanksgivingSkinId = "a" | "b" | "c";
@@ -75,7 +78,7 @@ export const SKINS: Readonly<Record<ThanksgivingSkinId, ThanksgivingSkin>> = {
   },
   c: {
     id: "c",
-    name: "Late autumn: russet-brown ground, brown and orange leaves, a dense hay-and-corn fence",
+    name: "Late autumn: russet-brown ground, brown and orange leaves, corn shocks, pumpkins and cornucopias round the edge",
     ground: {
       stops: [
         [0, [44, 28, 16]],
@@ -86,13 +89,16 @@ export const SKINS: Readonly<Record<ThanksgivingSkinId, ThanksgivingSkin>> = {
       amount: 0.7,
     },
     fill: 0x7a5432,
-    leaves: { count: 80, kinds: ["leaf-brown", "leaf-brown", "leaf-orange", "leaf-red", "leaf-yellow"] },
-    props: { pattern: ["corn", "hay", "corn", "hay", "pumpkins", "corn", "hay", "cornucopia"], spacing: 72 },
+    // Owner, 8 Nov: 30% fewer leaves than the 80 first drawn, and no hay
+    // bales. The rest of the first fence keeps its order and places: its five
+    // non-hay props in every eight, so the gap grows from 72 to 72 * 8 / 5.
+    leaves: { count: 56, kinds: ["leaf-brown", "leaf-brown", "leaf-orange", "leaf-red", "leaf-yellow"] },
+    props: { pattern: ["corn", "corn", "pumpkins", "corn", "cornucopia"], spacing: 115 },
   },
 };
 
-/** The look shown when the address names none. */
-export const DEFAULT_SKIN: ThanksgivingSkinId = "a";
+/** The look shown when the address names none: the owner's choice (8 Nov). */
+export const DEFAULT_SKIN: ThanksgivingSkinId = "c";
 
 /** The look `?tgskin=` asks for in `search` (the page's query string), else the default. */
 export const skinIdFrom = (search: string): ThanksgivingSkinId => {

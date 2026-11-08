@@ -11,6 +11,11 @@ import type { Yard } from "./yardModel";
  * home whose straight path crosses no building, walks there slowly, and
  * stands about again. It never leaves the plot. Everything is in yard units
  * (the server's `x`, `y`); the layer turns them into world pixels.
+ *
+ * A building is more than its footprint: its picture rises above it on
+ * screen and hides whatever stands behind (a turkey there could be seen
+ * only as a tap that opened the building). So each building also keeps
+ * turkeys off the ground its art covers ({@link TurkeyObstacle.rise}).
  */
 
 /** How far from home a turkey wanders, yard units (a mushroom's ground is 30). */
@@ -34,12 +39,20 @@ export const TARGET_TRIES = 8;
 /** Frames in the turkey strip (`turkey.png`): walk 1-4, the startled hop, pecking. */
 export const FRAME = { walk: [0, 1, 2, 3], hop: 4, peck: 5, stand: 1 } as const;
 
-/** A box in yard units: a building's footprint grown by the clearance. */
+/**
+ * A box in yard units: a building's footprint grown by the clearance, swept
+ * back by `rise`. Screen-up is yard (-1, -1) (`toIso`: world y is (x + y) / 2,
+ * world x is x - y), so ground `t` yard units back along that diagonal sits
+ * `t` world pixels higher with the same world x: art rising `rise` world
+ * pixels above the footprint covers the box swept back by up to `rise`.
+ */
 export interface TurkeyObstacle {
   readonly x0: number;
   readonly y0: number;
   readonly x1: number;
   readonly y1: number;
+  /** World pixels the building's art rises above its footprint (0 or left out: the footprint alone). */
+  readonly rise?: number;
 }
 
 /** Where turkeys may walk: inside the plot, outside every obstacle. */
@@ -69,27 +82,112 @@ export interface TurkeyState {
   pecking: boolean;
 }
 
-/** The plot and the buildings of a yard, as turkeys see them. */
-export const turkeyAreaOf = (yard: Pick<Yard, "bounds" | "buildings">): TurkeyArea => ({
+/**
+ * The plot and the buildings of a yard, as turkeys see them. `rises` gives,
+ * by building id, how many world pixels its drawn art rises above its
+ * footprint (`YardBuildings.artRises`); a building not in it (its picture
+ * not in yet) keeps turkeys off its footprint only.
+ */
+export const turkeyAreaOf = (
+  yard: Pick<Yard, "bounds" | "buildings">,
+  rises?: ReadonlyMap<number, number>,
+): TurkeyArea => ({
   halfW: yard.bounds.yardWidth / 2,
   halfH: yard.bounds.yardHeight / 2,
-  obstacles: yard.buildings.map((building) => ({
-    x0: building.x - TURKEY_CLEARANCE,
-    y0: building.y - TURKEY_CLEARANCE,
-    x1: building.x + building.footprint[0] + TURKEY_CLEARANCE,
-    y1: building.y + building.footprint[1] + TURKEY_CLEARANCE,
-  })),
+  obstacles: yard.buildings.map((building) => {
+    const rise = rises?.get(building.id) ?? 0;
+    return {
+      x0: building.x - TURKEY_CLEARANCE,
+      y0: building.y - TURKEY_CLEARANCE,
+      x1: building.x + building.footprint[0] + TURKEY_CLEARANCE,
+      y1: building.y + building.footprint[1] + TURKEY_CLEARANCE,
+      rise: rise > 0 ? rise + TURKEY_CLEARANCE : 0,
+    };
+  }),
 });
+
+/**
+ * Whether a point is inside an obstacle (open, so its edge is outside): some
+ * `t` in `[0, rise]` puts the point `t` forward along (+1, +1) inside the box.
+ */
+export const covers = (box: TurkeyObstacle, x: number, y: number): boolean => {
+  const after = Math.max(box.x0 - x, box.y0 - y);
+  const before = Math.min(box.x1 - x, box.y1 - y);
+  return after < before && before > 0 && after < (box.rise ?? 0);
+};
 
 /** Whether a turkey may stand at a point. */
 export const isFree = (area: TurkeyArea, x: number, y: number): boolean => {
   const edge = 16;
   if (Math.abs(x) > area.halfW - edge || Math.abs(y) > area.halfH - edge) return false;
-  return !area.obstacles.some((box) => x > box.x0 && x < box.x1 && y > box.y0 && y < box.y1);
+  return !area.obstacles.some((box) => covers(box, x, y));
+};
+
+/**
+ * The corners of a swept obstacle, in order round it: the box's top corner
+ * and its two side corners lifted back by `rise`, then its other three.
+ */
+const sweptCorners = (box: TurkeyObstacle, rise: number): readonly (readonly [number, number])[] => [
+  [box.x0 - rise, box.y0 - rise],
+  [box.x1 - rise, box.y0 - rise],
+  [box.x1, box.y0],
+  [box.x1, box.y1],
+  [box.x0, box.y1],
+  [box.x0 - rise, box.y1 - rise],
+];
+
+/**
+ * Whether the segment from (x0, y0) to (x1, y1) passes through an open
+ * obstacle: the slab test for a plain box, the same clip against each side
+ * of the (convex) swept shape otherwise.
+ */
+const crosses = (box: TurkeyObstacle, x0: number, y0: number, x1: number, y1: number): boolean => {
+  const rise = box.rise ?? 0;
+  return rise > 0 ? crossesSwept(box, rise, x0, y0, x1, y1) : crossesBox(box, x0, y0, x1, y1);
+};
+
+const crossesSwept = (
+  box: TurkeyObstacle,
+  rise: number,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+): boolean => {
+  const corners = sweptCorners(box, rise);
+  const midX = corners.reduce((sum, [x]) => sum + x, 0) / corners.length;
+  const midY = corners.reduce((sum, [, y]) => sum + y, 0) / corners.length;
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  let enter = 0;
+  let leave = 1;
+  for (let index = 0; index < corners.length; index++) {
+    const [ax, ay] = corners[index]!;
+    const [bx, by] = corners[(index + 1) % corners.length]!;
+    // The side's normal, turned to point out of the shape.
+    let nx = by - ay;
+    let ny = ax - bx;
+    if (nx * (midX - ax) + ny * (midY - ay) > 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+    // Inside is n . (p - a) < 0.
+    const start = nx * (x0 - ax) + ny * (y0 - ay);
+    const along = nx * dx + ny * dy;
+    if (Math.abs(along) < 1e-9) {
+      if (start >= 0) return false;
+      continue;
+    }
+    const at = -start / along;
+    if (along < 0) enter = Math.max(enter, at);
+    else leave = Math.min(leave, at);
+    if (enter >= leave) return false;
+  }
+  return true;
 };
 
 /** Whether the segment from (x0, y0) to (x1, y1) passes through the open box (slab test). */
-const crosses = (box: TurkeyObstacle, x0: number, y0: number, x1: number, y1: number): boolean => {
+const crossesBox = (box: TurkeyObstacle, x0: number, y0: number, x1: number, y1: number): boolean => {
   let enter = 0;
   let leave = 1;
   for (const [start, delta, low, high] of [
@@ -116,7 +214,28 @@ const crosses = (box: TurkeyObstacle, x0: number, y0: number, x1: number, y1: nu
  * it; each building is checked exactly, so no corner is clipped between checks.
  */
 export const pathFree = (area: TurkeyArea, x0: number, y0: number, x1: number, y1: number): boolean =>
-  isFree(area, x1, y1) && !area.obstacles.some((box) => crosses(box, x0, y0, x1, y1));
+  isFree(area, x1, y1) &&
+  // One that finds itself inside a shape (its art came in after it stood
+  // there) may walk out of that one.
+  !area.obstacles.some((box) => !covers(box, x0, y0) && crosses(box, x0, y0, x1, y1));
+
+/**
+ * Where a turkey whose home is covered (a mushroom grew behind a building)
+ * starts instead: the nearest free point on rings round home, or home itself
+ * if none is within {@link WANDER_RADIUS}.
+ */
+export const freeSpotNear = (area: TurkeyArea, x: number, y: number): { x: number; y: number } => {
+  if (isFree(area, x, y)) return { x, y };
+  for (let reach = 10; reach <= WANDER_RADIUS; reach += 10) {
+    for (let turn = 0; turn < 16; turn++) {
+      const angle = (turn / 16) * Math.PI * 2;
+      const spotX = x + Math.cos(angle) * reach;
+      const spotY = y + Math.sin(angle) * reach;
+      if (isFree(area, spotX, spotY)) return { x: spotX, y: spotY };
+    }
+  }
+  return { x, y };
+};
 
 /** Screen direction of a step in yard units: the isometric x is `x - y`. */
 const facingOf = (dx: number, dy: number, was: 1 | -1): 1 | -1 => {

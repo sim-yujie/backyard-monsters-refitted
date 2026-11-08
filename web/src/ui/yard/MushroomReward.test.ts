@@ -51,6 +51,8 @@ describe("showGoldenMushroom", () => {
     const popup = showGoldenMushroom(layer, 8, "thanksgiving");
 
     expect(layer.querySelector(".panel__title")?.textContent).toBe(GOLDEN_TURKEY_TITLE);
+    // Short enough for the title bar not to cut it (it ellipsises past about 24).
+    expect(GOLDEN_TURKEY_TITLE.length).toBeLessThanOrEqual(24);
     expect(layer.querySelector("img")?.getAttribute("src")).toBe(GOLDEN_TURKEY_ART);
     expect(spokenText(layer.querySelector(".mushroom-reward__text")!)).toMatch(/golden turkey worth Shiny 8\./);
     popup.close();

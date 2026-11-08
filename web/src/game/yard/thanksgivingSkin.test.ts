@@ -16,8 +16,10 @@ describe("Thanksgiving yard dress-up looks", () => {
   it("?tgskin= picks look A, B or C; anything else is the default A", () => {
     expect(skinIdFrom("?tgskin=b")).toBe("b");
     expect(skinIdFrom("?x=1&tgskin=C")).toBe("c");
-    expect(skinIdFrom("?tgskin=z")).toBe("a");
-    expect(skinIdFrom("")).toBe("a");
+    expect(skinIdFrom("?tgskin=a")).toBe("a");
+    // The owner chose C (8 Nov): it is the look with no switch.
+    expect(skinIdFrom("?tgskin=z")).toBe("c");
+    expect(skinIdFrom("")).toBe("c");
   });
 
   it("every look recolours the grass warmer and keeps alpha", () => {
@@ -42,6 +44,12 @@ describe("Thanksgiving yard dress-up looks", () => {
       // Same seed, same yard.
       expect(propSpots(skin, CORNERS, 42)).toEqual(spots);
     }
+  });
+
+  it("look C, the owner's: no hay bales, 30% fewer leaves than the first 80", () => {
+    expect(SKINS.c.props.pattern).not.toContain("hay");
+    expect(new Set(SKINS.c.props.pattern)).toEqual(new Set(["corn", "pumpkins", "cornucopia"]));
+    expect(SKINS.c.leaves.count).toBe(Math.round(80 * 0.7));
   });
 
   it("leaves: the look's count, inside the ground block, the same for one seed", () => {

@@ -26,10 +26,12 @@ export const JACK_O_LANTERN_TITLE = "Your worker found a jack-o'-lantern!";
 /**
  * The Thanksgiving dress: the golden find is a golden turkey
  * (`server/public/assets/specialevent/thanksgiving/golden-turkey.png`, Codex,
- * from the game's own worker art). Same reward, same roll.
+ * from the game's own worker art). Same reward, same roll. The title is
+ * short so the title bar shows it whole, phone width included (the longer
+ * "Your worker caught a golden turkey!" was cut to "Your worker caught a g...").
  */
 export const GOLDEN_TURKEY_ART = "/assets/specialevent/thanksgiving/golden-turkey.png";
-export const GOLDEN_TURKEY_TITLE = "Your worker caught a golden turkey!";
+export const GOLDEN_TURKEY_TITLE = "A golden turkey!";
 
 /** What the popup says in each season: picture, title, and the line around the Shiny. */
 const DRESS: Readonly<Record<Season, { art: string; title: string; before: string; after: string }>> = {

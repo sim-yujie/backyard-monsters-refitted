@@ -1091,6 +1091,17 @@
     font-size: 16px;
   }
 
+  /* Folded on a phone the Friends strip is an empty box along the bottom
+     holding only its round button (friends-bar.css): no plate, or its two
+     edges show as a dark band under the dock and lift the button's sign
+     above its neighbours' (Thanksgiving test, 8 Nov). Opened, it is a sheet
+     and wears the plate. */
+  :root[data-skin] .friends-bar.friends-bar:not(.is-open) {
+    border: 0;
+    border-image: none;
+    filter: none;
+  }
+
   /* A window as wide as the screen keeps its disc on the screen. */
   :root[data-skin] .panel__titlebar > .btn[aria-label^="Close"] {
     right: calc(-1 * var(--skin-edge) + 2px);
