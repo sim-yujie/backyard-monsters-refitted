@@ -36,7 +36,7 @@ describe("Thanksgiving yard dress-up looks", () => {
   });
 
   it("props stand outside the plot, along all four sides, the pattern in turn", () => {
-    for (const skin of Object.values(SKINS)) {
+    for (const skin of [SKINS.a, SKINS.b]) {
       const spots = propSpots(skin, CORNERS, 42);
       expect(spots.length).toBeGreaterThan(8);
       for (const spot of spots) expect(inside(spot.x, spot.y)).toBe(false);
@@ -46,9 +46,9 @@ describe("Thanksgiving yard dress-up looks", () => {
     }
   });
 
-  it("look C, the owner's: no hay bales, 30% fewer leaves than the first 80", () => {
-    expect(SKINS.c.props.pattern).not.toContain("hay");
-    expect(new Set(SKINS.c.props.pattern)).toEqual(new Set(["corn", "pumpkins", "cornucopia"]));
+  it("look C, the owner's: nothing round the yard, 30% fewer leaves than the first 80", () => {
+    expect(SKINS.c.props.pattern).toEqual([]);
+    expect(propSpots(SKINS.c, CORNERS, 42)).toEqual([]);
     expect(SKINS.c.leaves.count).toBe(Math.round(80 * 0.7));
   });
 

@@ -78,7 +78,7 @@ export const SKINS: Readonly<Record<ThanksgivingSkinId, ThanksgivingSkin>> = {
   },
   c: {
     id: "c",
-    name: "Late autumn: russet-brown ground, brown and orange leaves, corn shocks, pumpkins and cornucopias round the edge",
+    name: "Late autumn: russet-brown ground, brown and orange leaves, nothing round the edge",
     ground: {
       stops: [
         [0, [44, 28, 16]],
@@ -89,11 +89,10 @@ export const SKINS: Readonly<Record<ThanksgivingSkinId, ThanksgivingSkin>> = {
       amount: 0.7,
     },
     fill: 0x7a5432,
-    // Owner, 8 Nov: 30% fewer leaves than the 80 first drawn, and no hay
-    // bales. The rest of the first fence keeps its order and places: its five
-    // non-hay props in every eight, so the gap grows from 72 to 72 * 8 / 5.
+    // Owner, 8 Nov: 30% fewer leaves than the 80 first drawn, and nothing
+    // round the yard (the corn shocks read as hay bales too).
     leaves: { count: 56, kinds: ["leaf-brown", "leaf-brown", "leaf-orange", "leaf-red", "leaf-yellow"] },
-    props: { pattern: ["corn", "corn", "pumpkins", "corn", "cornucopia"], spacing: 115 },
+    props: { pattern: [], spacing: 115 },
   },
 };
 
@@ -234,7 +233,7 @@ export const propSpots = (
   seed: number,
   offset = 34,
 ): PropSpot[] => {
-  if (corners.length !== 4) return [];
+  if (corners.length !== 4 || skin.props.pattern.length === 0) return [];
   const random = seeded(seed * 104729 + 3);
   const centre = {
     x: corners.reduce((sum, point) => sum + point.x, 0) / 4,
