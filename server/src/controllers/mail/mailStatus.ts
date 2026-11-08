@@ -1,7 +1,7 @@
 import { Status } from "../../enums/StatusCodes.js";
 import type { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
-import { findMailRecipient, isMailModerator } from "../../services/mail/modMail.js";
+import { blocksIgnoringStaff, findMailRecipient, isMailModerator } from "../../services/mail/modMail.js";
 import { readMailStatus } from "../../services/mail/mailStatus.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
@@ -11,7 +11,9 @@ import type { KoaController } from "../../utils/KoaController.js";
  */
 export const getMailStatus: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  const status = await readMailStatus(postgres.em, user.userid, user.blockedUsers ?? []);
+  // Mail from moderators and admins counts even if the player blocked them (owner, 8 Nov).
+  const blocked = await blocksIgnoringStaff(postgres.em, user.blockedUsers ?? []);
+  const status = await readMailStatus(postgres.em, user.userid, blocked);
   ctx.status = Status.OK;
   ctx.body = { error: 0, ...status };
 };
