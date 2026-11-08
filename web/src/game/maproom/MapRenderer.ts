@@ -37,7 +37,17 @@ import type { ZoneRecord, ZoneStore } from "./ZoneStore";
 import type { CellRange } from "./zones";
 import type { GroundData } from "./painted/GroundData";
 import type * as PaintedLookNamespace from "./painted/paintedLook";
-import { HIDDEN, PrepareTracker, prepareShows, type PrepareState } from "./prepareProgress";
+import {
+  HIDDEN,
+  markPreparedThisPage,
+  pendingShows,
+  PrepareTracker,
+  preparedThisPage,
+  prepareShows,
+  StallGuard,
+  type PrepareState,
+} from "./prepareProgress";
+import { prewarmStatus } from "./mr2Prewarm";
 
 type PaintedLookModule = typeof PaintedLookNamespace;
 
@@ -166,9 +176,18 @@ export class MapRenderer {
    * The "Preparing map" bar's tracker (`prepareProgress.ts`), from when the look's code arrives;
    * `level` is the Quality its programs were last listed for, `since` when it began.
    */
-  private preparing: { tracker: PrepareTracker; look: PaintedLookModule; warmer: ProgramWarmer; level: Quality; since: number } | null = null;
-  /** The full look came in on this open: the bar does not come back (a Quality change keeps the tiles' look). */
+  private preparing: { tracker: PrepareTracker; look: PaintedLookModule; warmer: ProgramWarmer; level: Quality } | null = null;
+  /**
+   * The loading screen is done for this open (the full look came in, nothing was left to compile, or
+   * it stalled): it does not come back, and a Quality change later waits with the Low look instead.
+   */
   private prepareFinished = false;
+  /** What the loading screen was last told when it finished (100%, or where it stalled). */
+  private prepareEnd: PrepareState = HIDDEN;
+  /** When the map first asked for the loading screen's state (its open). */
+  private prepareFrom: number | null = null;
+  /** Fades the loading screen if its progress stands still too long (`STALL_MS`). */
+  private readonly prepareStall = new StallGuard();
   /** Classic on High: which cells are fog, for `clouds`; the painted look keeps its own in `painted`. */
   private classicFog: GroundData | null = null;
   private classicFogPreparing = false;
@@ -557,31 +576,58 @@ export class MapRenderer {
   }
 
   /**
-   * The "Preparing map… N%" bar's state now (owner, 7 Nov 2026): shown while the painted look's
-   * programs compile on an open that had some left to compile, never in Classic, and gone for good
-   * once the ground draws the player's own Quality (`prepareProgress.ts` has the rules).
+   * The "Preparing map" loading screen's state now (owner chose design A, 8 Nov 2026): over the map
+   * from the open while the painted look's code is on its way (unless it is surely ready), then while
+   * its programs compile, and gone for good once the ground draws the player's own Quality. Never in
+   * Classic, never on an open whose programs were all ready, and never longer than `STALL_MS`
+   * without progress (`prepareProgress.ts` has the rules).
    */
   prepareState(now: number = performance.now()): PrepareState {
+    if (this.prepareFinished || this.destroyed) return this.prepareFinished ? this.prepareEnd : HIDDEN;
+    const state = this.currentPrepareState(now);
+    if (this.prepareStall.check(state, now)) return this.finishPrepare({ show: false, percent: state.percent });
+    return state;
+  }
+
+  private finishPrepare(end: PrepareState): PrepareState {
+    this.prepareFinished = true;
+    this.prepareEnd = end;
+    return end;
+  }
+
+  private currentPrepareState(now: number): PrepareState {
+    const classic = classicLook();
     const prep = this.preparing;
-    if (this.prepareFinished || !prep || this.destroyed) return this.prepareFinished ? { show: false, percent: 100 } : HIDDEN;
+    if (!prep) {
+      const cover = pendingShows({
+        classic,
+        paintedWanted: this.paintedWanted,
+        failed: this.paintedBroken,
+        webGL2: this.webGL2,
+        preparedBefore: preparedThisPage(),
+        warmedUp: prewarmStatus() === "done",
+        waitedMs: now - (this.prepareFrom ??= now),
+      });
+      return cover ? { show: true, percent: 0 } : HIDDEN;
+    }
     const level = quality();
     if (level !== prep.level) {
       prep.level = level;
       prep.tracker.update(prep.look.fullLookPrograms(prep.warmer, level));
     }
     const fullLook = this.painted?.drawsLevel(level) ?? false;
+    if (fullLook || !prep.tracker.hadWork) {
+      // Its programs stay compiled in the renderer: a later open on this page needs no screen.
+      markPreparedThisPage();
+      return this.finishPrepare({ show: false, percent: 100 });
+    }
     const show = prepareShows({
-      classic: classicLook(),
+      classic,
       paintedWanted: this.paintedWanted,
       failed: this.paintedBroken,
       fullLook,
       hadWork: prep.tracker.hadWork,
-      waitedMs: now - prep.since,
     });
-    if (fullLook || !prep.tracker.hadWork) {
-      this.prepareFinished = true;
-      return { show: false, percent: 100 };
-    }
     return { show, percent: prep.tracker.percent(now) };
   }
 
@@ -624,7 +670,7 @@ export class MapRenderer {
     const warmer = look.warmerFor(renderer, gl);
     const tracker = new PrepareTracker(warmer);
     tracker.update(look.fullLookPrograms(warmer, level));
-    this.preparing = { tracker, look, warmer, level, since: performance.now() };
+    this.preparing = { tracker, look, warmer, level };
   }
 
   /** Modern's clouds over the undiscovered map: on High only; Medium and Low keep it dark, like Classic (owner, 5 Nov 2026). */

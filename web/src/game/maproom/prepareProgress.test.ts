@@ -2,11 +2,18 @@ import { describe, expect, it } from "vitest";
 import {
   EXPECT_MS,
   PrepareTracker,
+  PENDING_DELAY_MS,
   RUNNING_CAP,
-  SHOW_DELAY_MS,
+  STALL_MS,
+  StallGuard,
+  markPreparedThisPage,
+  pendingShows,
+  preparedThisPage,
   prepareShows,
   programShare,
+  resetPreparedThisPage,
   type NeededProgram,
+  type PendingFacts,
   type PrepareFacts,
   type WarmerView,
 } from "./prepareProgress";
@@ -114,14 +121,13 @@ describe("the Preparing map bar's progress (programs compiled, weighted by how l
   });
 });
 
-describe("when the Preparing map bar shows", () => {
+describe("when the Preparing map screen shows", () => {
   const compiling: PrepareFacts = {
     classic: false,
     paintedWanted: true,
     failed: false,
     fullLook: false,
     hadWork: true,
-    waitedMs: SHOW_DELAY_MS + 1,
   };
 
   it("shows while the painted look compiles on an open that had work left", () => {
@@ -132,7 +138,7 @@ describe("when the Preparing map bar shows", () => {
     expect(prepareShows({ ...compiling, classic: true })).toBe(false);
   });
 
-  it("never shows when nothing was left to compile (Low with its program ready, Chrome after the warm-up)", () => {
+  it("never shows when nothing was left to compile (a second open, Chrome after the warm-up)", () => {
     expect(prepareShows({ ...compiling, hadWork: false })).toBe(false);
   });
 
@@ -144,10 +150,68 @@ describe("when the Preparing map bar shows", () => {
     expect(prepareShows({ ...compiling, paintedWanted: false })).toBe(false);
     expect(prepareShows({ ...compiling, failed: true })).toBe(false);
   });
+});
 
-  it("waits a moment first, so a quick compile never flashes it", () => {
-    expect(prepareShows({ ...compiling, waitedMs: 0 })).toBe(false);
-    expect(prepareShows({ ...compiling, waitedMs: SHOW_DELAY_MS - 1 })).toBe(false);
-    expect(prepareShows({ ...compiling, waitedMs: SHOW_DELAY_MS })).toBe(true);
+describe("covering the map while the look's code is on its way", () => {
+  const firstOpen: PendingFacts = {
+    classic: false,
+    paintedWanted: true,
+    failed: false,
+    webGL2: true,
+    preparedBefore: false,
+    warmedUp: false,
+    waitedMs: PENDING_DELAY_MS,
+  };
+
+  it("covers a first open after a moment, so the plain tiles are never seen", () => {
+    expect(pendingShows(firstOpen)).toBe(true);
+    expect(pendingShows({ ...firstOpen, waitedMs: PENDING_DELAY_MS - 1 })).toBe(false);
+  });
+
+  it("does not cover a map already prepared on this page, or warmed up in the yard", () => {
+    expect(pendingShows({ ...firstOpen, preparedBefore: true })).toBe(false);
+    expect(pendingShows({ ...firstOpen, warmedUp: true })).toBe(false);
+  });
+
+  it("does not cover in Classic, without the painted look, without WebGL2, or once it failed", () => {
+    expect(pendingShows({ ...firstOpen, classic: true })).toBe(false);
+    expect(pendingShows({ ...firstOpen, paintedWanted: false })).toBe(false);
+    expect(pendingShows({ ...firstOpen, webGL2: false })).toBe(false);
+    expect(pendingShows({ ...firstOpen, failed: true })).toBe(false);
+  });
+
+  it("remembers for the page that the full look came in", () => {
+    resetPreparedThisPage();
+    expect(preparedThisPage()).toBe(false);
+    markPreparedThisPage();
+    expect(preparedThisPage()).toBe(true);
+    resetPreparedThisPage();
+  });
+});
+
+describe("the screen never gets stuck", () => {
+  it("gives up after STALL_MS without progress", () => {
+    const guard = new StallGuard();
+    expect(guard.check({ show: true, percent: 40 }, 0)).toBe(false);
+    expect(guard.check({ show: true, percent: 40 }, STALL_MS - 1)).toBe(false);
+    expect(guard.check({ show: true, percent: 40 }, STALL_MS)).toBe(true);
+    // Once given up, it stays given up.
+    expect(guard.check({ show: true, percent: 90 }, STALL_MS + 1)).toBe(true);
+  });
+
+  it("starts the wait again whenever the percent moves", () => {
+    const guard = new StallGuard(1_000);
+    guard.check({ show: true, percent: 10 }, 0);
+    expect(guard.check({ show: true, percent: 11 }, 900)).toBe(false);
+    expect(guard.check({ show: true, percent: 11 }, 1_800)).toBe(false);
+    expect(guard.check({ show: true, percent: 11 }, 1_900)).toBe(true);
+  });
+
+  it("does not count time while hidden", () => {
+    const guard = new StallGuard(1_000);
+    guard.check({ show: false, percent: 0 }, 0);
+    expect(guard.check({ show: false, percent: 0 }, 5_000)).toBe(false);
+    expect(guard.check({ show: true, percent: 0 }, 5_000)).toBe(false);
+    expect(guard.check({ show: true, percent: 0 }, 5_999)).toBe(false);
   });
 });

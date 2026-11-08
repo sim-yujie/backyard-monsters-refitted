@@ -2,7 +2,7 @@ import type { Quality } from "@/game/quality";
 import type { ProgramSource } from "./painted/shaderWarmup";
 
 /**
- * The "Preparing map… N%" bar's numbers (owner, 7 Nov 2026: Firefox's first open takes ~17 s to the
+ * The "Preparing map" loading screen's numbers (owner, 7 Nov 2026: Firefox's first open takes ~17 s to the
  * full painted look, since it cannot compile the shaders ahead in the yard; "a progress bar can come
  * later"). The map shows its plain tiles meanwhile, so the bar only tells the player that the look is
  * still coming, and how far along it is.
@@ -99,9 +99,10 @@ export class PrepareTracker {
 
 /* ── When it shows ───────────────────────────────────────────────────────── */
 
-/** A compile shorter than this never shows the bar (no flash on a quick machine). */
-export const SHOW_DELAY_MS = 600;
-
+/**
+ * The map's loading screen ("Preparing map", owner chose design A, 8 Nov 2026) covers the map from
+ * the open until the full look is in, so the plain tiles are never seen on a first open.
+ */
 export interface PrepareFacts {
   readonly classic: boolean;
   /** The painted look is switched on for this map (the server's flag, not Classic). */
@@ -112,20 +113,98 @@ export interface PrepareFacts {
   readonly fullLook: boolean;
   /** {@link PrepareTracker.hadWork}. */
   readonly hadWork: boolean;
-  /** Since the map opened (or since the look's code arrived), in ms. */
+}
+
+/** Whether the loading screen shows now, once the look's code has arrived and its programs are known. */
+export const prepareShows = (facts: PrepareFacts): boolean =>
+  !facts.classic && facts.paintedWanted && !facts.failed && !facts.fullLook && facts.hadWork;
+
+/** Before the look's code has arrived: what decides whether to cover the map already. */
+export interface PendingFacts {
+  readonly classic: boolean;
+  readonly paintedWanted: boolean;
+  readonly failed: boolean;
+  /** The renderer can draw the painted look at all (WebGL2). */
+  readonly webGL2: boolean;
+  /** The full look came in earlier on this page ({@link preparedThisPage}): its programs are kept. */
+  readonly preparedBefore: boolean;
+  /** The yard's warm-up compiled everything already (`mr2Prewarm.ts`, Chrome and Edge). */
+  readonly warmedUp: boolean;
+  /** Since the map first asked (its open), in ms. */
   readonly waitedMs: number;
 }
 
-/** Whether the "Preparing map" bar shows now. */
-export const prepareShows = (facts: PrepareFacts): boolean =>
+/**
+ * The cover waits this long for the look's code before showing: where it is already loaded (a later
+ * open, Chrome's warm-up) the answer comes sooner, so the screen never flickers; the map's own tiles
+ * need longer than this to arrive, so a first open still never shows them.
+ */
+export const PENDING_DELAY_MS = 150;
+
+/**
+ * While the look's code is still on its way: cover the map (0%) unless it is surely ready already,
+ * so a first open never shows the plain tiles.
+ */
+export const pendingShows = (facts: PendingFacts): boolean =>
   !facts.classic &&
   facts.paintedWanted &&
   !facts.failed &&
-  !facts.fullLook &&
-  facts.hadWork &&
-  facts.waitedMs >= SHOW_DELAY_MS;
+  facts.webGL2 &&
+  !facts.preparedBefore &&
+  !facts.warmedUp &&
+  facts.waitedMs >= PENDING_DELAY_MS;
 
-/** What the map tells its overlay each frame. */
+/* ── Never stuck ─────────────────────────────────────────────────────────── */
+
+/** With no progress for this long, the loading screen gives up and fades; the map works on as it can. */
+export const STALL_MS = 30_000;
+
+/**
+ * Watches the shown percent and says when it has stood still for {@link STALL_MS} (a compile that
+ * never ends, code that never arrives). Once stalled it stays stalled for this open.
+ */
+export class StallGuard {
+  private best = -1;
+  private since: number | null = null;
+  private stalled = false;
+
+  constructor(private readonly limitMs: number = STALL_MS) {}
+
+  /** Notes the state shown at `now`; true once it has stalled. */
+  check(state: PrepareState, now: number): boolean {
+    if (this.stalled) return true;
+    if (!state.show) {
+      this.since = null;
+      return false;
+    }
+    if (this.since === null || state.percent > this.best) {
+      this.best = Math.max(this.best, state.percent);
+      this.since = now;
+      return false;
+    }
+    this.stalled = now - this.since >= this.limitMs;
+    return this.stalled;
+  }
+}
+
+/* ── Once a page ─────────────────────────────────────────────────────────── */
+
+let prepared = false;
+
+/** Whether the full look came in on this page: its programs stay compiled, so a later open needs no screen. */
+export const preparedThisPage = (): boolean => prepared;
+
+/** Notes that the full look came in on this page. */
+export const markPreparedThisPage = (): void => {
+  prepared = true;
+};
+
+/** Forgets it (tests). */
+export const resetPreparedThisPage = (): void => {
+  prepared = false;
+};
+
+/** What the map tells its loading screen each frame. */
 export interface PrepareState {
   readonly show: boolean;
   readonly percent: number;

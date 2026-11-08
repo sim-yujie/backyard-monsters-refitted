@@ -20,8 +20,7 @@ import { FindControl } from "./FindControl";
 import { HoverCard, type HoverCardContent } from "./HoverCard";
 import { Minimap } from "./Minimap";
 import { TiltToggle } from "./TiltToggle";
-import { createPrepareView, type PrepareView } from "./PrepareDesigns";
-import type { PrepareDesign } from "@/game/maproom/prepareDesign";
+import { PreparingMap } from "./PreparingMap";
 import type { PrepareState } from "@/game/maproom/prepareProgress";
 import { KitFilterControl } from "./KitFilterControl";
 import { NavPanel } from "./NavPanel";
@@ -140,8 +139,8 @@ export class MapRoomUi {
   private readonly minimap: Minimap;
   private readonly zoomControl: ZoomControl;
   private readonly tiltToggle: TiltToggle;
-  /** "Preparing map… N%" while the painted look compiles on a first open (`?prepbar=` picks a prototype). */
-  private readonly preparing: PrepareView;
+  /** The "Preparing map" loading screen over the map while the painted look compiles on a first open. */
+  private readonly preparing = new PreparingMap();
   private readonly rangeControl: RangeControl;
   private readonly kitFilterControl: KitFilterControl;
   private readonly docks: HTMLElement[] = [];
@@ -157,14 +156,8 @@ export class MapRoomUi {
   private modal: HTMLElement | null = null;
   private readonly handlers: MapRoomUiHandlers;
 
-  constructor(
-    handlers: MapRoomUiHandlers,
-    activeScene: string,
-    scenes: { id: string; label: string }[],
-    prepareDesign: PrepareDesign = "bar",
-  ) {
+  constructor(handlers: MapRoomUiHandlers, activeScene: string, scenes: { id: string; label: string }[]) {
     this.handlers = handlers;
-    this.preparing = createPrepareView(prepareDesign);
 
     this.hud = new Hud({
       scenes,
@@ -225,20 +218,9 @@ export class MapRoomUi {
 
     this.hover.mount(container);
     this.find.mount(this.dock("map-dock mr2-find-dock"));
-    if (this.preparing.docked) {
-      this.dock("map-dock mr2-prepare-dock").append(this.preparing.over);
-    } else {
-      // The prototypes place themselves (maproom.css); C's mist goes first, under every control.
-      const under = this.preparing.under;
-      if (under) {
-        const host = document.createElement("div");
-        host.className = "mr2-prep-host";
-        host.append(under);
-        container.prepend(host);
-        this.docks.push(host);
-      }
-      this.dock("mr2-prep-host").append(this.preparing.over);
-    }
+    // Over the map and its controls, under the top bar (maproom.css `.mr2-prepare`).
+    container.append(this.preparing.element);
+    this.docks.push(this.preparing.element);
 
     const bottomRight = this.dock("map-dock map-dock--bottom-right mr2-tools-dock");
     bottomRight.append(this.rangeControl.legend);
@@ -318,9 +300,14 @@ export class MapRoomUi {
     this.tiltToggle.set(state);
   }
 
-  /** The "Preparing map" plate: shown while the painted look compiles (`MapRenderer.prepareState`). */
+  /** The "Preparing map" loading screen: shown while the painted look compiles (`MapRenderer.prepareState`). */
   setPreparing(state: PrepareState): void {
     this.preparing.set(state);
+  }
+
+  /** Whether the loading screen is up: the map takes no keys meanwhile. */
+  get preparingShown(): boolean {
+    return this.preparing.showing;
   }
 
   /** The zoom floor moved (the tilted map cannot zoom out as far as the flat one). */
