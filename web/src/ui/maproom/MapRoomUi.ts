@@ -20,7 +20,8 @@ import { FindControl } from "./FindControl";
 import { HoverCard, type HoverCardContent } from "./HoverCard";
 import { Minimap } from "./Minimap";
 import { TiltToggle } from "./TiltToggle";
-import { PreparingMap } from "./PreparingMap";
+import { createPrepareView, type PrepareView } from "./PrepareDesigns";
+import type { PrepareDesign } from "@/game/maproom/prepareDesign";
 import type { PrepareState } from "@/game/maproom/prepareProgress";
 import { KitFilterControl } from "./KitFilterControl";
 import { NavPanel } from "./NavPanel";
@@ -139,8 +140,8 @@ export class MapRoomUi {
   private readonly minimap: Minimap;
   private readonly zoomControl: ZoomControl;
   private readonly tiltToggle: TiltToggle;
-  /** "Preparing map… N%" while the painted look compiles on a first open. */
-  private readonly preparing = new PreparingMap();
+  /** "Preparing map… N%" while the painted look compiles on a first open (`?prepbar=` picks a prototype). */
+  private readonly preparing: PrepareView;
   private readonly rangeControl: RangeControl;
   private readonly kitFilterControl: KitFilterControl;
   private readonly docks: HTMLElement[] = [];
@@ -156,8 +157,14 @@ export class MapRoomUi {
   private modal: HTMLElement | null = null;
   private readonly handlers: MapRoomUiHandlers;
 
-  constructor(handlers: MapRoomUiHandlers, activeScene: string, scenes: { id: string; label: string }[]) {
+  constructor(
+    handlers: MapRoomUiHandlers,
+    activeScene: string,
+    scenes: { id: string; label: string }[],
+    prepareDesign: PrepareDesign = "bar",
+  ) {
     this.handlers = handlers;
+    this.preparing = createPrepareView(prepareDesign);
 
     this.hud = new Hud({
       scenes,
@@ -218,7 +225,20 @@ export class MapRoomUi {
 
     this.hover.mount(container);
     this.find.mount(this.dock("map-dock mr2-find-dock"));
-    this.dock("map-dock mr2-prepare-dock").append(this.preparing.element);
+    if (this.preparing.docked) {
+      this.dock("map-dock mr2-prepare-dock").append(this.preparing.over);
+    } else {
+      // The prototypes place themselves (maproom.css); C's mist goes first, under every control.
+      const under = this.preparing.under;
+      if (under) {
+        const host = document.createElement("div");
+        host.className = "mr2-prep-host";
+        host.append(under);
+        container.prepend(host);
+        this.docks.push(host);
+      }
+      this.dock("mr2-prep-host").append(this.preparing.over);
+    }
 
     const bottomRight = this.dock("map-dock map-dock--bottom-right mr2-tools-dock");
     bottomRight.append(this.rangeControl.legend);
@@ -251,6 +271,7 @@ export class MapRoomUi {
     this.zoomControl.destroy();
     this.kitFilterControl.destroy();
     this.notices.destroy();
+    this.preparing.destroy();
     for (const dock of this.docks) dock.remove();
     this.docks.length = 0;
     this.container = null;

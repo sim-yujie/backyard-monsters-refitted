@@ -1470,3 +1470,283 @@
 .mr2-chip--neighbours {
   gap: var(--space-2);
 }
+
+/* ── "Preparing map" prototypes A, B, C (owner, 8 Nov 2026) ─────────────────
+   Picked with ?prepbar=a|b|c (game/maproom/prepareDesign.ts); built in
+   ui/maproom/PrepareDesigns.ts. Rapid prototypes for the owner to choose
+   from, not polished. Modern: orange fill on steel; Classic: gold fill on
+   the Flash plate or parchment. */
+
+.mr2-prep-host {
+  pointer-events: none;
+}
+
+:is(.mr2-prep-a, .mr2-prep-b, .mr2-prep-c, .mr2-prep-c-mist) {
+  --prep-fill: var(--colour-accent);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 450ms ease,
+    visibility 0s linear 450ms;
+}
+
+:is(.mr2-prep-a, .mr2-prep-b, .mr2-prep-c, .mr2-prep-c-mist).mr2-prep--shown {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 250ms ease;
+}
+
+:root[data-skin="scrap"] :is(.mr2-prep-a, .mr2-prep-b, .mr2-prep-c) {
+  --prep-fill: #ff8a2a;
+}
+
+:root[data-skin="flash"] :is(.mr2-prep-a, .mr2-prep-b, .mr2-prep-c) {
+  --prep-fill: linear-gradient(#ffe48a, #e0a521 60%, #b97c10);
+}
+
+.mr2-prep__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.mr2-prep__track {
+  position: relative;
+  flex: 1;
+  min-width: 60px;
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: rgb(0 0 0 / 50%);
+  box-shadow:
+    inset 0 1px 3px rgb(0 0 0 / 70%),
+    0 1px 0 rgb(255 255 255 / 12%);
+  overflow: hidden;
+}
+
+.mr2-prep__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(rgb(255 255 255 / 45%), rgb(255 255 255 / 0%) 55%),
+    var(--prep-fill);
+  transition: width 300ms linear;
+}
+
+.mr2-prep__number {
+  min-width: 4ch;
+  text-align: right;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.mr2-prep__title {
+  font-weight: 800;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+/* A: the loading screen over the map area, under the top bar. It takes the
+   pointer, so the map cannot be moved while it shows. */
+.mr2-prep-a {
+  position: absolute;
+  top: var(--hud-height);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: radial-gradient(ellipse at 50% 42%, #2e3d4b 0%, #141b22 70%, #0b0f13 100%);
+  pointer-events: auto;
+}
+
+:root[data-skin="flash"] .mr2-prep-a {
+  background: radial-gradient(ellipse at 50% 42%, #7a5530 0%, #3d2410 70%, #24150a 100%);
+}
+
+.mr2-prep-a__card {
+  width: min(560px, 92vw);
+  max-width: none;
+  padding: var(--space-5);
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
+.mr2-prep-a__art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  box-shadow: 0 3px 10px rgb(0 0 0 / 55%);
+}
+
+:root[data-skin="flash"] .mr2-prep-a__art {
+  filter: sepia(0.35) saturate(0.9);
+  border: 3px solid #7a4a1c;
+}
+
+.mr2-prep-a__title {
+  text-align: center;
+  font-size: 24px;
+}
+
+.mr2-prep__row--big .mr2-prep__track {
+  height: 20px;
+}
+
+.mr2-prep__row--big .mr2-prep__number {
+  font-size: 20px;
+}
+
+/* B: a strip centred just under the top bar; a readout, so the map under
+   and around it stays usable. */
+.mr2-prep-b {
+  position: absolute;
+  top: calc(var(--hud-height) + var(--space-2));
+  left: 50%;
+  z-index: 15;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  box-sizing: border-box;
+  width: 420px;
+  min-height: 54px;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-float);
+  color: var(--colour-text);
+  pointer-events: none;
+}
+
+.mr2-prep-b .mr2-prep__title {
+  font-size: 17px;
+}
+
+.mr2-prep-b .mr2-prep__row {
+  flex: 1;
+}
+
+.mr2-prep__row--broad .mr2-prep__track {
+  height: 16px;
+}
+
+.mr2-prep__row--broad .mr2-prep__number {
+  font-size: 17px;
+}
+
+/* C: the mist over the map, under every control, thinning as it prepares
+   (its inner layer's opacity follows the percent), thinner in the middle so
+   the yards there stay readable. */
+.mr2-prep-c-mist {
+  position: absolute;
+  top: var(--hud-height);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.mr2-prep-c-mist__clouds {
+  position: absolute;
+  inset: 0;
+  background: url("/maproom/painted/cloud-deck@2x.webp") repeat;
+  background-size: 384px;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, rgb(0 0 0 / 45%) 0%, #000 80%);
+  mask-image: radial-gradient(ellipse at 50% 50%, rgb(0 0 0 / 45%) 0%, #000 80%);
+  transition: opacity 600ms ease;
+}
+
+:root[data-skin="flash"] .mr2-prep-c-mist__clouds {
+  /* Parchment shading rather than cloud. */
+  filter: sepia(0.9) saturate(0.7) brightness(0.92);
+}
+
+.mr2-prep-c {
+  position: absolute;
+  top: calc(var(--hud-height) + var(--space-3));
+  left: var(--space-4);
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-raised);
+  box-shadow: var(--shadow-float);
+  color: var(--colour-text);
+  pointer-events: none;
+}
+
+.mr2-prep-c .mr2-prep__title {
+  font-size: 14px;
+}
+
+.mr2-prep__row--small .mr2-prep__track {
+  width: 90px;
+  flex: none;
+  height: 10px;
+}
+
+.mr2-prep__row--small .mr2-prep__number {
+  font-size: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.mr2-prep-a, .mr2-prep-b, .mr2-prep-c, .mr2-prep-c-mist),
+  :is(.mr2-prep-a, .mr2-prep-b, .mr2-prep-c, .mr2-prep-c-mist).mr2-prep--shown,
+  .mr2-prep__fill,
+  .mr2-prep-c-mist__clouds {
+    transition: none;
+  }
+}
+
+/* Phone: B and C's plaque go under the Find bar and the tool row (which sit
+   under the top bar there); A's card fills the width. */
+@media (width <= 620px) {
+  .mr2-prep-b,
+  .mr2-prep-c {
+    top: calc(var(--hud-height) + var(--space-2) + 2 * var(--control-height) + var(--space-3) + var(--space-2));
+  }
+
+  .mr2-prep-b {
+    left: 12px;
+    right: 12px;
+    width: auto;
+    min-height: 46px;
+    transform: none;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3);
+  }
+
+  .mr2-prep-b .mr2-prep__title,
+  .mr2-prep__row--broad .mr2-prep__number {
+    font-size: 15px;
+  }
+
+  .mr2-prep-c {
+    left: 12px;
+  }
+
+  .mr2-prep-a__card {
+    padding: var(--space-4);
+    gap: var(--space-3);
+  }
+
+  .mr2-prep-a__art {
+    aspect-ratio: 4 / 3;
+  }
+
+  .mr2-prep-a__title {
+    font-size: 20px;
+  }
+}

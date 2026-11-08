@@ -100,6 +100,7 @@ import { MapInput } from "@/game/maproom/MapInput";
 import { paintedMapOn } from "@/game/maproom/painted/paintedSwitch";
 import { MapRenderer } from "@/game/maproom/MapRenderer";
 import { prewarmStatus } from "@/game/maproom/mr2Prewarm";
+import { demoState, readPrepareChoice } from "@/game/maproom/prepareDesign";
 import { classicLook } from "@/game/classicLook";
 import {
   decideTilt,
@@ -349,6 +350,10 @@ export class MapRoom2Scene implements Scene {
   private markerPicturesStarted = false;
   private markerPicturesTimer: ReturnType<typeof setTimeout> | null = null;
   private framesMarked = 0;
+  /** The "Preparing map" prototype and its demo switch (`?prepbar=`, `?prepbar-demo=1`), read on each open. */
+  private prepareChoice: ReturnType<typeof readPrepareChoice> = { design: "bar", demo: false };
+  /** When the demo's made-up progress began (this open), or null without the demo. */
+  private prepareDemoFrom: number | null = null;
   private zoneMarksDone = false;
 
   async enter(context: SceneContext): Promise<void> {
@@ -357,6 +362,8 @@ export class MapRoom2Scene implements Scene {
     connectMr2TimingReport();
     // Whether the yard's warm-up ran first this page (`mr2Prewarm.ts`): none, running, done or partial.
     markOpen({ quality: quality(), classic: classicLook(), prewarm: prewarmStatus() });
+    this.prepareChoice = readPrepareChoice();
+    this.prepareDemoFrom = this.prepareChoice.demo ? performance.now() : null;
     // The world's hex shape (MR2 look plan step 1) before anything is drawn
     // or picked: the grid's geometry follows the server's rules. Classic gets
     // its own pointy-top cell size (never tilted, Flash's 3/4 tiles).
@@ -491,6 +498,7 @@ export class MapRoom2Scene implements Scene {
         { id: SceneName.MAP_ROOM_2, label: "Map" },
         { id: SceneName.YARD, label: "Yard" },
       ],
+      this.prepareChoice.design,
     ).mount(context.overlay.content, context.overlay.modal);
 
     // Mail (#193): the tool row's first button, and the mailbox behind it.
@@ -792,7 +800,10 @@ export class MapRoom2Scene implements Scene {
     }
     this.ui?.drawMinimap();
     // "Preparing map… N%" while the painted look compiles (owner, 7 Nov 2026; mostly Firefox).
-    this.ui?.setPreparing(this.renderer.prepareState());
+    // `?prepbar-demo=1`: a made-up 0-100% on every open, in any browser and in Classic (prototype review).
+    this.ui?.setPreparing(
+      this.prepareDemoFrom === null ? this.renderer.prepareState() : demoState(performance.now() - this.prepareDemoFrom),
+    );
 
     if (this.ready) {
       this.sincePump += deltaSeconds;
