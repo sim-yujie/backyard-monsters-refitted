@@ -21,7 +21,8 @@
   color: #ffb347;
 }
 
-.events-door[aria-expanded="true"] .yard-dock__disc {
+.events-door[aria-expanded="true"] .yard-dock__disc,
+.events-door[aria-expanded="true"]:hover:not(:disabled) .yard-dock__disc {
   border-color: var(--colour-accent);
 }
 
