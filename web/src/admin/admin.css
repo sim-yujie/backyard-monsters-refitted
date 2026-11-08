@@ -254,7 +254,9 @@ button {
   top: 0;
   z-index: var(--z-sticky);
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Each tab as wide as its word and badge, the room left shared out: four
+     equal quarters cut "Inbox 14" to "Inb…" on a 375px phone. */
+  grid-template-columns: repeat(4, auto);
   gap: 4px;
   padding: 6px 12px;
   background: color-mix(in oklch, var(--bg) 92%, transparent);
@@ -266,10 +268,10 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
   min-height: var(--tap);
-  padding: 0 8px;
+  padding: 0 6px;
   border: 0;
   border-radius: var(--radius-sm);
   background: none;
@@ -383,6 +385,14 @@ button {
   font-size: 0.75rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+/* A phone tab's badge a little smaller, so all four tabs fit whole on a 320px phone. */
+.tab .nav-state .count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  font-size: 0.6875rem;
 }
 
 .nav-state .mark {
@@ -3736,10 +3746,15 @@ tbody th {
     background: var(--surface);
   }
 
+  /* The player pane fits the window from where it starts, under the page's
+     title (32px page padding, the ~30px title, 16px gap, 16px under it), so
+     Warn / Ban / Dismiss at its foot show without scrolling the page; its
+     evidence scrolls inside. Scrolled, it sticks 16px from the top. */
   .inbox.has-open .inbox-detail {
     position: sticky;
     top: 16px;
-    max-height: calc(100vh - 32px);
+    max-height: calc(100vh - 96px);
+    max-height: calc(100dvh - 96px);
     overflow-y: auto;
   }
 
