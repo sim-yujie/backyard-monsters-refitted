@@ -3430,3 +3430,175 @@ tbody th {
     flex: 1 1 auto;
   }
 }
+
+/* The moderation inbox: one row per player, the opened player beside the list
+   on a computer (the list stays in view), full screen on a phone with Back. */
+.page:has(> .view.is-wide:not([hidden])) {
+  max-width: 1320px;
+}
+
+.inbox {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.inbox-side {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.inbox-sources {
+  justify-self: start;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.seg-count {
+  margin-left: 2px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.seg[aria-pressed="true"] .seg-count {
+  color: inherit;
+}
+
+.inbox-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 12px 16px;
+  cursor: pointer;
+}
+
+.inbox-row > .icon {
+  color: var(--ink-3);
+}
+
+.inbox-row[aria-current="true"] {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.inbox-quote {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  overflow: hidden;
+  font-size: 0.9375rem;
+}
+
+.inbox-source {
+  display: inline-flex;
+  margin-right: 6px;
+  color: var(--ink-3);
+  vertical-align: -2px;
+}
+
+.inbox-counts {
+  font-variant-numeric: tabular-nums;
+}
+
+.inbox-detail {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.inbox-detail[hidden] {
+  display: none;
+}
+
+.inbox-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.inbox-head h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.inbox-record {
+  margin-left: auto;
+}
+
+.inbox-back {
+  justify-self: start;
+}
+
+.inbox-block {
+  display: grid;
+  gap: 10px;
+}
+
+.inbox-block > h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9375rem;
+  font-weight: 650;
+}
+
+.inbox-block > h4 > .icon {
+  color: var(--ink-3);
+}
+
+.inbox-act {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.inbox-result {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--good-soft);
+  color: var(--good-text);
+}
+
+.inbox-result .note {
+  color: var(--ink-2);
+}
+
+@media (max-width: 1023px) {
+  /* A player opened takes the whole screen; Back returns to the list where it was. */
+  .inbox.has-open .inbox-side {
+    display: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .inbox-back {
+    display: none;
+  }
+
+  .inbox.has-open {
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  }
+
+  .inbox.has-open .inbox-detail {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+  }
+
+  .inbox.has-open .inbox-quote {
+    font-size: 0.875rem;
+  }
+}

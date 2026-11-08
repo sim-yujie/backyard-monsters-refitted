@@ -17,6 +17,7 @@
 
 export const VIEWS = [
   ["home", "Home", ""],
+  ["inbox", "Inbox", "Moderation"],
   ["cases", "Chat cases", "Moderation"],
   ["photos", "Photo reports", "Moderation"],
   ["moderation", "Find a player", "Moderation"],
@@ -37,7 +38,7 @@ export const VIEWS = [
 export type ViewId = (typeof VIEWS)[number][0];
 
 /** The phone's tabs; every other view is under More. */
-export const PHONE_TABS: readonly ViewId[] = ["home", "cases", "bugs"];
+export const PHONE_TABS: readonly ViewId[] = ["home", "inbox", "bugs"];
 
 export const isView = (name: string): name is ViewId => VIEWS.some(([id]) => id === name);
 

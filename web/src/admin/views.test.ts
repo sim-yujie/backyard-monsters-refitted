@@ -26,8 +26,8 @@ describe("the address", () => {
   it("is written back the same way it is read", () => {
     expect(viewHash("errors")).toBe("#errors");
     expect(viewHash("bugs", { list: "working", empty: "", none: null })).toBe("#bugs?list=working");
-    const hash = viewHash("cases", { player: 12, source: "filter" });
-    expect(readRoute("", hash)).toEqual({ view: "cases", params: { player: "12", source: "filter" }, bug: null });
+    const hash = viewHash("inbox", { player: 12, source: "filter" });
+    expect(readRoute("", hash)).toEqual({ view: "inbox", params: { player: "12", source: "filter" }, bug: null });
   });
 });
 
@@ -43,7 +43,8 @@ describe("the nav", () => {
     for (const tab of PHONE_TABS) expect(phoneTab(tab)).toBe(tab);
     expect(phoneTab("errors")).toBe("more");
     expect(phoneTab("announcements")).toBe("more");
-    expect(PHONE_TABS).toHaveLength(3);
+    expect(PHONE_TABS).toEqual(["home", "inbox", "bugs"]);
+    expect(phoneTab("cases")).toBe("more");
   });
 });
 

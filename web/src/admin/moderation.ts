@@ -610,6 +610,8 @@ const fold = (title: string, id: string, countBadge: HTMLElement | null, body: H
 
 export interface ModerationOptions {
   say(message: string): void;
+  /** A step or a dismissal here closed items the moderation inbox shows. */
+  onChanged?(): void;
 }
 
 /** The Moderation section. */
@@ -814,6 +816,7 @@ export class ModerationView {
       return;
     }
     this.options.say(`Dismissed: ${name}`);
+    this.options.onChanged?.();
     if (this.current?.flag?.userid === flag.userid) this.current.flag = null;
     this.renderCard();
     await this.loadFlags();
@@ -952,6 +955,7 @@ export class ModerationView {
               this.current = { player: after, chatReportId, flag, form: null };
               this.renderCard();
               void this.loadReports();
+              this.options.onChanged?.();
               // Acting on a flagged player takes their flags off the list.
               if (flag) void this.dismiss(flag);
             },

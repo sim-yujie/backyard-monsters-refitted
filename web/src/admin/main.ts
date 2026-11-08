@@ -11,6 +11,7 @@ import {
   fetchOverview,
   type AdminHealthReport,
   type DashboardSection,
+  type InboxList,
   type StatsOverview,
 } from "./api";
 import { AnnouncementsView } from "./announcements";
@@ -20,6 +21,7 @@ import { PhotosView } from "./photos";
 import { ChatPanel } from "./chat";
 import { h, replace } from "./dom";
 import { ErrorsView } from "./errors";
+import { InboxView } from "./inbox";
 import { ModerationView } from "./moderation";
 import { ModeratorsView } from "./moderators";
 import { ModMailSection } from "./modmail";
@@ -73,7 +75,7 @@ import {
 /** The phone tabs' own names. */
 const TAB_WORDS: Readonly<Partial<Record<ViewId | "more", string>>> & { more: string } = {
   home: "Home",
-  cases: "Moderation",
+  inbox: "Moderation",
   bugs: "Bugs",
   more: "More",
 };
@@ -81,6 +83,7 @@ const TAB_WORDS: Readonly<Partial<Record<ViewId | "more", string>>> & { more: st
 /** Views whose nav link never shows the server's health marks. */
 const NO_HEALTH_MARK: ReadonlySet<ViewId> = new Set<ViewId>([
   "home",
+  "inbox",
   "cases",
   "photos",
   "players",
@@ -93,6 +96,9 @@ const NO_HEALTH_MARK: ReadonlySet<ViewId> = new Set<ViewId>([
   "modmail",
   "chat",
 ]);
+
+/** Views with a list and an opened item side by side: they get a wider page. */
+const WIDE_VIEWS: ReadonlySet<ViewId> = new Set<ViewId>(["inbox", "bugs"]);
 
 const RANGES = [
   [30, "30 days"],
@@ -171,7 +177,10 @@ class Dashboard {
     openReport: (id) => this.openBug(id),
     say: (message) => this.say(message),
   });
-  private readonly moderation = new ModerationView({ say: (message) => this.say(message) });
+  private readonly moderation = new ModerationView({
+    say: (message) => this.say(message),
+    onChanged: () => void this.inbox.refresh(),
+  });
   private readonly weekend = new WeekendView({ say: (message) => this.say(message) });
   private readonly moderators = new ModeratorsView({ say: (message) => this.say(message) });
   private readonly modMail = new ModMailSection({
@@ -186,8 +195,34 @@ class Dashboard {
       this.renderToday();
     },
     openPlayer: (userid) => this.openPlayer(userid),
-    onChanged: () => void this.moderation.refresh(),
+    onChanged: () => {
+      void this.moderation.refresh();
+      void this.inbox.refresh();
+    },
   });
+  private readonly inbox = new InboxView({
+    say: (message) => this.say(message),
+    onCount: (counts) => {
+      this.inboxCounts = counts;
+      this.renderInboxState();
+      this.renderToday();
+    },
+    onChanged: () => {
+      void this.cases.refresh();
+      void this.moderation.refresh();
+    },
+    openAward: (caseId) => {
+      history.pushState(null, "", `${location.pathname}${viewHash("cases")}`);
+      this.show("cases", {});
+      void this.cases.openAward(caseId);
+    },
+    openPlayer: (userid) => this.openPlayer(userid),
+    navigate: ({ source, player }) => {
+      location.hash = viewHash("inbox", { source: source === "all" ? null : source, player });
+    },
+  });
+  /** Players in the moderation inbox, by source, or null before they are read. */
+  private inboxCounts: InboxList["counts"] | null = null;
   /** Open chat cases, or null before they are read. */
   private openCases: number | null = null;
   private readonly photos = new PhotosView({
@@ -305,7 +340,10 @@ class Dashboard {
       const state = h("span", { class: "section-state" });
       const element = h(
         "section",
-        { class: "section view", attrs: { id, "data-view": id, "aria-labelledby": `${id}-title`, hidden: "" } },
+        {
+          class: `section view${WIDE_VIEWS.has(id) ? " is-wide" : ""}`,
+          attrs: { id, "data-view": id, "aria-labelledby": `${id}-title`, hidden: "" },
+        },
         h(
           "header",
           { class: "section-head" },
@@ -318,6 +356,7 @@ class Dashboard {
       return { element, body, state };
     };
     this.sections = {
+      inbox: section("inbox", "Moderation inbox"),
       cases: section("cases", "Chat cases"),
       photos: section("photos", "Photo reports"),
       bugs: section("bugs", "Bug reports"),
@@ -334,6 +373,7 @@ class Dashboard {
       health: section("health", "Server"),
       backups: section("backups", "Backups"),
     };
+    replace(this.sections.inbox.body, this.inbox.element);
     replace(this.sections.cases.body, this.cases.element);
     replace(this.sections.photos.body, this.photos.element);
     replace(this.sections.bugs.body, this.bugs.element);
@@ -422,6 +462,7 @@ class Dashboard {
     await Promise.all([
       this.loadHealth(),
       this.loadStats(),
+      route.view === "inbox" ? this.inbox.show(route.params) : this.inbox.refresh(),
       this.cases.refresh(),
       this.photos.refresh(),
       this.bugs.show(route.bug),
@@ -439,6 +480,7 @@ class Dashboard {
     const route = readRoute(location.search, location.hash);
     this.show(route.view, route.params);
     if (route.view === "bugs") void this.bugs.show(route.bug);
+    if (route.view === "inbox") void this.inbox.show(route.params);
   }
 
   /**
@@ -494,6 +536,7 @@ class Dashboard {
     await Promise.all([
       this.loadHealth(),
       this.loadStats(),
+      this.inbox.refresh(),
       this.cases.refresh(),
       this.photos.refresh(),
       this.bugs.refresh(),
@@ -517,6 +560,20 @@ class Dashboard {
       replace(state, h("span", { class: "chip chip-info" }, `${text} open`));
     } else {
       this.setBadge(view, null);
+      replace(state);
+    }
+  }
+
+  /** The players waiting in the moderation inbox on its links and heading. */
+  private renderInboxState(): void {
+    const open = this.inboxCounts?.all ?? null;
+    const { state } = this.sections.inbox;
+    if (open) {
+      const text = String(open);
+      this.setBadge("inbox", () => h("span", { class: "count" }, text, h("span", { class: "sr-only" }, " waiting")));
+      replace(state, h("span", { class: "chip chip-info" }, open === 1 ? "1 player" : `${text} players`));
+    } else {
+      this.setBadge("inbox", null);
       replace(state);
     }
   }
@@ -655,7 +712,7 @@ class Dashboard {
   private renderStates(items: readonly TopItem[]): void {
     const levels = sectionLevels(items) as Partial<Record<ViewId, Level>>;
     for (const [id] of VIEWS) {
-      if (id === "home" || id === "cases" || id === "photos") continue;
+      if (id === "home" || id === "inbox" || id === "cases" || id === "photos") continue;
       const { state } = this.sections[id];
       const level = NO_HEALTH_MARK.has(id) ? undefined : levels[id];
       if (id === "bugs" && this.newBugs) {
