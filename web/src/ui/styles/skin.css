@@ -1150,8 +1150,11 @@
     font-size: var(--text-sm);
   }
 
+  /* "Decorations" filled its quarter edge to edge at 375px (tester, 9 Nov):
+     a touch smaller, about 7px clear of each end. */
   :root[data-skin] .build-menu__tabs .tabs__tab {
-    font-size: min(var(--text-sm), 2.9vw);
+    padding-inline: 4px;
+    font-size: min(var(--text-sm), 2.6vw);
   }
 
   /* The bars' edge thinner too: the planner's bottom line keeps one row. */
