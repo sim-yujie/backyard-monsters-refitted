@@ -16,7 +16,7 @@ import {
 import { footprintCorners, footprintOf, type Point } from "./YardGrid";
 import type { Yard, YardBuilding } from "./yardModel";
 import type { UpgradeCost } from "@/api/types";
-import { linePath, planLine, type LineBudget, type LinePlan } from "./wallLine";
+import { planLine, polylinePath, snapAnchor, type LineBudget, type LinePlan } from "./wallLine";
 
 /**
  * Putting a new building down (`docs/design/yard-buildings.md` §5.3): the
@@ -221,17 +221,20 @@ export type DropOutcome = "placed" | "refused";
 
 /** Where a drawn wall line stands, for the bar. */
 export interface LineStage {
-  /** No start yet: the next click or tap picks the first Block. */
+  /** No corner yet: the next click or tap picks the first Block. */
   readonly empty: boolean;
-  /** The end is chosen and the line waits for ✓. */
-  readonly fixed: boolean;
+  /** How many corners are down (↶ takes the last one away). */
+  readonly anchors: number;
   /** ✓ was pressed and the server has not answered yet. */
   readonly busy: boolean;
 }
 
 /**
  * Line mode for wall Blocks (walls Option B, owner 8 Nov 2026; the maths is
- * `wallLine.ts`). Given only to a wall placement.
+ * `wallLine.ts`). Given only to a wall placement. A click or tap puts a
+ * corner down and a drag pans, on a mouse and a finger alike; with a mouse
+ * the next stretch follows the pointer, a double-click ends the line, and
+ * Backspace or a right-click takes the last corner away.
  */
 export interface LineModeOptions {
   /** On when the placement starts. */
@@ -326,18 +329,20 @@ export class BuildPlacement {
 
   /* Line mode (walls Option B). */
   private lineOn = false;
-  private lineStart: Point | null = null;
-  private lineEnd: Point | null = null;
-  /** The end is chosen; the line waits for ✓. */
-  private lineFixed = false;
-  /** A mouse press drawing the line: where it went down, and whether it is the second click. */
-  private lineDrag: { x: number; y: number; second: boolean } | null = null;
+  /** The corners clicked or tapped so far, in order, each on the Block its stretch ends on. */
+  private lineAnchors: Point[] = [];
+  /** The mouse's spot over the yard: the live stretch from the last corner runs to it. */
+  private lineHover: Point | null = null;
+  /** A double-click ended the line: no live stretch until the next click. */
+  private lineFinished = false;
   private lineBusy = false;
   private linePlanNow: LinePlan | null = null;
   /** The line's Blocks: footprints, then pictures, drawn over the yard. */
   private readonly lineLayer = new Container();
   private readonly lineOutlines = new Graphics();
   private readonly linePictures = new Container();
+  /** A dot on every corner, over the pictures, so the bends show. */
+  private readonly lineMarks = new Graphics();
   /** The loaded picture layers, so every Block of a line can be drawn with them. */
   private artTextures: { texture: Texture; layer: ResolvedImage }[] = [];
 
@@ -351,7 +356,7 @@ export class BuildPlacement {
     this.ghost.visible = false;
     options.layer.addChild(this.ghost);
     this.lineLayer.eventMode = "none";
-    this.lineLayer.addChild(this.lineOutlines, this.linePictures);
+    this.lineLayer.addChild(this.lineOutlines, this.linePictures, this.lineMarks);
     options.layer.addChild(this.lineLayer);
     void this.loadArt();
 
@@ -359,6 +364,9 @@ export class BuildPlacement {
     canvas.addEventListener("pointerdown", this.onPointerDown);
     canvas.addEventListener("pointerup", this.onPointerUp);
     canvas.addEventListener("pointermove", this.onPointerMove);
+    canvas.addEventListener("pointerleave", this.onPointerLeave);
+    canvas.addEventListener("dblclick", this.onDoubleClick);
+    canvas.addEventListener("contextmenu", this.onContextMenu);
     window.addEventListener("keydown", this.onKeyDown);
     if (options.line?.on) this.setLineMode(true);
   }
@@ -400,8 +408,10 @@ export class BuildPlacement {
     canvas.removeEventListener("pointerdown", this.onPointerDown);
     canvas.removeEventListener("pointerup", this.onPointerUp);
     canvas.removeEventListener("pointermove", this.onPointerMove);
+    canvas.removeEventListener("pointerleave", this.onPointerLeave);
+    canvas.removeEventListener("dblclick", this.onDoubleClick);
+    canvas.removeEventListener("contextmenu", this.onContextMenu);
     window.removeEventListener("keydown", this.onKeyDown);
-    window.removeEventListener("pointerdown", this.onLinePress, true);
     // The renderer's own teardown may already have destroyed the layer.
     if (!this.ghost.destroyed) this.ghost.destroy({ children: true });
     if (!this.lineLayer.destroyed) this.lineLayer.destroy({ children: true });
@@ -422,49 +432,71 @@ export class BuildPlacement {
 
   /**
    * Turns line mode on or off (the bar's Line toggle). Any line half drawn
-   * goes. On, a mouse press on the yard draws instead of panning; a finger
-   * still pans, and taps pick the ends.
+   * goes. Either way a drag pans the yard; with it on, a click or tap puts
+   * down a corner.
    */
   setLineMode(on: boolean): void {
     if (!this.options.line || this.done) return;
     this.lineOn = on;
-    window.removeEventListener("pointerdown", this.onLinePress, true);
-    // Before the camera's own listener on the canvas: a mouse press draws rather than pans.
-    if (on) window.addEventListener("pointerdown", this.onLinePress, true);
     this.clearLine();
   }
 
   /** Lets the line go (✗, Escape); the Block in hand stays. */
   clearLine(): void {
     if (this.lineBusy) return;
-    this.lineStart = null;
-    this.lineEnd = null;
-    this.lineFixed = false;
-    this.lineDrag = null;
+    this.lineAnchors = [];
+    this.lineHover = null;
+    this.lineFinished = false;
     this.updateLine();
   }
 
-  /** Puts the line's start at a spot directly, as a click there would (a test, the keyboard). */
+  /** The corners put down so far. */
+  get anchors(): readonly Point[] {
+    return this.lineAnchors;
+  }
+
+  /**
+   * Puts a corner down at a spot, as a click or tap there does: the first is
+   * the start; each later one fixes the stretch from the corner before it.
+   * The corner is kept on the Block that stretch really ends on, so the next
+   * one starts there. A click on the last corner again adds nothing.
+   */
   lineTap(x: number, y: number): void {
-    if (!this.lineOn || this.lineBusy) return;
-    if (!this.lineStart || this.lineFixed) {
-      this.lineStart = { x, y };
-      this.lineEnd = { x, y };
-      this.lineFixed = false;
-    } else {
-      this.lineEnd = { x, y };
-      this.lineFixed = true;
-    }
+    if (!this.lineOn || this.lineBusy || this.done) return;
+    const last = this.lineAnchors[this.lineAnchors.length - 1];
+    const [width] = footprintOf(this.options.type, this.yard.kind);
+    const anchor = last ? snapAnchor(last, { x, y }, width) : { x, y };
+    this.lineFinished = false;
+    if (!last || last.x !== anchor.x || last.y !== anchor.y) this.lineAnchors.push(anchor);
     this.updateLine();
   }
 
-  /** ✓: builds the line's green Blocks. */
+  /** Takes the last corner away (↶, Backspace, a right-click). */
+  undoAnchor(): void {
+    if (!this.lineOn || this.lineBusy || this.lineAnchors.length === 0) return;
+    this.lineAnchors.pop();
+    this.lineFinished = false;
+    this.updateLine();
+  }
+
+  /** A double-click: the last corner ends the line; the live stretch stops following the mouse until the next click. */
+  finishLine(): void {
+    if (!this.lineOn || this.lineBusy || this.lineAnchors.length === 0) return;
+    this.lineFinished = true;
+    this.updateLine();
+  }
+
+  /** ✓: builds the green Blocks between the corners put down (never the live stretch to the mouse). */
   async confirmLine(): Promise<void> {
     const line = this.options.line;
-    const plan = this.linePlanNow;
-    if (!line || !plan || plan.build.length === 0 || this.lineBusy || this.done) return;
+    if (!line || this.lineBusy || this.done) return;
+    const plan = this.planFor(false);
+    if (!plan || plan.build.length === 0) return;
     this.lineBusy = true;
-    this.lineDrag = null;
+    this.lineHover = null;
+    // What is on screen is what is built.
+    this.linePlanNow = plan;
+    this.drawLine(plan);
     const holds = plan.build.map((cell) => this.grid.hold(this.options.type, cell.x, cell.y));
     this.reportLine();
     const outcome = await line.onBuild(plan.build);
@@ -472,41 +504,48 @@ export class BuildPlacement {
     for (const handle of holds) this.grid.release(handle);
     this.lineBusy = false;
     if (outcome === "placed") {
-      this.lineStart = null;
-      this.lineEnd = null;
-      this.lineFixed = false;
+      this.lineAnchors = [];
+      this.lineFinished = false;
     }
     this.updateLine();
   }
 
   /** The stage of the line, for the bar. */
   private get lineStage(): LineStage {
-    return { empty: this.lineStart === null, fixed: this.lineFixed, busy: this.lineBusy };
+    return { empty: this.lineAnchors.length === 0, anchors: this.lineAnchors.length, busy: this.lineBusy };
   }
 
   private reportLine(): void {
     this.options.line?.onPlan(this.linePlanNow, this.lineStage);
   }
 
-  /** Works the line out again from its ends, draws it and tells the bar. */
+  /** The plan through the corners, with the live stretch to the mouse when `live`; null with no corner. */
+  private planFor(live: boolean): LinePlan | null {
+    const line = this.options.line;
+    if (!line || !this.lineOn || this.lineAnchors.length === 0) return null;
+    const [width] = footprintOf(this.options.type, this.yard.kind);
+    const tail = live && !this.lineFinished ? this.lineHover : null;
+    const path = polylinePath(this.lineAnchors, width, tail);
+    return planLine(path, (x, y) => this.grid.check(this.options.type, x, y), line.budget(), line.unitCost);
+  }
+
+  /** Works the line out again from its corners, draws it and tells the bar. */
   private updateLine(): void {
     const line = this.options.line;
     if (!line || this.done) return;
-    const start = this.lineOn ? this.lineStart : null;
-    if (!start) {
-      this.linePlanNow = null;
+    const plan = this.planFor(true);
+    this.linePlanNow = plan;
+    if (!plan) {
       this.lineOutlines.clear();
+      this.lineMarks.clear();
       this.linePictures.removeChildren().forEach((child) => child.destroy({ children: true }));
       // The one Block in hand shows again where the next press goes.
       if (this.spot && !this.done) this.draw(this.spot);
       this.reportLine();
       return;
     }
-    const [width] = footprintOf(this.options.type, this.yard.kind);
-    const path = linePath(start, this.lineEnd ?? start, width);
-    this.linePlanNow = planLine(path, (x, y) => this.grid.check(this.options.type, x, y), line.budget(), line.unitCost);
     this.ghost.visible = false;
-    this.drawLine(this.linePlanNow);
+    this.drawLine(plan);
     this.reportLine();
   }
 
@@ -544,29 +583,17 @@ export class BuildPlacement {
       if (cell.state === "short") for (const child of picture.children) (child as Sprite).tint = 0x808080;
       this.linePictures.addChild(picture);
     }
+    // A dot on every corner, over the pictures, so the bends read at a glance.
+    const marks = this.lineMarks;
+    marks.clear();
+    for (const anchor of this.lineAnchors) {
+      const corners = footprintCorners(this.yard.bounds, this.options.type, anchor.x, anchor.y, this.yard.kind);
+      if (corners.length === 0) continue;
+      const cx = corners.reduce((sum, point) => sum + point.x, 0) / corners.length;
+      const cy = corners.reduce((sum, point) => sum + point.y, 0) / corners.length;
+      marks.circle(cx, cy, 5).fill({ color: 0xffffff, alpha: 0.95 }).stroke({ width: 2, color: 0x1d252d, alpha: 0.9 });
+    }
   }
-
-  /** A mouse or pen press with line mode on, claimed before the camera can pan with it. */
-  private readonly onLinePress = (event: PointerEvent): void => {
-    if (event.target !== this.options.canvas || event.pointerType === "touch") return;
-    if (event.button !== 0 || this.lineBusy || this.done) return;
-    event.stopPropagation();
-    try {
-      this.options.canvas.setPointerCapture(event.pointerId);
-    } catch {
-      // The pointer is already gone; the release still reaches the canvas.
-    }
-    const point = this.yardPoint(event);
-    const spot = this.grid.spotAt(this.options.type, point.x, point.y);
-    const second = this.lineStart !== null && !this.lineFixed;
-    if (!second) {
-      this.lineStart = spot;
-      this.lineFixed = false;
-    }
-    this.lineEnd = spot;
-    this.lineDrag = { x: event.clientX, y: event.clientY, second };
-    this.updateLine();
-  };
 
   /* ── Drawing ────────────────────────────────────────────────────────── */
 
@@ -659,7 +686,7 @@ export class BuildPlacement {
     if (top) this.art.position.set(top.x, top.y);
     this.art.tint = check.problem ? 0xffb0b0 : 0xffffff;
     // A drawn line shows its own Blocks in place of the one in hand.
-    this.ghost.visible = !(this.lineOn && this.lineStart);
+    this.ghost.visible = !(this.lineOn && this.lineAnchors.length > 0);
   }
 
   /**
@@ -713,19 +740,34 @@ export class BuildPlacement {
     if (event.pointerType === "touch" || this.pinned) return;
     const point = this.yardPoint(event);
     const spot = this.grid.spotAt(this.options.type, point.x, point.y);
-    if (this.lineOn) {
+    if (this.lineOn && this.lineAnchors.length > 0) {
       if (this.lineBusy) return;
-      // Dragging, or between the two clicks: the end follows the pointer.
-      if (this.lineDrag || (this.lineStart && !this.lineFixed)) {
-        if (this.lineEnd?.x !== spot.x || this.lineEnd?.y !== spot.y) {
-          this.lineEnd = spot;
-          this.updateLine();
-        }
-        return;
+      // The live stretch: from the last corner to the mouse, until a double-click ends the line.
+      if (this.lineHover?.x !== spot.x || this.lineHover?.y !== spot.y) {
+        this.lineHover = spot;
+        if (!this.lineFinished) this.updateLine();
       }
-      if (this.lineStart) return;
+      return;
     }
     this.show(spot.x, spot.y);
+  };
+
+  /** The mouse left the yard (for the bar's ✓, say): the live stretch goes, so the preview is what ✓ builds. */
+  private readonly onPointerLeave = (): void => {
+    if (!this.lineOn || this.lineHover === null) return;
+    this.lineHover = null;
+    if (!this.lineBusy) this.updateLine();
+  };
+
+  private readonly onDoubleClick = (): void => {
+    if (this.lineOn) this.finishLine();
+  };
+
+  /** A right-click takes the last corner away rather than opening the browser's menu. */
+  private readonly onContextMenu = (event: Event): void => {
+    if (!this.lineOn) return;
+    event.preventDefault();
+    this.undoAnchor();
   };
 
   private readonly onPointerUp = (event: PointerEvent): void => {
@@ -744,41 +786,34 @@ export class BuildPlacement {
   };
 
   /**
-   * A release with line mode on; never drops a single Block. A mouse press
-   * that travelled, or the second click, fixes the end; a press that did not
-   * travel only picks the start, and the end follows the pointer until the
-   * next click. A finger's tap picks the start, then the end; a finger that
-   * travelled was a pan.
+   * A release with line mode on; never drops a single Block. A click or tap
+   * that did not travel puts a corner down; one that travelled was a pan.
    */
   private lineUp(event: PointerEvent): true {
     const pressed = this.pressed;
     this.pressed = false;
-    if (this.lineBusy) return true;
+    if (!pressed || this.lineBusy) return true;
+    if (Math.hypot(event.clientX - this.pressX, event.clientY - this.pressY) > DRAG_SLOP) return true;
     const point = this.yardPoint(event);
     const spot = this.grid.spotAt(this.options.type, point.x, point.y);
-    const drag = this.lineDrag;
-    if (drag) {
-      this.lineDrag = null;
-      this.lineEnd = spot;
-      if (drag.second || Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > DRAG_SLOP) {
-        this.lineFixed = true;
-      }
-      this.updateLine();
-      return true;
-    }
-    if (event.pointerType !== "touch" || !pressed) return true;
-    if (Math.hypot(event.clientX - this.pressX, event.clientY - this.pressY) > DRAG_SLOP) return true;
     this.lineTap(spot.x, spot.y);
     return true;
   }
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
-    // Nothing to cancel once a one-off building is on its way down.
-    if (event.key !== "Escape" || this.pinned) return;
+    if (event.key !== "Escape" && event.key !== "Backspace") return;
     const target = event.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+    if (event.key === "Backspace") {
+      if (!this.lineOn || this.lineAnchors.length === 0) return;
+      event.preventDefault();
+      this.undoAnchor();
+      return;
+    }
+    // Nothing to cancel once a one-off building is on its way down.
+    if (this.pinned) return;
     // Escape lets a drawn line go first, then the Block in hand.
-    if (this.lineOn && this.lineStart && !this.lineBusy) {
+    if (this.lineOn && this.lineAnchors.length > 0 && !this.lineBusy) {
       this.clearLine();
       return;
     }

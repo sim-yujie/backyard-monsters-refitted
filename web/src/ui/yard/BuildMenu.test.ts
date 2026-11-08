@@ -645,7 +645,7 @@ describe("PlacementBar", () => {
       cost: { r1: build * 1000, r2: 0, r3: 0, r4: 0 },
     });
     const lineBar = (on = true) => {
-      const line = { on, onToggle: vi.fn(), onConfirm: vi.fn(), onClear: vi.fn() };
+      const line = { on, onToggle: vi.fn(), onConfirm: vi.fn(), onClear: vi.fn(), onUndo: vi.fn() };
       const bar = new PlacementBar({
         type: 17,
         instant: false,
@@ -659,21 +659,101 @@ describe("PlacementBar", () => {
       return { bar, line, q };
     };
 
-    it("draws the Line toggle, pressed when on, with ✓ and ✗ in place of Build here", () => {
+    it("draws the Line switch, pressed when on, with ↶, ✗ and ✓ Build in place of Build here", () => {
       const { bar, line, q } = lineBar();
       const toggle = q<HTMLButtonElement>(".build-placing__line-toggle");
       expect(toggle.getAttribute("aria-pressed")).toBe("true");
+      // On/off is the switch's track, never a tick that reads like the build ✓.
+      expect(toggle.textContent).toBe("Line");
+      expect(toggle.querySelector(".build-placing__switch")).not.toBeNull();
       expect(bar.lineMode).toBe(true);
       expect(q<HTMLButtonElement>(".build-placing__here").hidden).toBe(true);
       expect(q<HTMLButtonElement>(".build-placing__line-confirm").hidden).toBe(false);
       expect(q<HTMLButtonElement>(".build-placing__line-clear").hidden).toBe(false);
+      expect(q<HTMLButtonElement>(".build-placing__line-undo").hidden).toBe(false);
+      // Cancel is the corner's ×, said as putting the Block away.
+      expect(q(".build-placing__cancel").getAttribute("aria-label")).toBe("Put the Block away");
 
       toggle.click();
       expect(line.onToggle).toHaveBeenCalledWith(false);
       expect(toggle.getAttribute("aria-pressed")).toBe("false");
       expect(q<HTMLButtonElement>(".build-placing__here").hidden).toBe(false);
       expect(q<HTMLButtonElement>(".build-placing__line-confirm").hidden).toBe(true);
+      expect(q<HTMLButtonElement>(".build-placing__line-undo").hidden).toBe(true);
       expect(q<HTMLElement>(".build-placing__line").hidden).toBe(true);
+      expect(q(".build-placing__cancel").getAttribute("aria-label")).toBe("Cancel");
+    });
+
+    it("↶ is the painted undo arrow: off with no corner, on with one, and it calls back", () => {
+      const { bar, line, q } = lineBar();
+      const undo = q<HTMLButtonElement>(".build-placing__line-undo");
+      expect(undo.querySelector("img.game-icon--undo")).not.toBeNull();
+      expect(undo.getAttribute("aria-label")).toBe("Undo last corner");
+      expect(undo.disabled).toBe(true);
+      bar.setLine(plan(1, 0, 0, null), { empty: false, anchors: 1, busy: false });
+      expect(undo.disabled).toBe(false);
+      undo.click();
+      expect(line.onUndo).toHaveBeenCalledTimes(1);
+      bar.setLine(plan(1, 0, 0, null), { empty: false, anchors: 1, busy: true });
+      expect(undo.disabled).toBe(true);
+    });
+
+    it("✓ is labelled with the count: ✓ Build 12, plain ✓ Build when there is nothing to build", () => {
+      const { bar, q } = lineBar();
+      const confirm = q<HTMLButtonElement>(".build-placing__line-confirm");
+      expect(confirm.textContent).toBe("✓ Build");
+      bar.setLine(plan(12, 0, 0, null), { empty: false, anchors: 2, busy: false });
+      expect(confirm.textContent).toBe("✓ Build 12");
+      expect(confirm.getAttribute("aria-label")).toBe("Build 12 Blocks");
+    });
+
+    it("the tip shows before the first corner, fades once one is down, and comes back when nothing builds", () => {
+      const { bar, q } = lineBar();
+      const hint = q(".build-placing__hint");
+      expect(hint.classList.contains("build-placing__hint--faded")).toBe(false);
+      bar.setLine(plan(3, 0, 0, null), { empty: false, anchors: 1, busy: false });
+      expect(hint.classList.contains("build-placing__hint--faded")).toBe(true);
+      bar.setLine(plan(0, 2, 0, null), { empty: false, anchors: 2, busy: false });
+      expect(hint.textContent).toBe("Nothing here can be built.");
+      expect(hint.classList.contains("build-placing__hint--faded")).toBe(false);
+      // Cleared again: the first tip has had its turn.
+      bar.setLine(null, { empty: true, anchors: 0, busy: false });
+      expect(hint.classList.contains("build-placing__hint--faded")).toBe(true);
+    });
+
+    it("the first tip fades by itself after a few seconds", () => {
+      vi.useFakeTimers();
+      try {
+        const { q } = lineBar();
+        const hint = q(".build-placing__hint");
+        expect(hint.classList.contains("build-placing__hint--faded")).toBe(false);
+        vi.advanceTimersByTime(6500);
+        expect(hint.classList.contains("build-placing__hint--faded")).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("in line mode \"Built 12.\" goes after a few seconds; a refusal stays", () => {
+      vi.useFakeTimers();
+      try {
+        const { bar, q } = lineBar();
+        bar.setMessage("Built 12.", "good");
+        vi.advanceTimersByTime(5500);
+        expect(q(".build-placing__message").textContent).toBe("");
+        bar.setMessage("Not enough Twigs.", "bad");
+        vi.advanceTimersByTime(10000);
+        expect(q(".build-placing__message").textContent).toBe("Not enough Twigs.");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("before the first corner the summary is one Block's price, said once", () => {
+      const { bar, q } = lineBar();
+      expect(spokenText(q(".build-placing__line-cost"))).toBe("Twigs 1,000");
+      expect(q(".build-placing__line-each").textContent).toBe("each");
+      expect(bar.element.querySelector(".build-placing__line-count")).toBeNull();
     });
 
     it("starts off when asked, and a bar without line options has no toggle", () => {
@@ -696,37 +776,37 @@ describe("PlacementBar", () => {
       expect(confirm.disabled).toBe(true);
       expect(clear.disabled).toBe(true);
 
-      bar.setLine(plan(0, 2, 0, null), { empty: false, fixed: true, busy: false });
+      bar.setLine(plan(0, 2, 0, null), { empty: false, anchors: 2, busy: false });
       expect(confirm.disabled).toBe(true);
       expect(clear.disabled).toBe(false);
 
-      bar.setLine(plan(3, 0, 0, null), { empty: false, fixed: true, busy: false });
+      bar.setLine(plan(3, 0, 0, null), { empty: false, anchors: 2, busy: false });
       expect(confirm.disabled).toBe(false);
       confirm.click();
       expect(line.onConfirm).toHaveBeenCalledTimes(1);
       clear.click();
       expect(line.onClear).toHaveBeenCalledTimes(1);
 
-      bar.setLine(plan(3, 0, 0, null), { empty: false, fixed: true, busy: true });
+      bar.setLine(plan(3, 0, 0, null), { empty: false, anchors: 2, busy: true });
       expect(confirm.disabled).toBe(true);
       expect(clear.disabled).toBe(true);
       expect(q<HTMLButtonElement>(".build-placing__line-toggle").disabled).toBe(true);
       expect(q(".build-placing__hint").textContent).toBe("Building…");
     });
 
-    it("the summary: Block ×count, the cost, blocked and what is short", () => {
+    it("the summary: ×count, the cost, blocked and what is short, each only when there is some", () => {
       const { bar, q } = lineBar();
-      bar.setLine(plan(4, 2, 3, "resources"), { empty: false, fixed: true, busy: false });
+      bar.setLine(plan(4, 2, 3, "resources"), { empty: false, anchors: 2, busy: false });
       expect(q(".build-placing__line-count").textContent).toBe("×4");
       expect(spokenText(q(".build-placing__line-cost"))).toBe("Twigs 4,000");
-      expect(q(".build-placing__line-skip").textContent).toBe("✕ 2");
+      expect(q(".build-placing__line-skip").textContent).toBe("✕2");
       expect(q(".build-placing__line-short").textContent).toBe("3 can't afford");
 
-      bar.setLine(plan(1, 0, 5, "limit"), { empty: false, fixed: true, busy: false });
-      expect(q(".build-placing__line-short").textContent).toBe("5 over hall limit");
+      bar.setLine(plan(1, 0, 5, "limit"), { empty: false, anchors: 2, busy: false });
+      expect(q(".build-placing__line-short").textContent).toBe("5 over limit");
       expect(bar.element.querySelector(".build-placing__line-skip")).toBeNull();
 
-      bar.setLine(plan(0, 1, 0, null), { empty: false, fixed: true, busy: false });
+      bar.setLine(plan(0, 1, 0, null), { empty: false, anchors: 2, busy: false });
       expect(q(".build-placing__line-count").textContent).toBe("×0");
       expect(bar.element.querySelector(".build-placing__line-cost")).toBeNull();
     });
@@ -740,16 +820,14 @@ describe("PlacementBar", () => {
     });
 
     it("lineHint says what to do next on a desktop and a phone", () => {
-      const fresh = { empty: true, fixed: false, busy: false };
-      const started = { empty: false, fixed: false, busy: false };
-      const fixed = { empty: false, fixed: true, busy: false };
-      expect(lineHint(false, null, null)).toBe("Drag from the first Block to the last. Esc cancels.");
-      expect(lineHint(true, fresh, null)).toBe("Tap the first Block, then the last.");
-      expect(lineHint(false, started, null)).toBe("Click the last Block.");
-      expect(lineHint(true, started, null)).toBe("Tap the last Block.");
-      expect(lineHint(false, fixed, plan(0, 3, 0, null))).toBe("Nothing here can be built.");
-      expect(lineHint(true, fixed, plan(2, 0, 0, null))).toBe("✓ builds the green Blocks.");
-      expect(lineHint(false, { ...fixed, busy: true }, plan(2, 0, 0, null))).toBe("Building…");
+      const fresh = { empty: true, anchors: 0, busy: false };
+      const started = { empty: false, anchors: 2, busy: false };
+      expect(lineHint(false, null, null)).toBe("Click to place corners. ✓ builds.");
+      expect(lineHint(true, fresh, null)).toBe("Tap to place corners. ✓ builds.");
+      expect(lineHint(false, started, plan(2, 0, 0, null))).toBe("Click for more corners. ✓ builds.");
+      expect(lineHint(true, started, plan(2, 0, 0, null))).toBe("Tap for more corners. ✓ builds.");
+      expect(lineHint(false, started, plan(0, 3, 0, null))).toBe("Nothing here can be built.");
+      expect(lineHint(false, { ...started, busy: true }, plan(2, 0, 0, null))).toBe("Building…");
     });
   });
 

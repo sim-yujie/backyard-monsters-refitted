@@ -2038,6 +2038,7 @@ export class YardScene implements Scene {
           },
           onConfirm: () => void placement.confirmLine(),
           onClear: () => placement.clearLine(),
+          onUndo: () => placement.undoAnchor(),
         },
       }),
       type,

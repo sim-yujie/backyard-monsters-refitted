@@ -6,10 +6,12 @@ import type { Point } from "./YardGrid";
  * Drawing a line of wall Blocks (walls Option B, owner 8 Nov 2026): the
  * arithmetic, without Pixi or a DOM.
  *
- * The player picks a start Block and an end Block. {@link linePath} lays the
- * Blocks between them edge to edge along the yard's two axes: a straight line
- * when the ends share a row or column, otherwise an L whose longer leg comes
- * first (the drag's main direction), turning once at the corner.
+ * The player clicks or taps corners (anchors, owner 8 Nov 2026: "mouse click
+ * on map sets an anchor point so it allows for bends"). {@link linePath} lays
+ * the Blocks between two anchors edge to edge along the yard's two axes: a
+ * straight line when they share a row or column, otherwise an L whose longer
+ * leg comes first, turning once at the corner. {@link polylinePath} joins the
+ * stretches into one path.
  *
  * {@link planLine} then says what each Block will come to, the way the server
  * will decide it (`server/src/services/yard/buildWalls.ts`), so the preview is
@@ -93,6 +95,48 @@ export const linePath = (start: Point, end: Point, step: number, bend: LineBend 
       else y += direction * step;
       cells.push({ x, y });
     }
+  }
+  return cells;
+};
+
+/**
+ * Where a stretch from `from` towards `to` really ends: `to` rounded to the
+ * nearest Block along each axis ({@link linePath}'s last Block). An anchor is
+ * kept there, so the next stretch starts exactly on the Block this one ended on.
+ */
+export const snapAnchor = (from: Point, to: Point, step: number): Point => ({
+  x: from.x + Math.round((to.x - from.x) / step) * step,
+  y: from.y + Math.round((to.y - from.y) / step) * step,
+});
+
+/**
+ * The Blocks of a bent line through `anchors` in order (walls anchors, owner
+ * 8 Nov 2026): each stretch from one anchor to the next is straight when they
+ * share a row or column, otherwise an L with the longer leg first
+ * ({@link linePath}). A stretch starts on the Block the last one ended on, so
+ * the shared corner is laid once; a path that crosses itself lays each Block
+ * once too, at its first visit, as the server takes no repeats. An optional
+ * `tail` is one more stretch from the last anchor (the mouse's live preview).
+ * No anchors, no Blocks.
+ */
+export const polylinePath = (anchors: readonly Point[], step: number, tail: Point | null = null): Point[] => {
+  const first = anchors[0];
+  if (!first) return [];
+  const ends = tail ? [...anchors, tail] : anchors;
+  const cells: Point[] = [];
+  const seen = new Set<string>();
+  const add = (cell: Point): void => {
+    const key = `${cell.x},${cell.y}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    cells.push(cell);
+  };
+  add({ x: first.x, y: first.y });
+  let from: Point = first;
+  for (let i = 1; i < ends.length; i++) {
+    const stretch = linePath(from, ends[i]!, step);
+    for (let j = 1; j < stretch.length; j++) add(stretch[j]!);
+    from = stretch[stretch.length - 1]!;
   }
   return cells;
 };

@@ -5,7 +5,9 @@ import {
   lineBudgetOf,
   linePath,
   planLine,
+  polylinePath,
   readLineModePreference,
+  snapAnchor,
   writeLineModePreference,
 } from "./wallLine";
 
@@ -82,6 +84,75 @@ describe("linePath", () => {
 
   it("a square L has as many Blocks as both legs and the corner", () => {
     expect(linePath({ x: 0, y: 0 }, { x: 40, y: 40 }, BLOCK)).toHaveLength(5);
+  });
+});
+
+describe("polylinePath (corners, owner 8 Nov 2026)", () => {
+  const xy = (cells: { x: number; y: number }[]) => cells.map(({ x, y }) => `${x},${y}`);
+
+  it("no corners, no Blocks; one corner, its one Block", () => {
+    expect(polylinePath([], BLOCK)).toEqual([]);
+    expect(polylinePath([{ x: 0, y: 0 }], BLOCK)).toEqual([{ x: 0, y: 0 }]);
+  });
+
+  it("three corners make two straight stretches that share the corner Block once", () => {
+    const path = polylinePath(
+      [
+        { x: 0, y: 0 },
+        { x: 60, y: 0 },
+        { x: 60, y: 40 },
+      ],
+      BLOCK,
+    );
+    expect(xy(path)).toEqual(["0,0", "20,0", "40,0", "60,0", "60,20", "60,40"]);
+  });
+
+  it("a stretch between corners that do not line up is an L, longer leg first, each stretch on its own", () => {
+    const path = polylinePath(
+      [
+        { x: 0, y: 0 },
+        { x: 60, y: 20 }, // x leg longer: along x, then y
+        { x: 80, y: 100 }, // y leg longer: along y, then x
+      ],
+      BLOCK,
+    );
+    expect(xy(path)).toEqual([
+      "0,0", "20,0", "40,0", "60,0", "60,20",
+      "60,40", "60,60", "60,80", "60,100", "80,100",
+    ]);
+  });
+
+  it("a path that crosses or doubles back lays each Block once, at its first visit", () => {
+    const path = polylinePath(
+      [
+        { x: 0, y: 0 },
+        { x: 80, y: 0 },
+        { x: 80, y: 40 },
+        { x: 40, y: 40 },
+        { x: 40, y: -40 }, // crosses the first stretch at 40,0
+      ],
+      BLOCK,
+    );
+    const keys = xy(path);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(keys.filter((key) => key === "40,0")).toHaveLength(1);
+    expect(keys.indexOf("40,0")).toBe(2);
+    expect(keys[keys.length - 1]).toBe("40,-40");
+    // Back over the same stretch adds nothing new.
+    expect(xy(polylinePath([{ x: 0, y: 0 }, { x: 60, y: 0 }, { x: 0, y: 0 }], BLOCK))).toEqual([
+      "0,0", "20,0", "40,0", "60,0",
+    ]);
+  });
+
+  it("the tail is one more stretch from the last corner (the mouse's live preview)", () => {
+    const path = polylinePath([{ x: 0, y: 0 }, { x: 40, y: 0 }], BLOCK, { x: 40, y: 40 });
+    expect(xy(path)).toEqual(["0,0", "20,0", "40,0", "40,20", "40,40"]);
+  });
+
+  it("a corner off the Block grid of the start is rounded, and the next stretch starts where the last ended", () => {
+    expect(snapAnchor({ x: 0, y: 0 }, { x: 47, y: -8 }, BLOCK)).toEqual({ x: 40, y: 0 });
+    const path = polylinePath([{ x: 0, y: 0 }, { x: 47, y: 5 }, { x: 47, y: 45 }], BLOCK);
+    expect(xy(path)).toEqual(["0,0", "20,0", "40,0", "40,20", "40,40"]);
   });
 });
 

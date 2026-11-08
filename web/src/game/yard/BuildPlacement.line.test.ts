@@ -14,8 +14,9 @@ vi.mock("./buildingArt", async (importOriginal) => ({
 }));
 
 /**
- * Line mode for wall Blocks (walls Option B, owner 8 Nov 2026): picking the
- * ends with the mouse or by taps, the preview's states, and ✓.
+ * Line mode for wall Blocks (walls Option B, owner 8 Nov 2026; corners, owner
+ * 8 Nov): corners put down by clicks or taps, the mouse's live stretch, undo,
+ * a drag that pans, the preview's states, and ✓.
  */
 
 const yardOf = (buildings: BuildingData[]): Yard =>
@@ -34,6 +35,8 @@ const TWIGS = { r1: 1000, r2: 0, r3: 0, r4: 0 };
 const open: BuildPlacement[] = [];
 beforeEach(() => {
   vi.stubGlobal("window", new EventTarget());
+  vi.stubGlobal("HTMLInputElement", class {});
+  vi.stubGlobal("HTMLTextAreaElement", class {});
 });
 afterEach(() => {
   while (open.length > 0) open.pop()?.destroy();
@@ -49,13 +52,13 @@ const draw = (
     budget?: { afford: number; room: number };
     onBuild?: (cells: readonly Point[]) => Promise<DropOutcome>;
     onDrop?: (x: number, y: number) => Promise<DropOutcome>;
+    onCancel?: () => void;
     on?: boolean;
     yard?: Yard;
   } = {},
 ) => {
   const canvas = new EventTarget() as HTMLCanvasElement;
   canvas.getBoundingClientRect = () => ({ left: 0, top: 0 }) as DOMRect;
-  canvas.setPointerCapture = () => {};
   const plans: { plan: LinePlan | null; stage: LineStage }[] = [];
   const onDrop = vi.fn(options.onDrop ?? (() => Promise.resolve<DropOutcome>("placed")));
   const onBuild = vi.fn(options.onBuild ?? (() => Promise.resolve<DropOutcome>("placed")));
@@ -67,7 +70,7 @@ const draw = (
     layer: new Container(),
     worldToYard: (x, y) => ({ x, y }),
     onDrop,
-    onCancel: () => {},
+    onCancel: options.onCancel ?? (() => {}),
     repeat: true,
     line: {
       on: options.on ?? true,
@@ -82,105 +85,158 @@ const draw = (
 };
 
 /** A pointer event with the fields the placement reads. */
-const pointer = (type: string, pointerType: string, x: number, y: number) =>
-  Object.assign(new Event(type), { pointerType, clientX: x, clientY: y, button: 0, pointerId: 1 }) as PointerEvent;
+const pointer = (type: string, pointerType: string, x: number, y: number, button = 0) =>
+  Object.assign(new Event(type), { pointerType, clientX: x, clientY: y, button, pointerId: 1 }) as PointerEvent;
 
-/**
- * A mouse press on the canvas. The placement claims it on `window` in the
- * capture phase (before the camera); with no DOM here, the press goes to
- * `window` carrying the canvas as its target, as a real one would.
- */
-const press = (canvas: EventTarget, x: number, y: number) => {
-  const event = pointer("pointerdown", "mouse", x, y);
-  Object.defineProperty(event, "target", { value: canvas });
-  window.dispatchEvent(event);
-  return event;
-};
+/** A mouse press on the canvas (the camera's own listener is not here: in the yard a drag pans). */
+const press = (canvas: EventTarget, x: number, y: number, button = 0) =>
+  canvas.dispatchEvent(pointer("pointerdown", "mouse", x, y, button));
 const move = (canvas: EventTarget, x: number, y: number, pointerType = "mouse") =>
   canvas.dispatchEvent(pointer("pointermove", pointerType, x, y));
 const release = (canvas: EventTarget, x: number, y: number, pointerType = "mouse") =>
   canvas.dispatchEvent(pointer("pointerup", pointerType, x, y));
+const click = (canvas: EventTarget, x: number, y: number) => {
+  press(canvas, x, y);
+  release(canvas, x, y);
+};
 const tap = (canvas: EventTarget, x: number, y: number) => {
   canvas.dispatchEvent(pointer("pointerdown", "touch", x, y));
   canvas.dispatchEvent(pointer("pointerup", "touch", x, y));
 };
+const key = (name: string) => {
+  const event = Object.assign(new Event("keydown", { cancelable: true }), { key: name });
+  window.dispatchEvent(event);
+  return event;
+};
+const cells = (plan: LinePlan | null | undefined) => plan?.build.map(({ x, y }) => `${x},${y}`);
 
 describe("BuildPlacement line mode", () => {
   it("starts on when asked, with no line yet", () => {
     const { placement, last } = draw();
     expect(placement.lineMode).toBe(true);
     expect(placement.linePlan).toBeNull();
-    expect(last().stage).toEqual({ empty: true, fixed: false, busy: false });
+    expect(last().stage).toEqual({ empty: true, anchors: 0, busy: false });
   });
 
-  it("mouse: press, drag and release draw a straight line and wait for ✓ (no build on release)", () => {
+  it("mouse: clicks put corners down; three corners make a line with a bend (no build until ✓)", () => {
     const { canvas, placement, onBuild, onDrop, last } = draw();
-    const down = press(canvas, 210, 110); // spot centred on the pointer: (200, 100)
-    move(canvas, 270, 110);
-    expect(last().stage).toMatchObject({ empty: false, fixed: false });
-    release(canvas, 290, 110);
-
-    expect(last().stage).toMatchObject({ fixed: true, busy: false });
-    expect(placement.linePlan?.build).toEqual([
+    click(canvas, 210, 110); // spot centred on the pointer: (200, 100)
+    expect(last().stage).toMatchObject({ empty: false, anchors: 1 });
+    click(canvas, 270, 110);
+    click(canvas, 270, 150);
+    expect(placement.anchors).toEqual([
       { x: 200, y: 100 },
-      { x: 220, y: 100 },
-      { x: 240, y: 100 },
       { x: 260, y: 100 },
-      { x: 280, y: 100 },
-    ]);
-    expect(onBuild).not.toHaveBeenCalled();
-    expect(onDrop).not.toHaveBeenCalled();
-    // The camera never saw the press, so it did not pan.
-    expect((down as unknown as { cancelBubble: boolean }).cancelBubble).toBe(true);
-  });
-
-  it("mouse: a diagonal drag draws an L, the longer leg first", () => {
-    const { canvas, placement } = draw();
-    press(canvas, 210, 110);
-    release(canvas, 270, 150);
-    expect(placement.linePlan?.build).toEqual([
-      { x: 200, y: 100 },
-      { x: 220, y: 100 },
-      { x: 240, y: 100 },
-      { x: 260, y: 100 },
-      { x: 260, y: 120 },
       { x: 260, y: 140 },
     ]);
+    expect(cells(placement.linePlan)).toEqual(["200,100", "220,100", "240,100", "260,100", "260,120", "260,140"]);
+    expect(onBuild).not.toHaveBeenCalled();
+    expect(onDrop).not.toHaveBeenCalled();
   });
 
-  it("mouse: a click picks the start, the end follows the pointer, the second click fixes it", () => {
-    const { canvas, placement, last } = draw();
-    press(canvas, 210, 110);
-    release(canvas, 211, 110);
-    expect(last().stage).toMatchObject({ empty: false, fixed: false });
-    move(canvas, 250, 110);
+  it("mouse: the next stretch follows the pointer from the last corner, an L when it does not line up", () => {
+    const { canvas, placement } = draw();
+    click(canvas, 210, 110);
+    move(canvas, 270, 150);
+    expect(cells(placement.linePlan)).toEqual(["200,100", "220,100", "240,100", "260,100", "260,120", "260,140"]);
+    expect(placement.anchors).toHaveLength(1);
+  });
+
+  it("mouse: leaving the yard drops the live stretch, so the preview is what ✓ builds; ✓ never builds it", async () => {
+    const { canvas, placement, onBuild } = draw();
+    click(canvas, 210, 110);
+    click(canvas, 250, 110);
+    move(canvas, 250, 190);
+    expect(placement.linePlan?.build).toHaveLength(7);
+    canvas.dispatchEvent(new Event("pointerleave"));
     expect(placement.linePlan?.build).toHaveLength(3);
-    press(canvas, 270, 110);
-    release(canvas, 270, 110);
-    expect(last().stage).toMatchObject({ fixed: true });
-    expect(placement.linePlan?.build).toHaveLength(4);
-    // Moving after it is fixed changes nothing.
-    move(canvas, 500, 110);
-    expect(placement.linePlan?.build).toHaveLength(4);
+    move(canvas, 250, 190);
+    await placement.confirmLine();
+    expect(onBuild).toHaveBeenCalledWith([
+      { x: 200, y: 100 },
+      { x: 220, y: 100 },
+      { x: 240, y: 100 },
+    ]);
   });
 
-  it("touch: tap the start, tap the end; a finger drag pans and picks nothing", () => {
+  it("mouse: a press that travels is a pan, not a corner; a few pixels of wobble is still a click", () => {
+    const { canvas, placement } = draw();
+    click(canvas, 210, 110);
+    press(canvas, 300, 300);
+    move(canvas, 340, 300);
+    release(canvas, 340, 300);
+    expect(placement.anchors).toHaveLength(1);
+    press(canvas, 270, 110);
+    release(canvas, 274, 112);
+    expect(placement.anchors).toHaveLength(2);
+  });
+
+  it("mouse: a double-click ends the line (no live stretch) until the next click", () => {
+    const { canvas, placement } = draw();
+    click(canvas, 210, 110);
+    click(canvas, 270, 110);
+    click(canvas, 270, 110); // the double-click's second click adds nothing
+    canvas.dispatchEvent(new Event("dblclick"));
+    expect(placement.anchors).toHaveLength(2);
+    move(canvas, 270, 190);
+    expect(placement.linePlan?.build).toHaveLength(4);
+    click(canvas, 270, 190);
+    expect(placement.anchors).toHaveLength(3);
+    expect(placement.linePlan?.build).toHaveLength(8);
+  });
+
+  it("undo: Backspace, a right-click and ↶ each take the last corner away", () => {
+    const { canvas, placement, last } = draw();
+    click(canvas, 210, 110);
+    click(canvas, 270, 110);
+    click(canvas, 270, 150);
+    click(canvas, 330, 150);
+    expect(key("Backspace").defaultPrevented).toBe(true);
+    expect(placement.anchors).toHaveLength(3);
+
+    const menu = new Event("contextmenu", { cancelable: true });
+    canvas.dispatchEvent(menu);
+    expect(menu.defaultPrevented).toBe(true);
+    expect(placement.anchors).toHaveLength(2);
+
+    placement.undoAnchor();
+    expect(placement.anchors).toHaveLength(1);
+    expect(last().stage).toMatchObject({ anchors: 1 });
+    placement.undoAnchor();
+    expect(placement.linePlan).toBeNull();
+    expect(last().stage).toEqual({ empty: true, anchors: 0, busy: false });
+    // Nothing left: Backspace is the page's again.
+    expect(key("Backspace").defaultPrevented).toBe(false);
+  });
+
+  it("a right-click press does not put a corner down", () => {
+    const { canvas, placement } = draw();
+    press(canvas, 210, 110, 2);
+    release(canvas, 210, 110);
+    expect(placement.anchors).toHaveLength(0);
+  });
+
+  it("touch: each tap is a corner, a finger drag pans and puts nothing down", () => {
     const { canvas, placement, last } = draw();
     tap(canvas, 210, 110);
     expect(placement.linePlan?.build).toEqual([{ x: 200, y: 100 }]);
-    expect(last().stage).toMatchObject({ fixed: false });
 
     canvas.dispatchEvent(pointer("pointerdown", "touch", 300, 300));
     move(canvas, 100, 100, "touch");
     release(canvas, 100, 100, "touch");
-    expect(placement.linePlan?.build).toEqual([{ x: 200, y: 100 }]);
+    expect(placement.anchors).toHaveLength(1);
 
     tap(canvas, 210, 170);
-    expect(last().stage).toMatchObject({ fixed: true });
-    expect(placement.linePlan?.build.map((cell) => cell.y)).toEqual([100, 120, 140, 160]);
-    // A third tap starts a new line.
-    tap(canvas, 110, 210);
-    expect(placement.linePlan?.build).toEqual([{ x: 100, y: 200 }]);
+    tap(canvas, 270, 170);
+    expect(last().stage).toMatchObject({ anchors: 3 });
+    expect(cells(placement.linePlan)).toEqual([
+      "200,100", "200,120", "200,140", "200,160", "220,160", "240,160", "260,160",
+    ]);
+    // A finger has no hover: moving grows no live stretch.
+    move(canvas, 500, 500, "touch");
+    expect(placement.linePlan?.build).toHaveLength(7);
+    placement.undoAnchor();
+    expect(placement.linePlan?.build).toHaveLength(4);
   });
 
   it("the preview: red on a building (skipped), grey past the budget", () => {
@@ -195,6 +251,18 @@ describe("BuildPlacement line mode", () => {
     expect(plan.cells[2]).toMatchObject({ problem: "overlap", blockedBy: 5 });
     expect(plan.shortReason).toBe("resources");
     expect(plan.cost.r1).toBe(3000);
+  });
+
+  it("the summary counts the whole bent line, over the hall's limit too", () => {
+    const { placement, last } = draw({ budget: { afford: 100, room: 5 } });
+    placement.lineTap(200, 100);
+    placement.lineTap(260, 100);
+    placement.lineTap(260, 160);
+    const plan = last().plan!;
+    expect(plan.cells).toHaveLength(7);
+    expect(plan.build).toHaveLength(5);
+    expect(plan.short).toBe(2);
+    expect(plan.shortReason).toBe("limit");
   });
 
   it("a line off the plot is red where it leaves", () => {
@@ -221,13 +289,15 @@ describe("BuildPlacement line mode", () => {
     expect(last().stage).toMatchObject({ busy: true });
     // Held: the spots read as taken until the answer.
     expect(placement.grid.check(BLOCK, 200, 100).problem).toBe("overlap");
-    placement.lineTap(500, 500); // no new line while waiting
+    placement.lineTap(500, 500); // no new corner while waiting
+    placement.undoAnchor(); // nor undo
+    expect(placement.anchors).toHaveLength(2);
     expect(placement.linePlan?.build[0]).toEqual({ x: 200, y: 100 });
 
     answer("placed");
     await settle();
     expect(placement.linePlan).toBeNull();
-    expect(last().stage).toEqual({ empty: true, fixed: false, busy: false });
+    expect(last().stage).toEqual({ empty: true, anchors: 0, busy: false });
     expect(placement.grid.check(BLOCK, 200, 100).problem).toBeNull();
   });
 
@@ -237,6 +307,7 @@ describe("BuildPlacement line mode", () => {
     placement.lineTap(240, 100);
     await placement.confirmLine();
     expect(placement.linePlan?.build).toHaveLength(3);
+    expect(placement.anchors).toHaveLength(2);
   });
 
   it("✓ with nothing green sends nothing", async () => {
@@ -248,50 +319,26 @@ describe("BuildPlacement line mode", () => {
 
   it("Escape lets the line go first, then cancels", () => {
     const onCancel = vi.fn();
-    const { placement } = draw();
-    // Swap in a cancel spy through a fresh placement sharing the shape.
-    placement.destroy();
-    open.pop();
-    const canvas = new EventTarget() as HTMLCanvasElement;
-    canvas.getBoundingClientRect = () => ({ left: 0, top: 0 }) as DOMRect;
-    const withCancel = new BuildPlacement({
-      type: BLOCK,
-      yard: yardOf([HALL]),
-      camera: { screenToWorld: (point: { x: number; y: number }) => point } as unknown as Camera,
-      canvas,
-      layer: new Container(),
-      worldToYard: (x, y) => ({ x, y }),
-      onDrop: () => Promise.resolve("placed"),
-      onCancel,
-      repeat: true,
-      line: {
-        on: true,
-        budget: () => ({ afford: 10, room: 10 }),
-        unitCost: TWIGS,
-        onPlan: () => {},
-        onBuild: () => Promise.resolve("placed"),
-      },
-    });
-    open.push(withCancel);
-    vi.stubGlobal("HTMLInputElement", class {});
-    vi.stubGlobal("HTMLTextAreaElement", class {});
-    withCancel.lineTap(200, 100);
-    window.dispatchEvent(Object.assign(new Event("keydown"), { key: "Escape" }));
-    expect(withCancel.linePlan).toBeNull();
+    const { placement } = draw({ onCancel });
+    placement.lineTap(200, 100);
+    placement.lineTap(240, 100);
+    key("Escape");
+    expect(placement.linePlan).toBeNull();
+    expect(placement.anchors).toHaveLength(0);
     expect(onCancel).not.toHaveBeenCalled();
-    window.dispatchEvent(Object.assign(new Event("keydown"), { key: "Escape" }));
+    key("Escape");
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
-  it("off: a click builds one Block as before, and the mouse press is left to the camera", () => {
+  it("off: a click builds one Block as before, and a right-click is left alone", () => {
     const { canvas, placement, onDrop, onBuild } = draw({ on: false });
     expect(placement.lineMode).toBe(false);
-    const down = press(canvas, 210, 110);
-    expect((down as unknown as { cancelBubble: boolean }).cancelBubble).toBe(false);
-    canvas.dispatchEvent(pointer("pointerdown", "mouse", 210, 110));
-    release(canvas, 210, 110);
+    click(canvas, 210, 110);
     expect(onDrop).toHaveBeenCalledWith(200, 100);
     expect(onBuild).not.toHaveBeenCalled();
+    const menu = new Event("contextmenu", { cancelable: true });
+    canvas.dispatchEvent(menu);
+    expect(menu.defaultPrevented).toBe(false);
   });
 
   it("toggling clears any line; in line mode a release never drops one Block", () => {
@@ -300,8 +347,7 @@ describe("BuildPlacement line mode", () => {
     placement.setLineMode(false);
     expect(placement.linePlan).toBeNull();
     placement.setLineMode(true);
-    press(canvas, 210, 110);
-    release(canvas, 210, 110);
+    click(canvas, 210, 110);
     placement.dropHere();
     expect(onDrop).not.toHaveBeenCalled();
   });
