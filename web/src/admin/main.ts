@@ -53,6 +53,7 @@ import {
   pageOf,
   pageViews,
   readRoute,
+  viewElementId,
   viewHash,
   viewLabel,
   type PageId,
@@ -325,7 +326,7 @@ class Dashboard {
         "section",
         {
           class: `section view${WIDE_VIEWS.has(id) ? " is-wide" : ""}`,
-          attrs: { id, "data-view": id, "data-page": page, "aria-labelledby": `${id}-title`, hidden: "" },
+          attrs: { id: viewElementId(id), "data-view": id, "data-page": page, "aria-labelledby": `${id}-title`, hidden: "" },
         },
         h(
           "header",
@@ -365,7 +366,7 @@ class Dashboard {
 
     this.home = h(
       "section",
-      { class: "view home", attrs: { id: "home", "data-view": "home", "aria-labelledby": "home-title", hidden: "" } },
+      { class: "view home", attrs: { id: viewElementId("home"), "data-view": "home", "aria-labelledby": "home-title", hidden: "" } },
       h(
         "header",
         { class: "page-heading" },

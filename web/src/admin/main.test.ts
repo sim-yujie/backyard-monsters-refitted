@@ -4,6 +4,7 @@ import { SESSION_STORAGE_KEY } from "@/config";
 import fixture from "../../test/fixtures/admin-dashboard.json";
 import { boot, sectionLevels } from "./main";
 import type { TopItem } from "./problems";
+import { routeNames } from "./views";
 
 /**
  * Who sees the dashboard: only the owner. Without a session, or when the
@@ -164,10 +165,10 @@ describe("the owner's first look", () => {
     expect(link.textContent).toContain("Moderation");
     expect(link.querySelector(".count")?.textContent).toContain("3");
     // The list's filters count players too, Closed from the last 30 days.
-    const segs = [...document.querySelectorAll<HTMLButtonElement>("#moderation .filter-grid .seg")].map((b) => b.textContent);
+    const segs = [...document.querySelectorAll<HTMLButtonElement>("#view-moderation .filter-grid .seg")].map((b) => b.textContent);
     expect(segs).toEqual(["All 3", "Player reports 2", "Word filter 1", "Closed 2"]);
     // A row counts each line once: 4 messages, 4 reports, 2 lines only the filter caught.
-    const row = document.querySelector("#moderation a.q-row[data-player='42']")!;
+    const row = document.querySelector("#view-moderation a.q-row[data-player='42']")!;
     expect(row.textContent).toContain("4 messages · 4 reports from 4 players · 2 word-filter catches");
     expect(row.textContent).toContain("Player reports");
     expect(row.textContent).toContain("Word filter");
@@ -184,22 +185,37 @@ describe("the owner's first look", () => {
       "Game activity",
       "Server health",
     ]);
-    expect(document.querySelector("#shiny .subnav a[href='#shiny']")?.textContent).toBe("Give Shiny");
-    expect(document.getElementById("shiny")?.querySelector("#player-search")).not.toBeNull();
-    expect(document.querySelector("#find .subnav a[href='#find']")?.textContent).toBe("Find a player");
-    expect(document.getElementById("find")?.querySelector("#mod-search")).not.toBeNull();
-    expect(document.querySelector("#chat .subnav a[href='#chat']")?.textContent).toBe("Game chat");
-    expect(document.getElementById("chat")?.textContent).toContain("Join chat");
-    expect(document.querySelector("#chat h1")?.textContent).toContain("Player support");
+    expect(document.querySelector("#view-shiny .subnav a[href='#shiny']")?.textContent).toBe("Give Shiny");
+    expect(document.getElementById("view-shiny")?.querySelector("#player-search")).not.toBeNull();
+    expect(document.querySelector("#view-find .subnav a[href='#find']")?.textContent).toBe("Find a player");
+    expect(document.getElementById("view-find")?.querySelector("#mod-search")).not.toBeNull();
+    expect(document.querySelector("#view-chat .subnav a[href='#chat']")?.textContent).toBe("Game chat");
+    expect(document.getElementById("view-chat")?.textContent).toContain("Join chat");
+    expect(document.querySelector("#view-chat h1")?.textContent).toContain("Player support");
     const select = document.querySelector<HTMLSelectElement>(".topbar .theme-pick select")!;
     expect([...select.options].map((o) => o.value)).toEqual(["auto", "light", "dark"]);
     expect(select.value).toBe("auto");
   });
 
+  it("gives no element an id the address can name, so a direct link opens at the top", async () => {
+    await boot();
+    await settle();
+    // Open every view, so ids that only appear once a view has drawn are checked too.
+    for (const name of routeNames()) {
+      location.hash = `#${name}`;
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    }
+    await settle();
+    const ids = new Set([...document.querySelectorAll("[id]")].map((e) => e.id));
+    expect(routeNames().filter((name) => ids.has(name))).toEqual([]);
+    expect(document.getElementById("view-chat")?.dataset.view).toBe("chat");
+    location.hash = "";
+  });
+
   it("opens on Home, shows one view at a time, and follows the address", async () => {
     await boot();
     await settle();
-    const shown = () => [...document.querySelectorAll<HTMLElement>(".page > .view")].filter((v) => !v.hidden).map((v) => v.id);
+    const shown = () => [...document.querySelectorAll<HTMLElement>(".page > .view")].filter((v) => !v.hidden).map((v) => v.dataset.view);
     const current = () => document.querySelector(".nav a[aria-current]")?.getAttribute("data-page");
     expect(shown()).toEqual(["home"]);
     expect(current()).toBe("home");
@@ -208,7 +224,7 @@ describe("the owner's first look", () => {
     // Server health is one page: the old Errors tab's address (Telegram alerts) lands on it, with no tabs.
     expect(shown()).toEqual(["health"]);
     expect(current()).toBe("server");
-    expect(document.querySelector("#health .subnav")).toBeNull();
+    expect(document.querySelector("#view-health .subnav")).toBeNull();
     // On a phone, Menu opens the six pages; picking one closes it.
     const menu = document.querySelector<HTMLButtonElement>(".menu-toggle")!;
     menu.click();
@@ -230,7 +246,7 @@ describe("the owner's first look", () => {
   it("shows Server health as one page of six cards, each with when it was last checked, and the error list below", async () => {
     await boot();
     await settle();
-    const page = document.getElementById("health")!;
+    const page = document.getElementById("view-health")!;
     const cards = [...page.querySelectorAll<HTMLElement>(".server-card")];
     expect(cards.map((c) => c.querySelector("h2")?.textContent)).toEqual([
       "Game server",
@@ -271,7 +287,7 @@ describe("the owner's first look", () => {
     search.value = "Mud";
     location.hash = "#errors";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
-    expect(document.getElementById("moderation")!.hidden).toBe(true);
+    expect(document.getElementById("view-moderation")!.hidden).toBe(true);
     location.hash = "#moderation";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     expect(document.querySelector<HTMLInputElement>("#mod-search")!.value).toBe("Mud");
@@ -281,18 +297,18 @@ describe("the owner's first look", () => {
   it("shows Game activity as the mock-up's panels: players with big numbers, gameplay as a table with honest gaps", async () => {
     await boot();
     await settle();
-    const titles = (id: string) => [...document.querySelectorAll(`#${id} .activity-panel h2`)].map((t) => t.textContent);
+    const titles = (id: string) => [...document.querySelectorAll(`#view-${id} .activity-panel h2`)].map((t) => t.textContent);
     expect(titles("players")).toEqual(["Players", "Players each day", "Player preferences"]);
-    expect([...document.querySelectorAll("#players .metric span:not(.metric-sub)")].map((t) => t.textContent)).toEqual([
+    expect([...document.querySelectorAll("#view-players .metric span:not(.metric-sub)")].map((t) => t.textContent)).toEqual([
       "played today",
       "new today",
       "played in the last 7 days",
       "players in all",
     ]);
-    expect(document.querySelector("#players .activity-head .small")?.textContent).toMatch(/^Last updated /);
+    expect(document.querySelector("#view-players .activity-head .small")?.textContent).toMatch(/^Last updated /);
     expect(titles("activity")).toEqual(["Gameplay today", "Gameplay each day"]);
     const row = (name: string) =>
-      [...document.querySelectorAll<HTMLTableRowElement>("#activity .data-table tbody tr")].find(
+      [...document.querySelectorAll<HTMLTableRowElement>("#view-activity .data-table tbody tr")].find(
         (tr) => tr.querySelector("th")?.textContent === name,
       )!;
     expect(row("Bug reports").querySelectorAll("td")[0]!.textContent).toBe("3");
@@ -303,7 +319,7 @@ describe("the owner's first look", () => {
   it("keeps the technical words behind Technical details", async () => {
     await boot();
     await settle();
-    const health = document.getElementById("health")!;
+    const health = document.getElementById("view-health")!;
     expect(health.textContent).toContain("Game server");
     for (const word of ["f8304513abead896", "bun 1.4.2", "bymr-sgp1"]) {
       const places = [...document.querySelectorAll("body *")].filter(

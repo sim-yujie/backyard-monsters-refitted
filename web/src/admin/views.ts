@@ -67,6 +67,19 @@ const ALIASES: Readonly<Record<string, ViewId>> = {
   backups: "health",
 };
 
+/**
+ * Every name the address can carry after `#`: views, pages and older names.
+ * No element may have one of these as its id, or a direct link (bookmark,
+ * reload, Telegram alert) makes the browser jump down to that element and the
+ * page title hides under the top bar (dash-fix, 9 Nov 2026).
+ */
+export const routeNames = (): string[] => [
+  ...new Set([...VIEWS.map(([id]) => id), ...PAGES.map(([id]) => id), ...Object.keys(ALIASES)]),
+];
+
+/** A view's element id: `view-chat`, never `chat` (see {@link routeNames}). */
+export const viewElementId = (id: ViewId): string => `view-${id}`;
+
 export const isView = (name: string): name is ViewId => VIEWS.some(([id]) => id === name);
 
 export const viewLabel = (id: ViewId): string => VIEWS.find(([v]) => v === id)![1];
