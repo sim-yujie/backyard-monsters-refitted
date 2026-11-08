@@ -933,3 +933,80 @@ export const addModerator = (player: string): Promise<Envelope<{ moderator: Mode
 
 export const removeModerator = (userid: number): Promise<Envelope<{ removed: number }>> =>
   adminPost(`${ADMIN}/moderators/${userid}/remove`, {});
+
+/**
+ * Moderator mail (owner, beta 7; server `services/mail/modMail.ts`): every
+ * conversation a moderator is in, both sides, kept even when the players
+ * delete the thread. Admin only; moderators never see it.
+ */
+export type ModMailSender = "moderator" | "player";
+
+/** One conversation in the list. */
+export interface ModConversationSummary {
+  threadid: number;
+  /** Named as in the newest message. */
+  moderatorId: number;
+  moderatorName: string;
+  playerId: number;
+  playerName: string;
+  messages: number;
+  fromModerator: number;
+  startedAt: string;
+  lastAt: string;
+  /** The newest message, for the preview. */
+  lastSender: ModMailSender;
+  lastSubject: string;
+  lastMessage: string;
+  lastType: string;
+  lastId: number;
+}
+
+/** One message of a conversation. */
+export interface ModConversationMessage {
+  id: number;
+  sentAt: string;
+  sender: ModMailSender;
+  senderId: number;
+  /** The name when it was sent. */
+  senderName: string;
+  newThread: boolean;
+  messagetype: string;
+  /** What the other side got (after the word filter). */
+  subject: string;
+  message: string;
+  /** What the writer typed, when the word filter changed it. */
+  written: string | null;
+}
+
+/** One conversation whole, oldest first. */
+export interface ModConversation {
+  threadid: number;
+  moderatorId: number;
+  moderatorName: string;
+  playerId: number;
+  playerName: string;
+  messages: ModConversationMessage[];
+  /** Too long for one answer: the newest messages are left out. */
+  cut: boolean;
+}
+
+export interface ModMailSearch {
+  /** A name (part of one) or account number. */
+  moderator?: string | undefined;
+  /** The player side. */
+  recipient?: string | undefined;
+  /** The previous page's `next`. */
+  before?: number | undefined;
+}
+
+export const fetchModConversations = (
+  search: ModMailSearch = {},
+): Promise<Envelope<{ conversations: ModConversationSummary[]; next: number | null }>> =>
+  adminGet(`${ADMIN}/modmail`, {
+    moderator: search.moderator || undefined,
+    recipient: search.recipient || undefined,
+    before: search.before,
+  });
+
+export const fetchModConversation = (threadid: number): Promise<Envelope<{ conversation: ModConversation }>> =>
+  adminGet(`${ADMIN}/modmail/${threadid}`);

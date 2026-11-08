@@ -6,6 +6,7 @@ import { BaseType } from "../../../enums/Base.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { cellCoordsFromBaseId } from "./rangeCheck.js";
 import { SYSTEM_SENDER } from "../../mail/systemSender.js";
+import { nudgeMail } from "../../mail/mailNudge.js";
 
 /**
  * Telling a player when one of their Map Room 2 outposts is attacked or taken
@@ -289,6 +290,8 @@ export const refreshUnread = async (em: EntityManager, userid: number): Promise<
     ],
   });
   await em.nativeUpdate(Save, { saveuserid: userid, type: BaseType.MAIN }, { unreadmessages: count });
+  // Their game asks what came (`mailNudge.ts`); inside a transaction it may ask a moment early and see it at the next check.
+  nudgeMail(userid);
 };
 
 /** Most a single attack can take of one resource (`defenderLootHandler.ts`). */

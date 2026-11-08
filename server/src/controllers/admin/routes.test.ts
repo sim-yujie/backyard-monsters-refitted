@@ -47,6 +47,10 @@ describe("the dashboard routes (controllers/admin/routes.ts)", () => {
     );
   });
 
+  test("include the moderator mail routes: the conversations, and one conversation", () => {
+    expect(routes.map((r) => r.route)).toEqual(expect.arrayContaining(["GET /modmail", "GET /modmail/:threadid"]));
+  });
+
   test("all go through the owner-only check", () => {
     expect(routes.length).toBeGreaterThan(5);
     for (const { route, rest } of routes) expect(`${route}: ${rest}`).toContain("apiVersion, adminOnly,");

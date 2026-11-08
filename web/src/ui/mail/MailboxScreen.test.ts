@@ -914,3 +914,89 @@ describe("mail from the game team (dashboard replies and Shiny gifts)", () => {
     expect(host.querySelector(".mail-message__text")?.textContent).toContain("Why: Thanks for the report");
   });
 });
+
+describe("moderators in the mailbox (owner, beta 7)", () => {
+  const modStatus = (mod: boolean) => vi.fn(async () => ({ unread: 0, latest: null, mod }));
+
+  it("shows the Mod badge on a moderator's thread, in the list and the thread", async () => {
+    const api = fakeApi([[message({ threadid: 4, userid: 30 })]], { 4: [message({ threadid: 4, userid: 30 })] }, {
+      "30": { first_name: "Alpha", mod: 1 },
+    });
+    const { host } = await openScreen(api);
+    expect(rows(host)[0]?.querySelector(".mail-row__name .mail-mod")?.textContent).toBe("Mod");
+    expect(rows(host)[0]?.querySelector(".mail-row__name")?.textContent).toBe("ModAlpha");
+    click(rows(host)[0]);
+    await settle();
+    expect(host.querySelector(".mail-pane__name .mail-mod")).not.toBeNull();
+    expect(host.querySelector(".mail-pane__name")?.getAttribute("title")).toBe("Moderator Alpha");
+  });
+
+  it("gives no badge to a player who is not one", async () => {
+    const { host } = await openScreen(fakeApi([[message()]], {}));
+    expect(host.querySelector(".mail-mod")).toBeNull();
+  });
+
+  it("lets a moderator write to any player: a typed name is looked up on the server", async () => {
+    const api = fakeApi([[message()]], {});
+    api.status = modStatus(true);
+    api.findPlayer = vi.fn(async () => ({ ok: true as const, userid: 2503, name: "yardtester" }));
+    api.sendResult = { ok: true, threadid: 6 };
+    const { host } = await openScreen(api);
+    click(host.querySelector(".mail-list__new"));
+    await settle();
+    const to = host.querySelector<HTMLInputElement>("input.mail-compose__any")!;
+    expect(to).not.toBeNull();
+    expect(host.querySelector(".mail-compose__caption .mail-mod")).not.toBeNull();
+    to.value = "yardtester";
+    type(host.querySelector<HTMLTextAreaElement>(".mail-writer__text")!, "Please stop");
+    click(host.querySelector(".mail-writer__send"));
+    await settle();
+    await settle();
+    expect(api.findPlayer).toHaveBeenCalledWith("yardtester");
+    expect(api.sent[0]).toMatchObject({ threadid: 0, targetid: 2503, message: "Please stop" });
+  });
+
+  it("takes a past contact's name as it is, without asking the server", async () => {
+    const api = fakeApi([[message()]], {});
+    api.status = modStatus(true);
+    api.findPlayer = vi.fn();
+    const { host } = await openScreen(api);
+    click(host.querySelector(".mail-list__new"));
+    await settle();
+    host.querySelector<HTMLInputElement>("input.mail-compose__any")!.value = "bramblefoot";
+    type(host.querySelector<HTMLTextAreaElement>(".mail-writer__text")!, "Hi");
+    click(host.querySelector(".mail-writer__send"));
+    await settle();
+    await settle();
+    expect(api.findPlayer).not.toHaveBeenCalled();
+    expect(api.sent[0]).toMatchObject({ targetid: 77 });
+  });
+
+  it("shows the server's refusal when no player matches, and sends nothing", async () => {
+    const api = fakeApi([[message()]], {});
+    api.status = modStatus(true);
+    api.findPlayer = vi.fn(async () => ({ ok: false as const, reason: "No player has that name or number." }));
+    const { host } = await openScreen(api);
+    click(host.querySelector(".mail-list__new"));
+    await settle();
+    host.querySelector<HTMLInputElement>("input.mail-compose__any")!.value = "nobody";
+    type(host.querySelector<HTMLTextAreaElement>(".mail-writer__text")!, "Hi");
+    click(host.querySelector(".mail-writer__send"));
+    await settle();
+    await settle();
+    expect(api.sent).toEqual([]);
+    const refusal = host.querySelector<HTMLElement>(".mail-writer__refusal")!;
+    expect(refusal.hidden).toBe(false);
+    expect(refusal.textContent).toBe("No player has that name or number.");
+  });
+
+  it("keeps the contacts list for a player who is not a moderator", async () => {
+    const api = fakeApi([[message()]], {});
+    api.status = modStatus(false);
+    const { host } = await openScreen(api);
+    click(host.querySelector(".mail-list__new"));
+    await settle();
+    expect(host.querySelector("input.mail-compose__any")).toBeNull();
+    expect(host.querySelector("select.mail-compose__to")).not.toBeNull();
+  });
+});
