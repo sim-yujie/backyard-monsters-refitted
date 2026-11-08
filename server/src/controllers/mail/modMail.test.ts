@@ -188,12 +188,27 @@ describe("a moderator's mail", () => {
     expect(ctx.body).toMatchObject({ error: 0 });
   });
 
-  test("a block still stops a moderator", async () => {
+  test("a player's block does not stop a moderator (owner, 8 Nov)", async () => {
+    users.find((user) => user.userid === STRANGER)!.blockedUsers = [MOD];
+    const ctx = ctxFor(MOD, newMail(STRANGER));
+    await sendMessage(ctx);
+    expect(ctx.body).toMatchObject({ error: 0 });
+    expect(logRows.length).toBeGreaterThan(0);
+  });
+
+  test("a moderator's own block does not stop a player answering them", async () => {
+    users.find((user) => user.userid === MOD)!.blockedUsers = [STRANGER];
+    const ctx = ctxFor(STRANGER, newMail(MOD));
+    await sendMessage(ctx);
+    expect(ctx.body).toMatchObject({ error: 0 });
+  });
+
+  test("a block of someone taken off the moderators list counts again", async () => {
+    moderators = new Set();
     users.find((user) => user.userid === STRANGER)!.blockedUsers = [MOD];
     const ctx = ctxFor(MOD, newMail(STRANGER));
     await sendMessage(ctx);
     expect(ctx.body).toEqual({ error: 1, message: "Cannot send message to this user" });
-    expect(logRows).toEqual([]);
   });
 
   test("a moderator taken off the list is a normal player at the next send", async () => {

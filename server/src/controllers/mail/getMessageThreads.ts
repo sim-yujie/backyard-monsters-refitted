@@ -9,6 +9,7 @@ import { FilterFrontendKeys } from "../../utils/FrontendKey.js";
 import { logger } from "../../utils/logger.js";
 import { Truce } from "../../database/models/truce.model.js";
 import { truceEndsAt } from "../../services/mail/truceRules.js";
+import { blocksIgnoringStaff } from "../../services/mail/modMail.js";
 import { Message } from "../../database/models/message.model.js";
 import { MessageType } from "../../enums/MessageType.js";
 import { findInviteOutposts, inviteFields } from "../../services/mail/inviteRules.js";
@@ -40,7 +41,8 @@ export const getMessageThreads: KoaController = async (ctx) => {
       { populate: ["lastMessage"] }
     );
 
-    const blockedUsers = new Set(user.blockedUsers);
+    // Blocks of moderators and admins do not hide their mail (owner, 8 Nov).
+    const blockedUsers = new Set(await blocksIgnoringStaff(postgres.em, user.blockedUsers ?? []));
 
     // Filter out threads with blocked users and ensure they have lastMessage
     const filteredThreads = threads.filter((thread) => {

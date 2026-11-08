@@ -20,7 +20,7 @@ import { logger } from "../../utils/logger.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import { isServerSender, SUPPORT_SENDER } from "../../services/mail/systemSender.js";
 import { mayAnswerTeam } from "../../services/mail/teamThreads.js";
-import { isMailModerator, logModConversation, modNewThreadRefusal } from "../../services/mail/modMail.js";
+import { isMailModerator, isMailStaff, logModConversation, modNewThreadRefusal } from "../../services/mail/modMail.js";
 import { nudgeMail } from "../../services/mail/mailNudge.js";
 
 /**
@@ -137,8 +137,11 @@ export const sendMessage: KoaController = async (ctx) => {
       return;
     }
 
-    // Check if either user has blocked the other
-    if (blockedUsers.includes(messageTargetId) || recipient.blockedUsers.includes(userid)) {
+    // Check if either user has blocked the other. Blocks do not apply to
+    // moderators or admins on either side (owner, 8 Nov).
+    const blocked = blockedUsers.includes(messageTargetId) || recipient.blockedUsers.includes(userid);
+    const staff = blocked && (moderator || (await isMailStaff(postgres.em, userid)) || (await isMailStaff(postgres.em, messageTargetId)));
+    if (blocked && !staff) {
       ctx.status = Status.OK;
       ctx.body = { error: 1, message: "Cannot send message to this user" };
       return;
