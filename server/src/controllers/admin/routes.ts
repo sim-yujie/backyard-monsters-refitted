@@ -41,6 +41,7 @@ import { dismissChatFlags, listChatFlags, readChatLog } from "../../services/adm
 import {
   actOnCase,
   awardReporters,
+  getChatCase,
   listChatCases,
   parseCaseAction,
   parseCaseAward,
@@ -53,9 +54,9 @@ import {
   type ModeratorEffects,
 } from "../../services/admin/chatModerators.js";
 import { listModConversations, parseModMailQuery, readModConversation } from "../../services/mail/modMail.js";
+import { actOnInboxPlayer, listInbox, moderatePlayer, parseInboxAction } from "../../services/admin/moderationInbox.js";
 import {
   listChatReports,
-  moderate,
   parseModeration,
   playerModeration,
   type ModerationEffects,
@@ -133,6 +134,13 @@ const moderatorEffects: ModeratorEffects = { changed: publishModeratorsChanged }
 const CASE_REFUSAL_WORDS = {
   notFound: "There is no such case.",
   closed: "This case is already closed.",
+  noPlayer: "This player's account is gone.",
+  gameTeam: "That is a game team account.",
+} as const;
+
+const INBOX_REFUSAL_WORDS = {
+  changed: "Something new came in for this player since you opened them. Look again before deciding.",
+  nothingOpen: "Nothing is open for this player any more.",
   noPlayer: "This player's account is gone.",
   gameTeam: "That is a game team account.",
 } as const;
@@ -304,6 +312,14 @@ export const mountAdminRoutes = (router: Router): void => {
     });
   });
 
+  // One case, open or closed (the inbox shows an open case's evidence).
+  router.get(`${admin}/chatcases/:id`, apiVersion, adminOnly, async (ctx) => {
+    const id = intOf(ctx.params.id);
+    const view = id === undefined || id < 1 ? null : await getChatCase(postgres.em.fork(), id);
+    if (!view) return refuse(ctx, Status.CONFLICT, CASE_REFUSAL_WORDS.notFound, "notFound");
+    ok(ctx, { case: view });
+  });
+
   router.post(`${admin}/chatcases/:id/act`, apiVersion, adminOnly, async (ctx) => {
     const id = intOf(ctx.params.id);
     if (id === undefined || id < 1) return refuse(ctx, Status.NOT_FOUND, CASE_REFUSAL_WORDS.notFound, "notFound");
@@ -385,12 +401,47 @@ export const mountAdminRoutes = (router: Router): void => {
     const request = parseModeration(kind, ctx.request.body);
     if (!request.ok) return refuse(ctx, Status.BAD_REQUEST, request.message, "badRequest");
     const em = postgres.em.fork();
-    const done = await moderate(em, id, request.value, ctx.authUser.userid, moderationEffects);
+    // A warning, pause or ban also closes the player's open chat case and word-filter lines.
+    const { done, closed } = await moderatePlayer(em, id, request.value, ctx.authUser.userid, moderationEffects);
     if (done.outcome !== "done") {
       const status = done.outcome === "noPlayer" ? Status.NOT_FOUND : Status.CONFLICT;
       return refuse(ctx, status, MODERATION_REFUSAL_WORDS[done.outcome], done.outcome);
     }
-    ok(ctx, { player: await playerModeration(em, id) });
+    ok(ctx, { player: await playerModeration(em, id), closed });
+  });
+
+  // The moderation inbox (services/admin/moderationInbox.ts): one row per
+  // player with open items from every source; one step closes them all.
+  // Refusals are 400/409, never 404 for a known route (the page reads a 404
+  // as signed out).
+  router.get(`${admin}/inbox`, apiVersion, adminOnly, async (ctx) => {
+    const source = ctx.query.source === "reports" || ctx.query.source === "filter" ? ctx.query.source : "all";
+    const userid = intOf(ctx.query.userid);
+    ok(ctx, {
+      ...(await listInbox(postgres.em.fork(), {
+        source,
+        userid: userid !== undefined && userid > 0 ? userid : undefined,
+        offset: intOf(ctx.query.offset),
+        limit: intOf(ctx.query.limit),
+      })),
+    });
+  });
+
+  router.post(`${admin}/inbox/:id/act`, apiVersion, adminOnly, async (ctx) => {
+    const id = playerId(ctx);
+    if (id === null) return;
+    const parsed = parseInboxAction(ctx.request.body);
+    if (!parsed.ok) return refuse(ctx, Status.BAD_REQUEST, parsed.message, "badRequest");
+    const done = await actOnInboxPlayer(
+      postgres.em.fork(),
+      id,
+      parsed.value.action,
+      parsed.value.seen,
+      ctx.authUser.userid,
+      moderationEffects,
+    );
+    if (done.outcome !== "done") return refuse(ctx, Status.CONFLICT, INBOX_REFUSAL_WORDS[done.outcome], done.outcome);
+    ok(ctx, { closed: done.closed, player: done.player });
   });
 
   // Chat moderators (services/admin/chatModerators.ts): a blue [Mod] badge in

@@ -3,6 +3,7 @@ import {
   MAX_SHINY_AWARD,
   actOnCase,
   awardCaseReporters,
+  fetchChatCase,
   fetchChatCases,
   type CaseHistory,
   type CaseList,
@@ -53,7 +54,9 @@ export const outcomeWords = (closed: NonNullable<ChatCaseView["closed"]>): strin
     ? "Dismissed"
     : closed.outcome === "warn"
       ? "Warned"
-      : `Warned + paused ${closed.hours === null ? "" : lengthWords(closed.hours)}`.trim();
+      : closed.outcome === "ban"
+        ? "Banned"
+        : `Warned + paused ${closed.hours === null ? "" : lengthWords(closed.hours)}`.trim();
 
 /** Earlier warnings, pauses and bans. */
 export const earlierSteps = (history: CaseHistory): number =>
@@ -87,7 +90,7 @@ export const suggestedStep = (suggest: ChatCaseView["suggest"]): number => {
 export const defaultAward = (reporter: CaseReporter, award: { each: number; first: number }): number =>
   reporter.first ? award.first : award.each;
 
-const nameOf = (userid: number, username: string | null): string => username ?? `#${userid}`;
+export const nameOf = (userid: number, username: string | null): string => username ?? `#${userid}`;
 
 /** "14:02" for a time in ms, in the viewer's time zone. */
 const clock = (ms: number): string => dateTime(new Date(ms).toISOString()).split(" ").pop() ?? "";
@@ -128,7 +131,7 @@ const SOURCE_WORDS: Record<CaseMessage["snapshot"]["source"], string> = {
 };
 
 /** One reported line and the room around it. */
-const messageBlock = (message: CaseMessage, offender: number): HTMLElement => {
+export const messageBlock = (message: CaseMessage, offender: number): HTMLElement => {
   const lines = message.snapshot.lines;
   const marked = lines.some((line) => line.reported);
   return h(
@@ -164,7 +167,7 @@ const messageBlock = (message: CaseMessage, offender: number): HTMLElement => {
   );
 };
 
-const reporterItem = (reporter: CaseReporter): HTMLElement =>
+export const reporterItem = (reporter: CaseReporter): HTMLElement =>
   h(
     "li",
     { class: "case-reporter" },
@@ -181,7 +184,7 @@ const reporterItem = (reporter: CaseReporter): HTMLElement =>
       : null,
   );
 
-interface PanelSpec {
+export interface PanelSpec {
   fields: Child[];
   /** The button that leads to the question. */
   next: string;
@@ -197,7 +200,7 @@ interface PanelSpec {
 }
 
 /** A small form: its fields, then "are you sure?" in place of its button. */
-const panel = (spec: PanelSpec): { element: HTMLFormElement; changed(): void } => {
+export const panel = (spec: PanelSpec): { element: HTMLFormElement; changed(): void } => {
   const problem = h("p", { class: "form-error", attrs: { role: "alert", hidden: "" } });
   const say = (text: string | null) => {
     problem.hidden = text === null;
@@ -310,6 +313,25 @@ export class CasesView {
       if (this.closedFold.open && !this.closedLoaded) void this.loadClosed();
     });
     replace(this.element, this.openList, this.closedFold);
+  }
+
+  /**
+   * Shows a case (closed from the inbox, say) at the top of the open list,
+   * opened at its award step, until its reporters are seen to.
+   */
+  async openAward(caseId: number): Promise<void> {
+    let view: ChatCaseView;
+    try {
+      view = (await fetchChatCase(caseId)).case;
+    } catch (err) {
+      this.options.say(`Could not open the case: ${errorWords(err)}`);
+      return;
+    }
+    this.kept.set(view.id, view);
+    this.expanded.add(view.id);
+    if (view.reporters.some((r) => r.award === null)) this.panels.set(view.id, "award");
+    await this.loadOpen();
+    this.items.get(view.id)?.scrollIntoView?.({ block: "start" });
   }
 
   /** Loads the open cases again (and the closed ones, if they are on show). */
