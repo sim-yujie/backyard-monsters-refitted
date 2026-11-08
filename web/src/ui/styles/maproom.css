@@ -1478,3 +1478,25 @@
 .mr2-chip--neighbours {
   gap: var(--space-2);
 }
+
+/*
+ * A narrow phone (375 px): the "Find a place" bar would be squeezed to under 100 px and its label
+ * wrap to three lines, so Find shrinks to an icon-only square (its label stays for screen readers
+ * through the aria-label). Opening it still gives the full-width sheet. Last in the file so it wins
+ * over the tool-row offsets above.
+ */
+@media (width <= 440px) {
+  .overlay__layer:not(:has(.mr2-find--open)) > .mr2-find-dock {
+    right: auto !important;
+  }
+
+  .mr2-find-dock .mr2-find__button {
+    width: var(--control-height);
+    padding: 0;
+    justify-content: center;
+  }
+
+  .mr2-find-dock .mr2-find__phone-label {
+    display: none;
+  }
+}

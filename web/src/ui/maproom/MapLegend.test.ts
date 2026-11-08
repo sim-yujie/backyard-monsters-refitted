@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
-import { cssHex, RELATION_LOOK } from "@/game/maproom/relationLook";
-import { MAP_LEGEND_TEXT, MapLegend, relationSwatch } from "./MapLegend";
+import { RELATION_LOOK } from "@/game/maproom/relationLook";
+import { MAP_LEGEND_TEXT, MapLegend, relationSwatch, swatchLineColour } from "./MapLegend";
 
 /** The border colours' key on Map Room 2 (owner, 8 Nov 2026). */
 describe("MapLegend", () => {
@@ -52,19 +52,28 @@ describe("MapLegend", () => {
     const strokes = [...hostile.querySelectorAll("polygon")].map((shape) =>
       shape.getAttribute("stroke"),
     );
-    expect(strokes).toContain(cssHex(RELATION_LOOK.hostile.colour));
+    expect(strokes).toContain(swatchLineColour(RELATION_LOOK.hostile.colour));
     expect(hostile.querySelector("img")?.dataset["icon"]).toBe("swords");
     expect(legend.element.querySelector('[data-relation="other"] img')).toBeNull();
   });
 
-  it("draws dashes for hostile and two lines for friends", () => {
+  it("draws dashes for hostile, two lines for friends and three for pinned friends", () => {
     expect(relationSwatch("hostile").querySelector("[stroke-dasharray]")).not.toBeNull();
-    const friendColour = cssHex(RELATION_LOOK.friend.colour);
+    const friendColour = swatchLineColour(RELATION_LOOK.friend.colour);
     const friendLines = [...relationSwatch("friend").querySelectorAll("polygon")].filter(
       (shape) => shape.getAttribute("stroke") === friendColour,
     );
     expect(friendLines).toHaveLength(2);
+    const pinnedColour = swatchLineColour(RELATION_LOOK.pinned.colour);
+    const pinnedLines = [...relationSwatch("pinned").querySelectorAll("polygon")].filter(
+      (shape) => shape.getAttribute("stroke") === pinnedColour,
+    );
+    expect(pinnedLines).toHaveLength(3);
     expect(relationSwatch("other").querySelector("[stroke-dasharray]")).toBeNull();
+  });
+
+  it("shows the friend swatch in the colour the map line ends up (40 per cent towards white)", () => {
+    expect(swatchLineColour(0xff5fd2)).toBe("#ff9fe4");
   });
 
   it("opens from the Key button and closes on a second press", () => {

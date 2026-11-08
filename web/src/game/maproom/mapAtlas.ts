@@ -357,13 +357,13 @@ export class MapAtlas {
  * and for a double line how far each stroke sits from the middle. Drawn a little inside the hex
  * (`RELATION_INSET`) so two neighbours' borders each show on their own side.
  */
-export const RELATION_LINES: Record<BorderStyle, { width: number; offset: number; dashed?: boolean }> = {
+export const RELATION_LINES: Record<BorderStyle, { width: number; offset: number; dashed?: boolean; middle?: boolean }> = {
   thick: { width: 5, offset: 0 },
-  solid: { width: 3.5, offset: 0 },
-  thin: { width: 2.5, offset: 0 },
+  solid: { width: 3.8, offset: 0 },
+  thin: { width: 3.2, offset: 0 },
   dashed: { width: 4, offset: 0, dashed: true },
   double: { width: 2, offset: 2.6 },
-  doubleBold: { width: 2.8, offset: 3.4 },
+  triple: { width: 2, offset: 3.8, middle: true },
 };
 const RELATION_INSET = 0.9;
 /** The dark rim's width either side of the line. */
@@ -390,7 +390,7 @@ const strokeDashed = (g: Graphics, points: number[], width: number, colour: numb
 
 /** One relation line, or (`rim`) the dark band under it, white either way. */
 const drawRelationLine = (g: Graphics, style: BorderStyle, rim: boolean): void => {
-  const { width, offset, dashed } = RELATION_LINES[style];
+  const { width, offset, dashed, middle } = RELATION_LINES[style];
   if (rim) {
     const rimWidth = offset * 2 + width + RELATION_RIM * 2;
     if (dashed) strokeDashed(g, insetHex(0), rimWidth, 0xffffff);
@@ -402,6 +402,7 @@ const drawRelationLine = (g: Graphics, style: BorderStyle, rim: boolean): void =
   } else if (offset > 0) {
     g.poly(insetHex(offset)).stroke({ width, color: 0xffffff, alignment: 0.5 });
     g.poly(insetHex(-offset)).stroke({ width, color: 0xffffff, alignment: 0.5 });
+    if (middle) g.poly(insetHex(0)).stroke({ width, color: 0xffffff, alignment: 0.5 });
   } else {
     g.poly(insetHex(0)).stroke({ width, color: 0xffffff, alignment: 0.5 });
   }

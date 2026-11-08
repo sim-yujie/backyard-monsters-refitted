@@ -10,7 +10,8 @@
  *    on 3 Nov, and the map's "you" accent everywhere else (range line, own plate ring).
  *  - Alliance, green `#54f06e`: kept from 3 Nov. Hidden in the legend until alliances exist.
  *  - Friend, pink-magenta `#ff5fd2`, a double line; Pinned friend, lighter pink `#ffa0ea`, a
- *    bolder double line with a stronger glow. Magenta is the one hue nowhere in the terrain
+ *    triple line (a third stroke down the middle, so it differs by shape and not only by tint)
+ *    with a stronger glow. Magenta is the one hue nowhere in the terrain
  *    (green and yellow grass, blue water, sand, grey rock) and far from cyan, green, blue and red.
  *    Gold (the Map Room 1 pinned colour) would vanish on sand and yellow grass.
  *  - Hostile, red `#ff4a3d`, a dashed line: kept from the 3 Nov "attacked you" red.
@@ -29,7 +30,7 @@
 export type PlayerRelation = "you" | "alliance" | "pinned" | "friend" | "hostile" | "other";
 
 /** The line a relation draws: its weight and pattern. */
-export type BorderStyle = "thick" | "solid" | "thin" | "double" | "doubleBold" | "dashed";
+export type BorderStyle = "thick" | "solid" | "thin" | "double" | "triple" | "dashed";
 
 export interface RelationLook {
   colour: number;
@@ -41,7 +42,7 @@ export interface RelationLook {
 export const RELATION_LOOK: Record<PlayerRelation, RelationLook> = {
   you: { colour: 0x3cf2ff, style: "thick", label: "Yours" },
   alliance: { colour: 0x54f06e, style: "solid", label: "Alliance" },
-  pinned: { colour: 0xffa0ea, style: "doubleBold", label: "Pinned friend" },
+  pinned: { colour: 0xffa0ea, style: "triple", label: "Pinned friend" },
   friend: { colour: 0xff5fd2, style: "double", label: "Friend" },
   hostile: { colour: 0xff4a3d, style: "dashed", label: "Hostile" },
   other: { colour: 0x4a9bff, style: "thin", label: "Neutral" },

@@ -188,6 +188,9 @@ describe("border pulse and shader", () => {
     }
     expect(BORDER_FRAGMENT).toContain("relation == 4) { colour = uHostile; halfK = 1.2; dashed = true; }");
     expect(BORDER_FRAGMENT).toContain("relation == 5) { colour = uFriend; halfK = 0.7; doubleGap = 0.018; }");
+    // A pinned friend's third stroke down the middle.
+    expect(BORDER_FRAGMENT).toContain("triple = true;");
+    expect(BORDER_FRAGMENT).toContain("if (triple) fromLine = min(fromLine, fromCentre);");
   });
 
   it("walks the neighbours in HexGrid's order", () => {

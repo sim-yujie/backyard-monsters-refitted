@@ -48,6 +48,19 @@ export const MAP_LEGEND_TEXT = {
   tooltip: "What the border colours mean",
 } as const;
 
+/**
+ * The colour a border line shows on the map: the painted shader runs the middle of the line 40 per
+ * cent towards white, as a glowing tube does, so a swatch drawn in the plain colour looked darker
+ * than the border it explains (the friend pink most).
+ */
+export const swatchLineColour = (colour: number): string => {
+  const lift = (shift: number): number => {
+    const channel = (colour >> shift) & 0xff;
+    return Math.round(channel + (255 - channel) * 0.4);
+  };
+  return cssHex((lift(16) << 16) | (lift(8) << 8) | lift(0));
+};
+
 /** A pointy-top hex's corners inside a `w` by `h` box, inset by `inset`. */
 const hexPoints = (w: number, h: number, inset: number): string => {
   const cx = w / 2;
@@ -79,7 +92,7 @@ const STROKE: Record<BorderStyle, number> = {
   solid: 2.6,
   thin: 1.6,
   double: 1.4,
-  doubleBold: 2,
+  triple: 1.2,
   dashed: 2.6,
 };
 
@@ -99,7 +112,7 @@ export const relationSwatch = (relation: PlayerRelation, size = 28): SVGSVGEleme
   svg.classList.add("mr2-key__swatch");
   svg.dataset["style"] = look.style;
 
-  const colour = cssHex(look.colour);
+  const colour = swatchLineColour(look.colour);
   const rim = cssHex(BORDER_RIM_COLOUR);
   const width = STROKE[look.style];
   const outer = hexPoints(w, h, 2.5);
@@ -112,8 +125,8 @@ export const relationSwatch = (relation: PlayerRelation, size = 28): SVGSVGEleme
     }),
   );
 
-  if (look.style === "double" || look.style === "doubleBold") {
-    const gap = width + 2.2;
+  if (look.style === "double" || look.style === "triple") {
+    const gap = look.style === "triple" ? 4.6 : width + 2.2;
     svg.append(
       polygon(hexPoints(w, h, 2.5 + gap), {
         fill: "none",
@@ -137,6 +150,16 @@ export const relationSwatch = (relation: PlayerRelation, size = 28): SVGSVGEleme
         "stroke-linejoin": "round",
       }),
     );
+    if (look.style === "triple") {
+      svg.append(
+        polygon(hexPoints(w, h, 2.5 + gap / 2), {
+          fill: "none",
+          stroke: colour,
+          "stroke-width": String(width),
+          "stroke-linejoin": "round",
+        }),
+      );
+    }
   } else {
     const attrs: Record<string, string> = {
       fill: "none",

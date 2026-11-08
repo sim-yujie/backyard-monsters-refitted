@@ -122,12 +122,13 @@ void main() {
   float hazeK = 1.0;
   float doubleGap = 0.0;
   bool dashed = false;
+  bool triple = false;
   if (relation == 1) { colour = uYou; halfK = 1.5; }
   else if (relation == 2) { colour = uAlliance; }
   else if (relation == 3) { colour = uOther; halfK = 0.8; glowK = 0.6; hazeK = 0.5; }
   else if (relation == 4) { colour = uHostile; halfK = 1.2; dashed = true; }
   else if (relation == 5) { colour = uFriend; halfK = 0.7; doubleGap = 0.018; }
-  else { colour = uPinned; halfK = 0.95; doubleGap = 0.024; glowK = 1.35; }
+  else { colour = uPinned; halfK = 0.75; doubleGap = 0.034; glowK = 1.35; triple = true; }
 
   float cellPts = uCellPoints;
   float haze = uQuality > 0.5 ? HAZE * hazeK * cellPts : 0.0;
@@ -140,6 +141,8 @@ void main() {
   float pixel = max(fwidth(d), 1e-4);
   float fromCentre = abs(d - LINE_INSET * cellPts);
   float fromLine = abs(fromCentre - gap);
+  // A pinned friend adds a third stroke down the middle: three lines to a friend's two.
+  if (triple) fromLine = min(fromLine, fromCentre);
   float half_ = max(LINE_HALF * halfK * cellPts, 0.9 * pixel);
   float line = 1.0 - smoothstep(half_ - 0.5 * pixel, half_ + 0.75 * pixel, fromLine);
   // The dark rim round the whole band (and between a double line's strokes).
