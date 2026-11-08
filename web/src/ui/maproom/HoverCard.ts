@@ -138,8 +138,8 @@ export const hoverContentFor = (
   const mark =
     isPlayerCell(payload) && !mine ? friendMarkOf(payload.uid, { friend: payload.fr === 1, pinned: payload.fp === 1 }) : null;
   const friend = mark ? { friend: mark } : {};
-  // Someone else's picture wears their border's colour (owner, 8 Nov 2026): friend pink, pinned
-  // friend light pink, hostile red; a neutral player's stays plain, as the map's quiet blue line.
+  // Someone else's picture wears their border's colour (owner, 8 Nov 2026): friend green, pinned
+  // friend light mint, hostile red; a neutral player's stays plain, as the map's quiet grey line.
   if (isPlayerCell(payload) && !mine) {
     const relation = relationOf(payload, null, mark ?? "none");
     if (relation === "pinned" || relation === "friend" || relation === "hostile") ring = cssHex(RELATION_LOOK[relation].colour);

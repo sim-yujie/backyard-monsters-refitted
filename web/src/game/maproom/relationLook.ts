@@ -5,25 +5,30 @@
  * (`painted/BorderLayer.ts`), the tile map's border sprites (`MapChunk`, Classic and the painted
  * look switched off), the far view's dots (`rasterColour`) and the legend's swatches.
  *
- * The palette, and why:
+ * The palette, and why (owner, 8 Nov 2026: "dont use pink for friends. Green for friends?
+ * Alliance dark blue? red for enemies"):
  *  - Yours, cyan `#3cf2ff`, the thickest line: kept from the painted borders the owner approved
- *    on 3 Nov, and the map's "you" accent everywhere else (range line, own plate ring).
- *  - Alliance, green `#54f06e`: kept from 3 Nov. Hidden in the legend until alliances exist.
- *  - Friend, pink-magenta `#ff5fd2`, a double line; Pinned friend, lighter pink `#ffa0ea`, a
+ *    on 3 Nov, and the map's "you" accent everywhere else (range line, own plate ring). Kept next
+ *    to the dark-blue alliance: cyan is far lighter (14 times the rim's luminance to 3.7) and thick.
+ *  - Alliance, dark blue `#2f5bff`, a solid line. Hidden in the legend until alliances exist.
+ *    Dark against the ground, so the rim carries it: its glowing middle is 7.5 times the rim.
+ *  - Friend, emerald green `#2ee86b`, a double line; Pinned friend, light mint `#a4ffbe`, a
  *    triple line (a third stroke down the middle, so it differs by shape and not only by tint)
- *    with a stronger glow. Magenta is the one hue nowhere in the terrain
- *    (green and yellow grass, blue water, sand, grey rock) and far from cyan, green, blue and red.
- *    Gold (the Map Room 1 pinned colour) would vanish on sand and yellow grass.
+ *    with a stronger glow. The greens are a cool green (hue 137 to 140) well apart from the
+ *    yellow-green grass (hue 75 to 85) and far brighter: 3.1 and 4.2 times the main grass's
+ *    luminance (the old pink was only 1.9), and 12 and 16 times the rim.
  *  - Hostile, red `#ff4a3d`, a dashed line: kept from the 3 Nov "attacked you" red.
- *  - Neutral, blue `#4a9bff`, the thinnest solid line and the softest glow: kept from 3 Nov,
- *    calmer because most players are neutral.
+ *  - Neutral, pale grey `#c2c9d2`, the thinnest solid line and the softest glow: calm because
+ *    most players are neutral, and no longer a blue beside the alliance's dark blue. It is the far
+ *    view's neutral player colour too (a near-white dot).
  *
- * Every border also sits on a thin dark rim (`BORDER_RIM_COLOUR`): the bright colours alone are
- * only 1.2 to 3.7 times the luminance of sand, water and grass, but against the rim they are 6 to
- * 15 times, so they read on any ground. For colour-blind players the line style carries the
- * meaning too: with red-green blindness green and red both look olive-yellow (hostile is dashed,
- * alliance solid) and magenta looks lavender-blue like neutral (friend is double, neutral single);
- * with blue-yellow blindness pink and red look alike (dashed versus double again).
+ * Every border also sits on a thin dark rim (`BORDER_RIM_COLOUR`): on sand, water or grass the
+ * colours alone can be as little as 1.0 to 1.5 times the ground's luminance (blue on grass and
+ * water, grey and green on sand), but against the rim they are 6.8 to 17 times (the line's middle,
+ * 40 per cent towards white), so they read on any ground. For colour-blind players the line style
+ * carries the meaning too: with red-green blindness the friend greens and the hostile red both look
+ * olive-yellow (double or triple versus dashed); blue and cyan stay apart by weight (solid versus
+ * thick) and grey neutral is a single thin line against the friends' double and triple.
  */
 
 /** How a player cell relates to the viewer, most important first. */
@@ -41,11 +46,11 @@ export interface RelationLook {
 
 export const RELATION_LOOK: Record<PlayerRelation, RelationLook> = {
   you: { colour: 0x3cf2ff, style: "thick", label: "Yours" },
-  alliance: { colour: 0x54f06e, style: "solid", label: "Alliance" },
-  pinned: { colour: 0xffa0ea, style: "triple", label: "Pinned friend" },
-  friend: { colour: 0xff5fd2, style: "double", label: "Friend" },
+  alliance: { colour: 0x2f5bff, style: "solid", label: "Alliance" },
+  pinned: { colour: 0xa4ffbe, style: "triple", label: "Pinned friend" },
+  friend: { colour: 0x2ee86b, style: "double", label: "Friend" },
   hostile: { colour: 0xff4a3d, style: "dashed", label: "Hostile" },
-  other: { colour: 0x4a9bff, style: "thin", label: "Neutral" },
+  other: { colour: 0xc2c9d2, style: "thin", label: "Neutral" },
 };
 
 /** The dark rim under every border, and how opaque it is. */
@@ -53,7 +58,7 @@ export const BORDER_RIM_COLOUR = 0x0b0f14;
 export const BORDER_RIM_ALPHA = 0.55;
 
 /**
- * Whether alliances exist yet. They do not (beta 7): alliance-mates still get the green border if
+ * Whether alliances exist yet. They do not (beta 7): alliance-mates still get the dark-blue border if
  * the server ever sends a shared alliance (`PlayerCell.aid` equal to `GetAreaResponse.myalliance`),
  * but the legend leaves the Alliance row out until this is switched on.
  */

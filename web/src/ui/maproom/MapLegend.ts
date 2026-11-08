@@ -51,7 +51,7 @@ export const MAP_LEGEND_TEXT = {
 /**
  * The colour a border line shows on the map: the painted shader runs the middle of the line 40 per
  * cent towards white, as a glowing tube does, so a swatch drawn in the plain colour looked darker
- * than the border it explains (the friend pink most).
+ * than the border it explains (the dark-blue alliance most).
  */
 export const swatchLineColour = (colour: number): string => {
   const lift = (shift: number): number => {

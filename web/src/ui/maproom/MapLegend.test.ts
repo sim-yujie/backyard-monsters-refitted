@@ -73,7 +73,8 @@ describe("MapLegend", () => {
   });
 
   it("shows the friend swatch in the colour the map line ends up (40 per cent towards white)", () => {
-    expect(swatchLineColour(0xff5fd2)).toBe("#ff9fe4");
+    expect(swatchLineColour(RELATION_LOOK.friend.colour)).toBe("#82f1a6");
+    expect(swatchLineColour(RELATION_LOOK.alliance.colour)).toBe("#829dff");
   });
 
   it("opens from the Key button and closes on a second press", () => {
