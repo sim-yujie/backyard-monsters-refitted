@@ -42,6 +42,7 @@ import { tagStyle, type TagStyle } from "./painted/markerStyle";
 import { GROUND_ANCHOR_X, groundAnchorY, type GroundArt } from "./groundArt";
 import type { MapPicture } from "./mapPicture";
 import { MarkerPins } from "./markerPins";
+import { BORDER_RIM_COLOUR, PINNED_CENTRE_COLOUR, RELATION_LOOK, TILE_RIM_ALPHA } from "./relationLook";
 
 /**
  * One 10 x 10 block of the map, built once as sprites.
@@ -324,6 +325,24 @@ export class MapChunk {
         outline.alpha = GRID_ALPHA;
         this.outlineSprites.push(outline);
         this.addGround(outline, order + 0.25);
+
+        // A player's cell wears its relation border (owner, 8 Nov 2026) on a dark rim. Only seen
+        // on the tile map: the painted look hides this ground and draws its own (`BorderLayer`).
+        if (appearance.relation !== null) {
+          const look = RELATION_LOOK[appearance.relation];
+          const alpha = appearance.dimmed ? DIMMED_ALPHA : 1;
+          const rim = place(new Sprite(this.atlas.relationRims[look.style]), centre.x, centre.y, BORDER_RIM_COLOUR);
+          rim.alpha = TILE_RIM_ALPHA * alpha;
+          this.addGround(rim, order + 0.3);
+          const border = place(new Sprite(this.atlas.relationBorders[look.style]), centre.x, centre.y, look.colour);
+          border.alpha = alpha;
+          this.addGround(border, order + 0.35);
+          if (look.style === "triple") {
+            const centre2 = place(new Sprite(this.atlas.pinnedCentre), centre.x, centre.y, PINNED_CENTRE_COLOUR);
+            centre2.alpha = alpha;
+            this.addGround(centre2, order + 0.36);
+          }
+        }
 
         if (appearance.marker === CellMarker.YARD || appearance.marker === CellMarker.OUTPOST) {
           this.addPlayer(appearance, centre.x, centre.y);

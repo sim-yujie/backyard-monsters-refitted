@@ -14,6 +14,7 @@ import {
   unblockPlayer,
 } from "../../services/friends/friendships.js";
 import { FRIEND_LIMITS } from "../../services/friends/friendRules.js";
+import { setFriendPinned } from "../../services/friends/friendPins.js";
 import { countWaitingGifts, giftedToday } from "../../services/friends/gifts.js";
 import { friendsHelp, helpsToday } from "../../services/friends/helpFacts.js";
 import { helpsLeftOf } from "../../services/friends/helpRules.js";
@@ -46,6 +47,7 @@ export const AnswerRequestSchema = z.object({ requestid: id, accept: z.boolean()
 export const CancelRequestSchema = z.object({ requestid: id });
 export const PlayerSchema = z.object({ userid: id });
 export const SearchSchema = z.object({ q: z.string().trim().min(3).max(64) });
+export const PinSchema = z.object({ userid: id, pinned: z.boolean() });
 
 /** `GET /bm/friends`: the list and the counts the bar and screen show. */
 export const friendsAnswer = async (em: EntityManager, user: User, now: number): Promise<FriendsBody> => {
@@ -66,6 +68,7 @@ export const friendsAnswer = async (em: EntityManager, user: User, now: number):
     error: 0,
     friends,
     max: FRIEND_LIMITS.maxFriends,
+    maxPinned: FRIEND_LIMITS.maxPinned,
     requestsIn,
     giftsWaiting,
     helpsLeft: helpsLeftOf(today),
@@ -102,6 +105,17 @@ export const removeAnswer = async (em: EntityManager, user: User, body: unknown)
   const { userid } = PlayerSchema.parse(body);
   await removeFriend(em, user.userid, userid);
   return { error: 0 };
+};
+
+/**
+ * `POST /bm/friends/pin` `{ userid, pinned }` (beta 7): pins a friend to the
+ * top of the list, or unpins them. Refuses `notFriends`, `self`, and
+ * `pinLimit` once 10 are pinned.
+ */
+export const pinAnswer = async (em: EntityManager, user: User, body: unknown, now: number): Promise<FriendsBody> => {
+  const { userid, pinned } = PinSchema.parse(body);
+  const result = await setFriendPinned(em, user.userid, userid, pinned, now);
+  return { error: 0, userid, ...result, maxPinned: FRIEND_LIMITS.maxPinned };
 };
 
 /** `GET /bm/friends/search?q=`: up to 10 players. */

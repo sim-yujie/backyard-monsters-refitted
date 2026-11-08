@@ -423,6 +423,86 @@
   display: none;
 }
 
+/* The border colours' key (owner, 8 Nov 2026, `MapLegend.ts`): a tool button
+   with three small bordered hexes, opening a card of swatches above the row. */
+.mr2-key__icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.mr2-key__icon .mr2-key__swatch + .mr2-key__swatch {
+  margin-left: -3px;
+}
+
+.mr2-key__toggle[aria-expanded="true"] {
+  border: 2px solid var(--colour-accent);
+  padding: 0 calc(var(--space-4) - 1px);
+  color: var(--colour-accent);
+}
+
+.mr2-tools-dock .mr2-key {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-2));
+  z-index: 2;
+  width: max-content;
+  min-width: 13rem;
+  max-width: calc(100vw - 24px);
+  padding: var(--space-3) var(--space-4);
+}
+
+.mr2-key[hidden] {
+  display: none;
+}
+
+.mr2-key__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+
+.mr2-key__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mr2-key__row {
+  display: grid;
+  grid-template-columns: 28px 24px 1fr;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mr2-key__swatch {
+  display: block;
+  flex: none;
+}
+
+.mr2-key__picture {
+  display: flex;
+  width: 24px;
+  height: 24px;
+}
+
+.mr2-key__words {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.mr2-key__label {
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.mr2-key__hint {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
 /* The kit filter (#334): a compact row of pill buttons, smaller than .mr2-tool. */
 .mr2-kit-filter {
   display: flex;
@@ -1289,7 +1369,12 @@
      icon buttons (My range went in beta 6). The kit row folds into Filter and opens as a list
      under it, so nothing is pushed off the screen's edge. */
   .mr2-find-dock {
-    right: calc(12px + 2 * var(--control-height) + 2 * var(--space-2));
+    right: calc(12px + 3 * var(--control-height) + 3 * var(--space-2));
+  }
+
+  /* Mail, Filter and Key, plus the "Tilted map" button where the map tilts. */
+  .overlay__layer:has(.mr2-tilt-toggle:not([hidden])):not(:has(.mr2-find--open)) > .mr2-find-dock {
+    right: calc(12px + 4 * var(--control-height) + 4 * var(--space-2));
   }
 
   /* The open Find sheet takes the whole width; the tool row steps aside. */
@@ -1333,6 +1418,16 @@
   /* The kit list hangs under the row. */
   .mr2-tools-dock .mr2-kit-filter {
     top: calc(100% + var(--space-2));
+  }
+
+  /* So does the key, and its lit border keeps the square button's size. */
+  .mr2-tools-dock .mr2-key {
+    top: calc(100% + var(--space-2));
+    bottom: auto;
+  }
+
+  .mr2-tools-dock .mr2-key__toggle[aria-expanded="true"] {
+    padding: 0;
   }
 }
 
@@ -1560,6 +1655,28 @@
    and bar stay. */
 @media (height <= 500px) {
   .mr2-prepare__art {
+    display: none;
+  }
+}
+
+/*
+ * A narrow phone (375 px): the "Find a place" bar would be squeezed to under 100 px and its label
+ * wrap to three lines, so Find shrinks to an icon-only square (its label stays for screen readers
+ * through the aria-label). Opening it still gives the full-width sheet. Last in the file so it wins
+ * over the tool-row offsets above.
+ */
+@media (width <= 440px) {
+  .overlay__layer:not(:has(.mr2-find--open)) > .mr2-find-dock {
+    right: auto !important;
+  }
+
+  .mr2-find-dock .mr2-find__button {
+    width: var(--control-height);
+    padding: 0;
+    justify-content: center;
+  }
+
+  .mr2-find-dock .mr2-find__phone-label {
     display: none;
   }
 }

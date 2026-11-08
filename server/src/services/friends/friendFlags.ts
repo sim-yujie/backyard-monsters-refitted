@@ -17,6 +17,32 @@ export const friendsAmong = async (em: EntityManager, userid: number | undefined
   return new Set(rows.map((row) => Number(row.friend_userid)));
 };
 
+/**
+ * {@link friendsAmong} and, of those, the ones `userid` pinned (beta 7): the
+ * sets behind `fr` / `fp` on Map Room 2 cells and `friend` / `friendpinned`
+ * in Map Room 1 neighbour lists. One query for both.
+ */
+export const friendMarksAmong = async (
+  em: EntityManager,
+  userid: number | undefined,
+  ids: readonly number[]
+): Promise<{ friends: Set<number>; pinned: Set<number> }> => {
+  const others = [...new Set(ids)].filter((id) => id !== userid);
+  if (userid === undefined || others.length === 0) return { friends: new Set(), pinned: new Set() };
+  const rows = await em.execute<{ friend_userid: number; pinned: boolean }[]>(
+    `SELECT friend_userid, pinned_at IS NOT NULL AS pinned FROM bym.friend
+      WHERE userid = ? AND friend_userid IN (${others.map(() => "?").join(", ")})`,
+    [userid, ...others]
+  );
+  const friends = new Set<number>();
+  const pinned = new Set<number>();
+  for (const row of rows) {
+    friends.add(Number(row.friend_userid));
+    if (row.pinned) pinned.add(Number(row.friend_userid));
+  }
+  return { friends, pinned };
+};
+
 /** `1` for a friend, else `0`: the legacy flag's value. */
 export const friendFlag = (friends: ReadonlySet<number>, userid: number): 0 | 1 => (friends.has(userid) ? 1 : 0);
 

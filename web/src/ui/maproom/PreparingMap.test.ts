@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HOLD_MS, LOADING_ART_URL, PREPARE_LABEL, PreparingMap } from "./PreparingMap";
 
@@ -88,5 +90,38 @@ describe("PreparingMap", () => {
     screen.set({ show: false, percent: 100 });
     screen.destroy();
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+/**
+ * The screen must stay over every Map Room 2 control while it shows (owner, 8 Nov 2026): the Key
+ * button and its legend card (friends work), the hover card, the tool row. They all live in the
+ * same overlay, so every z-index in the map's stylesheet must stay under the screen's.
+ */
+describe("the Preparing map screen stays on top of the map's controls", () => {
+  const css = readFileSync(resolve(process.cwd(), "src/ui/styles/maproom.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const blocks = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({
+    selector: (selector ?? "").trim(),
+    body: body ?? "",
+  }));
+  const zOf = (body: string): string | null => /z-index:\s*([^;]+);/.exec(body)?.[1]?.trim() ?? null;
+  const screenZ = Number(zOf(blocks.find(({ selector }) => selector === ".mr2-prepare")?.body ?? ""));
+  /** The design tokens these rules use (tokens.css): the overlay is 10, the top bar 20. */
+  const TOKENS: Record<string, number> = { "var(--z-canvas)": 0, "var(--z-overlay)": 10 };
+
+  it("has a z-index above the overlay (10) and below the top bar (20), which stays usable", () => {
+    expect(screenZ).toBeGreaterThan(10);
+    expect(screenZ).toBeLessThan(20);
+  });
+
+  it("is above the Key button's legend card and every other map control", () => {
+    const others = blocks.filter(({ selector, body }) => zOf(body) !== null && !selector.includes("mr2-prepare"));
+    expect(others.some(({ selector }) => selector.includes(".mr2-key"))).toBe(true);
+    for (const { selector, body } of others) {
+      const raw = zOf(body) ?? "";
+      const z = raw in TOKENS ? TOKENS[raw] : Number(raw);
+      expect({ selector, z }).toEqual({ selector, z: expect.any(Number) });
+      expect(z, selector).toBeLessThan(screenZ);
+    }
   });
 });

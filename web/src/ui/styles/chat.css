@@ -390,10 +390,24 @@ button.chat-line__name {
   display: none;
 }
 
+/* The name opens the player's profile: a plain-looking button on its own row. */
 .chat-box__player-name {
   flex: 1 1 100%;
   min-width: 0;
+  padding: 0 28px 0 0;
+  border: 0;
+  background: none;
   color: var(--chat-name);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.chat-box__player-name:hover,
+.chat-box__player-name:focus-visible {
+  text-decoration: underline;
 }
 
 .chat-box__actions {
@@ -412,6 +426,58 @@ button.chat-line__name {
 .chat-box__action {
   min-height: 32px;
   padding: var(--space-1) var(--space-3);
+}
+
+/* Icon-first (owner, 8 Nov 2026): Add friend, Mute, View yard and Report are
+   painted pictures with a tiny word under them, all one size so the strip
+   does not jump as Add friend turns to Sent or Friend. */
+.chat-box__action--icon {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 56px;
+  min-height: 48px;
+  padding: 4px 6px;
+}
+
+.chat-box__action--icon .game-icon,
+.chat-box__action--icon .friend-badge {
+  flex: none;
+}
+
+.chat-box__action-label {
+  font-size: var(--text-xs);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.chat-box__action--icon:disabled {
+  cursor: default;
+}
+
+/* Classic's buttons do not fade when disabled, so a Sent or Friend picture looked
+   as lit as an active one: dim the picture and drop its colour (the word stays
+   readable, and is still the accessible name). */
+:root[data-skin="flash"] .chat-box__action--icon:disabled .game-icon,
+:root[data-skin="flash"] .chat-box__action--icon:disabled .friend-badge {
+  opacity: 0.4;
+  filter: grayscale(0.85);
+}
+
+:root[data-skin="flash"] .chat-box__action--icon:disabled .chat-box__action-label {
+  opacity: 0.75;
+}
+
+/* Muted: the same picture on a lit button, its word now Unmute. */
+.chat-box__action--on {
+  outline: 2px solid var(--colour-accent);
+  outline-offset: -2px;
+}
+
+.chat-box__friend {
+  display: inline-flex;
 }
 
 .chat-box__player-close {
@@ -550,5 +616,22 @@ button.chat-line__name {
   .chat-box--open .chat-line,
   .chat-box__action {
     min-height: 32px;
+  }
+
+  /* A phone keeps only the pictures: 40px squares in one row, the word
+     still the tooltip and the screen reader's name. */
+  .chat-box__action.chat-box__action--icon {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 4px;
+  }
+
+  .chat-box__action--icon .chat-box__action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }

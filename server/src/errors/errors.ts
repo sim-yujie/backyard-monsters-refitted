@@ -1229,6 +1229,7 @@ export type FriendRefusal =
   | "noSuchPlayer"
   | "noSuchRequest"
   | "noSuchGift"
+  | "pinLimit"
   | "self";
 
 const FRIEND_REFUSAL_MESSAGES: Record<FriendRefusal, string> = {
@@ -1253,6 +1254,7 @@ const FRIEND_REFUSAL_MESSAGES: Record<FriendRefusal, string> = {
   noSuchPlayer: "There is no player with that name.",
   noSuchRequest: "That request is no longer waiting for an answer.",
   noSuchGift: "That gift is no longer waiting.",
+  pinLimit: "You can pin up to 10 friends. Unpin one first.",
   self: "That's you!",
 };
 

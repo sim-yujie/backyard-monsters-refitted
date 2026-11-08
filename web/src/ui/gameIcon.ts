@@ -65,6 +65,16 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * domed Town Hall with its horn antenna (`townhall`), a gold crown for empire
  * points (`empire`), two smiling monster heads for friends (`friends`) and the
  * crimson alliance shield with its gold stripe (`alliance`).
+ *
+ * Pinning a friend to the top of the list (beta 7, `ui/friends/FriendsTab.ts`):
+ * `pin`. A STAND-IN for now: its files are copies of the gold crown
+ * (`empire`) until a painted pin is made; replace `pin-*.webp` to change it.
+ *
+ * World chat's player strip (`ui/chat/ChatBox.ts`, owner 8 Nov: icons rather than
+ * words): `addfriend`, `mute` and `report` are STAND-INS too until they are painted:
+ * `addfriend` copies the two monster heads (`friends`; wants a green plus), `mute` the
+ * blue Protection shield (wants a speaker with a cross) and `report` the white flag of
+ * Retreat (wants a red warning flag). Replace their `*.webp` files to change them.
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -111,6 +121,10 @@ export const GAME_ICONS = {
   empire: "Empire points",
   friends: "Friends",
   alliance: "Alliance",
+  pin: "Pin to top",
+  addfriend: "Add friend",
+  mute: "Mute",
+  report: "Report",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;

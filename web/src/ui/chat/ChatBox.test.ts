@@ -9,6 +9,10 @@ import {
   type ChatSocket,
 } from "@/game/chat/chatSession";
 import { ChatBox } from "./ChatBox";
+import { FriendRelations } from "@/game/friends/friendRelations";
+import { FriendsStore } from "@/game/friends/friendsStore";
+import { fixtureApi, fixtureFriend, fixtureList, fixtureRequest } from "@/game/friends/friendsFixture";
+import { ADD_FRIEND_TEXT } from "@/ui/friends/AddFriendButton";
 import { openProfile } from "@/ui/profile/ProfileDialog";
 
 vi.mock("@/ui/profile/ProfileDialog", () => ({ openProfile: vi.fn() }));
@@ -51,6 +55,14 @@ let session: ChatSession;
 let api: { report: ReturnType<typeof vi.fn>; yardOf: ReturnType<typeof vi.fn> };
 let onViewYard: ReturnType<typeof vi.fn>;
 let box: ChatBox;
+let friends: ReturnType<typeof makeFriends>;
+
+const makeFriends = (answers: Parameters<typeof fixtureApi>[0] = {}) => {
+  const { api, calls } = fixtureApi(answers);
+  const store = new FriendsStore({ api });
+  const relations = new FriendRelations({ api, store, now: () => 0 });
+  return { api, calls, store, relations };
+};
 
 const mount = (history: ChatLineWire[]) => {
   session = new ChatSession(() => (socket = fakeSocket()));
@@ -63,6 +75,7 @@ const mount = (history: ChatLineWire[]) => {
     api: api as unknown as ChatApi,
     container: document.body,
     onViewYard,
+    friends: { api: friends.api, relations: friends.relations },
   });
 };
 
@@ -73,9 +86,10 @@ const nameButton = (name: string) =>
     (button) => button.textContent === name,
   )!;
 const strip = () => box.element.querySelector<HTMLElement>(".chat-box__player")!;
+/** A strip button by its word: the icon buttons' aria-label, or a text button's text. */
 const stripButton = (label: string) =>
   [...strip().querySelectorAll<HTMLButtonElement>("button")].find(
-    (button) => button.textContent === label,
+    (button) => (button.getAttribute("aria-label") ?? button.textContent) === label,
   )!;
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -83,6 +97,7 @@ beforeEach(() => {
   document.body.replaceChildren();
   api = { report: vi.fn(async () => {}), yardOf: vi.fn() };
   onViewYard = vi.fn(async () => {});
+  friends = makeFriends();
 });
 
 describe("ChatBox", () => {
@@ -252,11 +267,11 @@ describe("ChatBox", () => {
     expect(strip().textContent).toContain("You have sent a lot of reports.");
   });
 
-  it("Profile opens the player's profile", () => {
+  it("the name in the strip opens the player's profile", () => {
     mount([wire(77, "hello", 1)]);
     box.setOpen(true);
     nameButton("[12] p77").click();
-    stripButton("Profile").click();
+    stripButton("[12] p77's profile").click();
     expect(vi.mocked(openProfile)).toHaveBeenCalledWith(expect.objectContaining({ userid: 77 }));
   });
 
@@ -271,6 +286,93 @@ describe("ChatBox", () => {
     stripButton("View yard").click();
     await flush();
     expect(strip().textContent).toContain("That player's yard could not be opened.");
+  });
+
+  describe("icon-first strip and Add friend (owner, 8 Nov 2026)", () => {
+    const friendButton = () => strip().querySelector<HTMLButtonElement>(".add-friend__button")!;
+    const openStrip = async (userId = 77) => {
+      nameButton(`[12] p${userId}`).click();
+      await flush();
+    };
+
+    it("shows Add friend, Mute, View yard and Report as painted icons with their word as tooltip and name", async () => {
+      mount([wire(77, "hello", 1)]);
+      box.setOpen(true);
+      await openStrip();
+      const buttons = [...strip().querySelectorAll<HTMLButtonElement>(".chat-box__action--icon")];
+      expect(buttons.map((button) => button.querySelector(".chat-box__action-label")?.textContent)).toEqual([
+        ADD_FRIEND_TEXT.add,
+        "Mute",
+        "View yard",
+        "Report",
+      ]);
+      for (const button of buttons) {
+        expect(button.querySelector("img.game-icon")).not.toBeNull();
+        expect(button.getAttribute("aria-label")).toBeTruthy();
+        expect(button.title).toBe(button.getAttribute("aria-label"));
+      }
+      expect(buttons.map((button) => button.querySelector("img")!.dataset["icon"])).toEqual([
+        "addfriend",
+        "mute",
+        "townhall",
+        "report",
+      ]);
+      expect(friendButton().title).toBe(ADD_FRIEND_TEXT.addTitle("[12] p77"));
+    });
+
+    it("a stranger: Add friend sends the request, says so, and shows Sent when the strip opens again", async () => {
+      mount([wire(77, "hello", 1)]);
+      box.setOpen(true);
+      await openStrip();
+      expect(friendButton().dataset["relation"]).toBe("none");
+      friendButton().click();
+      await flush();
+      expect(friends.calls).toContainEqual(["request", { userid: 77 }]);
+      expect(strip().textContent).toContain(ADD_FRIEND_TEXT.sent("[12] p77"));
+      stripButton("OK").click();
+      await openStrip();
+      expect(friendButton().dataset["relation"]).toBe("requested");
+      expect(friendButton().disabled).toBe(true);
+      expect(friendButton().getAttribute("aria-label")).toBe(ADD_FRIEND_TEXT.requested);
+      expect(friendButton().querySelector("img")!.dataset["icon"]).toBe("time");
+    });
+
+    it("a request already waiting shows Sent, disabled", async () => {
+      friends = makeFriends({ requests: { incoming: [], outgoing: [fixtureRequest(1, 77)] } });
+      mount([wire(77, "hello", 1)]);
+      box.setOpen(true);
+      await openStrip();
+      await flush();
+      expect(friendButton().dataset["relation"]).toBe("requested");
+      expect(friendButton().disabled).toBe(true);
+      expect(friendButton().querySelector(".chat-box__action-label")?.textContent).toBe(
+        ADD_FRIEND_TEXT.shortRequested,
+      );
+    });
+
+    it("a friend shows the friend marker as Friend, disabled, and sends nothing", async () => {
+      friends = makeFriends({ list: fixtureList([fixtureFriend(77)]) });
+      await friends.store.refresh();
+      mount([wire(77, "hello", 1)]);
+      box.setOpen(true);
+      await openStrip();
+      expect(friendButton().dataset["relation"]).toBe("friend");
+      expect(friendButton().disabled).toBe(true);
+      expect(friendButton().querySelector(".friend-badge")).not.toBeNull();
+      expect(friendButton().getAttribute("aria-label")).toBe(ADD_FRIEND_TEXT.friend);
+      friendButton().click();
+      await flush();
+      expect(friends.calls.some(([call]) => call === "request")).toBe(false);
+    });
+
+    it("is not offered on the player's own lines", async () => {
+      mount([wire(2505, "mine", 1, "[27] agenttester")]);
+      box.setOpen(true);
+      box.element.querySelector<HTMLButtonElement>("button.chat-line__name")?.click();
+      await flush();
+      expect(strip().hidden).toBe(true);
+      expect(strip().querySelector(".add-friend__button")).toBeNull();
+    });
   });
 
   it("while reconnecting it says so quietly and the input waits", () => {
