@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { topUpPrice } from "@/game/yard/resourcePacks";
 import type { BaseLoadResponse, BuildingData, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
 import { setClassicLook } from "@/game/classicLook";
@@ -248,6 +249,26 @@ describe("BuildMenu", () => {
     expect(panel.querySelector(".build-info__build")?.getAttribute("aria-describedby")).toBe(
       "build-gate-20",
     );
+  });
+
+  it("short of resources: Top up buys the 1,500 Twigs on the second tap, then picks the building up (issue #393)", () => {
+    const { menu, onPick } = setup([HALL], { resources: { r1: 500, r2: 1500, r3: 500, r4: 0 } });
+    menu.open(BuildCategory.DEFENSIVE);
+    tile(menu, 20).click();
+    const topUp = info(menu).querySelector<HTMLButtonElement>(".build-info__topup")!;
+    expect(topUp.querySelector(".shiny-button__label")!.textContent).toBe("Top up");
+    expect(topUp.disabled).toBe(false);
+    topUp.click();
+    expect(onPick).not.toHaveBeenCalled();
+    topUp.click();
+    expect(onPick).toHaveBeenCalledWith(20, false, topUpPrice({ r1: 1_500 }));
+  });
+
+  it("offers no Top up when a cost is over the storage cap", () => {
+    const { menu } = setup([HALL], { resources: { r1: 0, r2: 1e6, r3: 1e6, r4: 1e6 }, caps: { r1: 100, r2: 5e8, r3: 5e8, r4: 5e8 } } as Partial<BaseLoadResponse>);
+    menu.open(BuildCategory.DEFENSIVE);
+    tile(menu, 20).click();
+    expect(info(menu).querySelector(".build-info__topup")).toBeNull();
   });
 
   it("every worker busy: Build still picks the building up, and the box waits for the spot (#345)", () => {

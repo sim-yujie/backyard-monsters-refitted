@@ -435,3 +435,63 @@ describe("durationText", () => {
     expect(durationText(7 * 86_400)).toBe("7 days");
   });
 });
+
+describe("ShopScreen: Resources (Flash's Resources tab, issue #393)", () => {
+  const CAPS = { r1: 1_000_000, r2: 1_000_000, r3: 1_000_000, r4: 1_000_000 };
+  const packs = (element: HTMLElement, key: string) =>
+    [...element.querySelectorAll<HTMLButtonElement>(`[data-pack="${key}"] .shop-card__pack`)];
+
+  it("lists +10%, +50% and Fill for each resource, with held / storage and what each brings", () => {
+    const { element } = setup({ caps: CAPS, resources: { r1: 0, r2: 0, r3: 0, r4: 950_000 } } as Partial<BaseLoadResponse>);
+    const section = element.querySelector<HTMLElement>('[data-section="resources"]')!;
+    expect(section.querySelector(".shop-section__title")!.textContent).toBe("Resources");
+    expect([...section.querySelectorAll<HTMLElement>(".shop-card--pack")].map((one) => one.dataset["pack"])).toEqual([
+      "r1",
+      "r2",
+      "r3",
+      "r4",
+    ]);
+    const twigs = section.querySelector<HTMLElement>('[data-pack="r1"]')!;
+    expect(twigs.querySelector(".shop-card__name")!.textContent).toBe("Twigs");
+    expect(twigs.querySelector(".shop-card__meta")!.textContent).toBe("0 / 1,000,000");
+    const buttons = packs(element, "r1");
+    expect(buttons.map((one) => one.querySelector(".shiny-button__label")!.textContent)).toEqual(["+10%", "+50%", "Fill"]);
+    expect(buttons.map((one) => one.querySelector(".shiny-button__note")!.textContent)).toEqual(["+100.0K", "+500.0K", "+1.0M"]);
+    expect(buttons[0]!.getAttribute("aria-label")).toBe("+10% Twigs (+100.0K), 58 Shiny");
+    // Goo is nearly full: only Fill is left, and nothing is said under it.
+    const goo = packs(element, "r4");
+    expect(goo.map((one) => one.disabled)).toEqual([true, true, false]);
+    expect(element.querySelector<HTMLElement>('[data-pack="r4"] .shop-card__gate')!.hidden).toBe(true);
+  });
+
+  it("says No room. when the storage is full", () => {
+    const { element } = setup({ caps: CAPS, resources: { r1: 1_000_000, r2: 0, r3: 0, r4: 0 } } as Partial<BaseLoadResponse>);
+    expect(packs(element, "r1").every((one) => one.disabled)).toBe(true);
+    expect(element.querySelector('[data-pack="r1"] .shop-card__gate')!.textContent).toBe("No room.");
+  });
+
+  it("buys at the price shown on the second tap, and says what landed for what", async () => {
+    const { store, element } = setup({ caps: CAPS } as Partial<BaseLoadResponse>);
+    const buy = vi.spyOn(store, "buy").mockImplementation(
+      (): Promise<YardActionResult<ShopBuyReport>> =>
+        Promise.resolve({
+          ok: true,
+          report: { item: "BR12", credits: 106, q: 0, endsAt: null, resource: "r1", amount: 500_000, points: 150_000 },
+          completed: [],
+        }),
+    );
+    const half = packs(element, "r1")[1]!;
+    half.click();
+    expect(buy).not.toHaveBeenCalled();
+    expect(half.querySelector(".shiny-button__label")!.textContent).toBe("Tap again");
+    half.click();
+    expect(buy).toHaveBeenCalledWith("BR12", 106);
+    await settle();
+    expect(spokenText(element.querySelector(".shop-status")!)).toBe("Twigs 500,000 gained for Shiny 106");
+  });
+
+  it("is in an outpost's shop too", () => {
+    const { element } = setup({ caps: CAPS } as Partial<BaseLoadResponse>, "outpost");
+    expect(element.querySelector('[data-section="resources"]')).not.toBeNull();
+  });
+});

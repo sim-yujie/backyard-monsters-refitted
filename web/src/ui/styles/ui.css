@@ -2256,3 +2256,41 @@ body {
 .block-button__question {
   font-size: var(--text-sm);
 }
+
+/* A tapped resource's three Shiny offers (+10%, +50%, Fill) under its
+   amount (issue #393, Flash's "+" beside each resource): narrow columns of
+   label, price and the amount it brings, centred. */
+.hud__offers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  max-width: 280px;
+}
+
+.hud__offer {
+  flex: 1 1 0;
+  min-width: 72px;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 0;
+  padding-inline: var(--space-1);
+  text-align: center;
+}
+
+.hud__offer .shiny-button__label {
+  white-space: normal;
+}
+
+.hud__offer .shiny-button__note {
+  flex-basis: auto;
+  font-size: var(--text-xs);
+}
+
+.hud__offers-note {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: center;
+  color: var(--colour-warning);
+}

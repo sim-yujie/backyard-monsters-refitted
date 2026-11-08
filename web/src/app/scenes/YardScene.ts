@@ -76,6 +76,7 @@ import {
   plannerEntryTooltip,
 } from "@/game/yard/planner/access";
 import { buildOffer, buildsAtOnce, categoryOf } from "@/game/yard/buildCatalogue";
+import { topUpPrice } from "@/game/yard/resourcePacks";
 import { WALL_TYPES } from "@/game/yard/buildingCosts";
 import { lineBudgetOf, readLineModePreference, writeLineModePreference } from "@/game/yard/wallLine";
 import { BuildPlacement } from "@/game/yard/BuildPlacement";
@@ -1704,7 +1705,7 @@ export class YardScene implements Scene {
     this.hud?.achievements?.close();
     this.buildMenu ??= new BuildMenu({
       binding,
-      onPick: (picked, instant) => this.startPlacement(picked, instant),
+      onPick: (picked, instant, topUp) => this.startPlacement(picked, instant, topUp),
       onTownHall: () => this.showTownHall(),
       onClose: () => {
         this.refreshBuildButton();
@@ -2008,7 +2009,8 @@ export class YardScene implements Scene {
    * comes out of storage (`decor/place`, §8.3): free and finished; one sold
    * for Shiny is bought as it goes down (`decor/buy`, owner 2026-11-04).
    */
-  private startPlacement(type: number, instant: boolean): void {
+  /** `topUp`: the Shiny the player agreed to pay for the resources it is short (issue #393). */
+  private startPlacement(type: number, instant: boolean, topUp?: number): void {
     const store = this.store;
     const camera = this.camera;
     const context = this.context;
@@ -2023,7 +2025,7 @@ export class YardScene implements Scene {
     const actions = buildActions(store);
     const storage = offer.stored !== null ? decorActions(store) : null;
     const buying = offer.price !== undefined;
-    const repeat = buildsAtOnce(type, store.kind) && !instant && !storage;
+    const repeat = buildsAtOnce(type, store.kind) && !instant && !storage && topUp === undefined;
     // A wall Block can be drawn as a line or L (walls Option B, owner 8 Nov 2026).
     const lineable = repeat && WALL_TYPES.includes(type);
     const lineOn = lineable && readLineModePreference();
@@ -2082,12 +2084,25 @@ export class YardScene implements Scene {
           }
         }
         // A one-off building is down; the bar says so until the answer (#277).
+        // A top-up is paid at today's shortfall, never above the price agreed:
+        // the server refuses any price but its own.
+        let paid: number | undefined;
+        if (topUp !== undefined && !storage && !instant) {
+          const gate = buildOffer(type, store)?.gate;
+          if (gate?.reason === "shortfall" && !gate.overCap) {
+            paid = topUpPrice(gate.shortfall);
+            if (paid > topUp) {
+              bar.setMessage("The top-up costs more now. Try again.", "bad");
+              return "refused";
+            }
+          }
+        }
         if (!repeat) bar.setBuilding(true);
         const result = storage
           ? await (buying ? storage.buy(type, x, y) : storage.place(type, x, y))
           : instant
             ? await actions.instant(type, x, y)
-            : await actions.build(type, x, y);
+            : await actions.build(type, x, y, paid);
         if (this.placement !== placement) return result.ok ? "placed" : "refused";
         if (!result.ok) {
           bar.setBuilding(false);
