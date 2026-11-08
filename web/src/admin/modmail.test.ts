@@ -82,8 +82,8 @@ beforeEach(() => {
   threads = {
     "5": conversation(5, [
       message(1, { newThread: true, subject: "About chat", message: "Please stop spamming chat." }),
-      message(2, { sender: "player", senderId: 2503, senderName: "yardtester", message: "Sorry, I will." }),
-      message(3, { message: "Thanks!", written: "Thanks d*mn | Thanks!" }),
+      message(2, { sender: "player", senderId: 2503, senderName: "yardtester", subject: "Re: About chat", message: "Sorry, I will." }),
+      message(3, { subject: "Something else", message: "Thanks!", written: "Thanks d*mn | Thanks!" }),
     ]),
     "4": conversation(4, [message(1, { messagetype: "trucerequest", newThread: true })]),
   };
@@ -116,9 +116,10 @@ const settle = async () => {
   for (let i = 0; i < 10; i++) await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
+const viewChanges: number[] = [];
 const mount = async () => {
   const said: string[] = [];
-  const view = new ModMailSection({ say: (message) => said.push(message) });
+  const view = new ModMailSection({ say: (message) => said.push(message), onViewChange: () => viewChanges.push(1) });
   document.body.append(view.element);
   await view.refresh();
   return { view, said };
@@ -203,7 +204,11 @@ describe("an opened conversation", () => {
     expect(bubbles(view)).toHaveLength(3);
     expect(first!.classList.contains("bubble-mod")).toBe(true);
     expect(first!.querySelector(".bubble-who")?.textContent).toMatch(/^ModAlpha · .+started the conversation$/);
-    expect(first!.querySelector(".modmail-subject")?.textContent).toBe("About chat");
+    // The subject is said once, in the header; a bubble shows one only when it differs ("Re: " ignored).
+    expect(openView(view).querySelector(".modmail-thread__subject")?.textContent).toBe("About chat");
+    expect(first!.querySelector(".modmail-subject")).toBeNull();
+    expect(second!.querySelector(".modmail-subject")).toBeNull();
+    expect(third!.querySelector(".modmail-subject")?.textContent).toBe("Something else");
     expect(first!.querySelector(".bubble-text")?.textContent).toBe("Please stop spamming chat.");
     expect(first!.querySelector("time")?.getAttribute("datetime")).toBe("2026-11-07T08:00:00.000Z");
     expect(second!.classList.contains("bubble-player")).toBe(true);
@@ -221,6 +226,17 @@ describe("an opened conversation", () => {
     await settle();
     expect(bubbles(view)[0]!.querySelector(".bubble-who")?.textContent).toContain("Truce request");
     expect(openView(view).querySelector(".note")?.textContent).toMatch(/^No answer from the player is logged/);
+  });
+
+  it("tells the page when the view switches, so the sidebar highlight can follow", async () => {
+    viewChanges.length = 0;
+    const { view } = await mount();
+    rows(view)[0]!.click();
+    await settle();
+    const opened = viewChanges.length;
+    expect(opened).toBeGreaterThanOrEqual(2);
+    openView(view).querySelector<HTMLButtonElement>(".back")!.click();
+    expect(viewChanges.length).toBe(opened + 1);
   });
 
   it("goes back to the list as it was, without asking again, the row in focus", async () => {

@@ -24,7 +24,16 @@ import { errorWords } from "./shiny";
 
 export interface ModMailOptions {
   say(message: string): void;
+  /** Called when the section switches between the list and an open conversation (its height changes). */
+  onViewChange?(): void;
 }
+
+/** A subject without a leading "Re: " (any number), for comparing. */
+const bareSubject = (subject: string): string => subject.replace(/^(\s*re:\s*)+/i, "").trim().toLowerCase();
+
+/** The subject a thread is known by: the first message that has one. */
+const threadSubject = (conversation: ModConversation): string =>
+  conversation.messages.find((message) => message.subject.trim())?.subject.trim() ?? "";
 
 /** What a message's kind reads as, when it is not plain mail. */
 const KIND_WORDS: Record<string, string> = {
@@ -157,6 +166,7 @@ export class ModMailSection {
     this.openThread = threadid;
     this.listView.hidden = true;
     this.openView.hidden = false;
+    this.options.onViewChange?.();
     replace(this.openView, this.backButton(), h("div", { class: "skeleton" }));
     this.openView.querySelector<HTMLButtonElement>(".back")?.focus();
     await this.load(threadid);
@@ -168,6 +178,7 @@ export class ModMailSection {
       const { conversation } = await fetchModConversation(threadid);
       if (opened !== this.opened || this.openThread !== threadid) return;
       replace(this.openView, this.backButton(), conversationView(conversation));
+      this.options.onViewChange?.();
     } catch (err) {
       if (opened !== this.opened || this.openThread !== threadid) return;
       replace(
@@ -186,6 +197,7 @@ export class ModMailSection {
     this.openView.hidden = true;
     this.listView.hidden = false;
     replace(this.openView);
+    this.options.onViewChange?.();
     this.list.querySelector<HTMLButtonElement>(`[data-thread="${threadid}"]`)?.focus();
   }
 
@@ -271,6 +283,7 @@ const conversationRow = (conversation: ModConversationSummary, onOpen: () => voi
 /** One conversation whole: who, then every message as a chat, the moderator on the right. */
 const conversationView = (conversation: ModConversation): HTMLElement => {
   const answered = conversation.messages.some((message) => message.sender === "player");
+  const subject = threadSubject(conversation);
   return h(
     "article",
     { class: "modmail-thread" },
@@ -282,6 +295,7 @@ const conversationView = (conversation: ModConversation): HTMLElement => {
         { class: "modmail-thread__title" },
         between(conversation.moderatorId, conversation.moderatorName, conversation.playerId, conversation.playerName),
       ),
+      subject ? h("p", { class: "modmail-thread__subject" }, subject) : null,
       h(
         "span",
         { class: "row-meta" },
@@ -295,7 +309,7 @@ const conversationView = (conversation: ModConversation): HTMLElement => {
     h(
       "ol",
       { class: "thread", attrs: { "aria-label": `Messages between ${conversation.moderatorName} and ${conversation.playerName}` } },
-      ...conversation.messages.map(bubble),
+      ...conversation.messages.map((message) => bubble(message, subject)),
     ),
     conversation.cut ? h("p", { class: "note" }, "Only the first messages are shown: this conversation is very long.") : null,
     answered
@@ -309,7 +323,9 @@ const conversationView = (conversation: ModConversation): HTMLElement => {
 };
 
 /** One message: who and when, its kind and subject, the words, and what was typed if the word filter changed it. */
-const bubble = (message: ModConversationMessage): HTMLElement => {
+const bubble = (message: ModConversationMessage, threadSubjectText: string): HTMLElement => {
+  const own = message.subject.trim();
+  const showSubject = own !== "" && bareSubject(own) !== bareSubject(threadSubjectText);
   const byModerator = message.sender === "moderator";
   const kind = KIND_WORDS[message.messagetype];
   return h(
@@ -325,7 +341,7 @@ const bubble = (message: ModConversationMessage): HTMLElement => {
       kind ? h("span", { class: "chip" }, kind) : null,
       message.newThread ? h("span", { class: "modmail-started" }, "started the conversation") : null,
     ),
-    message.subject ? h("span", { class: "modmail-subject" }, message.subject) : null,
+    showSubject ? h("span", { class: "modmail-subject" }, own) : null,
     h("span", { class: "bubble-text" }, message.message),
     message.written !== null
       ? h("span", { class: "modmail-written" }, h("span", { class: "chip chip-warn" }, "Written as"), " ", message.written)
