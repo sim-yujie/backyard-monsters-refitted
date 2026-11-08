@@ -691,15 +691,16 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
 export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
   // 1 Bone Cruncher: 3D (owner, 6 Nov 2026: "3d bone crusher has been approved"), the clean-room model's three tiers,
   // levels 1-2, 3-6 and 7-10 as the model splits them (Flash's has two looks, from 1 and 3); bones tip into the bowl
-  // and the rollers crunch them, 36 cells round. No damaged or destroyed look of its own yet: the damaged one is the
-  // whole look tinted, the destroyed Flash's.
+  // and the rollers crunch them, 36 cells round. Exported grown 1.2x about its middle on the ground (9 Nov 2026: the
+  // model came out smaller than Flash's in the same spot; `grow` in export3d_buildings.py). No damaged or destroyed
+  // look of its own yet: the damaged one is the whole look tinted, the destroyed Flash's.
   1: [
-    { from: 1, top: ["top.3d1@2x.webp", -40, -19], shadow: ["shadow.3d1.jpg", -39, 21], lift: 0,
-      anim: { strip: ["anim.3d1@2x.webp", -23, -13, 56, 56, 36], body: ["body.3d1@2x.webp", -40, -19] } },
-    { from: 3, top: ["top.3d3@2x.webp", -40, -25], shadow: ["shadow.3d3.jpg", -39, 18], lift: 0,
-      anim: { strip: ["anim.3d3@2x.webp", -23, -25, 52, 71, 36], body: ["body.3d3@2x.webp", -40, -25] } },
-    { from: 7, top: ["top.3d7@2x.webp", -40, -25], shadow: ["shadow.3d7.jpg", -39, 20], lift: 0,
-      anim: { strip: ["anim.3d7@2x.webp", -24, -25, 67, 71, 36], columns: 30, body: ["body.3d7@2x.webp", -40, -25] } },
+    { from: 1, top: ["top.3d1@2x.webp", -48, -29], shadow: ["shadow.3d1.jpg", -46, 18], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -28, -23, 67, 67, 36], columns: 30, body: ["body.3d1@2x.webp", -48, -29] } },
+    { from: 3, top: ["top.3d3@2x.webp", -48, -37], shadow: ["shadow.3d3.jpg", -46, 17], lift: 0,
+      anim: { strip: ["anim.3d3@2x.webp", -28, -37, 62, 85, 36], columns: 33, body: ["body.3d3@2x.webp", -48, -37] } },
+    { from: 7, top: ["top.3d7@2x.webp", -48, -37], shadow: ["shadow.3d7.jpg", -47, 16], lift: 0,
+      anim: { strip: ["anim.3d7@2x.webp", -29, -37, 80, 85, 36], columns: 25, body: ["body.3d7@2x.webp", -48, -37] } },
   ],
   // 16 Incubator Control Centre: 3D look C, on a small magma pool. Each cell is the whole building: 32 cells of its
   // idle loop (the lava's light breathing), then 64 of its loop while it hatches (the crystal pulsing twice as well).
