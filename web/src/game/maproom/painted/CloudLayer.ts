@@ -1,6 +1,7 @@
 import { Assets, BufferImageSource, CanvasSource, Geometry, GlProgram, Mesh, Shader, type TextureSource } from "pixi.js";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import { onQualityChange, quality, sheetAtQuality, type Quality } from "@/game/quality";
+import { timeArt } from "../openMarks";
 import type { CellRange } from "../zones";
 import { cellCentre, paintedCellShape, textureAspect, type CellShape } from "./cellShape";
 import { CLOUD_FRAGMENT, CLOUD_VERTEX } from "./cloudShader";
@@ -135,13 +136,18 @@ export class CloudLayer {
     return true;
   }
 
+  /** The cloud picture's address at this Quality (the MR2 warm-up fetches it ahead, `paintedLook.ts`). */
+  static artUrl(level: Quality): string {
+    return sheetAtQuality(DECK_URL, level);
+  }
+
   /** Fetches the cloud picture at this Quality; until it lands the cloud is its flat average colour. */
   async load(level: Quality = quality()): Promise<boolean> {
-    const url = sheetAtQuality(DECK_URL, level);
+    const url = CloudLayer.artUrl(level);
     if (url === this.deckUrl) return true;
     let image: CanvasImageSource & { width: number; height: number };
     try {
-      image = (await Assets.load(url)).source.resource;
+      image = (await timeArt(url, () => Assets.load(url))).source.resource;
     } catch {
       return false;
     }

@@ -1,6 +1,7 @@
 import { post, send, type FormBody, type RequestOptions } from "./http";
 import { getSession } from "./auth";
 import { seasonFor, setSeason } from "@/game/season";
+import { readWeekendState, setWeekend } from "@/game/weekend";
 import {
   BaseMode,
   type AttackData,
@@ -28,6 +29,8 @@ const LOAD_PATH = "/base/load";
 const loadBase = async (body: BaseLoadRequest): Promise<BaseLoadResponse> => {
   const response = await post<BaseLoadResponse>(LOAD_PATH, { ...body });
   setSeason(seasonFor(response.activeevents ?? []));
+  // A foreign load (an attack, a visit) answers the same weekend: the server's, not the yard's.
+  if (response.weekend !== undefined) setWeekend(readWeekendState(response.weekend), response.currenttime);
   return response;
 };
 const SAVE_PATH = "/base/save";

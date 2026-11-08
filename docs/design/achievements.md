@@ -434,7 +434,7 @@ added to the Map Room 2 area answer, which covers many cells at once.
 
 ### 10.4 Art
 
-Seventeen painted badges (#298, made with Codex; Huge Rage added for beta.4), one per shown achievement: the symbol on a round
+Painted badges for all 27 achievements (#298, made with Codex: seventeen for beta.4 with Huge Rage, then in beta 7 Better Together, the Inferno five (18-21) and the five hidden ones (23-27), kit in `web/tools/badges-codex`): the symbol on a round
 studded medal whose rim is bronze, silver or gold by reward (5: bronze, 10-15: silver, 20-25: gold),
 `web/public/achievements/badge-<id>.webp`, 176 px square, shown at 60 px (52 px on a phone, 24 px in
 another player's line), grey while not earned. The tier is painted into each picture, so it shows on

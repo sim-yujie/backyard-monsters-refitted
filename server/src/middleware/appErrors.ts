@@ -8,11 +8,21 @@ type AppError = Error & { status?: number; expose?: boolean; code?: string };
  * What a socket or stream reports when the client went away mid-response: a
  * closed tab, a reload, a cancelled fetch.
  */
-const CLIENT_GONE_CODES = new Set(["ERR_STREAM_PREMATURE_CLOSE", "ECONNRESET", "EPIPE", "ECONNABORTED"]);
+const CLIENT_GONE_CODES = new Set([
+  "ERR_STREAM_PREMATURE_CLOSE",
+  "ECONNRESET",
+  "EPIPE",
+  "ECONNABORTED",
+  // The request body ended early: the tab closed mid-save (14 on the live
+  // server, 30 Oct-6 Nov 2026, "Parse Error: Invalid EOF state").
+  "HPE_INVALID_EOF_STATE",
+]);
 
 /** Whether the error only says the client stopped listening (issue #274). */
 export const isClientGone = (err: AppError): boolean =>
-  (err.code !== undefined && CLIENT_GONE_CODES.has(err.code)) || err.message === "Premature close";
+  (err.code !== undefined && CLIENT_GONE_CODES.has(err.code)) ||
+  err.message === "Premature close" ||
+  err.message.startsWith("Parse Error: Invalid EOF state");
 
 /**
  * The app's `error` listener, in place of Koa's default (issue #274).

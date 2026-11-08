@@ -73,6 +73,7 @@ import { moveToRandomSpot, type RandomMoveResponse } from "@/api/maproom";
 import { forgetMapView } from "@/game/maproom/mapFocus";
 import { RANDOM_MOVE_TEXT } from "@/game/maproom/randomMove";
 import { RandomMoveDialog } from "@/ui/maproom/RandomMoveDialog";
+import { weekendChip } from "@/ui/events/weekendUi";
 
 /** What an outpost harvester's panel says in place of its stored amount. */
 export const AUTO_BANKING = "Auto-banking: what it makes goes straight to your main yard's storage";
@@ -1056,6 +1057,9 @@ export class BuildingPanel {
     title.textContent = `Lv ${offer.from} → ${offer.to}`;
     title.title = `Upgrade to level ${offer.to}`;
     head.append(title, stepTime(offer.seconds, "Upgrade time · 1 worker"));
+    // Builder's Weekend: the cost below is already the lower one.
+    const off = offer.weekendOff ? weekendChip("builders") : null;
+    if (off) head.append(off);
     block.append(head);
 
     // A main-yard Inferno building is paid from the Inferno purse (WP 6.1).
@@ -1134,6 +1138,9 @@ export class BuildingPanel {
     title.textContent = `Fortify to F${offer.to}`;
     title.title = `Fortified F${offer.from} of ${offer.max}.`;
     head.append(title, stepTime(offer.seconds, "Fortify time · 1 worker"));
+    // Builder's Weekend: the cost below is already the lower one.
+    const off = offer.weekendOff ? weekendChip("builders") : null;
+    if (off) head.append(off);
     block.append(head);
 
     block.append(this.costFactsLine(offer.cost, resources));

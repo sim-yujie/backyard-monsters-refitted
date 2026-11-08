@@ -68,6 +68,15 @@ describe("planAcademyTrain", () => {
     expect(plan.slices.buildingdata["6"]).not.toHaveProperty("upg");
   });
 
+  test("Study Weekend: 30% shorter time and duration, same putty", () => {
+    const plan = planAcademyTrain(saveOf(), "C2", 5, NOW, 30);
+
+    // 36,000 s × 0.7 = 25,200 s.
+    expect(plan.debit).toEqual({ r3: 24_000 });
+    expect(plan.report.endsAt).toBe(NOW + 25_200);
+    expect(plan.slices.academy.C2).toEqual({ level: 3, powerup: 1, time: NOW + 25_200, duration: 25_200 });
+  });
+
   test("without an academy takes the lowest-level idle one that can train it (#180)", () => {
     // C1 at level 1 fits both: academy 6 (level 1) is the lower, so academy 5
     // (level 3) stays free.

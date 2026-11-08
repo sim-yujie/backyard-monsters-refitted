@@ -85,11 +85,15 @@ export const fetchMapTilt = async (): Promise<MapTiltSettings> =>
   mapTiltOf((await get<AccountResponse>(ACCOUNT_PATH)).settings);
 
 /**
- * Map Room 2's hex shape (MR2 look plan step 1): the server's MR2_HEX_SHAPE
- * switch, flat-top unless it says pointy.
+ * Map Room 2's hex shape (MR2 look plan step 1: the server's MR2_HEX_SHAPE
+ * switch, flat-top unless it says pointy) and its tilt, both of the map's
+ * account answers from ONE `GET /player/account` (the map
+ * used to ask twice on its first open: once for the shape, once for the tilt).
  */
-export const fetchMapHexShape = async (): Promise<HexShape> =>
-  hexShapeOf((await get<AccountResponse>(ACCOUNT_PATH)).settings?.mapHexShape);
+export const fetchMapSettings = async (): Promise<{ hexShape: HexShape; tilt: MapTiltSettings }> => {
+  const settings = (await get<AccountResponse>(ACCOUNT_PATH)).settings;
+  return { hexShape: hexShapeOf(settings?.mapHexShape), tilt: mapTiltOf(settings) };
+};
 
 /** Stores the player's choice on the account; resolves with what the server now has. */
 export const setTiltedMap = async (tilted: boolean): Promise<MapTiltSettings> =>

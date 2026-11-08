@@ -1,3 +1,5 @@
+import { modalLayer } from "@/ui/events/WhatsNewDialog";
+import { openProfile } from "@/ui/profile/ProfileDialog";
 import { ApiError } from "@/api/http";
 import type { ChatApi } from "@/api/chat";
 import {
@@ -13,6 +15,10 @@ import {
 import { countryLabel, countryName } from "@/game/account/countries";
 import { countryLabelNodes } from "@/ui/countryFlag";
 import { icon } from "@/ui/icons";
+import { gameIcon, type GameIconName } from "@/ui/gameIcon";
+import { addFriendButton } from "@/ui/friends/AddFriendButton";
+import type { FriendsApi } from "@/api/friends";
+import type { FriendRelations } from "@/game/friends/friendRelations";
 import "@/ui/styles/chat.css";
 
 /**
@@ -22,8 +28,11 @@ import "@/ui/styles/chat.css";
  *
  * Folded, nothing in it takes a click but its "World chat" tab, so the yard
  * under the lines can still be tapped. Open, a player's name opens a strip of
- * what can be done about them: mute or unmute (the server's ignore list), view
- * their yard, or report the line. Muted players' lines leave the box.
+ * what can be done about them: add them as a friend (owner, 8 Nov 2026), mute
+ * or unmute (the server's ignore list), view their yard, or report the line;
+ * their name in the strip opens their profile. Muted players' lines leave the box.
+ * The strip's buttons are painted icons with a tiny word under them, which a
+ * phone drops (owner, 8 Nov: "consider using icon rather than words").
  *
  * The box only draws the session's state and calls back; the connection is
  * `game/chat/chatSession.ts`'s, and outlives the box. A new line is added on
@@ -41,7 +50,18 @@ export interface ChatBoxOptions {
   readonly container: HTMLElement;
   /** Opens a player's yard read-only; the scene finds it and goes there. */
   readonly onViewYard: (userId: number) => Promise<void>;
+  /** The friend request flow behind Add friend; the game's own unless a test swaps it. */
+  readonly friends?: { readonly api?: FriendsApi; readonly relations?: FriendRelations };
 }
+
+/** The strip's words: each button's tooltip and screen-reader name, and its tiny label. */
+export const CHAT_STRIP_TEXT = {
+  profile: (name: string): string => `${name}'s profile`,
+  mute: "Mute",
+  unmute: "Unmute",
+  viewYard: "View yard",
+  report: "Report",
+} as const;
 
 /** What the open box says under the lines while the room is not joined. */
 export const statusText = (status: ChatStatus): string | null => {
@@ -370,6 +390,7 @@ export class ChatBox {
     }
     item.className = entry.own ? "chat-line chat-line--own" : "chat-line";
     if (entry.gm) item.classList.add("chat-line--gm");
+    else if (entry.mod) item.classList.add("chat-line--mod");
     item.dataset["line"] = String(entry.id);
 
     const name = document.createElement(entry.own ? "span" : "button");
@@ -392,6 +413,12 @@ export class ChatBox {
       badge.className = "chat-line__gm";
       badge.textContent = "GM";
       badge.title = "The game team";
+      item.append(badge);
+    } else if (entry.mod) {
+      const badge = document.createElement("span");
+      badge.className = "chat-line__mod";
+      badge.textContent = "Mod";
+      badge.title = "Moderator";
       item.append(badge);
     }
     item.append(name, body);
@@ -426,9 +453,14 @@ export class ChatBox {
       return;
     }
 
-    const name = document.createElement("strong");
+    // The name opens their profile (it was a Profile button before the strip went icon-first).
+    const name = document.createElement("button");
+    name.type = "button";
     name.className = "chat-box__player-name";
     name.textContent = line.name;
+    name.title = CHAT_STRIP_TEXT.profile(line.name);
+    name.setAttribute("aria-label", CHAT_STRIP_TEXT.profile(line.name));
+    name.addEventListener("click", () => void openProfile({ container: modalLayer(), userid: line.userId }));
 
     const actions = document.createElement("div");
     actions.className = "chat-box__actions";
@@ -448,10 +480,29 @@ export class ChatBox {
       }
     } else {
       const muted = this.state.muted.has(line.userId);
+      const friend = addFriendButton({
+        userid: line.userId,
+        username: line.name,
+        className: "btn chat-box__action chat-box__action--icon",
+        compact: {
+          labelClassName: "chat-box__action-label",
+          onNote: (text) => {
+            if (this.picked?.id !== line.id) return;
+            this.pickedNote = { text };
+            this.renderPlayer();
+          },
+        },
+        ...this.options.friends,
+      });
+      friend.classList.add("chat-box__friend");
+      const mute = this.iconButton(muted ? CHAT_STRIP_TEXT.unmute : CHAT_STRIP_TEXT.mute, "mute", () => this.toggleMute(line));
+      // Muted, the same picture sits on a lit button and the word turns to Unmute.
+      mute.classList.toggle("chat-box__action--on", muted);
       actions.append(
-        this.button(muted ? "Unmute" : "Mute", () => this.toggleMute(line)),
-        this.button("View yard", () => void this.viewYard(line)),
-        this.button("Report", () => {
+        friend,
+        mute,
+        this.iconButton(CHAT_STRIP_TEXT.viewYard, "townhall", () => void this.viewYard(line)),
+        this.iconButton(CHAT_STRIP_TEXT.report, "report", () => {
           this.pickedNote = {
             text: `Report this message from ${line.name}?`,
             confirmReport: true,
@@ -476,6 +527,22 @@ export class ChatBox {
     button.type = "button";
     button.className = variant ? `btn ${variant} chat-box__action` : "btn chat-box__action";
     button.textContent = label;
+    button.addEventListener("click", onClick);
+    return button;
+  }
+
+  /** A painted icon with a tiny word under it; the word is also its tooltip and accessible name. */
+  private iconButton(label: string, picture: GameIconName, onClick: () => void): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn chat-box__action chat-box__action--icon";
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.dataset["action"] = picture;
+    const word = document.createElement("span");
+    word.className = "chat-box__action-label";
+    word.textContent = label;
+    button.append(gameIcon(picture, { size: 24, decorative: true }), word);
     button.addEventListener("click", onClick);
     return button;
   }

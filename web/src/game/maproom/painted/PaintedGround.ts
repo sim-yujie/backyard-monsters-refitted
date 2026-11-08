@@ -24,7 +24,7 @@ import { PLACEMENT_GRIDS, PlacementLayer, placementProgram } from "./PlacementLa
 import { RiverLayer } from "./RiverLayer";
 import type { RiverCells } from "./riverPaths";
 import type { ProgramWarmer } from "./shaderWarmup";
-import { MR2_FULL_LOOK, markOnce } from "../openMarks";
+import { MR2_FULL_LOOK, markOnce, timeArt, timeCut } from "../openMarks";
 
 /** The ground texture atlas, 4 textures a row (`web/tools/mr2-paint/build.py`). */
 const ATLAS_URL = `${import.meta.env.BASE_URL}maproom/painted/ground@4x.webp`;
@@ -305,6 +305,16 @@ export class PaintedGround {
     return true;
   }
 
+  /** Every picture `load` fetches at this Quality (for the MR2 warm-up, `paintedLook.ts`). */
+  static artUrls(level: Quality): string[] {
+    return [ATLAS_URL, ...SPRITE_SHEETS.map(({ url }) => url), CLIFFS_URL].map((url) => sheetAtQuality(url, level));
+  }
+
+  /** Whether the ground draws with this Quality's own program (the full look; the Low one stands in until then). */
+  drawsLevel(level: Quality): boolean {
+    return this.shader.glProgram === groundProgram(level);
+  }
+
   /** The placement programs (for the warm-up, `paintedLook.ts`). */
   static placementPrograms(): GlProgram[] {
     return PLACEMENT_GRIDS.map(placementProgram);
@@ -365,15 +375,18 @@ export class PaintedGround {
     if (url === this.cliffsUrl) return true;
     let image: CanvasImageSource & { width: number; height: number };
     try {
-      image = (await Assets.load(url)).source.resource;
+      image = (await timeArt(url, () => Assets.load(url))).source.resource;
     } catch {
       return false;
     }
     if (this.destroyed) return false;
-    const canvas = document.createElement("canvas");
-    canvas.width = image.width;
-    canvas.height = image.height;
-    canvas.getContext("2d")!.drawImage(image, 0, 0);
+    const canvas = timeCut("cliffs", () => {
+      const copy = document.createElement("canvas");
+      copy.width = image.width;
+      copy.height = image.height;
+      copy.getContext("2d")!.drawImage(image, 0, 0);
+      return copy;
+    });
     const source = new CanvasSource({
       resource: canvas,
       addressMode: "repeat",
@@ -396,21 +409,29 @@ export class PaintedGround {
     if (decalsUrl === this.spritesUrl) return true;
     let sheets: (CanvasImageSource & { width: number; height: number })[];
     try {
-      const loaded = await Promise.all(SPRITE_SHEETS.map(({ url }) => Assets.load(sheetAtQuality(url, level))));
+      const loaded = await Promise.all(
+        SPRITE_SHEETS.map(({ url }) => {
+          const at = sheetAtQuality(url, level);
+          return timeArt(at, () => Assets.load(at));
+        }),
+      );
       sheets = loaded.map((texture) => texture.source.resource);
     } catch {
       return false;
     }
     if (this.destroyed) return false;
     const frame = sheets[0]!.width / SPRITE_COLUMNS;
-    const canvas = document.createElement("canvas");
-    canvas.width = frame * SPRITE_COLUMNS;
-    canvas.height = frame * SPRITE_ROWS;
-    const context = canvas.getContext("2d")!;
-    let row = 0;
-    SPRITE_SHEETS.forEach(({ rows }, index) => {
-      context.drawImage(sheets[index]!, 0, frame * row, canvas.width, frame * rows);
-      row += rows;
+    const canvas = timeCut("sprites", () => {
+      const joined = document.createElement("canvas");
+      joined.width = frame * SPRITE_COLUMNS;
+      joined.height = frame * SPRITE_ROWS;
+      const context = joined.getContext("2d")!;
+      let row = 0;
+      SPRITE_SHEETS.forEach(({ rows }, index) => {
+        context.drawImage(sheets[index]!, 0, frame * row, joined.width, frame * rows);
+        row += rows;
+      });
+      return joined;
     });
     const source = new CanvasSource({
       resource: canvas,
@@ -433,7 +454,7 @@ export class PaintedGround {
     if (url === this.loadedUrl) return true;
     let image: CanvasImageSource;
     try {
-      const texture = await Assets.load(url);
+      const texture = await timeArt(url, () => Assets.load(url));
       image = texture.source.resource as CanvasImageSource;
     } catch {
       return false;
@@ -442,41 +463,44 @@ export class PaintedGround {
     const square = (image as { width: number }).width / ATLAS_COLUMNS;
     const size = Math.round(square / (1 + 2 * GROUND_GUTTER));
     const gutter = (square - size) / 2;
-    const canvases = SHADER_TEXTURES.map((slot) => {
-      const canvas = document.createElement("canvas");
-      canvas.width = canvas.height = size;
-      canvas.getContext("2d")!.drawImage(
-        image,
-        (slot % ATLAS_COLUMNS) * square + gutter,
-        Math.floor(slot / ATLAS_COLUMNS) * square + gutter,
-        size,
-        size,
-        0,
-        0,
-        size,
-        size,
-      );
-      return canvas;
-    });
-    const style = {
-      addressMode: "repeat",
-      scaleMode: "linear",
-      mipmapFilter: "linear",
-      autoGenerateMipmaps: true,
-      maxAnisotropy: 4,
-    } as const;
-    const wetAt = SHADER_TEXTURES.indexOf(GroundTexture.WET_SAND);
-    const foamAt = SHADER_TEXTURES.indexOf(GroundTexture.FOAM);
-    const pixels = (canvas: HTMLCanvasElement): Uint8ClampedArray =>
-      canvas.getContext("2d")!.getImageData(0, 0, size, size).data;
-    const cut: TextureSource[] = canvases.map((canvas, index) => {
-      if (index !== wetAt) return new CanvasSource({ resource: canvas, ...style });
-      return new BufferImageSource({
-        resource: withFoamAlpha(pixels(canvas), pixels(canvases[foamAt]!)),
-        width: size,
-        height: size,
-        alphaMode: "no-premultiply-alpha",
-        ...style,
+    // Cutting the atlas runs on the main thread (timed for the open, `openMarks.ts`).
+    const cut: TextureSource[] = timeCut("ground", () => {
+      const canvases = SHADER_TEXTURES.map((slot) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = size;
+        canvas.getContext("2d")!.drawImage(
+          image,
+          (slot % ATLAS_COLUMNS) * square + gutter,
+          Math.floor(slot / ATLAS_COLUMNS) * square + gutter,
+          size,
+          size,
+          0,
+          0,
+          size,
+          size,
+        );
+        return canvas;
+      });
+      const style = {
+        addressMode: "repeat",
+        scaleMode: "linear",
+        mipmapFilter: "linear",
+        autoGenerateMipmaps: true,
+        maxAnisotropy: 4,
+      } as const;
+      const wetAt = SHADER_TEXTURES.indexOf(GroundTexture.WET_SAND);
+      const foamAt = SHADER_TEXTURES.indexOf(GroundTexture.FOAM);
+      const pixels = (canvas: HTMLCanvasElement): Uint8ClampedArray =>
+        canvas.getContext("2d")!.getImageData(0, 0, size, size).data;
+      return canvases.map((canvas, index) => {
+        if (index !== wetAt) return new CanvasSource({ resource: canvas, ...style });
+        return new BufferImageSource({
+          resource: withFoamAlpha(pixels(canvas), pixels(canvases[foamAt]!)),
+          width: size,
+          height: size,
+          alphaMode: "no-premultiply-alpha",
+          ...style,
+        });
       });
     });
     const old = this.textures;

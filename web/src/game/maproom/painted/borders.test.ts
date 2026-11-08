@@ -45,14 +45,43 @@ describe("border relation", () => {
   it("colours players by how they relate to the viewer, and gives tribes, water and fog none", () => {
     expect(borderRelationOf(player(5, { mine: 1 }), 9)).toBe(BorderRelation.YOU);
     expect(borderRelationOf(player(5, { aid: 9 }), 9)).toBe(BorderRelation.ALLIANCE);
-    expect(borderRelationOf(player(5, { aid: 9, ak: 1 }), 9)).toBe(BorderRelation.ALLIANCE);
-    expect(borderRelationOf(player(5, { ak: 1 }), 9)).toBe(BorderRelation.ATTACKER);
+    expect(borderRelationOf(player(5, { aid: 9, ho: 1 }), 9)).toBe(BorderRelation.ALLIANCE);
+    expect(borderRelationOf(player(5, { ho: 1 }), 9)).toBe(BorderRelation.HOSTILE);
+    expect(borderRelationOf(player(5, { ak: 1 }), 9)).toBe(BorderRelation.OTHER);
+    expect(borderRelationOf(player(5, { fr: 1, ho: 1 }), 9)).toBe(BorderRelation.FRIEND);
+    expect(borderRelationOf(player(5, { fr: 1, fp: 1 }), 9)).toBe(BorderRelation.PINNED);
     expect(borderRelationOf(player(5, { aid: 3 }), 9)).toBe(BorderRelation.OTHER);
     expect(borderRelationOf(player(5, { aid: 3 }), null)).toBe(BorderRelation.OTHER);
     expect(borderRelationOf(camp(), 9)).toBe(BorderRelation.NONE);
     expect(borderRelationOf({ i: 40 }, 9)).toBe(BorderRelation.NONE);
     expect(borderRelationOf({ fog: 1 }, 9)).toBe(BorderRelation.NONE);
     expect(borderRelationOf(undefined, 9)).toBe(BorderRelation.NONE);
+  });
+});
+
+describe("border relation with the friends list", () => {
+  it("takes the viewer's friends list over the flags, and never marks the viewer's own cells", () => {
+    const viewer = { myAlliance: null, friendMark: (cell: PlayerCell) => (cell.uid === 5 ? ("pinned" as const) : ("none" as const)) };
+    expect(borderRelationOf(player(5), viewer)).toBe(BorderRelation.PINNED);
+    expect(borderRelationOf(player(6, { fr: 1, ho: 1 }), viewer)).toBe(BorderRelation.HOSTILE);
+    expect(borderRelationOf(player(5, { mine: 1 }), viewer)).toBe(BorderRelation.YOU);
+  });
+
+  it("writes friends, pinned friends and hostile players' codes into the data texture", () => {
+    const data = new BorderData("pointy", 40, 40);
+    data.applyZone(
+      zone([
+        [10, 10, player(1, { fr: 1 })],
+        [20, 10, player(2, { fr: 1, fp: 1 })],
+        [30, 10, player(3, { ho: 1 })],
+        [10, 20, player(4, { b: CellType.OUTPOST, fr: 1 })],
+      ]),
+      { myAlliance: null },
+    );
+    expect(data.relationAt(10, 10)).toBe(BorderRelation.FRIEND);
+    expect(data.relationAt(20, 10)).toBe(BorderRelation.PINNED);
+    expect(data.relationAt(30, 10)).toBe(BorderRelation.HOSTILE);
+    expect(data.relationAt(10, 20)).toBe(BorderRelation.FRIEND);
   });
 });
 
@@ -151,6 +180,17 @@ describe("border pulse and shader", () => {
     expect(PULSE_STEP_TICKS).toBe(3);
     expect(pulseAt(50, 0, "high")).toBe(pulseAt(0, 0, "high"));
     expect(pulseAt(800, 0, "high")).toBeCloseTo(1);
+  });
+
+  it("has a colour and a line for every relation, and the dark rim", () => {
+    for (const name of ["uYou", "uAlliance", "uOther", "uHostile", "uFriend", "uPinned", "uRim", "uRimAlpha"]) {
+      expect(BORDER_FRAGMENT).toContain(`uniform ${name === "uRimAlpha" ? "float" : "vec3"} ${name};`);
+    }
+    expect(BORDER_FRAGMENT).toContain("relation == 4) { colour = uHostile; halfK = 1.2; dashed = true; }");
+    expect(BORDER_FRAGMENT).toContain("relation == 5) { colour = uFriend; halfK = 0.7; doubleGap = 0.018; }");
+    // A pinned friend's third stroke down the middle.
+    expect(BORDER_FRAGMENT).toContain("triple = true;");
+    expect(BORDER_FRAGMENT).toContain("if (triple) fromLine = min(fromLine, fromCentre);");
   });
 
   it("walks the neighbours in HexGrid's order", () => {

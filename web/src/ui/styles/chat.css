@@ -23,6 +23,11 @@
   --chat-name: var(--colour-accent);
   --chat-own: var(--colour-warning-bright);
   --chat-gm: var(--colour-success);
+  /* Chat moderators: the theme's light blue (dark blue on a light panel). */
+  --chat-mod: var(--colour-info);
+  /* The words on the GM and Mod badges: dark on a light colour. */
+  --chat-gm-ink: #0d2416;
+  --chat-mod-ink: #0b1a3a;
   color: var(--chat-text);
   pointer-events: none;
 }
@@ -34,6 +39,17 @@
   --chat-name: #7fe4f8;
   --chat-own: #ffe2a8;
   --chat-gm: #9fe0b0;
+  --chat-mod: #9cb9ff;
+  --chat-gm-ink: #0d2416;
+  --chat-mod-ink: #0b1a3a;
+}
+
+/* Open on a light panel (the light theme, Classic's parchment) the green and
+   blue are dark ones: the badges' words go white. */
+:root[data-theme="light"]:not([data-skin]) .chat-box--open,
+:root[data-skin="flash"] .chat-box--open {
+  --chat-gm-ink: #ffffff;
+  --chat-mod-ink: #ffffff;
 }
 
 .chat-box[hidden] {
@@ -231,7 +247,31 @@ button.chat-line__name {
   padding: 0 0.35em;
   border-radius: var(--radius-sm, 3px);
   background: var(--chat-gm);
-  color: #0d2416;
+  color: var(--chat-gm-ink);
+  font-size: 0.75em;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  text-shadow: none;
+  vertical-align: 0.1em;
+}
+
+/* A chat moderator's lines: as the game team's, in blue with a Mod badge. */
+.chat-line--mod {
+  border-left: 3px solid var(--chat-mod);
+}
+
+.chat-line--mod .chat-line__name {
+  color: var(--chat-mod);
+}
+
+.chat-line__mod {
+  display: inline-block;
+  margin-right: 0.35em;
+  padding: 0 0.35em;
+  border-radius: var(--radius-sm, 3px);
+  background: var(--chat-mod);
+  color: var(--chat-mod-ink);
   font-size: 0.75em;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -286,6 +326,20 @@ button.chat-line__name {
   overscroll-behavior: contain;
 }
 
+/* The 150px above counts the input's row. A player's strip stands in its
+   place and is 80px taller (its buttons wrap to a second row since Profile
+   joined them), so with the strip up the room gives up those 80px too:
+   Report landed under Main yard (profiles test, 7 Nov). */
+.chat-box--open:has(> .chat-box__player:not([hidden])) > .chat-box__lines {
+  height: clamp(48px, calc(100dvh - var(--chat-top) - 229px - 230px - 13px), 260px);
+}
+
+/* And should a very short window still run the strip into the dock, the
+   strip is on top: none of its buttons is ever under a dock button. */
+.chat-box--open:has(> .chat-box__player:not([hidden])) {
+  z-index: 1;
+}
+
 .chat-box--open .chat-line {
   padding-block: 2px;
 }
@@ -336,10 +390,24 @@ button.chat-line__name {
   display: none;
 }
 
+/* The name opens the player's profile: a plain-looking button on its own row. */
 .chat-box__player-name {
   flex: 1 1 100%;
   min-width: 0;
+  padding: 0 28px 0 0;
+  border: 0;
+  background: none;
   color: var(--chat-name);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.chat-box__player-name:hover,
+.chat-box__player-name:focus-visible {
+  text-decoration: underline;
 }
 
 .chat-box__actions {
@@ -358,6 +426,58 @@ button.chat-line__name {
 .chat-box__action {
   min-height: 32px;
   padding: var(--space-1) var(--space-3);
+}
+
+/* Icon-first (owner, 8 Nov 2026): Add friend, Mute, View yard and Report are
+   painted pictures with a tiny word under them, all one size so the strip
+   does not jump as Add friend turns to Sent or Friend. */
+.chat-box__action--icon {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 56px;
+  min-height: 48px;
+  padding: 4px 6px;
+}
+
+.chat-box__action--icon .game-icon,
+.chat-box__action--icon .friend-badge {
+  flex: none;
+}
+
+.chat-box__action-label {
+  font-size: var(--text-xs);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.chat-box__action--icon:disabled {
+  cursor: default;
+}
+
+/* Classic's buttons do not fade when disabled, so a Sent or Friend picture looked
+   as lit as an active one: dim the picture and drop its colour (the word stays
+   readable, and is still the accessible name). */
+:root[data-skin="flash"] .chat-box__action--icon:disabled .game-icon,
+:root[data-skin="flash"] .chat-box__action--icon:disabled .friend-badge {
+  opacity: 0.4;
+  filter: grayscale(0.85);
+}
+
+:root[data-skin="flash"] .chat-box__action--icon:disabled .chat-box__action-label {
+  opacity: 0.75;
+}
+
+/* Muted: the same picture on a lit button, its word now Unmute. */
+.chat-box__action--on {
+  outline: 2px solid var(--colour-accent);
+  outline-offset: -2px;
+}
+
+.chat-box__friend {
+  display: inline-flex;
 }
 
 .chat-box__player-close {
@@ -442,15 +562,76 @@ button.chat-line__name {
     text-overflow: ellipsis;
   }
 
+  /* The dock takes about 270px at the bottom of a phone: the open box ends
+     above it and the room gives way, whatever the player strip, the country
+     notice and the input take (a fixed 140px for them let the strip's
+     Report run under the dock's More; 6 Nov UI check). On a phone too short
+     for even that, the box sits over the dock rather than under it. */
+  .chat-box--open {
+    z-index: 2;
+    max-height: calc(100dvh - var(--chat-top) - 270px);
+  }
+
   .chat-box--open .chat-box__lines {
-    /* The dock takes about 270px at the bottom of a phone. */
+    flex: 1 1 auto;
     height: auto;
-    min-height: 120px;
-    max-height: calc(100dvh - var(--chat-top) - 270px - 140px);
+    min-height: 80px;
+    max-height: none;
+  }
+
+  /* A picked player's strip stands in the input's place and is taller, so
+     on a 375x667 phone the capped box ran out of room and Mute / View yard /
+     Report ended 5px past it, under the frame's bottom bar (7 Nov UI check).
+     With a strip up the room may give way to a single line, and the room
+     tabs and Global's "English here" line step aside: the line is about
+     writing and the input is hidden meanwhile, and changing room closes the
+     strip anyway. The longer selectors win over the profiles branch's own
+     strip rule (48px floor, fixed reserve) whatever the order after a merge,
+     so its two-row strip fits the same way. */
+  .chat-box.chat-box--open:has(> .chat-box__player:not([hidden])) > .chat-box__lines {
+    min-height: 32px;
+    max-height: none;
+  }
+
+  .chat-box.chat-box--open:has(> .chat-box__player:not([hidden])) > :is(.chat-box__rooms, .chat-box__rule) {
+    display: none;
+  }
+
+  /* And on a phone too short even for that, the box scrolls inside its
+     frame rather than run the strip under it (the looks' frame rule sets
+     overflow: visible, hence :root). It stays over the dock's More. */
+  :root .chat-box.chat-box--open:has(> .chat-box__player:not([hidden])) {
+    z-index: 2;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .chat-box--open:has(> .chat-box__player:not([hidden])) > .chat-box__lines {
+    height: auto;
+    min-height: 48px;
+    max-height: calc(100dvh - var(--chat-top) - 270px - 140px - 80px);
   }
 
   .chat-box--open .chat-line,
   .chat-box__action {
     min-height: 32px;
+  }
+
+  /* A phone keeps only the pictures: 40px squares in one row, the word
+     still the tooltip and the screen reader's name. */
+  .chat-box__action.chat-box__action--icon {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 4px;
+  }
+
+  .chat-box__action--icon .chat-box__action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }

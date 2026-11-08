@@ -18,6 +18,8 @@ import {
 import { tribeInfo } from "@/game/maproom1/tribes";
 import { avatar, countdown } from "./TargetCard";
 import { tutTarget, TutTarget } from "@/game/guide/targets";
+import { friendMarkOf } from "@/game/friends/friendMarks";
+import { FRIEND_MARK_TEXT, friendBadge } from "@/ui/friends/friendBadge";
 import { onlineDot } from "@/ui/onlineDot";
 import { button, el, icon } from "./icons";
 
@@ -252,6 +254,14 @@ export class Mr1MapView {
       if (shielded) badge.append(icon("shield", 12));
       else badge.textContent = String(target.level);
       control.append(badge);
+      // The friend marker on the face (beta 7), gold-framed for a pinned friend.
+      const mark = friendMarkOf(target.userid, { friend: target.friend === true, pinned: target.pinned === true });
+      const friend = friendBadge(mark, 16, "mr1-pin__friend");
+      if (friend) {
+        control.append(friend);
+        pin.classList.add(`mr1-pin--${mark}`);
+        control.setAttribute("aria-label", `${control.getAttribute("aria-label")}, ${FRIEND_MARK_TEXT[mark!].toLowerCase()}`);
+      }
       if (playing) tag.append(onlineDot("", true));
       tag.append(target.name);
     }
@@ -264,6 +274,8 @@ export class Mr1MapView {
     this.pinLayer.append(pin);
 
     const dot = el("span", `mr1-mini__dot mr1-mini__dot--${target.kind} mr1-tone--${tone}`);
+    const dotMark = target.kind === "player" ? friendMarkOf(target.userid, { friend: target.friend === true, pinned: target.pinned === true }) : null;
+    if (dotMark) dot.classList.add(`mr1-mini__dot--${dotMark}`);
     this.placeDot(dot, spot);
     this.miniDots.append(dot);
     this.pins.set(target.key, { key: target.key, spot, element: pin, button: control, dot });

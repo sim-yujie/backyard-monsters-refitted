@@ -35,10 +35,15 @@ export { canHelp };
 
 const onlineRank = (friend: Friend): number => (friend.online === "online" ? 1 : 0);
 
-/** Wrench first, then online, then highest level, then name. Does not change the list given. */
+/**
+ * Pinned first (beta 7), in the order they were pinned; then wrench first,
+ * then online, then highest level, then name. Does not change the list given.
+ */
 export const orderFriends = (friends: readonly Friend[]): Friend[] =>
   [...friends].sort(
     (a, b) =>
+      Number(b.pinnedAt !== null) - Number(a.pinnedAt !== null) ||
+      (a.pinnedAt ?? 0) - (b.pinnedAt ?? 0) ||
       Number(canHelp(b)) - Number(canHelp(a)) ||
       onlineRank(b) - onlineRank(a) ||
       b.level - a.level ||
@@ -276,7 +281,7 @@ export class FriendsBar {
   }
 
   private portrait(friend: Friend): HTMLElement {
-    const slot = make("button", "friends-bar__slot");
+    const slot = make("button", friend.pinnedAt !== null ? "friends-bar__slot friends-bar__slot--pinned" : "friends-bar__slot");
     slot.type = "button";
     slot.dataset.userid = String(friend.userid);
     const face = make("span", "friends-bar__face");

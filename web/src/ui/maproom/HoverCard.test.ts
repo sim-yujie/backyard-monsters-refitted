@@ -99,3 +99,22 @@ describe("HoverCard", () => {
     expect(card.element.hidden).toBe(true);
   });
 });
+
+describe("the friend marker on the hover card (beta 7)", () => {
+  it("marks a friend and a pinned friend, never the player's own yard or a stranger", () => {
+    expect(hoverContentFor(player({ fr: 1 }), inRange(2))?.friend).toBe("friend");
+    expect(hoverContentFor(player({ fr: 1, fp: 1 }), outOfRange(2))?.friend).toBe("pinned");
+    expect(hoverContentFor(player(), inRange(2))?.friend).toBeUndefined();
+    expect(hoverContentFor(player({ mine: 1, fr: 1 }), inRange(2))?.friend).toBeUndefined();
+  });
+
+  it("shows the badge before the name", () => {
+    const card = new HoverCard().mount(document.createElement("div"));
+    card.show(hoverContentFor(player({ fr: 1, fp: 1 }), noFlinger)!, { left: 0, right: 10, middle: 0 });
+    const title = card.element.querySelector(".mr2-hover__title")!;
+    expect(title.querySelector(".friend-badge")?.getAttribute("data-friend")).toBe("pinned");
+    expect(title.textContent).toContain("Bramblefoot · Level 24");
+    card.show(hoverContentFor(player(), noFlinger)!, { left: 0, right: 10, middle: 0 });
+    expect(title.querySelector(".friend-badge")).toBeNull();
+  });
+});

@@ -248,4 +248,81 @@ describe("FriendsTab", () => {
     expect(friendMatches(ann, "", new Set(["online"]))).toBe(false);
     expect(friendMatches(ann, "", new Set(["gift"]))).toBe(true);
   });
+  describe("pins (beta 7)", () => {
+    const pinButton = (tab: FriendsTab, userid: number): HTMLButtonElement => {
+      const found = tab.element.querySelector<HTMLButtonElement>(`[data-userid="${userid}"] .friends-row__pin`);
+      if (!found) throw new Error(`no pin on ${userid}`);
+      return found;
+    };
+
+    it("puts pinned friends first, in the order they were pinned, and counts them", async () => {
+      const { tab } = setup({
+        list: {
+          list: fixtureList([
+            fixtureFriend(1, { username: "Ann", level: 3, online: "online" }),
+            fixtureFriend(2, { username: "Bob", level: 9, pinnedAt: 200 }),
+            fixtureFriend(3, { username: "Cat", level: 12, pinnedAt: 100 }),
+          ]),
+        },
+      });
+      await tab.show();
+      expect(names(tab.element)).toEqual(["Cat", "Bob", "Ann"]);
+      expect(tab.element.querySelector(".friends-summary__pins")?.textContent).toContain("2/10");
+      expect(pinButton(tab, 2).getAttribute("aria-pressed")).toBe("true");
+      expect(pinButton(tab, 1).getAttribute("aria-pressed")).toBe("false");
+      expect(tab.element.querySelector('[data-userid="3"]')?.classList.contains("friends-row--pinned")).toBe(true);
+    });
+
+    it("sorts a pinned friend before an online one", () => {
+      const pinned = fixtureFriend(1, { username: "A", level: 1, online: null, pinnedAt: 5 });
+      const online = fixtureFriend(2, { username: "B", level: 50, online: "online" });
+      expect([online, pinned].sort(friendOrder).map((one) => one.username)).toEqual(["A", "B"]);
+    });
+
+    it("pins at once, asks the server, and moves the row to the top", async () => {
+      const { tab, store, calls } = setup();
+      await tab.show();
+      pinButton(tab, 3).click();
+      expect(store.isPinned(3)).toBe(true);
+      await settle();
+      expect(calls).toContainEqual(["pin", 3, true]);
+      expect(names(tab.element)[0]).toBe("Cat");
+      expect(pinButton(tab, 3).getAttribute("aria-pressed")).toBe("true");
+    });
+
+    it("unpins", async () => {
+      const { tab, store, calls } = setup({
+        list: {
+          list: fixtureList([fixtureFriend(1, { username: "Ann", pinnedAt: 10 }), fixtureFriend(2, { username: "Bob" })]),
+          pin: { pinned: false, pinnedCount: 0 },
+        },
+      });
+      await tab.show();
+      pinButton(tab, 1).click();
+      await settle();
+      expect(calls).toContainEqual(["pin", 1, false]);
+      expect(store.isPinned(1)).toBe(false);
+    });
+
+    it("refuses an 11th pin without asking the server", async () => {
+      const ten = Array.from({ length: 10 }, (_, i) => fixtureFriend(i + 1, { username: `P${i + 1}`, pinnedAt: i + 1 }));
+      const { tab, store, calls } = setup({ list: { list: fixtureList([...ten, fixtureFriend(11, { username: "Eleven" })]) } });
+      await tab.show();
+      pinButton(tab, 11).click();
+      await settle();
+      expect(calls.some(([method]) => method === "pin")).toBe(false);
+      expect(store.isPinned(11)).toBe(false);
+      expect(tab.statusText).toBe(FRIENDS_TEXT.pinLimit(10));
+    });
+
+    it("puts the pin back when the server refuses it", async () => {
+      const { tab, store } = setup({ list: { pin: refused("pinLimit") } });
+      await tab.show();
+      pinButton(tab, 2).click();
+      await settle();
+      expect(store.isPinned(2)).toBe(false);
+      expect(tab.statusText).toBe(FRIENDS_TEXT.pinLimit(10));
+      expect(names(tab.element)).toEqual(["Bob", "Ann", "Cat"]);
+    });
+  });
 });

@@ -25,6 +25,7 @@ import { GENERAL_STORE_TYPE } from "@/game/yard/shop";
 import { BUNKER_TYPE } from "@/game/monsters/bunker";
 import { researchOn } from "@/game/monsters/lab";
 import { siteOfType } from "@/game/siege/siege";
+import { costLessBy, weekendPercent } from "@/game/weekend";
 import {
   isSurfaceInferno,
   purseFunds,
@@ -156,6 +157,12 @@ export interface UpgradeOffer {
   readonly instantGate: UpgradeGate | null;
   /** A main-yard Inferno building: `cost` is from the Inferno purse, in Bone, Coal, Sulfur and Magma. */
   readonly inferno: boolean;
+  /**
+   * A Builder's Weekend's percentage taken off `cost` (`game/weekend.ts`), 0
+   * when none runs; `fullCost` is then the price without it.
+   */
+  readonly weekendOff?: number;
+  readonly fullCost?: UpgradeCost;
 }
 
 /** One Shiny speed-up on a running job. */
@@ -191,6 +198,13 @@ export interface FortifyOffer {
   readonly seconds: number;
   readonly gate: UpgradeGate | null;
   readonly maxed: boolean;
+  /**
+   * A Builder's Weekend's percentage taken off `cost` (owner, 7 Nov:
+   * `planFortify`), absent when none runs; `fullCost` is then the price
+   * without it.
+   */
+  readonly weekendOff?: number;
+  readonly fullCost?: UpgradeCost;
 }
 
 /** A running build or upgrade countdown and what can be done about it. */
@@ -392,7 +406,10 @@ export const upgradeOffer = (
   const seconds = Math.floor(
     step.cost.time * sharperToolsMultiplier(context.save.storedata, context.now()),
   );
-  const cost: UpgradeCost = { r1: step.cost.r1, r2: step.cost.r2, r3: step.cost.r3, r4: step.cost.r4 };
+  const fullCost: UpgradeCost = { r1: step.cost.r1, r2: step.cost.r2, r3: step.cost.r3, r4: step.cost.r4 };
+  // Builder's Weekend: the server charges this much less (`planOneUpgrade`).
+  const weekendOff = weekendPercent("builders", context.now());
+  const cost: UpgradeCost = costLessBy(fullCost, weekendOff);
 
   // The gates both buttons share, in the server's order.
   const hall = townHallLevel(context.yard);
@@ -447,6 +464,7 @@ export const upgradeOffer = (
     gate,
     instantGate,
     inferno,
+    ...(weekendOff > 0 && { weekendOff, fullCost }),
   };
 };
 
@@ -495,9 +513,13 @@ export const cancelOffer = (building: YardBuilding, context: PanelContext): Canc
     building.countdown?.kind === "fortify"
       ? fortifyStepsOf(building.type, context.yard.kind)[building.fortification]
       : costOf(building.type, building.level, context.yard.kind);
-  const cost: UpgradeCost = step
+  const fullCost: UpgradeCost = step
     ? { r1: step[0], r2: step[1], r3: step[2], r4: step[3] }
     : { ...ZERO };
+  // An upgrade or fortify bought in a Builder's Weekend gives back what was
+  // paid (`wd`, `planCancelUpgrade` / `planCancelFortify`), whenever it is cancelled.
+  const paidOff = Number(building.raw["wd"]) || 0;
+  const cost = costLessBy(fullCost, paidOff);
   // A main-yard Inferno building's refund goes to the Inferno purse, up to its caps.
   const funds = fundsFor(building.type, context);
   const refund = { ...ZERO };
@@ -636,7 +658,10 @@ export const fortifyOffer = (building: YardBuilding, context: PanelContext): For
     return { from, to: from, max: ladder.length, cost: ZERO, seconds: 0, gate: null, maxed: true };
   }
 
-  const cost: UpgradeCost = { r1: step[0], r2: step[1], r3: step[2], r4: step[3] };
+  const fullCost: UpgradeCost = { r1: step[0], r2: step[1], r3: step[2], r4: step[3] };
+  // Builder's Weekend: the server charges this much less (`planFortify`).
+  const weekendOff = weekendPercent("builders", context.now());
+  const cost: UpgradeCost = costLessBy(fullCost, weekendOff);
   const seconds = Math.floor(step[4] * sharperToolsMultiplier(context.save.storedata, context.now()));
   const hall = townHallLevel(context.yard);
 
@@ -667,7 +692,16 @@ export const fortifyOffer = (building: YardBuilding, context: PanelContext): For
     }
   }
 
-  return { from, to: from + 1, max: ladder.length, cost, seconds, gate, maxed: false };
+  return {
+    from,
+    to: from + 1,
+    max: ladder.length,
+    cost,
+    seconds,
+    gate,
+    maxed: false,
+    ...(weekendOff > 0 && { weekendOff, fullCost }),
+  };
 };
 
 /**

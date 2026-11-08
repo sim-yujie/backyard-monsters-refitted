@@ -12,6 +12,8 @@ import { isFlatGround } from "@/game/maproom/ground";
 import { landFeatureChip } from "./landFeatureRow";
 import { addNeighbourBonusChip } from "./neighbourBonusChip";
 import { icon as lineIcon } from "@/ui/icons";
+import { friendMarkOf, type FriendMark } from "@/game/friends/friendMarks";
+import { friendBadge } from "@/ui/friends/friendBadge";
 
 /**
  * The map's cell panel, slimmed to what a player decides with (issue #174,
@@ -469,6 +471,7 @@ export class CellPanel {
       mine ? (outpost ? "Your outpost" : "Your yard") : payload.n,
       `Level ${payload.l}`,
       `${kind} · ${where}`,
+      mine ? null : friendMarkOf(payload.uid, { friend: payload.fr === 1, pinned: payload.fp === 1 }),
     );
 
     if (mine) {
@@ -585,8 +588,13 @@ export class CellPanel {
     title: string,
     level: string,
     subtitle: string,
+    /** The owner is the player's friend (beta 7): the friend marker before the name. */
+    friend: FriendMark = null,
   ): void {
-    this.title.textContent = title;
+    this.title.replaceChildren();
+    const badge = friendBadge(friend, 24, "mr2-cell__friend");
+    if (badge) this.title.append(badge, " ");
+    this.title.append(title);
     this.level.textContent = level;
     this.level.hidden = level === "";
     this.subtitle.textContent = subtitle;
@@ -699,10 +707,9 @@ export class CellPanel {
     this.chips.append(chip);
   }
 
-  /** The cell's land feature and what it does (`landFeatureRow.ts`); nothing on open ground. */
+  /** The cell's land feature and what it does (`landFeatureRow.ts`); "Open ground · no bonus" on open ground. */
   private addLandChip(feature: number | undefined): void {
-    const chip = landFeatureChip(feature);
-    if (chip) this.chips.append(chip);
+    this.chips.append(landFeatureChip(feature));
   }
 
   private addCountdown(

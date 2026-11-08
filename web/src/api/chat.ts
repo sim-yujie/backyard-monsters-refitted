@@ -41,6 +41,8 @@ export interface ChatLineWire {
   ts: number;
   /** Said by the game team: the server sets it, only for the game team's accounts. */
   gm?: boolean;
+  /** Said by a chat moderator: the server sets it, only for accounts on the dashboard's Moderators list (never with `gm`). */
+  mod?: boolean;
 }
 
 /** The error codes the chat server answers with. */
@@ -70,7 +72,9 @@ export type ChatServerMessage =
   /** Banned by the game team: the server closes the socket after it. */
   | { type: "kicked"; reason: "banned"; until: number | null; text: string; banReason?: string }
   /** The game team left a warning or mute to show (`api/moderation.ts`). */
-  | { type: "notice" };
+  | { type: "notice" }
+  /** New mail for this player: the game asks `/player/mailstatus` what came (owner, beta 7). */
+  | { type: "mail" };
 
 /** Everything needed to reach world chat, from the owner's yard load. */
 export interface ChatConfig {

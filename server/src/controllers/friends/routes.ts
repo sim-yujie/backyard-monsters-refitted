@@ -20,6 +20,7 @@ import {
   cancelAnswer,
   friendsAnswer,
   mutedAnswer,
+  pinAnswer,
   removeAnswer,
   requestAnswer,
   requestsAnswer,
@@ -66,6 +67,8 @@ export const mountFriendsRoutes = (router: Router): void => {
     route((ctx, now) => cancelAnswer(postgres.em, ctx.authUser, ctx.request.body, now)));
   router.post(`${api}/bm/friends/remove`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,
     route((ctx) => removeAnswer(postgres.em, ctx.authUser, ctx.request.body)));
+  router.post(`${api}/bm/friends/pin`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,
+    route((ctx, now) => pinAnswer(postgres.em, ctx.authUser, ctx.request.body, now)));
   router.get(`${api}/bm/friends/search`, apiVersion, verifyUserAuth, verifyAccountStatus, friendSearchLimiter,
     route((ctx, now) => searchAnswer(postgres.em, ctx.authUser, ctx.query, now)));
   router.get(`${api}/bm/friends/suggestions`, apiVersion, verifyUserAuth, verifyAccountStatus, friendsReadLimiter,

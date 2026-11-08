@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, BuildingData, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
 import { setDevDetails } from "@/app/devDetails";
 import { YardStore, type YardUiBinding } from "@/game/yard/YardStore";
+import { resetWeekend, setWeekend, type WeekendRun } from "@/game/weekend";
 import { topUpPrice } from "@/game/yard/resourcePacks";
 import { panelModel } from "./buildingActions";
 import type { Notices } from "@/ui/maproom/Notices";
@@ -1043,5 +1044,58 @@ describe("BuildingPanel: Move to a random spot on the Map Room (#366)", () => {
       "Available again in 7 days.",
     );
     modal.remove();
+  });
+});
+
+/**
+ * Builder's Weekend discounts Fortify too (owner, 7 Nov): the home-yard
+ * Fortify block shows the lowered price with the −30% chip, and the
+ * resources check is against that price. Cannon Tower F0 → F1 is
+ * 50,000 / 37,500 / 12,500 in full, 35,000 / 26,250 / 8,750 at 30% off.
+ */
+describe("BuildingPanel: fortifying in a Builder's Weekend", () => {
+  const BUILDERS: WeekendRun = {
+    id: "builders",
+    title: "Builder's Weekend",
+    line: "Upgrades cost 30% less",
+    percent: 30,
+    key: "2026-11-14",
+    startsAt: T0 - 60,
+    endsAt: T0 + 3_600,
+    announceAt: T0 - 86_460,
+    forced: false,
+  };
+  afterEach(() => {
+    resetWeekend();
+    document.body.replaceChildren();
+  });
+
+  const fortifyBlock = (resources?: Record<string, number>) => {
+    const { element } = setup([HALL, building(2, 20, 4)], 2, resources ? { load: { resources } as Partial<BaseLoadResponse> } : {});
+    return element.querySelector<HTMLElement>(".building-fortify")!;
+  };
+
+  it("shows the lowered price and the −30% chip", () => {
+    setWeekend({ active: BUILDERS, next: null }, T0);
+    const block = fortifyBlock();
+    expect(block.querySelector(".building-panel__head .weekend-chip")?.textContent).toBe("−30%");
+    const cost = spokenText(block.querySelector(".building-panel__cost")!);
+    expect(cost).toContain("35,000");
+    expect(cost).toContain("26,250");
+    expect(cost).toContain("8,750");
+    expect(cost).not.toContain("50,000");
+  });
+
+  it("is not short with just the lowered price in storage", () => {
+    setWeekend({ active: BUILDERS, next: null }, T0);
+    const block = fortifyBlock({ r1: 35_000, r2: 26_250, r3: 8_750, r4: 0 });
+    expect(block.querySelectorAll(".build-info__fact--ok")).toHaveLength(block.querySelectorAll(".build-info__fact").length);
+    expect(block.querySelector<HTMLButtonElement>(".building-panel__buttons button")?.disabled).toBe(false);
+  });
+
+  it("no weekend: the full price and no chip", () => {
+    const block = fortifyBlock();
+    expect(block.querySelector(".weekend-chip")).toBeNull();
+    expect(spokenText(block.querySelector(".building-panel__cost")!)).toContain("50,000");
   });
 });

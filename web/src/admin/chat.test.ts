@@ -140,6 +140,20 @@ describe("the chat panel", () => {
     expect(last.querySelector(".chat-gm")?.textContent).toBe("GM");
   });
 
+  it("marks a moderator's lines with a Mod chip, and the game team's with GM only", async () => {
+    const view = panel();
+    const socket = await joinUp(view);
+    socket.serve({ type: "message", channel: "chat:mr2-global", userId: 30, displayName: "[25] helper", body: "hi", ts: Date.now(), mod: true });
+    socket.serve({ type: "message", channel: "chat:mr2-global", userId: 9, displayName: "[40] Owner", body: "yo", ts: Date.now(), gm: true, mod: true });
+    const [mod, gm] = [...view.element.querySelectorAll(".chat-line")].slice(-2);
+    expect(mod!.classList.contains("is-mod")).toBe(true);
+    expect(mod!.querySelector(".chat-mod")?.textContent).toBe("Mod");
+    expect(mod!.querySelector(".chat-mod")?.getAttribute("title")).toBe("Moderator");
+    expect(gm!.classList.contains("is-gm")).toBe(true);
+    expect(gm!.classList.contains("is-mod")).toBe(false);
+    expect(gm!.querySelector(".chat-mod")).toBeNull();
+  });
+
   it("counts new lines in a room not on show", async () => {
     const view = panel();
     const socket = await joinUp(view);

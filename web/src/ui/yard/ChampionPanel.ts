@@ -1057,7 +1057,11 @@ export const actTile = (options: ActTileOptions): HTMLButtonElement => {
   tile.className = `champion-act champion-act--${options.act}`;
   tile.classList.toggle("champion-act--locked", options.locked);
   tile.title = options.sentence;
-  if (options.locked) tile.setAttribute("aria-disabled", "true");
+  if (options.locked) {
+    tile.setAttribute("aria-disabled", "true");
+    // Flash's refusal (`uiSounds.ts`) as the tap writes why it is locked.
+    tile.dataset["uiSound"] = "error";
+  }
   const art = document.createElement("img");
   art.className = "champion-act__art";
   art.src = (options.missing ? silhouetteUrl(options.type, options.kind) : null) ?? buttonUrl(options.type, options.kind);

@@ -85,8 +85,10 @@ describe("a wild monster camp", () => {
     expect(host.querySelector<HTMLImageElement>(".mr2-cell__picture img")?.src).toContain(
       "tribes/kozu-256.png",
     );
+    // A camp on open ground says so (owner, 7 Nov: a missing row read as a fault).
     expect(shown(host, ".mr2-chip").map((chip) => chip.textContent)).toEqual([
       "In range · next to your yard",
+      "Open ground · no bonus",
     ]);
     expect(buttonNamed(host, "Attack")?.disabled).toBe(false);
     expect(buttonNamed(host, "Look inside")).toBeDefined();
@@ -110,6 +112,7 @@ describe("a wild monster camp", () => {
     expect(shown(host, ".mr2-chip").map((chip) => chip.textContent)).toEqual([
       "Out of range · 2 cells too far",
       "Destroyed",
+      "Open ground · no bonus",
     ]);
     expect(shown(host, ".mr2-chip--warning")).toHaveLength(1);
     expect(buttonNamed(host, "Attack")?.disabled).toBe(true);

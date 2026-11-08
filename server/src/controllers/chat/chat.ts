@@ -1,7 +1,13 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
 import z from "zod";
 import type { HistoryEntry } from "../../chat/chatProtocol.js";
-import { CHANNELS, COUNTRY_CHANNEL_PREFIX, INFERNO_CHAT_CHANNEL, countryChannelFor } from "../../config/ChatConfig.js";
+import {
+  CHANNELS,
+  COUNTRY_CHANNEL_PREFIX,
+  INFERNO_CHAT_CHANNEL,
+  LEGACY_MR1_CHAT_CHANNEL,
+  countryChannelFor,
+} from "../../config/ChatConfig.js";
 import { User } from "../../database/models/user.model.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { CHAT_REPORT_MAX_TEXT, recordChatReport } from "../../services/chat/chatReports.js";
@@ -29,9 +35,10 @@ export type HistoryReader = (channel: string) => Promise<HistoryEntry[]>;
  * The world rooms a line can be reported from: the global channels the server
  * issues at base load, as `chatChannels.ts` `validateChannel` accepts them,
  * and country rooms (checked against the reporter's own country below).
- * Alliance rooms are left out; the web client has none yet.
+ * Alliance rooms are left out; the web client has none yet. Map Room 1's old
+ * room is accepted too: a page loaded before patch 6.6 reports from it.
  */
-const WORLD_CHANNELS = new Set([...Object.values(CHANNELS), INFERNO_CHAT_CHANNEL]);
+const WORLD_CHANNELS = new Set([...Object.values(CHANNELS), INFERNO_CHAT_CHANNEL, LEGACY_MR1_CHAT_CHANNEL]);
 
 const ReportSchema = z.object({
   userid: z.coerce.number().int().positive(),

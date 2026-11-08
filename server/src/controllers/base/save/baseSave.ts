@@ -40,6 +40,7 @@ import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
 import { scaledMR1Tribes } from "../../../services/maproom/v1/scaledMR1Tribes.js";
+import { withTribeGooBonus } from "../../../services/base/tribeGooBonus.js";
 import { isDescentBaseid } from "../../../services/inferno/descent.js";
 import { landDescentAttack } from "../../../services/inferno/descentLanding.js";
 import { landInfernoPlayerAttack } from "../../../services/inferno/infernoPlayerLanding.js";
@@ -91,6 +92,7 @@ import { championsAfterDefence } from "../../../services/base/combat/defenderCha
 import { healChampions } from "../../../services/yard/catchUpChampions.js";
 import { championsAfterLessons } from "../../../services/base/combat/championBrain.js";
 import { countAttackLoot } from "../../../services/events/lootEvents.js";
+import { plunderPercent, weekendBoostUsed, withPlunderBonus } from "../../../services/events/weekendBoosts.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanStore.js";
 import { discardDefenceReplayLoad } from "../../../services/defences/defenceReplayLoad.js";
@@ -579,7 +581,17 @@ const saveBase = async (
     }
 
     if (loot) {
-      banked = bankAttackLoot(userSave, loot.credit, loot.krallenBuff).credited;
+      // Tribe Plunder: a wild tribe's loot lands that much more, on top of
+      // the credit the server's battle allowed (`weekendBoosts.ts`); wild
+      // tribes also give 25% more Goo (patch 6.9, `tribeGooBonus.ts`).
+      const fromTribe = baseSave.type === BaseType.TRIBE;
+      const plunder = plunderPercent(fromTribe, now);
+      banked = bankAttackLoot(
+        userSave,
+        withPlunderBonus(withTribeGooBonus(loot.credit, fromTribe), plunder),
+        loot.krallenBuff
+      ).credited;
+      if (plunder > 0) weekendBoostUsed(user.userid, "plunder", now);
     }
 
     // Each champion that fought learns from the server's battle, once: this

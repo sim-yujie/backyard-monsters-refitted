@@ -141,6 +141,17 @@ describe("ProgramWarmer: the painted look's programs, each compiled once in the 
     expect(warmer.ready(source)).toBe(true);
   });
 
+  it("says a program is compiling between the ask and the answer (the map waits for it, not a fresh Low one)", async () => {
+    const gl = fakeGl({ polls: 3 });
+    const warmer = new ProgramWarmer(gl as unknown as WebGL2RenderingContext, vi.fn(async () => {}));
+    expect(warmer.compiling(source)).toBe(false);
+    const linked = warmer.warm(source);
+    expect(warmer.compiling(source)).toBe(true);
+    await linked;
+    expect(warmer.compiling(source)).toBe(false);
+    expect(warmer.ready(source)).toBe(true);
+  });
+
   it("compiles the same text once, however often (and from whichever object) it is asked", async () => {
     const gl = fakeGl({ polls: 2 });
     const warmer = new ProgramWarmer(gl as unknown as WebGL2RenderingContext, vi.fn(async () => {}));
@@ -159,6 +170,36 @@ describe("ProgramWarmer: the painted look's programs, each compiled once in the 
     expect(await warmer.warm(source)).toBe(false);
     expect(warmer.ready(source)).toBe(false);
     expect(gl.linkProgram).toHaveBeenCalledTimes(1);
+  });
+
+  it("says a program failed only once its link has failed (the progress bar counts it as done)", async () => {
+    const gl = fakeGl({ polls: 1, links: [false] });
+    const warmer = new ProgramWarmer(gl as unknown as WebGL2RenderingContext, vi.fn(async () => {}));
+    expect(warmer.failed(source)).toBe(false);
+    await warmer.warm(source);
+    expect(warmer.failed(source)).toBe(true);
+  });
+
+  it("tells when each program really began compiling: not while it waits its turn, not after it is done", async () => {
+    const gl = fakeGl({ parallel: false, fences: true, polls: 1 });
+    const gates: (() => void)[] = [];
+    const warmer = new ProgramWarmer(gl as unknown as WebGL2RenderingContext, () => new Promise<void>((open) => gates.push(open)));
+    const other = { vertex: "v", fragment: "g" };
+    const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+    const first = warmer.warm(source);
+    const second = warmer.warm(other);
+    await flush();
+    expect(warmer.startedAt(source)).toEqual(expect.any(Number));
+    expect(warmer.startedAt(other)).toBeNull();
+    gates.shift()?.();
+    await first;
+    await flush();
+    expect(warmer.startedAt(source)).toBeNull();
+    expect(warmer.startedAt(other)).toEqual(expect.any(Number));
+    gates.shift()?.();
+    await second;
+    expect(warmer.startedAt(other)).toBeNull();
+    expect(warmer.ready(other)).toBe(true);
   });
 
   it("warms several together and answers for each", async () => {

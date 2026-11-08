@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ClientErrorBatch, ClientErrorSendResult } from "@/api/clientErrors";
-import { BATCH_MAX, BATCHES_MAX, FIRST_SEND_DELAY_MS, SEND_GAP_MS, installErrorReporter, isNoise } from "./errorReporter";
+import { BATCH_MAX, BATCHES_MAX, FIRST_SEND_DELAY_MS, SEND_GAP_MS, installErrorReporter, isNoise, reportCaughtError } from "./errorReporter";
 
 /** The game's own error sender, for the owner's dashboard. */
 
@@ -107,6 +107,35 @@ describe("the error sender", () => {
     stop = null;
     error("after");
     await vi.advanceTimersByTimeAsync(SEND_GAP_MS);
+    expect(sent).toHaveLength(0);
+  });
+});
+
+describe("errors the game caught itself", () => {
+  it("sends one the game hands over (graphics off), counted like any other", async () => {
+    const { sent } = setUp("sent", false);
+    const error = new Error("Graphics off: WebGL is disabled due to your security policy (No available renderer)");
+    error.name = "GraphicsOffError";
+    reportCaughtError(error);
+    reportCaughtError(error);
+    await vi.advanceTimersByTimeAsync(FIRST_SEND_DELAY_MS);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.signedIn).toBe(false);
+    expect(sent[0]!.batch.errors).toEqual([
+      expect.objectContaining({
+        kind: "error",
+        message: "GraphicsOffError: Graphics off: WebGL is disabled due to your security policy (No available renderer)",
+        count: 2,
+      }),
+    ]);
+  });
+
+  it("does nothing once the sender has stopped", async () => {
+    const { sent } = setUp();
+    stop?.();
+    stop = null;
+    reportCaughtError(new Error("late"));
+    await vi.advanceTimersByTimeAsync(FIRST_SEND_DELAY_MS);
     expect(sent).toHaveLength(0);
   });
 });

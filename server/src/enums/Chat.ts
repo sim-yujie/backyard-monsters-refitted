@@ -27,4 +27,8 @@ export enum ChatControlType {
   Notice = "notice",
   /** The game team muted (or unmuted) the player: `until` in ms, 0 for none. */
   Mute = "mute",
+  /** The owner changed the chat moderators list: read it again. */
+  Moderators = "moderators",
+  /** New mail for the player (`services/mail/mailNudge.ts`): tell their game to look. */
+  Mail = "mail",
 }

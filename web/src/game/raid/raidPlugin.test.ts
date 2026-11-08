@@ -8,6 +8,7 @@ import { battlePlugin } from "@/game/attack/plugins/battle";
 import { TROJAN_HORSE_TYPE } from "@/game/trojan/trojanHorse";
 import { TRAP_BANNER, TRAP_BANNER_MS } from "@/game/trojan/trojanText";
 import { MOLOCH_RAID_GONE } from "@/game/inferno/emergenceText";
+import { SheetQueue } from "@/game/attack/sheetQueue";
 import { DOOR_OPEN_MS, RAID_PLUGINS, createRaidPlugin, finishNotice, raidPlugin } from "./raidPlugin";
 import { consumeRaidNote, consumeRaidResult, type RaidRun } from "./raidSession";
 import { DONT_PANIC } from "./raidText";
@@ -79,6 +80,7 @@ const mount = (
     setAnimFrame: vi.fn(),
     yardToWorld: vi.fn(),
   },
+  holdSheets?: () => () => void,
 ) => {
   const session = fakeSession();
   const hudSlot = document.createElement("span");
@@ -96,6 +98,7 @@ const mount = (
     serverNow: () => 1_000,
     clearRaid,
     wait: async () => {},
+    ...(holdSheets ? { holdSheets } : {}),
   });
   const teardown = plugin(mounts);
   return { session, hudSlot, goToYard, clearRaid, renderer, teardown };
@@ -155,6 +158,85 @@ describe("raidPlugin", () => {
     expect(consumeRaidResult()).toEqual(RESULT);
     expect(t.clearRaid).toHaveBeenCalled();
     expect(t.goToYard).toHaveBeenCalledTimes(1);
+  });
+
+  it("holds the sheet downloads while the finish is out, and lets go once it is back", async () => {
+    let answer!: (value: unknown) => void;
+    const order: string[] = [];
+    const release = vi.fn(() => order.push("release"));
+    const hold = vi.fn(() => {
+      order.push("hold");
+      return release;
+    });
+    const t = mount(
+      () => {
+        order.push("finish");
+        return new Promise((resolve) => (answer = resolve));
+      },
+      true,
+      run(),
+      undefined,
+      hold,
+    );
+    expect(hold).not.toHaveBeenCalled();
+    t.session.end();
+    await settle();
+    expect(order).toEqual(["hold", "finish"]);
+    expect(release).not.toHaveBeenCalled();
+    answer({ error: 0, result: RESULT });
+    await settle();
+    expect(order).toEqual(["hold", "finish", "release"]);
+    expect(t.goToYard).toHaveBeenCalledTimes(1);
+    consumeRaidResult();
+  });
+
+  it("lets the sheet downloads go if the screen leaves while the finish is still out", async () => {
+    const release = vi.fn();
+    const t = mount(() => new Promise(() => {}), true, run(), undefined, () => release);
+    t.session.end();
+    await settle();
+    expect(release).not.toHaveBeenCalled();
+    t.teardown?.();
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it("finish goes out at once with paintings still coming: the queue holds two at most, and drops the rest", async () => {
+    // The real queue over a loader that never finishes: a slow line.
+    const started: string[] = [];
+    const queue = new SheetQueue({
+      load: (url) => {
+        started.push(url);
+        return new Promise(() => {});
+      },
+    });
+    const names = ["pokey", "octo", "bolt", "fink", "ichi", "bandito", "fang", "brain", "crabatron", "projectx"];
+    for (const name of names) queue.load(`/assets/monsters/${name}-anim@4x.png`).catch(() => {});
+    expect(started).toHaveLength(2);
+
+    let finishAsked = 0;
+    const t = mount(
+      async () => {
+        finishAsked += 1;
+        // At most three sheets hold a connection of the six: the finish has one.
+        expect(queue.snapshot().active.small + queue.snapshot().active.full).toBeLessThanOrEqual(3);
+        expect(queue.snapshot().waiting).toEqual({ small: [], full: [] });
+        return { error: 0, result: RESULT };
+      },
+      true,
+      run(),
+      undefined,
+      () => {
+        queue.dropWaiting();
+        return queue.hold();
+      },
+    );
+    t.session.end();
+    await settle();
+    expect(finishAsked).toBe(1);
+    // Nothing more was started for a fight that is over.
+    expect(started).toHaveLength(2);
+    expect(t.goToYard).toHaveBeenCalledTimes(1);
+    consumeRaidResult();
   });
 
   it("opens the yard with a line when the raid was called off", async () => {
