@@ -70,6 +70,8 @@ describe("friendsApi reads", () => {
           giftSentToday: true,
           canGiftFrom: null,
           help: null,
+          wishes: ["r3", "r9", "r3", "r1"],
+          pinnedAt: "2026-11-01T08:00:00.000Z",
         },
         { userid: "9", online: "sometimes", help: { speedup: true, repair: 0 } },
       ],
@@ -88,7 +90,10 @@ describe("friendsApi reads", () => {
       giftSentToday: true,
       canGiftFrom: null,
       help: null,
+      wishes: ["r3", "r1"],
+      pinnedAt: Math.floor(Date.parse("2026-11-01T08:00:00.000Z") / 1000),
     });
+    expect(list.maxPinned).toBe(10);
     // A row with missing or odd fields still draws.
     expect(list.friends[1]).toMatchObject({
       userid: 9,
@@ -98,6 +103,8 @@ describe("friendsApi reads", () => {
       online: null,
       giftSentToday: false,
       help: { speedup: true, repair: false },
+      wishes: [],
+      pinnedAt: null,
     });
   });
 
@@ -141,6 +148,15 @@ describe("friendsApi reads", () => {
     stubFetch({ error: 0, results: [{ userid: 5, username: "Mate", level: 9, relation: "none" }] });
     expect(await friendsApi.suggestions()).toEqual([{ userid: 5, username: "Mate", pic: null, level: 9, relation: "none" }]);
     expect(calls[0]?.url).toMatch(/\/bm\/friends\/suggestions$/);
+  });
+
+  it("reads and saves the player's gift wishes (#391)", async () => {
+    stubFetch({ error: 0, collectsLeft: 5, gifts: [], wishes: ["r2", "r4"] });
+    expect((await friendsApi.gifts()).wishes).toEqual(["r2", "r4"]);
+    stubFetch({ error: 0, wishes: ["r1"] });
+    expect(await friendsApi.setWishes(["r1"])).toEqual(["r1"]);
+    expect(calls[1]).toMatchObject({ method: "POST", json: { wishes: ["r1"] } });
+    expect(calls[1]?.url).toMatch(/\/bm\/friends\/wishes$/);
   });
 
   it("reads gifts and the blocked list", async () => {

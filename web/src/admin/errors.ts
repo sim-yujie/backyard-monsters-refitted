@@ -15,6 +15,9 @@ import { chartCard, series, total } from "./sections";
  * browsers and from the server, with how often, and when first and last seen.
  * Tap one for where it happened, who hit it (name, account number and
  * address: shown here only, never anywhere players see) and its stack.
+ *
+ * The grouped list comes first (owner, 8 Nov 2026: what matters is which
+ * error, how often, when last); the daily charts are folded below it.
  */
 
 const SOURCES: readonly [ErrorSource | "all", string][] = [
@@ -45,6 +48,8 @@ export class ErrorsView {
   private source: ErrorSource | "all" = "all";
   private sort: "last" | "count" = "last";
   private days: readonly DailyStat[] = [];
+  /** Whether the owner opened the charts, kept across refreshes. */
+  private chartsOpen = false;
 
   constructor(private readonly onError: (message: string) => void) {}
 
@@ -100,7 +105,7 @@ export class ErrorsView {
     const onServer = series(this.days, (d) => d.serverErrors);
     const sum = (points: typeof inBrowsers) => {
       const n = total(points);
-      return n === null ? null : `${count(n)} in ${this.days.length} days`;
+      return n === null ? null : `${count(n)} ${n === 1 ? "error" : "errors"} in the last ${this.days.length} days`;
     };
     const list = groups.length
       ? h(
@@ -141,7 +146,7 @@ export class ErrorsView {
                       { class: "row-meta" },
                       [
                         SOURCE_WORD[group.source],
-                        `last ${ago(group.lastSeen)}`,
+                        `last seen ${ago(group.lastSeen)}`,
                         group.userids.length ? plural(group.userids.length, "player") : null,
                       ]
                         .filter(Boolean)
@@ -200,12 +205,15 @@ export class ErrorsView {
           ),
         );
 
-    replace(
-      this.element,
+    const charts = h(
+      "details",
+      { class: "fold error-charts", attrs: this.chartsOpen ? { open: "" } : {} },
       h(
-        "p",
-        { class: "lede" },
-        "Errors are things that went wrong in the game. A few are normal; a sudden rise is worth a look.",
+        "summary",
+        {},
+        icon("chevron", 16),
+        h("span", {}, "Errors per day"),
+        h("span", { class: "fold-count" }, `${this.days.length} days`),
       ),
       h(
         "div",
@@ -219,18 +227,24 @@ export class ErrorsView {
           unit: "server errors",
         }),
       ),
+    );
+    charts.addEventListener("toggle", () => (this.chartsOpen = charts.open));
+
+    replace(
+      this.element,
       h(
         "div",
         { class: "toolbar" },
         this.segmented(SOURCES, this.source, (value) => (this.source = value), "Which errors"),
         this.segmented(SORTS, this.sort, (value) => (this.sort = value), "Order"),
       ),
+      list,
       h(
         "p",
         { class: "note" },
-        `Kept for 30 days after last seen: ${plural(browser.kinds, "kind")} from browsers (${plural(browser.occurrences, "time")}), ${plural(server.kinds, "kind")} from the server (${plural(server.occurrences, "time")}).`,
+        `Distinct error groups in the list above, kept 30 days after last seen: ${plural(browser.kinds, "group")} from browsers and ${plural(server.kinds, "group")} from the server (${plural(browser.occurrences + server.occurrences, "occurrence")} between them). The charts count every occurrence per day, so their totals are higher. A few are normal; a sudden rise is worth a look.`,
       ),
-      list,
+      charts,
     );
   }
 }

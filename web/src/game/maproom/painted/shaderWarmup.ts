@@ -1,3 +1,5 @@
+import { noteShader } from "../openMarks";
+
 /**
  * Compiles the painted map's shaders without freezing the page (MR2 plan step 10; the owner's
  * "Map Room crashed" report, 4 Nov 2026; Firefox taking 15-30 s every open, 4 Nov 2026).
@@ -142,6 +144,8 @@ export const warmPrograms = async (
 export class ProgramWarmer {
   private readonly linked = new Map<string, boolean>();
   private readonly pending = new Map<string, Promise<boolean>>();
+  /** When each pending program really began compiling (after any queue), for the map's progress bar. */
+  private readonly began = new Map<string, number>();
   /** The last compile in line, where they run one at a time. */
   private queue: Promise<unknown> = Promise.resolve();
   private readonly parallel: boolean;
@@ -172,6 +176,29 @@ export class ProgramWarmer {
     return this.linked.get(this.key(source)) === true;
   }
 
+  /** True where programs compile one at a time (no `KHR_parallel_shader_compile`: Firefox). */
+  get serial(): boolean {
+    return !this.parallel;
+  }
+
+  /** Whether the program is compiling now (asked for, not answered yet). */
+  compiling(source: ProgramSource): boolean {
+    return !this.ready(source) && this.pending.has(this.key(source));
+  }
+
+  /** Whether the program was compiled here and failed to link (it will not be tried again). */
+  failed(source: ProgramSource): boolean {
+    return this.linked.get(this.key(source)) === false;
+  }
+
+  /**
+   * When the program really began compiling (performance.now() ms), or null while it waits its turn
+   * or is not compiling at all. Read by the map's "Preparing map" bar (`prepareProgress.ts`).
+   */
+  startedAt(source: ProgramSource): number | null {
+    return this.began.get(this.key(source)) ?? null;
+  }
+
   /** Compiles the program in the background (once) and resolves to whether it linked. */
   warm(source: ProgramSource): Promise<boolean> {
     if (this.host?.has(source)) return Promise.resolve(true);
@@ -181,16 +208,24 @@ export class ProgramWarmer {
     if (known === false || (known === true && !this.host)) return Promise.resolve(known);
     let pending = this.pending.get(key);
     if (!pending) {
-      const compile = (): Promise<boolean> =>
-        this.host?.has(source)
-          ? Promise.resolve(true)
-          : warmPrograms(this.gl, [source], this.wait, (_index, program) => this.host?.adopt(source, program) ?? false).then(
-              ([ok]) => Boolean(ok),
-            );
+      const requested = performance.now();
+      const compile = (): Promise<boolean> => {
+        if (this.host?.has(source)) return Promise.resolve(true);
+        // Timed for the map's open (`openMarks.ts`): from when it was asked for, and when it really began.
+        const started = performance.now();
+        this.began.set(key, started);
+        return warmPrograms(this.gl, [source], this.wait, (_index, program) => this.host?.adopt(source, program) ?? false).then(
+          ([ok]) => {
+            noteShader(source, requested, started, performance.now(), Boolean(ok));
+            return Boolean(ok);
+          },
+        );
+      };
       const run = this.parallel ? compile() : (this.queue = this.queue.then(compile, compile));
       pending = (run as Promise<boolean>).then((ok) => {
         this.linked.set(key, ok);
         this.pending.delete(key);
+        this.began.delete(key);
         return ok;
       });
       this.pending.set(key, pending);

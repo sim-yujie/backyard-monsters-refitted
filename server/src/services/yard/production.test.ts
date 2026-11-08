@@ -67,6 +67,23 @@ describe("simulateProduction — one hatchery", () => {
     ]);
   });
 
+  test("Hatch Rush: a monster that starts hatching in the weekend takes 30% less (15 s → 11 s)", () => {
+    const result = simulateProduction(inputOf(oneHatchery([["C1", 3, 1]]), { rush: () => 30 }), T0, T0 + 1000);
+
+    expect(housedOf(result)).toEqual({ C1: 3 });
+    expect(result.events.map((event) => event.at)).toEqual([T0 + 11, T0 + 22, T0 + 33]);
+  });
+
+  test("Hatch Rush: one already hatching keeps its length; one started after the weekend is full length", () => {
+    // The weekend runs until T0 + 20. The Pokey in production (15 s left) is not
+    // shortened; the next starts at T0 + 15 (in the weekend, 11 s) and keeps its
+    // shorter time; the third starts at T0 + 26 (after) and takes the full 15 s.
+    const rush = (t: number) => (t < T0 + 20 ? 30 : 0);
+    const result = simulateProduction(inputOf(oneHatchery([["C1", 2, 1]], ["C1", 15]), { rush }), T0, T0 + 1000);
+
+    expect(result.events.map((event) => event.at)).toEqual([T0 + 15, T0 + 26, T0 + 41]);
+  });
+
   test("an idle hatchery with a queue starts at `from`, and runs dry to idle", () => {
     const result = simulateProduction(inputOf(oneHatchery([["C1", 3, 1]])), T0, T0 + 1000);
 

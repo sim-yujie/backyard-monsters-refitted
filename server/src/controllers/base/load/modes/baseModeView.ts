@@ -1,4 +1,5 @@
 import { MapRoomVersion } from "../../../../enums/MapRoom.js";
+import { BaseType } from "../../../../enums/Base.js";
 import { Save } from "../../../../database/models/save.model.js";
 import { User } from "../../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../../database/models/worldmapcell.model.js";
@@ -57,15 +58,28 @@ const isCellVisibleTo = async (user: User, baseid: string): Promise<boolean> => 
  * @returns {Promise<Loaded<Save, never> | null>} The save object, or null if no valid save is found
  *   or (Map Room 2 only) the cell is outside the requester's sight.
  */
+/** A player's own main yard (not a camp, outpost or Inferno yard). */
+const isPlayerHomeYard = (save: Save | null): boolean =>
+  save?.type === BaseType.MAIN && Number(save.userid) > 0;
+
 export const baseModeView = async (baseid: string, mapversion: MapRoomVersion = MapRoomVersion.V2, worldid: string | null | undefined, user: User) => {
   if (mapversion === MapRoomVersion.V1 && MR1_TRIBE_IDS.has(baseid))
     return tribeSaveHandler(baseid, mapversion, worldid, user);
 
-  if (mapversion === MapRoomVersion.V2 && !devConfig.disableFogOfWar && !(await isCellVisibleTo(user, baseid))) {
+  let save = await postgres.em.findOne(Save, { baseid });
+
+  // The fog hides what is on the map (camps, outposts), not players' home
+  // yards: world chat's "View yard" and the friends list open those from
+  // anywhere, with no cell in sight (live bug, 8 Nov 2026: every such view
+  // far from the viewer came back "not found").
+  if (
+    mapversion === MapRoomVersion.V2 &&
+    !devConfig.disableFogOfWar &&
+    !isPlayerHomeYard(save) &&
+    !(await isCellVisibleTo(user, baseid))
+  ) {
     return null;
   }
-
-  let save = await postgres.em.findOne(Save, { baseid });
 
   if (!save) save = await tribeSaveHandler(baseid, mapversion, worldid, user);
 

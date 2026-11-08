@@ -1,5 +1,6 @@
 import { hatchTime, housingSpace, monsterEntry } from "../../game-data/monsterCatalogue.js";
 import type { JsonObject } from "../../types/JsonObject.js";
+import { shorterBy } from "../events/weekendBoosts.js";
 
 /**
  * Hatchery production, event by event (`docs/design/yard-buildings.md` §4.6,
@@ -122,6 +123,14 @@ export interface ProductionInput {
   overdrive: readonly OverdriveWindow[];
   /** Academy level per monster id (1 when absent). */
   levels: Readonly<Record<string, number>>;
+  /**
+   * Hatch Rush (`services/events/weekendBoosts.ts`): the percentage a monster
+   * that starts hatching at `t` takes off its `cTime`. It keeps the shorter
+   * time once started, so one started Sunday 23:59 finishes early on Monday;
+   * one already hatching when the weekend begins runs at its old length.
+   * Absent: none.
+   */
+  rush?: (t: number) => number;
 }
 
 /** One thing the walk did. */
@@ -387,7 +396,7 @@ export const simulateProduction = (
         Object.assign(hatchery, {
           monster: next.id,
           paidLevel: next.level,
-          countdown: hatchSeconds(next.id, levels),
+          countdown: shorterBy(hatchSeconds(next.id, levels), input.rush?.(t) ?? 0),
           stage: 1,
         });
       }

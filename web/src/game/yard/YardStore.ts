@@ -31,6 +31,7 @@ import { MAIN_YARD, outpostBaseid, type OwnYardTarget } from "./ownYards";
 import { freeWorkers, holdsWorker } from "./workers";
 import { readYard, type Yard, type YardBuilding, type YardWorkers } from "./yardModel";
 import { isTribeEditing } from "@/game/tribeEditor/tribeEditSession";
+import { costLessBy, weekendPercent } from "@/game/weekend";
 
 /**
  * One of the player's own yards, the main yard or an outpost, as one source
@@ -217,11 +218,13 @@ export interface YardStoreReader {
 
 /** The action side, for the panel and the Monsters screen. */
 export interface YardStoreActions {
-  upgrade(id: number): Promise<YardActionResult<UpgradeStartReport>>;
+  /** `topUp`: pay a shortfall with this much Shiny (Flash's `BRTOPUP`). */
+  upgrade(id: number, topUp?: number): Promise<YardActionResult<UpgradeStartReport>>;
   cancelUpgrade(id: number): Promise<YardActionResult<UpgradeCancelReport>>;
   instantUpgrade(id: number): Promise<YardActionResult<UpgradeInstantReport>>;
   speedUp(id: number, item: SpeedupItem): Promise<YardActionResult<SpeedupReport>>;
-  buy(item: string): Promise<YardActionResult<ShopBuyReport>>;
+  /** `price`: for a resource pack, the Shiny the player agreed to; never charged more. */
+  buy(item: string, price?: number): Promise<YardActionResult<ShopBuyReport>>;
   run<Report>(action: YardStoreAction<Report>): Promise<YardActionResult<Report>>;
   refresh(): Promise<YardActionResult<null>>;
 }
@@ -492,6 +495,15 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     return this.inFlight !== null;
   }
 
+  /**
+   * Nothing in flight and nothing waiting: the merged save is what the server
+   * holds (as far as this page knows). The map takes the yard from here only
+   * then (`mapRoute.ts` `primeFromYard`); the MR2 warm-up waits for it.
+   */
+  get settled(): boolean {
+    return !this.destroyed && this.inFlight === null && this.queue.length === 0;
+  }
+
   isRunning(key: string): boolean {
     return this.inFlight?.key === key || this.queue.some((entry) => entry.key === key);
   }
@@ -645,11 +657,15 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     return promise;
   }
 
-  upgrade(id: number): Promise<YardActionResult<UpgradeStartReport>> {
+  upgrade(id: number, topUp?: number): Promise<YardActionResult<UpgradeStartReport>> {
     return this.run({
       key: actionKey("upgrade", id),
-      check: (store) => upgradeRefusal(store, id),
-      send: (api, ...yard) => api.upgrade(id, ...yard),
+      check: (store) => {
+        const refusal = upgradeRefusal(store, id);
+        // A topped-up upgrade pays its shortfall in Shiny: the server prices and checks it.
+        return topUp !== undefined && refusal?.reason === "shortfall" ? null : refusal;
+      },
+      send: (api, ...yard) => (topUp === undefined ? api.upgrade(id, ...yard) : api.upgrade(id, yard[0], { topUp })),
     });
   }
 
@@ -695,10 +711,10 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     });
   }
 
-  buy(item: string): Promise<YardActionResult<ShopBuyReport>> {
+  buy(item: string, price?: number): Promise<YardActionResult<ShopBuyReport>> {
     return this.run({
       key: actionKey("buy", item),
-      send: (api, ...yard) => api.shopBuy(item, ...yard),
+      send: (api, ...yard) => (price === undefined ? api.shopBuy(item, ...yard) : api.shopBuy(item, yard[0], { price })),
     });
   }
 
@@ -930,7 +946,8 @@ const upgradeRefusal = (
   const step = costOf(building.type, building.level, kind);
   if (!step) return refuse("maxLevel", "That building is at its highest level.");
   const [r1, r2, r3, r4] = step;
-  const cost = { r1, r2, r3, r4 };
+  // Less a Builder's Weekend's percentage, as the server charges (`planOneUpgrade`).
+  const cost = costLessBy({ r1, r2, r3, r4 }, weekendPercent("builders", store.now()));
   // A main-yard Inferno building is paid from the Inferno purse (WP 6.1).
   const inferno = isSurfaceInferno(building.type, kind);
   const held = inferno ? purseFunds(store.save).resources : store.resources;

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import { attackWindowSeconds } from "../../base/attackWindow.js";
 import type { Context } from "koa";
+import { withTribeGooBonus } from "../../base/tribeGooBonus.js";
 
 /**
  * Issue #161: a `/base/save` naming a Map Room 1 tribe base used to credit
@@ -311,7 +312,9 @@ describe("Map Room 1 tribe save of a started attack", () => {
 
     expect(await run(ctx)).toBeNull();
     const { r1, r2, r3, r4 } = battle.attackloot;
-    expect(userSave.resources).toEqual({ r1: 100 + r1, r2: 100 + r2, r3: 100 + r3, r4: 100 + r4 });
+    // Wild tribes give 25% more Goo (patch 6.9).
+    const r4WithBonus = withTribeGooBonus({ r4 }, true).r4;
+    expect(userSave.resources).toEqual({ r1: 100 + r1, r2: 100 + r2, r3: 100 + r3, r4: 100 + r4WithBonus });
     expect(maproom.tribedata[0]).toMatchObject({
       destroyed: 1,
       damage: Math.trunc(battle.damage),
@@ -456,7 +459,9 @@ describe("Map Room 1 army settlement (#132)", () => {
 
     expect(await run(ctx)).toBeNull();
     const { r1, r2, r3, r4 } = battle.attackloot;
-    expect(userSave.resources).toEqual({ r1: 100 + r1, r2: 100 + r2, r3: 100 + r3, r4: 100 + r4 });
+    // Wild tribes give 25% more Goo (patch 6.9).
+    const r4WithBonus = withTribeGooBonus({ r4 }, true).r4;
+    expect(userSave.resources).toEqual({ r1: 100 + r1, r2: 100 + r2, r3: 100 + r3, r4: 100 + r4WithBonus });
     expect((userSave.monsters as { housed: unknown }).housed).toEqual({ C1: 4 });
     expect(maproom.tribedata[0]).toMatchObject({ destroyed: 1, damage: Math.trunc(battle.damage) });
     expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(false);
@@ -804,7 +809,9 @@ describe("Map Room 1 tribe attack left without a save", () => {
 
     expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(1);
     const { r1, r2, r3, r4 } = battle.attackloot;
-    expect(userSave.resources).toEqual({ r1: 100 + r1, r2: 100 + r2, r3: 100 + r3, r4: 100 + r4 });
+    // Wild tribes give 25% more Goo (patch 6.9).
+    const r4WithBonus = withTribeGooBonus({ r4 }, true).r4;
+    expect(userSave.resources).toEqual({ r1: 100 + r1, r2: 100 + r2, r3: 100 + r3, r4: 100 + r4WithBonus });
     expect((userSave.monsters as { housed: unknown }).housed).toEqual({ C1: 4 });
     expect(maproom.tribedata[0]).toMatchObject({ destroyed: 1, damage: Math.trunc(battle.damage) });
     expect(store.has(mr1TribeSessionKey(ATTACKER, TRIBE))).toBe(false);

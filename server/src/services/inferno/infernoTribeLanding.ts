@@ -1,3 +1,4 @@
+import { plunderPercent, withPlunderBonus } from "../events/weekendBoosts.js";
 import { LockMode, type EntityManager } from "@mikro-orm/core";
 import type { Context } from "koa";
 import type { TypeOf } from "zod";
@@ -189,7 +190,8 @@ const writeInfernoTribeLanding = async (
       inferno.monsters = subtractHoused(inferno.monsters, taken[inferno.baseid]);
 
       syncInfernoCap(main, inferno);
-      const funded = fundPurse(main.iresources, loot);
+      // Tribe Plunder: the purse takes that much more; the tribe gives up only `loot` (`weekendBoosts.ts`).
+      const funded = fundPurse(main.iresources, withPlunderBonus(loot, plunderPercent(true, now)));
       main.iresources = funded.iresources;
 
       const row = (await tx.findOne(InfernoMaproom, { userid: user.userid }, { lockMode: LockMode.PESSIMISTIC_WRITE })) ??

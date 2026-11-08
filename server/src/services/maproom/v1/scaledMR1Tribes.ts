@@ -34,6 +34,7 @@ import { isDeclareWarRunning } from "../../alliance/powerups.js";
 import { battleReplayInput, battleTick } from "../../base/combat/battle.js";
 import { recordBattleMismatches, replayBattleForSave } from "../../base/combat/saveBattle.js";
 import { creditableMR1Loot, mr1TribePool } from "./mr1TribeRules.js";
+import { withTribeGooBonus } from "../../base/tribeGooBonus.js";
 import { recordTribeDestroyed } from "../../goals/tribeCounter.js";
 import { tribeOfBase } from "../../goals/counters.js";
 import { addQuestEvents, questEvent } from "../../quests/state.js";
@@ -41,6 +42,7 @@ import { catapultQuestEvents, lootQuestEvents } from "../../quests/hooks.js";
 import { recordQuestEvents } from "../../quests/record.js";
 import { removedCampStandIn } from "./practiceCamp.js";
 import { countAttackLoot } from "../../events/lootEvents.js";
+import { plunderPercent, weekendBoostUsed, withPlunderBonus } from "../../events/weekendBoosts.js";
 import { recordAttackAchievements } from "../../achievements/events.js";
 import {
   acquireMR1TribeFinalLock,
@@ -272,7 +274,15 @@ const writeTribeLanding = async (
     // gives up the whole credit; the attacker keeps what fits in their
     // storage (issue #166, `bankAttackLoot`), as on Map Room 2.
     const credit = creditableMR1Loot(battle?.attackloot, mr1TribePool(tribeData), existingTribe.looted);
-    const credited: ResourceAmounts = bankAttackLoot(userSave, credit, krallenBuff).credited;
+    // Tribe Plunder: the attacker banks that much more; the tribe gives up only `credit` (`weekendBoosts.ts`).
+    // Wild tribes also give 25% more Goo (patch 6.9, `tribeGooBonus.ts`).
+    const plunder = plunderPercent(true, now);
+    const credited: ResourceAmounts = bankAttackLoot(
+      userSave,
+      withPlunderBonus(withTribeGooBonus(credit, true), plunder),
+      krallenBuff
+    ).credited;
+    if (plunder > 0) weekendBoostUsed(user.userid, "plunder", now);
 
     const looted = { ...existingTribe.looted };
     for (const key of RESOURCE_KEYS) looted[key] = (looted[key] ?? 0) + credit[key];
@@ -307,17 +317,18 @@ const writeTribeLanding = async (
     now
   );
 
-  // Each biggest Putty bomb fired counts towards Huge Rage (#299); a Map Room 1
-  // Kozu tribe is counted by its tribe counter above, never here.
-  if (attacker.bombs) {
-    await recordAttackAchievements(postgres.em, {
-      attackerBasesaveid: userSave.basesaveid,
-      defender: {},
-      before: null,
-      after: null,
-      bombs: attacker.bombs.charges,
-    });
-  }
+  // Each biggest Putty bomb fired counts towards Huge Rage (#299), and an
+  // attack that damaged a Kozu tribe towards Kozu Hunter (#392); a Map Room 1
+  // Kozu tribe destroyed is counted by its tribe counter above, never here.
+  await recordAttackAchievements(postgres.em, {
+    attackerBasesaveid: userSave.basesaveid,
+    defender: {},
+    before: null,
+    after: null,
+    bombs: attacker.bombs?.charges,
+    damage: battle?.damage,
+    kozuCamp: tribeOfBase(baseid) === "kozu",
+  });
 
   // Spent: the lock is still held, so a copy of this save finds nothing, and
   // the attack's checkpoint goes with it, so the finaliser does not land it again.

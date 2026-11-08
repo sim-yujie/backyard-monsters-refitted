@@ -354,7 +354,8 @@ describe("POST /bm/yard/shop/buy", () => {
 
   test("items off the allowlist are 400 notForSale", async () => {
     const heldBack = ["TODI", "BLK1", "BLK2I", "BLK3I", "BUILDING28"];
-    const dropped = ["HODI", "ENLI", "MUSK", "HAMS", "BR11", "BR43", "FQ", "FIX", "SP4"];
+    // The resource packs (BR11..BR43) are sold since beta 7 (issue #393, `resourcePacks.route.test.ts`).
+    const dropped = ["HODI", "ENLI", "MUSK", "HAMS", "BRTOPUP", "BR14", "FQ", "FIX", "SP4"];
     for (const item of [...heldBack, ...dropped, "toString", "__proto__"]) {
       const answer = await call(yardShopBuyAction, { item });
       expect(answer).toMatchObject({ status: 400, body: { reason: "notForSale" } });

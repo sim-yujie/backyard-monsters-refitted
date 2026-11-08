@@ -379,6 +379,75 @@ export const replyToReport = (
 export const searchPlayers = (q: string): Promise<Envelope<{ players: PlayerMatch[] }>> =>
   adminGet(`${ADMIN}/players`, { q });
 
+// ---- Attack log (server: services/admin/attackLogAdmin.ts) ----
+
+/** "made": attacks by the player; "received": attacks on them. */
+export type AttackSide = "made" | "received" | "both";
+export type AttackRange = "24h" | "7d" | "30d" | "all";
+
+export interface AttackPlayer {
+  userid: number;
+  /** Their name now; the name in the log when the account is gone. */
+  username: string;
+  /** A computer-run Map Room neighbour. */
+  bot: boolean;
+  /** The account no longer exists. */
+  gone: boolean;
+}
+
+export interface AttackRow {
+  id: number;
+  time: string;
+  direction: "made" | "received";
+  other: AttackPlayer;
+  /** The other player's name in the log, when they have since changed it. */
+  otherLoggedName: string | null;
+  /** The yard attacked, as stored: `main`, `outpost`, `inferno`... */
+  type: string;
+  x: number | null;
+  y: number | null;
+  loot: unknown;
+  report: unknown;
+}
+
+export interface TopPlayer extends AttackPlayer {
+  count: number;
+}
+
+export interface AttackLogView {
+  player: AttackPlayer;
+  side: AttackSide;
+  range: AttackRange;
+  since: string;
+  /** How long attack logs are kept. */
+  retentionDays: number;
+  summary: {
+    made: number;
+    received: number;
+    targets: number;
+    attackers: number;
+    topTargets: TopPlayer[];
+    topAttackers: TopPlayer[];
+  };
+  attacks: AttackRow[];
+  next: { time: string; id: number } | null;
+}
+
+export interface AttackLogQuery {
+  side: AttackSide;
+  range: AttackRange;
+  /** The previous page's `next`. */
+  before?: { time: string; id: number } | null;
+}
+
+export const fetchAttackLog = (userid: number, query: AttackLogQuery): Promise<Envelope<{ log: AttackLogView }>> =>
+  adminGet(`${ADMIN}/players/${userid}/attacks`, {
+    side: query.side,
+    range: query.range,
+    beforeTime: query.before?.time,
+    beforeId: query.before?.id,
+  });
+
 export const fetchShinyAwards = (
   before?: number,
 ): Promise<
@@ -687,7 +756,8 @@ export const fetchChatSession = (): Promise<Envelope<AdminChatSession>> =>
  * case, with a text copy of the room around each line.
  */
 export type CaseStatus = "open" | "actioned" | "dismissed";
-export type CaseOutcome = "warn" | "mute" | "dismiss";
+/** `ban`: closed by a ban from the inbox or the player panel. */
+export type CaseOutcome = "warn" | "mute" | "ban" | "dismiss";
 
 export interface SnapshotLine {
   userid: number;
@@ -773,6 +843,74 @@ export const fetchChatCases = (status: "open" | "closed", offset?: number): Prom
 export const actOnCase = (id: number, body: CaseActionBody): Promise<Envelope<{ case: ChatCaseView }>> =>
   adminPost(`${ADMIN}/chatcases/${id}/act`, { ...body });
 
+export const fetchChatCase = (id: number): Promise<Envelope<{ case: ChatCaseView }>> =>
+  adminGet(`${ADMIN}/chatcases/${id}`);
+
+/**
+ * The moderation inbox (server `services/admin/moderationInbox.ts`): one row
+ * per player with open items from every source (their open chat case and
+ * word-filter lines); one step closes them all.
+ */
+export type InboxSource = "all" | "reports" | "filter";
+
+export interface InboxPlayer {
+  userid: number;
+  username: string | null;
+  banned: boolean;
+  muted: boolean;
+  gameTeam: boolean;
+  /** Their open chat case, or null. */
+  caseId: number | null;
+  /** Chat lines other players reported, in the open case. */
+  reportedMessages: number;
+  /** Reports of those lines (one per reporter per line). */
+  reports: number;
+  uniqueReporters: number;
+  /** Open lines caught by the word filter. */
+  filterLines: number;
+  slurs: number;
+  /** The newest open word-filter line: acting closes up to it. */
+  flagsUpTo: number | null;
+  /** Earlier warnings, chat pauses and bans. */
+  previousActions: number;
+  lastAction: { action: ModerationKind; at: string } | null;
+  oldestAt: string;
+  latestAt: string;
+  preview: { text: string; source: "report" | "filter" } | null;
+  suggest: { action: "warn" | "mute"; hours: number | null };
+}
+
+export interface InboxList {
+  players: InboxPlayer[];
+  nextOffset: number | null;
+  counts: { all: number; reports: number; filter: number };
+}
+
+export const fetchInbox = (
+  options: { source?: InboxSource; userid?: number; offset?: number | undefined } = {},
+): Promise<Envelope<InboxList>> =>
+  adminGet(`${ADMIN}/inbox`, { source: options.source, userid: options.userid, offset: options.offset, limit: 30 });
+
+export type InboxActionBody =
+  | { action: "warn"; reason: string }
+  | { action: "mute"; reason: string; hours: number }
+  | { action: "ban"; reason: string; days: number | null }
+  | { action: "dismiss"; note?: string };
+
+/** What closing a player's items did. */
+export interface ClosedItems {
+  caseId: number | null;
+  reports: number;
+  filterLines: number;
+}
+
+export const actOnInboxPlayer = (
+  userid: number,
+  body: InboxActionBody,
+  seen: { caseId: number | null; reports: number; flagsUpTo: number | null },
+): Promise<Envelope<{ closed: ClosedItems; player: InboxPlayer | null }>> =>
+  adminPost(`${ADMIN}/inbox/${userid}/act`, { ...body, ...seen });
+
 export type AwardFailure = "notReporter" | "noPlayer" | "noMainYard";
 
 export const awardCaseReporters = (
@@ -786,3 +924,227 @@ export const awardCaseReporters = (
     failed: { userid: number; reason: AwardFailure }[];
   }>
 > => adminPost(`${ADMIN}/chatcases/${id}/award`, { awards });
+
+/** Profile photo reports (server `services/admin/photoReports.ts`): one case per player. */
+export interface PhotoReporterView {
+  userid: number;
+  username: string | null;
+  at: string;
+  /** Which upload they reported: older than the photo shown means it was replaced since. */
+  version: number;
+}
+
+export type PhotoAction = "keep" | "remove" | "block" | "unblock";
+export type PhotoOutcome = "kept" | "removed" | "blocked" | "replaced";
+
+export interface PhotoCaseView {
+  userid: number;
+  username: string | null;
+  banned: boolean;
+  /** The photo now, as a data URL, hidden or not; null when there is none. */
+  photo: string | null;
+  photoVersion: number;
+  hidden: boolean;
+  blocked: boolean;
+  /** The owner kept this upload before. */
+  kept: boolean;
+  reporters: PhotoReporterView[];
+  firstReportAt: string | null;
+  lastReportAt: string | null;
+  closed: { outcome: PhotoOutcome; at: string; by: number | null; byName: string | null } | null;
+}
+
+export interface PhotoCaseList {
+  cases: PhotoCaseView[];
+  /** Players with open reports, in all. */
+  open: number;
+  nextOffset: number | null;
+  /** Reports from this many players hide a photo. */
+  hideAt: number;
+}
+
+export const fetchPhotoCases = (status: "open" | "closed", offset?: number): Promise<Envelope<PhotoCaseList>> =>
+  adminGet(`${ADMIN}/photoreports`, { status, offset, limit: 30 });
+
+export const actOnPhoto = (userid: number, action: PhotoAction): Promise<Envelope<{ case: PhotoCaseView }>> =>
+  adminPost(`${ADMIN}/photoreports/${userid}/act`, { action });
+
+/* ── Weekend events (`server/src/controllers/admin/weekend.ts`) ─────────── */
+
+export type WeekendEventId = "builders" | "plunder" | "study" | "hatch";
+
+export interface WeekendSettingsView {
+  enabled: boolean;
+  rotation: WeekendEventId[];
+  percent: Record<WeekendEventId, number>;
+  /** `YYYY-MM-DD`, a Saturday. */
+  firstWeekend: string;
+  utcOffsetMinutes: number;
+  lengthHours: number;
+  announceHours: number;
+  overrides: Record<string, WeekendEventId | "skip">;
+  forced: { id: WeekendEventId; since: number; until: number } | null;
+}
+
+export interface WeekendRunView {
+  id: WeekendEventId;
+  title: string;
+  line: string;
+  percent: number;
+  key: string;
+  startsAt: number;
+  endsAt: number;
+  announceAt: number;
+  forced: boolean;
+}
+
+export interface WeekendPlanRowView {
+  key: string;
+  startsAt: number;
+  rotation: WeekendEventId | null;
+  override: WeekendEventId | "skip" | null;
+  runs: WeekendEventId | null;
+}
+
+export interface WeekendPanelView {
+  now: number;
+  settings: WeekendSettingsView;
+  updatedAt: number | null;
+  updatedBy: number | null;
+  state: { active: WeekendRunView | null; next: WeekendRunView | null };
+  plan: WeekendPlanRowView[];
+  /** A local `WEEKEND_FORCE` the server was started with (never in production). */
+  envForced: WeekendEventId | null;
+  events: { id: WeekendEventId; title: string; line: string }[];
+  limits: {
+    minPercent: number;
+    maxPercent: number;
+    minOffsetMinutes: number;
+    maxOffsetMinutes: number;
+    minLengthHours: number;
+    maxLengthHours: number;
+    maxAnnounceHours: number;
+    maxForceHours: number;
+  };
+}
+
+/** One change from the dashboard; the server checks every value again. */
+export type WeekendChange =
+  | {
+      action: "settings";
+      enabled?: boolean;
+      rotation?: WeekendEventId[];
+      percent?: Partial<Record<WeekendEventId, number>>;
+      firstWeekend?: string;
+      utcOffsetMinutes?: number;
+      lengthHours?: number;
+      announceHours?: number;
+    }
+  | { action: "weekend"; weekend: string; event: WeekendEventId | "skip" | null }
+  | { action: "force"; event: WeekendEventId; hours: number }
+  | { action: "stopForce" }
+  | { action: "reset" };
+
+export const fetchWeekend = (): Promise<Envelope<WeekendPanelView>> => adminGet(`${ADMIN}/weekend`);
+
+export const changeWeekend = (change: WeekendChange): Promise<Envelope<WeekendPanelView>> =>
+  adminPost(`${ADMIN}/weekend`, change as unknown as JsonBody);
+
+/**
+ * Chat moderators (server `services/admin/chatModerators.ts`): players whose
+ * chat lines show a blue [Mod] badge. Nothing more: no dashboard, no powers.
+ */
+export interface ModeratorView {
+  userid: number;
+  username: string;
+  addedBy: number;
+  addedByName: string | null;
+  addedAt: string;
+}
+
+export const fetchModerators = (): Promise<Envelope<{ moderators: ModeratorView[] }>> =>
+  adminGet(`${ADMIN}/moderators`);
+
+/** Adds a player by name or account number (`2503` or `#2503`). */
+export const addModerator = (player: string): Promise<Envelope<{ moderator: ModeratorView }>> =>
+  adminPost(`${ADMIN}/moderators`, { player });
+
+export const removeModerator = (userid: number): Promise<Envelope<{ removed: number }>> =>
+  adminPost(`${ADMIN}/moderators/${userid}/remove`, {});
+
+/**
+ * Moderator mail (owner, beta 7; server `services/mail/modMail.ts`): every
+ * conversation a moderator is in, both sides, kept even when the players
+ * delete the thread. Admin only; moderators never see it.
+ */
+export type ModMailSender = "moderator" | "player";
+
+/** One conversation in the list. */
+export interface ModConversationSummary {
+  threadid: number;
+  /** Named as in the newest message. */
+  moderatorId: number;
+  moderatorName: string;
+  playerId: number;
+  playerName: string;
+  messages: number;
+  fromModerator: number;
+  startedAt: string;
+  lastAt: string;
+  /** The newest message, for the preview. */
+  lastSender: ModMailSender;
+  lastSubject: string;
+  lastMessage: string;
+  lastType: string;
+  lastId: number;
+}
+
+/** One message of a conversation. */
+export interface ModConversationMessage {
+  id: number;
+  sentAt: string;
+  sender: ModMailSender;
+  senderId: number;
+  /** The name when it was sent. */
+  senderName: string;
+  newThread: boolean;
+  messagetype: string;
+  /** What the other side got (after the word filter). */
+  subject: string;
+  message: string;
+  /** What the writer typed, when the word filter changed it. */
+  written: string | null;
+}
+
+/** One conversation whole, oldest first. */
+export interface ModConversation {
+  threadid: number;
+  moderatorId: number;
+  moderatorName: string;
+  playerId: number;
+  playerName: string;
+  messages: ModConversationMessage[];
+  /** Too long for one answer: the newest messages are left out. */
+  cut: boolean;
+}
+
+export interface ModMailSearch {
+  /** A name (part of one) or account number. */
+  moderator?: string | undefined;
+  /** The player side. */
+  recipient?: string | undefined;
+  /** The previous page's `next`. */
+  before?: number | undefined;
+}
+
+export const fetchModConversations = (
+  search: ModMailSearch = {},
+): Promise<Envelope<{ conversations: ModConversationSummary[]; next: number | null }>> =>
+  adminGet(`${ADMIN}/modmail`, {
+    moderator: search.moderator || undefined,
+    recipient: search.recipient || undefined,
+    before: search.before,
+  });
+
+export const fetchModConversation = (threadid: number): Promise<Envelope<{ conversation: ModConversation }>> =>
+  adminGet(`${ADMIN}/modmail/${threadid}`);

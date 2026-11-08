@@ -8,7 +8,7 @@
  * locker, hatchery, academy and lab routes charge: per monster the unlock price
  * and time, the Monster Locker level it needs, whether it is obtainable, its
  * place in the lists, the academy training ladder and the per-level hatch cost,
- * hatch time and housing space; plus the Monster Lab's fourteen abilities: Flash's ten and the revamp's four
+ * hatch time and housing space; plus the Monster Lab's fifteen abilities: Flash's ten and the revamp's five
  * (`docs/design/yard-buildings.md` §4.2).
  *
  * What it reads, and from where:
@@ -506,6 +506,11 @@ const abilities = LAB_IDS.map((id) => {
  * Flash's lab had none for these monsters; they follow its rules (three
  * ranks, rank N needs Lab level N and the monster at level N + 1) and its
  * price scale. The effects are shares: 0.1 is 10%.
+ *
+ * Slimeattikus's "Split" came a round later (owner, beta 7 grill item 31,
+ * 6 Nov 2026, `agent-handoffs/beta7-grill.md`): its effect is the share of
+ * the original's health each copy gets; how many copies a rank leaves and
+ * their damage share are in `combat/rules/specialMoves.ts`.
  */
 const REVAMP_ABILITIES = [
   {
@@ -544,22 +549,35 @@ const REVAMP_ABILITIES = [
     costs: [[5000000, 216000], [7500000, 216000], [11250000, 216000]],
     effect: [0.1, 0.15, 0.2],
   },
+  {
+    id: "C17",
+    name: "Split",
+    effectLabel: "Split Copies",
+    description: "When it dies, it splits into smaller copies of itself.",
+    upgradeDescription: "More copies, or tougher ones.",
+    costs: [[6000000, 216000], [9000000, 216000], [13500000, 216000]],
+    effect: [0.25, 0.35, 0.35],
+    decided: "beta 7, owner, 6 Nov 2026",
+  },
 ];
 
 /**
- * The Lab list, cheapest first as Flash's ran, with the revamp's four placed
+ * The Lab list, cheapest first as Flash's ran, with the revamp's five placed
  * by price among Flash's ten (Flash's own ten keep their order).
  */
-const LAB_LIST = ["C1", "C2", "C3", "C4", "C6", "C7", "C8", "C5", "C9", "C10", "C11", "C13", "C14", "C12"];
+const LAB_LIST = ["C1", "C2", "C3", "C4", "C6", "C7", "C8", "C5", "C9", "C10", "C17", "C11", "C13", "C14", "C12"];
 
 for (const one of REVAMP_ABILITIES) {
-  if (byId.get(one.id)?.blocked !== false) fail(LAB, 0, `${one.id} has a lab ability but is not listed`);
+  // D7 lists Slimeattikus (`C17`) although the source blocks it, so read the rows.
+  if (rows.find((row) => row.id === one.id)?.blocked !== false) {
+    fail(LAB, 0, `${one.id} has a lab ability but is not listed`);
+  }
 }
 const flashOrder = abilities.slice().sort((a, b) => a.order - b.order).map((one) => one.id);
 if (flashOrder.join() !== LAB_LIST.filter((id) => LAB_IDS.includes(id)).join()) {
   fail(LAB, lab.declaredAt, `LAB_LIST no longer keeps Flash's order: ${flashOrder.join(", ")}`);
 }
-abilities.push(...REVAMP_ABILITIES.map((one) => ({ ...one, line: null })));
+abilities.push(...REVAMP_ABILITIES.map(({ decided, ...one }) => ({ ...one, line: null, decided })));
 for (const one of abilities) one.order = LAB_LIST.indexOf(one.id) + 1;
 abilities.sort((a, b) => a.order - b.order);
 
@@ -596,7 +614,7 @@ const monsterRow = (one) => {
 const abilityRow = (one) =>
   [
     `  // ${one.id} ${byId.get(one.id).name} — ` +
-      (one.line === null ? "revamp (owner, 2 Nov 2026)" : `MONSTERLAB.as:${one.line}`),
+      (one.line === null ? `revamp (${one.decided ?? "owner, 2 Nov 2026"})` : `MONSTERLAB.as:${one.line}`),
     `  {`,
     `    id: ${JSON.stringify(one.id)},`,
     `    order: ${one.order},`,
@@ -624,7 +642,8 @@ const output = `/**
  * Inferno roster (IC1-IC8) is its own list, \`INFERNO_MONSTER_CATALOGUE\`, priced
  * in Sulfur (unlock, training) and Magma (hatching) on the Inferno yard
  * (\`docs/design/inferno.md\` §2.6). C200 is not included. The Lab also has the
- * revamp's four abilities (Pokey, Octo-ooze, Ichi, Crabatron; owner, 2 Nov 2026).
+ * revamp's five abilities (Pokey, Octo-ooze, Ichi, Crabatron; owner, 2 Nov 2026;
+ * Slimeattikus; owner, 6 Nov 2026).
  *
  * This file exists twice, byte for byte: \`web/src/game/monsters/monsterCatalogue.ts\`
  * (what the Monsters screen shows) and \`server/src/game-data/monsterCatalogue.ts\`

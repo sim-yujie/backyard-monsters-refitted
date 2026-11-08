@@ -1219,6 +1219,7 @@ export type FriendRefusal =
   | "tooNew"
   | "dailyCap"
   | "giftSentToday"
+  | "notEnough"
   | "collectLimit"
   | "notFriends"
   | "helpersFull"
@@ -1228,6 +1229,7 @@ export type FriendRefusal =
   | "noSuchPlayer"
   | "noSuchRequest"
   | "noSuchGift"
+  | "pinLimit"
   | "self";
 
 const FRIEND_REFUSAL_MESSAGES: Record<FriendRefusal, string> = {
@@ -1242,6 +1244,7 @@ const FRIEND_REFUSAL_MESSAGES: Record<FriendRefusal, string> = {
   tooNew: "That isn't possible yet.",
   dailyCap: "You have done that as many times as you can today.",
   giftSentToday: "You have already sent this friend a gift today.",
+  notEnough: "You don't have enough of that to send.",
   collectLimit: "You have collected as many gifts as you can today.",
   notFriends: "You are not friends with this player.",
   helpersFull: "Enough friends have already helped with this.",
@@ -1251,6 +1254,7 @@ const FRIEND_REFUSAL_MESSAGES: Record<FriendRefusal, string> = {
   noSuchPlayer: "There is no player with that name.",
   noSuchRequest: "That request is no longer waiting for an answer.",
   noSuchGift: "That gift is no longer waiting.",
+  pinLimit: "You can pin up to 10 friends. Unpin one first.",
   self: "That's you!",
 };
 

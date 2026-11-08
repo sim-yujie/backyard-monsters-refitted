@@ -84,7 +84,21 @@
 
 .transfer-dialog .panel__body {
   display: grid;
+  /* minmax(0, 1fr): a long outpost name in a select must not widen the
+     dialog past a phone screen (6 Nov UI check: 126 px sideways scroll). */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
+}
+
+.transfer-dialog__field {
+  min-width: 0;
+}
+
+.transfer-dialog__select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  text-overflow: ellipsis;
 }
 
 .transfer-dialog [hidden] {
@@ -135,6 +149,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2) var(--space-3);
+  min-width: 0;
 }
 
 .transfer-row__picture {
@@ -164,7 +179,7 @@
 
 @media (width <= 620px) {
   .transfer-dialog__ends {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

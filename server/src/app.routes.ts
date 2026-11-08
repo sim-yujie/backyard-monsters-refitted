@@ -39,8 +39,16 @@ import {
   allianceCreateEditLimiter,
   bugReportLimiter,
   clientErrorLimiter,
+  clientTimingLimiter,
   announcementsLimiter,
   announcementImageLimiter,
+  profileReadLimiter,
+  profileWriteLimiter,
+  photoUploadLimiter,
+  photoReportLimiter,
+  profilePhotoLimiter,
+  mailStatusLimiter,
+  mailFindPlayerLimiter,
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
 
@@ -103,6 +111,7 @@ import { getMessageThread } from "./controllers/mail/getMessageThread.js";
 import { sendMessage } from "./controllers/mail/sendMessage.js";
 import { requestTruce } from "./controllers/mail/requestTruce.js";
 import { reportMessageThread } from "./controllers/mail/reportMessageThread.js";
+import { findMailPlayer, getMailStatus } from "./controllers/mail/mailStatus.js";
 
 import { getTemplates } from "./controllers/yardplanner/getTemplates.js";
 import { saveTemplate } from "./controllers/yardplanner/saveTemplate.js";
@@ -130,8 +139,11 @@ import { mountEventsRoutes } from "./controllers/events/routes.js";
 import { mountSupportRoutes } from "./controllers/support/routes.js";
 import { adminOnly, mountAdminRoutes } from "./controllers/admin/routes.js";
 import { mountAnnouncementRoutes } from "./controllers/announcements/routes.js";
+import { mountProfileRoutes } from "./controllers/profile/routes.js";
+import { sharedWordFilter } from "./services/chat/badWords.js";
 import { postgres } from "./server.js";
 import { clientErrors, guestClientErrors } from "./controllers/errors/clientErrors.js";
+import { clientTiming } from "./controllers/maproom/clientTiming.js";
 
 import { getAvailableWorlds } from "./controllers/leaderboards/getAvailableWorlds.js";
 import { getLeaderboards } from "./controllers/leaderboards/getLeaderboards.js";
@@ -285,6 +297,10 @@ router.post("/api/:apiVersion/player/getmessagethread", apiVersion, verifyUserAu
 router.post("/api/:apiVersion/player/sendmessage", apiVersion, verifyUserAuth, playerMailLimiter, mailTruceRequestLimiter, logRequest, sendMessage);
 router.post("/api/:apiVersion/player/requesttruce", apiVersion, verifyUserAuth, truceRequestLimiter, logRequest, requestTruce);
 router.post("/api/:apiVersion/player/reportmessagethread", apiVersion, verifyUserAuth, threadReportLimiter, logRequest, reportMessageThread);
+// Live mail (owner, beta 7): the game's check on a chat nudge or every so
+// often (not logged: it is frequent), and a moderator's find-any-player.
+router.get("/api/:apiVersion/player/mailstatus", apiVersion, verifyUserAuth, mailStatusLimiter, getMailStatus);
+router.post("/api/:apiVersion/player/mail/findplayer", apiVersion, verifyUserAuth, mailFindPlayerLimiter, logRequest, findMailPlayer);
 
 /**  ────────────────────────────────────────────────
 * 📦 Yard Planner
@@ -305,8 +321,12 @@ router.post("/api/:apiVersion/bm/yardplanner/deletetemplate", apiVersion, verify
 /**  ────────────────────────────────────────────────
 * 📦 Yard actions (server-authoritative, `controllers/yard/index.ts`)
 * ──────────────────────────────────────────────── */
-for (const { path, controller } of yardRoutes) {
-  router.post(`/api/:apiVersion/bm/yard/${path}`, apiVersion, verifyUserAuth, logRequest, controller);
+for (const { path, controller, limiter } of yardRoutes) {
+  if (limiter) {
+    router.post(`/api/:apiVersion/bm/yard/${path}`, apiVersion, verifyUserAuth, limiter, logRequest, controller);
+  } else {
+    router.post(`/api/:apiVersion/bm/yard/${path}`, apiVersion, verifyUserAuth, logRequest, controller);
+  }
 }
 
 /**  ────────────────────────────────────────────────
@@ -409,6 +429,12 @@ router.post("/api/:apiVersion/clienterrors", apiVersion, verifyUserAuth, clientE
 router.post("/api/:apiVersion/clienterrors/guest", apiVersion, clientErrorLimiter, guestClientErrors);
 
 /**  ────────────────────────────────────────────────
+* 📦 Map Room 2 open timings from real players: one log line each, message
+* "mr2-open-timing", in logs/bymr-*.jsonl (`controllers/maproom/clientTiming.ts`).
+* ──────────────────────────────────────────────── */
+router.post("/api/:apiVersion/clienttiming", apiVersion, verifyUserAuth, clientTimingLimiter, clientTiming);
+
+/**  ────────────────────────────────────────────────
 * 📦 The owner's dashboard (`controllers/admin/routes.ts`): 404 to anyone not in ADMIN_USER_IDS.
 * ──────────────────────────────────────────────── */
 mountAdminRoutes(router);
@@ -422,6 +448,23 @@ mountAnnouncementRoutes(router, {
   signedIn: [verifyUserAuth, verifyAccountStatus, announcementsLimiter],
   adminOnly,
   imageLimiter: announcementImageLimiter,
+});
+
+/**  ────────────────────────────────────────────────
+* 📦 Player profiles (beta 7): bio, photo, photo reports
+* ──────────────────────────────────────────────── */
+mountProfileRoutes(router, {
+  em: () => postgres.em.fork(),
+  signedIn: [verifyUserAuth, verifyAccountStatus],
+  adminOnly,
+  limiters: {
+    read: profileReadLimiter,
+    write: profileWriteLimiter,
+    upload: photoUploadLimiter,
+    report: photoReportLimiter,
+    image: profilePhotoLimiter,
+  },
+  filter: sharedWordFilter,
 });
 
 /**  ────────────────────────────────────────────────

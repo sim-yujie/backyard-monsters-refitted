@@ -229,6 +229,9 @@
 .shiny-button__note {
   flex-basis: 100%;
   font-size: var(--text-sm);
+  /* Its own leading: the button's line-height is a whole-pixel length for
+     15 px words (ui.css `.btn`), too tall for these 13 px lines. */
+  line-height: var(--leading-normal);
   font-weight: normal;
   white-space: normal;
   opacity: 0.9;

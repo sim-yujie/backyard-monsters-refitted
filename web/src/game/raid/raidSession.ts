@@ -80,6 +80,17 @@ export const raidEvents = (run: RaidRun): RaidEvent[] =>
   );
 
 /**
+ * The tick the fight's last wave lands on, for the session's battle
+ * (`AttackSessionOptions.raidSpawnsUntil`): the server fought the Trojan
+ * Horse's army with its last spawn's tick (`trojanFight.ts`,
+ * `TROJAN_LAST_SPAWN_TICK`), which is its last event's own tick, so the fight
+ * stays open through the gaps between spawns. A wild or Moloch raid's waves
+ * all land at 0, which the server leaves at its default, 0, too.
+ */
+export const raidSpawnsUntil = (run: RaidRun): number =>
+  raidEvents(run).reduce((last, event) => Math.max(last, Math.floor(event.t)), 0);
+
+/**
  * The attack scene's target for a raid: the player's own main yard, as the
  * fight found it, with their defence. Nobody's army is housed here: the
  * raiders come in the fight's waves.

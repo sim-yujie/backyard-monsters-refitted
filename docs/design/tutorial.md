@@ -386,7 +386,7 @@ refers to §6.2; "B" is a building check.
 | 3 | C8 | Open For Business | General Store | 500 / 1,500 / 500 / 500, 1,000 Shiny | — | drop (blocked) | — |
 | 4 | U1 | Next Level | any building at level 2 | 4,000 / 4,600 / 500 / 0 | — | keep | B: any building `l >= 2` |
 | 5 | T1 | Sniper Tower | Sniper Tower | 2,000 / 2,000 / 0 / 0 | — | keep | B: type 21 |
-| 6 | D1 | First Blood | defend the yard | 800 / 800 / 1,000 / 1,000 | — | keep\* | `raidSeen`: the staged raid, as Flash's tutorial completed D1 itself (`TUTORIAL.as:457-459`) |
+| 6 | D1 | First Blood | defend the yard | 800 / 800 / 1,000 / 1,000 | — | keep\* | `raidSeen`: the staged raid, as Flash's tutorial completed D1 itself (`TUTORIAL.as:457-459`), or any wild raid with a raider killed (Flash's `kills: 1`), or a good defence (`raidsSurvived`) |
 | 7 | CR3 | Home Sweet Home | Monster Housing | 2,000 / 2,000 / 2,000 / 2,000 | — | keep | B: type 15 |
 | 8 | C18 | Flinger | Flinger | 0 / 0 / 0 / 1,000 | — | keep | B: type 5 |
 | 9 | C17 | Monster Maps | Map Room | 0 / 0 / 0 / 1,000 | — | keep | B: type 11 |
@@ -479,7 +479,7 @@ Every check is a pure function of the main save plus `onboarding` (`services/goa
 | Monster unlocked | `save.lockerdata[id].t == 2` | as Flash's `CREATURELOCKER` reads it |
 | Champion hatched, or at level 6 | `save.champion` (an entry of that type, and its level) | |
 | Layout saved (N2) | `save.savetemplate` holds at least one layout (`server/src/controllers/yardplanner/getLayouts.ts:29`) | `/base/save` cannot write it |
-| `raidSeen` (D1) | `onboarding.raidSeen` | set by `guide/advance` from the raid step, or by the raid in the replay (Q6) |
+| `raidSeen` (D1) | `onboarding.raidSeen` | set by `guide/advance` from the raid step, or by a wild raid's landing with a raider killed (`raidLanding.ts`) |
 | Counters | `onboarding.counters`, written only by server routes | below |
 
 The counters are new because nothing on the server counts these today, and `save.stats` cannot be

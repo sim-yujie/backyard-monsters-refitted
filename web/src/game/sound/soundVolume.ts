@@ -46,11 +46,19 @@ let context: AudioContext | null | undefined;
  * The page's one Web Audio context, made on first need; null where the
  * browser has none. Effects play through it, and on iPhones and iPads the
  * music too, so one press lets both out.
+ *
+ * Also null where the browser has Web Audio switched off: there making one
+ * throws ("Web Audio API is disabled due to your security policy"), and the
+ * game plays on silently instead of failing in whatever asked for a sound.
  */
 export const sharedAudioContext = (): AudioContext | null => {
   if (context !== undefined) return context;
   const Context = globalThis.AudioContext ?? (globalThis as WebkitWindow).webkitAudioContext;
-  context = Context ? new Context() : null;
+  try {
+    context = Context ? new Context() : null;
+  } catch {
+    context = null;
+  }
   return context;
 };
 

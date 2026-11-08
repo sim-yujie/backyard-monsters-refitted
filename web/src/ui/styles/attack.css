@@ -229,6 +229,23 @@
   max-width: min(60vw, 520px);
 }
 
+/* ── A live attack: the screen cleaned up (owner, beta 7, grill item 35) ──
+   No HUD above the strip (AttackScene creates none), so the strip takes the
+   top edge and the Army panel follows it up; no Map / Yard / Log out menu,
+   no status line, no minimap. Replays, defence views and tests keep theirs. */
+.attack-strip--live {
+  top: var(--hud-inset);
+}
+
+.attack-strip--live [hidden],
+.attack-status--live[hidden] {
+  display: none;
+}
+
+.attack-dock--live {
+  --hud-height: 0px;
+}
+
 /* The phone's overflow menu (`ui/attack/AttackMenu.ts`); the HUD does its job
    on wider screens, so it only shows under the phone query below. */
 .attack-menu {
@@ -478,6 +495,12 @@
   .attack-strip__title,
   .attack-strip > .guide-help {
     display: none;
+  }
+
+  /* A live attack has no overflow menu to hold Bob's "?": it stays on the
+     strip, in the room the menu button left. */
+  .attack-strip--live > .guide-help:not([hidden]) {
+    display: block;
   }
 
   /* The status line goes, as upright: the map button has that corner (#381). */
@@ -942,9 +965,14 @@
 /* A phone: the result is the whole screen (§4.4 "Full-screen modal", #151),
    with its actions at the bottom within a thumb's reach. */
 @media (width <= 620px) {
+  /* One row and one column the size of the screen, so a long result (a
+     takeover offer under it) scrolls inside the window instead of growing
+     the row past the screen's top and bottom (6 Nov UI check: 174 px off). */
   .attack-end__backdrop {
     padding: 0;
     place-items: stretch;
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .attack-end {
@@ -952,6 +980,9 @@
     max-width: none;
     min-width: 0;
     height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    box-sizing: border-box;
     border: 0;
     border-radius: 0;
   }
@@ -960,7 +991,9 @@
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
+    min-height: 0;
     max-height: none;
+    overflow-y: auto;
   }
 
   .attack-end__actions {
@@ -970,6 +1003,12 @@
   .attack-end__actions .btn {
     flex: 1 1 auto;
     min-height: 44px;
+  }
+
+  /* The painted sign rides above the window's top edge (skin.css): the
+     sheet starts that far down so the sign stays on the screen. */
+  :root[data-skin] .attack-end__backdrop {
+    padding-top: 32px;
   }
 }
 

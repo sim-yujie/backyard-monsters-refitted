@@ -20,7 +20,7 @@ const PUBLIC_ICONS = path.resolve(__dirname, "../../public/ui/icons");
 
 describe("the pictures", () => {
   it("ships every size of every icon, game-sized", () => {
-    expect(GAME_ICON_NAMES).toHaveLength(40);
+    expect(GAME_ICON_NAMES).toHaveLength(48);
     for (const name of GAME_ICON_NAMES) {
       for (const side of GAME_ICON_SIDES) {
         const file = path.join(PUBLIC_ICONS, `${name}-${side}.webp`);

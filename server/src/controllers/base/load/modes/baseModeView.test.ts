@@ -73,6 +73,29 @@ describe("baseModeView: Map Room 2 fog gate", () => {
     expect(result).toBeNull();
   });
 
+  test("a player's home yard out of sight still opens (world chat's View yard, friends)", async () => {
+    tables.set(WorldMapCell, [{ baseid: "far-home", x: 500, y: 500 }]);
+    tables.set(Save, [{ baseid: "far-home", type: "main", userid: 77 }]);
+
+    const result = await baseModeView("far-home", MapRoomVersion.V2, WORLD, VIEWER);
+
+    expect(result).toMatchObject({ baseid: "far-home" });
+  });
+
+  test("an outpost or a camp out of sight is still refused", async () => {
+    tables.set(WorldMapCell, [
+      { baseid: "far-outpost", x: 500, y: 500 },
+      { baseid: "far-camp", x: 501, y: 500 },
+    ]);
+    tables.set(Save, [
+      { baseid: "far-outpost", type: "outpost", userid: 77 },
+      { baseid: "far-camp", type: "tribe", userid: 0 },
+    ]);
+
+    expect(await baseModeView("far-outpost", MapRoomVersion.V2, WORLD, VIEWER)).toBeNull();
+    expect(await baseModeView("far-camp", MapRoomVersion.V2, WORLD, VIEWER)).toBeNull();
+  });
+
   test("a base named in `revealed` (own or ally, by the sight rule) passes through to the real save", async () => {
     tables.set(WorldMapCell, [{ baseid: "own", x: 5, y: 5 }]);
     tables.set(Save, [{ baseid: "own" }]);

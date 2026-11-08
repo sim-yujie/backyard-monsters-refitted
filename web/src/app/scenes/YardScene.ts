@@ -51,7 +51,20 @@ import { concealTraps, countedBuildings } from "@/game/attack/trapReveal";
 import { prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { Camera } from "@/game/Camera";
 import { setMapFocus } from "@/game/maproom/mapFocus";
-import { MapRoomChoice, mapRoomOf, takePrimedOwnYard } from "@/game/maproom/mapRoute";
+import { MapRoomChoice, mapRoomOf, primeFromYard, takePrimedOwnYard } from "@/game/maproom/mapRoute";
+import {
+  prewarmLevel,
+  prewarmStarted,
+  prewarmSwitchedOff,
+  runPrewarm,
+  watchDownloads,
+  watchIdle,
+  type PrewarmFacts,
+} from "@/game/maproom/mr2Prewarm";
+import { paintedMapOn } from "@/game/maproom/painted/paintedSwitch";
+import { classicLook } from "@/game/classicLook";
+import { quality } from "@/game/quality";
+import { currentScreenName } from "@/game/bugReport/screenCapture";
 import { finishedMonstersJobs } from "@/game/monsters/finishedJobs";
 import { onJuiced } from "@/game/monsters/juiceNews";
 import { openInfernoMap } from "@/game/inferno/tribeEntry";
@@ -63,6 +76,9 @@ import {
   plannerEntryTooltip,
 } from "@/game/yard/planner/access";
 import { buildOffer, buildsAtOnce, categoryOf } from "@/game/yard/buildCatalogue";
+import { topUpPrice } from "@/game/yard/resourcePacks";
+import { WALL_TYPES } from "@/game/yard/buildingCosts";
+import { lineBudgetOf, readLineModePreference, writeLineModePreference } from "@/game/yard/wallLine";
 import { BuildPlacement } from "@/game/yard/BuildPlacement";
 import { fixedWorkSource } from "@/game/yard/buildingWork";
 import { startBank, type AnswerBank } from "@/game/yard/bankShow";
@@ -156,6 +172,7 @@ import { SceneName } from "../sceneName";
 import { BAITER_TYPE, setBaiterRun } from "@/game/baiter/baiterSession";
 import { trojanApi } from "@/api/trojan";
 import { setRaidRun } from "@/game/raid/raidSession";
+import { warmTrojanSheets } from "@/game/raid/raidSheets";
 import { TROJAN_HORSE_TYPE, findTrojanHorse } from "@/game/trojan/trojanHorse";
 import { TrojanFlow } from "@/game/trojan/trojanFlow";
 import { TrojanLetter } from "@/ui/trojan/TrojanLetter";
@@ -166,6 +183,13 @@ import { footprintBox } from "@/game/yard/YardGrid";
 import { mountYardPlugins, type YardSceneControls } from "@/game/yard/yardPlugins";
 import "@/game/yard/plugins";
 import { devStats } from "../devDetails";
+import { GOLDEN_POP_SECONDS } from "@/game/yard/YardTurkeys";
+
+/**
+ * How long the golden-turkey popup waits: the turkey's whole golden hop plays
+ * on the yard first, so the popup's dimmer does not cover it.
+ */
+const GOLDEN_TURKEY_DELAY_MS = GOLDEN_POP_SECONDS * 1000 + 100;
 
 /**
  * A yard: the player's own, or — handed a {@link ViewTarget} by the map —
@@ -427,6 +451,8 @@ export class YardScene implements Scene {
   private unsubscribeStore: (() => void) | null = null;
   /** Stops showing juices in the yard (`juiceNews.ts`). */
   private unsubscribeJuice: (() => void) | null = null;
+  /** Stops waiting for the yard to go quiet before Map Room 2's warm-up (`mr2Prewarm.ts`). */
+  private stopMr2Prewarm: (() => void) | null = null;
   /** What the panel and the HUD are handed on the own yard. */
   private binding: YardUiBinding | null = null;
   /** The tab came back while the planner was open; refresh once it closes. */
@@ -671,6 +697,8 @@ export class YardScene implements Scene {
       this.mail = new MailDoor({
         style: "dock",
         container: context.overlay.content,
+        // New mail shows at once (owner, beta 7): pushed over world chat, else asked every 45 s.
+        live: { chat: worldChat },
         onOpen: () => this.makeRoomForMail(),
         onShowOnMap: (cell) => {
           setMapFocus({ cell });
@@ -964,6 +992,8 @@ export class YardScene implements Scene {
       }
       // Which look the player uses, for the owner's dashboard (owner 4 Nov 2026): once per load.
       if (store?.kind === "main") reportLook();
+      // Map Room 2's code, shaders and pictures, once the yard has gone quiet (`mr2Prewarm.ts`).
+      if (store && !tribe) this.watchMr2Prewarm(store, context);
 
       // The planner's entry rule: the own yard's, never a visit's. The
       // Inferno yard has one too (owner decision 2026-10-29), unlike Flash's.
@@ -989,6 +1019,9 @@ export class YardScene implements Scene {
       // The Trojan Horse was just placed (issue #327, design §3.1): the
       // camera pans to it once, no popup, no sound. Own main yard only —
       // `trojanNew` never comes with a visit's or an outpost's load.
+      // A horse on the own main yard: its army's small sheets start now, as
+      // its fight has no warning to fetch them in (`raidSheets.ts`).
+      if (store?.kind === "main" && findTrojanHorse(yard.buildings)) warmTrojanSheets(false);
       if (store?.kind === "main" && response.trojanNew) {
         const horse = findTrojanHorse(yard.buildings);
         if (horse && this.camera) {
@@ -1197,6 +1230,7 @@ export class YardScene implements Scene {
         this.select(null);
         void this.mushroomPicker?.pick(mushroom);
       },
+      findsOnTop: () => this.renderer.findsOnTop,
       onZoomStep: (direction) => this.zoomBy(Math.pow(ZOOM_STEP, direction)),
       onZoomReset: () => this.fitYard(),
       onCancel: () => this.select(null),
@@ -1396,6 +1430,8 @@ export class YardScene implements Scene {
     const store = this.store;
     const context = this.context;
     if (!store || !context || this.trojanLetter) return;
+    // The fight is a click away: its paintings start too, after the stand-ins.
+    warmTrojanSheets(true);
     const flow = new TrojanFlow({
       api: trojanApi,
       fight: (response) => {
@@ -1677,7 +1713,7 @@ export class YardScene implements Scene {
     this.hud?.achievements?.close();
     this.buildMenu ??= new BuildMenu({
       binding,
-      onPick: (picked, instant) => this.startPlacement(picked, instant),
+      onPick: (picked, instant, topUp) => this.startPlacement(picked, instant, topUp),
       onTownHall: () => this.showTownHall(),
       onClose: () => {
         this.refreshBuildButton();
@@ -1916,6 +1952,8 @@ export class YardScene implements Scene {
     }
     const choice = mapRoomOf(store.save);
     if (choice !== MapRoomChoice.NONE) {
+      // Map Room 2 opens on the yard as held here instead of loading it again (when settled).
+      if (choice === MapRoomChoice.MAP_ROOM_2 && !this.tribe) primeFromYard(store);
       context.goTo(sceneForMap(choice));
       return;
     }
@@ -1979,7 +2017,8 @@ export class YardScene implements Scene {
    * comes out of storage (`decor/place`, §8.3): free and finished; one sold
    * for Shiny is bought as it goes down (`decor/buy`, owner 2026-11-04).
    */
-  private startPlacement(type: number, instant: boolean): void {
+  /** `topUp`: the Shiny the player agreed to pay for the resources it is short (issue #393). */
+  private startPlacement(type: number, instant: boolean, topUp?: number): void {
     const store = this.store;
     const camera = this.camera;
     const context = this.context;
@@ -1994,10 +2033,26 @@ export class YardScene implements Scene {
     const actions = buildActions(store);
     const storage = offer.stored !== null ? decorActions(store) : null;
     const buying = offer.price !== undefined;
-    const repeat = buildsAtOnce(type, store.kind) && !instant && !storage;
+    const repeat = buildsAtOnce(type, store.kind) && !instant && !storage && topUp === undefined;
+    // A wall Block can be drawn as a line or L (walls Option B, owner 8 Nov 2026).
+    const lineable = repeat && WALL_TYPES.includes(type);
+    const lineOn = lineable && readLineModePreference();
     let placed: number | null = null;
 
     const bar = new PlacementBar({
+      ...(lineable && {
+        line: {
+          on: lineOn,
+          onToggle: (on: boolean) => {
+            writeLineModePreference(on);
+            bar.setMessage(null);
+            placement.setLineMode(on);
+          },
+          onConfirm: () => void placement.confirmLine(),
+          onClear: () => placement.clearLine(),
+          onUndo: () => placement.undoAnchor(),
+        },
+      }),
       type,
       kind: store.kind,
       instant,
@@ -2037,12 +2092,25 @@ export class YardScene implements Scene {
           }
         }
         // A one-off building is down; the bar says so until the answer (#277).
+        // A top-up is paid at today's shortfall, never above the price agreed:
+        // the server refuses any price but its own.
+        let paid: number | undefined;
+        if (topUp !== undefined && !storage && !instant) {
+          const gate = buildOffer(type, store)?.gate;
+          if (gate?.reason === "shortfall" && !gate.overCap) {
+            paid = topUpPrice(gate.shortfall);
+            if (paid > topUp) {
+              bar.setMessage("The top-up costs more now. Try again.", "bad");
+              return "refused";
+            }
+          }
+        }
         if (!repeat) bar.setBuilding(true);
         const result = storage
           ? await (buying ? storage.buy(type, x, y) : storage.place(type, x, y))
           : instant
             ? await actions.instant(type, x, y)
-            : await actions.build(type, x, y);
+            : await actions.build(type, x, y, paid);
         if (this.placement !== placement) return result.ok ? "placed" : "refused";
         if (!result.ok) {
           bar.setBuilding(false);
@@ -2061,6 +2129,30 @@ export class YardScene implements Scene {
         // The new building's panel: its countdown, Finish now and Cancel build.
         if (placed !== null) this.showPlaced(placed);
       },
+      ...(lineable && {
+        line: {
+          on: lineOn,
+          budget: () => lineBudgetOf(buildOffer(type, store), store.resources),
+          unitCost: offer.cost,
+          onPlan: (plan, stage) => bar.setLine(plan, stage),
+          onBuild: async (cells) => {
+            const result = await actions.walls(type, cells);
+            if (this.placement !== placement) return result.ok ? "placed" : "refused";
+            if (!result.ok) {
+              bar.setMessage(result.refusal.message, "bad");
+              return "refused";
+            }
+            const { built, refused } = result.report;
+            for (const one of built) guideBus.emit("placed", { type, id: one.id });
+            const skipped = refused.length;
+            bar.setMessage(
+              skipped > 0 ? `Built ${built.length}. ${skipped} left out.` : `Built ${built.length}.`,
+              "good",
+            );
+            return "placed";
+          },
+        },
+      }),
     });
     this.placement = placement;
 
@@ -2403,6 +2495,78 @@ export class YardScene implements Scene {
   ): void {
     // The store's change does the rebuild and the `rebase` (`onStoreChange`).
     this.store?.mergeWrite({ buildingdata, resources, ...(mushrooms ? { mushrooms } : {}) });
+  }
+
+  /* ── Map Room 2, ahead ──────────────────────────────────────────────── */
+
+  /**
+   * Gets Map Room 2 ready while the player is idle here (MR2 open speed, 7 Nov 2026): once the
+   * yard has been settled (no request of its own in flight or waiting, no download landing, the
+   * page on screen) for a few seconds, the map's code is fetched, its shaders compiled and its
+   * pictures fetched one at a time, stopping between pictures whenever the yard is busy again.
+   * Once a page, never on Low Quality or in Classic, and only for a player whose map is Map Room 2
+   * with the painted look (`mr2Prewarm.ts` decides).
+   */
+  private watchMr2Prewarm(store: YardStore, context: SceneContext): void {
+    this.stopMr2Prewarm?.();
+    this.stopMr2Prewarm = null;
+    if (prewarmStarted()) return;
+    const facts = (): PrewarmFacts => ({
+      level: quality(),
+      classic: classicLook(),
+      mapRoom2: store.kind === "outpost" || (store.kind === "main" && mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2),
+      painted: paintedMapOn({ serverFlag: store.save.flags?.["mr2painted"] }),
+      webGL2: (context.renderer as { context?: { webGLVersion?: number } }).context?.webGLVersion === 2,
+      parallelCompile: Boolean((context.renderer as { gl?: WebGL2RenderingContext }).gl?.getExtension("KHR_parallel_shader_compile")),
+      switchedOff: prewarmSwitchedOff(),
+    });
+    // What the warm-up is waiting on, readable in the console as `__mr2Prewarm` (owner's Firefox
+    // test, 7 Nov 2026: it never started and nothing said why).
+    const diag: { facts: PrewarmFacts; state: string; busy: string | null; busySince: number | null; lastDownloadAt: number | null } = {
+      facts: facts(),
+      state: "waiting",
+      busy: null,
+      busySince: null,
+      lastDownloadAt: null,
+    };
+    (globalThis as { __mr2Prewarm?: unknown }).__mr2Prewarm = diag;
+    if (prewarmLevel(diag.facts) === null) {
+      diag.state = "skipped";
+      return;
+    }
+    const quiet = (): boolean => {
+      const busy =
+        this.context !== context || this.store !== store
+          ? "left the yard"
+          : !store.settled
+            ? "yard request in flight or waiting"
+            : document.visibilityState !== "visible"
+              ? "page hidden"
+              : null;
+      if (busy !== diag.busy) diag.busySince = busy === null ? null : Math.round(performance.now());
+      diag.busy = busy;
+      return busy === null;
+    };
+    const downloads = watchDownloads();
+    const stopIdle = watchIdle({
+      settled: quiet,
+      lastDownloadAt: () => (diag.lastDownloadAt = downloads.lastAt()),
+      now: () => performance.now(),
+      run: () => {
+        downloads.stop();
+        // Asked again: the player may have changed Quality or the look while waiting.
+        diag.facts = facts();
+        const level = prewarmLevel(diag.facts);
+        diag.state = level === null ? "skipped" : "started";
+        if (level === null) return;
+        // The map wants the same pictures, so opening it does not stop the fetching.
+        void runPrewarm(context.renderer, level, () => quiet() || currentScreenName() === SceneName.MAP_ROOM_2);
+      },
+    });
+    this.stopMr2Prewarm = () => {
+      stopIdle();
+      downloads.stop();
+    };
   }
 
   /* ── The store ──────────────────────────────────────────────────────── */
@@ -2785,7 +2949,14 @@ export class YardScene implements Scene {
     return {
       shake: (spot) => this.renderer.shakeMushroom(spot, true),
       stop: (spot) => this.renderer.shakeMushroom(spot, false),
-      golden: (shiny) => void showGoldenMushroom(context.overlay.modal, shiny, currentSeason()),
+      picked: (spot, golden) => this.renderer.pickedMushroom(spot, golden),
+      // At Thanksgiving the popup waits for the golden turkey's hop on the yard.
+      golden: (shiny) => {
+        const season = currentSeason();
+        const show = () => void showGoldenMushroom(context.overlay.modal, shiny, season);
+        if (season === "thanksgiving") setTimeout(show, GOLDEN_TURKEY_DELAY_MS);
+        else show();
+      },
       ordinary: (quip) => this.notices.show("mushroom", quip, { level: "info", timeoutMs: 4000 }),
       refused: (message) =>
         this.notices.show("mushroom", message, { level: "error", timeoutMs: 5000 }),
@@ -2812,6 +2983,8 @@ export class YardScene implements Scene {
     this.unsubscribeStore = null;
     this.unsubscribeJuice?.();
     this.unsubscribeJuice = null;
+    this.stopMr2Prewarm?.();
+    this.stopMr2Prewarm = null;
     this.store?.destroy();
     this.store = null;
     this.binding = null;

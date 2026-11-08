@@ -28,13 +28,14 @@ import "@/ui/styles/lab.css";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
 import { monsterPicture } from "./LockerTab";
 import type { MonstersFocus, MonstersTab, MonstersTabContext } from "./monstersTab";
+import { studySeconds, weekendChip, withWeekendChip } from "@/ui/events/weekendUi";
 
 /**
  * The Lab tab: the Monster Lab (`docs/design/yard-buildings.md` §6 "Lab tab").
  *
  * Top to bottom: the Lab as one slot ("Monster Lab · level 2 · Idle", or the
  * running research with its countdown, Finish now and Cancel) — one Lab, one
- * research at a time; then the fourteen monsters with an ability, each with its
+ * research at a time; then the fifteen monsters with an ability, each with its
  * rank 0–3, the next rank's putty and time, what the ability does now and
  * next in plain words, and the reason it cannot be researched yet ("Needs Lab
  * level 2", "Needs Octo-ooze at level 3"); beside it (under it on a phone)
@@ -367,7 +368,7 @@ export class LabTab implements MonstersTab {
         this.rowClocks.push({ node: clock, endsAt: row.research.endsAt });
         state.append(`Researching → ${row.research.rank} · `, clock);
       } else if (row.step) {
-        state.append(`→ ${row.rank + 1}: `, resourceAmount("r3", row.step[0]), ` · ${duration(row.step[1])}`);
+        state.append(`→ ${row.rank + 1}: `, resourceAmount("r3", row.step[0]), ` · ${duration(studySeconds(row.step[1]))}`);
       } else {
         state.textContent = "Fully researched";
       }
@@ -432,7 +433,11 @@ export class LabTab implements MonstersTab {
       const lockedInstant = instantGate(ability, store);
       const cost = document.createElement("p");
       cost.className = "locker-detail__note";
-      cost.append(`Rank ${rank + 1}: `, resourceAmount("r3", step[0]), ` · ${duration(step[1])}`);
+      cost.append(
+        `Rank ${rank + 1}: `,
+        resourceAmount("r3", step[0]),
+        withWeekendChip(` · ${duration(studySeconds(step[1]))}`, weekendChip("study")),
+      );
       action.append(cost);
       if (gate) action.append(gateLine(gate));
       const buttons = document.createElement("div");

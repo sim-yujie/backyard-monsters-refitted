@@ -28,6 +28,7 @@ import "@/ui/styles/train.css";
 import { ShinyButton } from "@/ui/yard/ShinyButton";
 import { describe, monsterPicture } from "./LockerTab";
 import type { MonstersFocus, MonstersTab, MonstersTabContext } from "./monstersTab";
+import { studySeconds, weekendChip, withWeekendChip } from "@/ui/events/weekendUi";
 
 /**
  * The Train tab: the Monster Academy (`docs/design/yard-buildings.md` §6
@@ -387,7 +388,7 @@ export class TrainTab implements MonstersTab {
         this.rowClocks.push({ node: clock, endsAt: row.training.endsAt });
         state.append(`Training → ${row.training.to} · `, clock);
       } else if (row.step) {
-        state.append(`→ ${row.level + 1}: `, resourceAmount("r3", row.step[0]), ` · ${duration(row.step[1])}`);
+        state.append(`→ ${row.level + 1}: `, resourceAmount("r3", row.step[0]), ` · ${duration(studySeconds(row.step[1]))}`);
       } else {
         state.textContent = "Fully trained";
       }
@@ -441,10 +442,12 @@ export class TrainTab implements MonstersTab {
       const facts = document.createElement("p");
       facts.className = "locker-detail__note";
       const at = academyFor(store, level);
+      // Study Weekend's chip right after the time it lowers, the two kept
+      // together, so a long line wraps before "· at Academy" and not under it.
       facts.append(
         `Level ${level + 1}: `,
         resourceAmount("r3", step[0]),
-        ` · ${duration(step[1])}`,
+        withWeekendChip(` · ${duration(studySeconds(step[1]))}`, weekendChip("study")),
         ...(gate === null && at ? [` · at ${this.academyName} ${at.number}`] : []),
       );
       action.append(facts);

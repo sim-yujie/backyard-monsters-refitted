@@ -113,9 +113,25 @@ body {
  */
 
 .btn {
+  /* Words at 0 px off the vertical centre (owner rule, 7 Nov 2026). Chrome
+     rounds the font's ascent and descent to whole pixels and floors the space
+     above the words, so a fractional leading (15 px text at line-height 1.45:
+     3.75 px) lifted them up to 0.9 px. Here the line is the rounded text
+     height plus an even whole number of pixels, the one nearest to the old
+     1.45, so the space above and below is equal and the line (and so any
+     button sized by its words) moves by under a pixel. A plate in the
+     display font swaps in that font's metrics (skin.css). Browsers without
+     CSS round() drop the line and keep the inherited one, as before. */
+  --btn-ascent: var(--font-body-ascent);
+  --btn-descent: var(--font-body-descent);
+  --btn-text: calc(round(nearest, var(--btn-ascent), 1px) + round(nearest, var(--btn-descent), 1px));
+  /* A button that wants tighter lines sets this, not line-height. */
+  --btn-leading: var(--leading-normal);
+
   min-height: var(--control-height-compact);
   font: inherit;
   font-weight: 700;
+  line-height: calc(var(--btn-text) + 2 * round(nearest, (var(--btn-leading) * 1em - var(--btn-text)) / 2, 1px));
   padding: var(--space-2) var(--space-4);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
@@ -1064,7 +1080,8 @@ body {
   min-width: 0;
   min-height: 40px;
   font-size: var(--text-sm);
-  line-height: 1.15;
+  /* 1.15, rounded so the words sit at 0 px off centre (`.btn`). */
+  --btn-leading: 1.15;
   /* The other two fonts run wider: a long item wraps rather than hits its neighbour. */
   white-space: normal;
 }
@@ -1760,6 +1777,47 @@ body {
   flex: none;
 }
 
+/* "Graphics are off" (ui/GraphicsOffNotice.ts): the browser will not let the
+   game draw, so this is plain HTML in the game's window over the dark page.
+   Above everything; nothing else is on screen. */
+.graphics-off {
+  position: fixed;
+  z-index: var(--z-system);
+}
+
+.graphics-off__panel {
+  width: min(92vw, 440px);
+}
+
+.graphics-off__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: 80vh;
+  line-height: var(--leading-normal);
+}
+
+.graphics-off__text {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--colour-text-strong);
+}
+
+.graphics-off__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding-inline-start: 1.4em;
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+.graphics-off__retry {
+  align-self: center;
+  min-width: 8em;
+}
+
 /* The in-game check (#273): in the "Stay protected?" card's place, and like it
    nothing behind is dimmed or blocked. Danger-edged: the yard can be attacked.
    Its own block name: `.bot-check` is the sign-up form's Turnstile widget. */
@@ -2197,4 +2255,42 @@ body {
 
 .block-button__question {
   font-size: var(--text-sm);
+}
+
+/* A tapped resource's three Shiny offers (+10%, +50%, Fill) under its
+   amount (issue #393, Flash's "+" beside each resource): narrow columns of
+   label, price and the amount it brings, centred. */
+.hud__offers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  max-width: 280px;
+}
+
+.hud__offer {
+  flex: 1 1 0;
+  min-width: 72px;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 0;
+  padding-inline: var(--space-1);
+  text-align: center;
+}
+
+.hud__offer .shiny-button__label {
+  white-space: normal;
+}
+
+.hud__offer .shiny-button__note {
+  flex-basis: auto;
+  font-size: var(--text-xs);
+}
+
+.hud__offers-note {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: center;
+  color: var(--colour-warning);
 }

@@ -8,8 +8,8 @@ import { formatAmount } from "@/ui/format";
  * come from the server; only the progress line's unit is the client's.
  */
 
-/** The screen's last line (§5.3): the six left out until their features exist. */
-export const FOOTER_TEXT = "More achievements arrive with alliances and the Inferno.";
+/** The screen's last line (§5.3): hidden entries show as "???" until earned. */
+export const FOOTER_TEXT = "Some achievements stay hidden until earned.";
 
 /**
  * The unit before an entry's "4 / 5", by achievement number. An entry not
@@ -30,6 +30,11 @@ const PROGRESS_UNITS: Readonly<Record<number, string>> = {
   13: "Starter Kits",
   16: "Heavy Traps built",
   17: "Monsters unlocked",
+  23: "Yards today",
+  24: "Days in a row",
+  25: "Friends",
+  26: "Kozu attacks",
+  27: "Outposts held",
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -79,7 +84,7 @@ export const badgeTier = (shiny: number | undefined): BadgeTier => {
   return "bronze";
 };
 
-type Listed = Pick<PublicAchievementView, "id" | "status" | "at">;
+type Listed = Pick<PublicAchievementView, "id" | "status" | "at" | "hidden">;
 
 /** Earned entries, newest first; ties in Flash's order. */
 export const earnedGroup = <T extends Listed>(list: readonly T[]): T[] =>
@@ -87,12 +92,20 @@ export const earnedGroup = <T extends Listed>(list: readonly T[]): T[] =>
     .filter((entry) => entry.status === "earned")
     .sort((a, b) => (b.at ?? 0) - (a.at ?? 0) || a.id - b.id);
 
-/** Entries still to do, closest to done first; ties in Flash's order. */
+/** A hidden entry not earned yet: shown as "???" (#299). */
+export const isSecret = (entry: Pick<PublicAchievementView, "status" | "hidden">): boolean =>
+  entry.hidden === true && entry.status !== "earned";
+
+/** Hidden "???" entries go after every visible one. */
+const secretLast = (a: Pick<PublicAchievementView, "status" | "hidden">, b: Pick<PublicAchievementView, "status" | "hidden">): number =>
+  Number(isSecret(a)) - Number(isSecret(b));
+
+/** Entries still to do, closest to done first, hidden ones last; ties in Flash's order. */
 export const toDoGroup = (list: readonly AchievementView[]): AchievementView[] =>
   list
     .filter((entry) => entry.status !== "earned")
-    .sort((a, b) => progressRatio(b.progress) - progressRatio(a.progress) || a.id - b.id);
+    .sort((a, b) => secretLast(a, b) || progressRatio(b.progress) - progressRatio(a.progress) || a.id - b.id);
 
-/** Someone else's entries not earned yet, in Flash's order: there is no progress to sort by. */
+/** Someone else's entries not earned yet, in Flash's order, hidden ones last: there is no progress to sort by. */
 export const notEarnedGroup = <T extends Listed>(list: readonly T[]): T[] =>
-  list.filter((entry) => entry.status !== "earned").sort((a, b) => a.id - b.id);
+  list.filter((entry) => entry.status !== "earned").sort((a, b) => secretLast(a, b) || a.id - b.id);

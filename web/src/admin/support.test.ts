@@ -380,3 +380,56 @@ describe("light or dark", () => {
     vi.restoreAllMocks();
   });
 });
+
+describe("the bug lists", () => {
+  const mount = async (params: Record<string, string> = {}) => {
+    routes["GET /admin/bugreports"] = {
+      error: 0,
+      reports: [summary({ id: 7, status: "new" }), summary({ id: 8, status: "new" }), summary({ id: 9, status: "new" })],
+      nextBefore: null,
+    };
+    for (const id of [7, 8, 9]) routes[`GET /admin/bugreports/${id}`] = { error: 0, report: detail({ id, status: "new" }) };
+    const routed: (number | null)[] = [];
+    const lists: string[] = [];
+    const view = new BugsView({
+      onRoute: (id) => routed.push(id),
+      onList: (list) => lists.push(list),
+      onError: () => {},
+      onSay: () => {},
+      onAward: () => {},
+    });
+    document.body.append(view.element);
+    await view.show(null, params);
+    return { view, routed, lists };
+  };
+
+  it("starts on New, asks the server for one status, and follows the address", async () => {
+    const { view, lists } = await mount();
+    const segs = [...view.element.querySelectorAll<HTMLButtonElement>(".bugs-side .seg")];
+    expect(segs.map((s) => s.textContent)).toEqual(["New", "Working", "Closed", "All"]);
+    expect(segs[0]!.getAttribute("aria-pressed")).toBe("true");
+    expect(calls.at(-1)!.query.get("filter")).toBe("new");
+    segs[1]!.click();
+    expect(lists).toEqual(["working"]);
+    await view.show(null, { list: "working" });
+    expect(calls.at(-1)!.query.get("filter")).toBe("working");
+    expect(view.currentList).toBe("working");
+  });
+
+  it("opens a report beside the list, marks it, and steps to the next and previous", async () => {
+    const { view, routed } = await mount();
+    await view.show(8);
+    await settle();
+    expect(view.element.classList.contains("has-open")).toBe(true);
+    // The list is still there, with the open report marked.
+    expect(view.element.querySelectorAll(".bug-row")).toHaveLength(3);
+    expect(view.element.querySelector(".bug-row[data-bug='8']")?.getAttribute("aria-current")).toBe("true");
+    expect(view.element.querySelector(".bug-steps")?.textContent).toContain("2 of 3");
+    button(view.element, "Next").click();
+    button(view.element, "Previous").click();
+    expect(routed).toEqual([9, 7]);
+    await view.show(null);
+    expect(view.element.classList.contains("has-open")).toBe(false);
+    expect(view.element.querySelector<HTMLElement>(".bugs-detail")!.hidden).toBe(true);
+  });
+});

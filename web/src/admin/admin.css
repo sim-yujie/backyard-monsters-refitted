@@ -1,8 +1,8 @@
 /* The owner dashboard (/admin). An ops tool, not the game: quiet tinted
    neutrals, one blue for what can be tapped, and the status colours kept for
    status alone (always with an icon and a word). Follows the phone's light or
-   dark setting, unless the owner picked one in the header (data-theme). Phone first: one column at 390 px with the section links in
-   one sticky row; from 1024 px a sidebar. */
+   dark setting, unless the owner picked one in the header (data-theme). Phone first: one column at 390 px with four view tabs
+   stuck to the top (More opens the rest); from 1024 px the views are listed in a sidebar. One view shows at a time. */
 
 :root {
   color-scheme: light dark;
@@ -42,7 +42,6 @@
   --ease: cubic-bezier(0.25, 1, 0.5, 1);
   --z-sticky: 10;
   --z-toast: 30;
-  --nav-height: 60px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -248,39 +247,108 @@ button {
   gap: 10px;
 }
 
-.nav {
+/* On a phone: four tabs stuck to the top (Home, Moderation, Bugs, More);
+   More opens the list of every view under them. */
+.tabs {
   position: sticky;
   top: 0;
   z-index: var(--z-sticky);
+  display: grid;
+  /* Each tab as wide as its word and badge, the room left shared out: four
+     equal quarters cut "Inbox 14" to "Inb…" on a 375px phone. */
+  grid-template-columns: repeat(4, auto);
+  gap: 4px;
+  padding: 6px 12px;
   background: color-mix(in oklch, var(--bg) 92%, transparent);
   backdrop-filter: saturate(1.4) blur(10px);
   border-bottom: 1px solid var(--line);
-  overflow-x: auto;
-  scrollbar-width: none;
-  /* A soft edge says the row scrolls sideways. */
-  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
 }
 
-.nav::-webkit-scrollbar {
+.tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.tab[aria-current],
+.tab-more.is-current,
+.tab-more[aria-expanded="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.nav {
   display: none;
 }
 
-.nav ul {
-  display: flex;
+.nav.is-open {
+  position: fixed;
+  inset: var(--menu-top, calc(var(--tap) + 13px)) 0 auto 0;
+  z-index: var(--z-sticky);
+  display: grid;
+  gap: 14px;
+  max-height: calc(100vh - var(--menu-top, calc(var(--tap) + 13px)));
+  overflow-y: auto;
+  padding: 12px 16px 20px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.nav-group {
+  display: grid;
   gap: 4px;
+}
+
+.nav-title {
+  padding: 0 10px;
+  color: var(--ink-3);
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.nav ul {
+  display: grid;
+  gap: 2px;
   margin: 0;
-  padding: 8px 16px;
+  padding: 0;
   list-style: none;
-  width: max-content;
 }
 
 .nav-link {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   min-height: var(--tap);
-  padding: 0 14px;
-  border-radius: 999px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
   color: var(--ink-2);
   font-size: 0.9375rem;
   font-weight: 550;
@@ -319,6 +387,14 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+/* A phone tab's badge a little smaller, so all four tabs fit whole on a 320px phone. */
+.tab .nav-state .count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  font-size: 0.6875rem;
+}
+
 .nav-state .mark {
   width: 20px;
   height: 20px;
@@ -330,15 +406,19 @@ button {
 }
 
 .page {
+  width: 100%;
   max-width: 1040px;
   margin: 0 auto;
   padding: 16px 16px 96px;
   padding-bottom: max(96px, env(safe-area-inset-bottom));
 }
 
+.view[hidden] {
+  display: none;
+}
+
 .section {
-  margin-top: 44px;
-  scroll-margin-top: calc(var(--nav-height) + 16px);
+  margin-top: 4px;
 }
 
 .section-head {
@@ -414,38 +494,31 @@ button {
     justify-content: space-between;
   }
 
-  .nav {
-    position: static;
-    background: none;
-    backdrop-filter: none;
-    border: 0;
-    overflow: visible;
-    mask-image: none;
+  .tabs {
+    display: none;
   }
 
-  .nav ul {
-    flex-direction: column;
-    width: auto;
+  .nav,
+  .nav.is-open {
+    position: static;
+    display: grid;
+    gap: 18px;
+    max-height: none;
+    overflow: visible;
     padding: 0;
-    gap: 2px;
+    background: none;
+    border: 0;
+    box-shadow: none;
   }
 
   .nav-link {
-    display: flex;
-    justify-content: space-between;
-    min-height: 40px;
-    padding: 0 10px;
-    border-radius: var(--radius-sm);
+    min-height: 38px;
   }
 
   .page {
     padding: 32px 40px 96px;
   }
 
-  .section {
-    margin-top: 56px;
-    scroll-margin-top: 24px;
-  }
 }
 
 /* ---- Buttons and switches ---- */
@@ -682,18 +755,13 @@ button {
   background: var(--good);
 }
 
-/* ---- The box at the top ---- */
+/* ---- Home: the server in one line, then the work that needs the owner ---- */
 
 .verdict {
-  border-radius: 18px;
-  padding: 20px;
+  border-radius: var(--radius);
+  padding: 10px 14px;
   background: var(--surface);
   border: 1px solid var(--line);
-}
-
-.verdict-ok {
-  background: var(--good-soft);
-  border-color: color-mix(in oklch, var(--good) 30%, transparent);
 }
 
 .verdict-warn {
@@ -707,21 +775,23 @@ button {
 }
 
 .verdict-loading h2 {
-  font-size: 1.25rem;
-  margin-bottom: 14px;
+  font-size: 1rem;
+  margin-bottom: 8px;
 }
 
 .verdict-head {
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-height: 32px;
 }
 
 .verdict-icon {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
   flex: none;
   background: var(--ink-3);
@@ -742,22 +812,53 @@ button {
 }
 
 .verdict h2 {
-  font-size: 1.5rem;
+  font-size: 1rem;
   font-weight: 700;
-  letter-spacing: -0.015em;
 }
 
 .verdict-sub {
-  margin-top: 4px;
   color: var(--ink-2);
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
+}
+
+/* The sign-in or connection failure keeps its words: they say what to do. */
+.verdict-head > div {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.verdict-toggle,
+.verdict-link {
+  margin-left: auto;
+  min-height: 36px;
+}
+
+.verdict-toggle .icon {
+  transform: rotate(90deg);
+  transition: transform 200ms var(--ease);
+}
+
+.verdict-toggle[aria-expanded="true"] .icon {
+  transform: rotate(-90deg);
+}
+
+.verdict-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--accent-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
 }
 
 .verdict-actions {
   display: grid;
   gap: 10px;
   justify-items: start;
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .verdict-buttons {
@@ -766,9 +867,105 @@ button {
   gap: 10px;
 }
 
+.issues[hidden] {
+  display: none;
+}
+
+.home-title {
+  margin: 24px 0 10px;
+  font-size: 1.0625rem;
+  font-weight: 700;
+}
+
+.home-cards {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 900px) {
+  .home-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.home-card {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.home-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-card-head h3 {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.home-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  color: var(--accent-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.home-more:hover {
+  text-decoration: underline;
+}
+
+.home-card .today {
+  margin-top: 0;
+  border-top: 0;
+}
+
+.home-card .today-link {
+  padding-top: 0;
+  min-height: 0;
+}
+
+.home-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 10px 14px;
+  text-decoration: none;
+}
+
+.home-row > .icon {
+  color: var(--ink-3);
+}
+
+.home-line {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  overflow: hidden;
+}
+
+.home > .today {
+  margin-top: 0;
+  padding: 0 16px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
 .issues {
   list-style: none;
-  margin: 18px 0 0;
+  margin: 10px 0 0;
   padding: 0;
 }
 
@@ -1879,6 +2076,76 @@ tbody th {
   color: var(--ink-3);
 }
 
+/* ---- Attack log (attacks.ts) ---- */
+
+.attacks {
+  display: grid;
+  gap: 16px;
+}
+
+.attack-head {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.attack-head h3 {
+  font-size: 1.125rem;
+  overflow-wrap: anywhere;
+}
+
+.attack-head .button {
+  margin-left: auto;
+}
+
+.attack-controls {
+  display: grid;
+  gap: 6px;
+}
+
+.attack-figures .figure-label .icon,
+.attack-dir .icon {
+  vertical-align: -2px;
+}
+
+.attack-tops {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  /* Side by side, the shorter list starts at the top at its own height, not
+     stretched to the other's (stretched, its heading and rows spread down). */
+  align-items: start;
+}
+
+.attack-top {
+  align-content: start;
+}
+
+.attack-top .row-top {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.attack-row > summary {
+  grid-template-columns: 3.75rem minmax(0, 1fr) auto;
+}
+
+.attack-row .row-top {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.attack-dir {
+  justify-self: start;
+  gap: 2px;
+  padding: 3px 8px;
+}
+
+.attack-row .code {
+  max-height: 320px;
+  overflow: auto;
+}
+
 .picked:empty {
   display: none;
 }
@@ -2581,6 +2848,235 @@ tbody th {
   background: var(--good-soft);
 }
 
+.chat-line.is-mod {
+  background: var(--accent-soft);
+}
+
+/* On a tinted row the soft chip would vanish into the tint: make it solid. */
+.chat-line.is-gm .chat-gm {
+  background: var(--good-text);
+  color: var(--accent-ink);
+}
+
+.chat-line.is-mod .chat-gm {
+  background: var(--accent-text);
+  color: var(--accent-ink);
+}
+
+/* ---- Moderators ---- */
+
+.moderators {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.moderator-add__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  max-width: 28rem;
+}
+
+.moderator-add__row .field-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.moderator-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 12px 16px;
+}
+
+.moderator-row .button {
+  gap: 6px;
+}
+
+/* ---- Moderator mail ---- */
+
+.modmail {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.modmail-search__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.modmail-search__row .field-input {
+  flex: 1 1 10rem;
+  min-width: 0;
+  max-width: 16rem;
+}
+
+.modmail-view {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.modmail-view[hidden] {
+  display: none;
+}
+
+.modmail-between {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.modmail-between .chat-gm {
+  margin-right: 0;
+}
+
+.modmail-who {
+  overflow-wrap: anywhere;
+}
+
+.modmail-arrow {
+  color: var(--ink-3);
+}
+
+/* One conversation in the list: a button that opens it. */
+.modmail-convo {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: center;
+  padding: 12px 12px 12px 16px;
+  cursor: pointer;
+}
+
+.modmail-convo > * {
+  grid-column: 1;
+}
+
+.modmail-convo > .icon {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  color: var(--ink-3);
+}
+
+.modmail-convo__head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.modmail-convo__preview {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink);
+}
+
+.modmail-convo__by {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+/* One conversation open. */
+.modmail-thread {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.modmail-thread__head {
+  display: grid;
+  gap: 4px;
+}
+
+.modmail-thread__title {
+  margin: 0;
+  font-size: 1.0625rem;
+}
+
+/* The player on the left, the moderator on the right. */
+.bubble-mod {
+  justify-self: end;
+  background: var(--accent-soft);
+  border-bottom-right-radius: 4px;
+}
+
+/* On the tinted bubble the soft Mod chip would vanish: make it solid. */
+.bubble-mod .chat-gm {
+  margin-right: 0;
+  background: var(--accent-text);
+  color: var(--accent-ink);
+}
+
+.modmail-started {
+  font-weight: 400;
+  color: var(--ink-3);
+}
+
+.modmail-subject {
+  font-weight: 600;
+}
+
+.modmail-thread__subject {
+  margin: 0;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+/* The time stays on one line; the title may wrap at the arrow. */
+.modmail-convo__head .chat-time {
+  flex: none;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+}
+
+.modmail-convo__head .modmail-between {
+  flex: 1 1 auto;
+}
+
+/* On a phone each filter pair gets its own line: label above its input. */
+@media (max-width: 599px) {
+  .modmail-search__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .modmail-search__row .field-input {
+    max-width: none;
+    margin-bottom: 8px;
+  }
+
+  .modmail-search__row .button {
+    width: 100%;
+  }
+}
+
+.modmail-written {
+  color: var(--ink-2);
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+}
+
+.modmail-more {
+  justify-self: start;
+}
+
+.modmail-more[hidden] {
+  display: none;
+}
+
 .chat-time {
   color: var(--ink-3);
   font-size: 0.8125rem;
@@ -2767,57 +3263,7 @@ tbody th {
   }
 }
 
-/* ---- Folded sections and lists (4 Nov: less to scroll past) ---- */
-
-.section-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: -4px 0 -4px -6px;
-  padding: 4px 8px 4px 6px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: inherit;
-  font: inherit;
-  letter-spacing: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.section-toggle:hover {
-  background: var(--surface-2);
-}
-
-.section-toggle .icon {
-  color: var(--ink-3);
-  transform: rotate(90deg);
-  transition: transform 200ms var(--ease);
-}
-
-.section-toggle[aria-expanded="false"] .icon {
-  transform: rotate(0deg);
-}
-
-.section-body[hidden] {
-  display: none;
-}
-
-.section.is-folded {
-  margin-top: 16px;
-}
-
-.section.is-folded .section-head {
-  margin-bottom: 0;
-}
-
-.section.is-folded .section-head h2 {
-  font-size: 1.125rem;
-}
-
-.section.is-folded .section-head .segmented {
-  display: none;
-}
+/* ---- Folded lists (4 Nov: less to scroll past) ---- */
 
 .fold {
   background: var(--surface);
@@ -3187,5 +3633,485 @@ tbody th {
 
   .case-actions .button {
     flex: 1 1 auto;
+  }
+}
+
+/* Photo reports (photos.ts): the photo beside who reported it and the buttons. */
+/* `.row` is a one-column grid with no padding: the photo sat on top of the
+   name, touching the card's edge (profiles test, 7 Nov). Photo left, the
+   rest beside it, padded like a bug row. */
+.photo-case {
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 14px 12px 14px 16px;
+}
+
+.photo-case__picture {
+  flex: none;
+  width: 96px;
+  height: 96px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2, rgba(127, 127, 127, 0.12));
+}
+
+.photo-case__img {
+  display: block;
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+}
+
+.photo-case__none {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* Name, chips and time wrap as whole pieces: at 375px the green "Kept by …"
+   chip and the time squeezed the name until it broke mid-word ("agen/tteste/r").
+   Now a chip that does not fit drops to its own line and the name keeps whole
+   words (it breaks inside a word only when that word alone is wider than the card). */
+.photo-case .row-top {
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
+.photo-case .report-who {
+  overflow-wrap: break-word;
+  text-align: left;
+}
+
+/* The flag stays beside the first line of the reporters, never alone. */
+.photo-case__reporters {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.photo-case__reporters > .icon {
+  flex: none;
+  margin-top: 2px;
+}
+
+.photo-case__reporter-words {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.photo-case__actions {
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+@media (max-width: 480px) {
+  .photo-case {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .photo-case__picture,
+  .photo-case__img {
+    width: 72px;
+    height: 72px;
+  }
+}
+
+/* ── Weekend events (`weekend.ts`) ───────────────────────────────────── */
+
+.weekend-admin {
+  display: grid;
+  gap: 18px;
+}
+
+.weekend-sentence {
+  font-size: 1.0625rem;
+  font-weight: 650;
+}
+
+.weekend-sentence.is-on {
+  color: var(--good-text);
+}
+
+.weekend-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap);
+  font-weight: 600;
+}
+
+.weekend-switch input {
+  width: 22px;
+  height: 22px;
+}
+
+.weekend-plan .weekend-row {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.weekend-row .row-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* A phone: the date above its choice, so "Rotation: Builder's Weekend" fits
+   the full width instead of being cut. */
+@media (max-width: 599px) {
+  .weekend-plan .weekend-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}
+
+.weekend-force,
+.weekend-percents {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+/* Wide enough for "Builder's Weekend" and the arrow; a phone stacks the two. */
+.weekend-force {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.weekend-settings > summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.weekend-rotation {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 1.5em;
+}
+
+.weekend-rotation li > span {
+  display: inline-block;
+  min-width: 10em;
+}
+
+/* The moderation inbox: one row per player, the opened player beside the list
+   on a computer (the list stays in view), full screen on a phone with Back. */
+.page:has(> .view.is-wide:not([hidden])) {
+  max-width: 1320px;
+}
+
+.inbox {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.inbox-side {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.inbox-sources {
+  justify-self: start;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.seg-count {
+  margin-left: 2px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.seg[aria-pressed="true"] .seg-count {
+  color: inherit;
+}
+
+/* The chosen source is plainly pressed: filled, not just lifted. */
+.inbox-sources .seg[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: none;
+}
+
+.inbox-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 12px 16px;
+  cursor: pointer;
+}
+
+.inbox-row > .icon {
+  color: var(--ink-3);
+}
+
+.inbox-row[aria-current="true"] {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.inbox-quote {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  overflow: hidden;
+  font-size: 0.9375rem;
+}
+
+.inbox-source {
+  display: inline-flex;
+  margin-right: 6px;
+  color: var(--ink-3);
+  vertical-align: -2px;
+}
+
+.inbox-counts {
+  font-variant-numeric: tabular-nums;
+}
+
+.inbox-detail {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.inbox-detail[hidden] {
+  display: none;
+}
+
+.inbox-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.inbox-head h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.inbox-record {
+  margin-left: auto;
+}
+
+.inbox-back {
+  justify-self: start;
+}
+
+.inbox-block {
+  display: grid;
+  gap: 10px;
+}
+
+.inbox-block > h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9375rem;
+  font-weight: 650;
+}
+
+.inbox-block > h4 > .icon {
+  color: var(--ink-3);
+}
+
+.inbox-act {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.inbox-result {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--good-soft);
+  color: var(--good-text);
+}
+
+.inbox-result .note {
+  color: var(--ink-2);
+}
+
+@media (max-width: 1023px) {
+  /* A player opened takes the whole screen; Back returns to the list where it was. */
+  .inbox.has-open .inbox-side {
+    display: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .inbox.has-open {
+    grid-template-columns: minmax(400px, 460px) minmax(0, 1fr);
+  }
+
+  .inbox.has-open .inbox-counts {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The action buttons stay at the foot of the player pane while it scrolls. */
+  .inbox.has-open .inbox-act {
+    position: sticky;
+    bottom: -16px;
+    z-index: 1;
+    margin: 0 -16px -16px;
+    padding: 14px 16px 16px;
+    background: var(--surface);
+  }
+
+  /* The player pane fits the window from where it starts, under the page's
+     title (32px page padding, the ~30px title, 16px gap, 16px under it), so
+     Warn / Ban / Dismiss at its foot show without scrolling the page; its
+     evidence scrolls inside. Scrolled, it sticks 16px from the top. */
+  .inbox.has-open .inbox-detail {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 96px);
+    max-height: calc(100dvh - 96px);
+    overflow-y: auto;
+  }
+
+  .inbox.has-open .inbox-quote {
+    font-size: 0.875rem;
+  }
+}
+
+/* Bug reports: a list per status, the open report beside it on a computer
+   (full screen on a phone), Previous / Next above the report. */
+.bugs {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.bugs-side {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.bugs-side > .segmented {
+  justify-self: start;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.bugs-detail {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.bugs-detail[hidden] {
+  display: none;
+}
+
+.bug-row[aria-current="true"] {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.bug-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.bug-steps {
+  display: flex;
+  align-items: center;
+  gap: 4px 8px;
+  margin-left: auto;
+}
+
+.bug-steps .hint {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1023px) {
+  .bugs.has-open .bugs-side {
+    display: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  /* Denser rows on a computer: one line of words, one of details. */
+  .bug-row {
+    min-height: 0;
+    padding: 10px 10px 10px 14px;
+  }
+
+  .bug-row .row-title {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    font-size: 0.9375rem;
+  }
+
+  /* The details wrap to a second line rather than cutting off. */
+  .bug-row .row-meta {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+  }
+
+  .bugs.has-open {
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  }
+
+  .bugs.has-open .bugs-side {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+  }
+}
+
+/* Phone: a slimmer header so the content starts higher. */
+@media (max-width: 599px) {
+  .top {
+    padding: 8px 12px 2px;
+    padding-top: max(8px, env(safe-area-inset-top));
+  }
+
+  .brand h1 {
+    font-size: 1rem;
+  }
+
+  .signed-in {
+    display: none;
+  }
+
+  .updated {
+    font-size: 0.75rem;
   }
 }

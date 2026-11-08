@@ -850,13 +850,23 @@ describe("buying workers in the Inferno (owner decision I3)", () => {
 
 describe("the Inferno shop (STORE.as:210)", () => {
   test("only the Inferno store's items are sold there: 400 notForSale for the rest", async () => {
-    for (const item of ["BST", "ENL", "POD", "CLOD", "HOD", "EXH", "TOD", "MOD", "BLK2", "BLK4", "BR11I"]) {
+    for (const item of ["BST", "ENL", "POD", "CLOD", "HOD", "EXH", "TOD", "MOD", "BLK2", "BLK4", "BR11", "BR43"]) {
       const answer = await buy(item);
       expect(answer.status).toBe(400);
       expect(body(answer).reason).toBe("notForSale");
     }
     expect(infernoStore()).toEqual({});
     expect(mainSave().credits).toBe(1000);
+  });
+
+  test("its resource packs (BR13I) fill the Inferno purse to the Inferno cap (issue #393)", async () => {
+    db.rows.set(MAIN, mainRow({ iresources: { ...PURSE, r1: START_CAP - 100 } }));
+    const answer = await buy("BR13I");
+    expect(answer.status).toBe(200);
+    expect(body(answer).report).toMatchObject({ item: "BR13I", amount: 100, credits: 5, inferno: true });
+    expect(purse().r1).toBe(START_CAP);
+    expect(mainSave().credits).toBe(995);
+    expect(infernoStore()).toEqual({});
   });
 
   test("the Inferno's own items are not sold on the main yard", async () => {

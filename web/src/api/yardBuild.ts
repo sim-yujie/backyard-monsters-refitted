@@ -12,6 +12,7 @@ import { yardBody, type YardRefusal } from "./yard";
  *   POST /api/:apiVersion/bm/yard/build           type, x, y
  *   POST /api/:apiVersion/bm/yard/build/cancel    id
  *   POST /api/:apiVersion/bm/yard/build/instant   type, x, y
+ *   POST /api/:apiVersion/bm/yard/build/walls     type, cells (JSON [[x, y], …])
  *
  * The calls hold no state; {@link buildActions} runs them through the
  * `YardStore`'s one-at-a-time queue, which merges each answer, so a line of
@@ -48,6 +49,18 @@ export interface InstantBuildReport {
   points: number;
 }
 
+/** `report` of `build/walls`: a drawn line of wall Blocks (walls Option B). */
+export interface BuildWallsReport {
+  t: number;
+  /** The Blocks built, in line order. */
+  built: { id: number; x: number; y: number }[];
+  /** The cells left out, in line order, with the single build's refusal reason. */
+  refused: { x: number; y: number; reason: string; placement?: string; with?: number }[];
+  /** The one charge for the lot. */
+  cost: UpgradeCost;
+  points: number;
+}
+
 /** `report` of `build/cancel`. */
 export interface CancelBuildReport {
   id: number;
@@ -65,8 +78,13 @@ export const buildAt = (
   x: number,
   y: number,
   baseid?: string,
+  /** `topUp`: the Shiny the player agreed to for a short pool (Flash's `TopoffBuild`). */
+  extra: { topUp?: number } = {},
 ): Promise<YardResponse<BuildReport>> =>
-  post<YardResponse<BuildReport>>(BUILD_PATH, yardBody({ type, x, y }, baseid));
+  post<YardResponse<BuildReport>>(
+    BUILD_PATH,
+    yardBody(extra.topUp === undefined ? { type, x, y } : { type, x, y, topUp: extra.topUp }, baseid),
+  );
 
 /** Places a new building finished, for Shiny. Refusals: `build`'s short of `shortfall` and `workers`, then `shinyLocked`, `credits`. */
 export const instantBuildAt = (
@@ -78,6 +96,22 @@ export const instantBuildAt = (
   post<YardResponse<InstantBuildReport>>(
     `${BUILD_PATH}/instant`,
     yardBody({ type, x, y }, baseid),
+  );
+
+/**
+ * Builds a line of wall Blocks, in order (`server/src/services/yard/buildWalls.ts`):
+ * blocked cells skipped, the rest built while the hall's limit and the
+ * resources last. Refusals when nothing at all builds: `build`'s, and 400
+ * `notWall`.
+ */
+export const buildWallsAt = (
+  type: number,
+  cells: readonly { x: number; y: number }[],
+  baseid?: string,
+): Promise<YardResponse<BuildWallsReport>> =>
+  post<YardResponse<BuildWallsReport>>(
+    `${BUILD_PATH}/walls`,
+    yardBody({ type, cells: JSON.stringify(cells.map(({ x, y }) => [x, y])) }, baseid),
   );
 
 /** Takes down a building still under construction for its full price back. Refusal: `notBuilding`. */
@@ -92,9 +126,11 @@ export interface BuildApi {
   build: typeof buildAt;
   instant: typeof instantBuildAt;
   cancel: typeof cancelBuild;
+  /** Absent in older stand-ins; the line then cannot be sent. */
+  walls?: typeof buildWallsAt;
 }
 
-export const buildApi: BuildApi = { build: buildAt, instant: instantBuildAt, cancel: cancelBuild };
+export const buildApi: BuildApi = { build: buildAt, instant: instantBuildAt, cancel: cancelBuild, walls: buildWallsAt };
 
 /** The queue keys, for `store.isRunning`. */
 export const BuildKey = {
@@ -143,11 +179,13 @@ const reasonOf = (gate: BuildGate, inferno: boolean): string =>
 
 export interface BuildActions {
   /** Places a building of `type` with its footprint at `(x, y)`. */
-  build(type: number, x: number, y: number): Promise<YardActionResult<BuildReport>>;
+  build(type: number, x: number, y: number, topUp?: number): Promise<YardActionResult<BuildReport>>;
   /** The same, finished at once for Shiny. */
   instant(type: number, x: number, y: number): Promise<YardActionResult<InstantBuildReport>>;
   /** Cancels a building under construction. */
   cancel(id: number): Promise<YardActionResult<CancelBuildReport>>;
+  /** Builds a drawn line of wall Blocks of `type`, in order. */
+  walls(type: number, cells: readonly { x: number; y: number }[]): Promise<YardActionResult<BuildWallsReport>>;
 }
 
 /**
@@ -156,15 +194,18 @@ export interface BuildActions {
  * the placement already held the spot, and the server measures it again.
  */
 export const buildActions = (store: YardStore, api: BuildApi = buildApi): BuildActions => ({
-  build: (type, x, y) =>
+  build: (type, x, y, topUp) =>
     store.run({
       key: BuildKey.place(type),
       check: (reader) => {
         const offer = buildOffer(type, reader);
         if (!offer) return refuse("notBuildable", "That cannot be built here.");
+        // A topped-up build pays its shortfall in Shiny: the server prices and checks it.
+        if (topUp !== undefined && offer.gate?.reason === "shortfall") return null;
         return offer.gate ? refuse(reasonOf(offer.gate, offer.inferno), gateMessage(offer.gate, offer.inferno)) : null;
       },
-      send: (_api, ...yard) => api.build(type, x, y, ...yard),
+      send: (_api, ...yard) =>
+        topUp === undefined ? api.build(type, x, y, ...yard) : api.build(type, x, y, yard[0], { topUp }),
     }),
   instant: (type, x, y) =>
     store.run({
@@ -189,5 +230,18 @@ export const buildActions = (store: YardStore, api: BuildApi = buildApi): BuildA
           : refuse("notBuilding", "That building is not under construction.");
       },
       send: (_api, ...yard) => api.cancel(id, ...yard),
+    }),
+  // The same gate as one Block: the first Block of the line must be buildable.
+  // Each cell after it is the server's to judge.
+  walls: (type, cells) =>
+    store.run({
+      key: BuildKey.place(type),
+      check: (reader) => {
+        if (cells.length === 0) return refuse("badRequest", "Draw a line first.");
+        const offer = buildOffer(type, reader);
+        if (!offer) return refuse("notBuildable", "That cannot be built here.");
+        return offer.gate ? refuse(reasonOf(offer.gate, offer.inferno), gateMessage(offer.gate, offer.inferno)) : null;
+      },
+      send: (_api, ...yard) => (api.walls ?? buildWallsAt)(type, cells, ...yard),
     }),
 });

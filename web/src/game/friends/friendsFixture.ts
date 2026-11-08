@@ -16,12 +16,15 @@ export const fixtureFriend = (userid: number, extra: Partial<Friend> = {}): Frie
   giftSentToday: false,
   canGiftFrom: null,
   help: null,
+  wishes: [],
+  pinnedAt: null,
   ...extra,
 });
 
 export const fixtureList = (friends: Friend[], extra: Partial<FriendsList> = {}): FriendsList => ({
   friends,
   max: 100,
+  maxPinned: 10,
   requestsIn: 0,
   giftsWaiting: 0,
   helpsLeft: 20,
@@ -65,6 +68,8 @@ export const fixtureGift = (id: number, userid: number, extra: Partial<Gift> = {
   ...extra,
 });
 
+type FriendsApiWishes = Parameters<FriendsApi["setWishes"]>[0];
+
 export type FixtureCall = readonly [method: keyof FriendsApi, ...args: unknown[]];
 
 /**
@@ -89,10 +94,16 @@ export const fixtureApi = (
     answer: answer("answer", null),
     cancel: answer("cancel", undefined),
     remove: answer("remove", undefined),
+    pin: answer("pin", { pinned: true, pinnedCount: 1 }),
     search: answer("search", []),
     suggestions: answer("suggestions", []),
     sendGift: answer("sendGift", null),
-    gifts: answer("gifts", { gifts: [], collectsLeft: 5 }),
+    gifts: answer("gifts", { gifts: [], collectsLeft: 5, wishes: [] }),
+    // Left out of `answers`, it stores what it was asked, like the server.
+    setWishes: (...args: unknown[]) =>
+      "setWishes" in answers
+        ? answer("setWishes", [])(...args)
+        : (calls.push(["setWishes", ...args]), Promise.resolve([...(args[0] as FriendsApiWishes)])),
     collect: answer("collect", { collected: 0, resources: {}, collectsLeft: 5, giftsWaiting: 0 }),
     help: answer("help", { reward: {}, helpsLeft: 0, building: null }),
     loadHelpYard: answer("loadHelpYard", { error: 0 } as Awaited<ReturnType<FriendsApi["loadHelpYard"]>>),

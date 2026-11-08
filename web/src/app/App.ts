@@ -42,6 +42,8 @@ import { WATCH_PLUGINS } from "@/game/autoAttack/watchPlugin";
 import { makeRaidDue } from "@/api/raid";
 import { RAID_PLUGINS } from "@/game/raid/raidPlugin";
 import { raidWatch } from "@/game/raid/raidWatch";
+import { gpuTextureLimit } from "@/game/textureLimit";
+import { graphicsStartError } from "./graphicsOff";
 // A type only: the dev hook's code is loaded on demand, in DEV alone.
 import type { DevDefenceOptions } from "@/game/defences/devWatchDefence";
 
@@ -109,18 +111,30 @@ export class App {
     // and `createImageBitmap` still decodes them off the main thread.
     Assets.setPreferences({ preferWorkers: false });
 
-    await this.pixi.init({
-      // The canvas fills the window; CSS pins it and `resizeTo` keeps the
-      // backing store in step.
-      resizeTo: window,
-      antialias: true,
-      background: "#11141a",
-      // Render at the display's true pixel density, capped so a 3x phone does
-      // not ask the GPU for nine times the work for no visible gain.
-      resolution: Math.min(window.devicePixelRatio || 1, 2),
-      autoDensity: true,
-      preference: "webgl",
-    });
+    try {
+      await this.pixi.init({
+        // The canvas fills the window; CSS pins it and `resizeTo` keeps the
+        // backing store in step.
+        resizeTo: window,
+        antialias: true,
+        background: "#11141a",
+        // Render at the display's true pixel density, capped so a 3x phone does
+        // not ask the GPU for nine times the work for no visible gain.
+        resolution: Math.min(window.devicePixelRatio || 1, 2),
+        autoDensity: true,
+        // WebGL, else WebGPU; never Pixi's plain-canvas fallback, which cannot
+        // draw the game (a broken screen). With neither, init throws and the
+        // player gets the "graphics are off" message (`graphicsOff.ts`).
+        preference: ["webgl", "webgpu"],
+      });
+    } catch (error) {
+      throw graphicsStartError(error);
+    }
+
+    // The graphics card's texture limit, read before any picture is asked for:
+    // the yard cuts building strips bigger than it (a black box otherwise) and
+    // the monster sheets are fetched in a copy it can hold.
+    gpuTextureLimit(this.pixi.renderer);
 
     const canvas = this.pixi.canvas;
     this.host.append(canvas);

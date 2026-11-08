@@ -90,6 +90,8 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     const users = await ids();
     const list = users.length ? users.join(",") : "0";
     await sql(`DELETE FROM bym.message WHERE userid IN (${list}) OR targetid IN (${list})`);
+    await sql(`DELETE FROM bym.player_profile WHERE userid IN (${list})`);
+    await sql(`DELETE FROM bym.photo_report WHERE reporter_id IN (${list}) OR reported_id IN (${list})`);
     await sql(`DELETE FROM bym.thread WHERE userid IN (${list}) OR targetid IN (${list})`);
     await sql(`DELETE FROM bym.truce WHERE initiator_userid IN (${list}) OR recipient_userid IN (${list})`);
     await sql(`DELETE FROM bym.attack_logs WHERE attacker_userid IN (${list}) OR defender_userid IN (${list})`);
@@ -457,6 +459,20 @@ describe.skipIf(!dbName)("deleting a player's account (deleteAccount.ts)", () =>
     expect(await countOf(`bym.message WHERE threadid = ?`, [pq])).toBe(0);
     // R still has the thread with Q.
     expect(await countOf(`bym.message WHERE threadid = ?`, [qr])).toBe(2);
+  });
+
+  test("their profile and the reports of their photo go; their reports of others stay", async () => {
+    const p = await player("p");
+    const q = await player("q");
+    await sql(`INSERT INTO bym.player_profile (userid, bio, photo, photo_version, photo_at) VALUES (?, 'hi', decode('00', 'hex'), 1, now())`, [p]);
+    await sql(`INSERT INTO bym.photo_report (reporter_id, reported_id, photo_version) VALUES (?, ?, 1), (?, ?, 1)`, [q, p, p, q]);
+
+    const done = await deleteAccount(orm.em, store.redis, await findAccount(orm.em, "zz_del_p"));
+    expect(done.rows["profile (bio and photo)"]).toBe(1);
+    expect(done.rows["reports of their profile photo"]).toBe(1);
+    expect(await countOf(`bym.player_profile WHERE userid = ?`, [p])).toBe(0);
+    expect(await countOf(`bym.photo_report WHERE reported_id = ?`, [p])).toBe(0);
+    expect(await countOf(`bym.photo_report WHERE reported_id = ?`, [q])).toBe(1);
   });
 
   test("an alliance with no one else in it is disbanded", async () => {

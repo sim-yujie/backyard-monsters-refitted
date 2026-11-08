@@ -646,6 +646,12 @@
   font-size: var(--text-sm);
 }
 
+/* Short of resources: buy what is missing with Shiny, then pick a spot
+   (Flash's top-up, issue #393). The one way to build now, so it leads. */
+.build-info__topup {
+  min-height: 44px;
+}
+
 /* ── Carrying a new building ───────────────────────────────────────────── */
 
 .build-placing {
@@ -660,7 +666,9 @@
   align-items: center;
   gap: var(--space-2) var(--space-4);
   width: max-content;
-  max-width: calc(100vw - 2 * var(--space-4));
+  /* Never under the corner buttons (Main yard / Map on the left, Collect all / Stop
+     on the right): they take about 130px each side, so the bar wraps instead. */
+  max-width: calc(100vw - 2 * 140px);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   border: 1px solid var(--colour-border-strong);
   border-radius: var(--radius-lg);
@@ -739,8 +747,279 @@
   gap: var(--space-2);
 }
 
-.build-placing__buttons[hidden] {
+.build-placing__buttons[hidden],
+.build-placing__buttons .btn[hidden],
+.build-placing__line[hidden] {
   display: none;
+}
+
+/* ── A wall line (walls anchors, owner 8 Nov): one clean bar ───────────────
+   Left the Block and its name; the middle one summary (×count, the cost,
+   then ✕blocked and what is short, only when there is some); right the Line
+   switch, ↶, ✗ and the green ✓ Build N. Cancel is the small × in the corner,
+   away from ✗; the tip sits above the bar and fades. One family of buttons:
+   flat, 44 px high, words centred; the one thing to do is the green plate. */
+
+/* The tip and the message sit in the bar for one building; above it in line mode. */
+.build-placing__notes {
+  display: contents;
+}
+
+.build-placing--line {
+  flex-wrap: nowrap;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+}
+
+/* The price is said once, in the summary. */
+.build-placing--line .build-placing__price {
+  display: none;
+}
+
+.build-placing--line .build-placing__notes {
+  position: absolute;
+  bottom: calc(100% + var(--space-3));
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  width: max-content;
+  max-width: min(92vw, 520px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.build-placing--line :is(.build-placing__hint, .build-placing__message:not(:empty)) {
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  background: rgb(12 16 22 / 80%);
+  color: #ffffff;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-align: center;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+  transition: opacity 400ms var(--easing);
+}
+
+.build-placing--line .build-placing__message[data-tone="good"] {
+  color: #b8f0c4;
+}
+
+.build-placing--line .build-placing__message[data-tone="bad"] {
+  color: #ffc2b8;
+}
+
+.build-placing--line .build-placing__hint.build-placing__hint--faded {
+  opacity: 0;
+}
+
+.build-placing__line {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  font-size: var(--text-md);
+  white-space: nowrap;
+}
+
+.build-placing__line:empty {
+  display: none;
+}
+
+.build-placing__line-count {
+  font-size: var(--text-lg);
+  color: var(--colour-text-strong, var(--colour-text));
+}
+
+.build-placing__line-each {
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+}
+
+.build-placing__line-skip {
+  color: #ff7b6b;
+  font-weight: 700;
+}
+
+.build-placing__line-short {
+  color: var(--colour-text-muted);
+}
+
+.build-placing--line .build-placing__buttons {
+  align-items: center;
+}
+
+/* The family: every control the same height, words centred both ways. */
+.build-placing__buttons :is(.build-placing__line-toggle, .build-placing__line-undo, .build-placing__line-clear, .build-placing__line-confirm) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  min-height: 44px;
+  padding-block: 0;
+}
+
+/* The quiet three (Line, ↶, ✗): one flat style. */
+.btn:is(.build-placing__line-toggle, .build-placing__line-undo, .build-placing__line-clear) {
+  border: 1px solid var(--colour-border-strong);
+  border-radius: 10px;
+  background: rgb(0 0 0 / 26%);
+  color: var(--colour-text);
+}
+
+.btn:is(.build-placing__line-toggle, .build-placing__line-undo, .build-placing__line-clear):hover:not(:disabled) {
+  background: rgb(255 255 255 / 12%);
+}
+
+.btn:is(.build-placing__line-undo, .build-placing__line-clear) {
+  width: 44px;
+  min-width: 44px;
+  padding-inline: 0;
+}
+
+.btn:is(.build-placing__line-undo, .build-placing__line-clear):disabled {
+  border-color: transparent;
+  background: rgb(0 0 0 / 16%);
+  opacity: 0.55;
+}
+
+.build-placing__line-undo .game-icon {
+  display: block;
+}
+
+.build-placing__line-clear {
+  font-size: var(--text-lg);
+}
+
+/* Line: the Blocks, the word and an on/off track; on is the green fill and the knob to the right. */
+.btn.build-placing__line-toggle {
+  gap: var(--space-2);
+  padding-inline: var(--space-2) var(--space-3);
+}
+
+.build-placing__line-icon {
+  display: inline-flex;
+  align-items: flex-end;
+}
+
+.build-placing__line-icon img {
+  width: 16px;
+  height: 20px;
+  object-fit: cover;
+}
+
+.build-placing__line-icon img + img {
+  margin-left: -7px;
+}
+
+.build-placing__switch {
+  position: relative;
+  flex: none;
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: rgb(0 0 0 / 50%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 28%);
+  transition: background var(--motion-fast) var(--easing);
+}
+
+.build-placing__switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e8edf2;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 55%);
+  transition: transform var(--motion-fast) var(--easing);
+}
+
+.build-placing__line-toggle[aria-pressed="true"] .build-placing__switch {
+  background: #3fa34d;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 40%);
+}
+
+.build-placing__line-toggle[aria-pressed="true"] .build-placing__switch::after {
+  transform: translateX(14px);
+}
+
+/* ✓ Build N: the one green plate. Wide enough that the count never moves it. */
+.btn.build-placing__line-confirm {
+  min-width: 132px;
+  padding-inline: var(--space-4);
+  border-color: #2c7a35;
+  background: #3d9b46;
+  color: #ffffff;
+  font-size: var(--text-md);
+  white-space: nowrap;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 45%);
+}
+
+.btn.build-placing__line-confirm:hover:not(:disabled) {
+  border-color: #348a3d;
+  background: #47ad50;
+}
+
+.btn.build-placing__line-confirm:active:not(:disabled) {
+  background: #348a3d;
+}
+
+.btn.build-placing__line-confirm:disabled {
+  border-color: transparent;
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-disabled);
+  text-shadow: none;
+}
+
+/* Put the Block away: a small × on the bar's corner, not beside ✗. */
+.build-placing--line .btn.build-placing__cancel {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  min-width: 0;
+  height: 32px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--colour-border-strong);
+  border-radius: 50%;
+  background: var(--colour-surface-base, #1d252d);
+  color: transparent;
+  font-size: 0;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 45%);
+}
+
+.build-placing--line .btn.build-placing__cancel::before {
+  content: "×";
+  color: var(--colour-text);
+  font-size: 22px;
+  line-height: 1;
+}
+
+/* Line off: Cancel and the Line switch still match in height. */
+.build-placing:not(.build-placing--line):has(.build-placing__line-toggle) .build-placing__buttons .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  min-height: 44px;
+  padding-block: 0;
+}
+
+/* A narrow window: the bar takes two rows (the Block and summary, then the buttons) rather than spill. */
+@media (width > 620px) and (width <= 1040px) {
+  .build-placing--line {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
 }
 
 /* Build here is the touch screen's click; a mouse clicks the spot itself. */
@@ -945,8 +1224,62 @@
     font-size: var(--text-md);
   }
 
-  .build-placing__buttons .build-placing__here {
+  .build-placing__buttons .build-placing__here,
+  .build-placing__buttons .build-placing__line-confirm {
     flex: 2;
+  }
+
+  .build-placing__line {
+    justify-content: center;
+  }
+
+  /* Line mode in the sheet: the Block and its name (× in the corner), the
+     summary, then one row of Line, ↶, ✗ and ✓ Build N; 48 px targets. */
+  .build-placing--line {
+    gap: var(--space-2);
+    padding-top: var(--space-3);
+  }
+
+  .build-placing--line .build-placing__what {
+    padding-right: 48px;
+  }
+
+  .build-placing--line .build-placing__buttons {
+    gap: var(--space-2);
+  }
+
+  .build-placing--line .build-placing__buttons .btn {
+    flex: none;
+    height: 48px;
+    min-height: 48px;
+  }
+
+  .build-placing--line .build-placing__buttons .btn:is(.build-placing__line-undo, .build-placing__line-clear) {
+    width: 48px;
+    min-width: 48px;
+  }
+
+  .build-placing--line .build-placing__buttons .btn.build-placing__line-confirm {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* The Blocks' picture is already on the left; the switch says it alone. */
+  .build-placing--line .build-placing__line-icon {
+    display: none;
+  }
+
+  .build-placing--line .btn.build-placing__cancel {
+    top: var(--space-2);
+    right: var(--space-3);
+    width: 40px;
+    min-width: 0;
+    height: 40px;
+    min-height: 0;
+  }
+
+  .build-placing--line .build-placing__notes {
+    bottom: calc(100% + var(--space-2));
   }
 }
 

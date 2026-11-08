@@ -54,6 +54,12 @@ export interface AchievementProgress {
   parts?: ProgressPart[];
 }
 
+/**
+ * What a hidden entry (#392) shows until it is earned: no name, description,
+ * reward or progress, only that one is there. The client draws it as "???".
+ */
+export const HIDDEN_NAME = "???";
+
 /** One entry of the player's own list. */
 export interface AchievementEntryView {
   id: number;
@@ -64,6 +70,8 @@ export interface AchievementEntryView {
   /** Unix seconds it unlocked; earned only. */
   at?: number;
   progress: AchievementProgress;
+  /** A hidden entry; while locked its name is {@link HIDDEN_NAME} and the rest is blank. */
+  hidden?: true;
 }
 
 /** `POST /bm/yard/achievements/state`'s report. */
@@ -85,6 +93,7 @@ export interface PublicAchievementView {
   description: string;
   status: "locked" | "earned";
   at?: number;
+  hidden?: true;
 }
 
 /** The public list, before the route adds the player's id and name. */
@@ -99,6 +108,15 @@ const earnedUnlock = (record: Achievements, id: number, rewards: boolean): Unloc
   const unlock = record.c[String(id)];
   return unlock && (rewards || !unlock.unpaid) ? unlock : undefined;
 };
+
+/** A hidden entry not yet earned, as both lists send it: nothing but its number. */
+const maskedHidden = (id: number): PublicAchievementView & { hidden: true } => ({
+  id,
+  name: HIDDEN_NAME,
+  description: "",
+  status: "locked",
+  hidden: true,
+});
 
 const capped = (stats: AchievementStats, rule: AchievementRule): number => Math.min(stats[rule.stat], rule.target);
 
@@ -137,6 +155,9 @@ export const achievementsState = (
   const achievements = availableAchievements().map((entry): AchievementEntryView => {
     const unlock = earnedUnlock(record, entry.id, rewards);
     if (unlock) shinyEarned += unlock.shiny;
+    if (entry.hidden && !unlock) {
+      return { ...maskedHidden(entry.id), shiny: 0, progress: { value: 0, target: 1 } };
+    }
     return {
       id: entry.id,
       name: entry.name,
@@ -145,6 +166,7 @@ export const achievementsState = (
       status: unlock ? "earned" : "locked",
       ...(unlock && { at: unlock.at }),
       progress: progressOf(entry, record.s, Boolean(unlock)),
+      ...(entry.hidden && { hidden: true as const }),
     };
   });
   return {
@@ -163,12 +185,14 @@ export const publicAchievements = (
 ): PublicAchievements => {
   const achievements = availableAchievements().map((entry): PublicAchievementView => {
     const unlock = earnedUnlock(record, entry.id, rewards);
+    if (entry.hidden && !unlock) return maskedHidden(entry.id);
     return {
       id: entry.id,
       name: entry.name,
       description: entry.description,
       status: unlock ? "earned" : "locked",
       ...(unlock && { at: unlock.at }),
+      ...(entry.hidden && { hidden: true as const }),
     };
   });
   return {

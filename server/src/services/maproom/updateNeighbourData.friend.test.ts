@@ -16,7 +16,7 @@ const FRIEND = 2;
 const STRANGER = 3;
 
 /** What the friend lookup reads back, and who it was asked for. */
-let friendRows: Array<{ friend_userid: number }> = [];
+let friendRows: Array<{ friend_userid: number; pinned?: boolean }> = [];
 let asked: unknown[][] = [];
 
 const saveRow = (userid: number) => ({
@@ -39,7 +39,7 @@ const em = {
     return [];
   },
   execute: async (sql: string, params: unknown[]) => {
-    if (!/FROM bym\.friend /.test(sql)) return [];
+    if (!/FROM bym\.friend\b/.test(sql)) return [];
     asked.push(params);
     return friendRows;
   },
@@ -64,6 +64,15 @@ describe("updateNeighbourData friend flag", () => {
       [STRANGER, 0],
     ]);
     expect(asked[0]?.[0]).toBe(VIEWER);
+  });
+
+  test("a pinned friend is flagged pinned, everyone else not (beta 7)", async () => {
+    friendRows = [{ friend_userid: FRIEND, pinned: true }];
+    const list = await updateNeighbourData(cached(), BaseType.MAIN, VIEWER);
+    expect(list.map((n) => [n.userid, n.friend, n.friendpinned ?? 0])).toEqual([
+      [FRIEND, 1, 1],
+      [STRANGER, 0, 0],
+    ]);
   });
 
   test("a list with no friends is all 0", async () => {

@@ -38,13 +38,13 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
 export const MUSHROOM_RESPAWN_SECONDS = 17_280;
 
 /**
- * While the Halloween pumpkin hunt is on (`season.ts`), the mushrooms grow as
- * pumpkins, one per this many seconds: about one an hour, under the same
+ * While a yard hunt is on (`season.ts`: Halloween's pumpkins, Thanksgiving's
+ * turkeys), the mushrooms grow as its finds, one per this many seconds: about one an hour, under the same
  * {@link MUSHROOM_CAP}.
  */
 export const PUMPKIN_RESPAWN_SECONDS = 3_600;
 
-/** The respawn period: the pumpkin hunt's while it is on, else the usual. */
+/** The respawn period: a yard hunt's while one is on, else the usual. */
 export const mushroomRespawnSeconds = (pumpkinHunt: boolean): number =>
   pumpkinHunt ? PUMPKIN_RESPAWN_SECONDS : MUSHROOM_RESPAWN_SECONDS;
 
@@ -351,6 +351,8 @@ export interface MushroomPickReport {
    * count for the event's ladder, this one included. Absent otherwise.
    */
   pumpkins?: number;
+  /** The same during the Thanksgiving turkey hunt: the player's turkey count. */
+  turkeys?: number;
 }
 
 /**
