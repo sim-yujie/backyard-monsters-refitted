@@ -450,6 +450,11 @@
   display: inline-flex;
 }
 
+/* Every pile at the line's own size, a pair or four as big as one. */
+.events-claim__what .events-reward__pictures > .res-icon {
+  height: 1.3em;
+}
+
 .events-claim__what .events-reward__pictures--block > .res-icon + .res-icon {
   margin-left: 2px;
 }
