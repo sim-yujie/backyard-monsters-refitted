@@ -687,7 +687,8 @@ export const fetchChatSession = (): Promise<Envelope<AdminChatSession>> =>
  * case, with a text copy of the room around each line.
  */
 export type CaseStatus = "open" | "actioned" | "dismissed";
-export type CaseOutcome = "warn" | "mute" | "dismiss";
+/** `ban`: closed by a ban from the inbox or the player panel. */
+export type CaseOutcome = "warn" | "mute" | "ban" | "dismiss";
 
 export interface SnapshotLine {
   userid: number;
@@ -772,6 +773,74 @@ export const fetchChatCases = (status: "open" | "closed", offset?: number): Prom
 
 export const actOnCase = (id: number, body: CaseActionBody): Promise<Envelope<{ case: ChatCaseView }>> =>
   adminPost(`${ADMIN}/chatcases/${id}/act`, { ...body });
+
+export const fetchChatCase = (id: number): Promise<Envelope<{ case: ChatCaseView }>> =>
+  adminGet(`${ADMIN}/chatcases/${id}`);
+
+/**
+ * The moderation inbox (server `services/admin/moderationInbox.ts`): one row
+ * per player with open items from every source (their open chat case and
+ * word-filter lines); one step closes them all.
+ */
+export type InboxSource = "all" | "reports" | "filter";
+
+export interface InboxPlayer {
+  userid: number;
+  username: string | null;
+  banned: boolean;
+  muted: boolean;
+  gameTeam: boolean;
+  /** Their open chat case, or null. */
+  caseId: number | null;
+  /** Chat lines other players reported, in the open case. */
+  reportedMessages: number;
+  /** Reports of those lines (one per reporter per line). */
+  reports: number;
+  uniqueReporters: number;
+  /** Open lines caught by the word filter. */
+  filterLines: number;
+  slurs: number;
+  /** The newest open word-filter line: acting closes up to it. */
+  flagsUpTo: number | null;
+  /** Earlier warnings, chat pauses and bans. */
+  previousActions: number;
+  lastAction: { action: ModerationKind; at: string } | null;
+  oldestAt: string;
+  latestAt: string;
+  preview: { text: string; source: "report" | "filter" } | null;
+  suggest: { action: "warn" | "mute"; hours: number | null };
+}
+
+export interface InboxList {
+  players: InboxPlayer[];
+  nextOffset: number | null;
+  counts: { all: number; reports: number; filter: number };
+}
+
+export const fetchInbox = (
+  options: { source?: InboxSource; userid?: number; offset?: number | undefined } = {},
+): Promise<Envelope<InboxList>> =>
+  adminGet(`${ADMIN}/inbox`, { source: options.source, userid: options.userid, offset: options.offset, limit: 30 });
+
+export type InboxActionBody =
+  | { action: "warn"; reason: string }
+  | { action: "mute"; reason: string; hours: number }
+  | { action: "ban"; reason: string; days: number | null }
+  | { action: "dismiss"; note?: string };
+
+/** What closing a player's items did. */
+export interface ClosedItems {
+  caseId: number | null;
+  reports: number;
+  filterLines: number;
+}
+
+export const actOnInboxPlayer = (
+  userid: number,
+  body: InboxActionBody,
+  seen: { caseId: number | null; reports: number; flagsUpTo: number | null },
+): Promise<Envelope<{ closed: ClosedItems; player: InboxPlayer | null }>> =>
+  adminPost(`${ADMIN}/inbox/${userid}/act`, { ...body, ...seen });
 
 export type AwardFailure = "notReporter" | "noPlayer" | "noMainYard";
 
