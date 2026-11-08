@@ -803,7 +803,15 @@ export const renderActivity = (overview: StatsOverview): Child[] => {
         "tbody",
         {},
         ...rows.map(([what, now, before, means]) =>
-          h("tr", {}, h("th", { attrs: { scope: "row" } }, what), h("td", {}, now), h("td", {}, before), h("td", {}, means)),
+          h(
+            "tr",
+            {},
+            h("th", { attrs: { scope: "row" } }, what),
+            // The labels head each value when a phone stacks the row (admin.css).
+            h("td", { attrs: { "data-label": "Today" } }, now),
+            h("td", { attrs: { "data-label": "Yesterday" } }, before),
+            h("td", { class: "means" }, means),
+          ),
         ),
       ),
     ),

@@ -314,6 +314,12 @@ describe("the owner's first look", () => {
     expect(row("Bug reports").querySelectorAll("td")[0]!.textContent).toBe("3");
     expect(row("Player reports").querySelectorAll("td")[0]!.textContent).toBe("Not counted per day");
     expect(row("Goo and other resources spent").querySelectorAll("td")[0]!.textContent).toBe("Not recorded");
+    // On a phone each row stacks; the numbers carry their column's name with them.
+    expect([...row("Attacks").querySelectorAll("td")].map((td) => td.dataset.label ?? td.className)).toEqual([
+      "Today",
+      "Yesterday",
+      "means",
+    ]);
   });
 
   it("keeps the technical words behind Technical details", async () => {

@@ -5393,9 +5393,61 @@ tbody th {
   color: var(--ink-2);
 }
 
+/* Phone: each row stacks into its name, then Today and Yesterday as label and
+   value, then what it means, so nothing is cut off and nothing scrolls sideways. */
 @media (max-width: 559px) {
-  .data-table td:last-child,
-  .data-table thead th:last-child {
-    display: none;
+  .data-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .data-table tbody,
+  .data-table tr,
+  .data-table tbody th,
+  .data-table td {
+    display: block;
+  }
+
+  .data-table tr {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .data-table tr:last-child {
+    border-bottom: 0;
+  }
+
+  .data-table tbody th,
+  .data-table td {
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .data-table tbody th {
+    margin-bottom: 4px;
+  }
+
+  .data-table td[data-label] {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 2px 0;
+    white-space: normal;
+    text-align: right;
+  }
+
+  .data-table td[data-label]::before {
+    content: attr(data-label);
+    color: var(--ink-3);
+    text-align: left;
+  }
+
+  .data-table td.means {
+    margin-top: 4px;
+    font-size: 0.8125rem;
   }
 }
