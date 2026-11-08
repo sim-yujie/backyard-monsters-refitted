@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LatestMail } from "@/api/mail";
-import { MailToast, TOAST_MS, modBadge, toastText } from "./MailToast";
+import { MailToast, TOAST_MS, gmBadge, modBadge, toastText } from "./MailToast";
 
-/** The live mail pop-up (owner, beta 7): who, the first words, the Mod badge, open and dismiss. */
+/** The live mail pop-up (owner, beta 7): who, the first words, the Mod or GM badge, open and dismiss. */
 
 const mail = (extra: Partial<LatestMail> = {}): LatestMail => ({
   id: "m1",
@@ -14,6 +14,7 @@ const mail = (extra: Partial<LatestMail> = {}): LatestMail => ({
   preview: "Hello there",
   time: 100,
   mod: false,
+  gm: false,
   notice: false,
   ...extra,
 });
@@ -39,6 +40,8 @@ describe("MailToast", () => {
     expect(toast.element.querySelector(".mail-toast__text")?.textContent).toBe("Hello there");
     expect(toast.element.querySelector(".mail-mod")).toBeNull();
     expect(toast.element.classList.contains("mail-toast--mod")).toBe(false);
+    expect(toast.element.querySelector(".mail-gm")).toBeNull();
+    expect(toast.element.classList.contains("mail-toast--gm")).toBe(false);
   });
 
   it("puts the Mod badge before a moderator's name and says so to a screen reader", () => {
@@ -48,6 +51,19 @@ describe("MailToast", () => {
     expect(toast.element.classList.contains("mail-toast--mod")).toBe(true);
     expect(toast.element.querySelector(".mail-toast__open")?.getAttribute("aria-label")).toBe(
       "New mail from moderator Alpha: Hello there. Open it",
+    );
+    expect(toast.element.querySelector(".mail-gm")).toBeNull();
+  });
+
+  it("puts the GM badge, not the Mod one, before an admin's name and names the game team (owner, 8 Nov)", () => {
+    const toast = new MailToast();
+    toast.show(mail({ gm: true }), vi.fn());
+    expect(toast.element.querySelector(".mail-toast__who")?.textContent).toBe("GMAlpha");
+    expect(toast.element.querySelector(".mail-mod")).toBeNull();
+    expect(toast.element.classList.contains("mail-toast--gm")).toBe(true);
+    expect(toast.element.classList.contains("mail-toast--mod")).toBe(false);
+    expect(toast.element.querySelector(".mail-toast__open")?.getAttribute("aria-label")).toBe(
+      "New mail from the game team, Alpha: Hello there. Open it",
     );
   });
 
@@ -97,5 +113,14 @@ describe("modBadge", () => {
     expect(badge.className).toBe("mail-mod");
     expect(badge.textContent).toBe("Mod");
     expect(badge.title).toBe("Moderator");
+  });
+});
+
+describe("gmBadge", () => {
+  it("is a short GM chip named for the game team, as chat's", () => {
+    const badge = gmBadge();
+    expect(badge.className).toBe("mail-gm");
+    expect(badge.textContent).toBe("GM");
+    expect(badge.title).toBe("The game team");
   });
 });

@@ -146,6 +146,7 @@ describe("MailDoor, live (owner, beta 7)", () => {
     preview: "Hello",
     time,
     mod: true,
+    gm: false,
     notice: false,
   });
 

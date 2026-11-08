@@ -725,6 +725,11 @@
   border-left: 4px solid var(--colour-info);
 }
 
+/* The game team's message (an admin): a green edge, as their chat lines have. */
+.mail-toast--gm {
+  border-left: 4px solid var(--colour-success);
+}
+
 .mail-toast__open {
   display: flex;
   flex: 1;
@@ -835,10 +840,17 @@
   border-left: 6px solid var(--colour-info);
 }
 
-/* ── The Mod badge: a moderator, in the list, the thread and the pop-up ── */
+:root[data-skin="flash"] .mail-toast--gm {
+  border-left: 6px solid var(--colour-success);
+}
 
-/* Chat's Mod badge: the theme's light blue with dark words. */
-.mail-mod {
+/* ── The Mod and GM badges: a moderator or the game team (an admin), in the
+   list, the thread and the pop-up ── */
+
+/* Chat's Mod badge: the theme's light blue with dark words. Chat's GM badge
+   is the same shape in the theme's green. */
+.mail-mod,
+.mail-gm {
   display: inline-block;
   flex: none;
   margin-right: 0.35em;
@@ -854,11 +866,19 @@
   vertical-align: 0.1em;
 }
 
-/* On a light card (the light theme, Classic's parchment) the blue is a dark
-   one: the words go white. */
+.mail-gm {
+  background: var(--colour-success);
+  color: #0d2416;
+}
+
+/* On a light card (the light theme, Classic's parchment) the blue and green
+   are dark ones: the words go white. */
 :root[data-theme="light"]:not([data-skin]) .mail-mod,
 :root[data-theme="light"] .mail-toast .mail-mod,
-:root[data-skin="flash"] .mail-mod {
+:root[data-skin="flash"] .mail-mod,
+:root[data-theme="light"]:not([data-skin]) .mail-gm,
+:root[data-theme="light"] .mail-toast .mail-gm,
+:root[data-skin="flash"] .mail-gm {
   color: #ffffff;
 }
 

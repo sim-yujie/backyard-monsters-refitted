@@ -102,6 +102,8 @@ export interface MailTarget {
   readonly deleted?: number;
   /** 1 when the player is a chat moderator now: their mail shows the light blue Mod badge. */
   readonly mod?: number;
+  /** 1 when the player is an admin: their mail shows the green GM badge (the game team, as in chat), never the Mod one. */
+  readonly gm?: number;
 }
 
 /** The newest unread message, as the live mail pop-up shows it (`/player/mailstatus`). */
@@ -118,6 +120,8 @@ export interface LatestMail {
   readonly time: number;
   /** The sender is a moderator: the light blue Mod badge. */
   readonly mod: boolean;
+  /** The sender is an admin: the green GM badge, as chat shows the game team. Never with {@link mod}. */
+  readonly gm: boolean;
   /** The game's own notice (an attack, a takeover). */
   readonly notice: boolean;
 }
@@ -141,6 +145,7 @@ interface StatusResponse extends ApiEnvelope {
     preview?: unknown;
     time?: unknown;
     mod?: unknown;
+    gm?: unknown;
     notice?: unknown;
   } | null;
   mod?: number;
@@ -171,7 +176,8 @@ export const statusOf = (response: StatusResponse): MailStatus => {
             subject: String(latest.subject ?? ""),
             preview: String(latest.preview ?? ""),
             time: Number(latest.time) || 0,
-            mod: Number(latest.mod) === 1,
+            mod: Number(latest.mod) === 1 && Number(latest.gm) !== 1,
+            gm: Number(latest.gm) === 1,
             notice: Number(latest.notice) === 1,
           }
         : null,

@@ -16,6 +16,7 @@ const latest = (id: string, time: number, extra: Partial<LatestMail> = {}): Late
   preview: "Hello there",
   time,
   mod: false,
+  gm: false,
   notice: false,
   ...extra,
 });

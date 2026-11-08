@@ -931,9 +931,26 @@ describe("moderators in the mailbox (owner, beta 7)", () => {
     expect(host.querySelector(".mail-pane__name")?.getAttribute("title")).toBe("Moderator Alpha");
   });
 
+  it("shows the GM badge, never the Mod one, on an admin's thread, in the list and the thread (owner, 8 Nov)", async () => {
+    const api = fakeApi([[message({ threadid: 4, userid: 30 })]], { 4: [message({ threadid: 4, userid: 30 })] }, {
+      "30": { first_name: "Owner", gm: 1, mod: 1 },
+    });
+    const { host } = await openScreen(api);
+    expect(rows(host)[0]?.querySelector(".mail-row__name .mail-gm")?.textContent).toBe("GM");
+    expect(rows(host)[0]?.querySelector(".mail-row__name")?.textContent).toBe("GMOwner");
+    expect(rows(host)[0]?.getAttribute("aria-label")).toContain("Game team Owner:");
+    expect(host.querySelector(".mail-mod")).toBeNull();
+    click(rows(host)[0]);
+    await settle();
+    expect(host.querySelector(".mail-pane__name .mail-gm")).not.toBeNull();
+    expect(host.querySelector(".mail-pane__name .mail-mod")).toBeNull();
+    expect(host.querySelector(".mail-pane__name")?.getAttribute("title")).toBe("The game team: Owner");
+  });
+
   it("gives no badge to a player who is not one", async () => {
     const { host } = await openScreen(fakeApi([[message()]], {}));
     expect(host.querySelector(".mail-mod")).toBeNull();
+    expect(host.querySelector(".mail-gm")).toBeNull();
   });
 
   it("lets a moderator write to any player: a typed name is looked up on the server", async () => {

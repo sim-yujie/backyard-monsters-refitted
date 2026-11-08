@@ -5,7 +5,7 @@ import "@/ui/styles/mail.css";
 /**
  * The live mail pop-up (owner, beta 7): a small card under the HUD when a
  * message arrives, the envelope, who sent it (with the light blue Mod badge
- * for a moderator) and its first words. Pressing it opens the message; ×
+ * for a moderator, the green GM badge for the game team) and its first words. Pressing it opens the message; ×
  * puts it away; it goes by itself after {@link TOAST_MS}. No sound: the game
  * plays none for mail.
  */
@@ -62,15 +62,17 @@ export class MailToast {
     body.className = "mail-toast__body";
     const name = document.createElement("span");
     name.className = "mail-toast__who";
-    if (mail.mod) name.append(modBadge());
+    if (mail.gm) name.append(gmBadge());
+    else if (mail.mod) name.append(modBadge());
     name.append(who);
     const words = document.createElement("span");
     words.className = "mail-toast__text";
     words.textContent = text;
     body.append(name, words);
     this.open.replaceChildren(icons, body);
-    this.open.setAttribute("aria-label", `New mail from ${mail.mod ? "moderator " : ""}${who}: ${text}. Open it`);
-    this.element.classList.toggle("mail-toast--mod", mail.mod);
+    this.open.setAttribute("aria-label", `New mail from ${mail.gm ? "the game team, " : mail.mod ? "moderator " : ""}${who}: ${text}. Open it`);
+    this.element.classList.toggle("mail-toast--gm", mail.gm);
+    this.element.classList.toggle("mail-toast--mod", mail.mod && !mail.gm);
     this.onOpen = onOpen;
     this.element.hidden = false;
     if (this.timer !== null) clearTimeout(this.timer);
@@ -100,5 +102,14 @@ export const modBadge = (): HTMLElement => {
   badge.className = "mail-mod";
   badge.textContent = "Mod";
   badge.title = "Moderator";
+  return badge;
+};
+
+/** The green GM badge, as chat shows the game team (an admin), for mail (owner, 8 Nov). */
+export const gmBadge = (): HTMLElement => {
+  const badge = document.createElement("span");
+  badge.className = "mail-gm";
+  badge.textContent = "GM";
+  badge.title = "The game team";
   return badge;
 };

@@ -1,7 +1,7 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
 
 import { DELETED_PLAYER_NAME } from "../privacy/deleteAccount.js";
-import { isMailStaff, moderatorsAmong } from "./modMail.js";
+import { isGameTeamSender, isMailStaff, moderatorsAmong } from "./modMail.js";
 import { SUPPORT_SENDER, SUPPORT_SENDER_NAME, SYSTEM_SENDER, SYSTEM_SENDER_NAME } from "./systemSender.js";
 
 /**
@@ -30,6 +30,8 @@ export interface LatestMail {
   time: number;
   /** 1 when the sender is on the moderators list now: the light blue Mod badge. */
   mod: 0 | 1;
+  /** 1 when the sender is an admin: the green GM badge, as chat shows the game team (never with `mod`). */
+  gm: 0 | 1;
   /** 1 for the game's own notice (an attack, a takeover). */
   notice: 0 | 1;
 }
@@ -101,6 +103,7 @@ export const readMailStatus = async (
       preview: previewText(last.message),
       time: Number(last.updatetime) || 0,
       mod: mods.has(from) ? 1 : 0,
+      gm: isGameTeamSender(from) ? 1 : 0,
       notice: from === SYSTEM_SENDER ? 1 : 0,
     };
   }
