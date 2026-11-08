@@ -1,7 +1,7 @@
 import type { EntityManager } from "@mikro-orm/postgresql";
 
 import { DELETED_PLAYER_NAME } from "../privacy/deleteAccount.js";
-import { isMailModerator, moderatorsAmong } from "./modMail.js";
+import { isMailStaff, moderatorsAmong } from "./modMail.js";
 import { SUPPORT_SENDER, SUPPORT_SENDER_NAME, SYSTEM_SENDER, SYSTEM_SENDER_NAME } from "./systemSender.js";
 
 /**
@@ -37,7 +37,7 @@ export interface LatestMail {
 export interface MailStatus {
   unread: number;
   latest: LatestMail | null;
-  /** 1 when the player is a moderator: their mailbox may write to anyone. */
+  /** 1 when the player is a moderator or an admin: their mailbox may write to anyone (patch 6.11). */
   mod: 0 | 1;
 }
 
@@ -86,7 +86,7 @@ export const readMailStatus = async (
         LIMIT 1`,
       [userid, ...blocked],
     ),
-    isMailModerator(em, userid),
+    isMailStaff(em, userid),
   ]);
   let latest: LatestMail | null = null;
   if (last) {

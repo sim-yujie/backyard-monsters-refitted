@@ -336,6 +336,22 @@ describe("finding any player to write to", () => {
     expect(self.body).toMatchObject({ error: 1 });
   });
 
+  test("an admin (ADMIN_USER_IDS) finds any player too, and mailstatus says so (patch 6.11)", async () => {
+    const saved = process.env.ADMIN_USER_IDS;
+    process.env.ADMIN_USER_IDS = String(PLAYER);
+    try {
+      const ctx = ctxFor(PLAYER, { player: "stranger" });
+      await findMailPlayer(ctx);
+      expect(ctx.body).toEqual({ error: 0, player: { userid: STRANGER, username: "Stranger" } });
+      const status = ctxFor(PLAYER);
+      await getMailStatus(status);
+      expect(status.body).toMatchObject({ error: 0, mod: 1 });
+    } finally {
+      if (saved === undefined) delete process.env.ADMIN_USER_IDS;
+      else process.env.ADMIN_USER_IDS = saved;
+    }
+  });
+
   test("a normal player is refused with 403, whatever they claim", async () => {
     const ctx = ctxFor(PLAYER, { player: "Stranger", mod: 1 });
     await findMailPlayer(ctx);
