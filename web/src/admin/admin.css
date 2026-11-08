@@ -2761,6 +2761,41 @@ tbody th {
   font-weight: 600;
 }
 
+.modmail-thread__subject {
+  margin: 0;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+/* The time stays on one line; the title may wrap at the arrow. */
+.modmail-convo__head .chat-time {
+  flex: none;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+}
+
+.modmail-convo__head .modmail-between {
+  flex: 1 1 auto;
+}
+
+/* On a phone each filter pair gets its own line: label above its input. */
+@media (max-width: 599px) {
+  .modmail-search__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .modmail-search__row .field-input {
+    max-width: none;
+    margin-bottom: 8px;
+  }
+
+  .modmail-search__row .button {
+    width: 100%;
+  }
+}
+
 .modmail-written {
   color: var(--ink-2);
   font-size: 0.875rem;

@@ -218,7 +218,10 @@ class Dashboard {
   private readonly moderation = new ModerationView({ say: (message) => this.say(message) });
   private readonly weekend = new WeekendView({ say: (message) => this.say(message) });
   private readonly moderators = new ModeratorsView({ say: (message) => this.say(message) });
-  private readonly modMail = new ModMailSection({ say: (message) => this.say(message) });
+  private readonly modMail = new ModMailSection({
+    say: (message) => this.say(message),
+    onViewChange: () => this.markCurrentSection(),
+  });
   private readonly cases = new CasesView({
     say: (message) => this.say(message),
     onCount: (open) => {
@@ -449,32 +452,40 @@ class Dashboard {
   /** Marks the link of the section being read, and keeps it in view in the phone's row. */
   private watchScroll(): void {
     if (typeof IntersectionObserver === "undefined") return;
-    const visible = new Set<string>();
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) visible.add(entry.target.id);
-          else visible.delete(entry.target.id);
-        }
-        const current = SECTIONS.find(([id]) => visible.has(id))?.[0];
-        for (const [id] of SECTIONS) {
-          const link = this.sections[id].link;
-          if (id === current) {
-            link.setAttribute("aria-current", "true");
-            const row = this.nav;
-            if (row.scrollWidth > row.clientWidth) {
-              const left = link.offsetLeft - (row.clientWidth - link.offsetWidth) / 2;
-              row.scrollTo({ left, behavior: "smooth" });
-            }
-          } else {
-            link.removeAttribute("aria-current");
-          }
-        }
-      },
+    const observer = new IntersectionObserver(() => this.markCurrentSection(), {
       // A section counts as "being read" while it crosses the upper third.
-      { rootMargin: "-20% 0px -65% 0px" },
-    );
+      rootMargin: "-20% 0px -65% 0px",
+    });
     for (const [id] of SECTIONS) observer.observe(this.sections[id].element);
+  }
+
+  /**
+   * Marks the link of the section that crosses the reading line (a fifth down
+   * the screen). Measured on demand, so it also follows a section that grows
+   * or shrinks (a mail conversation opening) without the page scrolling.
+   */
+  private markCurrentSection(): void {
+    const line = window.innerHeight * 0.2;
+    let current: string | undefined;
+    for (const [id] of SECTIONS) {
+      const rect = this.sections[id].element.getBoundingClientRect();
+      if (rect.top <= line && rect.bottom > line) current = id;
+    }
+    if (current === undefined) return;
+    for (const [id] of SECTIONS) {
+      const link = this.sections[id].link;
+      if (id === current) {
+        if (link.getAttribute("aria-current") === "true") continue;
+        link.setAttribute("aria-current", "true");
+        const row = this.nav;
+        if (row.scrollWidth > row.clientWidth) {
+          const left = link.offsetLeft - (row.clientWidth - link.offsetWidth) / 2;
+          row.scrollTo({ left, behavior: "smooth" });
+        }
+      } else {
+        link.removeAttribute("aria-current");
+      }
+    }
   }
 
   private async loadAll(): Promise<void> {
