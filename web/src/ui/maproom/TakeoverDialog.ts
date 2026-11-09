@@ -11,7 +11,7 @@ import {
 } from "@/game/maproom/takeover";
 import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
-import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
+import { RESOURCE_KEYS, resourceAmount, resourceIcon, type ResourceKey } from "@/ui/resourceIcon";
 import { GROUND_BONUS_TITLE, groundBonusIcons } from "./groundBonus";
 
 /**
@@ -113,9 +113,12 @@ export class TakeoverDialog {
     const cost = document.createElement("ul");
     cost.className = "takeover-dialog__cost";
     cost.setAttribute("aria-label", "Price, of each resource");
+    // A "New to Map Room 2" price shows, on each resource, the usual price
+    // struck through and then the cut one: "~~9,000,000~~ 900,000".
+    const usual = price.welcome ? price.usualResources : undefined;
     for (const key of RESOURCE_KEYS) {
       const item = document.createElement("li");
-      item.append(resourceAmount(key, price.resources ?? "—"));
+      item.append(usual !== undefined ? welcomeTile(key, usual, price.resources) : resourceAmount(key, price.resources ?? "—"));
       cost.append(item);
     }
 
@@ -342,6 +345,36 @@ const option = (action: HTMLButtonElement, caption: HTMLElement): HTMLElement =>
   return element;
 };
 
+/**
+ * One resource's "New to Map Room 2" price: the icon, the usual price struck
+ * through, then the cut price. The two prices sit side by side, or one over
+ * the other where the tile is too narrow (a phone).
+ */
+const welcomeTile = (key: ResourceKey, usual: number, cut: number | undefined): HTMLElement => {
+  const tile = document.createElement("span");
+  tile.className = "takeover-dialog__welcome-price";
+  tile.dataset["resource"] = key;
+  const prices = document.createElement("span");
+  prices.className = "takeover-dialog__prices";
+  const struck = document.createElement("s");
+  struck.className = "takeover-dialog__usual";
+  struck.textContent = formatAmount(usual);
+  struck.title = "The usual price";
+  const now = document.createElement("span");
+  now.className = "takeover-dialog__cut";
+  now.textContent = cut === undefined ? "—" : formatAmount(cut);
+  prices.append(hiddenText("usually "), struck, hiddenText(", now "), now);
+  tile.append(resourceIcon(key), prices);
+  return tile;
+};
+
+const hiddenText = (text: string): HTMLElement => {
+  const span = document.createElement("span");
+  span.className = "u-visually-hidden";
+  span.textContent = text;
+  return span;
+};
+
 /** The small label over a "New to Map Room 2" price; hidden otherwise. */
 export const WELCOME_LABEL = "New to Map Room 2";
 
@@ -356,13 +389,7 @@ const welcomeLabel = (price: TakeoverDialogPrice): HTMLElement => {
   const off = document.createElement("span");
   off.className = "takeover-dialog__welcome-off";
   off.textContent = "-90%";
+  // The usual price, struck through, is on each resource's tile below.
   line.append(tag, off);
-  if (price.usualResources !== undefined) {
-    const usual = document.createElement("s");
-    usual.className = "u-muted takeover-dialog__welcome-usual";
-    usual.textContent = formatAmount(price.usualResources);
-    usual.title = "The usual price, of each resource";
-    line.append(usual);
-  }
   return line;
 };

@@ -174,6 +174,17 @@ export const priceText = (price: { resources?: number | undefined; shiny?: numbe
 };
 
 /**
+ * The price as the map's Take over line and the end-of-attack offer say it:
+ * "New to Map Room 2: 900,000 of each resource or 924 Shiny" while the welcome
+ * price applies (it replaces the half price next to the main yard).
+ */
+export const offerPriceText = (price: {
+  resources?: number | undefined;
+  shiny?: number | undefined;
+  welcome?: boolean | undefined;
+}): string => (price.welcome ? `New to Map Room 2: ${priceText(price)}` : priceText(price));
+
+/**
  * Seconds the server's clock is ahead of this one, from a response that
  * carries the server's `now`. Countdowns add it to the local clock.
  */
@@ -225,8 +236,7 @@ export const takeoverActionView = (kind: TakeoverKind, state: TakeoverQuoteState
       const { quote } = state;
       const expiresAt = quote.grantExpiresAt;
       if (kind === "outpost" && expiresAt === undefined) return HIDDEN;
-      const price = quote.welcome ? `New to Map Room 2: ${priceText(quote)}` : priceText(quote);
-      const note = quote.eligible ? price : refusalText(quote.reason ?? "notFound", kind);
+      const note = quote.eligible ? offerPriceText(quote) : refusalText(quote.reason ?? "notFound", kind);
       return {
         visible: true,
         enabled: quote.eligible,

@@ -61,6 +61,19 @@ describe("New to Map Room 2 in Classic: labels readable on the cream", () => {
   });
 });
 
+describe("the takeover window's struck usual price", () => {
+  it("is muted but readable in Classic: at least 4.5:1 on a price tile over the cream", () => {
+    expect(rule(takeover, ".takeover-dialog__usual")).toMatch(/color: var\(--colour-text-muted\);/);
+    const muted = hex(token("colour-text-muted").replace("#", ""));
+    const tile = over(hex(token("skin-fill").replace("#", "")), token("colour-surface-sunken"));
+    expect(contrast(muted, tile)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("wraps under the cut price on a narrow tile rather than overflowing it", () => {
+    expect(rule(takeover, ".takeover-dialog__prices")).toMatch(/flex-wrap: wrap;/);
+  });
+});
+
 describe("the kit picker on a phone", () => {
   it("is never wider than the screen less the backdrop's 16px on each side", () => {
     expect(rule(css("ui.css"), ".popup-backdrop")).toMatch(/padding: var\(--space-4\);/);

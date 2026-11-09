@@ -122,8 +122,40 @@
   font-weight: 700;
 }
 
-.takeover-dialog__welcome-usual {
-  font-variant-numeric: tabular-nums;
+/* Each resource's tile on a "New to Map Room 2" price: the icon, the usual
+   price struck through (muted, smaller), then the cut price. The prices wrap
+   one over the other where the tile is narrow (a phone), both after the icon. */
+.takeover-dialog__welcome-price {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  min-width: 0;
+}
+
+.takeover-dialog__welcome-price > .res-icon {
+  flex: none;
+}
+
+.takeover-dialog__prices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-2);
+  min-width: 0;
+  line-height: var(--leading-tight);
+}
+
+.takeover-dialog__usual {
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+  text-decoration-thickness: 1.5px;
+  white-space: nowrap;
+}
+
+.takeover-dialog__cut {
+  color: var(--colour-text);
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .takeover-dialog__ground,
