@@ -216,6 +216,7 @@ export type AttackWindowTarget = Pick<AttackTarget, "name" | "kind" | "roster">;
 export const confirmAttackWindow = (container: HTMLElement, target: AttackWindowTarget): Promise<boolean> =>
   new Promise((resolve) => {
     let answered = false;
+    let stopScrollHint = (): void => {};
     const answer = (value: boolean): void => {
       if (answered) return;
       answered = true;
@@ -224,7 +225,10 @@ export const confirmAttackWindow = (container: HTMLElement, target: AttackWindow
     const popup = new Popup({
       title: ATTACK_WINDOW_TEXT.title,
       className: "attack-window",
-      onClose: () => answer(false),
+      onClose: () => {
+        stopScrollHint();
+        answer(false);
+      },
     });
     const model = attackWindowModel(target.roster);
 
@@ -252,8 +256,30 @@ export const confirmAttackWindow = (container: HTMLElement, target: AttackWindow
     popup.element.append(actions);
 
     popup.mount(container);
+    stopScrollHint = scrollHint(popup.body);
     go.focus();
   });
+
+/**
+ * Fades the scrolling body's edge where more is hidden, so a phone on its side
+ * shows the monsters go on below (and came from above) rather than a row cut
+ * mid-tile. Returns what stops it.
+ */
+export const scrollHint = (body: HTMLElement): (() => void) => {
+  const update = (): void => {
+    body.classList.toggle("attack-window__body--more-above", body.scrollTop > 1);
+    body.classList.toggle("attack-window__body--more-below", body.scrollTop + body.clientHeight < body.scrollHeight - 2);
+  };
+  body.addEventListener("scroll", update, { passive: true });
+  const resized = typeof ResizeObserver === "function" ? new ResizeObserver(update) : null;
+  resized?.observe(body);
+  update();
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(update);
+  return () => {
+    body.removeEventListener("scroll", update);
+    resized?.disconnect();
+  };
+};
 
 /** "Kozu camp  [Wild monsters]": who is being attacked, named as the map's cell panel names it. */
 const targetLine = (target: AttackWindowTarget): HTMLElement => {

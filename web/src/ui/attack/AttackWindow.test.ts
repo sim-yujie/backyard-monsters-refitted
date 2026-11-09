@@ -191,6 +191,26 @@ describe("confirmAttackWindow", () => {
     expect(document.activeElement).toBe(button(host, "Attack"));
   });
 
+  it("fades the body's edge where more is hidden, so it reads as scrolling", () => {
+    const { host } = open();
+    const body = host.querySelector<HTMLElement>(".attack-window > .panel__body")!;
+    const at = (top: number): void => {
+      Object.defineProperty(body, "scrollHeight", { configurable: true, value: 300 });
+      Object.defineProperty(body, "clientHeight", { configurable: true, value: 100 });
+      body.scrollTop = top;
+      body.dispatchEvent(new Event("scroll"));
+    };
+    at(0);
+    expect(body.classList.contains("attack-window__body--more-below")).toBe(true);
+    expect(body.classList.contains("attack-window__body--more-above")).toBe(false);
+    at(100);
+    expect(body.classList.contains("attack-window__body--more-below")).toBe(true);
+    expect(body.classList.contains("attack-window__body--more-above")).toBe(true);
+    at(200);
+    expect(body.classList.contains("attack-window__body--more-below")).toBe(false);
+    expect(body.classList.contains("attack-window__body--more-above")).toBe(true);
+  });
+
   it("resolves true on Attack and closes", async () => {
     const { host, answer } = open();
     button(host, ATTACK_WINDOW_TEXT.attack).click();
@@ -239,6 +259,12 @@ describe("attack-window.css", () => {
 
   it("centres the Classic title on the ribbon's red band, in this window only", () => {
     expect(css).toMatch(/:root\[data-skin="flash"\] \.attack-window \.panel__title \{[^}]*padding-top: 3px;/);
+  });
+
+  it("fades the scrolling edges and keeps a gap under the name line", () => {
+    expect(css).toMatch(/\.attack-window__body--more-below \{[^}]*mask-image: linear-gradient\(to bottom/);
+    expect(css).toMatch(/\.attack-window__body--more-above \{[^}]*mask-image: linear-gradient\(to bottom/);
+    expect(css).toMatch(/\.attack-window > \.panel__head \{[^}]*padding: var\(--space-2\) var\(--space-4\) var\(--space-2\);/);
   });
 
   it("sets no frame, title or button art of its own: the skin draws those", () => {

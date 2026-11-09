@@ -29,11 +29,30 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-4) var(--space-3);
 }
 
+/* A gap under the name line, so what scrolls up stops short of it. */
 .attack-window > .panel__head {
-  padding: var(--space-2) var(--space-4) 0;
+  padding: var(--space-2) var(--space-4) var(--space-2);
+}
+
+/* Where more is hidden, the body's edge fades out (`scrollHint`): the row cut
+   at the bottom reads as "more below", the heading going under the top as
+   "more above", instead of a hard cut. */
+.attack-window__body--more-below {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
+
+.attack-window__body--more-above {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 20px);
+  mask-image: linear-gradient(to bottom, transparent, #000 20px);
+}
+
+.attack-window__body--more-above.attack-window__body--more-below {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 20px, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 20px, #000 calc(100% - 28px), transparent);
 }
 
 /* Classic: "Attack" sat about 3 px above the middle of the red ribbon (tester,
@@ -73,14 +92,18 @@
 
 .attack-window__section {
   display: flex;
+  flex: none;
   flex-direction: column;
   gap: var(--space-2);
 }
 
 .attack-window__heading {
   display: flex;
+  flex: none;
   align-items: center;
   gap: var(--space-2);
+  /* Room for the 24 px icon: it never pokes out of its line. */
+  min-height: 28px;
   margin: 0;
   color: var(--colour-text-strong);
   font-family: var(--font-display);
