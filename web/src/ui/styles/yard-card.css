@@ -12,12 +12,17 @@
  *   │ [range +4%] [forest]    │                                 │
  *   │ [range] Flinger 4 cells │                                 │
  *   ├─────────────────────────┴─────────────────────────────────┤
- *   │ [Open outpost] [Move monsters from here] [Bring … here]   │
- *   │ [Move main yard here] [Invite to move here] [Bookmark]    │
+ *   │ [ Open outpost ] [ Move monsters from here ] [ Bring … ]  │
+ *   │      [Move main yard here] [Invite to move here] [Bookmark] │
  *   └───────────────────────────────────────────────────────────┘
  *
- * On a phone (≤ 620 px) the two columns stack and every action takes the
- * full width, so no word is ever cut.
+ * The one thing to do (Open) is the big orange plate, the two monster moves
+ * the big plates beside it; the rarer moves are smaller plates, centred.
+ *
+ * On a phone (≤ 620 px wide, or one on its side ≤ 500 px tall) every plate
+ * is compact with short words ("Open", "Move out", "Bring in"), three to a
+ * line upright and all on one line on its side, so the card's body keeps
+ * most of the height; what scrolls fades out at the edge where more is.
  */
 
 .yard-card {
@@ -39,9 +44,34 @@
   display: none !important;
 }
 
+/* Where more is hidden, the body's edge fades out (`yardCardScrollHint`):
+   a box cut at the bottom reads as "more below" rather than a hard cut. */
+.yard-card__body--more-below {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
+
+.yard-card__body--more-above {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 20px);
+  mask-image: linear-gradient(to bottom, transparent, #000 20px);
+}
+
+.yard-card__body--more-above.yard-card__body--more-below {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 20px, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 20px, #000 calc(100% - 28px), transparent);
+}
+
+/* Classic: the title sat about 3 px above the middle of the red ribbon
+   (tester, 9 Nov), as the attack window's did; this nudges it onto the
+   band's centre. The shared ribbon in skin.css is left alone. */
+:root[data-skin="flash"] .yard-card .panel__title {
+  padding-top: 3px;
+}
+
 .yard-card__columns {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  /* Even halves: the bonus chips keep to one line, the tiles stay big. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-4);
 }
 
@@ -112,15 +142,26 @@
   opacity: 0.6;
 }
 
-/* Unpinned, the pin is faded; pinned, it is full colour on a warm ground. */
-.yard-card__pin[aria-pressed="false"] .game-icon {
+/* The pin toggle (a crown until a painted pin exists). Unpinned: a grey
+   crown on the plain plate. Pinned: a gold crown on a gold plate with a gold
+   rim, a different colour, not only a glow. */
+.yard-card__pin .game-icon {
   filter: grayscale(1);
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
-.yard-card__pin[aria-pressed="true"] {
-  border-color: var(--colour-accent-line);
-  background: var(--colour-accent-soft);
+.yard-card__pin--on {
+  border: 2px solid rgb(232 184 48);
+  background: rgb(232 184 48 / 38%);
+}
+
+.yard-card__pin--on .game-icon {
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 45%));
+  opacity: 1;
+}
+
+.yard-card__pin--on:hover:not(:disabled) {
+  background: rgb(232 184 48 / 52%);
 }
 
 .yard-card__rename-form {
@@ -226,6 +267,25 @@
 
 .yard-card__chip .game-icon {
   flex: none;
+}
+
+/* The chips a little tighter than the map's, so two share the column's line. */
+.yard-card__chips > .mr2-chip {
+  gap: 6px;
+  padding-inline: var(--space-2);
+}
+
+/* What a bonus is for, in words beside its icon: "Tower reach +34%". */
+.yard-card__chip-label {
+  color: var(--colour-text-secondary);
+  font-weight: 700;
+}
+
+/* Classic: the chips sit on the parchment like the kit and Flinger boxes,
+   not on the glass look's blue-grey. */
+:root[data-skin="flash"] .yard-card .mr2-chip--info {
+  border-color: var(--colour-border);
+  background: var(--colour-surface-sunken);
 }
 
 /* Flinger, worker, storage: an icon or painting beside a label and a number. */
@@ -393,6 +453,11 @@
   filter: drop-shadow(0 3px 4px var(--colour-art-shadow));
 }
 
+/* Classic: name under the cut-out, the count a badge in the corner. */
+.yard-card__caption {
+  display: contents;
+}
+
 .yard-card__count {
   position: absolute;
   top: 4px;
@@ -426,6 +491,75 @@
   overflow-wrap: anywhere;
 }
 
+/* A few kinds of monster: two bigger tiles a line, so the column is not left
+   half empty beside the yard's details. */
+.yard-card__grid--few {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.yard-card__grid--few .yard-card__portrait {
+  width: 88px;
+  height: 88px;
+}
+
+.yard-card__grid--few .yard-card__monster-name {
+  font-size: var(--text-sm);
+}
+
+/* Modern: a painted portrait fills its tile edge to edge as one painted
+   card, inside the tile's rounded corners, with its name and count on a dark
+   strip over its foot (the attack window's look). Nothing covers its head. */
+.yard-card__monster--painted {
+  justify-content: flex-end;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  border-color: var(--colour-border-strong);
+  background: var(--colour-tile-ground);
+}
+
+.yard-card__monster--painted .yard-card__portrait,
+.yard-card__grid--few .yard-card__monster--painted .yard-card__portrait {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: none;
+}
+
+.yard-card__monster--painted .yard-card__caption {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0 4px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 4px 5px;
+  background: linear-gradient(to bottom, rgb(0 0 0 / 0%), rgb(0 0 0 / 74%) 45%);
+  color: #fff;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 90%);
+}
+
+.yard-card__monster--painted .yard-card__monster-name {
+  color: #fff;
+}
+
+:root .yard-card .yard-card__monster--painted .yard-card__count,
+:root[data-skin] .panel .yard-card__monster--painted .yard-card__count {
+  position: static;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  font-size: var(--text-sm);
+}
+
 .yard-card__empty {
   grid-column: 1 / -1;
   padding: var(--space-5) var(--space-3);
@@ -454,27 +588,145 @@
 .yard-card__row {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: var(--space-2);
 }
 
-/* Each plate as wide as its words, sharing what is left; the words are one
-   unbroken line in the middle of the plate. */
-.yard-card__row > .btn {
-  flex: 1 1 auto;
-  min-width: max-content;
+/* The words are one unbroken line in the middle of the plate; the phone's
+   short words wait until a phone. */
+.yard-card__foot .btn {
   text-align: center;
   white-space: nowrap;
 }
 
-.yard-card__row > .yard-card__open {
+.yard-card__label--short {
+  display: none;
+}
+
+/* The big plates: each as wide as its words, sharing what is left. */
+.yard-card__row--main > .btn {
+  flex: 1 1 auto;
+  min-width: max-content;
+}
+
+.yard-card__row--main > .yard-card__open {
   flex-grow: 1.4;
 }
 
+/* The smaller plates: as wide as their words, one size of words, centred
+   under the big ones; one alone (Bookmark on the main yard) stays small. */
 .yard-card__row--second > .btn {
+  flex: 0 0 auto;
+  min-width: 132px;
+  min-height: 36px;
+  padding-block: 0;
   font-size: var(--text-sm);
 }
 
+:root[data-skin] .panel.yard-card .yard-card__row--second > .btn {
+  min-height: 36px;
+  padding-inline: var(--space-3);
+}
+
 /* ── Phone ──────────────────────────────────────────────────────────────── */
+
+/* Upright or on its side: compact plates with short words, so the buttons
+   take one or two short lines and the card's body keeps the height. */
+@media (width <= 620px), (height <= 500px) {
+  .yard-card__label--long {
+    display: none;
+  }
+
+  .yard-card__label--short {
+    display: inline;
+  }
+
+  /* Upright: the big three share the first line, the small ones the second
+     (each as wide as its short words, centred; a lone one stays small). */
+  .yard-card__foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: var(--space-2);
+  }
+
+  .yard-card__row {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .yard-card__foot .btn,
+  .yard-card__row--main > .btn,
+  .yard-card__row--second > .btn {
+    min-width: max-content;
+    min-height: 38px;
+    padding: 0 var(--space-2);
+    font-size: var(--text-sm);
+  }
+
+  .yard-card__row--main > .btn,
+  .yard-card__row--main > .yard-card__open {
+    flex: 1 1 auto;
+  }
+
+  .yard-card__row--second > .btn {
+    flex: 0 0 auto;
+  }
+
+  /* The painted plates' ends pinched a little (as in a quantity stepper),
+     so three short plates share a phone's line. */
+  :root[data-skin] .panel.yard-card .yard-card__foot .btn {
+    --skin-button-cap: 14px;
+    --skin-button2-cap: 14px;
+
+    min-height: 38px;
+    padding: 0 2px;
+  }
+}
+
+/* On its side: both rows on one line, and less padding everywhere. */
+@media (width > 620px) and (height <= 500px) {
+  .yard-card__foot {
+    flex-wrap: nowrap;
+  }
+
+  .yard-card__row--main {
+    flex: 1 1 auto;
+  }
+
+  .yard-card__row--second {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+  }
+
+  .yard-card > .panel__body {
+    padding-block: var(--space-2);
+  }
+
+  .yard-card__columns,
+  .yard-card__about {
+    gap: var(--space-2);
+  }
+
+  .yard-card__name-row {
+    min-height: 32px;
+  }
+
+  .yard-card__tool {
+    width: 32px;
+    height: 32px;
+  }
+
+  .yard-card__kit {
+    min-height: 44px;
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .yard-card__kit-picture {
+    width: 60px;
+    height: 40px;
+  }
+}
 
 @media (width <= 620px) {
   .yard-card__columns {
@@ -492,18 +744,11 @@
     grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
   }
 
-  .yard-card__foot {
-    padding: var(--space-3);
+  .yard-card__grid--few {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  /* One plate per line: no word is squeezed or cut. */
-  .yard-card__row:not(.yard-card__row--second) > .btn {
-    flex-basis: 100%;
-  }
-
-  /* A plate wider than the phone lets its words wrap rather than run out. */
-  .yard-card__row > .btn {
-    min-width: 0;
-    white-space: normal;
+  .yard-card__about {
+    gap: var(--space-2);
   }
 }

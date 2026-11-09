@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PlayerCell } from "@/api/types";
 import { resetOutpostLabels, setOutpostLabels } from "@/game/yard/outpostLabels";
-import { YARD_CARD_TEXT, YardCard, type YardCardOptions } from "./YardCard";
+import { YARD_CARD_SHORT, YARD_CARD_TEXT, YardCard, type YardCardOptions } from "./YardCard";
 
 /**
  * The yard info card (beta 7, owner's design B): the player's own yard or
@@ -39,8 +39,12 @@ const outpost = (overrides: Partial<PlayerCell> = {}): PlayerCell => ({
   ...overrides,
 });
 
-const main = (overrides: Partial<PlayerCell> = {}): PlayerCell =>
-  outpost({ b: 2, bid: "3502", kit: undefined, wi: undefined, r: { r1: 50, r1max: 100, r2: 1, r2max: 100, r3: 100, r3max: 100, r4: 0, r4max: 100 }, ...overrides });
+const main = (overrides: Partial<PlayerCell> = {}): PlayerCell => {
+  const cell = outpost({ b: 2, bid: "3502", r: { r1: 50, r1max: 100, r2: 1, r2max: 100, r3: 100, r3max: 100, r4: 0, r4max: 100 }, ...overrides });
+  delete cell.kit;
+  delete cell.wi;
+  return cell;
+};
 
 let host: HTMLElement;
 
@@ -72,8 +76,11 @@ const text = (selector: string): string => host.querySelector(selector)?.textCon
 const visible = (selector: string): HTMLElement[] =>
   [...host.querySelectorAll<HTMLElement>(selector)].filter((node) => !node.closest("[hidden]"));
 
+/** A button by its name: its full words (a phone shows the short ones). */
 const buttonNamed = (name: string): HTMLButtonElement | undefined =>
-  visible("button").find((node) => node.textContent?.trim() === name) as HTMLButtonElement | undefined;
+  visible("button").find((node) => (node.getAttribute("aria-label") ?? node.textContent?.trim()) === name) as
+    | HTMLButtonElement
+    | undefined;
 
 afterEach(() => {
   host.remove();
@@ -91,6 +98,8 @@ describe("YardCard on an outpost", () => {
   it("calls an unnamed outpost by its cell, and shows its name once it has one", () => {
     open(outpost());
     expect(text(".yard-card__name")).toBe("Outpost 439, 461");
+    // The cell is in the name already: the line under it says only how far.
+    expect(text(".yard-card__where")).toBe("3 cells from main");
     setOutpostLabels({ names: { "22913802240208": "North gate" }, pins: [] });
     expect(text(".yard-card__name")).toBe("North gate");
     expect(text(".yard-card__where")).toBe("439, 461 · 3 cells from main");
@@ -116,9 +125,28 @@ describe("YardCard on an outpost", () => {
     expect(tiles.map((tile) => tile.dataset["monster"])).toEqual(["C6", "C14"]);
     expect(tiles.map((tile) => tile.querySelector(".yard-card__count")?.textContent)).toEqual(["×39", "×4"]);
     expect(tiles.every((tile) => tile.querySelector("img.yard-card__portrait"))).toBe(true);
+    // Name and count share one strip, so the count never covers the portrait's head.
+    expect(tiles.every((tile) => tile.querySelector(".yard-card__caption > .yard-card__monster-name + .yard-card__count"))).toBe(true);
+    // Two kinds of monster: bigger tiles, so the column is not left empty.
+    expect(host.querySelector(".yard-card__grid")?.classList.contains("yard-card__grid--few")).toBe(true);
     // 39 × 5 + 4 × 20 = 275 of 540.
     expect(text(".yard-card__housed-count")).toContain("275 / 540");
     expect(host.querySelector(".yard-card__bar")?.getAttribute("aria-valuenow")).toBe("51");
+  });
+
+  it("keeps the usual tiles when many kinds of monster live there", () => {
+    open(outpost({ m: { housed: { C1: 1, C2: 1, C3: 1, C4: 1, C5: 1 }, space: 540 } }));
+    expect(host.querySelector(".yard-card__grid")?.classList.contains("yard-card__grid--few")).toBe(false);
+  });
+
+  it("says what each ground bonus is for, with a sentence on hover", () => {
+    open(outpost({ i: 150 }));
+    const bonuses = visible(".yard-card__bonus");
+    expect(bonuses.map((chip) => chip.querySelector(".yard-card__chip-label")?.textContent)).toEqual([
+      YARD_CARD_TEXT.towerReach,
+      YARD_CARD_TEXT.income,
+    ]);
+    expect(bonuses.every((chip) => chip.title.length > 0)).toBe(true);
   });
 
   it("says when nobody lives there, and Move monsters from here waits", () => {
@@ -149,6 +177,19 @@ describe("YardCard on an outpost", () => {
     expect(options.onInvite).toHaveBeenCalled();
     buttonNamed(YARD_CARD_TEXT.bookmark)?.click();
     expect(options.onBookmark).toHaveBeenCalledWith(CELL);
+  });
+
+  it("has one main action, the monster moves beside it, and the rest as smaller plates", () => {
+    open(outpost());
+    const main = visible(".yard-card__row--main > button").map((node) => node.getAttribute("aria-label"));
+    const minor = visible(".yard-card__row--second > button").map((node) => node.getAttribute("aria-label"));
+    expect(main).toEqual([YARD_CARD_TEXT.openOutpost, YARD_CARD_TEXT.moveFrom, YARD_CARD_TEXT.bringHere]);
+    expect(minor).toEqual([YARD_CARD_TEXT.relocate, YARD_CARD_TEXT.invite, YARD_CARD_TEXT.bookmark]);
+    expect(visible(".btn--primary")).toHaveLength(1);
+    // Each plate carries its full words and the phone's short ones.
+    const open1 = buttonNamed(YARD_CARD_TEXT.openOutpost)!;
+    expect(open1.querySelector(".yard-card__label--long")?.textContent).toBe(YARD_CARD_TEXT.openOutpost);
+    expect(open1.querySelector(".yard-card__label--short")?.textContent).toBe(YARD_CARD_SHORT[YARD_CARD_TEXT.openOutpost]);
   });
 
   it("withdraws a waiting invitation instead of sending one", () => {
@@ -195,7 +236,15 @@ describe("YardCard on an outpost", () => {
     host.querySelector<HTMLButtonElement>(".yard-card__pin")?.click();
     await flush();
     expect(pin).toHaveBeenCalledWith("22913802240208", true);
-    expect(host.querySelector(".yard-card__pin")?.getAttribute("aria-pressed")).toBe("true");
+    const button = host.querySelector<HTMLButtonElement>(".yard-card__pin")!;
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+    expect(button.getAttribute("aria-label")).toBe(YARD_CARD_TEXT.pin);
+    expect(button.classList.contains("yard-card__pin--on")).toBe(true);
+    expect(button.title).toBe(YARD_CARD_TEXT.pinned);
+    button.click();
+    await flush();
+    expect(pin).toHaveBeenLastCalledWith("22913802240208", false);
+    expect(host.querySelector(".yard-card__pin")?.classList.contains("yard-card__pin--on")).toBe(false);
   });
 
   it("redraws only when the map sends news, and keeps a rename being typed", () => {
@@ -209,6 +258,20 @@ describe("YardCard on an outpost", () => {
     card.update(CELL, outpost({ m: { housed: { C6: 40 }, space: 540 } }));
     expect(host.querySelector(".yard-card__input")).not.toBeNull();
     expect(visible(".yard-card__count").map((node) => node.textContent)).toEqual(["×40"]);
+  });
+
+  it("fades the body's bottom edge while more is below, and its top once scrolled", () => {
+    const { card } = open(outpost());
+    const body = card.popup.body;
+    Object.defineProperty(body, "clientHeight", { configurable: true, value: 150 });
+    Object.defineProperty(body, "scrollHeight", { configurable: true, value: 370 });
+    body.dispatchEvent(new Event("scroll"));
+    expect(body.classList.contains("yard-card__body--more-below")).toBe(true);
+    expect(body.classList.contains("yard-card__body--more-above")).toBe(false);
+    body.scrollTop = 220;
+    body.dispatchEvent(new Event("scroll"));
+    expect(body.classList.contains("yard-card__body--more-below")).toBe(false);
+    expect(body.classList.contains("yard-card__body--more-above")).toBe(true);
   });
 
   it("tells the map when the player closes it, but not when the map does", () => {
