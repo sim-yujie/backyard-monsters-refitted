@@ -45,6 +45,8 @@ const READY_NOTICE = "events-ready";
 
 /** How often the page's countdowns and the list's freshness are checked. */
 const TICK_MS = 1_000;
+/** A computer's screen, as the centred windows count it (ui.css). */
+const COMPUTER_QUERY = "(width > 620px) and (height > 500px)";
 
 /**
  * The button's picture: the painted festive calendar with its gold star and
@@ -146,7 +148,13 @@ export class EventsDoor {
     if (decision === "show") openWhatsNew({ container: modalLayer() });
   }
 
-  toggle(): void {
+  /**
+   * Opens or shuts the Events page. Opened from its button it starts at the
+   * top on a computer, where the Frontier Pass leads the page; a phone and
+   * `atClaim` (a "Claim" notice) still scroll to the first Claim, which on a
+   * phone sits below the fold (bug report #10).
+   */
+  toggle(atClaim = false): void {
     if (this.panel) {
       this.panel.close();
       return;
@@ -167,7 +175,7 @@ export class EventsDoor {
       },
     }).mount(this.mounts.overlay.content);
     this.button.setAttribute("aria-expanded", "true");
-    this.scrollToClaim = true;
+    this.scrollToClaim = atClaim || window.matchMedia?.(COMPUTER_QUERY).matches !== true;
     this.render();
     void this.load();
   }
@@ -179,7 +187,7 @@ export class EventsDoor {
       this.panel.showFirstClaim();
       return;
     }
-    this.toggle();
+    this.toggle(true);
   }
 
   /** A pumpkin that reached a ladder tier: a notice with the tier's rewards and a Claim button. */

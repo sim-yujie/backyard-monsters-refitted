@@ -94,8 +94,9 @@ export interface EventsBody extends ApiEnvelope {
   /** The last "What's new" release the player saw, or null. */
   whatsNewSeen: string | null;
   /**
-   * The player's "New to Map Room 2" card, or null when their 10 days are not
-   * running or both rewards are used. Absent from an older server.
+   * The player's "New to Map Room 2" card (Frontier Pass), or null when their
+   * 10 days are not running. It stays all 10 days, used rewards and all.
+   * Absent from an older server.
    */
   mr2Welcome?: Mr2WelcomeStatus | null;
 }
@@ -111,6 +112,10 @@ export interface Mr2WelcomeStatus {
   takeover: boolean;
   /** The free Regular kit can still be used. */
   kit: boolean;
+  /** When the takeover was used (unix seconds); null when not used or not known. Absent from an older server. */
+  takeoverUsedAt?: number | null;
+  /** When the kit was used (unix seconds); null when not used or not known. Absent from an older server. */
+  kitUsedAt?: number | null;
 }
 
 export interface CalendarClaimReport {
