@@ -3,7 +3,7 @@ import { BaseMode, type BaseLoadResponse } from "@/api/types";
 import type { OffsetCell } from "@/game/HexGrid";
 import type { TakeoverKind } from "@/game/maproom/takeover";
 import { OUTPOST_CORE_TYPE, type YardKind } from "./buildingCostData";
-import { outpostLabels, outpostName } from "./outpostLabels";
+import { cellText, outpostLabels, outpostName } from "./outpostLabels";
 import type { Yard } from "./yardModel";
 
 /**
@@ -171,8 +171,8 @@ export const ownYardsOf = (
   current: OwnYardTarget,
   labels: OutpostLabels = outpostLabels(),
 ): OwnYardEntry[] => {
-  const pinOrder = new Map(labels.pins.map((baseid, index) => [baseid, index]));
-  const outposts = outpostsOf(save).map((outpost) => {
+  const pins = new Set(labels.pins);
+  const outposts = pinnedFirst(outpostsOf(save), labels).map((outpost) => {
     const target = outpostTarget(outpost.baseid, outpost.cell);
     const name = outpostName(outpost.baseid, labels);
     return {
@@ -180,12 +180,9 @@ export const ownYardsOf = (
       title: name || outpostTitle(outpost.cell),
       current: sameYard(target, current),
       name,
-      pinned: pinOrder.has(outpost.baseid),
+      pinned: pins.has(outpost.baseid),
     };
   });
-  const pinned = outposts
-    .filter((one) => one.pinned)
-    .sort((a, b) => pinOrder.get(a.target.baseid)! - pinOrder.get(b.target.baseid)!);
   return [
     {
       target: MAIN_YARD,
@@ -194,10 +191,34 @@ export const ownYardsOf = (
       name: "",
       pinned: false,
     },
-    ...pinned,
-    ...outposts.filter((one) => !one.pinned),
+    ...outposts,
   ];
 };
+
+/**
+ * The outposts in the yard list's order (beta 7): the pinned ones in the
+ * order they were pinned, then the rest in the order given.
+ */
+export const pinnedFirst = <T extends { readonly baseid: string }>(
+  outposts: readonly T[],
+  labels: OutpostLabels = outpostLabels(),
+): T[] => {
+  const pinOrder = new Map(labels.pins.map((baseid, index) => [baseid, index]));
+  const pinned = outposts
+    .filter((one) => pinOrder.has(one.baseid))
+    .sort((a, b) => pinOrder.get(a.baseid)! - pinOrder.get(b.baseid)!);
+  return [...pinned, ...outposts.filter((one) => !pinOrder.has(one.baseid))];
+};
+
+/**
+ * An outpost's one-line label, as the yard list shows it: its name, or
+ * "240, 209" when it has none.
+ */
+export const outpostShortTitle = (
+  baseid: string,
+  cell: OffsetCell,
+  labels: OutpostLabels = outpostLabels(),
+): string => outpostName(baseid, labels) || cellText(cell);
 
 /**
  * Whether an outpost holds nothing but its core, as one just taken from a

@@ -90,6 +90,15 @@ const make = <K extends keyof HTMLElementTagNameMap>(
   return element;
 };
 
+/**
+ * What stands above the list on the left: the World chat tab and, when chat
+ * is off, the floating "?". The open list stops this far below the lowest.
+ */
+const LIST_CEILING = ".chat-box__tab, .guide-help--float";
+const LIST_CEILING_GAP = 8;
+/** The list never gets shorter than this, even on a very short screen. */
+const LIST_MIN_HEIGHT = 120;
+
 const errorWords = (error: unknown): string =>
   error instanceof Error && error.message ? error.message : YARD_SWITCHER_TEXT.failed;
 
@@ -403,7 +412,32 @@ export class YardSwitcher {
     if (open) {
       this.showError(null);
       this.renderList();
+      this.fitList();
     }
+  }
+
+  /**
+   * Caps the open list's height so its top stays clear of what stands above
+   * it on the left ({@link LIST_CEILING}), instead of running under the
+   * World chat button. The list hangs from the switcher, so only its top moves.
+   */
+  private fitList(): void {
+    this.list.style.removeProperty("max-height");
+    const list = this.list.getBoundingClientRect();
+    let ceiling = Number.NEGATIVE_INFINITY;
+    for (const above of document.querySelectorAll<HTMLElement>(LIST_CEILING)) {
+      const box = above.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue; // hidden
+      if (box.right <= list.left || box.left >= list.right) continue; // not over the list
+      if (box.bottom >= list.bottom) continue; // beside or below it
+      ceiling = Math.max(ceiling, box.bottom);
+    }
+    if (ceiling === Number.NEGATIVE_INFINITY) return;
+    const room = Math.max(
+      LIST_MIN_HEIGHT,
+      Math.floor(list.bottom - ceiling - LIST_CEILING_GAP),
+    );
+    this.list.style.maxHeight = `min(60vh, 34rem, ${room}px)`;
   }
 
   /** A press anywhere else, or Escape, closes the list; Escape in a rename only ends it. */

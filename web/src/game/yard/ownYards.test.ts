@@ -9,7 +9,9 @@ import {
   namedOutpostTitle,
   outpostBaseid,
   outpostCountText,
+  outpostShortTitle,
   outpostsOf,
+  pinnedFirst,
   outpostTarget,
   ownYardsOf,
   sameYard,
@@ -82,6 +84,27 @@ describe("the yard switcher's list", () => {
     ]);
     expect(yardTitle(outpostTarget("22", { col: 2, row: 2 }), labels)).toBe("Farm");
     expect(namedOutpostTitle("11", { col: 1, row: 1 }, labels)).toBe("Outpost (1, 1)");
+  });
+
+  it("orders any outposts pinned first and gives each a one-line label", () => {
+    const labels = { names: { "22": "Farm" }, pins: ["33", "11"] };
+    const outposts = outpostsOf(
+      listing([
+        [1, 1, "11"],
+        [2, 2, "22"],
+        [3, 3, "33"],
+        [4, 4, "44"],
+      ]),
+    );
+    const ordered = pinnedFirst(outposts, labels);
+    expect(ordered.map((one) => one.baseid)).toEqual(["33", "11", "22", "44"]);
+    expect(ordered.map((one) => outpostShortTitle(one.baseid, one.cell, labels))).toEqual([
+      "3, 3",
+      "1, 1",
+      "Farm",
+      "4, 4",
+    ]);
+    expect(pinnedFirst(outposts, { names: {}, pins: [] })).toEqual(outposts);
   });
 
   it("titles and counts", () => {

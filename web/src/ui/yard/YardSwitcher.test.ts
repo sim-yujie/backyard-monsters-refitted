@@ -129,6 +129,40 @@ describe("YardSwitcher", () => {
     document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
     expect(switcher.open).toBe(false);
   });
+
+  it("caps the open list's height so its top stays below the World chat button", () => {
+    const rect = (top: number, left: number, width: number, height: number): DOMRect =>
+      ({
+        top,
+        left,
+        width,
+        height,
+        right: left + width,
+        bottom: top + height,
+        x: left,
+        y: top,
+      }) as DOMRect;
+    // The World chat tab at 140-164 on the left, and the Events button on the right.
+    const chat = document.createElement("button");
+    chat.className = "chat-box__tab";
+    chat.getBoundingClientRect = () => rect(140, 30, 120, 24);
+    const elsewhere = document.createElement("button");
+    elsewhere.className = "guide-help--float";
+    elsewhere.getBoundingClientRect = () => rect(150, 900, 32, 32);
+    document.body.append(chat, elsewhere);
+    switcher.bind(bindingFor(TWO, MAIN_YARD));
+    const list = switcher.element.querySelector<HTMLElement>(".yard-switcher__list")!;
+    // The list hangs from the switcher: its bottom is fixed at 660.
+    list.getBoundingClientRect = () => rect(150, 25, 300, 510);
+    button().click();
+    expect(list.style.maxHeight).toBe("min(60vh, 34rem, 488px)");
+
+    // Nothing above it on the left (chat off): the CSS cap alone.
+    chat.remove();
+    button().click();
+    button().click();
+    expect(list.style.maxHeight).toBe("");
+  });
 });
 
 describe("outpost names and pins (beta 7)", () => {

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { resetOutpostLabels, setOutpostLabels } from "@/game/yard/outpostLabels";
 import { NavPanel } from "./NavPanel";
 
 /** The bookmark Add button (#336): on for a typed name, with or without a selected cell. */
@@ -53,5 +54,53 @@ describe("NavPanel bookmark Add", () => {
     add.click();
     expect(onBookmarkAdd).toHaveBeenCalledWith("Spot");
     expect(add.disabled).toBe(true);
+  });
+});
+
+describe("NavPanel own-outpost buttons (beta 7)", () => {
+  afterEach(() => resetOutpostLabels());
+
+  it("lists pinned outposts first, one line each: the name or the bare coordinates", () => {
+    setOutpostLabels({ names: { b: "Very long front line hub" }, pins: ["c"] });
+    const onJump = vi.fn();
+    const nav = new NavPanel({
+      onHome: vi.fn(),
+      onJump,
+      onRefresh: vi.fn(),
+      onBookmarkJump: vi.fn(),
+      onBookmarkAdd: vi.fn(),
+      onBookmarkRemove: vi.fn(),
+    });
+    nav.setOutposts([
+      { baseid: "a", cell: { col: 240, row: 209 } },
+      { baseid: "b", cell: { col: 238, row: 209 } },
+      { baseid: "c", cell: { col: 239, row: 207 } },
+    ]);
+    const group = nav.element.querySelector<HTMLElement>("[aria-label='Your outposts']")!;
+    expect(group.hidden).toBe(false);
+    expect(group.className).toBe("map-outposts");
+    const buttons = [...group.querySelectorAll<HTMLButtonElement>("button.map-outpost")];
+    expect(buttons.map((b) => b.textContent)).toEqual([
+      "239, 207",
+      "240, 209",
+      "Very long front line hub",
+    ]);
+    // Each button's words sit in one cut-able line; the hover title has them in full.
+    expect(
+      buttons.every(
+        (b) =>
+          b.children.length === 1 && b.firstElementChild!.className === "map-outpost__label",
+      ),
+    ).toBe(true);
+    expect(buttons[2]!.title).toBe("Centre on Very long front line hub (238, 209)");
+    expect(buttons[0]!.title).toBe("Centre on your outpost at 239, 207");
+    buttons[0]!.click();
+    expect(onJump).toHaveBeenCalledWith(239, 207);
+  });
+
+  it("hides the row with no outposts", () => {
+    const { nav } = make();
+    nav.setOutposts([]);
+    expect(nav.element.querySelector<HTMLElement>(".map-outposts")!.hidden).toBe(true);
   });
 });
