@@ -23,7 +23,7 @@ const twoGifts = {
     fixtureGift(1, 7, { username: "Bob", resource: "r1" as const, amount: 300, expiresAt: NOW + 3 * DAY }),
     fixtureGift(2, 8, { username: "Cat", resource: "r4" as const, amount: 500, canSendBack: false }),
   ],
-  collectsLeft: 5,
+  collectsLeft: 10,
   wishes: [] as GiftResource[],
 };
 
@@ -60,14 +60,14 @@ describe("the list", () => {
     expect(row(tab, 1)?.textContent).toContain("Bob");
     expect(row(tab, 1)?.textContent).toContain("300");
     expect(row(tab, 1)?.textContent).toContain("3 days left");
-    expect(tab.element.textContent).toContain(GIFTS_TEXT.left(5));
+    expect(tab.element.textContent).toContain("10 left today");
     expect(store.snapshot.giftsWaiting).toBe(2);
     expect(buttonIn(row(tab, 1), GIFTS_TEXT.sendBack).disabled).toBe(false);
     expect(buttonIn(row(tab, 2), GIFTS_TEXT.sentBack).disabled).toBe(true);
   });
 
   it("says so when none are waiting, and Collect all is off", async () => {
-    const { tab } = setup({ gifts: { gifts: [], collectsLeft: 5, wishes: [] } });
+    const { tab } = setup({ gifts: { gifts: [], collectsLeft: 10, wishes: [] } });
     await tab.show();
     expect(tab.element.textContent).toContain(GIFTS_TEXT.none);
     expect(buttonIn(tab.element, GIFTS_TEXT.collectAll).disabled).toBe(true);
@@ -156,6 +156,97 @@ describe("collecting", () => {
     buttonIn(row(tab, 1), GIFTS_TEXT.collect).click();
     await settle();
     expect(tab.statusText).toBe(GIFTS_TEXT.underAttack);
+  });
+});
+
+describe("deleting (owner, 9 Nov 2026)", () => {
+  const discOf = (giftid: number): HTMLButtonElement => {
+    const found = document.querySelector(`[data-giftid="${giftid}"]`)?.querySelector<HTMLButtonElement>("button.gift-delete");
+    if (!found) throw new Error(`no delete disc on gift ${giftid}`);
+    return found;
+  };
+
+  it("each gift has the painted delete disc, named for a screen reader", async () => {
+    const { tab } = setup();
+    await tab.show();
+    const disc = discOf(1);
+    expect(disc.getAttribute("aria-label")).toBe("Delete gift: Bob");
+    expect(disc.textContent).toBe("");
+    expect(disc.querySelector(".gift-delete__disc")).not.toBeNull();
+  });
+
+  it("asks first; Cancel puts the row back and deletes nothing", async () => {
+    const { tab, calls } = setup();
+    await tab.show();
+    discOf(1).click();
+    expect(row(tab, 1)?.classList.contains("friends-row--confirm")).toBe(true);
+    expect(row(tab, 1)?.textContent).toContain(GIFTS_TEXT.deleteAsk);
+    // The amount stays in view while asking.
+    expect(row(tab, 1)?.textContent).toContain("300");
+    buttonIn(row(tab, 1), GIFTS_TEXT.cancel).click();
+    expect(row(tab, 1)?.classList.contains("friends-row--confirm")).toBe(false);
+    expect(calls.some(([method]) => method === "deleteGifts")).toBe(false);
+  });
+
+  it("deletes one gift: it goes, the count follows, and collects left stay", async () => {
+    const refresh = vi.fn();
+    clearPool = setPlayerPool({ read: () => null, refresh });
+    const { tab, store, calls } = setup({ deleteGifts: { deleted: 1, collectsLeft: 10, giftsWaiting: 1 } });
+    await tab.show();
+    discOf(1).click();
+    buttonIn(row(tab, 1), GIFTS_TEXT.delete).click();
+    await settle();
+    expect(calls).toContainEqual(["deleteGifts", 1]);
+    expect(row(tab, 1)).toBeNull();
+    expect(row(tab, 2)).not.toBeNull();
+    expect(store.snapshot.giftsWaiting).toBe(1);
+    expect(tab.statusText).toBe(GIFTS_TEXT.deleted(1));
+    expect(tab.element.textContent).toContain("10 left today");
+    // Nothing was given, so the pool is not refreshed.
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("Delete all shows with 2 or more, asks, then empties the list", async () => {
+    const { tab, store, calls } = setup({ deleteGifts: { deleted: 2, collectsLeft: 10, giftsWaiting: 0 } });
+    await tab.show();
+    buttonIn(tab.element, GIFTS_TEXT.deleteAll).click();
+    expect(tab.element.textContent).toContain(GIFTS_TEXT.deleteAllAsk(2));
+    expect(calls.some(([method]) => method === "deleteGifts")).toBe(false);
+    const yes = [...tab.element.querySelectorAll<HTMLButtonElement>(".gifts-summary .btn--danger")];
+    expect(yes.map((node) => node.textContent)).toEqual([GIFTS_TEXT.deleteAll]);
+    yes[0]!.click();
+    await settle();
+    expect(calls).toContainEqual(["deleteGifts", "all"]);
+    expect(tab.element.textContent).toContain(GIFTS_TEXT.none);
+    expect(store.snapshot.giftsWaiting).toBe(0);
+    expect(tab.statusText).toBe(GIFTS_TEXT.deleted(2));
+  });
+
+  it("Delete all hides with one gift waiting", async () => {
+    const { tab } = setup({ gifts: { ...twoGifts, gifts: twoGifts.gifts.slice(0, 1) } });
+    await tab.show();
+    expect(() => buttonIn(tab.element, GIFTS_TEXT.deleteAll)).toThrow();
+    expect(discOf(1)).toBeTruthy();
+  });
+
+  it("drops a gift the server no longer has", async () => {
+    const { tab } = setup({ deleteGifts: refused("noSuchGift") });
+    await tab.show();
+    discOf(2).click();
+    buttonIn(row(tab, 2), GIFTS_TEXT.delete).click();
+    await settle();
+    expect(row(tab, 2)).toBeNull();
+    expect(tab.statusText).toBe("That gift is no longer waiting.");
+  });
+
+  it("a delete keeps the collects left the server says, and Collect stays on", async () => {
+    const { tab } = setup({ deleteGifts: { deleted: 1, collectsLeft: 4, giftsWaiting: 1 } });
+    await tab.show();
+    discOf(1).click();
+    buttonIn(row(tab, 1), GIFTS_TEXT.delete).click();
+    await settle();
+    expect(tab.element.textContent).toContain("4 left today");
+    expect(buttonIn(row(tab, 2), GIFTS_TEXT.collect).disabled).toBe(false);
   });
 });
 
