@@ -49,6 +49,7 @@ import {
 } from "@/game/attack/attackTarget";
 import { visitFriend } from "@/game/friends/friendVisit";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
+import { confirmAttackWindow } from "@/ui/attack/AttackWindow";
 import { storageCapOf } from "@/game/attack/attackerStorage";
 import { Camera } from "@/game/Camera";
 import { mapRoomGrid, setHexShape, type OffsetCell } from "@/game/HexGrid";
@@ -285,6 +286,8 @@ export class MapRoom2Scene implements Scene {
 
   private home: OffsetCell | null = null;
   private selected: OffsetCell | null = null;
+  /** The attack window is up (`ui/attack/AttackWindow.ts`): Attack again opens no second one. */
+  private attackWindowOpen = false;
   /** The cell under the pointer, for the hover card (#176). */
   private hovered: OffsetCell | null = null;
   /**
@@ -606,6 +609,8 @@ export class MapRoom2Scene implements Scene {
   exit(): void {
     // An open the player left before it was done is summarised with what it had.
     finishOpen("left");
+    // A scene change sweeps the attack window off with the overlay.
+    this.attackWindowOpen = false;
     // Where the map was left, for the next time it opens (#153).
     if (this.ownSave) {
       const view = this.camera.visibleWorldRect();
@@ -1293,9 +1298,17 @@ export class MapRoom2Scene implements Scene {
       return;
     }
 
-    void attackWithFriendWarning(attack, context.overlay.modal, () => {
-      setAttackTarget(attack);
-      context.goTo(SceneName.ATTACK);
+    // Flash's PopupAttackA first: what the player can bring, then Attack or
+    // Cancel (owner, 9 Nov 2026). One at a time, however often Attack is hit.
+    if (this.attackWindowOpen) return;
+    this.attackWindowOpen = true;
+    void confirmAttackWindow(context.overlay.modal, attack).then((go) => {
+      this.attackWindowOpen = false;
+      if (!go || this.context !== context) return;
+      return attackWithFriendWarning(attack, context.overlay.modal, () => {
+        setAttackTarget(attack);
+        context.goTo(SceneName.ATTACK);
+      });
     });
   }
 
