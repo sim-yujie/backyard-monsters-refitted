@@ -22,6 +22,7 @@ import { buildActions } from "@/api/yardBuild";
 import { decorActions } from "@/api/yardDecor";
 import { consumeViewTarget, setAttackTarget, setViewTarget, type ViewTarget } from "@/game/attack/attackTarget";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
+import { confirmAttackWindow, showsAttackWindow } from "@/ui/attack/AttackWindow";
 import { setPlayerPool } from "@/game/friends/friendsView";
 import { currentSeason } from "@/game/season";
 import {
@@ -1156,9 +1157,14 @@ export class YardScene implements Scene {
     this.attacking = true;
     this.dock?.setAttack({ disabled: true, title });
     let confirmed = false;
-    await attackWithFriendWarning(attack, context.overlay.modal, () => {
-      confirmed = true;
-    });
+    // The map's attack window first (`ui/attack/AttackWindow.ts`): what the
+    // player can bring, then Attack or Cancel, as from the map itself.
+    const go = !showsAttackWindow(attack) || (await confirmAttackWindow(context.overlay.modal, attack));
+    if (go && this.context === context) {
+      await attackWithFriendWarning(attack, context.overlay.modal, () => {
+        confirmed = true;
+      });
+    }
     if (!confirmed) {
       if (this.context !== context) return;
       this.attacking = false;

@@ -40,6 +40,11 @@ export interface TransferDialogOptions {
   readonly yards: readonly TransferChoice[];
   /** The yard the dialog opens from. */
   readonly from: string;
+  /**
+   * The yard it opens to, when the player asked to bring monsters to it (the
+   * yard info card's "Bring monsters here"). Absent: the first that fits.
+   */
+  readonly to?: string;
   /** Reads a yard's roster and room as the server has them now. */
   readonly load: (baseid: string) => Promise<TransferYard>;
   /** Housing space one monster of a type takes, at the player's academy level. */
@@ -96,6 +101,9 @@ export class TransferDialog {
     });
     this.toSelect.addEventListener("change", () => void this.reload());
     this.fillTargets();
+    if (options.to !== undefined && [...this.toSelect.options].some((option) => option.value === options.to)) {
+      this.toSelect.value = options.to;
+    }
 
     const ends = document.createElement("div");
     ends.className = "transfer-dialog__ends";

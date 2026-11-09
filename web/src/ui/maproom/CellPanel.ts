@@ -1,4 +1,5 @@
 import { heightBonus } from "@/game/maproom/heightBonus";
+import { campTitle } from "@/game/attack/attackTarget";
 import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell, type PlayerCell } from "@/api/types";
 import { devDetails } from "@/app/devDetails";
 import { avatarOf, avatarUrl } from "@/game/avatars";
@@ -452,7 +453,7 @@ export class CellPanel {
     const tribe = payload.n;
     this.setHead(
       { kind: "tribe", tribe, faded: payload.d === 1 },
-      `${tribe} camp`,
+      campTitle(tribe),
       `Level ${payload.l}`,
       `Wild monsters · ${where}`,
     );

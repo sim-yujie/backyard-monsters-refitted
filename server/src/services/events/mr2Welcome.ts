@@ -23,8 +23,9 @@ import { logger } from "../../utils/logger.js";
  *
  * **Where it is kept.** One `bym.event_progress` row (`userid`,
  * `event_id = 'mr2-welcome'`), its `data` holding `start` (unix seconds),
- * `takeoverUsed` and `kitUsed`. Each reward is claimed by one conditional
- * UPDATE, so it can never be used twice.
+ * `takeoverUsed` and `kitUsed`, and when each was used (`takeoverAt`,
+ * `kitAt`, unix seconds; absent on rows used before they were kept). Each
+ * reward is claimed by one conditional UPDATE, so it can never be used twice.
  *
  * The takeover counts as used on the first wild camp taken over in the 10
  * days, however it was paid for: a player who pays Shiny for it does not get
@@ -51,6 +52,10 @@ export interface WelcomeState {
   readonly start: number;
   readonly takeoverUsed: boolean;
   readonly kitUsed: boolean;
+  /** When the takeover was used (unix seconds), if known. */
+  readonly takeoverAt?: number | null;
+  /** When the kit was used (unix seconds), if known. */
+  readonly kitAt?: number | null;
 }
 
 export type WelcomeReward = "takeover" | "kit";
@@ -66,6 +71,10 @@ export interface WelcomeStatus {
   takeover: boolean;
   /** The free Regular kit can still be used. */
   kit: boolean;
+  /** When the takeover was used (unix seconds); null when not used or not known. */
+  takeoverUsedAt: number | null;
+  /** When the kit was used (unix seconds); null when not used or not known. */
+  kitUsedAt: number | null;
 }
 
 /** Whether the window runs at `now`. */
@@ -77,12 +86,12 @@ export const welcomeReady = (state: WelcomeState | null, reward: WelcomeReward, 
   welcomeOpen(state, now) && !(reward === "takeover" ? state.takeoverUsed : state.kitUsed);
 
 /**
- * The card's status: null when the window is not running, or both rewards are
- * used (the card leaves the Events page then).
+ * The card's status: null only when the window is not running. The card stays
+ * on the Events page for all 10 days, a used reward showing Used (owner,
+ * 9 Nov 2026: it left once both were used).
  */
 export const welcomeStatus = (state: WelcomeState | null, now: number): WelcomeStatus | null => {
   if (!welcomeOpen(state, now)) return null;
-  if (state.takeoverUsed && state.kitUsed) return null;
   const endsAt = state.start + MR2_WELCOME_SECONDS;
   return {
     startsAt: state.start,
@@ -90,6 +99,8 @@ export const welcomeStatus = (state: WelcomeState | null, now: number): WelcomeS
     daysLeft: Math.max(1, Math.ceil((endsAt - now) / DAY)),
     takeover: !state.takeoverUsed,
     kit: !state.kitUsed,
+    takeoverUsedAt: state.takeoverUsed ? (state.takeoverAt ?? null) : null,
+    kitUsedAt: state.kitUsed ? (state.kitAt ?? null) : null,
   };
 };
 
@@ -119,10 +130,21 @@ const stateOf = (raw: unknown): WelcomeState | null => {
   const record = data as Record<string, unknown>;
   const start = Number(record.start);
   if (!Number.isFinite(start)) return null;
-  return { start, takeoverUsed: record.takeoverUsed === true, kitUsed: record.kitUsed === true };
+  const at = (value: unknown): number | null => {
+    const seconds = Number(value);
+    return value !== undefined && value !== null && Number.isFinite(seconds) ? seconds : null;
+  };
+  return {
+    start,
+    takeoverUsed: record.takeoverUsed === true,
+    kitUsed: record.kitUsed === true,
+    takeoverAt: at(record.takeoverAt),
+    kitAt: at(record.kitAt),
+  };
 };
 
 const USED_FIELD: Record<WelcomeReward, string> = { takeover: "takeoverUsed", kit: "kitUsed" };
+const AT_FIELD: Record<WelcomeReward, string> = { takeover: "takeoverAt", kit: "kitAt" };
 
 let cachedLaunch: number | null = null;
 
@@ -152,15 +174,16 @@ export const sqlWelcomeStore: WelcomeStore = {
 
   async claim(em, userid, reward, now) {
     const field = USED_FIELD[reward];
+    const atField = AT_FIELD[reward];
     const rows = await sql(em).execute<{ userid: number }[]>(
       `UPDATE bym.event_progress
-          SET data = data || jsonb_build_object('${field}', true), updated_at = now()
+          SET data = data || jsonb_build_object('${field}', true, '${atField}', ?::bigint), updated_at = now()
         WHERE userid = ? AND event_id = ?
           AND COALESCE((data->>'${field}')::boolean, false) = false
           AND (data->>'start')::bigint <= ?
           AND (data->>'start')::bigint + ? > ?
        RETURNING userid`,
-      [userid, MR2_WELCOME_EVENT_ID, now, MR2_WELCOME_SECONDS, now]
+      [Math.floor(now), userid, MR2_WELCOME_EVENT_ID, now, MR2_WELCOME_SECONDS, now]
     );
     return rows.length > 0;
   },
@@ -199,7 +222,11 @@ export const memoryWelcomeStore = (
     async claim(_em: EntityManager, userid: number, reward: WelcomeReward, now: number) {
       const state = store.rows.get(userid) ?? null;
       if (!welcomeReady(state, reward, now)) return false;
-      store.rows.set(userid, { ...state!, ...(reward === "takeover" ? { takeoverUsed: true } : { kitUsed: true }) });
+      const at = Math.floor(now);
+      store.rows.set(userid, {
+        ...state!,
+        ...(reward === "takeover" ? { takeoverUsed: true, takeoverAt: at } : { kitUsed: true, kitAt: at }),
+      });
       return true;
     },
     async launchTime(_em: EntityManager, now: number) {

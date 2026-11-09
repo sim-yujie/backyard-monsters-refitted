@@ -164,7 +164,9 @@ and a gift that lapses uncollected is not given back. One gift per friend per da
 Friends; their **Gifts** tab lists waiting gifts with **Collect** (and **Collect all**) and **Send
 one back**. Collecting adds the resource to the main yard up to its storage cap; if there is not
 room for all of it, the button warns first. A gift waits 7 days, then lapses. A player can collect
-at most 5 gifts a day; the rest wait.
+at most 10 gifts a day (owner, 9 Nov 2026: was 5); the rest wait. Each waiting gift has a delete
+button (and **Delete all** with 2 or more waiting), each with a short confirm: a deleted gift gives
+nothing, uses none of the day's collects, and still counts as the sender's gift for that day.
 
 ### 3.5 Attacking a friend
 
@@ -279,6 +281,7 @@ add lines to that file only. Answers use `{ error: 0, ... }` like the rest.
 | `POST /bm/friends/gift` | `{ userid, resource }` | `{ gift }` |
 | `GET /bm/friends/gifts` | — | `gifts: Gift[]`, `collectsLeft: n` |
 | `POST /bm/friends/gifts/collect` | `{ giftid }` or `{ all: true }` | `{ collected, resources }` |
+| `POST /bm/friends/gifts/delete` | `{ giftid }` or `{ all: true }` | `{ deleted, collectsLeft, giftsWaiting }` |
 | `POST /bm/friends/help` | `{ userid, buildingId, kind }` | `{ secondsSaved?, healed?, reward, helpsLeft, building }` |
 | `POST /base/load` with `type: "help"` | `baseid` of the friend's main yard | the yard as `view` serves it, plus `help: { helpsLeft, buildings: { [id]: { speedup?, repair? } } }`, each `true` or a reason |
 | `POST /player/settings` (existing) | adds `hideOnline?`, `friendRequests?` (every field optional) | `settings` adds both |
@@ -390,7 +393,7 @@ buildings can be helped. Until WP6 lands, `help.buildings` is empty.
 3. **Lower-cap scaling:** gift and reward amounts use the lower of the two storage caps, so small
    fake yards give and earn little.
 4. **Hard caps:** 100 friends; 30 open outgoing requests; 30 new requests a day; 20 helps a day; 5
-   helps per job; one gift per friend per day; 5 gifts collected a day where not set
+   helps per job; one gift per friend per day; 10 gifts collected a day where not set
    by the owner.
 5. **Per-pair keys:** `gift_day` and `hl` stop repeats even across remove and re-add.
 6. **Server decides everything:** time saved, health, amounts and caps are worked out on the server
