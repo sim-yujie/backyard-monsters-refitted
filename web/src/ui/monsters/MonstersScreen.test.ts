@@ -160,11 +160,9 @@ describe("MonstersScreen: the frame", () => {
     expect(screen.isOpen).toBe(false);
   });
 
-  it("stands beside the building panel when told", () => {
-    const { screen, element } = setup([HALL, LOCKER]);
-    screen.besidePanel(true);
-    expect(element.classList.contains("monsters-screen--beside-panel")).toBe(true);
-    screen.besidePanel(false);
+  it("is a middle window: centred on a computer, never beside the building panel", () => {
+    const { element } = setup([HALL, LOCKER]);
+    expect(element.classList.contains("panel--centre")).toBe(true);
     expect(element.classList.contains("monsters-screen--beside-panel")).toBe(false);
   });
 });

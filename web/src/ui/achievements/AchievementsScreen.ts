@@ -20,6 +20,7 @@ import {
   toDoGroup,
 } from "@/game/achievements/achievements";
 import { ApiError } from "@/api/http";
+import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { resourceAmount } from "@/ui/resourceIcon";
 import { achievementBadge, secretBadge } from "./badge";
@@ -94,6 +95,9 @@ export class AchievementsScreen {
   /** Bumped by every fetch, so an answer for a view the player has left is dropped. */
   private generation = 0;
 
+  /** Its place in the middle of the screen, one window at a time (`ui/centreWindow.ts`). */
+  private readonly centre: CentreWindow;
+
   constructor(options: AchievementsScreenOptions = {}) {
     this.options = options;
     this.api = options.api ?? achievementsApi;
@@ -102,6 +106,7 @@ export class AchievementsScreen {
     // opens and closes many times over one scene.
     this.panel = new Panel({ title: "Achievements", className: "ach-screen", closable: false });
     this.element = this.panel.element;
+    this.centre = centreWindow(this.element, () => this.close());
     this.element.hidden = true;
     this.element.setAttribute("role", "region");
     this.element.addEventListener("keydown", (event) => {
@@ -157,6 +162,7 @@ export class AchievementsScreen {
     this.opened = false;
     this.generation++;
     this.element.hidden = true;
+    this.centre.closed();
     this.options.onClose?.(hadFocus);
   }
 
@@ -173,6 +179,7 @@ export class AchievementsScreen {
     this.subject = subject;
     this.opened = true;
     this.element.hidden = false;
+    this.centre.opened();
     this.element.dataset["view"] = subject.kind;
     this.panel.setTitle(subject.kind === "own" ? "Achievements" : playerTitle(subject.name));
     if (!wasOpen) this.element.querySelector<HTMLElement>(".ach-screen__close")?.focus();

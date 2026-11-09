@@ -8,7 +8,8 @@
  * (ui.css). What is new here is the headed grid of item cards.
  */
 
-/* ── The frame: docked right under the HUD, full height ─────────────────── */
+/* ── The frame ──────────────────────────────────────────────────────────────
+   On a computer it opens in the middle (ui.css `.panel--centre`); this places it on a phone. */
 
 .shop-screen {
   position: absolute;
@@ -19,12 +20,7 @@
   width: min(720px, calc(100vw - 2 * var(--space-4)));
   max-width: none;
   min-width: 0;
-}
-
-/* Beside the 300px building panel, not over it. */
-.shop-screen--beside-panel {
-  right: calc(300px + 2 * var(--space-4));
-  width: min(720px, calc(100vw - 300px - 4 * var(--space-4)));
+  --centre-height: 820px;
 }
 
 .shop-screen[hidden] {
@@ -200,16 +196,8 @@
 
 /* ── Narrow screens: a bottom sheet, as the Monsters screen ─────────────── */
 
-@media (width <= 1080px) {
-  .shop-screen--beside-panel {
-    right: var(--space-4);
-    width: min(720px, calc(100vw - 2 * var(--space-4)));
-  }
-}
-
 @media (width <= 620px) {
-  .shop-screen,
-  .shop-screen--beside-panel {
+  .shop-screen {
     top: auto;
     left: 0;
     right: 0;

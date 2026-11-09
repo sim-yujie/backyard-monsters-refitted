@@ -42,7 +42,8 @@
   display: none;
 }
 
-/* ── The frame: docked right under the HUD, full height ─────────────────── */
+/* ── The frame ──────────────────────────────────────────────────────────────
+   On a computer it opens in the middle (ui.css `.panel--centre`); this places it on a phone. */
 
 .mail-screen {
   position: absolute;
@@ -53,6 +54,7 @@
   width: min(760px, calc(100vw - 2 * var(--space-4)));
   max-width: none;
   min-width: 0;
+  --centre-height: 820px;
 }
 
 .mail-screen[hidden] {

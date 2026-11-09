@@ -137,6 +137,7 @@ import { NotificationDoor } from "@/ui/notifications/NotificationDoor";
 import { DefencesDoor } from "@/ui/defences/DefencesDoor";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
 import { WorldChatBox } from "@/ui/chat/WorldChatBox";
+import { centredLayout, closeCentreWindow, onCentreWindowOpen } from "@/ui/centreWindow";
 import { openCountryPrompt } from "@/ui/chat/CountryPrompt";
 import { supportReminder } from "@/game/support/supportReminder";
 import { reportLook } from "@/app/lookReport";
@@ -414,6 +415,8 @@ export class YardScene implements Scene {
   private input: YardInput | null = null;
   private panel: BuildingPanel | null = null;
   private panelDock: HTMLElement | null = null;
+  /** Stops hearing middle windows open (`ui/centreWindow.ts`). */
+  private stopCentreWatch: (() => void) | null = null;
   /** The own yard's Monsters screen (§4.1), built the first time it opens. */
   private monsters: MonstersScreen | null = null;
   /** The Chaos Lab and Chaos Factory screen (Inferno WP 6.4), made on first open. */
@@ -743,6 +746,12 @@ export class YardScene implements Scene {
 
     window.addEventListener("keydown", this.onKeyDown);
     document.addEventListener("visibilitychange", this.onVisibilityChange);
+    // A window opening in the middle closes the building panel (owner, 9 Nov
+    // 2026, option A), as the Build menu always did.
+    // On a phone the panel waits under the sheet, as before.
+    this.stopCentreWatch = onCentreWindowOpen(() => {
+      if (centredLayout()) this.select(null);
+    });
 
     this.panelDock = document.createElement("div");
     this.panelDock.className = "map-dock map-dock--right";
@@ -771,6 +780,8 @@ export class YardScene implements Scene {
     this.attackGuard = null;
     window.removeEventListener("keydown", this.onKeyDown);
     document.removeEventListener("visibilitychange", this.onVisibilityChange);
+    this.stopCentreWatch?.();
+    this.stopCentreWatch = null;
     this.dropStore();
     this.endCompare();
     this.planner?.destroy();
@@ -1506,15 +1517,16 @@ export class YardScene implements Scene {
       const open = this.panel !== null;
       this.panel?.close();
       this.panel = null;
-      this.monsters?.besidePanel(false);
-      this.siege?.besidePanel(false);
-      this.shop?.besidePanel(false);
       if (open) guideBus.emit("panel", { building: null });
       return;
     }
 
-    // The panel docks where the build menu does.
-    this.buildMenu?.close();
+    // The panel and a middle window (the Build menu, the Monsters screen, the
+    // Shop, ...) make way for each other on a computer (owner, 9 Nov 2026,
+    // option A): the window in the middle shuts as a building's panel opens
+    // on the right. A phone keeps its old way: only the Build menu shuts.
+    if (centredLayout()) closeCentreWindow();
+    else this.buildMenu?.close();
 
     if (!this.panel) {
       const dock = this.panelDock;
@@ -1527,9 +1539,6 @@ export class YardScene implements Scene {
           this.panel = null;
           this.selected = null;
           this.renderer.setSelected(null);
-          this.monsters?.besidePanel(false);
-          this.siege?.besidePanel(false);
-          this.shop?.besidePanel(false);
           guideBus.emit("panel", { building: null });
         },
         // Clicking the Yard Planner should open the yard planner. The offer is
@@ -1547,17 +1556,19 @@ export class YardScene implements Scene {
       }).mount(dock);
     }
     this.panel.show(building);
-    this.monsters?.besidePanel(true);
-    this.siege?.besidePanel(true);
-    this.shop?.besidePanel(true);
     guideBus.emit("panel", { building: { id: building.id, type: building.type } });
 
-    // A monster building opens its tab of the Monsters screen (D4), beside
-    // the panel, which keeps the building's own upgrade. A Housing's panel is
-    // the Housing panel itself (#170), which has the tab's army in it, so the
-    // screen steps aside for it. Still on its first build (level 0), the
-    // building has no working window yet: the panel's construction info is
-    // all a click should open (#281).
+    // On a computer a monster building's click opens its panel only, as
+    // every building's does: the panel keeps its upgrade, and its Open button
+    // brings the Monsters screen to the middle, which closes the panel
+    // (owner, 9 Nov 2026, option A; it opened beside the panel before, D4).
+    // A phone keeps its old way: the click opens the building's tab as a
+    // sheet over the panel, which waits under it. A Housing's panel is the
+    // Housing panel itself (#170), with the tab's army in it, so the screen
+    // steps aside for it. Still on its first build (level 0), the building
+    // has no working window yet: the panel's construction info is all a
+    // click should open (#281).
+    if (centredLayout()) return;
     const tab = monstersTabFor(building.type);
     if (tab === MonstersTabId.HOUSING) this.monsters?.close();
     else if (tab && this.binding && building.level > 0) {
@@ -1587,7 +1598,6 @@ export class YardScene implements Scene {
     this.hud?.achievements?.close();
     this.siege?.close();
     this.monsters ??= new MonstersScreen({ binding, tabs }).mount(context.overlay.content);
-    this.monsters.besidePanel(this.panel !== null);
     this.monsters.open(shown, focus);
     // The player is looking: the Monsters button's cyan count starts again (#192).
     finishedMonstersJobs.clear();
@@ -1611,7 +1621,6 @@ export class YardScene implements Scene {
     this.hud?.achievements?.close();
     this.monsters?.close();
     this.siege ??= new SiegeScreen({ binding, openMap: () => this.openMap() }).mount(context.overlay.content);
-    this.siege.besidePanel(this.panel !== null);
     this.siege.open(site);
   }
 
@@ -1670,7 +1679,6 @@ export class YardScene implements Scene {
     this.defences?.close();
     this.hud?.achievements?.close();
     this.shop ??= new ShopScreen({ binding }).mount(context.overlay.content);
-    this.shop.besidePanel(this.panel !== null);
     this.shop.open();
   }
 

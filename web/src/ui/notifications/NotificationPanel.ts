@@ -3,6 +3,7 @@ import { achievementLineText } from "@/game/achievements/unlockText";
 import { friendLineTab, friendLineText } from "@/game/friends/friendText";
 import type { FriendsOpenTab } from "@/game/friends/friendsView";
 import { sentText } from "@/game/mail/mailbox";
+import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { jobLine, jobLineText } from "@/ui/yard/JobNotices";
 import "@/ui/styles/notifications.css";
@@ -62,6 +63,9 @@ export class NotificationPanel {
   private opened = false;
   private shown: GameNotification[] = [];
 
+  /** Its place in the middle of the screen, one window at a time (`ui/centreWindow.ts`). */
+  private readonly centre: CentreWindow;
+
   constructor(options: NotificationPanelOptions) {
     this.options = options;
     this.now = options.now ?? (() => Math.floor(Date.now() / 1000));
@@ -70,6 +74,7 @@ export class NotificationPanel {
     // opens and closes many times over one scene.
     const panel = new Panel({ title: "Notifications", className: "notif-screen", closable: false });
     this.element = panel.element;
+    this.centre = centreWindow(this.element, () => this.close());
     this.element.hidden = true;
     this.element.setAttribute("role", "region");
     this.element.addEventListener("keydown", (event) => {
@@ -123,6 +128,7 @@ export class NotificationPanel {
     if (this.opened) return;
     this.opened = true;
     this.element.hidden = false;
+    this.centre.opened();
     this.element.querySelector<HTMLElement>(".notif-screen__close")?.focus();
   }
 
@@ -131,6 +137,7 @@ export class NotificationPanel {
     const hadFocus = this.element.contains(document.activeElement);
     this.opened = false;
     this.element.hidden = true;
+    this.centre.closed();
     this.options.onClose?.(hadFocus);
   }
 

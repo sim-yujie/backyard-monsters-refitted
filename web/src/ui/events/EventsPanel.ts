@@ -15,6 +15,7 @@ import { typeName } from "@/game/yard/planner/summary";
 import { AMOUNT_CHANGE_SIGNS } from "@/ui/amountChange";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
+import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { resourceIcon, RESOURCE_KEYS } from "@/ui/resourceIcon";
 import { eventsArt } from "./eventsArt";
@@ -252,20 +253,28 @@ export class EventsPanel {
   private readonly panel: Panel;
   private readonly options: EventsPanelOptions;
 
+  /** Its place in the middle of the screen, one window at a time (`ui/centreWindow.ts`). */
+  private readonly centre: CentreWindow;
+
   constructor(options: EventsPanelOptions) {
     this.options = options;
     this.panel = new Panel({
       title: "Events",
       className: "events-panel",
       closeOnEscape: true,
-      onClose: () => options.onClose(),
+      onClose: () => {
+        this.centre.closed();
+        options.onClose();
+      },
     });
     this.element = this.panel.element;
+    this.centre = centreWindow(this.element, () => this.close());
     this.render({ kind: "loading" });
   }
 
   mount(container: HTMLElement): this {
     this.panel.mount(container);
+    this.centre.opened();
     return this;
   }
 

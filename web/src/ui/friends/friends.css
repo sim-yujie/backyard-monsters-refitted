@@ -1,6 +1,6 @@
 /*
- * The Friends screen (issue #370, docs/design/friends.md §8): docked on the
- * right like the achievements screen, a bottom sheet on a phone. Also the
+ * The Friends screen (issue #370, docs/design/friends.md §8): in the middle
+ * on a computer (ui.css `.panel--centre`), a bottom sheet on a phone. Also the
  * Account menu's Friends item and its count.
  *
  * Every value comes from tokens.css.
@@ -15,6 +15,8 @@
   width: min(520px, calc(100vw - 2 * var(--space-4)));
   max-width: none;
   min-width: 0;
+  /* On a computer it opens in the middle (ui.css `.panel--centre`), this tall. */
+  --centre-height: 760px;
 }
 
 .friends-screen[hidden] {

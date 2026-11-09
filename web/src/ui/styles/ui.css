@@ -433,6 +433,42 @@ body {
   box-shadow: var(--shadow-popup);
 }
 
+/* ── Middle windows (owner, 9 Nov 2026, option A) ───────────────────────────
+ * On a computer the game's windows open in the true middle of the screen, as
+ * the pop-ups above do and as Flash did: the Monsters screen and its tabs,
+ * Chaos Weapons, the Shop, Mail, Friends, Achievements, Defences, Alerts,
+ * Goals, Events, Quests and Build. `ui/centreWindow.ts` adds the class (and
+ * keeps one open at a time). Each is centred on both axes in the band between
+ * the HUD and the dock row, keeps its own width, takes its own height from
+ * `--centre-height` (else fits its content) and is never taller than the
+ * band, its body scrolling. Each window's own rule still places it on a
+ * phone, upright or on its side, where these do not apply. Only the building
+ * panel, the planner's tools, world chat and the attack screen stay at the
+ * side.
+ */
+@media (width > 620px) and (height > 500px) {
+  .overlay__layer > .panel.panel--centre {
+    --centre-top: calc(var(--hud-height) + var(--space-3));
+    /* The dock row (Monsters, Mail, Alerts, Goals; Build in the corner). */
+    --centre-bottom: 112px;
+
+    position: absolute;
+    inset: var(--centre-top) 0 var(--centre-bottom);
+    margin: auto;
+    height: var(--centre-height, max-content);
+    max-height: calc(100% - var(--centre-top) - var(--centre-bottom));
+    transform: none;
+  }
+}
+
+/* A short screen (a laptop's 720px): the window may come down over the dock
+   row, as the docked windows did, rather than lose a sixth of its height. */
+@media (width > 620px) and (500px < height <= 760px) {
+  .overlay__layer > .panel.panel--centre {
+    --centre-bottom: var(--space-4);
+  }
+}
+
 /* ── Resource icons (#93) ──────────────────────────────────────────────────
  * `resourceIcon.ts` sets the art, its crop and the aspect ratio inline; the
  * size follows the text around it, so one icon works in a HUD readout, a
