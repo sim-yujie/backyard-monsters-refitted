@@ -178,7 +178,7 @@ describe("TakeoverDialog", () => {
     });
     const label = $(".takeover-dialog__welcome");
     expect(label.hidden).toBe(false);
-    expect($(".takeover-dialog__welcome-tag").textContent).toBe("New to Map Room 2");
+    expect($(".takeover-dialog__welcome-tag").textContent).toBe("Frontier Pass");
     expect($(".takeover-dialog__welcome-off").textContent).toBe("-90%");
     // The label line no longer carries a struck total: each tile has its own.
     expect(label.querySelector("s")).toBeNull();

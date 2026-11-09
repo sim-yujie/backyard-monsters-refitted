@@ -5,7 +5,7 @@ import { gameIcon } from "@/ui/gameIcon";
 import { eventsArt } from "./eventsArt";
 
 /**
- * The "New to Map Room 2" card on the Events page (owner, 9 Nov 2026): while
+ * The "Frontier Pass" card on the Events page (owner, 9 Nov 2026): while
  * the player's 10 days run, the days left, the cheap first wild takeover and
  * the free Regular kit (each Ready or Used), a Go to Map Room 2 button, and a
  * "?" that opens a short note on why the takeover is so cheap and the kit
@@ -17,11 +17,11 @@ import { eventsArt } from "./eventsArt";
 
 const DAY = 86_400;
 
-export const WELCOME_TITLE = "New to Map Room 2";
+export const WELCOME_TITLE = "Frontier Pass";
 
 /** The "?" note: one lead line, then one line per reward and one for the days. */
 export const WELCOME_HELP = {
-  lead: "A head start for new Map Room 2 players.",
+  lead: "Frontier Pass: a head start for your first 10 days in Map Room 2.",
   takeover: "1st wild camp takeover: 10% of the resources. Shiny price as usual.",
   kit: "1 Regular Starter Kit free, on any outpost. Builds over time, no worker.",
   days: "10 days from joining Map Room 2. Once each.",
@@ -89,9 +89,9 @@ export const mr2WelcomeCard = (status: Mr2WelcomeStatus, now: number, onGo: () =
 
   const help = el("button", "btn btn--ghost events-welcome__help-button", "?");
   help.type = "button";
-  help.setAttribute("aria-label", "Why is this so cheap?");
+  help.setAttribute("aria-label", "What is the Frontier Pass?");
   help.setAttribute("aria-expanded", "false");
-  help.title = "Why is this so cheap?";
+  help.title = "What is the Frontier Pass?";
   head.append(title, days, help);
 
   const note = el("div", "events-welcome__help");

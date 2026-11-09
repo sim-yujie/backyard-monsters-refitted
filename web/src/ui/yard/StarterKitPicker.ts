@@ -42,7 +42,7 @@ import "@/ui/styles/starter-kits.css";
  * answer redraws the yard; the picker closes on success and reports through
  * `onBought`.
  *
- * "New to Map Room 2": while the player's free Regular kit is ready (the
+ * "Frontier Pass": while the player's free Regular kit is ready (the
  * Events answer's `mr2Welcome.kit`), the Regular card says Free and offers one
  * Free button; the server charges nothing and builds it as the resource path
  * does (prefabs, no worker).
@@ -57,15 +57,15 @@ export interface StarterKitPickerOptions {
   readonly onClose?: () => void;
   /** Stand-in calls, under test. */
   readonly actions?: StarterKitActions;
-  /** Whether the "New to Map Room 2" free Regular kit is ready; the Events answer by default. */
+  /** Whether the "Frontier Pass" free Regular kit is ready; the Events answer by default. */
   readonly freeKit?: () => Promise<boolean>;
 }
 
-/** The kit "New to Map Room 2" gives free (Regular). */
+/** The kit "Frontier Pass" gives free (Regular). */
 export const FREE_KIT_ID = 1;
 
 /** The Regular card's small label while it is free. */
-export const FREE_KIT_LABEL = "New to Map Room 2";
+export const FREE_KIT_LABEL = "Frontier Pass";
 
 const freeKitFromEvents = (): Promise<boolean> =>
   Promise.resolve()
@@ -295,7 +295,7 @@ export class StarterKitPicker {
       take.type = "button";
       take.className = "btn btn--primary kit-card__free";
       take.textContent = "Free";
-      take.title = "Free for players new to Map Room 2. The buildings build up over time without your worker.";
+      take.title = "Free with the Frontier Pass. The buildings build up over time without your worker.";
       take.disabled = busy;
       take.addEventListener("click", () => this.choose(kit.id, "resources"));
       buttons.append(take);

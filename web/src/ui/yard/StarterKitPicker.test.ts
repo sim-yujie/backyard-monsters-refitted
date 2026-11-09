@@ -151,7 +151,7 @@ describe("StarterKitPicker", () => {
       await openFree();
       expect(card(1).classList.contains("kit-card--free")).toBe(true);
       expect(card(1).querySelector(".kit-card__free-tag")!.textContent).toBe("Free");
-      expect(card(1).querySelector(".kit-card__free-label")!.textContent).toBe("New to Map Room 2");
+      expect(card(1).querySelector(".kit-card__free-label")!.textContent).toBe("Frontier Pass");
       expect(card(1).querySelector(".kit-card__free")!.textContent).toBe("Free");
       expect(card(1).querySelector(".kit-card__shiny")).toBeNull();
       expect(card(2).querySelector(".kit-card__free")).toBeNull();
@@ -161,7 +161,7 @@ describe("StarterKitPicker", () => {
     it("free even with an empty pool and no Shiny: the confirmation builds it free", async () => {
       const onBought = await openFree({ r1: 0, r2: 0, r3: 0, r4: 0 });
       card(1).querySelector<HTMLButtonElement>(".kit-card__free")!.click();
-      expect(confirm().textContent).toContain("Free: New to Map Room 2.");
+      expect(confirm().textContent).toContain("Free: Frontier Pass.");
       expect(confirm().textContent).toContain("without your worker");
       expect(go().textContent).toBe("Build it free");
       expect(go().disabled).toBe(false);

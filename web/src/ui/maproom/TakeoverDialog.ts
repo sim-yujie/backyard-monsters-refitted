@@ -35,7 +35,7 @@ export interface TakeoverDialogPrice {
   readonly resources?: number | undefined;
   readonly shiny?: number | undefined;
   readonly adjacent?: boolean | undefined;
-  /** "New to Map Room 2": `resources` is the cheap price, 10% of the full base. */
+  /** "Frontier Pass": `resources` is the cheap price, 10% of the full base. */
   readonly welcome?: boolean | undefined;
   /** The resource price without the welcome discount; with `welcome`. */
   readonly usualResources?: number | undefined;
@@ -113,7 +113,7 @@ export class TakeoverDialog {
     const cost = document.createElement("ul");
     cost.className = "takeover-dialog__cost";
     cost.setAttribute("aria-label", "Price, of each resource");
-    // A "New to Map Room 2" price shows, on each resource, the usual price
+    // A "Frontier Pass" price shows, on each resource, the usual price
     // struck through and then the cut one: "~~9,000,000~~ 900,000".
     const usual = price.welcome ? price.usualResources : undefined;
     for (const key of RESOURCE_KEYS) {
@@ -346,7 +346,7 @@ const option = (action: HTMLButtonElement, caption: HTMLElement): HTMLElement =>
 };
 
 /**
- * One resource's "New to Map Room 2" price: the icon, the usual price struck
+ * One resource's "Frontier Pass" price: the icon, the usual price struck
  * through, then the cut price. The two prices sit side by side, or one over
  * the other where the tile is too narrow (a phone).
  */
@@ -375,8 +375,8 @@ const hiddenText = (text: string): HTMLElement => {
   return span;
 };
 
-/** The small label over a "New to Map Room 2" price; hidden otherwise. */
-export const WELCOME_LABEL = "New to Map Room 2";
+/** The small label over a "Frontier Pass" price; hidden otherwise. */
+export const WELCOME_LABEL = "Frontier Pass";
 
 const welcomeLabel = (price: TakeoverDialogPrice): HTMLElement => {
   const line = document.createElement("p");
