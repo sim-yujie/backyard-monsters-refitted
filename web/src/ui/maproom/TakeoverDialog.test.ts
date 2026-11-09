@@ -165,6 +165,32 @@ describe("TakeoverDialog", () => {
     }
   });
 
+  it("a New to Map Room 2 price: the small label, -90%, the usual price struck, no half-price line", () => {
+    const { $ } = open({
+      price: {
+        resources: 350_000,
+        usualResources: 1_750_000,
+        welcome: true,
+        shiny: 924,
+        adjacent: true,
+        affordable: { resources: true, shiny: true },
+      },
+    });
+    const label = $(".takeover-dialog__welcome");
+    expect(label.hidden).toBe(false);
+    expect($(".takeover-dialog__welcome-tag").textContent).toBe("New to Map Room 2");
+    expect($(".takeover-dialog__welcome-off").textContent).toBe("-90%");
+    expect($(".takeover-dialog__welcome-usual").textContent).toBe("1,750,000");
+    expect($(".takeover-dialog__adjacent").hidden).toBe(true);
+    expect($(".takeover-dialog__cost").textContent).toContain("350,000");
+  });
+
+  it("no label on a usual price", () => {
+    const { $ } = open();
+    expect($(".takeover-dialog__welcome").hidden).toBe(true);
+    expect($(".takeover-dialog__adjacent").hidden).toBe(false);
+  });
+
   it("Back returns to the choice without calling the server", () => {
     const { dialog, takeOver, $ } = open();
     $(".takeover-dialog__resources").click();

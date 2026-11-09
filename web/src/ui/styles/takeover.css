@@ -73,6 +73,33 @@
 }
 
 .takeover-dialog__ground,
+/* "New to Map Room 2": a small label over the cheap price. */
+.takeover-dialog__welcome:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.takeover-dialog__welcome-tag {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--colour-accent-soft);
+  color: var(--colour-accent-text);
+  font-weight: 700;
+}
+
+.takeover-dialog__welcome-off {
+  color: var(--colour-gain);
+  font-weight: 700;
+}
+
+.takeover-dialog__welcome-usual {
+  font-variant-numeric: tabular-nums;
+}
+
 .takeover-dialog__adjacent,
 .takeover-dialog__countdown {
   margin: 0;

@@ -91,6 +91,14 @@ describe("the map's Take over control", () => {
     });
   });
 
+  it("a New to Map Room 2 price says so", () => {
+    const view = takeoverActionView("camp", {
+      status: "quoted",
+      quote: quote({ resources: 350_000, usualResources: 3_500_000, welcome: true }),
+    });
+    expect(view.note).toBe("New to Map Room 2: 350,000 of each resource or 924 Shiny");
+  });
+
   it("on a camp that cannot be taken: disabled with the reason in plain words", () => {
     const view = takeoverActionView("camp", {
       status: "quoted",

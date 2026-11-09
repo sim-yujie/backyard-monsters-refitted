@@ -225,7 +225,8 @@ export const takeoverActionView = (kind: TakeoverKind, state: TakeoverQuoteState
       const { quote } = state;
       const expiresAt = quote.grantExpiresAt;
       if (kind === "outpost" && expiresAt === undefined) return HIDDEN;
-      const note = quote.eligible ? priceText(quote) : refusalText(quote.reason ?? "notFound", kind);
+      const price = quote.welcome ? `New to Map Room 2: ${priceText(quote)}` : priceText(quote);
+      const note = quote.eligible ? price : refusalText(quote.reason ?? "notFound", kind);
       return {
         visible: true,
         enabled: quote.eligible,

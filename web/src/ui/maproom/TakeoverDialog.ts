@@ -35,6 +35,10 @@ export interface TakeoverDialogPrice {
   readonly resources?: number | undefined;
   readonly shiny?: number | undefined;
   readonly adjacent?: boolean | undefined;
+  /** "New to Map Room 2": `resources` is the cheap price, 10% of the full base. */
+  readonly welcome?: boolean | undefined;
+  /** The resource price without the welcome discount; with `welcome`. */
+  readonly usualResources?: number | undefined;
   /** Absent when not known: both payments are offered and the server decides. */
   readonly affordable?: { readonly resources: boolean; readonly shiny: boolean } | undefined;
   readonly shinyLocked?: boolean | undefined;
@@ -118,7 +122,10 @@ export class TakeoverDialog {
     const adjacent = document.createElement("p");
     adjacent.className = "u-muted takeover-dialog__adjacent";
     adjacent.textContent = "Half price: this yard is next to your main yard.";
-    adjacent.hidden = !price.adjacent;
+    // The welcome price is a flat 10% of the full price: no half price on top.
+    adjacent.hidden = !price.adjacent || !!price.welcome;
+
+    const welcome = welcomeLabel(price);
 
     this.countdown = document.createElement("p");
     this.countdown.className = "takeover-dialog__countdown";
@@ -184,7 +191,7 @@ export class TakeoverDialog {
     this.status.setAttribute("aria-live", "polite");
     this.status.hidden = true;
 
-    this.popup.setContent(expand, ground, cost, adjacent, this.countdown, this.choice, this.confirm, this.status);
+    this.popup.setContent(expand, ground, welcome, cost, adjacent, this.countdown, this.choice, this.confirm, this.status);
     this.setStep("choose");
     this.tick();
     if (price.grantExpiresAt !== undefined) this.timer = window.setInterval(() => this.tick(), 1000);
@@ -333,4 +340,29 @@ const option = (action: HTMLButtonElement, caption: HTMLElement): HTMLElement =>
   element.className = "takeover-dialog__option";
   element.append(action, caption);
   return element;
+};
+
+/** The small label over a "New to Map Room 2" price; hidden otherwise. */
+export const WELCOME_LABEL = "New to Map Room 2";
+
+const welcomeLabel = (price: TakeoverDialogPrice): HTMLElement => {
+  const line = document.createElement("p");
+  line.className = "takeover-dialog__welcome";
+  line.hidden = !price.welcome;
+  if (!price.welcome) return line;
+  const tag = document.createElement("span");
+  tag.className = "takeover-dialog__welcome-tag";
+  tag.textContent = WELCOME_LABEL;
+  const off = document.createElement("span");
+  off.className = "takeover-dialog__welcome-off";
+  off.textContent = "-90%";
+  line.append(tag, off);
+  if (price.usualResources !== undefined) {
+    const usual = document.createElement("s");
+    usual.className = "u-muted takeover-dialog__welcome-usual";
+    usual.textContent = formatAmount(price.usualResources);
+    usual.title = "The usual price, of each resource";
+    line.append(usual);
+  }
+  return line;
 };
