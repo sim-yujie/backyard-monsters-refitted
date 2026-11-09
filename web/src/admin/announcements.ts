@@ -146,6 +146,9 @@ export const pictureProblem = (file: Pick<File, "type" | "size">): string | null
 export type Standing = { word: string; tone: "good" | "info" | "warn" | "quiet" };
 
 /** Where an announcement stands for players now. */
+/** A standing's tone as the mock-up's badge colour. */
+const BADGE_TONE: Record<Standing["tone"], string> = { good: "green", info: "blue", warn: "amber", quiet: "" };
+
 export const standing = (
   item: Pick<AdminAnnouncement, "status" | "live" | "startsAt" | "endsAt">,
   now = Date.now(),
@@ -371,19 +374,21 @@ export class AnnouncementsView {
   }
 
   private renderList(): HTMLElement {
+    // Astra's mock-up: one panel, its title and New announcement on top.
     const head = h(
       "div",
-      { class: "actions split" },
+      { class: "actions split ann-head" },
       h(
-        "p",
-        { class: "note" },
-        "Pop-ups players see after their yard loads, until they press “Got it”.",
+        "div",
+        {},
+        h("h2", { class: "section-title" }, "Announcements"),
+        h("p", { class: "note" }, "Pop-ups players see after their yard loads, until they press “Got it”."),
       ),
       this.editing === undefined
         ? h(
             "button",
             {
-              class: "button primary",
+              class: "button quiet",
               attrs: { type: "button" },
               onClick: () => void this.edit(null),
             },
@@ -392,25 +397,31 @@ export class AnnouncementsView {
         : null,
     );
     if (!this.loaded)
-      return h("div", { class: "group" }, head, h("div", { class: "skeleton" }));
+      return h("section", { class: "group panel ann-panel" }, head, h("div", { class: "skeleton" }));
     if (this.loadError)
       return h(
-        "div",
-        { class: "group" },
+        "section",
+        { class: "group panel ann-panel" },
         head,
         h("p", { class: "form-error" }, this.loadError),
       );
     if (this.items.length === 0) {
       return h(
-        "div",
-        { class: "group" },
+        "section",
+        { class: "group panel ann-panel" },
         head,
-        h("div", { class: "empty" }, h("p", {}, "No announcements yet.")),
+        h(
+          "div",
+          { class: "empty in-panel" },
+          h("span", { class: "needs-icon" }, icon("announce", 20)),
+          h("p", {}, "No announcements yet."),
+          h("p", { class: "small" }, "Press New announcement to write one and see how it looks in the game."),
+        ),
       );
     }
     return h(
-      "div",
-      { class: "group" },
+      "section",
+      { class: "group panel ann-panel" },
       head,
       h("ul", { class: "ann-list" }, ...this.items.map((item) => this.renderRow(item))),
     );
@@ -429,8 +440,6 @@ export class AnnouncementsView {
         h(
           "span",
           { class: "row-meta" },
-          h("span", { class: `chip chip-${state.tone}` }, state.word),
-          " ",
           item.endsAt ? `until ${dateTime(item.endsAt)} · ` : "",
           item.imageIds.length > 0 ? `${plural(item.imageIds.length, "picture")} · ` : "",
           item.shiny > 0 ? `Gift ${count(item.shiny)} Shiny · ${count(item.claims)} claimed · ` : "",
@@ -442,6 +451,7 @@ export class AnnouncementsView {
           ),
         ),
       ),
+      h("span", { class: `badge ${BADGE_TONE[state.tone]}`.trim() }, state.word),
       confirming
         ? h(
             "span",
@@ -813,8 +823,8 @@ export class AnnouncementsView {
     });
     drawPreview();
     return h(
-      "div",
-      { class: "ann-editor" },
+      "section",
+      { class: "ann-editor panel" },
       form,
       h("div", { class: "ann-preview-wrap" }, h("h3", {}, "How players see it"), preview),
     );

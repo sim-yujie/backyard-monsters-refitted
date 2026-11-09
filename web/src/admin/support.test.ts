@@ -327,6 +327,11 @@ describe("the Shiny section", () => {
     const view = new ShinyView({ openReport: (id) => opened.push(id), say: () => {} });
     document.body.append(view.element);
     await view.refresh();
+    // The mock-up's two panels: the form, and the gift history beside it.
+    expect([...view.element.querySelectorAll(".shiny-cols > .panel h2")].map((t) => t.textContent)).toEqual([
+      "Give Shiny",
+      "Gift history",
+    ]);
     expect(view.element.querySelector(".log-head")?.textContent).toContain("2 gifts · 1,250 Shiny in all");
     const rows = view.element.querySelectorAll(".award-log .award-row");
     expect(rows).toHaveLength(2);
@@ -408,6 +413,8 @@ describe("the bug lists", () => {
     const segs = [...view.element.querySelectorAll<HTMLButtonElement>(".bugs-side .seg")];
     expect(segs.map((s) => s.textContent)).toEqual(["New", "Working", "Closed", "All"]);
     expect(segs[0]!.getAttribute("aria-pressed")).toBe("true");
+    // The mock-up's segment buttons.
+    expect(view.element.querySelector(".bugs-side .segments")).not.toBeNull();
     expect(calls.at(-1)!.query.get("filter")).toBe("new");
     segs[1]!.click();
     expect(lists).toEqual(["working"]);

@@ -260,7 +260,7 @@ export class BugsView {
   private renderList(): void {
     const tabs = h(
       "div",
-      { class: "segmented", attrs: { role: "group", "aria-label": "Which bug reports" } },
+      { class: "segmented segments", attrs: { role: "group", "aria-label": "Which bug reports" } },
       ...BUG_LISTS.map(([list, label]) =>
         h(
           "button",
@@ -280,7 +280,13 @@ export class BugsView {
           { class: "rows bug-rows" },
           ...this.reports.map((report) => bugRow(report, (id) => this.options.onRoute(id), report.id === this.openId)),
         )
-      : h("div", { class: "empty" }, h("strong", {}, emptyTitle), h("p", {}, emptyText));
+      : h(
+          "div",
+          { class: "empty" },
+          h("span", { class: "needs-icon" }, icon("ok", 20)),
+          h("strong", {}, emptyTitle),
+          h("p", {}, emptyText),
+        );
     const more =
       this.nextBefore !== null
         ? h(

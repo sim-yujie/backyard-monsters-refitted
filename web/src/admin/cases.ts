@@ -15,7 +15,7 @@ import {
 import { h, replace, type Child } from "./dom";
 import { ago, count, dateTime, plural } from "./format";
 import { icon, type IconName } from "./icons";
-import { DEFAULT_WARNING, roomLabel, severityChip } from "./moderation";
+import { DEFAULT_WARNING, NO_COPY_TITLE, roomLabel, severityChip } from "./moderation";
 import { errorWords } from "./shiny";
 
 /**
@@ -38,7 +38,7 @@ export const CASE_STEPS: readonly (readonly [number | null, string])[] = [
 ];
 
 /** The mail each rewarded reporter gets (the server's default reason). */
-const AWARD_MAIL = "Thank you for reporting a chat message that broke the rules.";
+export const AWARD_MAIL = "Thank you for reporting a chat message that broke the rules.";
 
 /** "1 hour", "1 day", "3 days". */
 export const lengthWords = (hours: number): string =>
@@ -106,7 +106,7 @@ const stat = (name: IconName, value: number, words: string, extra = ""): HTMLEle
   );
 
 /** One line of the room copy; the reported line is marked. */
-const snapshotLine = (line: SnapshotLine, offender: number): HTMLElement =>
+export const snapshotLine = (line: SnapshotLine, offender: number): HTMLElement =>
   h(
     "li",
     {
@@ -154,9 +154,9 @@ export const messageBlock = (message: CaseMessage, offender: number): HTMLElemen
             "span",
             {
               class: "chip chip-warn",
-              attrs: { title: "The chat server had no copy of the line to check the words against." },
+              attrs: { title: NO_COPY_TITLE },
             },
-            "Not matched",
+            "No chat copy",
           ),
     ),
     marked ? null : h("p", { class: "chat-quote" }, `“${message.message}”`),

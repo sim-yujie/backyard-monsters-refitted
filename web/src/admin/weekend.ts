@@ -11,7 +11,7 @@ import { h, replace } from "./dom";
 import { duration } from "./format";
 
 /**
- * The Weekend events section (`#weekend`): the mini weekend event, one boost
+ * The Weekend events section (`#events`, a tab of Announcements): the mini weekend event, one boost
  * each weekend (`server/src/controllers/admin/weekend.ts`).
  *
  * Top: what is on now or next, one sentence, and the on/off switch. Then the

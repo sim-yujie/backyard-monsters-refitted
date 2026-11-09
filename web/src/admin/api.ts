@@ -676,6 +676,8 @@ export interface FlagLine {
   /** `word`: a listed word as typed; `disguised`: spelled to get past the filter ("fvck", "f u c k"). */
   rule: FlagRule;
   at: string;
+  /** When it was said (ms), as chat stamped it: a report of the same line has the same stamp. */
+  ts: number;
 }
 
 /** A flagged player: open flags counted, newest lines first. */
@@ -695,7 +697,14 @@ export interface FlaggedPlayer {
 export type FlagSort = "latest" | "serious";
 
 export const fetchChatFlags = (
-  options: { sort?: FlagSort; slursOnly?: boolean; userid?: number; offset?: number | undefined } = {},
+  options: {
+    sort?: FlagSort;
+    slursOnly?: boolean;
+    userid?: number;
+    offset?: number | undefined;
+    /** Lines per player (default 3, at most 50): a player record asks for them all. */
+    lines?: number;
+  } = {},
 ): Promise<Envelope<{ players: FlaggedPlayer[]; nextOffset: number | null }>> =>
   adminGet(`${ADMIN}/chatflags`, {
     sort: options.sort,
@@ -703,6 +712,7 @@ export const fetchChatFlags = (
     userid: options.userid,
     offset: options.offset,
     limit: 30,
+    lines: options.lines,
   });
 
 export const dismissChatFlags = (userid: number, upTo: number): Promise<Envelope<{ dismissed: number }>> =>
@@ -866,8 +876,14 @@ export interface InboxPlayer {
   /** Reports of those lines (one per reporter per line). */
   reports: number;
   uniqueReporters: number;
-  /** Open lines caught by the word filter. */
+  /** Open lines caught by the word filter (some may be reported lines too). */
   filterLines: number;
+  /** Of those, lines players reported too: already one of `reportedMessages`, never counted twice. */
+  alsoReported: number;
+  /** Lines only the word filter caught. */
+  filterOnlyLines: number;
+  /** Different lines open against them, each counted once. */
+  messages: number;
   slurs: number;
   /** The newest open word-filter line: acting closes up to it. */
   flagsUpTo: number | null;
@@ -883,6 +899,7 @@ export interface InboxPlayer {
 export interface InboxList {
   players: InboxPlayer[];
   nextOffset: number | null;
+  /** Players; each in one list (Player reports if anyone reported them, else Word filter): reports + filter = all. */
   counts: { all: number; reports: number; filter: number };
 }
 
@@ -902,7 +919,40 @@ export interface ClosedItems {
   caseId: number | null;
   reports: number;
   filterLines: number;
+  /** Word-filter lines that were not reported lines (the rest were counted with the reports). */
+  filterOnlyLines: number;
 }
+
+/** One decision in the Closed list (server `listClosed`). */
+export interface ClosedDecision {
+  userid: number;
+  username: string | null;
+  closedAt: string;
+  closedBy: number | null;
+  closedByName: string | null;
+  caseId: number | null;
+  outcome: CaseOutcome;
+  hours: number | null;
+  note: string | null;
+  messages: number;
+  reportedMessages: number;
+  reports: number;
+  uniqueReporters: number;
+  alsoReported: number;
+  filterOnlyLines: number;
+  preview: { text: string; source: "report" | "filter" } | null;
+  flagLines: FlagLine[];
+}
+
+export interface ClosedList {
+  decisions: ClosedDecision[];
+  nextOffset: number | null;
+  /** Decisions in the last 30 days. */
+  count: number;
+}
+
+export const fetchClosed = (options: { userid?: number; offset?: number | undefined } = {}): Promise<Envelope<ClosedList>> =>
+  adminGet(`${ADMIN}/inbox/closed`, { userid: options.userid, offset: options.offset, limit: 30 });
 
 export const actOnInboxPlayer = (
   userid: number,

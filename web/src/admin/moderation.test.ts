@@ -127,9 +127,9 @@ describe("the chat reports list", () => {
     await view.refresh();
     const rows = view.element.querySelectorAll(".report-row");
     expect(rows).toHaveLength(2);
-    expect(rows[0]!.textContent).toContain("Not matched");
+    expect(rows[0]!.textContent).toContain("No chat copy");
     expect(rows[0]!.textContent).toContain("done: Warning");
-    expect(rows[1]!.textContent).toContain("Matched");
+    expect(rows[1]!.textContent).toContain("Checked");
     expect(rows[1]!.textContent).toContain("“you are all noobs”");
     expect(rows[1]!.textContent).toContain("reported by Tattler · Map Room 2");
 
@@ -298,6 +298,7 @@ const flagged = (over: Partial<FlaggedPlayer> = {}): FlaggedPlayer => ({
   lines: [
     {
       id: 90,
+      ts: 1_762_156_800_000,
       channel: "chat:mr2-global",
       message: "shut up faggot",
       shown: "shut up ******",

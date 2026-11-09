@@ -6,7 +6,7 @@ import { recordChatFlag } from "../chat/chatFlags.js";
 import { recordChatReport } from "../chat/chatReports.js";
 import { actOnCase } from "./chatCases.js";
 import type { ModerationEffects } from "./moderation.js";
-import { actOnInboxPlayer, listInbox, moderatePlayer } from "./moderationInbox.js";
+import { actOnInboxPlayer, listClosed, listInbox, moderatePlayer } from "./moderationInbox.js";
 
 /**
  * The moderation inbox against a real Postgres: one row per player from
@@ -130,7 +130,118 @@ describe.skipIf(!dbName)("the moderation inbox on a real database", () => {
     expect(players[0]).toMatchObject({ caseId: null, reports: 0, filterLines: 1, slurs: 1 });
 
     expect((await ours("reports")).map((p) => p.userid)).toEqual([OFFENDER]);
-    expect((await ours("filter")).map((p) => p.userid)).toEqual([SWEARER, OFFENDER]);
+    // Each player is in one list: the offender was reported, so not under Word filter too.
+    expect((await ours("filter")).map((p) => p.userid)).toEqual([SWEARER]);
+  });
+
+  describe("a line both reported and caught by the word filter is one item, counted once (owner, 8 Nov 2026)", () => {
+    const counts = async () => (await listInbox(orm.em.fork(), { limit: 100 })).counts;
+
+    test("in the lists and every count", async () => {
+      const before = await counts();
+      // Line 1: reported by two players AND caught by the filter (same chat stamp).
+      await report(REPORTER_A, OFFENDER, 1);
+      await report(REPORTER_B, OFFENDER, 1);
+      await flag(OFFENDER, 1);
+
+      const offender = (await row(OFFENDER))!;
+      expect(offender).toMatchObject({
+        reportedMessages: 1,
+        reports: 2,
+        uniqueReporters: 2,
+        filterLines: 1,
+        alsoReported: 1,
+        filterOnlyLines: 0,
+        messages: 1,
+      });
+      // Under Player reports, never under Word filter as well.
+      expect((await ours("reports")).map((p) => p.userid)).toEqual([OFFENDER]);
+      expect((await ours("filter")).map((p) => p.userid)).toEqual([]);
+      const after = await counts();
+      expect(after.all - before.all).toBe(1);
+      expect(after.reports - before.reports).toBe(1);
+      expect(after.filter - before.filter).toBe(0);
+      expect(after.reports + after.filter).toBe(after.all);
+    });
+
+    test("a reported line, the same line caught, and another caught line make two lines", async () => {
+      await report(REPORTER_A, OFFENDER, 1);
+      await flag(OFFENDER, 1);
+      await flag(OFFENDER, 2);
+      expect(await row(OFFENDER)).toMatchObject({
+        reportedMessages: 1,
+        filterLines: 2,
+        alsoReported: 1,
+        filterOnlyLines: 1,
+        messages: 2,
+      });
+      expect((await ours("filter")).map((p) => p.userid)).toEqual([]);
+    });
+
+    test("closing says the caught copy of a reported line was not a second item", async () => {
+      await report(REPORTER_A, OFFENDER, 1);
+      await report(REPORTER_B, OFFENDER, 1);
+      await flag(OFFENDER, 1);
+      await flag(OFFENDER, 2);
+      const seen = (await row(OFFENDER))!;
+      const done = await actOnInboxPlayer(
+        orm.em.fork(),
+        OFFENDER,
+        { kind: "warn", reason: "Be nice" },
+        { caseId: seen.caseId, reports: seen.reports, flagsUpTo: seen.flagsUpTo },
+        OWNER,
+        effects,
+      );
+      expect(done).toMatchObject({ outcome: "done", closed: { reports: 2, filterLines: 2, filterOnlyLines: 1 } });
+    });
+
+    test("the Closed list shows the decision once, its lines counted once", async () => {
+      await report(REPORTER_A, OFFENDER, 1);
+      await flag(OFFENDER, 1);
+      await flag(OFFENDER, 2);
+      const seen = (await row(OFFENDER))!;
+      await actOnInboxPlayer(
+        orm.em.fork(),
+        OFFENDER,
+        { kind: "dismiss", note: "Banter" },
+        { caseId: seen.caseId, reports: seen.reports, flagsUpTo: seen.flagsUpTo },
+        OWNER,
+        effects,
+      );
+      const closed = await listClosed(orm.em.fork(), { userid: OFFENDER });
+      expect(closed.count).toBe(1);
+      expect(closed.decisions).toHaveLength(1);
+      expect(closed.decisions[0]).toMatchObject({
+        userid: OFFENDER,
+        caseId: seen.caseId,
+        outcome: "dismiss",
+        note: "Banter",
+        closedBy: OWNER,
+        reportedMessages: 1,
+        reports: 1,
+        alsoReported: 1,
+        filterOnlyLines: 1,
+        messages: 2,
+      });
+      expect(closed.decisions[0]!.flagLines.map((l) => l.ts)).toEqual([T0 + 1000, T0 + 2000]);
+    });
+
+    test("word-filter lines closed on their own are a decision with the step taken", async () => {
+      await flag(SWEARER, 3);
+      const seen = (await row(SWEARER))!;
+      await actOnInboxPlayer(
+        orm.em.fork(),
+        SWEARER,
+        { kind: "mute", reason: "Language", hours: 24 },
+        { caseId: null, reports: 0, flagsUpTo: seen.flagsUpTo },
+        OWNER,
+        effects,
+      );
+      const closed = await listClosed(orm.em.fork(), { userid: SWEARER });
+      expect(closed.decisions).toEqual([
+        expect.objectContaining({ caseId: null, outcome: "mute", hours: 24, note: "Language", messages: 1, filterOnlyLines: 1, reports: 0 }),
+      ]);
+    });
   });
 
   test("acting on a chat case also sets the player's word-filter lines aside", async () => {

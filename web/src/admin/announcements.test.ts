@@ -178,6 +178,10 @@ describe("AnnouncementsView", () => {
     expect(rows[0]!.textContent).toContain("12 pressed Got it");
     expect(rows[1]!.textContent).toContain("Draft");
     expect(rows[1]!.textContent).not.toContain("pressed Got it");
+    // The mock-up's panel and badges: Live in green, a draft plain.
+    expect(view.element.querySelector(".ann-panel h2")?.textContent).toBe("Announcements");
+    expect(rows[0]!.querySelector(".badge")?.className).toBe("badge green");
+    expect(rows[1]!.querySelector(".badge")?.className).toBe("badge");
   });
 
   it("writes a new one: the preview follows the typing, text as text with links, and Save posts it", async () => {
