@@ -34,6 +34,7 @@ import { AREA_ZONE_SIZE, DEFAULT_ZOOM, MIN_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE
 import { mapRefreshSeconds, quality } from "@/game/quality";
 import {
   attackRefusal,
+  cellDistance,
   hasDeclareWar,
   outpostsToLoad,
   ownCellsIn,
@@ -474,6 +475,12 @@ export class MapRoom2Scene implements Scene {
           relocate: payload.b === CellType.OUTPOST,
         }),
         onMoveMonsters: (_cell, payload) => this.openTransfer(payload.bid),
+        // The own yard's info card (beta 7, owner's design B).
+        yardCard: {
+          sizeOf: (id) => (this.ownSave ? housingSpace(id, academyLevel(this.ownSave.academy, id)) ?? 1 : 1),
+          cellsFromHome: (cell) => (this.home ? cellDistance(this.home, cell) : null),
+          onBringMonsters: (_cell, payload) => this.bringMonsters(payload.bid),
+        },
         onRelocate: (cell, payload) => this.openRelocate(cell, payload),
         onMessage: (payload) => void this.mail?.openCompose({ userid: payload.uid, name: payload.n }),
         onTruce: (payload) => void this.mail?.openTruce({ userid: payload.uid, name: payload.n, baseid: payload.bid }),
@@ -1456,8 +1463,24 @@ export class MapRoom2Scene implements Scene {
     return cellAt(area, cell.col, cell.row);
   }
 
-  /** "Move monsters" from one of the player's yards. */
-  private openTransfer(from: string): void {
+  /**
+   * "Bring monsters here" (the yard info card): the transfer dialog with this
+   * yard as the target, from the main yard when this is an outpost, else from
+   * the first outpost (one end must be an outpost, `transferRules.ts`).
+   */
+  private bringMonsters(to: string): void {
+    const yards = this.ownYards().map(({ choice }) => choice);
+    const target = yards.find((yard) => yard.baseid === to);
+    const from = yards.find((yard) => yard.baseid !== to && !(target?.main && yard.main));
+    if (!target || !from) {
+      this.ui?.notices.show("transfer", TRANSFER_TEXT.noOutposts, { level: "info", timeoutMs: 4_000 });
+      return;
+    }
+    this.openTransfer(from.baseid, to);
+  }
+
+  /** "Move monsters" from one of the player's yards, to `to` when given. */
+  private openTransfer(from: string, to?: string): void {
     const save = this.ownSave;
     const yards = this.ownYards();
     if (!save || yards.length < 2) {
@@ -1469,6 +1492,7 @@ export class MapRoom2Scene implements Scene {
       new TransferDialog({
         yards: yards.map(({ choice }) => choice),
         from,
+        ...(to === undefined ? {} : { to }),
         load: async (baseid): Promise<TransferYard> => {
           const cell = cells.get(baseid);
           const payload = cell ? await this.freshCell(cell) : undefined;
