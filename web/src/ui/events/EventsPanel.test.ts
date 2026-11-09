@@ -445,18 +445,27 @@ describe("EventsPanel: the New to Map Room 2 card", () => {
     panel.close();
   });
 
-  it("lays two or more cards under the Frontier Pass in columns on a computer, one alone in one", () => {
+  it("on a computer: the Frontier Pass on top, events in the main column, Coming up at the side", () => {
     const { panel } = mounted();
-    panel.render(list([event()], { mr2Welcome: welcome }));
-    expect(panel.element.querySelector(".events-page")?.classList.contains("events-page--columns")).toBe(false);
-    panel.render(list([event(), event({ id: "other", title: "Other" })], { mr2Welcome: welcome }));
+    const soon = event({ id: "soon", title: "Soon", status: "upcoming", startsAt: 2 * 86_400 });
+    panel.render(list([event(), soon], { mr2Welcome: welcome }));
     const page = panel.element.querySelector(".events-page");
-    expect(page?.classList.contains("events-page--columns")).toBe(true);
-    expect(page?.firstElementChild?.getAttribute("data-event")).toBe("mr2-welcome");
+    expect([...(page?.children ?? [])].map((child) => child.className.split(" ")[0])).toEqual([
+      "events-card",
+      "events-page__main",
+      "events-upcoming",
+    ]);
+    expect(page?.classList.contains("events-page--side")).toBe(true);
+    expect(page?.querySelector(".events-page__main .events-card__title")?.textContent).toBe("Halloween");
+    // Nothing on now: no side column, Coming up under the card.
+    panel.render(list([soon], { mr2Welcome: welcome }));
+    expect(panel.element.querySelector(".events-page")?.classList.contains("events-page--side")).toBe(false);
+    expect(panel.element.querySelector(".events-page__main")).toBeNull();
     const css = eventsCss.replace(/\r\n/g, "\n");
     const desktop = css.slice(css.indexOf("@media (width > 620px) and (height > 500px)"));
     expect(desktop).toMatch(/\.events-panel \{\s*width: min\(1000px/);
-    expect(desktop).toMatch(/\.events-page--columns > \.events-card--mr2-welcome \{\s*column-span: all;/);
+    const wide = css.slice(css.indexOf("@media (width >= 1100px) and (height > 500px)"));
+    expect(wide).toMatch(/\.events-page > \.events-card--mr2-welcome \{\s*grid-column: 1 \/ -1;/);
     panel.close();
   });
 

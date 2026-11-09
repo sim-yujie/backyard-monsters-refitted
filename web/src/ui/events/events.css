@@ -135,7 +135,8 @@
 
 /* The page's cards, one under the other (a phone, a phone on its side, a
    narrow window); wide on a computer below. */
-.events-page {
+.events-page,
+.events-page__main {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -1089,13 +1090,14 @@
   min-width: 0;
 }
 
-/* The track: from this mark's dot to the one before it, lit up to today. */
+/* The track: from the dot before this mark's to its own, edge to edge (the
+   dots' fills may be see-through), lit up to today. */
 .events-welcome__mark + .events-welcome__mark::before {
   content: "";
   position: absolute;
-  right: 50%;
+  right: calc(50% + var(--mark-size) / 2 + 2px);
   bottom: calc(var(--mark-size) / 2 - 2px);
-  width: 100%;
+  width: calc(100% - var(--mark-size) - 4px);
   height: 4px;
   border-radius: 2px;
   background: var(--colour-border-subtle);
@@ -1127,6 +1129,7 @@
 
 .events-welcome__mark-dot {
   position: relative;
+  z-index: 1;
   display: grid;
   place-items: center;
   width: var(--mark-size);
@@ -1163,41 +1166,26 @@
 
 /* ── A computer: a bigger page, the cards spread out (owner, 9 Nov) ───────
    Windows open in the middle now (ui.css `.panel--centre`), so the page is
-   wide: the Frontier Pass across the top, then the events and Coming up in
-   two columns, each about as wide as the whole page was. centreWindow.ts may
-   narrow it to clear the Events button; under ~720px wide it is one column
-   again. */
+   wider (centreWindow.ts may narrow it to clear the Events button), the
+   login calendar two weeks of 7 and the timeline's marks bigger. */
 @media (width > 620px) and (height > 500px) {
+  /* max-width: none past ui.css's `.panel` cap of 560px. */
   .events-panel {
     width: min(1000px, calc(100vw - 2 * var(--space-4)));
+    max-width: none;
   }
 
   .events-panel .panel__body {
     padding: var(--space-4);
   }
 
-  .events-page--columns {
-    display: block;
-    column-width: 340px;
-    column-count: 2;
-    column-gap: var(--space-6);
-    column-rule: 1px solid var(--colour-border-subtle);
+  .events-page,
+  .events-page__main {
+    gap: var(--space-5);
   }
 
-  .events-page--columns > * {
-    break-inside: avoid;
-    margin-bottom: var(--space-5);
-  }
-
-  .events-page--columns > :last-child {
-    margin-bottom: 0;
-  }
-
-  /* The Frontier Pass across both columns, a line under it. */
-  .events-page--columns > .events-card--mr2-welcome {
-    column-span: all;
-    padding-bottom: var(--space-5);
-    border-bottom: 1px solid var(--colour-border-subtle);
+  .events-card__title {
+    font-size: var(--text-xl);
   }
 
   /* The 14 days as two weeks. */
@@ -1218,7 +1206,44 @@
     font-size: var(--text-md);
   }
 
-  /* The two rewards side by side, their pictures bigger. */
+  .events-welcome__reward > .events-welcome__picture {
+    width: 56px;
+    height: 56px;
+  }
+
+  .events-welcome__help-line > :first-child {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* A wide screen: the Frontier Pass across the top, a line under it, its two
+   rewards side by side with bigger pictures; the events on now in the wide
+   main column and Coming up in a column at the side. */
+@media (width >= 1100px) and (height > 500px) {
+  .events-page {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .events-page--side {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+    column-gap: var(--space-6);
+  }
+
+  .events-page > .events-card--mr2-welcome {
+    grid-column: 1 / -1;
+    padding-bottom: var(--space-5);
+    border-bottom: 1px solid var(--colour-border-subtle);
+  }
+
+  /* Coming up at the side: a line between it and the main column. */
+  .events-page--side > .events-upcoming {
+    padding-left: var(--space-5);
+    border-left: 1px solid var(--colour-border-subtle);
+  }
+
   .events-welcome__rewards {
     flex-direction: row;
   }
@@ -1240,14 +1265,5 @@
 
   .events-welcome__figure {
     font-size: var(--text-lg);
-  }
-
-  .events-welcome__help-line > :first-child {
-    width: 36px;
-    height: 36px;
-  }
-
-  .events-card__title {
-    font-size: var(--text-xl);
   }
 }

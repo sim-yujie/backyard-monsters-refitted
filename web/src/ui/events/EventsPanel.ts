@@ -337,12 +337,18 @@ export class EventsPanel {
       return;
     }
 
+    // On a computer the page is wide (owner, 9 Nov: windows open in the
+    // middle now, events.css): the Frontier Pass across the top, the events
+    // on now in the wide main column, Coming up in a column at the side. On a
+    // phone, or a narrow window, one under the other in that order.
     const { active, upcoming } = sortEvents(view.events);
-    const sections: HTMLElement[] = [];
+    const page = el("div", "events-page");
     const welcome = view.mr2Welcome ?? null;
-    if (welcome) sections.push(mr2WelcomeCard(welcome, view.now, () => this.options.onGoToMapRoom2?.()));
-    for (const event of active) sections.push(this.activeCard(event, view));
-    if (active.length === 0 && !welcome) sections.push(el("p", "events-status", "No event is on right now."));
+    if (welcome) page.append(mr2WelcomeCard(welcome, view.now, () => this.options.onGoToMapRoom2?.()));
+    const main = el("div", "events-page__main");
+    for (const event of active) main.append(this.activeCard(event, view));
+    if (active.length === 0 && !welcome) main.append(el("p", "events-status", "No event is on right now."));
+    if (main.childElementCount > 0) page.append(main);
     if (upcoming.length > 0) {
       const section = el("section", "events-upcoming");
       const list = el("ul", "events-upcoming__list");
@@ -357,15 +363,10 @@ export class EventsPanel {
         list.append(item);
       }
       section.append(el("h3", "events-section__title", "Coming up"), list);
-      sections.push(section);
+      page.append(section);
+      // The side column only beside events that are on.
+      if (main.childElementCount > 0) page.classList.add("events-page--side");
     }
-    // On a computer the page is wide (owner, 9 Nov: windows open in the
-    // middle now): the Frontier Pass across the top, the rest in two columns
-    // (events.css). One card alone, or a phone, keeps one column.
-    const page = el("div", "events-page");
-    const flowing = sections.filter((section) => section.dataset["event"] !== "mr2-welcome").length;
-    if (flowing > 1) page.classList.add("events-page--columns");
-    page.append(...sections);
     // Keep the scroll where it was: a claim re-renders the whole page.
     const scroll = this.panel.body.scrollTop;
     this.panel.setContent(page);
