@@ -1,0 +1,200 @@
+/*
+ * The attack window (`ui/attack/AttackWindow.ts`; owner, 9 Nov 2026, option
+ * A): Flash's PopupAttackA as a centred window between the map's Attack and
+ * the battle. The frame, the title sign, the close disc and the two button
+ * plates are the game's own (skin.css), in Modern or Classic; only the
+ * layout inside is set here, in the panel's own colour tokens, so it reads
+ * on the steel and on the parchment alike.
+ *
+ * Small screens: the window is never taller than the screen. The weapons and
+ * monsters scroll in the body while the target line above and the Cancel and
+ * Attack buttons below stay in sight; the buttons share the width equally
+ * and keep their words on one line, centred.
+ */
+
+.attack-window {
+  width: min(92vw, 460px);
+  /* What sticks up above the frame: the title sign (or the close disc). */
+  --attack-window-overhang: max(var(--skin-title-lift, 0px), calc(var(--skin-edge, 0px) + 12px));
+  max-height: calc(100dvh - 2 * var(--space-4) - var(--attack-window-overhang));
+  margin-top: var(--attack-window-overhang);
+  min-height: 0;
+}
+
+/* The body takes what is left and scrolls; the base cap (70vh) is not wanted here. */
+.attack-window > .panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.attack-window > .panel__head {
+  padding: var(--space-2) var(--space-4) 0;
+}
+
+/* ── Who is being attacked ─────────────────────────────────────────────── */
+
+.attack-window__target {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+}
+
+.attack-window__name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--colour-text-strong);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--display-weight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attack-window__kind {
+  flex: none;
+}
+
+/* ── Sections ──────────────────────────────────────────────────────────── */
+
+.attack-window__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.attack-window__heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--colour-text-strong);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: var(--display-weight);
+}
+
+.attack-window__heading .game-icon {
+  flex: none;
+}
+
+.attack-window__total {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Tiles: a picture and a number ─────────────────────────────────────── */
+
+.attack-window__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: var(--space-2);
+}
+
+.attack-window__tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--space-1) 2px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.attack-window__art {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 44px;
+}
+
+.attack-window__art > img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.attack-window__art > .res-icon {
+  width: 46px;
+  height: auto;
+  vertical-align: middle;
+}
+
+.attack-window__caption {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--colour-text-strong);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--leading-tight);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The champion stands out, as the first of the army. */
+.attack-window__tile--champion {
+  border: 2px solid var(--colour-accent-line);
+  background: var(--colour-accent-soft);
+}
+
+/* A bomb the Catapult cannot fire yet, or the player cannot pay for. */
+.attack-window__tile--off .attack-window__art {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+
+.attack-window__tile--off .attack-window__caption {
+  color: var(--colour-text-muted);
+}
+
+.attack-window__none {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--colour-text-muted);
+  text-align: center;
+}
+
+/* ── Cancel and Attack ─────────────────────────────────────────────────── */
+
+.attack-window__actions {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4) var(--space-3);
+}
+
+.attack-window__actions > .btn {
+  min-width: 0;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* A phone on its side: smaller pictures so more of the army shows. */
+@media (max-height: 480px) {
+  .attack-window__grid {
+    grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  }
+
+  .attack-window__art {
+    width: 40px;
+    height: 36px;
+  }
+
+  .attack-window__art > .res-icon {
+    width: 38px;
+  }
+}
