@@ -451,6 +451,73 @@ describe("HatchTab: the message and the housing bar", () => {
 });
 
 describe("HatchTab: the grid", () => {
+  it("keeps the list where it is when a monster lower down is chosen (owner, 9 Nov)", () => {
+    const { element } = setup(twoHatcheries(), { buildingId: 10, monster: "C1" });
+    const scroll = element.querySelector<HTMLElement>(".hatch__scroll")!;
+    // As a browser does: focusing an element scrolls the box to it unless told
+    // not to. The focused slot is up in the line, so that is the top.
+    const realFocus = HTMLElement.prototype.focus;
+    const focus = vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (
+      this: HTMLElement,
+      options?: FocusOptions,
+    ) {
+      realFocus.call(this, options);
+      if (!options?.preventScroll && scroll.contains(this)) scroll.scrollTop = 0;
+    });
+    try {
+      // A tap on a waiting stack leaves the focus there; an iPhone's tap on a
+      // monster does not move it (jsdom's click does not either).
+      slots(element)[0]!.focus({ preventScroll: true });
+      scroll.scrollTop = 400;
+      monster(element, "C3").click();
+      expect(monster(element, "C3").getAttribute("aria-pressed")).toBe("true");
+      expect(scroll.scrollTop).toBe(400);
+      // The redrawn slot has the focus back, without a scroll.
+      expect(document.activeElement).toBe(slots(element)[0]);
+      expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    } finally {
+      focus.mockRestore();
+    }
+  });
+
+  it("keeps the list still when a shorter info panel would pull a box scrolled to the bottom up (tester, 9 Nov)", () => {
+    const { element } = setup(twoHatcheries(), { buildingId: 10, monster: "C1" });
+    const scroll = element.querySelector<HTMLElement>(".hatch__scroll")!;
+    const info = element.querySelector<HTMLElement>(".hatch-info")!;
+    // A browser's box, which jsdom lacks: C3's info panel is 22 px shorter
+    // than C1's, the panel never smaller than its held height, and the scroll
+    // never past the bottom (shortening the box pulls it up).
+    const chosenC3 = (): boolean => element.querySelector('[data-monster="C3"]')?.getAttribute("aria-pressed") === "true";
+    const panel = (): number => Math.max(chosenC3() ? 178 : 200, Number.parseFloat(info.style.minHeight) || 0);
+    let top = 0;
+    Object.defineProperty(info, "offsetHeight", { configurable: true, get: panel });
+    Object.defineProperty(scroll, "scrollHeight", { configurable: true, get: () => 800 + panel() });
+    Object.defineProperty(scroll, "clientHeight", { configurable: true, get: () => 400 });
+    Object.defineProperty(scroll, "scrollTop", {
+      configurable: true,
+      get: () => Math.min(top, scroll.scrollHeight - scroll.clientHeight),
+      set: (value: number) => {
+        top = value;
+      },
+    });
+    scroll.scrollTop = 600; // the bottom
+    monster(element, "C3").click();
+    expect(monster(element, "C3").getAttribute("aria-pressed")).toBe("true");
+    expect(scroll.scrollTop).toBe(600);
+    expect(info.style.minHeight).toBe("200px");
+  });
+
+  it("prices a tile short, with the full figure on hover and in the stats (owner, 9 Nov)", () => {
+    const lockerdata = { C1: { t: 2 }, C3: { t: 2 }, C7: { t: 2 }, C12: { t: 2 } };
+    const { element } = setup(twoHatcheries({ lockerdata } as Partial<BaseLoadResponse>), { monster: "C12" });
+    const price = (id: string): string => spokenText(monster(element, id).querySelector(".hatch-monster__note")!);
+    expect(price("C1")).toBe("Goo 250");
+    expect(price("C7")).toBe("Goo 2.5K");
+    expect(price("C12")).toBe("Goo 150K");
+    expect(monster(element, "C12").title).toBe("Choose D.A.V.E. · 150,000 each");
+    expect(spokenText(element.querySelector(".hatch-info__each")!)).toContain("Goo 150,000");
+  });
+
   it("only chooses a monster on a tap, and adds nothing (#268, E)", async () => {
     const { element, actions } = setup(twoHatcheries(), { buildingId: 11 });
     expect(text(element, ".hatch-pick__hint")).toBe("Tap a monster to choose it");

@@ -11,7 +11,6 @@ import {
 import type { YardActionResult, YardUiBinding } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { formatAmount, formatCompact } from "@/ui/format";
-import type { AmountChange } from "@/ui/amountChange";
 import { icon } from "@/ui/icons";
 import { RESOURCE_NAMES, resourceAmount, resourceRealm } from "@/ui/resourceIcon";
 
@@ -33,8 +32,8 @@ import { RESOURCE_NAMES, resourceAmount, resourceRealm } from "@/ui/resourceIcon
  * store's prediction (`harvest.ts`) once a second while bound, as well as on
  * every store change the dock passes on. The press runs through the store's
  * queue (`bankActions`), so the answer is merged like any yard action's and the
- * HUD's readouts float what arrived; the notice says what was collected and
- * what stayed in the harvesters because storage was full.
+ * HUD's readouts float what arrived; a notice only says what stayed in the
+ * harvesters because storage was full, or a refusal.
  */
 
 /** How often the waiting total is re-read while bound. */
@@ -129,17 +128,14 @@ export const collectRing = (
   return { ...waiting, fraction, state };
 };
 
-/**
- * "icon 720 icon 300": the non-zero amounts of a report field, or null for
- * none; "+720" in green with `change: "gain"` (`amountChange.ts`).
- */
-const amountsNode = (amounts: Readonly<Record<HarvestKey, number>>, change?: AmountChange): Node | null => {
+/** "icon 720 icon 300": the non-zero amounts of a report field, or null for none. */
+const amountsNode = (amounts: Readonly<Record<HarvestKey, number>>): Node | null => {
   const shown = KEYS.filter((key) => amounts[key] > 0);
   if (shown.length === 0) return null;
   const span = document.createElement("span");
   shown.forEach((key, index) => {
     if (index > 0) span.append(" ");
-    span.append(resourceAmount(key, amounts[key], change ? { change } : {}));
+    span.append(resourceAmount(key, amounts[key]));
   });
   return span;
 };
@@ -147,7 +143,7 @@ const amountsNode = (amounts: Readonly<Record<HarvestKey, number>>, change?: Amo
 /**
  * "+720" in green with the resource's icon: what a tap banked, for the yard to
  * float off the building (`harvest.css`). A gain (`amountChange.ts`); only to
- * look at, as the notice says the same in words.
+ * look at: a plain collect has no notice, so this and the HUD say what arrived.
  */
 export const bankFloat = (resource: HarvestKey, amount: number): HTMLElement => {
   const float = resourceAmount(resource, amount, {
@@ -161,9 +157,12 @@ export const bankFloat = (resource: HarvestKey, amount: number): HTMLElement => 
 };
 
 /**
- * Says how a bank came out in the yard's notice dock: what was collected, and
- * what stayed in the harvesters because the pool was full. A local "nothing to
- * collect" says nothing: the bubble was about to empty anyway.
+ * Says how a bank came out in the yard's notice dock, but only when something
+ * went wrong: a server refusal, or storage full so some stayed in the
+ * harvesters. A plain collect says nothing (owner, 9 Nov: the "Collected"
+ * toast was annoying); the balls, the floats and the HUD readouts already
+ * show what arrived. A local "nothing to collect" says nothing either: the
+ * bubble was about to empty anyway.
  */
 export const showBankResult = (notices: Notices, result: YardActionResult<BankReport>): void => {
   if (!result.ok) {
@@ -171,21 +170,12 @@ export const showBankResult = (notices: Notices, result: YardActionResult<BankRe
     notices.show(BANK_NOTICE, result.refusal.message, { level: "error", timeoutMs: 6_000 });
     return;
   }
-  const { banked, leftInBuffers } = result.report;
-  // What was collected is a gain; what stayed behind is only where it is.
-  const got = amountsNode(banked, "gain");
-  const kept = amountsNode(leftInBuffers);
+  // What stayed behind is only where it is: plain, not a gain.
+  const kept = amountsNode(result.report.leftInBuffers);
+  if (!kept) return;
   const message = document.createElement("span");
-  if (got) message.append("Collected ", got, ".");
-  if (kept) {
-    if (got) message.append(" ");
-    message.append(
-      kept,
-      ` stayed in your harvesters: storage is full. Build or upgrade ${storageName()}.`,
-    );
-  }
-  if (!got && !kept) return;
-  notices.show(BANK_NOTICE, message, { level: kept ? "warning" : "info", timeoutMs: kept ? 8_000 : 4_000 });
+  message.append(kept, ` stayed in your harvesters: storage is full. Build or upgrade ${storageName()}.`);
+  notices.show(BANK_NOTICE, message, { level: "warning", timeoutMs: 8_000 });
 };
 
 export class CollectAll {
