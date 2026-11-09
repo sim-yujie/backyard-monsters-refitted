@@ -1,7 +1,9 @@
 import type { ChampionData } from "../../../schemas/ChampionSchema.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
 import { parseFlingLog } from "../attackCheckpoint.js";
-import { siegeAfter } from "./abandonedAttack.js";
+import type { ChampionHealth } from "../attackSession.js";
+import { entryOf, maxHealthOf, statusOf } from "../../yard/champion.js";
+import { siegeAfter, type AbandonedOutcome } from "./abandonedAttack.js";
 
 /**
  * What an attack does to the attacker's own row, worked out by the server
@@ -16,10 +18,12 @@ import { siegeAfter } from "./abandonedAttack.js";
  *   every use (`siege` events), so the stock is the stored one less those, as
  *   the server's finaliser already takes it (`siegeAfter`,
  *   `finaliseAttack.ts`). The client's copy is not read.
- * - **Champion**: a champion that fought comes home hurt, or dead. Its health
- *   is the one thing taken from the client, and only downwards, and only for
- *   a champion the log flung. Everything else about it (type, level, feeding,
- *   status) stays as stored.
+ * - **Champion**: a champion that fought comes home hurt, dead, or healed by
+ *   Vorgs. Where the server replayed the battle, its health is the replay's
+ *   ({@link championsAfterBattle}); with no replay (Map Room 3) it is taken
+ *   from the client, and only downwards, and only for a champion the log
+ *   flung. Everything else about it (type, level, feeding, status) stays as
+ *   stored.
  *
  * Only the save that ends the attack applies either, like the loot, so an
  * attack spends its siege once however many saves it sends.
@@ -82,6 +86,41 @@ export const championsAfterAttack = (
     const hp = Number(match?.hp);
     if (!match || !Number.isFinite(hp)) return champion;
     const kept = Math.max(0, Math.min(Number(champion.hp), hp));
+    return kept === champion.hp ? champion : { ...champion, hp: kept };
+  });
+};
+
+/**
+ * The attacker's champions once the server's own battle is over: a champion
+ * that battle flung comes home at the health the battle left it at, healed by
+ * Vorgs or hurt, as Flash kept it (`ChampionBase.as:1200/1310`, `BASE.as:3270`,
+ * `ATTACK.as:532`), and as the finaliser already lands it from a checkpoint.
+ * The client's figure is never read. Never above the champion's full health
+ * for its stored level and food bonus, never below 0.
+ *
+ * Only a champion the attack froze a health for is taken from the battle: a
+ * session minted before the freeze fought it at full health, so its figure
+ * says nothing about the champion's real health, and the save's only-downwards
+ * rule ({@link championsAfterAttack}) is left to stand for it. A champion not
+ * out of the cage, or one the battle never flung, keeps what it has.
+ *
+ * @param stored - The attacker's `champion`, after {@link championsAfterAttack}.
+ * @param battle - The server's replay of the attack.
+ * @param frozen - The session's `championHealth`, if any.
+ */
+export const championsAfterBattle = (
+  stored: readonly ChampionData[] | null | undefined,
+  battle: Pick<AbandonedOutcome, "attackerchampion" | "championsFlung">,
+  frozen: ChampionHealth | null | undefined
+): ChampionData[] => {
+  const flung = new Set(battle.championsFlung);
+  return (stored ?? []).map((champion) => {
+    if (!flung.has(champion.t) || statusOf(champion) !== 0) return champion;
+    if (frozen?.[String(champion.t)] === undefined) return champion;
+    const entry = entryOf(champion);
+    const hp = Number(battle.attackerchampion?.find((one) => one.t === champion.t)?.hp);
+    if (!entry || !Number.isFinite(hp)) return champion;
+    const kept = Math.floor(Math.max(0, Math.min(maxHealthOf(champion, entry), hp)));
     return kept === champion.hp ? champion : { ...champion, hp: kept };
   });
 };

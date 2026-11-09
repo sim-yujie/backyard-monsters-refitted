@@ -517,6 +517,41 @@ describe("Map Room 1 tribe save: the attacker's own row (#23, C1)", () => {
 
     expect(userSave.champion).toEqual([{ ...champion(120), b: expect.any(Object), bs: expect.objectContaining({ n: 1 }) }]);
   });
+
+  test("a champion healed by Vorgs keeps the server's battle's heal, never the save's figure", async () => {
+    const { championStatWithFood } = await import("../../../game-rules/combat/stats.js");
+    const full = championStatWithFood("G3", "health", 4, 0);
+    const low = Math.floor(full * 0.05);
+    store.set(
+      mr1TribeSessionKey(ATTACKER, TRIBE),
+      serialiseAttackSession({
+        attackerid: ATTACKER,
+        attackid: ATTACK_ID,
+        startedat: now(),
+        entryHoused: { "5000": { C16: 6 } },
+        championHealth: { "3": low },
+      })
+    );
+    userSave.champion = [{ t: 3, hp: low, l: 4, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 }];
+    const vorgLog = {
+      v: 1,
+      seed: 5,
+      events: [{ kind: "fling", t: 40, x: 0, y: 0, r: 100, monsters: { C16: 6 }, champion: { t: 3, l: 4 } }],
+    };
+
+    await run(
+      ctxFor({
+        over: "1",
+        attackid: String(ATTACK_ID),
+        flinglog: JSON.stringify(vorgLog),
+        tick: "3000",
+        attackerchampion: JSON.stringify([{ t: 3, hp: full, l: 4, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 }]),
+      })
+    );
+
+    expect((userSave.champion as { hp: number }[])[0]!.hp).toBeGreaterThan(low);
+    expect((userSave.champion as { hp: number }[])[0]!.hp).toBeLessThan(full);
+  });
 });
 
 describe("Map Room 1 tribe save: the catapult quest", () => {

@@ -138,6 +138,10 @@ mock.module("../../../scripts/anticheat/anticheat.js", () => ({
 let sessionForces: unknown;
 /** The champions' brains the attack froze at launch, when a test gives the session some (issue #219). */
 let sessionBrains: Record<string, BrainWeights> | undefined;
+/** The champions' health the attack froze at launch, when a test gives the session some. */
+let sessionHealth: Record<string, number> | undefined;
+/** What the attacker housed at entry, when a test changes it from {@link ENTRY}; null for none (Map Room 3). */
+let sessionEntry: Record<string, Record<string, number>> | null | undefined;
 
 mock.module("../../../services/base/attackSessionStore.js", () => ({
   startAttackSession: async () => {},
@@ -145,10 +149,11 @@ mock.module("../../../services/base/attackSessionStore.js", () => ({
     attackerid: ATTACKER,
     attackid: ATTACK_ID,
     startedat: Math.floor(Date.now() / 1000),
-    entryHoused: ENTRY,
+    ...(sessionEntry !== null && { entryHoused: sessionEntry ?? ENTRY }),
     defenderResources: { r1: 5000, r2: 0, r3: 0, r4: 0 },
     ...(sessionForces ? { defenderForces: sessionForces } : {}),
     ...(sessionBrains ? { championBrains: sessionBrains } : {}),
+    ...(sessionHealth ? { championHealth: sessionHealth } : {}),
   }),
   endAttackSession: async () => {},
 }));
@@ -178,6 +183,7 @@ const { replayAbandonedAttack } = await import("../../../services/base/combat/ab
 const { battleReplayInput, battleTick, foughtLoot } = await import("../../../services/base/combat/battle.js");
 const { decodeReplay } = await import("../../../services/defences/defenceReplayStore.js");
 const { defenceReplayInput } = await import("../../../services/defences/recordDefenceReplay.js");
+const { championStatWithFood } = await import("../../../game-rules/combat/stats.js");
 
 const ctxFor = (body: Record<string, string>) =>
   ({
@@ -221,6 +227,8 @@ beforeEach(() => {
   replayTimesOut = false;
   sessionForces = undefined;
   sessionBrains = undefined;
+  sessionHealth = undefined;
+  sessionEntry = undefined;
   setMode("log");
   reports.length = 0;
   replays.length = 0;
@@ -832,6 +840,130 @@ describe("the attacker's own row through the save (#23, C1)", () => {
 
     expect(attackerSave.champion).toEqual([champion(500)]);
     expect(attackerSave.siege).toEqual({ jars: { quantity: 2 } });
+  });
+});
+
+describe("a champion healed by Vorgs keeps the heal through the save", () => {
+  const FULL = championStatWithFood("G3", "health", 4, 0);
+  const LOW = Math.floor(FULL * 0.05);
+  const fomor = (hp: number) => ({ t: 3, hp, l: 4, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 });
+  /** A camp with a Sniper Tower that reaches the fling point. */
+  const CAMP = { "0": { id: 0, t: 14, l: 1, X: 0, Y: 0 }, "1": { id: 1, t: 21, l: 3, X: 300, Y: 300 } };
+  const TICK = 24_000;
+  const vorgLog = (monsters: Record<string, number>) => ({
+    v: 1,
+    seed: 5,
+    events: [{ kind: "fling", t: 80, x: 400, y: 400, r: 200, monsters, champion: { t: 3, l: 4 } }],
+  });
+
+  /** The server's own battle for it, as the save (and the finaliser) replays it. */
+  const replayHp = (monsters: Record<string, number>, start: number) => {
+    const input = battleReplayInput({
+      flinglog: vorgLog(monsters),
+      session: {
+        attackerid: ATTACKER,
+        attackid: ATTACK_ID,
+        startedat: 0,
+        entryHoused: sessionEntry ?? ENTRY,
+        championHealth: { "3": start },
+      },
+      defender: { type: "tribe", buildingdata: CAMP as never, buildinghealthdata: {}, resources: defender.resources },
+      attacker: attackerSave,
+      tick: battleTick(TICK),
+      declareWar: false,
+    })!;
+    return replayAbandonedAttack(input).attackerchampion![0]!.hp;
+  };
+
+  const save = (monsters: Record<string, number>, reported: number, body: Record<string, string> = {}) =>
+    baseSave(
+      ctxFor({
+        over: "1",
+        tick: String(TICK),
+        flinglog: JSON.stringify(vorgLog(monsters)),
+        attackerchampion: JSON.stringify([fomor(reported)]),
+        ...body,
+      }),
+      async () => {}
+    );
+
+  beforeEach(() => {
+    defender.buildingdata = structuredClone(CAMP);
+    sessionEntry = { [HOME]: { C16: 6 } };
+    sessionHealth = { "3": LOW };
+    attackerSave.champion = [fomor(LOW)];
+  });
+
+  test("the save that ends the attack stores the replay's healed health", async () => {
+    const healed = replayHp({ C16: 6 }, LOW);
+    expect(healed).toBeGreaterThan(LOW);
+
+    await save({ C16: 6 }, healed);
+
+    expect(attackerSave.champion).toEqual([{ ...fomor(healed), b: expect.any(Object), bs: expect.any(Object) }]);
+  });
+
+  test("a forged save claiming full health stores the replay's figure", async () => {
+    const healed = replayHp({ C16: 6 }, LOW);
+
+    await save({ C16: 6 }, FULL);
+
+    expect(attackerSave.champion[0].hp).toBe(healed);
+    expect(attackerSave.champion[0].hp).toBeLessThan(FULL);
+  });
+
+  test("Vorgs the attacker never housed are cut from the log: no heal", async () => {
+    sessionEntry = { [HOME]: { C4: 12 } };
+
+    await save({ C16: 6 }, FULL);
+
+    expect(attackerSave.champion[0].hp).toBeLessThanOrEqual(LOW);
+    expect(attackerSave.champion[0].hp).toBe(replayHp({ C16: 6 }, LOW));
+  });
+
+  test("a champion with no Vorg keeps the damage it took, whatever the save says", async () => {
+    sessionEntry = { [HOME]: {} };
+    sessionHealth = { "3": FULL };
+    attackerSave.champion = [fomor(FULL)];
+    const hurt = replayHp({}, FULL);
+    expect(hurt).toBeLessThan(FULL);
+
+    await save({}, FULL);
+
+    expect(attackerSave.champion[0].hp).toBe(hurt);
+  });
+
+  test("a save that does not end the attack changes nothing", async () => {
+    await save({ C16: 6 }, FULL, { over: "" });
+
+    expect(attackerSave.champion).toEqual([fomor(LOW)]);
+  });
+
+  test("a session with no frozen health keeps the only-downwards rule", async () => {
+    sessionHealth = undefined;
+
+    await save({ C16: 6 }, FULL);
+    expect(attackerSave.champion[0].hp).toBe(LOW);
+  });
+
+  test("a replay past its deadline is refused and writes nothing; the checkpoint lands it", async () => {
+    replayTimesOut = true;
+    const caught = await save({ C16: 6 }, FULL).catch((err: unknown) => err as { data?: { reason?: string } });
+
+    expect(caught?.data?.reason).toBe("replayTimeout");
+    expect(attackerSave.champion).toEqual([fomor(LOW)]);
+  });
+
+  test("a Map Room 3 attack has no replay: the save's figure lands only downwards", async () => {
+    sessionEntry = null;
+    attackerSave.mapversion = 3;
+
+    await save({ C16: 6 }, FULL);
+    expect(attackerSave.champion).toEqual([fomor(LOW)]);
+
+    defender.attackid = ATTACK_ID;
+    await save({ C16: 6 }, 100);
+    expect(attackerSave.champion).toEqual([fomor(100)]);
   });
 });
 
