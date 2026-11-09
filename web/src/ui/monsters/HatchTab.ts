@@ -145,6 +145,8 @@ const JUMPS = [5, 10] as const;
 
 /** The most hatcheries a yard ever holds (`client/scripts/HATCHERYCCPOPUP.as:668`). */
 const MAX_HATCHERIES = 5;
+/** Letters past which a card's name is drawn smaller on a phone ("Slimeattikus" is 12). */
+const LONG_NAME = 10;
 
 /** Seconds as a countdown: "12s", "4m 10s". */
 const duration = (seconds: number): string => formatCountdown(Math.ceil(seconds));
@@ -449,6 +451,9 @@ export class HatchTab implements MonstersTab {
     // sometimes jumped the list back to the top). Only a hatchery tab's tap
     // opens at the top, and it sets that before it redraws.
     const scrolled = this.scroll.scrollTop;
+    const tall = this.scroll.scrollHeight;
+    // The info panel's held height (below) is let go; it is measured again.
+    this.info.style.minHeight = "";
     const store = this.store;
     const yard = readHatchYard(store.save, store.now());
     this.yard = yard;
@@ -492,7 +497,15 @@ export class HatchTab implements MonstersTab {
     if (focusKey) {
       this.element.querySelector<HTMLElement>(`[data-focus-key="${focusKey}"]`)?.focus({ preventScroll: true });
     }
-    if (this.scroll.scrollTop !== scrolled) this.scroll.scrollTop = scrolled;
+    if (this.scroll.scrollTop !== scrolled) {
+      // A shorter info panel (D.A.V.E.'s after Crabatron's) made the box
+      // shorter while it was scrolled to the bottom: the browser pulled the
+      // scroll up and the list moved about 20 px (tester, 9 Nov, phone). The
+      // panel keeps the height it lost, so the list stays put.
+      const lost = tall - this.scroll.scrollHeight;
+      if (lost > 0) this.info.style.minHeight = `${this.info.offsetHeight + lost}px`;
+      this.scroll.scrollTop = scrolled;
+    }
   }
 
   /**
@@ -1276,7 +1289,10 @@ export class HatchTab implements MonstersTab {
           : `${row.monster.name}: ${row.state.kind === "unlocking" ? "still unlocking" : "locked"}`;
       button.addEventListener("click", () => this.tapMonster(row));
       const name = document.createElement("span");
-      name.className = "hatch-monster__name";
+      // A long name ("Slimeattikus") gets smaller letters on a phone, so it
+      // stays whole on one line rather than breaking mid-word.
+      name.className =
+        row.monster.name.length > LONG_NAME ? "hatch-monster__name hatch-monster__name--long" : "hatch-monster__name";
       name.textContent = row.monster.name;
       const note = document.createElement("span");
       note.className = "hatch-monster__note";

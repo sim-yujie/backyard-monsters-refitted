@@ -1650,8 +1650,9 @@ button.hatch-slot:disabled {
 
   /* Four across, not five (owner, 9 Nov: "needs polishing"): at 390 px a
      fifth card was 68 px, too narrow for "Slimeattikus" or "Crabatron" in
-     the display font, cut to "Slimeat…". A name that still does not fit
-     takes a second line rather than being cut. */
+     the display font, cut to "Slimeat…". A name stays whole on one line: a
+     long one ("Slimeattikus", `hatch-monster__name--long`) in smaller
+     letters, never broken mid-word ("Slimeattik / us", tester 9 Nov). */
   .hatch__grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 6px;
@@ -1662,15 +1663,21 @@ button.hatch-slot:disabled {
     height: 48px;
   }
 
-  .hatch-monster__name {
-    white-space: normal;
-    text-wrap: balance;
-    overflow-wrap: anywhere;
-    hyphens: auto;
+  .hatch-monster__name--long {
+    font-size: 10.5px;
+    letter-spacing: -0.2px;
   }
 
+  /* The note takes the line's whole width and the button goes under it,
+     centred (it was squeezed to about a word a line beside the button). */
   .hatch-pick__locked {
     flex-wrap: wrap;
+    justify-content: center;
+    row-gap: var(--space-2);
+  }
+
+  .hatch-pick__locked-text {
+    flex: 1 1 calc(100% - 40px);
   }
 
   /* The info panel becomes the bar fixed to the sheet's bottom (not on a

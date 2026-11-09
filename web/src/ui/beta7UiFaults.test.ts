@@ -57,7 +57,11 @@ describe("6 Nov UI check: phone faults", () => {
     const source = css("styles/hatch.css");
     const phoneHatch = block(source, "@container hatch (width < 560px) {");
     expect(phoneHatch).toMatch(/\.hatch__grid \{\s*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
-    expect(phoneHatch).toMatch(/\.hatch-monster__name \{\s*white-space: normal;[^}]*overflow-wrap: anywhere;/);
+    // A name is never broken mid-word ("Slimeattik / us"): a long one is drawn smaller.
+    expect(phoneHatch).not.toMatch(/\.hatch-monster__name \{[^}]*overflow-wrap: anywhere;/);
+    expect(phoneHatch).toMatch(/\.hatch-monster__name--long \{\s*font-size: 10\.5px;/);
+    // The "Grey monsters are locked" note has the line's width, its button under it.
+    expect(phoneHatch).toMatch(/\.hatch-pick__locked-text \{\s*flex: 1 1 calc\(100% - 40px\);/);
     expect(phoneHatch).toMatch(/\.hatch-slot__upgrade \{\s*min-height: var\(--control-height-compact\);/);
     expect(source).toMatch(
       /\.hatch-monster\[aria-pressed="true"\],[^{]*\{[^}]*background: color-mix\(in srgb, var\(--colour-accent\) 36%, transparent\);/,
