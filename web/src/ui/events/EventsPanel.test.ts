@@ -435,6 +435,31 @@ describe("EventsPanel: the New to Map Room 2 card", () => {
     panel.close();
   });
 
+  it("keeps the card with both rewards used", () => {
+    const { panel } = mounted();
+    panel.render(list([event()], { mr2Welcome: { ...welcome, takeover: false, kit: false } }));
+    const card = panel.element.querySelector(".events-card--mr2-welcome");
+    expect(card).not.toBeNull();
+    expect(card?.querySelectorAll(".events-welcome__state--used")).toHaveLength(2);
+    expect(card?.querySelectorAll(".events-welcome__mark")).toHaveLength(10);
+    panel.close();
+  });
+
+  it("lays two or more cards under the Frontier Pass in columns on a computer, one alone in one", () => {
+    const { panel } = mounted();
+    panel.render(list([event()], { mr2Welcome: welcome }));
+    expect(panel.element.querySelector(".events-page")?.classList.contains("events-page--columns")).toBe(false);
+    panel.render(list([event(), event({ id: "other", title: "Other" })], { mr2Welcome: welcome }));
+    const page = panel.element.querySelector(".events-page");
+    expect(page?.classList.contains("events-page--columns")).toBe(true);
+    expect(page?.firstElementChild?.getAttribute("data-event")).toBe("mr2-welcome");
+    const css = eventsCss.replace(/\r\n/g, "\n");
+    const desktop = css.slice(css.indexOf("@media (width > 620px) and (height > 500px)"));
+    expect(desktop).toMatch(/\.events-panel \{\s*width: min\(1000px/);
+    expect(desktop).toMatch(/\.events-page--columns > \.events-card--mr2-welcome \{\s*column-span: all;/);
+    panel.close();
+  });
+
   it("shows only the card, with no 'No event' line, when no event is on", () => {
     const { panel } = mounted();
     panel.render(list([], { mr2Welcome: welcome }));
@@ -448,6 +473,8 @@ describe("EventsPanel: the New to Map Room 2 card", () => {
     panel.render(list([], { mr2Welcome: welcome }));
     panel.tick(8 * 86_400 + 30);
     expect(panel.element.querySelector("[data-welcome-ends]")?.textContent).toBe("2 days left");
+    expect(panel.element.querySelector('[data-day="9"]')?.classList.contains("events-welcome__mark--today")).toBe(true);
+    expect(panel.element.querySelector('[data-day="1"]')?.classList.contains("events-welcome__mark--gone")).toBe(true);
     panel.close();
   });
 

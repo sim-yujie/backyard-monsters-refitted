@@ -19,7 +19,7 @@ import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { resourceIcon, RESOURCE_KEYS } from "@/ui/resourceIcon";
 import { eventsArt } from "./eventsArt";
-import { mr2WelcomeCard, welcomeDaysText } from "./mr2WelcomeCard";
+import { mr2WelcomeCard, paintWelcomeTimeline, welcomeDaysText } from "./mr2WelcomeCard";
 import "./events.css";
 
 /**
@@ -307,6 +307,7 @@ export class EventsPanel {
     for (const line of this.element.querySelectorAll<HTMLElement>("[data-welcome-ends]")) {
       line.textContent = welcomeDaysText(Number(line.dataset["welcomeEnds"]), now);
     }
+    for (const line of this.element.querySelectorAll<HTMLElement>("[data-welcome-start]")) paintWelcomeTimeline(line, now);
   }
 
   /**
@@ -358,9 +359,16 @@ export class EventsPanel {
       section.append(el("h3", "events-section__title", "Coming up"), list);
       sections.push(section);
     }
+    // On a computer the page is wide (owner, 9 Nov: windows open in the
+    // middle now): the Frontier Pass across the top, the rest in two columns
+    // (events.css). One card alone, or a phone, keeps one column.
+    const page = el("div", "events-page");
+    const flowing = sections.filter((section) => section.dataset["event"] !== "mr2-welcome").length;
+    if (flowing > 1) page.classList.add("events-page--columns");
+    page.append(...sections);
     // Keep the scroll where it was: a claim re-renders the whole page.
     const scroll = this.panel.body.scrollTop;
-    this.panel.setContent(...sections);
+    this.panel.setContent(page);
     this.panel.body.scrollTop = scroll;
   }
 
