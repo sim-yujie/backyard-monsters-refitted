@@ -1,6 +1,7 @@
 import z from "zod";
 import { CHAMPION_STANCES, type ChampionStance } from "../game-rules/combat/index.js";
 import { jsonField } from "./jsonField.js";
+import { formBoolean } from "./formBoolean.js";
 
 /**
  * Body schemas for the yard action routes, `POST /api/:apiVersion/bm/yard/*`
@@ -338,11 +339,6 @@ export const YardFortifySchema = z.object({ id: BuildingIdField, topUp: TopUpFie
 export const YardCancelFortifySchema = z.object({ id: BuildingIdField });
 
 /**
- * `POST /bm/yard/starterkit` (outposts WP9): the kit (1 Regular, 2 Mega, 3
- * Ultra), how it is paid for, and the Shiny top-up the player agreed to when
- * the pool is short (`services/yard/starterKit.ts`).
- */
-/**
  * `POST /bm/yard/decor/place` and `/decor/buy`: a decoration out of storage
  * (#128) or bought for Shiny (owner 2026-11-04), and where.
  */
@@ -352,12 +348,17 @@ export const YardPlaceDecorationSchema = z.object({
   y: YardCoordinateField,
 });
 
+/**
+ * `POST /bm/yard/starterkit` (outposts WP9): the kit (1 Regular, 2 Mega, 3
+ * Ultra), how it is paid for, and the Shiny top-up the player agreed to when
+ * the pool is short (`services/yard/starterKit.ts`).
+ */
 export const YardStarterKitSchema = z.object({
   kit: z.coerce.number().int().min(1).max(3),
   pay: z.enum(["resources", "shiny"]),
   topUp: z.coerce.number().int().nonnegative().optional(),
   /** The picker showed the Regular kit as free ("New to Map Room 2"); refused rather than charged if it no longer is. */
-  free: z.boolean().optional(),
+  free: formBoolean,
 });
 
 /**

@@ -1,6 +1,7 @@
 import z from "zod";
 import { isCountryCode } from "../config/Countries.js";
 import { SessionType } from "../enums/SessionType.js";
+import { formBoolean } from "./formBoolean.js";
 
 import {
   AccountMessage,
@@ -77,12 +78,6 @@ export const UserLoginSchema = z.object({
   token: z.string().optional(),
   sessionType: z.enum([SessionType.GAME, SessionType.LAUNCHER]).default(SessionType.GAME),
 });
-
-/** An optional true/false that a form-encoded body sends as "true" or "false". */
-const formBoolean = z.preprocess(
-  (input) => (input === "true" ? true : input === "false" ? false : input),
-  z.boolean().optional()
-);
 
 /**
  * Schema to validate user registration data.

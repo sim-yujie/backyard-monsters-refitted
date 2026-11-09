@@ -1,4 +1,6 @@
-import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import type { Server } from "node:http";
+import Koa from "koa";
 import { LockMode, type EntityManager } from "@mikro-orm/core";
 import type z from "zod";
 import type { Save } from "../../database/models/save.model.js";
@@ -31,6 +33,7 @@ import {
 } from "./yardAction.js";
 import { STARTER_KITS } from "../../game-data/starterKits.js";
 import { readAchievements } from "../../services/achievements/state.js";
+import { bodyParsers } from "../../middleware/bodyLimits.js";
 
 /**
  * The yard action wrapper on Map Room 2 outposts (outposts WP3, issue #184),
@@ -1027,6 +1030,66 @@ describe("free Regular kit (New to Map Room 2)", () => {
     const answer = await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources", free: true });
     expect(answer.status).toBe(200);
     expect(welcome.rows.get(USERID)).toMatchObject({ start: launch, kitUsed: true });
+  });
+});
+
+/**
+ * The free kit as the game sends it: a form-encoded body through the server's
+ * own body parser, so every field arrives as a string (`free=true`, not
+ * `true`). The tests above pass objects and missed a schema that refused it.
+ */
+describe("free Regular kit over a real form-encoded request", () => {
+  let server: Server;
+  let base: string;
+
+  beforeAll(async () => {
+    const app = new Koa();
+    app.use(bodyParsers());
+    app.use(async (ctx) => {
+      const answer = await runYardAction(em as unknown as EntityManager, userOf(), yardStarterKitAction, ctx.request.body);
+      ctx.status = answer.status;
+      ctx.body = answer.body;
+    });
+    await new Promise<void>((resolve) => {
+      server = app.listen(0, () => resolve());
+    });
+    const address = server.address();
+    base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+  });
+
+  afterAll(() => {
+    server.close();
+  });
+
+  const postForm = (body: string) =>
+    fetch(`${base}/api/v1.1.0/bm/yard/starterkit`, {
+      method: "POST",
+      body,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
+
+  test("kit=1&pay=resources&free=true builds the kit free", async () => {
+    welcome.rows.set(USERID, { start: now() - 3600, takeoverUsed: false, kitUsed: false });
+    const res = await postForm(`kit=1&pay=resources&free=true&baseid=${OUTPOST_BASEID}`);
+    const body = (await res.json()) as Row;
+
+    expect(res.status).toBe(200);
+    expect(body.report).toMatchObject({ kit: 1, free: true, cost: { r1: 0, r2: 0, r3: 0, r4: 0 } });
+    expect(pool()).toMatchObject({ r1: 1_000_000, r2: 1_000_000, r3: 1_000_000 });
+    expect(welcome.rows.get(USERID)!.kitUsed).toBe(true);
+  });
+
+  test("free=true once the free kit is gone is refused 409 welcomeUsed, not a 400", async () => {
+    welcome.rows.set(USERID, { start: now() - 3600, takeoverUsed: false, kitUsed: true });
+    const res = await postForm(`kit=1&pay=resources&free=true&baseid=${OUTPOST_BASEID}`);
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as Row).reason).toBe("welcomeUsed");
+  });
+
+  test("free=false is read as false", async () => {
+    const res = await postForm(`kit=1&pay=shiny&free=false&baseid=${OUTPOST_BASEID}`);
+    expect(res.status).toBe(200);
+    expect(mainSave().credits).toBe(1000 - 420);
   });
 });
 
