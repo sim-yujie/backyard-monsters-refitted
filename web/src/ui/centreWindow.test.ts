@@ -4,11 +4,15 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  CENTRE_DOCK_GAP,
+  CENTRE_MIN_BOTTOM,
+  CENTRE_SIDE_GAP,
   CENTRE_WINDOW_CLASS,
   CENTRED_LAYOUT_QUERY,
   centreWindow,
   centredLayout,
   closeCentreWindow,
+  fitCentreWindow,
   onCentreWindowOpen,
   openCentreWindow,
 } from "./centreWindow";
@@ -197,5 +201,94 @@ describe("Middle windows: the shared rule", () => {
   it("lets the notices show over a middle window", () => {
     const hud = read("styles/yard-hud.css");
     expect(hud).toMatch(/\.yard-notices \{\n {2}z-index: calc\(var\(--z-hud\) \+ 1\);/);
+  });
+});
+
+describe("Middle windows: never over the dock (tester, 9 Nov)", () => {
+  const css = read("styles/ui.css");
+  /** 1280x720: the HUD's Events button top right, the dock row along the bottom. */
+  const screen = { width: 1280, height: 720 };
+  const events = { left: 1196, top: 104, right: 1264, bottom: 190 };
+  const monsters = { left: 1044, top: 582, right: 1136, bottom: 690 };
+  const build = { left: 1160, top: 568, right: 1252, bottom: 694 };
+  const map = { left: 24, top: 600, right: 100, bottom: 694 };
+
+  it("keeps the band's bottom above the top of each dock button under the window", () => {
+    const fit = fitCentreWindow(screen, 1100, [monsters, map]);
+    expect(fit.bottom).toBe(720 - monsters.top + CENTRE_DOCK_GAP);
+  });
+
+  it("does not shrink a window for a dock button beside it, not under it", () => {
+    expect(fitCentreWindow(screen, 600, [monsters, build, map]).bottom).toBe(CENTRE_MIN_BOTTOM);
+  });
+
+  it("goes by the tallest button under the window, its badge included", () => {
+    const withBadge = { ...monsters, top: monsters.top - 10 };
+    expect(fitCentreWindow(screen, 1100, [withBadge, map]).bottom).toBe(720 - withBadge.top + CENTRE_DOCK_GAP);
+  });
+
+  it("narrows a wide window to clear the Events column, close X and all, still centred", () => {
+    const fit = fitCentreWindow(screen, 1208, [events]);
+    expect(fit.maxWidth).toBe(1280 - 2 * (1280 - events.left + CENTRE_SIDE_GAP));
+    expect(fitCentreWindow(screen, 900, [events]).maxWidth).toBeNull();
+  });
+
+  it("checks the dock under the narrowed width, not the window's own", () => {
+    // 1208 wide would reach Kits in the corner; narrowed to clear Events it stops short of it.
+    const kits = { left: 1185, top: 590, right: 1260, bottom: 694 };
+    expect(fitCentreWindow(screen, 1208, [kits]).bottom).toBeGreaterThan(CENTRE_MIN_BOTTOM);
+    const fit = fitCentreWindow(screen, 1208, [events, kits]);
+    expect(fit.maxWidth).not.toBeNull();
+    expect(fit.bottom).toBe(CENTRE_MIN_BOTTOM);
+  });
+
+  it("has no short-screen exception: the band's bottom is the dock, whatever the height", () => {
+    expect(css).not.toMatch(/height <= 760px/);
+    expect(css.match(/--centre-bottom:/g)).toHaveLength(1);
+  });
+
+  it("measures the dock in the page and sets the band and the notices' place", () => {
+    const layer = document.createElement("div");
+    layer.className = "overlay__layer";
+    const box = (element: Element, left: number, top: number, width: number, height: number): void => {
+      element.getBoundingClientRect = () => new DOMRect(left, top, width, height);
+    };
+    box(layer, 0, 0, 1280, 720);
+    const dock = document.createElement("div");
+    dock.className = "yard-dock";
+    const door = document.createElement("button");
+    door.className = "yard-dock__button events-door";
+    box(door, events.left, events.top, events.right - events.left, events.bottom - events.top);
+    const right = document.createElement("div");
+    right.className = "yard-dock__right";
+    const more = document.createElement("div");
+    more.className = "bubble-menu";
+    box(more, 944, 590, 92, 100);
+    const badge = document.createElement("span");
+    badge.className = "yard-dock__badge bubble-menu__badge";
+    box(badge, 1010, 578, 22, 22);
+    more.append(badge);
+    right.append(more);
+    dock.append(door, right);
+    const element = document.createElement("section");
+    element.className = "panel";
+    Object.defineProperty(element, "offsetWidth", { value: 1208 });
+    box(element, 100, 94, 1080, 460);
+    const bar = document.createElement("div");
+    bar.className = "panel__titlebar";
+    box(bar, 100, 94, 1080, 52);
+    element.append(bar);
+    layer.append(dock, element);
+    document.body.append(layer);
+    centreWindow(element, () => undefined).opened();
+    expect(element.style.maxWidth).toBe(`${1280 - 2 * (1280 - events.left + CENTRE_SIDE_GAP)}px`);
+    expect(element.style.getPropertyValue("--centre-bottom")).toBe(`${720 - 578 + CENTRE_DOCK_GAP}px`);
+    expect(layer.style.getPropertyValue("--centre-notice-top")).toBe(`${94 + 52 + 8}px`);
+  });
+
+  it("hangs the yard's notices under the open window's title bar, not on it", () => {
+    expect(css).toContain(
+      ".overlay__layer:has(> .panel--centre:not([hidden])) > .yard-notices {\n    top: var(--centre-notice-top,",
+    );
   });
 });

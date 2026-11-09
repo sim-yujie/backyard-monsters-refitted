@@ -445,11 +445,20 @@ body {
  * phone, upright or on its side, where these do not apply. Only the building
  * panel, the planner's tools, world chat and the attack screen stay at the
  * side.
+ *
+ * The band never reaches the dock row, on any screen (tester, 9 Nov): in the
+ * yard `centreWindow.ts` measures the top of the dock buttons under the
+ * window (their words and badges too, in either look) and sets
+ * `--centre-bottom` on it, and narrows a window that would reach the Events
+ * column under the HUD. 112px is only the start, and the place outside the
+ * yard. While a middle window is open the yard's notices hang under its
+ * title bar (`--centre-notice-top`, measured too), so a claim's notice never
+ * hides the window's name or close X, and the window does not move for it.
  */
 @media (width > 620px) and (height > 500px) {
   .overlay__layer > .panel.panel--centre {
     --centre-top: calc(var(--hud-height) + var(--space-3));
-    /* The dock row (Monsters, Mail, Alerts, Goals; Build in the corner). */
+    /* The dock row (More, Monsters, Build, Collect all; Main yard and Map). */
     --centre-bottom: 112px;
 
     position: absolute;
@@ -459,13 +468,9 @@ body {
     max-height: calc(100% - var(--centre-top) - var(--centre-bottom));
     transform: none;
   }
-}
 
-/* A short screen (a laptop's 720px): the window may come down over the dock
-   row, as the docked windows did, rather than lose a sixth of its height. */
-@media (width > 620px) and (500px < height <= 760px) {
-  .overlay__layer > .panel.panel--centre {
-    --centre-bottom: var(--space-4);
+  .overlay__layer:has(> .panel--centre:not([hidden])) > .yard-notices {
+    top: var(--centre-notice-top, calc(var(--notice-top-inset) + var(--space-3)));
   }
 }
 
