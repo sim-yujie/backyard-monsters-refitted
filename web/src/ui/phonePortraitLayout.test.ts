@@ -60,7 +60,7 @@ describe("upright phone layout", () => {
 
   it("puts the Friends button away while a panel or sheet is open", () => {
     // Upright and sideways alike (#381).
-    const phone = media(css("friends/friends-bar.css"), "width <= 620px), (height <= 500px");
+    const phone = media(css("friends/friends-button.css"), "width <= 620px), (height <= 500px");
     for (const opener of [
       "> .panel:not([hidden])",
       "> .map-dock--right > *",
@@ -68,7 +68,7 @@ describe("upright phone layout", () => {
       "> .monsters-screen:not([hidden])",
       "> .yard-dock > .yard-menu:not([hidden])",
     ]) {
-      expect(phone).toContain(`.overlay__layer:has(${opener}) > .friends-bar`);
+      expect(phone).toContain(`.overlay__layer:has(${opener}) > .friends-button`);
     }
   });
 

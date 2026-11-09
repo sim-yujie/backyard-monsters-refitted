@@ -1,0 +1,374 @@
+/*
+ * The Friends button and window (owner, 9 Nov 2026, option A;
+ * `FriendsButton.ts`, `FriendsWindow.ts`): one round disc beside Map in the
+ * bottom-left corner on every screen size, opening a window in the middle of
+ * the screen. The disc is a dock disc (`yard-hud.css` `.yard-dock__button`),
+ * so it takes the dock's size and look in Modern and Classic; the window is a
+ * Popup, so its frame, title sign, close disc and button plates are the
+ * game's own (`skin.css`). Only the layout inside is set here, in the panel's
+ * colour tokens, so it reads on the steel and on the parchment alike.
+ *
+ * Every value comes from tokens.css.
+ */
+
+/* ── The button ────────────────────────────────────────────────────────── */
+
+/* Beside Map: Map's left edge (24px), its disc (68px), then the gap. */
+.friends-button {
+  position: absolute;
+  bottom: 26px;
+  left: calc(24px + 68px + var(--space-4));
+  z-index: var(--z-hud);
+  min-width: 68px;
+}
+
+/* Amber, as a count of things to do is on the dock (Monsters waiting). */
+.friends-button .yard-dock__badge.friends-button__badge {
+  background: var(--colour-warning);
+  color: var(--colour-warning-text);
+}
+
+.friends-button__badge--gift {
+  padding: 0 2px;
+}
+
+.friends-button__badge--gift > .game-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+/* The yard's status line moves along to stay beside the corner's buttons. */
+@media (width > 620px) {
+  .overlay__layer:has(> .yard-dock):has(> .friends-button) > .cell-readout {
+    left: calc(24px + 68px + 2 * var(--space-4) + 80px);
+  }
+}
+
+/* A phone, upright or on its side (#381): beside Map, or the Menu that holds it. */
+@media (width <= 620px) {
+  .friends-button {
+    bottom: 18px;
+    left: 88px;
+  }
+
+  /* Friends a step right of Map, so their signs keep the bottom row's gap
+     instead of touching (lead, beta 6). */
+  .overlay__layer:has(> .yard-dock--bubbles) > .friends-button {
+    left: 100px;
+  }
+}
+
+/* On its side the buttons are a little smaller (yard-hud.css). */
+@media (width > 620px) and (height <= 500px) {
+  .friends-button {
+    bottom: var(--space-4);
+    left: 84px;
+  }
+}
+
+/* While a sheet or a screen is open on a phone the dock's buttons step aside
+   (yard-hud.css and each screen's own rule), and Friends with them, so it
+   never sits on a panel's heading. */
+@media (width <= 620px), (height <= 500px) {
+  .overlay__layer:has(> .panel:not([hidden])) > .friends-button,
+  .overlay__layer:has(> .map-dock--right > *) > .friends-button,
+  .overlay__layer:has(> .build-menu:not([hidden])) > .friends-button,
+  .overlay__layer:has(> .monsters-screen:not([hidden])) > .friends-button,
+  .overlay__layer:has(> .build-placing) > .friends-button,
+  .overlay__layer:has(> .planner-bar) > .friends-button,
+  .overlay__layer:has(> .yard-dock > .yard-menu:not([hidden])) > .friends-button {
+    display: none;
+  }
+}
+
+/* ── The window ────────────────────────────────────────────────────────── */
+
+.friends-window {
+  width: min(100%, 440px);
+  /* What sticks up above the frame: the title sign (or the close disc). */
+  --friends-window-overhang: max(var(--skin-title-lift, 0px), calc(var(--skin-edge, 0px) + 12px));
+  max-height: calc(100dvh - 2 * var(--space-4) - var(--friends-window-overhang));
+  margin-top: var(--friends-window-overhang);
+  min-height: 0;
+}
+
+.friends-window > .panel__head {
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+/* The list takes what is left and scrolls; the base cap (70vh) is not wanted here. */
+.friends-window > .panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  padding: var(--space-2) var(--space-3);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Head: "[friends] 34  [dot] 6" and Add. */
+.friends-window__top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.friends-window__summary {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.friends-window__count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--colour-text-strong);
+  font-size: var(--text-md);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.friends-window__dot {
+  width: 12px;
+  height: 12px;
+  box-shadow: 0 0 0 2px rgb(0 0 0 / 25%);
+}
+
+.friends-window__add,
+.friends-window__all,
+.friends-window__requests,
+.friends-window__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.friends-window__add {
+  flex: none;
+  padding-inline: var(--space-3);
+}
+
+.friends-window__add > .game-icon,
+.friends-window__requests > .game-icon {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+
+/* ── The list ──────────────────────────────────────────────────────────── */
+
+.friends-window__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.friends-window__group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: var(--space-2) var(--space-1) 2px;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.friends-window__group:first-child {
+  margin-top: 0;
+}
+
+.friends-window__group > .game-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.friends-window__group > .friends-window__dot {
+  width: 10px;
+  height: 10px;
+  margin-inline: 5px;
+}
+
+.friends-window__group-count {
+  color: var(--colour-text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.friends-window__item {
+  border-radius: var(--radius-md);
+}
+
+.friends-window__item.is-open {
+  background: var(--colour-surface-sunken);
+}
+
+.friends-window__row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 48px;
+  padding: 4px var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--colour-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.friends-window__row:hover {
+  background: var(--colour-surface-control-hover);
+}
+
+.friends-window__row:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.friends-window__face {
+  position: relative;
+  display: block;
+  width: 40px;
+  height: 40px;
+}
+
+.friends-window__img {
+  display: block;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.friends-window__face-dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border: 2px solid var(--colour-surface-base);
+}
+
+/* A friend pinned to the top of the list (beta 7): a gold frame on the face. */
+.friends-window__item--pinned .friends-window__img {
+  box-shadow:
+    0 0 0 2px #f2c230,
+    0 0 6px 1px rgb(242 194 48 / 55%);
+}
+
+:root[data-skin="flash"] .friends-window__item--pinned .friends-window__img {
+  box-shadow:
+    0 0 0 2px #c98a12,
+    0 0 5px 1px rgb(201 138 18 / 50%);
+}
+
+.friends-window__name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--colour-text-strong);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.friends-window__level {
+  font-variant-numeric: tabular-nums;
+}
+
+.friends-window__marks {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  /* Two marks' room, so the levels line up whether a row has marks or not. */
+  min-width: calc(2 * 24px + 2px);
+}
+
+.friends-window__mark {
+  display: block;
+  width: 24px;
+  height: 24px;
+}
+
+/* Visit, Message, Send gift: one line, sharing the width. */
+.friends-window__actions {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: var(--space-2);
+  padding: 2px var(--space-2) var(--space-2);
+}
+
+/* A phone held upright: three plates do not fit one line, so Visit has the
+   line to itself and Message and Send gift share the one under it. */
+@media (width <= 480px) {
+  .friends-window__actions {
+    grid-template-columns: 1fr 1fr;
+    grid-auto-flow: row;
+  }
+
+  .friends-window__actions[data-count="3"] > .friends-window__action:first-child,
+  .friends-window__actions[data-count="1"] > .friends-window__action {
+    grid-column: 1 / -1;
+  }
+}
+
+.friends-window__empty {
+  margin: var(--space-4) var(--space-2);
+  color: var(--colour-text-muted);
+  text-align: center;
+}
+
+/* ── The foot ──────────────────────────────────────────────────────────── */
+
+.friends-window__foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4) var(--space-3);
+}
+
+.friends-window__all {
+  flex: 1 1 auto;
+}
+
+.friends-window__requests {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.friends-window__requests[hidden] {
+  display: none;
+}
+
+/* A phone on its side: the rows a little tighter, so more of the list shows. */
+@media (height <= 500px) {
+  .friends-window__row {
+    min-height: 40px;
+    padding-block: 2px;
+  }
+
+  .friends-window__face,
+  .friends-window__img {
+    width: 34px;
+    height: 34px;
+  }
+
+  .friends-window__row {
+    grid-template-columns: 34px minmax(0, 1fr) auto auto;
+  }
+}
