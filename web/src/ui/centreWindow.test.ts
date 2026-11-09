@@ -347,6 +347,32 @@ describe("Middle windows: never over the dock (tester, 9 Nov)", () => {
     expect(element.style.maxWidth).toBe("");
   });
 
+  it("lays itself out again when an attribute widens it, though capped it kept its size (900x1000, 9 Nov)", async () => {
+    const layer = document.createElement("div");
+    layer.className = "overlay__layer";
+    layer.getBoundingClientRect = () => new DOMRect(0, 0, 900, 1000);
+    const dock = document.createElement("div");
+    dock.className = "yard-dock";
+    const door = document.createElement("button");
+    door.getBoundingClientRect = () => new DOMRect(804, 98, 80, 85);
+    dock.append(door);
+    const element = document.createElement("section");
+    element.className = "panel";
+    // The Monsters screen: 760px on most tabs, 868px and never narrowed on Hatch (hatch.css).
+    Object.defineProperty(element, "offsetWidth", {
+      get: () => (element.dataset["tab"] === "hatch" ? 868 : 760),
+    });
+    element.getBoundingClientRect = () => new DOMRect(125, 115, 651, 560);
+    layer.append(dock, element);
+    document.body.append(layer);
+    centreWindow(element, () => undefined).opened();
+    expect(element.style.maxWidth).toBe(`${900 - 2 * (900 - 804 + CENTRE_SIDE_GAP)}px`);
+    element.style.setProperty("--centre-min-width", "1212px");
+    element.dataset["tab"] = "hatch";
+    await Promise.resolve();
+    expect(element.style.maxWidth).toBe("");
+  });
+
   it("hangs the yard's notices under the open window's title bar, not on it", () => {
     expect(css).toContain(
       ".overlay__layer:has(> .panel--centre:not([hidden])) > .yard-notices {\n    top: var(--centre-notice-top,",

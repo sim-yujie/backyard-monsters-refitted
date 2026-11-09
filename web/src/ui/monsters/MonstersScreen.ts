@@ -223,10 +223,12 @@ export class MonstersScreen {
     const wasOpen = this.opened;
     this.opened = true;
     this.element.hidden = false;
-    this.centre.opened();
     this.active = tab;
     // The Hatch tab is the original's wide hatchery popup (#156): hatch.css widens the frame for it.
+    // Set before the middle window measures itself, or it keeps the last tab's width and cap
+    // (the Hatch tab at 900px wide stayed 651px and fell to its phone layout).
     this.element.dataset["tab"] = tab;
+    this.centre.opened();
     for (const [id, button] of this.tabButtons) {
       const current = id === tab;
       button.setAttribute("aria-selected", String(current));

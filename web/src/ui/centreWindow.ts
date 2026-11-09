@@ -254,13 +254,21 @@ const layoutCentreWindow = (element: HTMLElement): void => {
 };
 
 /* The open window is laid out again as it or the screen changes size (a tab
-   change, its content loading, the browser resized). */
+   change, its content loading, the browser resized), and as its own
+   attributes change (a tab's `data-tab` widening it): a window capped by
+   `max-width` keeps its size when its CSS widens it, so no resize is heard. */
 let watcher: ResizeObserver | null = null;
+let marks: MutationObserver | null = null;
 let watched: HTMLElement | null = null;
 let resizeHeard = false;
 
 const relayout = (): void => {
   if (current) layoutCentreWindow(current.element);
+};
+
+/** Its own inline style is what the layout writes: only another attribute counts. */
+const remark = (changes: MutationRecord[]): void => {
+  if (changes.some((change) => change.attributeName !== "style")) relayout();
 };
 
 const watch = (element: HTMLElement): void => {
@@ -269,16 +277,23 @@ const watch = (element: HTMLElement): void => {
     window.addEventListener("resize", relayout);
     resizeHeard = true;
   }
-  if (typeof ResizeObserver === "undefined" || watched === element) return;
-  watcher ??= new ResizeObserver(relayout);
-  if (watched) watcher.unobserve(watched);
-  watcher.observe(element);
+  if (watched === element) return;
+  if (watched) unwatch(watched);
+  if (typeof ResizeObserver !== "undefined") {
+    watcher ??= new ResizeObserver(relayout);
+    watcher.observe(element);
+  }
+  if (typeof MutationObserver !== "undefined") {
+    marks ??= new MutationObserver(remark);
+    marks.observe(element, { attributes: true });
+  }
   watched = element;
 };
 
 const unwatch = (element: HTMLElement): void => {
   if (watched !== element) return;
   watcher?.unobserve(element);
+  marks?.disconnect();
   watched = null;
 };
 

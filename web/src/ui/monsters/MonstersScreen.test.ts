@@ -165,6 +165,27 @@ describe("MonstersScreen: the frame", () => {
     expect(element.classList.contains("panel--centre")).toBe(true);
     expect(element.classList.contains("monsters-screen--beside-panel")).toBe(false);
   });
+
+  it("is measured as the middle window with the tab it opens on (Hatch's wider frame, 9 Nov)", () => {
+    const { screen, element } = setup([HALL, LOCKER]);
+    const layer = document.createElement("div");
+    layer.getBoundingClientRect = () => new DOMRect(0, 0, 900, 1000);
+    const dock = document.createElement("div");
+    dock.className = "yard-dock";
+    layer.append(dock, element);
+    document.body.append(layer);
+    const seen: (string | undefined)[] = [];
+    Object.defineProperty(element, "offsetWidth", {
+      get: () => {
+        seen.push(element.dataset["tab"]);
+        return 760;
+      },
+    });
+    screen.open("unlock");
+    screen.open("hatch");
+    expect(seen.at(0)).toBe("unlock");
+    expect(seen.at(-1)).toBe("hatch");
+  });
 });
 
 describe("MonstersScreen: the tab contract", () => {
