@@ -2,6 +2,7 @@ import type { Mr2WelcomeStatus } from "@/api/events";
 import { FIRST_OPEN_ART } from "@/game/maproom/takeover";
 import { STARTER_KIT_SUMMARIES } from "@/game/yard/starterKits";
 import { gameIcon } from "@/ui/gameIcon";
+import { eventsArt } from "./eventsArt";
 
 /**
  * The "New to Map Room 2" card on the Events page (owner, 9 Nov 2026): while
@@ -57,7 +58,9 @@ const reward = (src: string, alt: string, name: string, figure: string, ready: b
   row.dataset["reward"] = key;
   const words = el("div", "events-welcome__words");
   words.append(el("span", "events-welcome__name", name), el("span", "events-welcome__figure", figure));
-  const state = el("span", `events-welcome__state events-welcome__state--${ready ? "ready" : "used"}`, ready ? "Ready" : "Used");
+  // A gift and "Ready", or the claimed tick and "Used": the mark carries it, the word is short.
+  const state = el("span", `events-welcome__state events-welcome__state--${ready ? "ready" : "used"}`);
+  state.append(eventsArt(ready ? "gift" : "tick", 16, "events-welcome__state-mark"), el("span", "", ready ? "Ready" : "Used"));
   row.append(picture(src, alt), words, state);
   return row;
 };
@@ -79,7 +82,7 @@ export const mr2WelcomeCard = (status: Mr2WelcomeStatus, now: number, onGo: () =
   const head = el("div", "events-card__head events-welcome__head");
   const title = el("h3", "events-card__title", WELCOME_TITLE);
   const days = el("p", "events-card__countdown events-welcome__days");
-  days.append(gameIcon("time", { size: 20, decorative: true, className: "events-welcome__time" }));
+  days.append(gameIcon("time", { size: 24, decorative: true, className: "events-welcome__time" }));
   const daysText = el("span", "events-welcome__days-text", welcomeDaysText(status.endsAt, now));
   daysText.dataset["welcomeEnds"] = String(status.endsAt);
   days.append(daysText);
