@@ -425,7 +425,10 @@
   line-height: 1;
 }
 
+/* The number wears the button's own ink, not the heading's (tester, 9 Nov:
+   white on the gold plate in Modern, brown on green in Classic). */
 .friends-window__back > .friends-window__group-count {
+  color: inherit;
   font-variant-numeric: tabular-nums;
 }
 
@@ -527,9 +530,12 @@
   .friends-window__marks {
     min-width: calc(2 * 22px + 2px);
   }
+}
 
-  /* The way back sits beside the title sign here, as the count line does:
-     "< [wrench] 90" only, its words kept for the tooltip and a screen reader. */
+/* The way back as "< [wrench] 90" only, its words kept for the tooltip and a
+   screen reader: beside the title sign on a phone on its side, and on an
+   upright phone, where "Can use help" was cut to "Can ..." (tester, 9 Nov). */
+@media (height <= 500px), (width <= 480px) {
   .friends-window__back > .friends-window__group-words {
     display: none;
   }

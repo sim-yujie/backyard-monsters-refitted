@@ -146,4 +146,11 @@ describe("upright phone layout", () => {
     expect(phone).toMatch(/\.attack-viewtools \.yard-minimap \{[^}]*width: 120px !important;/);
     expect(phone).toMatch(/\.attack-viewtools \.yard-zoom__slider,\s*\.attack-viewtools \.yard-zoom__readout \{\s*display: none;/);
   });
+
+  it("keeps the Friends window's way back to '< [wrench] 90' on phones, in the button's ink (tester, 9 Nov)", () => {
+    const source = css("friends/friends-button.css");
+    const phones = media(source, "height <= 500px), (width <= 480px");
+    expect(phones).toMatch(/\.friends-window__back > \.friends-window__group-words \{\s*display: none;/);
+    expect(source).toMatch(/\.friends-window__back > \.friends-window__group-count \{[^}]*color: inherit;/);
+  });
 });
