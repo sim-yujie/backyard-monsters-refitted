@@ -2,6 +2,7 @@ import { Tribes } from "../../../enums/Tribes.js";
 import { calculateTribeLevel } from "./calculateTribeLevel.js";
 import { mr2HexShape } from "../../../config/MapRoom2Config.js";
 import { type HexShape, hexDistance } from "../../../game-rules/maproom/range.js";
+import { cheapTakeoverPrice } from "../../events/mr2Welcome.js";
 
 /**
  * Server-side reconstruction of the Map Room 2 takeover price.
@@ -141,6 +142,13 @@ export interface TakeoverQuote {
   shiny: number;
   /** Whether the cell neighbours the taker's main yard, which halves the price. */
   adjacent: boolean;
+  /**
+   * "New to Map Room 2" (`services/events/mr2Welcome.ts`): `resources` is the
+   * cheap price, 10% of the camp's full base price. Only when it applies.
+   */
+  welcome?: true;
+  /** The resource price without the welcome discount; only with `welcome`. */
+  usualResources?: number;
 }
 
 /**
@@ -157,6 +165,7 @@ export const quoteTakeover = ({
   empireValue,
   takerHomebase,
   conquestActive,
+  welcome = false,
 }: {
   cell: { x: number; y: number };
   isWildMonster: boolean;
@@ -164,6 +173,12 @@ export const quoteTakeover = ({
   /** The taker's `Save.homebase`, `[x, y]` as strings. */
   takerHomebase: readonly (string | number)[] | null | undefined;
   conquestActive: boolean;
+  /**
+   * The taker's "New to Map Room 2" cheap takeover is ready. A wild camp then
+   * costs 10% of its full base price in resources, with no half price or
+   * Conquest on top; the Shiny price stays the usual one.
+   */
+  welcome?: boolean;
 }): TakeoverQuote => {
   const [homeX, homeY] = (takerHomebase ?? []).map(Number);
   const tribe = Tribes[(cell.x + cell.y) % Tribes.length]!;
@@ -173,13 +188,29 @@ export const quoteTakeover = ({
     Number.isFinite(homeY) &&
     isAdjacentToMainYard(homeX!, homeY!, cell.x, cell.y);
 
+  const level = calculateTribeLevel(cell.x, cell.y, tribe);
+
   const resources = takeoverResourceCost({
     isWildMonster,
-    level: calculateTribeLevel(cell.x, cell.y, tribe),
+    level,
     empireValue,
     adjacentToMainYard: adjacent,
     conquestActive,
   });
 
-  return { resources, shiny: takeoverShinyCost(resources), adjacent };
+  const shiny = takeoverShinyCost(resources);
+
+  if (welcome && isWildMonster) {
+    const fullBase = takeoverResourceCost({
+      isWildMonster,
+      level,
+      empireValue,
+      adjacentToMainYard: false,
+      conquestActive: false,
+    });
+
+    return { resources: cheapTakeoverPrice(fullBase), shiny, adjacent, welcome: true, usualResources: resources };
+  }
+
+  return { resources, shiny, adjacent };
 };

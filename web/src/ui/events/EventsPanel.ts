@@ -1,4 +1,4 @@
-import type { EventReward, EventView, LadderView } from "@/api/events";
+import type { EventReward, EventView, LadderView, Mr2WelcomeStatus } from "@/api/events";
 import {
   calendarDays,
   claimableTiers,
@@ -19,6 +19,7 @@ import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { resourceIcon, RESOURCE_KEYS } from "@/ui/resourceIcon";
 import { eventsArt } from "./eventsArt";
+import { mr2WelcomeCard, welcomeDaysText } from "./mr2WelcomeCard";
 import "./events.css";
 
 /**
@@ -61,6 +62,8 @@ export type EventsPanelView =
       readonly claiming: string | null;
       /** A refusal to show under its claim. */
       readonly refusal: { readonly key: string; readonly message: string } | null;
+      /** The player's "New to Map Room 2" card (`ui/events/mr2WelcomeCard.ts`), first on the page; null for none. */
+      readonly mr2Welcome?: Mr2WelcomeStatus | null;
     };
 
 export interface EventsPanelOptions {
@@ -68,6 +71,8 @@ export interface EventsPanelOptions {
   onClaimTier(event: EventView, tier: number): void;
   onRetry(): void;
   onClose(): void;
+  /** The "New to Map Room 2" card's Go to Map Room 2. */
+  onGoToMapRoom2?(): void;
 }
 
 const el = <K extends keyof HTMLElementTagNameMap>(
@@ -299,6 +304,9 @@ export class EventsPanel {
     for (const line of this.element.querySelectorAll<HTMLElement>("[data-next-at]")) {
       line.textContent = nextText(Number(line.dataset["nextAt"]) - now);
     }
+    for (const line of this.element.querySelectorAll<HTMLElement>("[data-welcome-ends]")) {
+      line.textContent = welcomeDaysText(Number(line.dataset["welcomeEnds"]), now);
+    }
   }
 
   /**
@@ -330,8 +338,10 @@ export class EventsPanel {
 
     const { active, upcoming } = sortEvents(view.events);
     const sections: HTMLElement[] = [];
+    const welcome = view.mr2Welcome ?? null;
+    if (welcome) sections.push(mr2WelcomeCard(welcome, view.now, () => this.options.onGoToMapRoom2?.()));
     for (const event of active) sections.push(this.activeCard(event, view));
-    if (active.length === 0) sections.push(el("p", "events-status", "No event is on right now."));
+    if (active.length === 0 && !welcome) sections.push(el("p", "events-status", "No event is on right now."));
     if (upcoming.length > 0) {
       const section = el("section", "events-upcoming");
       const list = el("ul", "events-upcoming__list");

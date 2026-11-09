@@ -11,7 +11,7 @@ import {
 } from "@/game/maproom/takeover";
 import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
-import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
+import { RESOURCE_KEYS, resourceAmount, resourceIcon, type ResourceKey } from "@/ui/resourceIcon";
 import { GROUND_BONUS_TITLE, groundBonusIcons } from "./groundBonus";
 
 /**
@@ -35,6 +35,10 @@ export interface TakeoverDialogPrice {
   readonly resources?: number | undefined;
   readonly shiny?: number | undefined;
   readonly adjacent?: boolean | undefined;
+  /** "Frontier Pass": `resources` is the cheap price, 10% of the full base. */
+  readonly welcome?: boolean | undefined;
+  /** The resource price without the welcome discount; with `welcome`. */
+  readonly usualResources?: number | undefined;
   /** Absent when not known: both payments are offered and the server decides. */
   readonly affordable?: { readonly resources: boolean; readonly shiny: boolean } | undefined;
   readonly shinyLocked?: boolean | undefined;
@@ -109,16 +113,22 @@ export class TakeoverDialog {
     const cost = document.createElement("ul");
     cost.className = "takeover-dialog__cost";
     cost.setAttribute("aria-label", "Price, of each resource");
+    // A "Frontier Pass" price shows, on each resource, the usual price
+    // struck through and then the cut one: "~~9,000,000~~ 900,000".
+    const usual = price.welcome ? price.usualResources : undefined;
     for (const key of RESOURCE_KEYS) {
       const item = document.createElement("li");
-      item.append(resourceAmount(key, price.resources ?? "—"));
+      item.append(usual !== undefined ? welcomeTile(key, usual, price.resources) : resourceAmount(key, price.resources ?? "—"));
       cost.append(item);
     }
 
     const adjacent = document.createElement("p");
     adjacent.className = "u-muted takeover-dialog__adjacent";
     adjacent.textContent = "Half price: this yard is next to your main yard.";
-    adjacent.hidden = !price.adjacent;
+    // The welcome price is a flat 10% of the full price: no half price on top.
+    adjacent.hidden = !price.adjacent || !!price.welcome;
+
+    const welcome = welcomeLabel(price);
 
     this.countdown = document.createElement("p");
     this.countdown.className = "takeover-dialog__countdown";
@@ -184,7 +194,7 @@ export class TakeoverDialog {
     this.status.setAttribute("aria-live", "polite");
     this.status.hidden = true;
 
-    this.popup.setContent(expand, ground, cost, adjacent, this.countdown, this.choice, this.confirm, this.status);
+    this.popup.setContent(expand, ground, welcome, cost, adjacent, this.countdown, this.choice, this.confirm, this.status);
     this.setStep("choose");
     this.tick();
     if (price.grantExpiresAt !== undefined) this.timer = window.setInterval(() => this.tick(), 1000);
@@ -333,4 +343,53 @@ const option = (action: HTMLButtonElement, caption: HTMLElement): HTMLElement =>
   element.className = "takeover-dialog__option";
   element.append(action, caption);
   return element;
+};
+
+/**
+ * One resource's "Frontier Pass" price: the icon, the usual price struck
+ * through, then the cut price. The two prices sit side by side, or one over
+ * the other where the tile is too narrow (a phone).
+ */
+const welcomeTile = (key: ResourceKey, usual: number, cut: number | undefined): HTMLElement => {
+  const tile = document.createElement("span");
+  tile.className = "takeover-dialog__welcome-price";
+  tile.dataset["resource"] = key;
+  const prices = document.createElement("span");
+  prices.className = "takeover-dialog__prices";
+  const struck = document.createElement("s");
+  struck.className = "takeover-dialog__usual";
+  struck.textContent = formatAmount(usual);
+  struck.title = "The usual price";
+  const now = document.createElement("span");
+  now.className = "takeover-dialog__cut";
+  now.textContent = cut === undefined ? "—" : formatAmount(cut);
+  prices.append(hiddenText("usually "), struck, hiddenText(", now "), now);
+  tile.append(resourceIcon(key), prices);
+  return tile;
+};
+
+const hiddenText = (text: string): HTMLElement => {
+  const span = document.createElement("span");
+  span.className = "u-visually-hidden";
+  span.textContent = text;
+  return span;
+};
+
+/** The small label over a "Frontier Pass" price; hidden otherwise. */
+export const WELCOME_LABEL = "Frontier Pass";
+
+const welcomeLabel = (price: TakeoverDialogPrice): HTMLElement => {
+  const line = document.createElement("p");
+  line.className = "takeover-dialog__welcome";
+  line.hidden = !price.welcome;
+  if (!price.welcome) return line;
+  const tag = document.createElement("span");
+  tag.className = "takeover-dialog__welcome-tag";
+  tag.textContent = WELCOME_LABEL;
+  const off = document.createElement("span");
+  off.className = "takeover-dialog__welcome-off";
+  off.textContent = "-90%";
+  // The usual price, struck through, is on each resource's tile below.
+  line.append(tag, off);
+  return line;
 };

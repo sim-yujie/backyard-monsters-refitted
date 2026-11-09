@@ -1,4 +1,11 @@
-import { eventsActions, eventsApi, type EventsActions, type EventsApi, type EventView } from "@/api/events";
+import {
+  eventsActions,
+  eventsApi,
+  type EventsActions,
+  type EventsApi,
+  type EventView,
+  type Mr2WelcomeStatus,
+} from "@/api/events";
 import { claimableCount, claimableTiers, grantedKrallenText, isOver, serverClock, type ServerClock } from "@/game/events/eventsModel";
 import { onPumpkins, PUMPKIN_HUNT_KIND, withPumpkinCount } from "@/game/events/pumpkinHunt";
 import { currentSeason, seasonFor, setSeason } from "@/game/season";
@@ -58,6 +65,8 @@ export class EventsDoor {
   private readonly actions: EventsActions;
   private panel: EventsPanel | null = null;
   private events: readonly EventView[] | null = null;
+  /** The "New to Map Room 2" card, or null. */
+  private welcome: Mr2WelcomeStatus | null = null;
   private clock: ServerClock | null = null;
   private loadFailed: string | null = null;
   private claiming: string | null = null;
@@ -109,6 +118,7 @@ export class EventsDoor {
       if (this.destroyed) return;
       this.clock = serverClock(body.now, Date.now());
       this.events = body.events;
+      this.welcome = body.mr2Welcome ?? null;
       // An event that started since the yard loaded dresses it now. The yard's
       // own load already chose among overlapping events (a forced one first),
       // so a season whose event is still on is kept rather than replaced by
@@ -145,6 +155,10 @@ export class EventsDoor {
       onClaimCalendar: (event) => void this.claimCalendar(event),
       onClaimTier: (event, tier) => void this.claimTier(event, tier),
       onRetry: () => void this.load(),
+      onGoToMapRoom2: () => {
+        this.panel?.close();
+        this.mounts.scene.openMap();
+      },
       onClose: () => {
         this.panel = null;
         this.refusal = null;
@@ -193,7 +207,14 @@ export class EventsDoor {
 
   private view(): EventsPanelView {
     if (this.events) {
-      return { kind: "list", events: this.events, now: this.now, claiming: this.claiming, refusal: this.refusal };
+      return {
+        kind: "list",
+        events: this.events,
+        now: this.now,
+        claiming: this.claiming,
+        refusal: this.refusal,
+        mr2Welcome: this.welcome,
+      };
     }
     if (this.loadFailed) return { kind: "error", message: this.loadFailed };
     return { kind: "loading" };
@@ -210,7 +231,7 @@ export class EventsDoor {
 
   private refresh(): void {
     const events = this.events ?? [];
-    this.button.hidden = events.length === 0;
+    this.button.hidden = events.length === 0 && this.welcome === null;
     const count = claimableCount(events);
     this.badge.hidden = count === 0;
     this.badge.textContent = count > 99 ? "99+" : String(count);
@@ -224,9 +245,11 @@ export class EventsDoor {
   private tick(): void {
     if (!this.events || this.loading) return;
     const now = this.now;
-    const stale = this.events.some(
-      (event) => isOver(event, now) || (event.calendar?.nextAt != null && now >= event.calendar.nextAt),
-    );
+    const stale =
+      (this.welcome !== null && now >= this.welcome.endsAt) ||
+      this.events.some(
+        (event) => isOver(event, now) || (event.calendar?.nextAt != null && now >= event.calendar.nextAt),
+      );
     if (stale) {
       void this.load();
       return;

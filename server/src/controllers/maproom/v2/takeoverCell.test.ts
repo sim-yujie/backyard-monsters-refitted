@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { memoryWelcomeStore, useWelcomeStore } from "../../../services/events/mr2Welcome.js";
+import { quoteTakeover } from "../../../services/maproom/v2/takeoverCost.js";
 import type { Context } from "koa";
 import { achievementConfig } from "../../../config/AchievementConfig.js";
 import { readAchievements } from "../../../services/achievements/state.js";
@@ -35,6 +37,7 @@ const GRANT_KEY = "takeover-grant:900";
 let allianceOf: Map<number, number | null>;
 /** Keys dropped via Redis, in call order (issue #329, #330 WP1). */
 let delCalls: string[];
+let welcome: ReturnType<typeof memoryWelcomeStore>;
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -192,6 +195,9 @@ beforeEach(() => {
   delCalls = [];
   // By default the taker has just destroyed the outpost and holds its grant.
   grantTo(TAKER);
+  // "New to Map Room 2": no window unless a test opens one.
+  welcome = memoryWelcomeStore(0);
+  useWelcomeStore(welcome);
 });
 
 const startingRewards = achievementConfig.rewards;
@@ -446,5 +452,72 @@ describe("sight cache invalidation (#329, #330 WP1)", () => {
     expect((await run({ baseid: CAMP, shiny: "1" })).ok).toBe(true);
 
     expect(delCalls).toEqual([`sight:${TAKER}`]);
+  });
+});
+
+describe("takeoverCell: New to Map Room 2", () => {
+  const openWindow = () => welcome.rows.set(TAKER, { start: now() - 60, takeoverUsed: false, kitUsed: false });
+  const fullBase = () =>
+    quoteTakeover({ cell: { x: 240, y: 208 }, isWildMonster: true, empireValue: 0, takerHomebase: null, conquestActive: false })
+      .resources;
+
+  test("the first wild camp in the 10 days costs 10% of its full base price, and uses the reward", async () => {
+    openWindow();
+    const result = await run({ baseid: CAMP });
+    expect(result.ok).toBe(true);
+    const cheap = Math.round(fullBase() * 0.1);
+    expect(takerResources()).toEqual({
+      r1: 100_000_000 - cheap,
+      r2: 100_000_000 - cheap,
+      r3: 100_000_000 - cheap,
+      r4: 100_000_000 - cheap,
+    });
+    expect(welcome.rows.get(TAKER)!.takeoverUsed).toBe(true);
+  });
+
+  test("a client that posts a lower figure is still charged the server's price", async () => {
+    openWindow();
+    await run({ baseid: CAMP, resources: JSON.stringify({ r1: 1, r2: 1, r3: 1, r4: 1 }) });
+    expect(takerResources().r1).toBe(100_000_000 - Math.round(fullBase() * 0.1));
+  });
+
+  test("paid with Shiny: the usual Shiny price, and the reward is used all the same", async () => {
+    const usualShiny = quoteTakeover({
+      cell: { x: 240, y: 208 },
+      isWildMonster: true,
+      empireValue: 0,
+      takerHomebase: takerSave.homebase as string[],
+      conquestActive: false,
+    }).shiny;
+    openWindow();
+    expect((await run({ baseid: CAMP, shiny: "1" })).ok).toBe(true);
+    expect(takerSave.credits).toBe(5000 - usualShiny);
+    expect(welcome.rows.get(TAKER)!.takeoverUsed).toBe(true);
+  });
+
+  test("a player outpost never uses it, and is charged in full", async () => {
+    openWindow();
+    expect((await run({ baseid: OUTPOST })).ok).toBe(true);
+    expect(takerResources().r1).toBe(72_000_000);
+    expect(welcome.rows.get(TAKER)!.takeoverUsed).toBe(false);
+  });
+
+  test("only the first wild camp: after it the price is the usual one", async () => {
+    welcome.rows.set(TAKER, { start: now() - 60, takeoverUsed: true, kitUsed: false });
+    await run({ baseid: CAMP });
+    expect(takerResources().r1).toBe(100_000_000 - fullBase());
+  });
+
+  test("after the 10 days the price is the usual one", async () => {
+    welcome.rows.set(TAKER, { start: now() - 10 * 86_400 - 1, takeoverUsed: false, kitUsed: false });
+    await run({ baseid: CAMP });
+    expect(takerResources().r1).toBe(100_000_000 - fullBase());
+  });
+
+  test("a refused takeover does not charge the cheap price", async () => {
+    openWindow();
+    takerSave.resources = { r1: 10, r2: 10, r3: 10, r4: 10 };
+    const result = await run({ baseid: CAMP });
+    expect(result.reason).toBe("notEnoughResources");
   });
 });

@@ -1,4 +1,6 @@
 import { startWeekendSettingsRefresh } from "./services/events/weekendSettings.js";
+import { getCurrentDateTime } from "./utils/getCurrentDateTime.js";
+import { ensureWelcomeLaunch } from "./services/events/mr2Welcome.js";
 import Koa, { type Next } from "koa";
 import serve from "koa-static";
 import ormConfig from "./mikro-orm.config.js";
@@ -142,6 +144,10 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // The weekend events' live settings, read now and every minute
   // (`services/events/weekendSettings.ts`); the dashboard changes them.
   startWeekendSettingsRefresh(() => postgres.em.fork());
+
+  // "New to Map Room 2": players already on Map Room 2 get their 10 days from
+  // the first start of a server with this feature (`services/events/mr2Welcome.ts`).
+  void ensureWelcomeLaunch(postgres.em.fork(), getCurrentDateTime());
 
   // Finishes attacks whose window closed without a save (issue #138).
   // `ATTACK_FINALISER_SWEEP=off` leaves the sweep to another server sharing

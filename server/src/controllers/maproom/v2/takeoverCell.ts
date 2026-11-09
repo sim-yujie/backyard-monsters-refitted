@@ -35,6 +35,7 @@ import { isAttackActive } from "../../../services/base/isAttackActive.js";
 import { readAttackSession } from "../../../services/base/attackSessionStore.js";
 import { recordAchievements, unseenAchievements } from "../../../services/achievements/record.js";
 import type { AchievementEvents } from "../../../services/achievements/evaluate.js";
+import { claimWelcome, onMapRoom2, readWelcome, welcomeReady } from "../../../services/events/mr2Welcome.js";
 
 /** `SELECT … FOR UPDATE` on one save row, refreshed into the identity map. */
 const lockSave = (em: EntityManager, where: { basesaveid: number } | { userid: number; type: string }) =>
@@ -94,6 +95,14 @@ export const takeoverCell: KoaController = async (ctx) => {
 
   const conquestActive = powerups.some(({ id }) => id === AlliancePowerupType.CONQUEST);
 
+  // "New to Map Room 2" (`services/events/mr2Welcome.ts`), read before the
+  // transaction: a failed read only means no discount, never a failed takeover.
+  // The transaction claims it again, atomically, before charging the cheap price.
+  const wildCamp = cell.base_type === MapRoomCell.WM;
+  const readAt = getCurrentDateTime();
+  const welcomeOpen =
+    wildCamp && welcomeReady(await readWelcome(postgres.em, currentUser.userid, onMapRoom2(userSave), readAt), "takeover", readAt);
+
   const result = await postgres.em.transactional(async (em) => {
     const taker = await lockSave(em, { basesaveid: userSave.basesaveid });
     const cellSave = await lockSave(em, { basesaveid: cell.save!.basesaveid });
@@ -126,12 +135,21 @@ export const takeoverCell: KoaController = async (ctx) => {
     // million - so a request that omits both fields is charged the resource cost rather
     // than taking the cell for nothing.
     // The client branches on the cell payload's `b` field, which is base_type, so match it.
+    //
+    // The first wild camp in the player's "New to Map Room 2" days uses the
+    // reward up however it is paid for; only a resource payment gets the cheap
+    // price (the Shiny price is the usual one). The claim is one conditional
+    // UPDATE in this transaction, so a refusal below rolls it back and two
+    // takeovers cannot both have it.
+    const welcome = welcomeOpen && (await claimWelcome(em, currentUser.userid, "takeover", now));
+
     const { resources: cost, shiny: shinyCost } = quoteTakeover({
       cell,
-      isWildMonster: cell.base_type === MapRoomCell.WM,
+      isWildMonster: wildCamp,
       empireValue: cellSave.empirevalue,
       takerHomebase: taker.homebase,
       conquestActive,
+      welcome,
     });
 
     if (useShiny) {

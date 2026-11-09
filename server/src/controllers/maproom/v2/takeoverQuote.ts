@@ -20,6 +20,7 @@ import { quoteTakeover, type TakeoverQuote } from "../../../services/maproom/v2/
 import { takeoverRefusal, type TakeoverRefusal } from "../../../services/maproom/v2/takeoverRules.js";
 import { holdsTakeoverGrant } from "../../../services/maproom/v2/takeoverGrant.js";
 import { readTakeoverGrant } from "../../../services/maproom/v2/takeoverGrantStore.js";
+import { onMapRoom2, readWelcome, welcomeReady } from "../../../services/events/mr2Welcome.js";
 
 const TakeoverQuoteSchema = z.object({
   /** The cell's base id, as the map carries it (`bid`). */
@@ -115,12 +116,18 @@ export const takeoverQuote: KoaController = async (ctx) => {
 
   const save = quoted.row?.save ?? null;
 
+  // "New to Map Room 2": the first wild camp in the player's 10 days is cheap.
+  const welcome =
+    quoted.isWildMonster &&
+    welcomeReady(await readWelcome(postgres.em, currentUser.userid, onMapRoom2(userSave), now), "takeover", now);
+
   const price = quoteTakeover({
     cell: quoted,
     isWildMonster: quoted.isWildMonster,
     empireValue: save?.empirevalue ?? 0,
     takerHomebase: userSave.homebase,
     conquestActive: powerups.some(({ id }) => id === AlliancePowerupType.CONQUEST),
+    welcome,
   });
 
   let reason: TakeoverQuoteReason | null;

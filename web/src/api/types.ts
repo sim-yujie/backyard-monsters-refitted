@@ -484,6 +484,10 @@ export interface TakeoverQuoteResponse extends ApiEnvelope {
   shiny?: number;
   /** Next to the caller's main yard, which halves the price. */
   adjacent?: boolean;
+  /** "New to Map Room 2": `resources` is the cheap price (10% of the full base). */
+  welcome?: true;
+  /** The resource price without that discount; only with `welcome`. */
+  usualResources?: number;
   /** Server seconds when the caller's chance at this player outpost ends; only while it runs. */
   grantExpiresAt?: number;
   /** Whether the caller can pay each way right now. */

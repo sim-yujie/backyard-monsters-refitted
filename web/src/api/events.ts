@@ -93,6 +93,24 @@ export interface EventsBody extends ApiEnvelope {
   events: EventView[];
   /** The last "What's new" release the player saw, or null. */
   whatsNewSeen: string | null;
+  /**
+   * The player's "New to Map Room 2" card, or null when their 10 days are not
+   * running or both rewards are used. Absent from an older server.
+   */
+  mr2Welcome?: Mr2WelcomeStatus | null;
+}
+
+/** "New to Map Room 2": 10 days with a cheap first wild takeover and a free Regular kit. */
+export interface Mr2WelcomeStatus {
+  /** Unix seconds. */
+  startsAt: number;
+  endsAt: number;
+  /** Whole days left, rounded up. */
+  daysLeft: number;
+  /** The cheap takeover can still be used. */
+  takeover: boolean;
+  /** The free Regular kit can still be used. */
+  kit: boolean;
 }
 
 export interface CalendarClaimReport {

@@ -17,6 +17,9 @@ import { nextBuildingId, placementProblem } from "./build.js";
 import { MAP_ROOM_TYPE } from "./buildingJobs.js";
 import { creditResources, type CreditSave } from "./credit.js";
 import { readMushrooms } from "./mushrooms.js";
+import { recordMr2Join } from "../events/mr2Welcome.js";
+import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { logger } from "../../utils/logger.js";
 
 /**
  * The Map Room and the Radio Tower (`docs/design/yard-buildings.md` §5.7,
@@ -321,18 +324,34 @@ const joinWorld: WorldJoin = async (em, save, user) => {
  * @param em - The transaction the catch-up runs in.
  * @param save - The caught-up main yard.
  * @param user - Its owner, when the caller has it (it is loaded otherwise).
+ * The move starts the player's "New to Map Room 2" 10 days
+ * (`services/events/mr2Welcome.ts`), in the same transaction; nothing if they
+ * ever had them.
+ *
  * @param join - The world work; a stand-in under test.
+ * @param welcome - Starts the welcome days; a stand-in under test.
  * @returns Whether the yard moved.
  */
 export const joinMapRoom2 = async (
   em: EntityManager,
   save: Save,
   user: User | null = null,
-  join: WorldJoin = joinWorld
+  join: WorldJoin = joinWorld,
+  welcome: (em: EntityManager, userid: number, now: number) => Promise<void> = recordMr2Join
 ): Promise<boolean> => {
   if (!needsMapRoom2Join(save)) return false;
   if (!save.worldid) await join(em, save, user);
   save.mr2upgraded = true;
   save.mapversion = MapRoomVersion.V2;
+  // Never the reason a yard fails to load: a stand-in database under test
+  // has no SQL, and the first read for an MR2 player writes the row anyway.
+  try {
+    await welcome(em, save.userid, getCurrentDateTime());
+  } catch (error) {
+    logger.warn("Could not start the Map Room 2 welcome for {userid}: {error}", {
+      userid: save.userid,
+      error: String(error),
+    });
+  }
   return true;
 };

@@ -409,3 +409,64 @@ describe("Layout faults (picture tester, 9 Nov)", () => {
     expect((lum("f3e3c3") + 0.05) / (lum(classic!) + 0.05)).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+describe("EventsPanel: the New to Map Room 2 card", () => {
+  const welcome = { startsAt: 0, endsAt: 10 * 86_400, daysLeft: 10, takeover: true, kit: false };
+
+  it("puts the card first, before the events, while the days run", () => {
+    const { panel } = mounted();
+    panel.render(list([event()], { mr2Welcome: welcome }));
+    const cards = [...panel.element.querySelectorAll<HTMLElement>(".events-card")];
+    expect(cards[0]?.dataset["event"]).toBe("mr2-welcome");
+    expect(cards[1]?.querySelector(".events-card__title")?.textContent).toBe("Halloween");
+    expect(cards[0]?.querySelector("[data-welcome-ends]")?.textContent).toBe("10 days left");
+    expect(cards[0]?.querySelector('[data-reward="takeover"] .events-welcome__state')?.textContent).toBe("Ready");
+    expect(cards[0]?.querySelector('[data-reward="kit"] .events-welcome__state')?.textContent).toBe("Used");
+    expect(cards[0]?.querySelector(".events-welcome__help-button")?.textContent).toBe("?");
+    panel.close();
+  });
+
+  it("draws no card when the server sends none, or null", () => {
+    const { panel } = mounted();
+    panel.render(list([event()]));
+    expect(panel.element.querySelector(".events-card--mr2-welcome")).toBeNull();
+    panel.render(list([event()], { mr2Welcome: null }));
+    expect(panel.element.querySelector(".events-card--mr2-welcome")).toBeNull();
+    panel.close();
+  });
+
+  it("shows only the card, with no 'No event' line, when no event is on", () => {
+    const { panel } = mounted();
+    panel.render(list([], { mr2Welcome: welcome }));
+    expect(panel.element.querySelector(".events-card--mr2-welcome")).not.toBeNull();
+    expect(panel.element.querySelector(".events-status")).toBeNull();
+    panel.close();
+  });
+
+  it("counts the days down on the tick", () => {
+    const { panel } = mounted();
+    panel.render(list([], { mr2Welcome: welcome }));
+    panel.tick(8 * 86_400 + 30);
+    expect(panel.element.querySelector("[data-welcome-ends]")?.textContent).toBe("2 days left");
+    panel.close();
+  });
+
+  it("goes to Map Room 2 from the card's button", () => {
+    const onGoToMapRoom2 = vi.fn();
+    const panel = new EventsPanel({ onClaimCalendar: vi.fn(), onClaimTier: vi.fn(), onRetry: vi.fn(), onClose: vi.fn(), onGoToMapRoom2 }).mount(document.body);
+    panel.render(list([], { mr2Welcome: welcome }));
+    const go = panel.element.querySelector<HTMLButtonElement>(".events-welcome__go");
+    expect(go?.textContent).toBe("Go to Map Room 2");
+    go?.click();
+    expect(onGoToMapRoom2).toHaveBeenCalledOnce();
+    panel.close();
+  });
+
+  it("hides the closed note and drops the days under the title on a phone", () => {
+    const css = eventsCss.replace(/\r\n/g, "\n");
+    expect(css).toMatch(/\.events-welcome__help\[hidden\] \{\s*display: none;/);
+    const phone = css.slice(css.lastIndexOf("@media (width <= 620px)"));
+    expect(phone).toMatch(/\.events-welcome__days \{\s*grid-row: 2;/);
+    expect(css).toMatch(/:root\[data-skin="flash"\] \.events-card--mr2-welcome \{/);
+  });
+});

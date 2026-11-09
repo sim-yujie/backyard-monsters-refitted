@@ -165,6 +165,61 @@ describe("TakeoverDialog", () => {
     }
   });
 
+  it("a New to Map Room 2 price: the small label, -90%, each tile the usual price struck then the cut one, no half-price line", () => {
+    const { $ } = open({
+      price: {
+        resources: 350_000,
+        usualResources: 1_750_000,
+        welcome: true,
+        shiny: 924,
+        adjacent: true,
+        affordable: { resources: true, shiny: true },
+      },
+    });
+    const label = $(".takeover-dialog__welcome");
+    expect(label.hidden).toBe(false);
+    expect($(".takeover-dialog__welcome-tag").textContent).toBe("Frontier Pass");
+    expect($(".takeover-dialog__welcome-off").textContent).toBe("-90%");
+    // The label line no longer carries a struck total: each tile has its own.
+    expect(label.querySelector("s")).toBeNull();
+    expect($(".takeover-dialog__adjacent").hidden).toBe(true);
+    const tiles = [...modal.querySelectorAll(".takeover-dialog__cost li")];
+    expect(tiles).toHaveLength(4);
+    for (const tile of tiles) {
+      expect(tile.querySelector(".res-icon")).not.toBeNull();
+      const struck = tile.querySelectorAll("s");
+      expect(struck).toHaveLength(1);
+      expect(struck[0]!.textContent).toBe("1,750,000");
+      expect(tile.querySelector(".takeover-dialog__cut")!.textContent).toBe("350,000");
+      // Icon, then the struck usual price, then the cut price.
+      const order = [...tile.querySelectorAll(".res-icon, s, .takeover-dialog__cut")];
+      expect(order.map((el) => el.className.split(" ")[0])).toEqual(["res-icon", "takeover-dialog__usual", "takeover-dialog__cut"]);
+    }
+    expect([...new Set(tiles.map((tile) => (tile.firstElementChild as HTMLElement).dataset["resource"]))]).toEqual([
+      "r1",
+      "r2",
+      "r3",
+      "r4",
+    ]);
+  });
+
+  it("no label and nothing struck on a usual price", () => {
+    const { $ } = open();
+    expect($(".takeover-dialog__welcome").hidden).toBe(true);
+    expect($(".takeover-dialog__adjacent").hidden).toBe(false);
+    const tiles = [...modal.querySelectorAll(".takeover-dialog__cost li")];
+    expect(tiles).toHaveLength(4);
+    for (const tile of tiles) {
+      expect(tile.querySelector("s")).toBeNull();
+      expect(tile.textContent).toContain("3,500,000");
+    }
+  });
+
+  it("nothing struck when the quote carries a usual price but no welcome discount", () => {
+    open({ price: { resources: 3_500_000, usualResources: 3_500_000, shiny: 924 } });
+    expect(modal.querySelectorAll(".takeover-dialog__cost s")).toHaveLength(0);
+  });
+
   it("Back returns to the choice without calling the server", () => {
     const { dialog, takeOver, $ } = open();
     $(".takeover-dialog__resources").click();
