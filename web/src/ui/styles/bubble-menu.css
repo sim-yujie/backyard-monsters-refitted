@@ -128,16 +128,6 @@
   width: var(--dock-slot);
 }
 
-/* The friends bar stands beside Map, the ways out and the friends in one
-   corner, rather than alone in the middle of the bottom edge, and keeps
-   clear of the shorter row. */
-@media (width > 620px) and (height > 500px) {
-  .overlay__layer.overlay__layer:has(> .yard-dock--bubbles) > .friends-bar {
-    --friends-bar-right: 470px;
-    margin-inline: 0;
-  }
-}
-
 /* A tall desktop: the right edge is one column, the zoom rail over Collect
    all over Build, so the yard's middle is free and every button is in the
    one corner; the bottom row is More, Monsters and Build. */
@@ -160,14 +150,10 @@
     bottom: 298px;
     transform: none;
   }
-
-  .overlay__layer.overlay__layer:has(> .yard-dock--bubbles) > .friends-bar {
-    --friends-bar-right: 370px;
-  }
 }
 
 /* A phone held upright: the switcher over Map and Friends beside it in the
-   left corner (yard-hud.css, friends-bar.css), and the right corner a square
+   left corner (yard-hud.css, friends-button.css), and the right corner a square
    of four under the thumb: More over Monsters, Collect all over Build. The
    column rises straight from More, the bubbles a little smaller and closer. */
 @media (width <= 620px) {
@@ -178,9 +164,12 @@
     --bubble-step: 60px;
   }
 
+  /* 101px (108px before the Friends button): Monsters' word keeps 8px from
+     Friends' on its left and Build's on its right in Classic, whose signs are
+     the wider (tester, 9 Nov: the Friends and Monsters ribbons touched). */
   .yard-dock__right > .bubble-menu,
   .yard-dock--bubbles .yard-dock__right > .yard-dock__button--monsters {
-    right: 108px;
+    right: 101px;
   }
 
   .yard-dock__right > .bubble-menu {
@@ -245,12 +234,6 @@
 
   .yard-dock--bubbles .yard-dock__right > .yard-dock__button--kits {
     bottom: var(--space-4);
-  }
-
-  /* Friends a step right of Map, so their signs keep the bottom row's gap
-     instead of touching (lead, beta 6). */
-  .overlay__layer:has(> .yard-dock--bubbles) > .friends-bar > .friends-bar__toggle {
-    left: 100px;
   }
 
   /* The yard's readout line would sit on Friends. */

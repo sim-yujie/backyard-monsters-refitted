@@ -117,6 +117,17 @@ yet**, so decision 7's alliance entry point has nowhere to live (see section 10,
 
 ### 3.2 The friends bar
 
+> **Replaced (owner, 9 Nov 2026, option A).** The strip is gone on every screen size. One round
+> **Friends** disc beside Map (`ui/friends/FriendsButton.ts`) wears a badge (friends who can use
+> your help, else a gift while one is due) and opens the **Friends window**
+> (`ui/friends/FriendsWindow.ts`), a centred game window: friend and online counts, Add (Find), the
+> list grouped can help / online / everyone else with Visit, Message and Send gift under a pressed
+> row, and All friends plus the requests waiting at the foot. A long list (90 can help, 20 online,
+> 150 in all) shows each group's first five and **Show all N**, which lists that group whole with a
+> **‹ N** way back in the window's head; one request (`GET /bm/friends`) fills it at any size. A dev
+> build opened with `?bigfriends` (or `?bigfriends=H,O,T`) shows a made-up list of that size
+> (`game/friends/friendsDev.ts`). The text below is the original bar.
+
 A strip of portraits along the bottom middle of the player's own yard, between the left and right
 buttons, like Flash's. Each portrait is the friend's critter avatar with name and level, a green dot
 when online (unless they hide it), and small badges:
@@ -408,8 +419,8 @@ New code lives in `web/src/ui/friends/` and `web/src/game/friends/` so packages 
   counts for badges), refreshed on open, on a `friend` notification and every few minutes (WP3).
 - `ui/friends/FriendsScreen.ts` — a `Panel` with tabs **Friends**, **Requests**, **Gifts**,
   **Find**; each tab its own file so WP8 adds Gifts without touching the others (WP3).
-- `ui/friends/FriendsBar.ts` and `FriendCard.ts` — the bar and the portrait card (WP4), mounted by
-  the yard scene.
+- `ui/friends/FriendsButton.ts` and `FriendsWindow.ts` — the Friends disc beside Map and its centred
+  window (WP4; the bar and its card until 9 Nov 2026), mounted by the yard scene.
 - Visit: a `friend` kind of `ViewTarget`, loaded with `type: "help"`; Home on the dock; the
   "Helping {name}" line (WP5). Help markers and the help panel (WP7).
 - `ui/friends/FriendAttackConfirm.ts`, called before the three `setAttackTarget` calls (WP10).

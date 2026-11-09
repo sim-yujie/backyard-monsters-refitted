@@ -1,4 +1,5 @@
 import { FRIEND_MAX, PIN_MAX, friendsApi, type Friend, type FriendsApi, type FriendsList } from "@/api/friends";
+import { devBigFriends, withBigList } from "./friendsDev";
 
 /**
  * The player's friends, cached for the tab (`docs/design/friends.md` §8,
@@ -218,5 +219,8 @@ export class FriendsStore {
   }
 }
 
+/** A dev build opened with `?bigfriends` shows a made-up long list (`friendsDev.ts`). */
+const devCounts = import.meta.env.DEV && typeof window !== "undefined" ? devBigFriends(window.location.search) : null;
+
 /** The tab's one store. */
-export const friendsStore = new FriendsStore();
+export const friendsStore = new FriendsStore(devCounts ? { api: withBigList(friendsApi, devCounts) } : {});
