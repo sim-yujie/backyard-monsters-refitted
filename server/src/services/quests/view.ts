@@ -20,6 +20,8 @@ export interface QuestView {
   /** Finished and not claimed: the Claim button shows. */
   ready: boolean;
   rewards: EventReward[];
+  /** Weekly Fighting / Resources: last week's need when the player's pace moved it ("Harder" / "Easier" line). */
+  was?: number;
 }
 
 export interface QuestSetView {
@@ -59,6 +61,7 @@ const setView = (set: QuestSet | null, period: string, bonus: number): QuestSetV
       claimed: quest.claimed,
       ready: !quest.claimed && quest.have >= quest.need,
       rewards: quest.rewards,
+      ...(quest.was !== undefined && { was: quest.was }),
     })),
     bonus: { shiny: bonus, ready: !!current && !current.bonus && allDone(current), claimed: current?.bonus ?? false },
   };

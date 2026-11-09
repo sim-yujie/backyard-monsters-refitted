@@ -215,6 +215,40 @@ const WEEKLY_FIGHTS_NEED: ByTownHall = [
   WEEKLY_FIGHTS, WEEKLY_FIGHTS, WEEKLY_FIGHTS, WEEKLY_FIGHTS, WEEKLY_FIGHTS,
   WEEKLY_FIGHTS, WEEKLY_FIGHTS, WEEKLY_FIGHTS, WEEKLY_FIGHTS, WEEKLY_FIGHTS,
 ];
+/**
+ * Owner, 9 Nov (Option A, "pace multiplier"): the weekly Fighting and
+ * Resources quests adapt to each player so they take about 3-5 days. At the
+ * weekly rollover each group's pace is multiplied by the step for the day
+ * (1 = Monday) its quest last week was finished on, then clamped. Social is
+ * never paced. Tune after one beta week.
+ */
+export const WEEKLY_PACE = {
+  /** A new player's pace (today's numbers). */
+  start: 1,
+  min: 0.5,
+  max: 3,
+  /** Finished on day 1..fastDay: harder. */
+  fastDay: 2,
+  fastStep: 1.25,
+  /** Finished on day slowDay..7: easier. Days between keep the pace. */
+  slowDay: 6,
+  slowStep: 0.85,
+  /** Not finished (or no quest picked last week, the player was away): easier still. */
+  failStep: 0.7,
+  /** Fighting need = round(base x pace), within these. */
+  fightsMin: 5,
+  fightsMax: 30,
+  /** Loot need = base x pace (3 significant figures), within base x these. */
+  lootMinShare: 0.5,
+  lootMaxShare: 3,
+  /** The Resources quest's pay share scales with pace, never above this share of the cap. */
+  payMaxShare: 0.45,
+} as const;
+
+/** The weekly groups whose need adapts to the player's pace (Social never does). */
+export const PACED_GROUPS = ["fighting", "resources"] as const;
+export type PacedGroup = (typeof PACED_GROUPS)[number];
+
 /** Decision 13: Social and Fighting each pay a 1-hour speed-up (SP2). */
 const WEEKLY_SPEEDUP: readonly EventReward[] = [{ kind: "speedup", item: "SP2", count: 1 }];
 
