@@ -573,6 +573,20 @@
   margin-left: auto;
 }
 
+/* A gift's "Delete? You get nothing." is never cut: on its own line under
+   the level, wrapping if a phone is narrower still. */
+.friends-row--confirm[data-giftid] .friends-row__meta {
+  flex-wrap: wrap;
+  white-space: normal;
+}
+
+.friends-row--confirm[data-giftid] .friends-row__note {
+  flex: 1 0 100%;
+  overflow: visible;
+  font-weight: 700;
+  color: var(--colour-danger);
+}
+
 .gifts-summary--confirm .gifts-summary__ask {
   font-weight: 700;
   color: var(--colour-danger);

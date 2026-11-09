@@ -209,6 +209,8 @@ describe("deleting (owner, 9 Nov 2026)", () => {
   it("Delete all shows with 2 or more, asks, then empties the list", async () => {
     const { tab, store, calls } = setup({ deleteGifts: { deleted: 2, collectsLeft: 10, giftsWaiting: 0 } });
     await tab.show();
+    // A destructive plate: red in both looks, not the friendly green or gold.
+    expect(buttonIn(tab.element, GIFTS_TEXT.deleteAll).classList.contains("btn--danger")).toBe(true);
     buttonIn(tab.element, GIFTS_TEXT.deleteAll).click();
     expect(tab.element.textContent).toContain(GIFTS_TEXT.deleteAllAsk(2));
     expect(calls.some(([method]) => method === "deleteGifts")).toBe(false);

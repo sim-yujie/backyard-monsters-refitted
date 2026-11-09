@@ -241,7 +241,8 @@ export class GiftsTab implements FriendsTabView {
       return;
     }
     if (this.gifts.length >= 2) {
-      const dropAll = button(GIFTS_TEXT.deleteAll, () => this.ask("all"));
+      // Red in both looks: it throws gifts away, unlike the friendly plates beside it.
+      const dropAll = button(GIFTS_TEXT.deleteAll, () => this.ask("all"), "danger");
       dropAll.classList.add("gifts-summary__delete-all");
       dropAll.disabled = this.busy;
       buttons.append(dropAll);
