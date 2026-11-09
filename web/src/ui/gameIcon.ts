@@ -71,10 +71,12 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * (`empire`) until a painted pin is made; replace `pin-*.webp` to change it.
  *
  * World chat's player strip (`ui/chat/ChatBox.ts`, owner 8 Nov: icons rather than
- * words): `addfriend`, `mute` and `report` are STAND-INS too until they are painted:
- * `addfriend` copies the two monster heads (`friends`; wants a green plus), `mute` the
- * blue Protection shield (wants a speaker with a cross) and `report` the white flag of
- * Retreat (wants a red warning flag). Replace their `*.webp` files to change them.
+ * words): `addfriend` is the two monster heads (`friends`) with a green plus disc on
+ * their corner (9 Nov, `tools/game-icons/friends_icons.py`, so Add no longer looks
+ * like the friend count). `mute` and `report` are STAND-INS until they are painted:
+ * `mute` the blue Protection shield (wants a speaker with a cross) and `report` the
+ * white flag of Retreat (wants a red warning flag). Replace their `*.webp` files to
+ * change them.
  *
  * Event coins (beta 7, `game/eventCoins.ts`, `art-samples/event-coin`,
  * repainted by Codex 8 Nov to look nothing like Shiny's gold coins): the
@@ -89,9 +91,12 @@ import { writeAmount, type AmountChange } from "./amountChange";
  *
  * The Friends window's "no gift sent today" mark and the Friends button's gift
  * badge (`ui/friends/FriendsWindow.ts`, owner 9 Nov: painted icons, no emoji):
- * `gift` is a STAND-IN, its files copies of the mixed resource pile (`income`;
- * a gift is a pile of resources) until a painted gift box is made; replace
- * `gift-*.webp` to change it.
+ * `gift` is Flash's own red gift box with its yellow ribbon (`icon_gifts`,
+ * `client/images/612.png`), its round brown frame taken off. The Friends
+ * window's friend requests: `mail`, Flash's envelope (`icon_mail`,
+ * `client/images/606.png`), the same way. Both are made by
+ * `tools/game-icons/friends_icons.py` (9 Nov) and stand in until painted ones
+ * at the size of the others are made; replace their `*.webp` files to change them.
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -148,6 +153,7 @@ export const GAME_ICONS = {
   tools: "Store boost",
   event: "Events",
   gift: "Gift",
+  mail: "Friend requests",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;
