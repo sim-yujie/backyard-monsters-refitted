@@ -282,22 +282,41 @@
 /* A phone on its side (844x390): the weapons and the monsters sit side by
    side in a wider window, so the monsters, the main thing, show from the top
    of the body without scrolling, and smaller pictures fit more of them in.
-   The weapons keep one row of full-width (68 px) tiles. */
+   Two rows of monsters show (16 tiles, eight a row at 844 wide; tester,
+   9 Nov: only the first five did): the weapons stand two by two in 68 px
+   tiles, leaving the monsters most of the width, and the name line,
+   headings, tiles and the button line are tighter at this height only. More
+   than that still scrolls, with the fade. */
 @media (max-height: 480px) and (min-width: 600px) {
   .attack-window {
     width: min(92vw, 720px);
     /* The base panel stops at 560 px; this one may be wider. */
     max-width: none;
+    /* 8 px under it rather than 16: that room goes to the monsters. */
+    max-height: calc(100dvh - var(--hud-height) - var(--space-1) - var(--space-2) - var(--attack-window-overhang));
+  }
+
+  .popup-backdrop:has(> .attack-window) {
+    padding-bottom: var(--space-2);
   }
 
   .attack-window > .panel__head {
-    padding-block: var(--space-1);
+    padding-block: 2px;
   }
 
   .attack-window > .panel__body {
     flex-direction: row;
     align-items: flex-start;
     gap: var(--space-4);
+    padding-block: var(--space-1);
+  }
+
+  .attack-window__section {
+    gap: var(--space-1);
+  }
+
+  .attack-window__heading {
+    min-height: 24px;
   }
 
   .attack-window__section--weapons {
@@ -305,9 +324,32 @@
   }
 
   .attack-window__grid.attack-window__weapons {
-    grid-template-columns: none;
-    grid-auto-columns: 68px;
-    grid-auto-flow: column;
+    grid-template-columns: repeat(2, 68px);
+  }
+
+  .attack-window__grid {
+    gap: 6px;
+  }
+
+  .attack-window__tile {
+    padding-top: 2px;
+  }
+
+  /* (Over the 36 px of the plain phone-on-its-side rule below.) */
+  .attack-window .attack-window__art {
+    height: 32px;
+  }
+
+  .attack-window__tile:not(.attack-window__tile--painted) {
+    padding-bottom: 2px;
+  }
+
+  .attack-window__actions {
+    padding: var(--space-1) var(--space-4) var(--space-2);
+  }
+
+  :root[data-skin] .panel.attack-window .attack-window__actions > .btn {
+    min-height: 38px;
   }
 
   .attack-window__section--monsters {

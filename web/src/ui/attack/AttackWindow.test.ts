@@ -298,7 +298,10 @@ describe("attack-window.css", () => {
   it("puts the weapons beside the monsters on a phone on its side, so the monsters show unscrolled", () => {
     const sideways = css.slice(css.indexOf("@media (max-height: 480px) and (min-width: 600px)"));
     expect(sideways).toMatch(/\.attack-window > \.panel__body \{[^}]*flex-direction: row;/);
-    expect(sideways).toMatch(/\.attack-window__grid\.attack-window__weapons \{[^}]*grid-auto-columns: 68px;[^}]*grid-auto-flow: column;/);
+    // Two by two, so the monsters get most of the width: two rows of seven show.
+    expect(sideways).toMatch(/\.attack-window__grid\.attack-window__weapons \{\s*grid-template-columns: repeat\(2, 68px\);/);
+    // Tighter at this height only: the buttons' line and the tiles.
+    expect(sideways).toMatch(/:root\[data-skin\] \.panel\.attack-window \.attack-window__actions > \.btn \{\s*min-height: 38px;/);
     // Wider than the base panel's 560 px cap, so the two sit side by side.
     expect(sideways).toMatch(/\.attack-window \{[^}]*width: min\(92vw, 720px\);[^}]*max-width: none;/);
   });
