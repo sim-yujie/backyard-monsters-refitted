@@ -145,10 +145,17 @@
   line-height: var(--leading-tight);
 }
 
+/* The usual price stays legible: a touch larger, no Modern text shadow
+   (it blurred the zeros), and a thin red strike so the line does not fill
+   the middle of each digit. The cut price stays bold, bright and bigger. */
 .takeover-dialog__usual {
   color: var(--colour-text-muted);
-  font-size: var(--text-sm);
-  text-decoration-thickness: 1.5px;
+  font-size: calc(var(--text-sm) + 1px);
+  letter-spacing: 0.02em;
+  text-shadow: none;
+  text-decoration-line: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--colour-danger) 80%, transparent);
   white-space: nowrap;
 }
 

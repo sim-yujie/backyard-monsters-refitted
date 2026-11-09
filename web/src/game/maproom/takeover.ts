@@ -175,14 +175,19 @@ export const priceText = (price: { resources?: number | undefined; shiny?: numbe
 
 /**
  * The price as the map's Take over line and the end-of-attack offer say it:
- * "Frontier Pass: 900,000 of each resource or 924 Shiny" while the welcome
- * price applies (it replaces the half price next to the main yard).
+ * "Frontier Pass: 900,000 each or 924 Shiny" while the welcome price applies
+ * (it replaces the half price next to the main yard), kept short so the
+ * map's "Take over · …" line stays one line.
  */
 export const offerPriceText = (price: {
   resources?: number | undefined;
   shiny?: number | undefined;
   welcome?: boolean | undefined;
-}): string => (price.welcome ? `Frontier Pass: ${priceText(price)}` : priceText(price));
+}): string => {
+  if (!price.welcome || price.resources === undefined) return priceText(price);
+  const resources = `${formatAmount(price.resources)} each`;
+  return `Frontier Pass: ${price.shiny === undefined ? resources : `${resources} or ${formatAmount(price.shiny)} Shiny`}`;
+};
 
 /**
  * Seconds the server's clock is ahead of this one, from a response that

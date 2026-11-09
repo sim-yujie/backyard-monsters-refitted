@@ -69,6 +69,17 @@ describe("the takeover window's struck usual price", () => {
     expect(contrast(muted, tile)).toBeGreaterThanOrEqual(4.5);
   });
 
+  it("is legible in both looks: no text shadow, a thin coloured strike, smaller than the bold cut price", () => {
+    const usual = rule(takeover, ".takeover-dialog__usual");
+    expect(usual).toMatch(/text-shadow: none;/);
+    expect(usual).toMatch(/text-decoration-thickness: 1px;/);
+    expect(usual).toMatch(/text-decoration-color: color-mix\(in srgb, var\(--colour-danger\)/);
+    expect(usual).toMatch(/font-size: calc\(var\(--text-sm\) \+ 1px\);/);
+    const cut = rule(takeover, ".takeover-dialog__cut");
+    expect(cut).not.toMatch(/font-size/);
+    expect(cut).toMatch(/font-weight: 700;/);
+  });
+
   it("wraps under the cut price on a narrow tile rather than overflowing it", () => {
     expect(rule(takeover, ".takeover-dialog__prices")).toMatch(/flex-wrap: wrap;/);
   });
