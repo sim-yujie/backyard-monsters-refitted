@@ -219,6 +219,17 @@ describe("friendsApi writes", () => {
     expect(calls.map((call) => call.json)).toEqual([{ userid: 7, resource: "r2" }, { all: true }, { giftid: 5 }]);
   });
 
+  it("deletes one gift or all, and reads what is left", async () => {
+    stubFetch({ error: 0, deleted: 3, collectsLeft: "10", giftsWaiting: 0 });
+    expect(await friendsApi.deleteGifts("all")).toEqual({ deleted: 3, collectsLeft: 10, giftsWaiting: 0 });
+    await friendsApi.deleteGifts(5);
+    expect(calls.map((call) => [call.method, call.json])).toEqual([
+      ["POST", { all: true }],
+      ["POST", { giftid: 5 }],
+    ]);
+    expect(calls.every((call) => call.url.includes("/bm/friends/gifts/delete"))).toBe(true);
+  });
+
   it("helps and reads the result", async () => {
     stubFetch({ error: 0, secondsSaved: 390, reward: { r1: 10, r2: 10, r3: 10, r4: 10 }, helpsLeft: 16, building: { id: 4 } });
     expect(await friendsApi.help(7, 4, "speedup")).toEqual({

@@ -246,6 +246,8 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /api/:apiVersion/bm/friends/remove",
   // The player's gift wish list (beta 7): a setting, changes no game state.
   "POST /api/:apiVersion/bm/friends/wishes",
+  // Deleting received gifts (owner, 9 Nov 2026) gives nothing and changes no yard.
+  "POST /api/:apiVersion/bm/friends/gifts/delete",
   // Pinning a friend to the top of the list (beta 7) only sorts it.
   "POST /api/:apiVersion/bm/friends/pin",
   "POST /alliance/createalliance",

@@ -98,6 +98,24 @@ describe("NavPanel own-outpost buttons (beta 7)", () => {
     expect(onJump).toHaveBeenCalledWith(239, 207);
   });
 
+  it("redraws names and order at once after a rename or pin, and stops listening once destroyed", () => {
+    const { nav } = make();
+    nav.setOutposts([
+      { baseid: "a", cell: { col: 240, row: 209 } },
+      { baseid: "b", cell: { col: 238, row: 209 } },
+    ]);
+    const words = (): (string | null)[] =>
+      [...nav.element.querySelectorAll<HTMLButtonElement>("button.map-outpost")].map((b) => b.textContent);
+    expect(words()).toEqual(["240, 209", "238, 209"]);
+    setOutpostLabels({ names: { b: "North gate" }, pins: [] });
+    expect(words()).toEqual(["240, 209", "North gate"]);
+    setOutpostLabels({ names: { b: "North gate" }, pins: ["b"] });
+    expect(words()).toEqual(["North gate", "240, 209"]);
+    nav.destroy();
+    setOutpostLabels({ names: {}, pins: [] });
+    expect(words()).toEqual(["North gate", "240, 209"]);
+  });
+
   it("hides the row with no outposts", () => {
     const { nav } = make();
     nav.setOutposts([]);

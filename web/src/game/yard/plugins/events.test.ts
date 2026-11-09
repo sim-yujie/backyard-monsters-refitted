@@ -136,6 +136,20 @@ describe("Events: opening the page", () => {
     expect(scrolled).toEqual([content.querySelector("button[data-claim]")]);
   });
 
+  it("opens at the top on a computer, with the Frontier Pass in view", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const matchMedia = vi.fn((query: string) => ({ matches: query.includes("width > 620px") }) as MediaQueryList);
+    vi.stubGlobal("matchMedia", matchMedia);
+    try {
+      const { door } = await setup([hunt(12)]);
+      door.toggle();
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("leaves the scroll alone when nothing waits", async () => {
     const scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoView;

@@ -435,6 +435,40 @@ describe("EventsPanel: the New to Map Room 2 card", () => {
     panel.close();
   });
 
+  it("keeps the card with both rewards used", () => {
+    const { panel } = mounted();
+    panel.render(list([event()], { mr2Welcome: { ...welcome, takeover: false, kit: false } }));
+    const card = panel.element.querySelector(".events-card--mr2-welcome");
+    expect(card).not.toBeNull();
+    expect(card?.querySelectorAll(".events-welcome__state--used")).toHaveLength(2);
+    expect(card?.querySelectorAll(".events-welcome__mark")).toHaveLength(10);
+    panel.close();
+  });
+
+  it("on a computer: the Frontier Pass on top, events in the main column, Coming up at the side", () => {
+    const { panel } = mounted();
+    const soon = event({ id: "soon", title: "Soon", status: "upcoming", startsAt: 2 * 86_400 });
+    panel.render(list([event(), soon], { mr2Welcome: welcome }));
+    const page = panel.element.querySelector(".events-page");
+    expect([...(page?.children ?? [])].map((child) => child.className.split(" ")[0])).toEqual([
+      "events-card",
+      "events-page__main",
+      "events-upcoming",
+    ]);
+    expect(page?.classList.contains("events-page--side")).toBe(true);
+    expect(page?.querySelector(".events-page__main .events-card__title")?.textContent).toBe("Halloween");
+    // Nothing on now: no side column, Coming up under the card.
+    panel.render(list([soon], { mr2Welcome: welcome }));
+    expect(panel.element.querySelector(".events-page")?.classList.contains("events-page--side")).toBe(false);
+    expect(panel.element.querySelector(".events-page__main")).toBeNull();
+    const css = eventsCss.replace(/\r\n/g, "\n");
+    const desktop = css.slice(css.indexOf("@media (width > 620px) and (height > 500px)"));
+    expect(desktop).toMatch(/\.events-panel \{\s*width: min\(1000px/);
+    const wide = css.slice(css.indexOf("@media (width >= 1100px) and (height > 500px)"));
+    expect(wide).toMatch(/\.events-page > \.events-card--mr2-welcome \{\s*grid-column: 1 \/ -1;/);
+    panel.close();
+  });
+
   it("shows only the card, with no 'No event' line, when no event is on", () => {
     const { panel } = mounted();
     panel.render(list([], { mr2Welcome: welcome }));
@@ -448,6 +482,8 @@ describe("EventsPanel: the New to Map Room 2 card", () => {
     panel.render(list([], { mr2Welcome: welcome }));
     panel.tick(8 * 86_400 + 30);
     expect(panel.element.querySelector("[data-welcome-ends]")?.textContent).toBe("2 days left");
+    expect(panel.element.querySelector('[data-day="9"]')?.classList.contains("events-welcome__mark--today")).toBe(true);
+    expect(panel.element.querySelector('[data-day="1"]')?.classList.contains("events-welcome__mark--gone")).toBe(true);
     panel.close();
   });
 

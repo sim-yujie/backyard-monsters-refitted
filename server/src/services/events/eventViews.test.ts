@@ -154,20 +154,34 @@ describe("GET /bm/events: the New to Map Room 2 card", () => {
     const previous = useWelcomeStore(memoryWelcomeStore(NOW - 2 * DAY));
     try {
       const body = await eventsAnswer(em, memoryProgressStore(), onMr2, NOW);
-      expect(body.mr2Welcome).toEqual({ startsAt: NOW - 2 * DAY, endsAt: NOW + 8 * DAY, daysLeft: 8, takeover: true, kit: true });
+      expect(body.mr2Welcome).toEqual({
+        startsAt: NOW - 2 * DAY,
+        endsAt: NOW + 8 * DAY,
+        daysLeft: 8,
+        takeover: true,
+        kit: true,
+        takeoverUsedAt: null,
+        kitUsedAt: null,
+      });
       expect((await eventsAnswer(em, memoryProgressStore(), onMr1, NOW)).mr2Welcome).toBeNull();
     } finally {
       useWelcomeStore(previous);
     }
   });
 
-  test("gone after the 10 days, and once both rewards are used", async () => {
+  test("gone after the 10 days; kept all 10 days once both rewards are used", async () => {
     const store = memoryWelcomeStore(NOW - 11 * DAY);
     const previous = useWelcomeStore(store);
     try {
       expect((await eventsAnswer(em, memoryProgressStore(), onMr2, NOW)).mr2Welcome).toBeNull();
-      store.rows.set(5, { start: NOW - DAY, takeoverUsed: true, kitUsed: true });
-      expect((await eventsAnswer(em, memoryProgressStore(), onMr2, NOW)).mr2Welcome).toBeNull();
+      store.rows.set(5, { start: NOW - DAY, takeoverUsed: true, kitUsed: true, takeoverAt: NOW - DAY + 60, kitAt: NOW - 30 });
+      expect((await eventsAnswer(em, memoryProgressStore(), onMr2, NOW)).mr2Welcome).toMatchObject({
+        daysLeft: 9,
+        takeover: false,
+        kit: false,
+        takeoverUsedAt: NOW - DAY + 60,
+        kitUsedAt: NOW - 30,
+      });
       store.rows.set(5, { start: NOW - DAY, takeoverUsed: true, kitUsed: false });
       expect((await eventsAnswer(em, memoryProgressStore(), onMr2, NOW)).mr2Welcome).toMatchObject({ takeover: false, kit: true });
     } finally {
