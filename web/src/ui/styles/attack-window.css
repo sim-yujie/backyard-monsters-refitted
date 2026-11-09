@@ -185,6 +185,38 @@
   background: var(--colour-accent-soft);
 }
 
+/* Modern: a painted portrait fills its tile edge to edge as one painted card,
+   inside the tile's own rounded corners, with the count on a dark strip over
+   its foot. The art box stays in the flow (empty), so the tile is exactly as
+   tall as the champion and bomb tiles beside it. */
+.attack-window__tile--painted {
+  position: relative;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+.attack-window__tile--painted .attack-window__art > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: cover;
+}
+
+.attack-window__tile--painted .attack-window__caption {
+  position: relative;
+  z-index: 1;
+  align-self: stretch;
+  max-width: none;
+  margin: -8px -2px 0;
+  padding: 8px 2px var(--space-1);
+  background: linear-gradient(to bottom, rgb(0 0 0 / 0%), rgb(0 0 0 / 72%) 55%);
+  color: #fff;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 90%);
+}
+
 /* A bomb the Catapult cannot fire yet, or the player cannot pay for. */
 .attack-window__tile--off .attack-window__art {
   opacity: 0.45;

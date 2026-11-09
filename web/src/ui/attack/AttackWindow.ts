@@ -377,13 +377,26 @@ const monstersSection = (model: AttackWindowModel): HTMLElement => {
     list.append(element);
   }
   for (const slot of model.monsters) {
+    const picture = monsterPortrait(slot.id, "icon");
+    const image = portrait(picture);
     const element = tile(
-      portrait(monsterPortrait(slot.id, "icon")),
+      image,
       ATTACK_WINDOW_TEXT.count(slot.count),
       ATTACK_WINDOW_TEXT.monsterTip(slot),
       "attack-window__tile--monster",
     );
     element.dataset["monster"] = slot.id;
+    // Modern's painted portraits come with their own painted ground, so the
+    // picture fills the whole tile as one painted card, the count on a dark
+    // strip over its foot (lead, 9 Nov: no Flash art in Modern). Classic's
+    // cut-outs stand on the tile as before; so does a painted one that failed
+    // and fell back to its cut-out.
+    if (picture.fallback !== null) {
+      element.classList.add("attack-window__tile--painted");
+      image.addEventListener("load", () => {
+        if (image.getAttribute("src") !== picture.src) element.classList.remove("attack-window__tile--painted");
+      });
+    }
     list.append(element);
   }
   if (list.childElementCount === 0) {

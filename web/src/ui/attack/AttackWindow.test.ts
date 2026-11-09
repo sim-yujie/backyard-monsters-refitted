@@ -175,10 +175,15 @@ describe("confirmAttackWindow", () => {
   it("draws the painted portraits in Modern and the Flash originals in Classic", () => {
     const modern = open();
     expect(modern.host.querySelector("[data-monster='C1'] img")?.getAttribute("src")).toMatch(/portraits\/C1-icon\.webp$/);
+    // Modern: each painted portrait is the whole tile, one painted card.
+    expect(modern.host.querySelector("[data-monster='C1']")?.classList.contains("attack-window__tile--painted")).toBe(true);
+    // The champions keep their own look.
+    expect(modern.host.querySelector("[data-champion]")?.classList.contains("attack-window__tile--painted")).toBe(false);
     document.body.replaceChildren();
     setClassicLook(true);
     const classic = open();
     expect(classic.host.querySelector("[data-monster='C1'] img")?.getAttribute("src")).toBe("/assets/monsters/C1-small.png");
+    expect(classic.host.querySelector("[data-monster='C1']")?.classList.contains("attack-window__tile--painted")).toBe(false);
   });
 
   it("puts Cancel and Attack under the body, so they stay in sight when it scrolls", () => {
@@ -265,6 +270,12 @@ describe("attack-window.css", () => {
     expect(css).toMatch(/\.attack-window__body--more-below \{[^}]*mask-image: linear-gradient\(to bottom/);
     expect(css).toMatch(/\.attack-window__body--more-above \{[^}]*mask-image: linear-gradient\(to bottom/);
     expect(css).toMatch(/\.attack-window > \.panel__head \{[^}]*padding: var\(--space-2\) var\(--space-4\) var\(--space-2\);/);
+  });
+
+  it("lets a painted portrait fill its tile, the count on a dark strip over its foot", () => {
+    expect(css).toMatch(/\.attack-window__tile--painted \{[^}]*position: relative;[^}]*overflow: hidden;/);
+    expect(css).toMatch(/\.attack-window__tile--painted \.attack-window__art > img \{[^}]*position: absolute;[^}]*inset: 0;[^}]*object-fit: cover;/);
+    expect(css).toMatch(/\.attack-window__tile--painted \.attack-window__caption \{[^}]*background: linear-gradient/);
   });
 
   it("sets no frame, title or button art of its own: the skin draws those", () => {
