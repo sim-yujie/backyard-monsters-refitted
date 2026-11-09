@@ -167,7 +167,7 @@ describe("the engine sends a champion out at the health it is handed", () => {
  * save that ends it, or the finaliser from its checkpoint
  * (`finaliseAttack.ts`, which writes `attackerchampion` as is).
  */
-describe("a champion comes home at the server's battle's health (Vorg heals)", () => {
+describe("a champion comes home at the server's battle's health (Vorg and Zafreeti heals)", () => {
   const FOMOR_FULL = championStatWithFood("G3", "health", 4, 0);
   const LOW = Math.floor(FOMOR_FULL * 0.05);
   const fomor = (hp: number, extra: Partial<ChampionData> = {}): ChampionData => champion(3, { hp, ...extra });
@@ -217,6 +217,23 @@ describe("a champion comes home at the server's battle's health (Vorg heals)", (
 
     // The finaliser from the checkpoint writes the same battle's figure.
     expect(outcome.attackerchampion).toEqual([fomor(healed)]);
+  });
+
+  // Every healer the game has: the two monsters with negative damage, C15
+  // Zafreeti and C16 Vorg (`Zafreeti.as`, `Vorg.as`, both through
+  // `FIREBALL.as:150-159`, a tenth on a champion). Flash's `Vorgv2` and
+  // `Zafreetiv2` (and its powered-up heal on death) sit behind
+  // `k_USE_REBALANCED_MONSTERS = false` (`CREATURELOCKER.as:30`) and never ran.
+  test.each([
+    ["Zafreeti", { C15: 2 }],
+    ["Vorg", { C16: 6 }],
+    ["both", { C15: 2, C16: 6 }],
+  ])("%s: the healed health comes home, whichever path lands it", (_name, healers) => {
+    const outcome = fight(healers, healers, LOW);
+    const healed = replayHp(outcome);
+    expect(healed).toBeGreaterThan(LOW);
+    expect(healed).toBeLessThanOrEqual(FOMOR_FULL);
+    expect(championsAfterBattle([fomor(LOW)], outcome, { "3": LOW })).toEqual(outcome.attackerchampion!);
   });
 
   test("a forged save reporting full health stores the replay's figure", () => {

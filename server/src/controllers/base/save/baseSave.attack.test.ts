@@ -843,7 +843,7 @@ describe("the attacker's own row through the save (#23, C1)", () => {
   });
 });
 
-describe("a champion healed by Vorgs keeps the heal through the save", () => {
+describe("a champion healed by Vorgs or Zafreeti keeps the heal through the save", () => {
   const FULL = championStatWithFood("G3", "health", 4, 0);
   const LOW = Math.floor(FULL * 0.05);
   const fomor = (hp: number) => ({ t: 3, hp, l: 4, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 });
@@ -901,6 +901,27 @@ describe("a champion healed by Vorgs keeps the heal through the save", () => {
     await save({ C16: 6 }, healed);
 
     expect(attackerSave.champion).toEqual([{ ...fomor(healed), b: expect.any(Object), bs: expect.any(Object) }]);
+  });
+
+  test("a Zafreeti's heal is kept the same way (the other healer, `Zafreeti.as`)", async () => {
+    sessionEntry = { [HOME]: { C15: 2 } };
+    const healed = replayHp({ C15: 2 }, LOW);
+    expect(healed).toBeGreaterThan(LOW);
+
+    await save({ C15: 2 }, healed);
+
+    expect(attackerSave.champion).toEqual([{ ...fomor(healed), b: expect.any(Object), bs: expect.any(Object) }]);
+  });
+
+  test("Vorgs and Zafreeti together: the replay's figure, never above full", async () => {
+    sessionEntry = { [HOME]: { C15: 2, C16: 6 } };
+    const healed = replayHp({ C15: 2, C16: 6 }, LOW);
+    expect(healed).toBeGreaterThan(LOW);
+    expect(healed).toBeLessThanOrEqual(FULL);
+
+    await save({ C15: 2, C16: 6 }, FULL);
+
+    expect(attackerSave.champion[0].hp).toBe(healed);
   });
 
   test("a forged save claiming full health stores the replay's figure", async () => {

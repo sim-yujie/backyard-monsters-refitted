@@ -93,8 +93,9 @@ export const championsAfterAttack = (
 /**
  * The attacker's champions once the server's own battle is over: a champion
  * that battle flung comes home at the health the battle left it at, healed by
- * Vorgs or hurt, as Flash kept it (`ChampionBase.as:1200/1310`, `BASE.as:3270`,
- * `ATTACK.as:532`), and as the finaliser already lands it from a checkpoint.
+ * Vorgs or Zafreeti (the game's only healers) or hurt, as Flash kept it
+ * (`ChampionBase.as:1200/1310`, `BASE.as:3270`, `ATTACK.as:532`), and as the
+ * finaliser already lands it from a checkpoint.
  * The client's figure is never read. Never above the champion's full health
  * for its stored level and food bonus, never below 0.
  *
