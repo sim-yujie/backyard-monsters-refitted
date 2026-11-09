@@ -111,6 +111,12 @@
   font-weight: 700;
 }
 
+/* Classic's accent words are white (for a solid orange button); on the light
+   tint over cream they all but vanish, so the label takes a dark orange. */
+:root[data-skin="flash"] .takeover-dialog__welcome-tag {
+  color: #8a3a00;
+}
+
 .takeover-dialog__welcome-off {
   color: var(--colour-gain);
   font-weight: 700;

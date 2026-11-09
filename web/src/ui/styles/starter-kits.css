@@ -2,10 +2,14 @@
  * one confirmation under them. Every value is a token. */
 
 .kit-picker {
-  width: min(96vw, 1180px);
   /* Wider than a plain popup (ui.css caps those at 560px): three cards, wide
-     enough that the kits' lists keep to short lines. */
-  max-width: min(96vw, 1180px);
+     enough that the kits' lists keep to short lines. Never wider than the
+     screen less the backdrop's two 16px gaps (the frame is inside the width):
+     96vw alone is 360px on a 375px phone, which ran 1px past the right edge. */
+  --kit-picker-width: min(96vw, calc(100vw - 2 * var(--space-4)), 1180px);
+
+  width: var(--kit-picker-width);
+  max-width: var(--kit-picker-width);
 }
 
 /* The window opens with every card whole at 1600x900 and 1280x720: the body
@@ -139,6 +143,12 @@
   border-radius: var(--radius-md);
   background: var(--colour-accent-soft);
   color: var(--colour-accent-text);
+}
+
+/* Classic's accent words are white (for a solid orange button); on the light
+   tint over the card's cream they all but vanish, so Free takes a dark orange. */
+:root[data-skin="flash"] .kit-card__free-tag {
+  color: #8a3a00;
 }
 
 .kit-card__free-label {
