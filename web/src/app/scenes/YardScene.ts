@@ -1775,6 +1775,7 @@ export class YardScene implements Scene {
     }
     this.visitLine.dataset["name"] = name;
     this.showHelpBlock();
+    this.refreshStatus();
   }
 
   /** Puts the help block on screen: the line, the wrenches and the open panel. */
@@ -3158,7 +3159,9 @@ export class YardScene implements Scene {
     // #56); the counts, the plot, the frame time and the selected id are a
     // developer's (#150), behind their own opt-in switch (`devStats`, beta 6).
     const parts = [
-      ...(this.target ? [`${this.whose()}, read-only`] : []),
+      // A friend's yard in help mode says "Helping …" at the top; "read-only"
+      // under it would contradict it (tester, 9 Nov), so it just names the yard.
+      ...(this.target ? [this.helpBlock ? this.whose() : `${this.whose()}, read-only`] : []),
       ...(this.hint ? [this.hint] : []),
       ...(devStats()
         ? [

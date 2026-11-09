@@ -164,9 +164,12 @@
     --bubble-step: 60px;
   }
 
+  /* 101px (108px before the Friends button): Monsters' word keeps 8px from
+     Friends' on its left and Build's on its right in Classic, whose signs are
+     the wider (tester, 9 Nov: the Friends and Monsters ribbons touched). */
   .yard-dock__right > .bubble-menu,
   .yard-dock--bubbles .yard-dock__right > .yard-dock__button--monsters {
-    right: 108px;
+    right: 101px;
   }
 
   .yard-dock__right > .bubble-menu {

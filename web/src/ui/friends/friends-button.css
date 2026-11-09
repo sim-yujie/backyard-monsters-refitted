@@ -13,7 +13,9 @@
 
 /* ── The button ────────────────────────────────────────────────────────── */
 
-/* Beside Map: Map's left edge (24px), its disc (68px), then the gap. */
+/* Beside Map: Map's left edge (24px), its disc (68px), then the gap. This is
+   only where it starts: `FriendsButton.follow` measures Map's box, word
+   included, and sets `left` 8px past it, so the words never touch. */
 .friends-button {
   position: absolute;
   bottom: 26px;
@@ -26,6 +28,20 @@
 .friends-button .yard-dock__badge.friends-button__badge {
   background: var(--colour-warning);
   color: var(--colour-warning-text);
+}
+
+/* The painted two monster heads: a touch smaller than Monsters' sprite, as
+   the icon fills its square. */
+.friends-button .yard-dock__picture.friends-button__picture {
+  width: 40px;
+  height: 40px;
+}
+
+@media (width <= 620px), (height <= 500px) {
+  .friends-button .yard-dock__picture.friends-button__picture {
+    width: 36px;
+    height: 36px;
+  }
 }
 
 .friends-button__badge--gift {
@@ -41,7 +57,7 @@
 /* The yard's status line moves along to stay beside the corner's buttons. */
 @media (width > 620px) {
   .overlay__layer:has(> .yard-dock):has(> .friends-button) > .cell-readout {
-    left: calc(24px + 68px + 2 * var(--space-4) + 80px);
+    left: calc(var(--friends-button-right, 200px) + var(--space-3));
   }
 }
 
@@ -84,13 +100,29 @@
 
 /* ── The window ────────────────────────────────────────────────────────── */
 
+/* 460px (440 before): Message and Send gift keep clear of the plates'
+   rivets in Modern (tester, 9 Nov). */
 .friends-window {
-  width: min(100%, 440px);
+  width: min(100%, 460px);
   /* What sticks up above the frame: the title sign (or the close disc). */
   --friends-window-overhang: max(var(--skin-title-lift, 0px), calc(var(--skin-edge, 0px) + 12px));
-  max-height: calc(100dvh - 2 * var(--space-4) - var(--friends-window-overhang));
+  /* The window stays under the top bar (the HUD's band, `--hud-height`), so
+     its title sign never covers the resources (tester, 9 Nov). */
+  max-height: calc(100dvh - var(--hud-height) - var(--space-2) - var(--space-4) - var(--friends-window-overhang));
   margin-top: var(--friends-window-overhang);
   min-height: 0;
+}
+
+/* The scrim starts its centring under the top bar, not at the screen's top. */
+.popup-backdrop:has(> .friends-window) {
+  padding-top: calc(var(--hud-height) + var(--space-2));
+}
+
+/* Classic: "Friends" sat about 3 px above the middle of the red ribbon
+   (tester, 9 Nov), as the attack window's did; this nudges it onto the
+   band's centre. The shared ribbon in skin.css is left alone. */
+:root[data-skin="flash"] .friends-window .panel__title {
+  padding-top: 3px;
 }
 
 .friends-window > .panel__head {
@@ -199,6 +231,11 @@
   margin-inline: 5px;
 }
 
+/* "Everyone else": neither online nor in need of help, so a grey dot. */
+.friends-window__dot--off {
+  background: var(--colour-text-muted);
+}
+
 .friends-window__group-count {
   color: var(--colour-text-strong);
   font-variant-numeric: tabular-nums;
@@ -263,7 +300,17 @@
   border: 2px solid var(--colour-surface-base);
 }
 
-/* A friend pinned to the top of the list (beta 7): a gold frame on the face. */
+/* A friend pinned to the top of the list (beta 7): a gold frame on the face,
+   and the pin on its top corner says why (tester, 9 Nov). */
+.friends-window__pin {
+  position: absolute;
+  top: -5px;
+  left: -5px;
+  width: 16px;
+  height: 16px;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 60%));
+}
+
 .friends-window__item--pinned .friends-window__img {
   box-shadow:
     0 0 0 2px #f2c230,
@@ -308,8 +355,15 @@
   display: grid;
   grid-auto-columns: minmax(0, 1fr);
   grid-auto-flow: column;
-  gap: var(--space-2);
+  gap: 6px;
   padding: 2px var(--space-2) var(--space-2);
+}
+
+/* Modern: the steel plates carry a rivet inside each end, and "Send gift" at
+   15px ran into them (tester, 9 Nov). A step smaller and a wider window keep
+   about 8px of plate between the words and each rivet. */
+:root[data-skin="scrap"] .friends-window .friends-window__action {
+  font-size: 14px;
 }
 
 /* A phone held upright: three plates do not fit one line, so Visit has the

@@ -7,6 +7,7 @@ import { formatAmount } from "@/ui/format";
 import { gameIcon } from "@/ui/gameIcon";
 import { onlineDot } from "@/ui/onlineDot";
 import { Popup } from "@/ui/Popup";
+import { scrollFade } from "@/ui/scrollFade";
 import { openGiftPicker } from "./GiftPicker";
 import { make } from "./rows";
 import "./friends-button.css";
@@ -46,6 +47,7 @@ export const FRIENDS_WINDOW_TEXT = {
   onlineGroup: "Online",
   restGroup: "Everyone else",
   level: (level: number): string => `Lv ${level}`,
+  pinned: "Pinned to the top",
   canHelp: "Can use your help today",
   giftDue: "No gift sent today",
   visit: "Visit",
@@ -121,6 +123,7 @@ export class FriendsWindow {
   /** The friend whose actions show, or null. */
   private opened: number | null = null;
   private container: HTMLElement | null = null;
+  private stopFade: () => void = () => {};
 
   constructor(options: FriendsWindowOptions = {}) {
     this.options = options;
@@ -130,6 +133,7 @@ export class FriendsWindow {
       className: "friends-window",
       onClose: () => {
         this.unsubscribe();
+        this.stopFade();
         options.onClose?.();
       },
     });
@@ -167,6 +171,8 @@ export class FriendsWindow {
     this.container = container;
     this.render();
     this.popup.mount(container);
+    // Fades where more of the list is hidden, as the attack window does (tester, 9 Nov).
+    this.stopFade = scrollFade(this.popup.body, this.list);
     return this;
   }
 
@@ -189,8 +195,9 @@ export class FriendsWindow {
 
     const waiting = this.store.snapshot.requestsIn;
     this.requests.hidden = waiting <= 0;
+    // The letter: a request waiting, not the Add button's heads and plus (tester, 9 Nov).
     this.requests.replaceChildren(
-      gameIcon("addfriend", { size: 24, decorative: true }),
+      gameIcon("mail", { size: 24, decorative: true }),
       make("span", "friends-window__requests-count", formatAmount(waiting)),
     );
     this.requests.title = FRIENDS_WINDOW_TEXT.requests(waiting);
@@ -206,15 +213,15 @@ export class FriendsWindow {
     this.list.replaceChildren(
       ...this.group("help", help, FRIENDS_WINDOW_TEXT.helpGroup, groups.help),
       ...this.group("online", onlineDot("friends-window__dot", true), FRIENDS_WINDOW_TEXT.onlineGroup, groups.online),
-      ...this.group("rest", null, FRIENDS_WINDOW_TEXT.restGroup, groups.rest),
+      ...this.group("rest", offlineDot(), FRIENDS_WINDOW_TEXT.restGroup, groups.rest),
     );
   }
 
   /** A group's heading ("[wrench] 3 Can use help") and its rows; nothing for an empty group. */
-  private group(name: keyof FriendGroups, picture: HTMLElement | null, words: string, friends: readonly Friend[]): HTMLElement[] {
+  private group(name: keyof FriendGroups, picture: HTMLElement, words: string, friends: readonly Friend[]): HTMLElement[] {
     if (friends.length === 0) return [];
     const heading = make("h3", `friends-window__group friends-window__group--${name}`);
-    if (picture) heading.append(picture);
+    heading.append(picture);
     heading.append(make("span", "friends-window__group-count", formatAmount(friends.length)), make("span", "friends-window__group-words", words));
     return [heading, ...friends.map((friend) => this.row(friend))];
   }
@@ -238,6 +245,11 @@ export class FriendsWindow {
     img.loading = "lazy";
     face.append(img);
     if (friend.online === "online") face.append(onlineDot("friends-window__face-dot"));
+    // The gold frame says "pinned" with a pin on its corner and in the tooltip (tester, 9 Nov).
+    if (friend.pinnedAt !== null) {
+      face.title = FRIENDS_WINDOW_TEXT.pinned;
+      face.append(gameIcon("pin", { size: 16, label: FRIENDS_WINDOW_TEXT.pinned, className: "friends-window__pin" }));
+    }
     const name = make("span", "friends-window__name", friend.username);
     name.title = friend.username;
     const marks = make("span", "friends-window__marks");
@@ -290,6 +302,16 @@ export class FriendsWindow {
     return actions;
   }
 }
+
+/**
+ * The grey dot by "Everyone else": the friends who are neither online nor in
+ * need of help, so its heading lines up with the other two (tester, 9 Nov).
+ */
+const offlineDot = (): HTMLElement => {
+  const dot = make("span", "online-dot friends-window__dot friends-window__dot--off");
+  dot.setAttribute("aria-hidden", "true");
+  return dot;
+};
 
 /** "[picture] 34": a count in the head, its words in the tooltip and for a screen reader. */
 const count = (picture: HTMLElement, value: number, words: string, name: string): HTMLElement => {

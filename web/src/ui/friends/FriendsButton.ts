@@ -2,8 +2,7 @@ import type { Friend } from "@/api/friends";
 import { canHelp } from "@/game/friends/friendText";
 import { friendsStore as sharedStore, type FriendsStore } from "@/game/friends/friendsStore";
 import { formatAmount } from "@/ui/format";
-import { gameIcon } from "@/ui/gameIcon";
-import { icon } from "@/ui/icons";
+import { gameIcon, gameIconUrl } from "@/ui/gameIcon";
 import { make } from "./rows";
 import { FriendsWindow, type FriendsWindowOptions } from "./FriendsWindow";
 import "./friends-button.css";
@@ -25,6 +24,22 @@ import "./friends-button.css";
 
 /** The badge caps at this. */
 const BADGE_MAX = 99;
+
+/**
+ * The px between the box of the button above-left of Friends in the corner
+ * (Map, or the phone's Menu), word included, and Friends' own box: the words
+ * under the two never touch (tester, 9 Nov: "Map" and "Friends" overlapped at
+ * 844x390), however wide the yard switcher's name makes that column.
+ */
+export const FRIENDS_BUTTON_GAP = 8;
+
+/**
+ * Where Friends' left edge goes, in px from the overlay layer's left: just
+ * past the corner column's bottom button (Map, or Menu), whose box holds its
+ * word too. Null while that button is not on screen.
+ */
+export const friendsButtonLeft = (layer: DOMRect, anchor: DOMRect | null): number | null =>
+  anchor && anchor.width > 0 ? Math.round(anchor.right - layer.left + FRIENDS_BUTTON_GAP) : null;
 
 /** What the Friends button's badge wears. */
 export interface FriendsBadge {
@@ -65,6 +80,9 @@ export class FriendsButton {
   private readonly badge = make("span", "yard-dock__badge friends-button__badge");
   private readonly unsubscribe: () => void;
   private window: FriendsWindow | null = null;
+  /** Whether the open window came from a press of the mouse or a finger, not a key. */
+  private pointerOpened = false;
+  private stopFollowing: () => void = () => {};
 
   constructor(options: FriendsButtonOptions = {}) {
     this.options = options;
@@ -76,15 +94,68 @@ export class FriendsButton {
     this.element.setAttribute("aria-expanded", "false");
     const disc = make("span", "yard-dock__disc");
     this.badge.hidden = true;
-    disc.append(icon("friends", 29), this.badge);
+    // The painted two monster heads (the profile's Friends icon), as Monsters
+    // beside it wears its painted monster: no line icon (owner, 9 Nov).
+    const picture = make("img", "yard-dock__picture friends-button__picture");
+    picture.src = gameIconUrl("friends", 64);
+    picture.alt = "";
+    picture.decoding = "async";
+    picture.draggable = false;
+    disc.append(picture, this.badge);
     this.element.append(disc, make("span", "yard-dock__label", "Friends"));
-    this.element.addEventListener("click", () => (this.window ? this.close() : this.open()));
+    this.element.addEventListener("click", (event) => {
+      if (this.window) {
+        this.close();
+        return;
+      }
+      // A key press is a click with no count; a mouse's or a finger's has one.
+      this.pointerOpened = event.detail > 0;
+      this.open();
+    });
     this.unsubscribe = this.store.subscribe(() => this.renderBadge());
   }
 
   mount(parent: HTMLElement): this {
     parent.append(this.element);
+    this.stopFollowing = this.follow(parent);
     return this;
+  }
+
+  /**
+   * Keeps Friends just right of the corner column's bottom button (Map, or the
+   * phone's Menu), measured rather than guessed: that column is as wide as its
+   * widest word (the yard switcher's "Main yard", or an outpost's name), so a
+   * fixed place let the words overlap on one screen and touch on another. The
+   * CSS place stands until the first measure, and while the column is hidden.
+   * The layer gets `--friends-button-right` for the status line beside it.
+   */
+  private follow(layer: HTMLElement): () => void {
+    const column = (): HTMLElement | null => layer.querySelector<HTMLElement>(":scope > .yard-dock .yard-dock__left");
+    const place = (): void => {
+      const left = column();
+      // The column's lowest shown button: Map, or Menu on a phone.
+      let anchor: DOMRect | null = null;
+      for (const child of left ? Array.from(left.children) : []) {
+        const box = child.getBoundingClientRect();
+        if (box.width > 0 && (!anchor || box.bottom >= anchor.bottom)) anchor = box;
+      }
+      const at = friendsButtonLeft(layer.getBoundingClientRect(), anchor);
+      if (at === null) return;
+      this.element.style.left = `${at}px`;
+      layer.style.setProperty("--friends-button-right", `${at + this.element.offsetWidth}px`);
+    };
+    const watch = typeof ResizeObserver === "function" ? new ResizeObserver(place) : null;
+    const observed = column();
+    if (observed) watch?.observe(observed);
+    watch?.observe(this.element);
+    window.addEventListener("resize", place);
+    place();
+    void document.fonts?.ready.then(place);
+    return () => {
+      watch?.disconnect();
+      window.removeEventListener("resize", place);
+      layer.style.removeProperty("--friends-button-right");
+    };
   }
 
   /** Opens the Friends window; it is shown once only. */
@@ -97,6 +168,10 @@ export class FriendsButton {
       onClose: () => {
         if (this.window === opened) this.window = null;
         this.element.setAttribute("aria-expanded", "false");
+        // The window hands focus back to the disc as it goes; after a mouse or
+        // finger opened it, Escape would leave the keyboard ring on it, which
+        // reads as "still selected" (tester, 9 Nov). A key-opened window keeps it.
+        if (this.pointerOpened) queueMicrotask(() => this.element.blur());
       },
     });
     this.window = opened;
@@ -111,6 +186,7 @@ export class FriendsButton {
 
   destroy(): void {
     this.unsubscribe();
+    this.stopFollowing();
     this.close();
     this.element.remove();
   }

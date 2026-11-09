@@ -107,6 +107,8 @@ describe("the window", () => {
     expect(headings).toEqual(["1Can use help", "1Online", "2Everyone else"]);
     expect(names()).toEqual(["Ann", "Bo", "Cy", "Di"]);
     expect(document.querySelector(".friends-window__group--help img.game-icon--tools")).not.toBeNull();
+    // Every heading leads with its picture, so the three line up (tester, 9 Nov).
+    expect(document.querySelector(".friends-window__group--rest > .friends-window__dot--off:first-child")).not.toBeNull();
   });
 
   it("leaves out an empty group", async () => {
@@ -132,9 +134,28 @@ describe("the window", () => {
     expect(document.querySelector(".friends-window")!.textContent).not.toMatch(/\p{Extended_Pictographic}/u);
   });
 
-  it("marks a pinned friend", async () => {
-    await setup([friend(1, { username: "Pin", pinnedAt: 10 })]);
-    expect(items()[0]!.classList.contains("friends-window__item--pinned")).toBe(true);
+  it("marks a pinned friend with the gold frame, a pin and its tooltip", async () => {
+    await setup([friend(1, { username: "Pin", pinnedAt: 10 }), friend(2, { username: "Free" })]);
+    const [pinned, free] = items();
+    expect(pinned!.classList.contains("friends-window__item--pinned")).toBe(true);
+    expect(pinned!.querySelector(".friends-window__face")!.getAttribute("title")).toBe(FRIENDS_WINDOW_TEXT.pinned);
+    const pin = pinned!.querySelector<HTMLImageElement>(".friends-window__face > .friends-window__pin")!;
+    expect(pin.dataset["icon"]).toBe("pin");
+    expect(pin.getAttribute("aria-label")).toBe(FRIENDS_WINDOW_TEXT.pinned);
+    expect(free!.querySelector(".friends-window__pin")).toBeNull();
+  });
+
+  it("gives Add, the friend count and the requests a picture each", async () => {
+    await setup([friend(1)], {}, { requestsIn: 2 });
+    const icon = (selector: string) => document.querySelector<HTMLImageElement>(`${selector} img.game-icon`)!.dataset["icon"];
+    expect(icon(".friends-window__count--total")).toBe("friends");
+    expect(icon(".friends-window__add")).toBe("addfriend");
+    expect(icon(".friends-window__requests")).toBe("mail");
+  });
+
+  it("marks the list for its scroll fades", async () => {
+    await setup();
+    expect(document.querySelector(".friends-window > .panel__body")!.classList.contains("scroll-fade")).toBe(true);
   });
 
   it("follows the store while open", async () => {

@@ -645,6 +645,26 @@ body {
   font-weight: 700;
 }
 
+/* ── Scroll fades ───────────────────────────────────────────────────────────
+ * A scrolling box's edge fades out where more is hidden (`ui/scrollFade.ts`):
+ * the row cut at the bottom reads as "more below", the one going under the
+ * top as "more above", instead of a hard cut.
+ */
+.scroll-fade.scroll-fade--more-below {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
+
+.scroll-fade.scroll-fade--more-above {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 20px);
+  mask-image: linear-gradient(to bottom, transparent, #000 20px);
+}
+
+.scroll-fade.scroll-fade--more-above.scroll-fade--more-below {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 20px, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 20px, #000 calc(100% - 28px), transparent);
+}
+
 /* ── Online dot ─────────────────────────────────────────────────────────────
  * The green dot beside an online player's name (`ui/onlineDot.ts`). Offline
  * players get none; a "Last seen" line says the rest.

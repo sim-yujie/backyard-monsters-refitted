@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fixtureApi, fixtureFriend, fixtureList } from "@/game/friends/friendsFixture";
 import { FriendsStore } from "@/game/friends/friendsStore";
-import { FriendsButton, friendsBadge, helpNote, type FriendsButtonOptions } from "./FriendsButton";
+import { FRIENDS_BUTTON_GAP, FriendsButton, friendsBadge, friendsButtonLeft, helpNote, type FriendsButtonOptions } from "./FriendsButton";
 
 /** The round Friends button beside Map (owner, 9 Nov 2026, option A), on every screen size. */
 
@@ -68,10 +68,11 @@ describe("the badge", () => {
 });
 
 describe("the button", () => {
-  it("is a dock disc with its word, like Map", async () => {
+  it("is a dock disc with its painted picture and word, like Monsters", async () => {
     await setup();
     const button = document.querySelector<HTMLButtonElement>("button.yard-dock__button.friends-button")!;
-    expect(button.querySelector(".yard-dock__disc > svg")).not.toBeNull();
+    expect(button.querySelector(".yard-dock__disc > svg")).toBeNull();
+    expect(button.querySelector<HTMLImageElement>(".yard-dock__disc > img.yard-dock__picture")!.src).toContain("ui/icons/friends-64.webp");
     expect(button.querySelector(".yard-dock__label")!.textContent).toBe("Friends");
     expect(button.dataset["dock"]).toBe("friends");
   });
@@ -105,6 +106,41 @@ describe("the button", () => {
     document.querySelector<HTMLButtonElement>(".friends-window__row")!.click();
     document.querySelector<HTMLButtonElement>(".friends-window__action")!.click();
     expect(onVisit).toHaveBeenCalledWith(expect.objectContaining({ userid: 7 }));
+  });
+
+  it("loses its focus ring when a window it opened by mouse closes", async () => {
+    const { modal } = await setup();
+    const button = document.querySelector<HTMLButtonElement>(".friends-button")!;
+    button.focus();
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+    expect(modal.querySelector(".friends-window")).not.toBeNull();
+    modal.querySelector<HTMLButtonElement>('.friends-window .btn[aria-label^="Close"]')!.click();
+    await Promise.resolve();
+    expect(document.activeElement).not.toBe(button);
+  });
+
+  it("keeps its focus when the window was opened from the keyboard", async () => {
+    const { modal } = await setup();
+    const button = document.querySelector<HTMLButtonElement>(".friends-button")!;
+    button.focus();
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+    modal.querySelector<HTMLButtonElement>('.friends-window .btn[aria-label^="Close"]')!.click();
+    await Promise.resolve();
+    expect(document.activeElement).toBe(button);
+  });
+});
+
+describe("its place", () => {
+  const box = (left: number, width: number): DOMRect => new DOMRect(left, 0, width, 40);
+
+  it("starts the gap's width past the corner button's box, word included", () => {
+    expect(friendsButtonLeft(box(0, 800), box(24, 68))).toBe(24 + 68 + FRIENDS_BUTTON_GAP);
+    expect(friendsButtonLeft(box(10, 800), box(34, 75.4))).toBe(Math.round(34 + 75.4 - 10 + FRIENDS_BUTTON_GAP));
+  });
+
+  it("leaves the CSS place while the corner button is not on screen", () => {
+    expect(friendsButtonLeft(box(0, 800), null)).toBeNull();
+    expect(friendsButtonLeft(box(0, 800), box(0, 0))).toBeNull();
   });
 });
 
