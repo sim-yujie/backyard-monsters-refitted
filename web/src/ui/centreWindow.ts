@@ -16,7 +16,7 @@
  * - **Clear of the dock, unless that makes it unusable** (tester, 9 Nov).
  *   The band's bottom is measured, not guessed: {@link fitCentreWindow}
  *   keeps the window above the top of every dock button under it (More,
- *   Monsters, Build, Collect all, Main yard, Map, Add friends, their words
+ *   Monsters, Build, Collect all, Main yard, Map, Friends, their words
  *   and badges, in either look), and narrows a window that would reach the
  *   button column under the HUD's right end (Events), close X included. A
  *   window short of room gets shorter, its body scrolling, but never below
@@ -151,7 +151,7 @@ const DOCK_BUTTONS = [
   ":scope > .yard-dock > :not(.yard-dock__left, .yard-dock__right, .yard-menu)",
   ":scope > .yard-dock > .yard-dock__left > *",
   ":scope > .yard-dock > .yard-dock__right > *",
-  ":scope > .friends-bar",
+  ":scope > .friends-button",
 ].join(", ");
 
 /** The badges that sit on a button's rim, partly outside its box. */

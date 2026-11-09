@@ -22,6 +22,7 @@ import { buildActions } from "@/api/yardBuild";
 import { decorActions } from "@/api/yardDecor";
 import { consumeViewTarget, setAttackTarget, setViewTarget, type ViewTarget } from "@/game/attack/attackTarget";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
+import { confirmAttackWindow, showsAttackWindow } from "@/ui/attack/AttackWindow";
 import { setPlayerPool } from "@/game/friends/friendsView";
 import { currentSeason } from "@/game/season";
 import {
@@ -157,7 +158,7 @@ import { MAP_ROOM_TYPE } from "@/ui/yard/buildingActions";
 import { BuildMenu, PlacementBar, spotSentence } from "@/ui/yard/BuildMenu";
 import { bankFloat, showBankResult } from "@/ui/yard/CollectAll";
 import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
-import { FriendsBar } from "@/ui/friends/FriendsBar";
+import { FriendsButton } from "@/ui/friends/FriendsButton";
 import { HelpPanel } from "@/ui/friends/HelpPanel";
 import { YardDock, type YardDockOptions } from "@/ui/yard/YardDock";
 import { StarterKitPicker } from "@/ui/yard/StarterKitPicker";
@@ -467,7 +468,7 @@ export class YardScene implements Scene {
    */
   private dock: YardDock | null = null;
   /** The friends bar (#371): own yard only; null on a visit. */
-  private friendsBar: FriendsBar | null = null;
+  private friendsButton: FriendsButton | null = null;
   /** Takes back the pool the Gifts tab reads and refreshes after a collect (#375). */
   private clearPlayerPool: (() => void) | null = null;
   /**
@@ -688,7 +689,9 @@ export class YardScene implements Scene {
       this.dock.setAttack({ disabled: true, title: `Attack ${target.name}'s yard` });
     }
     if (!target && !this.tribe) {
-      this.friendsBar = new FriendsBar({
+      // The Friends button beside Map; its window opens in the middle (owner, 9 Nov 2026).
+      this.friendsButton = new FriendsButton({
+        modal: context.overlay.modal,
         onVisit: (friend) => this.visitFriendYard(friend),
         onMessage: (friend) => void this.mail?.openCompose({ userid: friend.userid, name: friend.username }),
       }).mount(context.overlay.content);
@@ -794,8 +797,8 @@ export class YardScene implements Scene {
     this.defences = null;
     this.chat?.destroy();
     this.chat = null;
-    this.friendsBar?.destroy();
-    this.friendsBar = null;
+    this.friendsButton?.destroy();
+    this.friendsButton = null;
     this.clearPlayerPool?.();
     this.clearPlayerPool = null;
     this.stopHelpedWatch?.();
@@ -1154,9 +1157,14 @@ export class YardScene implements Scene {
     this.attacking = true;
     this.dock?.setAttack({ disabled: true, title });
     let confirmed = false;
-    await attackWithFriendWarning(attack, context.overlay.modal, () => {
-      confirmed = true;
-    });
+    // The map's attack window first (`ui/attack/AttackWindow.ts`): what the
+    // player can bring, then Attack or Cancel, as from the map itself.
+    const go = !showsAttackWindow(attack) || (await confirmAttackWindow(context.overlay.modal, attack));
+    if (go && this.context === context) {
+      await attackWithFriendWarning(attack, context.overlay.modal, () => {
+        confirmed = true;
+      });
+    }
     if (!confirmed) {
       if (this.context !== context) return;
       this.attacking = false;
@@ -1773,6 +1781,7 @@ export class YardScene implements Scene {
     }
     this.visitLine.dataset["name"] = name;
     this.showHelpBlock();
+    this.refreshStatus();
   }
 
   /** Puts the help block on screen: the line, the wrenches and the open panel. */
@@ -3156,7 +3165,9 @@ export class YardScene implements Scene {
     // #56); the counts, the plot, the frame time and the selected id are a
     // developer's (#150), behind their own opt-in switch (`devStats`, beta 6).
     const parts = [
-      ...(this.target ? [`${this.whose()}, read-only`] : []),
+      // A friend's yard in help mode says "Helping …" at the top; "read-only"
+      // under it would contradict it (tester, 9 Nov), so it just names the yard.
+      ...(this.target ? [this.helpBlock ? this.whose() : `${this.whose()}, read-only`] : []),
       ...(this.hint ? [this.hint] : []),
       ...(devStats()
         ? [

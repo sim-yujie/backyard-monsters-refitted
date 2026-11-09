@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatAmount, formatCompact, formatCountdown, formatShort } from "./format";
+import { formatAmount, formatCompact, formatCountdown, formatShort, formatShortPrice } from "./format";
 
 /** The shared spellings: amounts in full by default (#134), short only on request. */
 
@@ -70,5 +70,33 @@ describe("formatShort", () => {
 
   it("shows a dash for a value the save did not send", () => {
     expect(formatShort(undefined)).toBe("—");
+  });
+});
+
+describe("formatShortPrice", () => {
+  it("spells hatchery prices the way the owner asked (9 Nov)", () => {
+    expect(formatShortPrice(468_000)).toBe("468K");
+    expect(formatShortPrice(120_000)).toBe("120K");
+    expect(formatShortPrice(14_400)).toBe("14.4K");
+    expect(formatShortPrice(1_200_000)).toBe("1.2M");
+    expect(formatShortPrice(350)).toBe("350");
+  });
+
+  it("rounds up, so a tile never looks cheaper than it is (tester, 9 Nov)", () => {
+    expect(formatShortPrice(1_250)).toBe("1.3K");
+    expect(formatShortPrice(14_450)).toBe("14.5K");
+    expect(formatShortPrice(47_500)).toBe("47.5K");
+    expect(formatShortPrice(1_001)).toBe("1.1K");
+    expect(formatShortPrice(999.2)).toBe("1K");
+  });
+
+  it("goes up a unit rather than reading 1000K", () => {
+    expect(formatShortPrice(999_950)).toBe("1M");
+    expect(formatShortPrice(1_000_000)).toBe("1M");
+    expect(formatShortPrice(1_234_567_890)).toBe("1.3B");
+  });
+
+  it("leaves formatShort rounding down for its other users", () => {
+    expect(formatShort(1_250)).toBe("1.2K");
   });
 });

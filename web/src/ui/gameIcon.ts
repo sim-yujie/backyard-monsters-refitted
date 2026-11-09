@@ -67,14 +67,16 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * crimson alliance shield with its gold stripe (`alliance`).
  *
  * Pinning a friend to the top of the list (beta 7, `ui/friends/FriendsTab.ts`):
- * `pin`. A STAND-IN for now: its files are copies of the gold crown
- * (`empire`) until a painted pin is made; replace `pin-*.webp` to change it.
+ * `pin`, a glossy red push-pin with a steel needle (painted by Codex, 9 Nov:
+ * the stand-in copy of the gold crown read as a crown, tester 9 Nov).
  *
  * World chat's player strip (`ui/chat/ChatBox.ts`, owner 8 Nov: icons rather than
- * words): `addfriend`, `mute` and `report` are STAND-INS too until they are painted:
- * `addfriend` copies the two monster heads (`friends`; wants a green plus), `mute` the
- * blue Protection shield (wants a speaker with a cross) and `report` the white flag of
- * Retreat (wants a red warning flag). Replace their `*.webp` files to change them.
+ * words): `addfriend` is the two monster heads (`friends`) with a green plus disc on
+ * their corner (9 Nov, `tools/game-icons/friends_icons.py`, so Add no longer looks
+ * like the friend count). `mute` and `report` are STAND-INS until they are painted:
+ * `mute` the blue Protection shield (wants a speaker with a cross) and `report` the
+ * white flag of Retreat (wants a red warning flag). Replace their `*.webp` files to
+ * change them.
  *
  * Event coins (beta 7, `game/eventCoins.ts`, `art-samples/event-coin`,
  * repainted by Codex 8 Nov to look nothing like Shiny's gold coins): the
@@ -86,6 +88,16 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * (`overdrive`), a crossed wrench and hammer for another store boost such as
  * Sharper Tools (`tools`), and the festive calendar with a gold star and rosette on
  * the Events button (`event`), which suits every event, not just Halloween.
+ *
+ * The Friends window's "no gift sent today" mark and the Friends button's gift
+ * badge (`ui/friends/FriendsWindow.ts`, owner 9 Nov: painted icons, no emoji):
+ * `gift` is Flash's own red gift box with its yellow ribbon (`icon_gifts`,
+ * `client/images/612.png`), its round brown frame taken off, made by
+ * `tools/game-icons/friends_icons.py` (9 Nov); it stands in until a painted one
+ * at the size of the others is made; replace its `*.webp` files to change it.
+ * The Friends window's friend requests: `mail`, a cream envelope with a red
+ * wax seal (painted by Codex, 9 Nov: Flash's gold `icon_mail` read as a gem at
+ * 22 px, tester 9 Nov).
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -141,6 +153,8 @@ export const GAME_ICONS = {
   overdrive: "Production Overdrive",
   tools: "Store boost",
   event: "Events",
+  gift: "Gift",
+  mail: "Friend requests",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;

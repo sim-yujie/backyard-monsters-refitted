@@ -566,9 +566,8 @@
   display: none;
 }
 
-/* The friends row belongs to the yard, not the planner: its top rim would show
-   above the planner's bottom bar. */
-.overlay__layer:has(> .planner-dock) > .friends-bar {
+/* The Friends button belongs to the yard, not the planner. */
+.overlay__layer:has(> .planner-dock) > .friends-button {
   display: none;
 }
 

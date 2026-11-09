@@ -645,6 +645,50 @@ body {
   font-weight: 700;
 }
 
+/* ── Scroll fades ───────────────────────────────────────────────────────────
+ * A scrolling box's edge fades out where more is hidden (`ui/scrollFade.ts`):
+ * the row cut at the bottom reads as "more below", the one going under the
+ * top as "more above", instead of a hard cut. The fade is long and ends fully
+ * clear (tester, 9 Nov: the first 28px fade was barely seen), so about half a
+ * row dissolves into the panel. A box sets `--scroll-fade-below` /
+ * `--scroll-fade-above` to change its length.
+ */
+.scroll-fade {
+  --scroll-fade-below: 64px;
+  --scroll-fade-above: 36px;
+}
+
+.scroll-fade.scroll-fade--more-below {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--scroll-fade-below)), rgb(0 0 0 / 40%) calc(100% - var(--scroll-fade-below) / 2), transparent calc(100% - 6px));
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--scroll-fade-below)), rgb(0 0 0 / 40%) calc(100% - var(--scroll-fade-below) / 2), transparent calc(100% - 6px));
+}
+
+.scroll-fade.scroll-fade--more-above {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 4px, rgb(0 0 0 / 40%) calc(var(--scroll-fade-above) / 2), #000 var(--scroll-fade-above));
+  mask-image: linear-gradient(to bottom, transparent 4px, rgb(0 0 0 / 40%) calc(var(--scroll-fade-above) / 2), #000 var(--scroll-fade-above));
+}
+
+.scroll-fade.scroll-fade--more-above.scroll-fade--more-below {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 4px,
+    rgb(0 0 0 / 40%) calc(var(--scroll-fade-above) / 2),
+    #000 var(--scroll-fade-above),
+    #000 calc(100% - var(--scroll-fade-below)),
+    rgb(0 0 0 / 40%) calc(100% - var(--scroll-fade-below) / 2),
+    transparent calc(100% - 6px)
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 4px,
+    rgb(0 0 0 / 40%) calc(var(--scroll-fade-above) / 2),
+    #000 var(--scroll-fade-above),
+    #000 calc(100% - var(--scroll-fade-below)),
+    rgb(0 0 0 / 40%) calc(100% - var(--scroll-fade-below) / 2),
+    transparent calc(100% - 6px)
+  );
+}
+
 /* ── Online dot ─────────────────────────────────────────────────────────────
  * The green dot beside an online player's name (`ui/onlineDot.ts`). Offline
  * players get none; a "Last seen" line says the rest.

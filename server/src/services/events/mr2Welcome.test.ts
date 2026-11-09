@@ -37,17 +37,31 @@ describe("the 10 days", () => {
     expect(welcomeReady({ ...fresh, takeoverUsed: true }, "kit", T0)).toBe(true);
   });
 
-  test("the card: days left rounded up, each reward's state, gone when expired or both used", () => {
+  test("the card: days left rounded up, each reward's state, gone only when the 10 days are over", () => {
     expect(welcomeStatus(fresh, T0)).toEqual({
       startsAt: T0,
       endsAt: T0 + 10 * DAY,
       daysLeft: 10,
       takeover: true,
       kit: true,
+      takeoverUsedAt: null,
+      kitUsedAt: null,
     });
     expect(welcomeStatus(fresh, T0 + 9 * DAY + 1)?.daysLeft).toBe(1);
     expect(welcomeStatus({ ...fresh, kitUsed: true }, T0 + DAY)).toMatchObject({ daysLeft: 9, takeover: true, kit: false });
-    expect(welcomeStatus({ ...fresh, kitUsed: true, takeoverUsed: true }, T0)).toBeNull();
+    // Both used: the card stays for the rest of the 10 days (owner, 9 Nov), with when each was used.
+    expect(
+      welcomeStatus({ ...fresh, kitUsed: true, takeoverUsed: true, takeoverAt: T0 + 100, kitAt: T0 + 2 * DAY }, T0 + 3 * DAY),
+    ).toMatchObject({ daysLeft: 7, takeover: false, kit: false, takeoverUsedAt: T0 + 100, kitUsedAt: T0 + 2 * DAY });
+    // Used before the time was kept: Used, with no day.
+    expect(welcomeStatus({ ...fresh, kitUsed: true, takeoverUsed: true }, T0)).toMatchObject({
+      takeover: false,
+      kit: false,
+      takeoverUsedAt: null,
+      kitUsedAt: null,
+    });
+    // A time on a reward not used is not shown.
+    expect(welcomeStatus({ ...fresh, takeoverAt: T0 }, T0)?.takeoverUsedAt).toBeNull();
     expect(welcomeStatus(fresh, T0 + 10 * DAY)).toBeNull();
     expect(welcomeStatus(null, T0)).toBeNull();
   });
@@ -102,6 +116,7 @@ describe("when the 10 days start", () => {
     expect(await claimWelcome(em, 11, "takeover", T0 + DAY)).toBe(false);
     expect(await claimWelcome(em, 11, "kit", T0 + DAY)).toBe(true);
     expect(await claimWelcome(em, 12, "kit", T0 + DAY)).toBe(false);
+    expect(store.rows.get(11)).toMatchObject({ takeoverAt: T0 + DAY, kitAt: T0 + DAY });
   });
 });
 

@@ -185,7 +185,7 @@ describe("CollectAll", () => {
     }
   });
 
-  it("banks everything in one request and says what was collected", async () => {
+  it("banks everything in one request without a Collected notice (owner, 9 Nov)", async () => {
     run.mockResolvedValue({ ok: true, report: reportOf({ r1: 720, r4: 500 }), completed: [] });
     collect.bind(binding);
     button().click();
@@ -193,8 +193,7 @@ describe("CollectAll", () => {
     await Promise.resolve();
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0]![0].key).toBe("bank:all");
-    const notice = document.querySelector(".notice")!;
-    expect(spokenText(notice)).toContain("Collected Twigs 720 gained Goo 500 gained.");
+    expect(document.querySelector(".notice")).toBeNull();
   });
 
   it("throws the balls on the press and hands the answer over after (#208)", async () => {
@@ -291,11 +290,17 @@ describe("showBankResult", () => {
   it("warns when storage kept some in the harvesters", () => {
     showBankResult(notices, { ok: true, report: reportOf({ r1: 280 }, { r1: 440 }), completed: [] });
     expect(document.querySelector(".notice--warning")).not.toBeNull();
-    expect(text()).toContain("Collected Twigs 280 gained. Twigs 440 stayed in your harvesters: storage is full.");
-    // Collected is a gain, green "+280" (owner, 28 Oct); what stayed is plain.
+    expect(text()).toContain("Twigs 440 stayed in your harvesters: storage is full.");
+    // No "Collected" part (owner, 9 Nov); what stayed is plain, not a gain.
+    expect(text()).not.toContain("Collected");
     const values = [...document.querySelectorAll(".notice .res-amount__value")];
-    expect(values.map((value) => value.textContent)).toEqual(["+280", "440"]);
-    expect(document.querySelectorAll(".notice .res-amount--gain")).toHaveLength(1);
+    expect(values.map((value) => value.textContent)).toEqual(["440"]);
+    expect(document.querySelectorAll(".notice .res-amount--gain")).toHaveLength(0);
+  });
+
+  it("says nothing for a plain collect (owner, 9 Nov: the toast was annoying)", () => {
+    showBankResult(notices, { ok: true, report: reportOf({ r1: 280, r4: 90 }), completed: [] });
+    expect(document.querySelector(".notice")).toBeNull();
   });
 
   it("says a server refusal, but not a local nothing-to-collect", () => {

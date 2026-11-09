@@ -43,7 +43,7 @@ import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import { maxLevel, quantityOf, townHallLevel, type YardKind } from "@/game/yard/buildingCosts";
 import { NEED_MORE_SILOS, overCap } from "@/game/yard/storage";
 import { YardChangeReason, type YardActionResult, type YardChange } from "@/game/yard/YardStore";
-import { formatAmount, formatCountdown } from "@/ui/format";
+import { formatAmount, formatCountdown, formatShortPrice } from "@/ui/format";
 import { QuantityStepper } from "@/ui/QuantityStepper";
 import { gameIcon, iconAmount } from "@/ui/gameIcon";
 import { resourceAmount, resourceIcon } from "@/ui/resourceIcon";
@@ -145,6 +145,8 @@ const JUMPS = [5, 10] as const;
 
 /** The most hatcheries a yard ever holds (`client/scripts/HATCHERYCCPOPUP.as:668`). */
 const MAX_HATCHERIES = 5;
+/** Letters past which a card's name is drawn smaller on a phone ("Slimeattikus" is 12). */
+const LONG_NAME = 10;
 
 /** Seconds as a countdown: "12s", "4m 10s". */
 const duration = (seconds: number): string => formatCountdown(Math.ceil(seconds));
@@ -444,6 +446,14 @@ export class HatchTab implements MonstersTab {
 
   private render(): void {
     const focusKey = (document.activeElement as HTMLElement | null)?.dataset?.["focusKey"];
+    // A redraw (a monster chosen, a hatch done) keeps the box where the player
+    // scrolled it (owner, 9 Nov: on a phone, choosing a monster lower down
+    // sometimes jumped the list back to the top). Only a hatchery tab's tap
+    // opens at the top, and it sets that before it redraws.
+    const scrolled = this.scroll.scrollTop;
+    const tall = this.scroll.scrollHeight;
+    // The info panel's held height (below) is let go; it is measured again.
+    this.info.style.minHeight = "";
     const store = this.store;
     const yard = readHatchYard(store.save, store.now());
     this.yard = yard;
@@ -479,7 +489,23 @@ export class HatchTab implements MonstersTab {
     }
     this.renderCount(document.activeElement !== this.stepper.input);
     this.markYard(yard.hcc || yard.hatcheries.length === 0 ? null : this.target);
-    if (focusKey) this.element.querySelector<HTMLElement>(`[data-focus-key="${focusKey}"]`)?.focus();
+    // The focus goes back to the redrawn copy of what had it, where it was:
+    // without preventScroll the browser scrolls the box to it, and on a phone
+    // that is often a button up in the line (a tap there focuses it, and an
+    // iPhone's tap on a monster leaves the focus where it was), so choosing a
+    // monster lower down threw the list back up.
+    if (focusKey) {
+      this.element.querySelector<HTMLElement>(`[data-focus-key="${focusKey}"]`)?.focus({ preventScroll: true });
+    }
+    if (this.scroll.scrollTop !== scrolled) {
+      // A shorter info panel (D.A.V.E.'s after Crabatron's) made the box
+      // shorter while it was scrolled to the bottom: the browser pulled the
+      // scroll up and the list moved about 20 px (tester, 9 Nov, phone). The
+      // panel keeps the height it lost, so the list stays put.
+      const lost = tall - this.scroll.scrollHeight;
+      if (lost > 0) this.info.style.minHeight = `${this.info.offsetHeight + lost}px`;
+      this.scroll.scrollTop = scrolled;
+    }
   }
 
   /**
@@ -1257,17 +1283,22 @@ export class HatchTab implements MonstersTab {
       button.dataset["monster"] = row.monster.id;
       button.dataset["focusKey"] = `monster-${row.monster.id}`;
       button.setAttribute("aria-pressed", String(row.monster.id === this.selected));
+      // The tile says its price short ("468K", owner 9 Nov: easier to see), rounded up so it never looks cheaper;
+      // the full figure stays on hover here and in the chosen monster's stats.
       button.title =
         row.state.kind === "ready"
-          ? `Choose ${row.monster.name}`
+          ? `Choose ${row.monster.name} · ${formatAmount(row.price)} each`
           : `${row.monster.name}: ${row.state.kind === "unlocking" ? "still unlocking" : "locked"}`;
       button.addEventListener("click", () => this.tapMonster(row));
       const name = document.createElement("span");
-      name.className = "hatch-monster__name";
+      // A long name ("Slimeattikus") gets smaller letters on a phone, so it
+      // stays whole on one line rather than breaking mid-word.
+      name.className =
+        row.monster.name.length > LONG_NAME ? "hatch-monster__name hatch-monster__name--long" : "hatch-monster__name";
       name.textContent = row.monster.name;
       const note = document.createElement("span");
       note.className = "hatch-monster__note";
-      if (row.state.kind === "ready") note.append(resourceAmount("r4", row.price));
+      if (row.state.kind === "ready") note.append(resourceAmount("r4", formatShortPrice(row.price)));
       else note.textContent = row.state.kind === "unlocking" ? "Unlocking" : "Locked";
       button.append(monsterPicture(row.monster, "small", "hatch-monster__picture"), name, " ", note);
       item.append(button);

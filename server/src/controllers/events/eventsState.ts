@@ -19,7 +19,7 @@ import { logger } from "../../utils/logger.js";
  *   last "What's new" release the player has seen. Claims are yard
  *   actions (`controllers/yard/events.ts`). `mr2Welcome` is the player's
  *   "New to Map Room 2" card (`services/events/mr2Welcome.ts`), null when
- *   their 10 days are not running or both rewards are used.
+ *   their 10 days are not running (it stays while both rewards are used).
  * - `POST /bm/whatsnew/seen { version }`: records that the player has seen
  *   the "What's new" cards up to `version` (a release name such as
  *   `2.0.0-beta.4`), so they pop up once per release on any device.

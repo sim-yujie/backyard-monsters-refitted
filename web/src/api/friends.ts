@@ -23,6 +23,7 @@ import type { ApiEnvelope, BaseLoadResponse } from "./types";
  * - `GET  /bm/friends/suggestions`: alliance mates not yet friends.
  * - `POST /bm/friends/gift { userid, resource }`, `GET /bm/friends/gifts`,
  *   `POST /bm/friends/gifts/collect { giftid } | { all: true }` (WP8),
+ *   `POST /bm/friends/gifts/delete { giftid } | { all: true }` (owner, 9 Nov 2026),
 *   `POST /bm/friends/wishes { wishes }` (#391).
  * - `POST /bm/friends/help { userid, buildingId, kind }` (WP6/WP7).
  * - `POST /base/load` with `type: "help"`: a friend's main yard to help in (WP2/WP5).
@@ -47,6 +48,7 @@ const SUGGESTIONS_PATH = "/api/:apiVersion/bm/friends/suggestions";
 const GIFT_PATH = "/api/:apiVersion/bm/friends/gift";
 const GIFTS_PATH = "/api/:apiVersion/bm/friends/gifts";
 const COLLECT_PATH = "/api/:apiVersion/bm/friends/gifts/collect";
+const DELETE_GIFTS_PATH = "/api/:apiVersion/bm/friends/gifts/delete";
 const WISHES_PATH = "/api/:apiVersion/bm/friends/wishes";
 const HELP_PATH = "/api/:apiVersion/bm/friends/help";
 const LOAD_PATH = "/base/load";
@@ -199,6 +201,16 @@ export interface GiftCollect {
   /** What went into the main yard, after the storage cap. */
   readonly resources: ResourceAmounts;
   /** Gifts the player can still collect today. */
+  readonly collectsLeft: number;
+  /** Gifts still waiting. */
+  readonly giftsWaiting: number;
+}
+
+/** `POST /bm/friends/gifts/delete`: thrown away, nothing given, no collect used. */
+export interface GiftDelete {
+  /** How many gifts were deleted. */
+  readonly deleted: number;
+  /** Gifts the player can still collect today (unchanged by a delete). */
   readonly collectsLeft: number;
   /** Gifts still waiting. */
   readonly giftsWaiting: number;
@@ -545,6 +557,8 @@ export interface FriendsApi {
   setWishes(wishes: readonly GiftResource[]): Promise<GiftResource[]>;
   /** Collects one gift, or every one waiting with `"all"`. */
   collect(giftid: number | "all"): Promise<GiftCollect>;
+  /** Deletes one waiting gift, or every one waiting with `"all"`; gives nothing. */
+  deleteGifts(giftid: number | "all"): Promise<GiftDelete>;
   help(userid: number, buildingId: number, kind: HelpKind): Promise<HelpResult>;
   /** A friend's main yard, loaded to help in (`type: "help"`). */
   loadHelpYard(baseid: string): Promise<HelpYardResponse>;
@@ -627,6 +641,14 @@ export const friendsApi: FriendsApi = {
     return {
       collected: count(answer["collected"]),
       resources: amounts(answer["resources"]),
+      collectsLeft: count(answer["collectsLeft"]),
+      giftsWaiting: count(answer["giftsWaiting"]),
+    };
+  },
+  async deleteGifts(giftid) {
+    const answer = await postJson<Answer>(DELETE_GIFTS_PATH, giftid === "all" ? { all: true } : { giftid });
+    return {
+      deleted: count(answer["deleted"]),
       collectsLeft: count(answer["collectsLeft"]),
       giftsWaiting: count(answer["giftsWaiting"]),
     };

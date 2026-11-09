@@ -810,13 +810,13 @@
 /* A building in hand: the placement bar has the bottom of the screen. Only the
    corners stay (the switcher and Map on the left, Stop on the right; the bar's
    max-width keeps it clear of them). Collect all, More, Monsters, Layout, Kits
-   and the friends strip step aside however the dock is laid out, so a bar that
+   and the Friends button step aside however the dock is laid out, so a bar that
    wraps to two or three rows never covers a button. Hidden, not removed, so
    Stop keeps its place. The phone hides the whole dock under its sheet. */
 @media (width > 620px) {
   .overlay__layer:has(> .build-placing) > .yard-dock .yard-dock__right > :not(.yard-dock__button--build),
   .overlay__layer:has(> .build-placing) > .yard-dock .yard-dock__button--menu,
-  .overlay__layer:has(> .build-placing) > .friends-bar {
+  .overlay__layer:has(> .build-placing) > .friends-button {
     visibility: hidden;
   }
 }

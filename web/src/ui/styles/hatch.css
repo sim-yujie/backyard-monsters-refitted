@@ -1074,7 +1074,15 @@ button.hatch-slot:disabled {
   list-style: none;
 }
 
+/* Each card fills its cell, so a row's cards are one height when a name
+   takes two lines on a phone. */
+.hatch__grid > li {
+  display: flex;
+  min-width: 0;
+}
+
 .hatch-monster {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1092,18 +1100,30 @@ button.hatch-slot:disabled {
     border-color var(--motion-fast) var(--easing);
 }
 
-.hatch-monster:hover {
-  background: var(--colour-surface-control-hover);
+/* Only with a mouse: a phone keeps a tapped card "hovered", which read as a
+   second chosen monster. */
+@media (hover: hover) {
+  .hatch-monster:hover {
+    background: var(--colour-surface-control-hover);
+  }
 }
 
 .hatch-monster:active {
   transform: translateY(1px);
 }
 
-.hatch-monster[aria-pressed="true"] {
+/* The chosen monster is a different colour, not a glow (owner, 9 Nov): a
+   strong wash of the look's accent inside its 2px rim, in either look. The
+   1px less padding keeps the picture and name where they were. */
+.hatch-monster[aria-pressed="true"],
+.hatch-monster[aria-pressed="true"]:hover {
   padding: 5px 1px 7px;
   border: 2px solid var(--colour-accent);
-  background: var(--colour-accent-soft);
+  background: color-mix(in srgb, var(--colour-accent) 36%, transparent);
+  color: var(--colour-text-strong);
+}
+
+.hatch-monster[aria-pressed="true"] .hatch-monster__note {
   color: var(--colour-text-strong);
 }
 
@@ -1590,7 +1610,7 @@ button.hatch-slot:disabled {
   }
 
   .hatch-slot__upgrade {
-    min-height: 36px;
+    min-height: var(--control-height-compact);
     padding-inline: var(--space-1);
     font-size: var(--text-xs);
   }
@@ -1628,18 +1648,36 @@ button.hatch-slot:disabled {
     width: auto;
   }
 
+  /* Four across, not five (owner, 9 Nov: "needs polishing"): at 390 px a
+     fifth card was 68 px, too narrow for "Slimeattikus" or "Crabatron" in
+     the display font, cut to "Slimeat…". A name stays whole on one line: a
+     long one ("Slimeattikus", `hatch-monster__name--long`) in smaller
+     letters, never broken mid-word ("Slimeattik / us", tester 9 Nov). */
   .hatch__grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 6px;
   }
 
   .hatch-monster__picture {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
   }
 
+  .hatch-monster__name--long {
+    font-size: 10.5px;
+    letter-spacing: -0.2px;
+  }
+
+  /* The note takes the line's whole width and the button goes under it,
+     centred (it was squeezed to about a word a line beside the button). */
   .hatch-pick__locked {
     flex-wrap: wrap;
+    justify-content: center;
+    row-gap: var(--space-2);
+  }
+
+  .hatch-pick__locked-text {
+    flex: 1 1 calc(100% - 40px);
   }
 
   /* The info panel becomes the bar fixed to the sheet's bottom (not on a
@@ -1723,17 +1761,18 @@ button.hatch-slot:disabled {
     font-size: var(--text-xs);
   }
 
-  /* The steps give way before Max does, and if Max still does not fit it
-     takes its own line rather than running past the edge (6 Nov UI check:
-     "Max (145)" was cut at 390 px wide). */
+  /* If Max does not fit beside the steps it takes its own line rather than
+     running past the edge (6 Nov UI check: "Max (145)" was cut at 390 px
+     wide). */
   .hatch-add__controls {
     flex-wrap: wrap;
     gap: var(--space-1);
   }
 
+  /* A finger's width each, 44 px (owner, 9 Nov: phone polish). */
   .hatch-add__controls .qty-stepper__step {
-    flex: 1 1 34px;
-    min-width: 34px;
+    flex: 1 1 var(--control-height-compact);
+    min-width: var(--control-height-compact);
   }
 
   .hatch-add__jump {

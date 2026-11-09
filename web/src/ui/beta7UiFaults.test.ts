@@ -44,10 +44,28 @@ describe("6 Nov UI check: phone faults", () => {
   it("Hatchery: Max wraps rather than running past the edge; a card shows its hatchery's number", () => {
     const phoneHatch = block(css("styles/hatch.css"), "@container hatch (width < 560px) {");
     expect(phoneHatch).toMatch(/\.hatch-add__controls \{\s*flex-wrap: wrap;/);
-    expect(phoneHatch).toMatch(/\.hatch-add__controls \.qty-stepper__step \{\s*flex: 1 1 34px;\s*min-width: 34px;/);
+    // A finger's width each since 9 Nov (was 34px).
+    expect(phoneHatch).toMatch(
+      /\.hatch-add__controls \.qty-stepper__step \{\s*flex: 1 1 var\(--control-height-compact\);\s*min-width: var\(--control-height-compact\);/,
+    );
     expect(phoneHatch).toMatch(/\.hatch-add__fill \{\s*flex: 1 0 auto;/);
     expect(phoneHatch).toMatch(/\.hatch-line--hcc \.hatch-now__label-word \{\s*display: none;/);
     expect(phoneHatch).toMatch(/\.hatch-line--hcc \.hatch-now__label-number::before \{\s*content: "#";/);
+  });
+
+  it("Hatchery on a phone (owner, 9 Nov): four monsters across, no name cut, the chosen one a different colour", () => {
+    const source = css("styles/hatch.css");
+    const phoneHatch = block(source, "@container hatch (width < 560px) {");
+    expect(phoneHatch).toMatch(/\.hatch__grid \{\s*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
+    // A name is never broken mid-word ("Slimeattik / us"): a long one is drawn smaller.
+    expect(phoneHatch).not.toMatch(/\.hatch-monster__name \{[^}]*overflow-wrap: anywhere;/);
+    expect(phoneHatch).toMatch(/\.hatch-monster__name--long \{\s*font-size: 10\.5px;/);
+    // The "Grey monsters are locked" note has the line's width, its button under it.
+    expect(phoneHatch).toMatch(/\.hatch-pick__locked-text \{\s*flex: 1 1 calc\(100% - 40px\);/);
+    expect(phoneHatch).toMatch(/\.hatch-slot__upgrade \{\s*min-height: var\(--control-height-compact\);/);
+    expect(source).toMatch(
+      /\.hatch-monster\[aria-pressed="true"\],[^{]*\{[^}]*background: color-mix\(in srgb, var\(--colour-accent\) 36%, transparent\);/,
+    );
   });
 
   it("Baiter: Fill takes its own line in a narrow card instead of the next column or past the edge", () => {

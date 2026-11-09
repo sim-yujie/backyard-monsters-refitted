@@ -53,7 +53,7 @@ describe.skipIf(!dbName)("Map Room 2 welcome on a real database", () => {
   test("the start is written once, ever", async () => {
     await store.start(em(), A, T0);
     await store.start(em(), A, T0 + 999);
-    expect(await store.read(em(), A)).toEqual({ start: T0, takeoverUsed: false, kitUsed: false });
+    expect(await store.read(em(), A)).toEqual({ start: T0, takeoverUsed: false, kitUsed: false, takeoverAt: null, kitAt: null });
     expect(await store.read(em(), B)).toBeNull();
   });
 
@@ -64,7 +64,14 @@ describe.skipIf(!dbName)("Map Room 2 welcome on a real database", () => {
     expect(await store.claim(em(), A, "takeover", T0 + 5)).toBe(true);
     expect(await store.claim(em(), A, "takeover", T0 + 6)).toBe(false);
     expect(await store.claim(em(), A, "kit", T0 + MR2_WELCOME_SECONDS - 1)).toBe(true);
-    expect(await store.read(em(), A)).toEqual({ start: T0, takeoverUsed: true, kitUsed: true });
+    // When each was used is kept, for the card's day timeline.
+    expect(await store.read(em(), A)).toEqual({
+      start: T0,
+      takeoverUsed: true,
+      kitUsed: true,
+      takeoverAt: T0 + 5,
+      kitAt: T0 + MR2_WELCOME_SECONDS - 1,
+    });
     expect(await store.claim(em(), B, "kit", T0 + 5)).toBe(false);
   });
 
