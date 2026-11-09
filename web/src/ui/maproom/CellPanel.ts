@@ -413,7 +413,7 @@ export class CellPanel {
 
   private render(cell: OffsetCell, payload: MapCell | undefined): void {
     // A no-break space keeps "238, 207" on one line in the narrow header.
-    const where = `${cell.col}, ${cell.row}`;
+    const where = `${cell.col},\u00a0${cell.row}`;
     this.chips.replaceChildren();
     this.facts.replaceChildren();
     this.countdowns = [];
