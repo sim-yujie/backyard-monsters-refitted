@@ -444,6 +444,11 @@ export class HatchTab implements MonstersTab {
 
   private render(): void {
     const focusKey = (document.activeElement as HTMLElement | null)?.dataset?.["focusKey"];
+    // A redraw (a monster chosen, a hatch done) keeps the box where the player
+    // scrolled it (owner, 9 Nov: on a phone, choosing a monster lower down
+    // sometimes jumped the list back to the top). Only a hatchery tab's tap
+    // opens at the top, and it sets that before it redraws.
+    const scrolled = this.scroll.scrollTop;
     const store = this.store;
     const yard = readHatchYard(store.save, store.now());
     this.yard = yard;
@@ -479,7 +484,15 @@ export class HatchTab implements MonstersTab {
     }
     this.renderCount(document.activeElement !== this.stepper.input);
     this.markYard(yard.hcc || yard.hatcheries.length === 0 ? null : this.target);
-    if (focusKey) this.element.querySelector<HTMLElement>(`[data-focus-key="${focusKey}"]`)?.focus();
+    // The focus goes back to the redrawn copy of what had it, where it was:
+    // without preventScroll the browser scrolls the box to it, and on a phone
+    // that is often a button up in the line (a tap there focuses it, and an
+    // iPhone's tap on a monster leaves the focus where it was), so choosing a
+    // monster lower down threw the list back up.
+    if (focusKey) {
+      this.element.querySelector<HTMLElement>(`[data-focus-key="${focusKey}"]`)?.focus({ preventScroll: true });
+    }
+    if (this.scroll.scrollTop !== scrolled) this.scroll.scrollTop = scrolled;
   }
 
   /**

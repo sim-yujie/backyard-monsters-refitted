@@ -451,6 +451,35 @@ describe("HatchTab: the message and the housing bar", () => {
 });
 
 describe("HatchTab: the grid", () => {
+  it("keeps the list where it is when a monster lower down is chosen (owner, 9 Nov)", () => {
+    const { element } = setup(twoHatcheries(), { buildingId: 10, monster: "C1" });
+    const scroll = element.querySelector<HTMLElement>(".hatch__scroll")!;
+    // As a browser does: focusing an element scrolls the box to it unless told
+    // not to. The focused slot is up in the line, so that is the top.
+    const realFocus = HTMLElement.prototype.focus;
+    const focus = vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (
+      this: HTMLElement,
+      options?: FocusOptions,
+    ) {
+      realFocus.call(this, options);
+      if (!options?.preventScroll && scroll.contains(this)) scroll.scrollTop = 0;
+    });
+    try {
+      // A tap on a waiting stack leaves the focus there; an iPhone's tap on a
+      // monster does not move it (jsdom's click does not either).
+      slots(element)[0]!.focus({ preventScroll: true });
+      scroll.scrollTop = 400;
+      monster(element, "C3").click();
+      expect(monster(element, "C3").getAttribute("aria-pressed")).toBe("true");
+      expect(scroll.scrollTop).toBe(400);
+      // The redrawn slot has the focus back, without a scroll.
+      expect(document.activeElement).toBe(slots(element)[0]);
+      expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    } finally {
+      focus.mockRestore();
+    }
+  });
+
   it("only chooses a monster on a tap, and adds nothing (#268, E)", async () => {
     const { element, actions } = setup(twoHatcheries(), { buildingId: 11 });
     expect(text(element, ".hatch-pick__hint")).toBe("Tap a monster to choose it");
