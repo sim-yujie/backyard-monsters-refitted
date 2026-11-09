@@ -19,6 +19,7 @@ import { creditResources, type CreditSave } from "./credit.js";
 import { readMushrooms } from "./mushrooms.js";
 import { recordMr2Join } from "../events/mr2Welcome.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { logger } from "../../utils/logger.js";
 
 /**
  * The Map Room and the Radio Tower (`docs/design/yard-buildings.md` §5.7,
@@ -342,6 +343,15 @@ export const joinMapRoom2 = async (
   if (!save.worldid) await join(em, save, user);
   save.mr2upgraded = true;
   save.mapversion = MapRoomVersion.V2;
-  await welcome(em, save.userid, getCurrentDateTime());
+  // Never the reason a yard fails to load: a stand-in database under test
+  // has no SQL, and the first read for an MR2 player writes the row anyway.
+  try {
+    await welcome(em, save.userid, getCurrentDateTime());
+  } catch (error) {
+    logger.warn("Could not start the Map Room 2 welcome for {userid}: {error}", {
+      userid: save.userid,
+      error: String(error),
+    });
+  }
   return true;
 };
