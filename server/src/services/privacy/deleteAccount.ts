@@ -211,6 +211,7 @@ const deleteSteps = (u: number): DeleteStep[] => [
   { label: "announcements they pressed \"Got it\" on", table: "announcement_dismissal", where: `userid = ?`, params: [u] },
   { label: "announcement gifts they claimed", table: "announcement_claim", where: `userid = ?`, params: [u] },
   { label: "profile (bio and photo)", table: "player_profile", where: `userid = ?`, params: [u] },
+  { label: "outpost names and pins", table: "outpost_label", where: `userid = ?`, params: [u] },
   { label: "reports of their profile photo", table: "photo_report", where: `reported_id = ?`, params: [u] },
   { label: "map cells (home and outposts)", table: "world_map_cell", where: `uid = ?`, params: [u] },
   { label: "account (login and email)", table: `"user"`, where: `userid = ?`, params: [u] },

@@ -41,6 +41,7 @@ import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
 import { calculateBaseLevel, playerLevelOf, playerPointsOf } from "../../../services/base/calculateBaseLevel.js";
 import { RESOURCE_KEYS } from "../../../services/base/updateResources.js";
 import { mapSaveData } from "../../../services/base/mapSaveData.js";
+import { outpostLabelsOnLoad } from "../../../services/outposts/outpostLabels.js";
 import { onboardingSummary } from "../../../services/onboarding/summary.js";
 import { unseenAchievements } from "../../../services/achievements/record.js";
 import { recordLogin, recordVisit } from "../../../services/achievements/daily.js";
@@ -506,6 +507,12 @@ export const baseLoad: KoaController = async (ctx) => {
       ? await ownCoinsOnLoad(user.userid)
       : null;
 
+  // The player's outpost names and pins (beta 7, `services/outposts/outpostLabels.ts`)
+  // on the owner's build-mode load, main yard or outpost: the yard list and the HUD
+  // title read them. Left out when there are none or the read fails.
+  const outpostLabels =
+    isOwner && !isInferno && type === BaseMode.BUILD ? await outpostLabelsOnLoad(() => postgres.em.fork(), user.userid) : null;
+
   const response: Record<string, unknown> = {
     ...filteredSave,
     relationship,
@@ -526,6 +533,7 @@ export const baseLoad: KoaController = async (ctx) => {
     // the web client's banner, Friday pop-up and boosted prices and times.
     weekend: weekendState(weekendSettings(), getCurrentDateTime()),
     ...(coins !== null && { eventcoins: coins }),
+    ...(outpostLabels && { outpostlabels: outpostLabels }),
     chatservers: [process.env.CHAT_WS_HOST!],
     ...(isAttack && { attpowerups }),
     ...(type === BaseMode.HELP && { help: await helpBlockFor(user.userid, baseSave) }),

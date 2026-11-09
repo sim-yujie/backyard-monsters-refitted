@@ -674,6 +674,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   outposts?: OutpostEntry[] | null;
   /**
+   * The player's outpost names and pins, `{ names, pins }`
+   * (`server/src/services/outposts/outpostLabels.ts`), on the owner's
+   * build-mode loads; absent when there are none. Read by `outpostLabels.ts`.
+   */
+  outpostlabels?: unknown;
+  /**
    * When "Move to a random spot" last moved the main yard, unix seconds; null
    * or absent when it never has (issue #366). The next move opens 7 days later.
    */

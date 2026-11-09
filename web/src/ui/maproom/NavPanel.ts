@@ -1,6 +1,6 @@
 import type { Bookmark } from "@/api/bookmarks";
 import { devStats } from "@/app/devDetails";
-import { outpostTitle, type OwnOutpost } from "@/game/yard/ownYards";
+import { outpostShortTitle, pinnedFirst, type OwnOutpost } from "@/game/yard/ownYards";
 import { Panel } from "@/ui/Panel";
 
 /**
@@ -57,7 +57,7 @@ export class NavPanel {
     );
 
     this.outposts = document.createElement("div");
-    this.outposts.className = "map-row map-row--wrap";
+    this.outposts.className = "map-outposts";
     this.outposts.setAttribute("role", "group");
     this.outposts.setAttribute("aria-label", "Your outposts");
     this.outposts.hidden = true;
@@ -162,15 +162,33 @@ export class NavPanel {
     });
   }
 
-  /** The player's outposts, each a button that centres on it. */
+  /**
+   * The player's outposts, each a button that centres on it, in the yard
+   * list's order (pinned first, beta 7). One line each, as in the list: the
+   * outpost's name, or "240, 209" when it has none; a long name is cut with
+   * "…" and shows in full on hover.
+   */
   setOutposts(outposts: readonly OwnOutpost[]): void {
     this.outposts.hidden = outposts.length === 0;
     this.outposts.replaceChildren(
-      ...outposts.map(({ cell }) =>
-        button(outpostTitle(cell), `Centre on your outpost at ${cell.col}, ${cell.row}`, () =>
-          this.options.onJump(cell.col, cell.row),
-        ),
-      ),
+      ...pinnedFirst(outposts).map(({ baseid, cell }) => {
+        const label = outpostShortTitle(baseid, cell);
+        const where = `${cell.col}, ${cell.row}`;
+        const jump = button(
+          label,
+          label === where
+            ? `Centre on your outpost at ${where}`
+            : `Centre on ${label} (${where})`,
+          () => this.options.onJump(cell.col, cell.row),
+        );
+        jump.classList.add("map-outpost");
+        // The words in their own box, so a long name is cut with "…".
+        const words = document.createElement("span");
+        words.className = "map-outpost__label";
+        words.textContent = label;
+        jump.replaceChildren(words);
+        return jump;
+      }),
     );
   }
 

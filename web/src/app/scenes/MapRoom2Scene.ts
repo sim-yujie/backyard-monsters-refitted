@@ -122,9 +122,10 @@ import { Sight } from "@/game/maproom/Sight";
 import { ZoneStore, type ZoneError } from "@/game/maproom/ZoneStore";
 import { inWorld, zonesForRange, type CellRange, type ZoneRef } from "@/game/maproom/zones";
 import { IncomePrediction, overdriveEndOf } from "@/game/yard/outpostIncome";
+import { seedOutpostLabels } from "@/game/yard/outpostLabels";
 import {
   MAIN_YARD_TITLE,
-  outpostTitle,
+  namedOutpostTitle,
   outpostsOf,
   outpostTarget,
   setOwnYardTarget,
@@ -846,6 +847,8 @@ export class MapRoom2Scene implements Scene {
       noteInfo("ownYard", primed ? "primed" : "fetched");
       const base = primed ?? (await timeSpan("own-yard", () => loadOwnYard()));
       this.ownSave = base;
+      // The player's outpost names (beta 7) for the outpost buttons and the move picker.
+      seedOutpostLabels(base.outpostlabels);
       // Map Room 2's painted look (MR2_PAINTED_MAP), never in Classic.
       const painted = paintedMapOn({ serverFlag: base.flags?.["mr2painted"] });
       this.renderer.setPaintedMap(painted);
@@ -1436,7 +1439,7 @@ export class MapRoom2Scene implements Scene {
     }
     for (const outpost of outpostsOf(save)) {
       yards.push({
-        choice: { baseid: outpost.baseid, label: outpostTitle(outpost.cell), main: false },
+        choice: { baseid: outpost.baseid, label: namedOutpostTitle(outpost.baseid, outpost.cell), main: false },
         cell: outpost.cell,
       });
     }
