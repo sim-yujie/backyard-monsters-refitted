@@ -169,7 +169,9 @@ describe("confirmAttackWindow", () => {
       ["IC1", "×2"],
     ]);
     expect(monsters[0]?.title).toMatch(/level 3\) ×12$/);
-    expect(host.querySelector(".attack-window__total")?.textContent).toBe("48");
+    // The chip counts the "×N" tiles, in their own sign; the tooltip names the champion too.
+    expect(host.querySelector(".attack-window__total")?.textContent).toBe("×48");
+    expect(host.querySelector<HTMLElement>(".attack-window__total")?.title).toBe("48 monsters, plus the champion");
   });
 
   it("draws the painted portraits in Modern and the Flash originals in Classic", () => {
@@ -177,13 +179,17 @@ describe("confirmAttackWindow", () => {
     expect(modern.host.querySelector("[data-monster='C1'] img")?.getAttribute("src")).toMatch(/portraits\/C1-icon\.webp$/);
     // Modern: each painted portrait is the whole tile, one painted card.
     expect(modern.host.querySelector("[data-monster='C1']")?.classList.contains("attack-window__tile--painted")).toBe(true);
-    // The champions keep their own look.
-    expect(modern.host.querySelector("[data-champion]")?.classList.contains("attack-window__tile--painted")).toBe(false);
+    // The champion is the same card: its painted cut-out on a painted-ground backdrop.
+    const champ = modern.host.querySelector("[data-champion]");
+    expect(champ?.querySelector("img")?.getAttribute("src")).toMatch(/portraits\/G1-L3-icon\.webp$/);
+    expect(champ?.classList.contains("attack-window__tile--painted")).toBe(true);
+    expect(champ?.classList.contains("attack-window__tile--cutout")).toBe(true);
     document.body.replaceChildren();
     setClassicLook(true);
     const classic = open();
     expect(classic.host.querySelector("[data-monster='C1'] img")?.getAttribute("src")).toBe("/assets/monsters/C1-small.png");
     expect(classic.host.querySelector("[data-monster='C1']")?.classList.contains("attack-window__tile--painted")).toBe(false);
+    expect(classic.host.querySelector("[data-champion]")?.classList.contains("attack-window__tile--painted")).toBe(false);
   });
 
   it("puts Cancel and Attack under the body, so they stay in sight when it scrolls", () => {
@@ -276,6 +282,25 @@ describe("attack-window.css", () => {
     expect(css).toMatch(/\.attack-window__tile--painted \{[^}]*position: relative;[^}]*overflow: hidden;/);
     expect(css).toMatch(/\.attack-window__tile--painted \.attack-window__art > img \{[^}]*position: absolute;[^}]*inset: 0;[^}]*object-fit: cover;/);
     expect(css).toMatch(/\.attack-window__tile--painted \.attack-window__caption \{[^}]*background: linear-gradient/);
+  });
+
+  it("stands a champion's cut-out on a painted-ground backdrop above the strip, in its orange rim", () => {
+    expect(css).toMatch(/\.attack-window__tile--champion\.attack-window__tile--painted \{[^}]*background:[^}]*linear-gradient/);
+    expect(css).toMatch(/\.attack-window__tile--cutout \.attack-window__art > img \{[^}]*object-fit: contain;/);
+    expect(css).toMatch(/\.attack-window__tile--champion \{[^}]*border: 2px solid var\(--colour-accent-line\);/);
+  });
+
+  it("puts the weapons beside the monsters on a phone on its side, so the monsters show unscrolled", () => {
+    const sideways = css.slice(css.indexOf("@media (max-height: 480px) and (min-width: 600px)"));
+    expect(sideways).toMatch(/\.attack-window > \.panel__body \{[^}]*flex-direction: row;/);
+    expect(sideways).toMatch(/\.attack-window__grid\.attack-window__weapons \{[^}]*grid-auto-columns: 68px;[^}]*grid-auto-flow: column;/);
+    // Wider than the base panel's 560 px cap, so the two sit side by side.
+    expect(sideways).toMatch(/\.attack-window \{[^}]*width: min\(92vw, 720px\);[^}]*max-width: none;/);
+  });
+
+  it("centres the window under the top bar, so its title sign never covers the resources", () => {
+    expect(css).toMatch(/\.popup-backdrop:has\(> \.attack-window\) \{[^}]*padding-top: calc\(var\(--hud-height\)/);
+    expect(css).toMatch(/\.attack-window \{[^}]*max-height: calc\(100dvh - var\(--hud-height\)/);
   });
 
   it("sets no frame, title or button art of its own: the skin draws those", () => {

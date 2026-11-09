@@ -14,11 +14,18 @@
 
 .attack-window {
   width: min(92vw, 460px);
-  /* What sticks up above the frame: the title sign (or the close disc). */
-  --attack-window-overhang: max(var(--skin-title-lift, 0px), calc(var(--skin-edge, 0px) + 12px));
-  max-height: calc(100dvh - 2 * var(--space-4) - var(--attack-window-overhang));
+  /* What sticks up above the frame: the title sign rides up by its lift less
+     the frame's edge, the close disc by 12 px (as the middle windows, ui.css). */
+  --attack-window-overhang: max(12px, calc(var(--skin-title-lift, 0px) - var(--skin-edge, 0px)));
+  max-height: calc(100dvh - var(--hud-height) - var(--space-1) - var(--space-4) - var(--attack-window-overhang));
   margin-top: var(--attack-window-overhang);
   min-height: 0;
+}
+
+/* The window is centred in the band under the top bar, so its title sign
+   never sits over the resources (tester, 9 Nov: it did on a phone on its side). */
+.popup-backdrop:has(> .attack-window) {
+  padding-top: calc(var(--hud-height) + var(--space-1));
 }
 
 /* The body takes what is left and scrolls; the base cap (70vh) is not wanted here. */
@@ -205,6 +212,24 @@
   object-fit: cover;
 }
 
+/* A champion's painting is a cut-out (no ground of its own): it stands on a
+   backdrop in the monsters' painted-ground greys, above the strip, so the
+   champion tiles are the same cards as the monsters beside them; the orange
+   rim still marks them out. */
+.attack-window__tile--champion.attack-window__tile--painted {
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 60%, rgb(214 208 186 / 85%), transparent 75%),
+    linear-gradient(to bottom, #a8aa9f, #bdb9a8);
+}
+
+.attack-window__tile--cutout .attack-window__art > img {
+  inset: 3px 3px 14px;
+  width: calc(100% - 6px);
+  height: calc(100% - 17px);
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 40%));
+}
+
 .attack-window__tile--painted .attack-window__caption {
   position: relative;
   z-index: 1;
@@ -249,6 +274,43 @@
   justify-content: center;
   text-align: center;
   white-space: nowrap;
+}
+
+/* A phone on its side (844x390): the weapons and the monsters sit side by
+   side in a wider window, so the monsters, the main thing, show from the top
+   of the body without scrolling, and smaller pictures fit more of them in.
+   The weapons keep one row of full-width (68 px) tiles. */
+@media (max-height: 480px) and (min-width: 600px) {
+  .attack-window {
+    width: min(92vw, 720px);
+    /* The base panel stops at 560 px; this one may be wider. */
+    max-width: none;
+  }
+
+  .attack-window > .panel__head {
+    padding-block: var(--space-1);
+  }
+
+  .attack-window > .panel__body {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: var(--space-4);
+  }
+
+  .attack-window__section--weapons {
+    flex: none;
+  }
+
+  .attack-window__grid.attack-window__weapons {
+    grid-template-columns: none;
+    grid-auto-columns: 68px;
+    grid-auto-flow: column;
+  }
+
+  .attack-window__section--monsters {
+    flex: 1 1 0;
+    min-width: 0;
+  }
 }
 
 /* A phone on its side: smaller pictures so more of the army shows. */

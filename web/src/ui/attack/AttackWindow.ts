@@ -192,6 +192,11 @@ export const ATTACK_WINDOW_TEXT = {
   none: "None in range",
   level: (level: number): string => `Lv ${level}`,
   count: (count: number): string => `×${formatAmount(count)}`,
+  /** The Monsters heading's chip counts the "×N" tiles only; the champions say "Lv N". */
+  totalTip: (total: number, champions: number): string =>
+    champions === 0
+      ? `${formatAmount(total)} monsters`
+      : `${formatAmount(total)} monsters, plus ${champions === 1 ? "the champion" : `${champions} champions`}`,
   bombTip: (slot: BombSlot): string =>
     slot.state === "locked"
       ? `${resourceName(resourceKeyOf(slot.resource), "surface")} bombs: need a level ${slot.needs} Catapult`
@@ -361,42 +366,35 @@ const weaponsSection = (model: AttackWindowModel): HTMLElement => {
     element.dataset["siege"] = model.siege.id;
     list.append(element);
   }
-  return section("resourcebomb", ATTACK_WINDOW_TEXT.weapons, null, list);
+  const part = section("resourcebomb", ATTACK_WINDOW_TEXT.weapons, null, list);
+  part.classList.add("attack-window__section--weapons");
+  return part;
 };
 
 const monstersSection = (model: AttackWindowModel): HTMLElement => {
   const list = grid("attack-window__monsters");
   for (const slot of model.champions) {
+    const picture = championPortrait(slot.id, slot.level, "icon");
     const element = tile(
-      portrait(championPortrait(slot.id, slot.level, "icon")),
+      portrait(picture),
       ATTACK_WINDOW_TEXT.level(slot.level),
       ATTACK_WINDOW_TEXT.championTip(slot),
       "attack-window__tile--champion",
     );
     element.dataset["champion"] = slot.id;
+    paintedCard(element, picture, "cut-out");
     list.append(element);
   }
   for (const slot of model.monsters) {
     const picture = monsterPortrait(slot.id, "icon");
-    const image = portrait(picture);
     const element = tile(
-      image,
+      portrait(picture),
       ATTACK_WINDOW_TEXT.count(slot.count),
       ATTACK_WINDOW_TEXT.monsterTip(slot),
       "attack-window__tile--monster",
     );
     element.dataset["monster"] = slot.id;
-    // Modern's painted portraits come with their own painted ground, so the
-    // picture fills the whole tile as one painted card, the count on a dark
-    // strip over its foot (lead, 9 Nov: no Flash art in Modern). Classic's
-    // cut-outs stand on the tile as before; so does a painted one that failed
-    // and fell back to its cut-out.
-    if (picture.fallback !== null) {
-      element.classList.add("attack-window__tile--painted");
-      image.addEventListener("load", () => {
-        if (image.getAttribute("src") !== picture.src) element.classList.remove("attack-window__tile--painted");
-      });
-    }
+    paintedCard(element, picture, "ground");
     list.append(element);
   }
   if (list.childElementCount === 0) {
@@ -407,9 +405,31 @@ const monstersSection = (model: AttackWindowModel): HTMLElement => {
   }
   const total = document.createElement("span");
   total.className = "chip attack-window__total";
-  total.textContent = formatAmount(model.total);
-  total.title = `${formatAmount(model.total)} monsters in range`;
-  return section("swords", ATTACK_WINDOW_TEXT.monsters, model.total > 0 ? total : null, list);
+  total.textContent = ATTACK_WINDOW_TEXT.count(model.total);
+  total.title = ATTACK_WINDOW_TEXT.totalTip(model.total, model.champions.length);
+  const part = section("swords", ATTACK_WINDOW_TEXT.monsters, model.total > 0 ? total : null, list);
+  part.classList.add("attack-window__section--monsters");
+  return part;
+};
+
+/**
+ * Modern: a painted portrait makes its tile one painted card, the caption on
+ * a dark strip over its foot (lead, 9 Nov: no Flash art in Modern). A
+ * monster's painting brings its own painted ground and fills the tile; a
+ * champion's is a cut-out, so it stands on a painted-ground backdrop to match,
+ * inside its orange rim. Classic's cut-outs stand on the tile as before; so
+ * does a painted one that failed and fell back to its Flash original.
+ */
+const paintedCard = (element: HTMLElement, picture: Portrait, art: "ground" | "cut-out"): void => {
+  if (picture.fallback === null) return;
+  element.classList.add("attack-window__tile--painted");
+  if (art === "cut-out") element.classList.add("attack-window__tile--cutout");
+  const image = element.querySelector("img");
+  image?.addEventListener("load", () => {
+    if (image.getAttribute("src") !== picture.src) {
+      element.classList.remove("attack-window__tile--painted", "attack-window__tile--cutout");
+    }
+  });
 };
 
 /** A portrait image; a broken one is dropped rather than shown as a broken picture. */
