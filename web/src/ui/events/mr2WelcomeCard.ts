@@ -9,8 +9,8 @@ import { eventsArt } from "./eventsArt";
  * the player's 10 days run, the days left, a timeline of the 10 days (the
  * days gone, today lit, the days left, and the day each reward was used),
  * the cheap first wild takeover and the free Regular kit (each Ready or
- * Used), a Go to Map Room 2 button, and a "?" that opens a short note on why
- * the takeover is so cheap and the kit free. Short words, pictures and
+ * Used), a Go to Map Room 2 button while a reward is left, and a "?"
+ * that opens a short note on why the takeover is so cheap and the kit free. Short words, pictures and
  * numbers (owner prefers little text).
  *
  * The server decides everything (`GET /bm/events` `mr2Welcome`). The card
@@ -195,10 +195,14 @@ export const mr2WelcomeCard = (status: Mr2WelcomeStatus, now: number, onGo: () =
     reward(KIT_THUMBNAIL, "The Regular Starter Kit", "Regular Starter Kit", "Free", status.kit, "kit"),
   );
 
-  const go = el("button", "btn btn--primary events-welcome__go", "Go to Map Room 2");
-  go.type = "button";
-  go.addEventListener("click", () => onGo());
+  card.append(head, note, timeline(status, now), rewards);
 
-  card.append(head, note, timeline(status, now), rewards, go);
+  // Both rewards used: nothing is left to do on Map Room 2 for the pass.
+  if (status.takeover || status.kit) {
+    const go = el("button", "btn btn--primary events-welcome__go", "Go to Map Room 2");
+    go.type = "button";
+    go.addEventListener("click", () => onGo());
+    card.append(go);
+  }
   return card;
 };

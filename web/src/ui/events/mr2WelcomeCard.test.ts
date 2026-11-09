@@ -115,14 +115,16 @@ describe("mr2WelcomeCard", () => {
     expect(stateOf(card, "takeover")?.classList.contains("events-welcome__state--used")).toBe(true);
     expect(card.querySelector('[data-reward="takeover"]')?.classList.contains("events-welcome__reward--used")).toBe(true);
     expect(stateOf(card, "kit")?.textContent).toBe("Ready");
+    // One reward is left, so the way to Map Room 2 stays.
+    expect(card.querySelector(".events-welcome__go")).not.toBeNull();
   });
 
-  it("stays with both rewards used, each Used, the button still there", () => {
+  it("stays with both rewards used, each Used, with no Go to Map Room 2 left", () => {
     const card = mr2WelcomeCard(status({ takeover: false, kit: false }), 4 * DAY, vi.fn());
     expect(stateOf(card, "takeover")?.textContent).toBe("Used");
     expect(stateOf(card, "kit")?.textContent).toBe("Used");
     expect(card.querySelector("[data-welcome-ends]")?.textContent).toBe("6 days left");
-    expect(card.querySelector(".events-welcome__go")).not.toBeNull();
+    expect(card.querySelector(".events-welcome__go")).toBeNull();
   });
 
   it("opens and closes the short note from the ?", () => {
