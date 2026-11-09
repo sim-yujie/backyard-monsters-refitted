@@ -127,16 +127,26 @@ describe("YardCard on an outpost", () => {
     expect(tiles.every((tile) => tile.querySelector("img.yard-card__portrait"))).toBe(true);
     // Name and count share one strip, so the count never covers the portrait's head.
     expect(tiles.every((tile) => tile.querySelector(".yard-card__caption > .yard-card__monster-name + .yard-card__count"))).toBe(true);
-    // Two kinds of monster: bigger tiles, so the column is not left empty.
-    expect(host.querySelector(".yard-card__grid")?.classList.contains("yard-card__grid--few")).toBe(true);
     // 39 × 5 + 4 × 20 = 275 of 540.
     expect(text(".yard-card__housed-count")).toContain("275 / 540");
     expect(host.querySelector(".yard-card__bar")?.getAttribute("aria-valuenow")).toBe("51");
   });
 
-  it("keeps the usual tiles when many kinds of monster live there", () => {
+  it("draws one tile size however many kinds of monster live there", () => {
+    open(outpost());
+    expect(host.querySelector(".yard-card__grid")?.className).toBe("yard-card__grid");
     open(outpost({ m: { housed: { C1: 1, C2: 1, C3: 1, C4: 1, C5: 1 }, space: 540 } }));
-    expect(host.querySelector(".yard-card__grid")?.classList.contains("yard-card__grid--few")).toBe(false);
+    expect(host.querySelector(".yard-card__grid")?.className).toBe("yard-card__grid");
+  });
+
+  it("fades the monster tiles' edge too, where they scroll on their own", () => {
+    const { card } = open(outpost());
+    const grid = card.popup.body.querySelector<HTMLElement>(".yard-card__grid")!;
+    Object.defineProperty(grid, "clientHeight", { configurable: true, value: 100 });
+    Object.defineProperty(grid, "scrollHeight", { configurable: true, value: 220 });
+    grid.dispatchEvent(new Event("scroll"));
+    expect(grid.classList.contains("yard-card__grid--more-below")).toBe(true);
+    expect(grid.classList.contains("yard-card__body--more-below")).toBe(false);
   });
 
   it("says what each ground bonus is for, with a sentence on hover", () => {

@@ -44,19 +44,21 @@
   display: none !important;
 }
 
-/* Where more is hidden, the body's edge fades out (`yardCardScrollHint`):
-   a box cut at the bottom reads as "more below" rather than a hard cut. */
-.yard-card__body--more-below {
+/* Where more is hidden, a scrolling box's edge fades out (`yardCardScrollHint`):
+   a box cut at the bottom reads as "more below" rather than a hard cut. The
+   body scrolls upright on a phone; on its side the yard's details and the
+   monster tiles scroll each on their own. */
+:is(.yard-card__body--more-below, .yard-card__about--more-below, .yard-card__grid--more-below) {
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
   mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
 }
 
-.yard-card__body--more-above {
+:is(.yard-card__body--more-above, .yard-card__about--more-above, .yard-card__grid--more-above) {
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 20px);
   mask-image: linear-gradient(to bottom, transparent, #000 20px);
 }
 
-.yard-card__body--more-above.yard-card__body--more-below {
+:is(.yard-card__body--more-above.yard-card__body--more-below, .yard-card__about--more-above.yard-card__about--more-below, .yard-card__grid--more-above.yard-card__grid--more-below) {
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 20px, #000 calc(100% - 28px), transparent);
   mask-image: linear-gradient(to bottom, transparent, #000 20px, #000 calc(100% - 28px), transparent);
 }
@@ -363,6 +365,25 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* On a computer the main yard (no worker) has its storage beside the
+   Flinger as two lines of two, so its details are no taller than the
+   monster tiles and no empty band is left under them. A phone stacks the
+   columns, so there the storage keeps its one line of four. */
+@media (width > 620px) {
+  .yard-card__stats:not(:has(.yard-card__stat--worker)) {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .yard-card__stats:not(:has(.yard-card__stat--worker)) .yard-card__stat--storage {
+    grid-column: auto;
+  }
+
+  .yard-card__stats:not(:has(.yard-card__stat--worker)) .yard-card__stores {
+    grid-template-columns: repeat(2, max-content);
+    gap: var(--space-1) var(--space-3);
+  }
+}
+
 .yard-card__store--full {
   color: var(--colour-warning);
 }
@@ -453,57 +474,32 @@
   filter: drop-shadow(0 3px 4px var(--colour-art-shadow));
 }
 
-/* Classic: name under the cut-out, the count a badge in the corner. */
+/* Both looks: name and count share one line under the picture, the count
+   never cut and the name ending in "…" if a tile is too narrow for both. */
 .yard-card__caption {
-  display: contents;
-}
-
-.yard-card__count {
-  position: absolute;
-  top: 4px;
-  right: 4px;
   display: flex;
-  align-items: center;
+  flex-wrap: nowrap;
+  align-items: baseline;
   justify-content: center;
-  min-width: 30px;
-  height: 22px;
-  box-sizing: border-box;
-  padding: 0 6px;
-  border: 1px solid var(--colour-border-strong);
-  border-radius: 11px;
-  background: var(--colour-badge-ground);
-  color: #fff;
-  font-family: var(--font-display);
-  font-size: var(--text-sm);
+  gap: 0 3px;
+  max-width: 100%;
+  min-width: 0;
+  font-size: var(--text-xs);
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-:root[data-skin] .panel .yard-card__count {
-  color: var(--skin-ink);
+  line-height: 1.25;
 }
 
 .yard-card__monster-name {
-  max-width: 100%;
-  font-size: var(--text-xs);
-  font-weight: 700;
-  text-align: center;
-  overflow-wrap: anywhere;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* A few kinds of monster: two bigger tiles a line, so the column is not left
-   half empty beside the yard's details. */
-.yard-card__grid--few {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.yard-card__grid--few .yard-card__portrait {
-  width: 88px;
-  height: 88px;
-}
-
-.yard-card__grid--few .yard-card__monster-name {
-  font-size: var(--text-sm);
+.yard-card__count {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* Modern: a painted portrait fills its tile edge to edge as one painted
@@ -518,8 +514,7 @@
   background: var(--colour-tile-ground);
 }
 
-.yard-card__monster--painted .yard-card__portrait,
-.yard-card__grid--few .yard-card__monster--painted .yard-card__portrait {
+.yard-card__monster--painted .yard-card__portrait {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -531,11 +526,6 @@
 .yard-card__monster--painted .yard-card__caption {
   position: relative;
   z-index: 1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: center;
-  gap: 0 4px;
   width: 100%;
   box-sizing: border-box;
   padding: 14px 4px 5px;
@@ -544,20 +534,8 @@
   text-shadow: 0 1px 2px rgb(0 0 0 / 90%);
 }
 
-.yard-card__monster--painted .yard-card__monster-name {
+.yard-card__monster--painted :is(.yard-card__monster-name, .yard-card__count) {
   color: #fff;
-}
-
-:root .yard-card .yard-card__monster--painted .yard-card__count,
-:root[data-skin] .panel .yard-card__monster--painted .yard-card__count {
-  position: static;
-  min-width: 0;
-  height: auto;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: #fff;
-  font-size: var(--text-sm);
 }
 
 .yard-card__empty {
@@ -744,11 +722,48 @@
     grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
   }
 
-  .yard-card__grid--few {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .yard-card__about {
     gap: var(--space-2);
+  }
+}
+
+/* Upright phone: the top bar is two rows (`--hud-height`, 100 px). The card
+   is centred in the room under it, so its name plate (which rides 14 px over
+   the frame there) never covers the resources, in either look. */
+@media (width <= 620px) {
+  .popup-backdrop:has(> .yard-card) {
+    padding-top: calc(var(--hud-height) + 14px);
+  }
+
+  .yard-card {
+    max-height: calc(100dvh - var(--hud-height) - 14px - var(--space-4));
+  }
+}
+
+/* On its side the card is as tall as the screen allows and its body no
+   longer scrolls as one: the yard's details and the monster tiles each fill
+   the height and scroll on their own, fading where more is (so a second row
+   of monsters reads as "more below", not cut off). */
+@media (width > 620px) and (height <= 500px) {
+  /* Rows sized from the body's flexed height; if a browser cannot, the body
+     simply scrolls as one, as before. */
+  .yard-card > .panel__body {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .yard-card__columns {
+    min-height: 0;
+  }
+
+  .yard-card__about,
+  .yard-card__grid {
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    overscroll-behavior: contain;
+  }
+
+  .yard-card__grid {
+    flex: 1 1 auto;
   }
 }

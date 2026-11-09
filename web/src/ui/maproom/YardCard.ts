@@ -137,24 +137,37 @@ const setLabel = (button: HTMLButtonElement, label: string): void => {
 };
 
 /**
- * Fades the scrolling body's edge where more is hidden (the attack window's
- * way), so a phone on its side shows the card goes on below rather than a
- * box cut mid-line. Returns what stops it.
+ * Fades a scrolling box's edge where more is hidden (the attack window's
+ * way), so a phone shows the card goes on below rather than a box cut
+ * mid-line. `block` names the classes: `<block>--more-above` and
+ * `<block>--more-below`. The card body uses it upright; on a phone on its
+ * side the yard's details and the monster tiles each scroll on their own.
+ * Returns what stops it.
  */
-export const yardCardScrollHint = (body: HTMLElement): (() => void) => {
+export const yardCardScrollHint = (box: HTMLElement, block = "yard-card__body"): (() => void) => {
   const update = (): void => {
-    body.classList.toggle("yard-card__body--more-above", body.scrollTop > 1);
-    body.classList.toggle("yard-card__body--more-below", body.scrollTop + body.clientHeight < body.scrollHeight - 2);
+    box.classList.toggle(`${block}--more-above`, box.scrollTop > 1);
+    box.classList.toggle(`${block}--more-below`, box.scrollTop + box.clientHeight < box.scrollHeight - 2);
   };
-  body.addEventListener("scroll", update, { passive: true });
+  box.addEventListener("scroll", update, { passive: true });
   const resized = typeof ResizeObserver === "function" ? new ResizeObserver(update) : null;
-  resized?.observe(body);
-  for (const child of body.children) resized?.observe(child);
+  resized?.observe(box);
+  for (const child of box.children) resized?.observe(child);
+  // The monster tiles are redrawn when the yard changes: watch the new ones too.
+  const redrawn =
+    typeof MutationObserver === "function"
+      ? new MutationObserver(() => {
+          for (const child of box.children) resized?.observe(child);
+          update();
+        })
+      : null;
+  redrawn?.observe(box, { childList: true });
   update();
   if (typeof requestAnimationFrame === "function") requestAnimationFrame(update);
   return () => {
-    body.removeEventListener("scroll", update);
+    box.removeEventListener("scroll", update);
     resized?.disconnect();
+    redrawn?.disconnect();
   };
 };
 
@@ -289,7 +302,14 @@ export class YardCard {
       if (!this.renaming) this.renderName();
     });
     this.render();
-    this.stopScrollHint = yardCardScrollHint(this.popup.body);
+    const stops = [
+      yardCardScrollHint(this.popup.body),
+      yardCardScrollHint(about, "yard-card__about"),
+      yardCardScrollHint(this.grid, "yard-card__grid"),
+    ];
+    this.stopScrollHint = () => {
+      for (const stop of stops) stop();
+    };
   }
 
   /** The cell shown. */
@@ -652,8 +672,6 @@ export class YardCard {
     this.bar.classList.toggle("yard-card__bar--full", percent >= 100);
     this.barFill.style.width = `${percent}%`;
 
-    // A few kinds of monster get bigger tiles, so the column is not left empty.
-    this.grid.classList.toggle("yard-card__grid--few", facts.housed.length > 0 && facts.housed.length <= 4);
     if (facts.housed.length === 0) {
       const empty = make("li", "yard-card__empty", YARD_CARD_TEXT.noMonsters);
       this.grid.replaceChildren(empty);
