@@ -409,20 +409,67 @@
   display: none;
 }
 
-/* A phone on its side: the rows a little tighter, so more of the list shows. */
+/* A phone on its side (844x390): only one friend showed before the fade
+   (tester, 9 Nov). The count line and Add move up beside the title sign, and
+   the rows, the plates and the gaps get tighter, so three or more rows show.
+   Taller screens are unchanged. */
 @media (height <= 500px) {
+  .friends-window {
+    max-height: calc(100dvh - var(--hud-height) - var(--space-2) - var(--space-2) - var(--friends-window-overhang));
+  }
+
+  /* The sign and close disc hang over the frame; the title bar keeps no band
+     of its own, and the count line sits on either side of the sign. */
+  :root[data-skin] .friends-window > .panel__titlebar {
+    min-height: 0;
+    padding: 0;
+  }
+
+  :root[data-skin] .friends-window > .panel__head {
+    padding-top: 10px;
+  }
+
+  /* Clear of the close disc on the corner above it. */
+  :root[data-skin] .friends-window .friends-window__add {
+    margin-right: 6px;
+  }
+
+  .friends-window > .panel__body {
+    padding-block: 4px;
+    --scroll-fade-below: 32px;
+    --scroll-fade-above: 24px;
+  }
+
+  :root[data-skin] .panel.friends-window :is(.friends-window__add, .friends-window__all, .friends-window__requests) {
+    min-height: 36px;
+  }
+
+  .friends-window__foot {
+    padding-block: 4px 6px;
+  }
+
+  .friends-window__group {
+    margin-top: 4px;
+  }
+
   .friends-window__row {
-    min-height: 40px;
-    padding-block: 2px;
+    grid-template-columns: 32px minmax(0, 1fr) auto auto;
+    min-height: 36px;
+    padding-block: 1px;
   }
 
   .friends-window__face,
   .friends-window__img {
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
   }
 
-  .friends-window__row {
-    grid-template-columns: 34px minmax(0, 1fr) auto auto;
+  .friends-window__mark {
+    width: 22px;
+    height: 22px;
+  }
+
+  .friends-window__marks {
+    min-width: calc(2 * 22px + 2px);
   }
 }
