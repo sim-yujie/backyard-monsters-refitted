@@ -6,6 +6,7 @@ import { eventPlayerOf, type EventPlayer } from "../../services/events/eventPlay
 import { eventView, hasTierToClaim, type EventView } from "../../services/events/eventViews.js";
 import type { EventProgressStore } from "../../services/events/progressStore.js";
 import { visibleEvents } from "../../services/events/schedule.js";
+import { onMapRoom2, readWelcome, welcomeStatus, type WelcomeStatus } from "../../services/events/mr2Welcome.js";
 import { logger } from "../../utils/logger.js";
 
 /**
@@ -16,7 +17,9 @@ import { logger } from "../../utils/logger.js";
  *   30 days with the player's progress (`services/events/eventViews.ts`),
  *   any that is over but still has a reward the player can claim, and the
  *   last "What's new" release the player has seen. Claims are yard
- *   actions (`controllers/yard/events.ts`).
+ *   actions (`controllers/yard/events.ts`). `mr2Welcome` is the player's
+ *   "New to Map Room 2" card (`services/events/mr2Welcome.ts`), null when
+ *   their 10 days are not running or both rewards are used.
  * - `POST /bm/whatsnew/seen { version }`: records that the player has seen
  *   the "What's new" cards up to `version` (a release name such as
  *   `2.0.0-beta.4`), so they pop up once per release on any device.
@@ -32,6 +35,7 @@ export interface EventsBody {
   now: number;
   events: EventView[];
   whatsNewSeen: string | null;
+  mr2Welcome: WelcomeStatus | null;
 }
 
 export const WhatsNewSeenSchema = z.object({
@@ -65,13 +69,14 @@ export const eventsAnswer = async (
   player: EventPlayer = eventPlayerOf(user.save)
 ): Promise<EventsBody> => {
   const shown = visibleEvents(now);
-  const [progress, whatsNewSeen] = await Promise.all([
+  const [progress, whatsNewSeen, welcome] = await Promise.all([
     store.read(
       em,
       user.userid,
       shown.map((one) => one.event.id)
     ),
     readWhatsNewSeen(em, user.userid),
+    readWelcome(em, user.userid, onMapRoom2(user.save), now),
   ]);
   return {
     error: 0,
@@ -80,6 +85,7 @@ export const eventsAnswer = async (
       .map((one) => eventView(one, progress.get(one.event.id), now, player))
       .filter((view) => view.status !== "ended" || hasTierToClaim(view)),
     whatsNewSeen,
+    mr2Welcome: welcomeStatus(welcome, now),
   };
 };
 

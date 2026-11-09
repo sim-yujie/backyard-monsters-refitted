@@ -356,6 +356,8 @@ export const YardStarterKitSchema = z.object({
   kit: z.coerce.number().int().min(1).max(3),
   pay: z.enum(["resources", "shiny"]),
   topUp: z.coerce.number().int().nonnegative().optional(),
+  /** The picker showed the Regular kit as free ("New to Map Room 2"); refused rather than charged if it no longer is. */
+  free: z.boolean().optional(),
 });
 
 /**

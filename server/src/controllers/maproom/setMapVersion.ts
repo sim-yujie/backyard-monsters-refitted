@@ -22,6 +22,9 @@ import { Maproom } from "../../database/models/maproom.model.js";
 import { clearPendingInvites } from "../../services/alliance/allianceInvites.js";
 import { MAX_RESOURCE_CAPACITY } from "../../config/MapRoom2Config.js";
 import { RESOURCE_KEYS } from "../../services/base/updateResources.js";
+import { onMapRoom2, recordMr2Join } from "../../services/events/mr2Welcome.js";
+import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { logger } from "../../utils/logger.js";
 
 /**
  * Schema for validating the request body when setting the map version.
@@ -100,10 +103,26 @@ export const setMapVersion: KoaController = async (ctx) => {
       const townHall = extractTownHall(save.buildingdata ?? {});
 
       if (!save.mr2upgraded && (!townHall || townHall.l < 6)) throw townHallLevelErr();
-      
+
+      const joining = !onMapRoom2(save);
+
       await joinOrCreateWorld(user, save);
       save.mr2upgraded = true;
       save.mapversion = MapRoomVersion.V2;
+
+      // A first move to Map Room 2 starts the "New to Map Room 2" 10 days
+      // (`services/events/mr2Welcome.ts`); once ever. Forgiving: the move
+      // itself must not fail over it.
+      if (joining) {
+        try {
+          await recordMr2Join(postgres.em, user.userid, getCurrentDateTime());
+        } catch (error) {
+          logger.warn("Could not start the Map Room 2 welcome for {userid}: {error}", {
+            userid: user.userid,
+            error: String(error),
+          });
+        }
+      }
 
       const maproom1 = await postgres.em.findOne(Maproom, { userid: user.userid });
 

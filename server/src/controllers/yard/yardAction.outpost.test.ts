@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { LockMode, type EntityManager } from "@mikro-orm/core";
 import type z from "zod";
 import type { Save } from "../../database/models/save.model.js";
@@ -7,6 +7,7 @@ import type { User } from "../../database/models/user.model.js";
 import { fortifyStepsOf, OUTPOST_COSTS } from "../../game-data/buildingCosts.js";
 import { storageCap } from "../../services/base/economy/resourceBudget.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { memoryWelcomeStore, useWelcomeStore, type WelcomeStore } from "../../services/events/mr2Welcome.js";
 import { yardAcademyTrainAction } from "./academy.js";
 import { yardBankAction } from "./bank.js";
 import { yardBuildAction, yardCancelBuildAction, yardInstantBuildAction } from "./build.js";
@@ -211,6 +212,16 @@ const stepOf = (type: number, level = 0) => {
   const [r1, r2, r3, r4, time] = OUTPOST_COSTS[type]!.costs[level]!;
   return { r1, r2, r3, r4, time };
 };
+
+// "New to Map Room 2" over a Map: by default the player's 10 days ended long
+// ago (launch at 0), so a Regular kit is paid for as usual.
+let welcome: ReturnType<typeof memoryWelcomeStore>;
+const realWelcome: WelcomeStore = useWelcomeStore(memoryWelcomeStore(0));
+afterAll(() => useWelcomeStore(realWelcome));
+beforeEach(() => {
+  welcome = memoryWelcomeStore(0);
+  useWelcomeStore(welcome);
+});
 
 beforeEach(() => {
   db.rows = new Map([
@@ -954,6 +965,68 @@ describe("Starter Kits (outposts WP9, issue #188)", () => {
     const answer = await call(yardStarterKitAction, { kit: 1, pay: "shiny" });
     expect(answer.status).toBe(409);
     expect(answer.body.reason).toBe("notOutpost");
+  });
+});
+
+describe("free Regular kit (New to Map Room 2)", () => {
+  const open = () => welcome.rows.set(USERID, { start: now() - 3600, takeoverUsed: false, kitUsed: false });
+
+  test("while the 10 days run, a Regular kit costs nothing and is built as prefabs with no worker", async () => {
+    open();
+    const answer = await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources", free: true });
+
+    expect(answer.status).toBe(200);
+    expect(pool()).toMatchObject({ r1: 1_000_000, r2: 1_000_000, r3: 1_000_000 });
+    expect(mainSave().credits).toBe(1000);
+    expect(answer.body.report).toMatchObject({ kit: 1, free: true, shiny: 0, cost: { r1: 0, r2: 0, r3: 0, r4: 0 } });
+    const after = Object.values(buildings(outpostSave()));
+    expect(after.filter((b) => b.t !== 112).every((b) => Number(b.cB) > 0 && Number(b.prefab) > 0)).toBe(true);
+    expect(answer.body.workers).toEqual({ total: 1, busy: 0 });
+    expect(welcome.rows.get(USERID)!.kitUsed).toBe(true);
+  });
+
+  test("asked for with Shiny, the free kit is still free and still prefabs", async () => {
+    open();
+    const answer = await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
+
+    expect(answer.status).toBe(200);
+    expect(mainSave().credits).toBe(1000);
+    expect(Object.values(buildings(outpostSave())).some((b) => Number(b.cB) > 0)).toBe(true);
+  });
+
+  test("once only: the second Regular kit is charged, and one sent as free is refused", async () => {
+    open();
+    await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
+    const refused = await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources", free: true });
+    expect(refused.status).toBe(409);
+    expect(refused.body.reason).toBe("welcomeUsed");
+
+    const paid = await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
+    expect(paid.status).toBe(200);
+    expect(mainSave().credits).toBe(1000 - 420);
+  });
+
+  test("Regular only: a Mega kit is charged as usual and leaves the free kit ready", async () => {
+    open();
+    const answer = await onOutpost(yardStarterKitAction, { kit: 2, pay: "shiny" });
+    expect(answer.status).toBe(200);
+    expect(mainSave().credits).toBeLessThan(1000);
+    expect(welcome.rows.get(USERID)!.kitUsed).toBe(false);
+  });
+
+  test("after the 10 days the Regular kit is charged", async () => {
+    welcome.rows.set(USERID, { start: now() - 10 * 86_400 - 1, takeoverUsed: false, kitUsed: false });
+    const answer = await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
+    expect(answer.status).toBe(200);
+    expect(mainSave().credits).toBe(1000 - 420);
+  });
+
+  test("a player on Map Room 2 at launch, with no row yet, gets it from the launch time", async () => {
+    const launch = now() - 60;
+    welcome.launch = launch;
+    const answer = await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources", free: true });
+    expect(answer.status).toBe(200);
+    expect(welcome.rows.get(USERID)).toMatchObject({ start: launch, kitUsed: true });
   });
 });
 

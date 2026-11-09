@@ -5,6 +5,7 @@ import type { User } from "../../database/models/user.model.js";
 import { EVENTS, KRALLEN_HUNT_GOALS, krallenHunt, type EventDefinition } from "../../game-data/events/events.js";
 import { eventView } from "./eventViews.js";
 import { memoryProgressStore, NO_PROGRESS } from "./progressStore.js";
+import { memoryWelcomeStore, useWelcomeStore } from "./mr2Welcome.js";
 import { visibleEvents } from "./schedule.js";
 
 const DAY = 86_400;
@@ -140,5 +141,37 @@ describe("POST /bm/whatsnew/seen body", () => {
     expect(WhatsNewSeenSchema.safeParse({ version: "<script>" }).success).toBe(false);
     expect(WhatsNewSeenSchema.safeParse({ version: "x".repeat(33) }).success).toBe(false);
     expect(WhatsNewSeenSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe("GET /bm/events: the New to Map Room 2 card", () => {
+  const em = { execute: async () => [] } as never;
+  const NOW = Date.UTC(2030, 5, 1) / 1000;
+  const onMr2 = { userid: 5, save: { buildingdata: {}, tutorialstage: 205, champion: [], mr2upgraded: true } } as unknown as User;
+  const onMr1 = { userid: 6, save: { buildingdata: {}, tutorialstage: 205, champion: [], mapversion: 1 } } as unknown as User;
+
+  test("a player on Map Room 2 sees days left and both rewards; one on Map Room 1 sees none", async () => {
+    const previous = useWelcomeStore(memoryWelcomeStore(NOW - 2 * DAY));
+    try {
+      const body = await eventsAnswer(em, memoryProgressStore(), onMr2, NOW);
+      expect(body.mr2Welcome).toEqual({ startsAt: NOW - 2 * DAY, endsAt: NOW + 8 * DAY, daysLeft: 8, takeover: true, kit: true });
+      expect((await eventsAnswer(em, memoryProgressStore(), onMr1, NOW)).mr2Welcome).toBeNull();
+    } finally {
+      useWelcomeStore(previous);
+    }
+  });
+
+  test("gone after the 10 days, and once both rewards are used", async () => {
+    const store = memoryWelcomeStore(NOW - 11 * DAY);
+    const previous = useWelcomeStore(store);
+    try {
+      expect((await eventsAnswer(em, memoryProgressStore(), onMr2, NOW)).mr2Welcome).toBeNull();
+      store.rows.set(5, { start: NOW - DAY, takeoverUsed: true, kitUsed: true });
+      expect((await eventsAnswer(em, memoryProgressStore(), onMr2, NOW)).mr2Welcome).toBeNull();
+      store.rows.set(5, { start: NOW - DAY, takeoverUsed: true, kitUsed: false });
+      expect((await eventsAnswer(em, memoryProgressStore(), onMr2, NOW)).mr2Welcome).toMatchObject({ takeover: false, kit: true });
+    } finally {
+      useWelcomeStore(previous);
+    }
   });
 });
