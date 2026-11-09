@@ -67,8 +67,8 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * crimson alliance shield with its gold stripe (`alliance`).
  *
  * Pinning a friend to the top of the list (beta 7, `ui/friends/FriendsTab.ts`):
- * `pin`. A STAND-IN for now: its files are copies of the gold crown
- * (`empire`) until a painted pin is made; replace `pin-*.webp` to change it.
+ * `pin`, a glossy red push-pin with a steel needle (painted by Codex, 9 Nov:
+ * the stand-in copy of the gold crown read as a crown, tester 9 Nov).
  *
  * World chat's player strip (`ui/chat/ChatBox.ts`, owner 8 Nov: icons rather than
  * words): `addfriend` is the two monster heads (`friends`) with a green plus disc on
@@ -92,11 +92,12 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * The Friends window's "no gift sent today" mark and the Friends button's gift
  * badge (`ui/friends/FriendsWindow.ts`, owner 9 Nov: painted icons, no emoji):
  * `gift` is Flash's own red gift box with its yellow ribbon (`icon_gifts`,
- * `client/images/612.png`), its round brown frame taken off. The Friends
- * window's friend requests: `mail`, Flash's envelope (`icon_mail`,
- * `client/images/606.png`), the same way. Both are made by
- * `tools/game-icons/friends_icons.py` (9 Nov) and stand in until painted ones
- * at the size of the others are made; replace their `*.webp` files to change them.
+ * `client/images/612.png`), its round brown frame taken off, made by
+ * `tools/game-icons/friends_icons.py` (9 Nov); it stands in until a painted one
+ * at the size of the others is made; replace its `*.webp` files to change it.
+ * The Friends window's friend requests: `mail`, a cream envelope with a red
+ * wax seal (painted by Codex, 9 Nov: Flash's gold `icon_mail` read as a gem at
+ * 22 px, tester 9 Nov).
  */
 export const GAME_ICONS = {
   health: "Health",

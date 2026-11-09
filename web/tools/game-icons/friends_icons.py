@@ -1,10 +1,12 @@
-"""Make the Friends window's three icons from art already in the game (9 Nov).
+"""Make the Friends window's add-friend and gift icons from art already in the game (9 Nov).
 
 usage: python -I friends_icons.py [out folder]   (default: web/public/ui/icons)
 
 - addfriend: the painted two monster heads (friends-64.webp) with a green plus disc
   on their corner, so Add no longer looks like the friend count.
-- mail: Flash's envelope (icon_mail, client/images/606.png), its round frame taken off.
+- mail: no longer made here. Flash's envelope (icon_mail, 606.png) read as a gold
+  gem at 22 px (tester, 9 Nov); mail-*.webp is now a painted envelope, made by
+  make.py from art-samples/friends-icons/large/mail.png. Do not bring it back.
 - gift: Flash's red gift box (icon_gifts, client/images/612.png), the same way.
 Writes <name>-<side>.webp for every side in SIDES. Run addfriend once only: it
 reads friends-64.webp, not its own output.
@@ -122,5 +124,4 @@ def save(name: str, im: Image.Image) -> None:
 
 if __name__ == "__main__":
     save("addfriend", addfriend())
-    save("mail", ringless(606, 11))
     save("gift", ringless(612, 14))
