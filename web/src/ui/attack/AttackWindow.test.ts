@@ -207,6 +207,14 @@ describe("confirmAttackWindow", () => {
     expect(await second.answer).toBe(false);
   });
 
+  it("names a wild camp as the map's cell panel does: \"Kozu camp\"", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    void confirmAttackWindow(host, { name: "Kozu", kind: "wild", roster: roster() });
+    expect(host.querySelector(".attack-window__name")?.textContent).toBe("Kozu camp");
+    expect(host.querySelector(".attack-window__kind")?.textContent).toBe("Wild monsters");
+  });
+
   it("with only the champion in range shows no monster count", () => {
     const { host } = open({ monsters: {} });
     expect(host.querySelectorAll("[data-monster]")).toHaveLength(0);

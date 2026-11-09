@@ -2,7 +2,7 @@ import type { ChampionSaveEntry } from "@/api/types";
 import { isHealthyChampion } from "@/game/attack/attackEntry";
 import { availableSiege, parseSiegeStock, siegeWeapon, type SiegeWeaponId } from "@/game/attack/AttackInput";
 import { combatKind } from "@/game/attack/AttackSession";
-import type { AttackRoster, AttackTarget, AttackTargetKind } from "@/game/attack/attackTarget";
+import { targetTitle, type AttackRoster, type AttackTarget, type AttackTargetKind } from "@/game/attack/attackTarget";
 import { BOMBS, championByType, monsterName } from "@/game/combat/rules";
 import { championPortrait, monsterPortrait, showPortrait, type Portrait } from "@/game/portraits";
 import { bombName } from "@/ui/attack/CatapultPanel";
@@ -255,14 +255,14 @@ export const confirmAttackWindow = (container: HTMLElement, target: AttackWindow
     go.focus();
   });
 
-/** "Kozu  [Outpost]": who is being attacked. */
+/** "Kozu camp  [Wild monsters]": who is being attacked, named as the map's cell panel names it. */
 const targetLine = (target: AttackWindowTarget): HTMLElement => {
   const line = document.createElement("p");
   line.className = "attack-window__target";
   const name = document.createElement("strong");
   name.className = "attack-window__name";
-  name.textContent = target.name;
-  name.title = target.name;
+  name.textContent = targetTitle(target.name, target.kind);
+  name.title = name.textContent;
   const kind = document.createElement("span");
   kind.className = "chip attack-window__kind";
   kind.textContent = ATTACK_WINDOW_TEXT.kind[target.kind];
