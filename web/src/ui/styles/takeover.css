@@ -37,8 +37,29 @@
 }
 
 /* The confirm dialog. */
+/* 500px, so "Use Resources" and "Use 1,234 Shiny" each keep to one line
+   side by side, and the title sign holds "Take over this Wild Monster Yard". */
 .takeover-dialog {
-  width: min(92vw, 420px);
+  width: min(92vw, 500px);
+}
+
+/* A smaller title on the sign than a plain window's 21-22px: the camp title
+   is 32 letters (it was cut to "Take over this Wild Mons..."). The Classic
+   ribbon's tails are shortened as on the map's docks to leave the words room. */
+:root[data-skin] .takeover-dialog.panel .panel__title {
+  font-size: 18px;
+}
+
+:root[data-skin="flash"] .takeover-dialog.panel {
+  --skin-title-height: 50px;
+  --skin-title-cap: 40px;
+  --skin-title-lift: 40px;
+  --skin-title-pad: 6px;
+}
+
+:root[data-skin="flash"] .takeover-dialog.panel .panel__title {
+  padding-inline: 8px;
+  font-size: 16px;
 }
 
 .takeover-dialog .panel__body {
@@ -72,7 +93,6 @@
   background: var(--colour-surface-sunken);
 }
 
-.takeover-dialog__ground,
 /* "New to Map Room 2": a small label over the cheap price. */
 .takeover-dialog__welcome:not([hidden]) {
   display: flex;
@@ -100,6 +120,7 @@
   font-variant-numeric: tabular-nums;
 }
 
+.takeover-dialog__ground,
 .takeover-dialog__adjacent,
 .takeover-dialog__countdown {
   margin: 0;
@@ -120,6 +141,14 @@
   display: grid;
   align-content: start;
   gap: var(--space-1);
+}
+
+/* Both choices one line and one height: the big plate and the small one
+   (Use Resources wrapped to two lines and stood taller than the Shiny one). */
+.takeover-dialog__option > .btn {
+  min-width: 0;
+  min-height: 46px;
+  white-space: nowrap;
 }
 
 .takeover-dialog__note {
