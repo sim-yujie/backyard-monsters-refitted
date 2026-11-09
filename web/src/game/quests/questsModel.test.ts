@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { QuestsView } from "@/api/quests";
 import {
+  paceHint,
   canSwap,
   grantedRewards,
   loginDays,
@@ -164,5 +165,23 @@ describe("tabClaimable and utcDayOf", () => {
   it("reads the UTC day", () => {
     expect(utcDayOf(Date.UTC(2026, 10, 2, 23, 59) / 1000)).toBe("2026-11-02");
     expect(utcDayOf(Date.UTC(2026, 10, 3, 0, 0) / 1000)).toBe("2026-11-03");
+  });
+});
+
+describe("paceHint (weekly quests adapt to the player's pace)", () => {
+  it("says Harder or Easier with last week's need", () => {
+    expect(paceHint({ kind: "weeklyFights", need: 13, was: 10 })).toEqual({ up: true, text: "▲ Harder: 13 fights (was 10)" });
+    expect(paceHint({ kind: "weeklyFights", need: 9, was: 10 })).toEqual({ up: false, text: "▼ Easier: 9 fights (was 10)" });
+    expect(paceHint({ kind: "weeklyLootGoo", need: 24_300_000, was: 19_400_000 })).toEqual({
+      up: true,
+      text: "▲ Harder: 24.3M Goo (was 19.4M)",
+    });
+    expect(paceHint({ kind: "weeklyLootPutty", need: 16_500_000, was: 19_400_000 })?.text).toBe("▼ Easier: 16.5M Putty (was 19.4M)");
+  });
+
+  it("says nothing when the need did not move", () => {
+    expect(paceHint({ kind: "weeklyFights", need: 10 })).toBeNull();
+    expect(paceHint({ kind: "weeklyFights", need: 10, was: 10 })).toBeNull();
+    expect(paceHint({ kind: "weeklyHelpGift", need: 5 })).toBeNull();
   });
 });

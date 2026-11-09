@@ -256,6 +256,27 @@ describe("QuestsPanel", () => {
 });
 
 describe("resetText", () => {
+  it("shows a Harder / Easier line on a weekly quest whose need moved, and the adapt note", () => {
+    const { panel } = panelOf("weekly");
+    const view = questsView();
+    const [social, loot, fights] = view.weekly.quests;
+    const weekly = { ...view.weekly, quests: [social!, { ...loot!, need: 900_000, was: 1_200_000 }, { ...fights!, need: 13, was: 10 }] };
+    panel.render(list({ quests: { ...view, weekly } }));
+    const rows = all(".quests-set--weekly .quest");
+    expect(rows[0]!.querySelector(".quest__pace")).toBeNull();
+    expect(rows[1]!.querySelector(".quest__pace--down")?.textContent).toBe("▼ Easier: 900K Goo (was 1.2M)");
+    expect(rows[2]!.querySelector(".quest__pace--up")?.textContent).toBe("▲ Harder: 13 fights (was 10)");
+    // Under the title, above the "what counts" line.
+    expect(rows[2]!.querySelector(".quest__title")?.nextElementSibling?.classList.contains("quest__pace")).toBe(true);
+    expect(q(".quests-set__pace-note")?.textContent).toBe("Weekly quests adapt to how fast you finish them.");
+  });
+
+  it("shows no Harder / Easier line when no need moved", () => {
+    const { panel } = panelOf("weekly");
+    panel.render(list());
+    expect(all(".quest__pace")).toHaveLength(0);
+  });
+
   it("counts down, and says to reopen once the time is up", () => {
     expect(resetText(3 * 86_400 + 5 * 3600)).toBe("Resets in 3d 5h");
     expect(resetText(0)).toBe("New quests: reopen Quests");

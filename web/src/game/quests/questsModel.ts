@@ -117,6 +117,22 @@ export const questHint = (quest: Pick<QuestView, "kind">): string | null => {
   }
 };
 
+/**
+ * The line under a weekly Fighting or Resources quest whose need moved with
+ * the player's pace (owner, 9 Nov: weekly quests adapt to how fast they are
+ * finished): "▲ Harder: 13 fights (was 10)", "▼ Easier: 16.5M Goo (was 19.4M)".
+ * Null when the need did not move.
+ */
+export const paceHint = (quest: Pick<QuestView, "kind" | "need" | "was">): { up: boolean; text: string } | null => {
+  const { need, was } = quest;
+  if (was === undefined || was === need) return null;
+  const up = need > was;
+  const resource = LOOT_KINDS[quest.kind];
+  const amount =
+    quest.kind === "weeklyFights" ? `${need} ${need === 1 ? "fight" : "fights"}` : resource ? `${shortAmount(need)} ${RESOURCE_WORDS[resource]}` : shortAmount(need);
+  return { up, text: `${up ? "▲ Harder" : "▼ Easier"}: ${amount} (was ${shortAmount(was)})` };
+};
+
 /** The resource a weekly loot quest names, or null. */
 export const lootResource = (kind: string): keyof typeof RESOURCE_WORDS | null => LOOT_KINDS[kind] ?? null;
 
