@@ -7,6 +7,7 @@ import {
   CENTRE_DOCK_GAP,
   CENTRE_MIN_BOTTOM,
   CENTRE_SIDE_GAP,
+  CENTRE_TOP_GAP,
   CENTRE_WINDOW_CLASS,
   CENTRED_LAYOUT_QUERY,
   centreWindow,
@@ -187,7 +188,7 @@ describe("Middle windows: the shared rule", () => {
   })();
 
   it("centres on both axes in the band between the HUD and the dock row", () => {
-    expect(rule).toContain("--centre-top: calc(var(--hud-height) + var(--space-3));");
+    expect(rule).toContain("--centre-top: calc(var(--hud-height) + var(--centre-overhang, 0px) + var(--space-2));");
     expect(rule).toContain("inset: var(--centre-top) 0 var(--centre-bottom);");
     expect(rule).toContain("margin: auto;");
     expect(rule).toContain("transform: none;");
@@ -198,9 +199,16 @@ describe("Middle windows: the shared rule", () => {
     expect(rule).toContain("max-height: calc(100% - var(--centre-top) - var(--centre-bottom));");
   });
 
-  it("lets the notices show over a middle window", () => {
+  it("draws a middle window over the dock, Events and the zoom rail, and the notices over it", () => {
+    expect(rule).toContain("z-index: calc(var(--z-hud) + 1);");
     const hud = read("styles/yard-hud.css");
-    expect(hud).toMatch(/\.yard-notices \{\n {2}z-index: calc\(var\(--z-hud\) \+ 1\);/);
+    expect(hud).toMatch(/\.yard-notices \{\n {2}z-index: calc\(var\(--z-hud\) \+ 2\);/);
+  });
+
+  it("leaves room above the frame for the painted name plate and close X", () => {
+    expect(css).toContain(
+      ":root[data-skin] .overlay__layer > .panel.panel--centre {\n    --centre-overhang: max(12px, var(--skin-title-lift) - var(--skin-edge));",
+    );
   });
 });
 
@@ -286,9 +294,142 @@ describe("Middle windows: never over the dock (tester, 9 Nov)", () => {
     expect(layer.style.getPropertyValue("--centre-notice-top")).toBe(`${94 + 52 + 8}px`);
   });
 
+  it("starts the band under the HUD, leaving room for the name plate sticking up", () => {
+    const layer = document.createElement("div");
+    layer.className = "overlay__layer";
+    const box = (element: Element, left: number, top: number, width: number, height: number): void => {
+      element.getBoundingClientRect = () => new DOMRect(left, top, width, height);
+    };
+    box(layer, 0, 0, 1280, 720);
+    const hud = document.createElement("div");
+    hud.className = "hud hud--corner";
+    box(hud, 16, 16, 1248, 79);
+    const dock = document.createElement("div");
+    dock.className = "yard-dock";
+    const element = document.createElement("section");
+    element.className = "panel";
+    Object.defineProperty(element, "offsetWidth", { value: 440 });
+    box(element, 420, 98, 440, 400);
+    const bar = document.createElement("div");
+    bar.className = "panel__titlebar";
+    box(bar, 444, 122, 392, 30);
+    const plate = document.createElement("h2");
+    plate.className = "panel__title";
+    box(plate, 540, 98 - 14, 200, 48);
+    const close = document.createElement("button");
+    box(close, 838, 98 - 12, 46, 46);
+    bar.append(plate, close);
+    element.append(bar);
+    layer.append(dock, element);
+    document.body.append(hud, layer);
+    centreWindow(element, () => undefined).opened();
+    expect(element.style.getPropertyValue("--centre-top")).toBe(`${95 + 14 + CENTRE_TOP_GAP}px`);
+  });
+
+  it("reads the window's minimum width from its CSS and keeps it, over Events", () => {
+    const layer = document.createElement("div");
+    layer.className = "overlay__layer";
+    layer.getBoundingClientRect = () => new DOMRect(0, 0, 1280, 720);
+    const dock = document.createElement("div");
+    dock.className = "yard-dock";
+    const door = document.createElement("button");
+    door.getBoundingClientRect = () =>
+      new DOMRect(events.left, events.top, events.right - events.left, events.bottom - events.top);
+    dock.append(door);
+    const element = document.createElement("section");
+    element.className = "panel";
+    element.style.setProperty("--centre-min-width", "1212px");
+    Object.defineProperty(element, "offsetWidth", { value: 1212 });
+    element.getBoundingClientRect = () => new DOMRect(34, 115, 1212, 560);
+    layer.append(dock, element);
+    document.body.append(layer);
+    centreWindow(element, () => undefined).opened();
+    expect(element.style.maxWidth).toBe("");
+  });
+
   it("hangs the yard's notices under the open window's title bar, not on it", () => {
     expect(css).toContain(
       ".overlay__layer:has(> .panel--centre:not([hidden])) > .yard-notices {\n    top: var(--centre-notice-top,",
+    );
+  });
+});
+
+describe("Middle windows: never smaller than their minimum (tester-41, 9 Nov)", () => {
+  /** 1280x720, as measured: Events under the HUD, the dock row along the bottom. */
+  const screen = { width: 1280, height: 720 };
+  const events = { left: 1196, top: 104, right: 1264, bottom: 190 };
+  const mainYard = { left: 24, top: 490, right: 118, bottom: 590 };
+  const collect = { left: 840, top: 580, right: 935, bottom: 704 };
+  const more = { left: 956, top: 595, right: 1024, bottom: 690 };
+  const dock = [events, mainYard, collect, more];
+  /** HUD bottom 95 + the plate's 14 + the gap. */
+  const top = 95 + 14 + CENTRE_TOP_GAP;
+
+  it("keeps a wide window's minimum width, covering Events rather than squeezing its content", () => {
+    // The Hatch tab: 1212px with its frame, all of it needed for one row of slots.
+    const fit = fitCentreWindow(screen, 1212, [events], { minWidth: 1212 });
+    expect(fit.maxWidth).toBeNull();
+    expect(fit.over).toBe(true);
+  });
+
+  it("still narrows to clear Events when that leaves it its minimum", () => {
+    const fit = fitCentreWindow(screen, 1208, [events], { minWidth: 900 });
+    expect(fit.maxWidth).toBe(1280 - 2 * (1280 - events.left + CENTRE_SIDE_GAP));
+    expect(fit.over).toBe(false);
+  });
+
+  it("narrows only as far as the minimum when Events is too far in", () => {
+    const fit = fitCentreWindow(screen, 1208, [events], { minWidth: 1100 });
+    expect(fit.maxWidth).toBe(1100);
+    expect(fit.over).toBe(true);
+  });
+
+  it("stays above the dock when the band holds its minimum height", () => {
+    const fit = fitCentreWindow(screen, 700, dock, { top, minHeight: 400 });
+    expect(fit.bottom).toBe(720 - collect.top + CENTRE_DOCK_GAP);
+    expect(fit.over).toBe(false);
+  });
+
+  it("reaches over the dock on a short screen rather than shrink below its minimum", () => {
+    // Hatch or Build at 1280x720: the dock leaves ~450px, the window needs 560.
+    const fit = fitCentreWindow(screen, 1212, dock, { top, minWidth: 1212, minHeight: 560 });
+    expect(fit.bottom).toBe(CENTRE_MIN_BOTTOM);
+    expect(fit.over).toBe(true);
+  });
+
+  it("stops above the first dock button down that leaves it its minimum", () => {
+    // Build at 900x1000: over Collect all, still clear of the Build button under it.
+    const tall = { width: 900, height: 1000 };
+    const collectAll = { left: 780, top: 720, right: 875, bottom: 840 };
+    const buildButton = { left: 780, top: 850, right: 875, bottom: 975 };
+    const fit = fitCentreWindow(tall, 868, [collectAll, buildButton], { top, minHeight: 640 });
+    expect(fit.bottom).toBe(1000 - buildButton.top + CENTRE_DOCK_GAP);
+    expect(fit.over).toBe(true);
+  });
+
+  it("has no minimum height without a measured top", () => {
+    expect(fitCentreWindow(screen, 1212, dock, { minHeight: 560 }).bottom).toBe(720 - mainYard.top + CENTRE_DOCK_GAP);
+  });
+
+  it("gives the Monsters screen, its Hatch tab and Build their minimums in CSS", () => {
+    expect(read("styles/monsters.css")).toContain("--centre-min-height: 560px;");
+    expect(read("styles/hatch.css")).toContain("--centre-min-width: 1212px;");
+    const build = read("styles/build-menu.css");
+    expect(build).toContain("--centre-min-width: 1200px;");
+    expect(build).toContain("--centre-min-height: 640px;");
+  });
+
+  it("lets Build's tiles reflow to fewer columns, never squash, and names break between words", () => {
+    const build = read("styles/build-menu.css");
+    expect(build).toContain(
+      "grid-template-columns: repeat(auto-fill, minmax(max(108px, calc((100% - 4 * var(--space-3)) / 5)), 1fr));",
+    );
+    expect(build).toMatch(/\.build-tile__name \{\n {4}overflow-wrap: break-word;/);
+  });
+
+  it("wraps a hatchery's slots rather than sliding sideways when too narrow for one row", () => {
+    expect(read("styles/hatch.css")).toMatch(
+      /@container hatch \(560px <= width < 1092px\) \{\n {2}\.hatch-line__slots,\n {2}\.hatch-line__now \{\n {4}flex-wrap: wrap;/,
     );
   });
 });

@@ -10,13 +10,21 @@
  *   Each window keeps its own width, and its own height through
  *   `--centre-height` (else it fits its content), never taller than the band.
  *   A phone, upright or on its side, keeps each window's own sheet.
- * - **Never over the dock** (tester, 9 Nov). The band's bottom is measured,
- *   not guessed: {@link fitCentreWindow} keeps the window above the top of
- *   every dock button under it (More, Monsters, Build, Collect all, Main
- *   yard, Map, Add friends, their words and badges, in either look), and
- *   narrows a window that would reach the button column under the HUD's
- *   right end (Events), close X included. A window short of room gets
- *   shorter, its body scrolling; it never comes down over the buttons.
+ * - **Clear of the HUD.** The band's top is measured too: the HUD's
+ *   bottom, plus what of the window sticks up above its frame (the painted
+ *   name plate and close X), plus {@link CENTRE_TOP_GAP}.
+ * - **Clear of the dock, unless that makes it unusable** (tester, 9 Nov).
+ *   The band's bottom is measured, not guessed: {@link fitCentreWindow}
+ *   keeps the window above the top of every dock button under it (More,
+ *   Monsters, Build, Collect all, Main yard, Map, Add friends, their words
+ *   and badges, in either look), and narrows a window that would reach the
+ *   button column under the HUD's right end (Events), close X included. A
+ *   window short of room gets shorter, its body scrolling, but never below
+ *   its own minimum (`--centre-min-width`, `--centre-min-height` in its
+ *   CSS; the Monsters screen and Build have one): rather than that it
+ *   covers the Events column, or reaches down over the dock buttons it
+ *   needs to (drawn above them; the dock is not used while a middle window
+ *   is open). Its close X stays on the screen.
  * - **Notices stay readable.** While a middle window is open the yard's
  *   notices (a claim's "Day 1 claimed") hang just under its title bar rather
  *   than on it, so the name plate and close X stay in sight. Nothing moves to
@@ -64,10 +72,22 @@ export interface Box {
 
 /** Where a middle window may go, as {@link fitCentreWindow} works it out. */
 export interface CentreFit {
-  /** A cap on the window's width in px, or null when its own width clears the side columns. */
+  /** A cap on the window's width in px, or null when its own width is kept. */
   readonly maxWidth: number | null;
   /** The px kept free under the window: from the layer's bottom to the window's lowest edge. */
   readonly bottom: number;
+  /** Whether, to keep its minimum size, the window covers the Events column or dock buttons. */
+  readonly over: boolean;
+}
+
+/** What {@link fitCentreWindow} knows of the window beyond its width. */
+export interface CentreLimits {
+  /** The band's top in px from the layer's top, when measured; without it no minimum height applies. */
+  readonly top?: number | undefined;
+  /** The narrowest the window may be made (never more than its own width). */
+  readonly minWidth?: number;
+  /** The shortest the band may leave the window. */
+  readonly minHeight?: number;
 }
 
 /** Between the window's bottom edge and the top of the dock button under it. */
@@ -76,6 +96,8 @@ export const CENTRE_DOCK_GAP = 12;
 export const CENTRE_SIDE_GAP = 28;
 /** Under the window when no dock button is below it. */
 export const CENTRE_MIN_BOTTOM = 16;
+/** Between the HUD's bottom and the highest part of the window (its name plate or close X). */
+export const CENTRE_TOP_GAP = 6;
 /** A dock button this near the window's side counts as under it. */
 const OVERLAP_SLACK = 8;
 
@@ -84,13 +106,18 @@ const OVERLAP_SLACK = 8;
  * buttons at `buttons`. A button in the top half of the layer near its left
  * or right edge (Events, under the HUD) is a side column: the window is
  * narrowed to stay clear of it, by the same on both sides so it stays
- * centred. A button in the bottom half is the dock row: the window's bottom
- * stays above the top of every one under it.
+ * centred, but not below `limits.minWidth`; wider than that, it covers the
+ * column. A button in the bottom half is the dock row: the window's bottom
+ * stays above the top of every one under it, unless that leaves less than
+ * `limits.minHeight` under `limits.top`. Then it stops above the first
+ * button down that leaves it that much (or at the layer's foot), covering
+ * the ones above that line.
  */
 export const fitCentreWindow = (
   layer: { readonly width: number; readonly height: number },
   width: number,
   buttons: readonly Box[],
+  limits: CentreLimits = {},
 ): CentreFit => {
   let side = 0;
   const row: Box[] = [];
@@ -100,17 +127,23 @@ export const fitCentreWindow = (
     else if (middleX > (layer.width * 3) / 4) side = Math.max(side, layer.width - box.left);
     else if (middleX < layer.width / 4) side = Math.max(side, box.right);
   }
-  const cap = side > 0 ? Math.max(0, Math.floor(layer.width - 2 * (side + CENTRE_SIDE_GAP))) : Infinity;
-  const kept = Math.min(width, cap);
+  const clear = side > 0 ? Math.max(0, Math.floor(layer.width - 2 * (side + CENTRE_SIDE_GAP))) : Infinity;
+  const floor = Math.min(width, limits.minWidth ?? 0);
+  const kept = Math.min(width, Math.max(clear, floor));
   const left = (layer.width - kept) / 2;
   const right = left + kept;
-  let bottom = CENTRE_MIN_BOTTOM;
-  for (const box of row) {
-    if (box.right > left - OVERLAP_SLACK && box.left < right + OVERLAP_SLACK) {
-      bottom = Math.max(bottom, layer.height - box.top + CENTRE_DOCK_GAP);
-    }
-  }
-  return { maxWidth: width > cap ? cap : null, bottom: Math.ceil(bottom) };
+  // Each dock button under the window: the lowest its bottom edge may come to stay clear of it.
+  const lines = row
+    .filter((box) => box.right > left - OVERLAP_SLACK && box.left < right + OVERLAP_SLACK)
+    .map((box) => box.top - CENTRE_DOCK_GAP);
+  const lowest = limits.top !== undefined && limits.minHeight ? limits.top + limits.minHeight : -Infinity;
+  let edge = layer.height - CENTRE_MIN_BOTTOM;
+  for (const line of lines) if (line >= lowest) edge = Math.min(edge, line);
+  return {
+    maxWidth: kept < width ? kept : null,
+    bottom: Math.ceil(layer.height - edge),
+    over: kept > clear || lines.some((line) => line < edge),
+  };
 };
 
 /** The dock's buttons as laid out in the yard (not the More fan's bubbles, which fold away). */
@@ -156,12 +189,40 @@ const dockBoxes = (layer: HTMLElement, origin: DOMRect): Box[] => {
   return boxes;
 };
 
+/** The yard's HUD across the top (`ui/Hud.ts`). */
+const HUD = ".hud--corner";
+
 /**
- * Places the open middle window clear of the dock and the Events column
- * (`max-width` and ui.css's `--centre-bottom`, inline on the window) and
- * tells ui.css where the yard's notices go (`--centre-notice-top` on the
- * layer). A phone's sheets, and a scene without the yard's dock, keep
- * ui.css's own places.
+ * The band's top in px from the layer's top: under the HUD's bottom by what
+ * sticks up above the window's frame (the painted name plate, the close X)
+ * and {@link CENTRE_TOP_GAP}. Undefined without the HUD: ui.css's own top.
+ */
+const centreTop = (element: HTMLElement, origin: DOMRect): number | undefined => {
+  const hud = document.querySelector(HUD);
+  const bar = hud ? visibleBox(hud) : null;
+  if (!bar) return undefined;
+  const frame = element.getBoundingClientRect();
+  let highest = frame.top;
+  for (const part of element.querySelectorAll(":scope > .panel__titlebar > *")) {
+    const box = visibleBox(part);
+    if (box) highest = Math.min(highest, box.top);
+  }
+  return Math.ceil(bar.bottom - origin.top + (frame.top - highest) + CENTRE_TOP_GAP);
+};
+
+/** A window's own px length from its CSS (`--centre-min-width: 1200px`), or 0. */
+const lengthOf = (element: HTMLElement, name: string): number => {
+  const value = Number.parseFloat(getComputedStyle(element).getPropertyValue(name));
+  return Number.isFinite(value) && value > 0 ? value : 0;
+};
+
+/**
+ * Places the open middle window clear of the HUD, the dock and the Events
+ * column as far as its minimum size lets it (`--centre-top`, `max-width`
+ * and ui.css's `--centre-bottom`, inline on the window) and tells ui.css
+ * where the yard's notices go (`--centre-notice-top` on the layer). A
+ * phone's sheets, and a scene without the yard's dock, keep ui.css's own
+ * places.
  */
 const layoutCentreWindow = (element: HTMLElement): void => {
   const layer = element.parentElement;
@@ -169,13 +230,21 @@ const layoutCentreWindow = (element: HTMLElement): void => {
   const style = element.style;
   style.removeProperty("max-width");
   if (!centredLayout() || layer.querySelector(":scope > .yard-dock") === null) {
+    style.removeProperty("--centre-top");
     style.removeProperty("--centre-bottom");
     layer.style.removeProperty("--centre-notice-top");
     return;
   }
   const origin = layer.getBoundingClientRect();
   if (origin.width <= 0 || origin.height <= 0) return;
-  const fit = fitCentreWindow(origin, element.offsetWidth, dockBoxes(layer, origin));
+  const top = centreTop(element, origin);
+  if (top === undefined) style.removeProperty("--centre-top");
+  else style.setProperty("--centre-top", `${top}px`);
+  const fit = fitCentreWindow(origin, element.offsetWidth, dockBoxes(layer, origin), {
+    top,
+    minWidth: lengthOf(element, "--centre-min-width"),
+    minHeight: lengthOf(element, "--centre-min-height"),
+  });
   if (fit.maxWidth !== null) style.maxWidth = `${fit.maxWidth}px`;
   style.setProperty("--centre-bottom", `${fit.bottom}px`);
   const bar = element.querySelector(":scope > .panel__titlebar");

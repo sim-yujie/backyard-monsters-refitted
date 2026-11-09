@@ -29,8 +29,11 @@
   width: min(760px, calc(100vw - 2 * var(--space-4)));
   max-width: none;
   min-width: 0;
-  /* Its height in the middle: the tabs do not jump as they change. */
+  /* Its height in the middle: the tabs do not jump as they change. Never
+     under 560px, the Hatch tab's hatcheries, slots and a row of monsters: on
+     a short screen it reaches over the dock rather than (ui.css). */
   --centre-height: 820px;
+  --centre-min-height: 560px;
 }
 
 .monsters-screen[hidden] {

@@ -21,6 +21,11 @@
 @media (width > 620px) {
   .monsters-screen[data-tab="hatch"] {
     width: min(1160px, calc(100vw - 2 * var(--space-4)));
+    /* Never narrowed to clear the Events column (ui.css `.panel--centre`):
+       the inside's 1160px plus the widest painted frame (skin.css), so the
+       hatchery's seven slots and "All done in" fit in one row whenever the
+       screen has the room; it covers Events instead. */
+    --centre-min-width: 1212px;
   }
 }
 
@@ -1413,6 +1418,28 @@ button.hatch-slot:disabled {
 @container hatch (width >= 1040px) {
   .hatch__grid {
     grid-template-columns: repeat(9, minmax(0, 1fr));
+  }
+}
+
+/* ── Too narrow for a hatchery's seven slots and "All done in" in a row ──
+   (7 x 124px + gaps + 168px = 1092px; tester, 9 Nov): the slots wrap onto a
+   second row and the totals go under them on one line, rather than the row
+   sliding sideways. */
+@container hatch (560px <= width < 1092px) {
+  .hatch-line__slots,
+  .hatch-line__now {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .hatch-line__totals {
+    flex-basis: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: var(--space-2);
+    padding: var(--space-1) 0 0;
+    border-left: 0;
   }
 }
 

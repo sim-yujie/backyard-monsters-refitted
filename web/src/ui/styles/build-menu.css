@@ -19,6 +19,12 @@
   min-width: 0;
   max-height: calc(100% - var(--hud-height) - var(--space-3) - var(--space-4));
   transform: translateX(-50%);
+  /* In the middle (ui.css `.panel--centre`) it keeps its full width, five
+     tiles across, rather than narrow to clear the Events column, and is
+     never under 640px tall: on a short or narrow screen it covers Events or
+     the dock instead (tester, 9 Nov). */
+  --centre-min-width: 1200px;
+  --centre-min-height: 640px;
 }
 
 .build-menu[hidden] {
@@ -1052,6 +1058,41 @@
 
   .build-menu__legend .build-menu__key {
     display: none;
+  }
+}
+
+/*
+ * In the middle on a computer (ui.css `.panel--centre`; tester, 9 Nov): the
+ * tiles never squash. Up to five across, each at least 108px, so a narrower
+ * window takes fewer columns and more rows (the column scrolls) instead of
+ * thin tiles with a letter a line; a name breaks between words, and inside
+ * one only if that word alone is wider than the tile. Where the tiles' column
+ * is narrow the page arrows go under the tiles, beside "Page 1 of 2", and
+ * give the tiles their room.
+ */
+@media (width > 620px) and (height > 500px) {
+  .build-menu__browse {
+    container: build-browse / inline-size;
+  }
+
+  .build-menu__grid {
+    grid-template-columns: repeat(auto-fill, minmax(max(108px, calc((100% - 4 * var(--space-3)) / 5)), 1fr));
+  }
+
+  .build-tile__name {
+    overflow-wrap: break-word;
+  }
+
+  @container build-browse (width < 560px) {
+    .build-menu__pager {
+      grid-template-areas:
+        "grid grid grid"
+        "previous pages next";
+    }
+
+    .build-menu__turn {
+      height: var(--control-height);
+    }
   }
 }
 
