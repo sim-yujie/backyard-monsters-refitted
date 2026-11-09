@@ -601,6 +601,8 @@ export interface PlayerModeration {
   /** A game team account: cannot be warned, paused or banned. */
   gameTeam: boolean;
   reportsAgainst: number;
+  /** Their weekly quests' pace: Fighting and Resources multipliers (1 = normal); null before they had one. */
+  questPace?: { fighting: number; resources: number } | null;
   log: ModerationEntry[];
 }
 

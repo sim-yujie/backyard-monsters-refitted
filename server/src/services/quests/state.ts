@@ -133,7 +133,8 @@ export const startPace = (): QuestPace => ({ fighting: WEEKLY_PACE.start, resour
 const clampPace = (value: number): number =>
   Math.round(Math.min(WEEKLY_PACE.max, Math.max(WEEKLY_PACE.min, value)) * 10_000) / 10_000;
 
-const paceOf = (raw: unknown): QuestPace => {
+/** A stored pace, cleaned up: each group within the limits, 1 when missing. */
+export const readPace = (raw: unknown): QuestPace => {
   const one = (raw !== null && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const pace = startPace();
   for (const group of PACED_GROUPS) {
@@ -191,7 +192,7 @@ export const readQuests = (raw: unknown): QuestRecord => {
     daily: setOf(one.daily),
     weekly: setOf(one.weekly),
     hasFriend: one.hasFriend === true,
-    pace: paceOf(one.pace),
+    pace: readPace(one.pace),
   };
 };
 

@@ -219,5 +219,7 @@ describe.skipIf(!dbName)("the dashboard's moderation on a real database", () => 
     expect(next.reports.map((r) => r.id)).toEqual([first]);
     expect(next.reports[0]!.actions).toEqual([]);
     expect((await playerModeration(orm.em.fork(), PLAYER, NOW))!.reportsAgainst).toBe(2);
+    // No main save: no weekly quest pace yet.
+    expect((await playerModeration(orm.em.fork(), PLAYER, NOW))!.questPace).toBeNull();
   });
 });

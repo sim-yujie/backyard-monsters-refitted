@@ -205,6 +205,16 @@ describe("a player's card", () => {
     expect(entries[1]!.textContent).toContain("seen");
   });
 
+  it("shows the player's weekly quest pace when they have one", async () => {
+    routes = {
+      "GET /chatreports": { reports: [], nextBefore: null },
+      "GET /players/42/moderation": { player: player({ questPace: { fighting: 1.5625, resources: 0.85 } }) },
+    };
+    const view = new ModerationView({ say: () => {} });
+    await view.open(42);
+    expect(view.element.textContent).toContain("Weekly pace: fights ×1.56, loot ×0.85");
+  });
+
   it("offers a game team account only the lifts", async () => {
     routes = { "GET /players/42/moderation": { player: player({ gameTeam: true }) } };
     const view = new ModerationView({ say: () => {} });
