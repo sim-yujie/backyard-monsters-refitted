@@ -43,7 +43,7 @@ import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import { maxLevel, quantityOf, townHallLevel, type YardKind } from "@/game/yard/buildingCosts";
 import { NEED_MORE_SILOS, overCap } from "@/game/yard/storage";
 import { YardChangeReason, type YardActionResult, type YardChange } from "@/game/yard/YardStore";
-import { formatAmount, formatCountdown } from "@/ui/format";
+import { formatAmount, formatCountdown, formatShort } from "@/ui/format";
 import { QuantityStepper } from "@/ui/QuantityStepper";
 import { gameIcon, iconAmount } from "@/ui/gameIcon";
 import { resourceAmount, resourceIcon } from "@/ui/resourceIcon";
@@ -1283,9 +1283,11 @@ export class HatchTab implements MonstersTab {
       button.dataset["monster"] = row.monster.id;
       button.dataset["focusKey"] = `monster-${row.monster.id}`;
       button.setAttribute("aria-pressed", String(row.monster.id === this.selected));
+      // The tile says its price short ("468K", owner 9 Nov: easier to see);
+      // the full figure stays on hover here and in the chosen monster's stats.
       button.title =
         row.state.kind === "ready"
-          ? `Choose ${row.monster.name}`
+          ? `Choose ${row.monster.name} · ${formatAmount(row.price)} each`
           : `${row.monster.name}: ${row.state.kind === "unlocking" ? "still unlocking" : "locked"}`;
       button.addEventListener("click", () => this.tapMonster(row));
       const name = document.createElement("span");
@@ -1296,7 +1298,7 @@ export class HatchTab implements MonstersTab {
       name.textContent = row.monster.name;
       const note = document.createElement("span");
       note.className = "hatch-monster__note";
-      if (row.state.kind === "ready") note.append(resourceAmount("r4", row.price));
+      if (row.state.kind === "ready") note.append(resourceAmount("r4", formatShort(row.price)));
       else note.textContent = row.state.kind === "unlocking" ? "Unlocking" : "Locked";
       button.append(monsterPicture(row.monster, "small", "hatch-monster__picture"), name, " ", note);
       item.append(button);

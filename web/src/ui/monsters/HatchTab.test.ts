@@ -507,6 +507,17 @@ describe("HatchTab: the grid", () => {
     expect(info.style.minHeight).toBe("200px");
   });
 
+  it("prices a tile short, with the full figure on hover and in the stats (owner, 9 Nov)", () => {
+    const lockerdata = { C1: { t: 2 }, C3: { t: 2 }, C7: { t: 2 }, C12: { t: 2 } };
+    const { element } = setup(twoHatcheries({ lockerdata } as Partial<BaseLoadResponse>), { monster: "C12" });
+    const price = (id: string): string => spokenText(monster(element, id).querySelector(".hatch-monster__note")!);
+    expect(price("C1")).toBe("Goo 250");
+    expect(price("C7")).toBe("Goo 2.5K");
+    expect(price("C12")).toBe("Goo 150K");
+    expect(monster(element, "C12").title).toBe("Choose D.A.V.E. · 150,000 each");
+    expect(spokenText(element.querySelector(".hatch-info__each")!)).toContain("Goo 150,000");
+  });
+
   it("only chooses a monster on a tap, and adds nothing (#268, E)", async () => {
     const { element, actions } = setup(twoHatcheries(), { buildingId: 11 });
     expect(text(element, ".hatch-pick__hint")).toBe("Tap a monster to choose it");

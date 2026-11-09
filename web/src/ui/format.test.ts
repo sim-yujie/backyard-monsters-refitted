@@ -62,6 +62,14 @@ describe("formatShort", () => {
     expect(formatShort(1_250)).toBe("1.2K");
   });
 
+  it("spells hatchery prices the way the owner asked (9 Nov)", () => {
+    expect(formatShort(468_000)).toBe("468K");
+    expect(formatShort(120_000)).toBe("120K");
+    expect(formatShort(14_400)).toBe("14.4K");
+    expect(formatShort(1_200_000)).toBe("1.2M");
+    expect(formatShort(350)).toBe("350");
+  });
+
   it("goes up a unit rather than reading 1000K", () => {
     expect(formatShort(999_999)).toBe("999.9K");
     expect(formatShort(1_000_000)).toBe("1M");
