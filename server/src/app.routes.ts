@@ -47,6 +47,7 @@ import {
   photoUploadLimiter,
   photoReportLimiter,
   profilePhotoLimiter,
+  outpostLabelLimiter,
   mailStatusLimiter,
   mailFindPlayerLimiter,
 } from "./middleware/rateLimiters.js";
@@ -140,6 +141,7 @@ import { mountSupportRoutes } from "./controllers/support/routes.js";
 import { adminOnly, mountAdminRoutes } from "./controllers/admin/routes.js";
 import { mountAnnouncementRoutes } from "./controllers/announcements/routes.js";
 import { mountProfileRoutes } from "./controllers/profile/routes.js";
+import { mountOutpostLabelRoutes } from "./controllers/outposts/labelRoutes.js";
 import { sharedWordFilter } from "./services/chat/badWords.js";
 import { postgres } from "./server.js";
 import { clientErrors, guestClientErrors } from "./controllers/errors/clientErrors.js";
@@ -464,6 +466,16 @@ mountProfileRoutes(router, {
     report: photoReportLimiter,
     image: profilePhotoLimiter,
   },
+  filter: sharedWordFilter,
+});
+
+/**  ────────────────────────────────────────────────
+* 📦 Outpost names and pins (beta 7): the yard list's rename and pin
+* ──────────────────────────────────────────────── */
+mountOutpostLabelRoutes(router, {
+  em: () => postgres.em.fork(),
+  signedIn: [verifyUserAuth, verifyAccountStatus],
+  limiter: outpostLabelLimiter,
   filter: sharedWordFilter,
 });
 
