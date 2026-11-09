@@ -380,6 +380,61 @@
   }
 }
 
+/* A long group (lead, 9 Nov: 90 can use help): its first five, then
+   "Show all 90" across the list's width, so the next group is close below. */
+.friends-window__more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(100% - 2 * var(--space-2));
+  min-height: 40px;
+  margin: 2px var(--space-2) var(--space-1);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* One group shown whole: the head's count line becomes the way back,
+   "< [wrench] 90 Can use help", which stays put while the rows scroll. */
+.friends-window__back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding-inline: var(--space-3);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.friends-window__back > .game-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.friends-window__back > .friends-window__dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+}
+
+.friends-window__back-arrow {
+  flex: none;
+  font-size: 1.25em;
+  line-height: 1;
+}
+
+.friends-window__back > .friends-window__group-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.friends-window__back > .friends-window__group-words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .friends-window__empty {
   margin: var(--space-4) var(--space-2);
   color: var(--colour-text-muted);
@@ -440,7 +495,7 @@
     --scroll-fade-above: 24px;
   }
 
-  :root[data-skin] .panel.friends-window :is(.friends-window__add, .friends-window__all, .friends-window__requests) {
+  :root[data-skin] .panel.friends-window :is(.friends-window__add, .friends-window__all, .friends-window__requests, .friends-window__more, .friends-window__back) {
     min-height: 36px;
   }
 
@@ -471,5 +526,11 @@
 
   .friends-window__marks {
     min-width: calc(2 * 22px + 2px);
+  }
+
+  /* The way back sits beside the title sign here, as the count line does:
+     "< [wrench] 90" only, its words kept for the tooltip and a screen reader. */
+  .friends-window__back > .friends-window__group-words {
+    display: none;
   }
 }

@@ -31,6 +31,11 @@ import "./friends-button.css";
  *   painted help and gift marks; pressing it shows **Visit** (the help-mode
  *   visit), **Message** and **Send gift** ("Sent" once a gift went today)
  *   under it. Only the list scrolls.
+ * - **A long list** (lead, 9 Nov: "90 can use help, 20 online"): each group
+ *   shows its first {@link GROUP_PREVIEW} and a **Show all 90** button, so
+ *   all three groups are a short scroll apart. Show all lists that one group
+ *   whole, and the head becomes a **< 90 Can use help** button back to the
+ *   three. One scrolling box at any size; the way back never scrolls away.
  * - **Foot:** **All friends ›** opens the Friends screen, and the friend
  *   requests waiting, when there are any, open its Requests tab.
  *
@@ -57,6 +62,8 @@ export const FRIENDS_WINDOW_TEXT = {
   giftSent: "Sent",
   giftSentTitle: "Gift sent today",
   all: "All friends",
+  showAll: (count: number): string => `Show all ${formatAmount(count)}`,
+  back: "Back to all three groups",
   requests: (count: number): string =>
     count === 1 ? "1 friend request waiting" : `${formatAmount(count)} friend requests waiting`,
   empty: "No friends yet. Add players you meet in chat or on the map.",
@@ -95,6 +102,36 @@ export const groupFriends = (friends: readonly Friend[]): FriendGroups => {
   return groups;
 };
 
+/** How many friends a group shows before its Show all button. */
+export const GROUP_PREVIEW = 5;
+
+/** One group as the window shows it: the friends in sight and how many wait behind Show all. */
+export interface FriendsSection {
+  readonly name: keyof FriendGroups;
+  readonly friends: readonly Friend[];
+  readonly total: number;
+  readonly hidden: number;
+}
+
+/**
+ * What the list shows: with no group chosen, every group that has anyone,
+ * each cut to its first {@link GROUP_PREVIEW} (one more would only trade the
+ * button for a row, so a group of 6 shows whole); with `focus`, that group
+ * alone and whole. A chosen group that has emptied falls back to all three.
+ */
+export const friendsSections = (groups: FriendGroups, focus: keyof FriendGroups | null): FriendsSection[] => {
+  if (focus && groups[focus].length > 0) {
+    return [{ name: focus, friends: groups[focus], total: groups[focus].length, hidden: 0 }];
+  }
+  return (["help", "online", "rest"] as const)
+    .filter((name) => groups[name].length > 0)
+    .map((name) => {
+      const all = groups[name];
+      const friends = all.length > GROUP_PREVIEW + 1 ? all.slice(0, GROUP_PREVIEW) : all;
+      return { name, friends, total: all.length, hidden: all.length - friends.length };
+    });
+};
+
 export interface FriendsWindowOptions {
   /** Takes the player to this friend's yard (help mode). Without it a row has no Visit. */
   readonly onVisit?: (friend: Friend) => void;
@@ -124,6 +161,11 @@ export class FriendsWindow {
   private opened: number | null = null;
   private container: HTMLElement | null = null;
   private stopFade: () => void = () => {};
+  /** The group shown whole (Show all), or null for all three cut short. */
+  private focus: keyof FriendGroups | null = null;
+  /** Where the three-group list was scrolled when Show all was pressed. */
+  private overviewScroll = 0;
+  private readonly head = make("div", "friends-window__top");
 
   constructor(options: FriendsWindowOptions = {}) {
     this.options = options;
@@ -144,9 +186,8 @@ export class FriendsWindow {
     add.setAttribute("aria-label", FRIENDS_WINDOW_TEXT.addTitle);
     add.append(gameIcon("addfriend", { size: 24, decorative: true }), make("span", "friends-window__add-word", FRIENDS_WINDOW_TEXT.add));
     add.addEventListener("click", () => this.openFriends("find"));
-    const head = make("div", "friends-window__top");
-    head.append(this.summary, add);
-    this.popup.setHead(head);
+    this.head.append(this.summary, add);
+    this.popup.setHead(this.head);
 
     this.list.setAttribute("role", "list");
     this.popup.body.classList.add("friends-window__body");
@@ -188,10 +229,18 @@ export class FriendsWindow {
   private render(): void {
     const friends = this.store.friends;
     const online = friends.filter((friend) => friend.online === "online").length;
-    this.summary.replaceChildren(
-      count(gameIcon("friends", { size: 24, decorative: true }), friends.length, FRIENDS_WINDOW_TEXT.total(friends.length), "total"),
-      count(onlineDot("friends-window__dot", true), online, FRIENDS_WINDOW_TEXT.online(online), "online"),
-    );
+    const groups = groupFriends(friends);
+    const sections = friendsSections(groups, this.focus);
+    if (this.focus && sections[0]?.name !== this.focus) this.focus = null;
+    this.head.classList.toggle("friends-window__top--focus", this.focus !== null);
+    if (this.focus) {
+      this.summary.replaceChildren(this.backButton(this.focus, groups[this.focus].length));
+    } else {
+      this.summary.replaceChildren(
+        count(gameIcon("friends", { size: 24, decorative: true }), friends.length, FRIENDS_WINDOW_TEXT.total(friends.length), "total"),
+        count(onlineDot("friends-window__dot", true), online, FRIENDS_WINDOW_TEXT.online(online), "online"),
+      );
+    }
 
     const waiting = this.store.snapshot.requestsIn;
     this.requests.hidden = waiting <= 0;
@@ -208,22 +257,57 @@ export class FriendsWindow {
       this.list.replaceChildren(make("p", "friends-window__empty", FRIENDS_WINDOW_TEXT.empty));
       return;
     }
-    const groups = groupFriends(friends);
-    const help = gameIcon("tools", { size: 24, decorative: true });
-    this.list.replaceChildren(
-      ...this.group("help", help, FRIENDS_WINDOW_TEXT.helpGroup, groups.help),
-      ...this.group("online", onlineDot("friends-window__dot", true), FRIENDS_WINDOW_TEXT.onlineGroup, groups.online),
-      ...this.group("rest", offlineDot(), FRIENDS_WINDOW_TEXT.restGroup, groups.rest),
-    );
+    this.list.classList.toggle("friends-window__list--focus", this.focus !== null);
+    this.list.replaceChildren(...sections.flatMap((section) => this.section(section)));
   }
 
-  /** A group's heading ("[wrench] 3 Can use help") and its rows; nothing for an empty group. */
-  private group(name: keyof FriendGroups, picture: HTMLElement, words: string, friends: readonly Friend[]): HTMLElement[] {
-    if (friends.length === 0) return [];
-    const heading = make("h3", `friends-window__group friends-window__group--${name}`);
-    heading.append(picture);
-    heading.append(make("span", "friends-window__group-count", formatAmount(friends.length)), make("span", "friends-window__group-words", words));
-    return [heading, ...friends.map((friend) => this.row(friend))];
+  /**
+   * A group's heading ("[wrench] 3 Can use help"), its rows and, when some
+   * are left out, Show all. A group shown whole has its heading in the head.
+   */
+  private section(section: FriendsSection): HTMLElement[] {
+    const nodes: HTMLElement[] = [];
+    if (!this.focus) {
+      const heading = make("h3", `friends-window__group friends-window__group--${section.name}`);
+      heading.append(groupPicture(section.name), ...groupWords(section.name, section.total));
+      nodes.push(heading);
+    }
+    nodes.push(...section.friends.map((friend) => this.row(friend)));
+    if (section.hidden > 0) {
+      const more = make("button", "btn btn--outline friends-window__more", FRIENDS_WINDOW_TEXT.showAll(section.total));
+      more.type = "button";
+      more.dataset["group"] = section.name;
+      more.addEventListener("click", () => this.showGroup(section.name));
+      nodes.push(more);
+    }
+    return nodes;
+  }
+
+  /** "< [wrench] 90 Can use help": back to the three groups, in the head so it never scrolls away. */
+  private backButton(name: keyof FriendGroups, total: number): HTMLElement {
+    const back = make("button", "btn btn--outline friends-window__back");
+    back.type = "button";
+    back.title = FRIENDS_WINDOW_TEXT.back;
+    back.setAttribute("aria-label", `${FRIENDS_WINDOW_TEXT.back} (${formatAmount(total)} ${GROUP_WORDS[name]})`);
+    back.append(make("span", "friends-window__back-arrow", "\u2039"), groupPicture(name), ...groupWords(name, total));
+    back.addEventListener("click", () => this.showGroup(null));
+    return back;
+  }
+
+  /** Shows one group whole, or (null) all three cut short again, keeping the place and the focus sensible. */
+  private showGroup(name: keyof FriendGroups | null): void {
+    const was = this.focus;
+    if (name) this.overviewScroll = this.popup.body.scrollTop;
+    this.focus = name;
+    this.opened = null;
+    this.render();
+    if (name) {
+      this.popup.body.scrollTop = 0;
+      this.summary.querySelector<HTMLElement>(".friends-window__back")?.focus();
+    } else {
+      this.popup.body.scrollTop = this.overviewScroll;
+      this.list.querySelector<HTMLElement>(`.friends-window__more[data-group="${was}"]`)?.focus({ preventScroll: true });
+    }
   }
 
   private row(friend: Friend): HTMLElement {
@@ -302,6 +386,26 @@ export class FriendsWindow {
     return actions;
   }
 }
+
+const GROUP_WORDS: Record<keyof FriendGroups, string> = {
+  help: FRIENDS_WINDOW_TEXT.helpGroup,
+  online: FRIENDS_WINDOW_TEXT.onlineGroup,
+  rest: FRIENDS_WINDOW_TEXT.restGroup,
+};
+
+/** A group's picture: the wrench, the green dot, the grey dot. */
+const groupPicture = (name: keyof FriendGroups): HTMLElement =>
+  name === "help"
+    ? gameIcon("tools", { size: 24, decorative: true })
+    : name === "online"
+      ? onlineDot("friends-window__dot", true)
+      : offlineDot();
+
+/** A group's count and words: "90", "Can use help". */
+const groupWords = (name: keyof FriendGroups, total: number): HTMLElement[] => [
+  make("span", "friends-window__group-count", formatAmount(total)),
+  make("span", "friends-window__group-words", GROUP_WORDS[name]),
+];
 
 /**
  * The grey dot by "Everyone else": the friends who are neither online nor in

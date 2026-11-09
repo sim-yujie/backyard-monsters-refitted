@@ -1,9 +1,17 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { canHelp } from "@/game/friends/friendText";
-import { fixtureApi, fixtureFriend, fixtureList } from "@/game/friends/friendsFixture";
+import { bigFriendList, fixtureApi, fixtureFriend, fixtureList } from "@/game/friends/friendsFixture";
 import { FriendsStore } from "@/game/friends/friendsStore";
-import { FRIENDS_WINDOW_TEXT, groupFriends, openFriendsWindow, orderFriends, type FriendsWindowOptions } from "./FriendsWindow";
+import {
+  FRIENDS_WINDOW_TEXT,
+  friendsSections,
+  GROUP_PREVIEW,
+  groupFriends,
+  openFriendsWindow,
+  orderFriends,
+  type FriendsWindowOptions,
+} from "./FriendsWindow";
 
 /** The Friends window (owner, 9 Nov 2026, option A): a centred game window in place of the bar. */
 
@@ -284,5 +292,106 @@ describe("closing", () => {
     expect(document.querySelector(".friends-window")).toBeNull();
     expect(() => store.addFriend(friend(5))).not.toThrow();
     expect(document.querySelector(".friends-window__item")).toBeNull();
+  });
+});
+
+describe("a long list: 90 can use help, 20 online, 150 in all (lead, 9 Nov)", () => {
+  const big = () => bigFriendList({ help: 90, online: 20, total: 150 });
+  const headings = () => [...document.querySelectorAll(".friends-window__group")].map((h) => h.textContent);
+  const more = () => [...document.querySelectorAll<HTMLButtonElement>(".friends-window__more")];
+  const back = () => document.querySelector<HTMLButtonElement>(".friends-window__back");
+  const body = () => document.querySelector<HTMLElement>(".friends-window > .panel__body")!;
+
+  it("cuts each group to its first five, with how many wait behind Show all", () => {
+    const sections = friendsSections(groupFriends(big()), null);
+    expect(sections.map(({ name, friends, total, hidden }) => [name, friends.length, total, hidden])).toEqual([
+      ["help", GROUP_PREVIEW, 90, 85],
+      ["online", GROUP_PREVIEW, 20, 15],
+      ["rest", GROUP_PREVIEW, 40, 35],
+    ]);
+    // The first five are the top of today's order: the pinned ones lead.
+    expect(sections[0]!.friends.slice(0, 3).every((one) => one.pinnedAt !== null)).toBe(true);
+  });
+
+  it("shows a group of six whole: a button in place of one row saves nothing", () => {
+    const six = Array.from({ length: GROUP_PREVIEW + 1 }, (_, i) => friend(i + 1));
+    const seven = Array.from({ length: GROUP_PREVIEW + 2 }, (_, i) => friend(i + 1));
+    expect(friendsSections(groupFriends(six), null)[0]).toMatchObject({ hidden: 0, total: 6 });
+    expect(friendsSections(groupFriends(seven), null)[0]).toMatchObject({ hidden: 2, total: 7 });
+  });
+
+  it("shows one group whole when chosen, and all three again once it has emptied", () => {
+    const groups = groupFriends(big());
+    const help = friendsSections(groups, "help");
+    expect(help).toHaveLength(1);
+    expect(help[0]).toMatchObject({ name: "help", total: 90, hidden: 0 });
+    expect(help[0]!.friends).toHaveLength(90);
+    expect(friendsSections({ ...groups, online: [] }, "online").map((one) => one.name)).toEqual(["help", "rest"]);
+  });
+
+  it("opens on three short groups: 15 rows, each heading with its count and a Show all", async () => {
+    await setup(big());
+    expect(headings()).toEqual(["90Can use help", "20Online", "40Everyone else"]);
+    expect(items()).toHaveLength(3 * GROUP_PREVIEW);
+    expect(more().map((button) => [button.textContent, button.dataset["group"]])).toEqual([
+      ["Show all 90", "help"],
+      ["Show all 20", "online"],
+      ["Show all 40", "rest"],
+    ]);
+    // Each Show all sits right under its group's last row, before the next heading.
+    expect(more()[0]!.nextElementSibling?.classList.contains("friends-window__group--online")).toBe(true);
+    expect(document.querySelector(".friends-window__count--total")!.textContent).toBe("150");
+  });
+
+  it("Show all lists that group whole, with the way back in the head, and Visit under a row", async () => {
+    const onVisit = vi.fn();
+    await setup(big(), { onVisit });
+    more()[0]!.click();
+    expect(items()).toHaveLength(90);
+    expect(headings()).toEqual([]);
+    expect(more()).toHaveLength(0);
+    // The way back is in the window's head, which never scrolls.
+    expect(back()!.closest(".panel__head")).not.toBeNull();
+    expect(back()!.textContent).toBe("‹90Can use help");
+    expect(document.activeElement).toBe(back());
+    expect(body().scrollTop).toBe(0);
+    expect(document.querySelector(".friends-window__count--total")).toBeNull();
+    // A row far down still opens its Visit.
+    row("Helper 80").click();
+    actions()[0]!.click();
+    expect(onVisit).toHaveBeenCalledWith(expect.objectContaining({ username: "Helper 80" }));
+  });
+
+  it("goes back to the three groups where the list was, with the focus on that Show all", async () => {
+    await setup(big());
+    body().scrollTop = 120;
+    more()[1]!.click();
+    expect(items()).toHaveLength(20);
+    back()!.click();
+    expect(items()).toHaveLength(3 * GROUP_PREVIEW);
+    expect(back()).toBeNull();
+    expect(body().scrollTop).toBe(120);
+    expect(document.activeElement).toBe(more()[1]);
+  });
+
+  it("stays on the chosen group when the store refreshes, and leaves it once it is empty", async () => {
+    const list = big();
+    const { store } = await setup(list);
+    more()[1]!.click();
+    store.addFriend(friend(5, { username: "Newly online", online: "online" }));
+    expect(items()).toHaveLength(21);
+    for (const one of [...list.filter((f) => f.username.startsWith("Online")), friend(5)]) store.removeFriend(one.userid);
+    expect(back()).toBeNull();
+    expect(headings()).toEqual(["90Can use help", "40Everyone else"]);
+  });
+
+  it("makes one list request however many friends there are", async () => {
+    const { api, calls } = fixtureApi({ list: fixtureList(big(), { max: 150 }) });
+    const store = new FriendsStore({ api });
+    await store.refresh();
+    openFriendsWindow(document.body, { store, openFriends: vi.fn() });
+    more()[0]!.click();
+    back()!.click();
+    expect(calls.map(([method]) => method)).toEqual(["list"]);
   });
 });
