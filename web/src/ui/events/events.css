@@ -835,10 +835,12 @@
    under the title so "New to Map Room 2" never squeezes the "?" out. */
 .events-card--mr2-welcome {
   --events-welcome-ready: #ffb347;
+  --events-welcome-open-ink: #2b1700;
 }
 
 :root[data-skin="flash"] .events-card--mr2-welcome {
   --events-welcome-ready: #c86a00;
+  --events-welcome-open-ink: #fff;
 }
 
 .events-welcome__head {
@@ -876,10 +878,21 @@
   line-height: 1;
 }
 
-.events-welcome__help-button[aria-expanded="true"] {
+.btn.events-welcome__help-button:hover:not(:disabled) {
+  background: var(--colour-surface-control);
+  color: var(--events-hot-text);
+}
+
+/* Open: pressed in and lit, so it reads as on while the note shows. The
+   hover state is named too: a ghost button's hover (ui.css) outranked the
+   open look, so a "?" just clicked looked the same as a closed one. */
+.btn.events-welcome__help-button[aria-expanded="true"],
+.btn.events-welcome__help-button[aria-expanded="true"]:hover:not(:disabled) {
   background: var(--events-welcome-ready);
   border-color: var(--events-welcome-ready);
-  color: #fff;
+  color: var(--events-welcome-open-ink);
+  box-shadow: inset 0 2px 4px rgb(0 0 0 / 45%);
+  transform: translateY(1px);
 }
 
 /* The "?" note: one bold line, then a picture and a short line per reward. */
