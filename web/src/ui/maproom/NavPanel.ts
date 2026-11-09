@@ -1,5 +1,6 @@
 import type { Bookmark } from "@/api/bookmarks";
 import { devStats } from "@/app/devDetails";
+import { onOutpostLabels } from "@/game/yard/outpostLabels";
 import { outpostShortTitle, pinnedFirst, type OwnOutpost } from "@/game/yard/ownYards";
 import { Panel } from "@/ui/Panel";
 
@@ -41,11 +42,17 @@ export class NavPanel {
   private readonly list: HTMLUListElement;
   /** One button per own outpost; hidden while there are none. */
   private readonly outposts: HTMLElement;
+  /** The outposts last given, redrawn when a rename or pin changes their names or order. */
+  private shownOutposts: readonly OwnOutpost[] = [];
+  private readonly stopLabels: () => void;
   private readonly status: HTMLElement;
   private readonly options: NavPanelOptions;
 
   constructor(options: NavPanelOptions) {
     this.options = options;
+    // A rename or pin (the yard card, the yard switcher) shows here at once,
+    // not only after the next yard load (tester, 9 Nov).
+    this.stopLabels = onOutpostLabels(() => this.drawOutposts());
     this.panel = new Panel({ title: "Find a place", closable: false, className: "map-panel" });
     this.element = this.panel.element;
 
@@ -169,6 +176,12 @@ export class NavPanel {
    * "…" and shows in full on hover.
    */
   setOutposts(outposts: readonly OwnOutpost[]): void {
+    this.shownOutposts = outposts;
+    this.drawOutposts();
+  }
+
+  private drawOutposts(): void {
+    const outposts = this.shownOutposts;
     this.outposts.hidden = outposts.length === 0;
     this.outposts.replaceChildren(
       ...pinnedFirst(outposts).map(({ baseid, cell }) => {
@@ -202,6 +215,7 @@ export class NavPanel {
   }
 
   destroy(): void {
+    this.stopLabels();
     this.panel.close();
   }
 }
