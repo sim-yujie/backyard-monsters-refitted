@@ -13,8 +13,14 @@ import { wishesSummary, wishMark } from "./wishMark";
  * **Collect** and **Send one back**, and **Collect all** above them.
  * Collecting adds the resource to the main yard up to its storage cap; when
  * there is not room for all of it, the first press warns and a second one
- * collects anyway. At most 5 a day; the rest wait, and a gift lapses after 7
- * days. Fetched fresh each time the tab comes forward.
+ * collects anyway. At most 10 a day (owner, 9 Nov 2026: was 5); the rest
+ * wait, and a gift lapses after 7 days. Fetched fresh each time the tab comes
+ * forward.
+ *
+ * Deleting (owner, 9 Nov 2026): each gift has the look's painted close disc;
+ * pressing it turns the row into "Delete?" with **Delete** and **Cancel**.
+ * With 2 or more waiting, **Delete all** sits beside Collect all and asks the
+ * same way. A deleted gift gives nothing and uses none of the day's collects.
  *
  * Above the gifts, **My wishes** (#391; ranked since the owner's 7 Nov
  * note): four resource tiles; tapping one adds it as the next wish (1, 2, 3,
@@ -87,8 +93,16 @@ export const GIFTS_TEXT = {
   collectAllAnyway: "Collect all anyway",
   sendBack: "Send one back",
   sentBack: "Gift sent today",
-  left: (count: number): string =>
-    count > 0 ? `You can collect ${count} more ${count === 1 ? "gift" : "gifts"} today.` : "You have collected all you can today. The rest will wait.",
+  /** The daily counter: short, the number first (owner: numbers over words). */
+  left: (count: number): string => (count > 0 ? `${count} left today` : "None left today. The rest wait."),
+  delete: "Delete",
+  /** The painted disc's name, for a screen reader and a mouse hover. */
+  deleteTitle: "Delete gift",
+  deleteAsk: "Delete? You get nothing.",
+  deleteAll: "Delete all",
+  deleteAllAsk: (count: number): string => `Delete all ${count}?`,
+  cancel: "Cancel",
+  deleted: (count: number): string => (count === 1 ? "Gift deleted." : `${count} gifts deleted.`),
   /** "Collected · [twig] +1,000 [goo] +500", green with a plus as gains (owner, 28 Oct). */
   collected: (amounts: ResourceAmounts): HTMLElement => {
     const line = document.createElement("span");
@@ -135,6 +149,8 @@ export class GiftsTab implements FriendsTabView {
   private busy = false;
   /** The gift id (or "all") whose short-storage warning is showing: the next press collects. */
   private warned: number | "all" | null = null;
+  /** The gift id (or "all") whose "Delete?" question is showing. */
+  private asking: number | "all" | null = null;
   /** Bumped by every fetch, so a late answer is dropped. */
   private generation = 0;
   private destroyed = false;
@@ -156,6 +172,7 @@ export class GiftsTab implements FriendsTabView {
   async show(): Promise<void> {
     const generation = ++this.generation;
     this.warned = null;
+    this.asking = null;
     if (!this.loaded) this.status.set(GIFTS_TEXT.loading);
     try {
       const { gifts, collectsLeft, wishes } = await this.options.api.gifts();
@@ -186,18 +203,13 @@ export class GiftsTab implements FriendsTabView {
   private render(): void {
     if (!this.loaded) return;
     const now = this.now();
-    const all = button(
-      this.warned === "all" ? GIFTS_TEXT.collectAllAnyway : GIFTS_TEXT.collectAll,
-      () => void this.collect("all"),
-      "primary",
-    );
-    all.classList.add("gifts-summary__all");
-    all.disabled = this.busy || this.gifts.length === 0 || this.collectsLeft === 0;
-    const line = make("p", "gifts-summary__left", GIFTS_TEXT.left(this.collectsLeft));
-    this.summary.replaceChildren(line, all);
+    if (this.asking === "all" && this.gifts.length < 2) this.asking = null;
+    if (typeof this.asking === "number" && !this.gifts.some((gift) => gift.id === this.asking)) this.asking = null;
+    this.renderSummary();
     this.renderWishes();
 
     const rows = this.gifts.map((gift) => {
+      if (this.asking === gift.id) return this.askRow(gift);
       const collect = button(
         this.warned === gift.id ? GIFTS_TEXT.collectAnyway : GIFTS_TEXT.collect,
         () => void this.collect(gift),
@@ -208,13 +220,101 @@ export class GiftsTab implements FriendsTabView {
       back.disabled = this.busy || !gift.canSendBack;
       const row = playerRow(gift, {
         ...(gift.expiresAt !== null && { note: lapseText(gift.expiresAt, now) }),
-        actions: [collect, back],
+        actions: [collect, back, this.deleteButton(gift)],
       });
       row.dataset["giftid"] = String(gift.id);
       row.querySelector(".friends-row__text")?.append(resourceAmount(gift.resource, gift.amount, { change: "gain", className: "gift-amount" }));
       return row;
     });
     this.body.replaceChildren(section(GIFTS_TEXT.waiting, rows, GIFTS_TEXT.none));
+  }
+
+  /** The line above the list: "10 left today", Delete all (2 or more waiting), Collect all; or the Delete all question. */
+  private renderSummary(): void {
+    const buttons = make("div", "gifts-summary__buttons");
+    this.summary.classList.toggle("gifts-summary--confirm", this.asking === "all");
+    if (this.asking === "all") {
+      const yes = button(GIFTS_TEXT.deleteAll, () => void this.remove("all"), "danger");
+      yes.disabled = this.busy;
+      buttons.append(yes, button(GIFTS_TEXT.cancel, () => this.ask(null)));
+      this.summary.replaceChildren(make("p", "gifts-summary__left gifts-summary__ask", GIFTS_TEXT.deleteAllAsk(this.gifts.length)), buttons);
+      return;
+    }
+    if (this.gifts.length >= 2) {
+      // Red in both looks: it throws gifts away, unlike the friendly plates beside it.
+      const dropAll = button(GIFTS_TEXT.deleteAll, () => this.ask("all"), "danger");
+      dropAll.classList.add("gifts-summary__delete-all");
+      dropAll.disabled = this.busy;
+      buttons.append(dropAll);
+    }
+    const all = button(
+      this.warned === "all" ? GIFTS_TEXT.collectAllAnyway : GIFTS_TEXT.collectAll,
+      () => void this.collect("all"),
+      "primary",
+    );
+    all.classList.add("gifts-summary__all");
+    all.disabled = this.busy || this.gifts.length === 0 || this.collectsLeft === 0;
+    buttons.append(all);
+    this.summary.replaceChildren(make("p", "gifts-summary__left", GIFTS_TEXT.left(this.collectsLeft)), buttons);
+  }
+
+  /** The look's painted close disc; its words only for a screen reader and a hover. */
+  private deleteButton(gift: Gift): HTMLButtonElement {
+    const node = make("button", "btn btn--ghost btn--icon friends-row__action gift-delete");
+    node.type = "button";
+    node.title = GIFTS_TEXT.deleteTitle;
+    node.setAttribute("aria-label", `${GIFTS_TEXT.deleteTitle}: ${gift.username}`);
+    node.disabled = this.busy;
+    node.append(make("span", "gift-delete__disc"));
+    node.addEventListener("click", () => this.ask(gift.id));
+    return node;
+  }
+
+  /** A gift's row asking "Delete?": the amount stays in view, so the player sees what goes. */
+  private askRow(gift: Gift): HTMLLIElement {
+    const yes = button(GIFTS_TEXT.delete, () => void this.remove(gift), "danger");
+    yes.disabled = this.busy;
+    const no = button(GIFTS_TEXT.cancel, () => this.ask(null));
+    const row = playerRow(gift, { note: GIFTS_TEXT.deleteAsk, actions: [yes, no] });
+    row.classList.add("friends-row--confirm");
+    row.dataset["giftid"] = String(gift.id);
+    row.querySelector(".friends-row__text")?.append(resourceAmount(gift.resource, gift.amount, { className: "gift-amount" }));
+    return row;
+  }
+
+  /** Shows (or with null, closes) the "Delete?" question for one gift or for all. */
+  private ask(which: number | "all" | null): void {
+    if (this.busy) return;
+    this.asking = which;
+    this.warned = null;
+    this.render();
+  }
+
+  /** Deletes one gift or every one waiting; nothing is given and no collect is used. */
+  private async remove(which: Gift | "all"): Promise<void> {
+    if (this.busy) return;
+    this.asking = null;
+    this.busy = true;
+    this.render();
+    try {
+      const answer = await this.options.api.deleteGifts(which === "all" ? "all" : which.id);
+      this.gifts = which === "all" ? [] : this.gifts.filter((gift) => gift.id !== which.id);
+      this.collectsLeft = answer.collectsLeft;
+      this.options.store.setGiftsWaiting(answer.giftsWaiting);
+      this.status.set(GIFTS_TEXT.deleted(Math.max(1, answer.deleted)));
+      // The list as the server has it (a gift may have come in meanwhile).
+      if (answer.giftsWaiting !== this.gifts.length) void this.show();
+    } catch (caught) {
+      const refusal = friendRefusal(caught);
+      this.status.set(refusal.message, "error");
+      if (refusal.reason === "noSuchGift" && which !== "all") {
+        this.gifts = this.gifts.filter((gift) => gift.id !== which.id);
+        this.options.store.setGiftsWaiting(this.gifts.length);
+      }
+    } finally {
+      this.busy = false;
+      if (!this.destroyed) this.render();
+    }
   }
 
   /** The "My wishes" strip: one toggle per resource, ranked by the marker, the others off once 3 are on. */
@@ -295,6 +395,7 @@ export class GiftsTab implements FriendsTabView {
       return;
     }
     this.warned = null;
+    this.asking = null;
     this.busy = true;
     this.render();
     try {
