@@ -1,6 +1,6 @@
 /*
  * The achievements screen (issue #204, docs/design/achievements.md §10.1):
- * docked on the right like the mailbox, a bottom sheet on a phone. The badge
+ * in the middle on a computer (ui.css `.panel--centre`), a bottom sheet on a phone. The badge
  * is the §10.4 placeholder until the art lands (#298).
  *
  * Every value comes from tokens.css.
@@ -15,6 +15,8 @@
   width: min(460px, calc(100vw - 2 * var(--space-4)));
   max-width: none;
   min-width: 0;
+  /* On a computer it opens in the middle (ui.css `.panel--centre`), this tall. */
+  --centre-height: 760px;
 }
 
 .ach-screen[hidden] {

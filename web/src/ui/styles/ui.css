@@ -433,6 +433,61 @@ body {
   box-shadow: var(--shadow-popup);
 }
 
+/* ── Middle windows (owner, 9 Nov 2026, option A) ───────────────────────────
+ * On a computer the game's windows open in the true middle of the screen, as
+ * the pop-ups above do and as Flash did: the Monsters screen and its tabs,
+ * Chaos Weapons, the Shop, Mail, Friends, Achievements, Defences, Alerts,
+ * Goals, Events, Quests and Build. `ui/centreWindow.ts` adds the class (and
+ * keeps one open at a time). Each is centred on both axes in the band between
+ * the HUD and the dock row, keeps its own width, takes its own height from
+ * `--centre-height` (else fits its content) and is never taller than the
+ * band, its body scrolling. Each window's own rule still places it on a
+ * phone, upright or on its side, where these do not apply. Only the building
+ * panel, the planner's tools, world chat and the attack screen stay at the
+ * side.
+ *
+ * The band starts under the HUD with room for what sticks up above the
+ * window's frame (the painted name plate and close X, `--centre-overhang`),
+ * and stops above the dock row (tester, 9 Nov): in the yard
+ * `centreWindow.ts` measures the HUD's bottom, the plate and the top of the
+ * dock buttons under the window (their words and badges too, in either
+ * look), sets `--centre-top` and `--centre-bottom` on it, and narrows a
+ * window that would reach the Events column under the HUD. A window with a
+ * minimum size (`--centre-min-width`, `--centre-min-height`: the Monsters
+ * screen, Build) is never made smaller than it: on a short or narrow screen
+ * it covers the Events column or the dock buttons instead, drawn above them
+ * (one step over the HUD's layer, under the notices). 112px is only the
+ * start, and the place outside the yard. While a middle window is open the
+ * yard's notices hang under its title bar (`--centre-notice-top`, measured
+ * too), so a claim's notice never hides the window's name or close X, and
+ * the window does not move for it.
+ */
+@media (width > 620px) and (height > 500px) {
+  .overlay__layer > .panel.panel--centre {
+    --centre-top: calc(var(--hud-height) + var(--centre-overhang, 0px) + var(--space-2));
+    /* The dock row (More, Monsters, Build, Collect all; Main yard and Map). */
+    --centre-bottom: 112px;
+
+    position: absolute;
+    inset: var(--centre-top) 0 var(--centre-bottom);
+    z-index: calc(var(--z-hud) + 1);
+    margin: auto;
+    height: var(--centre-height, max-content);
+    max-height: calc(100% - var(--centre-top) - var(--centre-bottom));
+    transform: none;
+  }
+
+  /* The painted name plate rides up over the frame's top edge, and the close
+     disc 12px (skin.css): the band's top leaves room for the higher. */
+  :root[data-skin] .overlay__layer > .panel.panel--centre {
+    --centre-overhang: max(12px, var(--skin-title-lift) - var(--skin-edge));
+  }
+
+  .overlay__layer:has(> .panel--centre:not([hidden])) > .yard-notices {
+    top: var(--centre-notice-top, calc(var(--notice-top-inset) + var(--space-3)));
+  }
+}
+
 /* ── Resource icons (#93) ──────────────────────────────────────────────────
  * `resourceIcon.ts` sets the art, its crop and the aspect ratio inline; the
  * size follows the text around it, so one icon works in a HUD readout, a

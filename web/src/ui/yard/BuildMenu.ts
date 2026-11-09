@@ -25,6 +25,7 @@ import { typeName } from "@/game/yard/planner/summary";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { gameIcon } from "@/ui/gameIcon";
+import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { costAmounts, resourceAmount, type ResourceRealm } from "@/ui/resourceIcon";
 import { INFERNO_LOCKED_MESSAGE, purseFunds } from "@/game/yard/surfaceInferno";
@@ -213,6 +214,9 @@ export class BuildMenu {
   private opened = false;
   private destroyed = false;
 
+  /** Its place in the middle of the screen, one window at a time (`ui/centreWindow.ts`). */
+  private readonly centre: CentreWindow;
+
   constructor(options: BuildMenuOptions) {
     this.binding = options.binding;
     this.onPick = options.onPick;
@@ -221,6 +225,7 @@ export class BuildMenu {
 
     const panel = new Panel({ title: "Build", className: "build-menu", closable: false });
     this.element = panel.element;
+    this.centre = centreWindow(this.element, () => this.close());
     this.element.hidden = true;
     this.element.setAttribute("role", "region");
     this.element.addEventListener("keydown", (event) => {
@@ -356,6 +361,7 @@ export class BuildMenu {
     const wasOpen = this.opened;
     this.opened = true;
     this.element.hidden = false;
+    this.centre.opened();
     const switching = category !== this.active;
     if (switching) {
       this.active = category;
@@ -380,6 +386,7 @@ export class BuildMenu {
     if (!this.opened) return;
     this.opened = false;
     this.element.hidden = true;
+    this.centre.closed();
     this.disarm();
     // A phone reopens on the tiles, not on an info it was showing.
     if (isStacked()) this.picked = null;

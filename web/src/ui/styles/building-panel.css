@@ -564,19 +564,6 @@
   font-weight: 800;
 }
 
-/* The Monsters screen beside the wider panel, not over it. */
-.overlay__layer:has(> .map-dock--right > .building-panel--housing) > .monsters-screen--beside-panel {
-  right: calc(468px + 2 * var(--space-4));
-  width: min(760px, calc(100vw - 468px - 4 * var(--space-4)));
-}
-
-@media (width <= 1080px) {
-  .overlay__layer:has(> .map-dock--right > .building-panel--housing) > .monsters-screen--beside-panel {
-    right: var(--space-4);
-    width: min(760px, calc(100vw - 2 * var(--space-4)));
-  }
-}
-
 /* A phone (R-Housing-phone): a sheet from the bottom with a handle, no
    line of purpose, and the rest a size smaller. */
 @media (width <= 620px) {
@@ -674,19 +661,6 @@
   padding: 0;
   border: 0;
   background: transparent;
-}
-
-/* The Monsters screen beside the wider panel, not over it. */
-.overlay__layer:has(> .map-dock--right > .building-panel--cage) > .monsters-screen--beside-panel {
-  right: calc(560px + 2 * var(--space-4));
-  width: min(760px, calc(100vw - 560px - 4 * var(--space-4)));
-}
-
-@media (width <= 1080px) {
-  .overlay__layer:has(> .map-dock--right > .building-panel--cage) > .monsters-screen--beside-panel {
-    right: var(--space-4);
-    width: min(760px, calc(100vw - 2 * var(--space-4)));
-  }
 }
 
 /* A phone: the sheet may rise higher than other buildings' for the champion. */

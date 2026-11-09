@@ -789,11 +789,12 @@
 /* ── What the corner makes way for ────────────────────────────────────── */
 
 /* A notice ("Day 3 claimed +10K +15", a quest claimed, Glimmers gained) shows
-   over an open window (Events, Quests, Build: all at --z-hud), never hidden
-   under it, so a claim's notice is seen while the window stays open. Popups
-   at --z-popup (the yard menu, a confirm) still cover it. */
+   over an open window (Events, Quests, Build: one step over --z-hud in the
+   middle, ui.css `.panel--centre`), never hidden under it, so a claim's
+   notice is seen while the window stays open. Popups at --z-popup (the yard
+   menu, a confirm) still cover it. */
 .yard-notices {
-  z-index: calc(var(--z-hud) + 1);
+  z-index: calc(var(--z-hud) + 2);
 }
 
 /* A building's panel docks on the right edge where the rail is. */

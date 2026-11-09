@@ -15,7 +15,8 @@
   border-radius: var(--radius-sm);
 }
 
-/* ── The frame: docked right under the HUD, full height ─────────────────── */
+/* ── The frame ──────────────────────────────────────────────────────────────
+   On a computer it opens in the middle (ui.css `.panel--centre`); this places it on a phone. */
 
 .monsters-screen {
   position: absolute;
@@ -28,12 +29,11 @@
   width: min(760px, calc(100vw - 2 * var(--space-4)));
   max-width: none;
   min-width: 0;
-}
-
-/* Beside the 300px building panel (maproom.css `.map-dock--right`), not over it. */
-.monsters-screen--beside-panel {
-  right: calc(300px + 2 * var(--space-4));
-  width: min(760px, calc(100vw - 300px - 4 * var(--space-4)));
+  /* Its height in the middle: the tabs do not jump as they change. Never
+     under 560px, the Hatch tab's hatcheries, slots and a row of monsters: on
+     a short screen it reaches over the dock rather than (ui.css). */
+  --centre-height: 820px;
+  --centre-min-height: 560px;
 }
 
 .monsters-screen[hidden] {
@@ -495,14 +495,6 @@
 
 /* ── Narrow screens ──────────────────────────────────────────────────────── */
 
-/* No room beside the building panel: the screen takes the right side over it. */
-@media (width <= 1080px) {
-  .monsters-screen--beside-panel {
-    right: var(--space-4);
-    width: min(760px, calc(100vw - 2 * var(--space-4)));
-  }
-}
-
 /* The card goes under the list. */
 @media (width <= 760px) {
   .locker__split {
@@ -543,8 +535,7 @@
 
 /* A phone: a bottom sheet over the lower part of the yard. */
 @media (width <= 620px) {
-  .monsters-screen,
-  .monsters-screen--beside-panel {
+  .monsters-screen {
     top: auto;
     left: 0;
     right: 0;

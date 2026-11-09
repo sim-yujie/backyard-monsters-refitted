@@ -17,6 +17,7 @@ import { PACK_LABELS, packGroups, type PackGroup, type PackOffer } from "@/game/
 import { actionKey, YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { formatAmount, formatCompact, formatCountdown } from "@/ui/format";
 import { iconAmount } from "@/ui/gameIcon";
+import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { resourceAmount, resourceIcon, resourceName, type ResourceRealm } from "@/ui/resourceIcon";
 import { ShinyButton } from "./ShinyButton";
@@ -178,6 +179,9 @@ export class ShopScreen {
   private opened = false;
   private destroyed = false;
 
+  /** Its place in the middle of the screen, one window at a time (`ui/centreWindow.ts`). */
+  private readonly centre: CentreWindow;
+
   constructor(options: ShopScreenOptions) {
     this.binding = options.binding;
     this.onClose = options.onClose;
@@ -187,6 +191,7 @@ export class ShopScreen {
     // opens and closes many times over one yard.
     this.panel = new Panel({ title: "Shop", className: "shop-screen", closable: false });
     this.element = this.panel.element;
+    this.centre = centreWindow(this.element, () => this.close());
     this.element.hidden = true;
     this.element.setAttribute("role", "region");
     this.element.addEventListener("keydown", (event) => {
@@ -232,6 +237,7 @@ export class ShopScreen {
     const wasOpen = this.opened;
     this.opened = true;
     this.element.hidden = false;
+    this.centre.opened();
     this.render();
     if (!wasOpen) this.element.querySelector<HTMLElement>(".shop-screen__close")?.focus();
     if (!wasOpen) guideBus.emit("screen", { id: GuideScreen.SHOP, root: this.element, header: this.panel.titlebar });
@@ -241,15 +247,11 @@ export class ShopScreen {
     if (!this.opened) return;
     this.opened = false;
     this.element.hidden = true;
+    this.centre.closed();
     this.setStatus(null);
     for (const card of this.cards.values()) card.button.setBusy(false);
     for (const button of this.packButtons.values()) button.setBusy(false);
     this.onClose?.();
-  }
-
-  /** Whether the building panel is open in the right dock: the screen then stands to its left. */
-  besidePanel(beside: boolean): void {
-    this.element.classList.toggle("shop-screen--beside-panel", beside);
   }
 
   /** Once a second, from the scene: the running items count down. */

@@ -131,7 +131,8 @@ describe("live attack clean-up (grill item 35)", () => {
 describe("Glimmers picture tester, 9 Nov", () => {
   it("a claim's notice shows over an open window (Events, Quests, Build), under popups", () => {
     const hud = css("styles/yard-hud.css");
-    expect(hud).toMatch(/\n\.yard-notices \{\s*z-index: calc\(var\(--z-hud\) \+ 1\);/);
+    // Over the middle windows, which sit one step over --z-hud (ui.css `.panel--centre`).
+    expect(hud).toMatch(/\n\.yard-notices \{\s*z-index: calc\(var\(--z-hud\) \+ 2\);/);
     // One rule for every window, not one per window.
     expect(css("quests/quests.css")).not.toMatch(/> \.yard-notices \{/);
   });

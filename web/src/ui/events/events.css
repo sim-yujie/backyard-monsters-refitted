@@ -109,8 +109,9 @@
   --events-hot-text: #9a3f00;
 }
 
-/* Centred under the HUD like Quests (owner, 8 Nov: "make the pop up centre
-   rather than at the side"), clear of the Events button at the top right. */
+/* In the middle on a computer, like every window (ui.css `.panel--centre`,
+   owner 9 Nov), clear of the Events button at the top right; this places it
+   on a phone on its side. */
 .events-panel {
   position: absolute;
   top: calc(var(--hud-height) + var(--space-3));

@@ -480,16 +480,6 @@
   :root[data-skin] .monsters-screen[data-tab="hatch"] {
     width: min(1160px + 2 * var(--skin-edge), calc(100vw - 2 * var(--space-4)));
   }
-
-  :root[data-skin] .monsters-screen--beside-panel[data-tab="hatch"] {
-    width: min(1160px + 2 * var(--skin-edge), calc(100vw - 300px - 4 * var(--space-4)));
-  }
-}
-
-@media (620px < width <= 1080px) {
-  :root[data-skin] .monsters-screen--beside-panel[data-tab="hatch"] {
-    width: min(1160px + 2 * var(--skin-edge), calc(100vw - 2 * var(--space-4)));
-  }
 }
 
 /* ── Outside the windows: the screen's own colours ──────────────────────── */

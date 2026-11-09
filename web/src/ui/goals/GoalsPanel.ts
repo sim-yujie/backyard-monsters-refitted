@@ -2,6 +2,7 @@ import type { GoalView } from "@/api/goals";
 import { monsterPortrait } from "@/game/portraits";
 import { tutTarget } from "@/game/guide/targets";
 import { formatAmount } from "@/ui/format";
+import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { resourceAmount } from "@/ui/resourceIcon";
 import { REWARD_KEYS, type ClaimFigure } from "./claimFigure";
@@ -201,6 +202,9 @@ export class GoalsPanel {
   private readonly words: GoalsPanelWords;
   private claimedOpen = false;
 
+  /** Its place in the middle of the screen, one window at a time (`ui/centreWindow.ts`). */
+  private readonly centre: CentreWindow;
+
   constructor(options: GoalsPanelOptions) {
     this.options = options;
     this.words = options.words ?? GOAL_WORDS;
@@ -208,9 +212,13 @@ export class GoalsPanel {
       title: this.words.title,
       className: "goals-panel",
       closeOnEscape: true,
-      onClose: () => options.onClose(),
+      onClose: () => {
+        this.centre.closed();
+        options.onClose();
+      },
     });
     this.element = tutTarget(this.panel.element, GOALS_PANEL_TARGET);
+    this.centre = centreWindow(this.element, () => this.close());
     this.render({ kind: "loading" });
   }
 
@@ -221,6 +229,7 @@ export class GoalsPanel {
 
   mount(container: HTMLElement): this {
     this.panel.mount(container);
+    this.centre.opened();
     return this;
   }
 

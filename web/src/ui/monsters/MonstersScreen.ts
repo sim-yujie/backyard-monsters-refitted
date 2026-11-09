@@ -5,6 +5,7 @@ import { monsterRealmOf, monsterWords } from "@/game/monsters/realm";
 import { nameOf, quantityOf, townHallLevel, type YardKind } from "@/game/yard/buildingCosts";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { formatAmount } from "@/ui/format";
+import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { RESOURCE_NAMES, resourceAmount } from "@/ui/resourceIcon";
 import {
@@ -118,6 +119,9 @@ export class MonstersScreen {
   private opened = false;
   private destroyed = false;
 
+  /** Its place in the middle of the screen, one window at a time (`ui/centreWindow.ts`). */
+  private readonly centre: CentreWindow;
+
   constructor(options: MonstersScreenOptions) {
     this.binding = options.binding;
     this.onClose = options.onClose;
@@ -128,6 +132,7 @@ export class MonstersScreen {
     // screen is opened and closed many times over one yard.
     this.panel = new Panel({ title: "Monsters", className: "monsters-screen", closable: false });
     this.element = this.panel.element;
+    this.centre = centreWindow(this.element, () => this.close());
     this.element.hidden = true;
     this.element.setAttribute("role", "region");
     this.element.addEventListener("keydown", (event) => {
@@ -220,7 +225,10 @@ export class MonstersScreen {
     this.element.hidden = false;
     this.active = tab;
     // The Hatch tab is the original's wide hatchery popup (#156): hatch.css widens the frame for it.
+    // Set before the middle window measures itself, or it keeps the last tab's width and cap
+    // (the Hatch tab at 900px wide stayed 651px and fell to its phone layout).
     this.element.dataset["tab"] = tab;
+    this.centre.opened();
     for (const [id, button] of this.tabButtons) {
       const current = id === tab;
       button.setAttribute("aria-selected", String(current));
@@ -242,18 +250,10 @@ export class MonstersScreen {
     if (!this.opened) return;
     this.opened = false;
     this.element.hidden = true;
+    this.centre.closed();
     delete this.element.dataset["shown"];
     this.hideVisible();
     this.onClose?.();
-  }
-
-  /**
-   * Whether the building panel is open in the right dock: on a wide screen the
-   * screen then stands to its left, so a Monster Locker's panel (its upgrade)
-   * and its Unlock tab are both in view.
-   */
-  besidePanel(beside: boolean): void {
-    this.element.classList.toggle("monsters-screen--beside-panel", beside);
   }
 
   /** Once a second, from the scene. */

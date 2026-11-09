@@ -45,6 +45,7 @@ import {
   inviteTag,
 } from "@/game/mail/invite";
 import type { OwnOutpost } from "@/game/yard/ownYards";
+import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { attackStatsRow, attackStatsText } from "@/ui/attackNotice";
 import { requestCard, type RequestAction } from "./RequestCard";
@@ -230,6 +231,9 @@ export class MailboxScreen {
   /** The status line says the list could not load: the next good fetch clears it, and nothing else does. */
   private loadFailed = false;
 
+  /** Its place in the middle of the screen, one window at a time (`ui/centreWindow.ts`). */
+  private readonly centre: CentreWindow;
+
   constructor(options: MailboxScreenOptions = {}) {
     this.options = options;
     this.api = options.api ?? mailApi;
@@ -240,6 +244,7 @@ export class MailboxScreen {
     // opens and closes many times over one scene.
     const panel = new Panel({ title: "Mail", className: "mail-screen", closable: false });
     this.element = panel.element;
+    this.centre = centreWindow(this.element, () => this.close());
     this.element.hidden = true;
     this.element.setAttribute("role", "region");
     this.element.addEventListener("keydown", (event) => {
@@ -302,6 +307,7 @@ export class MailboxScreen {
     const wasOpen = this.opened;
     this.opened = true;
     this.element.hidden = false;
+    this.centre.opened();
     if (!wasOpen) {
       this.view = { kind: "none" };
       this.renderPane();
@@ -320,6 +326,7 @@ export class MailboxScreen {
     if (!this.opened) {
       this.opened = true;
       this.element.hidden = false;
+      this.centre.opened();
       void this.refresh();
     }
     this.view = { kind: "compose", to };
@@ -348,6 +355,7 @@ export class MailboxScreen {
     if (!this.opened) {
       this.opened = true;
       this.element.hidden = false;
+      this.centre.opened();
       void this.refresh();
     }
     this.showTruceForm({ userid: to.userid, name: to.name }, to);
@@ -359,6 +367,7 @@ export class MailboxScreen {
     if (!this.opened) {
       this.opened = true;
       this.element.hidden = false;
+      this.centre.opened();
       void this.refresh();
     }
     this.view = { kind: "invite", target };
@@ -372,6 +381,7 @@ export class MailboxScreen {
     const hadFocus = this.element.contains(document.activeElement);
     this.opened = false;
     this.element.hidden = true;
+    this.centre.closed();
     this.setStatus(null);
     this.options.onClose?.(hadFocus);
   }

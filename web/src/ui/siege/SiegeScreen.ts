@@ -27,6 +27,7 @@ import {
 import { progressFraction } from "@/game/yard/jobs";
 import { YardChangeReason, type YardActionResult, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
+import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/monsters.css";
@@ -114,6 +115,9 @@ export class SiegeScreen {
   /** Plain buttons disabled while any siege request runs. */
   private plainButtons: HTMLButtonElement[] = [];
 
+  /** Its place in the middle of the screen, one window at a time (`ui/centreWindow.ts`). */
+  private readonly centre: CentreWindow;
+
   constructor(options: SiegeScreenOptions) {
     this.binding = options.binding;
     this.openMap = options.openMap;
@@ -123,6 +127,7 @@ export class SiegeScreen {
 
     this.panel = new Panel({ title: "Chaos Weapons", className: "monsters-screen siege-screen", closable: false });
     this.element = this.panel.element;
+    this.centre = centreWindow(this.element, () => this.close());
     this.element.hidden = true;
     this.element.setAttribute("role", "region");
     this.element.addEventListener("keydown", (event) => {
@@ -219,6 +224,7 @@ export class SiegeScreen {
     }
     this.opened = true;
     this.element.hidden = false;
+    this.centre.opened();
     this.site = site;
     this.element.dataset["tab"] = site;
     for (const [id, button] of this.tabButtons) {
@@ -237,15 +243,11 @@ export class SiegeScreen {
     if (!this.opened) return;
     this.opened = false;
     this.element.hidden = true;
+    this.centre.closed();
     this.confirm = null;
     // Not playing where nobody looks.
     for (const video of this.detail.querySelectorAll("video")) video.pause();
     this.onClose?.();
-  }
-
-  /** Whether the building panel is open in the right dock: the screen then stands to its left. */
-  besidePanel(beside: boolean): void {
-    this.element.classList.toggle("monsters-screen--beside-panel", beside);
   }
 
   /** Once a second, from the scene. */
