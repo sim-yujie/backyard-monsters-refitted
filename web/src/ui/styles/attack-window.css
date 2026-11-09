@@ -136,9 +136,12 @@
 }
 
 /* The bomb tiles are wide enough for their longest size word, "Massive"
-   (58 px at --text-sm, in either look), at every screen size: never "Massi…". */
+   (58 px at --text-sm, in either look), at every screen size: never "Massi…".
+   Four tiles share a line when each still gets 64 px: Classic's thicker
+   frame left 294 px at 390 wide, 2 px short of four 68 px tiles, and "Lv 3"
+   went alone onto a second line (tester, 9 Nov). A computer keeps 68 px. */
 .attack-window__grid.attack-window__weapons {
-  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(clamp(64px, calc((100% - 3 * var(--space-2)) / 4), 68px), 1fr));
 }
 
 .attack-window__tile {

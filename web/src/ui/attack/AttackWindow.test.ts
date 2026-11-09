@@ -263,7 +263,12 @@ describe("attack-window.css", () => {
   });
 
   it("keeps the bomb tiles wide enough for \"Massive\" at every size, phones on their side included", () => {
-    expect(css).toMatch(/\.attack-window__grid\.attack-window__weapons \{\s*grid-template-columns: repeat\(auto-fill, minmax\(68px, 1fr\)\);/);
+    // 64 to 68 px each ("Massive" is 58 px plus the tile's 6), four to a line
+    // whenever four fit at 64 px: Classic at 390 wide no longer drops "Lv 3"
+    // alone onto a second line (tester, 9 Nov).
+    expect(css).toMatch(
+      /\.attack-window__grid\.attack-window__weapons \{\s*grid-template-columns: repeat\(auto-fill, minmax\(clamp\(64px, calc\(\(100% - 3 \* var\(--space-2\)\) \/ 4\), 68px\), 1fr\)\);/,
+    );
     // The smaller phone-on-its-side columns are for the monsters only.
     expect(css).not.toMatch(/@media \(max-height: 480px\) \{\s*\.attack-window__grid \{/);
   });
