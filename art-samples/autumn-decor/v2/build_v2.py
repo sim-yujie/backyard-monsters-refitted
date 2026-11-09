@@ -35,20 +35,31 @@ GRASS, LIGHT, INK, font = refs.GRASS, refs.LIGHT, refs.INK, refs.font
 # name, label, (sheet, cols, rows, cell), in-game height (px), Flash neighbours of similar size,
 # rejected v1 cut-out (2x art) or None
 PICKS = [
-    ("turkey-topiary", "Turkey Topiary", ("r1/autumn-v2-r1.png", 3, 2, 0), 54,
+    ("turkey-topiary", "Turkey Topiary", ("r2/autumn-v2-r2.png", 2, 2, 2), 54,
      ["flowers/top-red.png", "blackberrybush/top.png", "bonsaitree/top.png"], "turkey-topiary@2x.png"),
-    ("harvest-wheelbarrow", "Harvest Wheelbarrow", ("r1/autumn-v2-r1.png", 3, 2, 1), 42,
+    ("harvest-wheelbarrow", "Harvest Wheelbarrow", ("r1/autumn-v2-r1.png", 3, 2, 1), 46,
      ["lawnchair/top.png", "pumpkins/attended-large-top.png", "hammock/top.png"], "harvest-wheelbarrow@2x.png"),
-    ("autumn-maple", "Autumn Maple Tree", ("r1/autumn-v2-r1.png", 3, 2, 2), 80,
+    ("autumn-maple", "Autumn Maple Tree", ("r2/autumn-v2-r2.png", 2, 2, 0), 80,
      ["bonsaitree/top.png", "scarecrow/top.png", "birdhouse/top.png"], "autumn-maple@2x.png"),
-    ("leaf-pile-rake", "Leaf Pile and Rake", ("r1/autumn-v2-r1.png", 3, 2, 3), 40,
+    ("leaf-pile-rake", "Leaf Pile and Rake", ("r2/autumn-v2-r2.png", 2, 2, 1), 40,
      ["thorns/top.png", "walnut/top.png", "sundial/top.png"], "leaf-pile-rake@2x.png"),
     ("apple-barrel", "Apple Barrel", ("r1/autumn-v2-r1.png", 3, 2, 4), 44,
      ["beehive/top.png", "outhouse/top.png", "flowers/top-yellow.png"], None),
-    ("pie-stump", "Pie on a Tree Stump", ("r1/autumn-v2-r1.png", 3, 2, 5), 36,
+    ("pie-stump", "Pie on a Tree Stump", ("r2/autumn-v2-r2.png", 2, 2, 3), 36,
      ["beehive/top.png", "acorn/top.png", "pumpkins/top.png"], None),
 ]
 NAMES = {p: n for n, p in refs.ALL}  # Flash path -> name
+
+
+# Tone tweak after cutting: gamma > 1 deepens the shadows (only the maple's crown needed it,
+# to sit as dark as the Flash bonsai's foliage).
+GAMMA = {"autumn-maple": 1.25}
+
+
+def gamma(im, g):
+    lut = [round(255 * (i / 255) ** g) for i in range(256)]
+    r, gr, b, a = im.split()
+    return Image.merge("RGBA", (r.point(lut), gr.point(lut), b.point(lut), a))
 
 
 def cut(src):
@@ -59,7 +70,16 @@ def cut(src):
 
 
 def at_h(im, h):
-    return im.resize((max(1, round(im.width * h / im.height)), h), Image.LANCZOS)
+    out = im.resize((max(1, round(im.width * h / im.height)), h), Image.LANCZOS)
+    px = out.load()
+    for y in range(out.height):  # drop faint specks and any magenta left in the soft edge
+        for x in range(out.width):
+            r, g, b, a = px[x, y]
+            if a < 24:
+                px[x, y] = (0, 0, 0, 0)
+            elif min(r, b) - g > 40:
+                px[x, y] = (r, g, min(b, g + 20), a)
+    return out
 
 
 def z(im, k):
@@ -105,6 +125,8 @@ def main():
         if not os.path.exists(os.path.join(HERE, src[0])):
             print("missing", src[0]); continue
         full = cut(src)
+        if name in GAMMA:
+            full = gamma(full, GAMMA[name])
         one, two = at_h(full, h), at_h(full, h * 2)
         one.save(os.path.join(OUT, f"{name}.png"))
         two.save(os.path.join(OUT, f"{name}@2x.png"))
