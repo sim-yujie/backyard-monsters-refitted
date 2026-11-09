@@ -231,6 +231,16 @@ describe("attack-window.css", () => {
     expect(css).toMatch(/\.attack-window__actions > \.btn \{[^}]*justify-content: center;[^}]*text-align: center;[^}]*white-space: nowrap;/);
   });
 
+  it("keeps the bomb tiles wide enough for \"Massive\" at every size, phones on their side included", () => {
+    expect(css).toMatch(/\.attack-window__grid\.attack-window__weapons \{\s*grid-template-columns: repeat\(auto-fill, minmax\(68px, 1fr\)\);/);
+    // The smaller phone-on-its-side columns are for the monsters only.
+    expect(css).not.toMatch(/@media \(max-height: 480px\) \{\s*\.attack-window__grid \{/);
+  });
+
+  it("centres the Classic title on the ribbon's red band, in this window only", () => {
+    expect(css).toMatch(/:root\[data-skin="flash"\] \.attack-window \.panel__title \{[^}]*padding-top: 3px;/);
+  });
+
   it("sets no frame, title or button art of its own: the skin draws those", () => {
     expect(css).not.toMatch(/border-image|--skin-(frame|button|title)\s*:/);
   });

@@ -36,6 +36,13 @@
   padding: var(--space-2) var(--space-4) 0;
 }
 
+/* Classic: "Attack" sat about 3 px above the middle of the red ribbon (tester,
+   9 Nov); this nudges it down onto the band's centre. The shared ribbon in
+   skin.css is left alone: the other windows measure right. */
+:root[data-skin="flash"] .attack-window .panel__title {
+  padding-top: 3px;
+}
+
 /* ── Who is being attacked ─────────────────────────────────────────────── */
 
 .attack-window__target {
