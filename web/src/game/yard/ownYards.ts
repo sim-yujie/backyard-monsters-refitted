@@ -1,7 +1,9 @@
+import type { OutpostLabels } from "@/api/outpostLabels";
 import { BaseMode, type BaseLoadResponse } from "@/api/types";
 import type { OffsetCell } from "@/game/HexGrid";
 import type { TakeoverKind } from "@/game/maproom/takeover";
 import { OUTPOST_CORE_TYPE, type YardKind } from "./buildingCostData";
+import { outpostLabels, outpostName } from "./outpostLabels";
 import type { Yard } from "./yardModel";
 
 /**
@@ -109,9 +111,26 @@ export const INFERNO_YARD_TITLE = "Inferno";
 export const outpostTitle = (cell: OffsetCell | null | undefined): string =>
   cell ? `Outpost (${cell.col}, ${cell.row})` : "Outpost";
 
-/** The yard's title: "Main yard", "Inferno" or "Outpost (x, y)". */
-export const yardTitle = (target: OwnYardTarget): string =>
-  target.kind === "main" ? MAIN_YARD_TITLE : target.kind === "inferno" ? INFERNO_YARD_TITLE : outpostTitle(target.cell);
+/**
+ * An own outpost's title: the name the player gave it (beta 7), or
+ * "Outpost (x, y)" when it has none.
+ */
+export const namedOutpostTitle = (
+  baseid: string,
+  cell: OffsetCell | null | undefined,
+  labels: OutpostLabels = outpostLabels(),
+): string => outpostName(baseid, labels) || outpostTitle(cell);
+
+/** The yard's title: "Main yard", "Inferno", or the outpost's name or "Outpost (x, y)". */
+export const yardTitle = (
+  target: OwnYardTarget,
+  labels: OutpostLabels = outpostLabels(),
+): string =>
+  target.kind === "main"
+    ? MAIN_YARD_TITLE
+    : target.kind === "inferno"
+      ? INFERNO_YARD_TITLE
+      : namedOutpostTitle(target.baseid, target.cell, labels);
 
 /** "No outposts", "1 outpost", "3 outposts". */
 export const outpostCountText = (count: number): string =>
@@ -136,22 +155,49 @@ export interface OwnYardEntry {
   readonly title: string;
   /** The yard open now. */
   readonly current: boolean;
+  /** An outpost's own name (beta 7); "" for none, and for the main yard. */
+  readonly name: string;
+  /** An outpost pinned to the top of the list (beta 7). */
+  readonly pinned: boolean;
 }
 
 /**
- * Every yard the player owns, for the switcher: the main yard first, then each
- * outpost in the main yard's order, the one open now marked.
+ * Every yard the player owns, for the switcher: the main yard first, then
+ * the pinned outposts in the order they were pinned (beta 7), then the rest
+ * in the main yard's order, the one open now marked.
  */
 export const ownYardsOf = (
   save: Pick<BaseLoadResponse, "outposts">,
   current: OwnYardTarget,
-): OwnYardEntry[] => [
-  { target: MAIN_YARD, title: MAIN_YARD_TITLE, current: current.kind === "main" },
-  ...outpostsOf(save).map((outpost) => {
+  labels: OutpostLabels = outpostLabels(),
+): OwnYardEntry[] => {
+  const pinOrder = new Map(labels.pins.map((baseid, index) => [baseid, index]));
+  const outposts = outpostsOf(save).map((outpost) => {
     const target = outpostTarget(outpost.baseid, outpost.cell);
-    return { target, title: outpostTitle(outpost.cell), current: sameYard(target, current) };
-  }),
-];
+    const name = outpostName(outpost.baseid, labels);
+    return {
+      target,
+      title: name || outpostTitle(outpost.cell),
+      current: sameYard(target, current),
+      name,
+      pinned: pinOrder.has(outpost.baseid),
+    };
+  });
+  const pinned = outposts
+    .filter((one) => one.pinned)
+    .sort((a, b) => pinOrder.get(a.target.baseid)! - pinOrder.get(b.target.baseid)!);
+  return [
+    {
+      target: MAIN_YARD,
+      title: MAIN_YARD_TITLE,
+      current: current.kind === "main",
+      name: "",
+      pinned: false,
+    },
+    ...pinned,
+    ...outposts.filter((one) => !one.pinned),
+  ];
+};
 
 /**
  * Whether an outpost holds nothing but its core, as one just taken from a

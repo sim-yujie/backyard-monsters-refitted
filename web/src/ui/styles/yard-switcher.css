@@ -20,6 +20,9 @@
   text-overflow: ellipsis;
 }
 
+/* Beta 7 (owner 9 Nov 2026): one line per yard, a pin and a rename on each
+   outpost, and room for hundreds of outposts: the heading stays and the
+   rows scroll inside a capped height. */
 .yard-switcher__list {
   position: absolute;
   bottom: calc(100% + var(--space-2));
@@ -27,10 +30,8 @@
   z-index: var(--z-popup);
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  min-width: 13rem;
-  max-height: 60vh;
-  overflow-y: auto;
+  width: min(20rem, calc(100vw - 2 * var(--space-4)));
+  max-height: min(60vh, 34rem);
   padding: var(--space-1);
   border: 1px solid var(--colour-border);
   border-radius: var(--radius-md);
@@ -45,21 +46,181 @@
 }
 
 .yard-switcher__heading {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--colour-border-subtle);
   color: var(--colour-text-muted);
   font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.yard-switcher__counts {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.yard-switcher__outposts {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.yard-switcher__error {
+  flex: none;
+  margin: var(--space-1) var(--space-2) 0;
+  color: var(--colour-danger);
+  font-size: var(--text-xs);
+}
+
+.yard-switcher__error[hidden] {
+  display: none;
+}
+
+.yard-switcher__rows {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  padding-top: var(--space-1);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.yard-switcher__row {
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-height: 36px;
+  border-radius: var(--radius-sm);
+  /* Rows off screen skip layout and paint: smooth with 800 outposts. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 36px;
+}
+
+.yard-switcher__row--pinned {
+  background: rgb(242 194 48 / 8%);
 }
 
 .yard-switcher__item {
-  min-height: 44px;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 var(--space-2);
   justify-content: flex-start;
   text-align: start;
   color: var(--colour-text);
+  white-space: nowrap;
+}
+
+.yard-switcher__kind {
+  flex: none;
+  opacity: 0.7;
+}
+
+.yard-switcher__name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.yard-switcher__cell {
+  flex: none;
+  margin-left: auto;
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
 }
 
 .yard-switcher__item[aria-current="true"] {
   color: var(--colour-accent);
   font-weight: 700;
   cursor: default;
+}
+
+.yard-switcher__action {
+  flex: none;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+}
+
+.yard-switcher__pin .game-icon {
+  filter: grayscale(1);
+  opacity: 0.4;
+  transition:
+    opacity 120ms ease,
+    filter 120ms ease;
+}
+
+.yard-switcher__pin:hover .game-icon,
+.yard-switcher__pin:focus-visible .game-icon {
+  opacity: 0.8;
+}
+
+.yard-switcher__pin--on .game-icon,
+.yard-switcher__pin--on:hover .game-icon {
+  filter: none;
+  opacity: 1;
+}
+
+.yard-switcher__rename {
+  color: var(--colour-text-muted);
+}
+
+.yard-switcher__pencil {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.yard-switcher__rename-form {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 2px var(--space-1);
+}
+
+.yard-switcher__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--colour-accent);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-input);
+  color: var(--colour-text);
+  font: inherit;
+}
+
+/* Fingers need bigger targets than a mouse. */
+@media (pointer: coarse) {
+  .yard-switcher__row,
+  .yard-switcher__item {
+    min-height: 44px;
+  }
+
+  .yard-switcher__row {
+    contain-intrinsic-size: auto 44px;
+  }
+
+  .yard-switcher__action {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .yard-switcher__input {
+    min-height: 40px;
+  }
 }

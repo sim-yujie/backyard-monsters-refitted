@@ -6,6 +6,7 @@ import {
   infernoTarget,
   isEmptyOutpost,
   MAIN_YARD,
+  namedOutpostTitle,
   outpostBaseid,
   outpostCountText,
   outpostsOf,
@@ -61,8 +62,26 @@ describe("the yard switcher's list", () => {
 
   it("lists only the main yard for a player with no outposts", () => {
     expect(ownYardsOf(listing([]), MAIN_YARD)).toEqual([
-      { target: MAIN_YARD, title: "Main yard", current: true },
+      { target: MAIN_YARD, title: "Main yard", current: true, name: "", pinned: false },
     ]);
+  });
+
+  it("names outposts and lists the pinned ones first, in pin order (beta 7)", () => {
+    const three = listing([
+      [1, 1, "11"],
+      [2, 2, "22"],
+      [3, 3, "33"],
+    ]);
+    const labels = { names: { "22": "Farm", "99": "Lost" }, pins: ["33", "99", "11"] };
+    const entries = ownYardsOf(three, MAIN_YARD, labels);
+    expect(entries.map((entry) => [entry.title, entry.name, entry.pinned])).toEqual([
+      ["Main yard", "", false],
+      ["Outpost (3, 3)", "", true],
+      ["Outpost (1, 1)", "", true],
+      ["Farm", "Farm", false],
+    ]);
+    expect(yardTitle(outpostTarget("22", { col: 2, row: 2 }), labels)).toBe("Farm");
+    expect(namedOutpostTitle("11", { col: 1, row: 1 }, labels)).toBe("Outpost (1, 1)");
   });
 
   it("titles and counts", () => {

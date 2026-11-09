@@ -1,6 +1,6 @@
 import type { Bookmark } from "@/api/bookmarks";
 import { devStats } from "@/app/devDetails";
-import { outpostTitle, type OwnOutpost } from "@/game/yard/ownYards";
+import { namedOutpostTitle, type OwnOutpost } from "@/game/yard/ownYards";
 import { Panel } from "@/ui/Panel";
 
 /**
@@ -166,8 +166,8 @@ export class NavPanel {
   setOutposts(outposts: readonly OwnOutpost[]): void {
     this.outposts.hidden = outposts.length === 0;
     this.outposts.replaceChildren(
-      ...outposts.map(({ cell }) =>
-        button(outpostTitle(cell), `Centre on your outpost at ${cell.col}, ${cell.row}`, () =>
+      ...outposts.map(({ baseid, cell }) =>
+        button(namedOutpostTitle(baseid, cell), `Centre on your outpost at ${cell.col}, ${cell.row}`, () =>
           this.options.onJump(cell.col, cell.row),
         ),
       ),
