@@ -86,6 +86,12 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * (`overdrive`), a crossed wrench and hammer for another store boost such as
  * Sharper Tools (`tools`), and the festive calendar with a gold star and rosette on
  * the Events button (`event`), which suits every event, not just Halloween.
+ *
+ * The Friends window's "no gift sent today" mark and the Friends button's gift
+ * badge (`ui/friends/FriendsWindow.ts`, owner 9 Nov: painted icons, no emoji):
+ * `gift` is a STAND-IN, its files copies of the mixed resource pile (`income`;
+ * a gift is a pile of resources) until a painted gift box is made; replace
+ * `gift-*.webp` to change it.
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -141,6 +147,7 @@ export const GAME_ICONS = {
   overdrive: "Production Overdrive",
   tools: "Store boost",
   event: "Events",
+  gift: "Gift",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;
