@@ -99,6 +99,9 @@ describe("the chat panel", () => {
     panel();
     expect(sockets).toHaveLength(0);
     expect(document.body.textContent).toContain("Not in chat");
+    // One panel, with the warning about the game's own chat as a notice.
+    expect(document.querySelector(".chat-panel h2")?.textContent).toBe("Global game chat");
+    expect(document.querySelector(".chat-panel .notice")?.textContent).toContain("closes the chat in your own game");
   });
 
   it("signs in as the owner, joins every room and shows the history", async () => {

@@ -4,6 +4,7 @@ import {
   type ErrorGroup,
   type ErrorReporter,
   type ErrorSource,
+  type ErrorTotals,
 } from "./api";
 import { h, replace } from "./dom";
 import { ago, count, dateTime, plural } from "./format";
@@ -51,7 +52,11 @@ export class ErrorsView {
   /** Whether the owner opened the charts, kept across refreshes. */
   private chartsOpen = false;
 
-  constructor(private readonly onError: (message: string) => void) {}
+  constructor(
+    private readonly onError: (message: string) => void,
+    /** Told the totals each time the list loads (Server health's Recorded errors card). */
+    private readonly onTotals: (totals: ErrorTotals) => void = () => {},
+  ) {}
 
   /** The daily counts for the charts (from the stats overview). */
   setDays(days: readonly DailyStat[]): void {
@@ -63,6 +68,7 @@ export class ErrorsView {
     try {
       const { groups, totals } = await fetchErrors(this.source, this.sort);
       this.render(groups, totals.browser, totals.server);
+      this.onTotals(totals);
     } catch (err) {
       this.onError(`Errors could not be loaded: ${String(err)}`);
     } finally {

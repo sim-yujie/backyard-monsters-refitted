@@ -41,6 +41,10 @@ import { errorWords } from "./shiny";
  * reason and when it ends.
  */
 
+/** What a "No chat copy" chip means, on hover. */
+export const NO_COPY_TITLE =
+  "The chat server kept no copy of this line, so its words come from the reporter's game and could not be checked.";
+
 /** What the Warn form starts with. */
 export const DEFAULT_WARNING = "Please keep chat friendly. Next time it's a ban.";
 
@@ -399,10 +403,10 @@ export const reportRow = (report: ChatReportView, open: (report: ChatReportView)
               attrs: {
                 title: report.verified
                   ? "The words match the chat server's own copy of the line."
-                  : "The chat server had no copy of the line to check the words against.",
+                  : NO_COPY_TITLE,
               },
             },
-            report.verified ? "Matched" : "Not matched",
+            report.verified ? "Checked" : "No chat copy",
           ),
           " ",
           [

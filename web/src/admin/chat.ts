@@ -1,6 +1,7 @@
 import { chatSocketUrl, type ChatLineWire, type ChatServerMessage } from "@/api/chat";
 import { fetchChatSession, type AdminChatSession } from "./api";
 import { h, replace } from "./dom";
+import { icon } from "./icons";
 import { roomLabel } from "./moderation";
 import { errorWords } from "./shiny";
 
@@ -142,22 +143,33 @@ export class ChatPanel {
       event.preventDefault();
       this.sendLine();
     });
+    // Astra's mock-up: one panel, the warning about the game's own chat as a notice.
     replace(
       this.element,
       h(
-        "p",
-        { class: "lede" },
-        "Your lines carry the GM badge. Joining here closes the chat in your own game: " +
-          "one account has one chat at a time. Click a name to open that player in Moderation.",
+        "section",
+        { class: "panel chat-panel", attrs: { "aria-labelledby": "chat-panel-title" } },
+        h(
+          "div",
+          { class: "chat-bar" },
+          h("h2", { class: "section-title", attrs: { id: "chat-panel-title" } }, "Global game chat"),
+          h("span", { class: "chat-status" }, this.statusDot, this.statusText),
+          this.joinButton,
+        ),
+        h(
+          "p",
+          { class: "small lede" },
+          "Your lines carry the GM badge so players know who is speaking. Click a name to open that player in Moderation.",
+        ),
+        h(
+          "div",
+          { class: "notice" },
+          icon("warn", 18),
+          h("span", {}, "Joining here closes the chat in your own game: one account has one chat at a time."),
+        ),
+        this.problem,
+        h("div", { class: "chat-box" }, this.tabs, this.log, form),
       ),
-      h(
-        "div",
-        { class: "chat-bar" },
-        h("span", { class: "chat-status" }, this.statusDot, this.statusText),
-        this.joinButton,
-      ),
-      this.problem,
-      h("div", { class: "chat-box" }, this.tabs, this.log, form),
     );
     this.render();
   }

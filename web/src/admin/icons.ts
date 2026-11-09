@@ -37,6 +37,15 @@ const PATHS = {
   x: ["M6 6l12 12", "M18 6 6 18"],
   history: ["M3 12a9 9 0 1 0 2.6-6.4L3 8", "M3 3v5h5", "M12 8v4l3 2"],
   menu: ["M4 6h16", "M4 12h16", "M4 18h16"],
+  /** The six pages' icons (Codex astra's mock-up, 8 Nov 2026). */
+  home: ["M3 10 12 3l9 7", "M5 9v12h5v-7h4v7h5V9"],
+  shield: ["M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6z", "m9 12 2 2 4-4"],
+  support: ["M4 13v-1a8 8 0 0 1 16 0v1", "M4 12H2v7h4v-7z", "M20 12h2v7h-4v-7z", "M18 19c0 2-3 2-6 2"],
+  announce: ["M4 10h4l11-5v14L8 14H4z", "m8 14 2 6H6l-2-6", "M21 9v6"],
+  chart: ["M4 3v18h17", "M8 17v-5", "M13 17V7", "M18 17V4"],
+  server: ["M4 4h16v6H4z", "M4 14h16v6H4z", "M7 7h.01", "M7 17h.01", "M16 7h1", "M16 17h1"],
+  arrow: ["M5 12h14", "m14 7 5 5-5 5"],
+  search: ["m20 20-5-5", "M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0"],
   /** An attack made (out, up-right) and an attack received (in, down-left). */
   out: ["M7 17 17 7", "M8 7h9v9"],
   in: ["M17 7 7 17", "M16 17H7V8"],

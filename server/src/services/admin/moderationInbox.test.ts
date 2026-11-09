@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseInboxAction } from "./moderationInbox.js";
+import { countOnce, parseInboxAction } from "./moderationInbox.js";
 
 describe("an inbox step, as the page sends it", () => {
   const seen = { caseId: 4, reports: 3, flagsUpTo: 90 };
@@ -36,5 +36,24 @@ describe("an inbox step, as the page sends it", () => {
       ok: true,
       value: { seen: { caseId: null, reports: 0, flagsUpTo: null } },
     });
+  });
+});
+
+describe("counting chat lines once (owner, 8 Nov 2026)", () => {
+  test("a reported line the word filter also caught is one line", () => {
+    expect(countOnce([1000], [1000])).toEqual({ messages: 1, alsoReported: 1, filterOnly: 0 });
+  });
+
+  test("reported lines and other caught lines add up, the shared one once", () => {
+    expect(countOnce([1000, 2000, 3000], [2000, 4000])).toEqual({ messages: 4, alsoReported: 1, filterOnly: 1 });
+  });
+
+  test("nothing shared, or nothing at all", () => {
+    expect(countOnce([1000], [2000])).toEqual({ messages: 2, alsoReported: 0, filterOnly: 1 });
+    expect(countOnce([], [])).toEqual({ messages: 0, alsoReported: 0, filterOnly: 0 });
+  });
+
+  test("the same stamp twice is still one line", () => {
+    expect(countOnce([1000, 1000], [1000, 1000])).toEqual({ messages: 1, alsoReported: 1, filterOnly: 0 });
   });
 });

@@ -265,6 +265,10 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* Keeps the dock's own layers (the More fan's z-index over Monsters and
+     Build) inside the dock, so More never floats above a window opened over
+     the yard while the other dock buttons sit under it (owner, 8 Nov). */
+  isolation: isolate;
 }
 
 .yard-dock__left {

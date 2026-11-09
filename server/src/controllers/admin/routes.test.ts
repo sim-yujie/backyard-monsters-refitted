@@ -47,6 +47,12 @@ describe("the dashboard routes (controllers/admin/routes.ts)", () => {
     );
   });
 
+  test("include the moderation inbox routes: open players, the Closed list, and the one step", () => {
+    expect(routes.map((r) => r.route)).toEqual(
+      expect.arrayContaining(["GET /inbox", "GET /inbox/closed", "POST /inbox/:id/act"])
+    );
+  });
+
   test("include the moderator mail routes: the conversations, and one conversation", () => {
     expect(routes.map((r) => r.route)).toEqual(expect.arrayContaining(["GET /modmail", "GET /modmail/:threadid"]));
   });

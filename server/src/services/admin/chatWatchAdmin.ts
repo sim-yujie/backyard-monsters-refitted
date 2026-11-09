@@ -25,6 +25,8 @@ export interface FlagLine {
   /** `word`: a listed word as such; `disguised`: spelled to get past the filter. */
   rule: FlagRule;
   at: string;
+  /** When it was said (ms), as chat stamped it: the same line in a chat report has the same stamp. */
+  ts: number;
 }
 
 /** A flagged player: their open flags, counted, with the latest few lines. */
@@ -47,6 +49,9 @@ export interface FlaggedPlayer {
 /** Lines shown per flagged player. */
 export const FLAG_LINES_SHOWN = 3;
 
+/** The most lines one player's row carries. */
+export const FLAG_LINES_MAX = 50;
+
 export const FLAGGED_PAGE = 30;
 
 export type FlagSort = "latest" | "serious";
@@ -60,6 +65,8 @@ export interface FlagListOptions {
   userid?: number;
   offset?: number;
   limit?: number;
+  /** Lines carried per player: FLAG_LINES_SHOWN by default, at most FLAG_LINES_MAX (a player record shows them all). */
+  lines?: number;
 }
 
 interface FlaggedRow {
@@ -71,7 +78,7 @@ interface FlaggedRow {
   slurs: string | number;
   last_id: string | number;
   latest_at: Date | string;
-  lines: { id: string | number; channel: string; message: string; shown: string; words: string; severity: FlagSeverity; rule: FlagRule; created_at: string }[] | string | null;
+  lines: { id: string | number; channel: string; message: string; shown: string; words: string; severity: FlagSeverity; rule: FlagRule; created_at: string; message_ts: string | number }[] | string | null;
 }
 
 /**
@@ -86,6 +93,7 @@ export const listChatFlags = async (
   const limit = Math.min(100, Math.max(1, options.limit ?? FLAGGED_PAGE));
   const offset = Math.max(0, options.offset ?? 0);
   const serious = options.sort === "serious";
+  const shown = Math.min(FLAG_LINES_MAX, Math.max(1, Math.floor(options.lines ?? FLAG_LINES_SHOWN)));
   const rows = await em.execute<FlaggedRow[]>(
     `WITH open AS (
        SELECT f.userid, count(*) AS count, count(*) FILTER (WHERE f.severity = 'slur') AS slurs,
@@ -96,10 +104,10 @@ export const listChatFlags = async (
      )
      SELECT o.userid, u.username, u.banned, u.mute_until, o.count, o.slurs, o.last_id, o.latest_at,
             (SELECT json_agg(x ORDER BY x.id DESC) FROM (
-               SELECT l.id, l.channel, l.message, l.shown, l.words, l.severity, l.rule, l.created_at
+               SELECT l.id, l.channel, l.message, l.shown, l.words, l.severity, l.rule, l.created_at, l.message_ts
                  FROM bym.chat_flag l
                 WHERE l.userid = o.userid AND l.dismissed_at IS NULL
-                ORDER BY l.id DESC LIMIT ${FLAG_LINES_SHOWN}
+                ORDER BY l.id DESC LIMIT ${shown}
              ) x) AS lines
        FROM open o
        LEFT JOIN bym."user" u ON u.userid = o.userid
@@ -131,6 +139,7 @@ export const listChatFlags = async (
           severity: line.severity,
           rule: line.rule === "disguised" ? "disguised" : "word",
           at: iso(line.created_at),
+          ts: Number(line.message_ts),
         })),
       };
     }),
