@@ -17,6 +17,7 @@ import {
   type TakeoverPayment,
 } from "@/api/maproom";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
+import { mateAllianceOf } from "@/game/maproom/mapAlliances";
 import { getAutoAttackPlan, type AutoAttackPlanResponse } from "@/api/autoAttack";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
 import { openDefence } from "@/game/defences/openDefence";
@@ -1280,10 +1281,20 @@ export class MapRoom2Scene implements Scene {
         cell,
         name: targetName(payload),
         ...("uid" in payload && payload.uid > 0 ? { owner: payload.uid } : {}),
+        ...this.allyOf(payload),
         roster,
       },
       refusal: null,
     };
+  }
+
+  /**
+   * The player's own alliance when the cell's owner is in it too (beta 7), for
+   * the "attack anyway?" confirm; nothing for anyone else or the player's own.
+   */
+  private allyOf(payload: MapCell): { ally?: { name: string; image: number } } {
+    const ally = mateAllianceOf(payload, this.renderer.myAllianceId, (id) => this.renderer.allianceNamed(id));
+    return ally ? { ally } : {};
   }
 
   /** Hands the selected cell to the attack scene. */

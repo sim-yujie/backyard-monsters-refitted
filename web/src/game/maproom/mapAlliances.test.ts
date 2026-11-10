@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type * as Pixi from "pixi.js";
 import type { MapCell, PlayerCell } from "@/api/types";
-import { AllianceRoster, MapShields, parseAllianceRoster } from "./mapAlliances";
+import { AllianceRoster, MATE_FALLBACK_NAME, MapShields, mateAllianceOf, parseAllianceRoster } from "./mapAlliances";
 import { appearanceOf, KitFilter, type MapViewerContext } from "./cellVisuals";
 import { ZoneStore, type AreaFetcher } from "./ZoneStore";
 
@@ -107,5 +107,28 @@ describe("ZoneStore", () => {
     store.ensureVisible({ minCol: 0, maxCol: 2, minRow: 0, maxRow: 2 });
     await store.pump();
     await vi.waitFor(() => expect(onAllianceRoster).toHaveBeenCalledWith([{ id: 7, name: "Goo Gang", image: 12 }]));
+  });
+});
+
+describe("mateAllianceOf", () => {
+  const cell = (overrides: Partial<PlayerCell> = {}): MapCell =>
+    ({ uid: 77, b: 2, i: 150, bid: "1", aid: 7, n: "Ana", l: 24, v: 1, dm: 0, d: 0, lo: 0, p: 0, mine: 0, pi: 0, ...overrides }) as MapCell;
+  const known = (id: number) => (id === 7 ? { id: 7, name: "Goo Gang", image: 12 } : undefined);
+
+  it("is the player's alliance when the owner is in it too", () => {
+    expect(mateAllianceOf(cell(), 7, known)).toEqual({ name: "Goo Gang", image: 12 });
+  });
+
+  it("still warns when the map has not heard the alliance's name yet", () => {
+    expect(mateAllianceOf(cell(), 7, () => undefined)).toEqual({ name: MATE_FALLBACK_NAME, image: 1 });
+  });
+
+  it("is null for another alliance, no alliance, the player's own cell, a camp or no cell", () => {
+    expect(mateAllianceOf(cell({ aid: 9 }), 7, known)).toBeNull();
+    expect(mateAllianceOf(cell({ aid: null }), 7, known)).toBeNull();
+    expect(mateAllianceOf(cell(), null, known)).toBeNull();
+    expect(mateAllianceOf(cell({ mine: 1 }), 7, known)).toBeNull();
+    expect(mateAllianceOf({ uid: 0, b: 1, i: 150, bid: "2", n: "Kozu", l: 3, dm: 0, d: 0 } as MapCell, 7, known)).toBeNull();
+    expect(mateAllianceOf(undefined, 7, known)).toBeNull();
   });
 });

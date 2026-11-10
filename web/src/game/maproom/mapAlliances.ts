@@ -1,4 +1,5 @@
 import type { Texture } from "pixi.js";
+import { isPlayerCell, type MapCell } from "@/api/types";
 import { shieldUrl } from "@/game/alliance/allianceRules";
 import { MapPicture } from "./mapPicture";
 
@@ -32,6 +33,25 @@ export const parseAllianceRoster = (data: unknown): MapAlliance[] => {
   }
   return roster;
 };
+
+/**
+ * The player's own alliance when a cell's owner is in it too (beta 7), for
+ * the "X is in your alliance, attack anyway?" confirm; null for anyone else,
+ * the player's own cells, a camp, or a player in no alliance.
+ */
+export const mateAllianceOf = (
+  cell: MapCell | undefined,
+  myAlliance: number | null,
+  allianceOf: (id: number) => MapAlliance | undefined,
+): { name: string; image: number } | null => {
+  if (!cell || !isPlayerCell(cell) || cell.mine === 1 || cell.aid == null || myAlliance === null) return null;
+  if (cell.aid !== myAlliance) return null;
+  const alliance = allianceOf(myAlliance);
+  return { name: alliance?.name ?? MATE_FALLBACK_NAME, image: alliance?.image ?? 1 };
+};
+
+/** The mate warning's alliance name when the map has not heard the alliance's own yet. */
+export const MATE_FALLBACK_NAME = "Your alliance";
 
 /** Every alliance the open map has heard of, newest word kept (a rename, a new shield). */
 export class AllianceRoster {

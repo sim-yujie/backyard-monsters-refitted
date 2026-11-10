@@ -41,3 +41,43 @@ describe("attackWithFriendWarning", () => {
     expect(go).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("attackWithFriendWarning: an alliance mate (beta 7)", () => {
+  const GANG = { name: "Goo Gang", image: 12 };
+  const mateDeps = (friend: boolean, answer: boolean) => ({
+    ...deps(friend, true),
+    confirmMate: vi.fn(async () => answer),
+  });
+
+  it("asks 'in your alliance, attack anyway?' and attacks on yes", async () => {
+    const d = mateDeps(false, true);
+    const go = vi.fn();
+    await attackWithFriendWarning({ owner: 7, name: "Ana", ally: GANG }, container, go, d);
+    expect(d.confirmMate).toHaveBeenCalledWith(container, "Ana", GANG);
+    expect(go).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not attack when the player cancels", async () => {
+    const d = mateDeps(false, false);
+    const go = vi.fn();
+    await attackWithFriendWarning({ owner: 7, name: "Ana", ally: GANG }, container, go, d);
+    expect(go).not.toHaveBeenCalled();
+  });
+
+  it("asks a mate who is also a friend once, as a mate", async () => {
+    const d = mateDeps(true, true);
+    const go = vi.fn();
+    await attackWithFriendWarning({ owner: 7, name: "Ana", ally: GANG }, container, go, d);
+    expect(d.confirmMate).toHaveBeenCalledTimes(1);
+    expect(d.confirm).not.toHaveBeenCalled();
+    expect(go).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves a non-mate to the friend warning", async () => {
+    const d = mateDeps(true, true);
+    const go = vi.fn();
+    await attackWithFriendWarning({ owner: 7, name: "Ann" }, container, go, d);
+    expect(d.confirmMate).not.toHaveBeenCalled();
+    expect(d.confirm).toHaveBeenCalledWith(container, "Ann");
+  });
+});
