@@ -118,8 +118,10 @@
   background: var(--colour-surface-sunken);
 }
 
+/* Wraps (the clock under the heading) only in a dock too narrow for both. */
 .building-panel__head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-2);
@@ -268,20 +270,36 @@
 
 /* ── The running job ────────────────────────────────────────────────────── */
 
-/* Finish now leads on its own row; the two fixed-price steps share the next. */
+/* Finish now leads on its own row; the two fixed-price steps share the next.
+   minmax(0, 1fr), not 1fr: a plain 1fr column never gets narrower than its
+   button's words, so "-1 h Free (5 left)" beside "-2 h Free (3 left)" pushed
+   the row, Finish now and the whole block past the panel's right edge and
+   gave the panel a sideways scrollbar (owner's phone, 10 Nov). */
 .building-job .building-panel__buttons {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .building-job .building-panel__buttons > :first-child {
   grid-column: 1 / -1;
 }
 
-/* A speed-up with lines under it takes the whole row, so they fit a phone;
-   its partner then does too, so neither sits beside an empty cell. */
-.building-job .building-panel__buttons:has(> .shiny-button--noted) > * {
+/* A speed-up with lines under it, or a free one ("Free (5 left)", too long
+   for half a 300px dock), takes the whole row, so it fits a phone; its
+   partner then does too, so neither sits beside an empty cell. */
+.building-job .building-panel__buttons:has(> :is(.shiny-button--noted, .shiny-button--free)) > * {
   grid-column: 1 / -1;
+}
+
+/* The last resort at the narrowest docks: a Shiny button's words in the
+   panel's button rows (job, repair, upgrade, fortify) wrap at their spaces,
+   the price under the label, rather than run past the panel. A button that
+   fits, as every one does on a desktop dock, stays on one line. */
+.building-panel__buttons > .shiny-button {
+  flex-wrap: wrap;
+  row-gap: 0;
+  max-width: 100%;
+  white-space: normal;
 }
 
 .building-job__countdown {
