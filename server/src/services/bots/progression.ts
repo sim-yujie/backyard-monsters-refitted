@@ -10,6 +10,7 @@ import { STARTER_BUILDINGS } from "../yard/starterBase.js";
 import { planOneUpgrade } from "../yardplanner/startUpgrades.js";
 import { pointsForBuild, pointsForUpgrade, TOWN_HALL_TYPE } from "../yardplanner/costs.js";
 import { GUIDE_BUILDINGS } from "../onboarding/guidedStart.js";
+import { OBSERVATORY_TYPE } from "../yard/buildingJobs.js";
 import { CORE_WALLS, coreStyleWalls, yardStyleOf } from "./yardStyle.js";
 
 /**
@@ -349,10 +350,11 @@ const VALUE_EXCLUDED_KINDS: ReadonlySet<string> = new Set(["decoration", "enemy"
 /**
  * Every type the progression may build: the build menu (`BUILDABLE_TYPES`),
  * less the main yard's Inferno buildings, which need an Inferno a bot does not
- * have (`yard/surfaceInferno.ts`).
+ * have (`yard/surfaceInferno.ts`), and less the Observatory: bots never join
+ * an alliance.
  */
 const PROGRESSION_TYPES: readonly number[] = [...BUILDABLE_TYPES]
-  .filter((type) => !SURFACE_INFERNO_TYPES.has(type))
+  .filter((type) => !SURFACE_INFERNO_TYPES.has(type) && type !== OBSERVATORY_TYPE)
   .sort((a, b) => a - b);
 
 /** A pool deep enough that the upgrade gate never reports a shortfall. */

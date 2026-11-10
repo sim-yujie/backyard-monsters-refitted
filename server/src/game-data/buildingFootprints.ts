@@ -177,6 +177,7 @@ export const FOOTPRINTS: Record<number, Footprint> = {
   138: { w: 130, h: 130, decoration: false }, // b_stronghold (tower)
   139: { w: 130, h: 130, decoration: false }, // b_resourceop (cage)
   140: { w: 130, h: 130, decoration: false }, // b_opdefender (special)
+  150: { w: 100, h: 100, decoration: false }, // Observatory (special): this project's alliance pass, HCC-sized
   // 201 and up: this project's own decorations (`revampDecorations.ts`).
   ...Object.fromEntries(
     REVAMP_DECORATIONS.map((one): [number, Footprint] => [one.type, { w: one.size, h: one.size, decoration: true }]),
