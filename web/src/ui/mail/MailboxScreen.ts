@@ -594,11 +594,13 @@ export class MailboxScreen {
     // The thread's truce belongs to its last request, which carries the card.
     const request = state === null ? -1 : requestIndex(items);
     const until = thread.truce?.until ?? null;
+    // An alliance invite's thread is about the alliance: no truce offered there.
+    const allianceInviteThread = items.some((item) => item.allianceInvite);
     // Propose truce and Block player keep to a row of their own, which goes
     // under the name and subject when the pane has no room beside them.
     if (!thread.notice && !thread.team) {
       const actions = make("div", "mail-pane__actions");
-      if (canPropose(state, until, items[request]?.mine ?? false, now)) {
+      if (!allianceInviteThread && canPropose(state, until, items[request]?.mine ?? false, now)) {
         actions.append(
           buttonOf("btn btn--outline mail-pane__truce", "Propose truce", () =>
             this.showTruceForm({ userid: thread.otherId, name: thread.otherName }, thread),
@@ -613,6 +615,8 @@ export class MailboxScreen {
     const invitation = inviteIndex(items);
 
     const messages = make("ol", "mail-messages");
+    // A waiting alliance invite's Accept / Decline, brought into sight on opening.
+    const answerable: HTMLElement[] = [];
     items.forEach((item, index) => {
       const side = item.notice ? "notice" : item.mine ? "mine" : "theirs";
       const bubble = make("li", `mail-message mail-message--${side}`);
@@ -620,7 +624,11 @@ export class MailboxScreen {
       if (item.label && index !== request && index !== invitation && !item.allianceInvite) {
         bubble.append(make("strong", "mail-message__label", item.label));
       }
-      bubble.append(item.attack ? attackText(item.text, item.attack) : make("p", "mail-message__text", item.text));
+      // An alliance invite's card says the invite in its own words: the
+      // message's text would say it a second time.
+      if (!item.allianceInvite) {
+        bubble.append(item.attack ? attackText(item.text, item.attack) : make("p", "mail-message__text", item.text));
+      }
       if (index === request && state !== null) {
         const card = truceCard(state, until, item.mine, thread.otherName, now);
         bubble.classList.add("mail-message--request");
@@ -645,8 +653,10 @@ export class MailboxScreen {
         bubble.append(invite);
       }
       if (item.allianceInvite) {
-        bubble.classList.add("mail-message--request");
-        bubble.append(this.allianceCardFor(thread, item.allianceInvite, item.mine));
+        bubble.classList.add("mail-message--request", "mail-message--alliance");
+        const allianceCard = this.allianceCardFor(thread, item.allianceInvite, item.mine);
+        bubble.append(allianceCard);
+        if (allianceCard.querySelector(".mail-request__actions")) answerable.push(allianceCard);
       }
       bubble.append(make("span", "mail-message__time", sentText(item.time, now)));
       if (item.defenceId !== null) {
@@ -694,7 +704,14 @@ export class MailboxScreen {
         }),
       );
     }
-    messages.lastElementChild?.scrollIntoView?.({ block: "nearest" });
+    const answer = answerable.at(-1);
+    if (answer) {
+      // The card, and above all its Accept / Decline, in sight without scrolling.
+      answer.scrollIntoView?.({ block: "nearest" });
+      answer.querySelector(".mail-request__actions")?.scrollIntoView?.({ block: "nearest" });
+    } else {
+      messages.lastElementChild?.scrollIntoView?.({ block: "nearest" });
+    }
   }
 
   /** Block player: one press asks, the second blocks. */

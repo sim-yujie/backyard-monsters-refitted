@@ -1106,6 +1106,47 @@ describe("alliance invites in the mailbox (beta 7)", () => {
     }
   });
 
+  it("says the invite once: the card's words, not the message text as well", async () => {
+    const api = fakeApi([[invitation("pending")]], { 1: [invitation("pending")] });
+    const { host } = await openScreen(api, { allianceApi: { answerInvite: vi.fn() } });
+    await openFirst(host);
+    const bubble = host.querySelector<HTMLElement>(".mail-message--alliance");
+    expect(bubble?.querySelector(".mail-message__text")).toBeNull();
+    expect(bubble?.textContent).not.toContain("Join Goo Lords!");
+    expect(bubble?.textContent?.match(/invites you to Goo Lords/g)).toHaveLength(1);
+  });
+
+  it("offers no Propose truce in an invite thread, while a player thread keeps it", async () => {
+    const api = fakeApi([[invitation("pending"), message({ threadid: 2 })]], { 1: [invitation("pending")], 2: [message({ threadid: 2 })] });
+    const { host } = await openScreen(api, { allianceApi: { answerInvite: vi.fn() } });
+    const open = async (threadid: number) => {
+      click(host.querySelector(`.mail-row[data-thread='${threadid}']`));
+      await settle();
+    };
+    await open(1);
+    expect(host.querySelector(".mail-pane__truce")).toBeNull();
+    expect(host.querySelector(".mail-block__ask")).not.toBeNull();
+    await open(2);
+    expect(host.querySelector(".mail-pane__truce")?.textContent).toBe("Propose truce");
+  });
+
+  it("brings Accept / Decline into sight when the thread opens, even under later replies", async () => {
+    const scrolled: Element[] = [];
+    const scroll = vi.fn(function (this: Element) {
+      scrolled.push(this);
+    });
+    Object.defineProperty(Element.prototype, "scrollIntoView", { value: scroll, configurable: true, writable: true });
+    try {
+      const thread = [invitation("pending"), message({ message: "hi", updatetime: NOW - 300 }), message({ message: "there", updatetime: NOW - 200 })];
+      const api = fakeApi([[invitation("pending")]], { 1: thread });
+      const { host } = await openScreen(api, { allianceApi: { answerInvite: vi.fn() } });
+      await openFirst(host);
+      expect(scrolled.at(-1)).toBe(host.querySelector(".mail-request--alliance .mail-request__actions"));
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
+
   it("the inviter sees it waiting, with no buttons", async () => {
     const mine = invitation("pending", { userid: ME, targetid: 77 });
     // In the list the row names the other party; in the thread the message is the player's own.
