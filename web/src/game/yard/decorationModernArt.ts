@@ -114,7 +114,7 @@ export const DECORATION_MODERN_ART: Readonly<Record<number, readonly TierArt[]>>
   135: modernLook(["dave-trophy.modern@2x.webp", -38, -30], ["dave-trophy.modern-shadow.jpg", -32, 33]),
   120: modernLook(["big-gulp.modern@2x.webp", -24, -36], ["big-gulp.modern-shadow.jpg", -20, 26]),
   // The full set, batch f8: Tall: Eiffel Tower, Big Ben, Fly Trap.
-  100: modernLook(["eiffel-tower.modern@2x.webp", -61, -120], ["eiffel-tower.modern-shadow.jpg", -50, 11]),
+  100: modernLook(["eiffel-tower.modern@2x.webp", -60, -120], ["eiffel-tower.modern-shadow.jpg", -48, 11]),
   101: modernLook(["big-ben.modern@2x.webp", -30, -103], ["big-ben.modern-shadow.jpg", -24, 3]),
   89: modernLook(["flytrap.modern@2x.webp", -32, -5], ["flytrap.modern-shadow.jpg", -26, 35]),
   // The full set, batch f9: Big: pool, pond, raceway, zen and tea gardens, Fountain.
