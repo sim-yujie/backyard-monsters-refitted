@@ -139,6 +139,18 @@ describe("AllianceWindow: marketplace", () => {
     expect(green[0]!.querySelector(".alliance__active-dot")).not.toBeNull();
   });
 
+  it("Quick Join: four chips, each type's icon and member limit kept together", async () => {
+    await open(fakeApi({ search: vi.fn(() => ok({ alliances: [listing(1)], pageSize: 10, totalResults: 1 })) }));
+    const chips = [...document.querySelectorAll(".alliance__quick-types > .alliance__chip")];
+    expect(chips).toHaveLength(4);
+    for (const chip of chips.slice(0, 3)) {
+      const size = chip.querySelector(".alliance__chip-size")!;
+      expect(size.querySelector("svg, img, .game-icon, [class*='icon']")).not.toBeNull();
+      expect(size.querySelector(".alliance__chip-count")).not.toBeNull();
+    }
+    expect(chips.map((chip) => chip.querySelector(".alliance__chip-count")?.textContent ?? null)).toEqual(["15", "30", "60", null]);
+  });
+
   it("asks to join from an opened row, then marks it Asked", async () => {
     const api = fakeApi({ search: vi.fn(() => ok({ alliances: [listing(5)], pageSize: 10, totalResults: 1 })) });
     await open(api);

@@ -541,11 +541,9 @@ export class AllianceWindow {
       if (type === "any") choice.append(make("span", "alliance__chip-word", ALLIANCE_TEXT.anyType));
       else {
         choice.title = `${TYPE_INFO[type].label}: ${membersLine(type)}`;
-        choice.append(
-          make("span", "alliance__chip-word", TYPE_INFO[type].label),
-          gameIcon("friends", { size: 16, decorative: true }),
-          make("span", "alliance__chip-count", String(TYPE_INFO[type].members)),
-        );
+        const size = make("span", "alliance__chip-size");
+        size.append(gameIcon("friends", { size: 16, decorative: true }), make("span", "alliance__chip-count", String(TYPE_INFO[type].members)));
+        choice.append(make("span", "alliance__chip-word", TYPE_INFO[type].label), size);
       }
       choice.addEventListener("click", () => {
         this.quickType = type;

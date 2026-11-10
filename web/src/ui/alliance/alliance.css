@@ -389,31 +389,44 @@
   background: var(--colour-accent-soft);
 }
 
-/* Chips and Join on one line; on a narrow phone the chips scroll sideways. */
+/* "Quick Join" with Join on its right; the four chips below in a 2 x 2 grid
+   that always fits the window: a chip never runs past the edge and nothing
+   scrolls sideways (owner, 10 Nov). On a narrow phone a long type name breaks
+   onto two lines inside its chip instead. */
 .alliance__quick {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label join"
+    "types types";
   align-items: center;
 }
 
 .alliance__quick > .alliance__section {
-  grid-column: 1 / -1;
+  grid-area: label;
+}
+
+.alliance__quick-join {
+  grid-area: join;
 }
 
 .alliance__quick-types {
-  display: flex;
+  grid-area: types;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-1);
-  overflow-x: auto;
-  scrollbar-width: none;
+  min-width: 0;
 }
 
 .alliance__chip {
-  flex: none;
-  display: inline-flex;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 2px 4px;
   min-height: var(--control-height-compact);
-  padding: 0 var(--space-3);
+  padding: 2px var(--space-3);
   border: 1px solid var(--colour-border-strong);
   border-radius: var(--radius-pill);
   background: var(--colour-surface-control);
@@ -421,7 +434,22 @@
   font: inherit;
   font-size: var(--text-sm);
   font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
   cursor: pointer;
+}
+
+.alliance__chip-word {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The friends icon and the member limit stay together. */
+.alliance__chip-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
 }
 
 .alliance__chip:hover {
@@ -802,12 +830,7 @@
     gap: 2px;
   }
 
-  /* Join drops under the chips. */
-  .alliance__quick {
-    grid-template-columns: 1fr;
-  }
-
-  .alliance__quick-join {
-    justify-self: end;
+  .alliance__chip {
+    padding-inline: var(--space-2);
   }
 }
