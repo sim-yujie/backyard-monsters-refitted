@@ -49,14 +49,53 @@ def prompt():
         open(os.path.join(HERE, t, "prompt.txt"), "w", encoding="utf-8").write(txt)
 
 
+# Flash's level-5 gold is lemon-gold (hue ~55); Codex's came out orange-gold (~37): turned yellower in the cut.
+GOLD5 = ["--hue", "totem-l5=16"]
+
+
 def cut(extra):
     for t, (type_id, folder, levels) in TOTEMS.items():
         anchors = [anchor(folder, *lv) for lv in levels]
         names = ",".join(f"totem-l{i + 1}" for i in range(6))
         heights = ",".join(str(a[0]) for a in anchors)
         out = os.path.join(HERE, t, "out")
-        subprocess.run([sys.executable, f"{S}/cut_sheet.py", os.path.join(HERE, t, f"{t}.png"), "--cols", "3", "--rows",
-                        "2", "--out", out, f"--names={names}", "--height", heights, *extra], check=True)
+        # The tall row-2 totems reach up into row 1's cells, so a plain grid cut mixes them: split each column
+        # into its two biggest connected pieces instead (top piece = row 1, bottom = row 2), one sheet per level.
+        import numpy as np
+        from scipy import ndimage
+        sys.path.insert(0, S)
+        import artlib
+        sheet = artlib.key(Image.open(os.path.join(HERE, t, f"{t}.png")))  # plain key: despills the plates
+        alpha = np.asarray(sheet.getchannel("A")) > 40
+        for col in range(3):
+            x0, x1 = col * 512, (col + 1) * 512
+            lab, n = ndimage.label(alpha[:, x0:x1])
+            sizes = ndimage.sum(np.ones_like(lab), lab, range(1, n + 1))
+            big = sorted(np.argsort(sizes)[-2:] + 1, key=lambda k: ndimage.center_of_mass(lab == k)[0])
+            for row, k in enumerate(big):
+                keep = np.zeros(alpha.shape, bool)
+                keep[:, x0:x1] = lab == k
+                # also keep small pieces (a jewel) lying inside this piece's box
+                ys, xs = np.nonzero(lab == k)
+                box = lab[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+                inner = np.zeros(lab.shape, bool)
+                inner[ys.min():ys.max() + 1, xs.min():xs.max() + 1] = (box > 0) & ~np.isin(box, big)
+                keep[:, x0:x1] |= inner
+                piece = sheet.copy()
+                piece.putalpha(Image.fromarray(np.where(keep, np.asarray(sheet.getchannel("A")), 0).astype(np.uint8)))
+                piece = piece.crop(piece.getbbox())
+                pad = Image.new("RGBA", (piece.width + 40, piece.height + 40), (255, 0, 255, 255))
+                pad.alpha_composite(piece, (20, 20))
+                level = row * 3 + col + 1
+                pad.save(os.path.join(HERE, t, f"part-l{level}.png"))
+        for i, h in enumerate(heights.split(",")):
+            subprocess.run([sys.executable, f"{S}/cut_sheet.py", os.path.join(HERE, t, f"part-l{i + 1}.png"), "--cols",
+                            "1", "--rows", "1", "--out", out, f"--names=totem-l{i + 1}", "--height", h, *GOLD5, *extra],
+                           check=True, capture_output=True)
+            os.remove(os.path.join(HERE, t, f"part-l{i + 1}.png"))
+            # Codex left a lilac cast on the grey base plates and the black metal: back to plain grey.
+            from tidy import degrey
+            degrey(out, f"totem-l{i + 1}")
         rows = []
         for i, (h, bottom, centre) in enumerate(anchors):
             res = subprocess.run([sys.executable, f"{S}/make_game_files.py", "--src", out, "--suffix", ".modern",

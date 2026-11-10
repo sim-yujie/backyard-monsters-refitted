@@ -1,0 +1,16 @@
+  121: modernLevels([
+    [["totem-l1.modern@2x.webp", -30, -22], ["totem-l1.modern-shadow.jpg", -25, 19]],
+    [["totem-l2.modern@2x.webp", -28, -59], ["totem-l2.modern-shadow.jpg", -24, 9]],
+    [["totem-l3.modern@2x.webp", -30, -90], ["totem-l3.modern-shadow.jpg", -25, 0]],
+    [["totem-l4.modern@2x.webp", -28, -109], ["totem-l4.modern-shadow.jpg", -24, -5]],
+    [["totem-l5.modern@2x.webp", -27, -110], ["totem-l5.modern-shadow.jpg", -23, -5]],
+    [["totem-l6.modern@2x.webp", -28, -110], ["totem-l6.modern-shadow.jpg", -24, -7]],
+  ]),
+  131: modernLevels([
+    [["totem-l1.modern@2x.webp", -28, -25], ["totem-l1.modern-shadow.jpg", -22, 19]],
+    [["totem-l2.modern@2x.webp", -30, -60], ["totem-l2.modern-shadow.jpg", -24, 9]],
+    [["totem-l3.modern@2x.webp", -30, -86], ["totem-l3.modern-shadow.jpg", -24, 2]],
+    [["totem-l4.modern@2x.webp", -30, -121], ["totem-l4.modern-shadow.jpg", -24, -8]],
+    [["totem-l5.modern@2x.webp", -28, -124], ["totem-l5.modern-shadow.jpg", -22, -11]],
+    [["totem-l6.modern@2x.webp", -30, -128], ["totem-l6.modern-shadow.jpg", -24, -11]],
+  ]),

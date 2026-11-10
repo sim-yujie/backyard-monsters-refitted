@@ -99,4 +99,47 @@ export const DECORATION_MODERN_ART: Readonly<Record<number, readonly TierArt[]>>
   108: modernLook(["cube-unsolved.modern@2x.webp", -18, -22], ["cube-unsolved.modern-shadow.jpg", -14, 7]),
   109: modernLook(["cube-solved.modern@2x.webp", -18, -22], ["cube-solved.modern-shadow.jpg", -14, 7]),
   60: modernLook(["gnome-red.modern@2x.webp", -10, -31], ["gnome-red.modern-shadow.jpg", -9, 1]),
+  // The full set, batch f2b: Heads on sticks (2/2).
+  79: modernLook(["crabatron.modern@2x.webp", -9, -29], ["crabatron.modern-shadow.jpg", -5, 2]),
+  81: modernLook(["eyera.modern@2x.webp", -4, -23], ["eyera.modern-shadow.jpg", -4, 3]),
+  82: modernLook(["fang.modern@2x.webp", -9, -29], ["fang.modern-shadow.jpg", -5, 2]),
+  83: modernLook(["fink.modern@2x.webp", -10, -28], ["fink.modern-shadow.jpg", -6, 2]),
+  84: modernLook(["ichi.modern@2x.webp", -4, -28], ["ichi.modern-shadow.jpg", -3, 2]),
+  85: modernLook(["projectx.modern@2x.webp", -6, -23], ["projectx.modern-shadow.jpg", -4, 8]),
+  // The full set, batch f7: Gnomes, trophies, Big Gulp.
+  61: modernLook(["gnome-blue.modern@2x.webp", -10, -31], ["gnome-blue.modern-shadow.jpg", -9, 1]),
+  62: modernLook(["gnome-green.modern@2x.webp", -10, -31], ["gnome-green.modern-shadow.jpg", -9, 1]),
+  96: modernLook(["baseball-trophy.modern@2x.webp", -20, -36], ["baseball-trophy.modern-shadow.jpg", -17, 10]),
+  97: modernLook(["football-trophy.modern@2x.webp", -18, -38], ["football-trophy.modern-shadow.jpg", -15, 10]),
+  135: modernLook(["dave-trophy.modern@2x.webp", -38, -30], ["dave-trophy.modern-shadow.jpg", -32, 33]),
+  120: modernLook(["big-gulp.modern@2x.webp", -24, -36], ["big-gulp.modern-shadow.jpg", -20, 26]),
+  // The full set, batch f8: Tall: Eiffel Tower, Big Ben, Fly Trap.
+  100: modernLook(["eiffel-tower.modern@2x.webp", -61, -120], ["eiffel-tower.modern-shadow.jpg", -50, 11]),
+  101: modernLook(["big-ben.modern@2x.webp", -30, -103], ["big-ben.modern-shadow.jpg", -24, 3]),
+  89: modernLook(["flytrap.modern@2x.webp", -32, -5], ["flytrap.modern-shadow.jpg", -26, 35]),
+  // The full set, batch f9: Big: pool, pond, raceway, zen and tea gardens, Fountain.
+  102: modernLook(["pool.modern@2x.webp", -56, 9], ["pool.modern-shadow.jpg", -38, 61]),
+  103: modernLook(["pond.modern@2x.webp", -38, 14], ["pond.modern-shadow.jpg", -29, 60]),
+  68: modernLook(["raceway.modern@2x.webp", -47, 0], ["raceway.modern-shadow.jpg", -41, 61]),
+  104: modernLook(["zen-garden.modern@2x.webp", -59, -5], ["zen-garden.modern-shadow.jpg", -45, 58]),
+  106: modernLook(["tea-garden.modern@2x.webp", -60, -38], ["tea-garden.modern-shadow.jpg", -47, 46]),
+  // The Fountain keeps Flash\'s water, cut from its frames, over the new stone (owner, 10 Nov 2026: option A).
+  105: modernUnderFlashAnim(105, ["fountain-stone.modern@2x.webp", -45, -44], ["water.png", -47, -51, 89, 114, 42]),
+  // The full set: the two Victory Totem Poles, one look per level, each level the one below plus more.
+  121: modernLevels([
+    [["totem-l1.modern@2x.webp", -30, -22], ["totem-l1.modern-shadow.jpg", -25, 19]],
+    [["totem-l2.modern@2x.webp", -28, -59], ["totem-l2.modern-shadow.jpg", -24, 9]],
+    [["totem-l3.modern@2x.webp", -30, -90], ["totem-l3.modern-shadow.jpg", -25, 0]],
+    [["totem-l4.modern@2x.webp", -28, -109], ["totem-l4.modern-shadow.jpg", -24, -5]],
+    [["totem-l5.modern@2x.webp", -27, -110], ["totem-l5.modern-shadow.jpg", -23, -5]],
+    [["totem-l6.modern@2x.webp", -28, -110], ["totem-l6.modern-shadow.jpg", -24, -7]],
+  ]),
+  131: modernLevels([
+    [["totem-l1.modern@2x.webp", -28, -25], ["totem-l1.modern-shadow.jpg", -22, 19]],
+    [["totem-l2.modern@2x.webp", -30, -60], ["totem-l2.modern-shadow.jpg", -24, 9]],
+    [["totem-l3.modern@2x.webp", -30, -86], ["totem-l3.modern-shadow.jpg", -24, 2]],
+    [["totem-l4.modern@2x.webp", -30, -121], ["totem-l4.modern-shadow.jpg", -24, -8]],
+    [["totem-l5.modern@2x.webp", -28, -124], ["totem-l5.modern-shadow.jpg", -22, -11]],
+    [["totem-l6.modern@2x.webp", -30, -128], ["totem-l6.modern-shadow.jpg", -24, -11]],
+  ]),
 };
