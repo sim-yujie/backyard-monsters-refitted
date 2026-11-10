@@ -166,9 +166,9 @@ describe("BuildMenu", () => {
     expect(cannon.querySelector(".build-tile__picture--modern")).not.toBeNull();
 
     menu.open(BuildCategory.BUILDINGS);
-    // The Monster Locker has no new look yet: Flash's button, as before.
-    expect(tile(menu, 8).querySelector("img")?.getAttribute("src")).toBe("/assets/buildingbuttons/8.jpg");
-    expect(tile(menu, 8).querySelector(".build-tile__picture--modern")).toBeNull();
+    // The Monster Locker shows its 3D look (10 Nov 2026).
+    expect(tile(menu, 8).querySelector("img")?.getAttribute("src")).toBe(buildPicture(8, "main", false).url);
+    expect(tile(menu, 8).querySelector(".build-tile__picture--modern")).not.toBeNull();
     menu.turn(1);
     const lab = tile(menu, 116);
     expect(lab.classList.contains("build-tile--locked")).toBe(true);
