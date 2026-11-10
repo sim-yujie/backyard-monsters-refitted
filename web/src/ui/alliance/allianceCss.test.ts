@@ -115,3 +115,9 @@ describe("alliance.css: a constellation's monster behind its stars", () => {
     expect(rulesFor(".alliance-sky__figure").join(" ")).toMatch(/position:\s*relative/);
   });
 });
+
+describe("alliance.css: trade tiles", () => {
+  it("set the resource tiles (buttons) in the window's own font, not the browser's", () => {
+    expect(rulesFor(".trade-tile").join(" ")).toMatch(/font:\s*inherit/);
+  });
+});

@@ -2128,6 +2128,8 @@
   border-radius: var(--radius-md);
   background: var(--colour-surface-control);
   color: var(--colour-text);
+  /* A <button>: browsers give it their own sans font unless told to inherit. */
+  font: inherit;
   cursor: pointer;
 }
 

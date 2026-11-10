@@ -127,6 +127,17 @@ describe("TradeTab", () => {
     expect(api.give).toHaveBeenCalledWith(7, { r3: 450_000 });
   });
 
+  it("Give: with nothing to give, the amount buttons and Give are greyed out", async () => {
+    const api = fakeApi({ view: vi.fn(() => ok({ view: view({ me: storage(0) }) })) });
+    await mount(api);
+    buttonNamed(TRADE_TEXT.give)!.click();
+    expect(document.body.textContent).toContain(TRADE_TEXT.upTo("0 Putty"));
+    for (const words of [TRADE_TEXT.all, TRADE_TEXT.half, TRADE_TEXT.other]) {
+      expect(buttonNamed(words)!.disabled).toBe(true);
+    }
+    expect(document.querySelector<HTMLButtonElement>(".trade-sheet__go")!.disabled).toBe(true);
+  });
+
   it("Ask: pick a resource, Most fits the free room, post", async () => {
     const api = fakeApi({ view: vi.fn(() => ok({ view: view({ me: storage(19_500_000) }) })) });
     const { host } = await mount(api);

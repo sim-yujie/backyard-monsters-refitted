@@ -580,6 +580,9 @@ export class TradeTab {
       nodes.push(make("p", "trade-warn", TRADE_TEXT.upTo(capped.map((key) => `${formatShort(limits[key])} ${resourceName(key)}`).join(", "))));
     }
     const choices = make("div", "trade-choices");
+    // Nothing of what they asked can be given (your storage, their room or the
+    // cap): the amount buttons would only pick 0, so they are greyed out.
+    const nothing = TRADE_KEYS.every((key) => (request.amounts[key] ?? 0) <= 0 || limits[key] <= 0);
     const choose = (choice: "all" | "half" | "other") => {
       sheet.choice = choice;
       for (const key of TRADE_KEYS) {
@@ -596,6 +599,7 @@ export class TradeTab {
     ] as const) {
       const node = button(words, `btn--outline trade-choices__pick${sheet.choice === choice ? " is-on" : ""}`, () => choose(choice));
       node.setAttribute("aria-pressed", String(sheet.choice === choice));
+      node.disabled = nothing;
       choices.append(node);
     }
     nodes.push(choices);

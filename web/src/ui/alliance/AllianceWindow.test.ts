@@ -453,3 +453,54 @@ describe("AllianceWindow: the Alliance chat room", () => {
     expect(chat.setAllianceRoom).toHaveBeenCalledWith(null);
   });
 });
+
+describe("AllianceWindow: Trade sheet Back, then another tab (lead, 11 Nov)", () => {
+  const press = (node: Element): void => {
+    node.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    node.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    (node as HTMLElement).click();
+  };
+
+  it("Back on the Ask sheet goes to the Trade tab, and Members then opens with the window still up", async () => {
+    const storage = { held: { r1: 1_000, r2: 1_000, r3: 1_000, r4: 1_000 }, cap: 10_000 };
+    const tradeApi = {
+      view: vi.fn(() =>
+        ok({
+          view: {
+            today: { sendsLeft: 1, receivesLeft: 1, asksLeft: 3, newDayIn: 3_600 },
+            rules: { loss: 0.1, capShare: 0.1, requestSeconds: 86_400 },
+            me: storage,
+            myRequest: null,
+            requests: [],
+            recent: [],
+            mate: null,
+          },
+        }),
+      ),
+      ask: vi.fn(() => ok({})),
+      cancel: vi.fn(() => ok({})),
+      give: vi.fn(() => ok({})),
+      send: vi.fn(() => ok({})),
+    } as unknown as NonNullable<AllianceWindowOptions["tradeApi"]>;
+    const onClose = vi.fn();
+    const view = await open(fakeApi({ mine: vi.fn(() => ok({ alliance: mine(), rejoinAt: null })) }), {
+      tab: "trade",
+      tradeApi,
+      onClose,
+    });
+    await flush();
+
+    press(document.querySelector(".trade-ask")!);
+    expect(document.querySelector(".trade-sheet__back")).not.toBeNull();
+    press(document.querySelector(".trade-sheet__back")!);
+    expect(document.querySelector(".trade-sheet__back")).toBeNull();
+    expect(document.querySelector(".trade-ask")).not.toBeNull();
+
+    press(document.querySelector('.alliance__tab[data-tab="members"]')!);
+    await flush();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(document.querySelector(".popup-backdrop")).not.toBeNull();
+    expect(document.querySelector('.alliance__tab[aria-selected="true"]')!.getAttribute("data-tab")).toBe("members");
+    expect(view.kind).toBe("mine");
+  });
+});
