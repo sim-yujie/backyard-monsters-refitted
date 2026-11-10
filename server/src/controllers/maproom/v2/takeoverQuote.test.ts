@@ -3,6 +3,11 @@ import type { Context } from "koa";
 import { generateBaseId } from "../../../utils/generateBaseId.js";
 import { generateNoise, getTerrainHeight } from "../../../services/maproom/v2/generateMap.js";
 import { quoteTakeover } from "../../../services/maproom/v2/takeoverCost.js";
+import { STARTER_KITS } from "../../../game-data/starterKits.js";
+import { kitBuildings } from "../../../services/yard/starterKit.js";
+
+/** A Regular Starter Kit outpost, worth 10,000,000 of each (outpostValue.test.ts). */
+const REGULAR_KIT = kitBuildings(STARTER_KITS[0]!, "shiny", {}).buildingdata;
 import { memoryWelcomeStore, useWelcomeStore } from "../../../services/events/mr2Welcome.js";
 
 /**
@@ -108,6 +113,8 @@ beforeEach(() => {
       saveuserid: OWNER,
       type: "outpost",
       damage: 92,
+      buildingdata: REGULAR_KIT,
+      // Never read: the price comes from the buildings.
       empirevalue: 10_000_000,
     }),
     cellRow(CAMP, 0, 1, 242, { basesaveid: 901, userid: 0, saveuserid: 0, type: "tribe", damage: 95, wmid: 41 }),
@@ -126,7 +133,7 @@ describe("takeoverQuote", () => {
     const price = quoteTakeover({
       cell: { x: 242, y: 208 },
       isWildMonster: true,
-      empireValue: 0,
+      buildingdata: null,
       takerHomebase: ["241", "207"],
     });
     expect(body).toEqual({
@@ -192,11 +199,13 @@ describe("takeoverQuote", () => {
     expect(body.kind).toBe("outpost");
     expect(body.eligible).toBe(true);
     expect(body.grantExpiresAt).toBe(expiresAt);
+    // Its Regular Kit's 10,000,000, halved next to the caller's main yard.
+    expect(body.resources).toBe(5_000_000);
     expect(body.resources).toBe(
       quoteTakeover({
         cell: { x: 240, y: 208 },
         isWildMonster: false,
-        empireValue: 10_000_000,
+        buildingdata: REGULAR_KIT,
         takerHomebase: ["241", "207"],
       }).resources
     );
@@ -273,7 +282,7 @@ describe("takeoverQuote: New to Map Room 2", () => {
     const fullBase = quoteTakeover({
       cell: { x: 242, y: 208 },
       isWildMonster: true,
-      empireValue: 0,
+      buildingdata: null,
       takerHomebase: null,
     }).resources;
 

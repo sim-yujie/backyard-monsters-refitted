@@ -13,6 +13,8 @@ import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { RESOURCE_KEYS, noAmounts, type ResourceKey } from "../../base/economy/resourceBudget.js";
 import { isAttackActive } from "../../base/isAttackActive.js";
 import { creditResources, type CreditSave } from "../../yard/credit.js";
+import { catchUpOutpostBuildings } from "../../yard/catchUp.js";
+import type { CatchUpBuildingsSave } from "../../yard/catchUpBuildings.js";
 import { harvesterHealth, overdriveEnd } from "../../yard/catchUpHarvesters.js";
 import { levelOf, type ResourceAmounts } from "../../yardplanner/costs.js";
 
@@ -57,8 +59,13 @@ import { levelOf, type ResourceAmounts } from "../../yardplanner/costs.js";
  *   out. The overdrive is the player's, read off the main yard's `storedata`.
  * - With no `t` on record (a yard that never autobanked), nothing is paid and
  *   `t` is stamped; Flash fell back to the save's `savetime` (`:73`).
- * - The rate is worked out at every payout from the rows as they stand; Flash
- *   recomputed it only when an outpost session saved.
+ * - The rate is worked out at every payout, each outpost's row replayed from
+ *   its `savetime` the way its own catch-up would (`outpostTimeline`): a
+ *   harvester whose build finished while nobody had that outpost open pays its
+ *   new level from the moment it finished, and one repaired from nothing earns
+ *   again from the repair's start, without the outpost being opened. Flash
+ *   recomputed the rate only when an outpost session saved, so such a
+ *   harvester kept its old rate until its owner next looked.
  *
  * `buildingresources` on the main yard keeps `t`, the moment income has been
  * paid up to, and one `b<baseid>: {r1..r4}` rate per outpost (the shape Flash
@@ -96,6 +103,9 @@ export const DEFAULT_CELL_HEIGHT = 100;
 /** Points per resource banked (`AutoBankManager.as:278`). */
 export const AUTOBANK_POINTS = 0.375;
 
+/** A rate of one a tick, for counting ticks with `autobankTicks`. */
+const ONE_EACH: ResourceAmounts = { r1: 1, r2: 1, r3: 1, r4: 1 };
+
 /** The four harvester types, which are also the resource they make (`AutoBankManager.as:192`). */
 const isOutpostHarvester = (type: number): boolean => type >= 1 && type <= 4;
 
@@ -103,6 +113,11 @@ const isOutpostHarvester = (type: number): boolean => type >= 1 && type <= 4;
 export interface OutpostIncomeSave {
   buildingdata?: BuildingDataMap | null;
   buildinghealthdata?: BuildingHealthData | null;
+  /**
+   * The moment the row's countdowns and health were measured at (its last
+   * catch-up or save); none means they are taken as they stand.
+   */
+  savetime?: number | null;
 }
 
 /** The height the rate divides by: the cell's, or 100 when it has none. */
@@ -162,6 +177,110 @@ export const outpostIncome = (
   return rate;
 };
 
+/** A step in an outpost's income: from `at` on, it earns `delta` more a tick. */
+export interface IncomeChange {
+  /** Unix seconds. */
+  at: number;
+  /** Per resource, per tick; negative for less. */
+  delta: ResourceAmounts;
+}
+
+/** What an outpost earns now, and the steps that took it there since its row was saved. */
+export interface OutpostTimeline {
+  /** Per tick, as it stands at `now`. */
+  rate: ResourceAmounts;
+  /** Each change since the row's `savetime`, oldest first. */
+  changes: IncomeChange[];
+}
+
+/**
+ * A harvester whose income a replay could change: one being built (level 0
+ * until it is done) or being repaired (nothing while it has no health). An
+ * upgrade already counts at its next level, so its finish changes nothing,
+ * and a fortification never touches income.
+ */
+const isMoving = (building: BuildingData | null | undefined): boolean =>
+  Boolean(building) && isOutpostHarvester(Number(building!.t)) && Boolean(building!.cB || building!.rE);
+
+/** A copy of the outpost holding only its harvesters, for a replay to move. */
+const harvestersOf = (outpost: OutpostIncomeSave): CatchUpBuildingsSave => ({
+  type: BaseType.OUTPOST,
+  buildingdata: Object.fromEntries(
+    Object.entries(outpost.buildingdata ?? {}).filter(
+      ([, building]) => building && isOutpostHarvester(Number(building.t))
+    )
+  ),
+  buildinghealthdata: outpost.buildinghealthdata ?? null,
+});
+
+const minus = (a: ResourceAmounts, b: ResourceAmounts): ResourceAmounts => {
+  const out = noAmounts();
+  for (const key of RESOURCE_KEYS) out[key] = a[key] - b[key];
+  return out;
+};
+
+const isNothing = (amounts: ResourceAmounts): boolean => RESOURCE_KEYS.every((key) => amounts[key] === 0);
+
+/**
+ * An outpost's income from its row's `savetime` to `now`, with the row
+ * replayed the way its own catch-up would replay it
+ * (`catchUpOutpostBuildings`: repairs, then countdowns): a harvester whose
+ * build finished while nobody had the outpost open pays its new level from
+ * the moment it finished, and one repaired from nothing earns again from the
+ * repair's start. Flash froze each outpost's rate at its last session's save
+ * until the owner looked again (the file comment); this pays what the outpost
+ * really earned.
+ *
+ * Only the outpost's harvesters are replayed, on a copy: the row is read, not
+ * changed (its own catch-up moves it when it is next opened). A row with no
+ * harvester counting down or repairing is not replayed at all.
+ *
+ * @param outpost - The row as last saved.
+ * @param height - The cell's height ({@link incomeHeight}).
+ * @param land - The cell's land feature.
+ * @param now - Unix seconds.
+ */
+export const outpostTimeline = (
+  outpost: OutpostIncomeSave,
+  height: number,
+  land: number,
+  now: number
+): OutpostTimeline => {
+  const stored = outpostIncome(outpost, height, land);
+  const savetime = Number(outpost.savetime);
+  const buildings = Object.values(outpost.buildingdata ?? {});
+  if (!(Number.isFinite(savetime) && savetime > 0 && now > savetime) || !buildings.some(isMoving)) {
+    return { rate: stored, changes: [] };
+  }
+
+  const rateAt = (moment: number): ResourceAmounts => {
+    const copy = harvestersOf(outpost);
+    catchUpOutpostBuildings(copy, savetime, moment);
+    return outpostIncome(copy, height, land);
+  };
+
+  // The moments the rate can move: every finish the replay to now reports,
+  // and the first second of a repair (a harvester with no health earns again
+  // as soon as it has any).
+  const replay = harvestersOf(outpost);
+  const moments = new Set(catchUpOutpostBuildings(replay, savetime, now).map((job) => job.at));
+  if (buildings.some((building) => isMoving(building) && building!.rE)) moments.add(savetime + 1);
+
+  const changes: IncomeChange[] = [];
+  let previous = stored;
+  for (const at of [...moments].filter((at) => at > savetime && at < now).sort((a, b) => a - b)) {
+    const rate = rateAt(at);
+    const delta = minus(rate, previous);
+    if (!isNothing(delta)) changes.push({ at, delta });
+    previous = rate;
+  }
+  const rate = outpostIncome(replay, height, land);
+  const delta = minus(rate, previous);
+  if (!isNothing(delta)) changes.push({ at: now, delta });
+
+  return { rate, changes };
+};
+
 /** The slice of the main yard a payout reads and writes. */
 export interface AutobankSave extends CreditSave {
   buildingresources?: JsonObject | null;
@@ -201,12 +320,17 @@ const lastPaid = (buildingresources: JsonObject | null | undefined): number | un
  * @param completed - What the main yard's catch-up finished in this request:
  *   a Production Overdrive that ran out in it is gone from `storedata`, and its
  *   end is read from here (`overdriveEnd`).
+ * @param changes - How the rates moved during the interval
+ *   ({@link outpostTimeline}): `rates` are the rates at `now`, and each tick
+ *   that ran out at or before a change's `at` is paid without its `delta`.
+ *   A change at or before the start of the interval counts for all of it.
  */
 export const payAutobank = (
   main: AutobankSave,
   rates: Readonly<Record<string, ResourceAmounts>>,
   now: number,
-  completed: readonly unknown[] = []
+  completed: readonly unknown[] = [],
+  changes: readonly IncomeChange[] = []
 ): AutobankReport => {
   const total = noAmounts();
   const column: JsonObject = {};
@@ -216,7 +340,22 @@ export const payAutobank = (
   }
 
   const last = lastPaid(main.buildingresources);
-  const { owed, ticks, t } = autobankTicks(total, last, now, overdriveEnd(main, completed));
+  const until = overdriveEnd(main, completed);
+  const { owed, ticks, t } = autobankTicks(total, last, now, until);
+  if (ticks > 0 && changes.length > 0) {
+    // The ticks paid from `start` to now, overdrive doubling included, by the
+    // same count as the whole interval's.
+    const paidFrom = (start: number): number => autobankTicks(ONE_EACH, start, now, until).owed.r1;
+    const from = t - ticks * AUTOBANK_TICK;
+    const all = paidFrom(from);
+    for (const { at, delta } of changes) {
+      if (!(at > from)) continue;
+      const before = Math.min(ticks, Math.floor((at - from) / AUTOBANK_TICK));
+      const earlier = all - paidFrom(from + before * AUTOBANK_TICK);
+      for (const key of RESOURCE_KEYS) owed[key] -= delta[key] * earlier;
+    }
+    for (const key of RESOURCE_KEYS) owed[key] = Math.max(0, owed[key]);
+  }
   const { credited, overflow } = creditResources(main, owed);
 
   const banked = credited.r1 + credited.r2 + credited.r3 + credited.r4;
@@ -237,26 +376,40 @@ const OUTPOST_FIELDS = [
   "mapversion",
   "buildingdata",
   "buildinghealthdata",
+  "savetime",
 ] as const;
+
+/** The player's outposts' income: each one's rate now, and how they moved. */
+export interface OutpostIncomes {
+  /** Per tick, by `baseid`, at `now`. */
+  rates: Record<string, ResourceAmounts>;
+  /** Every outpost's changes since its row was saved ({@link outpostTimeline}). */
+  changes: IncomeChange[];
+}
 
 /**
  * Each of the player's Map Room 2 outposts' income per tick, by `baseid`: the
  * outposts listed in the main yard's `outposts` that are theirs, over their
  * cells' heights (`world_map_cell.terrainHeight`, as `combatCellHeight` reads
- * it for the towers).
+ * it for the towers), each replayed from its row's `savetime` to `now`
+ * ({@link outpostTimeline}).
  *
  * @param em - The transaction's entity manager.
  * @param main - The owner's main yard.
- * @param inHand - An outpost row the caller already holds (locked and caught
- *   up), used as it is rather than read again.
+ * @param now - Unix seconds.
+ * @param inHand - An outpost row the caller already holds (locked, and not
+ *   yet caught up), used as it is rather than read again. One already caught
+ *   up to `now` is fine too: it simply has nothing left to replay.
  */
 export const outpostIncomes = async (
   em: EntityManager,
   main: Pick<Save, "outposts" | "saveuserid">,
+  now: number,
   inHand: Save | null = null
-): Promise<Record<string, ResourceAmounts>> => {
+): Promise<OutpostIncomes> => {
+  const none: OutpostIncomes = { rates: {}, changes: [] };
   const listed = [...new Set((main.outposts ?? []).map(([, , baseid]) => String(baseid)))];
-  if (listed.length === 0) return {};
+  if (listed.length === 0) return none;
 
   const others = listed.filter((baseid) => baseid !== inHand?.baseid);
   const rows: Save[] = [];
@@ -276,7 +429,7 @@ export const outpostIncomes = async (
       row.saveuserid === main.saveuserid &&
       Number(row.mapversion) !== MapRoomVersion.V3
   );
-  if (outposts.length === 0) return {};
+  if (outposts.length === 0) return none;
 
   const cells = await em.find(
     WorldMapCell,
@@ -292,12 +445,18 @@ export const outpostIncomes = async (
     ])
   );
 
-  return Object.fromEntries(
-    outposts.map((row) => [
-      row.baseid,
-      outpostIncome(row, incomeHeight(heights.get(row.baseid)), lands.get(row.baseid) ?? 0),
-    ])
-  );
+  const result: OutpostIncomes = { rates: {}, changes: [] };
+  for (const row of outposts) {
+    const { rate, changes } = outpostTimeline(
+      row,
+      incomeHeight(heights.get(row.baseid)),
+      lands.get(row.baseid) ?? 0,
+      now
+    );
+    result.rates[row.baseid] = rate;
+    result.changes.push(...changes);
+  }
+  return result;
 };
 
 /**
@@ -322,8 +481,8 @@ export const autobankYard = async (
   inHand: Save | null = null
 ): Promise<AutobankReport | null> => {
   if (main.type !== BaseType.MAIN || Number(main.mapversion) !== MapRoomVersion.V2) return null;
-  const rates = await outpostIncomes(em, main, inHand);
-  return payAutobank(main, rates, now, completed);
+  const { rates, changes } = await outpostIncomes(em, main, now, inHand);
+  return payAutobank(main, rates, now, completed, changes);
 };
 
 /**

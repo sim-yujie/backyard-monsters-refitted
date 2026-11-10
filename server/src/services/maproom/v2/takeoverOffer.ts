@@ -22,7 +22,7 @@ export interface TakeoverOffer extends Partial<TakeoverQuote> {
  *
  * @param {TakeoverGrant} grant - The grant.
  * @param {Save} takerSave - The attacker's main save, for the adjacency half.
- * @param {Save} outpost - The outpost, for its empire value.
+ * @param {Save} outpost - The outpost, whose buildings set its price.
  * @returns {Promise<TakeoverOffer>} The offer.
  */
 export const takeoverOffer = async (
@@ -46,7 +46,7 @@ export const takeoverOffer = async (
     ...quoteTakeover({
       cell,
       isWildMonster: false,
-      empireValue: outpost.empirevalue,
+      buildingdata: outpost.buildingdata,
       takerHomebase: takerSave.homebase,
     }),
   };

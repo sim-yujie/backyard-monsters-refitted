@@ -3,6 +3,8 @@ import { calculateTribeLevel } from "./calculateTribeLevel.js";
 import { mr2HexShape } from "../../../config/MapRoom2Config.js";
 import { type HexShape, hexDistance } from "../../../game-rules/maproom/range.js";
 import { cheapTakeoverPrice } from "../../events/mr2Welcome.js";
+import type { BuildingDataMap } from "../../../types/BuildingData.js";
+import { outpostValue } from "./outpostValue.js";
 
 /**
  * Server-side reconstruction of the Map Room 2 takeover price.
@@ -21,6 +23,11 @@ import { cheapTakeoverPrice } from "../../events/mr2Welcome.js";
  * off on top; the alliance power-ups are gone (owner, 10 Nov 2026). The same
  * amount is charged for each of r1..r4, and the Shiny alternative is
  * `ceil(sqrt(cost / 2) ^ 0.75 * 4)` (`PopupTakeover.as:80`).
+ *
+ * A player outpost's empire value is the outpost's own `BASE.CalcBaseValue`
+ * (`BASE.as:4830-4862`), which Flash posted as `empirevalue`. The server works
+ * it out from the outpost's stored buildings instead (`outpostValue.ts`), so
+ * {@link quoteTakeover} takes the buildings, never a stored or posted figure.
  *
  * The outpost-count tier table in `PopupInfoEnemy.as:498-513` is NOT this price: it
  * only decides whether `PopupInfoEnemy.TakeOverConfirm` runs instead of opening
@@ -49,7 +56,7 @@ export interface TakeoverCostInput {
   isWildMonster: boolean;
   /** The camp's coordinate-derived tribe level. Wild monster camps only. */
   level: number;
-  /** The target save's empirevalue. Player outposts only. */
+  /** The outpost's empire value (`outpostValue.ts`). Player outposts only. */
   empireValue: number;
   /** Whether the target neighbours the taker's main yard. */
   adjacentToMainYard: boolean;
@@ -146,7 +153,9 @@ export interface TakeoverQuote {
 /**
  * The takeover price for one taker and one cell, the way `PopupTakeover.as`
  * works it out: the camp's coordinate-derived level or the outpost's empire
- * value, and the taker's main yard for the adjacency half.
+ * value (worked out here from its buildings, `outpostValue.ts`), and the
+ * taker's main yard for the adjacency half. The quote, the offer after an
+ * attack and the takeover itself all price through here, so they agree.
  *
  * @param {object} input - The cell, what it is, and the taker's side.
  * @returns {TakeoverQuote} The price.
@@ -154,13 +163,14 @@ export interface TakeoverQuote {
 export const quoteTakeover = ({
   cell,
   isWildMonster,
-  empireValue,
+  buildingdata,
   takerHomebase,
   welcome = false,
 }: {
   cell: { x: number; y: number };
   isWildMonster: boolean;
-  empireValue: number;
+  /** The target's stored `buildingdata`; read for a player outpost only. */
+  buildingdata: BuildingDataMap | null | undefined;
   /** The taker's `Save.homebase`, `[x, y]` as strings. */
   takerHomebase: readonly (string | number)[] | null | undefined;
   /**
@@ -179,6 +189,8 @@ export const quoteTakeover = ({
     isAdjacentToMainYard(homeX!, homeY!, cell.x, cell.y);
 
   const level = calculateTribeLevel(cell.x, cell.y, tribe);
+
+  const empireValue = isWildMonster ? 0 : outpostValue(buildingdata);
 
   const resources = takeoverResourceCost({
     isWildMonster,

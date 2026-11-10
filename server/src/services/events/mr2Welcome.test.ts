@@ -3,6 +3,8 @@ import type { EntityManager } from "@mikro-orm/core";
 
 import { quoteTakeover, takeoverResourceCost, takeoverShinyCost } from "../maproom/v2/takeoverCost.js";
 import { calculateTribeLevel } from "../maproom/v2/calculateTribeLevel.js";
+import { STARTER_KITS } from "../../game-data/starterKits.js";
+import { kitBuildings } from "../yard/starterKit.js";
 import { Tribes } from "../../enums/Tribes.js";
 import {
   cheapTakeoverPrice,
@@ -131,7 +133,7 @@ describe("the cheap takeover price", () => {
     adjacentToMainYard: false,
   });
   const quote = (over: Partial<Parameters<typeof quoteTakeover>[0]> = {}) =>
-    quoteTakeover({ cell, isWildMonster: true, empireValue: 0, takerHomebase: ["0", "0"], ...over });
+    quoteTakeover({ cell, isWildMonster: true, buildingdata: null, takerHomebase: ["0", "0"], ...over });
 
   test("10% of the camp's full base price, in each resource", () => {
     expect(cheapTakeoverPrice(1_000_000)).toBe(100_000);
@@ -153,8 +155,9 @@ describe("the cheap takeover price", () => {
   });
 
   test("a player outpost is never cheap", () => {
-    const outpost = quote({ welcome: true, isWildMonster: false, empireValue: 5_000_000 });
+    const buildingdata = kitBuildings(STARTER_KITS[0]!, "shiny", {}).buildingdata;
+    const outpost = quote({ welcome: true, isWildMonster: false, buildingdata });
     expect(outpost.welcome).toBeUndefined();
-    expect(outpost.resources).toBe(quote({ isWildMonster: false, empireValue: 5_000_000 }).resources);
+    expect(outpost.resources).toBe(quote({ isWildMonster: false, buildingdata }).resources);
   });
 });
