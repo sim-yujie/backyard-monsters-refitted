@@ -42,8 +42,11 @@ describe("the build menu's Modern pictures", () => {
       modern: true,
     });
     expect(buildPicture(1, "main", true)).toEqual({ url: buttonUrl(1), modern: false });
-    // A building with no new look (type 8): Flash's button either way.
-    expect(buildPicture(8, "main", false)).toEqual({ url: buttonUrl(8), modern: false });
+    // A building with no new look (type 133): Flash's button either way.
+    expect(buildPicture(133, "main", false)).toEqual({ url: buttonUrl(133), modern: false });
+    // The Monster Locker (8) has its 3D look's picture (10 Nov 2026).
+    expect(buildPicture(8, "main", false).url).toMatch(/\/modern\/8\.main\.[0-9a-f]{8}\.webp$/);
+    expect(buildPicture(8, "main", true)).toEqual({ url: buttonUrl(8), modern: false });
   });
 
   it("the Inferno's Incubator Control Centre shows its own 3D look, not the Hatchery Control Center's", () => {

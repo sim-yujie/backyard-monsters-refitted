@@ -80,7 +80,10 @@
  * game") the Monster Lab, art/buildings-3d-lab at tag
  * lab-3d-baseline-2026-11-01; then (owner, 2 Nov 2026: "Champion chamber
  * pass") the Champion Chamber, art/buildings-3d-chamber at 40e38b1b8
- * (round 9, the cooling pipes).
+ * (round 9, the cooling pipes); then (owner, 10 Nov 2026, Review Desk card
+ * locker-fable-r2) the Monster Locker, art/locker-fable-2, the model made
+ * from scratch from the Flash art, its four levels with their own damaged
+ * looks and one wreck.
  *
  * The Town Hall's new art is the default (owner, 26 Oct 2026): one picture
  * per level (`TOWN_HALL_ART`), each painted from that level's Flash picture
@@ -533,6 +536,27 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
       anim: { strip: ["anim.3d1@2x.webp", -33, -21, 66, 70, 26], body: ["body.3d1@2x.webp", -36, -51] },
       damaged: { top: ["top.3d1.damaged@2x.webp", -40, -54], shadow: ["shadow.3d1.damaged.jpg", -37, 28] },
       destroyed: { top: ["top.3d1.destroyed@2x.webp", -44, -5], shadow: ["shadow.3d1.destroyed.jpg", -55, 19] } },
+  ],
+  // 8 Monster Locker: 3D (owner, 10 Nov 2026), Flash's four looks; its key and gears turn while it unlocks a monster.
+  // Each cell is the whole machine round what moves, over a body with that box cut out. One wreck for every level,
+  // as Flash's (`top.2.destroyed.png`).
+  8: [
+    { from: 1, top: ["top.3d1@2x.webp", -35, -34], shadow: ["shadow.3d1.jpg", -29, 27], lift: 0,
+      anim: { strip: ["anim.3d1@2x.webp", -37, -36, 20, 20, 21], body: ["body.3d1@2x.webp", -31, -30] },
+      damaged: { top: ["top.3d1.damaged@2x.webp", -56, -24], shadow: ["shadow.3d1.damaged.jpg", -39, 27] },
+      destroyed: { top: ["top.3d2.destroyed@2x.webp", -48, -32], shadow: ["shadow.3d2.destroyed.jpg", -38, 25] } },
+    { from: 2, top: ["top.3d2@2x.webp", -44, -90], shadow: ["shadow.3d2.jpg", -47, 26], lift: 0,
+      anim: { strip: ["anim.3d2@2x.webp", -47, -92, 61, 67, 20], body: ["body.3d2@2x.webp", -44, -59] },
+      damaged: { top: ["top.3d2.damaged@2x.webp", -70, -59], shadow: ["shadow.3d2.damaged.jpg", -54, 26] },
+      destroyed: { top: ["top.3d2.destroyed@2x.webp", -48, -32], shadow: ["shadow.3d2.destroyed.jpg", -38, 25] } },
+    { from: 3, top: ["top.3d3@2x.webp", -51, -83], shadow: ["shadow.3d3.jpg", -54, 14], lift: 0,
+      anim: { strip: ["anim.3d3@2x.webp", -47, -85, 90, 80, 20], body: ["body.3d3@2x.webp", -51, -78] },
+      damaged: { top: ["top.3d3.damaged@2x.webp", -64, -82], shadow: ["shadow.3d3.damaged.jpg", -63, 12] },
+      destroyed: { top: ["top.3d2.destroyed@2x.webp", -48, -32], shadow: ["shadow.3d2.destroyed.jpg", -38, 25] } },
+    { from: 4, top: ["top.3d4@2x.webp", -54, -95], shadow: ["shadow.3d4.jpg", -58, 11], lift: 0,
+      anim: { strip: ["anim.3d4@2x.webp", -48, -86, 95, 96, 21], body: ["body.3d4@2x.webp", -54, -95] },
+      damaged: { top: ["top.3d4.damaged@2x.webp", -69, -95], shadow: ["shadow.3d4.damaged.jpg", -64, 8] },
+      destroyed: { top: ["top.3d2.destroyed@2x.webp", -48, -32], shadow: ["shadow.3d2.destroyed.jpg", -38, 25] } },
   ],
   // 9 Monster Juicer: 3D, one look; its 51 cells as Flash's
   9: [

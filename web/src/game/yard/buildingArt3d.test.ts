@@ -13,11 +13,11 @@ const ASSETS = fileURLToPath(new URL("../../../../server/public/assets/", import
 /**
  * The 3D yard buildings: the first eight (owner, 31 Oct 2026: "All approved"), then the Flinger, Juicer, Yard Planner,
  * Map Room, General Store, Blocks, Stone Block, Baiter, Catapult and Champion Cage (1 Nov 2026), then the Monster
- * Academy and the Monster Lab, then the Champion Chamber (2 Nov 2026).
+ * Academy and the Monster Lab, then the Champion Chamber (2 Nov 2026), then the Monster Locker (10 Nov 2026).
  */
-const TYPES = [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 24, 26, 51, 114, 116, 117, 119];
+const TYPES = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 24, 26, 51, 114, 116, 117, 119];
 /** The ones whose parts move, as Flash's do; the rest stand still, as Flash's did. */
-const MOVING = [1, 2, 3, 4, 6, 9, 13, 19, 26, 116];
+const MOVING = [1, 2, 3, 4, 6, 8, 9, 13, 19, 26, 116];
 /** The ones with no damaged or destroyed 3D look yet: the General Store, tinted and then Flash's rubble. */
 const NO_RUIN = [12];
 /** The traps (art/traps-3d): whole until they fire, then their destroyed look is the fired trap; never damaged. */
@@ -26,12 +26,14 @@ const TRAPS = [24, 117];
 /**
  * The looks whose model reaches past Flash's picture, `[left, top, right, bottom]` in px each edge may differ: the
  * Putty Squisher's first vial stands 8 px further right and its last wheel 12 px higher, the third Hatchery's front
- * foot 9 px lower, the second Academy's shoulder brackets 7 px higher (as approved, 1 Nov 2026).
+ * foot 9 px lower, the second Academy's shoulder brackets 7 px higher (as approved, 1 Nov 2026). The second Locker's
+ * key stands 7 px further in from the left than Flash's (the owner's key angle, 10 Nov 2026).
  */
 const WIDER: Record<string, Box> = {
   "3:1": [6, 6, 8, 6],
   "3:10": [6, 12, 6, 6],
   "13:3": [6, 6, 6, 9],
+  "8:2": [7, 6, 6, 6],
   "26:2": [6, 7, 6, 6],
 };
 
