@@ -94,6 +94,31 @@ export const toAllianceMember = (
 };
 
 /**
+ * How many members of each alliance are online now, by the same rule as the
+ * My Alliance tab's "online" ({@link getAllianceDetails}): the alliance list's
+ * green number. One database query and one Redis call for the whole page;
+ * an alliance with nobody online is 0.
+ *
+ * @param {readonly number[]} allianceIds - The alliances on the page.
+ * @returns {Promise<Map<number, number>>} Online members by alliance id.
+ */
+export const onlineMemberCounts = async (allianceIds: readonly number[]): Promise<Map<number, number>> => {
+  const counts = new Map<number, number>(allianceIds.map((id) => [id, 0]));
+  if (allianceIds.length === 0) return counts;
+  const members = await postgres.em.execute<{ userid: number; alliance_id: number }[]>(
+    `SELECT userid, alliance_id FROM bym."user" WHERE alliance_id IN (${allianceIds.map(() => "?").join(",")})`,
+    [...allianceIds]
+  );
+  const online = await onlinePlayers(members.map(({ userid }) => Number(userid)), getCurrentDateTime());
+  for (const { userid, alliance_id } of members) {
+    if (!online.has(Number(userid))) continue;
+    const id = Number(alliance_id);
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
+};
+
+/**
  * The member figures the My Alliance tab prints beside an alliance's name.
  *
  * @param {number} allianceId - The alliance to summarise.

@@ -7,6 +7,7 @@ import { SearchAlliancesSchema } from "../../schemas/AllianceSchemas.js";
 import { findRelationships, type RelationshipLookup } from "../../services/alliance/relationships.js";
 import { getLeaderBaseIds } from "../../services/alliance/allianceLeaders.js";
 import { memberLimit } from "../../services/alliance/allianceTypes.js";
+import { onlineMemberCounts } from "../../services/alliance/allianceMember.js";
 import { ALLIANCE_TYPES } from "../../config/AllianceConfig.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { allianceNoWorldErr } from "../../errors/errors.js";
@@ -35,7 +36,8 @@ const MEMBER_LIMIT_SQL = `CASE a.type ${Object.entries(ALLIANCE_TYPES)
  *
  * Marketplace order (alliances phase 0): alliances with a free seat first,
  * then the most members who played in the last 7 days (`active_members`),
- * then empire points.
+ * then empire points. Each row also says `online_members`: members online now,
+ * by the same rule as My Alliance.
  *
  * @param {Context} ctx - Koa context.
  */
@@ -78,6 +80,7 @@ export const searchAlliances: KoaController = async (ctx) => {
 
   const allianceIds = alliances.map((alliance) => alliance.id);
   const relationships: RelationshipLookup = await findRelationships(user.alliance_id, allianceIds);
+  const online = await onlineMemberCounts(allianceIds);
 
   const results = alliances.map((alliance) => ({
     alliance_id: alliance.id,
@@ -92,6 +95,8 @@ export const searchAlliances: KoaController = async (ctx) => {
     type: alliance.type,
     member_limit: memberLimit(alliance.type),
     active_members: alliance.stats?.active_members ?? 0,
+    // Members online now, the list's green number (as My Alliance's "online").
+    online_members: online.get(alliance.id) ?? 0,
   }));
 
   ctx.status = Status.OK;

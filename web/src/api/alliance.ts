@@ -78,7 +78,10 @@ export interface AllianceListing {
   readonly image: number;
   readonly members: number;
   readonly member_limit: number;
+  /** Members who played in the last 7 days (the list's order). */
   readonly active_members: number;
+  /** Members online now (the list's green number); older servers leave it out. */
+  readonly online_members?: number;
   readonly leader_name: string;
   readonly type: AllianceType;
   readonly rank?: number | null;

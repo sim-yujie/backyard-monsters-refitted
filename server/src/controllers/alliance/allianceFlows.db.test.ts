@@ -55,6 +55,8 @@ const { takeOverAlliance } = await import("./takeOverAlliance.js");
 const { renameAllianceController } = await import("./renameAlliance.js");
 const { reportAllianceController } = await import("./reportAlliance.js");
 const { adminAllianceAction, listAllianceReports } = await import("../../services/alliance/allianceModeration.js");
+const { lastActionKey, lastSeenKey } = await import("../../services/user/online.js");
+const { redis } = await import("../../server.js");
 
 const BASE = 993_800;
 const LEADER = BASE + 1;
@@ -511,6 +513,28 @@ describe.skipIf(!enabled)("alliance flows through the controllers, on Postgres (
       expect(body.totalResults).toBe(2);
       expect(body.alliances.map((row: { name: string }) => row.name)).toEqual(["zz_flow_roomy", NAME]);
       expect(body.alliances[1]).toMatchObject({ members: 15, type: "midas", member_limit: 15, active_members: 15 });
+    });
+
+    test("search says how many members are online now, by My Alliance's rule", async () => {
+      const busy = (await found()).alliance.alliance_id as number;
+      await fill(busy, 4);
+      await found(MEMBER, { alliance_name: "zz_flow_quiet" });
+      const now = Math.floor(Date.now() / 1000);
+      // Two fillers seen and acting just now; a third only seen (no real action) is not online.
+      for (const userid of FILLERS.slice(0, 2)) {
+        await redis.setex(lastSeenKey(userid), 60, String(now));
+        await redis.setex(lastActionKey(userid), 60, String(now));
+      }
+      await redis.setex(lastSeenKey(FILLERS[2]!), 60, String(now));
+
+      const body = await call(searchAlliances, PLAYER, { search: "zz_flow", page: 0, world: "false" });
+      const online = Object.fromEntries(
+        body.alliances.map((row: { name: string; online_members: number }) => [row.name, row.online_members])
+      );
+
+      expect(online).toEqual({ [NAME]: 2, zz_flow_quiet: 0 });
+      expect((await call(myAlliance, LEADER)).alliance.online_members).toBe(2);
+      for (const userid of FILLERS.slice(0, 3)) await redis.del(lastSeenKey(userid), lastActionKey(userid));
     });
   });
 

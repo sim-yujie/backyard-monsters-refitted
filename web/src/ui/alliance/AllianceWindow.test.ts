@@ -126,6 +126,19 @@ describe("AllianceWindow: marketplace", () => {
     expect(rows[1]!.querySelector(".alliance__members-count")!.textContent).toBe("3/60");
   });
 
+  it("the green number is members online now, not the member count or the week's active", async () => {
+    const api = fakeApi({
+      search: vi.fn(() =>
+        ok({ alliances: [listing(1, { members: 9, active_members: 7, online_members: 4 }), listing(2, { members: 5, active_members: 3 })], pageSize: 10, totalResults: 2 }),
+      ),
+    });
+    await open(api);
+    const green = [...document.querySelectorAll(".alliance__item .alliance__active")];
+    expect(green.map((node) => node.textContent)).toEqual(["4", "0"]);
+    expect(green[0]!.getAttribute("aria-label")).toBe(ALLIANCE_TEXT.online(4));
+    expect(green[0]!.querySelector(".alliance__active-dot")).not.toBeNull();
+  });
+
   it("asks to join from an opened row, then marks it Asked", async () => {
     const api = fakeApi({ search: vi.fn(() => ok({ alliances: [listing(5)], pageSize: 10, totalResults: 1 })) });
     await open(api);

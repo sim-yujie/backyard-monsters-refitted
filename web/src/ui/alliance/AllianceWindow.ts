@@ -84,7 +84,6 @@ export const ALLIANCE_TEXT = {
   searchPlaceholder: "Alliance name",
   empty: "No alliances in your world yet. Be the first.",
   noMatch: "No alliance has that name.",
-  activeWeek: (count: number): string => `${formatAmount(count)} active this week`,
   leader: (name: string): string => `Leader: ${name}`,
   askedNote: (name: string): string => `Asked to join ${name}. Its Leader or an Officer will answer.`,
   quickNone: "No alliance of that type has room. Try Any.",
@@ -627,9 +626,11 @@ export class AllianceWindow {
     row.setAttribute("aria-expanded", String(opened));
     const words = make("span", "alliance__row-words");
     words.append(make("strong", "alliance__row-name", listing.name), typeBadge(listing.type));
-    const active = make("span", "alliance__active", formatAmount(listing.active_members));
-    active.title = ALLIANCE_TEXT.activeWeek(listing.active_members);
-    active.setAttribute("aria-label", ALLIANCE_TEXT.activeWeek(listing.active_members));
+    // The green number: members online now, as My Alliance's "online" (server `status`).
+    const onlineNow = listing.online_members ?? 0;
+    const active = make("span", "alliance__active", formatAmount(onlineNow));
+    active.title = ALLIANCE_TEXT.online(onlineNow);
+    active.setAttribute("aria-label", ALLIANCE_TEXT.online(onlineNow));
     active.prepend(onlineDot("alliance__active-dot", true));
     row.append(
       shieldImage(listing.image, "medium", "alliance__shield"),
