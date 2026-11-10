@@ -262,6 +262,12 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /alliance/promotemember",
   "POST /alliance/changerelationship",
   "POST /alliance/deletemessages",
+  // Alliances phase 0 (10 Nov 2026): type switch, ranks, takeover, rename, report.
+  "POST /alliance/changetype",
+  "POST /alliance/setrank",
+  "POST /alliance/takeover",
+  "POST /alliance/rename",
+  "POST /alliance/report",
   // Reads, looks and polls a client sends while the player sits still.
   "POST /base/updatesaved",
   "POST /base/checkpoint",
