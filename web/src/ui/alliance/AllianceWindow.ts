@@ -126,6 +126,8 @@ export const ALLIANCE_TEXT = {
   membersCount: (count: number, limit: number): string => `${formatAmount(count)} / ${formatAmount(limit)} members`,
   online: (count: number): string => `${formatAmount(count)} online`,
   points: "Alliance points",
+  /** The short word under each Overview tile's number. */
+  tileCaption: { members: "members", online: "online now", points: "points" },
   edit: "Edit",
   save: "Save",
   cancel: "Cancel",
@@ -932,7 +934,8 @@ export class AllianceWindow {
       words,
       membersBadge(alliance.number_of_members ?? this.members.length, alliance.member_limit),
     );
-    const tabs = make("div", "tabs alliance__tabs");
+    // `.tab-row`: the row fills the window and never cuts a label (ui.css).
+    const tabs = make("div", "tabs tab-row alliance__tabs");
     tabs.setAttribute("role", "tablist");
     for (const tab of AllianceWindow.TABS) {
       const words = ALLIANCE_TEXT.tabs[tab];
@@ -1026,9 +1029,9 @@ export class AllianceWindow {
 
     const tiles = make("div", "alliance__tiles");
     tiles.append(
-      this.tile(gameIcon("friends", { size: 24, decorative: true }), `${formatAmount(alliance.number_of_members ?? 0)}/${formatAmount(alliance.member_limit)}`, ALLIANCE_TEXT.membersCount(alliance.number_of_members ?? 0, alliance.member_limit)),
-      this.tile(onlineDot("alliance__tile-dot", true), formatAmount(alliance.online_members ?? 0), ALLIANCE_TEXT.online(alliance.online_members ?? 0)),
-      this.tile(gameIcon("empire", { size: 24, decorative: true }), formatAmount(alliance.points), ALLIANCE_TEXT.points),
+      this.tile(gameIcon("friends", { size: 24, decorative: true }), `${formatAmount(alliance.number_of_members ?? 0)}/${formatAmount(alliance.member_limit)}`, ALLIANCE_TEXT.membersCount(alliance.number_of_members ?? 0, alliance.member_limit), ALLIANCE_TEXT.tileCaption.members),
+      this.tile(onlineDot("alliance__tile-dot", true), formatAmount(alliance.online_members ?? 0), ALLIANCE_TEXT.online(alliance.online_members ?? 0), ALLIANCE_TEXT.tileCaption.online),
+      this.tile(gameIcon("empire", { size: 24, decorative: true }), formatAmount(alliance.points), ALLIANCE_TEXT.points, ALLIANCE_TEXT.tileCaption.points),
     );
     nodes.push(tiles);
 
@@ -1082,11 +1085,13 @@ export class AllianceWindow {
     return nodes;
   }
 
-  private tile(picture: HTMLElement, value: string, label: string): HTMLElement {
+  private tile(picture: HTMLElement, value: string, label: string, caption: string): HTMLElement {
     const tile = make("div", "alliance__tile");
     tile.title = label;
     tile.setAttribute("aria-label", `${label}: ${value}`);
-    tile.append(picture, make("strong", "alliance__tile-value", value));
+    const words = make("span", "alliance__tile-words");
+    words.append(make("strong", "alliance__tile-value", value), make("span", "alliance__tile-caption", caption));
+    tile.append(picture, words);
     return tile;
   }
 

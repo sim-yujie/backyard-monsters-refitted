@@ -178,7 +178,7 @@ export const helpersCard = (alliance: MyAlliance): HTMLElement | null => {
     const row = make("li", "alliance-helpers__row");
     row.append(
       make("span", "alliance-helpers__name", helper.username),
-      make("span", "alliance-helpers__stat", `${helper.quests} quests`),
+      make("span", "alliance-helpers__stat", `${helper.quests} ${helper.quests === 1 ? "quest" : "quests"}`),
       make("span", "alliance-helpers__stat", `${helper.goal_share}% of a goal`),
     );
     list.append(row);
@@ -419,10 +419,10 @@ export const territoryTab = (
   shieldUrl: (image: number) => string,
 ): HTMLElement[] => {
   const switcher = make("div", "alliance-board__types");
-  switcher.setAttribute("role", "tablist");
+  switcher.setAttribute("role", "group");
   for (const type of ["midas", "conquest", "fortress"] as const) {
     const node = button(TYPE_WORD[type], `btn--outline btn--small alliance-board__type${type === shown ? " alliance-board__type--on" : ""}`, () => pick(type));
-    node.setAttribute("aria-selected", String(type === shown));
+    node.setAttribute("aria-pressed", String(type === shown));
     switcher.append(node);
   }
   const nodes: HTMLElement[] = [switcher];

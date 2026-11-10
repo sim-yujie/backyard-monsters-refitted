@@ -336,7 +336,13 @@ describe("AllianceWindow: my alliance", () => {
     await flush();
     expect(progress.territory).toHaveBeenLastCalledWith("fortress");
 
-    view.showTab("constellation");
+    // The chosen board is marked pressed.
+    const types = [...document.querySelectorAll<HTMLButtonElement>(".alliance-board__type")];
+    expect(types.map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false", "true"]);
+
+    // Clicking the tab button itself switches (as a tap on a phone does).
+    document.querySelector<HTMLButtonElement>(".alliance__tab[data-tab='constellation']")!.click();
+    expect(document.querySelector(".alliance__tab[aria-selected='true']")!.getAttribute("data-tab")).toBe("constellation");
     expect(document.querySelector(".alliance-sky__empty, .alliance-sky")).not.toBeNull();
   });
 
