@@ -57,6 +57,9 @@ const { reportAllianceController } = await import("./reportAlliance.js");
 const { adminAllianceAction, listAllianceReports } = await import("../../services/alliance/allianceModeration.js");
 const { lastActionKey, lastSeenKey } = await import("../../services/user/online.js");
 const { redis } = await import("../../server.js");
+const { underAttackShout } = await import("../../services/alliance/underAttack.js");
+const { emitShout, getAllianceMessages } = await import("../../services/alliance/allianceMessages.js");
+const { BaseType } = await import("../../enums/Base.js");
 
 const BASE = 993_800;
 const LEADER = BASE + 1;
@@ -814,5 +817,24 @@ describe.skipIf(!enabled)("alliance flows through the controllers, on Postgres (
       expect(mine.alliance.permissions).toContain("kickMember");
       expect(mine.alliance.permissions).not.toContain("kickOfficer");
     });
+  });
+
+  test("an attack on a member's outpost is stored as an under-attack line, read back with its cell", async () => {
+    const allianceId = await foundWithMember();
+    requestEm = orm!.em.fork();
+    const defender = await requestEm.findOneOrFail(User, { userid: MEMBER });
+    const alert = underAttackShout({
+      defender,
+      attacker: { userid: PLAYER, username: "Bob" },
+      baseType: BaseType.OUTPOST,
+      cell: { x: 12, y: 40 },
+    });
+
+    await emitShout({ ...alert!, em: requestEm });
+
+    const last = (await getAllianceMessages(allianceId, orm!.em.fork())).at(-1)!;
+    expect(String(last.messageType)).toBe("under_attack");
+    expect(last.cell).toEqual({ x: 12, y: 40 });
+    expect(last.body).toContain("(12, 40) is under attack by Bob!");
   });
 });

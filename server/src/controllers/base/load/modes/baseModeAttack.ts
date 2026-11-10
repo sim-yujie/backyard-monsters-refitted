@@ -37,6 +37,8 @@ import { academyRanks } from "../../../../game-rules/combat/index.js";
 import { mr2NeighbourBonusMode } from "../../../../config/MapRoom2Config.js";
 import { loadFriendlyNeighbourCount } from "../../../../services/maproom/v2/neighbourDefence.js";
 import { activeLandFeature } from "../../../../services/maproom/v2/landFeature.js";
+import { underAttackShout } from "../../../../services/alliance/underAttack.js";
+import { announceShout } from "../../../../services/alliance/allianceMessages.js";
 import {
   generateNoise,
   getTerrainHeight,
@@ -349,6 +351,17 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
 
     if (mapversion === MapRoomVersion.V1) await registerAttacker(user, defender);
     await createAttackLog(user, defender, save)
+
+    // The defender's alliance hears of it: "Ana_B's outpost (12, 40) is under
+    // attack by Bob!" with Show on map (beta 7 design v5 §12). Never stops the attack.
+    const alert = underAttackShout({
+      defender,
+      attacker: user,
+      baseType: save.type,
+      mapversion,
+      cell: save.cell ? { x: save.cell.x, y: save.cell.y } : cellCoords,
+    });
+    if (alert) await announceShout(alert);
   }
 
   return { save, defenderForces, championBrains, championHealth, attackerAcademy, attackerRanks };

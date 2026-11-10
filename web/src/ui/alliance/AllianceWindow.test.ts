@@ -322,3 +322,17 @@ describe("AllianceWindow: my alliance", () => {
     expect(buttonNamed(ALLIANCE_TEXT.leave)).toBeUndefined();
   });
 });
+
+describe("AllianceWindow: the Alliance chat room", () => {
+  it("opens the room for the player's alliance, with its name and shield", async () => {
+    const chat = { setAllianceRoom: vi.fn() };
+    await open(fakeApi({ mine: vi.fn(() => ok({ alliance: mine(), rejoinAt: null })) }), { chat });
+    expect(chat.setAllianceRoom).toHaveBeenCalledWith({ id: 7, name: "Goo Lords", image: 4 });
+  });
+
+  it("closes it when the player is in no alliance", async () => {
+    const chat = { setAllianceRoom: vi.fn() };
+    await open(fakeApi(), { chat });
+    expect(chat.setAllianceRoom).toHaveBeenCalledWith(null);
+  });
+});

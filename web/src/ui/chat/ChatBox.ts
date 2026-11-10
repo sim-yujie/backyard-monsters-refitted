@@ -3,6 +3,7 @@ import { openProfile } from "@/ui/profile/ProfileDialog";
 import { ApiError } from "@/api/http";
 import type { ChatApi } from "@/api/chat";
 import {
+  ALLIANCE_ROOM,
   ChatStatus,
   MAX_LINE_LENGTH,
   visibleEntries,
@@ -14,6 +15,7 @@ import {
 } from "@/game/chat/chatSession";
 import { countryLabel, countryName } from "@/game/account/countries";
 import { countryLabelNodes } from "@/ui/countryFlag";
+import { shieldUrl } from "@/game/alliance/allianceRules";
 import { icon } from "@/ui/icons";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { addFriendButton } from "@/ui/friends/AddFriendButton";
@@ -42,6 +44,13 @@ import "@/ui/styles/chat.css";
  * A player whose country has a room (owner 3 Nov 2026) gets a second tab
  * beside Global in the open box; Global stays the default and carries a short
  * line saying it is in English.
+ *
+ * A player in an alliance (beta 7, design v5 §7c) gets the Alliance room
+ * between them: Global | Alliance | Country, its tab the alliance's own
+ * shield. Its automatic lines (joins, leaves, under-attack alerts) read as
+ * plain notes, an alert with a Map button that opens the map on the yard.
+ * Lines there cannot be reported (members kick instead; the server takes no
+ * alliance reports).
  */
 
 export interface ChatBoxOptions {
@@ -50,6 +59,8 @@ export interface ChatBoxOptions {
   readonly container: HTMLElement;
   /** Opens a player's yard read-only; the scene finds it and goes there. */
   readonly onViewYard: (userId: number) => Promise<void>;
+  /** An under-attack alert's Map button: opens Map Room 2 on that cell. Absent: no button. */
+  readonly onShowOnMap?: (cell: { readonly x: number; readonly y: number }) => void;
   /** The friend request flow behind Add friend; the game's own unless a test swaps it. */
   readonly friends?: { readonly api?: FriendsApi; readonly relations?: FriendRelations };
 }
@@ -61,6 +72,13 @@ export const CHAT_STRIP_TEXT = {
   unmute: "Unmute",
   viewYard: "View yard",
   report: "Report",
+} as const;
+
+/** The Alliance room's words: its tab, and an alert's map button (word and tooltip). */
+export const ALLIANCE_ROOM_TEXT = {
+  tab: "Alliance",
+  map: "Map",
+  showOnMap: (cell: { readonly x: number; readonly y: number }): string => `Show on map (${cell.x}, ${cell.y})`,
 } as const;
 
 /** What the open box says under the lines while the room is not joined. */
@@ -88,9 +106,24 @@ const coarsePointer = (): boolean =>
 /** Global's tab. */
 export const GLOBAL_LABEL = "\u{1F310} Global";
 
-/** What a room's tab says: "🌐 Global" or "🇵🇭 Philippines". */
+/** What a room's tab says: "🌐 Global", "Alliance" (beside its shield) or "🇵🇭 Philippines". */
 export const roomLabel = (room: ChatRoom): string =>
-  room.kind === "country" && room.country ? countryLabel(room.country) : GLOBAL_LABEL;
+  room.kind === "alliance"
+    ? ALLIANCE_ROOM_TEXT.tab
+    : room.kind === "country" && room.country
+      ? countryLabel(room.country)
+      : GLOBAL_LABEL;
+
+/** The Alliance room's tab: the alliance's own painted shield, then "Alliance". */
+const allianceLabelNodes = (room: ChatRoom): Node[] => {
+  const shield = document.createElement("img");
+  shield.className = "chat-box__shield";
+  shield.src = shieldUrl(room.alliance?.image ?? 1, "small");
+  shield.alt = "";
+  shield.width = 18;
+  shield.height = 18;
+  return [shield, document.createTextNode(ALLIANCE_ROOM_TEXT.tab)];
+};
 
 /** The line at the top of Global: English there, and the country room for the player's own language. */
 export const globalRuleText = (hasCountryRoom: boolean): string =>
@@ -301,11 +334,17 @@ export class ChatBox {
     const shown = state.rooms.find((room) => room.channel === state.channel) ?? null;
     const country = state.rooms.find((room) => room.kind === "country") ?? null;
     const inCountry = shown?.kind === "country" && !!shown.country;
+    const inAlliance = shown?.kind === "alliance";
 
-    const labelKey = inCountry && shown?.country ? shown.country : "";
+    const labelKey = inCountry && shown?.country
+      ? shown.country
+      : inAlliance
+        ? `alliance:${shown.alliance?.image ?? 1}`
+        : "";
     if (this.tabLabel.dataset["country"] !== labelKey) {
       this.tabLabel.dataset["country"] = labelKey;
-      if (labelKey) this.tabLabel.replaceChildren(...countryLabelNodes(labelKey));
+      if (inAlliance && shown) this.tabLabel.replaceChildren(...allianceLabelNodes(shown));
+      else if (labelKey) this.tabLabel.replaceChildren(...countryLabelNodes(labelKey));
       else this.tabLabel.textContent = "World chat";
     }
     this.element.dataset["unread"] = state.unread.size > 0 ? "true" : "false";
@@ -313,7 +352,7 @@ export class ChatBox {
     const two = state.rooms.length > 1;
     this.rooms.hidden = !two || !this.open;
     if (two) {
-      const key = state.rooms.map((room) => `${room.channel}|${room.country}`).join(",");
+      const key = state.rooms.map((room) => `${room.channel}|${room.country}|${room.alliance?.image ?? ""}`).join(",");
       if (this.rooms.dataset["key"] !== key) {
         this.rooms.dataset["key"] = key;
         this.rooms.replaceChildren(
@@ -326,6 +365,10 @@ export class ChatBox {
             if (room.kind === "country" && room.country) {
               button.replaceChildren(...countryLabelNodes(room.country));
               button.title = countryName(room.country);
+            } else if (room.kind === "alliance") {
+              button.classList.add("chat-box__room--alliance");
+              button.replaceChildren(...allianceLabelNodes(room));
+              button.title = room.alliance?.name ?? ALLIANCE_ROOM_TEXT.tab;
             } else button.textContent = roomLabel(room);
             return button;
           }),
@@ -344,10 +387,14 @@ export class ChatBox {
       delete this.rooms.dataset["key"];
     }
 
-    this.rule.hidden = !this.open || inCountry || state.rooms.length === 0;
+    this.rule.hidden = !this.open || shown?.kind !== "global";
     this.rule.textContent = globalRuleText(!!country);
 
-    const where = inCountry && shown?.country ? countryName(shown.country) : null;
+    const where = inCountry && shown?.country
+      ? countryName(shown.country)
+      : inAlliance
+        ? (shown.alliance?.name ?? ALLIANCE_ROOM_TEXT.tab)
+        : null;
     this.input.placeholder = where ? `Say something to ${where}…` : "Say something to the world…";
     this.input.setAttribute("aria-label", where ? `Message to ${where} chat` : "Message to world chat");
   }
@@ -388,6 +435,7 @@ export class ChatBox {
       item.textContent = entry.text;
       return item;
     }
+    if (entry.auto) return this.autoEntry(item, entry);
     item.className = entry.own ? "chat-line chat-line--own" : "chat-line";
     if (entry.gm) item.classList.add("chat-line--gm");
     else if (entry.mod) item.classList.add("chat-line--mod");
@@ -422,6 +470,39 @@ export class ChatBox {
       item.append(badge);
     }
     item.append(name, body);
+    return item;
+  }
+
+  /**
+   * An Alliance room's automatic line (design v5 §7c): the server's sentence
+   * alone, no name to pick; an under-attack alert ends with a Map button that
+   * opens the map on the attacked yard.
+   */
+  private autoEntry(item: HTMLLIElement, entry: ChatLine): HTMLLIElement {
+    item.className = entry.cell ? "chat-line chat-line--auto chat-line--alert" : "chat-line chat-line--auto";
+    item.dataset["line"] = String(entry.id);
+    const body = document.createElement("span");
+    body.className = "chat-line__body";
+    body.textContent = entry.body;
+    item.append(body);
+    const cell = entry.cell;
+    const onShowOnMap = this.options.onShowOnMap;
+    if (cell && onShowOnMap) {
+      const label = ALLIANCE_ROOM_TEXT.showOnMap(cell);
+      const map = document.createElement("button");
+      map.type = "button";
+      map.className = "chat-line__map";
+      map.title = label;
+      map.setAttribute("aria-label", label);
+      map.tabIndex = this.open ? 0 : -1;
+      const word = document.createElement("span");
+      word.textContent = ALLIANCE_ROOM_TEXT.map;
+      map.append(gameIcon("pin", { size: 16, decorative: true }), word);
+      map.addEventListener("click", () => {
+        if (this.open) onShowOnMap(cell);
+      });
+      item.append(map);
+    }
     return item;
   }
 
@@ -498,18 +579,19 @@ export class ChatBox {
       const mute = this.iconButton(muted ? CHAT_STRIP_TEXT.unmute : CHAT_STRIP_TEXT.mute, "mute", () => this.toggleMute(line));
       // Muted, the same picture sits on a lit button and the word turns to Unmute.
       mute.classList.toggle("chat-box__action--on", muted);
-      actions.append(
-        friend,
-        mute,
-        this.iconButton(CHAT_STRIP_TEXT.viewYard, "townhall", () => void this.viewYard(line)),
-        this.iconButton(CHAT_STRIP_TEXT.report, "report", () => {
-          this.pickedNote = {
-            text: `Report this message from ${line.name}?`,
-            confirmReport: true,
-          };
-          this.renderPlayer();
-        }),
-      );
+      actions.append(friend, mute, this.iconButton(CHAT_STRIP_TEXT.viewYard, "townhall", () => void this.viewYard(line)));
+      // The Alliance room's lines are not reported: the server takes no alliance reports, and members kick.
+      if (this.state.channel !== ALLIANCE_ROOM) {
+        actions.append(
+          this.iconButton(CHAT_STRIP_TEXT.report, "report", () => {
+            this.pickedNote = {
+              text: `Report this message from ${line.name}?`,
+              confirmReport: true,
+            };
+            this.renderPlayer();
+          }),
+        );
+      }
     }
 
     const close = document.createElement("button");

@@ -8,7 +8,7 @@ import type { HistoryEntry } from "../../chat/chatProtocol.js";
 import { publishAllianceShout } from "../../chat/chatShouts.js";
 import { postgres } from "../../server.js";
 import { logger } from "../../utils/logger.js";
-import { composeShout } from "./shoutText.js";
+import { composeShout, shoutCell } from "./shoutText.js";
 
 interface AllianceMessageDraft {
   allianceId: number;
@@ -124,6 +124,8 @@ export const emitShout = async (shout: ShoutDraft) => {
   const stored = await addAllianceMessage(draft, em);
   const shoutText = composeShout(message.type, author.username, message.body, target);
 
+  const cell = shoutCell(message.type, message.body);
+
   const entry: HistoryEntry = {
     userId: author.userid,
     displayName: author.username,
@@ -132,6 +134,7 @@ export const emitShout = async (shout: ShoutDraft) => {
     body: shoutText,
     ts: stored.created_at.getTime(),
     messageType: message.type,
+    ...(cell && { cell }),
   };
 
   publishAllianceShout(message.allianceId, entry);
@@ -170,6 +173,7 @@ export const getAllianceMessages = async (allianceId: number, em: EntityManagerT
 
     const isShout = messageType !== AllianceMessageType.MESSAGE;
     const text = isShout ? composeShout(messageType, username, body, targetAlliance) : body;
+    const cell = shoutCell(messageType, body);
 
     return {
       userId: userid,
@@ -179,6 +183,7 @@ export const getAllianceMessages = async (allianceId: number, em: EntityManagerT
       body: text,
       ts: created_at.getTime(),
       messageType,
+      ...(cell && { cell }),
     };
   });
 

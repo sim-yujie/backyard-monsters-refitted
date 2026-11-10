@@ -1,4 +1,4 @@
-import type { ChatConfig, ChatLineWire, ChatServerMessage } from "@/api/chat";
+import type { ChatAlliance, ChatConfig, ChatLineWire, ChatServerMessage } from "@/api/chat";
 import { onWorldChatChange, worldChatOn } from "./worldChatSetting";
 
 /**
@@ -26,6 +26,14 @@ import { onWorldChatChange, worldChatOn } from "./worldChatSetting";
  * that room too, on the same socket: the yard load names it, the server lets
  * them in only from their stored country. The box shows one room at a time
  * (`channel`); lines in the other are kept and marked unread.
+ *
+ * A player in an alliance (beta 7) has a third room between the two: the
+ * Alliance room (design v5 §7c). The client asks for it by the server's alias
+ * ({@link ALLIANCE_ROOM}); the server picks the player's own alliance's room
+ * and answers with its real name, which this session keeps for saying lines
+ * there. Leaving or being kicked from the alliance closes the tab: the server
+ * says "left", or the next yard load names no alliance. Its automatic lines
+ * (joins, leaves, under-attack alerts) are marked `auto`, an alert with its cell.
  */
 
 /** A line someone said in the room. */
@@ -44,6 +52,10 @@ export interface ChatLine {
   readonly gm: boolean;
   /** Said by a chat moderator (the server's mark); false whenever `gm` is true. */
   readonly mod: boolean;
+  /** An Alliance room's automatic line (a join, a leave, an under-attack alert), not something a member said. */
+  readonly auto: boolean;
+  /** The map cell an automatic line is about (an under-attack alert), for Show on map; else null. */
+  readonly cell: { readonly x: number; readonly y: number } | null;
 }
 
 /** A word from the client itself, such as "slow down". */
@@ -69,13 +81,26 @@ export const ChatStatus = {
 } as const;
 export type ChatStatus = (typeof ChatStatus)[keyof typeof ChatStatus];
 
-/** A room the player is in: Global, or their country's room. */
+/** A room the player is in: Global, their alliance's room, or their country's room. */
 export interface ChatRoom {
   readonly channel: string;
-  readonly kind: "global" | "country";
+  readonly kind: "global" | "alliance" | "country";
   /** The country's ISO code, for a country room's tab. */
   readonly country: string | null;
+  /** The alliance, for the Alliance room's tab; absent on the others. */
+  readonly alliance?: ChatAlliance;
 }
+
+/**
+ * The Alliance room's channel in {@link ChatState}: the server's alias for
+ * "my alliance's room" (`ALLIANCE_CHANNEL_ALIAS`), so the room keeps one name
+ * whichever alliance it is.
+ */
+export const ALLIANCE_ROOM = "alliance";
+/** How the server names alliance rooms (`chatChannels.ts` `allianceChannelKey`). */
+const ALLIANCE_KEY_PREFIX = "chat:alliance:";
+/** How the server names country rooms (`ChatConfig.ts` `COUNTRY_CHANNEL_PREFIX`). */
+const COUNTRY_PREFIX = "chat:country:";
 
 export interface ChatState {
   readonly status: ChatStatus;
@@ -85,9 +110,9 @@ export interface ChatState {
   readonly muted: ReadonlySet<number>;
   /** This player, once the server has said who they are. */
   readonly self: { readonly userId: number; readonly name: string } | null;
-  /** The room shown: Global, or the country room. */
+  /** The room shown: Global, the Alliance room ({@link ALLIANCE_ROOM}) or the country room. */
   readonly channel: string | null;
-  /** Global first, then the country room if the player has one. */
+  /** Global first, then the Alliance room and the country room when the player has them. */
   readonly rooms: readonly ChatRoom[];
   /** Rooms not shown that have new lines since they were last shown. */
   readonly unread: ReadonlySet<string>;
@@ -172,11 +197,18 @@ const sameConfig = (a: ChatConfig | null, b: ChatConfig): boolean =>
   a.userId === b.userId &&
   a.token === b.token &&
   a.channel === b.channel &&
-  (a.countryChannel ?? null) === (b.countryChannel ?? null);
+  (a.countryChannel ?? null) === (b.countryChannel ?? null) &&
+  sameAlliance(a.alliance ?? null, b.alliance ?? null);
 
-/** The rooms a config puts the player in. */
+const sameAlliance = (a: ChatAlliance | null, b: ChatAlliance | null): boolean =>
+  a === b || (!!a && !!b && a.id === b.id && a.name === b.name && a.image === b.image);
+
+/** The rooms a config puts the player in: Global | Alliance | Country (design v5 §7c). */
 const roomsOf = (config: ChatConfig): ChatRoom[] => {
   const rooms: ChatRoom[] = [{ channel: config.channel, kind: "global", country: null }];
+  if (config.alliance) {
+    rooms.push({ channel: ALLIANCE_ROOM, kind: "alliance", country: null, alliance: config.alliance });
+  }
   if (config.countryChannel && config.countryChannel !== config.channel) {
     rooms.push({ channel: config.countryChannel, kind: "country", country: config.country ?? null });
   }
@@ -231,6 +263,8 @@ export class ChatSession {
   private roomEntries = new Map<string, readonly ChatEntry[]>();
   /** Rooms the server said "joined" for on this socket. */
   private joined = new Set<string>();
+  /** The Alliance room's real name on the server (`chat:alliance:<id>`), once it said "joined". */
+  private allianceKey: string | null = null;
   private state: ChatState = {
     status: ChatStatus.OFF,
     entries: [],
@@ -288,7 +322,9 @@ export class ChatSession {
    * new token alone is kept for the next connect; a new room (a move between
    * Map Rooms) is changed over on the open socket.
    */
-  configure(config: ChatConfig): void {
+  configure(next: ChatConfig): void {
+    // No word on the alliance (a load other than the main yard's): it stays as it was.
+    const config: ChatConfig = next.alliance === undefined ? { ...next, alliance: this.config?.alliance ?? null } : next;
     if (!this.enabled) {
       // Kept for when the player turns world chat back on.
       this.config = config;
@@ -308,18 +344,24 @@ export class ChatSession {
       this.connect();
       return;
     }
-    // A move between Map Rooms changes Global; a country change, the country room.
+    // A move between Map Rooms changes Global; a country change, the country
+    // room; joining, leaving or changing alliance, the Alliance room.
     const before = this.state.rooms;
     const after = roomsOf(config);
     const online = this.state.status === ChatStatus.ONLINE;
+    // Another alliance keeps the room's name but is another room on the server.
+    const otherAlliance = (previous?.alliance?.id ?? null) !== (config.alliance?.id ?? null);
+    const kept = (room: ChatRoom, rooms: readonly ChatRoom[]): boolean =>
+      rooms.some((other) => other.channel === room.channel) && !(room.kind === "alliance" && otherAlliance);
     for (const room of before) {
-      if (after.some((kept) => kept.channel === room.channel)) continue;
+      if (kept(room, after)) continue;
       this.roomEntries.delete(room.channel);
       this.joined.delete(room.channel);
-      if (online) this.sendRaw({ type: "leave", channel: room.channel });
+      if (online) this.sendRaw({ type: "leave", channel: this.wireOf(room.channel) });
+      if (room.kind === "alliance") this.allianceKey = null;
     }
     for (const room of after) {
-      if (before.some((had) => had.channel === room.channel)) continue;
+      if (kept(room, before)) continue;
       this.roomEntries.set(room.channel, []);
       if (online) this.sendRaw({ type: "join", channel: room.channel });
     }
@@ -341,6 +383,17 @@ export class ChatSession {
     const config = this.config;
     if (!config) return;
     this.configure({ ...config, countryChannel, country });
+  }
+
+  /**
+   * The player joined, made, left or changed alliance (the Alliance window
+   * found out): the Alliance room opens or closes at once, without waiting for
+   * the next yard load.
+   */
+  setAllianceRoom(alliance: ChatAlliance | null): void {
+    const config = this.config;
+    if (!config || sameAlliance(config.alliance ?? null, alliance)) return;
+    this.configure({ ...config, alliance });
   }
 
   /** Shows another of the player's rooms in the box. */
@@ -399,7 +452,7 @@ export class ChatSession {
     }
     this.lastSaid = body;
     if (this.state.bounced !== null) this.update({ bounced: null });
-    this.sendRaw({ type: "say", channel, message: body });
+    this.sendRaw({ type: "say", channel: this.wireOf(channel), message: body });
     return true;
   }
 
@@ -461,6 +514,7 @@ export class ChatSession {
   /** Lets go of the socket and the timers without touching the state. */
   private drop(): void {
     this.joined.clear();
+    this.allianceKey = null;
     if (this.retryTimer !== null) clearTimeout(this.retryTimer);
     this.retryTimer = null;
     if (this.pingTimer !== null) clearInterval(this.pingTimer);
@@ -515,8 +569,10 @@ export class ChatSession {
         this.update({ status: ChatStatus.SIGNED_OUT });
         return;
       case "joined": {
-        const room = this.state.rooms.find((candidate) => candidate.channel === message.channel);
+        const channel = this.roomOf(message.channel);
+        const room = this.state.rooms.find((candidate) => candidate.channel === channel);
         if (!room) return;
+        if (room.kind === "alliance") this.allianceKey = message.channel;
         this.joined.add(room.channel);
         this.roomEntries.set(
           room.channel,
@@ -530,9 +586,14 @@ export class ChatSession {
         }
         return;
       }
-      case "message":
-        if (!this.roomEntries.has(message.channel)) return;
-        this.append(this.line(message), message.channel);
+      case "message": {
+        const channel = this.roomOf(message.channel);
+        if (!this.roomEntries.has(channel)) return;
+        this.append(this.line(message), channel);
+        return;
+      }
+      case "left":
+        if (this.roomOf(message.channel) === ALLIANCE_ROOM) this.dropAllianceRoom();
         return;
       case "name_update":
         if (this.state.self && message.userId === this.state.self.userId) {
@@ -559,7 +620,7 @@ export class ChatSession {
           this.update({ bounced: this.lastSaid });
           this.notice(RATE_LIMITED_TEXT);
         } else if (message.code === "invalid_channel") {
-          this.refused();
+          this.refused(message.channel);
         } else if (message.code === "muted") {
           this.update({ bounced: this.lastSaid });
           this.notice(mutedText(message.until));
@@ -600,15 +661,66 @@ export class ChatSession {
       own: this.state.self?.userId === userId,
       gm: wire.gm === true,
       mod: wire.mod === true && wire.gm !== true,
+      auto: typeof wire.messageType === "string" && wire.messageType !== "message",
+      cell:
+        wire.cell && Number.isInteger(wire.cell.x) && Number.isInteger(wire.cell.y)
+          ? { x: wire.cell.x, y: wire.cell.y }
+          : null,
     };
   }
 
+  /** The room a channel the server names belongs to: the Alliance room for its real name. */
+  private roomOf(wire: string): string {
+    if (wire === this.allianceKey) return ALLIANCE_ROOM;
+    const alliance = this.state.rooms.some((room) => room.kind === "alliance");
+    return alliance && this.allianceKey === null && wire.startsWith(ALLIANCE_KEY_PREFIX) ? ALLIANCE_ROOM : wire;
+  }
+
+  /** What to name a room to the server: the Alliance room by its real name once known. */
+  private wireOf(channel: string): string {
+    return channel === ALLIANCE_ROOM ? (this.allianceKey ?? ALLIANCE_ROOM) : channel;
+  }
+
+  /** The player is no longer in an alliance: its tab goes, and Global shows if it was showing. */
+  private dropAllianceRoom(): void {
+    if (this.config) this.config = { ...this.config, alliance: null };
+    this.allianceKey = null;
+    this.dropRoom("alliance");
+  }
+
+  /** Takes a room's tab and lines away; Global shows instead if it was the one showing. */
+  private dropRoom(kind: "alliance" | "country"): void {
+    const room = this.state.rooms.find((candidate) => candidate.kind === kind);
+    if (!room) return;
+    const global = this.state.rooms.find((candidate) => candidate.kind === "global");
+    this.roomEntries.delete(room.channel);
+    this.joined.delete(room.channel);
+    const unread = new Set(this.state.unread);
+    unread.delete(room.channel);
+    this.show({
+      rooms: this.state.rooms.filter((candidate) => candidate !== room),
+      channel: this.state.channel === room.channel ? (global?.channel ?? null) : this.state.channel,
+      unread,
+    });
+  }
+
   /**
-   * The server turned a join down. With Global joined and the country room
-   * not, it was the country room (the country changed elsewhere, or its room
-   * closed): its tab goes and Global carries on. Otherwise it was Global.
+   * The server turned a join down. It names the room it refused: the Alliance
+   * room (the player left the alliance elsewhere) or a country room (the
+   * country changed elsewhere, or its room closed) loses its tab and Global
+   * carries on. An older server names none: with Global joined and the country
+   * room not, it was the country room. Otherwise it was Global.
    */
-  private refused(): void {
+  private refused(channel?: string): void {
+    if (channel === ALLIANCE_ROOM) {
+      this.dropAllianceRoom();
+      return;
+    }
+    if (channel?.startsWith(COUNTRY_PREFIX) && this.state.rooms.some((room) => room.channel === channel)) {
+      if (this.config) this.config = { ...this.config, countryChannel: null, country: null };
+      this.dropRoom("country");
+      return;
+    }
     const country = this.state.rooms.find((room) => room.kind === "country");
     const global = this.state.rooms.find((room) => room.kind === "global");
     if (!country || !global || !this.joined.has(global.channel) || this.joined.has(country.channel)) {

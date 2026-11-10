@@ -649,6 +649,11 @@ export class YardScene implements Scene {
       api: chatApi,
       container: context.overlay.content,
       onViewYard: (userId) => this.viewChatPlayer(userId),
+      // An Alliance room under-attack alert's Map button (beta 7): the map, opened on that yard.
+      onShowOnMap: (cell) => {
+        setMapFocus({ cell: { col: cell.x, row: cell.y } });
+        context.goTo(sceneForMap(MapRoomChoice.MAP_ROOM_2));
+      },
     });
 
     this.notices.mount(context.overlay.content);
@@ -1004,7 +1009,9 @@ export class YardScene implements Scene {
       this.notices.clear("yard-load");
       // The owner's load carries world chat's token and room (#282).
       const chat = target || tribe ? null : chatConfigFrom(response, getSession()?.userId ?? 0, location.protocol === "https:");
-      if (chat) worldChat.configure(chat);
+      // Only the main yard's load says which alliance the player is in; an
+      // outpost's or the Inferno's leaves the Alliance room as it was.
+      if (chat) worldChat.configure(store?.kind === "main" ? chat : { ...chat, alliance: undefined });
       // Once, after login: where the player is from, for a country chat room
       // (owner 3 Nov 2026). The server sends `countryask` until it is answered or put off.
       if (store?.kind === "main" && response.countryask) {

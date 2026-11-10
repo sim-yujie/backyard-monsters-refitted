@@ -203,4 +203,22 @@ describe("a country change (CountryEvict)", () => {
     evict(client, { type: ChatControlType.AllianceEvict, userId: USERID });
     expect([...client.channels.keys()]).toEqual(["chat:mr2-global", "chat:country:PH"]);
   });
+
+  test("an alliance eviction takes the alliance room and tells the client, which drops its tab", () => {
+    const client = holding();
+    const sent: unknown[] = [];
+    (client.ws as unknown as { send: (data: string) => void }).send = (data) => sent.push(JSON.parse(data));
+    joinChannel(client, "chat:alliance:9", { type: ChannelType.Alliance, allianceId: 9 });
+    evict(client, { type: ChatControlType.AllianceEvict, userId: USERID });
+    expect([...client.channels.keys()]).toEqual(["chat:mr2-global", "chat:country:PH"]);
+    expect(sent).toEqual([{ type: "left", channel: "chat:alliance:9" }]);
+  });
+
+  test("a country change says nothing to the client (its next load names the room)", () => {
+    const client = holding();
+    const sent: unknown[] = [];
+    (client.ws as unknown as { send: (data: string) => void }).send = (data) => sent.push(data);
+    evict(client, { type: ChatControlType.CountryEvict, userId: USERID, keep: null });
+    expect(sent).toEqual([]);
+  });
 });

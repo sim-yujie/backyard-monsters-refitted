@@ -36,6 +36,7 @@ import {
   type MemberAction,
 } from "@/game/alliance/allianceRules";
 import type { AllianceTab } from "@/game/alliance/allianceView";
+import { worldChat, type ChatSession } from "@/game/chat/chatSession";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { gameIcon } from "@/ui/gameIcon";
 import { onlineDot } from "@/ui/onlineDot";
@@ -193,6 +194,8 @@ export interface AllianceWindowOptions {
   readonly onOpenMap?: () => void;
   /** The player joined, founded, left or lost an alliance: the scene refreshes what shows it. */
   readonly onChanged?: () => void;
+  /** World chat, whose Alliance room follows what this window learns; the game's own unless a test swaps it. */
+  readonly chat?: Pick<ChatSession, "setAllianceRoom">;
   readonly onClose?: () => void;
 }
 
@@ -335,6 +338,11 @@ export class AllianceWindow {
       return;
     }
     this.rejoinAt = mine.rejoinAt;
+    // The Alliance chat room opens or closes at once (joined, founded, left, kicked).
+    const { alliance } = mine;
+    (this.options.chat ?? worldChat).setAllianceRoom(
+      alliance ? { id: alliance.alliance_id, name: alliance.name, image: alliance.image } : null,
+    );
     if (mine.alliance) {
       this.view = { kind: "mine", alliance: mine.alliance };
       this.render();

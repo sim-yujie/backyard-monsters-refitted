@@ -49,6 +49,8 @@ export enum AllianceMessageType {
   TYPE_CHANGED = "type_changed",
   RENAMED = "renamed",
   TAKEOVER = "takeover",
+  /** A member's yard or outpost was attacked (beta 7 design v5 §12): an automatic line with Show on map. */
+  UNDER_ATTACK = "under_attack",
 }
 
 /**

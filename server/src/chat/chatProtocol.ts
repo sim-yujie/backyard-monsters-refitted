@@ -28,6 +28,8 @@ export enum ServerMessageType {
   Notice = "notice",
   /** New mail arrived for this player: the game fetches it (`/player/mailstatus`) to show. */
   Mail = "mail",
+  /** The player was taken out of a room (left or was kicked from their alliance): the client drops its tab. */
+  Left = "left",
 }
 
 export enum ErrorCode {
@@ -55,6 +57,8 @@ export interface HistoryEntry {
   body: string;
   messageType: AllianceMessageType;
   ts: number;
+  /** The map cell an automatic line is about (an under-attack alert's yard): the chat box offers Show on map. */
+  cell?: { x: number; y: number };
   /** Said by the game team (an `ADMIN_USER_IDS` account): the chat box marks it. Set by the server only. */
   gm?: boolean;
   /** Said by a chat moderator (`chatModerators.ts`), never with `gm`: the chat box marks it. Set by the server only. */
@@ -81,16 +85,18 @@ export type ServerMessage =
   | { type: ServerMessageType.AuthOk; userId: number; displayName: string }
   | { type: ServerMessageType.AuthFail; reason: AuthFailReason }
   | { type: ServerMessageType.Joined; channel: string; history: HistoryEntry[] }
-  | { type: ServerMessageType.Message; channel: string; messageType: AllianceMessageType; userId: number; displayName: string; picSquare: string | null; allianceImage: number | null; body: string; ts: number; gm?: boolean; mod?: boolean }
+  | { type: ServerMessageType.Message; channel: string; messageType: AllianceMessageType; userId: number; displayName: string; picSquare: string | null; allianceImage: number | null; body: string; ts: number; cell?: { x: number; y: number }; gm?: boolean; mod?: boolean }
   | { type: ServerMessageType.UserEnter; channel: string; userId: number; displayName: string }
   | { type: ServerMessageType.UserExit; channel: string; userId: number }
   | { type: ServerMessageType.NameUpdate; channel: string; userId: number; displayName: string }
   | { type: ServerMessageType.IgnoreList; list: IgnoreEntry[] }
-  | { type: ServerMessageType.Error; code: Exclude<ErrorCode, ErrorCode.Muted> }
+  /** `channel`: the room a refused join asked for, so the client knows which tab to drop. */
+  | { type: ServerMessageType.Error; code: Exclude<ErrorCode, ErrorCode.Muted>; channel?: string }
   | { type: ServerMessageType.Error; code: ErrorCode.Muted; until: number }
   | { type: ServerMessageType.Kicked; reason: "banned"; until: number | null; text: string; banReason: string }
   | { type: ServerMessageType.Notice }
-  | { type: ServerMessageType.Mail };
+  | { type: ServerMessageType.Mail }
+  | { type: ServerMessageType.Left; channel: string };
 
 interface Sender { send(data: string): void; }
 

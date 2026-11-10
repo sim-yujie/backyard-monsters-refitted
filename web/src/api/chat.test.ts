@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { chatApi, chatConfigFrom, chatSocketUrl } from "./chat";
+import { chatAllianceOf, chatApi, chatConfigFrom, chatSocketUrl } from "./chat";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -36,7 +36,18 @@ describe("chatConfigFrom", () => {
       channel: "chat:mr2-global",
       countryChannel: null,
       country: null,
+      alliance: null,
     });
+  });
+
+  it("reads the player's alliance for the Alliance room, null for none or a bad one", () => {
+    expect(
+      chatConfigFrom({ ...load, alliancedata: { alliance_id: 7, name: "Goo Gang", image: 12 } }, 2505, false),
+    ).toMatchObject({ alliance: { id: 7, name: "Goo Gang", image: 12 } });
+    expect(chatAllianceOf({ alliance_id: "7", name: "X" })).toEqual({ id: 7, name: "X", image: 1 });
+    expect(chatAllianceOf({ alliance_id: 0, name: "X" })).toBeNull();
+    expect(chatAllianceOf([])).toBeNull();
+    expect(chatAllianceOf(null)).toBeNull();
   });
 
   it("reads the player's country room when the load names one", () => {

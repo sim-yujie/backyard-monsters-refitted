@@ -285,6 +285,57 @@ button.chat-line__name {
   font-style: italic;
 }
 
+/* The Alliance room's tab (beta 7): the alliance's own shield before the word. */
+.chat-box__shield {
+  width: 18px;
+  height: 18px;
+  margin-right: 0.3em;
+  object-fit: contain;
+  vertical-align: -4px;
+}
+
+/* An Alliance room's automatic line: a join, a leave, a star lit. */
+.chat-line--auto {
+  color: var(--colour-text-secondary);
+  font-style: italic;
+}
+
+/* An under-attack alert: a red bar, and the Map button after the words. */
+.chat-line--alert {
+  border-left: 3px solid var(--colour-danger);
+  color: var(--colour-text-strong);
+  font-style: normal;
+}
+
+.chat-line__map {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 0.4em;
+  padding: 0 0.4em;
+  min-height: 22px;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-control-hover);
+  color: var(--colour-text-strong);
+  font: inherit;
+  font-size: 0.85em;
+  font-weight: 700;
+  text-shadow: none;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.chat-line__map:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Folded, the lines take no clicks: the button would only promise one. */
+.chat-box:not(.chat-box--open) .chat-line__map {
+  display: none;
+}
+
 /* Folded: the last four lines over a light shade, nothing clickable. */
 .chat-box:not(.chat-box--open) .chat-box__lines {
   border-radius: var(--radius-md);

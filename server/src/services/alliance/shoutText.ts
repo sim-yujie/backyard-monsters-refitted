@@ -37,6 +37,56 @@ const createRelationshipShoutText = (allianceName: string, relationship: Allianc
   return `"${allianceName}" ${verb} been flagged as ${STANCE_LABEL[relationship]}`;
 };
 
+/** What an under-attack line stores in `body`: the yard's cell, whether it is an outpost, and the attacker. */
+export interface UnderAttackFacts {
+  x: number;
+  y: number;
+  outpost: boolean;
+  by: string;
+}
+
+/**
+ * The stored `body` of an under-attack line (beta 7 design v5 §12).
+ *
+ * @param {UnderAttackFacts} facts - The attacked yard and who attacked it.
+ * @returns {string} JSON, read back by {@link readUnderAttack}.
+ */
+export const underAttackBody = (facts: UnderAttackFacts): string => JSON.stringify(facts);
+
+/**
+ * Reads an under-attack line's stored body; null for anything that is not one.
+ *
+ * @param {string} body - The stored body.
+ * @returns {UnderAttackFacts | null} The facts, or null when the body is not a valid one.
+ */
+export const readUnderAttack = (body: string): UnderAttackFacts | null => {
+  try {
+    const facts = JSON.parse(body) as Partial<UnderAttackFacts> | null;
+
+    if (!facts || !Number.isInteger(facts.x) || !Number.isInteger(facts.y) || typeof facts.by !== "string") return null;
+
+    return { x: facts.x!, y: facts.y!, outpost: facts.outpost === true, by: facts.by };
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * The map cell an automatic line is about, for the chat box's Show on map:
+ * an under-attack line's yard; nothing for any other line.
+ *
+ * @param {AllianceMessageType} type - The line's type.
+ * @param {string} body - Its stored body.
+ * @returns {{ x: number; y: number } | undefined} The cell, or undefined.
+ */
+export const shoutCell = (type: AllianceMessageType, body: string): { x: number; y: number } | undefined => {
+  if (type !== AllianceMessageType.UNDER_ATTACK) return undefined;
+
+  const facts = readUnderAttack(body);
+
+  return facts ? { x: facts.x, y: facts.y } : undefined;
+};
+
 /**
  * Picks the right builder for a stored row.
  *
@@ -62,6 +112,15 @@ export const composeShout = (type: AllianceMessageType, username: string, body: 
 
     case AllianceMessageType.RENAMED:
       return body ? `${username} renamed the alliance to ${body}.` : "";
+
+    case AllianceMessageType.UNDER_ATTACK: {
+      const facts = readUnderAttack(body);
+
+      if (!facts) return "";
+
+      // "Ana_B's outpost (12, 40) is under attack by Bob!" (design v5 §12).
+      return `${username}'s ${facts.outpost ? "outpost" : "yard"} (${facts.x}, ${facts.y}) is under attack by ${facts.by}!`;
+    }
 
     case AllianceMessageType.RELATIONSHIP:
       if (!targetAlliance) return "";
