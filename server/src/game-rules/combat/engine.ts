@@ -2076,7 +2076,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const bonusToughness = 1 + bonusShare(options.defenceBonus?.hp);
   /** The land feature's tower range change, whole percent (`landFeatures.ts`). */
   const bonusRangePct = Math.round(100 * bonusShare(options.defenceBonus?.range));
-  /** The alliance's trap damage (beta 7): 1 without one, which leaves every blast exactly as it was. */
+  /** The alliance's trap damage (beta 7): 1 without one, every blast exactly as it was. */
   const bonusTrap = 1 + bonusShare(options.defenceBonus?.trap);
   const trapBlast = (raw: number): number => (bonusTrap === 1 ? raw : raw * bonusTrap);
   /** What a building takes from `raw`: fortification, then the neighbour bonus. */

@@ -77,11 +77,15 @@ export interface AllianceDefence {
   readonly trap?: number;
 }
 
-/** The most an alliance part can change a battle by, either way, in percent: a guard on a bad save. */
+/** The most an alliance part can move a battle, either way, in percent (a bad save's guard). */
 export const ALLIANCE_DEFENCE_LIMIT = 90;
 
 const alliancePart = (value: unknown): number =>
-  typeof value === "number" && Number.isSafeInteger(value) && Math.abs(value) <= ALLIANCE_DEFENCE_LIMIT ? value : 0;
+  typeof value === "number" &&
+  Number.isSafeInteger(value) &&
+  Math.abs(value) <= ALLIANCE_DEFENCE_LIMIT
+    ? value
+    : 0;
 
 /** The alliance's parts that read cleanly and are not 0, or undefined for none. */
 export const parseAllianceDefence = (raw: unknown): AllianceDefence | undefined => {
@@ -95,7 +99,9 @@ export const parseAllianceDefence = (raw: unknown): AllianceDefence | undefined 
 };
 
 /** The battle's defence bonus for an alliance's parts, as fractions; none for none. */
-export const allianceDefenceBonus = (alliance: AllianceDefence | undefined): DefenceBonus | undefined => {
+export const allianceDefenceBonus = (
+  alliance: AllianceDefence | undefined,
+): DefenceBonus | undefined => {
   const parts = parseAllianceDefence(alliance);
   if (!parts) return undefined;
   return {
