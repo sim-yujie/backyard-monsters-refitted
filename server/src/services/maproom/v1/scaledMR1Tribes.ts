@@ -20,7 +20,7 @@ import { endRowlessAttack, landRowlessOnce, type RowlessCheckpoint } from "../..
 import { recordBombSpend } from "../../base/combat/recordBombSpend.js";
 import { checkAttackBinding, type AttackSession } from "../../base/attackSession.js";
 import { storedDamage } from "../../base/storedDamage.js";
-import { championsAfterAttack, siegeAfterAttack } from "../../base/combat/attackerRow.js";
+import { championsAfterAttack, championsAfterBattle, siegeAfterAttack } from "../../base/combat/attackerRow.js";
 import { championsAfterLessons } from "../../base/combat/championBrain.js";
 import {
   RESOURCE_KEYS,
@@ -258,10 +258,13 @@ const writeTribeLanding = async (
     const krallenBuff = krallenBuffOf(parseFlingLog(attacker.flinglog), userSave.champion);
 
     // The attacker's own row as the log explains it, not as the save says it
-    // (#23, C1): siege less what was used, champion health only downwards.
+    // (#23, C1): siege less what was used, champion health only downwards,
+    // except that a champion the server's battle flung comes home at the
+    // replay's health, Vorg heals kept, whatever the save reported.
     if (attacker.attackerchampion) {
       userSave.champion = championsAfterAttack(userSave.champion, attacker.attackerchampion as never, attacker.flinglog);
     }
+    if (battle) userSave.champion = championsAfterBattle(userSave.champion, battle, session.championHealth);
     // Each champion that fought learns from the server's battle, once, under
     // the tribe's final lock (issue #219).
     if (battle) userSave.champion = championsAfterLessons(userSave.champion, battle.lessons, battle.log) ?? userSave.champion;

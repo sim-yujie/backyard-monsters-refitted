@@ -81,7 +81,7 @@ import { buildingDataWithout } from "../../../services/base/combat/abandonedAtta
 import { recordBattleMismatches, replayBattleForSave } from "../../../services/base/combat/saveBattle.js";
 import { isDeclareWarRunning } from "../../../services/alliance/powerups.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
-import { championsAfterAttack, siegeAfterAttack } from "../../../services/base/combat/attackerRow.js";
+import { championsAfterAttack, championsAfterBattle, siegeAfterAttack } from "../../../services/base/combat/attackerRow.js";
 import { garrisonsAfterBattle } from "../../../services/base/combat/bunkerGarrison.js";
 import {
   landHousingLoss,
@@ -462,6 +462,12 @@ const saveBase = async (
               saveData.attackerchampion,
               saveData.flinglog
             );
+          }
+          // Where the server replayed the battle, a champion it flung comes
+          // home at the replay's health, Vorg heals kept, as the finaliser
+          // lands it; the client's figure is not read for it.
+          if (battle && saveData.over) {
+            userSave.champion = championsAfterBattle(userSave.champion, battle, session?.championHealth);
           }
 
           // A replayed battle writes the defender's champion from the replay
