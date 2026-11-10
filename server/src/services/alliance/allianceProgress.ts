@@ -99,7 +99,8 @@ export const setProgressFeed = (fn: FeedLine) => {
   feedLine = fn;
 };
 
-const say = (allianceId: number, userid: number, type: AllianceMessageType, body: object) =>
+/** Puts an automatic line in an alliance's feed and chat room (logged, never thrown). */
+export const say = (allianceId: number, userid: number, type: AllianceMessageType, body: object) =>
   feedLine(allianceId, userid, type, JSON.stringify(body)).catch((err) =>
     logger.error(`Alliance feed line ${type} failed: ${err}`)
   );
