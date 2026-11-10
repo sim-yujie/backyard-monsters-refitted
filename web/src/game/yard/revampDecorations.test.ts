@@ -25,7 +25,7 @@ describe("this project's own decorations (owner, 10 Nov 2026: the six autumn one
       "Leaf Pile and Rake",
       "Apple Barrel",
       "Pie on a Tree Stump",
-      "Harvest Wheelbarrow",
+      "Harvest Barrow",
       "Turkey Topiary",
       "Autumn Maple Tree",
     ]);

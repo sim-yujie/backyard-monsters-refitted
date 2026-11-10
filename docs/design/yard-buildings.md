@@ -1311,7 +1311,7 @@ the lead, and the plot question by the owner (option A):
    - **This project's own decorations** (owner, 10 Nov 2026): six autumn ones Flash never had,
      types 201 to 206 (`server/src/game-data/revampDecorations.ts`,
      `web/src/game/yard/revampDecorations.ts`): Leaf Pile and Rake 25 coins, Apple Barrel 30, Pie on a
-     Tree Stump 35, Harvest Wheelbarrow 50, Turkey Topiary 60, Autumn Maple Tree 75. They behave as
+     Tree Stump 35, Harvest Barrow 50, Turkey Topiary 60, Autumn Maple Tree 75. They behave as
      Flash's: a free, uncapped `decoration` cost row (added by `web/tools/gen-building-costs.mjs`),
      a square footprint, stored when recycled, never a battle target. No `BUILDING<t>` store row, so
      only `decor/buy` sells them. They lead the Plants (201, 205, 206) and Good (202, 203, 204)

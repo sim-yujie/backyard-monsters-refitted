@@ -12,7 +12,7 @@ describe("REVAMP_DECORATIONS", () => {
       [201, "Leaf Pile and Rake", 25],
       [202, "Apple Barrel", 30],
       [203, "Pie on a Tree Stump", 35],
-      [204, "Harvest Wheelbarrow", 50],
+      [204, "Harvest Barrow", 50],
       [205, "Turkey Topiary", 60],
       [206, "Autumn Maple Tree", 75],
     ]);

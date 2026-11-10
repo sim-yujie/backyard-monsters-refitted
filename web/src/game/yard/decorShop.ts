@@ -23,7 +23,7 @@ export const DECORATIONS_FOR_SALE: readonly (readonly [type: number, price: numb
   [201, 25], [205, 60], [206, 75],
   [55, 5], [66, 5], [72, 5], [91, 10], [92, 10], [94, 10], [95, 10], [93, 15], [56, 20], [90, 10],
   [86, 25], [88, 25], [89, 25], [87, 50],
-  // Good: the autumn Apple Barrel, Pie on a Tree Stump and Harvest Wheelbarrow first
+  // Good: the autumn Apple Barrel, Pie on a Tree Stump and Harvest Barrow first
   [202, 30], [203, 35], [204, 50],
   [57, 20], [65, 20], [63, 20], [64, 20], [71, 25], [108, 25], [109, 50], [61, 25], [62, 25],
   [60, 35], [102, 200], [103, 200], [68, 250], [104, 250], [105, 250], [106, 250],
