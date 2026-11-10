@@ -192,7 +192,7 @@ describe("BuildMenu", () => {
     expect(menu.element.querySelector(".build-menu__page")?.textContent).toBe("Page 2 of 2");
     expect(next.disabled).toBe(true);
     const second = tileTypes(menu);
-    expect(first.length + second.length).toBe(15);
+    expect(first.length + second.length).toBe(16);
     const ranks = [...firstRanks, ...tileRanks(menu)];
     expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
     // The General Store leads; the Monster Locker, all built, comes last.
