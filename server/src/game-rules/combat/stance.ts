@@ -109,6 +109,14 @@ export interface StanceWeights {
   readonly careful: number;
   /** Per share of {@link QUAKE_CROWD_CAP} other buildings in the quake's reach (Korath). */
   readonly quake: number;
+  /*
+   * Fomor's habits about which hurt monster to back (wave 2): read only in
+   * its own choice of monster, never in a building's score.
+   */
+  /** Per share of the biggest hurt monster's health this one has (`maxHp`). */
+  readonly big: number;
+  /** Per share of {@link FOMOR_CROWD_CAP} other monsters around this one. */
+  readonly crowd: number;
 }
 
 /** The weights a champion learns as habits, in the one order every loop takes them. */
@@ -122,6 +130,8 @@ export const HABIT_KEYS = [
   "near",
   "careful",
   "quake",
+  "big",
+  "crowd",
 ] as const;
 
 export type HabitKey = (typeof HABIT_KEYS)[number];
@@ -139,6 +149,11 @@ export const HABIT_FEATURE_KEYS = [
 
 export type HabitFeatureKey = (typeof HABIT_FEATURE_KEYS)[number];
 
+/** Fomor's habits about which monster to back: not a building's features. */
+export const MONSTER_HABIT_KEYS = ["big", "crowd"] as const;
+
+export type MonsterHabitKey = (typeof MONSTER_HABIT_KEYS)[number];
+
 export const ZERO_WEIGHTS: StanceWeights = {
   tower: 0,
   loot: 0,
@@ -154,6 +169,8 @@ export const ZERO_WEIGHTS: StanceWeights = {
   near: 0,
   careful: 0,
   quake: 0,
+  big: 0,
+  crowd: 0,
 };
 
 /**
@@ -213,6 +230,8 @@ export const WEIGHT_BOUNDS: Readonly<Record<keyof StanceWeights, readonly [numbe
   near: [-150, 150],
   careful: [-150, 150],
   quake: [-150, 150],
+  big: [-150, 150],
+  crowd: [-150, 150],
 };
 
 const WEIGHT_KEYS: readonly (keyof StanceWeights)[] = [
@@ -224,6 +243,7 @@ const WEIGHT_KEYS: readonly (keyof StanceWeights)[] = [
   "stay",
   "margin",
   ...HABIT_FEATURE_KEYS,
+  ...MONSTER_HABIT_KEYS,
 ];
 
 /**
@@ -287,6 +307,12 @@ export const GUN_TOWERS_MIN = 3;
 
 /** Other buildings in a quake's reach past this many add nothing more. */
 export const QUAKE_CROWD_CAP = 4;
+
+/** How near another monster stands to count in Fomor's crowd (`crowd`), in creep units. */
+export const FOMOR_CROWD_RANGE = 150;
+
+/** The most monsters Fomor's crowd counts. */
+export const FOMOR_CROWD_CAP = 4;
 
 /** Allies on a building past this many add nothing more. */
 export const FOCUS_CAP = 5;

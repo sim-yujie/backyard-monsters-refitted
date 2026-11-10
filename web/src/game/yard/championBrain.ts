@@ -164,6 +164,16 @@ const HABIT_WORDS: Readonly<
     on: ["Careful when hurt", "Under half health: buildings no tower covers."],
   },
   quake: { icon: "quake", on: ["Quakes the crowd", "Picks packed buildings for its quake."] },
+  big: {
+    icon: "big",
+    on: ["Backs the big ones", "Follows your biggest hurt monster."],
+    off: ["Backs the small ones", "Follows your smallest hurt monster."],
+  },
+  crowd: {
+    icon: "crowd",
+    on: ["Fires up the crowd", "Follows the hurt monster with most monsters round it."],
+    off: ["Sticks with one", "Follows a hurt monster on its own."],
+  },
 };
 
 /** What a champion is, in one short fixed line. */

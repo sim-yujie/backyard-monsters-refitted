@@ -70,9 +70,13 @@ import type { BrainKey, BrainWeights, ChampionLesson } from "./brain.js";
 import { CURIOUS_EVERY, habitMind, hasHabits } from "./habits.js";
 import { buildPathGrid, cellOf, pointTarget } from "./grid.js";
 import {
+  FOMOR_CROWD_CAP,
+  FOMOR_CROWD_RANGE,
   GUN_TOWERS_MIN,
   HABIT_FEATURE_KEYS,
+  MONSTER_HABIT_KEYS,
   NEAR_RANGE,
+  QUAKE_CROWD_CAP,
   cannotBeat,
   exposure,
   focusFeature,
@@ -81,7 +85,13 @@ import {
   threatFeature,
   towerPerTick,
 } from "./stance.js";
-import type { ChampionStance, HabitKey, StanceWeights, TargetFeatures } from "./stance.js";
+import type {
+  ChampionStance,
+  HabitFeatureKey,
+  HabitKey,
+  StanceWeights,
+  TargetFeatures,
+} from "./stance.js";
 import { mulberry32 } from "./rng.js";
 import { REZGHUL_ID, SPLIT_CHILD_ID } from "./potential.js";
 import {
@@ -1505,8 +1515,8 @@ interface Creep {
 /** What a lesson credits: the old brain's features and the habits' own. */
 type LearnKey = BrainKey | HabitKey;
 
-/** {@link LearnKey} in one fixed order, each once. */
-const LEARN_KEYS: readonly LearnKey[] = [
+/** The {@link LearnKey}s a building's features give, in one fixed order, each once. */
+const LEARN_KEYS: readonly (BrainKey | HabitFeatureKey)[] = [
   "tower",
   "loot",
   "finish",
@@ -1518,6 +1528,7 @@ const LEARN_KEYS: readonly LearnKey[] = [
 const zeroCredit = (): Record<LearnKey, number> => {
   const out = {} as Record<LearnKey, number>;
   for (const key of LEARN_KEYS) out[key] = 0;
+  for (const key of MONSTER_HABIT_KEYS) out[key] = 0;
   return out;
 };
 
@@ -4293,6 +4304,28 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     /** 1 for a building no tower that can hit it covers, while it is under half health. */
     const uncovered = (building: EngineBuilding): number =>
       champion.hp * 2 < champion.maxHp && fireAt(building) === 0 ? 1 : 0;
+    const quakes = hasQuake(champion.monsterId, champion.level, champion.power);
+    const quakeReach = champion.range * QUAKE_RADIUS_RANGES;
+    /**
+     * Korath's crowd (wave 2): the other buildings his quake would reach from
+     * this one, up to {@link QUAKE_CROWD_CAP}, over the cap, in id order; 0
+     * until he has his quake.
+     */
+    const crowded = (building: EngineBuilding): number => {
+      if (!quakes) return 0;
+      const x = building.cx + building.middle;
+      const y = building.cy + building.middle;
+      let count = 0;
+      for (const other of yard.buildings) {
+        if (other === building || other.hp <= 0) continue;
+        if (UNTARGETABLE_TYPES.includes(other.type)) continue;
+        const squared = distanceSquared(x, y, other.cx + other.middle, other.cy + other.middle);
+        if (squared >= quakeReach * quakeReach) continue;
+        count += 1;
+        if (count >= QUAKE_CROWD_CAP) break;
+      }
+      return count / QUAKE_CROWD_CAP;
+    };
     /**
      * A candidate's features; its threat only when asked, being the costly
      * one, and each habit's only when `weights` reads it (null: every one,
@@ -4315,8 +4348,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       hall: weights === null || weights.hall !== 0 ? hallUp(building) : 0,
       near: weights === null || weights.near !== 0 ? nearness(building) : 0,
       careful: weights === null || weights.careful !== 0 ? uncovered(building) : 0,
-      // Korath's "Quakes the crowd" comes in wave 2.
-      quake: 0,
+      quake: weights === null || weights.quake !== 0 ? crowded(building) : 0,
     });
     return { features, liveTower, shareAt };
   };
@@ -5584,7 +5616,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (!other.gone && other.behaviour !== "heal" && other.hp !== other.maxHp) break;
       first += 1;
     }
-    const ally = hits[first]?.creep;
+    let ally = hits[first]?.creep;
+    // Its habits' choice of monster (champion modes wave 2), only when one is
+    // not 0; a lesson watches every choice. Otherwise Flash's nearest.
+    const weights = creep.weights;
+    const scored = weights !== null && (weights.big !== 0 || weights.crowd !== 0);
+    const lesson = lessons.size > 0 ? lessons.get(creep.id) : undefined;
+    if (ally && (scored || lesson)) {
+      ally = backedAlly(creep, hits, first, scored ? weights : null, lesson);
+    }
     const helper = creep.helpCreep >= 0 ? byCreepId.get(creep.helpCreep) : undefined;
     if (ally) {
       creep.helpCreep = ally.id;
@@ -5597,6 +5637,70 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     creep.support = true;
     creep.hasHelpTarget = true;
+  };
+
+  /**
+   * Which wounded monster Fomor backs by its habits (champion modes wave 2,
+   * `habits.ts`): each wounded non-healer `findBuffTargets` sees, nearest
+   * first, scored as a building is, its distance less `big` per share of the
+   * biggest one's health and `crowd` per share of {@link FOMOR_CROWD_CAP}
+   * monsters round it; ties go to the nearer. With no weights (a lesson only
+   * watching) the nearest is kept. A lesson is credited as `findAndLearn`
+   * credits a building: the chosen one's features less their mean.
+   */
+  const backedAlly = (
+    creep: Creep,
+    hits: readonly CreepHit<Creep>[],
+    from: number,
+    weights: StanceWeights | null,
+    lesson: LessonRecord | undefined,
+  ): Creep => {
+    const candidates: { readonly creep: Creep; readonly dist: number }[] = [];
+    for (let i = from; i < hits.length; i += 1) {
+      const hit = hits[i] as CreepHit<Creep>;
+      const other = hit.creep;
+      if (other.gone || other.behaviour === "heal" || other.hp === other.maxHp) continue;
+      candidates.push({ creep: other, dist: hit.dist });
+    }
+    let most = 0;
+    for (const one of candidates) most = Math.max(most, one.creep.maxHp);
+    const crowdAt = (ally: Creep): number => {
+      let count = 0;
+      const near = index.inRange(FOMOR_CROWD_RANGE, ally.x, ally.y, oldStyleTargets(1), ally.id);
+      for (const hit of near) {
+        if (hit.creep === creep || hit.creep.gone) continue;
+        count += 1;
+        if (count >= FOMOR_CROWD_CAP) break;
+      }
+      return count / FOMOR_CROWD_CAP;
+    };
+    const bigOf = (ally: Creep): number => (most > 0 ? ally.maxHp / most : 0);
+    let best = candidates[0];
+    if (weights && best) {
+      let bestScore = 0;
+      for (let i = 0; i < candidates.length; i += 1) {
+        const one = candidates[i] as (typeof candidates)[number];
+        const crowd = weights.crowd !== 0 ? weights.crowd * crowdAt(one.creep) : 0;
+        const bonus = weights.big * bigOf(one.creep) + crowd;
+        const score = Math.trunc(one.dist) - Math.trunc(bonus);
+        if (i === 0 || score < bestScore) {
+          best = one;
+          bestScore = score;
+        }
+      }
+    }
+    if (lesson && best && candidates.length >= 2) {
+      let big = 0;
+      let crowd = 0;
+      for (const one of candidates) {
+        big += bigOf(one.creep);
+        crowd += crowdAt(one.creep);
+      }
+      lesson.credit.big += bigOf(best.creep) - big / candidates.length;
+      lesson.credit.crowd += crowdAt(best.creep) - crowd / candidates.length;
+      lesson.picks += 1;
+    }
+    return best ? best.creep : (hits[from] as CreepHit<Creep>).creep;
   };
 
   /**

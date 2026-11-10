@@ -70,7 +70,7 @@ export const HABIT_STEP = 15;
 export const CURIOUS_EVERY = 5;
 
 /** Habits that can lean either way: the panel names the side they lean to. */
-export const TWO_ENDED_HABITS: readonly HabitKey[] = ["tower", "loot", "gun"];
+export const TWO_ENDED_HABITS: readonly HabitKey[] = ["tower", "loot", "gun", "big", "crowd"];
 
 type HabitRow = Readonly<Record<ChampionStance, readonly HabitKey[]>>;
 
@@ -80,9 +80,12 @@ type HabitRow = Readonly<Record<ChampionStance, readonly HabitKey[]>>;
  *
  * - Gorgo, Drull and Korath choose buildings; none can hit a flier, so their
  *   "Aerial Defense first" is the building that shoots the attacker's fliers.
- * - Korath's "Quakes the crowd" comes in wave 2.
+ * - Korath's "Quakes the crowd" (wave 2) wakes only once he has his quake.
  * - Fomor picks its own building only when none of the attacker's monsters is
- *   hurt; its monster-choosing habits come in wave 2.
+ *   hurt; its other habits (wave 2) choose which hurt monster it backs:
+ *   "big" (the biggest, or the smallest) and, in Hybrid, "crowd" (the one
+ *   with most monsters round it, or the one alone). They are read only when
+ *   not 0, so with none Fomor follows the nearest hurt monster, as in Flash.
  * - Krallen has none (owner, 10 Nov).
  */
 export const CHAMPION_HABITS: Readonly<Record<string, HabitRow>> = {
@@ -97,14 +100,14 @@ export const CHAMPION_HABITS: Readonly<Record<string, HabitRow>> = {
     hybrid: ["tower", "loot", "hall", "careful"],
   },
   [KORATH_ID]: {
-    offensive: ["gun", "aerial"],
-    defensive: ["guard"],
-    hybrid: ["tower", "loot", "hall"],
+    offensive: ["quake", "gun", "aerial"],
+    defensive: ["guard", "quake"],
+    hybrid: ["tower", "loot", "hall", "quake"],
   },
   [FOMOR_ID]: {
-    offensive: ["aerial"],
-    defensive: ["aerial"],
-    hybrid: ["aerial"],
+    offensive: ["big", "aerial"],
+    defensive: ["big", "aerial"],
+    hybrid: ["crowd", "big", "aerial"],
   },
 };
 

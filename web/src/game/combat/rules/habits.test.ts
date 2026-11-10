@@ -37,6 +37,7 @@ const RESOURCES = { r1: 1_000_000, r2: 0, r3: 0, r4: 0 };
 const GORGO = 1;
 const DRULL = 2;
 const FOMOR = 3;
+const KORATH = 4;
 const KRALLEN = 5;
 
 type Habits = Partial<Record<HabitKey, number>>;
@@ -47,6 +48,8 @@ interface Fight {
   /** The habits flung, with the version; null flings none (today's champion). */
   readonly habits: Habits | null;
   readonly level?: number;
+  /** Its power level, `pl` (Korath's quake needs 3). */
+  readonly power?: number;
   readonly hp?: number;
   /** Monsters flung first, elsewhere, so a tower is busy with them. */
   readonly army?: { readonly x: number; readonly y: number; readonly monsters: Record<string, number> };
@@ -71,6 +74,7 @@ const picks = (buildings: CombatBuildingDataMap, fight: Fight): number[] => {
     champion: {
       t: fight.t ?? GORGO,
       l: fight.level ?? 1,
+      ...(fight.power ? { pl: fight.power } : {}),
       s: fight.stance,
       ...(fight.habits ? { hv: 1, h: fight.habits } : {}),
       ...(fight.hp ? { hp: fight.hp } : {}),
@@ -121,8 +125,19 @@ describe("the per-champion habit table", () => {
         if (id !== KORATH_ID) expect(row[stance]).not.toContain("quake");
       }
     }
-    // Fomor picks a building only when no monster is hurt: Aerial Defense alone.
-    for (const stance of CHAMPION_STANCES) expect(habitsOf(FOMOR_ID, stance)).toEqual(["aerial"]);
+    // Fomor's building habit is Aerial Defense alone; its others choose a monster
+    // (wave 2), and "crowd" only in Hybrid.
+    expect(habitsOf(FOMOR_ID, "offensive")).toEqual(["big", "aerial"]);
+    expect(habitsOf(FOMOR_ID, "defensive")).toEqual(["big", "aerial"]);
+    expect(habitsOf(FOMOR_ID, "hybrid")).toEqual(["crowd", "big", "aerial"]);
+    // Nobody but Fomor has a monster habit.
+    for (const [id, row] of Object.entries(CHAMPION_HABITS)) {
+      if (id === FOMOR_ID) continue;
+      for (const stance of CHAMPION_STANCES) {
+        expect(row[stance]).not.toContain("big");
+        expect(row[stance]).not.toContain("crowd");
+      }
+    }
     // Learning only moves the row's habits, whatever the lesson credits.
     const lesson: ChampionLesson = {
       t: GORGO,
@@ -235,6 +250,21 @@ describe("each habit in battle: on, it changes the pick; asleep, it changes noth
     sameAsNone(yard, { stance: "offensive", habits: { guard: 100 }, wait: 200 });
   });
 
+  it("quakes the crowd (Korath, hybrid), once he has his quake", () => {
+    const yard = {
+      "1": harvester(1, 200, 200),
+      "2": harvester(2, -300, -300),
+      "3": harvester(3, -390, -300),
+      "4": harvester(4, -300, -390),
+      "5": harvester(5, -390, -390),
+    };
+    const korath = { t: KORATH, power: 3 } as const;
+    expect(first(yard, { ...korath, level: 5, stance: "hybrid", habits: null })).toBe(1);
+    expect(first(yard, { ...korath, level: 5, stance: "hybrid", habits: { quake: 150 } })).toBe(2);
+    // Level 4, no quake yet: asleep.
+    sameAsNone(yard, { ...korath, level: 4, stance: "hybrid", habits: { quake: 150 } });
+  });
+
   it("careful when hurt (Drull, hybrid)", () => {
     const yard = { "1": { id: 1, t: 14, l: 5, X: 250, Y: 250 }, "2": sniper(2, 400, 300, 5), "3": harvester(3, -380, -380) };
     expect(first(yard, { t: DRULL, stance: "hybrid", habits: null, hp: 1000 })).toBe(1);
@@ -342,6 +372,19 @@ describe("replay safety", () => {
     const today = replay({ t: GORGO, l: 2, s: "hybrid", hp: 1000 });
     const claimed = replay({ t: GORGO, l: 2, s: "hybrid", hp: 1000, hv: 1, h: { careful: 150 } });
     expect(claimed.digest).toBe(today.digest);
+  });
+
+  it("fights a Fomor with no monster habit exactly as today's, and replays one with it identically", () => {
+    for (const stance of CHAMPION_STANCES) {
+      const today = replay({ t: FOMOR, l: 3, s: stance });
+      expect(replay({ t: FOMOR, l: 3, s: stance, hv: 1, h: {} }).digest).toBe(today.digest);
+      const big = replay({ t: FOMOR, l: 3, s: stance, hv: 1, h: { big: 100 } });
+      expect(replay({ t: FOMOR, l: 3, s: stance, hv: 1, h: { big: 100 } }).digest).toBe(big.digest);
+    }
+    const crowd = replay({ t: FOMOR, l: 3, s: "hybrid", hv: 1, h: { crowd: -150, big: -150 } });
+    expect(replay({ t: FOMOR, l: 3, s: "hybrid", hv: 1, h: { crowd: -150, big: -150 } }).checkpoints).toEqual(
+      crowd.checkpoints,
+    );
   });
 
   it("replays a champion with habits identically", () => {
