@@ -1,4 +1,5 @@
 import type { EntityManager } from "@mikro-orm/core";
+import type { EntityManager as SqlEm, PostgreSqlDriver } from "@mikro-orm/postgresql";
 
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import { Save } from "../../database/models/save.model.js";
@@ -39,6 +40,33 @@ export const loadGateSave = async (em: EntityManager, user: User): Promise<GateS
   if (!basesaveid) return null;
 
   return em.findOne(Save, { basesaveid }, { fields: [...GATE_SAVE_FIELDS] });
+};
+
+/**
+ * Locks `userid`'s main save row until the transaction ends and reads the
+ * gate's slice of it from the database.
+ *
+ * A join asks the gate again under this lock, and leaving a world takes the
+ * same lock before it decides about the alliance, so a player can never be
+ * added to an alliance at the same moment they leave its world (security
+ * review, 10 Nov 2026). Lock order: the alliance row, then the player row
+ * (`lockMembership`), then this save, so two such transactions never deadlock.
+ *
+ * @param {EntityManager} em - The transaction's EntityManager.
+ * @param {number} userid - The player whose main save to lock.
+ * @returns {Promise<GateSave | null>} Null when the player has no main save.
+ */
+export const lockGateSave = async (em: SqlEm<PostgreSqlDriver>, userid: number): Promise<GateSave | null> => {
+  const [row] = await em.execute<GateSave[]>(
+    `SELECT s.worldid, s.mr2upgraded, s.mapversion, s.buildingdata
+       FROM bym.save s
+       JOIN bym."user" u ON u.save_basesaveid = s.basesaveid
+      WHERE u.userid = ? AND s.type = 'main'
+        FOR UPDATE OF s`,
+    [userid]
+  );
+
+  return row ?? null;
 };
 
 /**

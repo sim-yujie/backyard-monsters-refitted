@@ -39,7 +39,7 @@ mock.module("../../server.js", () => ({
 }));
 
 const { answerInvite } = await import("./allianceInvites.js");
-const { addAllianceMember, promoteAllianceMember, removeAllianceMember } = await import("./membership.js");
+const { addAllianceMember, lockForWorldChange, promoteAllianceMember, removeAllianceMember } = await import("./membership.js");
 
 const BASE = 993_700;
 const PLAYER = BASE + 1;
@@ -353,5 +353,59 @@ describe.skipIf(!enabled)("alliance membership under simultaneous requests, on P
 
     expect(await outcome(joined)).toBe("You are already a member of an alliance.");
     expect((await membership(PLAYER)).alliance_id).toBe(ALLIANCE_A);
+  });
+  test("accepting an invite while the player leaves the world: the join waits for the save and is refused", async () => {
+    await addAlliance(ALLIANCE_A, LEADER_A);
+    const invite = await addInvite(ALLIANCE_A, PLAYER, AllianceInviteType.INVITE);
+    let accepted: Promise<string> | null = null;
+
+    // A world move holds the player's main save while it empties the world
+    // fields; the accept arrives in the middle of it.
+    await orm!.em.fork().transactional(async (em) => {
+      await em.execute(`SELECT basesaveid FROM bym.save WHERE userid = ? AND type = 'main' FOR UPDATE`, [PLAYER]);
+      accepted = outcome(accept(PLAYER, invite));
+      await Bun.sleep(300);
+      await em.execute(`UPDATE bym.save SET worldid = NULL WHERE userid = ? AND type = 'main'`, [PLAYER]);
+    });
+
+    expect(await accepted!).toBe("You must join a world before you can be in an alliance.");
+    expect(await membership(PLAYER)).toEqual({ alliance_id: null, alliance_role: null });
+    expect(await inviteStatuses(invite)).toEqual(["pending"]);
+  });
+
+  test("a world move whose request missed a new alliance is refused under the locks", async () => {
+    await addAlliance(ALLIANCE_A, LEADER_A);
+
+    // The world move's request read the player while they were free, and
+    // left no alliance (`leaveAllianceForWorldChange` saw none)...
+    // ...then they joined A before the move reached its world step
+    // (`leaveWorld` runs `lockForWorldChange` first in that step).
+    await accept(PLAYER, await addInvite(ALLIANCE_A, PLAYER, AllianceInviteType.INVITE));
+
+    const move = orm!.em.fork().transactional(async (em) => {
+      await lockForWorldChange(em, PLAYER);
+      await em.execute(`UPDATE bym.save SET worldid = NULL WHERE userid = ? AND type = 'main'`, [PLAYER]);
+    });
+
+    expect(await outcome(move)).toBe("You must leave your alliance before you can change worlds.");
+    expect(await membership(PLAYER)).toEqual({ alliance_id: ALLIANCE_A, alliance_role: AllianceRole.MEMBER });
+    const [row] = await sql<{ worldid: string | null }>(`SELECT worldid FROM bym.save WHERE userid = ? AND type = 'main'`, [PLAYER]);
+    expect(row!.worldid).toBe("w");
+  });
+
+  test("a world move holds the save, so an accept arriving during it is refused", async () => {
+    await addAlliance(ALLIANCE_A, LEADER_A);
+    const invite = await addInvite(ALLIANCE_A, PLAYER, AllianceInviteType.INVITE);
+    let accepted: Promise<string> | null = null;
+
+    await orm!.em.fork().transactional(async (em) => {
+      await lockForWorldChange(em, PLAYER);
+      accepted = outcome(accept(PLAYER, invite));
+      await Bun.sleep(300);
+      await em.execute(`UPDATE bym.save SET worldid = NULL WHERE userid = ? AND type = 'main'`, [PLAYER]);
+    });
+
+    expect(await accepted!).toBe("You must join a world before you can be in an alliance.");
+    expect((await membership(PLAYER)).alliance_id).toBeNull();
   });
 });

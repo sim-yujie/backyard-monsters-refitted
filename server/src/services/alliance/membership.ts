@@ -9,13 +9,14 @@ import { invalidateAllianceSight, invalidatePlayerSight } from "../maproom/sight
 import { announceShout, emitShout, type ShoutDraft } from "./allianceMessages.js";
 import { AllianceAction, can, canKick } from "./permissions.js";
 import { officerLimit } from "./allianceTypes.js";
-import { assertRejoinAllowed } from "./joinGate.js";
+import { assertRejoinAllowed, lockGateSave } from "./joinGate.js";
 import { REJOIN_COOLDOWN_HOURS } from "../../config/AllianceConfig.js";
 import {
   alreadyInAllianceErr,
   cannotKickErr,
   cannotPromoteErr,
   leaderMustTransferErr,
+  mustLeaveAllianceToChangeWorldErr,
   officerSeatsFullErr,
   permissionErr,
 } from "../../errors/errors.js";
@@ -248,6 +249,27 @@ export const leaveAllianceForWorldChange = async (user: User): Promise<void> => 
   }
 
   await removeAllianceMember(user, alliance, AllianceMessageType.LEFT);
+};
+
+/**
+ * Locks a player's row and main save until a world move's transaction ends,
+ * the same locks an alliance join takes before it asks the join gate
+ * (`lockGateSave`), and refuses the move if they are in an alliance by now.
+ * A join that landed after `leaveAllianceForWorldChange` (or that the
+ * request's copy of the player missed) is caught here, so no member is ever
+ * left in an alliance of a world they are no longer in (security review,
+ * 10 Nov 2026).
+ *
+ * @param {Em} em - The world move's transaction.
+ * @param {number} userid - The player leaving their world.
+ * @throws {ClientSafeError} When they are in an alliance.
+ */
+export const lockForWorldChange = async (em: Em, userid: number): Promise<void> => {
+  const membership = await lockMembership(em, userid);
+
+  await lockGateSave(em, userid);
+
+  if (membership?.alliance_id) throw mustLeaveAllianceToChangeWorldErr();
 };
 
 /**

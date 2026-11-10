@@ -16,7 +16,7 @@ import { postgres } from "../../server.js";
 import { addAllianceMember, lockAlliance, lockMembership } from "./membership.js";
 import { AllianceAction, can } from "./permissions.js";
 import { memberLimit } from "./allianceTypes.js";
-import { assertMayJoin, assertRejoinAllowed, loadGateSave } from "./joinGate.js";
+import { assertMayJoin, assertRejoinAllowed, loadGateSave, lockGateSave } from "./joinGate.js";
 import {
   allianceFullErr,
   inviteNotPendingErr,
@@ -286,7 +286,9 @@ export const answerInvite = async (user: User, inviteId: number, status: Allianc
 
   // The gate again: the player may have left the world or lost the Observatory
   // since the invite or request was sent.
-  assertMayJoin(await loadGateSave(postgres.em, player), { allianceWorld: alliance.world_id, who: isAnswerer ? undefined : player.username });
+  const who = isAnswerer ? undefined : player.username;
+
+  assertMayJoin(await loadGateSave(postgres.em, player), { allianceWorld: alliance.world_id, who });
 
   // Everything above was read outside any lock, so it is checked again here
   // under the alliance's lock and the player's. Without that, a player
@@ -312,6 +314,10 @@ export const answerInvite = async (user: User, inviteId: number, status: Allianc
     if (!membership) throw permissionErr();
     if (membership.alliance_id) throw alreadyInOne();
     assertRejoinAllowed(membership.alliance_left_at, new Date(), isAnswerer ? undefined : player.username);
+
+    // The gate once more, on the main save locked until the join lands: leaving
+    // the world takes the same lock first, so the two can never cross.
+    assertMayJoin(await lockGateSave(em, player.userid), { allianceWorld: alliance.world_id, who });
 
     await checkAllianceSpace(em, alliance.id, locked.type);
     await resolveInvite(em, invite, status);

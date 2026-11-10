@@ -10,7 +10,7 @@ import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { postgres } from "../../../server.js";
 import { getDefenderCoords } from "../v3/getDefenderCoords.js";
 import { voidInvitesFrom } from "../../mail/inviteRules.js";
-import { leaveAllianceForWorldChange } from "../../alliance/membership.js";
+import { leaveAllianceForWorldChange, lockForWorldChange } from "../../alliance/membership.js";
 
 /**
  * Removes a user from their current Map Room world, cleaning up all associated data atomically.
@@ -26,7 +26,9 @@ import { leaveAllianceForWorldChange } from "../../alliance/membership.js";
  *
  * First the player leaves their alliance, which lives in this one world
  * (`leaveAllianceForWorldChange`): a leader with other members is refused
- * here, before anything about the world is touched.
+ * here, before anything about the world is touched. The world step then
+ * locks the player's row and main save (the locks a join takes) and refuses
+ * if they are in an alliance again by then.
  *
  * No-ops if the user is not currently in a world.
  * All world operations run inside a single transaction.
@@ -44,6 +46,8 @@ export const leaveWorld = async (user: User, save: Save) => {
   const worldid = save.worldid;
 
   await postgres.em.transactional(async (em) => {
+    await lockForWorldChange(em, userid);
+
     await em.nativeUpdate(World, { uuid: worldid }, { playerCount: raw("player_count - 1") });
 
     const homeCell = await em.findOne(WorldMapCell, {

@@ -6,9 +6,9 @@ import { Alliance } from "../../database/models/alliance.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { CreateAllianceSchema } from "../../schemas/AllianceSchemas.js";
-import { addAllianceMember } from "../../services/alliance/membership.js";
+import { addAllianceMember, lockMembership } from "../../services/alliance/membership.js";
 import { getWorldMapVersion } from "../../services/maproom/knownWorlds.js";
-import { assertMayJoin, assertRejoinAllowed, GATE_SAVE_FIELDS } from "../../services/alliance/joinGate.js";
+import { assertMayJoin, assertRejoinAllowed, GATE_SAVE_FIELDS, lockGateSave } from "../../services/alliance/joinGate.js";
 import { assertDescriptionAllowed, assertNameAllowed } from "../../services/alliance/textFilter.js";
 import {
   allianceNameTakenErr,
@@ -60,6 +60,12 @@ export const createAlliance: KoaController = async (ctx) => {
   };
 
   const alliance = await postgres.em.transactional(async (em) => {
+      // The gate again, on the player's row and main save locked until the
+      // alliance exists: leaving the world takes the same locks first, so a
+      // founder can never end up leading an alliance in a world they just left.
+      await lockMembership(em, user.userid);
+      assertMayJoin(await lockGateSave(em, user.userid), { allianceWorld: worldid });
+
       const newAlliance = em.create(Alliance, allianceData);
 
       em.persist(newAlliance);
