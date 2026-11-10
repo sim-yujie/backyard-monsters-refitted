@@ -1,5 +1,6 @@
 import {
   YardChampionFeedSchema,
+  YardChampionForgetSchema,
   YardChampionRaiseSchema,
   YardChampionRenameSchema,
   YardChampionSchema,
@@ -12,6 +13,7 @@ import {
   KORATH_TYPE,
   planChampionEvolve,
   planChampionFeed,
+  planChampionForget,
   planChampionHeal,
   planChampionJuice,
   planChampionRaise,
@@ -76,6 +78,12 @@ export const yardChampionRenameAction = defineYardAction({
 export const yardChampionJuiceAction = defineYardAction({
   schema: YardChampionSchema,
   run: ({ save }) => planChampionJuice(save),
+});
+
+/** `POST /bm/yard/champion/forget` — wipe one Mode's habits (champion modes round 2). */
+export const yardChampionForgetAction = defineYardAction({
+  schema: YardChampionForgetSchema,
+  run: ({ save, body }) => planChampionForget(save, body.type, body.stance),
 });
 
 /** `POST /bm/yard/champion/stance` — remember the Mode a champion attacks in (issue #220). */

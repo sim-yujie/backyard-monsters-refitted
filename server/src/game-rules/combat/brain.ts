@@ -42,7 +42,8 @@
  */
 
 import { ZERO_WEIGHTS } from "./stance.js";
-import type { ChampionStance, StanceWeights } from "./stance.js";
+import type { ChampionStance, HabitKey, StanceWeights } from "./stance.js";
+import type { CombatTargetKind } from "./types.js";
 
 /** The features a brain learns, in the one order every loop takes them. */
 export const BRAIN_KEYS = ["tower", "loot", "finish", "focus", "threat"] as const;
@@ -145,8 +146,13 @@ export interface ChampionLesson {
   readonly t: number;
   /** Looks that had two or more candidates to choose between. */
   readonly picks: number;
-  /** Per feature, the sum over those looks of chosen less the candidates' mean. */
-  readonly credit: BrainWeights;
+  /**
+   * Per feature, the sum over those looks of chosen less the candidates' mean:
+   * the old brain's five, and the habits' (`habits.ts`) when recorded.
+   */
+  readonly credit: BrainWeights & Readonly<Partial<Record<HabitKey, number>>>;
+  /** The kind of yard it fought on; a lesson without one is a player's yard. */
+  readonly k?: CombatTargetKind;
   /** Health it took off buildings, after fortification. */
   readonly dealt: number;
   /**

@@ -498,7 +498,8 @@ describe("Map Room 1 tribe save: the attacker's own row (#23, C1)", () => {
 
     expect(caught).toBeNull();
     // It fought, so it learned from the battle (issue #219); nothing else moved.
-    expect(userSave.champion).toEqual([{ ...champion(500), b: expect.any(Object), bs: expect.objectContaining({ n: 1 }) }]);
+    // Gorgo learns habits per Mode now (champion modes), not the old brain.
+    expect(userSave.champion).toEqual([{ ...champion(500), h: {}, hs: expect.objectContaining({ n: 1 }) }]);
     expect(userSave.siege).toEqual({ jars: { quantity: 1 } });
   });
 
@@ -515,7 +516,7 @@ describe("Map Room 1 tribe save: the attacker's own row (#23, C1)", () => {
       })
     );
 
-    expect(userSave.champion).toEqual([{ ...champion(120), b: expect.any(Object), bs: expect.objectContaining({ n: 1 }) }]);
+    expect(userSave.champion).toEqual([{ ...champion(120), h: {}, hs: expect.objectContaining({ n: 1 }) }]);
   });
 
   test("a champion healed by Vorgs keeps the server's battle's heal, never the save's figure", async () => {

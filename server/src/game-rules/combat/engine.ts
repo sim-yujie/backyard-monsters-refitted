@@ -35,7 +35,7 @@ import {
   linearAreaDamage,
   lootAuraBonus,
 } from "./champions.js";
-import { BRAIN_KEYS, brainBase } from "./brain.js";
+import { brainBase } from "./brain.js";
 import {
   DECOY_BUILDING_REACH,
   DECOY_FRAME_TICKS,
@@ -67,8 +67,16 @@ import {
 } from "./vacuum.js";
 import type { VacuumPlan } from "./vacuum.js";
 import type { BrainKey, BrainWeights, ChampionLesson } from "./brain.js";
+import { CURIOUS_EVERY, habitMind, hasHabits } from "./habits.js";
 import { buildPathGrid, cellOf, pointTarget } from "./grid.js";
 import {
+  FOMOR_CROWD_CAP,
+  FOMOR_CROWD_RANGE,
+  GUN_TOWERS_MIN,
+  HABIT_FEATURE_KEYS,
+  MONSTER_HABIT_KEYS,
+  NEAR_RANGE,
+  QUAKE_CROWD_CAP,
   cannotBeat,
   exposure,
   focusFeature,
@@ -77,7 +85,13 @@ import {
   threatFeature,
   towerPerTick,
 } from "./stance.js";
-import type { ChampionStance, StanceWeights, TargetFeatures } from "./stance.js";
+import type {
+  ChampionStance,
+  HabitFeatureKey,
+  HabitKey,
+  StanceWeights,
+  TargetFeatures,
+} from "./stance.js";
 import { mulberry32 } from "./rng.js";
 import { REZGHUL_ID, SPLIT_CHILD_ID } from "./potential.js";
 import {
@@ -1465,6 +1479,17 @@ interface Creep {
    */
   weights: StanceWeights | null;
   /**
+   * A champion flung with habits (champion modes round 2, `habits.ts`): its
+   * Mode's instincts alone, which every {@link CURIOUS_EVERY}th look picks
+   * by. Null for every other creep, and for a champion with no habit, whose
+   * looks are all alike.
+   */
+  instinctWeights: StanceWeights | null;
+  /** Whether {@link instinctWeights} is in use: a champion flung with habits. */
+  habitsOn: boolean;
+  /** Looks a champion with habits has taken, which times its curious looks. */
+  looks: number;
+  /**
    * `k_sBHVR_HUNT` (`CreepBase.as:398-402`): an attacker whose target group
    * was 6, Balthazar. It keeps the behaviour after its group falls through
    * to 1, so its blows at a creep stay triple (`:884-886`).
@@ -1487,12 +1512,32 @@ interface Creep {
   splitCopy: boolean;
 }
 
+/** What a lesson credits: the old brain's features and the habits' own. */
+type LearnKey = BrainKey | HabitKey;
+
+/** The {@link LearnKey}s a building's features give, in one fixed order, each once. */
+const LEARN_KEYS: readonly (BrainKey | HabitFeatureKey)[] = [
+  "tower",
+  "loot",
+  "finish",
+  "focus",
+  "threat",
+  ...HABIT_FEATURE_KEYS,
+];
+
+const zeroCredit = (): Record<LearnKey, number> => {
+  const out = {} as Record<LearnKey, number>;
+  for (const key of LEARN_KEYS) out[key] = 0;
+  for (const key of MONSTER_HABIT_KEYS) out[key] = 0;
+  return out;
+};
+
 /** A {@link ChampionLesson} as the battle builds it (issue #219). */
 interface LessonRecord {
   readonly t: number;
   readonly monsterId: string;
   picks: number;
-  readonly credit: Record<BrainKey, number>;
+  readonly credit: Record<LearnKey, number>;
   dealt: number;
   /** Its damage per tick at full swing, as flung. */
   readonly perTick: number;
@@ -1549,6 +1594,9 @@ const NO_ABILITIES = {
   looking: false,
   surfaceChase: false,
   weights: null,
+  instinctWeights: null,
+  habitsOn: false,
+  looks: 0,
   hunts: false,
   huntPen: -1,
   hopStart: -1,
@@ -2992,6 +3040,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     stance?: ChampionStance,
     brain?: Partial<BrainWeights>,
     startHealth?: number,
+    habits?: { readonly hv?: number; readonly h?: unknown },
   ): Creep | null => {
     const id = championByType(type);
     if (!id) return null;
@@ -3062,14 +3111,23 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     byCreepId.set(creep.id, creep);
     boostDamage(creep);
     equipChampion(creep, power, at);
-    // Its Mode's tilt on its learned brain, as the log froze it (issues #220, #219).
-    creep.weights = stanceWeights(stance, brainBase(brain));
+    if (habits?.hv !== undefined && hasHabits(id)) {
+      // Its Mode's instincts plus that Mode's habits, as the log froze them
+      // (champion modes round 2, `habits.ts`); the old brain is not read.
+      const mind = habitMind(id, stance, habits.h);
+      creep.weights = mind.weights;
+      creep.instinctWeights = mind.instinct;
+      creep.habitsOn = mind.habits;
+    } else {
+      // Its Mode's tilt on its learned brain, as the log froze it (issues #220, #219).
+      creep.weights = stanceWeights(stance, brainBase(brain));
+    }
     if (options.learn) {
       lessons.set(creep.id, {
         t: type,
         monsterId: id,
         picks: 0,
-        credit: { tower: 0, loot: 0, finish: 0, focus: 0, threat: 0 },
+        credit: zeroCredit(),
         dealt: 0,
         perTick: creep.damage / Math.max(1, swingDelay(creep)),
         flungAt: tick,
@@ -3234,6 +3292,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         event.champion.s,
         event.champion.b,
         event.champion.hp,
+        event.champion.hv === undefined
+          ? undefined
+          : { hv: event.champion.hv, h: event.champion.h },
       );
     }
   };
@@ -3943,8 +4004,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     let chosen: EngineBuilding | null;
     if (creep.champion) {
       // A champion's own lists (`ChampionBase.findTarget`, `Krallen.findTarget`, issue #222).
-      // Scored by its Mode when it has one (issue #220).
-      const scoring = creep.weights ? stanceScoring(creep, creep.weights) : undefined;
+      // Scored by its Mode when it has one (issue #220). A champion with
+      // habits takes every CURIOUS_EVERYth look by its instincts alone
+      // (`habits.ts`), counted, never drawn.
+      let weights = creep.weights;
+      if (creep.habitsOn) {
+        creep.looks += 1;
+        if (creep.looks % CURIOUS_EVERY === 0) weights = creep.instinctWeights;
+      }
+      const scoring = weights ? stanceScoring(creep, weights) : undefined;
       const lesson = lessons.size > 0 ? lessons.get(creep.id) : undefined;
       chosen = lesson
         ? findAndLearn(creep, lesson, scoring)
@@ -4038,16 +4106,20 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * them.
    */
   const stanceScoring = (champion: Creep, weights: StanceWeights): ChampionScoring => {
-    const readsFire = weights.threat !== 0 || weights.margin > 0;
+    const readsFire = weights.threat !== 0 || weights.margin > 0 || weights.careful !== 0;
     const field = fieldFor(champion, weights.focus !== 0, readsFire);
     return {
-      bonus: (building) => stanceBonus(weights, field.features(building, weights.threat !== 0)),
+      bonus: (building) =>
+        stanceBonus(weights, field.features(building, weights.threat !== 0, weights)),
       skip: (building) =>
         weights.margin > 0 &&
         field.liveTower(building) &&
         cannotBeat(field.shareAt(building), weights.margin),
     };
   };
+
+  /** The Town Hall and the outpost core: the "Town Hall first" habit's buildings. */
+  const HALL_TYPES: readonly number[] = [14, 112];
 
   /** A champion with no Mode weights picks as Flash's: nothing added, nothing left out. */
   const FLASH_SCORING: ChampionScoring = { bonus: () => 0, skip: () => false };
@@ -4066,7 +4138,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     scoring: ChampionScoring | undefined,
   ): EngineBuilding | null => {
     const field = fieldFor(creep, true, true);
-    const sums: Record<BrainKey, number> = { tower: 0, loot: 0, finish: 0, focus: 0, threat: 0 };
+    const sums = zeroCredit();
     let count = 0;
     const base = scoring ?? FLASH_SCORING;
     const chosen = findChampionTarget(
@@ -4079,15 +4151,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         bonus: base.bonus,
         skip: base.skip,
         seen: (building) => {
-          const features = field.features(building, true);
-          for (const key of BRAIN_KEYS) sums[key] += features[key];
+          const features = field.features(building, true, null);
+          for (const key of LEARN_KEYS) sums[key] += features[key];
           count += 1;
         },
       },
     );
     if (chosen && count >= 2) {
-      const features = field.features(chosen, true);
-      for (const key of BRAIN_KEYS) lesson.credit[key] += features[key] - sums[key] / count;
+      const features = field.features(chosen, true, null);
+      for (const key of LEARN_KEYS) lesson.credit[key] += features[key] - sums[key] / count;
       lesson.picks += 1;
     }
     return chosen;
@@ -4151,14 +4223,142 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         buildingTakes(champion.damage, building.fortification) / delay,
         champion.hp,
       );
-    /** A candidate's features; its threat only when asked, being the costly one. */
-    const features = (building: EngineBuilding, withThreat: boolean): TargetFeatures => ({
+    /*
+     * The habits' features (champion modes round 2, `habits.ts`), each worked
+     * out only when a weight reads it, and once per look where it is shared.
+     */
+    let fliersOut: boolean | null = null;
+    /** Whether any of the attacker's monsters that fly is out on the field. */
+    const fliers = (): boolean => {
+      if (fliersOut === null) {
+        fliersOut = false;
+        for (const other of creeps) {
+          if (other === champion || other.friendly || other.gone || other.hp <= 0) continue;
+          if (other.flying) {
+            fliersOut = true;
+            break;
+          }
+        }
+      }
+      return fliersOut;
+    };
+    let towerOf: Map<number, Tower> | null = null;
+    const towerAt = (building: EngineBuilding): Tower | undefined => {
+      if (towerOf === null) {
+        towerOf = new Map();
+        for (const tower of towers) towerOf.set(tower.building.id, tower);
+      }
+      return towerOf.get(building.id);
+    };
+    /** 1 for a live tower aimed at one of the attacker's monsters (not the champion itself). */
+    const guarding = (building: EngineBuilding): number => {
+      if (!liveTower(building)) return 0;
+      const tower = towerAt(building);
+      if (!tower) return 0;
+      for (const id of tower.targets) {
+        const target = byCreepId.get(id);
+        if (target && target !== champion && !target.friendly && !target.gone && target.hp > 0) {
+          return 1;
+        }
+      }
+      return 0;
+    };
+    const gunPower = (building: EngineBuilding): number => {
+      const stats = towerStats(building.type, building.level, yard.kind);
+      return towerPerTick(
+        building.type,
+        building.level,
+        stats?.damage ?? 0,
+        stats?.rate ?? 0,
+        TOWER_REARM_MULTIPLIER,
+        building.hp,
+        building.maxHp,
+      );
+    };
+    let strongest: number | null = null;
+    /** A live tower's damage per tick over the strongest's; 0 under {@link GUN_TOWERS_MIN} up. */
+    const gunShare = (building: EngineBuilding): number => {
+      if (!liveTower(building)) return 0;
+      if (strongest === null) {
+        let up = 0;
+        let most = 0;
+        for (const tower of towers) {
+          if (!liveTower(tower.building)) continue;
+          up += 1;
+          most = Math.max(most, gunPower(tower.building));
+        }
+        strongest = up >= GUN_TOWERS_MIN ? most : 0;
+      }
+      return strongest > 0 ? gunPower(building) / strongest : 0;
+    };
+    /** 0 to 1: how far inside {@link NEAR_RANGE} the building is, measured as the pick measures. */
+    const nearness = (building: EngineBuilding): number => {
+      const away = Math.trunc(
+        Math.sqrt(
+          distanceSquared(
+            champion.x,
+            champion.y,
+            building.cx + building.middle,
+            building.cy + building.middle,
+          ),
+        ) - building.middle,
+      );
+      return away >= NEAR_RANGE ? 0 : 1 - Math.max(0, away) / NEAR_RANGE;
+    };
+    const aerialUp = (building: EngineBuilding): number =>
+      building.type === AERIAL_DEFENSE_TYPE && liveTower(building) && (champion.flying || fliers())
+        ? 1
+        : 0;
+    const hallUp = (building: EngineBuilding): number =>
+      building.hp > 0 && HALL_TYPES.includes(building.type) ? 1 : 0;
+    /** 1 for a building no tower that can hit it covers, while it is under half health. */
+    const uncovered = (building: EngineBuilding): number =>
+      champion.hp * 2 < champion.maxHp && fireAt(building) === 0 ? 1 : 0;
+    const quakes = hasQuake(champion.monsterId, champion.level, champion.power);
+    const quakeReach = champion.range * QUAKE_RADIUS_RANGES;
+    /**
+     * Korath's crowd (wave 2): the other buildings his quake would reach from
+     * this one, up to {@link QUAKE_CROWD_CAP}, over the cap, in id order; 0
+     * until he has his quake.
+     */
+    const crowded = (building: EngineBuilding): number => {
+      if (!quakes) return 0;
+      const x = building.cx + building.middle;
+      const y = building.cy + building.middle;
+      let count = 0;
+      for (const other of yard.buildings) {
+        if (other === building || other.hp <= 0) continue;
+        if (UNTARGETABLE_TYPES.includes(other.type)) continue;
+        const squared = distanceSquared(x, y, other.cx + other.middle, other.cy + other.middle);
+        if (squared >= quakeReach * quakeReach) continue;
+        count += 1;
+        if (count >= QUAKE_CROWD_CAP) break;
+      }
+      return count / QUAKE_CROWD_CAP;
+    };
+    /**
+     * A candidate's features; its threat only when asked, being the costly
+     * one, and each habit's only when `weights` reads it (null: every one,
+     * for a lesson).
+     */
+    const features = (
+      building: EngineBuilding,
+      withThreat: boolean,
+      weights: StanceWeights | null,
+    ): TargetFeatures => ({
       tower: liveTower(building) ? 1 : 0,
       loot: unlootedForKrallen(building) ? 1 : 0,
       finish: building.maxHp > 0 ? 1 - building.hp / building.maxHp : 0,
       focus: focusFeature(allies.get(building.id) ?? 0),
       threat: withThreat ? threatFeature(shareAt(building)) : 0,
       stay: building.id === champion.targetBuilding ? 1 : 0,
+      guard: weights === null || weights.guard !== 0 ? guarding(building) : 0,
+      aerial: weights === null || weights.aerial !== 0 ? aerialUp(building) : 0,
+      gun: weights === null || weights.gun !== 0 ? gunShare(building) : 0,
+      hall: weights === null || weights.hall !== 0 ? hallUp(building) : 0,
+      near: weights === null || weights.near !== 0 ? nearness(building) : 0,
+      careful: weights === null || weights.careful !== 0 ? uncovered(building) : 0,
+      quake: weights === null || weights.quake !== 0 ? crowded(building) : 0,
     });
     return { features, liveTower, shareAt };
   };
@@ -5537,7 +5737,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (!other.gone && other.behaviour !== "heal" && other.hp !== other.maxHp) break;
       first += 1;
     }
-    const ally = hits[first]?.creep;
+    let ally = hits[first]?.creep;
+    // Its habits' choice of monster (champion modes wave 2), only when one is
+    // not 0; a lesson watches every choice. Otherwise Flash's nearest.
+    const weights = creep.weights;
+    const scored = weights !== null && (weights.big !== 0 || weights.crowd !== 0);
+    const lesson = lessons.size > 0 ? lessons.get(creep.id) : undefined;
+    if (ally && (scored || lesson)) {
+      ally = backedAlly(creep, hits, first, scored ? weights : null, lesson);
+    }
     const helper = creep.helpCreep >= 0 ? byCreepId.get(creep.helpCreep) : undefined;
     if (ally) {
       creep.helpCreep = ally.id;
@@ -5550,6 +5758,70 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     creep.support = true;
     creep.hasHelpTarget = true;
+  };
+
+  /**
+   * Which wounded monster Fomor backs by its habits (champion modes wave 2,
+   * `habits.ts`): each wounded non-healer `findBuffTargets` sees, nearest
+   * first, scored as a building is, its distance less `big` per share of the
+   * biggest one's health and `crowd` per share of {@link FOMOR_CROWD_CAP}
+   * monsters round it; ties go to the nearer. With no weights (a lesson only
+   * watching) the nearest is kept. A lesson is credited as `findAndLearn`
+   * credits a building: the chosen one's features less their mean.
+   */
+  const backedAlly = (
+    creep: Creep,
+    hits: readonly CreepHit<Creep>[],
+    from: number,
+    weights: StanceWeights | null,
+    lesson: LessonRecord | undefined,
+  ): Creep => {
+    const candidates: { readonly creep: Creep; readonly dist: number }[] = [];
+    for (let i = from; i < hits.length; i += 1) {
+      const hit = hits[i] as CreepHit<Creep>;
+      const other = hit.creep;
+      if (other.gone || other.behaviour === "heal" || other.hp === other.maxHp) continue;
+      candidates.push({ creep: other, dist: hit.dist });
+    }
+    let most = 0;
+    for (const one of candidates) most = Math.max(most, one.creep.maxHp);
+    const crowdAt = (ally: Creep): number => {
+      let count = 0;
+      const near = index.inRange(FOMOR_CROWD_RANGE, ally.x, ally.y, oldStyleTargets(1), ally.id);
+      for (const hit of near) {
+        if (hit.creep === creep || hit.creep.gone) continue;
+        count += 1;
+        if (count >= FOMOR_CROWD_CAP) break;
+      }
+      return count / FOMOR_CROWD_CAP;
+    };
+    const bigOf = (ally: Creep): number => (most > 0 ? ally.maxHp / most : 0);
+    let best = candidates[0];
+    if (weights && best) {
+      let bestScore = 0;
+      for (let i = 0; i < candidates.length; i += 1) {
+        const one = candidates[i] as (typeof candidates)[number];
+        const crowd = weights.crowd !== 0 ? weights.crowd * crowdAt(one.creep) : 0;
+        const bonus = weights.big * bigOf(one.creep) + crowd;
+        const score = Math.trunc(one.dist) - Math.trunc(bonus);
+        if (i === 0 || score < bestScore) {
+          best = one;
+          bestScore = score;
+        }
+      }
+    }
+    if (lesson && best && candidates.length >= 2) {
+      let big = 0;
+      let crowd = 0;
+      for (const one of candidates) {
+        big += bigOf(one.creep);
+        crowd += crowdAt(one.creep);
+      }
+      lesson.credit.big += bigOf(best.creep) - big / candidates.length;
+      lesson.credit.crowd += crowdAt(best.creep) - crowd / candidates.length;
+      lesson.picks += 1;
+    }
+    return best ? best.creep : (hits[from] as CreepHit<Creep>).creep;
   };
 
   /**
@@ -7553,6 +7825,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       t: lesson.t,
       picks: lesson.picks,
       credit: { ...lesson.credit },
+      k: yard.kind,
       dealt: lesson.dealt,
       potential: lesson.perTick * Math.max(0, (lesson.leftAt ?? tick) - lesson.flungAt),
       startHp: lesson.startHp,

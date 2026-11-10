@@ -324,6 +324,9 @@ export const YardChampionStanceSchema = z.object({
   stance: z.enum(CHAMPION_STANCES as [ChampionStance, ...ChampionStance[]]),
 });
 
+/** `POST /bm/yard/champion/forget`: wipe one Mode's habits (champion modes round 2). */
+export const YardChampionForgetSchema = YardChampionStanceSchema;
+
 /** `POST /bm/yard/champion/freeze` moves the champion in the cage into the Champion Chamber. */
 export const YardChampionFreezeSchema = YardChampionTypedSchema;
 
