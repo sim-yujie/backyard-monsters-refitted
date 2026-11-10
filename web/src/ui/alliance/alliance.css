@@ -1272,7 +1272,27 @@
   background: rgb(255 212 90 / 0.1);
 }
 
+/* The constellation's monster, faint behind its stars (owner, 10 Nov): the
+   card picture fitted whole (never stretched), its edges fading into the sky. */
+.alliance-sky__art {
+  position: relative;
+  display: block;
+}
+
+.alliance-sky__monster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0.28;
+  pointer-events: none;
+  mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 55%, transparent 100%);
+}
+
 .alliance-sky__figure {
+  position: relative;
+  display: block;
   width: 100%;
   height: auto;
 }

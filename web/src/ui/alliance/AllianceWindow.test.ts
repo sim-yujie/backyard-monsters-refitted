@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AllianceApi, AllianceInviteRow, AllianceListing, AllianceMember, MyAlliance } from "@/api/alliance";
-import type { AllianceProgressApi } from "@/api/allianceProgress";
+import type { AllianceProgressApi, ConstellationView } from "@/api/allianceProgress";
+import { setClassicLook } from "@/game/classicLook";
 import { ALLIANCE_TEXT, AllianceWindow, type AllianceWindowOptions } from "./AllianceWindow";
 
 /** The alliance window (beta 7 phase 1) against a stand-in for the routes. */
@@ -121,6 +122,7 @@ const buttonNamed = (words: string): HTMLButtonElement | undefined =>
   [...document.querySelectorAll<HTMLButtonElement>("button")].find((node) => node.textContent?.trim() === words);
 
 afterEach(() => {
+  setClassicLook(false);
   document.body.replaceChildren();
   vi.restoreAllMocks();
 });
@@ -344,6 +346,39 @@ describe("AllianceWindow: my alliance", () => {
     document.querySelector<HTMLButtonElement>(".alliance__tab[data-tab='constellation']")!.click();
     expect(document.querySelector(".alliance__tab[aria-selected='true']")!.getAttribute("data-tab")).toBe("constellation");
     expect(document.querySelector(".alliance-sky__empty, .alliance-sky")).not.toBeNull();
+  });
+
+  it("draws each constellation's monster faint behind its stars, in both looks", async () => {
+    const star = (id: string, name: string, kind: ConstellationView["kind"]): ConstellationView => ({
+      id,
+      name,
+      kind,
+      steps: 1,
+      next_price: 40,
+      prices: [20, 40, 60, 80, 100],
+      suggest_count: 0,
+      effects: [{ stat: "production", values: [15, 17, 19, 21, 23, 25] }],
+    });
+    const constellations = [star("crabatron", "Crabatron", "strength"), star("octoooze", "Octo-ooze", "weakness"), star("mystery", "Mystery", "strength")];
+    const api = fakeApi({ mine: vi.fn(() => ok({ alliance: mine({ constellations }), rejoinAt: null })) });
+    const pictures = (): HTMLImageElement[] => [...document.querySelectorAll<HTMLImageElement>(".alliance-sky__con .alliance-sky__monster")];
+
+    const view = await open(api);
+    view.showTab("constellation");
+    await flush();
+    // The picture comes before the stars, so the stars draw on top; none for a constellation with no monster.
+    expect(pictures().map((image) => image.dataset.monster)).toEqual(["C10", "C2"]);
+    expect(pictures().map((image) => new URL(image.src).pathname)).toEqual(["/portraits/C10.webp", "/portraits/C2.webp"]);
+    expect(pictures()[0]!.alt).toBe("");
+    expect(pictures()[0]!.nextElementSibling!.classList.contains("alliance-sky__figure")).toBe(true);
+
+    // Classic: the original Flash portrait.
+    document.body.replaceChildren();
+    setClassicLook(true);
+    const classic = await open(api);
+    classic.showTab("constellation");
+    await flush();
+    expect(pictures().map((image) => new URL(image.src).pathname)).toEqual(["/assets/monsters/C10-portrait.jpg", "/assets/monsters/C2-portrait.jpg"]);
   });
 
   it("a tap on any tab, its icon included, switches to that tab (a phone shows icons only)", async () => {

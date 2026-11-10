@@ -98,3 +98,20 @@ describe("alliance.css: the member window's tabs and the Territory board", () =>
     expect(chosen).toMatch(/text-shadow:[^;]*var\(--skin-button-stroke\)/);
   });
 });
+
+describe("alliance.css: a constellation's monster behind its stars", () => {
+  it("draws the picture faint, fitted whole, and never in the way of a click", () => {
+    const art = rulesFor(".alliance-sky__monster").join(" ");
+    const opacity = Number(/opacity:\s*([\d.]+)/.exec(art)?.[1]);
+    expect(opacity).toBeGreaterThanOrEqual(0.2);
+    expect(opacity).toBeLessThanOrEqual(0.35);
+    expect(art).toMatch(/object-fit:\s*contain/);
+    expect(art).toMatch(/pointer-events:\s*none/);
+    expect(art).toMatch(/position:\s*absolute/);
+  });
+
+  it("lays the stars over the picture", () => {
+    expect(rulesFor(".alliance-sky__art").join(" ")).toMatch(/position:\s*relative/);
+    expect(rulesFor(".alliance-sky__figure").join(" ")).toMatch(/position:\s*relative/);
+  });
+});

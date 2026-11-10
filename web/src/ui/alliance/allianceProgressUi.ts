@@ -1,5 +1,6 @@
 import type { AllianceResult, AllianceType, MyAlliance } from "@/api/alliance";
 import type { ConstellationView, GoalView, NewsLine, TerritoryRow } from "@/api/allianceProgress";
+import { monsterPortrait, showPortrait } from "@/game/portraits";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { make } from "@/ui/friends/rows";
@@ -229,6 +230,47 @@ const svg = <K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string,
   return node;
 };
 
+/**
+ * The monster each constellation is named after, by roster id
+ * (`game/combat/rules/report.ts` MONSTER_NAMES), so its picture can sit
+ * faintly behind its stars (owner, 10 Nov).
+ */
+export const CONSTELLATION_MONSTERS: Readonly<Record<string, string>> = {
+  pokey: "C1",
+  octoooze: "C2",
+  bolt: "C3",
+  ichi: "C6",
+  bandito: "C7",
+  fang: "C8",
+  brain: "C9",
+  crabatron: "C10",
+  wormzer: "C13",
+  teratorn: "C14",
+  zafreeti: "C15",
+  slimeattikus: "C17",
+};
+
+/**
+ * A constellation's stars over its monster's card picture, drawn faint: the
+ * painted card in Modern, the original Flash portrait in Classic
+ * (`game/portraits.ts`). No picture for a constellation with no monster.
+ */
+const figureWithArt = (c: ConstellationView, slot: number): HTMLElement => {
+  const holder = make("span", "alliance-sky__art");
+  const monster = CONSTELLATION_MONSTERS[c.id];
+  if (monster) {
+    const image = document.createElement("img");
+    image.className = "alliance-sky__monster";
+    image.alt = "";
+    image.decoding = "async";
+    image.dataset.monster = monster;
+    showPortrait(image, monsterPortrait(monster, "card"));
+    holder.append(image);
+  }
+  holder.append(figure(c, slot));
+  return holder;
+};
+
 /** One figure: 10 stars, lit ones gold, the next 2 ringed with the price on the first. */
 const figure = (c: ConstellationView, slot: number): SVGSVGElement => {
   const places = FIGURES[slot % FIGURES.length]!;
@@ -316,7 +358,7 @@ export const constellationTab = (
         starDots(c.steps),
         make("span", "alliance-sky__value", effect ? statValue(effect.stat, effect.values[c.steps] ?? 0) : ""),
       );
-      node.append(figure(c, slot), plate);
+      node.append(figureWithArt(c, slot), plate);
       row.append(node);
     });
     half.append(row);
