@@ -55,7 +55,55 @@ export interface DefenderForces {
    * ground, the battle as it always was.
    */
   readonly land?: number;
+  /**
+   * The defending player's alliance constellation bonuses for this battle
+   * (beta 7 alliances, design v5 §9), whole percent, as the attack load froze
+   * them ({@link AllianceDefence}). Absent, or every part 0: no bonus, the
+   * battle as it always was, which is what an attack log from before beta 7
+   * holds.
+   */
+  readonly alliance?: AllianceDefence;
 }
+
+/**
+ * An alliance's battle bonuses on the defending yard, whole percent (positive
+ * = stronger): `hp` its buildings' health (building health, plus outpost
+ * health when the yard is an outpost), `damage` its towers' damage, `trap` its
+ * traps' damage. The attack load adds the stats up; the battle only reads them.
+ */
+export interface AllianceDefence {
+  readonly hp?: number;
+  readonly damage?: number;
+  readonly trap?: number;
+}
+
+/** The most an alliance part can change a battle by, either way, in percent: a guard on a bad save. */
+export const ALLIANCE_DEFENCE_LIMIT = 90;
+
+const alliancePart = (value: unknown): number =>
+  typeof value === "number" && Number.isSafeInteger(value) && Math.abs(value) <= ALLIANCE_DEFENCE_LIMIT ? value : 0;
+
+/** The alliance's parts that read cleanly and are not 0, or undefined for none. */
+export const parseAllianceDefence = (raw: unknown): AllianceDefence | undefined => {
+  const value = record(raw);
+  if (!value) return undefined;
+  const hp = alliancePart(value.hp);
+  const damage = alliancePart(value.damage);
+  const trap = alliancePart(value.trap);
+  if (hp === 0 && damage === 0 && trap === 0) return undefined;
+  return { ...(hp !== 0 && { hp }), ...(damage !== 0 && { damage }), ...(trap !== 0 && { trap }) };
+};
+
+/** The battle's defence bonus for an alliance's parts, as fractions; none for none. */
+export const allianceDefenceBonus = (alliance: AllianceDefence | undefined): DefenceBonus | undefined => {
+  const parts = parseAllianceDefence(alliance);
+  if (!parts) return undefined;
+  return {
+    hp: (parts.hp ?? 0) / 100,
+    damage: (parts.damage ?? 0) / 100,
+    ...(parts.trap !== undefined && { trap: parts.trap / 100 }),
+  };
+};
 
 /**
  * What each count of friendly neighbours adds to a Map Room 2 cell's defence
@@ -330,6 +378,7 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
   const buffs = parseBattleBuffs(value.buffs);
   const neighbours = typeof value.neighbours === "number" ? value.neighbours : undefined;
   const land = landFeatureOf(value.land);
+  const alliance = parseAllianceDefence(value.alliance);
   // A session stored before issue #310 holds one `defenderChampion`.
   const champions = Array.isArray(value.defenderChampions)
     ? value.defenderChampions
@@ -349,6 +398,7 @@ export const parseDefenderForces = (raw: unknown): DefenderForces | undefined =>
     ...(buffs && { buffs }),
     ...(neighbours !== undefined && neighbourDefenceBonus(neighbours) && { neighbours }),
     ...(land !== 0 && { land }),
+    ...(alliance && { alliance }),
   };
 };
 
@@ -377,10 +427,10 @@ export const battleDefence = (
   const hasLevels = Object.keys(forces.defenderLevels).length > 0;
   const hasRanks = Object.keys(forces.defenderRanks ?? {}).length > 0;
   const hasBuffs = Boolean(forces.buffs && (forces.buffs.attacker || forces.buffs.defender));
-  // The neighbour bonus and the land feature multiply (`combineDefenceBonus`).
+  // The neighbour bonus, the land feature and the alliance multiply (`combineDefenceBonus`).
   const defenceBonus = combineDefenceBonus(
-    neighbourDefenceBonus(forces.neighbours),
-    landDefenceBonus(forces.land),
+    combineDefenceBonus(neighbourDefenceBonus(forces.neighbours), landDefenceBonus(forces.land)),
+    allianceDefenceBonus(forces.alliance),
   );
   return {
     ...(hasBunkers ? { bunkers: forces.bunkers } : {}),

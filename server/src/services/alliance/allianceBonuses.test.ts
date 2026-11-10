@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { CONSTELLATIONS, TYPE_EXTRAS } from "../../config/AllianceConfig.js";
 import { AllianceType } from "../../enums/Alliance.js";
 import {
+  allianceDefenceOf,
   bonusesFor,
   byPercent,
   constellationOf,
@@ -102,5 +103,32 @@ describe("always-on values move with the whole sky", () => {
     const all = Object.fromEntries(CONSTELLATIONS[AllianceType.FORTRESS].map((c) => [c.id, 5]));
     expect(bonusesFor(AllianceType.FORTRESS, all).enemyTakeoverCost).toBe(40);
     expect(bonusesFor(AllianceType.FORTRESS, { crabatron: 5, bandito: 5 }).enemyTakeoverCost).toBe(32.5);
+  });
+});
+
+describe("the battle bonuses a member's yard defends with (beta 7)", () => {
+  const none = { buildingHealth: 0, outpostHealth: 0, towerDamage: 0, trapDamage: 0 };
+
+  test("none when every part is 0: the defence is served as before", () => {
+    expect(allianceDefenceOf(none, false)).toBeUndefined();
+    expect(allianceDefenceOf(noBonuses(), true)).toBeUndefined();
+  });
+
+  test("building health on every yard, outpost health added on an outpost only", () => {
+    const bonuses = { ...none, buildingHealth: 10, outpostHealth: -4, towerDamage: 5, trapDamage: 12 };
+    expect(allianceDefenceOf(bonuses, false)).toEqual({ hp: 10, damage: 5, trap: 12 });
+    expect(allianceDefenceOf(bonuses, true)).toEqual({ hp: 6, damage: 5, trap: 12 });
+    // Ichi's weakness alone lowers an outpost's and leaves the main yard alone.
+    expect(allianceDefenceOf({ ...none, outpostHealth: -10 }, false)).toBeUndefined();
+    expect(allianceDefenceOf({ ...none, outpostHealth: -10 }, true)).toEqual({ hp: -10 });
+  });
+
+  test("a half percent rounds to a whole one", () => {
+    expect(allianceDefenceOf({ ...none, towerDamage: 7.5 }, false)).toEqual({ damage: 8 });
+  });
+
+  test("a Fortress with its start stars defends stronger than no alliance", () => {
+    const fortress = allianceDefenceOf(bonusesFor(AllianceType.FORTRESS, {}), false);
+    expect(fortress?.hp ?? 0).toBeGreaterThan(0);
   });
 });

@@ -12,6 +12,7 @@ import {
   type ConstellationRules,
 } from "../../config/AllianceConfig.js";
 import type { AllianceType } from "../../enums/Alliance.js";
+import { parseAllianceDefence, type AllianceDefence } from "../../game-rules/combat/index.js";
 
 /**
  * An alliance's strengths and weaknesses as numbers (design v5 §4, §5, §9):
@@ -122,6 +123,30 @@ export const allianceBonusesOfUser = async (
   const stars = typeof row.stars === "string" ? (JSON.parse(row.stars) as LitSteps) : row.stars;
   return bonusesFor(row.type, stars);
 };
+
+/**
+ * The battle bonuses a member's yard defends with (beta 7, design v5 §9):
+ * building health (plus outpost health on an outpost), tower damage and trap
+ * damage, whole percent. Undefined when every part is 0, so a yard outside an
+ * alliance, or in one with no battle stars, is served exactly as before.
+ */
+export const allianceDefenceOf = (
+  bonuses: Pick<AllianceBonuses, "buildingHealth" | "outpostHealth" | "towerDamage" | "trapDamage">,
+  outpost: boolean
+): AllianceDefence | undefined =>
+  // Whole percent: a half step (a 50% conversion) rounds, as the battle keeps whole numbers.
+  parseAllianceDefence({
+    hp: Math.round(bonuses.buildingHealth + (outpost ? bonuses.outpostHealth : 0)),
+    damage: Math.round(bonuses.towerDamage),
+    trap: Math.round(bonuses.trapDamage),
+  });
+
+/** {@link allianceDefenceOf} for the alliance the yard's owner is in now. */
+export const allianceDefenceOfOwner = async (
+  em: EntityManager,
+  ownerId: number | null | undefined,
+  outpost: boolean
+): Promise<AllianceDefence | undefined> => allianceDefenceOf(await allianceBonusesOfUser(em, ownerId), outpost);
 
 /**
  * The alliance change, in percent, to what an attacker carries home: the

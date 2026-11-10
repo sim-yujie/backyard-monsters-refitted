@@ -121,7 +121,11 @@ export const ALLIANCE_STATS = [
 ] as const;
 export type AllianceStat = (typeof ALLIANCE_STATS)[number];
 
-/** Stats a battle reads; they wait for phase 4's buff hook. */
+/**
+ * Stats a battle reads. Health, tower and trap damage are frozen into the
+ * attack load's defence (`allianceDefenceOf` in `allianceBonuses.ts`, the
+ * shared rules' `DefenderForces.alliance`); `reach` is the map's attack range.
+ */
 export const BATTLE_STATS: readonly AllianceStat[] = [
   "buildingHealth",
   "outpostHealth",
