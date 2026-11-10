@@ -206,10 +206,7 @@ export const catchUpOutpost = (save: CatchUpSave, now: number): CompletedJob[] =
   // A core that has just gone in has stood for no time at all.
   const from = Number.isFinite(stored) && stored > 0 && !cored ? stored : now;
 
-  const completed: CompletedJob[] = [
-    ...catchUpRepairs(save, from, now),
-    ...catchUpBuildings(save, from, now),
-  ];
+  const completed: CompletedJob[] = catchUpOutpostBuildings(save, from, now);
   completed.push(...catchUpMonsters(save, from, now, completed));
   catchUpDamage(save);
 
@@ -217,6 +214,21 @@ export const catchUpOutpost = (save: CatchUpSave, now: number): CompletedJob[] =
 
   return completed.sort((a, b) => a.at - b.at);
 };
+
+/**
+ * The part of {@link catchUpOutpost} that moves an outpost's buildings from
+ * `from` to `now`: repairs, then the build, upgrade and fortify countdowns.
+ * The outpost income replays a harvester's day with it too
+ * (`maproom/v2/autobank.ts`), so a harvester finished while nobody looked
+ * pays from the moment the catch-up would finish it.
+ *
+ * @param save - The outpost, mutated in place; `savetime` is left alone.
+ */
+export const catchUpOutpostBuildings = (
+  save: CatchUpBuildingsSave,
+  from: number,
+  now: number
+): CompletedJob[] => [...catchUpRepairs(save, from, now), ...catchUpBuildings(save, from, now)];
 
 /**
  * The Inferno yard's catch-up (the file comment): the Locker, repairs,
