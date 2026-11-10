@@ -15,6 +15,7 @@ import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
 import type { LinePlan } from "@/game/yard/wallLine";
 import { BuildMenu, lineHint, PlacementBar, spotSentence } from "./BuildMenu";
+import { nameFitEm } from "./tileNameFit";
 
 /**
  * The build menu as a player meets it: the tabs, each tile's cost, count and
@@ -115,6 +116,13 @@ describe("BuildMenu", () => {
     expect(cannon.querySelector("img")?.getAttribute("src")).toBe("/assets/buildingbuttons/20.jpg");
     expect(cannon.querySelector(".build-tile__name")?.textContent).toBe("Cannon Tower");
     expect(cannon.querySelector(".build-tile__count")?.textContent).toBe("1 of 4 built");
+  });
+
+  it("a tile's name carries its widest word's width, so the CSS shrinks it rather than breaking it", () => {
+    const { menu } = setup([HALL, building(2, 20)]);
+    menu.open(BuildCategory.DEFENSIVE);
+    const name = tile(menu, 20).querySelector<HTMLElement>(".build-tile__name");
+    expect(name?.style.getPropertyValue("--name-fit-em")).toBe(String(nameFitEm("Cannon Tower")));
   });
 
   it("a locked tile: the silhouette, a lock, and the hall that unlocks it", () => {
