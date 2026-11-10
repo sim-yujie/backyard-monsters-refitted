@@ -121,3 +121,16 @@ describe("alliance.css: trade tiles", () => {
     expect(rulesFor(".trade-tile").join(" ")).toMatch(/font:\s*inherit/);
   });
 });
+
+describe("alliance.css: a member's window keeps one height", () => {
+  it("fixes the height (capped by the room under the top bar), so the tab row never moves", () => {
+    const member = rulesFor(".alliance-window:has(.alliance__tabs)").join(" ");
+    expect(member).toMatch(/(^|[;\s])height:\s*min\(760px,\s*var\(--alliance-window-room\)\)/);
+    expect(rulesFor(".alliance-window").join(" ")).toMatch(/max-height:\s*var\(--alliance-window-room\)/);
+    expect(rulesFor(".alliance-window > .panel__body").join(" ")).toMatch(/overflow-y:\s*auto/);
+  });
+
+  it("no phone or other rule sets the member window's height back to its content", () => {
+    expect(css).not.toMatch(/\.alliance-window[^{]*\{[^}]*(^|[;\s])height:\s*(auto|max-content|fit-content)/m);
+  });
+});

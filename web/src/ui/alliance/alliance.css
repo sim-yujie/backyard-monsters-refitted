@@ -15,7 +15,8 @@
   /* What sticks up above the frame: the title sign (or the close disc). */
   --alliance-window-overhang: max(var(--skin-title-lift, 0px), calc(var(--skin-edge, 0px) + 12px));
   /* Under the top bar, so the title sign never covers the resources. */
-  max-height: calc(100dvh - var(--hud-height, 0px) - var(--space-2) - var(--space-4) - var(--alliance-window-overhang));
+  --alliance-window-room: calc(100dvh - var(--hud-height, 0px) - var(--space-2) - var(--space-4) - var(--alliance-window-overhang));
+  max-height: var(--alliance-window-room);
   margin-top: var(--alliance-window-overhang);
   min-height: 0;
 }
@@ -820,6 +821,11 @@
 .alliance-window:has(.alliance__tabs) {
   width: min(100%, 840px);
   max-width: min(100%, 840px);
+  /* One height whatever the tab, sheet or Back shows (lead, 11 Nov): the
+     window sits in the middle, so a height change moved the tab row and a
+     press meant for a tab could land on the backdrop and close it. The body
+     scrolls inside instead. Both looks, desktop and phone. */
+  height: min(760px, var(--alliance-window-room));
 }
 
 /* `.tab-row` (ui.css) shares the row and never cuts a word: the tab is never
