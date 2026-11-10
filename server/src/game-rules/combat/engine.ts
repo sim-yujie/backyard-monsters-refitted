@@ -1918,6 +1918,15 @@ const creepReach = (range: number): number => Math.max(range * range, 2500);
 const CLOSE_FIGHT_SQUARED = 2500;
 
 /**
+ * An Eye-ra's blast on monsters reaches 90: on screen for an attacker's
+ * (`CreepBase.as:816`, 8,100 squared), in cartesian for a defender's
+ * (`Targeting.getCreepsInRange(90, ...)`, `:1133`).
+ */
+const EYE_RA_DEFENDER_RADIUS = 90;
+/** An attacking Eye-ra's blast reaches the yard's champion within 60 on screen (`:822`). */
+const EYE_RA_GUARDIAN_RADIUS = 60;
+
+/**
  * Balthazar is at a building under 50 screen px from its `_position`, and
  * otherwise flies to a point `30 + Math.random() * 10` px out from it
  * (`MonsterBase.as:1130-1141`); the engine takes that radius's middle.
@@ -2548,6 +2557,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       recordDeath(creep);
       if (creep.rank > 0 && creep.monsterId === OCTO_ID) ooze(creep, tower, striker);
       onDeath(creep);
+      if (creep.friendly && creep.explode && !creep.champion) deathBlast(creep);
     }
     if (striker && striker.friendly && !creep.friendly) creditDefender(striker, applied, killed);
     // Ichi's thorns: a share of the health it actually lost, back at the striker.
@@ -4719,6 +4729,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     originY: number,
     radius: number,
     struck: readonly BlastHit[],
+    creepsHurt = 0,
   ): void => {
     for (const [building, amount] of struck) {
       visual.push({
@@ -4746,7 +4757,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       ix: originX,
       iy: originY,
       radius: Math.round(radius * Math.SQRT2),
-      hits: struck.length,
+      hits: struck.length + creepsHurt,
     });
   };
 
@@ -4784,12 +4795,117 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       );
       struck.push([building, dealt]);
     }
-    noteBlast(creep, originX, originY, 60, struck);
+    const hurt = blastDefenders(creep);
+    noteBlast(creep, originX, originY, 60, struck, hurt);
     creep.hp = 0;
     creep.gone = true;
     countLost(creep);
     recordDeath(creep);
     onDeath(creep);
+  };
+
+  /**
+   * The rest of an attacking Eye-ra's blast (`CreepBase.as:804-827`): it hurts
+   * monsters too. The defender it is on, if any, takes the whole blow within
+   * `DEFENSE_RANGE_SQUARED`; every other defending monster on the ground within
+   * {@link EYE_RA_DEFENDER_RADIUS} a share falling to nothing at the edge; and
+   * the yard's champion (not Krallen, `CHAMPIONCAGE.isBasicGuardian`) within
+   * {@link EYE_RA_GUARDIAN_RADIUS} alike, flying or not. All measured on
+   * screen, as `_tmpPoint` is. Returns how many it hurt.
+   */
+  const blastDefenders = (creep: Creep): number => {
+    let hurt = 0;
+    const foe = creep.targetCreep >= 0 ? byCreepId.get(creep.targetCreep) : undefined;
+    if (foe && foe.friendly && foe.hp > 0 && !foe.gone) {
+      const squared = screenDistanceSquared(creep.ix, creep.iy, foe.ix, foe.iy);
+      const hit = squared < CLOSE_FIGHT_SQUARED && damageCreep(foe, creep.damage, null, creep) > 0;
+      if (hit) hurt += 1;
+    }
+    const monsterReach = EYE_RA_DEFENDER_RADIUS * EYE_RA_DEFENDER_RADIUS;
+    const guardianReach = EYE_RA_GUARDIAN_RADIUS * EYE_RA_GUARDIAN_RADIUS;
+    for (const other of creeps) {
+      if (!other.friendly || other.gone || other.hp <= 0) continue;
+      const squared = screenDistanceSquared(creep.ix, creep.iy, other.ix, other.iy);
+      let dealt = 0;
+      if (other.champion) {
+        if (other.monsterId === KRALLEN_ID || squared >= guardianReach) continue;
+        dealt = Math.trunc((creep.damage * (guardianReach - squared)) / guardianReach);
+      } else {
+        if (other === foe || other.flying || squared >= monsterReach) continue;
+        if (other.behaviour !== "defend" && other.behaviour !== "bunker") continue;
+        dealt = Math.trunc((creep.damage * (monsterReach - squared)) / monsterReach);
+      }
+      if (dealt > 0 && damageCreep(other, dealt, null, creep) > 0) hurt += 1;
+    }
+    return hurt;
+  };
+
+  /**
+   * A defending Eye-ra at the attacker it chased (`CreepBase.as:1122-1163`):
+   * it blows up there and is used up, not sent back into its bunker. A ranked
+   * one airbursts ({@link defenderAirburst}); a plain one deals
+   * `DealLinearAEDamage` within {@link EYE_RA_DEFENDER_RADIUS} to every
+   * attacker on the ground, cloaked or under ground too.
+   */
+  const defenderExplode = (creep: Creep): void => {
+    if (creep.rank > 0 && creep.monsterId === EYE_RA_ID) defenderAirburst(creep);
+    else defenderBlast(creep);
+    creep.hp = 0;
+    creep.gone = true;
+    recordDeath(creep);
+    onDeath(creep);
+  };
+
+  /** A defending Eye-ra's plain blast, shown as an attacker's is. */
+  const defenderBlast = (creep: Creep): void => {
+    const flags = TARGETS_ATTACKERS | TARGETS_GROUND | TARGETS_INVISIBLE;
+    let hurt = 0;
+    for (const hit of index.inRange(EYE_RA_DEFENDER_RADIUS, creep.x, creep.y, flags, creep.id)) {
+      if (hit.creep.gone || hit.creep.hp <= 0) continue;
+      const dealt = linearAreaDamage(creep.damage, EYE_RA_DEFENDER_RADIUS, 0, hit.dist);
+      if (dealt === undefined) continue;
+      if (damageCreep(hit.creep, dealt, null, creep) > 0) hurt += 1;
+    }
+    noteBlast(creep, creep.ix, creep.iy, EYE_RA_DEFENDER_RADIUS, [], hurt);
+  };
+
+  /**
+   * A ranked defending Eye-ra's airburst (`CreepBase.airburst`, `:1803-1840`):
+   * every attacker on the ground within 90 stretched by the rank's multiplier
+   * takes the swing times that multiplier, the nearest all of it and the rest
+   * a share falling to nothing at the edge; then every flyer within 90 takes
+   * the same at a tenth more per rank (0.2, 0.3, 0.4). Flash's own order of
+   * "first" is its grid's; here it is the nearest. Monster Overdrive is
+   * already in `damage` ({@link boostDamage}), so it is not applied again.
+   */
+  const defenderAirburst = (creep: Creep): void => {
+    const multiplier = airburstPercent(creep.rank) / 100;
+    const groundRadius = airburstRadius(AIRBURST_CREEP_RADIUS, creep.rank);
+    let hurt = 0;
+    const burst = (radius: number, flags: number, share: number): void => {
+      const hits = index.inRange(radius, creep.x, creep.y, flags, creep.id);
+      hits.forEach((hit, order) => {
+        if (hit.creep.gone || hit.creep.hp <= 0) return;
+        const part = order === 0 ? share : (share * (radius - hit.dist)) / radius;
+        if (damageCreep(hit.creep, creep.damage * part * multiplier, null, creep) > 0) hurt += 1;
+      });
+    };
+    burst(groundRadius, TARGETS_ATTACKERS | TARGETS_GROUND | TARGETS_INVISIBLE, 1);
+    burst(AIRBURST_CREEP_RADIUS, TARGETS_ATTACKERS | TARGETS_FLYING, 0.1 * creep.rank + 0.1);
+    noteBlast(creep, creep.ix, creep.iy, groundRadius, [], hurt);
+  };
+
+  /**
+   * A defending Eye-ra killed blows up where it falls (`tickBDefend`,
+   * `CreepBase.as:995-1044`): the plain blast, at once rather than on its
+   * next tick. A bunker's Eye-ra on an Inferno yard or outpost does not:
+   * Flash pens it first (`:1004-1010`); the Descent is neither.
+   */
+  const deathBlast = (creep: Creep): void => {
+    if (creep.homeBunker >= 0 && yard.kind === "inferno" && options.descentYard === undefined) {
+      return;
+    }
+    defenderBlast(creep);
   };
 
   const moveCreep = (creep: Creep): void => {
@@ -4996,6 +5112,11 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       creep.attacking = true;
       if (creep.attackCooldown <= 0) {
         creep.attackCooldown += swingDelay(creep);
+        // A defending Eye-ra's swing is its blast (`CreepBase.as:1122-1163`).
+        if (creep.friendly && creep.explode) {
+          defenderExplode(creep);
+          return;
+        }
         const dealt = strikeCreep(creep, foe, creep);
         if (defended) recordHit(creep, foe.ix, foe.iy, dealt);
         if (creep.rank > 0) onAttack(creep, creep.damage, foe, null);
