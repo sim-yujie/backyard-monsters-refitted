@@ -13,13 +13,28 @@ import {
   kitOffer,
   kitReplacesBuildings,
   kitsAtPrice,
+  kitSummary,
   type KitOffer,
   type StarterKitSummary,
 } from "@/game/yard/starterKits";
+import { currentAllianceBonuses } from "@/game/alliance/allianceBonuses";
+import { gameIcon } from "@/ui/gameIcon";
 import { formatAmount, formatCompact } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
 import { costAmounts, resourceAmount, RESOURCE_NAMES } from "@/ui/resourceIcon";
 import "@/ui/styles/starter-kits.css";
+
+/** The alliance's price change on a kit's card: its shield and "-10%" (cheaper) or "+5%" (dearer). */
+const allianceKitTag = (percent: number): HTMLElement => {
+  const tag = document.createElement("span");
+  const cheaper = percent < 0;
+  tag.className = `kit-card__alliance-tag kit-card__alliance-tag--${cheaper ? "cheaper" : "dearer"}`;
+  const amount = Number(Math.abs(percent).toFixed(1));
+  const text = `${cheaper ? "\u2212" : "+"}${amount}%`;
+  tag.title = `Your alliance: Starter Kits cost ${amount}% ${cheaper ? "less" : "more"} in resources.`;
+  tag.append(gameIcon("alliance", { size: 16, decorative: true }), text);
+  return tag;
+};
 
 /**
  * The outpost Starter Kit picker (outposts WP9, issue #188): Flash's
@@ -264,7 +279,21 @@ export class StarterKitPicker {
       usual.className = "kit-card__usual";
       if (amounts) usual.append(amounts);
       price.append(tag, label, usual);
-    } else if (amounts) price.append(amounts);
+    } else if (amounts) {
+      price.append(amounts);
+      // The alliance's Starter Kit price (beta 7): its shield and the change, the usual price struck through.
+      const percent = currentAllianceBonuses().kitCost;
+      const usualKit = kitSummary(kit.id);
+      const usualAmounts = percent && usualKit ? costAmounts(usualKit.resources, formatCompact) : null;
+      if (percent && usualAmounts) {
+        card.classList.add("kit-card--alliance");
+        price.prepend(allianceKitTag(percent));
+        const usual = document.createElement("s");
+        usual.className = "kit-card__usual";
+        usual.append(usualAmounts);
+        price.append(usual);
+      }
+    }
 
     const useResources = document.createElement("button");
     useResources.type = "button";
