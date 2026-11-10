@@ -495,9 +495,8 @@ export class MapRoom2Scene implements Scene {
             to: { userid: payload.uid, name: payload.n },
             outposts: this.ownSave ? outpostsOf(this.ownSave) : [],
           }),
-        // The server refuses a player in an alliance (`inviteRules.ts`); an outpost is needed to offer.
-        canInviteToOutpost: (payload) =>
-          !payload.aid && this.ownSave !== null && outpostsOf(this.ownSave).length > 0,
+        // An outpost is needed to offer. Alliance mates may be invited too (beta 7: the rule is gone).
+        canInviteToOutpost: () => this.ownSave !== null && outpostsOf(this.ownSave).length > 0,
         // The owner's alliance on the cell panel (beta 7, from the map's roster).
         allianceOf: (id) => this.renderer.allianceNamed(id),
         myAlliance: () => this.renderer.myAllianceId,

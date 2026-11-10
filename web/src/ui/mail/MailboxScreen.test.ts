@@ -834,6 +834,7 @@ describe("invitations to move in the mailbox (#205)", () => {
         message: words,
         type: "migraterequest",
         baseid: "2000241208",
+        hostpayment: "resources",
       },
     ]);
     expect(onInviteChanged).toHaveBeenCalledTimes(1);

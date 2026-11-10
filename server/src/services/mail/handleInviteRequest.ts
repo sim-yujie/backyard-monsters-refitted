@@ -5,9 +5,12 @@ import { User } from "../../database/models/user.model.js";
 import { WorldMapCell } from "../../database/models/worldmapcell.model.js";
 import { postgres } from "../../server.js";
 import { inviteExistsErr } from "../../errors/errors.js";
-import { relocateTargetRefusal } from "../maproom/v2/relocateRules.js";
+import { chargeRelocation, relocateTargetRefusal } from "../maproom/v2/relocateRules.js";
+import { isShinyLocked } from "../user/shinyLock.js";
 import {
+  INVITE_PRICE,
   InviteState,
+  type HostPayment,
   inviteRefusal,
   inviteSendRefusal,
   openInviteFilter,
@@ -20,6 +23,7 @@ export interface InviteMessageFields {
   worldid: string;
   coords: number[];
   migratestate: InviteState.REQUESTED;
+  hostpayment: HostPayment;
 }
 
 /**
@@ -29,20 +33,25 @@ export interface InviteMessageFields {
  * - The outpost is one of the inviter's own Map Room 2 outposts, as they
  *   would need to move onto it themselves (`relocateTargetRefusal`).
  * - The invited player is someone else, on Map Room 2, in the outpost's
- *   world, and not in an alliance.
+ *   world. Being in an alliance no longer matters (design v5 §12).
+ * - The inviter can pay their share ({@link INVITE_PRICE}) the way they chose
+ *   right now; it is charged only when the invitation is accepted, and
+ *   checked again then.
  * - The outpost has no invitation still waiting: `inviteExistsErr`.
  *
  * @param inviterId - The authenticated user's ID
  * @param invitedId - The message's recipient
  * @param baseid - The outpost, as the client names it
  * @param now - Unix seconds
+ * @param hostpayment - How the inviter pays their share
  * @returns The soft refusal to send, or the fields the message carries
  */
 export const handleInviteRequest = async (
   inviterId: number,
   invitedId: number,
   baseid: string | undefined,
-  now: number
+  now: number,
+  hostpayment: HostPayment = "resources"
 ): Promise<{ refusal: InviteSoftRefusal } | { fields: InviteMessageFields }> => {
   const em = postgres.em;
 
@@ -76,13 +85,19 @@ export const handleInviteRequest = async (
     outpostWorld: cell?.world.uuid,
     invited: {
       userid: invitedId,
-      allianceId: invited?.alliance_id,
       mapVersion: invited?.save?.mapversion,
       worldid: invited?.save?.worldid,
     },
   });
 
   if (refusal) return { refusal: inviteRefusal(refusal, "inviter") };
+
+  if (hostpayment === "shiny") {
+    const inviter = await em.findOne(User, { userid: inviterId }, { fields: ["shiny_locked"] });
+    if (inviter && isShinyLocked(inviter as User)) return { refusal: inviteRefusal("hostShinyLocked", "inviter") };
+  }
+  const share = chargeRelocation({ credits: inviterMain!.credits, resources: inviterMain!.resources }, hostpayment, INVITE_PRICE);
+  if (!share.ok) return { refusal: inviteRefusal(share.reason, "inviter") };
 
   if (await em.findOne(Message, { ...openInviteFilter(now), baseid: outpost!.baseid })) throw inviteExistsErr();
 
@@ -92,6 +107,7 @@ export const handleInviteRequest = async (
       worldid: cell!.world.uuid,
       coords: [cell!.x, cell!.y],
       migratestate: InviteState.REQUESTED,
+      hostpayment,
     },
   };
 };

@@ -828,7 +828,8 @@ export class MailboxScreen {
     const invite = item.invite;
     const state = inviteState(invite, now);
     if (!invite || !state) return null;
-    const card = inviteCard(state, invite.until, item.mine, thread.otherName, invite.cell, now);
+    const shared = "shared" in invite ? invite.shared : true;
+    const card = inviteCard(state, invite.until, item.mine, thread.otherName, invite.cell, now, shared);
     const cell = invite.cell;
     const onShowOnMap = this.options.onShowOnMap;
     const view: RequestAction[] =
@@ -851,7 +852,7 @@ export class MailboxScreen {
           label: "Accept",
           style: "primary",
           run: async () => {
-            node.replaceWith(this.priceChoice(thread, cell));
+            node.replaceWith(this.priceChoice(thread, cell, shared));
             return null;
           },
         },
@@ -876,9 +877,9 @@ export class MailboxScreen {
    * further confirm (the owner's rule). Back draws the thread again, with the
    * invitation's own card.
    */
-  private priceChoice(thread: MailThread, cell: OffsetCell | null): HTMLElement {
+  private priceChoice(thread: MailThread, cell: OffsetCell | null, shared: boolean): HTMLElement {
     const pay = (payment: InvitePayment): RequestAction => ({
-      label: `Pay ${invitePriceText(payment)}`,
+      label: `Pay ${invitePriceText(payment, shared)}`,
       style: "primary",
       run: () => this.acceptInvite(thread, payment),
     });
@@ -888,6 +889,7 @@ export class MailboxScreen {
       tone: "info",
       detail:
         `Your main yard moves${cell ? ` to (${cell.col}, ${cell.row})` : ""} at once. ` +
+        (shared ? `${thread.otherName} pays the same. ` : "") +
         "Your outposts stay yours, and wild monsters claim your old spot. It cannot be undone.",
       actions: [
         pay("resources"),
@@ -1070,12 +1072,25 @@ export class MailboxScreen {
       outpost = () => target.outposts.find((one) => one.baseid === select.value) ?? null;
     }
 
+    // Each pays a share (beta 7): the inviter picks theirs here, charged only when it is accepted.
+    const paySelect = make("select", "mail-invite__payment");
+    paySelect.setAttribute("aria-label", "You pay");
+    for (const payment of ["resources", "shiny"] as const) {
+      const option = document.createElement("option");
+      option.value = payment;
+      option.textContent = invitePriceText(payment);
+      paySelect.append(option);
+    }
+    const payLabel = make("label", "mail-compose__field");
+    payLabel.append(make("span", "mail-compose__caption", "You pay"), paySelect);
+    form.append(payLabel);
+
     form.append(
       make(
         "p",
         "mail-truce__about",
-        `If they accept, their main yard moves onto the outpost, for ${invitePriceText("resources")} or ` +
-          `${invitePriceText("shiny")}, which they pay. They must not be in an alliance. ` +
+        `If they accept, their main yard moves onto the outpost. You each pay ${invitePriceText("resources")} ` +
+          `or ${invitePriceText("shiny")}, charged then. ` +
           `They have ${INVITE_DAYS} days to answer, and you can withdraw it until then.`,
       ),
     );
@@ -1103,6 +1118,7 @@ export class MailboxScreen {
             message: text,
             type: "migraterequest",
             baseid: where.baseid,
+            hostpayment: paySelect.value === "shiny" ? "shiny" : "resources",
           });
           if (!result.ok) return result.reason;
           this.options.onInviteChanged?.();

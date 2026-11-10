@@ -109,6 +109,15 @@ export class Message {
   baseid: string | null = null;
 
   /**
+   * An invitation to move: how the one who invited pays their share,
+   * "shiny" or "resources" (design v5 §12, `inviteRules.ts`). Null on every
+   * other message, and on an invitation sent before both players paid.
+   */
+  @Property({ type: 'string', nullable: true, length: 10 })
+  @FrontendKey
+  hostpayment: string | null = null;
+
+  /**
    * An "attacked your yard" notice's defence replay (`defence_replay.id`,
    * `docs/design/defence-replays.md` §8), for its Watch button; null on every
    * other message, and once the replay is pruned. The mail API returns it

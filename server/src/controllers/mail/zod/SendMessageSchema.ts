@@ -53,4 +53,10 @@ export const SendMessageSchema = z.object({
    * @type {string}
    */
   baseid: z.string().optional(),
+
+  /**
+   * For migraterequest: how the one inviting pays their share of the move
+   * (design v5 §12). Left out by an older client: resources.
+   */
+  hostpayment: z.enum(["shiny", "resources"]).optional(),
 });

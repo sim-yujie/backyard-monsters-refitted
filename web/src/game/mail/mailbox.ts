@@ -95,6 +95,8 @@ export interface ThreadTruce {
 /** An invitation to move as its message carries it (#205): where it stands, when it lapses, and its outpost's cell. */
 export interface MessageInvite extends ThreadTruce {
   readonly cell: OffsetCell | null;
+  /** Both players pay a share (beta 7); false on one sent before, which the invited player alone pays. */
+  readonly shared: boolean;
 }
 
 /** One message of an open thread. */
@@ -222,10 +224,13 @@ export const allianceInviteOf = (
 };
 
 /** A message's invitation to move, as the server gives it (#205). */
-const inviteOf = (message: Pick<MailMessage, "migratestate" | "migrateexpire" | "coords">): MessageInvite => ({
+const inviteOf = (
+  message: Pick<MailMessage, "migratestate" | "migrateexpire" | "coords" | "hostpayment">,
+): MessageInvite => ({
   status: message.migratestate ?? "requested",
   until: Number(message.migrateexpire) > 0 ? Number(message.migrateexpire) : null,
   cell: noticeCell(message),
+  shared: !!message.hostpayment,
 });
 
 /** A notice's cell from its `coords`, or null. */
