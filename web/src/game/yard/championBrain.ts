@@ -95,6 +95,8 @@ export type TraitIcon =
   | "hurt"
   | "loot"
   | "quake"
+  | "crowd"
+  | "big"
   | "none";
 
 export interface TraitRow {

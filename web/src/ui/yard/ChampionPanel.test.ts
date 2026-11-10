@@ -7,7 +7,7 @@ import type { BaseLoadResponse, BuildingData, ChampionSaveEntry, YardResponse } 
 import type { YardApi } from "@/api/yard";
 import type { ChampionActions } from "@/api/yardChampion";
 import { YardStore } from "@/game/yard/YardStore";
-import { ChampionPanel, feedGate, hungerText } from "./ChampionPanel";
+import { brainBlock, ChampionPanel, feedGate, hungerText } from "./ChampionPanel";
 import { cageView } from "@/game/yard/championModel";
 
 /**
@@ -205,33 +205,140 @@ describe("ChampionPanel: a fed champion", () => {
   });
 });
 
-describe("ChampionPanel: how it fights (#219)", () => {
+describe("ChampionPanel: how it fights, the old brain (#219)", () => {
+  // Only a champion without habits (Krallen) keeps this block now.
+  const block = (champion: ChampionSaveEntry) => {
+    const cage = cageView(loadOf([champion]), T0);
+    if (cage.kind !== "active") throw new Error("no champion");
+    return brainBlock(cage.view);
+  };
   const tendencies = (root: HTMLElement) =>
     [...root.querySelectorAll(".champion__tendency")].map((one) => one.textContent);
 
   it("says a champion with no brain yet is still learning", () => {
-    const { element } = setup([gorgo()]);
-    expect(textOf(element, ".champion__part--brain .champion__heading")).toBe("How it fights");
+    const element = block(gorgo());
+    expect(textOf(element, ".champion__heading")).toBe("How it fights");
     expect(tendencies(element)).toEqual(["Still learning"]);
     expect(element.querySelector(".champion__tendency--learning")).not.toBeNull();
-    expect(textOf(element, ".champion__part--brain .champion__note")).toContain(
-      "It learns from every attack it fights in.",
-    );
+    expect(textOf(element, ".champion__note")).toContain("It learns from every attack it fights in.");
   });
 
   it("names what its attacks taught it, strongest first, and how many it learned from", () => {
-    const { element } = setup([
+    const element = block(
       gorgo({ b: { tower: 0, loot: 140, finish: 0, focus: 70, threat: 95 }, bs: { n: 18, hyb: 0.6 } }),
-    ]);
+    );
     expect(tendencies(element)).toEqual(["Loves loot", "Cautious near towers", "Sticks with the pack"]);
     expect(element.querySelector(".champion__tendency--learning")).toBeNull();
-    expect(textOf(element, ".champion__part--brain .champion__note")).toContain("Learned from 18 attacks.");
+    expect(textOf(element, ".champion__note")).toContain("Learned from 18 attacks.");
   });
 
   it("has no reset", () => {
-    const { element } = setup([gorgo({ b: { loot: 140 }, bs: { n: 3 } })]);
-    const block = element.querySelector<HTMLElement>(".champion__part--brain")!;
-    expect(block.querySelector("button")).toBeNull();
+    expect(block(gorgo({ b: { loot: 140 }, bs: { n: 3 } })).querySelector("button")).toBeNull();
+  });
+});
+
+describe("ChampionPanel: Modes, instincts and habits (champion modes round 2)", () => {
+  const tabs = (root: HTMLElement) => [...root.querySelectorAll<HTMLButtonElement>(".champion__mode-tab")];
+  const rows = (root: HTMLElement, kind: "instinct" | "habit") =>
+    [...root.querySelectorAll<HTMLElement>(`.champion__trait--${kind}`)].map((row) => [
+      row.querySelector(".champion__trait-name")!.textContent,
+      kind === "habit" ? Number(row.dataset["pips"]) : "always",
+    ]);
+  const shown = (root: HTMLElement) => root.querySelector<HTMLElement>(".champion__mode")!.dataset["stance"];
+
+  it("says what it is under its level, and opens on the Mode it last attacked in", () => {
+    const { element } = setup([gorgo({ s: "offensive" })]);
+    expect(textOf(element, ".champion__nature")).toBe("Walks · melee · tank · can't hit fliers");
+    expect(element.querySelector(".champion__part--brain")).toBeNull();
+    expect(tabs(element).map((tab) => tab.textContent)).toEqual(["Offensive×0", "Defensive×0", "Hybrid×0"]);
+    expect(shown(element)).toBe("offensive");
+    expect(rows(element, "instinct")).toEqual([
+      ["Goes for towers", "always"],
+      ["Finishes hurt buildings", "always"],
+    ]);
+    expect(rows(element, "habit")).toEqual([
+      ["Guards its monsters", 0],
+      ["Aerial Defense first", 0],
+      ["Biggest gun first", 0],
+    ]);
+  });
+
+  it("shows each Mode's own habits and attacks, a two-ended one by the side it leans to", () => {
+    const { element } = setup([
+      gorgo({
+        h: { off: { aerial: 80, gun: 30 }, hyb: { tower: -120, loot: 50 } },
+        hs: { n: 40, off: { n: 12, u: {} }, hyb: { n: 3, u: {} } },
+      }),
+    ]);
+    // No saved Mode: Hybrid, which has no instincts.
+    expect(shown(element)).toBe("hybrid");
+    expect(tabs(element).map((tab) => tab.textContent)).toEqual(["Offensive×12", "Defensive×0", "Hybrid×3"]);
+    expect(rows(element, "instinct")).toEqual([["None: a natural", "always"]]);
+    expect(rows(element, "habit")).toEqual([
+      ["Steers clear of towers", 3],
+      ["Loves loot", 1],
+      ["Town Hall first", 0],
+      ["Stays close", 0],
+    ]);
+    expect(textOf(element, ".champion__mode-foot")).toContain("40 attacks · Habits fade if they stop working.");
+
+    tabs(element)[0]!.click();
+    expect(shown(element)).toBe("offensive");
+    expect(rows(element, "habit")).toEqual([
+      ["Guards its monsters", 0],
+      ["Aerial Defense first", 3],
+      ["Biggest gun first", 1],
+    ]);
+    expect(tabs(element)[0]!.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("keeps the picked tab over a redraw", () => {
+    const { element, panel } = setup([gorgo({ s: "offensive" })]);
+    tabs(element)[1]!.click();
+    panel.show();
+    expect(shown(element)).toBe("defensive");
+  });
+
+  it("marks its icons as placeholders until the painted ones come", () => {
+    const { element } = setup([gorgo()]);
+    const icons = [...element.querySelectorAll<HTMLElement>(".champion__part--modes .champion__trait-icon")];
+    expect(icons.length).toBeGreaterThan(0);
+    for (const icon of icons) {
+      expect(icon.classList.contains("champion__trait-icon--placeholder")).toBe(true);
+      expect(icon.dataset["placeholder"]).toBeTruthy();
+    }
+  });
+
+  it("forgets the shown Mode's habits after asking once", () => {
+    const { element, spies } = setup([gorgo({ s: "offensive", h: { off: { guard: 60 } } })]);
+    const forget = element.querySelector<HTMLButtonElement>(".champion__forget")!;
+    expect(forget.disabled).toBe(false);
+    forget.click();
+    expect(spies.forget).not.toHaveBeenCalled();
+    expect(forget.textContent).toBe("Sure?");
+    forget.click();
+    expect(spies.forget).toHaveBeenCalledWith(1, "offensive");
+  });
+
+  it("has nothing to forget in a Mode with no habit yet", () => {
+    const { element } = setup([gorgo({ s: "defensive", h: { off: { guard: 60 } } })]);
+    expect(element.querySelector<HTMLButtonElement>(".champion__forget")!.disabled).toBe(true);
+  });
+
+  it("redraws when a habit is learned", () => {
+    const { element, panel, store } = setup([gorgo({ s: "offensive" })]);
+    store.save.champion![0]!.h = { off: { guard: 100 } };
+    panel.tick();
+    expect(rows(element, "habit")[0]).toEqual(["Guards its monsters", 3]);
+  });
+
+  it("leaves Krallen's card as it was: no Modes, no habits", () => {
+    const { element } = setup(
+      [gorgo(), gorgo({ t: 5, l: 5, hp: 30_000, h: { off: { guard: 100 } } })],
+      [CAGE, { id: 4, t: 119, l: 1, X: 400, Y: 0 }],
+    );
+    const card = element.querySelector<HTMLElement>(".champion__part--special")!;
+    expect(card.querySelector(".champion__mode-tab, .champion__trait, .champion__nature")).toBeNull();
   });
 });
 
@@ -294,7 +401,7 @@ describe("ChampionPanel: one screen at 1280x800 (lead, 28 Oct)", () => {
     const shown = [...element.querySelectorAll<HTMLElement>(".champion__heading")].filter(
       (heading) => !heading.classList.contains("u-visually-hidden"),
     );
-    expect(shown.map((heading) => heading.textContent)).toEqual(["How it fights"]);
+    expect(shown.map((heading) => heading.textContent)).toEqual([]);
   });
 
   it("lays the champion out in three columns, Freeze in a row under it on a phone", () => {
