@@ -64,6 +64,8 @@ export const playerRow = (
     readonly noteClass?: string;
     readonly actions?: readonly HTMLElement[];
     readonly badges?: readonly RowBadge[];
+    /** Small marks on the level line, after the level (a friend's other world). */
+    readonly marks?: readonly HTMLElement[];
   } = {},
 ): HTMLLIElement => {
   const row = make("li", "friends-row");
@@ -97,6 +99,7 @@ export const playerRow = (
   const level = levelLabel(player.level);
   const meta = make("span", "friends-row__meta");
   if (level) meta.append(make("span", "friends-row__level", level));
+  meta.append(...(options.marks ?? []));
   if (options.note) meta.append(make("span", `friends-row__note ${options.noteClass ?? ""}`.trim(), options.note));
   if (meta.childElementCount > 0) words.append(meta);
 

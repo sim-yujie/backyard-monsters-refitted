@@ -72,6 +72,7 @@ describe("friendsApi reads", () => {
           help: null,
           wishes: ["r3", "r9", "r3", "r1"],
           pinnedAt: "2026-11-01T08:00:00.000Z",
+          otherWorld: 2,
         },
         { userid: "9", online: "sometimes", help: { speedup: true, repair: 0 } },
       ],
@@ -92,6 +93,7 @@ describe("friendsApi reads", () => {
       help: null,
       wishes: ["r3", "r1"],
       pinnedAt: Math.floor(Date.parse("2026-11-01T08:00:00.000Z") / 1000),
+      otherWorld: 2,
     });
     expect(list.maxPinned).toBe(10);
     // A row with missing or odd fields still draws.
@@ -105,6 +107,7 @@ describe("friendsApi reads", () => {
       help: { speedup: true, repair: false },
       wishes: [],
       pinnedAt: null,
+      otherWorld: null,
     });
   });
 

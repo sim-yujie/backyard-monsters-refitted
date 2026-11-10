@@ -18,6 +18,7 @@ export const fixtureFriend = (userid: number, extra: Partial<Friend> = {}): Frie
   help: null,
   wishes: [],
   pinnedAt: null,
+  otherWorld: null,
   ...extra,
 });
 

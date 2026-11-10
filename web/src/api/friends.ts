@@ -102,6 +102,12 @@ export interface Friend {
   readonly wishes: readonly GiftResource[];
   /** Pinned to the top of the list (beta 7): when, unix seconds; null when not pinned. */
   readonly pinnedAt: number | null;
+  /**
+   * Their Map Room 2 world's number when it is not the player's (beta 7): an
+   * alliance is one world, so the row shows why they cannot ally. Null when
+   * they share it, or either has no Map Room 2 world.
+   */
+  readonly otherWorld: number | null;
 }
 
 /** `GET /bm/friends`. */
@@ -478,6 +484,7 @@ export const friendOf = (raw: Record<string, unknown>): Friend => {
         : null,
     wishes: wishesOf(raw["wishes"]),
     pinnedAt: toSeconds(raw["pinnedAt"]),
+    otherWorld: typeof raw["otherWorld"] === "number" && Number.isInteger(raw["otherWorld"]) && raw["otherWorld"] > 0 ? raw["otherWorld"] : null,
   };
 };
 

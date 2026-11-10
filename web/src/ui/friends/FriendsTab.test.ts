@@ -273,6 +273,23 @@ describe("FriendsTab", () => {
       expect(tab.element.querySelector('[data-userid="3"]')?.classList.contains("friends-row--pinned")).toBe(true);
     });
 
+    it("marks a friend in another Map Room 2 world with its number, and says why", async () => {
+      const { tab } = setup({
+        list: {
+          list: fixtureList([
+            fixtureFriend(1, { username: "Ann", otherWorld: 3 }),
+            fixtureFriend(2, { username: "Bob" }),
+          ]),
+        },
+      });
+      await tab.show();
+      const mark = tab.element.querySelector<HTMLElement>('[data-userid="1"] .friends-row__world');
+      expect(mark?.textContent).toBe("World 3");
+      expect(mark?.title).toBe("Ann is in world 3. An alliance is one world, so you cannot ally.");
+      expect(mark?.querySelector("img")).not.toBeNull();
+      expect(tab.element.querySelector('[data-userid="2"] .friends-row__world')).toBeNull();
+    });
+
     it("sorts a pinned friend before an online one", () => {
       const pinned = fixtureFriend(1, { username: "A", level: 1, online: null, pinnedAt: 5 });
       const online = fixtureFriend(2, { username: "B", level: 50, online: "online" });

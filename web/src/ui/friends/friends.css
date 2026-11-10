@@ -267,6 +267,14 @@
   color: var(--colour-text-muted);
 }
 
+/* A friend in another Map Room 2 world (beta 7): "[map] World 3". */
+.friends-row__world {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+}
+
 .friends-row__note {
   min-width: 0;
   overflow: hidden;

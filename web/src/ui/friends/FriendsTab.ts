@@ -71,7 +71,19 @@ export const FRIENDS_TEXT = {
   unpin: "Unpin",
   pinned: (count: number, max: number): string => `${count} of ${max} pinned`,
   pinLimit: (max: number): string => `Pinned ${max} already. Unpin one first.`,
+  /** A friend in another Map Room 2 world (beta 7): the short mark, and why it matters. */
+  world: (n: number): string => `World ${n}`,
+  worldTitle: (name: string, n: number): string => `${name} is in world ${n}. An alliance is one world, so you cannot ally.`,
 } as const;
+
+/** "[map] World 3" on a friend's row when they are in another Map Room 2 world. */
+const worldMark = (friend: Friend): HTMLElement[] => {
+  if (friend.otherWorld === null) return [];
+  const mark = make("span", "friends-row__world");
+  mark.append(gameIcon("maptilt", { size: 16, decorative: true }), make("span", "", FRIENDS_TEXT.world(friend.otherWorld)));
+  mark.title = FRIENDS_TEXT.worldTitle(friend.username, friend.otherWorld);
+  return [mark];
+};
 
 export type FriendFilter = "help" | "online" | "gift";
 
@@ -316,6 +328,7 @@ export class FriendsTab implements FriendsTabView {
       ...(seen && { note: seen, noteClass: "friends-online" }),
       actions,
       badges,
+      marks: worldMark(friend),
     });
     row.classList.toggle("friends-row--open", opened);
     row.classList.toggle("friends-row--pinned", friend.pinnedAt !== null);
