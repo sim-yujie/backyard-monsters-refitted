@@ -15,7 +15,7 @@ import {
 import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
 import type { PlanNode } from "@/game/yard/planner/placement";
 import { ACADEMY_TYPE, LAB_TYPE, countdownProgress } from "@/game/yard/jobs";
-import { recycleOffer, type RecycleOffer } from "@/game/yard/recycle";
+import { OBSERVATORY_TYPE, recycleOffer, type RecycleOffer } from "@/game/yard/recycle";
 import { ladderFor } from "@/game/yard/planner/upgrades";
 import { overCap as overCapOf } from "@/game/yard/storage";
 import { freeWorkers, holdsWorker, sharperToolsMultiplier } from "@/game/yard/workers";
@@ -252,6 +252,8 @@ export type OpenTarget =
   | "chamber"
   | "baiter"
   | "shop"
+  /** The alliance window: a built Observatory (beta 7). */
+  | "alliance"
   /** The Siege screen: a Siege Lab's Chaos Lab tab, a Siege Factory's Chaos Factory tab (Inferno WP 6.4). */
   | "siege";
 
@@ -602,7 +604,9 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
                     ? "shop"
                     : siteOfType(building.type) && building.level > 0 && context.yard.kind !== "outpost"
                       ? "siege"
-                      : null;
+                      : building.type === OBSERVATORY_TYPE && building.level > 0
+                        ? "alliance"
+                        : null;
   return {
     upgrade: upgrade && upgrade.gate?.reason !== "maxLevel" ? upgrade : null,
     maxed: upgrade?.gate?.reason === "maxLevel",

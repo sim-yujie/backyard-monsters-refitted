@@ -925,6 +925,15 @@ export class BuildingPanel {
       button.title = "Spend Shiny on workers, boosts and more";
       return button;
     }
+    // A button, not open-on-tap, so repair and speed-up stay on this card (lead, 10 Nov).
+    if (model?.open === "alliance" && scene?.openAlliance) {
+      const openAlliance = scene.openAlliance.bind(scene);
+      const button = actionButton("Alliance", () => openAlliance(), "btn--primary");
+      button.classList.add("building-panel__planner");
+      button.setAttribute("aria-haspopup", "dialog");
+      button.title = "Join or found an alliance, and lead it";
+      return button;
+    }
     const site = model?.open === "siege" ? siteOfType(building.type) : null;
     if (site && scene?.openSiege) {
       // Flash's Open button on these two, named for the popup's tab (`BUILDINGINFO.as:240-245`).

@@ -813,6 +813,18 @@ describe("panelModel: the General Store (§8.2)", () => {
   });
 });
 
+describe("panelModel: the Observatory (alliances, beta 7)", () => {
+  it("opens the alliance window once built", () => {
+    const context = contextOf({ buildings: [HALL(5), building(2, 150, 1)] });
+    expect(panelModel(pick(context, 2), context).open).toBe("alliance");
+  });
+
+  it("is not offered for a foundation", () => {
+    const context = contextOf({ buildings: [HALL(5), building(2, 150, 0, { cB: 600 })] });
+    expect(panelModel(pick(context, 2), context).open).toBeNull();
+  });
+});
+
 describe("randomMoveOffer: Move to a random spot (#366)", () => {
   const DAY = 24 * 60 * 60;
   const onMapRoom2 = (save: Partial<BaseLoadResponse> = {}, type?: string): PanelContext => {

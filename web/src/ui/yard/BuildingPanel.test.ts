@@ -453,6 +453,20 @@ describe("BuildingPanel: the General Store (§8.2)", () => {
   });
 });
 
+describe("BuildingPanel: the Observatory (alliances, beta 7)", () => {
+  it("opens the alliance window from its Alliance button", () => {
+    const openAlliance = vi.fn();
+    const { element } = setup([HALL, building(2, 150, 1)], 2, { scene: { openAlliance } });
+    buttonNamed(element, "Alliance")!.click();
+    expect(openAlliance).toHaveBeenCalledOnce();
+  });
+
+  it("offers no Alliance button where the scene has no window", () => {
+    const { element } = setup([HALL, building(2, 150, 1)], 2);
+    expect(buttonNamed(element, "Alliance")).toBeUndefined();
+  });
+});
+
 describe("BuildingPanel: the monster buildings", () => {
   it("opens the Monster Locker's Unlock tab from Open, with the building named", () => {
     const openMonsters = vi.fn();

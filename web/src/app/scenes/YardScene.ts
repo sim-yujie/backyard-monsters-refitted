@@ -136,6 +136,7 @@ import { ShopScreen } from "@/ui/yard/ShopScreen";
 import { MailDoor } from "@/ui/mail/MailDoor";
 import { NotificationDoor } from "@/ui/notifications/NotificationDoor";
 import { DefencesDoor } from "@/ui/defences/DefencesDoor";
+import { AllianceDoor } from "@/ui/alliance/AllianceDoor";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
 import { WorldChatBox } from "@/ui/chat/WorldChatBox";
 import { centredLayout, closeCentreWindow, onCentreWindowOpen } from "@/ui/centreWindow";
@@ -182,6 +183,7 @@ import { replayOf } from "@/game/baiter/testHistory";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { registerCanvasTarget, tutTarget, TutTarget, type TargetRect } from "@/game/guide/targets";
 import { footprintBox } from "@/game/yard/YardGrid";
+import { OBSERVATORY_TYPE } from "@/game/yard/recycle";
 import { mountYardPlugins, type YardSceneControls } from "@/game/yard/yardPlugins";
 import "@/game/yard/plugins";
 import { devStats } from "../devDetails";
@@ -430,6 +432,8 @@ export class YardScene implements Scene {
   private bell: NotificationDoor | null = null;
   /** The Defences button and screen (#363): the own yard of a Map Room 2 player. */
   private defences: DefencesDoor | null = null;
+  /** The Alliance button in the More fan and its window (beta 7): the own yard of a Map Room 2 player. */
+  private alliance: AllianceDoor | null = null;
   /**
    * World chat's box (#282), on every yard while the player's "World chat"
    * switch is on; the connection is `worldChat`'s and outlives it.
@@ -743,6 +747,19 @@ export class YardScene implements Scene {
         },
       });
       this.mail.button.element.after(this.defences.button.element);
+      // Alliances (beta 7): in the More fan beside Defences, shown on Map Room 2; the Observatory's panel opens it too.
+      this.alliance = new AllianceDoor({
+        container: context.overlay.modal,
+        onOpen: () => {
+          this.mail?.close();
+          this.bell?.close();
+          this.defences?.close();
+        },
+        onBuildObservatory: () => this.openBuildMenu(OBSERVATORY_TYPE),
+        onOpenMap: () => this.openMap(),
+        onChanged: () => void this.store?.refresh(),
+      });
+      this.defences.button.element.after(this.alliance.button);
     }
     context.overlay.content.append(this.status);
     this.inset = { top: this.hud.element.getBoundingClientRect().bottom, bottom: 0 };
@@ -795,6 +812,8 @@ export class YardScene implements Scene {
     this.bell = null;
     this.defences?.destroy();
     this.defences = null;
+    this.alliance?.destroy();
+    this.alliance = null;
     this.chat?.destroy();
     this.chat = null;
     this.friendsButton?.destroy();
@@ -1986,6 +2005,8 @@ export class YardScene implements Scene {
   /** The Defences button: only Map Room 2 keeps defence replays (until #246); an outpost is a Map Room 2 cell. */
   private showDefences(store: YardStore): void {
     this.defences?.setAvailable(store.kind === "outpost" || mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2);
+    // Alliances are the player's, so Map Room 2's main yard and outposts show the button; the Inferno does not.
+    this.alliance?.setAvailable(store.kind === "outpost" || (store.kind !== "inferno" && mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2));
   }
 
   /** Carries out what another screen asked the own yard to open (`yardIntent.ts`). */
@@ -2658,6 +2679,7 @@ export class YardScene implements Scene {
           }).mount(modal);
         },
         openShop: () => this.openShop(),
+        openAlliance: () => this.alliance?.open(),
         openDecorations: () => this.openDecorations(),
         startBank: (predicted) => this.startBank(predicted),
         markHatcheries: (marks) => this.markHatcheries(marks),
