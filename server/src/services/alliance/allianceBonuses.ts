@@ -12,6 +12,7 @@ import {
   type ConstellationRules,
 } from "../../config/AllianceConfig.js";
 import type { AllianceType } from "../../enums/Alliance.js";
+import { BaseType } from "../../enums/Base.js";
 import { parseAllianceDefence, type AllianceDefence } from "../../game-rules/combat/index.js";
 
 /**
@@ -140,6 +141,19 @@ export const allianceDefenceOf = (
     damage: Math.round(bonuses.towerDamage),
     trap: Math.round(bonuses.trapDamage),
   });
+
+/**
+ * Whether a yard under attack defends with its owner's alliance battle stars
+ * (owner, 10 Nov 2026: "battle bonuses against players only, or attacks on
+ * wild monster tribes"). Only a player's main yard or outpost, attacked by a
+ * player, does. A wild monster tribe's yard or camp (no player owner) never
+ * does, and wild monster raids on a member's yard never reach this: they
+ * freeze the yard's own defence only (`raids/raidFlow.ts`, `trojanFight.ts`).
+ * A member attacking a tribe still has their own attack-side stars: loot
+ * (`attackLootPercent`) and the flinger's extra reach.
+ */
+export const allianceDefenceApplies = (yard: { readonly type?: string | null; readonly saveuserid?: number | null }): boolean =>
+  (yard.type === BaseType.MAIN || yard.type === BaseType.OUTPOST) && Number(yard.saveuserid) > 0;
 
 /** {@link allianceDefenceOf} for the alliance the yard's owner is in now. */
 export const allianceDefenceOfOwner = async (

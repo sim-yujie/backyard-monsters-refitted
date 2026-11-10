@@ -38,7 +38,7 @@ import { mr2NeighbourBonusMode } from "../../../../config/MapRoom2Config.js";
 import { loadFriendlyNeighbourCount } from "../../../../services/maproom/v2/neighbourDefence.js";
 import { activeLandFeature } from "../../../../services/maproom/v2/landFeature.js";
 import { underAttackShout } from "../../../../services/alliance/underAttack.js";
-import { allianceDefenceOfOwner } from "../../../../services/alliance/allianceBonuses.js";
+import { allianceDefenceApplies, allianceDefenceOfOwner } from "../../../../services/alliance/allianceBonuses.js";
 import { announceShout } from "../../../../services/alliance/allianceMessages.js";
 import {
   generateNoise,
@@ -276,12 +276,12 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
       ? activeLandFeature(userSave.worldid, save.cell.x, save.cell.y, save.cell.terrainHeight)
       : 0;
   // The owner's alliance battle stars (beta 7): a player's main yard or
-  // outpost only, frozen with the rest, so every replay fights with the same.
-  // None, or every part 0, serves the defence exactly as before.
-  const alliance =
-    (save.type === BaseType.MAIN || save.type === BaseType.OUTPOST) && save.saveuserid > 0
-      ? await allianceDefenceOfOwner(postgres.em, save.saveuserid, save.type === BaseType.OUTPOST)
-      : undefined;
+  // outpost only (`allianceDefenceApplies`), frozen with the rest, so every
+  // replay fights with the same. None, or every part 0, serves the defence
+  // exactly as before.
+  const alliance = allianceDefenceApplies(save)
+    ? await allianceDefenceOfOwner(postgres.em, save.saveuserid, save.type === BaseType.OUTPOST)
+    : undefined;
   const defenderForces = {
     ...served,
     ...(neighbours > 0 && { neighbours }),
