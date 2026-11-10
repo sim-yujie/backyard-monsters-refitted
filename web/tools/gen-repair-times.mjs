@@ -81,10 +81,24 @@ const readTimes = (path, name) => {
 const rows = readTimes(PROPS, "YARD_PROPS.as");
 const infernoRows = readTimes(INFERNO_PROPS, "INFERNOYARDPROPS.as");
 
+/**
+ * This project's own buildings, which no props file holds (`gen-building-costs.mjs`,
+ * "This project's own buildings"). 150, the Observatory: the Map Room's level 2
+ * repair time, 600 s, as its health is the Map Room's level 2 health
+ * (`gen-combat-stats.mjs`); a placeholder the owner tunes later.
+ */
+const PROJECT_ROWS = [{ id: 150, times: [600], note: "this project's Observatory, the Map Room's level 2" }];
+for (const row of PROJECT_ROWS) {
+  if (rows.some((one) => one.id === row.id)) throw new Error(`YARD_PROPS.as already has a repairTime for ${row.id}`);
+  rows.push(row);
+}
+
 /* ── Emit ─────────────────────────────────────────────────────────────────── */
 
 const bodyOf = (table, name) =>
-  table.map((row) => `  ${row.id}: [${row.times.join(", ")}], // ${name}:${row.line}`).join("\n");
+  table
+    .map((row) => `  ${row.id}: [${row.times.join(", ")}], // ${row.note ?? `${name}:${row.line}`}`)
+    .join("\n");
 const body = bodyOf(rows, "YARD_PROPS.as");
 const infernoBody = bodyOf(infernoRows, "INFERNOYARDPROPS.as");
 

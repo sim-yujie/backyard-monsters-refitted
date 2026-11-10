@@ -835,6 +835,10 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
     [5,5,5,5,1,[]],
     [5,5,5,5,1,[]],
   ], [0,1,1,1,1,1]],
+  // 150 Observatory (special) — this project's own building (gen-building-costs.mjs)
+  [150, "Observatory", "special", 2, [
+    [4000000,4000000,4000000,0,129600,[[11,1,2]]],
+  ], [0,1,1,1,1,1,1,1,1,1,1]],
   // 201 bdg_leafpilerake (decoration) — this project's own decoration (gen-building-costs.mjs)
   [201, "bdg_leafpilerake", "decoration", 4, [
     [0,0,0,0,0,[]],

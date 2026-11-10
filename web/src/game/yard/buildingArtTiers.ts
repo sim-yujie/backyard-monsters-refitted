@@ -98,6 +98,7 @@ import type { ArtAnim } from "./buildingArtData";
 import type { YardKind } from "./buildingCostData";
 import type { TurretAim } from "./turretAim";
 import { TURRET_AIM } from "./turretAimData";
+import { CLASSIC_OWN_ART, OBSERVATORY_MODERN_ART } from "./revampBuildings";
 
 /**
  * The towers whose new art players see with the Modern look: the 3D Cannon
@@ -674,7 +675,8 @@ export const BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]>> = {
     { from: 1, top: ["top.3d1@2x.webp", -66, -61], shadow: ["shadow.3d1.jpg", -65, 17], lift: 0,
       damaged: { top: ["top.3d1.damaged@2x.webp", -66, -61], shadow: ["shadow.3d1.damaged.jpg", -66, 19] },
       destroyed: { top: ["top.3d1.destroyed@2x.webp", -66, -25], shadow: ["shadow.3d1.destroyed.jpg", -66, 23] } },
-  ],
+  ],  // 150 Observatory: this project's own (alliances), 3D design C, the lookout deck; it idles (`revampBuildings.ts`)
+  150: OBSERVATORY_MODERN_ART,
 };
 
 /**
@@ -777,7 +779,8 @@ export const hasInfernoTiers = (type: number, kind: YardKind): boolean =>
  * one is approved).
  */
 export const tierArtFor = (type: number, level: number, kind: YardKind = "main"): TierArt | null => {
-  if (!newTowerArt()) return null;
+  // This project's own buildings (the Observatory) have a Classic look of their own; Flash has none to fall back on.
+  if (!newTowerArt()) return kind === "inferno" ? null : pickTier(CLASSIC_OWN_ART[type], level);
   let looks: readonly TierArt[] | undefined;
   if (kind === "inferno" && type in INFERNO_BUILDING_3D_ART) {
     looks = INFERNO_BUILDING_3D_ART[type];
@@ -790,6 +793,11 @@ export const tierArtFor = (type: number, level: number, kind: YardKind = "main")
     if ((inferno || type in TOWER_TIER_ART) && !MODERN_TOWERS.includes(type)) return null;
     looks = inferno ? INFERNO_TOWER_TIER_ART[type] : NEW_ART[type];
   }
+  return pickTier(looks, level);
+};
+
+/** The last of `looks` (lowest first) that starts at or below `level`, or null. */
+const pickTier = (looks: readonly TierArt[] | undefined, level: number): TierArt | null => {
   let chosen: TierArt | null = null;
   for (const tier of looks ?? []) {
     if (tier.from > level) break;

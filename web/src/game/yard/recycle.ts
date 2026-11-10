@@ -48,6 +48,8 @@ export interface RecycleOffer {
 
 const TOWN_HALL_TYPE = 14;
 const MAP_ROOM_TYPE = 11;
+/** The Observatory, the pass into alliances: the server refuses its recycle (`observatory`). */
+export const OBSERVATORY_TYPE = 150;
 const LOCKER_TYPE = 8;
 const HATCHERY_TYPE = 13;
 const HCC_TYPE = 16;
@@ -152,6 +154,9 @@ export const recycleBlock = (
   if (type === TOWN_HALL_TYPE) return { reason: "isTownHall", message: "The Town Hall cannot be recycled." };
   if (type === MAP_ROOM_TYPE) {
     return { reason: "mapRoom", message: "The Map Room cannot be recycled: its level is your map." };
+  }
+  if (type === OBSERVATORY_TYPE) {
+    return { reason: "observatory", message: "The Observatory cannot be recycled: it is your way into alliances." };
   }
   if (building.cB || building.cU || building.cF) {
     return { reason: "busy", message: "Finish or cancel this building's job first." };

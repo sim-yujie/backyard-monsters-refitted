@@ -123,7 +123,10 @@ const span = (from: number, to: number): number[] => {
  */
 const CLASS_MEMBERS: Readonly<Record<BuildingClass, readonly number[]>> = {
   resource: [1, 2, 3, 4],
-  special: [5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 26, 51, 112, 113, 116, 119, 133, 134, 140],
+  special: [
+    5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 26, 51, 112, 113, 116, 119, 133, 134, 140,
+    150,
+  ],
   mushroom: [7],
   wall: [17, 18],
   tower: [20, 21, 22, 23, 25, 115, 118, 128, 129, 130, 132, 136, 137, 138],
@@ -187,10 +190,11 @@ export interface Footprint {
  *
  * Transcribed from `server/src/game-data/buildingFootprints.ts`, itself derived
  * from `docs/specs/base-building.md` §2 and the generated art extract;
- * `yard.test.ts` asserts every row against it. Only the 51 non-decoration types
+ * `yard.test.ts` asserts every row against it. Only the 52 non-decoration types
  * are carried, because a decoration is never a target and never blocks: an
  * absent type falls back to its pathing rectangle and then to the 40 x 40
- * default `buildingFootprints.ts` uses.
+ * default `buildingFootprints.ts` uses. The last, 150, is this project's own
+ * Observatory, 100 x 100 like the Hatchery Control Center.
  */
 const FOOTPRINTS: Readonly<Record<number, Footprint>> = {
   1: { w: 70, h: 70 },
@@ -244,6 +248,7 @@ const FOOTPRINTS: Readonly<Record<number, Footprint>> = {
   138: { w: 130, h: 130 },
   139: { w: 130, h: 130 },
   140: { w: 130, h: 130 },
+  150: { w: 100, h: 100 },
 };
 
 /** The 40 x 40 `DEFAULT_FOOTPRINT` of `server/src/game-data/buildingFootprints.ts`. */

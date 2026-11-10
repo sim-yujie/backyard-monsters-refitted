@@ -88,7 +88,8 @@ export const BUILD_CATALOGUE: readonly BuildCategoryDefinition[] = [
     // The Siege Factory and Lab follow the Champion Cage and Chamber, so those
     // stay beside the monster buildings (#159); among Flash's own Buildings
     // they keep its `order` (after the Hatchery Overdrive, before the Flinger).
-    types: [12, 8, 26, 15, 13, 16, 114, 119, 133, 134, 5, 51, 11, 19, 116, 10, 9],
+    // The Observatory (150, alliances) follows the Map Room 2 it needs.
+    types: [12, 8, 26, 15, 13, 16, 114, 119, 133, 134, 5, 51, 11, 150, 19, 116, 10, 9],
   },
   {
     id: BuildCategory.DEFENSIVE,
