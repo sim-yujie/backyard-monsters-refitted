@@ -11,7 +11,7 @@ from PIL import Image
 HERE = os.path.dirname(os.path.abspath(__file__))
 F = os.path.abspath(os.path.join(HERE, "../../../../server/public/assets/buildings/decorations/fountain"))
 W, H, N, X, Y = 89, 114, 42, -47, -51
-T = 70.0  # a difference of this much (0-255, colour and alpha) counts as fully water
+T = 30.0  # a difference of this much (0-255, colour and alpha) counts as fully water (70 left the spray too faint)
 
 strip = np.asarray(Image.open(os.path.join(F, "anim.png")).convert("RGBA")).astype(np.float32)
 frames = np.stack([strip[:, i * W:(i + 1) * W] for i in range(N)])
