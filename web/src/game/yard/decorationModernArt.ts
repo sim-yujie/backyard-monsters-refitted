@@ -118,11 +118,11 @@ export const DECORATION_MODERN_ART: Readonly<Record<number, readonly TierArt[]>>
   101: modernLook(["big-ben.modern@2x.webp", -30, -103], ["big-ben.modern-shadow.jpg", -24, 3]),
   89: modernLook(["flytrap.modern@2x.webp", -32, -5], ["flytrap.modern-shadow.jpg", -26, 35]),
   // The full set, batch f9: Big: pool, pond, raceway, zen and tea gardens, Fountain.
-  102: modernLook(["pool.modern@2x.webp", -56, 9], ["pool.modern-shadow.jpg", -38, 61]),
+  102: modernLook(["pool.modern@2x.webp", -65, 9], ["pool.modern-shadow.jpg", -48, 61]),
   103: modernLook(["pond.modern@2x.webp", -38, 14], ["pond.modern-shadow.jpg", -29, 60]),
   68: modernLook(["raceway.modern@2x.webp", -47, 0], ["raceway.modern-shadow.jpg", -41, 61]),
-  104: modernLook(["zen-garden.modern@2x.webp", -59, -5], ["zen-garden.modern-shadow.jpg", -45, 58]),
-  106: modernLook(["tea-garden.modern@2x.webp", -60, -38], ["tea-garden.modern-shadow.jpg", -47, 46]),
+  104: modernLook(["zen-garden.modern@2x.webp", -72, -5], ["zen-garden.modern-shadow.jpg", -58, 58]),
+  106: modernLook(["tea-garden.modern@2x.webp", -62, -38], ["tea-garden.modern-shadow.jpg", -52, 46]),
   // The Fountain keeps Flash\'s water, cut from its frames, over the new stone (owner, 10 Nov 2026: option A).
   105: modernUnderFlashAnim(105, ["fountain-stone.modern@2x.webp", -45, -44], ["water.png", -47, -51, 89, 114, 42]),
   // The full set: the two Victory Totem Poles, one look per level, each level the one below plus more.

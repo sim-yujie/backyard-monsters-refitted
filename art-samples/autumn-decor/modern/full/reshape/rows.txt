@@ -1,0 +1,8 @@
+pool: cut (591, 330), Flash 136x74; aspect cut 1.791 Flash 1.838 -> width stretched +2.6% relative to height
+  102: modernLook(["pool.modern@2x.webp", -65, 9], ["pool.modern-shadow.jpg", -48, 61]),
+zen-garden: cut (591, 383), Flash 139x89; aspect cut 1.543 Flash 1.562 -> width stretched +1.2% relative to height
+  104: modernLook(["zen-garden.modern@2x.webp", -72, -5], ["zen-garden.modern-shadow.jpg", -58, 58]),
+tea-garden: cut (409, 399), Flash 123x118; aspect cut 1.025 Flash 1.042 -> width stretched +1.7% relative to height
+  106: modernLook(["tea-garden.modern@2x.webp", -62, -38], ["tea-garden.modern-shadow.jpg", -52, 46]),
+eiffel-tower: cut (753, 1185), Flash 117x184; aspect cut 0.635 Flash 0.636 -> width stretched +0.1% relative to height
+  100: modernLook(["eiffel-tower.modern@2x.webp", -60, -120], ["eiffel-tower.modern-shadow.jpg", -48, 12]),

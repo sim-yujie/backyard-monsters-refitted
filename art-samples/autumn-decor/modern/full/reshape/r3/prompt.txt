@@ -1,0 +1,25 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+The attached images:
+- shape-guide.png: THE SHAPE TO FOLLOW. The old 2009 gold Eiffel Tower yard statue from our game (Backyard Monsters Revamped), placed on magenta at the exact size and position we want back.
+- gold-colour-swatch.png: the top part of our current Modern version: use it ONLY for the gold material and colour (keep exactly this warm orange-gold, do not make it more yellow or more brown).
+- ref-modern-decor.png, ref-modern-close.png: real approved Modern-look art of the game (decorations and buildings): the target finish.
+
+Job: repaint the tower of shape-guide.png in the Modern look, keeping its SHAPE EXACTLY, as if re-rendering the same 3D model with modern materials and lighting.
+
+THE MOST IMPORTANT POINT: SLIM LEGS AND BIG ARCHES. Our last two attempts drew the four legs as thick, chunky blocks with small arches; that is wrong. In the guide:
+- Each of the four legs is a SLIM curved girder: where it meets the ground it is only about one eighth of the tower's total width, and it stays slim all the way up.
+- Between the legs are BIG, TALL, ROUND arch openings: each opening is about as wide as two legs side by side plus a bit, and reaches up almost to the underside of the first platform (the arch top is just below the platform). Much more empty space than solid metal at the bottom.
+- The feet are small square pads, barely wider than the leg.
+- The first platform is a thin, wide slab with a thin decorative edge. Above it a wide four-sided pyramid section with tall open gaps between slim corner ribs, a small thin second platform, then a slender spire with open gaps and a thin needle on top.
+Keep the outline, width, height and position exactly as in the guide.
+
+The Modern look (follow every point):
+1. Clean, modern, stylised 3D render: smooth, slightly bevelled shapes with crisp clean silhouettes; polished gold metal with bright specular highlights. Little surface noise. No cel shading, no brush strokes, no flat colour fills.
+2. Camera exactly as in the guide (front, about 35-40 degrees above, the tower turned so two sides show).
+3. No outline at all. Crisp anti-aliased edges; small bevels catch the light as thin bright lines.
+4. Lighting like a Blender Cycles scene: ONE warm sun lamp from the upper left and a dim cool fill. Left sides bright; right sides and undersides in deep shade (25-35% as bright as the lit side, still readable); ambient occlusion where parts meet.
+5. No ground, base plate or cast shadow.
+
+Output canvas 1024x1536, the tower where it is in the guide. Flat solid magenta (#FF00FF) background, no text, no frame, no drop shadow. No magenta or pink inside the object.
+Save the final PNG as r3.png in the current working directory.
