@@ -83,3 +83,18 @@ describe("alliance.css: an invite row on a phone", () => {
     expect(rulesFor(".alliance__invite-words").join("\n")).toMatch(/min-width:\s*0/);
   });
 });
+
+describe("alliance.css: the member window's tabs and the Territory board", () => {
+  it("widens a member's window past the 560 px every panel stops at (ui.css), so four tabs fit", () => {
+    const wide = rulesFor(".alliance-window:has(.alliance__tabs)").join("\n");
+    expect(wide).toMatch(/width:\s*min\(100%,\s*840px\)/);
+    expect(wide).toMatch(/max-width:\s*min\(100%,\s*840px\)/);
+  });
+
+  it("marks the chosen board with the held-down plate and white words in both painted looks", () => {
+    const chosen = rulesFor(':root[data-skin] .alliance-window .alliance-board__type[aria-pressed="true"]').join("\n");
+    expect(chosen).toMatch(/border-image-source:\s*var\(--skin-button-pressed\)/);
+    expect(chosen).toMatch(/color:\s*#fff/);
+    expect(chosen).toMatch(/text-shadow:[^;]*var\(--skin-button-stroke\)/);
+  });
+});

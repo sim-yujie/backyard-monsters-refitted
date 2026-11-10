@@ -346,6 +346,16 @@ describe("AllianceWindow: my alliance", () => {
     expect(document.querySelector(".alliance-sky__empty, .alliance-sky")).not.toBeNull();
   });
 
+  it("a tap on any tab, its icon included, switches to that tab (a phone shows icons only)", async () => {
+    await open(fakeApi({ mine: vi.fn(() => ok({ alliance: mine(), rejoinAt: null })) }), { progressApi: fakeProgress() });
+    for (const tab of ["constellation", "members", "territory", "overview", "constellation"]) {
+      const icon = document.querySelector<HTMLElement>(`.alliance__tab[data-tab='${tab}'] > :first-child`)!;
+      icon.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await flush();
+      expect(document.querySelector(".alliance__tab[aria-selected='true']")!.getAttribute("data-tab")).toBe(tab);
+    }
+  });
+
   it("lists members Leader first, and gives the Leader rank buttons with a confirm", async () => {
     const api = fakeApi({
       mine: vi.fn(() => ok({ alliance: mine(), rejoinAt: null })),

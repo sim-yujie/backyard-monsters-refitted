@@ -814,19 +814,42 @@
 /* ── Phase 2: tabs, Overview cards, Constellation, Territory ───────────── */
 
 /* A member's window is wider: four tabs (five with Trade, design v5 §7b's
-   792 px row) and the night sky, each tab's word whole on a desktop. */
+   792 px row) and the night sky, each tab's word whole on a desktop. The
+   max-width too: every `.panel` stops at 560 px (ui.css), which kept the
+   window at 560 and pushed Territory off the row (lead, 10 Nov). */
 .alliance-window:has(.alliance__tabs) {
-  width: min(100%, 800px);
+  width: min(100%, 840px);
+  max-width: min(100%, 840px);
 }
 
 /* `.tab-row` (ui.css) shares the row and never cuts a word: the tab is never
-   narrower than icon + word; 15 px words (design v5 §7b). */
+   narrower than icon + word. 14 px words: at 840 px "Constellation" with its
+   icon and the plate's ends needs ~177 px of the ~187 each tab gets. */
 .alliance__tab {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 15px;
+  font-size: 14px;
   white-space: nowrap;
+}
+
+/* A narrower screen (a small laptop, a phone on its side): the plates' ends
+   pinched and the words smaller, so all four still fit with their words. */
+@media (480px < width <= 900px) {
+  :root[data-skin] .panel .alliance__tab.tabs__tab {
+    --skin-tab-cap: 10px;
+
+    font-size: 13px;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Narrower still: icons only, as on a phone; the aria-label and title name
+   each tab. */
+@media (480px < width <= 720px) {
+  .alliance__tab-words {
+    display: none;
+  }
 }
 
 .alliance__tab > * {
@@ -1498,21 +1521,29 @@
   white-space: normal;
 }
 
-/* The board showing: lit in the accent (Modern), an orange plate (Classic). */
-.alliance-window .alliance-board__type[aria-pressed="true"],
-:root[data-skin] .alliance-window .alliance-board__type[aria-pressed="true"] {
+/* The board showing. Plain glass: lit in the accent. Both painted looks: the
+   big plate held down (as an armed catapult's), white words on its own dark
+   outline, so it is another colour from the other two (Modern: orange, not
+   gold; Classic: orange, not green) and its words read (lead, 10 Nov). */
+.alliance-window .alliance-board__type[aria-pressed="true"] {
   border-color: var(--colour-accent);
   background: var(--colour-accent);
   color: var(--colour-accent-text);
   box-shadow: 0 0 0 1px var(--colour-accent);
 }
 
-:root[data-skin="flash"] .alliance-window .alliance-board__type[aria-pressed="true"] {
-  border-color: #9a4a08;
-  background: linear-gradient(#ffc457, #f39a1e 60%, #e07c12);
-  color: #2a1606;
-  text-shadow: 0 1px 0 rgb(255 236 170 / 60%);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 55%), 0 1px 3px rgb(90 42 10 / 45%);
+:root[data-skin] .alliance-window .alliance-board__type[aria-pressed="true"] {
+  border-width: 0 var(--skin-button-cap);
+  border-color: transparent;
+  border-image-source: var(--skin-button-pressed);
+  border-image-slice: 0 var(--skin-button-slice) fill;
+  border-image-width: 0 var(--skin-button-cap);
+  background: none;
+  box-shadow: none;
+  color: #fff;
+  text-shadow:
+    0 2px 0 var(--skin-button-stroke), 2px 0 0 var(--skin-button-stroke), -2px 0 0 var(--skin-button-stroke), 0 -2px 0 var(--skin-button-stroke),
+    1.5px 1.5px 0 var(--skin-button-stroke), -1.5px 1.5px 0 var(--skin-button-stroke), 1.5px -1.5px 0 var(--skin-button-stroke), -1.5px -1.5px 0 var(--skin-button-stroke);
 }
 
 .alliance-board__mine {
