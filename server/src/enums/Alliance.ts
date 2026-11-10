@@ -5,7 +5,19 @@
  */
 export enum AllianceRole {
   LEADER = "leader",
+  OFFICER = "officer",
   MEMBER = "member",
+}
+
+/**
+ * The three alliance types (beta 7 alliances design v5 §4). The leader picks
+ * one; each has its own member and Officer limits (`ALLIANCE_TYPES`).
+ * @enum {string}
+ */
+export enum AllianceType {
+  MIDAS = "midas",
+  CONQUEST = "conquest",
+  FORTRESS = "fortress",
 }
 
 /**
@@ -34,6 +46,11 @@ export enum AllianceMessageType {
   RELATIONSHIP = "relationship",
   POWERUP_ACTIVATED = "powerup_activated",
   POWERUP_PURCHASE = "powerup_purchase",
+  OFFICER = "officer",
+  DEMOTED = "demoted",
+  TYPE_CHANGED = "type_changed",
+  RENAMED = "renamed",
+  TAKEOVER = "takeover",
 }
 
 /**

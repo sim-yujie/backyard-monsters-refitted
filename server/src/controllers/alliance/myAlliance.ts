@@ -2,6 +2,8 @@ import { Status } from "../../enums/StatusCodes.js";
 import { User } from "../../database/models/user.model.js";
 import { getUserAlliance } from "../../services/alliance/allianceAccess.js";
 import { getAllianceDetails } from "../../services/alliance/allianceMember.js";
+import { getTypeSwitchOptions } from "../../services/alliance/allianceSettings.js";
+import { memberLimit, officerLimit } from "../../services/alliance/allianceTypes.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
 /**
@@ -24,6 +26,7 @@ export const myAlliance: KoaController = async (ctx) => {
   }
 
   const { online, avgLevel } = await getAllianceDetails(alliance.id);
+  const typeOptions = await getTypeSwitchOptions(alliance.id, new Date());
 
   ctx.status = Status.OK;
   ctx.body = {
@@ -38,6 +41,12 @@ export const myAlliance: KoaController = async (ctx) => {
       leader_name: alliance.leader_name,
       number_of_members: alliance.stats?.member_count,
       online_members: online,
+      type: alliance.type,
+      member_limit: memberLimit(alliance.type),
+      officer_limit: officerLimit(alliance.type),
+      points: alliance.points,
+      points_spent: alliance.points_spent,
+      type_options: typeOptions,
     },
   };
 };

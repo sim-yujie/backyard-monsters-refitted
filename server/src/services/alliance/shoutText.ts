@@ -1,5 +1,5 @@
-import { POWERUP_LABEL, SHOUT_TEXT, STANCE_LABEL } from "../../config/AllianceConfig.js";
-import { AllianceMessageType, type AllianceStance, type AlliancePowerupType } from "../../enums/Alliance.js";
+import { ALLIANCE_TYPES, POWERUP_LABEL, SHOUT_TEXT, STANCE_LABEL } from "../../config/AllianceConfig.js";
+import { AllianceMessageType, type AllianceStance, type AlliancePowerupType, type AllianceType } from "../../enums/Alliance.js";
 import type { Alliance } from "../../database/models/alliance.model.js";
 
 
@@ -98,6 +98,15 @@ export const composeShout = (type: AllianceMessageType, username: string, body: 
 
     case AllianceMessageType.POWERUP_PURCHASE:
       return createPowerupPurchaseText(username, body);
+
+    case AllianceMessageType.TYPE_CHANGED: {
+      const label = ALLIANCE_TYPES[body as AllianceType]?.label;
+
+      return label ? `${username} made the alliance a ${label}.` : "";
+    }
+
+    case AllianceMessageType.RENAMED:
+      return body ? `${username} renamed the alliance to ${body}.` : "";
 
     case AllianceMessageType.RELATIONSHIP:
       if (!targetAlliance) return "";

@@ -51,6 +51,7 @@ export const createAlliance: KoaController = async (ctx) => {
     leader_name: user.username,
     world_id: worldid,
     map_version: mapVersion,
+    type: data.alliance_type,
   };
 
   const alliance = await postgres.em.transactional(async (em) => {
@@ -77,6 +78,7 @@ export const createAlliance: KoaController = async (ctx) => {
       description: alliance.description,
       leader: user.username,
       world_id: alliance.world_id,
+      type: alliance.type,
     },
   };
 };

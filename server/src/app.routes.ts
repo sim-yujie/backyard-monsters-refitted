@@ -157,6 +157,7 @@ import { recordDebugData } from "./controllers/debug/recordDebugData.js";
 
 import { createAlliance } from "./controllers/alliance/createAlliance.js";
 import { editAlliance } from "./controllers/alliance/editAlliance.js";
+import { changeAllianceType } from "./controllers/alliance/changeAllianceType.js";
 import { leaveAlliance } from "./controllers/alliance/leaveAlliance.js";
 import { myAlliance } from "./controllers/alliance/myAlliance.js";
 import { searchAlliances } from "./controllers/alliance/searchAlliances.js";
@@ -390,6 +391,7 @@ router.get("/api/:apiVersion/attacklogs", verifyUserAuth, attackLogsLimiter, get
 * ──────────────────────────────────────────────── */
 router.post("/alliance/createalliance", verifyUserAuth, allianceCreateEditLimiter, logRequest, createAlliance);
 router.post("/alliance/editalliance", verifyUserAuth, allianceCreateEditLimiter, logRequest, editAlliance);
+router.post("/alliance/changetype", verifyUserAuth, allianceCreateEditLimiter, logRequest, changeAllianceType);
 router.post("/alliance/leavealliance", verifyUserAuth, logRequest, leaveAlliance);
 router.get("/alliance/myalliance", verifyUserAuth, logRequest, myAlliance);
 router.get("/alliance/myalliancemembers", verifyUserAuth, logRequest, myAllianceMembers);

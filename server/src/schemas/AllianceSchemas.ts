@@ -1,6 +1,7 @@
 import z from "zod";
 
-import { AllianceInviteStatus, AllianceStance } from "../enums/Alliance.js";
+import { AllianceInviteStatus, AllianceStance, AllianceType } from "../enums/Alliance.js";
+import { DEFAULT_ALLIANCE_TYPE } from "../config/AllianceConfig.js";
 
 /**
  * Schema to validate alliance creation data.
@@ -9,6 +10,15 @@ export const CreateAllianceSchema = z.object({
   alliance_name: z.string().trim(),
   alliance_image: z.coerce.number().int().min(1).max(41),
   alliance_desc: z.string().trim().min(1).max(255),
+  /** Midas' Council, Conquest Horde or Fortress Legion; Midas when left out. */
+  alliance_type: z.enum(AllianceType).default(DEFAULT_ALLIANCE_TYPE),
+});
+
+/**
+ * Schema for the leader's type switch.
+ */
+export const ChangeAllianceTypeSchema = z.object({
+  alliance_type: z.enum(AllianceType),
 });
 
 /**

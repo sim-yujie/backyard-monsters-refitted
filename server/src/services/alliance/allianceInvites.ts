@@ -3,12 +3,13 @@ import { UniqueConstraintViolationException, type FilterQuery } from "@mikro-orm
 import type { EntityManager, PostgreSqlDriver } from "@mikro-orm/postgresql";
 
 import { AllianceInviteStatus, AllianceInviteType, AllianceMessageType, AllianceRole } from "../../enums/Alliance.js";
-import { MAX_ALLIANCE_MEMBERS } from "../../config/AllianceConfig.js";
 import { Alliance } from "../../database/models/alliance.model.js";
 import { AllianceInvite } from "../../database/models/allianceinvite.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { addAllianceMember, lockAlliance, lockMembership } from "./membership.js";
+import { memberLimit } from "./allianceTypes.js";
+import type { AllianceType } from "../../enums/Alliance.js";
 import {
   allianceFullErr,
   inviteNotPendingErr,
@@ -190,15 +191,16 @@ export const clearPendingInvites = async (userId: number): Promise<number> =>
   });
 
 /**
- * Refuses an alliance that has no room left.
+ * Refuses an alliance that has no room left under its type's member limit.
  *
  * @param {EntityManager} em - EntityManager to count through, so a caller inside a transaction counts within it.
  * @param {number} allianceId - The alliance being filled.
+ * @param {AllianceType} type - Its type, read under the alliance lock when the caller holds one.
  */
-const checkAllianceSpace = async (em: EntityManager<PostgreSqlDriver>, allianceId: number) => {
+const checkAllianceSpace = async (em: EntityManager<PostgreSqlDriver>, allianceId: number, type: AllianceType) => {
   const members = await em.count(User, { alliance_id: allianceId });
 
-  if (members >= MAX_ALLIANCE_MEMBERS) throw allianceFullErr();
+  if (members >= memberLimit(type)) throw allianceFullErr();
 };
 
 /**
@@ -210,7 +212,7 @@ const checkAllianceSpace = async (em: EntityManager<PostgreSqlDriver>, allianceI
  * @returns {Promise<AllianceInvite>} The pending row.
  */
 export const openInvite = async (alliance: Alliance, userId: number, type: AllianceInviteType): Promise<AllianceInvite> => {
-  await checkAllianceSpace(postgres.em, alliance.id);
+  await checkAllianceSpace(postgres.em, alliance.id, alliance.type);
 
   const invite = new AllianceInvite();
   invite.alliance_id = alliance.id;
@@ -282,7 +284,9 @@ export const answerInvite = async (user: User, inviteId: number, status: Allianc
   // "not in an alliance" check twice, and the second join silently moved them
   // (alliance audit, 10 Nov 2026).
   await postgres.em.transactional(async (em) => {
-    if (!(await lockAlliance(em, alliance.id))) throw permissionErr();
+    const locked = await lockAlliance(em, alliance.id);
+
+    if (!locked) throw permissionErr();
 
     if (!isInvite) {
       const leader = await lockMembership(em, user.userid);
@@ -296,7 +300,7 @@ export const answerInvite = async (user: User, inviteId: number, status: Allianc
     if (!membership) throw permissionErr();
     if (membership.alliance_id) throw alreadyInOne();
 
-    await checkAllianceSpace(em, alliance.id);
+    await checkAllianceSpace(em, alliance.id, locked.type);
     await resolveInvite(em, invite, status);
     await addAllianceMember(player, alliance, AllianceRole.MEMBER, AllianceMessageType.JOINED, em);
   });

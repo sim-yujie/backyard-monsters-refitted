@@ -44,13 +44,17 @@ const { changeInviteStatus } = await import("./changeInviteStatus.js");
 const { leaveAlliance } = await import("./leaveAlliance.js");
 const { kickMember } = await import("./kickMember.js");
 const { promoteMember } = await import("./promoteMember.js");
+const { changeAllianceType } = await import("./changeAllianceType.js");
+const { myAlliance } = await import("./myAlliance.js");
 
 const BASE = 993_800;
 const LEADER = BASE + 1;
 const PLAYER = BASE + 2;
 const MEMBER = BASE + 3;
 const OTHER_WORLD = BASE + 4;
-const USERS = [LEADER, PLAYER, MEMBER, OTHER_WORLD];
+/** Members without a yard, only to fill an alliance up: BASE + 20 and on. */
+const FILLERS = Array.from({ length: 60 }, (_, i) => BASE + 20 + i);
+const USERS = [LEADER, PLAYER, MEMBER, OTHER_WORLD, ...FILLERS];
 const WORLD = "00000000-0000-4000-8000-000000993801";
 const WORLD_2 = "00000000-0000-4000-8000-000000993802";
 const NAME = "zz_flow_alliance";
@@ -82,6 +86,17 @@ const addPlayer = async (userid: number, world = WORLD, buildings: Record<string
     [userid, userid, String(userid), world, JSON.stringify(buildings)]
   );
   await sql(`UPDATE bym."user" SET save_basesaveid = ? WHERE userid = ?`, [save!.basesaveid, userid]);
+};
+
+/** Puts `count` yardless members straight into an alliance. */
+const fill = async (allianceId: number, count: number) => {
+  for (const userid of FILLERS.slice(0, count)) {
+    await sql(
+      `INSERT INTO bym."user" (userid, username, email, password, blocked_users, last_seen_at, alliance_id, alliance_role)
+       VALUES (?, ?, ?, 'x', '[]', now(), ?, 'member')`,
+      [userid, `zz_flow_${userid}`, `zz_flow_${userid}@test.invalid`, allianceId]
+    );
+  }
 };
 
 /** Runs a controller as `userid`'s request would, giving its body or the message it was refused with. */
@@ -279,5 +294,63 @@ describe.skipIf(!enabled)("alliance flows through the controllers, on Postgres (
     await foundWithMember();
 
     expect((await call(promoteMember, MEMBER, { userid: MEMBER })).refused).toBeDefined();
+  });
+
+  test("a Midas' Council is full at 15 members", async () => {
+    const allianceId = (await found(LEADER, { alliance_type: "midas" })).alliance.alliance_id;
+    await fill(allianceId, 14);
+
+    expect((await call(requestJoin, PLAYER, { alliance_id: allianceId })).refused).toBe("The alliance is already full.");
+  });
+
+  test("a Conquest Horde still has room at 15", async () => {
+    const allianceId = (await found(LEADER, { alliance_type: "conquest" })).alliance.alliance_id;
+    await fill(allianceId, 14);
+
+    expect((await call(requestJoin, PLAYER, { alliance_id: allianceId })).error).toBe(0);
+    await call(changeInviteStatus, LEADER, { invite_id: await pendingInviteId(PLAYER), status: "accepted" });
+    expect(await membership(PLAYER)).toEqual({ alliance_id: allianceId, role: "member" });
+  });
+
+  test("an accept is refused once the type's limit is reached in between", async () => {
+    const allianceId = (await found(LEADER, { alliance_type: "midas" })).alliance.alliance_id;
+    await fill(allianceId, 13);
+    await call(requestJoin, PLAYER, { alliance_id: allianceId });
+    await sql(
+      `INSERT INTO bym."user" (userid, username, email, password, blocked_users, last_seen_at, alliance_id, alliance_role)
+       VALUES (?, 'zz_flow_late', 'zz_flow_late@test.invalid', 'x', '[]', now(), ?, 'member')`,
+      [FILLERS[59], allianceId]
+    );
+
+    const body = await call(changeInviteStatus, LEADER, { invite_id: await pendingInviteId(PLAYER), status: "accepted" });
+
+    expect(body.refused).toBe("The alliance is already full.");
+  });
+
+  test("switching up is free; switching straight back down waits", async () => {
+    const allianceId = (await found(LEADER, { alliance_type: "midas" })).alliance.alliance_id;
+    await sql(`UPDATE bym.alliance SET points = 100 WHERE id = ?`, [allianceId]);
+
+    const up = await call(changeAllianceType, LEADER, { alliance_type: "fortress" });
+    expect(up).toEqual({ error: 0, type: "fortress", points: 400 });
+
+    const down = await call(changeAllianceType, LEADER, { alliance_type: "midas" });
+    expect(down.refused).toContain("has to wait");
+
+    const mine = await call(myAlliance, LEADER);
+    expect(mine.alliance).toMatchObject({ type: "fortress", member_limit: 60, officer_limit: 6, points: 400 });
+    expect(mine.alliance.type_options.map((one: { refusal: string | null }) => one.refusal)).toEqual([
+      "waitForDownSwitch",
+      "waitForDownSwitch",
+    ]);
+  });
+
+  test("a type smaller than the member count is refused, and only the leader may switch", async () => {
+    const allianceId = await foundWithMember();
+    await sql(`UPDATE bym.alliance SET type = 'conquest' WHERE id = ?`, [allianceId]);
+    await fill(allianceId, 15);
+
+    expect((await call(changeAllianceType, LEADER, { alliance_type: "midas" })).refused).toContain("too many members");
+    expect((await call(changeAllianceType, MEMBER, { alliance_type: "fortress" })).refused).toBeDefined();
   });
 });

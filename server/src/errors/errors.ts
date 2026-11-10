@@ -557,6 +557,22 @@ export const inviteNotPendingErr = () =>
     isClientFriendly: true,
   });
 
+/** Why a type switch was refused (`services/alliance/allianceTypes.ts`), with when a waiting one opens. */
+const TYPE_SWITCH_MESSAGES: Record<string, string> = {
+  sameType: "Your alliance is already that type.",
+  tooManyMembers: "Your alliance has too many members for that type.",
+  tooManyOfficers: "Your alliance has too many Officers for that type. Demote some first.",
+  waitForDownSwitch: "Your alliance changed type recently. Moving to a smaller type has to wait.",
+};
+
+export const allianceTypeSwitchRefusedErr = (reason: string, availableAt: number | null) =>
+  new ClientSafeError({
+    message: TYPE_SWITCH_MESSAGES[reason] ?? "Your alliance cannot change to that type now.",
+    status: Status.CONFLICT,
+    data: { reason, available_at: availableAt },
+    isClientFriendly: true,
+  });
+
 export const allianceFullErr = () =>
   new ClientSafeError({
     message: "The alliance is already full.",

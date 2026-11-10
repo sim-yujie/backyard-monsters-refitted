@@ -1,6 +1,6 @@
 import { EntityManager, PostgreSqlDriver } from "@mikro-orm/postgresql";
 
-import { AllianceMessageType, AllianceRole } from "../../enums/Alliance.js";
+import { AllianceMessageType, AllianceRole, AllianceType } from "../../enums/Alliance.js";
 import { Alliance } from "../../database/models/alliance.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
@@ -36,17 +36,27 @@ export interface Membership {
  * the locks in that one order keeps two such transactions from deadlocking.
  */
 
+/** An alliance row as read under its lock. */
+export interface LockedAlliance {
+  id: number;
+  type: AllianceType;
+}
+
 /**
- * Locks an alliance's row until the transaction ends.
+ * Locks an alliance's row until the transaction ends and reads its type, which
+ * sets the member and Officer limits, from the database.
  *
  * @param {Em} em - The transaction's EntityManager.
  * @param {number} allianceId - The alliance to lock.
- * @returns {Promise<boolean>} False when the alliance no longer exists (disbanded).
+ * @returns {Promise<LockedAlliance | null>} Null when the alliance no longer exists (disbanded).
  */
-export const lockAlliance = async (em: Em, allianceId: number): Promise<boolean> => {
-  const rows = await em.execute<{ id: number }[]>(`SELECT id FROM bym.alliance WHERE id = ? FOR UPDATE`, [allianceId]);
+export const lockAlliance = async (em: Em, allianceId: number): Promise<LockedAlliance | null> => {
+  const [row] = await em.execute<LockedAlliance[]>(
+    `SELECT id, type FROM bym.alliance WHERE id = ? FOR UPDATE`,
+    [allianceId]
+  );
 
-  return rows.length > 0;
+  return row ?? null;
 };
 
 /**
