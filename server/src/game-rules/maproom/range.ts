@@ -80,6 +80,21 @@ export const outpostRange = (level: number | undefined): number => {
   return Math.min(Math.floor(level), MAX_OUTPOST_RANGE);
 };
 
+/**
+ * A flinger's reach with the alliance's extra cells added (beta 7: Conquest's
+ * full Teratorn gives +1). Only a flinger that already reaches gets the extra;
+ * no flinger, or a destroyed one, still reaches nothing. A missing, negative
+ * or fractional extra counts whole cells only, so 0 changes nothing.
+ *
+ * @param reach - The flinger's own reach (`mainYardRange`/`outpostRange`).
+ * @param extra - Extra cells from the alliance (`bonuses.reach`).
+ * @returns Reach in cells.
+ */
+export const withExtraReach = (reach: number, extra: number | undefined): number => {
+  const cells = Number.isFinite(extra) ? Math.max(0, Math.floor(extra!)) : 0;
+  return reach > 0 ? reach + cells : reach;
+};
+
 
 /** The world's hex shape: Flash's flat-top columns, or pointy-top rows. */
 export type HexShape = "flat" | "pointy";

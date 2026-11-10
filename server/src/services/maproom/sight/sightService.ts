@@ -5,6 +5,8 @@ import { User } from "../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { postgres, redis } from "../../../server.js";
 import type { RevealedCell, SightSource } from "../../../game-rules/maproom/sight.js";
+import { withExtraReach } from "../../../game-rules/maproom/range.js";
+import { allianceBonusesOfUser } from "../../alliance/allianceBonuses.js";
 import {
   attackerRevealedCells,
   ownRevealedCells,
@@ -231,13 +233,23 @@ export const getPlayerSight = async (user: User): Promise<PlayerSight> => {
     ? await cachedAllianceSight(user.alliance_id, save.worldid)
     : EMPTY_HALF;
 
+  // Conquest's full Teratorn (+1 attack reach) widens every circle by the
+  // same cells, so a target the flinger now reaches is never fogged. Every
+  // circle here is the player's or an alliance mate's, and mates share the
+  // alliance's bonus. Added after the caches, so a star bought shows at once.
+  const extraReach = user.alliance_id ? (await allianceBonusesOfUser(postgres.em, user.userid)).reach : 0;
+  const widen = (source: SightSource): SightSource =>
+    extraReach > 0 ? { ...source, reach: withExtraReach(source.reach, extraReach) } : source;
+  const ownSources = own.sources.map(widen);
+  const allySources = ally.sources.map(widen);
+
   const revealed = [...own.revealed, ...ally.revealed];
   // The fingerprint is taken on the untagged circles, so `kind` (added only
   // for the minimap's two-tint drawing) can never change `sv` on its own.
-  const sv = sightVersionOf([...own.sources, ...ally.sources], revealed);
+  const sv = sightVersionOf([...ownSources, ...allySources], revealed);
   const sources: TaggedSightSource[] = [
-    ...own.sources.map((source) => ({ ...source, kind: "own" as const })),
-    ...ally.sources.map((source) => ({ ...source, kind: "ally" as const })),
+    ...ownSources.map((source) => ({ ...source, kind: "own" as const })),
+    ...allySources.map((source) => ({ ...source, kind: "ally" as const })),
   ];
 
   return { sv, sources, revealed };

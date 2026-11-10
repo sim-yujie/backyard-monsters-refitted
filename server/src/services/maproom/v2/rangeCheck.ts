@@ -6,6 +6,7 @@ import {
   hexDistance,
   mainYardRange,
   outpostRange,
+  withExtraReach,
 } from "../../../game-rules/maproom/range.js";
 
 /**
@@ -143,17 +144,22 @@ export const hasCoords = (
  *
  * @param {CellCoords} cell - The cell under attack.
  * @param {OutpostEntry[]} outposts - The attacker's owned outposts.
+ * @param {number} extraReach - Extra cells from the attacker's alliance (0 = none).
  * @returns {NearbyOutpost[]} Outposts in the box, with their offsets.
  */
 export const outpostsNearCell = (
   cell: CellCoords,
-  outposts: readonly OutpostEntry[]
+  outposts: readonly OutpostEntry[],
+  extraReach = 0
 ): NearbyOutpost[] => {
   const userOutposts = new Map(outposts.map(([x, y, id]) => [`${x},${y}`, id]));
   const nearby: NearbyOutpost[] = [];
+  // The box grows with the alliance's extra reach, so an outpost that only
+  // reaches with the extra cell is still found.
+  const sweep = withExtraReach(OUTPOST_SWEEP, extraReach);
 
-  for (let dx = -OUTPOST_SWEEP; dx <= OUTPOST_SWEEP; dx++) {
-    for (let dy = -OUTPOST_SWEEP; dy <= OUTPOST_SWEEP; dy++) {
+  for (let dx = -sweep; dx <= sweep; dx++) {
+    for (let dy = -sweep; dy <= sweep; dy++) {
       const neighborX = (cell.x + dx + MapRoom2.WIDTH) % MapRoom2.WIDTH;
       const neighborY = (cell.y + dy + MapRoom2.HEIGHT) % MapRoom2.HEIGHT;
 
@@ -175,6 +181,11 @@ export interface RangePlanInput {
   cell: { x?: number | null; y?: number | null } | null | undefined;
   /** The attacker's owned outposts. */
   outposts: readonly OutpostEntry[] | undefined;
+  /**
+   * Extra cells every flinger of the attacker reaches, from their alliance
+   * (Conquest's full Teratorn: +1). Absent or 0 = the plain rule.
+   */
+  extraReach?: number;
 }
 
 /**
@@ -188,6 +199,7 @@ export const planRangeCheck = ({
   flinger,
   cell,
   outposts = [],
+  extraReach = 0,
 }: RangePlanInput): RangePlan => {
   if (!homebase) return { ok: false, reason: "no-homebase" };
 
@@ -198,14 +210,14 @@ export const planRangeCheck = ({
   // An empty `homebase` array leaves these NaN, and the comparison below is
   // then false, which sends the check to the outposts. That is what the rule
   // has always done, so it is left as it is.
-  const totalRange = mainYardRange(flinger);
+  const totalRange = withExtraReach(mainYardRange(flinger), extraReach);
   const distanceFromMain = getDistanceFromMain(cell.x, cell.y, homeX!, homeY!);
 
   if (totalRange > 0 && distanceFromMain <= totalRange) return { ok: true, via: "main" };
 
   if (outposts.length === 0) return { ok: false, reason: "no-outposts" };
 
-  const nearby = outpostsNearCell(cell, outposts);
+  const nearby = outpostsNearCell(cell, outposts, extraReach);
 
   if (nearby.length === 0) return { ok: false, reason: "no-outposts-near-cell" };
 
@@ -222,17 +234,19 @@ export const planRangeCheck = ({
  * @param {NearbyOutpost[]} nearby - Outposts inside the sweep box.
  * @param {ReadonlyMap<string, number>} flingers - Flinger level per outpost baseid.
  * @param {HexShape} shape - The world's hex shape (`MR2_HEX_SHAPE`).
+ * @param {number} extraReach - Extra cells from the attacker's alliance (0 = none).
  * @returns {RangeVerdict} Whether the target is reachable from an outpost.
  */
 export const checkOutpostRange = (
   nearby: readonly NearbyOutpost[],
   flingers: ReadonlyMap<string, number | undefined>,
-  shape: HexShape = mr2HexShape()
+  shape: HexShape = mr2HexShape(),
+  extraReach = 0
 ): RangeVerdict => {
   for (const { baseid, x, y, dx, dy } of nearby) {
     if (!flingers.has(baseid)) continue;
 
-    const totalRange = outpostRange(flingers.get(baseid));
+    const totalRange = withExtraReach(outpostRange(flingers.get(baseid)), extraReach);
     const target = { x: x - dx, y: y - dy };
 
     if (totalRange > 0 && hexDistance({ x, y }, target, shape) <= totalRange)
@@ -258,7 +272,7 @@ export const checkRange = ({ outpostFlingers, ...plan }: RangeCheckInput): Range
   const planned = planRangeCheck(plan);
 
   if ("pending" in planned)
-    return checkOutpostRange(planned.pending, outpostFlingers);
+    return checkOutpostRange(planned.pending, outpostFlingers, mr2HexShape(), plan.extraReach);
 
   return planned;
 };

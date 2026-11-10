@@ -5,6 +5,7 @@ import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { postgres } from "../../../server.js";
 import { logReport } from "../../base/reportManager.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
+import { allianceBonusesOfUser } from "../../alliance/allianceBonuses.js";
 import {
   checkOutpostRange,
   planRangeCheck,
@@ -124,12 +125,16 @@ export const rangeCheckV2 = async (
   const { homebase, outposts, flinger } = user.save!;
 
   const cell = await resolveAttackCell(options);
+  // Conquest's full Teratorn: every flinger of a member reaches one cell more.
+  const extraReach = user.alliance_id
+    ? (await allianceBonusesOfUser(postgres.em, user.userid)).reach
+    : 0;
 
-  const plan = planRangeCheck({ homebase, flinger, cell, outposts });
+  const plan = planRangeCheck({ homebase, flinger, cell, outposts, extraReach });
 
   const verdict =
     "pending" in plan
-      ? checkOutpostRange(plan.pending, await outpostFlingers(plan.pending))
+      ? checkOutpostRange(plan.pending, await outpostFlingers(plan.pending), undefined, extraReach)
       : plan;
 
   return { cell, verdict };

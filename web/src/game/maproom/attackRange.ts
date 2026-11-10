@@ -2,7 +2,8 @@ import { CellType } from "@/api/types";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import { HexGrid, type OffsetCell } from "@/game/HexGrid";
 import { cellDistance, cellReach, type OwnCell } from "@/game/attack/attackEntry";
-import { mainYardRange } from "@/game/maproom/rules/range";
+import { mainYardRange, withExtraReach } from "@/game/maproom/rules/range";
+import { currentAllianceBonuses } from "@/game/alliance/allianceBonuses";
 
 /**
  * The player's attack range as the map shows it (issue #177): which cells the
@@ -13,7 +14,8 @@ import { mainYardRange } from "@/game/maproom/rules/range";
  * through `attackEntry.ts`), the one the Attack button and the server use, so
  * the line on the map and the button under it agree by construction.
  *
- * Pure: own cells and a Declare War flag in, cells and numbers out.
+ * Pure but for the alliance's extra reach (`currentAllianceBonuses`, set on
+ * every own-yard load): own cells in, cells and numbers out.
  */
 
 /** One of the player's cells whose flinger reaches anything. */
@@ -23,7 +25,7 @@ export interface RangeSource {
   readonly kind: "main" | "outpost";
   /** The flinger's level. */
   readonly flinger: number;
-  /** Cells it reaches, Declare War included while it runs. */
+  /** Cells it reaches, the alliance's extra reach included. */
   readonly reach: number;
 }
 
@@ -48,7 +50,7 @@ export const rangeSources = (
     if (reach > 0) sources.push({ col: own.col, row: own.row, kind, flinger: own.cell.f ?? 0, reach });
   }
   if (!homeSeen && home && typeof home.flinger === "number") {
-    const reach = mainYardRange(home.flinger);
+    const reach = withExtraReach(mainYardRange(home.flinger), currentAllianceBonuses().reach);
     if (reach > 0) {
       sources.push({ ...home.cell, kind: "main", flinger: home.flinger, reach });
     }

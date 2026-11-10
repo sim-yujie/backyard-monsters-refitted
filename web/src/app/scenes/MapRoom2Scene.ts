@@ -78,7 +78,8 @@ import {
   reachTo,
   type RangeSource,
 } from "@/game/maproom/attackRange";
-import { mainYardRange, outpostRange } from "@/game/maproom/rules/range";
+import { mainYardRange, outpostRange, withExtraReach } from "@/game/maproom/rules/range";
+import { currentAllianceBonuses, setCurrentAllianceBonuses } from "@/game/alliance/allianceBonuses";
 import { KitFilter } from "@/game/maproom/cellVisuals";
 import { Bookmarks } from "@/game/maproom/Bookmarks";
 import {
@@ -468,7 +469,8 @@ export class MapRoom2Scene implements Scene {
           return text ? { text, inRange: answer.inRange } : null;
         },
         ownFlinger: (_cell, payload) => {
-          const reach = payload.b === CellType.OUTPOST ? outpostRange(payload.f) : mainYardRange(payload.f);
+          const own = payload.b === CellType.OUTPOST ? outpostRange(payload.f) : mainYardRange(payload.f);
+          const reach = withExtraReach(own, currentAllianceBonuses().reach);
           return { level: payload.f ?? 0, reach };
         },
         ownMoves: (_cell, payload) => ({
@@ -861,6 +863,8 @@ export class MapRoom2Scene implements Scene {
       noteInfo("ownYard", primed ? "primed" : "fetched");
       const base = primed ?? (await timeSpan("own-yard", () => loadOwnYard()));
       this.ownSave = base;
+      // The alliance's extra reach (and prices) from this load, not the last yard visit.
+      setCurrentAllianceBonuses(base.alliancedata);
       // The player's outpost names (beta 7) for the outpost buttons and the move picker.
       seedOutpostLabels(base.outpostlabels);
       // Map Room 2's painted look (MR2_PAINTED_MAP), never in Classic.
@@ -1441,6 +1445,7 @@ export class MapRoom2Scene implements Scene {
       const base = await loadOwnYard();
       if (!this.context) return;
       this.ownSave = base;
+      setCurrentAllianceBonuses(base.alliancedata);
       this.income = new IncomePrediction(base.buildingresources, base.resources);
       this.incomeCap = storageCapOf(base);
       this.clockOffset = base.currenttime - Date.now() / 1000;

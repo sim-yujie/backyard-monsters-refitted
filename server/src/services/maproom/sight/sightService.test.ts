@@ -5,6 +5,7 @@ import { AttackLogs } from "../../../database/models/attacklogs.model.js";
 import { Save } from "../../../database/models/save.model.js";
 import { User } from "../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
+import { AllianceType } from "../../../enums/Alliance.js";
 import { matchesWhere } from "../../../testing/matchesWhere.js";
 import { memoryRedis } from "../../../testing/memoryRedis.js";
 
@@ -19,6 +20,8 @@ type Row = Record<string, unknown>;
 
 let tables: Map<unknown, Row[]>;
 let findCalls: { entity: unknown; where: Row }[];
+/** What `allianceBonusesOfUser`'s one SQL query answers (type and lit stars). */
+let allianceRows: Row[];
 
 const strings = new Map<string, string>();
 const redis = memoryRedis(strings);
@@ -33,6 +36,7 @@ const em = {
     (tables.get(entity) ?? []).find((row) => matchesWhere(row, where)) ?? null,
   // The fixtures below always attach `save` directly, so there is nothing to load.
   populate: async () => {},
+  execute: async () => allianceRows,
 };
 
 mock.module("../../../server.js", () => ({ postgres: { em }, redis }));
@@ -77,6 +81,7 @@ beforeEach(() => {
   strings.clear();
   tables = new Map();
   findCalls = [];
+  allianceRows = [];
 });
 
 afterEach(() => {
@@ -414,5 +419,36 @@ describe("invalidateSightIfFlingerChanged", () => {
 
     expect(await redis.get(playerSightKey(1))).toBeNull();
     expect(await redis.get(allianceSightKey(9))).toBeNull();
+  });
+});
+
+describe("getPlayerSight: alliance extra reach (Conquest's full Teratorn)", () => {
+  test("widens the player's and every mate's circle by one cell, and changes sv", async () => {
+    const p = user(1, { alliance_id: 9 });
+    tables.set(User, [
+      { userid: 1, alliance_id: 9 },
+      { userid: 2, alliance_id: 9 },
+    ]);
+    tables.set(Save, [mainSaveRow(2, { flinger: 3 })]); // mainYardRange(3) = 8
+    const plain = await getPlayerSight(p);
+
+    allianceRows = [{ type: AllianceType.CONQUEST, stars: { teratorn: 5 } }];
+    const wide = await getPlayerSight(p);
+
+    expect(wide.sources).toContainEqual({ x: 101, y: 101, reach: 7, kind: "own" }); // mainYardRange(2) = 6
+    expect(wide.sources).toContainEqual({ x: 102, y: 102, reach: 9, kind: "ally" });
+    expect(wide.sv).not.toBe(plain.sv);
+  });
+
+  test("four lit steps give no extra reach; a flinger 0 circle stays at 0", async () => {
+    const p = user(1, { alliance_id: 9, flinger: 0 });
+    tables.set(User, [{ userid: 1, alliance_id: 9 }]);
+    allianceRows = [{ type: AllianceType.CONQUEST, stars: { teratorn: 5 } }];
+    expect((await getPlayerSight(p)).sources).toContainEqual({ x: 101, y: 101, reach: 0, kind: "own" });
+
+    strings.clear();
+    const q = user(1, { alliance_id: 9 });
+    allianceRows = [{ type: AllianceType.CONQUEST, stars: { teratorn: 4 } }];
+    expect((await getPlayerSight(q)).sources).toContainEqual({ x: 101, y: 101, reach: 6, kind: "own" });
   });
 });

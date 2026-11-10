@@ -1,9 +1,9 @@
 {
   "files": {
     "autobank.ts": "67b88beac9a1e5502b43578ff1dbdbf2f42c22cd68fa9b4382ebfd861941a25b",
-    "range.ts": "7dfb7aa76f95e1722dafc5f95a256766e7286fe593c5645de57d1a409a011b19",
+    "range.ts": "103bda3e0aa0f68f66fc36ff8cb0007d0bc511fd5cc42c7aa5bd0ae5aa34de8c",
     "sight.ts": "d765d17eb7328b9dab16802bc1da1e52063387bea1c4d97fbfd5d819c42d5919"
   },
   "count": 3,
-  "version": "36597008bf721183"
+  "version": "b12d79475a03f48e"
 }

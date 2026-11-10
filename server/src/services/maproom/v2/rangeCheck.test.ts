@@ -227,3 +227,32 @@ describe("planning", () => {
     expect(plan).toEqual({ pending: [{ baseid: "op-near", x: 421, y: 400, dx: 1, dy: 0 }] });
   });
 });
+
+describe("alliance extra reach (Conquest's full Teratorn)", () => {
+  test("the main yard reaches one cell further with +1, and not without it", () => {
+    expect(range({ cell: { x: 400, y: 405 } })).toEqual({ ok: false, reason: "no-outposts" });
+    expect(range({ cell: { x: 400, y: 405 }, extraReach: 1 })).toEqual({ ok: true, via: "main" });
+    expect(range({ cell: { x: 400, y: 406 }, extraReach: 1 })).toEqual({ ok: false, reason: "no-outposts" });
+  });
+
+  test("an outpost reaches one cell further, found by a sweep that grows with it", () => {
+    // Level 4 outpost (4 cells) five rows away: outside the plain sweep box.
+    const at5 = { cell: { x: 420, y: 400 }, outposts: [[420, 405, "op"]] as OutpostEntry[], outpostFlingers: new Map([["op", 4]]) };
+    expect(range(at5)).toEqual({ ok: false, reason: "no-outposts-near-cell" });
+    expect(range({ ...at5, extraReach: 1 })).toEqual({ ok: true, via: "outpost" });
+    expect(outpostsNearCell({ x: 420, y: 400 }, at5.outposts, 1)).toHaveLength(1);
+  });
+
+  test("a flinger that reaches nothing still reaches nothing", () => {
+    expect(range({ flinger: 0, cell: { x: 400, y: 401 }, extraReach: 1 })).toEqual({
+      ok: false,
+      reason: "no-outposts",
+    });
+  });
+
+  test("0, a fraction or a negative changes nothing", () => {
+    for (const extraReach of [0, 0.5, -1]) {
+      expect(range({ cell: { x: 400, y: 405 }, extraReach })).toEqual({ ok: false, reason: "no-outposts" });
+    }
+  });
+});

@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { setCurrentAllianceBonuses } from "@/game/alliance/allianceBonuses";
 import type { PlayerCell } from "@/api/types";
 import { HexGrid, mapRoomGrid } from "@/game/HexGrid";
 import { cellDistance, rosterInRange, type OwnCell } from "@/game/attack/attackEntry";
@@ -148,5 +149,25 @@ describe("reachTo and reachText", () => {
   it("says nothing without a flinger, or for the flinging cell itself", () => {
     expect(reachText(reachTo({ col: 1, row: 1 }, []))).toBeNull();
     expect(reachText(reachTo({ col: 241, row: 207 }, sources))).toBeNull();
+  });
+});
+
+describe("alliance extra reach (Conquest's full Teratorn)", () => {
+  afterEach(() => setCurrentAllianceBonuses(undefined));
+
+  it("adds the cell to every flinger that reaches, the stand-in home included", () => {
+    setCurrentAllianceBonuses({ bonuses: { reach: 1 } });
+    const cells = [own(230, 215, 3, 3), own(250, 200, 3, 0)];
+    expect(rangeSources(cells).map((s) => s.reach)).toEqual([4]);
+    expect(rangeSources([], { cell: { col: 241, row: 207 }, flinger: 4 })[0]?.reach).toBe(11);
+    expect(rangeSources([], { cell: { col: 241, row: 207 }, flinger: 0 })).toEqual([]);
+  });
+
+  it("lets the Attack gate reach one cell further, as the overlay shows", () => {
+    const yard = own(400, 400, 2, 1); // reach 4
+    const target = { col: 400, row: 405 };
+    expect(rosterInRange(target, [yard], {}).flingerLevel).toBe(0);
+    setCurrentAllianceBonuses({ bonuses: { reach: 1 } });
+    expect(rosterInRange(target, [yard], {}).flingerLevel).toBe(1);
   });
 });

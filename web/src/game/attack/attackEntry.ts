@@ -15,7 +15,9 @@ import {
   hexDistance,
   mainYardRange,
   outpostRange,
+  withExtraReach,
 } from "@/game/maproom/rules/range";
+import { currentAllianceBonuses } from "@/game/alliance/allianceBonuses";
 import { storageCapOf } from "./attackerStorage";
 import type {
   AttackRoster,
@@ -41,10 +43,12 @@ import type {
 
 /**
  * How far one of the player's own cells can fling: its flinger's reach
- * (`game/maproom/rules/range.ts`, the rule the server measures with too).
+ * (`game/maproom/rules/range.ts`, the rule the server measures with too),
+ * plus the alliance's extra cells (Conquest's full Teratorn: +1), which the
+ * server's range check adds the same way (`rangeCheck.ts`).
  */
-export const cellReach = (cell: PlayerCell): number =>
-  cell.b === CellType.OUTPOST ? outpostRange(cell.f) : mainYardRange(cell.f);
+export const cellReach = (cell: PlayerCell, extra: number = currentAllianceBonuses().reach): number =>
+  withExtraReach(cell.b === CellType.OUTPOST ? outpostRange(cell.f) : mainYardRange(cell.f), extra);
 
 /**
  * Hex steps between two cells on the wrapping world: the distance the

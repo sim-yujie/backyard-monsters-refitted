@@ -2,7 +2,7 @@
  * The player's alliance strengths and weaknesses, as the server sends them on
  * an own main-yard load (`alliancedata.bonuses`, server
  * `services/alliance/allianceBonuses.ts`). Every value is a percent change
- * (positive = more); a player in no alliance has none.
+ * (positive = more) except `reach`, in cells; a player in no alliance has none.
  */
 export interface AllianceBonusesView {
   readonly production: number;
@@ -13,6 +13,8 @@ export interface AllianceBonusesView {
   readonly kitCost: number;
   readonly outpostHatchCost: number;
   readonly fortifyCost: number;
+  /** Extra cells every flinger reaches (Conquest's full Teratorn: 1); not a percent. */
+  readonly reach: number;
 }
 
 const KEYS: readonly (keyof AllianceBonusesView)[] = [
@@ -24,6 +26,7 @@ const KEYS: readonly (keyof AllianceBonusesView)[] = [
   "kitCost",
   "outpostHatchCost",
   "fortifyCost",
+  "reach",
 ];
 
 export const NO_BONUSES: AllianceBonusesView = Object.freeze(
