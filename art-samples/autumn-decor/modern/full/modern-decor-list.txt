@@ -1,0 +1,14 @@
+assets/buildings/decorations/flowers/red-flowers.modern@2x.webp
+assets/buildings/decorations/bonsaitree/bonsai-tree.modern@2x.webp
+assets/buildings/decorations/graveyardtombstone/tombstone.modern@2x.webp
+assets/buildings/decorations/outhouse/outhouse.modern@2x.webp
+assets/buildings/decorations/pumpkins/dave-pumpkin.modern@2x.webp
+assets/buildings/decorations/statue-soccer/soccer-trophy.modern@2x.webp
+assets/buildings/decorations/statue-liberty/statue-liberty.modern@2x.webp
+assets/buildings/decorations/tikitorch/tiki-torch.modern@2x.webp
+assets/buildings/decorations/autumn/leaf-pile-rake.modern@2x.webp
+assets/buildings/decorations/autumn/apple-barrel.modern@2x.webp
+assets/buildings/decorations/autumn/pie-stump.modern@2x.webp
+assets/buildings/decorations/autumn/harvest-wheelbarrow.modern@2x.webp
+assets/buildings/decorations/autumn/turkey-topiary.modern@2x.webp
+assets/buildings/decorations/autumn/autumn-maple.modern@2x.webp

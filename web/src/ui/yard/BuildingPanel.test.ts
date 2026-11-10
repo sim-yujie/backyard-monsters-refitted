@@ -243,11 +243,67 @@ describe("BuildingPanel: a tower at rest", () => {
       for (const field of ["Type id", "Footprint", "Position", "Building id", "Art", "save omits"]) {
         expect(text).not.toContain(field);
       }
-      expect(text).toContain("Level4");
-      expect(text).toContain("Health");
+      expect(text).toContain("FortificationNone");
     } finally {
       setDevDetails(null);
     }
+  });
+});
+
+/**
+ * Details hold only what the panel does not already show (owner, 10 Nov: an
+ * upgrading Flinger's Details repeated "Level 2" from the title, "Health
+ * 8,000 / 8,000" from the heart row and "Upgrading 7h 10m" from the job box).
+ */
+describe("BuildingPanel: Details repeat nothing shown above them", () => {
+  const detailTerms = (root: HTMLElement): string[] =>
+    [...root.querySelectorAll(".building-panel__details dt")].map((term) => term.textContent ?? "");
+  const asPlayer = <T,>(run: () => T): T => {
+    setDevDetails(false);
+    try {
+      return run();
+    } finally {
+      setDevDetails(null);
+    }
+  };
+
+  it("an upgrading building: no Level, Health or Upgrading row, only Fortification", () => {
+    asPlayer(() => {
+      const { element } = setup([HALL, building(2, 20, 4, { cU: 5_400 })], 2);
+      expect(element.querySelector(".panel__title")?.textContent).toMatch(/Level 4$/);
+      expect(infoLines(element).some((line) => line.startsWith("Health"))).toBe(true);
+      expect(element.querySelector(".building-job .building-panel__heading")?.textContent).toMatch(/^Upgrading/);
+      expect(detailTerms(element)).toEqual(["Fortification"]);
+      expect(element.querySelector<HTMLElement>(".building-panel__details")!.hidden).toBe(false);
+    });
+  });
+
+  it("a building under construction: no 'Still being built' or Building row", () => {
+    asPlayer(() => {
+      const { element } = setup([HALL, building(2, 20, 0, { cB: 20 })], 2);
+      expect(element.textContent).toContain("Under construction");
+      const terms = detailTerms(element);
+      expect(terms).not.toContain("Level");
+      expect(terms).not.toContain("Building");
+    });
+  });
+
+  it("a building being repaired: no Repairing or Health row", () => {
+    asPlayer(() => {
+      const { element } = setup([HALL, building(2, 20, 4, { hp: 8_820, rE: 1 })], 2);
+      expect(element.querySelector(".building-repair .building-panel__heading")?.textContent).toBe("Repairing");
+      const terms = detailTerms(element);
+      expect(terms).not.toContain("Repairing");
+      expect(terms).not.toContain("Health");
+    });
+  });
+
+  it("a foreign yard's building still says its level is hidden (its title has no level)", () => {
+    asPlayer(() => {
+      const { element } = setup([building(1, 14, 5)], 1, { own: false });
+      expect(element.querySelector(".panel__title")?.textContent).toBe("Town Hall");
+      expect(detailTerms(element)).toContain("Level");
+    });
   });
 });
 

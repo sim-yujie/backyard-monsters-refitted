@@ -1,0 +1,2 @@
+eiffel-tower: cut (750, 1180), Flash 117x184; aspect cut 0.636 Flash 0.636 -> width stretched +0.0% relative to height
+  100: modernLook(["eiffel-tower.modern@2x.webp", -60, -120], ["eiffel-tower.modern-shadow.jpg", -48, 11]),

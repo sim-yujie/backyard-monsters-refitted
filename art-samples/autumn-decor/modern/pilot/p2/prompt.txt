@@ -1,0 +1,24 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+The attached images:
+- ref-modern-close.png and ref-modern-all.png: the REAL "Modern look" yard buildings of our game (Backyard Monsters Revamped), clean stylised 3D renders: Twig Snapper, Catapult, wooden crate Block, Goo Factory, Putty Squisher, Pebble Shiner, Academy (note its polished gold trim), towers and more.
+- ref-modern-autumn.png: six yard decorations we already redrew in the Modern look and like. Match their finish.
+- ref-classic-p2.png: three OLD tall yard decorations from the 2009 Flash game (Classic look), numbered 1-3.
+
+Job: redraw EACH of the three in ref-classic-p2.png in the MODERN look, so they sit naturally beside the Modern buildings and look made by the same 3D artist with the same software. Each must be clearly the SAME object as its Classic version: same parts, same overall shape and proportions, same colours, same facing - only the rendering style changes.
+
+The Modern look (follow every point):
+1. Clean, modern, stylised 3D renders like the attached buildings, not the soft, grainy, dusty old look. Smooth, slightly bevelled shapes with crisp clean silhouettes; clean materials: polished gold and metal with bright specular highlights, smooth dark wood. Little surface noise. No cel shading, no brush strokes, no flat colour fills.
+2. Camera exactly like the buildings: seen from the front, about 35-40 degrees above, so the tops of bases show clearly.
+3. No outline at all. Crisp anti-aliased edges; small bevels catch the light as thin bright lines.
+4. LIGHTING: like a Blender Cycles scene with ONE warm sun lamp from the upper left and only a dim cool fill light. Lit faces on the upper left; the right side of every object clearly in deep but readable shade; ambient occlusion where parts meet. Strong 3D form. Not evenly front-lit.
+5. Colour: rich but slightly deep tones like the buildings; polished gold like the Academy's trim, not neon yellow, no glow.
+6. No ground, grass or cast shadow under any object.
+
+The three, each in its own tall cell, left to right in this order:
+- Column 1: STATUE OF LIBERTY TROPHY: the whole Statue of Liberty figure (raised torch in the right hand, crown, flowing robe, tablet held in the left arm) in polished gold, standing on a square stepped gold plinth; plinth turned so two sides show. Tall and slim: the figure about four times as tall as the plinth.
+- Column 2: FLAGPOLE: a plain thin silver-white metal flagpole with a small polished gold ball on top, standing straight up; NO flag, no base. Very thin and tall (about 20 times as tall as it is wide).
+- Column 3: TIKI TORCH: a straight thin dark brown wooden pole with a few small dry grass strands tied around it near the top, holding a short cylindrical bamboo/rust-orange torch cup at the top, open at the top; NO flame (the game adds the fire). Thin and tall.
+
+Canvas 1536x1024 split into 3 columns of equal tall cells (512x1024 each). One object standing upright in each cell, centred, about 80% of the cell height for the statue and the flagpole, about 55% for the tiki torch, nothing touching a cell edge. The whole sheet on a flat solid magenta (#FF00FF) background, no grid lines, no text, no labels, no frame, no drop shadows.
+Save the final PNG as pilot-p2.png in the current working directory.

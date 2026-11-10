@@ -212,6 +212,8 @@ export class BuildingPanel {
   private readonly unlocks: HTMLElement;
   /** The info rows the next level changes, drawn beside Upgrade; none when there is no upgrade to offer. */
   private gains: readonly InfoRow[] = [];
+  /** Whether the info rows carry the health row (the heart), so Details need not. */
+  private infoHasHealth = false;
   private readonly actions: HTMLElement;
   /** Holds a Monster Bunker's controls while they are open (`BunkerPanel.ts`). */
   private readonly bunkerSlot: HTMLElement;
@@ -745,6 +747,8 @@ export class BuildingPanel {
     // button instead (`upgradeGains`); these rows then read as they are now.
     this.gains = this.yard && panelModel(building, this.yard.store).upgrade ? rows.filter((row) => row.next) : [];
     const withNext = this.gains.length === 0;
+    const healthLabel = buildingHealthLabel(building.type);
+    this.infoHasHealth = rows.some((row) => row.label === healthLabel);
     this.info.replaceChildren();
     for (const row of rows) {
       const term = document.createElement("dt");
@@ -1778,19 +1782,25 @@ export class BuildingPanel {
     const dev = devDetails();
     // Someone else's yard keeps its level, and what would tell it, to itself.
     const foreign = this.yard === undefined;
+    // Details hold only what the panel does not already show above them
+    // (owner, 10 Nov: an upgrading Flinger's Details repeated its level, its
+    // health and its countdown). Read after the rest of the panel is drawn.
+    const shown = this.shownAbove(building);
     if (dev) this.add("Type id", String(building.type));
-    this.add(
-      "Level",
-      building.level === 0
-        ? dev
-          ? "0 — foundation, still building"
-          : "Still being built"
-        : foreign
-          ? "Hidden"
-          : dev && building.raw.l === undefined
-            ? "1 (the save omits the level at 1)"
-            : String(building.level),
-    );
+    if (!shown.level) {
+      this.add(
+        "Level",
+        building.level === 0
+          ? dev
+            ? "0 — foundation, still building"
+            : "Still being built"
+          : foreign
+            ? "Hidden"
+            : dev && building.raw.l === undefined
+              ? "1 (the save omits the level at 1)"
+              : String(building.level),
+      );
+    }
 
     if (dev) {
       const [width, height] = building.footprint;
@@ -1805,11 +1815,39 @@ export class BuildingPanel {
         building.fortification === 0 ? "None" : `Level ${building.fortification}`,
         building.fortification > 0 ? "is-info" : undefined,
       );
-      this.addHealth(building);
-      this.addCountdown(building);
+      if (!shown.health) this.addHealth(building);
+      if (!shown.countdown) this.addCountdown(building);
     }
-    this.addProduction(building);
+    this.addProduction(building, shown.repairing);
     if (dev) this.addArt(building);
+    // Nothing left to tell: no fold. (Housing and the cage tabs hide it too.)
+    if (this.facts.childElementCount === 0) this.details.hidden = true;
+  }
+
+  /**
+   * Which of Details' facts the panel already shows above them: the level
+   * in the title ("Flinger · Level 2"), a Housing's chip or the kind line
+   * ("Under construction"); health on the heart row; the countdown in the
+   * job block ("Upgrading to 3 · 7h 11m"); a repair in the repair block.
+   */
+  private shownAbove(building: YardBuilding): {
+    level: boolean;
+    health: boolean;
+    countdown: boolean;
+    repairing: boolean;
+  } {
+    const own = this.yard !== undefined;
+    const housing = this.isHousing(building);
+    const levelInTitle = own && building.level > 0 && !housing;
+    const underConstruction =
+      own && building.level === 0 && !this.kind.hidden && this.kindLabel.textContent === "Under construction";
+    const actions = !this.actions.hidden;
+    return {
+      level: levelInTitle || (housing && !this.chip.hidden) || underConstruction,
+      health: this.infoHasHealth && !this.info.hidden,
+      countdown: actions && this.jobRefs !== null,
+      repairing: actions && this.repairView !== null,
+    };
   }
 
   private addHealth(building: YardBuilding): void {
@@ -1865,11 +1903,13 @@ export class BuildingPanel {
    * disabled "Auto-Banking" there (`client/scripts/BUILDINGINFO.as:130-131`,
    * `:384-385`), and the server pays them into the main pool as they produce.
    */
-  private addProduction(building: YardBuilding): void {
+  private addProduction(building: YardBuilding, repairShown: boolean): void {
     const store = this.yard?.store;
+    const repairing = building.raw.rE === 1 && !repairShown;
     if (store?.kind === "outpost") {
-      this.add("Banking", AUTO_BANKING, "is-info");
-      if (building.raw.rE === 1) this.add("Repairing", "Yes", "is-info");
+      // An own outpost's harvester says Auto-banking in a note above (and
+      // nothing else on an outpost banks), so Details does not repeat it.
+      if (repairing) this.add("Repairing", "Yes", "is-info");
       return;
     }
     const now = store ? harvesterNow(building.raw, store.save, store.now()) : null;
@@ -1878,7 +1918,7 @@ export class BuildingPanel {
     } else if (typeof building.raw.st === "number") {
       this.add("Stored", formatAmount(building.raw.st));
     }
-    if (building.raw.rE === 1) this.add("Repairing", "Yes", "is-info");
+    if (repairing) this.add("Repairing", "Yes", "is-info");
   }
 
   /** Which picture this building is showing, which is the first thing to check

@@ -430,6 +430,7 @@ export class MapRenderer {
 
   /** Feeds a freshly loaded zone into the raster and invalidates its chunk. */
   applyZone(zone: ZoneRecord): void {
+    if (this.destroyed) return;
     this.raster.applyZone(zone);
     this.painted?.applyZone(zone);
     this.classicFog?.applyZone(zone);

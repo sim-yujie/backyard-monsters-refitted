@@ -457,6 +457,21 @@ describe("ZoneStore", () => {
     expect(store.pendingRequests).toBe(0);
   });
 
+  it("keeps a zone that lands after stop in the cache but does not announce it (live drawHighlight error)", async () => {
+    const held = heldFetcher();
+    const onZone = vi.fn();
+    const store = new ZoneStore({ fetcher: held.fetcher, now: time.now, maxConcurrent: 1, onZone });
+
+    store.ensureVisible({ minCol: 700, maxCol: 739, minRow: 340, maxRow: 379 });
+    void store.pump();
+    store.stop();
+    held.open[0]!();
+    await settle();
+
+    expect(store.loadedZones).toBe(1);
+    expect(onZone).not.toHaveBeenCalled();
+  });
+
   it("can leave the chaining off, so one pump starts exactly one round", async () => {
     const held = heldFetcher();
     const store = new ZoneStore({ fetcher: held.fetcher, now: time.now, maxConcurrent: 1, pumpOnSettle: false });

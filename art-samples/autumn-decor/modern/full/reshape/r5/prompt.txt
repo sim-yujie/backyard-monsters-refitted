@@ -1,0 +1,22 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+The attached images:
+- r4-previous.png: our last Modern try of the gold Eiffel Tower yard statue. Its finish, colour, lighting and details are APPROVED (smooth polished gold, recessed panels down the legs, one thin wide first platform, pyramid with open gaps, thin second platform, slender spire). Keep all of that.
+- fill-the-red-line.png: what is still wrong. A = that last try with the RED target outline drawn over it. B = the old 2009 original (the shape guide) with the same red outline. The red line is the exact silhouette we need.
+- shape-guide.png: the old 2009 original on magenta, at the exact size and position we want back.
+- gold-colour-swatch.png: use ONLY for the gold colour (keep this warm orange-gold).
+- ref-modern-decor.png, ref-modern-close.png: real approved Modern-look art of the game: the target finish.
+
+Job: paint r4-previous.png again with the SAME finish and details, but with the legs filling the red outline exactly. The upper half (first platform, pyramid, second platform, spire) already fits the red line: keep it as it is.
+
+WHAT MUST CHANGE (the legs only):
+1. The FRONT leg is too thin in the last try. Make it a broad pier, about 30% wider than in r4-previous.png: just below the first platform it is about one third of the platform's width, and it narrows only a little down to its foot. Its foot is the same width as the leg bottom or just slightly wider, as in the guide.
+2. The arch openings are too tall and too wide in the last try. Make them smaller: the top of each arch sits clearly lower, leaving a thick band of solid leg/girder under the first platform (as in the guide B), and the openings are narrower because the front leg is wider.
+3. The two side legs are slightly thicker than in the last try (about 10% wider), same lean, same feet position.
+4. Feet stay small square blocks, as in the last try; the outer edges of all three feet stay exactly where they are now.
+Keep the recessed panel down each leg's front face (wider now, to suit the wider leg).
+
+Everything else exactly like r4-previous.png: camera, size, position on the canvas, materials, colour, lighting (one warm sun lamp from the upper left, dim cool fill, right sides and undersides in deep shade, ambient occlusion where parts meet), no outline, no ground, no cast shadow.
+
+Output canvas 1024x1536, the tower exactly where it is in r4-previous.png. Flat solid magenta (#FF00FF) background, no text, no frame, no drop shadow, no red line. No magenta or pink inside the object.
+Save the final PNG as r5.png in the current working directory.

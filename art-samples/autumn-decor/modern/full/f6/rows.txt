@@ -1,0 +1,6 @@
+  58: modernLook(["camping-tent.modern@2x.webp", -30, -12], ["camping-tent.modern-shadow.jpg", -24, 20]),
+  63: modernLook(["hammock.modern@2x.webp", -22, -8], ["hammock.modern-shadow.jpg", -16, 18]),
+  64: modernLook(["lawn-chair.modern@2x.webp", -22, -14], ["lawn-chair.modern-shadow.jpg", -19, 17]),
+  108: modernLook(["cube-unsolved.modern@2x.webp", -18, -22], ["cube-unsolved.modern-shadow.jpg", -14, 7]),
+  109: modernLook(["cube-solved.modern@2x.webp", -18, -22], ["cube-solved.modern-shadow.jpg", -14, 7]),
+  60: modernLook(["gnome-red.modern@2x.webp", -10, -31], ["gnome-red.modern-shadow.jpg", -9, 1]),
