@@ -109,7 +109,12 @@
 
 /* ── Rooms: Global and the player's country room (owner 3 Nov 2026) ── */
 
+/* The row is a `.tab-row` (ui.css), a sideways scroller: as a flex item its
+   floor is 0, so the phone's height-capped box squeezed it to a sliver under
+   the lines (alliance chat, 10 Nov). It keeps its full height; the lines
+   give way instead. */
 .chat-box__rooms {
+  flex: none;
   display: flex;
   gap: var(--space-1);
   padding-bottom: var(--space-1);
