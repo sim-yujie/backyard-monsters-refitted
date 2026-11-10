@@ -2062,12 +2062,27 @@
   width: 20px;
 }
 
-.trade-reason {
+/* What a request is for: the building's picture or monster's portrait, and its name (owner 10 Nov). */
+.trade-for {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--colour-text-secondary);
-  font-size: var(--text-xs);
+  min-width: 0;
+  color: var(--colour-text-strong);
+  font-size: var(--text-sm);
+}
+
+.trade-for__pic {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  object-fit: contain;
+}
+
+.trade-for__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .trade-recent__line {
@@ -2175,8 +2190,7 @@
 }
 
 .trade-amount__quick.is-on,
-.trade-choices__pick.is-on,
-.trade-reasons__pick.is-on {
+.trade-for-pick__tab.is-on {
   border-color: var(--colour-accent);
   background: var(--colour-accent-soft);
   color: var(--colour-text-strong);
@@ -2194,22 +2208,78 @@
   text-align: right;
 }
 
-.trade-reasons,
-.trade-choices {
+/* Ask's "For": Building / Monster, then the player's own as pictures in a fixed-height strip. */
+.trade-for-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.trade-for-pick__head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
 }
 
-.trade-reasons__label {
+.trade-for-pick__label {
   color: var(--colour-text-secondary);
 }
 
-.trade-reasons__pick {
+.trade-for-pick__tab {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+.trade-for-pick__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: var(--space-1);
+  /* Two rows of pictures; more scroll inside, so the sheet keeps its height. */
+  height: 136px;
+  overflow-y: auto;
+  padding: 2px;
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.trade-for-pick__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 64px;
+  padding: 2px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-control);
+  color: var(--colour-text-strong);
+  font: inherit;
+  cursor: pointer;
+}
+
+.trade-for-pick__item.is-on {
+  border-color: var(--colour-accent);
+  background: var(--colour-accent-soft);
+}
+
+.trade-for-pick__pic {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.trade-for-pick__lv {
+  position: absolute;
+  right: 2px;
+  bottom: 1px;
+  padding: 0 3px;
+  border-radius: var(--radius-sm, 4px);
+  background: rgb(0 0 0 / 65%);
+  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: 700;
 }
 
 .trade-flow {
@@ -2375,14 +2445,6 @@
 
   .trade-bars {
     grid-template-columns: 1fr;
-  }
-
-  /* The four "For" buttons: the icon above the word, so all four fit. */
-  .trade-reasons__pick {
-    flex: 1 1 0;
-    flex-direction: column;
-    min-width: 0;
-    padding-inline: 4px;
   }
 
   .trade-amount__box {

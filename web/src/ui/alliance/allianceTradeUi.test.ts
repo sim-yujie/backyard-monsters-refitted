@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AllianceTradeApi, TradeRequest, TradeStorage, TradeView } from "@/api/allianceTrade";
-import { arriveFor, askCap, carryCap, fitToRoom, landing, sendCap, sentFor } from "@/game/alliance/tradeRules";
-import { TRADE_TEXT, TradeTab, type TradeHost } from "./allianceTradeUi";
+import { arriveFor, askCap, carryCap, fitToRoom, giveCheck, landing, sendCap, sentFor } from "@/game/alliance/tradeRules";
+import { TRADE_TEXT, TradeTab, tradeForName, type TradeHost } from "./allianceTradeUi";
 
-/** The Trade tab and its sheets (design v5 §12b) against a stand-in for the routes. */
+/**
+ * The Trade tab and its sheets (design v5 §12b; owner 10 Nov 2026: Give is
+ * 1:1 with 10% lost, no amount choices; a request says which building or
+ * monster it is for) against a stand-in for the routes.
+ */
 
 const ok = <T extends object>(value: T) => Promise.resolve({ ok: true as const, ...value });
 const flush = async (): Promise<void> => {
@@ -19,7 +23,7 @@ const request = (extra: Partial<TradeRequest> = {}): TradeRequest => ({
   username: "PebbleKing",
   role: "member",
   amounts: { r3: 1_500_000 },
-  reason: "upgrade",
+  for: { kind: "building", type: 14, level: 7 },
   created_at: 0,
   expires_at: 1_000_000 + 3_600,
   status: "open",
@@ -32,6 +36,7 @@ const view = (extra: Partial<TradeView> = {}): TradeView => ({
   today: { sendsLeft: 1, receivesLeft: 1, asksLeft: 3, newDayIn: 6 * 3600 },
   rules: { loss: 0.1, capShare: 0.1, requestSeconds: 86_400 },
   me: storage(5_000_000),
+  choices: { buildings: [{ type: 14, level: 7 }, { type: 21, level: 4 }], monsters: ["C1", "C2"] },
   myRequest: null,
   requests: [request()],
   recent: [{ from: "Mira", to: "Thornback", arrived: { r4: 800_000 }, at: 1_000_000 - 7_200 }],
@@ -78,77 +83,111 @@ describe("trade sums (web preview = server)", () => {
     expect(arriveFor(2_222_223)).toBe(2_000_000);
     expect(sentFor(2_000_000)).toBe(2_222_223);
     expect(carryCap(20_000_000, 50_000_000)).toBe(2_000_000);
-    expect(askCap(storage(19_500_000), "r1")).toBe(500_000);
-    expect(askCap(storage(0), "r1")).toBe(1_800_000);
+    // An ask is what a mate gives: its 90% must fit the room.
+    expect(askCap(storage(19_500_000), "r1")).toBe(555_556);
+    expect(arriveFor(555_556)).toBe(500_000);
+    expect(askCap(storage(0), "r1")).toBe(2_000_000);
+    expect(askCap(storage(21_000_000), "r1")).toBe(0);
     expect(sendCap(storage(500_000), storage(0), "r2")).toBe(500_000);
     expect(landing(1_000_000, storage(19_500_000), "r3")).toEqual({ arrive: 900_000, lands: 500_000, lost: 400_000 });
     const fit = fitToRoom(storage(19_500_000), "r3");
     expect(arriveFor(fit)).toBe(500_000);
     expect(arriveFor(fit + 1)).toBeGreaterThan(500_000);
+    expect(fitToRoom(storage(20_000_000), "r3")).toBe(0);
+  });
+
+  it("give is all of it or nothing: what stops it", () => {
+    expect(giveCheck({ r3: 1_500_000 }, storage(5_000_000), storage(0))).toEqual({ short: [], overCap: [] });
+    expect(giveCheck({ r3: 1_500_000 }, storage(1_000_000), storage(0))).toEqual({ short: ["r3"], overCap: [] });
+    expect(giveCheck({ r3: 1_500_000 }, storage(5_000_000, 10_000_000), storage(0))).toEqual({ short: [], overCap: ["r3"] });
   });
 });
 
 describe("TradeTab", () => {
-  it("shows today, the ask button, mates asking with Give, and recent trades", async () => {
+  it("shows today, the ask button, mates asking with what for and Give, and recent trades", async () => {
     await mount(fakeApi());
     const text = document.body.textContent ?? "";
     expect(text).toContain(TRADE_TEXT.ask);
     expect(text).toContain("PebbleKing");
     expect(text).toContain("1.5M");
+    expect(text).toContain(tradeForName({ kind: "building", type: 14, level: 7 }));
+    expect(tradeForName({ kind: "building", type: 14, level: 7 })).toMatch(/Town Hall L7/);
+    expect(document.querySelector(".trade-request .trade-for__pic")).not.toBeNull();
     expect(text).toContain(TRADE_TEXT.gave("Mira", "Thornback", "800K Goo"));
     expect(buttonNamed(TRADE_TEXT.give)?.disabled).toBe(false);
   });
 
-  it("Give: the flow shows what leaves and what arrives; Give sends all they asked", async () => {
+  it("Give: one action, 1:1; the flow shows what leaves and what arrives (less 10%)", async () => {
     const api = fakeApi();
     const { host } = await mount(api);
     buttonNamed(TRADE_TEXT.give)!.click();
     const text = document.body.textContent ?? "";
-    expect(text).toContain("1,666,667");
+    // 1,500,000 leaves, 1,350,000 arrives.
     expect(text).toContain("1,500,000");
+    expect(text).toContain("1,350,000");
     expect(text).toContain(TRADE_TEXT.lossLong);
+    expect(text).toContain(tradeForName({ kind: "building", type: 14, level: 7 }));
     expect(document.querySelectorAll(".trade-bar")).toHaveLength(2);
+    // No amount choices any more.
+    expect(document.querySelector(".trade-choices, .trade-amounts")).toBeNull();
     document.querySelector<HTMLButtonElement>(".trade-sheet__go")!.click();
     await flush();
-    expect(api.give).toHaveBeenCalledWith(7, null);
+    expect(api.give).toHaveBeenCalledWith(7);
     expect(host.traded).toHaveBeenCalled();
     expect(host.said.at(-1)).toBe(TRADE_TEXT.sent("PebbleKing", "2M Putty"));
     expect(document.querySelector(".trade-sheet")).toBeNull();
   });
 
-  it("Give: a giver with a lower cap sees how much they can give; Half halves it", async () => {
-    const api = fakeApi({ view: vi.fn(() => ok({ view: view({ me: storage(5_000_000, 10_000_000) }) })) });
+  it("Give: a giver short of what was asked sees what they have, and Give is off", async () => {
+    const api = fakeApi({ view: vi.fn(() => ok({ view: view({ me: storage(800_000) }) })) });
     await mount(api);
     buttonNamed(TRADE_TEXT.give)!.click();
-    expect(document.body.textContent).toContain(TRADE_TEXT.upTo("900K Putty"));
-    buttonNamed(TRADE_TEXT.half)!.click();
-    document.querySelector<HTMLButtonElement>(".trade-sheet__go")!.click();
-    await flush();
-    expect(api.give).toHaveBeenCalledWith(7, { r3: 450_000 });
-  });
-
-  it("Give: with nothing to give, the amount buttons and Give are greyed out", async () => {
-    const api = fakeApi({ view: vi.fn(() => ok({ view: view({ me: storage(0) }) })) });
-    await mount(api);
-    buttonNamed(TRADE_TEXT.give)!.click();
-    expect(document.body.textContent).toContain(TRADE_TEXT.upTo("0 Putty"));
-    for (const words of [TRADE_TEXT.all, TRADE_TEXT.half, TRADE_TEXT.other]) {
-      expect(buttonNamed(words)!.disabled).toBe(true);
-    }
+    expect(document.body.textContent).toContain(TRADE_TEXT.youHave("800,000"));
     expect(document.querySelector<HTMLButtonElement>(".trade-sheet__go")!.disabled).toBe(true);
   });
 
-  it("Ask: pick a resource, Most fits the free room, post", async () => {
+  it("Give: past the carry cap between the yards, Give is off with the cap shown", async () => {
+    const api = fakeApi({ view: vi.fn(() => ok({ view: view({ me: storage(5_000_000, 10_000_000) }) })) });
+    await mount(api);
+    buttonNamed(TRADE_TEXT.give)!.click();
+    expect(document.body.textContent).toContain(TRADE_TEXT.overCap("1,000,000"));
+    expect(document.querySelector<HTMLButtonElement>(".trade-sheet__go")!.disabled).toBe(true);
+  });
+
+  it("Ask: pick a resource, Most fits the free room after the 10%, pick the building it is for, post", async () => {
     const api = fakeApi({ view: vi.fn(() => ok({ view: view({ me: storage(19_500_000) }) })) });
     const { host } = await mount(api);
     buttonNamed(TRADE_TEXT.ask)!.click();
     document.querySelector<HTMLButtonElement>('.trade-tile[data-key="r4"]')!.click();
     buttonNamed(TRADE_TEXT.most)!.click();
-    buttonNamed(TRADE_TEXT.reasons.monsters)!.click();
+    // The preview: a mate gives 555,556, you get 500,000.
+    expect(document.body.textContent).toContain("555,556");
+    expect(document.body.textContent).toContain("500,000");
+    const items = document.querySelectorAll<HTMLButtonElement>(".trade-for-pick__item");
+    expect(items).toHaveLength(2);
+    expect(items[0]!.textContent).toBe("L7");
+    items[0]!.click();
+    expect(document.querySelector(".trade-for-pick__item")!.getAttribute("aria-checked")).toBe("true");
     document.querySelector<HTMLButtonElement>(".trade-sheet__go")!.click();
     await flush();
-    expect(api.ask).toHaveBeenCalledWith({ r4: 500_000 }, "monsters");
+    expect(api.ask).toHaveBeenCalledWith({ r4: 555_556 }, { kind: "building", type: 14, level: 7 });
     expect(host.said.at(-1)).toBe(TRADE_TEXT.posted);
+  });
+
+  it("Ask: the Monster tab lists the player's monsters; none picked posts without one", async () => {
+    const api = fakeApi();
+    await mount(api);
+    buttonNamed(TRADE_TEXT.ask)!.click();
+    buttonNamed(TRADE_TEXT.forMonster)!.click();
+    const items = document.querySelectorAll<HTMLButtonElement>(".trade-for-pick__item");
+    expect([...items].map((node) => node.title)).toEqual([tradeForName({ kind: "monster", id: "C1" }), tradeForName({ kind: "monster", id: "C2" })]);
+    items[1]!.click();
+    expect(document.querySelectorAll(".trade-for-pick__item")[1]!.getAttribute("aria-checked")).toBe("true");
+    document.querySelectorAll<HTMLButtonElement>(".trade-for-pick__item")[1]!.click(); // tap again: cleared
+    document.querySelector<HTMLButtonElement>('.trade-tile[data-key="r1"]')!.click();
+    document.querySelector<HTMLButtonElement>(".trade-sheet__go")!.click();
+    await flush();
+    expect(api.ask).toHaveBeenCalledWith({ r1: 1_000_000 }, null);
   });
 
   it("Send: past free storage is lost, Fit to room lowers it", async () => {

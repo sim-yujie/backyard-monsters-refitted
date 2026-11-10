@@ -1,7 +1,8 @@
 import { TRADE_KEYS, type TradeAmounts, type TradeKey, type TradeStorage } from "@/api/allianceTrade";
 
 /**
- * The trade sums the sheets show (design v5 §12a, §12b), the same as the
+ * The trade sums the sheets show (design v5 §12a, §12b; Give is 1:1, owner
+ * 10 Nov 2026), the same as the
  * server's (`server/src/services/alliance/trade.ts`), which decides: 10% lost
  * on the way, up to 10% of the smaller storage cap leaves per resource, and
  * whatever has no room is lost.
@@ -29,9 +30,12 @@ export const carryCap = (capA: number, capB: number, share = TRADE_CAP_SHARE): n
 /** Free room of one resource. */
 export const roomOf = (storage: TradeStorage, key: TradeKey): number => Math.max(0, Math.floor(storage.cap - storage.held[key]));
 
-/** "Most" on Ask: what fits, and what one trade can bring. */
+/**
+ * "Most" on Ask (what a mate gives, 1:1): what one trade carries, and what
+ * still fits the free room after the 10%.
+ */
 export const askCap = (storage: TradeStorage, key: TradeKey): number =>
-  Math.min(roomOf(storage, key), arriveFor(carryCap(storage.cap, storage.cap)));
+  Math.min(carryCap(storage.cap, storage.cap), fitToRoom(storage, key));
 
 /** The most the giver can send of one resource: the carry cap and what they hold. */
 export const sendCap = (mine: TradeStorage, theirs: TradeStorage, key: TradeKey): number =>
@@ -47,8 +51,29 @@ export const landing = (sent: number, theirs: TradeStorage, key: TradeKey) => {
 /** The most that can leave so that all of it lands. */
 export const fitToRoom = (theirs: TradeStorage, key: TradeKey): number => {
   const room = roomOf(theirs, key);
-  // The largest sent whose arrival fits: sentFor(room + 1) - 1.
-  return Math.max(0, sentFor(room + 1) - 1);
+  // The largest sent whose arrival fits: sentFor(room + 1) - 1. No room, nothing.
+  return room >= 1 ? sentFor(room + 1) - 1 : 0;
+};
+
+/**
+ * Whether the caller can fill a request 1:1 (owner, 10 Nov 2026: no part
+ * gifts): per asked resource, what they hold and the carry cap between the
+ * two yards. `short` / `overCap` list what stops it; both empty = can give.
+ */
+export const giveCheck = (
+  asked: Partial<TradeAmounts>,
+  mine: TradeStorage | null,
+  theirs: TradeStorage | null,
+): { short: TradeKey[]; overCap: TradeKey[] } => {
+  const short: TradeKey[] = [];
+  const overCap: TradeKey[] = [];
+  for (const key of TRADE_KEYS) {
+    const amount = asked[key] ?? 0;
+    if (amount <= 0) continue;
+    if (!mine || mine.held[key] < amount) short.push(key);
+    if (mine && theirs && amount > carryCap(mine.cap, theirs.cap)) overCap.push(key);
+  }
+  return { short, overCap };
 };
 
 /** Only the resources with something in them. */

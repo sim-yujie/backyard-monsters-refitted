@@ -356,9 +356,5 @@ export const TRADE_CAP_SHARE = 0.1;
 /** How long a request stays up (24 h, ASSUMED). */
 export const TRADE_REQUEST_SECONDS = 24 * 60 * 60;
 
-/** What a request is for (optional), each with its icon on the web. */
-export const TRADE_REASONS = ["upgrade", "monsters", "outpost", "other"] as const;
-export type TradeReason = (typeof TRADE_REASONS)[number];
-
 /** Requests a member may post in one UTC day, so cancel-and-ask cannot fill the chat (ASSUMED). */
 export const TRADE_ASKS_PER_DAY = 3;

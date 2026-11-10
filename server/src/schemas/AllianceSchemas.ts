@@ -1,7 +1,7 @@
 import z from "zod";
 
 import { AllianceInviteStatus, AllianceRole, AllianceStance, AllianceType } from "../enums/Alliance.js";
-import { DEFAULT_ALLIANCE_TYPE, TRADE_REASONS } from "../config/AllianceConfig.js";
+import { DEFAULT_ALLIANCE_TYPE } from "../config/AllianceConfig.js";
 
 /**
  * Schema to validate alliance creation data.
@@ -146,14 +146,17 @@ const tradeAmounts = { r1: tradeAmount, r2: tradeAmount, r3: tradeAmount, r4: tr
 /** GET /alliance/trade[?to=]: the Trade tab; `to` adds a mate's storage for the Send sheet. */
 export const TradeViewSchema = z.object({ to: z.coerce.number().int().positive().optional() });
 
-/** POST /alliance/trade/ask: what should arrive, and what for (optional). */
+/**
+ * POST /alliance/trade/ask: what a mate gives (the asker gets 10% less), and
+ * what for (optional): `b:<type>:<level>` or `m:<id>` (`tradeFor.ts`).
+ */
 export const TradeAskSchema = z.object({
   ...tradeAmounts,
-  reason: z.enum(TRADE_REASONS).nullish(),
+  for: z.string().max(16).nullish(),
 });
 
-/** POST /alliance/trade/give: a request, and what should arrive (all they asked when left out). */
-export const TradeGiveSchema = z.object({ request_id: z.coerce.number().int().positive(), ...tradeAmounts });
+/** POST /alliance/trade/give: a request. The giver gives exactly what was asked; no amounts. */
+export const TradeGiveSchema = z.object({ request_id: z.coerce.number().int().positive() }).strict();
 
 /** POST /alliance/trade/send: a mate, and what leaves. */
 export const TradeSendSchema = z.object({ to: z.coerce.number().int().positive(), ...tradeAmounts });

@@ -32,11 +32,11 @@ export const tradeViewController: KoaController = async (ctx) => {
   ctx.body = await tradeView(postgres.em, user.userid, getCurrentDateTime(), to);
 };
 
-/** POST /alliance/trade/ask {r1..r4 (what should arrive), reason?} */
+/** POST /alliance/trade/ask {r1..r4 (what a mate gives), for?} */
 export const tradeAskController: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
   const body = TradeAskSchema.parse(ctx.request.body ?? {});
-  const request = await askForResources(postgres.em, user.userid, amountsOf(body), body.reason ?? null, getCurrentDateTime());
+  const request = await askForResources(postgres.em, user.userid, amountsOf(body), body.for ?? null, getCurrentDateTime());
   ctx.status = Status.OK;
   ctx.body = { error: 0, request };
 };
@@ -49,13 +49,11 @@ export const tradeCancelController: KoaController = async (ctx) => {
   ctx.body = { error: 0, cancelled };
 };
 
-/** POST /alliance/trade/give {request_id, r1..r4? (what should arrive)} */
+/** POST /alliance/trade/give {request_id}: gives exactly what was asked. */
 export const tradeGiveController: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
   const body = TradeGiveSchema.parse(ctx.request.body ?? {});
-  const wanted = amountsOf(body);
-  const anything = Object.values(wanted).some((n) => n > 0);
-  const result = await giveToRequest(postgres.em, user.userid, body.request_id, anything ? wanted : null, getCurrentDateTime());
+  const result = await giveToRequest(postgres.em, user.userid, body.request_id, getCurrentDateTime());
   ctx.status = Status.OK;
   ctx.body = { error: 0, ...result };
 };

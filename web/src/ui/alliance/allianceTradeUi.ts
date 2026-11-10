@@ -1,12 +1,11 @@
 import type { AllianceResult } from "@/api/alliance";
 import {
   TRADE_KEYS,
-  TRADE_REASONS,
   allianceTradeApi,
   type AllianceTradeApi,
   type TradeAmounts,
+  type TradeFor,
   type TradeKey,
-  type TradeReason,
   type TradeRequest,
   type TradeStorage,
   type TradeView,
@@ -15,15 +14,19 @@ import {
   arriveFor,
   askCap,
   fitToRoom,
+  giveCheck,
   landing,
   nonZero,
   roomOf,
   sendCap,
-  sentFor,
 } from "@/game/alliance/tradeRules";
+import { monsterEntry } from "@/game/monsters/monsterCatalogue";
+import { monsterPortrait, showPortrait } from "@/game/portraits";
+import { buildPictureUrl } from "@/game/yard/buildButtonArt";
+import { buildingName } from "@/game/yard/buildingArt";
 import { formatAmount, formatCountdown, formatShort } from "@/ui/format";
 import { make } from "@/ui/friends/rows";
-import { gameIcon, type GameIconName } from "@/ui/gameIcon";
+import { gameIcon } from "@/ui/gameIcon";
 import { resourceIcon, resourceName } from "@/ui/resourceIcon";
 
 /**
@@ -31,15 +34,17 @@ import { resourceIcon, resourceName } from "@/ui/resourceIcon";
  *
  * - the tab: Today (sends / receives left, new day, −10%), your request or
  *   Ask, mates asking (Give), the last 2 trades, a hint;
- * - Ask: resource tiles with free room, amount that should arrive (500K /
- *   1M / Most or typed), what for, preview, Post;
- * - Give: who asks, the flow (you give → −10% → they get), All / Half /
- *   Other, both storage bars, Give;
+ * - Ask: resource tiles with free room, amount a mate gives (500K / 1M /
+ *   Most or typed), what for (one of the asker's buildings at its next level,
+ *   or one of their monsters, with its picture), preview, Post;
+ * - Give: who asks and for what, the flow (you give → −10% → they get),
+ *   both storage bars, one Give: exactly what was asked, 1:1 (owner, 10 Nov
+ *   2026); greyed with the reason when the giver is short of it;
  * - Send (a mate's row in Members, or chat): tiles, 500K / 1M / Most, the
  *   flow with what really lands, "lost: storage full" and Fit to room.
  *
- * A sheet takes the tab's place (it fills a phone). Amounts shown are what
- * arrives unless the line says "You give". The server decides everything
+ * A sheet takes the tab's place (it fills a phone). A request's amounts are
+ * what a mate gives; the flow shows what arrives. The server decides everything
  * (`server/src/services/alliance/trade.ts`); the sums here are its preview.
  */
 
@@ -59,7 +64,7 @@ export const TRADE_TEXT = {
   asksUsed: "No more requests today.",
   cancel: "Cancel",
   matesAsking: "Mates asking",
-  arriveNote: "Amounts are what arrives.",
+  arriveNote: "Amounts are what the giver gives; −10% on the way.",
   noRequests: "No one is asking right now.",
   give: "Give",
   givenBy: (name: string) => `✓ Given by ${name}`,
@@ -75,13 +80,15 @@ export const TRADE_TEXT = {
   youGive: "You give",
   gets: (name: string) => `${name} gets`,
   most: "Most",
-  all: "All they asked",
-  half: "Half",
-  other: "Other amount",
-  upTo: (amount: string) => `You can give up to ${amount}`,
+  youHave: (amount: string) => `You have ${amount}`,
+  overCap: (amount: string) => `One trade carries up to ${amount}`,
   usesSend: "Uses your 1 send today · Shiny can't be sent",
   noSendLeft: "You've sent today. New day in",
   forWhat: "For",
+  forBuilding: "Building",
+  forMonster: "Monster",
+  forNone: "Nothing to pick.",
+  upgrading: (name: string, level: number) => `${name} L${level}`,
   room: "room",
   full: "Full",
   lostFull: (amount: string) => `${amount} lost: storage full`,
@@ -99,15 +106,27 @@ export const TRADE_TEXT = {
   loading: "Loading…",
   gone: "That request is no longer open.",
   pick: "Pick a resource",
-  reasons: { upgrade: "Upgrade", monsters: "Monsters", outpost: "Outpost", other: "Other" } as Record<TradeReason, string>,
 };
 
-const REASON_ICON: Readonly<Record<TradeReason, GameIconName>> = {
-  upgrade: "levelup",
-  monsters: "housing",
-  outpost: "pin",
-  other: "box",
+/** "Town Hall L7" / "Bandito". */
+export const tradeForName = (value: TradeFor): string =>
+  value.kind === "building"
+    ? TRADE_TEXT.upgrading(buildingName(value.type) ?? `#${value.type}`, value.level)
+    : (monsterEntry(value.id)?.name ?? value.id);
+
+/** The building's picture or the monster's portrait, small. */
+const forPicture = (value: TradeFor, className: string): HTMLImageElement => {
+  const image = make("img", className);
+  image.alt = "";
+  image.decoding = "async";
+  image.draggable = false;
+  if (value.kind === "building") image.src = buildPictureUrl(value.type, "main");
+  else showPortrait(image, monsterPortrait(value.id, "icon"));
+  return image;
 };
+
+const sameFor = (a: TradeFor | null, b: TradeFor | null): boolean =>
+  !!a && !!b && (a.kind === "building" && b.kind === "building" ? a.type === b.type && a.level === b.level : a.kind === "monster" && b.kind === "monster" && a.id === b.id);
 
 /** The quick amounts on Ask and Send. */
 const QUICK = [500_000, 1_000_000] as const;
@@ -125,9 +144,10 @@ type Amounts = Record<TradeKey, number>;
 const zero = (): Amounts => ({ r1: 0, r2: 0, r3: 0, r4: 0 });
 
 type Sheet =
-  | { kind: "ask"; picked: Set<TradeKey>; amounts: Amounts; reason: TradeReason | null }
-  /** `amounts`: what should arrive. */
-  | { kind: "give"; request: TradeRequest; choice: "all" | "half" | "other"; amounts: Amounts }
+  /** `amounts`: what a mate gives. `forTab`: which picker shows. */
+  | { kind: "ask"; picked: Set<TradeKey>; amounts: Amounts; forWhat: TradeFor | null; forTab: "building" | "monster" }
+  /** Gives exactly `request.amounts`. */
+  | { kind: "give"; request: TradeRequest }
   /** `amounts`: what leaves. */
   | { kind: "send"; mate: { userid: number; username: string; storage: TradeStorage | null }; picked: Set<TradeKey>; amounts: Amounts };
 
@@ -305,7 +325,7 @@ export class TradeTab {
       const row = make("div", "trade-request trade-request--mine");
       row.append(
         chips(mine.amounts),
-        this.reasonTag(mine.reason),
+        this.forTag(mine.for),
         make("span", "trade-request__time", TRADE_TEXT.timeLeft(formatCountdown(mine.expires_at - now))),
         button(TRADE_TEXT.cancel, "btn--outline trade-request__act", () => void this.cancel()),
       );
@@ -347,10 +367,14 @@ export class TradeTab {
     return nodes;
   }
 
-  private reasonTag(reason: TradeReason | null): HTMLElement {
-    const tag = make("span", "trade-reason");
-    if (!reason) return tag;
-    tag.append(gameIcon(REASON_ICON[reason], { size: 16, decorative: true }), make("span", "", TRADE_TEXT.reasons[reason]));
+  /** What the request is for: the building's picture or monster's portrait, and its name. */
+  private forTag(value: TradeFor | null): HTMLElement {
+    const tag = make("span", "trade-for");
+    if (!value) return tag;
+    const name = tradeForName(value);
+    tag.title = name;
+    if (value.kind === "building") tag.append(gameIcon("levelup", { size: 16, decorative: true }));
+    tag.append(forPicture(value, "trade-for__pic"), make("span", "trade-for__name", name));
     return tag;
   }
 
@@ -363,7 +387,7 @@ export class TradeTab {
     who.append(make("strong", "trade-request__name", request.username));
     if (request.role && request.role !== "member") who.append(make("span", `alliance__role alliance__role--${request.role}`, request.role === "leader" ? "Leader" : "Officer"));
     const what = make("div", "trade-request__what");
-    what.append(chips(request.amounts), this.reasonTag(request.reason));
+    what.append(chips(request.amounts), this.forTag(request.for));
     row.append(who, what);
     if (given) {
       row.append(make("span", "trade-request__given", TRADE_TEXT.givenBy(request.given_by ?? "?")));
@@ -382,28 +406,14 @@ export class TradeTab {
 
   private openAsk(): void {
     this.host.say(null);
-    this.sheet = { kind: "ask", picked: new Set(), amounts: zero(), reason: null };
+    this.sheet = { kind: "ask", picked: new Set(), amounts: zero(), forWhat: null, forTab: "building" };
     this.host.redraw();
   }
 
   private openGiveSheet(request: TradeRequest): void {
     this.host.say(null);
-    const amounts = zero();
-    const limits = this.giveLimits(request);
-    for (const key of TRADE_KEYS) amounts[key] = Math.min(request.amounts[key] ?? 0, limits[key]);
-    this.sheet = { kind: "give", request, choice: "all", amounts };
+    this.sheet = { kind: "give", request };
     this.host.redraw();
-  }
-
-  /** The most of each resource that can arrive from the caller to this request. */
-  private giveLimits(request: TradeRequest): Amounts {
-    const out = zero();
-    const me = this.view?.me;
-    for (const key of TRADE_KEYS) {
-      const asked = request.amounts[key] ?? 0;
-      out[key] = me && request.storage ? Math.min(asked, arriveFor(sendCap(me, request.storage, key))) : asked;
-    }
-    return out;
   }
 
   private renderSheet(view: TradeView, sheet: Sheet): HTMLElement {
@@ -525,27 +535,69 @@ export class TradeTab {
       if (!sheet.picked.has(key) || !me) continue;
       amounts.append(this.amountRow(key, sheet.amounts[key], askCap(me, key), (n) => (sheet.amounts[key] = n)));
     }
-    const reasons = make("div", "trade-reasons");
-    reasons.append(make("span", "trade-reasons__label", TRADE_TEXT.forWhat));
-    for (const reason of TRADE_REASONS) {
-      const node = make("button", `btn btn--outline trade-reasons__pick${sheet.reason === reason ? " is-on" : ""}`);
+    return [tiles, amounts, this.forPicker(view, sheet)];
+  }
+
+  /**
+   * "For": Building / Monster, then the player's own: each building type at
+   * its next level ("Town Hall L7") or each unlocked monster, as pictures.
+   * Optional; tapping the chosen one again clears it.
+   */
+  private forPicker(view: TradeView, sheet: Extract<Sheet, { kind: "ask" }>): HTMLElement {
+    const box = make("div", "trade-for-pick");
+    const head = make("div", "trade-for-pick__head");
+    head.append(make("span", "trade-for-pick__label", TRADE_TEXT.forWhat));
+    for (const [tab, words, icon] of [
+      ["building", TRADE_TEXT.forBuilding, "levelup"],
+      ["monster", TRADE_TEXT.forMonster, "housing"],
+    ] as const) {
+      const on = sheet.forTab === tab;
+      const node = make("button", `btn btn--outline trade-for-pick__tab${on ? " is-on" : ""}`);
       node.type = "button";
-      node.setAttribute("aria-pressed", String(sheet.reason === reason));
-      node.append(gameIcon(REASON_ICON[reason], { size: 24, decorative: true }), make("span", "", TRADE_TEXT.reasons[reason]));
+      node.setAttribute("aria-pressed", String(on));
+      node.append(gameIcon(icon, { size: 16, decorative: true }), make("span", "", words));
       node.addEventListener("click", () => {
-        sheet.reason = sheet.reason === reason ? null : reason;
+        sheet.forTab = tab;
         this.host.redraw();
       });
-      reasons.append(node);
+      head.append(node);
     }
-    return [tiles, amounts, reasons];
+    if (sheet.forWhat) head.append(this.forTag(sheet.forWhat));
+    const grid = make("div", "trade-for-pick__grid");
+    grid.setAttribute("role", "radiogroup");
+    grid.setAttribute("aria-label", TRADE_TEXT.forWhat);
+    const choices = view.choices ?? { buildings: [], monsters: [] };
+    const options: TradeFor[] =
+      sheet.forTab === "building"
+        ? choices.buildings.map((b) => ({ kind: "building", type: b.type, level: b.level }))
+        : choices.monsters.map((id) => ({ kind: "monster", id }));
+    for (const option of options) {
+      const on = sameFor(sheet.forWhat, option);
+      const name = tradeForName(option);
+      const node = make("button", `trade-for-pick__item${on ? " is-on" : ""}`);
+      node.type = "button";
+      node.title = name;
+      node.setAttribute("role", "radio");
+      node.setAttribute("aria-checked", String(on));
+      node.setAttribute("aria-label", name);
+      node.append(forPicture(option, "trade-for-pick__pic"));
+      if (option.kind === "building") node.append(make("span", "trade-for-pick__lv", `L${option.level}`));
+      node.addEventListener("click", () => {
+        sheet.forWhat = on ? null : option;
+        this.host.redraw();
+      });
+      grid.append(node);
+    }
+    if (options.length === 0) grid.append(make("p", "trade-note", TRADE_TEXT.forNone));
+    box.append(head, grid);
+    return box;
   }
 
   private askLive(_view: TradeView, sheet: Extract<Sheet, { kind: "ask" }>): HTMLElement[] {
     const nodes: HTMLElement[] = [];
     for (const key of TRADE_KEYS) {
       if (!sheet.picked.has(key) || sheet.amounts[key] <= 0) continue;
-      nodes.push(this.flow(key, sentFor(sheet.amounts[key]), sheet.amounts[key], TRADE_TEXT.youGet));
+      nodes.push(this.flow(key, sheet.amounts[key], arriveFor(sheet.amounts[key]), TRADE_TEXT.youGet));
     }
     if (sheet.picked.size === 0) nodes.push(make("p", "trade-note", TRADE_TEXT.pick));
     const any = TRADE_KEYS.some((key) => sheet.amounts[key] > 0);
@@ -554,7 +606,7 @@ export class TradeTab {
   }
 
   private async postAsk(sheet: Extract<Sheet, { kind: "ask" }>): Promise<void> {
-    await this.act(() => this.api.ask(nonZero(sheet.amounts), sheet.reason), () => this.host.say(TRADE_TEXT.posted), false);
+    await this.act(() => this.api.ask(nonZero(sheet.amounts), sheet.forWhat), () => this.host.say(TRADE_TEXT.posted), false);
   }
 
   private async cancel(): Promise<void> {
@@ -563,53 +615,27 @@ export class TradeTab {
 
   // Give -------------------------------------------------------------------
 
-  private giveControls(_view: TradeView, sheet: Extract<Sheet, { kind: "give" }>): HTMLElement[] {
+  private giveControls(view: TradeView, sheet: Extract<Sheet, { kind: "give" }>): HTMLElement[] {
     const now = this.host.now();
     const request = sheet.request;
     const who = make("div", "trade-sheet__who");
     who.append(
       make("strong", "", TRADE_TEXT.asks(request.username)),
       chips(request.amounts),
-      this.reasonTag(request.reason),
+      this.forTag(request.for),
       make("span", "trade-request__time", TRADE_TEXT.timeLeft(formatCountdown(request.expires_at - now).replace(/ \d+[ms]$/, ""))),
     );
-    const limits = this.giveLimits(request);
     const nodes: HTMLElement[] = [who];
-    const capped = TRADE_KEYS.filter((key) => (request.amounts[key] ?? 0) > limits[key]);
-    if (capped.length > 0) {
-      nodes.push(make("p", "trade-warn", TRADE_TEXT.upTo(capped.map((key) => `${formatShort(limits[key])} ${resourceName(key)}`).join(", "))));
+    // 1:1 or not at all: say what stops it, with the number.
+    const check = giveCheck(request.amounts, view.me, request.storage);
+    for (const key of check.short) {
+      const warn = make("p", "trade-warn");
+      warn.append(resourceIcon(key, { decorative: true }), make("span", "", TRADE_TEXT.youHave(formatAmount(view.me?.held[key] ?? 0))));
+      nodes.push(warn);
     }
-    const choices = make("div", "trade-choices");
-    // Nothing of what they asked can be given (your storage, their room or the
-    // cap): the amount buttons would only pick 0, so they are greyed out.
-    const nothing = TRADE_KEYS.every((key) => (request.amounts[key] ?? 0) <= 0 || limits[key] <= 0);
-    const choose = (choice: "all" | "half" | "other") => {
-      sheet.choice = choice;
-      for (const key of TRADE_KEYS) {
-        const all = limits[key];
-        if (choice === "all") sheet.amounts[key] = all;
-        if (choice === "half") sheet.amounts[key] = Math.floor(all / 2);
-      }
-      this.host.redraw();
-    };
-    for (const [choice, words] of [
-      ["all", TRADE_TEXT.all],
-      ["half", TRADE_TEXT.half],
-      ["other", TRADE_TEXT.other],
-    ] as const) {
-      const node = button(words, `btn--outline trade-choices__pick${sheet.choice === choice ? " is-on" : ""}`, () => choose(choice));
-      node.setAttribute("aria-pressed", String(sheet.choice === choice));
-      node.disabled = nothing;
-      choices.append(node);
-    }
-    nodes.push(choices);
-    if (sheet.choice === "other") {
-      const amounts = make("div", "trade-amounts");
-      for (const key of TRADE_KEYS) {
-        if ((request.amounts[key] ?? 0) <= 0) continue;
-        amounts.append(this.amountRow(key, sheet.amounts[key], limits[key], (n) => (sheet.amounts[key] = n), false));
-      }
-      nodes.push(amounts);
+    if (check.overCap.length > 0 && view.me && request.storage) {
+      const cap = Math.floor(Math.min(view.me.cap, request.storage.cap) * view.rules.capShare);
+      nodes.push(make("p", "trade-warn", TRADE_TEXT.overCap(formatAmount(cap))));
     }
     return nodes;
   }
@@ -619,30 +645,26 @@ export class TradeTab {
     const request = sheet.request;
     const bars = make("div", "trade-bars");
     for (const key of TRADE_KEYS) {
-      const arrive = sheet.amounts[key];
-      if ((request.amounts[key] ?? 0) <= 0) continue;
-      const give = sentFor(arrive);
-      nodes.push(this.flow(key, give, arrive, TRADE_TEXT.gets(request.username)));
-      if (request.storage) bars.append(storageBar(TRADE_TEXT.storage(request.username), request.storage, key, arrive));
+      const give = request.amounts[key] ?? 0;
+      if (give <= 0) continue;
+      const land = request.storage ? landing(give, request.storage, key) : { arrive: arriveFor(give), lands: arriveFor(give), lost: 0 };
+      nodes.push(this.flow(key, give, land.lands, TRADE_TEXT.gets(request.username), land.lost));
+      if (request.storage) bars.append(storageBar(TRADE_TEXT.storage(request.username), request.storage, key, land.lands));
       if (view.me) bars.append(storageBar(TRADE_TEXT.yourStorage, view.me, key, -give));
     }
     nodes.push(bars, make("p", "trade-note trade-note--small", TRADE_TEXT.usesSend));
-    const any = TRADE_KEYS.some((key) => sheet.amounts[key] > 0);
-    nodes.push(this.submit(TRADE_TEXT.give, any && view.today.sendsLeft > 0, () => void this.give(sheet)));
+    const check = giveCheck(request.amounts, view.me, request.storage);
+    const can = check.short.length === 0 && check.overCap.length === 0 && view.today.sendsLeft > 0;
+    nodes.push(this.submit(TRADE_TEXT.give, can, () => void this.give(sheet)));
     return nodes;
   }
 
   private async give(sheet: Extract<Sheet, { kind: "give" }>): Promise<void> {
-    const amounts = nonZero(sheet.amounts);
     await this.act(
-      () => this.api.give(sheet.request.id, sheet.choice === "all" && this.allAsked(sheet) ? null : amounts),
+      () => this.api.give(sheet.request.id),
       (answer) => this.host.say(TRADE_TEXT.sent(sheet.request.username, amountsWords(answer.done.arrived))),
       true,
     );
-  }
-
-  private allAsked(sheet: Extract<Sheet, { kind: "give" }>): boolean {
-    return TRADE_KEYS.every((key) => sheet.amounts[key] === (sheet.request.amounts[key] ?? 0));
   }
 
   // Send -------------------------------------------------------------------

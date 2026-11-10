@@ -1,6 +1,7 @@
 import { ALLIANCE_TYPES, CONSTELLATIONS, GOAL_MENU, SHOUT_TEXT, STANCE_LABEL } from "../../config/AllianceConfig.js";
 import { AllianceMessageType, type AllianceStance, type AllianceType } from "../../enums/Alliance.js";
 import type { Alliance } from "../../database/models/alliance.model.js";
+import { parseTradeFor, tradeForName } from "./tradeFor.js";
 
 
 type ShoutTarget = Pick<Alliance, "name"> | null;
@@ -83,7 +84,8 @@ export const readUnderAttack = (body: string): UnderAttackFacts | null => {
 export interface TradeAskFacts {
   request: number;
   amounts: Partial<Record<"r1" | "r2" | "r3" | "r4", number>>;
-  reason: string | null;
+  /** What for, as stored (`b:<type>:<level>` / `m:<id>`, `tradeFor.ts`). */
+  for?: string | null;
 }
 
 /** What a trade-done line stores: who got it and what arrived. */
@@ -203,9 +205,9 @@ export const composeShout = (type: AllianceMessageType, username: string, body: 
       const what = amountsText(facts?.amounts ?? {});
       if (!what) return "";
 
-      // "PebbleKing asks for 2.0M Goo (Upgrade)." (design v5 §12b)
-      const reason = facts?.reason ? ` (${facts.reason.charAt(0).toUpperCase()}${facts.reason.slice(1)})` : "";
-      return `${username} asks for ${what}${reason}.`;
+      // "PebbleKing asks for 2.0M Goo (Town Hall L7)." (design v5 §12b, owner 10 Nov)
+      const forName = tradeForName(parseTradeFor(facts?.for));
+      return `${username} asks for ${what}${forName ? ` (${forName})` : ""}.`;
     }
 
     case AllianceMessageType.TRADE_DONE: {

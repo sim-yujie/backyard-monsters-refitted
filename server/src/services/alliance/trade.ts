@@ -6,7 +6,6 @@ import {
   TRADE_CAP_SHARE,
   TRADE_LOSS,
   TRADE_REQUEST_SECONDS,
-  type TradeReason,
 } from "../../config/AllianceConfig.js";
 import { catchUpLockedRow } from "../../controllers/yard/yardAction.js";
 import { Save } from "../../database/models/save.model.js";
@@ -22,17 +21,21 @@ import { capOf, creditResources } from "../yard/credit.js";
 import { notMainYardErr, yardRaidInProgressErr, yardUnderAttackErr } from "../yard/yardErrors.js";
 import type { ResourceAmounts } from "../yardplanner/costs.js";
 import { countAfterCommit, progressRefusedErr, say, utcDay } from "./allianceProgress.js";
+import { isTradeChoice, parseTradeFor, tradeChoicesOf, tradeForText, type TradeChoices, type TradeFor } from "./tradeFor.js";
 
 /**
  * Trading between alliance members (beta 7, design v5 §12a, §12b).
  *
- * - **Ask**: a member posts what should ARRIVE (one or more of Twigs,
- *   Pebbles, Putty, Goo), optionally what for. Open 24 hours, one open per
- *   player, only while their receive of the day is unused, each amount within
- *   their free room and the most one trade can bring them. A line goes to the
- *   alliance chat with Give.
- * - **Give**: one mate fills a request (all of it, or less); the request
- *   closes, as it used the asker's one receive.
+ * - **Ask**: a member posts what a mate should GIVE (one or more of Twigs,
+ *   Pebbles, Putty, Goo; they get 10% less), optionally what for: a building's
+ *   next level or one of their monsters (`tradeFor.ts`). Open 24 hours, one
+ *   open per player, only while their receive of the day is unused, each
+ *   amount within the most one trade carries and what fits their free room
+ *   after the 10%. A line goes to the alliance chat with Give.
+ * - **Give**: one mate fills a request 1:1: exactly what was asked leaves,
+ *   10% is lost on the way (owner, 10 Nov 2026: no all / half / other). A
+ *   giver short of it, or past the carry cap, is refused. The request closes,
+ *   as it used the asker's one receive.
  * - **Send**: a direct send to a mate, no request.
  *
  * Every trade: one send and one receive per player per UTC day (the count is
@@ -66,9 +69,15 @@ export const sentFor = (arrive: number): number => {
 export const carryCap = (capA: number, capB: number): number =>
   Math.max(0, Math.floor(TRADE_CAP_SHARE * Math.min(capA, capB)));
 
-/** The most a member can ask for, per resource: what fits, and what one trade can bring. */
+/** The most that can leave so that all of it fits `room` after the 10%. */
+export const fitSent = (room: number): number => (room >= 1 ? sentFor(Math.floor(room) + 1) - 1 : 0);
+
+/**
+ * The most a member can ask for (what a mate gives), per resource: what one
+ * trade carries, and what still fits their free room after the 10%.
+ */
 export const askCapOf = (cap: number, held: number): number =>
-  Math.max(0, Math.min(Math.floor(cap - held), arriveFor(carryCap(cap, cap))));
+  Math.max(0, Math.min(fitSent(cap - held), carryCap(cap, cap)));
 
 /** Seconds to the next UTC midnight. */
 export const newDayIn = (now: number): number => 86_400 - (now % 86_400);
@@ -162,9 +171,10 @@ export interface TradeRequestView {
   userid: number;
   username: string;
   role: string | null;
-  /** What should arrive. */
+  /** What a mate gives (the asker gets 10% less). */
   amounts: Partial<Amounts>;
-  reason: string | null;
+  /** What for: a building's next level or a monster; null for none. */
+  for: TradeFor | null;
   created_at: number;
   expires_at: number;
   status: "open" | "given";
@@ -191,6 +201,17 @@ const readStorage = async (em: EntityManager, userids: number[]): Promise<Map<nu
     userids
   );
   return new Map(rows.map((row) => [Number(row.userid), storageOfRow({ ...row, resources: parseJson<JsonObject>(row.resources) })]));
+};
+
+/** What the player's main yard can ask for (`tradeFor.ts`). */
+const readChoices = async (em: EntityManager, userid: number): Promise<TradeChoices> => {
+  const [row] = await em.execute<{ buildingdata: unknown; lockerdata: unknown }[]>(
+    `SELECT s.buildingdata, s.lockerdata FROM bym."user" u JOIN bym.save s ON s.basesaveid = u.save_basesaveid WHERE u.userid = ?`,
+    [userid]
+  );
+  return row
+    ? tradeChoicesOf({ buildingdata: parseJson(row.buildingdata), lockerdata: parseJson(row.lockerdata) })
+    : { buildings: [], monsters: [] };
 };
 
 /**
@@ -239,7 +260,7 @@ export const tradeView = async (em: EntityManager, userid: number, now: number, 
     username: row.username,
     role: row.alliance_role,
     amounts: nonZero(amountsOf(parseJson(row.amounts))),
-    reason: row.reason,
+    for: parseTradeFor(row.reason),
     created_at: Number(row.created_at),
     expires_at: Number(row.expires_at),
     status: row.status === "open" ? "open" : "given",
@@ -283,6 +304,8 @@ export const tradeView = async (em: EntityManager, userid: number, now: number, 
     },
     rules: { loss: TRADE_LOSS, capShare: TRADE_CAP_SHARE, requestSeconds: TRADE_REQUEST_SECONDS },
     me: storage.get(userid) ?? null,
+    /** What the caller can pick on Ask's "For". */
+    choices: await readChoices(em, userid),
     myRequest: mine,
     requests: requests.filter((row) => row !== mine),
     recent: recent.map((row) => ({
@@ -299,16 +322,19 @@ export const tradeView = async (em: EntityManager, userid: number, now: number, 
 // Ask and cancel
 // ---------------------------------------------------------------------------
 
-/** `POST /alliance/trade/ask`: posts a request (what should arrive). */
+/** `POST /alliance/trade/ask`: posts a request (what a mate gives; `forText` = what for, `tradeFor.ts`). */
 export const askForResources = async (
   em: EntityManager,
   userid: number,
   wanted: Partial<Record<Key, number>>,
-  reason: TradeReason | null,
+  forText: string | null,
   now: number
 ) => {
   const amounts = amountsOf(wanted);
   if (!anyOf(amounts)) throw refused("nothingAsked", "Pick a resource and an amount.", Status.BAD_REQUEST);
+  const forWhat = forText ? parseTradeFor(forText) : null;
+  if (forText && !forWhat) throw refused("badFor", "Pick a building or monster of yours.", Status.BAD_REQUEST);
+  const reason = forWhat ? tradeForText(forWhat) : null;
 
   const posted = await em.transactional(async (tx) => {
     const members = await lockMembers(tx, [userid]);
@@ -327,6 +353,9 @@ export const askForResources = async (
 
     const storage = (await readStorage(tx, [userid])).get(userid);
     if (!storage) throw notMainYardErr();
+    if (forWhat && !isTradeChoice(forWhat, await readChoices(tx, userid))) {
+      throw refused("badFor", "Pick a building or monster of yours.", Status.BAD_REQUEST);
+    }
     for (const key of RESOURCE_KEYS) {
       const most = askCapOf(storage.cap, storage.held[key]);
       if (amounts[key] > most) {
@@ -350,9 +379,9 @@ export const askForResources = async (
   void say(posted.allianceId, userid, AllianceMessageType.TRADE_ASK, {
     request: posted.id,
     amounts: nonZero(amounts),
-    reason,
+    for: reason,
   });
-  return { id: posted.id, amounts: nonZero(amounts), reason, expires_at: now + TRADE_REQUEST_SECONDS };
+  return { id: posted.id, amounts: nonZero(amounts), for: forWhat, expires_at: now + TRADE_REQUEST_SECONDS };
 };
 
 /** `POST /alliance/trade/cancel`: takes the caller's open request down. */
@@ -517,29 +546,18 @@ const announce = (done: { allianceId: number; to: { username: string }; arrived:
 };
 
 /**
- * `POST /alliance/trade/give`: fills a mate's request. `wanted` is what
- * should ARRIVE, each at most what was asked; left out, all they asked.
+ * `POST /alliance/trade/give`: fills a mate's request 1:1. Exactly what they
+ * asked leaves the giver; they get it less 10% (and less what their storage
+ * has no room for). No other amount (owner, 10 Nov 2026).
  */
-export const giveToRequest = async (
-  em: EntityManager,
-  userid: number,
-  requestId: number,
-  wanted: Partial<Record<Key, number>> | null,
-  now: number
-): Promise<TradeResult> => {
+export const giveToRequest = async (em: EntityManager, userid: number, requestId: number, now: number): Promise<TradeResult> => {
   const [request] = await em.execute<{ userid: number; amounts: unknown; status: string }[]>(
     `SELECT userid, amounts, status FROM bym.alliance_trade_request WHERE id = ?`,
     [requestId]
   );
   if (!request || request.status !== "open") throw refused("requestGone", "That request is no longer open.");
   const asked = amountsOf(parseJson(request.amounts));
-  const arrive = wanted && anyOf(amountsOf(wanted)) ? amountsOf(wanted) : asked;
-  const sent = noAmounts();
-  for (const key of RESOURCE_KEYS) {
-    if (arrive[key] > asked[key]) throw refused("overAsk", "That is more than they asked for.", Status.BAD_REQUEST);
-    sent[key] = sentFor(arrive[key]);
-  }
-  const done = await trade(em, userid, Number(request.userid), sent, requestId, now);
+  const done = await trade(em, userid, Number(request.userid), asked, requestId, now);
   announce(done, userid);
   const { allianceId: _a, giverName: _g, ...result } = done;
   return result;

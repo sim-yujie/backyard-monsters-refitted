@@ -40,10 +40,13 @@ describe("trade sums", () => {
       expect(trade.arriveFor(sent - 1)).toBeLessThan(n);
     }
   });
-  test("cap: 10% of the smaller storage; asks fit the free room", () => {
+  test("cap: 10% of the smaller storage; an ask (what a mate gives) fits the free room after the 10%", () => {
     expect(trade.carryCap(20_000_000, 50_000_000)).toBe(2_000_000);
-    expect(trade.askCapOf(20_000_000, 0)).toBe(1_800_000);
-    expect(trade.askCapOf(20_000_000, 19_500_000)).toBe(500_000);
+    expect(trade.askCapOf(20_000_000, 0)).toBe(2_000_000);
+    // 500,000 room: 555,556 given, 500,000 arrive.
+    expect(trade.askCapOf(20_000_000, 19_500_000)).toBe(555_556);
+    expect(trade.arriveFor(555_556)).toBe(500_000);
+    expect(trade.arriveFor(555_557)).toBe(500_001);
     expect(trade.askCapOf(20_000_000, 21_000_000)).toBe(0);
   });
 });
@@ -128,19 +131,20 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
     await orm!.close(true);
   });
 
-  test("ask, mates see it, give fills it, the day's limits hold", async () => {
-    const asked = await trade.askForResources(em(), B, { r3: 900 }, "upgrade", NOW);
-    expect(asked.amounts).toEqual({ r3: 900 });
+  test("ask, mates see it, give fills it 1:1 less 10%, the day's limits hold", async () => {
+    const asked = await trade.askForResources(em(), B, { r3: 1000 }, "b:14:2", NOW);
+    expect(asked.amounts).toEqual({ r3: 1000 });
+    expect(asked.for).toEqual({ kind: "building", type: 14, level: 2 });
     expect(await reasonOf(trade.askForResources(em(), B, { r3: 100 }, null, NOW))).toBe("requestOpen");
 
     const seen = await trade.tradeView(em(), A, NOW);
     expect(seen.today).toMatchObject({ sendsLeft: 1, receivesLeft: 1 });
     const row = seen.requests.find((r) => r.id === asked.id)!;
-    expect(row).toMatchObject({ userid: B, amounts: { r3: 900 }, reason: "upgrade", status: "open" });
+    expect(row).toMatchObject({ userid: B, amounts: { r3: 1000 }, for: { kind: "building", type: 14, level: 2 }, status: "open" });
     expect(row.storage?.cap).toBe(10_000);
     expect((await trade.tradeView(em(), B, NOW)).myRequest?.id).toBe(asked.id);
 
-    const given = await trade.giveToRequest(em(), A, asked.id, null, NOW);
+    const given = await trade.giveToRequest(em(), A, asked.id, NOW);
     expect(given.sent).toEqual({ r3: 1000 });
     expect(given.arrived).toEqual({ r3: 900 });
     expect((await held(A)).r3).toBe(STOCK - 1000);
@@ -176,28 +180,49 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
     expect(done.resources.r1).toBe(STOCK - 1000);
   });
 
-  test("asks fit the free room; give takes less than asked, never more; cancel", async () => {
+  test("asks fit the free room after the 10%; give is all of it or nothing; cancel", async () => {
     await sql(`UPDATE bym.save SET resources = ? WHERE userid = ? AND type = 'main'`, [
       JSON.stringify({ r1: 9_800, r2: 0, r3: 0, r4: 0 }),
       B,
     ]);
-    expect(await reasonOf(trade.askForResources(em(), B, { r1: 201 }, null, NOW))).toBe("overRoom");
-    expect(await reasonOf(trade.askForResources(em(), B, { r2: 901 }, null, NOW))).toBe("overRoom");
-    const asked = await trade.askForResources(em(), B, { r1: 200, r2: 900 }, null, NOW);
-    expect(await reasonOf(trade.giveToRequest(em(), A, asked.id, { r2: 901 }, NOW))).toBe("overAsk");
-    const half = await trade.giveToRequest(em(), A, asked.id, { r2: 450 }, NOW);
-    expect(half.arrived).toEqual({ r2: 450 });
-    expect(await reasonOf(trade.giveToRequest(em(), C, asked.id, null, NOW))).toBe("requestGone");
+    // 200 room: 223 given, 200 arrive; 224 would bring 201.
+    expect(await reasonOf(trade.askForResources(em(), B, { r1: 224 }, null, NOW))).toBe("overRoom");
+    expect(await reasonOf(trade.askForResources(em(), B, { r2: 1001 }, null, NOW))).toBe("overRoom");
+    const asked = await trade.askForResources(em(), B, { r1: 223, r2: 1000 }, null, NOW);
+    // A giver short of what was asked is refused: no part gifts.
+    await sql(`UPDATE bym.save SET resources = ? WHERE userid = ? AND type = 'main'`, [
+      JSON.stringify({ r1: STOCK, r2: 999, r3: STOCK, r4: STOCK }),
+      A,
+    ]);
+    expect(await reasonOf(trade.giveToRequest(em(), A, asked.id, NOW))).toBe("notEnough");
+    expect((await held(A)).r2).toBe(999);
+    const all = await trade.giveToRequest(em(), C, asked.id, NOW);
+    expect(all.sent).toEqual({ r1: 223, r2: 1000 });
+    expect(all.arrived).toEqual({ r1: 200, r2: 900 });
+    expect(all.lostFull).toEqual({});
+    expect(await reasonOf(trade.giveToRequest(em(), A, asked.id, NOW))).toBe("requestGone");
 
     await clear();
-    const again = await trade.askForResources(em(), C, { r4: 100 }, "other", NOW);
+    const again = await trade.askForResources(em(), C, { r4: 100 }, "m:C1", NOW);
+    expect(again.for).toEqual({ kind: "monster", id: "C1" });
     expect((await trade.cancelRequest(em(), C, NOW)).cancelled).toBe(1);
-    expect(await reasonOf(trade.giveToRequest(em(), A, again.id, null, NOW))).toBe("requestGone");
+    expect(await reasonOf(trade.giveToRequest(em(), A, again.id, NOW))).toBe("requestGone");
+  });
+
+  test("what for: only the asker's own buildings' next levels and unlocked monsters", async () => {
+    const choices = (await trade.tradeView(em(), B, NOW)).choices;
+    expect(choices.buildings).toContainEqual({ type: 14, level: 2 });
+    expect(choices.monsters).toEqual(["C1"]);
+    // Not in the yard, a level the hall would not reach next, a locked monster, an old word, junk.
+    for (const bad of ["b:15:1", "b:14:3", "m:C5", "upgrade", "b:14"]) {
+      expect(await reasonOf(trade.askForResources(em(), B, { r1: 100 }, bad, NOW))).toBe("badFor");
+    }
+    expect((await trade.tradeView(em(), B, NOW)).myRequest).toBeNull();
   });
 
   test("a request lapses after 24 hours", async () => {
     const asked = await trade.askForResources(em(), B, { r1: 100 }, null, NOW);
-    expect(await reasonOf(trade.giveToRequest(em(), A, asked.id, null, NOW + 86_400))).toBe("requestGone");
+    expect(await reasonOf(trade.giveToRequest(em(), A, asked.id, NOW + 86_400))).toBe("requestGone");
     expect((await trade.tradeView(em(), B, NOW + 86_400)).myRequest).toBeNull();
   });
 });
