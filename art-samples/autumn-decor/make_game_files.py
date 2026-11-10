@@ -31,10 +31,18 @@ BOTTOM = {30: 22, 40: 30}
 
 SHEAR_X = 0.45   # shadow leans right by this much per pixel of height (Flash scarecrow ~0.4)
 SQUASH = 0.28    # and rises this much per pixel of height
-DARK = 0.62      # darkest the shadow gets (Flash's darkest: 51-129 of 255)
+DARK = 0.62      # the build buttons' shadow strength (unchanged since first made)
+# The yard shadows, matched to Flash's of similar size (Bonsai, Bird House, Beehive, Outhouse):
+# their darkest pixel 50-90 of 255 and most of the shadow solid, so darker and crisper than the
+# first cut, which the tester found too light and soft (10 Nov 2026).
+YARD_DARK = 0.75
+YARD_BLUR = 0.7
+YARD_FADE_FLOOR = 0.6
 
 
-def shadow_mask(alpha: Image.Image, scale: float = 1.0) -> tuple[Image.Image, int, int]:
+def shadow_mask(
+    alpha: Image.Image, scale: float = 1.0, dark: float = DARK, blur_px: float = 1.6, floor: float = 0.35
+) -> tuple[Image.Image, int, int]:
     """The shadow cast by `alpha` (an L image) as an L mask, and where its top-left sits relative
     to the art's bottom-left corner."""
     w, h = alpha.size
@@ -52,14 +60,14 @@ def shadow_mask(alpha: Image.Image, scale: float = 1.0) -> tuple[Image.Image, in
     e = 1.0 / SQUASH
     f = bottom - bottom / SQUASH
     sheared = canvas.transform((cw, ch), Image.AFFINE, (a, b, c, d, e, f), resample=Image.BILINEAR)
-    blur = sheared.filter(ImageFilter.GaussianBlur(1.6 * scale))
+    blur = sheared.filter(ImageFilter.GaussianBlur(blur_px * scale))
     # fade with distance from the base: rows further up (further from bottom) fade out
     fade = Image.new("L", (cw, ch), 0)
     px = fade.load()
     span = max(1.0, h * SQUASH)
     for yy in range(ch):
         dist = max(0.0, bottom - yy)
-        val = int(255 * DARK * max(0.35, 1.0 - 0.55 * dist / span))
+        val = int(255 * dark * max(floor, 1.0 - 0.55 * dist / span))
         for xx in range(cw):
             px[xx, yy] = val
     mask = ImageChops.multiply(blur, fade)
@@ -82,7 +90,7 @@ for type_id, name, size in ITEMS:
 
     bottom = BOTTOM[size]
     top_x, top_y = -round(w / 2), bottom - h
-    mask, sx, sy = shadow_mask(one.getchannel("A"))
+    mask, sx, sy = shadow_mask(one.getchannel("A"), dark=YARD_DARK, blur_px=YARD_BLUR, floor=YARD_FADE_FLOOR)
     to_jpeg_shadow(mask).save(OUT / f"{name}-shadow.jpg", quality=90)
     shadow_x, shadow_y = top_x + sx, bottom + sy
     print(f"{type_id} {name} size {size} top {w}x{h} at ({top_x},{top_y}) shadow {mask.size[0]}x{mask.size[1]} at ({shadow_x},{shadow_y})")

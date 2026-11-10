@@ -29,7 +29,7 @@ export const REVAMP_DECORATIONS: readonly RevampDecoration[] = [
   { type: 201, name: "Leaf Pile and Rake", size: 40, price: 25 },
   { type: 202, name: "Apple Barrel", size: 30, price: 30 },
   { type: 203, name: "Pie on a Tree Stump", size: 30, price: 35 },
-  { type: 204, name: "Harvest Wheelbarrow", size: 40, price: 50 },
+  { type: 204, name: "Harvest Barrow", size: 40, price: 50 },
   { type: 205, name: "Turkey Topiary", size: 40, price: 60 },
   { type: 206, name: "Autumn Maple Tree", size: 40, price: 75 },
 ];

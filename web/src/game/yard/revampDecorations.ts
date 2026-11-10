@@ -30,19 +30,19 @@ export const REVAMP_DECORATION_ROWS: readonly ArtRow[] = [
     [1, ["leaf-pile-rake@2x.png", -23, -10], null, null, ["leaf-pile-rake-shadow.jpg", -20, 18], null, null],
   ], [100], 40],
   [202, "Apple Barrel", "buildings/decorations/autumn/", [
-    [1, ["apple-barrel@2x.png", -19, -22], null, null, ["apple-barrel-shadow.jpg", -15, 8], null, null],
+    [1, ["apple-barrel@2x.png", -19, -22], null, null, ["apple-barrel-shadow.jpg", -14, 9], null, null],
   ], [100], 30],
   [203, "Pie on a Tree Stump", "buildings/decorations/autumn/", [
-    [1, ["pie-stump@2x.png", -21, -14], null, null, ["pie-stump-shadow.jpg", -19, 10], null, null],
+    [1, ["pie-stump@2x.png", -21, -14], null, null, ["pie-stump-shadow.jpg", -18, 11], null, null],
   ], [100], 30],
-  [204, "Harvest Wheelbarrow", "buildings/decorations/autumn/", [
+  [204, "Harvest Barrow", "buildings/decorations/autumn/", [
     [1, ["harvest-wheelbarrow@2x.png", -26, -16], null, null, ["harvest-wheelbarrow-shadow.jpg", -25, 16], null, null],
   ], [100], 40],
   [205, "Turkey Topiary", "buildings/decorations/autumn/", [
-    [1, ["turkey-topiary@2x.png", -24, -24], null, null, ["turkey-topiary-shadow.jpg", -11, 13], null, null],
+    [1, ["turkey-topiary@2x.png", -24, -24], null, null, ["turkey-topiary-shadow.jpg", -10, 14], null, null],
   ], [100], 40],
   [206, "Autumn Maple Tree", "buildings/decorations/autumn/", [
-    [1, ["autumn-maple@2x.png", -37, -50], null, null, ["autumn-maple-shadow.jpg", -17, 6], null, null],
+    [1, ["autumn-maple@2x.png", -37, -50], null, null, ["autumn-maple-shadow.jpg", -17, 7], null, null],
   ], [100], 40],
 ];
 
