@@ -74,10 +74,11 @@ describe("the Observatory (150, alliances)", () => {
     // Under construction it shows its level 1 look.
     expect(resolveArt(150, 0, ArtState.DEFAULT)?.top.url).toBe(`/assets/${FOLDER}body.c1@2x.webp`);
 
+    // It stands still on its first frame (owner 10 Nov: "Just make it still").
     const policy = animPolicy(150);
-    expect(policy?.ticksPerFrame).toBeGreaterThan(0);
+    expect(policy?.ticksPerFrame).toBeNull();
+    expect(policy?.randomStart).toBe(false);
     expect(policy?.work).toBeNull();
-    expect(policy?.pauseWhileBusy).toBe(true);
   });
 
   it("cannot be recycled", () => {
