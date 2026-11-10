@@ -1,4 +1,5 @@
 import { yardSize } from "../YardGrid";
+import { isRevampDecoration } from "../revampDecorations";
 
 /**
  * Placement rules for the planner, as arithmetic and nothing else.
@@ -163,7 +164,8 @@ export const snap = (value: number): number => Math.round(value / GRID_STEP) * G
 
 /**
  * Decoration type ids: 28–50, 55–111, 120, 121, 131 and 135, which is every
- * type with `group == 4` (docs/specs/base-building.md §2, "Decorations").
+ * type with `group == 4` (docs/specs/base-building.md §2, "Decorations"), and
+ * this project's own from 201 (`revampDecorations.ts`).
  */
 export const isDecoration = (type: number): boolean =>
   (type >= 28 && type <= 50) ||
@@ -171,7 +173,8 @@ export const isDecoration = (type: number): boolean =>
   type === 120 ||
   type === 121 ||
   type === 131 ||
-  type === 135;
+  type === 135 ||
+  isRevampDecoration(type);
 
 export const InvalidReason = {
   OVERLAP: "overlap",
