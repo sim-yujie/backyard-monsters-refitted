@@ -63,6 +63,13 @@ import {
   type ModerationEffects,
   type ModerationKind,
 } from "../../services/admin/moderation.js";
+import {
+  adminAllianceAction,
+  allianceAdminLog,
+  dismissAllianceReports,
+  listAllianceReports,
+  type AllianceAdminAction,
+} from "../../services/alliance/allianceModeration.js";
 
 /**
  * The owner's dashboard API (`docs/design/admin-dashboard-api.md`); every
@@ -473,6 +480,46 @@ export const mountAdminRoutes = (router: Router): void => {
   // Chat moderators (services/admin/chatModerators.ts): a blue [Mod] badge in
   // chat, nothing more. Refusals are 400/409, never 404 (the page reads a 404
   // as signed out).
+  // Alliance reports and admin actions (services/alliance/allianceModeration.ts,
+  // design v5 §13): open reports one row per alliance; rename to
+  // "Alliance {id}", clear the ad, or disband; each logged and closing the
+  // alliance's open reports. A gone alliance is a 409, not a 404.
+  router.get(`${admin}/alliancereports`, apiVersion, adminOnly, async (ctx) => {
+    ok(ctx, {
+      reports: await listAllianceReports(postgres.em.fork(), {
+        offset: intOf(ctx.query.offset),
+        limit: intOf(ctx.query.limit),
+      }),
+    });
+  });
+
+  router.get(`${admin}/alliances/:id/log`, apiVersion, adminOnly, async (ctx) => {
+    const id = intOf(ctx.params.id);
+    if (id === undefined || id < 1) return refuse(ctx, Status.BAD_REQUEST, "There is no such alliance.", "noAlliance");
+    ok(ctx, { log: await allianceAdminLog(postgres.em.fork(), id) });
+  });
+
+  router.post(`${admin}/alliances/:id/:kind`, apiVersion, adminOnly, async (ctx) => {
+    const id = intOf(ctx.params.id);
+    if (id === undefined || id < 1) return refuse(ctx, Status.BAD_REQUEST, "There is no such alliance.", "noAlliance");
+    const kinds: Record<string, AllianceAdminAction | "dismiss"> = {
+      rename: "rename",
+      clearad: "clear_ad",
+      disband: "disband",
+      dismiss: "dismiss",
+    };
+    const kind = kinds[ctx.params.kind ?? ""];
+    if (!kind) return refuse(ctx, Status.BAD_REQUEST, "There is no such step.", "badRequest");
+    const em = postgres.em.fork();
+    if (kind === "dismiss") {
+      ok(ctx, { closed: await dismissAllianceReports(em, id, ctx.authUser.userid) });
+      return;
+    }
+    const done = await adminAllianceAction(em, id, ctx.authUser.userid, kind);
+    if (done.outcome !== "done") return refuse(ctx, Status.CONFLICT, "That alliance no longer exists.", "noAlliance");
+    ok(ctx, { closed: done.closed });
+  });
+
   router.get(`${admin}/moderators`, apiVersion, adminOnly, async (ctx) => {
     ok(ctx, { moderators: await listModerators(postgres.em.fork()) });
   });

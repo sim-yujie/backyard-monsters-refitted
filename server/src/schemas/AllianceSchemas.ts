@@ -22,6 +22,21 @@ export const ChangeAllianceTypeSchema = z.object({
 });
 
 /**
+ * Schema for the leader's rename (once per 7 days; `leadership.ts`).
+ */
+export const RenameAllianceSchema = z.object({
+  alliance_name: z.string().trim(),
+});
+
+/**
+ * Schema for a player's report of an alliance; the reason is optional.
+ */
+export const ReportAllianceSchema = z.object({
+  alliance_id: z.coerce.number().int().positive(),
+  reason: z.string().max(1000).optional().default(""),
+});
+
+/**
  * Schema to validate alliance edit data.
  */
 export const EditAllianceSchema = z.object({

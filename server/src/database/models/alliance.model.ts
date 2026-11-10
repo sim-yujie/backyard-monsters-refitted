@@ -49,6 +49,14 @@ export class Alliance {
   @Property({ type: "number", default: 0 })
   points_spent: Opt<number> = 0;
 
+  /** When the leader last renamed it; once per `RENAME_COOLDOWN_DAYS`. */
+  @Property({ type: Date, nullable: true })
+  renamed_at?: Date | null = null;
+
+  /** Set by an admin rename: the leader may pick a new name at once. */
+  @Property({ type: "boolean", default: false })
+  must_rename: Opt<boolean> = false;
+
   @OneToOne({ entity: () => AllianceStats, mappedBy: "alliance" })
   stats?: AllianceStats;
 }

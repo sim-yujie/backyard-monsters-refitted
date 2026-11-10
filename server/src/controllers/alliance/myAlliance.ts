@@ -1,4 +1,5 @@
 import { Status } from "../../enums/StatusCodes.js";
+import { AllianceRole } from "../../enums/Alliance.js";
 import { User } from "../../database/models/user.model.js";
 import { getUserAlliance } from "../../services/alliance/allianceAccess.js";
 import { getAllianceDetails } from "../../services/alliance/allianceMember.js";
@@ -6,6 +7,7 @@ import { getTypeSwitchOptions } from "../../services/alliance/allianceSettings.j
 import { memberLimit, officerLimit } from "../../services/alliance/allianceTypes.js";
 import { allowedActions } from "../../services/alliance/permissions.js";
 import { rejoinAvailableAt } from "../../services/alliance/joinGate.js";
+import { canTakeOver, renameAvailableAt } from "../../services/alliance/leadership.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
 /**
@@ -35,7 +37,10 @@ export const myAlliance: KoaController = async (ctx) => {
   }
 
   const { online, avgLevel } = await getAllianceDetails(alliance.id);
-  const typeOptions = await getTypeSwitchOptions(alliance.id, new Date());
+  const now = new Date();
+  const typeOptions = await getTypeSwitchOptions(alliance.id, now);
+  const renameAt = renameAvailableAt(alliance, now);
+  const isLeader = user.alliance_role === AllianceRole.LEADER;
 
   ctx.status = Status.OK;
   ctx.body = {
@@ -58,6 +63,11 @@ export const myAlliance: KoaController = async (ctx) => {
       type_options: typeOptions,
       role: user.alliance_role ?? null,
       permissions: allowedActions(user.alliance_role),
+      // Renaming (leader): `must_rename` after an admin rename; otherwise once per 7 days.
+      must_rename: alliance.must_rename,
+      rename_available_at: renameAt ? Math.floor(renameAt.getTime() / 1000) : null,
+      // The absent-leader takeover button (`leadership.ts`).
+      can_take_over: !isLeader && (await canTakeOver(alliance.id, user.userid, now)),
     },
   };
 };

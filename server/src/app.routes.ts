@@ -171,6 +171,9 @@ import { deleteMessages } from "./controllers/alliance/deleteMessages.js";
 import { kickMember } from "./controllers/alliance/kickMember.js";
 import { promoteMember } from "./controllers/alliance/promoteMember.js";
 import { setMemberRank } from "./controllers/alliance/setMemberRank.js";
+import { takeOverAlliance } from "./controllers/alliance/takeOverAlliance.js";
+import { renameAllianceController } from "./controllers/alliance/renameAlliance.js";
+import { reportAllianceController } from "./controllers/alliance/reportAlliance.js";
 import { changeRelationship } from "./controllers/alliance/changeRelationship.js";
 import { getPowerups } from "./controllers/alliance/getPowerups.js";
 import { submitBugReportController, submitGuestBugReportController } from "./controllers/bugReports/submitBugReport.js";
@@ -409,6 +412,9 @@ router.post("/alliance/deletemessages", verifyUserAuth, logRequest, deleteMessag
 router.post("/alliance/kickmember", verifyUserAuth, logRequest, kickMember);
 router.post("/alliance/promotemember", verifyUserAuth, logRequest, promoteMember);
 router.post("/alliance/setrank", verifyUserAuth, logRequest, setMemberRank);
+router.post("/alliance/takeover", verifyUserAuth, logRequest, takeOverAlliance);
+router.post("/alliance/rename", verifyUserAuth, allianceCreateEditLimiter, logRequest, renameAllianceController);
+router.post("/alliance/report", verifyUserAuth, allianceCreateEditLimiter, logRequest, reportAllianceController);
 router.post("/alliance/changerelationship", verifyUserAuth, logRequest, changeRelationship);
 
 /**  ────────────────────────────────────────────────

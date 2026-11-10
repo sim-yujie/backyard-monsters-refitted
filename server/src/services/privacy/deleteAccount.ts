@@ -371,7 +371,7 @@ const allianceOutcome = async (sql: Sql, account: AccountRow) => {
   const [next] = await sql<{ userid: number; username: string }>(
     // An Officer takes over before a Member (design v5 §6).
     `SELECT userid, username FROM bym."user" WHERE alliance_id = ? AND userid <> ?
-      ORDER BY (alliance_role = ?) DESC, userid LIMIT 1`,
+      ORDER BY (alliance_role = ?) DESC, alliance_joined_at ASC NULLS LAST, userid LIMIT 1`,
     [account.alliance_id, account.userid, AllianceRole.OFFICER]
   );
 

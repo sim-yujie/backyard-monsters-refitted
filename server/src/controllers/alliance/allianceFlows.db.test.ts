@@ -49,6 +49,10 @@ const { myAlliance } = await import("./myAlliance.js");
 const { setMemberRank } = await import("./setMemberRank.js");
 const { editAlliance } = await import("./editAlliance.js");
 const { searchAlliances } = await import("./searchAlliances.js");
+const { takeOverAlliance } = await import("./takeOverAlliance.js");
+const { renameAllianceController } = await import("./renameAlliance.js");
+const { reportAllianceController } = await import("./reportAlliance.js");
+const { adminAllianceAction, listAllianceReports } = await import("../../services/alliance/allianceModeration.js");
 
 const BASE = 993_800;
 const LEADER = BASE + 1;
@@ -66,7 +70,12 @@ const sql = <R = Record<string, any>>(query: string, params: unknown[] = []) =>
   orm!.em.fork().execute<R[]>(query, params);
 
 const clear = async () => {
-  await sql(`DELETE FROM bym.alliance WHERE name LIKE 'zz_flow_%'`);
+  await sql(`DELETE FROM bym.alliance_report WHERE reporter_id IN (${USERS.join(",")})`);
+  await sql(`DELETE FROM bym.alliance_admin_action WHERE admin_id = ${BASE}`);
+  await sql(
+    `DELETE FROM bym.alliance WHERE name LIKE 'zz_flow_%'
+        OR id IN (SELECT alliance_id FROM bym."user" WHERE userid IN (${USERS.join(",")}) AND alliance_id IS NOT NULL)`
+  );
   await sql(`DELETE FROM bym.alliance_invite WHERE user_id IN (${USERS.join(",")})`);
   await sql(`UPDATE bym."user" SET save_basesaveid = NULL WHERE userid IN (${USERS.join(",")})`);
   await sql(`DELETE FROM bym.save WHERE userid IN (${USERS.join(",")})`);
@@ -480,6 +489,114 @@ describe.skipIf(!enabled)("alliance flows through the controllers, on Postgres (
         [LEADER, MEMBER]
       );
       expect(rows.every((row) => row.alliance_joined_at !== null)).toBe(true);
+    });
+  });
+
+  describe("absent-leader takeover (design v5 §6)", () => {
+    /** LEADER last played `days` ago; MEMBER and PLAYER are in, MEMBER the longer. */
+    const setUp = async (days: number) => {
+      const allianceId = await foundWithMember();
+      await call(requestJoin, PLAYER, { alliance_id: allianceId });
+      await call(changeInviteStatus, LEADER, { invite_id: await pendingInviteId(PLAYER), status: "accepted" });
+      await sql(`UPDATE bym."user" SET alliance_joined_at = now() - interval '30 days' WHERE userid = ?`, [MEMBER]);
+      await sql(`UPDATE bym."user" SET last_seen_at = now() - (? * interval '1 day') WHERE userid = ?`, [days, LEADER]);
+      return allianceId;
+    };
+
+    test("an active leader cannot be taken over", async () => {
+      await setUp(2);
+      expect((await call(takeOverAlliance, MEMBER)).refused).toContain("played in the last 7 days");
+      expect((await call(myAlliance, MEMBER)).alliance.can_take_over).toBe(false);
+    });
+
+    test("with no Officer, the longest-serving active Member takes over; the leader becomes a Member", async () => {
+      await setUp(8);
+      expect((await call(myAlliance, PLAYER)).alliance.can_take_over).toBe(false);
+      expect((await call(takeOverAlliance, PLAYER)).refused).toContain("served longer");
+
+      expect((await call(myAlliance, MEMBER)).alliance.can_take_over).toBe(true);
+      expect((await call(takeOverAlliance, MEMBER)).error).toBe(0);
+      expect((await membership(MEMBER)).role).toBe("leader");
+      expect((await membership(LEADER)).role).toBe("member");
+    });
+
+    test("an active Officer comes before a longer-serving Member; an absent Officer is passed over", async () => {
+      await setUp(8);
+      await call(setMemberRank, LEADER, { userid: PLAYER, role: "officer" });
+      expect((await call(takeOverAlliance, MEMBER)).refused).toContain("served longer");
+
+      await sql(`UPDATE bym."user" SET last_seen_at = now() - interval '9 days' WHERE userid = ?`, [PLAYER]);
+      expect((await call(takeOverAlliance, MEMBER)).error).toBe(0);
+    });
+  });
+
+  describe("rename, report and admin actions (design v5 §6, §13)", () => {
+    const adminEm = () => orm!.em.fork();
+    const nameOf = async (id: number) =>
+      (await sql<{ name: string; must_rename: boolean; description: string }>(
+        `SELECT name, must_rename, description FROM bym.alliance WHERE id = ?`,
+        [id]
+      ))[0];
+
+    test("the leader renames once per 7 days; an Officer may not", async () => {
+      const allianceId = await foundWithMember();
+
+      expect((await call(renameAllianceController, LEADER, { alliance_name: "zz_flow_renamed" })).error).toBe(0);
+      expect((await nameOf(allianceId))!.name).toBe("zz_flow_renamed");
+      expect((await call(renameAllianceController, LEADER, { alliance_name: "zz_flow_again" })).refused).toContain(
+        "once every 7 days"
+      );
+
+      await sql(`UPDATE bym.alliance SET renamed_at = now() - interval '8 days' WHERE id = ?`, [allianceId]);
+      await call(setMemberRank, LEADER, { userid: MEMBER, role: "officer" });
+      expect((await call(renameAllianceController, MEMBER, { alliance_name: "zz_flow_officer" })).refused).toBeDefined();
+      expect((await call(renameAllianceController, LEADER, { alliance_name: "zz_flow_again" })).error).toBe(0);
+    });
+
+    test("an admin rename gives 'Alliance {id}' and lets the leader rename at once", async () => {
+      const allianceId = await foundWithMember();
+      await call(renameAllianceController, LEADER, { alliance_name: "zz_flow_renamed" });
+
+      expect(await adminAllianceAction(adminEm(), allianceId, BASE, "rename")).toMatchObject({ outcome: "done" });
+      expect(await nameOf(allianceId)).toMatchObject({ name: `Alliance ${allianceId}`, must_rename: true });
+      expect((await call(myAlliance, LEADER)).alliance).toMatchObject({ must_rename: true, rename_available_at: null });
+
+      expect((await call(renameAllianceController, LEADER, { alliance_name: "zz_flow_clean" })).error).toBe(0);
+      expect(await nameOf(allianceId)).toMatchObject({ name: "zz_flow_clean", must_rename: false });
+    });
+
+    test("a report lands once on the dashboard; clearing the ad closes it", async () => {
+      const allianceId = await foundWithMember();
+
+      expect((await call(reportAllianceController, MEMBER, { alliance_id: allianceId })).refused).toContain("your own");
+      expect((await call(reportAllianceController, OTHER_WORLD, { alliance_id: allianceId, reason: "rude ad" })).error).toBe(0);
+      expect((await call(reportAllianceController, OTHER_WORLD, { alliance_id: allianceId })).error).toBe(0);
+
+      const listed = (await listAllianceReports(adminEm())).filter((row) => row.alliance_id === allianceId);
+      expect(listed).toHaveLength(1);
+      expect(listed[0]).toMatchObject({ reports: 1, reasons: ["rude ad"], reported_desc: "A test alliance" });
+
+      expect(await adminAllianceAction(adminEm(), allianceId, BASE, "clear_ad")).toEqual({ outcome: "done", closed: 1 });
+      expect((await nameOf(allianceId))!.description).toBe("");
+      expect((await listAllianceReports(adminEm())).filter((row) => row.alliance_id === allianceId)).toEqual([]);
+    });
+
+    test("an admin disband frees every member without the 24-hour wait, and is logged", async () => {
+      const allianceId = await foundWithMember();
+
+      expect(await adminAllianceAction(adminEm(), allianceId, BASE, "disband")).toMatchObject({ outcome: "done" });
+      expect(await allianceExists(allianceId)).toBe(false);
+      expect(await membership(MEMBER)).toEqual({ alliance_id: null, role: null });
+
+      const [row] = await sql<{ alliance_left_at: Date | null }>(
+        `SELECT alliance_left_at FROM bym."user" WHERE userid = ?`,
+        [MEMBER]
+      );
+      expect(row!.alliance_left_at).toBeNull();
+
+      const log = await sql(`SELECT action FROM bym.alliance_admin_action WHERE alliance_id = ?`, [allianceId]);
+      expect(log.map((entry) => entry.action)).toEqual(["disband"]);
+      expect(await adminAllianceAction(adminEm(), allianceId, BASE, "disband")).toEqual({ outcome: "noAlliance" });
     });
   });
 
