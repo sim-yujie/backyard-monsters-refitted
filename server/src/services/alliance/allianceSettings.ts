@@ -97,7 +97,7 @@ export const switchAllianceType = async (
     await em.nativeUpdate(
       Alliance,
       { id: alliance.id },
-      { type: to, type_changed_at: now, points: quote.points_after, points_spent: 0 }
+      { type: to, type_changed_at: now, points: quote.points_after, points_spent: 0, stars: {} }
     );
 
     return quote;
@@ -107,6 +107,7 @@ export const switchAllianceType = async (
   alliance.type_changed_at = now;
   alliance.points = quote.points_after;
   alliance.points_spent = 0;
+  alliance.stars = {};
 
   await announceShout({ allianceId: alliance.id, author: leader, type: AllianceMessageType.TYPE_CHANGED, body: to });
 

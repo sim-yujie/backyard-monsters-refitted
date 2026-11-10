@@ -2,6 +2,7 @@ import type { Resources } from "@/api/types";
 import { OUTPOST_CORE_TYPE } from "./buildingCosts";
 import { STARTER_KIT_SUMMARIES, type StarterKitSummary } from "./starterKitData";
 import type { Yard } from "./yardModel";
+import { byPercent, currentAllianceBonuses } from "@/game/alliance/allianceBonuses";
 
 /**
  * The outpost Starter Kits, client-side (outposts WP9, issue #188): what the
@@ -74,3 +75,20 @@ export const kitReplacesBuildings = (yard: Pick<Yard, "buildings">): boolean =>
 /** A kit by id, 1 to 3. */
 export const kitSummary = (id: number): StarterKitSummary | null =>
   STARTER_KIT_SUMMARIES.find((kit) => kit.id === id) ?? null;
+
+/**
+ * The kits at the player's price: the alliance's `kitCost` changes the
+ * resource price only, never the Shiny one (server `planStarterKit`).
+ */
+export const kitsAtPrice = (percent: number = currentAllianceBonuses().kitCost): readonly StarterKitSummary[] =>
+  percent
+    ? STARTER_KIT_SUMMARIES.map((kit) => ({
+        ...kit,
+        resources: {
+          ...kit.resources,
+          r1: byPercent(kit.resources.r1, percent),
+          r2: byPercent(kit.resources.r2, percent),
+          r3: byPercent(kit.resources.r3, percent),
+        },
+      }))
+    : STARTER_KIT_SUMMARIES;

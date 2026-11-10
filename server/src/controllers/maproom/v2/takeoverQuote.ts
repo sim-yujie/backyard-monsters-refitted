@@ -1,4 +1,5 @@
 import z from "zod";
+import { takeoverPercent } from "../../../services/alliance/allianceBonuses.js";
 import type { KoaController } from "../../../utils/KoaController.js";
 import type { User } from "../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
@@ -123,6 +124,11 @@ export const takeoverQuote: KoaController = async (ctx) => {
     buildingdata: save?.buildingdata,
     takerHomebase: userSave.homebase,
     welcome,
+    alliancePercent: await takeoverPercent(
+      postgres.em,
+      currentUser.userid,
+      quoted.isWildMonster ? null : save?.saveuserid
+    ),
   });
 
   let reason: TakeoverQuoteReason | null;

@@ -1,4 +1,5 @@
 import { LockMode, type EntityManager } from "@mikro-orm/core";
+import { allianceBonusesOfUser, productionFactor } from "../../alliance/allianceBonuses.js";
 import { Save } from "../../../database/models/save.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { BaseType } from "../../../enums/Base.js";
@@ -330,7 +331,8 @@ export const payAutobank = (
   rates: Readonly<Record<string, ResourceAmounts>>,
   now: number,
   completed: readonly unknown[] = [],
-  changes: readonly IncomeChange[] = []
+  changes: readonly IncomeChange[] = [],
+  factor = 1
 ): AutobankReport => {
   const total = noAmounts();
   const column: JsonObject = {};
@@ -356,6 +358,8 @@ export const payAutobank = (
     }
     for (const key of RESOURCE_KEYS) owed[key] = Math.max(0, owed[key]);
   }
+  // The owner's alliance production bonus (`allianceBonuses.ts`), on what the ticks earned.
+  if (factor !== 1) for (const key of RESOURCE_KEYS) owed[key] = Math.max(0, Math.floor(owed[key] * factor));
   const { credited, overflow } = creditResources(main, owed);
 
   const banked = credited.r1 + credited.r2 + credited.r3 + credited.r4;
@@ -482,7 +486,9 @@ export const autobankYard = async (
 ): Promise<AutobankReport | null> => {
   if (main.type !== BaseType.MAIN || Number(main.mapversion) !== MapRoomVersion.V2) return null;
   const { rates, changes } = await outpostIncomes(em, main, now, inHand);
-  return payAutobank(main, rates, now, completed, changes);
+  if (Object.keys(rates).length === 0) return payAutobank(main, rates, now, completed, changes);
+  const factor = productionFactor(await allianceBonusesOfUser(em, main.saveuserid));
+  return payAutobank(main, rates, now, completed, changes, factor);
 };
 
 /**

@@ -51,3 +51,15 @@ describe("isAdjacentToMainYard", () => {
     for (const [x, y] of [[239, 208], [241, 208]]) expect(isAdjacentToMainYard(240, 207, x!, y!)).toBe(false);
   });
 });
+
+describe("quoteTakeover: alliance percent", () => {
+  test("changes the resource price and the Shiny follows", async () => {
+    const { quoteTakeover } = await import("./takeoverCost.js");
+    const input = { cell: { x: 40, y: 40 }, isWildMonster: true, buildingdata: null, takerHomebase: null };
+    const plain = quoteTakeover(input);
+    const cheaper = quoteTakeover({ ...input, alliancePercent: -20 });
+    expect(cheaper.resources).toBe(Math.round(plain.resources * 0.8));
+    expect(cheaper.shiny).toBe(takeoverShinyCost(cheaper.resources));
+    expect(quoteTakeover({ ...input, alliancePercent: 25 }).resources).toBe(Math.round(plain.resources * 1.25));
+  });
+});

@@ -1,4 +1,5 @@
 import { LockMode, type EntityManager } from "@mikro-orm/core";
+import { takeoverPercent } from "../../../services/alliance/allianceBonuses.js";
 import type { KoaController } from "../../../utils/KoaController.js";
 import { User } from "../../../database/models/user.model.js";
 import { Save } from "../../../database/models/save.model.js";
@@ -143,6 +144,7 @@ export const takeoverCell: KoaController = async (ctx) => {
       buildingdata: cellSave.buildingdata,
       takerHomebase: taker.homebase,
       welcome,
+      alliancePercent: await takeoverPercent(em, currentUser.userid, wildCamp ? null : cellSave.saveuserid),
     });
 
     if (useShiny) {

@@ -50,6 +50,7 @@ import { recordAttackPlan } from "./autoAttack/attackPlanStore.js";
 import { recordAttackAchievements } from "../achievements/events.js";
 import { countAttackLoot } from "../events/lootEvents.js";
 import { plunderPercent, weekendBoostUsed, withPlunderBonus } from "../events/weekendBoosts.js";
+import { attackLootPercent, mapByPercent } from "../alliance/allianceBonuses.js";
 import { attackQuestEvents, defenceQuestEvents } from "../quests/hooks.js";
 import { recordQuestEvents, recordUserQuestEvents } from "../quests/record.js";
 
@@ -317,10 +318,14 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   // Tribe Plunder and the wild-tribe Goo bonus, as `baseSave.ts` lands them.
   const fromTribe = defender.type === BaseType.TRIBE;
   const plunder = plunderPercent(fromTribe, now);
+  const alliancePercent = await attackLootPercent(postgres.em, attacker.userid, defender.saveuserid);
   const banked = bankAttackLoot(
     userSave,
     withPlunderBonus(
-      withCampLootBonus(withTribeGooBonus(loot.credit, fromTribe), isMR2Camp(defender.type, userSave.mapversion)),
+      withCampLootBonus(
+        withTribeGooBonus(mapByPercent(loot.credit, alliancePercent), fromTribe),
+        isMR2Camp(defender.type, userSave.mapversion)
+      ),
       plunder
     ),
     loot.krallenBuff

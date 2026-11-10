@@ -1,4 +1,5 @@
 import type { BaseLoadResponse, ResourceCaps, Resources, SpeedupItem, StoreData, UpgradeCost } from "@/api/types";
+import { currentAllianceBonuses } from "@/game/alliance/allianceBonuses";
 import type { CostRequirement, YardKind } from "@/game/yard/buildingCostData";
 import {
   costOf,
@@ -663,9 +664,11 @@ export const fortifyOffer = (building: YardBuilding, context: PanelContext): For
   }
 
   const fullCost: UpgradeCost = { r1: step[0], r2: step[1], r3: step[2], r4: step[3] };
-  // Builder's Weekend: the server charges this much less (`planFortify`).
+  // Builder's Weekend: the server charges this much less (`planFortify`),
+  // and a Fortress Legion's cheaper Fortify on top, never in the Inferno.
   const weekendOff = weekendPercent("builders", context.now());
-  const cost: UpgradeCost = costLessBy(fullCost, weekendOff);
+  const allianceOff = context.yard.kind === "inferno" ? 0 : Math.max(0, -currentAllianceBonuses().fortifyCost);
+  const cost: UpgradeCost = costLessBy(fullCost, Math.min(90, weekendOff + allianceOff));
   const seconds = Math.floor(step[4] * sharperToolsMultiplier(context.save.storedata, context.now()));
   const hall = townHallLevel(context.yard);
 

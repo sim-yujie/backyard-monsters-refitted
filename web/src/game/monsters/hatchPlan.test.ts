@@ -501,3 +501,11 @@ describe("queueRefund", () => {
     expect(queueRefund([])).toBe(0);
   });
 });
+
+describe("a Midas Council's dearer outpost hatching", () => {
+  it("priceOf adds the percent, rounded as the server", async () => {
+    const { priceOf } = await import("./hatchPlan");
+    expect(priceOf("C1", 1, 15)).toBe(Math.round(priceOf("C1", 1) * 1.15));
+    expect(priceOf("C1", 1, 0)).toBe(priceOf("C1", 1));
+  });
+});

@@ -155,8 +155,10 @@ export interface CatchUpSave
  *
  * @param save - The yard, mutated in place; `savetime` ends at `now`.
  * @param now - Unix seconds to advance to.
+ * @param productionFactor - The owner's alliance production bonus as a
+ *   factor on the main yard's harvesters (`allianceBonuses.ts`); 1 for none.
  */
-export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
+export const catchUpYard = (save: CatchUpSave, now: number, productionFactor = 1): CompletedJob[] => {
   const kind = yardKindOf(save);
   if (kind === "outpost") return catchUpOutpost(save, now);
   if (kind === "inferno") return catchUpInferno(save, now);
@@ -175,7 +177,7 @@ export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
     ...catchUpBuildings(save, from, now),
   ];
   completed.push(...catchUpMonsters(save, from, now, completed));
-  catchUpHarvesters(save, from, now, completed);
+  catchUpHarvesters(save, from, now, completed, "main", productionFactor);
   catchUpMushrooms(save, now);
   completed.push(...catchUpTraining(save, from, now));
   completed.push(...catchUpResearch(save, now));

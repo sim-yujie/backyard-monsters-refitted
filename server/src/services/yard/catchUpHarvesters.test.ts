@@ -146,3 +146,19 @@ describe("catchUpYard with harvesters", () => {
     expect(split.buildingdata).toEqual(whole.buildingdata);
   });
 });
+
+describe("catchUpHarvesters: alliance production bonus", () => {
+  test("a factor of 1.5 adds half again per cycle", () => {
+    const plain = yardOf(snapper({ st: 0, cP: 10 }));
+    const boosted = yardOf(snapper({ st: 0, cP: 10 }));
+    catchUpHarvesters(plain, T0, T0 + 100, []);
+    catchUpHarvesters(boosted, T0, T0 + 100, [], "main", 1.5);
+    expect(Number(boosted.buildingdata["1"]?.st)).toBeCloseTo(Number(plain.buildingdata["1"]?.st) * 1.5, 5);
+  });
+
+  test("still stops at the capacity", () => {
+    const save = yardOf(snapper({ st: 700 }));
+    catchUpHarvesters(save, T0, T0 + 3600, [], "main", 2);
+    expect(save.buildingdata["1"]).toMatchObject({ st: 720, pr: 0 });
+  });
+});

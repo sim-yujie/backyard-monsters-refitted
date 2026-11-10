@@ -14,6 +14,7 @@ import { isAttackActive } from "../../services/base/isAttackActive.js";
 import { addEvents, builtEvents, recordAchievements, unseenAchievements } from "../../services/achievements/record.js";
 import type { AchievementEvents } from "../../services/achievements/evaluate.js";
 import { autobankYard } from "../../services/maproom/v2/autobank.js";
+import { allianceBonusesOfUser, productionFactor, type AllianceBonuses } from "../../services/alliance/allianceBonuses.js";
 import { isShinyLocked } from "../../services/user/shinyLock.js";
 import { coinNotes, coinStore } from "../../services/events/eventCoins.js";
 import { catchUpYard, type CompletedJob } from "../../services/yard/catchUp.js";
@@ -201,6 +202,11 @@ export interface YardActionInput<Body> {
    * a refusal. Never use it to write the save itself: return `slices`.
    */
   em: EntityManager;
+  /**
+   * The player's alliance strengths and weaknesses (`allianceBonuses.ts`),
+   * all zeros outside an alliance. Optional so tests may leave it out.
+   */
+  bonuses?: AllianceBonuses;
 }
 
 /** What `run` returns. Every field but `report` is optional. */
@@ -568,7 +574,8 @@ export const catchUpLockedYard = async (
  * @returns What the catch-up finished.
  */
 export const catchUpLockedRow = async (tx: EntityManager, locked: Save, now: number): Promise<CompletedJob[]> => {
-  const completed = catchUpYard(locked, now);
+  const factor = locked.type === BaseType.MAIN ? productionFactor(await allianceBonusesOfUser(tx, locked.saveuserid)) : 1;
+  const completed = catchUpYard(locked, now, factor);
   await joinMapRoom2(tx, locked);
   await autobankYard(tx, locked, now, completed);
   // Hatches that finished while the player was away count for
@@ -707,11 +714,12 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
       // from its finish, not from now. On the main yard it is paid after the
       // catch-up, which tells it when a Production Overdrive ran out.
       if (yard.outpost) await autobankYard(tx, yard.main, now, [], yard.outpost);
-      const completed = catchUpYard(save, now);
+      const bonuses = await allianceBonusesOfUser(tx, user.userid);
+      const completed = catchUpYard(save, now, onMain ? productionFactor(bonuses) : 1);
       if (onMain) await joinMapRoom2(tx, save, user);
       if (onMain) await autobankYard(tx, yard.main, now, completed);
 
-      const outcome = await action.run({ save, user, body: parsed.data, now, completed, em: tx });
+      const outcome = await action.run({ save, user, body: parsed.data, now, completed, em: tx, bonuses });
       applyOutcome(save, user, outcome);
       await applyCoins(tx, user, outcome);
       // A Resource Pod built, finished or recycled moves the main yard's

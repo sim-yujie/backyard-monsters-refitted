@@ -83,43 +83,174 @@ export const OBSERVATORY = {
 };
 
 /**
- * Starting strengths and weaknesses of each type, in percent, as placeholders
- * for the phase that wires them in (fable52 balance check, 10 Nov 2026,
- * "Recommended numbers", START column). Nothing reads these yet. Positive
- * means more, negative less; `takeoverCost` and `kitCost` are what a member
- * pays; `enemyTakeoverCost` is what others pay for this type's outposts.
+ * What an alliance bonus can change, each in percent of the normal figure
+ * (positive = more). Who it touches:
+ * - `production`: what members' harvesters make, main yard and outposts.
+ * - `loot`: what a member carries home from an attack.
+ * - `raidersCarry`: what an attacker carries home from a member's yards.
+ * - `takeoverCost`: what a member pays to take over an outpost or camp.
+ * - `enemyTakeoverCost`: what anyone pays to take over a member's outpost.
+ * - `kitCost`: the resource price of an Outpost Starter Kit (Shiny stays).
+ * - `outpostHatchCost`: the resource price of hatching on an outpost.
+ * - `fortifyCost`: the price of fortifying a building.
+ * Battle stats (phase 4, one buff hook for server and web battles):
+ * - `buildingHealth`, `outpostHealth` (outposts only), `towerDamage`,
+ *   `trapDamage`, and `reach` (extra map reach in cells, not percent).
+ * Not wired yet (listed so the numbers live here): `takeoverDestroyedPercent`
+ * (the damage a takeover needs), `newOutpostProtectionHours`,
+ * `outpostRepairSpeed`, `damageProtectionLength`.
  */
-export const TYPE_BONUSES_PLACEHOLDER: Record<AllianceType, Record<string, number>> = {
-  [AllianceType.MIDAS]: {
-    production: 15,
-    loot: 10,
-    takeoverCost: 20,
-    kitCost: 10,
-    outpostHatchCost: 15,
-    raidersCarry: 10,
-    outpostHealth: -10,
-  },
-  [AllianceType.CONQUEST]: {
-    loot: -20,
-    takeoverCost: -20,
-    kitCost: -10,
-    takeoverDestroyedPercent: 85,
-    newOutpostProtectionHours: 6,
-    outpostHealth: -10,
-  },
+export const ALLIANCE_STATS = [
+  "production",
+  "loot",
+  "raidersCarry",
+  "takeoverCost",
+  "enemyTakeoverCost",
+  "kitCost",
+  "outpostHatchCost",
+  "fortifyCost",
+  "buildingHealth",
+  "outpostHealth",
+  "towerDamage",
+  "trapDamage",
+  "reach",
+  "takeoverDestroyedPercent",
+  "newOutpostProtectionHours",
+  "outpostRepairSpeed",
+  "damageProtectionLength",
+] as const;
+export type AllianceStat = (typeof ALLIANCE_STATS)[number];
+
+/** Stats a battle reads; they wait for phase 4's buff hook. */
+export const BATTLE_STATS: readonly AllianceStat[] = [
+  "buildingHealth",
+  "outpostHealth",
+  "towerDamage",
+  "trapDamage",
+  "reach",
+];
+
+/** One stat a constellation moves: its value with no stars, and what each step (2 stars) adds. */
+export interface ConstellationEffect {
+  stat: AllianceStat;
+  start: number;
+  perStep: number;
+  /** Added only once the last step is lit (Teratorn's +1 reach). */
+  atFull?: number;
+}
+
+/** One of a type's four constellations (design v5 §9). */
+export interface ConstellationRules {
+  /** Stable id, stored in `alliance.stars`. */
+  id: string;
+  /** The monster it is named after. */
+  name: string;
+  /** Strengths grow with stars; weaknesses shrink. */
+  kind: "strength" | "weakness";
+  effects: ConstellationEffect[];
+}
+
+/** Steps per constellation; each step lights 2 of its 10 stars (design v5 §9, question 22). */
+export const CONSTELLATION_STEPS = 5;
+
+/** Stars each step lights. */
+export const STARS_PER_STEP = 2;
+
+/**
+ * Point price of steps 1-5 for Midas; Conquest pays 2x and Fortress 4x (by
+ * capacity, never by member count; design v5 §9).
+ */
+export const STEP_PRICES = [40, 80, 120, 160, 200];
+
+/** Capacity factor per type: point prices, goal targets and goal points scale with it. */
+export const TYPE_SCALE: Record<AllianceType, number> = {
+  [AllianceType.MIDAS]: 1,
+  [AllianceType.CONQUEST]: 2,
+  [AllianceType.FORTRESS]: 4,
+};
+
+/**
+ * The four constellations of each type, with start values from fable52's
+ * balance check (10 Nov 2026, START column) and the owner's answers of
+ * 10 Nov: Midas's second weakness is outpost hatch cost, Conquest's is
+ * outpost health, no weakness touches main-yard defence. A weakness step
+ * takes off a tenth of its start, so a full constellation halves it.
+ * PLACEHOLDERS: the owner tunes these after the feature is done.
+ */
+export const CONSTELLATIONS: Record<AllianceType, ConstellationRules[]> = {
+  [AllianceType.MIDAS]: [
+    { id: "wormzer", name: "Wormzer", kind: "strength", effects: [{ stat: "production", start: 15, perStep: 3 }] },
+    { id: "brain", name: "Brain", kind: "strength", effects: [{ stat: "loot", start: 10, perStep: 1 }] },
+    {
+      id: "pokey",
+      name: "Pokey",
+      kind: "weakness",
+      effects: [{ stat: "outpostHatchCost", start: 15, perStep: -1.5 }],
+    },
+    {
+      id: "zafreeti",
+      name: "Zafreeti",
+      kind: "weakness",
+      effects: [{ stat: "takeoverCost", start: 20, perStep: -2 }],
+    },
+  ],
+  [AllianceType.CONQUEST]: [
+    { id: "fang", name: "Fang", kind: "strength", effects: [{ stat: "takeoverCost", start: -20, perStep: -2 }] },
+    {
+      id: "teratorn",
+      name: "Teratorn",
+      kind: "strength",
+      effects: [
+        { stat: "kitCost", start: -10, perStep: -3 },
+        { stat: "reach", start: 0, perStep: 0, atFull: 1 },
+      ],
+    },
+    { id: "bolt", name: "Bolt", kind: "weakness", effects: [{ stat: "loot", start: -20, perStep: 2 }] },
+    { id: "ichi", name: "Ichi", kind: "weakness", effects: [{ stat: "outpostHealth", start: -10, perStep: 1 }] },
+  ],
+  [AllianceType.FORTRESS]: [
+    {
+      id: "crabatron",
+      name: "Crabatron",
+      kind: "strength",
+      effects: [
+        { stat: "buildingHealth", start: 10, perStep: 2 },
+        { stat: "trapDamage", start: 10, perStep: 2 },
+      ],
+    },
+    { id: "bandito", name: "Bandito", kind: "strength", effects: [{ stat: "towerDamage", start: 5, perStep: 2 }] },
+    {
+      id: "slimeattikus",
+      name: "Slimeattikus",
+      kind: "weakness",
+      effects: [{ stat: "production", start: -5, perStep: 0.5 }],
+    },
+    {
+      id: "octoooze",
+      name: "Octo-ooze",
+      kind: "weakness",
+      effects: [{ stat: "takeoverCost", start: 15, perStep: -1.5 }],
+    },
+  ],
+};
+
+/**
+ * Start values outside the constellations: always on, never moved by stars
+ * (fable52's other START numbers). Fortress's strengths are all battle stats
+ * until phase 4, so these give it economy-shaped strengths meanwhile
+ * (alliance audit §6.2).
+ */
+export const TYPE_EXTRAS: Record<AllianceType, Partial<Record<AllianceStat, number>>> = {
+  [AllianceType.MIDAS]: { kitCost: 10, raidersCarry: 10 },
+  [AllianceType.CONQUEST]: { takeoverDestroyedPercent: 85, newOutpostProtectionHours: 6 },
   [AllianceType.FORTRESS]: {
-    production: -5,
-    takeoverCost: 15,
     kitCost: 5,
-    takeoverDestroyedPercent: 95,
     enemyTakeoverCost: 25,
     raidersCarry: -20,
+    fortifyCost: -20,
+    takeoverDestroyedPercent: 95,
     outpostRepairSpeed: 25,
     damageProtectionLength: 25,
-    fortifyCost: -20,
-    buildingHealth: 10,
-    trapDamage: 10,
-    towerDamage: 5,
   },
 };
 

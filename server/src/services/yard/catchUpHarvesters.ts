@@ -149,7 +149,8 @@ export const advanceHarvester = (
   start: number,
   now: number,
   podEnd: number | undefined,
-  kind: YardKind = "main"
+  kind: YardKind = "main",
+  factor = 1
 ): HarvesterBuffer | null => {
   const type = Number(building.t);
   if (!isHarvester(type) || counting(building)) return null;
@@ -165,8 +166,8 @@ export const advanceHarvester = (
 
   let buffer = bufferOf(building);
   const overdriven = podEnd === undefined ? 0 : Math.max(0, Math.min(now, podEnd) - start);
-  if (overdriven > 0) buffer = runHarvester(buffer, rates, overdriven, OVERDRIVE_POWER);
-  return runHarvester(buffer, rates, Math.max(0, now - start - overdriven));
+  if (overdriven > 0) buffer = runHarvester(buffer, rates, overdriven, OVERDRIVE_POWER * factor);
+  return runHarvester(buffer, rates, Math.max(0, now - start - overdriven), factor);
 };
 
 /**
@@ -182,16 +183,17 @@ const advanceAcrossRepair = (
   now: number,
   podEnd: number | undefined,
   repair: RepairJob,
-  kind: YardKind
+  kind: YardKind,
+  factor: number
 ): HarvesterBuffer | null => {
   const damaged = repair.detail.from;
   const before: CatchUpHarvestersSave = {
     ...save,
     buildinghealthdata: { ...(save.buildinghealthdata ?? {}), [String(building.id ?? key)]: damaged },
   };
-  const first = advanceHarvester(before, key, { ...building, hp: damaged }, start, repair.at, podEnd, kind);
+  const first = advanceHarvester(before, key, { ...building, hp: damaged }, start, repair.at, podEnd, kind, factor);
   const mid = first ? withBuffer(building, first) : building;
-  return advanceHarvester(save, key, mid, repair.at, now, podEnd, kind) ?? first;
+  return advanceHarvester(save, key, mid, repair.at, now, podEnd, kind, factor) ?? first;
 };
 
 /**
@@ -206,13 +208,16 @@ const advanceAcrossRepair = (
  *   Overdrive's end.
  * @param kind - The yard's table: the Inferno yard's harvesters (Bone,
  *   Coal, Sulfur, Magma) run at their own rates (`inferno/infernoLoad.ts`).
+ * @param factor - The owner's alliance production bonus as a power factor
+ *   (`productionFactor`, `services/alliance/allianceBonuses.ts`); 1 for none.
  */
 export const catchUpHarvesters = (
   save: CatchUpHarvestersSave,
   from: number,
   now: number,
   completed: readonly unknown[],
-  kind: YardKind = "main"
+  kind: YardKind = "main",
+  factor = 1
 ): void => {
   const buildings = save.buildingdata;
   if (!buildings) return;
@@ -228,8 +233,8 @@ export const catchUpHarvesters = (
     const repair = repairOf(completed, id);
     const buffer =
       repair && repair.at > start
-        ? advanceAcrossRepair(save, key, building, start, now, podEnd, repair, kind)
-        : advanceHarvester(save, key, building, start, now, podEnd, kind);
+        ? advanceAcrossRepair(save, key, building, start, now, podEnd, repair, kind, factor)
+        : advanceHarvester(save, key, building, start, now, podEnd, kind, factor);
     if (!buffer) continue;
 
     const before = bufferOf(building);

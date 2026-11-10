@@ -12,7 +12,7 @@ import { typeName } from "@/game/yard/planner/summary";
 import {
   kitOffer,
   kitReplacesBuildings,
-  STARTER_KIT_SUMMARIES,
+  kitsAtPrice,
   type KitOffer,
   type StarterKitSummary,
 } from "@/game/yard/starterKits";
@@ -187,7 +187,7 @@ export class StarterKitPicker {
 
   /** Opens the confirmation for a kit and a payment, as a card's button does. */
   choose(kitId: number, pay: KitPayment): void {
-    const kit = STARTER_KIT_SUMMARIES.find((one) => one.id === kitId);
+    const kit = kitsAtPrice().find((one) => one.id === kitId);
     if (!kit || this.sending) return;
     this.pending = { kit, pay, free: this.isFree(kit) };
     this.status.textContent = "";
@@ -213,7 +213,7 @@ export class StarterKitPicker {
 
   private render(): void {
     if (this.closed) return;
-    this.cards.replaceChildren(...STARTER_KIT_SUMMARIES.map((kit) => this.card(kit)));
+    this.cards.replaceChildren(...kitsAtPrice().map((kit) => this.card(kit)));
     this.renderConfirm();
   }
 

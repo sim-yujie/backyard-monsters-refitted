@@ -1599,7 +1599,7 @@ export class HatchTab implements MonstersTab {
     const yard = this.yard;
     const preview = yard ? previewAdd(yard, target, monster, count) : null;
     if (preview && preview.added === 0) {
-      const price = priceOf(monster, yard?.levels[monster] ?? 1);
+      const price = priceOf(monster, yard?.levels[monster] ?? 1, yard?.pricePercent);
       this.setStatus({
         tone: "bad",
         content: [

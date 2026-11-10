@@ -717,6 +717,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
   firedtraps?: FiredTrap[];
   /** `main`, `outpost` or `tribe` (`server/src/enums/Base.ts`, BaseType). */
   type?: string;
+  /**
+   * The player's alliance, on an own main-yard load only (server
+   * `allianceData.ts`): read through `game/alliance/allianceBonuses.ts`
+   * and `api/chat.ts`.
+   */
+  alliancedata?: unknown;
   /** Owner username; the tribe name on a wild monster camp. */
   name?: string;
   /** Housing and hatchery state. On the own-yard load, the roster to fling. */

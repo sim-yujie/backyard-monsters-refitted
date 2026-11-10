@@ -5,6 +5,7 @@ import { type HexShape, hexDistance } from "../../../game-rules/maproom/range.js
 import { cheapTakeoverPrice } from "../../events/mr2Welcome.js";
 import type { BuildingDataMap } from "../../../types/BuildingData.js";
 import { outpostValue } from "./outpostValue.js";
+import { byPercent } from "../../alliance/allianceBonuses.js";
 
 /**
  * Server-side reconstruction of the Map Room 2 takeover price.
@@ -166,6 +167,7 @@ export const quoteTakeover = ({
   buildingdata,
   takerHomebase,
   welcome = false,
+  alliancePercent = 0,
 }: {
   cell: { x: number; y: number };
   isWildMonster: boolean;
@@ -179,6 +181,12 @@ export const quoteTakeover = ({
    * top; the Shiny price stays the usual one.
    */
   welcome?: boolean;
+  /**
+   * The alliance change to the price in percent (`takeoverPercent`,
+   * `services/alliance/allianceBonuses.ts`): on the resource price, after the
+   * adjacency half; the Shiny price follows from it.
+   */
+  alliancePercent?: number;
 }): TakeoverQuote => {
   const [homeX, homeY] = (takerHomebase ?? []).map(Number);
   const tribe = Tribes[(cell.x + cell.y) % Tribes.length]!;
@@ -192,12 +200,15 @@ export const quoteTakeover = ({
 
   const empireValue = isWildMonster ? 0 : outpostValue(buildingdata);
 
-  const resources = takeoverResourceCost({
-    isWildMonster,
-    level,
-    empireValue,
-    adjacentToMainYard: adjacent,
-  });
+  const resources = byPercent(
+    takeoverResourceCost({
+      isWildMonster,
+      level,
+      empireValue,
+      adjacentToMainYard: adjacent,
+    }),
+    alliancePercent
+  );
 
   const shiny = takeoverShinyCost(resources);
 
@@ -209,7 +220,7 @@ export const quoteTakeover = ({
       adjacentToMainYard: false,
     });
 
-    return { resources: cheapTakeoverPrice(fullBase), shiny, adjacent, welcome: true, usualResources: resources };
+    return { resources: cheapTakeoverPrice(byPercent(fullBase, alliancePercent)), shiny, adjacent, welcome: true, usualResources: resources };
   }
 
   return { resources, shiny, adjacent };

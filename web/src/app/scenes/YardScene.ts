@@ -1,4 +1,5 @@
 import { getSession, logout } from "@/api/auth";
+import { setCurrentAllianceBonuses } from "@/game/alliance/allianceBonuses";
 import { chatApi, chatConfigFrom } from "@/api/chat";
 import { loadAttackOn, loadOwnBase, loadOwnYard, takeAwayJobs, viewBase } from "@/api/base";
 import {
@@ -1012,6 +1013,8 @@ export class YardScene implements Scene {
       // Only the main yard's load says which alliance the player is in; an
       // outpost's or the Inferno's leaves the Alliance room as it was.
       if (chat) worldChat.configure(store?.kind === "main" ? chat : { ...chat, alliance: undefined });
+      // The alliance's strengths and weaknesses, for prices outside the yard store (Starter Kits, outpost hatching).
+      if (!target && !tribe && store?.kind === "main") setCurrentAllianceBonuses(response.alliancedata);
       // Once, after login: where the player is from, for a country chat room
       // (owner 3 Nov 2026). The server sends `countryask` until it is answered or put off.
       if (store?.kind === "main" && response.countryask) {

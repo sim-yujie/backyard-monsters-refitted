@@ -1,4 +1,5 @@
 import { costOf, OUTPOST_CORE_TYPE } from "../../game-data/buildingCosts.js";
+import { mapByPercent } from "../alliance/allianceBonuses.js";
 import { STARTER_KITS, type KitBuilding, type StarterKit } from "../../game-data/starterKits.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
@@ -254,10 +255,19 @@ const withoutProduction = (monsters: JsonObject | null | undefined): JsonObject 
  * @param now - Unix seconds.
  * @param free - The "New to Map Room 2" free Regular kit was claimed: charge
  *   nothing and build it as the resource path does.
+ * @param kitPercent - The alliance change to the kit's resource price
+ *   (`kitCost`, `allianceBonuses.ts`); the Shiny price never changes.
  * @returns The new buildings, health and monsters, the charge and the report.
  */
-export const planStarterKit = (save: StarterKitSave, request: StarterKitRequest, now: number, free = false) => {
-  const kit = starterKit(request.kit);
+export const planStarterKit = (
+  save: StarterKitSave,
+  request: StarterKitRequest,
+  now: number,
+  free = false,
+  kitPercent = 0
+) => {
+  const listed = starterKit(request.kit);
+  const kit = listed && kitPercent ? { ...listed, resources: mapByPercent(listed.resources, kitPercent) } : listed;
   if (!kit) throw yardBadRequestErr("There is no such Starter Kit.", { kit: request.kit });
   if (yardKindOf(save) !== "outpost") {
     throw yardRefusedErr("notOutpost", "Starter Kits are for outposts.");

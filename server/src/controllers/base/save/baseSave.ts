@@ -93,6 +93,7 @@ import { healChampions } from "../../../services/yard/catchUpChampions.js";
 import { championsAfterLessons } from "../../../services/base/combat/championBrain.js";
 import { countAttackLoot } from "../../../services/events/lootEvents.js";
 import { plunderPercent, weekendBoostUsed, withPlunderBonus } from "../../../services/events/weekendBoosts.js";
+import { attackLootPercent, mapByPercent } from "../../../services/alliance/allianceBonuses.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanStore.js";
 import { discardDefenceReplayLoad } from "../../../services/defences/defenceReplayLoad.js";
@@ -591,11 +592,13 @@ const saveBase = async (
       // tribes also give 25% more Goo (patch 6.9, `tribeGooBonus.ts`).
       const fromTribe = baseSave.type === BaseType.TRIBE;
       const plunder = plunderPercent(fromTribe, now);
+      // The attacker's alliance loot bonus and the defender's raiders-carry (`allianceBonuses.ts`).
+      const alliancePercent = await attackLootPercent(postgres.em, user.userid, baseSave.saveuserid);
       banked = bankAttackLoot(
         userSave,
         withPlunderBonus(
           withCampLootBonus(
-            withTribeGooBonus(loot.credit, fromTribe),
+            withTribeGooBonus(mapByPercent(loot.credit, alliancePercent), fromTribe),
             isMR2Camp(baseSave.type, userSave.mapversion)
           ),
           plunder

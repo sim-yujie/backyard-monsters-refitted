@@ -49,6 +49,10 @@ export class Alliance {
   @Property({ type: "number", default: 0 })
   points_spent: Opt<number> = 0;
 
+  /** Constellation steps lit, per constellation id of its type (`allianceBonuses.ts`); reset on a type switch. */
+  @Property({ type: "json", default: "{}" })
+  stars: Opt<Record<string, number>> = {};
+
   /** When the leader last renamed it; once per `RENAME_COOLDOWN_DAYS`. */
   @Property({ type: Date, nullable: true })
   renamed_at?: Date | null = null;

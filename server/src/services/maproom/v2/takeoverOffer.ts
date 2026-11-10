@@ -1,4 +1,5 @@
 import type { Save } from "../../../database/models/save.model.js";
+import { takeoverPercent } from "../../alliance/allianceBonuses.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { postgres } from "../../../server.js";
@@ -48,6 +49,7 @@ export const takeoverOffer = async (
       isWildMonster: false,
       buildingdata: outpost.buildingdata,
       takerHomebase: takerSave.homebase,
+      alliancePercent: await takeoverPercent(postgres.em, takerSave.saveuserid, outpost.saveuserid),
     }),
   };
 };
