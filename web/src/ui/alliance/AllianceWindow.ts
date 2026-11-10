@@ -1104,7 +1104,8 @@ export class AllianceWindow {
       this.face(member.pic_square, member.user_id),
       words,
       make("span", "alliance__level", ALLIANCE_TEXT.level(member.level)),
-      onlineDot(member.online ? "alliance__online is-online" : "alliance__online", false),
+      // Offline: an empty spot of the dot's size, so the levels line up (and no "Online" label).
+      member.online ? onlineDot("alliance__online", false) : make("span", "alliance__online alliance__online--off"),
     );
     row.addEventListener("click", () => {
       this.openMember = opened ? null : member.user_id;

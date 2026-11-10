@@ -1,4 +1,813 @@
-/* Alliance window (beta 7 phase 1). UNFINISHED: only the size so far; the next helper styles the rest. */
+/*
+ * The alliance window (beta 7 phase 1, `AllianceWindow.ts`): a Popup, so the
+ * frame, title sign, tabs and `.btn` plates come from `skin.css` in both looks.
+ * This file lays out what is inside: the marketplace, the Create form and My
+ * alliance. Colours come from tokens, so Modern's steel and Classic's
+ * parchment both read; the look-specific rules are the chosen chip, shield
+ * and type card (Modern: lit in the accent; Classic: an orange plate with
+ * dark writing) and a few lighter words on Modern's dark steel.
+ */
+
+/* ── The window ───────────────────────────────────────────────────────── */
+
 .alliance-window {
   width: min(100%, 520px);
+  /* What sticks up above the frame: the title sign (or the close disc). */
+  --alliance-window-overhang: max(var(--skin-title-lift, 0px), calc(var(--skin-edge, 0px) + 12px));
+  /* Under the top bar, so the title sign never covers the resources. */
+  max-height: calc(100dvh - var(--hud-height, 0px) - var(--space-2) - var(--space-4) - var(--alliance-window-overhang));
+  margin-top: var(--alliance-window-overhang);
+  min-height: 0;
+}
+
+.popup-backdrop:has(> .alliance-window) {
+  padding-top: calc(var(--hud-height, 0px) + var(--space-2));
+}
+
+/* Classic: the title onto the red ribbon's centre, as the Friends window. */
+:root[data-skin="flash"] .alliance-window .panel__title {
+  padding-top: 3px;
+}
+
+.alliance-window > .panel__head {
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+/* The body scrolls; the foot (Back / Create, Leave) stays whole under it. */
+.alliance-window > .panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.alliance__foot {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  border-top: 1px solid var(--colour-border-subtle);
+}
+
+.alliance__foot[hidden] {
+  display: none;
+}
+
+/* ── Shared pieces ────────────────────────────────────────────────────── */
+
+.alliance__status {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+  font-size: var(--text-sm);
+  line-height: 1.35;
+}
+
+.alliance__status--bad {
+  border-left: 3px solid var(--colour-danger);
+}
+
+.alliance__status[hidden] {
+  display: none;
+}
+
+.alliance__step {
+  margin-left: var(--space-2);
+  vertical-align: middle;
+}
+
+.alliance__section {
+  margin: 0;
+  color: var(--colour-text-strong);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: var(--display-weight);
+}
+
+.alliance__note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.alliance__note--soft {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.alliance__note--wait {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--colour-warning-soft);
+  color: var(--colour-text);
+}
+
+.alliance__empty {
+  margin: 0;
+  color: var(--colour-text-secondary);
+  text-align: center;
+}
+
+.alliance__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  min-height: var(--control-height-compact);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-input);
+  color: var(--colour-text);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.alliance__textarea {
+  resize: vertical;
+  min-height: 3.2em;
+}
+
+.alliance__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Flash's shields: medium is 46 px, small 25 px; shown at their own size, so they stay sharp. */
+.alliance__shield {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+}
+
+.alliance__shield--small {
+  width: 25px;
+  height: 25px;
+}
+
+.alliance__face {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--colour-surface-sunken);
+}
+
+.alliance__members,
+.alliance__active {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--colour-text);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance__level {
+  flex: none;
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The type: a small tag after the name, tinted in the type's own colour. */
+.alliance__type {
+  flex: none;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.alliance__type--midas {
+  background: rgb(224 170 40 / 30%);
+}
+
+.alliance__type--conquest {
+  background: rgb(210 60 50 / 26%);
+}
+
+.alliance__type--fortress {
+  background: rgb(70 120 210 / 26%);
+}
+
+.alliance__type-good,
+.alliance__type-bad {
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.alliance__type-good {
+  color: var(--colour-gain);
+}
+
+.alliance__type-bad {
+  color: var(--colour-loss);
+}
+
+/* ── Rows (alliances and members) ─────────────────────────────────────── */
+
+.alliance__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.alliance__item {
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.alliance__item.is-open {
+  border-color: var(--colour-accent-line);
+}
+
+.alliance__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 52px;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.alliance__row:hover:not(:disabled) {
+  background: var(--colour-surface-overlay);
+}
+
+/* A member with no buttons for the viewer: a plain row, not a greyed one. */
+.alliance__row:disabled {
+  color: inherit;
+  cursor: default;
+  opacity: 1;
+}
+
+.alliance__row-words {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-2);
+}
+
+.alliance__row-name {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--colour-text-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alliance__row-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2) var(--space-2);
+}
+
+.alliance__row-leader,
+.alliance__confirm-words {
+  flex: 1 1 100%;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.alliance__foot > .alliance__confirm-words {
+  flex: 1 1 12em;
+}
+
+.alliance__report {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.alliance__role {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.alliance__role--leader {
+  color: var(--colour-accent);
+}
+
+.alliance__role--officer {
+  color: var(--colour-info);
+}
+
+.alliance__online {
+  flex: none;
+}
+
+.alliance__online--off {
+  width: 8px;
+  height: 8px;
+}
+
+.alliance__pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+.alliance__page {
+  min-width: 4em;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* ── Marketplace ──────────────────────────────────────────────────────── */
+
+.alliance__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.alliance__head-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--colour-text-strong);
+  font-size: var(--text-md);
+}
+
+.alliance__quick,
+.alliance__invites,
+.alliance__invite-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+/* Invites waiting: the one thing to answer, so it stands out. */
+.alliance__invites {
+  border-color: var(--colour-accent-line);
+  background: var(--colour-accent-soft);
+}
+
+/* Chips and Join on one line; on a narrow phone the chips scroll sideways. */
+.alliance__quick {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.alliance__quick > .alliance__section {
+  grid-column: 1 / -1;
+}
+
+.alliance__quick-types {
+  display: flex;
+  gap: var(--space-1);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.alliance__chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--control-height-compact);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--colour-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.alliance__chip:hover {
+  background: var(--colour-surface-control-hover);
+}
+
+.alliance__chip-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance__search {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.alliance__search-go {
+  flex: none;
+}
+
+.alliance__invite {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.alliance__invite-words {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alliance__invite-words small {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.alliance__first {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-3);
+}
+
+.alliance__first-shield {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+}
+
+/* ── Create ───────────────────────────────────────────────────────────── */
+
+.alliance__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.alliance__form--inline {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.alliance__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.alliance__label {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+/* 41 shields: a grid that scrolls in a short box, so the form stays short. */
+.alliance__shields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 4px;
+  max-height: 104px;
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+}
+
+.alliance__shield-choice {
+  display: grid;
+  place-items: center;
+  height: 44px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+.alliance__shield-choice:hover {
+  background: var(--colour-surface-overlay);
+}
+
+.alliance__types {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.alliance__type-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  padding: var(--space-2);
+  border: 2px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.alliance__type-card:hover {
+  background: var(--colour-surface-control-hover);
+}
+
+.alliance__type-name {
+  color: var(--colour-text-strong);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: var(--display-weight);
+}
+
+/* The lead line: "Up to N members". */
+.alliance__type-size {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--colour-text-strong);
+  font-size: var(--text-sm);
+  font-weight: 800;
+}
+
+.alliance__type-officers {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* ── Chosen: chips, shields, type cards ───────────────────────────────── */
+
+/* Modern (and no skin): lit in the accent. */
+.alliance__chip[aria-pressed="true"] {
+  border-color: var(--colour-accent);
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.alliance__shield-choice[aria-checked="true"] {
+  border-color: var(--colour-accent);
+  background: var(--colour-accent-soft);
+}
+
+.alliance__type-card[aria-checked="true"] {
+  border-color: var(--colour-accent);
+  background: var(--colour-accent-soft);
+  box-shadow: 0 0 0 1px var(--colour-accent), 0 0 8px var(--colour-accent-line);
+}
+
+/* Classic: an orange plate with dark writing (owner's choice for Classic). */
+:root[data-skin="flash"] .alliance__chip[aria-pressed="true"],
+:root[data-skin="flash"] .alliance__type-card[aria-checked="true"] {
+  border-color: #9a4a08;
+  background: linear-gradient(#ffc457, #f39a1e 60%, #e07c12);
+  color: #2a1606;
+  text-shadow: 0 1px 0 rgb(255 236 170 / 60%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 55%), 0 1px 3px rgb(90 42 10 / 45%);
+}
+
+:root[data-skin="flash"] .alliance__shield-choice[aria-checked="true"] {
+  border-color: #9a4a08;
+  background: linear-gradient(#ffd27a, #f5a63a);
+}
+
+:root[data-skin="flash"] .alliance__type-card[aria-checked="true"] :is(.alliance__type-name, .alliance__type-size, .alliance__type-officers) {
+  color: #2a1606;
+}
+
+/* On the orange plate: deeper green and red than the parchment's. */
+:root[data-skin="flash"] .alliance__type-card[aria-checked="true"] .alliance__type-good {
+  color: #0d4219;
+}
+
+:root[data-skin="flash"] .alliance__type-card[aria-checked="true"] .alliance__type-bad {
+  color: #6e0c0c;
+}
+
+/* ── My alliance ──────────────────────────────────────────────────────── */
+
+.alliance__head--mine {
+  gap: var(--space-3);
+}
+
+.alliance__head-words {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.alliance__head-name {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--colour-text-strong);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--display-weight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alliance__tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.alliance__tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.alliance__tile-dot {
+  width: 12px;
+  height: 12px;
+}
+
+.alliance__tile-value {
+  color: var(--colour-text-strong);
+  font-size: var(--text-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance__type-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--space-3);
+}
+
+.alliance__leader {
+  margin: 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.alliance__description {
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border-left: 3px solid var(--colour-accent-line);
+  color: var(--colour-text);
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.alliance__description:empty {
+  display: none;
+}
+
+.alliance__callout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-accent-line);
+  border-radius: var(--radius-md);
+  background: var(--colour-accent-soft);
+  color: var(--colour-text);
+}
+
+.alliance__callout > p {
+  flex: 1 1 12em;
+  margin: 0;
+}
+
+.alliance__switch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.alliance__switch-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.alliance__switch-words {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.alliance__switch-words small {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* Kick sits apart from the friendly rank buttons. */
+.alliance__kick {
+  margin-left: auto;
+}
+
+/* ── Modern's dark steel: lighter words where the theme's are dark ────── */
+
+:root[data-skin="scrap"] .alliance-window .alliance__type-good {
+  color: #7fe08f;
+}
+
+:root[data-skin="scrap"] .alliance-window .alliance__type-bad {
+  color: #ff9a8a;
+}
+
+:root[data-skin="scrap"] .alliance-window .alliance__role--officer {
+  color: #8fb8ff;
+}
+
+/* ── Phone ────────────────────────────────────────────────────────────── */
+
+@media (width <= 480px) {
+  .alliance-window > .panel__body {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .alliance__foot {
+    padding-inline: var(--space-3);
+  }
+
+  .alliance__shield:not(.alliance__shield--small) {
+    width: 38px;
+    height: 38px;
+  }
+
+  .alliance__head-title {
+    font-size: var(--text-sm);
+  }
+
+  /* The three type cards stack. */
+  .alliance__types {
+    grid-template-columns: 1fr;
+  }
+
+  .alliance__tile {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  /* Join drops under the chips. */
+  .alliance__quick {
+    grid-template-columns: 1fr;
+  }
+
+  .alliance__quick-join {
+    justify-self: end;
+  }
 }

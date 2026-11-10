@@ -136,9 +136,9 @@ export interface AllianceApi {
   kick(userid: number): Promise<AllianceResult<object>>;
   handOver(userid: number): Promise<AllianceResult<object>>;
   setRank(userid: number, role: "officer" | "member"): Promise<AllianceResult<object>>;
-  /** Players in the world with no alliance, most recently active first: Leader and Officers. */
   /** The invites inbox: invites to the player, requests to join the player's alliance, and their outcomes. */
   messages(): Promise<AllianceResult<{ messages: readonly AllianceInviteRow[] }>>;
+  /** Players in the world with no alliance, most recently active first: Leader and Officers. */
   suggested(): Promise<AllianceResult<{ members: readonly AllianceMember[] }>>;
 }
 
