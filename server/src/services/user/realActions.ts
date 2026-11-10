@@ -266,6 +266,11 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /alliance/takeover",
   "POST /alliance/rename",
   "POST /alliance/report",
+  // Alliances phase 2: stars and weekly goals (alliance work, not yard play).
+  "POST /alliance/lightstar",
+  "POST /alliance/suggeststar",
+  "POST /alliance/setgoal",
+  "POST /alliance/removegoal",
   // Reads, looks and polls a client sends while the player sits still.
   "POST /base/updatesaved",
   "POST /base/checkpoint",
