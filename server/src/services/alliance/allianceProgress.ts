@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { EntityManager } from "@mikro-orm/core";
 import type { EntityManager as SqlEntityManager } from "@mikro-orm/postgresql";
 
@@ -17,6 +18,7 @@ import { AllianceMessageType, AllianceRole, type AllianceType } from "../../enum
 import { Status } from "../../enums/StatusCodes.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import { logger } from "../../utils/logger.js";
+import { defenceQuestEvents } from "../quests/hooks.js";
 import {
   constellationOf,
   constellationsOf,
@@ -173,6 +175,8 @@ export const addGoalProgress = async (
  * Call it inside the claim's transaction. Returns whether a point was paid.
  */
 export const creditDailyQuest = async (em: EntityManager, userid: number, now: number): Promise<boolean> => {
+  // A unit-test fake without SQL (`allianceQuery`): no alliance, nothing to pay.
+  if (typeof (em as unknown as Partial<Sql>).execute !== "function") return false;
   const rows = await sql(em).execute<{ alliance_id: number }[]>(
     `INSERT INTO bym.alliance_contribution (alliance_id, userid, day, quest_points)
      SELECT alliance_id, userid, ?::date, 1 FROM bym."user" WHERE userid = ? AND alliance_id IS NOT NULL
@@ -191,17 +195,91 @@ export const creditDailyQuest = async (em: EntityManager, userid: number, now: n
 // Quest events, buffered (`setQuestEventListener` in services/quests/state.ts)
 // ---------------------------------------------------------------------------
 
-const pending = new Map<number, Record<string, number>>();
+type EventBatch = Map<number, Record<string, number>>;
 
-/** Queues goal progress for a player; written by the next flush. Sync and cheap. */
+const pending: EventBatch = new Map();
+
+const addToBatch = (batch: EventBatch, userid: number, amounts: Readonly<Record<string, number>>) => {
+  const mine = batch.get(userid) ?? {};
+  for (const [kind, n] of Object.entries(amounts)) mine[kind] = (mine[kind] ?? 0) + n;
+  batch.set(userid, mine);
+};
+
+/**
+ * Goal progress noted inside {@link countAfterCommit}'s work waits here and is
+ * queued only when that work resolves, so a rolled-back transaction (a refused
+ * kit buy, a failed save) never counts towards a goal.
+ */
+const commitScope = new AsyncLocalStorage<EventBatch>();
+
+/**
+ * Runs `work` (an `em.transactional(...)` call) and queues the goal progress
+ * noted during it only once it resolves; a throw drops it. Nested scopes hand
+ * theirs to the outer scope, which decides.
+ */
+export const countAfterCommit = async <T>(work: () => Promise<T>): Promise<T> => {
+  const outer = commitScope.getStore();
+  const staged: EventBatch = new Map();
+  const result = await commitScope.run(staged, work);
+  for (const [userid, amounts] of staged) addToBatch(outer ?? pending, userid, amounts);
+  return result;
+};
+
+/**
+ * Queues goal progress for a player; written by the next flush. Sync and
+ * cheap. Inside {@link countAfterCommit} it waits for the commit.
+ */
 export const noteAllianceEvents = (userid: number, events: Readonly<Record<string, number>> | null | undefined) => {
   if (!userid) return;
   const amounts = goalAmounts(events);
   if (Object.keys(amounts).length === 0) return;
-  const mine = pending.get(userid) ?? {};
-  for (const [kind, n] of Object.entries(amounts)) mine[kind] = (mine[kind] ?? 0) + n;
-  pending.set(userid, mine);
+  addToBatch(commitScope.getStore() ?? pending, userid, amounts);
 };
+
+/**
+ * Fortress's "Outposts attacked but not taken" goal (design v5 §16): one
+ * attack on a member's outpost that the outpost held (the quests' held
+ * defence, `defenceQuestEvents`), by a player outside the defender's alliance,
+ * counted at most once per attacker per outpost per UTC day
+ * (`bym.alliance_defence_credit`), so two friends cannot farm it. Called after
+ * the attack's landing has committed. Returns whether it counted; a failure is
+ * logged, never thrown.
+ */
+export const noteOutpostDefended = async (
+  em: EntityManager,
+  defender: { userid: number; outpost: number },
+  attackerUserid: number,
+  damageAfter: number,
+  now: number
+): Promise<boolean> => {
+  if (!defenceQuestEvents(damageAfter).defenceWin) return false;
+  if (!defender.userid || !attackerUserid || defender.userid === attackerUserid) return false;
+  try {
+    const rows = await sql(em).execute<{ userid: number; alliance_id: number | null }[]>(
+      `SELECT userid, alliance_id FROM bym."user" WHERE userid IN (?, ?)`,
+      [defender.userid, attackerUserid]
+    );
+    const allianceOf = (id: number) => rows.find((r) => Number(r.userid) === id)?.alliance_id ?? null;
+    const mine = allianceOf(defender.userid);
+    if (mine === null) return false;
+    if (allianceOf(attackerUserid) === mine) return false;
+    const fresh = await sql(em).execute<{ outpost: number }[]>(
+      `INSERT INTO bym.alliance_defence_credit (outpost, attacker, day) VALUES (?, ?, ?::date)
+       ON CONFLICT DO NOTHING RETURNING outpost`,
+      [defender.outpost, attackerUserid, utcDay(now)]
+    );
+    if (fresh.length === 0) return false;
+    noteAllianceEvents(defender.userid, { outpostDefended: 1 });
+    return true;
+  } catch (err) {
+    logger.error(`Alliance outpost defence for user ${defender.userid} failed: ${err}`);
+    return false;
+  }
+};
+
+/** Test seam: the progress queued and not yet flushed, per player. */
+export const pendingAllianceEvents = (userid: number): Readonly<Record<string, number>> | undefined =>
+  pending.get(userid);
 
 /** Writes every queued progress. A failure drops that player's batch (logged), never the others. */
 export const flushAllianceEvents = async (em: EntityManager, now: number): Promise<void> => {
@@ -381,6 +459,8 @@ export const runTerritoryTally = async (em: EntityManager, now: number): Promise
   if (claimed.length === 0) return null;
   try {
     return await em.fork().transactional(async (tx) => {
+      // The held-defence credits only matter for the day they were given.
+      await sql(tx).execute(`DELETE FROM bym.alliance_defence_credit WHERE day < ?::date - 7`, [day]);
       const rows = await sql(tx).execute<{ alliance_id: number }[]>(
         `INSERT INTO bym.alliance_territory (alliance_id, day, type, outposts)
          SELECT a.id, ?::date, a.type, count(s.basesaveid)::int

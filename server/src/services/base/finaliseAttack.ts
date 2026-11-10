@@ -53,7 +53,7 @@ import { plunderPercent, weekendBoostUsed, withPlunderBonus } from "../events/we
 import { attackLootPercent, mapByPercent } from "../alliance/allianceBonuses.js";
 import { attackQuestEvents, defenceQuestEvents } from "../quests/hooks.js";
 import { recordQuestEvents, recordUserQuestEvents } from "../quests/record.js";
-import { noteAllianceEvents } from "../alliance/allianceProgress.js";
+import { noteOutpostDefended } from "../alliance/allianceProgress.js";
 
 /**
  * Finishes an attack its attacker left without saving (issue #138).
@@ -420,7 +420,15 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   if (defender.type !== BaseType.TRIBE && defender.saveuserid && defender.saveuserid !== attacker.userid) {
     await recordUserQuestEvents(postgres.em, defender.saveuserid, defenceQuestEvents(landedDamage), now);
     // Fortress's "Outposts attacked but not taken" goal (design v5 §16).
-    if (defender.type === BaseType.OUTPOST) noteAllianceEvents(defender.saveuserid, { outpostDefended: 1 });
+    if (defender.type === BaseType.OUTPOST) {
+      await noteOutpostDefended(
+        postgres.em,
+        { userid: defender.saveuserid, outpost: Number(defender.basesaveid) },
+        attacker.userid,
+        landedDamage,
+        now
+      );
+    }
   }
 
   await endAttackSession(basesaveid);

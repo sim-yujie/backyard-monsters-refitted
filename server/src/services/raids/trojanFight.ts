@@ -24,6 +24,7 @@ import { raidFighting } from "./raidLock.js";
 import { readSchedule, scheduleColumn, withFightLock, TROJAN_TRIBE } from "./raidSchedule.js";
 import { newRaidId, openFightingRaid, readOpenRaid, type OpenRaid } from "./raidStore.js";
 import { TROJAN_LAST_SPAWN_TICK, trojanArmy } from "./trojanArmy.js";
+import { countAfterCommit } from "../alliance/allianceProgress.js";
 
 /**
  * Springing the Trojan Horse (#306 WP3, `docs/design/trojan-horse.md` §5-§7,
@@ -77,7 +78,7 @@ const rosterOf = (events: readonly RaidEvent[]): Roster => {
  */
 const freezeTrojan = async (em: EntityManager, user: User, now: number): Promise<TrojanFrozen> => {
   let completed: Awaited<ReturnType<typeof catchUpLockedRow>> = [];
-  const frozen = await em.transactional(async (tx) => {
+  const frozen = await countAfterCommit(() => em.transactional(async (tx) => {
     const locked = await lockMain(tx, user);
     if (isAttackActive(locked)) throw raidRefusedErr("underAttack");
     if (raidFighting(locked, now)) throw raidRefusedErr("raidOpen");
@@ -110,7 +111,7 @@ const freezeTrojan = async (em: EntityManager, user: User, now: number): Promise
     locked.aiattacks = scheduleColumn(withFightLock(schedule, { id: raidId, until: now + START_LOCK_SECONDS }));
     await tx.flush();
     return { raidId, seed: newSeed(), events, yard, defence };
-  });
+  }));
   await notifyJobs(em, user.userid, completed);
   return frozen;
 };

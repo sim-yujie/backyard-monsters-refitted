@@ -15,6 +15,7 @@ import { addEvents, builtEvents, recordAchievements, unseenAchievements } from "
 import type { AchievementEvents } from "../../services/achievements/evaluate.js";
 import { autobankYard } from "../../services/maproom/v2/autobank.js";
 import { allianceBonusesOfUser, type AllianceBonuses } from "../../services/alliance/allianceBonuses.js";
+import { countAfterCommit } from "../../services/alliance/allianceProgress.js";
 import { productionScheduleOfUser, settleProductionHistory, type FactorSchedule } from "../../services/alliance/productionHistory.js";
 import { isShinyLocked } from "../../services/user/shinyLock.js";
 import { coinNotes, coinStore } from "../../services/events/eventCoins.js";
@@ -550,7 +551,7 @@ export const catchUpLockedYard = async (
   save: Save,
   alsoUnderLock?: (locked: Save, now: number) => void
 ): Promise<{ save: Save; completed: CompletedJob[] }> =>
-  em.transactional(async (tx) => {
+  countAfterCommit(() => em.transactional(async (tx) => {
     const locked = await lockRow(tx, save.basesaveid);
     if (!locked) return { save, completed: [] };
     const now = getCurrentDateTime();
@@ -564,7 +565,7 @@ export const catchUpLockedYard = async (
     await recordAchievements(tx, locked, now, builtEvents(completed));
     await tx.flush();
     return { save: locked, completed };
-  });
+  }));
 
 /**
  * Drops the alliance factor steps (`productionHistory.ts`) both the main
@@ -618,7 +619,7 @@ export const catchUpLockedOutpost = async (
   user: User,
   outpost: Save
 ): Promise<{ save: Save; completed: CompletedJob[] }> =>
-  em.transactional(async (tx) => {
+  countAfterCommit(() => em.transactional(async (tx) => {
     let yard: OwnYard;
     try {
       yard = await lockOwnYard(tx, user, String(outpost.baseid));
@@ -639,7 +640,7 @@ export const catchUpLockedOutpost = async (
     recordQuests(yard.main, now, jobQuestEvents(completed));
     await tx.flush();
     return { save: yard.outpost, completed };
-  });
+  }));
 
 /**
  * Marks the Inferno quests met now done on the Inferno yard's view, writing
@@ -709,7 +710,8 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
     // it actually changed (issue #329, #330 WP1).
     let flingerBefore: number | undefined;
 
-    const answer = await em.transactional(async (tx) => {
+    // Goal progress the action noted counts only once this commits.
+    const answer = await countAfterCommit(() => em.transactional(async (tx) => {
       const yard = await lockOwnYard(tx, user, target.data.baseid);
       if (yard.outpost && action.outposts !== "allow") {
         throw notInOutpostErr(action.outposts?.refuse);
@@ -783,7 +785,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         // Event coins changed in this request (a buy, a claim, a weekend's coins).
         coins: coinNotes(tx),
       };
-    });
+    }));
 
     // After the commit, so a rolled-back action never announces a level it
     // did not save. The account's level, so this fires from an outpost

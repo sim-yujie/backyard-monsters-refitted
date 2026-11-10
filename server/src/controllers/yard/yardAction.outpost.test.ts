@@ -21,6 +21,7 @@ import { yardBuyDecorationAction, yardPlaceDecorationAction } from "./decor.js";
 import { yardRepairInstantAction } from "./repair.js";
 import { yardShopBuyAction } from "./shopBuy.js";
 import { yardStarterKitAction } from "./starterKit.js";
+import { pendingAllianceEvents } from "../../services/alliance/allianceProgress.js";
 import { yardSpeedupAction } from "./speedup.js";
 import { yardStateAction } from "./state.js";
 import { yardCancelUpgradeAction, yardUpgradeAction } from "./upgrade.js";
@@ -947,6 +948,19 @@ describe("Starter Kits (outposts WP9, issue #188)", () => {
     expect(answer.body.reason).toBe("shortfall");
     expect(answer.body.topUp).toBeGreaterThan(0);
     expect([...db.rows.values()]).toEqual(before);
+  });
+
+  test("Conquest's kit goal counts a kit bought, and not a refused (rolled-back) one", async () => {
+    const userid = userOf().userid;
+    const kits = () => pendingAllianceEvents(userid)?.kitRebuild ?? 0;
+    const before = kits();
+    const refused = await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources" });
+    expect(refused.status).toBe(409);
+    expect(kits()).toBe(before);
+
+    const bought = await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
+    expect(bought.status).toBe(200);
+    expect(kits()).toBe(before + 1);
   });
 
   test("a damaged outpost's damage drops with the kit, so the map shows it at once", async () => {

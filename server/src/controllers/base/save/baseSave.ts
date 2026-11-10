@@ -103,7 +103,7 @@ import { attackQuestEvents, defenceQuestEvents } from "../../../services/quests/
 import { recordQuestEvents, recordUserQuestEvents } from "../../../services/quests/record.js";
 import { INFERNO_SAVE_TYPES, refuseOldInferno } from "../../../services/inferno/infernoGate.js";
 import { infernoConfig } from "../../../config/InfernoConfig.js";
-import { noteAllianceEvents } from "../../../services/alliance/allianceProgress.js";
+import { noteOutpostDefended } from "../../../services/alliance/allianceProgress.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -800,7 +800,15 @@ const saveBase = async (
     if (baseSave.type !== BaseType.TRIBE && baseSave.saveuserid && baseSave.saveuserid !== user.userid) {
       await recordUserQuestEvents(postgres.em, baseSave.saveuserid, defenceQuestEvents(damageAfter), now);
       // Fortress's "Outposts attacked but not taken" goal (design v5 §16).
-      if (baseSave.type === BaseType.OUTPOST) noteAllianceEvents(baseSave.saveuserid, { outpostDefended: 1 });
+      if (baseSave.type === BaseType.OUTPOST) {
+      await noteOutpostDefended(
+        postgres.em,
+        { userid: baseSave.saveuserid, outpost: Number(baseSave.basesaveid) },
+        user.userid,
+        damageAfter,
+        now
+      );
+    }
     }
   }
 

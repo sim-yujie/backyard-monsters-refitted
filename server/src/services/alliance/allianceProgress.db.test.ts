@@ -33,8 +33,10 @@ const { productionScheduleOfUser } = await import("./productionHistory.js");
 const BASE = 993_900;
 const LEADER = BASE + 1;
 const MEMBER = BASE + 2;
-const USERS = [LEADER, MEMBER];
+const OUTSIDER = BASE + 3;
+const USERS = [LEADER, MEMBER, OUTSIDER];
 const ALLIANCE = BASE + 1;
+const OUTPOST = BASE * 10 + 7;
 // A Wednesday, so the week has begun (Monday 2026-11-09).
 const NOW = Date.parse("2026-11-11T12:00:00Z") / 1000;
 
@@ -47,6 +49,7 @@ const clear = async () => {
   await sql(`DELETE FROM bym.save WHERE saveuserid IN (${USERS.join(",")})`);
   await sql(`DELETE FROM bym."user" WHERE userid IN (${USERS.join(",")})`);
   await sql(`DELETE FROM bym.job_run WHERE job = ?`, [progress.TERRITORY_JOB]);
+  await sql(`DELETE FROM bym.alliance_defence_credit WHERE outpost IN (?, ?)`, [OUTPOST, OUTPOST + 1]);
 };
 
 const alliance = async () =>
@@ -129,5 +132,47 @@ describe.skipIf(!enabled)("alliance progress", () => {
     const board = await progress.territoryBoard(em(), AllianceType.MIDAS, NOW, 1000);
     expect(board.find((r) => r.alliance_id === ALLIANCE)).toMatchObject({ month: 1, all_time: 1 });
     await sql(`DELETE FROM bym.save WHERE saveuserid = ?`, [MEMBER]);
+  });
+
+  test("an outpost defence counts once per attacker per outpost per day, only if it held, never from a mate", async () => {
+    const queued = () => progress.pendingAllianceEvents(MEMBER)?.outpostDefended ?? 0;
+    const start = queued();
+    const defend = (attacker: number, damage: number, outpost = OUTPOST, now = NOW) =>
+      progress.noteOutpostDefended(em(), { userid: MEMBER, outpost }, attacker, damage, now);
+    // Lost (the outpost was wrecked): nothing.
+    expect(await defend(OUTSIDER, 100)).toBe(false);
+    // A mate attacking: nothing.
+    expect(await defend(LEADER, 0)).toBe(false);
+    expect(queued()).toBe(start);
+    // Held against an outsider: once.
+    expect(await defend(OUTSIDER, 0)).toBe(true);
+    expect(queued()).toBe(start + 1);
+    // The same attacker on the same outpost the same day: nothing more.
+    expect(await defend(OUTSIDER, 0)).toBe(false);
+    expect(queued()).toBe(start + 1);
+    // Another outpost, or the next day: counts again.
+    expect(await defend(OUTSIDER, 0, OUTPOST + 1)).toBe(true);
+    expect(await defend(OUTSIDER, 0, OUTPOST, NOW + 86_400)).toBe(true);
+    expect(queued()).toBe(start + 3);
+  });
+
+  test("goal progress noted in a rolled-back transaction is dropped; a committed one is queued", async () => {
+    const hatches = () => progress.pendingAllianceEvents(MEMBER)?.hatch ?? 0;
+    const start = hatches();
+    await expect(
+      progress.countAfterCommit(() =>
+        em().transactional(async () => {
+          progress.noteAllianceEvents(MEMBER, { hatch: 5 });
+          throw new Error("refused");
+        })
+      )
+    ).rejects.toThrow("refused");
+    expect(hatches()).toBe(start);
+    await progress.countAfterCommit(() =>
+      em().transactional(async () => {
+        progress.noteAllianceEvents(MEMBER, { hatch: 5 });
+      })
+    );
+    expect(hatches()).toBe(start + 5);
   });
 });

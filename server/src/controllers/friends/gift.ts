@@ -33,6 +33,7 @@ import type { JsonObject } from "../../types/JsonObject.js";
 import { catchUpLockedRow } from "../yard/yardAction.js";
 import { recordQuestEvents } from "../../services/quests/record.js";
 import type { FriendsBody } from "./friends.js";
+import { countAfterCommit } from "../../services/alliance/allianceProgress.js";
 
 /**
  * The gift routes (`docs/design/friends.md` §3.4, §5 and §6.2, issue #375):
@@ -111,7 +112,7 @@ export const sendGiftAnswer = async (em: EntityManager, user: User, body: unknow
   const from = user.userid;
   if (to === from) throw friendRefusedErr("self");
 
-  const done = await em.transactional(async (tx) => {
+  const done = await countAfterCommit(() => em.transactional(async (tx) => {
     const sides = await readSides(tx, [from, to]);
     const mine = sides.get(from);
     const theirs = sides.get(to);
@@ -151,7 +152,7 @@ export const sendGiftAnswer = async (em: EntityManager, user: User, body: unknow
       receiver: theirs,
       resources: resourcesOf(save),
     };
-  });
+  }));
 
   await notifyFriend(
     em,
@@ -219,7 +220,7 @@ export const collectGiftsAnswer = async (em: EntityManager, user: User, body: un
   const me = user.userid;
   const giftid = "giftid" in which ? which.giftid : null;
 
-  const done = await em.transactional(async (tx) => {
+  const done = await countAfterCommit(() => em.transactional(async (tx) => {
     const [side] = (await readSides(tx, [me])).values();
     if (!side?.basesaveid) throw notMainYardErr();
     const save = await lockSave(tx, side.basesaveid);
@@ -247,7 +248,7 @@ export const collectGiftsAnswer = async (em: EntityManager, user: User, body: un
     );
     await tx.flush();
     return { collected: taking.length, resources: credited, collectsLeft: left - taking.length };
-  });
+  }));
 
   return { error: 0, ...done, giftsWaiting: await countWaitingGifts(em, me, now) };
 };

@@ -63,6 +63,7 @@ import {
   type OpenRaid,
   type RaidScreen,
 } from "./raidStore.js";
+import { countAfterCommit } from "../alliance/allianceProgress.js";
 
 /**
  * The server's side of a wild monster raid, end to end (#226 WP3,
@@ -361,7 +362,7 @@ export const START_LOCK_SECONDS = Math.ceil(FINALISE_REPLAY_DEADLINE_MS / 1000) 
  */
 const freezeYard = async (em: EntityManager, user: User, raid: OpenRaid, now: number): Promise<FrozenYard | null> => {
   let completed: CompletedJob[] = [];
-  const frozen = await em.transactional(async (tx) => {
+  const frozen = await countAfterCommit(() => em.transactional(async (tx) => {
     const locked = await lockMain(tx, user);
     if (isAttackActive(locked)) throw raidRefusedErr("underAttack");
     // Protection bought during the warning: the raid is called off (`startRaid`),
@@ -392,7 +393,7 @@ const freezeYard = async (em: EntityManager, user: User, raid: OpenRaid, now: nu
     );
     await tx.flush();
     return { yard, defence };
-  });
+  }));
   await notifyJobs(em, user.userid, completed);
   return frozen;
 };
@@ -577,7 +578,7 @@ export const finishRaid = async (em: EntityManager, user: User, raidId: unknown,
   let completed: CompletedJob[] = [];
   // False when this finish only repeats one that already landed, so the dashboard counts each raid once.
   let landedNow = false;
-  const result = await em.transactional(async (tx) => {
+  const result = await countAfterCommit(() => em.transactional(async (tx) => {
     const locked = await lockMain(tx, user);
     if (raidAlreadyApplied(readSchedule(locked.aiattacks), raid.id)) {
       const landed = landedResult(locked.aiattacks, raid.id);
@@ -595,7 +596,7 @@ export const finishRaid = async (em: EntityManager, user: User, raidId: unknown,
     await tx.flush();
     landedNow = true;
     return landed;
-  });
+  }));
   await notifyJobs(em, user.userid, completed);
 
   const plan = planOf(raid);
