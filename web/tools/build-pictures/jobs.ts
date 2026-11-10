@@ -1,7 +1,9 @@
 /**
  * Lists the build menu's Modern pictures to make, as JSON on stdout, for
  * `make.py`: every type in a build menu (main yard, outpost and Inferno)
- * that shows a new look in the yard at level 1 (`newLookFor`), with the files
+ * that shows a new look in the yard at level 1 (`newLookFor`), and this
+ * project's own decorations (the Decorations tab lists no fixed types, so
+ * they are named here), with the files
  * and offsets the yard draws it from (`resolveArt`): its whole picture (the
  * still of a tower whose turret turns, or of a 3D building whose moving parts
  * are a strip) and its ground shadow.
@@ -12,6 +14,7 @@ import { ArtState, newLookFor, resolveArt } from "@/game/yard/buildingArt";
 import { catalogueFor } from "@/game/yard/buildCatalogue";
 import type { YardKind } from "@/game/yard/buildingCostData";
 import { maxLevel } from "@/game/yard/buildingCosts";
+import { REVAMP_DECORATION_ROWS } from "@/game/yard/revampDecorations";
 
 /** The level whose look the menu shows: the one a new building has, as Flash's buttons did. */
 export const PICTURE_LEVEL = 1;
@@ -39,6 +42,8 @@ const jobs: object[] = [];
 for (const kind of ["main", "inferno"] as const satisfies readonly YardKind[]) {
   const kinds: readonly YardKind[] = kind === "main" ? ["main", "outpost"] : ["inferno"];
   const types = new Set(kinds.flatMap((k) => catalogueFor(k).flatMap((category) => category.types)));
+  // Decorations go only in the main yard.
+  if (kind === "main") for (const row of REVAMP_DECORATION_ROWS) types.add(row[0]);
   for (const type of [...types].sort((a, b) => a - b)) {
     const level = pictureLevel(type, kind);
     if (!newLookFor(type, level, kind)) continue;
