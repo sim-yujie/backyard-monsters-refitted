@@ -1,0 +1,23 @@
+# pilot check
+Red Flowers C=assets/buildings/decorations/flowers/top-red.png
+Red Flowers M=out/red-flowers.png
+Bonsai C=assets/buildings/decorations/bonsaitree/top.png
+Bonsai M=out/bonsai-tree.png
+Goo=assets/buildings/goofactory.v2/top.3d1@2x.webp
+Tomb C=assets/buildings/decorations/graveyardtombstone/top.png
+Tomb M=out/tombstone.png
+Outhouse C=assets/buildings/decorations/outhouse/top.png
+Outhouse M=out/outhouse.png
+Twig=assets/buildings/twigsnapper.v2/top.3d1@2x.webp
+DAVE C=assets/buildings/decorations/pumpkins/attended-large-top.png
+DAVE M=out/dave-pumpkin.png
+Soccer C=assets/buildings/decorations/statue-soccer/top.v2.png
+Soccer M=out/soccer-trophy.png
+Academy=assets/buildings/academy/top.3d1@2x.webp
+Liberty C=assets/buildings/decorations/statue-liberty/top.v2.png
+Liberty M=out/statue-liberty.png
+Pole C=assets/buildings/decorations/flags/flagpole.png
+Pole M=out/flagpole.png
+Tiki C=assets/buildings/decorations/tikitorch/top.png
+Tiki M=out/tiki-torch.png
+Cannon=assets/buildings/cannontower/top.t1@2x.webp

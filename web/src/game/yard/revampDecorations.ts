@@ -65,11 +65,11 @@ const modern = (top: TierImage, shadow: TierImage): readonly TierArt[] => {
  */
 export const REVAMP_DECORATION_MODERN_ART: Readonly<Record<number, readonly TierArt[]>> = {
   201: modern(["leaf-pile-rake.modern@2x.webp", -22, -10], ["leaf-pile-rake.modern-shadow.jpg", -20, 18]),
-  202: modern(["apple-barrel.modern@2x.webp", -18, -22], ["apple-barrel.modern-shadow.jpg", -15, 8]),
-  203: modern(["pie-stump.modern@2x.webp", -20, -14], ["pie-stump.modern-shadow.jpg", -18, 10]),
-  204: modern(["harvest-wheelbarrow.modern@2x.webp", -27, -16], ["harvest-wheelbarrow.modern-shadow.jpg", -26, 16]),
-  205: modern(["turkey-topiary.modern@2x.webp", -22, -24], ["turkey-topiary.modern-shadow.jpg", -10, 13]),
-  206: modern(["autumn-maple.modern@2x.webp", -36, -50], ["autumn-maple.modern-shadow.jpg", -18, 6]),
+  202: modern(["apple-barrel.modern@2x.webp", -18, -22], ["apple-barrel.modern-shadow.jpg", -14, 9]),
+  203: modern(["pie-stump.modern@2x.webp", -20, -14], ["pie-stump.modern-shadow.jpg", -18, 11]),
+  204: modern(["harvest-wheelbarrow.modern@2x.webp", -27, -16], ["harvest-wheelbarrow.modern-shadow.jpg", -25, 16]),
+  205: modern(["turkey-topiary.modern@2x.webp", -22, -24], ["turkey-topiary.modern-shadow.jpg", -9, 14]),
+  206: modern(["autumn-maple.modern@2x.webp", -36, -50], ["autumn-maple.modern-shadow.jpg", -18, 7]),
 };
 
 const TYPES: ReadonlySet<number> = new Set(REVAMP_DECORATION_ROWS.map((row) => row[0]));

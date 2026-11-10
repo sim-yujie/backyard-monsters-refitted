@@ -92,6 +92,7 @@
  */
 
 import { classicLook } from "@/game/classicLook";
+import { DECORATION_MODERN_ART } from "./decorationModernArt";
 import { REVAMP_DECORATION_MODERN_ART } from "./revampDecorations";
 import type { ArtAnim } from "./buildingArtData";
 import type { YardKind } from "./buildingCostData";
@@ -749,12 +750,14 @@ export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly Tier
 
 /**
  * Every type with new art the old-art switch turns back: the towers, the Town Hall (14), the 3D buildings,
- * and this project's own decorations' Modern look (`revampDecorations.ts`).
+ * the Flash decorations' Modern look (`decorationModernArt.ts`) and this project's own decorations' Modern
+ * look (`revampDecorations.ts`).
  */
 const NEW_ART: Readonly<Record<number, readonly TierArt[]>> = {
   ...TOWER_TIER_ART,
   14: TOWN_HALL_ART,
   ...BUILDING_3D_ART,
+  ...DECORATION_MODERN_ART,
   ...REVAMP_DECORATION_MODERN_ART,
 };
 
