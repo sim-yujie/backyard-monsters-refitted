@@ -161,5 +161,7 @@ export const devConfig = {
     [MessageType.TRUCE_REJECT]: true,
     [MessageType.MIGRATE_REQUEST]: true,
     [MessageType.MIGRATE_REVOKE]: true,
+    // Written by the server when a Leader or Officer invites (`inviteMail.ts`); never sent by a player.
+    [MessageType.ALLIANCE_INVITE]: false,
   },
 };

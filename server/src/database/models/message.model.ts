@@ -137,6 +137,15 @@ export class Message {
   @FrontendKey
   attackstats: AttackStats | null = null;
 
+  /**
+   * On an `allianceinvite` message (owner, 10 Nov 2026), the alliance invite
+   * it delivers (`bym.alliance_invite.id`); the player answers it with
+   * `/alliance/changeinvitestatus`. Null on every other message.
+   */
+  @Property({ type: "number", nullable: true })
+  @FrontendKey
+  allianceinviteid: number | null = null;
+
   @Property({ type: Date, onCreate: () => new Date() })
   createdAt: Opt<Date> = new Date();
 

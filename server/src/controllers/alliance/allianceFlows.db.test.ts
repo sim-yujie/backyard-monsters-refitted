@@ -40,6 +40,8 @@ mock.module("../../server.js", () => ({
 const { createAlliance } = await import("./createAlliance.js");
 const { requestJoin } = await import("./requestJoin.js");
 const { inviteUser } = await import("./inviteUser.js");
+const { getMessageThreads } = await import("../mail/getMessageThreads.js");
+const { getMessageThread } = await import("../mail/getMessageThread.js");
 const { changeInviteStatus } = await import("./changeInviteStatus.js");
 const { leaveAlliance } = await import("./leaveAlliance.js");
 const { kickMember } = await import("./kickMember.js");
@@ -77,6 +79,8 @@ const clear = async () => {
         OR id IN (SELECT alliance_id FROM bym."user" WHERE userid IN (${USERS.join(",")}) AND alliance_id IS NOT NULL)`
   );
   await sql(`DELETE FROM bym.alliance_invite WHERE user_id IN (${USERS.join(",")})`);
+  await sql(`DELETE FROM bym.thread WHERE userid IN (${USERS.join(",")}) OR targetid IN (${USERS.join(",")})`);
+  await sql(`DELETE FROM bym.message WHERE userid IN (${USERS.join(",")}) OR targetid IN (${USERS.join(",")})`);
   await sql(`UPDATE bym."user" SET save_basesaveid = NULL WHERE userid IN (${USERS.join(",")})`);
   await sql(`DELETE FROM bym.save WHERE userid IN (${USERS.join(",")})`);
   await sql(`DELETE FROM bym."user" WHERE userid IN (${USERS.join(",")})`);
@@ -248,6 +252,47 @@ describe.skipIf(!enabled)("alliance flows through the controllers, on Postgres (
     expect(await membership(PLAYER)).toEqual({ alliance_id: allianceId, role: "member" });
   });
 
+  test("an invite reaches the player as mail from the inviter, answered from there; the mail follows the invite", async () => {
+    const allianceId = (await found()).alliance.alliance_id;
+    const sent = await call(inviteUser, LEADER, { userid: PLAYER });
+    expect(sent.error).toBe(0);
+
+    const [mail] = await sql<{ threadid: number; userid: number; messagetype: string; allianceinviteid: number; subject: string }>(
+      `SELECT threadid, userid, messagetype, allianceinviteid, subject FROM bym.message WHERE targetid = ?`,
+      [PLAYER]
+    );
+    expect(mail).toMatchObject({ userid: LEADER, messagetype: "allianceinvite", subject: "Join zz_flow_alliance" });
+    expect(Number(mail!.allianceinviteid)).toBe(sent.invite_id);
+    const [save] = await sql<{ unreadmessages: number }>(`SELECT unreadmessages FROM bym.save WHERE userid = ? AND type = 'main'`, [PLAYER]);
+    expect(save!.unreadmessages).toBe(1);
+
+    const listed = (await call(getMessageThreads, PLAYER)).threads[mail!.threadid];
+    expect(listed.allianceinvite).toEqual({
+      state: "pending",
+      alliance_id: allianceId,
+      alliance_name: "zz_flow_alliance",
+      alliance_image: expect.any(Number),
+    });
+
+    // The mail's button answers the invite it names.
+    expect((await call(changeInviteStatus, PLAYER, { invite_id: Number(mail!.allianceinviteid), status: "accepted" })).error).toBe(0);
+    expect(await membership(PLAYER)).toEqual({ alliance_id: allianceId, role: "member" });
+
+    const thread = (await call(getMessageThread, PLAYER, { threadid: String(mail!.threadid) })).thread;
+    expect(Object.values(thread as Record<string, any>)[0].allianceinvite.state).toBe("accepted");
+    // The Invites tab names who sent it.
+    expect(Number((await sql(`SELECT invited_by FROM bym.alliance_invite WHERE id = ?`, [sent.invite_id]))[0]!.invited_by)).toBe(LEADER);
+  });
+
+  test("an invite between players where one blocked the other is refused, with no invite and no mail", async () => {
+    await found();
+    await sql(`UPDATE bym."user" SET blocked_users = ? WHERE userid = ?`, [JSON.stringify([LEADER]), PLAYER]);
+
+    expect((await call(inviteUser, LEADER, { userid: PLAYER })).refused).toBe("You cannot invite zz_flow_" + PLAYER + ".");
+    expect(await pendingInviteId(PLAYER)).toBeNull();
+    expect(await sql(`SELECT 1 FROM bym.message WHERE targetid = ?`, [PLAYER])).toHaveLength(0);
+  });
+
   test("a declined invite joins no one", async () => {
     await found();
     await call(inviteUser, LEADER, { userid: PLAYER });
@@ -260,8 +305,11 @@ describe.skipIf(!enabled)("alliance flows through the controllers, on Postgres (
   test("an ordinary member cannot invite", async () => {
     await foundWithMember();
 
-    expect((await call(inviteUser, MEMBER, { userid: PLAYER })).refused).toBeDefined();
+    expect((await call(inviteUser, MEMBER, { userid: PLAYER })).refused).toBe(
+      "Only the leader or an Officer can invite new members. Ask one of them to send the invitation for you."
+    );
     expect(await pendingInviteId(PLAYER)).toBeNull();
+    expect(await sql(`SELECT 1 FROM bym.message WHERE targetid = ?`, [PLAYER])).toHaveLength(0);
   });
 
   test("a member leaves", async () => {

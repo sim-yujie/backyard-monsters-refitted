@@ -104,7 +104,8 @@ export const getInviteMessages = async (user: User): Promise<InviteMessage[]> =>
   if (invites.length === 0) return [];
 
   const allianceIds = invites.map((invite) => invite.alliance_id);
-  const userIds = invites.map((invite) => invite.user_id);
+  // The players named on each row, and whoever sent each invite.
+  const userIds = invites.flatMap((invite) => (invite.invited_by ? [invite.user_id, invite.invited_by] : [invite.user_id]));
 
   const [alliances, players] = await Promise.all([
     postgres.em.find(Alliance, { id: { $in: allianceIds } }),
@@ -133,7 +134,8 @@ export const getInviteMessages = async (user: User): Promise<InviteMessage[]> =>
       alliance_name: alliance.name,
       alliance_image: alliance.image,
       leader_name: alliance.leader_name,
-      invited_by_name: alliance.leader_name,
+      // Invites sent before 10 Nov 2026 do not say who sent them: the leader then.
+      invited_by_name: (invite.invited_by && playersById.get(invite.invited_by)?.username) || alliance.leader_name,
       user_id: player.userid,
       user_name: player.username,
       user_pic_square: player.pic_square ?? null,
@@ -216,19 +218,29 @@ const checkAllianceSpace = async (em: EntityManager<PostgreSqlDriver>, allianceI
  * @param {Alliance} alliance - The alliance being joined or doing the inviting.
  * @param {number} userId - The player being invited, or making the request.
  * @param {AllianceInviteType} type - Which side opened it.
+ * @param {object} opts - `invitedBy`: the Leader or Officer sending an invite;
+ *   `em`: an open transaction to write through (the invite's mail lands with it).
  * @returns {Promise<AllianceInvite>} The pending row.
  */
-export const openInvite = async (alliance: Alliance, userId: number, type: AllianceInviteType): Promise<AllianceInvite> => {
-  await checkAllianceSpace(postgres.em, alliance.id, alliance.type);
+export const openInvite = async (
+  alliance: Alliance,
+  userId: number,
+  type: AllianceInviteType,
+  opts: { invitedBy?: number; em?: EntityManager<PostgreSqlDriver> } = {}
+): Promise<AllianceInvite> => {
+  const em = opts.em ?? postgres.em;
+
+  await checkAllianceSpace(em, alliance.id, alliance.type);
 
   const invite = new AllianceInvite();
   invite.alliance_id = alliance.id;
   invite.user_id = userId;
   invite.type = type;
+  invite.invited_by = opts.invitedBy ?? null;
 
   try {
-    postgres.em.persist(invite);
-    await postgres.em.flush();
+    em.persist(invite);
+    await em.flush();
   } catch (err) {
     if (!(err instanceof UniqueConstraintViolationException)) throw err;
     throw type === AllianceInviteType.REQUEST ? requestPendingErr() : invitePendingErr();

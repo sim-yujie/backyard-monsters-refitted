@@ -12,12 +12,15 @@ import { FilterFrontendKeys } from "../../utils/FrontendKey.js";
 import { MessageType } from "../../enums/MessageType.js";
 import { findInviteOutposts, inviteFields } from "../../services/mail/inviteRules.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { allianceInviteFields } from "../../services/alliance/inviteMail.js";
 
 /**
  * Controller to get multiple messages with single threadid.
  * This function retrieves messages for a specific thread and marks them as read if necessary.
  * An invitation to move (#205) says where it stands now and when it lapses
  * (`migratestate`, `migrateexpire`), with its outpost's cell in `coords`.
+ * An alliance invite (`allianceinvite`) says where its invite stands now and
+ * which alliance it is for (`allianceinvite`, `services/alliance/inviteMail.ts`).
  *
  * @param {Context} ctx - The Koa context object, which includes the request body.
  * @returns {Promise<void>} - A promise that resolves when the controller is complete.
@@ -57,6 +60,10 @@ export const getMessageThread: KoaController = async (ctx) => {
     const invites = messages.filter((message) => message.messagetype === MessageType.MIGRATE_REQUEST);
     const inviteOutposts = await findInviteOutposts(postgres.em, invites.map((invite) => invite.baseid));
     const now = getCurrentDateTime();
+    const allianceInvites = await allianceInviteFields(
+      postgres.em,
+      messages.filter((message) => message.messagetype === MessageType.ALLIANCE_INVITE).map((message) => message.allianceinviteid)
+    );
 
     const thread = Object.fromEntries(
       messages.map((message: Message) => [
@@ -64,6 +71,7 @@ export const getMessageThread: KoaController = async (ctx) => {
         {
           ...FilterFrontendKeys(message),
           ...(message.messagetype === MessageType.MIGRATE_REQUEST && inviteFields(message, inviteOutposts, now)),
+          ...(message.allianceinviteid != null && allianceInvites.get(message.allianceinviteid)),
         },
       ])
     );

@@ -491,6 +491,15 @@ export const userAlreadyInAllianceErr = () =>
     isClientFriendly: true,
   });
 
+/** An alliance invite to a player who blocked the inviter, or whom the inviter blocked: mail rules. */
+export const inviteBlockedErr = (name: string) =>
+  new ClientSafeError({
+    message: `You cannot invite ${name}.`,
+    status: Status.FORBIDDEN,
+    data: { reason: "blocked" },
+    isClientFriendly: true,
+  });
+
 export const inviteLeaderOnlyErr = () =>
   new ClientSafeError({
     message: "Only the leader or an Officer can invite new members. Ask one of them to send the invitation for you.",
