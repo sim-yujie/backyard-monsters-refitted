@@ -2,14 +2,20 @@ import { UniqueConstraintViolationException, type FilterQuery } from "@mikro-orm
 
 import type { EntityManager, PostgreSqlDriver } from "@mikro-orm/postgresql";
 
-import { AllianceInviteStatus, AllianceInviteType, AllianceMessageType, AllianceRole } from "../../enums/Alliance.js";
+import {
+  AllianceInviteStatus,
+  AllianceInviteType,
+  AllianceMessageType,
+  AllianceRole,
+  type AllianceType,
+} from "../../enums/Alliance.js";
 import { Alliance } from "../../database/models/alliance.model.js";
 import { AllianceInvite } from "../../database/models/allianceinvite.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { addAllianceMember, lockAlliance, lockMembership } from "./membership.js";
+import { AllianceAction, can } from "./permissions.js";
 import { memberLimit } from "./allianceTypes.js";
-import type { AllianceType } from "../../enums/Alliance.js";
 import {
   allianceFullErr,
   inviteNotPendingErr,
@@ -41,7 +47,7 @@ interface InviteMessage {
  * The inbox is one table read from two sides. A pending row belongs to whoever
  * has to answer it, and resolving it hands the row to whoever opened it, so the
  * status change doubles as the "accepted"/"declined" notice. A leader therefore
- * sees incoming requests plus the outcomes of invites they sent; an ordinary
+ * (or Officer) sees incoming requests plus the outcomes of invites sent; an ordinary
  * player sees incoming invites plus the outcomes of requests they made.
  *
  * @param {User} user - The player whose inbox is being read.
@@ -56,9 +62,9 @@ const inboxScope = (user: User): FilterQuery<AllianceInvite> => {
     ],
   };
 
-  const leads = user.alliance_role === AllianceRole.LEADER && user.alliance_id;
+  const answersRequests = can(user.alliance_role, AllianceAction.ANSWER_REQUEST) && user.alliance_id;
 
-  if (!leads) return asPlayer;
+  if (!answersRequests) return asPlayer;
 
   const asLeader = {
     alliance_id: user.alliance_id,
@@ -250,11 +256,11 @@ export const answerInvite = async (user: User, inviteId: number, status: Allianc
 
   if (invite.status !== AllianceInviteStatus.PENDING) throw inviteNotPendingErr();
 
-  const isLeader = user.alliance_role === AllianceRole.LEADER;
-  const leadsAlliance = isLeader && user.alliance_id === invite.alliance_id;
+  const answersForAlliance =
+    can(user.alliance_role, AllianceAction.ANSWER_REQUEST) && user.alliance_id === invite.alliance_id;
 
   const isInvite = invite.type === AllianceInviteType.INVITE;
-  const canAnswer = isInvite ? invite.user_id === user.userid : leadsAlliance;
+  const canAnswer = isInvite ? invite.user_id === user.userid : answersForAlliance;
 
   if (!canAnswer) throw permissionErr();
 
@@ -289,10 +295,11 @@ export const answerInvite = async (user: User, inviteId: number, status: Allianc
     if (!locked) throw permissionErr();
 
     if (!isInvite) {
-      const leader = await lockMembership(em, user.userid);
-      const stillLeads = leader?.alliance_id === alliance.id && leader.alliance_role === AllianceRole.LEADER;
+      const answerer = await lockMembership(em, user.userid);
+      const stillMay =
+        answerer?.alliance_id === alliance.id && can(answerer.alliance_role, AllianceAction.ANSWER_REQUEST);
 
-      if (!stillLeads) throw permissionErr();
+      if (!stillMay) throw permissionErr();
     }
 
     const membership = await lockMembership(em, player.userid);

@@ -10,6 +10,8 @@ interface AllianceData {
   name: string;
   image: number;
   is_leader: boolean;
+  /** leader, officer or member. */
+  role: AllianceRole | null;
   relationships: Relationship;
 }
 
@@ -37,7 +39,7 @@ export const getAllianceData = async (user: User): Promise<AllianceData | null> 
   const isLeader = user.alliance_role === AllianceRole.LEADER;
   const relationships = await getAllianceRelationships(id);
 
-  return { alliance_id: id, name, image, is_leader: isLeader, relationships };
+  return { alliance_id: id, name, image, is_leader: isLeader, role: user.alliance_role ?? null, relationships };
 };
 
 /**

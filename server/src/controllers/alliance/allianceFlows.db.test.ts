@@ -46,6 +46,8 @@ const { kickMember } = await import("./kickMember.js");
 const { promoteMember } = await import("./promoteMember.js");
 const { changeAllianceType } = await import("./changeAllianceType.js");
 const { myAlliance } = await import("./myAlliance.js");
+const { setMemberRank } = await import("./setMemberRank.js");
+const { editAlliance } = await import("./editAlliance.js");
 
 const BASE = 993_800;
 const LEADER = BASE + 1;
@@ -352,5 +354,94 @@ describe.skipIf(!enabled)("alliance flows through the controllers, on Postgres (
 
     expect((await call(changeAllianceType, LEADER, { alliance_type: "midas" })).refused).toContain("too many members");
     expect((await call(changeAllianceType, MEMBER, { alliance_type: "fortress" })).refused).toBeDefined();
+  });
+
+  describe("Officers", () => {
+    /** Founds with MEMBER in, and makes MEMBER an Officer. */
+    const foundWithOfficer = async () => {
+      const allianceId = await foundWithMember();
+      expect((await call(setMemberRank, LEADER, { userid: MEMBER, role: "officer" })).changed).toBe(true);
+      return allianceId;
+    };
+
+    test("an Officer invites, and answers a join request", async () => {
+      const allianceId = await foundWithOfficer();
+
+      expect((await call(inviteUser, MEMBER, { userid: PLAYER })).error).toBe(0);
+      await call(changeInviteStatus, PLAYER, { invite_id: await pendingInviteId(PLAYER), status: "declined" });
+
+      await call(requestJoin, PLAYER, { alliance_id: allianceId });
+      const body = await call(changeInviteStatus, MEMBER, { invite_id: await pendingInviteId(PLAYER), status: "accepted" });
+
+      expect(body.error).toBe(0);
+      expect(await membership(PLAYER)).toEqual({ alliance_id: allianceId, role: "member" });
+    });
+
+    test("an Officer kicks a Member but not the Leader; the Leader kicks an Officer", async () => {
+      const allianceId = await foundWithOfficer();
+      await call(requestJoin, PLAYER, { alliance_id: allianceId });
+      await call(changeInviteStatus, LEADER, { invite_id: await pendingInviteId(PLAYER), status: "accepted" });
+
+      expect((await call(kickMember, MEMBER, { userid: LEADER })).refused).toBe("You cannot kick members.");
+      expect((await call(kickMember, MEMBER, { userid: PLAYER })).error).toBe(0);
+      expect((await call(kickMember, LEADER, { userid: MEMBER })).error).toBe(0);
+      expect(await membership(MEMBER)).toEqual({ alliance_id: null, role: null });
+    });
+
+    test("an Officer cannot kick another Officer", async () => {
+      const allianceId = await foundWithOfficer();
+      await call(requestJoin, PLAYER, { alliance_id: allianceId });
+      await call(changeInviteStatus, LEADER, { invite_id: await pendingInviteId(PLAYER), status: "accepted" });
+      await call(setMemberRank, LEADER, { userid: PLAYER, role: "officer" });
+
+      expect((await call(kickMember, MEMBER, { userid: PLAYER })).refused).toBe("You cannot kick members.");
+      expect(await membership(PLAYER)).toEqual({ alliance_id: allianceId, role: "officer" });
+    });
+
+    test("a Midas' Council has two Officer seats", async () => {
+      const allianceId = await foundWithOfficer();
+      await fill(allianceId, 2);
+      const [first, second] = FILLERS;
+
+      expect((await call(setMemberRank, LEADER, { userid: first, role: "officer" })).changed).toBe(true);
+      expect((await call(setMemberRank, LEADER, { userid: second, role: "officer" })).refused).toBe(
+        "Your alliance already has 2 Officers, the most its type allows."
+      );
+
+      expect((await call(setMemberRank, LEADER, { userid: first, role: "member" })).changed).toBe(true);
+      expect((await call(setMemberRank, LEADER, { userid: second, role: "officer" })).changed).toBe(true);
+    });
+
+    test("only the Leader changes ranks", async () => {
+      const allianceId = await foundWithOfficer();
+      await fill(allianceId, 1);
+
+      expect((await call(setMemberRank, MEMBER, { userid: FILLERS[0], role: "officer" })).refused).toBeDefined();
+    });
+
+    test("handing over to an Officer leaves the old Leader an Officer", async () => {
+      const allianceId = await foundWithOfficer();
+
+      expect((await call(promoteMember, LEADER, { userid: MEMBER })).error).toBe(0);
+      expect(await membership(MEMBER)).toEqual({ alliance_id: allianceId, role: "leader" });
+      expect(await membership(LEADER)).toEqual({ alliance_id: allianceId, role: "officer" });
+    });
+
+    test("an Officer edits the ad but not the shield", async () => {
+      await foundWithOfficer();
+
+      expect((await call(editAlliance, MEMBER, { alliance_image: 3, alliance_desc: "New ad" })).error).toBe(0);
+      expect((await call(editAlliance, MEMBER, { alliance_image: 9, alliance_desc: "New ad" })).refused).toBeDefined();
+    });
+
+    test("myalliance tells an Officer what they may do", async () => {
+      await foundWithOfficer();
+
+      const mine = await call(myAlliance, MEMBER);
+
+      expect(mine.alliance.role).toBe("officer");
+      expect(mine.alliance.permissions).toContain("kickMember");
+      expect(mine.alliance.permissions).not.toContain("kickOfficer");
+    });
   });
 });

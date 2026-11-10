@@ -7,15 +7,20 @@ import { postgres } from "../../server.js";
 import { disconnectAllianceChat } from "../../chat/chatControl.js";
 import { invalidateAllianceSight, invalidatePlayerSight } from "../maproom/sight/sightService.js";
 import { announceShout, emitShout, type ShoutDraft } from "./allianceMessages.js";
+import { AllianceAction, can, canKick } from "./permissions.js";
+import { officerLimit } from "./allianceTypes.js";
 import {
   alreadyInAllianceErr,
   cannotKickErr,
   cannotPromoteErr,
   leaderMustTransferErr,
+  officerSeatsFullErr,
   permissionErr,
 } from "../../errors/errors.js";
 
 type EntryShout = AllianceMessageType.CREATED | AllianceMessageType.JOINED;
+/** The ranks `setAllianceRank` moves a player between. */
+type Rank = AllianceRole.OFFICER | AllianceRole.MEMBER;
 type ExitShout = AllianceMessageType.KICKED | AllianceMessageType.LEFT;
 
 type Em = EntityManager<PostgreSqlDriver>;
@@ -129,14 +134,14 @@ export const addAllianceMember = async (
  * Every rule is checked again under the locks: the player must still be in
  * this alliance (they may have left and joined another since the request read
  * them), a leader may only go once no one else remains, and a kick needs the
- * kicker to still lead it. The count that decides a disband is taken under the
+ * kicker to still hold a rank that may kick the player's rank (`canKick`). The count that decides a disband is taken under the
  * alliance lock too, so a player accepted at the same moment is either counted
  * or refused, never left behind in a deleted alliance.
  *
  * @param {User} user - The user leaving or being removed.
  * @param {Alliance} alliance - The alliance they belong to.
  * @param {ExitShout} shoutType - KICKED when removed by a leader, LEFT when they chose to go.
- * @param {User} kickedBy - The leader doing the kick, for KICKED.
+ * @param {User} kickedBy - The Leader or Officer doing the kick, for KICKED.
  * @returns {Promise<boolean>} True if the alliance was disbanded (last member out).
  * @throws {ClientSafeError} When the user is no longer in it, a leader still has members, or the kicker no longer leads.
  */
@@ -149,16 +154,15 @@ export const removeAllianceMember = async (
   const disbanded = await postgres.em.transactional(async (em) => {
     if (!(await lockAlliance(em, alliance.id))) throw permissionErr();
 
-    if (kickedBy) {
-      const kicker = await lockMembership(em, kickedBy.userid);
-      const leads = kicker?.alliance_id === alliance.id && kicker.alliance_role === AllianceRole.LEADER;
+    const kicker = kickedBy ? await lockMembership(em, kickedBy.userid) : null;
 
-      if (!leads) throw cannotKickErr();
-    }
+    if (kickedBy && kicker?.alliance_id !== alliance.id) throw cannotKickErr();
 
     const membership = await lockMembership(em, user.userid);
 
     if (membership?.alliance_id !== alliance.id) throw kickedBy ? cannotKickErr() : permissionErr();
+
+    if (kickedBy && !canKick(kicker?.alliance_role, membership.alliance_role)) throw cannotKickErr();
 
     const remaining = await em.count(User, { alliance_id: alliance.id, userid: { $ne: user.userid } });
 
@@ -198,18 +202,26 @@ export const removeAllianceMember = async (
 };
 
 /**
- * Hands leadership of an alliance to one of its members.
- * 
- * Leader becomes a member, and the member becomes the leader.
- * Alliance ownership is updated to reflect the new leader's userid and username.
+ * Hands leadership of an alliance to one of its Officers or Members.
+ *
+ * The two swap: the new leader's old rank goes to the old leader, so an
+ * Officer taking over leaves the old leader an Officer and the Officer count
+ * never moves. Alliance ownership is updated to the new leader's id and name.
  *
  * @param {User} leader - The current leader, stepping down.
- * @param {User} member - The member taking over.
+ * @param {User} member - The Officer or Member taking over.
  * @param {Alliance} alliance - The alliance changing hands.
  */
 export const promoteAllianceMember = async (leader: User, member: User, alliance: Alliance) => {
-  await postgres.em.transactional(async (em) => {
+  const oldRank = await postgres.em.transactional(async (em) => {
     if (!(await lockAlliance(em, alliance.id))) throw permissionErr();
+
+    const memberNow = await lockMembership(em, member.userid);
+    const rank = memberNow?.alliance_role;
+    const takesOverFrom =
+      memberNow?.alliance_id === alliance.id && (rank === AllianceRole.MEMBER || rank === AllianceRole.OFFICER);
+
+    if (!takesOverFrom) throw cannotPromoteErr();
 
     // Each write only lands if its player still holds the role it changes, in
     // this alliance, so a double click or a member leaving at the same moment
@@ -217,14 +229,14 @@ export const promoteAllianceMember = async (leader: User, member: User, alliance
     const stepsDown = await em.nativeUpdate(
       User,
       { userid: leader.userid, alliance_id: alliance.id, alliance_role: AllianceRole.LEADER },
-      { alliance_role: AllianceRole.MEMBER }
+      { alliance_role: rank }
     );
 
     if (stepsDown === 0) throw permissionErr();
 
     const takesOver = await em.nativeUpdate(
       User,
-      { userid: member.userid, alliance_id: alliance.id, alliance_role: AllianceRole.MEMBER },
+      { userid: member.userid, alliance_id: alliance.id, alliance_role: rank },
       { alliance_role: AllianceRole.LEADER }
     );
 
@@ -235,10 +247,12 @@ export const promoteAllianceMember = async (leader: User, member: User, alliance
       { id: alliance.id },
       { leader_userid: member.userid, leader_name: member.username }
     );
+
+    return rank;
   });
 
   member.alliance_role = AllianceRole.LEADER;
-  leader.alliance_role = AllianceRole.MEMBER;
+  leader.alliance_role = oldRank;
 
   alliance.leader_userid = member.userid;
   alliance.leader_name = member.username;
@@ -251,4 +265,59 @@ export const promoteAllianceMember = async (leader: User, member: User, alliance
   }
 
   await announceShout(shout);
+};
+
+/**
+ * Makes a Member an Officer, or an Officer a Member (design v5 §6). Only a
+ * rank with `SET_RANK` may, checked again under the locks, and an Officer seat
+ * is only given while the type has one free (2 / 4 / 6), counted under the
+ * alliance lock so two promotions at once cannot both take the last seat.
+ *
+ * @param {User} actor - The Leader doing it.
+ * @param {User} target - The player whose rank changes.
+ * @param {Alliance} alliance - The alliance.
+ * @param {Rank} rank - The rank to give.
+ * @returns {Promise<boolean>} False when the player already held that rank.
+ * @throws {ClientSafeError} When the actor may not, the target is not an Officer or Member here, or no seat is free.
+ */
+export const setAllianceRank = async (actor: User, target: User, alliance: Alliance, rank: Rank) => {
+  const changed = await postgres.em.transactional(async (em) => {
+    const locked = await lockAlliance(em, alliance.id);
+
+    if (!locked) throw permissionErr();
+
+    const actorNow = await lockMembership(em, actor.userid);
+
+    if (actorNow?.alliance_id !== alliance.id || !can(actorNow.alliance_role, AllianceAction.SET_RANK)) {
+      throw cannotPromoteErr();
+    }
+
+    const targetNow = await lockMembership(em, target.userid);
+    const from = targetNow?.alliance_role;
+    const movable =
+      targetNow?.alliance_id === alliance.id && (from === AllianceRole.MEMBER || from === AllianceRole.OFFICER);
+
+    if (!movable) throw cannotPromoteErr();
+    if (from === rank) return false;
+
+    if (rank === AllianceRole.OFFICER) {
+      const officers = await em.count(User, { alliance_id: alliance.id, alliance_role: AllianceRole.OFFICER });
+
+      if (officers >= officerLimit(locked.type)) throw officerSeatsFullErr(officerLimit(locked.type));
+    }
+
+    await em.nativeUpdate(User, { userid: target.userid }, { alliance_role: rank });
+
+    return true;
+  });
+
+  if (!changed) return false;
+
+  target.alliance_role = rank;
+
+  const type = rank === AllianceRole.OFFICER ? AllianceMessageType.OFFICER : AllianceMessageType.DEMOTED;
+
+  await announceShout({ allianceId: alliance.id, author: target, type, body: "" });
+
+  return true;
 };

@@ -6,6 +6,7 @@ import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { announceShout } from "./allianceMessages.js";
 import { lockAlliance, lockMembership } from "./membership.js";
+import { AllianceAction, can } from "./permissions.js";
 import { quoteTypeSwitch, typeSwitchOptions, type TypeSwitchQuote, type TypeSwitchState } from "./allianceTypes.js";
 import { allianceTypeSwitchRefusedErr, permissionErr } from "../../errors/errors.js";
 
@@ -81,9 +82,9 @@ export const switchAllianceType = async (
     if (!(await lockAlliance(em, alliance.id))) throw permissionErr();
 
     const membership = await lockMembership(em, leader.userid);
-    const leads = membership?.alliance_id === alliance.id && membership.alliance_role === AllianceRole.LEADER;
+    const may = membership?.alliance_id === alliance.id && can(membership.alliance_role, AllianceAction.SWITCH_TYPE);
 
-    if (!leads) throw permissionErr();
+    if (!may) throw permissionErr();
 
     const state = await readSwitchState(em, alliance.id);
 

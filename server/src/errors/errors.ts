@@ -493,7 +493,7 @@ export const userAlreadyInAllianceErr = () =>
 
 export const inviteLeaderOnlyErr = () =>
   new ClientSafeError({
-    message: "Only the leader of the alliance can invite new members. Ask them to send the invitation for you.",
+    message: "Only the leader or an Officer can invite new members. Ask one of them to send the invitation for you.",
     status: Status.FORBIDDEN,
     data: {},
     isClientFriendly: true,
@@ -578,6 +578,14 @@ export const allianceFullErr = () =>
     message: "The alliance is already full.",
     status: Status.CONFLICT,
     data: {},
+    isClientFriendly: true,
+  });
+
+export const officerSeatsFullErr = (seats: number) =>
+  new ClientSafeError({
+    message: `Your alliance already has ${seats} Officers, the most its type allows.`,
+    status: Status.CONFLICT,
+    data: { reason: "officerSeatsFull", seats },
     isClientFriendly: true,
   });
 

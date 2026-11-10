@@ -1,6 +1,6 @@
 import z from "zod";
 
-import { AllianceInviteStatus, AllianceStance, AllianceType } from "../enums/Alliance.js";
+import { AllianceInviteStatus, AllianceRole, AllianceStance, AllianceType } from "../enums/Alliance.js";
 import { DEFAULT_ALLIANCE_TYPE } from "../config/AllianceConfig.js";
 
 /**
@@ -64,6 +64,14 @@ export const InviteUserSchema = z.object({
  */
 export const MemberActionSchema = z.object({
   userid: z.coerce.number().int().positive(),
+});
+
+/**
+ * Schema for the Leader's Make Officer / Make Member buttons.
+ */
+export const SetRankSchema = z.object({
+  userid: z.coerce.number().int().positive(),
+  role: z.enum([AllianceRole.OFFICER, AllianceRole.MEMBER]),
 });
 
 /**

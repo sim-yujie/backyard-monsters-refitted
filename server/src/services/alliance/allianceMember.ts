@@ -28,6 +28,8 @@ export interface AllianceMember {
   points: number;
   last_attacker: string;
   is_leader: boolean;
+  /** leader, officer or member. */
+  role: AllianceRole | null;
   status: AllianceMemberStatus;
 }
 
@@ -86,6 +88,7 @@ export const toAllianceMember = (
     points: calculateEmpirePoints(save.points, save.basevalue),
     last_attacker: save.lastattackername ?? "",
     is_leader: isLeader,
+    role: alliance_role ?? null,
     status,
   };
 };

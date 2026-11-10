@@ -1,4 +1,5 @@
-import { AllianceInviteType, AllianceRole } from "../../enums/Alliance.js";
+import { AllianceInviteType } from "../../enums/Alliance.js";
+import { AllianceAction, can } from "../../services/alliance/permissions.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
@@ -38,9 +39,7 @@ export const inviteUser: KoaController = async (ctx) => {
 
   const alliance = await requireAllianceMember(user);
 
-  // Not confirmed: The original's map room enabled the button for every member, so members do reach here,
-  // so not sure yet if this was a leader-only action.
-  if (user.alliance_role !== AllianceRole.LEADER) throw inviteLeaderOnlyErr();
+  if (!can(user.alliance_role, AllianceAction.INVITE)) throw inviteLeaderOnlyErr();
 
   const player = await postgres.em.findOne(User, { userid }, { fields: INVITE_FIELDS });
   if (!player) throw permissionErr();

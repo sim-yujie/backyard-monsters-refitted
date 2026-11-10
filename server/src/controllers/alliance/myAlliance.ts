@@ -4,6 +4,7 @@ import { getUserAlliance } from "../../services/alliance/allianceAccess.js";
 import { getAllianceDetails } from "../../services/alliance/allianceMember.js";
 import { getTypeSwitchOptions } from "../../services/alliance/allianceSettings.js";
 import { memberLimit, officerLimit } from "../../services/alliance/allianceTypes.js";
+import { allowedActions } from "../../services/alliance/permissions.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
 /**
@@ -47,6 +48,8 @@ export const myAlliance: KoaController = async (ctx) => {
       points: alliance.points,
       points_spent: alliance.points_spent,
       type_options: typeOptions,
+      role: user.alliance_role ?? null,
+      permissions: allowedActions(user.alliance_role),
     },
   };
 };

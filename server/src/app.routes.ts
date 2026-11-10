@@ -170,6 +170,7 @@ import { getMessages } from "./controllers/alliance/getMessages.js";
 import { deleteMessages } from "./controllers/alliance/deleteMessages.js";
 import { kickMember } from "./controllers/alliance/kickMember.js";
 import { promoteMember } from "./controllers/alliance/promoteMember.js";
+import { setMemberRank } from "./controllers/alliance/setMemberRank.js";
 import { changeRelationship } from "./controllers/alliance/changeRelationship.js";
 import { getPowerups } from "./controllers/alliance/getPowerups.js";
 import { submitBugReportController, submitGuestBugReportController } from "./controllers/bugReports/submitBugReport.js";
@@ -407,6 +408,7 @@ router.get("/alliance/getmessages", verifyUserAuth, logRequest, getMessages);
 router.post("/alliance/deletemessages", verifyUserAuth, logRequest, deleteMessages);
 router.post("/alliance/kickmember", verifyUserAuth, logRequest, kickMember);
 router.post("/alliance/promotemember", verifyUserAuth, logRequest, promoteMember);
+router.post("/alliance/setrank", verifyUserAuth, logRequest, setMemberRank);
 router.post("/alliance/changerelationship", verifyUserAuth, logRequest, changeRelationship);
 
 /**  ────────────────────────────────────────────────

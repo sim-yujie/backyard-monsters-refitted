@@ -2,7 +2,8 @@ import { Status } from "../../enums/StatusCodes.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { MemberActionSchema } from "../../schemas/AllianceSchemas.js";
-import { requireAllianceLeader } from "../../services/alliance/allianceAccess.js";
+import { requireAlliancePermission } from "../../services/alliance/allianceAccess.js";
+import { AllianceAction } from "../../services/alliance/permissions.js";
 import { promoteAllianceMember } from "../../services/alliance/membership.js";
 import { cannotPromoteErr } from "../../errors/errors.js";
 import type { KoaController } from "../../utils/KoaController.js";
@@ -18,7 +19,7 @@ export const promoteMember: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
   const { userid } = MemberActionSchema.parse(ctx.request.body);
 
-  const alliance = await requireAllianceLeader(user);
+  const alliance = await requireAlliancePermission(user, AllianceAction.HAND_OVER);
 
   if (userid === user.userid) throw cannotPromoteErr();
 
