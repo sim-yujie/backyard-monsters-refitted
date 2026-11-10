@@ -324,7 +324,6 @@ const tribeReplayInput = (
     // bomb or siege, and a champion fling finds no champion to send.
     attacker: { champion: [], catapult: 0, siege: null },
     tick,
-    declareWar: tribe.session.declareWar ?? false,
     left,
   });
 

@@ -17,9 +17,9 @@ import { cheapTakeoverPrice } from "../../events/mr2Welcome.js";
  *                                     / 250000) * 250000, 1000000), 65000000)
  *
  * then halved when the cell is adjacent to the taker's main yard
- * (`PopupTakeover.as:62-75`), then reduced 25% by the Alliance Conquest power-up
- * (`PopupTakeover.as:77-79`, `POWERUPS.as:337-339`). The same amount is charged for
- * each of r1..r4, and the Shiny alternative is
+ * (`PopupTakeover.as:62-75`). The original's Alliance Conquest power-up took 25%
+ * off on top; the alliance power-ups are gone (owner, 10 Nov 2026). The same
+ * amount is charged for each of r1..r4, and the Shiny alternative is
  * `ceil(sqrt(cost / 2) ^ 0.75 * 4)` (`PopupTakeover.as:80`).
  *
  * The outpost-count tier table in `PopupInfoEnemy.as:498-513` is NOT this price: it
@@ -44,9 +44,6 @@ const OUTPOST_SLOPE = 15820570.7;
 
 const OUTPOST_INTERCEPT = -227080916.9;
 
-/** Alliance Conquest takes 25% off the price (POWERUPS.as:337-339). */
-const CONQUEST_MULTIPLIER = 0.75;
-
 export interface TakeoverCostInput {
   /** True for a wild monster camp, false for a player-owned outpost. */
   isWildMonster: boolean;
@@ -56,8 +53,6 @@ export interface TakeoverCostInput {
   empireValue: number;
   /** Whether the target neighbours the taker's main yard. */
   adjacentToMainYard: boolean;
-  /** Whether the taker's alliance has Conquest running. */
-  conquestActive: boolean;
 }
 
 /**
@@ -103,7 +98,6 @@ export const takeoverResourceCost = ({
   level,
   empireValue,
   adjacentToMainYard,
-  conquestActive,
 }: TakeoverCostInput) => {
   let cost: number;
 
@@ -119,8 +113,6 @@ export const takeoverResourceCost = ({
   }
 
   if (adjacentToMainYard) cost *= 0.5;
-
-  if (conquestActive) cost = Math.ceil(cost * CONQUEST_MULTIPLIER);
 
   return cost;
 };
@@ -154,7 +146,7 @@ export interface TakeoverQuote {
 /**
  * The takeover price for one taker and one cell, the way `PopupTakeover.as`
  * works it out: the camp's coordinate-derived level or the outpost's empire
- * value, the taker's main yard for the adjacency half, and Conquest.
+ * value, and the taker's main yard for the adjacency half.
  *
  * @param {object} input - The cell, what it is, and the taker's side.
  * @returns {TakeoverQuote} The price.
@@ -164,7 +156,6 @@ export const quoteTakeover = ({
   isWildMonster,
   empireValue,
   takerHomebase,
-  conquestActive,
   welcome = false,
 }: {
   cell: { x: number; y: number };
@@ -172,11 +163,10 @@ export const quoteTakeover = ({
   empireValue: number;
   /** The taker's `Save.homebase`, `[x, y]` as strings. */
   takerHomebase: readonly (string | number)[] | null | undefined;
-  conquestActive: boolean;
   /**
    * The taker's "New to Map Room 2" cheap takeover is ready. A wild camp then
-   * costs 10% of its full base price in resources, with no half price or
-   * Conquest on top; the Shiny price stays the usual one.
+   * costs 10% of its full base price in resources, with no half price on
+   * top; the Shiny price stays the usual one.
    */
   welcome?: boolean;
 }): TakeoverQuote => {
@@ -195,7 +185,6 @@ export const quoteTakeover = ({
     level,
     empireValue,
     adjacentToMainYard: adjacent,
-    conquestActive,
   });
 
   const shiny = takeoverShinyCost(resources);
@@ -206,7 +195,6 @@ export const quoteTakeover = ({
       level,
       empireValue,
       adjacentToMainYard: false,
-      conquestActive: false,
     });
 
     return { resources: cheapTakeoverPrice(fullBase), shiny, adjacent, welcome: true, usualResources: resources };

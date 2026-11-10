@@ -9,7 +9,6 @@ import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
 import { buildingDataHandler } from "../../controllers/base/save/handlers/buildingDataHandler.js";
 import { defenderLootHandler } from "../../controllers/base/save/handlers/defenderLootHandler.js";
-import { isDeclareWarRunning } from "../alliance/powerups.js";
 import { protectAfterAttack } from "../maproom/v2/damageProtection.js";
 import { noticeOutpostAttack } from "../maproom/v2/outpostNotices.js";
 import { afterYardDefended } from "./afterYardDefended.js";
@@ -226,7 +225,6 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
     },
     attacker: userSave,
     tick: checkpoint.tick,
-    declareWar: await isDeclareWarRunning(attacker.alliance_id),
     left: options.left ?? true,
   });
   if (!input) {

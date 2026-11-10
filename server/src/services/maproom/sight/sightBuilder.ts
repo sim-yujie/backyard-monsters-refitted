@@ -1,4 +1,4 @@
-import { mainYardRange, outpostRange, withDeclareWar } from "../../../game-rules/maproom/range.js";
+import { mainYardRange, outpostRange } from "../../../game-rules/maproom/range.js";
 import type { RevealedCell, SightSource } from "../../../game-rules/maproom/sight.js";
 
 /**
@@ -35,13 +35,12 @@ const isReal = (n: number): boolean => Number.isFinite(n);
  * visible regardless, through {@link ownRevealedCells}, not this circle.
  *
  * @param save - The main yard's own fields.
- * @param declareWar - Whether the owner's alliance has Declare War running.
  */
-export const mainYardSource = (save: OwnBaseSave, declareWar: boolean): SightSource | null => {
+export const mainYardSource = (save: OwnBaseSave): SightSource | null => {
   const [x, y] = (save.homebase ?? []).map(Number);
   if (!isReal(x!) || !isReal(y!)) return null;
 
-  return { x: x!, y: y!, reach: withDeclareWar(mainYardRange(save.flinger), declareWar) };
+  return { x: x!, y: y!, reach: mainYardRange(save.flinger) };
 };
 
 /**
@@ -53,19 +52,17 @@ export const mainYardSource = (save: OwnBaseSave, declareWar: boolean): SightSou
  * @param flingerLevels - Flinger level per outpost `baseid`, from
  *   {@link sightService.ts}'s query. An outpost whose level is not in the
  *   map (its save row is gone) is skipped.
- * @param declareWar - Whether the owner's alliance has Declare War running.
  */
 export const outpostSources = (
   save: Pick<OwnBaseSave, "outposts">,
   flingerLevels: ReadonlyMap<string, number | undefined>,
-  declareWar: boolean,
 ): SightSource[] =>
   (save.outposts ?? [])
     .filter(([, , baseid]) => flingerLevels.has(baseid))
     .map(([x, y, baseid]) => ({
       x,
       y,
-      reach: withDeclareWar(outpostRange(flingerLevels.get(baseid)), declareWar),
+      reach: outpostRange(flingerLevels.get(baseid)),
     }));
 
 /**
@@ -73,15 +70,13 @@ export const outpostSources = (
  *
  * @param save - The base's own fields.
  * @param flingerLevels - Flinger level per outpost `baseid`.
- * @param declareWar - Whether the owner's alliance has Declare War running.
  */
 export const ownSources = (
   save: OwnBaseSave,
   flingerLevels: ReadonlyMap<string, number | undefined>,
-  declareWar: boolean,
 ): SightSource[] => {
-  const main = mainYardSource(save, declareWar);
-  const outposts = outpostSources(save, flingerLevels, declareWar);
+  const main = mainYardSource(save);
+  const outposts = outpostSources(save, flingerLevels);
 
   return main ? [main, ...outposts] : outposts;
 };

@@ -44,8 +44,6 @@ export enum AllianceMessageType {
   PROMOTED = "promoted",
   CREATED = "created",
   RELATIONSHIP = "relationship",
-  POWERUP_ACTIVATED = "powerup_activated",
-  POWERUP_PURCHASE = "powerup_purchase",
   OFFICER = "officer",
   DEMOTED = "demoted",
   TYPE_CHANGED = "type_changed",
@@ -78,14 +76,3 @@ export enum AllianceInviteStatus {
   DECLINED = "declined",
 }
 
-/**
- * The three alliance power-ups. Values are the ids the client's POWERUPS class
- * keys its buckets by, so they must match `ap_*` in POWERUPS.as exactly.
- *
- * @enum {string}
- */
-export enum AlliancePowerupType {
-  ARMAMENT = "ap_armament",
-  CONQUEST = "ap_conquest",
-  DECLARE_WAR = "ap_declarewar",
-}

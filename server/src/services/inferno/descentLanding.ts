@@ -325,7 +325,6 @@ const descentReplayInput = (
     // the attacker fights with none.
     attacker: { ...user.save!, catapult: 0, siege: null } as never,
     tick,
-    declareWar: session.declareWar ?? false,
     left,
     // From yard 7 the fight burns surface monsters (WP 1.21), as the client's does.
     descentYard: descentIndexOf(String(yard.baseid))! + 1,

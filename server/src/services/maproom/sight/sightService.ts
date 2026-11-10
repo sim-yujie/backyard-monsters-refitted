@@ -1,12 +1,9 @@
-import { AlliancePowerupType } from "../../../enums/Alliance.js";
 import { BaseType } from "../../../enums/Base.js";
 import { AttackLogs } from "../../../database/models/attacklogs.model.js";
 import { Save } from "../../../database/models/save.model.js";
 import { User } from "../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { postgres, redis } from "../../../server.js";
-import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
-import { runningPowerups } from "../../alliance/powerups.js";
 import type { RevealedCell, SightSource } from "../../../game-rules/maproom/sight.js";
 import {
   attackerRevealedCells,
@@ -66,35 +63,6 @@ interface CachedHalf {
 
 const EMPTY_HALF: CachedHalf = { sources: [], revealed: [] };
 
-/** Whether the alliance's Declare War is running, and when it ends, for the cache's TTL cap. */
-interface DeclareWarStatus {
-  active: boolean;
-  /** Unix seconds; present only while {@link active}. */
-  endsAt?: number;
-}
-
-const declareWarStatus = async (allianceId: User["alliance_id"]): Promise<DeclareWarStatus> => {
-  if (!allianceId) return { active: false };
-
-  const running = await runningPowerups(allianceId);
-  const war = running.find(({ id }) => id === AlliancePowerupType.DECLARE_WAR);
-
-  return war ? { active: true, endsAt: war.endtime } : { active: false };
-};
-
-/**
- * The cache life to use: the normal {@link SIGHT_CACHE_TTL_SECONDS}, or
- * however long is left of a running Declare War if that is sooner, so a
- * cached sight can never outlive the extra reach it was built with
- * (`fog-of-war.md` §9). At least a second, so an about-to-expire war never
- * caches as already gone.
- */
-const cacheTtl = (war: DeclareWarStatus): number => {
-  if (!war.active || war.endsAt === undefined) return SIGHT_CACHE_TTL_SECONDS;
-
-  return Math.max(1, Math.min(SIGHT_CACHE_TTL_SECONDS, war.endsAt - getCurrentDateTime()));
-};
-
 /**
  * Flinger level per outpost `baseid`, for whichever outposts the caller asks
  * about (one player's own, or every member of an alliance's combined).
@@ -153,9 +121,8 @@ const asOwnBaseSave = (save: Pick<Save, "homebase" | "flinger" | "outposts">): O
  *
  * @param user - The player, with `user.save` already populated
  *   ({@link SIGHT_SAVE_FIELDS}).
- * @param declareWar - Whether the player's alliance has Declare War running.
  */
-const loadOwnSight = async (user: User, declareWar: boolean): Promise<CachedHalf> => {
+const loadOwnSight = async (user: User): Promise<CachedHalf> => {
   const save = user.save;
   if (!save?.worldid) return EMPTY_HALF;
 
@@ -168,7 +135,7 @@ const loadOwnSight = async (user: User, declareWar: boolean): Promise<CachedHalf
   ]);
 
   return {
-    sources: ownSources(baseSave, flingerLevels, declareWar),
+    sources: ownSources(baseSave, flingerLevels),
     revealed: [...ownRevealedCells(baseSave), ...attackerRevealedCells(attackerBases)],
   };
 };
@@ -180,13 +147,8 @@ const loadOwnSight = async (user: User, declareWar: boolean): Promise<CachedHalf
  *
  * @param allianceId - The alliance.
  * @param worldid - Only members on this world contribute (`fog-of-war.md` §8).
- * @param declareWar - Whether the alliance has Declare War running.
  */
-const loadAllianceSight = async (
-  allianceId: number,
-  worldid: string,
-  declareWar: boolean,
-): Promise<CachedHalf> => {
+const loadAllianceSight = async (allianceId: number, worldid: string): Promise<CachedHalf> => {
   const members = await postgres.em.find(User, { alliance_id: allianceId }, { fields: ["userid"] });
   const memberIds = members.map(({ userid }) => userid);
   if (!memberIds.length) return EMPTY_HALF;
@@ -205,7 +167,7 @@ const loadAllianceSight = async (
 
   for (const save of saves) {
     const baseSave = asOwnBaseSave(save);
-    sources.push(...ownSources(baseSave, flingerLevels, declareWar));
+    sources.push(...ownSources(baseSave, flingerLevels));
     revealed.push(...ownRevealedCells(baseSave));
   }
 
@@ -224,34 +186,30 @@ const readCached = async (key: string): Promise<CachedHalf | null> => {
   }
 };
 
-const cachedOwnSight = async (user: User, war: DeclareWarStatus): Promise<CachedHalf> => {
+const cachedOwnSight = async (user: User): Promise<CachedHalf> => {
   const key = playerSightKey(user.userid);
   const cached = await readCached(key);
   if (cached) return cached;
 
-  const fresh = await loadOwnSight(user, war.active);
-  await redis.setex(key, cacheTtl(war), JSON.stringify(fresh));
+  const fresh = await loadOwnSight(user);
+  await redis.setex(key, SIGHT_CACHE_TTL_SECONDS, JSON.stringify(fresh));
   return fresh;
 };
 
-const cachedAllianceSight = async (
-  allianceId: number,
-  worldid: string,
-  war: DeclareWarStatus,
-): Promise<CachedHalf> => {
+const cachedAllianceSight = async (allianceId: number, worldid: string): Promise<CachedHalf> => {
   const key = allianceSightKey(allianceId);
   const cached = await readCached(key);
   if (cached) return cached;
 
-  const fresh = await loadAllianceSight(allianceId, worldid, war.active);
-  await redis.setex(key, cacheTtl(war), JSON.stringify(fresh));
+  const fresh = await loadAllianceSight(allianceId, worldid);
+  await redis.setex(key, SIGHT_CACHE_TTL_SECONDS, JSON.stringify(fresh));
   return fresh;
 };
 
 /**
  * A player's complete sight: their own circles and cells, their alliance's
  * union of the same, and every attacker's base — cached in Redis, 30 seconds
- * at most and never past a running Declare War's end (`fog-of-war.md` §9).
+ * at most (`fog-of-war.md` §9).
  *
  * A player with no save yet, or a save never placed on a Map Room 2 world,
  * sees nothing: an empty sight, not an error (`emptyAreaResponse.ts` already
@@ -268,11 +226,9 @@ export const getPlayerSight = async (user: User): Promise<PlayerSight> => {
   const save = user.save;
   if (!save?.worldid) return { sv: sightVersionOf([], []), sources: [], revealed: [] };
 
-  const war = await declareWarStatus(user.alliance_id);
-
-  const own = await cachedOwnSight(user, war);
+  const own = await cachedOwnSight(user);
   const ally = user.alliance_id
-    ? await cachedAllianceSight(user.alliance_id, save.worldid, war)
+    ? await cachedAllianceSight(user.alliance_id, save.worldid)
     : EMPTY_HALF;
 
   const revealed = [...own.revealed, ...ally.revealed];
@@ -299,10 +255,9 @@ export const invalidatePlayerSight = (userid: number): Promise<number> =>
 
 /**
  * Drops an alliance's cached unioned sight: a member joined or left
- * (`fog-of-war.md` §9). Declare War starting also invalidates it, so the
- * alliance's extra reach is not served stale for up to 30 seconds.
+ * (`fog-of-war.md` §9).
  *
- * @param allianceId - The alliance whose membership or Declare War changed.
+ * @param allianceId - The alliance whose membership changed.
  */
 export const invalidateAllianceSight = (allianceId: number): Promise<number> =>
   redis.del(allianceSightKey(allianceId));
@@ -320,8 +275,7 @@ const allianceIdOf = async (userid: number): Promise<Pick<User, "userid" | "alli
  * alliance cache combined them into is stale as well (`fog-of-war.md` §9).
  * `invalidatePlayerSight`/`invalidateAllianceSight` stay the right call on
  * their own where only one side moved (an attacker's revealed base is never
- * shared into the alliance union; a Declare War start touches no member's
- * own sources).
+ * shared into the alliance union).
  *
  * @param who - The affected player, already loaded (`alliance_id` read
  *   straight off it), or just their id for a caller holding only the other

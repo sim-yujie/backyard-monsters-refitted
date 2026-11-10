@@ -29,8 +29,6 @@ import { quoteTakeover } from "../../../services/maproom/v2/takeoverCost.js";
 import { takeoverRefusal } from "../../../services/maproom/v2/takeoverRules.js";
 import { holdsTakeoverGrant } from "../../../services/maproom/v2/takeoverGrant.js";
 import { endTakeoverGrant, readTakeoverGrant } from "../../../services/maproom/v2/takeoverGrantStore.js";
-import { runningPowerups } from "../../../services/alliance/powerups.js";
-import { AlliancePowerupType } from "../../../enums/Alliance.js";
 import { isAttackActive } from "../../../services/base/isAttackActive.js";
 import { readAttackSession } from "../../../services/base/attackSessionStore.js";
 import { recordAchievements, unseenAchievements } from "../../../services/achievements/record.js";
@@ -91,10 +89,6 @@ export const takeoverCell: KoaController = async (ctx) => {
 
   await validateRange(currentUser, MapRoomVersion.V2, { attackCell: cell });
 
-  const powerups = await runningPowerups(currentUser.alliance_id);
-
-  const conquestActive = powerups.some(({ id }) => id === AlliancePowerupType.CONQUEST);
-
   // "New to Map Room 2" (`services/events/mr2Welcome.ts`), read before the
   // transaction: a failed read only means no discount, never a failed takeover.
   // The transaction claims it again, atomically, before charging the cheap price.
@@ -148,7 +142,6 @@ export const takeoverCell: KoaController = async (ctx) => {
       isWildMonster: wildCamp,
       empireValue: cellSave.empirevalue,
       takerHomebase: taker.homebase,
-      conquestActive,
       welcome,
     });
 

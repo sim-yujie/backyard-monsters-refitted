@@ -255,8 +255,6 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /alliance/leavealliance",
   "POST /alliance/requestjoin",
   "POST /alliance/inviteuser",
-  "POST /alliance/activatepowerup",
-  "POST /alliance/purchasepowerup",
   "POST /alliance/changeinvitestatus",
   "POST /alliance/kickmember",
   "POST /alliance/promotemember",

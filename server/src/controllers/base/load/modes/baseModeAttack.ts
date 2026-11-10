@@ -34,7 +34,6 @@ import { poolAmounts } from "../../../../services/base/combat/attackLoot.js";
 import { autobankOwner } from "../../../../services/maproom/v2/autobank.js";
 import { academyLevels } from "../../../../services/base/combat/abandonedAttack.js";
 import { academyRanks } from "../../../../game-rules/combat/index.js";
-import { isDeclareWarRunning } from "../../../../services/alliance/powerups.js";
 import { mr2NeighbourBonusMode } from "../../../../config/MapRoom2Config.js";
 import { loadFriendlyNeighbourCount } from "../../../../services/maproom/v2/neighbourDefence.js";
 import { activeLandFeature } from "../../../../services/maproom/v2/landFeature.js";
@@ -51,11 +50,6 @@ export interface AttackDetails {
   count: number;
   starttime: number;
   seen: boolean;
-  /**
-   * Declare War ran for the attacker when the attack started: its window is
-   * the longer one (`attackWindow.ts`). Absent otherwise.
-   */
-  declarewar?: boolean;
 }
 
 interface BaseModeAttack {
@@ -200,11 +194,6 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
   // Past this point the attack is committed: everything below writes.
   if (save.attacks.length > 3) save.attacks = save.attacks.slice(-2);
 
-  // Whether Declare War runs for the attacker: frozen into the session for the
-  // battle (issue #201, below), and onto the row, where it sets how long the
-  // attack locks the yard (`attackWindow.ts`).
-  const declareWar = await isDeclareWarRunning(user.alliance_id);
-
   // Track the details of the attack
   const attackDetails: AttackDetails = {
     fbid: "",
@@ -214,7 +203,6 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
     count: 1,
     starttime: getCurrentDateTime(),
     seen: false,
-    ...(declareWar && { declarewar: true }),
   };
 
   if (save.type != BaseType.TRIBE) save.attacks.push(attackDetails);
@@ -317,7 +305,6 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
         defenderForces,
         championBrains,
         attackerAcademy,
-        declareWar,
         attackerRanks,
         championHealth
       )
@@ -340,7 +327,6 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
         defenderForces,
         championBrains,
         attackerAcademy,
-        declareWar,
         attackerRanks,
         championHealth
       )

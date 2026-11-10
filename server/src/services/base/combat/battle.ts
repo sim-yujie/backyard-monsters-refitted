@@ -64,12 +64,11 @@ export interface BattleAttacker extends LootAttacker {
  *
  * @param flinglog - The log: a save's `flinglog` or a checkpoint's.
  * @param session - What the attack load recorded: the roster, the pools, the level,
- *   the attacker's academy and Declare War (issue #201), which win over the rows.
+ *   the attacker's academy and, for an attack started before the alliance power-ups
+ *   were removed, Declare War (issue #201), which win over the rows.
  * @param defender - The defender's row.
  * @param attacker - The attacker's main save.
  * @param tick - The tick the battle ended at.
- * @param declareWar - Whether the attacker's alliance has Declare War running, for a
- *   session that did not record it.
  * @param left - Whether the report says the attacker left (`AbandonedInput.left`):
  *   always for the finaliser; for a save, when its `left` says so.
  */
@@ -79,7 +78,6 @@ export const battleReplayInput = ({
   defender,
   attacker,
   tick,
-  declareWar,
   left,
   descentYard,
 }: {
@@ -88,7 +86,6 @@ export const battleReplayInput = ({
   defender: BattleDefender;
   attacker: BattleAttacker;
   tick: number;
-  declareWar: boolean;
   left?: boolean;
   /** The Descent yard fought, 1 to 13 (`AbandonedInput.descentYard`); absent outside the Descent. */
   descentYard?: number;
@@ -126,8 +123,9 @@ export const battleReplayInput = ({
       ? fightableLog(log, fighter, session.entryHoused)
       : withFrozenChampions(log, session?.championBrains, session?.championHealth),
     tick,
-    // The countdown the client was served, whatever runs now (issue #201).
-    declareWar: session?.declareWar ?? declareWar,
+    // The countdown the client was served (issue #201): Declare War is gone, but
+    // a session started while it ran still carries it.
+    declareWar: session?.declareWar ?? false,
     ...(session?.attackerlevel !== undefined && { playerLevel: session.attackerlevel }),
     ...(left !== undefined && { left }),
     // The defence the attack load served (issue #195).

@@ -2,12 +2,10 @@ import { MapRoom2 } from "../../../enums/MapRoom.js";
 import { mr2HexShape } from "../../../config/MapRoom2Config.js";
 import {
   type HexShape,
-  DECLARE_WAR_RANGE,
   MAX_OUTPOST_RANGE,
   hexDistance,
   mainYardRange,
   outpostRange,
-  withDeclareWar,
 } from "../../../game-rules/maproom/range.js";
 
 /**
@@ -29,18 +27,18 @@ import {
  * `validateRange.ts` is the half that talks to the database and turns a
  * verdict into the error the client already handles.
  *
- * The measuring itself — the flinger ladders, Declare War, and the hex-ring
+ * The measuring itself — the flinger ladders and the hex-ring
  * distance on the wrapping world — is `game-rules/maproom/range.ts`, a
  * byte-for-byte copy of the file the web client's range overlay and Attack
  * button use (issue #190), so the three can never disagree.
  */
 
 /**
- * The longest reach any outpost flinger can have, Declare War included: the
+ * The longest reach any outpost flinger can have: the
  * half-width of the box swept around the target when looking for outposts.
  * The box is only a first cut; the hex rule decides.
  */
-export const OUTPOST_SWEEP = MAX_OUTPOST_RANGE + DECLARE_WAR_RANGE;
+export const OUTPOST_SWEEP = MAX_OUTPOST_RANGE;
 
 /** A cell on the Map Room 2 grid. */
 export interface CellCoords {
@@ -82,7 +80,7 @@ export type RangePlan =
   | { ok: false; reason: Exclude<RangeRefusal, "out-of-range"> }
   | { pending: NearbyOutpost[] };
 
-export { DECLARE_WAR_RANGE, MAX_OUTPOST_RANGE, withDeclareWar };
+export { MAX_OUTPOST_RANGE };
 
 /** Reach of a main yard's flinger, by flinger level (`range.ts`). */
 export const getMainYardRange = mainYardRange;
@@ -177,11 +175,6 @@ export interface RangePlanInput {
   cell: { x?: number | null; y?: number | null } | null | undefined;
   /** The attacker's owned outposts. */
   outposts: readonly OutpostEntry[] | undefined;
-  /**
-   * Whether the attacker's alliance has Declare War running: its two extra
-   * cells count only then, as in Flash (`POWERUPS.as:140-160`, `:341-344`).
-   */
-  declareWar: boolean;
 }
 
 /**
@@ -195,7 +188,6 @@ export const planRangeCheck = ({
   flinger,
   cell,
   outposts = [],
-  declareWar,
 }: RangePlanInput): RangePlan => {
   if (!homebase) return { ok: false, reason: "no-homebase" };
 
@@ -206,7 +198,7 @@ export const planRangeCheck = ({
   // An empty `homebase` array leaves these NaN, and the comparison below is
   // then false, which sends the check to the outposts. That is what the rule
   // has always done, so it is left as it is.
-  const totalRange = withDeclareWar(mainYardRange(flinger), declareWar);
+  const totalRange = mainYardRange(flinger);
   const distanceFromMain = getDistanceFromMain(cell.x, cell.y, homeX!, homeY!);
 
   if (totalRange > 0 && distanceFromMain <= totalRange) return { ok: true, via: "main" };
@@ -229,20 +221,18 @@ export const planRangeCheck = ({
  *
  * @param {NearbyOutpost[]} nearby - Outposts inside the sweep box.
  * @param {ReadonlyMap<string, number>} flingers - Flinger level per outpost baseid.
- * @param {boolean} declareWar - Whether Declare War is running.
  * @param {HexShape} shape - The world's hex shape (`MR2_HEX_SHAPE`).
  * @returns {RangeVerdict} Whether the target is reachable from an outpost.
  */
 export const checkOutpostRange = (
   nearby: readonly NearbyOutpost[],
   flingers: ReadonlyMap<string, number | undefined>,
-  declareWar: boolean,
   shape: HexShape = mr2HexShape()
 ): RangeVerdict => {
   for (const { baseid, x, y, dx, dy } of nearby) {
     if (!flingers.has(baseid)) continue;
 
-    const totalRange = withDeclareWar(outpostRange(flingers.get(baseid)), declareWar);
+    const totalRange = outpostRange(flingers.get(baseid));
     const target = { x: x - dx, y: y - dy };
 
     if (totalRange > 0 && hexDistance({ x, y }, target, shape) <= totalRange)
@@ -268,7 +258,7 @@ export const checkRange = ({ outpostFlingers, ...plan }: RangeCheckInput): Range
   const planned = planRangeCheck(plan);
 
   if ("pending" in planned)
-    return checkOutpostRange(planned.pending, outpostFlingers, plan.declareWar);
+    return checkOutpostRange(planned.pending, outpostFlingers);
 
   return planned;
 };

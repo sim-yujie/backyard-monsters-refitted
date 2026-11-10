@@ -79,7 +79,6 @@ import {
 import { battleReplayInput, battleTick, foughtLoot } from "../../../services/base/combat/battle.js";
 import { buildingDataWithout } from "../../../services/base/combat/abandonedAttack.js";
 import { recordBattleMismatches, replayBattleForSave } from "../../../services/base/combat/saveBattle.js";
-import { isDeclareWarRunning } from "../../../services/alliance/powerups.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import { championsAfterAttack, championsAfterBattle, siegeAfterAttack } from "../../../services/base/combat/attackerRow.js";
 import { garrisonsAfterBattle } from "../../../services/base/combat/bunkerGarrison.js";
@@ -307,7 +306,6 @@ const saveBase = async (
       ? battleReplayInput({
           ...lootArgs,
           tick: battleTick(saveData.tick),
-          declareWar: await isDeclareWarRunning(user.alliance_id),
           // Only the report reads it: "Left the attack" when the client says so.
           left: saveData.left,
         })
@@ -683,7 +681,7 @@ const saveBase = async (
 
     if (saveData.over && isProtectable && !isMR3Structure(baseSave.wmid)) {
       const grant = await protectAfterAttack(baseSave, user.userid);
-      if (grant) takeoverGrant = await takeoverOffer(grant, user, userSave, baseSave);
+      if (grant) takeoverGrant = await takeoverOffer(grant, userSave, baseSave);
     }
 
     // The outpost's owner is told who attacked it, the damage and the loot

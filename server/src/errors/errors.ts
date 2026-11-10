@@ -638,38 +638,6 @@ export const inviteMapVersionErr = (username: string) =>
     isClientFriendly: true,
   });
 
-export const powerupUnknownErr = () =>
-  new ClientSafeError({
-    message: "This Power-Up cannot be activated at this time.",
-    status: Status.BAD_REQUEST,
-    data: {},
-    isClientFriendly: true,
-  });
-
-export const powerupRunningErr = () =>
-  new ClientSafeError({
-    message: "This Power-Up is already active.",
-    status: Status.CONFLICT,
-    data: {},
-    isClientFriendly: true,
-  });
-
-export const powerupNotReadyErr = () =>
-  new ClientSafeError({
-    message: "This Power-Up is not ready to activate.",
-    status: Status.CONFLICT,
-    data: {},
-    isClientFriendly: true,
-  });
-
-export const powerupReadyErr = () =>
-  new ClientSafeError({
-    message: "This Power-Up is currently ready.",
-    status: Status.CONFLICT,
-    data: {},
-    isClientFriendly: true,
-  });
-
 export const notEnoughShinyErr = () =>
   new ClientSafeError({
     message: "You do not have enough Shiny for that.",
@@ -682,14 +650,6 @@ export const notEnoughResourcesErr = () =>
   new ClientSafeError({
     message: "You do not have enough resources for that.",
     status: Status.CONFLICT,
-    data: {},
-    isClientFriendly: true,
-  });
-
-export const powerupLeaderOnlyErr = () =>
-  new ClientSafeError({
-    message: `Only the leader of the alliance can activate a Power-Up.`,
-    status: Status.FORBIDDEN,
     data: {},
     isClientFriendly: true,
   });

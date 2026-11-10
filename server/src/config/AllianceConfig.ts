@@ -1,12 +1,4 @@
-import { AllianceMessageType, AlliancePowerupType, AllianceStance, AllianceType } from "../enums/Alliance.js";
-
-export interface PowerupRules {
-  powerup_id: number;
-  type: AlliancePowerupType;
-  running_time: number;
-  recharge_time: number;
-  hourly_cost: number;
-}
+import { AllianceMessageType, AllianceStance, AllianceType } from "../enums/Alliance.js";
 
 /*
  * Every alliance number lives in this file so balance can be tuned in one
@@ -154,37 +146,4 @@ export const STANCE_LABEL: Record<AllianceStance, string> = {
   [AllianceStance.FRIENDLY]: "Ally",
 };
 
-/**
- * The rules governing each alliance power-up - how long it runs once started, how
- * long it takes to charge, and what an hour off that charge costs in Shiny.
- */
-export const POWERUP_RULES: PowerupRules[] = [
-  {
-    powerup_id: 1,
-    type: AlliancePowerupType.ARMAMENT,
-    running_time: 12 * 3600,
-    recharge_time: 7 * 24 * 3600,
-    hourly_cost: 20,
-  },
-  {
-    powerup_id: 2,
-    type: AlliancePowerupType.CONQUEST,
-    running_time: 6 * 3600,
-    recharge_time: 5 * 24 * 3600,
-    hourly_cost: 20,
-  },
-  {
-    powerup_id: 3,
-    type: AlliancePowerupType.DECLARE_WAR,
-    running_time: 12 * 3600,
-    recharge_time: 7 * 24 * 3600,
-    hourly_cost: 20,
-  },
-];
 
-/** How each power-up is named in a shout - the original's ap_*_name values. */
-export const POWERUP_LABEL: Record<AlliancePowerupType, string> = {
-  [AlliancePowerupType.ARMAMENT]: "Armament",
-  [AlliancePowerupType.CONQUEST]: "Conquest",
-  [AlliancePowerupType.DECLARE_WAR]: "Declare War",
-};

@@ -5,13 +5,11 @@ import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { postgres } from "../../../server.js";
 import { Status } from "../../../enums/StatusCodes.js";
 import { MapRoomCell, MapRoomVersion, Terrain } from "../../../enums/MapRoom.js";
-import { AlliancePowerupType } from "../../../enums/Alliance.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { generateBaseId } from "../../../utils/generateBaseId.js";
 import { RESOURCE_KEYS } from "../../../services/base/updateResources.js";
 import { isAttackActive } from "../../../services/base/isAttackActive.js";
 import { readAttackSession } from "../../../services/base/attackSessionStore.js";
-import { runningPowerups } from "../../../services/alliance/powerups.js";
 import { isShinyLocked } from "../../../services/user/shinyLock.js";
 import { generateNoise, getTerrainHeight } from "../../../services/maproom/v2/generateMap.js";
 import { cellCoordsFromBaseId, type CellCoords } from "../../../services/maproom/v2/rangeCheck.js";
@@ -112,8 +110,6 @@ export const takeoverQuote: KoaController = async (ctx) => {
     return;
   }
 
-  const powerups = await runningPowerups(currentUser.alliance_id);
-
   const save = quoted.row?.save ?? null;
 
   // "New to Map Room 2": the first wild camp in the player's 10 days is cheap.
@@ -126,7 +122,6 @@ export const takeoverQuote: KoaController = async (ctx) => {
     isWildMonster: quoted.isWildMonster,
     empireValue: save?.empirevalue ?? 0,
     takerHomebase: userSave.homebase,
-    conquestActive: powerups.some(({ id }) => id === AlliancePowerupType.CONQUEST),
     welcome,
   });
 

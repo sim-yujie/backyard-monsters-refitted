@@ -141,7 +141,7 @@ export const emitShout = async (shout: ShoutDraft) => {
  * Raises a shout without letting it undo the action that caused it.
  *
  * By the time a shout is emitted the work is done and flushed - a member has
- * joined, Shiny has been spent, a power-up is running - so a failure to announce
+ * joined, a rank has changed, the alliance has a new name - so a failure to announce
  * it must not surface as a failure of the action. Logged and swallowed.
  *
  * @param {ShoutDraft} shout - The shout to raise.

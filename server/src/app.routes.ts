@@ -9,7 +9,6 @@ import {
   debugDataLimiter,
   getAreaLimiter,
   attackLogsLimiter,
-  purchasePowerupLimiter,
   sightLimiter,
   loginLimiter,
   forgotPasswordEmailLimiter,
@@ -175,10 +174,7 @@ import { takeOverAlliance } from "./controllers/alliance/takeOverAlliance.js";
 import { renameAllianceController } from "./controllers/alliance/renameAlliance.js";
 import { reportAllianceController } from "./controllers/alliance/reportAlliance.js";
 import { changeRelationship } from "./controllers/alliance/changeRelationship.js";
-import { getPowerups } from "./controllers/alliance/getPowerups.js";
 import { submitBugReportController, submitGuestBugReportController } from "./controllers/bugReports/submitBugReport.js";
-import { activatePowerup } from "./controllers/alliance/activatePowerup.js";
-import { purchasePowerup } from "./controllers/alliance/purchasePowerup.js";
 
 const router = new Router();
 
@@ -403,9 +399,6 @@ router.get("/alliance/getsuggestedmembers", verifyUserAuth, logRequest, suggeste
 router.post("/alliance/searchalliances", verifyUserAuth, searchAlliancesLimiter, logRequest, searchAlliances);
 router.post("/alliance/requestjoin", verifyUserAuth, allianceJoinRequestLimiter, logRequest, requestJoin);
 router.post("/alliance/inviteuser", verifyUserAuth, allianceInviteLimiter, logRequest, inviteUser);
-router.get("/alliance/getpowerups", verifyUserAuth, logRequest, getPowerups);
-router.post("/alliance/activatepowerup", verifyUserAuth, logRequest, activatePowerup);
-router.post("/alliance/purchasepowerup", verifyUserAuth, purchasePowerupLimiter, logRequest, purchasePowerup);
 router.post("/alliance/changeinvitestatus", verifyUserAuth, logRequest, changeInviteStatus);
 router.get("/alliance/getmessages", verifyUserAuth, logRequest, getMessages);
 router.post("/alliance/deletemessages", verifyUserAuth, logRequest, deleteMessages);
