@@ -18,6 +18,8 @@ import {
   territoryRankOf,
 } from "../../services/alliance/allianceProgress.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { isAdminUser } from "../../config/AdminConfig.js";
+import { loadStarFigures } from "../../services/alliance/starFigures.js";
 
 /**
  * Returns the authenticated user's alliance for the My Alliance tab, or
@@ -90,6 +92,10 @@ export const myAlliance: KoaController = async (ctx) => {
       bonuses: bonusesFor(alliance.type, stars),
       stars,
       constellations: constellationView(alliance.type, stars, suggestions),
+      // The owner's drawn star figures (`starFigures.ts`); the web has built-in ones for the rest.
+      star_figures: await loadStarFigures(postgres.em),
+      // The owner (ADMIN_USER_IDS) sees the star editor button.
+      can_edit_stars: isAdminUser(user.userid),
       my_suggestion: suggestions[String(user.userid)] ?? null,
       last_lit: await lastLit(postgres.em, alliance.id),
       territory: await territoryRankOf(postgres.em, alliance.id, alliance.type, nowSeconds),

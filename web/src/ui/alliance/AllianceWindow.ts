@@ -58,6 +58,7 @@ import {
 } from "./allianceProgressUi";
 import { onlineDot } from "@/ui/onlineDot";
 import { Popup } from "@/ui/Popup";
+import { StarEditor } from "@/ui/alliance/StarEditor";
 import { make } from "@/ui/friends/rows";
 import "./alliance.css";
 
@@ -316,6 +317,8 @@ export class AllianceWindow {
 
   // Phase 2: goals, stars, territory, news.
   private chosenStar: string | null = null;
+  /** Where the window was mounted: the star editor opens over it there. */
+  private container: HTMLElement | null = null;
   private addingGoal = false;
   private territoryType: AllianceType | null = null;
   private territoryRows: readonly TerritoryRow[] | null = null;
@@ -350,6 +353,7 @@ export class AllianceWindow {
 
   /** Shows the window in `container` (the overlay's modal layer) and loads the player's alliance. */
   mount(container: HTMLElement): this {
+    this.container = container;
     this.render();
     this.popup.mount(container);
     void this.load();
@@ -358,6 +362,11 @@ export class AllianceWindow {
 
   close(): void {
     this.popup.close();
+  }
+
+  /** The owner's star editor (admins only); a save reloads the tab's figures. */
+  private openStarEditor(): void {
+    new StarEditor({ onClose: (saved) => saved && void this.load() }).mount(this.container ?? document.body);
   }
 
   /** What shows now, for a test. */
@@ -996,10 +1005,17 @@ export class AllianceWindow {
       case "members":
         return this.membersTab(alliance);
       case "constellation":
-        return constellationTab(alliance, this.host, this.progressApi, this.chosenStar, (id) => {
-          this.chosenStar = id;
-          this.render();
-        });
+        return constellationTab(
+          alliance,
+          this.host,
+          this.progressApi,
+          this.chosenStar,
+          (id) => {
+            this.chosenStar = id;
+            this.render();
+          },
+          alliance.can_edit_stars ? () => this.openStarEditor() : undefined,
+        );
       case "territory":
         return territoryTab(
           alliance,

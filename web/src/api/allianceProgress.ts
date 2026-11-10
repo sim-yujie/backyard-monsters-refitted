@@ -49,6 +49,10 @@ export interface AllianceProgressFields {
   readonly bonuses?: Readonly<Record<string, number>>;
   readonly stars?: Readonly<Record<string, number>>;
   readonly constellations?: readonly ConstellationView[];
+  /** The owner's drawn star figures by constellation id (`ui/alliance/starFigures.ts`); checked before use. */
+  readonly star_figures?: Readonly<Record<string, unknown>>;
+  /** The owner (an admin): the Constellation tab shows the star editor button. */
+  readonly can_edit_stars?: boolean;
   readonly my_suggestion?: string | null;
   readonly last_lit?: { readonly id: string | null; readonly step: number; readonly by: string; readonly at: number } | null;
   readonly territory?: { readonly rank: number; readonly of: number; readonly month: number; readonly badge: number | null } | null;

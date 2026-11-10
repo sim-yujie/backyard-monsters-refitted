@@ -4,6 +4,7 @@ import { monsterPortrait, showPortrait } from "@/game/portraits";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { make } from "@/ui/friends/rows";
+import { CONSTELLATION_MONSTERS, FIGURE_HEIGHT, FIGURE_WIDTH, figureFor } from "@/ui/alliance/starFigures";
 
 /**
  * The alliance dashboard's phase 2 parts (design v5 §7b, §8, §9a, §11): the
@@ -212,16 +213,9 @@ export const newsCard = (lines: readonly NewsLine[] | null, all: boolean, host: 
 };
 
 // ---------------------------------------------------------------------------
-// Constellation tab (design v5 §9a; star figures are placeholders)
+// Constellation tab (design v5 §9a; star figures in `starFigures.ts`)
 // ---------------------------------------------------------------------------
 
-/** Ten star places per figure (a 200 x 170 box), one layout per slot: placeholder art. */
-const FIGURES: readonly (readonly [number, number][])[] = [
-  [[30, 120], [55, 95], [80, 105], [100, 75], [125, 60], [150, 70], [170, 45], [140, 100], [115, 125], [85, 140]],
-  [[25, 60], [50, 45], [80, 55], [100, 85], [95, 120], [125, 130], [150, 110], [170, 80], [155, 50], [120, 35]],
-  [[40, 40], [65, 65], [60, 100], [85, 125], [115, 115], [140, 130], [165, 105], [150, 75], [120, 70], [100, 40]],
-  [[30, 90], [55, 70], [85, 80], [110, 55], [140, 45], [165, 65], [150, 95], [125, 110], [95, 130], [65, 125]],
-];
 
 const SVG = "http://www.w3.org/2000/svg";
 const svg = <K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number>): SVGElementTagNameMap[K] => {
@@ -230,32 +224,15 @@ const svg = <K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string,
   return node;
 };
 
-/**
- * The monster each constellation is named after, by roster id
- * (`game/combat/rules/report.ts` MONSTER_NAMES), so its picture can sit
- * faintly behind its stars (owner, 10 Nov).
- */
-export const CONSTELLATION_MONSTERS: Readonly<Record<string, string>> = {
-  pokey: "C1",
-  octoooze: "C2",
-  bolt: "C3",
-  ichi: "C6",
-  bandito: "C7",
-  fang: "C8",
-  brain: "C9",
-  crabatron: "C10",
-  wormzer: "C13",
-  teratorn: "C14",
-  zafreeti: "C15",
-  slimeattikus: "C17",
-};
+/** The monster each constellation is named after (kept with the figures). */
+export { CONSTELLATION_MONSTERS };
 
 /**
  * A constellation's stars over its monster's card picture, drawn faint: the
  * painted card in Modern, the original Flash portrait in Classic
  * (`game/portraits.ts`). No picture for a constellation with no monster.
  */
-const figureWithArt = (c: ConstellationView, slot: number): HTMLElement => {
+const figureWithArt = (c: ConstellationView, slot: number, saved: MyAlliance["star_figures"]): HTMLElement => {
   const holder = make("span", "alliance-sky__art");
   const monster = CONSTELLATION_MONSTERS[c.id];
   if (monster) {
@@ -267,32 +244,34 @@ const figureWithArt = (c: ConstellationView, slot: number): HTMLElement => {
     showPortrait(image, monsterPortrait(monster, "card"));
     holder.append(image);
   }
-  holder.append(figure(c, slot));
+  holder.append(figure(c, slot, saved));
   return holder;
 };
 
 /** One figure: 10 stars, lit ones gold, the next 2 ringed with the price on the first. */
-const figure = (c: ConstellationView, slot: number): SVGSVGElement => {
-  const places = FIGURES[slot % FIGURES.length]!;
+const figure = (c: ConstellationView, slot: number, saved: MyAlliance["star_figures"]): SVGSVGElement => {
+  const { stars, lines } = figureFor(c.id, slot, saved);
   const lit = c.steps * 2;
-  const box = svg("svg", { viewBox: "0 0 200 170", class: "alliance-sky__figure", "aria-hidden": "true" });
-  for (let i = 1; i < places.length; i++) {
-    const [x1, y1] = places[i - 1]!;
-    const [x2, y2] = places[i]!;
-    box.append(svg("line", { x1, y1, x2, y2, class: `alliance-sky__line${i < lit ? " alliance-sky__line--lit" : ""}` }));
+  const box = svg("svg", { viewBox: `0 0 ${FIGURE_WIDTH} ${FIGURE_HEIGHT}`, class: "alliance-sky__figure", "aria-hidden": "true" });
+  for (const [a, b] of lines) {
+    const [x1, y1] = stars[a]!;
+    const [x2, y2] = stars[b]!;
+    box.append(svg("line", { x1, y1, x2, y2, class: `alliance-sky__line${a < lit && b < lit ? " alliance-sky__line--lit" : ""}` }));
   }
-  places.forEach(([x, y], i) => {
+  stars.forEach(([x, y], i) => {
     const state = i < lit ? "lit" : i < lit + 2 && c.next_price !== null ? "next" : "dim";
     if (state === "next") box.append(svg("circle", { cx: x, cy: y, r: 9, class: "alliance-sky__ring" }));
     box.append(svg("circle", { cx: x, cy: y, r: state === "lit" ? 5 : 3.5, class: `alliance-sky__star alliance-sky__star--${state}` }));
   });
   if (c.next_price !== null) {
-    const [x, y] = places[lit]!;
+    const [x, y] = stars[lit]!;
     const tag = svg("g", { class: "alliance-sky__tag" });
-    // Clear of the figure: above the star, or below when it is near the top.
+    // Clear of the figure: above the star, or below when it is near the top;
+    // kept inside the box at the sides.
     const ty = y < 30 ? y + 22 : y - 16;
-    tag.append(svg("rect", { x: x - 22, y: ty - 11, width: 44, height: 18, rx: 9 }));
-    const text = svg("text", { x, y: ty + 2, "text-anchor": "middle" });
+    const tx = Math.min(Math.max(x, 23), FIGURE_WIDTH - 23);
+    tag.append(svg("rect", { x: tx - 22, y: ty - 11, width: 44, height: 18, rx: 9 }));
+    const text = svg("text", { x: tx, y: ty + 2, "text-anchor": "middle" });
     text.textContent = `★${c.next_price}`;
     tag.append(text);
     box.append(tag);
@@ -323,6 +302,7 @@ export const constellationTab = (
   api: { lightStar(id: string): Promise<AllianceResult<object>>; suggestStar(id: string): Promise<AllianceResult<object>> },
   chosenId: string | null,
   choose: (id: string) => void,
+  editStars?: () => void,
 ): HTMLElement[] => {
   const list = alliance.constellations ?? [];
   if (list.length === 0) return [make("p", "alliance-sky__empty", "The constellations are not ready yet.")];
@@ -338,6 +318,8 @@ export const constellationTab = (
     groups,
     make("span", "alliance-sky__points", `${formatAmount(pointsToSpend(alliance))} points to spend`),
   );
+  // The owner only: draw the star figures over the monsters (`StarEditor.ts`).
+  if (editStars) top.append(button("✎ Stars", "btn--outline alliance-sky__edit", editStars, "Star editor (admin)"));
   sky.append(top);
 
   const halves = make("div", "alliance-sky__halves");
@@ -358,7 +340,7 @@ export const constellationTab = (
         starDots(c.steps),
         make("span", "alliance-sky__value", effect ? statValue(effect.stat, effect.values[c.steps] ?? 0) : ""),
       );
-      node.append(figureWithArt(c, slot), plate);
+      node.append(figureWithArt(c, slot, alliance.star_figures), plate);
       row.append(node);
     });
     half.append(row);
