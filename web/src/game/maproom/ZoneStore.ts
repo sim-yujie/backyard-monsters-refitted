@@ -9,6 +9,7 @@ import { getArea } from "@/api/maproom";
 import { ApiError, NetworkError } from "@/api/http";
 import type { AreaCellGrid, GetAreaResponse, MapCell, Resources } from "@/api/types";
 import { TokenBucket } from "./TokenBucket";
+import { parseAllianceRoster, type MapAlliance } from "./mapAlliances";
 import {
   rangeCentre,
   zoneFor,
@@ -52,6 +53,8 @@ export interface ZoneStoreOptions {
   onResources?: (resources: Resources, credits: number | undefined) => void;
   /** Fired when a response carried the viewer's own alliance id (#334). */
   onAlliance?: (allianceId: number | null) => void;
+  /** Fired with the alliances owning cells in a response's area (`alliancedata`, beta 7). */
+  onAllianceRoster?: (roster: MapAlliance[]) => void;
   /**
    * Fired with every applied response's `sv` (issue #330, #331): the fog of
    * war sight version, so the caller can refetch `/worldmapv2/sight` and
@@ -437,6 +440,9 @@ export class ZoneStore {
     }
     if (response.myalliance !== undefined) {
       this.options.onAlliance?.(response.myalliance);
+    }
+    if (response.alliancedata !== undefined) {
+      this.options.onAllianceRoster?.(parseAllianceRoster(response.alliancedata));
     }
     this.options.onSightVersion?.(response.sv);
   }

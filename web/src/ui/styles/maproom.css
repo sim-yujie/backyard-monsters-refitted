@@ -939,6 +939,18 @@
   --tone: var(--colour-info);
 }
 
+/* The owner's alliance (beta 7): its shield and name; a mate's in the map's alliance border blue (relationLook.ts). */
+.mr2-chip--alliance.mr2-chip--accent {
+  --tone: #2f5bff;
+}
+
+.mr2-chip__shield {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
 /* Tower range and income on an outpost's ground: two painted icons and numbers. */
 .mr2-chip--ground {
   gap: var(--space-3);

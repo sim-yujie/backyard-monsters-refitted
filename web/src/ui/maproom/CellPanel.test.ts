@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { MapCell, PlayerCell, WildMonsterCell } from "@/api/types";
 import { setDevDetails } from "@/app/devDetails";
-import { CellPanel, type CellPanelOptions } from "./CellPanel";
+import { CELL_ALLIANCE_TEXT, CellPanel, type CellPanelOptions } from "./CellPanel";
 
 /**
  * The slim cell panel (issue #174): a picture, a name and level, what and
@@ -568,5 +568,32 @@ describe("the height chip (painted map, plan step 5)", () => {
     } finally {
       setFlatGround(false);
     }
+  });
+});
+
+describe("the owner's alliance (beta 7)", () => {
+  const GANG = { id: 7, name: "Goo Gang", image: 12 };
+  const allianceOf = (id: number) => (id === 7 ? GANG : undefined);
+
+  it("shows its shield and name as a chip", () => {
+    const { host } = open(player({ aid: 7 }), { allianceOf, myAlliance: () => null });
+    const chip = host.querySelector<HTMLElement>(".mr2-chip--alliance")!;
+    expect(chip.textContent).toBe("Goo Gang");
+    expect(chip.querySelector("img")!.getAttribute("src")).toBe("/assets/alliances/12_small.png");
+    expect(chip.classList.contains("mr2-chip--info")).toBe(true);
+    expect(chip.title).toBe(CELL_ALLIANCE_TEXT.other("Goo Gang"));
+  });
+
+  it("marks a mate's chip as the player's own alliance", () => {
+    const { host } = open(player({ aid: 7 }), { allianceOf, myAlliance: () => 7 });
+    const chip = host.querySelector<HTMLElement>(".mr2-chip--alliance")!;
+    expect(chip.classList.contains("mr2-chip--accent")).toBe(true);
+    expect(chip.title).toBe("Goo Gang · your alliance");
+  });
+
+  it("shows no chip for a player in no alliance, or one the map has not heard of", () => {
+    expect(open(player({ aid: null }), { allianceOf }).host.querySelector(".mr2-chip--alliance")).toBeNull();
+    expect(open(player({ aid: 9 }), { allianceOf }).host.querySelector(".mr2-chip--alliance")).toBeNull();
+    expect(open(player({ aid: 7 })).host.querySelector(".mr2-chip--alliance")).toBeNull();
   });
 });

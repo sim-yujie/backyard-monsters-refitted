@@ -24,6 +24,7 @@ import { cellLift, liftCorners, setFlatGround } from "./ground";
 import { GroundArt } from "./groundArt";
 import { LiveMap } from "./live/LiveMap";
 import { CONSTRUCTION_BADGE_URL, IDLE_HELPER_URL, MapPicture } from "./mapPicture";
+import { AllianceRoster, MapShields, type MapAlliance } from "./mapAlliances";
 import { friendMarkOf, friendMarksKey } from "@/game/friends/friendMarks";
 import { friendsStore } from "@/game/friends/friendsStore";
 import { RangeOverlay } from "./RangeOverlay";
@@ -136,6 +137,11 @@ export class MapRenderer {
   private readonly groundArt = new GroundArt();
   private readonly constructionBadge = new MapPicture(CONSTRUCTION_BADGE_URL);
   private readonly idleHelper = new MapPicture(IDLE_HELPER_URL, true);
+  /** The alliances owning cells on the map (beta 7): a cell's `aid` to its name and shield. */
+  private readonly alliances = new AllianceRoster();
+  /** Their shields' pictures, fetched as plates need them; the plates redraw as each lands. */
+  private readonly shields = new MapShields(() => this.rebuildAll());
+  private readonly allianceOf = (id: number): MapAlliance | undefined => this.alliances.get(id);
   /** `friendMarksKey()` when the chunks were last told who is a friend; they rebuild only when it changes. */
   private friendsKey = "";
   private stopFriends: (() => void) | null = null;
@@ -357,6 +363,21 @@ export class MapRenderer {
     this.myAlliance = id;
     this.borders?.setMyAlliance(id, this.store.loadedZoneRefs());
     this.rebuildAll();
+  }
+
+  /** Takes in a `/getarea` answer's alliance roster (beta 7); redraws when a shield or name changed. */
+  setAllianceRoster(roster: readonly MapAlliance[]): void {
+    if (this.alliances.merge(roster)) this.rebuildAll();
+  }
+
+  /** The viewer's own alliance id, or null (the last `/getarea` answer's `myalliance`). */
+  get myAllianceId(): number | null {
+    return this.myAlliance;
+  }
+
+  /** The alliance a cell's `aid` names, for its popup; undefined when the map has not heard of it. */
+  allianceNamed(id: number | null | undefined): MapAlliance | undefined {
+    return id == null ? undefined : this.alliances.get(id);
   }
 
   /** Sets the active kit filter (#334) and rebuilds every chunk if it changed. */
@@ -808,6 +829,8 @@ export class MapRenderer {
     this.groundArt.destroy();
     this.constructionBadge.destroy();
     this.idleHelper.destroy();
+    this.shields.destroy();
+    this.alliances.clear();
     this.stopFriends?.();
     this.stopFriends = null;
     this.atlas?.destroy();
@@ -859,6 +882,7 @@ export class MapRenderer {
             this.groundArt,
             this.constructionBadge,
             this.idleHelper,
+            this.shields,
           );
           this.chunks.set(ref.id, chunk);
           this.world.addChild(chunk.container);
@@ -870,6 +894,7 @@ export class MapRenderer {
           kitFilter: this.kitFilter,
           sight: this.sight,
           friendMark: this.friendMark,
+          allianceOf: this.allianceOf,
         };
         chunk.build(this.store, nowSeconds, context);
         this.live.chunkBuilt(ref, { store: this.store, viewer: context, nowSeconds, groundReady: this.groundArt.ready });

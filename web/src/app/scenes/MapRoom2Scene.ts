@@ -237,6 +237,7 @@ export class MapRoom2Scene implements Scene {
     },
     onResources: (resources, credits) => this.syncPool(resources, credits),
     onAlliance: (id) => this.renderer.setMyAlliance(id),
+    onAllianceRoster: (roster) => this.renderer.setAllianceRoster(roster),
     onError: (error) => this.reportError(error),
     onAuthFailure: () => this.context?.goTo(SceneName.LOGIN),
     skipZone: (zone) => this.sight.isZoneFullyFogged(zone),
@@ -496,6 +497,9 @@ export class MapRoom2Scene implements Scene {
         // The server refuses a player in an alliance (`inviteRules.ts`); an outpost is needed to offer.
         canInviteToOutpost: (payload) =>
           !payload.aid && this.ownSave !== null && outpostsOf(this.ownSave).length > 0,
+        // The owner's alliance on the cell panel (beta 7, from the map's roster).
+        allianceOf: (id) => this.renderer.allianceNamed(id),
+        myAlliance: () => this.renderer.myAllianceId,
         // Repeat attack on a wild camp (#221).
         autoAttackPlan: (baseid) => getAutoAttackPlan(baseid),
         onRepeatAttack: (cell, baseid, answer) => this.openAutoAttack(cell, baseid, answer),
