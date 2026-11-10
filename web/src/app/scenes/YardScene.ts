@@ -722,6 +722,8 @@ export class YardScene implements Scene {
           this.mail?.close();
           void this.defences?.open();
         },
+        // An alliance invite accepted in the mail (beta 7): the yard's load carries the alliance.
+        onAllianceJoined: () => void this.store?.refresh(),
       });
       this.dock.placeBesideMonsters(tutTarget(this.mail.button.element, TutTarget.DOCK_MAIL));
       this.bell = new NotificationDoor({

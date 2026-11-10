@@ -91,6 +91,21 @@ export interface MailMessage {
    * Null on everything else and on older notices.
    */
   readonly attackstats?: unknown;
+  /**
+   * On an `allianceinvite` message (alliances, beta 7): the invite it
+   * delivers, answered with `/alliance/changeinvitestatus`. Null on everything else.
+   */
+  readonly allianceinviteid?: number | null;
+  /** On an `allianceinvite` message: where that invite stands now, and its alliance. */
+  readonly allianceinvite?: MailAllianceInviteFields | null;
+}
+
+/** What the server adds to an `allianceinvite` message (`services/alliance/inviteMail.ts`). */
+export interface MailAllianceInviteFields {
+  readonly state: "pending" | "accepted" | "declined" | "closed";
+  readonly alliance_id: number | null;
+  readonly alliance_name: string | null;
+  readonly alliance_image: number | null;
 }
 
 /** One name `getmessagetargets` gives, by user id. */

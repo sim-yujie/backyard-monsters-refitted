@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MailMessage } from "@/api/mail";
 import {
+  allianceInviteOf,
   contactsOf,
   counterText,
   MESSAGE_LIMIT,
@@ -149,6 +150,27 @@ describe("threadItems", () => {
   it("gives a notice without whole coordinates no cell", () => {
     expect(noticeCell({ coords: null })).toBeNull();
     expect(noticeCell({ coords: [1.5, 2] })).toBeNull();
+  });
+
+  it("carries an alliance invite with its id and state, and none on anything else (beta 7)", () => {
+    const invite = message({
+      messagetype: "allianceinvite",
+      allianceinviteid: 31,
+      allianceinvite: { state: "pending", alliance_id: 4, alliance_name: "Goo Lords", alliance_image: 9 },
+    });
+    const [item, plain] = threadItems([invite, message()], 2505);
+    expect(item!.allianceInvite).toEqual({ id: 31, state: "pending", allianceName: "Goo Lords", allianceImage: 9 });
+    expect(item!.label).toBe("Alliance invite");
+    expect(plain!.allianceInvite).toBeNull();
+  });
+
+  it("calls an alliance invite whose row is gone closed", () => {
+    expect(allianceInviteOf({ messagetype: "allianceinvite", allianceinviteid: null, allianceinvite: null })).toEqual({
+      id: null,
+      state: "closed",
+      allianceName: null,
+      allianceImage: null,
+    });
   });
 });
 

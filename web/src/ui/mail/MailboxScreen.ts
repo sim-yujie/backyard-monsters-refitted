@@ -1,6 +1,8 @@
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { getSession } from "@/api/auth";
+import { allianceApi, type AllianceApi } from "@/api/alliance";
+import { shieldUrl } from "@/game/alliance/allianceRules";
 import { blockRefusal, mailApi, type InvitePayment, type MailApi, type MailTarget } from "@/api/mail";
 import type { OffsetCell } from "@/game/HexGrid";
 import {
@@ -16,6 +18,7 @@ import {
   unreadThreads,
   type MailAttack,
   type MailContact,
+  type MailAllianceInvite,
   type MailItem,
   type MailThread,
 } from "@/game/mail/mailbox";
@@ -125,6 +128,10 @@ export interface MailboxScreenOptions {
    * Absent: past contacts only.
    */
   readonly friends?: () => Promise<readonly MailContact[]>;
+  /** The alliance route for an alliance invite's Accept and Decline (beta 7); the real one unless a test swaps it. */
+  readonly allianceApi?: Pick<AllianceApi, "answerInvite">;
+  /** An alliance invite was accepted here: the player is in an alliance now (beta 7). */
+  readonly onAllianceJoined?: () => void;
 }
 
 /** A new message's recipient when the map opened it: the player whose yard it was. */
@@ -162,6 +169,14 @@ const LOAD_FAILED = "Could not load your mail. Try again.";
 /** Numbers the moderators' suggestion lists, so each has its own id. */
 let anyPlayerLists = 0;
 const SUBJECT_LIMIT = 60;
+
+/** An alliance invite's state, as its card shows it (beta 7). */
+const ALLIANCE_INVITE_LOOK: Readonly<Record<MailAllianceInvite["state"], { label: string; tone: "info" | "good" | "bad" | "muted" }>> = {
+  pending: { label: "Waiting for you", tone: "info" },
+  accepted: { label: "Accepted", tone: "good" },
+  declined: { label: "Declined", tone: "muted" },
+  closed: { label: "Closed", tone: "muted" },
+};
 
 const make = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -207,6 +222,8 @@ export class MailboxScreen {
   readonly element: HTMLElement;
 
   private readonly api: MailApi;
+  /** The alliance route an alliance invite's Accept and Decline call (beta 7). */
+  private readonly allianceApi: Pick<AllianceApi, "answerInvite">;
   private readonly myId: () => number | null;
   private readonly now: () => number;
   private readonly options: MailboxScreenOptions;
@@ -237,6 +254,7 @@ export class MailboxScreen {
   constructor(options: MailboxScreenOptions = {}) {
     this.options = options;
     this.api = options.api ?? mailApi;
+    this.allianceApi = options.allianceApi ?? allianceApi;
     this.myId = options.myId ?? (() => getSession()?.userId ?? null);
     this.now = options.now ?? (() => Math.floor(Date.now() / 1000));
 
@@ -598,7 +616,8 @@ export class MailboxScreen {
     items.forEach((item, index) => {
       const side = item.notice ? "notice" : item.mine ? "mine" : "theirs";
       const bubble = make("li", `mail-message mail-message--${side}`);
-      if (item.label && index !== request && index !== invitation) {
+      // The card names its own kind: no label above it as well.
+      if (item.label && index !== request && index !== invitation && !item.allianceInvite) {
         bubble.append(make("strong", "mail-message__label", item.label));
       }
       bubble.append(item.attack ? attackText(item.text, item.attack) : make("p", "mail-message__text", item.text));
@@ -624,6 +643,10 @@ export class MailboxScreen {
       if (invite) {
         bubble.classList.add("mail-message--request");
         bubble.append(invite);
+      }
+      if (item.allianceInvite) {
+        bubble.classList.add("mail-message--request");
+        bubble.append(this.allianceCardFor(thread, item.allianceInvite, item.mine));
       }
       bubble.append(make("span", "mail-message__time", sentText(item.time, now)));
       if (item.defenceId !== null) {
@@ -902,6 +925,53 @@ export class MailboxScreen {
     this.options.onInviteChanged?.();
     await this.reopen(thread);
     this.setStatus("info", `You withdrew your invitation to ${thread.otherName}.`);
+    return null;
+  }
+
+  /**
+   * An alliance invite (beta 7): the alliance's shield and name, where the
+   * invite stands, and Accept / Decline while it waits for this player.
+   */
+  private allianceCardFor(thread: MailThread, invite: MailAllianceInvite, mine: boolean): HTMLElement {
+    const name = invite.allianceName ?? "an alliance";
+    const look = ALLIANCE_INVITE_LOOK[invite.state];
+    const id = invite.id;
+    const canAnswer = invite.state === "pending" && !mine && id !== null;
+    const node = requestCard({
+      title: "Alliance invite",
+      state: mine && invite.state === "pending" ? "Waiting" : look.label,
+      tone: look.tone,
+      detail:
+        invite.state === "closed"
+          ? `The invite to ${name} can no longer be answered.`
+          : mine
+            ? `You invited ${thread.otherName} to ${name}.`
+            : `${thread.otherName} invites you to ${name}.`,
+      ...(canAnswer && {
+        actions: [
+          { label: "Accept", style: "primary", run: () => this.answerAllianceInvite(thread, id, name, true) },
+          { label: "Decline", style: "outline", run: () => this.answerAllianceInvite(thread, id, name, false) },
+        ],
+      }),
+    });
+    node.classList.add("mail-request--alliance");
+    if (invite.allianceImage !== null) {
+      const shield = make("img", "mail-request__shield");
+      shield.src = shieldUrl(invite.allianceImage, "medium");
+      shield.alt = "";
+      shield.decoding = "async";
+      node.querySelector(".mail-request__head")?.prepend(shield);
+    }
+    return node;
+  }
+
+  private async answerAllianceInvite(thread: MailThread, id: number, name: string, accept: boolean): Promise<string | null> {
+    const result = await this.allianceApi.answerInvite(id, accept);
+    if (!result.ok) return result.message;
+    if (this.destroyed) return null;
+    if (accept) this.options.onAllianceJoined?.();
+    await this.reopen(thread);
+    this.setStatus("info", accept ? `You joined ${name}.` : `You declined the invite to ${name}.`);
     return null;
   }
 

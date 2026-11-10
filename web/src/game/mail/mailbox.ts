@@ -127,6 +127,8 @@ export interface MailItem {
    * anything else and on older notices.
    */
   readonly attack: MailAttack | null;
+  /** On an alliance invite (beta 7), the invite; null or absent on anything else. */
+  readonly allianceInvite?: MailAllianceInvite | null;
 }
 
 /** A past contact, for a new message's recipient list. */
@@ -191,6 +193,32 @@ const TRUCE_LABELS: Readonly<Record<string, string>> = {
   trucereject: "Truce turned down",
   migraterequest: "Invitation to move",
   migraterevoke: "Invitation withdrawn",
+  allianceinvite: "Alliance invite",
+};
+
+/** An alliance invite as its message carries it (beta 7): the invite to answer, and where it stands. */
+export interface MailAllianceInvite {
+  /** The invite's id, for `/alliance/changeinvitestatus`; null when the message lost it. */
+  readonly id: number | null;
+  readonly state: "pending" | "accepted" | "declined" | "closed";
+  readonly allianceName: string | null;
+  readonly allianceImage: number | null;
+}
+
+/** A message's alliance invite, or null on any other message. */
+export const allianceInviteOf = (
+  message: Pick<MailMessage, "messagetype" | "allianceinviteid" | "allianceinvite">,
+): MailAllianceInvite | null => {
+  if (message.messagetype !== "allianceinvite") return null;
+  const id = Number(message.allianceinviteid);
+  const fields = message.allianceinvite;
+  return {
+    id: message.allianceinviteid != null && Number.isInteger(id) && id > 0 ? id : null,
+    // No fields: the invite row is gone, so it can no longer be answered.
+    state: fields?.state ?? "closed",
+    allianceName: fields?.alliance_name ?? null,
+    allianceImage: fields?.alliance_image ?? null,
+  };
 };
 
 /** A message's invitation to move, as the server gives it (#205). */
@@ -241,6 +269,7 @@ export const threadItems = (messages: readonly MailMessage[], myId: number): Mai
       defenceId: notice && message.messagetype === YARD_ATTACKED ? defenceIdOf(message) : null,
       byUserId: notice ? byUserIdOf(message, myId) : null,
       attack: notice ? attackOf(message) : null,
+      allianceInvite: allianceInviteOf(message),
     };
   });
 

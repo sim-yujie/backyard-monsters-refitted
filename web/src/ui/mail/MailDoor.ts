@@ -43,6 +43,8 @@ export interface MailDoorOptions {
   readonly onWatchDefence?: (id: number) => Promise<string | null>;
   /** An attack notice's Defences (#363). */
   readonly onOpenDefences?: () => void;
+  /** An alliance invite was accepted in the mailbox (beta 7): the player is in an alliance now. */
+  readonly onAllianceJoined?: () => void;
   /** The mail routes, for a test. */
   readonly api?: MailApi;
   /** The player's friends, offered as recipients; the shared friends list's by default. */
@@ -172,6 +174,7 @@ export class MailDoor {
       ...(this.options.onInviteChanged ? { onInviteChanged: this.options.onInviteChanged } : {}),
       ...(this.options.onWatchDefence ? { onWatchDefence: this.options.onWatchDefence } : {}),
       ...(this.options.onOpenDefences ? { onOpenDefences: this.options.onOpenDefences } : {}),
+      ...(this.options.onAllianceJoined ? { onAllianceJoined: this.options.onAllianceJoined } : {}),
       friends: this.options.friends ?? listedFriends,
       addFriend: (userid) => addFriendButton({ userid, className: "btn btn--outline mail-message__add-friend" }),
       onUnreadChange: (count) => {
