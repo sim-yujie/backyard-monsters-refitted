@@ -138,6 +138,9 @@ const isEvent = (value: unknown): value is FlingEvent => {
     // Its brain (issue #219): read only to be replaced by the session's frozen
     // copy (`fightableLog`), but a client's log carries it, so it must parse.
     (value.champion.b === undefined || isBrainRecord(value.champion.b)) &&
+    // Its habits and their version (champion modes round 2), replaced the same way.
+    (value.champion.hv === undefined || Number.isInteger(value.champion.hv)) &&
+    (value.champion.h === undefined || isBrainRecord(value.champion.h)) &&
     // Its health, replaced the same way by the session's frozen figure.
     (value.champion.hp === undefined || (typeof value.champion.hp === "number" && Number.isFinite(value.champion.hp)))
   );

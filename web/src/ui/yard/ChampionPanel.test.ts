@@ -71,6 +71,7 @@ const setup = (
     evolve: vi.fn(actions.evolve ?? (() => never())),
     heal: vi.fn(actions.heal ?? (() => never())),
     rename: vi.fn(actions.rename ?? (() => never())),
+    forget: vi.fn(actions.forget ?? (() => never())),
     freeze: vi.fn(actions.freeze ?? (() => never())),
     thaw: vi.fn(actions.thaw ?? (() => never())),
     healSpecial: vi.fn(actions.healSpecial ?? (() => never())),

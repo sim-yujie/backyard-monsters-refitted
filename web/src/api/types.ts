@@ -245,6 +245,10 @@ export interface ChampionSaveEntry {
   b?: unknown;
   /** What its brain has learned from: `n` attacks, and each Mode's usual score. */
   bs?: unknown;
+  /** Its habits per Mode (champion modes round 2, `habits.ts`); the server's alone to write. */
+  h?: unknown;
+  /** What its habits learned from: `n` attacks, and each Mode's count and usual scores. */
+  hs?: unknown;
   [key: string]: unknown;
 }
 

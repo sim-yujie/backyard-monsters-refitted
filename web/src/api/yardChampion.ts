@@ -101,6 +101,20 @@ export const championStance = (
     yardBody({ type: String(type), stance }),
   );
 
+/**
+ * Wipes the habits a champion learned in one Mode (champion modes round 2,
+ * the cage's **Forget**). Its other Modes and its attack counts stay.
+ */
+export const championForget = (
+  type: number,
+  stance: ChampionStance,
+  baseid?: string,
+): Promise<YardResponse<ChampionReport>> =>
+  post<YardResponse<ChampionReport>>(
+    `${CHAMPION_PATH}/forget`,
+    yardBody({ type: String(type), stance }, baseid),
+  );
+
 export const championFreeze = (baseid?: string, type?: number): Promise<YardResponse<ChampionReport>> =>
   post<YardResponse<ChampionReport>>(
     `${CHAMPION_PATH}/freeze`,
@@ -122,6 +136,7 @@ export interface ChampionApi {
   evolve: typeof championEvolve;
   heal: typeof championHeal;
   rename: typeof championRename;
+  forget: typeof championForget;
   freeze: typeof championFreeze;
   thaw: typeof championThaw;
 }
@@ -132,6 +147,7 @@ export const championApi: ChampionApi = {
   evolve: championEvolve,
   heal: championHeal,
   rename: championRename,
+  forget: championForget,
   freeze: championFreeze,
   thaw: championThaw,
 };
@@ -143,6 +159,7 @@ export const ChampionKey = {
   evolve: actionKey("champion", "evolve"),
   heal: actionKey("champion", "heal"),
   rename: actionKey("champion", "rename"),
+  forget: (stance: ChampionStance): string => actionKey("championForget", stance),
   freeze: actionKey("champion", "freeze"),
   healSpecial: actionKey("champion", "healSpecial"),
   freezeSpecial: actionKey("champion", "freezeSpecial"),
@@ -155,6 +172,8 @@ export interface ChampionActions {
   evolve(): Promise<YardActionResult<ChampionPaidReport>>;
   heal(): Promise<YardActionResult<ChampionPaidReport>>;
   rename(name: string): Promise<YardActionResult<ChampionReport>>;
+  /** Wipes the habits the champion in the cage learned in one Mode. */
+  forget(type: number, stance: ChampionStance): Promise<YardActionResult<ChampionReport>>;
   freeze(): Promise<YardActionResult<ChampionReport>>;
   /** Heals Krallen, who stays beside the champion in the cage. */
   healSpecial(): Promise<YardActionResult<ChampionPaidReport>>;
@@ -300,6 +319,15 @@ export const championActions = (store: YardStore, api: ChampionApi = championApi
         return activeChampion(reader.save) ? null : refuse("noChampion", "There is no champion in your cage.");
       },
       send: (_api, ...yard) => api.rename(name.trim(), ...yard),
+    }),
+  forget: (type, stance) =>
+    store.run({
+      key: ChampionKey.forget(stance),
+      check: (reader) => {
+        const view = activeOrRefuse(reader);
+        return "reason" in view ? view : null;
+      },
+      send: (_api, ...yard) => api.forget(type, stance, ...yard),
     }),
   freeze: () =>
     store.run({
