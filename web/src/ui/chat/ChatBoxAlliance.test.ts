@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatApi, ChatLineWire } from "@/api/chat";
 import { ALLIANCE_ROOM, ChatSession, type ChatSocket } from "@/game/chat/chatSession";
+import { setAllianceOpener } from "@/game/alliance/allianceView";
 import { ALLIANCE_ROOM_TEXT, ChatBox, GLOBAL_LABEL } from "./ChatBox";
 
 /**
@@ -178,5 +179,42 @@ describe("a member's line", () => {
     mount();
     box.element.querySelector<HTMLButtonElement>("button.chat-line__name")!.click();
     expect(actionWords()).toContain("Report");
+  });
+});
+
+describe("trading in the Alliance room (design v5 §7c)", () => {
+  const opened: unknown[][] = [];
+  let clear: () => void = () => {};
+  beforeEach(() => {
+    opened.length = 0;
+    clear = setAllianceOpener((...args) => {
+      opened.push(args);
+    });
+  });
+  afterEach(() => clear());
+
+  it("a trade request line has Give, which opens the Trade tab on it", () => {
+    mount();
+    tabs()[1]!.click();
+    socket.hear({
+      type: "message",
+      channel: KEY,
+      ...wire(0, "PebbleKing asks for 2.0M Putty (Upgrade).", { messageType: "trade_ask", tradeRequest: 41 }),
+    });
+    const give = box.element.querySelector<HTMLButtonElement>(".chat-line__give")!;
+    expect(give.textContent).toBe(ALLIANCE_ROOM_TEXT.give);
+    give.click();
+    expect(opened).toEqual([["trade", { give: 41 }]]);
+  });
+
+  it("a mate's name offers Send in the Alliance room only", () => {
+    mount();
+    box.element.querySelector<HTMLButtonElement>("button.chat-line__name")!.click();
+    expect(box.element.querySelector('[data-action="income"]')).toBeNull();
+    tabs()[1]!.click();
+    box.element.querySelector<HTMLButtonElement>("button.chat-line__name")!.click();
+    box.element.querySelector<HTMLButtonElement>('[data-action="income"]')!.click();
+    expect(opened[0]?.[0]).toBe("trade");
+    expect(opened[0]?.[1]).toMatchObject({ send: {} });
   });
 });

@@ -291,7 +291,7 @@ describe("AllianceWindow: my alliance", () => {
     expect(buttonNamed(ALLIANCE_TEXT.rename)).toBeDefined();
     expect(buttonNamed(ALLIANCE_TEXT.changeType)).toBeDefined();
     const tabs = [...document.querySelectorAll(".alliance__tab")].map((tab) => tab.getAttribute("aria-label"));
-    expect(tabs).toEqual(["Overview", "Constellation", "Members", "Territory"]);
+    expect(tabs).toEqual(["Overview", "Constellation", "Members", "Trade", "Territory"]);
   });
 
   it("shows phase 2's Overview cards, and a goal set from the menu reloads on the same tab", async () => {

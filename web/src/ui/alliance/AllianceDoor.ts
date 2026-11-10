@@ -1,5 +1,5 @@
 import type { AllianceApi } from "@/api/alliance";
-import { setAllianceOpener, type AllianceTab } from "@/game/alliance/allianceView";
+import { setAllianceOpener, type AllianceFocus, type AllianceTab } from "@/game/alliance/allianceView";
 import { gameIconUrl } from "@/ui/gameIcon";
 import { make } from "@/ui/friends/rows";
 import { AllianceWindow } from "./AllianceWindow";
@@ -58,7 +58,7 @@ export class AllianceDoor {
     this.button.append(disc, make("span", "yard-dock__label", ALLIANCE_DOOR_TEXT.label));
     this.button.addEventListener("click", () => this.toggle());
     this.button.hidden = true;
-    this.clearOpener = setAllianceOpener((tab) => this.open(tab));
+    this.clearOpener = setAllianceOpener((tab, focus) => this.open(tab, focus));
   }
 
   get isOpen(): boolean {
@@ -75,9 +75,9 @@ export class AllianceDoor {
     else this.open();
   }
 
-  open(tab?: AllianceTab): void {
+  open(tab?: AllianceTab, focus?: AllianceFocus): void {
     if (this.window) {
-      if (tab) this.window.showTab(tab);
+      if (tab) this.window.showTab(tab, focus);
       return;
     }
     this.options.onOpen?.();
@@ -85,6 +85,7 @@ export class AllianceDoor {
     this.window = new AllianceWindow({
       ...(api ? { api } : {}),
       ...(tab ? { tab } : {}),
+      ...(focus ? { focus } : {}),
       ...(onBuildObservatory ? { onBuildObservatory } : {}),
       ...(onOpenMap ? { onOpenMap } : {}),
       ...(onChanged ? { onChanged } : {}),

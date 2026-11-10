@@ -51,6 +51,8 @@ export interface ChatLineWire {
   messageType?: string;
   /** The map cell an automatic line is about (an under-attack alert): Show on map. */
   cell?: { x: number; y: number };
+  /** A trade request line's request, for the chat box's Give (alliance trading). */
+  tradeRequest?: number;
 }
 
 /** The error codes the chat server answers with. */

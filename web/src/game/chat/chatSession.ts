@@ -56,6 +56,8 @@ export interface ChatLine {
   readonly auto: boolean;
   /** The map cell an automatic line is about (an under-attack alert), for Show on map; else null. */
   readonly cell: { readonly x: number; readonly y: number } | null;
+  /** A trade request line's request, for Give (design v5 §7c); else null. */
+  readonly tradeRequest: number | null;
 }
 
 /** A word from the client itself, such as "slow down". */
@@ -666,6 +668,7 @@ export class ChatSession {
         wire.cell && Number.isInteger(wire.cell.x) && Number.isInteger(wire.cell.y)
           ? { x: wire.cell.x, y: wire.cell.y }
           : null,
+      tradeRequest: Number.isInteger(wire.tradeRequest) && Number(wire.tradeRequest) > 0 ? Number(wire.tradeRequest) : null,
     };
   }
 

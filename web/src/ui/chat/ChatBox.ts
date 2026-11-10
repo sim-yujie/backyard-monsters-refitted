@@ -16,6 +16,7 @@ import {
 import { countryLabel, countryName } from "@/game/account/countries";
 import { countryLabelNodes } from "@/ui/countryFlag";
 import { shieldUrl } from "@/game/alliance/allianceRules";
+import { allianceOpener } from "@/game/alliance/allianceView";
 import { icon } from "@/ui/icons";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { addFriendButton } from "@/ui/friends/AddFriendButton";
@@ -79,6 +80,11 @@ export const ALLIANCE_ROOM_TEXT = {
   tab: "Alliance",
   map: "Map",
   showOnMap: (cell: { readonly x: number; readonly y: number }): string => `Show on map (${cell.x}, ${cell.y})`,
+  /** A trade request line's button: opens the Give sheet (design v5 §7c). */
+  give: "Give",
+  giveTitle: "Give: open the Trade tab on this request",
+  /** A mate's name in the Alliance room: the Send sheet (resources). */
+  send: "Send",
 } as const;
 
 /** What the open box says under the lines while the room is not joined. */
@@ -503,6 +509,23 @@ export class ChatBox {
       });
       item.append(map);
     }
+    // A mate's trade request: Give opens the alliance window's Give sheet on it.
+    const request = entry.tradeRequest;
+    const openAlliance = allianceOpener();
+    if (request && openAlliance && !entry.own) {
+      const give = document.createElement("button");
+      give.type = "button";
+      give.className = "chat-line__map chat-line__give";
+      give.title = ALLIANCE_ROOM_TEXT.giveTitle;
+      give.tabIndex = this.open ? 0 : -1;
+      const word = document.createElement("span");
+      word.textContent = ALLIANCE_ROOM_TEXT.give;
+      give.append(gameIcon("gift", { size: 16, decorative: true }), word);
+      give.addEventListener("click", () => {
+        if (this.open) allianceOpener()?.("trade", { give: request });
+      });
+      item.append(give);
+    }
     return item;
   }
 
@@ -580,6 +603,16 @@ export class ChatBox {
       // Muted, the same picture sits on a lit button and the word turns to Unmute.
       mute.classList.toggle("chat-box__action--on", muted);
       actions.append(friend, mute, this.iconButton(CHAT_STRIP_TEXT.viewYard, "townhall", () => void this.viewYard(line)));
+      // A mate in the Alliance room: Send resources (design v5 §7c).
+      const openAlliance = allianceOpener();
+      if (this.state.channel === ALLIANCE_ROOM && openAlliance) {
+        actions.append(
+          this.iconButton(ALLIANCE_ROOM_TEXT.send, "income", () => {
+            this.pick(null);
+            allianceOpener()?.("trade", { send: { userid: line.userId, username: line.name } });
+          }),
+        );
+      }
       // The Alliance room's lines are not reported: the server takes no alliance reports, and members kick.
       if (this.state.channel !== ALLIANCE_ROOM) {
         actions.append(

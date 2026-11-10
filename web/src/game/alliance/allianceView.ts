@@ -5,10 +5,15 @@
  * window's (`game/friends/friendsView.ts`).
  */
 
-/** The window's pages (design v5 §7b); Trade comes with phase 3. */
-export type AllianceTab = "overview" | "constellation" | "members" | "territory";
+/** The window's pages (design v5 §7b). */
+export type AllianceTab = "overview" | "constellation" | "members" | "trade" | "territory";
 
-export type AllianceOpener = (tab?: AllianceTab) => void;
+/** Where the Trade tab opens: a mate's request to fill (chat's Give), or Send to a mate. */
+export type AllianceFocus =
+  | { readonly give: number }
+  | { readonly send: { readonly userid: number; readonly username: string } };
+
+export type AllianceOpener = (tab?: AllianceTab, focus?: AllianceFocus) => void;
 
 let opener: AllianceOpener | null = null;
 

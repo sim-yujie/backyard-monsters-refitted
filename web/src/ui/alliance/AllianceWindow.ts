@@ -36,7 +36,10 @@ import {
   TYPE_INFO,
   type MemberAction,
 } from "@/game/alliance/allianceRules";
-import type { AllianceTab } from "@/game/alliance/allianceView";
+import type { AllianceFocus, AllianceTab } from "@/game/alliance/allianceView";
+import { playerPool } from "@/game/friends/friendsView";
+import type { AllianceTradeApi } from "@/api/allianceTrade";
+import { TradeTab } from "./allianceTradeUi";
 import { worldChat, type ChatSession } from "@/game/chat/chatSession";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
@@ -121,12 +124,14 @@ export const ALLIANCE_TEXT = {
   back: "Back",
   overview: "Overview",
   members: "Members",
-  tabs: { overview: "Overview", constellation: "Constellation", members: "Members", territory: "Territory" } as Readonly<
+  tabs: { overview: "Overview", constellation: "Constellation", members: "Members", trade: "Trade", territory: "Territory" } as Readonly<
     Record<AllianceTab, string>
   >,
   membersCount: (count: number, limit: number): string => `${formatAmount(count)} / ${formatAmount(limit)} members`,
   online: (count: number): string => `${formatAmount(count)} online`,
   points: "Alliance points",
+  /** A mate's row: send them resources (the Trade tab's Send sheet). */
+  send: "Send",
   /** The short word under each Overview tile's number. */
   tileCaption: { members: "members", online: "online now", points: "points" },
   edit: "Edit",
@@ -213,6 +218,10 @@ export interface AllianceWindowOptions {
   readonly now?: () => number;
   /** The tab a member's window opens on. */
   readonly tab?: AllianceTab;
+  /** On the Trade tab: open Give on a request, or Send to a mate. */
+  readonly focus?: AllianceFocus;
+  /** The trade routes; the game's own unless a test swaps them. */
+  readonly tradeApi?: AllianceTradeApi;
   /** Opens the build menu on the Observatory (the join gate's next step). Without it, no button. */
   readonly onBuildObservatory?: () => void;
   /** Opens the map (Map Room 2's next step). Without it, no button. */
@@ -264,18 +273,24 @@ const typeBadge = (type: AllianceType): HTMLElement =>
   make("span", `alliance__type alliance__type--${type}`, TYPE_INFO[type]?.label ?? type);
 
 export class AllianceWindow {
-  /** The member tabs, in order (design v5 §7b); phase 3 puts Trade before Territory. */
-  static readonly TABS: readonly AllianceTab[] = ["overview", "constellation", "members", "territory"];
+  /** The member tabs, in order (design v5 §7b). */
+  static readonly TABS: readonly AllianceTab[] = ["overview", "constellation", "members", "trade", "territory"];
 
   /** Each tab's painted icon; on a phone the tabs show only it. */
   static readonly TAB_ICONS: Readonly<Record<AllianceTab, GameIconName>> = {
     overview: "alliance",
     constellation: "empire",
     members: "friends",
+    trade: "income",
     territory: "pin",
   };
 
   readonly popup: Popup;
+
+  /** The Trade tab (design v5 §12b), which keeps its own data and sheets. */
+  private readonly trade: TradeTab;
+  /** Where the Trade tab opens on its first load (chat's Give, a Send). */
+  private focus: AllianceFocus | null;
 
   private readonly options: AllianceWindowOptions;
   private readonly api: AllianceApi;
@@ -332,6 +347,18 @@ export class AllianceWindow {
 
   constructor(options: AllianceWindowOptions = {}) {
     this.options = options;
+    this.trade = new TradeTab(
+      {
+        redraw: () => {
+          if (this.tab === "trade") this.render();
+        },
+        say: (text) => this.say(text),
+        now: () => this.now(),
+        traded: () => playerPool()?.refresh(),
+      },
+      options.tradeApi,
+    );
+    this.focus = options.focus ?? null;
     this.api = options.api ?? allianceApi;
     this.progressApi = options.progressApi ?? allianceProgressApi;
     this.players = options.players ?? friendsApi;
@@ -374,8 +401,9 @@ export class AllianceWindow {
     return this.view.kind;
   }
 
-  /** Shows a member tab (Overview, Members). */
-  showTab(tab: AllianceTab): void {
+  /** Shows a member tab; on Trade, `focus` opens Give or Send. */
+  showTab(tab: AllianceTab, focus?: AllianceFocus): void {
+    if (focus) this.focus = focus;
     this.tab = tab;
     this.editing = null;
     this.addingGoal = false;
@@ -384,6 +412,16 @@ export class AllianceWindow {
     if (tab === "members") void this.loadMembers();
     if (tab === "overview") void this.loadNews();
     if (tab === "territory") void this.loadTerritory(this.territoryType ?? this.view.alliance.type);
+    if (tab === "trade") this.loadTrade();
+  }
+
+  /** Loads the Trade tab, opening the sheet a focus asks for. */
+  private loadTrade(): void {
+    const focus = this.focus;
+    this.focus = null;
+    if (focus && "give" in focus) this.trade.openGive(focus.give);
+    else if (focus && "send" in focus) this.trade.openSend(focus.send.userid, focus.send.username);
+    else void this.trade.load();
   }
 
   /** Loads the player's alliance again: the marketplace without one, My alliance with one. */
@@ -409,6 +447,7 @@ export class AllianceWindow {
       if (this.tab === "members") await this.loadMembers();
       if (this.tab === "overview") await this.loadNews();
       if (this.tab === "territory") await this.loadTerritory(this.territoryType ?? mine.alliance.type);
+      if (this.tab === "trade") this.loadTrade();
       await this.loadInbox();
       return;
     }
@@ -1016,6 +1055,8 @@ export class AllianceWindow {
           },
           alliance.can_edit_stars ? () => this.openStarEditor() : undefined,
         );
+      case "trade":
+        return this.trade.render();
       case "territory":
         return territoryTab(
           alliance,
@@ -1269,14 +1310,16 @@ export class AllianceWindow {
   }
 
   private memberRow(alliance: MyAlliance, member: AllianceMember, actions: readonly MemberAction[]): HTMLElement {
-    const opened = this.openMember === member.user_id && actions.length > 0;
+    // Every mate but yourself can be sent resources (design v5 §7b, §12b).
+    const canSend = member.user_id !== (this.myId() ?? -1);
+    const opened = this.openMember === member.user_id && (actions.length > 0 || canSend);
     const item = make("div", "alliance__item");
     item.setAttribute("role", "listitem");
     item.dataset["userid"] = String(member.user_id);
     item.classList.toggle("is-open", opened);
     const row = make("button", "alliance__row");
     row.type = "button";
-    row.disabled = actions.length === 0;
+    row.disabled = actions.length === 0 && !canSend;
     row.setAttribute("aria-expanded", String(opened));
     const role = member.role ?? "member";
     const words = make("span", "alliance__row-words");
@@ -1307,6 +1350,13 @@ export class AllianceWindow {
           }),
         );
       } else {
+        if (canSend) {
+          const send = button(ALLIANCE_TEXT.send, "btn--outline alliance__send", () =>
+            this.showTab("trade", { send: { userid: member.user_id, username: member.display_name } }),
+          );
+          send.prepend(gameIcon("income", { size: 16, decorative: true }));
+          more.append(send);
+        }
         for (const action of actions) {
           more.append(
             button(ALLIANCE_TEXT.action[action], action === "kick" ? "btn--outline alliance__kick" : "btn--outline", () => {
