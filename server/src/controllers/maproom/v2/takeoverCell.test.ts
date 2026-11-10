@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { memoryWelcomeStore, useWelcomeStore } from "../../../services/events/mr2Welcome.js";
 import { quoteTakeover } from "../../../services/maproom/v2/takeoverCost.js";
+import { STARTER_KITS } from "../../../game-data/starterKits.js";
+import { kitBuildings } from "../../../services/yard/starterKit.js";
 import type { Context } from "koa";
 import { achievementConfig } from "../../../config/AchievementConfig.js";
 import { readAchievements } from "../../../services/achievements/state.js";
@@ -180,6 +182,10 @@ beforeEach(() => {
       saveuserid: OWNER,
       type: "outpost",
       damage: 92,
+      // A Regular Starter Kit, worth 3,222,316: 10,000,000 of each
+      // (outpostValue.test.ts). The stored 10,000,000 would price at
+      // 28,000,000; the server never reads it.
+      buildingdata: kitBuildings(STARTER_KITS[0]!, "shiny", {}).buildingdata,
       empirevalue: 10_000_000,
     }),
     cellRow(CAMP, 0, 1, { basesaveid: 901, userid: 0, saveuserid: 0, type: "tribe", damage: 95, wmid: 41 }),
@@ -211,8 +217,8 @@ describe("takeoverCell", () => {
     expect(result.body).toEqual({ error: 0 });
     expect(store.has(GRANT_KEY)).toBe(false);
     expect(outpost().protected as number).toBeLessThanOrEqual(now() + 12 * 3600);
-    // ln(10,000,000) prices at 28,000,000 of each (takeoverCost.test.ts).
-    expect(takerResources()).toEqual({ r1: 72_000_000, r2: 72_000_000, r3: 72_000_000, r4: 72_000_000 });
+    // Its Regular Kit prices it at 10,000,000 of each, not its stored empirevalue.
+    expect(takerResources()).toEqual({ r1: 90_000_000, r2: 90_000_000, r3: 90_000_000, r4: 90_000_000 });
     expect(outpost()).toMatchObject({ userid: TAKER, saveuserid: TAKER, name: "taker" });
     expect(outpost().protected as number).toBeGreaterThan(now() + 11 * 3600);
     expect(cells[0]).toMatchObject({ uid: TAKER, base_type: 3 });
@@ -336,12 +342,12 @@ describe("takeoverCell", () => {
   test("a zero or negative price is not honoured: the server's price is charged", async () => {
     const result = await run({ baseid: OUTPOST, shiny: "-99", resources: JSON.stringify({ r1: -1e9, r2: -1e9, r3: -1e9, r4: -1e9 }) });
     expect(result.ok).toBe(true);
-    expect(takerResources().r1).toBe(72_000_000);
+    expect(takerResources().r1).toBe(90_000_000);
     expect(takerSave.credits).toBe(5000);
   });
 
   test("a taker who cannot pay is refused", async () => {
-    takerResources().r2 = 27_999_999;
+    takerResources().r2 = 9_999_999;
     const result = await run({ baseid: OUTPOST });
     expect(result.reason).toBe("notEnoughResources");
     expect(flushed).toBe(0);
@@ -458,7 +464,7 @@ describe("sight cache invalidation (#329, #330 WP1)", () => {
 describe("takeoverCell: New to Map Room 2", () => {
   const openWindow = () => welcome.rows.set(TAKER, { start: now() - 60, takeoverUsed: false, kitUsed: false });
   const fullBase = () =>
-    quoteTakeover({ cell: { x: 240, y: 208 }, isWildMonster: true, empireValue: 0, takerHomebase: null, conquestActive: false })
+    quoteTakeover({ cell: { x: 240, y: 208 }, isWildMonster: true, buildingdata: null, takerHomebase: null, conquestActive: false })
       .resources;
 
   test("the first wild camp in the 10 days costs 10% of its full base price, and uses the reward", async () => {
@@ -485,7 +491,7 @@ describe("takeoverCell: New to Map Room 2", () => {
     const usualShiny = quoteTakeover({
       cell: { x: 240, y: 208 },
       isWildMonster: true,
-      empireValue: 0,
+      buildingdata: null,
       takerHomebase: takerSave.homebase as string[],
       conquestActive: false,
     }).shiny;
@@ -498,7 +504,7 @@ describe("takeoverCell: New to Map Room 2", () => {
   test("a player outpost never uses it, and is charged in full", async () => {
     openWindow();
     expect((await run({ baseid: OUTPOST })).ok).toBe(true);
-    expect(takerResources().r1).toBe(72_000_000);
+    expect(takerResources().r1).toBe(90_000_000);
     expect(welcome.rows.get(TAKER)!.takeoverUsed).toBe(false);
   });
 
