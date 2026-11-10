@@ -146,7 +146,7 @@ export const takeoverCell: KoaController = async (ctx) => {
     const { resources: cost, shiny: shinyCost } = quoteTakeover({
       cell,
       isWildMonster: wildCamp,
-      empireValue: cellSave.empirevalue,
+      buildingdata: cellSave.buildingdata,
       takerHomebase: taker.homebase,
       conquestActive,
       welcome,

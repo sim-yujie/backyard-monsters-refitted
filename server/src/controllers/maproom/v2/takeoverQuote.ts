@@ -124,7 +124,7 @@ export const takeoverQuote: KoaController = async (ctx) => {
   const price = quoteTakeover({
     cell: quoted,
     isWildMonster: quoted.isWildMonster,
-    empireValue: save?.empirevalue ?? 0,
+    buildingdata: save?.buildingdata,
     takerHomebase: userSave.homebase,
     conquestActive: powerups.some(({ id }) => id === AlliancePowerupType.CONQUEST),
     welcome,
