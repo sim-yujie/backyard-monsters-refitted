@@ -337,3 +337,21 @@ export const STANCE_LABEL: Record<AllianceStance, string> = {
 };
 
 
+
+// ---------------------------------------------------------------------------
+// Trading between members (design v5 §12a, §12b). Placeholders until the
+// owner balances them.
+// ---------------------------------------------------------------------------
+
+/** What is lost on the way, as a share of what leaves (10%). */
+export const TRADE_LOSS = 0.1;
+
+/** One trade carries up to this share of the smaller storage cap, per resource (10%, ASSUMED). */
+export const TRADE_CAP_SHARE = 0.1;
+
+/** How long a request stays up (24 h, ASSUMED). */
+export const TRADE_REQUEST_SECONDS = 24 * 60 * 60;
+
+/** What a request is for (optional), each with its icon on the web. */
+export const TRADE_REASONS = ["upgrade", "monsters", "outpost", "other"] as const;
+export type TradeReason = (typeof TRADE_REASONS)[number];

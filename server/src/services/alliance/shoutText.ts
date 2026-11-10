@@ -79,6 +79,45 @@ export const readUnderAttack = (body: string): UnderAttackFacts | null => {
  * @param {string} body - Its stored body.
  * @returns {{ x: number; y: number } | undefined} The cell, or undefined.
  */
+/** What a request line stores: the request, what should arrive, and what for. */
+export interface TradeAskFacts {
+  request: number;
+  amounts: Partial<Record<"r1" | "r2" | "r3" | "r4", number>>;
+  reason: string | null;
+}
+
+/** What a trade-done line stores: who got it and what arrived. */
+export interface TradeDoneFacts {
+  to: string;
+  arrived: Partial<Record<"r1" | "r2" | "r3" | "r4", number>>;
+}
+
+const RESOURCE_WORDS: Record<string, string> = { r1: "Twigs", r2: "Pebbles", r3: "Putty", r4: "Goo" };
+
+/** "2.0M Goo, 500K Twigs" */
+export const amountsText = (amounts: Partial<Record<string, number>>): string =>
+  Object.entries(amounts)
+    .filter(([key, value]) => RESOURCE_WORDS[key] && Number(value) > 0)
+    .map(([key, value]) => `${shortAmount(Number(value))} ${RESOURCE_WORDS[key]}`)
+    .join(", ");
+
+/** 2,000,000 as "2.0M", 500,000 as "500K", 950 as "950". */
+export const shortAmount = (value: number): string => {
+  if (value >= 1_000_000) return `${(Math.floor(value / 100_000) / 10).toFixed(1)}M`;
+  if (value >= 1_000) return `${Math.floor(value / 1_000)}K`;
+  return String(Math.floor(value));
+};
+
+/**
+ * The trade request an automatic line is about, for the chat box's Give;
+ * nothing for any other line.
+ */
+export const shoutTradeRequest = (type: AllianceMessageType, body: string): number | undefined => {
+  if (type !== AllianceMessageType.TRADE_ASK) return undefined;
+  const facts = readJson<Partial<TradeAskFacts>>(body);
+  return Number.isInteger(facts?.request) ? facts!.request : undefined;
+};
+
 export const shoutCell = (type: AllianceMessageType, body: string): { x: number; y: number } | undefined => {
   if (type !== AllianceMessageType.UNDER_ATTACK) return undefined;
 
@@ -157,6 +196,25 @@ export const composeShout = (type: AllianceMessageType, username: string, body: 
       return type === AllianceMessageType.GOAL_SET
         ? `${username} set a goal: ${goal} (${tier}).`
         : `Goal reached: ${goal} (${tier}), +${Number(facts.points) || 0} points!`;
+    }
+
+    case AllianceMessageType.TRADE_ASK: {
+      const facts = readJson<Partial<TradeAskFacts>>(body);
+      const what = amountsText(facts?.amounts ?? {});
+      if (!what) return "";
+
+      // "PebbleKing asks for 2.0M Goo (Upgrade)." (design v5 §12b)
+      const reason = facts?.reason ? ` (${facts.reason.charAt(0).toUpperCase()}${facts.reason.slice(1)})` : "";
+      return `${username} asks for ${what}${reason}.`;
+    }
+
+    case AllianceMessageType.TRADE_DONE: {
+      const facts = readJson<Partial<TradeDoneFacts>>(body);
+      const what = amountsText(facts?.arrived ?? {});
+      if (!what || !facts?.to) return "";
+
+      // "Mira gave Thornback 800K Goo." (design v5 §12b)
+      return `${username} gave ${facts.to} ${what}.`;
     }
 
     case AllianceMessageType.RELATIONSHIP:

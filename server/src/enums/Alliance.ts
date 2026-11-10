@@ -59,6 +59,10 @@ export enum AllianceMessageType {
   GOAL_DONE = "goal_done",
   /** A member suggested the next step of a constellation (design v5 §9a, PROPOSED); body `{"id","step"}`. */
   STAR_SUGGESTED = "star_suggested",
+  /** A member asked mates for resources (design v5 §12b); body `{"request","amounts","reason"}`; chat shows Give. */
+  TRADE_ASK = "trade_ask",
+  /** A trade done; body `{"to","arrived"}`. */
+  TRADE_DONE = "trade_done",
 }
 
 /**
