@@ -5,8 +5,8 @@
  * window's (`game/friends/friendsView.ts`).
  */
 
-/** The window's pages: phase 2 adds Chat here. */
-export type AllianceTab = "overview" | "members";
+/** The window's pages (design v5 §7b); Trade comes with phase 3. */
+export type AllianceTab = "overview" | "constellation" | "members" | "territory";
 
 export type AllianceOpener = (tab?: AllianceTab) => void;
 

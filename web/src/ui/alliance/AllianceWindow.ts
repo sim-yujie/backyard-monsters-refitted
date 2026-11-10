@@ -6,6 +6,7 @@ import {
   type AllianceInviteRow,
   type AllianceListing,
   type AllianceMember,
+  type AllianceResult,
   type AllianceRefusal,
   type AllianceType,
   type MyAlliance,
@@ -38,7 +39,23 @@ import {
 import type { AllianceTab } from "@/game/alliance/allianceView";
 import { worldChat, type ChatSession } from "@/game/chat/chatSession";
 import { formatAmount, formatCountdown } from "@/ui/format";
-import { gameIcon } from "@/ui/gameIcon";
+import { gameIcon, type GameIconName } from "@/ui/gameIcon";
+import {
+  allianceProgressApi,
+  type AllianceProgressApi,
+  type NewsLine,
+  type TerritoryRow,
+} from "@/api/allianceProgress";
+import {
+  constellationTab,
+  goalsCard,
+  helpersCard,
+  newsCard,
+  statTiles,
+  territoryTab,
+  todayCard,
+  type ProgressHost,
+} from "./allianceProgressUi";
 import { onlineDot } from "@/ui/onlineDot";
 import { Popup } from "@/ui/Popup";
 import { make } from "@/ui/friends/rows";
@@ -103,6 +120,9 @@ export const ALLIANCE_TEXT = {
   back: "Back",
   overview: "Overview",
   members: "Members",
+  tabs: { overview: "Overview", constellation: "Constellation", members: "Members", territory: "Territory" } as Readonly<
+    Record<AllianceTab, string>
+  >,
   membersCount: (count: number, limit: number): string => `${formatAmount(count)} / ${formatAmount(limit)} members`,
   online: (count: number): string => `${formatAmount(count)} online`,
   points: "Alliance points",
@@ -180,6 +200,8 @@ const saveQuickType = (type: AllianceType | "any"): void => {
 
 export interface AllianceWindowOptions {
   readonly api?: AllianceApi;
+  /** Points, goals, stars, territory and news (phase 2); the game's own unless a test swaps it. */
+  readonly progressApi?: AllianceProgressApi;
   /** The player search Invite uses. */
   readonly players?: Pick<FriendsApi, "search">;
   /** The player's own id; the session's by default. */
@@ -239,13 +261,22 @@ const typeBadge = (type: AllianceType): HTMLElement =>
   make("span", `alliance__type alliance__type--${type}`, TYPE_INFO[type]?.label ?? type);
 
 export class AllianceWindow {
-  /** The member tabs, in order. Phase 2 appends Chat. */
-  static readonly TABS: readonly AllianceTab[] = ["overview", "members"];
+  /** The member tabs, in order (design v5 §7b); phase 3 puts Trade before Territory. */
+  static readonly TABS: readonly AllianceTab[] = ["overview", "constellation", "members", "territory"];
+
+  /** Each tab's painted icon; on a phone the tabs show only it. */
+  static readonly TAB_ICONS: Readonly<Record<AllianceTab, GameIconName>> = {
+    overview: "alliance",
+    constellation: "empire",
+    members: "friends",
+    territory: "pin",
+  };
 
   readonly popup: Popup;
 
   private readonly options: AllianceWindowOptions;
   private readonly api: AllianceApi;
+  private readonly progressApi: AllianceProgressApi;
   private readonly players: Pick<FriendsApi, "search">;
   private readonly status = make("p", "alliance__status");
   private readonly foot = make("div", "alliance__foot");
@@ -281,9 +312,23 @@ export class AllianceWindow {
   private suggested: readonly AllianceMember[] = [];
   private invitedIds = new Set<number>();
 
+  // Phase 2: goals, stars, territory, news.
+  private chosenStar: string | null = null;
+  private addingGoal = false;
+  private territoryType: AllianceType | null = null;
+  private territoryRows: readonly TerritoryRow[] | null = null;
+  private news: readonly NewsLine[] | null = null;
+  private showAllNews = false;
+  private readonly host: ProgressHost = {
+    run: (action) => void this.runProgress(action),
+    redraw: () => this.render(),
+    now: () => this.now(),
+  };
+
   constructor(options: AllianceWindowOptions = {}) {
     this.options = options;
     this.api = options.api ?? allianceApi;
+    this.progressApi = options.progressApi ?? allianceProgressApi;
     this.players = options.players ?? friendsApi;
     this.tab = options.tab ?? "overview";
     this.popup = new Popup({
@@ -322,8 +367,12 @@ export class AllianceWindow {
   showTab(tab: AllianceTab): void {
     this.tab = tab;
     this.editing = null;
+    this.addingGoal = false;
     this.render();
-    if (tab === "members" && this.view.kind === "mine") void this.loadMembers();
+    if (this.view.kind !== "mine") return;
+    if (tab === "members") void this.loadMembers();
+    if (tab === "overview") void this.loadNews();
+    if (tab === "territory") void this.loadTerritory(this.territoryType ?? this.view.alliance.type);
   }
 
   /** Loads the player's alliance again: the marketplace without one, My alliance with one. */
@@ -347,6 +396,8 @@ export class AllianceWindow {
       this.view = { kind: "mine", alliance: mine.alliance };
       this.render();
       if (this.tab === "members") await this.loadMembers();
+      if (this.tab === "overview") await this.loadNews();
+      if (this.tab === "territory") await this.loadTerritory(this.territoryType ?? mine.alliance.type);
       await this.loadInbox();
       return;
     }
@@ -419,6 +470,44 @@ export class AllianceWindow {
     }
     this.members = orderMembers(answer.members);
     this.render();
+  }
+
+  /**
+   * A phase 2 action (light a star, suggest one, set or remove a goal): on a
+   * refusal the reason shows; on success the alliance loads again on the same
+   * tab (not {@link changed}, which goes back to the Overview).
+   */
+  private async runProgress(action: () => Promise<AllianceResult<object>>): Promise<void> {
+    const answer = await action();
+    if (this.destroyed) return;
+    if (!answer.ok) {
+      this.refuse(answer);
+      this.render();
+      return;
+    }
+    this.say(null);
+    this.addingGoal = false;
+    await this.load();
+  }
+
+  private async loadNews(): Promise<void> {
+    const answer = await this.progressApi.news();
+    if (this.destroyed || !answer.ok) return;
+    this.news = answer.news;
+    if (this.tab === "overview") this.render();
+  }
+
+  private async loadTerritory(type: AllianceType): Promise<void> {
+    this.territoryType = type;
+    const answer = await this.progressApi.territory(type);
+    if (this.destroyed || this.territoryType !== type) return;
+    if (!answer.ok) {
+      this.refuse(answer);
+      this.territoryRows = [];
+    } else {
+      this.territoryRows = answer.rows;
+    }
+    if (this.tab === "territory") this.render();
   }
 
   /** After a join, a leave, a kick of the player: the alliance changed under the scene too. */
@@ -846,7 +935,14 @@ export class AllianceWindow {
     const tabs = make("div", "tabs alliance__tabs");
     tabs.setAttribute("role", "tablist");
     for (const tab of AllianceWindow.TABS) {
-      const node = make("button", "tabs__tab alliance__tab", tab === "overview" ? ALLIANCE_TEXT.overview : ALLIANCE_TEXT.members);
+      const words = ALLIANCE_TEXT.tabs[tab];
+      const node = make("button", "tabs__tab alliance__tab");
+      node.append(
+        gameIcon(AllianceWindow.TAB_ICONS[tab], { size: 24, decorative: true }),
+        make("span", "alliance__tab-words", words),
+      );
+      node.title = words;
+      node.setAttribute("aria-label", words);
       node.type = "button";
       node.setAttribute("role", "tab");
       node.setAttribute("aria-selected", String(tab === this.tab));
@@ -855,7 +951,7 @@ export class AllianceWindow {
       tabs.append(node);
     }
     this.popup.setHead(head, tabs, this.status);
-    this.popup.body.replaceChildren(...(this.tab === "members" ? this.membersTab(alliance) : this.overviewTab(alliance)));
+    this.popup.body.replaceChildren(...this.tabBody(alliance));
 
     this.foot.hidden = alliance.role === "leader" && (alliance.number_of_members ?? 1) > 1;
     if (!this.foot.hidden) this.foot.append(...this.leaveButtons());
@@ -892,6 +988,32 @@ export class AllianceWindow {
     await this.changed();
   }
 
+  private tabBody(alliance: MyAlliance): HTMLElement[] {
+    switch (this.tab) {
+      case "members":
+        return this.membersTab(alliance);
+      case "constellation":
+        return constellationTab(alliance, this.host, this.progressApi, this.chosenStar, (id) => {
+          this.chosenStar = id;
+          this.render();
+        });
+      case "territory":
+        return territoryTab(
+          alliance,
+          this.territoryType ?? alliance.type,
+          this.territoryRows,
+          (type) => {
+            this.territoryRows = null;
+            this.render();
+            void this.loadTerritory(type);
+          },
+          (image) => shieldUrl(image, "small"),
+        );
+      default:
+        return this.overviewTab(alliance);
+    }
+  }
+
   private overviewTab(alliance: MyAlliance): HTMLElement[] {
     const now = this.now();
     const nodes: HTMLElement[] = [];
@@ -910,8 +1032,12 @@ export class AllianceWindow {
     );
     nodes.push(tiles);
 
+    // The type's 2 strengths and 2 weaknesses at today's values; the plain
+    // words only while the server sends no constellations.
+    const stats = statTiles(alliance);
     const info = TYPE_INFO[alliance.type];
-    if (info) {
+    if (stats) nodes.push(stats);
+    else if (info) {
       const type = make("div", "alliance__type-line");
       type.append(make("span", "alliance__type-good", `+ ${info.strength}`), make("span", "alliance__type-bad", `− ${info.weakness}`));
       nodes.push(type);
@@ -934,6 +1060,25 @@ export class AllianceWindow {
     }
     if (this.editing === "rename") nodes.push(this.renameForm(alliance));
     if (this.editing === "type") nodes.push(this.typeSwitch(alliance, now));
+
+    const adding = {
+      open: this.addingGoal,
+      toggle: () => {
+        this.addingGoal = !this.addingGoal;
+        this.render();
+      },
+    };
+    for (const part of [
+      todayCard(alliance),
+      goalsCard(alliance, this.host, this.progressApi, adding),
+      helpersCard(alliance),
+      newsCard(this.news, this.showAllNews, this.host, () => {
+        this.showAllNews = !this.showAllNews;
+        this.render();
+      }),
+    ]) {
+      if (part) nodes.push(part);
+    }
     return nodes;
   }
 

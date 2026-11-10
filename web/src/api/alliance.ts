@@ -1,5 +1,6 @@
 import { ApiError, get, NetworkError, post, type FormBody } from "./http";
 import type { ApiEnvelope } from "./types";
+import type { AllianceProgressFields } from "@/api/allianceProgress";
 
 /**
  * Alliances (beta 7, phase 1): the `/alliance/` routes the alliance window
@@ -29,8 +30,8 @@ export interface TypeOption {
   readonly available_at: number | null;
 }
 
-/** The player's own alliance, as `myalliance` sends it. */
-export interface MyAlliance {
+/** The player's own alliance, as `myalliance` sends it (phase 2 adds {@link AllianceProgressFields}). */
+export interface MyAlliance extends AllianceProgressFields {
   readonly alliance_id: number;
   readonly name: string;
   /** The shield, 1 to 41. */

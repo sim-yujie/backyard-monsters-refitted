@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AllianceApi, AllianceInviteRow, AllianceListing, AllianceMember, MyAlliance } from "@/api/alliance";
+import type { AllianceProgressApi } from "@/api/allianceProgress";
 import { ALLIANCE_TEXT, AllianceWindow, type AllianceWindowOptions } from "./AllianceWindow";
 
 /** The alliance window (beta 7 phase 1) against a stand-in for the routes. */
@@ -92,8 +93,25 @@ const flush = async (): Promise<void> => {
   for (let i = 0; i < 6; i++) await Promise.resolve();
 };
 
+const fakeProgress = (overrides: Partial<AllianceProgressApi> = {}): AllianceProgressApi => ({
+  lightStar: vi.fn(() => ok({})),
+  suggestStar: vi.fn(() => ok({})),
+  setGoal: vi.fn(() => ok({})),
+  removeGoal: vi.fn(() => ok({})),
+  territory: vi.fn(() => ok({ rows: [] })),
+  news: vi.fn(() => ok({ news: [] })),
+  ...overrides,
+});
+
 const open = async (api: AllianceApi, options: AllianceWindowOptions = {}): Promise<AllianceWindow> => {
-  const view = new AllianceWindow({ api, myId: () => 1, now: () => 1_000_000, players: { search: vi.fn(() => Promise.resolve([])) }, ...options });
+  const view = new AllianceWindow({
+    api,
+    progressApi: fakeProgress(),
+    myId: () => 1,
+    now: () => 1_000_000,
+    players: { search: vi.fn(() => Promise.resolve([])) },
+    ...options,
+  });
   view.mount(document.body);
   await flush();
   return view;
@@ -270,8 +288,56 @@ describe("AllianceWindow: my alliance", () => {
     expect(document.querySelector(".alliance__description")!.textContent).toBe("We farm goo.");
     expect(buttonNamed(ALLIANCE_TEXT.rename)).toBeDefined();
     expect(buttonNamed(ALLIANCE_TEXT.changeType)).toBeDefined();
-    const tabs = [...document.querySelectorAll(".alliance__tab")].map((tab) => tab.textContent);
-    expect(tabs).toEqual([ALLIANCE_TEXT.overview, ALLIANCE_TEXT.members]);
+    const tabs = [...document.querySelectorAll(".alliance__tab")].map((tab) => tab.getAttribute("aria-label"));
+    expect(tabs).toEqual(["Overview", "Constellation", "Members", "Territory"]);
+  });
+
+  it("shows phase 2's Overview cards, and a goal set from the menu reloads on the same tab", async () => {
+    const goal = { id: 7, kind: "hatch", name: "Hatch monsters", tier: "easy", target: 150, progress: 60, points: 10, done: false, removable: false } as const;
+    const api = fakeApi({
+      mine: vi.fn(() =>
+        ok({
+          alliance: mine({
+            today: { contributed: 1, members: 2, points_today: 3, helped_ids: [1] },
+            goals: [goal],
+            goals_per_week: 5,
+            week_ends_at: 1_000_000 + 3600,
+            goal_menu: [{ kind: "kitRebuild", name: "Rebuild outposts with Starter Kits", only: "conquest", tiers: [{ tier: "easy", target: 40, points: 10 }] }],
+            top_helpers: [{ userid: 1, username: "Player 1", quests: 3, goal_share: 40 }],
+          }),
+          rejoinAt: null,
+        }),
+      ),
+    });
+    const progress = fakeProgress({ news: vi.fn(() => ok({ news: [{ name: "Player 1", type: "goal_set", text: "Player 1 set a goal", ts: 999_000_000 }] })) });
+    await open(api, { progressApi: progress });
+    expect(document.querySelectorAll(".alliance-card").length).toBeGreaterThanOrEqual(4);
+    expect(document.querySelector(".alliance-goal__count")!.textContent).toBe("60 / 150");
+    expect(document.querySelector(".alliance-news__text")!.textContent).toBe("Player 1 set a goal");
+
+    buttonNamed("Add goal")!.click();
+    document.querySelector<HTMLButtonElement>(".alliance-goal-menu__tier")!.click();
+    await flush();
+    expect(progress.setGoal).toHaveBeenCalledWith("kitRebuild", "easy");
+    expect(api.mine).toHaveBeenCalledTimes(2);
+    expect(document.querySelector(".alliance__tab[aria-selected='true']")!.getAttribute("aria-label")).toBe("Overview");
+  });
+
+  it("Territory loads its board and switches type; Constellation draws the sky", async () => {
+    const progress = fakeProgress({
+      territory: vi.fn(() => ok({ rows: [{ rank: 1, alliance_id: 1, name: "Goo Farmers", image: 3, month: 12, all_time: 40, badge: null }] })),
+    });
+    const view = await open(fakeApi({ mine: vi.fn(() => ok({ alliance: mine(), rejoinAt: null })) }), { progressApi: progress });
+    view.showTab("territory");
+    await flush();
+    expect(progress.territory).toHaveBeenCalledWith("conquest");
+    expect(document.querySelectorAll(".alliance-board__row")).toHaveLength(1);
+    document.querySelectorAll<HTMLButtonElement>(".alliance-board__type")[2]!.click();
+    await flush();
+    expect(progress.territory).toHaveBeenLastCalledWith("fortress");
+
+    view.showTab("constellation");
+    expect(document.querySelector(".alliance-sky__empty, .alliance-sky")).not.toBeNull();
   });
 
   it("lists members Leader first, and gives the Leader rank buttons with a confirm", async () => {
