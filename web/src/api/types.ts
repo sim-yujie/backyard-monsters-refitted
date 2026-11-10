@@ -747,8 +747,6 @@ export interface BaseLoadResponse extends ApiEnvelope {
   attackid?: number;
   /** `canAttack()`'s verdict on the caller against this base. */
   canattack?: boolean;
-  /** Attack modes only: the attacker's running alliance powerups. */
-  attpowerups?: unknown[];
   /**
    * Attack modes only: the attacker's player level from their stored save,
    * which the engine's low-level loot bonus reads (`ATTACK.as:678-680`). The
@@ -834,8 +832,6 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * `parseDefenderForces`.
    */
   defenderforces?: unknown;
-  /** The base owner's running alliance powerups. */
-  powerups?: unknown[];
   /**
    * Only on the owner's build-mode load of their own main yard or outpost: what the
    * load's catch-up finished while the player was away, oldest first, in the

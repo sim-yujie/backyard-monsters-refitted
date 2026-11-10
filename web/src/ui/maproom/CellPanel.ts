@@ -116,10 +116,8 @@ export interface CellPanelOptions {
 export interface OwnFlinger {
   /** The Flinger's level. */
   readonly level: number;
-  /** Cells it reaches, Declare War included while it runs. */
+  /** Cells it reaches. */
   readonly reach: number;
-  /** Cells of that from Declare War. */
-  readonly bonus: number;
 }
 
 /** The moves between yards an own cell offers; see `CellPanelOptions.ownMoves`. */
@@ -575,10 +573,7 @@ export class CellPanel {
         flinger.level > 0 ? `Flinger level ${flinger.level}` : "Build a Flinger here to attack from it";
     } else {
       this.flingerTitle.textContent = `Your Flinger reaches ${cellsText(flinger.reach)}`;
-      this.flingerDetail.textContent =
-        flinger.bonus > 0
-          ? `Flinger level ${flinger.level} (${flinger.reach - flinger.bonus}) + ${flinger.bonus} Declare War bonus`
-          : `Flinger level ${flinger.level}`;
+      this.flingerDetail.textContent = `Flinger level ${flinger.level}`;
     }
   }
 

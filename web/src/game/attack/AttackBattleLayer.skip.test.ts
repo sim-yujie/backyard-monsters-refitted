@@ -85,7 +85,7 @@ describe("Skip to end on the battle layer", { timeout: BATTLE_TIMEOUT_MS }, () =
     const session = new AttackSession({
       target,
       seed: run.replay.seed,
-      declareWar: run.replay.declareWar,
+      declareWar: run.replay.declareWar ?? false,
       ...(now ? { now } : {}),
     });
     session.playScript(watchEvents(run), run.replay.tick);

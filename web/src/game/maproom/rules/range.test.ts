@@ -1,19 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { HexGrid } from "@/game/HexGrid";
 import {
-  DECLARE_WAR_RANGE,
   hexDistance,
   inReach,
   mainYardRange,
   outpostRange,
-  withDeclareWar,
   type RangeCell,
 } from "./range";
 
 /**
  * The Map Room 2 range rule (issue #190): a hex ring, as Flash drew it
- * (`MapRoomPopup.as:975-1016`), with Declare War's two cells only while the
- * powerup runs.
+ * (`MapRoomPopup.as:975-1016`).
  */
 
 const cell = (x: number, y: number): RangeCell => ({ x, y });
@@ -110,12 +107,6 @@ describe("reach", () => {
   it("keeps the server's reading of a save with no flinger level: the longest reach", () => {
     expect(mainYardRange(undefined)).toBe(10);
     expect(outpostRange(undefined)).toBe(4);
-  });
-
-  it("adds Declare War's two cells only while it runs", () => {
-    expect(withDeclareWar(10, false)).toBe(10);
-    expect(withDeclareWar(10, true)).toBe(10 + DECLARE_WAR_RANGE);
-    expect(withDeclareWar(0, true)).toBe(0);
   });
 
   it("reaches a cell r steps away and refuses one r + 1 away", () => {

@@ -55,7 +55,7 @@ const open = (
     attackRefusal: () => null,
     onAttack: vi.fn(),
     reach: () => ({ text: "In range · next to your yard", inRange: true }),
-    ownFlinger: () => ({ level: 4, reach: 10, bonus: 0 }),
+    ownFlinger: () => ({ level: 4, reach: 10 }),
     onRangeToggle: vi.fn(),
     ...overrides,
   };
@@ -284,13 +284,11 @@ describe("another player's achievements (#204)", () => {
 describe("the player's own yards", () => {
   it("shows how far the Flinger reaches, the range switch and Open yard", () => {
     const { host, options, panel } = open(player({ mine: 1, n: "agenttester", l: 12 }), {
-      ownFlinger: () => ({ level: 4, reach: 12, bonus: 2 }),
+      ownFlinger: () => ({ level: 4, reach: 10 }),
     });
     expect(text(host, ".mr2-cell__title")).toBe("Your yard");
-    expect(text(host, ".mr2-cell__flinger-title")).toBe("Your Flinger reaches 12 cells");
-    expect(text(host, ".mr2-cell__flinger-detail")).toBe(
-      "Flinger level 4 (10) + 2 Declare War bonus",
-    );
+    expect(text(host, ".mr2-cell__flinger-title")).toBe("Your Flinger reaches 10 cells");
+    expect(text(host, ".mr2-cell__flinger-detail")).toBe("Flinger level 4");
     expect(buttonNamed(host, "Attack")).toBeUndefined();
     expect(shown(host, ".mr2-chip")).toHaveLength(0);
     const openYard = buttonNamed(host, "Open yard")!;

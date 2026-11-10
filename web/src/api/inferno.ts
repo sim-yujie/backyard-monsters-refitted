@@ -144,7 +144,6 @@ export interface DescentAttackStart extends ApiEnvelope {
   readonly attackerhealth?: unknown;
   readonly attackeracademy?: unknown;
   readonly attackerranks?: unknown;
-  readonly attpowerups?: unknown[];
   /** What one fling may carry. */
   readonly flingercapacity: number;
   /** The Inferno purse now: the Descent's running loot total. */
@@ -170,7 +169,6 @@ export const descentAttackLoad = (start: DescentAttackStart): BaseLoadResponse =
     ...(start.attackerhealth === undefined ? {} : { attackerhealth: start.attackerhealth }),
     ...(start.attackeracademy === undefined ? {} : { attackeracademy: start.attackeracademy }),
     ...(start.attackerranks === undefined ? {} : { attackerranks: start.attackerranks }),
-    ...(start.attpowerups === undefined ? {} : { attpowerups: start.attpowerups }),
   }) as BaseLoadResponse;
 
 /**
@@ -283,7 +281,6 @@ export interface TribeAttackStart extends ApiEnvelope {
   readonly attackeracademy: Readonly<Record<string, number>>;
   /** The player's level, for the low-level loot bonus. */
   readonly attackerlevel?: number;
-  readonly attpowerups?: unknown[];
   /** What one fling may carry: a Housing Bunker's load (R11). */
   readonly flingercapacity: number;
 }
@@ -293,7 +290,7 @@ export const startTribeAttack = (baseid: string): Promise<TribeAttackStart> =>
 
 /** The tribe start as the attack scene reads an attack load, an Inferno yard as the Descent's is. */
 export const tribeAttackLoad = (
-  start: Pick<TribeAttackStart, "base" | "attackid" | "defenderforces" | "attackeracademy" | "attackerlevel" | "attpowerups">,
+  start: Pick<TribeAttackStart, "base" | "attackid" | "defenderforces" | "attackeracademy" | "attackerlevel">,
 ): BaseLoadResponse =>
   ({
     ...start.base,
@@ -302,7 +299,6 @@ export const tribeAttackLoad = (
     defenderforces: start.defenderforces,
     attackeracademy: start.attackeracademy,
     ...(start.attackerlevel === undefined ? {} : { attackerlevel: start.attackerlevel }),
-    ...(start.attpowerups === undefined ? {} : { attpowerups: start.attpowerups }),
   }) as BaseLoadResponse;
 
 /* ── The Inferno map: other players (PvP, WP 3.1-3.5) ── */
@@ -376,7 +372,6 @@ export interface PlayerAttackStart extends ApiEnvelope {
   /** Infernal Academy levels by monster id. */
   readonly attackeracademy: Readonly<Record<string, number>>;
   readonly attackerlevel?: number;
-  readonly attpowerups?: unknown[];
   /** What one fling may carry: a Housing Bunker's load (R11). */
   readonly flingercapacity: number;
 }

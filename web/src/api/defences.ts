@@ -52,7 +52,8 @@ export interface DefenceReplayPayload {
   readonly champion?: unknown;
   /** The attacker's siege inventory as fought. */
   readonly siege?: Readonly<Record<string, unknown>> | null;
-  readonly declareWar: boolean;
+  /** Declare War's longer countdown; only on a replay of an attack fought while the old alliance power-up ran. */
+  readonly declareWar?: boolean;
   /** The attack report text. */
   readonly report?: unknown;
 }

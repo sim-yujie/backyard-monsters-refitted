@@ -35,7 +35,6 @@ import { mapRefreshSeconds, quality } from "@/game/quality";
 import {
   attackRefusal,
   cellDistance,
-  hasDeclareWar,
   outpostsToLoad,
   ownCellsIn,
   rosterInRange,
@@ -78,7 +77,7 @@ import {
   reachTo,
   type RangeSource,
 } from "@/game/maproom/attackRange";
-import { mainYardRange, outpostRange, withDeclareWar } from "@/game/maproom/rules/range";
+import { mainYardRange, outpostRange } from "@/game/maproom/rules/range";
 import { KitFilter } from "@/game/maproom/cellVisuals";
 import { Bookmarks } from "@/game/maproom/Bookmarks";
 import {
@@ -467,9 +466,8 @@ export class MapRoom2Scene implements Scene {
           return text ? { text, inRange: answer.inRange } : null;
         },
         ownFlinger: (_cell, payload) => {
-          const own = payload.b === CellType.OUTPOST ? outpostRange(payload.f) : mainYardRange(payload.f);
-          const reach = withDeclareWar(own, this.declareWar);
-          return { level: payload.f ?? 0, reach, bonus: reach - own };
+          const reach = payload.b === CellType.OUTPOST ? outpostRange(payload.f) : mainYardRange(payload.f);
+          return { level: payload.f ?? 0, reach };
         },
         ownMoves: (_cell, payload) => ({
           // Flash offered the transfer only to a player with an outpost
@@ -1231,11 +1229,6 @@ export class MapRoom2Scene implements Scene {
     return rosterInRange(cell, ownCellsIn(this.store.loadedZoneRefs()), this.ownSave);
   }
 
-  /** Whether the player's alliance has Declare War running, from the own-yard load. */
-  private get declareWar(): boolean {
-    return hasDeclareWar(this.ownSave?.powerups);
-  }
-
   /**
    * The flingers the player's range is drawn from (#177): every own cell in
    * the loaded zones, with the home cell stood in for from the own-yard load
@@ -1245,12 +1238,11 @@ export class MapRoom2Scene implements Scene {
   private updateRange(): void {
     const sources = rangeSources(
       ownCellsIn(this.store.loadedZoneRefs()),
-      this.declareWar,
       this.home ? { cell: this.home, flinger: this.ownSave?.flinger } : null,
     );
     this.rangeSources = sources;
     this.renderer.setRange(this.rangeOn ? sources : null);
-    this.ui?.setRangeSources(sources, this.declareWar);
+    this.ui?.setRangeSources(sources);
   }
 
   /** The cell panel's Attack gate, for the cell it is showing. */

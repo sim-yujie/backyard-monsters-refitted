@@ -32,7 +32,7 @@ const sessionFor = (run: DefenceWatch, now?: () => number): AttackSession => {
   const session = new AttackSession({
     target: watchTarget(run),
     seed: run.replay.seed,
-    declareWar: run.replay.declareWar,
+    declareWar: run.replay.declareWar ?? false,
     ...(now ? { now } : {}),
   });
   session.playScript(watchEvents(run), run.replay.tick);

@@ -59,7 +59,6 @@ const startOf = (baseid: string): PlayerAttackStart => ({
   army: { IC1: 6 },
   attackeracademy: { IC1: 2 },
   attackerlevel: 30,
-  attpowerups: [],
   flingercapacity: 780,
 });
 

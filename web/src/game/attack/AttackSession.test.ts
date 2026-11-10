@@ -10,7 +10,6 @@ import {
   AttackSession,
   DropsClosedError,
   combatKind,
-  hasDeclareWar,
   mintSeed,
   servedAcademy,
   servedRanks,
@@ -149,9 +148,9 @@ describe("AttackSession lifecycle", () => {
     expect(session.speed).toBe(2);
   });
 
-  it("uses the Declare War countdown when the load says the powerup is running", () => {
+  it("uses the Declare War countdown for an old replay fought while it ran", () => {
     const session = new AttackSession({ target: targetOf(), seed: 1 });
-    session.load({ ...towerYard(), attpowerups: [{ id: "ap_declarewar", endtime: 1 }] });
+    session.load(towerYard(), true);
     const state = session.state();
     expect(state.declareWar).toBe(true);
     expect(state.countdownSeconds).toBe(DECLARE_WAR_COUNTDOWN_SECONDS);
@@ -796,12 +795,6 @@ describe("AttackSession ending", () => {
 });
 
 describe("helpers", () => {
-  it("reads Declare War off the running powerups", () => {
-    expect(hasDeclareWar(undefined)).toBe(false);
-    expect(hasDeclareWar([{ id: "ap_armament" }])).toBe(false);
-    expect(hasDeclareWar([{ id: "ap_armament" }, { id: "ap_declarewar", endtime: 9 }])).toBe(true);
-  });
-
   // `BSTORAGE.as:77-85`, `:111`, `:117`: a camp's half and lower fall caps
   // are Map Room 2's; a Map Room 1 tribe gets only the wild monster fifth.
   it("names a Map Room 1 tribe `tribe` and leaves every other kind as it is", () => {

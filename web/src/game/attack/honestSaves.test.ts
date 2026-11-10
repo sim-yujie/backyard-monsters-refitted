@@ -152,7 +152,7 @@ const brainsFor = (events: readonly FlingEvent[]): Record<string, unknown> | und
   return Object.keys(brains).length > 0 ? brains : undefined;
 };
 
-const loadOf = (fixture: Fixture, kind: Kind, scenario: Scenario, brains?: Record<string, unknown>): BaseLoadResponse => {
+const loadOf = (fixture: Fixture, kind: Kind, brains?: Record<string, unknown>): BaseLoadResponse => {
   const caged = fixture.defence?.defenderChampions ?? [];
   const base: Record<string, unknown> =
     fixture.yard === "sandbox"
@@ -180,7 +180,6 @@ const loadOf = (fixture: Fixture, kind: Kind, scenario: Scenario, brains?: Recor
     attackerlevel: fixture.playerLevel,
     attackeracademy: fixture.levels,
     ...(fixture.ranks && { attackerranks: fixture.ranks }),
-    attpowerups: scenario.declareWar ? [{ id: "ap_declarewar" }] : [],
     ...(fixture.defence && { defenderforces: fixture.defence }),
     ...(fixture.height !== undefined && { cellheight: fixture.height }),
     ...(brains && { attackerbrains: brains }),
@@ -236,7 +235,7 @@ const play = (scenario: Scenario): HonestSave => {
   const champions = championsFor(events);
   const brains = brainsFor(events);
   const monsters = housedOf(events);
-  const load = loadOf(fixture, kind, scenario, brains);
+  const load = loadOf(fixture, kind, brains);
   const target: AttackTarget = {
     baseid: "9001",
     kind: kind === "tribe" ? "wild" : kind,
@@ -255,7 +254,8 @@ const play = (scenario: Scenario): HonestSave => {
     load,
   };
 
-  const session = new AttackSession({ target, seed: fixture.log.seed });
+  // Declare War is gone; an old attack fought under it still replays with it.
+  const session = new AttackSession({ target, seed: fixture.log.seed, declareWar: scenario.declareWar ?? false });
   session.start();
   session.setSpeed(scenario.speed ?? 1);
   const queue = [...events];

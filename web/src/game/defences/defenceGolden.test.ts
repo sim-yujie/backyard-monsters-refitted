@@ -35,7 +35,7 @@ const MISSED_BUMP =
 
 /** The run as the viewer gets it, played through at 1x: what it ended on. */
 const played = (run: DefenceWatch) => {
-  const session = new AttackSession({ target: watchTarget(run), seed: run.replay.seed, declareWar: run.replay.declareWar });
+  const session = new AttackSession({ target: watchTarget(run), seed: run.replay.seed, declareWar: run.replay.declareWar ?? false });
   session.playScript(watchEvents(run), run.replay.tick);
   session.start();
   for (let frames = 0; !session.ended && frames < 200_000; frames += 1) session.advance(1 / 60);

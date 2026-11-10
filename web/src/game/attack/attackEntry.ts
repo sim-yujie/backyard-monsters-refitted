@@ -15,7 +15,6 @@ import {
   hexDistance,
   mainYardRange,
   outpostRange,
-  withDeclareWar,
 } from "@/game/maproom/rules/range";
 import { storageCapOf } from "./attackerStorage";
 import type {
@@ -41,15 +40,11 @@ import type {
  */
 
 /**
- * How far one of the player's own cells can fling: its flinger's reach, plus
- * Declare War's two cells only while that powerup is running (issue #190;
- * `game/maproom/rules/range.ts`, the rule the server measures with too).
+ * How far one of the player's own cells can fling: its flinger's reach
+ * (`game/maproom/rules/range.ts`, the rule the server measures with too).
  */
-export const cellReach = (cell: PlayerCell, declareWar: boolean): number =>
-  withDeclareWar(
-    cell.b === CellType.OUTPOST ? outpostRange(cell.f) : mainYardRange(cell.f),
-    declareWar,
-  );
+export const cellReach = (cell: PlayerCell): number =>
+  cell.b === CellType.OUTPOST ? outpostRange(cell.f) : mainYardRange(cell.f);
 
 /**
  * Hex steps between two cells on the wrapping world: the distance the
@@ -58,22 +53,6 @@ export const cellReach = (cell: PlayerCell, declareWar: boolean): number =>
  */
 export const cellDistance = (a: OffsetCell, b: OffsetCell): number =>
   hexDistance({ x: a.col, y: a.row }, { x: b.col, y: b.row }, hexShape());
-
-/**
- * Whether the player's alliance has Declare War running.
- *
- * `powerups` is `runningPowerups()`'s list, `{ id, endtime }` per active
- * powerup (`server/src/services/alliance/powerups.ts:170-179`): the own-yard
- * load's `powerups`, or an attack load's `attpowerups`. Declare War's id is
- * `ap_declarewar` (`server/src/enums/Alliance.ts`).
- */
-export const hasDeclareWar = (powerups: readonly unknown[] | undefined): boolean =>
-  (powerups ?? []).some(
-    (entry) =>
-      typeof entry === "object" &&
-      entry !== null &&
-      (entry as { id?: unknown }).id === "ap_declarewar",
-  );
 
 /** One of the player's own cells, with where it is. */
 export interface OwnCell {
@@ -179,8 +158,7 @@ export const ownCatapultLevel = (
  *
  * `ownSave` is the map's own-yard load, which carries the champions, the
  * academy levels, the Catapult building (see {@link ownCatapultLevel}), the
- * siege inventory and the running alliance powerups (Declare War's extra
- * reach); all belong to the player, not to any one cell.
+ * siege inventory; all belong to the player, not to any one cell.
  *
  * `sources` keeps each contributing cell's whole `m` blob, keyed by its base
  * id, because the attack save has to write the cell's housing back in full
@@ -194,10 +172,8 @@ export const rosterInRange = (
 ): AttackRoster => {
   const sources: RosterSource[] = [];
   let flingerLevel = 0;
-  const declareWar = hasDeclareWar(ownSave?.powerups);
-
   for (const own of ownCells) {
-    const reach = cellReach(own.cell, declareWar);
+    const reach = cellReach(own.cell);
     if (reach === 0 || cellDistance(own, target) > reach) continue;
     flingerLevel = Math.max(flingerLevel, own.cell.f ?? 0);
 
@@ -220,7 +196,6 @@ export type RosterSave = Pick<
   | "storedata"
   | "resources"
   | "credits"
-  | "powerups"
 > & { siege?: unknown; outposts?: unknown };
 
 /**

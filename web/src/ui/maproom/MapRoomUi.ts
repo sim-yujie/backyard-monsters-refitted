@@ -369,8 +369,8 @@ export class MapRoomUi {
   }
 
   /** The flingers the range is drawn from, for the legend (#177). */
-  setRangeSources(sources: readonly RangeSource[], declareWar: boolean): void {
-    this.rangeControl.setSources(sources, declareWar);
+  setRangeSources(sources: readonly RangeSource[]): void {
+    this.rangeControl.setSources(sources);
   }
 
   /** The viewer's fog of war sight (#331), for the minimap's two-tint circles. */

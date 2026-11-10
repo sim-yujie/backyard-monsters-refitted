@@ -2,7 +2,7 @@ import { CellType } from "@/api/types";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
 import { HexGrid, type OffsetCell } from "@/game/HexGrid";
 import { cellDistance, cellReach, type OwnCell } from "@/game/attack/attackEntry";
-import { mainYardRange, withDeclareWar } from "@/game/maproom/rules/range";
+import { mainYardRange } from "@/game/maproom/rules/range";
 
 /**
  * The player's attack range as the map shows it (issue #177): which cells the
@@ -37,7 +37,6 @@ export interface RangeSource {
  */
 export const rangeSources = (
   ownCells: readonly OwnCell[],
-  declareWar: boolean,
   home?: { cell: OffsetCell; flinger: number | undefined } | null,
 ): RangeSource[] => {
   const sources: RangeSource[] = [];
@@ -45,11 +44,11 @@ export const rangeSources = (
   for (const own of ownCells) {
     const kind = own.cell.b === CellType.OUTPOST ? "outpost" : "main";
     if (kind === "main") homeSeen = true;
-    const reach = cellReach(own.cell, declareWar);
+    const reach = cellReach(own.cell);
     if (reach > 0) sources.push({ col: own.col, row: own.row, kind, flinger: own.cell.f ?? 0, reach });
   }
   if (!homeSeen && home && typeof home.flinger === "number") {
-    const reach = withDeclareWar(mainYardRange(home.flinger), declareWar);
+    const reach = mainYardRange(home.flinger);
     if (reach > 0) {
       sources.push({ ...home.cell, kind: "main", flinger: home.flinger, reach });
     }
