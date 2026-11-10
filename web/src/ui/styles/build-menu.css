@@ -331,6 +331,8 @@
   border: 1px solid var(--colour-border);
   border-radius: var(--radius-md);
   background: var(--colour-surface-sunken);
+  /* Its width sizes its name (`.build-tile__name`); its contents never size it. */
+  container-type: inline-size;
   color: var(--colour-text);
   font: inherit;
   text-align: left;
@@ -415,12 +417,24 @@
   color: var(--colour-text-secondary);
 }
 
+/*
+ * A name breaks only between words, never inside one ("Observator" / "y";
+ * lead, 11 Nov). A word too wide for the tile shrinks the name instead:
+ * `--name-fit-em` is its widest word in em (`ui/yard/tileNameFit.ts`) and
+ * `--name-room` the width it has, in the tile's own container units, so the
+ * size follows the tile at every window size, down to a 10px floor that only
+ * the cramped short-landscape tiles (a phone on its side) can reach.
+ */
 .build-tile__name {
+  --name-size: var(--text-md);
+  --name-room: 100cqi;
   font-family: var(--font-display);
-  font-size: var(--text-md);
+  font-size: clamp(10px, calc(var(--name-room) / var(--name-fit-em, 1)), var(--name-size));
   font-weight: 600;
   line-height: var(--leading-tight);
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: manual;
 }
 
 .build-tile__count {
@@ -1065,8 +1079,8 @@
  * In the middle on a computer (ui.css `.panel--centre`; tester, 9 Nov): the
  * tiles never squash. Up to five across, each at least 108px, so a narrower
  * window takes fewer columns and more rows (the column scrolls) instead of
- * thin tiles with a letter a line; a name breaks between words, and inside
- * one only if that word alone is wider than the tile. Where the tiles' column
+ * thin tiles with a letter a line; a name breaks only between words, and a
+ * word wider than the tile shrinks to fit (`.build-tile__name`). Where the tiles' column
  * is narrow the page arrows go under the tiles, beside "Page 1 of 2", and
  * give the tiles their room.
  */
@@ -1077,10 +1091,6 @@
 
   .build-menu__grid {
     grid-template-columns: repeat(auto-fill, minmax(max(108px, calc((100% - 4 * var(--space-3)) / 5)), 1fr));
-  }
-
-  .build-tile__name {
-    overflow-wrap: break-word;
   }
 
   @container build-browse (width < 560px) {
@@ -1203,9 +1213,10 @@
   }
 
   .build-tile__name {
+    --name-size: var(--text-sm);
+    --name-room: calc(100cqi - 48px - var(--space-2));
     grid-area: name;
     align-self: end;
-    font-size: var(--text-sm);
   }
 
   .build-tile__count {
@@ -1421,10 +1432,10 @@
   }
 
   .build-tile__name {
+    --name-size: var(--text-sm);
+    --name-room: calc(100cqi - 40px - var(--space-2));
     grid-area: name;
     align-self: end;
-    font-size: var(--text-sm);
-    overflow-wrap: normal;
   }
 
   .build-tile__count {

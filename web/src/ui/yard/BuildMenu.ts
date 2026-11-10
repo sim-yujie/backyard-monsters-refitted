@@ -22,6 +22,7 @@ import { DECOR_KINDS, DecorKind } from "@/game/yard/decorShop";
 import { townHallLevel, type YardKind } from "@/game/yard/buildingCosts";
 import { NEED_MORE_PODS, NEED_MORE_SILOS } from "@/game/yard/storage";
 import { typeName } from "@/game/yard/planner/summary";
+import { nameFitEm } from "@/ui/yard/tileNameFit";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
 import { gameIcon } from "@/ui/gameIcon";
@@ -656,6 +657,8 @@ export class BuildMenu {
     const title = document.createElement("span");
     title.className = "build-tile__name";
     title.textContent = name;
+    // Its widest word, so the CSS can shrink it to fit rather than break it (`tileNameFit.ts`).
+    title.style.setProperty("--name-fit-em", String(nameFitEm(name)));
     const count = document.createElement("span");
     count.className = "build-tile__count";
     count.textContent = tileLine(offer, kind);

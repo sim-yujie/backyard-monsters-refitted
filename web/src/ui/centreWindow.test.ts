@@ -445,12 +445,12 @@ describe("Middle windows: never smaller than their minimum (tester-41, 9 Nov)", 
     expect(build).toContain("--centre-min-height: 640px;");
   });
 
-  it("lets Build's tiles reflow to fewer columns, never squash, and names break between words", () => {
+  it("lets Build's tiles reflow to fewer columns, never squash", () => {
     const build = read("styles/build-menu.css");
     expect(build).toContain(
       "grid-template-columns: repeat(auto-fill, minmax(max(108px, calc((100% - 4 * var(--space-3)) / 5)), 1fr));",
     );
-    expect(build).toMatch(/\.build-tile__name \{\n {4}overflow-wrap: break-word;/);
+    // Names never break inside a word: `BuildTileNameCss.test.ts`.
   });
 
   it("wraps a hatchery's slots rather than sliding sideways when too narrow for one row", () => {
