@@ -13,13 +13,17 @@ import type { TierArt } from "./buildingArtTiers";
  * {@link OBSERVATORY_CLASSIC_ART}), each with its damaged and destroyed
  * stills and an idle loop of 48 cells in rows of 22 (`yardAnim.ts` runs it
  * idle, held while it is being built). The row below is the Classic look as
- * stills, for anything that reads the row directly (the Flash fallback).
+ * stills, for anything that reads the row directly (the Flash fallback). Its
+ * health (10,000, the Map Room's at level 2, a placeholder) and props size
+ * (120) are the combat table's (`web/tools/gen-combat-stats.mjs`, "This
+ * project's own buildings"), so the yard's damaged and destroyed art switch
+ * at the health the battle uses.
  */
 export const REVAMP_BUILDING_ROWS: readonly ArtRow[] = [
   [150, "Observatory", "buildings/observatory/", [
     [1, ["top.c1@2x.webp", -52, -84], ["top.c1.damaged@2x.webp", -57, -55], ["top.c1.destroyed@2x.webp", -66, 1],
       ["shadow.c1.jpg", -51, 13], ["shadow.c1.damaged.jpg", -57, 12], ["shadow.c1.destroyed.jpg", -66, 19]],
-  ], [4000], 100],
+  ], [10000], 120],
 ];
 
 /** The Observatory's Modern look (`rows.json` "modern" on art/observatory-3d). */

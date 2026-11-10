@@ -192,9 +192,12 @@ export const TOWER_STATS: Readonly<Record<number, readonly TowerLevelStats[]>> =
 /**
  * Every type's health ladder, `hp[level - 1]` (`YARD_PROPS.as`, `"hp"`).
  *
- * 139 of the 140 entries have one; the rest are
+ * 140 of the 141 entries have one; the rest are
  * placeholders and decorations that never take damage. The Housing Bunker's is
- * `INFERNOYARDPROPS.as`'s, as its range is.
+ * `INFERNOYARDPROPS.as`'s, as its range is. The Observatory, 150, is this
+ * project's own building, with no props entry: its one level is the Map Room's
+ * level 2 health, a placeholder (`gen-combat-stats.mjs`, "This project's own
+ * buildings").
  */
 export const BUILDING_HP: Readonly<Record<number, readonly number[]>> = {
   // 1 Twig Snapper (resource) — YARD_PROPS.as:10
@@ -752,6 +755,10 @@ export const BUILDING_HP: Readonly<Record<number, readonly number[]>> = {
   // 140 b_opdefender (special) — YARD_PROPS.as:7890
   140: [
     8800, 42000, 200000, 400000, 600000,
+  ],
+  // 150 Observatory (special) — this project's own (gen-combat-stats.mjs)
+  150: [
+    10000,
   ],
 };
 
@@ -1415,6 +1422,8 @@ export const GRID_COST: Readonly<Record<number, readonly GridCostRect[]>> = {
   139: [[0, 0, 130, 130, 10], [10, 10, 110, 110, 200]],
   // 140 b_opdefender (special) — YARD_PROPS.as:7890 via OutpostDefender
   140: [[0, 0, 130, 130, 10], [10, 10, 110, 110, 200]],
+  // 150 Observatory (special) — this project's own (gen-combat-stats.mjs) via BUILDING8's shape
+  150: [[0, 0, 100, 100, 10], [10, 10, 80, 80, 200]],
 };
 
 /** A rectangle whose cost is a function of the building's level, not a constant. */
@@ -1460,7 +1469,7 @@ export const PROPS_SIZE: Readonly<Record<number, number>> = {
   99: 70, 100: 70, 101: 70, 102: 100, 103: 100, 104: 100, 105: 70, 106: 100, 107: 20, 108: 20,
   109: 20, 110: 40, 111: 20, 112: 190, 113: 80, 114: 200, 117: 90, 118: 64, 119: 64, 120: 70,
   121: 40, 122: 1, 123: 1, 124: 1, 125: 1, 126: 1, 127: 100, 128: 200, 129: 64, 130: 64, 131: 40,
-  132: 64, 133: 90, 134: 90, 135: 70, 136: 64, 137: 64,
+  132: 64, 133: 90, 134: 90, 135: 70, 136: 64, 137: 64, 150: 120,
 };
 
 /**
