@@ -1,0 +1,6 @@
+  91: modernLook(["pink-flowers.modern@2x.webp", -16, -21], ["pink-flowers.modern-shadow.jpg", -9, 2]),
+  92: modernLook(["purple-flowers.modern@2x.webp", -16, -21], ["purple-flowers.modern-shadow.jpg", -9, 2]),
+  94: modernLook(["white-flowers.modern@2x.webp", -16, -21], ["white-flowers.modern-shadow.jpg", -9, 2]),
+  95: modernLook(["yellow-flowers.modern@2x.webp", -16, -21], ["yellow-flowers.modern-shadow.jpg", -9, 2]),
+  57: modernLook(["bird-house.modern@2x.webp", -16, -45], ["bird-house.modern-shadow.jpg", -4, 1]),
+  70: modernLook(["sundial.modern@2x.webp", -22, -6], ["sundial.modern-shadow.jpg", -18, 20]),

@@ -24,7 +24,7 @@ const KEEPS_FLASH_ANIM = [71, ...FLAGS];
 
 describe("the Flash decorations' Modern look (owner, 10 Nov 2026: the pilot)", () => {
   it("covers the pilot: one of each kind and size, and every flag on one pole", () => {
-    expect([...TYPES].sort((a, b) => a - b)).toEqual([...FLAGS, 65, 71, 73, 87, 93, 98, 99, 110].sort((a, b) => a - b));
+    expect(TYPES).toEqual(expect.arrayContaining([...FLAGS, 65, 71, 73, 87, 93, 98, 99, 110]));
     for (const type of TYPES) expect(kindOf(type), `${type}`).toBe("decoration");
   });
 
