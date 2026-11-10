@@ -1,0 +1,6 @@
+  80: modernLook(["dave-head.modern@2x.webp", -12, -30], ["dave-head.modern-shadow.jpg", -9, 4]),
+  111: modernLook(["mini-pumpkin.modern@2x.webp", -10, -4], ["mini-pumpkin.modern-shadow.jpg", -8, 9]),
+  59: modernLook(["jax.modern@2x.webp", -10, -11], ["jax.modern-shadow.jpg", -8, 8]),
+  67: modernLook(["rock.modern@2x.webp", -14, 0], ["rock.modern-shadow.jpg", -13, 13]),
+  72: modernLook(["walnut.modern@2x.webp", -12, -2], ["walnut.modern-shadow.jpg", -10, 14]),
+  55: modernLook(["acorn.modern@2x.webp", -10, -9], ["acorn.modern-shadow.jpg", -8, 11]),

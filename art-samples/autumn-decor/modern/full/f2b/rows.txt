@@ -1,0 +1,6 @@
+  79: modernLook(["crabatron.modern@2x.webp", -9, -29], ["crabatron.modern-shadow.jpg", -5, 2]),
+  81: modernLook(["eyera.modern@2x.webp", -4, -23], ["eyera.modern-shadow.jpg", -4, 3]),
+  82: modernLook(["fang.modern@2x.webp", -9, -29], ["fang.modern-shadow.jpg", -5, 2]),
+  83: modernLook(["fink.modern@2x.webp", -10, -28], ["fink.modern-shadow.jpg", -6, 2]),
+  84: modernLook(["ichi.modern@2x.webp", -4, -28], ["ichi.modern-shadow.jpg", -3, 2]),
+  85: modernLook(["projectx.modern@2x.webp", -6, -23], ["projectx.modern-shadow.jpg", -4, 8]),
