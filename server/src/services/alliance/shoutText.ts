@@ -1,4 +1,4 @@
-import { ALLIANCE_TYPES, SHOUT_TEXT, STANCE_LABEL } from "../../config/AllianceConfig.js";
+import { ALLIANCE_TYPES, CONSTELLATIONS, GOAL_MENU, SHOUT_TEXT, STANCE_LABEL } from "../../config/AllianceConfig.js";
 import { AllianceMessageType, type AllianceStance, type AllianceType } from "../../enums/Alliance.js";
 import type { Alliance } from "../../database/models/alliance.model.js";
 
@@ -102,6 +102,19 @@ export const shoutCell = (type: AllianceMessageType, body: string): { x: number;
  * @param {ShoutTarget} targetAlliance - The flagged alliance, present only on a relationship shout.
  * @returns {string} The finished sentence, or empty if it cannot be built.
  */
+/** A JSON body, or null. */
+const readJson = <T>(body: string): T | null => {
+  try {
+    return JSON.parse(body) as T;
+  } catch {
+    return null;
+  }
+};
+
+/** A constellation's name from its id, whatever the type. */
+const constellationName = (id: string | undefined): string | null =>
+  (id && Object.values(CONSTELLATIONS).flat().find((c) => c.id === id)?.name) || null;
+
 export const composeShout = (type: AllianceMessageType, username: string, body: string, targetAlliance?: ShoutTarget) => {
   switch (type) {
     case AllianceMessageType.TYPE_CHANGED: {
@@ -120,6 +133,30 @@ export const composeShout = (type: AllianceMessageType, username: string, body: 
 
       // "Ana_B's outpost (12, 40) is under attack by Bob!" (design v5 §12).
       return `${username}'s ${facts.outpost ? "outpost" : "yard"} (${facts.x}, ${facts.y}) is under attack by ${facts.by}!`;
+    }
+
+    case AllianceMessageType.STAR_LIT:
+    case AllianceMessageType.STAR_SUGGESTED: {
+      const facts = readJson<{ id?: string; step?: number }>(body);
+      const name = constellationName(facts?.id);
+      const step = Number(facts?.step);
+      if (!name || !(step >= 1)) return "";
+      const stars = `${name} ★${step * 2 - 1}–${step * 2}`;
+
+      // "Mira lit Pokey ★3–4." / "Hexa suggests Brain ★3–4." (design v5 §9a)
+      return type === AllianceMessageType.STAR_LIT ? `${username} lit ${stars}.` : `${username} suggests ${stars}.`;
+    }
+
+    case AllianceMessageType.GOAL_SET:
+    case AllianceMessageType.GOAL_DONE: {
+      const facts = readJson<{ kind?: string; tier?: string; points?: number }>(body);
+      const goal = GOAL_MENU.find((g) => g.kind === facts?.kind)?.name;
+      if (!goal || !facts?.tier) return "";
+      const tier = facts.tier.charAt(0).toUpperCase() + facts.tier.slice(1);
+
+      return type === AllianceMessageType.GOAL_SET
+        ? `${username} set a goal: ${goal} (${tier}).`
+        : `Goal reached: ${goal} (${tier}), +${Number(facts.points) || 0} points!`;
     }
 
     case AllianceMessageType.RELATIONSHIP:

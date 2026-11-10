@@ -17,6 +17,7 @@ import {
 } from "../../services/quests/state.js";
 import { questsView, type QuestsView } from "../../services/quests/view.js";
 import { nextUtcMidnight } from "../../services/quests/period.js";
+import { creditDailyQuest } from "../../services/alliance/allianceProgress.js";
 import { yardRefusedErr } from "../../services/yard/yardErrors.js";
 import { defineYardAction } from "./yardAction.js";
 
@@ -113,9 +114,11 @@ export const questsActions = (hasFriend: HasFriend = sqlHasFriend) => ({
 
   claim: defineYardAction({
     schema: QuestClaimSchema,
-    run: ({ save, body, now }) => {
+    run: async ({ save, user, body, now, em }) => {
       const result = claimQuest(current(save, now), body.period, body.slot);
       if (!result.ok) return refuse(result.reason, { period: body.period, slot: body.slot });
+      // A daily quest earns the player's alliance a point (design v5 §8).
+      if (body.period === "daily") await creditDailyQuest(em, user.userid, now);
       const plan = planGrant(save, result.value.rewards, now);
       const report: QuestsReport = { quests: questsView(result.record, now), granted: plan.granted };
       return {

@@ -51,6 +51,14 @@ export enum AllianceMessageType {
   TAKEOVER = "takeover",
   /** A member's yard or outpost was attacked (beta 7 design v5 §12): an automatic line with Show on map. */
   UNDER_ATTACK = "under_attack",
+  /** Two stars of a constellation lit (design v5 §9a); body `{"id","step"}`. */
+  STAR_LIT = "star_lit",
+  /** A weekly goal added (design v5 §8); body `{"kind","tier"}`. */
+  GOAL_SET = "goal_set",
+  /** A weekly goal reached; body `{"kind","tier","points"}`. */
+  GOAL_DONE = "goal_done",
+  /** A member suggested the next step of a constellation (design v5 §9a, PROPOSED); body `{"id","step"}`. */
+  STAR_SUGGESTED = "star_suggested",
 }
 
 /**

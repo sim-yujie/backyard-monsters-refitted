@@ -9,6 +9,15 @@ import { allowedActions } from "../../services/alliance/permissions.js";
 import { rejoinAvailableAt } from "../../services/alliance/joinGate.js";
 import { canTakeOver, renameAvailableAt } from "../../services/alliance/leadership.js";
 import type { KoaController } from "../../utils/KoaController.js";
+import { postgres } from "../../server.js";
+import { bonusesFor, type LitSteps } from "../../services/alliance/allianceBonuses.js";
+import {
+  constellationView,
+  lastLit,
+  progressView,
+  territoryRankOf,
+} from "../../services/alliance/allianceProgress.js";
+import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 
 /**
  * Returns the authenticated user's alliance for the My Alliance tab, or
@@ -41,6 +50,16 @@ export const myAlliance: KoaController = async (ctx) => {
   const typeOptions = await getTypeSwitchOptions(alliance.id, now);
   const renameAt = renameAvailableAt(alliance, now);
   const isLeader = user.alliance_role === AllianceRole.LEADER;
+  const nowSeconds = getCurrentDateTime();
+  // Phase 2 (design v5 §7b, §8, §9a, §11): strengths, stars, today, goals, territory.
+  const [extra] = await postgres.em.execute<{ stars: unknown; suggestions: unknown }[]>(
+    `SELECT stars, suggestions FROM bym.alliance WHERE id = ?`,
+    [alliance.id]
+  );
+  const readJson = <T>(raw: unknown): T => ((typeof raw === "string" ? JSON.parse(raw) : raw) ?? {}) as T;
+  const stars = readJson<LitSteps>(extra?.stars);
+  const suggestions = readJson<Record<string, string>>(extra?.suggestions);
+  const progress = await progressView(postgres.em, alliance.id, alliance.type, nowSeconds);
 
   ctx.status = Status.OK;
   ctx.body = {
@@ -68,6 +87,13 @@ export const myAlliance: KoaController = async (ctx) => {
       rename_available_at: renameAt ? Math.floor(renameAt.getTime() / 1000) : null,
       // The absent-leader takeover button (`leadership.ts`).
       can_take_over: !isLeader && (await canTakeOver(alliance.id, user.userid, now)),
+      bonuses: bonusesFor(alliance.type, stars),
+      stars,
+      constellations: constellationView(alliance.type, stars, suggestions),
+      my_suggestion: suggestions[String(user.userid)] ?? null,
+      last_lit: await lastLit(postgres.em, alliance.id),
+      territory: await territoryRankOf(postgres.em, alliance.id, alliance.type, nowSeconds),
+      ...progress,
     },
   };
 };

@@ -117,3 +117,24 @@ export const ChangeRelationshipSchema = z.object({
   relationship: z.coerce.number().int().pipe(z.enum(AllianceStance)),
 });
 
+
+/** Light or suggest the next step of a constellation (design v5 §9). */
+export const ConstellationStepSchema = z.object({
+  constellation: z.string().min(1).max(32),
+});
+
+/** Add a weekly goal (design v5 §8, §16). */
+export const SetGoalSchema = z.object({
+  kind: z.string().min(1).max(32),
+  tier: z.enum(["easy", "medium", "hard"]),
+});
+
+/** Remove a weekly goal (only at 0 progress). */
+export const RemoveGoalSchema = z.object({
+  goal_id: z.coerce.number().int().positive(),
+});
+
+/** One type's territory board (design v5 §11). */
+export const TerritoryBoardSchema = z.object({
+  type: z.enum(AllianceType).optional(),
+});

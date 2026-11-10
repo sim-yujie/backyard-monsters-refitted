@@ -83,6 +83,8 @@ mock.module("../../../server.js", () => ({
       getTransactionContext: () => transaction,
       // Only the event counter's SQL is answered; anything else fails as with no database.
       execute: async (sql: string, params: unknown[]) => {
+        // The alliance lookups (`allianceBonuses.ts`): nobody here is in one.
+        if (sql.includes("bym.alliance")) return [];
         if (!sql.includes("event_progress")) throw new Error("no database");
         counted.push([String(params[1]), Number(params[2])]);
         return [{ counter: params[2] }];

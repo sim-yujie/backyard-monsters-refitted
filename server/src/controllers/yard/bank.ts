@@ -4,6 +4,7 @@ import { YardBankSchema } from "../../schemas/YardSchemas.js";
 import { countBank } from "../../services/goals/counters.js";
 import { planBank } from "../../services/yard/bank.js";
 import { defineYardAction } from "./yardAction.js";
+import { noteAllianceEvents } from "../../services/alliance/allianceProgress.js";
 
 /** `TUTORIAL._endstage` (`client/scripts/TUTORIAL.as:22`): the tutorial done. */
 const TUTORIAL_END_STAGE = 205;
@@ -28,7 +29,7 @@ const TUTORIAL_END_STAGE = 205;
  */
 export const yardBankAction = defineYardAction({
   schema: YardBankSchema,
-  run: ({ save, body }) => {
+  run: ({ save, user, body }) => {
     const inferno = save.type === BaseType.INFERNO;
     const plan = planBank(
       save,
@@ -37,6 +38,11 @@ export const yardBankAction = defineYardAction({
     );
     // Goals BK1-BK4, or the Inferno's IBK1-IBK4: the most one tap has banked (#227).
     const onboarding = countBank(save, plan.report.banked, inferno ? "infernoBestBank" : "bestBank");
+    // Midas's "Harvest resources" goal (design v5 §16): the surface's harvests only.
+    if (!inferno) {
+      const { r1, r2, r3, r4 } = plan.report.banked;
+      noteAllianceEvents(user.userid, { harvest: r1 + r2 + r3 + r4 });
+    }
     return onboarding ? { ...plan, slices: { ...plan.slices, onboarding } } : plan;
   },
   // An outpost's harvesters show a disabled "Auto-Banking" button

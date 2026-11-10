@@ -174,6 +174,13 @@ import { takeOverAlliance } from "./controllers/alliance/takeOverAlliance.js";
 import { renameAllianceController } from "./controllers/alliance/renameAlliance.js";
 import { reportAllianceController } from "./controllers/alliance/reportAlliance.js";
 import { changeRelationship } from "./controllers/alliance/changeRelationship.js";
+import {
+  lightStarController,
+  removeGoalController,
+  setGoalController,
+  suggestStarController,
+  territoryController,
+} from "./controllers/alliance/allianceProgress.js";
 import { submitBugReportController, submitGuestBugReportController } from "./controllers/bugReports/submitBugReport.js";
 
 const router = new Router();
@@ -409,6 +416,11 @@ router.post("/alliance/takeover", verifyUserAuth, logRequest, takeOverAlliance);
 router.post("/alliance/rename", verifyUserAuth, allianceCreateEditLimiter, logRequest, renameAllianceController);
 router.post("/alliance/report", verifyUserAuth, allianceCreateEditLimiter, logRequest, reportAllianceController);
 router.post("/alliance/changerelationship", verifyUserAuth, logRequest, changeRelationship);
+router.post("/alliance/lightstar", verifyUserAuth, logRequest, lightStarController);
+router.post("/alliance/suggeststar", verifyUserAuth, logRequest, suggestStarController);
+router.post("/alliance/setgoal", verifyUserAuth, logRequest, setGoalController);
+router.post("/alliance/removegoal", verifyUserAuth, logRequest, removeGoalController);
+router.get("/alliance/territory", verifyUserAuth, logRequest, territoryController);
 
 /**  ────────────────────────────────────────────────
 * 📦 Events

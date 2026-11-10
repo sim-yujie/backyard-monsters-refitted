@@ -40,7 +40,7 @@ const FEED_FIELDS = [
   "targetAlliance.image"
 ] as const;
 
-export const ALLIANCE_MESSAGE_LIMIT = 50;
+export const ALLIANCE_MESSAGE_LIMIT = 200;
 
 /**
  * Drops an alliance's oldest entries once it holds more than
