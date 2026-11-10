@@ -65,7 +65,8 @@ def main():
             black = Image.new("RGBA", s.size, (0, 0, 0, 255))
             black.putalpha(ImageChops.invert(s))
             layers.append((black, d["shadow"]["x"], d["shadow"]["y"]))
-        layers.append((load(d["top"]["url"]), d["top"]["x"], d["top"]["y"]))
+        fr = d["top"].get("frame")  # a top that is a strip's cell 0 (Flash's Fountain)
+        layers.append((load(d["top"]["url"], (fr["width"], fr["height"]) if fr else None), d["top"]["x"], d["top"]["y"]))
         for c in d["anims"]:
             layers.append((load(c["url"], (c["width"], c["height"])), c["x"], c["y"]))
         left = min(x * 2 for _, x, _ in layers)

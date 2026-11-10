@@ -92,6 +92,19 @@ BATCHES = {
          "lines up with the new bowls")]),
 }
 
+BATCHES["f2b"] = BATCHES["f2"]
+# Pink or purple parts the plain magenta key eats: these are keyed with --connected-key (only the magenta joined
+# to the background); everything else keeps the plain key, which also cleans magenta reflections off greys.
+CONNECTED = {"f1": ["pokey", "brain"], "f2b": ["crabatron"], "f4": ["blackberry-bush"],
+             "f5": ["pink-flowers", "purple-flowers"]}
+# Tone fixes per batch (cut_sheet args): 15% less colour everywhere; the orange-gold trophies like the Liberty.
+GOLD = "eiffel-tower=1.4,big-ben=1.4,baseball-trophy=1.4,football-trophy=1.4"
+EXTRA = ["--sat", "0.85", "--gamma", GOLD, "--hue", GOLD.replace("1.4", "-1")]
+# The Eiffel Tower's leg reached into the next cell of f8's sheet: cut by column ranges instead.
+# Greys Codex tinted lilac/pink: recoloured after the cut (tidy.degrey), name -> hue (None = plain grey).
+DEGREY = {"f3": {"rock": 250}}
+SPLITS = {"f8": [(20, 637), (637, 1015), (1015, 1536)]}  # f2 redone: its first sheet left out the heads' blood puddles
+
 
 def anchors():
     out = {}
@@ -133,8 +146,27 @@ def cut(batch, extra):
     names = ",".join(s for _, s, _ in items)
     heights = ",".join(str(a[t]["h"]) for t, _, _ in items)
     out = os.path.join(HERE, batch, "out")
-    subprocess.run([sys.executable, f"{S}/cut_sheet.py", os.path.join(HERE, batch, f"{batch}.png"), "--cols", str(cols),
-                    "--rows", str(rows), "--out", out, f"--names={names}", "--height", heights, *extra], check=True)
+    sheet = os.path.join(HERE, batch, f"{batch}.png")
+    if batch in SPLITS:  # an object spilled over its cell's edge: cut each from its own column range
+        from PIL import Image
+        im = Image.open(sheet)
+        for (t, s, _), (x0, x1) in zip(items, SPLITS[batch]):
+            part = os.path.join(HERE, batch, f"part-{s}.png")
+            im.crop((x0, 0, x1, im.height)).save(part)
+            subprocess.run([sys.executable, f"{S}/cut_sheet.py", part, "--cols", "1", "--rows", "1", "--out", out,
+                            f"--names={s}", "--height", str(a[t]["h"]), *EXTRA, *extra], check=True, capture_output=True)
+    else:
+        for connected in (False, True):
+            only = CONNECTED.get(batch, [])
+            if connected and not only:
+                break
+            these = ",".join(s if (s in only) == connected else "-" for _, s, _ in items)
+            subprocess.run([sys.executable, f"{S}/cut_sheet.py", sheet, "--cols", str(cols), "--rows", str(rows),
+                            "--out", out, f"--names={these}", "--height", heights, *EXTRA, *extra,
+                            *(["--connected-key"] if connected else [])], check=True, capture_output=True)
+    from tidy import degrey
+    for name, hue in DEGREY.get(batch, {}).items():
+        degrey(out, name, hue)
     rows_txt = []
     for t, s, _ in items:
         x = a[t]
