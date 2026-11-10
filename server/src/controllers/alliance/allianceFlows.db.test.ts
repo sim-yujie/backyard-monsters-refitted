@@ -438,6 +438,21 @@ describe.skipIf(!enabled)("alliance flows through the controllers, on Postgres (
       expect(other.alliances).toEqual([]);
     });
 
+    test("search treats % and _ as plain letters", async () => {
+      await found();
+      await found(MEMBER, { alliance_name: "zz_flow_50%" });
+
+      const names = async (search: string) =>
+        (await call(searchAlliances, PLAYER, { search, page: 0, world: "false" })).alliances.map(
+          (row: { name: string }) => row.name
+        );
+
+      expect(await names("50%")).toEqual(["zz_flow_50%"]);
+      expect(await names("%")).toEqual(["zz_flow_50%"]);
+      expect(await names("zz_flow_a")).toEqual(["zz_flow_alliance"]);
+      expect(await names("zz%flow")).toEqual([]);
+    });
+
     test("search puts alliances with a free seat first, and says type, limit and active members", async () => {
       const full = (await found()).alliance.alliance_id as number;
       await fill(full, 14);

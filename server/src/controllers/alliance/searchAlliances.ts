@@ -13,6 +13,12 @@ import { allianceNoWorldErr } from "../../errors/errors.js";
 
 const PAGE_SIZE = 10;
 
+/**
+ * The search text as a literal ILIKE pattern: `%`, `_` and the escape
+ * character `\` match only themselves, so "50%" does not list everything.
+ */
+export const likeContains = (text: string) => `%${text.replace(/[\\%_]/g, "\\$&")}%`;
+
 /** Each type's member limit as SQL, built from the config so no number is written twice. */
 const MEMBER_LIMIT_SQL = `CASE a.type ${Object.entries(ALLIANCE_TYPES)
   .map(([type, rules]) => `WHEN '${type}' THEN ${Number(rules.members)}`)
@@ -43,8 +49,8 @@ export const searchAlliances: KoaController = async (ctx) => {
 
   if (!worldid) throw allianceNoWorldErr();
 
-  const nameFilter = search ? "AND a.name ILIKE ?" : "";
-  const params: unknown[] = search ? [worldid, `%${search}%`] : [worldid];
+  const nameFilter = search ? "AND a.name ILIKE ? ESCAPE '\\'" : "";
+  const params: unknown[] = search ? [worldid, likeContains(search)] : [worldid];
 
   const [count] = await postgres.em.execute<{ n: string }[]>(
     `SELECT count(*) AS n FROM bym.alliance a WHERE a.world_id = ? ${nameFilter}`,
