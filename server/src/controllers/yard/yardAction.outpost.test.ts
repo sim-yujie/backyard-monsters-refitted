@@ -950,12 +950,33 @@ describe("Starter Kits (outposts WP9, issue #188)", () => {
     expect([...db.rows.values()]).toEqual(before);
   });
 
-  test("Conquest's kit goal counts a kit bought, and not a refused (rolled-back) one", async () => {
+  test("Conquest's kit goal counts a kit bought, and not one rolled back (refused, or its write failed)", async () => {
     const userid = userOf().userid;
     const kits = () => pendingAllianceEvents(userid)?.kitRebuild ?? 0;
     const before = kits();
     const refused = await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources" });
     expect(refused.status).toBe(409);
+    expect(kits()).toBe(before);
+
+    // The kit is planned (and its goal noted), then the write fails: rolled back.
+    const failing = {
+      transactional: <T>(cb: (fork: unknown) => Promise<T>): Promise<T> =>
+        em.transactional((fork) =>
+          cb({
+            ...(fork as object),
+            flush: async () => {
+              throw new Error("write failed");
+            },
+          })
+        ),
+    };
+    const rows = structuredClone([...db.rows.values()]);
+    await runYardAction(failing as unknown as EntityManager, userOf(), yardStarterKitAction, {
+      kit: 1,
+      pay: "shiny",
+      baseid: OUTPOST_BASEID,
+    }).catch(() => null);
+    expect([...db.rows.values()]).toEqual(rows);
     expect(kits()).toBe(before);
 
     const bought = await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
