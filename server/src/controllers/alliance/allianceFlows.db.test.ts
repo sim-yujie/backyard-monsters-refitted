@@ -437,6 +437,18 @@ describe.skipIf(!enabled)("alliance flows through the controllers, on Postgres (
       expect(own.alliances.map((row: { name: string }) => row.name)).toEqual([NAME]);
       expect(other.alliances).toEqual([]);
     });
+
+    test("search puts alliances with a free seat first, and says type, limit and active members", async () => {
+      const full = (await found()).alliance.alliance_id as number;
+      await fill(full, 14);
+      await found(MEMBER, { alliance_name: "zz_flow_roomy" });
+
+      const body = await call(searchAlliances, PLAYER, { search: "zz_flow", page: 0, world: "false" });
+
+      expect(body.totalResults).toBe(2);
+      expect(body.alliances.map((row: { name: string }) => row.name)).toEqual(["zz_flow_roomy", NAME]);
+      expect(body.alliances[1]).toMatchObject({ members: 15, type: "midas", member_limit: 15, active_members: 15 });
+    });
   });
 
   describe("the 24-hour re-join wait (owner, 10 Nov 2026)", () => {
