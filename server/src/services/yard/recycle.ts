@@ -11,6 +11,7 @@ import {
 } from "../monsters/transferRules.js";
 import { hallName, TOWN_HALL_TYPE, yardKindOf, type ResourceAmounts } from "../yardplanner/costs.js";
 import { MAP_ROOM_TYPE } from "./buildingJobs.js";
+import { OBSERVATORY } from "../../config/AllianceConfig.js";
 import { fundPurse, isSurfaceInferno, purseReport } from "./surfaceInferno.js";
 import { academyLevels, isMapRoom3Monsters } from "./catchUpMonsters.js";
 import { fitCredit } from "./credit.js";
@@ -47,6 +48,7 @@ import { siegeHold, siegeRecycleMessage } from "./siege.js";
  * - `isTownHall`: the Town Hall;
  * - `mapRoom`: the Map Room, whose level is the map version (D16) — recycling
  *   it in the original left Map Room 2 (`client/scripts/BUILDING11.as:190-212`);
+ * - `observatory`: the Observatory (150), the pass into an alliance;
  * - `trojanHorse`: the Trojan Horse (building 27) — the server places it and
  *   takes it away once it is sprung (`docs/design/trojan-horse.md` §7, #324);
  * - `busy`: a build, upgrade or fortify running (a build is cancelled, not
@@ -176,6 +178,10 @@ const refuse = (save: RecycleSave, building: BuildingData, id: number, now: numb
   if (type === TOWN_HALL_TYPE) throw refused("isTownHall", `The ${hallName(yard)} cannot be recycled.`);
   if (type === MAP_ROOM_TYPE) {
     throw refused("mapRoom", "The Map Room cannot be recycled: its level is your map.");
+  }
+  // The pass into an alliance (alliances phase 0): one per yard, 36 hours to build.
+  if (type === OBSERVATORY.type) {
+    throw refused("observatory", "The Observatory cannot be recycled: it is your pass into an alliance.");
   }
   // The server placed it and the server takes it away once it is sprung
   // (design §7 "Save protection", issue #324).

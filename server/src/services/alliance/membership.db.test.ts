@@ -57,15 +57,30 @@ const sql = <R = Record<string, any>>(query: string, params: unknown[] = []) =>
 
 const clear = async () => {
   await sql(`DELETE FROM bym.alliance WHERE id IN (?, ?) OR name = ?`, [ALLIANCE_A, ALLIANCE_B, FOUNDED]);
+  await sql(`UPDATE bym."user" SET save_basesaveid = NULL WHERE userid IN (${USERS.join(",")})`);
+  await sql(`DELETE FROM bym.save WHERE userid IN (${USERS.join(",")})`);
   await sql(`DELETE FROM bym."user" WHERE userid IN (${USERS.join(",")})`);
 };
 
-const addUser = (userid: number) =>
-  sql(
+/**
+ * A player with a Map Room 2 main yard in world "w" and a finished
+ * Observatory, so the join gate (`joinGate.ts`) lets them in.
+ */
+const addUser = async (userid: number) => {
+  await sql(
     `INSERT INTO bym."user" (userid, username, email, password, blocked_users, last_seen_at)
      VALUES (?, ?, ?, 'x', '[]', now())`,
     [userid, `zz_ai_${userid}`, `zz_ai_${userid}@test.invalid`]
   );
+  const [save] = await sql<{ basesaveid: number }>(
+    `INSERT INTO bym.save (userid, saveuserid, baseid, type, points, basevalue, createtime, name, credits, attacks,
+                           takeover_date, created_at, lastupdate_at, worldid, mapversion, mr2upgraded, buildingdata)
+     VALUES (?, ?, ?, 'main', 0, '0', 0, 'main', 0, '[]', now(), now(), now(), 'w', 2, true, ?::jsonb)
+     RETURNING basesaveid`,
+    [userid, userid, String(userid), JSON.stringify({ o1: { t: 150, l: 1, X: 0, Y: 0 } })]
+  );
+  await sql(`UPDATE bym."user" SET save_basesaveid = ? WHERE userid = ?`, [save!.basesaveid, userid]);
+};
 
 const addAlliance = async (id: number, leader: number, members: number[] = []) => {
   await sql(

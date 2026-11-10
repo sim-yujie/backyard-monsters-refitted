@@ -48,6 +48,7 @@ const { changeAllianceType } = await import("./changeAllianceType.js");
 const { myAlliance } = await import("./myAlliance.js");
 const { setMemberRank } = await import("./setMemberRank.js");
 const { editAlliance } = await import("./editAlliance.js");
+const { searchAlliances } = await import("./searchAlliances.js");
 
 const BASE = 993_800;
 const LEADER = BASE + 1;
@@ -73,8 +74,11 @@ const clear = async () => {
   await sql(`DELETE FROM bym.world WHERE uuid IN (?, ?)`, [WORLD, WORLD_2]);
 };
 
-/** A player with a Map Room 2 main yard in the given world. */
-const addPlayer = async (userid: number, world = WORLD, buildings: Record<string, unknown> = {}) => {
+/** A finished Observatory, the pass into an alliance (`joinGate.ts`). */
+const OBSERVATORY_YARD = { o1: { t: 150, l: 1, X: 0, Y: 0 } };
+
+/** A player with a Map Room 2 main yard in the given world, with an Observatory unless told otherwise. */
+const addPlayer = async (userid: number, world = WORLD, buildings: Record<string, unknown> = OBSERVATORY_YARD) => {
   await sql(
     `INSERT INTO bym."user" (userid, username, email, password, blocked_users, last_seen_at)
      VALUES (?, ?, ?, 'x', '[]', now())`,
@@ -354,6 +358,76 @@ describe.skipIf(!enabled)("alliance flows through the controllers, on Postgres (
 
     expect((await call(changeAllianceType, LEADER, { alliance_type: "midas" })).refused).toContain("too many members");
     expect((await call(changeAllianceType, MEMBER, { alliance_type: "fortress" })).refused).toBeDefined();
+  });
+
+  describe("the join gate (owner, 10 Nov 2026)", () => {
+    const setYard = (userid: number, buildings: Record<string, unknown>, mapversion = 2, mr2upgraded = true) =>
+      sql(`UPDATE bym.save SET buildingdata = ?::jsonb, mapversion = ?, mr2upgraded = ? WHERE userid = ?`, [
+        JSON.stringify(buildings),
+        mapversion,
+        mr2upgraded,
+        userid,
+      ]);
+
+    test("founding needs a finished Observatory", async () => {
+      await setYard(LEADER, {});
+      expect((await found()).refused).toContain("Observatory");
+
+      await setYard(LEADER, { o1: { t: 150, l: 0, X: 0, Y: 0, cB: 5 } });
+      expect((await found()).refused).toContain("Observatory");
+
+      await setYard(LEADER, OBSERVATORY_YARD);
+      expect((await found()).error).toBe(0);
+    });
+
+    test("founding needs Map Room 2", async () => {
+      await setYard(LEADER, OBSERVATORY_YARD, 1, false);
+      expect((await found()).refused).toContain("Map Room 2");
+    });
+
+    test("asking to join needs an Observatory and the alliance's world", async () => {
+      const allianceId = (await found()).alliance.alliance_id;
+
+      await setYard(PLAYER, {});
+      expect((await call(requestJoin, PLAYER, { alliance_id: allianceId })).refused).toContain("Observatory");
+
+      expect((await call(requestJoin, OTHER_WORLD, { alliance_id: allianceId })).refused).toContain("another world");
+      expect(await pendingInviteId(OTHER_WORLD)).toBeNull();
+    });
+
+    test("an invite names the player who may not join", async () => {
+      const allianceId = (await found()).alliance.alliance_id;
+
+      expect((await call(inviteUser, LEADER, { userid: OTHER_WORLD })).refused).toBe(
+        `zz_flow_${OTHER_WORLD} is in another world.`
+      );
+
+      await setYard(PLAYER, {});
+      expect((await call(inviteUser, LEADER, { userid: PLAYER })).refused).toBe(
+        `zz_flow_${PLAYER} has no Observatory yet.`
+      );
+      expect(allianceId).toBeGreaterThan(0);
+    });
+
+    test("an accept is refused once the joining player has lost the gate since", async () => {
+      const allianceId = (await found()).alliance.alliance_id;
+      await call(requestJoin, PLAYER, { alliance_id: allianceId });
+      await sql(`UPDATE bym.save SET worldid = ? WHERE userid = ?`, [WORLD_2, PLAYER]);
+
+      const answer = await call(changeInviteStatus, LEADER, { invite_id: await pendingInviteId(PLAYER), status: "accepted" });
+
+      expect(answer.refused).toBe(`zz_flow_${PLAYER} is in another world.`);
+      expect(await membership(PLAYER)).toEqual({ alliance_id: null, role: null });
+    });
+
+    test("search lists only the player's own world", async () => {
+      await found();
+      const own = await call(searchAlliances, PLAYER, { search: "zz_flow", page: 0, world: "false" });
+      const other = await call(searchAlliances, OTHER_WORLD, { search: "zz_flow", page: 0, world: "false" });
+
+      expect(own.alliances.map((row: { name: string }) => row.name)).toEqual([NAME]);
+      expect(other.alliances).toEqual([]);
+    });
   });
 
   describe("Officers", () => {

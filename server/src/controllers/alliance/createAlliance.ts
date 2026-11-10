@@ -8,6 +8,7 @@ import { postgres } from "../../server.js";
 import { CreateAllianceSchema } from "../../schemas/AllianceSchemas.js";
 import { addAllianceMember } from "../../services/alliance/membership.js";
 import { getWorldMapVersion } from "../../services/maproom/knownWorlds.js";
+import { assertMayJoin, GATE_SAVE_FIELDS } from "../../services/alliance/joinGate.js";
 import { assertDescriptionAllowed, assertNameAllowed } from "../../services/alliance/textFilter.js";
 import {
   allianceNameTakenErr,
@@ -26,13 +27,16 @@ import type { KoaController } from "../../utils/KoaController.js";
  */
 export const createAlliance: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  await postgres.em.populate(user, ["save"], { fields: ["save.worldid"] });
+  await postgres.em.populate(user, ["save"], { fields: GATE_SAVE_FIELDS.map((field) => `save.${field}` as const) });
 
   if (user.alliance_id) throw alreadyInAllianceErr();
 
-  const { worldid } = user.save!;
+  const worldid = user.save?.worldid;
 
   if (!worldid) throw allianceNoWorldErr();
+
+  // Map Room 2 and a finished Observatory (owner, 10 Nov 2026).
+  assertMayJoin(user.save);
 
   const data = CreateAllianceSchema.parse(ctx.request.body);
 

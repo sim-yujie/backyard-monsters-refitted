@@ -55,9 +55,11 @@ describe("buildingCosts", () => {
     // 135 of the 140 entries in `_yardProps` carry a `costs` array; the five
     // without one are not buildable at any price. The Radio Tower (113) is
     // dropped on purpose (D15, `web/tools/gen-building-costs.mjs`). Then this
-    // project's six autumn decorations, 201 to 206 (`revampDecorations.ts`).
-    expect(BUILDING_COST_ROWS.length).toBe(134 + 6);
-    expect(Object.keys(COSTS).length).toBe(134 + 6);
+    // project's own Observatory (150, the alliance pass) and its six autumn
+    // decorations, 201 to 206 (`revampDecorations.ts`).
+    expect(BUILDING_COST_ROWS.length).toBe(134 + 1 + 6);
+    expect(Object.keys(COSTS).length).toBe(134 + 1 + 6);
+    expect(BUILDING_COST_ROWS.slice(-7, -6).map(([type]) => type)).toEqual([150]);
     expect(BUILDING_COST_ROWS.slice(-6).map(([type]) => type)).toEqual([201, 202, 203, 204, 205, 206]);
   });
 

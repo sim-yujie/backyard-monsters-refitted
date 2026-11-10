@@ -5,17 +5,17 @@ import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { InviteUserSchema } from "../../schemas/AllianceSchemas.js";
 import { requireAllianceMember } from "../../services/alliance/allianceAccess.js";
-import { getWorldMapVersion } from "../../services/maproom/knownWorlds.js";
 import { openInvite } from "../../services/alliance/allianceInvites.js";
-import {
-  inviteLeaderOnlyErr,
-  inviteMapVersionErr,
-  permissionErr,
-  userAlreadyInAllianceErr,
-} from "../../errors/errors.js";
+import { assertMayJoin, GATE_SAVE_FIELDS } from "../../services/alliance/joinGate.js";
+import { inviteLeaderOnlyErr, permissionErr, userAlreadyInAllianceErr } from "../../errors/errors.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
-const INVITE_FIELDS = ["userid", "username", "alliance_id", "save.worldid"] as const;
+const INVITE_FIELDS = [
+  "userid",
+  "username",
+  "alliance_id",
+  ...GATE_SAVE_FIELDS.map((field) => `save.${field}` as const),
+] as const;
 
 /**
  * Invites a player into the leader's alliance, from the Suggested tab or the map
@@ -25,11 +25,10 @@ const INVITE_FIELDS = ["userid", "username", "alliance_id", "save.worldid"] as c
  * is the leader's to send rather than being refused outright. The original's map
  * room enabled the button for every member, so members do reach here.
  *
- * Alliances reach across worlds but not across Map Room versions, so a player on
- * the other version cannot be invited. The original restricted invites to the
- * leader's own world and sector, which assumed players could relocate towards each
- * other; ours cannot choose a world, so the rule is relaxed to match what a player
- * can actually reach by requesting to join.
+ * The invited player must pass the alliance gate (`joinGate.ts`): Map Room 2,
+ * a finished Observatory, and the alliance's own world (one world per
+ * alliance, owner 10 Nov 2026). The original also limited invites to the
+ * leader's world; the sector rule is not kept.
  *
  * @param {Context} ctx - Koa context.
  */
@@ -46,13 +45,7 @@ export const inviteUser: KoaController = async (ctx) => {
 
   if (player.alliance_id) throw userAlreadyInAllianceErr();
 
-  const worldid = player.save?.worldid;
-  if (!worldid) throw inviteMapVersionErr(player.username);
-
-  const mapVersion = await getWorldMapVersion(worldid);
-  const sameMapVersion = mapVersion === alliance.map_version;
-
-  if (!sameMapVersion) throw inviteMapVersionErr(player.username);
+  assertMayJoin(player.save, { allianceWorld: alliance.world_id, who: player.username });
 
   await openInvite(alliance, player.userid, AllianceInviteType.INVITE);
 

@@ -16,6 +16,7 @@ import { postgres } from "../../server.js";
 import { addAllianceMember, lockAlliance, lockMembership } from "./membership.js";
 import { AllianceAction, can } from "./permissions.js";
 import { memberLimit } from "./allianceTypes.js";
+import { assertMayJoin, loadGateSave } from "./joinGate.js";
 import {
   allianceFullErr,
   inviteNotPendingErr,
@@ -282,6 +283,10 @@ export const answerInvite = async (user: User, inviteId: number, status: Allianc
   const alreadyInOne = () => (isAnswerer ? mustLeaveAllianceToAcceptErr() : userAlreadyInAllianceErr());
 
   if (player.alliance_id) throw alreadyInOne();
+
+  // The gate again: the player may have left the world or lost the Observatory
+  // since the invite or request was sent.
+  assertMayJoin(await loadGateSave(postgres.em, player), { allianceWorld: alliance.world_id, who: isAnswerer ? undefined : player.username });
 
   // Everything above was read outside any lock, so it is checked again here
   // under the alliance's lock and the player's. Without that, a player

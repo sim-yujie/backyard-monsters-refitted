@@ -445,6 +445,43 @@ for (const [id, name] of REVAMP_DECORATIONS) {
   });
 }
 
+/* ── This project's own buildings ─────────────────────────────────────────────
+ *
+ * Buildings Flash never had, from type 150 so they stay clear of Flash's ids
+ * (which end at 140) and of this project's decorations (201 and up).
+ *
+ * 150, the Observatory (beta 7 alliances, owner 10 Nov 2026): the one building
+ * a player needs, besides Map Room 2, to join or found an alliance. One per
+ * main yard at every Town Hall level (no Town Hall rule), one level only, 4M
+ * Twigs, Pebbles and Putty and 36 hours, needing the Map Room at level 2. The
+ * server's gate is `services/alliance/joinGate.ts`; its numbers are repeated
+ * for readers in `server/src/config/AllianceConfig.ts` (OBSERVATORY).
+ */
+const REVAMP_BUILDINGS = [
+  {
+    id: 150,
+    name: "Observatory",
+    kind: "special",
+    group: 2,
+    steps: [{ r1: 4000000, r2: 4000000, r3: 4000000, r4: 0, time: 36 * 3600, re: [[11, 1, 2]] }],
+    quantity: [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+  },
+];
+for (const building of REVAMP_BUILDINGS) {
+  if (entries.some((one) => one.id === building.id)) throw new Error(`YARD_PROPS.as already has a type ${building.id}`);
+  entries.push({
+    ...building,
+    line: 0,
+    source: "this project's own building (gen-building-costs.mjs)",
+    blocked: false,
+    hp: [],
+    fortify: [],
+    capacity: [],
+    stats: undefined,
+  });
+}
+entries.sort((a, b) => a.id - b.id);
+
 /* ── Outposts ─────────────────────────────────────────────────────────────────
  *
  * An outpost yard runs on `OUTPOST_YARD_PROPS._outpostProps` in place of the

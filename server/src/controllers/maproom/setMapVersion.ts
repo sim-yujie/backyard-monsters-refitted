@@ -68,8 +68,7 @@ export const setMapVersion: KoaController = async (ctx) => {
 
   switch (version) {
     case MapRoomVersion.NONE: {
-      if (user.alliance_id) throw mustLeaveAllianceToChangeWorldErr();
-
+      // Leaving the world leaves the alliance too: `leaveWorld` does it first.
       await clearPendingInvites(user.userid);
 
       if (save.mapversion === MapRoomVersion.V3 && save.resources) {
@@ -83,8 +82,8 @@ export const setMapVersion: KoaController = async (ctx) => {
       await leaveWorld(user, save);
       // Leaving with no follow-up join (unlike the V2 case below, whose
       // `joinOrCreateWorld` invalidates its own): the old Map Room 2 sight
-      // is gone (issue #329, #330 WP1). No alliance to invalidate too — the
-      // guard above already refused one.
+      // is gone (issue #329, #330 WP1). The alliance's sight was invalidated
+      // when `leaveWorld` took the player out of it.
       await invalidatePlayerSight(user.userid);
       break;
     }
@@ -96,6 +95,8 @@ export const setMapVersion: KoaController = async (ctx) => {
     case MapRoomVersion.V2: {
       if (save.mapversion === MapRoomVersion.V3) break;
 
+      // Kept: `joinOrCreateWorld` may place a player already on Map Room 2 in
+      // another world without `leaveWorld`, which would strand their alliance.
       if (user.alliance_id) throw mustLeaveAllianceToChangeWorldErr();
 
       await clearPendingInvites(user.userid);

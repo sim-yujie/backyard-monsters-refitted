@@ -202,6 +202,29 @@ export const removeAllianceMember = async (
 };
 
 /**
+ * Leaving the world is leaving the alliance (owner, 10 Nov 2026): an alliance
+ * lives in one world. A member or Officer simply leaves; a leader alone
+ * disbands it; a leader with others is refused (`leaderMustTransferErr`)
+ * before anything about the world changes, so they hand over first.
+ *
+ * @param {User} user - The player about to leave their world.
+ * @returns {Promise<void>} Once they are out of any alliance.
+ */
+export const leaveAllianceForWorldChange = async (user: User): Promise<void> => {
+  if (!user.alliance_id) return;
+
+  const alliance = await postgres.em.findOne(Alliance, { id: user.alliance_id });
+
+  if (!alliance) {
+    user.alliance_id = null;
+    user.alliance_role = null;
+    return;
+  }
+
+  await removeAllianceMember(user, alliance, AllianceMessageType.LEFT);
+};
+
+/**
  * Hands leadership of an alliance to one of its Officers or Members.
  *
  * The two swap: the new leader's old rank goes to the old leader, so an

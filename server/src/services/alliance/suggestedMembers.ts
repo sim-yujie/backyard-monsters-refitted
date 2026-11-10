@@ -6,7 +6,6 @@ import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { onlinePlayers } from "../user/online.js";
-import { getCachedWorlds } from "../maproom/knownWorlds.js";
 import { ALLIANCE_MEMBER_FIELDS, toAllianceMember, type AllianceMember } from "./allianceMember.js";
 
 const SUGGESTED_LIMIT = 50;
@@ -14,8 +13,9 @@ const SUGGESTED_LIMIT = 50;
 /**
  * Builds the Suggested tab's candidate list for one alliance.
  *
- * Candidates are unaffiliated players on the alliance's own Map Room version, newest
- * player first. Ordering on save.savetime is what makes the list worth reading: an
+ * Candidates are unaffiliated players in the alliance's own world (one world
+ * per alliance, owner 10 Nov 2026), newest player first. The join gate's other
+ * rules (Map Room 2, Observatory) are checked when the invite is sent. Ordering on save.savetime is what makes the list worth reading: an
  * invite only pays off if it reaches someone still playing.
  *
  * Anyone with a pending exchange already open with this alliance is left out.
@@ -24,13 +24,7 @@ const SUGGESTED_LIMIT = 50;
  * @returns {Promise<AllianceMember[]>} Candidate rows, most recently active first.
  */
 export const getSuggestedMembers = async (alliance: Alliance): Promise<AllianceMember[]> => {
-  const worlds = await getCachedWorlds();
-
-  const worldIds = worlds
-    .filter((world) => world.map_version === alliance.map_version)
-    .map((world) => world.uuid);
-
-  if (worldIds.length === 0) return [];
+  const worldIds = [alliance.world_id];
 
   const invite = await postgres.em.find(
     AllianceInvite,

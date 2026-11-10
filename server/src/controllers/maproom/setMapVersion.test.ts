@@ -146,11 +146,11 @@ describe("setMapVersion from Map Room 1", () => {
     expect(delCalls).toEqual([`sight:${ME}`]);
   });
 
-  test("a member of an alliance is refused first, and nothing invalidates", async () => {
+  test("a member of an alliance may leave: leaveWorld takes them out of it first (owner, 10 Nov 2026)", async () => {
     const result = await run(0, 42);
-    expect(result).toMatchObject({ ok: false, status: 409 });
-    expect(moves).toEqual([]);
-    expect(delCalls).toEqual([]);
+    expect(result.ok).toBe(true);
+    expect(moves).toEqual(["leave"]);
+    expect(delCalls).toEqual([`sight:${ME}`]);
   });
 });
 
