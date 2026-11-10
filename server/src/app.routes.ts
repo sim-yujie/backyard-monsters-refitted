@@ -180,6 +180,7 @@ import {
   setGoalController,
   suggestStarController,
   territoryController,
+  allianceNewsController,
 } from "./controllers/alliance/allianceProgress.js";
 import { submitBugReportController, submitGuestBugReportController } from "./controllers/bugReports/submitBugReport.js";
 
@@ -421,6 +422,7 @@ router.post("/alliance/suggeststar", verifyUserAuth, logRequest, suggestStarCont
 router.post("/alliance/setgoal", verifyUserAuth, logRequest, setGoalController);
 router.post("/alliance/removegoal", verifyUserAuth, logRequest, removeGoalController);
 router.get("/alliance/territory", verifyUserAuth, logRequest, territoryController);
+router.get("/alliance/news", verifyUserAuth, logRequest, allianceNewsController);
 
 /**  ────────────────────────────────────────────────
 * 📦 Events

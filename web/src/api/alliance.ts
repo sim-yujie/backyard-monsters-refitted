@@ -166,7 +166,7 @@ export const refusalOf = (caught: unknown): AllianceRefusal => {
   return { ok: false, reason: "unknown", message: UNKNOWN, availableAt: null };
 };
 
-const call = async <T extends object>(
+export const call = async <T extends object>(
   run: () => Promise<ApiEnvelope>,
   pick: (body: Record<string, unknown>) => T,
 ): Promise<AllianceResult<T>> => {
@@ -178,9 +178,9 @@ const call = async <T extends object>(
   }
 };
 
-const postTo = (route: string, body: FormBody = {}) => () => post<ApiEnvelope>(`/alliance/${route}`, body);
-const getFrom = (route: string) => () => get<ApiEnvelope>(`/alliance/${route}`);
-const nothing = (): object => ({});
+export const postTo = (route: string, body: FormBody = {}) => () => post<ApiEnvelope>(`/alliance/${route}`, body);
+export const getFrom = (route: string) => () => get<ApiEnvelope>(`/alliance/${route}`);
+export const nothing = (): object => ({});
 const numberOr = (value: unknown, fallback: number): number => {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;

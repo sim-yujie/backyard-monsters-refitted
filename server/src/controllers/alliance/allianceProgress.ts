@@ -8,6 +8,8 @@ import {
   TerritoryBoardSchema,
 } from "../../schemas/AllianceSchemas.js";
 import { getUserAlliance } from "../../services/alliance/allianceAccess.js";
+import { getAllianceMessages } from "../../services/alliance/allianceMessages.js";
+import { AllianceMessageType } from "../../enums/Alliance.js";
 import {
   lightStar,
   removeGoal,
@@ -73,5 +75,24 @@ export const territoryController: KoaController = async (ctx) => {
     error: 0,
     type: board ?? null,
     rows: board ? await territoryBoard(postgres.em, board, getCurrentDateTime()) : [],
+  };
+};
+
+/**
+ * GET /alliance/news: the alliance's automatic lines (joins, leaves, stars
+ * lit, goals, attacks...), newest first, for the All news panel (design v5
+ * §7b). Chat messages stay in the Alliance chat room.
+ */
+export const allianceNewsController: KoaController = async (ctx) => {
+  const user: User = ctx.authUser;
+  const alliance = await getUserAlliance(user);
+  const feed = alliance ? await getAllianceMessages(alliance.id) : [];
+  ctx.status = Status.OK;
+  ctx.body = {
+    error: 0,
+    news: feed
+      .filter((entry) => entry.messageType !== AllianceMessageType.MESSAGE && entry.body)
+      .toReversed()
+      .map(({ displayName, body, ts, messageType, cell }) => ({ name: displayName, text: body, ts, type: messageType, cell })),
   };
 };
