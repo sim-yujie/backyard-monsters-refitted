@@ -1,3 +1,4 @@
+import { UniqueConstraintViolationException } from "@mikro-orm/core";
 import type { EntityManager, PostgreSqlDriver } from "@mikro-orm/postgresql";
 
 import { Status } from "../../enums/StatusCodes.js";
@@ -17,7 +18,7 @@ import { lockAlliance } from "./membership.js";
 /*
  * Alliance reports and admin actions (design v5 §13). A player reports an
  * alliance's name, ad or shield; the dashboard lists open reports; an admin
- * renames it to "Alliance {id}" (its leader must pick a new name), clears its
+ * renames it to "#Alliance {id}" (its leader must pick a new name), clears its
  * ad, or disbands it. Each admin action is written to
  * `bym.alliance_admin_action` and closes the alliance's open reports.
  */
@@ -129,15 +130,22 @@ const logAction = async (
   logger.info(`Alliance admin action: ${action} on alliance ${alliance.id} by admin ${adminId}`);
 };
 
-export type AdminActionOutcome = { outcome: "done"; closed: number } | { outcome: "noAlliance" };
+export type AdminActionOutcome =
+  | { outcome: "done"; closed: number }
+  | { outcome: "noAlliance" }
+  | { outcome: "nameTaken"; name: string };
 
-/** The name an admin rename gives: "Alliance {id}". */
+/** The name an admin rename gives: "#Alliance {id}". */
 export const adminPlaceholderName = (id: number) => ADMIN_RENAME_PLACEHOLDER.replace("{id}", String(id));
 
 /**
- * An admin action on an alliance: rename to "Alliance {id}" (the leader may
+ * An admin action on an alliance: rename to "#Alliance {id}" (the leader may
  * then rename at once), clear the ad, or disband. A disband frees every
  * member without the 24-hour re-join wait: they did nothing wrong.
+ *
+ * Players cannot choose the placeholder name, but an old alliance might
+ * already hold it: the rename then answers `nameTaken` and changes nothing,
+ * rather than failing as a server error.
  */
 export const adminAllianceAction = async (
   em: Em,
@@ -145,7 +153,7 @@ export const adminAllianceAction = async (
   adminId: number,
   action: AllianceAdminAction
 ): Promise<AdminActionOutcome> => {
-  const result = await em.transactional(async (tx) => {
+  const transaction = em.transactional(async (tx) => {
     if (!(await lockAlliance(tx, allianceId))) return null;
 
     const [alliance] = await tx.execute<{ id: number; name: string; description: string }[]>(
@@ -179,6 +187,17 @@ export const adminAllianceAction = async (
 
     return { closed, members };
   });
+
+  let result: Awaited<typeof transaction>;
+
+  try {
+    result = await transaction;
+  } catch (error) {
+    if (action === "rename" && error instanceof UniqueConstraintViolationException) {
+      return { outcome: "nameTaken", name: adminPlaceholderName(allianceId) };
+    }
+    throw error;
+  }
 
   if (!result) return { outcome: "noAlliance" };
 

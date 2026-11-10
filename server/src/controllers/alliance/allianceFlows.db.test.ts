@@ -580,16 +580,44 @@ describe.skipIf(!enabled)("alliance flows through the controllers, on Postgres (
       expect((await call(renameAllianceController, LEADER, { alliance_name: "zz_flow_again" })).error).toBe(0);
     });
 
-    test("an admin rename gives 'Alliance {id}' and lets the leader rename at once", async () => {
+    test("an admin rename gives '#Alliance {id}' and lets the leader rename at once", async () => {
       const allianceId = await foundWithMember();
       await call(renameAllianceController, LEADER, { alliance_name: "zz_flow_renamed" });
 
       expect(await adminAllianceAction(adminEm(), allianceId, BASE, "rename")).toMatchObject({ outcome: "done" });
-      expect(await nameOf(allianceId)).toMatchObject({ name: `Alliance ${allianceId}`, must_rename: true });
+      expect(await nameOf(allianceId)).toMatchObject({ name: `#Alliance ${allianceId}`, must_rename: true });
       expect((await call(myAlliance, LEADER)).alliance).toMatchObject({ must_rename: true, rename_available_at: null });
+
+      // No player may pick a name shaped like the placeholder, with or without the "#".
+      for (const alliance_name of [`Alliance ${allianceId + 1}`, `#Alliance ${allianceId + 1}`, "alliance-77"]) {
+        expect((await call(renameAllianceController, LEADER, { alliance_name })).refused).toBe(
+          "The alliance name is not allowed."
+        );
+      }
 
       expect((await call(renameAllianceController, LEADER, { alliance_name: "zz_flow_clean" })).error).toBe(0);
       expect(await nameOf(allianceId)).toMatchObject({ name: "zz_flow_clean", must_rename: false });
+    });
+
+    test("an admin rename whose placeholder an old alliance holds is refused cleanly, nothing changed", async () => {
+      const allianceId = await foundWithMember();
+      await call(renameAllianceController, LEADER, { alliance_name: "zz_flow_offensive" });
+      // An alliance from before the rule already holds the name (in any case).
+      await sql(
+        `INSERT INTO bym.alliance (name, leader_userid, leader_name, world_id, created_at)
+         VALUES (?, ?, 'zz_flow_old', ?, now())`,
+        [`#ALLIANCE ${allianceId}`, OTHER_WORLD, WORLD]
+      );
+
+      try {
+        expect(await adminAllianceAction(adminEm(), allianceId, BASE, "rename")).toEqual({
+          outcome: "nameTaken",
+          name: `#Alliance ${allianceId}`,
+        });
+        expect(await nameOf(allianceId)).toMatchObject({ name: "zz_flow_offensive", must_rename: false });
+      } finally {
+        await sql(`DELETE FROM bym.alliance WHERE name = ?`, [`#ALLIANCE ${allianceId}`]);
+      }
     });
 
     test("a report lands once on the dashboard; clearing the ad closes it", async () => {

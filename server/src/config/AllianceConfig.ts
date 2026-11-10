@@ -64,8 +64,13 @@ export const ABSENT_LEADER_DAYS = 7;
 /** "Active" in the marketplace and stats means played within this many days (design v5 §7a). */
 export const ACTIVE_MEMBER_DAYS = 7;
 
-/** The name an admin rename gives, with the alliance id in place of `{id}` (design v5 §13). */
-export const ADMIN_RENAME_PLACEHOLDER = "Alliance {id}";
+/**
+ * The name an admin rename gives, with the alliance id in place of `{id}`
+ * (design v5 §13). It opens with "#", which a player-chosen name never may
+ * (`textFilter.ts`), so no player can take it first and block the rename
+ * (security review, 10 Nov 2026).
+ */
+export const ADMIN_RENAME_PLACEHOLDER = "#Alliance {id}";
 
 /** Most open reports one player may have against alliances at a time. */
 export const MAX_OPEN_REPORTS_PER_PLAYER = 10;

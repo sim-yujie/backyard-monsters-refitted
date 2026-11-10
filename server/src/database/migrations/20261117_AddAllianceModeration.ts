@@ -7,7 +7,7 @@ import { Migration } from "@mikro-orm/migrations";
  * `bym.alliance` gains:
  * - `renamed_at`: when the leader last renamed it; once per 7 days
  *   (`RENAME_COOLDOWN_DAYS`).
- * - `must_rename`: set when an admin renames it to "Alliance {id}"; the leader
+ * - `must_rename`: set when an admin renames it to "#Alliance {id}"; the leader
  *   may then pick a new name at once, without the 7-day wait.
  *
  * New tables:

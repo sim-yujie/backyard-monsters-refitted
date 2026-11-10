@@ -482,7 +482,7 @@ export const mountAdminRoutes = (router: Router): void => {
   // as signed out).
   // Alliance reports and admin actions (services/alliance/allianceModeration.ts,
   // design v5 §13): open reports one row per alliance; rename to
-  // "Alliance {id}", clear the ad, or disband; each logged and closing the
+  // "#Alliance {id}", clear the ad, or disband; each logged and closing the
   // alliance's open reports. A gone alliance is a 409, not a 404.
   router.get(`${admin}/alliancereports`, apiVersion, adminOnly, async (ctx) => {
     ok(ctx, {
@@ -516,6 +516,14 @@ export const mountAdminRoutes = (router: Router): void => {
       return;
     }
     const done = await adminAllianceAction(em, id, ctx.authUser.userid, kind);
+    if (done.outcome === "nameTaken") {
+      return refuse(
+        ctx,
+        Status.CONFLICT,
+        `Another alliance already has the name "${done.name}", so this one was not renamed. Disband or rename that one first.`,
+        "nameTaken"
+      );
+    }
     if (done.outcome !== "done") return refuse(ctx, Status.CONFLICT, "That alliance no longer exists.", "noAlliance");
     ok(ctx, { closed: done.closed });
   });
