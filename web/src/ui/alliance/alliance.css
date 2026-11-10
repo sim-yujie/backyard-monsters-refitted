@@ -1,0 +1,4 @@
+/* Alliance window (beta 7 phase 1). UNFINISHED: only the size so far; the next helper styles the rest. */
+.alliance-window {
+  width: min(100%, 520px);
+}
