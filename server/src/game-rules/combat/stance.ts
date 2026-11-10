@@ -89,7 +89,55 @@ export interface StanceWeights {
   readonly stay: number;
   /** The {@link cannotBeat} margin; 0 switches the gate off. */
   readonly margin: number;
+  /*
+   * The habits' own features (champion modes round 2, `habits.ts`). No Mode
+   * tilts them and a log with no habits leaves them at 0, so each is read
+   * only when its weight is not 0 and a champion without habits fights
+   * exactly as before.
+   */
+  /** For a tower shooting one of the attacker's monsters right now. */
+  readonly guard: number;
+  /** For an Aerial Defense Tower while the attacker's fliers are out (or the champion flies). */
+  readonly aerial: number;
+  /** Per share of the strongest tower's damage this tower deals, with 3 or more towers up. */
+  readonly gun: number;
+  /** For the Town Hall or the outpost core. */
+  readonly hall: number;
+  /** Per share of {@link NEAR_RANGE} the building is nearer than it. */
+  readonly near: number;
+  /** For a building no tower covers, while the champion is under half health. */
+  readonly careful: number;
+  /** Per share of {@link QUAKE_CROWD_CAP} other buildings in the quake's reach (Korath). */
+  readonly quake: number;
 }
+
+/** The weights a champion learns as habits, in the one order every loop takes them. */
+export const HABIT_KEYS = [
+  "tower",
+  "loot",
+  "guard",
+  "aerial",
+  "gun",
+  "hall",
+  "near",
+  "careful",
+  "quake",
+] as const;
+
+export type HabitKey = (typeof HABIT_KEYS)[number];
+
+/** The habits' own features, which no Mode tilts (all but `tower` and `loot`). */
+export const HABIT_FEATURE_KEYS = [
+  "guard",
+  "aerial",
+  "gun",
+  "hall",
+  "near",
+  "careful",
+  "quake",
+] as const;
+
+export type HabitFeatureKey = (typeof HABIT_FEATURE_KEYS)[number];
 
 export const ZERO_WEIGHTS: StanceWeights = {
   tower: 0,
@@ -99,6 +147,13 @@ export const ZERO_WEIGHTS: StanceWeights = {
   threat: 0,
   stay: 0,
   margin: 0,
+  guard: 0,
+  aerial: 0,
+  gun: 0,
+  hall: 0,
+  near: 0,
+  careful: 0,
+  quake: 0,
 };
 
 /**
@@ -116,9 +171,27 @@ export const ZERO_WEIGHTS: StanceWeights = {
  *   kills the towers sooner.
  */
 export const STANCE_TILTS: Readonly<Record<ChampionStance, StanceWeights>> = {
-  offensive: { tower: 200, loot: 50, finish: 150, focus: 0, threat: 0, stay: 60, margin: 0 },
+  offensive: {
+    ...ZERO_WEIGHTS,
+    tower: 200,
+    loot: 50,
+    finish: 150,
+    focus: 0,
+    threat: 0,
+    stay: 60,
+    margin: 0,
+  },
   hybrid: ZERO_WEIGHTS,
-  defensive: { tower: 0, loot: 0, finish: 50, focus: 200, threat: 600, stay: 60, margin: 1.5 },
+  defensive: {
+    ...ZERO_WEIGHTS,
+    tower: 0,
+    loot: 0,
+    finish: 50,
+    focus: 200,
+    threat: 600,
+    stay: 60,
+    margin: 1.5,
+  },
 };
 
 /**
@@ -133,6 +206,13 @@ export const WEIGHT_BOUNDS: Readonly<Record<keyof StanceWeights, readonly [numbe
   threat: [0, 800],
   stay: [0, 200],
   margin: [0, 3],
+  guard: [-150, 150],
+  aerial: [-150, 150],
+  gun: [-150, 150],
+  hall: [-150, 150],
+  near: [-150, 150],
+  careful: [-150, 150],
+  quake: [-150, 150],
 };
 
 const WEIGHT_KEYS: readonly (keyof StanceWeights)[] = [
@@ -143,6 +223,7 @@ const WEIGHT_KEYS: readonly (keyof StanceWeights)[] = [
   "threat",
   "stay",
   "margin",
+  ...HABIT_FEATURE_KEYS,
 ];
 
 /**
@@ -182,7 +263,30 @@ export interface TargetFeatures {
   readonly threat: number;
   /** 1 for the building the champion is already on, else 0. */
   readonly stay: number;
+  /*
+   * The habits' features: each 0 unless its weight reads it (see
+   * {@link StanceWeights.guard} and on), so the sum is unchanged without habits.
+   */
+  readonly guard: number;
+  readonly aerial: number;
+  /** 0 to 1. */
+  readonly gun: number;
+  readonly hall: number;
+  /** 0 to 1. */
+  readonly near: number;
+  readonly careful: number;
+  /** 0 to 1. */
+  readonly quake: number;
 }
+
+/** Buildings nearer than this get the "Stays close" habit's feature, more the nearer. */
+export const NEAR_RANGE = 600;
+
+/** The "Gets the biggest gun" habit wakes only with at least this many towers up. */
+export const GUN_TOWERS_MIN = 3;
+
+/** Other buildings in a quake's reach past this many add nothing more. */
+export const QUAKE_CROWD_CAP = 4;
 
 /** Allies on a building past this many add nothing more. */
 export const FOCUS_CAP = 5;
@@ -373,7 +477,14 @@ export const stanceBonus = (weights: StanceWeights, features: TargetFeatures): n
       weights.finish * features.finish +
       weights.focus * features.focus -
       weights.threat * features.threat +
-      weights.stay * features.stay,
+      weights.stay * features.stay +
+      weights.guard * features.guard +
+      weights.aerial * features.aerial +
+      weights.gun * features.gun +
+      weights.hall * features.hall +
+      weights.near * features.near +
+      weights.careful * features.careful +
+      weights.quake * features.quake,
   );
 
 /**

@@ -114,7 +114,10 @@ describe("stance weights", () => {
 
   it("scores in distance units, threat as a penalty", () => {
     const weights = { ...ZERO_WEIGHTS, tower: 200, threat: 400, focus: 150 };
-    const features = { tower: 1, loot: 0, finish: 0, focus: focusFeature(2), threat: 0.5, stay: 0 };
+    const features = {
+      ...{ guard: 0, aerial: 0, gun: 0, hall: 0, near: 0, careful: 0, quake: 0 },
+      ...{ tower: 1, loot: 0, finish: 0, focus: focusFeature(2), threat: 0.5, stay: 0 },
+    };
     expect(stanceBonus(weights, features)).toBe(200 + 60 - 200);
     expect(focusFeature(9)).toBe(1);
   });
