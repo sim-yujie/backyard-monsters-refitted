@@ -194,6 +194,8 @@ const POLICIES = new Map<number, AnimPolicy>([
   [133, STATIC_FIXED],
   [134, STATIC_FIXED],
   [140, every(1, false)],
+  // Observatory (this project's own, alliances): its lookout deck idles, held while it is being built.
+  [150, whenIdle(every(3))],
   ...DECORATIONS.map((type): [number, AnimPolicy] => [type, every(2)]),
 ]);
 

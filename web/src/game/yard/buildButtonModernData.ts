@@ -37,6 +37,7 @@ export const MODERN_BUTTON_FILE: Readonly<Record<"main" | "inferno", Readonly<Re
     119: "119.main.c0a79d38.webp",
     129: "129.main.10ef0b45.webp",
     132: "132.main.cdb0631d.webp",
+    150: "150.main.0bbbe7fe.webp",
   },
   inferno: {
     1: "1.inferno.f2d473ff.webp",

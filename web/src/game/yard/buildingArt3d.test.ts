@@ -129,7 +129,8 @@ afterEach(() => setClassicLook(false));
 
 describe("the 3D yard buildings", () => {
   it("are the approved ones, one look for each of Flash's pictures", () => {
-    expect(Object.keys(BUILDING_3D_ART).map(Number)).toEqual(TYPES);
+    // The Observatory (150) is this project's own, with no Flash picture: `revampBuildings.test.ts`.
+    expect(Object.keys(BUILDING_3D_ART).map(Number).filter((type) => type !== 150)).toEqual(TYPES);
     for (const type of TYPES) {
       expect(BUILDING_3D_ART[type]?.map((look) => look.from), `type ${type}`).toEqual(
         flashPictures(type).map((look) => look[0]),

@@ -101,7 +101,7 @@ describe("the catalogue", () => {
     // `BUILDABLE_TYPES` in server/src/services/yard/build.ts.
     expect([...BUILDABLE_TYPES].sort((a, b) => a - b)).toEqual([
       1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 15, 16, 17, 19, 20, 21, 22, 23, 24, 25, 26, 51, 114,
-      115, 116, 117, 118, 119, 129, 132, 133, 134,
+      115, 116, 117, 118, 119, 129, 132, 133, 134, 150,
     ]);
     const all = BUILD_CATALOGUE.flatMap((category) => category.types);
     expect(new Set(all).size).toBe(all.length);
