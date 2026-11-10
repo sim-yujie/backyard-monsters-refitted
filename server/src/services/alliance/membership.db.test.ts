@@ -329,6 +329,8 @@ describe.skipIf(!enabled)("alliance membership under simultaneous requests, on P
 
     // ...then they left and joined B.
     await removeAllianceMember(await load(PLAYER), await loadAlliance(ALLIANCE_A), AllianceMessageType.LEFT);
+    // (a day later: the 24-hour re-join wait is not what this test is about)
+    await sql(`UPDATE bym."user" SET alliance_left_at = now() - interval '25 hours' WHERE userid = ?`, [PLAYER]);
     await accept(PLAYER, await addInvite(ALLIANCE_B, PLAYER, AllianceInviteType.INVITE));
 
     expect(await outcome(removeAllianceMember(stale, alliance, AllianceMessageType.KICKED, kicker))).toBe(

@@ -9,6 +9,8 @@ import { invalidateAllianceSight, invalidatePlayerSight } from "../maproom/sight
 import { announceShout, emitShout, type ShoutDraft } from "./allianceMessages.js";
 import { AllianceAction, can, canKick } from "./permissions.js";
 import { officerLimit } from "./allianceTypes.js";
+import { assertRejoinAllowed } from "./joinGate.js";
+import { REJOIN_COOLDOWN_HOURS } from "../../config/AllianceConfig.js";
 import {
   alreadyInAllianceErr,
   cannotKickErr,
@@ -29,6 +31,8 @@ type Em = EntityManager<PostgreSqlDriver>;
 export interface Membership {
   alliance_id: number | null;
   alliance_role: AllianceRole | null;
+  /** When they last left or were kicked (the 24-hour re-join wait). */
+  alliance_left_at: Date | null;
 }
 
 /*
@@ -74,7 +78,7 @@ export const lockAlliance = async (em: Em, allianceId: number): Promise<LockedAl
  */
 export const lockMembership = async (em: Em, userid: number): Promise<Membership | null> => {
   const [row] = await em.execute<Membership[]>(
-    `SELECT alliance_id, alliance_role FROM bym."user" WHERE userid = ? FOR UPDATE`,
+    `SELECT alliance_id, alliance_role, alliance_left_at FROM bym."user" WHERE userid = ? FOR UPDATE`,
     [userid]
   );
 
@@ -91,7 +95,9 @@ export const lockMembership = async (em: Em, userid: number): Promise<Membership
  * The write only lands on a player with no alliance, so the database itself
  * refuses a second join, whatever the timing and however many server processes
  * there are. Call it inside a transaction, so a refusal also undoes whatever the
- * caller wrote before it (the new alliance, the accepted invite).
+ * caller wrote before it (the new alliance, the accepted invite). It also
+ * only lands once the 24-hour re-join wait is over (`REJOIN_COOLDOWN_HOURS`),
+ * the last guard behind the friendlier checks the callers make first.
  *
  * @param {User} user - The user joining.
  * @param {Alliance} alliance - The alliance being joined.
@@ -109,16 +115,29 @@ export const addAllianceMember = async (
 ) => {
   const { id } = alliance;
 
+  const now = new Date();
+  const waitedSince = new Date(now.getTime() - REJOIN_COOLDOWN_HOURS * 3600_000);
+
   const joined = await em.nativeUpdate(
     User,
-    { userid: user.userid, alliance_id: null },
-    { alliance_id: id, alliance_role: role }
+    {
+      userid: user.userid,
+      alliance_id: null,
+      $or: [{ alliance_left_at: null }, { alliance_left_at: { $lte: waitedSince } }],
+    },
+    { alliance_id: id, alliance_role: role, alliance_joined_at: now }
   );
 
-  if (joined === 0) throw alreadyInAllianceErr();
+  if (joined === 0) {
+    const row = await lockMembership(em, user.userid);
+
+    if (row && !row.alliance_id) assertRejoinAllowed(row.alliance_left_at, now);
+    throw alreadyInAllianceErr();
+  }
 
   user.alliance_id = id;
   user.alliance_role = role;
+  user.alliance_joined_at = now;
 
   if (shoutType) await emitShout({ allianceId: id, author: user, type: shoutType, body: "", em });
 
@@ -151,6 +170,7 @@ export const removeAllianceMember = async (
   shoutType: ExitShout,
   kickedBy?: User
 ) => {
+  const leftAt = new Date();
   const disbanded = await postgres.em.transactional(async (em) => {
     if (!(await lockAlliance(em, alliance.id))) throw permissionErr();
 
@@ -170,7 +190,11 @@ export const removeAllianceMember = async (
       throw kickedBy ? cannotKickErr() : leaderMustTransferErr(alliance.name);
     }
 
-    await em.nativeUpdate(User, { userid: user.userid }, { alliance_id: null, alliance_role: null });
+    await em.nativeUpdate(
+      User,
+      { userid: user.userid },
+      { alliance_id: null, alliance_role: null, alliance_joined_at: null, alliance_left_at: leftAt }
+    );
 
     if (remaining === 0) await em.nativeDelete(Alliance, { id: alliance.id });
 
@@ -179,6 +203,8 @@ export const removeAllianceMember = async (
 
   user.alliance_id = null;
   user.alliance_role = null;
+  user.alliance_joined_at = null;
+  user.alliance_left_at = leftAt;
 
   // The player's own sight no longer shares the alliance's, and the
   // alliance's cached union no longer includes them (issue #329,

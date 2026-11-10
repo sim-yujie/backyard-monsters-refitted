@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { allianceJoinGateErr, hasObservatory, joinRefusal } from "./joinGate.js";
+import { allianceJoinGateErr, assertRejoinAllowed, hasObservatory, joinRefusal, rejoinAvailableAt } from "./joinGate.js";
 
 const OBSERVATORY = { o1: { t: 150, l: 1 } };
 const ready = { worldid: "w1", mapversion: 2, mr2upgraded: true, buildingdata: OBSERVATORY };
@@ -35,5 +35,24 @@ describe("the alliance join gate (owner, 10 Nov 2026)", () => {
     expect(other.message).toBe("Bob is in another world.");
     expect(other.data).toEqual({ reason: "otherWorld" });
     expect(other.status).toBe(403);
+  });
+
+  test("the 24-hour re-join wait", () => {
+    const now = new Date("2026-11-10T12:00:00Z");
+
+    expect(rejoinAvailableAt(null, now)).toBeNull();
+    expect(rejoinAvailableAt(new Date("2026-11-09T11:59:59Z"), now)).toBeNull();
+    expect(rejoinAvailableAt("2026-11-10T00:00:00Z", now)).toEqual(new Date("2026-11-11T00:00:00Z"));
+
+    try {
+      assertRejoinAllowed("2026-11-10T00:00:00Z", now, "Bob");
+      throw new Error("not refused");
+    } catch (error) {
+      expect((error as Error).message).toBe("Bob left an alliance less than 24 hours ago.");
+      expect((error as { data: object }).data).toEqual({
+        reason: "rejoinCooldown",
+        available_at: Date.parse("2026-11-11T00:00:00Z") / 1000,
+      });
+    }
   });
 });

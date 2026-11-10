@@ -8,7 +8,7 @@ import { postgres } from "../../server.js";
 import { CreateAllianceSchema } from "../../schemas/AllianceSchemas.js";
 import { addAllianceMember } from "../../services/alliance/membership.js";
 import { getWorldMapVersion } from "../../services/maproom/knownWorlds.js";
-import { assertMayJoin, GATE_SAVE_FIELDS } from "../../services/alliance/joinGate.js";
+import { assertMayJoin, assertRejoinAllowed, GATE_SAVE_FIELDS } from "../../services/alliance/joinGate.js";
 import { assertDescriptionAllowed, assertNameAllowed } from "../../services/alliance/textFilter.js";
 import {
   allianceNameTakenErr,
@@ -37,6 +37,7 @@ export const createAlliance: KoaController = async (ctx) => {
 
   // Map Room 2 and a finished Observatory (owner, 10 Nov 2026).
   assertMayJoin(user.save);
+  assertRejoinAllowed(user.alliance_left_at, new Date());
 
   const data = CreateAllianceSchema.parse(ctx.request.body);
 

@@ -6,7 +6,7 @@ import { postgres } from "../../server.js";
 import { InviteUserSchema } from "../../schemas/AllianceSchemas.js";
 import { requireAllianceMember } from "../../services/alliance/allianceAccess.js";
 import { openInvite } from "../../services/alliance/allianceInvites.js";
-import { assertMayJoin, GATE_SAVE_FIELDS } from "../../services/alliance/joinGate.js";
+import { assertMayJoin, assertRejoinAllowed, GATE_SAVE_FIELDS } from "../../services/alliance/joinGate.js";
 import { inviteLeaderOnlyErr, permissionErr, userAlreadyInAllianceErr } from "../../errors/errors.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
@@ -14,6 +14,7 @@ const INVITE_FIELDS = [
   "userid",
   "username",
   "alliance_id",
+  "alliance_left_at",
   ...GATE_SAVE_FIELDS.map((field) => `save.${field}` as const),
 ] as const;
 
@@ -46,6 +47,7 @@ export const inviteUser: KoaController = async (ctx) => {
   if (player.alliance_id) throw userAlreadyInAllianceErr();
 
   assertMayJoin(player.save, { allianceWorld: alliance.world_id, who: player.username });
+  assertRejoinAllowed(player.alliance_left_at, new Date(), player.username);
 
   await openInvite(alliance, player.userid, AllianceInviteType.INVITE);
 

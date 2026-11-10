@@ -5,11 +5,13 @@ import { getAllianceDetails } from "../../services/alliance/allianceMember.js";
 import { getTypeSwitchOptions } from "../../services/alliance/allianceSettings.js";
 import { memberLimit, officerLimit } from "../../services/alliance/allianceTypes.js";
 import { allowedActions } from "../../services/alliance/permissions.js";
+import { rejoinAvailableAt } from "../../services/alliance/joinGate.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
 /**
  * Returns the authenticated user's alliance for the My Alliance tab, or
- * `alliance: null` when they are unaffiliated.
+ * `alliance: null` when they are unaffiliated, with `rejoin_available_at`
+ * (Unix seconds) while the 24-hour re-join wait runs, else null.
  *
  * Rank is the alliance's standing across its whole map version by empire points,
  * not within its own world.
@@ -22,7 +24,13 @@ export const myAlliance: KoaController = async (ctx) => {
 
   if (!alliance) {
     ctx.status = Status.OK;
-    ctx.body = { error: 0, alliance: null };
+    const rejoinAt = rejoinAvailableAt(user.alliance_left_at, new Date());
+
+    ctx.body = {
+      error: 0,
+      alliance: null,
+      rejoin_available_at: rejoinAt ? Math.floor(rejoinAt.getTime() / 1000) : null,
+    };
     return;
   }
 

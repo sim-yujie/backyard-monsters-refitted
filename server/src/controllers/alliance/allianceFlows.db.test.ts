@@ -430,6 +430,59 @@ describe.skipIf(!enabled)("alliance flows through the controllers, on Postgres (
     });
   });
 
+  describe("the 24-hour re-join wait (owner, 10 Nov 2026)", () => {
+    const aDayAgo = (userid: number) =>
+      sql(`UPDATE bym."user" SET alliance_left_at = now() - interval '25 hours' WHERE userid = ?`, [userid]);
+
+    test("a player who left may not ask to join, nor found, for 24 hours", async () => {
+      const allianceId = await foundWithMember();
+      await call(leaveAlliance, MEMBER);
+
+      const [row] = await sql<{ alliance_left_at: Date | null; alliance_joined_at: Date | null }>(
+        `SELECT alliance_left_at, alliance_joined_at FROM bym."user" WHERE userid = ?`,
+        [MEMBER]
+      );
+      expect(row!.alliance_left_at).not.toBeNull();
+      expect(row!.alliance_joined_at).toBeNull();
+
+      expect((await call(requestJoin, MEMBER, { alliance_id: allianceId })).refused).toContain("24 hours");
+      expect((await found(MEMBER, { alliance_name: "zz_flow_other" })).refused).toContain("24 hours");
+
+      await aDayAgo(MEMBER);
+      expect((await call(requestJoin, MEMBER, { alliance_id: allianceId })).error).toBe(0);
+    });
+
+    test("a kicked player cannot be invited back for 24 hours; the invite names them", async () => {
+      const allianceId = await foundWithMember();
+      await call(kickMember, LEADER, { userid: MEMBER });
+
+      expect((await call(inviteUser, LEADER, { userid: MEMBER })).refused).toBe(
+        `zz_flow_${MEMBER} left an alliance less than 24 hours ago.`
+      );
+      expect(allianceId).toBeGreaterThan(0);
+    });
+
+    test("an accept already waiting is refused under the lock when the player left in between", async () => {
+      const allianceId = await foundWithMember();
+      await call(requestJoin, PLAYER, { alliance_id: allianceId });
+      await sql(`UPDATE bym."user" SET alliance_left_at = now() WHERE userid = ?`, [PLAYER]);
+
+      const answer = await call(changeInviteStatus, LEADER, { invite_id: await pendingInviteId(PLAYER), status: "accepted" });
+
+      expect(answer.refused).toBe(`zz_flow_${PLAYER} left an alliance less than 24 hours ago.`);
+      expect(await membership(PLAYER)).toEqual({ alliance_id: null, role: null });
+    });
+
+    test("joining records when, and the founder's join time is set too", async () => {
+      await foundWithMember();
+      const rows = await sql<{ userid: number; alliance_joined_at: Date | null }>(
+        `SELECT userid, alliance_joined_at FROM bym."user" WHERE userid IN (?, ?)`,
+        [LEADER, MEMBER]
+      );
+      expect(rows.every((row) => row.alliance_joined_at !== null)).toBe(true);
+    });
+  });
+
   describe("Officers", () => {
     /** Founds with MEMBER in, and makes MEMBER an Officer. */
     const foundWithOfficer = async () => {

@@ -5,7 +5,7 @@ import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { RequestJoinSchema } from "../../schemas/AllianceSchemas.js";
 import { openInvite } from "../../services/alliance/allianceInvites.js";
-import { assertMayJoin, GATE_SAVE_FIELDS } from "../../services/alliance/joinGate.js";
+import { assertMayJoin, assertRejoinAllowed, GATE_SAVE_FIELDS } from "../../services/alliance/joinGate.js";
 import { mustLeaveAllianceErr, permissionErr } from "../../errors/errors.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
@@ -32,6 +32,7 @@ export const requestJoin: KoaController = async (ctx) => {
   if (!alliance) throw permissionErr();
 
   assertMayJoin(user.save, { allianceWorld: alliance.world_id });
+  assertRejoinAllowed(user.alliance_left_at, new Date());
 
   await openInvite(alliance, user.userid, AllianceInviteType.REQUEST);
 

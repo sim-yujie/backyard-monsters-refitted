@@ -202,4 +202,12 @@ export class User {
 
   @Property({ type: "string", nullable: true })
   alliance_role?: AllianceRole | null;
+
+  /** When they joined their current alliance; the absent-leader takeover picks the longest-serving. */
+  @Property({ type: Date, nullable: true })
+  alliance_joined_at?: Date | null = null;
+
+  /** When they last left or were kicked: no alliance for `REJOIN_COOLDOWN_HOURS` after. */
+  @Property({ type: Date, nullable: true })
+  alliance_left_at?: Date | null = null;
 }

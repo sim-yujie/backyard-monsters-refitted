@@ -16,7 +16,7 @@ import { postgres } from "../../server.js";
 import { addAllianceMember, lockAlliance, lockMembership } from "./membership.js";
 import { AllianceAction, can } from "./permissions.js";
 import { memberLimit } from "./allianceTypes.js";
-import { assertMayJoin, loadGateSave } from "./joinGate.js";
+import { assertMayJoin, assertRejoinAllowed, loadGateSave } from "./joinGate.js";
 import {
   allianceFullErr,
   inviteNotPendingErr,
@@ -311,6 +311,7 @@ export const answerInvite = async (user: User, inviteId: number, status: Allianc
 
     if (!membership) throw permissionErr();
     if (membership.alliance_id) throw alreadyInOne();
+    assertRejoinAllowed(membership.alliance_left_at, new Date(), isAnswerer ? undefined : player.username);
 
     await checkAllianceSpace(em, alliance.id, locked.type);
     await resolveInvite(em, invite, status);

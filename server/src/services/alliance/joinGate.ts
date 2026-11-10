@@ -4,7 +4,7 @@ import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import { Status } from "../../enums/StatusCodes.js";
-import { OBSERVATORY } from "../../config/AllianceConfig.js";
+import { OBSERVATORY, REJOIN_COOLDOWN_HOURS } from "../../config/AllianceConfig.js";
 import { onMapRoom2 } from "../events/mr2Welcome.js";
 
 /**
@@ -16,7 +16,7 @@ import { onMapRoom2 } from "../events/mr2Welcome.js";
  */
 
 /** Why the gate says no, in the order it asks. */
-export type JoinRefusal = "noWorld" | "notMapRoom2" | "noObservatory" | "otherWorld";
+export type JoinRefusal = "noWorld" | "notMapRoom2" | "noObservatory" | "otherWorld" | "rejoinCooldown";
 
 /** The slice of a main save the gate reads. */
 export interface GateSave {
@@ -73,6 +73,7 @@ const SELF_TEXT: Record<JoinRefusal, string> = {
   notMapRoom2: "Alliances are on Map Room 2. Upgrade your Map Room first.",
   noObservatory: "Build an Observatory first: it is your pass into an alliance.",
   otherWorld: "That alliance is in another world.",
+  rejoinCooldown: `You left an alliance less than ${REJOIN_COOLDOWN_HOURS} hours ago. Wait a little before joining another.`,
 };
 
 const OTHER_TEXT: Record<JoinRefusal, (name: string) => string> = {
@@ -80,6 +81,7 @@ const OTHER_TEXT: Record<JoinRefusal, (name: string) => string> = {
   notMapRoom2: (name) => `${name} is not on Map Room 2 yet.`,
   noObservatory: (name) => `${name} has no Observatory yet.`,
   otherWorld: (name) => `${name} is in another world.`,
+  rejoinCooldown: (name) => `${name} left an alliance less than ${REJOIN_COOLDOWN_HOURS} hours ago.`,
 };
 
 /**
@@ -103,4 +105,30 @@ export const assertMayJoin = (
   const reason = joinRefusal(save, opts);
 
   if (reason) throw allianceJoinGateErr(reason, opts.who);
+};
+
+/**
+ * When a player who last left (or was kicked from) an alliance at `leftAt`
+ * may be in one again, or null when they already may.
+ */
+export const rejoinAvailableAt = (leftAt: Date | string | null | undefined, now: Date): Date | null => {
+  if (!leftAt) return null;
+
+  const at = new Date(new Date(leftAt).getTime() + REJOIN_COOLDOWN_HOURS * 3600_000);
+
+  return at > now ? at : null;
+};
+
+/**
+ * Throws the 24-hour re-join refusal (owner, 10 Nov 2026), with `available_at`
+ * in Unix seconds, if `leftAt` is too recent.
+ */
+export const assertRejoinAllowed = (
+  leftAt: Date | string | null | undefined,
+  now: Date,
+  who?: string
+): void => {
+  const at = rejoinAvailableAt(leftAt, now);
+
+  if (at) throw allianceJoinGateErr("rejoinCooldown", who, { available_at: Math.floor(at.getTime() / 1000) });
 };
