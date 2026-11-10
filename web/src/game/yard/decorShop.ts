@@ -10,15 +10,21 @@
  * test keeps the two equal; `decor/buy` always charges the server's own price.
  * Flash's `block`ed decorations (the event and reward ones) and the store rows
  * priced 0 are not sold; one of those still shows while it is in storage.
+ *
+ * This project's own decorations (`revampDecorations.ts`; owner, 10 Nov 2026:
+ * the six autumn ones, 25 to 75 coins) come first in their sub-tab, cheapest
+ * first, so a player meets them on its first page.
  */
 export const DECORATIONS_FOR_SALE: readonly (readonly [type: number, price: number])[] = [
   // Evil
   [107, 20], [74, 10], [75, 15], [76, 15], [77, 15], [78, 15], [79, 15], [81, 15], [82, 15],
   [83, 15], [84, 15], [85, 15], [80, 25], [73, 50],
-  // Plants
+  // Plants: the autumn Leaf Pile and Rake, Turkey Topiary and Autumn Maple Tree first
+  [201, 25], [205, 60], [206, 75],
   [55, 5], [66, 5], [72, 5], [91, 10], [92, 10], [94, 10], [95, 10], [93, 15], [56, 20], [90, 10],
   [86, 25], [88, 25], [89, 25], [87, 50],
-  // Good
+  // Good: the autumn Apple Barrel, Pie on a Tree Stump and Harvest Wheelbarrow first
+  [202, 30], [203, 35], [204, 50],
   [57, 20], [65, 20], [63, 20], [64, 20], [71, 25], [108, 25], [109, 50], [61, 25], [62, 25],
   [60, 35], [102, 200], [103, 200], [68, 250], [104, 250], [105, 250], [106, 250],
   // Flags
@@ -58,21 +64,22 @@ export interface DecorKindDefinition {
 
 /**
  * Which sub-tab each decoration is under in Flash: every one of the 84
- * decoration types (`isDecoration`) has a `subgroup`, 0 to 4.
+ * decoration types (`isDecoration`) has a `subgroup`, 0 to 4. This project's
+ * own go under Plants and Good.
  */
 export const DECOR_KINDS: readonly DecorKindDefinition[] = [
   { id: DecorKind.EVIL, label: "Evil", types: [107, 74, 75, 76, 77, 78, 79, 81, 82, 83, 84, 85, 80, 73] },
   {
     id: DecorKind.PLANTS,
     label: "Plants",
-    // Blocked: 67 Rock, 59 Childrens Jax, 69 Scarecrow.
-    types: [55, 66, 72, 67, 59, 91, 92, 94, 95, 93, 56, 69, 90, 86, 88, 89, 87],
+    // Blocked: 67 Rock, 59 Childrens Jax, 69 Scarecrow. This project's autumn ones first.
+    types: [201, 205, 206, 55, 66, 72, 67, 59, 91, 92, 94, 95, 93, 56, 69, 90, 86, 88, 89, 87],
   },
   {
     id: DecorKind.GOOD,
     label: "Good",
-    // Blocked: 70 Sun Dial, 58 Camping Tent.
-    types: [70, 57, 58, 65, 63, 64, 71, 108, 109, 61, 62, 60, 102, 103, 68, 104, 105, 106],
+    // Blocked: 70 Sun Dial, 58 Camping Tent. This project's autumn ones first.
+    types: [202, 203, 204, 70, 57, 58, 65, 63, 64, 71, 108, 109, 61, 62, 60, 102, 103, 68, 104, 105, 106],
   },
   {
     id: DecorKind.FLAGS,

@@ -27,21 +27,24 @@ describe("Flash's Decorations sub-tabs", () => {
     const flash = flashDecorations();
     const all = DECOR_KINDS.flatMap((kind) => kind.types);
     expect(new Set(all).size).toBe(all.length);
-    expect(all).toHaveLength(84);
+    expect(all).toHaveLength(84 + 6);
     expect(flash.size).toBe(84);
+    // This project's six autumn ones (owner, 10 Nov 2026): Plants and Good.
+    expect(DECOR_KINDS[1]?.types.slice(0, 3)).toEqual([201, 205, 206]);
+    expect(DECOR_KINDS[2]?.types.slice(0, 3)).toEqual([202, 203, 204]);
     for (const [type, { subgroup }] of flash) {
       expect(isDecoration(type), `${type} is a decoration`).toBe(true);
       expect(decorKindOf(type), `${type}`).toBe(DECOR_KINDS[subgroup]?.id);
     }
-    for (let type = 0; type < 200; type++) {
+    for (let type = 0; type < 300; type++) {
       expect(decorKindOf(type) !== null, `${type}`).toBe(isDecoration(type));
     }
   });
 
-  it("sell 14 Evil, 14 Plants, 16 Good, 23 Flags and 6 Premium, the shop's order sub-tab by sub-tab", () => {
+  it("sell 14 Evil, 14 + 3 Plants, 16 + 3 Good, 23 Flags and 6 Premium, the shop's order sub-tab by sub-tab", () => {
     const sold = new Set(DECORATIONS_FOR_SALE.map(([type]) => type));
     const counts = DECOR_KINDS.map((kind) => kind.types.filter((type) => sold.has(type)).length);
-    expect(counts).toEqual([14, 14, 16, 23, 6]);
+    expect(counts).toEqual([14, 17, 19, 23, 6]);
     expect(DECOR_KINDS.flatMap((kind) => kind.types.filter((type) => sold.has(type)))).toEqual(
       DECORATIONS_FOR_SALE.map(([type]) => type),
     );
@@ -63,5 +66,17 @@ describe("Flash's Decorations sub-tabs", () => {
     expect(decorOrder(73)).toBeLessThan(decorOrder(55));
     expect(decorOrder(32)).toBeLessThan(decorOrder(120));
     expect(decorOrder(5)).toBe(Number.MAX_SAFE_INTEGER);
+  });
+});
+
+describe("this project's autumn decorations (owner, 10 Nov 2026)", () => {
+  it("sell for 25 to 75 coins, cheapest first in their sub-tab", () => {
+    const prices = new Map(DECORATIONS_FOR_SALE);
+    expect([201, 202, 203, 204, 205, 206].map((type) => prices.get(type))).toEqual([25, 30, 35, 50, 60, 75]);
+    expect(decorKindOf(201)).toBe(DecorKind.PLANTS);
+    expect(decorKindOf(206)).toBe(DecorKind.PLANTS);
+    expect(decorKindOf(204)).toBe(DecorKind.GOOD);
+    expect(decorOrder(201)).toBeLessThan(decorOrder(55));
+    expect(decorOrder(202)).toBeLessThan(decorOrder(57));
   });
 });

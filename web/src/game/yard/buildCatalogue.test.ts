@@ -314,11 +314,11 @@ describe("buildOffers", () => {
 });
 
 describe("decorations sold for event coins (owner 2026-11-04, decision 29)", () => {
-  it("lists stored ones, then the 73 Flash sold in its tab's order, each type once", () => {
+  it("lists stored ones, then the 73 Flash sold and the 6 autumn ones in its tab's order, each type once", () => {
     const context = contextOf({ buildings: [HALL(3)], researchdata: { b29: 2, b70: 1 } });
     const offers = buildOffers(BuildCategory.DECORATIONS, context);
 
-    expect(DECORATIONS_FOR_SALE).toHaveLength(73);
+    expect(DECORATIONS_FOR_SALE).toHaveLength(73 + 6);
     // The Sun Dial (70) is not sold, but shows while one is stored.
     expect(offers.slice(0, 2).map((offer) => [offer.type, offer.stored])).toEqual([
       [29, 2],
@@ -385,14 +385,17 @@ describe("the Decorations sub-tabs (Flash's Evil, Plants, Good, Flags, Premium)"
       [67, 1],
       [88, 2],
     ]);
-    expect(plants.slice(3).map((offer) => offer.type)).toEqual([66, 72, 91, 92, 94, 95, 93, 56, 90, 86, 89, 87]);
+    // The autumn Leaf Pile and Rake, Turkey Topiary and Autumn Maple Tree (owner, 10 Nov 2026) lead the ones for sale.
+    expect(plants.slice(3).map((offer) => offer.type)).toEqual([
+      201, 205, 206, 66, 72, 91, 92, 94, 95, 93, 56, 90, 86, 89, 87,
+    ]);
     expect(decorationOffers(DecorKind.FLAGS, context)[0]).toMatchObject({ type: 28, stored: 4 });
   });
 
-  it("together hold the whole tab, 14, 14, 16, 23 and 6 with nothing stored", () => {
+  it("together hold the whole tab, 14, 17, 19, 23 and 6 with nothing stored", () => {
     const context = contextOf({ buildings: [HALL(3)] });
     const kinds = [DecorKind.EVIL, DecorKind.PLANTS, DecorKind.GOOD, DecorKind.FLAGS, DecorKind.PREMIUM];
-    expect(kinds.map((kind) => decorationOffers(kind, context).length)).toEqual([14, 14, 16, 23, 6]);
+    expect(kinds.map((kind) => decorationOffers(kind, context).length)).toEqual([14, 17, 19, 23, 6]);
     expect(kinds.flatMap((kind) => decorationOffers(kind, context).map((offer) => offer.type))).toEqual(
       buildOffers(BuildCategory.DECORATIONS, context).map((offer) => offer.type),
     );

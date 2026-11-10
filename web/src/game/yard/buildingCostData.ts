@@ -7,7 +7,8 @@
  * (`client/scripts/GLOBAL.as:615-714`) applied on top, because this project
  * runs Map Room 2 as the default overworld. Two rows are this project's own
  * decisions: the Map Room (11) stops at level 2, and the Radio Tower (113) has
- * no row (`docs/design/yard-buildings.md` §5.7). Regenerate with
+ * no row (`docs/design/yard-buildings.md` §5.7). Types 201 and up are this
+ * project's own decorations, which Flash never had. Regenerate with
  * `node tools/gen-building-costs.mjs` from `web/`.
  *
  * A row is `[type, name, kind, group, costs, quantity]`, with a seventh
@@ -834,6 +835,30 @@ export const BUILDING_COST_ROWS: readonly CostRow[] = [
     [5,5,5,5,1,[]],
     [5,5,5,5,1,[]],
   ], [0,1,1,1,1,1]],
+  // 201 bdg_leafpilerake (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [201, "bdg_leafpilerake", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 202 bdg_applebarrel (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [202, "bdg_applebarrel", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 203 bdg_piestump (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [203, "bdg_piestump", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 204 bdg_harvestwheelbarrow (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [204, "bdg_harvestwheelbarrow", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 205 bdg_turkeytopiary (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [205, "bdg_turkeytopiary", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
+  // 206 bdg_autumnmaple (decoration) — this project's own decoration (gen-building-costs.mjs)
+  [206, "bdg_autumnmaple", "decoration", 4, [
+    [0,0,0,0,0,[]],
+  ], [0]],
 ];
 
 /* ── Outposts ───────────────────────────────────────────────────────────────── */

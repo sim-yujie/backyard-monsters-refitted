@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import fixture from "../../../test/fixtures/baseload-sandbox-yard.json";
 import manifest from "../../../test/fixtures/building-art-files.json";
 import { BUILDING_ART_ROWS } from "./buildingArtData";
+import { isRevampDecoration, REVAMP_DECORATION_ROWS } from "./revampDecorations";
 import {
   artFolder,
   artTypes,
@@ -47,9 +48,9 @@ const fixtureTypes = [
 const fileOf = (url: string): string => url.slice(url.lastIndexOf("/") + 1);
 
 describe("the art table", () => {
-  it("covers 132 building types with no duplicates", () => {
+  it("covers 132 building types with no duplicates, and this project's own decorations", () => {
     expect(BUILDING_ART_ROWS.length).toBe(132);
-    expect(artTypes().length).toBe(BUILDING_ART_ROWS.length);
+    expect(artTypes().length).toBe(BUILDING_ART_ROWS.length + REVAMP_DECORATION_ROWS.length);
   });
 
   it("draws the outpost core from the outpost props table", () => {
@@ -62,7 +63,10 @@ describe("the art table", () => {
   });
 
   it("names a folder that exists for every type", () => {
-    const missing = artTypes().filter((type) => folders[artFolder(type) ?? ""]?.exists !== true);
+    // This project's own decorations are checked on disk by revampDecorations.test.ts.
+    const missing = artTypes()
+      .filter((type) => !isRevampDecoration(type))
+      .filter((type) => folders[artFolder(type) ?? ""]?.exists !== true);
     expect(missing).toEqual([]);
   });
 
