@@ -1,4 +1,4 @@
-import { LockMode, UniqueConstraintViolationException, type FilterQuery } from "@mikro-orm/core";
+import { UniqueConstraintViolationException, type FilterQuery } from "@mikro-orm/core";
 
 import type { EntityManager, PostgreSqlDriver } from "@mikro-orm/postgresql";
 
@@ -8,7 +8,7 @@ import { Alliance } from "../../database/models/alliance.model.js";
 import { AllianceInvite } from "../../database/models/allianceinvite.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
-import { addAllianceMember } from "./membership.js";
+import { addAllianceMember, lockAlliance, lockMembership } from "./membership.js";
 import {
   allianceFullErr,
   inviteNotPendingErr,
@@ -257,8 +257,7 @@ export const answerInvite = async (user: User, inviteId: number, status: Allianc
   if (!canAnswer) throw permissionErr();
 
   if (status === AllianceInviteStatus.DECLINED) {
-    invite.status = status;
-    await postgres.em.flush();
+    await resolveInvite(postgres.em, invite, status);
 
     return invite;
   }
@@ -272,21 +271,63 @@ export const answerInvite = async (user: User, inviteId: number, status: Allianc
   if (!player) throw permissionErr();
 
   const isAnswerer = player.userid === user.userid;
+  const alreadyInOne = () => (isAnswerer ? mustLeaveAllianceToAcceptErr() : userAlreadyInAllianceErr());
 
-  if (player.alliance_id) {
-    throw isAnswerer ? mustLeaveAllianceToAcceptErr() : userAlreadyInAllianceErr();
-  }
+  if (player.alliance_id) throw alreadyInOne();
 
-  // The transaction locks the alliance row to prevent two simultaneous acceptances from both sides
+  // Everything above was read outside any lock, so it is checked again here
+  // under the alliance's lock and the player's. Without that, a player
+  // accepting two invites at once (or accepting one while their request
+  // elsewhere is accepted, or while founding an alliance) passed the
+  // "not in an alliance" check twice, and the second join silently moved them
+  // (alliance audit, 10 Nov 2026).
   await postgres.em.transactional(async (em) => {
-    await em.findOne(Alliance, { id: alliance.id }, { lockMode: LockMode.PESSIMISTIC_WRITE });
-    await checkAllianceSpace(em, alliance.id);
+    if (!(await lockAlliance(em, alliance.id))) throw permissionErr();
 
-    await em.nativeUpdate(AllianceInvite, { id: invite.id }, { status, updated_at: new Date() });
+    if (!isInvite) {
+      const leader = await lockMembership(em, user.userid);
+      const stillLeads = leader?.alliance_id === alliance.id && leader.alliance_role === AllianceRole.LEADER;
+
+      if (!stillLeads) throw permissionErr();
+    }
+
+    const membership = await lockMembership(em, player.userid);
+
+    if (!membership) throw permissionErr();
+    if (membership.alliance_id) throw alreadyInOne();
+
+    await checkAllianceSpace(em, alliance.id);
+    await resolveInvite(em, invite, status);
     await addAllianceMember(player, alliance, AllianceRole.MEMBER, AllianceMessageType.JOINED, em);
   });
 
-  invite.status = status;
-
   return invite;
+};
+
+/**
+ * Marks a pending exchange accepted or declined. The write only lands while the
+ * row is still pending, so two answers sent at once resolve it exactly once.
+ *
+ * @param {EntityManager} em - EntityManager to write through: the accept's transaction, or the request's.
+ * @param {AllianceInvite} invite - The row being answered.
+ * @param {AllianceInviteStatus} status - Accepted or declined.
+ * @throws {ClientSafeError} When the row was answered first by another request.
+ */
+const resolveInvite = async (
+  em: EntityManager<PostgreSqlDriver>,
+  invite: AllianceInvite,
+  status: AllianceInviteStatus
+) => {
+  const updated_at = new Date();
+
+  const resolved = await em.nativeUpdate(
+    AllianceInvite,
+    { id: invite.id, status: AllianceInviteStatus.PENDING },
+    { status, updated_at }
+  );
+
+  if (resolved === 0) throw inviteNotPendingErr();
+
+  invite.status = status;
+  invite.updated_at = updated_at;
 };

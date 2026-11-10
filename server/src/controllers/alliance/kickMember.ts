@@ -25,7 +25,7 @@ export const kickMember: KoaController = async (ctx) => {
 
   if (!member || member.alliance_id !== alliance.id) throw cannotKickErr();
 
-  await removeAllianceMember(member, alliance, AllianceMessageType.KICKED);
+  await removeAllianceMember(member, alliance, AllianceMessageType.KICKED, user);
 
   ctx.status = Status.OK;
   ctx.body = { error: 0 };

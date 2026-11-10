@@ -364,7 +364,9 @@ const capturedDefenders = async (tx: EntityManager, u: number, worldid: string |
 const allianceOutcome = async (sql: Sql, account: AccountRow) => {
   if (account.alliance_id === null) return { text: null, disband: false, successor: null as { userid: number; username: string } | null };
 
-  const [alliance] = await sql<{ name: string }>(`SELECT name FROM bym.alliance WHERE id = ?`, [account.alliance_id]);
+  // Locked like every other membership change (`services/alliance/membership.ts`), so a member
+  // leaving or being promoted at the same moment cannot make the successor chosen here stale.
+  const [alliance] = await sql<{ name: string }>(`SELECT name FROM bym.alliance WHERE id = ? FOR UPDATE`, [account.alliance_id]);
   const name = alliance?.name ?? `#${account.alliance_id}`;
   const [next] = await sql<{ userid: number; username: string }>(
     `SELECT userid, username FROM bym."user" WHERE alliance_id = ? AND userid <> ? ORDER BY userid LIMIT 1`,
