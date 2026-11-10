@@ -183,6 +183,18 @@ const numberOr = (value: unknown, fallback: number): number => {
   return Number.isFinite(number) ? number : fallback;
 };
 
+/**
+ * The server's member rows, with `online` lifted out of `status`
+ * (`services/alliance/allianceMember.ts` sends `status: { online, damage_protection }`).
+ */
+export const membersOf = (rows: unknown): AllianceMember[] =>
+  Array.isArray(rows)
+    ? rows.map((row: AllianceMember & { status?: { online?: unknown } }) => ({
+        ...row,
+        online: Boolean(row.online ?? row.status?.online),
+      }))
+    : [];
+
 export const allianceApi: AllianceApi = {
   mine: () =>
     call(getFrom("myalliance"), (body) => ({
@@ -191,7 +203,7 @@ export const allianceApi: AllianceApi = {
     })),
   members: () =>
     call(getFrom("myalliancemembers"), (body) => ({
-      members: Array.isArray(body["members"]) ? (body["members"] as AllianceMember[]) : [],
+      members: membersOf(body["members"]),
     })),
   search: (search, page) =>
     call(postTo("searchalliances", { ...(search ? { search } : {}), page }), (body) => ({
@@ -233,6 +245,6 @@ export const allianceApi: AllianceApi = {
     })),
   suggested: () =>
     call(getFrom("getsuggestedmembers"), (body) => ({
-      members: Array.isArray(body["members"]) ? (body["members"] as AllianceMember[]) : [],
+      members: membersOf(body["members"]),
     })),
 };

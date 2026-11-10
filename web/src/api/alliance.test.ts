@@ -81,6 +81,18 @@ describe("allianceApi", () => {
     expect(calls[1]!.body).toContain("declined");
   });
 
+  it("lifts a member's online out of the server's status", async () => {
+    stubFetch({
+      error: 0,
+      members: [
+        { user_id: 1, display_name: "A", status: { online: true, damage_protection: false } },
+        { user_id: 2, display_name: "B", status: { online: false, damage_protection: true } },
+      ],
+    });
+    const answer = await allianceApi.members();
+    expect(answer.ok && answer.members.map((member) => member.online)).toEqual([true, false]);
+  });
+
   it("turns a refused route into an answer, not a throw", async () => {
     stubFetch(
       { error: "That alliance is full.", errorDetails: { message: "That alliance is full.", status: 409, data: { reason: "allianceFull" } } },
