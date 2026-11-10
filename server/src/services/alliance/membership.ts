@@ -20,6 +20,8 @@ import {
   officerSeatsFullErr,
   permissionErr,
 } from "../../errors/errors.js";
+import { allianceFactorOf, noteFactorChange } from "./productionHistory.js";
+import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 
 type EntryShout = AllianceMessageType.CREATED | AllianceMessageType.JOINED;
 /** The ranks `setAllianceRank` moves a player between. */
@@ -136,6 +138,9 @@ export const addAllianceMember = async (
     throw alreadyInAllianceErr();
   }
 
+  // The time before the join stays at no bonus (`productionHistory.ts`).
+  await noteFactorChange(em, { userid: user.userid }, 1, await allianceFactorOf(em, id), getCurrentDateTime());
+
   user.alliance_id = id;
   user.alliance_role = role;
   user.alliance_joined_at = now;
@@ -190,6 +195,9 @@ export const removeAllianceMember = async (
     if (membership.alliance_role === AllianceRole.LEADER && remaining > 0) {
       throw kickedBy ? cannotKickErr() : leaderMustTransferErr(alliance.name);
     }
+
+    // The time before leaving stays at the alliance's bonus (`productionHistory.ts`).
+    await noteFactorChange(em, { userid: user.userid }, await allianceFactorOf(em, alliance.id), 1, getCurrentDateTime());
 
     await em.nativeUpdate(
       User,

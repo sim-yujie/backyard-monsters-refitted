@@ -173,19 +173,19 @@ export const TYPE_SCALE: Record<AllianceType, number> = {
  * The four constellations of each type, with start values from fable52's
  * balance check (10 Nov 2026, START column) and the owner's answers of
  * 10 Nov: Midas's second weakness is outpost hatch cost, Conquest's is
- * outpost health, no weakness touches main-yard defence. A weakness step
- * takes off a tenth of its start, so a full constellation halves it.
+ * outpost health, no weakness touches main-yard defence. Steps follow the
+ * check's "start -> full sky" table (5 equal steps).
  * PLACEHOLDERS: the owner tunes these after the feature is done.
  */
 export const CONSTELLATIONS: Record<AllianceType, ConstellationRules[]> = {
   [AllianceType.MIDAS]: [
-    { id: "wormzer", name: "Wormzer", kind: "strength", effects: [{ stat: "production", start: 15, perStep: 3 }] },
+    { id: "wormzer", name: "Wormzer", kind: "strength", effects: [{ stat: "production", start: 15, perStep: 2 }] },
     { id: "brain", name: "Brain", kind: "strength", effects: [{ stat: "loot", start: 10, perStep: 1 }] },
     {
       id: "pokey",
       name: "Pokey",
       kind: "weakness",
-      effects: [{ stat: "outpostHatchCost", start: 15, perStep: -1.5 }],
+      effects: [{ stat: "outpostHatchCost", start: 15, perStep: -2 }],
     },
     {
       id: "zafreeti",
@@ -229,28 +229,39 @@ export const CONSTELLATIONS: Record<AllianceType, ConstellationRules[]> = {
       id: "octoooze",
       name: "Octo-ooze",
       kind: "weakness",
-      effects: [{ stat: "takeoverCost", start: 15, perStep: -1.5 }],
+      effects: [{ stat: "takeoverCost", start: 15, perStep: -2 }],
     },
   ],
 };
 
+/** An always-on value: `start` with no stars lit, `full` with the whole sky lit. */
+export interface TypeExtra {
+  start: number;
+  full: number;
+}
+
 /**
- * Start values outside the constellations: always on, never moved by stars
- * (fable52's other START numbers). Fortress's strengths are all battle stats
- * until phase 4, so these give it economy-shaped strengths meanwhile
- * (alliance audit §6.2).
+ * Values outside the constellations: always on, and moving from `start` to
+ * `full` with the share of the whole sky lit (20 steps; fable52's balance
+ * check, "Recommended numbers (start -> full sky)", 10 Nov 2026). Fortress's
+ * strengths are all battle stats until phase 4, so these give it
+ * economy-shaped strengths meanwhile (alliance audit §6.2).
+ * PLACEHOLDERS: the owner tunes these after the feature is done.
  */
-export const TYPE_EXTRAS: Record<AllianceType, Partial<Record<AllianceStat, number>>> = {
-  [AllianceType.MIDAS]: { kitCost: 10, raidersCarry: 10 },
-  [AllianceType.CONQUEST]: { takeoverDestroyedPercent: 85, newOutpostProtectionHours: 6 },
+export const TYPE_EXTRAS: Record<AllianceType, Partial<Record<AllianceStat, TypeExtra>>> = {
+  [AllianceType.MIDAS]: { kitCost: { start: 10, full: 5 }, raidersCarry: { start: 10, full: 5 } },
+  [AllianceType.CONQUEST]: {
+    takeoverDestroyedPercent: { start: 85, full: 80 },
+    newOutpostProtectionHours: { start: 6, full: 7 },
+  },
   [AllianceType.FORTRESS]: {
-    kitCost: 5,
-    enemyTakeoverCost: 25,
-    raidersCarry: -20,
-    fortifyCost: -20,
-    takeoverDestroyedPercent: 95,
-    outpostRepairSpeed: 25,
-    damageProtectionLength: 25,
+    kitCost: { start: 5, full: 0 },
+    enemyTakeoverCost: { start: 25, full: 40 },
+    raidersCarry: { start: -20, full: -35 },
+    fortifyCost: { start: -20, full: -35 },
+    takeoverDestroyedPercent: { start: 95, full: 95 },
+    outpostRepairSpeed: { start: 25, full: 40 },
+    damageProtectionLength: { start: 25, full: 50 },
   },
 };
 

@@ -55,8 +55,13 @@ export const effectValue = (effect: ConstellationRules["effects"][number], steps
 export const bonusesFor = (type: AllianceType | null | undefined, stars?: LitSteps | null): AllianceBonuses => {
   const out = noBonuses();
   if (!type || !CONSTELLATIONS[type]) return out;
-  for (const [stat, value] of Object.entries(TYPE_EXTRAS[type] ?? {})) out[stat as AllianceStat] += value ?? 0;
-  for (const constellation of constellationsOf(type)) {
+  const constellations = constellationsOf(type);
+  const sky = constellations.length * CONSTELLATION_STEPS;
+  const lit = constellations.reduce((sum, c) => sum + stepsOf(stars, c.id), 0);
+  for (const [stat, extra] of Object.entries(TYPE_EXTRAS[type] ?? {})) {
+    if (extra) out[stat as AllianceStat] += round(extra.start + ((extra.full - extra.start) * lit) / (sky || 1));
+  }
+  for (const constellation of constellations) {
     const steps = stepsOf(stars, constellation.id);
     for (const effect of constellation.effects) out[effect.stat] = round(out[effect.stat] + effectValue(effect, steps));
   }
@@ -89,6 +94,17 @@ export const productionFactor = (bonuses: Pick<AllianceBonuses, "production"> | 
   Math.max(0, 1 + (bonuses?.production ?? 0) / 100);
 
 /**
+ * Runs one read-only alliance query, or answers no rows when `em` cannot run
+ * SQL: the stand-in entity managers of the yard's unit tests, whose players are
+ * in no alliance. Every real one (MikroORM's Postgres manager) can.
+ */
+export const allianceQuery = async <R>(em: EntityManager, sql: string, params: unknown[]): Promise<R[]> => {
+  const sqlEm = em as unknown as Partial<SqlEntityManager>;
+  if (typeof sqlEm.execute !== "function") return [];
+  return (await sqlEm.execute(sql, params)) as R[];
+};
+
+/**
  * The bonuses of the alliance `userid` is in, all zeros when none. One small
  * query; safe to call inside a transaction.
  */
@@ -97,7 +113,8 @@ export const allianceBonusesOfUser = async (
   userid: number | null | undefined
 ): Promise<AllianceBonuses> => {
   if (!userid) return noBonuses();
-  const [row] = await (em as SqlEntityManager).execute<{ type: AllianceType; stars: LitSteps | string | null }[]>(
+  const [row] = await allianceQuery<{ type: AllianceType; stars: LitSteps | string | null }>(
+    em,
     `SELECT a.type, a.stars FROM bym."user" u JOIN bym.alliance a ON a.id = u.alliance_id WHERE u.userid = ?`,
     [userid]
   );

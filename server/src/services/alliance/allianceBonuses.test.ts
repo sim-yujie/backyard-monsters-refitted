@@ -25,7 +25,7 @@ describe("alliance bonuses", () => {
       const bonuses = bonusesFor(type, {});
       for (const constellation of CONSTELLATIONS[type]) {
         for (const effect of constellation.effects) {
-          const extra = TYPE_EXTRAS[type][effect.stat] ?? 0;
+          const extra = TYPE_EXTRAS[type][effect.stat]?.start ?? 0;
           const others = CONSTELLATIONS[type]
             .filter((c) => c !== constellation)
             .flatMap((c) => c.effects)
@@ -54,11 +54,12 @@ describe("alliance bonuses", () => {
     expect(bonusesFor(AllianceType.FORTRESS).fortifyCost).toBeLessThan(0);
   });
 
-  test("strength steps grow; weakness steps shrink to half at full", () => {
+  test("strength steps grow; weakness steps shrink at full", () => {
     const start = bonusesFor(AllianceType.MIDAS).production;
-    expect(bonusesFor(AllianceType.MIDAS, { wormzer: 5 }).production).toBeCloseTo(start + 15, 5);
+    expect(bonusesFor(AllianceType.MIDAS, { wormzer: 5 }).production).toBeCloseTo(start + 10, 5);
     const pokey = constellationOf(AllianceType.MIDAS, "pokey")!.effects[0]!;
-    expect(bonusesFor(AllianceType.MIDAS, { pokey: 5 }).outpostHatchCost).toBeCloseTo(pokey.start / 2, 5);
+    // Hatch cost +15% -> +5% (fable52, start -> full).
+    expect(bonusesFor(AllianceType.MIDAS, { pokey: 5 }).outpostHatchCost).toBeCloseTo(pokey.start - 10, 5);
     const bolt = constellationOf(AllianceType.CONQUEST, "bolt")!.effects[0]!;
     expect(bonusesFor(AllianceType.CONQUEST, { bolt: 5 }).loot).toBeCloseTo(bolt.start / 2, 5);
   });
@@ -92,5 +93,14 @@ describe("alliance bonuses", () => {
     expect(mapByPercent({ r1: 100, r2: 0 }, 10)).toEqual({ r1: 110, r2: 0 });
     expect(productionFactor({ production: 15 })).toBeCloseTo(1.15, 5);
     expect(productionFactor(null)).toBe(1);
+  });
+});
+
+describe("always-on values move with the whole sky", () => {
+  test("Fortress's enemy takeover price: +25% with nothing lit, +40% with all 20 steps", () => {
+    expect(bonusesFor(AllianceType.FORTRESS, {}).enemyTakeoverCost).toBe(25);
+    const all = Object.fromEntries(CONSTELLATIONS[AllianceType.FORTRESS].map((c) => [c.id, 5]));
+    expect(bonusesFor(AllianceType.FORTRESS, all).enemyTakeoverCost).toBe(40);
+    expect(bonusesFor(AllianceType.FORTRESS, { crabatron: 5, bandito: 5 }).enemyTakeoverCost).toBe(32.5);
   });
 });

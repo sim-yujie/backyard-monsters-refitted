@@ -14,7 +14,8 @@ import { isAttackActive } from "../../services/base/isAttackActive.js";
 import { addEvents, builtEvents, recordAchievements, unseenAchievements } from "../../services/achievements/record.js";
 import type { AchievementEvents } from "../../services/achievements/evaluate.js";
 import { autobankYard } from "../../services/maproom/v2/autobank.js";
-import { allianceBonusesOfUser, productionFactor, type AllianceBonuses } from "../../services/alliance/allianceBonuses.js";
+import { allianceBonusesOfUser, type AllianceBonuses } from "../../services/alliance/allianceBonuses.js";
+import { productionScheduleOfUser, settleProductionHistory, type FactorSchedule } from "../../services/alliance/productionHistory.js";
 import { isShinyLocked } from "../../services/user/shinyLock.js";
 import { coinNotes, coinStore } from "../../services/events/eventCoins.js";
 import { catchUpYard, type CompletedJob } from "../../services/yard/catchUp.js";
@@ -566,6 +567,18 @@ export const catchUpLockedYard = async (
   });
 
 /**
+ * Drops the alliance factor steps (`productionHistory.ts`) both the main
+ * yard's catch-up and its outpost income have now passed: up to `now`, or up
+ * to the last outpost income tick for a Map Room 2 yard, whose income may stop
+ * short of `now`.
+ */
+const settleFactorSteps = async (tx: EntityManager, main: Save, schedule: FactorSchedule, now: number) => {
+  const paid = Number((main.buildingresources as { t?: unknown } | null | undefined)?.t);
+  const autobanks = Number(main.mapversion) === MapRoomVersion.V2 && Number.isFinite(paid) && paid > 0;
+  await settleProductionHistory(tx, main.saveuserid, schedule, autobanks ? Math.min(now, paid) : now);
+};
+
+/**
  * The main yard's catch-up on a row the caller has locked, not yet flushed:
  * `catchUpYard`, then Map Room 2 if it now qualifies, then the outpost income.
  * {@link catchUpLockedYard}'s, and a wild monster raid's at its start and its
@@ -574,10 +587,12 @@ export const catchUpLockedYard = async (
  * @returns What the catch-up finished.
  */
 export const catchUpLockedRow = async (tx: EntityManager, locked: Save, now: number): Promise<CompletedJob[]> => {
-  const factor = locked.type === BaseType.MAIN ? productionFactor(await allianceBonusesOfUser(tx, locked.saveuserid)) : 1;
+  const onMain = locked.type === BaseType.MAIN;
+  const factor = onMain ? await productionScheduleOfUser(tx, locked.saveuserid) : 1;
   const completed = catchUpYard(locked, now, factor);
   await joinMapRoom2(tx, locked);
   await autobankYard(tx, locked, now, completed);
+  if (onMain) await settleFactorSteps(tx, locked, factor as FactorSchedule, now);
   // Hatches that finished while the player was away count for
   // quests, on every path that catches the main row up (a load, a raid, a
   // friend's help or gift).
@@ -715,9 +730,11 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
       // catch-up, which tells it when a Production Overdrive ran out.
       if (yard.outpost) await autobankYard(tx, yard.main, now, [], yard.outpost);
       const bonuses = await allianceBonusesOfUser(tx, user.userid);
-      const completed = catchUpYard(save, now, onMain ? productionFactor(bonuses) : 1);
+      const schedule = onMain ? await productionScheduleOfUser(tx, user.userid) : 1;
+      const completed = catchUpYard(save, now, schedule);
       if (onMain) await joinMapRoom2(tx, save, user);
       if (onMain) await autobankYard(tx, yard.main, now, completed);
+      if (onMain) await settleFactorSteps(tx, yard.main, schedule as FactorSchedule, now);
 
       const outcome = await action.run({ save, user, body: parsed.data, now, completed, em: tx, bonuses });
       applyOutcome(save, user, outcome);

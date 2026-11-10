@@ -162,3 +162,42 @@ describe("catchUpHarvesters: alliance production bonus", () => {
     expect(save.buildingdata["1"]).toMatchObject({ st: 720, pr: 0 });
   });
 });
+
+/**
+ * A production bonus that changed while the player was away is paid only from
+ * the change on (`services/alliance/productionHistory.ts`, security review
+ * of 78c9156be).
+ */
+describe("catchUpHarvesters: a factor that changed while away", () => {
+  const run = (from: number, to: number, factor: Parameters<typeof catchUpHarvesters>[5], start = snapper()) => {
+    const save = yardOf(start);
+    catchUpHarvesters(save, from, to, [], "main", factor);
+    return save.buildingdata["1"]!;
+  };
+
+  test("away the whole time, then joined: all of it at no bonus", () => {
+    // Joined at the moment of the load: the step ends at `now`.
+    const joined = run(T0, T0 + 300, { past: [{ until: T0 + 300, factor: 1 }], current: 1.5 });
+    expect(joined).toEqual(run(T0, T0 + 300, 1));
+  });
+
+  test("a star lit half-way: old factor before, new after", () => {
+    const split = run(T0, T0 + 300, { past: [{ until: T0 + 150, factor: 1.15 }], current: 1.5 });
+    const first = run(T0, T0 + 150, 1.15);
+    const both = run(T0 + 150, T0 + 300, 1.5, first);
+    expect(split).toEqual(both);
+    expect(Number(split.st)).toBeGreaterThan(Number(run(T0, T0 + 300, 1.15).st));
+    expect(Number(split.st)).toBeLessThan(Number(run(T0, T0 + 300, 1.5).st));
+  });
+
+  test("leaving half-way keeps the bonus earned before it", () => {
+    const left = run(T0, T0 + 300, { past: [{ until: T0 + 150, factor: 1.5 }], current: 1 });
+    expect(Number(left.st)).toBeGreaterThan(Number(run(T0, T0 + 300, 1).st));
+    expect(left).toEqual(run(T0 + 150, T0 + 300, 1, run(T0, T0 + 150, 1.5)));
+  });
+
+  test("steps already paid (before the window) count for nothing", () => {
+    const old = run(T0, T0 + 300, { past: [{ until: T0 - 50, factor: 3 }], current: 1.5 });
+    expect(old).toEqual(run(T0, T0 + 300, 1.5));
+  });
+});

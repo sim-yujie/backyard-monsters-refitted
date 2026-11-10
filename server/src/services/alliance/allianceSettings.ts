@@ -9,6 +9,7 @@ import { lockAlliance, lockMembership } from "./membership.js";
 import { AllianceAction, can } from "./permissions.js";
 import { quoteTypeSwitch, typeSwitchOptions, type TypeSwitchQuote, type TypeSwitchState } from "./allianceTypes.js";
 import { allianceTypeSwitchRefusedErr, permissionErr } from "../../errors/errors.js";
+import { allianceFactor, allianceFactorOf, noteFactorChange } from "./productionHistory.js";
 
 type Em = EntityManager<PostgreSqlDriver>;
 
@@ -93,6 +94,10 @@ export const switchAllianceType = async (
     const quote = quoteTypeSwitch(state, to, now);
 
     if (quote.refusal) throw allianceTypeSwitchRefusedErr(quote.refusal, quote.available_at);
+
+    // Members' time before the switch stays at the old type's bonus (`productionHistory.ts`).
+    const factorBefore = await allianceFactorOf(em, alliance.id);
+    await noteFactorChange(em, { allianceId: alliance.id }, factorBefore, allianceFactor(to, {}), Math.floor(now.getTime() / 1000));
 
     await em.nativeUpdate(
       Alliance,

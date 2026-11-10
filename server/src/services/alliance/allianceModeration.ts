@@ -14,6 +14,8 @@ import {
 } from "../../config/AllianceConfig.js";
 import { logger } from "../../utils/logger.js";
 import { lockAlliance } from "./membership.js";
+import { allianceFactorOf, noteFactorChange } from "./productionHistory.js";
+import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 
 /*
  * Alliance reports and admin actions (design v5 §13). A player reports an
@@ -173,6 +175,9 @@ export const adminAllianceAction = async (
       await tx.nativeUpdate(Alliance, { id: allianceId }, { description: "" });
       await logAction(tx, alliance, adminId, action, alliance.description);
     } else {
+      // Every member's production bonus ends now: time before it stays paid
+      // at the alliance's factor (`productionHistory.ts`).
+      await noteFactorChange(tx, { allianceId }, await allianceFactorOf(tx, allianceId), 1, getCurrentDateTime());
       const rows = await tx.execute<{ userid: number }[]>(
         `UPDATE bym."user" SET alliance_id = NULL, alliance_role = NULL, alliance_joined_at = NULL
           WHERE alliance_id = ? RETURNING userid`,

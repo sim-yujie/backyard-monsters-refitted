@@ -10,6 +10,7 @@ import {
   type HarvesterBuffer,
 } from "../base/economy/production.js";
 import { levelOf } from "../yardplanner/costs.js";
+import { factorPieces, isFlat, factorNow, type ProductionFactor } from "../alliance/productionHistory.js";
 import type { BuildingJob, StoreItemJob } from "./catchUpBuildings.js";
 import type { RepairJob } from "./catchUpRepairs.js";
 
@@ -150,8 +151,23 @@ export const advanceHarvester = (
   now: number,
   podEnd: number | undefined,
   kind: YardKind = "main",
-  factor = 1
+  factor: ProductionFactor = 1
 ): HarvesterBuffer | null => {
+  // A factor that changed inside the window (`productionHistory.ts`): each
+  // stretch at its own factor, the buffer carried across (a run split in two
+  // equals one run, `runHarvester`).
+  if (!isFlat(factor)) {
+    let current = building;
+    let buffer: HarvesterBuffer | null = null;
+    for (const piece of factorPieces(start, now, factor)) {
+      const next = advanceHarvester(save, key, current, piece.from, piece.to, podEnd, kind, piece.factor);
+      if (!next) return buffer;
+      buffer = next;
+      current = withBuffer(current, next);
+    }
+    return buffer;
+  }
+  const flat = factorNow(factor);
   const type = Number(building.t);
   if (!isHarvester(type) || counting(building)) return null;
   const level = levelOf(building);
@@ -166,8 +182,8 @@ export const advanceHarvester = (
 
   let buffer = bufferOf(building);
   const overdriven = podEnd === undefined ? 0 : Math.max(0, Math.min(now, podEnd) - start);
-  if (overdriven > 0) buffer = runHarvester(buffer, rates, overdriven, OVERDRIVE_POWER * factor);
-  return runHarvester(buffer, rates, Math.max(0, now - start - overdriven), factor);
+  if (overdriven > 0) buffer = runHarvester(buffer, rates, overdriven, OVERDRIVE_POWER * flat);
+  return runHarvester(buffer, rates, Math.max(0, now - start - overdriven), flat);
 };
 
 /**
@@ -184,7 +200,7 @@ const advanceAcrossRepair = (
   podEnd: number | undefined,
   repair: RepairJob,
   kind: YardKind,
-  factor: number
+  factor: ProductionFactor
 ): HarvesterBuffer | null => {
   const damaged = repair.detail.from;
   const before: CatchUpHarvestersSave = {
@@ -210,6 +226,7 @@ const advanceAcrossRepair = (
  *   Coal, Sulfur, Magma) run at their own rates (`inferno/infernoLoad.ts`).
  * @param factor - The owner's alliance production bonus as a power factor
  *   (`productionFactor`, `services/alliance/allianceBonuses.ts`); 1 for none.
+ *   A schedule (`productionHistory.ts`) when it changed while they were away.
  */
 export const catchUpHarvesters = (
   save: CatchUpHarvestersSave,
@@ -217,7 +234,7 @@ export const catchUpHarvesters = (
   now: number,
   completed: readonly unknown[],
   kind: YardKind = "main",
-  factor = 1
+  factor: ProductionFactor = 1
 ): void => {
   const buildings = save.buildingdata;
   if (!buildings) return;
