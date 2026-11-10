@@ -203,6 +203,10 @@ describe("AllianceWindow: marketplace", () => {
     const onChanged = vi.fn();
     const view = await open(api, { onChanged });
     expect(document.querySelector(".alliance__invites")!.textContent).toContain("Fortress Folk");
+    // Accept / Decline in a group of their own after the shield and words (a phone puts it on its own line).
+    const row = document.querySelector(".alliance__invites .alliance__invite--answer")!;
+    expect([...row.children].map((child) => child.className.split(" ")[0])).toEqual(["alliance__shield", "alliance__invite-words", "alliance__invite-answer"]);
+    expect([...row.querySelectorAll(".alliance__invite-answer > button")].map((node) => node.textContent)).toEqual([ALLIANCE_TEXT.accept, ALLIANCE_TEXT.decline]);
     buttonNamed(ALLIANCE_TEXT.accept)!.click();
     await flush();
     await flush();

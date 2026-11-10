@@ -493,18 +493,27 @@ export class AllianceWindow {
     const box = make("section", "alliance__invites");
     box.append(make("h4", "alliance__section", ALLIANCE_TEXT.invites));
     for (const invite of invites) {
-      const row = make("div", "alliance__invite");
+      const row = make("div", "alliance__invite alliance__invite--answer");
       const words = make("div", "alliance__invite-words");
       words.append(make("strong", "", invite.alliance_name), make("small", "", ALLIANCE_TEXT.invitedBy(invite.invited_by_name)));
       row.append(
         shieldImage(invite.alliance_image, "small", "alliance__shield alliance__shield--small"),
         words,
-        button(ALLIANCE_TEXT.accept, "btn--primary", () => void this.answerInvite(invite, true)),
-        button(ALLIANCE_TEXT.decline, "btn--outline", () => void this.answerInvite(invite, false)),
+        this.answerButtons(invite),
       );
       box.append(row);
     }
     return box;
+  }
+
+  /** Accept / Decline together: beside the name on desktop, on a line of their own on a phone. */
+  private answerButtons(invite: AllianceInviteRow): HTMLElement {
+    const answer = make("div", "alliance__invite-answer");
+    answer.append(
+      button(ALLIANCE_TEXT.accept, "btn--primary", () => void this.answerInvite(invite, true)),
+      button(ALLIANCE_TEXT.decline, "btn--outline", () => void this.answerInvite(invite, false)),
+    );
+    return answer;
   }
 
   private async answerInvite(invite: AllianceInviteRow, accept: boolean): Promise<void> {
@@ -1066,12 +1075,11 @@ export class AllianceWindow {
     const box = make("section", "alliance__invites");
     box.append(make("h4", "alliance__section", ALLIANCE_TEXT.requests));
     for (const request of requests) {
-      const row = make("div", "alliance__invite");
+      const row = make("div", "alliance__invite alliance__invite--answer");
       row.append(
         this.face(request.user_pic_square, request.user_id),
         make("strong", "alliance__invite-words", request.user_name),
-        button(ALLIANCE_TEXT.accept, "btn--primary", () => void this.answerInvite(request, true)),
-        button(ALLIANCE_TEXT.decline, "btn--outline", () => void this.answerInvite(request, false)),
+        this.answerButtons(request),
       );
       box.append(row);
     }

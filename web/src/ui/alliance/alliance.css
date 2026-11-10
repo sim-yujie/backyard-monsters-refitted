@@ -490,6 +490,19 @@
   font-size: var(--text-xs);
 }
 
+/* The name and "From ..." each end in "..." only when truly too long. */
+.alliance__invite-words > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Accept / Decline: beside the name on desktop. */
+.alliance__invite-answer {
+  flex: none;
+  display: flex;
+  gap: var(--space-2);
+}
+
 .alliance__first {
   display: flex;
   flex-direction: column;
@@ -832,5 +845,19 @@
 
   .alliance__chip {
     padding-inline: var(--space-2);
+  }
+
+  /* A phone: Accept / Decline drop to a line of their own under the shield
+     and name, so the name keeps the row's width (lead, 10 Nov). */
+  .alliance__invite--answer {
+    flex-wrap: wrap;
+  }
+
+  .alliance__invite--answer > .alliance__invite-answer {
+    flex: 1 1 100%;
+  }
+
+  .alliance__invite-answer > .btn {
+    flex: 1 1 0;
   }
 }
