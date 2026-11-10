@@ -808,6 +808,162 @@ describe.skipIf(!enabled)("alliance flows through the controllers, on Postgres (
       expect((await call(editAlliance, MEMBER, { alliance_image: 9, alliance_desc: "New ad" })).refused).toBeDefined();
     });
 
+    describe("the marketplace ad: joining mode, language, time zone, minimum level (design v5 §7a)", () => {
+      /** Makes `userid` a high-level player (far past level 40). */
+      const raiseLevel = (userid: number) =>
+        sql(`UPDATE bym.save SET points = '100000000000' WHERE userid = ? AND type = 'main'`, [userid]);
+
+      test("founding saves the ad; myalliance and search send it back", async () => {
+        const created = await found(LEADER, { join_mode: "open", language: "ph", time_zone: "8", min_level: "35" });
+
+        expect(created.alliance).toMatchObject({ join_mode: "open", language: "PH", time_zone: 8, min_level: 35 });
+        expect((await call(myAlliance, LEADER)).alliance).toMatchObject({
+          join_mode: "open",
+          language: "PH",
+          time_zone: 8,
+          min_level: 35,
+        });
+
+        const row = (await call(searchAlliances, PLAYER, { search: "zz_flow", page: 0 })).alliances[0];
+
+        expect(row).toMatchObject({
+          description: "A test alliance",
+          join_mode: "open",
+          language: "PH",
+          time_zone: 8,
+          min_level: 35,
+        });
+      });
+
+      test("left out, the ad is Ask to join, any language, no time zone, level 30", async () => {
+        const created = await found();
+
+        expect(created.alliance).toMatchObject({ join_mode: "ask", language: null, time_zone: null, min_level: 30 });
+      });
+
+      test("an Open alliance takes the player at once, with no request left behind", async () => {
+        const allianceId = (await found(LEADER, { join_mode: "open" })).alliance.alliance_id;
+
+        const body = await call(requestJoin, PLAYER, { alliance_id: allianceId });
+
+        expect(body).toEqual({ error: 0, joined: true });
+        expect(await membership(PLAYER)).toEqual({ alliance_id: allianceId, role: "member" });
+        expect(await pendingInviteId(PLAYER)).toBeNull();
+      });
+
+      test("Ask to join leaves a request for the Leader", async () => {
+        const allianceId = (await found(LEADER, { join_mode: "ask" })).alliance.alliance_id;
+
+        expect(await call(requestJoin, PLAYER, { alliance_id: allianceId })).toEqual({ error: 0, joined: false });
+        expect(await membership(PLAYER)).toEqual({ alliance_id: null, role: null });
+        expect(await pendingInviteId(PLAYER)).not.toBeNull();
+      });
+
+      test("an Open alliance with no seat left refuses", async () => {
+        const allianceId = (await found(LEADER, { join_mode: "open" })).alliance.alliance_id;
+        await fill(allianceId, 14);
+
+        expect((await call(requestJoin, PLAYER, { alliance_id: allianceId })).refused).toBe("The alliance is already full.");
+        expect((await membership(PLAYER)).alliance_id).toBeNull();
+      });
+
+      test("Invite only refuses an ask, but the Leader's invite still lets the player in", async () => {
+        const allianceId = (await found(LEADER, { join_mode: "invite" })).alliance.alliance_id;
+
+        expect((await call(requestJoin, PLAYER, { alliance_id: allianceId })).refused).toBe(
+          "That alliance takes members by invite only."
+        );
+        expect(await pendingInviteId(PLAYER)).toBeNull();
+
+        expect((await call(inviteUser, LEADER, { userid: PLAYER })).error).toBe(0);
+        await call(changeInviteStatus, PLAYER, { invite_id: await pendingInviteId(PLAYER), status: "accepted" });
+
+        expect(await membership(PLAYER)).toEqual({ alliance_id: allianceId, role: "member" });
+      });
+
+      test("a minimum level above 30 refuses a lower player, Open or Ask; a high enough one gets in", async () => {
+        const open = (await found(LEADER, { join_mode: "open", min_level: "40" })).alliance.alliance_id;
+        const ask = (await found(MEMBER, { alliance_name: "zz_flow_ask", min_level: "40" })).alliance.alliance_id;
+
+        expect((await call(requestJoin, PLAYER, { alliance_id: open })).refused).toBe(
+          "That alliance takes players from level 40."
+        );
+        expect((await call(requestJoin, PLAYER, { alliance_id: ask })).refused).toBe(
+          "That alliance takes players from level 40."
+        );
+        expect((await membership(PLAYER)).alliance_id).toBeNull();
+        expect(await pendingInviteId(PLAYER)).toBeNull();
+
+        await raiseLevel(PLAYER);
+
+        expect((await call(requestJoin, PLAYER, { alliance_id: ask })).joined).toBe(false);
+        await sql(`DELETE FROM bym.alliance_invite WHERE user_id = ?`, [PLAYER]);
+        expect((await call(requestJoin, PLAYER, { alliance_id: open })).joined).toBe(true);
+        expect((await membership(PLAYER)).alliance_id).toBe(open);
+      });
+
+      test("level 30, the floor, takes a player of any level", async () => {
+        const allianceId = (await found(LEADER, { join_mode: "open", min_level: "30" })).alliance.alliance_id;
+
+        expect((await call(requestJoin, PLAYER, { alliance_id: allianceId })).joined).toBe(true);
+      });
+
+      test("an Officer edits the whole ad; fields left out stay; bad values are refused", async () => {
+        await foundWithOfficer();
+        const edit = (extra: Record<string, unknown>) =>
+          call(editAlliance, MEMBER, { alliance_image: 3, alliance_desc: "New ad", ...extra });
+
+        const saved = await edit({ join_mode: "invite", language: "de", time_zone: "-5", min_level: "50" });
+
+        expect(saved.alliance).toMatchObject({ join_mode: "invite", language: "DE", time_zone: -5, min_level: 50 });
+        expect((await edit({})).alliance).toMatchObject({ join_mode: "invite", language: "DE", time_zone: -5, min_level: 50 });
+        expect((await edit({ language: "", time_zone: "" })).alliance).toMatchObject({ language: null, time_zone: null });
+
+        for (const bad of [
+          { join_mode: "closed" },
+          { language: "XX" },
+          { time_zone: "15" },
+          { time_zone: "-13" },
+          { min_level: "29" },
+          { min_level: "61" },
+        ]) {
+          expect((await edit(bad)).refused).toBeDefined();
+        }
+        expect((await call(myAlliance, MEMBER)).alliance).toMatchObject({ join_mode: "invite", min_level: 50 });
+      });
+
+      test("a Member cannot change the ad", async () => {
+        await foundWithMember();
+
+        expect(
+          (await call(editAlliance, MEMBER, { alliance_image: 3, alliance_desc: "x", join_mode: "open" })).refused
+        ).toBeDefined();
+      });
+
+      test("search narrows to Open only, one language and one type", async () => {
+        await found(LEADER, { join_mode: "open", language: "PH", alliance_type: "midas" });
+        await found(MEMBER, { alliance_name: "zz_flow_ask", join_mode: "ask", language: "DE", alliance_type: "conquest" });
+        const names = async (extra: Record<string, unknown>) =>
+          (await call(searchAlliances, PLAYER, { search: "zz_flow", page: 0, ...extra })).alliances
+            .map((row: { name: string }) => row.name)
+            .sort();
+
+        expect(await names({})).toEqual([NAME, "zz_flow_ask"]);
+        expect(await names({ open: "true" })).toEqual([NAME]);
+        expect(await names({ language: "de" })).toEqual(["zz_flow_ask"]);
+        expect(await names({ type: "conquest" })).toEqual(["zz_flow_ask"]);
+        expect(await names({ type: "nonsense", language: "XX" })).toEqual([NAME, "zz_flow_ask"]);
+      });
+
+      test("an Open alliance that turns Ask to join in between takes a request instead", async () => {
+        const allianceId = (await found(LEADER, { join_mode: "open" })).alliance.alliance_id;
+        await call(editAlliance, LEADER, { alliance_image: 3, alliance_desc: "A test alliance", join_mode: "ask" });
+
+        expect((await call(requestJoin, PLAYER, { alliance_id: allianceId })).joined).toBe(false);
+        expect((await membership(PLAYER)).alliance_id).toBeNull();
+      });
+    });
+
     test("myalliance tells an Officer what they may do", async () => {
       await foundWithOfficer();
 

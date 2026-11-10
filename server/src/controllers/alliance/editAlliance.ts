@@ -6,10 +6,12 @@ import { requireAlliancePermission } from "../../services/alliance/allianceAcces
 import { AllianceAction, can } from "../../services/alliance/permissions.js";
 import { permissionErr } from "../../errors/errors.js";
 import { assertDescriptionAllowed } from "../../services/alliance/textFilter.js";
+import { adOf } from "../../services/alliance/allianceAd.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
 /**
- * Updates the shield image and description of the authenticated user's alliance.
+ * Updates the shield image, description and the rest of the marketplace ad
+ * (joining mode, language, time zone, minimum level) of the authenticated user's alliance.
  * The name is immutable and is not accepted, so only the description is passed
  * through the profanity filter. The Leader and Officers edit the description
  * (the ad); only the Leader may change the shield (`permissions.ts`).
@@ -30,6 +32,11 @@ export const editAlliance: KoaController = async (ctx) => {
 
   alliance.image = data.alliance_image;
   alliance.description = data.alliance_desc;
+  // The marketplace ad (design v5 §7a); each left out stays as it is.
+  if (data.join_mode !== undefined) alliance.join_mode = data.join_mode;
+  if (data.language !== undefined) alliance.language = data.language;
+  if (data.time_zone !== undefined) alliance.time_zone = data.time_zone;
+  if (data.min_level !== undefined) alliance.min_level = data.min_level;
 
   await postgres.em.flush();
 
@@ -43,6 +50,7 @@ export const editAlliance: KoaController = async (ctx) => {
       description: alliance.description,
       leader: alliance.leader_name,
       world_id: alliance.world_id,
+      ...adOf(alliance),
     },
   };
 };

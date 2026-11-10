@@ -21,6 +21,19 @@ export enum AllianceType {
 }
 
 /**
+ * How a player gets into an alliance from the marketplace (design v5 §7a):
+ * Open joins at once, Ask to join waits for the Leader or an Officer, Invite
+ * only takes no asks at all.
+ *
+ * @enum {string}
+ */
+export enum AllianceJoinMode {
+  OPEN = "open",
+  ASK = "ask",
+  INVITE = "invite",
+}
+
+/**
  * How one alliance has flagged another - Foe, Neutral or Ally.
  *
  * @enum {number}

@@ -7,6 +7,7 @@ import { getTypeSwitchOptions } from "../../services/alliance/allianceSettings.j
 import { memberLimit, officerLimit } from "../../services/alliance/allianceTypes.js";
 import { allowedActions } from "../../services/alliance/permissions.js";
 import { rejoinAvailableAt } from "../../services/alliance/joinGate.js";
+import { adOf } from "../../services/alliance/allianceAd.js";
 import { canTakeOver, renameAvailableAt } from "../../services/alliance/leadership.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { postgres } from "../../server.js";
@@ -71,6 +72,8 @@ export const myAlliance: KoaController = async (ctx) => {
       name: alliance.name,
       image: alliance.image,
       description: alliance.description,
+      // The rest of the marketplace ad, so the Edit form starts from it (design v5 §7a).
+      ...adOf(alliance),
       rank: alliance.stats?.global_rank,
       avg_level: avgLevel,
       leader_name: alliance.leader_name,

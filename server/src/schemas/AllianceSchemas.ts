@@ -1,7 +1,33 @@
 import z from "zod";
 
-import { AllianceInviteStatus, AllianceRole, AllianceStance, AllianceType } from "../enums/Alliance.js";
-import { DEFAULT_ALLIANCE_TYPE } from "../config/AllianceConfig.js";
+import { AllianceInviteStatus, AllianceJoinMode, AllianceRole, AllianceStance, AllianceType } from "../enums/Alliance.js";
+import { ALLIANCE_AD, DEFAULT_ALLIANCE_TYPE } from "../config/AllianceConfig.js";
+import { isCountryCode } from "../config/Countries.js";
+
+/**
+ * The marketplace ad's fields (design v5 §7a). The calls are form-encoded, so
+ * an empty language or time zone means "not set" (null).
+ */
+const adLanguage = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .refine((code) => code === "" || isCountryCode(code), { message: "Unknown language" })
+  .transform((code) => (code === "" ? null : code));
+
+const adTimeZone = z.union([
+  z.literal("").transform(() => null),
+  z.coerce.number().int().min(ALLIANCE_AD.timeZone.min).max(ALLIANCE_AD.timeZone.max),
+]);
+
+const adMinLevel = z.coerce.number().int().min(ALLIANCE_AD.minLevel.min).max(ALLIANCE_AD.minLevel.max);
+
+const adFields = {
+  join_mode: z.enum(AllianceJoinMode).optional(),
+  language: adLanguage.optional(),
+  time_zone: adTimeZone.optional(),
+  min_level: adMinLevel.optional(),
+};
 
 /**
  * Schema to validate alliance creation data.
@@ -12,6 +38,8 @@ export const CreateAllianceSchema = z.object({
   alliance_desc: z.string().trim().min(1).max(255),
   /** Midas' Council, Conquest Horde or Fortress Legion; Midas when left out. */
   alliance_type: z.enum(AllianceType).default(DEFAULT_ALLIANCE_TYPE),
+  /** The ad; each left out keeps the default (Ask to join, any language, no time zone, the level floor). */
+  ...adFields,
 });
 
 /**
@@ -42,6 +70,8 @@ export const ReportAllianceSchema = z.object({
 export const EditAllianceSchema = z.object({
   alliance_image: z.coerce.number().int().min(1).max(41),
   alliance_desc: z.string().trim().min(1).max(255),
+  /** The ad; each left out stays as it is. */
+  ...adFields,
 });
 
 /**
@@ -58,6 +88,10 @@ export const SearchAlliancesSchema = z.object({
   // does, or the tabs lose their error messages. Change both together - stringbool() rejects
   // a real boolean, so the filter would silently stop working.
   world: z.stringbool().catch(false),
+  /** Marketplace filters (design v5 §7a): one type, one language, Open alliances only. */
+  type: z.enum(AllianceType).optional().catch(undefined),
+  language: z.string().trim().toUpperCase().refine(isCountryCode).optional().catch(undefined),
+  open: z.stringbool().catch(false),
 });
 
 /**

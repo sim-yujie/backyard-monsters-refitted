@@ -1,7 +1,8 @@
 import { Entity, Index, OneToOne, PrimaryKey, Property } from "@mikro-orm/decorators/es";
 import type { Opt } from "@mikro-orm/core";
 import { AllianceStats } from "./alliancestats.view.js";
-import { AllianceType } from "../../enums/Alliance.js";
+import { AllianceJoinMode, AllianceType } from "../../enums/Alliance.js";
+import { ALLIANCE_AD } from "../../config/AllianceConfig.js";
 
 @Entity({ tableName: "alliance" })
 export class Alliance {
@@ -60,6 +61,22 @@ export class Alliance {
   /** Set by an admin rename: the leader may pick a new name at once. */
   @Property({ type: "boolean", default: false })
   must_rename: Opt<boolean> = false;
+
+  /** Open, Ask to join or Invite only (the marketplace ad, design v5 §7a). */
+  @Property({ type: "string", length: 8, default: AllianceJoinMode.ASK })
+  join_mode: Opt<AllianceJoinMode> = AllianceJoinMode.ASK;
+
+  /** The ad's language: a country code from the chat country list, or null for any. */
+  @Property({ type: "string", length: 2, nullable: true })
+  language?: string | null = null;
+
+  /** The ad's time zone as a whole GMT band (-12 to 14), or null when not set. */
+  @Property({ type: "smallint", nullable: true })
+  time_zone?: number | null = null;
+
+  /** Lowest player level that may ask or join; the floor (`ALLIANCE_AD.minLevel.min`) takes anyone. */
+  @Property({ type: "smallint", default: ALLIANCE_AD.minLevel.min })
+  min_level: Opt<number> = ALLIANCE_AD.minLevel.min;
 
   @OneToOne({ entity: () => AllianceStats, mappedBy: "alliance" })
   stats?: AllianceStats;

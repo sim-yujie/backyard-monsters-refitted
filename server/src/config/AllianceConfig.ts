@@ -47,6 +47,17 @@ export const TYPE_SWITCH = {
 /** Hours a player waits to join or found an alliance after leaving or being kicked (owner 10 Nov 2026). */
 export const REJOIN_COOLDOWN_HOURS = 24;
 
+/**
+ * The marketplace ad (design v5 §7a). The minimum level runs from `min` to
+ * `max`; `min` is every player's floor, so an alliance left at it takes
+ * players of any level (the owner's gate has no level rule, 10 Nov 2026) and
+ * only a higher one refuses anyone. Time zones are whole GMT bands.
+ */
+export const ALLIANCE_AD = {
+  minLevel: { min: 30, max: 60 },
+  timeZone: { min: -12, max: 14 },
+};
+
 /** Days between two renames by the leader (design v5 §6). */
 export const RENAME_COOLDOWN_DAYS = 7;
 

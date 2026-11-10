@@ -1,5 +1,5 @@
 import { Status } from "../../enums/StatusCodes.js";
-import { AllianceStance } from "../../enums/Alliance.js";
+import { AllianceJoinMode, AllianceStance } from "../../enums/Alliance.js";
 import { Alliance } from "../../database/models/alliance.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
@@ -9,6 +9,7 @@ import { getLeaderBaseIds } from "../../services/alliance/allianceLeaders.js";
 import { memberLimit } from "../../services/alliance/allianceTypes.js";
 import { onlineMemberCounts } from "../../services/alliance/allianceMember.js";
 import { ALLIANCE_TYPES } from "../../config/AllianceConfig.js";
+import { adOf } from "../../services/alliance/allianceAd.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { allianceNoWorldErr } from "../../errors/errors.js";
 
@@ -39,11 +40,15 @@ const MEMBER_LIMIT_SQL = `CASE a.type ${Object.entries(ALLIANCE_TYPES)
  * then empire points. Each row also says `online_members`: members online now,
  * by the same rule as My Alliance.
  *
+ * The marketplace ad rides on each row (description, `join_mode`, `language`,
+ * `time_zone`, `min_level`), and the list can be narrowed to one type, one
+ * language or Open alliances only.
+ *
  * @param {Context} ctx - Koa context.
  */
 export const searchAlliances: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  const { search, page } = SearchAlliancesSchema.parse(ctx.request.body);
+  const { search, page, type, language, open } = SearchAlliancesSchema.parse(ctx.request.body);
 
   await postgres.em.populate(user, ["save"], { fields: ["save.worldid"] });
 
@@ -51,11 +56,31 @@ export const searchAlliances: KoaController = async (ctx) => {
 
   if (!worldid) throw allianceNoWorldErr();
 
-  const nameFilter = search ? "AND a.name ILIKE ? ESCAPE '\\'" : "";
-  const params: unknown[] = search ? [worldid, likeContains(search)] : [worldid];
+  // The marketplace filters (design v5 §7a): name, type, language, Open only.
+  const filters: string[] = [];
+  const params: unknown[] = [worldid];
+
+  if (search) {
+    filters.push("AND a.name ILIKE ? ESCAPE '\\'");
+    params.push(likeContains(search));
+  }
+  if (type) {
+    filters.push("AND a.type = ?");
+    params.push(type);
+  }
+  if (language) {
+    filters.push("AND a.language = ?");
+    params.push(language);
+  }
+  if (open) {
+    filters.push("AND a.join_mode = ?");
+    params.push(AllianceJoinMode.OPEN);
+  }
+
+  const filterSql = filters.join(" ");
 
   const [count] = await postgres.em.execute<{ n: string }[]>(
-    `SELECT count(*) AS n FROM bym.alliance a WHERE a.world_id = ? ${nameFilter}`,
+    `SELECT count(*) AS n FROM bym.alliance a WHERE a.world_id = ? ${filterSql}`,
     params
   );
   const totalResults = Number(count?.n ?? 0);
@@ -64,7 +89,7 @@ export const searchAlliances: KoaController = async (ctx) => {
     `SELECT a.id
        FROM bym.alliance a
        JOIN bym.alliance_stats s ON s.alliance_id = a.id
-      WHERE a.world_id = ? ${nameFilter}
+      WHERE a.world_id = ? ${filterSql}
       ORDER BY (${MEMBER_LIMIT_SQL}) > s.member_count DESC, s.active_members DESC, s.empire_points DESC, a.id ASC
       OFFSET ? LIMIT ?`,
     [...params, page * PAGE_SIZE, PAGE_SIZE]
@@ -97,8 +122,12 @@ export const searchAlliances: KoaController = async (ctx) => {
     active_members: alliance.stats?.active_members ?? 0,
     // Members online now, the list's green number (as My Alliance's "online").
     online_members: online.get(alliance.id) ?? 0,
+    // The ad (design v5 §7a): its line, how to get in, language, time zone, minimum level.
+    description: alliance.description,
+    ...adOf(alliance),
   }));
 
   ctx.status = Status.OK;
-  ctx.body = { error: 0, alliances: results, pageSize: PAGE_SIZE, totalResults };
+  // `my_country`: the player's own chat country, so Quick Join can prefer alliances in their language.
+  ctx.body = { error: 0, alliances: results, pageSize: PAGE_SIZE, totalResults, my_country: user.country ?? null };
 };

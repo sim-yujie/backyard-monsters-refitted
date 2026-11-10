@@ -10,6 +10,7 @@ import { addAllianceMember, lockMembership } from "../../services/alliance/membe
 import { getWorldMapVersion } from "../../services/maproom/knownWorlds.js";
 import { assertMayJoin, assertRejoinAllowed, GATE_SAVE_FIELDS, lockGateSave } from "../../services/alliance/joinGate.js";
 import { assertDescriptionAllowed, assertNameAllowed } from "../../services/alliance/textFilter.js";
+import { adOf } from "../../services/alliance/allianceAd.js";
 import {
   allianceNameTakenErr,
   allianceNoWorldErr,
@@ -57,6 +58,11 @@ export const createAlliance: KoaController = async (ctx) => {
     world_id: worldid,
     map_version: mapVersion,
     type: data.alliance_type,
+    // The marketplace ad (design v5 §7a); each left out keeps the column's default.
+    ...(data.join_mode !== undefined ? { join_mode: data.join_mode } : {}),
+    ...(data.language !== undefined ? { language: data.language } : {}),
+    ...(data.time_zone !== undefined ? { time_zone: data.time_zone } : {}),
+    ...(data.min_level !== undefined ? { min_level: data.min_level } : {}),
   };
 
   const alliance = await postgres.em.transactional(async (em) => {
@@ -90,6 +96,7 @@ export const createAlliance: KoaController = async (ctx) => {
       leader: user.username,
       world_id: alliance.world_id,
       type: alliance.type,
+      ...adOf(alliance),
     },
   };
 };

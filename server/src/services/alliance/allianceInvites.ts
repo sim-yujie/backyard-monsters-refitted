@@ -17,9 +17,11 @@ import { addAllianceMember, lockAlliance, lockMembership } from "./membership.js
 import { AllianceAction, can } from "./permissions.js";
 import { memberLimit } from "./allianceTypes.js";
 import { assertMayJoin, assertRejoinAllowed, loadGateSave, lockGateSave } from "./joinGate.js";
+import { adOf, assertAdAllows, joinerLevel } from "./allianceAd.js";
 import {
   allianceFullErr,
   inviteNotPendingErr,
+  mustLeaveAllianceErr,
   invitePendingErr,
   mustLeaveAllianceToAcceptErr,
   permissionErr,
@@ -337,6 +339,46 @@ export const answerInvite = async (user: User, inviteId: number, status: Allianc
   });
 
   return invite;
+};
+
+/**
+ * Joins an Open alliance at once (the marketplace's Join, design v5 §7a).
+ *
+ * The same locked path as accepting an invite: the alliance's row, then the
+ * player's, then their main save, so two joins at once, a join while leaving
+ * the world, or a join into the last seat can never both land. The ad is read
+ * again under the alliance lock, so a Leader switching to Ask to join or
+ * raising the minimum level in between is obeyed.
+ *
+ * @param {User} user - The player joining.
+ * @param {Alliance} alliance - The alliance, read before the locks.
+ */
+export const joinOpenAlliance = async (user: User, alliance: Alliance): Promise<void> => {
+  await postgres.em.transactional(async (em) => {
+    const locked = await lockAlliance(em, alliance.id);
+
+    if (!locked) throw permissionErr();
+
+    const [row] = await em.execute<{ join_mode: Alliance["join_mode"]; min_level: number }[]>(
+      `SELECT join_mode, min_level FROM bym.alliance WHERE id = ?`,
+      [alliance.id]
+    );
+    const ad = adOf({ ...row!, language: null, time_zone: null });
+
+    if (ad.join_mode !== "open") throw permissionErr();
+    assertAdAllows(ad, await joinerLevel(em, user.userid));
+
+    const membership = await lockMembership(em, user.userid);
+
+    if (!membership) throw permissionErr();
+    if (membership.alliance_id) throw mustLeaveAllianceErr();
+    assertRejoinAllowed(membership.alliance_left_at, new Date());
+
+    assertMayJoin(await lockGateSave(em, user.userid), { allianceWorld: alliance.world_id });
+
+    await checkAllianceSpace(em, alliance.id, locked.type);
+    await addAllianceMember(user, alliance, AllianceRole.MEMBER, AllianceMessageType.JOINED, em);
+  });
 };
 
 /**
