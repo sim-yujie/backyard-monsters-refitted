@@ -128,7 +128,6 @@ describe("takeoverQuote", () => {
       isWildMonster: true,
       empireValue: 0,
       takerHomebase: ["241", "207"],
-      conquestActive: false,
     });
     expect(body).toEqual({
       error: 0,
@@ -199,7 +198,6 @@ describe("takeoverQuote", () => {
         isWildMonster: false,
         empireValue: 10_000_000,
         takerHomebase: ["241", "207"],
-        conquestActive: false,
       }).resources
     );
   });
@@ -277,7 +275,6 @@ describe("takeoverQuote: New to Map Room 2", () => {
       isWildMonster: true,
       empireValue: 0,
       takerHomebase: null,
-      conquestActive: false,
     }).resources;
 
     expect(cheap.welcome).toBe(true);

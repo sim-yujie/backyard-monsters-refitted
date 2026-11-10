@@ -43,7 +43,7 @@ const log = (hp?: unknown): FlingLog =>
   }) as FlingLog;
 
 const session = (championHealth?: Record<string, number>) =>
-  newAttackSession(2, 4242, { [HOME]: { C1: 5 } }, undefined, 30, undefined, undefined, undefined, undefined, undefined, undefined, championHealth);
+  newAttackSession(2, 4242, { [HOME]: { C1: 5 } }, undefined, 30, undefined, undefined, undefined, undefined, undefined, championHealth);
 
 describe("healthOf", () => {
   test("freezes each champion's whole health, never below 0, by type", () => {
@@ -116,7 +116,6 @@ describe("the log a client sends", () => {
       defender: { type: "tribe", buildingdata: {}, buildinghealthdata: {}, resources: {} },
       attacker: { champion: [champion(1, { hp: 500 })] },
       tick: 200,
-      declareWar: false,
     })!;
     expect(input.log.events[0]).toMatchObject({ champion: { hp: 500 } });
   });
@@ -193,7 +192,6 @@ describe("a champion comes home at the server's battle's health (Vorg and Zafree
       defender: { type: "tribe", buildingdata: CAMP, buildinghealthdata: {}, resources: { r1: 5000, r2: 0, r3: 0, r4: 0 } },
       attacker: { academy: {}, champion: [fomor(hp)] },
       tick: 24_000,
-      declareWar: false,
     })!;
     return replayAbandonedAttack(input);
   };

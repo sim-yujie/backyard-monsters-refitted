@@ -157,11 +157,6 @@ mock.module("../../../utils/logger.js", () => ({
   logger: { warn: mock(() => {}), error: mock(() => {}), info: mock(() => {}), debug: mock(() => {}) },
 }));
 
-mock.module("../../alliance/powerups.js", () => ({
-  runningPowerups: async () => [],
-  isDeclareWarRunning: async () => false,
-}));
-
 // Bun keeps a module mock for every file that runs after this one, so each
 // stand-in below hands over to the real module once this file is done.
 let standIn = true;

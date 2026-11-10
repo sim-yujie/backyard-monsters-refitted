@@ -189,11 +189,6 @@ mock.module("../../utils/logger.js", () => ({
   logger: { warn: mock(() => {}), error: mock(() => {}), info: mock(() => {}), debug: mock(() => {}) },
 }));
 
-mock.module("../alliance/powerups.js", () => ({
-  runningPowerups: async () => [],
-  isDeclareWarRunning: async () => false,
-}));
-
 // The real replay runner, whatever an earlier file left in its place: bun keeps
 // module mocks across files, and a stand-in with a battle canned by another
 // suite failed every landing here on CI (run 41459356322). The query makes the

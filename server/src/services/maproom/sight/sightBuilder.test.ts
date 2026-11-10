@@ -24,20 +24,16 @@ const save = (over: Partial<OwnBaseSave> = {}): OwnBaseSave => ({
 
 describe("mainYardSource", () => {
   test("a main yard with a cell gets a circle at its reach", () => {
-    expect(mainYardSource(save({ flinger: 2 }), false)).toEqual({ x: 100, y: 100, reach: 6 });
-  });
-
-  test("Declare War adds its two cells while running", () => {
-    expect(mainYardSource(save({ flinger: 2 }), true)).toEqual({ x: 100, y: 100, reach: 8 });
+    expect(mainYardSource(save({ flinger: 2 }))).toEqual({ x: 100, y: 100, reach: 6 });
   });
 
   test("flinger 0 still gets a circle, just one that reaches nothing", () => {
-    expect(mainYardSource(save({ flinger: 0 }), false)).toEqual({ x: 100, y: 100, reach: 0 });
+    expect(mainYardSource(save({ flinger: 0 }))).toEqual({ x: 100, y: 100, reach: 0 });
   });
 
   test("no homebase cell at all is not a circle", () => {
-    expect(mainYardSource(save({ homebase: [] }), false)).toBeNull();
-    expect(mainYardSource(save({ homebase: null }), false)).toBeNull();
+    expect(mainYardSource(save({ homebase: [] }))).toBeNull();
+    expect(mainYardSource(save({ homebase: null }))).toBeNull();
   });
 });
 
@@ -53,27 +49,20 @@ describe("outpostSources", () => {
       ["b", 1],
     ]);
 
-    expect(outpostSources({ outposts }, flingerLevels, false)).toEqual([
+    expect(outpostSources({ outposts }, flingerLevels)).toEqual([
       { x: 200, y: 200, reach: 3 },
       { x: 300, y: 300, reach: 1 },
     ]);
   });
 
-  test("Declare War adds to every outpost circle while running", () => {
-    const flingerLevels = new Map([["a", 3]]);
-    expect(outpostSources({ outposts: [[200, 200, "a"]] }, flingerLevels, true)).toEqual([
-      { x: 200, y: 200, reach: 5 },
-    ]);
-  });
-
   test("an outpost whose save row is gone (not in the map) is skipped", () => {
     const flingerLevels = new Map([["a", 3]]);
-    expect(outpostSources({ outposts }, flingerLevels, false)).toEqual([{ x: 200, y: 200, reach: 3 }]);
+    expect(outpostSources({ outposts }, flingerLevels)).toEqual([{ x: 200, y: 200, reach: 3 }]);
   });
 
   test("no outposts is an empty list", () => {
-    expect(outpostSources({ outposts: [] }, new Map(), false)).toEqual([]);
-    expect(outpostSources({ outposts: undefined }, new Map(), false)).toEqual([]);
+    expect(outpostSources({ outposts: [] }, new Map())).toEqual([]);
+    expect(outpostSources({ outposts: undefined }, new Map())).toEqual([]);
   });
 });
 
@@ -82,7 +71,7 @@ describe("ownSources", () => {
     const outposts: [number, number, string][] = [[200, 200, "a"]];
     const flingerLevels = new Map([["a", 4]]);
 
-    expect(ownSources(save({ flinger: 1, outposts }), flingerLevels, false)).toEqual([
+    expect(ownSources(save({ flinger: 1, outposts }), flingerLevels)).toEqual([
       { x: 100, y: 100, reach: 4 },
       { x: 200, y: 200, reach: 4 },
     ]);
@@ -92,7 +81,7 @@ describe("ownSources", () => {
     const outposts: [number, number, string][] = [[200, 200, "a"]];
     const flingerLevels = new Map([["a", 4]]);
 
-    expect(ownSources(save({ homebase: [], outposts }), flingerLevels, false)).toEqual([
+    expect(ownSources(save({ homebase: [], outposts }), flingerLevels)).toEqual([
       { x: 200, y: 200, reach: 4 },
     ]);
   });

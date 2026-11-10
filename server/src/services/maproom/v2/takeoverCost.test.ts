@@ -3,7 +3,7 @@ import { isAdjacentToMainYard, takeoverResourceCost, takeoverShinyCost } from ".
 
 /** PopupTakeover.as:50-80, worked by hand for the figures below. */
 
-const base = { isWildMonster: false, level: 0, empireValue: 0, adjacentToMainYard: false, conquestActive: false };
+const base = { isWildMonster: false, level: 0, empireValue: 0, adjacentToMainYard: false };
 const camp = (level: number, over = {}) => takeoverResourceCost({ ...base, isWildMonster: true, level, ...over });
 const outpost = (empireValue: number) => takeoverResourceCost({ ...base, empireValue });
 
@@ -24,10 +24,8 @@ describe("takeoverResourceCost", () => {
     expect(outpost(1e12)).toBe(65_000_000);
   });
 
-  test("half next to the main yard, a quarter off with Conquest, both together", () => {
+  test("half next to the main yard", () => {
     expect(camp(50, { adjacentToMainYard: true })).toBe(6_750_000);
-    expect(camp(50, { conquestActive: true })).toBe(10_125_000);
-    expect(camp(50, { adjacentToMainYard: true, conquestActive: true })).toBe(5_062_500);
   });
 });
 

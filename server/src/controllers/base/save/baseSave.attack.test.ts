@@ -209,7 +209,7 @@ const serverLoot = (flinglog: unknown, buildingdata: unknown) => {
     attacker: attackerSave,
     mapRoom3: false,
   };
-  const input = battleReplayInput({ ...args, tick: battleTick(undefined), declareWar: false });
+  const input = battleReplayInput({ ...args, tick: battleTick(undefined) });
   return attackLootOf({ ...args, fought: input && foughtLoot(replayAbandonedAttack(input)) });
 };
 
@@ -341,7 +341,6 @@ describe("the champion's learning brain through the save (issue #219)", () => {
       defender: { type: "tribe", buildingdata: YARD as never, buildinghealthdata: {}, resources: defender.resources },
       attacker: structuredClone(attackerSave),
       tick: battleTick("3200"),
-      declareWar: false,
     })!;
     expect(input.log.events[0]).toMatchObject({ champion: { b: BRAIN } });
     const lesson = replayAbandonedAttack(input).lessons!.find((one) => one.t === 1)!;
@@ -455,7 +454,6 @@ describe("the shop boosts through the save (beta.4)", () => {
       defender: { type: "tribe", buildingdata: YARD as never, buildinghealthdata: {}, resources: defender.resources },
       attacker: attackerSave,
       tick: battleTick(undefined),
-      declareWar: false,
     });
     return replayAbandonedAttack(input!).buildinghealthdata["1"];
   };
@@ -870,7 +868,6 @@ describe("a champion healed by Vorgs or Zafreeti keeps the heal through the save
       defender: { type: "tribe", buildingdata: CAMP as never, buildinghealthdata: {}, resources: defender.resources },
       attacker: attackerSave,
       tick: battleTick(TICK),
-      declareWar: false,
     })!;
     return replayAbandonedAttack(input).attackerchampion![0]!.hp;
   };
@@ -1032,7 +1029,6 @@ describe("the battle is the server's (#23, C3)", () => {
         defender: { type: "tribe", buildingdata: WITH_TRAP as never, buildinghealthdata: {}, resources: { r1: 5000, r2: 0, r3: 0, r4: 0 } },
         attacker: attackerSave,
         tick: battleTick(TICK),
-        declareWar: false,
         left,
       })!
     );
@@ -1242,7 +1238,6 @@ describe("the defence lands (#195)", () => {
         },
         attacker: attackerSave,
         tick: battleTick(TICK),
-        declareWar: false,
         left: false,
       })!
     );

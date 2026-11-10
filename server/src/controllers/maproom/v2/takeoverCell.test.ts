@@ -92,9 +92,6 @@ mock.module("../../../server.js", () => ({
           ? (cells.find((cell) => cell.baseid === where.baseid && where.world === WORLD) ?? null)
           // `invalidateSight`'s `allianceIdOf`, looking up the previous owner by bare userid.
           : { userid: where.userid, alliance_id: allianceOf.get(where.userid as number) ?? null },
-      // A taker (or previous owner) with an alliance makes `runningPowerups`
-      // read it (`services/alliance/powerups.ts`'s `alliancePowerup`); no
-      // powerup row is ever seeded, so every alliance's three come back idle.
       find: async () => [],
       create: (_entity: unknown, data: Row) => data,
       persist: () => {},
@@ -458,7 +455,7 @@ describe("sight cache invalidation (#329, #330 WP1)", () => {
 describe("takeoverCell: New to Map Room 2", () => {
   const openWindow = () => welcome.rows.set(TAKER, { start: now() - 60, takeoverUsed: false, kitUsed: false });
   const fullBase = () =>
-    quoteTakeover({ cell: { x: 240, y: 208 }, isWildMonster: true, empireValue: 0, takerHomebase: null, conquestActive: false })
+    quoteTakeover({ cell: { x: 240, y: 208 }, isWildMonster: true, empireValue: 0, takerHomebase: null })
       .resources;
 
   test("the first wild camp in the 10 days costs 10% of its full base price, and uses the reward", async () => {
@@ -487,7 +484,6 @@ describe("takeoverCell: New to Map Room 2", () => {
       isWildMonster: true,
       empireValue: 0,
       takerHomebase: takerSave.homebase as string[],
-      conquestActive: false,
     }).shiny;
     openWindow();
     expect((await run({ baseid: CAMP, shiny: "1" })).ok).toBe(true);

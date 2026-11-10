@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Context } from "koa";
 
 /**
@@ -21,7 +21,6 @@ let maproom: Record<string, unknown> | null;
 const persisted: unknown[] = [];
 let flushes = 0;
 const store = new Map<string, string>();
-let declareWar = false;
 
 const em = {
   populate: async (user: Record<string, unknown>) => {
@@ -53,19 +52,6 @@ mock.module("../../server.js", () => ({
       return "OK";
     },
   },
-}));
-
-const REAL_POWERUPS = "../../services/alliance/powerups.ts?real";
-const realPowerups = (await import(REAL_POWERUPS)) as typeof import("../../services/alliance/powerups.js");
-let standIn = true;
-afterAll(() => {
-  standIn = false;
-});
-mock.module("../../services/alliance/powerups.js", () => ({
-  ...realPowerups,
-  isDeclareWarRunning: async (allianceId: number | null) =>
-    standIn ? declareWar : realPowerups.isDeclareWarRunning(allianceId),
-  runningPowerups: async (allianceId: number | null) => (standIn ? [] : realPowerups.runningPowerups(allianceId)),
 }));
 
 const { infernoAttackStart } = await import("./descentAttack.js");
@@ -139,7 +125,6 @@ beforeEach(() => {
   persisted.length = 0;
   flushes = 0;
   store.clear();
-  declareWar = false;
 });
 
 afterEach(() => {
@@ -235,12 +220,6 @@ describe("starting a tribe attack", () => {
     expect(session?.session.attackerAcademy).toEqual({ IC1: 3 });
     // The tribe's housed monsters defend from its Housing Bunkers.
     expect(Object.keys(body.defenderforces.bunkers).length).toBeGreaterThan(0);
-  });
-
-  test("Declare War adds a quarter to the load", async () => {
-    declareWar = true;
-    const body = await start({ kind: "tribe", baseid: "214" });
-    expect(body.flingercapacity).toBe(975);
   });
 
   test("the tribe keeps the health earlier attacks left it", async () => {

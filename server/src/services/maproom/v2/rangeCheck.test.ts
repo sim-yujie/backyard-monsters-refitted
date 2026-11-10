@@ -8,7 +8,6 @@ import {
   getOutpostRange,
   outpostsNearCell,
   planRangeCheck,
-  withDeclareWar,
   type OutpostEntry,
   type RangeCheckInput,
 } from "./rangeCheck.js";
@@ -33,7 +32,6 @@ const range = (overrides: Partial<RangeCheckInput> = {}) =>
     cell: { x: 402, y: 400 },
     outposts: [],
     outpostFlingers: noOutposts,
-    declareWar: false,
     ...overrides,
   });
 
@@ -59,16 +57,6 @@ describe("main yard range", () => {
     expect(range({ cell: { x: 404, y: 398 } })).toEqual({ ok: true, via: "main" });
   });
 
-  test("Declare War's two cells count only while it is running", () => {
-    const edge = { x: 400, y: 406 };
-    expect(range({ cell: edge })).toEqual({ ok: false, reason: "no-outposts" });
-    expect(range({ cell: edge, declareWar: true })).toEqual({ ok: true, via: "main" });
-    expect(range({ cell: { x: 400, y: 407 }, declareWar: true })).toEqual({
-      ok: false,
-      reason: "no-outposts",
-    });
-  });
-
   test("distance wraps around the toroidal grid", () => {
     // (799, 400) is one cell west of (0, 400), not 799 cells east.
     expect(getDistanceFromMain(799, 400, 0, 400)).toBe(1);
@@ -81,9 +69,9 @@ describe("main yard range", () => {
   });
 
   test("a flinger-less yard reaches nothing, not even its own cell's neighbour", () => {
-    expect(withDeclareWar(getMainYardRange(0), true)).toBe(0);
+    expect(getMainYardRange(0)).toBe(0);
 
-    expect(range({ flinger: 0, cell: { x: 401, y: 400 }, declareWar: true })).toEqual({
+    expect(range({ flinger: 0, cell: { x: 401, y: 400 } })).toEqual({
       ok: false,
       reason: "no-outposts",
     });
@@ -145,18 +133,6 @@ describe("outpost range", () => {
     expect(at(404)).toEqual({ ok: false, reason: "out-of-range" });
   });
 
-  test("an outpost's Declare War cells count only while it runs", () => {
-    const check = (declareWar: boolean) =>
-      range({
-        cell: { x: 420, y: 400 },
-        outposts: [outpost(420, 403, "op")],
-        outpostFlingers: new Map([["op", 1]]),
-        declareWar,
-      });
-    expect(check(false)).toEqual({ ok: false, reason: "out-of-range" });
-    expect(check(true)).toEqual({ ok: true, via: "outpost" });
-  });
-
   test("each outpost is measured from its own cell with its own flinger", () => {
     // The strong outpost is far away; the near one is weak. Neither reaches,
     // though the old rule tested the strong one's reach against the near
@@ -197,22 +173,22 @@ describe("outpost range", () => {
 
     expect(nearby).toEqual([{ baseid: "op-wrapped", x: 798, y: 799, dx: -3, dy: -2 }]);
     // Four steps across the seam: a level 4 outpost reaches, a level 3 does not.
-    expect(checkOutpostRange(nearby, new Map([["op-wrapped", 4]]), false)).toEqual({
+    expect(checkOutpostRange(nearby, new Map([["op-wrapped", 4]]))).toEqual({
       ok: true,
       via: "outpost",
     });
-    expect(checkOutpostRange(nearby, new Map([["op-wrapped", 3]]), false)).toEqual({
+    expect(checkOutpostRange(nearby, new Map([["op-wrapped", 3]]))).toEqual({
       ok: false,
       reason: "out-of-range",
     });
   });
 
   test("the sweep box holds every cell the longest outpost ring reaches", () => {
-    // Level 4 plus Declare War reaches 6 steps; every such cell is inside the box.
+    // Level 4 reaches 4 steps; every such cell is inside the box.
     const target = { x: 400, y: 400 };
     for (let x = 390; x <= 410; x++) {
       for (let y = 390; y <= 410; y++) {
-        if (getDistanceFromMain(x, y, target.x, target.y) > 6) continue;
+        if (getDistanceFromMain(x, y, target.x, target.y) > 4) continue;
         expect(outpostsNearCell(target, [outpost(x, y, "op")])).toHaveLength(1);
       }
     }
@@ -221,7 +197,7 @@ describe("outpost range", () => {
   test("an outpost with no save row cannot vouch for the attack", () => {
     const nearby = outpostsNearCell({ x: 400, y: 400 }, [outpost(401, 400, "op-gone")]);
 
-    expect(checkOutpostRange(nearby, new Map(), true)).toEqual({
+    expect(checkOutpostRange(nearby, new Map())).toEqual({
       ok: false,
       reason: "out-of-range",
     });
@@ -236,7 +212,6 @@ describe("planning", () => {
         flinger: 4,
         cell: { x: 405, y: 405 },
         outposts: [],
-        declareWar: false,
       })
     ).toEqual({ ok: true, via: "main" });
   });
@@ -247,7 +222,6 @@ describe("planning", () => {
       flinger: 1,
       cell: { x: 420, y: 400 },
       outposts: [[421, 400, "op-near"]],
-      declareWar: false,
     });
 
     expect(plan).toEqual({ pending: [{ baseid: "op-near", x: 421, y: 400, dx: 1, dy: 0 }] });

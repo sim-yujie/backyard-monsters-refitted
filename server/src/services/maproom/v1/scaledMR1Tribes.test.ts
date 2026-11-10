@@ -199,7 +199,6 @@ const serverBattle = (log: unknown, tick: number) => {
       },
       attacker: userSave as never,
       tick: battleTick(tick),
-      declareWar: false,
     })!
   );
 };

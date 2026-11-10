@@ -134,24 +134,20 @@ describe("respawn", () => {
 
 describe("what one fling carries (R11)", () => {
   test("a level 4 Housing Bunker allows 780, not the Flinger table's 640", () => {
-    expect(infernoTribeFlingCapacity(bunker(1, 4), false)).toBe(780);
+    expect(infernoTribeFlingCapacity(bunker(1, 4))).toBe(780);
   });
 
   test("each level holds 200/300/520/780/1,140/1,820", () => {
-    expect([1, 2, 3, 4, 5, 6].map((l) => infernoTribeFlingCapacity(bunker(1, l), false))).toEqual([
+    expect([1, 2, 3, 4, 5, 6].map((l) => infernoTribeFlingCapacity(bunker(1, l)))).toEqual([
       200, 300, 520, 780, 1140, 1820,
     ]);
   });
 
   test("the best finished bunker counts; one still being built does not", () => {
-    expect(infernoTribeFlingCapacity({ ...bunker(1, 2), ...bunker(2, 5) }, false)).toBe(1140);
-    expect(infernoTribeFlingCapacity({ ...bunker(1, 2), ...bunker(2, 1, { cB: 900 }) }, false)).toBe(300);
-    expect(infernoTribeFlingCapacity(bunker(2, 1, { cB: 900 }), false)).toBe(0);
-    expect(infernoTribeFlingCapacity({}, false)).toBe(0);
-  });
-
-  test("Declare War adds a quarter", () => {
-    expect(infernoTribeFlingCapacity(bunker(1, 4), true)).toBe(975);
+    expect(infernoTribeFlingCapacity({ ...bunker(1, 2), ...bunker(2, 5) })).toBe(1140);
+    expect(infernoTribeFlingCapacity({ ...bunker(1, 2), ...bunker(2, 1, { cB: 900 }) })).toBe(300);
+    expect(infernoTribeFlingCapacity(bunker(2, 1, { cB: 900 }))).toBe(0);
+    expect(infernoTribeFlingCapacity({})).toBe(0);
   });
 });
 
