@@ -12,12 +12,14 @@ import {
   hasArt,
   maxHealth,
   prettifyArtKey,
+  propsSize,
   resolveArt,
   restingLayers,
   stripCrop,
 } from "./buildingArt";
 import { stripCells } from "./yardAnim";
 import { setClassicLook } from "@/game/classicLook";
+import { BUILDING_HP, PROPS_SIZE } from "@/game/combat/rules/combatStatsData";
 
 // These tests read the Flash art table, its strips and its files, so they run on the old building art
 // (the new Town Hall is the default; buildingArtTiers.test.ts covers it).
@@ -400,6 +402,13 @@ describe("names and health", () => {
 
   it("has no ladder for a type it does not know", () => {
     expect(maxHealth(9999, 1)).toBeNull();
+  });
+
+  it("gives the Observatory the health and size the battle uses", () => {
+    // The yard's damaged and destroyed art must switch at the battle's health.
+    expect(maxHealth(150, 1)).toBe(BUILDING_HP[150]?.[0]);
+    expect(maxHealth(150, 0)).toBe(10_000);
+    expect(propsSize(150)).toBe(PROPS_SIZE[150]);
   });
 });
 
