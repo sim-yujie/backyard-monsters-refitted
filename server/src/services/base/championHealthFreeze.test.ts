@@ -5,7 +5,8 @@ import type { ChampionData } from "../../schemas/ChampionSchema.js";
 import { checkpointSession, newCheckpoint, parseFlingLog, parseStoredCheckpoint, serialiseCheckpoint } from "./attackCheckpoint.js";
 import { healthOf, newAttackSession, parseAttackSession, serialiseAttackSession } from "./attackSession.js";
 import { fightableLog, withFrozenChampions } from "./combat/attackLoot.js";
-import { championsAfterAttack } from "./combat/attackerRow.js";
+import { replayAbandonedAttack } from "./combat/abandonedAttack.js";
+import { championsAfterAttack, championsAfterBattle } from "./combat/attackerRow.js";
 import { battleReplayInput } from "./combat/battle.js";
 
 /**
@@ -155,5 +156,142 @@ describe("the engine sends a champion out at the health it is handed", () => {
     expect(championsAfterAttack([champion(1, { hp: 500 })], [{ ...champion(1), hp: after }], log())).toEqual([
       champion(1, { hp: after }),
     ]);
+  });
+});
+
+/**
+ * Vorgs heal a champion in battle, and it comes home at that health, as Flash
+ * kept it (`ChampionBase.as:1200/1310` export `hp` every tick, `BASE.as:3270`
+ * sends it, `ATTACK.as:532` spawns from it). Where the server replayed the
+ * battle, its figure is the one stored, whichever path lands the attack: the
+ * save that ends it, or the finaliser from its checkpoint
+ * (`finaliseAttack.ts`, which writes `attackerchampion` as is).
+ */
+describe("a champion comes home at the server's battle's health (Vorg and Zafreeti heals)", () => {
+  const FOMOR_FULL = championStatWithFood("G3", "health", 4, 0);
+  const LOW = Math.floor(FOMOR_FULL * 0.05);
+  const fomor = (hp: number, extra: Partial<ChampionData> = {}): ChampionData => champion(3, { hp, ...extra });
+  /** A camp with a Sniper Tower that reaches the fling point. */
+  const CAMP = { "0": { id: 0, t: 14, l: 1, X: 0, Y: 0 }, "1": { id: 1, t: 21, l: 3, X: 300, Y: 300 } };
+  const vorgLog = (monsters: Record<string, number>) =>
+    ({
+      v: 1,
+      seed: 5,
+      events: [{ kind: "fling", t: 80, x: 400, y: 400, r: 200, monsters, champion: { t: 3, l: 4 } }],
+    }) as FlingLog;
+
+  /** The server's replay, as both the save and the finaliser run it. */
+  const fight = (
+    monsters: Record<string, number>,
+    housed: Record<string, number>,
+    hp: number,
+    championHealth: Record<string, number> | undefined = { "3": hp }
+  ) => {
+    const input = battleReplayInput({
+      flinglog: vorgLog(monsters),
+      session: { ...newAttackSession(2, 4242, { [HOME]: housed }), ...(championHealth && { championHealth }) },
+      defender: { type: "tribe", buildingdata: CAMP, buildinghealthdata: {}, resources: { r1: 5000, r2: 0, r3: 0, r4: 0 } },
+      attacker: { academy: {}, champion: [fomor(hp)] },
+      tick: 24_000,
+      declareWar: false,
+    })!;
+    return replayAbandonedAttack(input);
+  };
+  const replayHp = (outcome: ReturnType<typeof fight>) => outcome.attackerchampion![0]!.hp;
+
+  test("a hurt Fomor with housed Vorgs comes home healed, at the replay's figure", () => {
+    const outcome = fight({ C16: 6 }, { C16: 6 }, LOW);
+    const healed = replayHp(outcome);
+    expect(healed).toBeGreaterThan(LOW);
+    expect(healed).toBeLessThanOrEqual(FOMOR_FULL);
+
+    // The save that ends the attack: the client reports what it saw, the
+    // only-downwards rule keeps the stored health, then the replay's lands.
+    const reported = [fomor(healed)];
+    const afterSave = championsAfterBattle(
+      championsAfterAttack([fomor(LOW)], reported, vorgLog({ C16: 6 })),
+      outcome,
+      { "3": LOW }
+    );
+    expect(afterSave).toEqual([fomor(healed)]);
+
+    // The finaliser from the checkpoint writes the same battle's figure.
+    expect(outcome.attackerchampion).toEqual([fomor(healed)]);
+  });
+
+  // Every healer the game has: the two monsters with negative damage, C15
+  // Zafreeti and C16 Vorg (`Zafreeti.as`, `Vorg.as`, both through
+  // `FIREBALL.as:150-159`, a tenth on a champion). Flash's `Vorgv2` and
+  // `Zafreetiv2` (and its powered-up heal on death) sit behind
+  // `k_USE_REBALANCED_MONSTERS = false` (`CREATURELOCKER.as:30`) and never ran.
+  test.each([
+    ["Zafreeti", { C15: 2 }],
+    ["Vorg", { C16: 6 }],
+    ["both", { C15: 2, C16: 6 }],
+  ])("%s: the healed health comes home, whichever path lands it", (_name, healers) => {
+    const outcome = fight(healers, healers, LOW);
+    const healed = replayHp(outcome);
+    expect(healed).toBeGreaterThan(LOW);
+    expect(healed).toBeLessThanOrEqual(FOMOR_FULL);
+    expect(championsAfterBattle([fomor(LOW)], outcome, { "3": LOW })).toEqual(outcome.attackerchampion!);
+  });
+
+  test("a forged save reporting full health stores the replay's figure", () => {
+    const outcome = fight({ C16: 6 }, { C16: 6 }, LOW);
+    const after = championsAfterBattle(
+      championsAfterAttack([fomor(LOW)], [fomor(FOMOR_FULL)], vorgLog({ C16: 6 })),
+      outcome,
+      { "3": LOW }
+    );
+    expect(after[0]!.hp).toBe(replayHp(outcome));
+    expect(after[0]!.hp).toBeLessThan(FOMOR_FULL);
+  });
+
+  test("a forged log with Vorgs the attacker never housed is cut: no heal", () => {
+    const outcome = fight({ C16: 6 }, { C4: 12 }, LOW);
+    const after = championsAfterBattle([fomor(LOW)], outcome, { "3": LOW });
+    expect(after[0]!.hp).toBeLessThanOrEqual(LOW);
+    expect(after[0]!.hp).toBe(replayHp(outcome));
+  });
+
+  test("a champion with no Vorg that takes damage keeps it", () => {
+    const outcome = fight({}, {}, FOMOR_FULL);
+    const hurt = replayHp(outcome);
+    expect(hurt).toBeLessThan(FOMOR_FULL);
+    // Even when the save claims it came home untouched.
+    const after = championsAfterBattle(
+      championsAfterAttack([fomor(FOMOR_FULL)], [fomor(FOMOR_FULL)], vorgLog({})),
+      outcome,
+      { "3": FOMOR_FULL }
+    );
+    expect(after).toEqual([fomor(hurt)]);
+  });
+
+  test("with no replay (Map Room 3) the save's figure lands only downwards, as before", () => {
+    const log = vorgLog({ C16: 6 });
+    expect(championsAfterAttack([fomor(LOW)], [fomor(FOMOR_FULL)], log)).toEqual([fomor(LOW)]);
+    expect(championsAfterAttack([fomor(LOW)], [fomor(100)], log)).toEqual([fomor(100)]);
+  });
+
+  test("never above full health for its stored level and food bonus, never below 0", () => {
+    const battle = (hp: number) => ({ attackerchampion: [fomor(hp)], championsFlung: [3] });
+    expect(championsAfterBattle([fomor(LOW)], battle(FOMOR_FULL * 5), { "3": LOW })).toEqual([fomor(FOMOR_FULL)]);
+    expect(championsAfterBattle([fomor(LOW)], battle(-40), { "3": LOW })).toEqual([fomor(0)]);
+    expect(championsAfterBattle([fomor(LOW)], battle(1234.9), { "3": LOW })).toEqual([fomor(1234)]);
+  });
+
+  test("a champion the battle never flung, one not out of the cage, or one with no frozen health keeps its own", () => {
+    const outcome = { attackerchampion: [fomor(9_000)], championsFlung: [3] };
+    expect(championsAfterBattle([fomor(LOW)], { ...outcome, championsFlung: [] }, { "3": LOW })).toEqual([fomor(LOW)]);
+    expect(championsAfterBattle([fomor(LOW, { status: 1 })], outcome, { "3": LOW })).toEqual([fomor(LOW, { status: 1 })]);
+    // A session minted before the freeze fought it at full health: the figure says nothing.
+    expect(championsAfterBattle([fomor(LOW)], outcome, undefined)).toEqual([fomor(LOW)]);
+    expect(championsAfterBattle([fomor(LOW)], outcome, { "1": LOW })).toEqual([fomor(LOW)]);
+    // Other champions are untouched; no champion is added.
+    expect(championsAfterBattle([champion(1, { hp: 500 }), fomor(LOW)], outcome, { "1": 500, "3": LOW })).toEqual([
+      champion(1, { hp: 500 }),
+      fomor(9_000),
+    ]);
+    expect(championsAfterBattle([], outcome, { "3": LOW })).toEqual([]);
   });
 });

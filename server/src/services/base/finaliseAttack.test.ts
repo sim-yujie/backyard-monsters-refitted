@@ -216,6 +216,7 @@ const { attackSessionKey, attackerSessionKey } = await import("./attackSession.j
 const { replayAbandonedAttack } = await import("./combat/abandonedAttack.js");
 const { attackLootOf } = await import("./combat/attackLoot.js");
 const { foughtLoot } = await import("./combat/battle.js");
+const { championStatWithFood } = await import("../../game-rules/combat/stats.js");
 const { housingLossOf, housingLossLine } = await import("./combat/housingLoss.js");
 const { defenceReplayLoadKey, defenceReplayLoadOf, keepDefenceReplayLoad } = await import(
   "../defences/defenceReplayLoad.js"
@@ -600,6 +601,31 @@ describe("finaliseAbandonedAttack", () => {
       expect(defender.attackreport).not.toContain("Housing");
     }, REPLAY_TIMEOUT_MS);
   });
+
+  test("a champion healed by Vorgs comes home at the replay's health, as the save stores it", async () => {
+    // Fomor at 5% with six housed Vorgs: they heal it in the battle (FIREBALL.as:150-159).
+    const full = championStatWithFood("G3", "health", 4, 0);
+    const low = Math.floor(full * 0.05);
+    const fomor = { t: 3, l: 4, hp: low, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 };
+    userSave.champion = [fomor];
+    userSave.monsters = { housed: { C16: 6 }, space: 400 };
+    const vorgLog = {
+      v: 1 as const,
+      seed: LOG.seed,
+      events: [{ kind: "fling" as const, t: 480, x: -615, y: 115, r: 300, monsters: { C16: 6 }, champion: { t: 3, l: 4 } }],
+    };
+    await arm({ flinglog: vorgLog, sources: [HOME], entryHoused: { [HOME]: { C16: 6 } }, championHealth: { "3": low } });
+    // The same battle, the champion sent out at its frozen health.
+    const healed = replayed(TICK, {
+      ...vorgLog,
+      events: [{ ...vorgLog.events[0]!, champion: { t: 3, l: 4, hp: low } }],
+    }).attackerchampion![0]!.hp;
+    expect(healed).toBeGreaterThan(low);
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+    expect(userSave.champion[0].hp).toBe(healed);
+  }, REPLAY_TIMEOUT_MS);
 
   test("is idempotent: a second finalisation finds nothing and charges nothing", async () => {
     await arm();
