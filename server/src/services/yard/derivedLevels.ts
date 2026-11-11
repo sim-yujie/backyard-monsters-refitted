@@ -1,5 +1,6 @@
 import { BaseType } from "../../enums/Base.js";
-import type { BuildingDataMap } from "../../types/BuildingData.js";
+import type { BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
+import { advanceBuildingTimers } from "../base/advanceBuildingTimers.js";
 import { baseValueOf } from "../base/economy/resourceBudget.js";
 import { levelOf } from "../yardplanner/costs.js";
 
@@ -62,6 +63,58 @@ export const derivedLevels = (buildingdata: BuildingDataMap | null | undefined):
   flinger: highestLevel(buildingdata, FLINGER_TYPE),
   catapult: highestLevel(buildingdata, CATAPULT_TYPE),
 });
+
+/**
+ * {@link syncDerivedLevels} for a yard an attack has just caught up
+ * (`advanceBuildingTimers` in an attack's landing): a countdown that ran out
+ * while the owner was away is finished there, so a Flinger upgrade done by
+ * then has to count for the cached level too, or the owner's range and fog of
+ * war stay short until they next open the yard. Player yards only: a wild
+ * camp's or a bot tribe's column is left as its data has it.
+ *
+ * @returns Whether either level changed.
+ */
+export const syncAttackedYardLevels = (save: DerivedLevelsSave & { type?: string }): boolean =>
+  save.type === BaseType.MAIN || save.type === BaseType.OUTPOST ? syncDerivedLevels(save) : false;
+
+/** The slice of a save {@link flingerLevelAt} reads. */
+export interface FlingerClockSave {
+  flinger?: number;
+  buildingdata?: BuildingDataMap | null;
+  buildinghealthdata?: BuildingHealthData | null;
+  savetime?: number | null;
+}
+
+/**
+ * The yard's Flinger level as of `now`, rather than as of its last write.
+ *
+ * `save.flinger` only moves when the server writes the yard (a load, a yard
+ * action), so a Flinger whose upgrade countdown ran out since then still
+ * reads at its old level there until the owner next opens that yard, which
+ * for an outpost can be days. This plays the Flinger's own countdown forward
+ * to `now` the way the catch-up would (`advanceBuildingTimers`: paused while
+ * damaged, a prefab finishing at its kit level) and reads the level off that,
+ * so the fog of war's sight and the attack range grow the moment the upgrade
+ * is done, never before it.
+ *
+ * A row loaded without its `buildingdata` falls back to the stored column.
+ *
+ * @param save - The yard's Flinger, health and clock.
+ * @param now - Unix seconds.
+ */
+export const flingerLevelAt = (save: FlingerClockSave, now: number): number | undefined => {
+  const buildingdata = save.buildingdata;
+  if (!buildingdata || typeof buildingdata !== "object") return save.flinger;
+
+  const flingers: BuildingDataMap = {};
+  for (const [key, building] of Object.entries(buildingdata)) {
+    if (building && Number(building.t) === FLINGER_TYPE) flingers[key] = building;
+  }
+
+  const savedAt = Number(save.savetime);
+  const elapsed = Number.isFinite(savedAt) && savedAt > 0 ? now - savedAt : 0;
+  return highestLevel(advanceBuildingTimers(flingers, save.buildinghealthdata, elapsed), FLINGER_TYPE);
+};
 
 /**
  * Writes `flinger` and `catapult` onto the save from its buildings.

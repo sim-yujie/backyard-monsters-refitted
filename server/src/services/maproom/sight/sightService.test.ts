@@ -161,6 +161,61 @@ describe("getPlayerSight: own circles and cells", () => {
   });
 });
 
+describe("getPlayerSight: a Flinger upgrade's countdown", () => {
+  const nowSeconds = () => Math.floor(Date.now() / 1000);
+  /** A level 2 Flinger upgrading to 3, saved `ago` seconds back with `left` seconds to go then. */
+  const upgradingYard = (baseid: string, ago: number, left: number, over: Partial<Row> = {}): Row => ({
+    baseid,
+    flinger: 2,
+    savetime: nowSeconds() - ago,
+    buildingdata: { "9": { id: 9, t: 5, l: 2, X: 0, Y: 0, cU: left, cL: 32_400 } },
+    buildinghealthdata: {},
+    ...over,
+  });
+
+  test("the main yard keeps its old reach while the upgrade is still counting down", async () => {
+    const p = user(1, { baseid: "home-1", flinger: 2 });
+    tables.set(Save, [upgradingYard("home-1", 100, 3_600)]);
+
+    const sight = await getPlayerSight(p);
+
+    expect(sight.sources).toEqual([{ x: 101, y: 101, reach: 6, kind: "own" }]);
+  });
+
+  test("the main yard reaches further as soon as the upgrade is done, before the yard is opened again", async () => {
+    // Saved 100 s ago with 90 s left: done 10 s ago, but `flinger` still says 2.
+    const p = user(1, { baseid: "home-1", flinger: 2 });
+    tables.set(Save, [upgradingYard("home-1", 100, 90)]);
+
+    const sight = await getPlayerSight(p);
+
+    expect(sight.sources).toEqual([{ x: 101, y: 101, reach: 8, kind: "own" }]); // mainYardRange(3)
+  });
+
+  test("an outpost's finished upgrade counts without the outpost being opened", async () => {
+    const p = user(1, { baseid: "home-1", flinger: 1, outposts: [[200, 200, "out-a"]] });
+    tables.set(Save, [
+      upgradingYard("out-a", 100, 90), // outpostRange(3) = 3
+    ]);
+
+    const sight = await getPlayerSight(p);
+
+    expect(sight.sources).toEqual([
+      { x: 101, y: 101, reach: 4, kind: "own" },
+      { x: 200, y: 200, reach: 3, kind: "own" },
+    ]);
+  });
+
+  test("a damaged Flinger's countdown is paused, so it keeps its old reach", async () => {
+    const p = user(1, { baseid: "home-1", flinger: 2 });
+    tables.set(Save, [upgradingYard("home-1", 100, 90, { buildinghealthdata: { "9": 100 } })]);
+
+    const sight = await getPlayerSight(p);
+
+    expect(sight.sources).toEqual([{ x: 101, y: 101, reach: 6, kind: "own" }]);
+  });
+});
+
 describe("getPlayerSight: attackers", () => {
   test("reveals the current bases, on the player's world, of anyone who has ever attacked them", async () => {
     const p = user(1);

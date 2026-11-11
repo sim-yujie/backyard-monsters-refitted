@@ -6,7 +6,9 @@ import { User } from "../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { postgres, redis } from "../../../server.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
+import { logger } from "../../../utils/logger.js";
 import { runningPowerups } from "../../alliance/powerups.js";
+import { flingerLevelsNow } from "../../yard/flingerLevelsNow.js";
 import type { RevealedCell, SightSource } from "../../../game-rules/maproom/sight.js";
 import {
   attackerRevealedCells,
@@ -96,21 +98,12 @@ const cacheTtl = (war: DeclareWarStatus): number => {
 };
 
 /**
- * Flinger level per outpost `baseid`, for whichever outposts the caller asks
- * about (one player's own, or every member of an alliance's combined).
+ * The main yards' and outposts' `baseid`s whose Flinger levels a sight needs.
  *
- * @param baseids - The outposts whose flinger levels decide their reach.
+ * @param saves - The main saves (one player's own, or every member's of an alliance).
  */
-const outpostFlingerLevels = async (
-  baseids: readonly string[],
-): Promise<Map<string, number | undefined>> => {
-  const unique = [...new Set(baseids)];
-  if (!unique.length) return new Map();
-
-  const rows = await postgres.em.find(Save, { baseid: { $in: unique } }, { fields: ["baseid", "flinger"] });
-
-  return new Map(rows.map(({ baseid, flinger }) => [baseid, flinger]));
-};
+const flingerBaseids = (saves: readonly Pick<Save, "baseid" | "outposts">[]): (string | undefined)[] =>
+  saves.flatMap((save) => [save.baseid, ...(save.outposts ?? []).map(([, , baseid]) => baseid)]);
 
 /**
  * Every base, on `worldid`, owned by someone who has ever attacked `userid`
@@ -139,11 +132,19 @@ const attackerBasesOn = async (
 };
 
 /** The fields `loadOwnSight` and `loadAllianceSight` need off a main save. */
-const SIGHT_SAVE_FIELDS = ["homebase", "flinger", "outposts", "worldid"] as const;
+const SIGHT_SAVE_FIELDS = ["baseid", "homebase", "flinger", "outposts", "worldid"] as const;
 
-const asOwnBaseSave = (save: Pick<Save, "homebase" | "flinger" | "outposts">): OwnBaseSave => ({
+/**
+ * A main save as the sight rule reads it, with its Flinger level as of now
+ * (`flingerLevelsNow`) in place of the `flinger` column, falling back to the
+ * column for a row the lookup did not find.
+ */
+const asOwnBaseSave = (
+  save: Pick<Save, "baseid" | "homebase" | "flinger" | "outposts">,
+  flingerLevels: ReadonlyMap<string, number | undefined>,
+): OwnBaseSave => ({
   homebase: save.homebase,
-  flinger: save.flinger,
+  flinger: flingerLevels.has(save.baseid) ? flingerLevels.get(save.baseid) : save.flinger,
   outposts: save.outposts ?? [],
 });
 
@@ -159,13 +160,11 @@ const loadOwnSight = async (user: User, declareWar: boolean): Promise<CachedHalf
   const save = user.save;
   if (!save?.worldid) return EMPTY_HALF;
 
-  const baseSave = asOwnBaseSave(save);
-  const outpostIds = (save.outposts ?? []).map(([, , baseid]) => baseid);
-
   const [flingerLevels, attackerBases] = await Promise.all([
-    outpostFlingerLevels(outpostIds),
+    flingerLevelsNow(flingerBaseids([save])),
     attackerBasesOn(user.userid, save.worldid),
   ]);
+  const baseSave = asOwnBaseSave(save, flingerLevels);
 
   return {
     sources: ownSources(baseSave, flingerLevels, declareWar),
@@ -197,14 +196,13 @@ const loadAllianceSight = async (
     { fields: SIGHT_SAVE_FIELDS },
   );
 
-  const outpostIds = saves.flatMap((save) => (save.outposts ?? []).map(([, , baseid]) => baseid));
-  const flingerLevels = await outpostFlingerLevels(outpostIds);
+  const flingerLevels = await flingerLevelsNow(flingerBaseids(saves));
 
   const sources: SightSource[] = [];
   const revealed: RevealedCell[] = [];
 
   for (const save of saves) {
-    const baseSave = asOwnBaseSave(save);
+    const baseSave = asOwnBaseSave(save, flingerLevels);
     sources.push(...ownSources(baseSave, flingerLevels, declareWar));
     revealed.push(...ownRevealedCells(baseSave));
   }
@@ -340,17 +338,42 @@ export const invalidateSight = async (who: number | Pick<User, "userid" | "allia
  * `syncDerivedLevels` runs on every yard write regardless, and most leave it
  * unchanged (`derivedLevels.ts`).
  *
- * @param user - The save's owner (an outpost's own flinger level is cached
- *   under its main yard owner's sight, the same key `playerSightKey` uses).
+ * @param user - The save's owner, loaded or just their id (an outpost's own
+ *   flinger level is cached under its main yard owner's sight, the same key
+ *   `playerSightKey` uses).
  * @param before - `save.flinger` read before the write that might have
  *   changed it.
  * @param after - `save.flinger` read after.
  */
 export const invalidateSightIfFlingerChanged = async (
-  user: Pick<User, "userid" | "alliance_id">,
+  user: number | Pick<User, "userid" | "alliance_id">,
   before: number | undefined,
   after: number | undefined,
 ): Promise<void> => {
   if (before === after) return;
   await invalidateSight(user);
+};
+
+/**
+ * {@link invalidateSightIfFlingerChanged} for a yard an attack has just
+ * landed on: the landing's catch-up can finish a Flinger upgrade
+ * (`syncAttackedYardLevels`). Called after the landing commits, so it never
+ * throws: a cache it could not drop runs out by itself within
+ * {@link SIGHT_CACHE_TTL_SECONDS}, and the attack must not fail for it.
+ *
+ * @param yard - The defender's row as it was written: its owner and new `flinger`.
+ * @param flingerBefore - Its `flinger` before the catch-up.
+ */
+export const invalidateSightAfterLanding = async (
+  yard: Pick<Save, "userid" | "flinger">,
+  flingerBefore: number | undefined,
+): Promise<void> => {
+  try {
+    await invalidateSightIfFlingerChanged(yard.userid, flingerBefore, yard.flinger);
+  } catch (error) {
+    logger.warn("Sight of {userid} not dropped after an attack finished their Flinger upgrade", {
+      userid: yard.userid,
+      error,
+    });
+  }
 };

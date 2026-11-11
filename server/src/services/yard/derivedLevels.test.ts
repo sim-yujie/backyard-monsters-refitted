@@ -5,6 +5,8 @@ import {
   CATAPULT_TYPE,
   FLINGER_TYPE,
   derivedLevels,
+  flingerLevelAt,
+  syncAttackedYardLevels,
   syncBaseValue,
   syncDerivedLevels,
   type BaseValueSave,
@@ -171,5 +173,53 @@ describe("syncBaseValue (#209)", () => {
       expect(syncBaseValue(save)).toBe(false);
       expect(save.basevalue).toBe("0");
     }
+  });
+});
+
+describe("flingerLevelAt", () => {
+  const NOW = 1_000_000;
+  const upgrading = (left: number, extra: Partial<BuildingData> = {}): BuildingDataMap => ({
+    ...yard(),
+    "1": building(1, FLINGER_TYPE, { l: 3, cU: left, cL: 97_200, ...extra }),
+  });
+
+  test("a running upgrade counts at the level the Flinger has", () => {
+    expect(flingerLevelAt({ flinger: 3, buildingdata: upgrading(500), savetime: NOW - 100 }, NOW)).toBe(3);
+  });
+
+  test("an upgrade whose countdown ran out since the save counts at its new level", () => {
+    expect(flingerLevelAt({ flinger: 3, buildingdata: upgrading(100), savetime: NOW - 100 }, NOW)).toBe(4);
+  });
+
+  test("a damaged Flinger's countdown is paused", () => {
+    const save = { flinger: 3, buildingdata: upgrading(100), buildinghealthdata: { "1": 50 }, savetime: NOW - 100 };
+    expect(flingerLevelAt(save, NOW)).toBe(3);
+  });
+
+  test("a Starter Kit Flinger is 0 while it builds and its kit level once done", () => {
+    const kit = (left: number): BuildingDataMap => ({
+      "1": building(1, FLINGER_TYPE, { l: 4, prefab: 4, cB: left, cL: 141_300 }),
+    });
+    expect(flingerLevelAt({ flinger: 0, buildingdata: kit(500), savetime: NOW - 100 }, NOW)).toBe(0);
+    expect(flingerLevelAt({ flinger: 0, buildingdata: kit(100), savetime: NOW - 100 }, NOW)).toBe(4);
+  });
+
+  test("a row loaded without its buildings falls back to the stored column", () => {
+    expect(flingerLevelAt({ flinger: 2 }, NOW)).toBe(2);
+    expect(flingerLevelAt({}, NOW)).toBeUndefined();
+  });
+});
+
+describe("syncAttackedYardLevels", () => {
+  test("re-derives a player yard's levels", () => {
+    const save = { type: "outpost", flinger: 1, catapult: 0, buildingdata: yard() };
+    expect(syncAttackedYardLevels(save)).toBe(true);
+    expect(save).toMatchObject({ flinger: 3, catapult: 2 });
+  });
+
+  test("leaves a wild camp's columns as they are", () => {
+    const save = { type: "tribe", flinger: 1, catapult: 0, buildingdata: yard() };
+    expect(syncAttackedYardLevels(save)).toBe(false);
+    expect(save).toMatchObject({ flinger: 1, catapult: 0 });
   });
 });
