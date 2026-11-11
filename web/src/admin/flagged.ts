@@ -53,8 +53,31 @@ const KIND_HINTS: Readonly<Record<CheatEntry["kind"], string>> = {
   other: "Another report",
 };
 
-/** "yardlord", or "base 1200" when no yard has that id any more. */
-export const yardName = (yard: CheatYard): string => yard.owner?.username ?? `base ${yard.baseid}`;
+/** The first Descent yard's base id: yards 1-13 are 201-213. */
+const DESCENT_FIRST_BASEID = 201;
+
+/**
+ * A yard by what it is: its owner's name ("yardlord"), "Descent yard 1",
+ * "Moloch tribe (base 300)", "Map Room 1 tribe (base 5)", or plainly
+ * "base 201" when the entry did not say what it is or the yard is gone.
+ * Never an owner guessed from a base id alone.
+ */
+export const yardName = (yard: CheatYard): string => {
+  switch (yard.kind) {
+    case "descent": {
+      const level = Number(yard.baseid) - DESCENT_FIRST_BASEID + 1;
+      return Number.isInteger(level) && level >= 1 ? `Descent yard ${level}` : `Descent (base ${yard.baseid})`;
+    }
+    case "inferno-tribe":
+      return `Moloch tribe (base ${yard.baseid})`;
+    case "mr1-tribe":
+      return `Map Room 1 tribe (base ${yard.baseid})`;
+    case "yard":
+      return yard.owner?.username ?? (yard.baseid ? `base ${yard.baseid}` : "a yard now gone");
+    default:
+      return `base ${yard.baseid}`;
+  }
+};
 
 const botChip = (yard: CheatYard | null): Child =>
   yard?.owner?.bot

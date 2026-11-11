@@ -85,6 +85,16 @@ describe("recordBattleMismatches", () => {
     expect(reports).toEqual([]);
   });
 
+  test("names a yard with no row by what it is, so the base id alone is never read as a save's", async () => {
+    await recordBattleMismatches(ctx, user, { baseid: "201", rowless: "descent" }, crafted, battle, stored, "log");
+    await recordBattleMismatches(ctx, user, { baseid: "201" }, crafted, battle, stored, "log");
+    expect(reports).toEqual([
+      "Attack save on base 201 flagged (log): disagrees with the replay on damage, attackloot [descent]",
+      "Attack save on base 201 flagged (log): disagrees with the replay on damage, attackloot",
+    ]);
+    expect(mismatchLines()[0]![1]).toMatchObject({ baseid: "201", rowless: "descent" });
+  });
+
   test("off: a crafted save goes unremarked", async () => {
     await recordBattleMismatches(ctx, user, base, crafted, battle, stored, "off");
     expect(mismatchLines()).toEqual([]);
@@ -96,7 +106,7 @@ describe("recordBattleMismatches", () => {
 
     expect(mismatchLines()).toHaveLength(1);
     expect(mismatchLines()[0]![1]).toMatchObject({ outcome: "flagged", mode: "log", fields: ["damage", "attackloot"] });
-    expect(reports).toEqual(["Attack save on base 1234 flagged (log): disagrees with the replay on damage, attackloot"]);
+    expect(reports).toEqual(["Attack save on base 1234 flagged (log): disagrees with the replay on damage, attackloot [save 9]"]);
   });
 
   test("reject: the same warning and row, then the save is refused", async () => {
@@ -132,7 +142,7 @@ describe("recordBattleMismatches", () => {
 
     expect(mismatchLines()).toHaveLength(1);
     expect(mismatchLines()[0]![1]).toMatchObject({ outcome: "flagged", mode: "reject", fields: ["attackersiege"] });
-    expect(reports).toEqual(["Attack save on base 1234 flagged (reject): disagrees with the replay on attackersiege"]);
+    expect(reports).toEqual(["Attack save on base 1234 flagged (reject): disagrees with the replay on attackersiege [save 9]"]);
   });
 
   test("reject: a siege stock beside a real mismatch is refused for the real one only", async () => {

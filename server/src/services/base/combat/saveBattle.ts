@@ -21,12 +21,26 @@ import {
  * Room 1 tribe save (`scaledMR1Tribes.ts`).
  */
 
+/** A yard with no save row, by what it is: an Inferno Descent yard, a Moloch tribe, a Map Room 1 tribe. */
+export type RowlessYard = "descent" | "inferno-tribe" | "mr1-tribe";
+
 /** The base a save is for, as the log lines name it. */
 export interface SavedBase {
   readonly baseid: string;
-  /** Absent for a Map Room 1 tribe, which has no row. */
+  /** Absent for a yard with no row (a Map Room 1 tribe, a Descent yard, a Moloch tribe). */
   readonly basesaveid?: number;
+  /** What a yard with no row is; its base id alone can match a real save's. */
+  readonly rowless?: RowlessYard;
 }
+
+/**
+ * The yard tag the report message ends with, so the dashboard's Flagged list
+ * can tell the yard apart without guessing from the base id (a Descent yard's
+ * "201" is also some save's base id): "[save 1200]" for a yard with a row,
+ * "[descent]" and the like for one without, nothing when neither is known.
+ */
+export const yardTag = (base: SavedBase): string =>
+  base.basesaveid !== undefined ? ` [save ${base.basesaveid}]` : base.rowless ? ` [${base.rowless}]` : "";
 
 /**
  * How long a save's replay may run. A save sent as the attacker left the
@@ -124,6 +138,7 @@ export const recordBattleMismatches = async (
     username: user.username,
     baseid: base.baseid,
     basesaveid: base.basesaveid,
+    rowless: base.rowless,
     fields,
     sent: { damage: client.damage, destroyed: client.destroyed },
     derived: { damage: battle.damage, destroyed: battle.destroyed, tick: battle.tick },
@@ -136,7 +151,7 @@ export const recordBattleMismatches = async (
     await logReport(
       user,
       `Attack save on base ${base.baseid} ${rejected ? "rejected" : "flagged"} (${mode}): ` +
-        `disagrees with the replay on ${fields.join(", ")}`
+        `disagrees with the replay on ${fields.join(", ")}${yardTag(base)}`
     );
   } catch (err) {
     logger.error("Could not write the attack replay report row for userid {userid}: {error}", {

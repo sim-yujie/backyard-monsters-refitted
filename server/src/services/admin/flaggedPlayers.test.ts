@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { readEntries, readEntry, summarise, type FlagYard } from "./flaggedPlayers.js";
+import { readEntries, readEntry, summarise, yardOf, type FlagYard } from "./flaggedPlayers.js";
 
 /**
  * The Flagged list's reading of `bym.report` entries: each check's message
@@ -25,8 +25,18 @@ describe("readEntry", () => {
       outcome: "refused",
       fields: ["damage", "buildinghealthdata", "attackloot"],
       baseid: "201",
+      yardKey: "base:201",
       message: "Attack save on base 201 rejected (reject): disagrees with the replay on damage, buildinghealthdata, attackloot",
     });
+  });
+
+  test("a fight's yard tag: a save id, or what a yard with no row is", () => {
+    const fight = (tail: string) =>
+      readEntry({ message: `Attack save on base 201 rejected (reject): disagrees with the replay on damage, attackloot${tail}`, timestamp: at(1) });
+    expect(fight(" [save 1200]")).toMatchObject({ fields: ["damage", "attackloot"], baseid: "201", yardKey: "save:1200" });
+    expect(fight(" [descent]")).toMatchObject({ fields: ["damage", "attackloot"], yardKey: "descent:201" });
+    expect(fight(" [inferno-tribe]")).toMatchObject({ yardKey: "inferno-tribe:201" });
+    expect(fight(" [mr1-tribe]")).toMatchObject({ yardKey: "mr1-tribe:201" });
   });
 
   test("a fight only flagged in log mode", () => {
@@ -44,6 +54,7 @@ describe("readEntry", () => {
       outcome: "refused",
       fields: ["overCap", "capMismatch", "pointsJumped"],
       baseid: "1200",
+      yardKey: "own:1200",
     });
     expect(
       readEntry({ message: "ECONOMY SAVE FLAGGED (mode=log): base 9, 5s since the last save — resourceBudget", timestamp: at(3) }),
@@ -80,8 +91,22 @@ describe("readEntries", () => {
   });
 });
 
+describe("yardOf", () => {
+  test("a yard with no row by its kind; a save gone or an old untagged base plainly, never with an owner", () => {
+    expect(yardOf("descent:201", new Map())).toEqual({ key: "descent:201", kind: "descent", baseid: "201", owner: null, type: null });
+    expect(yardOf("base:201", new Map())).toEqual({ key: "base:201", kind: "unknown", baseid: "201", owner: null, type: null });
+    expect(yardOf("save:1200", new Map())).toEqual({ key: "save:1200", kind: "yard", baseid: "", owner: null, type: null });
+  });
+});
+
 describe("summarise", () => {
-  const bot: FlagYard = { baseid: "201", type: "main", owner: { userid: 201, username: "yardlord", bot: true } };
+  const bot: FlagYard = {
+    key: "save:1200",
+    kind: "yard",
+    baseid: "1200",
+    type: "main",
+    owner: { userid: 2199, username: "yardlord", bot: true },
+  };
   const row = {
     userid: 552,
     report_username: "Bluetenit",
@@ -92,15 +117,15 @@ describe("summarise", () => {
     attack_violations: 0,
     lastupdate_at: at(30),
     report: [
-      { message: "Attack save on base 201 rejected (reject): disagrees with the replay on damage, buildinghealthdata, attackloot", timestamp: at(4) },
-      { message: "Attack save on base 202 rejected (reject): disagrees with the replay on buildinghealthdata, attackerchampion", timestamp: at(10) },
-      { message: "Attack save on base 201 flagged (log): disagrees with the replay on attackloot", timestamp: at(12) },
+      { message: "Attack save on base 1200 rejected (reject): disagrees with the replay on damage, buildinghealthdata, attackloot [save 1200]", timestamp: at(4) },
+      { message: "Attack save on base 202 rejected (reject): disagrees with the replay on buildinghealthdata, attackerchampion [descent]", timestamp: at(10) },
+      { message: "Attack save on base 1200 flagged (log): disagrees with the replay on attackloot [save 1200]", timestamp: at(12) },
       { message: "ECONOMY SAVE REJECTED (mode=reject): base 1300, 30s since the last save — overCap [12]", timestamp: at(20) },
     ],
   };
 
   test("counts per check and outcome, fields and yards most often first, first and last time", () => {
-    const player = summarise(row, readEntries(row.report), new Map([["201", bot]]));
+    const player = summarise(row, readEntries(row.report), new Map([["save:1200", bot]]));
     expect(player).toMatchObject({
       userid: 552,
       username: "Bluetenit",
@@ -123,11 +148,26 @@ describe("summarise", () => {
     ]);
     expect(player.yards).toEqual([
       { ...bot, count: 2 },
-      { baseid: "1300", owner: null, type: null, count: 1 },
-      { baseid: "202", owner: null, type: null, count: 1 },
+      { key: "descent:202", kind: "descent", baseid: "202", owner: null, type: null, count: 1 },
+      { key: "own:1300", kind: "yard", baseid: "1300", owner: null, type: null, count: 1 },
     ]);
   });
 
+  test("Bluetenit's three refused Descent fights (10 Nov 2026), written before the tag: plain base ids, no owner guessed", () => {
+    const report = [
+      { message: "Attack save on base 201 rejected (reject): disagrees with the replay on damage, buildinghealthdata, attackloot", timestamp: "2026-11-10T00:04:51.503Z" },
+      { message: "Attack save on base 202 rejected (reject): disagrees with the replay on buildinghealthdata, attackerchampion", timestamp: "2026-11-10T00:10:30.585Z" },
+      { message: "Attack save on base 207 rejected (reject): disagrees with the replay on damage, buildinghealthdata, attackloot", timestamp: "2026-11-10T10:27:00.158Z" },
+    ];
+    // Even with a real save whose base id is 201, an untagged entry is not read as it.
+    const player = summarise({ ...row, report }, readEntries(report), new Map([["save:201", { ...bot, key: "save:201", baseid: "201" }]]));
+    expect(player.counts.fight).toEqual({ refused: 3, flagged: 0 });
+    expect(player.yards).toEqual([
+      { key: "base:201", kind: "unknown", baseid: "201", owner: null, type: null, count: 1 },
+      { key: "base:202", kind: "unknown", baseid: "202", owner: null, type: null, count: 1 },
+      { key: "base:207", kind: "unknown", baseid: "207", owner: null, type: null, count: 1 },
+    ]);
+  });
   test("a gone account keeps the report's name; a ban reason is shown", () => {
     const player = summarise(
       { ...row, username: null, banned: null, ban_reason: { message: "Cheating", timestamp: at(40) } },

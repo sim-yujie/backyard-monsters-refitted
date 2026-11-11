@@ -455,7 +455,18 @@ export type CheatKind = "fight" | "economy" | "attack" | "other";
 /** refused: the server did not take the save; flagged: taken and only recorded. */
 export type CheatOutcome = "refused" | "flagged";
 
+/**
+ * What a yard is: one with a save row ("yard"), one with none (an Inferno
+ * Descent yard, a Moloch tribe, a Map Room 1 tribe), or "unknown" for an old
+ * fight entry that did not say.
+ */
+export type CheatYardKind = "yard" | "descent" | "inferno-tribe" | "mr1-tribe" | "unknown";
+
 export interface CheatYard {
+  /** Tells yards apart: "save:1200", "descent:201", "base:201"... */
+  key: string;
+  kind: CheatYardKind;
+  /** The base id; "" for a save no row has any more. */
   baseid: string;
   /** The yard's owner now; null when no yard has that base id any more. */
   owner: { userid: number; username: string; bot: boolean } | null;

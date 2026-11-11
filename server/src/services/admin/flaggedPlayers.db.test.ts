@@ -31,6 +31,8 @@ const SAVER_BASE = "99730201";
 
 describe.skipIf(!dbName)("the dashboard's Flagged list on a real database", () => {
   let orm: MikroORM;
+  /** Each yard's save id, by owner, as the database gave it. */
+  const saveIds = new Map<number, number>();
   const sql = <R = Record<string, any>>(text: string, params: unknown[] = []) => orm.em.fork().execute<R[]>(text, params);
 
   const report = (userid: number, username: string, entries: { message: string; timestamp: string }[], updated: string) =>
@@ -65,12 +67,14 @@ describe.skipIf(!dbName)("the dashboard's Flagged list on a real database", () =
       [SEEDED, SEEDED_BASE],
       [SAVER, SAVER_BASE],
     ] as const) {
-      await sql(
+      const [saved] = await sql<{ basesaveid: number }>(
         `INSERT INTO bym.save (userid, saveuserid, baseid, type, points, basevalue, createtime, name, credits, attacks,
                                takeover_date, created_at, lastupdate_at)
-         VALUES (?, ?, ?, 'main', '0', '0', 0, 'yard', 0, '[]', now(), now(), now())`,
+         VALUES (?, ?, ?, 'main', '0', '0', 0, 'yard', 0, '[]', now(), now(), now())
+         RETURNING basesaveid`,
         [userid, userid, baseid],
       );
+      saveIds.set(userid, Number(saved!.basesaveid));
     }
 
     await report(
@@ -78,12 +82,21 @@ describe.skipIf(!dbName)("the dashboard's Flagged list on a real database", () =
       `flagtest_${CHEAT}`,
       [
         {
-          message: `Attack save on base ${BOT_BASE} rejected (reject): disagrees with the replay on damage, buildinghealthdata, attackloot`,
+          message: `Attack save on base ${BOT_BASE} rejected (reject): disagrees with the replay on damage, buildinghealthdata, attackloot [save ${saveIds.get(BOT)}]`,
           timestamp: "2026-11-10T00:04:51.000Z",
         },
         {
-          message: `Attack save on base ${SEEDED_BASE} rejected (reject): disagrees with the replay on buildinghealthdata, attackerchampion`,
+          message: `Attack save on base ${SEEDED_BASE} rejected (reject): disagrees with the replay on buildinghealthdata, attackerchampion [save ${saveIds.get(SEEDED)}]`,
           timestamp: "2026-11-10T10:27:00.000Z",
+        },
+        // Written before the yard tag: the bot's base id, but not read as its yard.
+        {
+          message: `Attack save on base ${BOT_BASE} flagged (log): disagrees with the replay on attackersiege`,
+          timestamp: "2026-11-09T00:00:00.000Z",
+        },
+        {
+          message: "Attack save on base 201 flagged (log): disagrees with the replay on attackersiege [descent]",
+          timestamp: "2026-11-09T00:01:00.000Z",
         },
       ],
       "2026-11-10T10:27:00Z",
@@ -112,18 +125,27 @@ describe.skipIf(!dbName)("the dashboard's Flagged list on a real database", () =
       username: `flagtest_${CHEAT}`,
       banned: false,
       gone: false,
-      counts: { fight: { refused: 2, flagged: 0 }, economy: { refused: 0, flagged: 0 }, attack: 0, other: 0 },
+      counts: { fight: { refused: 2, flagged: 2 }, economy: { refused: 0, flagged: 0 }, attack: 0, other: 0 },
       last: "2026-11-10T10:27:00.000Z",
-      entries: 2,
+      entries: 4,
     });
-    expect(cheat!.fields[0]).toEqual({ name: "buildinghealthdata", count: 2 });
-    const yards = Object.fromEntries(cheat!.yards.map((yard) => [yard.baseid, yard]));
-    expect(yards[BOT_BASE]).toMatchObject({ type: "main", owner: { userid: BOT, username: `flagtest_${BOT}`, bot: true }, count: 1 });
+    expect(cheat!.fields).toContainEqual({ name: "buildinghealthdata", count: 2 });
+    const yards = Object.fromEntries(cheat!.yards.map((yard) => [yard.key, yard]));
+    expect(yards[`save:${saveIds.get(BOT)}`]).toMatchObject({
+      kind: "yard",
+      baseid: BOT_BASE,
+      type: "main",
+      owner: { userid: BOT, username: `flagtest_${BOT}`, bot: true },
+      count: 1,
+    });
     // A seeded dev player is not a bot.
-    expect(yards[SEEDED_BASE]).toMatchObject({ owner: { userid: SEEDED, bot: false } });
+    expect(yards[`save:${saveIds.get(SEEDED)}`]).toMatchObject({ owner: { userid: SEEDED, bot: false } });
+    // An untagged old entry names only a base id: no owner is guessed from it.
+    expect(yards[`base:${BOT_BASE}`]).toMatchObject({ kind: "unknown", baseid: BOT_BASE, owner: null });
+    expect(yards["descent:201"]).toMatchObject({ kind: "descent", baseid: "201", owner: null });
 
     expect(saver).toMatchObject({ banned: true, counts: { economy: { refused: 1, flagged: 0 } }, fields: [{ name: "overCap", count: 1 }] });
-    expect(saver!.yards[0]).toMatchObject({ baseid: SAVER_BASE, owner: { userid: SAVER, bot: false } });
+    expect(saver!.yards[0]).toMatchObject({ kind: "yard", baseid: SAVER_BASE, owner: { userid: SAVER, bot: false } });
 
     expect(gone).toMatchObject({ username: "flagtest_gone", gone: true, counts: { attack: 1 }, yards: [] });
   });
@@ -131,13 +153,19 @@ describe.skipIf(!dbName)("the dashboard's Flagged list on a real database", () =
   test("one player's history, newest first, each entry with its yard", async () => {
     const detail = (await flaggedPlayer(orm.em.fork(), CHEAT))!;
     expect(detail.player.userid).toBe(CHEAT);
-    expect(detail.history.map((entry) => entry.time)).toEqual(["2026-11-10T10:27:00.000Z", "2026-11-10T00:04:51.000Z"]);
+    expect(detail.history.map((entry) => entry.time)).toEqual([
+      "2026-11-10T10:27:00.000Z",
+      "2026-11-10T00:04:51.000Z",
+      "2026-11-09T00:01:00.000Z",
+      "2026-11-09T00:00:00.000Z",
+    ]);
     expect(detail.history[1]).toMatchObject({
       kind: "fight",
       outcome: "refused",
       fields: ["damage", "buildinghealthdata", "attackloot"],
-      yard: { baseid: BOT_BASE, owner: { userid: BOT, bot: true } },
+      yard: { kind: "yard", baseid: BOT_BASE, owner: { userid: BOT, bot: true } },
     });
+    expect(detail.history[3]!.yard).toMatchObject({ kind: "unknown", baseid: BOT_BASE, owner: null });
     expect(await flaggedPlayer(orm.em.fork(), BOT)).toBeNull();
   });
 });

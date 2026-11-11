@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SESSION_STORAGE_KEY } from "@/config";
-import type { CheatEntry, CheatPlayer } from "./api";
+import type { CheatEntry, CheatPlayer, CheatYard } from "./api";
 import { FlaggedSection, fieldWord, yardName } from "./flagged";
 
 /**
@@ -37,9 +37,9 @@ const bluetenit = (over: Partial<CheatPlayer> = {}): CheatPlayer => ({
     { name: "attackerchampion", count: 1 },
   ],
   yards: [
-    { baseid: "201", type: "main", owner: { userid: 201, username: "yardlord", bot: true }, count: 1 },
-    { baseid: "202", type: "main", owner: { userid: 202, username: "DarkGecko", bot: true }, count: 1 },
-    { baseid: "999", type: null, owner: null, count: 1 },
+    { key: "save:1200", kind: "yard", baseid: "1200", type: "main", owner: { userid: 2199, username: "yardlord", bot: true }, count: 1 },
+    { key: "descent:202", kind: "descent", baseid: "202", type: null, owner: null, count: 1 },
+    { key: "base:999", kind: "unknown", baseid: "999", type: null, owner: null, count: 1 },
   ],
   first: ago(600),
   last: ago(5),
@@ -53,7 +53,7 @@ const saver: CheatPlayer = bluetenit({
   username: "Saver",
   counts: { fight: { refused: 0, flagged: 0 }, economy: { refused: 1, flagged: 2 }, attack: 1, other: 0 },
   fields: [{ name: "overCap", count: 3 }],
-  yards: [{ baseid: "1300", type: "main", owner: { userid: 77, username: "Saver", bot: false }, count: 3 }],
+  yards: [{ key: "own:1300", kind: "yard", baseid: "1300", type: "main", owner: { userid: 77, username: "Saver", bot: false }, count: 3 }],
   banned: true,
   last: ago(90),
 });
@@ -63,9 +63,9 @@ const entry = (over: Partial<CheatEntry> = {}): CheatEntry => ({
   kind: "fight",
   outcome: "refused",
   fields: ["damage", "buildinghealthdata", "attackloot"],
-  baseid: "201",
-  message: "Attack save on base 201 rejected (reject): disagrees with the replay on damage, buildinghealthdata, attackloot",
-  yard: { baseid: "201", type: "main", owner: { userid: 201, username: "yardlord", bot: true } },
+  baseid: "1200",
+  message: "Attack save on base 1200 rejected (reject): disagrees with the replay on damage, buildinghealthdata, attackloot [save 1200]",
+  yard: { key: "save:1200", kind: "yard", baseid: "1200", type: "main", owner: { userid: 2199, username: "yardlord", bot: true } },
   ...over,
 });
 
@@ -88,7 +88,7 @@ beforeEach(() => {
             outcome: "flagged",
             fields: ["attackerchampion"],
             baseid: "999",
-            yard: { baseid: "999", type: null, owner: null },
+            yard: { key: "base:999", kind: "unknown", baseid: "999", type: null, owner: null },
             message: "Attack save on base 999 flagged (log): disagrees with the replay on attackerchampion",
           }),
         ],
@@ -147,8 +147,19 @@ describe("fieldWord and yardName", () => {
   });
 
   it("names a yard by its owner, or by its base id when it is gone", () => {
-    expect(yardName({ baseid: "201", type: "main", owner: { userid: 201, username: "yardlord", bot: true } })).toBe("yardlord");
-    expect(yardName({ baseid: "999", type: null, owner: null })).toBe("base 999");
+    const owner = { userid: 2199, username: "yardlord", bot: true };
+    expect(yardName({ key: "save:1200", kind: "yard", baseid: "1200", type: "main", owner })).toBe("yardlord");
+    expect(yardName({ key: "own:999", kind: "yard", baseid: "999", type: null, owner: null })).toBe("base 999");
+    expect(yardName({ key: "save:5", kind: "yard", baseid: "", type: null, owner: null })).toBe("a yard now gone");
+  });
+
+  it("names a yard with no row by what it is, and an old untagged base plainly (Bluetenit's 201, 202, 207)", () => {
+    const rowless = (kind: CheatYard["kind"], baseid: string): CheatYard => ({ key: `${kind}:${baseid}`, kind, baseid, type: null, owner: null });
+    expect(yardName(rowless("descent", "201"))).toBe("Descent yard 1");
+    expect(yardName(rowless("descent", "207"))).toBe("Descent yard 7");
+    expect(yardName(rowless("inferno-tribe", "300"))).toBe("Moloch tribe (base 300)");
+    expect(yardName(rowless("mr1-tribe", "5"))).toBe("Map Room 1 tribe (base 5)");
+    expect(["201", "202", "207"].map((baseid) => yardName(rowless("unknown", baseid)))).toEqual(["base 201", "base 202", "base 207"]);
   });
 });
 
@@ -185,7 +196,7 @@ describe("the Flagged list", () => {
     expect(first!.querySelector('.flagged-count[data-kind="economy"]')).toBeNull();
     const fields = [...first!.querySelectorAll(".flagged-field")].map((el) => el.textContent);
     expect(fields).toEqual(["Building health ×3", "Loot ×2", "Damage % ×2", "Champion HP"]);
-    expect(first!.querySelector(".flagged-yards")!.textContent).toBe("yardlord (bot) · DarkGecko (bot) · base 999");
+    expect(first!.querySelector(".flagged-yards")!.textContent).toBe("yardlord (bot) · Descent yard 2 · base 999");
 
     expect(second!.querySelector('.flagged-count[data-kind="economy"][data-outcome="refused"]')!.textContent).toBe(
       "Economy ×1",

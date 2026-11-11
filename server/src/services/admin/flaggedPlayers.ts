@@ -17,6 +17,14 @@ import type { EntityManager } from "@mikro-orm/postgresql";
  *   (`maproom/validateAttack.ts`, `logAttackViolation`): "ATTACK VIOLATION:
  *   ...". These also ban the player and are what `attack_violations` counts.
  *
+ * A fight entry ends with what its yard is (`saveBattle.ts`, `yardTag`, from
+ * 11 Nov 2026): "[save 1200]" for a yard with a row, whose owner this page
+ * looks up by that save id, or "[descent]", "[inferno-tribe]", "[mr1-tribe]"
+ * for one without. An older fight entry has no tag and its base id alone can
+ * name a Descent yard and some player's save at once ("201"), so it is shown
+ * as "base 201", with no owner guessed. An economy entry is always the
+ * player's own yard save, looked up by its base id.
+ *
  * Anything else is listed as it is, as "other". "refused" is a save the
  * server did not take (the player got nothing from it); "flagged" is one it
  * took and only recorded (log mode).
@@ -27,8 +35,19 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 export type FlagKind = "fight" | "economy" | "attack" | "other";
 export type FlagOutcome = "refused" | "flagged";
 
+/**
+ * What a yard is: one with a save row ("yard", its owner looked up), a yard
+ * with none (an Inferno Descent yard, a Moloch tribe, a Map Room 1 tribe), or
+ * "unknown" for an old fight entry that did not say.
+ */
+export type FlagYardKind = "yard" | "descent" | "inferno-tribe" | "mr1-tribe" | "unknown";
+
 /** A yard an entry names, with whose it is. */
 export interface FlagYard {
+  /** Tells yards apart in the tallies: "save:1200", "descent:201", "base:201"... */
+  key: string;
+  kind: FlagYardKind;
+  /** The base id; "" for a save id no row has any more. */
   baseid: string;
   /** The yard's owner now; null when no yard has that base id any more. */
   owner: { userid: number; username: string; bot: boolean } | null;
@@ -46,6 +65,8 @@ export interface FlagEntry {
   fields: string[];
   /** The base the save was for; null when the message names none. */
   baseid: string | null;
+  /** Its yard's {@link FlagYard.key}; null with no base. */
+  yardKey: string | null;
   message: string;
 }
 
@@ -86,7 +107,8 @@ export interface FlaggedDetail {
 /** Players on one page of the list, newest first; enough for the whole table today. */
 export const FLAGGED_PAGE = 200;
 
-const FIGHT = /^Attack save on base (\S+) (rejected|flagged) \(([a-z]+)\): disagrees with the replay on (.+)$/s;
+const FIGHT =
+  /^Attack save on base (\S+) (rejected|flagged) \(([a-z]+)\): disagrees with the replay on (.+?)(?: \[(save \d+|descent|inferno-tribe|mr1-tribe)\])?$/s;
 const ECONOMY = /^ECONOMY SAVE (REJECTED|FLAGGED) \(mode=([a-z]+)\): base (\S+), \d+s since the last save — (.*)$/s;
 const ATTACK = /^ATTACK VIOLATION: /;
 const RULE = /^([A-Za-z][\w-]*)/;
@@ -113,12 +135,15 @@ export const readEntry = (raw: unknown): FlagEntry | null => {
 
   const fight = FIGHT.exec(message);
   if (fight) {
+    const baseid = fight[1]!;
+    const tag = fight[5];
     return {
       time,
       kind: "fight",
       outcome: outcomeOf(fight[2]!),
       fields: fight[4]!.split(",").map((field) => field.trim()).filter(Boolean),
-      baseid: fight[1]!,
+      baseid,
+      yardKey: tag === undefined ? `base:${baseid}` : tag.startsWith("save ") ? `save:${tag.slice(5)}` : `${tag}:${baseid}`,
       message,
     };
   }
@@ -130,11 +155,12 @@ export const readEntry = (raw: unknown): FlagEntry | null => {
       outcome: outcomeOf(economy[1]!),
       fields: economyRules(economy[4]!),
       baseid: economy[3]!,
+      yardKey: `own:${economy[3]!}`,
       message,
     };
   }
-  if (ATTACK.test(message)) return { time, kind: "attack", outcome: null, fields: [], baseid: null, message };
-  return { time, kind: "other", outcome: null, fields: [], baseid: null, message };
+  if (ATTACK.test(message)) return { time, kind: "attack", outcome: null, fields: [], baseid: null, yardKey: null, message };
+  return { time, kind: "other", outcome: null, fields: [], baseid: null, yardKey: null, message };
 };
 
 /** A report row's entries, read, newest first. */
@@ -177,7 +203,7 @@ export const summarise = (row: ReportRow, entries: readonly FlagEntry[], yards: 
     else counts[entry.kind] += 1;
   }
   const timed = entries.map((entry) => entry.time).filter(Boolean).sort();
-  const baseids = entries.map((entry) => entry.baseid).filter((id): id is string => id !== null);
+  const keys = entries.map((entry) => entry.yardKey).filter((key): key is string => key !== null);
   const ban = row.ban_reason as { message?: unknown; timestamp?: unknown } | null;
   return {
     userid: Number(row.userid),
@@ -188,7 +214,7 @@ export const summarise = (row: ReportRow, entries: readonly FlagEntry[], yards: 
     attackViolations: Number(row.attack_violations ?? 0),
     counts,
     fields: tally(entries.flatMap((entry) => entry.fields)),
-    yards: tally(baseids).map(({ name, count }) => ({ ...(yards.get(name) ?? { baseid: name, owner: null, type: null }), count })),
+    yards: tally(keys).map(({ name, count }) => ({ ...yardOf(name, yards), count })),
     first: timed[0] ?? null,
     last: timed.at(-1) ?? null,
     entries: entries.length,
@@ -200,6 +226,7 @@ export const summarise = (row: ReportRow, entries: readonly FlagEntry[], yards: 
 };
 
 interface YardRow {
+  basesaveid: number | string;
   baseid: string;
   type: string;
   userid: number | string | null;
@@ -207,31 +234,66 @@ interface YardRow {
   bot: boolean | null;
 }
 
-/** The yards these base ids are, with their owners now and whether each is a bot. */
-const yardsById = async (em: EntityManager, baseids: readonly string[]): Promise<Map<string, FlagYard>> => {
-  const ids = [...new Set(baseids)].filter((id) => /^\d+$/.test(id));
-  if (ids.length === 0) return new Map();
+const ROWLESS: ReadonlySet<string> = new Set(["descent", "inferno-tribe", "mr1-tribe"]);
+
+const splitKey = (key: string): [string, string] => {
+  const colon = key.indexOf(":");
+  return [key.slice(0, colon), key.slice(colon + 1)];
+};
+
+/**
+ * The yard a key names: the row {@link yardsByKey} found, else a yard with no
+ * save row by its kind, else (a save gone, or an old untagged fight entry)
+ * plainly its base id, owner null. Never guesses an owner.
+ */
+export const yardOf = (key: string, found: ReadonlyMap<string, FlagYard>): FlagYard => {
+  const known = found.get(key);
+  if (known) return known;
+  const [prefix, rest] = splitKey(key);
+  if (ROWLESS.has(prefix)) return { key, kind: prefix as FlagYardKind, baseid: rest, owner: null, type: null };
+  if (prefix === "save") return { key, kind: "yard", baseid: "", owner: null, type: null };
+  return { key, kind: prefix === "own" ? "yard" : "unknown", baseid: rest, owner: null, type: null };
+};
+
+/**
+ * The yards with a row these keys name, with their owners now and whether
+ * each is a bot: "save:N" by save id, "own:B" (an economy entry's own yard)
+ * by base id. Yards with no row are left to {@link yardOf}.
+ */
+const yardsByKey = async (em: EntityManager, keys: readonly string[]): Promise<Map<string, FlagYard>> => {
+  const saveids = new Set<string>();
+  const baseids = new Set<string>();
+  for (const key of keys) {
+    const [prefix, id] = splitKey(key);
+    if (!/^\d+$/.test(id)) continue;
+    if (prefix === "save") saveids.add(id);
+    if (prefix === "own") baseids.add(id);
+  }
+  if (saveids.size === 0 && baseids.size === 0) return new Map();
   const rows = await em.execute<YardRow[]>(
-    `SELECT s.baseid, s.type, u.userid, u.username, (b.userid IS NOT NULL AND b.state <> 'seeded') AS bot
+    `SELECT s.basesaveid, s.baseid, s.type, u.userid, u.username, (b.userid IS NOT NULL AND b.state <> 'seeded') AS bot
        FROM bym.save s
        LEFT JOIN bym."user" u ON u.userid = s.saveuserid
        LEFT JOIN bym.bot b ON b.userid = s.saveuserid
-      WHERE s.baseid = ANY(?::text[])`,
-    [`{${ids.join(",")}}`],
+      WHERE s.basesaveid = ANY(?::bigint[]) OR s.baseid = ANY(?::text[])`,
+    [`{${[...saveids].join(",")}}`, `{${[...baseids].join(",")}}`],
   );
-  return new Map(
-    rows.map((row) => [
-      String(row.baseid),
-      {
-        baseid: String(row.baseid),
-        type: row.type,
-        owner:
-          row.userid === null || row.username === null
-            ? null
-            : { userid: Number(row.userid), username: row.username, bot: row.bot === true },
-      },
-    ]),
-  );
+  const out = new Map<string, FlagYard>();
+  for (const row of rows) {
+    const yard = (key: string): FlagYard => ({
+      key,
+      kind: "yard",
+      baseid: String(row.baseid),
+      type: row.type,
+      owner:
+        row.userid === null || row.username === null
+          ? null
+          : { userid: Number(row.userid), username: row.username, bot: row.bot === true },
+    });
+    if (saveids.has(String(row.basesaveid))) out.set(`save:${row.basesaveid}`, yard(`save:${row.basesaveid}`));
+    if (baseids.has(String(row.baseid))) out.set(`own:${row.baseid}`, yard(`own:${row.baseid}`));
+  }
+  return out;
 };
 
 const REPORT_COLUMNS = `r.userid, r.username AS report_username, u.username, u.banned, r.report, r.ban_reason,
@@ -251,9 +313,9 @@ export const listFlaggedPlayers = async (em: EntityManager, limit: number = FLAG
     [limit],
   );
   const read = rows.map((row) => ({ row, entries: readEntries(row.report) }));
-  const yards = await yardsById(
+  const yards = await yardsByKey(
     em,
-    read.flatMap(({ entries }) => entries.map((entry) => entry.baseid).filter((id): id is string => id !== null)),
+    read.flatMap(({ entries }) => entries.map((entry) => entry.yardKey).filter((key): key is string => key !== null)),
   );
   return read
     .map(({ row, entries }) => ({ row, player: summarise(row, entries, yards) }))
@@ -272,15 +334,15 @@ export const flaggedPlayer = async (em: EntityManager, userid: number): Promise<
   );
   if (!row) return null;
   const entries = readEntries(row.report);
-  const yards = await yardsById(
+  const yards = await yardsByKey(
     em,
-    entries.map((entry) => entry.baseid).filter((id): id is string => id !== null),
+    entries.map((entry) => entry.yardKey).filter((key): key is string => key !== null),
   );
   return {
     player: summarise(row, entries, yards),
     history: entries.map((entry) => ({
       ...entry,
-      yard: entry.baseid === null ? null : (yards.get(entry.baseid) ?? { baseid: entry.baseid, owner: null, type: null }),
+      yard: entry.yardKey === null ? null : yardOf(entry.yardKey, yards),
     })),
   };
 };
