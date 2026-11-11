@@ -4,6 +4,7 @@ import type { BaseLoadResponse, ChampionSaveEntry } from "@/api/types";
 import { holdForEmergence } from "@/game/inferno/emergenceHold";
 import { KORATH_UNLOCKED_LINE, KORATH_UNLOCKED_TITLE, korathStep, korathStepText } from "@/game/inferno/korathNotice";
 import type { YardMounts } from "@/game/yard/yardPlugins";
+import { setQuietLogin } from "@/game/quietLogin";
 import { korathPlugin, resetKorathPlugin } from "./korath";
 
 /**
@@ -125,6 +126,18 @@ describe("the Korath plugin", () => {
     vi.advanceTimersByTime(5_000);
     expect(modal.textContent).toBe("");
     expect(seen).toHaveBeenCalledTimes(1);
+  });
+
+  it("a test server's quiet login: not shown and the server not told", () => {
+    setQuietLogin(true);
+    try {
+      mount(saveOf([CAGE]));
+      vi.advanceTimersByTime(5_000);
+      expect(modal.textContent).toBe("");
+      expect(seen).not.toHaveBeenCalled();
+    } finally {
+      setQuietLogin(false);
+    }
   });
 
   it("goes to the Build menu at the cage when there is none", () => {

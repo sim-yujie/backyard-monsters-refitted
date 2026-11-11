@@ -1,3 +1,4 @@
+import { quietLogin } from "@/game/quietLogin";
 import {
   eventsActions,
   eventsApi,
@@ -149,6 +150,8 @@ export class EventsDoor {
   private checkWhatsNew(serverSeen: string | null): void {
     if (this.whatsNewChecked) return;
     this.whatsNewChecked = true;
+    // A test server's quiet login: shut, and nothing marked seen.
+    if (quietLogin()) return;
     const latest = latestRelease();
     const decision = whatsNewDecision(latest, serverSeen, localSeen(), this.mounts.store.save.onboarding?.guide.state);
     if (!latest || decision === "none") return;

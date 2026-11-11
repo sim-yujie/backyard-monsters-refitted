@@ -1,3 +1,4 @@
+import { quietLogin } from "@/game/quietLogin";
 import { markKorathSeen } from "@/api/inferno";
 import { emergencePlaying } from "@/game/inferno/emergenceHold";
 import { korathStep } from "@/game/inferno/korathNotice";
@@ -40,6 +41,8 @@ export const korathPlugin = (
 ): (() => void) | void => {
   const { store, overlay, scene } = mounts;
   if (store.kind !== "main" || shown || store.save.infernostate?.korathNotice !== true) return;
+  // A test server's quiet login: not shown, and the server not told.
+  if (quietLogin()) return;
 
   let alive = true;
   let timer: ReturnType<typeof setTimeout> | null = null;

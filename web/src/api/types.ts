@@ -820,6 +820,8 @@ export interface BaseLoadResponse extends ApiEnvelope {
   chatcountry?: string;
   /** The owner's loads, until answered or put off: ask once where the player is from. */
   countryask?: number;
+  /** The owner's build-mode loads on a local test server started with `QUIET_LOGIN=1` (`game/quietLogin.ts`). */
+  quietlogin?: number;
   /**
    * Map Room 2 attack loads only: the target cell's height, `i`, which
    * stretches an outpost's tower range (`BTOWER.as:80-85`). The server's loot

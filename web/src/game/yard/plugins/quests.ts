@@ -1,3 +1,4 @@
+import { quietLogin } from "@/game/quietLogin";
 import { questsActions, type QuestPeriod, type QuestsActions, type QuestsReport, type QuestsView } from "@/api/quests";
 import type { YardActionResult } from "@/game/yard/YardStore";
 import { grantedRewards, utcDayOf } from "@/game/quests/questsModel";
@@ -267,6 +268,8 @@ export class QuestsDoor {
   private schedulePopup(): void {
     if (this.popupChecked || !this.view) return;
     this.popupChecked = true;
+    // A test server's quiet login: no pop-up; the card still opens from Quests.
+    if (quietLogin()) return;
     if (this.view.login.claimedToday) return;
     const baseid = String(this.mounts.store.save.baseid ?? "");
     if (readShownDay(baseid) === utcDayOf(this.view.now)) return;
