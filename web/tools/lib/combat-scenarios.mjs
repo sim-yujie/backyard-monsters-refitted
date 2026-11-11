@@ -172,7 +172,8 @@ export const SCENARIOS = [
     description:
       "A player outpost on a cell of height 250: the core, six-level outpost towers with the " +
       "Railgun, the Tesla and the Laser all but wrecked, so they deal half (issues #261, " +
-      "#266, #267), four harvesters (two damaged), one wave that levels it (issue #179).",
+      "#266, #267), four harvesters (two damaged), one wave that levels it (issue #179), " +
+      "thrown as three flings in a row, each within the Flinger's 2,250.",
     yard: OUTPOST_YARD,
     health: { 1: 1000, 2: 1000, 3: 1000, 6: 40000, 8: 3000 },
     height: 250,
@@ -185,7 +186,9 @@ export const SCENARIOS = [
       v: 1,
       seed: 179,
       events: [
-        { kind: "fling", t: 80, x: 600, y: 0, r: 300, monsters: { C3: 150, C6: 80, C8: 40 } },
+        { kind: "fling", t: 80, x: 600, y: 0, r: 300, monsters: { C3: 50, C6: 40, C8: 20 } },
+        { kind: "fling", t: 81, x: 600, y: 0, r: 300, monsters: { C3: 50, C6: 40, C8: 20 } },
+        { kind: "fling", t: 82, x: 600, y: 0, r: 300, monsters: { C3: 50, C6: 40, C8: 20 } },
       ],
     },
   },
@@ -360,8 +363,11 @@ export const SCENARIOS = [
           x: 300,
           y: -300,
           r: 300,
-          monsters: { C1: 90, C15: 6, C19: 4 },
+          monsters: { C1: 90, C15: 6 },
         },
+        // The Rezghul in a second fling on the same spot: with the first it is
+        // over the Flinger's 2,250.
+        { kind: "fling", t: 201, x: 300, y: -300, r: 300, monsters: { C19: 4 } },
         { kind: "fling", t: 3600, x: 480, y: -420, r: 300, monsters: { C8: 30, C3: 20 } },
       ],
     },
