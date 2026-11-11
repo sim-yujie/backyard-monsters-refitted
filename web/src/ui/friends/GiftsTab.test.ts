@@ -8,6 +8,7 @@ import { ApiError } from "@/api/http";
 import { fixtureApi, fixtureGift, fixtureList } from "@/game/friends/friendsFixture";
 import { FriendsStore } from "@/game/friends/friendsStore";
 import { setPlayerPool } from "@/game/friends/friendsView";
+import { setResourceRealm } from "@/ui/resourceIcon";
 import { GIFTS_TEXT, GiftsTab, lapseText, overflowOf } from "./GiftsTab";
 
 /** The Gifts tab (issue #375): the gifts waiting, Collect, Collect all with the short-storage warning, Send one back. */
@@ -64,6 +65,20 @@ describe("the list", () => {
     expect(store.snapshot.giftsWaiting).toBe(2);
     expect(buttonIn(row(tab, 1), GIFTS_TEXT.sendBack).disabled).toBe(false);
     expect(buttonIn(row(tab, 2), GIFTS_TEXT.sentBack).disabled).toBe(true);
+  });
+
+  it("shows the main yard's resources even while the player is in the Inferno (gifts land there)", async () => {
+    setResourceRealm("inferno");
+    try {
+      const { tab } = setup();
+      await tab.show();
+      const icons = [...tab.element.querySelectorAll(".gift-amount .res-icon")] as HTMLElement[];
+      expect(icons.length).toBeGreaterThan(0);
+      expect(icons.map((icon) => icon.dataset["realm"])).toEqual(icons.map(() => "surface"));
+      expect(icons.map((icon) => icon.getAttribute("aria-label"))).toEqual(["Twigs", "Goo"]);
+    } finally {
+      setResourceRealm("surface");
+    }
   });
 
   it("says so when none are waiting, and Collect all is off", async () => {
