@@ -11,6 +11,7 @@ import {
   type FeedRecipe,
 } from "../../game-data/championCatalogue.js";
 import { Status } from "../../enums/StatusCodes.js";
+import { korathPowerOf } from "../../game-data/events/monsterMadness.js";
 import { championByType, forgetHabits, hasHabits, type ChampionStance } from "../../game-rules/combat/index.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import type { ChampionData } from "../../schemas/ChampionSchema.js";
@@ -101,6 +102,8 @@ export interface ChampionSave extends JuiceSave {
   buildinghealthdata?: BuildingHealthData | null;
   monsters?: JsonObject | null;
   champion?: unknown;
+  /** Read for the Korath power won in Monster Madness (`Reward.KORATH_POWER`). */
+  rewards?: unknown;
 }
 
 /** A finite number off a jsonb field, 0 otherwise. */
@@ -295,7 +298,9 @@ export const planChampionRaise = (
     ft: now + entry.feedTime,
     fd: 0,
     fb: 0,
-    pl: entry.powerLevel,
+    // Korath hatches with the power won in Monster Madness, if any
+    // (`services/events/korathPower.ts`); every other champion at the catalogue's.
+    pl: entry.t === KORATH_TYPE ? Math.max(entry.powerLevel, korathPowerOf(save.rewards)) : entry.powerLevel,
     status: CHAMPION_STATUS.ACTIVE,
   };
   if (existing >= 0) champions[existing] = champion;

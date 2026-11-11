@@ -60,6 +60,13 @@ export interface EventProgressStore {
    * {@link COUNTER_MAX} rather than fail the write that raised it.
    */
   addToCounter(em: EntityManager, userid: number, eventId: string, amount: number): Promise<number>;
+  /**
+   * Adds `amount` to the counter for the outpost `baseid` taken over, unless
+   * that outpost has counted in this event already (`data.taken`, a list of
+   * baseids). Returns the new count, or null when it had counted. The count
+   * stops at {@link COUNTER_MAX} as {@link addToCounter}'s does.
+   */
+  addTakeover(em: EntityManager, userid: number, eventId: string, baseid: string, amount: number): Promise<number | null>;
 }
 
 /** The highest count the `integer` column holds. */
@@ -155,6 +162,25 @@ export const sqlProgressStore: EventProgressStore = {
     if (add > 0) noteEventPlayer(eventId, userid);
     return Number(rows[0]?.counter) || 0;
   },
+
+  async addTakeover(em, userid, eventId, baseid, amount) {
+    const add = addable(amount);
+    const one = JSON.stringify([String(baseid)]);
+    const rows = await sql(em).execute<{ counter: number | string }[]>(
+      `INSERT INTO bym.event_progress AS p (userid, event_id, counter, data)
+       VALUES (?, ?, ?, jsonb_build_object('taken', ?::jsonb))
+       ON CONFLICT (userid, event_id) DO UPDATE
+          SET counter = LEAST(p.counter::bigint + EXCLUDED.counter, ?)::integer,
+              data = jsonb_set(p.data, '{taken}', COALESCE(p.data->'taken', '[]'::jsonb) || (EXCLUDED.data->'taken')),
+              updated_at = now()
+        WHERE NOT (COALESCE(p.data->'taken', '[]'::jsonb) @> (EXCLUDED.data->'taken'))
+       RETURNING counter`,
+      [userid, eventId, add, one, COUNTER_MAX]
+    );
+    if (rows.length === 0) return null;
+    noteEventPlayer(eventId, userid);
+    return Number(rows[0]!.counter) || 0;
+  },
 };
 
 /**
@@ -192,6 +218,18 @@ export const memoryProgressStore = (): EventProgressStore & { rows: Map<string, 
     async addToCounter(_em, userid, eventId, amount) {
       const now = get(userid, eventId);
       const next = { ...now, counter: Math.min(COUNTER_MAX, now.counter + addable(amount)) };
+      rows.set(key(userid, eventId), next);
+      return next.counter;
+    },
+    async addTakeover(_em, userid, eventId, baseid, amount) {
+      const now = get(userid, eventId);
+      const taken = Array.isArray(now.data.taken) ? now.data.taken.map(String) : [];
+      if (taken.includes(String(baseid))) return null;
+      const next = {
+        ...now,
+        counter: Math.min(COUNTER_MAX, now.counter + addable(amount)),
+        data: { ...now.data, taken: [...taken, String(baseid)] },
+      };
       rows.set(key(userid, eventId), next);
       return next.counter;
     },

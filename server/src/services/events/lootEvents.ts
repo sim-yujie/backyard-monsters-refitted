@@ -1,10 +1,11 @@
 import type { EntityManager } from "@mikro-orm/core";
 
-import { EVENTS, type EventDefinition } from "../../game-data/events/events.js";
+import type { EventDefinition } from "../../game-data/events/events.js";
 import type { ResourceAmounts } from "../../game-rules/combat/index.js";
 import { logger } from "../../utils/logger.js";
 import { RESOURCE_KEYS } from "../base/economy/resourceBudget.js";
 import { eventPlayerOf, lockedReason, type EventPlayerSave } from "./eventPlayer.js";
+import { liveEvents } from "./liveEvents.js";
 import { sqlProgressStore, type EventProgressStore } from "./progressStore.js";
 import { eventWindow, statusAt } from "./schedule.js";
 
@@ -32,7 +33,7 @@ import { eventWindow, statusAt } from "./schedule.js";
  */
 
 /** The events that count attack loot and are on at `now`. */
-export const lootEventsOn = (now: number, events: readonly EventDefinition[] = EVENTS): EventDefinition[] =>
+export const lootEventsOn = (now: number, events: readonly EventDefinition[] = liveEvents()): EventDefinition[] =>
   events.filter((event) => event.ladder?.source === "attackLoot" && statusAt(eventWindow(event, now), now) === "active");
 
 /** Twigs, Pebbles, Putty and Goo added up, each a whole amount of at least 0. */

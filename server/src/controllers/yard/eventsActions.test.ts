@@ -4,6 +4,7 @@ import type z from "zod";
 
 import type { User } from "../../database/models/user.model.js";
 import { KRALLEN_HUNT_GOALS, krallenHunt, withEventCoins, type EventDefinition } from "../../game-data/events/events.js";
+import { monsterMadnessRun } from "../../game-data/events/monsterMadness.js";
 import { memoryProgressStore } from "../../services/events/progressStore.js";
 import { memoryCoinStore, useCoinStore, type EventCoinStore } from "../../services/events/eventCoins.js";
 import { eventsActions } from "./eventsActions.js";
@@ -464,5 +465,48 @@ describe("event coins through the claims", () => {
     const answer = await claim();
     expect(answer.body.eventcoins).toBeUndefined();
     expect(answer.body.coinsGained).toBeUndefined();
+  });
+});
+
+describe("Monster Madness: Korath's powers by ladder claim", () => {
+  const RUN = monsterMadnessRun(START);
+  const madness = () => eventsActions(store, [RUN]);
+  const claimGoal = (tier: number) => call(madness().ladderClaim, { event: RUN.id, tier });
+  const korath = { t: 4, hp: 28_000, l: 5, ft: START + DAY, fd: 0, fb: 0, pl: 0, status: 0 };
+
+  test("a reached goal lifts the Korath in the yard and keeps the power", async () => {
+    db.row = rowOf({ champion: [korath], rewards: {} });
+    await store.addTakeover({} as never, 2, RUN.id, "900", 100_000_000);
+
+    const first = await claimGoal(1);
+    expect(first.status).toBe(200);
+    expect(first.body.report).toMatchObject({ granted: [{ kind: "korath", power: 2, raised: true, hasKorath: true }] });
+    expect(db.row!.champion).toEqual([{ ...korath, pl: 2 }]);
+    expect(db.row!.rewards).toEqual({ korathPower: { id: "korathPower", value: 2 } });
+
+    // The lower goal claimed after pays nothing more and lowers nothing.
+    const lower = await claimGoal(0);
+    expect(lower.body.report).toMatchObject({ granted: [{ kind: "korath", power: 2, raised: false }] });
+    expect(db.row!.champion).toEqual([{ ...korath, pl: 2 }]);
+
+    expect(await claimGoal(2)).toMatchObject({ status: 409, body: { reason: "tierLocked", need: 160_125_000 } });
+  });
+
+  test("without Korath the power is kept for him", async () => {
+    db.row = rowOf({ champion: [], rewards: {} });
+    await store.addTakeover({} as never, 2, RUN.id, "900", 42_000_000);
+    const answer = await claimGoal(0);
+    expect(answer.body.report).toMatchObject({ granted: [{ kind: "korath", power: 1, hasKorath: false }] });
+    expect(db.row!.champion).toEqual([]);
+    expect(db.row!.rewards).toEqual({ korathPower: { id: "korathPower", value: 1 } });
+  });
+
+  test("claims stay open for 7 days after the run, then close", async () => {
+    db.row = rowOf({ rewards: {} });
+    await store.addTakeover({} as never, 2, RUN.id, "900", 42_000_000);
+    at(START + 4 * DAY + 7 * DAY + 1);
+    expect(await claimGoal(0)).toMatchObject({ status: 409, body: { reason: "eventNotActive" } });
+    at(START + 4 * DAY + 6 * DAY);
+    expect((await claimGoal(0)).status).toBe(200);
   });
 });

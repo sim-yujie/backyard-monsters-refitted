@@ -1,4 +1,5 @@
 import { startWeekendSettingsRefresh } from "./services/events/weekendSettings.js";
+import { startMonsterMadnessRefresh } from "./services/events/monsterMadnessRuns.js";
 import { getCurrentDateTime } from "./utils/getCurrentDateTime.js";
 import { ensureWelcomeLaunch } from "./services/events/mr2Welcome.js";
 import Koa, { type Next } from "koa";
@@ -144,6 +145,7 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // The weekend events' live settings, read now and every minute
   // (`services/events/weekendSettings.ts`); the dashboard changes them.
   startWeekendSettingsRefresh(() => postgres.em.fork());
+  startMonsterMadnessRefresh(() => postgres.em.fork());
 
   // "New to Map Room 2": players already on Map Room 2 get their 10 days from
   // the first start of a server with this feature (`services/events/mr2Welcome.ts`).
