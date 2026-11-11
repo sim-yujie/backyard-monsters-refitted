@@ -129,11 +129,18 @@ describe("alliance.css: trade tiles", () => {
     expect(rulesFor(':root[data-skin="flash"] .trade-for-pick__item.is-on .trade-for-pick__name').join(" ")).toMatch(/color:\s*#2a1606/);
   });
 
-  it("gives each \"For\" tile a one-line name in the game's font", () => {
+  it("gives each \"For\" tile its whole name, up to two lines, in the game's font", () => {
     expect(rulesFor(".trade-for-pick__item").join(" ")).toMatch(/font:\s*inherit/);
     const name = rulesFor(".trade-for-pick__name").join(" ");
-    expect(name).toMatch(/white-space:\s*nowrap/);
-    expect(name).toMatch(/text-overflow:\s*ellipsis/);
+    expect(name).toMatch(/-webkit-line-clamp:\s*2/);
+    expect(name).toMatch(/min-height:\s*calc\(2 \* 1\.3em\)/);
+    expect(name).not.toMatch(/white-space:\s*nowrap/);
+    expect(name).not.toMatch(/text-overflow:\s*ellipsis/);
+  });
+
+  it("makes the \"For\" tiles wide and tall enough for a picture and two lines of name", () => {
+    expect(rulesFor(".trade-for-pick__grid").join(" ")).toMatch(/minmax\(96px,\s*1fr\)/);
+    expect(rulesFor(".trade-for-pick__item").join(" ")).toMatch(/(^|[;\s])height:\s*108px/);
   });
 });
 
