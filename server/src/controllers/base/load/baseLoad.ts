@@ -35,6 +35,7 @@ import { BaseLoadSchema } from "../../../schemas/BaseLoadSchema.js";
 import { baseNotFoundErr, discordAgeErr, mapRoom3ClosedErr } from "../../../errors/errors.js";
 import { EnumBaseRelationship } from "../../../enums/EnumBaseRelationship.js";
 import { canAttack } from "../../../services/base/canAttack.js";
+import { mr1AttackVerdict } from "../../../services/maproom/v1/mr1AttackCheck.js";
 import { createMR1Tribes } from "../../../services/maproom/v1/createMR1Tribes.js";
 import { MR1_TRIBES } from "../../../enums/Tribes.js";
 import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
@@ -438,7 +439,21 @@ export const baseLoad: KoaController = async (ctx) => {
   }
 
   // A visit is look-only: nothing to attack from it (friends WP2, #369).
-  const attackAllowed = type === BaseMode.HELP ? false : canAttack(userSave, baseSave, mapversion);
+  // Map Room 1's neighbour and level rules (`mr1AttackRules.ts`), as the
+  // attack load applies them, for someone else's Map Room 1 main yard seen
+  // without attacking it (an attack load has passed them already).
+  const mr1Target =
+    !attacking &&
+    mapversion === MapRoomVersion.V1 &&
+    !isOwner &&
+    baseSave.type === BaseType.MAIN &&
+    baseSave.mapversion === MapRoomVersion.V1;
+  const attackAllowed =
+    type === BaseMode.HELP
+      ? false
+      : canAttack(userSave, baseSave, mapversion) &&
+        (!mr1Target ||
+          (await mr1AttackVerdict(user.userid, userSave, baseSave.saveuserid, baseSave, getCurrentDateTime())).ok);
 
   let baseOwner;
 

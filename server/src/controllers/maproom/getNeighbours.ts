@@ -16,6 +16,7 @@ import {
   needsNewNeighbours,
 } from "../../services/maproom/neighbourCache.js";
 import { calculateBaseLevel } from "../../services/base/calculateBaseLevel.js";
+import { keepRecentAttackers } from "../../services/maproom/v1/mr1AttackRules.js";
 import type { Save } from "../../database/models/save.model.js";
 import type { NeighbourData } from "../../types/NeighbourData.js";
 
@@ -99,7 +100,13 @@ export const overworldNeighbours = async (user: User, save: Save): Promise<Neigh
       exclude: droppedToday(cache.droppedNeighbours, currentDate),
     });
 
-    cache.neighbors = carryAttackCounters(cache.neighbors, foundNeighbours);
+    // Whoever attacked the player in the last 14 days stays, so they can be
+    // hit back (`keepRecentAttackers`, `v1/mr1AttackRules.ts`).
+    cache.neighbors = keepRecentAttackers(
+      cache.neighbors,
+      carryAttackCounters(cache.neighbors, foundNeighbours),
+      Math.floor(currentDate.getTime() / 1000)
+    );
     cache.neighborsLastCalculated = currentDate;
     cache.neighborsLevel = level;
     postgres.em.persist(cache);
@@ -108,13 +115,13 @@ export const overworldNeighbours = async (user: User, save: Save): Promise<Neigh
 
   if (needsNewNeighbours(maproom, currentDate) || levelMovedAway(maproom.neighborsLevel, level)) {
     await research(maproom);
-    return updateNeighbourData(maproom.neighbors, BaseType.MAIN, user.userid);
+    return updateNeighbourData(maproom.neighbors, BaseType.MAIN, user.userid, user.userid, level);
   }
 
-  const neighbours = await updateNeighbourData(maproom.neighbors, BaseType.MAIN, user.userid);
+  const neighbours = await updateNeighbourData(maproom.neighbors, BaseType.MAIN, user.userid, user.userid, level);
 
   if (!needsAttackableRetry(neighbours, maproom.neighborsLastCalculated, currentDate)) return neighbours;
 
   await research(maproom);
-  return updateNeighbourData(maproom.neighbors, BaseType.MAIN, user.userid);
+  return updateNeighbourData(maproom.neighbors, BaseType.MAIN, user.userid, user.userid, level);
 };
