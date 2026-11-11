@@ -97,7 +97,8 @@ export interface FlingerClockSave {
  * so the fog of war's sight and the attack range grow the moment the upgrade
  * is done, never before it.
  *
- * A row loaded without its `buildingdata` falls back to the stored column.
+ * A row loaded without its `buildingdata`, or with no Flinger in it, falls
+ * back to the stored column.
  *
  * @param save - The yard's Flinger, health and clock.
  * @param now - Unix seconds.
@@ -110,6 +111,8 @@ export const flingerLevelAt = (save: FlingerClockSave, now: number): number | un
   for (const [key, building] of Object.entries(buildingdata)) {
     if (building && Number(building.t) === FLINGER_TYPE) flingers[key] = building;
   }
+  // No Flinger on record (a row written without its buildings): keep the stored level.
+  if (!Object.keys(flingers).length) return save.flinger;
 
   const savedAt = Number(save.savetime);
   const elapsed = Number.isFinite(savedAt) && savedAt > 0 ? now - savedAt : 0;
