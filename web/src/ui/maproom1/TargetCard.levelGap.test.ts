@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import { AttackPermission, type MapRoom1NeighbourWire } from "@/api/maproom1";
-import { readMapRoom1, type Mr1Own } from "@/game/maproom1/mr1Model";
+import { MR1_LEVEL_GAP, readMapRoom1, type Mr1Own } from "@/game/maproom1/mr1Model";
 import { targetCard, type CardHandlers } from "./TargetCard";
 import { Mr1ListView } from "./Mr1ListView";
 
@@ -29,6 +29,8 @@ const world = readMapRoom1(
     neighbours: [
       wire(2, 12, { attackpermitted: AttackPermission.LEVEL_RESTRICTION }),
       wire(3, 12, { attackpermitted: AttackPermission.VENGEANCE_MODE, vengeance: 2, attacksfrom: 2 }),
+      wire(4, 28, { attackpermitted: AttackPermission.HIGHER_LEVEL }),
+      wire(5, 25, { attackpermitted: AttackPermission.ATTACKABLE }),
     ],
   },
   NOW,
@@ -80,5 +82,56 @@ describe("a yard you have vengeance on", () => {
     expect(low.textContent).toContain("Too low · 7+ levels below");
     const revenge = list.element.querySelector<HTMLElement>('[data-key="player-3"]')!;
     expect(revenge.querySelector(".mr1-battle--vengeance")?.textContent).toBe("Revenge ×2");
+  });
+});
+
+describe("a yard more than the gap above", () => {
+  const warning = (element: HTMLElement) => element.querySelector<HTMLElement>(".mr1-warning--level");
+
+  it("keeps Attack on and warns that they can hit back once", () => {
+    const element = card(4);
+    expect(attackButton(element).disabled).toBe(false);
+    const note = warning(element)!;
+    expect(note.textContent).toBe(
+      `More than ${MR1_LEVEL_GAP} levels above you. Attacking lets them hit you back once.`,
+    );
+    expect(note.querySelector("svg")).not.toBeNull();
+  });
+
+  it("does not warn on a yard within the gap", () => {
+    expect(warning(card(5))).toBeNull();
+  });
+
+  it("does not warn when both are level 40+ (the server sends ATTACKABLE, no gap)", () => {
+    const high = readMapRoom1(
+      {
+        error: 0,
+        now: NOW,
+        level: 45,
+        protectedUntil: 0,
+        tribes: [],
+        neighbours: [wire(6, 60, { attackpermitted: AttackPermission.ATTACKABLE })],
+      },
+      NOW,
+    );
+    const element = targetCard(
+      high.neighbours[0]!,
+      { world: high, own: { ...own, level: 45 }, now: NOW },
+      handlers(),
+      "panel",
+    );
+    expect(attackButton(element).disabled).toBe(false);
+    expect(warning(element)).toBeNull();
+  });
+
+  it("the list row says so in the warning colour, and only on that yard", () => {
+    const list = new Mr1ListView({ onSelect: vi.fn() });
+    list.setData(world, NOW);
+    const far = list.element.querySelector<HTMLElement>('[data-key="player-4"] .mr1-row__line')!;
+    expect(far.textContent).toBe(`${MR1_LEVEL_GAP}+ levels above you`);
+    expect(far.classList.contains("mr1-row__line--warn")).toBe(true);
+    expect(far.querySelector("svg")).not.toBeNull();
+    const near = list.element.querySelector<HTMLElement>('[data-key="player-5"] .mr1-row__line');
+    expect(near?.classList.contains("mr1-row__line--warn") ?? false).toBe(false);
   });
 });

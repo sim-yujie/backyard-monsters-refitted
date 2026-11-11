@@ -466,6 +466,12 @@ export interface Mr1Gate {
    * protection. Tribes never do. Null when there is nothing to warn about.
    */
   readonly warning: { readonly strong: string; readonly rest: string } | null;
+  /**
+   * Attacking a player more than {@link MR1_LEVEL_GAP} levels above you is
+   * allowed, but earns them one hit back (owner, 11 Nov 2026). Shown on the
+   * card before the tap, like `warning`; Map Room 1 has no confirm box.
+   */
+  readonly levelWarning: { readonly strong: string; readonly rest: string } | null;
   /** Why View is off too (a yard under attack), or null. */
   readonly viewOff: string | null;
 }
@@ -566,6 +572,16 @@ const ownYardReason = (own: Mr1Own | null): Mr1Reason | null => {
   return null;
 };
 
+/**
+ * A player more than {@link MR1_LEVEL_GAP} levels above you that you could
+ * attack now (HIGHER_LEVEL). The server already leaves out pairs both at
+ * level 40+, so this only reads its code.
+ */
+export const isFarAbove = (target: Mr1Target, now: number): boolean =>
+  target.kind === "player" &&
+  target.permission === AttackPermission.HIGHER_LEVEL &&
+  targetReason(target, now) === null;
+
 /** Whether Attack is on for `target`, and if not, why. */
 export const attackGate = (
   target: Mr1Target,
@@ -592,7 +608,14 @@ export const attackGate = (
         }
       : null;
 
-  return { reason, warning, viewOff };
+  const levelWarning = isFarAbove(target, now)
+    ? {
+        strong: `More than ${MR1_LEVEL_GAP} levels above you.`,
+        rest: "Attacking lets them hit you back once.",
+      }
+    : null;
+
+  return { reason, warning, levelWarning, viewOff };
 };
 
 /* ── The attack ─────────────────────────────────────────────────────── */
@@ -730,5 +753,6 @@ export const rowLine = (neighbour: Mr1Neighbour, now: number): string => {
   if (reason?.key === ReasonKey.UNDER_ATTACK) return "Under attack now";
   if (reason?.key === ReasonKey.TRUCE) return "Truce";
   if (reason?.key === ReasonKey.LEVEL_GAP) return `Too low · ${MR1_LEVEL_GAP}+ levels below`;
+  if (isFarAbove(neighbour, now)) return `${MR1_LEVEL_GAP}+ levels above you`;
   return presenceText(neighbour, now);
 };

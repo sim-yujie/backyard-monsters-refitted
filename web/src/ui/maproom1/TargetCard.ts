@@ -308,6 +308,16 @@ export const targetCard = (
     card.append(note);
   }
 
+  if (gate.levelWarning) {
+    const note = el("div", "mr1-warning mr1-warning--level");
+    note.setAttribute("role", "note");
+    note.append(icon("alert", 18, "mr1-icon mr1-warning__icon"));
+    const words = el("span");
+    words.append(el("strong", undefined, gate.levelWarning.strong), " ", gate.levelWarning.rest);
+    note.append(words);
+    card.append(note);
+  }
+
   const army = gate.reason?.key === ReasonKey.NO_MONSTERS ? null : armyChips(state.own);
   if (army) card.append(army);
 

@@ -1033,6 +1033,12 @@
   color: var(--colour-text-secondary);
 }
 
+/* More than the level gap above: allowed, with a warning colour. */
+.mr1-row__line--warn {
+  color: var(--colour-warning);
+  font-weight: 700;
+}
+
 .mr1-row__chevron {
   color: var(--colour-text-muted);
 }
