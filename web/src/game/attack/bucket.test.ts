@@ -340,11 +340,12 @@ describe("Bucket champion", () => {
     // 200 Pokeys are 1,400 bucket units: a zone of 350, radius 175.
     bucket.setCount("C1", 200);
     expect(bucket.radius()).toBe(175);
-    // Gorgo's 240 on top (`ATTACK.as:645-653`): a zone of 410, radius 205. The
-    // payload the rows are clamped by is unchanged.
+    // Gorgo's 240 on top (`ATTACK.as:645-653`): a zone of 410, radius 205. It
+    // takes its room in the payload too (`ATTACK.BucketAdd`), and 1,640 still fits.
     bucket.pickChampion(1);
     expect(bucket.radius()).toBe(205);
-    expect(bucket.cost()).toBe(1400);
+    expect(bucket.cost()).toBe(1640);
+    expect(bucket.count("C1")).toBe(200);
   });
 
   it("lets Krallen go after Fomor has been dropped (#74), and names what blocks the rest", () => {
@@ -539,7 +540,7 @@ describe("Bucket last army", () => {
   });
 });
 
-describe("Bucket champion in an Inferno attack's payload", () => {
+describe("Bucket champion in the payload", () => {
   /**
    * The server's cut for an Inferno attack (`descentFightableLog`), copied:
    * the champion takes its own `bucket` first, then monsters in id order
@@ -620,9 +621,25 @@ describe("Bucket champion in an Inferno attack's payload", () => {
     expect(serverCut(composition, DESCENT_CAPACITY)).toEqual(composition.monsters);
   });
 
-  it("leaves other attacks as they were: there the server cuts nothing and the champion takes no room", () => {
-    const bucket = new Bucket(sessionWith({ monsters: { C1: 400 }, champions: [champion(2, 2)] }), { storage: null });
+  it("does the same in every other attack, at the Map Room 2 payload (owner: match Flash)", () => {
+    const bucket = new Bucket(sessionWith({ monsters: { C1: 400, C4: 200 }, champions: [champion(2, 2)] }), { storage: null });
+    bucket.fillAll();
+    const full = bucket.composition().monsters;
     bucket.pickChampion(2);
+    expect(bucket.reserved()).toBe(champBucket);
+    expect(bucket.cost()).toBeLessThanOrEqual(CAPACITY);
+    const composition = bucket.composition();
+    expect(serverCut(composition, CAPACITY)).toEqual(composition.monsters);
+    expect(bucketCost(composition.monsters, {})).toBeLessThan(bucketCost(full, {}));
+    // Un-picking gives the room back to Fill.
+    bucket.pickChampion(null);
+    expect(bucket.reserved()).toBe(0);
+    bucket.fillAll();
+    expect(bucket.cost()).toBe(bucketCost(full, {}));
+  });
+
+  it("puts no champion's room on a drop without one", () => {
+    const bucket = new Bucket(sessionWith({ monsters: { C1: 400 }, champions: [champion(2, 2)] }), { storage: null });
     bucket.fillAll();
     expect(bucket.reserved()).toBe(0);
     expect(bucket.count("C1")).toBe(Math.floor(CAPACITY / bucketCost({ C1: 1 }, {})));
