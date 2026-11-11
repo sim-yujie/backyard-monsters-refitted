@@ -2286,6 +2286,8 @@ export class YardScene implements Scene {
         this.refreshStatus();
       },
       onExit: () => this.closePlanner(),
+      // The yard picture's caption (owner, 2026-11-11): who, and how far along.
+      snapshotCaption: () => ({ name: getSession()?.username ?? null, level: this.store?.playerLevel ?? null }),
       // Compare (#9): the main yard's layouts beside the plan.
       ...(this.store && this.store.kind === "main"
         ? {
