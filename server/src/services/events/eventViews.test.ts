@@ -156,8 +156,8 @@ describe("GET /bm/events: the New to Map Room 2 card", () => {
       const body = await eventsAnswer(em, memoryProgressStore(), onMr2, NOW);
       expect(body.mr2Welcome).toEqual({
         startsAt: NOW - 2 * DAY,
-        endsAt: NOW + 8 * DAY,
-        daysLeft: 8,
+        endsAt: NOW + 5 * DAY,
+        daysLeft: 5,
         takeover: true,
         kit: true,
         takeoverUsedAt: null,
@@ -169,14 +169,14 @@ describe("GET /bm/events: the New to Map Room 2 card", () => {
     }
   });
 
-  test("gone after the 10 days; kept all 10 days once both rewards are used", async () => {
-    const store = memoryWelcomeStore(NOW - 11 * DAY);
+  test("gone after the pass; kept all its days once both rewards are used", async () => {
+    const store = memoryWelcomeStore(NOW - 8 * DAY);
     const previous = useWelcomeStore(store);
     try {
       expect((await eventsAnswer(em, memoryProgressStore(), onMr2, NOW)).mr2Welcome).toBeNull();
       store.rows.set(5, { start: NOW - DAY, takeoverUsed: true, kitUsed: true, takeoverAt: NOW - DAY + 60, kitAt: NOW - 30 });
       expect((await eventsAnswer(em, memoryProgressStore(), onMr2, NOW)).mr2Welcome).toMatchObject({
-        daysLeft: 9,
+        daysLeft: 6,
         takeover: false,
         kit: false,
         takeoverUsedAt: NOW - DAY + 60,

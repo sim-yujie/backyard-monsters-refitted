@@ -116,7 +116,7 @@ export const takeoverQuote: KoaController = async (ctx) => {
 
   const save = quoted.row?.save ?? null;
 
-  // "New to Map Room 2": the first wild camp in the player's 10 days is cheap.
+  // "New to Map Room 2": the first wild camp in the player's pass days is cheap.
   const welcome =
     quoted.isWildMonster &&
     welcomeReady(await readWelcome(postgres.em, currentUser.userid, onMapRoom2(userSave), now), "takeover", now);

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { memoryWelcomeStore, useWelcomeStore } from "../../../services/events/mr2Welcome.js";
+import { memoryWelcomeStore, MR2_WELCOME_SECONDS, useWelcomeStore } from "../../../services/events/mr2Welcome.js";
 import { quoteTakeover } from "../../../services/maproom/v2/takeoverCost.js";
 import { STARTER_KITS } from "../../../game-data/starterKits.js";
 import { kitBuildings } from "../../../services/yard/starterKit.js";
@@ -467,7 +467,7 @@ describe("takeoverCell: New to Map Room 2", () => {
     quoteTakeover({ cell: { x: 240, y: 208 }, isWildMonster: true, buildingdata: null, takerHomebase: null, conquestActive: false })
       .resources;
 
-  test("the first wild camp in the 10 days costs 10% of its full base price, and uses the reward", async () => {
+  test("the first wild camp in the pass costs 10% of its full base price, and uses the reward", async () => {
     openWindow();
     const result = await run({ baseid: CAMP });
     expect(result.ok).toBe(true);
@@ -514,8 +514,8 @@ describe("takeoverCell: New to Map Room 2", () => {
     expect(takerResources().r1).toBe(100_000_000 - fullBase());
   });
 
-  test("after the 10 days the price is the usual one", async () => {
-    welcome.rows.set(TAKER, { start: now() - 10 * 86_400 - 1, takeoverUsed: false, kitUsed: false });
+  test("after the pass the price is the usual one", async () => {
+    welcome.rows.set(TAKER, { start: now() - MR2_WELCOME_SECONDS - 1, takeoverUsed: false, kitUsed: false });
     await run({ baseid: CAMP });
     expect(takerResources().r1).toBe(100_000_000 - fullBase());
   });

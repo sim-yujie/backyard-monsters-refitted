@@ -6,7 +6,7 @@ import { forgetLaunchTime, LAUNCH_SETTING_KEY, MR2_WELCOME_SECONDS, sqlWelcomeSt
 
 /**
  * The "New to Map Room 2" store against a real Postgres: once-ever start,
- * each reward claimed once and only inside the 10 days (also when two
+ * each reward claimed once and only inside the pass (also when two
  * transactions race), a claim rolled back with its transaction, and the
  * launch time written once.
  *
@@ -57,7 +57,7 @@ describe.skipIf(!dbName)("Map Room 2 welcome on a real database", () => {
     expect(await store.read(em(), B)).toBeNull();
   });
 
-  test("each reward once, only inside the 10 days", async () => {
+  test("each reward once, only inside the pass", async () => {
     await store.start(em(), A, T0);
     expect(await store.claim(em(), A, "takeover", T0 - 1)).toBe(false);
     expect(await store.claim(em(), A, "takeover", T0 + MR2_WELCOME_SECONDS)).toBe(false);

@@ -145,7 +145,7 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // (`services/events/weekendSettings.ts`); the dashboard changes them.
   startWeekendSettingsRefresh(() => postgres.em.fork());
 
-  // "New to Map Room 2": players already on Map Room 2 get their 10 days from
+  // "New to Map Room 2": players already on Map Room 2 get their pass from
   // the first start of a server with this feature (`services/events/mr2Welcome.ts`).
   void ensureWelcomeLaunch(postgres.em.fork(), getCurrentDateTime());
 

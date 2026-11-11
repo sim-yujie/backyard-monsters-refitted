@@ -5,8 +5,9 @@ import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { logger } from "../../utils/logger.js";
 
 /**
- * "New to Map Room 2" (owner, 9 Nov 2026, beta 7): each player gets 10 days,
- * once ever, with two rewards:
+ * "New to Map Room 2" (owner, 9 Nov 2026, beta 7): each player gets a pass of
+ * {@link MR2_WELCOME_DAYS} days (7, owner 11 Nov 2026; it was 10), once
+ * ever, with two rewards:
  *
  * - the first wild monster camp they take over costs 10% of its full base
  *   price in resources (no next-to-yard half or Conquest on top; the Shiny
@@ -14,12 +15,17 @@ import { logger } from "../../utils/logger.js";
  * - one free Regular Starter Kit on any outpost, built as the resource path
  *   builds (prefabs, no worker): `services/yard/starterKit.ts`.
  *
- * **When the 10 days start.** A player who joins Map Room 2 after this ships
+ * **When the pass starts.** A player who joins Map Room 2 after this ships
  * starts on joining ({@link recordMr2Join}, from `setMapVersion` and
  * `joinMapRoom2`). A player already on Map Room 2 when it ships has no row,
  * so the first read for them writes one starting at the launch time: the
  * first time any server with this feature started, kept once in
  * `bym.game_setting` under {@link LAUNCH_SETTING_KEY} ({@link launchTime}).
+ *
+ * **How long it lasts.** Only the start is kept; the end is always
+ * `start + MR2_WELCOME_SECONDS`, so changing {@link MR2_WELCOME_DAYS} changes
+ * every pass, ones already running included (a pass started 8 days ago when
+ * the length went from 10 to 7 is over at once).
  *
  * **Where it is kept.** One `bym.event_progress` row (`userid`,
  * `event_id = 'mr2-welcome'`), its `data` holding `start` (unix seconds),
@@ -27,14 +33,15 @@ import { logger } from "../../utils/logger.js";
  * `kitAt`, unix seconds; absent on rows used before they were kept). Each
  * reward is claimed by one conditional UPDATE, so it can never be used twice.
  *
- * The takeover counts as used on the first wild camp taken over in the 10
- * days, however it was paid for: a player who pays Shiny for it does not get
+ * The takeover counts as used on the first wild camp taken over in the
+ * pass, however it was paid for: a player who pays Shiny for it does not get
  * the cheap price later.
  */
 
 export const MR2_WELCOME_EVENT_ID = "mr2-welcome";
 
-export const MR2_WELCOME_DAYS = 10;
+/** The pass's length in days (owner, 11 Nov 2026: 7 for beta 7; it was 10). */
+export const MR2_WELCOME_DAYS = 7;
 
 const DAY = 86_400;
 
@@ -65,7 +72,7 @@ export interface WelcomeStatus {
   /** Unix seconds. */
   startsAt: number;
   endsAt: number;
-  /** Whole days left, rounded up: 10 on the first day, 1 on the last. */
+  /** Whole days left, rounded up: {@link MR2_WELCOME_DAYS} on the first day, 1 on the last. */
   daysLeft: number;
   /** The cheap takeover can still be used. */
   takeover: boolean;
@@ -87,7 +94,7 @@ export const welcomeReady = (state: WelcomeState | null, reward: WelcomeReward, 
 
 /**
  * The card's status: null only when the window is not running. The card stays
- * on the Events page for all 10 days, a used reward showing Used (owner,
+ * on the Events page for all the pass days, a used reward showing Used (owner,
  * 9 Nov 2026: it left once both were used).
  */
 export const welcomeStatus = (state: WelcomeState | null, now: number): WelcomeStatus | null => {
@@ -288,7 +295,7 @@ export const readWelcome = async (
   }
 };
 
-/** Starts a player's 10 days on joining Map Room 2 (nothing if they ever had them). */
+/** Starts a player's pass on joining Map Room 2 (nothing if they ever had one). */
 export const recordMr2Join = (em: EntityManager, userid: number, now: number): Promise<void> =>
   welcomeStore().start(em, userid, now);
 
@@ -298,7 +305,7 @@ export const claimWelcome = (em: EntityManager, userid: number, reward: WelcomeR
 
 /**
  * Fixes the launch time at server start, so players already on Map Room 2
- * get their 10 days from the moment the feature went live rather than from
+ * get their pass from the moment the feature went live rather than from
  * their next visit. Forgiving: the first read does the same later.
  */
 export const ensureWelcomeLaunch = async (em: EntityManager, now: number): Promise<void> => {

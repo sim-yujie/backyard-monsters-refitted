@@ -324,7 +324,7 @@ const joinWorld: WorldJoin = async (em, save, user) => {
  * @param em - The transaction the catch-up runs in.
  * @param save - The caught-up main yard.
  * @param user - Its owner, when the caller has it (it is loaded otherwise).
- * The move starts the player's "New to Map Room 2" 10 days
+ * The move starts the player's "New to Map Room 2" pass
  * (`services/events/mr2Welcome.ts`), in the same transaction; nothing if they
  * ever had them.
  *

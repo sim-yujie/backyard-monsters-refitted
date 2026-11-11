@@ -9,7 +9,7 @@ import type { User } from "../../database/models/user.model.js";
 import { fortifyStepsOf, OUTPOST_COSTS } from "../../game-data/buildingCosts.js";
 import { storageCap } from "../../services/base/economy/resourceBudget.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
-import { memoryWelcomeStore, useWelcomeStore, type WelcomeStore } from "../../services/events/mr2Welcome.js";
+import { memoryWelcomeStore, MR2_WELCOME_SECONDS, useWelcomeStore, type WelcomeStore } from "../../services/events/mr2Welcome.js";
 import { yardAcademyTrainAction } from "./academy.js";
 import { yardBankAction } from "./bank.js";
 import { yardBuildAction, yardCancelBuildAction, yardInstantBuildAction } from "./build.js";
@@ -216,7 +216,7 @@ const stepOf = (type: number, level = 0) => {
   return { r1, r2, r3, r4, time };
 };
 
-// "New to Map Room 2" over a Map: by default the player's 10 days ended long
+// "New to Map Room 2" over a Map: by default the player's pass ended long
 // ago (launch at 0), so a Regular kit is paid for as usual.
 let welcome: ReturnType<typeof memoryWelcomeStore>;
 const realWelcome: WelcomeStore = useWelcomeStore(memoryWelcomeStore(0));
@@ -974,7 +974,7 @@ describe("Starter Kits (outposts WP9, issue #188)", () => {
 describe("free Regular kit (New to Map Room 2)", () => {
   const open = () => welcome.rows.set(USERID, { start: now() - 3600, takeoverUsed: false, kitUsed: false });
 
-  test("while the 10 days run, a Regular kit costs nothing and is built as prefabs with no worker", async () => {
+  test("while the pass runs, a Regular kit costs nothing and is built as prefabs with no worker", async () => {
     open();
     const answer = await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources", free: true });
 
@@ -1017,8 +1017,8 @@ describe("free Regular kit (New to Map Room 2)", () => {
     expect(welcome.rows.get(USERID)!.kitUsed).toBe(false);
   });
 
-  test("after the 10 days the Regular kit is charged", async () => {
-    welcome.rows.set(USERID, { start: now() - 10 * 86_400 - 1, takeoverUsed: false, kitUsed: false });
+  test("after the pass the Regular kit is charged", async () => {
+    welcome.rows.set(USERID, { start: now() - MR2_WELCOME_SECONDS - 1, takeoverUsed: false, kitUsed: false });
     const answer = await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
     expect(answer.status).toBe(200);
     expect(mainSave().credits).toBe(1000 - 420);

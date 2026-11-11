@@ -7,8 +7,8 @@ const DAY = 86_400;
 
 const status = (over: Partial<Mr2WelcomeStatus> = {}): Mr2WelcomeStatus => ({
   startsAt: 0,
-  endsAt: 10 * DAY,
-  daysLeft: 10,
+  endsAt: 7 * DAY,
+  daysLeft: 7,
   takeover: true,
   kit: true,
   ...over,
@@ -18,21 +18,21 @@ const stateOf = (card: HTMLElement, key: string) => card.querySelector<HTMLEleme
 
 describe("welcomeDaysText", () => {
   it("counts whole days left, rounded up, never below one", () => {
-    expect(welcomeDaysText(10 * DAY, 0)).toBe("10 days left");
-    expect(welcomeDaysText(10 * DAY, 2 * DAY + 1)).toBe("8 days left");
-    expect(welcomeDaysText(10 * DAY, 9 * DAY + 5)).toBe("1 day left");
-    expect(welcomeDaysText(10 * DAY, 10 * DAY + 60)).toBe("1 day left");
+    expect(welcomeDaysText(7 * DAY, 0)).toBe("7 days left");
+    expect(welcomeDaysText(7 * DAY, 2 * DAY + 1)).toBe("5 days left");
+    expect(welcomeDaysText(7 * DAY, 6 * DAY + 5)).toBe("1 day left");
+    expect(welcomeDaysText(7 * DAY, 7 * DAY + 60)).toBe("1 day left");
   });
 });
 
 describe("welcomeDay", () => {
-  it("counts the day of the 10 from the player's own start, kept inside 1 to 10", () => {
+  it("counts the pass day from the player's own start, kept inside 1 to 7", () => {
     const start = 1_000_000;
     expect(welcomeDay(start, start)).toBe(1);
     expect(welcomeDay(start, start + DAY - 1)).toBe(1);
     expect(welcomeDay(start, start + 3 * DAY + 5)).toBe(4);
-    expect(welcomeDay(start, start + 10 * DAY - 1)).toBe(10);
-    expect(welcomeDay(start, start + 12 * DAY)).toBe(10);
+    expect(welcomeDay(start, start + 7 * DAY - 1)).toBe(7);
+    expect(welcomeDay(start, start + 12 * DAY)).toBe(7);
     expect(welcomeDay(start, start - 5)).toBe(1);
   });
 });
@@ -42,15 +42,15 @@ const stateOfMark = (mark: HTMLElement) =>
   ["gone", "today", "left"].find((name) => mark.classList.contains(`events-welcome__mark--${name}`));
 
 describe("the day timeline", () => {
-  it("draws 10 marks: the days gone, today lit, the days left", () => {
-    // A player who joined Map Room 2 after launch: their own start, day 4 of 10.
+  it("draws 7 marks (WELCOME_DAYS): the days gone, today lit, the days left", () => {
+    // A player who joined Map Room 2 after launch: their own start, day 4 of 7.
     const start = 5_000_000;
-    const card = mr2WelcomeCard(status({ startsAt: start, endsAt: start + 10 * DAY, daysLeft: 7 }), start + 3 * DAY + 60, vi.fn());
+    const card = mr2WelcomeCard(status({ startsAt: start, endsAt: start + 7 * DAY, daysLeft: 4 }), start + 3 * DAY + 60, vi.fn());
     const all = marks(card);
-    expect(all.map((mark) => mark.textContent)).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
-    expect(all.map(stateOfMark)).toEqual(["gone", "gone", "gone", "today", "left", "left", "left", "left", "left", "left"]);
+    expect(all.map((mark) => mark.textContent)).toEqual(["1", "2", "3", "4", "5", "6", "7"]);
+    expect(all.map(stateOfMark)).toEqual(["gone", "gone", "gone", "today", "left", "left", "left"]);
     expect(all[3]?.getAttribute("aria-current")).toBe("date");
-    expect(card.querySelector(".events-welcome__timeline")?.getAttribute("aria-label")).toBe("Day 4 of 10");
+    expect(card.querySelector(".events-welcome__timeline")?.getAttribute("aria-label")).toBe("Day 4 of 7");
   });
 
   it("puts each used reward's picture over the day it was used, if the server knows it", () => {
@@ -79,8 +79,8 @@ describe("the day timeline", () => {
   it("moves today on as the days pass", () => {
     const card = mr2WelcomeCard(status(), 0, vi.fn());
     const timeline = card.querySelector<HTMLElement>(".events-welcome__timeline")!;
-    paintWelcomeTimeline(timeline, 9 * DAY + 1);
-    expect(marks(card).map(stateOfMark).slice(8)).toEqual(["gone", "today"]);
+    paintWelcomeTimeline(timeline, 6 * DAY + 1);
+    expect(marks(card).map(stateOfMark).slice(5)).toEqual(["gone", "today"]);
     expect(marks(card)[0]?.hasAttribute("aria-current")).toBe(false);
   });
 });
@@ -91,8 +91,8 @@ describe("mr2WelcomeCard", () => {
     expect(card.dataset["event"]).toBe("mr2-welcome");
     expect(card.querySelector(".events-card__title")?.textContent).toBe(WELCOME_TITLE);
     const days = card.querySelector<HTMLElement>("[data-welcome-ends]");
-    expect(days?.textContent).toBe("7 days left");
-    expect(days?.dataset["welcomeEnds"]).toBe(String(10 * DAY));
+    expect(days?.textContent).toBe("4 days left");
+    expect(days?.dataset["welcomeEnds"]).toBe(String(7 * DAY));
     expect(card.querySelector(".events-welcome__days .game-icon--time")).not.toBeNull();
   });
 
@@ -123,7 +123,7 @@ describe("mr2WelcomeCard", () => {
     const card = mr2WelcomeCard(status({ takeover: false, kit: false }), 4 * DAY, vi.fn());
     expect(stateOf(card, "takeover")?.textContent).toBe("Used");
     expect(stateOf(card, "kit")?.textContent).toBe("Used");
-    expect(card.querySelector("[data-welcome-ends]")?.textContent).toBe("6 days left");
+    expect(card.querySelector("[data-welcome-ends]")?.textContent).toBe("3 days left");
     expect(card.querySelector(".events-welcome__go")).toBeNull();
   });
 
@@ -142,6 +142,10 @@ describe("mr2WelcomeCard", () => {
     const text = note?.textContent ?? "";
     for (const line of Object.values(WELCOME_HELP)) expect(text).toContain(line);
     expect(text).toContain("10%");
+    // The pass's length comes from WELCOME_DAYS (7, owner 11 Nov), never a typed number.
+    expect(WELCOME_HELP.lead).toBe("Frontier Pass: a head start for your first 7 days in Map Room 2.");
+    expect(WELCOME_HELP.days).toBe("7 days from joining Map Room 2. Once each.");
+    expect(text).not.toContain("10 days");
 
     help?.click();
     expect(note?.hidden).toBe(true);

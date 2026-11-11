@@ -6,7 +6,7 @@ import { eventsArt } from "./eventsArt";
 
 /**
  * The "Frontier Pass" card on the Events page (owner, 9 Nov 2026): while
- * the player's 10 days run, the days left, a timeline of the 10 days (the
+ * the player's pass runs, the days left, a timeline of its days (the
  * days gone, today lit, the days left, and the day each reward was used),
  * the cheap first wild takeover and the free Regular kit (each Ready or
  * Used), a Go to Map Room 2 button while a reward is left, and a "?"
@@ -14,7 +14,7 @@ import { eventsArt } from "./eventsArt";
  * numbers (owner prefers little text).
  *
  * The server decides everything (`GET /bm/events` `mr2Welcome`). The card
- * stays all 10 days, both rewards used or not (owner, 9 Nov: it left once
+ * stays all the pass days, both rewards used or not (owner, 9 Nov: it left once
  * both were used); null only when the days are over, and then there is no
  * card. The days count from the player's own start (launch, or the day they
  * joined Map Room 2 after it).
@@ -22,17 +22,17 @@ import { eventsArt } from "./eventsArt";
 
 const DAY = 86_400;
 
-/** The pass's length in days (server `MR2_WELCOME_DAYS`). */
-export const WELCOME_DAYS = 10;
+/** The pass's length in days (server `MR2_WELCOME_DAYS`; 7, owner 11 Nov 2026). The texts and the timeline use it. */
+export const WELCOME_DAYS = 7;
 
 export const WELCOME_TITLE = "Frontier Pass";
 
 /** The "?" note: one lead line, then one line per reward and one for the days. */
 export const WELCOME_HELP = {
-  lead: "Frontier Pass: a head start for your first 10 days in Map Room 2.",
+  lead: `Frontier Pass: a head start for your first ${WELCOME_DAYS} days in Map Room 2.`,
   takeover: "1st wild camp takeover: 10% of the resources. Shiny price as usual.",
   kit: "1 Regular Starter Kit free, on any outpost. Builds over time, no worker.",
-  days: "10 days from joining Map Room 2. Once each.",
+  days: `${WELCOME_DAYS} days from joining Map Room 2. Once each.`,
 } as const;
 
 /** "8 days left", "1 day left", from the server's end and clock. */
@@ -41,7 +41,7 @@ export const welcomeDaysText = (endsAt: number, now: number): string => {
   return days === 1 ? "1 day left" : `${days} days left`;
 };
 
-/** Which of the 10 days `at` falls on: 1 on the first day, 10 on the last (kept inside 1 to 10). */
+/** Which pass day `at` falls on: 1 on the first day, {@link WELCOME_DAYS} on the last (kept inside them). */
 export const welcomeDay = (startsAt: number, at: number): number =>
   Math.min(WELCOME_DAYS, Math.max(1, Math.floor((at - startsAt) / DAY) + 1));
 
@@ -107,7 +107,7 @@ interface UsedOn {
 }
 
 /**
- * The 10 days as marks in a row on a track: each day's number in a dot, the
+ * The pass days as marks in a row on a track: each day's number in a dot, the
  * days gone filled, today lit and bigger, the days left hollow; over the day
  * a reward was used, its picture. Numbers and pictures, no words (the words
  * on hover and for a screen reader).

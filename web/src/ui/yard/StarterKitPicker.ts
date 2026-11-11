@@ -400,7 +400,7 @@ export class StarterKitPicker {
     this.sending = false;
     if (this.closed) return;
     if (!result.ok) {
-      // No longer free (used elsewhere, or the 10 days ended): show the prices again.
+      // No longer free (used elsewhere, or the pass ended): show the prices again.
       if (free && result.refusal.reason === "welcomeUsed") {
         this.freeKit = false;
         this.pending = null;

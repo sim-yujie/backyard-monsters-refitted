@@ -95,13 +95,13 @@ export interface EventsBody extends ApiEnvelope {
   whatsNewSeen: string | null;
   /**
    * The player's "New to Map Room 2" card (Frontier Pass), or null when their
-   * 10 days are not running. It stays all 10 days, used rewards and all.
+   * pass is not running. It stays all the pass days, used rewards and all.
    * Absent from an older server.
    */
   mr2Welcome?: Mr2WelcomeStatus | null;
 }
 
-/** "New to Map Room 2": 10 days with a cheap first wild takeover and a free Regular kit. */
+/** "New to Map Room 2": a pass of `WELCOME_DAYS` (7) days with a cheap first wild takeover and a free Regular kit. */
 export interface Mr2WelcomeStatus {
   /** Unix seconds. */
   startsAt: number;

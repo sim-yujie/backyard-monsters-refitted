@@ -1067,15 +1067,17 @@
   }
 }
 
-/* The day timeline: 10 marks on a track, the days gone filled, today lit and
-   bigger, the days left hollow; over the day a reward was used, its picture.
-   Equal columns, so the 10 fit the narrowest phone. */
+/* The day timeline: one mark per pass day (WELCOME_DAYS, 7) on a track, the
+   days gone filled, today lit and bigger, the days left hollow; over the day a
+   reward was used, its picture. One equal column per mark, however many days
+   the pass has, so they fill the row and fit the narrowest phone. */
 .events-welcome__timeline {
   --mark-size: 26px;
   --mark-used: 22px;
 
   display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
   margin: 0;
   padding: 0;
   list-style: none;

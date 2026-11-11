@@ -117,7 +117,7 @@ export const setMapVersion: KoaController = async (ctx) => {
       save.mr2upgraded = true;
       save.mapversion = MapRoomVersion.V2;
 
-      // A first move to Map Room 2 starts the "New to Map Room 2" 10 days
+      // A first move to Map Room 2 starts the "New to Map Room 2" pass
       // (`services/events/mr2Welcome.ts`); once ever. Forgiving: the move
       // itself must not fail over it.
       if (joining) {

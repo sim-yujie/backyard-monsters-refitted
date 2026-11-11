@@ -8,7 +8,7 @@ import { kitBuildings } from "../../../services/yard/starterKit.js";
 
 /** A Regular Starter Kit outpost, worth 10,000,000 of each (outpostValue.test.ts). */
 const REGULAR_KIT = kitBuildings(STARTER_KITS[0]!, "shiny", {}).buildingdata;
-import { memoryWelcomeStore, useWelcomeStore } from "../../../services/events/mr2Welcome.js";
+import { memoryWelcomeStore, MR2_WELCOME_SECONDS, useWelcomeStore } from "../../../services/events/mr2Welcome.js";
 
 /**
  * `POST /worldmapv2/takeoverquote` (issue #82): the price and the takeover's
@@ -277,7 +277,7 @@ describe("takeoverQuote", () => {
 describe("takeoverQuote: New to Map Room 2", () => {
   const openWindow = () => welcome.rows.set(TAKER, { start: now() - 60, takeoverUsed: false, kitUsed: false });
 
-  test("a wild camp in the player's 10 days: 10% of the full base price, the usual Shiny, and the label data", async () => {
+  test("a wild camp in the player's pass: 10% of the full base price, the usual Shiny, and the label data", async () => {
     const usual = await quote(CAMP);
     openWindow();
     const cheap = await quote(CAMP);
@@ -303,10 +303,10 @@ describe("takeoverQuote: New to Map Room 2", () => {
     expect(body.welcome).toBeUndefined();
   });
 
-  test("used, or after the 10 days, the price is the usual one", async () => {
+  test("used, or after the pass, the price is the usual one", async () => {
     welcome.rows.set(TAKER, { start: now() - 60, takeoverUsed: true, kitUsed: false });
     expect((await quote(CAMP)).welcome).toBeUndefined();
-    welcome.rows.set(TAKER, { start: now() - 10 * 86_400 - 1, takeoverUsed: false, kitUsed: false });
+    welcome.rows.set(TAKER, { start: now() - MR2_WELCOME_SECONDS - 1, takeoverUsed: false, kitUsed: false });
     expect((await quote(CAMP)).welcome).toBeUndefined();
   });
 
