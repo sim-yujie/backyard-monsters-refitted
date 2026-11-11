@@ -19,6 +19,7 @@ import {
 } from "./api";
 import { AnnouncementsView } from "./announcements";
 import { AttackLogSection } from "./attacks";
+import { FlaggedSection } from "./flagged";
 import { BugsView } from "./bugs";
 import { ChatPanel } from "./chat";
 import { h, replace } from "./dom";
@@ -184,6 +185,14 @@ class Dashboard {
       location.hash = viewHash("attacks", { player, side: side === "both" ? null : side, range: range === "7d" ? null : range });
     },
     openPlayer: (userid) => this.openPlayer(userid),
+  });
+  /** Players the cheat checks caught (`bym.report`), newest first. */
+  private readonly flagged = new FlaggedSection({
+    say: (message) => this.say(message),
+    openPlayer: (userid) => this.openPlayer(userid),
+    openAttacks: (userid) => {
+      location.hash = viewHash("attacks", { player: userid });
+    },
   });
   private readonly modMail = new ModMailSection({
     say: (message) => this.say(message),
@@ -364,6 +373,7 @@ class Dashboard {
       photos: section("photos"),
       find: section("find"),
       attacks: section("attacks"),
+      flagged: section("flagged"),
       moderators: section("moderators"),
       modmail: section("modmail"),
       bugs: section("bugs"),
@@ -380,6 +390,7 @@ class Dashboard {
     replace(this.sections.find.body, this.moderation.element);
     replace(this.sections.bugs.body, this.bugs.element);
     replace(this.sections.attacks.body, this.attacks.element);
+    replace(this.sections.flagged.body, this.flagged.element);
     replace(this.sections.moderators.body, this.moderators.element);
     replace(this.sections.modmail.body, this.modMail.element);
     replace(this.sections.chat.body, this.chat.element);
@@ -482,6 +493,7 @@ class Dashboard {
       this.bugs.show(route.bug, route.view === "bugs" ? route.params : {}),
       this.moderation.refresh(),
       route.view === "attacks" ? this.attacks.show(route.params) : Promise.resolve(),
+      this.flagged.refresh(),
       this.moderators.refresh(),
       this.modMail.refresh(),
       this.shiny.refresh(),
@@ -559,6 +571,7 @@ class Dashboard {
       this.bugs.refresh(),
       this.moderation.refresh(),
       this.attacks.refresh(),
+      this.flagged.refresh(),
       this.moderators.refresh(),
       this.modMail.refresh(),
       this.shiny.refresh(),

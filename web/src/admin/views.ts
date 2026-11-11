@@ -41,6 +41,7 @@ export const VIEWS = [
   ["photos", "Photo reports", "moderation"],
   ["find", "Find a player", "moderation"],
   ["attacks", "Attack log", "moderation"],
+  ["flagged", "Flagged", "moderation"],
   ["moderators", "Moderators", "moderation"],
   ["modmail", "Moderator mail", "moderation"],
   ["bugs", "Bug reports", "support"],

@@ -352,7 +352,7 @@ const descentBattle = async (
   const input = descentReplayInput(user, descent, yard, log, battleTick(saveData.tick), saveData.left);
   if (!input) return null;
 
-  const base = { baseid: String(saveData.baseid) };
+  const base = { baseid: String(saveData.baseid), rowless: "descent" as const };
   const fought = await replayBattleForSave(ctx, user, base, input, "the finaliser lands it from its checkpoint");
   const battle = { ...fought, log: input.log };
 

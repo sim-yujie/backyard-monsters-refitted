@@ -212,7 +212,7 @@ describe("the owner's first look", () => {
     await settle();
     const tabs = (view: string) =>
       [...document.querySelectorAll(`#view-${view} .subnav a .nav-state`)].map((s) => s.previousElementSibling?.textContent);
-    expect(tabs("photos")).toEqual(["Review", "Photo reports", "Find a player", "Attack log", "Moderators", "Moderator mail"]);
+    expect(tabs("photos")).toEqual(["Review", "Photo reports", "Find a player", "Attack log", "Flagged", "Moderators", "Moderator mail"]);
     expect(tabs("events")).toEqual(["Announcements", "Events"]);
     // The tab and the heading count the players with open photo reports.
     expect(document.querySelector("#view-moderation .subnav a[href='#photos'] .count")?.textContent).toContain("2");

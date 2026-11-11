@@ -400,7 +400,7 @@ const tribeBattle = async (
   const input = await tribeReplayInput(user, session, served, saveData.flinglog, battleTick(saveData.tick), saveData.left);
   if (!input) return null;
 
-  const base = { baseid: saveData.baseid };
+  const base = { baseid: saveData.baseid, rowless: "mr1-tribe" as const };
   const battle = tribeBattleOf(
     await replayBattleForSave(ctx, user, base, input, "the finaliser lands it from its checkpoint"),
     input.log

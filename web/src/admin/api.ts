@@ -448,6 +448,69 @@ export const fetchAttackLog = (userid: number, query: AttackLogQuery): Promise<E
     beforeId: query.before?.id,
   });
 
+// ---- Flagged players (server: services/admin/flaggedPlayers.ts) ----
+
+/** fight: the attack save disagreed with the server's replay; economy: a yard save broke a rule; attack: a tampered attack load. */
+export type CheatKind = "fight" | "economy" | "attack" | "other";
+/** refused: the server did not take the save; flagged: taken and only recorded. */
+export type CheatOutcome = "refused" | "flagged";
+
+/**
+ * What a yard is: one with a save row ("yard"), one with none (an Inferno
+ * Descent yard, a Moloch tribe, a Map Room 1 tribe), or "unknown" for an old
+ * fight entry that did not say.
+ */
+export type CheatYardKind = "yard" | "descent" | "inferno-tribe" | "mr1-tribe" | "unknown";
+
+export interface CheatYard {
+  /** Tells yards apart: "save:1200", "descent:201", "base:201"... */
+  key: string;
+  kind: CheatYardKind;
+  /** The base id; "" for a save no row has any more. */
+  baseid: string;
+  /** The yard's owner now; null when no yard has that base id any more. */
+  owner: { userid: number; username: string; bot: boolean } | null;
+  type: string | null;
+}
+
+export interface CheatEntry {
+  time: string;
+  kind: CheatKind;
+  outcome: CheatOutcome | null;
+  /** The fight's fields or the economy's rules that did not match. */
+  fields: string[];
+  baseid: string | null;
+  message: string;
+  yard: CheatYard | null;
+}
+
+export interface CheatPlayer {
+  userid: number;
+  username: string;
+  banned: boolean;
+  gone: boolean;
+  violations: number;
+  attackViolations: number;
+  counts: {
+    fight: Record<CheatOutcome, number>;
+    economy: Record<CheatOutcome, number>;
+    attack: number;
+    other: number;
+  };
+  fields: { name: string; count: number }[];
+  yards: (CheatYard & { count: number })[];
+  first: string | null;
+  last: string | null;
+  entries: number;
+  banReason: { message: string; time: string | null } | null;
+}
+
+export const fetchCheatPlayers = (): Promise<Envelope<{ players: CheatPlayer[] }>> => adminGet(`${ADMIN}/flagged`);
+
+export const fetchCheatPlayer = (
+  userid: number,
+): Promise<Envelope<{ player: CheatPlayer; history: CheatEntry[] }>> => adminGet(`${ADMIN}/flagged/${userid}`);
+
 export const fetchShinyAwards = (
   before?: number,
 ): Promise<

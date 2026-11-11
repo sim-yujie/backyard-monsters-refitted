@@ -1123,7 +1123,7 @@ describe("the battle is the server's (#23, C3)", () => {
     // The camp does fall (99%), so the claimed `destroyed` is the battle's own.
     expect(reports).toEqual([
       "Attack save on base 1234 flagged (log): disagrees with the replay on " +
-        "damage, buildinghealthdata, attackloot",
+        "damage, buildinghealthdata, attackloot [save 9]",
     ]);
     expect(defender.damage).toBe(Math.trunc(battle.damage));
   });
