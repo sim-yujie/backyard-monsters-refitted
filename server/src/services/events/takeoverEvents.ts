@@ -58,6 +58,14 @@ export interface TakeoverScore {
   readonly total: number;
 }
 
+/** Where takeovers are counted unless a call names a store: the database; tests hand in a memory one. */
+let takeoverStore: EventProgressStore = sqlProgressStore;
+
+/** Counts takeovers into `store` from now on (tests); `sqlProgressStore` puts the database back. */
+export const useTakeoverStore = (store: EventProgressStore): void => {
+  takeoverStore = store;
+};
+
 export interface CountTakeoverOptions {
   store?: EventProgressStore;
   events?: readonly EventDefinition[];
@@ -88,7 +96,7 @@ export const countTakeover = async (
   if (events.length === 0) return scores;
 
   const player = eventPlayerOf(save, options.skipTutorial);
-  const store = options.store ?? sqlProgressStore;
+  const store = options.store ?? takeoverStore;
   for (const event of events) {
     if (lockedReason(event, player) !== null) continue;
     try {
