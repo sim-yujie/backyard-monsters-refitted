@@ -54,7 +54,7 @@ describe("categoryOf", () => {
       starterBase: GAME_NOTICES,
     };
     for (const rowKind of ["jobs", "away"]) {
-      for (const [kind, category] of Object.entries(expected)) expect(categoryOf(rowKind, job(kind))).toBe(category);
+      for (const [kind, category] of Object.entries(expected)) expect<string>(categoryOf(rowKind, job(kind))).toBe(category);
     }
   });
 
