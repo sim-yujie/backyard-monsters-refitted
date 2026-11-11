@@ -34,7 +34,13 @@ describe.skipIf(!dbName)("the notification list on a real database (issue #257)"
 
   const clear = async () => {
     await em().getConnection().execute(`DELETE FROM bym.notification WHERE userid IN (?, ?)`, [PLAYER, OTHER]);
+    await em().getConnection().execute(`UPDATE bym."user" SET notifications_off = '[]' WHERE userid IN (?, ?)`, [PLAYER, OTHER]);
   };
+  const mute = (userid: number, categories: string[]) =>
+    em().getConnection().execute(`UPDATE bym."user" SET notifications_off = ?::jsonb WHERE userid = ?`, [
+      JSON.stringify(categories),
+      userid,
+    ]);
 
   beforeAll(async () => {
     if (dbName === "bym") throw new Error("NOTIF_TEST_DB must be a throwaway database, not bym");
@@ -108,5 +114,39 @@ describe.skipIf(!dbName)("the notification list on a real database (issue #257)"
     await markAllNotificationsRead(em(), PLAYER);
     expect(await unreadNotificationCount(em(), PLAYER)).toBe(0);
     expect(await unreadNotificationCount(em(), OTHER)).toBe(1);
+  });
+
+  test("a category turned off is stored but not shown or counted, and comes back when turned on", async () => {
+    await mute(PLAYER, ["buildings"]);
+    await notifyAndCount(em(), PLAYER, null, "away", [job("upgrade", 1), job("yardAttacked", 2)]);
+    expect(await notifyAndCount(em(), PLAYER, null, "jobs", [job("upgrade", 3)])).toBe(1);
+    const list = await listNotifications(em(), PLAYER);
+    expect(list.map((one) => one.jobs)).toEqual([[job("yardAttacked", 2)]]);
+    // Another player's choice is theirs: nothing muted for them.
+    await notifyAndCount(em(), OTHER, null, "jobs", [job("upgrade", 5)]);
+    expect(await unreadNotificationCount(em(), OTHER)).toBe(1);
+
+    await mute(PLAYER, []);
+    const back = await listNotifications(em(), PLAYER);
+    expect(back.map((one) => [one.jobs, one.read])).toEqual([
+      // Written while muted: already read, so it never lit the bell.
+      [[job("upgrade", 3)], true],
+      [[job("upgrade", 1), job("yardAttacked", 2)], false],
+    ]);
+  });
+
+  test("a muted noisy category never pushes the shown rows out", async () => {
+    await mute(PLAYER, ["buildings"]);
+    const now = new Date();
+    for (let index = 0; index < 5; index++) {
+      await recordNotifications(em(), PLAYER, null, "jobs", [[job("train", index)]], new Date(now.getTime() - (60 - index) * 1000));
+    }
+    for (let index = 0; index < 30; index++) {
+      await recordNotifications(em(), PLAYER, null, "jobs", [[job("upgrade", index)]], new Date(now.getTime() - (30 - index) * 1000));
+    }
+    const list = await listNotifications(em(), PLAYER);
+    expect(list.map((one) => (one.jobs[0] as { id: number }).id)).toEqual([4, 3, 2, 1, 0]);
+    const [{ count }] = await em().getConnection().execute(`SELECT count(*)::int AS count FROM bym.notification WHERE userid = ?`, [PLAYER]);
+    expect(count).toBe(5 + NOTIFICATION_LIMIT);
   });
 });

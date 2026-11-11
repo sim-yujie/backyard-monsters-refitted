@@ -101,6 +101,15 @@ export class User {
   country_asked: Opt<boolean> = false;
 
   /**
+   * The bell's notification categories the player turned off (owner 11 Nov
+   * 2026), as ids from `services/notifications/notificationCategories.ts`;
+   * empty, everything on, by default. Set in Settings (`/player/settings`).
+   * Muted entries are still stored, never shown (`notifications.ts`).
+   */
+  @Property({ type: "json", columnType: "jsonb", defaultRaw: "'[]'" })
+  notifications_off: Opt<string[]> = [];
+
+  /**
    * The player's Look and sound choices as the web client last sent them
    * (`POST /player/look`, owner 4 Nov 2026: how players split between Modern
    * and Classic). Null until the first load that sends them. Only the owner's

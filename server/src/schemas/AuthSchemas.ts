@@ -1,5 +1,6 @@
 import z from "zod";
 import { isCountryCode } from "../config/Countries.js";
+import { MUTABLE_CATEGORIES } from "../services/notifications/notificationCategories.js";
 import { SessionType } from "../enums/SessionType.js";
 import { formBoolean } from "./formBoolean.js";
 
@@ -124,6 +125,12 @@ export const UpdateSettingsSchema = z.object({
   country: z.string().refine(isCountryCode).nullable().optional(),
   /** The one-time country prompt was put off ("Not now"); it is not shown again. */
   countryAsked: z.literal(true).optional(),
+  /**
+   * The bell's categories switched on (true) or off (false), only those that
+   * changed (`notificationCategories.ts`). Strict: an unknown or always-on
+   * category is refused rather than quietly ignored.
+   */
+  notifications: z.partialRecord(z.enum(MUTABLE_CATEGORIES), z.boolean()).optional(),
 });
 
 /**

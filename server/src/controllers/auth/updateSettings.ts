@@ -6,6 +6,7 @@ import { UpdateSettingsSchema } from "../../schemas/AuthSchemas.js";
 import { mr2HexShape, mr2TiltEnabled } from "../../config/MapRoom2Config.js";
 import { countryChannelFor } from "../../config/ChatConfig.js";
 import { disconnectCountryChat } from "../../chat/chatControl.js";
+import { mutedAfter, mutedSetOf } from "../../services/notifications/notificationCategories.js";
 
 /** The account's settings block, as `/player/settings` and `/player/account` send it. */
 export const settingsOf = (user: User) => ({
@@ -27,6 +28,8 @@ export const settingsOf = (user: User) => ({
   country: user.country ?? null,
   countryAsked: user.country_asked || !!user.country,
   countryChannel: countryChannelFor(user.country),
+  // The bell's categories turned off (owner 11 Nov 2026); empty, all on, by default.
+  notificationsOff: [...mutedSetOf(user.notifications_off)],
 });
 
 /**
@@ -44,15 +47,15 @@ export const settingsOf = (user: User) => ({
  */
 export const updateSettings: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  const { shinyLocked, hideOnline, friendRequests, tiltedMap, country, countryAsked } = UpdateSettingsSchema.parse(
-    ctx.request.body,
-  );
+  const { shinyLocked, hideOnline, friendRequests, tiltedMap, country, countryAsked, notifications } =
+    UpdateSettingsSchema.parse(ctx.request.body);
 
   if (shinyLocked !== undefined) user.shiny_locked = shinyLocked;
   if (hideOnline !== undefined) user.hide_online = hideOnline;
   if (friendRequests !== undefined) user.friend_requests_off = !friendRequests;
   if (tiltedMap !== undefined) user.map_flat = !tiltedMap;
   if (countryAsked) user.country_asked = true;
+  if (notifications) user.notifications_off = mutedAfter(user.notifications_off, notifications);
 
   const oldCountry = user.country ?? null;
 
