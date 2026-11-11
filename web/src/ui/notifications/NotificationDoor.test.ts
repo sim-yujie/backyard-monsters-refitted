@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type * as httpApi from "@/api/http";
+
 const http = vi.hoisted(() => ({ postJson: vi.fn() }));
-vi.mock("@/api/http", async (original) => ({ ...(await original<typeof import("@/api/http")>()), ...http }));
+vi.mock("@/api/http", async (original) => ({ ...(await original<typeof httpApi>()), ...http }));
 
 import { setNotificationCategory } from "@/api/notificationSettings";
 import type { GameNotification, NotificationsApi } from "@/api/notifications";

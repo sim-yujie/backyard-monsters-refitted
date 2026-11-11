@@ -21,9 +21,10 @@ const chat = vi.hoisted(() => ({ worldChat: { setCountryRoom: vi.fn(), unmute: v
 vi.mock("@/game/chat/chatSession", () => chat);
 const lookReport = vi.hoisted(() => ({ reportLook: vi.fn() }));
 vi.mock("@/app/lookReport", () => lookReport);
+import type * as notificationSettingsApi from "@/api/notificationSettings";
 const notifApi = vi.hoisted(() => ({ setNotificationCategory: vi.fn() }));
 vi.mock("@/api/notificationSettings", async (original) => ({
-  ...(await original<typeof import("@/api/notificationSettings")>()),
+  ...(await original<typeof notificationSettingsApi>()),
   ...notifApi,
 }));
 
