@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { BaseLoadResponse } from "@/api/types";
-import { bucketCost, dropRadius, flingerPayload } from "@/game/combat/rules";
+import { bucketCost, championByType, championStat, dropRadius, flingerPayload } from "@/game/combat/rules";
 import { AttackSession } from "./AttackSession";
 import type { AttackRoster, AttackTarget } from "./attackTarget";
 import { Bucket, bucketFor, LAST_ARMY_KEY_PREFIX } from "./bucket";
@@ -536,5 +536,95 @@ describe("Bucket last army", () => {
       champion: null,
       champions: [],
     });
+  });
+});
+
+describe("Bucket champion in an Inferno attack's payload", () => {
+  /**
+   * The server's cut for an Inferno attack (`descentFightableLog`), copied:
+   * the champion takes its own `bucket` first, then monsters in id order
+   * while they fit. Whatever it drops, the server fights without.
+   */
+  const serverCut = (
+    composition: ReturnType<Bucket["composition"]>,
+    capacity: number,
+  ): Record<string, number> => {
+    let room = capacity;
+    if (composition.champion) {
+      const id = championByType(composition.champion.t);
+      room -= id ? championStat(id, "bucket", composition.champion.l) : 0;
+    }
+    const kept: Record<string, number> = {};
+    for (const id of Object.keys(composition.monsters).sort()) {
+      const each = bucketCost({ [id]: 1 }, {});
+      const fits = Math.min(composition.monsters[id] ?? 0, Math.floor(Math.max(0, room) / each));
+      if (fits <= 0) continue;
+      kept[id] = fits;
+      room -= fits * each;
+    }
+    return kept;
+  };
+
+  // Bluetenit's champion (10 Nov 2026): type 2 at level 2, flung with a full bucket.
+  const DESCENT_CAPACITY = 850;
+  const champBucket = championStat(championByType(2)!, "bucket", 2);
+
+  it("leaves room for the champion's own bucket, so the server keeps every monster", () => {
+    const bucket = new Bucket(
+      sessionWith({ monsters: { C1: 400 }, champions: [champion(2, 2)], flingCapacity: DESCENT_CAPACITY }),
+      { storage: null },
+    );
+    bucket.pickChampion(2);
+    bucket.fillAll();
+    const unit = bucketCost({ C1: 1 }, {});
+    expect(champBucket).toBeGreaterThan(0);
+    expect(bucket.count("C1")).toBe(Math.floor((DESCENT_CAPACITY - champBucket) / unit));
+    expect(bucket.cost()).toBeLessThanOrEqual(DESCENT_CAPACITY);
+    const composition = bucket.composition();
+    expect(serverCut(composition, DESCENT_CAPACITY)).toEqual(composition.monsters);
+  });
+
+  it("trims the last rows when a champion is picked into a full bucket", () => {
+    const bucket = new Bucket(
+      sessionWith({ monsters: { C1: 50, C4: 200 }, champions: [champion(2, 2)], flingCapacity: DESCENT_CAPACITY }),
+      { storage: null },
+    );
+    bucket.fillAll();
+    expect(bucket.cost()).toBeGreaterThan(DESCENT_CAPACITY - champBucket);
+    const before = bucket.composition().monsters;
+    // Before the fix this composition went out whole and the server cut it.
+    expect(serverCut({ ...bucket.composition(), champion: { t: 2, l: 2, s: "hybrid" } }, DESCENT_CAPACITY)).not.toEqual(
+      before,
+    );
+    bucket.pickChampion(2);
+    const composition = bucket.composition();
+    expect(composition.champion?.t).toBe(2);
+    expect(bucket.cost()).toBeLessThanOrEqual(DESCENT_CAPACITY);
+    expect(serverCut(composition, DESCENT_CAPACITY)).toEqual(composition.monsters);
+    // The first row in roster order keeps what it had; the last gives way.
+    expect(composition.monsters.C1).toBe(before.C1);
+  });
+
+  it("restores a last army with its champion inside the payload", () => {
+    const storage = fakeStorage();
+    const roster = { monsters: { C1: 400 }, champions: [champion(2, 2)], flingCapacity: DESCENT_CAPACITY };
+    const again = new Bucket(sessionWith(roster), { storage, playerKey: "p" });
+    // An army saved before the champion took room: rows at the full payload.
+    storage.setItem(
+      LAST_ARMY_KEY_PREFIX + "p",
+      JSON.stringify({ v: 1, monsters: { C1: 400 }, champion: 2, champions: [2] }),
+    );
+    expect(again.loadLast()).toBe(true);
+    const composition = again.composition();
+    expect(composition.champion?.t).toBe(2);
+    expect(serverCut(composition, DESCENT_CAPACITY)).toEqual(composition.monsters);
+  });
+
+  it("leaves other attacks as they were: there the server cuts nothing and the champion takes no room", () => {
+    const bucket = new Bucket(sessionWith({ monsters: { C1: 400 }, champions: [champion(2, 2)] }), { storage: null });
+    bucket.pickChampion(2);
+    bucket.fillAll();
+    expect(bucket.reserved()).toBe(0);
+    expect(bucket.count("C1")).toBe(Math.floor(CAPACITY / bucketCost({ C1: 1 }, {})));
   });
 });
