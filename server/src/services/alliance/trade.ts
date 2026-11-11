@@ -2,6 +2,7 @@ import { LockMode } from "@mikro-orm/core";
 import type { EntityManager } from "@mikro-orm/postgresql";
 
 import {
+  allianceTradeEnabled,
   TRADE_ASKS_PER_DAY,
   TRADE_CAP_SHARE,
   TRADE_LOSS,
@@ -198,9 +199,12 @@ const giveBack = (em: EntityManager, userid: number, now: number, mode: "stale" 
           WHERE userid = ? AND status = 'open' FOR UPDATE`,
         [userid]
       );
+      // While trading is switched off (`ALLIANCE_TRADE_ENABLED`), every open request is stale.
+      const tradeOff = !allianceTradeEnabled();
       const closing = rows.filter(
         (row) =>
           mode === "cancel" ||
+          tradeOff ||
           Number(row.expires_at) <= now ||
           row.alliance_id === null ||
           Number(row.alliance_id) !== me.alliance_id
@@ -239,7 +243,8 @@ const giveBack = (em: EntityManager, userid: number, now: number, mode: "stale" 
 
 /**
  * Gives back what a player's request holds when it ran out or their alliance
- * is gone or changed (left, kicked, disbanded, moved world). Called on the
+ * is gone or changed (left, kicked, disbanded, moved world), or every open
+ * one while trading is switched off (`ALLIANCE_TRADE_ENABLED`). Called on the
  * owner's yard load and on the Trade tab; a cheap look first, so a load with
  * nothing to give back costs one indexed query. Never throws.
  */
@@ -248,9 +253,9 @@ export const refundStaleRequests = async (em: EntityManager, userid: number, now
     const [stale] = await em.execute<{ id: number }[]>(
       `SELECT r.id FROM bym.alliance_trade_request r JOIN bym."user" u ON u.userid = r.userid
         WHERE r.userid = ? AND r.status = 'open'
-          AND (r.expires_at <= ? OR r.alliance_id IS NULL OR r.alliance_id IS DISTINCT FROM u.alliance_id)
+          AND (? OR r.expires_at <= ? OR r.alliance_id IS NULL OR r.alliance_id IS DISTINCT FROM u.alliance_id)
         LIMIT 1`,
-      [userid, now]
+      [userid, !allianceTradeEnabled(), now]
     );
     if (!stale) return 0;
     return (await giveBack(em, userid, now, "stale")).closed;

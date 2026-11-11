@@ -105,6 +105,13 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
     await sql(`DELETE FROM bym.alliance_trade_request WHERE userid IN (${LIST})`);
   };
 
+  // Trading's switch (`ALLIANCE_TRADE_ENABLED`, off by default): these tests trade, so it is on unless a test turns it off.
+  const savedSwitch = process.env.ALLIANCE_TRADE_ENABLED;
+  const setSwitch = (value: string | undefined) => {
+    if (value === undefined) delete process.env.ALLIANCE_TRADE_ENABLED;
+    else process.env.ALLIANCE_TRADE_ENABLED = value;
+  };
+
   beforeAll(async () => {
     await sql(`DELETE FROM bym.alliance WHERE id IN (?, ?)`, [ALLIANCE, OTHER]);
     for (const userid of USERS) {
@@ -134,6 +141,7 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
   });
 
   beforeEach(async () => {
+    setSwitch("on");
     await clear();
     await sql(`UPDATE bym."user" SET alliance_id = ?, alliance_role = 'member' WHERE userid IN (?, ?, ?)`, [ALLIANCE, A, B, C]);
     await sql(`UPDATE bym."user" SET alliance_id = NULL, alliance_role = NULL WHERE userid = ?`, [OUT]);
@@ -146,6 +154,7 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
   });
 
   afterAll(async () => {
+    setSwitch(savedSwitch);
     await clear();
     await sql(`DELETE FROM bym.save WHERE userid IN (${LIST})`);
     await sql(`DELETE FROM bym."user" WHERE userid IN (${LIST})`);
@@ -245,6 +254,17 @@ describe.skipIf(!enabled)("alliance trading on a real database", () => {
     expect(await trade.refundStaleRequests(em(), C, NOW + 86_400)).toBe(1);
     expect(await statusOf(two.id)).toBe("expired");
     expect((await held(C)).r3).toBe(STOCK);
+  });
+
+  test("switched off: the next load gives back every open request, and a cancel still finds none left", async () => {
+    const open = await trade.postRequest(em(), B, "r1", "r2", 500, NOW);
+    expect((await held(B)).r1).toBe(STOCK - 500);
+    setSwitch(undefined);
+    // Within the 24 h and still in the alliance: only the switch closes it.
+    expect(await trade.refundStaleRequests(em(), B, NOW + 60)).toBe(1);
+    expect(await statusOf(open.id)).toBe("expired");
+    expect((await held(B)).r1).toBe(STOCK);
+    expect(await trade.refundStaleRequests(em(), B, NOW + 120)).toBe(0);
   });
 
   test("leaving the alliance, or it disbanding, gives back what the request holds", async () => {

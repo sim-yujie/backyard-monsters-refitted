@@ -189,6 +189,7 @@ import {
   tradeSendController,
   tradeViewController,
 } from "./controllers/alliance/trade.js";
+import { tradeSwitchGate } from "./services/alliance/tradeSwitch.js";
 import { submitBugReportController, submitGuestBugReportController } from "./controllers/bugReports/submitBugReport.js";
 
 const router = new Router();
@@ -429,11 +430,12 @@ router.post("/alliance/suggeststar", verifyUserAuth, logRequest, suggestStarCont
 router.post("/alliance/setgoal", verifyUserAuth, logRequest, setGoalController);
 router.post("/alliance/removegoal", verifyUserAuth, logRequest, removeGoalController);
 router.get("/alliance/territory", verifyUserAuth, logRequest, territoryController);
-router.get("/alliance/trade", verifyUserAuth, logRequest, tradeViewController);
-router.post("/alliance/trade/post", verifyUserAuth, logRequest, tradePostController);
-router.post("/alliance/trade/cancel", verifyUserAuth, logRequest, tradeCancelController);
-router.post("/alliance/trade/accept", verifyUserAuth, logRequest, tradeAcceptController);
-router.post("/alliance/trade/send", verifyUserAuth, logRequest, tradeSendController);
+// Trading refuses every route while ALLIANCE_TRADE_ENABLED is off (the default, beta 7).
+router.get("/alliance/trade", verifyUserAuth, tradeSwitchGate, logRequest, tradeViewController);
+router.post("/alliance/trade/post", verifyUserAuth, tradeSwitchGate, logRequest, tradePostController);
+router.post("/alliance/trade/cancel", verifyUserAuth, tradeSwitchGate, logRequest, tradeCancelController);
+router.post("/alliance/trade/accept", verifyUserAuth, tradeSwitchGate, logRequest, tradeAcceptController);
+router.post("/alliance/trade/send", verifyUserAuth, tradeSwitchGate, logRequest, tradeSendController);
 router.get("/alliance/news", verifyUserAuth, logRequest, allianceNewsController);
 
 /**  ────────────────────────────────────────────────

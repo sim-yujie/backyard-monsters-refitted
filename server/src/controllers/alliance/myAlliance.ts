@@ -1,4 +1,5 @@
 import { Status } from "../../enums/StatusCodes.js";
+import { allianceTradeEnabled } from "../../config/AllianceConfig.js";
 import { AllianceRole } from "../../enums/Alliance.js";
 import { User } from "../../database/models/user.model.js";
 import { getUserAlliance } from "../../services/alliance/allianceAccess.js";
@@ -92,6 +93,8 @@ export const myAlliance: KoaController = async (ctx) => {
       rename_available_at: renameAt ? Math.floor(renameAt.getTime() / 1000) : null,
       // The absent-leader takeover button (`leadership.ts`).
       can_take_over: !isLeader && (await canTakeOver(alliance.id, user.userid, now)),
+      // Trading's switch (`ALLIANCE_TRADE_ENABLED`, off in beta 7): the web hides the Trade tab and Send while false.
+      trade_on: allianceTradeEnabled(),
       bonuses: bonusesFor(alliance.type, stars),
       stars,
       constellations: constellationView(alliance.type, stars, suggestions),

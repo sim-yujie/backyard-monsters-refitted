@@ -1,4 +1,5 @@
 import { AllianceMessageType, AllianceStance, AllianceType } from "../enums/Alliance.js";
+import { isSwitchOn } from "./BotConfig.js";
 
 /*
  * Every alliance number lives in this file so balance can be tuned in one
@@ -357,6 +358,18 @@ export const STANCE_LABEL: Record<AllianceStance, string> = {
 // Trading between members (design v5 §12a, §12b). Placeholders until the
 // owner balances them.
 // ---------------------------------------------------------------------------
+
+/**
+ * Trading's switch (owner 11 Nov 2026: "disable trades for now. We can polish
+ * it for beta 8"). Off unless `ALLIANCE_TRADE_ENABLED` is `on` (or `true`):
+ * every `/alliance/trade` route refuses with `reason: "trade_off"`, and
+ * `myalliance` and the yard load's `alliancedata` say `trade_on: false`, so
+ * the web hides the Trade tab and every Send / Trade button. Refunds of a
+ * request that somehow exists still run (all of them while it is off). Read
+ * on each request, so tests can flip it.
+ */
+export const allianceTradeEnabled = (env: Record<string, string | undefined> = process.env): boolean =>
+  isSwitchOn(env.ALLIANCE_TRADE_ENABLED);
 
 /** What is lost on the way, as a share of what leaves (10%). */
 export const TRADE_LOSS = 0.1;

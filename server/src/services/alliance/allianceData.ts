@@ -1,4 +1,5 @@
 import { AllianceRole, type AllianceType } from "../../enums/Alliance.js";
+import { allianceTradeEnabled } from "../../config/AllianceConfig.js";
 import { bonusesFor, type AllianceBonuses } from "./allianceBonuses.js";
 import { Alliance } from "../../database/models/alliance.model.js";
 import { User } from "../../database/models/user.model.js";
@@ -21,6 +22,8 @@ interface AllianceData {
    * (`allianceBonuses.ts`): the web's harvesters fill at `production`.
    */
   bonuses: AllianceBonuses;
+  /** Trading's switch (`ALLIANCE_TRADE_ENABLED`, off in beta 7): the web shows chat's Send and Trade only when true. */
+  trade_on: boolean;
 }
 
 export interface AllianceRosterEntry {
@@ -56,6 +59,7 @@ export const getAllianceData = async (user: User): Promise<AllianceData | null> 
     relationships,
     type,
     bonuses: bonusesFor(type, alliance.stars),
+    trade_on: allianceTradeEnabled(),
   };
 };
 
