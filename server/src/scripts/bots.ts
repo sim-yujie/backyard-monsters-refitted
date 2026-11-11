@@ -3,7 +3,7 @@ import mikroOrmConfig from "../mikro-orm.config.js";
 import { randomBytes } from "node:crypto";
 import { MikroORM, type EntityManager } from "@mikro-orm/postgresql";
 
-import { botConfig, botFloorLevel } from "../config/BotConfig.js";
+import { botConfig, botFloorLevel, BOTS_RETIRED } from "../config/BotConfig.js";
 import { Env } from "../enums/Env.js";
 import { mulberry32 } from "../game-rules/combat/rng.js";
 import {
@@ -24,6 +24,10 @@ import { planTodaysRebalance, type TodaysRebalance } from "../services/bots/swee
  * Makes and removes Map Room 1 bots (issue #239, `docs/design/bot-neighbours.md`
  * §10). Run from the server directory; it writes to the database `DB_NAME`
  * names (`server/.env`, or `DB_NAME=... bun ...` to point it elsewhere).
+ *
+ * Bots are retired (owner, 12 Nov 2026, `BOTS_RETIRED`): `create` refuses
+ * unless it is a --dry-run; `status`, `retire-all` and `delete-retired` still
+ * work on the bots there are.
  *
  *   bun src/scripts/bots.ts create --target N [--per-day N] [--dry-run]
  *       Tops the active bots up to N, spread evenly from the level floor
@@ -383,6 +387,9 @@ export const run = async (args: BotsArgs) => {
   }
   if (args.command === "remove-all" && !args.yes && !args.dryRun) {
     throw new Error("remove-all deletes every bot and its mail. Add --yes to go ahead.");
+  }
+  if (args.command === "create" && BOTS_RETIRED && !args.dryRun) {
+    throw new Error("Bots are retired (owner, 12 Nov 2026; BOTS_RETIRED in config/BotConfig.ts): create makes no bots.");
   }
   if (args.command === "rebalance" && !args.dryRun) {
     throw new Error("rebalance only takes --dry-run: the bot sweep runs the real one each day.");

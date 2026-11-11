@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
   botConfig,
+  BOTS_RETIRED,
+  isSwitchOn,
   DAYS_ON_LEVEL,
   daysBetween,
   daysOn,
@@ -65,6 +67,7 @@ describe("bot switches (issue #235)", () => {
       freshPerDay: DEFAULT_BOTS_FRESH_PER_DAY,
       levelSlack: DEFAULT_BOTS_LEVEL_SLACK,
       seeded: true,
+      retired: true,
     });
     expect(botConfig().total).toBe(185);
   });
@@ -77,13 +80,25 @@ describe("bot switches (issue #235)", () => {
   });
 
   test("on or true turns a switch on; anything else leaves it off", () => {
-    process.env.BOTS_FILL = "on";
-    process.env.BOTS_BRAIN = " TRUE ";
-    process.env.BOTS_REVENGE = "yes";
-    expect(botConfig()).toMatchObject({ fill: true, brain: true, revenge: false });
+    for (const on of ["on", " TRUE ", "true", "ON"]) expect(isSwitchOn(on)).toBe(true);
+    for (const off of [undefined, "", "off", "yes", "1"]) expect(isSwitchOn(off)).toBe(false);
+  });
 
-    process.env.BOTS_FILL = "off";
-    expect(botConfig().fill).toBe(false);
+  test("bots are retired (owner, 12 Nov 2026): BOTS_FILL and BOTS_REVENGE are ignored, the sweep never runs on production", () => {
+    expect(BOTS_RETIRED).toBe(true);
+    process.env.BOTS_FILL = "on";
+    process.env.BOTS_BRAIN = "on";
+    process.env.BOTS_REVENGE = "on";
+
+    // Live's own settings: nothing of the bots runs.
+    process.env.ENV = "production";
+    expect(botConfig()).toMatchObject({ fill: false, brain: false, revenge: false, retired: true, seeded: false });
+
+    // A dev server still runs the sweep with BOTS_BRAIN=on, for the seeded Map Room 2 yards alone.
+    process.env.ENV = "local";
+    expect(botConfig()).toMatchObject({ fill: false, brain: true, revenge: false, retired: true, seeded: true });
+    process.env.BOTS_BRAIN = "off";
+    expect(botConfig().brain).toBe(false);
   });
 
   test("the count and pace scale take positive numbers and fall back otherwise", () => {

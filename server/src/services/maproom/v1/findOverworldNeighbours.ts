@@ -137,7 +137,9 @@ export interface FindNeighboursOptions {
  * 2026). No bot stands below the level floor (`BOTS_FLOOR_LEVEL`, 25 by
  * default), so a player from 15 up but below it gets the nearest bots,
  * levels 25-27 (`botLevelWindow`). With it off the list holds
- * real players only, and bots never appear.
+ * real players only, and bots never appear. Since the owner retired the bots
+ * (12 Nov 2026) `botConfig().fill` is always off (`BOTS_RETIRED`), so every
+ * list is real players only; `options.fill` stays for the tests.
  *
  * Bot entries are built exactly as real ones, and the list is shuffled, so
  * nothing in it (fields or order) tells which entries are bots.

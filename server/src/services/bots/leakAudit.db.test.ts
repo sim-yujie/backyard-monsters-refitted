@@ -24,6 +24,11 @@ import { createBots, deleteBots } from "./factory.js";
  * bot is fresh from the factory, not yet touched by the sweep (the state in
  * which it differed most, before #245).
  *
+ * Since the owner retired the bots (12 Nov 2026) no new list takes one
+ * (`BOTS_FILL` is ignored), so the viewer's and the rival's lists are written
+ * here as a search with bots on built them while bots were live: what a
+ * player's cached list held before the retirement migration cleared it.
+ *
  * Opt-in, like the other bot `*.db.test.ts`: runs only when BOTS_TEST_DB
  * names a throwaway database with the `bym` schema, and refuses the shared
  * `bym`. Redis is a stand-in in memory, and so is `server.js` (that database
@@ -212,6 +217,22 @@ describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => 
       viewer.userid,
       rival.userid,
     ]);
+    // Their lists as a search with bots on built them while bots were live.
+    const { findOverworldNeighbours } = await import("../maproom/v1/findOverworldNeighbours.js");
+    for (const player of [viewer, rival]) {
+      const [save] = await sql<{ points: string; basevalue: string }>(
+        `SELECT points, basevalue FROM bym.save WHERE userid = ? AND type = 'main'`,
+        [player.userid]
+      );
+      const list = await findOverworldNeighbours(db.em.fork(), player, save!, { fill: true });
+      await sql(
+        `INSERT INTO bym.maproom (userid, neighbors, neighbors_last_calculated, neighbors_level, created_at, lastupdate_at)
+         VALUES (?, ?::jsonb, now(), 15, now(), now())
+         ON CONFLICT (userid) DO UPDATE SET neighbors = EXCLUDED.neighbors,
+           neighbors_last_calculated = now(), neighbors_level = 15`,
+        [player.userid, JSON.stringify(list)]
+      );
+    }
   }, 120_000);
 
   afterAll(async () => {
