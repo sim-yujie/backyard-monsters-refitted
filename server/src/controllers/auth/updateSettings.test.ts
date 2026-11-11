@@ -118,6 +118,14 @@ describe("the bell's notification categories (owner 11 Nov 2026)", () => {
     expect(flushes).toBe(3);
   });
 
+  test("reads the change as a JSON body brings it, stringified by middleware/jsonBody.ts", async () => {
+    const who = account();
+    await call({ notifications: JSON.stringify({ boosts: false }) }, who);
+    expect(who.notifications_off).toEqual(["boosts"]);
+    await expect(call({ notifications: "{not json" }, account())).rejects.toThrow();
+    await expect(call({ notifications: JSON.stringify({ game: false }) }, account())).rejects.toThrow();
+  });
+
   test("leaves them alone when the change is about something else", async () => {
     const who: Row = { ...account(), notifications_off: ["boosts"] };
     await call({ tiltedMap: false }, who);
