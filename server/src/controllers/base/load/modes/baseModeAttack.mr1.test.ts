@@ -149,9 +149,15 @@ const setup = (
   ]);
 };
 
-const attack = (from: number) => {
+const attack = (from: number, mr1Rules?: boolean) => {
   const user = { userid: from, username: from === ATTACKER ? "alice" : "bob", save: saveOf(from) } as unknown as User;
-  return baseModeAttack({ user, baseid: from === ATTACKER ? MAIN_BASEID : ATTACKER_BASEID, mapversion: 1, attackerLevel: 10 });
+  return baseModeAttack({
+    user,
+    baseid: from === ATTACKER ? MAIN_BASEID : ATTACKER_BASEID,
+    mapversion: 1,
+    attackerLevel: 10,
+    ...(mr1Rules === undefined ? {} : { mr1Rules }),
+  });
 };
 
 const refused = async (message: string) => {
@@ -240,5 +246,20 @@ describe("Map Room 1 level gap", () => {
     setup({ attacker: 15, owner: 20 });
     await goesAhead();
     expect(entryOn(OWNER, ATTACKER)?.vengeance).toBe(0);
+  });
+});
+
+describe("an attack the server starts itself (a bot's revenge, issue #244)", () => {
+  test("off the attacker's list and far below: still attacked, and no vengeance moves", async () => {
+    setup({ attacker: 20, owner: 12 }, null);
+    const { save } = await attack(ATTACKER, false);
+    expect(save.attackid).toBeGreaterThan(0);
+    expect(sessions.has(700)).toBe(true);
+    expect(entryOn(OWNER, ATTACKER)?.vengeance).toBe(0);
+  });
+
+  test("a player's attack load keeps the rules: the same attack is refused", async () => {
+    setup({ attacker: 20, owner: 12 }, null);
+    await refused(NOT_NEIGHBOUR);
   });
 });
