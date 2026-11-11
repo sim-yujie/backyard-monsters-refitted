@@ -1463,3 +1463,37 @@ describe("the defence replay a save lands (issue #359)", () => {
     expect(replays).toEqual([]);
   });
 });
+
+describe("a countdown the attack save's catch-up finishes", () => {
+  /** A Map Room 2 main yard saved 60 s ago with 30 s of a level 3 to 4 Flinger upgrade left. */
+  const withFinishingFlinger = () => {
+    Object.assign(defender, {
+      type: "main",
+      mapversion: 2,
+      attacks: [],
+      protected: 0,
+      flinger: 3,
+      savetime: Math.floor(Date.now() / 1000) - 60,
+    });
+    defender.buildingdata["2"] = { id: 2, t: 5, l: 3, X: -200, Y: -200, cU: 30, cL: 32_400 };
+    store.set(`sight:${DEFENDER_OWNER}`, JSON.stringify({ sources: [], revealed: [] }));
+  };
+
+  test("a finished Flinger upgrade raises the yard's flinger level and drops its owner's cached sight", async () => {
+    withFinishingFlinger();
+
+    await baseSave(ctxFor({ flinglog: JSON.stringify(LOG) }), async () => {});
+
+    expect(defender.buildingdata["2"].l).toBe(4);
+    expect(defender.flinger).toBe(4);
+    expect(store.has(`sight:${DEFENDER_OWNER}`)).toBe(false);
+  });
+
+  test("a wild camp's flinger column is left alone", async () => {
+    Object.assign(defender, { flinger: 7, savetime: Math.floor(Date.now() / 1000) - 60 });
+
+    await baseSave(ctxFor({ flinglog: JSON.stringify(LOG) }), async () => {});
+
+    expect(defender.flinger).toBe(7);
+  });
+});

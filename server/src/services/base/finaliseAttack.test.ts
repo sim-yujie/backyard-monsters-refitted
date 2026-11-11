@@ -1072,3 +1072,28 @@ describe("the defence replay an abandoned attack lands (issue #359)", () => {
     expect(replays).toEqual([]);
   }, REPLAY_TIMEOUT_MS);
 });
+
+describe("a countdown the attack's catch-up finishes", () => {
+  test("a finished Flinger upgrade raises the yard's flinger level and drops its owner's cached sight", async () => {
+    Object.assign(defender, { type: "main", mapversion: 2, attacks: [], userid: DEFENDER_OWNER, flinger: 3 });
+    // Saved 60 s ago with 30 s of a level 3 to 4 upgrade left: done by the time the attack lands.
+    defender.buildingdata["594"] = { ...defender.buildingdata["594"], l: 3, cU: 30, cL: 32_400 };
+    store.set(`sight:${DEFENDER_OWNER}`, JSON.stringify({ sources: [], revealed: [] }));
+    await arm();
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+    expect(defender.buildingdata["594"].l).toBe(4);
+    expect(defender.flinger).toBe(4);
+    expect(store.has(`sight:${DEFENDER_OWNER}`)).toBe(false);
+  }, REPLAY_TIMEOUT_MS);
+
+  test("a wild camp's flinger column is left alone", async () => {
+    defender.flinger = 7;
+    await arm();
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+    expect(defender.flinger).toBe(7);
+  }, REPLAY_TIMEOUT_MS);
+});

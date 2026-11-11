@@ -27,6 +27,8 @@ import { monsterUpdateHandler, monsterUpdateMode } from "./handlers/monsterUpdat
 import { validateSave } from "../../../scripts/anticheat/anticheat.js";
 import { getHousingOwner, getOutpostOwnerSave } from "../../../services/base/getOutpostOwnerSave.js";
 import { advanceBuildingTimers } from "../../../services/base/advanceBuildingTimers.js";
+import { invalidateSightAfterLanding } from "../../../services/maproom/sight/sightService.js";
+import { syncAttackedYardLevels } from "../../../services/yard/derivedLevels.js";
 import { championHandler } from "./handlers/championHandler.js";
 import { buildingDataHandler } from "./handlers/buildingDataHandler.js";
 import { protectTrojanHorse } from "../../../services/raids/trojanHorse.js";
@@ -739,8 +741,11 @@ const saveBase = async (
 
   // Attack saves store health from the attacker's replay but keep buildingdata from the DB,
   // so the owner's countdowns are brought up to the attack before savetime moves to it.
+  const flingerBefore = baseSave.flinger;
   if (isAttack && baseSave.buildingdata) {
     baseSave.buildingdata = advanceBuildingTimers(baseSave.buildingdata, storedHealthData, now - baseSave.savetime);
+    // An upgrade the catch-up just finished counts for the cached levels too.
+    syncAttackedYardLevels(baseSave);
   }
 
   baseSave.id = baseSave.savetime;
@@ -752,6 +757,9 @@ const saveBase = async (
 
   postgres.em.persist(baseSave);
   await postgres.em.flush();
+  // Sight reads each Flinger off the yard's own clock (`flingerLevelsNow`), so
+  // dropping it before the landing commits shows nothing early; it only skips the cache.
+  if (isAttack) await invalidateSightAfterLanding(baseSave, flingerBefore);
 
   if (lands) {
     // The loot on both sides and `attackid = 0` commit together: a copy of
