@@ -1,7 +1,16 @@
-import { describe, expect, test } from "bun:test";
-import { getLogger, withConfigSync, type LogRecord, type Sink } from "@logtape/logtape";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  configureSync,
+  getConfig,
+  getLogger,
+  resetSync,
+  withConfigSync,
+  type LogRecord,
+  type Sink,
+} from "@logtape/logtape";
 
-import { loggerRoutes } from "./logger.js";
+import { loggerRoutes } from "./loggerRoutes.js";
 
 /**
  * In production, request logs (["bymr", "http"]) go to the JSON log file only,
@@ -12,6 +21,26 @@ import { loggerRoutes } from "./logger.js";
  */
 
 const SINK_IDS = ["console", "file", "errorCapture"] as const;
+
+/*
+ * withConfigSync needs LogTape configured once. The app's logger.ts does that,
+ * but many test files replace "./logger.js" with mock.module and Bun keeps the
+ * mock for later files, so in a full run the real setup may never have run.
+ * Configure an empty setup then, and undo it afterwards.
+ */
+let configuredHere = false;
+beforeAll(() => {
+  if (getConfig() !== null) return;
+  configureSync({
+    contextLocalStorage: new AsyncLocalStorage(),
+    sinks: {},
+    loggers: [{ category: ["logtape", "meta"], lowestLevel: "error", sinks: [] }],
+  });
+  configuredHere = true;
+});
+afterAll(() => {
+  if (configuredHere) resetSync();
+});
 
 /** Routes one http record, one app warning and one app error; returns what each sink got. */
 const route = (local: boolean, sinkIds: readonly string[] = SINK_IDS) => {
