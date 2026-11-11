@@ -186,6 +186,17 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
     case "krallen":
       pictures.append(krallenPicture(1, "icon", "events-reward__image"));
       break;
+    case "korath": {
+      // Flash's own Monster Madness prize pictures (upstream `events/wotc/wotc_reward<n>.png`).
+      const power = Math.min(Math.max(Math.floor(reward.power), 1), KORATH_POWER_SHORT.length);
+      const image = el("img", "events-reward__image events-reward__image--korath");
+      image.src = `/events/korath-power-${power}.png`;
+      image.alt = "";
+      image.decoding = "async";
+      pictures.append(image);
+      figure = KORATH_POWER_SHORT[power - 1]!;
+      break;
+    }
     case "eventCoins":
       pictures.append(rewardIcon("eventcoin"));
       figure = shortAmount(reward.amount);
@@ -220,6 +231,9 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
   if (figure) badge.append(el("span", "events-reward__figure", figure));
   return badge;
 };
+
+/** Korath's powers' short names for a reward tile, 1 Burn to 3 Fists of Doom. */
+const KORATH_POWER_SHORT = ["Burn", "Fire", "Fists"] as const;
 
 /** Krallen's portrait at a level. */
 const krallenPicture = (level: number, size: "card" | "icon", className: string): HTMLImageElement => {

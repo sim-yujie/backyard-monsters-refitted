@@ -28,7 +28,9 @@ export type EventReward =
   /** Event coins (beta 7): the decorations shop's currency. */
   | { readonly kind: "eventCoins"; readonly amount: number }
   /** The champion Krallen: level 1 the first time, one level more each later win, at most 5. */
-  | { readonly kind: "krallen" };
+  | { readonly kind: "krallen" }
+  /** One of Korath's powers (Monster Madness): 1 Burn, 2 Breath of Fire, 3 Fists of Doom. */
+  | { readonly kind: "korath"; readonly power: number };
 
 /** One reward as a claim paid it (server `services/events/grant.ts`). */
 export type GrantedReward =
@@ -39,7 +41,9 @@ export type GrantedReward =
   | { kind: "decoration"; type: number; count: number; stored: number }
   | { kind: "eventCoins"; amount: number }
   /** `raised` false: she was at the top already and nothing changed. */
-  | { kind: "krallen"; level: number; raised: boolean };
+  | { kind: "krallen"; level: number; raised: boolean }
+  /** Korath's power now; `raised` false when it was that high already; `hasKorath` false when it waits for him. */
+  | { kind: "korath"; power: number; raised: boolean; hasKorath: boolean };
 
 export interface CalendarView {
   /** Each day's rewards, day 1 first. */

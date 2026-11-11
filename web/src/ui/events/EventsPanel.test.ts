@@ -506,3 +506,21 @@ describe("EventsPanel: the New to Map Room 2 card", () => {
     expect(css).toMatch(/:root\[data-skin="flash"\] \.events-card--mr2-welcome \{/);
   });
 });
+
+describe("rewardBadge: Korath's powers (Monster Madness)", () => {
+  it("shows Flash's power portrait and its short name", () => {
+    const badge = rewardBadge({ kind: "korath", power: 2 });
+    expect(badge.classList).toContain("events-reward--korath");
+    expect(badge.querySelector<HTMLImageElement>(".events-reward__image--korath")!.getAttribute("src")).toBe(
+      "/events/korath-power-2.png",
+    );
+    expect(badge.querySelector(".events-reward__figure")?.textContent).toBe("Fire");
+    expect(rewardBadge({ kind: "korath", power: 3 }).querySelector(".events-reward__figure")?.textContent).toBe("Fists");
+  });
+
+  it("is never signed as a gain", () => {
+    const gained = rewardBadge({ kind: "korath", power: 1 }, true);
+    expect(gained.classList).not.toContain("events-reward--gain");
+    expect(gained.querySelector(".events-reward__figure")?.textContent).toBe("Burn");
+  });
+});

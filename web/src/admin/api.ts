@@ -1100,6 +1100,35 @@ export const fetchWeekend = (): Promise<Envelope<WeekendPanelView>> => adminGet(
 export const changeWeekend = (change: WeekendChange): Promise<Envelope<WeekendPanelView>> =>
   adminPost(`${ADMIN}/weekend`, change as unknown as JsonBody);
 
+/* ── Monster Madness (`server/src/controllers/admin/monsterMadness.ts`) ── */
+
+/** One run, unix seconds; a stopped run ends when it was stopped. */
+export interface MonsterMadnessRunView {
+  startsAt: number;
+  endsAt: number;
+}
+
+export interface MonsterMadnessPanelView {
+  now: number;
+  /** The run on now, or null: the event is off. */
+  running: MonsterMadnessRunView | null;
+  /** The latest run, on or over. */
+  last: MonsterMadnessRunView | null;
+  /** How long a started run lasts. */
+  days: number;
+  /** The three goals, in points; each pays one of Korath's powers. */
+  goals: number[];
+  updatedAt: string | null;
+  updatedBy: number | null;
+}
+
+export const fetchMonsterMadness = (): Promise<Envelope<MonsterMadnessPanelView>> =>
+  adminGet(`${ADMIN}/monster-madness`);
+
+/** Starts a run from now, or stops the one on now. 409 `alreadyRunning` / `notRunning`. */
+export const changeMonsterMadness = (action: "start" | "stop"): Promise<Envelope<MonsterMadnessPanelView>> =>
+  adminPost(`${ADMIN}/monster-madness`, { action });
+
 /**
  * Chat moderators (server `services/admin/chatModerators.ts`): players whose
  * chat lines show a blue [Mod] badge. Nothing more: no dashboard, no powers.

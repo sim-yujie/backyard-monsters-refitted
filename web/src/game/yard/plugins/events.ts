@@ -6,7 +6,15 @@ import {
   type EventView,
   type Mr2WelcomeStatus,
 } from "@/api/events";
-import { claimableCount, claimableTiers, grantedKrallenText, isOver, serverClock, type ServerClock } from "@/game/events/eventsModel";
+import {
+  claimableCount,
+  claimableTiers,
+  grantedKorathText,
+  grantedKrallenText,
+  isOver,
+  serverClock,
+  type ServerClock,
+} from "@/game/events/eventsModel";
 import { onPumpkins, PUMPKIN_HUNT_KIND, withPumpkinCount } from "@/game/events/pumpkinHunt";
 import { currentSeason, seasonFor, setSeason } from "@/game/season";
 import { latestRelease, localSeen, markSeen, whatsNewDecision } from "@/game/events/whatsNew";
@@ -297,7 +305,10 @@ export class EventsDoor {
     this.claiming = null;
     if (result.ok) {
       const rewards = event.ladder?.tiers[tier]?.rewards ?? [];
-      const words = grantedKrallenText(result.report.granted) ?? claimedLine("Claimed", rewards);
+      const words =
+        grantedKrallenText(result.report.granted) ??
+        grantedKorathText(result.report.granted) ??
+        claimedLine("Claimed", rewards);
       this.mounts.notices.show(EVENTS_NOTICE, words, {
         level: "info",
         timeoutMs: 5_000,

@@ -9,6 +9,8 @@ import {
   useShinyLabel,
   type TakeoverKind,
 } from "@/game/maproom/takeover";
+import { shortAmount } from "@/game/events/eventsModel";
+import { isMonsterMadness, takeoverScores, takeoverScoreText, type TakeoverScore } from "@/game/events/takeoverScores";
 import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
 import { RESOURCE_KEYS, resourceAmount, resourceIcon, type ResourceKey } from "@/ui/resourceIcon";
@@ -303,8 +305,16 @@ export class TakeoverDialog {
  * does the yard when a takeover from the map opens the new outpost (outposts
  * WP5); after a takeover from the end-of-attack panel the map shows it as it
  * selects the new outpost.
+ *
+ * While Monster Madness is on, the takeover's points sit under the words:
+ * the event's logo, "+2.1M" and the player's total (`takeoverScores.ts`).
  */
-export const showTakenOver = (container: HTMLElement, kind: TakeoverKind, name: string): Popup => {
+export const showTakenOver = (
+  container: HTMLElement,
+  kind: TakeoverKind,
+  name: string,
+  scores: readonly TakeoverScore[] = takeoverScores.take(),
+): Popup => {
   const popup = new Popup({ title: TAKEOVER_TEXT.firstOpenTitle, className: "takeover-first-open" });
 
   const art = document.createElement("img");
@@ -319,8 +329,35 @@ export const showTakenOver = (container: HTMLElement, kind: TakeoverKind, name: 
   const ok = button("OK", "btn btn--primary");
   ok.addEventListener("click", () => popup.close());
 
-  popup.setContent(art, line, ok);
+  popup.setContent(art, line, ...scores.map(scoreRow), ok);
   return popup.mount(container);
+};
+
+/** Monster Madness's logo (Flash `events/wotc/mm_logo_meter.png`). */
+export const MONSTER_MADNESS_LOGO = "/events/monster-madness-logo.png";
+
+/** One event's points from the takeover: its logo (or name), "+2.1M", "Total 45M". */
+const scoreRow = (score: TakeoverScore): HTMLElement => {
+  const row = document.createElement("p");
+  row.className = "takeover-first-open__score";
+  const words = takeoverScoreText(score);
+  row.setAttribute("aria-label", words);
+  row.title = words;
+  if (isMonsterMadness(score.event)) {
+    const logo = document.createElement("img");
+    logo.className = "takeover-first-open__score-logo";
+    logo.src = MONSTER_MADNESS_LOGO;
+    logo.alt = "";
+    row.append(logo);
+  }
+  const points = document.createElement("span");
+  points.className = "takeover-first-open__score-points";
+  points.textContent = `+${shortAmount(score.points)}`;
+  const total = document.createElement("span");
+  total.className = "takeover-first-open__score-total";
+  total.textContent = `Total ${shortAmount(score.total)}`;
+  row.append(points, total);
+  return row;
 };
 
 const button = (label: string, className: string): HTMLButtonElement => {
