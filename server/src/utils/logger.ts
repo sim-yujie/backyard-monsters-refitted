@@ -6,6 +6,7 @@ import {
   getConsoleSink,
   getJsonLinesFormatter,
   getLogger,
+  type LoggerConfig,
   type Sink,
 } from "@logtape/logtape";
 import { getPrettyFormatter } from "@logtape/pretty";
@@ -56,7 +57,8 @@ const pruneOldLogs = () => {
  *
  * - console: @logtape/pretty everywhere. Locally it also prints each record's
  *   properties. In production it prints one line per record with no word wrap
- *   (pm2 is not a terminal), which is what `pm2 logs` shows. It stays blocking
+ *   (pm2 is not a terminal), which is what `pm2 logs` shows; request logs
+ *   skip it there ({@link loggerRoutes}). It stays blocking
  *   so a record logged just before process.exit() is never lost.
  * - file (production only): every record as JSON Lines, message kept as its
  *   template, for querying with jq. A new file starts every UTC day
@@ -103,6 +105,43 @@ const sinks: Record<string, Sink> = isLocal
 sinks.errorCapture = errorCaptureSink;
 
 /**
+ * Which sinks each category writes to.
+ *
+ * - ["bymr"]: the application logger, debug and above, to every sink. Its
+ *   hierarchy includes ["bymr", "http"], the request logs.
+ * - ["bymr", "http"] (production only): request logs go to the JSON file only,
+ *   not the console, so pm2's out log stops growing by about 200 MB a day
+ *   (upstream 96afa485a). The file keeps every request for jq; errors,
+ *   warnings and startup lines still reach the console. errorCapture stays in
+ *   case an error is ever logged under this category. Locally the console
+ *   keeps showing requests.
+ * - ["logtape", "meta"]: LogTape's own meta-logging, warnings and above only,
+ *   to avoid noise unless the logging system itself has a problem.
+ */
+export const loggerRoutes = (local: boolean, sinkIds: string[]): LoggerConfig<string, string>[] => [
+  {
+    category: ["bymr"],
+    lowestLevel: "debug",
+    sinks: sinkIds,
+  },
+  ...(local
+    ? []
+    : [
+        {
+          category: ["bymr", "http"],
+          lowestLevel: "debug" as const,
+          sinks: sinkIds.filter((id) => id !== "console"),
+          parentSinks: "override" as const,
+        },
+      ]),
+  {
+    category: ["logtape", "meta"],
+    lowestLevel: "warning",
+    sinks: ["console"],
+  },
+];
+
+/**
  * Configure LogTape logging for the application.
  *
  * Enables implicit contexts through AsyncLocalStorage, which the request
@@ -115,30 +154,7 @@ sinks.errorCapture = errorCaptureSink;
 await configure({
   contextLocalStorage: new AsyncLocalStorage(),
   sinks,
-  loggers: [
-    {
-      /**
-       * Primary application logger.
-       *
-       * Category hierarchy: ["bymr", ...], including ["bymr", "http"] for
-       * request logs. Logs everything from debug and above.
-       */
-      category: ["bymr"],
-      lowestLevel: "debug",
-      sinks: Object.keys(sinks),
-    },
-    {
-      /**
-       * Internal LogTape meta-logging.
-       *
-       * Reduced verbosity to avoid noise unless warnings
-       * or errors occur within the logging system itself.
-       */
-      category: ["logtape", "meta"],
-      lowestLevel: "warning",
-      sinks: ["console"],
-    },
-  ],
+  loggers: loggerRoutes(isLocal, Object.keys(sinks)),
 });
 
 /**
