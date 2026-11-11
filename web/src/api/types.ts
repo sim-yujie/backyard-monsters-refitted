@@ -124,6 +124,8 @@ export interface AccountResponse extends ApiEnvelope {
     countryAsked?: boolean;
     /** The country's chat room, when it has one. */
     countryChannel?: string | null;
+    /** The bell's notification categories turned off (`api/notificationSettings.ts`). */
+    notificationsOff?: string[];
   };
 }
 

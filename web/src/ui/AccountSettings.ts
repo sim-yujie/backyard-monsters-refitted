@@ -1,7 +1,9 @@
 /**
- * The Settings dialog, opened from the account menu, in three tabs (owner,
- * 5 Nov 2026): Account (avatar, username, Shiny Lock), Look and sound, and
- * Social (world chat, country, the privacy switches, blocked and muted players). "World
+ * The Settings dialog, opened from the account menu, in four tabs (owner,
+ * 5 Nov 2026): Account (avatar, username, Shiny Lock), Look and sound,
+ * Social (world chat, country, the privacy switches, blocked and muted
+ * players), and Notifications (owner 11 Nov 2026: which categories reach the
+ * bell, kept on the account, `ui/notifications/NotificationSettings.ts`). "World
  * chat", "Game effects" and "Look and sound" are kept in this browser only: no
  * server, except the volume sliders, which the account menu has too
  * (`ui/SoundSliders.ts`).
@@ -39,12 +41,14 @@ import { noteShinyLock } from "@/game/shinyLock";
 import { savedFontChoice, setFontChoice, type FontChoice } from "@/ui/fontChoice";
 import { Popup } from "@/ui/Popup";
 import { reportLook } from "@/app/lookReport";
+import { NOTIFICATION_SETTINGS_TEXT, notificationSettingsSection } from "@/ui/notifications/NotificationSettings";
 
 export const SETTINGS_TEXT = {
   title: "Settings",
   tabAccount: "Account",
   tabLook: "Look and sound",
   tabSocial: "Social",
+  tabNotifications: "Notifications",
   reduceLabel: "Reduce effects",
   reduceHint: "Turns off screen shake, hit pauses and slow motion in attacks, with fewer particles.",
   loadFailed: "Could not load your account. Try again.",
@@ -154,12 +158,13 @@ const SETTINGS_TABS = [
   { id: "account", label: SETTINGS_TEXT.tabAccount },
   { id: "look", label: SETTINGS_TEXT.tabLook },
   { id: "social", label: SETTINGS_TEXT.tabSocial },
+  { id: "notifications", label: SETTINGS_TEXT.tabNotifications },
 ] as const;
 
 type SettingsTab = (typeof SETTINGS_TABS)[number]["id"];
 
 /**
- * The tab strip and its three panes, the Account tab showing; returns the
+ * The tab strip and its four panes, the Account tab showing; returns the
  * panes. Only the panes scroll, in their own box under the strip, so the tabs
  * never scroll out of sight (owner, 6 Nov 2026).
  */
@@ -212,7 +217,7 @@ const settingsTabs = (body: HTMLElement): Record<SettingsTab, HTMLElement> => {
     tabs.get(next)?.focus();
     event.preventDefault();
   });
-  scroll.append(panes.account, panes.look, panes.social);
+  scroll.append(panes.account, panes.look, panes.social, panes.notifications);
   body.append(strip, scroll);
   show(active);
   return panes;
@@ -240,12 +245,18 @@ export const openAccountSettings = (options: AccountSettingsOptions): Popup => {
       panes.account.append(usernameSection(account, options), shinySection(account));
       // Country last: its long list would push the switches out of sight.
       panes.social.append(chatSection(), privacySection(account.privacy), countrySection(account.country));
+      panes.notifications.append(notificationSettingsSection(account.notificationsOff));
     },
     () => {
       status.textContent = SETTINGS_TEXT.loadFailed;
       status.classList.add("field__hint--error");
       // Kept in this browser, so it works without the server.
       panes.social.append(chatSection());
+      // Kept on the account: nothing to show without it.
+      const failed = document.createElement("p");
+      failed.className = "field__hint field__hint--error";
+      failed.textContent = NOTIFICATION_SETTINGS_TEXT.loadFailed;
+      panes.notifications.append(failed);
     },
   );
   return popup;

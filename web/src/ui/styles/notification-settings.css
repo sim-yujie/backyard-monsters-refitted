@@ -1,0 +1,169 @@
+/* Settings' Notifications tab (ui/notifications/NotificationSettings.ts):
+   one dark row per category, its painted icon, the game font for its name,
+   and a switch that turns green when the category is on. */
+
+.notif-settings__intro {
+  margin: 0;
+}
+
+.notif-settings__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.notif-settings__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 56px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--colour-success) 45%, transparent);
+  border-radius: var(--radius-md);
+  background: rgb(8 12 18 / 72%);
+  transition:
+    border-color var(--motion-fast) var(--easing),
+    background var(--motion-fast) var(--easing);
+}
+
+.notif-settings__row--off {
+  border-color: var(--colour-border);
+  background: rgb(8 12 18 / 45%);
+}
+
+.notif-settings__icon {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  transition: filter var(--motion-fast) var(--easing), opacity var(--motion-fast) var(--easing);
+}
+
+/* An off category's picture goes grey, so the list reads at a glance. */
+.notif-settings__row--off .notif-settings__icon {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
+.notif-settings__words {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.notif-settings__label {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  color: #ffffff;
+  letter-spacing: 0.01em;
+}
+
+.notif-settings__row--off .notif-settings__label {
+  color: #c3ccd7;
+}
+
+.notif-settings__hint {
+  font-size: var(--text-xs);
+  line-height: 1.35;
+  color: #c3ccd7;
+}
+
+.notif-settings__hint--error {
+  color: #ff8a8a;
+}
+
+/* The switch: "On"/"Off" beside a track, green while on. */
+.notif-switch {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #c3ccd7;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.notif-switch:disabled {
+  cursor: progress;
+}
+
+.notif-switch:focus-visible {
+  outline: none;
+}
+
+.notif-switch:focus-visible .notif-switch__track {
+  box-shadow: var(--focus-ring);
+}
+
+.notif-switch__state {
+  min-width: 2.2em;
+  text-align: right;
+}
+
+.notif-switch__track {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: 13px;
+  background: rgb(255 255 255 / 16%);
+  transition: background var(--motion-fast) var(--easing);
+}
+
+.notif-switch__track::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #c3ccd7;
+  transition: transform var(--motion-fast) var(--easing);
+}
+
+.notif-switch[aria-checked="true"] {
+  color: #9fe0b0;
+}
+
+.notif-switch[aria-checked="true"] .notif-switch__track {
+  background: #3fae62;
+}
+
+.notif-switch[aria-checked="true"] .notif-switch__track::after {
+  transform: translateX(18px);
+  background: #ffffff;
+}
+
+/* The game's own notices: no switch, a gold "Always on" tag. */
+.notif-settings__row--locked {
+  border-color: rgb(240 196 90 / 45%);
+  border-style: dashed;
+}
+
+.notif-settings__always {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgb(240 196 90 / 18%);
+  color: #f0c45a;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notif-settings__row,
+  .notif-settings__icon,
+  .notif-switch__track,
+  .notif-switch__track::after {
+    transition: none;
+  }
+}
