@@ -79,6 +79,8 @@ export interface MyAlliance extends AllianceProgressFields, Partial<AllianceAd> 
   readonly rename_available_at: number | null;
   /** The absent-leader takeover is offered to this player. */
   readonly can_take_over: boolean;
+  /** Trading is on (the server's `ALLIANCE_TRADE_ENABLED`, off in beta 7): absent or false hides the Trade tab and Send. */
+  readonly trade_on?: boolean;
 }
 
 /** One member on the Members tab. */

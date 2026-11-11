@@ -47,6 +47,7 @@ import {
 } from "@/game/alliance/allianceRules";
 import type { AllianceFocus, AllianceTab } from "@/game/alliance/allianceView";
 import { playerPool } from "@/game/friends/friendsView";
+import { setAllianceTradeOn } from "@/game/alliance/tradeSwitch";
 import type { AllianceTradeApi } from "@/api/allianceTrade";
 import { TradeTab } from "./allianceTradeUi";
 import { worldChat, type ChatSession } from "@/game/chat/chatSession";
@@ -483,18 +484,41 @@ export class AllianceWindow {
     return this.view.kind;
   }
 
+  /**
+   * Whether the server lets the alliance trade (`trade_on`; the server's
+   * `ALLIANCE_TRADE_ENABLED`, off in beta 7): off, the Trade tab and every
+   * Send are gone, not greyed out.
+   */
+  private tradeOn(): boolean {
+    return this.view.kind === "mine" && this.view.alliance.trade_on === true;
+  }
+
+  /** The member tabs this alliance shows: {@link AllianceWindow.TABS}, without Trade while trading is off. */
+  private memberTabs(): readonly AllianceTab[] {
+    return this.tradeOn() ? AllianceWindow.TABS : AllianceWindow.TABS.filter((tab) => tab !== "trade");
+  }
+
+  /** Off Trade when trading is off (a chat button or an old tab asked for it): Overview, no sheet. */
+  private dropTradeWhenOff(): void {
+    if (this.view.kind !== "mine" || this.tradeOn() || this.tab !== "trade") return;
+    this.tab = "overview";
+    this.focus = null;
+  }
+
   /** Shows a member tab; on Trade, `focus` opens Give or Send. */
   showTab(tab: AllianceTab, focus?: AllianceFocus): void {
     if (focus) this.focus = focus;
     this.tab = tab;
+    this.dropTradeWhenOff();
     this.editing = null;
     this.addingGoal = false;
     this.render();
     if (this.view.kind !== "mine") return;
-    if (tab === "members") void this.loadMembers();
-    if (tab === "overview") void this.loadNews();
-    if (tab === "territory") void this.loadTerritory(this.territoryType ?? this.view.alliance.type);
-    if (tab === "trade") this.loadTrade();
+    // `this.tab`, not `tab`: a Trade ask while trading is off is now Overview.
+    if (this.tab === "members") void this.loadMembers();
+    if (this.tab === "overview") void this.loadNews();
+    if (this.tab === "territory") void this.loadTerritory(this.territoryType ?? this.view.alliance.type);
+    if (this.tab === "trade") this.loadTrade();
   }
 
   /** Loads the Trade tab, opening the sheet a focus asks for. */
@@ -523,8 +547,10 @@ export class AllianceWindow {
     (this.options.chat ?? worldChat).setAllianceRoom(
       alliance ? { id: alliance.alliance_id, name: alliance.name, image: alliance.image } : null,
     );
+    setAllianceTradeOn(mine.alliance?.trade_on);
     if (mine.alliance) {
       this.view = { kind: "mine", alliance: mine.alliance };
+      this.dropTradeWhenOff();
       this.render();
       if (this.tab === "members") await this.loadMembers();
       if (this.tab === "overview") await this.loadNews();
@@ -1276,7 +1302,7 @@ export class AllianceWindow {
     // `.tab-row`: the row fills the window and never cuts a label (ui.css).
     const tabs = make("div", "tabs tab-row alliance__tabs");
     tabs.setAttribute("role", "tablist");
-    for (const tab of AllianceWindow.TABS) {
+    for (const tab of this.memberTabs()) {
       const words = ALLIANCE_TEXT.tabs[tab];
       const node = make("button", "tabs__tab alliance__tab");
       node.append(
@@ -1613,7 +1639,7 @@ export class AllianceWindow {
 
   private memberRow(alliance: MyAlliance, member: AllianceMember, actions: readonly MemberAction[]): HTMLElement {
     // Every mate but yourself can be sent resources (design v5 §7b, §12b).
-    const canSend = member.user_id !== (this.myId() ?? -1);
+    const canSend = this.tradeOn() && member.user_id !== (this.myId() ?? -1);
     const opened = this.openMember === member.user_id && (actions.length > 0 || canSend);
     const item = make("div", "alliance__item");
     item.setAttribute("role", "listitem");

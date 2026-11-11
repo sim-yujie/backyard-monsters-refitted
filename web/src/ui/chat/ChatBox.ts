@@ -17,6 +17,7 @@ import { countryLabel, countryName } from "@/game/account/countries";
 import { countryLabelNodes } from "@/ui/countryFlag";
 import { shieldUrl } from "@/game/alliance/allianceRules";
 import { allianceOpener } from "@/game/alliance/allianceView";
+import { allianceTradeOn } from "@/game/alliance/tradeSwitch";
 import { icon } from "@/ui/icons";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { addFriendButton } from "@/ui/friends/AddFriendButton";
@@ -512,7 +513,8 @@ export class ChatBox {
     // A mate's trade request: Trade opens the alliance window's Trade tab on it.
     const request = entry.tradeRequest;
     const openAlliance = allianceOpener();
-    if (request && openAlliance && !entry.own) {
+    // Trading switched off (beta 7): no Trade button on a request line.
+    if (request && openAlliance && !entry.own && allianceTradeOn()) {
       const give = document.createElement("button");
       give.type = "button";
       give.className = "chat-line__map chat-line__give";
@@ -603,9 +605,9 @@ export class ChatBox {
       // Muted, the same picture sits on a lit button and the word turns to Unmute.
       mute.classList.toggle("chat-box__action--on", muted);
       actions.append(friend, mute, this.iconButton(CHAT_STRIP_TEXT.viewYard, "townhall", () => void this.viewYard(line)));
-      // A mate in the Alliance room: Send resources (design v5 §7c).
       const openAlliance = allianceOpener();
-      if (this.state.channel === ALLIANCE_ROOM && openAlliance) {
+      // A mate in the Alliance room: Send resources (design v5 §7c), while trading is on.
+      if (this.state.channel === ALLIANCE_ROOM && openAlliance && allianceTradeOn()) {
         actions.append(
           this.iconButton(ALLIANCE_ROOM_TEXT.send, "income", () => {
             this.pick(null);

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatApi, ChatLineWire } from "@/api/chat";
 import { ALLIANCE_ROOM, ChatSession, type ChatSocket } from "@/game/chat/chatSession";
 import { setAllianceOpener } from "@/game/alliance/allianceView";
+import { setAllianceTradeOn } from "@/game/alliance/tradeSwitch";
 import { ALLIANCE_ROOM_TEXT, ChatBox, GLOBAL_LABEL } from "./ChatBox";
 
 /**
@@ -190,8 +191,13 @@ describe("trading in the Alliance room (design v5 §7c)", () => {
     clear = setAllianceOpener((...args) => {
       opened.push(args);
     });
+    // Trading's switch on (beta 8); off is below.
+    setAllianceTradeOn(true);
   });
-  afterEach(() => clear());
+  afterEach(() => {
+    clear();
+    setAllianceTradeOn(false);
+  });
 
   it("a trade request line has Trade, which opens the Trade tab on it", () => {
     mount();
@@ -216,5 +222,20 @@ describe("trading in the Alliance room (design v5 §7c)", () => {
     box.element.querySelector<HTMLButtonElement>('[data-action="income"]')!.click();
     expect(opened[0]?.[0]).toBe("trade");
     expect(opened[0]?.[1]).toMatchObject({ send: {} });
+  });
+
+  it("switch off (beta 7): no Trade on a request line and no Send on a mate", () => {
+    setAllianceTradeOn(false);
+    mount();
+    tabs()[1]!.click();
+    socket.hear({
+      type: "message",
+      channel: KEY,
+      ...wire(0, "PebbleKing gives 1K Twigs for 1K Goo.", { messageType: "trade_ask", tradeRequest: 41 }),
+    });
+    expect(box.element.querySelector(".chat-line__give")).toBeNull();
+    box.element.querySelector<HTMLButtonElement>("button.chat-line__name")!.click();
+    expect(box.element.querySelector('[data-action="income"]')).toBeNull();
+    expect(opened).toEqual([]);
   });
 });

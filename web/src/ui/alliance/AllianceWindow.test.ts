@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AllianceApi, AllianceInviteRow, AllianceListing, AllianceMember, MyAlliance } from "@/api/alliance";
 import type { AllianceProgressApi, ConstellationView } from "@/api/allianceProgress";
 import { setClassicLook } from "@/game/classicLook";
+import { allianceTradeOn, setAllianceTradeOn } from "@/game/alliance/tradeSwitch";
 import { ALLIANCE_TEXT, AllianceWindow, type AllianceWindowOptions } from "./AllianceWindow";
 
 /** The alliance window (beta 7 phase 1) against a stand-in for the routes. */
@@ -485,8 +486,9 @@ describe("AllianceWindow: my alliance", () => {
     expect(document.querySelector(".alliance__description")!.textContent).toBe("We farm goo.");
     expect(buttonNamed(ALLIANCE_TEXT.rename)).toBeDefined();
     expect(buttonNamed(ALLIANCE_TEXT.changeType)).toBeDefined();
+    // Trading is off unless the server says on (beta 7): no Trade tab.
     const tabs = [...document.querySelectorAll(".alliance__tab")].map((tab) => tab.getAttribute("aria-label"));
-    expect(tabs).toEqual(["Overview", "Constellation", "Members", "Trade", "Territory"]);
+    expect(tabs).toEqual(["Overview", "Constellation", "Members", "Territory"]);
   });
 
   it("Edit starts from the saved ad and sends the whole ad back", async () => {
@@ -704,7 +706,7 @@ describe("AllianceWindow: Trade sheet Back, then another tab (lead, 11 Nov)", ()
       send: vi.fn(() => ok({})),
     } as unknown as NonNullable<AllianceWindowOptions["tradeApi"]>;
     const onClose = vi.fn();
-    const view = await open(fakeApi({ mine: vi.fn(() => ok({ alliance: mine(), rejoinAt: null })) }), {
+    const view = await open(fakeApi({ mine: vi.fn(() => ok({ alliance: mine({ trade_on: true }), rejoinAt: null })) }), {
       tab: "trade",
       tradeApi,
       onClose,
@@ -723,5 +725,59 @@ describe("AllianceWindow: Trade sheet Back, then another tab (lead, 11 Nov)", ()
     expect(document.querySelector(".popup-backdrop")).not.toBeNull();
     expect(document.querySelector('.alliance__tab[aria-selected="true"]')!.getAttribute("data-tab")).toBe("members");
     expect(view.kind).toBe("mine");
+  });
+});
+
+describe("AllianceWindow: trading's switch (owner 11 Nov: off for beta 7)", () => {
+  const tradeApi = () =>
+    ({
+      view: vi.fn(() => ok({})),
+      post: vi.fn(() => ok({})),
+      cancel: vi.fn(() => ok({})),
+      accept: vi.fn(() => ok({})),
+      send: vi.fn(() => ok({})),
+    }) as unknown as NonNullable<AllianceWindowOptions["tradeApi"]>;
+  const tabNames = () => [...document.querySelectorAll(".alliance__tab")].map((tab) => tab.getAttribute("data-tab"));
+  const withMembers = (alliance: MyAlliance) =>
+    fakeApi({
+      mine: vi.fn(() => ok({ alliance, rejoinAt: null })),
+      members: vi.fn(() => ok({ members: [member(1, "leader"), member(3, "member")] })),
+    });
+
+  afterEach(() => setAllianceTradeOn(false));
+
+  it("switch off: no Trade tab, no Send on a mate, and a Trade ask lands on Overview without asking the server", async () => {
+    setAllianceTradeOn(true);
+    const trade = tradeApi();
+    const view = await open(withMembers(mine({ trade_on: false })), { tab: "trade", focus: { request: 5 }, tradeApi: trade });
+    expect(tabNames()).toEqual(["overview", "constellation", "members", "territory"]);
+    expect(document.querySelector('.alliance__tab[aria-selected="true"]')!.getAttribute("data-tab")).toBe("overview");
+    expect(allianceTradeOn()).toBe(false);
+
+    view.showTab("trade", { send: { userid: 3, username: "Player 3" } });
+    await flush();
+    expect(document.querySelector('.alliance__tab[aria-selected="true"]')!.getAttribute("data-tab")).toBe("overview");
+    expect(document.querySelector(".trade-new")).toBeNull();
+
+    view.showTab("members");
+    await flush();
+    document.querySelector<HTMLButtonElement>("[data-userid='3'] .alliance__row")!.click();
+    expect(document.querySelector(".alliance__send")).toBeNull();
+    expect(trade.view).not.toHaveBeenCalled();
+  });
+
+  it("an older server that says nothing counts as off", async () => {
+    await open(withMembers(mine()));
+    expect(tabNames()).not.toContain("trade");
+  });
+
+  it("switch on: the Trade tab and a mate's Send are back", async () => {
+    const view = await open(withMembers(mine({ trade_on: true })), { tradeApi: tradeApi() });
+    expect(tabNames()).toEqual(["overview", "constellation", "members", "trade", "territory"]);
+    expect(allianceTradeOn()).toBe(true);
+    view.showTab("members");
+    await flush();
+    document.querySelector<HTMLButtonElement>("[data-userid='3'] .alliance__row")!.click();
+    expect(document.querySelector(".alliance__send")).not.toBeNull();
   });
 });
