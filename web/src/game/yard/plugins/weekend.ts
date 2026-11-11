@@ -1,3 +1,4 @@
+import { quietLogin } from "@/game/quietLogin";
 import { refreshWeekend } from "@/api/weekend";
 import {
   announcedWeekend,
@@ -79,7 +80,8 @@ export const weekendPlugin: YardPlugin = (mounts) => {
 
   const maybePopup = (): void => {
     window.clearTimeout(waitTimer);
-    if (stopped || popupOpen) return;
+    // A test server's quiet login: no pop-up by itself; the banner still opens it.
+    if (stopped || popupOpen || quietLogin()) return;
     const run = popupRun(weekendNow(), currentWeekend(), seenKey());
     if (!run) return;
     if (screenBusy(mounts)) {

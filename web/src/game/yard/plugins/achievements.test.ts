@@ -7,6 +7,7 @@ import { NetworkError } from "@/api/http";
 import { setAchievementsOpener } from "@/game/achievements/achievementsView";
 import { UnlockInbox } from "@/game/achievements/unlockInbox";
 import { holdForEmergence } from "@/game/inferno/emergenceHold";
+import { setQuietLogin } from "@/game/quietLogin";
 import { outpostTarget, type OwnYardTarget } from "@/game/yard/ownYards";
 import { YardStore } from "@/game/yard/YardStore";
 import { CARD_MS, GAP_MS } from "@/ui/achievements/UnlockPopup";
@@ -115,6 +116,25 @@ describe("UnlockPopupDoor", () => {
     await settle();
     expect(send).toHaveBeenLastCalledWith([5]);
     expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it("a test server's quiet login: the load's cards stay shut, unseen, even when later answers carry them", async () => {
+    setQuietLogin(true);
+    try {
+      const { send, act } = setup({ achievements: [unlock(2), unlock(5)] });
+      await settle();
+      expect(names()).toEqual([]);
+      await act({ achievements: [unlock(2), unlock(5)] });
+      await settle();
+      vi.advanceTimersByTime(CARD_MS + GAP_MS);
+      expect(names()).toEqual([]);
+      expect(send).not.toHaveBeenCalled();
+      // One earned from here on still shows.
+      await act({ achievements: [unlock(2), unlock(5), unlock(9)] });
+      expect(names()).toEqual(["Ach 9"]);
+    } finally {
+      setQuietLogin(false);
+    }
   });
 
   it("shows an action answer's unlock once, though the next answers carry it too", async () => {

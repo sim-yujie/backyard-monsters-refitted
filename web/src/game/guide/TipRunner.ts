@@ -81,6 +81,11 @@ export interface TipRunnerOptions {
   watchMs?: number;
   /** How long before a screen with nothing to point at yet is looked at again. */
   retryMs?: number;
+  /**
+   * True while no tip should show by itself (a test server's quiet login,
+   * `game/quietLogin.ts`); a "?" still replays them. Nothing is marked seen.
+   */
+  quiet?: () => boolean;
 }
 
 /** A screen's element, as a `screen` event handed it. */
@@ -312,6 +317,7 @@ export class TipRunner {
   autoShows(screen: GuideScreen): boolean {
     const onboarding = this.onboarding;
     if (!onboarding || guideOpen(onboarding)) return false;
+    if (this.options.quiet?.()) return false;
     if (this.tips(screen).length === 0) return false;
     if (GUIDED_SCREENS.has(screen) && onboarding.guide.state === "done") return false;
     return !this.isSeen(screen);
