@@ -11,10 +11,12 @@ import type { EventDefinition, LadderTier } from "./events.js";
  * the value of a player's outpost priced the same as it, a player's outpost
  * its own empire value. Each outpost scores once per run. Reaching a goal
  * unlocks one of Korath's powers, in Flash's order (`MonsterMadness.as:50-63`,
- * `KorathReward.as`): power 1 Burn, 2 Breath of Fire, 3 Fists of Doom. A
- * power is kept for good, and one won before the player has Korath waits for
- * him (`services/events/korathPower.ts`). Korath himself still comes from
- * owning an Inferno yard (owner I10).
+ * `KorathReward.as`): power 1 Burn, 2 Breath of Fire, 3 Fists of Doom.
+ * Burn is the flame his hits leave; Flash gave it to every Korath, here only
+ * a Korath with power 1 or more burns (`hasFlame` in the fight rules, owner
+ * 11 Nov 2026). A power is kept for good, and one won before the player
+ * has Korath waits for him (`services/events/korathPower.ts`). Korath
+ * himself still comes from owning an Inferno yard (owner I10).
  *
  * NOT ON A CALENDAR (owner, 11 Nov 2026): the event never starts by itself.
  * The owner starts a run from the dashboard (Events tab, "Monster Madness",
