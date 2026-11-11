@@ -1099,9 +1099,21 @@ export class AttackSession {
     return this.response;
   }
 
-  /** The fling log as it stands: the §3.10 shape, resent in full on every save. */
+  /**
+   * The fling log as it stands: the §3.10 shape, resent in full on every save.
+   * `championRoom` tells the server this page puts a picked champion into the
+   * Flinger first (`Bucket.reserved`), so it holds every fling to that rule.
+   */
   flingLog(): FlingLog {
-    return { v: 1, seed: this.seed, events: [...this.events] };
+    // The mark stays out of the shared rules' `FlingLog`, whose bytes set the
+    // rules version stored defence replays are stamped with.
+    const log: FlingLog & { readonly championRoom: 1 } = {
+      v: 1,
+      seed: this.seed,
+      events: [...this.events],
+      championRoom: 1,
+    };
+    return log;
   }
 
   /**

@@ -9,7 +9,10 @@ import type { EntityManager } from "@mikro-orm/postgresql";
  *
  * - **fight** — the attack save disagreed with the server's replay of the
  *   battle (`combat/saveBattle.ts`): "Attack save on base 201 rejected
- *   (reject): disagrees with the replay on damage, attackloot".
+ *   (reject): disagrees with the replay on damage, attackloot". An attack
+ *   with a fling fuller than the Flinger holds (`combat/recordFlingRoom.ts`)
+ *   is one too, its one field `flingOverRoom`: "Attack save on base 201
+ *   rejected (reject): fling over Flinger room, 2830 of 2250 in fling 1".
  * - **economy** — the yard save broke an economy rule
  *   (`economy/recordVerdict.ts`): "ECONOMY SAVE REJECTED (mode=reject): base
  *   1200, 30s since the last save — overCap [12] {...}; capMismatch".
@@ -109,6 +112,9 @@ export const FLAGGED_PAGE = 200;
 
 const FIGHT =
   /^Attack save on base (\S+) (rejected|flagged) \(([a-z]+)\): disagrees with the replay on (.+?)(?: \[(save \d+|descent|inferno-tribe|mr1-tribe)\])?$/s;
+/** An over-full fling (`combat/recordFlingRoom.ts`): a fight entry whose one field is `flingOverRoom`. */
+const FLING =
+  /^Attack save on base (\S+) (rejected|flagged) \(([a-z]+)\): fling over Flinger room(?:, [^[]*)?(?: \[(save \d+|descent|inferno-tribe|mr1-tribe)\])?$/s;
 const ECONOMY = /^ECONOMY SAVE (REJECTED|FLAGGED) \(mode=([a-z]+)\): base (\S+), \d+s since the last save — (.*)$/s;
 const ATTACK = /^ATTACK VIOLATION: /;
 const RULE = /^([A-Za-z][\w-]*)/;
@@ -142,6 +148,20 @@ export const readEntry = (raw: unknown): FlagEntry | null => {
       kind: "fight",
       outcome: outcomeOf(fight[2]!),
       fields: fight[4]!.split(",").map((field) => field.trim()).filter(Boolean),
+      baseid,
+      yardKey: tag === undefined ? `base:${baseid}` : tag.startsWith("save ") ? `save:${tag.slice(5)}` : `${tag}:${baseid}`,
+      message,
+    };
+  }
+  const fling = FLING.exec(message);
+  if (fling) {
+    const baseid = fling[1]!;
+    const tag = fling[4];
+    return {
+      time,
+      kind: "fight",
+      outcome: outcomeOf(fling[2]!),
+      fields: ["flingOverRoom"],
       baseid,
       yardKey: tag === undefined ? `base:${baseid}` : tag.startsWith("save ") ? `save:${tag.slice(5)}` : `${tag}:${baseid}`,
       message,

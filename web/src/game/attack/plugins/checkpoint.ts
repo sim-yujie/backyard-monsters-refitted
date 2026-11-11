@@ -80,6 +80,8 @@ const FINAL_REASONS = new Set([
   "stale-attack",
   "rewound",
   "reseeded",
+  // A fling fuller than the Flinger holds: every later checkpoint carries it too.
+  "flingOverRoom",
 ]);
 
 const refusalReason = (caught: unknown): string | null => {

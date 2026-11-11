@@ -29,6 +29,8 @@ const FIELD_WORDS: Readonly<Record<string, string>> = {
   attackerchampion: "Champion HP",
   attackersiege: "Siege",
   champion: "Defending champion",
+  // Not a replay field: a fling fuller than the Flinger holds (`recordFlingRoom.ts`).
+  flingOverRoom: "Fling over Flinger room",
 };
 
 /** A field or rule as short words: the fight's in plain words, an economy rule split at its capitals. */

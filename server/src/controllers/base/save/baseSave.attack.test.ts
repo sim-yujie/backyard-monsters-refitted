@@ -1497,3 +1497,111 @@ describe("a countdown the attack save's catch-up finishes", () => {
     expect(defender.flinger).toBe(7);
   });
 });
+
+describe("the Flinger's room (owner, 12 Nov 2026)", () => {
+  const TICK = 2_000;
+  const GORGO = { t: 1, l: 6 };
+  /** One fling where LOG's lands; `old` leaves out the mark a page from before the release lacks. */
+  const flingLog = (monsters: Record<string, number>, champion?: { t: number; l: number }, old = false) => ({
+    v: 1,
+    seed: 5,
+    ...(!old && { championRoom: 1 }),
+    events: [{ kind: "fling", t: 80, x: 400, y: 400, r: 200, monsters, ...(champion && { champion }) }],
+  });
+  /** Gorgo's 240 and 2,010 of monsters (C4 takes 20, C2 10): the Flinger's 2,250 exactly. */
+  const EXACT = { C4: 100, C2: 1 };
+  /** Then one C1 (7) more. */
+  const OVER = { C4: 100, C2: 1, C1: 1 };
+
+  /** What the server's own replay of `log` gives, as an honest page reports it. */
+  const honestBody = (log: unknown): Record<string, string> => {
+    const battle = replayAbandonedAttack(
+      battleReplayInput({
+        flinglog: log,
+        session: { attackerid: ATTACKER, attackid: ATTACK_ID, startedat: 0, entryHoused: ENTRY },
+        defender: {
+          type: defender.type,
+          buildingdata: YARD as never,
+          buildinghealthdata: {},
+          resources: { r1: 5000, r2: 0, r3: 0, r4: 0 },
+        },
+        attacker: attackerSave,
+        tick: battleTick(TICK),
+        declareWar: false,
+      })!
+    );
+    return {
+      over: "1",
+      tick: String(TICK),
+      flinglog: JSON.stringify(log),
+      damage: String(battle.damage),
+      ...(battle.destroyed !== undefined && { destroyed: String(battle.destroyed) }),
+      buildinghealthdata: JSON.stringify(battle.buildinghealthdata),
+      attackloot: JSON.stringify(battle.attackloot),
+    };
+  };
+
+  const refusal = (body: Record<string, string>) =>
+    baseSave(ctxFor(body), async () => {}).then(
+      () => null,
+      (err: unknown) => err as { data?: { reason?: string; flings?: unknown } }
+    );
+
+  for (const type of ["tribe", "main", "outpost"]) {
+    test(`reject: a ${type} attack with a fling over the room is refused before anything is written`, async () => {
+      setMode("reject");
+      defender.type = type;
+      const caught = await refusal(honestBody(flingLog(OVER, GORGO)));
+
+      expect(caught?.data?.reason).toBe("flingOverRoom");
+      expect(caught?.data?.flings).toEqual([{ fling: 1, t: 80, used: 2257, room: 2250 }]);
+      expect(reports).toEqual([
+        "Attack save on base 1234 rejected (reject): fling over Flinger room, 2257 of 2250 in fling 1 [save 9]",
+      ]);
+      expect(defender.damage).toBe(0);
+      expect(defender.buildinghealthdata).toEqual({});
+      expect(attackerSave.resources).toEqual({ r1: 100, r2: 100, r3: 100, r4: 100 });
+      // The row still carries the attack, for the finaliser to land from its last checkpoint.
+      expect(defender.attackid).toBe(ATTACK_ID);
+    });
+  }
+
+  test("reject: a champion and monsters that fill the room exactly land", async () => {
+    setMode("reject");
+    await baseSave(ctxFor(honestBody(flingLog(EXACT, GORGO))), async () => {});
+
+    expect(reports).toEqual([]);
+    expect(defender.attackid).toBe(0);
+  });
+
+  test("reject: a page from before the release, its champion on top of a full Flinger, lands", async () => {
+    setMode("reject");
+    // 2,250 of monsters and Gorgo on top: what the page before the release sent.
+    await baseSave(ctxFor(honestBody(flingLog({ C4: 112, C2: 1 }, GORGO, true))), async () => {});
+
+    expect(reports).toEqual([]);
+    expect(defender.attackid).toBe(0);
+  });
+
+  test("reject: that older page's log is still refused when its monsters alone are over", async () => {
+    setMode("reject");
+    const caught = await refusal(honestBody(flingLog({ C4: 113 }, GORGO, true)));
+
+    expect(caught?.data?.reason).toBe("flingOverRoom");
+  });
+
+  test("log: an over-full fling is reported once and the server's battle lands", async () => {
+    await baseSave(ctxFor(honestBody(flingLog(OVER, GORGO))), async () => {});
+
+    expect(reports).toEqual([
+      "Attack save on base 1234 flagged (log): fling over Flinger room, 2257 of 2250 in fling 1 [save 9]",
+    ]);
+  });
+
+  test("off: nothing is checked", async () => {
+    setMode("off");
+    await baseSave(ctxFor(honestBody(flingLog(OVER, GORGO))), async () => {});
+
+    expect(reports).toEqual([]);
+  });
+});
