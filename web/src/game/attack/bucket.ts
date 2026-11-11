@@ -42,10 +42,10 @@ import { KRALLEN_TYPE, type AttackSession, type ChampionBlockReason } from "./At
  * past the payload, and Fill walks the rows in roster order so two presses of
  * Fill all land on the same numbers (§7, Q11).
  *
- * Where the server cuts every fling to the payload (an Inferno attack, whose
- * `flingCapacity` the server set), the picked champion goes in first and
- * takes its own `bucket` from it, as Flash's `ATTACK.BucketAdd` and the
- * server's `descentFightableLog` do ({@link reserved}). Picking a champion
+ * In every attack the picked champion goes in first and takes its own
+ * `bucket` from the payload, as Flash's `ATTACK.BucketAdd` does and the
+ * server's `descentFightableLog` enforces for an Inferno attack
+ * ({@link reserved}; owner, 11 Nov 2026: "match flash"). Picking a champion
  * into a full bucket trims the last rows to make room, so the fling sent is
  * never one the server would cut (Bluetenit's refused Descent saves, 10 Nov
  * 2026).
@@ -227,13 +227,10 @@ export class Bucket {
 
   /**
    * The payload the picked champion takes before any monster goes in: its own
-   * `bucket` at its level, where the server cuts flings to the payload (an
-   * Inferno attack: `descentFightableLog`, `ATTACK.BucketAdd`). 0 with no
-   * champion picked, and 0 on any other attack, whose flings the server does
-   * not cut.
+   * `bucket` at its level (`ATTACK.BucketAdd`), in every attack. 0 with no
+   * champion picked.
    */
   reserved(): number {
-    if (this.session.target.roster.flingCapacity === undefined) return 0;
     const champion = this.picked()[0];
     return champion ? flingCost({ monsters: {}, champion }, this.session.levels) : 0;
   }
