@@ -136,8 +136,8 @@ export const takeoverCell: KoaController = async (ctx) => {
     // than taking the cell for nothing.
     // The client branches on the cell payload's `b` field, which is base_type, so match it.
     //
-    // The first wild camp in the player's "New to Map Room 2" days uses the
-    // reward up however it is paid for; only a resource payment gets the cheap
+    // A wild camp taken over while the player's "New to Map Room 2" takeover is
+    // ready today uses it however it is paid for; only a resource payment gets the cheap
     // price (the Shiny price is the usual one). The claim is one conditional
     // UPDATE in this transaction, so a refusal below rolls it back and two
     // takeovers cannot both have it.

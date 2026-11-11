@@ -411,7 +411,22 @@ describe("Layout faults (picture tester, 9 Nov)", () => {
 });
 
 describe("EventsPanel: the New to Map Room 2 card", () => {
-  const welcome = { startsAt: 0, endsAt: 10 * 86_400, daysLeft: 10, takeover: true, kit: false };
+  // Day 1: the kit used today, the takeover ready.
+  const welcome = {
+    startsAt: 0,
+    endsAt: 10 * 86_400,
+    daysLeft: 10,
+    sets: 7,
+    takeover: true,
+    kit: false,
+    takeoverLeft: 7,
+    kitLeft: 6,
+    takeoverToday: false,
+    kitToday: true,
+    nextDayAt: 86_400,
+    takeoverUses: [],
+    kitUses: [60],
+  };
 
   it("puts the card first, before the events, while the days run", () => {
     const { panel } = mounted();
@@ -420,8 +435,8 @@ describe("EventsPanel: the New to Map Room 2 card", () => {
     expect(cards[0]?.dataset["event"]).toBe("mr2-welcome");
     expect(cards[1]?.querySelector(".events-card__title")?.textContent).toBe("Halloween");
     expect(cards[0]?.querySelector("[data-welcome-ends]")?.textContent).toBe("10 days left");
-    expect(cards[0]?.querySelector('[data-reward="takeover"] .events-welcome__state')?.textContent).toBe("Ready");
-    expect(cards[0]?.querySelector('[data-reward="kit"] .events-welcome__state')?.textContent).toBe("Used");
+    expect(cards[0]?.querySelector('[data-reward="takeover"] .events-welcome__state')?.textContent).toBe("Ready today");
+    expect(cards[0]?.querySelector('[data-reward="kit"] .events-welcome__state')?.textContent).toBe("Used today, back tomorrow");
     expect(cards[0]?.querySelector(".events-welcome__help-button")?.textContent).toBe("?");
     panel.close();
   });
@@ -435,12 +450,12 @@ describe("EventsPanel: the New to Map Room 2 card", () => {
     panel.close();
   });
 
-  it("keeps the card with both rewards used", () => {
+  it("keeps the card with all 7 of both used", () => {
     const { panel } = mounted();
-    panel.render(list([event()], { mr2Welcome: { ...welcome, takeover: false, kit: false } }));
+    panel.render(list([event()], { mr2Welcome: { ...welcome, takeover: false, kit: false, takeoverLeft: 0, kitLeft: 0 } }));
     const card = panel.element.querySelector(".events-card--mr2-welcome");
     expect(card).not.toBeNull();
-    expect(card?.querySelectorAll(".events-welcome__state--used")).toHaveLength(2);
+    expect(card?.querySelectorAll(".events-welcome__state--done")).toHaveLength(2);
     expect(card?.querySelectorAll(".events-welcome__mark")).toHaveLength(10);
     panel.close();
   });
@@ -482,6 +497,8 @@ describe("EventsPanel: the New to Map Room 2 card", () => {
     panel.render(list([], { mr2Welcome: welcome }));
     panel.tick(8 * 86_400 + 30);
     expect(panel.element.querySelector("[data-welcome-ends]")?.textContent).toBe("2 days left");
+    // The kit used on day 1 is back after the daily reset.
+    expect(panel.element.querySelector('[data-reward="kit"] .events-welcome__state')?.textContent).toBe("Ready today");
     expect(panel.element.querySelector('[data-day="9"]')?.classList.contains("events-welcome__mark--today")).toBe(true);
     expect(panel.element.querySelector('[data-day="1"]')?.classList.contains("events-welcome__mark--gone")).toBe(true);
     panel.close();

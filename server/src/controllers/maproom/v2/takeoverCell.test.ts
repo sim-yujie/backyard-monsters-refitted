@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { memoryWelcomeStore, useWelcomeStore } from "../../../services/events/mr2Welcome.js";
+import { memoryWelcomeStore, MR2_WELCOME_SECONDS, newWelcome, useWelcomeStore } from "../../../services/events/mr2Welcome.js";
+import { utcDay } from "../../../services/events/schedule.js";
 import { quoteTakeover } from "../../../services/maproom/v2/takeoverCost.js";
 import { STARTER_KITS } from "../../../game-data/starterKits.js";
 import { kitBuildings } from "../../../services/yard/starterKit.js";
@@ -462,12 +463,12 @@ describe("sight cache invalidation (#329, #330 WP1)", () => {
 });
 
 describe("takeoverCell: New to Map Room 2", () => {
-  const openWindow = () => welcome.rows.set(TAKER, { start: now() - 60, takeoverUsed: false, kitUsed: false });
+  const openWindow = () => welcome.rows.set(TAKER, newWelcome(now() - 60));
   const fullBase = () =>
     quoteTakeover({ cell: { x: 240, y: 208 }, isWildMonster: true, buildingdata: null, takerHomebase: null, conquestActive: false })
       .resources;
 
-  test("the first wild camp in the 10 days costs 10% of its full base price, and uses the reward", async () => {
+  test("a wild camp while today's takeover is ready costs 10% of its full base price, and uses it", async () => {
     openWindow();
     const result = await run({ baseid: CAMP });
     expect(result.ok).toBe(true);
@@ -478,7 +479,7 @@ describe("takeoverCell: New to Map Room 2", () => {
       r3: 100_000_000 - cheap,
       r4: 100_000_000 - cheap,
     });
-    expect(welcome.rows.get(TAKER)!.takeoverUsed).toBe(true);
+    expect(welcome.rows.get(TAKER)!.takeoverUses).toHaveLength(1);
   });
 
   test("a client that posts a lower figure is still charged the server's price", async () => {
@@ -498,24 +499,40 @@ describe("takeoverCell: New to Map Room 2", () => {
     openWindow();
     expect((await run({ baseid: CAMP, shiny: "1" })).ok).toBe(true);
     expect(takerSave.credits).toBe(5000 - usualShiny);
-    expect(welcome.rows.get(TAKER)!.takeoverUsed).toBe(true);
+    expect(welcome.rows.get(TAKER)!.takeoverUses).toHaveLength(1);
   });
 
   test("a player outpost never uses it, and is charged in full", async () => {
     openWindow();
     expect((await run({ baseid: OUTPOST })).ok).toBe(true);
     expect(takerResources().r1).toBe(90_000_000);
-    expect(welcome.rows.get(TAKER)!.takeoverUsed).toBe(false);
+    expect(welcome.rows.get(TAKER)!.takeoverUses).toHaveLength(0);
   });
 
-  test("only the first wild camp: after it the price is the usual one", async () => {
-    welcome.rows.set(TAKER, { start: now() - 60, takeoverUsed: true, kitUsed: false });
+  test("today's already used: the usual price, and nothing more is used", async () => {
+    welcome.rows.set(TAKER, { ...newWelcome(now() - 60), takeoverUses: [now() - 30], takeoverDay: utcDay(now()) });
+    await run({ baseid: CAMP });
+    expect(takerResources().r1).toBe(100_000_000 - fullBase());
+    expect(welcome.rows.get(TAKER)!.takeoverUses).toHaveLength(1);
+  });
+
+  test("used on an earlier day: today's is cheap again, the 2nd of 7", async () => {
+    const twoDaysAgo = now() - 2 * 86_400;
+    welcome.rows.set(TAKER, { ...newWelcome(twoDaysAgo - 60), takeoverUses: [twoDaysAgo], takeoverDay: utcDay(twoDaysAgo) });
+    await run({ baseid: CAMP });
+    expect(takerResources().r1).toBe(100_000_000 - Math.round(fullBase() * 0.1));
+    expect(welcome.rows.get(TAKER)!.takeoverUses).toHaveLength(2);
+  });
+
+  test("all 7 used: the usual price", async () => {
+    const start = now() - 8 * 86_400;
+    welcome.rows.set(TAKER, { ...newWelcome(start), takeoverUses: [1, 2, 3, 4, 5, 6, 7], takeoverDay: utcDay(start) });
     await run({ baseid: CAMP });
     expect(takerResources().r1).toBe(100_000_000 - fullBase());
   });
 
   test("after the 10 days the price is the usual one", async () => {
-    welcome.rows.set(TAKER, { start: now() - 10 * 86_400 - 1, takeoverUsed: false, kitUsed: false });
+    welcome.rows.set(TAKER, newWelcome(now() - MR2_WELCOME_SECONDS - 1));
     await run({ baseid: CAMP });
     expect(takerResources().r1).toBe(100_000_000 - fullBase());
   });

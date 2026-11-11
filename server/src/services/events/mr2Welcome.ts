@@ -3,18 +3,27 @@ import type { EntityManager as SqlEntityManager } from "@mikro-orm/postgresql";
 
 import { MapRoomVersion } from "../../enums/MapRoom.js";
 import { logger } from "../../utils/logger.js";
+import { nextUtcMidnight, utcDay } from "./schedule.js";
 
 /**
- * "New to Map Room 2" (owner, 9 Nov 2026, beta 7): each player gets 10 days,
- * once ever, with two rewards:
+ * "New to Map Room 2", the Frontier Pass (owner, 9 Nov 2026, beta 7; seven
+ * sets, owner 11 Nov): each player gets {@link MR2_WELCOME_DAYS} days, once
+ * ever, with {@link MR2_WELCOME_SETS} sets of two rewards:
  *
- * - the first wild monster camp they take over costs 10% of its full base
- *   price in resources (no next-to-yard half or Conquest on top; the Shiny
- *   price is the normal one): `takeoverCost.ts` `quoteTakeover`;
- * - one free Regular Starter Kit on any outpost, built as the resource path
+ * - a wild monster camp takeover at 10% of its full base price in resources
+ *   (no next-to-yard half or Conquest on top; the Shiny price is the normal
+ *   one): `takeoverCost.ts` `quoteTakeover`;
+ * - a free Regular Starter Kit on any outpost, built as the resource path
  *   builds (prefabs, no worker): `services/yard/starterKit.ts`.
  *
- * **When the 10 days start.** A player who joins Map Room 2 after this ships
+ * **One set a day.** At most one cheap takeover and one free kit a day, the
+ * day being the game's daily reset (UTC midnight, `schedule.ts` `utcDay`, as
+ * the daily login calendar and the daily quests). The two count apart: a day
+ * the kit was used still has its takeover. Days not played lose nothing: any
+ * 7 of the 10 days will do (3 spare). The pass is done once 7 of each are
+ * used or the 10 days are over.
+ *
+ * **When the days start.** A player who joins Map Room 2 after this ships
  * starts on joining ({@link recordMr2Join}, from `setMapVersion` and
  * `joinMapRoom2`). A player already on Map Room 2 when it ships has no row,
  * so the first read for them writes one starting at the launch time: the
@@ -22,19 +31,28 @@ import { logger } from "../../utils/logger.js";
  * `bym.game_setting` under {@link LAUNCH_SETTING_KEY} ({@link launchTime}).
  *
  * **Where it is kept.** One `bym.event_progress` row (`userid`,
- * `event_id = 'mr2-welcome'`), its `data` holding `start` (unix seconds),
- * `takeoverUsed` and `kitUsed`, and when each was used (`takeoverAt`,
- * `kitAt`, unix seconds; absent on rows used before they were kept). Each
- * reward is claimed by one conditional UPDATE, so it can never be used twice.
+ * `event_id = 'mr2-welcome'`), its `data` holding `start` (unix seconds) and,
+ * per reward, the uses (`takeoverUses`, `kitUses`: when each was used, unix
+ * seconds, null where not known; their count is the number used) and the
+ * day of the last use (`takeoverDay`, `kitDay`, `YYYY-MM-DD` UTC). Each use is
+ * one conditional UPDATE (fewer than 7 used, none today, inside the days), so
+ * no use can be taken twice. Rows from the one-set pass (`takeoverUsed`,
+ * `kitUsed`, `takeoverAt`, `kitAt`) are turned into this shape by migration
+ * `20261116_Mr2WelcomeSevenSets.ts`, a used reward counting as 1 of 7; until
+ * then they read the same way.
  *
- * The takeover counts as used on the first wild camp taken over in the 10
- * days, however it was paid for: a player who pays Shiny for it does not get
- * the cheap price later.
+ * A wild camp taken over while today's takeover is ready uses it, however it
+ * was paid for: a player who pays Shiny for it does not get the cheap price
+ * again that day.
  */
 
 export const MR2_WELCOME_EVENT_ID = "mr2-welcome";
 
+/** The pass's length in days (owner, 11 Nov 2026: 10 days for 7 sets). */
 export const MR2_WELCOME_DAYS = 10;
+
+/** How many of each reward the pass gives, one of each a day at most. */
+export const MR2_WELCOME_SETS = 7;
 
 const DAY = 86_400;
 
@@ -50,12 +68,14 @@ export const CHEAP_TAKEOVER_SHARE = 0.1;
 export interface WelcomeState {
   /** Unix seconds. */
   readonly start: number;
-  readonly takeoverUsed: boolean;
-  readonly kitUsed: boolean;
-  /** When the takeover was used (unix seconds), if known. */
-  readonly takeoverAt?: number | null;
-  /** When the kit was used (unix seconds), if known. */
-  readonly kitAt?: number | null;
+  /** When each cheap takeover was used (unix seconds; null where not known). */
+  readonly takeoverUses: readonly (number | null)[];
+  /** When each free kit was used (unix seconds; null where not known). */
+  readonly kitUses: readonly (number | null)[];
+  /** The UTC day (`YYYY-MM-DD`) the takeover was last used, if known. */
+  readonly takeoverDay?: string | null;
+  /** The UTC day (`YYYY-MM-DD`) the kit was last used, if known. */
+  readonly kitDay?: string | null;
 }
 
 export type WelcomeReward = "takeover" | "kit";
@@ -67,28 +87,55 @@ export interface WelcomeStatus {
   endsAt: number;
   /** Whole days left, rounded up: 10 on the first day, 1 on the last. */
   daysLeft: number;
-  /** The cheap takeover can still be used. */
+  /** How many of each reward the pass gives ({@link MR2_WELCOME_SETS}). */
+  sets: number;
+  /** The cheap takeover can be used now. */
   takeover: boolean;
-  /** The free Regular kit can still be used. */
+  /** The free Regular kit can be used now. */
   kit: boolean;
-  /** When the takeover was used (unix seconds); null when not used or not known. */
-  takeoverUsedAt: number | null;
-  /** When the kit was used (unix seconds); null when not used or not known. */
-  kitUsedAt: number | null;
+  /** Cheap takeovers left of `sets`. */
+  takeoverLeft: number;
+  /** Free kits left of `sets`. */
+  kitLeft: number;
+  /** Today's takeover is used (it is back at `nextDayAt` if any are left). */
+  takeoverToday: boolean;
+  /** Today's kit is used (it is back at `nextDayAt` if any are left). */
+  kitToday: boolean;
+  /** The next daily reset (unix seconds, UTC midnight). */
+  nextDayAt: number;
+  /** When each takeover was used (unix seconds), where known. */
+  takeoverUses: number[];
+  /** When each kit was used (unix seconds), where known. */
+  kitUses: number[];
 }
 
 /** Whether the window runs at `now`. */
 export const welcomeOpen = (state: WelcomeState | null, now: number): state is WelcomeState =>
   state !== null && now >= state.start && now < state.start + MR2_WELCOME_SECONDS;
 
-/** Whether `reward` can be used at `now`. */
+const usesOf = (state: WelcomeState, reward: WelcomeReward) =>
+  reward === "takeover" ? state.takeoverUses : state.kitUses;
+
+/** How many of `reward` are left of {@link MR2_WELCOME_SETS}. */
+export const welcomeLeft = (state: WelcomeState, reward: WelcomeReward): number =>
+  Math.max(0, MR2_WELCOME_SETS - usesOf(state, reward).length);
+
+/** Whether `reward` was used on the day (daily reset) `now` falls in. */
+export const welcomeUsedToday = (state: WelcomeState, reward: WelcomeReward, now: number): boolean => {
+  const day = (reward === "takeover" ? state.takeoverDay : state.kitDay) ?? null;
+  return day !== null && day >= utcDay(now);
+};
+
+/** Whether `reward` can be used at `now`: inside the days, some left, none used today. */
 export const welcomeReady = (state: WelcomeState | null, reward: WelcomeReward, now: number): boolean =>
-  welcomeOpen(state, now) && !(reward === "takeover" ? state.takeoverUsed : state.kitUsed);
+  welcomeOpen(state, now) && welcomeLeft(state, reward) > 0 && !welcomeUsedToday(state, reward, now);
+
+const known = (uses: readonly (number | null)[]): number[] => uses.filter((at): at is number => at !== null);
 
 /**
  * The card's status: null only when the window is not running. The card stays
- * on the Events page for all 10 days, a used reward showing Used (owner,
- * 9 Nov 2026: it left once both were used).
+ * on the Events page for all the days, rewards used or not (owner, 9 Nov
+ * 2026: it left once both were used).
  */
 export const welcomeStatus = (state: WelcomeState | null, now: number): WelcomeStatus | null => {
   if (!welcomeOpen(state, now)) return null;
@@ -97,10 +144,16 @@ export const welcomeStatus = (state: WelcomeState | null, now: number): WelcomeS
     startsAt: state.start,
     endsAt,
     daysLeft: Math.max(1, Math.ceil((endsAt - now) / DAY)),
-    takeover: !state.takeoverUsed,
-    kit: !state.kitUsed,
-    takeoverUsedAt: state.takeoverUsed ? (state.takeoverAt ?? null) : null,
-    kitUsedAt: state.kitUsed ? (state.kitAt ?? null) : null,
+    sets: MR2_WELCOME_SETS,
+    takeover: welcomeReady(state, "takeover", now),
+    kit: welcomeReady(state, "kit", now),
+    takeoverLeft: welcomeLeft(state, "takeover"),
+    kitLeft: welcomeLeft(state, "kit"),
+    takeoverToday: welcomeUsedToday(state, "takeover", now),
+    kitToday: welcomeUsedToday(state, "kit", now),
+    nextDayAt: nextUtcMidnight(now),
+    takeoverUses: known(state.takeoverUses),
+    kitUses: known(state.kitUses),
   };
 };
 
@@ -124,27 +177,46 @@ export interface WelcomeStore {
 
 const sql = (em: EntityManager): SqlEntityManager => em as SqlEntityManager;
 
+const secondsOrNull = (value: unknown): number | null => {
+  const seconds = Number(value);
+  return value !== undefined && value !== null && Number.isFinite(seconds) ? seconds : null;
+};
+
+/**
+ * One reward's uses and last day from a row: the seven-set shape, or a
+ * one-set row not yet migrated (used = 1 of 7, on the day it was used).
+ */
+const usesFrom = (record: Record<string, unknown>, reward: WelcomeReward) => {
+  const list = record[`${reward}Uses`];
+  if (Array.isArray(list)) {
+    const day = record[`${reward}Day`];
+    return { uses: list.map(secondsOrNull), day: typeof day === "string" ? day : null };
+  }
+  if (record[`${reward}Used`] !== true) return { uses: [], day: null };
+  const at = secondsOrNull(record[`${reward}At`]);
+  return { uses: [at], day: at === null ? null : utcDay(at) };
+};
+
 const stateOf = (raw: unknown): WelcomeState | null => {
   const data = typeof raw === "string" ? (JSON.parse(raw) as unknown) : raw;
   if (data === null || typeof data !== "object") return null;
   const record = data as Record<string, unknown>;
   const start = Number(record.start);
   if (!Number.isFinite(start)) return null;
-  const at = (value: unknown): number | null => {
-    const seconds = Number(value);
-    return value !== undefined && value !== null && Number.isFinite(seconds) ? seconds : null;
-  };
-  return {
-    start,
-    takeoverUsed: record.takeoverUsed === true,
-    kitUsed: record.kitUsed === true,
-    takeoverAt: at(record.takeoverAt),
-    kitAt: at(record.kitAt),
-  };
+  const takeover = usesFrom(record, "takeover");
+  const kit = usesFrom(record, "kit");
+  return { start, takeoverUses: takeover.uses, kitUses: kit.uses, takeoverDay: takeover.day, kitDay: kit.day };
 };
 
-const USED_FIELD: Record<WelcomeReward, string> = { takeover: "takeoverUsed", kit: "kitUsed" };
-const AT_FIELD: Record<WelcomeReward, string> = { takeover: "takeoverAt", kit: "kitAt" };
+/** SQL for one reward's uses (a JSON array), a not yet migrated one-set row read as in {@link usesFrom}. */
+const usesSql = (reward: WelcomeReward): string =>
+  `COALESCE(data->'${reward}Uses', CASE WHEN COALESCE((data->>'${reward}Used')::boolean, false)
+     THEN jsonb_build_array(data->'${reward}At') ELSE '[]'::jsonb END)`;
+
+/** SQL for one reward's last day (`YYYY-MM-DD`, '' when none), read as in {@link usesFrom}. */
+const daySql = (reward: WelcomeReward): string =>
+  `COALESCE(data->>'${reward}Day', CASE WHEN COALESCE((data->>'${reward}Used')::boolean, false) AND data->>'${reward}At' IS NOT NULL
+     THEN to_char(to_timestamp((data->>'${reward}At')::bigint) AT TIME ZONE 'UTC', 'YYYY-MM-DD') END, '')`;
 
 let cachedLaunch: number | null = null;
 
@@ -166,27 +238,34 @@ export const sqlWelcomeStore: WelcomeStore = {
   async start(em, userid, start) {
     await sql(em).execute(
       `INSERT INTO bym.event_progress (userid, event_id, data)
-       VALUES (?, ?, jsonb_build_object('start', ?::bigint, 'takeoverUsed', false, 'kitUsed', false))
+       VALUES (?, ?, jsonb_build_object('start', ?::bigint, 'takeoverUses', '[]'::jsonb, 'kitUses', '[]'::jsonb))
        ON CONFLICT (userid, event_id) DO NOTHING`,
       [userid, MR2_WELCOME_EVENT_ID, Math.floor(start)]
     );
   },
 
+  // One conditional UPDATE: inside the days, fewer than 7 used, none today.
+  // Two claims at once both wait on the row, and the second sees the first's
+  // use (Postgres re-checks the WHERE on the updated row), so it fails.
   async claim(em, userid, reward, now) {
-    const field = USED_FIELD[reward];
-    const atField = AT_FIELD[reward];
+    const at = Math.floor(now);
+    const today = utcDay(now);
     const rows = await sql(em).execute<{ userid: number }[]>(
       `UPDATE bym.event_progress
-          SET data = data || jsonb_build_object('${field}', true, '${atField}', ?::bigint), updated_at = now()
+          SET data = (data - '${reward}Used' - '${reward}At')
+                     || jsonb_build_object('${reward}Uses', ${usesSql(reward)} || to_jsonb(?::bigint), '${reward}Day', ?::text),
+              updated_at = now()
         WHERE userid = ? AND event_id = ?
-          AND COALESCE((data->>'${field}')::boolean, false) = false
+          AND jsonb_array_length(${usesSql(reward)}) < ?
+          AND ${daySql(reward)} < ?
           AND (data->>'start')::bigint <= ?
           AND (data->>'start')::bigint + ? > ?
        RETURNING userid`,
-      [Math.floor(now), userid, MR2_WELCOME_EVENT_ID, now, MR2_WELCOME_SECONDS, now]
+      [at, today, userid, MR2_WELCOME_EVENT_ID, MR2_WELCOME_SETS, today, now, MR2_WELCOME_SECONDS, now]
     );
     return rows.length > 0;
   },
+
 
   async launchTime(em, now) {
     if (cachedLaunch !== null) return cachedLaunch;
@@ -206,6 +285,9 @@ export const sqlWelcomeStore: WelcomeStore = {
   },
 };
 
+/** A pass starting at `start` with nothing used. */
+export const newWelcome = (start: number): WelcomeState => ({ start, takeoverUses: [], kitUses: [] });
+
 /** The same rules on Maps, for tests. */
 export const memoryWelcomeStore = (
   launch: number | null = null
@@ -217,15 +299,18 @@ export const memoryWelcomeStore = (
       return store.rows.get(userid) ?? null;
     },
     async start(_em: EntityManager, userid: number, start: number) {
-      if (!store.rows.has(userid)) store.rows.set(userid, { start: Math.floor(start), takeoverUsed: false, kitUsed: false });
+      if (!store.rows.has(userid)) store.rows.set(userid, newWelcome(Math.floor(start)));
     },
     async claim(_em: EntityManager, userid: number, reward: WelcomeReward, now: number) {
       const state = store.rows.get(userid) ?? null;
-      if (!welcomeReady(state, reward, now)) return false;
+      if (!welcomeReady(state, reward, now) || !state) return false;
       const at = Math.floor(now);
+      const today = utcDay(now);
       store.rows.set(userid, {
-        ...state!,
-        ...(reward === "takeover" ? { takeoverUsed: true, takeoverAt: at } : { kitUsed: true, kitAt: at }),
+        ...state,
+        ...(reward === "takeover"
+          ? { takeoverUses: [...state.takeoverUses, at], takeoverDay: today }
+          : { kitUses: [...state.kitUses, at], kitDay: today }),
       });
       return true;
     },
@@ -288,17 +373,17 @@ export const readWelcome = async (
   }
 };
 
-/** Starts a player's 10 days on joining Map Room 2 (nothing if they ever had them). */
+/** Starts a player's pass on joining Map Room 2 (nothing if they ever had one). */
 export const recordMr2Join = (em: EntityManager, userid: number, now: number): Promise<void> =>
   welcomeStore().start(em, userid, now);
 
-/** Marks a reward used if it is ready; whether it was. */
+/** Uses one of `reward` if one is ready today; whether it did. */
 export const claimWelcome = (em: EntityManager, userid: number, reward: WelcomeReward, now: number): Promise<boolean> =>
   welcomeStore().claim(em, userid, reward, now);
 
 /**
  * Fixes the launch time at server start, so players already on Map Room 2
- * get their 10 days from the moment the feature went live rather than from
+ * get their pass days from the moment the feature went live rather than from
  * their next visit. Forgiving: the first read does the same later.
  */
 export const ensureWelcomeLaunch = async (em: EntityManager, now: number): Promise<void> => {

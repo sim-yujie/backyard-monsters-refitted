@@ -158,10 +158,16 @@ describe("GET /bm/events: the New to Map Room 2 card", () => {
         startsAt: NOW - 2 * DAY,
         endsAt: NOW + 8 * DAY,
         daysLeft: 8,
+        sets: 7,
         takeover: true,
         kit: true,
-        takeoverUsedAt: null,
-        kitUsedAt: null,
+        takeoverLeft: 7,
+        kitLeft: 7,
+        takeoverToday: false,
+        kitToday: false,
+        nextDayAt: NOW + DAY,
+        takeoverUses: [],
+        kitUses: [],
       });
       expect((await eventsAnswer(em, memoryProgressStore(), onMr1, NOW)).mr2Welcome).toBeNull();
     } finally {
@@ -169,21 +175,31 @@ describe("GET /bm/events: the New to Map Room 2 card", () => {
     }
   });
 
-  test("gone after the 10 days; kept all 10 days once both rewards are used", async () => {
+  test("gone after the 10 days; kept all 10 days once all 7 sets are used", async () => {
     const store = memoryWelcomeStore(NOW - 11 * DAY);
     const previous = useWelcomeStore(store);
     try {
       expect((await eventsAnswer(em, memoryProgressStore(), onMr2, NOW)).mr2Welcome).toBeNull();
-      store.rows.set(5, { start: NOW - DAY, takeoverUsed: true, kitUsed: true, takeoverAt: NOW - DAY + 60, kitAt: NOW - 30 });
+      const all = [1, 2, 3, 4, 5, 6, NOW - DAY + 60];
+      store.rows.set(5, { start: NOW - 8 * DAY, takeoverUses: all, kitUses: all, takeoverDay: "2030-05-31", kitDay: "2030-05-31" });
       expect((await eventsAnswer(em, memoryProgressStore(), onMr2, NOW)).mr2Welcome).toMatchObject({
-        daysLeft: 9,
+        daysLeft: 2,
         takeover: false,
         kit: false,
-        takeoverUsedAt: NOW - DAY + 60,
-        kitUsedAt: NOW - 30,
+        takeoverLeft: 0,
+        kitLeft: 0,
+        takeoverUses: all,
       });
-      store.rows.set(5, { start: NOW - DAY, takeoverUsed: true, kitUsed: false });
-      expect((await eventsAnswer(em, memoryProgressStore(), onMr2, NOW)).mr2Welcome).toMatchObject({ takeover: false, kit: true });
+      // Today's takeover used (it is just past midnight), the kit not: kit ready, takeover back tomorrow.
+      store.rows.set(5, { start: NOW - DAY, takeoverUses: [NOW + 5], kitUses: [NOW - DAY + 60], takeoverDay: "2030-06-01", kitDay: "2030-05-31" });
+      expect((await eventsAnswer(em, memoryProgressStore(), onMr2, NOW + 10)).mr2Welcome).toMatchObject({
+        takeover: false,
+        kit: true,
+        takeoverToday: true,
+        kitToday: false,
+        takeoverLeft: 6,
+        kitLeft: 6,
+      });
     } finally {
       useWelcomeStore(previous);
     }

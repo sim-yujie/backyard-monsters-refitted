@@ -5,19 +5,21 @@ import { gameIcon } from "@/ui/gameIcon";
 import { eventsArt } from "./eventsArt";
 
 /**
- * The "Frontier Pass" card on the Events page (owner, 9 Nov 2026): while
- * the player's 10 days run, the days left, a timeline of the 10 days (the
- * days gone, today lit, the days left, and the day each reward was used),
- * the cheap first wild takeover and the free Regular kit (each Ready or
- * Used), a Go to Map Room 2 button while a reward is left, and a "?"
- * that opens a short note on why the takeover is so cheap and the kit free. Short words, pictures and
- * numbers (owner prefers little text).
+ * The "Frontier Pass" card on the Events page (owner, 9 Nov 2026; 7 sets in
+ * 10 days, owner 11 Nov): while the player's 10 days run, the days left, a
+ * timeline of the 10 days (the days gone, today lit, the days left, and the
+ * days a reward was used), the cheap wild takeover and the free Regular kit,
+ * each with how many are left of 7 and today's state (Ready today, Used
+ * today, back tomorrow, or All used), a Go to Map Room 2 button while one is
+ * ready, and a "?" that opens a short note. Short words, pictures and numbers
+ * (owner prefers little text).
  *
  * The server decides everything (`GET /bm/events` `mr2Welcome`). The card
- * stays all 10 days, both rewards used or not (owner, 9 Nov: it left once
- * both were used); null only when the days are over, and then there is no
- * card. The days count from the player's own start (launch, or the day they
- * joined Map Room 2 after it).
+ * stays all 10 days, rewards used or not (owner, 9 Nov: it left once both
+ * were used); null only when the days are over, and then there is no card.
+ * The days count from the player's own start (launch, or the day they joined
+ * Map Room 2 after it); a reward used today is back at the daily reset (UTC
+ * midnight), which the panel's tick shows without a new answer.
  */
 
 const DAY = 86_400;
@@ -25,15 +27,27 @@ const DAY = 86_400;
 /** The pass's length in days (server `MR2_WELCOME_DAYS`). */
 export const WELCOME_DAYS = 10;
 
+/** How many of each reward the pass gives, one a day at most (server `MR2_WELCOME_SETS`). */
+export const WELCOME_SETS = 7;
+
 export const WELCOME_TITLE = "Frontier Pass";
 
 /** The "?" note: one lead line, then one line per reward and one for the days. */
 export const WELCOME_HELP = {
-  lead: "Frontier Pass: a head start for your first 10 days in Map Room 2.",
-  takeover: "1st wild camp takeover: 10% of the resources. Shiny price as usual.",
-  kit: "1 Regular Starter Kit free, on any outpost. Builds over time, no worker.",
-  days: "10 days from joining Map Room 2. Once each.",
+  lead: `Frontier Pass: ${WELCOME_SETS} sets over your first ${WELCOME_DAYS} days in Map Room 2.`,
+  takeover: "Wild camp takeover: 10% of the resources. Shiny price as usual.",
+  kit: "Regular Starter Kit free, on any outpost. Builds over time, no worker.",
+  days: `1 set a day, on any ${WELCOME_SETS} of the ${WELCOME_DAYS} days. New day at 00:00 UTC.`,
 } as const;
+
+/** The state words on a reward. */
+export const WELCOME_STATE_TEXT = {
+  ready: "Ready today",
+  today: "Used today, back tomorrow",
+  done: "All used",
+} as const;
+
+type RewardState = keyof typeof WELCOME_STATE_TEXT;
 
 /** "8 days left", "1 day left", from the server's end and clock. */
 export const welcomeDaysText = (endsAt: number, now: number): string => {
@@ -41,7 +55,10 @@ export const welcomeDaysText = (endsAt: number, now: number): string => {
   return days === 1 ? "1 day left" : `${days} days left`;
 };
 
-/** Which of the 10 days `at` falls on: 1 on the first day, 10 on the last (kept inside 1 to 10). */
+/** "5/7 left". */
+export const welcomeLeftText = (left: number, sets: number): string => `${left}/${sets} left`;
+
+/** Which of the 10 days `at` falls on: 1 on the first day, 10 on the last (kept inside them). */
 export const welcomeDay = (startsAt: number, at: number): number =>
   Math.min(WELCOME_DAYS, Math.max(1, Math.floor((at - startsAt) / DAY) + 1));
 
@@ -64,16 +81,62 @@ const picture = (src: string, alt: string): HTMLImageElement => {
 
 const KIT_THUMBNAIL = STARTER_KIT_SUMMARIES.find((kit) => kit.id === 1)?.thumbnail ?? "";
 
-/** One reward row: its picture, its short name and figure, Ready or Used. */
-const reward = (src: string, alt: string, name: string, figure: string, ready: boolean, key: string): HTMLElement => {
-  const row = el("li", `events-welcome__reward${ready ? "" : " events-welcome__reward--used"}`);
+const REWARD_STATES: readonly RewardState[] = ["ready", "today", "done"];
+
+/** Puts `state`'s mark and words on a reward row. */
+const paintRewardState = (row: HTMLElement, state: RewardState): void => {
+  row.dataset["state"] = state;
+  for (const name of REWARD_STATES) row.classList.toggle(`events-welcome__reward--${name}`, name === state);
+  const chip = row.querySelector<HTMLElement>(".events-welcome__state");
+  if (!chip) return;
+  chip.className = `events-welcome__state events-welcome__state--${state}`;
+  // A gift while ready, a clock until tomorrow, the claimed tick once all are used.
+  const mark =
+    state === "ready"
+      ? eventsArt("gift", 16, "events-welcome__state-mark")
+      : state === "today"
+        ? gameIcon("time", { size: 16, decorative: true, className: "events-welcome__state-mark" })
+        : eventsArt("tick", 16, "events-welcome__state-mark");
+  chip.replaceChildren(mark, el("span", "", WELCOME_STATE_TEXT[state]));
+};
+
+/**
+ * Brings a reward used today back at the daily reset (the panel's tick): a
+ * row waiting on `data-back-at` turns Ready today once `now` reaches it.
+ */
+export const paintWelcomeReward = (row: HTMLElement, now: number): void => {
+  const backAt = Number(row.dataset["backAt"]);
+  if (!Number.isFinite(backAt) || now < backAt) return;
+  delete row.dataset["backAt"];
+  paintRewardState(row, "ready");
+};
+
+/** One reward row: its picture, its short name and figure, how many are left of 7, and today's state. */
+const reward = (
+  src: string,
+  alt: string,
+  name: string,
+  figure: string,
+  key: string,
+  left: number,
+  sets: number,
+  usedToday: boolean,
+  nextDayAt: number,
+  now: number,
+): HTMLElement => {
+  const row = el("li", "events-welcome__reward");
   row.dataset["reward"] = key;
   const words = el("div", "events-welcome__words");
-  words.append(el("span", "events-welcome__name", name), el("span", "events-welcome__figure", figure));
-  // A gift and "Ready", or the claimed tick and "Used": the mark carries it, the word is short.
-  const state = el("span", `events-welcome__state events-welcome__state--${ready ? "ready" : "used"}`);
-  state.append(eventsArt(ready ? "gift" : "tick", 16, "events-welcome__state-mark"), el("span", "", ready ? "Ready" : "Used"));
-  row.append(picture(src, alt), words, state);
+  const figures = el("span", "events-welcome__figures");
+  figures.append(el("span", "events-welcome__figure", figure), el("span", "events-welcome__left", welcomeLeftText(left, sets)));
+  words.append(el("span", "events-welcome__name", name), figures);
+  row.append(picture(src, alt), words, el("span", "events-welcome__state"));
+  const state: RewardState = left <= 0 ? "done" : usedToday ? "today" : "ready";
+  paintRewardState(row, state);
+  if (state === "today") {
+    row.dataset["backAt"] = String(nextDayAt);
+    paintWelcomeReward(row, now);
+  }
   return row;
 };
 
@@ -98,43 +161,43 @@ export const paintWelcomeTimeline = (timeline: HTMLElement, now: number): void =
   }
 };
 
-/** What was used on which day, for the timeline: the day, its picture and its words. */
-interface UsedOn {
-  readonly day: number;
+/** A reward's picture and words, for the days it was used on the timeline. */
+interface UsedKind {
+  readonly key: string;
   readonly src: string;
   readonly words: string;
-  readonly key: string;
+  readonly days: ReadonlySet<number>;
 }
 
 /**
  * The 10 days as marks in a row on a track: each day's number in a dot, the
- * days gone filled, today lit and bigger, the days left hollow; over the day
- * a reward was used, its picture. Numbers and pictures, no words (the words
- * on hover and for a screen reader).
+ * days gone filled, today lit and bigger, the days left hollow; over each day
+ * a reward was used, its picture (one per reward a day). Numbers and
+ * pictures, no words (the words on hover and for a screen reader).
  */
 const timeline = (status: Mr2WelcomeStatus, now: number): HTMLElement => {
   const list = el("ol", "events-welcome__timeline");
   list.dataset["welcomeStart"] = String(status.startsAt);
-  const used: UsedOn[] = [];
-  if (!status.takeover && status.takeoverUsedAt != null)
-    used.push({ day: welcomeDay(status.startsAt, status.takeoverUsedAt), src: FIRST_OPEN_ART, words: "Wild camp takeover used", key: "takeover" });
-  if (!status.kit && status.kitUsedAt != null)
-    used.push({ day: welcomeDay(status.startsAt, status.kitUsedAt), src: KIT_THUMBNAIL, words: "Regular Starter Kit used", key: "kit" });
+  const daysOf = (uses: readonly number[]) => new Set(uses.map((at) => welcomeDay(status.startsAt, at)));
+  const kinds: UsedKind[] = [
+    { key: "takeover", src: FIRST_OPEN_ART, words: "Wild camp takeover used", days: daysOf(status.takeoverUses) },
+    { key: "kit", src: KIT_THUMBNAIL, words: "Regular Starter Kit used", days: daysOf(status.kitUses) },
+  ];
   for (let day = 1; day <= WELCOME_DAYS; day++) {
     const mark = el("li", "events-welcome__mark");
     mark.dataset["day"] = String(day);
-    const onDay = used.filter((item) => item.day === day);
+    const onDay = kinds.filter((kind) => kind.days.has(day));
     const slot = el("span", "events-welcome__mark-used");
-    for (const item of onDay) {
-      const image = picture(item.src, "");
+    for (const kind of onDay) {
+      const image = picture(kind.src, "");
       image.className = "events-welcome__mark-picture";
-      image.dataset["usedReward"] = item.key;
+      image.dataset["usedReward"] = kind.key;
       image.width = 22;
       image.height = 22;
       slot.append(image);
     }
     const dot = el("span", "events-welcome__mark-dot", String(day));
-    const words = [`Day ${day}`, ...onDay.map((item) => item.words)].join(": ");
+    const words = [`Day ${day}`, onDay.map((kind) => kind.words).join(", ")].filter(Boolean).join(": ");
     mark.title = words;
     mark.setAttribute("aria-label", words);
     mark.append(slot, dot);
@@ -189,15 +252,16 @@ export const mr2WelcomeCard = (status: Mr2WelcomeStatus, now: number, onGo: () =
     help.setAttribute("aria-expanded", String(!note.hidden));
   });
 
+  const sets = status.sets;
   const rewards = el("ul", "events-welcome__rewards");
   rewards.append(
-    reward(FIRST_OPEN_ART, "An outpost", "Wild camp takeover", "10% price", status.takeover, "takeover"),
-    reward(KIT_THUMBNAIL, "The Regular Starter Kit", "Regular Starter Kit", "Free", status.kit, "kit"),
+    reward(FIRST_OPEN_ART, "An outpost", "Wild camp takeover", "10% price", "takeover", status.takeoverLeft, sets, status.takeoverToday, status.nextDayAt, now),
+    reward(KIT_THUMBNAIL, "The Regular Starter Kit", "Regular Starter Kit", "Free", "kit", status.kitLeft, sets, status.kitToday, status.nextDayAt, now),
   );
 
   card.append(head, note, timeline(status, now), rewards);
 
-  // Both rewards used: nothing is left to do on Map Room 2 for the pass.
+  // Nothing ready today: nothing to do on Map Room 2 for the pass until tomorrow.
   if (status.takeover || status.kit) {
     const go = el("button", "btn btn--primary events-welcome__go", "Go to Map Room 2");
     go.type = "button";
