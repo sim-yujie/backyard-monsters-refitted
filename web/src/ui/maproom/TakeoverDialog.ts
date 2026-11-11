@@ -141,8 +141,13 @@ export class TakeoverDialog {
     this.resourcesButton = button(TAKEOVER_TEXT.useResources, "btn btn--primary takeover-dialog__resources");
     this.resourcesButton.disabled = resourcesShort || price.resources === undefined;
     this.resourcesButton.addEventListener("click", () => this.choose("resources"));
+    // With a Frontier Pass price, each note says which payment uses the day's
+    // cheap takeover: only resources do; Shiny is the usual price and leaves it
+    // for later (owner, 11 Nov: "Paying shiny should not count as it is not discounted").
     const resourcesNote = note(
-      resourcesShort ? TAKEOVER_TEXT.needResources : `${formatAmount(price.resources)} of each resource.`,
+      resourcesShort
+        ? TAKEOVER_TEXT.needResources
+        : `${formatAmount(price.resources)} of each resource.` + (price.welcome ? ` ${WELCOME_NOTE.resources}` : ""),
       resourcesShort ? "takeover-dialog__short" : "u-muted",
     );
 
@@ -157,7 +162,9 @@ export class TakeoverDialog {
         ? "Shiny is turned off for your account."
         : shinyShort
           ? "You do not have enough Shiny."
-          : TAKEOVER_TEXT.instant,
+          : price.welcome
+            ? WELCOME_NOTE.shiny
+            : TAKEOVER_TEXT.instant,
       shinyShort ? "takeover-dialog__short" : "u-muted",
     );
 
@@ -220,9 +227,10 @@ export class TakeoverDialog {
     this.payment = payment;
     const { price } = this.options;
     this.confirmText.textContent =
-      payment === "shiny"
+      (payment === "shiny"
         ? `Take this yard over for ${formatAmount(price.shiny)} Shiny?`
-        : `Take this yard over for ${formatAmount(price.resources)} of each resource?`;
+        : `Take this yard over for ${formatAmount(price.resources)} of each resource?`) +
+      (price.welcome ? ` ${WELCOME_NOTE[payment]}` : "");
     this.status.hidden = true;
     this.setStep("confirm");
   }
@@ -377,6 +385,12 @@ const hiddenText = (text: string): HTMLElement => {
 
 /** The small label over a "Frontier Pass" price; hidden otherwise. */
 export const WELCOME_LABEL = "Frontier Pass";
+
+/** Under each payment while the Frontier Pass price applies: only resources use the day's cheap takeover. */
+export const WELCOME_NOTE = {
+  resources: "Uses today's Frontier Pass.",
+  shiny: "Usual price. Does not use your Frontier Pass.",
+} as const satisfies Record<TakeoverPayment, string>;
 
 const welcomeLabel = (price: TakeoverDialogPrice): HTMLElement => {
   const line = document.createElement("p");

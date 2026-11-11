@@ -203,6 +203,34 @@ describe("TakeoverDialog", () => {
     ]);
   });
 
+  it("a Frontier Pass price: only the resource payment says it uses today's pass; Shiny says it does not", () => {
+    const { $ } = open({
+      price: {
+        resources: 350_000,
+        usualResources: 3_500_000,
+        welcome: true,
+        shiny: 924,
+        affordable: { resources: true, shiny: true },
+      },
+    });
+    const notes = [...modal.querySelectorAll(".takeover-dialog__note")].map((one) => one.textContent);
+    expect(notes).toEqual(["350,000 of each resource. Uses today's Frontier Pass.", "Usual price. Does not use your Frontier Pass."]);
+    $(".takeover-dialog__shiny").click();
+    expect($(".takeover-dialog__confirm-text").textContent).toBe("Take this yard over for 924 Shiny? Usual price. Does not use your Frontier Pass.");
+    $(".takeover-dialog__back").click();
+    $(".takeover-dialog__resources").click();
+    expect($(".takeover-dialog__confirm-text").textContent).toBe(
+      "Take this yard over for 350,000 of each resource? Uses today's Frontier Pass.",
+    );
+  });
+
+  it("a usual price says nothing about the Frontier Pass", () => {
+    const { $ } = open({ price: { resources: 3_500_000, shiny: 924, affordable: { resources: true, shiny: true } } });
+    expect(modal.querySelector(".takeover-dialog__choice")!.textContent).not.toContain("Frontier Pass");
+    $(".takeover-dialog__shiny").click();
+    expect($(".takeover-dialog__confirm-text").textContent).toBe("Take this yard over for 924 Shiny?");
+  });
+
   it("no label and nothing struck on a usual price", () => {
     const { $ } = open();
     expect($(".takeover-dialog__welcome").hidden).toBe(true);

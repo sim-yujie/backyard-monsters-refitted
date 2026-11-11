@@ -35,7 +35,7 @@ export const WELCOME_TITLE = "Frontier Pass";
 /** The "?" note: one lead line, then one line per reward and one for the days. */
 export const WELCOME_HELP = {
   lead: `Frontier Pass: ${WELCOME_SETS} sets over your first ${WELCOME_DAYS} days in Map Room 2.`,
-  takeover: "Wild camp takeover: 10% of the resources. Shiny price as usual.",
+  takeover: "Wild camp takeover: 10% of the resources. Paying Shiny does not use it.",
   kit: "Regular Starter Kit free, on any outpost. Builds over time, no worker.",
   days: `1 set a day, on any ${WELCOME_SETS} of the ${WELCOME_DAYS} days. New day at 00:00 UTC.`,
 } as const;

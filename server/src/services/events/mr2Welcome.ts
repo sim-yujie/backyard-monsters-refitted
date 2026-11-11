@@ -41,9 +41,10 @@ import { nextUtcMidnight, utcDay } from "./schedule.js";
  * `20261116_Mr2WelcomeSevenSets.ts`, a used reward counting as 1 of 7; until
  * then they read the same way.
  *
- * A wild camp taken over while today's takeover is ready uses it, however it
- * was paid for: a player who pays Shiny for it does not get the cheap price
- * again that day.
+ * Only a takeover paid in resources at the cheap price uses the day's
+ * takeover. Paying Shiny is the usual price, so it does not count: the cheap
+ * takeover stays ready (owner, 11 Nov: "Paying shiny should not count as it
+ * is not discounted").
  */
 
 export const MR2_WELCOME_EVENT_ID = "mr2-welcome";

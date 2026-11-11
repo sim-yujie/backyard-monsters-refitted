@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { memoryWelcomeStore, MR2_WELCOME_SECONDS, newWelcome, useWelcomeStore } from "../../../services/events/mr2Welcome.js";
+import {
+  memoryWelcomeStore,
+  MR2_WELCOME_SECONDS,
+  newWelcome,
+  useWelcomeStore,
+  welcomeStatus,
+} from "../../../services/events/mr2Welcome.js";
 import { utcDay } from "../../../services/events/schedule.js";
 import { quoteTakeover } from "../../../services/maproom/v2/takeoverCost.js";
 import { STARTER_KITS } from "../../../game-data/starterKits.js";
@@ -488,18 +494,39 @@ describe("takeoverCell: New to Map Room 2", () => {
     expect(takerResources().r1).toBe(100_000_000 - Math.round(fullBase() * 0.1));
   });
 
-  test("paid with Shiny: the usual Shiny price, and the reward is used all the same", async () => {
-    const usualShiny = quoteTakeover({
+  const usualShiny = () =>
+    quoteTakeover({
       cell: { x: 240, y: 208 },
       isWildMonster: true,
       buildingdata: null,
       takerHomebase: takerSave.homebase as string[],
       conquestActive: false,
     }).shiny;
+
+  // Owner, 11 Nov: "Paying shiny should not count as it is not discounted".
+  test("paid with Shiny: the usual Shiny price, and today's takeover is not used", async () => {
     openWindow();
     expect((await run({ baseid: CAMP, shiny: "1" })).ok).toBe(true);
-    expect(takerSave.credits).toBe(5000 - usualShiny);
-    expect(welcome.rows.get(TAKER)!.takeoverUses).toHaveLength(1);
+    expect(takerSave.credits).toBe(5000 - usualShiny());
+    expect(takerResources().r1).toBe(100_000_000);
+    expect(welcome.rows.get(TAKER)!.takeoverUses).toHaveLength(0);
+    const status = welcomeStatus(welcome.rows.get(TAKER)!, now())!;
+    expect(status.takeover).toBe(true);
+    expect(status.takeoverLeft).toBe(7);
+    expect(status.takeoverToday).toBe(false);
+  });
+
+  test("paid with Shiny after 2 earlier sets: still 5 of 7 left and ready today", async () => {
+    const twoDaysAgo = now() - 2 * 86_400;
+    const before = { ...newWelcome(twoDaysAgo - 60), takeoverUses: [twoDaysAgo - 30, twoDaysAgo], takeoverDay: utcDay(twoDaysAgo) };
+    welcome.rows.set(TAKER, before);
+    expect((await run({ baseid: CAMP, shiny: "1" })).ok).toBe(true);
+    expect(takerSave.credits).toBe(5000 - usualShiny());
+    expect(welcome.rows.get(TAKER)).toEqual(before);
+    const status = welcomeStatus(welcome.rows.get(TAKER)!, now())!;
+    expect(status.takeover).toBe(true);
+    expect(status.takeoverLeft).toBe(5);
+    expect(status.takeoverToday).toBe(false);
   });
 
   test("a player outpost never uses it, and is charged in full", async () => {
