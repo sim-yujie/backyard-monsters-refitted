@@ -2,7 +2,7 @@ import { friendRefusal, GIFT_WISH_MAX, type FriendsApi, type Gift, type GiftReso
 import type { FriendsStore } from "@/game/friends/friendsStore";
 import { playerPool, type PlayerPool } from "@/game/friends/friendsView";
 import { formatAmount } from "@/ui/format";
-import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, resourceIcon } from "@/ui/resourceIcon";
+import { RESOURCE_KEYS, resourceAmount, resourceIcon, resourceName } from "@/ui/resourceIcon";
 import { openGiftPicker, type GiftTarget } from "./GiftPicker";
 import { button, make, playerRow, section, StatusLine, type FriendsTabView } from "./rows";
 import { wishesSummary, wishMark } from "./wishMark";
@@ -55,7 +55,7 @@ export const lapseText = (expiresAt: number, now: number): string => {
 /** "300 Twigs and 1,200 Goo". */
 const amountsText = (amounts: ResourceAmounts): string => {
   const parts = RESOURCE_KEYS.filter((key) => (amounts[key] ?? 0) > 0).map(
-    (key) => `${formatAmount(amounts[key] ?? 0)} ${RESOURCE_NAMES[key]}`,
+    (key) => `${formatAmount(amounts[key] ?? 0)} ${resourceName(key, "surface")}`,
   );
   if (parts.length <= 1) return parts[0] ?? "nothing";
   return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
@@ -107,7 +107,7 @@ export const GIFTS_TEXT = {
   collected: (amounts: ResourceAmounts): HTMLElement => {
     const line = document.createElement("span");
     const gained = RESOURCE_KEYS.filter((key) => (amounts[key] ?? 0) >= 1).map((key) =>
-      resourceAmount(key, amounts[key] ?? 0, { change: "gain" }),
+      resourceAmount(key, amounts[key] ?? 0, { change: "gain", realm: "surface" }),
     );
     if (gained.length === 0) {
       line.append("Collected · nothing");
@@ -223,7 +223,7 @@ export class GiftsTab implements FriendsTabView {
         actions: [collect, back, this.deleteButton(gift)],
       });
       row.dataset["giftid"] = String(gift.id);
-      row.querySelector(".friends-row__text")?.append(resourceAmount(gift.resource, gift.amount, { change: "gain", className: "gift-amount" }));
+      row.querySelector(".friends-row__text")?.append(resourceAmount(gift.resource, gift.amount, { change: "gain", className: "gift-amount", realm: "surface" }));
       return row;
     });
     this.body.replaceChildren(section(GIFTS_TEXT.waiting, rows, GIFTS_TEXT.none));
@@ -278,7 +278,7 @@ export class GiftsTab implements FriendsTabView {
     const row = playerRow(gift, { note: GIFTS_TEXT.deleteAsk, actions: [yes, no] });
     row.classList.add("friends-row--confirm");
     row.dataset["giftid"] = String(gift.id);
-    row.querySelector(".friends-row__text")?.append(resourceAmount(gift.resource, gift.amount, { className: "gift-amount" }));
+    row.querySelector(".friends-row__text")?.append(resourceAmount(gift.resource, gift.amount, { className: "gift-amount", realm: "surface" }));
     return row;
   }
 
@@ -328,10 +328,10 @@ export class GiftsTab implements FriendsTabView {
       toggle.type = "button";
       toggle.dataset["resource"] = key;
       toggle.setAttribute("aria-pressed", String(on));
-      toggle.setAttribute("aria-label", on ? `${RESOURCE_NAMES[key]} (wish ${rank})` : RESOURCE_NAMES[key]);
-      toggle.title = RESOURCE_NAMES[key];
+      toggle.setAttribute("aria-label", on ? `${resourceName(key, "surface")} (wish ${rank})` : resourceName(key, "surface"));
+      toggle.title = resourceName(key, "surface");
       toggle.disabled = !on && full;
-      toggle.append(resourceIcon(key, { decorative: true }));
+      toggle.append(resourceIcon(key, { decorative: true, realm: "surface" }));
       if (on) {
         toggle.dataset["rank"] = String(rank);
         toggle.append(wishMark(rank, "gift-wish__mark"));
