@@ -721,6 +721,11 @@
   color: var(--colour-warning);
 }
 
+/* Vengeance: hits back across the level gap. */
+.mr1-battle--vengeance {
+  color: var(--colour-accent);
+}
+
 .mr1-warning,
 .mr1-protection {
   display: flex;

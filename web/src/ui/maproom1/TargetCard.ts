@@ -9,6 +9,7 @@ import {
   presenceText,
   ReasonKey,
   respawnIn,
+  type Mr1BattleCount,
   type Mr1Gate,
   type Mr1Neighbour,
   type Mr1Own,
@@ -113,6 +114,12 @@ export const avatar = (target: Mr1Target, size: "sm" | "md" | "lg"): HTMLElement
  * "You attacked them 1 time", each with those words on hover and for screen
  * readers. Null when they never fought.
  */
+const BATTLE_ICONS: Readonly<Record<Mr1BattleCount["kind"], IconName>> = {
+  attackedYou: "shield",
+  youAttacked: "attack",
+  vengeance: "target",
+};
+
 export const battleIcons = (neighbour: Mr1Neighbour): HTMLElement | null => {
   const counts = battleCounts(neighbour);
   if (!counts.length) return null;
@@ -122,7 +129,7 @@ export const battleIcons = (neighbour: Mr1Neighbour): HTMLElement | null => {
     badge.title = label;
     badge.setAttribute("role", "img");
     badge.setAttribute("aria-label", label);
-    badge.append(icon(kind === "attackedYou" ? "shield" : "attack", 13), String(count));
+    badge.append(icon(BATTLE_ICONS[kind], 13), String(count));
     group.append(badge);
   }
   return group;
@@ -155,6 +162,7 @@ const REASON_ICONS: Readonly<Record<string, IconName>> = {
   [ReasonKey.UNDER_ATTACK]: "attack",
   [ReasonKey.TRUCE]: "truce",
   [ReasonKey.WRECKED]: "clock",
+  [ReasonKey.LEVEL_GAP]: "lock",
 };
 
 const ACTION_LABELS: Readonly<Record<CardAction, string>> = {
