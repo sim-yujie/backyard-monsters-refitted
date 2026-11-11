@@ -39,7 +39,9 @@ const requestLoggingOptions: KoaLogTapeOptions = {
  * "structured-common" format: method, url, path, status, responseTime,
  * contentLength and remoteAddr. It omits referrer (always the SWF's URL) and
  * userAgent, which the request context below supplies instead. It logs under
- * ["bymr", "http"] so it inherits the application logger's sinks.
+ * ["bymr", "http"]: locally it inherits the application logger's sinks; in
+ * production it goes to the JSON log file only, not the console
+ * (`loggerRoutes` in utils/logger.ts).
  *
  * It also opens a request-scoped context, so every LogTape record emitted while
  * the request is handled (controllers, ErrorInterceptor) carries the request's
