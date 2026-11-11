@@ -682,13 +682,13 @@ describe("AllianceWindow: Trade sheet Back, then another tab (lead, 11 Nov)", ()
     (node as HTMLElement).click();
   };
 
-  it("Back on the Ask sheet goes to the Trade tab, and Members then opens with the window still up", async () => {
+  it("Back on the New request sheet goes to the Trade tab, and Members then opens with the window still up", async () => {
     const storage = { held: { r1: 1_000, r2: 1_000, r3: 1_000, r4: 1_000 }, cap: 10_000 };
     const tradeApi = {
       view: vi.fn(() =>
         ok({
           view: {
-            today: { sendsLeft: 1, receivesLeft: 1, asksLeft: 3, newDayIn: 3_600 },
+            today: { sendsLeft: 1, receivesLeft: 1, postsLeft: 3, newDayIn: 3_600 },
             rules: { loss: 0.1, capShare: 0.1, requestSeconds: 86_400 },
             me: storage,
             myRequest: null,
@@ -698,9 +698,9 @@ describe("AllianceWindow: Trade sheet Back, then another tab (lead, 11 Nov)", ()
           },
         }),
       ),
-      ask: vi.fn(() => ok({})),
+      post: vi.fn(() => ok({})),
       cancel: vi.fn(() => ok({})),
-      give: vi.fn(() => ok({})),
+      accept: vi.fn(() => ok({})),
       send: vi.fn(() => ok({})),
     } as unknown as NonNullable<AllianceWindowOptions["tradeApi"]>;
     const onClose = vi.fn();
@@ -711,11 +711,11 @@ describe("AllianceWindow: Trade sheet Back, then another tab (lead, 11 Nov)", ()
     });
     await flush();
 
-    press(document.querySelector(".trade-ask")!);
+    press(document.querySelector(".trade-new")!);
     expect(document.querySelector(".trade-sheet__back")).not.toBeNull();
     press(document.querySelector(".trade-sheet__back")!);
     expect(document.querySelector(".trade-sheet__back")).toBeNull();
-    expect(document.querySelector(".trade-ask")).not.toBeNull();
+    expect(document.querySelector(".trade-new")).not.toBeNull();
 
     press(document.querySelector('.alliance__tab[data-tab="members"]')!);
     await flush();

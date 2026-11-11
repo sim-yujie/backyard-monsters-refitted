@@ -121,26 +121,23 @@ describe("alliance.css: trade tiles", () => {
     expect(rulesFor(".trade-tile").join(" ")).toMatch(/font:\s*inherit/);
   });
 
-  it("lights the chosen \"For\" tile in the accent, and Classic's in the orange plate with dark writing", () => {
-    expect(rulesFor(".trade-for-pick__item.is-on").join(" ")).toMatch(/border-color:\s*var\(--colour-accent\)/);
-    expect(rulesFor(".trade-for-pick__item.is-on .trade-for-pick__name").join(" ")).toMatch(/background:\s*var\(--colour-accent\)/);
-    const classic = rulesFor(':root[data-skin="flash"] .trade-for-pick__item.is-on').join(" ");
+  it("lights the chosen resource tile in the accent, and Classic's on the orange plate with dark writing", () => {
+    expect(rulesFor(".trade-tile.is-on").join(" ")).toMatch(/border-color:\s*var\(--colour-accent\)/);
+    const classic = rulesFor(':root[data-skin="flash"] .trade-tile.is-on').join(" ");
     expect(classic).toMatch(/linear-gradient\(#ffc457/);
-    expect(rulesFor(':root[data-skin="flash"] .trade-for-pick__item.is-on .trade-for-pick__name').join(" ")).toMatch(/color:\s*#2a1606/);
+    expect(classic).toMatch(/color:\s*#2a1606/);
+    expect(rulesFor(':root[data-skin="flash"] .trade-tile.is-on .trade-tile__name').join(" ")).toMatch(/color:\s*#2a1606/);
+    expect(rulesFor(':root[data-skin="flash"] .trade-amount__quick.is-on').join(" ")).toMatch(/linear-gradient\(#ffc457/);
   });
 
-  it("gives each \"For\" tile its whole name, up to two lines, in the game's font", () => {
-    expect(rulesFor(".trade-for-pick__item").join(" ")).toMatch(/font:\s*inherit/);
-    const name = rulesFor(".trade-for-pick__name").join(" ");
-    expect(name).toMatch(/-webkit-line-clamp:\s*2/);
-    expect(name).toMatch(/min-height:\s*calc\(2 \* 1\.3em\)/);
-    expect(name).not.toMatch(/white-space:\s*nowrap/);
-    expect(name).not.toMatch(/text-overflow:\s*ellipsis/);
+  it("shows a swap as what leaves (loss colour) and what comes (gain colour)", () => {
+    expect(rulesFor(".trade-swap__out").join(" ")).toMatch(/color:\s*var\(--colour-loss\)/);
+    expect(rulesFor(".trade-swap__in").join(" ")).toMatch(/color:\s*var\(--colour-gain\)/);
+    expect(rulesFor(".trade-swap__side").join(" ")).toMatch(/white-space:\s*nowrap/);
   });
 
-  it("makes the \"For\" tiles wide and tall enough for a picture and two lines of name", () => {
-    expect(rulesFor(".trade-for-pick__grid").join(" ")).toMatch(/minmax\(96px,\s*1fr\)/);
-    expect(rulesFor(".trade-for-pick__item").join(" ")).toMatch(/(^|[;\s])height:\s*108px/);
+  it("has no styles left for the old Ask's building / monster pictures", () => {
+    expect(css).not.toMatch(/\.trade-for/);
   });
 });
 

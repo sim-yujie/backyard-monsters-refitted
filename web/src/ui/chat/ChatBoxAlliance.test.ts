@@ -193,18 +193,18 @@ describe("trading in the Alliance room (design v5 §7c)", () => {
   });
   afterEach(() => clear());
 
-  it("a trade request line has Give, which opens the Trade tab on it", () => {
+  it("a trade request line has Trade, which opens the Trade tab on it", () => {
     mount();
     tabs()[1]!.click();
     socket.hear({
       type: "message",
       channel: KEY,
-      ...wire(0, "PebbleKing asks for 2.0M Putty (Upgrade).", { messageType: "trade_ask", tradeRequest: 41 }),
+      ...wire(0, "PebbleKing gives 1K Twigs for 1K Goo.", { messageType: "trade_ask", tradeRequest: 41 }),
     });
     const give = box.element.querySelector<HTMLButtonElement>(".chat-line__give")!;
-    expect(give.textContent).toBe(ALLIANCE_ROOM_TEXT.give);
+    expect(give.textContent).toBe(ALLIANCE_ROOM_TEXT.trade);
     give.click();
-    expect(opened).toEqual([["trade", { give: 41 }]]);
+    expect(opened).toEqual([["trade", { request: 41 }]]);
   });
 
   it("a mate's name offers Send in the Alliance room only", () => {

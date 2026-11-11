@@ -501,7 +501,7 @@ export class AllianceWindow {
   private loadTrade(): void {
     const focus = this.focus;
     this.focus = null;
-    if (focus && "give" in focus) this.trade.openGive(focus.give);
+    if (focus && "request" in focus) this.trade.openRequest(focus.request);
     else if (focus && "send" in focus) this.trade.openSend(focus.send.userid, focus.send.username);
     else void this.trade.load();
   }

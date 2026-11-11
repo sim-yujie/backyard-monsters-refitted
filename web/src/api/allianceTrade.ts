@@ -10,43 +10,36 @@ export type TradeKey = "r1" | "r2" | "r3" | "r4";
 export const TRADE_KEYS: readonly TradeKey[] = ["r1", "r2", "r3", "r4"];
 export type TradeAmounts = Readonly<Record<TradeKey, number>>;
 
-/**
- * What a request is for (owner, 10 Nov 2026): one of the asker's buildings at
- * its next level, or one of their unlocked monsters (server `tradeFor.ts`).
- */
-export type TradeFor =
-  | { readonly kind: "building"; readonly type: number; readonly level: number }
-  | { readonly kind: "monster"; readonly id: string };
-
-/** What the player can pick on Ask's "For": buildings' next levels and unlocked monsters. */
-export interface TradeChoices {
-  readonly buildings: readonly { readonly type: number; readonly level: number }[];
-  readonly monsters: readonly string[];
-}
-
-/** The short text the server stores: `b:<type>:<level>` or `m:<id>`. */
-export const tradeForText = (value: TradeFor): string =>
-  value.kind === "building" ? `b:${value.type}:${value.level}` : `m:${value.id}`;
-
 /** A main yard's storage: what it holds and its one cap. */
 export interface TradeStorage {
   readonly held: TradeAmounts;
   readonly cap: number;
 }
 
+/**
+ * A trade request (owner, 11 Nov 2026): "I give `amount` of `give`, I want
+ * `amount` of `want`", 1:1. What the asker gives is held by the request; a
+ * mate who accepts sends `amount` of `want`; each side receives `gets`
+ * (the amount less 10%).
+ */
 export interface TradeRequest {
   readonly id: number;
   readonly userid: number;
   readonly username: string;
   readonly role: string | null;
-  /** What a mate gives, 1:1; the asker gets 10% less. */
-  readonly amounts: Partial<TradeAmounts>;
-  readonly for: TradeFor | null;
+  readonly give: TradeKey;
+  readonly want: TradeKey;
+  readonly amount: number;
+  readonly gets: number;
   readonly created_at: number;
   readonly expires_at: number;
-  readonly status: "open" | "given";
-  readonly given_by: string | null;
+  readonly status: "open" | "done";
+  /** Who accepted it (done requests). */
+  readonly taken_by: string | null;
+  /** The asker's storage (open requests), for the room check. */
   readonly storage: TradeStorage | null;
+  /** False when the asker already traded today: it can be accepted from the next UTC day. */
+  readonly ready: boolean;
 }
 
 export interface TradeRecent {
@@ -57,11 +50,9 @@ export interface TradeRecent {
 }
 
 export interface TradeView {
-  readonly today: { readonly sendsLeft: number; readonly receivesLeft: number; readonly asksLeft: number; readonly newDayIn: number };
+  readonly today: { readonly sendsLeft: number; readonly receivesLeft: number; readonly postsLeft: number; readonly newDayIn: number };
   readonly rules: { readonly loss: number; readonly capShare: number; readonly requestSeconds: number };
   readonly me: TradeStorage | null;
-  /** What the player can ask for (Ask's "For"). */
-  readonly choices?: TradeChoices;
   readonly myRequest: TradeRequest | null;
   readonly requests: readonly TradeRequest[];
   readonly recent: readonly TradeRecent[];
@@ -77,13 +68,24 @@ export interface TradeDone {
   readonly to: { readonly userid: number; readonly username: string };
 }
 
+/** What an accept did, for the accepter. */
+export interface SwapDone {
+  /** What left the accepter. */
+  readonly gave: Partial<TradeAmounts>;
+  /** What landed in their storage. */
+  readonly got: Partial<TradeAmounts>;
+  readonly resources: TradeAmounts;
+  readonly with: { readonly userid: number; readonly username: string };
+}
+
 export interface AllianceTradeApi {
   view(to?: number): Promise<AllianceResult<{ view: TradeView }>>;
-  /** `amounts` = what a mate gives. */
-  ask(amounts: Partial<TradeAmounts>, forWhat: TradeFor | null): Promise<AllianceResult<object>>;
+  /** "I give `amount` of `give`, I want `amount` of `want`." */
+  post(give: TradeKey, want: TradeKey, amount: number): Promise<AllianceResult<object>>;
+  /** Takes the caller's request down; what it held comes back. */
   cancel(): Promise<AllianceResult<object>>;
-  /** Gives exactly what was asked (1:1, 10% lost on the way). */
-  give(requestId: number): Promise<AllianceResult<{ done: TradeDone }>>;
+  /** Takes a mate's request whole: the swap. */
+  accept(requestId: number): Promise<AllianceResult<{ done: SwapDone }>>;
   /** `amounts` = what leaves. */
   send(to: number, amounts: Partial<TradeAmounts>): Promise<AllianceResult<{ done: TradeDone }>>;
 }
@@ -101,8 +103,8 @@ const doneOf = (body: Record<string, unknown>) => ({ done: body as unknown as Tr
 
 export const allianceTradeApi: AllianceTradeApi = {
   view: (to) => call(getFrom(to ? `trade?to=${to}` : "trade"), (body) => ({ view: body as unknown as TradeView })),
-  ask: (amounts, forWhat) => call(postTo("trade/ask", { ...flat(amounts), ...(forWhat ? { for: tradeForText(forWhat) } : {}) }), () => ({})),
+  post: (give, want, amount) => call(postTo("trade/post", { give, want, amount: Math.floor(amount) }), () => ({})),
   cancel: () => call(postTo("trade/cancel"), () => ({})),
-  give: (requestId) => call(postTo("trade/give", { request_id: requestId }), doneOf),
+  accept: (requestId) => call(postTo("trade/accept", { request_id: requestId }), (body) => ({ done: body as unknown as SwapDone })),
   send: (to, amounts) => call(postTo("trade/send", { to, ...flat(amounts) }), doneOf),
 };

@@ -80,9 +80,9 @@ export const ALLIANCE_ROOM_TEXT = {
   tab: "Alliance",
   map: "Map",
   showOnMap: (cell: { readonly x: number; readonly y: number }): string => `Show on map (${cell.x}, ${cell.y})`,
-  /** A trade request line's button: opens the Give sheet (design v5 §7c). */
-  give: "Give",
-  giveTitle: "Give: open the Trade tab on this request",
+  /** A trade request line's button: opens the Trade tab on that request (design v5 §7c). */
+  trade: "Trade",
+  tradeTitle: "Open this request in the Trade tab",
   /** A mate's name in the Alliance room: the Send sheet (resources). */
   send: "Send",
 } as const;
@@ -509,20 +509,20 @@ export class ChatBox {
       });
       item.append(map);
     }
-    // A mate's trade request: Give opens the alliance window's Give sheet on it.
+    // A mate's trade request: Trade opens the alliance window's Trade tab on it.
     const request = entry.tradeRequest;
     const openAlliance = allianceOpener();
     if (request && openAlliance && !entry.own) {
       const give = document.createElement("button");
       give.type = "button";
       give.className = "chat-line__map chat-line__give";
-      give.title = ALLIANCE_ROOM_TEXT.giveTitle;
+      give.title = ALLIANCE_ROOM_TEXT.tradeTitle;
       give.tabIndex = this.open ? 0 : -1;
       const word = document.createElement("span");
-      word.textContent = ALLIANCE_ROOM_TEXT.give;
-      give.append(gameIcon("gift", { size: 16, decorative: true }), word);
+      word.textContent = ALLIANCE_ROOM_TEXT.trade;
+      give.append(gameIcon("income", { size: 16, decorative: true }), word);
       give.addEventListener("click", () => {
-        if (this.open) allianceOpener()?.("trade", { give: request });
+        if (this.open) allianceOpener()?.("trade", { request });
       });
       item.append(give);
     }
