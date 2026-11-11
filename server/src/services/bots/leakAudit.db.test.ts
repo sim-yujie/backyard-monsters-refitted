@@ -205,11 +205,12 @@ describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => 
     await sql(`UPDATE bym.save SET protected = 0 WHERE userid = ?`, [real.userid]);
     // And has since closed the game: online, they could not be attacked.
     strings.delete(`last-seen:main:${real.userid}`);
-    // Players under level 15 are shown no bots (owner 3 Nov 2026): the viewer and the real player stand on 15, as the bot.
-    await sql(`UPDATE bym.save SET points = ?, level = 15 WHERE userid IN (?, ?) AND type = 'main'`, [
+    // Players under level 15 are shown no bots (owner 3 Nov 2026): the viewer, the rival and the real player stand on 15, as the bot.
+    await sql(`UPDATE bym.save SET points = ?, level = 15 WHERE userid IN (?, ?, ?) AND type = 'main'`, [
       String(experiencePoints[14]),
       real.userid,
       viewer.userid,
+      rival.userid,
     ]);
   }, 120_000);
 
@@ -247,6 +248,10 @@ describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => 
 
   test("the attack load", async () => {
     // Two attackers, so neither attack load finds the other attack running.
+    // Map Room 1 attacks only neighbours (owner, 11 Nov 2026): the rival picks
+    // the bot from its own list, as the viewer picked the real player above.
+    const rivalList = (await call(routes.getMapRoom1, rival.email)).neighbours as Body[];
+    expect(rivalList.find((entry) => entry.userid === bot.userid)).toBeDefined();
     const onReal = await load(viewer.email, "attack", (await saveOf(real.userid)).baseid);
     const onBot = await load(rival.email, "attack", bot.baseid);
     expect(onReal.error).toBe(0);

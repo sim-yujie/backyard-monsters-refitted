@@ -68,6 +68,15 @@ interface BaseModeAttack {
    * as `attackerlevel`; kept in the attack session for the loot replay.
    */
   attackerLevel?: number;
+  /**
+   * Whether Map Room 1's neighbour and level rules (`mr1AttackRules.ts`)
+   * apply. They are for a player picking a target from their own Map Room 1
+   * list, so on by default; false only for an attack the server starts
+   * itself, a bot's revenge (`services/bots/revengeRun.ts`, issue #244): the
+   * bot answers a player who attacked it, whatever its own list holds. Such
+   * an attack moves no vengeance counters.
+   */
+  mr1Rules?: boolean;
 }
 
 /**
@@ -84,7 +93,7 @@ interface BaseModeAttack {
  *   and their health,
  *   and the attacker's academy levels it is fought at (issue #201)
  */
-export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }: BaseModeAttack) => {
+export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel, mr1Rules = true }: BaseModeAttack) => {
   // Map Room 3 is closed (security audit 2026-10-29, C1): it took the attack's
   // cost and result from the client. The load refuses it first; this is the
   // same rule for any other caller.
@@ -138,8 +147,9 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
 
     // Map Room 1 attacks only neighbours, within the level gap or with
     // vengeance (owner, 11 Nov 2026, `services/maproom/v1/mr1AttackRules.ts`).
-    // Only player main yards get here on Map Room 1.
-    if (mapversion === MapRoomVersion.V1 && save.type === BaseType.MAIN) {
+    // Only player main yards get here on Map Room 1. Not for a bot's revenge
+    // (`mr1Rules: false`), which the server starts, not a player's list.
+    if (mr1Rules && mapversion === MapRoomVersion.V1 && save.type === BaseType.MAIN) {
       mr1Permission = await requireMr1Attack(user.userid, userSave, save.saveuserid, save, getCurrentDateTime());
     }
 
