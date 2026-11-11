@@ -1,4 +1,5 @@
 import { notificationsApi, type GameNotification, type NotificationsApi } from "@/api/notifications";
+import { onNotificationSettingsChanged } from "@/api/notificationSettings";
 import type { CompletedJob } from "@/api/types";
 import { friendsStore, type FriendsStore } from "@/game/friends/friendsStore";
 import { friendsOpener } from "@/game/friends/friendsView";
@@ -14,6 +15,10 @@ import { LOAD_FAILED_TEXT, NotificationPanel } from "./NotificationPanel";
  * never polls. Opening the list, marking one read and Mark all read each bring
  * the server's own count back too; the next answer with a different count
  * than the last takes over again, as the mailbox's door does.
+ *
+ * Turning a category off or on in Settings (`api/notificationSettings.ts`)
+ * changes what the server lists and counts, so the door asks for the count
+ * again at once, and the list too when it is open.
  *
  * Shown only in the player's own yard: the yard scene makes one when no
  * foreign yard is open, and nothing else does.
@@ -47,12 +52,14 @@ export class NotificationDoor {
   private destroyed = false;
   /** Bumped by every fetch, so an answer that arrives late is dropped. */
   private generation = 0;
+  private readonly stopSettings: () => void;
 
   constructor(options: NotificationDoorOptions) {
     this.options = options;
     this.api = options.api ?? notificationsApi;
     this.friends = options.friends ?? friendsStore;
     this.bell = new NotificationBell(() => this.toggle());
+    this.stopSettings = onNotificationSettingsChanged(() => void this.settingsChanged());
   }
 
   get isOpen(): boolean {
@@ -102,6 +109,7 @@ export class NotificationDoor {
 
   destroy(): void {
     this.destroyed = true;
+    this.stopSettings();
     this.panel?.destroy();
     this.panel = null;
     this.bell.destroy();
@@ -147,6 +155,25 @@ export class NotificationDoor {
     } catch {
       if (this.destroyed || generation !== this.generation) return;
       panel.setStatus(LOAD_FAILED_TEXT);
+    }
+  }
+
+  /** A category turned off or on: the server's count, and its list when open. */
+  private async settingsChanged(): Promise<void> {
+    if (this.destroyed) return;
+    if (this.isOpen) {
+      await this.refresh();
+      return;
+    }
+    const generation = ++this.generation;
+    try {
+      const unread = await this.api.unread();
+      if (this.destroyed || generation !== this.generation) return;
+      // The next yard answer carries the same count; it changes nothing then.
+      this.saveCount = unread;
+      this.bell.setCount(unread);
+    } catch {
+      // The next yard answer brings the count.
     }
   }
 

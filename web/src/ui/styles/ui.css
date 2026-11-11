@@ -2190,7 +2190,7 @@ select option {
   width: 100%;
 }
 
-/* One size for the three tabs, so the window does not jump between them. */
+/* One size for the four tabs, so the window does not jump between them. */
 .account-settings-popup {
   width: min(560px, calc(100vw - 16px));
   height: min(calc(100dvh - 32px), 640px);

@@ -1,5 +1,10 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const http = vi.hoisted(() => ({ postJson: vi.fn() }));
+vi.mock("@/api/http", async (original) => ({ ...(await original<typeof import("@/api/http")>()), ...http }));
+
+import { setNotificationCategory } from "@/api/notificationSettings";
 import type { GameNotification, NotificationsApi } from "@/api/notifications";
 import type { CompletedJob } from "@/api/types";
 import { setFriendsOpener } from "@/game/friends/friendsView";
@@ -227,5 +232,42 @@ describe("NotificationDoor", () => {
     expect(door.isOpen).toBe(false);
     expect(api.read).toHaveBeenCalledWith(5);
     clear();
+  });
+
+  it("asks for the count again when a category is turned off or on in Settings, and stops when destroyed", async () => {
+    const api = fakeApi([]);
+    api.unread.mockResolvedValue(2);
+    const door = doorWith(api);
+    door.setSaveCount(5);
+    http.postJson.mockResolvedValue({ error: 0, settings: { notificationsOff: ["buildings"] } });
+    expect(await setNotificationCategory("buildings", false)).toEqual(["buildings"]);
+    expect(http.postJson).toHaveBeenCalledWith(expect.stringContaining("/player/settings"), {
+      notifications: { buildings: false },
+    });
+    await flush();
+    expect(api.unread).toHaveBeenCalledTimes(1);
+    expect(badge(door).hidden).toBe(false);
+    expect(badge(door).textContent).toBe("2");
+    // A yard answer with the same count changes nothing.
+    door.setSaveCount(2);
+    expect(friends.nudge).not.toHaveBeenCalled();
+
+    door.destroy();
+    await setNotificationCategory("buildings", true);
+    await flush();
+    expect(api.unread).toHaveBeenCalledTimes(1);
+  });
+
+  it("fetches the open list again when a category changes", async () => {
+    const api = fakeApi([notification({ id: 1 })]);
+    const door = doorWith(api);
+    await door.open();
+    expect(api.list).toHaveBeenCalledTimes(1);
+    http.postJson.mockResolvedValue({ error: 0, settings: { notificationsOff: [] } });
+    await setNotificationCategory("friends", true);
+    await flush();
+    expect(api.list).toHaveBeenCalledTimes(2);
+    expect(api.unread).not.toHaveBeenCalled();
+    door.destroy();
   });
 });
