@@ -61,8 +61,8 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  *
  * ## Free Regular kit
  *
- * "New to Map Room 2" (`services/events/mr2Welcome.ts`) gives one Regular
- * kit free in the player's 10 days, on any outpost. The route claims it
+ * "New to Map Room 2" (`services/events/mr2Welcome.ts`) gives 7 Regular
+ * kits free in the player's 10 days, one a day, on any outpost. The route claims one
  * (`controllers/yard/starterKit.ts`) and plans with `free`: nothing charged,
  * built as the resource path builds (prefabs, no worker), whichever payment
  * was asked for.

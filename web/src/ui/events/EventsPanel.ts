@@ -19,7 +19,7 @@ import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { resourceIcon, RESOURCE_KEYS } from "@/ui/resourceIcon";
 import { eventsArt } from "./eventsArt";
-import { mr2WelcomeCard, paintWelcomeTimeline, welcomeDaysText } from "./mr2WelcomeCard";
+import { mr2WelcomeCard, paintWelcomeReward, paintWelcomeTimeline, welcomeDaysText } from "./mr2WelcomeCard";
 import "./events.css";
 
 /**
@@ -308,6 +308,8 @@ export class EventsPanel {
       line.textContent = welcomeDaysText(Number(line.dataset["welcomeEnds"]), now);
     }
     for (const line of this.element.querySelectorAll<HTMLElement>("[data-welcome-start]")) paintWelcomeTimeline(line, now);
+    // A Frontier Pass reward used today is back at the daily reset.
+    for (const row of this.element.querySelectorAll<HTMLElement>(".events-welcome__reward[data-back-at]")) paintWelcomeReward(row, now);
   }
 
   /**

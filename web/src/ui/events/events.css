@@ -965,9 +965,14 @@
   background: var(--colour-surface-sunken);
 }
 
-.events-welcome__reward--used {
+/* All 7 used: the row steps back. Used today: only its state says so. */
+.events-welcome__reward--done {
   border-color: var(--colour-border-subtle);
   opacity: 0.6;
+}
+
+.events-welcome__reward--today {
+  border-color: var(--colour-border-subtle);
 }
 
 .events-welcome__reward > .events-welcome__picture {
@@ -991,6 +996,14 @@
   color: var(--colour-text-strong);
 }
 
+/* The figure ("10% price", "Free") and how many are left ("5/7 left"). */
+.events-welcome__figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--space-2);
+}
+
 .events-welcome__figure {
   font-size: var(--text-md);
   font-weight: 800;
@@ -998,7 +1011,18 @@
   color: var(--events-hot-text);
 }
 
-.events-welcome__reward--used .events-welcome__figure {
+.events-welcome__left {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-raised);
+  color: var(--colour-text-strong);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.events-welcome__reward--done .events-welcome__figure {
   color: var(--colour-text-muted);
   text-decoration: line-through;
 }
@@ -1021,7 +1045,16 @@
   color: var(--events-hot-text);
 }
 
-.events-welcome__state--used {
+/* "Used today, back tomorrow" may take two lines on a narrow row. */
+.events-welcome__state--today {
+  flex: 0 1 auto;
+  max-width: 10em;
+  color: var(--colour-text-muted);
+  text-align: end;
+  white-space: normal;
+}
+
+.events-welcome__state--done {
   color: var(--colour-success);
 }
 

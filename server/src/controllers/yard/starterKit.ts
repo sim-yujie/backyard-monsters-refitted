@@ -17,7 +17,7 @@ import { defineYardAction } from "./yardAction.js";
  * countdown ends, as in Flash: a kit paid with Shiny places them finished
  * (`docs/design/achievements.md` §7.2).
  *
- * A Regular kit on an outpost uses the player's "New to Map Room 2" free kit
+ * A Regular kit on an outpost uses the player's "New to Map Room 2" free kit for the day
  * while it is ready (`services/events/mr2Welcome.ts`): claimed in the yard's
  * transaction, so a refusal after it (monsters) gives it back. A request the
  * picker sent as free (`free: true`) is refused `409 welcomeUsed` rather than

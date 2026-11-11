@@ -8,7 +8,8 @@ import { kitBuildings } from "../../../services/yard/starterKit.js";
 
 /** A Regular Starter Kit outpost, worth 10,000,000 of each (outpostValue.test.ts). */
 const REGULAR_KIT = kitBuildings(STARTER_KITS[0]!, "shiny", {}).buildingdata;
-import { memoryWelcomeStore, useWelcomeStore } from "../../../services/events/mr2Welcome.js";
+import { memoryWelcomeStore, MR2_WELCOME_SECONDS, newWelcome, useWelcomeStore } from "../../../services/events/mr2Welcome.js";
+import { utcDay } from "../../../services/events/schedule.js";
 
 /**
  * `POST /worldmapv2/takeoverquote` (issue #82): the price and the takeover's
@@ -275,9 +276,9 @@ describe("takeoverQuote", () => {
 });
 
 describe("takeoverQuote: New to Map Room 2", () => {
-  const openWindow = () => welcome.rows.set(TAKER, { start: now() - 60, takeoverUsed: false, kitUsed: false });
+  const openWindow = () => welcome.rows.set(TAKER, newWelcome(now() - 60));
 
-  test("a wild camp in the player's 10 days: 10% of the full base price, the usual Shiny, and the label data", async () => {
+  test("a wild camp while today's takeover is ready: 10% of the full base price, the usual Shiny, and the label data", async () => {
     const usual = await quote(CAMP);
     openWindow();
     const cheap = await quote(CAMP);
@@ -303,10 +304,12 @@ describe("takeoverQuote: New to Map Room 2", () => {
     expect(body.welcome).toBeUndefined();
   });
 
-  test("used, or after the 10 days, the price is the usual one", async () => {
-    welcome.rows.set(TAKER, { start: now() - 60, takeoverUsed: true, kitUsed: false });
+  test("used today, all 7 used, or after the 10 days: the usual price", async () => {
+    welcome.rows.set(TAKER, { ...newWelcome(now() - 60), takeoverUses: [now() - 30], takeoverDay: utcDay(now()) });
     expect((await quote(CAMP)).welcome).toBeUndefined();
-    welcome.rows.set(TAKER, { start: now() - 10 * 86_400 - 1, takeoverUsed: false, kitUsed: false });
+    welcome.rows.set(TAKER, { ...newWelcome(now() - 8 * 86_400), takeoverUses: [1, 2, 3, 4, 5, 6, 7], takeoverDay: "2000-01-01" });
+    expect((await quote(CAMP)).welcome).toBeUndefined();
+    welcome.rows.set(TAKER, newWelcome(now() - MR2_WELCOME_SECONDS - 1));
     expect((await quote(CAMP)).welcome).toBeUndefined();
   });
 
