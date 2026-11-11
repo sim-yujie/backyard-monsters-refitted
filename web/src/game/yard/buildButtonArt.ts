@@ -147,3 +147,25 @@ export const buildPicture = (type: number, kind: YardKind = "main", classic: boo
 
 /** The URL of {@link buildPicture}. */
 export const buildPictureUrl = (type: number, kind: YardKind = "main"): string => buildPicture(type, kind).url;
+
+/**
+ * Types whose Flash buttons exist only one per level, with their top level on
+ * disk: the Town Hall's are `14.1.jpg` … `14.10.jpg`, and there is no
+ * `14.jpg`. The build menu never offers a Town Hall, but an alliance request
+ * "for Town Hall L2" shows one (lead, 11 Nov 2026: the picture was broken).
+ */
+const LEVEL_BUTTONS: Readonly<Record<number, number>> = { 14: 10 };
+
+/**
+ * A main-yard building's picture at a level: the Modern look's where the
+ * building has one, else Flash's button for that level where Flash drew one
+ * per level, else the build menu's own button.
+ */
+export const buildPictureAt = (type: number, level: number, classic: boolean = classicLook()): string => {
+  const picture = buildPicture(type, "main", classic);
+  if (picture.modern) return picture.url;
+  const top = LEVEL_BUTTONS[type];
+  if (top === undefined) return picture.url;
+  const at = Math.min(top, Math.max(1, Math.trunc(level) || 1));
+  return `${ROOT}${type}.${at}.jpg`;
+};

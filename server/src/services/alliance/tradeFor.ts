@@ -2,7 +2,8 @@ import { COSTS, maxLevel } from "../../game-data/buildingCosts.js";
 import { isListed, LISTED_MONSTERS, monsterEntry } from "../../game-data/monsterCatalogue.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import { STARTER_MONSTER } from "../yard/locker.js";
-import { levelOf } from "../yardplanner/costs.js";
+import { BUILDABLE_TYPES } from "../yard/build.js";
+import { levelOf, TOWN_HALL_TYPE } from "../yardplanner/costs.js";
 
 /**
  * What a trade request is for (owner, 10 Nov 2026: "im unclear what the
@@ -49,6 +50,13 @@ export const tradeForName = (value: TradeFor | null): string | null => {
 };
 
 /**
+ * The buildings a request can name: what the build menu builds, and the Town
+ * Hall. Not decorations, nor the world's own (Inferno Cavern, the strongholds'
+ * Spurtz Cannons, Stronghold, Outpost Defender), which have no picture to show.
+ */
+const askable = (type: number): boolean => type === TOWN_HALL_TYPE || BUILDABLE_TYPES.has(type);
+
+/**
  * What a main yard can ask for: every building type below its top level, at
  * each next level its buildings would reach (two Snipers at L3 and L5 give
  * Sniper L4 and L6), and every unlocked monster (the Pokey always).
@@ -65,7 +73,7 @@ export const tradeChoicesOf = (save: {
     const type = Number(building.t);
     const level = levelOf(building as Parameters<typeof levelOf>[0]);
     if (!Number.isInteger(type) || type <= 0 || level <= 0) continue;
-    if (level >= maxLevel(type, "main") || COSTS[type]?.kind === "decoration") continue;
+    if (level >= maxLevel(type, "main") || !askable(type)) continue;
     const key = `${type}:${level + 1}`;
     if (seen.has(key)) continue;
     seen.add(key);

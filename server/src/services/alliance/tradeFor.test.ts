@@ -33,6 +33,19 @@ describe("trade request: what for", () => {
     expect(choices.monsters).not.toContain("C3");
   });
 
+  test("never decorations or the world's own buildings, which have no picture", () => {
+    const choices = tradeChoicesOf({
+      buildingdata: {
+        "0": { t: 127, l: 1 }, // Inferno Cavern
+        "1": { t: 136, l: 1 }, // a stronghold's Spurtz Cannon
+        "2": { t: 138, l: 1 }, // Stronghold
+        "3": { t: 140, l: 1 }, // Outpost Defender
+        "4": { t: 15, l: 1 }, // Monster Locker: yes
+      },
+    });
+    expect(choices.buildings).toEqual([{ type: 15, level: 2 }]);
+  });
+
   test("stored as short text and read back; old words and junk read as nothing", () => {
     const hall = { kind: "building", type: 14, level: 7 } as const;
     expect(tradeForText(hall)).toBe("b:14:7");

@@ -22,7 +22,7 @@ import {
 } from "@/game/alliance/tradeRules";
 import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { monsterPortrait, showPortrait } from "@/game/portraits";
-import { buildPictureUrl } from "@/game/yard/buildButtonArt";
+import { buildPictureAt } from "@/game/yard/buildButtonArt";
 import { buildingName } from "@/game/yard/buildingArt";
 import { formatAmount, formatCountdown, formatShort } from "@/ui/format";
 import { make } from "@/ui/friends/rows";
@@ -120,7 +120,7 @@ const forPicture = (value: TradeFor, className: string): HTMLImageElement => {
   image.alt = "";
   image.decoding = "async";
   image.draggable = false;
-  if (value.kind === "building") image.src = buildPictureUrl(value.type, "main");
+  if (value.kind === "building") image.src = buildPictureAt(value.type, value.level);
   else showPortrait(image, monsterPortrait(value.id, "icon"));
   return image;
 };
