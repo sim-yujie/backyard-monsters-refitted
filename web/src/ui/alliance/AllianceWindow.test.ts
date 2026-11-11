@@ -181,6 +181,48 @@ describe("AllianceWindow: marketplace", () => {
     expect(buttonNamed(ALLIANCE_TEXT.asked)!.disabled).toBe(true);
   });
 
+  it("a row the player already asked (from the server) says Asked; a refused second ask says Asked too", async () => {
+    const api = fakeApi({
+      search: vi.fn(() => ok({ alliances: [listing(5), listing(6)], pageSize: 10, totalResults: 2, myRequests: [5] })),
+      requestJoin: vi.fn(() => Promise.resolve({ ok: false as const, reason: "requestPending", message: "You already asked to join this alliance.", availableAt: null })),
+    });
+    await open(api);
+    const rows = () => document.querySelectorAll<HTMLButtonElement>(".alliance__row");
+    rows()[0]!.click();
+    expect(buttonNamed(ALLIANCE_TEXT.asked)!.disabled).toBe(true);
+    rows()[1]!.click();
+    buttonNamed(ALLIANCE_TEXT.ask)!.click();
+    await flush();
+    expect(buttonNamed(ALLIANCE_TEXT.asked)!.disabled).toBe(true);
+  });
+
+  it("a player below an alliance's minimum level sees the level needed, off, instead of Join", async () => {
+    const api = fakeApi({
+      search: vi.fn(() => ok({ alliances: [listing(5, { join_mode: "open", min_level: 40 })], pageSize: 10, totalResults: 1, myLevel: 35 })),
+    });
+    await open(api);
+    document.querySelector<HTMLButtonElement>(".alliance__row")!.click();
+    // The row's only join button is the level needed.
+    expect([...document.querySelectorAll(".alliance__row-more .alliance__join")].map((node) => node.textContent)).toEqual(["40+"]);
+    const low = document.querySelector<HTMLButtonElement>(".alliance__join--level")!;
+    expect(low.textContent).toBe("40+");
+    expect(low.disabled).toBe(true);
+    expect(low.title).toBe(ALLIANCE_TEXT.needsLevel(40));
+  });
+
+  it("an alliance that invited the player offers Accept invite on its row, not Ask to join", async () => {
+    const api = fakeApi({
+      search: vi.fn(() => ok({ alliances: [listing(5)], pageSize: 10, totalResults: 1 })),
+      messages: vi.fn(() => ok({ messages: [invite(77, { alliance_id: 5 })] })),
+    });
+    await open(api);
+    document.querySelector<HTMLButtonElement>(".alliance__row")!.click();
+    expect(buttonNamed(ALLIANCE_TEXT.ask)).toBeUndefined();
+    buttonNamed(ALLIANCE_TEXT.acceptInvite)!.click();
+    await flush();
+    expect(api.answerInvite).toHaveBeenCalledWith(77, true);
+  });
+
   it("Quick Join joins the first Open alliance of the chosen type with room, asking the server for Open ones", async () => {
     const api = fakeApi({
       search: vi.fn(() =>

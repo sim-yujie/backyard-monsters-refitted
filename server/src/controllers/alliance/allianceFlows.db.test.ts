@@ -232,7 +232,25 @@ describe.skipIf(!enabled)("alliance flows through the controllers, on Postgres (
     await call(requestJoin, PLAYER, { alliance_id: allianceId });
 
     expect((await call(requestJoin, PLAYER, { alliance_id: allianceId })).refused).toBe(
-      "You already have a request pending."
+      "You already asked to join this alliance."
+    );
+  });
+
+  test("the marketplace lists the alliances a player has asked, and their level", async () => {
+    const allianceId = (await found()).alliance.alliance_id;
+    await call(requestJoin, PLAYER, { alliance_id: allianceId });
+
+    const body = await call(searchAlliances, PLAYER, { search: "zz_flow", page: 0, world: "false" });
+    expect(body.my_requests).toEqual([allianceId]);
+    expect(typeof body.my_level).toBe("number");
+  });
+
+  test("asking to join an alliance that invited the player points to the invite", async () => {
+    const allianceId = (await found()).alliance.alliance_id;
+    expect((await call(inviteUser, LEADER, { userid: PLAYER })).error).toBe(0);
+
+    expect((await call(requestJoin, PLAYER, { alliance_id: allianceId })).refused).toBe(
+      `${NAME} already invited you. Accept it under Invites.`
     );
   });
 

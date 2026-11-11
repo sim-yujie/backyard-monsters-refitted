@@ -469,9 +469,18 @@ export const leaderMustTransferErr = (allianceName: string) =>
 
 export const requestPendingErr = () =>
   new ClientSafeError({
-    message: "You already have a request pending.",
+    message: "You already asked to join this alliance.",
     status: Status.CONFLICT,
-    data: {},
+    data: { reason: "requestPending" },
+    isClientFriendly: true,
+  });
+
+/** Ask to join an alliance that has already invited the player: accept the invite instead. */
+export const alreadyInvitedErr = (name: string) =>
+  new ClientSafeError({
+    message: `${name} already invited you. Accept it under Invites.`,
+    status: Status.CONFLICT,
+    data: { reason: "invited" },
     isClientFriendly: true,
   });
 

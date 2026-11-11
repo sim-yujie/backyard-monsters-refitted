@@ -149,3 +149,17 @@ describe("alliance.css: a member's window keeps one height", () => {
     expect(css).not.toMatch(/\.alliance-window[^{]*\{[^}]*(^|[;\s])height:\s*(auto|max-content|fit-content)/m);
   });
 });
+
+describe("alliance.css: the marketplace keeps one height", () => {
+  it("fixes the marketplace's height like a member's window, so filters never move the title", () => {
+    expect(rulesFor(".alliance-window:has(.alliance__head--market)").join(" ")).toMatch(
+      /(^|[;\s])height:\s*min\(760px,\s*var\(--alliance-window-room\)\)/,
+    );
+  });
+
+  it("gives a message in the head its own space and a line under it", () => {
+    const head = rulesFor(".alliance-window > .panel__head:has(> .alliance__status:not([hidden]))").join(" ");
+    expect(head).toMatch(/padding-bottom:/);
+    expect(head).toMatch(/border-bottom:/);
+  });
+});

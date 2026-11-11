@@ -1,13 +1,14 @@
-import { AllianceInviteType, AllianceJoinMode } from "../../enums/Alliance.js";
+import { AllianceInviteStatus, AllianceInviteType, AllianceJoinMode } from "../../enums/Alliance.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { Alliance } from "../../database/models/alliance.model.js";
+import { AllianceInvite } from "../../database/models/allianceinvite.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { RequestJoinSchema } from "../../schemas/AllianceSchemas.js";
 import { joinOpenAlliance, openInvite } from "../../services/alliance/allianceInvites.js";
 import { adOf, assertAdAllows, joinerLevel } from "../../services/alliance/allianceAd.js";
 import { assertMayJoin, assertRejoinAllowed, GATE_SAVE_FIELDS } from "../../services/alliance/joinGate.js";
-import { mustLeaveAllianceErr, permissionErr } from "../../errors/errors.js";
+import { alreadyInvitedErr, mustLeaveAllianceErr, permissionErr } from "../../errors/errors.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
 /**
@@ -50,6 +51,15 @@ export const requestJoin: KoaController = async (ctx) => {
 
     return;
   }
+
+  // Already invited by this alliance: the pending invite is the way in (`invited`), not a second row.
+  const invited = await postgres.em.count(AllianceInvite, {
+    alliance_id: alliance.id,
+    user_id: user.userid,
+    type: AllianceInviteType.INVITE,
+    status: AllianceInviteStatus.PENDING,
+  });
+  if (invited > 0) throw alreadyInvitedErr(alliance.name);
 
   await openInvite(alliance, user.userid, AllianceInviteType.REQUEST);
 

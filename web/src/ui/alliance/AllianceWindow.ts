@@ -111,6 +111,8 @@ export const ALLIANCE_TEXT = {
   join: "Join",
   ask: "Ask to join",
   asked: "Asked",
+  acceptInvite: "Accept invite",
+  needsLevel: (level: number) => `Needs level ${level}`,
   full: "Full",
   report: "Report",
   reported: "Reported",
@@ -388,6 +390,8 @@ export class AllianceWindow {
   private filters: { type: AllianceType | null; language: string | null; open: boolean } = { type: null, language: null, open: false };
   /** The player's chat country, from the last search: Quick Join and the language filter use it. */
   private myCountry: string | null = null;
+  /** The player's level, from the last search: a row whose minimum is above it shows the level needed. */
+  private myLevel: number | null = null;
 
   // Create form, kept while the player goes Back and forth. A new alliance starts Open.
   private draft = AllianceWindow.newDraft();
@@ -579,6 +583,8 @@ export class AllianceWindow {
       this.total = answer.totalResults;
       this.pageSize = answer.pageSize;
       this.myCountry = answer.myCountry ?? null;
+      this.myLevel = answer.myLevel ?? null;
+      for (const id of answer.myRequests ?? []) this.asked.add(id);
     }
     this.render();
   }
@@ -677,7 +683,8 @@ export class AllianceWindow {
 
   private renderMarket(): void {
     this.popup.setTitle(ALLIANCE_TEXT.title);
-    const head = make("div", "alliance__head");
+    // `--market`: the marketplace keeps one height (alliance.css), whatever the filters leave.
+    const head = make("div", "alliance__head alliance__head--market");
     const title = make("h3", "alliance__head-title");
     title.append(gameIcon("alliance", { size: 24, decorative: true }), make("span", "", ALLIANCE_TEXT.marketTitle));
     head.append(title, button(ALLIANCE_TEXT.create, "btn--primary alliance__create", () => this.showCreate(), ALLIANCE_TEXT.createTitle));
@@ -942,7 +949,18 @@ export class AllianceWindow {
       const mode = joinModeOf(listing);
       const full = listing.members >= listing.member_limit;
       const asked = this.asked.has(listing.alliance_id);
-      if (mode === "invite") {
+      const invite = this.inbox.find((row) => row.type === "invite" && row.alliance_id === listing.alliance_id);
+      const needs = shownMinLevel(listing);
+      if (invite) {
+        // They already invited the player: Accept here too, not Ask (lead, 11 Nov 2026).
+        more.append(button(ALLIANCE_TEXT.acceptInvite, "btn--primary alliance__join", () => void this.answerInvite(invite, true)));
+      } else if (mode !== "invite" && needs !== null && this.myLevel !== null && this.myLevel < needs) {
+        // Below the alliance's minimum: the level needed, off, instead of a Join that fails.
+        const low = button("", "btn--primary alliance__join alliance__join--level", () => {}, ALLIANCE_TEXT.needsLevel(needs));
+        low.append(gameIcon("levelup", { size: 16, decorative: true }), make("span", "", `${needs}+`));
+        low.disabled = true;
+        more.append(low);
+      } else if (mode === "invite") {
         const note = make("span", "alliance__invite-only");
         note.append(gameIcon(JOIN_ICON.invite, { size: 16, decorative: true }), make("span", "", ALLIANCE_TEXT.joinMode.invite));
         more.append(note);
@@ -968,7 +986,9 @@ export class AllianceWindow {
     if (!answer.ok) {
       if (answer.reason === "requestPending") this.asked.add(listing.alliance_id);
       this.refuse(answer);
-      this.render();
+      // They had invited the player: the row turns into Accept once the inbox is read again.
+      if (answer.reason === "invited") await this.loadInbox();
+      else this.render();
       return;
     }
     if (answer.joined) {

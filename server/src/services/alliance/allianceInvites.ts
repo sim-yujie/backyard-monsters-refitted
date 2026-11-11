@@ -33,6 +33,7 @@ interface InviteMessage {
   invite_id: number;
   type: AllianceInviteType;
   status: AllianceInviteStatus;
+  alliance_id: number;
   alliance_name: string;
   alliance_image: number;
   leader_name: string;
@@ -133,6 +134,7 @@ export const getInviteMessages = async (user: User): Promise<InviteMessage[]> =>
       invite_id: invite.id,
       type: invite.type,
       status: invite.status,
+      alliance_id: alliance.id,
       alliance_name: alliance.name,
       alliance_image: alliance.image,
       leader_name: alliance.leader_name,

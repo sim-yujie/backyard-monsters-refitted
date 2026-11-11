@@ -69,15 +69,18 @@ describe("allianceApi", () => {
     expect(calls[0]!.url).toContain("/alliance/searchalliances");
     expect(calls[0]!.method).toBe("POST");
     expect(calls[0]!.body).toContain("goo");
-    expect(answer).toEqual({ ok: true, alliances: [], pageSize: 20, totalResults: 3, myCountry: null });
+    expect(answer).toEqual({ ok: true, alliances: [], pageSize: 20, totalResults: 3, myCountry: null, myLevel: null, myRequests: [] });
   });
 
   it("sends the marketplace filters, and reads the player's country", async () => {
-    stubFetch({ error: 0, alliances: [], pageSize: 10, totalResults: 0, my_country: "PH" });
+    stubFetch({ error: 0, alliances: [], pageSize: 10, totalResults: 0, my_country: "PH", my_level: 35, my_requests: [953, "x"] });
     const answer = await allianceApi.search("", 0, { type: "midas", language: "PH", open: true });
     const body = new URLSearchParams(calls[0]!.body as string);
     expect([body.get("type"), body.get("language"), body.get("open")]).toEqual(["midas", "PH", "true"]);
     expect(answer.ok && answer.myCountry).toBe("PH");
+    // The player's level and the alliances they asked, for the rows' buttons.
+    expect(answer.ok && answer.myLevel).toBe(35);
+    expect(answer.ok && answer.myRequests).toEqual([953]);
   });
 
   it("sends the ad with Edit, an unset language or time zone as empty", async () => {

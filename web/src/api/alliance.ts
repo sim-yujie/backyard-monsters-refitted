@@ -119,6 +119,10 @@ export interface AlliancePage {
   readonly totalResults: number;
   /** The player's own chat country, for Quick Join and the language filter; null when not set. */
   readonly myCountry?: string | null;
+  /** The player's level, so a row whose minimum is above it shows the level needed; null when unknown. */
+  readonly myLevel?: number | null;
+  /** The alliances the player has asked to join, still waiting: their rows say Asked. */
+  readonly myRequests?: readonly number[];
 }
 
 /** The ad as Create and Edit send it. */
@@ -129,6 +133,8 @@ export interface AllianceInviteRow {
   readonly invite_id: number;
   readonly type: "invite" | "request";
   readonly status: "pending" | "accepted" | "declined";
+  /** Older servers leave it out. */
+  readonly alliance_id?: number;
   readonly alliance_name: string;
   readonly alliance_image: number;
   readonly leader_name: string;
@@ -262,6 +268,8 @@ export const allianceApi: AllianceApi = {
       pageSize: numberOr(body["pageSize"], 10),
       totalResults: numberOr(body["totalResults"], 0),
       myCountry: typeof body["my_country"] === "string" && body["my_country"] ? body["my_country"] : null,
+      myLevel: typeof body["my_level"] === "number" && Number.isFinite(body["my_level"]) ? body["my_level"] : null,
+      myRequests: Array.isArray(body["my_requests"]) ? body["my_requests"].filter((id): id is number => Number.isInteger(id)) : [],
     })),
   create: (form) =>
     call(

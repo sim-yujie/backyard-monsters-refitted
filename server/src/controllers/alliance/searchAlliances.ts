@@ -1,5 +1,5 @@
 import { Status } from "../../enums/StatusCodes.js";
-import { AllianceJoinMode, AllianceStance } from "../../enums/Alliance.js";
+import { AllianceInviteStatus, AllianceInviteType, AllianceJoinMode, AllianceStance } from "../../enums/Alliance.js";
 import { Alliance } from "../../database/models/alliance.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
@@ -9,7 +9,8 @@ import { getLeaderBaseIds } from "../../services/alliance/allianceLeaders.js";
 import { memberLimit } from "../../services/alliance/allianceTypes.js";
 import { onlineMemberCounts } from "../../services/alliance/allianceMember.js";
 import { ALLIANCE_TYPES } from "../../config/AllianceConfig.js";
-import { adOf } from "../../services/alliance/allianceAd.js";
+import { adOf, joinerLevel } from "../../services/alliance/allianceAd.js";
+import { AllianceInvite } from "../../database/models/allianceinvite.model.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import { allianceNoWorldErr } from "../../errors/errors.js";
 
@@ -127,7 +128,24 @@ export const searchAlliances: KoaController = async (ctx) => {
     ...adOf(alliance),
   }));
 
+  // The player's level, so a row whose minimum is above it shows "40+" instead of Join, and the
+  // alliances they have already asked to join, so those rows say Asked (lead, 11 Nov 2026).
+  const myLevel = await joinerLevel(postgres.em, user.userid);
+  const myRequests = await postgres.em.find(
+    AllianceInvite,
+    { user_id: user.userid, type: AllianceInviteType.REQUEST, status: AllianceInviteStatus.PENDING },
+    { fields: ["alliance_id"] }
+  );
+
   ctx.status = Status.OK;
   // `my_country`: the player's own chat country, so Quick Join can prefer alliances in their language.
-  ctx.body = { error: 0, alliances: results, pageSize: PAGE_SIZE, totalResults, my_country: user.country ?? null };
+  ctx.body = {
+    error: 0,
+    alliances: results,
+    pageSize: PAGE_SIZE,
+    totalResults,
+    my_country: user.country ?? null,
+    my_level: myLevel,
+    my_requests: myRequests.map((row) => row.alliance_id),
+  };
 };

@@ -35,6 +35,13 @@
   padding: var(--space-3) var(--space-4) 0;
 }
 
+/* A message in the head gets its own space and a line under it, so the list
+   scrolling under it never looks covered (lead, 11 Nov). */
+.alliance-window > .panel__head:has(> .alliance__status:not([hidden])) {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--colour-border-subtle);
+}
+
 /* The body scrolls; the foot (Back / Create, Leave) stays whole under it. */
 .alliance-window > .panel__body {
   flex: 1 1 auto;
@@ -825,6 +832,12 @@
      window sits in the middle, so a height change moved the tab row and a
      press meant for a tab could land on the backdrop and close it. The body
      scrolls inside instead. Both looks, desktop and phone. */
+  height: min(760px, var(--alliance-window-room));
+}
+
+/* The marketplace too (lead, 11 Nov): the filter chips narrowing the list
+   moved the title and search box about 30 px. The list scrolls inside. */
+.alliance-window:has(.alliance__head--market) {
   height: min(760px, var(--alliance-window-room));
 }
 
