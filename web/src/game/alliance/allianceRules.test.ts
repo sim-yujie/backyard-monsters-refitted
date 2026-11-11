@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { AllianceListing, AllianceMember, MyAlliance, TypeOption } from "@/api/alliance";
 import {
+  browserTimeZone,
   descriptionProblem,
   gateStep,
+  gmtLabel,
+  joinModeOf,
   membersLine,
   memberActions,
   nameProblem,
@@ -12,13 +15,22 @@ import {
   refusalText,
   renameWait,
   shieldUrl,
+  shownMinLevel,
+  stepMinLevel,
+  stepTimeZone,
   switchSummary,
   TYPE_INFO,
 } from "./allianceRules";
 
 /** The alliance window's rules, worked out without the page (beta 7 phase 1). */
 
-const listing = (id: number, type: AllianceListing["type"], members: number, limit: number): AllianceListing => ({
+const listing = (
+  id: number,
+  type: AllianceListing["type"],
+  members: number,
+  limit: number,
+  extra: Partial<AllianceListing> = { join_mode: "open" },
+): AllianceListing => ({
   alliance_id: id,
   name: `A${id}`,
   image: 1,
@@ -27,6 +39,7 @@ const listing = (id: number, type: AllianceListing["type"], members: number, lim
   active_members: members,
   leader_name: "Lead",
   type,
+  ...extra,
 });
 
 const member = (id: number, role: AllianceMember["role"], extra: Partial<AllianceMember> = {}): AllianceMember => ({
@@ -92,6 +105,62 @@ describe("quickJoinPick", () => {
   it("finds none when no alliance of that type has room", () => {
     expect(quickJoinPick(listings, "fortress")).toBeNull();
     expect(quickJoinPick([listing(1, "midas", 15, 15)], "any")).toBeNull();
+  });
+
+  it("only joins Open alliances: Ask to join, Invite only and an older server's row are passed over", () => {
+    const mixed = [
+      listing(1, "midas", 3, 15, { join_mode: "ask" }),
+      listing(2, "midas", 3, 15, { join_mode: "invite" }),
+      listing(3, "midas", 3, 15, {}),
+      listing(4, "midas", 3, 15, { join_mode: "open" }),
+    ];
+    expect(quickJoinPick(mixed, "midas")?.alliance_id).toBe(4);
+    expect(quickJoinPick(mixed.slice(0, 3), "any")).toBeNull();
+  });
+
+  it("prefers one in the player's language, else the first that fits", () => {
+    const two = [listing(1, "midas", 3, 15, { join_mode: "open", language: "DE" }), listing(2, "midas", 3, 15, { join_mode: "open", language: "PH" })];
+    expect(quickJoinPick(two, "any", "PH")?.alliance_id).toBe(2);
+    expect(quickJoinPick(two, "any", "FR")?.alliance_id).toBe(1);
+    expect(quickJoinPick(two, "any")?.alliance_id).toBe(1);
+  });
+});
+
+describe("the marketplace ad", () => {
+  it("reads an older server's row as Ask to join", () => {
+    expect(joinModeOf({})).toBe("ask");
+    expect(joinModeOf({ join_mode: "invite" })).toBe("invite");
+  });
+
+  it("names GMT bands with their sign", () => {
+    expect(gmtLabel(8)).toBe("GMT+8");
+    expect(gmtLabel(-5)).toBe("GMT-5");
+    expect(gmtLabel(0)).toBe("GMT");
+  });
+
+  it("starts from the browser's hour band, kept between -12 and +14", () => {
+    expect(browserTimeZone(-480)).toBe(8);
+    expect(browserTimeZone(300)).toBe(-5);
+    expect(browserTimeZone(-330)).toBe(6);
+    expect(browserTimeZone(0)).toBe(0);
+    expect(browserTimeZone(-900)).toBe(14);
+  });
+
+  it("steps time zones one band and levels by 5, stopping at the ends", () => {
+    expect(stepTimeZone(14, 1)).toBe(14);
+    expect(stepTimeZone(-12, -1)).toBe(-12);
+    expect(stepTimeZone(0, -1)).toBe(-1);
+    expect(stepMinLevel(30, 1)).toBe(35);
+    expect(stepMinLevel(33, 1)).toBe(35);
+    expect(stepMinLevel(33, -1)).toBe(30);
+    expect(stepMinLevel(60, 1)).toBe(60);
+    expect(stepMinLevel(30, -1)).toBe(30);
+  });
+
+  it("shows a minimum level only above 30, which takes anyone", () => {
+    expect(shownMinLevel({ min_level: 30 })).toBeNull();
+    expect(shownMinLevel({})).toBeNull();
+    expect(shownMinLevel({ min_level: 45 })).toBe(45);
   });
 });
 

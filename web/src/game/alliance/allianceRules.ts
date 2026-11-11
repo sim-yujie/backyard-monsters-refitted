@@ -1,9 +1,11 @@
 import type {
+  AllianceAd,
   AllianceListing,
   AllianceMember,
   AllianceRefusal,
   AllianceRole,
   AllianceType,
+  JoinMode,
   MyAlliance,
   TypeOption,
 } from "@/api/alliance";
@@ -92,15 +94,52 @@ export const hasRoom = (listing: Pick<AllianceListing, "members" | "member_limit
   listing.members < listing.member_limit;
 
 /**
- * Quick Join's pick: the first alliance of the type (or any) with room, in
- * the server's marketplace order (room first, then the most active). Null
+ * Quick Join's pick (design v5 §7a): the first Open alliance of the type (or
+ * any) with room, in the server's marketplace order (room first, then the
+ * most active), one in the player's language first when there is one. Null
  * when none fits; the window then offers Any type.
  */
 export const quickJoinPick = (
   listings: readonly AllianceListing[],
   type: AllianceType | "any",
-): AllianceListing | null =>
-  listings.find((listing) => (type === "any" || listing.type === type) && hasRoom(listing)) ?? null;
+  myLanguage: string | null = null,
+): AllianceListing | null => {
+  const fits = listings.filter(
+    (listing) => joinModeOf(listing) === "open" && (type === "any" || listing.type === type) && hasRoom(listing),
+  );
+  return (myLanguage ? fits.find((listing) => listing.language === myLanguage) : undefined) ?? fits[0] ?? null;
+};
+
+/* ── The marketplace ad (design v5 §7a) ─────────────────────────────────── */
+
+/** The minimum level's range and step on the form; the floor takes anyone (server `ALLIANCE_AD`). */
+export const MIN_LEVEL = { min: 30, max: 60, step: 5 } as const;
+/** The GMT bands an ad may name. */
+export const TIME_ZONE = { min: -12, max: 14 } as const;
+
+/** An alliance's joining mode; an older server's row is Ask to join. */
+export const joinModeOf = (ad: Partial<Pick<AllianceAd, "join_mode">>): JoinMode => ad.join_mode ?? "ask";
+
+/** "GMT+8", "GMT-5", "GMT". */
+export const gmtLabel = (zone: number): string => (zone === 0 ? "GMT" : `GMT${zone > 0 ? "+" : "-"}${Math.abs(zone)}`);
+
+/** The browser's own GMT band, rounded to the hour and kept in range: the Create form's start. */
+export const browserTimeZone = (offsetMinutes: number = new Date().getTimezoneOffset()): number =>
+  Math.min(TIME_ZONE.max, Math.max(TIME_ZONE.min, Math.round(-offsetMinutes / 60) || 0));
+
+/** One step along the GMT bands, stopping at either end. */
+export const stepTimeZone = (zone: number, step: 1 | -1): number =>
+  Math.min(TIME_ZONE.max, Math.max(TIME_ZONE.min, zone + step));
+
+/** One step along the minimum levels (by 5), stopping at either end. */
+export const stepMinLevel = (level: number, step: 1 | -1): number => {
+  const next = step > 0 ? Math.floor(level / MIN_LEVEL.step) * MIN_LEVEL.step + MIN_LEVEL.step : Math.ceil(level / MIN_LEVEL.step) * MIN_LEVEL.step - MIN_LEVEL.step;
+  return Math.min(MIN_LEVEL.max, Math.max(MIN_LEVEL.min, next));
+};
+
+/** A minimum level worth showing on the ad: the floor takes anyone, so only a higher one shows. */
+export const shownMinLevel = (ad: Partial<Pick<AllianceAd, "min_level">>): number | null =>
+  ad.min_level !== undefined && ad.min_level > MIN_LEVEL.min ? ad.min_level : null;
 
 /** The words for a refusal, with the time left on a wait. */
 export const refusalText = (refusal: Pick<AllianceRefusal, "message" | "availableAt">, now: number): string =>

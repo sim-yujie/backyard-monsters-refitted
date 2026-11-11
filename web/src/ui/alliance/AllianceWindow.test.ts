@@ -79,7 +79,7 @@ const fakeApi = (overrides: Partial<AllianceApi> = {}): AllianceApi => ({
   takeOver: vi.fn(() => ok({})),
   report: vi.fn(() => ok({})),
   leave: vi.fn(() => ok({})),
-  requestJoin: vi.fn(() => ok({})),
+  requestJoin: vi.fn(() => ok({ joined: false })),
   invite: vi.fn(() => ok({ inviteId: 1 })),
   answerInvite: vi.fn(() => ok({})),
   kick: vi.fn(() => ok({})),
@@ -181,22 +181,132 @@ describe("AllianceWindow: marketplace", () => {
     expect(buttonNamed(ALLIANCE_TEXT.asked)!.disabled).toBe(true);
   });
 
-  it("Quick Join asks the first alliance of the chosen type with room", async () => {
+  it("Quick Join joins the first Open alliance of the chosen type with room, asking the server for Open ones", async () => {
     const api = fakeApi({
       search: vi.fn(() =>
         ok({
-          alliances: [listing(1, { members: 15 }), listing(2, { type: "conquest", member_limit: 30 }), listing(3)],
+          alliances: [
+            listing(1, { members: 15, join_mode: "open" }),
+            listing(2, { type: "conquest", member_limit: 30, join_mode: "open" }),
+            listing(4, { join_mode: "ask" }),
+            listing(3, { join_mode: "open" }),
+          ],
           pageSize: 10,
-          totalResults: 3,
+          totalResults: 4,
         }),
       ),
     });
     await open(api);
-    const midas = [...document.querySelectorAll<HTMLButtonElement>(".alliance__chip")].find((chip) => chip.textContent?.startsWith("Midas"))!;
+    const midas = [...document.querySelectorAll<HTMLButtonElement>(".alliance__quick-types .alliance__chip")].find((chip) => chip.textContent?.startsWith("Midas"))!;
     midas.click();
     document.querySelector<HTMLButtonElement>(".alliance__quick-join")!.click();
     await flush();
+    expect(api.search).toHaveBeenLastCalledWith("", 0, { type: "midas", open: true });
     expect(api.requestJoin).toHaveBeenCalledWith(3);
+  });
+
+  it("Quick Join prefers an Open alliance in the player's language", async () => {
+    const api = fakeApi({
+      search: vi.fn(() =>
+        ok({
+          alliances: [listing(1, { join_mode: "open", language: "DE" }), listing(2, { join_mode: "open", language: "PH" })],
+          pageSize: 10,
+          totalResults: 2,
+          myCountry: "PH",
+        }),
+      ),
+    });
+    await open(api);
+    [...document.querySelectorAll<HTMLButtonElement>(".alliance__quick-types .alliance__chip")].at(-1)!.click();
+    document.querySelector<HTMLButtonElement>(".alliance__quick-join")!.click();
+    await flush();
+    expect(api.requestJoin).toHaveBeenCalledWith(2);
+  });
+
+  it("each ad shows its joining mode, flag, time zone and a minimum level above 30", async () => {
+    const api = fakeApi({
+      search: vi.fn(() =>
+        ok({
+          alliances: [
+            listing(1, { join_mode: "open", language: "PH", time_zone: 8, min_level: 40, description: "Goo farmers" }),
+            listing(2, { join_mode: "invite", time_zone: -5, min_level: 30 }),
+          ],
+          pageSize: 10,
+          totalResults: 2,
+        }),
+      ),
+    });
+    await open(api);
+    const rows = document.querySelectorAll(".alliance__item");
+    expect(rows[0]!.querySelector(".alliance__ad-mode")!.textContent).toBe("Open");
+    expect(rows[0]!.querySelector(".alliance__ad-flag img, .alliance__ad-flag")).not.toBeNull();
+    expect(rows[0]!.querySelector(".alliance__ad-zone")!.textContent).toBe("GMT+8");
+    expect(rows[0]!.querySelector(".alliance__ad-level")!.textContent).toBe("40+");
+    expect(rows[1]!.querySelector(".alliance__ad-mode")!.textContent).toBe("Invite only");
+    expect(rows[1]!.querySelector(".alliance__ad-zone")!.textContent).toBe("GMT-5");
+    expect(rows[1]!.querySelector(".alliance__ad-level")).toBeNull();
+    expect(rows[1]!.querySelector(".alliance__ad-flag")).toBeNull();
+  });
+
+  it("an opened ad shows its line; Open says Join, Invite only offers no button", async () => {
+    const api = fakeApi({
+      search: vi.fn(() =>
+        ok({
+          alliances: [listing(1, { join_mode: "open", description: "Goo farmers" }), listing(2, { join_mode: "invite" })],
+          pageSize: 10,
+          totalResults: 2,
+        }),
+      ),
+    });
+    await open(api);
+    document.querySelectorAll<HTMLButtonElement>(".alliance__row")[0]!.click();
+    expect(document.querySelector(".alliance__row-desc")!.textContent).toBe("Goo farmers");
+    expect(document.querySelector(".alliance__join")!.textContent).toBe(ALLIANCE_TEXT.join);
+    document.querySelectorAll<HTMLButtonElement>(".alliance__row")[1]!.click();
+    expect(document.querySelector(".alliance__join")).toBeNull();
+    expect(document.querySelector(".alliance__invite-only")!.textContent).toBe("Invite only");
+  });
+
+  it("Join on an Open alliance opens My alliance at once", async () => {
+    let joined = false;
+    const api = fakeApi({
+      mine: vi.fn(() => ok({ alliance: joined ? mine({ role: "member", permissions: [] }) : null, rejoinAt: null })),
+      search: vi.fn(() => ok({ alliances: [listing(5, { join_mode: "open" })], pageSize: 10, totalResults: 1 })),
+      requestJoin: vi.fn(() => {
+        joined = true;
+        return ok({ joined: true });
+      }),
+    });
+    const onChanged = vi.fn();
+    const view = await open(api, { onChanged });
+    document.querySelector<HTMLButtonElement>(".alliance__row")!.click();
+    document.querySelector<HTMLButtonElement>(".alliance__join")!.click();
+    await flush();
+    await flush();
+    expect(api.requestJoin).toHaveBeenCalledWith(5);
+    expect(onChanged).toHaveBeenCalled();
+    expect(view.kind).toBe("mine");
+  });
+
+  it("filters: Open, the player's flag and a type go to the server; Clear drops them", async () => {
+    const api = fakeApi({
+      search: vi.fn(() => ok({ alliances: [listing(1)], pageSize: 10, totalResults: 1, myCountry: "PH" })),
+    });
+    await open(api);
+    const filter = (index: number) => document.querySelectorAll<HTMLButtonElement>(".alliance__filters .alliance__filter")[index]!;
+    filter(0).click();
+    await flush();
+    expect(api.search).toHaveBeenLastCalledWith("", 0, { type: null, language: null, open: true });
+    filter(1).click();
+    await flush();
+    expect(api.search).toHaveBeenLastCalledWith("", 0, { type: null, language: "PH", open: true });
+    filter(4).click();
+    await flush();
+    expect(api.search).toHaveBeenLastCalledWith("", 0, { type: "fortress", language: "PH", open: true });
+    expect(filter(4).getAttribute("aria-pressed")).toBe("true");
+    buttonNamed(ALLIANCE_TEXT.clear)!.click();
+    await flush();
+    expect(api.search).toHaveBeenLastCalledWith("", 0, { type: null, language: null, open: false });
   });
 
   it("shows a join-gate refusal with the next step", async () => {
@@ -267,8 +377,51 @@ describe("AllianceWindow: create", () => {
     document.querySelector<HTMLButtonElement>(".alliance__submit")!.click();
     await flush();
     await flush();
-    expect(api.create).toHaveBeenCalledWith({ name: "Goo Lords", image: 1, description: "We farm goo.", type: "fortress" });
+    expect(api.create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Goo Lords", image: 1, description: "We farm goo.", type: "fortress", join_mode: "open", language: null, min_level: 30 }),
+    );
     expect(view.kind).toBe("mine");
+  });
+
+  it("the ad fields: joining mode, time zone and minimum level go with the alliance", async () => {
+    const api = fakeApi();
+    await open(api);
+    document.querySelector<HTMLButtonElement>(".alliance__create")!.click();
+    const name = document.querySelector<HTMLInputElement>(".alliance__form input")!;
+    name.value = "Goo Lords";
+    name.dispatchEvent(new Event("input"));
+    const about = document.querySelector<HTMLTextAreaElement>(".alliance__form textarea")!;
+    about.value = "We farm goo.";
+    about.dispatchEvent(new Event("input"));
+    const modes = [...document.querySelectorAll<HTMLButtonElement>(".alliance__mode")];
+    expect(modes.map((mode) => mode.textContent)).toEqual(["Open", "Ask", "Invite only"]);
+    expect(modes[0]!.getAttribute("aria-pressed")).toBe("true");
+    modes[2]!.click();
+    expect(modes[2]!.getAttribute("aria-pressed")).toBe("true");
+    expect(modes[0]!.getAttribute("aria-pressed")).toBe("false");
+    const [zone, level] = [...document.querySelectorAll(".alliance__stepper")];
+    const zoneText = zone!.querySelector(".alliance__stepper-value")!.textContent!;
+    expect(zoneText).toMatch(/^GMT/);
+    expect(level!.querySelector(".alliance__stepper-value")!.textContent).toBe(ALLIANCE_TEXT.anyLevel);
+    const levelUp = level!.querySelectorAll<HTMLButtonElement>("button")[1]!;
+    levelUp.click();
+    levelUp.click();
+    expect(level!.querySelector(".alliance__stepper-value")!.textContent).toBe("40+");
+    document.querySelector<HTMLButtonElement>(".alliance__submit")!.click();
+    await flush();
+    expect(api.create).toHaveBeenCalledWith(expect.objectContaining({ join_mode: "invite", min_level: 40 }));
+  });
+
+  it("the language button opens the country list; a pick shows its flag", async () => {
+    await open(fakeApi());
+    document.querySelector<HTMLButtonElement>(".alliance__create")!.click();
+    const pick = document.querySelector<HTMLButtonElement>(".alliance__lang-pick")!;
+    expect(pick.textContent).toBe(ALLIANCE_TEXT.anyLanguage);
+    pick.click();
+    const option = document.querySelector<HTMLButtonElement>(".alliance__lang-list button[data-code='PH']")!;
+    option.click();
+    expect(document.querySelector(".alliance__lang-list")).toBeNull();
+    expect(pick.querySelector(".country-flag, img")).not.toBeNull();
   });
 
   it("does not send a name that is too short", async () => {
@@ -292,6 +445,32 @@ describe("AllianceWindow: my alliance", () => {
     expect(buttonNamed(ALLIANCE_TEXT.changeType)).toBeDefined();
     const tabs = [...document.querySelectorAll(".alliance__tab")].map((tab) => tab.getAttribute("aria-label"));
     expect(tabs).toEqual(["Overview", "Constellation", "Members", "Trade", "Territory"]);
+  });
+
+  it("Edit starts from the saved ad and sends the whole ad back", async () => {
+    const api = fakeApi({
+      mine: vi.fn(() => ok({ alliance: mine({ join_mode: "ask", language: "DE", time_zone: -5, min_level: 45 }), rejoinAt: null })),
+    });
+    await open(api);
+    expect(document.querySelector(".alliance__ad-mode")!.textContent).toBe("Ask");
+    buttonNamed(ALLIANCE_TEXT.edit)!.click();
+    const modes = [...document.querySelectorAll<HTMLButtonElement>(".alliance__mode")];
+    expect(modes[1]!.getAttribute("aria-pressed")).toBe("true");
+    const [zone, level] = [...document.querySelectorAll(".alliance__stepper")];
+    expect(zone!.querySelector(".alliance__stepper-value")!.textContent).toBe("GMT-5");
+    expect(level!.querySelector(".alliance__stepper-value")!.textContent).toBe("45+");
+    modes[0]!.click();
+    zone!.querySelectorAll<HTMLButtonElement>("button")[1]!.click();
+    buttonNamed(ALLIANCE_TEXT.save)!.click();
+    await flush();
+    expect(api.edit).toHaveBeenCalledWith({
+      image: 4,
+      description: "We farm goo.",
+      join_mode: "open",
+      language: "DE",
+      time_zone: -4,
+      min_level: 45,
+    });
   });
 
   it("shows phase 2's Overview cards, and a goal set from the menu reloads on the same tab", async () => {

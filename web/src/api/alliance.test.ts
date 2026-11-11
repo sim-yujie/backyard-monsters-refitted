@@ -69,7 +69,28 @@ describe("allianceApi", () => {
     expect(calls[0]!.url).toContain("/alliance/searchalliances");
     expect(calls[0]!.method).toBe("POST");
     expect(calls[0]!.body).toContain("goo");
-    expect(answer).toEqual({ ok: true, alliances: [], pageSize: 20, totalResults: 3 });
+    expect(answer).toEqual({ ok: true, alliances: [], pageSize: 20, totalResults: 3, myCountry: null });
+  });
+
+  it("sends the marketplace filters, and reads the player's country", async () => {
+    stubFetch({ error: 0, alliances: [], pageSize: 10, totalResults: 0, my_country: "PH" });
+    const answer = await allianceApi.search("", 0, { type: "midas", language: "PH", open: true });
+    const body = new URLSearchParams(calls[0]!.body as string);
+    expect([body.get("type"), body.get("language"), body.get("open")]).toEqual(["midas", "PH", "true"]);
+    expect(answer.ok && answer.myCountry).toBe("PH");
+  });
+
+  it("sends the ad with Edit, an unset language or time zone as empty", async () => {
+    stubFetch({ error: 0 });
+    await allianceApi.edit({ image: 2, description: "Hi", join_mode: "invite", language: null, time_zone: null, min_level: 40 });
+    const body = new URLSearchParams(calls[0]!.body as string);
+    expect([body.get("join_mode"), body.get("language"), body.get("time_zone"), body.get("min_level")]).toEqual(["invite", "", "", "40"]);
+  });
+
+  it("says when Join took the player straight in", async () => {
+    stubFetch({ error: 0, joined: true });
+    const answer = await allianceApi.requestJoin(5);
+    expect(answer).toEqual({ ok: true, joined: true });
   });
 
   it("answers an invite as accepted or declined", async () => {

@@ -18,6 +18,28 @@ export type AllianceRole = "leader" | "officer" | "member";
 /** The three types, smallest first ("up" is the next one along). */
 export const ALLIANCE_TYPES: readonly AllianceType[] = ["midas", "conquest", "fortress"];
 
+/** How a player gets in (design v5 §7a): Open joins at once, Ask waits for an answer, Invite only takes no asks. */
+export type JoinMode = "open" | "ask" | "invite";
+export const JOIN_MODES: readonly JoinMode[] = ["open", "ask", "invite"];
+
+/** The marketplace ad's settings (design v5 §7a); the description rides beside them. */
+export interface AllianceAd {
+  readonly join_mode: JoinMode;
+  /** A chat country code (`PH`), or null for any language. */
+  readonly language: string | null;
+  /** A whole GMT band, -12 to 14, or null when not set. */
+  readonly time_zone: number | null;
+  /** 30 to 60; 30 takes anyone. */
+  readonly min_level: number;
+}
+
+/** The marketplace filters the server applies. */
+export interface MarketFilters {
+  readonly type?: AllianceType | null;
+  readonly language?: string | null;
+  readonly open?: boolean;
+}
+
 /** One type's quote for a switch (`type_options` on My alliance). */
 export interface TypeOption {
   readonly type: AllianceType;
@@ -31,7 +53,7 @@ export interface TypeOption {
 }
 
 /** The player's own alliance, as `myalliance` sends it (phase 2 adds {@link AllianceProgressFields}). */
-export interface MyAlliance extends AllianceProgressFields {
+export interface MyAlliance extends AllianceProgressFields, Partial<AllianceAd> {
   readonly alliance_id: number;
   readonly name: string;
   /** The shield, 1 to 41. */
@@ -72,8 +94,8 @@ export interface AllianceMember {
   readonly is_leader?: boolean;
 }
 
-/** One alliance in the marketplace. */
-export interface AllianceListing {
+/** One alliance in the marketplace; older servers leave the ad out. */
+export interface AllianceListing extends Partial<AllianceAd> {
   readonly alliance_id: number;
   readonly name: string;
   readonly image: number;
@@ -87,13 +109,20 @@ export interface AllianceListing {
   readonly type: AllianceType;
   readonly rank?: number | null;
   readonly ep?: number | null;
+  /** The ad's line. */
+  readonly description?: string;
 }
 
 export interface AlliancePage {
   readonly alliances: readonly AllianceListing[];
   readonly pageSize: number;
   readonly totalResults: number;
+  /** The player's own chat country, for Quick Join and the language filter; null when not set. */
+  readonly myCountry?: string | null;
 }
+
+/** The ad as Create and Edit send it. */
+export type AdForm = AllianceAd;
 
 /** One row of the invites inbox (`getmessages`): an invite to the player, or a request to join the player's alliance. */
 export interface AllianceInviteRow {
@@ -126,15 +155,18 @@ export type AllianceResult<T> = ({ readonly ok: true } & T) | AllianceRefusal;
 export interface AllianceApi {
   mine(): Promise<AllianceResult<{ alliance: MyAlliance | null; rejoinAt: number | null }>>;
   members(): Promise<AllianceResult<{ members: readonly AllianceMember[] }>>;
-  search(search: string, page: number): Promise<AllianceResult<AlliancePage>>;
-  create(form: { name: string; image: number; description: string; type: AllianceType }): Promise<AllianceResult<{ alliance: MyAlliance | null }>>;
-  edit(form: { image: number; description: string }): Promise<AllianceResult<object>>;
+  search(search: string, page: number, filters?: MarketFilters): Promise<AllianceResult<AlliancePage>>;
+  create(
+    form: { name: string; image: number; description: string; type: AllianceType } & Partial<AdForm>,
+  ): Promise<AllianceResult<{ alliance: MyAlliance | null }>>;
+  edit(form: { image: number; description: string } & Partial<AdForm>): Promise<AllianceResult<object>>;
   changeType(type: AllianceType): Promise<AllianceResult<object>>;
   rename(name: string): Promise<AllianceResult<{ name: string }>>;
   takeOver(): Promise<AllianceResult<object>>;
   report(allianceId: number, reason: string): Promise<AllianceResult<object>>;
   leave(): Promise<AllianceResult<object>>;
-  requestJoin(allianceId: number): Promise<AllianceResult<object>>;
+  /** Join (an Open alliance: `joined`) or Ask to join (a request waits). */
+  requestJoin(allianceId: number): Promise<AllianceResult<{ joined: boolean }>>;
   invite(userid: number): Promise<AllianceResult<{ inviteId: number | null }>>;
   answerInvite(inviteId: number, accept: boolean): Promise<AllianceResult<object>>;
   kick(userid: number): Promise<AllianceResult<object>>;
@@ -191,6 +223,21 @@ const numberOr = (value: unknown, fallback: number): number => {
  * The server's member rows, with `online` lifted out of `status`
  * (`services/alliance/allianceMember.ts` sends `status: { online, damage_protection }`).
  */
+/** The ad as form fields: the calls are form-encoded, so "not set" goes as an empty string. */
+export const adBody = (ad: Partial<AdForm>): FormBody => ({
+  ...(ad.join_mode !== undefined ? { join_mode: ad.join_mode } : {}),
+  ...(ad.language !== undefined ? { language: ad.language ?? "" } : {}),
+  ...(ad.time_zone !== undefined ? { time_zone: ad.time_zone === null ? "" : ad.time_zone } : {}),
+  ...(ad.min_level !== undefined ? { min_level: ad.min_level } : {}),
+});
+
+/** The filters as form fields; each left out when off. */
+const filterBody = (filters: MarketFilters = {}): FormBody => ({
+  ...(filters.type ? { type: filters.type } : {}),
+  ...(filters.language ? { language: filters.language } : {}),
+  ...(filters.open ? { open: "true" } : {}),
+});
+
 export const membersOf = (rows: unknown): AllianceMember[] =>
   Array.isArray(rows)
     ? rows.map((row: AllianceMember & { status?: { online?: unknown } }) => ({
@@ -209,11 +256,12 @@ export const allianceApi: AllianceApi = {
     call(getFrom("myalliancemembers"), (body) => ({
       members: membersOf(body["members"]),
     })),
-  search: (search, page) =>
-    call(postTo("searchalliances", { ...(search ? { search } : {}), page }), (body) => ({
+  search: (search, page, filters) =>
+    call(postTo("searchalliances", { ...(search ? { search } : {}), page, ...filterBody(filters) }), (body) => ({
       alliances: Array.isArray(body["alliances"]) ? (body["alliances"] as AllianceListing[]) : [],
       pageSize: numberOr(body["pageSize"], 10),
       totalResults: numberOr(body["totalResults"], 0),
+      myCountry: typeof body["my_country"] === "string" && body["my_country"] ? body["my_country"] : null,
     })),
   create: (form) =>
     call(
@@ -222,10 +270,12 @@ export const allianceApi: AllianceApi = {
         alliance_image: form.image,
         alliance_desc: form.description,
         alliance_type: form.type,
+        ...adBody(form),
       }),
       (body) => ({ alliance: (body["alliance"] as MyAlliance | null | undefined) ?? null }),
     ),
-  edit: (form) => call(postTo("editalliance", { alliance_image: form.image, alliance_desc: form.description }), nothing),
+  edit: (form) =>
+    call(postTo("editalliance", { alliance_image: form.image, alliance_desc: form.description, ...adBody(form) }), nothing),
   changeType: (type) => call(postTo("changetype", { alliance_type: type }), nothing),
   rename: (name) =>
     call(postTo("rename", { alliance_name: name }), (body) => ({ name: String(body["name"] ?? name) })),
@@ -233,7 +283,8 @@ export const allianceApi: AllianceApi = {
   report: (allianceId, reason) =>
     call(postTo("report", { alliance_id: allianceId, ...(reason ? { reason } : {}) }), nothing),
   leave: () => call(postTo("leavealliance"), nothing),
-  requestJoin: (allianceId) => call(postTo("requestjoin", { alliance_id: allianceId }), nothing),
+  requestJoin: (allianceId) =>
+    call(postTo("requestjoin", { alliance_id: allianceId }), (body) => ({ joined: body["joined"] === true })),
   invite: (userid) =>
     call(postTo("inviteuser", { userid }), (body) => ({
       inviteId: Number(body["invite_id"]) > 0 ? Number(body["invite_id"]) : null,

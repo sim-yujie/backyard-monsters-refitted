@@ -1,7 +1,9 @@
 import { getSession } from "@/api/auth";
 import {
   ALLIANCE_TYPES,
+  JOIN_MODES,
   allianceApi,
+  type AdForm,
   type AllianceApi,
   type AllianceInviteRow,
   type AllianceListing,
@@ -9,6 +11,7 @@ import {
   type AllianceResult,
   type AllianceRefusal,
   type AllianceType,
+  type JoinMode,
   type MyAlliance,
 } from "@/api/alliance";
 import { friendsApi, SEARCH_MIN_LENGTH, type FriendsApi, type PlayerResult } from "@/api/friends";
@@ -16,10 +19,13 @@ import { avatarOf, avatarUrl } from "@/game/avatars";
 import {
   ALLIANCE_DESC_MAX,
   ALLIANCE_NAME_MAX,
+  browserTimeZone,
   canEdit,
   canInvite,
   descriptionProblem,
   gateStep,
+  gmtLabel,
+  joinModeOf,
   memberActions,
   membersLine,
   nameProblem,
@@ -32,6 +38,9 @@ import {
   ROLE_WORD,
   SHIELD_COUNT,
   shieldUrl,
+  shownMinLevel,
+  stepMinLevel,
+  stepTimeZone,
   switchSummary,
   TYPE_INFO,
   type MemberAction,
@@ -63,6 +72,9 @@ import { onlineDot } from "@/ui/onlineDot";
 import { Popup } from "@/ui/Popup";
 import { StarEditor } from "@/ui/alliance/StarEditor";
 import { make } from "@/ui/friends/rows";
+import { CountryPicker } from "@/ui/CountryPicker";
+import { countryFlagImage } from "@/ui/countryFlag";
+import { countryName } from "@/game/account/countries";
 import "./alliance.css";
 
 /**
@@ -94,7 +106,7 @@ export const ALLIANCE_TEXT = {
   create: "Create",
   createTitle: "Create an alliance",
   quickJoin: "Quick Join",
-  quickJoinTitle: "Ask the most active alliance of this type with room",
+  quickJoinTitle: "Join the most active Open alliance of this type with room",
   anyType: "Any",
   join: "Join",
   ask: "Ask to join",
@@ -108,7 +120,26 @@ export const ALLIANCE_TEXT = {
   noMatch: "No alliance has that name.",
   leader: (name: string): string => `Leader: ${name}`,
   askedNote: (name: string): string => `Asked to join ${name}. Its Leader or an Officer will answer.`,
-  quickNone: "No alliance of that type has room. Try Any.",
+  quickNone: "No Open alliance of that type has room. Try Any.",
+  /** The joining modes (design v5 §7a): the chip's word and its longer title. */
+  joinMode: { open: "Open", ask: "Ask", invite: "Invite only" } as Readonly<Record<JoinMode, string>>,
+  joinModeTitle: {
+    open: "Open: anyone joins at once",
+    ask: "Ask to join: the Leader or an Officer answers",
+    invite: "Invite only: no asks",
+  } as Readonly<Record<JoinMode, string>>,
+  joining: "Joining",
+  language: "Language",
+  anyLanguage: "Any",
+  timeZone: "Time zone",
+  minLevel: "Min level",
+  minLevelTitle: (level: number): string => `Players from level ${level}`,
+  anyLevel: "Any",
+  filters: "Filters",
+  openOnly: "Open",
+  openOnlyTitle: "Only alliances you can join at once",
+  myLanguageTitle: (name: string): string => `Only alliances in ${name}`,
+  clear: "Clear",
   rejoinWait: (left: string): string => `You can join an alliance again in ${left}.`,
   invites: "Invites",
   invitedBy: (who: string): string => `From ${who}`,
@@ -269,6 +300,43 @@ const membersBadge = (count: number, limit: number): HTMLElement => {
   return badge;
 };
 
+/** Each joining mode's painted icon. */
+const JOIN_ICON: Readonly<Record<JoinMode, GameIconName>> = { open: "addfriend", ask: "mail", invite: "shield" };
+
+/** The ad's editable part, as the Create and Edit forms hold it. */
+type AdDraft = { -readonly [K in keyof AdForm]: AdForm[K] };
+
+/** The ad's settings in one line of icons and numbers: mode, flag, GMT band, minimum level. */
+const adLine = (ad: Partial<AdForm>): HTMLElement => {
+  const line = make("span", "alliance__ad");
+  const mode = joinModeOf(ad);
+  const modeNode = make("span", `alliance__ad-item alliance__ad-mode alliance__ad-mode--${mode}`);
+  modeNode.title = ALLIANCE_TEXT.joinModeTitle[mode];
+  modeNode.setAttribute("aria-label", ALLIANCE_TEXT.joinModeTitle[mode]);
+  modeNode.append(gameIcon(JOIN_ICON[mode], { size: 16, decorative: true }), make("span", "", ALLIANCE_TEXT.joinMode[mode]));
+  line.append(modeNode);
+  if (ad.language) {
+    const flag = make("span", "alliance__ad-item alliance__ad-flag");
+    flag.title = countryName(ad.language);
+    flag.append(countryFlagImage(ad.language));
+    line.append(flag);
+  }
+  if (ad.time_zone !== null && ad.time_zone !== undefined) {
+    const zone = make("span", "alliance__ad-item alliance__ad-zone");
+    zone.append(gameIcon("time", { size: 16, decorative: true }), make("span", "", gmtLabel(ad.time_zone)));
+    line.append(zone);
+  }
+  const level = shownMinLevel(ad);
+  if (level !== null) {
+    const node = make("span", "alliance__ad-item alliance__ad-level");
+    node.title = ALLIANCE_TEXT.minLevelTitle(level);
+    node.setAttribute("aria-label", ALLIANCE_TEXT.minLevelTitle(level));
+    node.append(gameIcon("levelup", { size: 16, decorative: true }), make("span", "", `${level}+`));
+    line.append(node);
+  }
+  return line;
+};
+
 const typeBadge = (type: AllianceType): HTMLElement =>
   make("span", `alliance__type alliance__type--${type}`, TYPE_INFO[type]?.label ?? type);
 
@@ -316,9 +384,15 @@ export class AllianceWindow {
   private readonly reported = new Set<number>();
   private rejoinAt: number | null = null;
   private inbox: readonly AllianceInviteRow[] = [];
+  /** The marketplace filters (design v5 §7a); the server narrows the list. */
+  private filters: { type: AllianceType | null; language: string | null; open: boolean } = { type: null, language: null, open: false };
+  /** The player's chat country, from the last search: Quick Join and the language filter use it. */
+  private myCountry: string | null = null;
 
-  // Create form, kept while the player goes Back and forth.
-  private draft = { name: "", image: 1, description: "", type: "midas" as AllianceType };
+  // Create form, kept while the player goes Back and forth. A new alliance starts Open.
+  private draft = AllianceWindow.newDraft();
+  /** The Edit form's ad while it is open. */
+  private advertAd: AdDraft | null = null;
 
   // My alliance.
   private members: readonly AllianceMember[] = [];
@@ -344,6 +418,10 @@ export class AllianceWindow {
     redraw: () => this.render(),
     now: () => this.now(),
   };
+
+  private static newDraft(): { name: string; image: number; description: string; type: AllianceType } & AdDraft {
+    return { name: "", image: 1, description: "", type: "midas", join_mode: "open", language: null, time_zone: browserTimeZone(), min_level: 30 };
+  }
 
   constructor(options: AllianceWindowOptions = {}) {
     this.options = options;
@@ -490,7 +568,7 @@ export class AllianceWindow {
 
   private async loadMarket(): Promise<void> {
     const generation = this.generation;
-    const answer = await this.api.search(this.search, this.page);
+    const answer = await this.api.search(this.search, this.page, this.filters);
     if (this.destroyed || generation !== this.generation || this.view.kind !== "market") return;
     if (!answer.ok) {
       this.refuse(answer);
@@ -500,6 +578,7 @@ export class AllianceWindow {
       this.listings = answer.alliances;
       this.total = answer.totalResults;
       this.pageSize = answer.pageSize;
+      this.myCountry = answer.myCountry ?? null;
     }
     this.render();
   }
@@ -613,9 +692,9 @@ export class AllianceWindow {
     }
     const invites = this.inbox.filter((row) => row.type === "invite");
     if (invites.length > 0) nodes.push(this.invitesBox(invites));
-    nodes.push(this.quickJoinBox(), this.searchBox());
+    nodes.push(this.quickJoinBox(), this.searchBox(), this.filtersBox());
 
-    if (this.listings.length === 0 && !this.search) {
+    if (this.listings.length === 0 && !this.search && !this.filtering()) {
       const empty = make("div", "alliance__first");
       empty.append(
         shieldImage(1, "medium", "alliance__first-shield"),
@@ -713,15 +792,16 @@ export class AllianceWindow {
   }
 
   private async quickJoin(): Promise<void> {
-    // The first page is the server's order: room first, then the most active.
-    const answer = this.search || this.page > 0 ? await this.api.search("", 0) : null;
+    // Open alliances of the type, in the server's order: room first, then the most active.
+    const type = this.quickType === "any" ? null : this.quickType;
+    const answer = await this.api.search("", 0, { type, open: true });
     if (this.destroyed) return;
-    if (answer && !answer.ok) {
+    if (!answer.ok) {
       this.refuse(answer);
       return;
     }
-    const listings = answer?.ok ? answer.alliances : this.listings;
-    const pick = quickJoinPick(listings.filter((listing) => !this.asked.has(listing.alliance_id)), this.quickType);
+    const country = answer.myCountry ?? this.myCountry;
+    const pick = quickJoinPick(answer.alliances.filter((listing) => !this.asked.has(listing.alliance_id)), this.quickType, country);
     if (!pick) {
       this.say(ALLIANCE_TEXT.quickNone, "bad");
       return;
@@ -753,6 +833,64 @@ export class AllianceWindow {
     return form;
   }
 
+  private filtering(): boolean {
+    return this.filters.open || this.filters.type !== null || this.filters.language !== null;
+  }
+
+  /** Type, language and Open only (design v5 §7a): chips the server narrows the list by. */
+  private filtersBox(): HTMLElement {
+    const row = make("div", "alliance__filters");
+    row.setAttribute("role", "group");
+    row.setAttribute("aria-label", ALLIANCE_TEXT.filters);
+    const chip = (pressed: boolean, title: string, fill: (node: HTMLButtonElement) => void, flip: () => void): HTMLButtonElement => {
+      const node = make("button", "alliance__chip alliance__filter");
+      node.type = "button";
+      node.title = title;
+      node.setAttribute("aria-pressed", String(pressed));
+      fill(node);
+      node.addEventListener("click", () => {
+        flip();
+        this.page = 0;
+        this.opened = null;
+        void this.loadMarket();
+      });
+      return node;
+    };
+    row.append(
+      chip(this.filters.open, ALLIANCE_TEXT.openOnlyTitle, (node) => {
+        node.append(gameIcon(JOIN_ICON.open, { size: 16, decorative: true }), make("span", "alliance__chip-word", ALLIANCE_TEXT.openOnly));
+      }, () => (this.filters.open = !this.filters.open)),
+    );
+    const country = this.filters.language ?? this.myCountry;
+    if (country) {
+      row.append(
+        chip(this.filters.language !== null, ALLIANCE_TEXT.myLanguageTitle(countryName(country)), (node) => {
+          node.setAttribute("aria-label", ALLIANCE_TEXT.myLanguageTitle(countryName(country)));
+          node.append(countryFlagImage(country));
+        }, () => (this.filters.language = this.filters.language ? null : country)),
+      );
+    }
+    for (const type of ALLIANCE_TYPES) {
+      row.append(
+        chip(this.filters.type === type, TYPE_INFO[type].label, (node) => {
+          const size = make("span", "alliance__chip-size");
+          size.append(gameIcon("friends", { size: 16, decorative: true }), make("span", "alliance__chip-count", String(TYPE_INFO[type].members)));
+          node.append(size);
+        }, () => (this.filters.type = this.filters.type === type ? null : type)),
+      );
+    }
+    if (this.filtering()) {
+      const clear = button(ALLIANCE_TEXT.clear, "btn--outline alliance__filter-clear", () => {
+        this.filters = { type: null, language: null, open: false };
+        this.page = 0;
+        this.opened = null;
+        void this.loadMarket();
+      });
+      row.append(clear);
+    }
+    return row;
+  }
+
   private pager(pages: number): HTMLElement {
     const row = make("div", "alliance__pager");
     const prev = button(ALLIANCE_TEXT.prev, "btn--outline", () => this.goPage(this.page - 1), "Previous page");
@@ -779,7 +917,7 @@ export class AllianceWindow {
     row.type = "button";
     row.setAttribute("aria-expanded", String(opened));
     const words = make("span", "alliance__row-words");
-    words.append(make("strong", "alliance__row-name", listing.name), typeBadge(listing.type));
+    words.append(make("strong", "alliance__row-name", listing.name), typeBadge(listing.type), adLine(listing));
     // The green number: members online now, as My Alliance's "online" (server `status`).
     const onlineNow = listing.online_members ?? 0;
     const active = make("span", "alliance__active", formatAmount(onlineNow));
@@ -799,16 +937,26 @@ export class AllianceWindow {
     item.append(row);
     if (opened) {
       const more = make("div", "alliance__row-more");
+      if (listing.description) more.append(make("p", "alliance__row-desc", listing.description));
       more.append(make("span", "alliance__row-leader", ALLIANCE_TEXT.leader(listing.leader_name)));
+      const mode = joinModeOf(listing);
       const full = listing.members >= listing.member_limit;
       const asked = this.asked.has(listing.alliance_id);
-      const ask = button(full ? ALLIANCE_TEXT.full : asked ? ALLIANCE_TEXT.asked : ALLIANCE_TEXT.ask, "btn--primary", () => void this.ask(listing));
-      ask.disabled = full || asked;
+      if (mode === "invite") {
+        const note = make("span", "alliance__invite-only");
+        note.append(gameIcon(JOIN_ICON.invite, { size: 16, decorative: true }), make("span", "", ALLIANCE_TEXT.joinMode.invite));
+        more.append(note);
+      } else {
+        const words = full ? ALLIANCE_TEXT.full : mode === "open" ? ALLIANCE_TEXT.join : asked ? ALLIANCE_TEXT.asked : ALLIANCE_TEXT.ask;
+        const ask = button(words, "btn--primary alliance__join", () => void this.ask(listing), ALLIANCE_TEXT.joinModeTitle[mode]);
+        ask.disabled = full || (mode === "ask" && asked);
+        more.append(ask);
+      }
       const reported = this.reported.has(listing.alliance_id);
       const report = button(reported ? ALLIANCE_TEXT.reported : ALLIANCE_TEXT.report, "btn--outline alliance__report", () => void this.report(listing));
       report.disabled = reported;
       report.prepend(gameIcon("report", { size: 16, decorative: true }));
-      more.append(ask, report);
+      more.append(report);
       item.append(more);
     }
     return item;
@@ -821,6 +969,12 @@ export class AllianceWindow {
       if (answer.reason === "requestPending") this.asked.add(listing.alliance_id);
       this.refuse(answer);
       this.render();
+      return;
+    }
+    if (answer.joined) {
+      // An Open alliance took the player in: My alliance opens.
+      this.say(null);
+      await this.changed();
       return;
     }
     this.asked.add(listing.alliance_id);
@@ -872,6 +1026,7 @@ export class AllianceWindow {
 
     form.append(make("p", "alliance__note", ALLIANCE_TEXT.typeIntro), this.typeCards(this.draft.type, (type) => (this.draft.type = type)));
     form.append(make("p", "alliance__note alliance__note--soft", ALLIANCE_TEXT.typeLater));
+    form.append(this.adFields(this.draft));
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       void this.create();
@@ -916,6 +1071,118 @@ export class AllianceWindow {
     return grid;
   }
 
+  /** A labelled group of buttons (not a <label>: a click on its words must not press the first button). */
+  private group(label: string, control: HTMLElement): HTMLElement {
+    const wrap = make("div", "alliance__field");
+    const words = make("span", "alliance__label", label);
+    words.id = `alliance-${label.toLowerCase().replace(/\W+/g, "-")}`;
+    control.setAttribute("aria-labelledby", words.id);
+    wrap.append(words, control);
+    return wrap;
+  }
+
+  /** ‹ value ›: one step each press, the value redrawn in place so the rest of the form keeps what was typed. */
+  private stepper(icon: GameIconName, read: () => string, step: (direction: 1 | -1) => void, ends: () => [boolean, boolean]): HTMLElement {
+    const box = make("div", "alliance__stepper");
+    box.setAttribute("role", "group");
+    const value = make("span", "alliance__stepper-value");
+    const less = button("‹", "btn--outline alliance__stepper-go", () => press(-1), "Less");
+    const more = button("›", "btn--outline alliance__stepper-go", () => press(1), "More");
+    const draw = (): void => {
+      value.replaceChildren(gameIcon(icon, { size: 16, decorative: true }), make("span", "", read()));
+      const [atMin, atMax] = ends();
+      less.disabled = atMin;
+      more.disabled = atMax;
+    };
+    const press = (direction: 1 | -1): void => {
+      step(direction);
+      draw();
+    };
+    draw();
+    box.append(less, value, more);
+    return box;
+  }
+
+  /**
+   * The ad's settings (design v5 §7a): joining mode, language, time zone,
+   * minimum level. Every press changes `ad` and redraws in place.
+   */
+  private adFields(ad: AdDraft): HTMLElement {
+    const box = make("div", "alliance__ad-fields");
+
+    const modes = make("div", "alliance__modes");
+    for (const mode of JOIN_MODES) {
+      const chip = make("button", "alliance__chip alliance__mode");
+      chip.type = "button";
+      chip.dataset["mode"] = mode;
+      chip.title = ALLIANCE_TEXT.joinModeTitle[mode];
+      chip.setAttribute("aria-pressed", String(ad.join_mode === mode));
+      chip.append(gameIcon(JOIN_ICON[mode], { size: 16, decorative: true }), make("span", "alliance__chip-word", ALLIANCE_TEXT.joinMode[mode]));
+      chip.addEventListener("click", (event) => {
+        event.preventDefault();
+        ad.join_mode = mode;
+        for (const other of modes.querySelectorAll("[data-mode]")) other.setAttribute("aria-pressed", String(other === chip));
+      });
+      modes.append(chip);
+    }
+    box.append(this.group(ALLIANCE_TEXT.joining, modes));
+
+    // Language: the chat country list, opened under the button; "Not set" is any language.
+    const language = make("div", "alliance__lang");
+    const pick = make("button", "btn btn--outline alliance__lang-pick");
+    pick.type = "button";
+    pick.setAttribute("aria-expanded", "false");
+    const drawPick = (): void => {
+      pick.replaceChildren(
+        ...(ad.language ? [countryFlagImage(ad.language), make("span", "", countryName(ad.language))] : [make("span", "", ALLIANCE_TEXT.anyLanguage)]),
+      );
+    };
+    let picker: CountryPicker | null = null;
+    pick.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (picker) {
+        picker.element.remove();
+        picker = null;
+        pick.setAttribute("aria-expanded", "false");
+        return;
+      }
+      picker = new CountryPicker({
+        selected: ad.language,
+        onPick: (code) => {
+          ad.language = code;
+          drawPick();
+          picker?.element.remove();
+          picker = null;
+          pick.setAttribute("aria-expanded", "false");
+        },
+      });
+      picker.element.classList.add("alliance__lang-list");
+      language.append(picker.element);
+      pick.setAttribute("aria-expanded", "true");
+      picker.revealSelected();
+    });
+    drawPick();
+    language.append(pick);
+    box.append(this.group(ALLIANCE_TEXT.language, language));
+
+    const zone = this.stepper(
+      "time",
+      () => (ad.time_zone === null ? "—" : gmtLabel(ad.time_zone)),
+      (direction) => (ad.time_zone = ad.time_zone === null ? browserTimeZone() : stepTimeZone(ad.time_zone, direction)),
+      () => (ad.time_zone === null ? [false, false] : [ad.time_zone <= -12, ad.time_zone >= 14]),
+    );
+    const level = this.stepper(
+      "levelup",
+      () => (shownMinLevel(ad) === null ? ALLIANCE_TEXT.anyLevel : `${ad.min_level}+`),
+      (direction) => (ad.min_level = stepMinLevel(ad.min_level, direction)),
+      () => [ad.min_level <= 30, ad.min_level >= 60],
+    );
+    const numbers = make("div", "alliance__ad-numbers");
+    numbers.append(this.group(ALLIANCE_TEXT.timeZone, zone), this.group(ALLIANCE_TEXT.minLevel, level));
+    box.append(numbers);
+    return box;
+  }
+
   /** The three type cards; each leads with "Up to N members". */
   private typeCards(chosen: AllianceType, pick: (type: AllianceType) => void): HTMLElement {
     const cards = make("div", "alliance__types");
@@ -956,13 +1223,17 @@ export class AllianceWindow {
       image: this.draft.image,
       description: this.draft.description.trim(),
       type: this.draft.type,
+      join_mode: this.draft.join_mode,
+      language: this.draft.language,
+      time_zone: this.draft.time_zone,
+      min_level: this.draft.min_level,
     });
     if (this.destroyed) return;
     if (!answer.ok) {
       this.refuse(answer);
       return;
     }
-    this.draft = { name: "", image: 1, description: "", type: "midas" };
+    this.draft = AllianceWindow.newDraft();
     this.say(null);
     await this.changed();
   }
@@ -1107,6 +1378,7 @@ export class AllianceWindow {
     if (this.editing === "advert") nodes.push(this.advertForm(alliance));
     else {
       nodes.push(make("p", "alliance__description", alliance.description));
+      if (alliance.join_mode) nodes.push(adLine(alliance));
       const actions = make("div", "alliance__actions");
       if (canEdit(alliance)) actions.append(button(ALLIANCE_TEXT.edit, "btn--outline", () => this.edit("advert")));
       if (alliance.permissions.includes("rename")) {
@@ -1154,6 +1426,7 @@ export class AllianceWindow {
 
   private edit(what: "advert" | "rename" | "type"): void {
     this.editing = this.editing === what ? null : what;
+    this.advertAd = null;
     this.say(null);
     this.render();
   }
@@ -1165,32 +1438,41 @@ export class AllianceWindow {
     about.maxLength = ALLIANCE_DESC_MAX;
     about.rows = 2;
     about.value = alliance.description;
+    this.advertAd ??= {
+      join_mode: joinModeOf(alliance),
+      language: alliance.language ?? null,
+      time_zone: alliance.time_zone ?? null,
+      min_level: alliance.min_level ?? 30,
+    };
+    const ad = this.advertAd;
     form.append(
       this.field(ALLIANCE_TEXT.shield, this.shieldPicker(image, (chosen) => (image = chosen))),
       this.field(ALLIANCE_TEXT.description, about),
+      this.adFields(ad),
     );
     const actions = make("div", "alliance__actions");
     actions.append(
-      button(ALLIANCE_TEXT.save, "btn--primary", () => void this.saveAdvert(image, about.value)),
+      button(ALLIANCE_TEXT.save, "btn--primary", () => void this.saveAdvert(image, about.value, ad)),
       button(ALLIANCE_TEXT.cancel, "btn--outline", () => this.edit("advert")),
     );
     form.append(actions);
     return form;
   }
 
-  private async saveAdvert(image: number, description: string): Promise<void> {
+  private async saveAdvert(image: number, description: string, ad: AdDraft): Promise<void> {
     const problem = descriptionProblem(description);
     if (problem) {
       this.say(problem, "bad");
       return;
     }
-    const answer = await this.api.edit({ image, description: description.trim() });
+    const answer = await this.api.edit({ image, description: description.trim(), ...ad });
     if (this.destroyed) return;
     if (!answer.ok) {
       this.refuse(answer);
       return;
     }
     this.editing = null;
+    this.advertAd = null;
     await this.load();
   }
 

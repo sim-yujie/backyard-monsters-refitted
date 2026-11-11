@@ -2456,3 +2456,162 @@
     align-self: stretch;
   }
 }
+
+/* ── The marketplace ad (design v5 §7a) ──────────────────────────────────── */
+
+/* Mode, flag, GMT band, minimum level: one line of icons and numbers under the name. */
+.alliance__ad {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-2);
+  color: var(--colour-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance__ad-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.alliance__ad-mode--open {
+  color: var(--colour-success, var(--colour-text));
+}
+
+.alliance__ad-flag .country-flag {
+  display: block;
+  width: 20px;
+  height: 15px;
+  border-radius: 2px;
+}
+
+.alliance__row-desc {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--colour-text);
+  overflow-wrap: anywhere;
+}
+
+.alliance__invite-only {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+/* Filters: chips in one wrapping row, Clear at the end. */
+.alliance__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.alliance__filter {
+  flex: none;
+}
+
+.alliance__filter .country-flag {
+  display: block;
+  width: 20px;
+  height: 15px;
+  border-radius: 2px;
+}
+
+.alliance__filter-clear {
+  min-height: var(--control-height-compact);
+  padding: 2px var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* The Create and Edit forms' ad settings. */
+.alliance__ad-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.alliance__modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+
+.alliance__lang {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.alliance__lang-pick {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: inherit;
+  font-weight: 700;
+}
+
+.alliance__lang-pick .country-flag {
+  display: block;
+  width: 20px;
+  height: 15px;
+  border-radius: 2px;
+}
+
+/* The country list sits on the window's own dark well, never a white box. */
+.alliance__lang-list {
+  padding: var(--space-1);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+}
+
+.alliance__lang-list .country-picker__list {
+  max-height: 160px;
+}
+
+.alliance__ad-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+/* ‹ value ›: a fixed-width middle, so the arrows never move as the value changes. */
+.alliance__stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.alliance__stepper-go {
+  min-width: 32px;
+  min-height: var(--control-height-compact);
+  padding: 0 var(--space-2);
+  font: inherit;
+  font-weight: 700;
+}
+
+.alliance__stepper-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 6.5em;
+  min-height: var(--control-height-compact);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-strong);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
