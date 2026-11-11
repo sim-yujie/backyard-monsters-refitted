@@ -153,6 +153,52 @@ describe("Korath (issue #222)", () => {
     expect(flame[0]!.tick - first.tick).toBe(FLAME_INTERVAL);
   });
 
+  /** Whether any foe of Korath's caught his flame within `ticks`, and every hurt's amount. */
+  const flamesOf = (battle: Battle, ticks: number, korathFriendly: boolean) => {
+    let burning = false;
+    const hurts: number[] = [];
+    watch(battle, ticks, (event, current) => {
+      if (current.creeps().some((creep) => creep.friendly !== korathFriendly && creep.burning)) burning = true;
+      if (event.kind === "hurt") hurts.push(event.amount);
+    });
+    return { burning, hurts };
+  };
+
+  for (const [pl, burns] of [
+    [0, false],
+    [1, true],
+    [2, true],
+    [3, true],
+  ] as const) {
+    it(`${burns ? "leaves" : "leaves no"} flame on what he hits defending at power level ${pl} (Burn, owner 11 Nov 2026)`, () => {
+      // An attacking Gorgo, tough enough to outlive his blows and burn.
+      const battle = createBattle(cageYard(), {
+        seed: 5,
+        defenderChampions: [{ t: 4, l: 3, hp: 500_000, pl }],
+      });
+      fling(battle, 140, {}, { t: 1, l: 6, pl: 0 });
+      const { burning, hurts } = flamesOf(battle, 1500, true);
+      const flame = championStatWithFood("G4", "damage", 3, 0) * 0.1;
+      expect(burning).toBe(burns);
+      expect(hurts.includes(flame)).toBe(burns);
+    });
+  }
+
+  for (const [pl, burns] of [
+    [0, false],
+    [1, true],
+  ] as const) {
+    it(`${burns ? "burns" : "does not burn"} a defending champion when he attacks at power level ${pl}`, () => {
+      // Korath flung at a yard whose cage holds a Gorgo, who comes out to fight him.
+      const battle = createBattle(cageYard(), {
+        seed: 5,
+        defenderChampions: [{ t: 1, l: 6, hp: 500_000, pl: 0 }],
+      });
+      fling(battle, 140, {}, { t: 4, l: 3, pl });
+      expect(flamesOf(battle, 1500, false).burning).toBe(burns);
+    });
+  }
+
   it("cannot touch a flyer without the fireball", () => {
     const battle = createBattle(cageYard(), {
       seed: 5,

@@ -186,6 +186,17 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
     case "krallen":
       pictures.append(krallenPicture(1, "icon", "events-reward__image"));
       break;
+    case "korath": {
+      // Flash's own Monster Madness prize pictures (upstream `events/wotc/wotc_reward<n>.png`).
+      const power = Math.min(Math.max(Math.floor(reward.power), 1), KORATH_POWER_SHORT.length);
+      const image = el("img", "events-reward__image events-reward__image--korath");
+      image.src = `/events/korath-power-${power}.png`;
+      image.alt = "";
+      image.decoding = "async";
+      pictures.append(image);
+      figure = KORATH_POWER_SHORT[power - 1]!;
+      break;
+    }
     case "eventCoins":
       pictures.append(rewardIcon("eventcoin"));
       figure = shortAmount(reward.amount);
@@ -219,6 +230,45 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
   }
   if (figure) badge.append(el("span", "events-reward__figure", figure));
   return badge;
+};
+
+/** Korath's powers' short names for a reward tile, 1 Burn to 3 Fists of Doom. */
+const KORATH_POWER_SHORT = ["Burn", "Fire", "Fists"] as const;
+
+/** Ladders drawn with one bar across every goal (Monster Madness: points in the millions, three far-apart goals). */
+const GOAL_BAR_KINDS: ReadonlySet<string> = new Set(["monster-madness"]);
+
+/**
+ * One bar from 0 to the top goal, filled to the player's points, with a tick
+ * at each goal (green once reached) and its figure under it.
+ */
+export const goalsBar = (ladder: LadderView): HTMLElement => {
+  const top = Math.max(1, ...ladder.tiers.map((tier) => tier.need));
+  const reached = Math.min(ladder.counter, top);
+  const share = (value: number): string => `${Math.round((value / top) * 1000) / 10}%`;
+  const wrap = el("div", "events-goals");
+  const bar = el("div", "events-goals__bar");
+  bar.setAttribute("role", "progressbar");
+  bar.setAttribute("aria-label", ladder.label);
+  bar.setAttribute("aria-valuemin", "0");
+  bar.setAttribute("aria-valuemax", String(top));
+  bar.setAttribute("aria-valuenow", String(reached));
+  bar.setAttribute("aria-valuetext", `${formatAmount(ladder.counter)} of ${formatAmount(top)}`);
+  const fill = el("span", "events-goals__fill");
+  fill.style.width = share(reached);
+  bar.append(fill);
+  const marks = el("div", "events-goals__marks");
+  for (const tier of ladder.tiers) {
+    const done = ladder.counter >= tier.need;
+    const tick = el("span", `events-goals__tick${done ? " events-goals__tick--done" : ""}`);
+    tick.style.left = share(tier.need);
+    bar.append(tick);
+    const label = el("span", `events-goals__mark${done ? " events-goals__mark--done" : ""}`, shortAmount(tier.need));
+    label.style.left = share(tier.need);
+    marks.append(label);
+  }
+  wrap.append(bar, marks);
+  return wrap;
 };
 
 /** Krallen's portrait at a level. */
@@ -463,7 +513,8 @@ export class EventsPanel {
   }
 
   private ladder(event: EventView, ladder: LadderView, view: Extract<EventsPanelView, { kind: "list" }>): HTMLElement {
-    const section = el("section", "events-ladder");
+    const goalBar = GOAL_BAR_KINDS.has(event.kind);
+    const section = el("section", `events-ladder${goalBar ? ` events-ladder--goals events-ladder--${event.kind}` : ""}`);
     const head = el("div", "events-calendar__head");
     head.append(
       el("h4", "events-section__title", ladder.label),
@@ -502,7 +553,9 @@ export class EventsPanel {
       list.append(row);
       if (view.refusal?.key === key) list.append(refusalNote(view.refusal.message));
     });
-    section.append(head, list);
+    section.append(head);
+    if (goalBar) section.append(goalsBar(ladder));
+    section.append(list);
     return section;
   }
 

@@ -4,7 +4,15 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { EventView } from "@/api/events";
-import { claimedLine, EVENT_EXTRAS, EventsPanel, nextText, rewardBadge, type EventsPanelView } from "./EventsPanel";
+import {
+  claimedLine,
+  EVENT_EXTRAS,
+  EventsPanel,
+  goalsBar,
+  nextText,
+  rewardBadge,
+  type EventsPanelView,
+} from "./EventsPanel";
 
 /** The page's own CSS, read as text: jsdom lays nothing out. */
 const eventsCss = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "events.css"), "utf8");
@@ -521,5 +529,63 @@ describe("EventsPanel: the New to Map Room 2 card", () => {
     const phone = css.slice(css.lastIndexOf("@media (width <= 620px)"));
     expect(phone).toMatch(/\.events-welcome__days \{\s*grid-row: 2;/);
     expect(css).toMatch(/:root\[data-skin="flash"\] \.events-card--mr2-welcome \{/);
+  });
+});
+
+describe("rewardBadge: Korath's powers (Monster Madness)", () => {
+  it("shows Flash's power portrait and its short name", () => {
+    const badge = rewardBadge({ kind: "korath", power: 2 });
+    expect(badge.classList).toContain("events-reward--korath");
+    expect(badge.querySelector<HTMLImageElement>(".events-reward__image--korath")!.getAttribute("src")).toBe(
+      "/events/korath-power-2.png",
+    );
+    expect(badge.querySelector(".events-reward__figure")?.textContent).toBe("Fire");
+    expect(rewardBadge({ kind: "korath", power: 3 }).querySelector(".events-reward__figure")?.textContent).toBe("Fists");
+  });
+
+  it("is never signed as a gain", () => {
+    const gained = rewardBadge({ kind: "korath", power: 1 }, true);
+    expect(gained.classList).not.toContain("events-reward--gain");
+    expect(gained.querySelector(".events-reward__figure")?.textContent).toBe("Burn");
+  });
+});
+
+describe("EventsPanel: Monster Madness goals", () => {
+  const madness = (counter: number): EventView =>
+    event({
+      id: "monster-madness-1",
+      title: "Monster Madness",
+      kind: "monster-madness",
+      calendar: null,
+      ladder: {
+        label: "Takeover points",
+        counter,
+        tiers: [
+          { need: 42_000_000, rewards: [{ kind: "korath", power: 1 }], claimed: false },
+          { need: 94_500_000, rewards: [{ kind: "korath", power: 2 }], claimed: false },
+          { need: 160_125_000, rewards: [{ kind: "korath", power: 3 }], claimed: false },
+        ],
+      },
+    });
+
+  it("draws one bar to the top goal, with a tick at each goal", () => {
+    const bar = goalsBar(madness(50_000_000).ladder!);
+    expect(bar.querySelector<HTMLElement>(".events-goals__fill")!.style.width).toBe("31.2%");
+    const ticks = [...bar.querySelectorAll<HTMLElement>(".events-goals__tick")];
+    expect(ticks.map((tick) => tick.style.left)).toEqual(["26.2%", "59%", "100%"]);
+    expect(ticks.map((tick) => tick.classList.contains("events-goals__tick--done"))).toEqual([true, false, false]);
+    expect([...bar.querySelectorAll(".events-goals__mark")].map((mark) => mark.textContent)).toEqual([
+      "42M",
+      "94.5M",
+      "160.1M",
+    ]);
+    expect(bar.querySelector(".events-goals__bar")!.getAttribute("aria-valuenow")).toBe("50000000");
+  });
+
+  it("is on the Monster Madness card only", () => {
+    const { panel } = mounted();
+    panel.render(list([madness(50_000_000)]));
+    expect(panel.element.querySelector(".events-ladder--goals .events-goals__bar")).not.toBeNull();
+    expect(panel.element.querySelectorAll(".events-tier__claim")).toHaveLength(1);
   });
 });

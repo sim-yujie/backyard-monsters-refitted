@@ -50,9 +50,20 @@ export const CHAMPION_RETARGET_FRAMES = 100;
 
 /* ── Korath (G4) ──────────────────────────────────────────────────────────── */
 
-/** `KORATH_POWER_FIREBALL` and `KORATH_POWER_STOMP` (`Korath.as:13-15`). */
+/**
+ * Korath's powers (`Korath.as:11-15`): 1 Burn, 2 Breath of Fire, 3 Fists of
+ * Doom, as Monster Madness awards them. Flash named power 1 `NORMAL` and left
+ * the flame on every Korath; here the flame is the Burn power's (owner,
+ * 11 Nov 2026: "No one has korath with burns yet so remove it"), so a Korath
+ * at power 0 hits without one.
+ */
+export const KORATH_POWER_BURN = 1;
 export const KORATH_POWER_FIREBALL = 2;
 export const KORATH_POWER_STOMP = 3;
+
+/** Whether Korath's hits and fireballs leave his flame: from the Burn power, power level 1. */
+export const hasFlame = (id: string, power: number): boolean =>
+  id === KORATH_ID && power >= KORATH_POWER_BURN;
 
 /**
  * Korath shoots a fireball at a flyer from power level 2 at level 4 and up
@@ -74,7 +85,10 @@ export const KORATH_FIREBALL_DIVISOR = 4;
  */
 export const KORATH_DEFEND_FLYER_REACH = 2;
 
-/** The flame each hit leaves: a tenth of his damage (`Korath.as:162-165`). */
+/**
+ * The flame each hit leaves, once he has Burn ({@link hasFlame}): a tenth of
+ * his damage (`Korath.as:162-165`).
+ */
 export const FLAME_SHARE = 0.1;
 
 /**

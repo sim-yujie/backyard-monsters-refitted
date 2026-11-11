@@ -1,5 +1,6 @@
 import { eventsForcedOff, eventsForcedOn } from "../../config/GameConfig.js";
-import { EVENTS, UPCOMING_DAYS, type EventDefinition } from "../../game-data/events/events.js";
+import { UPCOMING_DAYS, type EventDefinition } from "../../game-data/events/events.js";
+import { liveEvents } from "./liveEvents.js";
 
 /**
  * When each event runs, and which ones a player sees now
@@ -74,7 +75,7 @@ export interface ScheduledEvent {
  */
 export const visibleEvents = (
   now: number,
-  events: readonly EventDefinition[] = EVENTS,
+  events: readonly EventDefinition[] = liveEvents(),
   forced: ReadonlySet<string> = eventsForcedOn(process.env),
   off: ReadonlySet<string> = eventsForcedOff(process.env)
 ): ScheduledEvent[] => {

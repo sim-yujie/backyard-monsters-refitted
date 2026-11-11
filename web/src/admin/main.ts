@@ -41,6 +41,7 @@ import {
 } from "./sections";
 import { QueueView } from "./queue";
 import { ShinyView } from "./shiny";
+import { MonsterMadnessView } from "./monsterMadness";
 import { WeekendView } from "./weekend";
 import { applyTheme, readTheme, themePicker } from "./theme";
 import {
@@ -224,6 +225,8 @@ class Dashboard {
   private readonly announcements = new AnnouncementsView({ say: (message) => this.say(message) });
   /** Weekend events (beta 7), a tab of Announcements. */
   private readonly weekend = new WeekendView({ say: (message) => this.say(message) });
+  /** Monster Madness (owner-started only), above the weekend events. */
+  private readonly monsterMadness = new MonsterMadnessView({ say: (message) => this.say(message) });
   private readonly errors = new ErrorsView(
     (message) => this.say(message),
     (totals) => {
@@ -382,7 +385,7 @@ class Dashboard {
     replace(this.sections.chat.body, this.chat.element);
     replace(this.sections.shiny.body, this.shiny.element);
     replace(this.sections.announcements.body, this.announcements.element);
-    replace(this.sections.events.body, this.weekend.element);
+    replace(this.sections.events.body, this.monsterMadness.element, this.weekend.element);
     replace(this.sections.health.body, this.errorsBox);
 
     this.home = h(
@@ -485,6 +488,7 @@ class Dashboard {
       this.announcements.refresh(),
       this.photos.refresh(),
       this.weekend.refresh(),
+      this.monsterMadness.refresh(),
     ]);
   }
 
@@ -560,6 +564,7 @@ class Dashboard {
       this.shiny.refresh(),
       this.photos.refresh(),
       this.weekend.refresh(),
+      this.monsterMadness.refresh(),
     ]);
     this.refreshButton.classList.remove("is-busy");
     this.refreshButton.disabled = false;

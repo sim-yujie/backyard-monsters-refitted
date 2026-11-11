@@ -29,6 +29,7 @@ import {
   enrageMultiplier,
   fomorBuff,
   hasFireball,
+  hasFlame,
   hasLootAura,
   hasQuake,
   krallenAuraRadius,
@@ -4610,7 +4611,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * One blow at another creep. Korath's at a flyer is his fireball, a quarter
    * of his damage (`Korath.as:72-75`, `:110-115`); his others are blows that
    * count towards his quake (`:78`); both leave his flame on what they hit
-   * (`:87`, `:155-160`). `by` is who the blow turns, for issue #195.
+   * (`:87`, `:155-160`) once he has the Burn power ({@link hasFlame}). `by`
+   * is who the blow turns, for issue #195.
    */
   const strikeCreep = (creep: Creep, foe: Creep, by: Creep | null): number => {
     if (!(creep.champion && creep.monsterId === KORATH_ID)) {
@@ -4630,8 +4632,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     return dealt;
   };
 
-  /** `addFlameDOT`: a flame of a tenth of Korath's damage, unless one burns already. */
+  /**
+   * `addFlameDOT`: a flame of a tenth of Korath's damage, unless one burns
+   * already. Only a Korath with the Burn power lights one (owner, 11 Nov 2026).
+   */
   const burn = (foe: Creep, korath: Creep): void => {
+    if (!hasFlame(korath.monsterId, korath.power)) return;
     if (foe.hp <= 0 || foe.burnDps > 0) return;
     foe.burnDps = korath.damage * FLAME_SHARE;
     foe.burnTick = 0;

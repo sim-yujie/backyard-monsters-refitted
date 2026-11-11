@@ -7,6 +7,13 @@ export enum Reward {
   SLIMEATTIKUS = "unblockSlimeattikus",
   REZGHUL = "unlockRezghul",
   KORATH = "KorathReward",
+  /**
+   * The Korath power a player has won (Monster Madness,
+   * `services/events/korathPower.ts`). Not {@link KORATH}: old saves carry a
+   * `KorathReward` of 3 that the Town Hall 7 gift used to write, which never
+   * meant anything in this game.
+   */
+  KORATH_POWER = "korathPower",
   KRALLEN = "krallenReward",
   SPURTZ1 = "spurtzCannonReward",
   SPURTZ2 = "spurtzCannonReward2",

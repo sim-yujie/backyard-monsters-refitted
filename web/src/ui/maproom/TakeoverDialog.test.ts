@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/api/http";
+import { takeoverScores } from "@/game/events/takeoverScores";
 import { TakeoverDialog, showTakenOver, type TakeoverDialogOptions } from "./TakeoverDialog";
 
 /**
@@ -282,5 +283,28 @@ describe("showTakenOver", () => {
     expect(modal.querySelector(".panel__title")!.textContent).toBe("Veni, Vidi, Vici!");
     expect(modal.textContent).toContain("You destroyed a Kozu base. Take over their yard and expand your empire.");
     expect(modal.querySelector("img")!.getAttribute("src")).toBe("/assets/popups/building-outpost.png");
+    expect(modal.querySelector(".takeover-first-open__score")).toBeNull();
+  });
+
+  it("shows a Monster Madness takeover's points: the logo, +points and the total", () => {
+    const modal = document.createElement("div");
+    showTakenOver(modal, "camp", "Kozu", [{ event: "monster-madness-1762819200", points: 2_100_000, total: 45_000_000 }]);
+    const row = modal.querySelector<HTMLElement>(".takeover-first-open__score")!;
+    expect(row.querySelector("img")!.getAttribute("src")).toBe("/events/monster-madness-logo.png");
+    expect(row.querySelector(".takeover-first-open__score-points")!.textContent).toBe("+2.1M");
+    expect(row.querySelector(".takeover-first-open__score-total")!.textContent).toBe("Total 45M");
+    expect(row.getAttribute("aria-label")).toBe("+2.1M Monster Madness points, 45M in all");
+    // Above the OK button.
+    expect(row.nextElementSibling?.textContent).toBe("OK");
+  });
+
+  it("takes the last takeover's waiting points by itself, once", () => {
+    takeoverScores.set([{ event: "monster-madness-1", points: 3_000_000, total: 3_000_000 }]);
+    const first = document.createElement("div");
+    showTakenOver(first, "camp", "Kozu");
+    expect(first.querySelector(".takeover-first-open__score-points")!.textContent).toBe("+3M");
+    const again = document.createElement("div");
+    showTakenOver(again, "camp", "Kozu");
+    expect(again.querySelector(".takeover-first-open__score")).toBeNull();
   });
 });

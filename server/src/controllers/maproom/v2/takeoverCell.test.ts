@@ -12,7 +12,11 @@ import { STARTER_KITS } from "../../../game-data/starterKits.js";
 import { kitBuildings } from "../../../services/yard/starterKit.js";
 import type { Context } from "koa";
 import { achievementConfig } from "../../../config/AchievementConfig.js";
+import { devConfig } from "../../../config/GameConfig.js";
 import { readAchievements } from "../../../services/achievements/state.js";
+import { setMonsterMadnessRuns } from "../../../services/events/monsterMadnessRuns.js";
+import { memoryProgressStore, sqlProgressStore } from "../../../services/events/progressStore.js";
+import { useTakeoverStore } from "../../../services/events/takeoverEvents.js";
 
 /**
  * `POST /worldmapv2/takeoverCell` (issue #182). The route took any cell at 90%
@@ -569,5 +573,69 @@ describe("takeoverCell: New to Map Room 2", () => {
     takerSave.resources = { r1: 10, r2: 10, r3: 10, r4: 10 };
     const result = await run({ baseid: CAMP });
     expect(result.reason).toBe("notEnoughResources");
+  });
+});
+
+describe("takeoverCell: Monster Madness points", () => {
+  let progress: ReturnType<typeof memoryProgressStore>;
+
+  beforeEach(() => {
+    progress = memoryProgressStore();
+    useTakeoverStore(progress);
+    takerSave.tutorialstage = 205;
+  });
+
+  afterEach(() => {
+    setMonsterMadnessRuns([]);
+    useTakeoverStore(sqlProgressStore);
+  });
+
+  const startRun = () => {
+    const startsAt = now() - 60;
+    setMonsterMadnessRuns([{ startsAt, endsAt: startsAt + 4 * 86_400 }]);
+    return `monster-madness-${startsAt}`;
+  };
+
+  test("off (no run started): the answer carries no points", async () => {
+    const result = await run({ baseid: OUTPOST });
+    expect(result.body).toEqual({ error: 0 });
+    expect(progress.rows.size).toBe(0);
+  });
+
+  test("a player's outpost scores its empire value, and the answer says so", async () => {
+    const event = startRun();
+    const result = await run({ baseid: OUTPOST });
+    // The Regular Starter Kit's value (outpostValue.test.ts).
+    expect(result.body).toEqual({ error: 0, eventPoints: [{ event, points: 3_222_316, total: 3_222_316 }] });
+  });
+
+  test("a wild camp scores by its level; the total grows across takeovers", async () => {
+    const event = startRun();
+    await run({ baseid: OUTPOST });
+    const result = await run({ baseid: CAMP, shiny: "1" });
+    const points = (result.body!.eventPoints as { points: number }[])[0]!.points;
+    expect(points).toBeGreaterThan(0);
+    expect(result.body!.eventPoints).toEqual([{ event, points, total: 3_222_316 + points }]);
+  });
+
+  test("a player still in the guided start scores nothing", async () => {
+    startRun();
+    takerSave.tutorialstage = 10;
+    const skip = devConfig.skipTutorial;
+    devConfig.skipTutorial = false;
+    try {
+      const result = await run({ baseid: OUTPOST });
+      expect(result.body).toEqual({ error: 0 });
+    } finally {
+      devConfig.skipTutorial = skip;
+    }
+  });
+
+  test("a refused takeover scores nothing", async () => {
+    startRun();
+    inRange = false;
+    const result = await run({ baseid: OUTPOST });
+    expect(result.ok).toBe(false);
+    expect(progress.rows.size).toBe(0);
   });
 });
