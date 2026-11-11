@@ -2195,6 +2195,14 @@
   color: var(--colour-text-strong);
 }
 
+/* "max 1K": the most one trade carries, so a capped amount makes sense. */
+.trade-amount__max {
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .trade-amount__box {
   width: 9rem;
   min-height: 36px;

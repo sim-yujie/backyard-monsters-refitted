@@ -80,6 +80,9 @@ export const TRADE_TEXT = {
   youGive: "You give",
   gets: (name: string) => `${name} gets`,
   most: "Most",
+  /** Beside the amount: the most one trade carries here. */
+  max: (amount: string) => `max ${amount}`,
+  maxWhy: "One trade carries up to 10% of storage, and only what fits the free room.",
   youHave: (amount: string) => `You have ${amount}`,
   overCap: (amount: string) => `One trade carries up to ${amount}`,
   usesSend: "Uses your 1 send today · Shiny can't be sent",
@@ -464,12 +467,14 @@ export class TradeTab {
     row.dataset["key"] = key;
     row.append(resourceIcon(key, { decorative: true }));
     if (quick) {
+      // A quick amount bigger than one trade carries is off (lead, 11 Nov 2026).
       for (const amount of QUICK) {
-        const node = button(formatShort(amount), `btn--outline trade-amount__quick${value === Math.min(amount, most) ? " is-on" : ""}`, () => {
-          set(Math.min(amount, most));
+        const node = button(formatShort(amount), `btn--outline trade-amount__quick${value === amount ? " is-on" : ""}`, () => {
+          set(amount);
           this.host.redraw();
         });
-        node.disabled = most <= 0;
+        node.disabled = amount > most;
+        if (node.disabled && most > 0) node.title = TRADE_TEXT.maxWhy;
         row.append(node);
       }
       const max = button(TRADE_TEXT.most, `btn--outline trade-amount__quick${value === most && most > 0 ? " is-on" : ""}`, () => {
@@ -491,6 +496,11 @@ export class TradeTab {
     });
     input.addEventListener("change", () => this.host.redraw());
     row.append(input);
+    if (most > 0) {
+      const max = make("span", "trade-amount__max", TRADE_TEXT.max(formatShort(most)));
+      max.title = TRADE_TEXT.maxWhy;
+      row.append(max);
+    }
     return row;
   }
 

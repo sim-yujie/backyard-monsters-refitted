@@ -178,6 +178,20 @@ describe("TradeTab", () => {
     expect(host.said.at(-1)).toBe(TRADE_TEXT.posted);
   });
 
+  it("Ask: one trade carries 10% of storage, so on 10K storage Most is 1,000 and 500K / 1M are off, with \"max 1K\" beside", async () => {
+    const api = fakeApi({ view: vi.fn(() => ok({ view: view({ me: storage(0, 10_000) }) })) });
+    await mount(api);
+    buttonNamed(TRADE_TEXT.ask)!.click();
+    document.querySelector<HTMLButtonElement>('.trade-tile[data-key="r3"]')!.click();
+    expect(buttonNamed("500K")!.disabled).toBe(true);
+    expect(buttonNamed("1M")!.disabled).toBe(true);
+    expect(buttonNamed("500K")!.classList.contains("is-on")).toBe(false);
+    expect(document.querySelector(".trade-amount__max")!.textContent).toBe(TRADE_TEXT.max("1K"));
+    buttonNamed(TRADE_TEXT.most)!.click();
+    expect(document.querySelector<HTMLInputElement>(".trade-amount__box")!.value).toBe("1,000");
+    expect(buttonNamed(TRADE_TEXT.most)!.classList.contains("is-on")).toBe(true);
+  });
+
   it("Ask: the Monster tab lists the player's monsters; none picked posts without one", async () => {
     const api = fakeApi();
     await mount(api);
