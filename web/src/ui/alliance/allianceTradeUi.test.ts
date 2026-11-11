@@ -165,9 +165,13 @@ describe("TradeTab", () => {
     expect(document.body.textContent).toContain("500,000");
     const items = document.querySelectorAll<HTMLButtonElement>(".trade-for-pick__item");
     expect(items).toHaveLength(2);
-    expect(items[0]!.textContent).toBe("L7");
+    // A short name under each picture, the level on it.
+    expect(items[0]!.querySelector(".trade-for-pick__lv")!.textContent).toBe("L7");
+    expect(items[0]!.querySelector(".trade-for-pick__name")!.textContent).toBe("Town Hall");
     items[0]!.click();
-    expect(document.querySelector(".trade-for-pick__item")!.getAttribute("aria-checked")).toBe("true");
+    const chosen = document.querySelector(".trade-for-pick__item")!;
+    expect(chosen.getAttribute("aria-checked")).toBe("true");
+    expect(chosen.classList.contains("is-on")).toBe(true);
     document.querySelector<HTMLButtonElement>(".trade-sheet__go")!.click();
     await flush();
     expect(api.ask).toHaveBeenCalledWith({ r4: 555_556 }, { kind: "building", type: 14, level: 7 });
@@ -178,7 +182,12 @@ describe("TradeTab", () => {
     const api = fakeApi();
     await mount(api);
     buttonNamed(TRADE_TEXT.ask)!.click();
+    // Building / Monster are chips: the chosen one is pressed (lit in another colour).
+    const pressed = () => [...document.querySelectorAll(".trade-for-pick__tab")].map((tab) => tab.getAttribute("aria-pressed"));
+    expect(document.querySelector(".trade-for-pick__tab")!.classList.contains("alliance__chip")).toBe(true);
+    expect(pressed()).toEqual(["true", "false"]);
     buttonNamed(TRADE_TEXT.forMonster)!.click();
+    expect(pressed()).toEqual(["false", "true"]);
     const items = document.querySelectorAll<HTMLButtonElement>(".trade-for-pick__item");
     expect([...items].map((node) => node.title)).toEqual([tradeForName({ kind: "monster", id: "C1" }), tradeForName({ kind: "monster", id: "C2" })]);
     items[1]!.click();

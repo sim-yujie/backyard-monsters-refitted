@@ -2189,8 +2189,7 @@
   width: 24px;
 }
 
-.trade-amount__quick.is-on,
-.trade-for-pick__tab.is-on {
+.trade-amount__quick.is-on {
   border-color: var(--colour-accent);
   background: var(--colour-accent-soft);
   color: var(--colour-text-strong);
@@ -2226,18 +2225,20 @@
   color: var(--colour-text-secondary);
 }
 
+/* Building / Monster: chips (.alliance__chip), the chosen one lit like the
+   marketplace's (accent; Classic's orange plate, in "Chosen" above). */
 .trade-for-pick__tab {
   display: inline-flex;
-  align-items: center;
+  flex-wrap: nowrap;
   gap: 4px;
 }
 
 .trade-for-pick__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
   gap: var(--space-1);
-  /* Two rows of pictures; more scroll inside, so the sheet keeps its height. */
-  height: 136px;
+  /* Two rows of pictures with names; more scroll inside, so the sheet keeps its height. */
+  height: 182px;
   overflow-y: auto;
   padding: 2px;
   border-radius: var(--radius-md);
@@ -2245,12 +2246,13 @@
 }
 
 .trade-for-pick__item {
-  position: relative;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 64px;
-  padding: 2px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  height: 86px;
+  padding: 3px;
   border: 2px solid transparent;
   border-radius: var(--radius-md);
   background: var(--colour-surface-control);
@@ -2259,15 +2261,61 @@
   cursor: pointer;
 }
 
+.trade-for-pick__item:hover {
+  background: var(--colour-surface-control-hover);
+}
+
+/* The chosen one: lit in the accent, its name on the accent (owner: a different colour). */
 .trade-for-pick__item.is-on {
   border-color: var(--colour-accent);
   background: var(--colour-accent-soft);
+  box-shadow: 0 0 0 1px var(--colour-accent), 0 0 8px var(--colour-accent-line);
+}
+
+.trade-for-pick__item.is-on .trade-for-pick__name {
+  border-radius: var(--radius-sm, 4px);
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+/* Classic: the orange plate with dark writing. */
+:root[data-skin="flash"] .trade-for-pick__item.is-on {
+  border-color: #9a4a08;
+  background: linear-gradient(#ffc457, #f39a1e 60%, #e07c12);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 55%), 0 1px 3px rgb(90 42 10 / 45%);
+}
+
+:root[data-skin="flash"] .trade-for-pick__item.is-on .trade-for-pick__name {
+  background: none;
+  color: #2a1606;
+  text-shadow: 0 1px 0 rgb(255 236 170 / 60%);
+}
+
+.trade-for-pick__frame {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
 }
 
 .trade-for-pick__pic {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+
+/* A short name under the picture, one line. */
+.trade-for-pick__name {
+  overflow: hidden;
+  padding: 0 2px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .trade-for-pick__lv {

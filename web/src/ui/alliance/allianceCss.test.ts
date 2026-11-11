@@ -120,6 +120,21 @@ describe("alliance.css: trade tiles", () => {
   it("set the resource tiles (buttons) in the window's own font, not the browser's", () => {
     expect(rulesFor(".trade-tile").join(" ")).toMatch(/font:\s*inherit/);
   });
+
+  it("lights the chosen \"For\" tile in the accent, and Classic's in the orange plate with dark writing", () => {
+    expect(rulesFor(".trade-for-pick__item.is-on").join(" ")).toMatch(/border-color:\s*var\(--colour-accent\)/);
+    expect(rulesFor(".trade-for-pick__item.is-on .trade-for-pick__name").join(" ")).toMatch(/background:\s*var\(--colour-accent\)/);
+    const classic = rulesFor(':root[data-skin="flash"] .trade-for-pick__item.is-on').join(" ");
+    expect(classic).toMatch(/linear-gradient\(#ffc457/);
+    expect(rulesFor(':root[data-skin="flash"] .trade-for-pick__item.is-on .trade-for-pick__name').join(" ")).toMatch(/color:\s*#2a1606/);
+  });
+
+  it("gives each \"For\" tile a one-line name in the game's font", () => {
+    expect(rulesFor(".trade-for-pick__item").join(" ")).toMatch(/font:\s*inherit/);
+    const name = rulesFor(".trade-for-pick__name").join(" ");
+    expect(name).toMatch(/white-space:\s*nowrap/);
+    expect(name).toMatch(/text-overflow:\s*ellipsis/);
+  });
 });
 
 describe("alliance.css: a member's window keeps one height", () => {

@@ -114,6 +114,10 @@ export const tradeForName = (value: TradeFor): string =>
     ? TRADE_TEXT.upgrading(buildingName(value.type) ?? `#${value.type}`, value.level)
     : (monsterEntry(value.id)?.name ?? value.id);
 
+/** A tile's caption: the building's or monster's name, without the level. */
+const shortForName = (value: TradeFor): string =>
+  value.kind === "building" ? (buildingName(value.type) ?? `#${value.type}`) : (monsterEntry(value.id)?.name ?? value.id);
+
 /** The building's picture or the monster's portrait, small. */
 const forPicture = (value: TradeFor, className: string): HTMLImageElement => {
   const image = make("img", className);
@@ -552,7 +556,8 @@ export class TradeTab {
       ["monster", TRADE_TEXT.forMonster, "housing"],
     ] as const) {
       const on = sheet.forTab === tab;
-      const node = make("button", `btn btn--outline trade-for-pick__tab${on ? " is-on" : ""}`);
+      // A chip like the marketplace's: the chosen one lit (owner: a different colour).
+      const node = make("button", `alliance__chip trade-for-pick__tab${on ? " is-on" : ""}`);
       node.type = "button";
       node.setAttribute("aria-pressed", String(on));
       node.append(gameIcon(icon, { size: 16, decorative: true }), make("span", "", words));
@@ -580,8 +585,10 @@ export class TradeTab {
       node.setAttribute("role", "radio");
       node.setAttribute("aria-checked", String(on));
       node.setAttribute("aria-label", name);
-      node.append(forPicture(option, "trade-for-pick__pic"));
-      if (option.kind === "building") node.append(make("span", "trade-for-pick__lv", `L${option.level}`));
+      const frame = make("span", "trade-for-pick__frame");
+      frame.append(forPicture(option, "trade-for-pick__pic"));
+      if (option.kind === "building") frame.append(make("span", "trade-for-pick__lv", `L${option.level}`));
+      node.append(frame, make("span", "trade-for-pick__name", shortForName(option)));
       node.addEventListener("click", () => {
         sheet.forWhat = on ? null : option;
         this.host.redraw();
