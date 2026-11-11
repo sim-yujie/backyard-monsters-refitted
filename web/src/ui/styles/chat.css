@@ -336,6 +336,13 @@ button.chat-line__name {
   box-shadow: var(--focus-ring);
 }
 
+/* A request's Trade while trading is switched off (beta 7): greyed out, "Coming soon". */
+.chat-line__map:disabled {
+  opacity: 0.5;
+  filter: grayscale(0.9);
+  cursor: not-allowed;
+}
+
 /* Folded, the lines take no clicks: the button would only promise one. */
 .chat-box:not(.chat-box--open) .chat-line__map {
   display: none;

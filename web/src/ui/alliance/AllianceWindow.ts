@@ -47,7 +47,7 @@ import {
 } from "@/game/alliance/allianceRules";
 import type { AllianceFocus, AllianceTab } from "@/game/alliance/allianceView";
 import { playerPool } from "@/game/friends/friendsView";
-import { setAllianceTradeOn } from "@/game/alliance/tradeSwitch";
+import { setAllianceTradeOn, TRADE_OFF_TITLE } from "@/game/alliance/tradeSwitch";
 import type { AllianceTradeApi } from "@/api/allianceTrade";
 import { TradeTab } from "./allianceTradeUi";
 import { worldChat, type ChatSession } from "@/game/chat/chatSession";
@@ -487,15 +487,10 @@ export class AllianceWindow {
   /**
    * Whether the server lets the alliance trade (`trade_on`; the server's
    * `ALLIANCE_TRADE_ENABLED`, off in beta 7): off, the Trade tab and every
-   * Send are gone, not greyed out.
+   * Send stay but are greyed out, "Coming soon" (owner 11 Nov).
    */
   private tradeOn(): boolean {
     return this.view.kind === "mine" && this.view.alliance.trade_on === true;
-  }
-
-  /** The member tabs this alliance shows: {@link AllianceWindow.TABS}, without Trade while trading is off. */
-  private memberTabs(): readonly AllianceTab[] {
-    return this.tradeOn() ? AllianceWindow.TABS : AllianceWindow.TABS.filter((tab) => tab !== "trade");
   }
 
   /** Off Trade when trading is off (a chat button or an old tab asked for it): Overview, no sheet. */
@@ -1302,8 +1297,10 @@ export class AllianceWindow {
     // `.tab-row`: the row fills the window and never cuts a label (ui.css).
     const tabs = make("div", "tabs tab-row alliance__tabs");
     tabs.setAttribute("role", "tablist");
-    for (const tab of this.memberTabs()) {
+    for (const tab of AllianceWindow.TABS) {
       const words = ALLIANCE_TEXT.tabs[tab];
+      // Trading switched off: the tab stays, greyed out, and a tap does nothing.
+      const off = tab === "trade" && !this.tradeOn();
       const node = make("button", "tabs__tab alliance__tab");
       node.append(
         gameIcon(AllianceWindow.TAB_ICONS[tab], { size: 24, decorative: true }),
@@ -1315,7 +1312,14 @@ export class AllianceWindow {
       node.setAttribute("role", "tab");
       node.setAttribute("aria-selected", String(tab === this.tab));
       node.dataset["tab"] = tab;
-      node.addEventListener("click", () => this.showTab(tab));
+      if (off) {
+        node.disabled = true;
+        node.title = TRADE_OFF_TITLE;
+        node.classList.add("alliance__tab--off");
+      }
+      node.addEventListener("click", () => {
+        if (!off) this.showTab(tab);
+      });
       tabs.append(node);
     }
     this.popup.setHead(head, tabs, this.status);
@@ -1639,7 +1643,7 @@ export class AllianceWindow {
 
   private memberRow(alliance: MyAlliance, member: AllianceMember, actions: readonly MemberAction[]): HTMLElement {
     // Every mate but yourself can be sent resources (design v5 §7b, §12b).
-    const canSend = this.tradeOn() && member.user_id !== (this.myId() ?? -1);
+    const canSend = member.user_id !== (this.myId() ?? -1);
     const opened = this.openMember === member.user_id && (actions.length > 0 || canSend);
     const item = make("div", "alliance__item");
     item.setAttribute("role", "listitem");
@@ -1679,10 +1683,16 @@ export class AllianceWindow {
         );
       } else {
         if (canSend) {
-          const send = button(ALLIANCE_TEXT.send, "btn--outline alliance__send", () =>
-            this.showTab("trade", { send: { userid: member.user_id, username: member.display_name } }),
-          );
+          const tradeOn = this.tradeOn();
+          const send = button(ALLIANCE_TEXT.send, "btn--outline alliance__send", () => {
+            if (tradeOn) this.showTab("trade", { send: { userid: member.user_id, username: member.display_name } });
+          });
           send.prepend(gameIcon("income", { size: 16, decorative: true }));
+          // Trading switched off: Send stays, greyed out, "Coming soon".
+          if (!tradeOn) {
+            send.disabled = true;
+            send.title = TRADE_OFF_TITLE;
+          }
           more.append(send);
         }
         for (const action of actions) {

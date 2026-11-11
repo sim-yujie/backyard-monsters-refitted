@@ -17,7 +17,7 @@ import { countryLabel, countryName } from "@/game/account/countries";
 import { countryLabelNodes } from "@/ui/countryFlag";
 import { shieldUrl } from "@/game/alliance/allianceRules";
 import { allianceOpener } from "@/game/alliance/allianceView";
-import { allianceTradeOn } from "@/game/alliance/tradeSwitch";
+import { allianceTradeOn, TRADE_OFF_TITLE } from "@/game/alliance/tradeSwitch";
 import { icon } from "@/ui/icons";
 import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { addFriendButton } from "@/ui/friends/AddFriendButton";
@@ -513,18 +513,20 @@ export class ChatBox {
     // A mate's trade request: Trade opens the alliance window's Trade tab on it.
     const request = entry.tradeRequest;
     const openAlliance = allianceOpener();
-    // Trading switched off (beta 7): no Trade button on a request line.
-    if (request && openAlliance && !entry.own && allianceTradeOn()) {
+    if (request && openAlliance && !entry.own) {
+      // Trading switched off (beta 7): the button stays, greyed out, "Coming soon".
+      const tradeOn = allianceTradeOn();
       const give = document.createElement("button");
       give.type = "button";
       give.className = "chat-line__map chat-line__give";
-      give.title = ALLIANCE_ROOM_TEXT.tradeTitle;
+      give.title = tradeOn ? ALLIANCE_ROOM_TEXT.tradeTitle : TRADE_OFF_TITLE;
+      give.disabled = !tradeOn;
       give.tabIndex = this.open ? 0 : -1;
       const word = document.createElement("span");
       word.textContent = ALLIANCE_ROOM_TEXT.trade;
       give.append(gameIcon("income", { size: 16, decorative: true }), word);
       give.addEventListener("click", () => {
-        if (this.open) allianceOpener()?.("trade", { request });
+        if (this.open && tradeOn) allianceOpener()?.("trade", { request });
       });
       item.append(give);
     }
@@ -606,14 +608,19 @@ export class ChatBox {
       mute.classList.toggle("chat-box__action--on", muted);
       actions.append(friend, mute, this.iconButton(CHAT_STRIP_TEXT.viewYard, "townhall", () => void this.viewYard(line)));
       const openAlliance = allianceOpener();
-      // A mate in the Alliance room: Send resources (design v5 §7c), while trading is on.
-      if (this.state.channel === ALLIANCE_ROOM && openAlliance && allianceTradeOn()) {
-        actions.append(
-          this.iconButton(ALLIANCE_ROOM_TEXT.send, "income", () => {
-            this.pick(null);
-            allianceOpener()?.("trade", { send: { userid: line.userId, username: line.name } });
-          }),
-        );
+      // A mate in the Alliance room: Send resources (design v5 §7c); greyed out, "Coming soon", while trading is off.
+      if (this.state.channel === ALLIANCE_ROOM && openAlliance) {
+        const tradeOn = allianceTradeOn();
+        const send = this.iconButton(ALLIANCE_ROOM_TEXT.send, "income", () => {
+          if (!tradeOn) return;
+          this.pick(null);
+          allianceOpener()?.("trade", { send: { userid: line.userId, username: line.name } });
+        });
+        if (!tradeOn) {
+          send.disabled = true;
+          send.title = TRADE_OFF_TITLE;
+        }
+        actions.append(send);
       }
       // The Alliance room's lines are not reported: the server takes no alliance reports, and members kick.
       if (this.state.channel !== ALLIANCE_ROOM) {

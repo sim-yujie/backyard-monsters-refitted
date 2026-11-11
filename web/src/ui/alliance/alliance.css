@@ -876,6 +876,20 @@
   pointer-events: none;
 }
 
+/* Trading switched off (beta 7, owner 11 Nov): the Trade tab stays, greyed
+   out, "Coming soon" on hover, and no hover glow. */
+.alliance__tab:disabled,
+:root[data-skin] .panel .alliance__tab.tabs__tab:disabled:hover {
+  background: none;
+  filter: none;
+  cursor: not-allowed;
+}
+
+.alliance__tab:disabled > * {
+  opacity: 0.45;
+  filter: grayscale(0.9);
+}
+
 .alliance-card {
   display: flex;
   flex-direction: column;

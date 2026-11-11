@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatApi, ChatLineWire } from "@/api/chat";
 import { ALLIANCE_ROOM, ChatSession, type ChatSocket } from "@/game/chat/chatSession";
 import { setAllianceOpener } from "@/game/alliance/allianceView";
-import { setAllianceTradeOn } from "@/game/alliance/tradeSwitch";
+import { setAllianceTradeOn, TRADE_OFF_TITLE } from "@/game/alliance/tradeSwitch";
 import { ALLIANCE_ROOM_TEXT, ChatBox, GLOBAL_LABEL } from "./ChatBox";
 
 /**
@@ -224,7 +224,7 @@ describe("trading in the Alliance room (design v5 §7c)", () => {
     expect(opened[0]?.[1]).toMatchObject({ send: {} });
   });
 
-  it("switch off (beta 7): no Trade on a request line and no Send on a mate", () => {
+  it("switch off (beta 7): Trade on a request line and Send on a mate are greyed out, Coming soon, and do nothing", () => {
     setAllianceTradeOn(false);
     mount();
     tabs()[1]!.click();
@@ -233,9 +233,16 @@ describe("trading in the Alliance room (design v5 §7c)", () => {
       channel: KEY,
       ...wire(0, "PebbleKing gives 1K Twigs for 1K Goo.", { messageType: "trade_ask", tradeRequest: 41 }),
     });
-    expect(box.element.querySelector(".chat-line__give")).toBeNull();
+    const give = box.element.querySelector<HTMLButtonElement>(".chat-line__give")!;
+    expect(give.textContent).toBe(ALLIANCE_ROOM_TEXT.trade);
+    expect(give.disabled).toBe(true);
+    expect(give.title).toBe(TRADE_OFF_TITLE);
+    give.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     box.element.querySelector<HTMLButtonElement>("button.chat-line__name")!.click();
-    expect(box.element.querySelector('[data-action="income"]')).toBeNull();
+    const send = box.element.querySelector<HTMLButtonElement>('[data-action="income"]')!;
+    expect(send.disabled).toBe(true);
+    expect(send.title).toBe(TRADE_OFF_TITLE);
+    send.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(opened).toEqual([]);
   });
 });
