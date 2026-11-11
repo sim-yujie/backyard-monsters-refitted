@@ -4,7 +4,15 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { EventView } from "@/api/events";
-import { claimedLine, EVENT_EXTRAS, EventsPanel, nextText, rewardBadge, type EventsPanelView } from "./EventsPanel";
+import {
+  claimedLine,
+  EVENT_EXTRAS,
+  EventsPanel,
+  goalsBar,
+  nextText,
+  rewardBadge,
+  type EventsPanelView,
+} from "./EventsPanel";
 
 /** The page's own CSS, read as text: jsdom lays nothing out. */
 const eventsCss = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "events.css"), "utf8");
@@ -522,5 +530,45 @@ describe("rewardBadge: Korath's powers (Monster Madness)", () => {
     const gained = rewardBadge({ kind: "korath", power: 1 }, true);
     expect(gained.classList).not.toContain("events-reward--gain");
     expect(gained.querySelector(".events-reward__figure")?.textContent).toBe("Burn");
+  });
+});
+
+describe("EventsPanel: Monster Madness goals", () => {
+  const madness = (counter: number): EventView =>
+    event({
+      id: "monster-madness-1",
+      title: "Monster Madness",
+      kind: "monster-madness",
+      calendar: null,
+      ladder: {
+        label: "Takeover points",
+        counter,
+        tiers: [
+          { need: 42_000_000, rewards: [{ kind: "korath", power: 1 }], claimed: false },
+          { need: 94_500_000, rewards: [{ kind: "korath", power: 2 }], claimed: false },
+          { need: 160_125_000, rewards: [{ kind: "korath", power: 3 }], claimed: false },
+        ],
+      },
+    });
+
+  it("draws one bar to the top goal, with a tick at each goal", () => {
+    const bar = goalsBar(madness(50_000_000).ladder!);
+    expect(bar.querySelector<HTMLElement>(".events-goals__fill")!.style.width).toBe("31.2%");
+    const ticks = [...bar.querySelectorAll<HTMLElement>(".events-goals__tick")];
+    expect(ticks.map((tick) => tick.style.left)).toEqual(["26.2%", "59%", "100%"]);
+    expect(ticks.map((tick) => tick.classList.contains("events-goals__tick--done"))).toEqual([true, false, false]);
+    expect([...bar.querySelectorAll(".events-goals__mark")].map((mark) => mark.textContent)).toEqual([
+      "42M",
+      "94.5M",
+      "160.1M",
+    ]);
+    expect(bar.querySelector(".events-goals__bar")!.getAttribute("aria-valuenow")).toBe("50000000");
+  });
+
+  it("is on the Monster Madness card only", () => {
+    const { panel } = mounted();
+    panel.render(list([madness(50_000_000)]));
+    expect(panel.element.querySelector(".events-ladder--goals .events-goals__bar")).not.toBeNull();
+    expect(panel.element.querySelectorAll(".events-tier__claim")).toHaveLength(1);
   });
 });

@@ -692,6 +692,108 @@
   color: var(--colour-text-muted);
 }
 
+/* Monster Madness: one bar across the three goals, a tick at each. */
+.events-goals {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-inline: 4px;
+}
+
+.events-goals__bar {
+  position: relative;
+  height: 16px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: 999px;
+  background: var(--colour-surface-sunken);
+}
+
+.events-goals__fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #e2561f, #ffb347);
+}
+
+.events-goals__tick {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 3px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: var(--colour-text-muted);
+}
+
+.events-goals__tick--done {
+  background: var(--colour-success);
+}
+
+.events-goals__marks {
+  position: relative;
+  height: 1.3em;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Each figure centred under its tick; the last one (at 100%) kept inside the bar's end. */
+.events-goals__mark {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+.events-goals__mark:last-child {
+  transform: translateX(-100%);
+}
+
+.events-goals__mark--done {
+  color: var(--colour-success);
+  opacity: 1;
+}
+
+/* Its rows: Korath's power large and named, the points readable. */
+.events-ladder--goals .events-tier {
+  align-items: center;
+  padding-block: var(--space-1);
+}
+
+.events-ladder--goals .events-tier__need {
+  min-width: 110px;
+  font-size: var(--text-md);
+}
+
+.events-ladder--goals .events-reward__image--korath {
+  width: 60px;
+  height: 60px;
+}
+
+.events-ladder--goals .events-reward--korath {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.events-ladder--goals .events-reward--korath .events-reward__figure {
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+
+@media (width <= 620px) {
+  .events-ladder--goals .events-tier__need {
+    min-width: 84px;
+    font-size: var(--text-sm);
+  }
+
+  .events-ladder--goals .events-reward__image--korath {
+    width: 48px;
+    height: 48px;
+  }
+}
+
 .events-krallen__progress {
   display: flex;
   flex-direction: column;
