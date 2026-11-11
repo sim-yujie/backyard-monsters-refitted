@@ -4992,7 +4992,8 @@ tbody th {
   list-style: none;
 }
 
-.award-amount {
+/* The amount box in the give form; the log's amount span shares the class name. */
+.input.award-amount {
   width: 110px;
   min-height: 40px;
 }
