@@ -112,12 +112,17 @@ export const avatar = (target: Mr1Target, size: "sm" | "md" | "lg"): HTMLElement
 /**
  * A shield and a count for "Attacked you 2 times", a sword and a count for
  * "You attacked them 1 time", each with those words on hover and for screen
- * readers. Null when they never fought.
+ * readers. Null when they never fought. Revenge also carries its word
+ * ("Revenge ×2"): the target icon alone was unclear (owner, 11 Nov 2026).
  */
 const BATTLE_ICONS: Readonly<Record<Mr1BattleCount["kind"], IconName>> = {
   attackedYou: "shield",
   youAttacked: "attack",
   vengeance: "target",
+};
+
+const BATTLE_WORDS: Partial<Record<Mr1BattleCount["kind"], string>> = {
+  vengeance: "Revenge",
 };
 
 export const battleIcons = (neighbour: Mr1Neighbour): HTMLElement | null => {
@@ -129,7 +134,8 @@ export const battleIcons = (neighbour: Mr1Neighbour): HTMLElement | null => {
     badge.title = label;
     badge.setAttribute("role", "img");
     badge.setAttribute("aria-label", label);
-    badge.append(icon(BATTLE_ICONS[kind], 13), String(count));
+    const word = BATTLE_WORDS[kind];
+    badge.append(icon(BATTLE_ICONS[kind], 13), word ? `${word} ×${count}` : String(count));
     group.append(badge);
   }
   return group;

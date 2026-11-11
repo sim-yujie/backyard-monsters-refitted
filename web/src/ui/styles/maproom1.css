@@ -721,9 +721,10 @@
   color: var(--colour-warning);
 }
 
-/* Vengeance: hits back across the level gap. */
+/* Vengeance: hits back across the level gap. "Revenge ×2" stays on one line. */
 .mr1-battle--vengeance {
   color: var(--colour-accent);
+  white-space: nowrap;
 }
 
 .mr1-warning,

@@ -64,12 +64,13 @@ describe("a yard too far below", () => {
 });
 
 describe("a yard you have vengeance on", () => {
-  it("keeps Attack on and shows a target badge with the count", () => {
+  it("keeps Attack on and shows a target badge with the word and the count", () => {
     const element = card(3);
     expect(attackButton(element).disabled).toBe(false);
     const badge = element.querySelector<HTMLElement>(".mr1-battle--vengeance")!;
-    expect(badge.textContent).toBe("2");
-    expect(badge.title).toBe("Vengeance: you can hit back 2 times");
+    expect(badge.textContent).toBe("Revenge ×2");
+    expect(badge.querySelector("svg")).not.toBeNull();
+    expect(badge.title).toBe("Revenge: you can hit back 2 times");
   });
 
   it("the list row says why a yard can't be attacked, and shows the vengeance badge", () => {
@@ -78,6 +79,6 @@ describe("a yard you have vengeance on", () => {
     const low = list.element.querySelector<HTMLElement>('[data-key="player-2"]')!;
     expect(low.textContent).toContain("Too low · 7+ levels below");
     const revenge = list.element.querySelector<HTMLElement>('[data-key="player-3"]')!;
-    expect(revenge.querySelector(".mr1-battle--vengeance")?.textContent).toBe("2");
+    expect(revenge.querySelector(".mr1-battle--vengeance")?.textContent).toBe("Revenge ×2");
   });
 });

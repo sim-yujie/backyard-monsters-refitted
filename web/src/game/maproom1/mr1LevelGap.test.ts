@@ -89,7 +89,7 @@ describe("vengeance", () => {
     expect(battleCounts(player(3))).toContainEqual({
       kind: "vengeance",
       count: 2,
-      label: "Vengeance: you can hit back 2 times",
+      label: "Revenge: you can hit back 2 times",
     });
     const inGap = { ...player(1), vengeance: 1 };
     expect(battleCounts(inGap).some((one) => one.kind === "vengeance")).toBe(false);

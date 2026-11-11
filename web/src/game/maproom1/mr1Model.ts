@@ -375,7 +375,7 @@ export const battleCounts = (neighbour: Mr1Neighbour): Mr1BattleCount[] => {
     counts.push({
       kind: "vengeance",
       count: vengeance,
-      label: `Vengeance: you can hit back ${times(vengeance)}`,
+      label: `Revenge: you can hit back ${times(vengeance)}`,
     });
   }
   return counts;
