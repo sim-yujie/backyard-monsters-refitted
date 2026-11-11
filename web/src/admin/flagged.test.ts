@@ -158,8 +158,22 @@ describe("the Flagged list", () => {
     const rows = [...view.element.querySelectorAll<HTMLElement>(".flagged-row")];
     expect(rows.map((row) => row.dataset["player"])).toEqual(["552", "77"]);
     const figures = [...view.element.querySelectorAll(".figure-value")].map((el) => el.textContent);
-    // 2 players; 3 refused fights + 1 refused economy save.
-    expect(figures).toEqual(["2", "4"]);
+    // 2 players; 3 refused fights + 1 refused economy save; 2 economy saves
+    // only logged; 1 tampered attack request.
+    expect(figures).toEqual(["2", "4", "2", "1"]);
+  });
+
+  it("makes each figure the sum of its colour of chips", async () => {
+    const { view } = await mount();
+    const figures = [...view.element.querySelectorAll(".figure-value")].map((el) => Number(el.textContent));
+    const sum = (selector: string) =>
+      [...view.element.querySelectorAll(selector)]
+        .map((el) => Number(/×(\d+)/.exec(el.textContent ?? "")?.[1] ?? 1))
+        .reduce((a, b) => a + b, 0);
+    const saves = '.flagged-count:not([data-kind="attack"])';
+    expect(sum(`${saves}.chip-bad`)).toBe(figures[1]);
+    expect(sum(`${saves}.chip-warn`)).toBe(figures[2]);
+    expect(sum('.flagged-count[data-kind="attack"]')).toBe(figures[3]);
   });
 
   it("counts refused saves per check, with what did not match and whose yards", async () => {
@@ -173,7 +187,12 @@ describe("the Flagged list", () => {
     expect(fields).toEqual(["Building health ×3", "Loot ×2", "Damage % ×2", "Champion HP"]);
     expect(first!.querySelector(".flagged-yards")!.textContent).toBe("yardlord (bot) · DarkGecko (bot) · base 999");
 
-    expect(second!.querySelector('.flagged-count[data-kind="economy"]')!.textContent).toBe("Economy ×3");
+    expect(second!.querySelector('.flagged-count[data-kind="economy"][data-outcome="refused"]')!.textContent).toBe(
+      "Economy ×1",
+    );
+    const logged = second!.querySelector<HTMLElement>('.flagged-count[data-kind="economy"][data-outcome="logged"]')!;
+    expect(logged.textContent).toBe("Economy ×2 logged");
+    expect(logged.classList.contains("chip-warn")).toBe(true);
     expect(second!.querySelector('.flagged-count[data-kind="attack"]')!.textContent).toBe("Tampered attack ×1");
     expect(second!.textContent).toContain("Banned");
     expect(second!.querySelector(".flagged-yards")!.textContent).toBe("Saver ×3");

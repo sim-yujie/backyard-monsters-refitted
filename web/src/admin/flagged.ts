@@ -61,21 +61,27 @@ const botChip = (yard: CheatYard | null): Child =>
     ? h("span", { class: "chip chip-warn", attrs: { title: "Run by the computer, not a real player" } }, "Bot")
     : null;
 
-/** A count chip: an icon, a word and ×n, quiet when it is nothing. */
-const countChip = (kind: "fight" | "economy" | "attack", refused: number, flagged = 0): Child => {
-  if (refused + flagged === 0) return null;
+/**
+ * A count chip: an icon, a word and ×n, nothing when n is 0. Red for refused
+ * saves (and tampered attack requests), amber "logged" for saves only logged,
+ * so the red chips add up to the "Refused saves" figure and the amber ones to
+ * "Only logged".
+ */
+const countChip = (kind: "fight" | "economy" | "attack", n: number, outcome: "refused" | "logged"): Child => {
+  if (n === 0) return null;
+  const refused = outcome === "refused";
   const title =
     kind === "attack"
-      ? `${refused} tampered attack ${refused === 1 ? "request" : "requests"}`
-      : `${refused} refused, ${flagged} only logged · ${KIND_HINTS[kind]}`;
+      ? `${n} tampered attack ${n === 1 ? "request" : "requests"} · ${KIND_HINTS[kind]}`
+      : `${n} ${n === 1 ? "save" : "saves"} ${refused ? "refused" : "only logged, not refused"} · ${KIND_HINTS[kind]}`;
   return h(
     "span",
     {
-      class: `chip chip-icon ${refused > 0 ? "chip-bad" : "chip-warn"} flagged-count`,
-      attrs: { title, "data-kind": kind },
+      class: `chip chip-icon ${refused ? "chip-bad" : "chip-warn"} flagged-count`,
+      attrs: { title, "data-kind": kind, "data-outcome": outcome },
     },
-    icon(refused > 0 ? "bad" : "warn", 14),
-    `${KIND_WORDS[kind]} ×${count(refused + flagged)}`,
+    icon(refused ? "bad" : "warn", 14),
+    `${KIND_WORDS[kind]} ×${count(n)}${refused ? "" : " logged"}`,
   );
 };
 
@@ -137,7 +143,10 @@ export class FlaggedSection {
       replace(this.body, h("p", { class: "note" }, "Nobody has been flagged."));
       return;
     }
+    // Each figure is the sum of one colour of chip below it.
     const refused = players.reduce((sum, p) => sum + p.counts.fight.refused + p.counts.economy.refused, 0);
+    const logged = players.reduce((sum, p) => sum + p.counts.fight.flagged + p.counts.economy.flagged, 0);
+    const tampered = players.reduce((sum, p) => sum + p.counts.attack, 0);
     replace(
       this.body,
       h(
@@ -155,6 +164,20 @@ export class FlaggedSection {
           h("span", { class: "figure-label" }, icon("bad", 14), " Refused saves"),
           h("span", { class: "figure-value" }, count(refused)),
         ),
+        h(
+          "div",
+          { class: "figure", attrs: { title: "Saves that broke a check but were let through (the check only logs)" } },
+          h("span", { class: "figure-label" }, icon("warn", 14), " Only logged"),
+          h("span", { class: "figure-value" }, count(logged)),
+        ),
+        tampered
+          ? h(
+              "div",
+              { class: "figure" },
+              h("span", { class: "figure-label" }, icon("bad", 14), " Tampered attacks"),
+              h("span", { class: "figure-value" }, count(tampered)),
+            )
+          : null,
       ),
       h("ul", { class: "rows flagged-rows" }, ...players.map((player) => this.playerRow(player))),
     );
@@ -187,9 +210,11 @@ export class FlaggedSection {
           h(
             "span",
             { class: "row-top flagged-counts" },
-            countChip("fight", counts.fight.refused, counts.fight.flagged),
-            countChip("economy", counts.economy.refused, counts.economy.flagged),
-            countChip("attack", counts.attack),
+            countChip("fight", counts.fight.refused, "refused"),
+            countChip("economy", counts.economy.refused, "refused"),
+            countChip("fight", counts.fight.flagged, "logged"),
+            countChip("economy", counts.economy.flagged, "logged"),
+            countChip("attack", counts.attack, "refused"),
             counts.other ? h("span", { class: "chip chip-quiet" }, `Other ×${count(counts.other)}`) : null,
           ),
           player.fields.length ? h("span", { class: "row-top flagged-fields" }, ...fieldChips(player.fields)) : null,
