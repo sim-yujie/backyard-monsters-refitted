@@ -183,9 +183,9 @@ import {
   allianceNewsController,
 } from "./controllers/alliance/allianceProgress.js";
 import {
-  tradeAskController,
+  tradePostController,
   tradeCancelController,
-  tradeGiveController,
+  tradeAcceptController,
   tradeSendController,
   tradeViewController,
 } from "./controllers/alliance/trade.js";
@@ -430,9 +430,9 @@ router.post("/alliance/setgoal", verifyUserAuth, logRequest, setGoalController);
 router.post("/alliance/removegoal", verifyUserAuth, logRequest, removeGoalController);
 router.get("/alliance/territory", verifyUserAuth, logRequest, territoryController);
 router.get("/alliance/trade", verifyUserAuth, logRequest, tradeViewController);
-router.post("/alliance/trade/ask", verifyUserAuth, logRequest, tradeAskController);
+router.post("/alliance/trade/post", verifyUserAuth, logRequest, tradePostController);
 router.post("/alliance/trade/cancel", verifyUserAuth, logRequest, tradeCancelController);
-router.post("/alliance/trade/give", verifyUserAuth, logRequest, tradeGiveController);
+router.post("/alliance/trade/accept", verifyUserAuth, logRequest, tradeAcceptController);
 router.post("/alliance/trade/send", verifyUserAuth, logRequest, tradeSendController);
 router.get("/alliance/news", verifyUserAuth, logRequest, allianceNewsController);
 

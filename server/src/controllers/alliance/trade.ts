@@ -1,14 +1,8 @@
 import { postgres } from "../../server.js";
 import { Status } from "../../enums/StatusCodes.js";
 import type { User } from "../../database/models/user.model.js";
-import { TradeAskSchema, TradeGiveSchema, TradeSendSchema, TradeViewSchema } from "../../schemas/AllianceSchemas.js";
-import {
-  askForResources,
-  cancelRequest,
-  giveToRequest,
-  sendToMate,
-  tradeView,
-} from "../../services/alliance/trade.js";
+import { TradeAcceptSchema, TradePostSchema, TradeSendSchema, TradeViewSchema } from "../../schemas/AllianceSchemas.js";
+import { acceptRequest, cancelRequest, postRequest, sendToMate, tradeView } from "../../services/alliance/trade.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
@@ -32,28 +26,28 @@ export const tradeViewController: KoaController = async (ctx) => {
   ctx.body = await tradeView(postgres.em, user.userid, getCurrentDateTime(), to);
 };
 
-/** POST /alliance/trade/ask {r1..r4 (what a mate gives), for?} */
-export const tradeAskController: KoaController = async (ctx) => {
+/** POST /alliance/trade/post {give, want, amount}: "I give N of one, I want N of another". */
+export const tradePostController: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  const body = TradeAskSchema.parse(ctx.request.body ?? {});
-  const request = await askForResources(postgres.em, user.userid, amountsOf(body), body.for ?? null, getCurrentDateTime());
+  const body = TradePostSchema.parse(ctx.request.body ?? {});
+  const request = await postRequest(postgres.em, user.userid, body.give, body.want, body.amount, getCurrentDateTime());
   ctx.status = Status.OK;
   ctx.body = { error: 0, request };
 };
 
-/** POST /alliance/trade/cancel */
+/** POST /alliance/trade/cancel: gives back what the request holds. */
 export const tradeCancelController: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  const { cancelled } = await cancelRequest(postgres.em, user.userid, getCurrentDateTime());
+  const result = await cancelRequest(postgres.em, user.userid, getCurrentDateTime());
   ctx.status = Status.OK;
-  ctx.body = { error: 0, cancelled };
+  ctx.body = { error: 0, ...result };
 };
 
-/** POST /alliance/trade/give {request_id}: gives exactly what was asked. */
-export const tradeGiveController: KoaController = async (ctx) => {
+/** POST /alliance/trade/accept {request_id}: the swap, whole. */
+export const tradeAcceptController: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  const body = TradeGiveSchema.parse(ctx.request.body ?? {});
-  const result = await giveToRequest(postgres.em, user.userid, body.request_id, getCurrentDateTime());
+  const body = TradeAcceptSchema.parse(ctx.request.body ?? {});
+  const result = await acceptRequest(postgres.em, user.userid, body.request_id, getCurrentDateTime());
   ctx.status = Status.OK;
   ctx.body = { error: 0, ...result };
 };

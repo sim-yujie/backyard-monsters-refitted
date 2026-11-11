@@ -1,7 +1,6 @@
 import { ALLIANCE_TYPES, CONSTELLATIONS, GOAL_MENU, SHOUT_TEXT, STANCE_LABEL } from "../../config/AllianceConfig.js";
 import { AllianceMessageType, type AllianceStance, type AllianceType } from "../../enums/Alliance.js";
 import type { Alliance } from "../../database/models/alliance.model.js";
-import { parseTradeFor, tradeForName } from "./tradeFor.js";
 
 
 type ShoutTarget = Pick<Alliance, "name"> | null;
@@ -80,19 +79,23 @@ export const readUnderAttack = (body: string): UnderAttackFacts | null => {
  * @param {string} body - Its stored body.
  * @returns {{ x: number; y: number } | undefined} The cell, or undefined.
  */
-/** What a request line stores: the request, what should arrive, and what for. */
+type TradeKey = "r1" | "r2" | "r3" | "r4";
+
+/** What a request line stores: the request, and the swap ("I give 1K Twigs, I want 1K Goo"). */
 export interface TradeAskFacts {
   request: number;
-  amounts: Partial<Record<"r1" | "r2" | "r3" | "r4", number>>;
-  /** What for, as stored (`b:<type>:<level>` / `m:<id>`, `tradeFor.ts`). */
-  for?: string | null;
+  give: TradeKey;
+  want: TradeKey;
+  amount: number;
 }
 
-/** What a trade-done line stores: who got it and what arrived. */
-export interface TradeDoneFacts {
-  to: string;
-  arrived: Partial<Record<"r1" | "r2" | "r3" | "r4", number>>;
-}
+/**
+ * What a trade-done line stores. A Send: who got it and what arrived. A
+ * swap: who it was `with`, what the accepter `gave` and `got` (as arrived).
+ */
+export type TradeDoneFacts =
+  | { to: string; arrived: Partial<Record<TradeKey, number>> }
+  | { with: string; gave: Partial<Record<TradeKey, number>>; got: Partial<Record<TradeKey, number>> };
 
 const RESOURCE_WORDS: Record<string, string> = { r1: "Twigs", r2: "Pebbles", r3: "Putty", r4: "Goo" };
 
@@ -202,21 +205,30 @@ export const composeShout = (type: AllianceMessageType, username: string, body: 
 
     case AllianceMessageType.TRADE_ASK: {
       const facts = readJson<Partial<TradeAskFacts>>(body);
-      const what = amountsText(facts?.amounts ?? {});
-      if (!what) return "";
+      const amount = Number(facts?.amount);
+      const give = amountsText({ [String(facts?.give)]: amount });
+      const want = amountsText({ [String(facts?.want)]: amount });
+      if (!give || !want) return "";
 
-      // "PebbleKing asks for 2.0M Goo (Town Hall L7)." (design v5 §12b, owner 10 Nov)
-      const forName = tradeForName(parseTradeFor(facts?.for));
-      return `${username} asks for ${what}${forName ? ` (${forName})` : ""}.`;
+      // "PebbleKing gives 1K Twigs for 1K Goo." (owner, 11 Nov 2026: a 1:1 swap)
+      return `${username} gives ${give} for ${want}.`;
     }
 
     case AllianceMessageType.TRADE_DONE: {
-      const facts = readJson<Partial<TradeDoneFacts>>(body);
-      const what = amountsText(facts?.arrived ?? {});
-      if (!what || !facts?.to) return "";
+      const facts = readJson<Record<string, unknown>>(body);
+      if (typeof facts?.["with"] === "string") {
+        const gave = amountsText((facts["gave"] ?? {}) as Record<string, number>);
+        const got = amountsText((facts["got"] ?? {}) as Record<string, number>);
+        if (!gave || !got) return "";
+
+        // "Mira and Thornback traded: 900 Goo for 900 Twigs." (what each got)
+        return `${username} and ${facts["with"]} traded: ${gave} for ${got}.`;
+      }
+      const what = amountsText((facts?.["arrived"] ?? {}) as Record<string, number>);
+      if (!what || typeof facts?.["to"] !== "string") return "";
 
       // "Mira gave Thornback 800K Goo." (design v5 §12b)
-      return `${username} gave ${facts.to} ${what}.`;
+      return `${username} gave ${facts["to"]} ${what}.`;
     }
 
     case AllianceMessageType.RELATIONSHIP:

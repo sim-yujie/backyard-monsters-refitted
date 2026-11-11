@@ -191,7 +191,10 @@ export const REAL_ACTION_ROUTES: readonly RealActionRoute[] = [
   { method: "POST", path: "/api/:apiVersion/bm/friends/gift" },
   { method: "POST", path: "/api/:apiVersion/bm/friends/gifts/collect" },
   // Alliance trades move resources between yards (beta 7, design v5 §12a).
-  { method: "POST", path: "/alliance/trade/give" },
+  // A request takes what it offers from the yard; cancel gives it back; accept swaps.
+  { method: "POST", path: "/alliance/trade/post" },
+  { method: "POST", path: "/alliance/trade/cancel" },
+  { method: "POST", path: "/alliance/trade/accept" },
   { method: "POST", path: "/alliance/trade/send" },
   // The "Stay protected?" prompt's tap (#275): the player said they are there.
   { method: "POST", path: "/api/:apiVersion/bm/presence/stay" },
@@ -274,9 +277,6 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /alliance/suggeststar",
   "POST /alliance/setgoal",
   "POST /alliance/removegoal",
-  // A trade request posted or taken down changes no yard (the give does).
-  "POST /alliance/trade/ask",
-  "POST /alliance/trade/cancel",
   // Reads, looks and polls a client sends while the player sits still.
   "POST /base/updatesaved",
   "POST /base/checkpoint",

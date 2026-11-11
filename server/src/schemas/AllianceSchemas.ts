@@ -180,17 +180,19 @@ const tradeAmounts = { r1: tradeAmount, r2: tradeAmount, r3: tradeAmount, r4: tr
 /** GET /alliance/trade[?to=]: the Trade tab; `to` adds a mate's storage for the Send sheet. */
 export const TradeViewSchema = z.object({ to: z.coerce.number().int().positive().optional() });
 
-/**
- * POST /alliance/trade/ask: what a mate gives (the asker gets 10% less), and
- * what for (optional): `b:<type>:<level>` or `m:<id>` (`tradeFor.ts`).
- */
-export const TradeAskSchema = z.object({
-  ...tradeAmounts,
-  for: z.string().max(16).nullish(),
-});
+/** One resource that can be traded (Shiny cannot). */
+const tradeKey = z.enum(["r1", "r2", "r3", "r4"]);
 
-/** POST /alliance/trade/give: a request. The giver gives exactly what was asked; no amounts. */
-export const TradeGiveSchema = z.object({ request_id: z.coerce.number().int().positive() }).strict();
+/**
+ * POST /alliance/trade/post: "I give `amount` of `give`, I want `amount` of
+ * `want`" (1:1; each side gets 10% less).
+ */
+export const TradePostSchema = z
+  .object({ give: tradeKey, want: tradeKey, amount: z.coerce.number().int().min(1).max(1_000_000_000) })
+  .strict();
+
+/** POST /alliance/trade/accept: a mate's request, taken whole; no amounts. */
+export const TradeAcceptSchema = z.object({ request_id: z.coerce.number().int().positive() }).strict();
 
 /** POST /alliance/trade/send: a mate, and what leaves. */
 export const TradeSendSchema = z.object({ to: z.coerce.number().int().positive(), ...tradeAmounts });

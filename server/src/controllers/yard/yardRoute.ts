@@ -7,6 +7,7 @@ import { notifyAndCount } from "../../services/notifications/notifications.js";
 import { countRaidSession } from "../../services/raids/raidSchedule.js";
 import { placeTrojanHorse } from "../../services/raids/trojanHorse.js";
 import type { CompletedJob } from "../../services/yard/catchUp.js";
+import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import type { KoaController } from "../../utils/KoaController.js";
 import {
   catchUpLockedOutpost,
@@ -56,9 +57,15 @@ export const yardRoute =
  * Trojan Horse the moment the player qualifies for one (`placeTrojanHorse`,
  * issue #324), so two loads at once still place exactly one.
  */
-export const catchUpOwnerYard = (
+export const catchUpOwnerYard = async (
   save: Save
 ): Promise<{ save: Save; completed: CompletedJob[]; trojanPlaced: boolean }> => {
+  // An alliance trade request that ran out, or whose alliance the player
+  // left, gives back what it holds first, so the yard loads with it (one
+  // indexed look when there is none; never throws). Loaded lazily: the load
+  // path need not pull in the alliance modules.
+  const { refundStaleRequests } = await import("../../services/alliance/trade.js");
+  await refundStaleRequests(postgres.em, save.userid, getCurrentDateTime());
   let trojanPlaced = false;
   return catchUpLockedYard(postgres.em, save, (locked, now) => {
     countRaidSession(locked, now);
