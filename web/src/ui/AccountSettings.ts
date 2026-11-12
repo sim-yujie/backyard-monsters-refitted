@@ -41,6 +41,7 @@ import { noteShinyLock } from "@/game/shinyLock";
 import { savedFontChoice, setFontChoice, type FontChoice } from "@/ui/fontChoice";
 import { Popup } from "@/ui/Popup";
 import { reportLook } from "@/app/lookReport";
+import { groundPicker } from "./groundPicker";
 import { NOTIFICATION_SETTINGS_TEXT, notificationSettingsSection } from "@/ui/notifications/NotificationSettings";
 
 export const SETTINGS_TEXT = {
@@ -680,16 +681,21 @@ const lookSection = (): HTMLElement => {
   hint.setAttribute("aria-live", "polite");
   hint.textContent = SETTINGS_TEXT.lookHint;
   look.setAttribute("aria-describedby", hint.id);
+  // The yard ground (owner, 12 Nov 2026): the swatches of the Style shown above.
+  let ground = groundPicker(look.value === "classic");
   look.addEventListener("change", () => {
     const saved = saveClassicLook(look.value === "classic");
     if (saved) reportLook();
     hint.textContent = saved ? SETTINGS_TEXT.lookSaved : SETTINGS_TEXT.lookFailed;
     hint.classList.toggle("field__hint--error", !saved);
+    const next = groundPicker(look.value === "classic");
+    ground.replaceWith(next);
+    ground = next;
   });
 
   // The volume sliders, as in the account menu (owner, 4 Nov 2026); saved with the account.
   const sound = new SoundSliders("account-settings__sound");
-  section.append(heading, row, hint, ...fontRows(), ...musicRows(), sound.element);
+  section.append(heading, row, hint, ground, ...fontRows(), ...musicRows(), sound.element);
   return section;
 };
 

@@ -29,8 +29,7 @@ export const PLANNER_ICON_WORDS: Readonly<Record<PlannerIcon, Words>> = {
   find: { words: "Find" },
   wallupgrade: { words: "Upgrade walls" },
   rearm: { words: "Re-arm traps" },
-  // The yard picture (owner, 2026-11-11). No painted camera yet: its words
-  // until one is made and added to PAINTED below.
+  // The yard picture (owner, 2026-11-11), a painted camera since 12 Nov.
   snapshot: { words: "Yard picture", short: "Picture" },
 };
 
@@ -53,6 +52,8 @@ const PAINTED: Partial<Record<PlannerIcon, () => HTMLElement>> = {
   find: painted("find"),
   wallupgrade: painted("wallupgrade"),
   rearm: painted("rearm2"),
+  // Owner 12 Nov: "change 'yard picture' function in planner to a photo icon".
+  snapshot: painted("camera"),
 };
 
 /** Whether a button shows its painted icon rather than its words. */

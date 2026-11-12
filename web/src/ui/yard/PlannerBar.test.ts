@@ -740,6 +740,9 @@ describe("the yard picture button (owner, 2026-11-11)", () => {
     const button = snapshotButton(bar)!;
     expect(button.parentElement).toBe(bar.toolbar);
     expect(button.getAttribute("aria-label")).toBe("Yard picture");
+    // A painted camera (owner, 12 Nov), not the words.
+    expect(button.querySelector("img.game-icon--camera")).not.toBeNull();
+    expect(button.querySelector(".planner-bar__face--words")).toBeNull();
     expect(button.nextElementSibling?.getAttribute("aria-label")).toBe("How the planner works, and every shortcut");
     button.click();
     expect(onSnapshot).toHaveBeenCalledTimes(1);

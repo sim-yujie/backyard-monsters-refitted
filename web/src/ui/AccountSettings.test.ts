@@ -477,6 +477,20 @@ describe("AccountSettings", () => {
     expect(document.querySelector("#settings-classic-art")).toBeNull();
   });
 
+  it("shows the yard ground swatches of the Style picked above (owner, 12 Nov 2026)", async () => {
+    localStorage.clear();
+    await open({});
+    const grounds = () =>
+      [...document.querySelectorAll<HTMLElement>(".ground-picker__swatch")].map((swatch) => swatch.dataset["ground"]);
+    expect(grounds()).toHaveLength(6);
+    expect(grounds()[0]).toBe("meadow");
+    const look = document.querySelector<HTMLSelectElement>("#settings-look")!;
+    look.value = "classic";
+    look.dispatchEvent(new Event("change"));
+    expect(grounds()).toEqual(["original", "rock", "sand", "crater"]);
+    localStorage.clear();
+  });
+
   it("offers the music on its own, following the Style by default, kept in this browser for the next load", async () => {
     localStorage.clear();
     await open({});
