@@ -105,23 +105,38 @@ describe("Halloween pumpkin hunt ladder", () => {
 });
 
 describe("Thanksgiving turkey hunt ladder", () => {
-  test("the same tiers as the pumpkins: 10, 25, 50 and 100 turkeys", () => {
-    expect(THANKSGIVING_2026_LADDER.map((tier) => tier.need)).toEqual([10, 25, 50, 100]);
+  test("the owner's tiers (13 Nov 2026): 25, 50, 150 and 200 turkeys", () => {
+    expect(THANKSGIVING_2026_LADDER.map((tier) => tier.need)).toEqual([25, 50, 150, 200]);
   });
 
-  test("during Thanksgiving the tenth turkey unlocks the first tier", async () => {
+  test("during Thanksgiving the 25th turkey unlocks the first tier: 10 Shiny and 20 Glimmers", async () => {
     setSystemTime(new Date(Date.UTC(2026, 10, 26, 12)));
     const store = memoryProgressStore();
     const claims = eventsActions(store);
-    await store.addToCounter(em as unknown as EntityManager, 2, TURKEY_HUNT_EVENT, 9);
+    await store.addToCounter(em as unknown as EntityManager, 2, TURKEY_HUNT_EVENT, 24);
+
+    const early = await run(claims.ladderClaim, { event: TURKEY_HUNT_EVENT, tier: 0 });
+    expect(early.body).toMatchObject({ reason: "tierLocked", have: 24, need: 25 });
 
     // An ordinary turkey (no golden roll), picked on the real clock.
     const picked = await run(mushroomPickAction(() => 0.9, store), { id: 0 });
-    expect(picked.body).toMatchObject({ report: { golden: false, turkeys: 10 } });
+    expect(picked.body).toMatchObject({ report: { golden: false, turkeys: 25 } });
 
     const claimed = await run(claims.ladderClaim, { event: TURKEY_HUNT_EVENT, tier: 0 });
     expect(claimed.status).toBe(200);
-    expect(claimed.body).toMatchObject({ credits: 110, report: { tier: 0 } });
+    expect(claimed.body).toMatchObject({ credits: 110, report: { tier: 0 }, eventcoins: 20 });
+  });
+
+  test("the 50-turkey tier pays 100 Glimmers on top of its usual 35, and no Shiny", async () => {
+    setSystemTime(new Date(Date.UTC(2026, 10, 26, 12)));
+    const store = memoryProgressStore();
+    const claims = eventsActions(store);
+    await store.addToCounter(em as unknown as EntityManager, 2, TURKEY_HUNT_EVENT, 50);
+
+    const claimed = await run(claims.ladderClaim, { event: TURKEY_HUNT_EVENT, tier: 1 });
+    expect(claimed.status).toBe(200);
+    expect(claimed.body).toMatchObject({ credits: 100, report: { tier: 1 }, eventcoins: 135 });
+    expect(coins.balances.get(2)).toBe(135);
   });
 
   test("a golden turkey pays its Shiny and still counts", async () => {

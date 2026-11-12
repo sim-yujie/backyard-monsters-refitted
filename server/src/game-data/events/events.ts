@@ -221,7 +221,7 @@ export const HALLOWEEN_2026_LADDER: readonly LadderTier[] = [
  * reward. r1 Twigs, r2 Pebbles, r3 Putty, r4 Goo. Decoration 55 is the
  * Acorn, 69 the Scarecrow. Like Halloween, the event also pays Glimmers
  * (event coins) every day and at every ladder tier: its `coins:
- * BIG_EVENT_COINS` in {@link EVENTS} adds them (`withEventCoins`).
+ * THANKSGIVING_2026_COINS` in {@link EVENTS} adds them (`withEventCoins`).
  * ═══════════════════════════════════════════════════════════════════════
  */
 export const THANKSGIVING_2026_CALENDAR: readonly CalendarDay[] = [
@@ -249,36 +249,54 @@ export const THANKSGIVING_2026_CALENDAR: readonly CalendarDay[] = [
 /**
  * ═══════════════════════════════════════════════════════════════════════
  * THANKSGIVING 2026 TURKEY HUNT LADDER: what picking turkeys earns.
- * The same tiers as Halloween's pumpkin ladder (owner may change them):
- * during the event the yard's mushrooms grow as turkeys that wander near
- * where they grew, about one an hour (`services/yard/season.ts`), and every
- * turkey a player picks adds one to the counter
- * (`controllers/yard/mushrooms.ts`). One pick in four is a golden turkey,
- * worth 3 or 8 Shiny, exactly as a golden mushroom (`GOLDEN_SMALL`,
- * `GOLDEN_BIG` in `services/yard/mushrooms.ts`). Each tier is claimed once,
- * by hand, on the Events page. `need` is the turkey count.
- * r1 Twigs, r2 Pebbles, r3 Putty, r4 Goo. Decoration 69 is the Scarecrow,
- * 110 the D.A.V.E. Pumpkin.
+ * Set by the owner (13 Nov 2026): 25 turkeys for 10 Shiny, 50 for 100
+ * Glimmers, 150 for the Scarecrow and 20 Shiny, 200 for the Autumn Maple
+ * Tree and 30 Shiny. During the event the yard's mushrooms grow as turkeys
+ * that wander near where they grew, about one an hour, at most 10 waiting
+ * (`services/yard/season.ts`, `mushrooms.ts`), and every turkey a player
+ * picks adds one to the counter (`controllers/yard/mushrooms.ts`): up to
+ * about 24 a day for a player who looks in at least every 10 hours. One pick
+ * in four is a golden turkey, worth 3 or 8 Shiny, exactly as a golden
+ * mushroom (`GOLDEN_SMALL`, `GOLDEN_BIG` in `services/yard/mushrooms.ts`).
+ * Each tier is claimed once, by hand, on the Events page. `need` is the
+ * turkey count. The 50 tier's 100 Glimmers are paid through the event's
+ * coins ({@link THANKSGIVING_2026_COINS}), on top of the usual ladder
+ * Glimmers, so the tier shows one Glimmer figure. Decoration 69 is the
+ * Scarecrow, 206 the Autumn Maple Tree (`revampDecorations.ts`).
  * ═══════════════════════════════════════════════════════════════════════
  */
 export const THANKSGIVING_2026_LADDER: readonly LadderTier[] = [
-  /* 10 turkeys  */ { need: 10, rewards: [{ kind: "shiny", amount: 10 }] },
-  /* 25 turkeys  */ { need: 25, rewards: [{ kind: "resources", amounts: { r1: 25_000, r2: 25_000, r3: 25_000, r4: 25_000 } }] },
-  /* 50 turkeys  */ {
-    need: 50,
+  /* 25 turkeys  */ { need: 25, rewards: [{ kind: "shiny", amount: 10 }] },
+  /* 50 turkeys  */ { need: 50, rewards: [] }, // 100 Glimmers, from THANKSGIVING_2026_COINS
+  /* 150 turkeys */ {
+    need: 150,
     rewards: [
       { kind: "decoration", type: 69, count: 1 },
       { kind: "shiny", amount: 20 },
     ],
   },
-  /* 100 turkeys */ {
-    need: 100,
+  /* 200 turkeys */ {
+    need: 200,
     rewards: [
-      { kind: "decoration", type: 110, count: 1 },
+      { kind: "decoration", type: 206, count: 1 },
       { kind: "shiny", amount: 30 },
     ],
   },
 ];
+
+/** Glimmers the 50-turkey tier pays as its own prize (owner, 13 Nov 2026). */
+export const THANKSGIVING_2026_TIER_GLIMMERS = 100;
+
+/**
+ * Thanksgiving's event coins: the big-event amounts ({@link BIG_EVENT_COINS},
+ * 15 a day and 20/35/55/80 over the ladder), with the 50-turkey tier's own
+ * {@link THANKSGIVING_2026_TIER_GLIMMERS} added to its milestone: 20, 135,
+ * 55, 80, 500 in all with the calendar.
+ */
+export const THANKSGIVING_2026_COINS: EventCoins = {
+  ...BIG_EVENT_COINS,
+  milestones: BIG_EVENT_COINS.milestones.map((coins, tier) => (tier === 1 ? coins + THANKSGIVING_2026_TIER_GLIMMERS : coins)),
+};
 
 /**
  * ═══════════════════════════════════════════════════════════════════════
@@ -368,7 +386,7 @@ export const EVENTS: readonly EventDefinition[] = [
     endsAt: "2026-12-03T00:00:00Z",
     calendar: THANKSGIVING_2026_CALENDAR,
     ladder: { label: "Turkeys caught", tiers: THANKSGIVING_2026_LADDER },
-    coins: BIG_EVENT_COINS,
+    coins: THANKSGIVING_2026_COINS,
   },
 ].map(withEventCoins);
 
