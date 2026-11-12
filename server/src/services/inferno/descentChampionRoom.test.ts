@@ -50,8 +50,8 @@ const FULL = { C2: 70, C3: 40, C5: 20 } as const;
 const fling = (t: number, x: number, y: number, monsters: Record<string, number>, champion?: typeof GORGO): FlingEvent =>
   ({ kind: "fling", t, x, y, r: 60, monsters: { ...monsters }, ...(champion && { champion: { ...champion } }) }) as FlingEvent;
 
-const replay = (log: FlingLog) => {
-  const yard = descentYardOf(YARD_INDEX);
+const replay = (log: FlingLog, index = YARD_INDEX) => {
+  const yard = descentYardOf(index);
   const defence = defenderForcesOf({
     buildingdata: yard.buildingdata,
     academy: yard.academy,
@@ -73,7 +73,7 @@ const replay = (log: FlingLog) => {
     declareWar: false,
     left: false,
     defence,
-    descentYard: YARD_INDEX + 1,
+    descentYard: index + 1,
   };
   return replayAbandonedAttack(input);
 };
@@ -114,6 +114,28 @@ describe("a Descent fling with a champion on a full Flinger (Max, Descent 2/4/6)
       const server = replay(cut);
       const fields = battleMismatches(saveOf(screen), server, descentYardOf(YARD_INDEX).buildingdata as never);
       expect(fields).toEqual(expect.arrayContaining(["buildinghealthdata", "attackloot", "attackerchampion"]));
+    },
+    TIMEOUT_MS
+  );
+
+  test(
+    "on Descent yard 6 the cut turns a win on the screen into a loss on the server",
+    () => {
+      // Two full flings (2,500 units each), Gorgo on top of the first, on
+      // yard 6 (base 206), the first yard with Housing Bunker defenders.
+      // Which way the cut tips a close fight depends on the fight (other
+      // seeds tip it the other way); this one: 93% on the screen, 89% kept.
+      const army = { C10: 15, C6: 50, C8: 30 };
+      expect(bucketCost(army, undefined)).toBe(CAPACITY);
+      const sent: FlingLog = {
+        v: 1,
+        seed: 1,
+        events: [fling(10, -400, 300, army, GORGO), fling(410, -100, 300, army)],
+      };
+      const screen = replay(sent, 5);
+      const server = replay(descentFightableLog(sent, CAPACITY, undefined), 5);
+      expect(screen.damage).toBeGreaterThanOrEqual(90);
+      expect(server.damage).toBeLessThan(90);
     },
     TIMEOUT_MS
   );
