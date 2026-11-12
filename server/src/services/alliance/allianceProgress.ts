@@ -366,7 +366,7 @@ export const removeGoal = async (em: EntityManager, userid: number, goalId: numb
 // ---------------------------------------------------------------------------
 
 /**
- * Lights the next 2 stars of one of the alliance's own constellations, paying
+ * Lights the next star of one of the alliance's own constellations, paying
  * the step's price from the points to spend (design v5 §9). The members'
  * production factor change is recorded first (`productionHistory.ts`), so
  * time already away is not paid at the new rate. Clears suggestions for it.
@@ -652,7 +652,7 @@ export const territoryRankOf = async (em: EntityManager, allianceId: number, typ
 /**
  * The Constellation tab's data (design v5 §9a): each of the type's 4
  * constellations with its steps lit, every effect's value at each step
- * (start, then steps 1-5), the next step's price, and how many members
+ * (start, then stars 1-10), the next step's price, and how many members
  * suggest it.
  */
 export const constellationView = (type: AllianceType, stars: LitSteps | null, suggestions: Record<string, string> | null) =>

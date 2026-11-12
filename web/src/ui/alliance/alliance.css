@@ -1388,12 +1388,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.alliance-sky__placeholder {
-  align-self: flex-end;
-  color: rgb(200 210 255 / 0.5);
-  font-size: 10px;
-}
-
 .alliance-dots {
   display: inline-flex;
   gap: 2px;
@@ -1477,10 +1471,10 @@
   margin: 0;
 }
 
-/* The star track: start, then 5 pairs of stars. */
+/* The star track: start, then stars 1-10. */
 .alliance-track {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(11, minmax(0, 1fr));
   gap: 4px;
   margin: 0;
   padding: 0;

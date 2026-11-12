@@ -153,12 +153,12 @@ export const BATTLE_STATS: readonly AllianceStat[] = [
   "reach",
 ];
 
-/** One stat a constellation moves: its value with no stars, and what each step (2 stars) adds. */
+/** One stat a constellation moves: its value with no stars, and what each star adds. */
 export interface ConstellationEffect {
   stat: AllianceStat;
   start: number;
-  perStep: number;
-  /** Added only once the last step is lit (Teratorn's +1 reach). */
+  perStar: number;
+  /** Added only once the last star is lit (Teratorn's +1 reach). */
   atFull?: number;
 }
 
@@ -173,17 +173,22 @@ export interface ConstellationRules {
   effects: ConstellationEffect[];
 }
 
-/** Steps per constellation; each step lights 2 of its 10 stars (design v5 §9, question 22). */
-export const CONSTELLATION_STEPS = 5;
+/**
+ * Steps per constellation; each step lights 1 of its 10 stars (owner, 12 Nov
+ * 2026: one at a time, not two; design v5 §9 had 5 steps of 2).
+ */
+export const CONSTELLATION_STEPS = 10;
 
 /** Stars each step lights. */
-export const STARS_PER_STEP = 2;
+export const STARS_PER_STEP = 1;
 
 /**
- * Point price of steps 1-5 for Midas; Conquest pays 2x and Fortress 4x (by
- * capacity, never by member count; design v5 §9).
+ * Point price of stars 1-10 for Midas; Conquest pays 2x and Fortress 4x (by
+ * capacity, never by member count; design v5 §9). Each old 2-star step's
+ * price split evenly over its two stars, so a full constellation still costs
+ * 600 (Midas).
  */
-export const STEP_PRICES = [40, 80, 120, 160, 200];
+export const STEP_PRICES = [20, 20, 40, 40, 60, 60, 80, 80, 100, 100];
 
 /** Capacity factor per type: point prices, goal targets and goal points scale with it. */
 export const TYPE_SCALE: Record<AllianceType, number> = {
@@ -197,39 +202,40 @@ export const TYPE_SCALE: Record<AllianceType, number> = {
  * balance check (10 Nov 2026, START column) and the owner's answers of
  * 10 Nov: Midas's second weakness is outpost hatch cost, Conquest's is
  * outpost health, no weakness touches main-yard defence. Steps follow the
- * check's "start -> full sky" table (5 equal steps).
+ * check's "start -> full sky" table in 10 equal stars (half of each old
+ * 2-star step, so 2, 4 ... 10 stars give the old 1, 2 ... 5 steps' values).
  * PLACEHOLDERS: the owner tunes these after the feature is done.
  */
 export const CONSTELLATIONS: Record<AllianceType, ConstellationRules[]> = {
   [AllianceType.MIDAS]: [
-    { id: "wormzer", name: "Wormzer", kind: "strength", effects: [{ stat: "production", start: 15, perStep: 2 }] },
-    { id: "brain", name: "Brain", kind: "strength", effects: [{ stat: "loot", start: 10, perStep: 1 }] },
+    { id: "wormzer", name: "Wormzer", kind: "strength", effects: [{ stat: "production", start: 15, perStar: 1 }] },
+    { id: "brain", name: "Brain", kind: "strength", effects: [{ stat: "loot", start: 10, perStar: 0.5 }] },
     {
       id: "pokey",
       name: "Pokey",
       kind: "weakness",
-      effects: [{ stat: "outpostHatchCost", start: 15, perStep: -2 }],
+      effects: [{ stat: "outpostHatchCost", start: 15, perStar: -1 }],
     },
     {
       id: "zafreeti",
       name: "Zafreeti",
       kind: "weakness",
-      effects: [{ stat: "takeoverCost", start: 20, perStep: -2 }],
+      effects: [{ stat: "takeoverCost", start: 20, perStar: -1 }],
     },
   ],
   [AllianceType.CONQUEST]: [
-    { id: "fang", name: "Fang", kind: "strength", effects: [{ stat: "takeoverCost", start: -20, perStep: -2 }] },
+    { id: "fang", name: "Fang", kind: "strength", effects: [{ stat: "takeoverCost", start: -20, perStar: -1 }] },
     {
       id: "teratorn",
       name: "Teratorn",
       kind: "strength",
       effects: [
-        { stat: "kitCost", start: -10, perStep: -3 },
-        { stat: "reach", start: 0, perStep: 0, atFull: 1 },
+        { stat: "kitCost", start: -10, perStar: -1.5 },
+        { stat: "reach", start: 0, perStar: 0, atFull: 1 },
       ],
     },
-    { id: "bolt", name: "Bolt", kind: "weakness", effects: [{ stat: "loot", start: -20, perStep: 2 }] },
-    { id: "ichi", name: "Ichi", kind: "weakness", effects: [{ stat: "outpostHealth", start: -10, perStep: 1 }] },
+    { id: "bolt", name: "Bolt", kind: "weakness", effects: [{ stat: "loot", start: -20, perStar: 1 }] },
+    { id: "ichi", name: "Ichi", kind: "weakness", effects: [{ stat: "outpostHealth", start: -10, perStar: 0.5 }] },
   ],
   [AllianceType.FORTRESS]: [
     {
@@ -237,22 +243,22 @@ export const CONSTELLATIONS: Record<AllianceType, ConstellationRules[]> = {
       name: "Crabatron",
       kind: "strength",
       effects: [
-        { stat: "buildingHealth", start: 10, perStep: 2 },
-        { stat: "trapDamage", start: 10, perStep: 2 },
+        { stat: "buildingHealth", start: 10, perStar: 1 },
+        { stat: "trapDamage", start: 10, perStar: 1 },
       ],
     },
-    { id: "bandito", name: "Bandito", kind: "strength", effects: [{ stat: "towerDamage", start: 5, perStep: 2 }] },
+    { id: "bandito", name: "Bandito", kind: "strength", effects: [{ stat: "towerDamage", start: 5, perStar: 1 }] },
     {
       id: "slimeattikus",
       name: "Slimeattikus",
       kind: "weakness",
-      effects: [{ stat: "production", start: -5, perStep: 0.5 }],
+      effects: [{ stat: "production", start: -5, perStar: 0.25 }],
     },
     {
       id: "octoooze",
       name: "Octo-ooze",
       kind: "weakness",
-      effects: [{ stat: "takeoverCost", start: 15, perStep: -2 }],
+      effects: [{ stat: "takeoverCost", start: 15, perStar: -1 }],
     },
   ],
 };

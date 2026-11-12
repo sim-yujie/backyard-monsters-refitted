@@ -37,10 +37,13 @@ export const STAT_INFO: Readonly<Record<string, { readonly label: string; readon
   towerDamage: { label: "Tower damage", icon: "damage" },
 };
 
-/** "+15%", "−10%", "+1" (reach in cells). */
+/**
+ * "+15%", "−10%", "+1" (reach in cells). Two decimals, since one star can move
+ * a value a quarter point (Slimeattikus: −4.75%).
+ */
 export const statValue = (stat: string, value: number): string => {
   const sign = value > 0 ? "+" : value < 0 ? "−" : "";
-  const amount = Math.abs(Math.round(value * 10) / 10);
+  const amount = Math.abs(Math.round(value * 100) / 100);
   return `${sign}${amount}${STAT_INFO[stat]?.cells ? "" : "%"}`;
 };
 
@@ -248,10 +251,10 @@ const figureWithArt = (c: ConstellationView, slot: number, saved: MyAlliance["st
   return holder;
 };
 
-/** One figure: 10 stars, lit ones gold, the next 2 ringed with the price on the first. */
+/** One figure: 10 stars, lit ones gold, the next one ringed with its price. */
 const figure = (c: ConstellationView, slot: number, saved: MyAlliance["star_figures"]): SVGSVGElement => {
   const { stars, lines } = figureFor(c.id, slot, saved);
-  const lit = c.steps * 2;
+  const lit = c.steps;
   const box = svg("svg", { viewBox: `0 0 ${FIGURE_WIDTH} ${FIGURE_HEIGHT}`, class: "alliance-sky__figure", "aria-hidden": "true" });
   for (const [a, b] of lines) {
     const [x1, y1] = stars[a]!;
@@ -259,7 +262,7 @@ const figure = (c: ConstellationView, slot: number, saved: MyAlliance["star_figu
     box.append(svg("line", { x1, y1, x2, y2, class: `alliance-sky__line${a < lit && b < lit ? " alliance-sky__line--lit" : ""}` }));
   }
   stars.forEach(([x, y], i) => {
-    const state = i < lit ? "lit" : i < lit + 2 && c.next_price !== null ? "next" : "dim";
+    const state = i < lit ? "lit" : i === lit && c.next_price !== null ? "next" : "dim";
     if (state === "next") box.append(svg("circle", { cx: x, cy: y, r: 9, class: "alliance-sky__ring" }));
     box.append(svg("circle", { cx: x, cy: y, r: state === "lit" ? 5 : 3.5, class: `alliance-sky__star alliance-sky__star--${state}` }));
   });
@@ -279,13 +282,14 @@ const figure = (c: ConstellationView, slot: number, saved: MyAlliance["star_figu
   return box;
 };
 
-/** 5 columns of 2 dots: the stars lit. */
+/** 5 columns of 2 dots: the stars lit, one a step (top then bottom of each column). */
 const starDots = (steps: number): HTMLElement => {
   const dots = make("span", "alliance-dots");
-  dots.setAttribute("aria-label", `${steps * 2} of 10 stars`);
+  dots.setAttribute("aria-label", `${steps} of 10 stars`);
+  const dot = (star: number) => make("span", `alliance-dots__dot${star < steps ? " alliance-dots__dot--on" : ""}`);
   for (let s = 0; s < 5; s++) {
     const col = make("span", "alliance-dots__col");
-    col.append(make("span", `alliance-dots__dot${s < steps ? " alliance-dots__dot--on" : ""}`), make("span", `alliance-dots__dot${s < steps ? " alliance-dots__dot--on" : ""}`));
+    col.append(dot(s * 2), dot(s * 2 + 1));
     dots.append(col);
   }
   return dots;
@@ -307,7 +311,7 @@ export const constellationTab = (
   const list = alliance.constellations ?? [];
   if (list.length === 0) return [make("p", "alliance-sky__empty", "The constellations are not ready yet.")];
   const chosen = chosenConstellation(list, chosenId)!;
-  const litStars = list.reduce((sum, c) => sum + c.steps * 2, 0);
+  const litStars = list.reduce((sum, c) => sum + c.steps, 0);
 
   const sky = make("div", `alliance-sky alliance-sky--${alliance.type}`);
   const top = make("div", "alliance-sky__top");
@@ -346,7 +350,7 @@ export const constellationTab = (
     half.append(row);
     halves.append(half);
   });
-  sky.append(halves, make("span", "alliance-sky__placeholder", "Placeholder star art"));
+  sky.append(halves);
   return [sky, detailBar(alliance, chosen, host, api)];
 };
 
@@ -366,18 +370,18 @@ const detailBar = (
     make("strong", "alliance-detail__name", c.name),
     make("span", `alliance-detail__tag alliance-detail__tag--${c.kind}`, c.kind === "strength" ? "Strength" : "Weakness"),
     make("span", "alliance-detail__stat", info?.label ?? ""),
-    make("span", "alliance-detail__per", effect ? `${statValue(effect.stat, per)} per 2 stars` : ""),
+    make("span", "alliance-detail__per", effect ? `${statValue(effect.stat, per)} per star` : ""),
   );
   if (info) who.prepend(gameIcon(info.icon, { size: 32, decorative: true }));
 
-  // The star track: start, then 5 pairs; lit gold, the next one tagged.
+  // The star track: start, then stars 1-10; lit gold, the next one tagged.
   const track = make("ol", "alliance-track");
   (effect?.values ?? []).forEach((value, i) => {
     const state = i === c.steps ? "now" : i < c.steps ? "lit" : i === c.steps + 1 ? "next" : "later";
     const mark = make("li", `alliance-track__mark alliance-track__mark--${state}`);
-    mark.title = i === 0 ? "Start" : `Stars ${i * 2 - 1}–${i * 2}, ★${c.prices[i - 1] ?? ""}`;
+    mark.title = i === 0 ? "Start" : `Star ${i}, ★${c.prices[i - 1] ?? ""}`;
     mark.append(
-      make("span", "alliance-track__pip", i === 0 ? "●" : state === "next" ? `★${c.next_price}` : "★★"),
+      make("span", "alliance-track__pip", i === 0 ? "●" : state === "next" ? `★${c.next_price}` : "★"),
       make("span", "alliance-track__value", statValue(effect!.stat, value)),
     );
     track.append(mark);
@@ -397,7 +401,7 @@ const detailBar = (
         ),
       );
     }
-    const stars = `★${c.steps * 2 + 1}–${c.steps * 2 + 2}`;
+    const stars = `★${c.steps + 1}`;
     if (canLead(alliance)) {
       const light = button(`Light ${stars}`, "btn--primary alliance-detail__light", () => host.run(() => api.lightStar(c.id)));
       light.disabled = toSpend < c.next_price;
@@ -422,7 +426,7 @@ const detailBar = (
   if (last?.id) {
     const name = (alliance.constellations ?? []).find((x) => x.id === last.id)?.name ?? last.id;
     bar.append(
-      make("p", "alliance-detail__last", `Last lit: ${name} ★${last.step * 2 - 1}–${last.step * 2}, by ${last.by}, ${ago(last.at * 1000, host.now())} ago`),
+      make("p", "alliance-detail__last", `Last lit: ${name} ★${last.step}, by ${last.by}, ${ago(last.at * 1000, host.now())} ago`),
     );
   }
   return bar;

@@ -185,9 +185,9 @@ export const composeShout = (type: AllianceMessageType, username: string, body: 
       const name = constellationName(facts?.id);
       const step = Number(facts?.step);
       if (!name || !(step >= 1)) return "";
-      const stars = `${name} ★${step * 2 - 1}–${step * 2}`;
+      const stars = `${name} ★${step}`;
 
-      // "Mira lit Pokey ★3–4." / "Hexa suggests Brain ★3–4." (design v5 §9a)
+      // "Mira lit Pokey ★3." / "Hexa suggests Brain ★3." (one star a step, owner 12 Nov)
       return type === AllianceMessageType.STAR_LIT ? `${username} lit ${stars}.` : `${username} suggests ${stars}.`;
     }
 
