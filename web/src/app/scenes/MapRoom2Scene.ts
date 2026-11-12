@@ -18,6 +18,7 @@ import {
 } from "@/api/maproom";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
 import { mateAllianceOf } from "@/game/maproom/mapAlliances";
+import { WorkerFinishWatch } from "@/game/maproom/workerFinish";
 import { getAutoAttackPlan, type AutoAttackPlanResponse } from "@/api/autoAttack";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
 import { openDefence } from "@/game/defences/openDefence";
@@ -319,6 +320,8 @@ export class MapRoom2Scene implements Scene {
   private income: IncomePrediction | null = null;
   private incomeCap = 0;
   private clockOffset = 0;
+  /** Own outposts' build ends already asked about (`workerFinish.ts`). */
+  private readonly workerFinish = new WorkerFinishWatch();
   /**
    * Where the map should open instead of the home cell: the target of the
    * attack just finished, or the outpost just taken over (`mapFocus.ts`).
@@ -842,6 +845,7 @@ export class MapRoom2Scene implements Scene {
       this.sinceUiTick = 0;
       this.refreshUi();
       this.tickIncome();
+      this.askFinishedWorkers();
     }
 
     // Exponential moving average: one slow frame should show, but not dominate.
@@ -1018,6 +1022,22 @@ export class MapRoom2Scene implements Scene {
   private syncPool(resources: Resources, credits: number | undefined): void {
     this.income?.rebase(resources);
     this.showResources(this.predictedPool() ?? resources, credits);
+  }
+
+  /**
+   * Once a second: an own outpost whose build or upgrade has just ended is
+   * asked for again, so its construction badge and its card's "Worker:
+   * Building" go now rather than when the yard is next opened (owner, 12 Nov 2026).
+   */
+  private askFinishedWorkers(): void {
+    if (!this.ownSave || !this.ready) return;
+    const now = Date.now() / 1000 + this.clockOffset;
+    const due = this.workerFinish.due(
+      outpostsOf(this.ownSave).map((outpost) => outpost.cell),
+      (col, row) => this.store.getCell(col, row),
+      now,
+    );
+    for (const cell of due) this.store.invalidateCell(cell.col, cell.row);
   }
 
   /** Once a second: the pool with the next whole tick of outpost income, when one passed (#207). */

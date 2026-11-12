@@ -28,6 +28,12 @@ export type UserCellFields =
 
 export type UserCellOwner = Loaded<User, "save", "userid" | "username" | "pic_square" | "alliance_id" | "save.points" | "save.basevalue">;
 
+/** `wf`: when the own outpost's busy worker is free again, when that is known. */
+const workerFinish = (busy: unknown, saveId: number): { wf: number } | undefined => {
+  const finishAt = busy instanceof Map ? busy.get(saveId) : undefined;
+  return typeof finishAt === "number" ? { wf: finishAt } : undefined;
+};
+
 type Cell = Loaded<WorldMapCell, "save", UserCellFields>;
 
 /**
@@ -94,7 +100,10 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     // `mcWorker`). Absent elsewhere: nobody else sees whether a worker is busy.
     ...(mine && outpostCell && (idleWorkers as Set<number> | undefined)?.has(cellSave.basesaveid) && { wi: 1 }),
     // ... or with it building, upgrading or fortifying (Modern's construction badge).
-    ...(mine && outpostCell && (busyWorkers as Set<number> | undefined)?.has(cellSave.basesaveid) && { wb: 1 }),
+    ...(mine && outpostCell && (busyWorkers as Map<number, number | null> | undefined)?.has(cellSave.basesaveid) && { wb: 1 }),
+    // ... and when that job ends (Unix seconds), so the map takes the badge down then
+    // without the yard being opened (owner, 12 Nov 2026). Absent while it is paused.
+    ...(mine && outpostCell && workerFinish(busyWorkers, cellSave.basesaveid)),
     bid: cell.baseid,
     aid: cellOwner.alliance_id,
     i: cell.terrainHeight,

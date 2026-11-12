@@ -1015,6 +1015,8 @@ export interface PlayerCell {
   wi?: 1;
   /** 1 on the caller's own outpost whose worker is building, upgrading or fortifying; absent otherwise. */
   wb?: 1;
+  /** With `wb`: when that job ends, Unix seconds on the server's clock (owner, 12 Nov 2026); absent while it is paused. */
+  wf?: number;
   /** Own cells only: the owner's live resources. */
   r?: Resources;
   /** Own cells only: hatchery and garrison state. */

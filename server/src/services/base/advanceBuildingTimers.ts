@@ -94,5 +94,5 @@ export const advanceBuildingTimers = (buildingData: BuildingDataMap, healthData:
  * @param {BuildingHealthData | null | undefined} healthData - Stored buildinghealthdata, as of the same save
  * @returns {boolean} True if the building was damaged or repairing
  */
-const isCountdownPaused = (building: BuildingData, healthData: HealthData) =>
+export const isCountdownPaused = (building: BuildingData, healthData: HealthData) =>
   Boolean(building.rE) || building.hp != null || (healthData != null && String(building.id) in healthData);
