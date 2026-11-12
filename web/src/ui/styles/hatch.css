@@ -889,11 +889,6 @@ button.hatch-slot:disabled {
   background: var(--colour-surface-sunken);
 }
 
-.hatch-message__icon.res-icon {
-  flex: none;
-  height: 24px;
-}
-
 .hatch-message__words {
   flex: 1;
   display: flex;
@@ -910,6 +905,12 @@ button.hatch-slot:disabled {
 
 .hatch-message__title--warning {
   color: var(--colour-warning);
+}
+
+/* With no warning beside it the housing bar takes the whole row. */
+.hatch-message > .hatch-housing:only-child {
+  flex: 1;
+  width: auto;
 }
 
 .hatch-housing {
@@ -1605,10 +1606,6 @@ button.hatch-slot:disabled {
     align-items: stretch;
     gap: var(--space-2);
     padding: var(--space-3);
-  }
-
-  .hatch-message__icon.res-icon {
-    display: none;
   }
 
   .hatch-housing {

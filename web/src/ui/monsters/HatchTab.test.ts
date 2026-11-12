@@ -508,12 +508,13 @@ describe("HatchTab: each hatchery's line", () => {
 });
 
 describe("HatchTab: the message and the housing bar", () => {
-  it("says what is hatching and what the line and the batch do to housing", () => {
+  it("shows what the line and the batch do to housing, with no everyday hint line (owner, 12 Nov)", () => {
     const { element } = setup(twoHatcheries(), { monster: "C1" });
     more(element);
-    expect(text(element, ".hatch-message__title")).toBe(
-      "Hatching Bolts. Choose a monster and how many, then press Add.",
-    );
+    // No "Hatching Bolts. Choose a monster and how many, then press Add." and no goo icon.
+    expect(element.querySelector(".hatch-message__title")).toBeNull();
+    expect(element.querySelector(".hatch-message .res-icon, .hatch-message__icon")).toBeNull();
+    expect(element.querySelector(".hatch-message")!.textContent).not.toMatch(/press Add/);
     // 15 (the Bolt) + 250 (25 Pokeys) on the way, 10 more for the one Pokey chosen.
     expect(text(element, ".hatch-housing__label")).toBe("Housing after this add");
     expect(text(element, ".hatch-housing__value")).toBe("275 / 1,080");

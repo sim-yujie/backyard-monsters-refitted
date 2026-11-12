@@ -1158,14 +1158,24 @@ export class HatchTab implements MonstersTab {
 
   /* ── The message and the housing bar ────────────────────────────────── */
 
+  /**
+   * The housing bar, with a line beside it only when something is wrong
+   * (damaged, housing full, paused). The everyday "Hatching Bolts. Choose a
+   * monster and how many, then press Add." line and its goo icon are gone
+   * (owner, 12 Nov 2026: "I dont need this").
+   */
   private renderMessage(yard: HatchYard, adding: number): void {
     const { title, tone } = lineSentence(yard, this.target, this.selectedRow(), this.words);
-    const words = document.createElement("div");
-    words.className = "hatch-message__words";
-    const main = document.createElement("span");
-    main.className = `hatch-message__title hatch-message__title--${tone}`;
-    main.textContent = title;
-    words.append(main);
+    const parts: HTMLElement[] = [];
+    if (tone === "warning") {
+      const words = document.createElement("div");
+      words.className = "hatch-message__words";
+      const main = document.createElement("span");
+      main.className = "hatch-message__title hatch-message__title--warning";
+      main.textContent = title;
+      words.append(main);
+      parts.push(words);
+    }
 
     const housed = housedSpace(yard);
     const pending = pendingSpace(yard);
@@ -1229,9 +1239,7 @@ export class HatchTab implements MonstersTab {
       housing.append(over);
     }
 
-    const icon = resourceIcon("r4", { decorative: true });
-    icon.classList.add("hatch-message__icon");
-    this.message.replaceChildren(icon, words, housing);
+    this.message.replaceChildren(...parts, housing);
   }
 
   /* ── The grid ───────────────────────────────────────────────────────── */
@@ -1829,7 +1837,7 @@ const chevron = (): HTMLElement => {
 /**
  * What the chosen line is doing, in one sentence (`HATCHERYPOPUP.as:430-467`):
  * nothing, hatching which monsters, waiting for housing, damaged, paused;
- * then what a tap does, or that the queue is full.
+ * then that the queue is full. Only the `warning` ones are drawn.
  */
 export const lineSentence = (
   yard: HatchYard,
@@ -1837,11 +1845,10 @@ export const lineSentence = (
   row: HatchMonster | null,
   words: MonsterWords = monsterWords("surface"),
 ): { title: string; tone: "plain" | "warning" } => {
-  const tip = " Choose a monster and how many, then press Add.";
   const build = { title: `Build ${article(words.hatchery)} to hatch monsters.`, tone: "plain" } as const;
   if (target === null) return build;
   const full = row?.state.kind === "ready" && fillLimits(yard, target, row.monster.id).queue === 0;
-  const tail = full ? " The queue is full." : tip;
+  const tail = full ? " The queue is full." : "";
   const names = (ids: readonly string[]): string => {
     const each = [...new Set(ids)].map((id) => plural(nameOf(id), 2));
     return each.length <= 1 ? (each[0] ?? "") : `${each.slice(0, -1).join(", ")} and ${each.at(-1)}`;
@@ -1865,7 +1872,7 @@ export const lineSentence = (
     }
     if (producing.length > 0) return { title: `Hatching ${names(producing.map((one) => one.monster!))}.${tail}`, tone: "plain" };
     if (yard.shared.length > 0) return { title: `Waiting for a free ${words.hatchery}.${tail}`, tone: "plain" };
-    return { title: `Nothing is hatching.${tip}`, tone: "plain" };
+    return { title: "Nothing is hatching.", tone: "plain" };
   }
 
   const hatchery = yard.hatcheries.find((one) => one.id === target);
@@ -1885,7 +1892,7 @@ export const lineSentence = (
     case "producing":
       return { title: `Hatching ${names([hatchery.monster ?? ""])}.${tail}`, tone: "plain" };
     default:
-      return { title: `Nothing is hatching.${tip}`, tone: "plain" };
+      return { title: "Nothing is hatching.", tone: "plain" };
   }
 };
 
