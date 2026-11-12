@@ -12,7 +12,7 @@ World: Z up, the drum's axis on the origin, 10 Flash px a unit. The camera looks
 units to the screen's right of the axis, f units toward the viewer, z up: Flash px (10 r, 5 f - 8.66 z) from the origin.
 
 What moves, as Flash: a lump travels up the intake (yellow pipe / brick stack), a lump travels along the copper pipe
-from the turret to the riser, the coal lumps stir, the fire flickers; at tier 3 the star turns. Everything is periodic
+from the turret to the riser, the coal slides down the chute into the furnace's hatch, the fire flickers; at tier 3 the star turns. Everything is periodic
 in the loop (47 frames at tier 1, 45 at tiers 2 and 3, as Flash's strips), so the last frame runs into the first.
 """
 import math
@@ -376,6 +376,7 @@ def mover(name):
 # ------------------------------------------------------------------------------------------------------------ animation
 BULGES = []         # (object, rest [(centre, offset, s)], t0, t1, amp, width, reverse)
 SPINS = []          # (hub, degrees a loop)
+SLIDES = []         # (object, ride(p, t, r), lane, radius, phase, rest rotation, tumbles a loop): the coal down the chute
 LUMPS = []          # (object, rest location, rest rotation, amplitude, turns, phase)
 
 
@@ -417,6 +418,9 @@ def turn(k):
         me.update()
     for hub, deg in SPINS:
         hub.rotation_euler = (0, 0, math.radians(deg * f))
+    for ob, ride, t, r, ph, rot, tumbles in SLIDES:
+        ob.location = ride((2 * f + ph) % 1.0, t, r)          # two trips a loop
+        ob.rotation_euler = (rot[0] + 2 * math.pi * tumbles * f, rot[1], rot[2] + 2 * math.pi * f)
     for ob, loc, rot, amp, turns, ph in LUMPS:
         a = 2 * math.pi * (f * turns[0] + ph)
         ob.location = loc + Vector((amp * 0.5 * math.sin(a + 1.3), amp * 0.5 * math.cos(a * 1.0 + 0.4), amp * math.sin(a)))
@@ -707,8 +711,8 @@ def intake():
 
 
 def cabinet():
-    """The feed box on the drum's top, left of the turret, and the coal chute from its mouth (-Y side): a closed-sided
-    trough sloping over the drum's rim and down into a feed hood on the drum's side."""
+    """The feed box on the drum's top, left of the turret, and the coal chute out of its mouth (-Y side): a closed-sided
+    trough sloping down across the drum's top into the furnace's feed hatch."""
     bx0, by0 = -2.04, -0.65
     bx1, by1, h = (-0.48, 0.2, 0.92) if T == 1 else (-0.3, 0.3, 1.15)
     xm, ym = (bx0 + bx1) / 2, (by0 + by1) / 2
@@ -717,87 +721,111 @@ def cabinet():
     one("cabinetlid", [m_trim() if T == 1 else m_body()], lambda b: b.box((bx1 - bx0 + 0.14, by1 - by0 + 0.14, 0.12), Matrix.Translation((xm, ym, zt + 0.04))), smooth=False, bevel=0.04)
     # the dark mouth in the box's front, over the coal
     one("cabinetmouth", [m_soot()], lambda b: b.box((bx1 - bx0 - 0.3, 0.04, min(h, 0.9) - 0.25), Matrix.Translation((xm, by0 - 0.01, TOP + min(h, 0.9) / 2 - 0.05))), smooth=False)
-    # ---- the chute: a closed-sided trough from the box's mouth, sloping over the drum's rim and dropping down a steep
-    # spout into a feed hood bolted on the drum's side wall (the furnace's coal door). One solid piece from the box to
-    # the wall: the body under the bed runs back into the drum, the hood's cheeks and floor too.
-    tx0, tx1 = -1.35, 0.4
-    th = 0.1
-    tm = (tx0 + tx1) / 2
-    wi = tx1 - tx0 - th                                  # the trough's inside width
-    A = (by0, TOP + 0.56)                                # the bed at the box's mouth (y, z)
-    Bp = (-2.3, TOP + 0.04)                              # ... over the drum's rim
-    C = (-2.5, TOP - 0.6)                                # ... the spout's end, inside the hood
-    hz0, hz1 = TOP - 1.22, TOP - 0.42                     # the hood's floor and rim
-    hy1 = -3.05 if T < 3 else -2.95                      # its front, at the rim and at the floor (it leans out)
-    hy0 = hy1 + 0.3
-    yw = -1.6                                            # well inside the drum's wall
+    # ---- the chute: a closed-sided trough out of the box's mouth, sloping down toward the viewer across the drum's
+    # top and ending in the furnace's feed hatch, an opening in the drum's top with the fire showing in it. The coal
+    # slides down the trough in a stream and drops into the hatch. One solid piece, standing in the drum's top.
+    O = Vector((-1.15, by0, 0.0))                        # where the trough's middle leaves the box's front
+    d = Vector((0.6, -0.8, 0.0))                         # downhill
+    w = Vector((0.8, 0.6, 0.0))                          # across the trough (to the screen's right)
+    hw, th = 0.42, 0.08                                  # the trough's inside half width, its walls
+    s0, sl, se = -0.45, 0.72, 1.4                         # it starts inside the box; the lip; the hatch's far end
+    za, zl = (TOP + 0.6, TOP + 0.27) if T == 1 else (TOP + 0.56, TOP + 0.14)      #                      # the bed at the box's front and at the lip
+    hr = 0.24                                            # the walls stand this far over the bed
+    zb = TOP - 0.4                                       # everything runs down into the drum's top
     trim = m_trim() if T == 1 else m_body()
 
-    def Myz(x):
-        return frame_at((x, 0, 0), (0, 1, 0), (1, 0, 0))             # a prism's outline as (y, z), its thickness along x
+    def Mc(t=0.0):
+        return frame_at(O + w * t, d, -w)                # a prism's outline as (s, z), its thickness across the trough
 
-    def bedz(y):
-        if y >= Bp[0]:
-            return A[1] + (Bp[1] - A[1]) * (A[0] - y) / (A[0] - Bp[0])
-        return Bp[1] + (C[1] - Bp[1]) * (Bp[0] - y) / (Bp[0] - C[0])
+    def bedz(s):
+        return za + (zl - za) * max(0.0, s) / sl               # level inside the box
 
-    one("chutebody", [trim], lambda b: b.prism([A, Bp, C, (-2.2, C[1] - 0.34), (yw, C[1] - 0.34), (yw, TOP - 0.35), (A[0], TOP - 0.35)],
-                                               tx1 - tx0 + th, Myz(tm)), smooth=False, bevel=0.02)
-    one("chutebed", [m_soot()], lambda b: b.prism([A, Bp, C, (C[0] - 0.035, C[1] + 0.012), (Bp[0] - 0.03, Bp[1] + 0.03), (A[0], A[1] + 0.03)],
-                                              wi, Myz(tm)), smooth=False)
-    rail = [A, Bp, C, (C[0] - 0.3, C[1] + 0.1), (Bp[0] - 0.24, Bp[1] + 0.27), (A[0], A[1] + 0.33)]
-    one("chuterails", [trim], lambda b: [b.prism(rail, th, Myz(x)) for x in (tx0, tx1)], smooth=False, bevel=0.03)
+    def at(s, t, z):
+        return O + d * s + w * t + UP * z
+
+    one("chutebody", [trim], lambda b: b.prism([(s0, za), (0, za), (sl, zl), (sl, zb), (s0, zb)], 2 * hw, Mc()), smooth=False)
+    one("chutebed", [m_soot()], lambda b: b.prism([(s0, za), (0, za), (sl, zl), (sl, zl - 0.2), (sl + 0.03, zl - 0.2), (sl + 0.03, zl + 0.02), (0, za + 0.03), (s0, za + 0.03)],
+                                              2 * hw, Mc()), smooth=False)
+    ze = TOP + (0.2 if T == 1 else 0.14)                                      # the hatch's rim at its far end
+    top = [(s0, za + hr), (0, za + hr), (sl, zl + hr), (se + th, ze)]         # the walls' top edge
+    wall = top + [(se + th, zb), (s0, zb)]
+    one("chutewalls", [trim], lambda b: ([b.prism(wall, th, Mc(t)) for t in (-hw - th / 2, hw + th / 2)],
+                                         b.prism([(se, ze), (se + th, ze), (se + th, zb), (se, zb)], 2 * hw, Mc())),
+        smooth=False, bevel=0.025)
+    # the dark of the box's mouth over the bed
+    one("chutemouth", [m_soot()], lambda b: b.box((2 * hw / w.x, 0.04, 0.4), Matrix.Translation((O.x, by0 - 0.012, za + 0.1))), smooth=False)
     if T < 3:                                            # Flash's yellow edge along the channel
-        cap = [rail[5], rail[4], (rail[4][0] - 0.012, rail[4][1] + 0.035), (rail[5][0], rail[5][1] + 0.035)]
-        one("chutecaps", [m_yellow()], lambda b: [b.prism(cap, th + 0.03, Myz(x)) for x in (tx0, tx1)], smooth=False, bevel=0.01)
+        cap = top + [(a, z + 0.035) for a, z in reversed(top)]
+        one("chutecaps", [m_yellow()], lambda b: ([b.prism(cap, th + 0.03, Mc(t)) for t in (-hw - th / 2, hw + th / 2)],
+                                                  b.box((th + 0.03, 2 * hw + 2 * th + 0.03, 0.035), frame_at(at(se + th / 2, 0, ze + 0.0175), d, UP))),
+            smooth=False, bevel=0.01)
 
-    def hood(b):
-        for x in (tx0 - th, tx1 + th):
-            b.prism([(hy1, hz1), (yw, hz1), (yw, hz0), (hy0, hz0)], th, Myz(x))
-        b.prism([(hy1, hz1), (hy1 + 0.1, hz1), (hy0 + 0.1, hz0), (hy0, hz0)], tx1 - tx0 + th, Myz(tm))
-        b.prism([(hy0 + 0.05, hz0), (yw, hz0), (yw, hz0 + 0.1), (hy0 + 0.08, hz0 + 0.1)], tx1 - tx0 + th, Myz(tm))
-    one("chutehood", [trim], hood, smooth=False, bevel=0.03)
-    one("chutehoodlip", [m_trim() if T < 3 else m_body()], lambda b: b.box((tx1 - tx0 + 3 * th + 0.08, 0.16, 0.13), Matrix.Translation((tm, hy1 + 0.03, hz1))), smooth=False, bevel=0.03)
-    one("chutehoodbolts", [m_dark()], lambda b: [b.lathe([(0.07, 0), (0.055, 0.04), (0, 0.05)], n=8, M=frame_at((tx1 + 1.5 * th, y, z), (0, 1, 0), (1, 0, 0)))
-                                                 for y, z in ((hy1 + 0.22, hz1 - 0.16), (-2.38, hz1 - 0.16), (hy0 + 0.2, hz0 + 0.16), (-2.38, hz0 + 0.16))])
-    # the dark inside of the hood: the way into the drum
-    one("chutethroat", [m_soot()], lambda b: b.prism([(hy1 + 0.1, hz1 - 0.3), (yw, hz1 - 0.3), (yw, hz0 + 0.1), (hy0 + 0.1, hz0 + 0.1)], tx1 - tx0 + th, Myz(tm)), smooth=False)
-    if T < 3:
         def cleats(b):
-            for y in (-1.5, -1.78, -2.06):
-                b.box((wi - 0.02, 0.1, 0.05), frame_at((tm, y, bedz(y) + 0.04), (1, 0, 0), (0, A[1] - Bp[1], A[0] - Bp[0])))
-            for u in (0.3, 0.7):
-                y = Bp[0] + (C[0] - Bp[0]) * u
-                b.box((wi - 0.02, 0.1, 0.05), frame_at((tm, y - 0.045, bedz(y) + 0.015), (1, 0, 0), (0, C[1] - Bp[1], Bp[0] - C[0])))
+            for s in (0.14, 0.34, 0.54):
+                b.box((0.09, 2 * hw - 0.02, 0.045), frame_at(at(s, 0, bedz(s) + 0.04), d + UP * ((zl - za) / sl), UP))
         one("chutecleats", [mat("slat", (104, 96, 88), rough=0.45, metal=0.6, wear=(170, 164, 150), rust=(70, 52, 44), scale=7.0)], cleats, smooth=False, bevel=0.015)
+    # the hatch: sooty sides, the furnace's fire below
+    one("hatchsides", [m_soot()], lambda b: ([b.prism([(sl, zl + hr - 0.05), (se, ze - 0.04), (se, zb), (sl, zb)], 0.02, Mc(t)) for t in (-hw + 0.01, hw - 0.01)],
+                                             b.prism([(se - 0.02, ze - 0.04), (se, ze - 0.04), (se, zb), (se - 0.02, zb)], 2 * hw, Mc())), smooth=False)
+    fmv = mover("hatchfire")
+    hf = fire("hatchfire", (70, 14, 4), (240, 104, 18), (255, 206, 80), strength=2.2, scale=3.2, cut=0.47, speed=1.5)
+
+    def top_at(p):
+        """The drum's top under p (the lid's cone at tier 1, the dome at tiers 2-3)."""
+        r = math.hypot(p.x, p.y)
+        if T == 1:
+            return max(TOP + 0.02, TOP + 0.05 + 0.19 * (1.9 - r))
+        prof = [(0.0, 4.55), (0.9, 4.5), (1.6, 4.38), (2.05, 4.2), (RD, 4.06)]
+        for (r0, z0), (r1, z1) in zip(prof, prof[1:]):
+            if r <= r1:
+                return z0 + (z1 - z0) * (r - r0) / (r1 - r0)
+        return 4.06
+
+    def flames(b):                                       # the fire lies just over the drum's top, following it
+        m = 6
+        g = [[None] * (m + 1) for _ in range(m + 1)]
+        for i in range(m + 1):
+            for j in range(m + 1):
+                q = at(sl + (se - sl) * i / m, -hw + 2 * hw * j / m, 0.0)
+                g[i][j] = b.bm.verts.new(q + UP * (top_at(q) + 0.035))
+        for i in range(m):
+            for j in range(m):
+                b.bm.faces.new((g[i][j], g[i + 1][j], g[i + 1][j + 1], g[i][j + 1]))
+    one("hatchfire", [hf], flames, parent=fmv)
+    # the coal: a stream of lumps out of the box, down the bed, over the lip and into the fire
     mv = mover("coal")
     rr = random.Random(5 if T < 3 else 9)
-    amp = {1: 0.05, 2: 0.07, 3: 0.1}[T]
     big = T == 3
-    for i in range(40 if not big else 24):                # the heap in the trough, thinning down the slope
-        x = rr.uniform(tx0 + 0.22, tx1 - 0.22)
-        y = rr.uniform(Bp[0] + 0.1, A[0] - 0.2)
-        k = 0.3 + 0.7 * (y - Bp[0]) / (A[0] - Bp[0])
-        r = rr.uniform(0.16, 0.25) if big else rr.uniform(0.1, 0.16)
-        lump("coal-%d" % i, Vector((x, y, bedz(y) + 0.12 + rr.uniform(0, 0.5 if big else 0.32) * k)), r, mv, rr, amp)
-    for i in range(7 if not big else 5):                  # sliding down the spout
-        y = rr.uniform(C[0] + 0.03, Bp[0])
-        r = rr.uniform(0.16, 0.22) if big else rr.uniform(0.1, 0.15)
-        lump("coalr-%d" % i, Vector((rr.uniform(tx0 + 0.22, tx1 - 0.22), y - 0.13, bedz(y) + 0.06)), r, mv, rr, amp)
-    for i in range(16 if not big else 10):                # heaped in the hood's mouth
-        y = rr.uniform(hy1 + (0.32 if big else 0.26), C[0] - 0.06)
-        r = rr.uniform(0.15, 0.2) if big else rr.uniform(0.1, 0.15)
-        lump("coalc-%d" % i, Vector((rr.uniform(tx0 + (0.32 if big else 0.2), tx1 - (0.32 if big else 0.2)), y, hz1 - 0.2 + rr.uniform(0, 0.16))), r, mv, rr, amp)
+
+    def ride(p, t, r):
+        """Where a lump is, p = 0..1 of its trip: sliding (gathering speed), then falling into the hatch."""
+        if p < 0.74:
+            s = s0 + (sl + 0.04 - s0) * (p / 0.74) ** 1.2
+            return at(s, t, bedz(min(s, sl)) + 0.8 * r + 0.03)
+        v = (p - 0.74) / 0.26
+        return at(sl + 0.04 + 0.3 * v, t, zl + 0.8 * r + 0.03 - 0.1 * v - 0.75 * v * v)
+    n = 20 if big else 34
+    for i in range(n):
+        r = rr.uniform(0.15, 0.2) if big else rr.uniform(0.1, 0.145)
+        bm = bmesh.new()
+        bmesh.ops.create_icosphere(bm, subdivisions=1, radius=r)
+        for v in bm.verts:
+            v.co *= rr.uniform(0.72, 1.18)
+        o = kit.mesh_ob("coal-%d" % i, bm, [m_coal()], smooth=False, parent=mv)
+        rot = (rr.uniform(0, 6.3), rr.uniform(0, 6.3), rr.uniform(0, 6.3))
+        SLIDES.append((o, ride, rr.uniform(-hw + r + 0.02, hw - r - 0.02), r, (i + rr.uniform(0, 0.6)) / n, rot, rr.choice((1, 1, 2))))
     if T == 3:
-        # the dark column under the hood, between the stack and the drum, and the pipes on it
-        yf = hy0 - 0.06
-        one("chute", [m_soot()], lambda b: b.box((tx1 - tx0 + 0.1, -2.3 - hy0, hz0 - 0.2), Matrix.Translation((tm, (hy0 - 2.3) / 2, (hz0 + 0.2) / 2))), smooth=False)
+        # the dark pipework between the stack and the drum
+        tx0, tx1, ry, rz = -1.35, 0.4, -2.62, TOP - 1.05
+        tm = (tx0 + tx1) / 2
+        yf = ry - 0.36
+        one("chute", [m_soot()], lambda b: b.box((tx1 - tx0 + 0.1, 0.87, rz - 0.2), Matrix.Translation((tm, ry + 0.085, (rz + 0.2) / 2))), smooth=False)
 
         def works(b):
-            for x, z0, z1, r in ((tx0 + 0.25, 0.3, hz0 - 0.05, 0.1), (tx0 + 0.62, 0.9, hz0 - 0.25, 0.07), (tx1 - 0.3, 0.3, 2.3, 0.09)):
+            for x, z0, z1, r in ((tx0 + 0.25, 0.3, rz - 0.3, 0.1), (tx0 + 0.62, 0.9, rz - 0.5, 0.07), (tx1 - 0.3, 0.3, 2.3, 0.09)):
                 b.tube([Vector((x, yf, z0)), Vector((x, yf, z1))], r, n=10)
             b.tube([Vector((tx0 + 0.1, yf - 0.04, 1.45)), Vector((tx1 - 0.05, yf - 0.04, 1.45))], 0.08, n=10)
-            b.box((0.5, 0.2, 0.62), Matrix.Translation((tm + 0.2, yf, hz0 - 0.4)))
+            b.box((0.5, 0.2, 0.62), Matrix.Translation((tm + 0.2, yf, 2.75)))
             b.box((0.7, 0.16, 0.2), Matrix.Translation((tm - 0.3, yf, 0.75)))
             for x, z in ((tx0 + 0.25, 2.1), (tx0 + 0.25, 1.0), (tx1 - 0.3, 1.9)):
                 b.lathe([(0.16, -0.06), (0.16, 0.06)], n=12, M=Matrix.Translation((x, yf, z)))
