@@ -1235,7 +1235,8 @@
 
 .alliance-sky__groups {
   display: flex;
-  gap: var(--space-2);
+  flex-wrap: wrap;
+  gap: 4px var(--space-2);
 }
 
 .alliance-sky__halves {
@@ -1312,6 +1313,16 @@
   display: block;
 }
 
+/* Faint star dust and a whisper of nebula behind each figure (rendered with the
+   stars; dim enough that the monster stays clear). */
+.alliance-sky__art::before {
+  position: absolute;
+  inset: 0;
+  background: url("/ui/stars/sky-dust@2x.webp") center / 100% 100% no-repeat;
+  content: "";
+  pointer-events: none;
+}
+
 .alliance-sky__monster {
   position: absolute;
   inset: 0;
@@ -1330,34 +1341,64 @@
   height: auto;
 }
 
+/* Star-map lines (stopping short of each star): a thin soft light between lit
+   stars, barely there between unlit ones. */
 .alliance-sky__line {
-  stroke: rgb(200 210 255 / 0.25);
-  stroke-width: 1.5;
+  stroke: rgb(170 190 255 / 0.15);
+  stroke-width: 0.8;
 }
 
 .alliance-sky__line--lit {
-  stroke: #ffd45a;
-  stroke-width: 2;
+  stroke: rgb(255 244 222 / 0.8);
+  stroke-width: 0.9;
+  filter: drop-shadow(0 0 2px rgb(255 225 170 / 0.75));
+}
+
+/* The stars are rendered light (`STAR_ART`, glow and spikes baked in). Lit
+   ones twinkle gently, each out of step; the next one to buy slowly brightens
+   and fades. Opacity and scale only, so it stays cheap; still for less motion. */
+.alliance-sky__star {
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
 .alliance-sky__star--lit {
-  fill: #ffd45a;
-  filter: drop-shadow(0 0 3px #ffd45a);
+  animation: alliance-star-twinkle 3.7s ease-in-out infinite;
 }
 
 .alliance-sky__star--next {
-  fill: #fff4c8;
+  animation: alliance-star-next 3s ease-in-out infinite;
 }
 
-.alliance-sky__star--dim {
-  fill: rgb(200 210 255 / 0.45);
+@keyframes alliance-star-twinkle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.78;
+  }
 }
 
-.alliance-sky__ring {
-  fill: none;
-  stroke: #ffd45a;
-  stroke-dasharray: 3 3;
-  stroke-width: 1.5;
+@keyframes alliance-star-next {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.97);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alliance-sky__star--lit,
+  .alliance-sky__star--next {
+    animation: none;
+  }
 }
 
 .alliance-sky__tag rect {
@@ -1388,26 +1429,33 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The star-count row: small star lights (rendered with the figure's stars), a
+   hot white point when lit, a faint blue one when not; 10 px under a name,
+   8 px in the top bar. */
 .alliance-dots {
   display: inline-flex;
-  gap: 2px;
+  gap: 0;
 }
 
 .alliance-dots__col {
   display: inline-flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
 }
 
 .alliance-dots__dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: rgb(200 210 255 / 0.3);
+  width: 10px;
+  height: 10px;
+  background: url("/ui/stars/star-dim-small@2x.webp") center / contain no-repeat;
 }
 
 .alliance-dots__dot--on {
-  background: #ffd45a;
+  background-image: url("/ui/stars/star-lit-small@2x.webp");
+}
+
+.alliance-sky__top .alliance-dots__dot {
+  width: 8px;
+  height: 8px;
 }
 
 /* The chosen constellation's detail bar. */
@@ -1506,6 +1554,20 @@
 .alliance-track__mark--lit .alliance-track__pip,
 .alliance-track__mark--now .alliance-track__pip {
   color: #e0a800;
+}
+
+/* Stars 1-10: the small star light on a little disc of night sky, so it reads
+   on the detail bar's panel in both looks; bright when lit, faint when not. */
+.alliance-track__pip--star {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: url("/ui/stars/star-dim-small@2x.webp") center / 14px 14px no-repeat, radial-gradient(circle, #1a2654 0%, #0a1028 100%);
+}
+
+.alliance-track__mark--lit .alliance-track__pip--star,
+.alliance-track__mark--now .alliance-track__pip--star {
+  background-image: url("/ui/stars/star-lit-small@2x.webp"), radial-gradient(circle, #1a2654 0%, #0a1028 100%);
 }
 
 .alliance-track__mark--now {
