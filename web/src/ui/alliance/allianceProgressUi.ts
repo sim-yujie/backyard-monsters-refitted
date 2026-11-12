@@ -251,7 +251,22 @@ const figureWithArt = (c: ConstellationView, slot: number, saved: MyAlliance["st
   return holder;
 };
 
-/** One figure: 10 stars, lit ones gold, the next one ringed with its price. */
+/**
+ * The painted stars (owner, 12 Nov: "stars, not just yellow dots"), made with
+ * Codex from the game's own icons (`design/constellation-stars/`): a gold
+ * medal star, its cool slate unlit twin, and that twin with a gold rim and
+ * halo for the next one to buy. Each picture is 40 px of star in an 80 px
+ * square (2x), the rest its baked glow, so a star of `size` box units shows
+ * a body of half that.
+ */
+export const STAR_ART = {
+  lit: { file: "star-lit@2x.webp", size: 32 },
+  next: { file: "star-next@2x.webp", size: 34 },
+  dim: { file: "star-dim@2x.webp", size: 26 },
+} as const;
+const starArt = (file: string): string => `${import.meta.env.BASE_URL}ui/stars/${file}`;
+
+/** One figure: 10 painted stars, lit ones gold, the next one rimmed and tagged with its price. */
 const figure = (c: ConstellationView, slot: number, saved: MyAlliance["star_figures"]): SVGSVGElement => {
   const { stars, lines } = figureFor(c.id, slot, saved);
   const lit = c.steps;
@@ -263,15 +278,18 @@ const figure = (c: ConstellationView, slot: number, saved: MyAlliance["star_figu
   }
   stars.forEach(([x, y], i) => {
     const state = i < lit ? "lit" : i === lit && c.next_price !== null ? "next" : "dim";
-    if (state === "next") box.append(svg("circle", { cx: x, cy: y, r: 9, class: "alliance-sky__ring" }));
-    box.append(svg("circle", { cx: x, cy: y, r: state === "lit" ? 5 : 3.5, class: `alliance-sky__star alliance-sky__star--${state}` }));
+    const { file, size } = STAR_ART[state];
+    const star = svg("image", { href: starArt(file), x: x - size / 2, y: y - size / 2, width: size, height: size, class: `alliance-sky__star alliance-sky__star--${state}` });
+    // Lit stars twinkle out of step with each other (CSS; still when the player asks for less motion).
+    if (state === "lit") star.style.animationDelay = `${-((i * 7 + slot * 3) % 10) * 0.37}s`;
+    box.append(star);
   });
   if (c.next_price !== null) {
     const [x, y] = stars[lit]!;
     const tag = svg("g", { class: "alliance-sky__tag" });
     // Clear of the figure: above the star, or below when it is near the top;
     // kept inside the box at the sides.
-    const ty = y < 30 ? y + 22 : y - 16;
+    const ty = y < 32 ? y + 24 : y - 19;
     const tx = Math.min(Math.max(x, 23), FIGURE_WIDTH - 23);
     tag.append(svg("rect", { x: tx - 22, y: ty - 11, width: 44, height: 18, rx: 9 }));
     const text = svg("text", { x: tx, y: ty + 2, "text-anchor": "middle" });
@@ -282,7 +300,7 @@ const figure = (c: ConstellationView, slot: number, saved: MyAlliance["star_figu
   return box;
 };
 
-/** 5 columns of 2 dots: the stars lit, one a step (top then bottom of each column). */
+/** 5 columns of 2 small painted stars (CSS): the stars lit, one a step (top then bottom of each column). */
 const starDots = (steps: number): HTMLElement => {
   const dots = make("span", "alliance-dots");
   dots.setAttribute("aria-label", `${steps} of 10 stars`);
@@ -380,8 +398,10 @@ const detailBar = (
     const state = i === c.steps ? "now" : i < c.steps ? "lit" : i === c.steps + 1 ? "next" : "later";
     const mark = make("li", `alliance-track__mark alliance-track__mark--${state}`);
     mark.title = i === 0 ? "Start" : `Star ${i}, ★${c.prices[i - 1] ?? ""}`;
+    // Stars 1-10 show the small painted star (CSS), lit or not; the next one its price.
+    const painted = i > 0 && state !== "next";
     mark.append(
-      make("span", "alliance-track__pip", i === 0 ? "●" : state === "next" ? `★${c.next_price}` : "★"),
+      make("span", `alliance-track__pip${painted ? " alliance-track__pip--star" : ""}`, i === 0 ? "●" : state === "next" ? `★${c.next_price}` : ""),
       make("span", "alliance-track__value", statValue(effect!.stat, value)),
     );
     track.append(mark);

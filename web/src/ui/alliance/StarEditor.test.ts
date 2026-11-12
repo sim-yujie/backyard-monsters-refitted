@@ -164,4 +164,33 @@ describe("the Constellation tab's editor button", () => {
     expect(bar!.querySelector(".alliance-detail__last")!.textContent).toMatch(/^Last lit: Brain ★2, by Ana/);
     expect([...bar!.querySelectorAll("button")].map((b) => b.textContent)).toContain("Light ★3");
   });
+
+  it("draws painted stars, not dots: lit, next and unlit pictures centred on each point (owner, 12 Nov)", async () => {
+    const { constellationTab, STAR_ART } = await import("@/ui/alliance/allianceProgressUi");
+    const values = [10, 10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14, 14.5, 15];
+    const pokey = { id: "pokey", name: "Pokey", kind: "strength", steps: 3, next_price: 40, prices: [20, 20, 40, 40, 60, 60, 80, 80, 100, 100], suggest_count: 0, effects: [{ stat: "loot", values }] };
+    const alliance = { type: "midas", role: "member", permissions: [], points: 100, points_spent: 0, constellations: [pokey] } as unknown as Parameters<typeof constellationTab>[0];
+    const host = { run: () => undefined, redraw: () => undefined, now: () => 0 };
+    const [sky, bar] = constellationTab(alliance, host, { lightStar: vi.fn(), suggestStar: vi.fn() }, null, () => undefined);
+    const stars = [...sky!.querySelectorAll<SVGImageElement>(".alliance-sky__figure .alliance-sky__star")];
+    expect(stars).toHaveLength(10);
+    expect(stars.every((s) => s.tagName === "image")).toBe(true);
+    expect(sky!.querySelectorAll(".alliance-sky__figure circle")).toHaveLength(0);
+    const states = stars.map((s) => ["lit", "next", "dim"].find((k) => s.classList.contains(`alliance-sky__star--${k}`)));
+    expect(states).toEqual(["lit", "lit", "lit", "next", "dim", "dim", "dim", "dim", "dim", "dim"]);
+    BUILT_IN_FIGURES.pokey!.stars.forEach(([x, y], i) => {
+      const s = stars[i]!;
+      const art = STAR_ART[states[i] as keyof typeof STAR_ART];
+      expect(s.getAttribute("href")!.endsWith(`ui/stars/${art.file}`)).toBe(true);
+      expect(Number(s.getAttribute("x")) + Number(s.getAttribute("width")) / 2).toBeCloseTo(x);
+      expect(Number(s.getAttribute("y")) + Number(s.getAttribute("height")) / 2).toBeCloseTo(y);
+    });
+    // The next one is the biggest, an unlit one the smallest; lit ones twinkle out of step.
+    expect(STAR_ART.next.size).toBeGreaterThan(STAR_ART.lit.size);
+    expect(STAR_ART.lit.size).toBeGreaterThan(STAR_ART.dim.size);
+    expect(new Set(stars.slice(0, 3).map((s) => s.style.animationDelay)).size).toBe(3);
+    // The track: stars 1-10 are painted pips, the next one keeps its price.
+    expect(bar!.querySelectorAll(".alliance-track__pip--star")).toHaveLength(9);
+    expect(bar!.querySelector(".alliance-track__mark--next .alliance-track__pip")!.textContent).toBe("★40");
+  });
 });
