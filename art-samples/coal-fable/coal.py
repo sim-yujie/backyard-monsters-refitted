@@ -85,7 +85,7 @@ def _math(t, op, a, b=None):
 
 
 def mat(name, col, rough=0.6, metal=0.0, wear=None, wear_amt=0.6, rust=None, rust_at=0.6, dirt=0.3, scale=5.0,
-        speck=0.14, bump=0.07, ao_min=0.5, streak=None, bricks=None, coat=0.0, mottle=0.4, top=None, bands=None):
+        speck=0.14, bump=0.07, ao_min=0.5, streak=None, bricks=None, coat=0.0, mottle=0.4, top=None, bands=None, hard=False):
     """Paint or metal: worn patches (`wear` shows through), rust blotches, a fine speckle, darker toward the ground and
     in creases. streak = colour of soft marks that run down the part. bricks = (course height, colour of the joints)."""
     if name in MATS:
@@ -94,9 +94,9 @@ def mat(name, col, rough=0.6, metal=0.0, wear=None, wear_amt=0.6, rust=None, rus
     v = t.coords()
     out = kit.srgb(*col)
     if wear:
-        out = t.mix(out, kit.srgb(*wear), t.ramp(t.noise(v, scale * 0.5, 3.0, 0.55, 0.2), [(0.45, K0), (0.72, grey(wear_amt))]))
+        out = t.mix(out, kit.srgb(*wear), t.ramp(t.noise(v, scale * 0.5, 3.0, 0.55, 0.0 if hard else 0.2), [(0.52, K0), (0.57, grey(wear_amt))] if hard else [(0.45, K0), (0.72, grey(wear_amt))]))
     if rust:
-        out = t.mix(out, kit.srgb(*rust), t.ramp(t.noise(v, scale * 0.8, 5.0, 0.65, 1.0), [(rust_at, K0), (rust_at + 0.14, grey(0.8))]))
+        out = t.mix(out, kit.srgb(*rust), t.ramp(t.noise(v, scale * 0.8, 5.0, 0.65, 0.0 if hard else 1.0), [(rust_at, K0), (rust_at + (0.04 if hard else 0.14), grey(0.8))]))
     if top:
         geo = t.n("ShaderNodeNewGeometry")
         sep = t.n("ShaderNodeSeparateXYZ")
@@ -104,9 +104,9 @@ def mat(name, col, rough=0.6, metal=0.0, wear=None, wear_amt=0.6, rust=None, rus
         out = t.mix(out, kit.srgb(*top), t.ramp(sep.outputs["Z"], [(0.5, K0), (0.8, K1)]))
     if bands:
         vb = t.coords(scale=(0.12, 0.12, 2.4))
-        out = t.mix(out, kit.srgb(*bands), t.ramp(t.noise(vb, scale, 3.0, 0.6, 0.4), [(0.46, K0), (0.62, grey(0.75))]))
+        out = t.mix(out, kit.srgb(*bands), t.ramp(t.noise(vb, scale, 3.0, 0.6, 0.0 if hard else 0.4), [(0.46, K0), (0.62, grey(0.75))]))
     if mottle:
-        out = t.mix(out, t.ramp(t.noise(v, scale * 0.3, 3.0, 0.6, 0.6), [(0.3, grey(1 - mottle)), (0.66, K1)]), 1.0, "MULTIPLY")
+        out = t.mix(out, t.ramp(t.noise(v, scale * 0.3, 3.0, 0.6, 0.0 if hard else 0.6), [(0.3, grey(1 - mottle)), (0.66, K1)]), 1.0, "MULTIPLY")
     if streak:
         v2 = t.coords(scale=(1.0, 1.0, 0.18))
         out = t.mix(out, kit.srgb(*streak), t.ramp(t.noise(v2, scale * 0.9, 5.0, 0.6, 0.3), [(0.5, K0), (0.72, grey(0.55))]))
@@ -159,7 +159,7 @@ SHINE = {1: 0.0, 2: 0.55, 3: 1.0}[T]
 def m_body():
     return mat("body", lerp((126, 70, 40), (128, 62, 22), SHINE), rough=0.75 - 0.43 * SHINE, metal=0.1 + 0.7 * SHINE,
                wear=lerp((226, 128, 66), (236, 142, 58), SHINE), rust=lerp((44, 26, 18), (50, 26, 12), SHINE),
-               rust_at=0.46 + 0.12 * SHINE, scale=2.4 + 1.6 * SHINE, wear_amt=0.85 - 0.15 * SHINE, streak=lerp((60, 36, 24), (80, 40, 16), SHINE),
+               rust_at=0.5 + 0.08 * SHINE, scale=4.6 - 0.6 * SHINE, hard=T < 3, wear_amt=0.85 - 0.15 * SHINE, streak=lerp((60, 36, 24), (80, 40, 16), SHINE),
                top=lerp((104, 64, 46), (128, 62, 22), SHINE), mottle=0.5, speck=0.1 * SHINE, bump=0.03 + 0.04 * SHINE,
                bands=lerp((50, 28, 18), (70, 34, 12), SHINE) if T < 3 else None)
 
@@ -185,8 +185,8 @@ def m_pipe():
 
 
 def m_olive():
-    return mat("olive", (146, 100, 36), rough=0.6, metal=0.3, wear=(206, 150, 56), rust=(62, 40, 20), rust_at=0.46, scale=3.0,
-               dirt=0.15, speck=0.0, streak=(70, 44, 20))
+    return mat("olive", (170, 118, 40), rough=0.5, metal=0.4, rust=(74, 46, 20), rust_at=0.64, scale=5.0,
+               dirt=0.2, speck=0.0, mottle=0.12, bump=0.02, hard=True)
 
 
 def m_neck():
