@@ -9,7 +9,7 @@ import ormConfig from "../../mikro-orm.config.js";
 import { getGameVersion } from "../../config/VersionManifestConfig.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { jsonBodyCompat } from "../../middleware/jsonBody.js";
-import type { ModerationEffects } from "../../services/admin/moderation.js";
+import { moderate, type ModerationEffects } from "../../services/admin/moderation.js";
 import { recordChatFlag } from "../../services/chat/chatFlags.js";
 import { recordChatReport } from "../../services/chat/chatReports.js";
 import { mountModReportsRoutes } from "./routes.js";
@@ -426,6 +426,22 @@ describe.skipIf(!dbName)("the moderators' Reports routes on a real database", ()
     expect(muted.status).toBe(200);
     const [row] = await sql(`SELECT mute_until FROM bym."user" WHERE userid = ?`, [OFFENDER]);
     expect(new Date(row!.mute_until).getTime()).toBe(NOW.getTime() + 24 * 3600_000);
+  });
+
+  test("a never-shorten mute keeps a longer one that landed after the check (read under the row lock)", async () => {
+    const thirtyDays = new Date(NOW.getTime() + 30 * 24 * 3600_000);
+    await sql(`UPDATE bym."user" SET mute_until = ? WHERE userid = ?`, [thirtyDays, OFFENDER]);
+    const done = await moderate(
+      orm.em.fork(),
+      OFFENDER,
+      { kind: "mute", reason: "x", length: 1, chatReportId: null, neverShorten: true },
+      MOD,
+      effects,
+      NOW,
+    );
+    expect(done.outcome).toBe("done");
+    const [row] = await sql(`SELECT mute_until FROM bym."user" WHERE userid = ?`, [OFFENDER]);
+    expect(new Date(row!.mute_until).getTime()).toBe(thirtyDays.getTime());
   });
 
   test("new reports since the moderator looked are not closed under the old decision", async () => {

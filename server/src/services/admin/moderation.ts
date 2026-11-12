@@ -52,6 +52,12 @@ export interface ModerationRequest {
   readonly length: number | null;
   /** The chat report it was done from, if any. */
   readonly chatReportId: number | null;
+  /**
+   * A mute that never shortens one already on (a moderator's step): the
+   * player stays muted until the later of the two. Read under the row lock,
+   * so an admin's longer mute landing at the same moment is kept.
+   */
+  readonly neverShorten?: boolean;
 }
 
 type Parsed<T> = { ok: true; value: T } | { ok: false; message: string };
@@ -171,6 +177,10 @@ export const moderate = async (
         break;
       case "mute":
         until = new Date(now.getTime() + (request.length ?? 1) * HOUR_MS);
+        if (request.neverShorten) {
+          const current = asDate(target.mute_until);
+          if (current && current > until) until = current;
+        }
         await tx.execute(`UPDATE bym."user" SET mute_until = ? WHERE userid = ?`, [until, userid]);
         break;
       case "unmute": {

@@ -429,8 +429,10 @@ export const actAsModerator = async (
     return { outcome: refused };
   }
   // A moderator's mute never shortens one already there (an admin's 30 days,
-  // say): a longer mute is refused before anything is closed or changed.
-  // Close and Warn never touch a mute or a ban (`moderate`, `closeOpenItems`).
+  // say): a longer mute is refused before anything is closed or changed, and
+  // `neverShorten` keeps the later end under the row lock should one land
+  // meanwhile. Close and Warn never touch a mute or a ban (`moderate`,
+  // `closeOpenItems`).
   if (action.kind === "mute") {
     const [current] = await em.execute<{ mute_until: Date | string | null }[]>(
       `SELECT mute_until FROM bym."user" WHERE userid = ?`,
@@ -447,7 +449,7 @@ export const actAsModerator = async (
       ? { kind: "dismiss", note: action.note }
       : action.kind === "warn"
         ? { kind: "warn", reason: action.reason }
-        : { kind: "mute", reason: action.reason, hours: Math.min(action.hours, MOD_MAX_MUTE_HOURS) };
+        : { kind: "mute", reason: action.reason, hours: Math.min(action.hours, MOD_MAX_MUTE_HOURS), neverShorten: true };
   const done = await actOnInboxPlayer(em, userid, step, seen, actor, effects, now);
   if (done.outcome !== "done") {
     return { outcome: done.outcome === "gameTeam" ? "gameTeam" : done.outcome };

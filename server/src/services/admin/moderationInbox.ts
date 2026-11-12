@@ -397,7 +397,7 @@ export const moderatePlayer = async (
 /** The owner's step on a player in the inbox. */
 export type InboxAction =
   | { kind: "warn"; reason: string }
-  | { kind: "mute"; reason: string; hours: number }
+  | { kind: "mute"; reason: string; hours: number; /** Never shortens a mute already on (moderators). */ neverShorten?: boolean }
   | { kind: "ban"; reason: string; days: number | null }
   | { kind: "dismiss"; note: string | null };
 
@@ -498,6 +498,7 @@ export const actOnInboxPlayer = async (
     reason: action.reason,
     length: action.kind === "mute" ? action.hours : action.kind === "ban" ? action.days : null,
     chatReportId: null,
+    neverShorten: action.kind === "mute" && action.neverShorten === true,
   };
   const { done, closed } = await moderatePlayer(em, userid, request, adminId, effects, now, flagsUpTo);
   if (done.outcome !== "done" || !closed) return { outcome: done.outcome === "gameTeam" ? "gameTeam" : "noPlayer" };
