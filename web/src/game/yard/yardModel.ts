@@ -108,9 +108,7 @@ export interface YardMushroom {
   /**
    * Which of the five art variants this mushroom shows, 1..5, as the save
    * stores it (`client/scripts/BMUSHROOM.as:52-62`, generated at
-   * `MUSHROOMS.as:62`). The art is an embedded Flash MovieClip and has no file
-   * on the server, so this client draws one glyph for all five and carries the
-   * field for when that art is recovered.
+   * `MUSHROOMS.as:62`): which of the five pictures it shows (`mushroomArt.ts`).
    */
   readonly variant: number;
 }

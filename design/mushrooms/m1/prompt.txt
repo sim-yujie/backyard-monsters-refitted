@@ -1,0 +1,27 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+The attached images:
+- ref-modern-decor.png: the REAL "Modern look" yard decorations of our game (Backyard Monsters Revamped): acorn, walnut, pinecone, mini pumpkin, potted flowers, blackberry bush, rock, cactus. Clean stylised 3D renders.
+- ref-flash-mushrooms-4x.png: the game's 6 OLD yard mushrooms (Classic, Flash 2009 look), numbered 1-6, enlarged 4x.
+
+Job: redraw EACH of the 6 mushroom groups in ref-flash-mushrooms-4x.png in the MODERN look, so they sit naturally beside the Modern acorn, walnut and mini pumpkin and look made by the same 3D artist with the same software. Each must be clearly the SAME group as its old version: same number of mushrooms, same arrangement (which one is in front, which is bigger), same proportions, same colours: glossy warm orange-tan caps with a few soft cream-white speckles, smooth pale grey-white stalks - only the rendering style changes.
+
+The Modern look (follow every point):
+1. Clean, modern, stylised 3D render (Blender), not a painting and not the grainy 2009 pre-render. Smooth, slightly bevelled shapes, crisp clean silhouettes, smooth materials with little surface noise. No cel shading, no brush strokes, no flat colour fills.
+2. Camera: the same as the decorations: from the front, about 35-40 degrees above, so the tops of the caps show clearly as domes seen from above.
+3. Outline: none. Crisp anti-aliased edges; a thin bright rim of light on the upper-left edge of each cap so the shape reads at small size.
+4. Light: ONE warm sun lamp from the upper left and a dim fill. Cap tops and left sides bright with a clear soft specular highlight (the caps are a little glossy, like the mini pumpkin); right sides and the underside of each cap in deep but readable shade; soft ambient occlusion where stalk meets cap and where mushrooms touch.
+5. Colour: rich and natural, like the acorn and mini pumpkin: warm orange-tan caps (not neon, not candy), cream speckles, stalks pale warm grey-white with darker grey shading on the right. The underside of the cap (gills) is a darker brownish cream, barely visible from this camera.
+6. Shape: chunky, a little toy-like, few big readable parts; every mushroom must read when the group is shrunk to 30-45 pixels tall. No faces, no eyes, no dots that look like eyes.
+7. No ground, no grass, no moss, no soil, no base plate and no cast shadow painted under them (the game adds its own shadow). The stalks end in a flat clean foot.
+
+The 6, in the same grid positions:
+- Row 1, column 1 (old #1): two mushrooms: a bigger one behind on the right, a smaller one in front on the left, caps overlapping.
+- Row 1, column 2 (old #2): a low wide group of three small mushrooms side by side, short stalks.
+- Row 1, column 3 (old #3): one medium mushroom, round domed cap, short thick stalk.
+- Row 2, column 1 (old #4): two mushrooms: a bigger one behind on the left, a smaller one in front on the right.
+- Row 2, column 2 (old #5): one big mushroom with a wide domed cap and short thick stalk.
+- Row 2, column 3 (old #6): one tall mushroom: a pointed bell-shaped cap on a long straight stalk.
+
+Canvas 1536x1024 split into 3 columns x 2 rows of equal cells. One group centred in each cell, about 60% of the cell height (the tall one #6 about 80%), generous margins, nothing touching a cell edge. The whole sheet on a flat solid magenta (#FF00FF) background, no grid lines, no text, no labels, no frame, no drop shadows.
+Save the final PNG as sheet.png in the current working directory.

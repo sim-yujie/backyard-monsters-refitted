@@ -30,11 +30,14 @@ import type { YardMushroom } from "./yardModel";
 export const SHAKE_MS = 1500;
 
 /**
- * The tap box around a mushroom's base, world pixels: the drawn glyph
- * (`yardAtlas.ts`, 28 × 26 about an anchor near its foot) with a little slack
- * for a finger.
+ * The tap box around a mushroom's spot, world pixels: the widest and tallest
+ * of the painted mushrooms (`mushroomArt.ts`: Flash's own are up to 49 px
+ * wide and stand 40 px over the spot, centred on it; the Modern ones are a
+ * little smaller), with a little slack for a finger. It covers the Halloween
+ * pumpkin and the drawn stand-in too.
  */
-const HIT = { left: 18, right: 18, top: 28, bottom: 8 } as const;
+export const MUSHROOM_HIT = { left: 26, right: 26, top: 44, bottom: 8 } as const;
+const HIT = MUSHROOM_HIT;
 
 /**
  * The mushroom under a world point, or null. The frontmost wins where two
