@@ -195,6 +195,7 @@ describe("the 3D yard buildings", () => {
       [17, INFERNO_BUILDING_3D_ART[17] ?? [], "inferno"] as const,
       [16, INFERNO_BUILDING_3D_ART[16] ?? [], "inferno"] as const,
       [1, INFERNO_BUILDING_3D_ART[1] ?? [], "inferno"] as const,
+      [2, INFERNO_BUILDING_3D_ART[2] ?? [], "inferno"] as const,
     ];
     for (const [type, looks, kind] of sets) {
       const folder = `${ASSETS}${artFolder(type, kind) ?? ""}`;
@@ -363,6 +364,31 @@ describe("the 3D yard buildings", () => {
     setClassicLook(true);
     expect(resolveArt(1, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.v2.png`);
     expect(resolveArt(1, 7, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.2.png`);
+  });
+
+  it("give the Inferno's Coal Extractor its three 3D tiers, from levels 3 and 7, in Flash's 47 and 45 cells", () => {
+    const folder = "/assets/buildings/icoalproducer/";
+    const looks = INFERNO_BUILDING_3D_ART[2] ?? [];
+    expect(looks.map((look) => look.from)).toEqual([1, 3, 7]);
+    for (const level of [1, 2, 3, 6, 7, 10]) {
+      const look = [...looks].reverse().find((one) => one.from <= level);
+      const art = resolveArt(2, level, ArtState.DEFAULT, "inferno");
+      const name = `level ${level}`;
+      expect(art?.top.url, name).toBe(`${folder}${look?.anim?.body?.[0] ?? ""}`);
+      expect(art?.still?.url, name).toBe(`${folder}${look?.top[0] ?? ""}`);
+      expect(art?.shadow?.url, name).toBe(`${folder}${look?.shadow?.[0] ?? ""}`);
+      expect(art?.anims.map(({ url, frames }) => ({ url, frames })), name).toEqual([
+        { url: `${folder}${look?.anim?.strip[0] ?? ""}`, frames: level < 3 ? 47 : 45 },
+      ]);
+    }
+    // No 3D ruins of its own: the whole look when damaged, Flash's rubble when destroyed.
+    expect(resolveArt(2, 1, ArtState.DAMAGED, "inferno")?.top.url).toBe(`${folder}body.3d1@2x.webp`);
+    expect(resolveArt(2, 1, ArtState.DESTROYED, "inferno")?.top.url).toBe(`${folder}top.1.destroyed.v2.png`);
+    // The main yard's Pebble Shiner keeps its own 3D look; the Classic look is Flash's Coal Extractor.
+    expect(resolveArt(2, 7, ArtState.DEFAULT, "main")?.top.url).toBe("/assets/buildings/pebbleshiner.v2/body.3d6@2x.webp");
+    setClassicLook(true);
+    expect(resolveArt(2, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.1.v2.png`);
+    expect(resolveArt(2, 7, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${folder}top.2.png`);
   });
 
   it("never show in an Inferno yard: the Inferno's own art there, even where it shares Flash's folder", () => {
