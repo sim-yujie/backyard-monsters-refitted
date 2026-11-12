@@ -163,7 +163,7 @@ export interface LandedQuestAttack {
   /** The battle's loot credit before the attacker's cap (decision 13). */
   loot?: Readonly<Partial<Record<string, unknown>>> | null;
   /**
-   * Whether the yard is a real player's (not a tribe camp's, a bot's or the
+   * Whether the yard is a player's (not a tribe camp's or the
    * attacker's own): a win then also counts `attackWin:player`, which only the
    * alliance goal "Win attacks on players" reads (owner, 12 Nov 2026).
    */

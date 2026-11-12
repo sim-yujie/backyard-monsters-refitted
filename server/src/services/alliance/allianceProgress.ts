@@ -19,7 +19,6 @@ import { BaseType } from "../../enums/Base.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import { logger } from "../../utils/logger.js";
-import { isBot } from "../bots/isBot.js";
 import { defenceQuestEvents } from "../quests/hooks.js";
 import {
   constellationOf,
@@ -87,7 +86,7 @@ export const isGoalOnMenu = (kind: string): boolean => GOAL_MENU.some((g) => g.k
  * - upgrades of harvesters and towers together; a cancelled upgrade (-1)
  *   takes its count back (owner, 12 Nov 2026);
  * - "Win attacks on players" from `attackWin:player` only, so tribe camps
- *   and bots do not count (`attackQuestEvents`).
+ *   do not count; a bot's yard counts like a player's (`isPlayerYard`).
  * Other variant keys are skipped; other undone counts (negative) are ignored.
  */
 export const goalAmounts = (events: Readonly<Record<string, number>> | null | undefined): Record<string, number> => {
@@ -300,24 +299,20 @@ export const noteOutpostDefended = async (
 };
 
 /**
- * Whether an attacked yard is a real player's, for "Win attacks on players"
- * (`attackQuestEvents`' `playerYard`): not a tribe camp, not empty, not the
- * attacker's own and not a bot's. A failed bot lookup reads as not a player.
+ * Whether an attacked yard is a player's, for "Win attacks on players"
+ * (`attackQuestEvents`' `playerYard`): not a tribe camp, not empty and not the
+ * attacker's own. A bot's yard counts like any player's: bots must never be
+ * told apart from players (services/bots/noLeak.test.ts), and a goal counter
+ * that skipped them would show which yards are bots.
  */
 export const isPlayerYard = async (
-  em: EntityManager,
+  _em: EntityManager,
   yard: { type?: string | null; saveuserid?: number | null },
   attackerUserid: number
 ): Promise<boolean> => {
   const owner = Number(yard.saveuserid) || 0;
   if (yard.type === BaseType.TRIBE || yard.type === BaseType.INFERNO_TRIBE) return false;
-  if (owner <= 0 || owner === attackerUserid) return false;
-  try {
-    return !(await isBot(owner, em as unknown as Sql));
-  } catch (err) {
-    logger.error(`Alliance player-yard check for user ${owner} failed: ${err}`);
-    return false;
-  }
+  return owner > 0 && owner !== attackerUserid;
 };
 
 /** Test seam: the progress queued and not yet flushed, per player. */
