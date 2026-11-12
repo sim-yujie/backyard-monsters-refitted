@@ -48,6 +48,7 @@ import {
   profilePhotoLimiter,
   outpostLabelLimiter,
   mailStatusLimiter,
+  modReportsLimiter,
   mailFindPlayerLimiter,
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
@@ -137,7 +138,8 @@ import { getDefenceReplay, getDefences } from "./controllers/defences/routes.js"
 import { mountFriendsRoutes } from "./controllers/friends/routes.js";
 import { mountEventsRoutes } from "./controllers/events/routes.js";
 import { mountSupportRoutes } from "./controllers/support/routes.js";
-import { adminOnly, mountAdminRoutes } from "./controllers/admin/routes.js";
+import { adminOnly, moderationEffects, mountAdminRoutes } from "./controllers/admin/routes.js";
+import { mountModReportsRoutes } from "./controllers/moderator/routes.js";
 import { mountAnnouncementRoutes } from "./controllers/announcements/routes.js";
 import { mountProfileRoutes } from "./controllers/profile/routes.js";
 import { mountOutpostLabelRoutes } from "./controllers/outposts/labelRoutes.js";
@@ -471,6 +473,16 @@ router.post("/api/:apiVersion/clienttiming", apiVersion, verifyUserAuth, clientT
 * 📦 The owner's dashboard (`controllers/admin/routes.ts`): 404 to anyone not in ADMIN_USER_IDS.
 * ──────────────────────────────────────────────── */
 mountAdminRoutes(router);
+
+/**  ────────────────────────────────────────────────
+* 📦 The game's Reports window for moderators (`controllers/moderator/routes.ts`):
+* the dashboard's moderation inbox, narrowed: Close, Warn, Mute up to 7 days.
+* ──────────────────────────────────────────────── */
+mountModReportsRoutes(router, {
+  em: () => postgres.em.fork(),
+  signedIn: [verifyUserAuth, modReportsLimiter],
+  effects: moderationEffects,
+});
 
 /**  ────────────────────────────────────────────────
 * 📦 Announcements: the owner writes them on the dashboard, the game pops them up
