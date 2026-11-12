@@ -59,6 +59,13 @@ export const ALLIANCE_AD = {
   timeZone: { min: -12, max: 14 },
 };
 
+/**
+ * The longest About a leader may save (owner, 12 Nov 2026: one short line with
+ * a live counter). The column stays VARCHAR(255): older, longer Abouts still
+ * show unchanged; only a new save must fit.
+ */
+export const ALLIANCE_DESC_MAX = 120;
+
 /** Days between two renames by the leader (design v5 §6). */
 export const RENAME_COOLDOWN_DAYS = 7;
 
