@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { setClassicLook } from "@/game/classicLook";
 import { ArtState, artFolder, resolveArt, restingLayers } from "./buildingArt";
 import { BUILDING_ART_ROWS } from "./buildingArtData";
-import { BUILDING_3D_ART, INFERNO_BUILDING_3D_ART, tierArtFor } from "./buildingArtTiers";
+import { BUILDING_3D_ART, INFERNO_BUILDING_3D_ART, INFERNO_PAINTED_BUILDING_ART, tierArtFor } from "./buildingArtTiers";
 
 /** The game server's assets, which the 3D pictures are served from. */
 const ASSETS = fileURLToPath(new URL("../../../../server/public/assets/", import.meta.url));
@@ -505,7 +505,8 @@ describe("the 3D yard buildings", () => {
   });
 
   it("never show in an Inferno yard: the Inferno's own art there, even where it shares Flash's folder", () => {
-    for (const type of TYPES.filter((one) => !(one in INFERNO_BUILDING_3D_ART))) {
+    // (A type with an Inferno look of its own, 3D or painted, shows that one: the Resource Pod, 6, is painted.)
+    for (const type of TYPES.filter((one) => !(one in INFERNO_BUILDING_3D_ART) && !(one in INFERNO_PAINTED_BUILDING_ART))) {
       for (const level of [1, 3, 6, 10]) {
         expect(tierArtFor(type, level, "inferno"), `type ${type} level ${level}`).toBeNull();
         const art = resolveArt(type, level, ArtState.DEFAULT, "inferno");

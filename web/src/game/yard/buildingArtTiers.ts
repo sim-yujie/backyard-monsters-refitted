@@ -832,8 +832,17 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
  * Town Hall, and fitted onto Flash's footprint by `web/tools/underhall-repaint/` (`finish.py`, then `export.py`), on
  * Flash's own shadows. Each look has its own damaged and destroyed picture, as Flash's has; like Flash's, it stands
  * still. The main yard's Town Hall (also type 14) keeps `TOWN_HALL_ART`.
+ *
+ * Also the Resource Pod (6, `buildings/istoragesilo/`; owner 12 Nov 2026: Codex for the Inferno buildings with no
+ * animation), painted the same way from Flash's one look by `web/tools/pod-repaint/`, damaged and destroyed too.
  */
 export const INFERNO_PAINTED_BUILDING_ART: Readonly<Record<number, readonly TierArt[]>> = {
+  // 6 Resource Pod: painted, Flash's one look (all ten levels), damaged and destroyed in paint too
+  6: [
+    { from: 1, top: ["top.c1@2x.webp", -45, -53], shadow: ["shadow.1.v2.jpg", -48, 17], lift: 0,
+      damaged: { top: ["top.c1.damaged@2x.webp", -48, -49], shadow: ["shadow.1.damaged.v2.jpg", -47, 17] },
+      destroyed: { top: ["top.c1.destroyed@2x.webp", -53, -15], shadow: ["shadow.1.destroyed.v2.jpg", -54, 12] } },
+  ],
   // 14 Under Hall: painted, Flash's three looks, each damaged and destroyed in paint too
   14: [
     { from: 1, top: ["top.c1@2x.webp", -52, -30], shadow: ["shadow.1.v2.jpg", -65, 49], lift: 0,

@@ -90,3 +90,68 @@ describe("the painted Under Hall (the Inferno's centre building)", () => {
     );
   });
 });
+
+describe("the painted Resource Pod (the Inferno's storage)", () => {
+  const POD = 6;
+  const folder = `${ASSETS}buildings/istoragesilo/`;
+  const looks = INFERNO_PAINTED_BUILDING_ART[POD] ?? [];
+  const flash = INFERNO_ART_ROWS.find(([type]) => type === POD);
+
+  it("has one look for all ten levels, as Flash's", () => {
+    expect(looks.map((look) => look.from)).toEqual(flash?.[3].map(([level]) => level));
+    expect(looks.map((look) => look.from)).toEqual([1]);
+  });
+
+  it("names only pictures that are on disk", () => {
+    const [look] = looks;
+    const files = [look?.top, look?.shadow, look?.damaged?.top, look?.damaged?.shadow, look?.destroyed?.top, look?.destroyed?.shadow];
+    for (const file of files) {
+      expect(file).toBeTruthy();
+      expect(existsSync(folder + (file?.[0] ?? "")), file?.[0]).toBe(true);
+    }
+  });
+
+  it("stands where Flash's does: each picture's base within 4 px of Flash's, centred within 4 px", () => {
+    const [look] = looks;
+    const [, top, damaged, destroyed] = flash?.[3][0] ?? [];
+    const pairs: [TierImage | undefined, TierImage][] = [
+      [look?.top, top as TierImage],
+      [look?.damaged?.top, damaged as TierImage],
+      [look?.destroyed?.top, destroyed as TierImage],
+    ];
+    for (const [painted, old] of pairs) {
+      expect(painted, old[0]).toBeTruthy();
+      const p = painted as TierImage;
+      expect(Math.abs(bottomOf(p, folder) - bottomOf(old, folder)), p[0]).toBeLessThanOrEqual(4);
+      const [width] = webpSize(folder + p[0]);
+      const [oldWidth] = pngSize(folder + old[0]);
+      expect(Math.abs(p[1] + width / 4 - (old[1] + oldWidth / 2)), p[0]).toBeLessThanOrEqual(4);
+    }
+  });
+
+  it("keeps Flash's own shadows (the footprint is Flash's)", () => {
+    const [look] = looks;
+    const level = flash?.[3][0];
+    expect(look?.shadow).toEqual(level?.[4]);
+    expect(look?.damaged?.shadow).toEqual(level?.[5]);
+    expect(look?.destroyed?.shadow).toEqual(level?.[6]);
+  });
+
+  it("shows in the Inferno yard at every level, whole, damaged and destroyed, standing still", () => {
+    const root = "/assets/buildings/istoragesilo/";
+    for (const level of [1, 5, 10]) {
+      expect(resolveArt(POD, level, ArtState.DEFAULT, "inferno")?.top.url).toBe(`${root}top.c1@2x.webp`);
+      expect(resolveArt(POD, level, ArtState.DEFAULT, "inferno")?.anims).toEqual([]);
+    }
+    expect(resolveArt(POD, 3, ArtState.DAMAGED, "inferno")?.top.url).toBe(`${root}top.c1.damaged@2x.webp`);
+    expect(resolveArt(POD, 10, ArtState.DESTROYED, "inferno")?.top.url).toBe(`${root}top.c1.destroyed@2x.webp`);
+  });
+
+  it("leaves the main yard's Silo alone, and goes back to Flash's Pod with the Classic look", () => {
+    expect(resolveArt(POD, 1, ArtState.DEFAULT)?.top.url).not.toContain("istoragesilo");
+    setClassicLook(true);
+    expect(tierArtFor(POD, 1, "inferno")).toBeNull();
+    expect(resolveArt(POD, 1, ArtState.DEFAULT, "inferno")?.top.url).toBe("/assets/buildings/istoragesilo/top.1.v2.png");
+    expect(resolveArt(POD, 1, ArtState.DESTROYED, "inferno")?.top.url).toBe("/assets/buildings/istoragesilo/top.1.destroyed.v2.png");
+  });
+});
