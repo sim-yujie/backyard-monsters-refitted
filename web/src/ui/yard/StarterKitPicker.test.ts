@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, Resources } from "@/api/types";
 import type { StarterKitActions, StarterKitReport } from "@/api/yardStarterKit";
 import { kitSummary, kitTopUpShiny } from "@/game/yard/starterKits";
+import { setClassicLook } from "@/game/classicLook";
 import { setCurrentAllianceBonuses } from "@/game/alliance/allianceBonuses";
 import { readYard } from "@/game/yard/yardModel";
 import type { YardListener, YardStore, YardUiBinding } from "@/game/yard/YardStore";
@@ -93,13 +94,31 @@ describe("StarterKitPicker", () => {
       "Ultra Kit",
     ]);
     expect(cards().map((one) => one.querySelector("img")!.getAttribute("src"))).toEqual([
-      "/assets/ui/prefab-2.v5.jpg",
-      "/assets/ui/prefab-3.v5.jpg",
-      "/assets/ui/prefab-4.v5.jpg",
+      "/assets/ui/kits/kit-regular-modern.webp?v=1",
+      "/assets/ui/kits/kit-mega-modern.webp?v=1",
+      "/assets/ui/kits/kit-ultra-modern.webp?v=1",
     ]);
     expect(card(1).textContent).toContain("3× Sniper Tower L5");
     expect(card(1).querySelector(".kit-card__shiny")!.getAttribute("aria-label")).toBe("Use 420 Shiny");
     expect(confirm().hidden).toBe(true);
+  });
+
+  it("shows the Classic pictures in Classic, and Flash's thumbnail when a picture is missing", () => {
+    setClassicLook(true);
+    try {
+      open(bindingWith(RICH, 5_000));
+      const pictures = cards().map((one) => one.querySelector("img")!);
+      expect(pictures.map((img) => img.getAttribute("src"))).toEqual([
+        "/assets/ui/kits/kit-regular-classic.webp?v=1",
+        "/assets/ui/kits/kit-mega-classic.webp?v=1",
+        "/assets/ui/kits/kit-ultra-classic.webp?v=1",
+      ]);
+      pictures[2]!.dispatchEvent(new Event("error"));
+      expect(pictures[2]!.getAttribute("src")).toBe("/assets/ui/prefab-4.v5.jpg");
+      expect(pictures[0]!.getAttribute("src")).toBe("/assets/ui/kits/kit-regular-classic.webp?v=1");
+    } finally {
+      setClassicLook(false);
+    }
   });
 
   describe("the alliance's Starter Kit price (beta 7)", () => {

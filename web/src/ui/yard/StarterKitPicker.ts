@@ -18,6 +18,7 @@ import {
   type StarterKitSummary,
 } from "@/game/yard/starterKits";
 import { currentAllianceBonuses } from "@/game/alliance/allianceBonuses";
+import { showKitPicture } from "@/game/yard/kitPictures";
 import { gameIcon } from "@/ui/gameIcon";
 import { formatAmount, formatCompact } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
@@ -40,8 +41,9 @@ const allianceKitTag = (percent: number): HTMLElement => {
  * The outpost Starter Kit picker (outposts WP9, issue #188): Flash's
  * `popup_prefab` (`client/scripts/popup_prefab.as`) in the revamp's style.
  *
- * Three cards, Regular, Mega and Ultra, each with its thumbnail
- * (`ui/prefab-2..4.v5.jpg`, `:23`), what it builds, its price in twigs,
+ * Three cards, Regular, Mega and Ultra, each with a picture of its layout in
+ * the player's look (`kitPictures.ts`; Flash's `ui/prefab-2..4.v5.jpg`, `:23`,
+ * if that is missing), what it builds, its price in twigs,
  * pebbles and putty, **Use Resources** and **Use N Shiny** (`:26-32`).
  *
  * A press never spends at once: it opens one confirmation under the cards,
@@ -243,7 +245,7 @@ export class StarterKitPicker {
 
     const picture = document.createElement("img");
     picture.className = "kit-card__picture";
-    picture.src = kit.thumbnail;
+    showKitPicture(picture, kit);
     picture.alt = `${kit.name}: the outpost it builds`;
     picture.decoding = "async";
 
