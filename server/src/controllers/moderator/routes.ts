@@ -54,6 +54,7 @@ export const MOD_REFUSAL_WORDS = {
   changed: "Something new came in for this player. Look again before deciding.",
   nothingOpen: "Someone already closed this. Nothing is open for this player now.",
   noPlayer: "This player's account is gone.",
+  longerMute: "This player's chat is already muted for longer. Warn or Close instead.",
 } as const;
 
 export type ModRefusal = keyof typeof MOD_REFUSAL_WORDS;

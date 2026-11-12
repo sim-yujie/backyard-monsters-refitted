@@ -370,6 +370,64 @@ describe.skipIf(!dbName)("the moderators' Reports routes on a real database", ()
     expect((await call("GET", `/api/v/mod/reports/players/${PLAYER}`, MOD)).status).toBe(404);
   });
 
+  test("a moderator's mute never shortens a longer one; Warn and Close leave mutes and bans alone", async () => {
+    const thirtyDays = new Date(NOW.getTime() + 30 * 24 * 3600_000);
+    const banUntil = new Date(NOW.getTime() + 5 * 24 * 3600_000);
+    await sql(`UPDATE bym."user" SET mute_until = ? WHERE userid = ?`, [thirtyDays, OFFENDER]);
+    await sql(`UPDATE bym."user" SET mute_until = ?, banned = true, ban_until = ?, ban_reason = 'spam' WHERE userid = ?`, [
+      thirtyDays,
+      banUntil,
+      SWEARER,
+    ]);
+    await report(REPORTER_A, OFFENDER, 1);
+    await flag(SWEARER, 2);
+    const state = async (userid: number) =>
+      (await sql(`SELECT mute_until, banned, ban_until FROM bym."user" WHERE userid = ?`, [userid]))[0]!;
+
+    for (const hours of [1, 24, 72, 168]) {
+      const muted = await call("POST", `/api/v/mod/reports/players/${OFFENDER}/act`, MOD, {
+        action: "mute",
+        reason: "x",
+        hours,
+        ...(await seenOf(OFFENDER)),
+      });
+      expect(muted.status).toBe(409);
+      expect(muted.body.reason).toBe("longerMute");
+    }
+    expect(new Date((await state(OFFENDER)).mute_until).getTime()).toBe(thirtyDays.getTime());
+    expect(Number((await sql(`SELECT count(*) AS n FROM bym.chat_case WHERE reported_id = ? AND status = 'open'`, [OFFENDER]))[0]!.n)).toBe(1);
+
+    const warned = await call("POST", `/api/v/mod/reports/players/${OFFENDER}/act`, MOD, {
+      action: "warn",
+      reason: "Please keep chat friendly.",
+      ...(await seenOf(OFFENDER)),
+    });
+    expect(warned.status).toBe(200);
+    expect(new Date((await state(OFFENDER)).mute_until).getTime()).toBe(thirtyDays.getTime());
+
+    const closed = await call("POST", `/api/v/mod/reports/players/${SWEARER}/act`, MOD, { action: "close", ...(await seenOf(SWEARER)) });
+    expect(closed.status).toBe(200);
+    const swearer = await state(SWEARER);
+    expect(new Date(swearer.mute_until).getTime()).toBe(thirtyDays.getTime());
+    expect(swearer.banned).toBe(true);
+    expect(new Date(swearer.ban_until).getTime()).toBe(banUntil.getTime());
+    expect(calls.some((c) => c.startsWith("mute ") || c.startsWith("kick "))).toBe(false);
+  });
+
+  test("a moderator's mute may lengthen a shorter one", async () => {
+    await sql(`UPDATE bym."user" SET mute_until = ? WHERE userid = ?`, [new Date(NOW.getTime() + 3600_000), OFFENDER]);
+    await report(REPORTER_A, OFFENDER, 1);
+    const muted = await call("POST", `/api/v/mod/reports/players/${OFFENDER}/act`, MOD, {
+      action: "mute",
+      reason: "x",
+      hours: 24,
+      ...(await seenOf(OFFENDER)),
+    });
+    expect(muted.status).toBe(200);
+    const [row] = await sql(`SELECT mute_until FROM bym."user" WHERE userid = ?`, [OFFENDER]);
+    expect(new Date(row!.mute_until).getTime()).toBe(NOW.getTime() + 24 * 3600_000);
+  });
+
   test("new reports since the moderator looked are not closed under the old decision", async () => {
     await report(REPORTER_A, OFFENDER, 1);
     const seen = await seenOf(OFFENDER);

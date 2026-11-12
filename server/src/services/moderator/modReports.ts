@@ -407,7 +407,7 @@ export const parseModAction = (raw: unknown): Parsed<{ action: ModAction; seen: 
 
 export type ModActionOutcome =
   | { outcome: "done"; closed: { reports: number; filterLines: number; filterOnlyLines: number }; player: ModQueueRow | null }
-  | { outcome: TargetRefusal | "changed" | "nothingOpen" | "noPlayer" };
+  | { outcome: TargetRefusal | "changed" | "nothingOpen" | "noPlayer" | "longerMute" };
 
 /**
  * A moderator's step on a player: refused on a moderator, a game team account
@@ -427,6 +427,20 @@ export const actAsModerator = async (
   if (refused) {
     logger.warn(`Moderator: ${action.kind} on user ${userid} by ${actor} refused (${refused})`);
     return { outcome: refused };
+  }
+  // A moderator's mute never shortens one already there (an admin's 30 days,
+  // say): a longer mute is refused before anything is closed or changed.
+  // Close and Warn never touch a mute or a ban (`moderate`, `closeOpenItems`).
+  if (action.kind === "mute") {
+    const [current] = await em.execute<{ mute_until: Date | string | null }[]>(
+      `SELECT mute_until FROM bym."user" WHERE userid = ?`,
+      [userid],
+    );
+    const until = current?.mute_until ? new Date(current.mute_until).getTime() : 0;
+    if (until > now.getTime() + action.hours * 3_600_000) {
+      logger.warn(`Moderator: mute ${action.hours}h on user ${userid} by ${actor} refused (a longer mute is on)`);
+      return { outcome: "longerMute" };
+    }
   }
   const step: InboxAction =
     action.kind === "close"
