@@ -134,7 +134,9 @@ describe("planTrapRearm over the sandbox yard", () => {
   test("firedtraps loses only the entries the batch answers", () => {
     const save = sandbox();
     const gone = fire(save, 24, 2);
-    const stranger: FiredTrap = { t: 117, X: 0, Y: 0, at: 5 };
+    // A Heavy Trap that fired too, on its own free spot.
+    const [heavy] = fire(save, 117, 1);
+    const stranger: FiredTrap = { t: 117, X: heavy!.x, Y: heavy!.y, at: 5 };
     const recorded = (trap: TrapPlacement, at: number): FiredTrap => ({
       t: trap.t,
       X: trap.x,

@@ -27,6 +27,7 @@ import {
   withinBounds,
   type PlacedRect,
 } from "./layoutGeometry.js";
+import { liveFiredTraps } from "./firedTraps.js";
 import { checkRequirements } from "./wallUpgrade.js";
 import { listIds, MAX_LISTED } from "./validateLayout.js";
 
@@ -320,7 +321,9 @@ export const planTrapRearm = (save: TrapRearmSave, traps: readonly TrapPlacement
     cost,
     points: steps.reduce((total, step) => total + pointsForBuild(step), 0),
     ids,
-    firedtraps,
+    // Struck off by spot as well: an entry under one of the new traps, or one
+    // the yard has no room left for, is answered too (`liveFiredTraps`).
+    firedtraps: liveFiredTraps({ type: save.type, buildingdata, firedtraps }),
     placed: traps.length,
   };
 };

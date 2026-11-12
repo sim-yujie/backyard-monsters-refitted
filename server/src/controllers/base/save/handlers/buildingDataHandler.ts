@@ -1,6 +1,7 @@
 import { SaveKeys } from "../../../../enums/SaveKeys.js";
 import { Save } from "../../../../database/models/save.model.js";
 import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
+import { liveFiredTraps } from "../../../../services/yardplanner/firedTraps.js";
 import {
   FIRED_TRAP_MAX,
   type BuildingDataMap,
@@ -61,6 +62,13 @@ export const buildingDataHandler = (buildingData: Record<string, any> | null, sa
 
   if (fired.length > 0) {
     const kept = Array.isArray(save.firedtraps) ? save.firedtraps : [];
-    save.firedtraps = [...kept, ...fired].slice(-FIRED_TRAP_MAX);
+    // Older entries the yard has since answered go (`liveFiredTraps`): a trap
+    // the player rebuilt by hand on that spot and that has now fired again is
+    // one trap to put back, not two (player report 2026-11-12, 24 + 17 = 41).
+    save.firedtraps = liveFiredTraps({
+      type: save.type,
+      buildingdata: result,
+      firedtraps: [...kept, ...fired],
+    }).slice(-FIRED_TRAP_MAX);
   }
 };
