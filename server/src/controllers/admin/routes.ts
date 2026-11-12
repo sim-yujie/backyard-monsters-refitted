@@ -156,8 +156,8 @@ const INBOX_REFUSAL_WORDS = {
   gameTeam: "That is a game team account.",
 } as const;
 
-/** What a ban, mute or warning does outside the database. */
-const moderationEffects: ModerationEffects = {
+/** What a ban, mute or warning does outside the database; the game's Reports window for moderators uses it too. */
+export const moderationEffects: ModerationEffects = {
   endSessions: endAllSessions,
   kickFromChat: (userId, until, text, banReason) =>
     publishModeration({ type: ChatControlType.Kick, userId, until, text, banReason }),
