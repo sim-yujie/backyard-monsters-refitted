@@ -2190,9 +2190,12 @@ select option {
   width: 100%;
 }
 
-/* One size for the four tabs, so the window does not jump between them. */
+/* One size for the four tabs, so the window does not jump between them.
+   600px wide so the four tab words fit between Modern's wide painted tab ends
+   on a computer: at 560px "Notifications" ran under the frame (owner, 12 Nov
+   2026). */
 .account-settings-popup {
-  width: min(560px, calc(100vw - 16px));
+  width: min(600px, calc(100vw - 16px));
   height: min(calc(100dvh - 32px), 640px);
 }
 
@@ -2216,6 +2219,24 @@ select option {
 .account-settings__tabs {
   flex: none;
   margin: var(--space-4) var(--space-4) 0;
+}
+
+/* "Look and sound" and "Notifications" cannot fit four across a phone in
+   Titan One, so there they read "Look" and "Alerts" (owner, 12 Nov 2026:
+   all four tabs in sight). The hidden word is display: none, out of the
+   tab's name too. */
+.account-settings__tab-short {
+  display: none;
+}
+
+@media (width <= 500px) {
+  .account-settings__tab-long {
+    display: none;
+  }
+
+  .account-settings__tab-short {
+    display: inline;
+  }
 }
 
 /* The scroll box is the shared `.tab-scroll` (above); only its padding here. */

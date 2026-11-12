@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
@@ -77,6 +80,29 @@ describe("AccountSettings", () => {
     const panes = [...document.querySelectorAll<HTMLElement>("[role='tabpanel']")];
     expect(panes).toHaveLength(4);
     for (const pane of panes) expect(pane.parentElement).toBe(scroll);
+  });
+
+  it("fits its four tabs: wider on a computer, short words on a phone (owner, 12 Nov)", async () => {
+    await open({});
+    const tab = (id: string) => document.querySelector<HTMLButtonElement>(`#account-settings-tab-${id}`)!;
+    // The two long tabs hold both words; the plain ones just their word.
+    expect(tab("look").querySelector(".account-settings__tab-long")!.textContent).toBe(SETTINGS_TEXT.tabLook);
+    expect(tab("look").querySelector(".account-settings__tab-short")!.textContent).toBe(SETTINGS_TEXT.tabLookShort);
+    expect(tab("notifications").querySelector(".account-settings__tab-long")!.textContent).toBe(
+      SETTINGS_TEXT.tabNotifications,
+    );
+    expect(tab("notifications").querySelector(".account-settings__tab-short")!.textContent).toBe(
+      SETTINGS_TEXT.tabNotificationsShort,
+    );
+    expect(tab("account").textContent).toBe(SETTINGS_TEXT.tabAccount);
+    const here = dirname(fileURLToPath(import.meta.url));
+    const ui = readFileSync(resolve(here, "styles/ui.css"), "utf8").replace(/\r\n/g, "\n");
+    // Modern's 22px tab ends need the room: at 560px "Notifications" ran under the frame.
+    expect(ui).toMatch(/\.account-settings-popup \{\s*width: min\(600px,/);
+    expect(ui).toMatch(/\.account-settings__tab-short \{\s*display: none;/);
+    expect(ui).toMatch(
+      /@media \(width <= 500px\) \{\s*\.account-settings__tab-long \{\s*display: none;\s*\}\s*\.account-settings__tab-short \{\s*display: inline;/,
+    );
   });
 
   it("switches tabs by click and arrow keys, and a new tab opens at its top", async () => {

@@ -1118,6 +1118,15 @@
     font-size: min(var(--text-sm), 3.5vw);
   }
 
+  /* Four tabs now (Notifications, 11 Nov), their phone words short (ui.css
+     `.account-settings__tab-short`); under 360px Classic's 10px ends need
+     the words a hair smaller still to fit 320px across. */
+  @media (width < 360px) {
+    :root[data-skin] .panel .tab-row > .account-settings__tab {
+      font-size: 3.1vw;
+    }
+  }
+
   :root[data-skin="flash"] .panel .tab-row > .account-settings__tab {
     padding-inline: 10px;
   }

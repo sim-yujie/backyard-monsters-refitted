@@ -49,6 +49,9 @@ export const SETTINGS_TEXT = {
   tabLook: "Look and sound",
   tabSocial: "Social",
   tabNotifications: "Notifications",
+  /** The two long tab words, shortened on a phone so all four tabs fit. */
+  tabLookShort: "Look",
+  tabNotificationsShort: "Alerts",
   reduceLabel: "Reduce effects",
   reduceHint: "Turns off screen shake, hit pauses and slow motion in attacks, with fewer particles.",
   loadFailed: "Could not load your account. Try again.",
@@ -154,14 +157,14 @@ export interface AccountSettingsOptions {
   readonly avatarPicker?: AvatarPicker;
 }
 
-const SETTINGS_TABS = [
-  { id: "account", label: SETTINGS_TEXT.tabAccount },
-  { id: "look", label: SETTINGS_TEXT.tabLook },
-  { id: "social", label: SETTINGS_TEXT.tabSocial },
-  { id: "notifications", label: SETTINGS_TEXT.tabNotifications },
-] as const;
+type SettingsTab = "account" | "look" | "social" | "notifications";
 
-type SettingsTab = (typeof SETTINGS_TABS)[number]["id"];
+const SETTINGS_TABS: readonly { id: SettingsTab; label: string; short?: string }[] = [
+  { id: "account", label: SETTINGS_TEXT.tabAccount },
+  { id: "look", label: SETTINGS_TEXT.tabLook, short: SETTINGS_TEXT.tabLookShort },
+  { id: "social", label: SETTINGS_TEXT.tabSocial },
+  { id: "notifications", label: SETTINGS_TEXT.tabNotifications, short: SETTINGS_TEXT.tabNotificationsShort },
+];
 
 /**
  * The tab strip and its four panes, the Account tab showing; returns the
@@ -189,7 +192,7 @@ const settingsTabs = (body: HTMLElement): Record<SettingsTab, HTMLElement> => {
       panes[tabId].hidden = !on;
     }
   };
-  for (const { id, label } of SETTINGS_TABS) {
+  for (const { id, label, short } of SETTINGS_TABS) {
     const tab = document.createElement("button");
     tab.type = "button";
     tab.className = "tabs__tab account-settings__tab";
@@ -197,7 +200,20 @@ const settingsTabs = (body: HTMLElement): Record<SettingsTab, HTMLElement> => {
     tab.dataset["tab"] = id;
     tab.setAttribute("role", "tab");
     tab.setAttribute("aria-controls", `account-settings-pane-${id}`);
-    tab.textContent = label;
+    if (short) {
+      // Both words are in the tab; the CSS shows the short one on a phone
+      // (ui.css `.account-settings__tab-short`), hiding the other entirely,
+      // so the tab's name is always the word on screen.
+      const long = document.createElement("span");
+      long.className = "account-settings__tab-long";
+      long.textContent = label;
+      const brief = document.createElement("span");
+      brief.className = "account-settings__tab-short";
+      brief.textContent = short;
+      tab.append(long, brief);
+    } else {
+      tab.textContent = label;
+    }
     tab.addEventListener("click", () => show(id));
     strip.append(tab);
     tabs.set(id, tab);
