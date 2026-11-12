@@ -109,7 +109,7 @@ describe("YardCard on an outpost", () => {
     open(outpost());
     expect(text(".yard-card__kit-name")).toBe("Ultra Kit");
     expect(host.querySelector<HTMLImageElement>(".yard-card__kit-picture")?.getAttribute("src")).toBe(
-      "/assets/ui/prefab-4.v5.jpg",
+      "/assets/ui/kits/kit-ultra-modern.webp?v=1",
     );
   });
 

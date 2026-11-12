@@ -16,6 +16,7 @@ import { resourceAmount } from "@/ui/resourceIcon";
 import type { OwnFlinger, OwnMoves } from "./CellPanel";
 import { landFeatureChip } from "./landFeatureRow";
 import { addNeighbourBonusChip } from "./neighbourBonusChip";
+import { showKitPicture } from "@/game/yard/kitPictures";
 import "@/ui/styles/yard-card.css";
 
 /**
@@ -171,9 +172,10 @@ export const yardCardScrollHint = (box: HTMLElement, block = "yard-card__body"):
   };
 };
 
+/** An `img`; without `src` when given none (an empty one would fire its error event). */
 const picture = (src: string, className: string): HTMLImageElement => {
   const node = make("img", className);
-  node.src = src;
+  if (src) node.src = src;
   node.alt = "";
   node.decoding = "async";
   node.draggable = false;
@@ -522,7 +524,7 @@ export class YardCard {
     const words = make("span", "yard-card__kit-words");
     if (kit) {
       words.append(make("span", "yard-card__kit-label", YARD_CARD_TEXT.kit), make("span", "yard-card__kit-name", kit.name));
-      this.kit.replaceChildren(picture(kit.thumbnail, "yard-card__kit-picture"), words);
+      this.kit.replaceChildren(showKitPicture(picture("", "yard-card__kit-picture"), kit), words);
     } else {
       words.append(make("span", "yard-card__kit-name", YARD_CARD_TEXT.noKit));
       this.kit.replaceChildren(words);
