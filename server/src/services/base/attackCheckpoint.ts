@@ -158,10 +158,14 @@ const isBrainRecord = (value: unknown): boolean =>
  * each inside the longest attack. The attack save's loot is replayed from the
  * same log (`combat/attackLoot.ts`), so both paths read it the same way.
  *
+ * The web client's mark that its champion takes its own room in the Flinger
+ * (`championRoom`, `combat/flingRoom.ts`) is kept; it lives beside the shared
+ * rules' `FlingLog` rather than in it, so the rules version is untouched.
+ *
  * @param flinglog - The log, already JSON-parsed.
  * @returns The log, or null when it is not one.
  */
-export const parseFlingLog = (flinglog: unknown): FlingLog | null => {
+export const parseFlingLog = (flinglog: unknown): (FlingLog & { readonly championRoom?: 1 }) | null => {
   if (!isRecord(flinglog) || flinglog.v !== 1 || !Number.isSafeInteger(flinglog.seed)) return null;
 
   const events = flinglog.events;
@@ -169,7 +173,13 @@ export const parseFlingLog = (flinglog: unknown): FlingLog | null => {
     return null;
   }
 
-  return { v: 1, seed: flinglog.seed as number, events: events as FlingEvent[] };
+  return {
+    v: 1,
+    seed: flinglog.seed as number,
+    events: events as FlingEvent[],
+    // Which Flinger rule the page fought under (`flingRoom.ts`); anything but 1 is the older one.
+    ...(flinglog.championRoom === 1 && { championRoom: 1 as const }),
+  };
 };
 
 /**

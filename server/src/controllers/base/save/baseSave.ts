@@ -22,6 +22,7 @@ import { refuseMissingBase } from "../../../services/base/missingBase.js";
 import { combatConfig } from "../../../config/CombatConfig.js";
 import { chargeBombSpend } from "../../../services/base/combat/bombSpend.js";
 import { recordBombSpend } from "../../../services/base/combat/recordBombSpend.js";
+import { requireFlingsInRoom } from "../../../services/base/combat/recordFlingRoom.js";
 import { defenderLootHandler } from "./handlers/defenderLootHandler.js";
 import { monsterUpdateHandler, monsterUpdateMode } from "./handlers/monsterUpdateHandler.js";
 import { validateSave } from "../../../scripts/anticheat/anticheat.js";
@@ -269,6 +270,22 @@ const saveBase = async (
           session?.attackerResources
         )
       : null;
+
+  // Every fling within the Flinger's room, the champion's first (owner, 12 Nov
+  // 2026): an over-full one is an edited game, refused in `reject` mode
+  // before any key is applied (`recordFlingRoom.ts`).
+  if (isAttack && saveData.over) {
+    await requireFlingsInRoom(
+      ctx,
+      user,
+      baseSave,
+      saveData.flinglog,
+      session?.attackerAcademy,
+      combatConfig.mode,
+      session?.attackid,
+      "save"
+    );
+  }
 
   const outpostOwnerSave = await getOutpostOwnerSave(baseSave, user);
 

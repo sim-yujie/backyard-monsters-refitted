@@ -39,6 +39,27 @@ describe("readEntry", () => {
     expect(fight(" [mr1-tribe]")).toMatchObject({ yardKey: "mr1-tribe:201" });
   });
 
+  test("a fling over the Flinger's room (recordFlingRoom.ts): a fight whose one field is flingOverRoom", () => {
+    const fling = (outcome: string, tail: string) =>
+      readEntry({
+        message: `Attack save on base 1234 ${outcome}: fling over Flinger room, 2490 of 2250 in fling 2${tail}`,
+        timestamp: at(3),
+      });
+    expect(fling("rejected (reject)", " [save 9]")).toMatchObject({
+      kind: "fight",
+      outcome: "refused",
+      fields: ["flingOverRoom"],
+      baseid: "1234",
+      yardKey: "save:9",
+    });
+    expect(fling("flagged (log)", " (and 2 more) [mr1-tribe]")).toMatchObject({
+      outcome: "flagged",
+      fields: ["flingOverRoom"],
+      yardKey: "mr1-tribe:1234",
+    });
+    expect(fling("rejected (reject)", "")).toMatchObject({ fields: ["flingOverRoom"], yardKey: "base:1234" });
+  });
+
   test("a fight only flagged in log mode", () => {
     expect(
       readEntry({ message: "Attack save on base 77 flagged (log): disagrees with the replay on attackersiege", timestamp: at(1) }),

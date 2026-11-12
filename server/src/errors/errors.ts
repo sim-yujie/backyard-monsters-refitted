@@ -869,6 +869,24 @@ export const attackBombRefusedErr = (violations: CombatViolation[]) =>
   });
 
 /**
+ * An attack whose fling log has a fling fuller than the Flinger holds
+ * (`services/base/combat/flingRoom.ts`; owner, 12 Nov 2026: "ensure edited
+ * game isnt allowed"), refused in `COMBAT_SAVE_VALIDATION=reject` mode. The
+ * game never sends one, so it is an edited game: the save, or the checkpoint,
+ * is not taken, and nothing of the over-full fling ever lands. `flings` names
+ * each over-full fling: which one, the room it took and the Flinger's.
+ */
+export const attackFlingOverRoomErr = (
+  flings: readonly { fling: number; t: number; used: number; room: number }[]
+) =>
+  new ClientSafeError({
+    message: "A fling held more monsters than the Flinger can carry, so the server did not take this attack.",
+    status: Status.CONFLICT,
+    data: { reason: "flingOverRoom", flings: [...flings] },
+    isClientFriendly: false,
+  });
+
+/**
  * A monster transfer the rules in `services/monsters/transferRules.ts` refused
  * (issue #27, `docs/specs/monsters-and-hatchery.md` §9).
  *
