@@ -474,7 +474,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
         goToOutpost(MAIN_YARD);
         return;
       }
-      if (target.cell && (target.mapversion ?? 2) === 2) setMapFocus({ cell: target.cell });
+      if (target.cell && (target.mapversion ?? 2) === 2) setMapFocus({ cell: target.cell, open: true });
       goToMap();
     };
 

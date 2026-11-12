@@ -657,7 +657,7 @@ export class YardScene implements Scene {
       onViewYard: (userId) => this.viewChatPlayer(userId),
       // An Alliance room under-attack alert's Map button (beta 7): the map, opened on that yard.
       onShowOnMap: (cell) => {
-        setMapFocus({ cell: { col: cell.x, row: cell.y } });
+        setMapFocus({ cell: { col: cell.x, row: cell.y }, open: true });
         context.goTo(sceneForMap(MapRoomChoice.MAP_ROOM_2));
       },
     });
@@ -722,7 +722,7 @@ export class YardScene implements Scene {
         live: { chat: worldChat },
         onOpen: () => this.makeRoomForMail(),
         onShowOnMap: (cell) => {
-          setMapFocus({ cell });
+          setMapFocus({ cell, open: true });
           context.goTo(sceneForMap(MapRoomChoice.MAP_ROOM_2));
         },
         // An invitation to move accepted here (#205): its price left the pool, which the server now holds.
@@ -2024,6 +2024,7 @@ export class YardScene implements Scene {
     }
     // An outpost is a Map Room 2 cell: its map is that world, opened on it.
     if (store.kind === "outpost") {
+      // Centred on the outpost just left, its card shut: the player asked for the map, not the card (owner, 12 Nov 2026).
       if (store.target.cell) setMapFocus({ cell: store.target.cell });
       context.goTo(sceneForMap(MapRoomChoice.MAP_ROOM_2));
       return;

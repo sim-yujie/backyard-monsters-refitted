@@ -83,6 +83,7 @@ import { currentAllianceBonuses, setCurrentAllianceBonuses } from "@/game/allian
 import { KitFilter } from "@/game/maproom/cellVisuals";
 import { Bookmarks } from "@/game/maproom/Bookmarks";
 import {
+  cardOnEntry,
   consumeMapFocus,
   recallMapView,
   rememberMapView,
@@ -143,7 +144,6 @@ import { devStats } from "../devDetails";
 import { connectMr2TimingReport } from "../mr2TimingReport";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../sceneName";
-import { isPhoneLayout } from "@/ui/phoneLayout";
 
 /**
  * Map Room 2.
@@ -629,7 +629,6 @@ export class MapRoom2Scene implements Scene {
         yard: this.ownSave.baseid,
         centre: { x: (view.left + view.right) / 2, y: (view.top + view.bottom) / 2 },
         zoom: this.camera.zoom,
-        selected: this.selected,
       });
     }
     if (this.markerPicturesTimer !== null) clearTimeout(this.markerPicturesTimer);
@@ -883,9 +882,10 @@ export class MapRoom2Scene implements Scene {
         if (inWorld(cell.col, cell.row)) {
           this.home = cell;
           this.ui?.setHome(cell);
-          // On a phone the "Your yard" card would cover a third of the map
-          // on every visit (#381): the map opens on the home cell, card shut.
-          this.jumpTo(cell, DEFAULT_ZOOM, !isPhoneLayout());
+          // The map opens on the home cell with the card shut: on a phone it
+          // would cover a third of the map (#381), and anywhere it popped up
+          // unasked on every visit (owner, 12 Nov 2026). A click opens it.
+          this.jumpTo(cell, DEFAULT_ZOOM, false);
           markOnce(MR2_OWN_CELL);
         }
       }
@@ -985,13 +985,16 @@ export class MapRoom2Scene implements Scene {
     void timeSpan("marker-pictures", () => this.renderer.loadMarkerPictures());
   }
 
-  /** Puts the camera and the selection back where the map was left. */
+  /**
+   * Puts the camera back where the map was left. The cell that was open then
+   * is not opened again: its card popping up on the way back from a yard
+   * looked random (owner, 12 Nov 2026).
+   */
   private restoreView(view: MapView): void {
     this.camera.zoom = view.zoom;
     this.camera.centreOn(view.centre);
     this.camera.dirty = true;
-    if (view.selected && inWorld(view.selected.col, view.selected.row)) this.selectCell(view.selected);
-    else this.clearSelection();
+    this.clearSelection();
   }
 
   /**
@@ -1003,7 +1006,8 @@ export class MapRoom2Scene implements Scene {
     const focus = this.pendingFocus;
     this.pendingFocus = null;
     if (!focus || !inWorld(focus.cell.col, focus.cell.row)) return;
-    this.jumpTo(focus.cell, DEFAULT_ZOOM);
+    // Its card opens only when the player asked for that cell (`MapFocus.open`).
+    this.jumpTo(focus.cell, DEFAULT_ZOOM, cardOnEntry(focus));
     if (focus.takenOver) this.ui?.showTakenOver(focus.takenOver.kind, focus.takenOver.name);
   }
 

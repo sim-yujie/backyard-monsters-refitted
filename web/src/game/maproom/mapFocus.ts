@@ -15,7 +15,17 @@ export interface MapFocus {
   readonly cell: OffsetCell;
   /** Set when the cell has just become the player's outpost: the map says "Veni, Vidi, Vici!". */
   readonly takenOver?: { readonly kind: TakeoverKind; readonly name: string };
+  /**
+   * The player asked to see this cell (a "Map" or "Show on map" button, or
+   * back from attacking it): its panel or card opens. Otherwise the map only
+   * centres on it: leaving an outpost for the map must not pop its card up
+   * (owner, 12 Nov 2026).
+   */
+  readonly open?: boolean;
 }
+
+/** Whether the map opens the focused cell's panel or card, not just centres on it. */
+export const cardOnEntry = (focus: MapFocus): boolean => focus.open === true;
 
 let focus: MapFocus | null = null;
 
@@ -32,10 +42,13 @@ export const consumeMapFocus = (): MapFocus | null => {
 };
 
 /**
- * Where the player left the map: the camera and the selected cell, so coming
- * back from a yard (a visit or their own) opens the map where it was rather
- * than on home (issue #153). Kept for the page's life and for one account:
- * another account signing in on the same page finds nothing.
+ * Where the player left the map: the camera, so coming back from a yard (a
+ * visit or their own) opens the map where it was rather than on home (issue
+ * #153). Kept for the page's life and for one account: another account
+ * signing in on the same page finds nothing.
+ *
+ * The cell that was open is not kept: reopening its card on the way back
+ * looked like a card popping up at random (owner, 12 Nov 2026).
  */
 export interface MapView {
   /** The account's main yard, by base id: whose view this is. */
@@ -43,7 +56,6 @@ export interface MapView {
   /** The viewport's centre, in world pixels. */
   readonly centre: { readonly x: number; readonly y: number };
   readonly zoom: number;
-  readonly selected: OffsetCell | null;
 }
 
 let lastView: MapView | null = null;
