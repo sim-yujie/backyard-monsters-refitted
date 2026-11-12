@@ -13,7 +13,6 @@ import {
   PENDING_GAVE_UP,
   PENDING_MESSAGE,
   PENDING_RESEND_MESSAGE,
-  REPLAY_MISMATCH_LOST,
   REPLAY_MISMATCH_MESSAGE,
   REPLAY_MISMATCH_SETTLES,
   REPLAY_RESEND_DELAY_MS,
@@ -649,10 +648,9 @@ describe("describeSaveFailure", () => {
       message: `${REPLAY_MISMATCH_MESSAGE} ${REPLAY_MISMATCH_SETTLES}`,
       canRetry: false,
     });
-    expect(describeSaveFailure(refused("replayMismatch"), true)).toEqual({
-      message: `${REPLAY_MISMATCH_MESSAGE} ${REPLAY_MISMATCH_LOST}`,
-      canRetry: false,
-    });
+    // Never "Nothing from this attack was saved": every attack, a yard with no
+    // row's included, lands from its checkpoint (Max's Descent, 12 Nov 2026).
+    expect(describeSaveFailure(refused("replayMismatch")).message).not.toContain("Nothing");
     expect(describeSaveFailure(refused("wrong-attacker"))).toEqual({
       message: "The server refused the result: no",
       canRetry: false,

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "@/api/http";
 import type { AttackSavePayload, BaseLoadResponse, BaseSaveResponse } from "@/api/types";
 import { AttackPresentation } from "@/game/attack/attackPresentation";
 import { AttackSession } from "@/game/attack/AttackSession";
@@ -10,7 +11,7 @@ import { DESCENT_GLOATS, DESCENT_TAUNTS, DESCENT_WHIMPERS, RETURN_HOME } from "@
 import { INFERNO_YARD, MAIN_YARD } from "@/game/yard/ownYards";
 import { Notices } from "@/ui/maproom/Notices";
 import { descentPlugin } from "./descent";
-import { END_PANEL_MAX_WAIT_MS, createEndPlugin } from "./end";
+import { END_PANEL_MAX_WAIT_MS, REPLAY_MISMATCH_SETTLES, createEndPlugin } from "./end";
 
 /**
  * A Descent attack's end (Inferno WP 1.13): the save names the yard and
@@ -80,10 +81,18 @@ describe("a Descent attack's end", () => {
     modal.remove();
   });
 
-  const run = async (target: AttackTarget, response: unknown, presentation = new AttackPresentation()) => {
+  const run = async (
+    target: AttackTarget,
+    response: unknown,
+    presentation = new AttackPresentation(),
+    refusal?: unknown,
+  ) => {
     const session = new AttackSession({ target, seed: 1 });
     session.start();
-    const save = vi.fn(async (_payload: AttackSavePayload) => response as BaseSaveResponse);
+    const save = vi.fn(async (_payload: AttackSavePayload) => {
+      if (refusal) throw refusal;
+      return response as BaseSaveResponse;
+    });
     const creditLoot = vi.fn();
     teardown = createEndPlugin({ save, saveOnLeave: save, now: () => 0 })({
       session,
@@ -164,6 +173,18 @@ describe("a Descent attack's end", () => {
     buttonNamed(modal, DESCENT_GLOATS[2]!.reply)!.click();
     await flush();
     expect(modal.querySelector(".descent-report")).toBeNull();
+  });
+
+  it("a save the server's replay refused says the attack will still be settled, never that nothing was saved", async () => {
+    // Max's Descent (12 Nov 2026): the panel said "Nothing from this attack
+    // was saved" while the finaliser landed the attack from its checkpoint,
+    // spending the army and moving the Descent on.
+    const refused = new ApiError("no", { status: 409, details: { data: { reason: "replayMismatch" } } });
+    await run(targetOf(2), landing(true), new AttackPresentation(), refused);
+    expect(modal.textContent).toContain(REPLAY_MISMATCH_SETTLES);
+    expect(modal.textContent).not.toContain("Nothing from this attack was saved");
+    // Nothing landed yet, so Moloch has no word.
+    expect(modal.textContent).not.toContain(DESCENT_WHIMPERS[1]!.moloch);
   });
 
   it("the 13th win: the capture's Start Building! opens the Inferno yard", async () => {
