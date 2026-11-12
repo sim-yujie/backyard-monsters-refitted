@@ -18,15 +18,21 @@ import { Migration } from "@mikro-orm/migrations";
  * save_basesaveid already points at a member's main yard, but the type filter stays -
  * nothing enforces that invariant, and an outpost slipping in would inflate every total.
  *
- * The AllianceStats entity declares view: true, so schema:create emits this same
- * CREATE VIEW on a fresh database. This migration exists to bring already-created
- * databases up to date. The entity's expression and the SQL below must be kept in
- * step - any future change to the view needs a new migration alongside it.
+ * The AllianceStats entity declares view: true, so schema:create emits the view on a
+ * fresh database - in its NEWEST shape (today with active_members, added by
+ * 20261118_AddActiveMembersToAllianceStats). CI and db:init run schema:create and then
+ * every migration, so this one meets a view with more columns than it defines here.
+ * CREATE OR REPLACE VIEW cannot drop columns (Postgres 42P16), so the view is dropped
+ * and rebuilt in this first shape; the later view migrations then bring it forward
+ * again. No other view depends on alliance_stats, so no CASCADE: if one ever does,
+ * this fails loudly rather than silently dropping it. Any future change to the view
+ * needs a new migration alongside the entity's expression.
  */
 export class CreateAllianceStatsView extends Migration {
   async up(): Promise<void> {
+    await this.execute(`DROP VIEW IF EXISTS bym.alliance_stats`);
     await this.execute(`
-      CREATE OR REPLACE VIEW bym.alliance_stats AS
+      CREATE VIEW bym.alliance_stats AS
       SELECT
         alliance_id,
         member_count,
