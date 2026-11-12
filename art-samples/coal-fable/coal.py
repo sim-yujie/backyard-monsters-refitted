@@ -83,7 +83,7 @@ def _math(t, op, a, b=None):
 
 
 def mat(name, col, rough=0.6, metal=0.0, wear=None, wear_amt=0.6, rust=None, rust_at=0.6, dirt=0.3, scale=5.0,
-        speck=0.14, bump=0.07, ao_min=0.5, streak=None, bricks=None, coat=0.0):
+        speck=0.14, bump=0.07, ao_min=0.5, streak=None, bricks=None, coat=0.0, mottle=0.4, top=None):
     """Paint or metal: worn patches (`wear` shows through), rust blotches, a fine speckle, darker toward the ground and
     in creases. streak = colour of soft marks that run down the part. bricks = (course height, colour of the joints)."""
     if name in MATS:
@@ -95,6 +95,13 @@ def mat(name, col, rough=0.6, metal=0.0, wear=None, wear_amt=0.6, rust=None, rus
         out = t.mix(out, kit.srgb(*wear), t.ramp(t.noise(v, scale * 0.5, 3.0, 0.55, 0.2), [(0.45, K0), (0.72, grey(wear_amt))]))
     if rust:
         out = t.mix(out, kit.srgb(*rust), t.ramp(t.noise(v, scale * 0.8, 5.0, 0.65, 1.0), [(rust_at, K0), (rust_at + 0.14, grey(0.8))]))
+    if top:
+        geo = t.n("ShaderNodeNewGeometry")
+        sep = t.n("ShaderNodeSeparateXYZ")
+        t.link(geo.outputs["Normal"], sep.inputs[0])
+        out = t.mix(out, kit.srgb(*top), t.ramp(sep.outputs["Z"], [(0.5, K0), (0.8, K1)]))
+    if mottle:
+        out = t.mix(out, t.ramp(t.noise(v, scale * 0.3, 3.0, 0.6, 0.6), [(0.3, grey(1 - mottle)), (0.66, K1)]), 1.0, "MULTIPLY")
     if streak:
         v2 = t.coords(scale=(1.0, 1.0, 0.18))
         out = t.mix(out, kit.srgb(*streak), t.ramp(t.noise(v2, scale * 0.9, 5.0, 0.6, 0.3), [(0.5, K0), (0.72, grey(0.55))]))
@@ -145,42 +152,43 @@ SHINE = {1: 0.0, 2: 0.55, 3: 1.0}[T]
 
 
 def m_body():
-    return mat("body", lerp((122, 80, 64), (178, 102, 38), SHINE), rough=0.7 - 0.32 * SHINE, metal=0.15 + 0.5 * SHINE,
-               wear=lerp((196, 136, 112), (226, 150, 70), SHINE), rust=lerp((70, 46, 38), (104, 56, 24), SHINE),
-               rust_at=0.5 + 0.12 * SHINE, scale=6.5 - 2.5 * SHINE, wear_amt=0.8, streak=lerp((70, 50, 42), (120, 70, 30), SHINE))
+    return mat("body", lerp((212, 120, 58), (128, 62, 22), SHINE), rough=0.7 - 0.38 * SHINE, metal=0.15 + 0.65 * SHINE,
+               wear=lerp((236, 156, 108), (236, 142, 58), SHINE), rust=lerp((62, 36, 24), (50, 26, 12), SHINE),
+               rust_at=0.5 + 0.08 * SHINE, scale=6.5 - 2.5 * SHINE, wear_amt=0.8 - 0.1 * SHINE, streak=lerp((70, 44, 30), (80, 40, 16), SHINE),
+               top=lerp((98, 62, 44), (122, 60, 22), SHINE), mottle=0.5)
 
 
 def m_trim():
-    return mat("trim", lerp((104, 70, 58), (160, 90, 32), SHINE), rough=0.65 - 0.25 * SHINE, metal=0.2 + 0.45 * SHINE,
-               wear=lerp((150, 100, 80), (224, 156, 76), SHINE), rust=lerp((66, 46, 40), (110, 64, 30), SHINE), scale=5.0)
+    return mat("trim", lerp((98, 60, 40), (140, 74, 26), SHINE), rough=0.65 - 0.3 * SHINE, metal=0.2 + 0.55 * SHINE,
+               wear=lerp((152, 96, 66), (214, 136, 60), SHINE), rust=lerp((50, 32, 24), (70, 36, 14), SHINE), scale=5.0)
 
 
 def m_yellow():
-    return mat("yellow", (226, 152, 34), rough=0.42, metal=0.35, wear=(250, 200, 88), rust=(164, 94, 24), rust_at=0.6,
-               scale=3.0, streak=(150, 84, 20), dirt=0.25)
+    return mat("yellow", (224, 146, 30), rough=0.42, metal=0.35, wear=(250, 198, 80), rust=(150, 80, 20), rust_at=0.58,
+               scale=3.0, streak=(130, 64, 16), dirt=0.6)
 
 
 def m_orange():
-    return mat("orange", (196, 112, 26), rough=0.5, metal=0.3, wear=(232, 160, 60), rust=(130, 66, 18), scale=4.0)
+    return mat("orange", (190, 104, 22), rough=0.5, metal=0.3, wear=(232, 156, 54), rust=(120, 60, 16), scale=4.0)
 
 
 def m_pipe():
-    return mat("pipe", lerp((190, 92, 62), (206, 118, 62), SHINE), rough=0.5 - 0.15 * SHINE, metal=0.3 + 0.35 * SHINE,
-               wear=lerp((222, 132, 100), (244, 170, 110), SHINE), rust=lerp((138, 60, 44), (150, 78, 40), SHINE), scale=4.0,
-               dirt=0.1)
+    return mat("pipe", lerp((232, 112, 66), (204, 98, 40), SHINE), rough=0.5 - 0.2 * SHINE, metal=0.3 + 0.45 * SHINE,
+               wear=lerp((255, 152, 104), (246, 160, 90), SHINE), rust=lerp((170, 70, 44), (130, 60, 24), SHINE), scale=4.0,
+               dirt=0.1, mottle=0.3)
 
 
 def m_olive():
-    return mat("olive", (150, 126, 54), rough=0.6, metal=0.25, wear=(186, 160, 78), rust=(92, 80, 40), scale=5.0, dirt=0.15)
+    return mat("olive", (150, 116, 40), rough=0.6, metal=0.25, wear=(194, 158, 60), rust=(84, 66, 28), scale=5.0, dirt=0.15)
 
 
 def m_neck():
-    return mat("neck", (150, 142, 112), rough=0.6, metal=0.2, wear=(192, 186, 160), rust=(96, 88, 66), scale=6.0, dirt=0.1)
+    return mat("neck", (140, 128, 96), rough=0.6, metal=0.2, wear=(188, 178, 146), rust=(84, 72, 50), scale=6.0, dirt=0.1)
 
 
 def m_cab():
-    return mat("cab", lerp((140, 100, 54), (190, 120, 50), SHINE), rough=0.6 - 0.2 * SHINE, metal=0.2 + 0.4 * SHINE,
-               wear=lerp((196, 152, 84), (232, 166, 84), SHINE), rust=(84, 58, 40), scale=5.0, dirt=0.1)
+    return mat("cab", lerp((140, 94, 40), (184, 88, 30), SHINE), rough=0.6 - 0.25 * SHINE, metal=0.2 + 0.55 * SHINE,
+               wear=lerp((204, 152, 64), (220, 130, 56), SHINE), rust=lerp((80, 52, 30), (64, 34, 16), SHINE), scale=5.0, dirt=0.1)
 
 
 def m_dark():
@@ -209,7 +217,7 @@ def m_flange():
 
 
 def m_brick():
-    return mat("brick", (176, 104, 40), rough=0.45, metal=0.5, wear=(226, 160, 78), rust=(124, 72, 30), scale=4.0,
+    return mat("brick", (206, 120, 44), rough=0.4, metal=0.45, wear=(238, 172, 86), rust=(92, 48, 18), scale=4.0, mottle=0.5, ao_min=0.12,
                streak=(120, 72, 30))
 
 
@@ -431,8 +439,8 @@ def legs():
         d = D(phi)
         side = UP.cross(d)
         if T < 3:
-            one("leg-%d" % i, [m_dark()], lambda b, d=d, side=side: b.box((0.42, 0.36, 0.95), frame_at(d * 2.22 + UP * 0.72, side, UP + d * 0.4)), bevel=0.06)
-            one("legfoot-%d" % i, [m_foot()], lambda b, d=d, side=side: b.box((0.52, 0.48, 0.32), frame_at(d * 2.48 + UP * 0.16, side, UP), taper=0.82), bevel=0.07)
+            one("leg-%d" % i, [m_dark()], lambda b, d=d, side=side: b.box((0.42, 0.36, 0.95), frame_at(d * 2.0 + UP * 0.72, side, UP + d * 0.3)), bevel=0.06)
+            one("legfoot-%d" % i, [m_foot()], lambda b, d=d, side=side: b.box((0.52, 0.48, 0.32), frame_at(d * 2.2 + UP * 0.16, side, UP), taper=0.82), bevel=0.07)
         else:
             def claw(b, d=d, side=side):
                 M = frame_at(d * 2.0 + UP * 0.6, d, side)          # the plate's plane holds d and up
@@ -458,16 +466,17 @@ def drum():
         one("drumrivets", [m_dark()], rivets)
     else:
         one("drumring", [m_dark()], lambda b: b.lathe([(RD + 0.01, 3.3), (RD + 0.05, 3.32), (RD + 0.05, 3.4), (RD + 0.01, 3.42)], n=72))
+        one("drumhoops", [m_body()], lambda b: [b.lathe([(RD - 0.01, z), (RD + 0.06, z + 0.03), (RD + 0.06, z + 0.15), (RD - 0.01, z + 0.18)], n=72) for z in (2.95, 1.72)])
 
 
 def windows():
     a0, a1 = WIN
     mv = mover("fire")
-    n = 7
+    n = 7 if T == 1 else 6
     step = (a1 - a0) / n
     lit = a0 + step * 5
     if T == 1:
-        z0, z1 = 2.0, 2.76
+        z0, z1 = 2.06, 2.68
         one("winframe", [m_trim()], lambda b: (b.shell(RD - 0.02, RD + 0.07, a0 - 3, a1 + 3, z0 - 0.12, z0, n=24),
                                                b.shell(RD - 0.02, RD + 0.07, a0 - 3, a1 + 3, z1, z1 + 0.1, n=24),
                                                b.shell(RD - 0.02, RD + 0.07, a0 - 3, a0, z0, z1, n=1),
@@ -478,25 +487,25 @@ def windows():
                 a = a0 + step * i
                 b.shell(RD - 0.02, RD + 0.05, a - 1.5, a + 1.5, z0, z1, n=1)
         one("winbars", [m_soot()], bars)
-        gl = fire("glass", (255, 120, 10), (255, 196, 40), (255, 244, 130), strength=1.25, scale=1.1, cut=0.3, speed=0.3)
+        gl = fire("glass", (176, 60, 8), (246, 170, 40), (255, 232, 120), strength=1.0, scale=0.7, cut=0.5, speed=0.3)
         one("glass", [gl], lambda b: b.shell(RD - 0.01, RD + 0.012, a0, lit, z0, z1, n=24), parent=mv)
-        one("glassdim", [glow("glassdim", (150, 60, 12), 0.5)], lambda b: b.shell(RD - 0.01, RD + 0.012, lit, a1, z0, z1, n=8))
+        one("glassdim", [glow("glassdim", (120, 44, 10), 0.4)], lambda b: b.shell(RD - 0.01, RD + 0.012, lit, a1, z0, z1, n=8))
     else:
-        z0, z1 = 1.78, 3.12
+        z0, z1 = 2.08, 2.72
 
         def frame(b):
-            b.shell(RD - 0.02, RD + 0.12, a0 - 5, a1 + 5, z0 - 0.2, z0, n=24)
-            b.shell(RD - 0.02, RD + 0.12, a0 - 5, a1 + 5, z1, z1 + 0.18, n=24)
-            b.shell(RD - 0.02, RD + 0.12, a0 - 6, a0, z0 - 0.1, z1 + 0.1, n=2)
-            b.shell(RD - 0.02, RD + 0.12, a1, a1 + 6, z0 - 0.1, z1 + 0.1, n=2)
-        one("winframe", [m_trim()], frame, bevel=0.05)
+            b.shell(RD - 0.02, RD + 0.2, a0 - 6, a1 + 6, z0 - 0.38, z0, n=24)
+            b.shell(RD - 0.02, RD + 0.2, a0 - 6, a1 + 6, z1, z1 + 0.36, n=24)
+            b.shell(RD - 0.02, RD + 0.2, a0 - 8, a0, z0 - 0.3, z1 + 0.3, n=2)
+            b.shell(RD - 0.02, RD + 0.2, a1, a1 + 8, z0 - 0.3, z1 + 0.3, n=2)
+        one("winframe", [mat("wframe", lerp((150, 90, 50), (206, 112, 40), SHINE), rough=0.4, metal=0.6, wear=(250, 172, 84), rust=(110, 56, 20), scale=5.0, mottle=0.3)], frame, bevel=0.07)
 
         def bars(b):
             for i in range(1, n):
                 a = a0 + step * i
                 b.shell(RD + 0.0, RD + 0.1, a - 1.3, a + 1.3, z0, z1, n=1)
         one("winbars", [m_trim()], bars, bevel=0.015)
-        gl = fire("glass", (70, 14, 4), (255, 110, 16), (255, 226, 90), strength=1.6, scale=2.4, cut=0.44, speed=1.5)
+        gl = fire("glass", (60, 12, 4), (236, 96, 16), (255, 196, 70), strength=1.25, scale=2.4, cut=0.5, speed=1.5)
         one("glass", [gl], lambda b: b.shell(RD - 0.01, RD + 0.015, a0, a1, z0, z1, n=24), parent=mv)
 
 
@@ -526,10 +535,10 @@ def turret():
         def bars(b):
             for i in range(8):
                 d = D(i * 45 + 12)
-                b.tube([c + d * (TR - 0.05) + UP * (z + 0.15), c + d * (TR - 0.05) + UP * (z + H - 0.26)], 0.07, n=8)
+                b.tube([c + d * (TR - 0.05) + UP * (z + 0.15), c + d * (TR - 0.05) + UP * (z + H - 0.26)], 0.085, n=8)
         one("turretbars", [m_dark()], bars)
         mv = mover("lantern")
-        gl = fire("lantern", (80, 16, 4), (255, 120, 20), (255, 232, 100), strength=1.7, scale=3.2, cut=0.42, speed=1.5)
+        gl = fire("lantern", (60, 12, 4), (236, 100, 18), (255, 200, 76), strength=1.3, scale=3.2, cut=0.42, speed=1.5)
         one("lanternfire", [gl], lambda b: b.lathe([(TR - 0.2, z + 0.18), (TR - 0.2, z + H - 0.28)], at=c, n=24), parent=mv)
         zc = z + H + 0.12
     if T < 3:
@@ -565,7 +574,7 @@ def turret():
         b.prism(pts, 0.14, Matrix.Identity(4))
         for v in b.bm.verts:                      # the points droop a little, as a shallow cone
             v.co.z -= 0.16 * (math.hypot(v.co.x, v.co.y) - 0.86)
-    one("starplate", [mat("starsteel", (120, 124, 120), rough=0.45, metal=0.6, wear=(184, 188, 184), rust=(80, 74, 62), scale=3.0, dirt=0.0)],
+    one("starplate", [mat("starsteel", (92, 72, 52), rough=0.45, metal=0.6, wear=(156, 134, 100), rust=(50, 38, 28), scale=3.0, dirt=0.0)],
         star, parent=hub, smooth=False, bevel=0.03)
     return zs + 0.36
 
@@ -657,28 +666,28 @@ def intake():
             one("stackbolts", [m_dark()], lambda b: [b.lathe([(0.09, 0), (0.07, 0.05), (0, 0.06)], n=8, M=M0 @ Matrix.Translation((sx * (S / 2 + 0.2), sy * (S / 2 + 0.2), 0.2)))
                                                      for sx in (-1, 1) for sy in (-1, 1)])
         return zf + bend + RE
-    S = 2.0
+    S = 1.86
     M0 = Rz(38, c)
     one("stackplate", [m_plate()], lambda b: b.box((S + 0.86, S + 0.86, 0.22), M0 @ Matrix.Translation((0, 0, 0.11))), smooth=False, bevel=0.04)
     one("stackbolts", [m_dark()], lambda b: [b.lathe([(0.1, 0), (0.08, 0.05), (0, 0.07)], n=8, M=M0 @ Matrix.Translation((sx * (S / 2 + 0.25), sy * (S / 2 + 0.25), 0.22)))
                                              for sx in (-1, 1) for sy in (-1, 1)])
     zs = [0.22]
     rs = [S / 2]
-    course = 0.94
+    course = 0.8
     for i in range(4):
         z0 = 0.22 + course * i
-        for z, k in ((z0 + 0.04, 0.955), (z0 + 0.09, 1.0), (z0 + course - 0.09, 1.0), (z0 + course - 0.04, 0.955)):
+        for z, k in ((z0 + 0.03, 0.9), (z0 + 0.08, 1.0), (z0 + course - 0.08, 1.0), (z0 + course - 0.03, 0.9)):
             zs.append(z)
             rs.append(S / 2 * k)
     zb = 0.22 + course * 4                         # the band
-    for z, k in ((zb + 0.02, 0.97), (zb + 0.06, 1.1), (zb + 0.62, 1.1), (zb + 0.68, 1.0)):
+    for z, k in ((zb + 0.02, 0.95), (zb + 0.06, 1.1), (zb + 0.56, 1.1), (zb + 0.6, 0.98)):
         zs.append(z)
         rs.append(S / 2 * k)
-    zh = zb + 0.68
-    for i in range(1, 9):                          # the head, rounding in at the top
-        u = i / 8
-        zs.append(zh + 1.85 * u)
-        rs.append(S / 2 * (1.0 if u < 0.7 else math.sqrt(max(0.05, 1 - ((u - 0.7) / 0.3) ** 2 * 0.75))))
+    zh = zb + 0.6
+    for i in range(1, 13):                          # the head, rounding in at the top
+        u = i / 12
+        zs.append(zh + 2.49 * u)
+        rs.append(S / 2 * (1 + 0.07 * math.sin(math.pi * min(u, 0.9) / 0.9)) * math.sqrt(max(0.1, 1 - (max(0.0, u - 0.68) / 0.32) ** 2 * 0.62)))
     mv = mover("stack")
     bb = B()
     rings = freeze(bb, bb.tube([c + UP * z for z in zs], rs, sides=4, twist=-7))
@@ -695,7 +704,7 @@ def cabinet():
     xm, ym = (bx0 + bx1) / 2, (by0 + by1) / 2
     zt = TOP + h
     one("cabinet", [m_cab() if T == 1 else m_body()], lambda b: b.box((bx1 - bx0, by1 - by0, h + 0.4), Matrix.Translation((xm, ym, TOP + h / 2 - 0.2))), smooth=False, bevel=0.05)
-    one("cabinetlid", [m_body()], lambda b: b.box((bx1 - bx0 + 0.14, by1 - by0 + 0.14, 0.12), Matrix.Translation((xm, ym, zt + 0.04))), smooth=False, bevel=0.04)
+    one("cabinetlid", [m_cab() if T == 1 else m_body()], lambda b: b.box((bx1 - bx0 + 0.14, by1 - by0 + 0.14, 0.12), Matrix.Translation((xm, ym, zt + 0.04))), smooth=False, bevel=0.04)
     # the dark mouth in the box's front, over the coal
     one("cabinetmouth", [m_soot()], lambda b: b.box((bx1 - bx0 - 0.3, 0.04, min(h, 0.9) - 0.25), Matrix.Translation((xm, by0 - 0.01, TOP + min(h, 0.9) / 2 - 0.05))), smooth=False)
     tx0, tx1 = -1.35, 0.4
@@ -721,18 +730,18 @@ def cabinet():
     one("trayrails", [m_trim()], rails, smooth=False, bevel=0.03)
     if T < 3:
         def slats(b):
-            for i in range(3):
-                u = 0.16 + 0.3 * i
+            for i in range(4):
+                u = 0.12 + 0.24 * i
                 p = Vector((tm, ty0 + (ry - ty0) * u, zbed + (rz - zbed) * u))
-                b.box((tx1 - tx0 - th, 0.2, 0.1), frame_at(p + rn * 0.1, (1, 0, 0), rn + Vector((0, 0, 0.8))))
-        one("trayslats", [mat("slat", (150, 126, 100), rough=0.6, wear=(214, 200, 176), rust=(80, 60, 50), scale=7.0)], slats, smooth=False, bevel=0.02)
+                b.box((tx1 - tx0 - th, 0.13, 0.08), frame_at(p + rn * 0.1, (1, 0, 0), rn + Vector((0, 0, 0.8))))
+        one("trayslats", [mat("slat", (130, 104, 76), rough=0.6, wear=(196, 176, 140), rust=(80, 60, 50), scale=7.0)], slats, smooth=False, bevel=0.02)
     mv = mover("coal")
     rr = random.Random(5 if T < 3 else 9)
     amp = {1: 0.05, 2: 0.07, 3: 0.1}[T]
-    for i in range(40 if T < 3 else 26):
+    for i in range(64 if T < 3 else 26):
         x = rr.uniform(tx0 + 0.22, tx1 - 0.22)
         y = rr.uniform(ty0 + 0.1, by0 - 0.22)
-        lump("coal-%d" % i, Vector((x, y, zbed + 0.14 + rr.uniform(0, 0.3 if T < 3 else 0.5) * (1.0 if y > -1.5 else 0.4))), rr.uniform(0.11, 0.17) if T < 3 else rr.uniform(0.2, 0.32), mv, rr, amp)
+        lump("coal-%d" % i, Vector((x, y, zbed + 0.14 + rr.uniform(0, 0.3 if T < 3 else 0.5) * (1.0 if y > -1.5 else 0.4))), rr.uniform(0.07, 0.115) if T < 3 else rr.uniform(0.2, 0.32), mv, rr, amp)
     if T == 3:
         # the coal runs on down a dark chute between the stack and the drum
         one("chute", [m_soot()], lambda b: b.box((tx1 - tx0 + 0.1, 0.5, rz - 0.2), Matrix.Translation((tm, ry - 0.1, (rz + 0.2) / 2))), smooth=False)
@@ -764,7 +773,7 @@ def riser(z_in):
     if T < 3:
         hc = P(-2.55, 2.97)                      # the housing's middle
         z0, z1 = z_in - 0.12, 7.5
-        one("riserbox", [mat("riserdark", (88, 72, 50), rough=0.7, metal=0.2, wear=(120, 104, 70), scale=6.0)], lambda b: b.lathe([(0.74, z0), (0.74, z1), (0.0, z1)], at=hc, n=32))
+        one("riserbox", [mat("riserdark", (78, 58, 34), rough=0.7, metal=0.2, wear=(120, 104, 70), scale=6.0)], lambda b: b.lathe([(0.74, z0), (0.74, z1), (0.0, z1)], at=hc, n=32))
         # the band round it and the arm to the funnel
         one("riserband", [m_olive()], lambda b: (b.lathe([(0.76, z1 - 0.02), (0.88, z1), (0.88, z1 + 0.6), (0.78, z1 + 0.66), (0.0, z1 + 0.66)], at=hc, n=32),
                                                  b.box((1.0, 0.4, 0.34), frame_at((hc - SR * 0.6 + FUN) / 2 + UP * (z1 + 0.3), SR, UP))), sharp=30)
@@ -773,8 +782,9 @@ def riser(z_in):
         RISER_TOP = zf + 0.5
         zc = 9.1
         one("funnelstem", [m_olive()], lambda b: b.lathe([(0.2, z1 + 0.2), (0.2, zc), (0.0, zc)], at=FUN, n=20))
-        one("funnel", [m_pipe()], lambda b: b.lathe([(0.22, zc - 0.08), (0.3, zc + 0.08), (0.42, zc + 0.5), (0.47, zc + 0.66), (0.41, zc + 0.66), (0.33, zc + 0.36),
-                                                      (0.0, zc + 0.3)], at=FUN, n=28), sharp=30)
+        one("funnel", [mat("cup", (168, 82, 50), rough=0.55, metal=0.3, wear=(214, 124, 84), rust=(90, 44, 30), scale=6.0)],
+            lambda b: b.lathe([(0.24, zc - 0.08), (0.36, zc + 0.04), (0.4, zc + 0.5), (0.46, zc + 0.6), (0.4, zc + 0.62), (0.34, zc + 0.5)], at=FUN, n=28), sharp=30)
+        one("funnelhole", [m_soot()], lambda b: b.lathe([(0.35, zc + 0.5), (0.0, zc + 0.44)], at=FUN, n=20))
         return
     nc = P(-2.4, 2.97)
     zb = 8.15
@@ -787,6 +797,7 @@ def riser(z_in):
     zc = zb + 0.2
     one("funnel", [m_pipe()], lambda b: b.lathe([(0.3, zc), (0.32, zc + 0.6), (0.4, zc + 1.2), (0.52, zc + 1.7), (0.63, zc + 1.92), (0.57, zc + 1.92),
                                                   (0.3, zc + 1.3), (0.0, zc + 1.2)], at=FUN, n=32), sharp=30)
+    one("funnelhole", [m_soot()], lambda b: b.lathe([(0.5, zc + 1.74), (0.0, zc + 1.45)], at=FUN, n=24))
 
 
 # ------------------------------------------------------------------------------------------------------------ build
