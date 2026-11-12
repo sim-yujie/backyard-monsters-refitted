@@ -1,0 +1,25 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+We need the small magic ORB that Rezghul, a necromancer monster in our game (Backyard Monsters), throws at a dead monster to raise it as a zombie. The game has two looks, CLASSIC (the 2009 Flash game) and MODERN (our refreshed version), and the orb must be drawn in BOTH, clearly different in rendering but the same design.
+
+The attached images:
+- ref-flash-projectiles.png: the REAL projectiles of the 2009 Flash game, enlarged from their tiny in-game size (a fireball shell from three angles, a rocket, a pebble). This is the CLASSIC look for projectiles: soft, blurry, glowing blobs of hot colour with a bright, almost white-yellow core fading to a saturated rim and a slightly smeared, soft edge; flat 2D glow painting with almost no hard surface, no gloss, no 3D marble look, few details.
+- ref-modern-effects.png: the REAL "Modern look" effects of our game (glows, flares, a swirling energy orb, a ring, bursts), drawn white so the game tints them. This is the MODERN look for effects: crisp, clean, painted energy with clear shapes, smooth gradients, thin bright highlight streaks and swirl lines, clean edges, more detail and polish than Flash, still glowing energy rather than a solid glass ball.
+- ref-rezghul-modern-2x.png and ref-rezghul-portrait-3x.png: Rezghul itself. Its magic colours: the sea-green / jade spirit swirl of its tail, the dark purple knob on its tail tip, the glowing green vortex with a dark centre in the portrait.
+
+Make a SHEET of 6 orbs: 3 designs (columns) x 2 looks (rows).
+- Row 1 = CLASSIC (Flash): render each design like the Flash projectiles in ref-flash-projectiles.png: a soft glowing blob, bright pale core, colour fading outward, soft slightly smeared edge, simple, low detail, like a 2009 Flash effect.
+- Row 2 = MODERN: render the SAME design like the Modern effects in ref-modern-effects.png: crisp, clean, polished painted energy with clear swirl lines and bright highlight streaks, smooth gradients and a clean round edge.
+
+The three designs (same design in both rows of a column):
+- Column 1, SOUL VORTEX: a ball of sea-green / jade spirit energy swirling inward into a dark black-violet hole at its centre, like the vortex in Rezghul's spirit tail.
+- Column 2, GRAVE KNOB: a dark purple / plum ball of death magic, like the knob on Rezghul's tail tip, with two or three sea-green ghost-flame wisps curling round it.
+- Column 3, GHOST SKULL: a ball of pale sea-green ghost-flame with a tiny bone-white skull inside seen from the front (two dark eye holes), the flame rising to one short pointed tip at the top.
+
+Colours: ONLY sea-green / jade, pale mint-white highlights, dark purple / violet and black, and bone-white for the skull. NO red, NO orange, NO yellow, no warm rim light or warm reflection anywhere (the bottom edge too).
+
+These orbs show VERY small in the game (about 20 pixels across), so each must be one simple, bold, high-contrast round shape that still reads at that size.
+
+Canvas 1536x1024 split into 3 columns x 2 rows of equal cells (512x512 each). One orb centred in each cell, about 55% of the cell height, generous margins, nothing touching a cell edge. Keep all glow INSIDE the orb's own round edge: the edge itself may be soft over a few pixels, but no wide halo, no light rays, no sparkles spreading outside it (the game adds its own glow). No ground, no shadow under it.
+The whole sheet on a flat solid magenta (#FF00FF) background, no grid lines, no text, no labels, no frame, no drop shadows.
+Save the final PNG as sheet.png in the current working directory.

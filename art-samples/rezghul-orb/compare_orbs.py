@@ -68,7 +68,7 @@ def cell(look: str, name: str) -> Image.Image:
     demon = rezghul(look)
     small.alpha_composite(demon, (8, small.height - demon.height - 22))
     g = glowed(orb)
-    small.alpha_composite(g, (74 - g.width // 2, 46 - g.height // 2))
+    small.alpha_composite(g, (86 - g.width // 2, 76 - g.height // 2))
     big = small.resize((CELL_W, CELL_H), Image.NEAREST if look == "classic" else Image.LANCZOS)
     # The orb alone at 8x (its @2x file at 4x) in the top right.
     orb2 = Image.open(HERE / f"out/{look}-{name}@2x.png").convert("RGBA")

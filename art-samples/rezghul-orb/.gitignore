@@ -4,3 +4,5 @@ out/*.full.png
 !compare-orbs.png
 !compare-orbs-1x.png
 !c1/prompt.txt
+!c2/prompt.txt
+!cut_c2.py
