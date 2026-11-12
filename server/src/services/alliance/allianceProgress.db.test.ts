@@ -105,7 +105,7 @@ describe.skipIf(!enabled)("alliance progress", () => {
     expect(view.top_helpers[0]).toMatchObject({ userid: MEMBER });
   });
 
-  test("lighting a step spends points and records the members' old factor", async () => {
+  test("lighting a star spends points and records the members' old factor", async () => {
     await expect(progress.lightStar(em(), LEADER, "wormzer", NOW)).rejects.toThrow("more points");
     await sql(`UPDATE bym.alliance SET points = 100 WHERE id = ?`, [ALLIANCE]);
     await expect(progress.lightStar(em(), MEMBER, "wormzer", NOW)).rejects.toThrow("Leader and Officers");
@@ -113,7 +113,7 @@ describe.skipIf(!enabled)("alliance progress", () => {
     const before = (await productionScheduleOfUser(em(), MEMBER)).current;
     await progress.lightStar(em(), LEADER, "wormzer", NOW);
     const after = await alliance();
-    expect(Number(after.points_spent)).toBe(40);
+    expect(Number(after.points_spent)).toBe(20);
     expect(after.stars).toEqual({ wormzer: 1 });
     const schedule = await productionScheduleOfUser(em(), MEMBER);
     expect(schedule.past).toEqual([{ until: NOW, factor: before }]);

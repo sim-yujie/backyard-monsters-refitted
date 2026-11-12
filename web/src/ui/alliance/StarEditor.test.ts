@@ -132,8 +132,36 @@ describe("the Constellation tab's editor button", () => {
     const owner = constellationTab(alliance, host, api, null, () => undefined, open);
     owner[0]!.querySelector<HTMLButtonElement>(".alliance-sky__edit")!.click();
     expect(open).toHaveBeenCalledOnce();
-    // The figure is pokey's built-in one: its 9 lines, the first 2 stars lit.
+    // The figure is pokey's built-in one: its 9 lines, the first star lit (one a step), the next ringed.
     expect(owner[0]!.querySelectorAll(".alliance-sky__line")).toHaveLength(BUILT_IN_FIGURES.pokey!.lines.length);
-    expect(owner[0]!.querySelectorAll(".alliance-sky__star--lit")).toHaveLength(2);
+    expect(owner[0]!.querySelectorAll(".alliance-sky__star--lit")).toHaveLength(1);
+    expect(owner[0]!.querySelectorAll(".alliance-sky__star--next")).toHaveLength(1);
+  });
+
+  it("lights one star a step: dots, count, per-star value, Light ★n and Last lit (owner, 12 Nov)", async () => {
+    const { constellationTab } = await import("@/ui/alliance/allianceProgressUi");
+    const values = [10, 10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14, 14.5, 15];
+    const brain = { id: "brain", name: "Brain", kind: "strength", steps: 2, next_price: 40, prices: [20, 20, 40, 40, 60, 60, 80, 80, 100, 100], suggest_count: 0, effects: [{ stat: "loot", values }] };
+    const alliance = {
+      type: "midas",
+      role: "leader",
+      permissions: [],
+      points: 2400,
+      points_spent: 40,
+      constellations: [brain],
+      last_lit: { id: "brain", step: 2, by: "Ana", at: 0 },
+    } as unknown as Parameters<typeof constellationTab>[0];
+    const host = { run: () => undefined, redraw: () => undefined, now: () => 60_000 };
+    const [sky, bar] = constellationTab(alliance, host, { lightStar: vi.fn(), suggestStar: vi.fn() }, null, () => undefined);
+    expect(sky!.querySelector(".alliance-sky__count")!.textContent).toBe("★ 2 / 10");
+    expect(sky!.querySelectorAll(".alliance-sky__plate .alliance-dots__dot--on")).toHaveLength(2);
+    expect(sky!.querySelectorAll(".alliance-sky__star--lit")).toHaveLength(2);
+    expect(sky!.querySelector(".alliance-sky__value")!.textContent).toBe("+11%");
+    expect(sky!.textContent).not.toContain("Placeholder");
+    expect(bar!.querySelector(".alliance-detail__per")!.textContent).toBe("+0.5% per star");
+    expect(bar!.querySelectorAll(".alliance-track__mark")).toHaveLength(11);
+    expect(bar!.querySelector(".alliance-detail__gain")!.textContent).toBe("+11% → +11.5%");
+    expect(bar!.querySelector(".alliance-detail__last")!.textContent).toMatch(/^Last lit: Brain ★2, by Ana/);
+    expect([...bar!.querySelectorAll("button")].map((b) => b.textContent)).toContain("Light ★3");
   });
 });

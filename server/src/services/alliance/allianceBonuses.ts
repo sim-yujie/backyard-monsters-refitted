@@ -24,7 +24,7 @@ import { parseAllianceDefence, type AllianceDefence } from "../../game-rules/com
 /** Every stat, in percent (reach in cells). A player in no alliance has all zeros. */
 export type AllianceBonuses = Record<AllianceStat, number>;
 
-/** Steps lit per constellation id (0-5); what `alliance.stars` stores. */
+/** Steps lit per constellation id (0-10, one star each); what `alliance.stars` stores. */
 export type LitSteps = Record<string, number>;
 
 /** All zeros: no alliance. */
@@ -48,7 +48,7 @@ export const stepsOf = (stars: LitSteps | null | undefined, id: string): number 
 
 /** One effect's value after `steps` steps. */
 export const effectValue = (effect: ConstellationRules["effects"][number], steps: number): number =>
-  round(effect.start + effect.perStep * steps + (steps >= CONSTELLATION_STEPS ? (effect.atFull ?? 0) : 0));
+  round(effect.start + effect.perStar * steps + (steps >= CONSTELLATION_STEPS ? (effect.atFull ?? 0) : 0));
 
 /**
  * The bonuses of an alliance of `type` with `stars` lit. Unknown ids in

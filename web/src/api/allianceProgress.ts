@@ -11,15 +11,15 @@ export interface ConstellationView {
   readonly id: string;
   readonly name: string;
   readonly kind: "strength" | "weakness";
-  /** Steps lit, 0-5 (each step = 2 stars). */
+  /** Steps lit, 0-10 (each step = 1 star). */
   readonly steps: number;
   /** Points for the next step, or null when all 10 stars are lit. */
   readonly next_price: number | null;
-  /** The price of steps 1-5. */
+  /** The price of stars 1-10. */
   readonly prices: readonly (number | null)[];
   /** Members suggesting its next step. */
   readonly suggest_count: number;
-  /** Each stat it moves: its value at start, then after steps 1-5. */
+  /** Each stat it moves: its value at start, then after stars 1-10. */
   readonly effects: readonly { readonly stat: string; readonly values: readonly number[] }[];
 }
 
