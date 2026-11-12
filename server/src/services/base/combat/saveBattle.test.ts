@@ -117,7 +117,7 @@ describe("recordBattleMismatches", () => {
     expect(mismatchLines()).toHaveLength(1);
     expect(mismatchLines()[0]![1]).toMatchObject({ outcome: "rejected", mode: "reject", fields: ["damage", "attackloot"] });
     expect(reports).toEqual([
-      "Attack save on base 1234 rejected (reject): disagrees with the replay on damage, attackloot [save 9]",
+      "Attack save on base 1234 rejected (reject): disagrees with the replay on damage, attackloot",
     ]);
   });
 

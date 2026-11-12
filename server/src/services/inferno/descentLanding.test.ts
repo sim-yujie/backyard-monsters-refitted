@@ -760,10 +760,10 @@ describe("a Descent save the server's battle overrules (reject mode)", () => {
     // Flagged as before: the same warning and the same Report row.
     const lines = mismatchLines();
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatchObject({ outcome: "rejected", rowless: "descent" });
+    expect(lines[0]).toMatchObject({ outcome: "rejected", mode: "reject" });
     expect(lines[0]!.fields).toEqual(expect.arrayContaining(["damage", "attackloot"]));
     expect(reports).toHaveLength(1);
-    expect(reports[0]).toMatch(/^Attack save on base 201 rejected \(reject\): disagrees with the replay on .*damage.* \[descent\]$/);
+    expect(reports[0]).toMatch(/^Attack save on base 201 rejected \(reject\): disagrees with the replay on .*damage.*$/);
   });
 
   test("a forged win the server's battle lost lands the loss, the yard keeping the battle's health", async () => {
