@@ -333,8 +333,9 @@ export interface GoalRules {
  * quest events for most, direct hooks for takeovers, daily quests, harvests,
  * kits and outposts defended; "hold" is the members' outposts at the week's
  * last daily tally. "attackWin" counts wins on players' yards only (not tribe
- * camps or bots); "hatch" counts housing space; "upgrade" loses a count when
- * the upgrade is cancelled.
+ * camps or bots); "upgrade" loses a count when the upgrade is cancelled.
+ * "Hatch monsters" is gone (owner, 12 Nov 2026): a stored goal of a kind no
+ * longer on the menu gains nothing, is not shown and takes no weekly slot.
  */
 export const GOAL_MENU: GoalRules[] = [
   { kind: "tribeDestroy", name: "Destroy tribe yards", targets: [200, 550, 1000] },
@@ -342,7 +343,6 @@ export const GOAL_MENU: GoalRules[] = [
   { kind: "hold", name: "Hold outposts at the end of the week", targets: [90, 240, 450] },
   { kind: "attackWin", name: "Win attacks on players", targets: [300, 800, 1500] },
   { kind: "defenceWin", name: "Win defences", targets: [30, 80, 150] },
-  { kind: "hatch", name: "Hatch monsters (housing space)", targets: [18_000, 48_000, 90_000] },
   { kind: "dailyQuests", name: "Finish daily quests", targets: [100, 280, 500] },
   { kind: "loot", name: "Loot resources", targets: [450_000_000, 1_200_000_000, 2_250_000_000] },
   { kind: "catapultHit", name: "Catapult hits", targets: [900, 2400, 4500] },

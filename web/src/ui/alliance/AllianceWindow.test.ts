@@ -621,7 +621,7 @@ describe("AllianceWindow: my alliance", () => {
   });
 
   it("shows phase 2's Overview cards, and a goal set from the menu reloads on the same tab", async () => {
-    const goal = { id: 7, kind: "hatch", name: "Hatch monsters", tier: "easy", target: 150, progress: 60, points: 10, done: false, removable: false } as const;
+    const goal = { id: 7, kind: "tribeDestroy", name: "Destroy tribe yards", tier: "easy", target: 150, progress: 60, points: 10, done: false, removable: false } as const;
     const api = fakeApi({
       mine: vi.fn(() =>
         ok({

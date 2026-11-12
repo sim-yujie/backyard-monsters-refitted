@@ -170,11 +170,13 @@ export const getAllianceMessages = async (allianceId: number, em: EntityManagerT
     { orderBy: { id: "DESC" }, limit: ALLIANCE_MESSAGE_LIMIT, fields: FEED_FIELDS }
   );
 
-  const entries = rows.toReversed().map(({ author, targetAlliance, messageType, body, created_at }) => {
+  const entries = rows.toReversed().flatMap(({ author, targetAlliance, messageType, body, created_at }) => {
     const { userid, username, pic_square } = author;
 
     const isShout = messageType !== AllianceMessageType.MESSAGE;
     const text = isShout ? composeShout(messageType, username, body, targetAlliance) : body;
+    // A shout with nothing left to say (e.g. a goal since taken off the menu, like "Hatch monsters") is left out.
+    if (isShout && !text) return [];
     const cell = shoutCell(messageType, body);
     const tradeRequest = shoutTradeRequest(messageType, body);
 

@@ -2,19 +2,27 @@ import { describe, expect, test } from "bun:test";
 
 import { GOAL_MENU, GOAL_POINTS, STEP_PRICES } from "../../config/AllianceConfig.js";
 import { AllianceType } from "../../enums/Alliance.js";
-import { goalAmounts, goalMenuFor, goalPlayers, goalPoints, goalTarget } from "./allianceProgress.js";
+import { goalAmounts, goalMenuFor, goalPlayers, goalPoints, goalTarget, isGoalOnMenu } from "./allianceProgress.js";
+import { composeShout } from "./shoutText.js";
+import { AllianceMessageType } from "../../enums/Alliance.js";
 
 /** The goal rules of 12 Nov 2026 (owner): what counts, targets, points, sized-for labels. */
 describe("alliance goal rules", () => {
-  test("hatching counts housing space from hatch:<monster>, not heads", () => {
-    // 3 Pokeys take 10 each.
-    expect(goalAmounts({ hatch: 3, "hatch:C1": 3 })).toEqual({ hatch: 30 });
-    // Heads with no monster named count as a Pokey's space.
-    expect(goalAmounts({ hatch: 2 })).toEqual({ hatch: 20 });
-    // An unknown monster id counts as a Pokey's space too.
-    expect(goalAmounts({ hatch: 1, "hatch:ZZ9": 1 })).toEqual({ hatch: 10 });
-    // One D.A.V.E. takes 160.
-    expect(goalAmounts({ hatch: 1, "hatch:C12": 1 })).toEqual({ hatch: 160 });
+  test("Hatch monsters is off the menu (owner, 12 Nov 2026): hatching counts towards no goal, an old goal's shout says nothing", () => {
+    expect(GOAL_MENU.some((g) => g.kind === "hatch")).toBe(false);
+    for (const type of [AllianceType.MIDAS, AllianceType.CONQUEST, AllianceType.FORTRESS]) {
+      expect(goalMenuFor(type).some((g) => g.kind === "hatch")).toBe(false);
+    }
+    expect(isGoalOnMenu("hatch")).toBe(false);
+    expect(isGoalOnMenu("tribeDestroy")).toBe(true);
+    expect(goalAmounts({ hatch: 3, "hatch:C1": 3, "hatch:C12": 1 })).toEqual({});
+    expect(goalAmounts({ hatch: 3, tribeDestroy: 1 })).toEqual({ tribeDestroy: 1 });
+    // An old "goal set" / "goal reached" line for it has nothing to say, so the feed leaves it out.
+    expect(composeShout(AllianceMessageType.GOAL_SET, "Gil", JSON.stringify({ kind: "hatch", tier: "easy" }))).toBe("");
+    expect(composeShout(AllianceMessageType.GOAL_DONE, "Gil", JSON.stringify({ kind: "hatch", tier: "easy", points: 15 }))).toBe("");
+    expect(composeShout(AllianceMessageType.GOAL_SET, "Gil", JSON.stringify({ kind: "loot", tier: "easy" }))).toBe(
+      "Gil set a goal: Loot resources (Easy)."
+    );
   });
 
   test("win attacks on players: only attackWin:player counts, never a plain attackWin (camps, bots)", () => {
@@ -38,7 +46,6 @@ describe("alliance goal rules", () => {
       hold: [90, 240, 450],
       attackWin: [300, 800, 1500],
       defenceWin: [30, 80, 150],
-      hatch: [18_000, 48_000, 90_000],
       dailyQuests: [100, 280, 500],
       loot: [450_000_000, 1_200_000_000, 2_250_000_000],
       catapultHit: [900, 2400, 4500],

@@ -16,7 +16,6 @@ import {
 } from "../../config/AllianceConfig.js";
 import { AllianceMessageType, AllianceRole, type AllianceType } from "../../enums/Alliance.js";
 import { BaseType } from "../../enums/Base.js";
-import { housingSpace } from "../../game-data/monsterCatalogue.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import { logger } from "../../utils/logger.js";
@@ -75,11 +74,12 @@ export const goalPoints = (type: AllianceType, tier: GoalTier): number => GOAL_P
 export const goalPlayers = (type: AllianceType, tier: GoalTier): number =>
   GOAL_TIER_PLAYERS[tier] * (TYPE_SCALE[type] ?? 1);
 
-/** Housing space of one hatched monster when its id is unknown: a Pokey's. */
-const DEFAULT_HATCH_SPACE = 10;
-
-/** The housing space of `count` monsters of `id` (at academy level 1). */
-const hatchSpace = (id: string, count: number): number => count * (housingSpace(id, 1) ?? DEFAULT_HATCH_SPACE);
+/**
+ * Whether a stored goal's kind is still on the menu. A kind taken off it
+ * ("hatch", owner 12 Nov 2026) is ignored: it gains nothing, is not shown and
+ * takes no weekly slot.
+ */
+export const isGoalOnMenu = (kind: string): boolean => GOAL_MENU.some((g) => g.kind === kind);
 
 /**
  * Goal progress in a batch of quest events:
@@ -87,9 +87,7 @@ const hatchSpace = (id: string, count: number): number => count * (housingSpace(
  * - upgrades of harvesters and towers together; a cancelled upgrade (-1)
  *   takes its count back (owner, 12 Nov 2026);
  * - "Win attacks on players" from `attackWin:player` only, so tribe camps
- *   and bots do not count (`attackQuestEvents`);
- * - "Hatch" as housing space, from `hatch:<monster>`; heads with no monster
- *   named count as a Pokey's space each.
+ *   and bots do not count (`attackQuestEvents`).
  * Other variant keys are skipped; other undone counts (negative) are ignored.
  */
 export const goalAmounts = (events: Readonly<Record<string, number>> | null | undefined): Record<string, number> => {
@@ -98,25 +96,13 @@ export const goalAmounts = (events: Readonly<Record<string, number>> | null | un
     const n = Number(value);
     if (Number.isFinite(n) && (n > 0 || (allowNegative && n < 0))) out[kind] = (out[kind] ?? 0) + n;
   };
-  let heads = 0;
-  let namedHeads = 0;
-  let space = 0;
-  for (const [key, raw] of Object.entries(events ?? {})) {
-    const value = Number(raw);
-    const positive = Number.isFinite(value) && value > 0;
-    if (key === "hatch") heads += positive ? value : 0;
-    else if (key.startsWith("hatch:")) {
-      if (positive) {
-        namedHeads += value;
-        space += hatchSpace(key.slice("hatch:".length), value);
-      }
-    } else if (key === "attackWin:player") add("attackWin", value);
+  for (const [key, value] of Object.entries(events ?? {})) {
+    if (key === "attackWin:player") add("attackWin", value);
     else if (key.includes(":") || key === "attackWin") continue;
     else if (/^lootR[1-4]$/.test(key)) add("loot", value);
     else if (key === "upgradeResource" || key === "upgradeDefence") add("upgrade", value, true);
-    else if (GOAL_MENU.some((g) => g.kind === key)) add(key, value);
+    else if (isGoalOnMenu(key)) add(key, value);
   }
-  add("hatch", space + Math.max(0, heads - namedHeads) * DEFAULT_HATCH_SPACE);
   if (out.upgrade === 0) delete out.upgrade;
   return out;
 };
@@ -165,9 +151,9 @@ export const addGoalProgress = async (
   amounts: Readonly<Record<string, number>>,
   now: number
 ): Promise<void> => {
-  // Only "upgrade" can go back (a cancelled upgrade), never below 0.
+  // Only "upgrade" can go back (a cancelled upgrade), never below 0; a kind off the menu gains nothing.
   const kinds = Object.entries(amounts).filter(
-    ([kind, n]) => (n > 0 || (n < 0 && kind === "upgrade")) && kind !== "hold"
+    ([kind, n]) => (n > 0 || (n < 0 && kind === "upgrade")) && kind !== "hold" && isGoalOnMenu(kind)
   );
   if (kinds.length === 0) return;
   const [member] = await sql(em).execute<{ alliance_id: number | null }[]>(
@@ -381,10 +367,13 @@ export const setGoal = async (em: EntityManager, userid: number, kind: string, t
     const rules = goalMenuFor(alliance.type).find((g) => g.kind === kind);
     if (!rules || !GOAL_TIERS.includes(tier)) throw progressRefusedErr("noSuchGoal", "That goal is not on your menu.");
     const week = weekOf(now);
+    // A stored goal of a kind off the menu (an old "hatch") takes no slot.
+    const menuKinds = GOAL_MENU.map((g) => g.kind);
     const [count] = await sql(tx).execute<{ n: number; same: number }[]>(
       `SELECT count(*)::int AS n, count(*) FILTER (WHERE kind = ?)::int AS same
-         FROM bym.alliance_goal WHERE alliance_id = ? AND week = ?::date`,
-      [kind, alliance.id, week]
+         FROM bym.alliance_goal
+        WHERE alliance_id = ? AND week = ?::date AND kind IN (${menuKinds.map(() => "?").join(", ")})`,
+      [kind, alliance.id, week, ...menuKinds]
     );
     if (Number(count?.same) > 0) throw progressRefusedErr("goalTaken", "That goal is already set this week.");
     if (Number(count?.n) >= GOALS_PER_WEEK) {
@@ -636,7 +625,7 @@ export const progressView = async (em: EntityManager, allianceId: number, type: 
     `SELECT id, kind, tier, target, points, progress, done_at FROM bym.alliance_goal
       WHERE alliance_id = ? AND week = ?::date ORDER BY id`,
     [allianceId, week]
-  );
+  ).then((rows) => rows.filter((g) => isGoalOnMenu(g.kind)));
   let held: number | null = null;
   if (goals.some((g) => g.kind === "hold")) {
     const [row] = await sql(em).execute<{ n: number }[]>(
