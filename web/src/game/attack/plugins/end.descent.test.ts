@@ -11,7 +11,7 @@ import { DESCENT_GLOATS, DESCENT_TAUNTS, DESCENT_WHIMPERS, RETURN_HOME } from "@
 import { INFERNO_YARD, MAIN_YARD } from "@/game/yard/ownYards";
 import { Notices } from "@/ui/maproom/Notices";
 import { descentPlugin } from "./descent";
-import { END_PANEL_MAX_WAIT_MS, REPLAY_MISMATCH_SETTLES, createEndPlugin } from "./end";
+import { END_PANEL_MAX_WAIT_MS, REPLAY_MISMATCH_SETTLES, SERVER_RESULT_USED, createEndPlugin } from "./end";
 
 /**
  * A Descent attack's end (Inferno WP 1.13): the save names the yard and
@@ -185,6 +185,32 @@ describe("a Descent attack's end", () => {
     expect(modal.textContent).not.toContain("Nothing from this attack was saved");
     // Nothing landed yet, so Moloch has no word.
     expect(modal.textContent).not.toContain(DESCENT_WHIMPERS[1]!.moloch);
+  });
+
+  it("a save the server's battle overruled lands its result: the panel says so and shows the server's outcome", async () => {
+    // Owner, 12 Nov 2026: when the screen and the server disagree, the
+    // Descent keeps the server's full fight (`descent.overruled`).
+    const overruled = { ...landing(true), descent: { ...landing(true).descent, damage: 93, overruled: true } };
+    await run(targetOf(2), overruled);
+    expect(modal.querySelector(".attack-end__status")!.textContent).toContain(SERVER_RESULT_USED);
+    expect(modal.querySelector(".attack-end__outcome")!.textContent).toBe("Victory! Moloch's camp is defeated.");
+    // Moloch's word follows the landing, as for any landed Descent attack.
+    expect(modal.textContent).toContain(DESCENT_WHIMPERS[1]!.moloch);
+  });
+
+  it("an overruled loss shows the server's damage, whatever the screen fought", async () => {
+    const lost = { ...landing(false), descent: { ...landing(false).descent, damage: 61, overruled: true } };
+    await run(targetOf(3), lost);
+    expect(modal.querySelector(".attack-end__outcome")!.textContent).toBe(
+      "Moloch's camp still stands at 61% damage (90% wins).",
+    );
+    expect(modal.textContent).toContain(DESCENT_GLOATS[2]!.moloch);
+  });
+
+  it("a landing the server did not overrule keeps the plain saved line", async () => {
+    await run(targetOf(7), landing(true));
+    expect(modal.querySelector(".attack-end__status")!.textContent).toContain("Result saved.");
+    expect(modal.textContent).not.toContain(SERVER_RESULT_USED);
   });
 
   it("the 13th win: the capture's Start Building! opens the Inferno yard", async () => {

@@ -189,6 +189,11 @@ export interface DescentLanding {
   /** The 13th win: the Inferno yard is the player's. */
   readonly captured: boolean;
   readonly infernobaseid?: string | number;
+  /**
+   * The save's own result disagreed with the server's battle, which landed
+   * instead (owner, 12 Nov 2026). Present only then.
+   */
+  readonly overruled?: boolean;
 }
 
 /** The landing's `descent`, when the answer carries a well-formed one. */
