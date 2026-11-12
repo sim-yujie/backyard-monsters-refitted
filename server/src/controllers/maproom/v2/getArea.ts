@@ -265,7 +265,7 @@ export const getArea: KoaController = async (ctx) => {
     onlinePlayers(ownerIds, getCurrentDateTime()),
     getTruces(user.userid, ownerIds),
     pendingInvitesOn(postgres.em, user.userid, ownOutposts, getCurrentDateTime()),
-    outpostWorkerSaves(postgres.em, ownOutpostSaveIds),
+    outpostWorkerSaves(postgres.em, ownOutpostSaveIds, getCurrentDateTime()),
     // Who has ever attacked the viewer: the red "attacked you" plate (`ak`).
     attackersAmong(postgres.em, user.userid, ownerIds),
     // Friends among them: the `fr` flag (friends WP2, #369), and the pinned ones' `fp` (beta 7).

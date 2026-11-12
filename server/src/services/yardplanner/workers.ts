@@ -89,13 +89,17 @@ export const workerCount = (
 export const busyWorkers = (buildingdata: BuildingDataMap | null | undefined): number => {
   let busy = 0;
   for (const raw of Object.values(buildingdata ?? {})) {
-    const building = raw as BuildingData;
-    // A Starter Kit's prefab builds itself: no worker (outposts WP9,
-    // `client/scripts/BFOUNDATION.as:3155-3159`).
-    const prefab = running(building.cB) && running(building.prefab);
-    if ((running(building.cB) && !prefab) || running(building.cU) || running(building.cF)) busy++;
+    if (holdsWorker(raw as BuildingData)) busy++;
   }
   return busy;
+};
+
+/** Whether this building's countdown holds a worker: a build, upgrade or fortify running. */
+export const holdsWorker = (building: BuildingData): boolean => {
+  // A Starter Kit's prefab builds itself: no worker (outposts WP9,
+  // `client/scripts/BFOUNDATION.as:3155-3159`).
+  const prefab = running(building.cB) && running(building.prefab);
+  return (running(building.cB) && !prefab) || running(building.cU) || running(building.cF);
 };
 
 /**
