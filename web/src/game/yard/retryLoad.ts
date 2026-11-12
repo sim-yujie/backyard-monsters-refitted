@@ -16,7 +16,7 @@ export const LOAD_TRIES = RETRY_DELAYS_MS.length + 1;
  * an old turret strip cut at new cell sizes draws the gun off its tower. Raise this
  * in any release that changes a building's pictures.
  */
-export const BUILDING_ART_VERSION = "11";
+export const BUILDING_ART_VERSION = "12";
 
 /** The address to ask for: a building picture carries {@link BUILDING_ART_VERSION}. */
 export const versionedArt = (url: string): string =>
