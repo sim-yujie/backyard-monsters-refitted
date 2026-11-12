@@ -39,3 +39,26 @@ describe("the support line", () => {
     expect(line?.querySelectorAll("a.support__link")).toHaveLength(2);
   });
 });
+
+describe("the Full details button", () => {
+  it("links the release's Patreon post in a new tab, under its cards", () => {
+    const withMore: ChangelogRelease = {
+      ...release,
+      moreUrl: "https://www.patreon.com/posts/1",
+      moreLabel: "Full details on Patreon",
+    };
+    openWhatsNew({ container: document.body, releases: [withMore, release] });
+    const more = document.querySelectorAll<HTMLAnchorElement>("a.whats-new__more");
+    expect(more).toHaveLength(1);
+    expect(more[0]!.textContent).toBe("Full details on Patreon");
+    expect(more[0]!.href).toBe("https://www.patreon.com/posts/1");
+    expect(more[0]!.target).toBe("_blank");
+    expect(more[0]!.rel).toContain("noopener");
+    expect(more[0]!.previousElementSibling?.classList.contains("whats-new__cards")).toBe(true);
+  });
+
+  it("is left out when the release has no page", () => {
+    openWhatsNew({ container: document.body, releases: [release] });
+    expect(document.querySelector(".whats-new__more")).toBeNull();
+  });
+});

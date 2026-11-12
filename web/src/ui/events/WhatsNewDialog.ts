@@ -8,8 +8,10 @@ import "./whats-new.css";
  * the newest release, older releases folded underneath. It pops up once after
  * an update (`game/events/whatsNew.ts` decides) and opens again from the
  * Account menu's "What's new" item. The words and pictures live in
- * `web/src/data/changelog/`, one file per release. At the foot, above the
- * button, one support line with the Patreon and Ko-fi links (owner 24 Oct).
+ * `web/src/data/changelog/`, one file per release. A release with a
+ * `moreUrl` ends with a "Full details on Patreon" button to its Patreon post
+ * (owner 12 Nov). At the foot, above the button, one support line with the
+ * Patreon and Ko-fi links (owner 24 Oct).
  */
 
 const el = <K extends keyof HTMLElementTagNameMap>(
@@ -54,6 +56,22 @@ const cardList = (release: ChangelogRelease): HTMLElement => {
   return list;
 };
 
+/** The release's "Full details" button, an outside link opened in a new tab; null without one. */
+const moreLink = (release: ChangelogRelease): HTMLAnchorElement | null => {
+  if (!release.moreUrl) return null;
+  const anchor = el("a", "btn btn--outline whats-new__more", release.moreLabel ?? "Full details");
+  anchor.href = release.moreUrl;
+  anchor.target = "_blank";
+  anchor.rel = "noopener noreferrer";
+  return anchor;
+};
+
+/** The cards, then the "Full details" button when the release has one. */
+const releaseBody = (release: ChangelogRelease): HTMLElement[] => {
+  const more = moreLink(release);
+  return more ? [cardList(release), more] : [cardList(release)];
+};
+
 export interface WhatsNewOptions {
   /** Where the popup mounts: the modal layer. */
   readonly container: HTMLElement;
@@ -72,10 +90,10 @@ export const openWhatsNew = (options: WhatsNewOptions): Popup | null => {
     ...(options.onClose && { onClose: options.onClose }),
   });
   const body = el("div", "whats-new");
-  body.append(el("p", "whats-new__release", latest.title), cardList(latest));
+  body.append(el("p", "whats-new__release", latest.title), ...releaseBody(latest));
   for (const release of older) {
     const details = el("details", "whats-new__older");
-    details.append(el("summary", "whats-new__older-summary", release.title), cardList(release));
+    details.append(el("summary", "whats-new__older-summary", release.title), ...releaseBody(release));
     body.append(details);
   }
   body.append(supportLine());

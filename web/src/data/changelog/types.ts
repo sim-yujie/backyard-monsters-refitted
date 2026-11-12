@@ -17,4 +17,11 @@ export interface ChangelogRelease {
   /** What the dialog's heading says, e.g. "Beta 4". */
   readonly title: string;
   readonly cards: readonly ChangelogCard[];
+  /**
+   * A page with the full notes (the release's Patreon post), shown as a
+   * button under the cards and opened in a new tab. Give both or neither.
+   */
+  readonly moreUrl?: string;
+  /** The button's words, e.g. "Full details on Patreon". */
+  readonly moreLabel?: string;
 }
