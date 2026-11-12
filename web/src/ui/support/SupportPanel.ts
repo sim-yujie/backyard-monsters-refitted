@@ -23,7 +23,8 @@ export const SUPPORT_TEXT = {
   kofi: "Ko-fi",
   kofiNote: "One-time tip",
   thanks: "Thank you!",
-  whatsNew: "Free, no ads, made by one person. Want to help?",
+  whatsNew:
+    "Backyard Monsters Revamped is free to play. If you enjoy it, supporting us on Patreon keeps the servers running and the updates coming.",
   later: "Maybe later",
   never: "Don't show again",
 } as const;
