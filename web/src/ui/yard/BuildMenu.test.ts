@@ -15,6 +15,7 @@ import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
 import type { LinePlan } from "@/game/yard/wallLine";
 import { BuildMenu, lineHint, PlacementBar, spotSentence } from "./BuildMenu";
+import { nameFitEm } from "./tileNameFit";
 
 /**
  * The build menu as a player meets it: the tabs, each tile's cost, count and
@@ -117,6 +118,13 @@ describe("BuildMenu", () => {
     expect(cannon.querySelector(".build-tile__count")?.textContent).toBe("1 of 4 built");
   });
 
+  it("a tile's name carries its widest word's width, so the CSS shrinks it rather than breaking it", () => {
+    const { menu } = setup([HALL, building(2, 20)]);
+    menu.open(BuildCategory.DEFENSIVE);
+    const name = tile(menu, 20).querySelector<HTMLElement>(".build-tile__name");
+    expect(name?.style.getPropertyValue("--name-fit-em")).toBe(String(nameFitEm("Cannon Tower")));
+  });
+
   it("a locked tile: the silhouette, a lock, and the hall that unlocks it", () => {
     setClassicLook(true);
     const { menu } = setup([HALL]);
@@ -158,9 +166,9 @@ describe("BuildMenu", () => {
     expect(cannon.querySelector(".build-tile__picture--modern")).not.toBeNull();
 
     menu.open(BuildCategory.BUILDINGS);
-    // The Monster Locker has no new look yet: Flash's button, as before.
-    expect(tile(menu, 8).querySelector("img")?.getAttribute("src")).toBe("/assets/buildingbuttons/8.jpg");
-    expect(tile(menu, 8).querySelector(".build-tile__picture--modern")).toBeNull();
+    // The Monster Locker shows its 3D look (10 Nov 2026).
+    expect(tile(menu, 8).querySelector("img")?.getAttribute("src")).toBe(buildPicture(8, "main", false).url);
+    expect(tile(menu, 8).querySelector(".build-tile__picture--modern")).not.toBeNull();
     menu.turn(1);
     const lab = tile(menu, 116);
     expect(lab.classList.contains("build-tile--locked")).toBe(true);

@@ -95,6 +95,7 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "champion/heal",
   "champion/rename",
   "champion/stance",
+  "champion/forget",
   "champion/juice",
   "champion/freeze",
   "champion/thaw",

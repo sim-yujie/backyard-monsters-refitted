@@ -10,7 +10,7 @@ import { STARTER_BUILDINGS } from "../yard/starterBase.js";
 import { planOneUpgrade } from "../yardplanner/startUpgrades.js";
 import { pointsForBuild, pointsForUpgrade, TOWN_HALL_TYPE } from "../yardplanner/costs.js";
 import { GUIDE_BUILDINGS } from "../onboarding/guidedStart.js";
-import { OBSERVATORY } from "../../config/AllianceConfig.js";
+import { OBSERVATORY_TYPE } from "../yard/buildingJobs.js";
 import { CORE_WALLS, coreStyleWalls, yardStyleOf } from "./yardStyle.js";
 
 /**
@@ -354,7 +354,7 @@ const VALUE_EXCLUDED_KINDS: ReadonlySet<string> = new Set(["decoration", "enemy"
  * an alliance.
  */
 const PROGRESSION_TYPES: readonly number[] = [...BUILDABLE_TYPES]
-  .filter((type) => !SURFACE_INFERNO_TYPES.has(type) && type !== OBSERVATORY.type)
+  .filter((type) => !SURFACE_INFERNO_TYPES.has(type) && type !== OBSERVATORY_TYPE)
   .sort((a, b) => a - b);
 
 /** A pool deep enough that the upgrade gate never reports a shortfall. */

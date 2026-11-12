@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { derivedDestroyed, parseDefenderForces, type FlingLog } from "../../../game-rules/combat/index.js";
-import { brainsOf, type AttackSession } from "../attackSession.js";
+import { frozenBrainsOf, type AttackSession } from "../attackSession.js";
 import { replayAbandonedAttack } from "./abandonedAttack.js";
 import { battleMismatches, battleReplayInput, battleTick, type BattleDefender } from "./battle.js";
 
@@ -122,9 +122,8 @@ const defenderOf = (one: HonestSave): { defender: BattleDefender; fixture: Fixtu
 /** The session the attack load minted: everything it froze, as `baseModeAttack.ts` freezes it. */
 const sessionOf = (one: HonestSave, fixture: Fixture): AttackSession => {
   const defenderForces = parseDefenderForces(fixture.defence);
-  const championBrains = one.attacker.brains
-    ? brainsOf(Object.entries(one.attacker.brains).map(([t, b]) => ({ t: Number(t), b })))
-    : undefined;
+  // Recorded before habits: the session froze old brains, which it keeps (`frozenBrainsOf`).
+  const championBrains = one.attacker.brains ? frozenBrainsOf(one.attacker.brains) : undefined;
   return {
     attackerid: 2505,
     attackid: 4242,

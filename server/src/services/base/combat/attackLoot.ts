@@ -5,6 +5,7 @@ import {
   LOW_LEVEL_LOOT_CEILING,
   RESOURCE_KEYS,
   championStat,
+  flungMind,
   lowLevelLootBonus,
   type BombStats,
   type BuildingHealthMap,
@@ -304,16 +305,17 @@ export const fightableLog = (log: FlingLog, attacker: LootAttacker, entryHoused:
 type FlungChampion = NonNullable<Extract<FlingEvent, { kind: "fling" }>["champion"]>;
 
 /**
- * A flung champion with the brain the attack froze at launch (issue #219):
- * the session's copy for its type, or none, whatever the log said.
+ * A flung champion with the mind the attack froze at launch, whatever the
+ * log said: its habits for the Mode the log flings it in, with their version
+ * (champion modes round 2, `flungMind`), or its old brain (issue #219), or
+ * none.
  *
  * @param champion - The champion as the log flings it.
  * @param brains - The session's `championBrains`, if any.
  */
 export const withFrozenBrain = (champion: FlungChampion, brains: ChampionBrains | null | undefined): FlungChampion => {
-  const { b: _sent, ...rest } = champion;
-  const brain = brains?.[String(champion.t)];
-  return brain ? { ...rest, b: brain } : rest;
+  const { b: _sent, hv: _version, h: _habits, ...rest } = champion;
+  return { ...rest, ...flungMind(brains?.[String(champion.t)], champion.t, champion.s) };
 };
 
 /**

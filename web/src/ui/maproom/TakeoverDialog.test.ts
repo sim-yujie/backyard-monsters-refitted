@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/api/http";
+import { takeoverScores } from "@/game/events/takeoverScores";
 import { TakeoverDialog, showTakenOver, type TakeoverDialogOptions } from "./TakeoverDialog";
 
 /**
@@ -203,6 +204,34 @@ describe("TakeoverDialog", () => {
     ]);
   });
 
+  it("a Frontier Pass price: only the resource payment says it uses today's pass; Shiny says it does not", () => {
+    const { $ } = open({
+      price: {
+        resources: 350_000,
+        usualResources: 3_500_000,
+        welcome: true,
+        shiny: 924,
+        affordable: { resources: true, shiny: true },
+      },
+    });
+    const notes = [...modal.querySelectorAll(".takeover-dialog__note")].map((one) => one.textContent);
+    expect(notes).toEqual(["350,000 of each resource. Uses today's Frontier Pass.", "Usual price. Does not use your Frontier Pass."]);
+    $(".takeover-dialog__shiny").click();
+    expect($(".takeover-dialog__confirm-text").textContent).toBe("Take this yard over for 924 Shiny? Usual price. Does not use your Frontier Pass.");
+    $(".takeover-dialog__back").click();
+    $(".takeover-dialog__resources").click();
+    expect($(".takeover-dialog__confirm-text").textContent).toBe(
+      "Take this yard over for 350,000 of each resource? Uses today's Frontier Pass.",
+    );
+  });
+
+  it("a usual price says nothing about the Frontier Pass", () => {
+    const { $ } = open({ price: { resources: 3_500_000, shiny: 924, affordable: { resources: true, shiny: true } } });
+    expect(modal.querySelector(".takeover-dialog__choice")!.textContent).not.toContain("Frontier Pass");
+    $(".takeover-dialog__shiny").click();
+    expect($(".takeover-dialog__confirm-text").textContent).toBe("Take this yard over for 924 Shiny?");
+  });
+
   it("no label and nothing struck on a usual price", () => {
     const { $ } = open();
     expect($(".takeover-dialog__welcome").hidden).toBe(true);
@@ -254,5 +283,28 @@ describe("showTakenOver", () => {
     expect(modal.querySelector(".panel__title")!.textContent).toBe("Veni, Vidi, Vici!");
     expect(modal.textContent).toContain("You destroyed a Kozu base. Take over their yard and expand your empire.");
     expect(modal.querySelector("img")!.getAttribute("src")).toBe("/assets/popups/building-outpost.png");
+    expect(modal.querySelector(".takeover-first-open__score")).toBeNull();
+  });
+
+  it("shows a Monster Madness takeover's points: the logo, +points and the total", () => {
+    const modal = document.createElement("div");
+    showTakenOver(modal, "camp", "Kozu", [{ event: "monster-madness-1762819200", points: 2_100_000, total: 45_000_000 }]);
+    const row = modal.querySelector<HTMLElement>(".takeover-first-open__score")!;
+    expect(row.querySelector("img")!.getAttribute("src")).toBe("/events/monster-madness-logo.png");
+    expect(row.querySelector(".takeover-first-open__score-points")!.textContent).toBe("+2.1M");
+    expect(row.querySelector(".takeover-first-open__score-total")!.textContent).toBe("Total 45M");
+    expect(row.getAttribute("aria-label")).toBe("+2.1M Monster Madness points, 45M in all");
+    // Above the OK button.
+    expect(row.nextElementSibling?.textContent).toBe("OK");
+  });
+
+  it("takes the last takeover's waiting points by itself, once", () => {
+    takeoverScores.set([{ event: "monster-madness-1", points: 3_000_000, total: 3_000_000 }]);
+    const first = document.createElement("div");
+    showTakenOver(first, "camp", "Kozu");
+    expect(first.querySelector(".takeover-first-open__score-points")!.textContent).toBe("+3M");
+    const again = document.createElement("div");
+    showTakenOver(again, "camp", "Kozu");
+    expect(again.querySelector(".takeover-first-open__score")).toBeNull();
   });
 });

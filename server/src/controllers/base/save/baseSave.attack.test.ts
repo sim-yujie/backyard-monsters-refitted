@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import type { Context } from "koa";
 import { gzipSync } from "node:zlib";
-import type { BrainWeights } from "../../../game-rules/combat/index.js";
+import type { BrainWeights, FrozenHabits } from "../../../game-rules/combat/index.js";
 
 /**
  * Attack saves through `/base/save`. Loot (issue #163): only the save that
@@ -139,7 +139,7 @@ mock.module("../../../scripts/anticheat/anticheat.js", () => ({
 /** The defence the attack load served, when a test gives the session one (issue #195). */
 let sessionForces: unknown;
 /** The champions' brains the attack froze at launch, when a test gives the session some (issue #219). */
-let sessionBrains: Record<string, BrainWeights> | undefined;
+let sessionBrains: Record<string, BrainWeights | FrozenHabits> | undefined;
 /** The champions' health the attack froze at launch, when a test gives the session some. */
 let sessionHealth: Record<string, number> | undefined;
 /** What the attacker housed at entry, when a test changes it from {@link ENTRY}; null for none (Map Room 3). */
@@ -323,20 +323,31 @@ describe("the Kozu Town Hall a save brings down (issue #204)", () => {
   });
 });
 
-describe("the champion's learning brain through the save (issue #219)", () => {
-  const BRAIN = { tower: 60, loot: -40, finish: 0, focus: 0, threat: 0 };
-  const FORGED = { tower: -200, loot: 200, finish: 200, focus: 200, threat: 200 };
+describe("the champion's habits through the save (champion modes round 2)", () => {
+  const HABITS = { tower: 60, loot: -40 };
+  const FORGED = { tower: -150, loot: 150, hall: 150 };
   const GORGO_LOG = {
     v: 1,
     seed: 5,
-    events: [{ kind: "fling", t: 80, x: 400, y: 400, r: 200, monsters: { C4: 12 }, champion: { t: 1, l: 4, b: FORGED } }],
+    events: [
+      {
+        kind: "fling",
+        t: 80,
+        x: 400,
+        y: 400,
+        r: 200,
+        monsters: { C4: 12 },
+        champion: { t: 1, l: 4, hv: 1, h: FORGED, b: { tower: 200, loot: 0, finish: 0, focus: 0, threat: 0 } },
+      },
+    ],
   };
+  const STATS = { n: 7, hyb: { n: 2, u: { main: 0, wild: 0, tribe: 0 } } };
 
-  test("the save that ends the attack teaches the champion from the server's battle, once", async () => {
-    const { learnFromLesson } = await import("../../../game-rules/combat/index.js");
-    sessionBrains = { "1": BRAIN };
-    attackerSave.champion = [{ t: 1, l: 4, hp: 100_000, status: 0, b: BRAIN, bs: { n: 2, hyb: 0 } }];
-    // The battle the server fights: the frozen brain, never the log's forged one.
+  test("the save that ends the attack teaches the champion's Mode from the server's battle, once", async () => {
+    const { learnHabits } = await import("../../../game-rules/combat/index.js");
+    sessionBrains = { "1": { v: 1, hyb: HABITS } };
+    attackerSave.champion = [{ t: 1, l: 4, hp: 100_000, status: 0, h: { hyb: HABITS }, hs: STATS }];
+    // The battle the server fights: the frozen habits, never the log's forged ones nor its brain.
     const input = battleReplayInput({
       flinglog: GORGO_LOG,
       session: { attackerid: ATTACKER, attackid: ATTACK_ID, startedat: 0, entryHoused: ENTRY, championBrains: sessionBrains },
@@ -344,26 +355,28 @@ describe("the champion's learning brain through the save (issue #219)", () => {
       attacker: structuredClone(attackerSave),
       tick: battleTick("3200"),
     })!;
-    expect(input.log.events[0]).toMatchObject({ champion: { b: BRAIN } });
+    expect(input.log.events[0]).toMatchObject({ champion: { hv: 1, h: HABITS } });
+    expect((input.log.events[0] as { champion: { b?: unknown } }).champion.b).toBeUndefined();
     const lesson = replayAbandonedAttack(input).lessons!.find((one) => one.t === 1)!;
-    const learned = learnFromLesson(BRAIN, { n: 2, hyb: 0 }, lesson, "hybrid");
+    const learned = learnHabits({ hyb: HABITS }, STATS, lesson, "hybrid");
 
     // A save that does not end it teaches nothing.
     await baseSave(ctxFor({ tick: "3200", flinglog: JSON.stringify(GORGO_LOG) }), async () => {});
-    expect(attackerSave.champion[0].bs).toEqual({ n: 2, hyb: 0 });
+    expect(attackerSave.champion[0].hs).toEqual(STATS);
 
     await baseSave(
       ctxFor({
         over: "1",
         tick: "3200",
         flinglog: JSON.stringify(GORGO_LOG),
-        // A forged brain on the reported champion is dropped like any other key.
-        attackerchampion: JSON.stringify([{ t: 1, l: 4, hp: 1, status: 0, b: FORGED, bs: { n: 999 } }]),
+        // Forged habits on the reported champion are dropped like any other key.
+        attackerchampion: JSON.stringify([{ t: 1, l: 4, hp: 1, status: 0, h: { hyb: FORGED }, hs: { n: 999 } }]),
       }),
       async () => {}
     );
-    expect(attackerSave.champion[0]).toMatchObject({ b: learned.brain, bs: learned.stats });
-    expect(attackerSave.champion[0].bs.n).toBe(3);
+    expect(attackerSave.champion[0]).toMatchObject({ h: learned.book, hs: learned.stats });
+    expect(attackerSave.champion[0].hs.n).toBe(8);
+    expect(attackerSave.champion[0].hs.hyb.n).toBe(3);
 
     // The attack is over: a copy of the save is refused and teaches nothing more.
     const after = structuredClone(attackerSave.champion);
@@ -818,8 +831,8 @@ describe("the attacker's own row through the save (#23, C1)", () => {
       attackersiege: JSON.stringify({ jars: { quantity: 99 }, rocket: { quantity: 5 } }),
     });
 
-    // It fought, so it learned from the battle (issue #219); nothing else moved.
-    expect(attackerSave.champion).toEqual([{ ...champion(500), b: expect.any(Object), bs: expect.objectContaining({ n: 1 }) }]);
+    // It fought, so it learned its habits from the battle (champion modes round 2); nothing else moved.
+    expect(attackerSave.champion).toEqual([{ ...champion(500), h: expect.any(Object), hs: expect.objectContaining({ n: 1 }) }]);
     // The one jar the log used is spent, whatever the save said the stock was.
     expect(attackerSave.siege).toEqual({ jars: { quantity: 1 } });
   });
@@ -831,7 +844,7 @@ describe("the attacker's own row through the save (#23, C1)", () => {
       attackersiege: JSON.stringify({ jars: { quantity: 1 } }),
     });
 
-    expect(attackerSave.champion).toEqual([{ ...champion(180), b: expect.any(Object), bs: expect.objectContaining({ n: 1 }) }]);
+    expect(attackerSave.champion).toEqual([{ ...champion(180), h: expect.any(Object), hs: expect.objectContaining({ n: 1 }) }]);
     expect(attackerSave.siege).toEqual({ jars: { quantity: 1 } });
   });
 
@@ -899,7 +912,7 @@ describe("a champion healed by Vorgs or Zafreeti keeps the heal through the save
 
     await save({ C16: 6 }, healed);
 
-    expect(attackerSave.champion).toEqual([{ ...fomor(healed), b: expect.any(Object), bs: expect.any(Object) }]);
+    expect(attackerSave.champion).toEqual([{ ...fomor(healed), h: expect.any(Object), hs: expect.any(Object) }]);
   });
 
   test("a Zafreeti's heal is kept the same way (the other healer, `Zafreeti.as`)", async () => {
@@ -909,7 +922,7 @@ describe("a champion healed by Vorgs or Zafreeti keeps the heal through the save
 
     await save({ C15: 2 }, healed);
 
-    expect(attackerSave.champion).toEqual([{ ...fomor(healed), b: expect.any(Object), bs: expect.any(Object) }]);
+    expect(attackerSave.champion).toEqual([{ ...fomor(healed), h: expect.any(Object), hs: expect.any(Object) }]);
   });
 
   test("Vorgs and Zafreeti together: the replay's figure, never above full", async () => {
@@ -1108,7 +1121,7 @@ describe("the battle is the server's (#23, C3)", () => {
     // The camp does fall (99%), so the claimed `destroyed` is the battle's own.
     expect(reports).toEqual([
       "Attack save on base 1234 flagged (log): disagrees with the replay on " +
-        "damage, buildinghealthdata, attackloot",
+        "damage, buildinghealthdata, attackloot [save 9]",
     ]);
     expect(defender.damage).toBe(Math.trunc(battle.damage));
   });
@@ -1445,5 +1458,146 @@ describe("the defence replay a save lands (issue #359)", () => {
     // The attacker's own yard is not an attack at all: that save is refused.
     await baseSave(ctxFor({ over: "1", tick: "3200", flinglog: JSON.stringify(LOG) }), async () => {}).catch(() => {});
     expect(replays).toEqual([]);
+  });
+});
+
+describe("a countdown the attack save's catch-up finishes", () => {
+  /** A Map Room 2 main yard saved 60 s ago with 30 s of a level 3 to 4 Flinger upgrade left. */
+  const withFinishingFlinger = () => {
+    Object.assign(defender, {
+      type: "main",
+      mapversion: 2,
+      attacks: [],
+      protected: 0,
+      flinger: 3,
+      savetime: Math.floor(Date.now() / 1000) - 60,
+    });
+    defender.buildingdata["2"] = { id: 2, t: 5, l: 3, X: -200, Y: -200, cU: 30, cL: 32_400 };
+    store.set(`sight:${DEFENDER_OWNER}`, JSON.stringify({ sources: [], revealed: [] }));
+  };
+
+  test("a finished Flinger upgrade raises the yard's flinger level and drops its owner's cached sight", async () => {
+    withFinishingFlinger();
+
+    await baseSave(ctxFor({ flinglog: JSON.stringify(LOG) }), async () => {});
+
+    expect(defender.buildingdata["2"].l).toBe(4);
+    expect(defender.flinger).toBe(4);
+    expect(store.has(`sight:${DEFENDER_OWNER}`)).toBe(false);
+  });
+
+  test("a wild camp's flinger column is left alone", async () => {
+    Object.assign(defender, { flinger: 7, savetime: Math.floor(Date.now() / 1000) - 60 });
+
+    await baseSave(ctxFor({ flinglog: JSON.stringify(LOG) }), async () => {});
+
+    expect(defender.flinger).toBe(7);
+  });
+});
+
+describe("the Flinger's room (owner, 12 Nov 2026)", () => {
+  const TICK = 2_000;
+  const GORGO = { t: 1, l: 6 };
+  /** One fling where LOG's lands; `old` leaves out the mark a page from before the release lacks. */
+  const flingLog = (monsters: Record<string, number>, champion?: { t: number; l: number }, old = false) => ({
+    v: 1,
+    seed: 5,
+    ...(!old && { championRoom: 1 }),
+    events: [{ kind: "fling", t: 80, x: 400, y: 400, r: 200, monsters, ...(champion && { champion }) }],
+  });
+  /** Gorgo's 240 and 2,010 of monsters (C4 takes 20, C2 10): the Flinger's 2,250 exactly. */
+  const EXACT = { C4: 100, C2: 1 };
+  /** Then one C1 (7) more. */
+  const OVER = { C4: 100, C2: 1, C1: 1 };
+
+  /** What the server's own replay of `log` gives, as an honest page reports it. */
+  const honestBody = (log: unknown): Record<string, string> => {
+    const battle = replayAbandonedAttack(
+      battleReplayInput({
+        flinglog: log,
+        session: { attackerid: ATTACKER, attackid: ATTACK_ID, startedat: 0, entryHoused: ENTRY },
+        defender: {
+          type: defender.type,
+          buildingdata: YARD as never,
+          buildinghealthdata: {},
+          resources: { r1: 5000, r2: 0, r3: 0, r4: 0 },
+        },
+        attacker: attackerSave,
+        tick: battleTick(TICK),
+      })!
+    );
+    return {
+      over: "1",
+      tick: String(TICK),
+      flinglog: JSON.stringify(log),
+      damage: String(battle.damage),
+      ...(battle.destroyed !== undefined && { destroyed: String(battle.destroyed) }),
+      buildinghealthdata: JSON.stringify(battle.buildinghealthdata),
+      attackloot: JSON.stringify(battle.attackloot),
+    };
+  };
+
+  const refusal = (body: Record<string, string>) =>
+    baseSave(ctxFor(body), async () => {}).then(
+      () => null,
+      (err: unknown) => err as { data?: { reason?: string; flings?: unknown } }
+    );
+
+  for (const type of ["tribe", "main", "outpost"]) {
+    test(`reject: a ${type} attack with a fling over the room is refused before anything is written`, async () => {
+      setMode("reject");
+      defender.type = type;
+      const caught = await refusal(honestBody(flingLog(OVER, GORGO)));
+
+      expect(caught?.data?.reason).toBe("flingOverRoom");
+      expect(caught?.data?.flings).toEqual([{ fling: 1, t: 80, used: 2257, room: 2250 }]);
+      expect(reports).toEqual([
+        "Attack save on base 1234 rejected (reject): fling over Flinger room, 2257 of 2250 in fling 1 [save 9]",
+      ]);
+      expect(defender.damage).toBe(0);
+      expect(defender.buildinghealthdata).toEqual({});
+      expect(attackerSave.resources).toEqual({ r1: 100, r2: 100, r3: 100, r4: 100 });
+      // The row still carries the attack, for the finaliser to land from its last checkpoint.
+      expect(defender.attackid).toBe(ATTACK_ID);
+    });
+  }
+
+  test("reject: a champion and monsters that fill the room exactly land", async () => {
+    setMode("reject");
+    await baseSave(ctxFor(honestBody(flingLog(EXACT, GORGO))), async () => {});
+
+    expect(reports).toEqual([]);
+    expect(defender.attackid).toBe(0);
+  });
+
+  test("reject: a page from before the release, its champion on top of a full Flinger, lands", async () => {
+    setMode("reject");
+    // 2,250 of monsters and Gorgo on top: what the page before the release sent.
+    await baseSave(ctxFor(honestBody(flingLog({ C4: 112, C2: 1 }, GORGO, true))), async () => {});
+
+    expect(reports).toEqual([]);
+    expect(defender.attackid).toBe(0);
+  });
+
+  test("reject: that older page's log is still refused when its monsters alone are over", async () => {
+    setMode("reject");
+    const caught = await refusal(honestBody(flingLog({ C4: 113 }, GORGO, true)));
+
+    expect(caught?.data?.reason).toBe("flingOverRoom");
+  });
+
+  test("log: an over-full fling is reported once and the server's battle lands", async () => {
+    await baseSave(ctxFor(honestBody(flingLog(OVER, GORGO))), async () => {});
+
+    expect(reports).toEqual([
+      "Attack save on base 1234 flagged (log): fling over Flinger room, 2257 of 2250 in fling 1 [save 9]",
+    ]);
+  });
+
+  test("off: nothing is checked", async () => {
+    setMode("off");
+    await baseSave(ctxFor(honestBody(flingLog(OVER, GORGO))), async () => {});
+
+    expect(reports).toEqual([]);
   });
 });

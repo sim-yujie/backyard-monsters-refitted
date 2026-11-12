@@ -56,7 +56,7 @@ describe("the menu", () => {
   it("puts every view on one page, and opens a page at its first view", () => {
     expect(PAGES.flatMap(([id]) => pageViews(id))).toEqual(VIEWS.map(([id]) => id));
     expect(pageHome("moderation")).toBe("moderation");
-    expect(pageViews("moderation")).toEqual(["moderation", "photos", "find", "attacks", "moderators", "modmail"]);
+    expect(pageViews("moderation")).toEqual(["moderation", "photos", "find", "attacks", "flagged", "moderators", "modmail"]);
     expect(pageViews("support")).toEqual(["bugs", "shiny", "chat"]);
     expect(pageViews("announcements")).toEqual(["announcements", "events"]);
     expect(pageViews("server")).toEqual(["health"]);

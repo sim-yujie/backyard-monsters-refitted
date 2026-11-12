@@ -2,7 +2,7 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 
 import { BotJob } from "../../database/models/botjob.model.js";
 import type { JsonObject } from "../../types/JsonObject.js";
-import { isBot } from "./isBot.js";
+import { isActiveBot } from "./isBot.js";
 import { DECLINE_TRUCE_HOURS } from "./truceDecline.js";
 
 /**
@@ -17,6 +17,10 @@ import { DECLINE_TRUCE_HOURS } from "./truceDecline.js";
  *
  * A request no longer waiting when the job runs (cancelled, or the pair
  * blocked since, which cancels it) is left alone. Either way the job is done.
+ *
+ * Only an `active` bot books an answer ({@link isActiveBot}). Since the owner
+ * retired every bot (12 Nov 2026) none is, so a request to a bot is never
+ * answered and lapses after 14 days, as one to a player who stopped playing.
  */
 
 /** Answered a uniform 2-8 hours after the request, as truce requests are. */
@@ -46,7 +50,7 @@ export const bookFriendDecline = async (
   now: number,
   rng: () => number = Math.random
 ): Promise<boolean> => {
-  if (!(await isBot(request.to_userid, em))) return false;
+  if (!(await isActiveBot(request.to_userid, em))) return false;
 
   const hours = DECLINE_FRIEND_HOURS.min + rng() * (DECLINE_FRIEND_HOURS.max - DECLINE_FRIEND_HOURS.min);
   em.create(BotJob, {

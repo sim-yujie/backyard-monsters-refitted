@@ -335,11 +335,15 @@ describe("finaliseAbandonedAttack", () => {
     // A level 1 Fomor stored at 1,200 two hours ago is full (15,000) an hour later.
     defender.savetime = now() - 2 * 3_600;
     defender.champion = [{ t: 3, l: 1, hp: 1_200, fd: 0, fb: 0, pl: 1, ft: now() + 3_600, status: 0 }];
+    // The finaliser takes its "now" before the replay, which can run past a
+    // second under a busy test run: compare with the clock read before it.
+    const before = now();
 
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
 
     expect(defender.champion[0].hp).toBe(15_000);
-    expect(defender.savetime).toBeGreaterThanOrEqual(now() - 1);
+    expect(defender.savetime).toBeGreaterThanOrEqual(before);
+    expect(defender.savetime).toBeLessThanOrEqual(now());
   }, REPLAY_TIMEOUT_MS);
 
   test("monsters hatched during the attack stay: the flung are taken from the caught-up yard", async () => {
@@ -912,18 +916,20 @@ describe("the champion's learning brain (issue #219)", () => {
   const gorgo = (extra: Record<string, unknown> = {}) => ({ t: 1, l: 5, hp: 150_000, status: 0, ...extra });
 
   test("the champion that fought learns from the server's battle, once", async () => {
-    const { learnFromLesson } = await import("../../game-rules/combat/index.js");
+    const { learnHabits } = await import("../../game-rules/combat/index.js");
     userSave.champion = [gorgo({ b: FROZEN["1"], bs: { n: 4, hyb: 0.2 } })];
     await arm({ tick: LATE, championBrains: FROZEN, flinglog: gorgoLog() });
     const expected = replayed(LATE, gorgoLog(FROZEN["1"]));
     const lesson = expected.lessons!.find((one) => one.t === 1)!;
     expect(lesson.picks).toBeGreaterThan(0);
-    const learned = learnFromLesson(FROZEN["1"], { n: 4, hyb: 0.2 }, lesson, "hybrid");
+    // Gorgo has habits (champion modes round 2): its old brain goes, its count stays.
+    const learned = learnHabits(undefined, undefined, lesson, "hybrid", { n: 4, hyb: 0.2 });
 
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
-    expect(userSave.champion[0]).toMatchObject({ t: 1, l: 5, b: learned.brain, bs: learned.stats });
-    expect(userSave.champion[0].bs.n).toBe(5);
-    expect(userSave.champion[0].b).not.toEqual(FROZEN["1"]);
+    expect(userSave.champion[0]).toMatchObject({ t: 1, l: 5, h: learned.book, hs: learned.stats });
+    expect(userSave.champion[0].hs.n).toBe(5);
+    expect(userSave.champion[0].b).toBeUndefined();
+    expect(userSave.champion[0].bs).toBeUndefined();
 
     // A second landing finds nothing, so nothing is learned twice.
     const after = structuredClone(userSave.champion);
@@ -951,9 +957,9 @@ describe("the champion's learning brain (issue #219)", () => {
 
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
     expect(defender.buildinghealthdata).toEqual(plain.buildinghealthdata);
-    // Its first attack in a Mode only sets the baseline.
-    expect(userSave.champion[0].b).toEqual({ tower: 0, loot: 0, finish: 0, focus: 0, threat: 0 });
-    expect(userSave.champion[0].bs).toMatchObject({ n: 1 });
+    // Its first attack in a Mode only sets the baseline: no habit yet.
+    expect(userSave.champion[0].h).toEqual({});
+    expect(userSave.champion[0].hs).toMatchObject({ n: 1, hyb: { n: 1 } });
   }, REPLAY_TIMEOUT_MS);
 });
 
@@ -1061,5 +1067,30 @@ describe("the defence replay an abandoned attack lands (issue #359)", () => {
     expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
 
     expect(replays).toEqual([]);
+  }, REPLAY_TIMEOUT_MS);
+});
+
+describe("a countdown the attack's catch-up finishes", () => {
+  test("a finished Flinger upgrade raises the yard's flinger level and drops its owner's cached sight", async () => {
+    Object.assign(defender, { type: "main", mapversion: 2, attacks: [], userid: DEFENDER_OWNER, flinger: 3 });
+    // Saved 60 s ago with 30 s of a level 3 to 4 upgrade left: done by the time the attack lands.
+    defender.buildingdata["594"] = { ...defender.buildingdata["594"], l: 3, cU: 30, cL: 32_400 };
+    store.set(`sight:${DEFENDER_OWNER}`, JSON.stringify({ sources: [], revealed: [] }));
+    await arm();
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+    expect(defender.buildingdata["594"].l).toBe(4);
+    expect(defender.flinger).toBe(4);
+    expect(store.has(`sight:${DEFENDER_OWNER}`)).toBe(false);
+  }, REPLAY_TIMEOUT_MS);
+
+  test("a wild camp's flinger column is left alone", async () => {
+    defender.flinger = 7;
+    await arm();
+
+    expect(await finaliseAbandonedAttack(BASESAVEID, "test")).toBe("finalised");
+
+    expect(defender.flinger).toBe(7);
   }, REPLAY_TIMEOUT_MS);
 });

@@ -1,3 +1,4 @@
+import { quietLogin } from "@/game/quietLogin";
 import { markTipsSeen } from "@/api/tips";
 import { GuideScreen } from "@/game/guide/guideBus";
 import { emergencePlaying } from "@/game/inferno/emergenceHold";
@@ -72,7 +73,7 @@ const otherBobTalking = (): boolean =>
 const touch = (): boolean =>
   typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
 
-const runner = new TipRunner({ send: markTipsSeen, createView, touch });
+const runner = new TipRunner({ send: markTipsSeen, createView, touch, quiet: quietLogin });
 
 /** The own yard's controls while it is up: the tips hide over its planner. */
 let yardScene: YardSceneControls | null = null;

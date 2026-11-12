@@ -132,6 +132,9 @@ describe("the dev-only guard", () => {
     expect(tends("seeded", { seeded: false })).toBe(false);
     expect(tends("seeded", {})).toBe(false);
     expect(tends("retired", { seeded: true })).toBe(false);
+    // Bots retired (owner, 12 Nov 2026): no active bot is tended; seeded players still are.
+    expect(tends("active", { retired: true, seeded: true })).toBe(false);
+    expect(tends("seeded", { retired: true, seeded: true })).toBe(true);
   });
 
   test("the sweep books seeded players' first grows only when told to", async () => {
@@ -144,9 +147,12 @@ describe("the dev-only guard", () => {
     } as unknown as EntityManager;
     await bookFirstGrows(em, NOW);
     await bookFirstGrows(em, NOW, true);
-    expect(calls[0]!.sql).toContain("(b.state = 'active' OR (?::boolean AND b.state = 'seeded'))");
-    expect(calls[0]!.params).toEqual([NOW, 3600, false]);
-    expect(calls[1]!.params).toEqual([NOW, 3600, true]);
+    // Bots retired (owner, 12 Nov 2026): seeded players only.
+    await bookFirstGrows(em, NOW, true, false);
+    expect(calls[0]!.sql).toContain("((?::boolean AND b.state = 'active') OR (?::boolean AND b.state = 'seeded'))");
+    expect(calls[0]!.params).toEqual([NOW, 3600, true, false]);
+    expect(calls[1]!.params).toEqual([NOW, 3600, true, true]);
+    expect(calls[2]!.params).toEqual([NOW, 3600, false, true]);
   });
 
   test("giving yards on production is refused before anything is read", async () => {

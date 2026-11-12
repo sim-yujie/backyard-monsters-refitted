@@ -44,6 +44,7 @@ const SetMapVersionSchema = z.object({
  * touched. The Flash client sent NONE when an upgraded Map Room was recycled
  * (`client/scripts/BUILDING11.as:216-226`); the revamp refuses that recycle too.
  * - V2:   Requires Town Hall level 6. Joins or creates an MR2 world and marks mr2upgraded.
+ *         A save already in a Map Room 2 world keeps its world and home cell.
  * - V3:   Refused (`mapRoom3ClosedErr`, security audit 2026-10-29, C1). Map
  *         Room 3 took an attack's cost and result from the client, and the web
  *         client never had it. A save already on it can still leave with NONE.
@@ -94,6 +95,12 @@ export const setMapVersion: KoaController = async (ctx) => {
 
     case MapRoomVersion.V2: {
       if (save.mapversion === MapRoomVersion.V3) break;
+
+      // Already in a Map Room 2 world: nothing to do. A repeat request (an old
+      // Flash client, or one made by hand) used to send the player through
+      // `joinOrCreateWorld` again, which picks a random world and gives a new
+      // home cell there, leaving the old one behind (upstream 7e200bb81).
+      if (save.mapversion === MapRoomVersion.V2 && save.worldid) break;
 
       // Kept: `joinOrCreateWorld` may place a player already on Map Room 2 in
       // another world without `leaveWorld`, which would strand their alliance.

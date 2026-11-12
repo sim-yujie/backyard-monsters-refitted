@@ -4,7 +4,15 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { EventView } from "@/api/events";
-import { claimedLine, EVENT_EXTRAS, EventsPanel, nextText, rewardBadge, type EventsPanelView } from "./EventsPanel";
+import {
+  claimedLine,
+  EVENT_EXTRAS,
+  EventsPanel,
+  goalsBar,
+  nextText,
+  rewardBadge,
+  type EventsPanelView,
+} from "./EventsPanel";
 
 /** The page's own CSS, read as text: jsdom lays nothing out. */
 const eventsCss = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "events.css"), "utf8");
@@ -411,7 +419,22 @@ describe("Layout faults (picture tester, 9 Nov)", () => {
 });
 
 describe("EventsPanel: the New to Map Room 2 card", () => {
-  const welcome = { startsAt: 0, endsAt: 10 * 86_400, daysLeft: 10, takeover: true, kit: false };
+  // Day 1: the kit used today, the takeover ready.
+  const welcome = {
+    startsAt: 0,
+    endsAt: 10 * 86_400,
+    daysLeft: 10,
+    sets: 7,
+    takeover: true,
+    kit: false,
+    takeoverLeft: 7,
+    kitLeft: 6,
+    takeoverToday: false,
+    kitToday: true,
+    nextDayAt: 86_400,
+    takeoverUses: [],
+    kitUses: [60],
+  };
 
   it("puts the card first, before the events, while the days run", () => {
     const { panel } = mounted();
@@ -420,8 +443,8 @@ describe("EventsPanel: the New to Map Room 2 card", () => {
     expect(cards[0]?.dataset["event"]).toBe("mr2-welcome");
     expect(cards[1]?.querySelector(".events-card__title")?.textContent).toBe("Halloween");
     expect(cards[0]?.querySelector("[data-welcome-ends]")?.textContent).toBe("10 days left");
-    expect(cards[0]?.querySelector('[data-reward="takeover"] .events-welcome__state')?.textContent).toBe("Ready");
-    expect(cards[0]?.querySelector('[data-reward="kit"] .events-welcome__state')?.textContent).toBe("Used");
+    expect(cards[0]?.querySelector('[data-reward="takeover"] .events-welcome__state')?.textContent).toBe("Ready today");
+    expect(cards[0]?.querySelector('[data-reward="kit"] .events-welcome__state')?.textContent).toBe("Used today, back tomorrow");
     expect(cards[0]?.querySelector(".events-welcome__help-button")?.textContent).toBe("?");
     panel.close();
   });
@@ -435,12 +458,12 @@ describe("EventsPanel: the New to Map Room 2 card", () => {
     panel.close();
   });
 
-  it("keeps the card with both rewards used", () => {
+  it("keeps the card with all 7 of both used", () => {
     const { panel } = mounted();
-    panel.render(list([event()], { mr2Welcome: { ...welcome, takeover: false, kit: false } }));
+    panel.render(list([event()], { mr2Welcome: { ...welcome, takeover: false, kit: false, takeoverLeft: 0, kitLeft: 0 } }));
     const card = panel.element.querySelector(".events-card--mr2-welcome");
     expect(card).not.toBeNull();
-    expect(card?.querySelectorAll(".events-welcome__state--used")).toHaveLength(2);
+    expect(card?.querySelectorAll(".events-welcome__state--done")).toHaveLength(2);
     expect(card?.querySelectorAll(".events-welcome__mark")).toHaveLength(10);
     panel.close();
   });
@@ -482,6 +505,8 @@ describe("EventsPanel: the New to Map Room 2 card", () => {
     panel.render(list([], { mr2Welcome: welcome }));
     panel.tick(8 * 86_400 + 30);
     expect(panel.element.querySelector("[data-welcome-ends]")?.textContent).toBe("2 days left");
+    // The kit used on day 1 is back after the daily reset.
+    expect(panel.element.querySelector('[data-reward="kit"] .events-welcome__state')?.textContent).toBe("Ready today");
     expect(panel.element.querySelector('[data-day="9"]')?.classList.contains("events-welcome__mark--today")).toBe(true);
     expect(panel.element.querySelector('[data-day="1"]')?.classList.contains("events-welcome__mark--gone")).toBe(true);
     panel.close();
@@ -504,5 +529,63 @@ describe("EventsPanel: the New to Map Room 2 card", () => {
     const phone = css.slice(css.lastIndexOf("@media (width <= 620px)"));
     expect(phone).toMatch(/\.events-welcome__days \{\s*grid-row: 2;/);
     expect(css).toMatch(/:root\[data-skin="flash"\] \.events-card--mr2-welcome \{/);
+  });
+});
+
+describe("rewardBadge: Korath's powers (Monster Madness)", () => {
+  it("shows Flash's power portrait and its short name", () => {
+    const badge = rewardBadge({ kind: "korath", power: 2 });
+    expect(badge.classList).toContain("events-reward--korath");
+    expect(badge.querySelector<HTMLImageElement>(".events-reward__image--korath")!.getAttribute("src")).toBe(
+      "/events/korath-power-2.png",
+    );
+    expect(badge.querySelector(".events-reward__figure")?.textContent).toBe("Fire");
+    expect(rewardBadge({ kind: "korath", power: 3 }).querySelector(".events-reward__figure")?.textContent).toBe("Fists");
+  });
+
+  it("is never signed as a gain", () => {
+    const gained = rewardBadge({ kind: "korath", power: 1 }, true);
+    expect(gained.classList).not.toContain("events-reward--gain");
+    expect(gained.querySelector(".events-reward__figure")?.textContent).toBe("Burn");
+  });
+});
+
+describe("EventsPanel: Monster Madness goals", () => {
+  const madness = (counter: number): EventView =>
+    event({
+      id: "monster-madness-1",
+      title: "Monster Madness",
+      kind: "monster-madness",
+      calendar: null,
+      ladder: {
+        label: "Takeover points",
+        counter,
+        tiers: [
+          { need: 42_000_000, rewards: [{ kind: "korath", power: 1 }], claimed: false },
+          { need: 94_500_000, rewards: [{ kind: "korath", power: 2 }], claimed: false },
+          { need: 160_125_000, rewards: [{ kind: "korath", power: 3 }], claimed: false },
+        ],
+      },
+    });
+
+  it("draws one bar to the top goal, with a tick at each goal", () => {
+    const bar = goalsBar(madness(50_000_000).ladder!);
+    expect(bar.querySelector<HTMLElement>(".events-goals__fill")!.style.width).toBe("31.2%");
+    const ticks = [...bar.querySelectorAll<HTMLElement>(".events-goals__tick")];
+    expect(ticks.map((tick) => tick.style.left)).toEqual(["26.2%", "59%", "100%"]);
+    expect(ticks.map((tick) => tick.classList.contains("events-goals__tick--done"))).toEqual([true, false, false]);
+    expect([...bar.querySelectorAll(".events-goals__mark")].map((mark) => mark.textContent)).toEqual([
+      "42M",
+      "94.5M",
+      "160.1M",
+    ]);
+    expect(bar.querySelector(".events-goals__bar")!.getAttribute("aria-valuenow")).toBe("50000000");
+  });
+
+  it("is on the Monster Madness card only", () => {
+    const { panel } = mounted();
+    panel.render(list([madness(50_000_000)]));
+    expect(panel.element.querySelector(".events-ladder--goals .events-goals__bar")).not.toBeNull();
+    expect(panel.element.querySelectorAll(".events-tier__claim")).toHaveLength(1);
   });
 });

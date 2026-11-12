@@ -4,6 +4,8 @@ import {
   type BrainStats,
   type BrainWeights,
   type ChampionStance,
+  type HabitBook,
+  type HabitStats,
 } from "../game-rules/combat/index.js";
 
 /**
@@ -28,13 +30,22 @@ export const ChampionSchema = z.object({
  * A champion as the save stores it: what the client may send, plus its
  * learned brain (issue #219, `game-rules/combat/brain.ts`), `b` its weights
  * and `bs` what it has learned from. Only the server writes those two, after
- * an attack lands (`services/base/combat/championBrain.ts`): they are kept
+ * an attack lands (`services/base/combat/championBrain.ts`), as are `h` and
+ * `hs` below: they are kept
  * off {@link ChampionSchema} on purpose, so zod drops them from every list a
  * client sends and no save can forge a brain.
  */
 export type ChampionData = z.infer<typeof ChampionSchema> & {
   b?: BrainWeights;
   bs?: BrainStats;
+  /**
+   * Its habits per Mode and what it learned them from (champion modes round
+   * 2, `game-rules/combat/habits.ts`), server-written like `b` and `bs`. A
+   * champion with habits drops its old `b` and `bs` the first time it
+   * learns; Krallen keeps them.
+   */
+  h?: HabitBook;
+  hs?: HabitStats;
 };
 
 /**

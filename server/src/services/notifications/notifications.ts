@@ -1,6 +1,7 @@
 import type { EntityManager } from "@mikro-orm/core";
 import { Notification, type NotificationKind } from "../../database/models/notification.model.js";
 import { logger } from "../../utils/logger.js";
+import { mutedSetOf, visibleEntries, type MutableCategory } from "./notificationCategories.js";
 
 /**
  * The yard's notification list behind the bell (issue #257; owner decisions
@@ -28,6 +29,16 @@ import { logger } from "../../utils/logger.js";
  * older than {@link NOTIFICATION_MAX_AGE_MS}: every write prunes, and every
  * read leaves out what is too old. Every query names the player, so no one
  * reads or marks another player's rows.
+ *
+ * **Categories turned off** (owner 11 Nov 2026, `notificationCategories.ts`,
+ * `user.notifications_off`): a muted entry is still written but never shown.
+ * The list and the bell's count leave out the muted entries of each row, and
+ * a row with nothing left; a row written with nothing the player wants is
+ * written already read, so it never lights the bell. Turning a category back
+ * on brings its last week back into the list, quietly. The prune keeps the
+ * newest 20 rows the player can see and, apart, the newest 20 they cannot,
+ * so a noisy muted category never pushes the rows they want out of the list.
+ * A player with nothing muted (the default) takes the plain queries below.
  */
 
 /** The most rows a player keeps. */
@@ -78,12 +89,55 @@ export const awayBatches = (completed: readonly JobLike[]): JobLike[][] =>
 const cutoffOf = (now: Date): Date => new Date(now.getTime() - NOTIFICATION_MAX_AGE_MS);
 
 /**
- * Drops the player's rows older than 7 days and all but their newest 20.
+ * The categories the player turned off (`user.notifications_off`): none for
+ * a player who never changed it, or a row that is not there.
+ */
+export const mutedCategories = async (em: EntityManager, userid: number): Promise<ReadonlySet<MutableCategory>> => {
+  const rows: unknown = await em
+    .getConnection()
+    .execute(`SELECT "notifications_off" FROM "bym"."user" WHERE "userid" = ?`, [userid]);
+  const first = Array.isArray(rows) ? (rows[0] as { notifications_off?: unknown } | undefined) : undefined;
+  return mutedSetOf(first?.notifications_off);
+};
+
+/** Whether a row shows anything once the muted entries are left out; a row with no entries always shows. */
+const showsAnything = (kind: string, jobs: unknown, muted: ReadonlySet<string>): boolean => {
+  const entries = Array.isArray(jobs) ? jobs : [];
+  return entries.length === 0 || visibleEntries(kind, entries, muted).length > 0;
+};
+
+/**
+ * Drops the player's rows older than 7 days and all but their newest 20; with
+ * categories turned off, all but the newest 20 they can see and the newest 20
+ * they cannot.
  *
  * @param em - Any entity manager; the deletes run as they are called.
+ * @param muted - The player's muted categories, when the caller has read them.
  */
-export const pruneNotifications = async (em: EntityManager, userid: number, now: Date = new Date()): Promise<void> => {
+export const pruneNotifications = async (
+  em: EntityManager,
+  userid: number,
+  now: Date = new Date(),
+  muted?: ReadonlySet<string>,
+): Promise<void> => {
   await em.nativeDelete(Notification, { userid, created_at: { $lt: cutoffOf(now) } });
+  const off = muted ?? (await mutedCategories(em, userid));
+  if (off.size > 0) {
+    const found: unknown = await em.getConnection().execute(
+      `SELECT "id", "kind", "jobs" FROM "bym"."notification" WHERE "userid" = ? ORDER BY "created_at" DESC, "id" DESC`,
+      [userid],
+    );
+    const rows = (Array.isArray(found) ? found : []) as { id: number | string; kind: string; jobs: unknown }[];
+    let shown = 0;
+    let hidden = 0;
+    const drop: number[] = [];
+    for (const row of rows) {
+      const kept = showsAnything(row.kind, row.jobs, off) ? ++shown : ++hidden;
+      if (kept > NOTIFICATION_LIMIT) drop.push(Number(row.id));
+    }
+    if (drop.length > 0) await em.nativeDelete(Notification, { userid, id: { $in: drop } });
+    return;
+  }
   await em.getConnection().execute(
     `DELETE FROM "bym"."notification"
       WHERE "userid" = ?
@@ -98,38 +152,71 @@ export const pruneNotifications = async (em: EntityManager, userid: number, now:
 };
 
 /**
- * Writes one row per batch, then prunes. Nothing for no batches.
+ * Writes one row per batch, then prunes. Nothing for no batches. A batch with
+ * nothing the player wants (every entry in a category they turned off) is
+ * written already read, so it never lights the bell.
  *
  * @param baseid - The outpost the jobs finished on; null for the main yard.
+ * @param muted - The player's muted categories, when the caller has read them.
  */
 export const recordNotifications = async (
   em: EntityManager,
   userid: number,
   baseid: string | null,
   kind: NotificationKind,
-  batches: readonly (readonly JobLike[])[],
+  batches: readonly (readonly unknown[])[],
   now: Date = new Date(),
+  muted?: ReadonlySet<string>,
 ): Promise<void> => {
   if (batches.length === 0) return;
+  const off = muted ?? (await mutedCategories(em, userid));
   await em.insertMany(
     Notification,
-    batches.map((jobs) => ({ userid, baseid, kind, jobs: [...jobs], read_at: null, created_at: now })),
+    batches.map((jobs) => ({
+      userid,
+      baseid,
+      kind,
+      jobs: [...jobs],
+      read_at: showsAnything(kind, jobs, off) ? null : now,
+      created_at: now,
+    })),
   );
-  await pruneNotifications(em, userid, now);
+  await pruneNotifications(em, userid, now, off);
 };
 
-/** The player's notifications, newest first: at most 20, none older than 7 days. */
+/** A row as the player sees it: the muted entries left out, or null when nothing is left. */
+export const shownView = (view: NotificationView, muted: ReadonlySet<string>): NotificationView | null => {
+  if (muted.size === 0 || view.jobs.length === 0) return view;
+  const jobs = visibleEntries(view.kind, view.jobs, muted);
+  return jobs.length === 0 ? null : { ...view, jobs };
+};
+
+/**
+ * The player's notifications, newest first: at most 20, none older than 7
+ * days, the categories they turned off left out.
+ *
+ * @param muted - The player's muted categories, when the caller has read them.
+ */
 export const listNotifications = async (
   em: EntityManager,
   userid: number,
   now: Date = new Date(),
+  muted?: ReadonlySet<string>,
 ): Promise<NotificationView[]> => {
+  const off = muted ?? (await mutedCategories(em, userid));
   const rows = await em.find(
     Notification,
     { userid, created_at: { $gte: cutoffOf(now) } },
-    { orderBy: { created_at: "DESC", id: "DESC" }, limit: NOTIFICATION_LIMIT },
+    // With nothing muted the newest 20 are the list; otherwise every row is
+    // read (the prune keeps at most 40) and the shown 20 picked from them.
+    { orderBy: { created_at: "DESC", id: "DESC" }, ...(off.size === 0 && { limit: NOTIFICATION_LIMIT }) },
   );
-  return rows.map(notificationView);
+  const views = rows.map(notificationView);
+  if (off.size === 0) return views;
+  return views
+    .map((view) => shownView(view, off))
+    .filter((view): view is NotificationView => view !== null)
+    .slice(0, NOTIFICATION_LIMIT);
 };
 
 /** How many of the player's listed notifications are unread. */
@@ -137,7 +224,10 @@ export const unreadNotificationCount = async (
   em: EntityManager,
   userid: number,
   now: Date = new Date(),
+  muted?: ReadonlySet<string>,
 ): Promise<number> => {
+  const off = muted ?? (await mutedCategories(em, userid));
+  if (off.size > 0) return (await listNotifications(em, userid, now, off)).filter((view) => !view.read).length;
   const unread = await em.count(Notification, { userid, read_at: null, created_at: { $gte: cutoffOf(now) } });
   return Math.min(unread, NOTIFICATION_LIMIT);
 };
@@ -193,8 +283,9 @@ export const notifyAndCount = async (
   try {
     const now = new Date();
     const batches = kind === "away" ? awayBatches(completed) : liveBatches(completed);
-    await recordNotifications(em, userid, baseid, kind, batches, now);
-    return await unreadNotificationCount(em, userid, now);
+    const muted = await mutedCategories(em, userid);
+    await recordNotifications(em, userid, baseid, kind, batches, now, muted);
+    return await unreadNotificationCount(em, userid, now, muted);
   } catch (err) {
     logger.warn("Notifications for user {userid} failed: {error}", {
       userid,

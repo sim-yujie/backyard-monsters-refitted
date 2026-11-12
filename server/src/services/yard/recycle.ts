@@ -10,8 +10,7 @@ import {
   housingUsed,
 } from "../monsters/transferRules.js";
 import { hallName, TOWN_HALL_TYPE, yardKindOf, type ResourceAmounts } from "../yardplanner/costs.js";
-import { MAP_ROOM_TYPE } from "./buildingJobs.js";
-import { OBSERVATORY } from "../../config/AllianceConfig.js";
+import { MAP_ROOM_TYPE, OBSERVATORY_TYPE } from "./buildingJobs.js";
 import { fundPurse, isSurfaceInferno, purseReport } from "./surfaceInferno.js";
 import { academyLevels, isMapRoom3Monsters } from "./catchUpMonsters.js";
 import { fitCredit } from "./credit.js";
@@ -180,7 +179,7 @@ const refuse = (save: RecycleSave, building: BuildingData, id: number, now: numb
     throw refused("mapRoom", "The Map Room cannot be recycled: its level is your map.");
   }
   // The pass into an alliance (alliances phase 0): one per yard, 36 hours to build.
-  if (type === OBSERVATORY.type) {
+  if (type === OBSERVATORY_TYPE) {
     throw refused("observatory", "The Observatory cannot be recycled: it is your pass into an alliance.");
   }
   // The server placed it and the server takes it away once it is sprung

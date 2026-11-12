@@ -185,7 +185,21 @@ describe("Events: the button while its page is open", () => {
 
 /** New to Map Room 2 (owner, 9 Nov 2026): the card alone keeps the Events button on the yard. */
 describe("Events: the New to Map Room 2 card", () => {
-  const welcome: Mr2WelcomeStatus = { startsAt: 0, endsAt: 10 * 86_400, daysLeft: 10, takeover: true, kit: true };
+  const welcome: Mr2WelcomeStatus = {
+    startsAt: 0,
+    endsAt: 10 * 86_400,
+    daysLeft: 10,
+    sets: 7,
+    takeover: true,
+    kit: true,
+    takeoverLeft: 7,
+    kitLeft: 7,
+    takeoverToday: false,
+    kitToday: false,
+    nextDayAt: 86_400,
+    takeoverUses: [],
+    kitUses: [],
+  };
 
   it("shows the Events button for the card when no event is on, and hides it with neither", async () => {
     const { door } = await setup([], welcome);

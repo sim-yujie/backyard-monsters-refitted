@@ -16,6 +16,8 @@ import { discardDefenceReplayLoad } from "../defences/defenceReplayLoad.js";
 import { recordDefenceReplay } from "../defences/recordDefenceReplay.js";
 import { isMR3Structure } from "../maproom/v3/utils/isMR3Structure.js";
 import { advanceBuildingTimers } from "./advanceBuildingTimers.js";
+import { invalidateSightAfterLanding } from "../maproom/sight/sightService.js";
+import { syncAttackedYardLevels } from "../yard/derivedLevels.js";
 import { beginAttackLanding, commitAttackLanding, rollbackAttackLanding } from "./attackLanding.js";
 import { checkpointExpired, checkpointSession, type AttackCheckpoint } from "./attackCheckpoint.js";
 import {
@@ -387,8 +389,11 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   const landedDamage = defender.damage ?? 0;
 
   defender.attackid = 0;
+  const flingerBefore = defender.flinger;
   if (defender.buildingdata) {
     defender.buildingdata = advanceBuildingTimers(defender.buildingdata, storedHealthData, now - defender.savetime);
+    // An upgrade the catch-up just finished counts for the cached levels too.
+    syncAttackedYardLevels(defender);
   }
   defender.id = defender.savetime;
   defender.savetime = now;
@@ -396,6 +401,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   await postgres.em.flush();
   // The loot on both sides and `attackid = 0` together.
   await commitAttackLanding();
+  await invalidateSightAfterLanding(defender, flingerBefore);
 
   // Event loot (the monthly Krallen Hunt), before the cap, once: still under
   // the final lock, and after the commit, so a counter that fails to write

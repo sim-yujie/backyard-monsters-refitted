@@ -144,6 +144,7 @@ import { WorldChatBox } from "@/ui/chat/WorldChatBox";
 import { centredLayout, closeCentreWindow, onCentreWindowOpen } from "@/ui/centreWindow";
 import { openCountryPrompt } from "@/ui/chat/CountryPrompt";
 import { supportReminder } from "@/game/support/supportReminder";
+import { quietLogin, setQuietLoginFrom } from "@/game/quietLogin";
 import { reportLook } from "@/app/lookReport";
 import {
   MONSTERS_TAB_ORDER,
@@ -1005,6 +1006,8 @@ export class YardScene implements Scene {
       // Flash client drew it outside BUILD mode. The own yard keeps its edge,
       // and is held by a store from here on.
       const store = target ? null : this.startStore(response, context);
+      // A local test server's `QUIET_LOGIN` (`game/quietLogin.ts`): the own yard's load says so.
+      if (store && !tribe) setQuietLoginFrom(response);
       const yard = store ? store.yard : readYard(response, { foreign: true });
       this.yard = yard;
       this.save = response;
@@ -1022,7 +1025,7 @@ export class YardScene implements Scene {
       }
       // Once, after login: where the player is from, for a country chat room
       // (owner 3 Nov 2026). The server sends `countryask` until it is answered or put off.
-      if (store?.kind === "main" && response.countryask) {
+      if (store?.kind === "main" && response.countryask && !quietLogin()) {
         openCountryPrompt({
           container: context.overlay.modal,
           onSaved: (settings) => worldChat.setCountryRoom(settings.countryChannel, settings.country),
@@ -1033,7 +1036,7 @@ export class YardScene implements Scene {
       // (`game/support/supportReminder.ts` keeps the rest of the rule).
       this.stopSupportOffer?.();
       this.stopSupportOffer = null;
-      if (store?.kind === "main" && !tribe) {
+      if (store?.kind === "main" && !tribe && !quietLogin()) {
         this.stopSupportOffer = supportReminder.offer(() => {
           if (this.context !== context || this.store !== store) return null;
           const guide = store.save.onboarding?.guide.state;
@@ -2324,6 +2327,8 @@ export class YardScene implements Scene {
         this.refreshStatus();
       },
       onExit: () => this.closePlanner(),
+      // The yard picture's caption (owner, 2026-11-11): who, and how far along.
+      snapshotCaption: () => ({ name: getSession()?.username ?? null, level: this.store?.playerLevel ?? null }),
       // Compare (#9): the main yard's layouts beside the plan.
       ...(this.store && this.store.kind === "main"
         ? {

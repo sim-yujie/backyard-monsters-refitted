@@ -156,6 +156,8 @@ export type YardSlices = Partial<
     | "lockerdata"
     | "academy"
     | "champion"
+    // Event prizes kept in the yard (a Korath power, `services/events/korathPower.ts`).
+    | "rewards"
     | "mushrooms"
     | "researchdata"
     | "firedtraps"

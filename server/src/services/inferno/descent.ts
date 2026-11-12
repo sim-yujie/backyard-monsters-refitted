@@ -1,8 +1,6 @@
 import { molochTribes } from "../../game-data/tribes/inferno/molochTribes.js";
 import {
   bucketCost,
-  championByType,
-  championStat,
   RESOURCE_KEYS,
   type FlingEvent,
   type FlingLog,
@@ -11,6 +9,7 @@ import {
 } from "../../game-rules/combat/index.js";
 import type { SaveData } from "../../types/EntityData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
+import { championRoomOf } from "../base/combat/flingRoom.js";
 import { EMERGENCE_LEVELS } from "./emergence.js";
 import { DESCENT_YARDS, type InfernoProgressRecord } from "./infernoProgress.js";
 
@@ -147,11 +146,7 @@ export const descentFightableLog = (log: FlingLog, capacity: number, levels: Mon
       events.push(event);
       continue;
     }
-    let room = capacity;
-    if (event.champion) {
-      const id = championByType(event.champion.t);
-      room -= id ? championStat(id, "bucket", event.champion.l) : 0;
-    }
+    let room = capacity - championRoomOf(event.champion);
     const monsters: Record<string, number> = {};
     for (const id of Object.keys(event.monsters).sort()) {
       const each = bucketCost({ [id]: 1 }, levels);

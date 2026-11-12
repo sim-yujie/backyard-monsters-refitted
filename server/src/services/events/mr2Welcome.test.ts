@@ -10,7 +10,10 @@ import {
   cheapTakeoverPrice,
   claimWelcome,
   memoryWelcomeStore,
+  MR2_WELCOME_DAYS,
   MR2_WELCOME_SECONDS,
+  MR2_WELCOME_SETS,
+  newWelcome,
   onMapRoom2,
   recordMr2Join,
   useWelcomeStore,
@@ -21,11 +24,20 @@ import {
 } from "./mr2Welcome.js";
 
 const DAY = 86_400;
+const HOUR = 3_600;
+/** 08:00 UTC; the next daily reset is 16 hours later. */
 const T0 = 1_800_000_000;
+const MIDNIGHT = T0 + 16 * HOUR;
 const em = {} as EntityManager;
-const fresh = { start: T0, takeoverUsed: false, kitUsed: false };
+const fresh = newWelcome(T0);
 
-describe("the 10 days", () => {
+describe("the pass days", () => {
+  test("10 days with 7 sets (owner, 11 Nov)", () => {
+    expect(MR2_WELCOME_DAYS).toBe(10);
+    expect(MR2_WELCOME_SETS).toBe(7);
+    expect(MR2_WELCOME_SECONDS).toBe(10 * DAY);
+  });
+
   test("open from the start for exactly 10 days", () => {
     expect(welcomeReady(fresh, "takeover", T0 - 1)).toBe(false);
     expect(welcomeReady(fresh, "takeover", T0)).toBe(true);
@@ -34,36 +46,56 @@ describe("the 10 days", () => {
     expect(welcomeReady(null, "kit", T0)).toBe(false);
   });
 
-  test("a used reward is not ready", () => {
-    expect(welcomeReady({ ...fresh, takeoverUsed: true }, "takeover", T0)).toBe(false);
-    expect(welcomeReady({ ...fresh, takeoverUsed: true }, "kit", T0)).toBe(true);
+  test("one of each a day: used today is back at the daily reset (UTC midnight), the other reward unaffected", () => {
+    const kitToday = { ...fresh, kitUses: [T0 + 60], kitDay: "2027-01-15" };
+    expect(new Date(T0 * 1000).toISOString().slice(0, 10)).toBe("2027-01-15");
+    expect(welcomeReady(kitToday, "kit", T0 + HOUR)).toBe(false);
+    expect(welcomeReady(kitToday, "kit", MIDNIGHT - 1)).toBe(false);
+    expect(welcomeReady(kitToday, "kit", MIDNIGHT)).toBe(true);
+    expect(welcomeReady(kitToday, "takeover", T0 + HOUR)).toBe(true);
   });
 
-  test("the card: days left rounded up, each reward's state, gone only when the 10 days are over", () => {
+  test("7 of each, then none; days not played lose nothing", () => {
+    const six = { ...fresh, takeoverUses: [1, 2, 3, 4, 5, 6], takeoverDay: "2027-01-17" };
+    // Six used by day 3, none used since: the 7th is still there on day 10.
+    expect(welcomeReady(six, "takeover", T0 + 9 * DAY)).toBe(true);
+    const seven = { ...six, takeoverUses: [...six.takeoverUses, 7] };
+    expect(welcomeReady(seven, "takeover", T0 + 9 * DAY)).toBe(false);
+    expect(welcomeReady(seven, "kit", T0 + 9 * DAY)).toBe(true);
+  });
+
+  test("the card: days left of 10, each reward's left of 7 and today's state, gone only when the days are over", () => {
     expect(welcomeStatus(fresh, T0)).toEqual({
       startsAt: T0,
       endsAt: T0 + 10 * DAY,
       daysLeft: 10,
+      sets: 7,
       takeover: true,
       kit: true,
-      takeoverUsedAt: null,
-      kitUsedAt: null,
+      takeoverLeft: 7,
+      kitLeft: 7,
+      takeoverToday: false,
+      kitToday: false,
+      nextDayAt: MIDNIGHT,
+      takeoverUses: [],
+      kitUses: [],
     });
     expect(welcomeStatus(fresh, T0 + 9 * DAY + 1)?.daysLeft).toBe(1);
-    expect(welcomeStatus({ ...fresh, kitUsed: true }, T0 + DAY)).toMatchObject({ daysLeft: 9, takeover: true, kit: false });
-    // Both used: the card stays for the rest of the 10 days (owner, 9 Nov), with when each was used.
-    expect(
-      welcomeStatus({ ...fresh, kitUsed: true, takeoverUsed: true, takeoverAt: T0 + 100, kitAt: T0 + 2 * DAY }, T0 + 3 * DAY),
-    ).toMatchObject({ daysLeft: 7, takeover: false, kit: false, takeoverUsedAt: T0 + 100, kitUsedAt: T0 + 2 * DAY });
-    // Used before the time was kept: Used, with no day.
-    expect(welcomeStatus({ ...fresh, kitUsed: true, takeoverUsed: true }, T0)).toMatchObject({
+    const used = { ...fresh, takeoverUses: [null, T0 + 2 * DAY], takeoverDay: "2027-01-17", kitUses: [T0 + 100], kitDay: "2027-01-15" };
+    expect(welcomeStatus(used, T0 + 2 * DAY + HOUR)).toMatchObject({
+      daysLeft: 8,
       takeover: false,
-      kit: false,
-      takeoverUsedAt: null,
-      kitUsedAt: null,
+      kit: true,
+      takeoverLeft: 5,
+      kitLeft: 6,
+      takeoverToday: true,
+      kitToday: false,
+      takeoverUses: [T0 + 2 * DAY],
+      kitUses: [T0 + 100],
     });
-    // A time on a reward not used is not shown.
-    expect(welcomeStatus({ ...fresh, takeoverAt: T0 }, T0)?.takeoverUsedAt).toBeNull();
+    // All 7 used: the card stays for the rest of the days (owner, 9 Nov).
+    const all = { ...fresh, takeoverUses: [1, 2, 3, 4, 5, 6, 7], kitUses: [1, 2, 3, 4, 5, 6, 7] };
+    expect(welcomeStatus(all, T0 + 8 * DAY)).toMatchObject({ takeover: false, kit: false, takeoverLeft: 0, kitLeft: 0 });
     expect(welcomeStatus(fresh, T0 + 10 * DAY)).toBeNull();
     expect(welcomeStatus(null, T0)).toBeNull();
   });
@@ -76,7 +108,7 @@ describe("the 10 days", () => {
   });
 });
 
-describe("when the 10 days start", () => {
+describe("when the days start", () => {
   let previous = welcomeStore();
   afterEach(() => useWelcomeStore(previous));
 
@@ -96,7 +128,7 @@ describe("when the 10 days start", () => {
     // The first server start with the feature fixes the launch time.
     expect(await store.launchTime(em, T0)).toBe(T0);
     expect(await welcomeState(em, 8, true, T0 + 3 * DAY)).toEqual(fresh);
-    expect(await welcomeState(em, 9, true, T0 + 5 * DAY)).toEqual({ ...fresh });
+    expect(await welcomeState(em, 9, true, T0 + 5 * DAY)).toEqual(fresh);
     expect(welcomeStatus(await welcomeState(em, 9, true, T0 + 5 * DAY), T0 + 5 * DAY)?.daysLeft).toBe(5);
   });
 
@@ -108,17 +140,22 @@ describe("when the 10 days start", () => {
     expect(store.rows.size).toBe(0);
   });
 
-  test("each reward is claimed once, only inside the 10 days", async () => {
+  test("one of each a day, 7 of each, only inside the days", async () => {
     const store = memoryWelcomeStore(T0);
     previous = useWelcomeStore(store);
     await recordMr2Join(em, 11, T0);
 
     expect(await claimWelcome(em, 11, "takeover", T0 + 10 * DAY)).toBe(false);
-    expect(await claimWelcome(em, 11, "takeover", T0 + DAY)).toBe(true);
-    expect(await claimWelcome(em, 11, "takeover", T0 + DAY)).toBe(false);
-    expect(await claimWelcome(em, 11, "kit", T0 + DAY)).toBe(true);
-    expect(await claimWelcome(em, 12, "kit", T0 + DAY)).toBe(false);
-    expect(store.rows.get(11)).toMatchObject({ takeoverAt: T0 + DAY, kitAt: T0 + DAY });
+    expect(await claimWelcome(em, 11, "takeover", T0 + HOUR)).toBe(true);
+    expect(await claimWelcome(em, 11, "takeover", T0 + 2 * HOUR)).toBe(false);
+    expect(await claimWelcome(em, 11, "kit", T0 + 2 * HOUR)).toBe(true);
+    expect(await claimWelcome(em, 12, "kit", T0 + HOUR)).toBe(false);
+    expect(store.rows.get(11)).toMatchObject({ takeoverUses: [T0 + HOUR], kitUses: [T0 + 2 * HOUR], takeoverDay: "2027-01-15" });
+    // The next day's takeover, after the reset; then six more days of it.
+    for (let day = 1; day < 7; day++) expect(await claimWelcome(em, 11, "takeover", MIDNIGHT + (day - 1) * DAY + 60)).toBe(true);
+    expect(store.rows.get(11)?.takeoverUses).toHaveLength(7);
+    expect(await claimWelcome(em, 11, "takeover", MIDNIGHT + 7 * DAY)).toBe(false);
+    expect(await claimWelcome(em, 11, "kit", MIDNIGHT + 7 * DAY)).toBe(true);
   });
 });
 

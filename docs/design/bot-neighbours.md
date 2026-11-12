@@ -1,5 +1,16 @@
 # Bot Neighbours for Map Room 1 — Design
 
+> **Retired (owner, 12 Nov 2026):** "bots can be decommissioned from game. we have a
+> sufficiently big population now." `BOTS_RETIRED` (`server/src/config/BotConfig.ts`) holds
+> `BOTS_FILL` and `BOTS_REVENGE` off and never runs the sweep on production (outside it,
+> `BOTS_BRAIN=on` tends only the seeded Map Room 2 dev players). Migration
+> `20261117_RetireBots.ts` moved every active bot to Map Room 2 with no world (state `retired`),
+> dropped every bot job and took the bots out of players' cached neighbour lists, which are
+> searched again on their next read. Bot accounts, yards and rows stay, so attack logs, replays
+> and mail keep their names; `isBot` still keeps them out of logins, leaderboards, gifts and the
+> Inferno. A truce or friend request to a retired bot is never answered and lapses. What follows
+> describes the system as it ran while bots were live.
+
 A design document for issue #233. The owner's request, as settled on 2026-10-03: make sure new
 players always have yards to attack, by filling Map Room 1 neighbour lists with computer-run
 players ("bots") that look and behave like real players.

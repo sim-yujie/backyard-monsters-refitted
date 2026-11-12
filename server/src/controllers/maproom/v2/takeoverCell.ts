@@ -36,6 +36,10 @@ import { recordAchievements, unseenAchievements } from "../../../services/achiev
 import type { AchievementEvents } from "../../../services/achievements/evaluate.js";
 import { claimWelcome, onMapRoom2, readWelcome, welcomeReady } from "../../../services/events/mr2Welcome.js";
 import { noteAllianceEvents } from "../../../services/alliance/allianceProgress.js";
+import { countTakeover, takeoverPoints } from "../../../services/events/takeoverEvents.js";
+import { calculateTribeLevel } from "../../../services/maproom/v2/calculateTribeLevel.js";
+import { outpostValue } from "../../../services/maproom/v2/outpostValue.js";
+import { Tribes } from "../../../enums/Tribes.js";
 
 /** `SELECT … FOR UPDATE` on one save row, refreshed into the identity map. */
 const lockSave = (em: EntityManager, where: { basesaveid: number } | { userid: number; type: string }) =>
@@ -61,6 +65,11 @@ const lockSave = (em: EntityManager, where: { basesaveid: number } | { userid: n
  * The takeover counts towards the taker's achievements in the same
  * transaction, and the answer carries `achievements`, the paid unlocks not
  * yet shown (issue #204).
+ *
+ * While an event that counts takeovers is on (Monster Madness,
+ * `services/events/takeoverEvents.ts`), the outpost's points are added after
+ * the transaction, priced from the outpost as it was before, and the answer
+ * carries `eventPoints`, what each such event counted.
  *
  * @param {Context} ctx - The Koa context object.
  * @throws Will throw an error if the base or base type is invalid.
@@ -132,12 +141,13 @@ export const takeoverCell: KoaController = async (ctx) => {
     // than taking the cell for nothing.
     // The client branches on the cell payload's `b` field, which is base_type, so match it.
     //
-    // The first wild camp in the player's "New to Map Room 2" days uses the
-    // reward up however it is paid for; only a resource payment gets the cheap
-    // price (the Shiny price is the usual one). The claim is one conditional
-    // UPDATE in this transaction, so a refusal below rolls it back and two
-    // takeovers cannot both have it.
-    const welcome = welcomeOpen && (await claimWelcome(em, currentUser.userid, "takeover", now));
+    // A wild camp paid for in resources while the player's "New to Map Room 2"
+    // takeover is ready today gets the cheap price and uses that day's takeover.
+    // Paying Shiny is the usual price, so it leaves the takeover for later
+    // (owner, 11 Nov: "Paying shiny should not count as it is not discounted").
+    // The claim is one conditional UPDATE in this transaction, so a refusal
+    // below rolls it back and two takeovers cannot both have it.
+    const welcome = welcomeOpen && !useShiny && (await claimWelcome(em, currentUser.userid, "takeover", now));
 
     const { resources: cost, shiny: shinyCost } = quoteTakeover({
       cell,
@@ -164,6 +174,15 @@ export const takeoverCell: KoaController = async (ctx) => {
         Operation.SUBTRACT
       );
     }
+
+    // What the outpost scores in a takeover event, read before it changes
+    // hands: a wild camp by its level, as it is priced; an outpost by the
+    // empire value of the buildings it has now.
+    const points = takeoverPoints({
+      tribe: wildCamp,
+      level: wildCamp ? calculateTribeLevel(cell.x, cell.y, Tribes[(cell.x + cell.y) % Tribes.length]!) : 0,
+      empireValue: wildCamp ? 0 : outpostValue(cellSave.buildingdata),
+    });
 
     // Clean up previous owner's save if the cell was player-owned
     const previousOwner = cellSave.userid
@@ -247,10 +266,13 @@ export const takeoverCell: KoaController = async (ctx) => {
     // Spent: the chance was one takeover.
     if (grant) await endTakeoverGrant(cellSave.basesaveid);
 
-    return { originCell, achievements: unseenAchievements(taker), previousOwnerId: previousOwner?.userid };
+    return { originCell, achievements: unseenAchievements(taker), previousOwnerId: previousOwner?.userid, points, now };
   });
 
-  const { originCell: isOriginCell, achievements, previousOwnerId } = result;
+  const { originCell: isOriginCell, achievements, previousOwnerId, points, now } = result;
+
+  // Takeover events (Monster Madness): after the commit, never failing the takeover.
+  const eventPoints = await countTakeover(postgres.em, currentUser.userid, userSave, String(baseid), points, now);
 
   if (isOriginCell) await invalidateWorldsCache();
 
@@ -270,5 +292,9 @@ export const takeoverCell: KoaController = async (ctx) => {
 
   ctx.status = Status.OK;
   // The paid unlocks not yet shown, as yard answers carry them (§9.3).
-  ctx.body = { error: 0, ...(achievements.length > 0 && { achievements }) };
+  ctx.body = {
+    error: 0,
+    ...(achievements.length > 0 && { achievements }),
+    ...(eventPoints.length > 0 && { eventPoints }),
+  };
 };

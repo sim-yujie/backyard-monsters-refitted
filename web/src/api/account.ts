@@ -3,6 +3,7 @@ import { setSessionPicSquare, setSessionUsername } from "./auth";
 import { get, post, postJson } from "./http";
 import { countryOf, type CountrySettings } from "./country";
 import { privacyOf, type PrivacySettings } from "./privacy";
+import { notificationsOffOf, type NotificationCategoryId } from "./notificationSettings";
 import { hexShapeOf, type HexShape } from "@/game/maproom/rules/range";
 import type { AccountResponse, ChangeUsernameResponse, SetAvatarResponse, SettingsResponse } from "./types";
 
@@ -38,6 +39,8 @@ export interface AccountInfo {
   readonly privacy: PrivacySettings;
   /** The player's country and the chat room it opens (owner 3 Nov 2026). */
   readonly country: CountrySettings;
+  /** The bell's notification categories turned off; none by default (owner 11 Nov 2026). */
+  readonly notificationsOff: readonly NotificationCategoryId[];
 }
 
 export const fetchAccount = async (): Promise<AccountInfo> => {
@@ -49,6 +52,7 @@ export const fetchAccount = async (): Promise<AccountInfo> => {
     shinyLocked: response.settings?.shinyLocked === true,
     privacy: privacyOf(response.settings),
     country: countryOf(response.settings),
+    notificationsOff: notificationsOffOf(response.settings),
   };
 };
 

@@ -1,6 +1,7 @@
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import {
   battleCounts,
+  isFarAbove,
   isPlayingNow,
   LIST_SORT_DIRECTIONS,
   LIST_SORT_LABELS,
@@ -250,6 +251,11 @@ export class Mr1ListView {
           const icons = battleIcons(neighbour);
           if (line || icons) {
             const second = el("span", "mr1-row__line", line);
+            // More than the level gap above: allowed, but they can hit back once.
+            if (isFarAbove(neighbour, now)) {
+              second.classList.add("mr1-row__line--warn");
+              second.prepend(icon("alert", 13, "mr1-icon"));
+            }
             if (icons) second.append(icons);
             words.append(second);
           }

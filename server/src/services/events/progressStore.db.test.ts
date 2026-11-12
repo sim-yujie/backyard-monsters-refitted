@@ -120,6 +120,21 @@ describe.skipIf(!dbName)("event progress on a real database", () => {
     );
   });
 
+  test("a takeover counts once per outpost, even when two race", async () => {
+    expect(await store.addTakeover(em(), A, EVENT, "700", 2_000_000)).toBe(2_000_000);
+    const raced = await Promise.all([
+      store.addTakeover(em(), A, EVENT, "701", 1_000_000),
+      store.addTakeover(em(), A, EVENT, "701", 1_000_000),
+    ]);
+    expect(raced.filter((one) => one !== null)).toEqual([3_000_000]);
+    expect(await store.addTakeover(em(), A, EVENT, "700", 2_000_000)).toBeNull();
+    const progress = (await store.read(em(), A, [EVENT])).get(EVENT)!;
+    expect(progress.counter).toBe(3_000_000);
+    expect(progress.data.taken).toEqual(["700", "701"]);
+    // Points from loot or picks on the same row still add.
+    expect(await store.addToCounter(em(), A, EVENT, 5)).toBe(3_000_005);
+  });
+
   test("an unknown player cannot have progress", async () => {
     await expect(store.addToCounter(em(), 995_999, EVENT, 1)).rejects.toThrow();
   });

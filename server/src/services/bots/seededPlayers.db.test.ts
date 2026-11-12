@@ -117,6 +117,33 @@ describe.skipIf(!dbName)("seeded Map Room 2 players in the bot sweep on a real d
     expect(online).toBe(0);
   }, 120_000);
 
+  test("bots retired (owner, 12 Nov 2026): a pass grows seeded players only, drops an active bot's grow and makes no bot", async () => {
+    const [player] = await makeSeeded([20]);
+    const [bot] = await createBots(orm.em.fork(), [20], { rng: mulberry32(1112), now: NOW, pace: T });
+    // A grow the active bot had booked before the switch, due now.
+    await sql(`INSERT INTO bym.bot_job (bot_userid, kind, due_at) VALUES (?, 'grow', ?)`, [bot!.userid, new Date(NOW * 1000)]);
+    const before = await saveRow(bot!.userid);
+
+    const draw = mulberry32(NOW);
+    const report = await runBotSweep({
+      em: orm.em,
+      now: () => NOW,
+      // A total of 50 would make bots on a live rebalance; retired, none is made.
+      config: () => ({ ...config(true, 50)(), retired: true }),
+      rng: () => draw.float(),
+    });
+    expect(report!.rebalanced).toBe(false);
+    expect(report!.born).toEqual([]);
+    expect(report!.replaced).toEqual([]);
+    expect(report!.grew).toEqual([]);
+    // Only the seeded player's first grow was booked; the bot's grow was dropped unrun.
+    expect(report!.booked).toBe(1);
+    expect((await jobs(player!.userid)).map((job) => job.kind)).toEqual(["grow"]);
+    expect(await jobs(bot!.userid)).toEqual([]);
+    expect(Number((await sql(`SELECT count(*) AS n FROM bym.bot WHERE state = 'active'`))[0]!.n)).toBe(1);
+    expect((await saveRow(bot!.userid)).points).toBe(before.points);
+  }, 60_000);
+
   test("past level 40 a seeded player stays on level 40 and its Map Room, never retired", async () => {
     const [player] = await makeSeeded([40]);
     await claimRebalance(NOW);

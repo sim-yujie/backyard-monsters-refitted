@@ -254,6 +254,32 @@
   margin: 0;
 }
 
+/* Monster Madness: the takeover's points, logo then "+2.1M" then the total. */
+.takeover-first-open__score {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+}
+
+.takeover-first-open__score-logo {
+  width: 150px;
+  height: auto;
+}
+
+.takeover-first-open__score-points {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--colour-success);
+}
+
+.takeover-first-open__score-total {
+  font-size: var(--text-sm);
+  opacity: 0.85;
+}
+
 /* The offer on the end-of-attack panel. */
 .end-takeover {
   display: grid;

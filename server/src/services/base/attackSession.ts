@@ -1,10 +1,15 @@
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import {
   MAX_RANK,
+  championByType,
+  frozenHabits,
+  hasHabits,
+  isFrozenHabits,
   isZeroBrain,
   parseBrain,
   parseDefenderForces,
   type BrainWeights,
+  type FrozenHabits,
   type DefenderForces,
   type ResourceAmounts,
 } from "../../game-rules/combat/index.js";
@@ -156,8 +161,14 @@ export type AcademyLevels = Readonly<Record<string, number>>;
 /** Monster id → Lab rank, as {@link AttackSession.attackerRanks} keeps it. */
 export type AcademyRanks = Readonly<Record<string, number>>;
 
-/** Champion type → brain, as {@link AttackSession.championBrains} keeps it. */
-export type ChampionBrains = Readonly<Record<string, BrainWeights>>;
+/**
+ * Champion type → what its battle reads, as {@link AttackSession.championBrains}
+ * keeps it: its habit book with their version for a champion that has habits
+ * (champion modes round 2, `game-rules/combat/habits.ts`), else its old brain.
+ * A session minted before habits holds old brains only, so its battle fights
+ * as it was launched.
+ */
+export type ChampionBrains = Readonly<Record<string, BrainWeights | FrozenHabits>>;
 
 /** Champion type → health, as {@link AttackSession.championHealth} keeps it. */
 export type ChampionHealth = Readonly<Record<string, number>>;
@@ -181,19 +192,67 @@ export const healthOf = (champions: unknown): ChampionHealth | undefined => {
 };
 
 /**
- * The brains to freeze from the attacker's stored champions: each non-zero
- * one, made safe (`parseBrain`), by type; undefined when there are none.
+ * What to freeze for one champion type: for one with habits, its book `h`
+ * with the version, if any habit is above 0; for one without (Krallen), its
+ * old brain `b`, if any weight is. Null when there is nothing to freeze,
+ * which is today's champion.
+ *
+ * @param t - The champion type.
+ * @param habits - The stored `h`, or a frozen book.
+ * @param brain - The stored `b`, or a frozen brain.
+ */
+const frozenMindOf = (t: number, habits: unknown, brain: unknown): BrainWeights | FrozenHabits | null => {
+  const id = championByType(t);
+  if (hasHabits(id)) return frozenHabits(habits, id);
+  const parsed = parseBrain(brain);
+  return isZeroBrain(parsed) ? null : parsed;
+};
+
+const championTypeOf = (raw: unknown): number | null =>
+  typeof raw === "number" && Number.isInteger(raw) && raw >= 1 && raw <= 5 ? raw : null;
+
+/**
+ * The minds to freeze from the attacker's stored champions, by type: each
+ * habit book with any habit (`h`), and Krallen's old brain (`b`) when it is
+ * not zero, made safe; undefined when there are none. A champion with habits
+ * never freezes its old `b`: its habits started fresh.
  *
  * @param champions - The attacker's `champion` list as stored.
  */
 export const brainsOf = (champions: unknown): ChampionBrains | undefined => {
   if (!Array.isArray(champions)) return undefined;
-  const out: Record<string, BrainWeights> = {};
+  const out: Record<string, BrainWeights | FrozenHabits> = {};
   for (const champion of champions) {
-    const t = (champion as { t?: unknown } | null)?.t;
-    if (typeof t !== "number" || !Number.isInteger(t) || t < 1 || t > 5) continue;
-    const brain = parseBrain((champion as { b?: unknown }).b);
-    if (!isZeroBrain(brain)) out[String(t)] = brain;
+    const t = championTypeOf((champion as { t?: unknown } | null)?.t);
+    if (t === null) continue;
+    const entry = champion as { h?: unknown; b?: unknown };
+    const mind = frozenMindOf(t, entry.h, entry.b);
+    if (mind) out[String(t)] = mind;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+};
+
+/**
+ * A session's (or checkpoint's) frozen minds read back: a frozen book stays
+ * a book, an old brain stays a brain, so a session minted before habits
+ * still fights with its old brains.
+ *
+ * @param raw - The stored `championBrains`.
+ */
+export const frozenBrainsOf = (raw: Record<string, unknown>): ChampionBrains | undefined => {
+  const out: Record<string, BrainWeights | FrozenHabits> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const t = championTypeOf(Number(key));
+    if (t === null) continue;
+    let mind: BrainWeights | FrozenHabits | null;
+    if (isFrozenHabits(value)) {
+      const id = championByType(t);
+      mind = hasHabits(id) ? frozenHabits(value, id) : null;
+    } else {
+      const brain = parseBrain(value);
+      mind = isZeroBrain(brain) ? null : brain;
+    }
+    if (mind) out[String(t)] = mind;
   }
   return Object.keys(out).length > 0 ? out : undefined;
 };
@@ -307,9 +366,7 @@ export const sessionFactsOf = (parsed: Record<string, unknown>): AttackSessionFa
   const defenderResources = defenderResourcesOf(parsed.defenderResources);
   const attackerResources = defenderResourcesOf(parsed.attackerResources);
   const defenderForces = parseDefenderForces(parsed.defenderForces);
-  const championBrains = isRecord(parsed.championBrains)
-    ? brainsOf(Object.entries(parsed.championBrains).map(([t, b]) => ({ t: Number(t), b })))
-    : undefined;
+  const championBrains = isRecord(parsed.championBrains) ? frozenBrainsOf(parsed.championBrains) : undefined;
   const championHealth = isRecord(parsed.championHealth)
     ? healthOf(Object.entries(parsed.championHealth).map(([t, hp]) => ({ t: Number(t), hp })))
     : undefined;

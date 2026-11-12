@@ -35,6 +35,7 @@ import { BaseLoadSchema } from "../../../schemas/BaseLoadSchema.js";
 import { baseNotFoundErr, discordAgeErr, mapRoom3ClosedErr } from "../../../errors/errors.js";
 import { EnumBaseRelationship } from "../../../enums/EnumBaseRelationship.js";
 import { canAttack } from "../../../services/base/canAttack.js";
+import { mr1AttackVerdict } from "../../../services/maproom/v1/mr1AttackCheck.js";
 import { createMR1Tribes } from "../../../services/maproom/v1/createMR1Tribes.js";
 import { MR1_TRIBES } from "../../../enums/Tribes.js";
 import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
@@ -58,6 +59,8 @@ import { cellRelationship, findRelationships } from "../../../services/alliance/
 import { INFERNO_CHAT_CHANNEL, countryChannelFor } from "../../../config/ChatConfig.js";
 import { finaliseBeforeLoad } from "../../../services/base/finaliseAttack.js";
 import { infernoConfig } from "../../../config/InfernoConfig.js";
+import { quietLoginOn } from "../../../config/QuietLoginConfig.js";
+import { loginPromptFields } from "./loginPrompts.js";
 import { closeInfernoPlayerAttacksOf } from "../../../services/inferno/infernoPlayerFinalise.js";
 import { combatCellHeight, combatLandFeature } from "../../../services/base/combat/cellHeight.js";
 import type { DefenderForces } from "../../../game-rules/combat/index.js";
@@ -437,7 +440,21 @@ export const baseLoad: KoaController = async (ctx) => {
   }
 
   // A visit is look-only: nothing to attack from it (friends WP2, #369).
-  const attackAllowed = type === BaseMode.HELP ? false : canAttack(userSave, baseSave, mapversion);
+  // Map Room 1's neighbour and level rules (`mr1AttackRules.ts`), as the
+  // attack load applies them, for someone else's Map Room 1 main yard seen
+  // without attacking it (an attack load has passed them already).
+  const mr1Target =
+    !attacking &&
+    mapversion === MapRoomVersion.V1 &&
+    !isOwner &&
+    baseSave.type === BaseType.MAIN &&
+    baseSave.mapversion === MapRoomVersion.V1;
+  const attackAllowed =
+    type === BaseMode.HELP
+      ? false
+      : canAttack(userSave, baseSave, mapversion) &&
+        (!mr1Target ||
+          (await mr1AttackVerdict(user.userid, userSave, baseSave.saveuserid, baseSave, getCurrentDateTime())).ok);
 
   let baseOwner;
 
@@ -508,6 +525,11 @@ export const baseLoad: KoaController = async (ctx) => {
   const outpostLabels =
     isOwner && !isInferno && type === BaseMode.BUILD ? await outpostLabelsOnLoad(() => postgres.em.fork(), user.userid) : null;
 
+  // A local test server's `QUIET_LOGIN` (`config/QuietLoginConfig.ts`): the
+  // owner's build-mode loads say so, and the web client leaves the pop-ups that
+  // open by themselves on login shut. Never on a production server.
+  const quietLogin = isOwner && type === BaseMode.BUILD && quietLoginOn();
+
   const response: Record<string, unknown> = {
     ...filteredSave,
     relationship,
@@ -564,9 +586,15 @@ export const baseLoad: KoaController = async (ctx) => {
       chattoken,
       chatchannel,
       ...(chatcountrychannel && { chatcountrychannel, chatcountry: user.country }),
-      // The one-time "Where are you playing from?" prompt, until it is answered or put off.
-      // Only on the own main yard, once the new-player tutorial is over (stage 205).
-      ...(isOwnMainYard && Number(isTutorialEnabled) >= 205 && !user.country && !user.country_asked && { countryask: 1 }),
+      // The one-time "Where are you playing from?" prompt, until it is answered or put off,
+      // and the test server's `QUIET_LOGIN` (`loginPrompts.ts`).
+      ...loginPromptFields({
+        ownMainYard: isOwnMainYard,
+        tutorialStage: Number(isTutorialEnabled),
+        country: user.country,
+        countryAsked: user.country_asked,
+        quiet: quietLogin,
+      }),
       ...(alliance && { alliancedata: alliance }),
     }),
   };

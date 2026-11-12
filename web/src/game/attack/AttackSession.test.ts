@@ -300,7 +300,7 @@ describe("AttackSession events and the fling log", () => {
     expect(event).toMatchObject({ kind: "fling", t: TICKS_PER_SECOND, x: -100, y: -100, r: 100 });
     expect(session.remaining()).toEqual({ C1: 1 });
     expect(session.state().creepsFlung).toBe(2);
-    expect(session.flingLog()).toEqual({ v: 1, seed: 1, events: [event] });
+    expect(session.flingLog()).toEqual({ v: 1, seed: 1, championRoom: 1, events: [event] });
   });
 
   it("starts the clock itself when a fling arrives before start", () => {

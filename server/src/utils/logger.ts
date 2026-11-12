@@ -13,6 +13,7 @@ import { Env } from "../enums/Env.js";
 import { retentionConfig } from "../config/RetentionConfig.js";
 import { getDailyRotatingFileSink, pruneLogFiles } from "./logFiles.js";
 import { errorCaptureSink } from "./errorCapture.js";
+import { loggerRoutes } from "./loggerRoutes.js";
 
 /**
  * Directory for the JSON log files in production: server/logs, resolved from this
@@ -56,7 +57,8 @@ const pruneOldLogs = () => {
  *
  * - console: @logtape/pretty everywhere. Locally it also prints each record's
  *   properties. In production it prints one line per record with no word wrap
- *   (pm2 is not a terminal), which is what `pm2 logs` shows. It stays blocking
+ *   (pm2 is not a terminal), which is what `pm2 logs` shows; request logs
+ *   skip it there ({@link loggerRoutes}). It stays blocking
  *   so a record logged just before process.exit() is never lost.
  * - file (production only): every record as JSON Lines, message kept as its
  *   template, for querying with jq. A new file starts every UTC day
@@ -115,30 +117,7 @@ sinks.errorCapture = errorCaptureSink;
 await configure({
   contextLocalStorage: new AsyncLocalStorage(),
   sinks,
-  loggers: [
-    {
-      /**
-       * Primary application logger.
-       *
-       * Category hierarchy: ["bymr", ...], including ["bymr", "http"] for
-       * request logs. Logs everything from debug and above.
-       */
-      category: ["bymr"],
-      lowestLevel: "debug",
-      sinks: Object.keys(sinks),
-    },
-    {
-      /**
-       * Internal LogTape meta-logging.
-       *
-       * Reduced verbosity to avoid noise unless warnings
-       * or errors occur within the logging system itself.
-       */
-      category: ["logtape", "meta"],
-      lowestLevel: "warning",
-      sinks: ["console"],
-    },
-  ],
+  loggers: loggerRoutes(isLocal, Object.keys(sinks)),
 });
 
 /**

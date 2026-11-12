@@ -28,7 +28,9 @@ export type EventReward =
   /** Event coins (beta 7): the decorations shop's currency. */
   | { readonly kind: "eventCoins"; readonly amount: number }
   /** The champion Krallen: level 1 the first time, one level more each later win, at most 5. */
-  | { readonly kind: "krallen" };
+  | { readonly kind: "krallen" }
+  /** One of Korath's powers (Monster Madness): 1 Burn, 2 Breath of Fire, 3 Fists of Doom. */
+  | { readonly kind: "korath"; readonly power: number };
 
 /** One reward as a claim paid it (server `services/events/grant.ts`). */
 export type GrantedReward =
@@ -39,7 +41,9 @@ export type GrantedReward =
   | { kind: "decoration"; type: number; count: number; stored: number }
   | { kind: "eventCoins"; amount: number }
   /** `raised` false: she was at the top already and nothing changed. */
-  | { kind: "krallen"; level: number; raised: boolean };
+  | { kind: "krallen"; level: number; raised: boolean }
+  /** Korath's power now; `raised` false when it was that high already; `hasKorath` false when it waits for him. */
+  | { kind: "korath"; power: number; raised: boolean; hasKorath: boolean };
 
 export interface CalendarView {
   /** Each day's rewards, day 1 first. */
@@ -95,27 +99,43 @@ export interface EventsBody extends ApiEnvelope {
   whatsNewSeen: string | null;
   /**
    * The player's "New to Map Room 2" card (Frontier Pass), or null when their
-   * 10 days are not running. It stays all 10 days, used rewards and all.
+   * 10 days are not running. It stays all 10 days, rewards used or not.
    * Absent from an older server.
    */
   mr2Welcome?: Mr2WelcomeStatus | null;
 }
 
-/** "New to Map Room 2": 10 days with a cheap first wild takeover and a free Regular kit. */
+/**
+ * "New to Map Room 2", the Frontier Pass (server `services/events/mr2Welcome.ts`):
+ * 10 days with 7 sets, a set being a cheap wild camp takeover and a free
+ * Regular kit; at most one of each a day (UTC midnight reset).
+ */
 export interface Mr2WelcomeStatus {
   /** Unix seconds. */
   startsAt: number;
   endsAt: number;
   /** Whole days left, rounded up. */
   daysLeft: number;
-  /** The cheap takeover can still be used. */
+  /** How many of each reward the pass gives (7). */
+  sets: number;
+  /** The cheap takeover can be used now. */
   takeover: boolean;
-  /** The free Regular kit can still be used. */
+  /** The free Regular kit can be used now. */
   kit: boolean;
-  /** When the takeover was used (unix seconds); null when not used or not known. Absent from an older server. */
-  takeoverUsedAt?: number | null;
-  /** When the kit was used (unix seconds); null when not used or not known. Absent from an older server. */
-  kitUsedAt?: number | null;
+  /** Cheap takeovers left of `sets`. */
+  takeoverLeft: number;
+  /** Free kits left of `sets`. */
+  kitLeft: number;
+  /** Today's takeover is used. */
+  takeoverToday: boolean;
+  /** Today's kit is used. */
+  kitToday: boolean;
+  /** The next daily reset (unix seconds): a reward used today is back then, if any are left. */
+  nextDayAt: number;
+  /** When each takeover was used (unix seconds), where known. */
+  takeoverUses: number[];
+  /** When each kit was used (unix seconds), where known. */
+  kitUses: number[];
 }
 
 export interface CalendarClaimReport {

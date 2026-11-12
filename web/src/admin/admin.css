@@ -2155,6 +2155,73 @@ tbody th {
   overflow: auto;
 }
 
+/* The Flagged list (flagged.ts): one row per player, the counts as icon chips. */
+.flagged-row > summary {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.flagged-row .row-main {
+  display: grid;
+  gap: 6px;
+}
+
+.flagged-row .row-top,
+.flagged-entry .row-top {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.flagged-row .chip,
+.flagged-entry .chip {
+  padding: 1px 8px;
+  font-size: 0.75rem;
+}
+
+.flagged-row .chip-icon .icon,
+.flagged-entry .chip-icon .icon,
+.flagged-yards .icon,
+.flagged-yard .icon,
+.flagged-figures .figure-label .icon {
+  vertical-align: -2px;
+}
+
+.flagged-yards {
+  overflow-wrap: anywhere;
+}
+
+.flagged-yards .icon {
+  margin-right: 4px;
+}
+
+.flagged-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.flagged-entries {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flagged-entry {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.flagged-message {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
 .picked:empty {
   display: none;
 }
@@ -4992,7 +5059,8 @@ tbody th {
   list-style: none;
 }
 
-.award-amount {
+/* The amount box in the give form; the log's amount span shares the class name. */
+.input.award-amount {
   width: 110px;
   min-height: 40px;
 }

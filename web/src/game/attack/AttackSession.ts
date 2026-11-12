@@ -16,6 +16,7 @@ import {
   felledCount,
   battleDefence,
   flingCost,
+  flungMind,
   healthOf,
   isChampionStance,
   isZeroBrain,
@@ -23,6 +24,7 @@ import {
   parseDefenderForces,
   toCombatYard,
   type BrainWeights,
+  type FlungMind,
   type BuildingClass,
   type AttackEvent,
   type Battle,
@@ -329,6 +331,18 @@ export const servedBrain = (raw: unknown, t: number): BrainWeights | null => {
   if (typeof raw !== "object" || raw === null) return null;
   const brain = parseBrain((raw as Record<string, unknown>)[String(t)]);
   return isZeroBrain(brain) ? null : brain;
+};
+
+/**
+ * What a flung champion's log entry carries of its mind, from the load's
+ * `attackerbrains` as the server froze it at launch: its habits for the Mode
+ * it is flung in, with their version (champion modes round 2), or its old
+ * brain (Krallen, issue #219), or nothing. The server's replay stamps the
+ * same from its own copy (`flungMind`).
+ */
+export const servedMind = (raw: unknown, t: number, stance: ChampionStance | undefined): FlungMind => {
+  if (typeof raw !== "object" || raw === null) return {};
+  return flungMind((raw as Record<string, unknown>)[String(t)], t, stance);
 };
 
 /**
@@ -923,7 +937,7 @@ export class AttackSession {
    * fights at and the server checks against the attacker's stored champion
    * (the food bonus adds the stats its cage card shows), and the Mode the
    * player picked (issue #220), which the server replays it in, its
-   * learned brain as the attack load froze it (issue #219, {@link servedBrain}),
+   * learned habits or brain as the attack load froze it ({@link servedMind}),
    * and the health the attack load froze it at ({@link servedHealth}).
    */
   private flungChampion(champion: NonNullable<FlingInput["champion"]>): {
@@ -932,21 +946,20 @@ export class AttackSession {
     pl?: number;
     fb?: number;
     s?: ChampionStance;
-    b?: BrainWeights;
-    hp?: number;
-  } {
+  } & FlungMind & { hp?: number } {
     const entry = this.target.roster.champions.find((owned) => owned.t === champion.t);
     const pl = Number(entry?.pl);
     const fb = Number(entry?.fb);
-    const brain = servedBrain(this.response?.attackerbrains, champion.t);
+    const stance = isChampionStance(champion.s) ? champion.s : undefined;
+    const mind = servedMind(this.response?.attackerbrains, champion.t, stance);
     const hp = servedHealth(this.response?.attackerhealth, champion.t);
     return {
       t: champion.t,
       l: champion.l,
       ...(Number.isInteger(pl) && pl > 0 ? { pl: Math.min(pl, CHAMPION_MAX_POWER_LEVEL) } : {}),
       ...(Number.isInteger(fb) && fb > 0 ? { fb: Math.min(fb, CHAMPION_MAX_FOOD_BONUS) } : {}),
-      ...(isChampionStance(champion.s) ? { s: champion.s } : {}),
-      ...(brain ? { b: brain } : {}),
+      ...(stance ? { s: stance } : {}),
+      ...mind,
       ...(hp !== null ? { hp } : {}),
     };
   }
@@ -1079,9 +1092,21 @@ export class AttackSession {
     return this.response;
   }
 
-  /** The fling log as it stands: the §3.10 shape, resent in full on every save. */
+  /**
+   * The fling log as it stands: the §3.10 shape, resent in full on every save.
+   * `championRoom` tells the server this page puts a picked champion into the
+   * Flinger first (`Bucket.reserved`), so it holds every fling to that rule.
+   */
   flingLog(): FlingLog {
-    return { v: 1, seed: this.seed, events: [...this.events] };
+    // The mark stays out of the shared rules' `FlingLog`, whose bytes set the
+    // rules version stored defence replays are stamped with.
+    const log: FlingLog & { readonly championRoom: 1 } = {
+      v: 1,
+      seed: this.seed,
+      events: [...this.events],
+      championRoom: 1,
+    };
+    return log;
   }
 
   /**

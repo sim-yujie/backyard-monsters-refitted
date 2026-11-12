@@ -57,7 +57,7 @@ const allianceKitTag = (percent: number): HTMLElement => {
  * answer redraws the yard; the picker closes on success and reports through
  * `onBought`.
  *
- * "Frontier Pass": while the player's free Regular kit is ready (the
+ * "Frontier Pass": while the player's free Regular kit for today is ready (the
  * Events answer's `mr2Welcome.kit`), the Regular card says Free and offers one
  * Free button; the server charges nothing and builds it as the resource path
  * does (prefabs, no worker).
@@ -429,7 +429,7 @@ export class StarterKitPicker {
     this.sending = false;
     if (this.closed) return;
     if (!result.ok) {
-      // No longer free (used elsewhere, or the 10 days ended): show the prices again.
+      // No longer free (today's used elsewhere, all 7 used, or the 10 days ended): show the prices again.
       if (free && result.refusal.reason === "welcomeUsed") {
         this.freeKit = false;
         this.pending = null;
