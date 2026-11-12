@@ -60,6 +60,9 @@ export interface ReportsWindowOptions {
 /** The phone layout: one column, the list or the player (reports.css). */
 export const REPORTS_PHONE_QUERY = "(width <= 620px)";
 
+/** Below this much room the window is one column (reports.css `@container mod-reports`). */
+export const REPORTS_TWO_COLUMNS = 720;
+
 const FILTERS: readonly (readonly [ModFilter, GameIconName])[] = [
   ["all", "mail"],
   ["reports", "report"],
@@ -95,8 +98,10 @@ const empty = (title: string, words: string, picture: HTMLElement, small = false
 const plate = (words: string, kind: "primary" | "outline", run: () => void, picture?: GameIconName): HTMLButtonElement => {
   const node = make("button", `btn btn--${kind} mod-reports__btn`);
   node.type = "button";
-  if (picture) node.append(icon(picture));
-  node.append(words);
+  // The word alone is centred on the plate; its picture hangs off its left (reports.css).
+  const word = make("span", "mod-reports__btn-word", words);
+  if (picture) word.prepend(icon(picture));
+  node.append(word);
   node.addEventListener("click", run);
   return node;
 };
@@ -145,7 +150,10 @@ export const snapList = (lines: readonly AroundLine[], them: number, line?: Pick
   return list;
 };
 
-const isPhone = (): boolean => {
+/** One column: a phone, or a window too narrow for the list and the player side by side. */
+const isNarrow = (workspace: HTMLElement): boolean => {
+  const width = workspace.clientWidth;
+  if (width > 0 && width < REPORTS_TWO_COLUMNS) return true;
   try {
     return typeof window.matchMedia === "function" && window.matchMedia(REPORTS_PHONE_QUERY).matches;
   } catch {
@@ -247,7 +255,7 @@ export class ReportsWindow {
     }
     this.renderFilters();
     this.renderList();
-    if (openFirst && this.openId === null && !isPhone()) {
+    if (openFirst && this.openId === null && !isNarrow(this.workspace)) {
       const first = this.visibleIds()[0];
       if (first !== undefined) void this.openPlayer(first);
     }

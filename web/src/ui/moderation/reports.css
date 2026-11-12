@@ -13,11 +13,15 @@
 
 /* ── The window ───────────────────────────────────────────────────────── */
 
-.mod-reports-window {
-  width: min(100%, 920px);
+/* As wide as the mock-up's computer window (two columns: the list at 300 px,
+   the player beside it), never wider than the screen. `.panel` caps every
+   window at 560 px (ui.css), so this lifts that cap for this one. */
+.panel.mod-reports-window {
+  width: min(100%, 1040px);
+  max-width: min(1040px, calc(100vw - 2 * var(--space-4)));
   --mod-reports-overhang: max(var(--skin-title-lift, 0px), calc(var(--skin-edge, 0px) + 12px));
   --mod-reports-room: calc(100dvh - var(--hud-height, 0px) - var(--space-2) - var(--space-4) - var(--mod-reports-overhang));
-  height: min(568px, var(--mod-reports-room));
+  height: min(640px, var(--mod-reports-room));
   margin-top: var(--mod-reports-overhang);
   min-height: 0;
   display: flex;
@@ -44,6 +48,9 @@
   display: flex;
   padding: 2px var(--space-2) var(--space-2);
   overflow: hidden;
+  /* The layout follows the room the window really has, not the screen:
+     two columns from 720 px, one below (`REPORTS_TWO_COLUMNS`). */
+  container: mod-reports / inline-size;
 }
 
 .mod-reports__workspace {
@@ -365,6 +372,8 @@
 /* ── Right: the opened player ─────────────────────────────────────────── */
 
 .mod-reports__detail {
+  /* The player's own room decides how the chat around and the plates sit. */
+  container: mod-reports-detail / inline-size;
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -395,7 +404,7 @@
   font-weight: 400;
   font-size: 20px;
   color: var(--colour-text-strong);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .mod-reports__account {
@@ -777,7 +786,23 @@
 .mod-reports__action-buttons .btn,
 .mod-reports__confirm-buttons .btn {
   min-width: 0;
-  gap: 6px;
+  white-space: nowrap;
+}
+
+/* A plate's word sits at the plate's exact middle (owner rule: 0 px off
+   centre); its picture hangs to the left of the word, never on top of it. */
+.mod-reports__btn-word {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.mod-reports-window .mod-reports__btn-word > .game-icon {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 6px);
+  transform: translateY(-50%);
+  vertical-align: 0;
 }
 
 .mod-reports__ban-note {
@@ -788,15 +813,17 @@
   white-space: nowrap;
 }
 
-/* ── Phone: one column, the list or the player ────────────────────────── */
+/* ── Narrow: one column, the list or the player ───────────────────────── */
 
 @media (width <= 620px) {
-  .mod-reports-window {
+  .panel.mod-reports-window {
     height: var(--mod-reports-room);
   }
+}
 
+@container mod-reports (width < 720px) {
   .mod-reports__workspace {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .mod-reports__workspace:not(.has-player) .mod-reports__detail,
@@ -807,7 +834,12 @@
   .mod-reports__back {
     display: inline-flex;
   }
+}
 
+/* A narrow player pane (a phone): the chat around on two lines each, the
+   mute lengths 2x2, and the three plates share the width without pictures
+   so each word keeps the plate's middle. */
+@container mod-reports-detail (width < 480px) {
   .mod-reports__snap-line {
     grid-template-columns: 2.6rem minmax(0, 1fr);
     gap: 0 8px;
@@ -817,7 +849,6 @@
     grid-column: 2;
   }
 
-  /* Four 84 px chips do not fit one row, so a 2x2 grid of equal cells. */
   .mod-reports__lengths {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -829,20 +860,17 @@
   }
 
   .mod-reports__action-buttons {
+    flex-basis: 100%;
     gap: 4px;
   }
 
-  /* Three plates share ~280 px: the plate ends and the clock shrink a little
-     to keep "Mute" and its clock on one line inside the plate. */
   :root[data-skin] .mod-reports-window .mod-reports__action-buttons .btn.mod-reports__btn {
-    gap: 4px;
     padding: 0;
     --skin-button-cap: 14px;
     --skin-button2-cap: 14px;
   }
 
-  .mod-reports-window .mod-reports__action-buttons .game-icon {
-    width: 16px;
-    height: 16px;
+  .mod-reports-window .mod-reports__action-buttons .mod-reports__btn-word > .game-icon {
+    display: none;
   }
 }
