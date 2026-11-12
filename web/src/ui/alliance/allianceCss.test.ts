@@ -116,10 +116,10 @@ describe("alliance.css: a constellation's monster behind its stars", () => {
   });
 });
 
-describe("alliance.css: painted stars (owner, 12 Nov: stars, not yellow dots)", () => {
+describe("alliance.css: night-sky stars (owner, 12 Nov: real stars, not yellow dots or game icons)", () => {
   const starFile = (name: string): Buffer => readFileSync(new URL(`../../../public/ui/stars/${name}`, import.meta.url));
 
-  it("shows the small painted stars in the star-count row and the track, never round dots", () => {
+  it("shows the small star lights in the star-count row and the track, never plain round dots", () => {
     const dot = rulesFor(".alliance-dots__dot").join(" ");
     expect(dot).toContain('url("/ui/stars/star-dim-small@2x.webp")');
     expect(dot).not.toMatch(/border-radius/);
@@ -127,8 +127,9 @@ describe("alliance.css: painted stars (owner, 12 Nov: stars, not yellow dots)", 
     expect(rulesFor(".alliance-track__pip--star").join(" ")).toContain("star-dim-small@2x.webp");
   });
 
-  it("has every star picture on disk as a 2x webp with even sides", () => {
-    for (const name of ["star-lit@2x.webp", "star-dim@2x.webp", "star-next@2x.webp", "star-lit-small@2x.webp", "star-dim-small@2x.webp"]) {
+  it("has every star picture on disk as a square 2x webp with even sides", () => {
+    const names = ["blue", "white", "gold"].map((t) => `star-lit-${t}@2x.webp`);
+    for (const name of [...names, "star-dim@2x.webp", "star-next@2x.webp", "star-lit-small@2x.webp", "star-dim-small@2x.webp"]) {
       const file = starFile(name);
       expect(file.subarray(8, 12).toString("ascii")).toBe("WEBP");
       // VP8L (lossless) header: 14-bit width-1 and height-1 after the signature byte.
@@ -139,6 +140,12 @@ describe("alliance.css: painted stars (owner, 12 Nov: stars, not yellow dots)", 
       expect(width).toBe(height);
       expect(width % 2).toBe(0);
     }
+  });
+
+  it("lays faint star dust behind each figure, under the monster", () => {
+    expect(rulesFor(".alliance-sky__art::before").join(" ")).toContain('url("/ui/stars/sky-dust@2x.webp")');
+    expect(rulesFor(".alliance-sky__art::before").join(" ")).toMatch(/pointer-events:\s*none/);
+    expect(starFile("sky-dust@2x.webp").subarray(8, 12).toString("ascii")).toBe("WEBP");
   });
 
   it("twinkles cheaply (opacity and scale) and keeps still for less motion", () => {

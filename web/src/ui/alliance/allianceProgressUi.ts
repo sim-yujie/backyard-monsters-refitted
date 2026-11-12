@@ -252,33 +252,45 @@ const figureWithArt = (c: ConstellationView, slot: number, saved: MyAlliance["st
 };
 
 /**
- * The painted stars (owner, 12 Nov: "stars, not just yellow dots"), made with
- * Codex from the game's own icons (`design/constellation-stars/`): a gold
- * medal star, its cool slate unlit twin, and that twin with a gold rim and
- * halo for the next one to buy. Each picture is 40 px of star in an 80 px
- * square (2x), the rest its baked glow, so a star of `size` box units shows
- * a body of half that.
+ * Real night-sky stars (owner, 12 Nov: "more realistic looking stars, not
+ * cartoon or game star icons"), rendered as light by
+ * `design/constellation-stars/real/render_stars.py`: a white-hot core, a soft
+ * coloured bloom and four thin diffraction spikes when lit; a faint small
+ * point when not; that point with a faint gold halo ring for the next one to
+ * buy. All are drawn at one scale (128 px picture = `size` 47 box units, about
+ * 40 px on a ~170 px card), so their cores match; the glow and spikes fill
+ * the rest and fade out before the picture's edge.
  */
 export const STAR_ART = {
-  lit: { file: "star-lit@2x.webp", size: 32 },
-  next: { file: "star-next@2x.webp", size: 34 },
-  dim: { file: "star-dim@2x.webp", size: 26 },
+  lit: { file: "star-lit-white@2x.webp", size: 47 },
+  next: { file: "star-next@2x.webp", size: 47 },
+  dim: { file: "star-dim@2x.webp", size: 23.5 },
 } as const;
+
+/** Each lit star's colour by its number, as real skies mix them: blue-white, white, pale gold. */
+export const STAR_TINTS = ["white", "blue", "white", "gold", "blue", "white", "gold", "blue", "white", "gold"] as const;
+
+/** How far a line stops short of each star, in box units, as on a star map. */
+const LINE_GAP = 6;
+
 const starArt = (file: string): string => `${import.meta.env.BASE_URL}ui/stars/${file}`;
 
-/** One figure: 10 painted stars, lit ones gold, the next one rimmed and tagged with its price. */
+/** One figure: 10 stars, lit ones shining, the next one haloed and tagged with its price. */
 const figure = (c: ConstellationView, slot: number, saved: MyAlliance["star_figures"]): SVGSVGElement => {
   const { stars, lines } = figureFor(c.id, slot, saved);
   const lit = c.steps;
   const box = svg("svg", { viewBox: `0 0 ${FIGURE_WIDTH} ${FIGURE_HEIGHT}`, class: "alliance-sky__figure", "aria-hidden": "true" });
   for (const [a, b] of lines) {
-    const [x1, y1] = stars[a]!;
-    const [x2, y2] = stars[b]!;
+    const [ax, ay] = stars[a]!;
+    const [bx, by] = stars[b]!;
+    const t = Math.min(LINE_GAP / Math.max(Math.hypot(bx - ax, by - ay), 1e-6), 0.4);
+    const [x1, y1, x2, y2] = [ax + (bx - ax) * t, ay + (by - ay) * t, bx - (bx - ax) * t, by - (by - ay) * t];
     box.append(svg("line", { x1, y1, x2, y2, class: `alliance-sky__line${a < lit && b < lit ? " alliance-sky__line--lit" : ""}` }));
   }
   stars.forEach(([x, y], i) => {
     const state = i < lit ? "lit" : i === lit && c.next_price !== null ? "next" : "dim";
-    const { file, size } = STAR_ART[state];
+    const { size } = STAR_ART[state];
+    const file = state === "lit" ? `star-lit-${STAR_TINTS[i % STAR_TINTS.length]}@2x.webp` : STAR_ART[state].file;
     const star = svg("image", { href: starArt(file), x: x - size / 2, y: y - size / 2, width: size, height: size, class: `alliance-sky__star alliance-sky__star--${state}` });
     // Lit stars twinkle out of step with each other (CSS; still when the player asks for less motion).
     if (state === "lit") star.style.animationDelay = `${-((i * 7 + slot * 3) % 10) * 0.37}s`;
@@ -300,7 +312,7 @@ const figure = (c: ConstellationView, slot: number, saved: MyAlliance["star_figu
   return box;
 };
 
-/** 5 columns of 2 small painted stars (CSS): the stars lit, one a step (top then bottom of each column). */
+/** 5 columns of 2 small star lights (CSS): the stars lit, one a step (top then bottom of each column). */
 const starDots = (steps: number): HTMLElement => {
   const dots = make("span", "alliance-dots");
   dots.setAttribute("aria-label", `${steps} of 10 stars`);
@@ -398,7 +410,7 @@ const detailBar = (
     const state = i === c.steps ? "now" : i < c.steps ? "lit" : i === c.steps + 1 ? "next" : "later";
     const mark = make("li", `alliance-track__mark alliance-track__mark--${state}`);
     mark.title = i === 0 ? "Start" : `Star ${i}, ★${c.prices[i - 1] ?? ""}`;
-    // Stars 1-10 show the small painted star (CSS), lit or not; the next one its price.
+    // Stars 1-10 show the small star light on a night-sky disc (CSS), lit or not; the next one its price.
     const painted = i > 0 && state !== "next";
     mark.append(
       make("span", `alliance-track__pip${painted ? " alliance-track__pip--star" : ""}`, i === 0 ? "●" : state === "next" ? `★${c.next_price}` : ""),
