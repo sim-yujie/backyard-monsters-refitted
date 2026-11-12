@@ -666,6 +666,8 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * that changed them. Absent elsewhere (a visit, an attack, an outpost).
    */
   eventcoins?: number;
+  /** What this load paid (a weekend event's "played" Glimmers), with `eventcoins`. */
+  coinsgained?: CoinGain[];
   /** When the yard was last saved, in unix seconds. 0 on a yard never saved. */
   savetime?: number;
   resources?: Resources;

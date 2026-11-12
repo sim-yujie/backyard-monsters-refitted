@@ -118,6 +118,14 @@ export class WeekendBanner {
   }
 }
 
+/**
+ * What every weekend event pays (owner, 12 Nov 2026: "builder's weekend pay
+ * glimmer"; `server/src/services/events/weekendCoins.ts` WEEKEND_COINS):
+ * 25 Glimmers the first time the yard loads that weekend, 75 the first time
+ * the boost is used. The pop-up says it in one line.
+ */
+export const WEEKEND_GLIMMERS_LINE = "Play this weekend for 25 Glimmers, use the boost for 75 more.";
+
 /** The pop-up's class, for tests and for "something else has the screen" checks. */
 export const WEEKEND_POPUP_CLASS = "weekend-popup";
 
@@ -131,7 +139,7 @@ export interface WeekendPopupOptions {
 
 /**
  * The Friday pop-up (and the same box from the banner): big icon, the
- * event's name, its one line, and when. "Starts in 14h" before Saturday,
+ * event's name, its one line, what it pays in Glimmers, and when. "Starts in 14h" before Saturday,
  * "Ends in 1d 4h" while it runs.
  */
 export const openWeekendPopup = (options: WeekendPopupOptions): Popup => {
@@ -158,10 +166,12 @@ export const openWeekendPopup = (options: WeekendPopupOptions): Popup => {
     gameIcon("time", { size: 16, decorative: true }),
     running ? `Ends in ${formatCountdown(run.endsAt - now)}` : `Starts in ${formatCountdown(run.startsAt - now)}`,
   );
+  const glimmers = el("p", "weekend-popup__coins");
+  glimmers.append(gameIcon("eventcoin", { size: 16, decorative: true }), WEEKEND_GLIMMERS_LINE);
   const done = el("button", "btn btn--primary weekend-popup__done", "OK");
   done.type = "button";
   done.addEventListener("click", () => popup.close());
-  body.append(hero, el("h3", "weekend-popup__title", run.title), el("p", "weekend-popup__line", run.line), when, done);
+  body.append(hero, el("h3", "weekend-popup__title", run.title), el("p", "weekend-popup__line", run.line), glimmers, when, done);
   popup.setContent(body).mount(options.container);
   done.focus({ preventScroll: true });
   return popup;

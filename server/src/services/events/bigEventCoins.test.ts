@@ -8,11 +8,13 @@ import {
 } from "../../game-data/events/eventRewards.js";
 import { EVENTS, KRALLEN_HUNTS, withEventCoins, type EventDefinition } from "../../game-data/events/events.js";
 import { WEEKEND_EVENT_INFO } from "../../game-data/events/weekendEvents.js";
+import { WEEKEND_COINS } from "./weekendCoins.js";
 
 /**
  * Event coins come only from big 1-2 week events (owner, 8 Nov 2026), through
  * the event's `coins` field: 15 a calendar day and a coin amount per ladder
- * tier, about 400 for a full 14-day event. Weekend events pay none.
+ * tier, about 400 for a full 14-day event. Weekend events pay a small
+ * fixed amount of their own instead (`weekendCoins.ts`, owner 12 Nov 2026).
  */
 
 const coinsIn = (rewards: readonly EventReward[]): number =>
@@ -98,9 +100,10 @@ describe("big events pay event coins", () => {
     for (const hunt of KRALLEN_HUNTS) expect(eventCoinsTotal(EVENTS.find((event) => event.id === hunt.id)!)).toBe(0);
   });
 
-  test("weekend events pay no coins: their definitions carry boosts only", () => {
+  test("weekend events pay only their fixed 25 + 75 (weekendCoins.ts); their definitions carry boosts only", () => {
     for (const weekend of Object.values(WEEKEND_EVENT_INFO)) {
       expect(JSON.stringify(weekend)).not.toMatch(/coin/i);
     }
+    expect(WEEKEND_COINS).toEqual({ played: 25, boost: 75 });
   });
 });

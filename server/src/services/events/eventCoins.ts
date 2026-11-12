@@ -23,11 +23,12 @@ import type { EntityManager as SqlEntityManager } from "@mikro-orm/postgresql";
  * then the coin row; nothing here ever locks a save, so a coin write outside
  * a yard action cannot wait on one.
  *
- * Where coins come from (owner, 8 Nov 2026): only big 1-2 week events
- * (Halloween, Thanksgiving), never weekend events. A big event with a
- * `coins` field pays them from its login calendar and its ladder; the
- * numbers live in one place, `BIG_EVENT_COINS` in
- * `game-data/events/eventRewards.ts` (about 400 per full 14-day event).
+ * Where coins come from: big 1-2 week events (Halloween, Thanksgiving;
+ * owner, 8 Nov 2026). A big event with a `coins` field pays them from its
+ * login calendar and its ladder; the numbers live in one place,
+ * `BIG_EVENT_COINS` in `game-data/events/eventRewards.ts` (about 400 per
+ * full 14-day event). And weekend events again (owner, 12 Nov 2026):
+ * `weekendCoins.ts`, 25 for playing and 75 for using the boost.
  */
 
 /** The most coins a balance holds (the `integer` column). */
@@ -36,7 +37,7 @@ export const COINS_MAX = 2_147_483_647;
 /** One payment, for the answer and the client's "+25" moment. */
 export interface CoinGain {
   readonly amount: number;
-  /** A short reason, e.g. `calendar`, `ladder`. */
+  /** A short reason, e.g. `calendar`, `ladder`, `weekend-played`. */
   readonly reason: string;
 }
 

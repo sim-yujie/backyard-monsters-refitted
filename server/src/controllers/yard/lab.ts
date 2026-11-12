@@ -16,10 +16,11 @@ import { defineYardAction } from "./yardAction.js";
  */
 export const yardLabStartAction = defineYardAction({
   schema: YardLabMonsterSchema,
-  run: ({ save, body, now, user }) => {
+  run: async ({ save, body, now, user, em }) => {
     const off = weekendBoost("study", now);
     const plan = planLabStart(save, body.monster, now, off);
-    if (off > 0) weekendBoostUsed(user.userid, "study", now);
+    // The weekend's Glimmers, in this transaction (`weekendCoins.ts`).
+    if (off > 0) await weekendBoostUsed(em, user.userid, "study", now);
     return plan;
   },
 });

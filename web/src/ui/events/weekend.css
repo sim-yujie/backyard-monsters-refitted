@@ -158,6 +158,14 @@
   font-size: var(--text-md);
 }
 
+.weekend-popup__coins {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
 .weekend-popup__when {
   display: inline-flex;
   align-items: center;
