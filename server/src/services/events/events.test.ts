@@ -4,6 +4,7 @@ import {
   EVENTS,
   HALLOWEEN_2026_CALENDAR,
   THANKSGIVING_2026_CALENDAR,
+  THANKSGIVING_2026_LADDER,
   KRALLEN_HUNT_GOALS,
   KRALLEN_HUNTS,
   krallenHunt,
@@ -62,6 +63,23 @@ describe("the event list", () => {
     expect(THANKSGIVING_2026_CALENDAR[6]!.rewards).toContainEqual({ kind: "decoration", type: 55, count: 1 });
     expect(THANKSGIVING_2026_CALENDAR[11]!.rewards).toContainEqual({ kind: "shopItem", item: "POD" });
     expect(THANKSGIVING_2026_CALENDAR[13]!.rewards).toContainEqual({ kind: "decoration", type: 69, count: 1 });
+  });
+
+  test("Thanksgiving 2026 turkey ladder (owner, 13 Nov 2026): no pumpkin; Scarecrow at 150, Autumn Maple Tree at 200", () => {
+    expect(THANKSGIVING_2026_LADDER).toEqual([
+      { need: 25, rewards: [{ kind: "shiny", amount: 10 }] },
+      { need: 50, rewards: [] },
+      { need: 150, rewards: [{ kind: "decoration", type: 69, count: 1 }, { kind: "shiny", amount: 20 }] },
+      { need: 200, rewards: [{ kind: "decoration", type: 206, count: 1 }, { kind: "shiny", amount: 30 }] },
+    ]);
+    const thanksgiving = EVENTS.find((event) => event.id === "thanksgiving-2026")!;
+    const all = thanksgiving.ladder!.tiers.flatMap((tier) => tier.rewards);
+    expect(all.some((one) => one.kind === "decoration" && one.type === 110)).toBe(false);
+    // The 50 tier is paid in Glimmers alone: 100 of its own and the usual 35.
+    expect(thanksgiving.ladder!.tiers[1]!.rewards).toEqual([{ kind: "eventCoins", amount: 135 }]);
+    // Reachable in the event: at most one turkey an hour, 24 a day, over its 14 days.
+    const days = (Date.parse(thanksgiving.endsAt) - Date.parse(thanksgiving.startsAt)) / 86_400_000;
+    expect(THANKSGIVING_2026_LADDER.at(-1)!.need).toBeLessThanOrEqual(days * 24);
   });
 
   test("Krallen Hunt: monthly from 15 Nov 2026, the 15th to the 1st, never during Halloween", () => {
