@@ -509,7 +509,9 @@ costs (issue #23, C7, `services/base/combat/saveBattle.ts`): `off` nothing; `log
 `log` is the way back) the same, then the save is refused with `attackReplayRejectedErr` (409,
 `reason: "replayMismatch"`, `fields`, "The server replayed this battle and got a different result,
 so it did not take this save.") before anything is written, so a Map Room 2 attack is left to the finaliser, which lands the server's own result
-from the checkpoint, and so is a Map Room 1 tribe attack (from its own checkpoint). The defender's `monsters` is not
+from the checkpoint, and so is a Map Room 1 tribe attack (from its own checkpoint). A Descent save is the exception
+(owner, 12 Nov 2026): the same warning and `Report` row, but no refusal; the attack lands with the server's own full
+battle, and the answer's `descent` block carries `overruled: true`. The defender's `monsters` is not
 compared (C2 ignores it). An `attackersiege` difference alone is logged but never refused
 (`LOG_ONLY_FIELDS`, issue #201): the server writes its own siege figure, and the attacker's stock
 can honestly move during an attack (bought in another tab after the map loaded). An honest web client fought the same battle with the same engine and the same inputs (the

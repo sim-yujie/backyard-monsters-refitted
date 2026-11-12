@@ -100,13 +100,33 @@ describe("recordBattleMismatches", () => {
   });
 
   test("reject: the same warning and row, then the save is refused", async () => {
-    const caught = await recordBattleMismatches(ctx, user, base, crafted, battle, stored, "reject").catch(
+    const caught = await recordBattleMismatches(ctx, user, base, crafted, battle, stored, "reject").then(
+      () => undefined,
       (err: unknown) => err as { data?: { reason?: string; fields?: string[] } }
     );
 
     expect(caught?.data).toEqual({ reason: "replayMismatch", fields: ["damage", "attackloot"] });
     expect(mismatchLines()[0]![1]).toMatchObject({ outcome: "rejected", mode: "reject" });
     expect(reports).toHaveLength(1);
+  });
+
+  test("reject without refusing (the Descent, owner 12 Nov 2026): the same warning and row, overruled, not thrown", async () => {
+    const overruled = await recordBattleMismatches(ctx, user, base, crafted, battle, stored, "reject", { refuse: false });
+
+    expect(overruled).toBe(true);
+    expect(mismatchLines()).toHaveLength(1);
+    expect(mismatchLines()[0]![1]).toMatchObject({ outcome: "rejected", mode: "reject", fields: ["damage", "attackloot"] });
+    expect(reports).toEqual([
+      "Attack save on base 1234 rejected (reject): disagrees with the replay on damage, attackloot [save 9]",
+    ]);
+  });
+
+  test("not overruled when nothing would be refused: an honest save, log mode, a siege stock alone", async () => {
+    const quiet = { refuse: false } as const;
+    expect(await recordBattleMismatches(ctx, user, base, honest, battle, stored, "reject", quiet)).toBe(false);
+    expect(await recordBattleMismatches(ctx, user, base, crafted, battle, stored, "log", quiet)).toBe(false);
+    expect(await recordBattleMismatches(ctx, user, base, otherSiege, battle, stored, "reject", quiet)).toBe(false);
+    expect(await recordBattleMismatches(ctx, user, base, crafted, battle, stored, "off", quiet)).toBe(false);
   });
 
   test("the default mode refuses a crafted save, with the message the client words alike (#201)", async () => {
@@ -118,7 +138,7 @@ describe("recordBattleMismatches", () => {
       battle,
       stored,
       DEFAULT_COMBAT_VALIDATION_MODE
-    ).catch((err: unknown) => err as { message?: string; data?: { reason?: string } });
+    ).then(() => undefined, (err: unknown) => err as { message?: string; data?: { reason?: string } });
 
     expect(caught?.data?.reason).toBe("replayMismatch");
     expect(caught?.message).toBe(
@@ -144,7 +164,7 @@ describe("recordBattleMismatches", () => {
       battle,
       stored,
       "reject"
-    ).catch((err: unknown) => err as { data?: { fields?: string[] } });
+    ).then(() => undefined, (err: unknown) => err as { data?: { fields?: string[] } });
 
     expect(caught?.data?.fields).toEqual(["damage", "attackloot"]);
     expect(mismatchLines()[0]![1]).toMatchObject({

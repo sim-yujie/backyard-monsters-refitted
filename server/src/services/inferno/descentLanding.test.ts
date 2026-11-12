@@ -90,8 +90,12 @@ mock.module("../../utils/logger.js", () => ({
   logger: { warn, error: mock(() => {}), info: mock(() => {}), debug: mock(() => {}) },
 }));
 
+/** The `Report` rows written, as their messages: the admins' Flagged list. */
+const reports: string[] = [];
 mock.module("../base/reportManager.js", () => ({
-  logReport: async () => {},
+  logReport: async (_user: unknown, message: string) => {
+    reports.push(message);
+  },
   logAttackViolation: async () => {},
   logBanReport: async () => {},
 }));
@@ -252,6 +256,7 @@ beforeEach(() => {
   flushes = 0;
   sql.length = 0;
   warn.mockClear();
+  reports.length = 0;
   achieved.mockClear();
   row = progressRow(0);
   userSave = {
@@ -704,5 +709,150 @@ describe("a Descent attack left without a save", () => {
     expect(await finaliseRowlessAttacksOf(ATTACKER, "load")).toBe(0);
     expect(userSave.iresources).toEqual(PURSE);
     expect(store.has(rowlessCheckpointKey(REF))).toBe(true);
+  });
+});
+
+/**
+ * A Descent save whose result disagrees with the server's battle under
+ * `COMBAT_SAVE_VALIDATION=reject` (owner, 12 Nov 2026, desk card
+ * "descent-refused-rule"): flagged for the admins exactly as before, but no
+ * longer refused, so the attack lands with the server's own full battle
+ * rather than from the finaliser's last checkpoint, up to 5 s short of it.
+ */
+describe("a Descent save the server's battle overrules (reject mode)", () => {
+  const mismatchLines = () =>
+    warn.mock.calls
+      .map((call) => call[1] as { event?: string; outcome?: string; fields?: string[]; rowless?: string } | undefined)
+      .filter((line) => line?.event === "attack-replay-mismatch");
+
+  beforeEach(() => {
+    (combatConfig as { mode: typeof MODE }).mode = "reject";
+  });
+
+  test("a screen loss the server's battle won lands the win: best %, beaten yard, loot", async () => {
+    startSession();
+    const loot = { r1: 400, r2: 300, r3: 200, r4: 100 };
+    canned = { damage: 93.4, destroyed: 0, attackloot: loot, buildinghealthdata: { "0": 0, "1": 0 } };
+    // The screen says 70%: a smaller fight, little loot.
+    const ctx = finalSave("201", {
+      damage: "70",
+      attackloot: JSON.stringify({ r1: 10, r2: 0, r3: 0, r4: 0 }),
+    });
+
+    expect(await run(ctx)).toBeNull();
+    expect(ctx.body.descent).toEqual({
+      won: true,
+      damage: 93,
+      level: 2,
+      loot,
+      total: { r1: PURSE.r1 + 400, r2: PURSE.r2 + 300, r3: PURSE.r3 + 200, r4: PURSE.r4 + 100 },
+      captured: false,
+      infernobaseid: null,
+      overruled: true,
+    });
+    expect(row!.descent_destroyed![0]).toBe(1);
+    expect(row!.descent_best![0]).toBe(93);
+    expect(userSave.iresources).toEqual({ r1: PURSE.r1 + 400, r2: PURSE.r2 + 300, r3: PURSE.r3 + 200, r4: PURSE.r4 + 100 });
+    // Spent: the finaliser has nothing left to land.
+    expect(store.has(descentSessionKey(ATTACKER))).toBe(false);
+    expect(achieved).toHaveBeenCalledTimes(1);
+
+    // Flagged as before: the same warning and the same Report row.
+    const lines = mismatchLines();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ outcome: "rejected", rowless: "descent" });
+    expect(lines[0]!.fields).toEqual(expect.arrayContaining(["damage", "attackloot"]));
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toMatch(/^Attack save on base 201 rejected \(reject\): disagrees with the replay on .*damage.* \[descent\]$/);
+  });
+
+  test("a forged win the server's battle lost lands the loss, the yard keeping the battle's health", async () => {
+    startSession();
+    const loot = { r1: 40, r2: 30, r3: 0, r4: 0 };
+    canned = { damage: 61.7, attackloot: loot, buildinghealthdata: { "1": 0, "2": 120 } };
+    const ctx = finalSave("201", FORGED);
+
+    expect(await run(ctx)).toBeNull();
+    expect(ctx.body.descent).toMatchObject({ won: false, damage: 61, level: 1, loot, overruled: true });
+    expect(row!.descent_destroyed![0]).toBe(0);
+    expect(row!.descent_best![0]).toBe(61);
+    expect(row!.descent_yards).toEqual({ "201": { health: { "1": 0, "2": 120 }, looted: loot } });
+    expect(userSave.iresources).toEqual({ ...PURSE, r1: PURSE.r1 + 40, r2: PURSE.r2 + 30 });
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toContain("rejected (reject)");
+  });
+
+  test("the champion comes home at the server's battle's health, not the screen's", async () => {
+    const GORGO = { t: 1, l: 3, hp: 3000, fb: 0, status: 0, fd: 0, ft: 0, pl: 0 };
+    userSave.champion = [{ ...GORGO }];
+    store.set(
+      descentSessionKey(ATTACKER),
+      JSON.stringify({
+        baseid: "201",
+        flingerCapacity: 2500,
+        session: serialiseAttackSession({
+          attackerid: ATTACKER,
+          attackid: ATTACK_ID,
+          startedat: now(),
+          entryHoused: { [MAIN_BASEID]: ARMY },
+          defenderForces: FORCES as never,
+          attackerAcademy: {},
+          championHealth: { "1": 3000 },
+        }),
+      })
+    );
+    canned = {
+      damage: 40,
+      championsFlung: [1],
+      attackerchampion: [{ ...GORGO, hp: 1234 }] as never,
+    };
+    const ctx = finalSave("201", {
+      ...FORGED,
+      attackerchampion: JSON.stringify([{ ...GORGO, hp: 2900 }]),
+    });
+
+    expect(await run(ctx)).toBeNull();
+    expect(ctx.body.descent).toMatchObject({ won: false, damage: 40, overruled: true });
+    expect((userSave.champion as { t: number; hp: number }[])[0]).toMatchObject({ t: 1, hp: 1234 });
+  });
+
+  test("a real replay of four Pokeys on yard 201 lands in full, to the save's last tick", async () => {
+    startSession();
+    const ctx = finalSave("201", FORGED);
+
+    expect(await run(ctx)).toBeNull();
+    expect(inputs).toHaveLength(1);
+    expect(inputs[0]!.tick).toBe(SCRATCH_TICK);
+    const server = replayAbandonedAttack(inputs[0]!);
+    expect(ctx.body.descent).toMatchObject({ won: false, damage: Math.floor(server.damage), overruled: true });
+    expect(row!.descent_best![0]).toBe(Math.floor(server.damage));
+    expect(reports).toHaveLength(1);
+  });
+
+  test("a save that agrees with the server's battle is not flagged or marked", async () => {
+    startSession();
+    canned = { damage: 50, attackloot: { r1: 5, r2: 0, r3: 0, r4: 0 }, buildinghealthdata: { "1": 0 } };
+    const ctx = finalSave("201", {
+      damage: "50",
+      attackloot: JSON.stringify({ r1: 5, r2: 0, r3: 0, r4: 0 }),
+      buildinghealthdata: JSON.stringify({ "1": 0 }),
+    });
+
+    expect(await run(ctx)).toBeNull();
+    expect(mismatchLines()).toEqual([]);
+    expect(reports).toEqual([]);
+    expect(ctx.body.descent).not.toHaveProperty("overruled");
+  });
+
+  test("in log mode a disagreeing save lands the server's battle as before, unmarked", async () => {
+    (combatConfig as { mode: typeof MODE }).mode = "log";
+    startSession();
+    canned = { damage: 12, attackloot: { r1: 5, r2: 0, r3: 0, r4: 0 } };
+    const ctx = finalSave("201", FORGED);
+
+    expect(await run(ctx)).toBeNull();
+    expect(ctx.body.descent).toMatchObject({ won: false, damage: 12 });
+    expect(ctx.body.descent).not.toHaveProperty("overruled");
+    expect(reports[0]).toContain("flagged (log)");
   });
 });
