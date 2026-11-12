@@ -60,8 +60,14 @@ export interface SavedInfo {
    * banked: a Moloch tribe's loot the Inferno purse had no room for (WP 2.10).
    */
   readonly taken?: ResourceAmounts | null;
-  /** The result as the server landed it, when it has its own (a Moloch tribe's Under Hall, WP 2.10). */
-  readonly result?: { readonly title: string; readonly outcome: string; readonly tone: OutcomeTone } | null;
+  /**
+   * The result as the server landed it, when it has its own (a Moloch tribe's
+   * Under Hall, WP 2.10; a Descent fight the server's battle overruled). With
+   * no title the panel keeps its own.
+   */
+  readonly result?: { readonly title?: string; readonly outcome: string; readonly tone: OutcomeTone } | null;
+  /** The saved line's words, when not just "Result saved." */
+  readonly note?: string;
   /** Unix seconds when the target is back, for a Moloch tribe left wrecked (WP 2.10). */
   readonly backAt?: number | null;
   /** Unix seconds until which the defender is now protected, if the server said so. */
@@ -350,13 +356,13 @@ export class EndAttackPanel {
   setSaved(info: SavedInfo = {}): void {
     if (info.credited) this.showLoot(info.credited, info.taken ?? null);
     if (info.result) {
-      this.panel.setTitle(info.result.title);
+      if (info.result.title) this.panel.setTitle(info.result.title);
       this.outcome.textContent = info.result.outcome;
       this.panel.element.classList.remove("attack-end--win", "attack-end--lose", "attack-end--neutral");
       this.panel.element.classList.add(`attack-end--${info.result.tone}`);
     }
     this.status_ = "saved";
-    this.setStatus("saved", "Result saved.");
+    this.setStatus("saved", info.note ?? "Result saved.");
     this.retryButton.hidden = true;
     this.leaveButton.hidden = true;
     this.hideLeave();

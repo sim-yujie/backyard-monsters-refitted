@@ -49,6 +49,7 @@ import { jobQuestEvents } from "../../services/quests/hooks.js";
 import { addQuestEvents, claimableCount, readQuests, recordQuests, type QuestEvents } from "../../services/quests/state.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
+import { pruneFiredTraps } from "../../services/yardplanner/firedTraps.js";
 
 /**
  * The yard action wrapper every `POST /bm/yard/<action>` runs
@@ -366,6 +367,9 @@ export const applyOutcome = (save: Save, user: User, outcome: YardOutcome<unknow
   }
 
   if (outcome.slices) Object.assign(save, outcome.slices);
+  // A trap built by hand on a fired trap's spot (or anything else put there)
+  // answers that entry: the re-arm list must not keep offering it.
+  if (outcome.slices?.buildingdata) pruneFiredTraps(save);
 
   if (RESOURCE_KEYS.some((key) => debit[key] > 0)) {
     const resources = { ...(save.resources ?? {}) };

@@ -16,6 +16,7 @@ import { yardKindOf, type YardKind } from "../../services/yardplanner/costs.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { lockInfernoRow, lockOwnYard } from "../yard/yardAction.js";
 import { countAfterCommit } from "../../services/alliance/allianceProgress.js";
+import { pruneFiredTraps } from "../../services/yardplanner/firedTraps.js";
 
 /**
  * The yard a Yard Planner route acts on (outposts WP3, issue #184).
@@ -88,6 +89,7 @@ export const onPlannerYard = async <T>(
     // of war sight cache (issue #329, #330 WP1).
     const flingerBefore = save.flinger;
     const result = run(save, getCurrentDateTime());
+    pruneFiredTraps(save);
     postgres.em.persist(save);
     await postgres.em.flush();
     emitLevelChange(user.userid, user.username, playerLevelOf(save));
@@ -103,6 +105,7 @@ export const onPlannerYard = async <T>(
     // Hatches the catch-up finished count for quests, as a yard action's do.
     if (!yard.inferno) recordQuests(yard.main, now, jobQuestEvents(completed));
     const batchResult = run(yard.save, now);
+    pruneFiredTraps(yard.save);
     // A Resource Pod an Apply finishes moves the Inferno caps, as a yard
     // action's does (`runYardAction`).
     if (yard.inferno) syncInfernoCap(yard.main, yard.inferno);

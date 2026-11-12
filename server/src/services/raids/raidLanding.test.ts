@@ -144,6 +144,9 @@ describe("landRaid", () => {
 
   test("a trap that fired is gone and kept for re-arming", () => {
     const save = saveOf();
+    // Town Hall 4: room for 20 Booby Traps (Town Hall 1 allows none, and the
+    // re-arm list keeps only what the hall has room for, `liveFiredTraps`).
+    save.buildingdata!["0"]!.l = 4;
     land(save, outcomeOf({ firedTraps: [3] }));
     expect(save.buildingdata!["3"]).toBeUndefined();
     expect(save.firedtraps).toEqual([expect.objectContaining({ t: 24, X: 200, Y: 0 })]);
