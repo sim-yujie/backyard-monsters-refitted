@@ -169,19 +169,16 @@ describe("tabClaimable and utcDayOf", () => {
 });
 
 describe("paceHint (weekly quests adapt to the player's pace)", () => {
-  it("says Harder or Easier with last week's need", () => {
-    expect(paceHint({ kind: "weeklyFights", need: 13, was: 10 })).toEqual({ up: true, text: "▲ Harder: 13 fights (was 10)" });
-    expect(paceHint({ kind: "weeklyFights", need: 9, was: 10 })).toEqual({ up: false, text: "▼ Easier: 9 fights (was 10)" });
-    expect(paceHint({ kind: "weeklyLootGoo", need: 24_300_000, was: 19_400_000 })).toEqual({
-      up: true,
-      text: "▲ Harder: 24.3M Goo (was 19.4M)",
-    });
-    expect(paceHint({ kind: "weeklyLootPutty", need: 16_500_000, was: 19_400_000 })?.text).toBe("▼ Easier: 16.5M Putty (was 19.4M)");
+  it("says Harder or Easier with last week's need, the reason as a tooltip", () => {
+    expect(paceHint({ need: 13, was: 10 })).toEqual({ up: true, text: "▲ Harder (was 10)", why: "Last week's was done in 2 days or less" });
+    expect(paceHint({ need: 9, was: 10 })).toEqual({ up: false, text: "▼ Easier (was 10)", why: "Last week's took 6+ days or was not done" });
+    expect(paceHint({ need: 24_300_000, was: 19_400_000 })?.text).toBe("▲ Harder (was 19.4M)");
+    expect(paceHint({ need: 16_500_000, was: 19_400_000 })?.text).toBe("▼ Easier (was 19.4M)");
   });
 
   it("says nothing when the need did not move", () => {
-    expect(paceHint({ kind: "weeklyFights", need: 10 })).toBeNull();
-    expect(paceHint({ kind: "weeklyFights", need: 10, was: 10 })).toBeNull();
-    expect(paceHint({ kind: "weeklyHelpGift", need: 5 })).toBeNull();
+    expect(paceHint({ need: 10 })).toBeNull();
+    expect(paceHint({ need: 10, was: 10 })).toBeNull();
+    expect(paceHint({ need: 5 })).toBeNull();
   });
 });

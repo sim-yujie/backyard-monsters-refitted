@@ -118,19 +118,22 @@ export const questHint = (quest: Pick<QuestView, "kind">): string | null => {
 };
 
 /**
- * The line under a weekly Fighting or Resources quest whose need moved with
- * the player's pace (owner, 9 Nov: weekly quests adapt to how fast they are
- * finished): "▲ Harder: 13 fights (was 10)", "▼ Easier: 16.5M Goo (was 19.4M)".
- * Null when the need did not move.
+ * The short line under a weekly Fighting or Resources quest whose need moved
+ * with the player's pace (owner, 9 Nov: weekly quests adapt to how fast they
+ * are finished; 12 Nov rule: icons and numbers over words). The title already
+ * shows the new need, so the line is the arrow, the word and last week's need:
+ * "▲ Harder (was 10)", "▼ Easier (was 19.4M)". `why` is its tooltip. Null when
+ * the need did not move.
  */
-export const paceHint = (quest: Pick<QuestView, "kind" | "need" | "was">): { up: boolean; text: string } | null => {
+export const paceHint = (quest: Pick<QuestView, "need" | "was">): { up: boolean; text: string; why: string } | null => {
   const { need, was } = quest;
   if (was === undefined || was === need) return null;
   const up = need > was;
-  const resource = LOOT_KINDS[quest.kind];
-  const amount =
-    quest.kind === "weeklyFights" ? `${need} ${need === 1 ? "fight" : "fights"}` : resource ? `${shortAmount(need)} ${RESOURCE_WORDS[resource]}` : shortAmount(need);
-  return { up, text: `${up ? "▲ Harder" : "▼ Easier"}: ${amount} (was ${shortAmount(was)})` };
+  return {
+    up,
+    text: `${up ? "▲ Harder" : "▼ Easier"} (was ${shortAmount(was)})`,
+    why: up ? "Last week's was done in 2 days or less" : "Last week's took 6+ days or was not done",
+  };
 };
 
 /** The resource a weekly loot quest names, or null. */

@@ -264,11 +264,12 @@ describe("resetText", () => {
     panel.render(list({ quests: { ...view, weekly } }));
     const rows = all(".quests-set--weekly .quest");
     expect(rows[0]!.querySelector(".quest__pace")).toBeNull();
-    expect(rows[1]!.querySelector(".quest__pace--down")?.textContent).toBe("▼ Easier: 900K Goo (was 1.2M)");
-    expect(rows[2]!.querySelector(".quest__pace--up")?.textContent).toBe("▲ Harder: 13 fights (was 10)");
+    expect(rows[1]!.querySelector(".quest__pace--down")?.textContent).toBe("▼ Easier (was 1.2M)");
+    expect(rows[2]!.querySelector(".quest__pace--up")?.textContent).toBe("▲ Harder (was 10)");
+    expect(rows[2]!.querySelector<HTMLElement>(".quest__pace")?.title).toBe("Last week's was done in 2 days or less");
     // Under the title, above the "what counts" line.
     expect(rows[2]!.querySelector(".quest__title")?.nextElementSibling?.classList.contains("quest__pace")).toBe(true);
-    expect(q(".quests-set__pace-note")?.textContent).toBe("Weekly quests adapt to how fast you finish them.");
+    expect(q(".quests-set__pace-note")?.textContent).toBe("Weekly quests follow your pace.");
   });
 
   it("shows no Harder / Easier line when no need moved", () => {
