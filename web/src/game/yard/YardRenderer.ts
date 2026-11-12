@@ -20,6 +20,7 @@ import { routeBetween } from "@/game/guide/MonsterWalkIn";
 import { yardArtAtlas, type YardArtAtlas } from "./yardAtlas";
 import { loadSheet, MonsterSheetTextures, prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { currentSeason, onSeasonChange, type Season } from "@/game/season";
+import { onGroundChange } from "./groundChoice";
 import { classicLook } from "@/game/classicLook";
 import { thanksgivingSkin } from "./thanksgivingSkin";
 import { YardTurkeys } from "./YardTurkeys";
@@ -189,6 +190,8 @@ export class YardRenderer {
   /** Whether `destroy` has run: a pumpkin still being retried then gives up. */
   private destroyed = false;
   private unwatchSeason: (() => void) | null = null;
+  /** Follows the ground the player picks in Settings (`groundChoice.ts`). */
+  private unwatchGround: (() => void) | null = null;
   private yard: Yard | null = null;
   /** Which buildings are working and the clock to read it on (#255); see `setWork`. */
   private work: WorkSource | null = null;
@@ -253,6 +256,8 @@ export class YardRenderer {
       this.setSeason(currentSeason());
       this.unwatchSeason = onSeasonChange((season) => this.setSeason(season));
     }
+    // And the ground the player picks, at once (owner, 12 Nov 2026).
+    this.unwatchGround ??= onGroundChange((ground) => this.ground.setGround(ground));
   }
 
   /**
@@ -466,10 +471,12 @@ export class YardRenderer {
     if (!target || range === null) return;
 
     const { rx, ry } = rangeRadii(range, YardView.ISO);
+    // White, as Flash drew it, unless the ground would swallow white (Snow).
+    const colour = this.ground.rangeInk() ?? RANGE_COLOUR;
     this.rangeOval
       .ellipse(0, 0, rx, ry)
-      .fill({ color: RANGE_COLOUR, alpha: RANGE_FILL_ALPHA })
-      .stroke({ color: RANGE_COLOUR, alpha: RANGE_EDGE_ALPHA, width: 1, pixelLine: true });
+      .fill({ color: colour, alpha: RANGE_FILL_ALPHA })
+      .stroke({ color: colour, alpha: RANGE_EDGE_ALPHA, width: 1, pixelLine: true });
     const offset = this.buildings.offsetOf(target.id);
     this.rangeOval.position.set(target.centreX + offset.x, target.centreY + offset.y);
   }
@@ -1170,6 +1177,8 @@ export class YardRenderer {
     this.openSheets();
     this.unwatchSeason?.();
     this.unwatchSeason = null;
+    this.unwatchGround?.();
+    this.unwatchGround = null;
     this.collect.destroy();
     this.giblets.destroy();
     this.blends.clear();

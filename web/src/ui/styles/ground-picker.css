@@ -1,0 +1,64 @@
+/* Settings, Look and sound: the yard ground swatches (ui/groundPicker.ts, owner 12 Nov 2026). */
+
+.ground-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.ground-picker__label {
+  font-weight: 600;
+  color: var(--colour-text-strong);
+}
+
+/* Wraps to a second line on a phone; never scrolls sideways. */
+.ground-picker__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ground-picker__swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 44px;
+  padding: 3px 3px 4px;
+  border: 2px solid var(--colour-border);
+  border-radius: 8px;
+  background: var(--colour-surface-control);
+  color: var(--colour-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.ground-picker__swatch:hover {
+  background: var(--colour-surface-control-hover);
+  color: var(--colour-text);
+}
+
+.ground-picker__swatch:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* The chosen ground: framed in the accent colour, its name bold. */
+.ground-picker__swatch[aria-checked="true"] {
+  border-color: var(--colour-accent);
+  background: var(--colour-surface-selected);
+  color: var(--colour-text-strong);
+  font-weight: 700;
+  box-shadow: 0 0 0 1px var(--colour-accent);
+}
+
+.ground-picker__picture {
+  display: block;
+  width: 72px;
+  height: 48px;
+  border-radius: 4px;
+  object-fit: cover;
+}
