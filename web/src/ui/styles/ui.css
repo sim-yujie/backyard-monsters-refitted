@@ -2193,9 +2193,12 @@ select option {
 /* One size for the four tabs, so the window does not jump between them.
    600px wide so the four tab words fit between Modern's wide painted tab ends
    on a computer: at 560px "Notifications" ran under the frame (owner, 12 Nov
-   2026). */
+   2026). Its own max-width too: `.panel`'s min(92vw, 560px) capped it at
+   560px and "Notifications" still ran under the frame. 92vw keeps phones
+   exactly as wide as before. */
 .account-settings-popup {
   width: min(600px, calc(100vw - 16px));
+  max-width: min(92vw, 600px);
   height: min(calc(100dvh - 32px), 640px);
 }
 

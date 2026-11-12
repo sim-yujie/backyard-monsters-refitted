@@ -98,7 +98,15 @@ describe("AccountSettings", () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const ui = readFileSync(resolve(here, "styles/ui.css"), "utf8").replace(/\r\n/g, "\n");
     // Modern's 22px tab ends need the room: at 560px "Notifications" ran under the frame.
-    expect(ui).toMatch(/\.account-settings-popup \{\s*width: min\(600px,/);
+    // Its own max-width too, later in the file than `.panel`'s 560px cap, which
+    // otherwise kept the window at 560px (lead, 1280x800 Modern, 12 Nov 2026).
+    expect(ui).toMatch(
+      /\.account-settings-popup \{\s*width: min\(600px, [^;]+;\s*max-width: min\(92vw, 600px\);/,
+    );
+    expect(ui.indexOf("max-width: min(92vw, 560px)")).toBeGreaterThan(-1);
+    expect(ui.indexOf(".account-settings-popup {")).toBeGreaterThan(
+      ui.indexOf("max-width: min(92vw, 560px)"),
+    );
     expect(ui).toMatch(/\.account-settings__tab-short \{\s*display: none;/);
     expect(ui).toMatch(
       /@media \(width <= 500px\) \{\s*\.account-settings__tab-long \{\s*display: none;\s*\}\s*\.account-settings__tab-short \{\s*display: inline;/,
