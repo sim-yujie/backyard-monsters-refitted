@@ -716,6 +716,22 @@ export const mailStatusLimiter = RateLimit.middleware({
   },
 });
 
+/**
+ * The game's Reports window for moderators (`/mod/...`, owner 12 Nov 2026):
+ * the button's count every couple of minutes, the list, a player, the chat
+ * around a line and the steps. 60 a minute is far above a moderator's use.
+ */
+export const modReportsLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 60,
+  prefixKey: "mod-reports",
+  keyGenerator: byUser("mod-reports"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many requests. Please slow down.", reason: "rateLimited" };
+  },
+});
+
 /** A moderator finding a player to write to (`/player/mail/findplayer`): 20 a minute. */
 export const mailFindPlayerLimiter = RateLimit.middleware({
   interval: { min: 1 },

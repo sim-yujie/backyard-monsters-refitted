@@ -6,7 +6,9 @@ import { logger } from "../../utils/logger.js";
 /**
  * Chat moderators (owner, 7 Nov 2026): players the owner adds on the
  * dashboard's Moderators list. In chat their lines carry a blue [Mod] badge
- * (`chat/chatModerators.ts`); they get no other powers and no dashboard.
+ * (`chat/chatModerators.ts`); they may mail any player (`services/mail/modMail.ts`)
+ * and open the game's Reports window (`services/moderator/modReports.ts`:
+ * Close, Warn, Mute up to 7 days). No dashboard and no bans.
  *
  * Kept in `bym.chat_moderator` (migration `20261109_AddChatModerators.ts`).
  * A change takes effect at once: the route tells the chat gateway to read

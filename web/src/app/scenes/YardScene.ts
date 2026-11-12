@@ -139,6 +139,7 @@ import { MailDoor } from "@/ui/mail/MailDoor";
 import { NotificationDoor } from "@/ui/notifications/NotificationDoor";
 import { DefencesDoor } from "@/ui/defences/DefencesDoor";
 import { AllianceDoor } from "@/ui/alliance/AllianceDoor";
+import { ReportsDoor } from "@/ui/moderation/ReportsDoor";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
 import { WorldChatBox } from "@/ui/chat/WorldChatBox";
 import { centredLayout, closeCentreWindow, onCentreWindowOpen } from "@/ui/centreWindow";
@@ -437,6 +438,8 @@ export class YardScene implements Scene {
   private defences: DefencesDoor | null = null;
   /** The Alliance button in the More fan and its window (beta 7): the own yard of a Map Room 2 player. */
   private alliance: AllianceDoor | null = null;
+  /** Moderators only (owner, 12 Nov 2026): chat reports in the game. */
+  private reports: ReportsDoor | null = null;
   /**
    * World chat's box (#282), on every yard while the player's "World chat"
    * switch is on; the connection is `worldChat`'s and outlives it.
@@ -770,6 +773,17 @@ export class YardScene implements Scene {
         onChanged: () => void this.store?.refresh(),
       });
       this.defences.button.element.after(this.alliance.button);
+      // Reports (owner, 12 Nov 2026): last in the More fan, shown only to moderators (the server says who).
+      this.reports = new ReportsDoor({
+        container: context.overlay.modal,
+        onOpen: () => {
+          this.mail?.close();
+          this.bell?.close();
+          this.defences?.close();
+          this.alliance?.close();
+        },
+      });
+      this.alliance.button.after(this.reports.button);
     }
     context.overlay.content.append(this.status);
     this.inset = { top: this.hud.element.getBoundingClientRect().bottom, bottom: 0 };
@@ -824,6 +838,8 @@ export class YardScene implements Scene {
     this.defences = null;
     this.alliance?.destroy();
     this.alliance = null;
+    this.reports?.destroy();
+    this.reports = null;
     this.chat?.destroy();
     this.chat = null;
     this.friendsButton?.destroy();
