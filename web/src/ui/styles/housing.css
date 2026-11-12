@@ -472,6 +472,22 @@
   }
 }
 
+/* ── Monster Bunkers (`BunkerPanel.ts` in the Housing tab, owner 12 Nov 2026) ── */
+
+/* No bunker built: no section; one bunker: no picker (their display beats
+   the hidden attribute). */
+.housing-section[hidden],
+.housing-bunkers__pick[hidden] {
+  display: none;
+}
+
+/* With several bunkers, one button each in the bunker's own switch look
+   (bunker.css `.bunker-switch`), the chosen one lit. */
+.housing-bunkers__pick {
+  align-self: flex-start;
+  min-width: min(100%, 320px);
+}
+
 /* ── Housing Expansion ───────────────────────────────────────────────────── */
 
 .housing-expansion {

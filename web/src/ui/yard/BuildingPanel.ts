@@ -36,7 +36,7 @@ import { formatAmount, formatCountdown } from "@/ui/format";
 import { icon } from "@/ui/icons";
 import { HousingJuice } from "@/ui/monsters/HousingJuice";
 import { HousingView } from "@/ui/monsters/HousingView";
-import { MonstersTabId } from "@/ui/monsters/monstersTab";
+import { MonsterBuilding, MonstersTabId } from "@/ui/monsters/monstersTab";
 import { gameIcon, iconAmount, type GameIconName } from "@/ui/gameIcon";
 import {
   costAmounts,
@@ -62,10 +62,7 @@ import {
 import { buildingHealthLabel, buildingInfo, unlockText, type InfoRow, type InfoValue } from "./buildingInfo";
 import { buttonUrl } from "@/game/yard/buildButtonArt";
 import { BaiterPanel } from "./BaiterPanel";
-import { BunkerPanel } from "./BunkerPanel";
-import { ChamberPanel } from "./ChamberPanel";
-import { ChampionPanel } from "./ChampionPanel";
-import { CHAMPION_CAGE_TYPE, CHAMPION_CHAMBER_TYPE, withChampionsHealed } from "@/game/yard/championModel";
+import { withChampionsHealed } from "@/game/yard/championModel";
 import { RepairBlock } from "./RepairBlock";
 import { ShinyButton } from "./ShinyButton";
 import { describeSeconds } from "./upgradeText";
@@ -87,7 +84,9 @@ export const AUTO_BANKING = "Auto-banking: what it makes goes straight to your m
  * the running job with its countdown, speed-ups and Cancel, or the next
  * upgrade with its cost, time and the one reason it cannot start — then an
  * Open button for the buildings that are doors (Map Room, Yard Planner, the
- * monster buildings' tabs of the Monsters screen), and
+ * monster buildings' tabs of the Monsters screen: since 12 Nov 2026 the
+ * Champion Cage and Chamber, Monster Juicer and Monster Bunker too, whose
+ * controls live in that screen now), and
  * finally Details: every field the save sends, collapsed.
  *
  * What is offered and what it costs is decided in `buildingActions.ts`; this
@@ -178,19 +177,17 @@ const SPEEDUP_LABEL: Readonly<Record<SpeedupItem, string>> = {
 
 type Status = { readonly tone: "good" | "bad"; readonly content: (Node | string)[] };
 
-/** The Champion Cage's and Chamber's two tabs: its champion(s), then the building's own card. */
-type CageTab = "champion" | "building";
 
-const CAGE_TABS: ReadonlyArray<readonly [CageTab, string]> = [
-  ["champion", "Champion"],
-  ["building", "Building"],
-];
-
-/** A building that opens on its champions: the cage on its one, the chamber on all it holds. */
-type ChampionHome = "cage" | "chamber";
-
-/** The first tab's word: the cage holds one champion, the chamber several. */
-const CHAMPION_TAB: Readonly<Record<ChampionHome, string>> = { cage: "Champion", chamber: "Champions" };
+/**
+ * The monster buildings whose Open button names them ("Open Champion Cage"):
+ * the four whose own controls moved into the Monsters screen on 12 Nov 2026.
+ */
+const NAMED_OPEN: ReadonlySet<number> = new Set([
+  MonsterBuilding.CHAMPION_CAGE,
+  MonsterBuilding.CHAMPION_CHAMBER,
+  MonsterBuilding.JUICER,
+  MonsterBuilding.BUNKER,
+]);
 
 /** The live parts of the job block, refreshed every second without a redraw. */
 interface JobRefs {
@@ -215,22 +212,8 @@ export class BuildingPanel {
   /** Whether the info rows carry the health row (the heart), so Details need not. */
   private infoHasHealth = false;
   private readonly actions: HTMLElement;
-  /** Holds a Monster Bunker's controls while they are open (`BunkerPanel.ts`). */
-  private readonly bunkerSlot: HTMLElement;
-  private bunker: BunkerPanel | null = null;
   /** The Baiter's practice-attack window while it is open (#126, #308). */
   private baiter: BaiterPanel | null = null;
-  /** Holds the Champion Cage's or Chamber's controls while they are open (`ChampionPanel.ts`, `ChamberPanel.ts`). */
-  private readonly championSlot: HTMLElement;
-  private champion: ChampionPanel | ChamberPanel | null = null;
-  /**
-   * A built Champion Cage on the own yard opens straight on its champion
-   * (owner, 28 Oct: no second click), in a wider panel; the building's own
-   * card (upgrade, repair, details) is the second tab. The Champion Chamber
-   * does the same with its frozen champions (owner, 28 Oct: "the same treatment").
-   */
-  private readonly cageTabs: HTMLElement;
-  private cageTab: CageTab = "champion";
   private readonly status: HTMLElement;
   /** A Housing's level chip beside the title ("Level 6 · max"). */
   private readonly chip: HTMLElement;
@@ -306,35 +289,6 @@ export class BuildingPanel {
     this.actions = document.createElement("div");
     this.actions.className = "building-panel__actions";
 
-    this.bunkerSlot = document.createElement("div");
-    this.bunkerSlot.className = "building-panel__bunker";
-    this.bunkerSlot.hidden = true;
-
-    this.championSlot = document.createElement("div");
-    this.championSlot.className = "building-panel__champion";
-    this.championSlot.hidden = true;
-
-    this.cageTabs = document.createElement("div");
-    this.cageTabs.className = "tabs tab-row building-panel__tabs";
-    this.cageTabs.setAttribute("role", "tablist");
-    this.cageTabs.setAttribute("aria-label", "Champion Cage");
-    this.cageTabs.hidden = true;
-    for (const [tab, label] of CAGE_TABS) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "tabs__tab building-panel__tab";
-      button.dataset["tab"] = tab;
-      button.setAttribute("role", "tab");
-      button.textContent = label;
-      button.addEventListener("click", () => this.showCageTab(tab));
-      this.cageTabs.append(button);
-    }
-    // Two tabs: either arrow moves to the other one.
-    this.cageTabs.addEventListener("keydown", (event) => {
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-      event.preventDefault();
-      this.showCageTab(this.cageTab === "champion" ? "building" : "champion");
-    });
 
     this.status = document.createElement("p");
     this.status.className = "building-panel__status";
@@ -395,8 +349,6 @@ export class BuildingPanel {
     this.facts.className = "cell-facts";
     this.details.append(summary, this.facts);
 
-    // The cage's and chamber's tabs sit over the body, which scrolls alone.
-    this.panel.setHead(this.cageTabs);
     this.panel.setContent(
       this.blurb,
       this.kind,
@@ -405,8 +357,6 @@ export class BuildingPanel {
       this.housingSlot,
       this.juiceSheet,
       this.actions,
-      this.bunkerSlot,
-      this.championSlot,
       this.footer,
       this.status,
       this.details,
@@ -433,13 +383,10 @@ export class BuildingPanel {
       // A different building's Shiny buttons are no use and may be armed.
       for (const button of this.shiny.values()) button.destroy();
       this.shiny.clear();
-      this.closeBunker();
       this.closeBaiter();
-      this.closeChampion();
       this.closeJuice();
       this.toggleMore(false);
       this.detailsShown = false;
-      this.cageTab = "champion";
     }
     this.building = building;
     if (this.isHousing(building)) {
@@ -458,9 +405,6 @@ export class BuildingPanel {
       if (this.repairView) {
         guideBus.emit("screen", { id: GuideScreen.REPAIR, root: this.element, header: this.panel.titlebar });
       }
-      if (this.champion instanceof ChampionPanel) {
-        guideBus.emit("screen", { id: GuideScreen.CHAMPION, root: this.champion.element, header: null });
-      }
     }
   }
 
@@ -470,7 +414,6 @@ export class BuildingPanel {
     for (const entry of this.countdowns) {
       entry.node.textContent = formatCountdown(entry.endsAt - now);
     }
-    this.champion?.tick();
     this.housing?.tick();
     const building = this.building;
     if (building && this.yard && this.repairView) {
@@ -508,73 +451,7 @@ export class BuildingPanel {
     this.renderInfo(building);
     this.renderHousing(building);
     this.renderActions(building);
-    this.renderCage(building);
-    this.bunker?.show();
-    this.champion?.show();
     this.renderDetails(building);
-  }
-
-  /** A built cage or chamber on the own yard: always on its champions, with the building a tab away. */
-  private championHome(building: YardBuilding): ChampionHome | null {
-    if (this.yard === undefined || building.level <= 0) return null;
-    if (building.type === CHAMPION_CAGE_TYPE) return "cage";
-    if (building.type === CHAMPION_CHAMBER_TYPE) return "chamber";
-    return null;
-  }
-
-  /**
-   * The cage's or chamber's tabs and which half shows: the champions, or the
-   * plain card's kind line, numbers, actions and Details. The champions'
-   * window is made here, so clicking the building is all it takes.
-   */
-  private renderCage(building: YardBuilding): void {
-    const store = this.yard?.store;
-    const home = store ? this.championHome(building) : null;
-    const on = home !== null && store !== undefined;
-    this.element.classList.toggle("building-panel--cage", on);
-    this.cageTabs.hidden = !on;
-    if (!on) {
-      delete this.element.dataset["cageTab"];
-      return;
-    }
-    if (!this.champion) {
-      this.champion = home === "cage" ? new ChampionPanel({ store }) : new ChamberPanel({ store });
-      this.championSlot.append(this.champion.element);
-    }
-    this.cageTabs.setAttribute("aria-label", home === "cage" ? "Champion Cage" : "Champion Chamber");
-    const first = this.cageTabs.querySelector<HTMLElement>('[data-tab="champion"]');
-    if (first) first.textContent = CHAMPION_TAB[home];
-    const tab = this.cageTab;
-    this.element.dataset["cageTab"] = tab;
-    for (const button of this.cageTabs.querySelectorAll<HTMLButtonElement>(".building-panel__tab")) {
-      const selected = button.dataset["tab"] === tab;
-      button.setAttribute("aria-selected", String(selected));
-      button.tabIndex = selected ? 0 : -1;
-    }
-    // A cage or chamber that needs repair says so on its Building tab.
-    const repair = repairOffer(building.id, store.save, store.credits, store.now()) !== null;
-    this.cageTabs.querySelector<HTMLElement>('[data-tab="building"]')?.classList.toggle("building-panel__tab--alert", repair);
-    const onChampion = tab === "champion";
-    this.championSlot.hidden = !onChampion;
-    this.kind.hidden = onChampion;
-    if (onChampion) {
-      this.info.hidden = true;
-      this.unlocks.hidden = true;
-      this.actions.hidden = true;
-    }
-    this.details.hidden = onChampion;
-  }
-
-  private showCageTab(tab: CageTab): void {
-    if (this.cageTab === tab) return;
-    this.cageTab = tab;
-    // The other tab opens at its top.
-    this.panel.body.scrollTop = 0;
-    this.render();
-    if (tab === "champion" && this.champion instanceof ChampionPanel) {
-      guideBus.emit("screen", { id: GuideScreen.CHAMPION, root: this.champion.element, header: null });
-    }
-    this.cageTabs.querySelector<HTMLElement>(`[data-tab="${tab}"]`)?.focus();
   }
 
   /**
@@ -913,14 +790,6 @@ export class BuildingPanel {
       }
       return button;
     }
-    if (model?.open === "bunker" && this.yard) {
-      const open = this.bunker !== null;
-      const button = actionButton(open ? "Close bunker" : "Open bunker", () => this.toggleBunker(), "btn--primary");
-      button.classList.add("building-panel__planner");
-      button.setAttribute("aria-expanded", String(open));
-      return button;
-    }
-    // The cage and chamber need no Open: they open on their champions, this card a tab away.
     const scene = this.yard?.scene;
     if (model?.open === "shop" && scene?.openShop) {
       const openShop = scene.openShop.bind(scene);
@@ -948,8 +817,11 @@ export class BuildingPanel {
     }
     if (model?.open === "monsters" && model.monstersTab && scene?.openMonsters) {
       const tab = model.monstersTab;
+      // The buildings whose controls moved into the screen say whose they open
+      // (owner, 12 Nov 2026: "an 'Open Champion Cage' button").
+      const named = NAMED_OPEN.has(building.type);
       const button = actionButton(
-        "Open",
+        named ? `Open ${building.name}` : "Open",
         () => scene.openMonsters?.(tab, { buildingId: building.id }),
         "btn--primary",
       );
@@ -1503,8 +1375,6 @@ export class BuildingPanel {
   private syncPending(): void {
     const store = this.yard?.store;
     if (!store) return;
-    this.bunker?.syncPending();
-    this.champion?.syncPending();
     this.housing?.syncPending();
     this.juice?.syncPending();
     for (const { key, button } of this.pendingButtons) {
@@ -1679,21 +1549,6 @@ export class BuildingPanel {
     this.status.replaceChildren(...status.content);
   }
 
-  /** Opens or closes the bunker's controls under the actions. */
-  private toggleBunker(): void {
-    const building = this.building;
-    const store = this.yard?.store;
-    if (this.bunker || !building || !store) {
-      this.closeBunker();
-    } else {
-      this.bunker = new BunkerPanel({ store, bunkerId: building.id });
-      this.bunkerSlot.append(this.bunker.element);
-      this.bunkerSlot.hidden = false;
-    }
-    this.render();
-    if (this.bunker) this.bunker.element.querySelector<HTMLElement>("[role=radio][aria-checked=true]")?.focus();
-  }
-
   /**
    * Opens the Baiter's practice-attack window over the yard (#126, #308): a
    * large window on the overlay's modal layer, the yard dimmed behind it.
@@ -1737,30 +1592,8 @@ export class BuildingPanel {
     this.baiter = null;
   }
 
-  private closeBunker(): void {
-    this.bunker?.destroy();
-    this.bunker = null;
-    this.bunkerSlot.hidden = true;
-  }
-
-  /** Opens the Champion Cage's or Chamber's controls when this panel is on one (the "Korath unlocked" popup). */
-  openChampion(): void {
-    const building = this.building;
-    const store = this.yard?.store;
-    if (!building || !store) return;
-    if (this.championHome(building)) this.showCageTab("champion");
-  }
-
-  private closeChampion(): void {
-    this.champion?.destroy();
-    this.champion = null;
-    this.championSlot.hidden = true;
-  }
-
   private dispose(): void {
-    this.closeBunker();
     this.closeBaiter();
-    this.closeChampion();
     this.closeJuice();
     this.toggleMore(false);
     this.housing?.destroy();
@@ -1820,7 +1653,7 @@ export class BuildingPanel {
     }
     this.addProduction(building, shown.repairing);
     if (dev) this.addArt(building);
-    // Nothing left to tell: no fold. (Housing and the cage tabs hide it too.)
+    // Nothing left to tell: no fold. (A Housing hides it too.)
     if (this.facts.childElementCount === 0) this.details.hidden = true;
   }
 

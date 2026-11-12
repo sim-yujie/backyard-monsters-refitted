@@ -1,9 +1,8 @@
 /*
- * The Monster Bunker's controls inside its building panel
- * (`web/src/ui/yard/BunkerPanel.ts`, design `docs/design/yard-buildings.md` §7.1).
- *
- * The panel sits in the 300px right dock, so every row stacks: the monster's
- * name over its stepper. Every value comes from tokens.css.
+ * The Monster Bunker's controls (`web/src/ui/yard/BunkerPanel.ts`, design
+ * `docs/design/yard-buildings.md` §7.1), in the Monsters screen's Housing tab
+ * since 12 Nov 2026 (the 300px building dock before). Every row stacks: the
+ * monster's name over its stepper. Every value comes from tokens.css.
  */
 
 .bunker {

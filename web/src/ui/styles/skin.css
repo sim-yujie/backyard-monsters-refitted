@@ -1131,6 +1131,14 @@
     padding-inline: 10px;
   }
 
+  /* The Monsters screen's six tabs (Champion joined them, owner 12 Nov
+     2026) across a phone: words a touch smaller and closer to the ends, so
+     the row fits 320px wide without sliding. */
+  :root[data-skin] .monsters-screen .tab-row > .tabs__tab {
+    padding-inline: 2px;
+    font-size: min(var(--text-sm), 3vw);
+  }
+
   /* The test report's words at the other tabs' size: all three fit 320px. */
   :root[data-skin] .panel .test-report__tab {
     font-size: var(--text-sm);
