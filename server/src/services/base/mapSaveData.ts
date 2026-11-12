@@ -5,6 +5,7 @@ import { FilterFrontendKeys } from "../../utils/FrontendKey.js";
 import { getOutpostOwnerSave } from "./getOutpostOwnerSave.js";
 import { isShinyLocked, visibleCredits } from "../user/shinyLock.js";
 import { maskYardForViewer, masksFor } from "./viewMask.js";
+import { liveFiredTraps } from "../yardplanner/firedTraps.js";
 
 type OwnerSave = Pick<Save, "resources">;
 
@@ -81,6 +82,12 @@ export const buildSaveData = (
   options: SaveDataOptions = {}
 ): Partial<Save> => {
   const filteredSave = FilterFrontendKeys(save);
+
+  // The owner's re-arm list, less what the yard has since answered: a trap
+  // rebuilt by hand on the spot, or a yard back at its cap (`liveFiredTraps`).
+  if (save.userid === user.userid && "firedtraps" in filteredSave) {
+    filteredSave.firedtraps = liveFiredTraps(save);
+  }
 
   const isOwner = save.type !== BaseType.INFERNO && save.userid === user.userid;
 

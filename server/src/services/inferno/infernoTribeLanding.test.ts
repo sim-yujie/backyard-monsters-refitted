@@ -380,6 +380,20 @@ describe("landing", () => {
     expect(tribeState()!.looted.r1).toBe(left + 1_000);
   });
 
+  test("reject mode still refuses a save its battle does not bear out: only the Descent lands it (owner, 12 Nov 2026)", async () => {
+    (combatConfig as { mode: typeof MODE }).mode = "reject";
+    startSession();
+    canned = { buildinghealthdata: { "1": 0 }, damage: 40, flung: { IC1: 6 } };
+    const ctx = finalSave("214", { damage: "100", destroyed: "1" });
+
+    const err = await run(ctx);
+    expect(err?.data?.reason).toBe("replayMismatch");
+    expect(ctx.body).toBeUndefined();
+    expect(transactions).toBe(0);
+    expect(store.has(infernoTribeSessionKey(ATTACKER))).toBe(true);
+    expect((inferno.monsters as { housed: Record<string, number> }).housed).toEqual(ARMY);
+  });
+
   test("a replay past its deadline lands nothing and keeps the session for a resent save", async () => {
     startSession();
     replayTimesOut = true;

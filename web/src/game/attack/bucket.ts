@@ -42,6 +42,14 @@ import { KRALLEN_TYPE, type AttackSession, type ChampionBlockReason } from "./At
  * past the payload, and Fill walks the rows in roster order so two presses of
  * Fill all land on the same numbers (§7, Q11).
  *
+ * Where the server cuts every fling to the payload (an Inferno attack, whose
+ * `flingCapacity` the server set), the picked champion goes in first and
+ * takes its own `bucket` from it, as Flash's `ATTACK.BucketAdd` and the
+ * server's `descentFightableLog` do ({@link reserved}). Picking a champion
+ * into a full bucket trims the last rows to make room, so the fling sent is
+ * never one the server would cut (Bluetenit's refused Descent saves, 10 Nov
+ * 2026).
+ *
  * ## The champion
  *
  * Per drop: one ordinary champion and Krallen, by type. Across the attack the session allows one ordinary
@@ -212,9 +220,22 @@ export class Bucket {
     return this.order.every((id) => this.count(id) === 0);
   }
 
-  /** Bucket units the composition costs. */
+  /** Bucket units the composition costs, with the room the picked champion takes ({@link reserved}). */
   cost(): number {
-    return bucketCost(this.composition().monsters, this.session.levels);
+    return bucketCost(this.composition().monsters, this.session.levels) + this.reserved();
+  }
+
+  /**
+   * The payload the picked champion takes before any monster goes in: its own
+   * `bucket` at its level, where the server cuts flings to the payload (an
+   * Inferno attack: `descentFightableLog`, `ATTACK.BucketAdd`). 0 with no
+   * champion picked, and 0 on any other attack, whose flings the server does
+   * not cut.
+   */
+  reserved(): number {
+    if (this.session.target.roster.flingCapacity === undefined) return 0;
+    const champion = this.picked()[0];
+    return champion ? flingCost({ monsters: {}, champion }, this.session.levels) : 0;
   }
 
   /** The flinger's payload: what one drop may cost at most; the server's, when it set one. */
@@ -341,6 +362,7 @@ export class Bucket {
     if (this.championTypes.includes(t)) return;
     const keep = this.championTypes.filter((other) => (other === KRALLEN_TYPE) !== (t === KRALLEN_TYPE));
     this.championTypes = [...keep, t];
+    this.trimToPayload();
     this.notify();
   }
 
@@ -481,11 +503,32 @@ export class Bucket {
       if (this.championTypes.some((other) => (other === KRALLEN_TYPE) === (t === KRALLEN_TYPE))) continue;
       this.championTypes.push(t);
     }
+    this.trimToPayload();
     this.notify();
     return true;
   }
 
   /* ── Internals ──────────────────────────────────────────────────────── */
+
+  /**
+   * Lowers rows, the last in roster order first, until the composition fits
+   * the payload again: after a champion is picked into a full bucket, whose
+   * own `bucket` now takes part of it ({@link reserved}). A no-op while it fits.
+   */
+  private trimToPayload(): void {
+    let over = this.cost() - this.capacity();
+    for (let i = this.order.length - 1; i >= 0 && over > 0; i--) {
+      const id = this.order[i]!;
+      const count = this.count(id);
+      const unit = this.unitCost(id);
+      if (count === 0 || unit <= 0) continue;
+      const cut = Math.min(count, Math.ceil(over / unit));
+      const next = count - cut;
+      if (next === 0) delete this.requested[id];
+      else this.requested[id] = next;
+      over -= cut * unit;
+    }
+  }
 
   private signature(): string {
     const state = this.session.state();

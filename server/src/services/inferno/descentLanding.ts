@@ -63,7 +63,12 @@ type BaseSaveData = TypeOf<typeof BaseSaveSchema>;
  * the start served. Its damage decides the attack (a win at 90%), its loot is
  * credited (capped by what the yard holds less what it gave before), and the
  * save's own `damage`, `destroyed`, health and `attackloot` are only compared
- * (`attack-replay-mismatch`).
+ * (`attack-replay-mismatch`). Where they disagree, even under
+ * `COMBAT_SAVE_VALIDATION=reject`, the save is flagged as any other but not
+ * refused: the attack lands with the server's own full battle, and the answer
+ * says so (`overruled`; owner, 12 Nov 2026). Refusing it left the finaliser to
+ * land the attack from its last checkpoint, up to 5 seconds short of the end:
+ * less damage, less loot, sometimes a yard that should have fallen.
  *
  * What lands: the flung monsters leave the main yard's housing; the loot goes
  * into the Inferno purse (`iresources`) with no cap; the yard is beaten or
@@ -94,6 +99,11 @@ export interface DescentLanded {
   captured: boolean;
   /** The player's Inferno yard, once captured. */
   infernobaseid: string | null;
+  /**
+   * The save's own result disagreed with the server's battle, which landed
+   * instead (owner, 12 Nov 2026). Present only then.
+   */
+  overruled?: true;
 }
 
 export const landDescentAttack = async (
@@ -161,15 +171,19 @@ const land = async (ctx: Context, user: User, saveData: BaseSaveData, finalises:
     battle,
     {
       entries: entries.filter((entry: { baseid?: unknown }) => String(entry?.baseid) === String(userSave.baseid)),
-      attackerchampion: saveData.attackerchampion,
+      // Overruled, the champions come home as the server's battle left them, as from a checkpoint.
+      attackerchampion: battle?.overruled ? battle.attackerchampion : saveData.attackerchampion,
       flinglog: saveData.flinglog,
     },
     now
   );
 };
 
-/** The server's battle for a Descent attack, with the log it fought. */
-type DescentBattle = AbandonedOutcome & { log: FlingLog };
+/**
+ * The server's battle for a Descent attack, with the log it fought, and
+ * whether it overruled the save's own result (`recordBattleMismatches`).
+ */
+type DescentBattle = AbandonedOutcome & { log: FlingLog; overruled?: boolean };
 
 /** The attacker's side of a landing: what the save (or the checkpoint) says of the attacker's own row. */
 interface DescentAttackerSide {
@@ -293,6 +307,7 @@ const writeDescentLanding = async (
       total: purseAmounts(userSave.iresources),
       captured: update.captured,
       infernobaseid: infernobaseid ?? null,
+      ...(battle?.overruled ? { overruled: true as const } : {}),
     },
   };
 };
@@ -354,11 +369,12 @@ const descentBattle = async (
 
   const base = { baseid: String(saveData.baseid) };
   const fought = await replayBattleForSave(ctx, user, base, input, "the finaliser lands it from its checkpoint");
-  const battle = { ...fought, log: input.log };
+  const battle: DescentBattle = { ...fought, log: input.log };
 
-  // Where the save disagrees with it: logged, or refused under
-  // `COMBAT_SAVE_VALIDATION=reject` before anything is written.
-  await recordBattleMismatches(
+  // Where the save disagrees with it: flagged, and under
+  // `COMBAT_SAVE_VALIDATION=reject` overruled rather than refused: the
+  // server's full battle lands (owner, 12 Nov 2026).
+  battle.overruled = await recordBattleMismatches(
     ctx,
     user,
     base,
@@ -373,7 +389,8 @@ const descentBattle = async (
     },
     battle,
     yard.buildingdata as JsonObject | undefined,
-    combatConfig.mode
+    combatConfig.mode,
+    { refuse: false }
   );
   return battle;
 };

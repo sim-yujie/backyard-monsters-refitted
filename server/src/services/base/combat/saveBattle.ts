@@ -89,8 +89,14 @@ export const replayBattleForSave = async (
  * leaves every row as it was and the `Report` row's flush carries nothing but
  * itself (as `recordVerdict.ts` relies on for the economy audit).
  *
+ * A Descent save passes `refuse: false` (owner, 12 Nov 2026): the same
+ * warning and the same `Report` row, still "rejected", but no refusal; the
+ * caller lands the server's own battle instead of the save's.
+ *
  * @param storedBuildingdata - The defender's `buildingdata` before the save.
- * @throws {ClientSafeError} `attackReplayRejectedErr` in `reject` mode.
+ * @returns Whether the save was overruled: `reject` mode, with a field that
+ *   is not log-only. Only ever true with `refuse: false`; otherwise it throws.
+ * @throws {ClientSafeError} `attackReplayRejectedErr` in `reject` mode, unless `refuse` is false.
  */
 /**
  * Fields a disagreement on is logged but never refused (issue #201). The server
@@ -108,11 +114,12 @@ export const recordBattleMismatches = async (
   client: ClientBattle,
   battle: AbandonedOutcome,
   storedBuildingdata: JsonObject | null | undefined,
-  mode: CombatValidationMode
-): Promise<void> => {
-  if (mode === "off") return;
+  mode: CombatValidationMode,
+  { refuse = true }: { readonly refuse?: boolean } = {}
+): Promise<boolean> => {
+  if (mode === "off") return false;
   const fields = battleMismatches(client, battle, storedBuildingdata);
-  if (fields.length === 0) return;
+  if (fields.length === 0) return false;
   const refused = fields.filter((field) => !LOG_ONLY_FIELDS.has(field));
   const rejected = mode === "reject" && refused.length > 0;
 
@@ -145,5 +152,6 @@ export const recordBattleMismatches = async (
     });
   }
 
-  if (rejected) throw attackReplayRejectedErr(refused);
+  if (rejected && refuse) throw attackReplayRejectedErr(refused);
+  return rejected;
 };
