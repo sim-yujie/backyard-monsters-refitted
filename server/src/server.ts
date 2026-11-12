@@ -203,6 +203,8 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // The bot sweep (issue #240): grows, repairs and rebalances Map Room 1 bots.
   // Off unless BOTS_BRAIN=on, and then not even loaded, so a server without
   // bots runs exactly as before; a failure to start it never stops the server.
+  // Bots are retired (owner, 12 Nov 2026, BOTS_RETIRED): never on production;
+  // elsewhere it tends only the seeded Map Room 2 dev players.
   if (botConfig().brain) {
     try {
       const { startBotSweep } = await import("./services/bots/sweep.js");

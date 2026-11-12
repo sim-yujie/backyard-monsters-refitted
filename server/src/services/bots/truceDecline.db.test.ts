@@ -181,4 +181,16 @@ describe.skipIf(!dbName)("a bot declines a truce through the sweep (issue #245)"
     ).toBe(false);
     expect(await sql(`SELECT * FROM bym.bot_job`)).toEqual([]);
   });
+
+  test("a request to a retired bot (all of them since 12 Nov 2026) books nothing: it lapses as any other", async () => {
+    const [bot] = await createBots(orm.em.fork(), [15], { rng: mulberry32(246), now: NOW, pace: T });
+    await sql(`UPDATE bym.bot SET state = 'retired', retired_at = now() WHERE userid = ?`, [bot!.userid]);
+    const em = orm.em.fork();
+    const player = em.create(User, { username: PLAYER, email: `${PLAYER}@test.com`, password: "x" });
+    await em.flush();
+    expect(
+      await bookTruceDecline(em, { id: 1, initiator_userid: player.userid, recipient_userid: bot!.userid }, NOW)
+    ).toBe(false);
+    expect(await sql(`SELECT * FROM bym.bot_job WHERE bot_userid = ?`, [bot!.userid])).toEqual([]);
+  });
 });

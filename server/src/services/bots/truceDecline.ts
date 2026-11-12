@@ -11,7 +11,7 @@ import type { JsonObject } from "../../types/JsonObject.js";
 import { logger } from "../../utils/logger.js";
 import { nudgeMail } from "../mail/mailNudge.js";
 import { answerTruce, isRequestOpen } from "../mail/truceTimes.js";
-import { isBot } from "./isBot.js";
+import { isActiveBot } from "./isBot.js";
 
 /**
  * A bot turns down every truce (issue #245, `docs/design/bot-neighbours.md`
@@ -37,6 +37,10 @@ import { isBot } from "./isBot.js";
  * refuses), nor can an invitation to move (`handleInviteRequest` wants a Map
  * Room 2 player), and there are no friend invitations, so truces are the
  * only invitation a bot answers. Messages to a bot are never answered.
+ *
+ * Only an `active` bot books an answer ({@link isActiveBot}). Since the owner
+ * retired every bot (12 Nov 2026) none is, so a request to a bot is never
+ * answered and lapses after 7 days, as one to a player who stopped playing.
  */
 
 /** A bot answers a truce request a uniform 2-8 hours after it was made (decision 18). */
@@ -73,7 +77,7 @@ export const bookTruceDecline = async (
   now: number,
   rng: () => number = Math.random
 ): Promise<boolean> => {
-  if (!(await isBot(truce.recipient_userid, em))) return false;
+  if (!(await isActiveBot(truce.recipient_userid, em))) return false;
 
   const hours = DECLINE_TRUCE_HOURS.min + rng() * (DECLINE_TRUCE_HOURS.max - DECLINE_TRUCE_HOURS.min);
   em.create(BotJob, {

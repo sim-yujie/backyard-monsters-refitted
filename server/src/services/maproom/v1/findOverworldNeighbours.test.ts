@@ -110,7 +110,7 @@ describe("findOverworldNeighbours", () => {
     expect(queries).toHaveLength(1);
   });
 
-  test("reads the BOTS_FILL switch when no fill option is given", async () => {
+  test("bots retired (owner, 12 Nov 2026): no bot fills a list even with BOTS_FILL=on", async () => {
     const before = process.env.BOTS_FILL;
     try {
       delete process.env.BOTS_FILL;
@@ -119,7 +119,9 @@ describe("findOverworldNeighbours", () => {
 
       process.env.BOTS_FILL = "on";
       const on = fakeEm([realRow(2)], [botRow(50)]);
-      expect(await findOverworldNeighbours(on.em, player, levelTwenty, { now: NOW })).toHaveLength(2);
+      expect(await findOverworldNeighbours(on.em, player, levelTwenty, { now: NOW })).toHaveLength(1);
+      // Only the real players were asked for: no bot search at all.
+      expect(on.queries).toHaveLength(1);
     } finally {
       if (before === undefined) delete process.env.BOTS_FILL;
       else process.env.BOTS_FILL = before;
