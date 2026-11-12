@@ -88,6 +88,11 @@ describe("reports.css: the window is wide enough for its two columns", () => {
     expect(rulesFor(".mod-reports__detail")).toMatch(/container:\s*mod-reports-detail \/ inline-size/);
   });
 
+  it("shows Back as a plain plate, so its word is centred top to bottom like the others", () => {
+    expect(rulesFor(".mod-reports__back")).toMatch(/display:\s*inline-block/);
+    expect(css).not.toMatch(/\.mod-reports__back\s*\{[^}]*inline-flex/);
+  });
+
   it("hangs a plate's picture off its word, so the word keeps the plate's middle", () => {
     expect(rulesFor(".mod-reports-window .mod-reports__btn-word > .game-icon")).toMatch(/position:\s*absolute/);
     expect(rulesFor(".mod-reports__btn-word")).toMatch(/white-space:\s*nowrap/);

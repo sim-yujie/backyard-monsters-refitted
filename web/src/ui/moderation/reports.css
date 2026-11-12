@@ -831,8 +831,10 @@
     display: none;
   }
 
+  /* inline-block like the other plates: a button centres its word on both
+     axes itself; inline-flex sat the word at the top of the plate. */
   .mod-reports__back {
-    display: inline-flex;
+    display: inline-block;
   }
 }
 
