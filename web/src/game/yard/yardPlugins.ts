@@ -33,7 +33,10 @@ export interface YardSceneControls {
   openBuildMenu(type?: number): void;
   /** Closes the Build menu and puts down any building in hand. */
   closeBuildMenu(): void;
-  /** Pans to a building and opens its panel; with `champion`, the Cage's or Chamber's controls too. */
+  /**
+   * Pans to a building and opens its panel; with `champion`, the Monsters
+   * screen's Champion tab too, on the Cage's or Chamber's part.
+   */
   focusBuilding(id: number, champion?: boolean): void;
   /** Closes the building panel. */
   closePanel(): void;

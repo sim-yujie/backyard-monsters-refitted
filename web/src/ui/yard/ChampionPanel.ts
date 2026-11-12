@@ -40,10 +40,11 @@ import { modesBlock, modesShape, savedStance, showsModes } from "./championModes
 import { ShinyButton } from "./ShinyButton";
 
 /**
- * The Champion Cage's controls, inside its building panel
- * (`docs/design/yard-buildings.md` §7.2, decisions D11 and D17; issue #124).
+ * The Champion Cage's controls, in the Monsters screen's Champion tab
+ * (`ChampionTab.ts`; owner, 12 Nov 2026; `docs/design/yard-buildings.md`
+ * §7.2, decisions D11 and D17; issue #124).
  *
- * Opened by the panel's **Open cage**. With no champion in the cage: one card
+ * Opened by the cage's **Open Champion Cage**. With no champion in the cage: one card
  * each for Gorgo, Drull and Fomor (Korath and Krallen are not offered), each
  * with **Raise** (free), or a note when that one is frozen in the Chamber.
  * Raising puts the champion in the cage straight away, as in the original

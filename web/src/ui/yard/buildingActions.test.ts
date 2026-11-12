@@ -391,26 +391,19 @@ describe("panelModel: which blocks each building gets", () => {
     }
   });
 
-  it("a built Monster Bunker opens its own controls; one still being built does not", () => {
-    const context = contextOf({
-      buildings: [HALL(6), building(2, 22, 1), building(3, 22, 0, { cB: 600 })],
-    });
-    expect(panelModel(pick(context, 2), context)).toMatchObject({ open: "bunker", monstersTab: null });
-    expect(panelModel(pick(context, 3), context).open).toBeNull();
-  });
-
-  it("a built Champion Cage opens its own controls; one still being built does not (#124)", () => {
-    const context = contextOf({
-      buildings: [HALL(6), building(2, 114, 1), building(3, 114, 0, { cB: 600 })],
-    });
-    expect(panelModel(pick(context, 2), context)).toMatchObject({ open: "cage", monstersTab: null });
-    expect(panelModel(pick(context, 3), context).open).toBeNull();
-  });
-
-  it("a built Champion Chamber opens its own controls (#125)", () => {
-    const context = contextOf({ buildings: [HALL(6), building(2, 119, 1), building(3, 119, 0, { cB: 600 })] });
-    expect(panelModel(pick(context, 2), context).open).toBe("chamber");
-    expect(panelModel(pick(context, 3), context).open).toBeNull();
+  it("a built Juicer, Bunker, Champion Cage or Chamber opens its Monsters tab; one still being built does not (owner, 12 Nov 2026)", () => {
+    for (const [type, tab] of [
+      [9, "housing"],
+      [22, "housing"],
+      [114, "champion"],
+      [119, "champion"],
+    ] as const) {
+      const context = contextOf({
+        buildings: [HALL(6), building(2, type, 1), building(3, type, 0, { cB: 600 })],
+      });
+      expect(panelModel(pick(context, 2), context)).toMatchObject({ open: "monsters", monstersTab: tab });
+      expect(panelModel(pick(context, 3), context).open).toBeNull();
+    }
   });
 
   it("no other building names a Monsters tab", () => {

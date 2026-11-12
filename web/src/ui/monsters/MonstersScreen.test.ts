@@ -92,7 +92,7 @@ const tabButton = (root: HTMLElement, label: string) =>
   )!;
 
 describe("MonstersScreen: the frame", () => {
-  it("starts closed and opens on the tab asked for, the five tabs in order", () => {
+  it("starts closed and opens on the tab asked for, the six tabs in order", () => {
     const { screen, element } = setup([HALL, LOCKER]);
     expect(element.hidden).toBe(true);
     screen.open("unlock");
@@ -103,6 +103,7 @@ describe("MonstersScreen: the frame", () => {
       "Housing",
       "Train",
       "Lab",
+      "Champion",
     ]);
     expect(tabButton(element, "Unlock").getAttribute("aria-selected")).toBe("true");
     expect(element.querySelector(".locker")).not.toBeNull();

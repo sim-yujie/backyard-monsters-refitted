@@ -34,13 +34,18 @@ import type { YardChange, YardUiBinding } from "@/game/yard/YardStore";
  * on its own status line.
  */
 
-/** The five tabs, in strip order (§4.1). */
+/**
+ * The six tabs, in strip order (§4.1). Champion is the Champion Cage's and
+ * Chamber's (owner, 12 Nov 2026: the champion lives with the monsters; the
+ * buildings' panels open it).
+ */
 export const MonstersTabId = {
   UNLOCK: "unlock",
   HATCH: "hatch",
   HOUSING: "housing",
   TRAIN: "train",
   LAB: "lab",
+  CHAMPION: "champion",
 } as const;
 export type MonstersTabId = (typeof MonstersTabId)[keyof typeof MonstersTabId];
 
@@ -50,11 +55,16 @@ export const MONSTERS_TAB_ORDER: readonly MonstersTabId[] = [
   MonstersTabId.HOUSING,
   MonstersTabId.TRAIN,
   MonstersTabId.LAB,
+  MonstersTabId.CHAMPION,
 ];
 
 /** What an opener asks the tab to put first. Every field is optional. */
 export interface MonstersFocus {
-  /** The building that was clicked: a Hatchery or HCC selects its chip (§4.4). */
+  /**
+   * The building that was clicked: a Hatchery or HCC selects its chip (§4.4);
+   * a Juicer or Monster Bunker brings its section of the Housing tab into
+   * view (the bunker chosen), a Champion Chamber its part of the Champion tab.
+   */
   readonly buildingId?: number;
   /** A monster to select, by roster id. */
   readonly monster?: string;
@@ -105,17 +115,32 @@ export const MonsterBuilding = {
   LAB: 116,
   /** The Inferno yard's housing, the Compound (`HOUSINGBUNKER`). */
   HOUSING_BUNKER: 128,
+  /** The Monster Juicer (`BUILDING9`): its controls are the Housing tab's. */
+  JUICER: 9,
+  /** The Monster Bunker: its controls are the Housing tab's too. */
+  BUNKER: 22,
+  CHAMPION_CAGE: 114,
+  CHAMPION_CHAMBER: 119,
 } as const;
 
-/** The tab each monster building opens (D4). */
+/**
+ * The tab each monster building opens (D4). The Juicer, the Bunker and the
+ * champions' two buildings joined them on 12 Nov 2026 (owner: "Champion
+ * cage, juicer, bunker should follow the same pattern"): each panel has an
+ * Open button for its place in the screen.
+ */
 export const TAB_FOR_BUILDING: Readonly<Record<number, MonstersTabId>> = {
   [MonsterBuilding.LOCKER]: MonstersTabId.UNLOCK,
   [MonsterBuilding.HATCHERY]: MonstersTabId.HATCH,
   [MonsterBuilding.HCC]: MonstersTabId.HATCH,
   [MonsterBuilding.HOUSING]: MonstersTabId.HOUSING,
   [MonsterBuilding.HOUSING_BUNKER]: MonstersTabId.HOUSING,
+  [MonsterBuilding.JUICER]: MonstersTabId.HOUSING,
+  [MonsterBuilding.BUNKER]: MonstersTabId.HOUSING,
   [MonsterBuilding.ACADEMY]: MonstersTabId.TRAIN,
   [MonsterBuilding.LAB]: MonstersTabId.LAB,
+  [MonsterBuilding.CHAMPION_CAGE]: MonstersTabId.CHAMPION,
+  [MonsterBuilding.CHAMPION_CHAMBER]: MonstersTabId.CHAMPION,
 };
 
 /** The tab a building opens, or null for a building that is not a monster building. */

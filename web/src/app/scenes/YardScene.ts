@@ -1626,15 +1626,17 @@ export class YardScene implements Scene {
     // brings the Monsters screen to the middle, which closes the panel
     // (owner, 9 Nov 2026, option A; it opened beside the panel before, D4).
     // A phone keeps its old way: the click opens the building's tab as a
-    // sheet over the panel, which waits under it. A Housing's panel is the
-    // Housing panel itself (#170), with the tab's army in it, so the screen
-    // steps aside for it. Still on its first build (level 0), the building
-    // has no working window yet: the panel's construction info is all a
-    // click should open (#281).
+    // sheet over the panel, which waits under it (the Champion Cage and
+    // Chamber their Champion tab, the Juicer and Monster Bunker the Housing
+    // tab, since 12 Nov 2026). A Housing's panel is the Housing panel itself
+    // (#170), with the tab's army in it, so the screen steps aside for it.
+    // Still on its first build (level 0), the building has no working window
+    // yet: the panel's construction info is all a click should open (#281).
     if (centredLayout()) return;
     const tab = monstersTabFor(building.type);
-    if (tab === MonstersTabId.HOUSING) this.monsters?.close();
-    else if (tab && this.binding && building.level > 0) {
+    if (building.type === MonsterBuilding.HOUSING || building.type === MonsterBuilding.HOUSING_BUNKER) {
+      this.monsters?.close();
+    } else if (tab && this.binding && building.level > 0) {
       this.openMonsters(tab, { buildingId: building.id });
     }
   }
@@ -2775,7 +2777,8 @@ export class YardScene implements Scene {
       },
       focusBuilding: (id, champion) => {
         this.focusBuilding(id);
-        if (champion && this.selected?.id === id) this.panel?.openChampion();
+        // The champions' controls live in the Monsters screen's Champion tab (owner, 12 Nov 2026).
+        if (champion && this.selected?.id === id) this.openMonsters(MonstersTabId.CHAMPION, { buildingId: id });
       },
       closePanel: () => this.select(null),
       selectedBuilding: () => this.selected?.id ?? null,
