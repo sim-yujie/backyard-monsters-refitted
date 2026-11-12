@@ -430,6 +430,10 @@ export class ZoneStore {
     };
     this.zones.set(entry.id, record);
     this.revision += 1;
+    // A zone that lands after the map closed only fills the cache: the scene's
+    // callbacks would draw on a renderer that is already destroyed (live error
+    // "reading 'clear'" in drawHighlight, 9-10 Nov).
+    if (this.stopped) return;
     this.options.onZone?.(record);
 
     if (response.resources) {

@@ -635,6 +635,18 @@ export const announcementImageLimiter = RateLimit.middleware({
   },
 });
 
+/** Outpost renames, pins and label reads (`controllers/outposts/labelRoutes.ts`): 60 a minute per user. */
+export const outpostLabelLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 60,
+  prefixKey: "outpost-label",
+  keyGenerator: byUser("outpost-label"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many changes. Please slow down.", reason: "rateLimited" };
+  },
+});
+
 /** A player's answer when a profile limiter is full (`controllers/profile/routes.ts`). */
 const profileRefusal = (error: string) => async (ctx: Context) => {
   ctx.status = Status.TOO_MANY_REQUESTS;

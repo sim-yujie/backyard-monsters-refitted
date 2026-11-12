@@ -1,5 +1,5 @@
 import type { Loaded } from "@mikro-orm/core";
-import { Save } from "../../../database/models/save.model.js";
+import { flingerLevelsNow } from "../../yard/flingerLevelsNow.js";
 import { User } from "../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { postgres } from "../../../server.js";
@@ -123,9 +123,14 @@ export const rangeCheckV2 = async (
   user: User,
   options: RangeOptions
 ): Promise<{ cell: CellCoords | null; verdict: RangeVerdict }> => {
-  const { homebase, outposts, flinger } = user.save!;
+  const { baseid, homebase, outposts, flinger: storedFlinger } = user.save!;
 
   const cell = await resolveAttackCell(options);
+
+  // The main yard's level as of now, as the fog of war's sight measures it
+  // (`flingerLevelsNow`): a finished upgrade counts before the yard is reopened.
+  const mainLevel = await flingerLevelsNow([baseid]);
+  const flinger = mainLevel.has(baseid) ? mainLevel.get(baseid) : storedFlinger;
 
   const declareWar = await declareWarRunning(user.alliance_id);
 
@@ -172,22 +177,13 @@ const resolveAttackCell = async (options: RangeOptions): Promise<CellCoords | nu
 };
 
 /**
- * Flinger level of every outpost inside the sweep box.
+ * Flinger level, as of now (`flingerLevelsNow`), of every outpost inside the sweep box.
  *
  * @param {NearbyOutpost[]} nearby - The outposts whose reach decides the attack.
  * @returns {Promise<Map<string, number | undefined>>} Flinger level per baseid.
  */
-const outpostFlingers = async (
-  nearby: readonly NearbyOutpost[]
-): Promise<Map<string, number | undefined>> => {
-  const outpostSaves = await postgres.em.find(
-    Save,
-    { baseid: { $in: nearby.map((outpost) => outpost.baseid) } },
-    { fields: ["baseid", "flinger"] },
-  );
-
-  return new Map(outpostSaves.map(({ baseid, flinger }) => [baseid, flinger]));
-};
+const outpostFlingers = (nearby: readonly NearbyOutpost[]): Promise<Map<string, number | undefined>> =>
+  flingerLevelsNow(nearby.map((outpost) => outpost.baseid));
 
 /**
  * The error for a refusal, with the wording the client already gets today.

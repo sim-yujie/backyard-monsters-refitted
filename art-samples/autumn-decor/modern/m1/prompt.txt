@@ -1,0 +1,27 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+The attached images:
+- ref-modern-close.png and ref-modern-all.png: the REAL "Modern look" yard buildings of our game (Backyard Monsters Revamped), clean stylised 3D renders: Twig Snapper, Catapult, wooden crate Block, Goo Factory, Putty Squisher, Pebble Shiner, Flinger, Yard Planner, and more.
+- ref-classic-six.png: six autumn yard decorations we already have in the OLD (Classic, Flash-style) look, numbered 1-6.
+
+Job: redraw EACH of the six decorations in ref-classic-six.png in the MODERN look, so they sit naturally beside the Modern buildings and look made by the same 3D artist with the same software. Each must be clearly the SAME object as its Classic version: same parts, same overall shape and proportions, same colours of each part, same facing (same side to the front) - only the rendering style changes.
+
+The Modern look (follow every point):
+1. Clean, modern, stylised 3D renders like the attached buildings, not paintings and not the soft, grainy, dusty old look of the Classic versions. Smooth, slightly bevelled shapes with crisp clean silhouettes; clean simple materials: honey/tan wood planks with light even grain and dark lines between boards (like the crate Block and the Catapult), smooth metal with bright specular highlights, glossy where it should be (apples, pumpkins, pie glaze). Little surface noise. No cel shading, no brush strokes, no flat colour fills.
+2. Camera exactly like the buildings: seen from the front, about 35-40 degrees above, so the tops show clearly.
+3. No outline at all. Crisp anti-aliased edges; small bevels catch the light as thin bright lines.
+4. Warm key light from the upper left / front: tops and left sides bright, right sides in MEDIUM shade that stays readable (not near-black); soft ambient occlusion in creases.
+5. Clean, rich colour, a little brighter and more saturated than the Classic versions (they are too dark and dusty for Modern), but not neon, no glow.
+6. Chunky, a little toy-like, few big readable parts. Leaves and foliage made of fewer, bigger, smoother clumps with clear light and shade per clump (like the Goo Factory's goo), not thousands of tiny noisy leaves.
+7. No ground, grass, base plate or cast shadow under any object.
+
+The six, in the same grid positions as ref-classic-six.png:
+- Row 1, column 1: TURKEY TOPIARY: a clipped green boxwood hedge in the shape of a turkey (round body, curved neck, small round head facing left, big half-circle fan tail behind) with a few orange/red autumn leaves stuck in the tail, in a round terracotta pot. All hedge, no eyes. Clean, rounded hedge forms in fresh mid-green.
+- Row 1, column 2: HARVEST WHEELBARROW: a wooden wheelbarrow with one spoked wooden wheel at the front left and two handles to the back right, filled with two orange pumpkins, one green-striped squash and yellow corn cobs.
+- Row 1, column 3: AUTUMN MAPLE TREE: a small, sturdy maple: thick slightly curving brown trunk with branches, and a rounded crown of big clumps of red, orange and gold maple leaves. Taller than wide, crown about two thirds of the height.
+- Row 2, column 1: LEAF PILE AND RAKE: a dome-shaped heap of fallen red, orange and brown leaves with a garden rake (wooden handle, metal fan tines) leaning into it, handle pointing up and to the right.
+- Row 2, column 2: APPLE BARREL: an upright wooden barrel with dark metal hoops, heaped with shiny red apples on top, two apples on the ground at its front right.
+- Row 2, column 3: PIE ON A TREE STUMP: a short, wide tree stump with bark, a pale cut top with rings and spreading roots, a golden lattice-crust cherry pie in a metal pie tin on top.
+
+Canvas 1536x1024 split into 3 columns x 2 rows of equal cells (512x512 each). One object centred in each cell, about 70% of the cell height (the leaf pile and pie stump can be lower and wider), generous margins, nothing touching a cell edge. The whole sheet on a flat solid magenta (#FF00FF) background, no grid lines, no text, no labels, no frame, no drop shadows.
+Save the final PNG as autumn-modern-m1.png in the current working directory.

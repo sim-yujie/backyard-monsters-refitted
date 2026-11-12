@@ -18,11 +18,13 @@ import {
   type BugReportImageKind,
 } from "../../services/admin/bugReportsAdmin.js";
 import { parseAttackLogQuery, playerAttackLog } from "../../services/admin/attackLogAdmin.js";
+import { flaggedPlayer, listFlaggedPlayers } from "../../services/admin/flaggedPlayers.js";
 import { giveShiny, listShinyAwards, parseShinyAward, searchPlayers } from "../../services/admin/shinyAwards.js";
 import { parseTeamText, replyToReport } from "../../services/admin/supportMail.js";
 import { errorTotals, listErrors } from "../../services/errors/errorStore.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { adminHealthReport } from "../../services/health/adminHealth.js";
+import { mountAdminMonsterMadnessRoutes } from "./monsterMadness.js";
 import { mountAdminWeekendRoutes } from "./weekend.js";
 import { daysBetween, readDailyStats, statsOverview, type StatsDeps } from "../../services/stats/dailyStats.js";
 import { LOG_BASE, LOG_DIR, logger } from "../../utils/logger.js";
@@ -193,6 +195,9 @@ export const mountAdminRoutes = (router: Router): void => {
 
   // Weekend events: rotation, swaps, skips, percentages, run now (`weekend.ts`).
   mountAdminWeekendRoutes(router, admin, adminOnly, () => postgres.em.fork());
+
+  // Monster Madness: on no calendar, started and stopped here (`monsterMadness.ts`).
+  mountAdminMonsterMadnessRoutes(router, admin, adminOnly, () => postgres.em.fork());
 
   router.get(`${admin}/stats/overview`, apiVersion, adminOnly, async (ctx) => {
     const days = Math.min(MAX_DAYS, Math.max(1, intOf(ctx.query.days) ?? 30));
@@ -402,6 +407,21 @@ export const mountAdminRoutes = (router: Router): void => {
     const log = await playerAttackLog(postgres.em.fork(), request.value);
     if (!log) return refuse(ctx, Status.BAD_REQUEST, "There is no player with that account number.", "noPlayer");
     ok(ctx, { log });
+  });
+
+  // The Flagged list (services/admin/flaggedPlayers.ts): players the cheat
+  // checks caught, from `bym.report`, newest first; and one player's entries.
+  // Read-only.
+  router.get(`${admin}/flagged`, apiVersion, adminOnly, async (ctx) => {
+    ok(ctx, { players: await listFlaggedPlayers(postgres.em.fork()) });
+  });
+
+  router.get(`${admin}/flagged/:id`, apiVersion, adminOnly, async (ctx) => {
+    const id = playerId(ctx);
+    if (id === null) return;
+    const detail = await flaggedPlayer(postgres.em.fork(), id);
+    if (!detail) return refuse(ctx, Status.NOT_FOUND, "That player has not been flagged.", "notFlagged");
+    ok(ctx, { ...detail });
   });
 
   router.post(`${admin}/players/:id/:kind`, apiVersion, adminOnly, async (ctx) => {

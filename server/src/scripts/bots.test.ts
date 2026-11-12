@@ -162,6 +162,11 @@ describe("rebalance --dry-run (owner 3 Nov 2026)", () => {
     const { run } = await import("./bots.js");
     await expect(run(parseArgs(["rebalance"]))).rejects.toThrow("--dry-run");
   });
+
+  test("create refuses while bots are retired (owner, 12 Nov 2026), before opening the database", async () => {
+    const { run } = await import("./bots.js");
+    await expect(run(parseArgs(["create", "--fill"]))).rejects.toThrow("Bots are retired");
+  });
 });
 
 describe("the CLI never boots a server", () => {

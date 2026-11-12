@@ -1,0 +1,27 @@
+STYLE NOTE: how the original Backyard Monsters (Flash, 2009) yard decorations look
+(measured on the game's own decoration pictures, compared at full size)
+
+1. Not painted cartoon art. They are small PRE-RENDERED 3D MODELS (late-2000s CG, like a 3ds Max
+   render), shrunk to sprite size. Real-looking materials with soft grain: wood grain, bark,
+   foliage made of many small leaf clumps, ribbed pumpkin skin, worn paint. No flat colour fills,
+   no airbrushed "mobile game" gloss, no cel shading.
+2. Camera: the same for every object. Seen from the front-left and from about 30-35 degrees above,
+   so the top of round things and of bases shows a little; boxy objects are turned about 30-45
+   degrees so two sides show (Outhouse, Lawn Chair, Birdhouse).
+3. Outline: none. No black or coloured line around the object. The edge is just where the
+   shaded object ends; the lower/back edges are dark because they are in shadow.
+4. Light: one soft key light from the upper left / top front. Lit faces are only moderately bright;
+   the right and lower sides fall into DEEP shadow (the darkest parts are near-black, about 15%
+   brightness). Gentle ambient occlusion in creases, small soft specular highlights on smooth or
+   wet surfaces only (pumpkin, acorn cap). Strong 3D form, not flat.
+5. Palette: natural and somewhat muted / dusty, overall fairly DARK: the average brightness of a
+   Flash decoration is about 35-55%, while the rejected samples averaged 60-90%. Greens are deep
+   olive and forest green, wood is grey-brown or warm mid-brown. Only one accent colour per object is
+   fully saturated (pumpkin orange, berry purple, flower red). No candy or neon colours, no glow.
+6. No shadow and no ground painted under the object (the game adds its own drop shadow), no grass
+   tufts, no base plate unless the object itself has one.
+7. Detail and shape: simple, chunky, believable real-world objects, a little toy-like but NOT
+   exaggerated cartoon proportions; no faces, eyes or cute expressions on natural objects. Few
+   parts; every part must still read when the object is shrunk to 40-80 pixels tall.
+8. Size in the game: 20-75 px tall at real size (Walnut 23, Acorn 30, Flowers 35, Beehive stump 46,
+   Blackberry Bush 47, Bonsai Tree 61, Birdhouse 67, Scarecrow 72).

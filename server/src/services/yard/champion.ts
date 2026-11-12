@@ -11,7 +11,8 @@ import {
   type FeedRecipe,
 } from "../../game-data/championCatalogue.js";
 import { Status } from "../../enums/StatusCodes.js";
-import type { ChampionStance } from "../../game-rules/combat/index.js";
+import { korathPowerOf } from "../../game-data/events/monsterMadness.js";
+import { championByType, forgetHabits, hasHabits, type ChampionStance } from "../../game-rules/combat/index.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import type { ChampionData } from "../../schemas/ChampionSchema.js";
 import type { BuildingData, BuildingDataMap, BuildingHealthData } from "../../types/BuildingData.js";
@@ -101,6 +102,8 @@ export interface ChampionSave extends JuiceSave {
   buildinghealthdata?: BuildingHealthData | null;
   monsters?: JsonObject | null;
   champion?: unknown;
+  /** Read for the Korath power won in Monster Madness (`Reward.KORATH_POWER`). */
+  rewards?: unknown;
 }
 
 /** A finite number off a jsonb field, 0 otherwise. */
@@ -295,7 +298,9 @@ export const planChampionRaise = (
     ft: now + entry.feedTime,
     fd: 0,
     fb: 0,
-    pl: entry.powerLevel,
+    // Korath hatches with the power won in Monster Madness, if any
+    // (`services/events/korathPower.ts`); every other champion at the catalogue's.
+    pl: entry.t === KORATH_TYPE ? Math.max(entry.powerLevel, korathPowerOf(save.rewards)) : entry.powerLevel,
     status: CHAMPION_STATUS.ACTIVE,
   };
   if (existing >= 0) champions[existing] = champion;
@@ -521,6 +526,31 @@ export const planChampionStance = (save: ChampionSave, type: number, stance: Cha
   );
   if (index < 0) throw yardRefusedErr("noChampion", "You have no champion of that type.");
   const changed = { ...champions[index]!, s: stance };
+  champions[index] = changed;
+
+  const report: ChampionReport = { champion: changed };
+  return { report, slices: { champion: champions } };
+};
+
+/**
+ * `POST /bm/yard/champion/forget`: wipe the habits a champion learned in one
+ * Mode (champion modes round 2, the panel's **Forget**). Its other Modes,
+ * its attack counts and its usual scores stay. Krallen has no habits, so
+ * she cannot forget any.
+ */
+export const planChampionForget = (save: ChampionSave, type: number, stance: ChampionStance) => {
+  if (!hasHabits(championByType(type))) {
+    throw yardRefusedErr("noHabits", "That champion has no habits to forget.");
+  }
+  const champions = readChampions(save.champion);
+  const index = champions.findIndex(
+    (one) => Math.trunc(numberOf(one.t)) === type && statusOf(one) !== CHAMPION_STATUS.JUICED,
+  );
+  if (index < 0) throw yardRefusedErr("noChampion", "You have no champion of that type.");
+  const stored = champions[index]!;
+  const book = forgetHabits(stored.h, championByType(type), stance);
+  const { h: _old, ...rest } = stored;
+  const changed: ChampionData = Object.keys(book).length > 0 ? { ...rest, h: book } : rest;
   champions[index] = changed;
 
   const report: ChampionReport = { champion: changed };

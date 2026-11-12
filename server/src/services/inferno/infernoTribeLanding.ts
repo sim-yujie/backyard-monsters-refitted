@@ -347,7 +347,7 @@ const tribeBattle = async (
   const input = tribeReplayInput(tribe, yard, log, battleTick(saveData.tick), saveData.left);
   if (!input) return null;
 
-  const base = { baseid: String(saveData.baseid) };
+  const base = { baseid: String(saveData.baseid), rowless: "inferno-tribe" as const };
   const battle = await replayBattleForSave(ctx, user, base, input, "the finaliser lands it from its checkpoint");
 
   // Where the save disagrees with it: logged, or refused under

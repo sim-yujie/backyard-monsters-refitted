@@ -174,6 +174,22 @@ export const priceText = (price: { resources?: number | undefined; shiny?: numbe
 };
 
 /**
+ * The price as the map's Take over line and the end-of-attack offer say it:
+ * "Frontier Pass: 900,000 each or 924 Shiny" while the welcome price applies
+ * (it replaces the half price next to the main yard), kept short so the
+ * map's "Take over · …" line stays one line.
+ */
+export const offerPriceText = (price: {
+  resources?: number | undefined;
+  shiny?: number | undefined;
+  welcome?: boolean | undefined;
+}): string => {
+  if (!price.welcome || price.resources === undefined) return priceText(price);
+  const resources = `${formatAmount(price.resources)} each`;
+  return `Frontier Pass: ${price.shiny === undefined ? resources : `${resources} or ${formatAmount(price.shiny)} Shiny`}`;
+};
+
+/**
  * Seconds the server's clock is ahead of this one, from a response that
  * carries the server's `now`. Countdowns add it to the local clock.
  */
@@ -225,7 +241,7 @@ export const takeoverActionView = (kind: TakeoverKind, state: TakeoverQuoteState
       const { quote } = state;
       const expiresAt = quote.grantExpiresAt;
       if (kind === "outpost" && expiresAt === undefined) return HIDDEN;
-      const note = quote.eligible ? priceText(quote) : refusalText(quote.reason ?? "notFound", kind);
+      const note = quote.eligible ? offerPriceText(quote) : refusalText(quote.reason ?? "notFound", kind);
       return {
         visible: true,
         enabled: quote.eligible,

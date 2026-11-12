@@ -14,7 +14,9 @@ import { coinRewards, BIG_EVENT_COINS, type EventCoins, type EventReward } from 
  * `addToCounter`, with a reward at each tier). Every reward is checked by
  * `events.test.ts`. A ladder whose `source` is `"attackLoot"` is counted by
  * the server's attack code instead (`services/events/lootEvents.ts`): all
- * the loot a player takes in attacks during the event.
+ * the loot a player takes in attacks during the event. One whose `source` is
+ * `"takeovers"` counts Map Room 2 takeovers (`services/events/takeoverEvents.ts`,
+ * Monster Madness, `monsterMadness.ts`).
  *
  * EVENT COINS: a big 1-2 week event (not a weekend event) pays event coins by
  * carrying `coins: BIG_EVENT_COINS` (`eventRewards.ts`, where the numbers
@@ -46,7 +48,7 @@ export interface EventRequirements {
 }
 
 /** What raises a ladder's counter: the event's own code, or every attack's loot. */
-export type LadderSource = "own" | "attackLoot";
+export type LadderSource = "own" | "attackLoot" | "takeovers";
 
 /** One tier of a collection ladder: claimable once the counter reaches `need`. */
 export interface LadderTier {
@@ -95,7 +97,9 @@ export interface EventDefinition {
     /**
      * Who raises the counter. `own` (the default): the event's own code.
      * `attackLoot`: `services/events/lootEvents.ts`, with every resource an
-     * attack takes, before the storage cap.
+     * attack takes, before the storage cap. `takeovers`:
+     * `services/events/takeoverEvents.ts`, with each Map Room 2 outpost taken
+     * over, once per outpost.
      */
     readonly source?: LadderSource;
     readonly tiers: readonly LadderTier[];

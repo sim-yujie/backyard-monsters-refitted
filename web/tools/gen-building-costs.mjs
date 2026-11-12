@@ -408,6 +408,78 @@ const radio = entries.findIndex((one) => one.id === RADIO_TOWER);
 if (radio < 0) throw new Error(`YARD_PROPS.as: no Radio Tower (${RADIO_TOWER}) entry to drop`);
 entries.splice(radio, 1);
 
+/* ── This project's own decorations ───────────────────────────────────────────
+ *
+ * Decorations Flash never had (owner, 10 Nov 2026: the six autumn ones, "merge
+ * into decoration shop"), from type 201 so they stay clear of Flash's ids. Each
+ * row is a Flash decoration's: free to build, uncapped, in the Decorations tab
+ * (group 4). Their names, footprints, art and event-coin prices live in
+ * `web/src/game/yard/revampDecorations.ts` and
+ * `server/src/game-data/revampDecorations.ts`, whose tests check every one has
+ * a row here.
+ */
+const REVAMP_DECORATIONS = [
+  [201, "bdg_leafpilerake"],
+  [202, "bdg_applebarrel"],
+  [203, "bdg_piestump"],
+  [204, "bdg_harvestwheelbarrow"],
+  [205, "bdg_turkeytopiary"],
+  [206, "bdg_autumnmaple"],
+];
+for (const [id, name] of REVAMP_DECORATIONS) {
+  if (entries.some((one) => one.id === id)) throw new Error(`YARD_PROPS.as already has a type ${id}`);
+  entries.push({
+    id,
+    name,
+    kind: "decoration",
+    group: 4,
+    steps: [{ r1: 0, r2: 0, r3: 0, r4: 0, time: 0, re: [] }],
+    quantity: [0],
+    line: 0,
+    source: "this project's own decoration (gen-building-costs.mjs)",
+    blocked: false,
+    hp: [100],
+    fortify: [],
+    capacity: [],
+    stats: undefined,
+  });
+}
+
+/* ── This project's own buildings ─────────────────────────────────────────────
+ *
+ * Buildings Flash never had, from type 150 so they stay clear of Flash's ids
+ * (which end at 140) and of this project's decorations (201 and up).
+ *
+ * 150, the Observatory (beta 7 alliances, owner 10 Nov 2026): the one building
+ * a player needs, besides Map Room 2, to join or found an alliance. One per
+ * main yard at every Town Hall level (no Town Hall rule), one level only, 4M
+ * Twigs, Pebbles and Putty and 36 hours, needing the Map Room at level 2.
+ */
+const REVAMP_BUILDINGS = [
+  {
+    id: 150,
+    name: "Observatory",
+    kind: "special",
+    group: 2,
+    steps: [{ r1: 4000000, r2: 4000000, r3: 4000000, r4: 0, time: 36 * 3600, re: [[11, 1, 2]] }],
+    quantity: [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+  },
+];
+for (const building of REVAMP_BUILDINGS) {
+  if (entries.some((one) => one.id === building.id)) throw new Error(`YARD_PROPS.as already has a type ${building.id}`);
+  entries.push({
+    ...building,
+    line: 0,
+    source: "this project's own building (gen-building-costs.mjs)",
+    blocked: false,
+    hp: [],
+    fortify: [],
+    capacity: [],
+    stats: undefined,
+  });
+}
+entries.sort((a, b) => a.id - b.id);
+
 /* ── Outposts ─────────────────────────────────────────────────────────────────
  *
  * An outpost yard runs on `OUTPOST_YARD_PROPS._outpostProps` in place of the
@@ -606,7 +678,7 @@ const costRows = (list, file) =>
     .map(
       (entry) =>
         `  // ${entry.id} ${entry.name}${entry.kind ? ` (${entry.kind})` : ""} ` +
-        `— ${file}:${entry.line}${entry.mr2 ? `, Map Room 2 override ${entry.mr2}` : ""}` +
+        `— ${entry.source ?? `${file}:${entry.line}`}${entry.mr2 ? `, Map Room 2 override ${entry.mr2}` : ""}` +
         `${entry.capped ? `, capped at level ${entry.capped} (D16)` : ""}\n` +
         `  [${entry.id}, ${JSON.stringify(entry.name)}, ${JSON.stringify(entry.kind)}, ` +
         `${entry.group}, [\n` +
@@ -768,7 +840,8 @@ const header = `/**
  * (\`client/scripts/GLOBAL.as:615-714\`) applied on top, because this project
  * runs Map Room 2 as the default overworld. Two rows are this project's own
  * decisions: the Map Room (11) stops at level 2, and the Radio Tower (113) has
- * no row (\`docs/design/yard-buildings.md\` §5.7). Regenerate with
+ * no row (\`docs/design/yard-buildings.md\` §5.7). Types 201 and up are this
+ * project's own decorations, which Flash never had. Regenerate with
  * \`node tools/gen-building-costs.mjs\` from \`web/\`.
  *
  * A row is \`[type, name, kind, group, costs, quantity]\`, with a seventh

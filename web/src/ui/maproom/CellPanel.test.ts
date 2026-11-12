@@ -81,7 +81,7 @@ describe("a wild monster camp", () => {
     const { host } = open(camp());
     expect(text(host, ".mr2-cell__title")).toBe("Kozu camp");
     expect(text(host, ".mr2-cell__level")).toBe("Level 38");
-    expect(text(host, ".mr2-cell__subtitle")).toBe("Wild monsters · 241, 208");
+    expect(text(host, ".mr2-cell__subtitle")).toBe("Wild monsters · 241, 208");
     expect(host.querySelector<HTMLImageElement>(".mr2-cell__picture img")?.src).toContain(
       "tribes/kozu-256.png",
     );
@@ -132,7 +132,7 @@ describe("another player's yard", () => {
   it("shows their critter picture (#175), name and level, and only the chips that are true", () => {
     const { host } = open(player({ dm: 35, p: 1, lo: 9 }));
     expect(text(host, ".mr2-cell__title")).toBe("Bramblefoot");
-    expect(text(host, ".mr2-cell__subtitle")).toBe("Main yard · 241, 208");
+    expect(text(host, ".mr2-cell__subtitle")).toBe("Main yard · 241, 208");
     expect(host.querySelector<HTMLImageElement>(".mr2-cell__picture img")?.src).toContain(
       "avatars/bee.webp",
     );
@@ -315,7 +315,7 @@ describe("the player's own yards", () => {
   it("opens an own outpost as one (#146)", () => {
     const { host } = open(player({ mine: 1, b: 3 }));
     expect(text(host, ".mr2-cell__title")).toBe("Your outpost");
-    expect(text(host, ".mr2-cell__subtitle")).toBe("Outpost · 241, 208");
+    expect(text(host, ".mr2-cell__subtitle")).toBe("Outpost · 241, 208");
     const openOutpost = buttonNamed(host, "Open outpost")!;
     expect(openOutpost.title).toBe("Open your outpost");
   });

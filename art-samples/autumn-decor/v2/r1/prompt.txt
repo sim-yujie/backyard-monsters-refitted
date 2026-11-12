@@ -1,0 +1,27 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+The attached images are the REAL yard decorations of the 2009 Flash game Backyard Monsters, enlarged from their tiny in-game size:
+- ref-flash-all-3x.png: 34 of the game's decorations at 3x.
+- ref-flash-close-4x.png: the ones closest to this job (bonsai tree, bushes, potted flowers, scarecrow, tree-stump beehive, wooden birdhouse/outhouse/sign, pumpkins, acorn, pinecone, walnut, grave) at 4x.
+- ref-flash-large.png: the game's biggest decoration renders (Giant Pumpkin, Tea Garden, Zen Garden), which show the rendering style in more detail.
+Study them closely: new decorations must look like they were made by the same artists with the same 3D software, so a player cannot tell them apart from the originals.
+
+What the Flash decorations have in common (follow every point):
+1. Not painted cartoon art: small PRE-RENDERED 3D MODELS (late-2000s CG, like a 3ds Max render) with real-looking materials and soft grain (wood grain, bark, foliage built from many small leaf clumps like the bonsai tree and blackberry bush, ribbed pumpkin skin). No flat colour fills, no glossy airbrushed mobile-game look, no cel shading, no painterly brush strokes.
+2. Camera: seen from the front-left and from about 30-35 degrees above, like every reference; boxy things turned about 30-45 degrees so two sides show (like the outhouse and lawn chair).
+3. No outline at all, no black or coloured edge line.
+4. One soft key light from the upper left; the right and lower sides fall into deep, nearly black shadow; soft ambient occlusion in creases; small soft highlights only on smooth surfaces. Strong 3D form.
+5. Natural, somewhat muted, fairly DARK colours like the references (average brightness well below the pure bright colours of modern mobile games). Deep olive/forest greens, grey-brown and warm mid-brown wood. Only one accent colour per object at full saturation. No candy or neon colours, no glow.
+6. No shadow, ground, grass or base under the objects.
+7. Believable real-world objects, a little toy-like but not exaggerated cartoon proportions; no faces or eyes. Simple chunky shapes with few parts, so each still reads when shrunk to 40-80 pixels tall.
+
+Make a SHEET of six NEW autumn / Thanksgiving yard decorations in exactly that rendered style and camera. Canvas 1536x1024 split into 3 columns x 2 rows of equal cells (512x512 each). One object centred in each cell, about 65% of the cell height, generous margins, nothing touching a cell edge:
+- Row 1, column 1: TURKEY TOPIARY: a dark green clipped boxwood hedge trimmed into a turkey shape (round body, short neck and small head, a big upright fan-shaped tail clipped in hedge), a few rust-red and orange leaves caught in the tail, standing in a round terracotta pot. It is a hedge, not a bird: no eyes, no beak colour, all foliage.
+- Row 1, column 2: HARVEST WHEELBARROW: an old weathered wooden wheelbarrow with one wooden spoked wheel at the front and two long handles at the back, heaped with orange pumpkins, a striped green-yellow gourd and two ears of dried corn.
+- Row 1, column 3: AUTUMN MAPLE TREE: a small young maple tree with a short, slightly curving grey-brown trunk and a rounded crown made of leaf clumps like the bonsai tree's foliage, in deep red, burnt orange and dull gold; it is noticeably taller than it is wide.
+- Row 2, column 1: LEAF PILE AND RAKE: a low mound of fallen autumn leaves (brown, rust, dull orange, ochre) with an old garden rake (wooden handle, metal fan tines) leaning into it.
+- Row 2, column 2: APPLE BARREL: an old oak barrel with dark iron hoops, open at the top and heaped with red apples, one or two apples lying beside it.
+- Row 2, column 3: PIE ON A TREE STUMP: a short sawn-off tree stump with bark and a few spreading roots (like the stump under the Flash beehive), with a golden-brown lattice-crust pie in a tin sitting on the cut top.
+
+The whole sheet on a flat solid magenta (#FF00FF) background, no grid lines, no text, no labels, no frame, no drop shadows.
+Save the final PNG as autumn-v2-r1.png in the current working directory.

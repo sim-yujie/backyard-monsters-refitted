@@ -145,6 +145,7 @@ describe("attackGate", () => {
     expect(attackGate(tribe, ready, world, NOW)).toEqual({
       reason: null,
       warning: null,
+      levelWarning: null,
       viewOff: null,
     });
   });

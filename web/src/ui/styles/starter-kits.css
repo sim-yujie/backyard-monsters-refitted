@@ -2,15 +2,25 @@
  * one confirmation under them. Every value is a token. */
 
 .kit-picker {
-  width: min(96vw, 980px);
-  /* Wider than a plain popup (ui.css caps those at 560px): three cards. */
-  max-width: min(96vw, 980px);
-  max-height: min(92vh, 860px);
+  /* Wider than a plain popup (ui.css caps those at 560px): three cards, wide
+     enough that the kits' lists keep to short lines. Never wider than the
+     screen less the backdrop's two 16px gaps (the frame is inside the width):
+     96vw alone is 360px on a 375px phone, which ran 1px past the right edge. */
+  --kit-picker-width: min(96vw, calc(100vw - 2 * var(--space-4)), 1180px);
+
+  width: var(--kit-picker-width);
+  max-width: var(--kit-picker-width);
 }
 
+/* The window opens with every card whole at 1600x900 and 1280x720: the body
+   may use the screen less the frame and title (a plain popup's body stops at
+   70vh, which put the buttons under the edge), and the pictures give up the
+   height a short screen lacks (.kit-card__picture). It still scrolls on a
+   phone or once the confirmation opens under the cards. */
 .kit-picker .panel__body {
   display: grid;
   gap: var(--space-3);
+  max-height: calc(100vh - 140px);
   overflow-y: auto;
 }
 
@@ -31,9 +41,14 @@
   gap: var(--space-3);
 }
 
+/* Picture, then the name with the building count beside it, the list, the
+   price and the buttons; the list's row takes the spare height, so the three
+   cards' prices and buttons line up at the bottom. */
 .kit-card {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto 1fr auto auto;
+  align-items: start;
   gap: var(--space-2);
   min-width: 0;
   padding: var(--space-3);
@@ -47,16 +62,23 @@
   box-shadow: 0 0 0 1px var(--colour-accent-line);
 }
 
+.kit-card > * {
+  grid-column: 1 / -1;
+}
+
+/* As tall as the screen allows: 220px at 900 high, 80px at 720. */
 .kit-card__picture {
   display: block;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  height: clamp(64px, calc(100vh - 640px), 220px);
   object-fit: cover;
   border-radius: var(--radius-md);
   background: var(--colour-surface-control);
 }
 
 .kit-card__name {
+  grid-column: 1;
+  align-self: baseline;
   margin: 0;
   font-family: var(--font-display);
   font-size: var(--text-lg);
@@ -64,27 +86,32 @@
 }
 
 .kit-card__count {
+  grid-column: 2;
+  align-self: baseline;
   margin: 0;
   color: var(--colour-text-muted);
   font-size: var(--text-sm);
 }
 
+/* The whole list, never a scroll box cut mid-line; two newspaper columns, so
+   a long name on the left no longer leaves a gap on the right. */
 .kit-card__contents {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px var(--space-2);
-  max-height: 11rem;
+  columns: 2;
+  column-gap: var(--space-2);
   margin: 0;
   padding: 0;
-  overflow-y: auto;
   list-style: none;
   color: var(--colour-text-secondary);
   font-size: var(--text-xs);
   line-height: var(--leading-tight);
 }
 
+.kit-card__contents > li {
+  break-inside: avoid;
+  padding-bottom: 2px;
+}
+
 .kit-card__price {
-  margin-top: auto;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
 }
@@ -97,6 +124,43 @@
 
 .kit-card__price .res-list > .res-amount + .res-amount {
   margin-left: 0;
+}
+
+/* "New to Map Room 2": the Regular kit while it is free. */
+.kit-card--free {
+  border-color: var(--colour-accent-line);
+}
+
+.kit-card--free .kit-card__price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.kit-card__free-tag {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--colour-accent-soft);
+  color: var(--colour-accent-text);
+}
+
+/* Classic's accent words are white (for a solid orange button); on the light
+   tint over the card's cream they all but vanish, so Free takes a dark orange. */
+:root[data-skin="flash"] .kit-card__free-tag {
+  color: #8a3a00;
+}
+
+.kit-card__free-label {
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--colour-text-secondary);
+}
+
+.kit-card__usual {
+  flex-basis: 100%;
+  font-weight: 400;
+  color: var(--colour-text-muted);
 }
 
 .kit-card__buttons {
@@ -167,6 +231,7 @@
   }
 
   .kit-card__picture {
+    height: auto;
     aspect-ratio: 16 / 9;
   }
 }

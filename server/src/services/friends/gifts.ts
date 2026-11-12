@@ -138,7 +138,7 @@ export interface WaitingGift {
 
 /**
  * The player's waiting gifts, oldest first, locked `FOR UPDATE`: one by id,
- * or all of them. Run inside the collect's transaction.
+ * or all of them. Run inside the collect's (or the delete's) transaction.
  */
 export const lockWaitingGifts = async (
   tx: EntityManager,
@@ -160,6 +160,21 @@ export const lockWaitingGifts = async (
 export const markCollected = async (tx: EntityManager, ids: readonly number[], now: number): Promise<void> => {
   if (ids.length === 0) return;
   await tx.execute(`UPDATE bym.friend_gift SET collected_at = ? WHERE id IN (${placeholders(ids)})`, [dateOf(now), ...ids]);
+};
+
+/**
+ * Deletes waiting gifts for the receiver (owner, 9 Nov 2026): they lapse at
+ * once, as a block lapses them ({@link dropWaitingGifts}). The rows stay, so
+ * the one-a-day key still holds (the sender cannot send again that day because
+ * the gift was deleted), the audit keeps them, and nothing counts them as
+ * collected. Run inside the delete's transaction, on ids it locked.
+ */
+export const markDeleted = async (tx: EntityManager, ids: readonly number[], now: number): Promise<void> => {
+  if (ids.length === 0) return;
+  await tx.execute(`UPDATE bym.friend_gift SET expires_at = ? WHERE id IN (${placeholders(ids)}) AND collected_at IS NULL`, [
+    dateOf(now),
+    ...ids,
+  ]);
 };
 
 /**

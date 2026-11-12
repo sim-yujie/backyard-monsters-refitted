@@ -612,8 +612,6 @@
   .hud--corner .hud__bar,
   .hud-status__badge,
   .hud-status__boost,
-  .friends-bar,
-  .friends-bar__card,
   .friend-visit-line,
   .account-menu__button--pill,
   .account-menu__list,
@@ -1079,17 +1077,6 @@
   :root[data-skin] .map-panel .panel__title {
     min-width: 130px;
     font-size: 16px;
-  }
-
-  /* Folded on a phone the Friends strip is an empty box along the bottom
-     holding only its round button (friends-bar.css): no plate, or its two
-     edges show as a dark band under the dock and lift the button's sign
-     above its neighbours' (Thanksgiving test, 8 Nov). Opened, it is a sheet
-     and wears the plate. */
-  :root[data-skin] .friends-bar.friends-bar:not(.is-open) {
-    border: 0;
-    border-image: none;
-    filter: none;
   }
 
   /* A window as wide as the screen keeps its disc on the screen. */

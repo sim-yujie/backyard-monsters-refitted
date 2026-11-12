@@ -11,6 +11,7 @@ import {
   OUTPOST_BUILDING_HP,
   OUTPOST_CAPACITY,
   OUTPOST_TOWER_STATS,
+  PROPS_SIZE,
   TOWER_STATS,
   TRAP_STATS,
 } from "./combatStatsData";
@@ -151,10 +152,19 @@ describe("BUILDING_HP", () => {
     // 112 is the outpost core, whose ladder lives in the outpost table. It is
     // not a Map Room 2 main-yard type, so it does not reach the audit of
     // `docs/design/server-combat.md` §2.2. The Inferno Cannon 130 takes its
-    // ladder from the Inferno table, as the Housing Bunker does.
-    expect(Object.keys(BUILDING_HP)).toHaveLength(139);
+    // ladder from the Inferno table, as the Housing Bunker does. The 140th row
+    // is this project's own Observatory, 150.
+    expect(Object.keys(BUILDING_HP)).toHaveLength(140);
     expect(BUILDING_HP[112]).toBeUndefined();
     expect(BUILDING_HP[130]?.length).toBe(7);
+  });
+
+  it("gives the Observatory one level at the Map Room's level 2 health, a placeholder", () => {
+    // Owner 10 Nov 2026: a normal building in a battle, like the Map Room.
+    expect(BUILDING_HP[150]).toEqual([BUILDING_HP[11]?.[1]]);
+    expect(BUILDING_HP[150]).toEqual([10_000]);
+    expect(GRID_COST[150]).toEqual(GRID_COST[8]);
+    expect(PROPS_SIZE[150]).toBe(PROPS_SIZE[8]);
   });
 
   it("takes the Housing Bunker's health from the Inferno table, as its range (issue #143)", () => {

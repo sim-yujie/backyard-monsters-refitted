@@ -1,4 +1,4 @@
-import type { EventReward, EventView, LadderView } from "@/api/events";
+import type { EventReward, EventView, LadderView, Mr2WelcomeStatus } from "@/api/events";
 import {
   calendarDays,
   claimableTiers,
@@ -19,6 +19,7 @@ import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { resourceIcon, RESOURCE_KEYS } from "@/ui/resourceIcon";
 import { eventsArt } from "./eventsArt";
+import { mr2WelcomeCard, paintWelcomeReward, paintWelcomeTimeline, welcomeDaysText } from "./mr2WelcomeCard";
 import "./events.css";
 
 /**
@@ -61,6 +62,8 @@ export type EventsPanelView =
       readonly claiming: string | null;
       /** A refusal to show under its claim. */
       readonly refusal: { readonly key: string; readonly message: string } | null;
+      /** The player's "New to Map Room 2" card (`ui/events/mr2WelcomeCard.ts`), first on the page; null for none. */
+      readonly mr2Welcome?: Mr2WelcomeStatus | null;
     };
 
 export interface EventsPanelOptions {
@@ -68,6 +71,8 @@ export interface EventsPanelOptions {
   onClaimTier(event: EventView, tier: number): void;
   onRetry(): void;
   onClose(): void;
+  /** The "New to Map Room 2" card's Go to Map Room 2. */
+  onGoToMapRoom2?(): void;
 }
 
 const el = <K extends keyof HTMLElementTagNameMap>(
@@ -181,6 +186,17 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
     case "krallen":
       pictures.append(krallenPicture(1, "icon", "events-reward__image"));
       break;
+    case "korath": {
+      // Flash's own Monster Madness prize pictures (upstream `events/wotc/wotc_reward<n>.png`).
+      const power = Math.min(Math.max(Math.floor(reward.power), 1), KORATH_POWER_SHORT.length);
+      const image = el("img", "events-reward__image events-reward__image--korath");
+      image.src = `/events/korath-power-${power}.png`;
+      image.alt = "";
+      image.decoding = "async";
+      pictures.append(image);
+      figure = KORATH_POWER_SHORT[power - 1]!;
+      break;
+    }
     case "eventCoins":
       pictures.append(rewardIcon("eventcoin"));
       figure = shortAmount(reward.amount);
@@ -214,6 +230,45 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
   }
   if (figure) badge.append(el("span", "events-reward__figure", figure));
   return badge;
+};
+
+/** Korath's powers' short names for a reward tile, 1 Burn to 3 Fists of Doom. */
+const KORATH_POWER_SHORT = ["Burn", "Fire", "Fists"] as const;
+
+/** Ladders drawn with one bar across every goal (Monster Madness: points in the millions, three far-apart goals). */
+const GOAL_BAR_KINDS: ReadonlySet<string> = new Set(["monster-madness"]);
+
+/**
+ * One bar from 0 to the top goal, filled to the player's points, with a tick
+ * at each goal (green once reached) and its figure under it.
+ */
+export const goalsBar = (ladder: LadderView): HTMLElement => {
+  const top = Math.max(1, ...ladder.tiers.map((tier) => tier.need));
+  const reached = Math.min(ladder.counter, top);
+  const share = (value: number): string => `${Math.round((value / top) * 1000) / 10}%`;
+  const wrap = el("div", "events-goals");
+  const bar = el("div", "events-goals__bar");
+  bar.setAttribute("role", "progressbar");
+  bar.setAttribute("aria-label", ladder.label);
+  bar.setAttribute("aria-valuemin", "0");
+  bar.setAttribute("aria-valuemax", String(top));
+  bar.setAttribute("aria-valuenow", String(reached));
+  bar.setAttribute("aria-valuetext", `${formatAmount(ladder.counter)} of ${formatAmount(top)}`);
+  const fill = el("span", "events-goals__fill");
+  fill.style.width = share(reached);
+  bar.append(fill);
+  const marks = el("div", "events-goals__marks");
+  for (const tier of ladder.tiers) {
+    const done = ladder.counter >= tier.need;
+    const tick = el("span", `events-goals__tick${done ? " events-goals__tick--done" : ""}`);
+    tick.style.left = share(tier.need);
+    bar.append(tick);
+    const label = el("span", `events-goals__mark${done ? " events-goals__mark--done" : ""}`, shortAmount(tier.need));
+    label.style.left = share(tier.need);
+    marks.append(label);
+  }
+  wrap.append(bar, marks);
+  return wrap;
 };
 
 /** Krallen's portrait at a level. */
@@ -299,6 +354,12 @@ export class EventsPanel {
     for (const line of this.element.querySelectorAll<HTMLElement>("[data-next-at]")) {
       line.textContent = nextText(Number(line.dataset["nextAt"]) - now);
     }
+    for (const line of this.element.querySelectorAll<HTMLElement>("[data-welcome-ends]")) {
+      line.textContent = welcomeDaysText(Number(line.dataset["welcomeEnds"]), now);
+    }
+    for (const line of this.element.querySelectorAll<HTMLElement>("[data-welcome-start]")) paintWelcomeTimeline(line, now);
+    // A Frontier Pass reward used today is back at the daily reset.
+    for (const row of this.element.querySelectorAll<HTMLElement>(".events-welcome__reward[data-back-at]")) paintWelcomeReward(row, now);
   }
 
   /**
@@ -328,10 +389,18 @@ export class EventsPanel {
       return;
     }
 
+    // On a computer the page is wide (owner, 9 Nov: windows open in the
+    // middle now, events.css): the Frontier Pass across the top, the events
+    // on now in the wide main column, Coming up in a column at the side. On a
+    // phone, or a narrow window, one under the other in that order.
     const { active, upcoming } = sortEvents(view.events);
-    const sections: HTMLElement[] = [];
-    for (const event of active) sections.push(this.activeCard(event, view));
-    if (active.length === 0) sections.push(el("p", "events-status", "No event is on right now."));
+    const page = el("div", "events-page");
+    const welcome = view.mr2Welcome ?? null;
+    if (welcome) page.append(mr2WelcomeCard(welcome, view.now, () => this.options.onGoToMapRoom2?.()));
+    const main = el("div", "events-page__main");
+    for (const event of active) main.append(this.activeCard(event, view));
+    if (active.length === 0 && !welcome) main.append(el("p", "events-status", "No event is on right now."));
+    if (main.childElementCount > 0) page.append(main);
     if (upcoming.length > 0) {
       const section = el("section", "events-upcoming");
       const list = el("ul", "events-upcoming__list");
@@ -346,11 +415,13 @@ export class EventsPanel {
         list.append(item);
       }
       section.append(el("h3", "events-section__title", "Coming up"), list);
-      sections.push(section);
+      page.append(section);
+      // The side column only beside events that are on.
+      if (main.childElementCount > 0) page.classList.add("events-page--side");
     }
     // Keep the scroll where it was: a claim re-renders the whole page.
     const scroll = this.panel.body.scrollTop;
-    this.panel.setContent(...sections);
+    this.panel.setContent(page);
     this.panel.body.scrollTop = scroll;
   }
 
@@ -442,7 +513,8 @@ export class EventsPanel {
   }
 
   private ladder(event: EventView, ladder: LadderView, view: Extract<EventsPanelView, { kind: "list" }>): HTMLElement {
-    const section = el("section", "events-ladder");
+    const goalBar = GOAL_BAR_KINDS.has(event.kind);
+    const section = el("section", `events-ladder${goalBar ? ` events-ladder--goals events-ladder--${event.kind}` : ""}`);
     const head = el("div", "events-calendar__head");
     head.append(
       el("h4", "events-section__title", ladder.label),
@@ -481,7 +553,9 @@ export class EventsPanel {
       list.append(row);
       if (view.refusal?.key === key) list.append(refusalNote(view.refusal.message));
     });
-    section.append(head, list);
+    section.append(head);
+    if (goalBar) section.append(goalsBar(ladder));
+    section.append(list);
     return section;
   }
 

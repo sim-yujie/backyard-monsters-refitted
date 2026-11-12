@@ -182,7 +182,8 @@ export class TakeoverControl {
     this.button.disabled = !view.enabled;
     this.button.title = view.note;
     this.button.setAttribute("aria-label", `${TAKEOVER_TEXT.button}. ${view.note}`);
-    this.note.textContent = view.enabled ? `${TAKEOVER_TEXT.button}: ${view.note}` : view.note;
+    // " · ", not ":", since the Frontier Pass price has its own colon.
+    this.note.textContent = view.enabled ? `${TAKEOVER_TEXT.button} · ${view.note}` : view.note;
     this.detail.classList.toggle("takeover-action--refused", !view.enabled);
     this.tick();
   }

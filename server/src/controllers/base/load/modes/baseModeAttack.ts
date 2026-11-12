@@ -1,6 +1,6 @@
 import { BaseMode, BaseType } from "../../../../enums/Base.js";
 import { recordQuestEvents } from "../../../../services/quests/record.js";
-import { MapRoomCell, MapRoomVersion } from "../../../../enums/MapRoom.js";
+import { AttackPermission, MapRoomCell, MapRoomVersion } from "../../../../enums/MapRoom.js";
 import { World } from "../../../../database/models/world.model.js";
 import { WorldMapCell } from "../../../../database/models/worldmapcell.model.js";
 import { postgres } from "../../../../server.js";
@@ -23,6 +23,7 @@ import { ATTACK_ONLINE_SECONDS, isPlayerOnline } from "../../../../services/user
 import { isTruceActive } from "../../../../services/mail/isTruceActive.js";
 import { MR1_TRIBE_IDS } from "../../../../game-data/tribes/v1/index.js";
 import { registerAttacker } from "../../../../services/maproom/v1/registerAttacker.js";
+import { requireMr1Attack } from "../../../../services/maproom/v1/mr1AttackCheck.js";
 import { requireAttackableMR1Tribe } from "../../../../services/maproom/v1/mr1TribeAttack.js";
 import { startMR1TribeSession } from "../../../../services/maproom/v1/mr1TribeSession.js";
 import { servedDefenderForces } from "../../../../services/base/combat/defenderForces.js";
@@ -67,13 +68,23 @@ interface BaseModeAttack {
    * as `attackerlevel`; kept in the attack session for the loot replay.
    */
   attackerLevel?: number;
+  /**
+   * Whether Map Room 1's neighbour and level rules (`mr1AttackRules.ts`)
+   * apply. They are for a player picking a target from their own Map Room 1
+   * list, so on by default; false only for an attack the server starts
+   * itself, a bot's revenge (`services/bots/revengeRun.ts`, issue #244): the
+   * bot answers a player who attacked it, whatever its own list holds. Such
+   * an attack moves no vengeance counters.
+   */
+  mr1Rules?: boolean;
 }
 
 /**
  * Processes an attack from a user against a specific base.
  *
- * Every refusal — protection, an attack already running, the defender being
- * online, a truce, and now range — is decided before anything is written, so a
+ * Every refusal — protection, an attack already running, Map Room 1's
+ * neighbour and level rules, the defender being online, a truce, and range —
+ * is decided before anything is written, so a
  * refused attack leaves the defender exactly as it found them.
  *
  * @param {BaseModeAttack} options - Attack options
@@ -82,7 +93,7 @@ interface BaseModeAttack {
  *   and their health,
  *   and the attacker's academy levels it is fought at (issue #201)
  */
-export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }: BaseModeAttack) => {
+export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel, mr1Rules = true }: BaseModeAttack) => {
   // Map Room 3 is closed (security audit 2026-10-29, C1): it took the attack's
   // cost and result from the client. The load refuses it first; this is the
   // same rule for any other caller.
@@ -124,6 +135,8 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
     isWildMonsterExpired(save, getCurrentDateTime());
   if (regrown && (await isCampInPlay(save!.basesaveid))) throw baseUnderAttackErr();
   const readSavetime = save?.savetime ?? 0;
+  // What Map Room 1's level rule allowed, for the vengeance counters.
+  let mr1Permission = AttackPermission.ATTACKABLE;
 
   if (save && save.type !== BaseType.TRIBE) {
     if (save.protected > getCurrentDateTime()) throw baseProtectedErr();
@@ -131,6 +144,14 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
     if (isAttackActive(save)) throw baseUnderAttackErr();
     // A wild monster raid being fought locks the yard as an attack does (#226, `raidLock.ts`).
     if (raidFighting(save, getCurrentDateTime())) throw baseUnderAttackErr();
+
+    // Map Room 1 attacks only neighbours, within the level gap or with
+    // vengeance (owner, 11 Nov 2026, `services/maproom/v1/mr1AttackRules.ts`).
+    // Only player main yards get here on Map Room 1. Not for a bot's revenge
+    // (`mr1Rules: false`), which the server starts, not a player's list.
+    if (mr1Rules && mapversion === MapRoomVersion.V1 && save.type === BaseType.MAIN) {
+      mr1Permission = await requireMr1Attack(user.userid, userSave, save.saveuserid, save, getCurrentDateTime());
+    }
 
     // Online means a game open (a presence mark from the last minute) AND
     // real play in the last ten minutes: a ping alone protects nobody (#271).
@@ -361,7 +382,7 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
 
     if (!defender) throw new Error("Defender user not found.");
 
-    if (mapversion === MapRoomVersion.V1) await registerAttacker(user, defender);
+    if (mapversion === MapRoomVersion.V1) await registerAttacker(user, defender, mr1Permission);
     await createAttackLog(user, defender, save)
   }
 

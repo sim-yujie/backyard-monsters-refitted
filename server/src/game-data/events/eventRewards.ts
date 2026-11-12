@@ -20,6 +20,11 @@ import type { ResourceAmounts } from "../../services/yardplanner/costs.js";
  *   for a player without one, one level more for a player who has one, up
  *   to {@link KRALLEN_MAX_LEVEL}, and nothing more at the top. She is kept
  *   for good. This is the only way a Krallen is made or raised.
+ * - `korath`: one of Korath's powers, `power` 1 Burn, 2 Breath of Fire, 3
+ *   Fists of Doom (Monster Madness, `monsterMadness.ts`). It sets his power
+ *   level to at least `power`, never lower, and is kept in the yard's
+ *   `rewards` so a Korath raised later hatches with it
+ *   (`services/events/korathPower.ts`).
  * - `eventCoins`: event coins (`services/events/eventCoins.ts`), the
  *   currency the decorations shop takes. They live in `bym.event_coins`,
  *   not in the yard, and never expire. Only big events pay them, through
@@ -33,6 +38,7 @@ export type EventReward =
   | { readonly kind: "speedup"; readonly item: FreeSpeedupItem; readonly count: number }
   | { readonly kind: "decoration"; readonly type: number; readonly count: number }
   | { readonly kind: "krallen" }
+  | { readonly kind: "korath"; readonly power: number }
   | { readonly kind: "eventCoins"; readonly amount: number };
 
 /**

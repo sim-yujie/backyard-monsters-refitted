@@ -2,6 +2,7 @@ import type { EntityManager } from "@mikro-orm/core";
 import type { EntityManager as SqlEntityManager } from "@mikro-orm/postgresql";
 
 import { infernoConfig } from "../../config/InfernoConfig.js";
+import { quietLoginOn } from "../../config/QuietLoginConfig.js";
 import type { Save } from "../../database/models/save.model.js";
 import { logger } from "../../utils/logger.js";
 import { isAttackActive } from "../base/isAttackActive.js";
@@ -35,8 +36,8 @@ export interface EmergenceOnLoad {
   readonly progress: InfernoProgressRecord;
   /** The level the cave just went up to, its raid due now; null when it did not. */
   readonly raised: number | null;
-  /** Why it did not; null when it did. */
-  readonly notDue: EmergenceNotDue | "race" | null;
+  /** Why it did not; null when it did. `quiet`: the test server's `QUIET_LOGIN` held it back. */
+  readonly notDue: EmergenceNotDue | "race" | "quiet" | null;
   /**
    * Moloch's raid for the level just reached, open and due now; null when none
    * was opened: none raised, or the first raise on a yard at 10% health or
@@ -85,6 +86,10 @@ export const raiseEmergence = async (
  * saved the level before the warning). A Moloch fight the load left was
  * called off already, as any raid's is (`cancelRaidOnYardLoad`).
  *
+ * A local test server with `QUIET_LOGIN` on (`config/QuietLoginConfig.ts`)
+ * never raises the cave on load, so a test account lands in its yard with no
+ * emergence and no Moloch raid; the cave and its progress are left as they are.
+ *
  * @param save - The main yard, caught up by this load.
  * @param now - Unix seconds.
  */
@@ -93,7 +98,8 @@ export const emergenceOnLoad = async (
   userid: number,
   save: Save,
   now: number,
-  enabled: boolean = infernoConfig.enabled
+  enabled: boolean = infernoConfig.enabled,
+  quiet: boolean = quietLoginOn()
 ): Promise<EmergenceOnLoad | undefined> => {
   if (!enabled) return undefined;
   let open = await readOpenRaid(userid);
@@ -102,6 +108,7 @@ export const emergenceOnLoad = async (
     open = null;
   }
   const progress = await readInfernoProgress(em, userid);
+  if (quiet) return { progress, raised: null, notDue: "quiet", raid: null };
   const notDue = emergenceDueCheck({
     enabled,
     save,

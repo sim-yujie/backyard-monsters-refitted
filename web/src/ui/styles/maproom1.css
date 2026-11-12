@@ -721,6 +721,12 @@
   color: var(--colour-warning);
 }
 
+/* Vengeance: hits back across the level gap. "Revenge ×2" stays on one line. */
+.mr1-battle--vengeance {
+  color: var(--colour-accent);
+  white-space: nowrap;
+}
+
 .mr1-warning,
 .mr1-protection {
   display: flex;
@@ -1025,6 +1031,12 @@
   gap: 5px;
   font-size: var(--text-xs);
   color: var(--colour-text-secondary);
+}
+
+/* More than the level gap above: allowed, with a warning colour. */
+.mr1-row__line--warn {
+  color: var(--colour-warning);
+  font-weight: 700;
 }
 
 .mr1-row__chevron {

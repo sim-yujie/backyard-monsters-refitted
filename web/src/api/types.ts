@@ -124,6 +124,8 @@ export interface AccountResponse extends ApiEnvelope {
     countryAsked?: boolean;
     /** The country's chat room, when it has one. */
     countryChannel?: string | null;
+    /** The bell's notification categories turned off (`api/notificationSettings.ts`). */
+    notificationsOff?: string[];
   };
 }
 
@@ -245,6 +247,10 @@ export interface ChampionSaveEntry {
   b?: unknown;
   /** What its brain has learned from: `n` attacks, and each Mode's usual score. */
   bs?: unknown;
+  /** Its habits per Mode (champion modes round 2, `habits.ts`); the server's alone to write. */
+  h?: unknown;
+  /** What its habits learned from: `n` attacks, and each Mode's count and usual scores. */
+  hs?: unknown;
   [key: string]: unknown;
 }
 
@@ -484,6 +490,10 @@ export interface TakeoverQuoteResponse extends ApiEnvelope {
   shiny?: number;
   /** Next to the caller's main yard, which halves the price. */
   adjacent?: boolean;
+  /** "New to Map Room 2": `resources` is the cheap price (10% of the full base). */
+  welcome?: true;
+  /** The resource price without that discount; only with `welcome`. */
+  usualResources?: number;
   /** Server seconds when the caller's chance at this player outpost ends; only while it runs. */
   grantExpiresAt?: number;
   /** Whether the caller can pay each way right now. */
@@ -670,6 +680,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    */
   outposts?: OutpostEntry[] | null;
   /**
+   * The player's outpost names and pins, `{ names, pins }`
+   * (`server/src/services/outposts/outpostLabels.ts`), on the owner's
+   * build-mode loads; absent when there are none. Read by `outpostLabels.ts`.
+   */
+  outpostlabels?: unknown;
+  /**
    * When "Move to a random spot" last moved the main yard, unix seconds; null
    * or absent when it never has (issue #366). The next move opens 7 days later.
    */
@@ -804,6 +820,8 @@ export interface BaseLoadResponse extends ApiEnvelope {
   chatcountry?: string;
   /** The owner's loads, until answered or put off: ask once where the player is from. */
   countryask?: number;
+  /** The owner's build-mode loads on a local test server started with `QUIET_LOGIN=1` (`game/quietLogin.ts`). */
+  quietlogin?: number;
   /**
    * Map Room 2 attack loads only: the target cell's height, `i`, which
    * stretches an outpost's tower range (`BTOWER.as:80-85`). The server's loot

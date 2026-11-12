@@ -8,6 +8,7 @@ import {
   firstOpenText,
   grantCountdownText,
   outpostTitle,
+  offerPriceText,
   priceText,
   quoteKey,
   refusalText,
@@ -89,6 +90,21 @@ describe("the map's Take over control", () => {
       enabled: true,
       note: "3,500,000 of each resource or 924 Shiny",
     });
+  });
+
+  it("a New to Map Room 2 price says so", () => {
+    const view = takeoverActionView("camp", {
+      status: "quoted",
+      quote: quote({ resources: 350_000, usualResources: 3_500_000, welcome: true }),
+    });
+    expect(view.note).toBe("Frontier Pass: 350,000 each or 924 Shiny");
+  });
+
+  it("the end-of-attack offer's price line says the welcome price the same way as the map", () => {
+    expect(offerPriceText({ resources: 350_000, shiny: 924, welcome: true })).toBe(
+      "Frontier Pass: 350,000 each or 924 Shiny",
+    );
+    expect(offerPriceText({ resources: 3_500_000, shiny: 924 })).toBe("3,500,000 of each resource or 924 Shiny");
   });
 
   it("on a camp that cannot be taken: disabled with the reason in plain words", () => {

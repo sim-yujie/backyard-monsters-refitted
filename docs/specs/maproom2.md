@@ -470,6 +470,15 @@ Cost, computed client-side in `PopupTakeover`
 | Wild monster camp | `max(round((level * 562500 - 14750000) / 250000) * 250000, 1000000)` |
 | Player outpost | `min(max(round((ln(empireValue) * 15820570.7 - 227080916.9) / 250000) * 250000, 1000000), 65000000)` |
 
+`empireValue` is the outpost's own `BASE.CalcBaseValue` (`client/scripts/BASE.as:4830-4862`), which
+Flash posted as `empirevalue` on every save: for every building whose props `type` is not
+`decoration`, `enemy`, `immovable` or `trap` (on an outpost, buildings still being built count too),
+add `time + r1 + r2 + r3 + r4` of the outpost table's `costs[level - 1]` (level 0 or less counts as
+1), then `ceil(sum * 0.1)`. The server works it out from the outpost's stored `buildingdata`
+(`server/src/services/maproom/v2/outpostValue.ts`) and never reads a stored or posted `empirevalue`.
+A fresh Regular / Mega / Ultra Starter Kit outpost prices at 10,000,000 / 34,250,000 / 50,500,000 of
+each; an empty one at the 1,000,000 floor.
+
 Then halved when the target is adjacent to the player's main yard
 (`PopupTakeover.as:62-75`), then reduced by the `ALLIANCE_CONQUEST` powerup
 (`PopupTakeover.as:77-79`). The same amount is charged for each of r1..r4. The shiny alternative is

@@ -58,6 +58,14 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
  * `400 badRequest` for an unknown kit; `409 notOutpost` on a main yard;
  * `409 monsters`; then the payment: `409 shortfall { shortfall, topUp }`, and
  * the wrapper's own `shinyLocked` and `credits`.
+ *
+ * ## Free Regular kit
+ *
+ * "New to Map Room 2" (`services/events/mr2Welcome.ts`) gives 7 Regular
+ * kits free in the player's 10 days, one a day, on any outpost. The route claims one
+ * (`controllers/yard/starterKit.ts`) and plans with `free`: nothing charged,
+ * built as the resource path builds (prefabs, no worker), whichever payment
+ * was asked for.
  */
 
 /** How a kit is paid for. */
@@ -69,6 +77,9 @@ export interface StarterKitRequest {
   /** The Shiny top-up the player agreed to for a short pool; see the file comment. */
   topUp?: number | undefined;
 }
+
+/** The kit "New to Map Room 2" gives free. */
+export const FREE_WELCOME_KIT = 1;
 
 /** The slice of a save a kit reads. */
 export interface StarterKitSave {
@@ -94,6 +105,8 @@ export interface StarterKitReport {
   shiny: number;
   /** Unix seconds when the last prefab is done; `now` when paid with Shiny. */
   doneBy: number;
+  /** The "New to Map Room 2" free Regular kit: nothing was charged. */
+  free?: true;
 }
 
 const KEYS = ["r1", "r2", "r3"] as const;
@@ -239,24 +252,30 @@ const withoutProduction = (monsters: JsonObject | null | undefined): JsonObject 
  * @param save - The caught-up outpost, seen through the main yard (`poolView`).
  * @param request - The kit, how it is paid for, and any agreed top-up.
  * @param now - Unix seconds.
+ * @param free - The "New to Map Room 2" free Regular kit was claimed: charge
+ *   nothing and build it as the resource path does.
  * @returns The new buildings, health and monsters, the charge and the report.
  */
-export const planStarterKit = (save: StarterKitSave, request: StarterKitRequest, now: number) => {
+export const planStarterKit = (save: StarterKitSave, request: StarterKitRequest, now: number, free = false) => {
   const kit = starterKit(request.kit);
   if (!kit) throw yardBadRequestErr("There is no such Starter Kit.", { kit: request.kit });
   if (yardKindOf(save) !== "outpost") {
     throw yardRefusedErr("notOutpost", "Starter Kits are for outposts.");
   }
+  const isFree = free && kit.id === FREE_WELCOME_KIT;
+  const pay: KitPayment = isFree ? "resources" : request.pay;
 
   const before = save.buildingdata ?? {};
-  const { buildingdata, seconds } = kitBuildings(kit, request.pay, before);
+  const { buildingdata, seconds } = kitBuildings(kit, pay, before);
 
   const monsters = kitMonsterRefusal(save, buildingdata);
   if (monsters) throw monsters;
 
   let debit = { r1: 0, r2: 0, r3: 0, r4: 0 };
   let shiny: number;
-  if (request.pay === "shiny") {
+  if (isFree) {
+    shiny = 0;
+  } else if (request.pay === "shiny") {
     shiny = kit.shiny;
   } else {
     const missing = kitShortfall(save.resources, kit);
@@ -282,12 +301,13 @@ export const planStarterKit = (save: StarterKitSave, request: StarterKitRequest,
   ).length;
   const report: StarterKitReport = {
     kit: kit.id,
-    pay: request.pay,
+    pay,
     placed: Object.keys(buildingdata).length - 1,
     removed,
     cost: debit,
     shiny,
     doneBy: now + seconds,
+    ...(isFree ? { free: true as const } : {}),
   };
 
   return {

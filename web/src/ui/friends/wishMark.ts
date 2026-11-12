@@ -1,5 +1,5 @@
 import type { GiftResource } from "@/api/friends";
-import { RESOURCE_NAMES } from "@/ui/resourceIcon";
+import { resourceName } from "@/ui/resourceIcon";
 import { make } from "./rows";
 
 /**
@@ -26,6 +26,6 @@ export const wishMark = (rank: number | null = null, className?: string): HTMLEl
  */
 export const wishesSummary = (wishes: readonly GiftResource[]): string => {
   if (wishes.length === 0) return "";
-  if (wishes.length === 1) return `${RESOURCE_NAMES[wishes[0]!]} only`;
-  return wishes.map((key) => RESOURCE_NAMES[key]).join(" > ");
+  if (wishes.length === 1) return `${resourceName(wishes[0]!, "surface")} only`;
+  return wishes.map((key) => resourceName(key, "surface")).join(" > ");
 };

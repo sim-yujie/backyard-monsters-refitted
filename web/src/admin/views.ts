@@ -20,7 +20,7 @@ import type { IconName } from "./icons";
  * ({@link ScrollMemory}).
  *
  * Beta 7's two extra views: Photo reports (player profile photos) is a tab
- * of Moderation, after the list; Weekend events is a tab of Announcements.
+ * of Moderation, after the list; Events (Monster Madness, weekend events) is a tab of Announcements.
  */
 
 export const PAGES = [
@@ -41,13 +41,14 @@ export const VIEWS = [
   ["photos", "Photo reports", "moderation"],
   ["find", "Find a player", "moderation"],
   ["attacks", "Attack log", "moderation"],
+  ["flagged", "Flagged", "moderation"],
   ["moderators", "Moderators", "moderation"],
   ["modmail", "Moderator mail", "moderation"],
   ["bugs", "Bug reports", "support"],
   ["shiny", "Give Shiny", "support"],
   ["chat", "Game chat", "support"],
   ["announcements", "Announcements", "announcements"],
-  ["events", "Weekend events", "announcements"],
+  ["events", "Events", "announcements"],
   ["players", "Players", "activity"],
   ["activity", "Gameplay", "activity"],
   ["health", "Server health", "server"],

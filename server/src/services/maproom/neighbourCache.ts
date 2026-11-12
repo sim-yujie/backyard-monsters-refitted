@@ -139,6 +139,9 @@ export const carryAttackCounters = (previous: NeighbourData[], found: NeighbourD
         attacksfrom: existing.attacksfrom || 0,
         attacksto: existing.attacksto || 0,
         retaliatecount: existing.retaliatecount || 0,
+        // Map Room 1 vengeance (`v1/mr1AttackRules.ts`) goes with them.
+        ...(existing.vengeance && { vengeance: existing.vengeance }),
+        ...(existing.lastattackfrom && { lastattackfrom: existing.lastattackfrom }),
       };
     }
     return newNeighbor;

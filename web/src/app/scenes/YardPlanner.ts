@@ -54,6 +54,9 @@ import {
   undoName,
 } from "@/ui/yard/plannerLayout";
 import { InventoryPanel } from "@/ui/yard/InventoryPanel";
+import { yardSnapshotPanel } from "@/ui/yard/YardSnapshotPanel";
+import { captionLines, snapshotFileName, type SnapshotCaption } from "@/game/yard/yardSnapshot";
+import { composeSnapshot, pictureBlob } from "@/game/yard/snapshotPicture";
 import { notePlannerActivity } from "@/game/presence/plannerActivity";
 import {
   applyPanel,
@@ -235,6 +238,11 @@ export interface YardPlannerOptions {
    * layout slots are its own. Undefined on the main yard.
    */
   baseid?: string;
+  /**
+   * Who the yard picture's caption names (owner, 2026-11-11): the player and
+   * their level. Absent, the picture carries the game's name only.
+   */
+  snapshotCaption?: () => SnapshotCaption;
 }
 
 export class YardPlanner {
@@ -428,6 +436,7 @@ export class YardPlanner {
       onClearYard: () => this.confirmClearYard(),
       onInventory: () => this.toggleInventory(),
       onHelp: () => this.openHelp("basics", false),
+      onSnapshot: () => this.showSnapshot(),
       onExit: () => this.requestExit(),
       onMore: () => this.applySheet(),
     }, { readOnly: this.readOnly, layouts: options.baseid === undefined });
@@ -1542,6 +1551,32 @@ export class YardPlanner {
         markPlannerHintSeen();
       },
     }).mount(this.helpDock);
+  }
+
+  /**
+   * The yard picture to share (owner, 2026-11-11): the whole yard as the plan
+   * now has it, centred, with no trap in it, in a window with Save and Copy.
+   * The renderer draws it in one go and puts the screen back before the
+   * window opens, so nothing on screen changes.
+   */
+  private showSnapshot(): void {
+    const caption = this.options.snapshotCaption?.() ?? {};
+    const drawn = this.options.renderer.snapshot();
+    const picture = drawn
+      ? composeSnapshot(drawn, captionLines(caption)).then((canvas) => {
+          if (!canvas) throw new Error("No 2D canvas for the yard picture.");
+          return pictureBlob(canvas);
+        })
+      : null;
+    // The window catches a failure and says so; this keeps it off the console's unhandled list.
+    picture?.catch(() => undefined);
+    this.openDialog(
+      yardSnapshotPanel({
+        picture,
+        fileName: snapshotFileName(caption.name),
+        onClose: () => this.closeDialog(),
+      }),
+    );
   }
 
   private openDialog(panel: Panel): void {

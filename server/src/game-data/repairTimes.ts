@@ -152,6 +152,7 @@ export const REPAIR_TIMES: Readonly<Record<number, readonly number[]>> = {
   138: [86400, 172800, 345600], // YARD_PROPS.as:7849
   139: [1], // YARD_PROPS.as:7888
   140: [1920, 7680, 30720, 86400, 345600], // YARD_PROPS.as:7960
+  150: [600], // this project's Observatory, the Map Room's level 2
 };
 
 /**

@@ -20,6 +20,7 @@ import {
   listWaitingGifts,
   lockWaitingGifts,
   markCollected,
+  markDeleted,
 } from "../../services/friends/gifts.js";
 import { friendsSince, readSides } from "../../services/friends/helpFacts.js";
 import { MAX_GIFT_WISHES, setWishes, wishesOf } from "../../services/friends/giftWishes.js";
@@ -54,9 +55,14 @@ import type { FriendsBody } from "./friends.js";
  *   carries them as `wishes`, and each friend in `GET /bm/friends` carries
  *   theirs.
  * - `POST /bm/friends/gifts/collect` `{ giftid }` or `{ all: true }`: credits
- *   the main yard, clamped to its storage cap, at most 5 gifts a UTC day; the
- *   rest wait. The main yard is locked and caught up first, and refused while
- *   it is under attack or being raided, as the yard actions are.
+ *   the main yard, clamped to its storage cap, at most 10 gifts a UTC day
+ *   (owner, 9 Nov 2026: was 5); the rest wait. The main yard is locked and
+ *   caught up first, and refused while it is under attack or being raided, as
+ *   the yard actions are.
+ * - `POST /bm/friends/gifts/delete` `{ giftid }` or `{ all: true }` (owner,
+ *   9 Nov 2026): the receiver throws waiting gifts away. Nothing is credited
+ *   and no daily collect is used; the sender's one-a-day key still holds.
+ *   One gift not waiting for the caller is `noSuchGift`.
  */
 
 const id = z.coerce.number().int().positive();
@@ -79,6 +85,8 @@ export const CollectSchema = z.union([
   z.object({ giftid: id }).strict(),
   z.object({ all: z.literal(true) }).strict(),
 ]);
+/** The same two shapes as a collect: one gift, or every one waiting. */
+export const DeleteGiftsSchema = CollectSchema;
 
 /** The storage-cap slice of each main save, by save id. */
 const readCaps = async (em: EntityManager, basesaveids: readonly number[]): Promise<Map<number, number>> => {
@@ -242,4 +250,35 @@ export const collectGiftsAnswer = async (em: EntityManager, user: User, body: un
   });
 
   return { error: 0, ...done, giftsWaiting: await countWaitingGifts(em, me, now) };
+};
+
+/**
+ * Deletes one waiting gift, or every one waiting (owner, 9 Nov 2026). Only the
+ * caller's own waiting gifts are touched: another player's gift, a collected
+ * one or a lapsed one is `noSuchGift`. Gives nothing and leaves today's collects
+ * as they were. Answers how many went, the collects left and the gifts still
+ * waiting.
+ *
+ * @param user - The receiver (`ctx.authUser`).
+ * @param body - `{ giftid }` or `{ all: true }`.
+ * @param now - Unix seconds.
+ */
+export const deleteGiftsAnswer = async (em: EntityManager, user: User, body: unknown, now: number): Promise<FriendsBody> => {
+  const which = DeleteGiftsSchema.parse(body);
+  const me = user.userid;
+  const giftid = "giftid" in which ? which.giftid : null;
+
+  const deleted = await em.transactional(async (tx) => {
+    const waiting = await lockWaitingGifts(tx, me, giftid, now);
+    if (giftid !== null && waiting.length === 0) throw friendRefusedErr("noSuchGift");
+    await markDeleted(
+      tx,
+      waiting.map((gift) => gift.id),
+      now
+    );
+    return waiting.length;
+  });
+
+  const [collected, giftsWaiting] = await Promise.all([collectedToday(em, me, now), countWaitingGifts(em, me, now)]);
+  return { error: 0, deleted, collectsLeft: collectsLeftOf(collected), giftsWaiting };
 };

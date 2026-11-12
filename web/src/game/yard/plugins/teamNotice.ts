@@ -1,3 +1,4 @@
+import { quietLogin } from "@/game/quietLogin";
 import { fetchModerationNotice, seeModerationNotice } from "@/api/moderation";
 import { worldChat } from "@/game/chat/chatSession";
 import { openTeamNotice } from "@/ui/moderation/TeamNoticeDialog";
@@ -20,7 +21,8 @@ export const teamNoticePlugin: YardPlugin = (mounts) => {
   let timer: number | undefined;
 
   const check = async (): Promise<void> => {
-    if (stopped || showing) return;
+    // A test server's quiet login: none pops up by itself.
+    if (stopped || showing || quietLogin()) return;
     window.clearTimeout(timer);
     let notice;
     try {

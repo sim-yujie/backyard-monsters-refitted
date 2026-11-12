@@ -81,7 +81,9 @@ const TEST_TIPS: Partial<Record<GuideScreen, readonly Tip[]>> = {
   [GuideScreen.ATTACK]: [{ text: "Drop on open ground." }],
 };
 
-const setup = (options: { touch?: boolean; send?: (screen: GuideScreen) => Promise<unknown> } = {}) => {
+const setup = (
+  options: { touch?: boolean; send?: (screen: GuideScreen) => Promise<unknown>; quiet?: () => boolean } = {},
+) => {
   const bus = new GuideBus();
   const views: FakeView[] = [];
   const send = vi.fn(options.send ?? (() => Promise.resolve()));
@@ -95,6 +97,7 @@ const setup = (options: { touch?: boolean; send?: (screen: GuideScreen) => Promi
     },
     touch: () => options.touch ?? false,
     tips: (screen) => TEST_TIPS[screen] ?? [],
+    ...(options.quiet && { quiet: options.quiet }),
   });
   const view = (): FakeView | undefined => views.at(-1);
   return { bus, send, views, view, runner };
@@ -189,6 +192,19 @@ describe("when tips show by themselves", () => {
     bus.emit("screen", { id: GuideScreen.YARD, root: yard(), header: null });
     await settle();
     expect(view()!.shown!.text).toBe("Tap Collect all.");
+  });
+
+  it("never by themselves on a test server's quiet login, nothing marked seen, but a \"?\" still replays them", async () => {
+    const { bus, view, send, runner: tips } = setup({ quiet: () => true });
+    tips.setOnboarding(onboarding("legacy"));
+    const root = yard();
+    bus.emit("screen", { id: GuideScreen.YARD, root, header: null });
+    await settle();
+    expect(view()?.shown ?? null).toBeNull();
+    expect(send).not.toHaveBeenCalled();
+    tips.replay([{ screen: GuideScreen.YARD, root }]);
+    await settle();
+    expect(view()!.shown).not.toBeNull();
   });
 
   it("a legacy account counts as one that never had the guided start: every screen", async () => {

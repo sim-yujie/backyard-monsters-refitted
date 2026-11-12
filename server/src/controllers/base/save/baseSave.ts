@@ -22,11 +22,14 @@ import { refuseMissingBase } from "../../../services/base/missingBase.js";
 import { combatConfig } from "../../../config/CombatConfig.js";
 import { chargeBombSpend } from "../../../services/base/combat/bombSpend.js";
 import { recordBombSpend } from "../../../services/base/combat/recordBombSpend.js";
+import { requireFlingsInRoom } from "../../../services/base/combat/recordFlingRoom.js";
 import { defenderLootHandler } from "./handlers/defenderLootHandler.js";
 import { monsterUpdateHandler, monsterUpdateMode } from "./handlers/monsterUpdateHandler.js";
 import { validateSave } from "../../../scripts/anticheat/anticheat.js";
 import { getHousingOwner, getOutpostOwnerSave } from "../../../services/base/getOutpostOwnerSave.js";
 import { advanceBuildingTimers } from "../../../services/base/advanceBuildingTimers.js";
+import { invalidateSightAfterLanding } from "../../../services/maproom/sight/sightService.js";
+import { syncAttackedYardLevels } from "../../../services/yard/derivedLevels.js";
 import { championHandler } from "./handlers/championHandler.js";
 import { buildingDataHandler } from "./handlers/buildingDataHandler.js";
 import { protectTrojanHorse } from "../../../services/raids/trojanHorse.js";
@@ -81,7 +84,7 @@ import { buildingDataWithout } from "../../../services/base/combat/abandonedAtta
 import { recordBattleMismatches, replayBattleForSave } from "../../../services/base/combat/saveBattle.js";
 import { isDeclareWarRunning } from "../../../services/alliance/powerups.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
-import { championsAfterAttack, siegeAfterAttack } from "../../../services/base/combat/attackerRow.js";
+import { championsAfterAttack, championsAfterBattle, siegeAfterAttack } from "../../../services/base/combat/attackerRow.js";
 import { garrisonsAfterBattle } from "../../../services/base/combat/bunkerGarrison.js";
 import {
   landHousingLoss,
@@ -267,6 +270,22 @@ const saveBase = async (
           session?.attackerResources
         )
       : null;
+
+  // Every fling within the Flinger's room, the champion's first (owner, 12 Nov
+  // 2026): an over-full one is an edited game, refused in `reject` mode
+  // before any key is applied (`recordFlingRoom.ts`).
+  if (isAttack && saveData.over) {
+    await requireFlingsInRoom(
+      ctx,
+      user,
+      baseSave,
+      saveData.flinglog,
+      session?.attackerAcademy,
+      combatConfig.mode,
+      session?.attackid,
+      "save"
+    );
+  }
 
   const outpostOwnerSave = await getOutpostOwnerSave(baseSave, user);
 
@@ -463,6 +482,12 @@ const saveBase = async (
               saveData.attackerchampion,
               saveData.flinglog
             );
+          }
+          // Where the server replayed the battle, a champion it flung comes
+          // home at the replay's health, Vorg heals kept, as the finaliser
+          // lands it; the client's figure is not read for it.
+          if (battle && saveData.over) {
+            userSave.champion = championsAfterBattle(userSave.champion, battle, session?.championHealth);
           }
 
           // A replayed battle writes the defender's champion from the replay
@@ -733,8 +758,11 @@ const saveBase = async (
 
   // Attack saves store health from the attacker's replay but keep buildingdata from the DB,
   // so the owner's countdowns are brought up to the attack before savetime moves to it.
+  const flingerBefore = baseSave.flinger;
   if (isAttack && baseSave.buildingdata) {
     baseSave.buildingdata = advanceBuildingTimers(baseSave.buildingdata, storedHealthData, now - baseSave.savetime);
+    // An upgrade the catch-up just finished counts for the cached levels too.
+    syncAttackedYardLevels(baseSave);
   }
 
   baseSave.id = baseSave.savetime;
@@ -746,6 +774,9 @@ const saveBase = async (
 
   postgres.em.persist(baseSave);
   await postgres.em.flush();
+  // Sight reads each Flinger off the yard's own clock (`flingerLevelsNow`), so
+  // dropping it before the landing commits shows nothing early; it only skips the cache.
+  if (isAttack) await invalidateSightAfterLanding(baseSave, flingerBefore);
 
   if (lands) {
     // The loot on both sides and `attackid = 0` commit together: a copy of

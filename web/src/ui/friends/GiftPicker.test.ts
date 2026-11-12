@@ -7,6 +7,7 @@ import { ApiError } from "@/api/http";
 import { fixtureApi, fixtureFriend, fixtureGift, fixtureList } from "@/game/friends/friendsFixture";
 import { FriendsStore } from "@/game/friends/friendsStore";
 import { setPlayerPool } from "@/game/friends/friendsView";
+import { setResourceRealm } from "@/ui/resourceIcon";
 import { choiceOrder, GIFT_TEXT, GiftPicker } from "./GiftPicker";
 
 /** The gift picker (issue #375): four resources, one press sends, the store marks the friend. */
@@ -38,6 +39,21 @@ describe("the gift picker", () => {
     const names = [...document.querySelectorAll(".gift-picker__choice")].map((node) => node.textContent);
     expect(names).toEqual(["Twigs", "Pebbles", "Putty", "Goo"]);
     expect(document.body.textContent).toContain(GIFT_TEXT.lead("Bob"));
+  });
+
+  it("offers the main yard's resources even while the player is in the Inferno (gifts land there)", async () => {
+    setResourceRealm("inferno");
+    try {
+      const { picker } = await setup();
+      const names = [...document.querySelectorAll(".gift-picker__choice")].map((node) => node.textContent);
+      expect(names).toEqual(["Twigs", "Pebbles", "Putty", "Goo"]);
+      const realms = [...document.querySelectorAll(".gift-picker__choice .res-icon")].map((icon) => (icon as HTMLElement).dataset["realm"]);
+      expect(realms).toEqual(["surface", "surface", "surface", "surface"]);
+      await picker.send("r3");
+      expect(picker.statusText).toBe("Sent to Bob · Putty 300 lost");
+    } finally {
+      setResourceRealm("surface");
+    }
   });
 
   it("sends the picked resource, says what went, and marks the friend gifted", async () => {

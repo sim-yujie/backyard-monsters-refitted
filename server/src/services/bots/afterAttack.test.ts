@@ -173,15 +173,17 @@ describe("scheduleAfterBotDefence", () => {
     expect(jobs.map((job) => job.kind)).toEqual(["repair"]);
   });
 
-  test("BOTS_REVENGE is off unless the environment turns it on", async () => {
+  test("bots retired (owner, 12 Nov 2026): no revenge is booked even with BOTS_REVENGE=on", async () => {
     const before = process.env.BOTS_REVENGE;
     try {
       delete process.env.BOTS_REVENGE;
       const off = await scheduleAfterBotDefence(fakeDb().em, { bot: BOT, attacker: PLAYER, at: AT, rng: sequence(0, REVENGE, 0.5) });
       expect(off.revenge).toBeNull();
       process.env.BOTS_REVENGE = "on";
-      const on = await scheduleAfterBotDefence(fakeDb().em, { bot: BOT, attacker: PLAYER, at: AT, rng: sequence(0, REVENGE, 0.5) });
-      expect(on.revenge).toEqual(hoursFrom(12.5));
+      const { em, jobs } = fakeDb();
+      const on = await scheduleAfterBotDefence(em, { bot: BOT, attacker: PLAYER, at: AT, rng: sequence(0, REVENGE, 0.5) });
+      expect(on.revenge).toBeNull();
+      expect(jobs.map((job) => job.kind)).toEqual(["repair"]);
     } finally {
       if (before === undefined) delete process.env.BOTS_REVENGE;
       else process.env.BOTS_REVENGE = before;

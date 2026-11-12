@@ -1,4 +1,7 @@
 import { startWeekendSettingsRefresh } from "./services/events/weekendSettings.js";
+import { startMonsterMadnessRefresh } from "./services/events/monsterMadnessRuns.js";
+import { getCurrentDateTime } from "./utils/getCurrentDateTime.js";
+import { ensureWelcomeLaunch } from "./services/events/mr2Welcome.js";
 import Koa, { type Next } from "koa";
 import serve from "koa-static";
 import ormConfig from "./mikro-orm.config.js";
@@ -142,6 +145,11 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // The weekend events' live settings, read now and every minute
   // (`services/events/weekendSettings.ts`); the dashboard changes them.
   startWeekendSettingsRefresh(() => postgres.em.fork());
+  startMonsterMadnessRefresh(() => postgres.em.fork());
+
+  // "New to Map Room 2": players already on Map Room 2 get their 10 days from
+  // the first start of a server with this feature (`services/events/mr2Welcome.ts`).
+  void ensureWelcomeLaunch(postgres.em.fork(), getCurrentDateTime());
 
   // Finishes attacks whose window closed without a save (issue #138).
   // `ATTACK_FINALISER_SWEEP=off` leaves the sweep to another server sharing
@@ -195,6 +203,8 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // The bot sweep (issue #240): grows, repairs and rebalances Map Room 1 bots.
   // Off unless BOTS_BRAIN=on, and then not even loaded, so a server without
   // bots runs exactly as before; a failure to start it never stops the server.
+  // Bots are retired (owner, 12 Nov 2026, BOTS_RETIRED): never on production;
+  // elsewhere it tends only the seeded Map Room 2 dev players.
   if (botConfig().brain) {
     try {
       const { startBotSweep } = await import("./services/bots/sweep.js");

@@ -22,6 +22,9 @@ import { Maproom } from "../../database/models/maproom.model.js";
 import { clearPendingInvites } from "../../services/alliance/allianceInvites.js";
 import { MAX_RESOURCE_CAPACITY } from "../../config/MapRoom2Config.js";
 import { RESOURCE_KEYS } from "../../services/base/updateResources.js";
+import { onMapRoom2, recordMr2Join } from "../../services/events/mr2Welcome.js";
+import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { logger } from "../../utils/logger.js";
 
 /**
  * Schema for validating the request body when setting the map version.
@@ -41,6 +44,7 @@ const SetMapVersionSchema = z.object({
  * touched. The Flash client sent NONE when an upgraded Map Room was recycled
  * (`client/scripts/BUILDING11.as:216-226`); the revamp refuses that recycle too.
  * - V2:   Requires Town Hall level 6. Joins or creates an MR2 world and marks mr2upgraded.
+ *         A save already in a Map Room 2 world keeps its world and home cell.
  * - V3:   Refused (`mapRoom3ClosedErr`, security audit 2026-10-29, C1). Map
  *         Room 3 took an attack's cost and result from the client, and the web
  *         client never had it. A save already on it can still leave with NONE.
@@ -93,6 +97,12 @@ export const setMapVersion: KoaController = async (ctx) => {
     case MapRoomVersion.V2: {
       if (save.mapversion === MapRoomVersion.V3) break;
 
+      // Already in a Map Room 2 world: nothing to do. A repeat request (an old
+      // Flash client, or one made by hand) used to send the player through
+      // `joinOrCreateWorld` again, which picks a random world and gives a new
+      // home cell there, leaving the old one behind (upstream 7e200bb81).
+      if (save.mapversion === MapRoomVersion.V2 && save.worldid) break;
+
       if (user.alliance_id) throw mustLeaveAllianceToChangeWorldErr();
 
       await clearPendingInvites(user.userid);
@@ -100,10 +110,26 @@ export const setMapVersion: KoaController = async (ctx) => {
       const townHall = extractTownHall(save.buildingdata ?? {});
 
       if (!save.mr2upgraded && (!townHall || townHall.l < 6)) throw townHallLevelErr();
-      
+
+      const joining = !onMapRoom2(save);
+
       await joinOrCreateWorld(user, save);
       save.mr2upgraded = true;
       save.mapversion = MapRoomVersion.V2;
+
+      // A first move to Map Room 2 starts the "New to Map Room 2" 10 days
+      // (`services/events/mr2Welcome.ts`); once ever. Forgiving: the move
+      // itself must not fail over it.
+      if (joining) {
+        try {
+          await recordMr2Join(postgres.em, user.userid, getCurrentDateTime());
+        } catch (error) {
+          logger.warn("Could not start the Map Room 2 welcome for {userid}: {error}", {
+            userid: user.userid,
+            error: String(error),
+          });
+        }
+      }
 
       const maproom1 = await postgres.em.findOne(Maproom, { userid: user.userid });
 

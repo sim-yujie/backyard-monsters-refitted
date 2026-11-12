@@ -2,7 +2,7 @@ import { friendRefusal, friendsApi, type FriendsApi, type Gift, type GiftResourc
 import { friendsStore as sharedStore, type FriendsStore } from "@/game/friends/friendsStore";
 import { playerPool } from "@/game/friends/friendsView";
 import { Popup } from "@/ui/Popup";
-import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, resourceIcon } from "@/ui/resourceIcon";
+import { RESOURCE_KEYS, resourceAmount, resourceIcon, resourceName } from "@/ui/resourceIcon";
 import { make, StatusLine } from "./rows";
 import { wishMark } from "./wishMark";
 import "./friends.css";
@@ -33,13 +33,13 @@ export const GIFT_TEXT = {
    */
   sent: (gift: Gift, name: string): HTMLElement => {
     const line = document.createElement("span");
-    line.append(`Sent to ${name} · `, resourceAmount(gift.resource, gift.amount, { change: "loss" }));
+    line.append(`Sent to ${name} · `, resourceAmount(gift.resource, gift.amount, { change: "loss", realm: "surface" }));
     return line;
   },
   cancel: "Cancel",
   done: "Done",
   /** The line over the choices when the friend wished for one resource only. */
-  wishedOnly: (name: string, resource: GiftResource): string => `${name} wants ${RESOURCE_NAMES[resource]} only`,
+  wishedOnly: (name: string, resource: GiftResource): string => `${name} wants ${resourceName(resource, "surface")} only`,
   /**
    * The line over the choices when the friend wished for two or three, with a
    * small "best first" after it (tester, 7 Nov: the longer line wrapped on a
@@ -135,7 +135,7 @@ export class GiftPicker {
           `btn ${top ? "btn--primary gift-picker__choice--top" : "btn--outline"} gift-picker__choice gift-picker__choice--wished`,
         );
         choice.dataset["rank"] = String(index + 1);
-        choice.setAttribute("aria-label", `${RESOURCE_NAMES[key]} (wish ${index + 1})`);
+        choice.setAttribute("aria-label", `${resourceName(key, "surface")} (wish ${index + 1})`);
         choice.append(wishMark(index + 1, "gift-picker__mark"));
         list.append(choice);
       });
@@ -147,8 +147,8 @@ export class GiftPicker {
         row.append(make("span", "gift-picker__others-label", GIFT_TEXT.others));
         for (const key of rest) {
           const tile = this.choice(key, "gift-wish gift-picker__other", false);
-          tile.setAttribute("aria-label", RESOURCE_NAMES[key]);
-          tile.title = RESOURCE_NAMES[key];
+          tile.setAttribute("aria-label", resourceName(key, "surface"));
+          tile.title = resourceName(key, "surface");
           row.append(tile);
         }
         parts.push(row);
@@ -167,8 +167,8 @@ export class GiftPicker {
     const choice = make("button", className);
     choice.type = "button";
     choice.dataset["resource"] = key;
-    choice.append(resourceIcon(key, { decorative: true }));
-    if (named) choice.append(make("span", "gift-picker__name", RESOURCE_NAMES[key]));
+    choice.append(resourceIcon(key, { decorative: true, realm: "surface" }));
+    if (named) choice.append(make("span", "gift-picker__name", resourceName(key, "surface")));
     choice.addEventListener("click", () => void this.send(key));
     this.choices.set(key, choice);
     return choice;

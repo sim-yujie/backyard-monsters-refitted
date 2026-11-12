@@ -564,6 +564,69 @@
   color: var(--colour-text-strong);
 }
 
+/* Delete all and Collect all side by side, kept together when the line wraps. */
+.gifts-summary__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+/* A gift's "Delete? You get nothing." is never cut: on its own line under
+   the level, wrapping if a phone is narrower still. */
+.friends-row--confirm[data-giftid] .friends-row__meta {
+  flex-wrap: wrap;
+  white-space: normal;
+}
+
+.friends-row--confirm[data-giftid] .friends-row__note {
+  flex: 1 0 100%;
+  overflow: visible;
+  font-weight: 700;
+  color: var(--colour-danger);
+}
+
+.gifts-summary--confirm .gifts-summary__ask {
+  font-weight: 700;
+  color: var(--colour-danger);
+}
+
+/* A gift's delete (owner, 9 Nov 2026): the look's painted close disc, the
+   same art as the window's close, at a row button's height. No plate behind
+   it in any look. */
+.friends-row__action.gift-delete,
+.friends-row__action.gift-delete:hover:not(:disabled),
+.friends-row__action.gift-delete:disabled,
+:root[data-skin] .panel .friends-row__action.gift-delete {
+  min-width: var(--control-height-compact);
+  width: var(--control-height-compact);
+  height: var(--control-height-compact);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.gift-delete__disc {
+  display: block;
+  width: 26px;
+  height: 26px;
+  margin: auto;
+  background: var(--skin-close, url("/ui/skin/scrap/close.webp")) center / contain no-repeat;
+  filter: drop-shadow(0 2px 1px rgb(0 0 0 / 35%));
+}
+
+.gift-delete:hover:not(:disabled) .gift-delete__disc,
+.gift-delete:focus-visible .gift-delete__disc {
+  filter: drop-shadow(0 2px 1px rgb(0 0 0 / 35%)) brightness(1.1);
+}
+
+.gift-delete:disabled .gift-delete__disc {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
 .gift-picker__choices {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -17,6 +17,9 @@ import { yardBadRequestErr, yardRefusedErr } from "./yardErrors.js";
 /** The Map Room (`client/scripts/YARD_PROPS.as:1122`). */
 export const MAP_ROOM_TYPE = 11;
 
+/** The Observatory, this project's own building (`web/tools/gen-building-costs.mjs`). */
+export const OBSERVATORY_TYPE = 150;
+
 /**
  * The building a request names, or a `400` with `reason` `badRequest`: an id
  * the yard does not hold is the client sending something it could not have

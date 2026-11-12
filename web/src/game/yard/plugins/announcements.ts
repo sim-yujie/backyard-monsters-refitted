@@ -1,3 +1,4 @@
+import { quietLogin } from "@/game/quietLogin";
 import { dismissAnnouncement, fetchAnnouncements } from "@/api/announcements";
 import { AnnouncementQueue, guideRunning } from "@/game/announcements/announcementQueue";
 import { openAnnouncement } from "@/ui/announcements/AnnouncementDialog";
@@ -41,7 +42,8 @@ export const announcementsPlugin: YardPlugin = (mounts) => {
     setTimer: (run, ms) => window.setTimeout(run, ms),
     clearTimer: (handle) => window.clearTimeout(handle as number),
   });
-  void queue.start();
+  // A test server's quiet login: none pops up; News still lists them.
+  if (!quietLogin()) void queue.start();
   const stopGifts = onGiftClaimed(() => void mounts.store.refresh());
   return () => {
     stopGifts();

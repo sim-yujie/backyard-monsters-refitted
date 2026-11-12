@@ -18,9 +18,10 @@ import type { AbandonedOutcome } from "../../base/combat/abandonedAttack.js";
 import { replayAbandonedInWorker } from "../../base/combat/replayRunner.js";
 import { endRowlessAttack, landRowlessOnce, type RowlessCheckpoint } from "../../base/rowlessCheckpoint.js";
 import { recordBombSpend } from "../../base/combat/recordBombSpend.js";
+import { requireFlingsInRoom } from "../../base/combat/recordFlingRoom.js";
 import { checkAttackBinding, type AttackSession } from "../../base/attackSession.js";
 import { storedDamage } from "../../base/storedDamage.js";
-import { championsAfterAttack, siegeAfterAttack } from "../../base/combat/attackerRow.js";
+import { championsAfterAttack, championsAfterBattle, siegeAfterAttack } from "../../base/combat/attackerRow.js";
 import { championsAfterLessons } from "../../base/combat/championBrain.js";
 import {
   RESOURCE_KEYS,
@@ -167,6 +168,19 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
     session?.attackerResources
   );
 
+  // Every fling within the Flinger's room (`recordFlingRoom.ts`), checked
+  // before anything is written, as the bombs are.
+  await requireFlingsInRoom(
+    ctx,
+    user,
+    { baseid: saveData.baseid, rowless: "mr1-tribe" },
+    saveData.flinglog,
+    session?.attackerAcademy,
+    combatConfig.mode,
+    session?.attackid,
+    "save"
+  );
+
   // The battle, replayed to the client's clock over the tribe as the attack
   // load served it (issue #23, C4), in a worker. A replay past its deadline
   // lands nothing: the save is answered `attackResultPendingErr` and the
@@ -259,10 +273,13 @@ const writeTribeLanding = async (
     const krallenBuff = krallenBuffOf(parseFlingLog(attacker.flinglog), userSave.champion);
 
     // The attacker's own row as the log explains it, not as the save says it
-    // (#23, C1): siege less what was used, champion health only downwards.
+    // (#23, C1): siege less what was used, champion health only downwards,
+    // except that a champion the server's battle flung comes home at the
+    // replay's health, Vorg heals kept, whatever the save reported.
     if (attacker.attackerchampion) {
       userSave.champion = championsAfterAttack(userSave.champion, attacker.attackerchampion as never, attacker.flinglog);
     }
+    if (battle) userSave.champion = championsAfterBattle(userSave.champion, battle, session.championHealth);
     // Each champion that fought learns from the server's battle, once, under
     // the tribe's final lock (issue #219).
     if (battle) userSave.champion = championsAfterLessons(userSave.champion, battle.lessons, battle.log) ?? userSave.champion;
@@ -397,7 +414,7 @@ const tribeBattle = async (
   const input = await tribeReplayInput(user, session, served, saveData.flinglog, battleTick(saveData.tick), saveData.left);
   if (!input) return null;
 
-  const base = { baseid: saveData.baseid };
+  const base = { baseid: saveData.baseid, rowless: "mr1-tribe" as const };
   const battle = tribeBattleOf(
     await replayBattleForSave(ctx, user, base, input, "the finaliser lands it from its checkpoint"),
     input.log

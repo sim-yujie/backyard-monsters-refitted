@@ -498,7 +498,8 @@ describe("Map Room 1 tribe save: the attacker's own row (#23, C1)", () => {
 
     expect(caught).toBeNull();
     // It fought, so it learned from the battle (issue #219); nothing else moved.
-    expect(userSave.champion).toEqual([{ ...champion(500), b: expect.any(Object), bs: expect.objectContaining({ n: 1 }) }]);
+    // Gorgo learns habits per Mode now (champion modes), not the old brain.
+    expect(userSave.champion).toEqual([{ ...champion(500), h: {}, hs: expect.objectContaining({ n: 1 }) }]);
     expect(userSave.siege).toEqual({ jars: { quantity: 1 } });
   });
 
@@ -515,7 +516,42 @@ describe("Map Room 1 tribe save: the attacker's own row (#23, C1)", () => {
       })
     );
 
-    expect(userSave.champion).toEqual([{ ...champion(120), b: expect.any(Object), bs: expect.objectContaining({ n: 1 }) }]);
+    expect(userSave.champion).toEqual([{ ...champion(120), h: {}, hs: expect.objectContaining({ n: 1 }) }]);
+  });
+
+  test("a champion healed by Vorgs keeps the server's battle's heal, never the save's figure", async () => {
+    const { championStatWithFood } = await import("../../../game-rules/combat/stats.js");
+    const full = championStatWithFood("G3", "health", 4, 0);
+    const low = Math.floor(full * 0.05);
+    store.set(
+      mr1TribeSessionKey(ATTACKER, TRIBE),
+      serialiseAttackSession({
+        attackerid: ATTACKER,
+        attackid: ATTACK_ID,
+        startedat: now(),
+        entryHoused: { "5000": { C16: 6 } },
+        championHealth: { "3": low },
+      })
+    );
+    userSave.champion = [{ t: 3, hp: low, l: 4, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 }];
+    const vorgLog = {
+      v: 1,
+      seed: 5,
+      events: [{ kind: "fling", t: 40, x: 0, y: 0, r: 100, monsters: { C16: 6 }, champion: { t: 3, l: 4 } }],
+    };
+
+    await run(
+      ctxFor({
+        over: "1",
+        attackid: String(ATTACK_ID),
+        flinglog: JSON.stringify(vorgLog),
+        tick: "3000",
+        attackerchampion: JSON.stringify([{ t: 3, hp: full, l: 4, ft: 0, fd: 0, fb: 0, pl: 0, status: 0 }]),
+      })
+    );
+
+    expect((userSave.champion as { hp: number }[])[0]!.hp).toBeGreaterThan(low);
+    expect((userSave.champion as { hp: number }[])[0]!.hp).toBeLessThan(full);
   });
 });
 
@@ -701,6 +737,81 @@ describe("Map Room 1 tribe save under COMBAT_SAVE_VALIDATION (#23, C7)", () => {
     expect(caught).toBeNull();
     expect(reports).toEqual([]);
     expect(maproom.tribedata[0]!.destroyed).toBe(1);
+  });
+});
+
+describe("Map Room 1 tribe save: the Flinger's room (owner, 12 Nov 2026)", () => {
+  /** One fling at the camp's harvesters; `old` leaves out the mark a page from before the release lacks. */
+  const flingLog = (monsters: Record<string, number>, champion?: { t: number; l: number }, old = false) => ({
+    v: 1,
+    seed: 7,
+    ...(!old && { championRoom: 1 }),
+    events: [{ kind: "fling", t: 40, x: 300, y: 150, r: 100, monsters, ...(champion && { champion }) }],
+  });
+  const GORGO = { t: 1, l: 6 };
+  /** Gorgo's 240 and 2,010 of monsters: the Flinger's 2,250 exactly. */
+  const EXACT = { C1: 280, C2: 5 };
+  /** Then one C1 (7) more. */
+  const OVER = { C1: 281, C2: 5 };
+
+  const honestBody = (log: unknown) => {
+    const battle = serverBattle(log, SCRATCH_TICK);
+    return {
+      over: "1",
+      attackid: String(ATTACK_ID),
+      tick: String(SCRATCH_TICK),
+      flinglog: JSON.stringify(log),
+      buildingdata: JSON.stringify(MR1_TRIBES_MAP.get(TRIBE)!.buildingdata),
+      buildinghealthdata: JSON.stringify(battle.buildinghealthdata),
+      damage: String(battle.damage),
+      ...(battle.destroyed !== undefined && { destroyed: String(battle.destroyed) }),
+      attackloot: loot(battle.attackloot),
+    };
+  };
+
+  test("reject: a fling one monster over the room is refused, lands nothing and is reported once", async () => {
+    setMode("reject");
+    startSession(ATTACKER, now(), ARMY);
+    userSave.monsters = { housed: { ...ARMY } };
+
+    const caught = await run(ctxFor(honestBody(flingLog(OVER, GORGO))));
+    expect(caught?.data?.reason).toBe("flingOverRoom");
+    expect(reports).toEqual([
+      "Attack save on base 2 rejected (reject): fling over Flinger room, 2257 of 2250 in fling 1 [mr1-tribe]",
+    ]);
+    expect(userSave.resources).toEqual({ r1: 100, r2: 100, r3: 100, r4: 100 });
+    expect(maproom.tribedata[0]!.damage).toBeUndefined();
+    expect(persisted).toEqual([]);
+
+    // Sent again, it is refused again but not reported twice.
+    expect((await run(ctxFor(honestBody(flingLog(OVER, GORGO)))))?.data?.reason).toBe("flingOverRoom");
+    expect(reports).toHaveLength(1);
+  });
+
+  test("reject: a champion and monsters that fill the room exactly land", async () => {
+    setMode("reject");
+    startSession(ATTACKER, now(), ARMY);
+
+    expect(await run(ctxFor(honestBody(flingLog(EXACT, GORGO))))).toBeNull();
+    expect(reports).toEqual([]);
+  });
+
+  test("reject: a page from before the release, its champion on top of a full Flinger, lands", async () => {
+    setMode("reject");
+    startSession(ATTACKER, now(), ARMY);
+
+    // 2,250 of monsters and Gorgo on top: what the page before the release sent.
+    expect(await run(ctxFor(honestBody(flingLog({ C1: 320, C2: 1 }, GORGO, true))))).toBeNull();
+    expect(reports).toEqual([]);
+  });
+
+  test("log: an over-full fling is reported and the server's battle lands", async () => {
+    startSession(ATTACKER, now(), ARMY);
+
+    expect(await run(ctxFor(honestBody(flingLog(OVER, GORGO))))).toBeNull();
+    expect(reports).toEqual([
+      "Attack save on base 2 flagged (log): fling over Flinger room, 2257 of 2250 in fling 1 [mr1-tribe]",
+    ]);
   });
 });
 

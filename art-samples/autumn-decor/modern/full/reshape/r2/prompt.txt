@@ -1,0 +1,24 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+The attached images:
+- shape-guide.png: THE SHAPE TO FOLLOW. The old 2009 gold Eiffel Tower yard statue from our game (Backyard Monsters Revamped), placed on magenta at the exact size and position we want back.
+- style-current-modern.png: our CURRENT Modern-look version of it. Its rendering style and gold colour are approved, but its SHAPE is wrong: the four legs are far too thick and chunky, the arches too small, the platforms too heavy. Use it ONLY for the rendering style, the gold material and colour, never for the shape.
+- ref-modern-decor.png, ref-modern-close.png: other real approved Modern-look art of the game (decorations and buildings): the target finish.
+
+Job: repaint the tower of shape-guide.png in the Modern look, keeping its SHAPE EXACTLY, as if re-rendering the same 3D model with modern materials and lighting: the outline, width, height and position must match the guide as if traced over it.
+What to watch:
+- The four LEGS are SLIM, like the guide's: tall, wide, high arches between them, the arch openings reaching as high and as wide as in the guide; each leg narrows as it rises; small square feet at the bottom of each leg, as small as the guide's. Not chunky blocks.
+- The first platform is a THIN wide slab as in the guide, the second platform smaller and thin, the upper tower a slender tapering four-sided spire with open lattice gaps between its corner ribs, ending in a thin needle at the top, exactly as tall as the guide.
+- Same gold colour as the current Modern version (do not change the colour).
+
+The Modern look (follow every point; it is already APPROVED by the owner, do not change it):
+1. Clean, modern, stylised 3D renders like the attached buildings and the current Modern decorations: smooth, slightly bevelled shapes with crisp clean silhouettes; clean simple materials: honey/tan wood with light even grain, smooth stone, smooth metal and polished gold with bright specular highlights, clear glossy water. Little surface noise. No cel shading, no brush strokes, no flat colour fills.
+2. Camera exactly as in the shape guide (front, about 35-40 degrees above).
+3. No outline at all. Crisp anti-aliased edges; small bevels catch the light as thin bright lines.
+4. Lighting like a Blender Cycles scene: ONE warm sun lamp from the upper left and a dim cool fill. Tops and left sides bright; right sides and undersides clearly in deep shade (25-35% as bright as the lit side, still readable); ambient occlusion where parts meet.
+5. Colours exactly like the current Modern versions (same wood, stone, water, foliage and gold tones). Foliage deep natural greens, never lime. No neon, no glow.
+6. Few big readable parts. Foliage as fewer, bigger, smooth clumps with clear light and shade per clump.
+7. No ground, grass, base plate or cast shadow under any object.
+
+Output canvas 1024x1536, the tower where it is in the guide. Flat solid magenta (#FF00FF) background, no text, no frame, no drop shadow. No magenta or pink inside the object.
+Save the final PNG as r2.png in the current working directory.

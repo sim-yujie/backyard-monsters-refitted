@@ -1,3 +1,4 @@
+import { quietLogin } from "@/game/quietLogin";
 import { markAchievementsSeen, markSeenAction } from "@/api/achievements";
 import type { Onboarding } from "@/api/types";
 import { achievementsOpener } from "@/game/achievements/achievementsView";
@@ -65,7 +66,10 @@ export class UnlockPopupDoor {
     this.unsubscribe = mounts.store.subscribe((change) => this.onStore(change));
     this.unsubscribeEmergence = onEmergencePlaying((playing) => this.popup.stepAside(playing));
     // The load the yard opened with, then anything an earlier yard showed and never confirmed.
-    inbox.add(mounts.store.save.achievements);
+    // A test server's quiet login: the cards this load brought stay shut (and
+    // unseen on the server); ones earned from here on still show.
+    if (quietLogin()) inbox.ignore(mounts.store.save.achievements);
+    else inbox.add(mounts.store.save.achievements);
     this.popup.pump();
     void this.confirm();
   }

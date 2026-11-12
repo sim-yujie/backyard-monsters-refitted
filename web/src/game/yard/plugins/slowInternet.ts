@@ -1,3 +1,4 @@
+import { quietLogin } from "@/game/quietLogin";
 import { setQuality } from "@/game/quality";
 import { suggestLowOnce } from "@/game/slowInternet";
 import { openSlowInternet } from "@/ui/quality/SlowInternetDialog";
@@ -10,12 +11,15 @@ import { screenBusy } from "./announcements";
  * connection looks slow, the player never picked a Quality and nothing else
  * has the screen.
  */
-export const slowInternetPlugin: YardPlugin = (mounts) =>
-  suggestLowOnce({
+export const slowInternetPlugin: YardPlugin = (mounts) => {
+  // A test server's quiet login: never suggested, and nothing remembered in the browser.
+  if (quietLogin()) return;
+  return suggestLowOnce({
     busy: () => screenBusy(mounts),
     show: () => openSlowInternet({ container: mounts.overlay.modal, onLow: () => setQuality("low") }),
     setTimer: (run, ms) => window.setTimeout(run, ms),
     clearTimer: (handle) => window.clearTimeout(handle as number),
   });
+};
 
 YARD_PLUGINS.push(slowInternetPlugin);

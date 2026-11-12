@@ -1,7 +1,22 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  memoryWelcomeStore,
+  MR2_WELCOME_SECONDS,
+  newWelcome,
+  useWelcomeStore,
+  welcomeStatus,
+} from "../../../services/events/mr2Welcome.js";
+import { utcDay } from "../../../services/events/schedule.js";
+import { quoteTakeover } from "../../../services/maproom/v2/takeoverCost.js";
+import { STARTER_KITS } from "../../../game-data/starterKits.js";
+import { kitBuildings } from "../../../services/yard/starterKit.js";
 import type { Context } from "koa";
 import { achievementConfig } from "../../../config/AchievementConfig.js";
+import { devConfig } from "../../../config/GameConfig.js";
 import { readAchievements } from "../../../services/achievements/state.js";
+import { setMonsterMadnessRuns } from "../../../services/events/monsterMadnessRuns.js";
+import { memoryProgressStore, sqlProgressStore } from "../../../services/events/progressStore.js";
+import { useTakeoverStore } from "../../../services/events/takeoverEvents.js";
 
 /**
  * `POST /worldmapv2/takeoverCell` (issue #182). The route took any cell at 90%
@@ -35,6 +50,7 @@ const GRANT_KEY = "takeover-grant:900";
 let allianceOf: Map<number, number | null>;
 /** Keys dropped via Redis, in call order (issue #329, #330 WP1). */
 let delCalls: string[];
+let welcome: ReturnType<typeof memoryWelcomeStore>;
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -177,6 +193,10 @@ beforeEach(() => {
       saveuserid: OWNER,
       type: "outpost",
       damage: 92,
+      // A Regular Starter Kit, worth 3,222,316: 10,000,000 of each
+      // (outpostValue.test.ts). The stored 10,000,000 would price at
+      // 28,000,000; the server never reads it.
+      buildingdata: kitBuildings(STARTER_KITS[0]!, "shiny", {}).buildingdata,
       empirevalue: 10_000_000,
     }),
     cellRow(CAMP, 0, 1, { basesaveid: 901, userid: 0, saveuserid: 0, type: "tribe", damage: 95, wmid: 41 }),
@@ -192,6 +212,9 @@ beforeEach(() => {
   delCalls = [];
   // By default the taker has just destroyed the outpost and holds its grant.
   grantTo(TAKER);
+  // "New to Map Room 2": no window unless a test opens one.
+  welcome = memoryWelcomeStore(0);
+  useWelcomeStore(welcome);
 });
 
 const startingRewards = achievementConfig.rewards;
@@ -205,8 +228,8 @@ describe("takeoverCell", () => {
     expect(result.body).toEqual({ error: 0 });
     expect(store.has(GRANT_KEY)).toBe(false);
     expect(outpost().protected as number).toBeLessThanOrEqual(now() + 12 * 3600);
-    // ln(10,000,000) prices at 28,000,000 of each (takeoverCost.test.ts).
-    expect(takerResources()).toEqual({ r1: 72_000_000, r2: 72_000_000, r3: 72_000_000, r4: 72_000_000 });
+    // Its Regular Kit prices it at 10,000,000 of each, not its stored empirevalue.
+    expect(takerResources()).toEqual({ r1: 90_000_000, r2: 90_000_000, r3: 90_000_000, r4: 90_000_000 });
     expect(outpost()).toMatchObject({ userid: TAKER, saveuserid: TAKER, name: "taker" });
     expect(outpost().protected as number).toBeGreaterThan(now() + 11 * 3600);
     expect(cells[0]).toMatchObject({ uid: TAKER, base_type: 3 });
@@ -330,12 +353,12 @@ describe("takeoverCell", () => {
   test("a zero or negative price is not honoured: the server's price is charged", async () => {
     const result = await run({ baseid: OUTPOST, shiny: "-99", resources: JSON.stringify({ r1: -1e9, r2: -1e9, r3: -1e9, r4: -1e9 }) });
     expect(result.ok).toBe(true);
-    expect(takerResources().r1).toBe(72_000_000);
+    expect(takerResources().r1).toBe(90_000_000);
     expect(takerSave.credits).toBe(5000);
   });
 
   test("a taker who cannot pay is refused", async () => {
-    takerResources().r2 = 27_999_999;
+    takerResources().r2 = 9_999_999;
     const result = await run({ baseid: OUTPOST });
     expect(result.reason).toBe("notEnoughResources");
     expect(flushed).toBe(0);
@@ -446,5 +469,173 @@ describe("sight cache invalidation (#329, #330 WP1)", () => {
     expect((await run({ baseid: CAMP, shiny: "1" })).ok).toBe(true);
 
     expect(delCalls).toEqual([`sight:${TAKER}`]);
+  });
+});
+
+describe("takeoverCell: New to Map Room 2", () => {
+  const openWindow = () => welcome.rows.set(TAKER, newWelcome(now() - 60));
+  const fullBase = () =>
+    quoteTakeover({ cell: { x: 240, y: 208 }, isWildMonster: true, buildingdata: null, takerHomebase: null, conquestActive: false })
+      .resources;
+
+  test("a wild camp while today's takeover is ready costs 10% of its full base price, and uses it", async () => {
+    openWindow();
+    const result = await run({ baseid: CAMP });
+    expect(result.ok).toBe(true);
+    const cheap = Math.round(fullBase() * 0.1);
+    expect(takerResources()).toEqual({
+      r1: 100_000_000 - cheap,
+      r2: 100_000_000 - cheap,
+      r3: 100_000_000 - cheap,
+      r4: 100_000_000 - cheap,
+    });
+    expect(welcome.rows.get(TAKER)!.takeoverUses).toHaveLength(1);
+  });
+
+  test("a client that posts a lower figure is still charged the server's price", async () => {
+    openWindow();
+    await run({ baseid: CAMP, resources: JSON.stringify({ r1: 1, r2: 1, r3: 1, r4: 1 }) });
+    expect(takerResources().r1).toBe(100_000_000 - Math.round(fullBase() * 0.1));
+  });
+
+  const usualShiny = () =>
+    quoteTakeover({
+      cell: { x: 240, y: 208 },
+      isWildMonster: true,
+      buildingdata: null,
+      takerHomebase: takerSave.homebase as string[],
+      conquestActive: false,
+    }).shiny;
+
+  // Owner, 11 Nov: "Paying shiny should not count as it is not discounted".
+  test("paid with Shiny: the usual Shiny price, and today's takeover is not used", async () => {
+    openWindow();
+    expect((await run({ baseid: CAMP, shiny: "1" })).ok).toBe(true);
+    expect(takerSave.credits).toBe(5000 - usualShiny());
+    expect(takerResources().r1).toBe(100_000_000);
+    expect(welcome.rows.get(TAKER)!.takeoverUses).toHaveLength(0);
+    const status = welcomeStatus(welcome.rows.get(TAKER)!, now())!;
+    expect(status.takeover).toBe(true);
+    expect(status.takeoverLeft).toBe(7);
+    expect(status.takeoverToday).toBe(false);
+  });
+
+  test("paid with Shiny after 2 earlier sets: still 5 of 7 left and ready today", async () => {
+    const twoDaysAgo = now() - 2 * 86_400;
+    const before = { ...newWelcome(twoDaysAgo - 60), takeoverUses: [twoDaysAgo - 30, twoDaysAgo], takeoverDay: utcDay(twoDaysAgo) };
+    welcome.rows.set(TAKER, before);
+    expect((await run({ baseid: CAMP, shiny: "1" })).ok).toBe(true);
+    expect(takerSave.credits).toBe(5000 - usualShiny());
+    expect(welcome.rows.get(TAKER)).toEqual(before);
+    const status = welcomeStatus(welcome.rows.get(TAKER)!, now())!;
+    expect(status.takeover).toBe(true);
+    expect(status.takeoverLeft).toBe(5);
+    expect(status.takeoverToday).toBe(false);
+  });
+
+  test("a player outpost never uses it, and is charged in full", async () => {
+    openWindow();
+    expect((await run({ baseid: OUTPOST })).ok).toBe(true);
+    expect(takerResources().r1).toBe(90_000_000);
+    expect(welcome.rows.get(TAKER)!.takeoverUses).toHaveLength(0);
+  });
+
+  test("today's already used: the usual price, and nothing more is used", async () => {
+    welcome.rows.set(TAKER, { ...newWelcome(now() - 60), takeoverUses: [now() - 30], takeoverDay: utcDay(now()) });
+    await run({ baseid: CAMP });
+    expect(takerResources().r1).toBe(100_000_000 - fullBase());
+    expect(welcome.rows.get(TAKER)!.takeoverUses).toHaveLength(1);
+  });
+
+  test("used on an earlier day: today's is cheap again, the 2nd of 7", async () => {
+    const twoDaysAgo = now() - 2 * 86_400;
+    welcome.rows.set(TAKER, { ...newWelcome(twoDaysAgo - 60), takeoverUses: [twoDaysAgo], takeoverDay: utcDay(twoDaysAgo) });
+    await run({ baseid: CAMP });
+    expect(takerResources().r1).toBe(100_000_000 - Math.round(fullBase() * 0.1));
+    expect(welcome.rows.get(TAKER)!.takeoverUses).toHaveLength(2);
+  });
+
+  test("all 7 used: the usual price", async () => {
+    const start = now() - 8 * 86_400;
+    welcome.rows.set(TAKER, { ...newWelcome(start), takeoverUses: [1, 2, 3, 4, 5, 6, 7], takeoverDay: utcDay(start) });
+    await run({ baseid: CAMP });
+    expect(takerResources().r1).toBe(100_000_000 - fullBase());
+  });
+
+  test("after the 10 days the price is the usual one", async () => {
+    welcome.rows.set(TAKER, newWelcome(now() - MR2_WELCOME_SECONDS - 1));
+    await run({ baseid: CAMP });
+    expect(takerResources().r1).toBe(100_000_000 - fullBase());
+  });
+
+  test("a refused takeover does not charge the cheap price", async () => {
+    openWindow();
+    takerSave.resources = { r1: 10, r2: 10, r3: 10, r4: 10 };
+    const result = await run({ baseid: CAMP });
+    expect(result.reason).toBe("notEnoughResources");
+  });
+});
+
+describe("takeoverCell: Monster Madness points", () => {
+  let progress: ReturnType<typeof memoryProgressStore>;
+
+  beforeEach(() => {
+    progress = memoryProgressStore();
+    useTakeoverStore(progress);
+    takerSave.tutorialstage = 205;
+  });
+
+  afterEach(() => {
+    setMonsterMadnessRuns([]);
+    useTakeoverStore(sqlProgressStore);
+  });
+
+  const startRun = () => {
+    const startsAt = now() - 60;
+    setMonsterMadnessRuns([{ startsAt, endsAt: startsAt + 4 * 86_400 }]);
+    return `monster-madness-${startsAt}`;
+  };
+
+  test("off (no run started): the answer carries no points", async () => {
+    const result = await run({ baseid: OUTPOST });
+    expect(result.body).toEqual({ error: 0 });
+    expect(progress.rows.size).toBe(0);
+  });
+
+  test("a player's outpost scores its empire value, and the answer says so", async () => {
+    const event = startRun();
+    const result = await run({ baseid: OUTPOST });
+    // The Regular Starter Kit's value (outpostValue.test.ts).
+    expect(result.body).toEqual({ error: 0, eventPoints: [{ event, points: 3_222_316, total: 3_222_316 }] });
+  });
+
+  test("a wild camp scores by its level; the total grows across takeovers", async () => {
+    const event = startRun();
+    await run({ baseid: OUTPOST });
+    const result = await run({ baseid: CAMP, shiny: "1" });
+    const points = (result.body!.eventPoints as { points: number }[])[0]!.points;
+    expect(points).toBeGreaterThan(0);
+    expect(result.body!.eventPoints).toEqual([{ event, points, total: 3_222_316 + points }]);
+  });
+
+  test("a player still in the guided start scores nothing", async () => {
+    startRun();
+    takerSave.tutorialstage = 10;
+    const skip = devConfig.skipTutorial;
+    devConfig.skipTutorial = false;
+    try {
+      const result = await run({ baseid: OUTPOST });
+      expect(result.body).toEqual({ error: 0 });
+    } finally {
+      devConfig.skipTutorial = skip;
+    }
+  });
+
+  test("a refused takeover scores nothing", async () => {
+    startRun();
+    inRange = false;
+    const result = await run({ baseid: OUTPOST });
+    expect(result.ok).toBe(false);
+    expect(progress.rows.size).toBe(0);
   });
 });

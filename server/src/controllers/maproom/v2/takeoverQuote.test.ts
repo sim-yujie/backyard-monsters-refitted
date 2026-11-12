@@ -3,6 +3,13 @@ import type { Context } from "koa";
 import { generateBaseId } from "../../../utils/generateBaseId.js";
 import { generateNoise, getTerrainHeight } from "../../../services/maproom/v2/generateMap.js";
 import { quoteTakeover } from "../../../services/maproom/v2/takeoverCost.js";
+import { STARTER_KITS } from "../../../game-data/starterKits.js";
+import { kitBuildings } from "../../../services/yard/starterKit.js";
+
+/** A Regular Starter Kit outpost, worth 10,000,000 of each (outpostValue.test.ts). */
+const REGULAR_KIT = kitBuildings(STARTER_KITS[0]!, "shiny", {}).buildingdata;
+import { memoryWelcomeStore, MR2_WELCOME_SECONDS, newWelcome, useWelcomeStore } from "../../../services/events/mr2Welcome.js";
+import { utcDay } from "../../../services/events/schedule.js";
 
 /**
  * `POST /worldmapv2/takeoverquote` (issue #82): the price and the takeover's
@@ -23,6 +30,7 @@ let cells: Row[];
 let sessions: Set<number>;
 let inRange: boolean;
 let user: Row;
+let welcome: ReturnType<typeof memoryWelcomeStore>;
 
 const store = new Map<string, string>();
 const GRANT_KEY = "takeover-grant:900";
@@ -106,6 +114,8 @@ beforeEach(() => {
       saveuserid: OWNER,
       type: "outpost",
       damage: 92,
+      buildingdata: REGULAR_KIT,
+      // Never read: the price comes from the buildings.
       empirevalue: 10_000_000,
     }),
     cellRow(CAMP, 0, 1, 242, { basesaveid: 901, userid: 0, saveuserid: 0, type: "tribe", damage: 95, wmid: 41 }),
@@ -113,6 +123,9 @@ beforeEach(() => {
   sessions = new Set();
   inRange = true;
   store.clear();
+  // "New to Map Room 2": no window unless a test opens one.
+  welcome = memoryWelcomeStore(0);
+  useWelcomeStore(welcome);
 });
 
 describe("takeoverQuote", () => {
@@ -121,7 +134,7 @@ describe("takeoverQuote", () => {
     const price = quoteTakeover({
       cell: { x: 242, y: 208 },
       isWildMonster: true,
-      empireValue: 0,
+      buildingdata: null,
       takerHomebase: ["241", "207"],
       conquestActive: false,
     });
@@ -188,11 +201,13 @@ describe("takeoverQuote", () => {
     expect(body.kind).toBe("outpost");
     expect(body.eligible).toBe(true);
     expect(body.grantExpiresAt).toBe(expiresAt);
+    // Its Regular Kit's 10,000,000, halved next to the caller's main yard.
+    expect(body.resources).toBe(5_000_000);
     expect(body.resources).toBe(
       quoteTakeover({
         cell: { x: 240, y: 208 },
         isWildMonster: false,
-        empireValue: 10_000_000,
+        buildingdata: REGULAR_KIT,
         takerHomebase: ["241", "207"],
         conquestActive: false,
       }).resources
@@ -257,5 +272,52 @@ describe("takeoverQuote", () => {
     if (getTerrainHeight(noise, x, 0) <= 99) {
       expect((await quote(generateBaseId(WORLD, x, 0))).reason).toBe("notFound");
     }
+  });
+});
+
+describe("takeoverQuote: New to Map Room 2", () => {
+  const openWindow = () => welcome.rows.set(TAKER, newWelcome(now() - 60));
+
+  test("a wild camp while today's takeover is ready: 10% of the full base price, the usual Shiny, and the label data", async () => {
+    const usual = await quote(CAMP);
+    openWindow();
+    const cheap = await quote(CAMP);
+    const fullBase = quoteTakeover({
+      cell: { x: 242, y: 208 },
+      isWildMonster: true,
+      buildingdata: null,
+      takerHomebase: null,
+      conquestActive: false,
+    }).resources;
+
+    expect(cheap.welcome).toBe(true);
+    expect(cheap.resources).toBe(Math.round(fullBase * 0.1));
+    // Next to the main yard the usual price is halved; the cheap one is not halved again.
+    expect(cheap.usualResources).toBe(usual.resources);
+    expect(cheap.shiny).toBe(usual.shiny);
+  });
+
+  test("a player outpost is priced as usual", async () => {
+    openWindow();
+    grantTo(TAKER);
+    const body = await quote(OUTPOST);
+    expect(body.welcome).toBeUndefined();
+  });
+
+  test("used today, all 7 used, or after the 10 days: the usual price", async () => {
+    welcome.rows.set(TAKER, { ...newWelcome(now() - 60), takeoverUses: [now() - 30], takeoverDay: utcDay(now()) });
+    expect((await quote(CAMP)).welcome).toBeUndefined();
+    welcome.rows.set(TAKER, { ...newWelcome(now() - 8 * 86_400), takeoverUses: [1, 2, 3, 4, 5, 6, 7], takeoverDay: "2000-01-01" });
+    expect((await quote(CAMP)).welcome).toBeUndefined();
+    welcome.rows.set(TAKER, newWelcome(now() - MR2_WELCOME_SECONDS - 1));
+    expect((await quote(CAMP)).welcome).toBeUndefined();
+  });
+
+  test("a player already on Map Room 2 with no row gets the window from the launch time", async () => {
+    takerSave.mr2upgraded = true;
+    const launch = now() - 3600;
+    welcome.launch = launch;
+    expect((await quote(CAMP)).welcome).toBe(true);
+    expect(welcome.rows.get(TAKER)?.start).toBe(launch);
   });
 });

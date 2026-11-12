@@ -286,4 +286,48 @@ describe("POST /bm/yard/decor/buy", () => {
     expect(balance()).toBe(850);
     expect(buildings()["5"]).toBeUndefined();
   });
+
+  test("the six autumn decorations (owner, 10 Nov 2026) sell at their own coin price", async () => {
+    const prices: [type: number, price: number][] = [
+      [201, 25],
+      [202, 30],
+      [203, 35],
+      [204, 50],
+      [205, 60],
+      [206, 75],
+    ];
+    let left = 1_000;
+    for (const [index, [type, price]] of prices.entries()) {
+      const x = -300 + index * 100;
+      const answer = await buy({ type, x, y: 200 });
+      expect(answer.status).toBe(200);
+      expect(answer.body.report).toMatchObject({ t: type, x, y: 200, level: 1, coins: price });
+      left -= price;
+      expect(balance()).toBe(left);
+      expect(coins.log.at(-1)).toMatchObject({ amount: -price, reason: `decor-${type}` });
+    }
+    expect(balance()).toBe(1_000 - 275);
+    expect(Object.values(buildings()).map((one) => one.t)).toEqual([14, 28, 201, 202, 203, 204, 205, 206]);
+    expect(db.row!.credits).toBe(1_000);
+  });
+
+  test("an autumn decoration takes its footprint: a second one on the same spot is refused", async () => {
+    expect((await buy({ type: 206, x: 200, y: 200 })).status).toBe(200);
+    expect(await buy({ type: 201, x: 220, y: 220 })).toMatchObject({
+      status: 409,
+      body: { reason: "placement", placement: "overlap" },
+    });
+    expect(balance()).toBe(1_000 - 75);
+  });
+
+  test("an autumn decoration goes to storage when recycled and comes back out for nothing", async () => {
+    await buy({ type: 205, x: 200, y: 200 });
+    await runYardAction(em as unknown as EntityManager, user, yardRecycleAction, { id: 5 });
+    expect(db.row).toMatchObject({ researchdata: { b205: 1 } });
+    expect(balance()).toBe(1_000 - 60);
+
+    const again = await buy({ type: 205, x: 0, y: 200 });
+    expect(again.body.report).toMatchObject({ t: 205, left: 0, coins: 0 });
+    expect(balance()).toBe(1_000 - 60);
+  });
 });

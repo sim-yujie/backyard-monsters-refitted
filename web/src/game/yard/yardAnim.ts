@@ -194,6 +194,8 @@ const POLICIES = new Map<number, AnimPolicy>([
   [133, STATIC_FIXED],
   [134, STATIC_FIXED],
   [140, every(1, false)],
+  // Observatory (this project's own, alliances): stands still (owner 10 Nov: "Just make it still").
+  [150, STATIC_FIXED],
   ...DECORATIONS.map((type): [number, AnimPolicy] => [type, every(2)]),
 ]);
 

@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite, type Renderer, type Texture } from "pixi.js";
+import { Container, Graphics, Rectangle, Sprite, type Renderer, type Texture } from "pixi.js";
 import { YardBuildings } from "./YardBuildings";
 import { NO_WORK, readWork, type WorkSource } from "./buildingWork";
 import { flightEnds, flightTotals, planFlights, TOWN_HALL_TYPE, type BankSource } from "./collectFx";
@@ -33,6 +33,14 @@ import { mushroomAt, mushroomKey, mushroomZIndex } from "./mushroomPick";
 import { MUSHROOM_POP_SECONDS, mushroomPopScale, newMushroomKeys } from "./mushroomPop";
 import type { Yard, YardBuilding, YardMushroom } from "./yardModel";
 import { rangeRadii } from "./planner/RangeLayer";
+import {
+  SNAPSHOT_BACKGROUND,
+  SNAPSHOT_SIZE,
+  snapshotFrame,
+  snapshotHiddenIds,
+  unionRect,
+  type SnapshotSize,
+} from "./yardSnapshot";
 import {
   hoverRange,
   RANGE_COLOUR,
@@ -168,6 +176,10 @@ export class YardRenderer {
   readonly flatDecals: Container = this.blueprint.decals;
 
   private atlas: YardArtAtlas | null = null;
+  /** The game's renderer, from `attach`: the yard picture is drawn with it. */
+  private pixi: Renderer | null = null;
+  /** The world rectangle the last frame drew, for putting the culling back after a picture. */
+  private lastVisible: Rect | null = null;
   /** The season the yard is dressed for (`game/season.ts`); see `setSeason`. */
   private season: Season = "normal";
   /** The Halloween pumpkin that stands in for a mushroom, once it has loaded. */
@@ -234,6 +246,7 @@ export class YardRenderer {
   /** Bakes the vector glyphs. Call once, before the first `show`. */
   attach(renderer: Renderer): void {
     this.atlas ??= yardArtAtlas(renderer);
+    this.pixi = renderer;
     this.life.useRenderer(renderer);
     // The yard follows the season from here on (`game/season.ts`).
     if (!this.unwatchSeason) {
@@ -400,6 +413,7 @@ export class YardRenderer {
    * animations run on.
    */
   draw(visible: Rect, deltaSeconds = 0): void {
+    this.lastVisible = visible;
     // Balls fly on in the blueprint, hidden, so the bar still counts up.
     this.collect.update(deltaSeconds);
     // The blueprint has no culling and no animation, so a hidden isometric
@@ -1297,6 +1311,57 @@ export class YardRenderer {
     }
   }
 
+  /* ── The yard picture (owner, 2026-11-11) ───────────────────────────── */
+
+  /**
+   * Draws the whole isometric yard into a picture to share, whichever view is
+   * showing: every building in frame and centred (`snapshotFrame`), and no
+   * trap in any form. The traps are concealed the way an enemy's are, so no
+   * sprite, shadow, strip or tile of one is drawn, and they are left out of
+   * the framing; only the ground, the shadows and the buildings are drawn, so
+   * no range disc, footprint, outline, badge, bar or planner mark is either.
+   * Everything is put back before this returns, so the screen never shows it.
+   *
+   * Returns the picture at about `size` (the caption and the exact size are
+   * `snapshotPicture.ts`'s), or null before the yard is drawn or if the
+   * graphics card would not give it.
+   */
+  snapshot(size: SnapshotSize = SNAPSHOT_SIZE): HTMLCanvasElement | null {
+    const pixi = this.pixi;
+    const yard = this.yard;
+    if (!pixi || !yard) return null;
+    const traps = snapshotHiddenIds(yard.buildings).filter((id) => !this.concealed.has(id));
+    const shown = this.root.children.map((child) => [child, child.visible] as const);
+    const wasGroup = this.root.isRenderGroup;
+    try {
+      for (const id of traps) this.setConcealed(id, true);
+      // Every building drawn, not only those on screen.
+      this.buildings.draw(EVERYWHERE, 0, this.work?.now() ?? 0);
+      const keep = new Set<Container>([this.ground.root, this.buildings.shadows, this.buildings.tops]);
+      for (const child of this.root.children) child.visible = keep.has(child);
+      const { frame, scale } = snapshotFrame(unionRect(this.buildings.drawnBoxes()), yardFitRect(yard.bounds), size);
+      const picture = pixi.extract.canvas({
+        target: this.root,
+        frame: new Rectangle(frame.x, frame.y, frame.width, frame.height),
+        resolution: scale,
+        clearColor: SNAPSHOT_BACKGROUND,
+      });
+      return picture instanceof HTMLCanvasElement && picture.width > 0 && picture.height > 0 ? picture : null;
+    } catch (caught) {
+      console.warn("The yard picture could not be drawn.", caught);
+      return null;
+    } finally {
+      for (const [child, visible] of shown) child.visible = visible;
+      for (const id of traps) this.setConcealed(id, false);
+      // Drawing a container on its own makes it a render group; the yard was not one.
+      if (!wasGroup && this.root.isRenderGroup) this.root.disableRenderGroup();
+      // The next frame culls to the screen again; until then, the screen as it was.
+      if (this.currentView === YardView.ISO && this.lastVisible) {
+        this.buildings.draw(this.lastVisible, 0, this.work?.now() ?? 0);
+      }
+    }
+  }
+
   /* ── A live battle: hit flash (#63) ─────────────────────────────────── */
 
   /** Lights a building up for the frames after a monster strikes it; see `YardBuildings.setFlash`. */
@@ -1320,6 +1385,9 @@ export class YardRenderer {
  * mushroom glyph (owner's call, 20 Oct 2026). `PUMPKIN_BASE` is where its
  * bottom sits, as a fraction of its height; scaling keeps it on the ground.
  */
+/** A world rectangle every building is inside: the yard picture culls nothing. */
+const EVERYWHERE: Rect = { x: -1e7, y: -1e7, width: 2e7, height: 2e7 };
+
 const PUMPKIN_ART = "/assets/buildings/decorations/pumpkins/top.png";
 const PUMPKIN_BASE = 0.9;
 const PUMPKIN_SCALE = 1.3;

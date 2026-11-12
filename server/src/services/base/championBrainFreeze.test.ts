@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import type { FlingLog } from "../../game-rules/combat/index.js";
 import type { ChampionData } from "../../schemas/ChampionSchema.js";
 import { YardChampionStanceSchema } from "../../schemas/YardSchemas.js";
-import { planChampionEvolve, planChampionStance, type ChampionSave } from "../yard/champion.js";
+import { planChampionEvolve, planChampionForget, planChampionStance, type ChampionSave } from "../yard/champion.js";
 import { checkpointSession, newCheckpoint, parseFlingLog, parseStoredCheckpoint, serialiseCheckpoint } from "./attackCheckpoint.js";
-import { brainsOf, newAttackSession, parseAttackSession, serialiseAttackSession } from "./attackSession.js";
+import { brainsOf, frozenBrainsOf, newAttackSession, parseAttackSession, serialiseAttackSession } from "./attackSession.js";
 import { fightableLog, withFrozenChampions } from "./combat/attackLoot.js";
 import { battleReplayInput } from "./combat/battle.js";
 
@@ -42,19 +42,56 @@ const log = (b?: unknown): FlingLog =>
   }) as FlingLog;
 
 describe("brainsOf", () => {
-  test("freezes each champion's brain that has learned anything, made safe, by type", () => {
+  test("freezes each champion's habit book with any habit, and Krallen's old brain, made safe, by type", () => {
     expect(
       brainsOf([
+        // Gorgo's old brain is not frozen: its habits started fresh (champion modes round 2).
         champion(1, { b: BRAIN }),
-        champion(2, { b: ZERO }),
+        champion(2, { h: { off: { gun: -500, guard: 40, hall: 90 } } }),
         champion(3),
+        champion(4, { h: { def: {} } }),
         champion(5, { b: { tower: 1e9, loot: Number.NaN } as never }),
         { t: 9, b: BRAIN },
         null,
       ])
-    ).toEqual({ "1": BRAIN, "5": { ...ZERO, tower: 200 } });
+    ).toEqual({ "2": { v: 1, off: { gun: -100, guard: 40 } }, "5": { ...ZERO, tower: 200 } });
     expect(brainsOf([champion(1)])).toBeUndefined();
     expect(brainsOf(null)).toBeUndefined();
+  });
+
+  test("a session minted before habits keeps its old brains; a book stays a book", () => {
+    const raw = { "1": BRAIN, "2": { v: 1, hyb: { tower: -90, near: 5 } }, "5": { v: 1, off: { guard: 50 } } };
+    // Drull has no "Stays close"; Krallen has no habits at all.
+    expect(frozenBrainsOf(raw)).toEqual({ "1": BRAIN, "2": { v: 1, hyb: { tower: -90 } } });
+  });
+
+  test("a frozen book stamps the flung Mode's habits with their version, and nothing else", () => {
+    const attacker = { champion: [champion(2)] };
+    const housed = { [HOME]: { C1: 5 } };
+    const book = { "2": { v: 1, off: { gun: 80 }, hyb: { loot: -30 } } };
+    const flung = (s: string | undefined) => {
+      const sent = {
+        v: 1,
+        seed: 7,
+        events: [
+          {
+            kind: "fling",
+            t: 100,
+            x: 0,
+            y: 0,
+            r: 300,
+            monsters: { C1: 5 },
+            champion: { t: 2, l: 4, ...(s && { s }), b: FORGED, hv: 1, h: { gun: -100 } },
+          },
+        ],
+      } as FlingLog;
+      const event = fightableLog(sent, { ...attacker, brains: book }, housed).events[0]!;
+      return event.kind === "fling" ? event.champion : undefined;
+    };
+    expect(flung("offensive")).toEqual({ t: 2, l: 4, s: "offensive", hv: 1, h: { gun: 80 } });
+    expect(flung(undefined)).toEqual({ t: 2, l: 4, hv: 1, h: { loot: -30 } });
+    // No habit in that Mode: nothing stamped, which is today's champion.
+    expect(flung("defensive")).toEqual({ t: 2, l: 4, s: "defensive" });
   });
 });
 
@@ -136,5 +173,15 @@ describe("the yard routes keep the brain and never take one", () => {
   test("the brain persists through a level-up", () => {
     const outcome = planChampionEvolve(yard([champion(1, { l: 2, hp: 60_000, b: BRAIN, bs: { n: 7, off: 0.4 } })]), 1_800_000_000);
     expect(outcome.slices.champion[0]).toMatchObject({ l: 3, b: BRAIN, bs: { n: 7, off: 0.4 } });
+  });
+
+  test("Forget wipes one Mode's habits and keeps the rest", () => {
+    const stored = champion(1, { h: { off: { guard: 60 }, hyb: { loot: 30 } }, hs: { n: 9, off: { n: 4, u: { main: 0.5 } } } });
+    const outcome = planChampionForget(yard([stored]), 1, "offensive");
+    expect(outcome.slices.champion[0]).toMatchObject({ h: { hyb: { loot: 30 } }, hs: { n: 9, off: { n: 4 } } });
+    const all = planChampionForget(yard([champion(1, { h: { off: { guard: 60 } } })]), 1, "offensive");
+    expect(all.slices.champion[0]).not.toHaveProperty("h");
+    // Krallen has no habits to forget.
+    expect(() => planChampionForget(yard([champion(5)]), 5, "hybrid")).toThrow();
   });
 });

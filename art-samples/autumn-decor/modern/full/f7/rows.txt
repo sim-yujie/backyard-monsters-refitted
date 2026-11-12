@@ -1,0 +1,6 @@
+  61: modernLook(["gnome-blue.modern@2x.webp", -10, -31], ["gnome-blue.modern-shadow.jpg", -9, 1]),
+  62: modernLook(["gnome-green.modern@2x.webp", -10, -31], ["gnome-green.modern-shadow.jpg", -9, 1]),
+  96: modernLook(["baseball-trophy.modern@2x.webp", -20, -36], ["baseball-trophy.modern-shadow.jpg", -17, 10]),
+  97: modernLook(["football-trophy.modern@2x.webp", -18, -38], ["football-trophy.modern-shadow.jpg", -15, 10]),
+  135: modernLook(["dave-trophy.modern@2x.webp", -38, -30], ["dave-trophy.modern-shadow.jpg", -32, 33]),
+  120: modernLook(["big-gulp.modern@2x.webp", -24, -36], ["big-gulp.modern-shadow.jpg", -20, 26]),

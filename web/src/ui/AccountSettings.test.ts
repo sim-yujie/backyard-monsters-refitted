@@ -21,6 +21,12 @@ const chat = vi.hoisted(() => ({ worldChat: { setCountryRoom: vi.fn(), unmute: v
 vi.mock("@/game/chat/chatSession", () => chat);
 const lookReport = vi.hoisted(() => ({ reportLook: vi.fn() }));
 vi.mock("@/app/lookReport", () => lookReport);
+import type * as notificationSettingsApi from "@/api/notificationSettings";
+const notifApi = vi.hoisted(() => ({ setNotificationCategory: vi.fn() }));
+vi.mock("@/api/notificationSettings", async (original) => ({
+  ...(await original<typeof notificationSettingsApi>()),
+  ...notifApi,
+}));
 
 import { reduceEffects } from "@/game/attack/juice";
 import { resetShinyLockForTests, shinyLocked } from "@/game/shinyLock";
@@ -38,6 +44,7 @@ const open = async (account: Record<string, unknown>) => {
     shinyLocked: false,
     privacy: { hideOnline: false, friendRequests: true },
     country: { country: null, countryAsked: false, countryChannel: null },
+    notificationsOff: [],
     ...account,
   });
   const popup = openAccountSettings({ container: document.body });
@@ -66,9 +73,9 @@ describe("AccountSettings", () => {
     expect(strip.parentElement).toBe(scroll.parentElement);
     expect(scroll.contains(strip)).toBe(false);
     expect(strip.nextElementSibling).toBe(scroll);
-    // All three panes scroll inside it.
+    // All four panes scroll inside it.
     const panes = [...document.querySelectorAll<HTMLElement>("[role='tabpanel']")];
-    expect(panes).toHaveLength(3);
+    expect(panes).toHaveLength(4);
     for (const pane of panes) expect(pane.parentElement).toBe(scroll);
   });
 
@@ -84,10 +91,32 @@ describe("AccountSettings", () => {
     expect(tab("social").getAttribute("aria-selected")).toBe("true");
     tab("social").focus();
     tab("social").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(pane("notifications").hidden).toBe(false);
+    tab("notifications").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     expect(pane("account").hidden).toBe(false);
     expect(document.activeElement).toBe(tab("account"));
     expect(tab("account").tabIndex).toBe(0);
     expect(tab("social").tabIndex).toBe(-1);
+  });
+
+  it("shows the Notifications tab with each category as the account has it", async () => {
+    await open({ notificationsOff: ["friends"] });
+    const pane = document.querySelector<HTMLElement>("#account-settings-pane-notifications")!;
+    const state = (id: string) =>
+      pane.querySelector(`[data-category='${id}'] [role='switch']`)!.getAttribute("aria-checked");
+    expect(state("attacks")).toBe("true");
+    expect(state("friends")).toBe("false");
+    // The game's own notices have no switch.
+    expect(pane.querySelector("[data-category='game'] [role='switch']")).toBeNull();
+  });
+
+  it("says the notification settings could not load when the account does not", async () => {
+    api.fetchAccount.mockRejectedValue(new Error("down"));
+    openAccountSettings({ container: document.body });
+    await settle();
+    const pane = document.querySelector<HTMLElement>("#account-settings-pane-notifications")!;
+    expect(pane.textContent).toContain("Could not load your notification settings");
+    expect(pane.querySelector("[role='switch']")).toBeNull();
   });
 
   it("renames through the server and then locks the field for the cooldown", async () => {
@@ -570,9 +599,9 @@ describe("AccountSettings tabs", () => {
   it("moves between tabs with the arrow keys, wrapping round", async () => {
     await open({});
     tab("account").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
-    expect(tab("social").getAttribute("aria-selected")).toBe("true");
-    expect(document.activeElement).toBe(tab("social"));
-    tab("social").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(tab("notifications").getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(tab("notifications"));
+    tab("notifications").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     expect(pane("account").hidden).toBe(false);
   });
 

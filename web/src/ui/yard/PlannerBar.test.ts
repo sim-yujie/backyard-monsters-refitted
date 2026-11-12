@@ -719,3 +719,43 @@ describe("PlannerBar Upgrade walls", () => {
     expect(bar.actionBar.classList.contains("planner-bar--wall-pick")).toBe(false);
   });
 });
+
+describe("the yard picture button (owner, 2026-11-11)", () => {
+  const withSnapshot = (
+    options: { readOnly?: boolean } = {},
+  ): { bar: PlannerBar; onSnapshot: ReturnType<typeof vi.fn> } => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const onSnapshot = vi.fn();
+    const bar = new PlannerBar({ ...actions(), onSnapshot }, options).mount(container);
+    return { bar, onSnapshot };
+  };
+
+  const snapshotButton = (bar: PlannerBar): HTMLButtonElement | null =>
+    bar.toolbar.querySelector<HTMLButtonElement>("button[data-icon='snapshot']") ??
+    bar.moreElement.querySelector<HTMLButtonElement>("button[data-icon='snapshot']");
+
+  it("sits in the top bar before Help, named, and takes the picture when pressed", () => {
+    const { bar, onSnapshot } = withSnapshot();
+    const button = snapshotButton(bar)!;
+    expect(button.parentElement).toBe(bar.toolbar);
+    expect(button.getAttribute("aria-label")).toBe("Yard picture");
+    expect(button.nextElementSibling?.getAttribute("aria-label")).toBe("How the planner works, and every shortcut");
+    button.click();
+    expect(onSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("is not there without a handler, or on a yard the player cannot edit", () => {
+    expect(snapshotButton(mount())).toBeNull();
+    expect(snapshotButton(withSnapshot({ readOnly: true }).bar)).toBeNull();
+  });
+
+  it("goes into a phone's More sheet, and comes back to the bar on a desktop", () => {
+    const { bar } = withSnapshot();
+    bar.update(stateOf({ view: YardView.ISO }));
+    bar.setLayout(PlannerLayout.PORTRAIT, true);
+    expect(bar.moreElement.contains(snapshotButton(bar))).toBe(true);
+    bar.setLayout(PlannerLayout.DESKTOP, false);
+    expect(snapshotButton(bar)!.parentElement).toBe(bar.toolbar);
+  });
+});

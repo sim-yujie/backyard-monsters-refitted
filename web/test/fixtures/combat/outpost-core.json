@@ -1,6 +1,6 @@
 {
   "name": "outpost-core",
-  "description": "A player outpost on a cell of height 250: the core, six-level outpost towers with the Railgun, the Tesla and the Laser all but wrecked, so they deal half (issues #261, #266, #267), four harvesters (two damaged), one wave that levels it (issue #179).",
+  "description": "A player outpost on a cell of height 250: the core, six-level outpost towers with the Railgun, the Tesla and the Laser all but wrecked, so they deal half (issues #261, #266, #267), four harvesters (two damaged), one wave that levels it (issue #179), thrown as three flings in a row, each within the Flinger's 2,250.",
   "yard": {
     "0": {
       "id": 0,
@@ -106,9 +106,33 @@
         "y": 0,
         "r": 300,
         "monsters": {
-          "C3": 150,
-          "C6": 80,
-          "C8": 40
+          "C3": 50,
+          "C6": 40,
+          "C8": 20
+        }
+      },
+      {
+        "kind": "fling",
+        "t": 81,
+        "x": 600,
+        "y": 0,
+        "r": 300,
+        "monsters": {
+          "C3": 50,
+          "C6": 40,
+          "C8": 20
+        }
+      },
+      {
+        "kind": "fling",
+        "t": 82,
+        "x": 600,
+        "y": 0,
+        "r": 300,
+        "monsters": {
+          "C3": 50,
+          "C6": 40,
+          "C8": 20
         }
       }
     ]
@@ -118,146 +142,146 @@
     "damage": 100,
     "destroyed": 1,
     "attackloot": {
-      "r1": 1900008,
-      "r2": 1729539,
-      "r3": 1651027,
-      "r4": 254139
+      "r1": 1905970,
+      "r2": 1714058,
+      "r3": 1628637,
+      "r4": 237514
     },
     "defenderLoss": {
-      "r1": 1903758,
-      "r2": 1733749,
-      "r3": 1656077,
-      "r4": 258608
+      "r1": 1908765,
+      "r2": 1716691,
+      "r3": 1631301,
+      "r4": 240346
     },
     "firedTraps": 0,
     "destroyedBuildings": 9,
-    "creepsFlung": 270,
-    "creepsKilled": 115,
+    "creepsFlung": 330,
+    "creepsKilled": 308,
     "championHp": null,
     "damagedBuildings": 9,
-    "rngDraws": 228263,
+    "rngDraws": 177174,
     "checkpoints": [
       {
         "tick": 800,
-        "digest": "d76c5e9033dbf89e"
+        "digest": "a4eaa5782166e042"
       },
       {
         "tick": 1600,
-        "digest": "b2b74517f34e94b5"
+        "digest": "34eb7d88ae789656"
       },
       {
         "tick": 2400,
-        "digest": "f5aa5dc8ec3202fa"
+        "digest": "864be5d35ac77201"
       },
       {
         "tick": 3200,
-        "digest": "0ee15720a0348776"
+        "digest": "4f1de2be2bf9e024"
       },
       {
         "tick": 4000,
-        "digest": "8266641ecafed0dc"
+        "digest": "178b0fbd1dc3780b"
       },
       {
         "tick": 4800,
-        "digest": "b9cfa549c72e9653"
+        "digest": "1fea9ad94eff48e7"
       },
       {
         "tick": 5600,
-        "digest": "f0da5736585e7448"
+        "digest": "9d7e588ee4cfa7a8"
       },
       {
         "tick": 6400,
-        "digest": "b968a802f41a468c"
+        "digest": "ba634ecc0349d7b2"
       },
       {
         "tick": 7200,
-        "digest": "7bd7e2fb7f4f4d5d"
+        "digest": "ba22b995c3da0617"
       },
       {
         "tick": 8000,
-        "digest": "f7b681e059c30fa2"
+        "digest": "1e6e2fd25d906f80"
       },
       {
         "tick": 8800,
-        "digest": "bf150b0a017536d4"
+        "digest": "03344e2bb3f5b1b1"
       },
       {
         "tick": 9600,
-        "digest": "528ce2d9a6fc8ca3"
+        "digest": "1a4d75ded072072c"
       },
       {
         "tick": 10400,
-        "digest": "cc1a5be3acaf7965"
+        "digest": "8eb84e8b80a6ed11"
       },
       {
         "tick": 11200,
-        "digest": "25f57dc67a126a58"
+        "digest": "27a474bf263e55c9"
       },
       {
         "tick": 12000,
-        "digest": "551dd2482e256eea"
+        "digest": "8b2a638cfb69b522"
       },
       {
         "tick": 12800,
-        "digest": "59d207d2918e635c"
+        "digest": "946a427f194079b9"
       },
       {
         "tick": 13600,
-        "digest": "d95365012f4806eb"
+        "digest": "82813861ffb3f1c3"
       },
       {
         "tick": 14400,
-        "digest": "05b62ecb86c68aed"
+        "digest": "04aca56ba854d405"
       },
       {
         "tick": 15200,
-        "digest": "05fb83cea843fbc0"
+        "digest": "32ba840ee31662c0"
       },
       {
         "tick": 16000,
-        "digest": "a1892bf02bebb4f2"
+        "digest": "07352e5fd1065acd"
       },
       {
         "tick": 16800,
-        "digest": "f9b848efd2c22639"
+        "digest": "c0e7e7d058647776"
       },
       {
         "tick": 17600,
-        "digest": "cb8f973adfbec184"
+        "digest": "d19c567525c0bd5b"
       },
       {
         "tick": 18400,
-        "digest": "68a881a2be22589c"
+        "digest": "944d227dc4e0ee13"
       },
       {
         "tick": 19200,
-        "digest": "1b333b2991794ab3"
+        "digest": "93326de6787b946c"
       },
       {
         "tick": 20000,
-        "digest": "dfdc89342c9278ce"
+        "digest": "009b01c3cb7ee1f9"
       },
       {
         "tick": 20800,
-        "digest": "dde96c13f65fa8d5"
+        "digest": "67dab6744580b262"
       },
       {
         "tick": 21600,
-        "digest": "5e24304e11923570"
+        "digest": "58b854e9784a3707"
       },
       {
         "tick": 22400,
-        "digest": "ee9e32d63f967d68"
+        "digest": "62a3f0312678fcdf"
       },
       {
         "tick": 23200,
-        "digest": "408cc44dc3e1d95f"
+        "digest": "5b65dc3aef5f40e8"
       },
       {
         "tick": 24000,
-        "digest": "d8840af8862be29a"
+        "digest": "6713db87c1fb3e35"
       }
     ],
-    "digest": "d8840af8862be29a"
+    "digest": "6713db87c1fb3e35"
   }
 }

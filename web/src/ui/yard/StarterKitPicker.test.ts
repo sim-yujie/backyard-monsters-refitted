@@ -75,8 +75,8 @@ describe("StarterKitPicker", () => {
     picker = null;
   });
 
-  const open = (binding: YardUiBinding, onBought = vi.fn()) => {
-    picker = new StarterKitPicker({ binding, actions, onBought }).mount(document.body);
+  const open = (binding: YardUiBinding, onBought = vi.fn(), freeKit = async () => false) => {
+    picker = new StarterKitPicker({ binding, actions, onBought, freeKit }).mount(document.body);
     return onBought;
   };
   const cards = () => [...document.querySelectorAll<HTMLElement>(".kit-card")];
@@ -138,6 +138,55 @@ describe("StarterKitPicker", () => {
     picker!.choose(3, "shiny");
     expect(go().disabled).toBe(true);
     expect(confirm().textContent).toContain("You need 1,400 more Shiny.");
+  });
+
+  describe("New to Map Room 2: the free Regular kit", () => {
+    const openFree = async (resources: Resources = RICH) => {
+      const onBought = open(bindingWith(resources, 0), vi.fn(), async () => true);
+      await vi.waitFor(() => expect(picker!.showsFreeKit).toBe(true));
+      return onBought;
+    };
+
+    it("the Regular card says Free with the small label and one Free button; the others are priced", async () => {
+      await openFree();
+      expect(card(1).classList.contains("kit-card--free")).toBe(true);
+      expect(card(1).querySelector(".kit-card__free-tag")!.textContent).toBe("Free");
+      expect(card(1).querySelector(".kit-card__free-label")!.textContent).toBe("Frontier Pass");
+      expect(card(1).querySelector(".kit-card__free")!.textContent).toBe("Free");
+      expect(card(1).querySelector(".kit-card__shiny")).toBeNull();
+      expect(card(2).querySelector(".kit-card__free")).toBeNull();
+      expect(card(2).querySelector(".kit-card__shiny")).not.toBeNull();
+    });
+
+    it("free even with an empty pool and no Shiny: the confirmation builds it free", async () => {
+      const onBought = await openFree({ r1: 0, r2: 0, r3: 0, r4: 0 });
+      card(1).querySelector<HTMLButtonElement>(".kit-card__free")!.click();
+      expect(confirm().textContent).toContain("Free: Frontier Pass.");
+      expect(confirm().textContent).toContain("without your worker");
+      expect(go().textContent).toBe("Build it free");
+      expect(go().disabled).toBe(false);
+      go().click();
+      await vi.waitFor(() => expect(onBought).toHaveBeenCalled());
+      expect(buy).toHaveBeenCalledWith(1, "resources", undefined, true);
+    });
+
+    it("refused as no longer free: the prices come back", async () => {
+      buy.mockResolvedValueOnce({
+        ok: false,
+        refusal: { reason: "welcomeUsed", message: "The free Regular Starter Kit is no longer available.", detail: {} },
+      });
+      await openFree();
+      picker!.choose(1, "resources");
+      go().click();
+      await vi.waitFor(() => expect(picker!.showsFreeKit).toBe(false));
+      expect(card(1).querySelector(".kit-card__free")).toBeNull();
+      expect(card(1).querySelector(".kit-card__shiny")).not.toBeNull();
+    });
+
+    it("not shown when the free kit is not ready", () => {
+      open(bindingWith(RICH, 5_000));
+      expect(document.querySelector(".kit-card--free")).toBeNull();
+    });
   });
 
   it("stays open with the server's reason when the kit is refused", async () => {

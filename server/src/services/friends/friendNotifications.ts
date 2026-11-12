@@ -1,8 +1,7 @@
 import type { EntityManager } from "@mikro-orm/core";
 
-import { Notification } from "../../database/models/notification.model.js";
 import { logger } from "../../utils/logger.js";
-import { pruneNotifications } from "../notifications/notifications.js";
+import { recordNotifications } from "../notifications/notifications.js";
 
 /**
  * The `friend` notifications (`docs/design/friends.md` §6.1, issue #368): one
@@ -23,7 +22,7 @@ export interface FriendNotice {
 
 /**
  * Writes one `friend` row for a player, then prunes their list as every
- * write does. Never throws: the friends answer matters more than its bell
+ * write does (`recordNotifications`). Never throws: the friends answer matters more than its bell
  * line, so a failure is logged. Run it after the friends transaction has
  * committed, never inside it.
  */
@@ -34,9 +33,9 @@ export const notifyFriend = async (
   now: Date = new Date(),
 ): Promise<void> => {
   try {
-    const fork = em.fork();
-    await fork.insert(Notification, { userid, baseid: null, kind: "friend", jobs: [notice], read_at: null, created_at: now });
-    await pruneNotifications(fork, userid, now);
+    // As every write: a player who turned "Friends and gifts" off gets it
+    // stored already read, never shown (`notificationCategories.ts`).
+    await recordNotifications(em.fork(), userid, null, "friend", [[notice]], now);
   } catch (err) {
     logger.warn("Friend notification for user {userid} failed: {error}", {
       userid,

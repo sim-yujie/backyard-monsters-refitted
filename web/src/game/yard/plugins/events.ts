@@ -1,5 +1,21 @@
-import { eventsActions, eventsApi, type EventsActions, type EventsApi, type EventView } from "@/api/events";
-import { claimableCount, claimableTiers, grantedKrallenText, isOver, serverClock, type ServerClock } from "@/game/events/eventsModel";
+import { quietLogin } from "@/game/quietLogin";
+import {
+  eventsActions,
+  eventsApi,
+  type EventsActions,
+  type EventsApi,
+  type EventView,
+  type Mr2WelcomeStatus,
+} from "@/api/events";
+import {
+  claimableCount,
+  claimableTiers,
+  grantedKorathText,
+  grantedKrallenText,
+  isOver,
+  serverClock,
+  type ServerClock,
+} from "@/game/events/eventsModel";
 import { onPumpkins, PUMPKIN_HUNT_KIND, withPumpkinCount } from "@/game/events/pumpkinHunt";
 import { currentSeason, seasonFor, setSeason } from "@/game/season";
 import { latestRelease, localSeen, markSeen, whatsNewDecision } from "@/game/events/whatsNew";
@@ -38,6 +54,8 @@ const READY_NOTICE = "events-ready";
 
 /** How often the page's countdowns and the list's freshness are checked. */
 const TICK_MS = 1_000;
+/** A computer's screen, as the centred windows count it (ui.css). */
+const COMPUTER_QUERY = "(width > 620px) and (height > 500px)";
 
 /**
  * The button's picture: the painted festive calendar with its gold star and
@@ -58,6 +76,8 @@ export class EventsDoor {
   private readonly actions: EventsActions;
   private panel: EventsPanel | null = null;
   private events: readonly EventView[] | null = null;
+  /** The "New to Map Room 2" card, or null. */
+  private welcome: Mr2WelcomeStatus | null = null;
   private clock: ServerClock | null = null;
   private loadFailed: string | null = null;
   private claiming: string | null = null;
@@ -109,6 +129,7 @@ export class EventsDoor {
       if (this.destroyed) return;
       this.clock = serverClock(body.now, Date.now());
       this.events = body.events;
+      this.welcome = body.mr2Welcome ?? null;
       // An event that started since the yard loaded dresses it now. The yard's
       // own load already chose among overlapping events (a forced one first),
       // so a season whose event is still on is kept rather than replaced by
@@ -129,6 +150,8 @@ export class EventsDoor {
   private checkWhatsNew(serverSeen: string | null): void {
     if (this.whatsNewChecked) return;
     this.whatsNewChecked = true;
+    // A test server's quiet login: shut, and nothing marked seen.
+    if (quietLogin()) return;
     const latest = latestRelease();
     const decision = whatsNewDecision(latest, serverSeen, localSeen(), this.mounts.store.save.onboarding?.guide.state);
     if (!latest || decision === "none") return;
@@ -136,7 +159,13 @@ export class EventsDoor {
     if (decision === "show") openWhatsNew({ container: modalLayer() });
   }
 
-  toggle(): void {
+  /**
+   * Opens or shuts the Events page. Opened from its button it starts at the
+   * top on a computer, where the Frontier Pass leads the page; a phone and
+   * `atClaim` (a "Claim" notice) still scroll to the first Claim, which on a
+   * phone sits below the fold (bug report #10).
+   */
+  toggle(atClaim = false): void {
     if (this.panel) {
       this.panel.close();
       return;
@@ -145,6 +174,10 @@ export class EventsDoor {
       onClaimCalendar: (event) => void this.claimCalendar(event),
       onClaimTier: (event, tier) => void this.claimTier(event, tier),
       onRetry: () => void this.load(),
+      onGoToMapRoom2: () => {
+        this.panel?.close();
+        this.mounts.scene.openMap();
+      },
       onClose: () => {
         this.panel = null;
         this.refusal = null;
@@ -153,7 +186,7 @@ export class EventsDoor {
       },
     }).mount(this.mounts.overlay.content);
     this.button.setAttribute("aria-expanded", "true");
-    this.scrollToClaim = true;
+    this.scrollToClaim = atClaim || window.matchMedia?.(COMPUTER_QUERY).matches !== true;
     this.render();
     void this.load();
   }
@@ -165,7 +198,7 @@ export class EventsDoor {
       this.panel.showFirstClaim();
       return;
     }
-    this.toggle();
+    this.toggle(true);
   }
 
   /** A pumpkin that reached a ladder tier: a notice with the tier's rewards and a Claim button. */
@@ -193,7 +226,14 @@ export class EventsDoor {
 
   private view(): EventsPanelView {
     if (this.events) {
-      return { kind: "list", events: this.events, now: this.now, claiming: this.claiming, refusal: this.refusal };
+      return {
+        kind: "list",
+        events: this.events,
+        now: this.now,
+        claiming: this.claiming,
+        refusal: this.refusal,
+        mr2Welcome: this.welcome,
+      };
     }
     if (this.loadFailed) return { kind: "error", message: this.loadFailed };
     return { kind: "loading" };
@@ -210,7 +250,7 @@ export class EventsDoor {
 
   private refresh(): void {
     const events = this.events ?? [];
-    this.button.hidden = events.length === 0;
+    this.button.hidden = events.length === 0 && this.welcome === null;
     const count = claimableCount(events);
     this.badge.hidden = count === 0;
     this.badge.textContent = count > 99 ? "99+" : String(count);
@@ -224,9 +264,11 @@ export class EventsDoor {
   private tick(): void {
     if (!this.events || this.loading) return;
     const now = this.now;
-    const stale = this.events.some(
-      (event) => isOver(event, now) || (event.calendar?.nextAt != null && now >= event.calendar.nextAt),
-    );
+    const stale =
+      (this.welcome !== null && now >= this.welcome.endsAt) ||
+      this.events.some(
+        (event) => isOver(event, now) || (event.calendar?.nextAt != null && now >= event.calendar.nextAt),
+      );
     if (stale) {
       void this.load();
       return;
@@ -266,7 +308,10 @@ export class EventsDoor {
     this.claiming = null;
     if (result.ok) {
       const rewards = event.ladder?.tiers[tier]?.rewards ?? [];
-      const words = grantedKrallenText(result.report.granted) ?? claimedLine("Claimed", rewards);
+      const words =
+        grantedKrallenText(result.report.granted) ??
+        grantedKorathText(result.report.granted) ??
+        claimedLine("Claimed", rewards);
       this.mounts.notices.show(EVENTS_NOTICE, words, {
         level: "info",
         timeoutMs: 5_000,

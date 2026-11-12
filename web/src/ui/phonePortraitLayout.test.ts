@@ -60,7 +60,7 @@ describe("upright phone layout", () => {
 
   it("puts the Friends button away while a panel or sheet is open", () => {
     // Upright and sideways alike (#381).
-    const phone = media(css("friends/friends-bar.css"), "width <= 620px), (height <= 500px");
+    const phone = media(css("friends/friends-button.css"), "width <= 620px), (height <= 500px");
     for (const opener of [
       "> .panel:not([hidden])",
       "> .map-dock--right > *",
@@ -68,7 +68,7 @@ describe("upright phone layout", () => {
       "> .monsters-screen:not([hidden])",
       "> .yard-dock > .yard-menu:not([hidden])",
     ]) {
-      expect(phone).toContain(`.overlay__layer:has(${opener}) > .friends-bar`);
+      expect(phone).toContain(`.overlay__layer:has(${opener}) > .friends-button`);
     }
   });
 
@@ -145,5 +145,12 @@ describe("upright phone layout", () => {
     const phone = media(css("styles/attack.css"), "width <= 620px");
     expect(phone).toMatch(/\.attack-viewtools \.yard-minimap \{[^}]*width: 120px !important;/);
     expect(phone).toMatch(/\.attack-viewtools \.yard-zoom__slider,\s*\.attack-viewtools \.yard-zoom__readout \{\s*display: none;/);
+  });
+
+  it("keeps the Friends window's way back to '< [wrench] 90' on phones, in the button's ink (tester, 9 Nov)", () => {
+    const source = css("friends/friends-button.css");
+    const phones = media(source, "height <= 500px), (width <= 480px");
+    expect(phones).toMatch(/\.friends-window__back > \.friends-window__group-words \{\s*display: none;/);
+    expect(source).toMatch(/\.friends-window__back > \.friends-window__group-count \{[^}]*color: inherit;/);
   });
 });

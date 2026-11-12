@@ -212,6 +212,21 @@ describe("paying it", () => {
     expect(payAutobank(main, rates, T0, completed).paid.r1).toBe(224 * 540);
   });
 
+  test("a rate change partway pays the old rate before it, overdrive and all", () => {
+    // The overdrive ran the first half hour; the rate rose by 100 at 45 min.
+    const main = mainYard(0);
+    const completed = [{ kind: "storeItem", id: "POD", t: null, at: T0 - HOUR / 2, detail: {} }];
+    const changes = [{ at: T0 - HOUR / 4, delta: { r1: 100, r2: 0, r3: 0, r4: 0 } }];
+    // 124 a tick for 270 ticks (180 of them doubled), then 224 for 90.
+    expect(payAutobank(main, rates, T0, completed, changes).paid.r1).toBe(124 * (270 + 180) + 224 * 90);
+  });
+
+  test("a change at or before the interval's start counts for all of it", () => {
+    const main = mainYard(0);
+    const changes = [{ at: T0 - 2 * HOUR, delta: { r1: 100, r2: 0, r3: 0, r4: 0 } }];
+    expect(payAutobank(main, rates, T0, [], changes).paid.r1).toBe(224 * 360);
+  });
+
   test("the server's rates replace whatever the column held, stale outposts included", () => {
     const main = mainYard(0, {
       buildingresources: { t: T0 - 10, b900: { r1: 99_999 }, b123: { r1: 5 }, junk: "x" } as JsonObject,
@@ -416,5 +431,130 @@ describe("autobanking a player", () => {
     db.rows.set(MAIN, mainRow({ attackid: 5, attacks: [{ starttime: getCurrentDateTime() - 30 }] }));
     expect(await autobankOwner(em, OWNER)).toBeNull();
     expect(pool().r1).toBe(0);
+  });
+});
+
+describe("timers that ran out on an outpost nobody opened", () => {
+  // Six hours unpaid: 2,160 ticks. Harvester income at height 125 by level:
+  // 1 → 2, 7 → 29, 8 → 37, 10 → 56 a tick; one still being built makes 1.
+  const SPAN = 6 * HOUR;
+  const TICKS = SPAN / 10;
+  let now = 0;
+
+  /** The main yard paid up to six hours ago; both outposts last saved then too. */
+  const setUp = (buildings900: Row, extra900: Row = {}, buildings901: Row = {}) => {
+    now = getCurrentDateTime();
+    db.rows.set(MAIN, mainRow({ buildingresources: { t: now - SPAN } }));
+    db.rows.set(900, outpostRow(900, "900", buildings900, { savetime: now - SPAN, ...extra900 }));
+    db.rows.set(901, outpostRow(901, "901", buildings901, { savetime: now - SPAN }));
+    db.cells = [
+      { baseid: "900", map_version: 2, terrainHeight: 125 },
+      { baseid: "901", map_version: 2, terrainHeight: 125 },
+    ];
+  };
+
+  test("a new harvester finishing 2 h in pays 1 a tick before and its level 1 after", async () => {
+    setUp({ "1": harvester(1, 0, { cB: 2 * HOUR }) });
+
+    await autobankOwner(em, OWNER);
+
+    expect(pool().r1).toBe(720 * 1 + 1440 * 2);
+    // The rate kept for the client is the one it earns now.
+    expect(db.rows.get(MAIN)!.buildingresources).toMatchObject({ b900: { r1: 2 } });
+  });
+
+  test("a bought-ahead (prefab) harvester pays its prefab level from its finish", async () => {
+    setUp({ "1": harvester(2, 0, { cB: 2 * HOUR, prefab: 8 }) });
+
+    await autobankOwner(em, OWNER);
+
+    expect(pool().r2).toBe(720 * 1 + 1440 * 37);
+  });
+
+  test("one that finished before the unpaid span pays its level for all of it", async () => {
+    setUp({ "1": harvester(1, 0, { cB: HOUR }) });
+    db.rows.get(900)!.savetime = now - 10 * HOUR;
+
+    await autobankOwner(em, OWNER);
+
+    expect(pool().r1).toBe(TICKS * 2);
+  });
+
+  test("an upgrade already counts at its next level, so its finish changes nothing", async () => {
+    setUp({ "1": harvester(3, 7, { cU: 2 * HOUR }) });
+
+    await autobankOwner(em, OWNER);
+
+    expect(pool().r3).toBe(TICKS * 37);
+  });
+
+  test("several outposts, each from its own finish", async () => {
+    setUp(
+      { "1": harvester(1, 0, { cB: 2 * HOUR }), "2": harvester(1, 10, { id: 2 }) },
+      {},
+      { "1": harvester(1, 0, { cB: 4 * HOUR, prefab: 7 }) }
+    );
+
+    await autobankOwner(em, OWNER);
+
+    expect(pool().r1).toBe(
+      // 900: a level 10 all along, plus the new one.
+      TICKS * 56 + 720 * 1 + 1440 * 2 +
+        // 901: 1 for four hours, then 29.
+        1440 * 1 + 720 * 29
+    );
+  });
+
+  test("a destroyed harvester being repaired earns again from the repair's start", async () => {
+    setUp({ "1": harvester(4, 10, { hp: 0, rE: 1 }) }, { buildinghealthdata: { "1": 0 } });
+
+    await autobankOwner(em, OWNER);
+
+    expect(pool().r4).toBe(TICKS * 56);
+  });
+
+  test("a destroyed harvester nobody repairs still earns nothing", async () => {
+    setUp({ "1": harvester(4, 10, { hp: 0 }) }, { buildinghealthdata: { "1": 0 } });
+
+    await autobankOwner(em, OWNER);
+
+    expect(pool().r4).toBe(0);
+  });
+
+  test("a build paused by damage and repaired restarts at the repair's end", async () => {
+    // Health 0 with a repair running: the countdown waits for the repair.
+    setUp({ "1": harvester(1, 0, { cB: HOUR, hp: 0, rE: 1 }) }, { buildinghealthdata: { "1": 0 } });
+
+    await autobankOwner(em, OWNER);
+
+    const column = db.rows.get(MAIN)!.buildingresources as JsonObject;
+    expect((column.b900 as JsonObject).r1).toBe(2);
+    // 1 a tick while it repairs and builds, 2 a tick once the repair and then
+    // the hour's build are done: the build ends an hour plus the repair in.
+    const atTwo = 2 * TICKS - pool().r1;
+    expect(atTwo).toBeGreaterThan(360);
+    expect(atTwo).toBeLessThan(360 + 60);
+  });
+
+  test("with nothing running the payout is what it always was", async () => {
+    setUp(fourOf(1), {}, fourOf(4));
+
+    await autobankOwner(em, OWNER);
+
+    expect(pool()).toEqual({ r1: 224 * TICKS, r2: 0, r3: 0, r4: 224 * TICKS });
+  });
+
+  test("the outpost in hand, not yet caught up, is replayed like the others", async () => {
+    setUp({});
+    const inHand = outpostRow(900, "900", { "1": harvester(1, 0, { cB: 2 * HOUR }) }, {
+      savetime: now - SPAN,
+    }) as unknown as Parameters<typeof autobankYard>[4];
+    const main = mainRow({ buildingresources: { t: now - SPAN } }) as unknown as Parameters<typeof autobankYard>[1];
+
+    await em.transactional((tx) => autobankYard(tx, main, now, [], inHand));
+
+    expect(main.resources).toMatchObject({ r1: 720 * 1 + 1440 * 2 });
+    // The row in hand is read, not changed: its own catch-up moves it.
+    expect((inHand!.buildingdata as Record<string, BuildingData>)["1"]!.cB).toBe(2 * HOUR);
   });
 });

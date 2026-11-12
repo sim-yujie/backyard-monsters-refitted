@@ -533,6 +533,30 @@ export const cannotLeaveMapRoom2Err = () =>
  * and a save already on it may not start an attack, whose cost and result
  * Map Room 3 took from the client.
  */
+/**
+ * Map Room 1: the target is not on the attacker's neighbour list
+ * (`services/maproom/v1/mr1AttackRules.ts`).
+ */
+export const notMr1NeighbourErr = () =>
+  new ClientSafeError({
+    message: "Not your neighbour. Map Room 1 attacks only your neighbours.",
+    status: Status.FORBIDDEN,
+    data: { reason: "notNeighbour" },
+    isClientFriendly: true,
+  });
+
+/**
+ * Map Room 1: the target's yard is more than `gap` levels below the
+ * attacker's, and they owe the attacker no vengeance (`mr1AttackRules.ts`).
+ */
+export const mr1LevelGapErr = (gap: number) =>
+  new ClientSafeError({
+    message: `Too low: more than ${gap} levels below you.`,
+    status: Status.FORBIDDEN,
+    data: { reason: "levelGap", gap },
+    isClientFriendly: true,
+  });
+
 export const mapRoom3ClosedErr = () =>
   new ClientSafeError({
     message: "Map Room 3 is closed.",
@@ -841,6 +865,24 @@ export const attackBombRefusedErr = (violations: CombatViolation[]) =>
     message: "This attack's bombs do not add up. Reload your yard.",
     status: Status.CONFLICT,
     data: { reason: "bombSpend", violations },
+    isClientFriendly: false,
+  });
+
+/**
+ * An attack whose fling log has a fling fuller than the Flinger holds
+ * (`services/base/combat/flingRoom.ts`; owner, 12 Nov 2026: "ensure edited
+ * game isnt allowed"), refused in `COMBAT_SAVE_VALIDATION=reject` mode. The
+ * game never sends one, so it is an edited game: the save, or the checkpoint,
+ * is not taken, and nothing of the over-full fling ever lands. `flings` names
+ * each over-full fling: which one, the room it took and the Flinger's.
+ */
+export const attackFlingOverRoomErr = (
+  flings: readonly { fling: number; t: number; used: number; room: number }[]
+) =>
+  new ClientSafeError({
+    message: "A fling held more monsters than the Flinger can carry, so the server did not take this attack.",
+    status: Status.CONFLICT,
+    data: { reason: "flingOverRoom", flings: [...flings] },
     isClientFriendly: false,
   });
 

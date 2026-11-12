@@ -37,7 +37,8 @@ import { planRevenge, revengeArmyOf } from "./revengePlan.js";
  *    nothing standing) is no revenge.
  * 3. **A replay slot** (`reserveReplaySlot`); none free is a retry.
  * 4. **The attack load** (`baseModeAttack`, Map Room 1, the bot's level): it
- *    refuses as for any attacker (protected, online, under attack, truce), and
+ *    refuses as for any attacker (protected, online, under attack, truce;
+ *    not Map Room 1's neighbour and level rules, which are a player's), and
  *    otherwise commits the attack: the bot's protection ends, the counters
  *    move (`registerAttacker`), `attack_logs` gets its row.
  * 5. **The checkpoint**, from the plan under a fresh seed, and
@@ -151,6 +152,9 @@ const fight = async (
         baseid: yard.baseid,
         mapversion: MapRoomVersion.V1,
         attackerLevel: playerLevelOf(botSave),
+        // A bot answers a player who attacked it: Map Room 1's neighbour and
+        // level rules are for a player picking from their list, not this.
+        mr1Rules: false,
       });
     } catch (error) {
       // Refused before anything was written: the sweep checks again later.

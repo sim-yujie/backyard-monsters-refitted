@@ -21,7 +21,7 @@ import { replayAbandonedInWorker } from "../base/combat/replayRunner.js";
 import { endRowlessAttack, landRowlessOnce, type RowlessCheckpoint } from "../base/rowlessCheckpoint.js";
 import { checkAttackBinding } from "../base/attackSession.js";
 import { battleReplayInput, battleTick } from "../base/combat/battle.js";
-import { championsAfterAttack } from "../base/combat/attackerRow.js";
+import { championsAfterAttack, championsAfterBattle } from "../base/combat/attackerRow.js";
 import { championsAfterLessons } from "../base/combat/championBrain.js";
 import { recordBattleMismatches, replayBattleForSave } from "../base/combat/saveBattle.js";
 import { creditableMR1Loot, mr1TribePool } from "../maproom/v1/mr1TribeRules.js";
@@ -217,6 +217,9 @@ const writeDescentLanding = async (
     if (attacker.attackerchampion) {
       userSave.champion = championsAfterAttack(userSave.champion, attacker.attackerchampion as never, attacker.flinglog);
     }
+    // A champion the server's battle flung comes home at the replay's health,
+    // Vorg heals kept, whatever the save reported.
+    if (battle) userSave.champion = championsAfterBattle(userSave.champion, battle, descent.session.championHealth);
     if (battle) userSave.champion = championsAfterLessons(userSave.champion, battle.lessons, battle.log) ?? userSave.champion;
 
     // The replay's gain, capped by what the yard has left to give, into the
@@ -349,7 +352,7 @@ const descentBattle = async (
   const input = descentReplayInput(user, descent, yard, log, battleTick(saveData.tick), saveData.left);
   if (!input) return null;
 
-  const base = { baseid: String(saveData.baseid) };
+  const base = { baseid: String(saveData.baseid), rowless: "descent" as const };
   const fought = await replayBattleForSave(ctx, user, base, input, "the finaliser lands it from its checkpoint");
   const battle = { ...fought, log: input.log };
 

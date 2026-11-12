@@ -69,7 +69,9 @@ import { logger } from "../../utils/logger.js";
  *    move `savetime` to `now` (§2.3); then, if that left a level 2 Map Room
  *    on a yard not yet on Map Room 2, join a world (`joinMapRoom2`, §5.7);
  *    then pay the player's outpost income into the main pool
- *    (`autobankYard`, outposts WP4).
+ *    (`autobankYard`, outposts WP4). On an outpost the income is paid first,
+ *    from the outpost as last saved, and its catch-up runs after: the payout
+ *    replays that outpost's harvesters itself.
  * 4. `run({ save, user, body, now, completed })`.
  * 5. Check and apply its {@link YardOutcome}: Shiny (`409 shinyLocked`,
  *    `409 credits`), resources (`409 shortfall`), then the new slices, the
@@ -151,6 +153,8 @@ export type YardSlices = Partial<
     | "lockerdata"
     | "academy"
     | "champion"
+    // Event prizes kept in the yard (a Korath power, `services/events/korathPower.ts`).
+    | "rewards"
     | "mushrooms"
     | "researchdata"
     | "firedtraps"
@@ -607,8 +611,10 @@ export const catchUpLockedOutpost = async (
     logOutpostProblems(yard.outpost);
     // The catch-up re-derives the outpost's own Flinger level (its reach) too.
     const now = getCurrentDateTime();
-    const completed = catchUpYard(yard.save, now);
+    // The income first, from the outpost as last saved: the payout replays its
+    // timers itself, so a harvester finished while away pays from its finish.
     await autobankYard(tx, yard.main, now, [], yard.outpost);
+    const completed = catchUpYard(yard.save, now);
     await recordAchievements(tx, yard.main, now, builtEvents(completed), yard.outpost);
     recordQuests(yard.main, now, jobQuestEvents(completed));
     await tx.flush();
@@ -694,13 +700,18 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
       const save = yard.save;
       flingerBefore = save.flinger;
       const now = getCurrentDateTime();
-      const completed = catchUpYard(save, now);
-      if (onMain) await joinMapRoom2(tx, save, user);
       // Outpost income up to now lands before the action decides (outposts
       // WP4): it can pay for it, and a rate the action changes (a harvester
       // upgrade on an outpost) only counts from here on. Never from the
-      // Inferno, whose purse no outpost fills.
-      if (!yard.inferno) await autobankYard(tx, yard.main, now, onMain ? completed : [], yard.outpost);
+      // Inferno, whose purse no outpost fills. On an outpost it is paid before
+      // the outpost's own catch-up, from the row as last saved: the payout
+      // replays its timers itself, so a harvester finished while away pays
+      // from its finish, not from now. On the main yard it is paid after the
+      // catch-up, which tells it when a Production Overdrive ran out.
+      if (yard.outpost) await autobankYard(tx, yard.main, now, [], yard.outpost);
+      const completed = catchUpYard(save, now);
+      if (onMain) await joinMapRoom2(tx, save, user);
+      if (onMain) await autobankYard(tx, yard.main, now, completed);
 
       const outcome = await action.run({ save, user, body: parsed.data, now, completed, em: tx });
       applyOutcome(save, user, outcome);

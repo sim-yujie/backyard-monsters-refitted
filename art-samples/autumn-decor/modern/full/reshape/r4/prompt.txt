@@ -1,0 +1,27 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+The attached images:
+- shape-guide.png: THE SHAPE TO FOLLOW. The old 2009 gold Eiffel Tower yard statue from our game (Backyard Monsters Revamped), placed on magenta at the exact size and position we want back.
+- legs-bracket.png: THREE versions side by side. A (left) = our first Modern try, rejected: legs read too chunky and blocky. C (right) = our second try, rejected: legs far too thin, spindly, tiny feet. B (middle) = the old original, the TARGET: the legs must be exactly as thick as B's, between A and C.
+- gold-colour-swatch.png: the top part of our current Modern version: use it ONLY for the gold material and colour (keep exactly this warm orange-gold, do not make it more yellow or more brown).
+- ref-modern-decor.png, ref-modern-close.png: real approved Modern-look art of the game (decorations and buildings): the target finish.
+
+Job: repaint the tower of shape-guide.png in the Modern look, keeping its SHAPE EXACTLY, as if re-rendering the same 3D model with modern materials and lighting.
+
+THE MOST IMPORTANT POINT: THE LEGS EXACTLY LIKE THE GUIDE (B in legs-bracket.png), neither chunky (A) nor spindly (C):
+- Seen from this camera, each of the three visible legs at ground level is about one fifth of the tower's total width (as wide as in the guide), and keeps that width up to the arch; the front leg is a narrow vertical pier, the two side legs lean outward slightly.
+- Each leg ends in a small square foot, only a little wider than the leg itself (as in the guide), not a big stepped block and not a tiny pin.
+- The legs are elegant curved girders, not flat slabs: give each leg's front face a long recessed panel or groove running down it so it reads as a framework, with the inner (arch) side in shade.
+- Between the legs are big round arch openings reaching up close to the underside of the first platform, as in the guide.
+- The first platform is a thin wide slab with a thin decorative edge (one slab, not a thick double one). Above it a wide four-sided pyramid section with tall open gaps between corner ribs, a small thin second platform, then a slender spire with a thin needle on top.
+Keep the outline, width, height and position exactly as in the guide.
+
+The Modern look (follow every point):
+1. Clean, modern, stylised 3D render: smooth, slightly bevelled shapes with crisp clean silhouettes; polished gold metal with bright specular highlights. Little surface noise. No cel shading, no brush strokes, no flat colour fills.
+2. Camera exactly as in the guide (front, about 35-40 degrees above, the tower turned so two sides show).
+3. No outline at all. Crisp anti-aliased edges; small bevels catch the light as thin bright lines.
+4. Lighting like a Blender Cycles scene: ONE warm sun lamp from the upper left and a dim cool fill. Left sides bright; right sides and undersides in deep shade (25-35% as bright as the lit side, still readable); ambient occlusion where parts meet.
+5. No ground, base plate or cast shadow.
+
+Output canvas 1024x1536, the tower where it is in the guide. Flat solid magenta (#FF00FF) background, no text, no frame, no drop shadow. No magenta or pink inside the object.
+Save the final PNG as r4.png in the current working directory.

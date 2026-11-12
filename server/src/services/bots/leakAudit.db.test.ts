@@ -24,6 +24,11 @@ import { createBots, deleteBots } from "./factory.js";
  * bot is fresh from the factory, not yet touched by the sweep (the state in
  * which it differed most, before #245).
  *
+ * Since the owner retired the bots (12 Nov 2026) no new list takes one
+ * (`BOTS_FILL` is ignored), so the viewer's and the rival's lists are written
+ * here as a search with bots on built them while bots were live: what a
+ * player's cached list held before the retirement migration cleared it.
+ *
  * Opt-in, like the other bot `*.db.test.ts`: runs only when BOTS_TEST_DB
  * names a throwaway database with the `bym` schema, and refuses the shared
  * `bym`. Redis is a stand-in in memory, and so is `server.js` (that database
@@ -205,12 +210,29 @@ describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => 
     await sql(`UPDATE bym.save SET protected = 0 WHERE userid = ?`, [real.userid]);
     // And has since closed the game: online, they could not be attacked.
     strings.delete(`last-seen:main:${real.userid}`);
-    // Players under level 15 are shown no bots (owner 3 Nov 2026): the viewer and the real player stand on 15, as the bot.
-    await sql(`UPDATE bym.save SET points = ?, level = 15 WHERE userid IN (?, ?) AND type = 'main'`, [
+    // Players under level 15 are shown no bots (owner 3 Nov 2026): the viewer, the rival and the real player stand on 15, as the bot.
+    await sql(`UPDATE bym.save SET points = ?, level = 15 WHERE userid IN (?, ?, ?) AND type = 'main'`, [
       String(experiencePoints[14]),
       real.userid,
       viewer.userid,
+      rival.userid,
     ]);
+    // Their lists as a search with bots on built them while bots were live.
+    const { findOverworldNeighbours } = await import("../maproom/v1/findOverworldNeighbours.js");
+    for (const player of [viewer, rival]) {
+      const [save] = await sql<{ points: string; basevalue: string }>(
+        `SELECT points, basevalue FROM bym.save WHERE userid = ? AND type = 'main'`,
+        [player.userid]
+      );
+      const list = await findOverworldNeighbours(db.em.fork(), player, save!, { fill: true });
+      await sql(
+        `INSERT INTO bym.maproom (userid, neighbors, neighbors_last_calculated, neighbors_level, created_at, lastupdate_at)
+         VALUES (?, ?::jsonb, now(), 15, now(), now())
+         ON CONFLICT (userid) DO UPDATE SET neighbors = EXCLUDED.neighbors,
+           neighbors_last_calculated = now(), neighbors_level = 15`,
+        [player.userid, JSON.stringify(list)]
+      );
+    }
   }, 120_000);
 
   afterAll(async () => {
@@ -247,6 +269,10 @@ describe.skipIf(!enabled)("bots leak nothing to any client (issue #245)", () => 
 
   test("the attack load", async () => {
     // Two attackers, so neither attack load finds the other attack running.
+    // Map Room 1 attacks only neighbours (owner, 11 Nov 2026): the rival picks
+    // the bot from its own list, as the viewer picked the real player above.
+    const rivalList = (await call(routes.getMapRoom1, rival.email)).neighbours as Body[];
+    expect(rivalList.find((entry) => entry.userid === bot.userid)).toBeDefined();
     const onReal = await load(viewer.email, "attack", (await saveOf(real.userid)).baseid);
     const onBot = await load(rival.email, "attack", bot.baseid);
     expect(onReal.error).toBe(0);

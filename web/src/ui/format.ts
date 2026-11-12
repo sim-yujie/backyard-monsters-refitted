@@ -63,6 +63,30 @@ export const formatShort = (value: number | undefined): string => {
 };
 
 /**
+ * A price at its shortest, rounded UP: "1.3K" for 1,250, "14.5K" for 14,450.
+ *
+ * {@link formatShort} rounds down so a held amount is never overstated; a
+ * price must never be understated instead, or a tile looks cheaper than it
+ * is (tester, 9 Nov: Pokey's 1,250 read "1.2K"). Hatchery tiles use it; the
+ * full figure stays in their tooltip. A price that rounds up to 1000K is "1M".
+ */
+export const formatShortPrice = (value: number | undefined): string => {
+  if (value === undefined) return "—";
+  const whole = Math.ceil(value);
+  if (whole < 1_000) return String(whole);
+  const units = [
+    [1_000, "K"],
+    [1_000_000, "M"],
+    [1_000_000_000, "B"],
+  ] as const;
+  for (const [unit, mark] of units) {
+    const tenths = Math.ceil(whole / (unit / 10)) / 10;
+    if (tenths < 1_000 || mark === "B") return `${tenths}${mark}`;
+  }
+  return String(whole);
+};
+
+/**
  * Seconds remaining as a compact duration, or "Done".
  *
  * Two units at a time, largest first: a three-day job does not need its

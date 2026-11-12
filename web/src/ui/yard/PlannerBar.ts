@@ -106,6 +106,12 @@ export interface PlannerBarActions {
   /** Open or close the inventory drawer. */
   onInventory: () => void;
   onHelp: () => void;
+  /**
+   * Takes the yard picture to share, traps hidden (owner, 2026-11-11). The
+   * button is mounted only when this is given and the session can edit: it
+   * is for a player's own yard.
+   */
+  onSnapshot?: () => void;
   onExit: () => void;
   /** A phone's More sheet opened or closed (#45), so the scene can hide the other sheets. */
   onMore?: (open: boolean) => void;
@@ -460,6 +466,8 @@ export class PlannerBar {
   private readonly find: HTMLButtonElement;
   private readonly layoutsButton: HTMLButtonElement;
   private readonly help: HTMLButtonElement;
+  /** The yard picture's button, or null where there is none (read-only, or no handler). */
+  private readonly snapshot: HTMLButtonElement | null;
   private readonly exit: HTMLButtonElement;
   /** Upgrade walls, re-arm, Checklist, Layouts and Apply. Null when read-only. */
   private readonly actionRow: HTMLElement | null;
@@ -621,6 +629,16 @@ export class PlannerBar {
     help.addEventListener("click", actions.onHelp);
     this.help = help;
 
+    const onSnapshot = actions.onSnapshot;
+    if (onSnapshot && !this.readOnly) {
+      const snapshot = iconButton("snapshot", "A picture of your whole yard to share, traps hidden");
+      snapshot.classList.add("planner-bar__snapshot");
+      snapshot.addEventListener("click", () => onSnapshot());
+      this.snapshot = snapshot;
+    } else {
+      this.snapshot = null;
+    }
+
     const exit = button("Leave planner", "Leave planner (P)");
     exit.classList.add("planner-bar__exit");
     exit.setAttribute("aria-label", "Leave planner");
@@ -646,6 +664,7 @@ export class PlannerBar {
             history,
           ]),
       spacer(),
+      ...(this.snapshot ? [this.snapshot] : []),
       help,
       exit,
     );
@@ -945,6 +964,7 @@ export class PlannerBar {
     }
     this.places.move(this.yardMenu.element, this.morePlan);
     this.yardMenu.setInline(!this.readOnly);
+    if (this.snapshot) this.places.move(this.snapshot, this.morePlan);
     this.places.move(this.help, this.morePlan);
     this.morePlanSection.hidden = this.morePlan.childElementCount === 0;
 

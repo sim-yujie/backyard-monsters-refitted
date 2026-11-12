@@ -67,6 +67,19 @@ export class UnlockInbox {
     return added;
   }
 
+  /**
+   * Takes an answer's `achievements` as known without queuing them: no card
+   * shows for them now, nor when a later answer carries them again, and none
+   * is reported `seen` (a test server's quiet login, `game/quietLogin.ts`).
+   */
+  ignore(achievements: unknown): void {
+    if (!Array.isArray(achievements)) return;
+    for (const value of achievements) {
+      const unlock = unlockOf(value);
+      if (unlock) this.known.add(unlock.id);
+    }
+  }
+
   /** How many unlocks wait to be shown. */
   get size(): number {
     return this.waiting.length;

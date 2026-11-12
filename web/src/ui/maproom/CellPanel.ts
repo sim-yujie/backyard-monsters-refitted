@@ -1,4 +1,5 @@
 import { heightBonus } from "@/game/maproom/heightBonus";
+import { campTitle } from "@/game/attack/attackTarget";
 import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell, type PlayerCell } from "@/api/types";
 import { devDetails } from "@/app/devDetails";
 import { avatarOf, avatarUrl } from "@/game/avatars";
@@ -412,7 +413,8 @@ export class CellPanel {
   }
 
   private render(cell: OffsetCell, payload: MapCell | undefined): void {
-    const where = `${cell.col}, ${cell.row}`;
+    // A no-break space keeps "238, 207" on one line in the narrow header.
+    const where = `${cell.col},\u00a0${cell.row}`;
     this.chips.replaceChildren();
     this.facts.replaceChildren();
     this.countdowns = [];
@@ -451,7 +453,7 @@ export class CellPanel {
     const tribe = payload.n;
     this.setHead(
       { kind: "tribe", tribe, faded: payload.d === 1 },
-      `${tribe} camp`,
+      campTitle(tribe),
       `Level ${payload.l}`,
       `Wild monsters · ${where}`,
     );

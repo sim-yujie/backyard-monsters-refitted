@@ -77,6 +77,24 @@ describe("the emergence on a main-yard load", () => {
     expect(db.raises).toEqual([[USER, 1, NOW, 0, NOW - 82_800]]);
   });
 
+  test("QUIET_LOGIN on a test server: due, but nothing is raised and no raid opens", async () => {
+    db.raiseAnswer = 1;
+    const result = (await emergenceOnLoad(em, USER, save(), NOW, true, true))!;
+    expect(result.raised).toBeNull();
+    expect(result.raid).toBeNull();
+    expect(result.notDue).toBe("quiet");
+    expect(result.progress.emergenceLevel).toBe(0);
+    expect(db.raises).toEqual([]);
+    expect(await readOpenRaid(USER)).toBeNull();
+  });
+
+  test("QUIET_LOGIN off (the default): the same load raises the cave as usual", async () => {
+    db.raiseAnswer = 1;
+    const result = (await emergenceOnLoad(em, USER, save(), NOW, true, false))!;
+    expect(result.raised).toBe(1);
+    expect(db.raises).toHaveLength(1);
+  });
+
   test("23 hours after the last, the next level", async () => {
     db.row = { userid: USER, emergence_level: 2, emergence_last_at: new Date((NOW - 82_800) * 1000) };
     db.raiseAnswer = 3;

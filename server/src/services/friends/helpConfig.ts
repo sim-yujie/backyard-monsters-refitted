@@ -33,8 +33,8 @@ export const FRIEND_GATES = {
 export const GIFT_RULES = {
   /** Share of the lower of the sender's and the receiver's storage caps one gift is worth, rounded down. */
   share: 0.03,
-  /** Gifts a player can collect in a UTC day; the rest wait. */
-  collectsPerDay: 5,
+  /** Gifts a player can collect in a UTC day; the rest wait (owner, 9 Nov 2026: was 5). */
+  collectsPerDay: 10,
   /** Days a gift waits to be collected before it lapses. */
   waitDays: 7,
 } as const;

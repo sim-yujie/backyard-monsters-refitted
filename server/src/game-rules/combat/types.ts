@@ -1,5 +1,6 @@
 import { hpLadder, maxHp, outpostHarvesterStock } from "./stats.js";
 import type { BrainWeights } from "./brain.js";
+import type { HabitWeights } from "./habits.js";
 import type { ChampionStance } from "./stance.js";
 
 /**
@@ -490,6 +491,7 @@ export type FlingEvent =
        * was flung in (issue #220, `stance.ts`); a log with none fights it as
        * Hybrid, which is the Flash champion. `b` is its learned brain as the
        * attack froze it at launch (issue #219, `brain.ts`); none is a zero brain.
+       * `hv` and `h` replace `b` for a champion with habits (`habits.ts`).
        * `hp` is the health it comes out with, the stored health the attack
        * froze at launch, as Flash spawned it (`ATTACK.as:532`,
        * `CREEPS.SpawnGuardian(..., hp, fb, pl)`); none is full health.
@@ -501,6 +503,14 @@ export type FlingEvent =
         readonly fb?: number;
         readonly s?: ChampionStance;
         readonly b?: Partial<BrainWeights>;
+        /**
+         * The habits' version (champion modes round 2, `habits.ts`): with it
+         * the champion fights its Mode's instincts plus `h`, the habits of
+         * that Mode as the attack froze them, and `b` is not read. A log
+         * without it takes the old path, `b`, unchanged.
+         */
+        readonly hv?: number;
+        readonly h?: HabitWeights;
         readonly hp?: number;
       };
     }

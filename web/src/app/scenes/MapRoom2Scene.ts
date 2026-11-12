@@ -34,6 +34,7 @@ import { AREA_ZONE_SIZE, DEFAULT_ZOOM, MIN_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE
 import { mapRefreshSeconds, quality } from "@/game/quality";
 import {
   attackRefusal,
+  cellDistance,
   hasDeclareWar,
   outpostsToLoad,
   ownCellsIn,
@@ -49,6 +50,7 @@ import {
 } from "@/game/attack/attackTarget";
 import { visitFriend } from "@/game/friends/friendVisit";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
+import { confirmAttackWindow } from "@/ui/attack/AttackWindow";
 import { storageCapOf } from "@/game/attack/attackerStorage";
 import { Camera } from "@/game/Camera";
 import { mapRoomGrid, setHexShape, type OffsetCell } from "@/game/HexGrid";
@@ -122,9 +124,10 @@ import { Sight } from "@/game/maproom/Sight";
 import { ZoneStore, type ZoneError } from "@/game/maproom/ZoneStore";
 import { inWorld, zonesForRange, type CellRange, type ZoneRef } from "@/game/maproom/zones";
 import { IncomePrediction, overdriveEndOf } from "@/game/yard/outpostIncome";
+import { seedOutpostLabels } from "@/game/yard/outpostLabels";
 import {
   MAIN_YARD_TITLE,
-  outpostTitle,
+  namedOutpostTitle,
   outpostsOf,
   outpostTarget,
   setOwnYardTarget,
@@ -284,6 +287,8 @@ export class MapRoom2Scene implements Scene {
 
   private home: OffsetCell | null = null;
   private selected: OffsetCell | null = null;
+  /** The attack window is up (`ui/attack/AttackWindow.ts`): Attack again opens no second one. */
+  private attackWindowOpen = false;
   /** The cell under the pointer, for the hover card (#176). */
   private hovered: OffsetCell | null = null;
   /**
@@ -473,6 +478,12 @@ export class MapRoom2Scene implements Scene {
           relocate: payload.b === CellType.OUTPOST,
         }),
         onMoveMonsters: (_cell, payload) => this.openTransfer(payload.bid),
+        // The own yard's info card (beta 7, owner's design B).
+        yardCard: {
+          sizeOf: (id) => (this.ownSave ? housingSpace(id, academyLevel(this.ownSave.academy, id)) ?? 1 : 1),
+          cellsFromHome: (cell) => (this.home ? cellDistance(this.home, cell) : null),
+          onBringMonsters: (_cell, payload) => this.bringMonsters(payload.bid),
+        },
         onRelocate: (cell, payload) => this.openRelocate(cell, payload),
         onMessage: (payload) => void this.mail?.openCompose({ userid: payload.uid, name: payload.n }),
         onTruce: (payload) => void this.mail?.openTruce({ userid: payload.uid, name: payload.n, baseid: payload.bid }),
@@ -605,6 +616,8 @@ export class MapRoom2Scene implements Scene {
   exit(): void {
     // An open the player left before it was done is summarised with what it had.
     finishOpen("left");
+    // A scene change sweeps the attack window off with the overlay.
+    this.attackWindowOpen = false;
     // Where the map was left, for the next time it opens (#153).
     if (this.ownSave) {
       const view = this.camera.visibleWorldRect();
@@ -846,6 +859,8 @@ export class MapRoom2Scene implements Scene {
       noteInfo("ownYard", primed ? "primed" : "fetched");
       const base = primed ?? (await timeSpan("own-yard", () => loadOwnYard()));
       this.ownSave = base;
+      // The player's outpost names (beta 7) for the outpost buttons and the move picker.
+      seedOutpostLabels(base.outpostlabels);
       // Map Room 2's painted look (MR2_PAINTED_MAP), never in Classic.
       const painted = paintedMapOn({ serverFlag: base.flags?.["mr2painted"] });
       this.renderer.setPaintedMap(painted);
@@ -1290,9 +1305,17 @@ export class MapRoom2Scene implements Scene {
       return;
     }
 
-    void attackWithFriendWarning(attack, context.overlay.modal, () => {
-      setAttackTarget(attack);
-      context.goTo(SceneName.ATTACK);
+    // Flash's PopupAttackA first: what the player can bring, then Attack or
+    // Cancel (owner, 9 Nov 2026). One at a time, however often Attack is hit.
+    if (this.attackWindowOpen) return;
+    this.attackWindowOpen = true;
+    void confirmAttackWindow(context.overlay.modal, attack).then((go) => {
+      this.attackWindowOpen = false;
+      if (!go || this.context !== context) return;
+      return attackWithFriendWarning(attack, context.overlay.modal, () => {
+        setAttackTarget(attack);
+        context.goTo(SceneName.ATTACK);
+      });
     });
   }
 
@@ -1436,7 +1459,7 @@ export class MapRoom2Scene implements Scene {
     }
     for (const outpost of outpostsOf(save)) {
       yards.push({
-        choice: { baseid: outpost.baseid, label: outpostTitle(outpost.cell), main: false },
+        choice: { baseid: outpost.baseid, label: namedOutpostTitle(outpost.baseid, outpost.cell), main: false },
         cell: outpost.cell,
       });
     }
@@ -1453,8 +1476,24 @@ export class MapRoom2Scene implements Scene {
     return cellAt(area, cell.col, cell.row);
   }
 
-  /** "Move monsters" from one of the player's yards. */
-  private openTransfer(from: string): void {
+  /**
+   * "Bring monsters here" (the yard info card): the transfer dialog with this
+   * yard as the target, from the main yard when this is an outpost, else from
+   * the first outpost (one end must be an outpost, `transferRules.ts`).
+   */
+  private bringMonsters(to: string): void {
+    const yards = this.ownYards().map(({ choice }) => choice);
+    const target = yards.find((yard) => yard.baseid === to);
+    const from = yards.find((yard) => yard.baseid !== to && !(target?.main && yard.main));
+    if (!target || !from) {
+      this.ui?.notices.show("transfer", TRANSFER_TEXT.noOutposts, { level: "info", timeoutMs: 4_000 });
+      return;
+    }
+    this.openTransfer(from.baseid, to);
+  }
+
+  /** "Move monsters" from one of the player's yards, to `to` when given. */
+  private openTransfer(from: string, to?: string): void {
     const save = this.ownSave;
     const yards = this.ownYards();
     if (!save || yards.length < 2) {
@@ -1466,6 +1505,7 @@ export class MapRoom2Scene implements Scene {
       new TransferDialog({
         yards: yards.map(({ choice }) => choice),
         from,
+        ...(to === undefined ? {} : { to }),
         load: async (baseid): Promise<TransferYard> => {
           const cell = cells.get(baseid);
           const payload = cell ? await this.freshCell(cell) : undefined;
