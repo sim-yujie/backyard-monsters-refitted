@@ -98,6 +98,11 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * The Friends window's friend requests: `mail`, a cream envelope with a red
  * wax seal (painted by Codex, 9 Nov: Flash's gold `icon_mail` read as a gem at
  * 22 px, tester 9 Nov).
+ *
+ * The Yard Planner's "Yard picture" button (owner 12 Nov: a photo icon,
+ * `art-samples/camera-icon`, painted by Codex): `camera`, a chunky red camera
+ * with a big blue lens and a yellow flash bulb; `camera2`, the other option, a
+ * teal instant camera with a photo of a yard coming out of its top.
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -155,6 +160,8 @@ export const GAME_ICONS = {
   event: "Events",
   gift: "Gift",
   mail: "Friend requests",
+  camera: "Yard picture",
+  camera2: "Yard picture",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;
