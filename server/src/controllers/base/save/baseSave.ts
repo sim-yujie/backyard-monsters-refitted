@@ -106,7 +106,7 @@ import { attackQuestEvents, defenceQuestEvents } from "../../../services/quests/
 import { recordQuestEvents, recordUserQuestEvents } from "../../../services/quests/record.js";
 import { INFERNO_SAVE_TYPES, refuseOldInferno } from "../../../services/inferno/infernoGate.js";
 import { infernoConfig } from "../../../config/InfernoConfig.js";
-import { noteOutpostDefended } from "../../../services/alliance/allianceProgress.js";
+import { isPlayerYard, noteOutpostDefended } from "../../../services/alliance/allianceProgress.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -819,6 +819,7 @@ const saveBase = async (
         after: battle?.buildinghealthdata,
         log: battleInput?.log,
         loot: loot?.credit,
+        playerYard: await isPlayerYard(postgres.em, baseSave, user.userid),
       }),
       now
     );

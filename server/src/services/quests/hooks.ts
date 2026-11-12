@@ -162,16 +162,25 @@ export interface LandedQuestAttack {
   log?: unknown;
   /** The battle's loot credit before the attacker's cap (decision 13). */
   loot?: Readonly<Partial<Record<string, unknown>>> | null;
+  /**
+   * Whether the yard is a player's (not a tribe camp's or the
+   * attacker's own): a win then also counts `attackWin:player`, which only the
+   * alliance goal "Win attacks on players" reads (owner, 12 Nov 2026).
+   */
+  playerYard?: boolean;
 }
 
 /**
  * The attacker's quest events of a landed attack: `attackWin` when the yard
  * ends at least `FIGHT_RULES.winDamage` damaged and the attack added damage;
+ * `attackWin:player` too on a player's yard (`playerYard`);
  * `tribeDestroy:<tribe>` when a Map Room 2 camp's Town Hall fell; catapult hits.
  */
 export const attackQuestEvents = (attack: LandedQuestAttack): QuestEvents => {
   const sets: QuestEvents[] = [lootQuestEvents(attack.loot)];
-  if (attack.damageAfter >= FIGHT_RULES.winDamage && attack.damageAfter > attack.damageBefore) sets.push({ attackWin: 1 });
+  if (attack.damageAfter >= FIGHT_RULES.winDamage && attack.damageAfter > attack.damageBefore) {
+    sets.push(questEvent("attackWin", attack.playerYard ? "player" : null));
+  }
   const tribe = campTribeOf(attack.defender);
   if (tribe && hallFell(attack.defender, attack.before, attack.after)) sets.push(questEvent("tribeDestroy", tribe));
   sets.push(catapultQuestEvents(attack.log, attack.defender.buildingdata));

@@ -1154,6 +1154,65 @@
 .alliance-goal-menu__tier {
   flex: 1 1 0;
   min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance-goal-menu__tier--easy {
+  color: var(--colour-gain);
+}
+
+.alliance-goal-menu__tier--hard {
+  color: var(--colour-loss);
+}
+
+/* The picker's head: per tier, who it is sized for and what it pays. */
+.alliance-goal-menu__head {
+  position: sticky;
+  top: calc(-1 * var(--space-1));
+  z-index: 1;
+  display: flex;
+  gap: 4px;
+  padding-block: 2px var(--space-1);
+  border-bottom: 1px solid var(--colour-border-subtle);
+  background: var(--colour-surface-sunken);
+}
+
+.alliance-goal-menu__col {
+  display: flex;
+  flex: 1 1 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px var(--space-2);
+  min-width: 0;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance-goal-menu__col-tier {
+  flex: 1 1 100%;
+  font-weight: 700;
+  text-align: center;
+}
+
+.alliance-goal-menu__col--easy .alliance-goal-menu__col-tier {
+  color: var(--colour-gain);
+}
+
+.alliance-goal-menu__col--hard .alliance-goal-menu__col-tier {
+  color: var(--colour-loss);
+}
+
+.alliance-goal-menu__players {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--colour-text-secondary);
+}
+
+.alliance-goal-menu__pays {
+  color: var(--colour-text-strong);
+  font-weight: 700;
 }
 
 /* Top helpers and news: plain lists. */

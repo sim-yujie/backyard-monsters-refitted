@@ -294,15 +294,24 @@ export const TYPE_EXTRAS: Record<AllianceType, Partial<Record<AllianceStat, Type
   },
 };
 
-/** Daily-quest points a member can earn the alliance per UTC day (design v5 §8, ASSUMED). */
-export const DAILY_QUEST_POINTS_CAP = 3;
-
 /** The three goal tiers. */
 export const GOAL_TIERS = ["easy", "medium", "hard"] as const;
 export type GoalTier = (typeof GOAL_TIERS)[number];
 
-/** Points a goal pays for Midas; Conquest 2x, Fortress 4x (`TYPE_SCALE`; design v5 §8, ASSUMED). */
-export const GOAL_POINTS: Record<GoalTier, number> = { easy: 10, medium: 25, hard: 50 };
+/**
+ * Points a goal pays for Midas; Conquest 2x, Fortress 4x (`TYPE_SCALE`).
+ * Goals are the only source of points (owner, 12 Nov 2026: daily quests no
+ * longer pay). Aim: 8 hardcore players finishing 5 Medium goals a week light
+ * the whole sky (2,400 Midas) in about 13 weeks.
+ */
+export const GOAL_POINTS: Record<GoalTier, number> = { easy: 15, medium: 37, hard: 70 };
+
+/**
+ * How many hardcore Map Room 2 players each tier is sized for, Midas; scaled
+ * by `TYPE_SCALE` like the targets (owner, 12 Nov 2026). Targets never scale
+ * with the member count; the goal picker shows these instead.
+ */
+export const GOAL_TIER_PLAYERS: Record<GoalTier, number> = { easy: 3, medium: 8, hard: 15 };
 
 /** Goals an alliance may set a week (owner). */
 export const GOALS_PER_WEEK = 5;
@@ -318,23 +327,27 @@ export interface GoalRules {
 }
 
 /**
- * The weekly goal menu (design v5 §16, targets ASSUMED). Each kind's progress
- * comes from `services/alliance/allianceProgress.ts`: quest events for most,
- * direct hooks for takeovers, daily quests, harvests, kits and outposts
- * defended; "hold" is the members' outposts at the week's last daily tally.
+ * The weekly goal menu. Midas targets are sized for 3 / 8 / 15 hardcore Map
+ * Room 2 players a week (owner, 12 Nov 2026); never scaled by member count.
+ * Each kind's progress comes from `services/alliance/allianceProgress.ts`:
+ * quest events for most, direct hooks for takeovers, daily quests, harvests,
+ * kits and outposts defended; "hold" is the members' outposts at the week's
+ * last daily tally. "attackWin" counts wins on players' yards only (not tribe
+ * camps or bots); "upgrade" loses a count when the upgrade is cancelled.
+ * "Hatch monsters" is gone (owner, 12 Nov 2026): a stored goal of a kind no
+ * longer on the menu gains nothing, is not shown and takes no weekly slot.
  */
 export const GOAL_MENU: GoalRules[] = [
-  { kind: "tribeDestroy", name: "Destroy tribe yards", targets: [15, 40, 75] },
-  { kind: "takeover", name: "Take over outposts", targets: [3, 8, 15] },
-  { kind: "hold", name: "Hold outposts at the end of the week", targets: [8, 15, 30] },
-  { kind: "attackWin", name: "Win attacks on players", targets: [8, 20, 45] },
-  { kind: "defenceWin", name: "Win defences", targets: [8, 20, 45] },
-  { kind: "hatch", name: "Hatch monsters", targets: [150, 400, 750] },
-  { kind: "dailyQuests", name: "Finish daily quests", targets: [60, 120, 225] },
-  { kind: "loot", name: "Loot resources", targets: [8_000_000, 30_000_000, 75_000_000] },
-  { kind: "catapultHit", name: "Catapult hits", targets: [30, 75, 150] },
-  { kind: "upgrade", name: "Upgrade buildings", targets: [15, 40, 75] },
-  { kind: "harvest", name: "Harvest resources", targets: [40_000_000, 120_000_000, 300_000_000], only: AllianceType.MIDAS },
+  { kind: "tribeDestroy", name: "Destroy tribe yards", targets: [200, 550, 1000] },
+  { kind: "takeover", name: "Take over outposts", targets: [60, 160, 300] },
+  { kind: "hold", name: "Hold outposts at the end of the week", targets: [90, 240, 450] },
+  { kind: "attackWin", name: "Win attacks on players", targets: [300, 800, 1500] },
+  { kind: "defenceWin", name: "Win defences", targets: [30, 80, 150] },
+  { kind: "dailyQuests", name: "Finish daily quests", targets: [100, 280, 500] },
+  { kind: "loot", name: "Loot resources", targets: [450_000_000, 1_200_000_000, 2_250_000_000] },
+  { kind: "catapultHit", name: "Catapult hits", targets: [900, 2400, 4500] },
+  { kind: "upgrade", name: "Upgrade buildings", targets: [90, 240, 450] },
+  { kind: "harvest", name: "Harvest resources", targets: [500_000_000, 1_300_000_000, 2_200_000_000], only: AllianceType.MIDAS },
   { kind: "kitRebuild", name: "Rebuild outposts with Starter Kits", targets: [6, 16, 30], only: AllianceType.CONQUEST },
   { kind: "outpostDefended", name: "Outposts attacked but not taken", targets: [30, 80, 160], only: AllianceType.FORTRESS },
 ];
