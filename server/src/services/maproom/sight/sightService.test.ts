@@ -487,7 +487,7 @@ describe("getPlayerSight: alliance extra reach (Conquest's full Teratorn)", () =
     tables.set(Save, [mainSaveRow(2, { flinger: 3 })]); // mainYardRange(3) = 8
     const plain = await getPlayerSight(p);
 
-    allianceRows = [{ type: AllianceType.CONQUEST, stars: { teratorn: 5 } }];
+    allianceRows = [{ type: AllianceType.CONQUEST, stars: { teratorn: 10 } }];
     const wide = await getPlayerSight(p);
 
     expect(wide.sources).toContainEqual({ x: 101, y: 101, reach: 7, kind: "own" }); // mainYardRange(2) = 6
@@ -495,15 +495,15 @@ describe("getPlayerSight: alliance extra reach (Conquest's full Teratorn)", () =
     expect(wide.sv).not.toBe(plain.sv);
   });
 
-  test("four lit steps give no extra reach; a flinger 0 circle stays at 0", async () => {
+  test("nine lit stars give no extra reach; a flinger 0 circle stays at 0", async () => {
     const p = user(1, { alliance_id: 9, flinger: 0 });
     tables.set(User, [{ userid: 1, alliance_id: 9 }]);
-    allianceRows = [{ type: AllianceType.CONQUEST, stars: { teratorn: 5 } }];
+    allianceRows = [{ type: AllianceType.CONQUEST, stars: { teratorn: 10 } }];
     expect((await getPlayerSight(p)).sources).toContainEqual({ x: 101, y: 101, reach: 0, kind: "own" });
 
     strings.clear();
     const q = user(1, { alliance_id: 9 });
-    allianceRows = [{ type: AllianceType.CONQUEST, stars: { teratorn: 4 } }];
+    allianceRows = [{ type: AllianceType.CONQUEST, stars: { teratorn: 9 } }];
     expect((await getPlayerSight(q)).sources).toContainEqual({ x: 101, y: 101, reach: 6, kind: "own" });
   });
 });
