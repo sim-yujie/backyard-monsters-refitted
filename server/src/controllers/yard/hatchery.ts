@@ -26,7 +26,8 @@ import { defineYardAction } from "./yardAction.js";
 /** `POST /bm/yard/hatchery/add` — queue up to `count` of `monster` in one request. */
 export const yardHatcheryAddAction = defineYardAction({
   schema: YardHatcheryAddSchema,
-  run: ({ save, body, now }) => planHatcheryAdd(save, body.hatchery, body.monster, body.count, now),
+  run: ({ save, body, now, bonuses }) =>
+    planHatcheryAdd(save, body.hatchery, body.monster, body.count, now, bonuses?.outpostHatchCost ?? 0),
   outposts: "allow",
   inferno: "allow",
 });

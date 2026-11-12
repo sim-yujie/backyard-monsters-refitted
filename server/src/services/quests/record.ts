@@ -7,6 +7,7 @@ import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
 import { sqlCountsAsNewFriend } from "./friends.js";
 import { cleanEvents, recordQuests, type QuestEvents } from "./state.js";
+import { countAfterCommit } from "../alliance/allianceProgress.js";
 
 /**
  * Quest progress that lands outside a yard action, so outside the main row's
@@ -30,13 +31,13 @@ export const recordQuestEvents = async (
   const clean = cleanEvents(events);
   if (!clean || !basesaveid) return false;
   try {
-    return await em.transactional(async (tx) => {
+    return await countAfterCommit(() => em.transactional(async (tx) => {
       const main = await tx.findOne(Save, { basesaveid }, { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true });
       if (!main || main.type !== BaseType.MAIN) return false;
       recordQuests(main, now, clean);
       await tx.flush();
       return true;
-    });
+    }));
   } catch (err) {
     logger.error(`Counting quest events ${JSON.stringify(clean)} on main save ${basesaveid} failed: ${err}`);
     return false;

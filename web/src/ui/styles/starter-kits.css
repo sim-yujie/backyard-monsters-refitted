@@ -163,6 +163,33 @@
   color: var(--colour-text-muted);
 }
 
+/* The alliance's kit price (beta 7): shield and percent before the price, the usual one struck through. */
+.kit-card--alliance .kit-card__price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.kit-card__alliance-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-md);
+  font-weight: 700;
+}
+
+.kit-card__alliance-tag--cheaper {
+  background: color-mix(in srgb, var(--colour-success) 18%, transparent);
+  color: var(--colour-success);
+}
+
+.kit-card__alliance-tag--dearer {
+  background: var(--colour-warning-soft);
+  color: var(--colour-warning-text);
+}
+
 .kit-card__buttons {
   display: grid;
   gap: var(--space-2);

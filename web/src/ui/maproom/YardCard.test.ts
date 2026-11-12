@@ -56,7 +56,7 @@ const open = (payload: PlayerCell, overrides: Partial<YardCardOptions> = {}) => 
     onBookmark: vi.fn(),
     canBookmark: () => true,
     sizeOf: (id) => ({ C6: 5, C14: 20 })[id] ?? 1,
-    ownFlinger: () => ({ level: 3, reach: 6, bonus: 2 }),
+    ownFlinger: () => ({ level: 3, reach: 6 }),
     ownMoves: (_cell, cell) => ({ monsters: true, relocate: cell.b === 3 }),
     onMoveFrom: vi.fn(),
     onBringHere: vi.fn(),
@@ -169,7 +169,7 @@ describe("YardCard on an outpost", () => {
   it("shows the Flinger's reach and an idle worker", () => {
     open(outpost());
     expect(text(".yard-card__stat--flinger .yard-card__stat-value")).toBe("6 cells");
-    expect(text(".yard-card__stat--flinger .yard-card__stat-detail")).toBe("Level 3 · +2 war");
+    expect(text(".yard-card__stat--flinger .yard-card__stat-detail")).toBe("Level 3");
     expect(text(".yard-card__stat--worker .yard-card__stat-value")).toBe(YARD_CARD_TEXT.idle);
   });
 

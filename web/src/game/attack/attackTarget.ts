@@ -150,6 +150,11 @@ export interface AttackTarget {
   readonly name: string;
   /** The defender's user id when a player owns it (not a wild camp); the friend warning reads it. */
   readonly owner?: number;
+  /**
+   * The player's own alliance, when the defender is in it too (beta 7): the
+   * "X is in your alliance, attack anyway?" confirm reads it. Absent otherwise.
+   */
+  readonly ally?: { readonly name: string; readonly image: number };
   readonly roster: AttackRoster;
   /**
    * The Map Room the attack load names, when it is not the client's default

@@ -605,12 +605,7 @@ export class YardCard {
 
     const flinger = this.options.ownFlinger(cell, payload);
     const reach = flinger.reach > 0 ? cellsText(flinger.reach) : YARD_CARD_TEXT.noFlinger;
-    const detail =
-      flinger.level <= 0
-        ? "Build one to attack"
-        : flinger.bonus > 0
-          ? `Level ${flinger.level} · +${flinger.bonus} war`
-          : `Level ${flinger.level}`;
+    const detail = flinger.level <= 0 ? "Build one to attack" : `Level ${flinger.level}`;
     tiles.push(
       this.stat(gameIcon("range", { size: 32, decorative: true }), YARD_CARD_TEXT.flinger, reach, detail, "flinger"),
     );

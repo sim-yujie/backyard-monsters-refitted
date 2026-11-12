@@ -168,8 +168,6 @@ describe("an honest save from the real client is never refused (#201)", () => {
           defender,
           attacker: attackerOf(one),
           tick: battleTick(one.save.tick),
-          // Whatever Declare War is doing by the save, the session's copy is fought.
-          declareWar: !one.declareWar,
           left: one.save.left === true,
         });
         expect(input).not.toBeNull();
@@ -220,7 +218,6 @@ describe("what the session froze is what the replay fights (#201)", () => {
         defender,
         attacker: attackerOf(one!),
         tick: battleTick(one!.save.tick),
-        declareWar: false,
         left: false,
       })!
     );
@@ -238,7 +235,6 @@ describe("what the session froze is what the replay fights (#201)", () => {
         defender,
         attacker: attackerOf(behind!),
         tick: battleTick(behind!.save.tick),
-        declareWar: false,
         left: false,
       })!
     );

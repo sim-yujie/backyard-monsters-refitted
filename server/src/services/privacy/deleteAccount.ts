@@ -369,8 +369,10 @@ const allianceOutcome = async (sql: Sql, account: AccountRow) => {
   const [alliance] = await sql<{ name: string }>(`SELECT name FROM bym.alliance WHERE id = ? FOR UPDATE`, [account.alliance_id]);
   const name = alliance?.name ?? `#${account.alliance_id}`;
   const [next] = await sql<{ userid: number; username: string }>(
-    `SELECT userid, username FROM bym."user" WHERE alliance_id = ? AND userid <> ? ORDER BY userid LIMIT 1`,
-    [account.alliance_id, account.userid]
+    // An Officer takes over before a Member (design v5 §6).
+    `SELECT userid, username FROM bym."user" WHERE alliance_id = ? AND userid <> ?
+      ORDER BY (alliance_role = ?) DESC, alliance_joined_at ASC NULLS LAST, userid LIMIT 1`,
+    [account.alliance_id, account.userid, AllianceRole.OFFICER]
   );
 
   if (!next) return { text: `alliance "${name}" is disbanded (no other members)`, disband: true, successor: null };

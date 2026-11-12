@@ -14,6 +14,7 @@ import { Message } from "../../database/models/message.model.js";
 import { MessageType } from "../../enums/MessageType.js";
 import { findInviteOutposts, inviteFields } from "../../services/mail/inviteRules.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { allianceInviteFields } from "../../services/alliance/inviteMail.js";
 
 /**
  * Controller to get threads for mailbox.
@@ -65,6 +66,24 @@ export const getMessageThreads: KoaController = async (ctx) => {
       : [];
     const inviteOutposts = await findInviteOutposts(postgres.em, invites.map((invite) => invite.baseid));
     const now = getCurrentDateTime();
+    // Each thread's alliance invite (owner, 10 Nov 2026), and where it stands now.
+    const allianceInviteMessages = threadIds.length
+      ? await postgres.em.find(
+          Message,
+          { threadid: { $in: threadIds }, messagetype: MessageType.ALLIANCE_INVITE },
+          { orderBy: { updatetime: "ASC", createdAt: "ASC" } }
+        )
+      : [];
+    const allianceInvites = await allianceInviteFields(
+      postgres.em,
+      allianceInviteMessages.map((message) => message.allianceinviteid)
+    );
+    const allianceInviteByThread = new Map(
+      allianceInviteMessages.flatMap((message) => {
+        const fields = message.allianceinviteid != null ? allianceInvites.get(message.allianceinviteid) : undefined;
+        return fields ? [[message.threadid, fields] as const] : [];
+      })
+    );
     // Read before the last messages' `userid` is rewritten below: an invitation may be one of them.
     const inviteByThread = new Map(
       invites.map((invite) => [invite.threadid, inviteFields(invite, inviteOutposts, now)])
@@ -93,9 +112,10 @@ export const getMessageThreads: KoaController = async (ctx) => {
     const threadsList = Object.fromEntries(
       threadMessages.map((message) => {
         const invite = inviteByThread.get(message.threadid);
+        const allianceInvite = allianceInviteByThread.get(message.threadid);
         return [
           message.threadid,
-          { ...FilterFrontendKeys(message), ...invite },
+          { ...FilterFrontendKeys(message), ...invite, ...allianceInvite },
         ];
       })
     );

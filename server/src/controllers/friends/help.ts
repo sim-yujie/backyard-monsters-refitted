@@ -33,6 +33,7 @@ import { recordQuests } from "../../services/quests/state.js";
 import { isTrap } from "../../game-rules/combat/damagePercent.js";
 import { maskBuilding } from "../../services/base/viewMask.js";
 import type { FriendsBody } from "./friends.js";
+import { countAfterCommit } from "../../services/alliance/allianceProgress.js";
 
 /**
  * `POST /bm/friends/help` `{ userid, buildingId, kind }` (`docs/design/friends.md`
@@ -93,7 +94,7 @@ export const helpAnswer = async (em: EntityManager, user: User, body: unknown, n
   const helper = user.userid;
   if (owner === helper) throw friendRefusedErr("self");
 
-  const done = await em.transactional(async (tx): Promise<HelpDone> => {
+  const done = await countAfterCommit(() => em.transactional(async (tx): Promise<HelpDone> => {
     const sides = await readSides(tx, [helper, owner]);
     const mySide = sides.get(helper);
     const theirSide = sides.get(owner);
@@ -181,7 +182,7 @@ export const helpAnswer = async (em: EntityManager, user: User, body: unknown, n
       building: maskBuilding(theirs.buildingdata![key]!, "main"),
       helperName: mySide.username,
     };
-  });
+  }));
 
   await notifyFriend(
     em,

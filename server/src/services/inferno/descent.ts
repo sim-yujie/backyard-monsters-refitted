@@ -41,9 +41,6 @@ export const DESCENT_PASSED_LEVEL = DESCENT_YARDS + 1;
  */
 export const DESCENT_FLINGER_CAPACITY: readonly number[] = [250, 850, 1500, 2500, 3500, 3500, 3500];
 
-/** Declare War adds a quarter to the payload (`ATTACK.as:592-594`). */
-export const DECLARE_WAR_PAYLOAD = 0.25;
-
 const FLINGER_TYPE = 5;
 
 /** The yard's index, 0-12, for a Descent base id, or null for any other base. */
@@ -123,12 +120,11 @@ export const flingerLevelOf = (buildingdata: JsonObject | null | undefined): num
 
 /**
  * What one fling may carry in a Descent attack: the main table's payload at
- * the attacker's Flinger level, a quarter more under Declare War.
+ * the attacker's Flinger level. (Flash added a quarter under the alliance
+ * power-up Declare War, `ATTACK.as:592-594`; the power-ups are gone.)
  */
-export const descentFlingerCapacity = (flingerLevel: number, declareWar: boolean): number => {
-  const base = flingerLevel >= 1 ? (DESCENT_FLINGER_CAPACITY[Math.min(flingerLevel, DESCENT_FLINGER_CAPACITY.length) - 1] ?? 0) : 0;
-  return declareWar ? base + Math.floor(base * DECLARE_WAR_PAYLOAD) : base;
-};
+export const descentFlingerCapacity = (flingerLevel: number): number =>
+  flingerLevel >= 1 ? (DESCENT_FLINGER_CAPACITY[Math.min(flingerLevel, DESCENT_FLINGER_CAPACITY.length) - 1] ?? 0) : 0;
 
 /**
  * The fling log cut down to what a Descent attack can do (`docs/design/inferno.md`

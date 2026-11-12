@@ -703,3 +703,12 @@ describe("hatchery/add — the Inferno's Incubator Control Centre", () => {
     expect(refusal(() => planHatcheryAdd(save, "hcc", "C1", 1, NOW)).slice(0, 2)).toEqual([400, "badRequest"]);
   });
 });
+
+describe("hatchery/add — a Midas Council's dearer outpost hatching", () => {
+  test("+15% on an outpost, never on the main yard, never a discount", () => {
+    const outpost = { type: "outpost" } as Partial<HatcherySave>;
+    expect(planHatcheryAdd(yardOf(outpost), 1, "C1", 2, NOW, 15).debit).toEqual({ r4: 2 * Math.round(250 * 1.15) });
+    expect(planHatcheryAdd(yardOf(), 1, "C1", 2, NOW, 15).debit).toEqual({ r4: 500 });
+    expect(planHatcheryAdd(yardOf(outpost), 1, "C1", 2, NOW, -50).debit).toEqual({ r4: 500 });
+  });
+});

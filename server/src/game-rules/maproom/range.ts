@@ -37,19 +37,13 @@
 export const MAP_WIDTH = 800;
 export const MAP_HEIGHT = 800;
 
-/**
- * Cells of extra reach while the alliance's Declare War powerup is running
- * (`POWERUPS.as:341-344`), and only then (`MapRoomPopup.as:919`, `:938`).
- */
-export const DECLARE_WAR_RANGE = 2;
-
 /** Reach of a main yard's flinger by level: `2 + 2 * level` (`BUILDING5.as:16-18`). */
 const MAIN_YARD_RANGES = [0, 4, 6, 8, 10] as const;
 
-/** The longest reach a main yard's flinger has, before Declare War. */
+/** The longest reach a main yard's flinger has. */
 export const MAX_MAIN_YARD_RANGE = 10;
 
-/** The longest reach an outpost's flinger has, before Declare War. */
+/** The longest reach an outpost's flinger has. */
 export const MAX_OUTPOST_RANGE = 4;
 
 /** A cell on the Map Room 2 grid, in offset coordinates. */
@@ -65,7 +59,7 @@ export interface RangeCell {
  * what the server has always assumed of one.
  *
  * @param level - The flinger's level.
- * @returns Reach in cells, before Declare War.
+ * @returns Reach in cells.
  */
 export const mainYardRange = (level: number | undefined): number => {
   if (level === undefined) return MAX_MAIN_YARD_RANGE;
@@ -78,7 +72,7 @@ export const mainYardRange = (level: number | undefined): number => {
  * (`BUILDING5.as:16-18`, called with `false` for an outpost).
  *
  * @param level - The flinger's level.
- * @returns Reach in cells, before Declare War.
+ * @returns Reach in cells.
  */
 export const outpostRange = (level: number | undefined): number => {
   if (level === undefined) return MAX_OUTPOST_RANGE;
@@ -87,16 +81,20 @@ export const outpostRange = (level: number | undefined): number => {
 };
 
 /**
- * A flinger's reach with Declare War added when it is running.
+ * A flinger's reach with the alliance's extra cells added (beta 7: Conquest's
+ * full Teratorn gives +1). Only a flinger that already reaches gets the extra;
+ * no flinger, or a destroyed one, still reaches nothing. A missing, negative
+ * or fractional extra counts whole cells only, so 0 changes nothing.
  *
- * A flinger that reaches nothing gains nothing from it.
- *
- * @param range - The flinger's own reach.
- * @param declareWar - Whether the Declare War powerup is running.
- * @returns The reach to measure against.
+ * @param reach - The flinger's own reach (`mainYardRange`/`outpostRange`).
+ * @param extra - Extra cells from the alliance (`bonuses.reach`).
+ * @returns Reach in cells.
  */
-export const withDeclareWar = (range: number, declareWar: boolean): number =>
-  range > 0 && declareWar ? range + DECLARE_WAR_RANGE : range;
+export const withExtraReach = (reach: number, extra: number | undefined): number => {
+  const cells = Number.isFinite(extra) ? Math.max(0, Math.floor(extra!)) : 0;
+  return reach > 0 ? reach + cells : reach;
+};
+
 
 /** The world's hex shape: Flash's flat-top columns, or pointy-top rows. */
 export type HexShape = "flat" | "pointy";
@@ -166,7 +164,7 @@ export const hexDistance = (a: RangeCell, b: RangeCell, shape: HexShape = "flat"
  *
  * @param from - The flinging cell.
  * @param to - The target.
- * @param reach - The flinger's reach, Declare War included.
+ * @param reach - The flinger's reach.
  * @param shape - The world's hex shape.
  * @returns True when `to` is within `reach` steps.
  */

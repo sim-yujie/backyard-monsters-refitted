@@ -31,7 +31,6 @@ import {
 } from "../../../game-rules/combat/index.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
 import type { TribeData } from "../../../types/TribeData.js";
-import { isDeclareWarRunning } from "../../alliance/powerups.js";
 import { battleReplayInput, battleTick } from "../../base/combat/battle.js";
 import { recordBattleMismatches, replayBattleForSave } from "../../base/combat/saveBattle.js";
 import { creditableMR1Loot, mr1TribePool } from "./mr1TribeRules.js";
@@ -380,7 +379,6 @@ const tribeReplayInput = async (
     },
     attacker: user.save!,
     tick,
-    declareWar: await isDeclareWarRunning(user.alliance_id),
     left,
   });
 

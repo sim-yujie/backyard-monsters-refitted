@@ -1,8 +1,8 @@
-import { AllianceRole } from "../../enums/Alliance.js";
 import { Alliance } from "../../database/models/alliance.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { permissionErr } from "../../errors/errors.js";
+import { can, type AllianceAction } from "./permissions.js";
 
 interface AllianceLookupOptions { withStats?: boolean; }
 
@@ -49,15 +49,17 @@ export const requireAllianceMember = async (user: User): Promise<Alliance> => {
 };
 
 /**
- * Loads the alliance a player leads. The guard for every leader-only action,
- * rejecting ordinary members and unaffiliated players alike.
+ * Loads the alliance of a player whose rank may take the given action
+ * (`permissions.ts`), rejecting other ranks and unaffiliated players alike.
+ * Services that change membership check the rank again under their locks.
  *
  * @param {User} user - The user whose membership is being resolved.
- * @returns {Promise<Alliance>} The alliance the player leads.
- * @throws {ClientSafeError} When the player does not lead an alliance.
+ * @param {AllianceAction} action - What they want to do.
+ * @returns {Promise<Alliance>} The player's alliance.
+ * @throws {ClientSafeError} When the player is in no alliance or their rank may not.
  */
-export const requireAllianceLeader = async (user: User): Promise<Alliance> => {
-  if (user.alliance_role !== AllianceRole.LEADER) throw permissionErr();
+export const requireAlliancePermission = async (user: User, action: AllianceAction): Promise<Alliance> => {
+  if (!can(user.alliance_role, action)) throw permissionErr();
 
   return await requireAllianceMember(user);
 };

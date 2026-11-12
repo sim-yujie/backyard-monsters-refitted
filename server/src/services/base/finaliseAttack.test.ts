@@ -145,6 +145,8 @@ mock.module("../../server.js", () => ({
       getTransactionContext: () => undefined,
       // Only the event counter's SQL is answered; anything else fails as with no database.
       execute: async (sql: string, params: unknown[]) => {
+        // The alliance lookups (`allianceBonuses.ts`): nobody here is in one.
+        if (sql.includes("bym.alliance")) return [];
         if (!sql.includes("event_progress")) throw new Error("no database");
         counted.push([String(params[1]), Number(params[2])]);
         return [{ counter: params[2] }];
@@ -187,11 +189,6 @@ mock.module("@mikro-orm/core", () => ({
 
 mock.module("../../utils/logger.js", () => ({
   logger: { warn: mock(() => {}), error: mock(() => {}), info: mock(() => {}), debug: mock(() => {}) },
-}));
-
-mock.module("../alliance/powerups.js", () => ({
-  runningPowerups: async () => [],
-  isDeclareWarRunning: async () => false,
 }));
 
 // The real replay runner, whatever an earlier file left in its place: bun keeps

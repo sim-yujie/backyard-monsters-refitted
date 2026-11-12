@@ -293,7 +293,6 @@ const serverBattle = (one: Fixture, log: FlingLog, tick: unknown) =>
       defender: defenderOf(one),
       attacker: attackerOf(one),
       tick: battleTick(tick),
-      declareWar: false,
       left: false,
     })!
   );
@@ -445,7 +444,6 @@ describe("the fightable log drops a bomb the attacker could not afford (#23, C3)
       defender: defenderOf(one),
       attacker: attackerOf(one),
       tick: 400,
-      declareWar: false,
     })!;
 
   test("priced against the pool the attack began with", () => {

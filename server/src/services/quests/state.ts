@@ -528,7 +528,19 @@ export const updateQuests = (
  * Rolls the main save's quests over and counts `events` on it, writing
  * `save.dailyquests` when anything changed. For code holding the main row's lock.
  */
+/**
+ * Who else hears each batch of quest events (the alliance weekly goals,
+ * `services/alliance/allianceProgress.ts`, set at boot). Unset in tests, so
+ * this module stays pure there. Sync: it only queues.
+ */
+let questEventListener: ((userid: number, events: QuestEvents) => void) | null = null;
+
+export const setQuestEventListener = (listener: ((userid: number, events: QuestEvents) => void) | null): void => {
+  questEventListener = listener;
+};
+
 export const recordQuests = (save: QuestSave, now: number, events?: QuestEvents | null): QuestRecord => {
+  if (events && questEventListener && save.userid) questEventListener(Number(save.userid), events);
   const { record, changed } = updateQuests(save, now, events);
   if (changed) save.dailyquests = questsJson(record);
   return record;

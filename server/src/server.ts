@@ -37,6 +37,7 @@ import { ownerSaveConfig, ownerSaveModeWasUnrecognised } from "./config/OwnerSav
 import { startAttackFinaliser } from "./services/base/finaliseAttack.js";
 import { startInfernoPlayerFinaliser } from "./services/inferno/infernoPlayerFinalise.js";
 import { startRetentionSweep } from "./services/privacy/retention.js";
+import { startAllianceProgress } from "./services/alliance/progressFeed.js";
 import { startAlertSweep } from "./services/alerts/alertSweep.js";
 import { startDailySummary } from "./services/alerts/dailySummary.js";
 import { trackResponseTimes } from "./services/health/responseTimes.js";
@@ -165,6 +166,10 @@ redis.onclose = (err) => logger.error(`Redis disconnected: ${err.message}`);
   // servers sharing a database run it once between them; `RETENTION_SWEEP=off`
   // turns it off on this one.
   if (process.env.RETENTION_SWEEP !== "off") startRetentionSweep(postgres.em);
+
+  // Alliance weekly goals fed by quest events, and the daily territory tally
+  // (`services/alliance/progressFeed.ts`); `ALLIANCE_PROGRESS=off` turns it off.
+  if (process.env.ALLIANCE_PROGRESS !== "off") startAllianceProgress(postgres.em);
 
   // The owner's dashboard (`docs/design/admin-dashboard-api.md`): who played
   // and what they did each UTC day, kept in Redis for 8 days; the server's

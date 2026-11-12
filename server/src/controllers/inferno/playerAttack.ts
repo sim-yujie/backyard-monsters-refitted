@@ -7,7 +7,6 @@ import { BaseType } from "../../enums/Base.js";
 import { AttackPermission } from "../../enums/MapRoom.js";
 import { infernoAttackRefusedErr, noInfernoYardErr } from "../../errors/errors.js";
 import type { DefenderForces } from "../../game-rules/combat/index.js";
-import { isDeclareWarRunning, runningPowerups } from "../../services/alliance/powerups.js";
 import { newAttackSession } from "../../services/base/attackSession.js";
 import { playerLevelOf } from "../../services/base/calculateBaseLevel.js";
 import { academyLevels } from "../../services/base/combat/abandonedAttack.js";
@@ -73,7 +72,6 @@ export interface InfernoPlayerAttackStart {
   army: Counts;
   attackeracademy: Record<string, number>;
   attackerlevel: number;
-  attpowerups: unknown[];
   flingercapacity: number;
 }
 
@@ -153,8 +151,7 @@ export const startInfernoPlayerAttack = async (
   for (const [id, count] of Object.entries(countsOf(inferno.monsters?.housed))) {
     if (count > 0) army[id] = count;
   }
-  const declareWar = await isDeclareWarRunning(user.alliance_id);
-  const flingerCapacity = infernoTribeFlingCapacity(inferno.buildingdata, declareWar);
+  const flingerCapacity = infernoTribeFlingCapacity(inferno.buildingdata);
   if (Object.keys(army).length === 0 || flingerCapacity <= 0) throw infernoAttackRefusedErr("noMonsters");
 
   const attackerAcademy = academyLevels(inferno.academy);
@@ -188,8 +185,6 @@ export const startInfernoPlayerAttack = async (
       count: 1,
       starttime: now,
       seen: false,
-      // The longer window, as the session's (`attackWindow.ts`).
-      ...(declareWar && { declarewar: true }),
     };
     locked.attacks = [...locked.attacks, attack];
     locked.attackid = Math.floor(Math.random() * 99999) + 1;
@@ -207,8 +202,7 @@ export const startInfernoPlayerAttack = async (
         undefined,
         defenderForces,
         undefined,
-        attackerAcademy,
-        declareWar
+        attackerAcademy
       ),
     });
     if (!started) throw infernoAttackRefusedErr("targetUnderAttack", { attacker: lastAttacker });
@@ -244,7 +238,6 @@ export const startInfernoPlayerAttack = async (
     army,
     attackeracademy: attackerAcademy,
     attackerlevel: attackerLevel,
-    attpowerups: await runningPowerups(user.alliance_id),
     flingercapacity: flingerCapacity,
   };
 };

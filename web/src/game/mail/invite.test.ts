@@ -56,9 +56,15 @@ describe("the invitation's card", () => {
     const card = inviteCard("pending", NOW + 6 * DAY, false, "Bramblefoot", CELL, NOW);
     expect(card).toMatchObject({ label: "Waiting", tone: "info", canAnswer: true, canWithdraw: false });
     expect(card.detail).toContain("Bramblefoot invites you to move your main yard onto their outpost at (241, 208)");
-    expect(card.detail).toContain("10,000,000 of each resource or 1,200 Shiny");
+    expect(card.detail).toContain("15,000,000 of each resource or 750 Shiny. Bramblefoot pays the same.");
     expect(card.detail).toContain("Your outposts stay yours");
     expect(card.detail).toContain("(6 days left)");
+  });
+
+  it("one sent before both paid shows the old price, the invited player's alone", () => {
+    const card = inviteCard("pending", NOW + 6 * DAY, false, "Bramblefoot", CELL, NOW, false);
+    expect(card.detail).toContain("for 10,000,000 of each resource or 1,200 Shiny. Your outposts stay yours");
+    expect(card.detail).not.toContain("pays the same");
   });
 
   it("to the one who invited, while it waits: that the outpost goes, and Withdraw", () => {
@@ -84,9 +90,11 @@ describe("the invitation's card", () => {
     expect(card.canAnswer || card.canWithdraw).toBe(false);
   });
 
-  it("names the two prices", () => {
-    expect(invitePriceText("resources")).toBe("10,000,000 of each resource");
-    expect(invitePriceText("shiny")).toBe("1,200 Shiny");
+  it("names the two prices: each player's share, or the old price on one sent before both paid", () => {
+    expect(invitePriceText("resources")).toBe("15,000,000 of each resource");
+    expect(invitePriceText("shiny")).toBe("750 Shiny");
+    expect(invitePriceText("resources", false)).toBe("10,000,000 of each resource");
+    expect(invitePriceText("shiny", false)).toBe("1,200 Shiny");
   });
 });
 
@@ -106,7 +114,12 @@ describe("the invitation as the routes give it", () => {
   };
 
   it("the thread list carries the thread's invitation", () => {
-    expect(threadList([request], {})[0]?.invite).toEqual({ status: "requested", until: NOW + 7 * DAY, cell: CELL });
+    expect(threadList([request], {})[0]?.invite).toEqual({
+      status: "requested",
+      until: NOW + 7 * DAY,
+      cell: CELL,
+      shared: false,
+    });
     expect(threadList([{ ...request, migratestate: null }], {})[0]?.invite).toBeNull();
   });
 

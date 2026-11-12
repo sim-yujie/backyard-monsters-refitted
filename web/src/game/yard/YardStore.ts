@@ -258,6 +258,11 @@ export interface YardSceneHooks {
    */
   openShop?(): void;
   /**
+   * Opens the alliance window (beta 7): the Observatory's Alliance button.
+   * Absent where there is no window (another player's yard).
+   */
+  openAlliance?(): void;
+  /**
    * Opens the Build window on its Decorations tab: the HUD's event coin
    * counter uses it. Absent where there is no Build window.
    */

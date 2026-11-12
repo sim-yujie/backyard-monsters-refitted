@@ -109,7 +109,12 @@
 
 /* ── Rooms: Global and the player's country room (owner 3 Nov 2026) ── */
 
+/* The row is a `.tab-row` (ui.css), a sideways scroller: as a flex item its
+   floor is 0, so the phone's height-capped box squeezed it to a sliver under
+   the lines (alliance chat, 10 Nov). It keeps its full height; the lines
+   give way instead. */
 .chat-box__rooms {
+  flex: none;
   display: flex;
   gap: var(--space-1);
   padding-bottom: var(--space-1);
@@ -283,6 +288,64 @@ button.chat-line__name {
 .chat-line--notice {
   color: var(--colour-text-secondary);
   font-style: italic;
+}
+
+/* The Alliance room's tab (beta 7): the alliance's own shield before the word. */
+.chat-box__shield {
+  width: 18px;
+  height: 18px;
+  margin-right: 0.3em;
+  object-fit: contain;
+  vertical-align: -4px;
+}
+
+/* An Alliance room's automatic line: a join, a leave, a star lit. */
+.chat-line--auto {
+  color: var(--colour-text-secondary);
+  font-style: italic;
+}
+
+/* An under-attack alert: a red bar, and the Map button after the words. */
+.chat-line--alert {
+  border-left: 3px solid var(--colour-danger);
+  color: var(--colour-text-strong);
+  font-style: normal;
+}
+
+.chat-line__map {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 0.4em;
+  padding: 0 0.4em;
+  min-height: 22px;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-control-hover);
+  color: var(--colour-text-strong);
+  font: inherit;
+  font-size: 0.85em;
+  font-weight: 700;
+  text-shadow: none;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.chat-line__map:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* A request's Trade while trading is switched off (beta 7): greyed out, "Coming soon". */
+.chat-line__map:disabled {
+  opacity: 0.5;
+  filter: grayscale(0.9);
+  cursor: not-allowed;
+}
+
+/* Folded, the lines take no clicks: the button would only promise one. */
+.chat-box:not(.chat-box--open) .chat-line__map {
+  display: none;
 }
 
 /* Folded: the last four lines over a light shade, nothing clickable. */

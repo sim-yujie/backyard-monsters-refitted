@@ -7,7 +7,6 @@ import { Status } from "../../enums/StatusCodes.js";
 import { infernoAttackRefusedErr } from "../../errors/errors.js";
 import { academyRanks, type DefenderForces } from "../../game-rules/combat/index.js";
 import { postgres } from "../../server.js";
-import { isDeclareWarRunning, runningPowerups } from "../../services/alliance/powerups.js";
 import { brainsOf, healthOf, newAttackSession } from "../../services/base/attackSession.js";
 import { academyLevels } from "../../services/base/combat/abandonedAttack.js";
 import { poolAmounts } from "../../services/base/combat/attackLoot.js";
@@ -75,8 +74,6 @@ export interface DescentAttackStart {
   attackerhealth?: ReturnType<typeof healthOf>;
   attackeracademy: Record<string, number>;
   attackerranks?: ReturnType<typeof academyRanks>;
-  /** The alliance powers running for the attacker (Declare War's countdown). */
-  attpowerups: unknown[];
   /** What one fling may carry. */
   flingercapacity: number;
   /** The Inferno purse now: the Descent's running loot total. */
@@ -123,8 +120,7 @@ export const startDescentAttack = async (
   const championHealth = healthOf(userSave.champion);
   const attackerAcademy = academyLevels(userSave.academy);
   const attackerRanks = academyRanks(userSave.academy);
-  const declareWar = await isDeclareWarRunning(user.alliance_id);
-  const flingerCapacity = descentFlingerCapacity(flingerLevelOf(userSave.buildingdata), declareWar);
+  const flingerCapacity = descentFlingerCapacity(flingerLevelOf(userSave.buildingdata));
 
   await startDescentSession(user.userid, {
     baseid: yard.baseid,
@@ -139,7 +135,6 @@ export const startDescentAttack = async (
       defenderForces,
       championBrains,
       attackerAcademy,
-      declareWar,
       attackerRanks,
       championHealth
     ),
@@ -159,7 +154,6 @@ export const startDescentAttack = async (
     ...(championHealth && { attackerhealth: championHealth }),
     attackeracademy: attackerAcademy,
     ...(Object.keys(attackerRanks).length > 0 && { attackerranks: attackerRanks }),
-    attpowerups: await runningPowerups(user.alliance_id),
     flingercapacity: flingerCapacity,
     descentloot: purseAmounts(userSave.iresources),
   };

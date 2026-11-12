@@ -24,10 +24,6 @@ mock.module("../../../server.js", () => ({
   },
   redis: memoryRedis(new Map()),
 }));
-// Spread the real module: bun's mock.module leaks into later test files.
-const REAL_POWERUPS = "../../alliance/powerups.ts?real";
-const realPowerups = (await import(REAL_POWERUPS)) as typeof import("../../alliance/powerups.js");
-mock.module("../../alliance/powerups.js", () => ({ ...realPowerups, runningPowerups: async () => [] }));
 
 const { rangeCheckV2 } = await import("./validateRange.js");
 

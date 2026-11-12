@@ -721,6 +721,12 @@ export interface DefenceBonus {
    * makes every tower reach `int(range * 90 / 100)`, after the cell's height.
    */
   readonly range?: number;
+  /**
+   * Trap damage, from the defender's alliance constellations (beta 7,
+   * `allianceDefenceBonus` in `defence.ts`): 0.1 makes every trap blast 1.1
+   * times as hard. Absent or 0, traps hit exactly as they always did.
+   */
+  readonly trap?: number;
 }
 
 /**
@@ -2128,6 +2134,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const bonusToughness = 1 + bonusShare(options.defenceBonus?.hp);
   /** The land feature's tower range change, whole percent (`landFeatures.ts`). */
   const bonusRangePct = Math.round(100 * bonusShare(options.defenceBonus?.range));
+  /** The alliance's trap damage (beta 7): 1 without one, every blast exactly as it was. */
+  const bonusTrap = 1 + bonusShare(options.defenceBonus?.trap);
+  const trapBlast = (raw: number): number => (bonusTrap === 1 ? raw : raw * bonusTrap);
   /** What a building takes from `raw`: fortification, then the neighbour bonus. */
   const buildingTakes = (raw: number, fortification: number): number => {
     const dealt = fortifiedDamage(raw, fortification, 0);
@@ -7169,7 +7178,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     for (const hit of index.inRange(spec.size, building.cx, building.cy, TRAP_TARGETS)) {
       if (hit.creep.hp <= 0) continue;
       touched += 1;
-      dealt += damageCreep(hit.creep, trapDamageAt(building.type, hit.dist));
+      dealt += damageCreep(hit.creep, trapBlast(trapDamageAt(building.type, hit.dist)));
       if (hit.creep.hp <= 0) kills += 1;
     }
     // A Heavy Trap's second pass, over the flyers at half (`BHEAVYTRAP.as:68-82`, issue #259).
@@ -7177,7 +7186,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       for (const hit of index.inRange(spec.size, building.cx, building.cy, oldStyleTargets(2))) {
         if (hit.creep.hp <= 0) continue;
         touched += 1;
-        dealt += damageCreep(hit.creep, heavyTrapFlyerDamageAt(hit.dist));
+        dealt += damageCreep(hit.creep, trapBlast(heavyTrapFlyerDamageAt(hit.dist)));
         if (hit.creep.hp <= 0) kills += 1;
       }
     }

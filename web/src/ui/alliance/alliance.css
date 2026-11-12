@@ -1,0 +1,2663 @@
+/*
+ * The alliance window (beta 7 phase 1, `AllianceWindow.ts`): a Popup, so the
+ * frame, title sign, tabs and `.btn` plates come from `skin.css` in both looks.
+ * This file lays out what is inside: the marketplace, the Create form and My
+ * alliance. Colours come from tokens, so Modern's steel and Classic's
+ * parchment both read; the look-specific rules are the chosen chip, shield
+ * and type card (Modern: lit in the accent; Classic: an orange plate with
+ * dark writing) and a few lighter words on Modern's dark steel.
+ */
+
+/* ── The window ───────────────────────────────────────────────────────── */
+
+.alliance-window {
+  width: min(100%, 520px);
+  /* What sticks up above the frame: the title sign (or the close disc). */
+  --alliance-window-overhang: max(var(--skin-title-lift, 0px), calc(var(--skin-edge, 0px) + 12px));
+  /* Under the top bar, so the title sign never covers the resources. */
+  --alliance-window-room: calc(100dvh - var(--hud-height, 0px) - var(--space-2) - var(--space-4) - var(--alliance-window-overhang));
+  max-height: var(--alliance-window-room);
+  margin-top: var(--alliance-window-overhang);
+  min-height: 0;
+}
+
+.popup-backdrop:has(> .alliance-window) {
+  padding-top: calc(var(--hud-height, 0px) + var(--space-2));
+}
+
+/* Classic: the title onto the red ribbon's centre, as the Friends window. */
+:root[data-skin="flash"] .alliance-window .panel__title {
+  padding-top: 3px;
+}
+
+.alliance-window > .panel__head {
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+/* A message in the head gets its own space and a line under it, so the list
+   scrolling under it never looks covered (lead, 11 Nov). */
+.alliance-window > .panel__head:has(> .alliance__status:not([hidden])) {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--colour-border-subtle);
+}
+
+/* The body scrolls; the foot (Back / Create, Leave) stays whole under it. */
+.alliance-window > .panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.alliance__foot {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  border-top: 1px solid var(--colour-border-subtle);
+}
+
+.alliance__foot[hidden] {
+  display: none;
+}
+
+/* ── Shared pieces ────────────────────────────────────────────────────── */
+
+.alliance__status {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+  font-size: var(--text-sm);
+  line-height: 1.35;
+}
+
+.alliance__status--bad {
+  border-left: 3px solid var(--colour-danger);
+}
+
+.alliance__status[hidden] {
+  display: none;
+}
+
+.alliance__step {
+  margin-left: var(--space-2);
+  vertical-align: middle;
+}
+
+.alliance__section {
+  margin: 0;
+  color: var(--colour-text-strong);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: var(--display-weight);
+}
+
+.alliance__note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.alliance__note--soft {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.alliance__note--wait {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--colour-warning-soft);
+  color: var(--colour-text);
+}
+
+.alliance__empty {
+  margin: 0;
+  color: var(--colour-text-secondary);
+  text-align: center;
+}
+
+.alliance__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  min-height: var(--control-height-compact);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-input);
+  color: var(--colour-text);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.alliance__textarea {
+  resize: vertical;
+  min-height: 3.2em;
+}
+
+.alliance__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Flash's shields: medium is 46 px, small 25 px; shown at their own size, so they stay sharp. */
+.alliance__shield {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+}
+
+.alliance__shield--small {
+  width: 25px;
+  height: 25px;
+}
+
+.alliance__face {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--colour-surface-sunken);
+}
+
+.alliance__members,
+.alliance__active {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--colour-text);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance__level {
+  flex: none;
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The type: a small tag after the name, tinted in the type's own colour. */
+.alliance__type {
+  flex: none;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.alliance__type--midas {
+  background: rgb(224 170 40 / 30%);
+}
+
+.alliance__type--conquest {
+  background: rgb(210 60 50 / 26%);
+}
+
+.alliance__type--fortress {
+  background: rgb(70 120 210 / 26%);
+}
+
+.alliance__type-good,
+.alliance__type-bad {
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.alliance__type-good {
+  color: var(--colour-gain);
+}
+
+.alliance__type-bad {
+  color: var(--colour-loss);
+}
+
+/* ── Rows (alliances and members) ─────────────────────────────────────── */
+
+.alliance__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.alliance__item {
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.alliance__item.is-open {
+  border-color: var(--colour-accent-line);
+}
+
+.alliance__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 52px;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.alliance__row:hover:not(:disabled) {
+  background: var(--colour-surface-overlay);
+}
+
+/* A member with no buttons for the viewer: a plain row, not a greyed one. */
+.alliance__row:disabled {
+  color: inherit;
+  cursor: default;
+  opacity: 1;
+}
+
+.alliance__row-words {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-2);
+}
+
+.alliance__row-name {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--colour-text-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alliance__row-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2) var(--space-2);
+}
+
+.alliance__row-leader,
+.alliance__confirm-words {
+  flex: 1 1 100%;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.alliance__foot > .alliance__confirm-words {
+  flex: 1 1 12em;
+}
+
+.alliance__report {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.alliance__role {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.alliance__role--leader {
+  color: var(--colour-accent);
+}
+
+.alliance__role--officer {
+  color: var(--colour-info);
+}
+
+.alliance__online {
+  flex: none;
+}
+
+.alliance__online--off {
+  width: 8px;
+  height: 8px;
+}
+
+.alliance__pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+.alliance__page {
+  min-width: 4em;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* ── Marketplace ──────────────────────────────────────────────────────── */
+
+.alliance__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.alliance__head-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--colour-text-strong);
+  font-size: var(--text-md);
+}
+
+.alliance__quick,
+.alliance__invites,
+.alliance__invite-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+/* Invites waiting: the one thing to answer, so it stands out. */
+.alliance__invites {
+  border-color: var(--colour-accent-line);
+  background: var(--colour-accent-soft);
+}
+
+/* "Quick Join" with Join on its right; the four chips below in a 2 x 2 grid
+   that always fits the window: a chip never runs past the edge and nothing
+   scrolls sideways (owner, 10 Nov). On a narrow phone a long type name breaks
+   onto two lines inside its chip instead. */
+.alliance__quick {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label join"
+    "types types";
+  align-items: center;
+}
+
+.alliance__quick > .alliance__section {
+  grid-area: label;
+}
+
+.alliance__quick-join {
+  grid-area: join;
+}
+
+.alliance__quick-types {
+  grid-area: types;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.alliance__chip {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px 4px;
+  min-height: var(--control-height-compact);
+  padding: 2px var(--space-3);
+  border: 1px solid var(--colour-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  cursor: pointer;
+}
+
+.alliance__chip-word {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The friends icon and the member limit stay together. */
+.alliance__chip-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.alliance__chip:hover {
+  background: var(--colour-surface-control-hover);
+}
+
+.alliance__chip-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance__search {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.alliance__search-go {
+  flex: none;
+}
+
+.alliance__invite {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.alliance__invite-words {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alliance__invite-words small {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* The name and "From ..." each end in "..." only when truly too long. */
+.alliance__invite-words > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Accept / Decline: beside the name on desktop. */
+.alliance__invite-answer {
+  flex: none;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.alliance__first {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-3);
+}
+
+.alliance__first-shield {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+}
+
+/* ── Create ───────────────────────────────────────────────────────────── */
+
+.alliance__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.alliance__form--inline {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.alliance__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.alliance__label {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+/* 41 shields: a grid that scrolls in a short box, so the form stays short. */
+.alliance__shields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 4px;
+  max-height: 104px;
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+}
+
+.alliance__shield-choice {
+  display: grid;
+  place-items: center;
+  height: 44px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+.alliance__shield-choice:hover {
+  background: var(--colour-surface-overlay);
+}
+
+.alliance__types {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.alliance__type-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  padding: var(--space-2);
+  border: 2px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.alliance__type-card:hover {
+  background: var(--colour-surface-control-hover);
+}
+
+.alliance__type-name {
+  color: var(--colour-text-strong);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: var(--display-weight);
+}
+
+/* The lead line: "Up to N members". */
+.alliance__type-size {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--colour-text-strong);
+  font-size: var(--text-sm);
+  font-weight: 800;
+}
+
+.alliance__type-officers {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* ── Chosen: chips, shields, type cards ───────────────────────────────── */
+
+/* Modern (and no skin): lit in the accent. */
+.alliance__chip[aria-pressed="true"] {
+  border-color: var(--colour-accent);
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+}
+
+.alliance__shield-choice[aria-checked="true"] {
+  border-color: var(--colour-accent);
+  background: var(--colour-accent-soft);
+}
+
+.alliance__type-card[aria-checked="true"] {
+  border-color: var(--colour-accent);
+  background: var(--colour-accent-soft);
+  box-shadow: 0 0 0 1px var(--colour-accent), 0 0 8px var(--colour-accent-line);
+}
+
+/* Classic: an orange plate with dark writing (owner's choice for Classic). */
+:root[data-skin="flash"] .alliance__chip[aria-pressed="true"],
+:root[data-skin="flash"] .alliance__type-card[aria-checked="true"] {
+  border-color: #9a4a08;
+  background: linear-gradient(#ffc457, #f39a1e 60%, #e07c12);
+  color: #2a1606;
+  text-shadow: 0 1px 0 rgb(255 236 170 / 60%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 55%), 0 1px 3px rgb(90 42 10 / 45%);
+}
+
+:root[data-skin="flash"] .alliance__shield-choice[aria-checked="true"] {
+  border-color: #9a4a08;
+  background: linear-gradient(#ffd27a, #f5a63a);
+}
+
+:root[data-skin="flash"] .alliance__type-card[aria-checked="true"] :is(.alliance__type-name, .alliance__type-size, .alliance__type-officers) {
+  color: #2a1606;
+}
+
+/* On the orange plate: deeper green and red than the parchment's. */
+:root[data-skin="flash"] .alliance__type-card[aria-checked="true"] .alliance__type-good {
+  color: #0d4219;
+}
+
+:root[data-skin="flash"] .alliance__type-card[aria-checked="true"] .alliance__type-bad {
+  color: #6e0c0c;
+}
+
+/* ── My alliance ──────────────────────────────────────────────────────── */
+
+.alliance__head--mine {
+  gap: var(--space-3);
+}
+
+.alliance__head-words {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.alliance__head-name {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--colour-text-strong);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--display-weight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alliance__tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.alliance__tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.alliance__tile-dot {
+  width: 12px;
+  height: 12px;
+}
+
+.alliance__tile-words {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+}
+
+.alliance__tile-caption {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.alliance__tile-value {
+  color: var(--colour-text-strong);
+  font-size: var(--text-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance__type-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--space-3);
+}
+
+.alliance__leader {
+  margin: 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.alliance__description {
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border-left: 3px solid var(--colour-accent-line);
+  color: var(--colour-text);
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.alliance__description:empty {
+  display: none;
+}
+
+.alliance__callout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-accent-line);
+  border-radius: var(--radius-md);
+  background: var(--colour-accent-soft);
+  color: var(--colour-text);
+}
+
+.alliance__callout > p {
+  flex: 1 1 12em;
+  margin: 0;
+}
+
+.alliance__switch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.alliance__switch-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.alliance__switch-words {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.alliance__switch-words small {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* Kick sits apart from the friendly rank buttons. */
+.alliance__kick {
+  margin-left: auto;
+}
+
+/* ── Phase 2: tabs, Overview cards, Constellation, Territory ───────────── */
+
+/* A member's window is wider: four tabs (five with Trade, design v5 §7b's
+   792 px row) and the night sky, each tab's word whole on a desktop. The
+   max-width too: every `.panel` stops at 560 px (ui.css), which kept the
+   window at 560 and pushed Territory off the row (lead, 10 Nov). */
+.alliance-window:has(.alliance__tabs) {
+  width: min(100%, 840px);
+  max-width: min(100%, 840px);
+  /* One height whatever the tab, sheet or Back shows (lead, 11 Nov): the
+     window sits in the middle, so a height change moved the tab row and a
+     press meant for a tab could land on the backdrop and close it. The body
+     scrolls inside instead. Both looks, desktop and phone. */
+  height: min(760px, var(--alliance-window-room));
+}
+
+/* The marketplace too (lead, 11 Nov): the filter chips narrowing the list
+   moved the title and search box about 30 px. The list scrolls inside. */
+.alliance-window:has(.alliance__head--market) {
+  height: min(760px, var(--alliance-window-room));
+}
+
+/* `.tab-row` (ui.css) shares the row and never cuts a word: the tab is never
+   narrower than icon + word. 14 px words: at 840 px "Constellation" with its
+   icon and the plate's ends needs ~177 px of the ~187 each tab gets. */
+.alliance__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* A narrower screen (a small laptop, a phone on its side): the plates' ends
+   pinched and the words smaller, so all four still fit with their words. */
+@media (480px < width <= 900px) {
+  :root[data-skin] .panel .alliance__tab.tabs__tab {
+    --skin-tab-cap: 10px;
+
+    font-size: 13px;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Narrower still: icons only, as on a phone; the aria-label and title name
+   each tab. */
+@media (480px < width <= 720px) {
+  .alliance__tab-words {
+    display: none;
+  }
+}
+
+.alliance__tab > * {
+  flex: none;
+  pointer-events: none;
+}
+
+/* Trading switched off (beta 7, owner 11 Nov): the Trade tab stays, greyed
+   out, "Coming soon" on hover, and no hover glow. */
+.alliance__tab:disabled,
+:root[data-skin] .panel .alliance__tab.tabs__tab:disabled:hover {
+  background: none;
+  filter: none;
+  cursor: not-allowed;
+}
+
+.alliance__tab:disabled > * {
+  opacity: 0.45;
+  filter: grayscale(0.9);
+}
+
+.alliance-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.alliance-card__title {
+  margin: 0;
+  color: var(--colour-text-strong);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: var(--display-weight);
+}
+
+/* Four stat tiles: the type's 2 strengths (green) and 2 weaknesses (red). */
+.alliance-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.alliance-stat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--space-1);
+  border: 1px solid var(--colour-border-subtle);
+  border-top-width: 3px;
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+  text-align: center;
+}
+
+.alliance-stat--strength {
+  border-top-color: var(--colour-gain);
+}
+
+.alliance-stat--weakness {
+  border-top-color: var(--colour-loss);
+}
+
+.alliance-stat__arrow {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  font-size: 10px;
+}
+
+.alliance-stat--strength .alliance-stat__arrow,
+.alliance-stat--strength .alliance-stat__value {
+  color: var(--colour-gain);
+}
+
+.alliance-stat--weakness .alliance-stat__arrow,
+.alliance-stat--weakness .alliance-stat__value {
+  color: var(--colour-loss);
+}
+
+.alliance-stat__value {
+  font-size: var(--text-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance-stat__label {
+  max-width: 100%;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+/* Today: a dot per member, lit if they helped. */
+.alliance-today__dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.alliance-today__dot {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: 50%;
+  background: var(--colour-surface-control);
+}
+
+.alliance-today__dot--on {
+  border-color: var(--colour-accent);
+  background: var(--colour-accent);
+}
+
+.alliance-today__numbers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+/* The line has its own row; the chips wrap under it, never into it. */
+.alliance-today__line {
+  flex: 1 1 100%;
+  color: var(--colour-text);
+  font-size: var(--text-sm);
+}
+
+.alliance-today__chip {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: 999px;
+  color: var(--colour-text-strong);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance-today__chip--spend {
+  border-color: var(--colour-accent-line);
+  background: var(--colour-accent-soft);
+}
+
+/* Goals: name, tier, points; a bar; the count. */
+.alliance-goals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.alliance-goals__empty,
+.alliance-goals__ends,
+.alliance-news__empty,
+.alliance-board__rule,
+.alliance-sky__empty {
+  margin: 0;
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+}
+
+.alliance-goal {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px var(--space-2);
+}
+
+.alliance-goal__head {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-2);
+}
+
+.alliance-goal__name {
+  flex: 1 1 10em;
+  min-width: 0;
+  color: var(--colour-text);
+  font-weight: 600;
+}
+
+.alliance-goal__tier,
+.alliance-goal-menu__tier {
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.alliance-goal__tier {
+  padding: 1px var(--space-2);
+  border-radius: 999px;
+  background: var(--colour-surface-control);
+}
+
+.alliance-goal__tier--easy {
+  color: var(--colour-gain);
+}
+
+.alliance-goal__tier--hard {
+  color: var(--colour-loss);
+}
+
+.alliance-goal__points {
+  color: var(--colour-text-strong);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance-goal__bar,
+.alliance-detail__need {
+  position: relative;
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: 999px;
+  background: var(--colour-surface-control);
+}
+
+.alliance-goal__fill,
+.alliance-detail__need-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--colour-accent);
+}
+
+.alliance-goal--done .alliance-goal__fill {
+  background: var(--colour-gain);
+}
+
+.alliance-goal__count {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance-goal__remove {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+
+.alliance-goals__add,
+.alliance-news__all {
+  align-self: flex-start;
+}
+
+.alliance-goal-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: 260px;
+  overflow-y: auto;
+  padding: var(--space-1);
+  border: 1px solid var(--colour-accent-line);
+  border-radius: var(--radius-md);
+}
+
+.alliance-goal-menu__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding-block: 2px;
+}
+
+.alliance-goal-menu__name {
+  flex: 1 1 100%;
+  color: var(--colour-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.alliance-goal-menu__name--only::after {
+  content: " ★";
+  color: var(--colour-accent);
+}
+
+.alliance-goal-menu__tier {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* Top helpers and news: plain lists. */
+.alliance-helpers,
+.alliance-news {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.alliance-helpers {
+  counter-reset: helper;
+}
+
+.alliance-helpers__row,
+.alliance-news__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.alliance-helpers__row::before {
+  counter-increment: helper;
+  content: counter(helper);
+  min-width: 1.2em;
+  color: var(--colour-accent);
+  font-weight: 700;
+}
+
+.alliance-helpers__name,
+.alliance-news__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--colour-text);
+  overflow-wrap: anywhere;
+}
+
+.alliance-helpers__stat,
+.alliance-news__when {
+  flex: none;
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Constellation: a deep blue night sky, gold lit stars ─────────────── */
+
+.alliance-sky {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid #1d2a55;
+  border-radius: var(--radius-md);
+  background: radial-gradient(ellipse at 50% 0%, #22346e 0%, #121b3d 55%, #0a1028 100%);
+  color: #e8ecff;
+}
+
+.alliance-sky__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.alliance-sky__count,
+.alliance-sky__points {
+  color: #ffd45a;
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance-sky__groups {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.alliance-sky__halves {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.alliance-sky__half {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 4px;
+  border-radius: var(--radius-md);
+}
+
+.alliance-sky__half--strength {
+  background: rgb(80 200 120 / 0.08);
+}
+
+.alliance-sky__half--weakness {
+  background: rgb(240 100 90 / 0.08);
+}
+
+.alliance-sky__label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.alliance-sky__half--strength .alliance-sky__label,
+.alliance-sky__plate--strength .alliance-sky__value {
+  color: #7fe08f;
+}
+
+.alliance-sky__half--weakness .alliance-sky__label,
+.alliance-sky__plate--weakness .alliance-sky__value {
+  color: #ff9a8a;
+}
+
+.alliance-sky__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.alliance-sky__con {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  padding: 2px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.alliance-sky__con:hover {
+  border-color: rgb(255 255 255 / 0.25);
+}
+
+.alliance-sky__con--chosen {
+  border-color: #ffd45a;
+  background: rgb(255 212 90 / 0.1);
+}
+
+/* The constellation's monster, faint behind its stars (owner, 10 Nov): the
+   card picture fitted whole (never stretched), its edges fading into the sky. */
+.alliance-sky__art {
+  position: relative;
+  display: block;
+}
+
+.alliance-sky__monster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0.28;
+  pointer-events: none;
+  mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 55%, transparent 100%);
+}
+
+.alliance-sky__figure {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.alliance-sky__line {
+  stroke: rgb(200 210 255 / 0.25);
+  stroke-width: 1.5;
+}
+
+.alliance-sky__line--lit {
+  stroke: #ffd45a;
+  stroke-width: 2;
+}
+
+.alliance-sky__star--lit {
+  fill: #ffd45a;
+  filter: drop-shadow(0 0 3px #ffd45a);
+}
+
+.alliance-sky__star--next {
+  fill: #fff4c8;
+}
+
+.alliance-sky__star--dim {
+  fill: rgb(200 210 255 / 0.45);
+}
+
+.alliance-sky__ring {
+  fill: none;
+  stroke: #ffd45a;
+  stroke-dasharray: 3 3;
+  stroke-width: 1.5;
+}
+
+.alliance-sky__tag rect {
+  fill: #e8761c;
+}
+
+.alliance-sky__tag text {
+  fill: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.alliance-sky__plate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px 4px;
+  font-size: var(--text-xs);
+}
+
+.alliance-sky__name,
+.alliance-sky__value {
+  font-weight: 700;
+}
+
+.alliance-sky__value {
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance-sky__placeholder {
+  align-self: flex-end;
+  color: rgb(200 210 255 / 0.5);
+  font-size: 10px;
+}
+
+.alliance-dots {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.alliance-dots__col {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.alliance-dots__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgb(200 210 255 / 0.3);
+}
+
+.alliance-dots__dot--on {
+  background: #ffd45a;
+}
+
+/* The chosen constellation's detail bar. */
+.alliance-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--colour-border-subtle);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.alliance-detail--strength {
+  border-left-color: var(--colour-gain);
+}
+
+.alliance-detail--weakness {
+  border-left-color: var(--colour-loss);
+}
+
+.alliance-detail__who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-2);
+}
+
+.alliance-detail__name {
+  color: var(--colour-text-strong);
+  font-size: var(--text-md);
+}
+
+.alliance-detail__tag {
+  padding: 1px var(--space-2);
+  border-radius: 999px;
+  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.alliance-detail__tag--strength {
+  background: var(--colour-gain);
+}
+
+.alliance-detail__tag--weakness {
+  background: var(--colour-loss);
+}
+
+.alliance-detail__stat,
+.alliance-detail__per,
+.alliance-detail__suggests,
+.alliance-detail__who-lights,
+.alliance-detail__last {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.alliance-detail__last {
+  margin: 0;
+}
+
+/* The star track: start, then 5 pairs of stars. */
+.alliance-track {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.alliance-track__mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 4px 2px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+}
+
+.alliance-track__pip {
+  color: var(--colour-text-muted);
+  font-weight: 700;
+}
+
+.alliance-track__value {
+  color: var(--colour-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance-track__mark--lit .alliance-track__pip,
+.alliance-track__mark--now .alliance-track__pip {
+  color: #e0a800;
+}
+
+.alliance-track__mark--now {
+  border-color: var(--colour-accent);
+  background: var(--colour-accent-soft);
+}
+
+.alliance-track__mark--next {
+  border-style: dashed;
+  border-color: #e8761c;
+}
+
+.alliance-track__mark--next .alliance-track__pip {
+  color: #e8761c;
+}
+
+.alliance-track__mark--later {
+  opacity: 0.6;
+}
+
+.alliance-detail__act {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.alliance-detail__gain,
+.alliance-detail__full {
+  color: var(--colour-text-strong);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance-detail__need {
+  flex: 1 1 10em;
+  height: 18px;
+}
+
+.alliance-detail__need-words {
+  position: relative;
+  display: block;
+  color: var(--colour-text-strong);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* ── Territory: one board per type ───────────────────────────────────── */
+
+.alliance-board__types {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.alliance-board__type {
+  min-width: 0;
+  white-space: normal;
+}
+
+/* The board showing. Plain glass: lit in the accent. Both painted looks: the
+   big plate held down (as an armed catapult's), white words on its own dark
+   outline, so it is another colour from the other two (Modern: orange, not
+   gold; Classic: orange, not green) and its words read (lead, 10 Nov). */
+.alliance-window .alliance-board__type[aria-pressed="true"] {
+  border-color: var(--colour-accent);
+  background: var(--colour-accent);
+  color: var(--colour-accent-text);
+  box-shadow: 0 0 0 1px var(--colour-accent);
+}
+
+:root[data-skin] .alliance-window .alliance-board__type[aria-pressed="true"] {
+  border-width: 0 var(--skin-button-cap);
+  border-color: transparent;
+  border-image-source: var(--skin-button-pressed);
+  border-image-slice: 0 var(--skin-button-slice) fill;
+  border-image-width: 0 var(--skin-button-cap);
+  background: none;
+  box-shadow: none;
+  color: #fff;
+  text-shadow:
+    0 2px 0 var(--skin-button-stroke), 2px 0 0 var(--skin-button-stroke), -2px 0 0 var(--skin-button-stroke), 0 -2px 0 var(--skin-button-stroke),
+    1.5px 1.5px 0 var(--skin-button-stroke), -1.5px 1.5px 0 var(--skin-button-stroke), 1.5px -1.5px 0 var(--skin-button-stroke), -1.5px -1.5px 0 var(--skin-button-stroke);
+}
+
+.alliance-board__mine {
+  margin: 0;
+  color: var(--colour-text-strong);
+  font-weight: 700;
+}
+
+.alliance-board {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance-board th,
+.alliance-board td {
+  padding: 4px var(--space-1);
+  border-bottom: 1px solid var(--colour-border-subtle);
+  text-align: right;
+}
+
+.alliance-board th:nth-child(2),
+.alliance-board td.alliance-board__name,
+.alliance-board td.alliance-board__empty {
+  text-align: left;
+}
+
+.alliance-board th {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.alliance-board__rank {
+  width: 2.5em;
+  color: var(--colour-text-strong);
+  font-weight: 700;
+}
+
+.alliance-board__name img,
+.alliance-board__shield {
+  width: 22px;
+  height: 22px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.alliance-board__name {
+  overflow-wrap: anywhere;
+}
+
+.alliance-board__row--mine td {
+  background: var(--colour-accent-soft);
+}
+
+.alliance-board__badge {
+  margin-left: 4px;
+  padding: 0 var(--space-1);
+  border-radius: 999px;
+  color: #3a2a00;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.alliance-board__badge--1 {
+  background: #ffd45a;
+}
+
+.alliance-board__badge--2 {
+  background: #d6dbe4;
+}
+
+.alliance-board__badge--3 {
+  background: #e3a46b;
+}
+
+.alliance-board__empty {
+  color: var(--colour-text-muted);
+}
+
+/* ── Modern's dark steel: lighter words where the theme's are dark ────── */
+
+:root[data-skin="scrap"] .alliance-window .alliance__type-good {
+  color: #7fe08f;
+}
+
+:root[data-skin="scrap"] .alliance-window .alliance__type-bad {
+  color: #ff9a8a;
+}
+
+:root[data-skin="scrap"] .alliance-window .alliance__role--officer {
+  color: #8fb8ff;
+}
+
+/* ── Phone ────────────────────────────────────────────────────────────── */
+
+@media (width <= 480px) {
+  .alliance-window > .panel__body {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .alliance__foot {
+    padding-inline: var(--space-3);
+  }
+
+  .alliance__shield:not(.alliance__shield--small) {
+    width: 38px;
+    height: 38px;
+  }
+
+  .alliance__head-title {
+    font-size: var(--text-sm);
+  }
+
+  /* The three type cards stack. */
+  .alliance__types {
+    grid-template-columns: 1fr;
+  }
+
+  .alliance__tile {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .alliance__chip {
+    padding-inline: var(--space-2);
+  }
+
+  /* A phone: Accept / Decline drop to a line of their own under the shield
+     and name, so the name keeps the row's width (lead, 10 Nov). */
+  .alliance__invite--answer {
+    flex-wrap: wrap;
+  }
+
+  .alliance__invite--answer > .alliance__invite-answer {
+    flex: 1 1 100%;
+  }
+
+  .alliance__invite-answer > .btn {
+    flex: 1 1 0;
+  }
+
+  /* Phase 2. The tabs show only their icon, so four (five with Trade) fit
+     (design v5 §7b); the button's aria-label and title still name it. */
+  .alliance__tab-words {
+    display: none;
+  }
+
+  /* The tile's caption under its number, the picture above. */
+  .alliance__tile-words {
+    align-items: center;
+  }
+
+  /* Two stat tiles a row. */
+  .alliance-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* The sky's halves stack: strengths above weaknesses. */
+  .alliance-sky__halves {
+    grid-template-columns: 1fr;
+  }
+
+  .alliance-track__mark {
+    padding-inline: 0;
+    font-size: 10px;
+  }
+
+  .alliance-board__types {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── The owner's star editor (`StarEditor.ts`, admins only) ───────────── */
+
+.alliance-sky__edit {
+  min-height: 28px;
+  padding: 2px var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.star-editor {
+  width: min(100%, 980px);
+  max-height: calc(100dvh - var(--space-4));
+}
+
+.star-editor__body {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: var(--space-3);
+  overflow: auto;
+}
+
+.star-editor__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.star-editor__type {
+  margin-top: var(--space-2);
+  color: var(--colour-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.star-editor__item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 14px;
+  gap: var(--space-1);
+  align-items: center;
+  min-height: 32px;
+  padding: 2px var(--space-1);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.star-editor__item--chosen {
+  border-color: var(--colour-accent);
+  background: var(--colour-accent-soft);
+  color: var(--colour-text-strong);
+  font-weight: 700;
+}
+
+.star-editor__icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.star-editor__mark {
+  color: var(--colour-accent);
+  text-align: center;
+}
+
+.star-editor__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.star-editor__canvas {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  aspect-ratio: 200 / 170;
+  border-radius: var(--radius-md);
+  background: #0a1028;
+  overflow: hidden;
+  user-select: none;
+}
+
+.star-editor__monster {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.star-editor__svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  outline: none;
+}
+
+.star-editor__line {
+  stroke: #ffd45a;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.star-editor__star {
+  cursor: grab;
+}
+
+.star-editor__hit {
+  fill: transparent;
+}
+
+.star-editor__dot {
+  fill: #fff;
+  stroke: #0a1028;
+  stroke-width: 1.2;
+}
+
+.star-editor__star--picked .star-editor__dot {
+  fill: #ffd45a;
+  stroke: #fff;
+  stroke-width: 1.6;
+}
+
+.star-editor__star--picked .star-editor__hit {
+  fill: rgb(255 212 90 / 0.35);
+}
+
+.star-editor__num {
+  fill: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #0a1028;
+  stroke-width: 2px;
+  pointer-events: none;
+}
+
+.star-editor__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.star-editor__help {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-xs);
+}
+
+.star-editor__json {
+  width: 100%;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.star-editor__status {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.star-editor__status--bad {
+  color: var(--colour-loss);
+}
+
+.star-editor__status--good {
+  color: var(--colour-gain);
+}
+
+@media (max-width: 640px) {
+  .star-editor__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .star-editor__list {
+    flex-flow: row wrap;
+  }
+
+  .star-editor__type {
+    flex-basis: 100%;
+  }
+}
+
+/* ── Trade tab and sheets (design v5 §12b) ───────────────────────────── */
+
+.trade-today {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.trade-today__stat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: 48px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.trade-today__stat.is-used {
+  opacity: 0.55;
+}
+
+.trade-today__n {
+  color: var(--colour-text-strong);
+  font-size: var(--text-md);
+}
+
+.trade-today__w {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.trade-note {
+  margin: 0;
+  color: var(--colour-text-secondary);
+}
+
+.trade-note--small {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.trade-ask-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.trade-requests,
+.trade-recent,
+.trade-amounts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.trade-request {
+  display: grid;
+  grid-template-columns: minmax(0, 8rem) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.trade-request--mine {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.trade-request.is-done {
+  opacity: 0.6;
+}
+
+/* Chat's Trade on a request line: that request, lit. */
+.trade-request.is-focus {
+  border-color: var(--colour-accent);
+  box-shadow: 0 0 0 1px var(--colour-accent);
+}
+
+/* Why Accept is off: an icon and a few words, under the row. */
+.trade-request__why {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* A swap from the reader's side: −1,000 (what leaves) → +900 (what comes). */
+.trade-swap {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.trade-swap__side {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.trade-swap__side .res-icon {
+  width: 24px;
+}
+
+.trade-swap__out {
+  color: var(--colour-loss);
+}
+
+.trade-swap__in {
+  color: var(--colour-gain);
+}
+
+.trade-swap__arrow {
+  color: var(--colour-text-secondary);
+  font-size: var(--text-md);
+  line-height: 1;
+}
+
+/* Accept shows what you get: "Accept +900 (icon)". */
+.trade-accept {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.trade-accept .res-icon {
+  width: 20px;
+}
+
+.trade-accept__n {
+  font-weight: 700;
+}
+
+.trade-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.trade-request__who,
+.trade-request__what {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.trade-request__name {
+  overflow: hidden;
+  color: var(--colour-text-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trade-request__time {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.trade-request__given {
+  grid-column: span 2;
+  color: var(--colour-gain);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.trade-recent__line {
+  margin: 0;
+  color: var(--colour-text);
+}
+
+.trade-recent__ago {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.trade-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.trade-sheet__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.trade-sheet__title {
+  margin: 0;
+  color: var(--colour-text-strong);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: var(--display-weight);
+}
+
+.trade-sheet__live {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.trade-sheet__go {
+  align-self: flex-end;
+  min-width: 10rem;
+}
+
+.trade-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.trade-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-2) var(--space-1);
+  border: 2px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-control);
+  color: var(--colour-text);
+  /* A <button>: browsers give it their own sans font unless told to inherit. */
+  font: inherit;
+  cursor: pointer;
+}
+
+.trade-tile .res-icon {
+  width: 32px;
+}
+
+.trade-tile.is-on {
+  border-color: var(--colour-accent);
+  background: var(--colour-accent-soft);
+  box-shadow: 0 0 0 1px var(--colour-accent), 0 0 8px var(--colour-accent-line);
+}
+
+/* Classic: the chosen one on the orange plate with dark writing (owner: a different colour). */
+:root[data-skin="flash"] .trade-tile.is-on,
+:root[data-skin="flash"] .trade-amount__quick.is-on {
+  border-color: #9a4a08;
+  background: linear-gradient(#ffc457, #f39a1e 60%, #e07c12);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 55%), 0 1px 3px rgb(90 42 10 / 45%);
+  color: #2a1606;
+}
+
+:root[data-skin="flash"] .trade-tile.is-on .trade-tile__name,
+:root[data-skin="flash"] .trade-tile.is-on .trade-tile__line {
+  color: #2a1606;
+}
+
+/* New request: "You give" and "You get", each a row of tiles. */
+.trade-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.trade-pick__label {
+  color: var(--colour-text-secondary);
+  font-weight: 700;
+}
+
+/* The request before Post: the swap, what the mate gets, −10%. */
+.trade-post-sum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.trade-post-sum .trade-swap__side .res-icon {
+  width: 32px;
+}
+
+.trade-post-sum .trade-swap__n {
+  font-size: var(--text-md);
+}
+
+.trade-post-sum__mate {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+}
+
+.trade-post-sum__mate .res-icon {
+  width: 20px;
+}
+
+.trade-tile:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.trade-tile__name {
+  color: var(--colour-text-strong);
+  font-weight: 600;
+}
+
+.trade-tile__line {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.trade-amount {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.trade-amount .res-icon {
+  width: 24px;
+}
+
+.trade-amount__quick.is-on {
+  border-color: var(--colour-accent);
+  background: var(--colour-accent-soft);
+  color: var(--colour-text-strong);
+}
+
+/* "max 1K": the most one trade carries, so a capped amount makes sense. */
+.trade-amount__max {
+  color: var(--colour-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.trade-amount__box {
+  width: 9rem;
+  min-height: 36px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-input);
+  color: var(--colour-text-strong);
+  font: inherit;
+  text-align: right;
+}
+
+.trade-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.trade-flow__side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.trade-flow__side--to {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.trade-flow__who {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.trade-flow__n {
+  color: var(--colour-text-strong);
+  font-size: var(--text-md);
+}
+
+.trade-flow__n--gain {
+  color: var(--colour-gain);
+}
+
+.trade-flow__lost {
+  color: var(--colour-loss);
+  font-size: var(--text-xs);
+}
+
+.trade-flow__arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--colour-loss);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.trade-flow__arrow::after {
+  content: "\2192";
+  color: var(--colour-text-secondary);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.trade-flow__arrow .res-icon {
+  width: 28px;
+}
+
+.trade-warn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--colour-warning-soft);
+  color: var(--colour-text-strong);
+  font-size: var(--text-sm);
+}
+
+.trade-bars {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.trade-bar__head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-1);
+  color: var(--colour-text-secondary);
+  font-size: var(--text-xs);
+}
+
+.trade-bar__nums {
+  white-space: nowrap;
+}
+
+.trade-bar__track {
+  position: relative;
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: 5px;
+  background: var(--colour-surface-control);
+}
+
+.trade-bar__fill,
+.trade-bar__gain,
+.trade-bar__loss {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.trade-bar__fill {
+  left: 0;
+  background: var(--colour-text-muted);
+}
+
+.trade-bar__gain {
+  background: var(--colour-gain);
+}
+
+.trade-bar__loss {
+  background: repeating-linear-gradient(45deg, var(--colour-loss) 0 3px, transparent 3px 6px);
+}
+
+/* The Send button on a mate's row in Members. */
+.alliance__send {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+@media (width <= 480px) {
+  /* Two by two, so each number keeps its word. */
+  .trade-today,
+  .trade-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .trade-new {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* A request: name and time on one line, the swap and Accept on the next. */
+  .trade-request,
+  .trade-request--mine {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  /* The flow keeps both numbers on one line; the 10% words go under. */
+  .trade-flow__loss {
+    display: none;
+  }
+
+  .trade-flow::after {
+    content: "\2212 10% lost on the way";
+    grid-column: 1 / -1;
+    color: var(--colour-loss);
+    font-size: var(--text-xs);
+    text-align: center;
+  }
+
+  .trade-bars {
+    grid-template-columns: 1fr;
+  }
+
+  .trade-amount__box {
+    flex: 1 1 6rem;
+    width: auto;
+  }
+
+  .trade-sheet__go {
+    align-self: stretch;
+  }
+}
+
+/* ── The marketplace ad (design v5 §7a) ──────────────────────────────────── */
+
+/* Mode, flag, GMT band, minimum level: one line of icons and numbers under the name. */
+.alliance__ad {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-2);
+  color: var(--colour-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance__ad-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.alliance__ad-mode--open {
+  color: var(--colour-success, var(--colour-text));
+}
+
+.alliance__ad-flag .country-flag {
+  display: block;
+  width: 20px;
+  height: 15px;
+  border-radius: 2px;
+}
+
+.alliance__row-desc {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--colour-text);
+  overflow-wrap: anywhere;
+}
+
+.alliance__invite-only {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+/* Filters: chips in one wrapping row, Clear at the end. */
+.alliance__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.alliance__filter {
+  flex: none;
+}
+
+.alliance__filter .country-flag {
+  display: block;
+  width: 20px;
+  height: 15px;
+  border-radius: 2px;
+}
+
+.alliance__filter-clear {
+  min-height: var(--control-height-compact);
+  padding: 2px var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* The Create and Edit forms' ad settings. */
+.alliance__ad-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.alliance__modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+
+.alliance__lang {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.alliance__lang-pick {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: inherit;
+  font-weight: 700;
+}
+
+.alliance__lang-pick .country-flag {
+  display: block;
+  width: 20px;
+  height: 15px;
+  border-radius: 2px;
+}
+
+/* The country list sits on the window's own dark well, never a white box. */
+.alliance__lang-list {
+  padding: var(--space-1);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+}
+
+.alliance__lang-list .country-picker__list {
+  max-height: 160px;
+}
+
+.alliance__ad-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+/* ‹ value ›: a fixed-width middle, so the arrows never move as the value changes. */
+.alliance__stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.alliance__stepper-go {
+  min-width: 32px;
+  min-height: var(--control-height-compact);
+  padding: 0 var(--space-2);
+  font: inherit;
+  font-weight: 700;
+}
+
+.alliance__stepper-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 6.5em;
+  min-height: var(--control-height-compact);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-strong);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

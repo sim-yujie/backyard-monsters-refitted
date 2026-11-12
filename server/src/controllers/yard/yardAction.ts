@@ -14,6 +14,9 @@ import { isAttackActive } from "../../services/base/isAttackActive.js";
 import { addEvents, builtEvents, recordAchievements, unseenAchievements } from "../../services/achievements/record.js";
 import type { AchievementEvents } from "../../services/achievements/evaluate.js";
 import { autobankYard } from "../../services/maproom/v2/autobank.js";
+import { allianceBonusesOfUser, type AllianceBonuses } from "../../services/alliance/allianceBonuses.js";
+import { countAfterCommit } from "../../services/alliance/allianceProgress.js";
+import { productionScheduleOfUser, settleProductionHistory, type FactorSchedule } from "../../services/alliance/productionHistory.js";
 import { isShinyLocked } from "../../services/user/shinyLock.js";
 import { coinNotes, coinStore } from "../../services/events/eventCoins.js";
 import { catchUpYard, type CompletedJob } from "../../services/yard/catchUp.js";
@@ -203,6 +206,11 @@ export interface YardActionInput<Body> {
    * a refusal. Never use it to write the save itself: return `slices`.
    */
   em: EntityManager;
+  /**
+   * The player's alliance strengths and weaknesses (`allianceBonuses.ts`),
+   * all zeros outside an alliance. Optional so tests may leave it out.
+   */
+  bonuses?: AllianceBonuses;
 }
 
 /** What `run` returns. Every field but `report` is optional. */
@@ -545,7 +553,7 @@ export const catchUpLockedYard = async (
   save: Save,
   alsoUnderLock?: (locked: Save, now: number) => void
 ): Promise<{ save: Save; completed: CompletedJob[] }> =>
-  em.transactional(async (tx) => {
+  countAfterCommit(() => em.transactional(async (tx) => {
     const locked = await lockRow(tx, save.basesaveid);
     if (!locked) return { save, completed: [] };
     const now = getCurrentDateTime();
@@ -559,7 +567,19 @@ export const catchUpLockedYard = async (
     await recordAchievements(tx, locked, now, builtEvents(completed));
     await tx.flush();
     return { save: locked, completed };
-  });
+  }));
+
+/**
+ * Drops the alliance factor steps (`productionHistory.ts`) both the main
+ * yard's catch-up and its outpost income have now passed: up to `now`, or up
+ * to the last outpost income tick for a Map Room 2 yard, whose income may stop
+ * short of `now`.
+ */
+const settleFactorSteps = async (tx: EntityManager, main: Save, schedule: FactorSchedule, now: number) => {
+  const paid = Number((main.buildingresources as { t?: unknown } | null | undefined)?.t);
+  const autobanks = Number(main.mapversion) === MapRoomVersion.V2 && Number.isFinite(paid) && paid > 0;
+  await settleProductionHistory(tx, main.saveuserid, schedule, autobanks ? Math.min(now, paid) : now);
+};
 
 /**
  * The main yard's catch-up on a row the caller has locked, not yet flushed:
@@ -570,9 +590,12 @@ export const catchUpLockedYard = async (
  * @returns What the catch-up finished.
  */
 export const catchUpLockedRow = async (tx: EntityManager, locked: Save, now: number): Promise<CompletedJob[]> => {
-  const completed = catchUpYard(locked, now);
+  const onMain = locked.type === BaseType.MAIN;
+  const factor = onMain ? await productionScheduleOfUser(tx, locked.saveuserid) : 1;
+  const completed = catchUpYard(locked, now, factor);
   await joinMapRoom2(tx, locked);
   await autobankYard(tx, locked, now, completed);
+  if (onMain) await settleFactorSteps(tx, locked, factor as FactorSchedule, now);
   // Hatches that finished while the player was away count for
   // quests, on every path that catches the main row up (a load, a raid, a
   // friend's help or gift).
@@ -598,7 +621,7 @@ export const catchUpLockedOutpost = async (
   user: User,
   outpost: Save
 ): Promise<{ save: Save; completed: CompletedJob[] }> =>
-  em.transactional(async (tx) => {
+  countAfterCommit(() => em.transactional(async (tx) => {
     let yard: OwnYard;
     try {
       yard = await lockOwnYard(tx, user, String(outpost.baseid));
@@ -619,7 +642,7 @@ export const catchUpLockedOutpost = async (
     recordQuests(yard.main, now, jobQuestEvents(completed));
     await tx.flush();
     return { save: yard.outpost, completed };
-  });
+  }));
 
 /**
  * Marks the Inferno quests met now done on the Inferno yard's view, writing
@@ -689,7 +712,8 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
     // it actually changed (issue #329, #330 WP1).
     let flingerBefore: number | undefined;
 
-    const answer = await em.transactional(async (tx) => {
+    // Goal progress the action noted counts only once this commits.
+    const answer = await countAfterCommit(() => em.transactional(async (tx) => {
       const yard = await lockOwnYard(tx, user, target.data.baseid);
       if (yard.outpost && action.outposts !== "allow") {
         throw notInOutpostErr(action.outposts?.refuse);
@@ -709,11 +733,14 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
       // from its finish, not from now. On the main yard it is paid after the
       // catch-up, which tells it when a Production Overdrive ran out.
       if (yard.outpost) await autobankYard(tx, yard.main, now, [], yard.outpost);
-      const completed = catchUpYard(save, now);
+      const bonuses = await allianceBonusesOfUser(tx, user.userid);
+      const schedule = onMain ? await productionScheduleOfUser(tx, user.userid) : 1;
+      const completed = catchUpYard(save, now, schedule);
       if (onMain) await joinMapRoom2(tx, save, user);
       if (onMain) await autobankYard(tx, yard.main, now, completed);
+      if (onMain) await settleFactorSteps(tx, yard.main, schedule as FactorSchedule, now);
 
-      const outcome = await action.run({ save, user, body: parsed.data, now, completed, em: tx });
+      const outcome = await action.run({ save, user, body: parsed.data, now, completed, em: tx, bonuses });
       applyOutcome(save, user, outcome);
       await applyCoins(tx, user, outcome);
       // A Resource Pod built, finished or recycled moves the main yard's
@@ -760,7 +787,7 @@ export const runYardAction = async <Schema extends z.ZodType, Report>(
         // Event coins changed in this request (a buy, a claim, a weekend's coins).
         coins: coinNotes(tx),
       };
-    });
+    }));
 
     // After the commit, so a rolled-back action never announces a level it
     // did not save. The account's level, so this fires from an outpost

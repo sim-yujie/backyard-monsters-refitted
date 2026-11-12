@@ -168,10 +168,9 @@ describe("the cheap takeover price", () => {
     level,
     empireValue: 0,
     adjacentToMainYard: false,
-    conquestActive: false,
   });
   const quote = (over: Partial<Parameters<typeof quoteTakeover>[0]> = {}) =>
-    quoteTakeover({ cell, isWildMonster: true, buildingdata: null, takerHomebase: ["0", "0"], conquestActive: false, ...over });
+    quoteTakeover({ cell, isWildMonster: true, buildingdata: null, takerHomebase: ["0", "0"], ...over });
 
   test("10% of the camp's full base price, in each resource", () => {
     expect(cheapTakeoverPrice(1_000_000)).toBe(100_000);
@@ -180,11 +179,11 @@ describe("the cheap takeover price", () => {
     expect(cheap).toMatchObject({ welcome: true, usualResources: fullBase });
   });
 
-  test("no half price or Conquest on top", () => {
-    const next = quote({ welcome: true, takerHomebase: [String(cell.x), String(cell.y - 1)], conquestActive: true });
+  test("no half price on top", () => {
+    const next = quote({ welcome: true, takerHomebase: [String(cell.x), String(cell.y - 1)] });
     expect(next.adjacent).toBe(true);
     expect(next.resources).toBe(Math.round(fullBase * 0.1));
-    expect(next.usualResources).toBe(Math.ceil(fullBase * 0.5 * 0.75));
+    expect(next.usualResources).toBe(fullBase * 0.5);
   });
 
   test("the Shiny price is the usual one", () => {

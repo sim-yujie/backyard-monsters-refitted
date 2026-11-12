@@ -15,7 +15,6 @@ import { INFERNO_MODES, refuseOldInferno } from "../../../services/inferno/infer
 import { extractTownHall } from "../../../utils/extractTownHall.js";
 import { mapSaveData } from "../../../services/base/mapSaveData.js";
 import { getAllianceData } from "../../../services/alliance/allianceData.js";
-import { runningPowerups } from "../../../services/alliance/powerups.js";
 import { visibleCredits } from "../../../services/user/shinyLock.js";
 
 const UpdateSavedSchema = z.object({
@@ -82,7 +81,6 @@ export const updateSaved: KoaController = async (ctx) => {
   const isOwnMainYard = isOwner && !isInferno;
   
   const alliance = isOwnMainYard ? await getAllianceData(user) : null;
-  const powerups = isOwnMainYard ? await runningPowerups(user.alliance_id) : null;
 
   ctx.status = Status.OK;
   ctx.body = {
@@ -91,6 +89,5 @@ export const updateSaved: KoaController = async (ctx) => {
     ...filteredSave,
     credits,
     ...(alliance && { alliancedata: alliance }),
-    ...(powerups && { powerups }),
   };
 };

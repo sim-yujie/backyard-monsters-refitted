@@ -1,4 +1,6 @@
 import { getSession, logout } from "@/api/auth";
+import { setCurrentAllianceBonuses } from "@/game/alliance/allianceBonuses";
+import { setAllianceTradeFrom } from "@/game/alliance/tradeSwitch";
 import { chatApi, chatConfigFrom } from "@/api/chat";
 import { loadAttackOn, loadOwnBase, loadOwnYard, takeAwayJobs, viewBase } from "@/api/base";
 import {
@@ -136,6 +138,7 @@ import { ShopScreen } from "@/ui/yard/ShopScreen";
 import { MailDoor } from "@/ui/mail/MailDoor";
 import { NotificationDoor } from "@/ui/notifications/NotificationDoor";
 import { DefencesDoor } from "@/ui/defences/DefencesDoor";
+import { AllianceDoor } from "@/ui/alliance/AllianceDoor";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
 import { WorldChatBox } from "@/ui/chat/WorldChatBox";
 import { centredLayout, closeCentreWindow, onCentreWindowOpen } from "@/ui/centreWindow";
@@ -183,6 +186,7 @@ import { replayOf } from "@/game/baiter/testHistory";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { registerCanvasTarget, tutTarget, TutTarget, type TargetRect } from "@/game/guide/targets";
 import { footprintBox } from "@/game/yard/YardGrid";
+import { OBSERVATORY_TYPE } from "@/game/yard/recycle";
 import { mountYardPlugins, type YardSceneControls } from "@/game/yard/yardPlugins";
 import "@/game/yard/plugins";
 import { devStats } from "../devDetails";
@@ -431,6 +435,8 @@ export class YardScene implements Scene {
   private bell: NotificationDoor | null = null;
   /** The Defences button and screen (#363): the own yard of a Map Room 2 player. */
   private defences: DefencesDoor | null = null;
+  /** The Alliance button in the More fan and its window (beta 7): the own yard of a Map Room 2 player. */
+  private alliance: AllianceDoor | null = null;
   /**
    * World chat's box (#282), on every yard while the player's "World chat"
    * switch is on; the connection is `worldChat`'s and outlives it.
@@ -646,6 +652,11 @@ export class YardScene implements Scene {
       api: chatApi,
       container: context.overlay.content,
       onViewYard: (userId) => this.viewChatPlayer(userId),
+      // An Alliance room under-attack alert's Map button (beta 7): the map, opened on that yard.
+      onShowOnMap: (cell) => {
+        setMapFocus({ cell: { col: cell.x, row: cell.y } });
+        context.goTo(sceneForMap(MapRoomChoice.MAP_ROOM_2));
+      },
     });
 
     this.notices.mount(context.overlay.content);
@@ -719,6 +730,8 @@ export class YardScene implements Scene {
           this.mail?.close();
           void this.defences?.open();
         },
+        // An alliance invite accepted in the mail (beta 7): the yard's load carries the alliance.
+        onAllianceJoined: () => void this.store?.refresh(),
       });
       this.dock.placeBesideMonsters(tutTarget(this.mail.button.element, TutTarget.DOCK_MAIL));
       this.bell = new NotificationDoor({
@@ -744,6 +757,19 @@ export class YardScene implements Scene {
         },
       });
       this.mail.button.element.after(this.defences.button.element);
+      // Alliances (beta 7): in the More fan beside Defences, shown on Map Room 2; the Observatory's panel opens it too.
+      this.alliance = new AllianceDoor({
+        container: context.overlay.modal,
+        onOpen: () => {
+          this.mail?.close();
+          this.bell?.close();
+          this.defences?.close();
+        },
+        onBuildObservatory: () => this.openBuildMenu(OBSERVATORY_TYPE),
+        onOpenMap: () => this.openMap(),
+        onChanged: () => void this.store?.refresh(),
+      });
+      this.defences.button.element.after(this.alliance.button);
     }
     context.overlay.content.append(this.status);
     this.inset = { top: this.hud.element.getBoundingClientRect().bottom, bottom: 0 };
@@ -796,6 +822,8 @@ export class YardScene implements Scene {
     this.bell = null;
     this.defences?.destroy();
     this.defences = null;
+    this.alliance?.destroy();
+    this.alliance = null;
     this.chat?.destroy();
     this.chat = null;
     this.friendsButton?.destroy();
@@ -986,7 +1014,15 @@ export class YardScene implements Scene {
       this.notices.clear("yard-load");
       // The owner's load carries world chat's token and room (#282).
       const chat = target || tribe ? null : chatConfigFrom(response, getSession()?.userId ?? 0, location.protocol === "https:");
-      if (chat) worldChat.configure(chat);
+      // Only the main yard's load says which alliance the player is in; an
+      // outpost's or the Inferno's leaves the Alliance room as it was.
+      if (chat) worldChat.configure(store?.kind === "main" ? chat : { ...chat, alliance: undefined });
+      // The alliance's strengths and weaknesses, for prices outside the yard store (Starter Kits, outpost hatching).
+      if (!target && !tribe && store?.kind === "main") {
+        setCurrentAllianceBonuses(response.alliancedata);
+        // Alliance trading's switch, for chat's Send and Trade buttons (off in beta 7).
+        setAllianceTradeFrom(response.alliancedata);
+      }
       // Once, after login: where the player is from, for a country chat room
       // (owner 3 Nov 2026). The server sends `countryask` until it is answered or put off.
       if (store?.kind === "main" && response.countryask && !quietLogin()) {
@@ -1989,6 +2025,8 @@ export class YardScene implements Scene {
   /** The Defences button: only Map Room 2 keeps defence replays (until #246); an outpost is a Map Room 2 cell. */
   private showDefences(store: YardStore): void {
     this.defences?.setAvailable(store.kind === "outpost" || mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2);
+    // Alliances are the player's, so Map Room 2's main yard and outposts show the button; the Inferno does not.
+    this.alliance?.setAvailable(store.kind === "outpost" || (store.kind !== "inferno" && mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2));
   }
 
   /** Carries out what another screen asked the own yard to open (`yardIntent.ts`). */
@@ -2663,6 +2701,7 @@ export class YardScene implements Scene {
           }).mount(modal);
         },
         openShop: () => this.openShop(),
+        openAlliance: () => this.alliance?.open(),
         openDecorations: () => this.openDecorations(),
         startBank: (predicted) => this.startBank(predicted),
         markHatcheries: (marks) => this.markHatcheries(marks),

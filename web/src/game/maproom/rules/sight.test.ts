@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  DECLARE_WAR_RANGE,
   mainYardRange,
   outpostRange,
-  withDeclareWar,
   type RangeCell,
 } from "./range";
 import { isVisible, type RevealedCell, type SightSource } from "./sight";
@@ -11,7 +9,7 @@ import { isVisible, type RevealedCell, type SightSource } from "./sight";
 /**
  * The Map Room 2 fog of war sight rule (issue #329,
  * `docs/design/fog-of-war.md` §3): own flinger reach, outposts measured from
- * their own cell, Declare War's +2 while it runs, reach 0 seeing only the
+ * their own cell, reach 0 seeing only the
  * revealed cell itself, wrap at the world seam, an ally's circles unioned in,
  * and attacker bases revealed forever.
  */
@@ -43,21 +41,6 @@ describe("isVisible", () => {
       expect(isVisible(cell(500 + reach, 500), sources, [])).toBe(true);
       expect(isVisible(cell(500 + reach + 1, 500), sources, [])).toBe(false);
     }
-  });
-
-  it("adds Declare War's two cells to a circle only while it runs", () => {
-    const home = cell(200, 200);
-    const base = mainYardRange(2); // 6
-    const atWar = withDeclareWar(base, true);
-    const atPeace = withDeclareWar(base, false);
-
-    expect(atWar).toBe(base + DECLARE_WAR_RANGE);
-
-    const warSources: SightSource[] = [source(home.x, home.y, atWar)];
-    const peaceSources: SightSource[] = [source(home.x, home.y, atPeace)];
-
-    expect(isVisible(cell(home.x + base + 1, home.y), warSources, [])).toBe(true);
-    expect(isVisible(cell(home.x + base + 1, home.y), peaceSources, [])).toBe(false);
   });
 
   it("gives a reach-0 circle no cells, not even its own", () => {

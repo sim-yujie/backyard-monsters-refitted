@@ -192,7 +192,7 @@ describe("the stored session", () => {
     expect(sessionFactsOf({ defenderForces: "nope" }).defenderForces).toBeUndefined();
   });
 
-  test("carries the academy and Declare War the attack was fought with (#201), checkpoint copy too", () => {
+  test("carries the academy the attack was fought with (#201), and still reads an old session's Declare War", () => {
     const attackerAcademy = { C1: 3, C5: 1 };
     const stored = newAttackSession(
       ATTACKER,
@@ -203,13 +203,13 @@ describe("the stored session", () => {
       undefined,
       undefined,
       undefined,
-      attackerAcademy,
-      false
+      attackerAcademy
     );
     const read = parseAttackSession(serialiseAttackSession(stored));
 
     expect(read?.attackerAcademy).toEqual(attackerAcademy);
-    expect(read?.declareWar).toBe(false);
+    // Nothing writes Declare War any more (the alliance power-ups are gone).
+    expect(read && "declareWar" in read).toBe(false);
     expect(sessionFactsOf(JSON.parse(JSON.stringify({ attackerAcademy, declareWar: true })))).toEqual({
       attackerAcademy,
       declareWar: true,
@@ -270,8 +270,8 @@ describe("the attacker's Monster Lab ranks (issue #352)", () => {
   const ranks = { C4: 2, C13: 3 };
 
   test("newAttackSession freezes them, and leaves them out when there are none", () => {
-    expect(newAttackSession(ATTACKER, DEFENDER_ATTACK_ID, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, ranks).attackerRanks).toEqual(ranks);
-    expect(newAttackSession(ATTACKER, DEFENDER_ATTACK_ID, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, {})).not.toHaveProperty("attackerRanks");
+    expect(newAttackSession(ATTACKER, DEFENDER_ATTACK_ID, undefined, undefined, undefined, undefined, undefined, undefined, undefined, ranks).attackerRanks).toEqual(ranks);
+    expect(newAttackSession(ATTACKER, DEFENDER_ATTACK_ID, undefined, undefined, undefined, undefined, undefined, undefined, undefined, {})).not.toHaveProperty("attackerRanks");
   });
 
   test("survive a round trip through the stored session", () => {

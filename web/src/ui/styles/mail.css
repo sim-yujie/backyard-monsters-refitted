@@ -397,6 +397,13 @@
   align-self: flex-start;
 }
 
+/* An alliance invite: the card takes the pane's width, so it stays short and
+   Accept / Decline show without scrolling. */
+.mail-message.mail-message--alliance {
+  align-self: stretch;
+  max-width: none;
+}
+
 .mail-message--notice {
   align-self: stretch;
   max-width: none;
@@ -464,6 +471,18 @@
 
 .mail-request__title {
   font-size: var(--text-sm);
+}
+
+/* An alliance invite (beta 7): the alliance's shield before the title, at Flash's own 46 px. */
+.mail-request__shield {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+}
+
+.mail-request--alliance .mail-request__title {
+  flex: 1 1 auto;
 }
 
 .mail-request__state {

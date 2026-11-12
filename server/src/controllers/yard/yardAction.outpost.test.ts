@@ -22,6 +22,7 @@ import { yardBuyDecorationAction, yardPlaceDecorationAction } from "./decor.js";
 import { yardRepairInstantAction } from "./repair.js";
 import { yardShopBuyAction } from "./shopBuy.js";
 import { yardStarterKitAction } from "./starterKit.js";
+import { pendingAllianceEvents } from "../../services/alliance/allianceProgress.js";
 import { yardSpeedupAction } from "./speedup.js";
 import { yardStateAction } from "./state.js";
 import { yardCancelUpgradeAction, yardUpgradeAction } from "./upgrade.js";
@@ -948,6 +949,40 @@ describe("Starter Kits (outposts WP9, issue #188)", () => {
     expect(answer.body.reason).toBe("shortfall");
     expect(answer.body.topUp).toBeGreaterThan(0);
     expect([...db.rows.values()]).toEqual(before);
+  });
+
+  test("Conquest's kit goal counts a kit bought, and not one rolled back (refused, or its write failed)", async () => {
+    const userid = userOf().userid;
+    const kits = () => pendingAllianceEvents(userid)?.kitRebuild ?? 0;
+    const before = kits();
+    const refused = await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources" });
+    expect(refused.status).toBe(409);
+    expect(kits()).toBe(before);
+
+    // The kit is planned (and its goal noted), then the write fails: rolled back.
+    const failing = {
+      transactional: <T>(cb: (fork: unknown) => Promise<T>): Promise<T> =>
+        em.transactional((fork) =>
+          cb({
+            ...(fork as object),
+            flush: async () => {
+              throw new Error("write failed");
+            },
+          })
+        ),
+    };
+    const rows = structuredClone([...db.rows.values()]);
+    await runYardAction(failing as unknown as EntityManager, userOf(), yardStarterKitAction, {
+      kit: 1,
+      pay: "shiny",
+      baseid: OUTPOST_BASEID,
+    }).catch(() => null);
+    expect([...db.rows.values()]).toEqual(rows);
+    expect(kits()).toBe(before);
+
+    const bought = await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
+    expect(bought.status).toBe(200);
+    expect(kits()).toBe(before + 1);
   });
 
   test("a damaged outpost's damage drops with the kit, so the map shows it at once", async () => {

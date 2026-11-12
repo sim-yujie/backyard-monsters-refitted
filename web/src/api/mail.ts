@@ -73,6 +73,11 @@ export interface MailMessage {
    * changed hands).
    */
   readonly migratestate?: string | null;
+  /**
+   * An invitation to move: how the one who invited pays their share, "shiny"
+   * or "resources" (beta 7, both players pay). Null on one sent before.
+   */
+  readonly hostpayment?: string | null;
   /** When that invitation lapses unanswered, unix seconds (#205). */
   readonly migrateexpire?: number | null;
   /**
@@ -91,6 +96,21 @@ export interface MailMessage {
    * Null on everything else and on older notices.
    */
   readonly attackstats?: unknown;
+  /**
+   * On an `allianceinvite` message (alliances, beta 7): the invite it
+   * delivers, answered with `/alliance/changeinvitestatus`. Null on everything else.
+   */
+  readonly allianceinviteid?: number | null;
+  /** On an `allianceinvite` message: where that invite stands now, and its alliance. */
+  readonly allianceinvite?: MailAllianceInviteFields | null;
+}
+
+/** What the server adds to an `allianceinvite` message (`services/alliance/inviteMail.ts`). */
+export interface MailAllianceInviteFields {
+  readonly state: "pending" | "accepted" | "declined" | "closed";
+  readonly alliance_id: number | null;
+  readonly alliance_name: string | null;
+  readonly alliance_image: number | null;
 }
 
 /** One name `getmessagetargets` gives, by user id. */
@@ -234,9 +254,11 @@ export interface Outgoing {
   readonly type?: MailSendType;
   /** An invitation's outpost (#205). */
   readonly baseid?: string;
+  /** An invitation: how the one inviting pays their share (beta 7). */
+  readonly hostpayment?: InvitePayment;
 }
 
-/** How an invitation to move is paid for: 10,000,000 of each resource, or 1,200 Shiny (#205). */
+/** How a share of an invitation to move is paid: 15,000,000 of each resource, or 750 Shiny (#205, beta 7). */
 export type InvitePayment = "resources" | "shiny";
 
 /** An invitation's answer: the main yard's new cell once accepted, or why it did not go. */
@@ -337,6 +359,7 @@ export const mailApi: MailApi = {
         message: outgoing.message,
         type: outgoing.type ?? "message",
         ...(outgoing.baseid !== undefined && { baseid: outgoing.baseid }),
+        ...(outgoing.hostpayment !== undefined && { hostpayment: outgoing.hostpayment }),
         // Required by the route's schema and never read (`docs/server-api.md`).
         targetbaseid: "0",
       });

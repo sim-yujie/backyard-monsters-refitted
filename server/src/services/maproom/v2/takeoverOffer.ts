@@ -1,10 +1,8 @@
 import type { Save } from "../../../database/models/save.model.js";
-import type { User } from "../../../database/models/user.model.js";
+import { takeoverPercent } from "../../alliance/allianceBonuses.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
-import { AlliancePowerupType } from "../../../enums/Alliance.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
 import { postgres } from "../../../server.js";
-import { runningPowerups } from "../../alliance/powerups.js";
 import { cellCoordsFromBaseId } from "./rangeCheck.js";
 import { quoteTakeover, type TakeoverQuote } from "./takeoverCost.js";
 import type { TakeoverGrant } from "./takeoverGrant.js";
@@ -24,14 +22,12 @@ export interface TakeoverOffer extends Partial<TakeoverQuote> {
  * be placed, which the takeover itself would refuse anyway.
  *
  * @param {TakeoverGrant} grant - The grant.
- * @param {User} taker - The attacker who holds it.
  * @param {Save} takerSave - The attacker's main save, for the adjacency half.
  * @param {Save} outpost - The outpost, whose buildings set its price.
  * @returns {Promise<TakeoverOffer>} The offer.
  */
 export const takeoverOffer = async (
   grant: TakeoverGrant,
-  taker: User,
   takerSave: Save,
   outpost: Save
 ): Promise<TakeoverOffer> => {
@@ -46,8 +42,6 @@ export const takeoverOffer = async (
 
   if (!cell) return offer;
 
-  const powerups = await runningPowerups(taker.alliance_id);
-
   return {
     ...offer,
     ...quoteTakeover({
@@ -55,7 +49,7 @@ export const takeoverOffer = async (
       isWildMonster: false,
       buildingdata: outpost.buildingdata,
       takerHomebase: takerSave.homebase,
-      conquestActive: powerups.some(({ id }) => id === AlliancePowerupType.CONQUEST),
+      alliancePercent: await takeoverPercent(postgres.em, takerSave.saveuserid, outpost.saveuserid),
     }),
   };
 };

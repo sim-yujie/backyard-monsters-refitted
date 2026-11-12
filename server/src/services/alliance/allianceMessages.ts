@@ -8,7 +8,7 @@ import type { HistoryEntry } from "../../chat/chatProtocol.js";
 import { publishAllianceShout } from "../../chat/chatShouts.js";
 import { postgres } from "../../server.js";
 import { logger } from "../../utils/logger.js";
-import { composeShout } from "./shoutText.js";
+import { composeShout, shoutCell, shoutTradeRequest } from "./shoutText.js";
 
 interface AllianceMessageDraft {
   allianceId: number;
@@ -40,7 +40,7 @@ const FEED_FIELDS = [
   "targetAlliance.image"
 ] as const;
 
-export const ALLIANCE_MESSAGE_LIMIT = 50;
+export const ALLIANCE_MESSAGE_LIMIT = 200;
 
 /**
  * Drops an alliance's oldest entries once it holds more than
@@ -124,6 +124,9 @@ export const emitShout = async (shout: ShoutDraft) => {
   const stored = await addAllianceMessage(draft, em);
   const shoutText = composeShout(message.type, author.username, message.body, target);
 
+  const cell = shoutCell(message.type, message.body);
+  const tradeRequest = shoutTradeRequest(message.type, message.body);
+
   const entry: HistoryEntry = {
     userId: author.userid,
     displayName: author.username,
@@ -132,6 +135,8 @@ export const emitShout = async (shout: ShoutDraft) => {
     body: shoutText,
     ts: stored.created_at.getTime(),
     messageType: message.type,
+    ...(cell && { cell }),
+    ...(tradeRequest !== undefined && { tradeRequest }),
   };
 
   publishAllianceShout(message.allianceId, entry);
@@ -141,7 +146,7 @@ export const emitShout = async (shout: ShoutDraft) => {
  * Raises a shout without letting it undo the action that caused it.
  *
  * By the time a shout is emitted the work is done and flushed - a member has
- * joined, Shiny has been spent, a power-up is running - so a failure to announce
+ * joined, a rank has changed, the alliance has a new name - so a failure to announce
  * it must not surface as a failure of the action. Logged and swallowed.
  *
  * @param {ShoutDraft} shout - The shout to raise.
@@ -170,6 +175,8 @@ export const getAllianceMessages = async (allianceId: number, em: EntityManagerT
 
     const isShout = messageType !== AllianceMessageType.MESSAGE;
     const text = isShout ? composeShout(messageType, username, body, targetAlliance) : body;
+    const cell = shoutCell(messageType, body);
+    const tradeRequest = shoutTradeRequest(messageType, body);
 
     return {
       userId: userid,
@@ -179,6 +186,8 @@ export const getAllianceMessages = async (allianceId: number, em: EntityManagerT
       body: text,
       ts: created_at.getTime(),
       messageType,
+      ...(cell && { cell }),
+      ...(tradeRequest !== undefined && { tradeRequest }),
     };
   });
 

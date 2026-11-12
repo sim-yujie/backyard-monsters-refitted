@@ -82,7 +82,6 @@ import {
 import { battleReplayInput, battleTick, foughtLoot } from "../../../services/base/combat/battle.js";
 import { buildingDataWithout } from "../../../services/base/combat/abandonedAttack.js";
 import { recordBattleMismatches, replayBattleForSave } from "../../../services/base/combat/saveBattle.js";
-import { isDeclareWarRunning } from "../../../services/alliance/powerups.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import { championsAfterAttack, championsAfterBattle, siegeAfterAttack } from "../../../services/base/combat/attackerRow.js";
 import { garrisonsAfterBattle } from "../../../services/base/combat/bunkerGarrison.js";
@@ -97,6 +96,7 @@ import { healChampions } from "../../../services/yard/catchUpChampions.js";
 import { championsAfterLessons } from "../../../services/base/combat/championBrain.js";
 import { countAttackLoot } from "../../../services/events/lootEvents.js";
 import { plunderPercent, weekendBoostUsed, withPlunderBonus } from "../../../services/events/weekendBoosts.js";
+import { attackLootPercent, mapByPercent } from "../../../services/alliance/allianceBonuses.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanStore.js";
 import { discardDefenceReplayLoad } from "../../../services/defences/defenceReplayLoad.js";
@@ -106,6 +106,7 @@ import { attackQuestEvents, defenceQuestEvents } from "../../../services/quests/
 import { recordQuestEvents, recordUserQuestEvents } from "../../../services/quests/record.js";
 import { INFERNO_SAVE_TYPES, refuseOldInferno } from "../../../services/inferno/infernoGate.js";
 import { infernoConfig } from "../../../config/InfernoConfig.js";
+import { noteOutpostDefended } from "../../../services/alliance/allianceProgress.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -326,7 +327,6 @@ const saveBase = async (
       ? battleReplayInput({
           ...lootArgs,
           tick: battleTick(saveData.tick),
-          declareWar: await isDeclareWarRunning(user.alliance_id),
           // Only the report reads it: "Left the attack" when the client says so.
           left: saveData.left,
         })
@@ -612,11 +612,13 @@ const saveBase = async (
       // tribes also give 25% more Goo (patch 6.9, `tribeGooBonus.ts`).
       const fromTribe = baseSave.type === BaseType.TRIBE;
       const plunder = plunderPercent(fromTribe, now);
+      // The attacker's alliance loot bonus and the defender's raiders-carry (`allianceBonuses.ts`).
+      const alliancePercent = await attackLootPercent(postgres.em, user.userid, baseSave.saveuserid);
       banked = bankAttackLoot(
         userSave,
         withPlunderBonus(
           withCampLootBonus(
-            withTribeGooBonus(loot.credit, fromTribe),
+            withTribeGooBonus(mapByPercent(loot.credit, alliancePercent), fromTribe),
             isMR2Camp(baseSave.type, userSave.mapversion)
           ),
           plunder
@@ -702,7 +704,7 @@ const saveBase = async (
 
     if (saveData.over && isProtectable && !isMR3Structure(baseSave.wmid)) {
       const grant = await protectAfterAttack(baseSave, user.userid);
-      if (grant) takeoverGrant = await takeoverOffer(grant, user, userSave, baseSave);
+      if (grant) takeoverGrant = await takeoverOffer(grant, userSave, baseSave);
     }
 
     // The outpost's owner is told who attacked it, the damage and the loot
@@ -822,6 +824,16 @@ const saveBase = async (
     );
     if (baseSave.type !== BaseType.TRIBE && baseSave.saveuserid && baseSave.saveuserid !== user.userid) {
       await recordUserQuestEvents(postgres.em, baseSave.saveuserid, defenceQuestEvents(damageAfter), now);
+      // Fortress's "Outposts attacked but not taken" goal (design v5 §16).
+      if (baseSave.type === BaseType.OUTPOST) {
+      await noteOutpostDefended(
+        postgres.em,
+        { userid: baseSave.saveuserid, outpost: Number(baseSave.basesaveid) },
+        user.userid,
+        damageAfter,
+        now
+      );
+    }
     }
   }
 

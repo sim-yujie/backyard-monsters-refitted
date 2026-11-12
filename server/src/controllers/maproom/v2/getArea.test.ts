@@ -44,9 +44,8 @@ const em = {
 
 mock.module("../../../server.js", () => ({ postgres: { em }, redis }));
 
-// These four modules have other real exports that files *other* than this
-// one's unit under test rely on unmocked (e.g. `powerups.ts`'s
-// `alliancePowerup`, `online.ts`'s `isOnline`/`readPresenceMarks`,
+// These modules have other real exports that files *other* than this
+// one's unit under test rely on unmocked (e.g. `online.ts`'s `isOnline`/`readPresenceMarks`,
 // `inviteRules.ts`'s invite-thread helpers, `shinyLock.ts`'s
 // `isShinyLocked`). `mock.module` replaces a module for the whole `bun
 // test` process, not just this file, so each mock below is the real module
@@ -60,22 +59,16 @@ mock.module("../../../server.js", () => ({ postgres: { em }, redis }));
 // specifier statically when it is given as a literal (same reason
 // `baseLoad.mapversion.test.ts`'s `REAL_RANGE` and
 // `baseSave.attack.test.ts`'s `REAL_RUNNER` are their own constants too).
-const REAL_POWERUPS = "../../../services/alliance/powerups.ts?real";
 const REAL_ONLINE = "../../../services/user/online.ts?real";
 const REAL_INVITE_RULES = "../../../services/mail/inviteRules.ts?real";
 const REAL_SHINY_LOCK = "../../../services/user/shinyLock.ts?real";
 const REAL_ALLIANCE_DATA = "../../../services/alliance/allianceData.ts?real";
 
-const realPowerups = (await import(REAL_POWERUPS)) as typeof import("../../../services/alliance/powerups.js");
 const realOnline = (await import(REAL_ONLINE)) as typeof import("../../../services/user/online.js");
 const realInviteRules = (await import(REAL_INVITE_RULES)) as typeof import("../../../services/mail/inviteRules.js");
 const realShinyLock = (await import(REAL_SHINY_LOCK)) as typeof import("../../../services/user/shinyLock.js");
 const realAllianceData = (await import(REAL_ALLIANCE_DATA)) as typeof import("../../../services/alliance/allianceData.js");
 
-mock.module("../../../services/alliance/powerups.js", () => ({
-  ...realPowerups,
-  runningPowerups: async () => [],
-}));
 mock.module("../../../services/user/online.js", () => ({
   ...realOnline,
   onlinePlayers: async () => new Set<number>(),

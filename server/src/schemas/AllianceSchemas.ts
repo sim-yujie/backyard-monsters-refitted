@@ -1,6 +1,33 @@
 import z from "zod";
 
-import { AllianceInviteStatus, AllianceStance } from "../enums/Alliance.js";
+import { AllianceInviteStatus, AllianceJoinMode, AllianceRole, AllianceStance, AllianceType } from "../enums/Alliance.js";
+import { ALLIANCE_AD, DEFAULT_ALLIANCE_TYPE } from "../config/AllianceConfig.js";
+import { isCountryCode } from "../config/Countries.js";
+
+/**
+ * The marketplace ad's fields (design v5 §7a). The calls are form-encoded, so
+ * an empty language or time zone means "not set" (null).
+ */
+const adLanguage = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .refine((code) => code === "" || isCountryCode(code), { message: "Unknown language" })
+  .transform((code) => (code === "" ? null : code));
+
+const adTimeZone = z.union([
+  z.literal("").transform(() => null),
+  z.coerce.number().int().min(ALLIANCE_AD.timeZone.min).max(ALLIANCE_AD.timeZone.max),
+]);
+
+const adMinLevel = z.coerce.number().int().min(ALLIANCE_AD.minLevel.min).max(ALLIANCE_AD.minLevel.max);
+
+const adFields = {
+  join_mode: z.enum(AllianceJoinMode).optional(),
+  language: adLanguage.optional(),
+  time_zone: adTimeZone.optional(),
+  min_level: adMinLevel.optional(),
+};
 
 /**
  * Schema to validate alliance creation data.
@@ -9,6 +36,32 @@ export const CreateAllianceSchema = z.object({
   alliance_name: z.string().trim(),
   alliance_image: z.coerce.number().int().min(1).max(41),
   alliance_desc: z.string().trim().min(1).max(255),
+  /** Midas' Council, Conquest Horde or Fortress Legion; Midas when left out. */
+  alliance_type: z.enum(AllianceType).default(DEFAULT_ALLIANCE_TYPE),
+  /** The ad; each left out keeps the default (Ask to join, any language, no time zone, the level floor). */
+  ...adFields,
+});
+
+/**
+ * Schema for the leader's type switch.
+ */
+export const ChangeAllianceTypeSchema = z.object({
+  alliance_type: z.enum(AllianceType),
+});
+
+/**
+ * Schema for the leader's rename (once per 7 days; `leadership.ts`).
+ */
+export const RenameAllianceSchema = z.object({
+  alliance_name: z.string().trim(),
+});
+
+/**
+ * Schema for a player's report of an alliance; the reason is optional.
+ */
+export const ReportAllianceSchema = z.object({
+  alliance_id: z.coerce.number().int().positive(),
+  reason: z.string().max(1000).optional().default(""),
 });
 
 /**
@@ -17,6 +70,8 @@ export const CreateAllianceSchema = z.object({
 export const EditAllianceSchema = z.object({
   alliance_image: z.coerce.number().int().min(1).max(41),
   alliance_desc: z.string().trim().min(1).max(255),
+  /** The ad; each left out stays as it is. */
+  ...adFields,
 });
 
 /**
@@ -33,6 +88,10 @@ export const SearchAlliancesSchema = z.object({
   // does, or the tabs lose their error messages. Change both together - stringbool() rejects
   // a real boolean, so the filter would silently stop working.
   world: z.stringbool().catch(false),
+  /** Marketplace filters (design v5 §7a): one type, one language, Open alliances only. */
+  type: z.enum(AllianceType).optional().catch(undefined),
+  language: z.string().trim().toUpperCase().refine(isCountryCode).optional().catch(undefined),
+  open: z.stringbool().catch(false),
 });
 
 /**
@@ -54,6 +113,14 @@ export const InviteUserSchema = z.object({
  */
 export const MemberActionSchema = z.object({
   userid: z.coerce.number().int().positive(),
+});
+
+/**
+ * Schema for the Leader's Make Officer / Make Member buttons.
+ */
+export const SetRankSchema = z.object({
+  userid: z.coerce.number().int().positive(),
+  role: z.enum([AllianceRole.OFFICER, AllianceRole.MEMBER]),
 });
 
 /**
@@ -84,17 +151,48 @@ export const ChangeRelationshipSchema = z.object({
   relationship: z.coerce.number().int().pipe(z.enum(AllianceStance)),
 });
 
-/**
- * Schema for the Power-Ups tab's leader-only Activate button.
- */
-export const ActivatePowerupSchema = z.object({
-  powerup_id: z.coerce.number().int().positive(),
+
+/** Light or suggest the next step of a constellation (design v5 §9). */
+export const ConstellationStepSchema = z.object({
+  constellation: z.string().min(1).max(32),
 });
 
-/**
- * Schema for the Speed Up dialog's Buy button.
- */
-export const PurchasePowerupSchema = z.object({
-  powerup_id: z.coerce.number().int().positive(),
-  purchase_hours: z.coerce.number().int().positive(),
+/** Add a weekly goal (design v5 §8, §16). */
+export const SetGoalSchema = z.object({
+  kind: z.string().min(1).max(32),
+  tier: z.enum(["easy", "medium", "hard"]),
 });
+
+/** Remove a weekly goal (only at 0 progress). */
+export const RemoveGoalSchema = z.object({
+  goal_id: z.coerce.number().int().positive(),
+});
+
+/** One type's territory board (design v5 §11). */
+export const TerritoryBoardSchema = z.object({
+  type: z.enum(AllianceType).optional(),
+});
+
+/** Resource amounts sent as flat fields (`r1`..`r4`), whole and not negative; left out is 0. */
+const tradeAmount = z.coerce.number().int().min(0).max(1_000_000_000).optional();
+const tradeAmounts = { r1: tradeAmount, r2: tradeAmount, r3: tradeAmount, r4: tradeAmount };
+
+/** GET /alliance/trade[?to=]: the Trade tab; `to` adds a mate's storage for the Send sheet. */
+export const TradeViewSchema = z.object({ to: z.coerce.number().int().positive().optional() });
+
+/** One resource that can be traded (Shiny cannot). */
+const tradeKey = z.enum(["r1", "r2", "r3", "r4"]);
+
+/**
+ * POST /alliance/trade/post: "I give `amount` of `give`, I want `amount` of
+ * `want`" (1:1; each side gets 10% less).
+ */
+export const TradePostSchema = z
+  .object({ give: tradeKey, want: tradeKey, amount: z.coerce.number().int().min(1).max(1_000_000_000) })
+  .strict();
+
+/** POST /alliance/trade/accept: a mate's request, taken whole; no amounts. */
+export const TradeAcceptSchema = z.object({ request_id: z.coerce.number().int().positive() }).strict();
+
+/** POST /alliance/trade/send: a mate, and what leaves. */
+export const TradeSendSchema = z.object({ to: z.coerce.number().int().positive(), ...tradeAmounts });

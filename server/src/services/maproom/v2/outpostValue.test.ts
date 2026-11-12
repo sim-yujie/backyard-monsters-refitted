@@ -24,7 +24,7 @@ const TWIG_8 = 135_000 + 86_400;
 
 /** The price of an outpost of this value, nowhere near the main yard, no Conquest. */
 const price = (empireValue: number) =>
-  takeoverResourceCost({ isWildMonster: false, level: 0, empireValue, adjacentToMainYard: false, conquestActive: false });
+  takeoverResourceCost({ isWildMonster: false, level: 0, empireValue, adjacentToMainYard: false });
 
 const kit = (index: number) => kitBuildings(STARTER_KITS[index]!, "resources", {}).buildingdata;
 
@@ -113,7 +113,7 @@ describe("outpostValue", () => {
 describe("quoteTakeover prices a player outpost from its buildings", () => {
   const cell = { x: 100, y: 100 };
   const quote = (buildingdata: BuildingDataMap | null, isWildMonster = false) =>
-    quoteTakeover({ cell, isWildMonster, buildingdata, takerHomebase: ["10", "10"], conquestActive: false });
+    quoteTakeover({ cell, isWildMonster, buildingdata, takerHomebase: ["10", "10"] });
 
   test("the quote is the formula's price of outpostValue", () => {
     for (const buildingdata of [kit(0), kit(1), kit(2), {}]) {

@@ -35,10 +35,12 @@ import { poolAmounts } from "../../../../services/base/combat/attackLoot.js";
 import { autobankOwner } from "../../../../services/maproom/v2/autobank.js";
 import { academyLevels } from "../../../../services/base/combat/abandonedAttack.js";
 import { academyRanks } from "../../../../game-rules/combat/index.js";
-import { isDeclareWarRunning } from "../../../../services/alliance/powerups.js";
 import { mr2NeighbourBonusMode } from "../../../../config/MapRoom2Config.js";
 import { loadFriendlyNeighbourCount } from "../../../../services/maproom/v2/neighbourDefence.js";
 import { activeLandFeature } from "../../../../services/maproom/v2/landFeature.js";
+import { underAttackShout } from "../../../../services/alliance/underAttack.js";
+import { allianceDefenceApplies, allianceDefenceOfOwner } from "../../../../services/alliance/allianceBonuses.js";
+import { announceShout } from "../../../../services/alliance/allianceMessages.js";
 import {
   generateNoise,
   getTerrainHeight,
@@ -52,11 +54,6 @@ export interface AttackDetails {
   count: number;
   starttime: number;
   seen: boolean;
-  /**
-   * Declare War ran for the attacker when the attack started: its window is
-   * the longer one (`attackWindow.ts`). Absent otherwise.
-   */
-  declarewar?: boolean;
 }
 
 interface BaseModeAttack {
@@ -221,11 +218,6 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel, 
   // Past this point the attack is committed: everything below writes.
   if (save.attacks.length > 3) save.attacks = save.attacks.slice(-2);
 
-  // Whether Declare War runs for the attacker: frozen into the session for the
-  // battle (issue #201, below), and onto the row, where it sets how long the
-  // attack locks the yard (`attackWindow.ts`).
-  const declareWar = await isDeclareWarRunning(user.alliance_id);
-
   // Track the details of the attack
   const attackDetails: AttackDetails = {
     fbid: "",
@@ -235,7 +227,6 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel, 
     count: 1,
     starttime: getCurrentDateTime(),
     seen: false,
-    ...(declareWar && { declarewar: true }),
   };
 
   if (save.type != BaseType.TRIBE) save.attacks.push(attackDetails);
@@ -305,10 +296,18 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel, 
     mapversion === MapRoomVersion.V2 && save.cell && userSave.worldid && save.type !== BaseType.MAIN
       ? activeLandFeature(userSave.worldid, save.cell.x, save.cell.y, save.cell.terrainHeight)
       : 0;
+  // The owner's alliance battle stars (beta 7): a player's main yard or
+  // outpost only (`allianceDefenceApplies`), frozen with the rest, so every
+  // replay fights with the same. None, or every part 0, serves the defence
+  // exactly as before.
+  const alliance = allianceDefenceApplies(save)
+    ? await allianceDefenceOfOwner(postgres.em, save.saveuserid, save.type === BaseType.OUTPOST)
+    : undefined;
   const defenderForces = {
     ...served,
     ...(neighbours > 0 && { neighbours }),
     ...(land !== 0 && { land }),
+    ...(alliance && { alliance }),
   };
   // The attacker's champions' brains as they stand now, after the load has
   // landed any attack they left (issue #219): frozen into the session, served
@@ -338,7 +337,6 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel, 
         defenderForces,
         championBrains,
         attackerAcademy,
-        declareWar,
         attackerRanks,
         championHealth
       )
@@ -361,7 +359,6 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel, 
         defenderForces,
         championBrains,
         attackerAcademy,
-        declareWar,
         attackerRanks,
         championHealth
       )
@@ -384,6 +381,17 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel, 
 
     if (mapversion === MapRoomVersion.V1) await registerAttacker(user, defender, mr1Permission);
     await createAttackLog(user, defender, save)
+
+    // The defender's alliance hears of it: "Ana_B's outpost (12, 40) is under
+    // attack by Bob!" with Show on map (beta 7 design v5 §12). Never stops the attack.
+    const alert = underAttackShout({
+      defender,
+      attacker: user,
+      baseType: save.type,
+      mapversion,
+      cell: save.cell ? { x: save.cell.x, y: save.cell.y } : cellCoords,
+    });
+    if (alert) await announceShout(alert);
   }
 
   return { save, defenderForces, championBrains, championHealth, attackerAcademy, attackerRanks };

@@ -3,7 +3,8 @@ import { Alliance } from "../../database/models/alliance.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { ChangeRelationshipSchema } from "../../schemas/AllianceSchemas.js";
-import { requireAllianceLeader } from "../../services/alliance/allianceAccess.js";
+import { requireAlliancePermission } from "../../services/alliance/allianceAccess.js";
+import { AllianceAction } from "../../services/alliance/permissions.js";
 import { setAllianceRelationship } from "../../services/alliance/relationships.js";
 import { cannotChangeRelationshipErr } from "../../errors/errors.js";
 import type { KoaController } from "../../utils/KoaController.js";
@@ -22,7 +23,7 @@ export const changeRelationship: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
   const { target_alliance_id, relationship } = ChangeRelationshipSchema.parse(ctx.request.body);
 
-  const alliance = await requireAllianceLeader(user);
+  const alliance = await requireAlliancePermission(user, AllianceAction.SET_RELATIONSHIP);
 
   if (target_alliance_id === alliance.id) throw cannotChangeRelationshipErr();
 

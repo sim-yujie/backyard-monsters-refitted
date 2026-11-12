@@ -15,6 +15,14 @@ import { addNeighbourBonusChip } from "./neighbourBonusChip";
 import { icon as lineIcon } from "@/ui/icons";
 import { friendMarkOf, type FriendMark } from "@/game/friends/friendMarks";
 import { friendBadge } from "@/ui/friends/friendBadge";
+import { shieldUrl } from "@/game/alliance/allianceRules";
+import type { MapAlliance } from "@/game/maproom/mapAlliances";
+
+/** The alliance chip's tooltip (beta 7). */
+export const CELL_ALLIANCE_TEXT = {
+  mate: (name: string): string => `${name} · your alliance`,
+  other: (name: string): string => `Alliance: ${name}`,
+} as const;
 
 /**
  * The map's cell panel, slimmed to what a player decides with (issue #174,
@@ -110,16 +118,22 @@ export interface CellPanelOptions {
    * under Message and Truce. Absent: no row.
    */
   addFriend?: (payload: PlayerCell) => HTMLElement;
+  /**
+   * The alliance a player cell's `aid` names (beta 7, the map's roster): its
+   * shield and name as a chip under the name. Absent, or the map has not heard
+   * of it: no chip.
+   */
+  allianceOf?: (allianceId: number) => MapAlliance | undefined;
+  /** The player's own alliance id, so a mate's chip reads as theirs; null for none. */
+  myAlliance?: () => number | null;
 }
 
 /** How far one of the player's own cells flings. */
 export interface OwnFlinger {
   /** The Flinger's level. */
   readonly level: number;
-  /** Cells it reaches, Declare War included while it runs. */
+  /** Cells it reaches. */
   readonly reach: number;
-  /** Cells of that from Declare War. */
-  readonly bonus: number;
 }
 
 /** The moves between yards an own cell offers; see `CellPanelOptions.ownMoves`. */
@@ -475,6 +489,7 @@ export class CellPanel {
       `${kind} · ${where}`,
       mine ? null : friendMarkOf(payload.uid, { friend: payload.fr === 1, pinned: payload.fp === 1 }),
     );
+    this.addAllianceChip(payload);
 
     if (mine) {
       this.renderFlinger(this.options.ownFlinger(cell, payload));
@@ -575,10 +590,7 @@ export class CellPanel {
         flinger.level > 0 ? `Flinger level ${flinger.level}` : "Build a Flinger here to attack from it";
     } else {
       this.flingerTitle.textContent = `Your Flinger reaches ${cellsText(flinger.reach)}`;
-      this.flingerDetail.textContent =
-        flinger.bonus > 0
-          ? `Flinger level ${flinger.level} (${flinger.reach - flinger.bonus}) + ${flinger.bonus} Declare War bonus`
-          : `Flinger level ${flinger.level}`;
+      this.flingerDetail.textContent = `Flinger level ${flinger.level}`;
     }
   }
 
@@ -687,6 +699,23 @@ export class CellPanel {
     if (title) chip.title = title;
     this.chips.append(chip);
     return label;
+  }
+
+  /** The owner's alliance (beta 7): its shield and name, in the accent colour when it is the player's own. */
+  private addAllianceChip(payload: PlayerCell): void {
+    const alliance = payload.aid != null ? this.options.allianceOf?.(payload.aid) : undefined;
+    if (!alliance) return;
+    const mate = this.options.myAlliance?.() === alliance.id;
+    const chip = el("span", `mr2-chip mr2-chip--${mate ? "accent" : "info"} mr2-chip--alliance`);
+    const shield = document.createElement("img");
+    shield.className = "mr2-chip__shield";
+    shield.src = shieldUrl(alliance.image, "small");
+    shield.alt = "";
+    shield.width = 16;
+    shield.height = 16;
+    chip.append(shield, el("span", "", alliance.name));
+    chip.title = mate ? CELL_ALLIANCE_TEXT.mate(alliance.name) : CELL_ALLIANCE_TEXT.other(alliance.name);
+    this.chips.append(chip);
   }
 
   /** Tower range and income on this ground, as painted icons and numbers (`groundBonus.ts`). */

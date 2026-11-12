@@ -834,6 +834,7 @@ describe("invitations to move in the mailbox (#205)", () => {
         message: words,
         type: "migraterequest",
         baseid: "2000241208",
+        hostpayment: "resources",
       },
     ]);
     expect(onInviteChanged).toHaveBeenCalledTimes(1);
@@ -1025,5 +1026,136 @@ describe("moderators in the mailbox (owner, beta 7)", () => {
     await settle();
     expect(host.querySelector("input.mail-compose__any")).toBeNull();
     expect(host.querySelector("select.mail-compose__to")).not.toBeNull();
+  });
+});
+
+describe("alliance invites in the mailbox (beta 7)", () => {
+  const invitation = (state: "pending" | "accepted" | "declined" | "closed", overrides: Partial<MailMessage> = {}) =>
+    message({
+      messagetype: "allianceinvite",
+      subject: "Alliance invite",
+      message: "Join Goo Lords!",
+      allianceinviteid: 31,
+      allianceinvite: { state, alliance_id: 4, alliance_name: "Goo Lords", alliance_image: 9 },
+      ...overrides,
+    });
+  const card = (host: HTMLElement) => host.querySelector<HTMLElement>(".mail-request--alliance");
+  const actions = (host: HTMLElement) => [...host.querySelectorAll<HTMLButtonElement>(".mail-request__action")];
+  const openFirst = async (host: HTMLElement) => {
+    click(rows(host)[0]);
+    await settle();
+  };
+
+  it("shows the alliance's shield and name with Accept and Decline while it waits", async () => {
+    const api = fakeApi([[invitation("pending")]], { 1: [invitation("pending")] });
+    const { host } = await openScreen(api, { allianceApi: { answerInvite: vi.fn() } });
+    await openFirst(host);
+    expect(card(host)?.querySelector(".mail-request__title")?.textContent).toBe("Alliance invite");
+    expect(card(host)?.textContent).toContain("Bramblefoot invites you to Goo Lords.");
+    expect(card(host)?.querySelector<HTMLImageElement>(".mail-request__shield")?.src).toContain("/assets/alliances/9_medium.png");
+    expect(actions(host).map((one) => one.textContent)).toEqual(["Accept", "Decline"]);
+    expect(host.querySelector(".mail-message__label")).toBeNull();
+  });
+
+  it("Accept joins through the alliance route, tells the scene, and the card says it is done", async () => {
+    const byThread = { 1: [invitation("pending")] };
+    const api = fakeApi([[invitation("pending")]], byThread);
+    const answerInvite = vi.fn(async () => {
+      byThread[1] = [invitation("accepted")];
+      return { ok: true as const };
+    });
+    const onAllianceJoined = vi.fn();
+    const { host } = await openScreen(api, { allianceApi: { answerInvite }, onAllianceJoined });
+    await openFirst(host);
+    click(actions(host)[0]);
+    await settle();
+    await settle();
+    expect(answerInvite).toHaveBeenCalledWith(31, true);
+    expect(onAllianceJoined).toHaveBeenCalledOnce();
+    expect(card(host)?.querySelector(".mail-request__state")?.textContent).toBe("Accepted");
+    expect(actions(host)).toHaveLength(0);
+  });
+
+  it("Decline sends no join, and a refusal shows on the card", async () => {
+    const api = fakeApi([[invitation("pending")]], { 1: [invitation("pending")] });
+    const answerInvite = vi.fn(async () => ({
+      ok: false as const,
+      reason: "allianceFull",
+      message: "That alliance is full.",
+      availableAt: null,
+    }));
+    const onAllianceJoined = vi.fn();
+    const { host } = await openScreen(api, { allianceApi: { answerInvite }, onAllianceJoined });
+    await openFirst(host);
+    click(actions(host)[1]);
+    await settle();
+    expect(answerInvite).toHaveBeenCalledWith(31, false);
+    expect(onAllianceJoined).not.toHaveBeenCalled();
+    expect(card(host)?.querySelector(".mail-request__refusal")?.textContent).toBe("That alliance is full.");
+  });
+
+  it("an answered or closed invite says so in words, with no buttons", async () => {
+    for (const [state, words] of [
+      ["declined", "Declined"],
+      ["closed", "Closed"],
+    ] as const) {
+      const api = fakeApi([[invitation(state)]], { 1: [invitation(state)] });
+      const { host } = await openScreen(api);
+      await openFirst(host);
+      expect(card(host)?.querySelector(".mail-request__state")?.textContent).toBe(words);
+      expect(actions(host)).toHaveLength(0);
+    }
+  });
+
+  it("says the invite once: the card's words, not the message text as well", async () => {
+    const api = fakeApi([[invitation("pending")]], { 1: [invitation("pending")] });
+    const { host } = await openScreen(api, { allianceApi: { answerInvite: vi.fn() } });
+    await openFirst(host);
+    const bubble = host.querySelector<HTMLElement>(".mail-message--alliance");
+    expect(bubble?.querySelector(".mail-message__text")).toBeNull();
+    expect(bubble?.textContent).not.toContain("Join Goo Lords!");
+    expect(bubble?.textContent?.match(/invites you to Goo Lords/g)).toHaveLength(1);
+  });
+
+  it("offers no Propose truce in an invite thread, while a player thread keeps it", async () => {
+    const api = fakeApi([[invitation("pending"), message({ threadid: 2 })]], { 1: [invitation("pending")], 2: [message({ threadid: 2 })] });
+    const { host } = await openScreen(api, { allianceApi: { answerInvite: vi.fn() } });
+    const open = async (threadid: number) => {
+      click(host.querySelector(`.mail-row[data-thread='${threadid}']`));
+      await settle();
+    };
+    await open(1);
+    expect(host.querySelector(".mail-pane__truce")).toBeNull();
+    expect(host.querySelector(".mail-block__ask")).not.toBeNull();
+    await open(2);
+    expect(host.querySelector(".mail-pane__truce")?.textContent).toBe("Propose truce");
+  });
+
+  it("brings Accept / Decline into sight when the thread opens, even under later replies", async () => {
+    const scrolled: Element[] = [];
+    const scroll = vi.fn(function (this: Element) {
+      scrolled.push(this);
+    });
+    Object.defineProperty(Element.prototype, "scrollIntoView", { value: scroll, configurable: true, writable: true });
+    try {
+      const thread = [invitation("pending"), message({ message: "hi", updatetime: NOW - 300 }), message({ message: "there", updatetime: NOW - 200 })];
+      const api = fakeApi([[invitation("pending")]], { 1: thread });
+      const { host } = await openScreen(api, { allianceApi: { answerInvite: vi.fn() } });
+      await openFirst(host);
+      expect(scrolled.at(-1)).toBe(host.querySelector(".mail-request--alliance .mail-request__actions"));
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
+
+  it("the inviter sees it waiting, with no buttons", async () => {
+    const mine = invitation("pending", { userid: ME, targetid: 77 });
+    // In the list the row names the other party; in the thread the message is the player's own.
+    const api = fakeApi([[invitation("pending")]], { 1: [mine] });
+    const { host } = await openScreen(api);
+    await openFirst(host);
+    expect(card(host)?.querySelector(".mail-request__state")?.textContent).toBe("Waiting");
+    expect(card(host)?.textContent).toContain("You invited Bramblefoot to Goo Lords.");
+    expect(actions(host)).toHaveLength(0);
   });
 });

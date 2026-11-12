@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { MapCell, PlayerCell, WildMonsterCell } from "@/api/types";
 import { setDevDetails } from "@/app/devDetails";
-import { CellPanel, type CellPanelOptions } from "./CellPanel";
+import { CELL_ALLIANCE_TEXT, CellPanel, type CellPanelOptions } from "./CellPanel";
 
 /**
  * The slim cell panel (issue #174): a picture, a name and level, what and
@@ -55,7 +55,7 @@ const open = (
     attackRefusal: () => null,
     onAttack: vi.fn(),
     reach: () => ({ text: "In range · next to your yard", inRange: true }),
-    ownFlinger: () => ({ level: 4, reach: 10, bonus: 0 }),
+    ownFlinger: () => ({ level: 4, reach: 10 }),
     onRangeToggle: vi.fn(),
     ...overrides,
   };
@@ -284,13 +284,11 @@ describe("another player's achievements (#204)", () => {
 describe("the player's own yards", () => {
   it("shows how far the Flinger reaches, the range switch and Open yard", () => {
     const { host, options, panel } = open(player({ mine: 1, n: "agenttester", l: 12 }), {
-      ownFlinger: () => ({ level: 4, reach: 12, bonus: 2 }),
+      ownFlinger: () => ({ level: 4, reach: 10 }),
     });
     expect(text(host, ".mr2-cell__title")).toBe("Your yard");
-    expect(text(host, ".mr2-cell__flinger-title")).toBe("Your Flinger reaches 12 cells");
-    expect(text(host, ".mr2-cell__flinger-detail")).toBe(
-      "Flinger level 4 (10) + 2 Declare War bonus",
-    );
+    expect(text(host, ".mr2-cell__flinger-title")).toBe("Your Flinger reaches 10 cells");
+    expect(text(host, ".mr2-cell__flinger-detail")).toBe("Flinger level 4");
     expect(buttonNamed(host, "Attack")).toBeUndefined();
     expect(shown(host, ".mr2-chip")).toHaveLength(0);
     const openYard = buttonNamed(host, "Open yard")!;
@@ -570,5 +568,32 @@ describe("the height chip (painted map, plan step 5)", () => {
     } finally {
       setFlatGround(false);
     }
+  });
+});
+
+describe("the owner's alliance (beta 7)", () => {
+  const GANG = { id: 7, name: "Goo Gang", image: 12 };
+  const allianceOf = (id: number) => (id === 7 ? GANG : undefined);
+
+  it("shows its shield and name as a chip", () => {
+    const { host } = open(player({ aid: 7 }), { allianceOf, myAlliance: () => null });
+    const chip = host.querySelector<HTMLElement>(".mr2-chip--alliance")!;
+    expect(chip.textContent).toBe("Goo Gang");
+    expect(chip.querySelector("img")!.getAttribute("src")).toBe("/assets/alliances/12_small.png");
+    expect(chip.classList.contains("mr2-chip--info")).toBe(true);
+    expect(chip.title).toBe(CELL_ALLIANCE_TEXT.other("Goo Gang"));
+  });
+
+  it("marks a mate's chip as the player's own alliance", () => {
+    const { host } = open(player({ aid: 7 }), { allianceOf, myAlliance: () => 7 });
+    const chip = host.querySelector<HTMLElement>(".mr2-chip--alliance")!;
+    expect(chip.classList.contains("mr2-chip--accent")).toBe(true);
+    expect(chip.title).toBe("Goo Gang · your alliance");
+  });
+
+  it("shows no chip for a player in no alliance, or one the map has not heard of", () => {
+    expect(open(player({ aid: null }), { allianceOf }).host.querySelector(".mr2-chip--alliance")).toBeNull();
+    expect(open(player({ aid: 9 }), { allianceOf }).host.querySelector(".mr2-chip--alliance")).toBeNull();
+    expect(open(player({ aid: 7 })).host.querySelector(".mr2-chip--alliance")).toBeNull();
   });
 });

@@ -147,11 +147,10 @@ export interface AttackSession {
   attackerRanks?: AcademyRanks;
   /**
    * Whether Declare War was running for the attacker's alliance at attack
-   * start, as the attack load served it (`attpowerups`), which sets the
-   * client's countdown. Every replay fights with this, so a Declare War that
-   * runs out, or starts, while the attack runs changes nothing (issue #201).
-   * Absent on a session minted before it; the replay then asks whether one is
-   * running at the time.
+   * start (issue #201), which set the client's longer countdown. The alliance
+   * power-ups are gone and nothing writes it any more; a session (or
+   * checkpoint) stored while Declare War ran still carries it, and its replay
+   * fights with it. Absent means no Declare War.
    */
   declareWar?: boolean;
 }
@@ -504,7 +503,6 @@ const academyRanksOf = (raw: unknown): AcademyRanks | undefined => {
  * @param {DefenderForces} [defenderForces] - The defence the attack load serves (issue #195).
  * @param {ChampionBrains} [championBrains] - The attacker's champions' brains, frozen (#219).
  * @param {AcademyLevels} [attackerAcademy] - The attacker's academy levels, which the attack load serves too (#201).
- * @param {boolean} [declareWar] - Whether Declare War was running for the attacker (#201).
  * @param {AcademyRanks} [attackerRanks] - The attacker's Monster Lab ranks, frozen (#352).
  * @param {ChampionHealth} [championHealth] - The attacker's champions' health, frozen.
  */
@@ -518,7 +516,6 @@ export const newAttackSession = (
   defenderForces?: DefenderForces,
   championBrains?: ChampionBrains,
   attackerAcademy?: AcademyLevels,
-  declareWar?: boolean,
   attackerRanks?: AcademyRanks,
   championHealth?: ChampionHealth
 ): AttackSession => ({
@@ -534,5 +531,4 @@ export const newAttackSession = (
   ...(championHealth && { championHealth }),
   ...(attackerAcademy && { attackerAcademy }),
   ...(attackerRanks && Object.keys(attackerRanks).length > 0 && { attackerRanks }),
-  ...(declareWar !== undefined && { declareWar }),
 });

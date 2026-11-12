@@ -199,7 +199,7 @@ describe("range", () => {
     const flingers = new Map([["op", 4]]);
     for (const shape of ["flat", "pointy"] as HexShape[]) {
       const steps = hexDistance({ x: 400, y: 400 }, { x: 404, y: 402 }, shape);
-      const verdict = checkOutpostRange(nearby, flingers, false, shape);
+      const verdict = checkOutpostRange(nearby, flingers, shape);
       expect("ok" in verdict && verdict.ok).toBe(steps <= 4);
     }
   });

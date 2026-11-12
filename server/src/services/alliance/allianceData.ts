@@ -1,4 +1,6 @@
-import { AllianceRole } from "../../enums/Alliance.js";
+import { AllianceRole, type AllianceType } from "../../enums/Alliance.js";
+import { allianceTradeEnabled } from "../../config/AllianceConfig.js";
+import { bonusesFor, type AllianceBonuses } from "./allianceBonuses.js";
 import { Alliance } from "../../database/models/alliance.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
@@ -10,7 +12,18 @@ interface AllianceData {
   name: string;
   image: number;
   is_leader: boolean;
+  /** leader, officer or member. */
+  role: AllianceRole | null;
   relationships: Relationship;
+  /** Midas, Conquest or Fortress. */
+  type: AllianceType;
+  /**
+   * The type's strengths and weaknesses now, stars included
+   * (`allianceBonuses.ts`): the web's harvesters fill at `production`.
+   */
+  bonuses: AllianceBonuses;
+  /** Trading's switch (`ALLIANCE_TRADE_ENABLED`, off in beta 7): the web shows chat's Send and Trade only when true. */
+  trade_on: boolean;
 }
 
 export interface AllianceRosterEntry {
@@ -32,12 +45,22 @@ export const getAllianceData = async (user: User): Promise<AllianceData | null> 
 
   if (!alliance) return null;
 
-  const { id, name, image } = alliance;
+  const { id, name, image, type } = alliance;
 
   const isLeader = user.alliance_role === AllianceRole.LEADER;
   const relationships = await getAllianceRelationships(id);
 
-  return { alliance_id: id, name, image, is_leader: isLeader, relationships };
+  return {
+    alliance_id: id,
+    name,
+    image,
+    is_leader: isLeader,
+    role: user.alliance_role ?? null,
+    relationships,
+    type,
+    bonuses: bonusesFor(type, alliance.stars),
+    trade_on: allianceTradeEnabled(),
+  };
 };
 
 /**

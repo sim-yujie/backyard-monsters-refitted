@@ -42,6 +42,12 @@ export interface FriendView {
   wishes: GiftResource[];
   /** When the caller pinned them to the top of the list (beta 7), unix seconds; null when not pinned. */
   pinnedAt: number | null;
+  /**
+   * Their Map Room 2 world's number when it is not the caller's (beta 7): an
+   * alliance is one world, so the row says why they cannot ally. Null when
+   * they share a world or either has no Map Room 2 world.
+   */
+  otherWorld: number | null;
 }
 
 /** One friend request, as both lists and the request routes send it; the player is the other side. */
@@ -110,15 +116,18 @@ export const listFriends = async (em: EntityManager, userid: number, now: number
       hide_online: boolean;
       last_seen_at: Date | null;
       gift_wishes: string | null;
+      worldid: string | null;
     })[]
   >(
-    `SELECT ${CARD_COLUMNS}, f.created_at AS since, f.pinned_at, u.hide_online, u.last_seen_at, u.gift_wishes
+    `SELECT ${CARD_COLUMNS}, f.created_at AS since, f.pinned_at, u.hide_online, u.last_seen_at, u.gift_wishes, s.worldid
        FROM bym.friend f JOIN ${CARD_JOIN} ON u.userid = f.friend_userid
       WHERE f.userid = ?
       ORDER BY lower(u.username), u.userid`,
     [userid]
   );
   const online = await onlinePlayers(rows.map((row) => Number(row.userid)), now);
+  const mine = await worldOfPlayer(em, userid);
+  const numbers = mine && rows.some((row) => row.worldid && row.worldid !== mine) ? await worldNumbers(em) : new Map<string, number>();
   const ageGate = FRIEND_LIMITS.friendshipAgeHours * 60 * 60;
   return rows.map((row) => {
     const card = cardOf(row);
@@ -132,8 +141,42 @@ export const listFriends = async (em: EntityManager, userid: number, now: number
       help: null,
       wishes: readWishes(row.gift_wishes),
       pinnedAt: secondsOf(row.pinned_at),
+      otherWorld: otherWorldOf(mine, row.worldid, numbers),
     };
   });
+};
+
+/**
+ * Map Room 2 worlds numbered 1, 2, 3... in the order they opened, the number
+ * a player sees ("World 2").
+ */
+export const worldNumbers = async (em: EntityManager): Promise<Map<string, number>> => {
+  const rows = await em.execute<{ uuid: string }[]>(
+    `SELECT uuid FROM bym.world WHERE map_version = 2 ORDER BY created_at, uuid`
+  );
+  return new Map(rows.map((row, i) => [row.uuid, i + 1]));
+};
+
+/** The player's world (their main yard's), or null with none. */
+const worldOfPlayer = async (em: EntityManager, userid: number): Promise<string | null> => {
+  const [row] = await em.execute<{ worldid: string | null }[]>(
+    `SELECT s.worldid FROM bym."user" u JOIN bym.save s ON s.basesaveid = u.save_basesaveid WHERE u.userid = ?`,
+    [userid]
+  );
+  return row?.worldid ?? null;
+};
+
+/**
+ * A friend's world number for their row: only when both players are in a Map
+ * Room 2 world and the worlds differ; null otherwise.
+ */
+export const otherWorldOf = (
+  mine: string | null,
+  theirs: string | null,
+  numbers: ReadonlyMap<string, number>
+): number | null => {
+  if (!mine || !theirs || mine === theirs || !numbers.has(mine)) return null;
+  return numbers.get(theirs) ?? null;
 };
 
 /** One friend's view, or null when they are not (or no longer) friends. */

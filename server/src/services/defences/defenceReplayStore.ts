@@ -55,7 +55,11 @@ export interface DefenceReplayPayload {
   /** The attacker's champion and brains, and siege, as fought. */
   readonly champion?: unknown;
   readonly siege?: JsonObject | null;
-  readonly declareWar: boolean;
+  /**
+   * Declare War's longer countdown. The alliance power-ups are gone: only a
+   * replay of an attack started while it ran has it true; absent means false.
+   */
+  readonly declareWar?: boolean;
   /** The attack report text. */
   readonly report?: unknown;
 }

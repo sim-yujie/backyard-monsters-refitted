@@ -1,6 +1,8 @@
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { getSession } from "@/api/auth";
+import { allianceApi, type AllianceApi } from "@/api/alliance";
+import { shieldUrl } from "@/game/alliance/allianceRules";
 import { blockRefusal, mailApi, type InvitePayment, type MailApi, type MailTarget } from "@/api/mail";
 import type { OffsetCell } from "@/game/HexGrid";
 import {
@@ -16,6 +18,7 @@ import {
   unreadThreads,
   type MailAttack,
   type MailContact,
+  type MailAllianceInvite,
   type MailItem,
   type MailThread,
 } from "@/game/mail/mailbox";
@@ -125,6 +128,10 @@ export interface MailboxScreenOptions {
    * Absent: past contacts only.
    */
   readonly friends?: () => Promise<readonly MailContact[]>;
+  /** The alliance route for an alliance invite's Accept and Decline (beta 7); the real one unless a test swaps it. */
+  readonly allianceApi?: Pick<AllianceApi, "answerInvite">;
+  /** An alliance invite was accepted here: the player is in an alliance now (beta 7). */
+  readonly onAllianceJoined?: () => void;
 }
 
 /** A new message's recipient when the map opened it: the player whose yard it was. */
@@ -162,6 +169,14 @@ const LOAD_FAILED = "Could not load your mail. Try again.";
 /** Numbers the moderators' suggestion lists, so each has its own id. */
 let anyPlayerLists = 0;
 const SUBJECT_LIMIT = 60;
+
+/** An alliance invite's state, as its card shows it (beta 7). */
+const ALLIANCE_INVITE_LOOK: Readonly<Record<MailAllianceInvite["state"], { label: string; tone: "info" | "good" | "bad" | "muted" }>> = {
+  pending: { label: "Waiting for you", tone: "info" },
+  accepted: { label: "Accepted", tone: "good" },
+  declined: { label: "Declined", tone: "muted" },
+  closed: { label: "Closed", tone: "muted" },
+};
 
 const make = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -207,6 +222,8 @@ export class MailboxScreen {
   readonly element: HTMLElement;
 
   private readonly api: MailApi;
+  /** The alliance route an alliance invite's Accept and Decline call (beta 7). */
+  private readonly allianceApi: Pick<AllianceApi, "answerInvite">;
   private readonly myId: () => number | null;
   private readonly now: () => number;
   private readonly options: MailboxScreenOptions;
@@ -237,6 +254,7 @@ export class MailboxScreen {
   constructor(options: MailboxScreenOptions = {}) {
     this.options = options;
     this.api = options.api ?? mailApi;
+    this.allianceApi = options.allianceApi ?? allianceApi;
     this.myId = options.myId ?? (() => getSession()?.userId ?? null);
     this.now = options.now ?? (() => Math.floor(Date.now() / 1000));
 
@@ -576,11 +594,13 @@ export class MailboxScreen {
     // The thread's truce belongs to its last request, which carries the card.
     const request = state === null ? -1 : requestIndex(items);
     const until = thread.truce?.until ?? null;
+    // An alliance invite's thread is about the alliance: no truce offered there.
+    const allianceInviteThread = items.some((item) => item.allianceInvite);
     // Propose truce and Block player keep to a row of their own, which goes
     // under the name and subject when the pane has no room beside them.
     if (!thread.notice && !thread.team) {
       const actions = make("div", "mail-pane__actions");
-      if (canPropose(state, until, items[request]?.mine ?? false, now)) {
+      if (!allianceInviteThread && canPropose(state, until, items[request]?.mine ?? false, now)) {
         actions.append(
           buttonOf("btn btn--outline mail-pane__truce", "Propose truce", () =>
             this.showTruceForm({ userid: thread.otherId, name: thread.otherName }, thread),
@@ -595,13 +615,20 @@ export class MailboxScreen {
     const invitation = inviteIndex(items);
 
     const messages = make("ol", "mail-messages");
+    // A waiting alliance invite's Accept / Decline, brought into sight on opening.
+    const answerable: HTMLElement[] = [];
     items.forEach((item, index) => {
       const side = item.notice ? "notice" : item.mine ? "mine" : "theirs";
       const bubble = make("li", `mail-message mail-message--${side}`);
-      if (item.label && index !== request && index !== invitation) {
+      // The card names its own kind: no label above it as well.
+      if (item.label && index !== request && index !== invitation && !item.allianceInvite) {
         bubble.append(make("strong", "mail-message__label", item.label));
       }
-      bubble.append(item.attack ? attackText(item.text, item.attack) : make("p", "mail-message__text", item.text));
+      // An alliance invite's card says the invite in its own words: the
+      // message's text would say it a second time.
+      if (!item.allianceInvite) {
+        bubble.append(item.attack ? attackText(item.text, item.attack) : make("p", "mail-message__text", item.text));
+      }
       if (index === request && state !== null) {
         const card = truceCard(state, until, item.mine, thread.otherName, now);
         bubble.classList.add("mail-message--request");
@@ -624,6 +651,12 @@ export class MailboxScreen {
       if (invite) {
         bubble.classList.add("mail-message--request");
         bubble.append(invite);
+      }
+      if (item.allianceInvite) {
+        bubble.classList.add("mail-message--request", "mail-message--alliance");
+        const allianceCard = this.allianceCardFor(thread, item.allianceInvite, item.mine);
+        bubble.append(allianceCard);
+        if (allianceCard.querySelector(".mail-request__actions")) answerable.push(allianceCard);
       }
       bubble.append(make("span", "mail-message__time", sentText(item.time, now)));
       if (item.defenceId !== null) {
@@ -671,7 +704,14 @@ export class MailboxScreen {
         }),
       );
     }
-    messages.lastElementChild?.scrollIntoView?.({ block: "nearest" });
+    const answer = answerable.at(-1);
+    if (answer) {
+      // The card, and above all its Accept / Decline, in sight without scrolling.
+      answer.scrollIntoView?.({ block: "nearest" });
+      answer.querySelector(".mail-request__actions")?.scrollIntoView?.({ block: "nearest" });
+    } else {
+      messages.lastElementChild?.scrollIntoView?.({ block: "nearest" });
+    }
   }
 
   /** Block player: one press asks, the second blocks. */
@@ -788,7 +828,8 @@ export class MailboxScreen {
     const invite = item.invite;
     const state = inviteState(invite, now);
     if (!invite || !state) return null;
-    const card = inviteCard(state, invite.until, item.mine, thread.otherName, invite.cell, now);
+    const shared = "shared" in invite ? invite.shared : true;
+    const card = inviteCard(state, invite.until, item.mine, thread.otherName, invite.cell, now, shared);
     const cell = invite.cell;
     const onShowOnMap = this.options.onShowOnMap;
     const view: RequestAction[] =
@@ -811,7 +852,7 @@ export class MailboxScreen {
           label: "Accept",
           style: "primary",
           run: async () => {
-            node.replaceWith(this.priceChoice(thread, cell));
+            node.replaceWith(this.priceChoice(thread, cell, shared));
             return null;
           },
         },
@@ -836,9 +877,9 @@ export class MailboxScreen {
    * further confirm (the owner's rule). Back draws the thread again, with the
    * invitation's own card.
    */
-  private priceChoice(thread: MailThread, cell: OffsetCell | null): HTMLElement {
+  private priceChoice(thread: MailThread, cell: OffsetCell | null, shared: boolean): HTMLElement {
     const pay = (payment: InvitePayment): RequestAction => ({
-      label: `Pay ${invitePriceText(payment)}`,
+      label: `Pay ${invitePriceText(payment, shared)}`,
       style: "primary",
       run: () => this.acceptInvite(thread, payment),
     });
@@ -848,6 +889,7 @@ export class MailboxScreen {
       tone: "info",
       detail:
         `Your main yard moves${cell ? ` to (${cell.col}, ${cell.row})` : ""} at once. ` +
+        (shared ? `${thread.otherName} pays the same. ` : "") +
         "Your outposts stay yours, and wild monsters claim your old spot. It cannot be undone.",
       actions: [
         pay("resources"),
@@ -902,6 +944,53 @@ export class MailboxScreen {
     this.options.onInviteChanged?.();
     await this.reopen(thread);
     this.setStatus("info", `You withdrew your invitation to ${thread.otherName}.`);
+    return null;
+  }
+
+  /**
+   * An alliance invite (beta 7): the alliance's shield and name, where the
+   * invite stands, and Accept / Decline while it waits for this player.
+   */
+  private allianceCardFor(thread: MailThread, invite: MailAllianceInvite, mine: boolean): HTMLElement {
+    const name = invite.allianceName ?? "an alliance";
+    const look = ALLIANCE_INVITE_LOOK[invite.state];
+    const id = invite.id;
+    const canAnswer = invite.state === "pending" && !mine && id !== null;
+    const node = requestCard({
+      title: "Alliance invite",
+      state: mine && invite.state === "pending" ? "Waiting" : look.label,
+      tone: look.tone,
+      detail:
+        invite.state === "closed"
+          ? `The invite to ${name} can no longer be answered.`
+          : mine
+            ? `You invited ${thread.otherName} to ${name}.`
+            : `${thread.otherName} invites you to ${name}.`,
+      ...(canAnswer && {
+        actions: [
+          { label: "Accept", style: "primary", run: () => this.answerAllianceInvite(thread, id, name, true) },
+          { label: "Decline", style: "outline", run: () => this.answerAllianceInvite(thread, id, name, false) },
+        ],
+      }),
+    });
+    node.classList.add("mail-request--alliance");
+    if (invite.allianceImage !== null) {
+      const shield = make("img", "mail-request__shield");
+      shield.src = shieldUrl(invite.allianceImage, "medium");
+      shield.alt = "";
+      shield.decoding = "async";
+      node.querySelector(".mail-request__head")?.prepend(shield);
+    }
+    return node;
+  }
+
+  private async answerAllianceInvite(thread: MailThread, id: number, name: string, accept: boolean): Promise<string | null> {
+    const result = await this.allianceApi.answerInvite(id, accept);
+    if (!result.ok) return result.message;
+    if (this.destroyed) return null;
+    if (accept) this.options.onAllianceJoined?.();
+    await this.reopen(thread);
+    this.setStatus("info", accept ? `You joined ${name}.` : `You declined the invite to ${name}.`);
     return null;
   }
 
@@ -983,12 +1072,25 @@ export class MailboxScreen {
       outpost = () => target.outposts.find((one) => one.baseid === select.value) ?? null;
     }
 
+    // Each pays a share (beta 7): the inviter picks theirs here, charged only when it is accepted.
+    const paySelect = make("select", "mail-invite__payment");
+    paySelect.setAttribute("aria-label", "You pay");
+    for (const payment of ["resources", "shiny"] as const) {
+      const option = document.createElement("option");
+      option.value = payment;
+      option.textContent = invitePriceText(payment);
+      paySelect.append(option);
+    }
+    const payLabel = make("label", "mail-compose__field");
+    payLabel.append(make("span", "mail-compose__caption", "You pay"), paySelect);
+    form.append(payLabel);
+
     form.append(
       make(
         "p",
         "mail-truce__about",
-        `If they accept, their main yard moves onto the outpost, for ${invitePriceText("resources")} or ` +
-          `${invitePriceText("shiny")}, which they pay. They must not be in an alliance. ` +
+        `If they accept, their main yard moves onto the outpost. You each pay ${invitePriceText("resources")} ` +
+          `or ${invitePriceText("shiny")}, charged then. ` +
           `They have ${INVITE_DAYS} days to answer, and you can withdraw it until then.`,
       ),
     );
@@ -1016,6 +1118,7 @@ export class MailboxScreen {
             message: text,
             type: "migraterequest",
             baseid: where.baseid,
+            hostpayment: paySelect.value === "shiny" ? "shiny" : "resources",
           });
           if (!result.ok) return result.reason;
           this.options.onInviteChanged?.();

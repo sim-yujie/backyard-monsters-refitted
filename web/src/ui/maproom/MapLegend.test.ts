@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
-import { PINNED_CENTRE_COLOUR, RELATION_LOOK } from "@/game/maproom/relationLook";
+import { ALLIANCES_LIVE, PINNED_CENTRE_COLOUR, RELATION_LOOK } from "@/game/maproom/relationLook";
 import { MAP_LEGEND_TEXT, MapLegend, relationSwatch, swatchLineColour } from "./MapLegend";
 
 /** The border colours' key on Map Room 2 (owner, 8 Nov 2026). */
@@ -26,16 +26,21 @@ describe("MapLegend", () => {
       (row) => row.dataset["relation"]!,
     );
 
-  it("lists yours, friend, pinned friend, hostile and neutral, leaving alliance out until alliances exist", () => {
+  it("lists yours, friend, pinned friend, alliance, hostile and neutral now alliances are live (beta 7)", () => {
+    expect(ALLIANCES_LIVE).toBe(true);
     const legend = make();
-    expect(rows(legend)).toEqual(["you", "friend", "pinned", "hostile", "other"]);
+    expect(rows(legend)).toEqual(["you", "friend", "pinned", "alliance", "hostile", "other"]);
     const words = [...legend.element.querySelectorAll(".mr2-key__label")].map(
       (label) => label.textContent,
     );
-    expect(words).toEqual(["Yours", "Friend", "Pinned friend", "Hostile", "Neutral"]);
+    expect(words).toEqual(["Yours", "Friend", "Pinned friend", "Alliance", "Hostile", "Neutral"]);
   });
 
-  it("shows the Alliance row once alliances are live", () => {
+  it("leaves the Alliance row out when alliances are switched off", () => {
+    expect(rows(make({ alliances: false }))).toEqual(["you", "friend", "pinned", "hostile", "other"]);
+  });
+
+  it("shows the Alliance row when asked for", () => {
     expect(rows(make({ alliances: true }))).toEqual([
       "you",
       "friend",

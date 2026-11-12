@@ -453,7 +453,9 @@ for (const [id, name] of REVAMP_DECORATIONS) {
  * 150, the Observatory (beta 7 alliances, owner 10 Nov 2026): the one building
  * a player needs, besides Map Room 2, to join or found an alliance. One per
  * main yard at every Town Hall level (no Town Hall rule), one level only, 4M
- * Twigs, Pebbles and Putty and 36 hours, needing the Map Room at level 2.
+ * Twigs, Pebbles and Putty and 36 hours, needing the Map Room at level 2. The
+ * server's gate is `services/alliance/joinGate.ts`; its numbers are repeated
+ * for readers in `server/src/config/AllianceConfig.ts` (OBSERVATORY).
  */
 const REVAMP_BUILDINGS = [
   {

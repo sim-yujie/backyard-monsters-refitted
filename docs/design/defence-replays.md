@@ -62,7 +62,7 @@ Index `(defender_userid, landed_at DESC)`.
 
 **Payload (gzip JSON, `v: 1`):** `load` (the attack load as served to the attacker, allow-listed to
 the fields the attack scene's load parser reads, e.g. buildingdata, buildinghealthdata, resources,
-defenderforces, the caged champion, cellheight, attpowerups, attackerlevel, attackeracademy,
+defenderforces, the caged champion, cellheight, attackerlevel, attackeracademy,
 attackerranks, attackerbrains; WP2 lists them exactly; never credits, chat, store, quest or
 notification fields), with `buildingdata` and
 `buildinghealthdata` REPLACED by the ones the server fought (`AbandonedInput.defender`), so the yard

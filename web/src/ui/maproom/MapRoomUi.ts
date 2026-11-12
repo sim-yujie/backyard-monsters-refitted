@@ -7,6 +7,7 @@ import { MAX_ZOOM, MIN_ZOOM } from "@/config";
 import type { OffsetCell } from "@/game/HexGrid";
 import type { RangeSource } from "@/game/maproom/attackRange";
 import type { KitFilter } from "@/game/maproom/cellVisuals";
+import type { MapAlliance } from "@/game/maproom/mapAlliances";
 import type { CellRange } from "@/game/maproom/zones";
 import type { TakeoverCandidate, TakeoverKind } from "@/game/maproom/takeover";
 import type { OwnOutpost } from "@/game/yard/ownYards";
@@ -123,6 +124,10 @@ export interface MapRoomUiHandlers {
   onWithdrawInvite?: (cell: OffsetCell, payload: PlayerCell) => void;
   onInviteToOutpost?: (payload: PlayerCell) => void;
   canInviteToOutpost?: (payload: PlayerCell) => boolean;
+  /** The alliance a cell's `aid` names, for the cell panel's alliance chip (beta 7). */
+  allianceOf?: (allianceId: number) => MapAlliance | undefined;
+  /** The player's own alliance id, or null. */
+  myAlliance?: () => number | null;
   /**
    * The cell inspector's Repeat attack on a wild camp (issue #221); see
    * `AutoAttackControlOptions`. Absent: no Repeat attack.
@@ -369,8 +374,8 @@ export class MapRoomUi {
   }
 
   /** The flingers the range is drawn from, for the legend (#177). */
-  setRangeSources(sources: readonly RangeSource[], declareWar: boolean): void {
-    this.rangeControl.setSources(sources, declareWar);
+  setRangeSources(sources: readonly RangeSource[]): void {
+    this.rangeControl.setSources(sources);
   }
 
   /** The viewer's fog of war sight (#331), for the minimap's two-tint circles. */
@@ -443,6 +448,8 @@ export class MapRoomUi {
         ...(this.handlers.onWithdrawInvite ? { onWithdrawInvite: this.handlers.onWithdrawInvite } : {}),
         ...(this.handlers.onInviteToOutpost ? { onInviteToOutpost: this.handlers.onInviteToOutpost } : {}),
         ...(this.handlers.canInviteToOutpost ? { canInviteToOutpost: this.handlers.canInviteToOutpost } : {}),
+        ...(this.handlers.allianceOf ? { allianceOf: this.handlers.allianceOf } : {}),
+        ...(this.handlers.myAlliance ? { myAlliance: this.handlers.myAlliance } : {}),
         onRangeToggle: (on) => this.toggleRange(on),
         extraAction: this.autoAttack ? [this.autoAttack, this.takeover] : this.takeover,
         ...(this.hud.achievements ? { achievementsLine: (payload: PlayerCell) => this.achievementsLine(payload) } : {}),

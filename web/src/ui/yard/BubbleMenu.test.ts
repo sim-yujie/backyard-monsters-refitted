@@ -79,8 +79,8 @@ describe("bubbleMenuOn", () => {
 });
 
 describe("BubbleMenu", () => {
-  it("holds Quests, Layout, Goals, Alerts, Defences and Mail, nearest More first; a new one only needs its name", () => {
-    expect(BUBBLE_ITEMS).toEqual(["quests", "layout", "goals", "bell", "defences", "mail"]);
+  it("holds Quests, Layout, Goals, Alerts, Defences, Mail and Alliance, nearest More first; a new one only needs its name", () => {
+    expect(BUBBLE_ITEMS).toEqual(["quests", "layout", "goals", "bell", "defences", "mail", "alliance"]);
   });
 
   it("gathers Layout into the fan and leaves Monsters on the bottom row", () => {

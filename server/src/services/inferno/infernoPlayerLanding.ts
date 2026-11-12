@@ -205,7 +205,6 @@ export const playerReplayInput = (
     // The Inferno yard has no champion, catapult or siege.
     attacker: { champion: [], catapult: 0, siege: null },
     tick,
-    declareWar: attack.session.declareWar ?? false,
     left,
   });
 

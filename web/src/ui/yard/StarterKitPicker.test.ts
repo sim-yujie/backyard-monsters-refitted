@@ -2,7 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, Resources } from "@/api/types";
 import type { StarterKitActions, StarterKitReport } from "@/api/yardStarterKit";
-import { kitTopUpShiny } from "@/game/yard/starterKits";
+import { kitSummary, kitTopUpShiny } from "@/game/yard/starterKits";
+import { setCurrentAllianceBonuses } from "@/game/alliance/allianceBonuses";
 import { readYard } from "@/game/yard/yardModel";
 import type { YardListener, YardStore, YardUiBinding } from "@/game/yard/YardStore";
 import { Notices } from "@/ui/maproom/Notices";
@@ -99,6 +100,40 @@ describe("StarterKitPicker", () => {
     expect(card(1).textContent).toContain("3× Sniper Tower L5");
     expect(card(1).querySelector(".kit-card__shiny")!.getAttribute("aria-label")).toBe("Use 420 Shiny");
     expect(confirm().hidden).toBe(true);
+  });
+
+  describe("the alliance's Starter Kit price (beta 7)", () => {
+    afterEach(() => setCurrentAllianceBonuses(null));
+
+    it("no alliance, or 0%: no tag and no struck-through price", () => {
+      open(bindingWith(RICH, 5_000));
+      expect(document.querySelector(".kit-card__alliance-tag")).toBeNull();
+      expect(document.querySelector(".kit-card__usual")).toBeNull();
+    });
+
+    it("a discount: the shield and -10% on every card, the usual price struck through", () => {
+      setCurrentAllianceBonuses({ bonuses: { kitCost: -10 } });
+      open(bindingWith(RICH, 5_000));
+      const tags = cards().map((one) => one.querySelector(".kit-card__alliance-tag"));
+      expect(tags.every((tag) => tag?.textContent === "−10%")).toBe(true);
+      expect(tags[0]!.classList.contains("kit-card__alliance-tag--cheaper")).toBe(true);
+      expect(tags[0]!.querySelector("img.game-icon--alliance")).not.toBeNull();
+      const usual = card(1).querySelector(".kit-card__usual")!;
+      expect(usual.textContent).not.toBe("");
+      // The card's own price is the alliance's, below the usual one.
+      const regular = kitSummary(1)!;
+      expect(card(1).querySelector(".kit-card__price")!.textContent).not.toBe(usual.textContent);
+      expect(regular.resources.r1).toBeGreaterThan(0);
+    });
+
+    it("a dearer kit says so: +5%", () => {
+      setCurrentAllianceBonuses({ bonuses: { kitCost: 5 } });
+      open(bindingWith(RICH, 5_000));
+      const tag = card(2).querySelector(".kit-card__alliance-tag")!;
+      expect(tag.textContent).toBe("+5%");
+      expect(tag.classList.contains("kit-card__alliance-tag--dearer")).toBe(true);
+      expect(tag.getAttribute("title")).toBe("Your alliance: Starter Kits cost 5% more in resources.");
+    });
   });
 
   it("spends nothing on a card's press: a confirmation says what happens first", async () => {

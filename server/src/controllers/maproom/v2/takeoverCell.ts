@@ -1,4 +1,5 @@
 import { LockMode, type EntityManager } from "@mikro-orm/core";
+import { takeoverPercent } from "../../../services/alliance/allianceBonuses.js";
 import type { KoaController } from "../../../utils/KoaController.js";
 import { User } from "../../../database/models/user.model.js";
 import { Save } from "../../../database/models/save.model.js";
@@ -29,13 +30,12 @@ import { quoteTakeover } from "../../../services/maproom/v2/takeoverCost.js";
 import { takeoverRefusal } from "../../../services/maproom/v2/takeoverRules.js";
 import { holdsTakeoverGrant } from "../../../services/maproom/v2/takeoverGrant.js";
 import { endTakeoverGrant, readTakeoverGrant } from "../../../services/maproom/v2/takeoverGrantStore.js";
-import { runningPowerups } from "../../../services/alliance/powerups.js";
-import { AlliancePowerupType } from "../../../enums/Alliance.js";
 import { isAttackActive } from "../../../services/base/isAttackActive.js";
 import { readAttackSession } from "../../../services/base/attackSessionStore.js";
 import { recordAchievements, unseenAchievements } from "../../../services/achievements/record.js";
 import type { AchievementEvents } from "../../../services/achievements/evaluate.js";
 import { claimWelcome, onMapRoom2, readWelcome, welcomeReady } from "../../../services/events/mr2Welcome.js";
+import { noteAllianceEvents } from "../../../services/alliance/allianceProgress.js";
 import { countTakeover, takeoverPoints } from "../../../services/events/takeoverEvents.js";
 import { calculateTribeLevel } from "../../../services/maproom/v2/calculateTribeLevel.js";
 import { outpostValue } from "../../../services/maproom/v2/outpostValue.js";
@@ -100,10 +100,6 @@ export const takeoverCell: KoaController = async (ctx) => {
 
   await validateRange(currentUser, MapRoomVersion.V2, { attackCell: cell });
 
-  const powerups = await runningPowerups(currentUser.alliance_id);
-
-  const conquestActive = powerups.some(({ id }) => id === AlliancePowerupType.CONQUEST);
-
   // "New to Map Room 2" (`services/events/mr2Welcome.ts`), read before the
   // transaction: a failed read only means no discount, never a failed takeover.
   // The transaction claims it again, atomically, before charging the cheap price.
@@ -158,8 +154,8 @@ export const takeoverCell: KoaController = async (ctx) => {
       isWildMonster: wildCamp,
       buildingdata: cellSave.buildingdata,
       takerHomebase: taker.homebase,
-      conquestActive,
       welcome,
+      alliancePercent: await takeoverPercent(em, currentUser.userid, wildCamp ? null : cellSave.saveuserid),
     });
 
     if (useShiny) {
@@ -290,6 +286,9 @@ export const takeoverCell: KoaController = async (ctx) => {
       ...(previousOwnerId !== undefined ? [invalidateSight(previousOwnerId)] : []),
     ],
   );
+
+  // The "Take over outposts" weekly goal (design v5 §16).
+  noteAllianceEvents(currentUser.userid, { takeover: 1 });
 
   ctx.status = Status.OK;
   // The paid unlocks not yet shown, as yard answers carry them (§9.3).

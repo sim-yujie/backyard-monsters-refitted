@@ -5,6 +5,7 @@ import { FREE_WELCOME_KIT, planStarterKit } from "../../services/yard/starterKit
 import { yardRefusedErr } from "../../services/yard/yardErrors.js";
 import { yardKindOf } from "../../services/yardplanner/costs.js";
 import { defineYardAction } from "./yardAction.js";
+import { noteAllianceEvents } from "../../services/alliance/allianceProgress.js";
 
 /**
  * `POST /bm/yard/starterkit` — replace an outpost's buildings with a Starter
@@ -27,7 +28,7 @@ const KIT_BOUGHT: AchievementEvents = { starterkit: 1 };
 
 export const yardStarterKitAction = defineYardAction({
   schema: YardStarterKitSchema,
-  run: async ({ save, user, body, now, em }) => {
+  run: async ({ save, user, body, now, em, bonuses }) => {
     let free = false;
     if (body.kit === FREE_WELCOME_KIT && yardKindOf(save) === "outpost") {
       // Outposts are Map Room 2 only, so the owner is on Map Room 2.
@@ -37,7 +38,10 @@ export const yardStarterKitAction = defineYardAction({
     if (body.free && !free) {
       throw yardRefusedErr("welcomeUsed", "The free Regular Starter Kit is no longer available.");
     }
-    return { ...planStarterKit(save, body, now, free), achievementEvents: KIT_BOUGHT };
+    const plan = planStarterKit(save, body, now, free, bonuses?.kitCost ?? 0);
+    // Conquest's "Rebuild outposts with Starter Kits" goal (design v5 §16).
+    if (yardKindOf(save) === "outpost") noteAllianceEvents(user.userid, { kitRebuild: 1 });
+    return { ...plan, achievementEvents: KIT_BOUGHT };
   },
   outposts: "allow",
 });

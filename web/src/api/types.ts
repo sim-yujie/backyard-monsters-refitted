@@ -723,6 +723,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
   firedtraps?: FiredTrap[];
   /** `main`, `outpost` or `tribe` (`server/src/enums/Base.ts`, BaseType). */
   type?: string;
+  /**
+   * The player's alliance, on an own main-yard load only (server
+   * `allianceData.ts`): read through `game/alliance/allianceBonuses.ts`
+   * and `api/chat.ts`.
+   */
+  alliancedata?: unknown;
   /** Owner username; the tribe name on a wild monster camp. */
   name?: string;
   /** Housing and hatchery state. On the own-yard load, the roster to fling. */
@@ -753,8 +759,6 @@ export interface BaseLoadResponse extends ApiEnvelope {
   attackid?: number;
   /** `canAttack()`'s verdict on the caller against this base. */
   canattack?: boolean;
-  /** Attack modes only: the attacker's running alliance powerups. */
-  attpowerups?: unknown[];
   /**
    * Attack modes only: the attacker's player level from their stored save,
    * which the engine's low-level loot bonus reads (`ATTACK.as:678-680`). The
@@ -842,8 +846,6 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * `parseDefenderForces`.
    */
   defenderforces?: unknown;
-  /** The base owner's running alliance powerups. */
-  powerups?: unknown[];
   /**
    * Only on the owner's build-mode load of their own main yard or outpost: what the
    * load's catch-up finished while the player was away, oldest first, in the

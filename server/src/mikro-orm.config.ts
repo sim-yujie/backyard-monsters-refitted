@@ -19,7 +19,6 @@ import { AttackPlanRow } from "./database/models/attackplan.model.js";
 import { Alliance } from "./database/models/alliance.model.js";
 import { AllianceInvite } from "./database/models/allianceinvite.model.js";
 import { AllianceMessage } from "./database/models/alliancemessage.model.js";
-import { AlliancePowerup } from "./database/models/alliancepowerup.model.js";
 import { AllianceRelationship } from "./database/models/alliancerelationship.model.js";
 import { AllianceStats } from "./database/models/alliancestats.view.js";
 import { ApiConsumer } from "./database/models/apiconsumer.model.js";
@@ -53,7 +52,6 @@ const entities = [
   Alliance,
   AllianceInvite,
   AllianceMessage,
-  AlliancePowerup,
   AllianceRelationship,
   AllianceStats,
   ApiConsumer,

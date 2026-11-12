@@ -17,6 +17,7 @@ import {
   type TakeoverPayment,
 } from "@/api/maproom";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
+import { mateAllianceOf } from "@/game/maproom/mapAlliances";
 import { getAutoAttackPlan, type AutoAttackPlanResponse } from "@/api/autoAttack";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
 import { openDefence } from "@/game/defences/openDefence";
@@ -35,7 +36,6 @@ import { mapRefreshSeconds, quality } from "@/game/quality";
 import {
   attackRefusal,
   cellDistance,
-  hasDeclareWar,
   outpostsToLoad,
   ownCellsIn,
   rosterInRange,
@@ -78,7 +78,8 @@ import {
   reachTo,
   type RangeSource,
 } from "@/game/maproom/attackRange";
-import { mainYardRange, outpostRange, withDeclareWar } from "@/game/maproom/rules/range";
+import { mainYardRange, outpostRange, withExtraReach } from "@/game/maproom/rules/range";
+import { currentAllianceBonuses, setCurrentAllianceBonuses } from "@/game/alliance/allianceBonuses";
 import { KitFilter } from "@/game/maproom/cellVisuals";
 import { Bookmarks } from "@/game/maproom/Bookmarks";
 import {
@@ -238,6 +239,7 @@ export class MapRoom2Scene implements Scene {
     },
     onResources: (resources, credits) => this.syncPool(resources, credits),
     onAlliance: (id) => this.renderer.setMyAlliance(id),
+    onAllianceRoster: (roster) => this.renderer.setAllianceRoster(roster),
     onError: (error) => this.reportError(error),
     onAuthFailure: () => this.context?.goTo(SceneName.LOGIN),
     skipZone: (zone) => this.sight.isZoneFullyFogged(zone),
@@ -468,8 +470,8 @@ export class MapRoom2Scene implements Scene {
         },
         ownFlinger: (_cell, payload) => {
           const own = payload.b === CellType.OUTPOST ? outpostRange(payload.f) : mainYardRange(payload.f);
-          const reach = withDeclareWar(own, this.declareWar);
-          return { level: payload.f ?? 0, reach, bonus: reach - own };
+          const reach = withExtraReach(own, currentAllianceBonuses().reach);
+          return { level: payload.f ?? 0, reach };
         },
         ownMoves: (_cell, payload) => ({
           // Flash offered the transfer only to a player with an outpost
@@ -495,9 +497,11 @@ export class MapRoom2Scene implements Scene {
             to: { userid: payload.uid, name: payload.n },
             outposts: this.ownSave ? outpostsOf(this.ownSave) : [],
           }),
-        // The server refuses a player in an alliance (`inviteRules.ts`); an outpost is needed to offer.
-        canInviteToOutpost: (payload) =>
-          !payload.aid && this.ownSave !== null && outpostsOf(this.ownSave).length > 0,
+        // An outpost is needed to offer. Alliance mates may be invited too (beta 7: the rule is gone).
+        canInviteToOutpost: () => this.ownSave !== null && outpostsOf(this.ownSave).length > 0,
+        // The owner's alliance on the cell panel (beta 7, from the map's roster).
+        allianceOf: (id) => this.renderer.allianceNamed(id),
+        myAlliance: () => this.renderer.myAllianceId,
         // Repeat attack on a wild camp (#221).
         autoAttackPlan: (baseid) => getAutoAttackPlan(baseid),
         onRepeatAttack: (cell, baseid, answer) => this.openAutoAttack(cell, baseid, answer),
@@ -859,6 +863,8 @@ export class MapRoom2Scene implements Scene {
       noteInfo("ownYard", primed ? "primed" : "fetched");
       const base = primed ?? (await timeSpan("own-yard", () => loadOwnYard()));
       this.ownSave = base;
+      // The alliance's extra reach (and prices) from this load, not the last yard visit.
+      setCurrentAllianceBonuses(base.alliancedata);
       // The player's outpost names (beta 7) for the outpost buttons and the move picker.
       seedOutpostLabels(base.outpostlabels);
       // Map Room 2's painted look (MR2_PAINTED_MAP), never in Classic.
@@ -1231,11 +1237,6 @@ export class MapRoom2Scene implements Scene {
     return rosterInRange(cell, ownCellsIn(this.store.loadedZoneRefs()), this.ownSave);
   }
 
-  /** Whether the player's alliance has Declare War running, from the own-yard load. */
-  private get declareWar(): boolean {
-    return hasDeclareWar(this.ownSave?.powerups);
-  }
-
   /**
    * The flingers the player's range is drawn from (#177): every own cell in
    * the loaded zones, with the home cell stood in for from the own-yard load
@@ -1245,12 +1246,11 @@ export class MapRoom2Scene implements Scene {
   private updateRange(): void {
     const sources = rangeSources(
       ownCellsIn(this.store.loadedZoneRefs()),
-      this.declareWar,
       this.home ? { cell: this.home, flinger: this.ownSave?.flinger } : null,
     );
     this.rangeSources = sources;
     this.renderer.setRange(this.rangeOn ? sources : null);
-    this.ui?.setRangeSources(sources, this.declareWar);
+    this.ui?.setRangeSources(sources);
   }
 
   /** The cell panel's Attack gate, for the cell it is showing. */
@@ -1284,10 +1284,20 @@ export class MapRoom2Scene implements Scene {
         cell,
         name: targetName(payload),
         ...("uid" in payload && payload.uid > 0 ? { owner: payload.uid } : {}),
+        ...this.allyOf(payload),
         roster,
       },
       refusal: null,
     };
+  }
+
+  /**
+   * The player's own alliance when the cell's owner is in it too (beta 7), for
+   * the "attack anyway?" confirm; nothing for anyone else or the player's own.
+   */
+  private allyOf(payload: MapCell): { ally?: { name: string; image: number } } {
+    const ally = mateAllianceOf(payload, this.renderer.myAllianceId, (id) => this.renderer.allianceNamed(id));
+    return ally ? { ally } : {};
   }
 
   /** Hands the selected cell to the attack scene. */
@@ -1435,6 +1445,7 @@ export class MapRoom2Scene implements Scene {
       const base = await loadOwnYard();
       if (!this.context) return;
       this.ownSave = base;
+      setCurrentAllianceBonuses(base.alliancedata);
       this.income = new IncomePrediction(base.buildingresources, base.resources);
       this.incomeCap = storageCapOf(base);
       this.clockOffset = base.currenttime - Date.now() / 1000;

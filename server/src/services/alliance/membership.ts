@@ -1,21 +1,31 @@
 import { EntityManager, PostgreSqlDriver } from "@mikro-orm/postgresql";
 
-import { AllianceMessageType, AllianceRole } from "../../enums/Alliance.js";
+import { AllianceMessageType, AllianceRole, AllianceType } from "../../enums/Alliance.js";
 import { Alliance } from "../../database/models/alliance.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { disconnectAllianceChat } from "../../chat/chatControl.js";
 import { invalidateAllianceSight, invalidatePlayerSight } from "../maproom/sight/sightService.js";
 import { announceShout, emitShout, type ShoutDraft } from "./allianceMessages.js";
+import { AllianceAction, can, canKick } from "./permissions.js";
+import { officerLimit } from "./allianceTypes.js";
+import { assertRejoinAllowed, lockGateSave } from "./joinGate.js";
+import { REJOIN_COOLDOWN_HOURS } from "../../config/AllianceConfig.js";
 import {
   alreadyInAllianceErr,
   cannotKickErr,
   cannotPromoteErr,
   leaderMustTransferErr,
+  mustLeaveAllianceToChangeWorldErr,
+  officerSeatsFullErr,
   permissionErr,
 } from "../../errors/errors.js";
+import { allianceFactorOf, noteFactorChange } from "./productionHistory.js";
+import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 
 type EntryShout = AllianceMessageType.CREATED | AllianceMessageType.JOINED;
+/** The ranks `setAllianceRank` moves a player between. */
+type Rank = AllianceRole.OFFICER | AllianceRole.MEMBER;
 type ExitShout = AllianceMessageType.KICKED | AllianceMessageType.LEFT;
 
 type Em = EntityManager<PostgreSqlDriver>;
@@ -24,6 +34,8 @@ type Em = EntityManager<PostgreSqlDriver>;
 export interface Membership {
   alliance_id: number | null;
   alliance_role: AllianceRole | null;
+  /** When they last left or were kicked (the 24-hour re-join wait). */
+  alliance_left_at: Date | null;
 }
 
 /*
@@ -36,17 +48,27 @@ export interface Membership {
  * the locks in that one order keeps two such transactions from deadlocking.
  */
 
+/** An alliance row as read under its lock. */
+export interface LockedAlliance {
+  id: number;
+  type: AllianceType;
+}
+
 /**
- * Locks an alliance's row until the transaction ends.
+ * Locks an alliance's row until the transaction ends and reads its type, which
+ * sets the member and Officer limits, from the database.
  *
  * @param {Em} em - The transaction's EntityManager.
  * @param {number} allianceId - The alliance to lock.
- * @returns {Promise<boolean>} False when the alliance no longer exists (disbanded).
+ * @returns {Promise<LockedAlliance | null>} Null when the alliance no longer exists (disbanded).
  */
-export const lockAlliance = async (em: Em, allianceId: number): Promise<boolean> => {
-  const rows = await em.execute<{ id: number }[]>(`SELECT id FROM bym.alliance WHERE id = ? FOR UPDATE`, [allianceId]);
+export const lockAlliance = async (em: Em, allianceId: number): Promise<LockedAlliance | null> => {
+  const [row] = await em.execute<LockedAlliance[]>(
+    `SELECT id, type FROM bym.alliance WHERE id = ? FOR UPDATE`,
+    [allianceId]
+  );
 
-  return rows.length > 0;
+  return row ?? null;
 };
 
 /**
@@ -59,7 +81,7 @@ export const lockAlliance = async (em: Em, allianceId: number): Promise<boolean>
  */
 export const lockMembership = async (em: Em, userid: number): Promise<Membership | null> => {
   const [row] = await em.execute<Membership[]>(
-    `SELECT alliance_id, alliance_role FROM bym."user" WHERE userid = ? FOR UPDATE`,
+    `SELECT alliance_id, alliance_role, alliance_left_at FROM bym."user" WHERE userid = ? FOR UPDATE`,
     [userid]
   );
 
@@ -76,7 +98,9 @@ export const lockMembership = async (em: Em, userid: number): Promise<Membership
  * The write only lands on a player with no alliance, so the database itself
  * refuses a second join, whatever the timing and however many server processes
  * there are. Call it inside a transaction, so a refusal also undoes whatever the
- * caller wrote before it (the new alliance, the accepted invite).
+ * caller wrote before it (the new alliance, the accepted invite). It also
+ * only lands once the 24-hour re-join wait is over (`REJOIN_COOLDOWN_HOURS`),
+ * the last guard behind the friendlier checks the callers make first.
  *
  * @param {User} user - The user joining.
  * @param {Alliance} alliance - The alliance being joined.
@@ -94,16 +118,32 @@ export const addAllianceMember = async (
 ) => {
   const { id } = alliance;
 
+  const now = new Date();
+  const waitedSince = new Date(now.getTime() - REJOIN_COOLDOWN_HOURS * 3600_000);
+
   const joined = await em.nativeUpdate(
     User,
-    { userid: user.userid, alliance_id: null },
-    { alliance_id: id, alliance_role: role }
+    {
+      userid: user.userid,
+      alliance_id: null,
+      $or: [{ alliance_left_at: null }, { alliance_left_at: { $lte: waitedSince } }],
+    },
+    { alliance_id: id, alliance_role: role, alliance_joined_at: now }
   );
 
-  if (joined === 0) throw alreadyInAllianceErr();
+  if (joined === 0) {
+    const row = await lockMembership(em, user.userid);
+
+    if (row && !row.alliance_id) assertRejoinAllowed(row.alliance_left_at, now);
+    throw alreadyInAllianceErr();
+  }
+
+  // The time before the join stays at no bonus (`productionHistory.ts`).
+  await noteFactorChange(em, { userid: user.userid }, 1, await allianceFactorOf(em, id), getCurrentDateTime());
 
   user.alliance_id = id;
   user.alliance_role = role;
+  user.alliance_joined_at = now;
 
   if (shoutType) await emitShout({ allianceId: id, author: user, type: shoutType, body: "", em });
 
@@ -119,14 +159,14 @@ export const addAllianceMember = async (
  * Every rule is checked again under the locks: the player must still be in
  * this alliance (they may have left and joined another since the request read
  * them), a leader may only go once no one else remains, and a kick needs the
- * kicker to still lead it. The count that decides a disband is taken under the
+ * kicker to still hold a rank that may kick the player's rank (`canKick`). The count that decides a disband is taken under the
  * alliance lock too, so a player accepted at the same moment is either counted
  * or refused, never left behind in a deleted alliance.
  *
  * @param {User} user - The user leaving or being removed.
  * @param {Alliance} alliance - The alliance they belong to.
  * @param {ExitShout} shoutType - KICKED when removed by a leader, LEFT when they chose to go.
- * @param {User} kickedBy - The leader doing the kick, for KICKED.
+ * @param {User} kickedBy - The Leader or Officer doing the kick, for KICKED.
  * @returns {Promise<boolean>} True if the alliance was disbanded (last member out).
  * @throws {ClientSafeError} When the user is no longer in it, a leader still has members, or the kicker no longer leads.
  */
@@ -136,19 +176,19 @@ export const removeAllianceMember = async (
   shoutType: ExitShout,
   kickedBy?: User
 ) => {
+  const leftAt = new Date();
   const disbanded = await postgres.em.transactional(async (em) => {
     if (!(await lockAlliance(em, alliance.id))) throw permissionErr();
 
-    if (kickedBy) {
-      const kicker = await lockMembership(em, kickedBy.userid);
-      const leads = kicker?.alliance_id === alliance.id && kicker.alliance_role === AllianceRole.LEADER;
+    const kicker = kickedBy ? await lockMembership(em, kickedBy.userid) : null;
 
-      if (!leads) throw cannotKickErr();
-    }
+    if (kickedBy && kicker?.alliance_id !== alliance.id) throw cannotKickErr();
 
     const membership = await lockMembership(em, user.userid);
 
     if (membership?.alliance_id !== alliance.id) throw kickedBy ? cannotKickErr() : permissionErr();
+
+    if (kickedBy && !canKick(kicker?.alliance_role, membership.alliance_role)) throw cannotKickErr();
 
     const remaining = await em.count(User, { alliance_id: alliance.id, userid: { $ne: user.userid } });
 
@@ -156,7 +196,14 @@ export const removeAllianceMember = async (
       throw kickedBy ? cannotKickErr() : leaderMustTransferErr(alliance.name);
     }
 
-    await em.nativeUpdate(User, { userid: user.userid }, { alliance_id: null, alliance_role: null });
+    // The time before leaving stays at the alliance's bonus (`productionHistory.ts`).
+    await noteFactorChange(em, { userid: user.userid }, await allianceFactorOf(em, alliance.id), 1, getCurrentDateTime());
+
+    await em.nativeUpdate(
+      User,
+      { userid: user.userid },
+      { alliance_id: null, alliance_role: null, alliance_joined_at: null, alliance_left_at: leftAt }
+    );
 
     if (remaining === 0) await em.nativeDelete(Alliance, { id: alliance.id });
 
@@ -165,6 +212,8 @@ export const removeAllianceMember = async (
 
   user.alliance_id = null;
   user.alliance_role = null;
+  user.alliance_joined_at = null;
+  user.alliance_left_at = leftAt;
 
   // The player's own sight no longer shares the alliance's, and the
   // alliance's cached union no longer includes them (issue #329,
@@ -188,18 +237,70 @@ export const removeAllianceMember = async (
 };
 
 /**
- * Hands leadership of an alliance to one of its members.
- * 
- * Leader becomes a member, and the member becomes the leader.
- * Alliance ownership is updated to reflect the new leader's userid and username.
+ * Leaving the world is leaving the alliance (owner, 10 Nov 2026): an alliance
+ * lives in one world. A member or Officer simply leaves; a leader alone
+ * disbands it; a leader with others is refused (`leaderMustTransferErr`)
+ * before anything about the world changes, so they hand over first.
+ *
+ * @param {User} user - The player about to leave their world.
+ * @returns {Promise<void>} Once they are out of any alliance.
+ */
+export const leaveAllianceForWorldChange = async (user: User): Promise<void> => {
+  if (!user.alliance_id) return;
+
+  const alliance = await postgres.em.findOne(Alliance, { id: user.alliance_id });
+
+  if (!alliance) {
+    user.alliance_id = null;
+    user.alliance_role = null;
+    return;
+  }
+
+  await removeAllianceMember(user, alliance, AllianceMessageType.LEFT);
+};
+
+/**
+ * Locks a player's row and main save until a world move's transaction ends,
+ * the same locks an alliance join takes before it asks the join gate
+ * (`lockGateSave`), and refuses the move if they are in an alliance by now.
+ * A join that landed after `leaveAllianceForWorldChange` (or that the
+ * request's copy of the player missed) is caught here, so no member is ever
+ * left in an alliance of a world they are no longer in (security review,
+ * 10 Nov 2026).
+ *
+ * @param {Em} em - The world move's transaction.
+ * @param {number} userid - The player leaving their world.
+ * @throws {ClientSafeError} When they are in an alliance.
+ */
+export const lockForWorldChange = async (em: Em, userid: number): Promise<void> => {
+  const membership = await lockMembership(em, userid);
+
+  await lockGateSave(em, userid);
+
+  if (membership?.alliance_id) throw mustLeaveAllianceToChangeWorldErr();
+};
+
+/**
+ * Hands leadership of an alliance to one of its Officers or Members.
+ *
+ * The two swap: the new leader's old rank goes to the old leader, so an
+ * Officer taking over leaves the old leader an Officer and the Officer count
+ * never moves. Alliance ownership is updated to the new leader's id and name.
  *
  * @param {User} leader - The current leader, stepping down.
- * @param {User} member - The member taking over.
+ * @param {User} member - The Officer or Member taking over.
  * @param {Alliance} alliance - The alliance changing hands.
  */
 export const promoteAllianceMember = async (leader: User, member: User, alliance: Alliance) => {
-  await postgres.em.transactional(async (em) => {
+  const oldRank = await postgres.em.transactional(async (em) => {
     if (!(await lockAlliance(em, alliance.id))) throw permissionErr();
+
+    const memberNow = await lockMembership(em, member.userid);
+    const rank = memberNow?.alliance_role;
+    const takesOverFrom =
+      memberNow?.alliance_id === alliance.id && (rank === AllianceRole.MEMBER || rank === AllianceRole.OFFICER);
+
+    if (!takesOverFrom) throw cannotPromoteErr();
 
     // Each write only lands if its player still holds the role it changes, in
     // this alliance, so a double click or a member leaving at the same moment
@@ -207,14 +308,14 @@ export const promoteAllianceMember = async (leader: User, member: User, alliance
     const stepsDown = await em.nativeUpdate(
       User,
       { userid: leader.userid, alliance_id: alliance.id, alliance_role: AllianceRole.LEADER },
-      { alliance_role: AllianceRole.MEMBER }
+      { alliance_role: rank }
     );
 
     if (stepsDown === 0) throw permissionErr();
 
     const takesOver = await em.nativeUpdate(
       User,
-      { userid: member.userid, alliance_id: alliance.id, alliance_role: AllianceRole.MEMBER },
+      { userid: member.userid, alliance_id: alliance.id, alliance_role: rank },
       { alliance_role: AllianceRole.LEADER }
     );
 
@@ -225,10 +326,12 @@ export const promoteAllianceMember = async (leader: User, member: User, alliance
       { id: alliance.id },
       { leader_userid: member.userid, leader_name: member.username }
     );
+
+    return rank;
   });
 
   member.alliance_role = AllianceRole.LEADER;
-  leader.alliance_role = AllianceRole.MEMBER;
+  leader.alliance_role = oldRank;
 
   alliance.leader_userid = member.userid;
   alliance.leader_name = member.username;
@@ -241,4 +344,59 @@ export const promoteAllianceMember = async (leader: User, member: User, alliance
   }
 
   await announceShout(shout);
+};
+
+/**
+ * Makes a Member an Officer, or an Officer a Member (design v5 §6). Only a
+ * rank with `SET_RANK` may, checked again under the locks, and an Officer seat
+ * is only given while the type has one free (2 / 4 / 6), counted under the
+ * alliance lock so two promotions at once cannot both take the last seat.
+ *
+ * @param {User} actor - The Leader doing it.
+ * @param {User} target - The player whose rank changes.
+ * @param {Alliance} alliance - The alliance.
+ * @param {Rank} rank - The rank to give.
+ * @returns {Promise<boolean>} False when the player already held that rank.
+ * @throws {ClientSafeError} When the actor may not, the target is not an Officer or Member here, or no seat is free.
+ */
+export const setAllianceRank = async (actor: User, target: User, alliance: Alliance, rank: Rank) => {
+  const changed = await postgres.em.transactional(async (em) => {
+    const locked = await lockAlliance(em, alliance.id);
+
+    if (!locked) throw permissionErr();
+
+    const actorNow = await lockMembership(em, actor.userid);
+
+    if (actorNow?.alliance_id !== alliance.id || !can(actorNow.alliance_role, AllianceAction.SET_RANK)) {
+      throw cannotPromoteErr();
+    }
+
+    const targetNow = await lockMembership(em, target.userid);
+    const from = targetNow?.alliance_role;
+    const movable =
+      targetNow?.alliance_id === alliance.id && (from === AllianceRole.MEMBER || from === AllianceRole.OFFICER);
+
+    if (!movable) throw cannotPromoteErr();
+    if (from === rank) return false;
+
+    if (rank === AllianceRole.OFFICER) {
+      const officers = await em.count(User, { alliance_id: alliance.id, alliance_role: AllianceRole.OFFICER });
+
+      if (officers >= officerLimit(locked.type)) throw officerSeatsFullErr(officerLimit(locked.type));
+    }
+
+    await em.nativeUpdate(User, { userid: target.userid }, { alliance_role: rank });
+
+    return true;
+  });
+
+  if (!changed) return false;
+
+  target.alliance_role = rank;
+
+  const type = rank === AllianceRole.OFFICER ? AllianceMessageType.OFFICER : AllianceMessageType.DEMOTED;
+
+  await announceShout({ allianceId: alliance.id, author: target, type, body: "" });
+
+  return true;
 };

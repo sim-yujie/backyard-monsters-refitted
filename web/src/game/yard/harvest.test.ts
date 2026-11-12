@@ -126,3 +126,13 @@ describe("predictBank", () => {
     });
   });
 });
+
+describe("the alliance production bonus", () => {
+  it("fills a harvester faster by alliancedata's production, as the server's catch-up", () => {
+    const plain = saveOf([snapper({ st: 0, cP: 10 })]);
+    const midas = { ...plain, alliancedata: { bonuses: { production: 50 } } };
+    const before = harvesterNow(snapper({ st: 0, cP: 10 }), plain, T0 + 100)!;
+    const after = harvesterNow(snapper({ st: 0, cP: 10 }), midas, T0 + 100)!;
+    expect(after.stored).toBe(Math.floor(before.stored * 1.5));
+  });
+});

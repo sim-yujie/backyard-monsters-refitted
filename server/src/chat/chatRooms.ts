@@ -264,8 +264,9 @@ export const postMessage = async (client: ChatClient, channel: string, body: str
 
 /**
  * Takes a client out of the rooms a control message says they no longer
- * belong in: every alliance room for an alliance eviction; every country room
- * but `keep` (the new country's) for a country change.
+ * belong in: every alliance room for an alliance eviction (the client is told,
+ * and drops its tab); every country room but `keep` (the new country's) for a
+ * country change.
  *
  * @param {ChatClient} client - The client to act on.
  * @param {ChatControlMessage} message - The eviction published by the API side.
@@ -274,6 +275,8 @@ export const evict = (client: ChatClient, message: ChatControlMessage) => {
   for (const [channel, info] of [...client.channels]) {
     if (message.type === ChatControlType.AllianceEvict && info.type === ChannelType.Alliance) {
       leaveChannel(client, channel);
+      // The player's own client drops its Alliance tab at once (beta 7 alliance chat).
+      send(client.ws, { type: ServerMessageType.Left, channel });
     }
 
     if (message.type === ChatControlType.CountryEvict && info.type === ChannelType.Country && channel !== message.keep) {

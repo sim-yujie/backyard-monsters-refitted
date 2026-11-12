@@ -15,6 +15,7 @@ import { notInOutpostErr, notYourYardErr } from "../../services/yard/yardErrors.
 import { yardKindOf, type YardKind } from "../../services/yardplanner/costs.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { lockInfernoRow, lockOwnYard } from "../yard/yardAction.js";
+import { countAfterCommit } from "../../services/alliance/allianceProgress.js";
 
 /**
  * The yard a Yard Planner route acts on (outposts WP3, issue #184).
@@ -94,7 +95,7 @@ export const onPlannerYard = async <T>(
     return result;
   }
 
-  const result = await postgres.em.transactional(async (tx) => {
+  const result = await countAfterCommit(() => postgres.em.transactional(async (tx) => {
     const yard = await lockOwnYard(tx, user, baseid);
     const now = getCurrentDateTime();
     const flingerBefore = yard.save.flinger;
@@ -107,7 +108,7 @@ export const onPlannerYard = async <T>(
     if (yard.inferno) syncInfernoCap(yard.main, yard.inferno);
     await tx.flush();
     return { batchResult, flingerBefore, flingerAfter: yard.save.flinger };
-  });
+  }));
 
   await invalidateSightIfFlingerChanged(user, result.flingerBefore, result.flingerAfter);
   return result.batchResult;

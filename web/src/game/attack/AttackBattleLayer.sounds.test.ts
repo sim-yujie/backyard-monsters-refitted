@@ -34,7 +34,7 @@ const blankSheet = (url: string): Promise<Texture> => {
 const battle = (classic: boolean) => {
   const run = fixtureRun(fixture, { rulesVersion: CLIENT_RULES_VERSION });
   const target = watchTarget(run);
-  const session = new AttackSession({ target, seed: run.replay.seed, declareWar: run.replay.declareWar });
+  const session = new AttackSession({ target, seed: run.replay.seed, declareWar: run.replay.declareWar ?? false });
   session.playScript(watchEvents(run), run.replay.tick);
   session.start();
   const depth = new Container();

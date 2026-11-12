@@ -127,7 +127,7 @@ const dispatch = async (ws: ServerWebSocket<SocketData>, data: string | Buffer) 
       const resolved = await authorizeJoin(client.userId, message.channel);
 
       if (!resolved) {
-        send(ws, { type: ServerMessageType.Error, code: ErrorCode.InvalidChannel });
+        send(ws, { type: ServerMessageType.Error, code: ErrorCode.InvalidChannel, channel: message.channel });
         return;
       }
 

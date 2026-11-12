@@ -1,4 +1,9 @@
 import { LockMode, type EntityManager } from "@mikro-orm/core";
+import {
+  productionScheduleOfUser,
+  weightedFactor,
+  type ProductionFactor,
+} from "../../alliance/productionHistory.js";
 import { Save } from "../../../database/models/save.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { BaseType } from "../../../enums/Base.js";
@@ -324,13 +329,16 @@ const lastPaid = (buildingresources: JsonObject | null | undefined): number | un
  *   ({@link outpostTimeline}): `rates` are the rates at `now`, and each tick
  *   that ran out at or before a change's `at` is paid without its `delta`.
  *   A change at or before the start of the interval counts for all of it.
+ * @param factor - The owner's alliance production factor, or its schedule
+ *   when it changed during the interval (`productionHistory.ts`).
  */
 export const payAutobank = (
   main: AutobankSave,
   rates: Readonly<Record<string, ResourceAmounts>>,
   now: number,
   completed: readonly unknown[] = [],
-  changes: readonly IncomeChange[] = []
+  changes: readonly IncomeChange[] = [],
+  factor: ProductionFactor = 1
 ): AutobankReport => {
   const total = noAmounts();
   const column: JsonObject = {};
@@ -356,6 +364,15 @@ export const payAutobank = (
     }
     for (const key of RESOURCE_KEYS) owed[key] = Math.max(0, owed[key]);
   }
+  // The owner's alliance production bonus (`allianceBonuses.ts`), on what the
+  // ticks earned: each tick at the factor that held when it ran
+  // (`productionHistory.ts`), so a bonus gained or lost while away is not
+  // applied to time before it.
+  const paidFactor =
+    ticks > 0
+      ? weightedFactor(t - ticks * AUTOBANK_TICK, now, factor, (start) => autobankTicks(ONE_EACH, start, now, until).owed.r1)
+      : 1;
+  if (paidFactor !== 1) for (const key of RESOURCE_KEYS) owed[key] = Math.max(0, Math.floor(owed[key] * paidFactor));
   const { credited, overflow } = creditResources(main, owed);
 
   const banked = credited.r1 + credited.r2 + credited.r3 + credited.r4;
@@ -482,7 +499,9 @@ export const autobankYard = async (
 ): Promise<AutobankReport | null> => {
   if (main.type !== BaseType.MAIN || Number(main.mapversion) !== MapRoomVersion.V2) return null;
   const { rates, changes } = await outpostIncomes(em, main, now, inHand);
-  return payAutobank(main, rates, now, completed, changes);
+  if (Object.keys(rates).length === 0) return payAutobank(main, rates, now, completed, changes);
+  const factor = await productionScheduleOfUser(em, main.saveuserid);
+  return payAutobank(main, rates, now, completed, changes, factor);
 };
 
 /**

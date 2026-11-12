@@ -5,7 +5,32 @@
  */
 export enum AllianceRole {
   LEADER = "leader",
+  OFFICER = "officer",
   MEMBER = "member",
+}
+
+/**
+ * The three alliance types (beta 7 alliances design v5 §4). The leader picks
+ * one; each has its own member and Officer limits (`ALLIANCE_TYPES`).
+ * @enum {string}
+ */
+export enum AllianceType {
+  MIDAS = "midas",
+  CONQUEST = "conquest",
+  FORTRESS = "fortress",
+}
+
+/**
+ * How a player gets into an alliance from the marketplace (design v5 §7a):
+ * Open joins at once, Ask to join waits for the Leader or an Officer, Invite
+ * only takes no asks at all.
+ *
+ * @enum {string}
+ */
+export enum AllianceJoinMode {
+  OPEN = "open",
+  ASK = "ask",
+  INVITE = "invite",
 }
 
 /**
@@ -32,8 +57,25 @@ export enum AllianceMessageType {
   PROMOTED = "promoted",
   CREATED = "created",
   RELATIONSHIP = "relationship",
-  POWERUP_ACTIVATED = "powerup_activated",
-  POWERUP_PURCHASE = "powerup_purchase",
+  OFFICER = "officer",
+  DEMOTED = "demoted",
+  TYPE_CHANGED = "type_changed",
+  RENAMED = "renamed",
+  TAKEOVER = "takeover",
+  /** A member's yard or outpost was attacked (beta 7 design v5 §12): an automatic line with Show on map. */
+  UNDER_ATTACK = "under_attack",
+  /** Two stars of a constellation lit (design v5 §9a); body `{"id","step"}`. */
+  STAR_LIT = "star_lit",
+  /** A weekly goal added (design v5 §8); body `{"kind","tier"}`. */
+  GOAL_SET = "goal_set",
+  /** A weekly goal reached; body `{"kind","tier","points"}`. */
+  GOAL_DONE = "goal_done",
+  /** A member suggested the next step of a constellation (design v5 §9a, PROPOSED); body `{"id","step"}`. */
+  STAR_SUGGESTED = "star_suggested",
+  /** A member asked mates for resources (design v5 §12b); body `{"request","amounts","reason"}`; chat shows Give. */
+  TRADE_ASK = "trade_ask",
+  /** A trade done; body `{"to","arrived"}`. */
+  TRADE_DONE = "trade_done",
 }
 
 /**
@@ -61,14 +103,3 @@ export enum AllianceInviteStatus {
   DECLINED = "declined",
 }
 
-/**
- * The three alliance power-ups. Values are the ids the client's POWERUPS class
- * keys its buckets by, so they must match `ap_*` in POWERUPS.as exactly.
- *
- * @enum {string}
- */
-export enum AlliancePowerupType {
-  ARMAMENT = "ap_armament",
-  CONQUEST = "ap_conquest",
-  DECLARE_WAR = "ap_declarewar",
-}

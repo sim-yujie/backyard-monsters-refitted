@@ -42,7 +42,6 @@ import {
   type ChampionStance,
 } from "@/game/combat/rules";
 import { siegeLevelsOf } from "@/game/combat/rules/siege";
-import { hasDeclareWar } from "./attackEntry";
 import type { AttackTarget } from "./attackTarget";
 
 /**
@@ -253,8 +252,8 @@ export interface AttackSessionOptions {
    */
   readonly playerLevel?: number;
   /**
-   * Whether Declare War lengthens the countdown. Read off the load's
-   * `attpowerups` when absent ({@link hasDeclareWar}).
+   * Whether Declare War lengthens the countdown. The alliance power-ups are
+   * gone: only a replay of an attack fought while it ran passes true.
    */
   readonly declareWar?: boolean;
   /**
@@ -320,12 +319,6 @@ export const mintSeed = (): number => {
   }
   return Math.floor(Math.random() * 0x1_0000_0000);
 };
-
-/**
- * Whether the attacker's running alliance powerups include Declare War; the
- * map's range gate reads the same list (`attackEntry.ts`).
- */
-export { hasDeclareWar };
 
 /**
  * A champion's brain from the load's `attackerbrains` (issue #219): the one
@@ -557,7 +550,7 @@ export class AttackSession {
   load(response: BaseLoadResponse, declareWar?: boolean): void {
     if (this.phase !== "idle") throw new Error("AttackSession: already loaded");
     this.response = response;
-    this.declareWar_ = declareWar ?? hasDeclareWar(response.attpowerups);
+    this.declareWar_ = declareWar ?? false;
     this.countdownSeconds = this.declareWar_
       ? DECLARE_WAR_COUNTDOWN_SECONDS
       : ATTACK_COUNTDOWN_SECONDS;

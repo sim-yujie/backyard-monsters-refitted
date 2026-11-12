@@ -5,8 +5,7 @@ import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { postgres } from "../../../server.js";
 import { logReport } from "../../base/reportManager.js";
 import { MapRoomVersion } from "../../../enums/MapRoom.js";
-import { AlliancePowerupType } from "../../../enums/Alliance.js";
-import { runningPowerups } from "../../alliance/powerups.js";
+import { allianceBonusesOfUser } from "../../alliance/allianceBonuses.js";
 import {
   checkOutpostRange,
   planRangeCheck,
@@ -126,33 +125,25 @@ export const rangeCheckV2 = async (
   const { baseid, homebase, outposts, flinger: storedFlinger } = user.save!;
 
   const cell = await resolveAttackCell(options);
+  // Conquest's full Teratorn: every flinger of a member reaches one cell more.
+  const extraReach = user.alliance_id
+    ? (await allianceBonusesOfUser(postgres.em, user.userid)).reach
+    : 0;
 
   // The main yard's level as of now, as the fog of war's sight measures it
   // (`flingerLevelsNow`): a finished upgrade counts before the yard is reopened.
   const mainLevel = await flingerLevelsNow([baseid]);
   const flinger = mainLevel.has(baseid) ? mainLevel.get(baseid) : storedFlinger;
 
-  const declareWar = await declareWarRunning(user.alliance_id);
-
-  const plan = planRangeCheck({ homebase, flinger, cell, outposts, declareWar });
+  const plan = planRangeCheck({ homebase, flinger, cell, outposts, extraReach });
 
   const verdict =
     "pending" in plan
-      ? checkOutpostRange(plan.pending, await outpostFlingers(plan.pending), declareWar)
+      ? checkOutpostRange(plan.pending, await outpostFlingers(plan.pending), undefined, extraReach)
       : plan;
 
   return { cell, verdict };
 };
-
-/**
- * Whether the user's alliance has Declare War running, the only time its two
- * extra cells of reach count (issue #190, as in Flash: `POWERUPS.as:140-160`).
- *
- * @param {User["alliance_id"]} allianceId - The user's alliance, if any.
- * @returns {Promise<boolean>} True while Declare War runs.
- */
-const declareWarRunning = async (allianceId: User["alliance_id"]): Promise<boolean> =>
-  (await runningPowerups(allianceId)).some(({ id }) => id === AlliancePowerupType.DECLARE_WAR);
 
 /**
  * The cell under attack, from whichever the caller could supply.

@@ -1,4 +1,5 @@
 import type { BaseLoadResponse, ResourceCaps, Resources, SpeedupItem, StoreData, UpgradeCost } from "@/api/types";
+import { currentAllianceBonuses } from "@/game/alliance/allianceBonuses";
 import type { CostRequirement, YardKind } from "@/game/yard/buildingCostData";
 import {
   costOf,
@@ -15,7 +16,7 @@ import {
 import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
 import type { PlanNode } from "@/game/yard/planner/placement";
 import { ACADEMY_TYPE, LAB_TYPE, countdownProgress } from "@/game/yard/jobs";
-import { recycleOffer, type RecycleOffer } from "@/game/yard/recycle";
+import { OBSERVATORY_TYPE, recycleOffer, type RecycleOffer } from "@/game/yard/recycle";
 import { ladderFor } from "@/game/yard/planner/upgrades";
 import { overCap as overCapOf } from "@/game/yard/storage";
 import { freeWorkers, holdsWorker, sharperToolsMultiplier } from "@/game/yard/workers";
@@ -252,6 +253,8 @@ export type OpenTarget =
   | "chamber"
   | "baiter"
   | "shop"
+  /** The alliance window: a built Observatory (beta 7). */
+  | "alliance"
   /** The Siege screen: a Siege Lab's Chaos Lab tab, a Siege Factory's Chaos Factory tab (Inferno WP 6.4). */
   | "siege";
 
@@ -602,7 +605,9 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
                     ? "shop"
                     : siteOfType(building.type) && building.level > 0 && context.yard.kind !== "outpost"
                       ? "siege"
-                      : null;
+                      : building.type === OBSERVATORY_TYPE && building.level > 0
+                        ? "alliance"
+                        : null;
   return {
     upgrade: upgrade && upgrade.gate?.reason !== "maxLevel" ? upgrade : null,
     maxed: upgrade?.gate?.reason === "maxLevel",
@@ -659,9 +664,11 @@ export const fortifyOffer = (building: YardBuilding, context: PanelContext): For
   }
 
   const fullCost: UpgradeCost = { r1: step[0], r2: step[1], r3: step[2], r4: step[3] };
-  // Builder's Weekend: the server charges this much less (`planFortify`).
+  // Builder's Weekend: the server charges this much less (`planFortify`),
+  // and a Fortress Legion's cheaper Fortify on top, never in the Inferno.
   const weekendOff = weekendPercent("builders", context.now());
-  const cost: UpgradeCost = costLessBy(fullCost, weekendOff);
+  const allianceOff = context.yard.kind === "inferno" ? 0 : Math.max(0, -currentAllianceBonuses().fortifyCost);
+  const cost: UpgradeCost = costLessBy(fullCost, Math.min(90, weekendOff + allianceOff));
   const seconds = Math.floor(step[4] * sharperToolsMultiplier(context.save.storedata, context.now()));
   const hall = townHallLevel(context.yard);
 

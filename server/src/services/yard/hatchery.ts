@@ -1,4 +1,5 @@
 import { shorterBy, weekendBoost } from "../events/weekendBoosts.js";
+import { byPercent } from "../alliance/allianceBonuses.js";
 import { hatchCost, hatchTime, housingSpace } from "../../game-data/monsterCatalogue.js";
 import { maxHp } from "../../game-rules/combat/stats.js";
 import type {
@@ -393,7 +394,8 @@ export const planHatcheryAdd = (
   target: HatcheryTarget,
   monster: string,
   count: number,
-  now: number
+  now: number,
+  outpostPercent = 0
 ) => {
   obtainableOrThrow(monster, monsterRealmOf(save));
   if (Number(save.lockerdata?.[monster]?.t) !== 2) {
@@ -412,7 +414,11 @@ export const planHatcheryAdd = (
   const limit = resolved.hcc ? HCC_STACKS : stackLimit(resolved.building);
 
   const level = levelOf(levels, monster);
-  const price = gooOf(monster, level);
+  // A Midas Council's dearer hatching on outposts (`outpostHatchCost`,
+  // `allianceBonuses.ts`). Only ever dearer: a cancel refunds the listed
+  // price, so a discount here would pay out more than it took.
+  const extra = yardKindOf(save) === "outpost" ? Math.max(0, outpostPercent) : 0;
+  const price = byPercent(gooOf(monster, level), extra);
   const goo = numberOf(save.resources?.[GOO]);
 
   let added = 0;

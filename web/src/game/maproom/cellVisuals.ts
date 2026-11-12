@@ -3,6 +3,7 @@ import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell, type Play
 import { HexGrid, mapRoomGrid } from "@/game/HexGrid";
 import { classicLook } from "@/game/classicLook";
 import { RELATION_LOOK, type PlayerRelation } from "./relationLook";
+import type { MapAlliance } from "./mapAlliances";
 
 export type { PlayerRelation } from "./relationLook";
 
@@ -108,6 +109,12 @@ export interface CellAppearance {
    * colour and line (`relationLook.ts`). Null off a player cell.
    */
   relation: PlayerRelation | null;
+  /**
+   * The owner's alliance shield (beta 7, design v5 §12): Flash's shield 1 to 41
+   * drawn at the left end of the name plate, 0 for none (no alliance, or its
+   * alliance not in the map's roster yet).
+   */
+  shield: number;
 }
 
 /** {@link CellAppearance.friend}. */
@@ -183,6 +190,12 @@ export interface MapViewerContext {
    * the flags alone decide.
    */
   friendMark?: (cell: PlayerCell) => CellFriend;
+  /**
+   * The alliance a player cell's `aid` names, from the map's roster
+   * (`GetAreaResponse.alliancedata`, beta 7): its name and shield. Absent, no
+   * shields are drawn.
+   */
+  allianceOf?: (allianceId: number) => MapAlliance | undefined;
 }
 export const DEFAULT_VIEWER_CONTEXT: MapViewerContext = { myAlliance: null, kitFilter: KitFilter.ALL };
 
@@ -376,6 +389,7 @@ export const loadingAppearance = (): CellAppearance => ({
   campHealth: null,
   friend: "none",
   relation: null,
+  shield: 0,
 });
 
 /**
@@ -467,6 +481,7 @@ export const fogAppearance = (coord?: { x: number; y: number }, sight?: SightLoo
     campHealth: null,
     friend: "none",
     relation: null,
+    shield: 0,
   };
 };
 
@@ -524,6 +539,7 @@ export const appearanceOf = (
     campHealth: null,
     friend: "none" as CellFriend,
     relation: null as PlayerRelation | null,
+    shield: 0,
   };
 
   if (isWaterCell(cell)) {
@@ -560,6 +576,7 @@ export const appearanceOf = (
       dimmed: !matchesKitFilter(cell, context.kitFilter),
       friend,
       relation,
+      shield: cell.aid != null ? (context.allianceOf?.(cell.aid)?.image ?? 0) : 0,
     };
   }
 

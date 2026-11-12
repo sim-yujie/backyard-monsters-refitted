@@ -315,3 +315,18 @@
   }
 }
 /* end take over */
+
+/* Before attacking an alliance mate (beta 7): the alliance's shield and name over the question. */
+.attack-mate-dialog__alliance {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.attack-mate-dialog__shield {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}

@@ -136,7 +136,6 @@ describe("takeoverQuote", () => {
       isWildMonster: true,
       buildingdata: null,
       takerHomebase: ["241", "207"],
-      conquestActive: false,
     });
     expect(body).toEqual({
       error: 0,
@@ -209,7 +208,6 @@ describe("takeoverQuote", () => {
         isWildMonster: false,
         buildingdata: REGULAR_KIT,
         takerHomebase: ["241", "207"],
-        conquestActive: false,
       }).resources
     );
   });
@@ -287,7 +285,6 @@ describe("takeoverQuote: New to Map Room 2", () => {
       isWildMonster: true,
       buildingdata: null,
       takerHomebase: null,
-      conquestActive: false,
     }).resources;
 
     expect(cheap.welcome).toBe(true);

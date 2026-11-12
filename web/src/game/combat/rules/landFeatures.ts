@@ -133,10 +133,13 @@ export const combineDefenceBonus = (
   if (!b) return a;
   const times = (x = 0, y = 0): number => (1 + x) * (1 + y) - 1;
   const range = (a.range ?? 0) + (b.range ?? 0);
+  // Only an alliance gives trap damage (beta 7); without one the object is as before.
+  const trap = times(a.trap, b.trap);
   return {
     hp: times(a.hp, b.hp),
     damage: times(a.damage, b.damage),
     ...(range !== 0 && { range }),
+    ...(trap !== 0 && { trap }),
   };
 };
 

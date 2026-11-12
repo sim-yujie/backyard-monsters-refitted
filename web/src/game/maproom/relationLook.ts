@@ -10,7 +10,7 @@
  *  - Yours, cyan `#3cf2ff`, the thickest line: kept from the painted borders the owner approved
  *    on 3 Nov, and the map's "you" accent everywhere else (range line, own plate ring). Kept next
  *    to the dark-blue alliance: cyan is far lighter (14 times the rim's luminance to 3.7) and thick.
- *  - Alliance, dark blue `#2f5bff`, a solid line. Hidden in the legend until alliances exist.
+ *  - Alliance, dark blue `#2f5bff`, a solid line (in the legend since alliances went live, beta 7).
  *    Dark against the ground, so the rim carries it: its glowing middle is 7.5 times the rim.
  *  - Friend, bright green `#4dff86` (was `#2ee86b`, which sank into Classic's dark grass), a double line; Pinned friend, light mint `#a4ffbe`, a
  *    triple line (a third stroke down the middle, so it differs by shape and not only by tint)
@@ -70,11 +70,12 @@ export const BORDER_RIM_COLOUR = 0x0b0f14;
 export const BORDER_RIM_ALPHA = 0.55;
 
 /**
- * Whether alliances exist yet. They do not (beta 7): alliance-mates still get the dark-blue border if
- * the server ever sends a shared alliance (`PlayerCell.aid` equal to `GetAreaResponse.myalliance`),
- * but the legend leaves the Alliance row out until this is switched on.
+ * Whether alliances exist: yes, from beta 7 (lead, 10 Nov 2026, branch feat/alliances). Alliance-mates
+ * (`PlayerCell.aid` equal to `GetAreaResponse.myalliance`) get the dark-blue border and their
+ * alliance's shield on the name plate, and the legend shows the Alliance row. Switched off, the
+ * legend would leave that row out again.
  */
-export const ALLIANCES_LIVE = false;
+export const ALLIANCES_LIVE = true;
 
 /** The legend's rows, in reading order. */
 const LEGEND_ORDER: readonly PlayerRelation[] = ["you", "friend", "pinned", "alliance", "hostile", "other"];

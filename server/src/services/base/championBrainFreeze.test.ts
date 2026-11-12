@@ -147,7 +147,6 @@ describe("the log a client sends", () => {
       defender: { type: "tribe", buildingdata: {}, buildinghealthdata: {}, resources: {} },
       attacker: { champion: [champion(1)] },
       tick: 200,
-      declareWar: false,
     })!;
     expect(input.log.events[0]).toMatchObject({ champion: { b: BRAIN } });
   });

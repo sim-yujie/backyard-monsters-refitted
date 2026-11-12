@@ -55,7 +55,6 @@ import type { CompletedJob } from "../../../services/yard/catchUp.js";
 import { extractTownHall } from "../../../utils/extractTownHall.js";
 import { getChatChannel, getOrCreateChatToken } from "../../../chat/chatChannels.js";
 import { getAllianceData } from "../../../services/alliance/allianceData.js";
-import { runningPowerups } from "../../../services/alliance/powerups.js";
 import { cellRelationship, findRelationships } from "../../../services/alliance/relationships.js";
 import { INFERNO_CHAT_CHANNEL, countryChannelFor } from "../../../config/ChatConfig.js";
 import { finaliseBeforeLoad } from "../../../services/base/finaliseAttack.js";
@@ -483,7 +482,6 @@ export const baseLoad: KoaController = async (ctx) => {
   }
 
   const isOwnMainYard = isOwner && !isInferno;
-  const isOverworldAttack = isAttack && !isInferno;
 
   const ownerAllianceId = isInferno ? 0 : (baseOwner?.alliance_id ?? 0);
   const flaggedAlliances = ownerAllianceId ? [ownerAllianceId] : [];
@@ -491,9 +489,6 @@ export const baseLoad: KoaController = async (ctx) => {
   const stances = await findRelationships(user.alliance_id, flaggedAlliances);
 
   const alliance = isOwnMainYard ? await getAllianceData(user) : null;
-  const powerups = isOwnMainYard ? await runningPowerups(user.alliance_id) : [];
-
-  const attpowerups = isOverworldAttack ? await runningPowerups(user.alliance_id) : [];
 
   const relationship = isOwnMainYard
     ? EnumBaseRelationship.SELF
@@ -557,7 +552,6 @@ export const baseLoad: KoaController = async (ctx) => {
     ...(coins !== null && { eventcoins: coins }),
     ...(outpostLabels && { outpostlabels: outpostLabels }),
     chatservers: [process.env.CHAT_WS_HOST!],
-    ...(isAttack && { attpowerups }),
     ...(type === BaseMode.HELP && { help: await helpBlockFor(user.userid, baseSave) }),
     ...(attackerLevel !== undefined && { attackerlevel: attackerLevel }),
     // The player's own level for the yard HUD (#192): their main save's, on
@@ -602,7 +596,6 @@ export const baseLoad: KoaController = async (ctx) => {
         quiet: quietLogin,
       }),
       ...(alliance && { alliancedata: alliance }),
-      powerups,
     }),
   };
 

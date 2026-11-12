@@ -83,6 +83,8 @@ mock.module("../../../server.js", () => ({
       getTransactionContext: () => transaction,
       // Only the event counter's SQL is answered; anything else fails as with no database.
       execute: async (sql: string, params: unknown[]) => {
+        // The alliance lookups (`allianceBonuses.ts`): nobody here is in one.
+        if (sql.includes("bym.alliance")) return [];
         if (!sql.includes("event_progress")) throw new Error("no database");
         counted.push([String(params[1]), Number(params[2])]);
         return [{ counter: params[2] }];
@@ -209,7 +211,7 @@ const serverLoot = (flinglog: unknown, buildingdata: unknown) => {
     attacker: attackerSave,
     mapRoom3: false,
   };
-  const input = battleReplayInput({ ...args, tick: battleTick(undefined), declareWar: false });
+  const input = battleReplayInput({ ...args, tick: battleTick(undefined) });
   return attackLootOf({ ...args, fought: input && foughtLoot(replayAbandonedAttack(input)) });
 };
 
@@ -352,7 +354,6 @@ describe("the champion's habits through the save (champion modes round 2)", () =
       defender: { type: "tribe", buildingdata: YARD as never, buildinghealthdata: {}, resources: defender.resources },
       attacker: structuredClone(attackerSave),
       tick: battleTick("3200"),
-      declareWar: false,
     })!;
     expect(input.log.events[0]).toMatchObject({ champion: { hv: 1, h: HABITS } });
     expect((input.log.events[0] as { champion: { b?: unknown } }).champion.b).toBeUndefined();
@@ -468,7 +469,6 @@ describe("the shop boosts through the save (beta.4)", () => {
       defender: { type: "tribe", buildingdata: YARD as never, buildinghealthdata: {}, resources: defender.resources },
       attacker: attackerSave,
       tick: battleTick(undefined),
-      declareWar: false,
     });
     return replayAbandonedAttack(input!).buildinghealthdata["1"];
   };
@@ -883,7 +883,6 @@ describe("a champion healed by Vorgs or Zafreeti keeps the heal through the save
       defender: { type: "tribe", buildingdata: CAMP as never, buildinghealthdata: {}, resources: defender.resources },
       attacker: attackerSave,
       tick: battleTick(TICK),
-      declareWar: false,
     })!;
     return replayAbandonedAttack(input).attackerchampion![0]!.hp;
   };
@@ -1045,7 +1044,6 @@ describe("the battle is the server's (#23, C3)", () => {
         defender: { type: "tribe", buildingdata: WITH_TRAP as never, buildinghealthdata: {}, resources: { r1: 5000, r2: 0, r3: 0, r4: 0 } },
         attacker: attackerSave,
         tick: battleTick(TICK),
-        declareWar: false,
         left,
       })!
     );
@@ -1255,7 +1253,6 @@ describe("the defence lands (#195)", () => {
         },
         attacker: attackerSave,
         tick: battleTick(TICK),
-        declareWar: false,
         left: false,
       })!
     );
@@ -1527,7 +1524,6 @@ describe("the Flinger's room (owner, 12 Nov 2026)", () => {
         },
         attacker: attackerSave,
         tick: battleTick(TICK),
-        declareWar: false,
       })!
     );
     return {

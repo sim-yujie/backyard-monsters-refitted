@@ -39,6 +39,7 @@ import { syncBaseValue, type BaseValueSave } from "./derivedLevels.js";
 import { addStarterBase, type StarterBaseJob, type StarterBaseSave } from "./starterBase.js";
 import { catchUpSiege, type SiegeCompletedJob, type SiegeSave } from "./siege.js";
 import { yardKindOf } from "../yardplanner/costs.js";
+import type { ProductionFactor } from "../alliance/productionHistory.js";
 
 /**
  * `catchUpYard(save, now)`: advances a main yard from its `savetime` to `now`
@@ -155,8 +156,11 @@ export interface CatchUpSave
  *
  * @param save - The yard, mutated in place; `savetime` ends at `now`.
  * @param now - Unix seconds to advance to.
+ * @param productionFactor - The owner's alliance production bonus as a
+ *   factor on the main yard's harvesters (`allianceBonuses.ts`); 1 for none.
+ *   A schedule when it changed while they were away (`productionHistory.ts`).
  */
-export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
+export const catchUpYard = (save: CatchUpSave, now: number, productionFactor: ProductionFactor = 1): CompletedJob[] => {
   const kind = yardKindOf(save);
   if (kind === "outpost") return catchUpOutpost(save, now);
   if (kind === "inferno") return catchUpInferno(save, now);
@@ -175,7 +179,7 @@ export const catchUpYard = (save: CatchUpSave, now: number): CompletedJob[] => {
     ...catchUpBuildings(save, from, now),
   ];
   completed.push(...catchUpMonsters(save, from, now, completed));
-  catchUpHarvesters(save, from, now, completed);
+  catchUpHarvesters(save, from, now, completed, "main", productionFactor);
   catchUpMushrooms(save, now);
   completed.push(...catchUpTraining(save, from, now));
   completed.push(...catchUpResearch(save, now));
