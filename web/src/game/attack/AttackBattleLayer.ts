@@ -1,4 +1,5 @@
 import {
+  ColorMatrixFilter,
   Container,
   Graphics,
   Rectangle,
@@ -62,6 +63,7 @@ import {
 } from "./punchyMoments";
 import { dirtFor, surfaceHop } from "./burrowFx";
 import { jumpLift } from "./jumpFx";
+import { RaiseFx, riseDrop, saturationMatrix, zombieSaturation, type ZombieAt } from "./raiseFx";
 import { classicLook } from "@/game/classicLook";
 import { deviceTextureLimit, sheetResolution } from "@/game/quality";
 import { copyCell, gpuTextureLimit } from "@/game/textureLimit";
@@ -772,6 +774,13 @@ const TOWER_QUAKE_COLOUR = 0x6666cc;
 /** The special moves' bursts (issue #352): a splash, a Bolt's hop. */
 const SPLASH_COLOUR = 0xe8d44d;
 const BLINK_COLOUR = 0x9fd4ff;
+/** A Rezghul raise's `Dig` and `GIBLETS` lie 20 px below the risen monster's feet (`RezghulResurrectAttack.as:79, 86`). */
+const RISE_DIG_BELOW = 20;
+/** The giblets' splat: a small one, as a monster's death. */
+const RISE_GIB_RADIUS = 12;
+/** The Modern look's ring round a raise, in Rezghul's sea-green. */
+const RISE_RING_RADIUS = 24;
+const RISE_RING_COLOUR = 0x3fd9a0;
 /** Blink.as:78: a hopping Bolt is drawn at this alpha. A cloaked Brain is drawn the same. */
 const UNSEEN_ALPHA = 0.3;
 const GIB_COLOURS = [0x5da832, 0x3f7a1e, 0x8ad14a] as const;
@@ -841,6 +850,12 @@ export class AttackBattleLayer {
   /** Drawn explosions, Eye-ra's fiery one (feat/eyera-explosion); inside `effects`. */
   private readonly blastAir = new Container();
   private readonly blastFx: BlastFx;
+  /** Rezghul's raise: its orbs and the green lightning round them and its zombies (`raiseFx.ts`). */
+  private readonly raiseFx: RaiseFx;
+  /** The tick each raised creep rose (`rise`), for its climb out of the ground and its greying. */
+  private readonly risen = new Map<number, number>();
+  /** Each zombie's grey (`Zombiefy`'s saturation tween), by creep id. */
+  private readonly zombieFilters = new Map<number, ColorMatrixFilter>();
   private readonly fire = new Graphics();
   /** The Spurtz Cannon's shells, off their sheet, just over `fire` (issue #313). */
   private readonly shells = new Container();
@@ -989,6 +1004,7 @@ export class AttackBattleLayer {
       this.juice === "full" ? BIG_MAX_SHAKE : undefined,
       this.juice === "reduced" && !this.reducedMotion,
     );
+    this.raiseFx = new RaiseFx(() => this.airLayer(), this.classic, this.reducedMotion);
     this.bombFx = new BombFx(
       {
         air: () => this.airLayer(),
@@ -1162,6 +1178,7 @@ export class AttackBattleLayer {
       this.towerFx.update(tick, (id) => this.views.get(id)?.snapshot ?? undefined, live);
       this.showReleased(this.ledger.expire(tick), tick);
       this.paintCreeps(tick);
+      this.raiseFx.update(tick, (at, reach) => this.creepNear(at, reach), this.zombies());
       this.fell(tick);
       if (this.session.ended && !this.endWalked) this.walkOffAtEnd(shown);
       this.walkOff(shown);
@@ -1379,16 +1396,26 @@ export class AttackBattleLayer {
     readonly y: number;
     readonly glint: number;
     readonly felled: boolean;
+    /** A zombie's saturation, 1 to 0 as it greys; 1 for any other creep. */
+    readonly saturation: number;
   } | null {
     const view = this.views.get(id) ?? this.felled.get(id);
     if (!view) return null;
+    const grey = this.zombieFilters.get(id);
     return {
       alpha: view.body.alpha,
       barAlpha: view.barBack.alpha,
       y: view.body.y,
       glint: view.glint?.visible ? view.glint.alpha : 0,
       felled: this.felled.has(id),
+      // The red row's red weight less the grey's share of red is the saturation.
+      saturation: grey ? (grey.matrix[0] ?? 1) - (grey.matrix[5] ?? 0) : 1,
     };
+  }
+
+  /** Rezghul's orbs and lightning, for tests. */
+  get raiseEffects(): RaiseFx {
+    return this.raiseFx;
   }
 
   /** Splats, dirt and gibs still fading on the ground, for tests. */
@@ -1442,6 +1469,10 @@ export class AttackBattleLayer {
     for (const scorch of this.scorches) scorch.destroy();
     this.scorches.length = 0;
     this.blastFx.destroy();
+    this.raiseFx.destroy();
+    for (const filter of this.zombieFilters.values()) filter.destroy();
+    this.zombieFilters.clear();
+    this.risen.clear();
     this.ledger.clear();
     this.heldBuildingHp.clear();
     this.lastJump.clear();
@@ -1672,7 +1703,51 @@ export class AttackBattleLayer {
             : view.baseTint;
       this.paintMoves(view, tick);
       this.paintGlint(view, tick);
+      this.paintZombie(view, tick);
     }
+  }
+
+  /**
+   * A Rezghul's zombie greys over its first second (`Zombiefy.as:34`): a
+   * colour-matrix filter on its body, as Flash's on its graphic. One raised
+   * while the battle was skipped, or before this layer saw it rise, is grey
+   * at once.
+   */
+  private paintZombie(view: CreepView, tick: number): void {
+    if (view.snapshot?.zombie !== true) return;
+    let filter = this.zombieFilters.get(view.id);
+    if (!filter) {
+      filter = new ColorMatrixFilter();
+      this.zombieFilters.set(view.id, filter);
+      view.body.filters = [filter];
+    }
+    const rose = this.risen.get(view.id);
+    filter.matrix = saturationMatrix(rose === undefined ? 0 : zombieSaturation(tick - rose));
+  }
+
+  /** Where the zombies stand, for their sparks. */
+  private *zombies(): Generator<ZombieAt> {
+    for (const view of this.views.values()) {
+      if (view.snapshot?.zombie !== true || view.burrowed) continue;
+      yield { id: view.id, ground: { x: view.lastX, y: view.lastY } };
+    }
+  }
+
+  /**
+   * The feet of the closest creep of either side within `reach` of `at`, for
+   * a Rezghul orb's spark (`Targeting.getClosestEnemy` with `k_TARGETS_ALL`).
+   */
+  private creepNear(at: Point, reach: number): Point | null {
+    let best: Point | null = null;
+    let bestDistance = reach;
+    for (const view of this.views.values()) {
+      if (!view.snapshot || this.died.has(view.id)) continue;
+      const distance = Math.hypot(view.lastX - at.x, view.lastY - at.y);
+      if (distance > bestDistance) continue;
+      bestDistance = distance;
+      best = { x: view.lastX, y: view.lastY };
+    }
+    return best;
   }
 
   /**
@@ -1803,6 +1878,14 @@ export class AttackBattleLayer {
 
   private release(view: CreepView): void {
     view.body.visible = false;
+    const zombie = this.zombieFilters.get(view.id);
+    if (zombie) {
+      // The view goes back to the pool: the next creep to use it starts in colour.
+      view.body.filters = null;
+      zombie.destroy();
+      this.zombieFilters.delete(view.id);
+    }
+    this.risen.delete(view.id);
     view.barBack.visible = false;
     view.barFront.visible = false;
     view.status.hide();
@@ -1910,8 +1993,12 @@ export class AttackBattleLayer {
         ? bigLungeOffset(tick - view.lungeTick) -
           (windUp !== null ? WINDUP_PULL_PX * ((windUp + 1) / Math.max(1, swing.strike ?? 2)) : 0)
         : lungeOffset(tick - view.lungeTick);
-    // A Wormzer that has just come up hops out of its hole (`MonsterBase.jump`).
-    const hop = this.reducedMotion ? 0 : surfaceHop(tick - view.surfaceTick);
+    // A Wormzer that has just come up hops out of its hole (`MonsterBase.jump`);
+    // a monster a Rezghul raised climbs out of the ground (`riseDrop`), a hop down.
+    const rose = this.risen.get(creep.id);
+    const hop = this.reducedMotion
+      ? 0
+      : surfaceHop(tick - view.surfaceTick) - (rose === undefined ? 0 : riseDrop(tick - rose));
     // A heavy round knocks it back along the round's flight, flattens it and
     // holds it on one frame for a moment ({@link onStruck}).
     // One it killed is thrown further and stays on that frame ({@link fell}).
@@ -2557,6 +2644,20 @@ export class AttackBattleLayer {
       this.onBounce(event);
       return;
     }
+    if (event.kind === "raiseOrb") {
+      this.raiseFx.throwOrb(
+        event.tick,
+        event.landTick,
+        event.creepId,
+        groundWorld(event.fromIx, event.fromIy, this.origin),
+        groundWorld(event.toIx, event.toIy, this.origin),
+      );
+      return;
+    }
+    if (event.kind === "rise") {
+      this.onRise(event);
+      return;
+    }
     if (event.kind !== "death") return;
     this.died.add(event.creepId);
     // A death a held bullet dealt waits for it to land; the rest splat now.
@@ -2586,6 +2687,24 @@ export class AttackBattleLayer {
     view.burrowed = under;
     view.dirtTick = tick;
     this.spawnDirt(tick, ground, dirt === "dig");
+  }
+
+  /**
+   * A Rezghul raised `creepId` (`RezghulResurrectAttack.resurrect`, `:78-85`):
+   * a `Dig` and `GIBLETS` 20 px below its feet, and it climbs the 20 px out
+   * of the ground over 0.8 s ({@link place}). The Modern look adds a ring in
+   * Rezghul's sea-green, as its other moves' bursts.
+   */
+  private onRise(event: Extract<BattleVisualEvent, { kind: "rise" }>): void {
+    this.risen.set(event.creepId, event.tick);
+    // Its view was placed this frame before the event was read: down in the ground from the first frame.
+    const view = this.views.get(event.creepId);
+    if (view?.snapshot) this.place(view, view.snapshot, event.tick);
+    const at = groundWorld(event.ix, event.iy, this.origin);
+    const below = { x: at.x, y: at.y + RISE_DIG_BELOW };
+    this.spawnDirt(event.tick, below, true);
+    this.spawnSplat(event.tick, below, RISE_GIB_RADIUS);
+    if (!this.classic) this.spawnRing(event.tick, at, RISE_RING_RADIUS, RISE_RING_COLOUR);
   }
 
   /**
