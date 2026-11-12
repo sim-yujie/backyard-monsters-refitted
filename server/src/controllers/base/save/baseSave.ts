@@ -22,11 +22,14 @@ import { refuseMissingBase } from "../../../services/base/missingBase.js";
 import { combatConfig } from "../../../config/CombatConfig.js";
 import { chargeBombSpend } from "../../../services/base/combat/bombSpend.js";
 import { recordBombSpend } from "../../../services/base/combat/recordBombSpend.js";
+import { requireFlingsInRoom } from "../../../services/base/combat/recordFlingRoom.js";
 import { defenderLootHandler } from "./handlers/defenderLootHandler.js";
 import { monsterUpdateHandler, monsterUpdateMode } from "./handlers/monsterUpdateHandler.js";
 import { validateSave } from "../../../scripts/anticheat/anticheat.js";
 import { getHousingOwner, getOutpostOwnerSave } from "../../../services/base/getOutpostOwnerSave.js";
 import { advanceBuildingTimers } from "../../../services/base/advanceBuildingTimers.js";
+import { invalidateSightAfterLanding } from "../../../services/maproom/sight/sightService.js";
+import { syncAttackedYardLevels } from "../../../services/yard/derivedLevels.js";
 import { championHandler } from "./handlers/championHandler.js";
 import { buildingDataHandler } from "./handlers/buildingDataHandler.js";
 import { protectTrojanHorse } from "../../../services/raids/trojanHorse.js";
@@ -79,7 +82,6 @@ import {
 import { battleReplayInput, battleTick, foughtLoot } from "../../../services/base/combat/battle.js";
 import { buildingDataWithout } from "../../../services/base/combat/abandonedAttack.js";
 import { recordBattleMismatches, replayBattleForSave } from "../../../services/base/combat/saveBattle.js";
-import { isDeclareWarRunning } from "../../../services/alliance/powerups.js";
 import { combatCellHeight } from "../../../services/base/combat/cellHeight.js";
 import { championsAfterAttack, championsAfterBattle, siegeAfterAttack } from "../../../services/base/combat/attackerRow.js";
 import { garrisonsAfterBattle } from "../../../services/base/combat/bunkerGarrison.js";
@@ -93,6 +95,8 @@ import { championsAfterDefence } from "../../../services/base/combat/defenderCha
 import { healChampions } from "../../../services/yard/catchUpChampions.js";
 import { championsAfterLessons } from "../../../services/base/combat/championBrain.js";
 import { countAttackLoot } from "../../../services/events/lootEvents.js";
+import { plunderPercent, weekendBoostUsed, withPlunderBonus } from "../../../services/events/weekendBoosts.js";
+import { attackLootPercent, mapByPercent } from "../../../services/alliance/allianceBonuses.js";
 import { RESOURCE_KEYS, type ResourceAmounts } from "../../../game-rules/combat/index.js";
 import { recordAttackPlan } from "../../../services/base/autoAttack/attackPlanStore.js";
 import { discardDefenceReplayLoad } from "../../../services/defences/defenceReplayLoad.js";
@@ -102,6 +106,7 @@ import { attackQuestEvents, defenceQuestEvents } from "../../../services/quests/
 import { recordQuestEvents, recordUserQuestEvents } from "../../../services/quests/record.js";
 import { INFERNO_SAVE_TYPES, refuseOldInferno } from "../../../services/inferno/infernoGate.js";
 import { infernoConfig } from "../../../config/InfernoConfig.js";
+import { isPlayerYard, noteOutpostDefended } from "../../../services/alliance/allianceProgress.js";
 
 /**
  * Controller responsible for saving the user's base data.
@@ -267,6 +272,22 @@ const saveBase = async (
         )
       : null;
 
+  // Every fling within the Flinger's room, the champion's first (owner, 12 Nov
+  // 2026): an over-full one is an edited game, refused in `reject` mode
+  // before any key is applied (`recordFlingRoom.ts`).
+  if (isAttack && saveData.over) {
+    await requireFlingsInRoom(
+      ctx,
+      user,
+      baseSave,
+      saveData.flinglog,
+      session?.attackerAcademy,
+      combatConfig.mode,
+      session?.attackid,
+      "save"
+    );
+  }
+
   const outpostOwnerSave = await getOutpostOwnerSave(baseSave, user);
 
   // Map Room 3 is the attacker's own save's say, never the attack load's
@@ -306,7 +327,6 @@ const saveBase = async (
       ? battleReplayInput({
           ...lootArgs,
           tick: battleTick(saveData.tick),
-          declareWar: await isDeclareWarRunning(user.alliance_id),
           // Only the report reads it: "Left the attack" when the client says so.
           left: saveData.left,
         })
@@ -554,6 +574,8 @@ const saveBase = async (
   let takeoverGrant: TakeoverOffer | null = null;
   /** What the attacker's pool took of the loot (issue #166), for the response. */
   let banked: ResourceAmounts | null = null;
+  /** Tribe Plunder raised this landing's loot: the weekend's Glimmers are paid after the commit. */
+  let plunderUsed = false;
   /** The defence replay and the yard owner's notice, written once the landing has committed. */
   let afterLanding: (() => Promise<void>) | null = null;
 
@@ -587,14 +609,25 @@ const saveBase = async (
     }
 
     if (loot) {
+      // Tribe Plunder: a wild tribe's loot lands that much more, on top of
+      // the credit the server's battle allowed (`weekendBoosts.ts`); wild
+      // tribes also give 25% more Goo (patch 6.9, `tribeGooBonus.ts`).
+      const fromTribe = baseSave.type === BaseType.TRIBE;
+      const plunder = plunderPercent(fromTribe, now);
+      // The attacker's alliance loot bonus and the defender's raiders-carry (`allianceBonuses.ts`).
+      const alliancePercent = await attackLootPercent(postgres.em, user.userid, baseSave.saveuserid);
       banked = bankAttackLoot(
         userSave,
-        withCampLootBonus(
-          withTribeGooBonus(loot.credit, baseSave.type === BaseType.TRIBE),
-          isMR2Camp(baseSave.type, userSave.mapversion)
+        withPlunderBonus(
+          withCampLootBonus(
+            withTribeGooBonus(mapByPercent(loot.credit, alliancePercent), fromTribe),
+            isMR2Camp(baseSave.type, userSave.mapversion)
+          ),
+          plunder
         ),
         loot.krallenBuff
       ).credited;
+      plunderUsed = plunder > 0;
     }
 
     // Each champion that fought learns from the server's battle, once: this
@@ -673,7 +706,7 @@ const saveBase = async (
 
     if (saveData.over && isProtectable && !isMR3Structure(baseSave.wmid)) {
       const grant = await protectAfterAttack(baseSave, user.userid);
-      if (grant) takeoverGrant = await takeoverOffer(grant, user, userSave, baseSave);
+      if (grant) takeoverGrant = await takeoverOffer(grant, userSave, baseSave);
     }
 
     // The outpost's owner is told who attacked it, the damage and the loot
@@ -729,8 +762,11 @@ const saveBase = async (
 
   // Attack saves store health from the attacker's replay but keep buildingdata from the DB,
   // so the owner's countdowns are brought up to the attack before savetime moves to it.
+  const flingerBefore = baseSave.flinger;
   if (isAttack && baseSave.buildingdata) {
     baseSave.buildingdata = advanceBuildingTimers(baseSave.buildingdata, storedHealthData, now - baseSave.savetime);
+    // An upgrade the catch-up just finished counts for the cached levels too.
+    syncAttackedYardLevels(baseSave);
   }
 
   baseSave.id = baseSave.savetime;
@@ -742,6 +778,9 @@ const saveBase = async (
 
   postgres.em.persist(baseSave);
   await postgres.em.flush();
+  // Sight reads each Flinger off the yard's own clock (`flingerLevelsNow`), so
+  // dropping it before the landing commits shows nothing early; it only skips the cache.
+  if (isAttack) await invalidateSightAfterLanding(baseSave, flingerBefore);
 
   if (lands) {
     // The loot on both sides and `attackid = 0` commit together: a copy of
@@ -765,6 +804,9 @@ const saveBase = async (
     // After the commit: a counter it fails to write is logged and lost, and
     // must not take the landing's transaction down with it.
     if (loot) await countAttackLoot(postgres.em, user.userid, userSave, loot.credit, now);
+    // Tribe Plunder's weekend Glimmers, after the commit too: logged, not thrown
+    // (`services/events/weekendCoins.ts`).
+    if (plunderUsed) await weekendBoostUsed(postgres.em, user.userid, "plunder", now, true);
 
     // Quests (`services/quests/hooks.ts`), each on its player's main row
     // under its own lock, after the commit: a won attack, a tribe camp
@@ -782,11 +824,22 @@ const saveBase = async (
         after: battle?.buildinghealthdata,
         log: battleInput?.log,
         loot: loot?.credit,
+        playerYard: await isPlayerYard(postgres.em, baseSave, user.userid),
       }),
       now
     );
     if (baseSave.type !== BaseType.TRIBE && baseSave.saveuserid && baseSave.saveuserid !== user.userid) {
       await recordUserQuestEvents(postgres.em, baseSave.saveuserid, defenceQuestEvents(damageAfter), now);
+      // Fortress's "Outposts attacked but not taken" goal (design v5 §16).
+      if (baseSave.type === BaseType.OUTPOST) {
+      await noteOutpostDefended(
+        postgres.em,
+        { userid: baseSave.saveuserid, outpost: Number(baseSave.basesaveid) },
+        user.userid,
+        damageAfter,
+        now
+      );
+    }
     }
   }
 
@@ -807,6 +860,7 @@ const saveBase = async (
       before: storedHealthData,
       after: battle?.buildinghealthdata,
       bombs: bombs?.charges,
+      damage: battle?.damage,
     });
   }
 

@@ -3,7 +3,7 @@ import { isAdjacentToMainYard, takeoverResourceCost, takeoverShinyCost } from ".
 
 /** PopupTakeover.as:50-80, worked by hand for the figures below. */
 
-const base = { isWildMonster: false, level: 0, empireValue: 0, adjacentToMainYard: false, conquestActive: false };
+const base = { isWildMonster: false, level: 0, empireValue: 0, adjacentToMainYard: false };
 const camp = (level: number, over = {}) => takeoverResourceCost({ ...base, isWildMonster: true, level, ...over });
 const outpost = (empireValue: number) => takeoverResourceCost({ ...base, empireValue });
 
@@ -24,10 +24,8 @@ describe("takeoverResourceCost", () => {
     expect(outpost(1e12)).toBe(65_000_000);
   });
 
-  test("half next to the main yard, a quarter off with Conquest, both together", () => {
+  test("half next to the main yard", () => {
     expect(camp(50, { adjacentToMainYard: true })).toBe(6_750_000);
-    expect(camp(50, { conquestActive: true })).toBe(10_125_000);
-    expect(camp(50, { adjacentToMainYard: true, conquestActive: true })).toBe(5_062_500);
   });
 });
 
@@ -51,5 +49,17 @@ describe("isAdjacentToMainYard", () => {
     for (const [x, y] of [[240, 206], [240, 208], [239, 206], [239, 207], [241, 206], [241, 207]])
       expect(isAdjacentToMainYard(240, 207, x!, y!)).toBe(true);
     for (const [x, y] of [[239, 208], [241, 208]]) expect(isAdjacentToMainYard(240, 207, x!, y!)).toBe(false);
+  });
+});
+
+describe("quoteTakeover: alliance percent", () => {
+  test("changes the resource price and the Shiny follows", async () => {
+    const { quoteTakeover } = await import("./takeoverCost.js");
+    const input = { cell: { x: 40, y: 40 }, isWildMonster: true, buildingdata: null, takerHomebase: null };
+    const plain = quoteTakeover(input);
+    const cheaper = quoteTakeover({ ...input, alliancePercent: -20 });
+    expect(cheaper.resources).toBe(Math.round(plain.resources * 0.8));
+    expect(cheaper.shiny).toBe(takeoverShinyCost(cheaper.resources));
+    expect(quoteTakeover({ ...input, alliancePercent: 25 }).resources).toBe(Math.round(plain.resources * 1.25));
   });
 });

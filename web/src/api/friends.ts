@@ -17,10 +17,14 @@ import type { ApiEnvelope, BaseLoadResponse } from "./types";
  * - `POST /bm/friends/request/answer { requestid, accept }`.
  * - `POST /bm/friends/request/cancel { requestid }`.
  * - `POST /bm/friends/remove { userid }`: silent, for both.
+ * - `POST /bm/friends/pin { userid, pinned }`: pins a friend to the top of
+ *   the list, or unpins them (beta 7, up to {@link PIN_MAX}).
  * - `GET  /bm/friends/search ?q=`: up to 10 players, exact name first.
  * - `GET  /bm/friends/suggestions`: alliance mates not yet friends.
  * - `POST /bm/friends/gift { userid, resource }`, `GET /bm/friends/gifts`,
- *   `POST /bm/friends/gifts/collect { giftid } | { all: true }` (WP8).
+ *   `POST /bm/friends/gifts/collect { giftid } | { all: true }` (WP8),
+ *   `POST /bm/friends/gifts/delete { giftid } | { all: true }` (owner, 9 Nov 2026),
+*   `POST /bm/friends/wishes { wishes }` (#391).
  * - `POST /bm/friends/help { userid, buildingId, kind }` (WP6/WP7).
  * - `POST /base/load` with `type: "help"`: a friend's main yard to help in (WP2/WP5).
  * - `POST /player/settings { hideOnline?, friendRequests? }`,
@@ -38,11 +42,14 @@ const REQUEST_PATH = "/api/:apiVersion/bm/friends/request";
 const ANSWER_PATH = "/api/:apiVersion/bm/friends/request/answer";
 const CANCEL_PATH = "/api/:apiVersion/bm/friends/request/cancel";
 const REMOVE_PATH = "/api/:apiVersion/bm/friends/remove";
+const PIN_PATH = "/api/:apiVersion/bm/friends/pin";
 const SEARCH_PATH = "/api/:apiVersion/bm/friends/search";
 const SUGGESTIONS_PATH = "/api/:apiVersion/bm/friends/suggestions";
 const GIFT_PATH = "/api/:apiVersion/bm/friends/gift";
 const GIFTS_PATH = "/api/:apiVersion/bm/friends/gifts";
 const COLLECT_PATH = "/api/:apiVersion/bm/friends/gifts/collect";
+const DELETE_GIFTS_PATH = "/api/:apiVersion/bm/friends/gifts/delete";
+const WISHES_PATH = "/api/:apiVersion/bm/friends/wishes";
 const HELP_PATH = "/api/:apiVersion/bm/friends/help";
 const LOAD_PATH = "/base/load";
 const SETTINGS_PATH = "/api/:apiVersion/player/settings";
@@ -57,6 +64,9 @@ export const SEARCH_MIN_LENGTH = 3;
 
 /** The most friends a player can have (decision 2); the list's `max` overrides it. */
 export const FRIEND_MAX = 100;
+
+/** The most friends a player can pin to the top (owner, beta 7); the list's `maxPinned` overrides it. */
+export const PIN_MAX = 10;
 
 /**
  * How recently a friend was last in their yard, coarse on purpose (§6.2,
@@ -88,12 +98,24 @@ export interface Friend {
   readonly canGiftFrom: number | null;
   /** Whether the player could help them today; null until help lands (WP6). */
   readonly help: { readonly speedup: boolean; readonly repair: boolean } | null;
+  /** The gifts they wish for (#391), up to 3; sending them first earns nothing extra. */
+  readonly wishes: readonly GiftResource[];
+  /** Pinned to the top of the list (beta 7): when, unix seconds; null when not pinned. */
+  readonly pinnedAt: number | null;
+  /**
+   * Their Map Room 2 world's number when it is not the player's (beta 7): an
+   * alliance is one world, so the row shows why they cannot ally. Null when
+   * they share it, or either has no Map Room 2 world.
+   */
+  readonly otherWorld: number | null;
 }
 
 /** `GET /bm/friends`. */
 export interface FriendsList {
   readonly friends: readonly Friend[];
   readonly max: number;
+  /** The most friends that can be pinned. */
+  readonly maxPinned: number;
   /** Requests waiting for the player's answer. */
   readonly requestsIn: number;
   /** Gifts waiting to be collected. */
@@ -174,6 +196,8 @@ export interface GiftsList {
   readonly gifts: readonly Gift[];
   /** Gifts the player can still collect today. */
   readonly collectsLeft: number;
+  /** The player's own gift wishes (#391), up to {@link GIFT_WISH_MAX}. */
+  readonly wishes: readonly GiftResource[];
 }
 
 /** `POST /bm/friends/gifts/collect`. */
@@ -183,6 +207,16 @@ export interface GiftCollect {
   /** What went into the main yard, after the storage cap. */
   readonly resources: ResourceAmounts;
   /** Gifts the player can still collect today. */
+  readonly collectsLeft: number;
+  /** Gifts still waiting. */
+  readonly giftsWaiting: number;
+}
+
+/** `POST /bm/friends/gifts/delete`: thrown away, nothing given, no collect used. */
+export interface GiftDelete {
+  /** How many gifts were deleted. */
+  readonly deleted: number;
+  /** Gifts the player can still collect today (unchanged by a delete). */
   readonly collectsLeft: number;
   /** Gifts still waiting. */
   readonly giftsWaiting: number;
@@ -255,6 +289,7 @@ export type FriendRefusalReason =
   | "tooNew"
   | "dailyCap"
   | "giftSentToday"
+  | "notEnough"
   | "collectLimit"
   | "notFriends"
   | "helpersFull"
@@ -264,6 +299,7 @@ export type FriendRefusalReason =
   | "noSuchPlayer"
   | "noSuchRequest"
   | "noSuchGift"
+  | "pinLimit"
   | "self";
 
 /** A refused call, in words: its reason (or `network`/`unknown`) and what to tell the player. */
@@ -319,6 +355,7 @@ export const REFUSAL_TEXT: Readonly<Record<FriendRefusalReason, string>> = {
   tooNew: `Not yet: friends for ${FRIEND_GATES.friendshipAgeHours} hours and each player level ${FRIEND_GATES.minLevel}.`,
   dailyCap: "You have done that as many times as you can today.",
   giftSentToday: "You have already sent this friend a gift today.",
+  notEnough: "You don't have enough of that to send. Pick another.",
   collectLimit: "You have collected as many gifts as you can today. The rest will wait.",
   notFriends: "You are not friends with this player any more.",
   helpersFull: "Enough friends have already helped with this.",
@@ -328,6 +365,7 @@ export const REFUSAL_TEXT: Readonly<Record<FriendRefusalReason, string>> = {
   noSuchPlayer: "There is no player with that name.",
   noSuchRequest: "That request is no longer waiting for an answer.",
   noSuchGift: "That gift is no longer waiting.",
+  pinLimit: `Pinned ${PIN_MAX} already. Unpin one first.`,
   self: "That's you!",
 };
 
@@ -412,6 +450,22 @@ const amounts = (value: unknown): ResourceAmounts => {
   return out;
 };
 
+/** At most this many gift wishes (#391; the server's `MAX_GIFT_WISHES`). */
+export const GIFT_WISH_MAX = 3;
+
+/** Known gift resources only, each once, at most {@link GIFT_WISH_MAX}. */
+export const wishesOf = (value: unknown): GiftResource[] => {
+  const out: GiftResource[] = [];
+  if (!Array.isArray(value)) return out;
+  for (const one of value) {
+    if (typeof one === "string" && GIFT_RESOURCES.has(one) && !out.includes(one as GiftResource)) {
+      out.push(one as GiftResource);
+    }
+    if (out.length >= GIFT_WISH_MAX) break;
+  }
+  return out;
+};
+
 export const friendOf = (raw: Record<string, unknown>): Friend => {
   const help = raw["help"];
   const helpRecord = record(help);
@@ -428,6 +482,9 @@ export const friendOf = (raw: Record<string, unknown>): Friend => {
       typeof help === "object" && help !== null
         ? { speedup: helpRecord["speedup"] === true, repair: helpRecord["repair"] === true }
         : null,
+    wishes: wishesOf(raw["wishes"]),
+    pinnedAt: toSeconds(raw["pinnedAt"]),
+    otherWorld: typeof raw["otherWorld"] === "number" && Number.isInteger(raw["otherWorld"]) && raw["otherWorld"] > 0 ? raw["otherWorld"] : null,
   };
 };
 
@@ -479,6 +536,12 @@ const privacyOf = (raw: Record<string, unknown>): PrivacySettings => ({
 
 type Answer = ApiEnvelope & Record<string, unknown>;
 
+/** `POST /bm/friends/pin`: the friend's pin as stored, and how many are pinned now. */
+export interface PinResult {
+  readonly pinned: boolean;
+  readonly pinnedCount: number;
+}
+
 /** Everything the friends screens ask the server, as one object a test can replace. */
 export interface FriendsApi {
   list(): Promise<FriendsList>;
@@ -489,14 +552,20 @@ export interface FriendsApi {
   answer(requestid: number, accept: boolean): Promise<Friend | null>;
   cancel(requestid: number): Promise<void>;
   remove(userid: number): Promise<void>;
+  /** Pins a friend to the top of the list, or unpins them; how many are pinned afterwards. */
+  pin(userid: number, pinned: boolean): Promise<PinResult>;
   /** Players whose name has `query` in it; `[]` under {@link SEARCH_MIN_LENGTH} letters, without asking. */
   search(query: string): Promise<PlayerResult[]>;
   /** Alliance mates who are not friends yet. */
   suggestions(): Promise<PlayerResult[]>;
   sendGift(userid: number, resource: GiftResource): Promise<Gift | null>;
   gifts(): Promise<GiftsList>;
+  /** Sets the player's gift wishes (#391), up to 3; `[]` clears them. Answers what was stored. */
+  setWishes(wishes: readonly GiftResource[]): Promise<GiftResource[]>;
   /** Collects one gift, or every one waiting with `"all"`. */
   collect(giftid: number | "all"): Promise<GiftCollect>;
+  /** Deletes one waiting gift, or every one waiting with `"all"`; gives nothing. */
+  deleteGifts(giftid: number | "all"): Promise<GiftDelete>;
   help(userid: number, buildingId: number, kind: HelpKind): Promise<HelpResult>;
   /** A friend's main yard, loaded to help in (`type: "help"`). */
   loadHelpYard(baseid: string): Promise<HelpYardResponse>;
@@ -516,6 +585,7 @@ export const friendsApi: FriendsApi = {
     return {
       friends: list(answer["friends"]).map(friendOf),
       max: count(answer["max"]) || FRIEND_MAX,
+      maxPinned: count(answer["maxPinned"]) || PIN_MAX,
       requestsIn: count(answer["requestsIn"]),
       giftsWaiting: count(answer["giftsWaiting"]),
       helpsLeft: count(answer["helpsLeft"]),
@@ -543,6 +613,10 @@ export const friendsApi: FriendsApi = {
   async remove(userid) {
     await postJson(REMOVE_PATH, { userid });
   },
+  async pin(userid, pinned) {
+    const answer = await postJson<Answer>(PIN_PATH, { userid, pinned });
+    return { pinned: answer["pinned"] === true, pinnedCount: count(answer["pinnedCount"]) };
+  },
   async search(query) {
     const q = query.trim();
     if (q.length < SEARCH_MIN_LENGTH) return [];
@@ -559,13 +633,29 @@ export const friendsApi: FriendsApi = {
   },
   async gifts() {
     const answer = await get<Answer>(GIFTS_PATH);
-    return { gifts: list(answer["gifts"]).map(giftOf), collectsLeft: count(answer["collectsLeft"]) };
+    return {
+      gifts: list(answer["gifts"]).map(giftOf),
+      collectsLeft: count(answer["collectsLeft"]),
+      wishes: wishesOf(answer["wishes"]),
+    };
+  },
+  async setWishes(wishes) {
+    const answer = await postJson<Answer>(WISHES_PATH, { wishes: [...wishes] });
+    return wishesOf(answer["wishes"]);
   },
   async collect(giftid) {
     const answer = await postJson<Answer>(COLLECT_PATH, giftid === "all" ? { all: true } : { giftid });
     return {
       collected: count(answer["collected"]),
       resources: amounts(answer["resources"]),
+      collectsLeft: count(answer["collectsLeft"]),
+      giftsWaiting: count(answer["giftsWaiting"]),
+    };
+  },
+  async deleteGifts(giftid) {
+    const answer = await postJson<Answer>(DELETE_GIFTS_PATH, giftid === "all" ? { all: true } : { giftid });
+    return {
+      deleted: count(answer["deleted"]),
       collectsLeft: count(answer["collectsLeft"]),
       giftsWaiting: count(answer["giftsWaiting"]),
     };

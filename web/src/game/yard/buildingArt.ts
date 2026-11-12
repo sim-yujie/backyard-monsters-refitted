@@ -2,6 +2,8 @@ import { BUILDING_ART_ROWS, type ArtAnim, type ArtImage, type ArtLevel, type Art
 import { INFERNO_ART_ROWS } from "./buildingArtInfernoData";
 import { hasInfernoTiers, tierArtFor, type TierArt } from "./buildingArtTiers";
 import type { YardKind } from "./buildingCostData";
+import { REVAMP_BUILDING_ROWS } from "./revampBuildings";
+import { REVAMP_DECORATION_ROWS } from "./revampDecorations";
 
 /**
  * Resolving a building to its art.
@@ -78,7 +80,8 @@ const indexOf = (rows: readonly ArtRow[]): Map<number, ArtRowIndex> =>
     rows.map((row) => [row[0], { name: row[1], folder: row[2], levels: row[3], hp: row[4], size: row[5] }]),
   );
 
-const ROWS = indexOf(BUILDING_ART_ROWS);
+/** The generated rows, then this project's own decorations (`revampDecorations.ts`). */
+const ROWS = indexOf([...BUILDING_ART_ROWS, ...REVAMP_BUILDING_ROWS, ...REVAMP_DECORATION_ROWS]);
 
 /**
  * The Inferno yard's rows: the types whose art or health differs there

@@ -1,4 +1,4 @@
-import type { EventReward } from "./eventRewards.js";
+import { coinRewards, BIG_EVENT_COINS, type EventCoins, type EventReward } from "./eventRewards.js";
 
 /**
  * The game's events: seasonal happenings with a start and an end, shown on
@@ -14,7 +14,14 @@ import type { EventReward } from "./eventRewards.js";
  * `addToCounter`, with a reward at each tier). Every reward is checked by
  * `events.test.ts`. A ladder whose `source` is `"attackLoot"` is counted by
  * the server's attack code instead (`services/events/lootEvents.ts`): all
- * the loot a player takes in attacks during the event.
+ * the loot a player takes in attacks during the event. One whose `source` is
+ * `"takeovers"` counts Map Room 2 takeovers (`services/events/takeoverEvents.ts`,
+ * Monster Madness, `monsterMadness.ts`).
+ *
+ * EVENT COINS: a big 1-2 week event (not a weekend event) pays event coins by
+ * carrying `coins: BIG_EVENT_COINS` (`eventRewards.ts`, where the numbers
+ * live): {@link withEventCoins} adds them to each calendar day and ladder
+ * tier, so the page, the claims and the tests all see them as rewards.
  *
  * Events that repeat (the monthly Krallen Hunt) come from a small generator,
  * one entry per run with its own id, so each month is an ordinary event with
@@ -22,7 +29,9 @@ import type { EventReward } from "./eventRewards.js";
  *
  * To switch an event on locally before its date, set
  * `EVENTS_FORCE_ON=<id>[,<id>…]` in `server/.env` (`config/GameConfig.ts`,
- * `eventsForcedOn`); it is ignored on production.
+ * `eventsForcedOn`); to hide one that is really on (say Halloween, to try
+ * Thanksgiving alone), `EVENTS_FORCE_OFF=<id>[,<id>…]` (`eventsForcedOff`).
+ * Both are ignored on production.
  */
 
 /** One day of a login calendar: what claiming it pays. */
@@ -39,7 +48,7 @@ export interface EventRequirements {
 }
 
 /** What raises a ladder's counter: the event's own code, or every attack's loot. */
-export type LadderSource = "own" | "attackLoot";
+export type LadderSource = "own" | "attackLoot" | "takeovers";
 
 /** One tier of a collection ladder: claimable once the counter reaches `need`. */
 export interface LadderTier {
@@ -88,7 +97,9 @@ export interface EventDefinition {
     /**
      * Who raises the counter. `own` (the default): the event's own code.
      * `attackLoot`: `services/events/lootEvents.ts`, with every resource an
-     * attack takes, before the storage cap.
+     * attack takes, before the storage cap. `takeovers`:
+     * `services/events/takeoverEvents.ts`, with each Map Room 2 outpost taken
+     * over, once per outpost.
      */
     readonly source?: LadderSource;
     readonly tiers: readonly LadderTier[];
@@ -101,7 +112,38 @@ export interface EventDefinition {
    * "ended" to players with something left to claim. 0 when absent.
    */
   readonly claimDays?: number;
+  /**
+   * Event coins this big event pays on top of its rewards, one amount for
+   * every calendar day and one per ladder tier (`BIG_EVENT_COINS`); none when
+   * absent. Added to the rewards by {@link withEventCoins}.
+   */
+  readonly coins?: EventCoins;
 }
+
+/**
+ * `event` with its `coins` added to its rewards: `perCalendarDay` to every
+ * calendar day, `milestones[i]` to ladder tier `i`. The same event when it
+ * has no `coins`. {@link EVENTS} passes every event through this.
+ */
+export const withEventCoins = (event: EventDefinition): EventDefinition => {
+  const coins = event.coins;
+  if (!coins) return event;
+  return {
+    ...event,
+    ...(event.calendar && {
+      calendar: event.calendar.map((day) => ({ ...day, rewards: [...day.rewards, ...coinRewards(coins.perCalendarDay)] })),
+    }),
+    ...(event.ladder && {
+      ladder: {
+        ...event.ladder,
+        tiers: event.ladder.tiers.map((tier, index) => ({
+          ...tier,
+          rewards: [...tier.rewards, ...coinRewards(coins.milestones[index])],
+        })),
+      },
+    }),
+  };
+};
 
 /** How many days before it starts an event shows under "Coming up". */
 export const UPCOMING_DAYS = 30;
@@ -170,6 +212,94 @@ export const HALLOWEEN_2026_LADDER: readonly LadderTier[] = [
 
 /**
  * ═══════════════════════════════════════════════════════════════════════
+ * THANKSGIVING 2026 LOGIN CALENDAR: the 14 daily rewards, day 1 first.
+ * Paced exactly like Halloween's (the same resources, Shiny and speed-ups
+ * on the same days; owner may change them), with harvest-time treats in
+ * place of the pumpkins: day 7 an Acorn, day 12 a Production Overdrive
+ * (harvesters at double rate for 12 hours) and day 14 a Scarecrow.
+ * Resources land clamped to the player's storage cap, like every other
+ * reward. r1 Twigs, r2 Pebbles, r3 Putty, r4 Goo. Decoration 55 is the
+ * Acorn, 69 the Scarecrow. Like Halloween, the event also pays Glimmers
+ * (event coins) every day and at every ladder tier: its `coins:
+ * THANKSGIVING_2026_COINS` in {@link EVENTS} adds them (`withEventCoins`).
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+export const THANKSGIVING_2026_CALENDAR: readonly CalendarDay[] = [
+  /* Day 1  */ { rewards: [{ kind: "resources", amounts: { r1: 10_000, r2: 10_000 } }] },
+  /* Day 2  */ { rewards: [{ kind: "shiny", amount: 10 }] },
+  /* Day 3  */ { rewards: [{ kind: "speedup", item: "SP2", count: 1 }] },
+  /* Day 4  */ { rewards: [{ kind: "resources", amounts: { r3: 15_000, r4: 15_000 } }] },
+  /* Day 5  */ { rewards: [{ kind: "resources", amounts: { r1: 20_000, r2: 20_000, r3: 20_000, r4: 20_000 } }] },
+  /* Day 6  */ { rewards: [{ kind: "speedup", item: "SP2", count: 2 }] },
+  /* Day 7  */ { rewards: [{ kind: "decoration", type: 55, count: 1 }] },
+  /* Day 8  */ { rewards: [{ kind: "resources", amounts: { r1: 30_000, r2: 30_000 } }] },
+  /* Day 9  */ { rewards: [{ kind: "shiny", amount: 20 }] },
+  /* Day 10 */ { rewards: [{ kind: "speedup", item: "SP3", count: 1 }] },
+  /* Day 11 */ { rewards: [{ kind: "resources", amounts: { r3: 30_000, r4: 30_000 } }] },
+  /* Day 12 */ { rewards: [{ kind: "shopItem", item: "POD" }] },
+  /* Day 13 */ { rewards: [{ kind: "speedup", item: "SP3", count: 2 }] },
+  /* Day 14 */ {
+    rewards: [
+      { kind: "decoration", type: 69, count: 1 },
+      { kind: "shiny", amount: 25 },
+    ],
+  },
+];
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * THANKSGIVING 2026 TURKEY HUNT LADDER: what picking turkeys earns.
+ * Set by the owner (13 Nov 2026): 25 turkeys for 10 Shiny, 50 for 100
+ * Glimmers, 150 for the Scarecrow and 20 Shiny, 200 for the Autumn Maple
+ * Tree and 30 Shiny. During the event the yard's mushrooms grow as turkeys
+ * that wander near where they grew, about one an hour, at most 10 waiting
+ * (`services/yard/season.ts`, `mushrooms.ts`), and every turkey a player
+ * picks adds one to the counter (`controllers/yard/mushrooms.ts`): up to
+ * about 24 a day for a player who looks in at least every 10 hours. One pick
+ * in four is a golden turkey, worth 3 or 8 Shiny, exactly as a golden
+ * mushroom (`GOLDEN_SMALL`, `GOLDEN_BIG` in `services/yard/mushrooms.ts`).
+ * Each tier is claimed once, by hand, on the Events page. `need` is the
+ * turkey count. The 50 tier's 100 Glimmers are paid through the event's
+ * coins ({@link THANKSGIVING_2026_COINS}), on top of the usual ladder
+ * Glimmers, so the tier shows one Glimmer figure. Decoration 69 is the
+ * Scarecrow, 206 the Autumn Maple Tree (`revampDecorations.ts`).
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+export const THANKSGIVING_2026_LADDER: readonly LadderTier[] = [
+  /* 25 turkeys  */ { need: 25, rewards: [{ kind: "shiny", amount: 10 }] },
+  /* 50 turkeys  */ { need: 50, rewards: [] }, // 100 Glimmers, from THANKSGIVING_2026_COINS
+  /* 150 turkeys */ {
+    need: 150,
+    rewards: [
+      { kind: "decoration", type: 69, count: 1 },
+      { kind: "shiny", amount: 20 },
+    ],
+  },
+  /* 200 turkeys */ {
+    need: 200,
+    rewards: [
+      { kind: "decoration", type: 206, count: 1 },
+      { kind: "shiny", amount: 30 },
+    ],
+  },
+];
+
+/** Glimmers the 50-turkey tier pays as its own prize (owner, 13 Nov 2026). */
+export const THANKSGIVING_2026_TIER_GLIMMERS = 100;
+
+/**
+ * Thanksgiving's event coins: the big-event amounts ({@link BIG_EVENT_COINS},
+ * 15 a day and 20/35/55/80 over the ladder), with the 50-turkey tier's own
+ * {@link THANKSGIVING_2026_TIER_GLIMMERS} added to its milestone: 20, 135,
+ * 55, 80, 500 in all with the calendar.
+ */
+export const THANKSGIVING_2026_COINS: EventCoins = {
+  ...BIG_EVENT_COINS,
+  milestones: BIG_EVENT_COINS.milestones.map((coins, tier) => (tier === 1 ? coins + THANKSGIVING_2026_TIER_GLIMMERS : coins)),
+};
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
  * THE MONTHLY KRALLEN HUNT: set by the owner (2026-10-20).
  * Every month from the 15th 00:00 UTC to the end of the month, the first
  * 15-30 November 2026 (never during Halloween). For Town Hall 6 and up,
@@ -226,7 +356,10 @@ export const KRALLEN_HUNTS: readonly EventDefinition[] = Array.from({ length: KR
   return krallenHunt(KRALLEN_HUNT_FIRST.year + Math.floor(months / 12), (months % 12) + 1);
 });
 
-/** Every event, past, present and future. Append new ones at the end. */
+/**
+ * Every event, past, present and future. Append new ones at the end. Each
+ * passes through {@link withEventCoins}, so a big event's `coins` are paid.
+ */
 export const EVENTS: readonly EventDefinition[] = [
   {
     id: "halloween-2026",
@@ -239,9 +372,23 @@ export const EVENTS: readonly EventDefinition[] = [
     banner: "/events/halloween-2026-banner.png",
     calendar: HALLOWEEN_2026_CALENDAR,
     ladder: { label: "Pumpkins found", tiers: HALLOWEEN_2026_LADDER },
+    coins: BIG_EVENT_COINS,
   },
   ...KRALLEN_HUNTS,
-];
+  {
+    id: "thanksgiving-2026",
+    title: "Thanksgiving",
+    text: "Happy Thanksgiving! Log in each day to claim a treat. Turkeys are roaming your yard: tap one to catch it for prizes, and watch out for the golden turkey!",
+    upcomingText: "Thanksgiving is coming! Log in each day to claim a treat, and catch the turkeys roaming your yard for prizes. Watch out for the golden turkey!",
+    kind: "thanksgiving",
+    // Dates editable: around US Thanksgiving, Thursday 26 November 2026.
+    startsAt: "2026-11-19T00:00:00Z",
+    endsAt: "2026-12-03T00:00:00Z",
+    calendar: THANKSGIVING_2026_CALENDAR,
+    ladder: { label: "Turkeys caught", tiers: THANKSGIVING_2026_LADDER },
+    coins: THANKSGIVING_2026_COINS,
+  },
+].map(withEventCoins);
 
 /** The event with this id, or undefined. */
 export const eventById = (id: string, events: readonly EventDefinition[] = EVENTS): EventDefinition | undefined =>

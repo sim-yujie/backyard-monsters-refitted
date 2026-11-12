@@ -101,3 +101,12 @@ describe("admin.css: phone activity table", () => {
     }
   });
 });
+
+describe("the Shiny gift log", () => {
+  it("leaves the amount in its own column: only the give form's input box is 110px wide", () => {
+    // A bare `.award-amount { width: 110px }` also widened the log's amount span past its
+    // 4.25rem column, so "+50" was drawn over the player's name (Player Support, 11 Nov).
+    expect(css).not.toMatch(/(^|\})\s*\.award-amount\s*\{[^}]*width:/);
+    expect(css).toMatch(/\.input\.award-amount\s*\{[^}]*width: 110px;/);
+  });
+});

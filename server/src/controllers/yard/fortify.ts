@@ -1,5 +1,8 @@
 import { YardCancelFortifySchema, YardFortifySchema } from "../../schemas/YardSchemas.js";
+import { weekendBoost, weekendBoostUsed } from "../../services/events/weekendBoosts.js";
 import { planCancelFortify, planFortify } from "../../services/yard/fortify.js";
+import { withTopUp } from "../../services/yard/topUp.js";
+import { yardKindOf } from "../../services/yardplanner/costs.js";
 import { defineYardAction } from "./yardAction.js";
 
 /**
@@ -12,17 +15,32 @@ import { defineYardAction } from "./yardAction.js";
  * of `INFERNOYARDPROPS.as` has `can_fortify`, so Flash's `BASE.CanFortify`
  * refuses every building there (`BASE.as:4015-4017`), and so do the rules
  * (`400 notFortifiable`).
+ *
+ * A Builder's Weekend takes its percentage off the price, as for upgrades
+ * (owner, 7 Nov; `services/events/weekendBoosts.ts`).
  */
 export const yardFortifyAction = defineYardAction({
   schema: YardFortifySchema,
-  run: ({ save, body, now }) => planFortify(save, body.id, now),
+  // A short pool topped up with Shiny, Flash's `TopoffFortify` (`services/yard/topUp.ts`, issue #393).
+  // A Builder's Weekend takes its percentage off first, so the top-up covers the discounted price.
+  run: async ({ save, user, body, now, bonuses, em }) => {
+    const weekend = weekendBoost("builders", now);
+    // A Fortress Legion's cheaper Fortify (`fortifyCost`, `allianceBonuses.ts`), never in the Inferno.
+    const alliance = yardKindOf(save) === "inferno" ? 0 : Math.max(0, -(bonuses?.fortifyCost ?? 0));
+    const off = Math.min(90, weekend + alliance);
+    const plan = await withTopUp(save, body.topUp, (seen) => planFortify(seen, body.id, now, off));
+    // The weekend's Glimmers, in this transaction (`weekendCoins.ts`).
+    if (weekend > 0) await weekendBoostUsed(em, user.userid, "builders", now);
+    return plan;
+  },
   outposts: "allow",
   inferno: "allow",
 });
 
 /**
  * `POST /bm/yard/fortify/cancel` — stop a running fortification and refund the
- * step's full price, clamped to the storage cap.
+ * step's price as paid (full, or less a Builder's Weekend), clamped to the
+ * storage cap.
  */
 export const yardCancelFortifyAction = defineYardAction({
   schema: YardCancelFortifySchema,

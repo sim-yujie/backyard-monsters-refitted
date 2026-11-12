@@ -1,0 +1,19 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+The attached images:
+- ref-modern-close.png and ref-modern-all.png: the REAL "Modern look" yard buildings of our game (Backyard Monsters Revamped), clean stylised 3D renders.
+- ref-modern-autumn.png: six yard decorations we already redrew in the Modern look and like. Match their finish.
+- ref-classic-tiki.png: the OLD Tiki Torch from the 2009 Flash game (Classic look), enlarged 10 times.
+- first-try-tiki.png: our first Modern try. Its finish is right, but it came out too thin and lost the Classic torch's shape: the cup is too small, there is no tapering neck, and the grass strands do not splay out.
+
+Job: redraw the Classic Tiki Torch in the MODERN look so it is clearly the SAME object as ref-classic-tiki.png, with the same proportions:
+- a LARGE cylindrical bamboo torch cup at the top (rust-orange with light tan bamboo rings at its top and bottom rim, open at the top showing a dark inside), the cup about one quarter of the whole height and about as wide as the Classic one relative to the pole (the cup is roughly 2.5 times as wide as the pole);
+- under the cup a short brown neck that TAPERS down into the pole, wrapped with dry grass;
+- a few long thin dry grass / straw strands hanging from the neck that SPLAY OUT to both sides and curl down, reaching out about as far as the cup is wide on each side;
+- a straight dark brown wooden pole below, a bit thicker and darker than in the first try.
+NO flame (the game adds the fire on top of the cup).
+
+The Modern look: clean modern stylised 3D render like the attached buildings; smooth slightly bevelled shapes, crisp clean silhouette, smooth dark wood, little surface noise, no outline, no cel shading, no brush strokes. Camera from the front about 35-40 degrees above so the open top of the cup shows as an ellipse. ONE warm sun lamp from the upper left, dim cool fill: lit faces upper left, right side in deep but readable shade. Rich but slightly deep colours. No ground, grass or cast shadow under it.
+
+Canvas 1024x1024 split into 2 columns of equal tall cells (512x1024 each). In each cell one Tiki Torch standing upright, centred, about 75% of the cell height, nothing touching a cell edge: two slightly different takes of the same torch (the right one with a slightly bigger cup and wider grass splay). The whole sheet on a flat solid magenta (#FF00FF) background, no grid lines, no text, no labels, no frame, no drop shadows.
+Save the final PNG as pilot-p3.png in the current working directory.

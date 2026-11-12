@@ -23,10 +23,17 @@ import type { RelocatePrice } from "../maproom/v2/relocateRules.js";
  *   write `void` ({@link voidOutpostInvites}), so an outpost won back does not
  *   bring an old invitation back to life.
  * - An outpost holds at most one invitation still waiting.
- * - Accepting costs the invited player {@link INVITE_PRICE}, charged by the
- *   server, and starts their relocation cooldown. It is refused softly, the
- *   invitation left open, while either yard is under attack, the invited
- *   player is in an alliance or cooling down, or cannot pay.
+ * - Accepting costs EACH player {@link INVITE_PRICE} (beta 7 alliances,
+ *   design v5 §12: the invited player and the one who invited both pay, each
+ *   choosing Shiny or resources; the inviter chose when sending, stored as the
+ *   message's `hostpayment`). An invitation sent before that has no
+ *   `hostpayment`: the invited player alone pays {@link LEGACY_INVITE_PRICE}.
+ *   Accepting starts the invited player's relocation cooldown. It is refused
+ *   softly, the invitation left open and nothing charged, while either yard is
+ *   under attack, the invited player is cooling down or cannot pay, or the one
+ *   who invited cannot pay their share (`hostCantPay`).
+ * - Being in an alliance no longer stops either side (Flash's "leave your
+ *   alliance first" rule is gone, design v5 §12).
  * - The one who invited gets nothing back: the outpost, its buildings and its
  *   housed monsters are gone. The game tells them of the answer
  *   ({@link inviteNoticeText}).
@@ -35,8 +42,25 @@ import type { RelocatePrice } from "../maproom/v2/relocateRules.js";
 /** How long an invitation waits for its answer, in seconds: 7 days. */
 export const INVITE_LIFETIME = 7 * 24 * 60 * 60;
 
-/** What accepting costs: 1,200 Shiny or 10,000,000 of each resource (`MapRoom.as:271-272`). */
-export const INVITE_PRICE: RelocatePrice = { shiny: 1_200, resources: 10_000_000 };
+/**
+ * What accepting costs EACH player: 750 Shiny or 15,000,000 of each resource
+ * (design v5 §12; together the 30M / 1,500 Shiny of a normal move).
+ */
+export const INVITE_PRICE: RelocatePrice = { shiny: 750, resources: 15_000_000 };
+
+/**
+ * An invitation sent before both players paid (no `hostpayment` on it): the
+ * invited player alone pays Flash's 1,200 Shiny or 10,000,000 of each resource
+ * (`MapRoom.as:271-272`).
+ */
+export const LEGACY_INVITE_PRICE: RelocatePrice = { shiny: 1_200, resources: 10_000_000 };
+
+/** How the one who invited pays their share, stored on the invitation (`hostpayment`). */
+export type HostPayment = "shiny" | "resources";
+
+/** What the invited player pays: the shared price, or the old one on an invitation without `hostpayment`. */
+export const invitedPrice = (invite: { hostpayment?: string | null }): RelocatePrice =>
+  invite.hostpayment ? INVITE_PRICE : LEGACY_INVITE_PRICE;
 
 /** The notices the game writes to the one who invited (`userid` 0, as `outpostNotices.ts` writes them). */
 export const INVITE_ACCEPTED = "inviteaccepted";
@@ -171,12 +195,13 @@ export type InviteRefusal =
   | "self"
   | "notMapRoom2"
   | "otherWorld"
-  | "inAlliance"
   | "coolingDown"
   | "underAttack"
   | "noHomeCell"
   | "notEnoughShiny"
-  | "notEnoughResources";
+  | "notEnoughResources"
+  | "hostCantPay"
+  | "hostShinyLocked";
 
 /** The soft refusal the routes send: `{ error: 1, message, reason }`, and `retryat` when there is a wait. */
 export interface InviteSoftRefusal {
@@ -192,18 +217,20 @@ const TO_INVITER: Partial<Record<InviteRefusal, string>> = {
   self: "You cannot invite yourself.",
   notMapRoom2: "They are not on Map Room 2, so they cannot move to your outpost.",
   otherWorld: "They are in another world, so they cannot move to your outpost.",
-  inAlliance: "They are in an alliance. They must leave it before they can move to your outpost.",
+  notEnoughShiny: "You need 750 Shiny for your share of the move.",
+  notEnoughResources: "You need 15M of each resource for your share of the move.",
+  hostShinyLocked: "Your Shiny is locked. Pay your share with resources.",
 };
 
-/** The invited player's side (`msg_mustleavealliance`, `movebase_warning`, `map_rel_res`). */
+/** The invited player's side (`movebase_warning`, `map_rel_res`). */
 const TO_INVITEE: Partial<Record<InviteRefusal, string>> = {
   notMapRoom2: "Only a Map Room 2 yard can move to an outpost.",
   otherWorld: "That outpost is in another world. You can only move within your own.",
-  inAlliance: "You must first leave your Alliance to accept this invitation.",
   underAttack: "Your yard or that outpost is under attack. Try again when the attack is over.",
   noHomeCell: "Your main yard has no place on the map to move from.",
   notEnoughShiny: "You do not have enough Shiny.",
   notEnoughResources: "You don't have enough resources to relocate.",
+  hostCantPay: "They can't pay their share right now, so nothing was charged. Try again later.",
 };
 
 /**
@@ -231,7 +258,6 @@ export const inviteRefusal = (
 /** The invited player as the rules need them. */
 export interface InvitedPlayer {
   userid: number;
-  allianceId: number | null | undefined;
   /** Their main save's `mapversion` and `worldid`. */
   mapVersion: number | null | undefined;
   worldid: string | null | undefined;
@@ -253,14 +279,13 @@ export const inviteSendRefusal = (input: {
   if (invited.userid === inviterId) return "self";
   if (invited.mapVersion !== MapRoomVersion.V2) return "notMapRoom2";
   if (!outpostWorld || invited.worldid !== outpostWorld) return "otherWorld";
-  if (invited.allianceId) return "inAlliance";
   return null;
 };
 
 /**
  * Whether the invited player may move now (checked again at accept, whatever
- * held when it was sent). The charge comes after, `chargeRelocation` at
- * {@link INVITE_PRICE}.
+ * held when it was sent). The charges come after, `chargeRelocation` at
+ * {@link invitedPrice} for them and {@link INVITE_PRICE} for the one who invited.
  */
 export const inviteAcceptRefusal = (input: {
   invited: InvitedPlayer;
@@ -273,7 +298,6 @@ export const inviteAcceptRefusal = (input: {
   const { invited, outpostWorld, cantMoveTill, underAttack, hasHomeCell, now } = input;
   if (invited.mapVersion !== MapRoomVersion.V2) return "notMapRoom2";
   if (!outpostWorld || invited.worldid !== outpostWorld) return "otherWorld";
-  if (invited.allianceId) return "inAlliance";
   if (cantMoveTill && cantMoveTill > now) return "coolingDown";
   if (!hasHomeCell) return "noHomeCell";
   if (underAttack) return "underAttack";

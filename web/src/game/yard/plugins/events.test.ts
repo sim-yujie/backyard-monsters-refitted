@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { EventsActions, EventsApi, EventView } from "@/api/events";
+import type { EventsActions, EventsApi, EventView, Mr2WelcomeStatus } from "@/api/events";
 import { notePumpkins } from "@/game/events/pumpkinHunt";
 import { Notices } from "@/ui/maproom/Notices";
 import type { YardMounts } from "../yardPlugins";
@@ -46,7 +49,7 @@ const hunt = (counter: number, claimed: readonly boolean[] = [false, false]): Ev
 
 let doors: EventsDoor[];
 
-const setup = async (events: EventView[]) => {
+const setup = async (events: EventView[], mr2Welcome: Mr2WelcomeStatus | null = null) => {
   const notices = new Notices();
   const dock = document.body.appendChild(document.createElement("div"));
   const content = document.body.appendChild(document.createElement("div"));
@@ -55,15 +58,16 @@ const setup = async (events: EventView[]) => {
     dock: { element: dock },
     overlay: { content },
     notices,
+    scene: { openMap: vi.fn() },
   } as unknown as YardMounts;
   const api = {
-    list: vi.fn(() => Promise.resolve({ now: 3_600, events, whatsNewSeen: null })),
+    list: vi.fn(() => Promise.resolve({ now: 3_600, events, whatsNewSeen: null, mr2Welcome })),
   } as unknown as EventsApi;
   const actions: EventsActions = { claimCalendar: vi.fn(), claimTier: vi.fn() };
   const door = new EventsDoor(mounts, api, actions);
   doors.push(door);
   await door.load();
-  return { door, notices, content };
+  return { door, notices, content, mounts };
 };
 
 const readyNotice = (notices: Notices) => notices.element.querySelector(".events-ready");
@@ -132,11 +136,83 @@ describe("Events: opening the page", () => {
     expect(scrolled).toEqual([content.querySelector("button[data-claim]")]);
   });
 
+  it("opens at the top on a computer, with the Frontier Pass in view", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const matchMedia = vi.fn((query: string) => ({ matches: query.includes("width > 620px") }) as MediaQueryList);
+    vi.stubGlobal("matchMedia", matchMedia);
+    try {
+      const { door } = await setup([hunt(12)]);
+      door.toggle();
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("leaves the scroll alone when nothing waits", async () => {
     const scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoView;
     const { door } = await setup([hunt(3)]);
     door.toggle();
     expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Tester, 9 Nov: on a phone the open sheet's top reached the Events button,
+ * whose label showed beside the sheet's title and ran under its close button.
+ * The button is marked open while its page is, and a phone's CSS hides it then.
+ */
+describe("Events: the button while its page is open", () => {
+  /** The page's own CSS, read as text: jsdom lays nothing out. */
+  const eventsCss = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../../ui/events/events.css"), "utf8");
+
+  it("is marked open, and shut again when the page's own close is used", async () => {
+    const { door, content } = await setup([hunt(3)]);
+    door.toggle();
+    expect(door.button.getAttribute("aria-expanded")).toBe("true");
+    content.querySelector<HTMLButtonElement>('button[aria-label^="Close"]')?.click();
+    expect(content.querySelector(".events-panel")).toBeNull();
+    expect(door.button.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("is hidden then on a phone, upright or on its side, and only there", () => {
+    const hide = /@media ([^{]+)\{\s*\.events-door\[aria-expanded="true"\] \{\s*visibility: hidden;/.exec(eventsCss);
+    expect(hide?.[1]?.trim()).toBe("(width <= 620px), (height <= 500px)");
+  });
+});
+
+/** New to Map Room 2 (owner, 9 Nov 2026): the card alone keeps the Events button on the yard. */
+describe("Events: the New to Map Room 2 card", () => {
+  const welcome: Mr2WelcomeStatus = {
+    startsAt: 0,
+    endsAt: 10 * 86_400,
+    daysLeft: 10,
+    sets: 7,
+    takeover: true,
+    kit: true,
+    takeoverLeft: 7,
+    kitLeft: 7,
+    takeoverToday: false,
+    kitToday: false,
+    nextDayAt: 86_400,
+    takeoverUses: [],
+    kitUses: [],
+  };
+
+  it("shows the Events button for the card when no event is on, and hides it with neither", async () => {
+    const { door } = await setup([], welcome);
+    expect(door.button.hidden).toBe(false);
+    const { door: none } = await setup([]);
+    expect(none.button.hidden).toBe(true);
+  });
+
+  it("its Go to Map Room 2 closes the page and opens the map", async () => {
+    const { door, content, mounts } = await setup([], welcome);
+    door.toggle();
+    content.querySelector<HTMLButtonElement>(".events-welcome__go")?.click();
+    expect(content.querySelector(".events-panel")).toBeNull();
+    expect(mounts.scene.openMap).toHaveBeenCalledOnce();
   });
 });

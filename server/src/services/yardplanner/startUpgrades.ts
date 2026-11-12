@@ -11,6 +11,7 @@ import type {
   BuildingHealthData,
 } from "../../types/BuildingData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
+import { costLessBy } from "../events/weekendBoosts.js";
 import { withoutHelpers } from "../friends/helpList.js";
 import { requirementDetail } from "../base/economy/transitions.js";
 import { ACADEMY_TYPE } from "../yard/academy.js";
@@ -144,6 +145,16 @@ const isDamaged = (
   health: BuildingHealthData | null | undefined
 ): boolean => building.hp != null || (health != null && String(building.id) in health);
 
+/**
+ * The building with the Builder's Weekend percentage it was bought at (`wd`),
+ * or without one: every start writes it afresh, so a cancel reads the price
+ * of the job that is running (`services/yard/upgrade.ts` `planCancelUpgrade`).
+ */
+const withWeekendDiscount = (building: BuildingData, percentOff: number): BuildingData => {
+  const { wd: _old, ...rest } = building;
+  return percentOff > 0 ? { ...rest, wd: percentOff } : (rest as BuildingData);
+};
+
 /** The kinds whose steps are written finished instead of started (D13, decision Q1). */
 const AT_ONCE_KINDS: ReadonlySet<string> = new Set(["wall", "trap"]);
 
@@ -257,8 +268,12 @@ export const upgradeLadder = (type: number, kind: YardKind = "main") => {
  * @param save - The yard as it stands.
  * @param id - The building's id in `save.buildingdata`.
  * @param now - Unix seconds, for the Sharper Tools window.
+ * @param percentOff - Builder's Weekend: the price is this much less
+ *   (`services/events/weekendBoosts.ts`), and the building keeps it as `wd`
+ *   so a cancel gives back what was paid. 0 (the bots, the instant upgrade's
+ *   gates) leaves the full price.
  */
-export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): OneUpgrade => {
+export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number, percentOff = 0): OneUpgrade => {
   const buildings = save.buildingdata ?? {};
   const building = buildings[String(id)] as BuildingData | undefined;
   if (!building) return { ok: false, reason: "missing", id, t: 0, from: 0, scope: "building" };
@@ -316,7 +331,7 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): 
         });
   }
 
-  const cost = stepCost(step);
+  const cost = costLessBy(stepCost(step), percentOff);
   const missing = inferno ? purseShortfall(save.iresources, cost) : shortfall(save.resources, cost);
   if (isShort(missing)) {
     return refuse("shortfall", "step", { shortfall: missing, ...(inferno && { purse: "inferno" as const }) });
@@ -339,7 +354,7 @@ export const planOneUpgrade = (save: UpgradeWalkSave, id: number, now: number): 
       cost,
       finished: false,
       points: 0,
-      building: { ...withoutHelpers(building), cU: seconds, cL: seconds },
+      building: withWeekendDiscount({ ...withoutHelpers(building), cU: seconds, cL: seconds }, percentOff),
     };
   }
 

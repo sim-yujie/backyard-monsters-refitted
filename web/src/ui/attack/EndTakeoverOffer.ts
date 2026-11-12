@@ -4,6 +4,7 @@ import {
   TAKEOVER_TEXT,
   clockSkew,
   grantCountdownText,
+  offerPriceText,
   priceText,
   refusalText,
   type TakeoverKind,
@@ -189,13 +190,20 @@ export class EndTakeoverOffer {
     }
   }
 
-  private showPrice(price: { resources?: number | undefined; shiny?: number | undefined; adjacent?: boolean | undefined }): void {
+  private showPrice(price: {
+    resources?: number | undefined;
+    shiny?: number | undefined;
+    adjacent?: boolean | undefined;
+    welcome?: boolean | undefined;
+  }): void {
     if (price.resources === undefined) {
       this.priceLine.textContent = this.options.kind === "camp" ? "Checking the price…" : "";
       return;
     }
-    this.priceLine.textContent =
-      `Price: ${priceText(price)}` + (price.adjacent ? " (half price: next to your main yard)" : "");
+    // The welcome price is a flat 10% of the full price: no half price on top.
+    this.priceLine.textContent = price.welcome
+      ? offerPriceText(price)
+      : `Price: ${priceText(price)}` + (price.adjacent ? " (half price: next to your main yard)" : "");
   }
 
   private open(): void {

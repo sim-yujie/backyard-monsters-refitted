@@ -5,6 +5,7 @@ import {
   planAcademyInstant,
   planAcademyTrain,
 } from "../../services/yard/academy.js";
+import { weekendBoost, weekendBoostUsed } from "../../services/events/weekendBoosts.js";
 import { defineYardAction } from "./yardAction.js";
 
 /**
@@ -16,10 +17,19 @@ import { defineYardAction } from "./yardAction.js";
  * (`docs/design/inferno.md` WP 2.2).
  */
 
-/** `POST /bm/yard/academy/train` — train `monster` one level, the full putty price up front. */
+/**
+ * `POST /bm/yard/academy/train` — train `monster` one level, the full putty
+ * price up front; a Study Weekend shortens it (`services/events/weekendBoosts.ts`).
+ */
 export const yardAcademyTrainAction = defineYardAction({
   schema: YardAcademyTrainSchema,
-  run: ({ save, body, now }) => planAcademyTrain(save, body.monster, body.academy, now),
+  run: async ({ save, body, now, user, em }) => {
+    const off = weekendBoost("study", now);
+    const plan = planAcademyTrain(save, body.monster, body.academy, now, off);
+    // The weekend's Glimmers, in this transaction (`weekendCoins.ts`).
+    if (off > 0) await weekendBoostUsed(em, user.userid, "study", now);
+    return plan;
+  },
   inferno: "allow",
 });
 

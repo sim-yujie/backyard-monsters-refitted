@@ -21,6 +21,10 @@ export class AllianceInvite {
   @Property({ type: "string" })
   status: AllianceInviteStatus = AllianceInviteStatus.PENDING;
 
+  /** The Leader or Officer who sent an invite; null on requests and older invites. */
+  @Property({ type: "number", nullable: true })
+  invited_by: number | null = null;
+
   @Property({ type: Date })
   created_at: Date = new Date();
 

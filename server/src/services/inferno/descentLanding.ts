@@ -340,7 +340,6 @@ const descentReplayInput = (
     // the attacker fights with none.
     attacker: { ...user.save!, catapult: 0, siege: null } as never,
     tick,
-    declareWar: session.declareWar ?? false,
     left,
     // From yard 7 the fight burns surface monsters (WP 1.21), as the client's does.
     descentYard: descentIndexOf(String(yard.baseid))! + 1,
@@ -367,7 +366,7 @@ const descentBattle = async (
   const input = descentReplayInput(user, descent, yard, log, battleTick(saveData.tick), saveData.left);
   if (!input) return null;
 
-  const base = { baseid: String(saveData.baseid) };
+  const base = { baseid: String(saveData.baseid), rowless: "descent" as const };
   const fought = await replayBattleForSave(ctx, user, base, input, "the finaliser lands it from its checkpoint");
   const battle: DescentBattle = { ...fought, log: input.log };
 

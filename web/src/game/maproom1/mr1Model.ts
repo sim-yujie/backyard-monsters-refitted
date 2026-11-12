@@ -78,6 +78,10 @@ export interface Mr1Neighbour {
   readonly avatar: AvatarId;
   /** Whether they are the player's friend, as the route says (friends §6.2). */
   readonly friend?: boolean;
+  /** Whether the player pinned this friend to the top of their list (beta 7). */
+  readonly pinned?: boolean;
+  /** Hits back the player has on them across the level gap ({@link MR1_LEVEL_GAP}). */
+  readonly vengeance?: number;
 }
 
 export type Mr1Target = Mr1Tribe | Mr1Neighbour;
@@ -180,6 +184,8 @@ const readNeighbour = (wire: MapRoom1NeighbourWire, now: number): Mr1Neighbour =
     truceUntil: truce ? (num(wire.truceexpire) > 0 ? now + num(wire.truceexpire) : now) : null,
     avatar: avatarOf(wire.pic, wire.userid),
     friend: num(wire.friend) === 1,
+    pinned: num(wire.friendpinned) === 1,
+    vengeance: Math.max(0, Math.floor(num(wire.vengeance))),
   };
 };
 
@@ -334,8 +340,8 @@ const times = (count: number): string => (count === 1 ? "1 time" : `${count} tim
 
 /** One side of the battles with a neighbour, shown as an icon and a count. */
 export interface Mr1BattleCount {
-  /** `attackedYou` draws a shield, `youAttacked` a sword. */
-  readonly kind: "attackedYou" | "youAttacked";
+  /** `attackedYou` draws a shield, `youAttacked` a sword, `vengeance` a target. */
+  readonly kind: "attackedYou" | "youAttacked" | "vengeance";
   readonly count: number;
   /** The words for the tooltip and screen readers: "Attacked you 2 times". */
   readonly label: string;
@@ -361,6 +367,15 @@ export const battleCounts = (neighbour: Mr1Neighbour): Mr1BattleCount[] => {
       kind: "youAttacked",
       count: attacksTo,
       label: `You attacked them ${times(attacksTo)}`,
+    });
+  }
+  // Vengeance only matters where it opens Attack: across the level gap.
+  const vengeance = neighbour.vengeance ?? 0;
+  if (neighbour.permission === AttackPermission.VENGEANCE_MODE && vengeance > 0) {
+    counts.push({
+      kind: "vengeance",
+      count: vengeance,
+      label: `Revenge: you can hit back ${times(vengeance)}`,
     });
   }
   return counts;
@@ -411,6 +426,14 @@ export const initials = (name: string): string => {
 
 /* ── The Attack gate ────────────────────────────────────────────────── */
 
+/**
+ * Map Room 1 attacks reach at most this many levels below the player, unless
+ * they have vengeance on the target (`server/src/services/maproom/v1/
+ * mr1AttackRules.ts`, `MR1_ATTACK_LEVEL_GAP`). The server decides; this is
+ * only the number the card shows.
+ */
+export const MR1_LEVEL_GAP = 7;
+
 export const ReasonKey = {
   NO_FLINGER: "noFlinger",
   FLINGER_BUSY: "flingerBusy",
@@ -421,6 +444,7 @@ export const ReasonKey = {
   UNDER_ATTACK: "underAttack",
   TRUCE: "truce",
   WRECKED: "wrecked",
+  LEVEL_GAP: "levelGap",
 } as const;
 export type ReasonKey = (typeof ReasonKey)[keyof typeof ReasonKey];
 
@@ -442,6 +466,12 @@ export interface Mr1Gate {
    * protection. Tribes never do. Null when there is nothing to warn about.
    */
   readonly warning: { readonly strong: string; readonly rest: string } | null;
+  /**
+   * Attacking a player more than {@link MR1_LEVEL_GAP} levels above you is
+   * allowed, but earns them one hit back (owner, 11 Nov 2026). Shown on the
+   * card before the tap, like `warning`; Map Room 1 has no confirm box.
+   */
+  readonly levelWarning: { readonly strong: string; readonly rest: string } | null;
   /** Why View is off too (a yard under attack), or null. */
   readonly viewOff: string | null;
 }
@@ -488,6 +518,12 @@ const targetReason = (target: Mr1Target, now: number): Mr1Reason | null => {
         key: ReasonKey.UNDER_ATTACK,
         title: "Under attack",
         detail: `${target.attacker ?? "Someone"} is attacking them now. Try again in a few minutes. View is off too.`,
+      };
+    case AttackPermission.LEVEL_RESTRICTION:
+      return {
+        key: ReasonKey.LEVEL_GAP,
+        title: "Too low",
+        detail: `More than ${MR1_LEVEL_GAP} levels below you.`,
       };
     case AttackPermission.TRUCE_ACTIVE:
       break;
@@ -536,6 +572,16 @@ const ownYardReason = (own: Mr1Own | null): Mr1Reason | null => {
   return null;
 };
 
+/**
+ * A player more than {@link MR1_LEVEL_GAP} levels above you that you could
+ * attack now (HIGHER_LEVEL). The server already leaves out pairs both at
+ * level 40+, so this only reads its code.
+ */
+export const isFarAbove = (target: Mr1Target, now: number): boolean =>
+  target.kind === "player" &&
+  target.permission === AttackPermission.HIGHER_LEVEL &&
+  targetReason(target, now) === null;
+
 /** Whether Attack is on for `target`, and if not, why. */
 export const attackGate = (
   target: Mr1Target,
@@ -562,7 +608,14 @@ export const attackGate = (
         }
       : null;
 
-  return { reason, warning, viewOff };
+  const levelWarning = isFarAbove(target, now)
+    ? {
+        strong: `More than ${MR1_LEVEL_GAP} levels above you.`,
+        rest: "Attacking lets them hit you back once.",
+      }
+    : null;
+
+  return { reason, warning, levelWarning, viewOff };
 };
 
 /* ── The attack ─────────────────────────────────────────────────────── */
@@ -699,5 +752,7 @@ export const rowLine = (neighbour: Mr1Neighbour, now: number): string => {
   if (reason?.key === ReasonKey.DAMAGE_PROTECTION) return "Damage protection";
   if (reason?.key === ReasonKey.UNDER_ATTACK) return "Under attack now";
   if (reason?.key === ReasonKey.TRUCE) return "Truce";
+  if (reason?.key === ReasonKey.LEVEL_GAP) return `Too low · ${MR1_LEVEL_GAP}+ levels below`;
+  if (isFarAbove(neighbour, now)) return `${MR1_LEVEL_GAP}+ levels above you`;
   return presenceText(neighbour, now);
 };

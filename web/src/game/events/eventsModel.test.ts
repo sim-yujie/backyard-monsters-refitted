@@ -5,9 +5,11 @@ import {
   claimableCount,
   claimableTiers,
   countdownText,
+  grantedKorathText,
   grantedKrallenText,
   isOver,
   krallenMaxed,
+  korathPowerName,
   krallenPrizeText,
   rewardText,
   serverClock,
@@ -118,6 +120,7 @@ describe("rewardText", () => {
     expect(rewardText({ kind: "speedup", item: "SP2", count: 1 }, name)).toBe("1-hour speed-up");
     expect(rewardText({ kind: "speedup", item: "SP3", count: 2 }, name)).toBe("2x 2-hour speed-up");
     expect(rewardText({ kind: "decoration", type: 111, count: 1 }, name)).toBe("Mini-Pumpkin");
+    expect(rewardText({ kind: "eventCoins", amount: 15 }, name)).toBe("15 Glimmers");
   });
 });
 
@@ -184,5 +187,30 @@ describe("the Krallen Hunt", () => {
     expect(krallenMaxed(topped)).toBe(true);
     expect(claimableCount([topped])).toBe(0);
     expect(claimableCount([hunt({ status: "upcoming" })])).toBe(0);
+  });
+});
+
+describe("Monster Madness: Korath's powers", () => {
+  const name = (type: number) => `Decoration ${type}`;
+
+  it("names each power, Flash's order", () => {
+    expect(korathPowerName(1)).toBe("Burn");
+    expect(korathPowerName(2)).toBe("Breath of Fire");
+    expect(korathPowerName(3)).toBe("Fists of Doom");
+    expect(korathPowerName(9)).toBe("Fists of Doom");
+    expect(rewardText({ kind: "korath", power: 2 }, name)).toBe("Korath's Breath of Fire");
+  });
+
+  it("says what a claim taught Korath", () => {
+    expect(grantedKorathText([{ kind: "korath", power: 2, raised: true, hasKorath: true }])).toBe(
+      "Korath learned Breath of Fire!",
+    );
+    expect(grantedKorathText([{ kind: "korath", power: 1, raised: true, hasKorath: false }])).toBe(
+      "Burn waits for your Korath.",
+    );
+    expect(grantedKorathText([{ kind: "korath", power: 3, raised: false, hasKorath: true }])).toBe(
+      "Korath already knows Fists of Doom.",
+    );
+    expect(grantedKorathText([{ kind: "shiny", amount: 5 }])).toBeNull();
   });
 });

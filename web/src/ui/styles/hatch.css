@@ -13,7 +13,7 @@
  * amounts `.res-amount`.
  *
  * The tab lays itself out by its own width (a container query), not the
- * window's: the frame is narrower beside a building panel than alone.
+ * window's: the frame narrows with the screen.
  */
 
 /* ── The frame: the original's popup was wide, so the tab is too ─────────── */
@@ -21,16 +21,11 @@
 @media (width > 620px) {
   .monsters-screen[data-tab="hatch"] {
     width: min(1160px, calc(100vw - 2 * var(--space-4)));
-  }
-
-  .monsters-screen--beside-panel[data-tab="hatch"] {
-    width: min(1160px, calc(100vw - 300px - 4 * var(--space-4)));
-  }
-}
-
-@media (620px < width <= 1080px) {
-  .monsters-screen--beside-panel[data-tab="hatch"] {
-    width: min(1160px, calc(100vw - 2 * var(--space-4)));
+    /* Never narrowed to clear the Events column (ui.css `.panel--centre`):
+       the inside's 1160px plus the widest painted frame (skin.css), so the
+       hatchery's seven slots and "All done in" fit in one row whenever the
+       screen has the room; it covers Events instead. */
+    --centre-min-width: 1212px;
   }
 }
 
@@ -414,7 +409,7 @@
   line-height: 1;
 }
 
-/* The monster hatching now. A button when there is one: a tap asks to cancel it. */
+/* The monster hatching now. A button when there is one: a tap cancels it, holding cancels more. */
 .hatch-now {
   position: relative;
   flex: none;
@@ -430,6 +425,17 @@
   color: var(--colour-text);
   font: inherit;
   text-align: left;
+}
+
+/* Held to cancel or take out more (owner, 12 Nov): a finger must not select
+   text or open the long-press menu. Panning the row still works; the browser
+   then cancels the press and nothing is taken. */
+button.hatch-now,
+button.hatch-slot {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
 }
 
 button.hatch-now {
@@ -538,39 +544,6 @@ button.hatch-now:disabled {
   transition: width var(--motion-normal) var(--easing);
 }
 
-/* "Cancel this Pokey?" in the card itself, with its refund. */
-.hatch-now--confirm,
-.hatch-now--confirm.hatch-now--compact {
-  justify-content: center;
-  gap: var(--space-1);
-  width: auto;
-  min-width: 208px;
-  padding: var(--space-2) var(--space-3);
-  border-color: var(--colour-danger);
-  background: var(--colour-danger-soft);
-}
-
-.hatch-now__question {
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.hatch-now__refund {
-  font-size: var(--text-sm);
-  color: var(--colour-text-secondary);
-}
-
-.hatch-now__buttons {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.hatch-now__buttons > .btn {
-  flex: 1;
-  padding-inline: var(--space-2);
-  font-size: var(--text-sm);
-}
-
 /* Idle, with the chosen batch about to start in it. */
 .hatch-now--preview {
   align-items: center;
@@ -636,6 +609,16 @@ button.hatch-slot {
 
 button.hatch-slot:hover:not(:disabled) {
   background: var(--colour-surface-control-hover);
+}
+
+/* Being held: the count runs down in the danger colour until the release sends it. */
+button.hatch-slot.hatch-slot--taking {
+  border-color: var(--colour-danger);
+  background: var(--colour-danger-soft);
+}
+
+.hatch-slot--taking .hatch-slot__count {
+  color: var(--colour-danger);
 }
 
 button.hatch-slot:focus-visible {
@@ -906,11 +889,6 @@ button.hatch-slot:disabled {
   background: var(--colour-surface-sunken);
 }
 
-.hatch-message__icon.res-icon {
-  flex: none;
-  height: 24px;
-}
-
 .hatch-message__words {
   flex: 1;
   display: flex;
@@ -927,6 +905,12 @@ button.hatch-slot:disabled {
 
 .hatch-message__title--warning {
   color: var(--colour-warning);
+}
+
+/* With no warning beside it the housing bar takes the whole row. */
+.hatch-message > .hatch-housing:only-child {
+  flex: 1;
+  width: auto;
 }
 
 .hatch-housing {
@@ -1079,7 +1063,15 @@ button.hatch-slot:disabled {
   list-style: none;
 }
 
+/* Each card fills its cell, so a row's cards are one height when a name
+   takes two lines on a phone. */
+.hatch__grid > li {
+  display: flex;
+  min-width: 0;
+}
+
 .hatch-monster {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1097,18 +1089,30 @@ button.hatch-slot:disabled {
     border-color var(--motion-fast) var(--easing);
 }
 
-.hatch-monster:hover {
-  background: var(--colour-surface-control-hover);
+/* Only with a mouse: a phone keeps a tapped card "hovered", which read as a
+   second chosen monster. */
+@media (hover: hover) {
+  .hatch-monster:hover {
+    background: var(--colour-surface-control-hover);
+  }
 }
 
 .hatch-monster:active {
   transform: translateY(1px);
 }
 
-.hatch-monster[aria-pressed="true"] {
+/* The chosen monster is a different colour, not a glow (owner, 9 Nov): a
+   strong wash of the look's accent inside its 2px rim, in either look. The
+   1px less padding keeps the picture and name where they were. */
+.hatch-monster[aria-pressed="true"],
+.hatch-monster[aria-pressed="true"]:hover {
   padding: 5px 1px 7px;
   border: 2px solid var(--colour-accent);
-  background: var(--colour-accent-soft);
+  background: color-mix(in srgb, var(--colour-accent) 36%, transparent);
+  color: var(--colour-text-strong);
+}
+
+.hatch-monster[aria-pressed="true"] .hatch-monster__note {
   color: var(--colour-text-strong);
 }
 
@@ -1275,8 +1279,9 @@ button.hatch-slot:disabled {
 /* A painted icon (the word on hover and for a screen reader) and its number. */
 .hatch-info__stat {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 2px 6px;
   padding: 5px 10px;
   border-radius: var(--radius-sm);
   background: var(--colour-surface-sunken);
@@ -1298,6 +1303,19 @@ button.hatch-slot:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+/* Hatch Rush's "−30%" under the time (a 98 px tile at 1280 has no room for
+   it beside "4s"): its own line, the chip a little tighter. */
+.hatch-info__stat dd.hatch-info__stat-extra {
+  display: flex;
+  flex-basis: 100%;
+  font-size: inherit;
+}
+
+.hatch-info__stat-extra > .chip {
+  padding: 1px 6px;
+  gap: 3px;
+}
+
 .hatch-add {
   display: flex;
   flex-direction: column;
@@ -1316,18 +1334,6 @@ button.hatch-slot:disabled {
 
 .hatch-add__to strong {
   color: var(--colour-text-strong);
-}
-
-/* The batch's cost, time and housing before it is sent (#268, G). */
-.hatch-add__sum {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0 var(--space-1);
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--colour-text-secondary);
-  font-variant-numeric: tabular-nums;
 }
 
 .hatch-add__controls .qty-stepper__step,
@@ -1367,16 +1373,11 @@ button.hatch-slot:disabled {
   text-wrap: balance;
 }
 
-.hatch-add__note,
 .hatch-add__warning {
   margin: 0;
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
   font-variant-numeric: tabular-nums;
-}
-
-.hatch-add__note {
-  color: var(--colour-text-secondary);
 }
 
 .hatch-add__warning {
@@ -1409,6 +1410,28 @@ button.hatch-slot:disabled {
 @container hatch (width >= 1040px) {
   .hatch__grid {
     grid-template-columns: repeat(9, minmax(0, 1fr));
+  }
+}
+
+/* ── Too narrow for a hatchery's seven slots and "All done in" in a row ──
+   (7 x 124px + gaps + 168px = 1092px; tester, 9 Nov): the slots wrap onto a
+   second row and the totals go under them on one line, rather than the row
+   sliding sideways. */
+@container hatch (560px <= width < 1092px) {
+  .hatch-line__slots,
+  .hatch-line__now {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .hatch-line__totals {
+    flex-basis: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: var(--space-2);
+    padding: var(--space-1) 0 0;
+    border-left: 0;
   }
 }
 
@@ -1481,6 +1504,16 @@ button.hatch-slot:disabled {
     white-space: nowrap;
   }
 
+  /* "Hatch…" hid which hatchery a card was: a phone shows its number
+     alone, "#1", which always fits (6 Nov UI check). */
+  .hatch-line--hcc .hatch-now__label-word {
+    display: none;
+  }
+
+  .hatch-line--hcc .hatch-now__label-number::before {
+    content: "#";
+  }
+
   /* Nothing to show in an empty slot: a short row, not a tall box. */
   .hatch-line .hatch-slot--empty {
     min-height: 48px;
@@ -1528,10 +1561,6 @@ button.hatch-slot:disabled {
     border-radius: 0;
   }
 
-  .hatch-now--confirm {
-    grid-column: span 3;
-  }
-
   .hatch-now--more {
     font-size: var(--text-xs);
   }
@@ -1549,7 +1578,7 @@ button.hatch-slot:disabled {
   }
 
   .hatch-slot__upgrade {
-    min-height: 36px;
+    min-height: var(--control-height-compact);
     padding-inline: var(--space-1);
     font-size: var(--text-xs);
   }
@@ -1579,26 +1608,40 @@ button.hatch-slot:disabled {
     padding: var(--space-3);
   }
 
-  .hatch-message__icon.res-icon {
-    display: none;
-  }
-
   .hatch-housing {
     width: auto;
   }
 
+  /* Four across, not five (owner, 9 Nov: "needs polishing"): at 390 px a
+     fifth card was 68 px, too narrow for "Slimeattikus" or "Crabatron" in
+     the display font, cut to "Slimeat…". A name stays whole on one line: a
+     long one ("Slimeattikus", `hatch-monster__name--long`) in smaller
+     letters, never broken mid-word ("Slimeattik / us", tester 9 Nov). */
   .hatch__grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 6px;
   }
 
   .hatch-monster__picture {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
   }
 
+  .hatch-monster__name--long {
+    font-size: 10.5px;
+    letter-spacing: -0.2px;
+  }
+
+  /* The note takes the line's whole width and the button goes under it,
+     centred (it was squeezed to about a word a line beside the button). */
   .hatch-pick__locked {
     flex-wrap: wrap;
+    justify-content: center;
+    row-gap: var(--space-2);
+  }
+
+  .hatch-pick__locked-text {
+    flex: 1 1 calc(100% - 40px);
   }
 
   /* The info panel becomes the bar fixed to the sheet's bottom (not on a
@@ -1677,13 +1720,22 @@ button.hatch-slot:disabled {
     border-top: 0;
   }
 
-  .hatch-add__to,
-  .hatch-add__sum {
+  .hatch-add__to {
     font-size: var(--text-xs);
   }
 
+  /* If Max does not fit beside the steps it takes its own line rather than
+     running past the edge (6 Nov UI check: "Max (145)" was cut at 390 px
+     wide). */
   .hatch-add__controls {
+    flex-wrap: wrap;
     gap: var(--space-1);
+  }
+
+  /* A finger's width each, 44 px (owner, 9 Nov: phone polish). */
+  .hatch-add__controls .qty-stepper__step {
+    flex: 1 1 var(--control-height-compact);
+    min-width: var(--control-height-compact);
   }
 
   .hatch-add__jump {
@@ -1697,6 +1749,7 @@ button.hatch-slot:disabled {
   }
 
   .hatch-add__fill {
+    flex: 1 0 auto;
     padding-inline: var(--space-2);
   }
 

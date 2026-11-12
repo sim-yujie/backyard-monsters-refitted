@@ -27,7 +27,6 @@ export const DEFENCE_REPLAY_LOAD_FIELDS = [
   // The battle as served (issues #167, #179, #195, #201, #219, #352).
   "cellheight",
   "defenderforces",
-  "attpowerups",
   "attackerlevel",
   "attackeracademy",
   "attackerranks",

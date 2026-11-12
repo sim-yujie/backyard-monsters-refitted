@@ -20,7 +20,7 @@
   right: calc(var(--dock-row) + 3 * var(--dock-pitch));
 }
 
-/* ── The frame: docked right under the HUD ──────────────────────────────── */
+/* ── The frame: in the middle on a computer (ui.css `.panel--centre`) ───── */
 
 .defences-screen {
   position: absolute;

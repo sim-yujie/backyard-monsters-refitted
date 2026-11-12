@@ -20,6 +20,7 @@ import {
   cancelAnswer,
   friendsAnswer,
   mutedAnswer,
+  pinAnswer,
   removeAnswer,
   requestAnswer,
   requestsAnswer,
@@ -32,7 +33,7 @@ import {
 import { helpBlock } from "../../services/friends/helpFacts.js";
 import { setHelpBlockFor } from "../../services/friends/helpHook.js";
 import { helpAnswer } from "./help.js";
-import { collectGiftsAnswer, giftsAnswer, sendGiftAnswer } from "./gift.js";
+import { collectGiftsAnswer, deleteGiftsAnswer, giftsAnswer, sendGiftAnswer, wishesAnswer } from "./gift.js";
 
 /** Binds an answer function to Koa: the caller, the body or query, `postgres.em`, now. */
 const route =
@@ -66,6 +67,8 @@ export const mountFriendsRoutes = (router: Router): void => {
     route((ctx, now) => cancelAnswer(postgres.em, ctx.authUser, ctx.request.body, now)));
   router.post(`${api}/bm/friends/remove`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,
     route((ctx) => removeAnswer(postgres.em, ctx.authUser, ctx.request.body)));
+  router.post(`${api}/bm/friends/pin`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,
+    route((ctx, now) => pinAnswer(postgres.em, ctx.authUser, ctx.request.body, now)));
   router.get(`${api}/bm/friends/search`, apiVersion, verifyUserAuth, verifyAccountStatus, friendSearchLimiter,
     route((ctx, now) => searchAnswer(postgres.em, ctx.authUser, ctx.query, now)));
   router.get(`${api}/bm/friends/suggestions`, apiVersion, verifyUserAuth, verifyAccountStatus, friendsReadLimiter,
@@ -78,6 +81,10 @@ export const mountFriendsRoutes = (router: Router): void => {
     route((ctx, now) => giftsAnswer(postgres.em, ctx.authUser, now)));
   router.post(`${api}/bm/friends/gifts/collect`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,
     route((ctx, now) => collectGiftsAnswer(postgres.em, ctx.authUser, ctx.request.body, now)));
+  router.post(`${api}/bm/friends/gifts/delete`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,
+    route((ctx, now) => deleteGiftsAnswer(postgres.em, ctx.authUser, ctx.request.body, now)));
+  router.post(`${api}/bm/friends/wishes`, apiVersion, verifyUserAuth, verifyAccountStatus, friendActionLimiter, logRequest,
+    route((ctx) => wishesAnswer(postgres.em, ctx.authUser, ctx.request.body)));
 
   router.get(`${api}/player/blocked`, apiVersion, verifyUserAuth, verifyAccountStatus, friendsReadLimiter,
     route((ctx) => blockedAnswer(postgres.em, ctx.authUser)));

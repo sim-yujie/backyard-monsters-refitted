@@ -2,11 +2,12 @@ import type { AutoAttackPlanResponse } from "@/api/autoAttack";
 import type { Bookmark } from "@/api/bookmarks";
 import type { Friend } from "@/api/friends";
 import type { TakeoverPayment } from "@/api/maproom";
-import type { MapCell, PlayerCell, Resources, SightSource, TakeoverQuoteResponse } from "@/api/types";
+import { isPlayerCell, type MapCell, type PlayerCell, type Resources, type SightSource, type TakeoverQuoteResponse } from "@/api/types";
 import { MAX_ZOOM, MIN_ZOOM } from "@/config";
 import type { OffsetCell } from "@/game/HexGrid";
 import type { RangeSource } from "@/game/maproom/attackRange";
 import type { KitFilter } from "@/game/maproom/cellVisuals";
+import type { MapAlliance } from "@/game/maproom/mapAlliances";
 import type { CellRange } from "@/game/maproom/zones";
 import type { TakeoverCandidate, TakeoverKind } from "@/game/maproom/takeover";
 import type { OwnOutpost } from "@/game/yard/ownYards";
@@ -20,13 +21,17 @@ import { FindControl } from "./FindControl";
 import { HoverCard, type HoverCardContent } from "./HoverCard";
 import { Minimap } from "./Minimap";
 import { TiltToggle } from "./TiltToggle";
+import { PreparingMap } from "./PreparingMap";
+import type { PrepareState } from "@/game/maproom/prepareProgress";
 import { KitFilterControl } from "./KitFilterControl";
+import { MapLegend } from "./MapLegend";
 import { NavPanel } from "./NavPanel";
 import { Notices } from "./Notices";
 import { RangeControl } from "./RangeControl";
 import { AutoAttackControl } from "./AutoAttackControl";
 import { TakeoverControl } from "./TakeoverControl";
 import { showTakenOver } from "./TakeoverDialog";
+import { YardCard } from "./YardCard";
 
 /**
  * The map's own shape of the shared zoom control: a fixed range taken once
@@ -119,13 +124,37 @@ export interface MapRoomUiHandlers {
   onWithdrawInvite?: (cell: OffsetCell, payload: PlayerCell) => void;
   onInviteToOutpost?: (payload: PlayerCell) => void;
   canInviteToOutpost?: (payload: PlayerCell) => boolean;
+  /** The alliance a cell's `aid` names, for the cell panel's alliance chip (beta 7). */
+  allianceOf?: (allianceId: number) => MapAlliance | undefined;
+  /** The player's own alliance id, or null. */
+  myAlliance?: () => number | null;
   /**
    * The cell inspector's Repeat attack on a wild camp (issue #221); see
    * `AutoAttackControlOptions`. Absent: no Repeat attack.
    */
   autoAttackPlan?: (baseid: string) => Promise<AutoAttackPlanResponse>;
   onRepeatAttack?: (cell: OffsetCell, baseid: string, answer: AutoAttackPlanResponse) => void;
+  /**
+   * The yard info card (beta 7, owner's design B): clicking one of the
+   * player's own yards opens `YardCard` in the middle instead of the side
+   * panel. Absent: own yards keep the side panel.
+   */
+  yardCard?: YardCardHandlers;
 }
+
+/** What the yard info card needs from the scene beyond the cell panel's own handlers. */
+export interface YardCardHandlers {
+  /** Housing one monster of a type takes, at the player's academy level. */
+  sizeOf: (id: string) => number;
+  /** Cells between a cell and the main yard, or null when not known. */
+  cellsFromHome: (cell: OffsetCell) => number | null;
+  /** "Bring monsters here": the transfer dialog with this yard as the target. */
+  onBringMonsters: (cell: OffsetCell, payload: PlayerCell) => void;
+}
+
+/** One of the player's own yards, loaded: the cells the info card is for. */
+const isOwnYard = (payload: MapCell | undefined): payload is PlayerCell =>
+  payload !== undefined && isPlayerCell(payload) && payload.mine === 1;
 
 export class MapRoomUi {
   readonly notices = new Notices();
@@ -137,13 +166,21 @@ export class MapRoomUi {
   private readonly minimap: Minimap;
   private readonly zoomControl: ZoomControl;
   private readonly tiltToggle: TiltToggle;
+  /** The "Preparing map" loading screen over the map while the painted look compiles on a first open. */
+  private readonly preparing = new PreparingMap();
   private readonly rangeControl: RangeControl;
   private readonly kitFilterControl: KitFilterControl;
+  /** The border colours' key (owner, 8 Nov 2026). */
+  private readonly legend = new MapLegend();
   private readonly docks: HTMLElement[] = [];
   /** The tool row, bottom right: Range and the zoom, and what `placeTool` puts first. */
   private tools: HTMLElement | null = null;
 
   private cellPanel: CellPanel | null = null;
+  /** The own yard's info card, open in the middle instead of the cell panel. */
+  private yardCard: YardCard | null = null;
+  /** Set while the map swaps the cell panel for the card, so its close is not the player's. */
+  private swappingPanel = false;
   private rangeOn = false;
   private takeover: TakeoverControl | null = null;
   private autoAttack: AutoAttackControl | null = null;
@@ -214,12 +251,16 @@ export class MapRoomUi {
 
     this.hover.mount(container);
     this.find.mount(this.dock("map-dock mr2-find-dock"));
+    // Over the map and its controls, under the top bar (maproom.css `.mr2-prepare`).
+    container.append(this.preparing.element);
+    this.docks.push(this.preparing.element);
 
     const bottomRight = this.dock("map-dock map-dock--bottom-right mr2-tools-dock");
     bottomRight.append(this.rangeControl.legend);
     const tools = document.createElement("div");
     tools.className = "mr2-toolrow";
     tools.append(this.kitFilterControl.toggle, this.kitFilterControl.element);
+    tools.append(this.legend.toggle, this.legend.element);
     tools.append(this.tiltToggle.element);
     this.zoomControl.mount(tools);
     bottomRight.append(tools);
@@ -242,10 +283,13 @@ export class MapRoomUi {
     this.takeover = null;
     this.autoAttack?.destroy();
     this.autoAttack = null;
+    this.closeYardCard();
     this.minimap.destroy();
     this.zoomControl.destroy();
     this.kitFilterControl.destroy();
+    this.legend.destroy();
     this.notices.destroy();
+    this.preparing.destroy();
     for (const dock of this.docks) dock.remove();
     this.docks.length = 0;
     this.container = null;
@@ -292,6 +336,16 @@ export class MapRoomUi {
     this.tiltToggle.set(state);
   }
 
+  /** The "Preparing map" loading screen: shown while the painted look compiles (`MapRenderer.prepareState`). */
+  setPreparing(state: PrepareState): void {
+    this.preparing.set(state);
+  }
+
+  /** Whether the loading screen is up: the map takes no keys meanwhile. */
+  get preparingShown(): boolean {
+    return this.preparing.showing;
+  }
+
   /** The zoom floor moved (the tilted map cannot zoom out as far as the flat one). */
   setMinZoom(minZoom: number): void {
     this.zoomControl.setRange(minZoom, MAX_ZOOM);
@@ -320,8 +374,8 @@ export class MapRoomUi {
   }
 
   /** The flingers the range is drawn from, for the legend (#177). */
-  setRangeSources(sources: readonly RangeSource[], declareWar: boolean): void {
-    this.rangeControl.setSources(sources, declareWar);
+  setRangeSources(sources: readonly RangeSource[]): void {
+    this.rangeControl.setSources(sources);
   }
 
   /** The viewer's fog of war sight (#331), for the minimap's two-tint circles. */
@@ -351,11 +405,13 @@ export class MapRoomUi {
   /* ── Cell inspector ─────────────────────────────────────────────────── */
 
   get shownCell(): OffsetCell | null {
-    return this.cellPanel?.shownCell ?? null;
+    return this.cellPanel?.shownCell ?? this.yardCard?.cell ?? null;
   }
 
   showCell(cell: OffsetCell, payload: MapCell | undefined): void {
     this.minimap.setSelected(cell);
+    if (this.showYardCard(cell, payload)) return;
+    this.closeYardCard();
 
     if (!this.cellPanel) {
       if (!this.container) return;
@@ -373,7 +429,9 @@ export class MapRoomUi {
           ? new AutoAttackControl({ plan: autoAttackPlan, onRepeat: onRepeatAttack })
           : null;
       this.cellPanel = new CellPanel({
-        onClose: this.handlers.onCellPanelClose,
+        onClose: () => {
+          if (!this.swappingPanel) this.handlers.onCellPanelClose();
+        },
         onBookmark: this.handlers.onBookmarkCell,
         canBookmark: this.handlers.canBookmark,
         onViewYard: this.handlers.onViewYard,
@@ -390,6 +448,8 @@ export class MapRoomUi {
         ...(this.handlers.onWithdrawInvite ? { onWithdrawInvite: this.handlers.onWithdrawInvite } : {}),
         ...(this.handlers.onInviteToOutpost ? { onInviteToOutpost: this.handlers.onInviteToOutpost } : {}),
         ...(this.handlers.canInviteToOutpost ? { canInviteToOutpost: this.handlers.canInviteToOutpost } : {}),
+        ...(this.handlers.allianceOf ? { allianceOf: this.handlers.allianceOf } : {}),
+        ...(this.handlers.myAlliance ? { myAlliance: this.handlers.myAlliance } : {}),
         onRangeToggle: (on) => this.toggleRange(on),
         extraAction: this.autoAttack ? [this.autoAttack, this.takeover] : this.takeover,
         ...(this.hud.achievements ? { achievementsLine: (payload: PlayerCell) => this.achievementsLine(payload) } : {}),
@@ -407,11 +467,94 @@ export class MapRoomUi {
   }
 
   updateCell(payload: MapCell | undefined): void {
+    const card = this.yardCard;
+    if (card) {
+      // Still loading again (a move just invalidated it): keep the card as it is.
+      if (payload === undefined) return;
+      if (isOwnYard(payload)) card.update(card.cell, payload);
+      // No longer the player's (moved away, taken): back to the side panel.
+      else this.showCell(card.cell, payload);
+      return;
+    }
+    const shown = this.cellPanel?.shownCell;
+    // The panel opened while the zone loaded, and it turns out to be the player's own yard.
+    if (shown && this.handlers.yardCard && isOwnYard(payload)) {
+      this.showCell(shown, payload);
+      return;
+    }
     this.cellPanel?.update(payload);
   }
 
   tickCell(nowSeconds: number): void {
     this.cellPanel?.tick(nowSeconds);
+    this.yardCard?.tick(nowSeconds);
+  }
+
+  /**
+   * Opens (or refreshes) the yard info card when the cell is one of the
+   * player's own yards, closing the side panel quietly. False when the card
+   * is not for this cell, and nothing was done.
+   */
+  private showYardCard(cell: OffsetCell, payload: MapCell | undefined): boolean {
+    const extra = this.handlers.yardCard;
+    if (!extra || !isOwnYard(payload)) return false;
+    if (this.yardCard) {
+      this.yardCard.update(cell, payload);
+      return true;
+    }
+    const container = this.modal ?? this.container;
+    if (!container) return false;
+    this.closeCellPanelQuietly();
+    const handlers = this.handlers;
+    this.yardCard = new YardCard(cell, payload, {
+      onOpen: handlers.onViewYard,
+      onBookmark: handlers.onBookmarkCell,
+      canBookmark: handlers.canBookmark,
+      sizeOf: extra.sizeOf,
+      ownFlinger: handlers.ownFlinger,
+      ownMoves: handlers.ownMoves,
+      onMoveFrom: handlers.onMoveMonsters,
+      onBringHere: extra.onBringMonsters,
+      onRelocate: handlers.onRelocate,
+      // The invitation is written in the mailbox, a window under this one: the card makes way.
+      ...(handlers.onInvite ? { onInvite: (at: OffsetCell, own: PlayerCell) => this.leaveCardFor(() => handlers.onInvite?.(at, own)) } : {}),
+      ...(handlers.onWithdrawInvite ? { onWithdrawInvite: handlers.onWithdrawInvite } : {}),
+      cellsFromHome: extra.cellsFromHome,
+      onClose: () => {
+        this.yardCard = null;
+        handlers.onCellPanelClose();
+      },
+    }).mount(container);
+    return true;
+  }
+
+  /** Closes the card as the player would (the selection goes too), then does `next`. */
+  private leaveCardFor(next: () => void): void {
+    this.yardCard?.popup.close();
+    next();
+  }
+
+  /** Takes the card down without telling the scene: the map is closing or replacing it. */
+  private closeYardCard(): void {
+    const card = this.yardCard;
+    this.yardCard = null;
+    card?.dismiss();
+  }
+
+  /** Takes the side panel down without the scene clearing its selection. */
+  private closeCellPanelQuietly(): void {
+    if (!this.cellPanel) return;
+    this.swappingPanel = true;
+    try {
+      this.cellPanel.close();
+    } finally {
+      this.swappingPanel = false;
+    }
+    this.cellPanel = null;
+    this.takeover?.destroy();
+    this.takeover = null;
+    this.autoAttack?.destroy();
+    this.autoAttack = null;
   }
 
   /** Asks the server again whether the shown cell can be taken over. */
@@ -467,6 +610,7 @@ export class MapRoomUi {
   }
 
   closeCell(): void {
+    this.closeYardCard();
     this.cellPanel?.close();
     this.cellPanel = null;
     this.takeover?.destroy();

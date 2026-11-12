@@ -19,6 +19,7 @@ import {
 } from "./api";
 import { AnnouncementsView } from "./announcements";
 import { AttackLogSection } from "./attacks";
+import { FlaggedSection } from "./flagged";
 import { BugsView } from "./bugs";
 import { ChatPanel } from "./chat";
 import { h, replace } from "./dom";
@@ -26,6 +27,7 @@ import { ErrorsView } from "./errors";
 import { ModerationView } from "./moderation";
 import { ModeratorsView } from "./moderators";
 import { ModMailSection } from "./modmail";
+import { PhotosView } from "./photos";
 import { homeSplitWords } from "./evidence";
 import { ago, count, dateTime, plural } from "./format";
 import { icon } from "./icons";
@@ -40,6 +42,8 @@ import {
 } from "./sections";
 import { QueueView } from "./queue";
 import { ShinyView } from "./shiny";
+import { MonsterMadnessView } from "./monsterMadness";
+import { WeekendView } from "./weekend";
 import { applyTheme, readTheme, themePicker } from "./theme";
 import {
   PAGES,
@@ -182,6 +186,14 @@ class Dashboard {
     },
     openPlayer: (userid) => this.openPlayer(userid),
   });
+  /** Players the cheat checks caught (`bym.report`), newest first. */
+  private readonly flagged = new FlaggedSection({
+    say: (message) => this.say(message),
+    openPlayer: (userid) => this.openPlayer(userid),
+    openAttacks: (userid) => {
+      location.hash = viewHash("attacks", { player: userid });
+    },
+  });
   private readonly modMail = new ModMailSection({
     say: (message) => this.say(message),
     onViewChange: () => undefined,
@@ -202,11 +214,28 @@ class Dashboard {
   });
   /** Players in the Moderation list, by list, or null before they are read. */
   private inboxCounts: InboxList["counts"] | null = null;
+  /** Photo reports (beta 7): reported profile photos, a tab of Moderation. */
+  private readonly photos = new PhotosView({
+    say: (message) => this.say(message),
+    onCount: (open) => {
+      this.openPhotos = open;
+      this.renderPhotoState();
+      this.renderInboxState();
+      this.renderHomeNeeds();
+    },
+    openPlayer: (userid) => this.openPlayer(userid),
+  });
+  /** Players with open photo reports, or null before they are read. */
+  private openPhotos: number | null = null;
   private readonly chat = new ChatPanel({
     openPlayer: (userid) => this.openPlayer(userid),
     say: (message) => this.say(message),
   });
   private readonly announcements = new AnnouncementsView({ say: (message) => this.say(message) });
+  /** Weekend events (beta 7), a tab of Announcements. */
+  private readonly weekend = new WeekendView({ say: (message) => this.say(message) });
+  /** Monster Madness (owner-started only), above the weekend events. */
+  private readonly monsterMadness = new MonsterMadnessView({ say: (message) => this.say(message) });
   private readonly errors = new ErrorsView(
     (message) => this.say(message),
     (totals) => {
@@ -341,27 +370,33 @@ class Dashboard {
     };
     this.sections = {
       moderation: section("moderation"),
+      photos: section("photos"),
       find: section("find"),
       attacks: section("attacks"),
+      flagged: section("flagged"),
       moderators: section("moderators"),
       modmail: section("modmail"),
       bugs: section("bugs"),
       shiny: section("shiny"),
       chat: section("chat"),
       announcements: section("announcements"),
+      events: section("events"),
       players: section("players", rangeButtons),
       activity: section("activity"),
       health: section("health"),
     };
     replace(this.sections.moderation.body, this.queue.element);
+    replace(this.sections.photos.body, this.photos.element);
     replace(this.sections.find.body, this.moderation.element);
     replace(this.sections.bugs.body, this.bugs.element);
     replace(this.sections.attacks.body, this.attacks.element);
+    replace(this.sections.flagged.body, this.flagged.element);
     replace(this.sections.moderators.body, this.moderators.element);
     replace(this.sections.modmail.body, this.modMail.element);
     replace(this.sections.chat.body, this.chat.element);
     replace(this.sections.shiny.body, this.shiny.element);
     replace(this.sections.announcements.body, this.announcements.element);
+    replace(this.sections.events.body, this.monsterMadness.element, this.weekend.element);
     replace(this.sections.health.body, this.errorsBox);
 
     this.home = h(
@@ -458,10 +493,14 @@ class Dashboard {
       this.bugs.show(route.bug, route.view === "bugs" ? route.params : {}),
       this.moderation.refresh(),
       route.view === "attacks" ? this.attacks.show(route.params) : Promise.resolve(),
+      this.flagged.refresh(),
       this.moderators.refresh(),
       this.modMail.refresh(),
       this.shiny.refresh(),
       this.announcements.refresh(),
+      this.photos.refresh(),
+      this.weekend.refresh(),
+      this.monsterMadness.refresh(),
     ]);
   }
 
@@ -532,16 +571,24 @@ class Dashboard {
       this.bugs.refresh(),
       this.moderation.refresh(),
       this.attacks.refresh(),
+      this.flagged.refresh(),
       this.moderators.refresh(),
       this.modMail.refresh(),
       this.shiny.refresh(),
+      this.photos.refresh(),
+      this.weekend.refresh(),
+      this.monsterMadness.refresh(),
     ]);
     this.refreshButton.classList.remove("is-busy");
     this.refreshButton.disabled = false;
     this.say("Up to date");
   }
 
-  /** The players waiting in the Moderation list on its menu link, tab and heading. */
+  /**
+   * The players waiting in the Moderation list on its tab and heading. The
+   * Moderation menu link counts them and the open photo reports together, so
+   * a reported photo shows from any page.
+   */
   private renderInboxState(): void {
     const open = this.inboxCounts?.all ?? null;
     const { state } = this.sections.moderation;
@@ -549,11 +596,29 @@ class Dashboard {
       const text = String(open);
       const badge = () => h("span", { class: "count" }, text, h("span", { class: "sr-only" }, " waiting"));
       this.setBadge("moderation", badge);
-      this.setPageBadge("moderation", badge);
       replace(state, h("span", { class: "chip chip-info" }, open === 1 ? "1 player" : `${text} players`));
     } else {
       this.setBadge("moderation", null);
-      this.setPageBadge("moderation", null);
+      replace(state);
+    }
+    const all = (open ?? 0) + (this.openPhotos ?? 0);
+    const allText = String(all);
+    this.setPageBadge(
+      "moderation",
+      all ? () => h("span", { class: "count" }, allText, h("span", { class: "sr-only" }, " waiting")) : null,
+    );
+  }
+
+  /** The players with open photo reports on the Photo reports tab and heading. */
+  private renderPhotoState(): void {
+    const open = this.openPhotos;
+    const { state } = this.sections.photos;
+    if (open) {
+      const text = String(open);
+      this.setBadge("photos", () => h("span", { class: "count" }, text, h("span", { class: "sr-only" }, " open")));
+      replace(state, h("span", { class: "chip chip-info" }, open === 1 ? "1 photo report" : `${text} photo reports`));
+    } else {
+      this.setBadge("photos", null);
       replace(state);
     }
   }
@@ -697,7 +762,7 @@ class Dashboard {
     const levels = sectionLevels(items) as Partial<Record<ViewId, Level>>;
     let server: Level | null = null;
     for (const [id] of VIEWS) {
-      if (id === "home" || id === "moderation") continue;
+      if (id === "home" || id === "moderation" || id === "photos") continue;
       const { state } = this.sections[id];
       const level =
         id === "health"
@@ -909,7 +974,7 @@ class Dashboard {
         "shield",
         total === null ? "Players to review" : total === 0 ? "Nobody to review" : `${plural(total, "player")} to review`,
         counts ? homeSplitWords(counts) : "Not read yet",
-        null,
+        this.openPhotos ? `Also ${plural(this.openPhotos, "reported profile photo")} in Photo reports` : null,
         "Open Moderation",
       ),
       card(

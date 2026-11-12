@@ -1,10 +1,12 @@
 import type { BaseLoadResponse, BuildingData, StoreData } from "@/api/types";
+import { byPercent, currentAllianceBonuses } from "@/game/alliance/allianceBonuses";
 import { maxHp } from "@/game/combat/rules";
 import { timeCost } from "@/game/yard/buildingCosts";
 import { acceleratedEnd, overdriveAt, savedAtOf } from "@/game/yard/jobs";
 import { academyLevel, housingCapacity } from "./housingSummary";
 import { hatchCost, hatchTime, housingSpace, monsterEntry, type MonsterEntry } from "./monsterCatalogue";
 import { listedMonstersOf, type MonsterRealm } from "./realm";
+import { shorterBy, weekendPercent } from "@/game/weekend";
 
 /**
  * What the Hatch tab shows, as data (`docs/design/yard-buildings.md` §4.4).
@@ -127,6 +129,12 @@ export interface HatchYard {
   readonly capacity: number;
   /** Goo held. */
   readonly goo: number;
+  /**
+   * The alliance's extra on each hatch price here, in percent: a Midas
+   * Council's dearer hatching on an outpost (`outpostHatchCost`), never a
+   * discount, as the server's `planHatcheryAdd` charges. Absent: 0.
+   */
+  readonly pricePercent?: number;
 }
 
 /** The legacy id the original rewrote on sight (`client/scripts/BUILDING13.as:225-227`). */
@@ -159,14 +167,18 @@ export const academyLevels = (save: Pick<BaseLoadResponse, "academy">): Record<s
 };
 
 /** Goo one `id` costs at academy `level`. */
-export const priceOf = (id: string, level: number): number => hatchCost(id, level) ?? 0;
+export const priceOf = (id: string, level: number, percent = 0): number => byPercent(hatchCost(id, level) ?? 0, percent);
 
 /** Housing space one `id` takes at academy `level`. */
 export const spaceOf = (id: string, level: number): number => housingSpace(id, level) ?? 0;
 
-/** Seconds to hatch one `id` at academy `level`, at least 1 (as the server counts). */
+/**
+ * Seconds to hatch one `id` at academy `level`, at least 1 (as the server
+ * counts), less a Hatch Rush running now (`game/weekend.ts`; the server takes
+ * it off each monster as it starts, `production.ts`).
+ */
 export const secondsOf = (id: string, level: number): number =>
-  Math.max(1, Math.ceil(hatchTime(id, level) ?? 1));
+  shorterBy(Math.max(1, Math.ceil(hatchTime(id, level) ?? 1)), weekendPercent("hatch"));
 
 /** A queue, normalised as the server reads it: a two-element stack is paid at today's level. */
 const readQueue = (raw: unknown, levels: Readonly<Record<string, number>>): QueueStack[] => {
@@ -319,6 +331,7 @@ export const readHatchYard = (save: BaseLoadResponse, now: number): HatchYard =>
     levels,
     capacity: housingCapacity(save, now),
     goo: Math.floor(finite(save.resources?.r4) ?? 0),
+    pricePercent: save.type === "outpost" ? Math.max(0, currentAllianceBonuses().outpostHatchCost) : 0,
   };
 };
 
@@ -460,7 +473,7 @@ export const previewAdd = (
   const limit = hcc ? HCC_STACKS : hatchery!.stackLimit;
   const before = new Map(queue.map((stack) => [stack, stack[1]]));
   const level = levelIn(yard.levels, monster);
-  const price = priceOf(monster, level);
+  const price = priceOf(monster, level, yard.pricePercent);
   const requested = Math.max(0, Math.min(MAX_ADD, Math.floor(count)));
 
   let added = 0;
@@ -542,7 +555,7 @@ export interface FillLimits {
  */
 export const fillLimits = (yard: HatchYard, target: HatchTarget, monster: string): FillLimits => {
   const level = levelIn(yard.levels, monster);
-  const price = priceOf(monster, level);
+  const price = priceOf(monster, level, yard.pricePercent);
   const queue = queueRoom(yard, target, monster);
   const goo = price > 0 ? Math.min(MAX_ADD, Math.floor(yard.goo / price)) : MAX_ADD;
   const housing = Math.min(MAX_ADD, housingFits(yard, monster));

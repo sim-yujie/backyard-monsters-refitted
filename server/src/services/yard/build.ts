@@ -143,6 +143,8 @@ export const BUILDABLE_TYPES: ReadonlySet<number> = new Set([
   17, 20, 21, 22, 23, 24, 25, 115, 117, 118,
   // The main yard's Inferno buildings (Inferno WP 6.1): Quake and Magma Towers, Siege Factory and Lab.
   129, 132, 133, 134,
+  // The Observatory, this project's pass into an alliance (alliances phase 0, 10 Nov 2026).
+  150,
 ]);
 
 /** The Yard Planner, which an outpost no longer builds (owner decision 2026-09-30). */

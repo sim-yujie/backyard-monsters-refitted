@@ -9,6 +9,7 @@ import {
 import { guideOpen, readOnboarding } from "../../services/onboarding/state.js";
 import { planBuild, planCancelBuild, planInstantBuild } from "../../services/yard/build.js";
 import { withInfernoStanding } from "../../services/yard/surfaceInferno.js";
+import { withTopUp } from "../../services/yard/topUp.js";
 import { yardRefusedErr } from "../../services/yard/yardErrors.js";
 import { defineYardAction } from "./yardAction.js";
 
@@ -30,6 +31,9 @@ import { defineYardAction } from "./yardAction.js";
  * A main-yard Inferno building (Quake or Magma Tower, Siege Factory or Lab)
  * reads the player's Inferno standing first and is paid from the Inferno
  * purse (`services/yard/surfaceInferno.ts`, Inferno WP 6.1).
+ *
+ * A short pool can be topped up with Shiny, Flash's `BRTOPUP` (`topUp`, the
+ * price the player agreed to; `services/yard/topUp.ts`, issue #393).
  */
 export const yardBuildAction = defineYardAction({
   schema: YardBuildSchema,
@@ -37,7 +41,8 @@ export const yardBuildAction = defineYardAction({
     const onboarding = readOnboarding(save);
     const built = (finished: boolean) => (finished ? placedFinishedEvents(body.type) : undefined);
     if (!isGuidedBuild(save, onboarding, body.type)) {
-      const plan = planBuild(await withInfernoStanding(em, user.userid, save, body.type), body, now);
+      const standing = await withInfernoStanding(em, user.userid, save, body.type);
+      const plan = await withTopUp(standing, body.topUp, (seen) => planBuild(seen, body, now));
       return { ...plan, achievementEvents: built(plan.report.finished) };
     }
     const { onboarding: guided, slices, ...plan } = planGuidedBuild(save, onboarding, body, now);

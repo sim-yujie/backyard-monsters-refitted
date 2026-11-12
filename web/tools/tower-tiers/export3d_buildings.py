@@ -34,6 +34,31 @@ px around the building's origin, 12 render px a 1x px), with the same camera as 
 | booby | 24 Booby Trap | art/traps-3d | traps-3d (traps.py) | one look, still; destroyed = fired |
 | heavy | 117 Heavy Trap | art/traps-3d | traps-3d (traps.py) | one look, still; destroyed = fired |
 | icc | 16 Incubator Control Centre in an Inferno yard | art/icc-inferno-looks | icc-looks (look C) | one look; 32 idle and 64 working cells, each the whole building |
+| bone | 1 Bone Cruncher in an Inferno yard | art/buildings-3d-inferno | inferno/bone-clean2 (crusher.py) | levels 1, 3, 7; 36 cells of its loop |
+| locker | 8 Monster Locker | art/locker-fable-2 | locker-fable-2 (locker.py) | levels 1-4; 21, 20, 20 and 21 cells of its key and gears |
+
+The Monster Locker (`locker`, owner 10 Nov 2026, Review Desk card locker-fable-2) is the from-scratch model
+(`locker.py`), its four levels as Flash's. Its renders are whole scenes (8 render px a 1x px, `k`, on the canvas
+x -80..80, y -110..90): `game.sh` renders every frame of each level's loop and each look with no ground shadow, and
+`game.py` lays them out for this export in `work/game/in/` as `L<n>-base.png`, `L<n>-alone.png` and `L<n>-cell-NN.png`,
+the whole scene per cell as the silo's, every pixel that barely changes over the loop frozen to the still's so only
+the key and the gears change. Its ground shadow is already softened and lightened there, as on the approved sheets,
+so nothing is taken off it (`noise` 0). The damaged looks are its own (`locker:damaged`, same folder); the destroyed
+one is one wreck for every level, rendered as level 2's (`locker:destroyed`), as Flash's `top.2.destroyed.png`.
+
+The Inferno's Bone Cruncher (`bone`, owner 6 Nov 2026: "3d bone crusher has been approved") is the clean-room model
+(`crusher.py`): three tiers, levels 1-2, 3-6 and 7-10 as the model's own script splits them. Its renders are the loop
+renders, `inferno/bone-clean2/anim/render/` (6 render px a 1x px, `k`, on the canvas x -60..60, y -70..70), frames 0-35
+only: `L<tier>-parts-36.png` is frame 0 again, rendered for the loop check, and must be left out. Its files are `*.3d1*`,
+`*.3d3*` and `*.3d7*` in the Inferno's own folder, `iboneharvester/`. It has no damaged or destroyed renders: the game
+tints the whole look when damaged and shows Flash's rubble when destroyed, as the Incubator Control Centre's.
+
+The model came out smaller than Flash's Bone Cruncher in the same spot (9 Nov 2026: about 76 x 72 1x px at level 1
+against Flash's 86 x 84, and 76 x 78 at levels 3 and 7 against Flash's 90 x 95), so it is exported grown (`grow`, 1.2)
+about its middle on the ground (`ground`, the model's `kit.ORIGIN`, (0, 35)): every render is first enlarged that much
+into a scratch folder (`grown()`), the canvas with it, and the export reads that, on a canvas whose top-left moves to
+keep the ground point where it was. The renders are 3 render px a 2x px, so the grown pictures are still made smaller
+from them, not blown up. Grown, it is 91 x 86 and 91 x 94: Flash's size at each tier.
 
 The Inferno's Incubator Control Centre (`icc`, moves "loops") is look C (owner, 2 Nov 2026: "I want to see it in the
 inferno + the soft animated glow of the lava"). Its glows are made after Blender (`icc-looks/anim.py game`), so its
@@ -51,7 +76,7 @@ levels, and so does the 3D (`buildingArtTiers.ts` names it in every look).
 A look's renders (`render/`): `L<n>-base.png` (`base.png`), every still part with the ground shadow (a shadow
 catcher: black, the shade as alpha) and the moving parts hidden from the camera; `L<n>-alone.png`, the building with
 no ground shadow; and `L<n>-parts-NN.png`, one per Flash cell, only the moving parts, every still part held out. The
-silo's `cell-NN.png` are instead the whole scene for each fill level (`post.py cells`), changed only in the sack. The
+silo's `cell-NN.png` (the Locker's `L<n>-cell-NN.png`) are instead the whole scene for each fill level (`post.py cells`), changed only in the sack. The
 Lab's `anim/<layer>-NN.png` (`dome`, `doorL`, `doorR`, as Flash's three strips) are the whole scene too, rendered only
 in a border round that layer's moving part (`lab.py anim`), the rest of the canvas empty; its base shows them at rest.
 
@@ -135,6 +160,10 @@ BUILDINGS = {
                 layers=("dome", "doorL", "doorR")),
     "chamber": dict(type=119, folder="champchamber", frame=(-78, -66), looks=[(1, "L1")], moves=None),
     "icc": dict(type=16, folder="hatcherycontrolcenter", frame=(-80, -84), looks=[(1, "")], moves="loops"),
+    "bone": dict(type=1, folder="iboneharvester", frame=(-60, -70), k=6, looks=[(1, "L1"), (3, "L2"), (7, "L3")],
+                 moves="parts", grow=1.2, ground=(0, 35)),
+    "locker": dict(type=8, folder="monsterlocker", frame=(-80, -110), k=8, looks=[(n, f"L{n}") for n in range(1, 5)],
+                   moves="cells", noise=0.0),
     "booby": dict(type=24, folder="boobytrap", frame=(-24, -14), looks=[(1, "booby-whole")], moves=None),
     "heavy": dict(type=117, folder="heavytrap", frame=(-24, -14), looks=[(1, "heavy-whole")], moves=None),
 }
@@ -142,7 +171,8 @@ BUILDINGS = {
 CELLS = {"twig": {1: 34, 3: 34, 6: 34, 10: 34}, "pebble": {1: 26, 3: 26, 6: 26, 10: 24},
          "putty": {1: 26, 3: 26, 6: 26, 10: 25}, "goo": {1: 26, 3: 26, 6: 26, 10: 26}, "silo": {1: 26},
          "hatchery": {1: 31, 2: 31, 3: 31}, "juicer": {1: 51}, "baiter": {1: 41},
-         "academy": {1: 21, 2: 21, 3: 21, 4: 21}, "lab": {1: (32, 5, 5)}}
+         "academy": {1: 21, 2: 21, 3: 21, 4: 21}, "lab": {1: (32, 5, 5)}, "bone": {1: 36, 3: 36, 7: 36},
+         "locker": {1: 21, 2: 20, 3: 20, 4: 21}}
 TAIL = 16                      # 1x px a shadow cut by the render's canvas is carried on past it, fading out
 NOISE = 0.07                   # the shadow catcher's faint wash over all the ground (sky occlusion), taken off every shade
 MOVED = 8                      # levels (of 255) a Lab cell must differ from the first to count as moving, past the noise
@@ -185,11 +215,12 @@ def clipped(alpha, box, run=15):
     return ", ".join(k for k, v in lines.items() if (v > 200).sum() > run)
 
 
-def split(scene, building):
-    """A scene with the ground shadow (base.png) into its still parts with none and the shadow alone, both float."""
+def split(scene, building, noise=NOISE):
+    """A scene with the ground shadow (base.png) into its still parts with none and the shadow alone, both float.
+    `noise` is the wash taken off the shade: none for a building whose shadow is already finished (the Locker's)."""
     a = scene[..., 3]
     near = ndimage.binary_dilation(building, iterations=3)
-    shade = np.clip((a - NOISE) / (1 - NOISE), 0, 1)
+    shade = np.clip((a - noise) / (1 - noise), 0, 1)
     # Under the building, the nearest shade outside it.
     idx = ndimage.distance_transform_edt(near, return_distances=False, return_indices=True)
     s = np.where(near, shade[idx[0], idx[1]], shade)
@@ -336,13 +367,41 @@ def export_loops(name, render):
     return [row]
 
 
+def grown(name, render, frame, k):
+    """A building exported larger than it was modelled (`grow`, the Bone Cruncher's): its renders, each look's base,
+    alone and first `CELLS` parts cells, enlarged by `grow` into a scratch folder, about the building's middle on the
+    ground (`ground`, 1x px from the origin), with the canvas's new top-left. Lanczos, alpha premultiplied (Pillow's
+    own for RGBA). The ground point and the canvas must land on whole 1x px."""
+    import tempfile
+    cfg = BUILDINGS[name]
+    g, (gx, gy), (fx, fy) = cfg["grow"], cfg["ground"], frame
+    nfx, nfy = gx - (gx - fx) * g, gy - (gy - fy) * g
+    assert abs(nfx - round(nfx)) < 1e-6 and abs(nfy - round(nfy)) < 1e-6, (name, g, nfx, nfy)
+    tmp = Path(tempfile.mkdtemp(prefix=f"grown-{name}-"))
+    for level, pre in cfg["looks"]:
+        stem = f"{pre}-" if pre else ""
+        files = [f"{stem}base.png", f"{stem}alone.png"]
+        if cfg["moves"] == "parts":
+            files += [f"{stem}parts-{i:02d}.png" for i in range(CELLS[name][level])]
+        for f in files:
+            im = Image.open(render / f).convert("RGBA")
+            size = (round(im.width * g), round(im.height * g))
+            assert size[0] % k == 0 and size[1] % k == 0, (f, size)
+            im.resize(size, Image.LANCZOS).save(tmp / f)
+    return tmp, (round(nfx), round(nfy))
+
+
 def export(name, render, state=None):
     """A building's whole looks, or with `state` ("damaged", "destroyed") the stills of that state `render` holds."""
     cfg = BUILDINGS[name]
     out = ASSETS / cfg["folder"]
     fx, fy = cfg.get("states", {}).get(state, cfg["frame"])
     k = cfg.get("k", K)
+    if cfg.get("grow"):
+        assert not state, (name, "a grown building's states are not wired")
+        render, (fx, fy) = grown(name, render, (fx, fy), k)
     moves = None if state else cfg["moves"]
+    noise = cfg.get("noise", NOISE)
     rows = []
 
     def game(px, py):
@@ -371,7 +430,7 @@ def export(name, render, state=None):
         if moves == "parts":
             names = sorted(render.glob(f"{stem}parts-*.png"))
         elif moves == "cells":
-            names = sorted(render.glob("cell-*.png"))
+            names = sorted(render.glob(f"{stem}cell-*.png"))
         elif moves == "boxes":
             names = [sorted(render.glob(f"anim/{layer}-*.png")) for layer in cfg["layers"]]
         if moves == "boxes":
@@ -394,15 +453,15 @@ def export(name, render, state=None):
             layers = []
             for n in names:
                 c = load(n)
-                layers.append(split(c, building | (c[..., 3] > 0.99) & changed)[0][y0:y1, x0:x1].copy())
+                layers.append(split(c, building | (c[..., 3] > 0.99) & changed, noise)[0][y0:y1, x0:x1].copy())
             c = load(names[0])
-            body, shade = split(c, building | (c[..., 3] > 0.99) & changed)
+            body, shade = split(c, building | (c[..., 3] > 0.99) & changed, noise)
             del c
             still = body.copy()
             body[y0:y1, x0:x1] = 0
             strips = [(f"anim.{tag}@2x.webp", box, layers)]
         elif moves == "boxes":
-            body, shade = split(base, building)
+            body, shade = split(base, building, noise)
             still = body.copy()
             strips = []
             for layer, files in zip(cfg["layers"], names):
@@ -410,7 +469,7 @@ def export(name, render, state=None):
                 body[core] = 0
                 strips.append((f"anim.{tag}.{layer}@2x.webp", box, cells))
         else:
-            body, shade = split(base, building)
+            body, shade = split(base, building, noise)
             still = body
             layers = []
             if names:

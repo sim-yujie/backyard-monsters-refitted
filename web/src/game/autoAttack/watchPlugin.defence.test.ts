@@ -59,7 +59,7 @@ describe("the watch scene on a defence replay", { timeout: BATTLE_TIMEOUT_MS }, 
 
   /** Mounts the plugin as the scene does: the plugins, then `start()`. */
   const mount = (run: DefenceWatch): void => {
-    session = new AttackSession({ target: watchTarget(run), seed: run.replay.seed, declareWar: run.replay.declareWar });
+    session = new AttackSession({ target: watchTarget(run), seed: run.replay.seed, declareWar: run.replay.declareWar ?? false });
     const mounts = { session, presentation, dock, modal, watch: run, openWatch, goToYard, goToMap } as unknown as AttackMounts;
     teardown = watchPlugin(mounts);
     session.start();

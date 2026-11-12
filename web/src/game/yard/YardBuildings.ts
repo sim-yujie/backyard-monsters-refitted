@@ -24,6 +24,7 @@ import { NO_WORK, workUntil, type WorkMap } from "./buildingWork";
 import { YardTextures } from "./YardTextures";
 import type { YardArtAtlas } from "./yardAtlas";
 import type { Rect } from "./YardGrid";
+import { spriteBox, unionRect } from "./yardSnapshot";
 import { artFor, type Yard, type YardBuilding } from "./yardModel";
 
 /**
@@ -504,6 +505,23 @@ export class YardBuildings {
    * test and the "rises above its footprint" test — cheap property reads, no
    * allocation, for every building that can't be the answer.
    */
+  /**
+   * How many world pixels each shown building's picture rises above the top
+   * corner of its footprint, by building id: the ground behind it that the
+   * art hides (Thanksgiving turkeys keep off it, `turkeyWalk.ts`). A building
+   * whose picture is not in yet, or whose art stays inside its footprint, is
+   * left out.
+   */
+  artRises(): Map<number, number> {
+    const rises = new Map<number, number>();
+    for (const view of this.views) {
+      if (view.hidden || !view.resolved) continue;
+      const rise = view.building.box.y + view.offsetY - view.top.y;
+      if (rise > 0) rises.set(view.building.id, rise);
+    }
+    return rises;
+  }
+
   pick(worldX: number, worldY: number): YardBuilding | null {
     for (let i = this.views.length - 1; i >= 0; i--) {
       const view = this.views[i];
@@ -588,6 +606,29 @@ export class YardBuildings {
       view.fort.back.visible = false;
       view.fort.front.visible = false;
     }
+  }
+
+  /**
+   * Where each building still shown is drawn, in world pixels: its footprint
+   * (moved with it by the planner) and every sprite of it now visible, the
+   * tall art, the strips, the shadow and the fortification. Hidden buildings
+   * (stored, concealed) give nothing. For the yard picture's framing
+   * (`yardSnapshot.ts`), so call it after a `draw` that culled nothing.
+   */
+  drawnBoxes(): Rect[] {
+    const boxes: Rect[] = [];
+    for (const view of this.views) {
+      if (view.hidden) continue;
+      const box = view.building.box;
+      const sprites: (Sprite | null)[] = [view.top, view.shadow, ...view.anims.map((layer) => layer.sprite)];
+      if (view.fort) sprites.push(view.fort.back, view.fort.front);
+      const union = unionRect([
+        { x: box.x + view.offsetX, y: box.y + view.offsetY, width: box.width, height: box.height },
+        ...sprites.map((sprite) => (sprite ? spriteBox(sprite) : null)),
+      ]);
+      if (union) boxes.push(union);
+    }
+    return boxes;
   }
 
   /** Puts every hidden building back. What leaving the planner does. */

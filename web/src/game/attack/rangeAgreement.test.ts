@@ -44,26 +44,24 @@ const own = (at: { col: number; row: number }, b: 2 | 3, f: number, bid: string)
   } satisfies PlayerCell,
 });
 
-describe.each([false, true])("with Declare War %s", (declareWar) => {
+describe("the web and server range checks", () => {
   it.each([
     [4, 3],
     [2, 1],
     [1, 4],
   ])("agrees for a yard flinger %i and an outpost flinger %i", (yardFlinger, outpostFlinger) => {
     const cells = [own(HOME, 2, yardFlinger, "main"), own(OUTPOST, 3, outpostFlinger, "op")];
-    const ownSave = declareWar ? { powerups: [{ id: "ap_declarewar", endtime: 1 }] } : {};
     let inReach = 0;
 
     for (let col = HOME.col - 20; col <= HOME.col + 20; col++) {
       for (let row = HOME.row - 20; row <= HOME.row + 20; row++) {
-        const web = rosterInRange({ col, row }, cells, ownSave).flingerLevel > 0;
+        const web = rosterInRange({ col, row }, cells, {}).flingerLevel > 0;
         const server = checkRange({
           homebase: [String(HOME.col), String(HOME.row)],
           flinger: yardFlinger,
           cell: { x: col, y: row },
           outposts: [[OUTPOST.col, OUTPOST.row, "op"]],
           outpostFlingers: new Map([["op", outpostFlinger]]),
-          declareWar,
         }).ok;
         expect(web, `(${col}, ${row})`).toBe(server);
         if (server) inReach += 1;
@@ -75,20 +73,18 @@ describe.each([false, true])("with Declare War %s", (declareWar) => {
   it("agrees across the world's seam", () => {
     const corner = { col: 1, row: 1 };
     const cells = [own(corner, 2, 4, "main")];
-    const ownSave = declareWar ? { powerups: [{ id: "ap_declarewar" }] } : {};
 
     for (let dc = -14; dc <= 14; dc++) {
       for (let dr = -14; dr <= 14; dr++) {
         const col = (corner.col + dc + 800) % 800;
         const row = (corner.row + dr + 800) % 800;
-        const web = rosterInRange({ col, row }, cells, ownSave).flingerLevel > 0;
+        const web = rosterInRange({ col, row }, cells, {}).flingerLevel > 0;
         const server = checkRange({
           homebase: ["1", "1"],
           flinger: 4,
           cell: { x: col, y: row },
           outposts: [],
           outpostFlingers: new Map(),
-          declareWar,
         }).ok;
         expect(web, `(${col}, ${row})`).toBe(server);
       }

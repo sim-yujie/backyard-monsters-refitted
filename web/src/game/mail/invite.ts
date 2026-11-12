@@ -7,9 +7,12 @@ import { spanText } from "./truce";
  * `ui/mail/MailboxScreen.ts` draws it.
  *
  * A player invites another to move their main yard onto one of their own
- * outposts (Flash's `migraterequest`). The one invited accepts, paying
- * 10,000,000 of each resource or 1,200 Shiny, and their main yard replaces the
- * outpost, whose buildings and monsters are lost; or they decline. The one who
+ * outposts (Flash's `migraterequest`). The one invited accepts and their main
+ * yard replaces the outpost, whose buildings and monsters are lost; or they
+ * decline. Since beta 7 both pay a share, {@link INVITE_PRICE} each, each
+ * choosing resources or Shiny (the inviter when sending); alliances no longer
+ * matter. One sent before keeps Flash's deal: the invited player alone pays
+ * {@link LEGACY_INVITE_PRICE}. The one who
  * invited may withdraw it while it waits. It lapses after 7 days unanswered,
  * and is void once the outpost changes hands. The server keeps it as the
  * request message's `migratestate` and says when it lapses (`migrateexpire`)
@@ -19,8 +22,11 @@ import { spanText } from "./truce";
 /** How long an invitation waits for its answer, in days. */
 export const INVITE_DAYS = 7;
 
-/** What accepting costs the one invited: of each resource, or in Shiny (`MapRoom.as:271-272`). */
-export const INVITE_PRICE = { resources: 10_000_000, shiny: 1_200 } as const;
+/** Each player's share of the move: of each resource, or in Shiny (design v5 §12). */
+export const INVITE_PRICE = { resources: 15_000_000, shiny: 750 } as const;
+
+/** An invitation sent before both paid: the invited player alone (`MapRoom.as:271-272`). */
+export const LEGACY_INVITE_PRICE = { resources: 10_000_000, shiny: 1_200 } as const;
 
 /** Flash's own words: `invite_subject`, `invite_body`, `invite_revoke`. */
 export const INVITE_SUBJECT = "Let's Join Forces";
@@ -93,15 +99,17 @@ export const inviteTag = (state: InviteState): { label: string; tone: InviteTone
 /** "(241, 208)", or "" when the cell is not known. */
 const at = (cell: OffsetCell | null): string => (cell ? ` at (${cell.col}, ${cell.row})` : "");
 
-/** "10,000,000 of each resource" or "1,200 Shiny". */
-export const invitePriceText = (payment: "resources" | "shiny"): string =>
-  payment === "shiny"
-    ? `${INVITE_PRICE.shiny.toLocaleString("en-GB")} Shiny`
-    : `${INVITE_PRICE.resources.toLocaleString("en-GB")} of each resource`;
+/** "15,000,000 of each resource" or "750 Shiny"; the old price for an invitation sent before both paid. */
+export const invitePriceText = (payment: "resources" | "shiny", shared = true): string => {
+  const price = shared ? INVITE_PRICE : LEGACY_INVITE_PRICE;
+  return payment === "shiny"
+    ? `${price.shiny.toLocaleString("en-GB")} Shiny`
+    : `${price.resources.toLocaleString("en-GB")} of each resource`;
+};
 
 /**
  * The card on a thread's invitation. `mine` when the player sent it;
- * `otherName` is the other player.
+ * `otherName` is the other player; `shared` when both pay a share.
  */
 export const inviteCard = (
   state: InviteState,
@@ -110,6 +118,7 @@ export const inviteCard = (
   otherName: string,
   cell: OffsetCell | null,
   now: number,
+  shared = true,
 ): InviteCard => {
   const when = until === null ? "" : ` ${dayText(until)} (${spanText(until - now)} left)`;
   let detail: string;
@@ -117,9 +126,11 @@ export const inviteCard = (
     case "pending":
       detail = mine
         ? `Waiting for ${otherName} to answer. If they accept, your outpost${at(cell)} and everything on it is ` +
-          `replaced by their yard.${until === null ? "" : ` It lapses on${when}.`}`
+          `replaced by their yard${shared ? ", and you pay your share" : ""}.` +
+          `${until === null ? "" : ` It lapses on${when}.`}`
         : `${otherName} invites you to move your main yard onto their outpost${at(cell)}, for ` +
-          `${invitePriceText("resources")} or ${invitePriceText("shiny")}. Your outposts stay yours, and wild ` +
+          `${invitePriceText("resources", shared)} or ${invitePriceText("shiny", shared)}` +
+          `${shared ? `. ${otherName} pays the same` : ""}. Your outposts stay yours, and wild ` +
           `monsters claim your old spot.${until === null ? "" : ` Answer by${when}.`}`;
       break;
     case "accepted":

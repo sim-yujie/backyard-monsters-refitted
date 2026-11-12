@@ -1,6 +1,7 @@
 import z from "zod";
 import { CHAMPION_STANCES, type ChampionStance } from "../game-rules/combat/index.js";
 import { jsonField } from "./jsonField.js";
+import { formBoolean } from "./formBoolean.js";
 
 /**
  * Body schemas for the yard action routes, `POST /api/:apiVersion/bm/yard/*`
@@ -39,7 +40,13 @@ export const YardTargetSchema = z.object({
 export const YardStateSchema = z.object({});
 
 /** `POST /bm/yard/upgrade`: the building to take one level up. */
-export const YardUpgradeSchema = z.object({ id: BuildingIdField });
+/**
+ * The Shiny top-up the player agreed to when the pool is short of a build,
+ * upgrade or fortification (Flash's `BRTOPUP`, `services/yard/topUp.ts`).
+ */
+const TopUpField = z.coerce.number().int().nonnegative().optional();
+
+export const YardUpgradeSchema = z.object({ id: BuildingIdField, topUp: TopUpField });
 
 /** `POST /bm/yard/upgrade/cancel`: the building whose running upgrade to cancel. */
 export const YardCancelUpgradeSchema = z.object({ id: BuildingIdField });
@@ -63,6 +70,12 @@ export const YardInstantUpgradeSchema = z.object({
  */
 export const YardShopBuySchema = z.object({
   item: z.string().min(1).max(16),
+  /**
+   * A resource pack (`BR11`..`BR43I`, `services/yard/resourcePacks.ts`): the
+   * Shiny the player agreed to. The server prices the pack itself; it refuses
+   * `409 priceChanged` rather than charge more than this.
+   */
+  price: z.coerce.number().int().nonnegative().optional(),
 });
 
 /** `POST /bm/yard/locker/cancel` and `/locker/finish` take no fields: there is only one unlock. */
@@ -146,6 +159,38 @@ export const YardBuildSchema = z.object({
   type: z.coerce.number().int().positive(),
   x: YardCoordinateField,
   y: YardCoordinateField,
+  /** Build only (not instant build): see {@link TopUpField}. */
+  topUp: TopUpField,
+});
+
+/**
+ * The most cells one `build/walls` line may name: the biggest Town Hall's
+ * Block allowance (400 at TH10, `game-data/buildingCosts.ts` type 17). The
+ * owner's cap is the hall's limit alone (8 Nov 2026); this only bounds the
+ * request, and the route still stops at the yard's own allowance.
+ */
+export const MAX_WALL_LINE_CELLS = 400;
+
+/** One cell of a wall line: a Block's footprint origin, on the 5-unit snap grid. */
+const WallCellField = z.tuple([YardCoordinateField, YardCoordinateField]);
+
+/**
+ * `POST /bm/yard/build/walls`: a wall type and the Blocks of a drawn line or
+ * L, in the order they are built. `cells` is a JSON array of `[x, y]` pairs
+ * (a JSON body's array arrives stringified, `middleware/jsonBody.ts`). Every
+ * cell must sit on the 5-unit grid and none may repeat; whether each fits is
+ * the route's rule (`services/yard/buildWalls.ts`).
+ */
+export const YardBuildWallsSchema = z.object({
+  type: z.coerce.number().int().positive(),
+  cells: jsonField("cells must be a JSON array of [x, y] pairs")
+    .pipe(z.array(WallCellField).min(1).max(MAX_WALL_LINE_CELLS))
+    .refine((cells) => cells.every(([x, y]) => x % 5 === 0 && y % 5 === 0), {
+      message: "Every cell must be on the 5-unit grid",
+    })
+    .refine((cells) => new Set(cells.map(([x, y]) => `${x},${y}`)).size === cells.length, {
+      message: "A cell is named twice",
+    }),
 });
 
 /**
@@ -279,6 +324,9 @@ export const YardChampionStanceSchema = z.object({
   stance: z.enum(CHAMPION_STANCES as [ChampionStance, ...ChampionStance[]]),
 });
 
+/** `POST /bm/yard/champion/forget`: wipe one Mode's habits (champion modes round 2). */
+export const YardChampionForgetSchema = YardChampionStanceSchema;
+
 /** `POST /bm/yard/champion/freeze` moves the champion in the cage into the Champion Chamber. */
 export const YardChampionFreezeSchema = YardChampionTypedSchema;
 
@@ -288,16 +336,11 @@ export const YardChampionThawSchema = z.object({
 });
 
 /** `POST /bm/yard/fortify`: the building to fortify one step (outposts). */
-export const YardFortifySchema = z.object({ id: BuildingIdField });
+export const YardFortifySchema = z.object({ id: BuildingIdField, topUp: TopUpField });
 
 /** `POST /bm/yard/fortify/cancel`: the building whose running fortification to cancel. */
 export const YardCancelFortifySchema = z.object({ id: BuildingIdField });
 
-/**
- * `POST /bm/yard/starterkit` (outposts WP9): the kit (1 Regular, 2 Mega, 3
- * Ultra), how it is paid for, and the Shiny top-up the player agreed to when
- * the pool is short (`services/yard/starterKit.ts`).
- */
 /**
  * `POST /bm/yard/decor/place` and `/decor/buy`: a decoration out of storage
  * (#128) or bought for Shiny (owner 2026-11-04), and where.
@@ -308,10 +351,17 @@ export const YardPlaceDecorationSchema = z.object({
   y: YardCoordinateField,
 });
 
+/**
+ * `POST /bm/yard/starterkit` (outposts WP9): the kit (1 Regular, 2 Mega, 3
+ * Ultra), how it is paid for, and the Shiny top-up the player agreed to when
+ * the pool is short (`services/yard/starterKit.ts`).
+ */
 export const YardStarterKitSchema = z.object({
   kit: z.coerce.number().int().min(1).max(3),
   pay: z.enum(["resources", "shiny"]),
   topUp: z.coerce.number().int().nonnegative().optional(),
+  /** The picker showed the Regular kit as free ("New to Map Room 2"); refused rather than charged if it no longer is. */
+  free: formBoolean,
 });
 
 /**

@@ -29,10 +29,25 @@ export const sandboxStartAvailable = (env: Record<string, string | undefined>): 
  * where the list is always empty.
  */
 export const eventsForcedOn = (env: Record<string, string | undefined>): ReadonlySet<string> =>
+  localEventIds(env, env.EVENTS_FORCE_ON);
+
+/**
+ * Events switched off for local testing, whatever their dates:
+ * EVENTS_FORCE_OFF=halloween-2026, or several ids comma-separated. An event
+ * switched off is over (`services/events/schedule.ts` `eventWindow`): it is
+ * not listed, its calendar and ladder cannot be claimed, and its yard hunt and
+ * yard look stay away. It wins over EVENTS_FORCE_ON. Never on ENV=production,
+ * where the list is always empty.
+ */
+export const eventsForcedOff = (env: Record<string, string | undefined>): ReadonlySet<string> =>
+  localEventIds(env, env.EVENTS_FORCE_OFF);
+
+/** A comma-separated list of event ids, read only off production. */
+const localEventIds = (env: Record<string, string | undefined>, list: string | undefined): ReadonlySet<string> =>
   env.ENV === Env.PROD
     ? new Set()
     : new Set(
-        (env.EVENTS_FORCE_ON ?? "")
+        (list ?? "")
           .split(",")
           .map((id) => id.trim())
           .filter((id) => id.length > 0)
@@ -146,5 +161,7 @@ export const devConfig = {
     [MessageType.TRUCE_REJECT]: true,
     [MessageType.MIGRATE_REQUEST]: true,
     [MessageType.MIGRATE_REVOKE]: true,
+    // Written by the server when a Leader or Officer invites (`inviteMail.ts`); never sent by a player.
+    [MessageType.ALLIANCE_INVITE]: false,
   },
 };

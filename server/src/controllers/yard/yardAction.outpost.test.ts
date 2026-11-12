@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import type { Server } from "node:http";
+import Koa from "koa";
 import { LockMode, type EntityManager } from "@mikro-orm/core";
 import type z from "zod";
 import type { Save } from "../../database/models/save.model.js";
@@ -7,6 +9,8 @@ import type { User } from "../../database/models/user.model.js";
 import { fortifyStepsOf, OUTPOST_COSTS } from "../../game-data/buildingCosts.js";
 import { storageCap } from "../../services/base/economy/resourceBudget.js";
 import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
+import { memoryWelcomeStore, MR2_WELCOME_SECONDS, newWelcome, useWelcomeStore, type WelcomeStore } from "../../services/events/mr2Welcome.js";
+import { utcDay } from "../../services/events/schedule.js";
 import { yardAcademyTrainAction } from "./academy.js";
 import { yardBankAction } from "./bank.js";
 import { yardBuildAction, yardCancelBuildAction, yardInstantBuildAction } from "./build.js";
@@ -18,6 +22,7 @@ import { yardBuyDecorationAction, yardPlaceDecorationAction } from "./decor.js";
 import { yardRepairInstantAction } from "./repair.js";
 import { yardShopBuyAction } from "./shopBuy.js";
 import { yardStarterKitAction } from "./starterKit.js";
+import { pendingAllianceEvents } from "../../services/alliance/allianceProgress.js";
 import { yardSpeedupAction } from "./speedup.js";
 import { yardStateAction } from "./state.js";
 import { yardCancelUpgradeAction, yardUpgradeAction } from "./upgrade.js";
@@ -30,6 +35,7 @@ import {
 } from "./yardAction.js";
 import { STARTER_KITS } from "../../game-data/starterKits.js";
 import { readAchievements } from "../../services/achievements/state.js";
+import { bodyParsers } from "../../middleware/bodyLimits.js";
 
 /**
  * The yard action wrapper on Map Room 2 outposts (outposts WP3, issue #184),
@@ -211,6 +217,16 @@ const stepOf = (type: number, level = 0) => {
   const [r1, r2, r3, r4, time] = OUTPOST_COSTS[type]!.costs[level]!;
   return { r1, r2, r3, r4, time };
 };
+
+// "New to Map Room 2" over a Map: by default the player's 10 days ended long
+// ago (launch at 0), so a Regular kit is paid for as usual.
+let welcome: ReturnType<typeof memoryWelcomeStore>;
+const realWelcome: WelcomeStore = useWelcomeStore(memoryWelcomeStore(0));
+afterAll(() => useWelcomeStore(realWelcome));
+beforeEach(() => {
+  welcome = memoryWelcomeStore(0);
+  useWelcomeStore(welcome);
+});
 
 beforeEach(() => {
   db.rows = new Map([
@@ -521,6 +537,21 @@ describe("routes Flash refuses in an outpost", () => {
         (production.body.report as { credits: number }).credits -
         (overdrive.body.report as { credits: number }).credits,
     );
+  });
+
+  test("an outpost sells the surface resource packs into the main pool, not the Inferno's (issue #393)", async () => {
+    db.rows.set(MAIN, mainRow({ resources: { r1: 0, r2: 0, r3: 0, r4: 0 } }));
+    const inferno = await onOutpost(yardShopBuyAction, { item: "BR11I" });
+    expect(inferno.status).toBe(400);
+    expect(inferno.body.reason).toBe("notForSale");
+
+    const fill = await onOutpost(yardShopBuyAction, { item: "BR23" });
+    expect(fill.status).toBe(200);
+    const report = fill.body.report as { amount: number; credits: number };
+    expect(report.amount).toBeGreaterThan(0);
+    expect((mainSave().resources as Row).r2).toBe(report.amount);
+    expect(outpostSave().resources).toEqual({});
+    expect(mainSave().credits).toBe(1000 - report.credits);
   });
 
   test("an outpost sells Tower Overdrive for its own towers, but no monster boost", async () => {
@@ -920,6 +951,40 @@ describe("Starter Kits (outposts WP9, issue #188)", () => {
     expect([...db.rows.values()]).toEqual(before);
   });
 
+  test("Conquest's kit goal counts a kit bought, and not one rolled back (refused, or its write failed)", async () => {
+    const userid = userOf().userid;
+    const kits = () => pendingAllianceEvents(userid)?.kitRebuild ?? 0;
+    const before = kits();
+    const refused = await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources" });
+    expect(refused.status).toBe(409);
+    expect(kits()).toBe(before);
+
+    // The kit is planned (and its goal noted), then the write fails: rolled back.
+    const failing = {
+      transactional: <T>(cb: (fork: unknown) => Promise<T>): Promise<T> =>
+        em.transactional((fork) =>
+          cb({
+            ...(fork as object),
+            flush: async () => {
+              throw new Error("write failed");
+            },
+          })
+        ),
+    };
+    const rows = structuredClone([...db.rows.values()]);
+    await runYardAction(failing as unknown as EntityManager, userOf(), yardStarterKitAction, {
+      kit: 1,
+      pay: "shiny",
+      baseid: OUTPOST_BASEID,
+    }).catch(() => null);
+    expect([...db.rows.values()]).toEqual(rows);
+    expect(kits()).toBe(before);
+
+    const bought = await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
+    expect(bought.status).toBe(200);
+    expect(kits()).toBe(before + 1);
+  });
+
   test("a damaged outpost's damage drops with the kit, so the map shows it at once", async () => {
     db.rows.set(
       OUTPOST,
@@ -939,6 +1004,141 @@ describe("Starter Kits (outposts WP9, issue #188)", () => {
     const answer = await call(yardStarterKitAction, { kit: 1, pay: "shiny" });
     expect(answer.status).toBe(409);
     expect(answer.body.reason).toBe("notOutpost");
+  });
+});
+
+describe("free Regular kit (New to Map Room 2)", () => {
+  const open = () => welcome.rows.set(USERID, newWelcome(now() - 3600));
+
+  test("while today's free kit is ready, a Regular kit costs nothing and is built as prefabs with no worker", async () => {
+    open();
+    const answer = await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources", free: true });
+
+    expect(answer.status).toBe(200);
+    expect(pool()).toMatchObject({ r1: 1_000_000, r2: 1_000_000, r3: 1_000_000 });
+    expect(mainSave().credits).toBe(1000);
+    expect(answer.body.report).toMatchObject({ kit: 1, free: true, shiny: 0, cost: { r1: 0, r2: 0, r3: 0, r4: 0 } });
+    const after = Object.values(buildings(outpostSave()));
+    expect(after.filter((b) => b.t !== 112).every((b) => Number(b.cB) > 0 && Number(b.prefab) > 0)).toBe(true);
+    expect(answer.body.workers).toEqual({ total: 1, busy: 0 });
+    expect(welcome.rows.get(USERID)!.kitUses).toHaveLength(1);
+  });
+
+  test("asked for with Shiny, the free kit is still free and still prefabs", async () => {
+    open();
+    const answer = await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
+
+    expect(answer.status).toBe(200);
+    expect(mainSave().credits).toBe(1000);
+    expect(Object.values(buildings(outpostSave())).some((b) => Number(b.cB) > 0)).toBe(true);
+  });
+
+  test("one a day: the second Regular kit today is charged, and one sent as free is refused", async () => {
+    open();
+    await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
+    const refused = await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources", free: true });
+    expect(refused.status).toBe(409);
+    expect(refused.body.reason).toBe("welcomeUsed");
+
+    const paid = await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
+    expect(paid.status).toBe(200);
+    expect(mainSave().credits).toBe(1000 - 420);
+  });
+
+  test("used on an earlier day: today's kit is free again, the 2nd of 7; none once 7 are used", async () => {
+    const yesterday = now() - 86_400;
+    welcome.rows.set(USERID, { ...newWelcome(yesterday - 60), kitUses: [yesterday], kitDay: utcDay(yesterday) });
+    const free = await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources", free: true });
+    expect(free.status).toBe(200);
+    expect(welcome.rows.get(USERID)!.kitUses).toHaveLength(2);
+
+    welcome.rows.set(USERID, { ...newWelcome(yesterday - 60), kitUses: [1, 2, 3, 4, 5, 6, 7], kitDay: utcDay(yesterday) });
+    const refused = await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources", free: true });
+    expect(refused.status).toBe(409);
+    expect(refused.body.reason).toBe("welcomeUsed");
+  });
+
+  test("Regular only: a Mega kit is charged as usual and leaves the free kit ready", async () => {
+    open();
+    const answer = await onOutpost(yardStarterKitAction, { kit: 2, pay: "shiny" });
+    expect(answer.status).toBe(200);
+    expect(mainSave().credits).toBeLessThan(1000);
+    expect(welcome.rows.get(USERID)!.kitUses).toHaveLength(0);
+  });
+
+  test("after the 10 days the Regular kit is charged", async () => {
+    welcome.rows.set(USERID, newWelcome(now() - MR2_WELCOME_SECONDS - 1));
+    const answer = await onOutpost(yardStarterKitAction, { kit: 1, pay: "shiny" });
+    expect(answer.status).toBe(200);
+    expect(mainSave().credits).toBe(1000 - 420);
+  });
+
+  test("a player on Map Room 2 at launch, with no row yet, gets it from the launch time", async () => {
+    const launch = now() - 60;
+    welcome.launch = launch;
+    const answer = await onOutpost(yardStarterKitAction, { kit: 1, pay: "resources", free: true });
+    expect(answer.status).toBe(200);
+    expect(welcome.rows.get(USERID)).toMatchObject({ start: launch, kitUses: [expect.any(Number)] });
+  });
+});
+
+/**
+ * The free kit as the game sends it: a form-encoded body through the server's
+ * own body parser, so every field arrives as a string (`free=true`, not
+ * `true`). The tests above pass objects and missed a schema that refused it.
+ */
+describe("free Regular kit over a real form-encoded request", () => {
+  let server: Server;
+  let base: string;
+
+  beforeAll(async () => {
+    const app = new Koa();
+    app.use(bodyParsers());
+    app.use(async (ctx) => {
+      const answer = await runYardAction(em as unknown as EntityManager, userOf(), yardStarterKitAction, ctx.request.body);
+      ctx.status = answer.status;
+      ctx.body = answer.body;
+    });
+    await new Promise<void>((resolve) => {
+      server = app.listen(0, () => resolve());
+    });
+    const address = server.address();
+    base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+  });
+
+  afterAll(() => {
+    server.close();
+  });
+
+  const postForm = (body: string) =>
+    fetch(`${base}/api/v1.1.0/bm/yard/starterkit`, {
+      method: "POST",
+      body,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
+
+  test("kit=1&pay=resources&free=true builds the kit free", async () => {
+    welcome.rows.set(USERID, newWelcome(now() - 3600));
+    const res = await postForm(`kit=1&pay=resources&free=true&baseid=${OUTPOST_BASEID}`);
+    const body = (await res.json()) as Row;
+
+    expect(res.status).toBe(200);
+    expect(body.report).toMatchObject({ kit: 1, free: true, cost: { r1: 0, r2: 0, r3: 0, r4: 0 } });
+    expect(pool()).toMatchObject({ r1: 1_000_000, r2: 1_000_000, r3: 1_000_000 });
+    expect(welcome.rows.get(USERID)!.kitUses).toHaveLength(1);
+  });
+
+  test("free=true once today's free kit is gone is refused 409 welcomeUsed, not a 400", async () => {
+    welcome.rows.set(USERID, { ...newWelcome(now() - 3600), kitUses: [now() - 60], kitDay: utcDay(now()) });
+    const res = await postForm(`kit=1&pay=resources&free=true&baseid=${OUTPOST_BASEID}`);
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as Row).reason).toBe("welcomeUsed");
+  });
+
+  test("free=false is read as false", async () => {
+    const res = await postForm(`kit=1&pay=shiny&free=false&baseid=${OUTPOST_BASEID}`);
+    expect(res.status).toBe(200);
+    expect(mainSave().credits).toBe(1000 - 420);
   });
 });
 

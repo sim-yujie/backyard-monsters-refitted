@@ -10,6 +10,8 @@ import type { Context } from "koa";
 let flushes = 0;
 
 mock.module("../../server.js", () => ({
+  // Only the country change talks to the chat server; nothing here changes it.
+  redis: {},
   postgres: {
     em: {
       flush: async () => {
@@ -96,5 +98,42 @@ describe("the tilted map setting", () => {
     process.env.MR2_HEX_SHAPE = "round";
     expect(settingsOf(account() as never).mapHexShape).toBe("flat");
     delete process.env.MR2_HEX_SHAPE;
+  });
+});
+
+describe("the bell's notification categories (owner 11 Nov 2026)", () => {
+  test("are all on for an account that never changed them", () => {
+    expect(settingsOf(account() as never).notificationsOff).toEqual([]);
+  });
+
+  test("turns one off and back on, stored on the account and echoed back", async () => {
+    const who = account();
+    const off = await call({ notifications: { attacks: false } }, who);
+    expect(who.notifications_off).toEqual(["attacks"]);
+    expect((off.body.settings as Row).notificationsOff).toEqual(["attacks"]);
+    await call({ notifications: { friends: false } }, who);
+    expect(who.notifications_off).toEqual(["attacks", "friends"]);
+    const on = await call({ notifications: { attacks: true } }, who);
+    expect((on.body.settings as Row).notificationsOff).toEqual(["friends"]);
+    expect(flushes).toBe(3);
+  });
+
+  test("reads the change as a JSON body brings it, stringified by middleware/jsonBody.ts", async () => {
+    const who = account();
+    await call({ notifications: JSON.stringify({ boosts: false }) }, who);
+    expect(who.notifications_off).toEqual(["boosts"]);
+    await expect(call({ notifications: "{not json" }, account())).rejects.toThrow();
+    await expect(call({ notifications: JSON.stringify({ game: false }) }, account())).rejects.toThrow();
+  });
+
+  test("leaves them alone when the change is about something else", async () => {
+    const who: Row = { ...account(), notifications_off: ["boosts"] };
+    await call({ tiltedMap: false }, who);
+    expect(who.notifications_off).toEqual(["boosts"]);
+  });
+
+  test("refuses the always-on game notices and unknown categories", async () => {
+    await expect(call({ notifications: { game: false } }, account())).rejects.toThrow();
+    await expect(call({ notifications: { alliance: false } }, account())).rejects.toThrow();
   });
 });

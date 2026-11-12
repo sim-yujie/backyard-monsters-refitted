@@ -1,3 +1,4 @@
+import { plunderPercent, withPlunderBonus } from "../events/weekendBoosts.js";
 import { LockMode, type EntityManager } from "@mikro-orm/core";
 import type { Context } from "koa";
 import type { TypeOf } from "zod";
@@ -189,7 +190,8 @@ const writeInfernoTribeLanding = async (
       inferno.monsters = subtractHoused(inferno.monsters, taken[inferno.baseid]);
 
       syncInfernoCap(main, inferno);
-      const funded = fundPurse(main.iresources, loot);
+      // Tribe Plunder: the purse takes that much more; the tribe gives up only `loot` (`weekendBoosts.ts`).
+      const funded = fundPurse(main.iresources, withPlunderBonus(loot, plunderPercent(true, now)));
       main.iresources = funded.iresources;
 
       const row = (await tx.findOne(InfernoMaproom, { userid: user.userid }, { lockMode: LockMode.PESSIMISTIC_WRITE })) ??
@@ -322,7 +324,6 @@ const tribeReplayInput = (
     // bomb or siege, and a champion fling finds no champion to send.
     attacker: { champion: [], catapult: 0, siege: null },
     tick,
-    declareWar: tribe.session.declareWar ?? false,
     left,
   });
 
@@ -345,7 +346,7 @@ const tribeBattle = async (
   const input = tribeReplayInput(tribe, yard, log, battleTick(saveData.tick), saveData.left);
   if (!input) return null;
 
-  const base = { baseid: String(saveData.baseid) };
+  const base = { baseid: String(saveData.baseid), rowless: "inferno-tribe" as const };
   const battle = await replayBattleForSave(ctx, user, base, input, "the finaliser lands it from its checkpoint");
 
   // Where the save disagrees with it: logged, or refused under

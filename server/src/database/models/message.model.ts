@@ -109,6 +109,15 @@ export class Message {
   baseid: string | null = null;
 
   /**
+   * An invitation to move: how the one who invited pays their share,
+   * "shiny" or "resources" (design v5 §12, `inviteRules.ts`). Null on every
+   * other message, and on an invitation sent before both players paid.
+   */
+  @Property({ type: 'string', nullable: true, length: 10 })
+  @FrontendKey
+  hostpayment: string | null = null;
+
+  /**
    * An "attacked your yard" notice's defence replay (`defence_replay.id`,
    * `docs/design/defence-replays.md` §8), for its Watch button; null on every
    * other message, and once the replay is pruned. The mail API returns it
@@ -136,6 +145,15 @@ export class Message {
   @Property({ nullable: true, type: "json", columnType: "jsonb" })
   @FrontendKey
   attackstats: AttackStats | null = null;
+
+  /**
+   * On an `allianceinvite` message (owner, 10 Nov 2026), the alliance invite
+   * it delivers (`bym.alliance_invite.id`); the player answers it with
+   * `/alliance/changeinvitestatus`. Null on every other message.
+   */
+  @Property({ type: "number", nullable: true })
+  @FrontendKey
+  allianceinviteid: number | null = null;
 
   @Property({ type: Date, onCreate: () => new Date() })
   createdAt: Opt<Date> = new Date();

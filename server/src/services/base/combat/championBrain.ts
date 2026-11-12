@@ -1,6 +1,9 @@
 import {
   DEFAULT_STANCE,
+  championByType,
+  hasHabits,
   learnFromLesson,
+  learnHabits,
   type ChampionLesson,
   type ChampionStance,
   type FlingLog,
@@ -21,6 +24,10 @@ import type { ChampionData } from "../../../schemas/ChampionSchema.js";
  *
  * Only the attacker's champions that fought learn: a defending champion
  * never has a lesson, since the replay records them for attackers alone.
+ *
+ * A champion with habits (champion modes round 2, `habits.ts`) learns its
+ * Mode's habits (`learnHabits`), and drops its old brain the first time;
+ * Krallen learns her old brain as before.
  *
  * Pure: the callers write the result.
  */
@@ -55,7 +62,16 @@ export const championsAfterLessons = <T extends ChampionData>(
   return champions.map((champion) => {
     const lesson = lessons.find((one) => one.t === champion?.t);
     if (!lesson) return champion;
-    const learned = learnFromLesson(champion.b, champion.bs, lesson, stances.get(lesson.t) ?? DEFAULT_STANCE);
+    const stance = stances.get(lesson.t) ?? DEFAULT_STANCE;
+    if (hasHabits(championByType(lesson.t))) {
+      // Its habits for the Mode it fought in (champion modes round 2). The
+      // first time, its old brain goes: habits start fresh, the count stays.
+      const learned = learnHabits(champion.h, champion.hs, lesson, stance, champion.bs);
+      const { b: _brain, bs: _stats, ...rest } = champion;
+      return { ...rest, h: learned.book, hs: learned.stats } as T;
+    }
+    // Krallen keeps today's brain (owner, 10 Nov).
+    const learned = learnFromLesson(champion.b, champion.bs, lesson, stance);
     return { ...champion, b: learned.brain, bs: learned.stats };
   });
 };

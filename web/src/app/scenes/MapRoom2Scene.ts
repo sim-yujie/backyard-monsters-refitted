@@ -17,6 +17,8 @@ import {
   type TakeoverPayment,
 } from "@/api/maproom";
 import { takePrimedOwnYard } from "@/game/maproom/mapRoute";
+import { mateAllianceOf } from "@/game/maproom/mapAlliances";
+import { WorkerFinishWatch } from "@/game/maproom/workerFinish";
 import { getAutoAttackPlan, type AutoAttackPlanResponse } from "@/api/autoAttack";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
 import { openDefence } from "@/game/defences/openDefence";
@@ -34,7 +36,7 @@ import { AREA_ZONE_SIZE, DEFAULT_ZOOM, MIN_ZOOM, WORLD_HEIGHT, WORLD_WIDTH, ZONE
 import { mapRefreshSeconds, quality } from "@/game/quality";
 import {
   attackRefusal,
-  hasDeclareWar,
+  cellDistance,
   outpostsToLoad,
   ownCellsIn,
   rosterInRange,
@@ -49,6 +51,7 @@ import {
 } from "@/game/attack/attackTarget";
 import { visitFriend } from "@/game/friends/friendVisit";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
+import { confirmAttackWindow } from "@/ui/attack/AttackWindow";
 import { storageCapOf } from "@/game/attack/attackerStorage";
 import { Camera } from "@/game/Camera";
 import { mapRoomGrid, setHexShape, type OffsetCell } from "@/game/HexGrid";
@@ -76,10 +79,12 @@ import {
   reachTo,
   type RangeSource,
 } from "@/game/maproom/attackRange";
-import { mainYardRange, outpostRange, withDeclareWar } from "@/game/maproom/rules/range";
+import { mainYardRange, outpostRange, withExtraReach } from "@/game/maproom/rules/range";
+import { currentAllianceBonuses, setCurrentAllianceBonuses } from "@/game/alliance/allianceBonuses";
 import { KitFilter } from "@/game/maproom/cellVisuals";
 import { Bookmarks } from "@/game/maproom/Bookmarks";
 import {
+  cardOnEntry,
   consumeMapFocus,
   recallMapView,
   rememberMapView,
@@ -101,6 +106,7 @@ import { MapInput } from "@/game/maproom/MapInput";
 import { paintedMapOn } from "@/game/maproom/painted/paintedSwitch";
 import { MapRenderer } from "@/game/maproom/MapRenderer";
 import { prewarmStatus } from "@/game/maproom/mr2Prewarm";
+import { demoState, readPrepareDemo } from "@/game/maproom/prepareDemo";
 import { classicLook } from "@/game/classicLook";
 import {
   decideTilt,
@@ -121,9 +127,10 @@ import { Sight } from "@/game/maproom/Sight";
 import { ZoneStore, type ZoneError } from "@/game/maproom/ZoneStore";
 import { inWorld, zonesForRange, type CellRange, type ZoneRef } from "@/game/maproom/zones";
 import { IncomePrediction, overdriveEndOf } from "@/game/yard/outpostIncome";
+import { seedOutpostLabels } from "@/game/yard/outpostLabels";
 import {
   MAIN_YARD_TITLE,
-  outpostTitle,
+  namedOutpostTitle,
   outpostsOf,
   outpostTarget,
   setOwnYardTarget,
@@ -138,7 +145,6 @@ import { devStats } from "../devDetails";
 import { connectMr2TimingReport } from "../mr2TimingReport";
 import type { Scene, SceneContext } from "../SceneManager";
 import { SceneName } from "../sceneName";
-import { isPhoneLayout } from "@/ui/phoneLayout";
 
 /**
  * Map Room 2.
@@ -234,6 +240,7 @@ export class MapRoom2Scene implements Scene {
     },
     onResources: (resources, credits) => this.syncPool(resources, credits),
     onAlliance: (id) => this.renderer.setMyAlliance(id),
+    onAllianceRoster: (roster) => this.renderer.setAllianceRoster(roster),
     onError: (error) => this.reportError(error),
     onAuthFailure: () => this.context?.goTo(SceneName.LOGIN),
     skipZone: (zone) => this.sight.isZoneFullyFogged(zone),
@@ -283,6 +290,8 @@ export class MapRoom2Scene implements Scene {
 
   private home: OffsetCell | null = null;
   private selected: OffsetCell | null = null;
+  /** The attack window is up (`ui/attack/AttackWindow.ts`): Attack again opens no second one. */
+  private attackWindowOpen = false;
   /** The cell under the pointer, for the hover card (#176). */
   private hovered: OffsetCell | null = null;
   /**
@@ -311,6 +320,8 @@ export class MapRoom2Scene implements Scene {
   private income: IncomePrediction | null = null;
   private incomeCap = 0;
   private clockOffset = 0;
+  /** Own outposts' build ends already asked about (`workerFinish.ts`). */
+  private readonly workerFinish = new WorkerFinishWatch();
   /**
    * Where the map should open instead of the home cell: the target of the
    * attack just finished, or the outpost just taken over (`mapFocus.ts`).
@@ -350,6 +361,8 @@ export class MapRoom2Scene implements Scene {
   private markerPicturesStarted = false;
   private markerPicturesTimer: ReturnType<typeof setTimeout> | null = null;
   private framesMarked = 0;
+  /** When the "Preparing map" demo's made-up progress began (`?prepbar-demo=1`, this open), or null without it. */
+  private prepareDemoFrom: number | null = null;
   private zoneMarksDone = false;
 
   async enter(context: SceneContext): Promise<void> {
@@ -358,6 +371,7 @@ export class MapRoom2Scene implements Scene {
     connectMr2TimingReport();
     // Whether the yard's warm-up ran first this page (`mr2Prewarm.ts`): none, running, done or partial.
     markOpen({ quality: quality(), classic: classicLook(), prewarm: prewarmStatus() });
+    this.prepareDemoFrom = readPrepareDemo() ? performance.now() : null;
     // The world's hex shape (MR2 look plan step 1) before anything is drawn
     // or picked: the grid's geometry follows the server's rules. Classic gets
     // its own pointy-top cell size (never tilted, Flash's 3/4 tiles).
@@ -459,8 +473,8 @@ export class MapRoom2Scene implements Scene {
         },
         ownFlinger: (_cell, payload) => {
           const own = payload.b === CellType.OUTPOST ? outpostRange(payload.f) : mainYardRange(payload.f);
-          const reach = withDeclareWar(own, this.declareWar);
-          return { level: payload.f ?? 0, reach, bonus: reach - own };
+          const reach = withExtraReach(own, currentAllianceBonuses().reach);
+          return { level: payload.f ?? 0, reach };
         },
         ownMoves: (_cell, payload) => ({
           // Flash offered the transfer only to a player with an outpost
@@ -469,6 +483,12 @@ export class MapRoom2Scene implements Scene {
           relocate: payload.b === CellType.OUTPOST,
         }),
         onMoveMonsters: (_cell, payload) => this.openTransfer(payload.bid),
+        // The own yard's info card (beta 7, owner's design B).
+        yardCard: {
+          sizeOf: (id) => (this.ownSave ? housingSpace(id, academyLevel(this.ownSave.academy, id)) ?? 1 : 1),
+          cellsFromHome: (cell) => (this.home ? cellDistance(this.home, cell) : null),
+          onBringMonsters: (_cell, payload) => this.bringMonsters(payload.bid),
+        },
         onRelocate: (cell, payload) => this.openRelocate(cell, payload),
         onMessage: (payload) => void this.mail?.openCompose({ userid: payload.uid, name: payload.n }),
         onTruce: (payload) => void this.mail?.openTruce({ userid: payload.uid, name: payload.n, baseid: payload.bid }),
@@ -480,9 +500,11 @@ export class MapRoom2Scene implements Scene {
             to: { userid: payload.uid, name: payload.n },
             outposts: this.ownSave ? outpostsOf(this.ownSave) : [],
           }),
-        // The server refuses a player in an alliance (`inviteRules.ts`); an outpost is needed to offer.
-        canInviteToOutpost: (payload) =>
-          !payload.aid && this.ownSave !== null && outpostsOf(this.ownSave).length > 0,
+        // An outpost is needed to offer. Alliance mates may be invited too (beta 7: the rule is gone).
+        canInviteToOutpost: () => this.ownSave !== null && outpostsOf(this.ownSave).length > 0,
+        // The owner's alliance on the cell panel (beta 7, from the map's roster).
+        allianceOf: (id) => this.renderer.allianceNamed(id),
+        myAlliance: () => this.renderer.myAllianceId,
         // Repeat attack on a wild camp (#221).
         autoAttackPlan: (baseid) => getAutoAttackPlan(baseid),
         onRepeatAttack: (cell, baseid, answer) => this.openAutoAttack(cell, baseid, answer),
@@ -548,6 +570,8 @@ export class MapRoom2Scene implements Scene {
       onCancel: () => this.clearSelection(),
       liftOf: this.renderer.liftAt,
       screenToFlat: () => this.tiltToFlat,
+      // The "Preparing map" screen is up: the map waits (its pointer events stop at the screen).
+      blocked: () => this.ui?.preparingShown ?? false,
     });
     this.input.attach();
 
@@ -599,6 +623,8 @@ export class MapRoom2Scene implements Scene {
   exit(): void {
     // An open the player left before it was done is summarised with what it had.
     finishOpen("left");
+    // A scene change sweeps the attack window off with the overlay.
+    this.attackWindowOpen = false;
     // Where the map was left, for the next time it opens (#153).
     if (this.ownSave) {
       const view = this.camera.visibleWorldRect();
@@ -606,7 +632,6 @@ export class MapRoom2Scene implements Scene {
         yard: this.ownSave.baseid,
         centre: { x: (view.left + view.right) / 2, y: (view.top + view.bottom) / 2 },
         zoom: this.camera.zoom,
-        selected: this.selected,
       });
     }
     if (this.markerPicturesTimer !== null) clearTimeout(this.markerPicturesTimer);
@@ -794,6 +819,11 @@ export class MapRoom2Scene implements Scene {
       this.standMarkers();
     }
     this.ui?.drawMinimap();
+    // The "Preparing map" loading screen while the painted look compiles (owner, 8 Nov 2026; mostly Firefox).
+    // `?prepbar-demo=1` on a test server: a made-up 0-100% on every open, in any browser and in Classic.
+    this.ui?.setPreparing(
+      this.prepareDemoFrom === null ? this.renderer.prepareState() : demoState(performance.now() - this.prepareDemoFrom),
+    );
 
     if (this.ready) {
       this.sincePump += deltaSeconds;
@@ -815,6 +845,7 @@ export class MapRoom2Scene implements Scene {
       this.sinceUiTick = 0;
       this.refreshUi();
       this.tickIncome();
+      this.askFinishedWorkers();
     }
 
     // Exponential moving average: one slow frame should show, but not dominate.
@@ -835,6 +866,10 @@ export class MapRoom2Scene implements Scene {
       noteInfo("ownYard", primed ? "primed" : "fetched");
       const base = primed ?? (await timeSpan("own-yard", () => loadOwnYard()));
       this.ownSave = base;
+      // The alliance's extra reach (and prices) from this load, not the last yard visit.
+      setCurrentAllianceBonuses(base.alliancedata);
+      // The player's outpost names (beta 7) for the outpost buttons and the move picker.
+      seedOutpostLabels(base.outpostlabels);
       // Map Room 2's painted look (MR2_PAINTED_MAP), never in Classic.
       const painted = paintedMapOn({ serverFlag: base.flags?.["mr2painted"] });
       this.renderer.setPaintedMap(painted);
@@ -851,9 +886,10 @@ export class MapRoom2Scene implements Scene {
         if (inWorld(cell.col, cell.row)) {
           this.home = cell;
           this.ui?.setHome(cell);
-          // On a phone the "Your yard" card would cover a third of the map
-          // on every visit (#381): the map opens on the home cell, card shut.
-          this.jumpTo(cell, DEFAULT_ZOOM, !isPhoneLayout());
+          // The map opens on the home cell with the card shut: on a phone it
+          // would cover a third of the map (#381), and anywhere it popped up
+          // unasked on every visit (owner, 12 Nov 2026). A click opens it.
+          this.jumpTo(cell, DEFAULT_ZOOM, false);
           markOnce(MR2_OWN_CELL);
         }
       }
@@ -953,13 +989,16 @@ export class MapRoom2Scene implements Scene {
     void timeSpan("marker-pictures", () => this.renderer.loadMarkerPictures());
   }
 
-  /** Puts the camera and the selection back where the map was left. */
+  /**
+   * Puts the camera back where the map was left. The cell that was open then
+   * is not opened again: its card popping up on the way back from a yard
+   * looked random (owner, 12 Nov 2026).
+   */
   private restoreView(view: MapView): void {
     this.camera.zoom = view.zoom;
     this.camera.centreOn(view.centre);
     this.camera.dirty = true;
-    if (view.selected && inWorld(view.selected.col, view.selected.row)) this.selectCell(view.selected);
-    else this.clearSelection();
+    this.clearSelection();
   }
 
   /**
@@ -971,7 +1010,8 @@ export class MapRoom2Scene implements Scene {
     const focus = this.pendingFocus;
     this.pendingFocus = null;
     if (!focus || !inWorld(focus.cell.col, focus.cell.row)) return;
-    this.jumpTo(focus.cell, DEFAULT_ZOOM);
+    // Its card opens only when the player asked for that cell (`MapFocus.open`).
+    this.jumpTo(focus.cell, DEFAULT_ZOOM, cardOnEntry(focus));
     if (focus.takenOver) this.ui?.showTakenOver(focus.takenOver.kind, focus.takenOver.name);
   }
 
@@ -982,6 +1022,22 @@ export class MapRoom2Scene implements Scene {
   private syncPool(resources: Resources, credits: number | undefined): void {
     this.income?.rebase(resources);
     this.showResources(this.predictedPool() ?? resources, credits);
+  }
+
+  /**
+   * Once a second: an own outpost whose build or upgrade has just ended is
+   * asked for again, so its construction badge and its card's "Worker:
+   * Building" go now rather than when the yard is next opened (owner, 12 Nov 2026).
+   */
+  private askFinishedWorkers(): void {
+    if (!this.ownSave || !this.ready) return;
+    const now = Date.now() / 1000 + this.clockOffset;
+    const due = this.workerFinish.due(
+      outpostsOf(this.ownSave).map((outpost) => outpost.cell),
+      (col, row) => this.store.getCell(col, row),
+      now,
+    );
+    for (const cell of due) this.store.invalidateCell(cell.col, cell.row);
   }
 
   /** Once a second: the pool with the next whole tick of outpost income, when one passed (#207). */
@@ -1205,11 +1261,6 @@ export class MapRoom2Scene implements Scene {
     return rosterInRange(cell, ownCellsIn(this.store.loadedZoneRefs()), this.ownSave);
   }
 
-  /** Whether the player's alliance has Declare War running, from the own-yard load. */
-  private get declareWar(): boolean {
-    return hasDeclareWar(this.ownSave?.powerups);
-  }
-
   /**
    * The flingers the player's range is drawn from (#177): every own cell in
    * the loaded zones, with the home cell stood in for from the own-yard load
@@ -1219,12 +1270,11 @@ export class MapRoom2Scene implements Scene {
   private updateRange(): void {
     const sources = rangeSources(
       ownCellsIn(this.store.loadedZoneRefs()),
-      this.declareWar,
       this.home ? { cell: this.home, flinger: this.ownSave?.flinger } : null,
     );
     this.rangeSources = sources;
     this.renderer.setRange(this.rangeOn ? sources : null);
-    this.ui?.setRangeSources(sources, this.declareWar);
+    this.ui?.setRangeSources(sources);
   }
 
   /** The cell panel's Attack gate, for the cell it is showing. */
@@ -1258,10 +1308,20 @@ export class MapRoom2Scene implements Scene {
         cell,
         name: targetName(payload),
         ...("uid" in payload && payload.uid > 0 ? { owner: payload.uid } : {}),
+        ...this.allyOf(payload),
         roster,
       },
       refusal: null,
     };
+  }
+
+  /**
+   * The player's own alliance when the cell's owner is in it too (beta 7), for
+   * the "attack anyway?" confirm; nothing for anyone else or the player's own.
+   */
+  private allyOf(payload: MapCell): { ally?: { name: string; image: number } } {
+    const ally = mateAllianceOf(payload, this.renderer.myAllianceId, (id) => this.renderer.allianceNamed(id));
+    return ally ? { ally } : {};
   }
 
   /** Hands the selected cell to the attack scene. */
@@ -1279,9 +1339,17 @@ export class MapRoom2Scene implements Scene {
       return;
     }
 
-    void attackWithFriendWarning(attack, context.overlay.modal, () => {
-      setAttackTarget(attack);
-      context.goTo(SceneName.ATTACK);
+    // Flash's PopupAttackA first: what the player can bring, then Attack or
+    // Cancel (owner, 9 Nov 2026). One at a time, however often Attack is hit.
+    if (this.attackWindowOpen) return;
+    this.attackWindowOpen = true;
+    void confirmAttackWindow(context.overlay.modal, attack).then((go) => {
+      this.attackWindowOpen = false;
+      if (!go || this.context !== context) return;
+      return attackWithFriendWarning(attack, context.overlay.modal, () => {
+        setAttackTarget(attack);
+        context.goTo(SceneName.ATTACK);
+      });
     });
   }
 
@@ -1401,6 +1469,7 @@ export class MapRoom2Scene implements Scene {
       const base = await loadOwnYard();
       if (!this.context) return;
       this.ownSave = base;
+      setCurrentAllianceBonuses(base.alliancedata);
       this.income = new IncomePrediction(base.buildingresources, base.resources);
       this.incomeCap = storageCapOf(base);
       this.clockOffset = base.currenttime - Date.now() / 1000;
@@ -1425,7 +1494,7 @@ export class MapRoom2Scene implements Scene {
     }
     for (const outpost of outpostsOf(save)) {
       yards.push({
-        choice: { baseid: outpost.baseid, label: outpostTitle(outpost.cell), main: false },
+        choice: { baseid: outpost.baseid, label: namedOutpostTitle(outpost.baseid, outpost.cell), main: false },
         cell: outpost.cell,
       });
     }
@@ -1442,8 +1511,24 @@ export class MapRoom2Scene implements Scene {
     return cellAt(area, cell.col, cell.row);
   }
 
-  /** "Move monsters" from one of the player's yards. */
-  private openTransfer(from: string): void {
+  /**
+   * "Bring monsters here" (the yard info card): the transfer dialog with this
+   * yard as the target, from the main yard when this is an outpost, else from
+   * the first outpost (one end must be an outpost, `transferRules.ts`).
+   */
+  private bringMonsters(to: string): void {
+    const yards = this.ownYards().map(({ choice }) => choice);
+    const target = yards.find((yard) => yard.baseid === to);
+    const from = yards.find((yard) => yard.baseid !== to && !(target?.main && yard.main));
+    if (!target || !from) {
+      this.ui?.notices.show("transfer", TRANSFER_TEXT.noOutposts, { level: "info", timeoutMs: 4_000 });
+      return;
+    }
+    this.openTransfer(from.baseid, to);
+  }
+
+  /** "Move monsters" from one of the player's yards, to `to` when given. */
+  private openTransfer(from: string, to?: string): void {
     const save = this.ownSave;
     const yards = this.ownYards();
     if (!save || yards.length < 2) {
@@ -1455,6 +1540,7 @@ export class MapRoom2Scene implements Scene {
       new TransferDialog({
         yards: yards.map(({ choice }) => choice),
         from,
+        ...(to === undefined ? {} : { to }),
         load: async (baseid): Promise<TransferYard> => {
           const cell = cells.get(baseid);
           const payload = cell ? await this.freshCell(cell) : undefined;

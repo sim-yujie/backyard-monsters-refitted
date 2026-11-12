@@ -469,9 +469,18 @@ export const leaderMustTransferErr = (allianceName: string) =>
 
 export const requestPendingErr = () =>
   new ClientSafeError({
-    message: "You already have a request pending.",
+    message: "You already asked to join this alliance.",
     status: Status.CONFLICT,
-    data: {},
+    data: { reason: "requestPending" },
+    isClientFriendly: true,
+  });
+
+/** Ask to join an alliance that has already invited the player: accept the invite instead. */
+export const alreadyInvitedErr = (name: string) =>
+  new ClientSafeError({
+    message: `${name} already invited you. Accept it under Invites.`,
+    status: Status.CONFLICT,
+    data: { reason: "invited" },
     isClientFriendly: true,
   });
 
@@ -491,9 +500,18 @@ export const userAlreadyInAllianceErr = () =>
     isClientFriendly: true,
   });
 
+/** An alliance invite to a player who blocked the inviter, or whom the inviter blocked: mail rules. */
+export const inviteBlockedErr = (name: string) =>
+  new ClientSafeError({
+    message: `You cannot invite ${name}.`,
+    status: Status.FORBIDDEN,
+    data: { reason: "blocked" },
+    isClientFriendly: true,
+  });
+
 export const inviteLeaderOnlyErr = () =>
   new ClientSafeError({
-    message: "Only the leader of the alliance can invite new members. Ask them to send the invitation for you.",
+    message: "Only the leader or an Officer can invite new members. Ask one of them to send the invitation for you.",
     status: Status.FORBIDDEN,
     data: {},
     isClientFriendly: true,
@@ -533,6 +551,30 @@ export const cannotLeaveMapRoom2Err = () =>
  * and a save already on it may not start an attack, whose cost and result
  * Map Room 3 took from the client.
  */
+/**
+ * Map Room 1: the target is not on the attacker's neighbour list
+ * (`services/maproom/v1/mr1AttackRules.ts`).
+ */
+export const notMr1NeighbourErr = () =>
+  new ClientSafeError({
+    message: "Not your neighbour. Map Room 1 attacks only your neighbours.",
+    status: Status.FORBIDDEN,
+    data: { reason: "notNeighbour" },
+    isClientFriendly: true,
+  });
+
+/**
+ * Map Room 1: the target's yard is more than `gap` levels below the
+ * attacker's, and they owe the attacker no vengeance (`mr1AttackRules.ts`).
+ */
+export const mr1LevelGapErr = (gap: number) =>
+  new ClientSafeError({
+    message: `Too low: more than ${gap} levels below you.`,
+    status: Status.FORBIDDEN,
+    data: { reason: "levelGap", gap },
+    isClientFriendly: true,
+  });
+
 export const mapRoom3ClosedErr = () =>
   new ClientSafeError({
     message: "Map Room 3 is closed.",
@@ -557,11 +599,35 @@ export const inviteNotPendingErr = () =>
     isClientFriendly: true,
   });
 
+/** Why a type switch was refused (`services/alliance/allianceTypes.ts`), with when a waiting one opens. */
+const TYPE_SWITCH_MESSAGES: Record<string, string> = {
+  sameType: "Your alliance is already that type.",
+  tooManyMembers: "Your alliance has too many members for that type.",
+  tooManyOfficers: "Your alliance has too many Officers for that type. Demote some first.",
+  waitForDownSwitch: "Your alliance changed type recently. Moving to a smaller type has to wait.",
+};
+
+export const allianceTypeSwitchRefusedErr = (reason: string, availableAt: number | null) =>
+  new ClientSafeError({
+    message: TYPE_SWITCH_MESSAGES[reason] ?? "Your alliance cannot change to that type now.",
+    status: Status.CONFLICT,
+    data: { reason, available_at: availableAt },
+    isClientFriendly: true,
+  });
+
 export const allianceFullErr = () =>
   new ClientSafeError({
     message: "The alliance is already full.",
     status: Status.CONFLICT,
     data: {},
+    isClientFriendly: true,
+  });
+
+export const officerSeatsFullErr = (seats: number) =>
+  new ClientSafeError({
+    message: `Your alliance already has ${seats} Officers, the most its type allows.`,
+    status: Status.CONFLICT,
+    data: { reason: "officerSeatsFull", seats },
     isClientFriendly: true,
   });
 
@@ -605,38 +671,6 @@ export const inviteMapVersionErr = (username: string) =>
     isClientFriendly: true,
   });
 
-export const powerupUnknownErr = () =>
-  new ClientSafeError({
-    message: "This Power-Up cannot be activated at this time.",
-    status: Status.BAD_REQUEST,
-    data: {},
-    isClientFriendly: true,
-  });
-
-export const powerupRunningErr = () =>
-  new ClientSafeError({
-    message: "This Power-Up is already active.",
-    status: Status.CONFLICT,
-    data: {},
-    isClientFriendly: true,
-  });
-
-export const powerupNotReadyErr = () =>
-  new ClientSafeError({
-    message: "This Power-Up is not ready to activate.",
-    status: Status.CONFLICT,
-    data: {},
-    isClientFriendly: true,
-  });
-
-export const powerupReadyErr = () =>
-  new ClientSafeError({
-    message: "This Power-Up is currently ready.",
-    status: Status.CONFLICT,
-    data: {},
-    isClientFriendly: true,
-  });
-
 export const notEnoughShinyErr = () =>
   new ClientSafeError({
     message: "You do not have enough Shiny for that.",
@@ -649,14 +683,6 @@ export const notEnoughResourcesErr = () =>
   new ClientSafeError({
     message: "You do not have enough resources for that.",
     status: Status.CONFLICT,
-    data: {},
-    isClientFriendly: true,
-  });
-
-export const powerupLeaderOnlyErr = () =>
-  new ClientSafeError({
-    message: `Only the leader of the alliance can activate a Power-Up.`,
-    status: Status.FORBIDDEN,
     data: {},
     isClientFriendly: true,
   });
@@ -841,6 +867,24 @@ export const attackBombRefusedErr = (violations: CombatViolation[]) =>
     message: "This attack's bombs do not add up. Reload your yard.",
     status: Status.CONFLICT,
     data: { reason: "bombSpend", violations },
+    isClientFriendly: false,
+  });
+
+/**
+ * An attack whose fling log has a fling fuller than the Flinger holds
+ * (`services/base/combat/flingRoom.ts`; owner, 12 Nov 2026: "ensure edited
+ * game isnt allowed"), refused in `COMBAT_SAVE_VALIDATION=reject` mode. The
+ * game never sends one, so it is an edited game: the save, or the checkpoint,
+ * is not taken, and nothing of the over-full fling ever lands. `flings` names
+ * each over-full fling: which one, the room it took and the Flinger's.
+ */
+export const attackFlingOverRoomErr = (
+  flings: readonly { fling: number; t: number; used: number; room: number }[]
+) =>
+  new ClientSafeError({
+    message: "A fling held more monsters than the Flinger can carry, so the server did not take this attack.",
+    status: Status.CONFLICT,
+    data: { reason: "flingOverRoom", flings: [...flings] },
     isClientFriendly: false,
   });
 
@@ -1219,6 +1263,7 @@ export type FriendRefusal =
   | "tooNew"
   | "dailyCap"
   | "giftSentToday"
+  | "notEnough"
   | "collectLimit"
   | "notFriends"
   | "helpersFull"
@@ -1228,6 +1273,7 @@ export type FriendRefusal =
   | "noSuchPlayer"
   | "noSuchRequest"
   | "noSuchGift"
+  | "pinLimit"
   | "self";
 
 const FRIEND_REFUSAL_MESSAGES: Record<FriendRefusal, string> = {
@@ -1242,6 +1288,7 @@ const FRIEND_REFUSAL_MESSAGES: Record<FriendRefusal, string> = {
   tooNew: "That isn't possible yet.",
   dailyCap: "You have done that as many times as you can today.",
   giftSentToday: "You have already sent this friend a gift today.",
+  notEnough: "You don't have enough of that to send.",
   collectLimit: "You have collected as many gifts as you can today.",
   notFriends: "You are not friends with this player.",
   helpersFull: "Enough friends have already helped with this.",
@@ -1251,6 +1298,7 @@ const FRIEND_REFUSAL_MESSAGES: Record<FriendRefusal, string> = {
   noSuchPlayer: "There is no player with that name.",
   noSuchRequest: "That request is no longer waiting for an answer.",
   noSuchGift: "That gift is no longer waiting.",
+  pinLimit: "You can pin up to 10 friends. Unpin one first.",
   self: "That's you!",
 };
 

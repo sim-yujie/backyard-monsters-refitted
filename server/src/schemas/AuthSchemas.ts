@@ -1,6 +1,9 @@
 import z from "zod";
 import { isCountryCode } from "../config/Countries.js";
+import { jsonField } from "./jsonField.js";
+import { MUTABLE_CATEGORIES } from "../services/notifications/notificationCategories.js";
 import { SessionType } from "../enums/SessionType.js";
+import { formBoolean } from "./formBoolean.js";
 
 import {
   AccountMessage,
@@ -78,12 +81,6 @@ export const UserLoginSchema = z.object({
   sessionType: z.enum([SessionType.GAME, SessionType.LAUNCHER]).default(SessionType.GAME),
 });
 
-/** An optional true/false that a form-encoded body sends as "true" or "false". */
-const formBoolean = z.preprocess(
-  (input) => (input === "true" ? true : input === "false" ? false : input),
-  z.boolean().optional()
-);
-
 /**
  * Schema to validate user registration data.
  * - Username must be between 2 and 12 characters.
@@ -112,6 +109,9 @@ export const UserRegistrationSchema = z.object({
  */
 export const ChangeUsernameSchema = z.object({ username: usernameSchema });
 
+/** `{ attacks: false, friends: true }`: only the categories a player can turn off. */
+const notificationSwitches = z.partialRecord(z.enum(MUTABLE_CATEGORIES), z.boolean());
+
 /**
  * Schema to validate an account settings update.
  * - Callers send the whole settings block, not a partial one.
@@ -129,6 +129,15 @@ export const UpdateSettingsSchema = z.object({
   country: z.string().refine(isCountryCode).nullable().optional(),
   /** The one-time country prompt was put off ("Not now"); it is not shown again. */
   countryAsked: z.literal(true).optional(),
+  /**
+   * The bell's categories switched on (true) or off (false), only those that
+   * changed (`notificationCategories.ts`). Strict: an unknown or always-on
+   * category is refused rather than quietly ignored. A JSON body arrives with
+   * it stringified (`middleware/jsonBody.ts`); a test may pass the object.
+   */
+  notifications: z
+    .union([jsonField("notifications must be valid JSON").pipe(notificationSwitches), notificationSwitches])
+    .optional(),
 });
 
 /**

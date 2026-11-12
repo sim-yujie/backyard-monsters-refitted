@@ -244,3 +244,14 @@ describe("what a kit refuses", () => {
     expect(plan.slices.monsters).toEqual({ housed: {}, h: [], hid: [], hstage: [], hcount: 0, hcc: [], saved: 5 });
   });
 });
+
+describe("alliance kit price", () => {
+  test("a Conquest discount cuts the resource price only", () => {
+    const kit = starterKit(1)!;
+    const rich = outpost({ resources: { r1: 9e9, r2: 9e9, r3: 9e9, r4: 9e9 } } as Partial<StarterKitSave>);
+    const plan = planStarterKit(rich, { kit: 1, pay: "resources" }, NOW, false, -10);
+    expect(plan.report.cost.r1).toBe(Math.round(kit.resources.r1 * 0.9));
+    const shiny = planStarterKit(rich, { kit: 1, pay: "shiny" }, NOW, false, -10);
+    expect(shiny.report.shiny).toBe(kit.shiny);
+  });
+});

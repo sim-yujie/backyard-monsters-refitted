@@ -6,8 +6,7 @@
  *
  * 1. It sits inside one of their sight circles (their own flingers', or an
  *    ally's under the same alliance-union rule) — the same hex-ring reach the
- *    attack range rule measures with (`range.ts`), Declare War's bonus
- *    already folded into each circle's `reach` by the caller.
+ *    attack range rule measures with (`range.ts`).
  * 2. It is named once in `revealed`: the player's own bases (visible however
  *    short their flingers' reach) and the bases of anyone who has ever
  *    attacked them, each a single lit cell regardless of range
@@ -24,8 +23,7 @@
 import { type HexShape, type RangeCell, inReach } from "./range.js";
 
 /**
- * One sight circle: a flinger's own cell and its final reach (Declare War's
- * +2 already added by the caller when it applies). A reach of 0 gives the
+ * One sight circle: a flinger's own cell and its reach. A reach of 0 gives the
  * circle no cells at all, not even its own (`inReach`); seeing the flinging
  * cell itself, when nothing else reaches it, comes from `revealed` instead.
  */
@@ -43,7 +41,7 @@ const sameCell = (a: RangeCell, b: RangeCell): boolean => a.x === b.x && a.y ===
  *
  * @param cell - The cell being tested.
  * @param sources - Every sight circle the rule allows (own and, for an ally
- *   union, every member's), Declare War already folded in.
+ *   union, every member's).
  * @param revealed - Every cell visible on its own: the player's own bases and
  *   the bases of anyone who has ever attacked them.
  * @param shape - The world's hex shape (`range.ts`), flat when left out.

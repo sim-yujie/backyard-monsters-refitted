@@ -9,7 +9,6 @@ import {
   debugDataLimiter,
   getAreaLimiter,
   attackLogsLimiter,
-  purchasePowerupLimiter,
   sightLimiter,
   loginLimiter,
   forgotPasswordEmailLimiter,
@@ -42,7 +41,14 @@ import {
   clientTimingLimiter,
   announcementsLimiter,
   announcementImageLimiter,
+  profileReadLimiter,
+  profileWriteLimiter,
+  photoUploadLimiter,
+  photoReportLimiter,
+  profilePhotoLimiter,
+  outpostLabelLimiter,
   mailStatusLimiter,
+  modReportsLimiter,
   mailFindPlayerLimiter,
 } from "./middleware/rateLimiters.js";
 import { Status } from "./enums/StatusCodes.js";
@@ -132,8 +138,12 @@ import { getDefenceReplay, getDefences } from "./controllers/defences/routes.js"
 import { mountFriendsRoutes } from "./controllers/friends/routes.js";
 import { mountEventsRoutes } from "./controllers/events/routes.js";
 import { mountSupportRoutes } from "./controllers/support/routes.js";
-import { adminOnly, mountAdminRoutes } from "./controllers/admin/routes.js";
+import { adminOnly, moderationEffects, mountAdminRoutes } from "./controllers/admin/routes.js";
+import { mountModReportsRoutes } from "./controllers/moderator/routes.js";
 import { mountAnnouncementRoutes } from "./controllers/announcements/routes.js";
+import { mountProfileRoutes } from "./controllers/profile/routes.js";
+import { mountOutpostLabelRoutes } from "./controllers/outposts/labelRoutes.js";
+import { sharedWordFilter } from "./services/chat/badWords.js";
 import { postgres } from "./server.js";
 import { clientErrors, guestClientErrors } from "./controllers/errors/clientErrors.js";
 import { clientTiming } from "./controllers/maproom/clientTiming.js";
@@ -148,6 +158,7 @@ import { recordDebugData } from "./controllers/debug/recordDebugData.js";
 
 import { createAlliance } from "./controllers/alliance/createAlliance.js";
 import { editAlliance } from "./controllers/alliance/editAlliance.js";
+import { changeAllianceType } from "./controllers/alliance/changeAllianceType.js";
 import { leaveAlliance } from "./controllers/alliance/leaveAlliance.js";
 import { myAlliance } from "./controllers/alliance/myAlliance.js";
 import { searchAlliances } from "./controllers/alliance/searchAlliances.js";
@@ -160,11 +171,28 @@ import { getMessages } from "./controllers/alliance/getMessages.js";
 import { deleteMessages } from "./controllers/alliance/deleteMessages.js";
 import { kickMember } from "./controllers/alliance/kickMember.js";
 import { promoteMember } from "./controllers/alliance/promoteMember.js";
+import { setMemberRank } from "./controllers/alliance/setMemberRank.js";
+import { takeOverAlliance } from "./controllers/alliance/takeOverAlliance.js";
+import { renameAllianceController } from "./controllers/alliance/renameAlliance.js";
+import { reportAllianceController } from "./controllers/alliance/reportAlliance.js";
 import { changeRelationship } from "./controllers/alliance/changeRelationship.js";
-import { getPowerups } from "./controllers/alliance/getPowerups.js";
+import {
+  lightStarController,
+  removeGoalController,
+  setGoalController,
+  suggestStarController,
+  territoryController,
+  allianceNewsController,
+} from "./controllers/alliance/allianceProgress.js";
+import {
+  tradePostController,
+  tradeCancelController,
+  tradeAcceptController,
+  tradeSendController,
+  tradeViewController,
+} from "./controllers/alliance/trade.js";
+import { tradeSwitchGate } from "./services/alliance/tradeSwitch.js";
 import { submitBugReportController, submitGuestBugReportController } from "./controllers/bugReports/submitBugReport.js";
-import { activatePowerup } from "./controllers/alliance/activatePowerup.js";
-import { purchasePowerup } from "./controllers/alliance/purchasePowerup.js";
 
 const router = new Router();
 
@@ -314,8 +342,12 @@ router.post("/api/:apiVersion/bm/yardplanner/deletetemplate", apiVersion, verify
 /**  ────────────────────────────────────────────────
 * 📦 Yard actions (server-authoritative, `controllers/yard/index.ts`)
 * ──────────────────────────────────────────────── */
-for (const { path, controller } of yardRoutes) {
-  router.post(`/api/:apiVersion/bm/yard/${path}`, apiVersion, verifyUserAuth, logRequest, controller);
+for (const { path, controller, limiter } of yardRoutes) {
+  if (limiter) {
+    router.post(`/api/:apiVersion/bm/yard/${path}`, apiVersion, verifyUserAuth, limiter, logRequest, controller);
+  } else {
+    router.post(`/api/:apiVersion/bm/yard/${path}`, apiVersion, verifyUserAuth, logRequest, controller);
+  }
 }
 
 /**  ────────────────────────────────────────────────
@@ -377,6 +409,7 @@ router.get("/api/:apiVersion/attacklogs", verifyUserAuth, attackLogsLimiter, get
 * ──────────────────────────────────────────────── */
 router.post("/alliance/createalliance", verifyUserAuth, allianceCreateEditLimiter, logRequest, createAlliance);
 router.post("/alliance/editalliance", verifyUserAuth, allianceCreateEditLimiter, logRequest, editAlliance);
+router.post("/alliance/changetype", verifyUserAuth, allianceCreateEditLimiter, logRequest, changeAllianceType);
 router.post("/alliance/leavealliance", verifyUserAuth, logRequest, leaveAlliance);
 router.get("/alliance/myalliance", verifyUserAuth, logRequest, myAlliance);
 router.get("/alliance/myalliancemembers", verifyUserAuth, logRequest, myAllianceMembers);
@@ -384,15 +417,28 @@ router.get("/alliance/getsuggestedmembers", verifyUserAuth, logRequest, suggeste
 router.post("/alliance/searchalliances", verifyUserAuth, searchAlliancesLimiter, logRequest, searchAlliances);
 router.post("/alliance/requestjoin", verifyUserAuth, allianceJoinRequestLimiter, logRequest, requestJoin);
 router.post("/alliance/inviteuser", verifyUserAuth, allianceInviteLimiter, logRequest, inviteUser);
-router.get("/alliance/getpowerups", verifyUserAuth, logRequest, getPowerups);
-router.post("/alliance/activatepowerup", verifyUserAuth, logRequest, activatePowerup);
-router.post("/alliance/purchasepowerup", verifyUserAuth, purchasePowerupLimiter, logRequest, purchasePowerup);
 router.post("/alliance/changeinvitestatus", verifyUserAuth, logRequest, changeInviteStatus);
 router.get("/alliance/getmessages", verifyUserAuth, logRequest, getMessages);
 router.post("/alliance/deletemessages", verifyUserAuth, logRequest, deleteMessages);
 router.post("/alliance/kickmember", verifyUserAuth, logRequest, kickMember);
 router.post("/alliance/promotemember", verifyUserAuth, logRequest, promoteMember);
+router.post("/alliance/setrank", verifyUserAuth, logRequest, setMemberRank);
+router.post("/alliance/takeover", verifyUserAuth, logRequest, takeOverAlliance);
+router.post("/alliance/rename", verifyUserAuth, allianceCreateEditLimiter, logRequest, renameAllianceController);
+router.post("/alliance/report", verifyUserAuth, allianceCreateEditLimiter, logRequest, reportAllianceController);
 router.post("/alliance/changerelationship", verifyUserAuth, logRequest, changeRelationship);
+router.post("/alliance/lightstar", verifyUserAuth, logRequest, lightStarController);
+router.post("/alliance/suggeststar", verifyUserAuth, logRequest, suggestStarController);
+router.post("/alliance/setgoal", verifyUserAuth, logRequest, setGoalController);
+router.post("/alliance/removegoal", verifyUserAuth, logRequest, removeGoalController);
+router.get("/alliance/territory", verifyUserAuth, logRequest, territoryController);
+// Trading refuses every route while ALLIANCE_TRADE_ENABLED is off (the default, beta 7).
+router.get("/alliance/trade", verifyUserAuth, tradeSwitchGate, logRequest, tradeViewController);
+router.post("/alliance/trade/post", verifyUserAuth, tradeSwitchGate, logRequest, tradePostController);
+router.post("/alliance/trade/cancel", verifyUserAuth, tradeSwitchGate, logRequest, tradeCancelController);
+router.post("/alliance/trade/accept", verifyUserAuth, tradeSwitchGate, logRequest, tradeAcceptController);
+router.post("/alliance/trade/send", verifyUserAuth, tradeSwitchGate, logRequest, tradeSendController);
+router.get("/alliance/news", verifyUserAuth, logRequest, allianceNewsController);
 
 /**  ────────────────────────────────────────────────
 * 📦 Events
@@ -429,6 +475,16 @@ router.post("/api/:apiVersion/clienttiming", apiVersion, verifyUserAuth, clientT
 mountAdminRoutes(router);
 
 /**  ────────────────────────────────────────────────
+* 📦 The game's Reports window for moderators (`controllers/moderator/routes.ts`):
+* the dashboard's moderation inbox, narrowed: Close, Warn, Mute up to 7 days.
+* ──────────────────────────────────────────────── */
+mountModReportsRoutes(router, {
+  em: () => postgres.em.fork(),
+  signedIn: [verifyUserAuth, modReportsLimiter],
+  effects: moderationEffects,
+});
+
+/**  ────────────────────────────────────────────────
 * 📦 Announcements: the owner writes them on the dashboard, the game pops them up
 * (`controllers/announcements/routes.ts`). Not echoed by logRequest: the writes carry pictures.
 * ──────────────────────────────────────────────── */
@@ -437,6 +493,33 @@ mountAnnouncementRoutes(router, {
   signedIn: [verifyUserAuth, verifyAccountStatus, announcementsLimiter],
   adminOnly,
   imageLimiter: announcementImageLimiter,
+});
+
+/**  ────────────────────────────────────────────────
+* 📦 Player profiles (beta 7): bio, photo, photo reports
+* ──────────────────────────────────────────────── */
+mountProfileRoutes(router, {
+  em: () => postgres.em.fork(),
+  signedIn: [verifyUserAuth, verifyAccountStatus],
+  adminOnly,
+  limiters: {
+    read: profileReadLimiter,
+    write: profileWriteLimiter,
+    upload: photoUploadLimiter,
+    report: photoReportLimiter,
+    image: profilePhotoLimiter,
+  },
+  filter: sharedWordFilter,
+});
+
+/**  ────────────────────────────────────────────────
+* 📦 Outpost names and pins (beta 7): the yard list's rename and pin
+* ──────────────────────────────────────────────── */
+mountOutpostLabelRoutes(router, {
+  em: () => postgres.em.fork(),
+  signedIn: [verifyUserAuth, verifyAccountStatus],
+  limiter: outpostLabelLimiter,
+  filter: sharedWordFilter,
 });
 
 /**  ────────────────────────────────────────────────

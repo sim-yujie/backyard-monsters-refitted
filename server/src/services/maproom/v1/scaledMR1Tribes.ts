@@ -18,6 +18,7 @@ import type { AbandonedOutcome } from "../../base/combat/abandonedAttack.js";
 import { replayAbandonedInWorker } from "../../base/combat/replayRunner.js";
 import { endRowlessAttack, landRowlessOnce, type RowlessCheckpoint } from "../../base/rowlessCheckpoint.js";
 import { recordBombSpend } from "../../base/combat/recordBombSpend.js";
+import { requireFlingsInRoom } from "../../base/combat/recordFlingRoom.js";
 import { checkAttackBinding, type AttackSession } from "../../base/attackSession.js";
 import { storedDamage } from "../../base/storedDamage.js";
 import { championsAfterAttack, championsAfterBattle, siegeAfterAttack } from "../../base/combat/attackerRow.js";
@@ -30,7 +31,6 @@ import {
 } from "../../../game-rules/combat/index.js";
 import type { JsonObject } from "../../../types/JsonObject.js";
 import type { TribeData } from "../../../types/TribeData.js";
-import { isDeclareWarRunning } from "../../alliance/powerups.js";
 import { battleReplayInput, battleTick } from "../../base/combat/battle.js";
 import { recordBattleMismatches, replayBattleForSave } from "../../base/combat/saveBattle.js";
 import { creditableMR1Loot, mr1TribePool } from "./mr1TribeRules.js";
@@ -42,6 +42,7 @@ import { catapultQuestEvents, lootQuestEvents } from "../../quests/hooks.js";
 import { recordQuestEvents } from "../../quests/record.js";
 import { removedCampStandIn } from "./practiceCamp.js";
 import { countAttackLoot } from "../../events/lootEvents.js";
+import { plunderPercent, weekendBoostUsed, withPlunderBonus } from "../../events/weekendBoosts.js";
 import { recordAttackAchievements } from "../../achievements/events.js";
 import {
   acquireMR1TribeFinalLock,
@@ -166,6 +167,19 @@ const saveTribeAttack = async (ctx: Context, user: User, saveData: BaseSaveData,
     session?.attackerResources
   );
 
+  // Every fling within the Flinger's room (`recordFlingRoom.ts`), checked
+  // before anything is written, as the bombs are.
+  await requireFlingsInRoom(
+    ctx,
+    user,
+    { baseid: saveData.baseid, rowless: "mr1-tribe" },
+    saveData.flinglog,
+    session?.attackerAcademy,
+    combatConfig.mode,
+    session?.attackid,
+    "save"
+  );
+
   // The battle, replayed to the client's clock over the tribe as the attack
   // load served it (issue #23, C4), in a worker. A replay past its deadline
   // lands nothing: the save is answered `attackResultPendingErr` and the
@@ -226,6 +240,8 @@ const writeTribeLanding = async (
 
   // Marked landed before anything is written: whatever a crash after the
   // write leaves behind lands nothing more (`landRowlessOnce`).
+  /** Tribe Plunder raised the loot: the weekend's Glimmers are paid after the flush. */
+  let plunderUsed = false;
   const { credit, credited } = await landRowlessOnce(ref, session, async () => {
     // The tribe keeps its own monsters, the stored ones or its template's: the
     // save's copy is never written (issue #23, C2). What the battle did to it
@@ -276,7 +292,15 @@ const writeTribeLanding = async (
     // gives up the whole credit; the attacker keeps what fits in their
     // storage (issue #166, `bankAttackLoot`), as on Map Room 2.
     const credit = creditableMR1Loot(battle?.attackloot, mr1TribePool(tribeData), existingTribe.looted);
-    const credited: ResourceAmounts = bankAttackLoot(userSave, withTribeGooBonus(credit, true), krallenBuff).credited;
+    // Tribe Plunder: the attacker banks that much more; the tribe gives up only `credit` (`weekendBoosts.ts`).
+    // Wild tribes also give 25% more Goo (patch 6.9, `tribeGooBonus.ts`).
+    const plunder = plunderPercent(true, now);
+    const credited: ResourceAmounts = bankAttackLoot(
+      userSave,
+      withPlunderBonus(withTribeGooBonus(credit, true), plunder),
+      krallenBuff
+    ).credited;
+    plunderUsed = plunder > 0;
 
     const looted = { ...existingTribe.looted };
     for (const key of RESOURCE_KEYS) looted[key] = (looted[key] ?? 0) + credit[key];
@@ -291,6 +315,8 @@ const writeTribeLanding = async (
   // Event loot (the monthly Krallen Hunt): the tribe's whole credit, before
   // the attacker's cap, once, under the tribe's final lock.
   await countAttackLoot(postgres.em, user.userid, userSave, credit, now);
+  // Tribe Plunder's weekend Glimmers, after the flush: logged, not thrown (`weekendCoins.ts`).
+  if (plunderUsed) await weekendBoostUsed(postgres.em, user.userid, "plunder", now, true);
 
   // Goals WM1-WM4 (#227): a tribe this replay destroyed, counted on the
   // attacker's main row under its own lock.
@@ -311,17 +337,18 @@ const writeTribeLanding = async (
     now
   );
 
-  // Each biggest Putty bomb fired counts towards Huge Rage (#299); a Map Room 1
-  // Kozu tribe is counted by its tribe counter above, never here.
-  if (attacker.bombs) {
-    await recordAttackAchievements(postgres.em, {
-      attackerBasesaveid: userSave.basesaveid,
-      defender: {},
-      before: null,
-      after: null,
-      bombs: attacker.bombs.charges,
-    });
-  }
+  // Each biggest Putty bomb fired counts towards Huge Rage (#299), and an
+  // attack that damaged a Kozu tribe towards Kozu Hunter (#392); a Map Room 1
+  // Kozu tribe destroyed is counted by its tribe counter above, never here.
+  await recordAttackAchievements(postgres.em, {
+    attackerBasesaveid: userSave.basesaveid,
+    defender: {},
+    before: null,
+    after: null,
+    bombs: attacker.bombs?.charges,
+    damage: battle?.damage,
+    kozuCamp: tribeOfBase(baseid) === "kozu",
+  });
 
   // Spent: the lock is still held, so a copy of this save finds nothing, and
   // the attack's checkpoint goes with it, so the finaliser does not land it again.
@@ -356,7 +383,6 @@ const tribeReplayInput = async (
     },
     attacker: user.save!,
     tick,
-    declareWar: await isDeclareWarRunning(user.alliance_id),
     left,
   });
 
@@ -390,7 +416,7 @@ const tribeBattle = async (
   const input = await tribeReplayInput(user, session, served, saveData.flinglog, battleTick(saveData.tick), saveData.left);
   if (!input) return null;
 
-  const base = { baseid: saveData.baseid };
+  const base = { baseid: saveData.baseid, rowless: "mr1-tribe" as const };
   const battle = tribeBattleOf(
     await replayBattleForSave(ctx, user, base, input, "the finaliser lands it from its checkpoint"),
     input.log

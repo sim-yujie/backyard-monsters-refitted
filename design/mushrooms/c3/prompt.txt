@@ -1,0 +1,26 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+The attached images are REAL art of the 2009 Flash game Backyard Monsters, enlarged from their tiny in-game size:
+- ref-flash-mushrooms-4x.png: the game's own 6 yard mushroom groups, numbered 1-6, at 4x.
+- ref-flash-decor-3x.png: the game's natural yard decorations (acorn, walnut, pinecone, pumpkins, flowers, blackberry bush, cactus) at 3x.
+Study them closely: the new mushrooms must look like they were made by the same artists with the same 3D software, so a player cannot tell them apart from the originals.
+
+What the Flash art has in common (follow every point):
+1. Not painted cartoon art: small PRE-RENDERED 3D MODELS (late-2000s CG, like a 3ds Max render) shrunk to sprite size. Real-looking materials with soft grain. No flat colour fills, no airbrushed mobile-game gloss, no cel shading.
+2. Camera: from the front-left and about 30-35 degrees above, so the tops of the caps show a little.
+3. Outline: none. The edge is just where the shaded object ends.
+4. Light: one soft key light from the upper left. Lit faces only moderately bright; right and lower sides fall into DEEP shadow (darkest parts near-black). Gentle ambient occlusion where stalk meets cap, small soft specular highlights on the caps (they are a little waxy, like the old mushrooms).
+5. Palette: natural and somewhat muted, overall fairly DARK, like the acorn and walnut. No candy or neon colours, no glow.
+6. No shadow and no ground painted under them, no grass, no moss, no soil.
+7. Simple, chunky, believable; no faces or eyes. Every mushroom must read when the group is shrunk to 25-45 pixels tall.
+
+Make a SHEET of the SAME 6 mushroom groups as ref-flash-mushrooms-4x.png (same number of mushrooms, same arrangement, same proportions, same pale grey-white stalks, same rendering), but ONE change on purpose: these are storybook toadstools - deep muted brick-red caps (dark red, never pink or neon) with a few chunky raised off-white spots, on chunky pale grey-white stalks, a little rounder and chunkier than the old ones:
+- Row 1, column 1 (old #1): two toadstools, a bigger one behind on the right, a smaller one in front on the left, caps overlapping.
+- Row 1, column 2 (old #2): a low wide group of three small toadstools side by side, short stalks.
+- Row 1, column 3 (old #3): one medium toadstool, round domed cap, short thick stalk.
+- Row 2, column 1 (old #4): two toadstools, a bigger one behind on the left, a smaller one in front on the right.
+- Row 2, column 2 (old #5): one big toadstool with a wide domed cap, short thick stalk.
+- Row 2, column 3 (old #6): one tall toadstool, a rounded bell-shaped cap on a long straight stalk.
+
+Canvas 1536x1024 split into 3 columns x 2 rows of equal cells. One group centred in each cell, about 60% of the cell height (the tall one about 80%), generous margins, nothing touching a cell edge. The whole sheet on a flat solid magenta (#FF00FF) background, no grid lines, no text, no labels, no frame, no drop shadows.
+Save the final PNG as sheet.png in the current working directory.

@@ -4,6 +4,7 @@ import {
   badgeTier,
   earnedGroup,
   earnedText,
+  isSecret,
   notEarnedGroup,
   playerTitle,
   progressRatio,
@@ -92,5 +93,32 @@ describe("achievements: the groups", () => {
       { id: 3, status: "locked" as const },
     ];
     expect(notEarnedGroup(list).map((one) => one.id)).toEqual([3, 12]);
+  });
+});
+
+describe("hidden achievements (#299)", () => {
+  it("counts only a hidden entry not earned yet as secret", () => {
+    expect(isSecret({ status: "locked", hidden: true })).toBe(true);
+    expect(isSecret({ status: "earned", hidden: true })).toBe(false);
+    expect(isSecret({ status: "locked" })).toBe(false);
+  });
+
+  it("puts secret entries after every visible one in both not-earned groups", () => {
+    const own = [
+      entry(24, { hidden: true, progress: { value: 0, target: 1 } }),
+      entry(2, { progress: { value: 0, target: 5 } }),
+      entry(23, { hidden: true, progress: { value: 0, target: 1 } }),
+    ];
+    expect(toDoGroup(own).map((one) => one.id)).toEqual([2, 23, 24]);
+    const theirs = [
+      { id: 25, status: "locked" as const, hidden: true as const },
+      { id: 12, status: "locked" as const },
+    ];
+    expect(notEarnedGroup(theirs).map((one) => one.id)).toEqual([12, 25]);
+  });
+
+  it("names the units of the five new entries", () => {
+    expect(progressText({ id: 24, progress: { value: 29, target: 30 } })).toBe("Days in a row 29 / 30");
+    expect(progressText({ id: 26, progress: { value: 99, target: 100 } })).toBe("Kozu attacks 99 / 100");
   });
 });

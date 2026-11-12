@@ -31,12 +31,16 @@ const media = (source: string, query: string): string => {
 };
 
 describe("upright phone layout", () => {
-  it("puts Map Room 2's Mail and Filter beside the search bar, on screen (#381)", () => {
+  it("puts Map Room 2's Mail, Filter and Key beside the search bar, on screen (#381)", () => {
     const phone = media(css("styles/maproom.css"), "width <= 620px");
     // One row under the HUD: the tools at the right, the search bar up to them.
     expect(phone).toMatch(/\.mr2-tools-dock \{\s*top: calc\(var\(--hud-height\) \+ var\(--space-2\)\);\s*left: auto;/);
     expect(phone).toMatch(/\.mr2-tools-dock \.mr2-toolrow \{\s*flex-wrap: nowrap;/);
-    expect(phone).toMatch(/\.mr2-find-dock \{\s*right: calc\(12px \+ 2 \* var\(--control-height\) \+ 2 \* var\(--space-2\)\);/);
+    // Mail, Filter and Key (the border colours' key, 8 Nov 2026), plus "Tilted map" where the map tilts.
+    expect(phone).toMatch(/\.mr2-find-dock \{\s*right: calc\(12px \+ 3 \* var\(--control-height\) \+ 3 \* var\(--space-2\)\);/);
+    expect(phone).toMatch(
+      /\.mr2-tilt-toggle:not\(\[hidden\]\)\):not\(:has\(\.mr2-find--open\)\) > \.mr2-find-dock \{\s*right: calc\(12px \+ 4 \* var\(--control-height\) \+ 4 \* var\(--space-2\)\);/,
+    );
     expect(phone).toMatch(/\.mr2-tools-dock \.mr2-tool,[^{]*\{[^}]*width: var\(--control-height\);/);
     // The "Find a place" bar starts after the floating "?".
     expect(phone).toMatch(/> \.guide-help--float:not\(\[hidden\]\)\) > \.mr2-find-dock \{\s*left: 56px;/);
@@ -56,7 +60,7 @@ describe("upright phone layout", () => {
 
   it("puts the Friends button away while a panel or sheet is open", () => {
     // Upright and sideways alike (#381).
-    const phone = media(css("friends/friends-bar.css"), "width <= 620px), (height <= 500px");
+    const phone = media(css("friends/friends-button.css"), "width <= 620px), (height <= 500px");
     for (const opener of [
       "> .panel:not([hidden])",
       "> .map-dock--right > *",
@@ -64,7 +68,7 @@ describe("upright phone layout", () => {
       "> .monsters-screen:not([hidden])",
       "> .yard-dock > .yard-menu:not([hidden])",
     ]) {
-      expect(phone).toContain(`.overlay__layer:has(${opener}) > .friends-bar`);
+      expect(phone).toContain(`.overlay__layer:has(${opener}) > .friends-button`);
     }
   });
 
@@ -77,9 +81,27 @@ describe("upright phone layout", () => {
     expect(phone).toMatch(/\.account-menu__button-count \{\s*right: auto;\s*left: -6px;/);
   });
 
-  it("tightens Workers and Shiny on a narrow phone so they share their columns", () => {
+  it("tightens Workers, Shiny and event coins on a narrow phone so they share their columns", () => {
     const narrow = media(css("styles/yard-hud.css"), "width <= 420px");
-    expect(narrow).toMatch(/\.hud__workers-button,[^{]*\.hud__resource--shiny \.hud__resource-button \{[^}]*padding: 0 6px;/);
+    expect(narrow).toMatch(
+      /\.hud__workers-button,[^{]*\.hud__resource--shiny \.hud__resource-button,[^{]*\.hud__coins-button \{[^}]*padding: 0 6px;/,
+    );
+  });
+
+  it("gives event coins the top row's last quarter on a phone, the critter alone leading it", () => {
+    const phone = media(css("styles/yard-hud.css"), "width <= 620px");
+    expect(phone).toMatch(/\.hud__resource--coins \{[^}]*grid-area: 1 \/ 4;/);
+    const shown = ".hud--corner:has(.hud__resource--coins:not([hidden]))";
+    expect(phone).toContain(`${shown} .account-menu {
+    grid-area: 1 / 1 / 2 / 2;`);
+    expect(phone).toContain(`${shown} .account-menu__pill-text {
+    display: none;`);
+    expect(phone).toContain(`${shown} .hud__workers {
+    grid-area: 1 / 2;`);
+    expect(phone).toContain(`${shown} .hud__resource--shiny {
+    grid-area: 1 / 3;`);
+    // The four resources keep row two to themselves.
+    expect(phone).toContain(".hud__resource:not(.hud__resource--shiny, .hud__resource--coins) {");
   });
 
   it("sizes the Build tabs to the width so Decorations fits", () => {
@@ -123,5 +145,12 @@ describe("upright phone layout", () => {
     const phone = media(css("styles/attack.css"), "width <= 620px");
     expect(phone).toMatch(/\.attack-viewtools \.yard-minimap \{[^}]*width: 120px !important;/);
     expect(phone).toMatch(/\.attack-viewtools \.yard-zoom__slider,\s*\.attack-viewtools \.yard-zoom__readout \{\s*display: none;/);
+  });
+
+  it("keeps the Friends window's way back to '< [wrench] 90' on phones, in the button's ink (tester, 9 Nov)", () => {
+    const source = css("friends/friends-button.css");
+    const phones = media(source, "height <= 500px), (width <= 480px");
+    expect(phones).toMatch(/\.friends-window__back > \.friends-window__group-words \{\s*display: none;/);
+    expect(source).toMatch(/\.friends-window__back > \.friends-window__group-count \{[^}]*color: inherit;/);
   });
 });

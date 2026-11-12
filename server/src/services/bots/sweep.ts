@@ -63,6 +63,13 @@ import { BOT_YARD_VERSION, generateBotYard } from "./yardGenerator.js";
  * in-process loop that runs bots' work when it is due. Off unless
  * `BOTS_BRAIN=on`; `server.ts` does not even load this module otherwise.
  *
+ * **Bots are retired** (owner, 12 Nov 2026, `BOTS_RETIRED` in
+ * `config/BotConfig.ts`): `BOTS_BRAIN` is held off on production, and
+ * elsewhere a pass runs with `config.retired`, which skips steps 1 and 2 for
+ * active bots and drops their grow and repair jobs, so only seeded Map Room 2
+ * dev players are tended. What follows is the machinery as it ran while bots
+ * were live; tests still drive it with their own config.
+ *
  * Each pass ({@link runBotSweep}):
  *
  * 1. **Books first grows.** Every active bot without a `grow` job gets one,
@@ -341,11 +348,12 @@ const yardAt = (bot: BotRow, position: number, now: number) =>
   generateBotYard({ seed: bot.seed, persona: bot.persona, targetPoints: targetAt(position), now });
 
 /**
- * Whether the sweep tends a bot row in this state: an active bot, or a seeded
- * Map Room 2 dev player while `config.seeded` is set (the file comment).
+ * Whether the sweep tends a bot row in this state: an active bot unless bots
+ * are retired (`config.retired`, owner 12 Nov 2026), or a seeded Map Room 2
+ * dev player while `config.seeded` is set (the file comment).
  */
-export const tends = (state: string, config: Pick<BotConfig, "seeded">): boolean =>
-  state === "active" || (state === "seeded" && config.seeded === true);
+export const tends = (state: string, config: Pick<BotConfig, "seeded" | "retired">): boolean =>
+  (state === "active" && config.retired !== true) || (state === "seeded" && config.seeded === true);
 
 /** Just under {@link RETIRE_POSITION}: where a seeded player's climb stops, the top of level 40. */
 export const SEEDED_TOP_POSITION = RETIRE_POSITION - 1e-6;
@@ -633,19 +641,20 @@ export const cancelRevenges = async (em: EntityManager): Promise<number> => {
 };
 
 /**
- * Books a `grow` for every active bot without one (step 1 of a pass), and
- * every seeded Map Room 2 dev player when `seeded` is set.
+ * Books a `grow` for every active bot without one (step 1 of a pass) unless
+ * `active` is false (bots retired), and every seeded Map Room 2 dev player
+ * when `seeded` is set.
  */
-export const bookFirstGrows = async (em: EntityManager, now: number, seeded = false): Promise<number> => {
+export const bookFirstGrows = async (em: EntityManager, now: number, seeded = false, active = true): Promise<number> => {
   const rows = await em.execute<{ id: number }[]>(
     `INSERT INTO bym.bot_job (bot_userid, kind, due_at)
      SELECT b.userid, 'grow', to_timestamp(? + floor(random() * ?))
        FROM bym.bot b
-      WHERE (b.state = 'active' OR (?::boolean AND b.state = 'seeded'))
+      WHERE ((?::boolean AND b.state = 'active') OR (?::boolean AND b.state = 'seeded'))
         AND NOT EXISTS (SELECT 1 FROM bym.bot_job j WHERE j.bot_userid = b.userid AND j.kind = 'grow')
      ON CONFLICT DO NOTHING
      RETURNING id`,
-    [now, FIRST_GROW_WITHIN_MINUTES * 60, seeded]
+    [now, FIRST_GROW_WITHIN_MINUTES * 60, active, seeded]
   );
   return rows.length;
 };
@@ -857,7 +866,9 @@ const makeBots = async (
 
 /**
  * One pass of the sweep (the file comment). Does nothing at all while
- * `BOTS_BRAIN` is off.
+ * `BOTS_BRAIN` is off. With `config.retired` (bots retired, owner 12 Nov
+ * 2026) it books and runs no active bot's grow or repair and runs no daily
+ * rebalance, so it makes no bot; seeded dev players are tended as before.
  */
 export const runBotSweep = async (deps: SweepDeps): Promise<SweepReport | null> => {
   const config = (deps.config ?? botConfig)();
@@ -881,7 +892,10 @@ export const runBotSweep = async (deps: SweepDeps): Promise<SweepReport | null> 
   const context: JobContext = { now, config, rng: deps.rng ?? Math.random, report, revenge: deps.revenge };
   const { em } = deps;
 
-  report.booked += await bookFirstGrows(em.fork(), now, config.seeded === true);
+  // Bots retired (owner, 12 Nov 2026): no active bot is booked, grown or
+  // rebalanced, and no new bot made; only seeded dev players are tended.
+  const botsOn = config.retired !== true;
+  report.booked += await bookFirstGrows(em.fork(), now, config.seeded === true, botsOn);
 
   // Revenge runs only with BOTS_REVENGE on and a runner given; with it off,
   // nothing booked survives.
@@ -893,7 +907,7 @@ export const runBotSweep = async (deps: SweepDeps): Promise<SweepReport | null> 
     kinds = [...HANDLED_KINDS, "revenge"];
   }
 
-  const rebalanced = await rebalance(em, now, config, context.rng);
+  const rebalanced = botsOn ? await rebalance(em, now, config, context.rng) : null;
   if (rebalanced !== null) {
     report.rebalanced = true;
     report.retired.push(...rebalanced.retired);
@@ -923,7 +937,7 @@ export const runBotSweep = async (deps: SweepDeps): Promise<SweepReport | null> 
       retired: report.retired.length,
     });
   }
-  if (report.replaced.length > 0) report.booked += await bookFirstGrows(em.fork(), now);
+  if (report.replaced.length > 0) report.booked += await bookFirstGrows(em.fork(), now, false, botsOn);
   return report;
 };
 

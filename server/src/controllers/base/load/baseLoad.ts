@@ -1,3 +1,7 @@
+import { weekendState } from "../../../services/events/weekendSchedule.js";
+import { weekendSettings } from "../../../services/events/weekendSettings.js";
+import { coinNotes, coinStore, type CoinGain } from "../../../services/events/eventCoins.js";
+import { awardWeekendCoinsSafely } from "../../../services/events/weekendCoins.js";
 import { devConfig } from "../../../config/GameConfig.js";
 import { Save } from "../../../database/models/save.model.js";
 import { postgres, redis } from "../../../server.js";
@@ -32,14 +36,17 @@ import { BaseLoadSchema } from "../../../schemas/BaseLoadSchema.js";
 import { baseNotFoundErr, discordAgeErr, mapRoom3ClosedErr } from "../../../errors/errors.js";
 import { EnumBaseRelationship } from "../../../enums/EnumBaseRelationship.js";
 import { canAttack } from "../../../services/base/canAttack.js";
+import { mr1AttackVerdict } from "../../../services/maproom/v1/mr1AttackCheck.js";
 import { createMR1Tribes } from "../../../services/maproom/v1/createMR1Tribes.js";
 import { MR1_TRIBES } from "../../../enums/Tribes.js";
 import { MR1_TRIBE_IDS } from "../../../game-data/tribes/v1/index.js";
 import { calculateBaseLevel, playerLevelOf, playerPointsOf } from "../../../services/base/calculateBaseLevel.js";
 import { RESOURCE_KEYS } from "../../../services/base/updateResources.js";
 import { mapSaveData } from "../../../services/base/mapSaveData.js";
+import { outpostLabelsOnLoad } from "../../../services/outposts/outpostLabels.js";
 import { onboardingSummary } from "../../../services/onboarding/summary.js";
 import { unseenAchievements } from "../../../services/achievements/record.js";
+import { recordLogin, recordVisit } from "../../../services/achievements/daily.js";
 import { clearExpiredStoreItems } from "../../../services/base/clearExpiredStoreItems.js";
 import { syncDerivedLevels } from "../../../services/yard/derivedLevels.js";
 import { catchUpOwnerOutpost, catchUpOwnerYard } from "../../yard/yardRoute.js";
@@ -49,11 +56,12 @@ import type { CompletedJob } from "../../../services/yard/catchUp.js";
 import { extractTownHall } from "../../../utils/extractTownHall.js";
 import { getChatChannel, getOrCreateChatToken } from "../../../chat/chatChannels.js";
 import { getAllianceData } from "../../../services/alliance/allianceData.js";
-import { runningPowerups } from "../../../services/alliance/powerups.js";
 import { cellRelationship, findRelationships } from "../../../services/alliance/relationships.js";
 import { INFERNO_CHAT_CHANNEL, countryChannelFor } from "../../../config/ChatConfig.js";
 import { finaliseBeforeLoad } from "../../../services/base/finaliseAttack.js";
 import { infernoConfig } from "../../../config/InfernoConfig.js";
+import { quietLoginOn } from "../../../config/QuietLoginConfig.js";
+import { loginPromptFields } from "./loginPrompts.js";
 import { closeInfernoPlayerAttacksOf } from "../../../services/inferno/infernoPlayerFinalise.js";
 import { combatCellHeight, combatLandFeature } from "../../../services/base/combat/cellHeight.js";
 import type { DefenderForces } from "../../../game-rules/combat/index.js";
@@ -80,6 +88,27 @@ const STRONGHOLD_FIELDS = ["level", "cell.x", "cell.y"] as const;
  * @returns {Promise<void>} A promise that resolves when the base load process is complete.
  * @throws Will throw an error if the base load process fails.
  */
+/**
+ * The owner's event coins on a main-yard load: pays a running weekend
+ * event's "played" Glimmers (once per run, `weekendCoins.ts`), then reads
+ * the balance. Null when the coin tables cannot be read.
+ */
+const ownCoinsOnLoad = async (
+  userid: number,
+  now: number
+): Promise<{ balance: number; gained: readonly CoinGain[] } | null> => {
+  try {
+    const em = postgres.em.fork();
+    await awardWeekendCoinsSafely(em, userid, ["played"], now);
+    const noted = coinNotes(em);
+    if (noted) return noted;
+    return { balance: await coinStore().balance(em, userid), gained: [] };
+  } catch (error) {
+    logger.warn(`event coins not read for user ${userid}: ${error}`);
+    return null;
+  }
+};
+
 export const baseLoad: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
   const { baseid, type, mapversion: requestedVersion, attackData } = BaseLoadSchema.parse(ctx.request.body);
@@ -420,7 +449,21 @@ export const baseLoad: KoaController = async (ctx) => {
   }
 
   // A visit is look-only: nothing to attack from it (friends WP2, #369).
-  const attackAllowed = type === BaseMode.HELP ? false : canAttack(userSave, baseSave, mapversion);
+  // Map Room 1's neighbour and level rules (`mr1AttackRules.ts`), as the
+  // attack load applies them, for someone else's Map Room 1 main yard seen
+  // without attacking it (an attack load has passed them already).
+  const mr1Target =
+    !attacking &&
+    mapversion === MapRoomVersion.V1 &&
+    !isOwner &&
+    baseSave.type === BaseType.MAIN &&
+    baseSave.mapversion === MapRoomVersion.V1;
+  const attackAllowed =
+    type === BaseMode.HELP
+      ? false
+      : canAttack(userSave, baseSave, mapversion) &&
+        (!mr1Target ||
+          (await mr1AttackVerdict(user.userid, userSave, baseSave.saveuserid, baseSave, getCurrentDateTime())).ok);
 
   let baseOwner;
 
@@ -448,7 +491,6 @@ export const baseLoad: KoaController = async (ctx) => {
   }
 
   const isOwnMainYard = isOwner && !isInferno;
-  const isOverworldAttack = isAttack && !isInferno;
 
   const ownerAllianceId = isInferno ? 0 : (baseOwner?.alliance_id ?? 0);
   const flaggedAlliances = ownerAllianceId ? [ownerAllianceId] : [];
@@ -456,13 +498,21 @@ export const baseLoad: KoaController = async (ctx) => {
   const stances = await findRelationships(user.alliance_id, flaggedAlliances);
 
   const alliance = isOwnMainYard ? await getAllianceData(user) : null;
-  const powerups = isOwnMainYard ? await runningPowerups(user.alliance_id) : [];
-
-  const attpowerups = isOverworldAttack ? await runningPowerups(user.alliance_id) : [];
 
   const relationship = isOwnMainYard
     ? EnumBaseRelationship.SELF
     : cellRelationship(user.alliance_id, ownerAllianceId, stances);
+
+  // Hidden achievements (#392, `services/achievements/daily.ts`): the day's
+  // first load of the player's own main yard counts a day on the login run
+  // (Regular) and the friends held (Popular); opening someone else's yard to
+  // look or help counts a yard visited today (Neighbourly). Each writes only
+  // when there is something new, and never fails the load.
+  if (type === BaseMode.BUILD && isOwner && baseSave.type === BaseType.MAIN) {
+    await recordLogin(postgres.em, userSave);
+  } else if (type === BaseMode.VIEW || type === BaseMode.HELP) {
+    await recordVisit(postgres.em, userSave, baseSave);
+  }
 
   // The account's paid achievement unlocks not yet shown, on the owner's
   // build-mode load, main yard or outpost (issue #204,
@@ -470,6 +520,26 @@ export const baseLoad: KoaController = async (ctx) => {
   const achievements = isOwner && !isInferno && type === BaseMode.BUILD ? unseenAchievements(user.save!) : [];
 
   const activeKinds = activeEventKinds(getCurrentDateTime());
+
+  // Event coins on the owner's main-yard load (`services/events/eventCoins.ts`):
+  // a weekend event's "played" Glimmers first, once per run (`weekendCoins.ts`),
+  // then the purse for the HUD and the decorations shop. Left out if the read
+  // fails (a server before the migration): the client then shows none.
+  const coins =
+    isOwner && type === BaseMode.BUILD && baseSave.type === BaseType.MAIN
+      ? await ownCoinsOnLoad(user.userid, getCurrentDateTime())
+      : null;
+
+  // The player's outpost names and pins (beta 7, `services/outposts/outpostLabels.ts`)
+  // on the owner's build-mode load, main yard or outpost: the yard list and the HUD
+  // title read them. Left out when there are none or the read fails.
+  const outpostLabels =
+    isOwner && !isInferno && type === BaseMode.BUILD ? await outpostLabelsOnLoad(() => postgres.em.fork(), user.userid) : null;
+
+  // A local test server's `QUIET_LOGIN` (`config/QuietLoginConfig.ts`): the
+  // owner's build-mode loads say so, and the web client leaves the pop-ups that
+  // open by themselves on login shut. Never on a production server.
+  const quietLogin = isOwner && type === BaseMode.BUILD && quietLoginOn();
 
   const response: Record<string, unknown> = {
     ...filteredSave,
@@ -487,8 +557,13 @@ export const baseLoad: KoaController = async (ctx) => {
     // web client dresses every yard for them (Halloween: dusky ground,
     // pumpkins). Left out when none is on.
     ...(activeKinds.length > 0 && { activeevents: activeKinds }),
+    // The weekend event on now and the next (`services/events/weekendSchedule.ts`):
+    // the web client's banner, Friday pop-up and boosted prices and times.
+    weekend: weekendState(weekendSettings(), getCurrentDateTime()),
+    ...(coins && { eventcoins: coins.balance }),
+    ...(coins && coins.gained.length > 0 && { coinsgained: coins.gained }),
+    ...(outpostLabels && { outpostlabels: outpostLabels }),
     chatservers: [process.env.CHAT_WS_HOST!],
-    ...(isAttack && { attpowerups }),
     ...(type === BaseMode.HELP && { help: await helpBlockFor(user.userid, baseSave) }),
     ...(attackerLevel !== undefined && { attackerlevel: attackerLevel }),
     // The player's own level for the yard HUD (#192): their main save's, on
@@ -523,11 +598,16 @@ export const baseLoad: KoaController = async (ctx) => {
       chattoken,
       chatchannel,
       ...(chatcountrychannel && { chatcountrychannel, chatcountry: user.country }),
-      // The one-time "Where are you playing from?" prompt, until it is answered or put off.
-      // Only on the own main yard, once the new-player tutorial is over (stage 205).
-      ...(isOwnMainYard && Number(isTutorialEnabled) >= 205 && !user.country && !user.country_asked && { countryask: 1 }),
+      // The one-time "Where are you playing from?" prompt, until it is answered or put off,
+      // and the test server's `QUIET_LOGIN` (`loginPrompts.ts`).
+      ...loginPromptFields({
+        ownMainYard: isOwnMainYard,
+        tutorialStage: Number(isTutorialEnabled),
+        country: user.country,
+        countryAsked: user.country_asked,
+        quiet: quietLogin,
+      }),
       ...(alliance && { alliancedata: alliance }),
-      powerups,
     }),
   };
 

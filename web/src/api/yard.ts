@@ -64,8 +64,13 @@ export const yardState = (baseid?: string): Promise<YardResponse<null>> =>
 export const startUpgrade = (
   id: number,
   baseid?: string,
+  /** `topUp`: the Shiny the player agreed to for a short pool (Flash's `BRTOPUP`). */
+  extra: { topUp?: number } = {},
 ): Promise<YardResponse<UpgradeStartReport>> =>
-  post<YardResponse<UpgradeStartReport>>(`${YARD_PATH}/upgrade`, yardBody({ id }, baseid));
+  post<YardResponse<UpgradeStartReport>>(
+    `${YARD_PATH}/upgrade`,
+    yardBody(extra.topUp === undefined ? { id } : { id, topUp: extra.topUp }, baseid),
+  );
 
 /** Cancels a running upgrade for its full cost back, clamped to the cap. Refusal: `notUpgrading`. */
 export const cancelUpgrade = (
@@ -106,8 +111,15 @@ export const speedUp = (
  * Buys a store item for Shiny (`BST`, `BEW` in Phase 1). Refusals: 400
  * `notForSale`, `alreadyActive`, `soldOut`, `shinyLocked`, `credits`.
  */
-export const shopBuy = (item: string, baseid?: string): Promise<YardResponse<ShopBuyReport>> =>
-  post<YardResponse<ShopBuyReport>>(`${YARD_PATH}/shop/buy`, yardBody({ item }, baseid));
+export const shopBuy = (
+  item: string,
+  baseid?: string,
+  extra: { price?: number } = {},
+): Promise<YardResponse<ShopBuyReport>> =>
+  post<YardResponse<ShopBuyReport>>(
+    `${YARD_PATH}/shop/buy`,
+    yardBody(extra.price === undefined ? { item } : { item, price: extra.price }, baseid),
+  );
 
 /**
  * Picks a mushroom with a free worker: `id` is its place in `mushrooms.l`,

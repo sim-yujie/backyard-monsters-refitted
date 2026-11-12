@@ -7,6 +7,7 @@ import { capState, exactLabel, formatDelta, formatRate, FULL_NOTE, fullText, Hud
 import { Notices } from "./maproom/Notices";
 import { noteShinyLock, resetShinyLockForTests, SHINY_LOCK_TEXT } from "@/game/shinyLock";
 import { setResourceRealm, spokenText } from "./resourceIcon";
+import { forgetCoinBalance, noteCoins } from "@/game/eventCoins";
 
 /**
  * The HUD's readouts: icons for the words (#93), and every change visible
@@ -637,6 +638,33 @@ describe("the HUD on the player's own yard", () => {
     expect(button("shiny").getAttribute("aria-label")).toBe("Shiny: 1,234");
     button("shiny").click();
     expect(document.querySelector(".hud__exact")).not.toBeNull();
+  });
+
+  it("shows the event coin balance right after Shiny once known; a tap opens Decorations", () => {
+    forgetCoinBalance();
+    const item = hud.element.querySelector<HTMLElement>(".hud__resource--coins")!;
+    // Hidden until the server has sent a balance.
+    expect(item.hidden).toBe(true);
+    const items = [...hud.element.querySelectorAll<HTMLElement>(".hud__resources > .hud__resource")];
+    expect(items.indexOf(item)).toBe(items.findIndex((one) => one.classList.contains("hud__resource--shiny")) + 1);
+
+    noteCoins(1_250);
+    expect(item.hidden).toBe(false);
+    const coins = item.querySelector<HTMLButtonElement>(".hud__coins-button")!;
+    expect(coins.textContent).toBe("1,250");
+    expect(coins.querySelector("[data-icon='eventcoin']")).not.toBeNull();
+    expect(coins.querySelector(".hud__resource-value")?.textContent).toBe("1,250");
+    expect(coins.getAttribute("aria-label")).toBe("1,250 Glimmers. Earned in big events, spent on decorations.");
+
+    // A buy lowers it at once.
+    noteCoins(950);
+    expect(coins.textContent).toBe("950");
+
+    const openDecorations = vi.fn();
+    hud.bindYard({ ...binding, scene: { selectBuilding, openDecorations } });
+    coins.click();
+    expect(openDecorations).toHaveBeenCalledOnce();
+    forgetCoinBalance();
   });
 
   it("shows amount / cap with a fill bar once bound, and takes them away on unbind", () => {

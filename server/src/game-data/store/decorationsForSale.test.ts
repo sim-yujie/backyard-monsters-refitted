@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { footprintOf } from "../buildingFootprints.js";
+import { REVAMP_DECORATIONS, revampDecoration } from "../revampDecorations.js";
 import { DECORATIONS_FOR_SALE, decorationPrice } from "./decorationsForSale.js";
 import { storeItems } from "./storeItems.js";
 
@@ -9,14 +10,35 @@ import { storeItems } from "./storeItems.js";
  * Decorations tab, its `block`ed entries left out, at its store price.
  */
 describe("DECORATIONS_FOR_SALE", () => {
-  test("73 decorations, each once, each priced above 0 from its BUILDING store row", () => {
-    expect(DECORATIONS_FOR_SALE).toHaveLength(73);
-    expect(new Set(DECORATIONS_FOR_SALE).size).toBe(73);
-    for (const type of DECORATIONS_FOR_SALE) {
+  test("73 of Flash's decorations, each once, each priced above 0 from its BUILDING store row", () => {
+    const flash = DECORATIONS_FOR_SALE.filter((type) => !revampDecoration(type));
+    expect(flash).toHaveLength(73);
+    expect(new Set(DECORATIONS_FOR_SALE).size).toBe(DECORATIONS_FOR_SALE.length);
+    for (const type of flash) {
       expect(footprintOf(type).decoration).toBe(true);
       expect(decorationPrice(type)).toBe(storeItems[`BUILDING${type}`]!.c[0]);
       expect(decorationPrice(type)).toBeGreaterThan(0);
     }
+  });
+
+  test("and this project's six autumn ones at their own price, first under Plants and Good, with no store row", () => {
+    expect(DECORATIONS_FOR_SALE).toHaveLength(79);
+    expect(REVAMP_DECORATIONS.map((one) => [one.type, decorationPrice(one.type)])).toEqual([
+      [201, 25],
+      [202, 30],
+      [203, 35],
+      [204, 50],
+      [205, 60],
+      [206, 75],
+    ]);
+    for (const { type } of REVAMP_DECORATIONS) {
+      expect(DECORATIONS_FOR_SALE).toContain(type);
+      expect(footprintOf(type).decoration).toBe(true);
+      expect(storeItems[`BUILDING${type}`]).toBeUndefined();
+    }
+    // Plants start after the 14 Evil, Good after the 14 + 3 Plants.
+    expect(DECORATIONS_FOR_SALE.slice(14, 17)).toEqual([201, 205, 206]);
+    expect(DECORATIONS_FOR_SALE.slice(31, 34)).toEqual([202, 203, 204]);
   });
 
   test("every BUILDING store row not sold is one Flash's tab hid (block) or priced 0", () => {

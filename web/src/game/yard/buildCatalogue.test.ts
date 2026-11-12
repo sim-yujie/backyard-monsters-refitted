@@ -58,6 +58,8 @@ interface Fixture {
   readonly storedata?: BaseLoadResponse["storedata"];
   readonly researchdata?: BaseLoadResponse["researchdata"];
   readonly outpost?: boolean;
+  /** Event coins, the decorations shop's purse (beta 7). */
+  readonly eventCoins?: number;
   readonly infernostate?: BaseLoadResponse["infernostate"];
   readonly iresources?: BaseLoadResponse["iresources"];
 }
@@ -83,6 +85,7 @@ const contextOf = (fixture: Fixture): BuildContext => {
     save,
     resources: save.resources ?? {},
     credits: save.credits ?? 0,
+    eventCoins: fixture.eventCoins ?? 1_000,
     caps: fixture.caps === undefined ? CAPS : fixture.caps,
     workers: yard.workers,
     now: () => T0,
@@ -98,7 +101,7 @@ describe("the catalogue", () => {
     // `BUILDABLE_TYPES` in server/src/services/yard/build.ts.
     expect([...BUILDABLE_TYPES].sort((a, b) => a - b)).toEqual([
       1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 15, 16, 17, 19, 20, 21, 22, 23, 24, 25, 26, 51, 114,
-      115, 116, 117, 118, 119, 129, 132, 133, 134,
+      115, 116, 117, 118, 119, 129, 132, 133, 134, 150,
     ]);
     const all = BUILD_CATALOGUE.flatMap((category) => category.types);
     expect(new Set(all).size).toBe(all.length);
@@ -310,12 +313,12 @@ describe("buildOffers", () => {
   });
 });
 
-describe("decorations sold for Shiny (owner 2026-11-04)", () => {
-  it("lists stored ones, then the 73 Flash sold in its tab's order, each type once", () => {
+describe("decorations sold for event coins (owner 2026-11-04, decision 29)", () => {
+  it("lists stored ones, then the 73 Flash sold and the 6 autumn ones in its tab's order, each type once", () => {
     const context = contextOf({ buildings: [HALL(3)], researchdata: { b29: 2, b70: 1 } });
     const offers = buildOffers(BuildCategory.DECORATIONS, context);
 
-    expect(DECORATIONS_FOR_SALE).toHaveLength(73);
+    expect(DECORATIONS_FOR_SALE).toHaveLength(73 + 6);
     // The Sun Dial (70) is not sold, but shows while one is stored.
     expect(offers.slice(0, 2).map((offer) => [offer.type, offer.stored])).toEqual([
       [29, 2],
@@ -332,7 +335,7 @@ describe("decorations sold for Shiny (owner 2026-11-04)", () => {
   });
 
   it("a sold tile carries Flash's price, finished at once, no worker, no limit", () => {
-    const context = contextOf({ buildings: [HALL(3), building(5, 55)], credits: 1_000 });
+    const context = contextOf({ buildings: [HALL(3), building(5, 55)], eventCoins: 1_000 });
     expect(buildOffer(55, context)).toMatchObject({
       type: 55,
       category: BuildCategory.DECORATIONS,
@@ -347,12 +350,12 @@ describe("decorations sold for Shiny (owner 2026-11-04)", () => {
     expect(buildOffer(49, context)?.price).toBe(125);
   });
 
-  it("short of Shiny: still listed and ready, gated on credits with what is missing", () => {
-    const context = contextOf({ buildings: [HALL(3)], credits: 100 });
+  it("short of event coins: still listed and ready, gated on coins with what is missing", () => {
+    const context = contextOf({ buildings: [HALL(3)], eventCoins: 100, credits: 10_000 });
     expect(buildOffer(28, context)).toMatchObject({
       price: 150,
       status: "ready",
-      gate: { reason: "credits", need: 50 },
+      gate: { reason: "coins", need: 50 },
     });
     expect(buildOffer(55, context)?.gate).toBeNull();
   });
@@ -382,14 +385,17 @@ describe("the Decorations sub-tabs (Flash's Evil, Plants, Good, Flags, Premium)"
       [67, 1],
       [88, 2],
     ]);
-    expect(plants.slice(3).map((offer) => offer.type)).toEqual([66, 72, 91, 92, 94, 95, 93, 56, 90, 86, 89, 87]);
+    // The autumn Leaf Pile and Rake, Turkey Topiary and Autumn Maple Tree (owner, 10 Nov 2026) lead the ones for sale.
+    expect(plants.slice(3).map((offer) => offer.type)).toEqual([
+      201, 205, 206, 66, 72, 91, 92, 94, 95, 93, 56, 90, 86, 89, 87,
+    ]);
     expect(decorationOffers(DecorKind.FLAGS, context)[0]).toMatchObject({ type: 28, stored: 4 });
   });
 
-  it("together hold the whole tab, 14, 14, 16, 23 and 6 with nothing stored", () => {
+  it("together hold the whole tab, 14, 17, 19, 23 and 6 with nothing stored", () => {
     const context = contextOf({ buildings: [HALL(3)] });
     const kinds = [DecorKind.EVIL, DecorKind.PLANTS, DecorKind.GOOD, DecorKind.FLAGS, DecorKind.PREMIUM];
-    expect(kinds.map((kind) => decorationOffers(kind, context).length)).toEqual([14, 14, 16, 23, 6]);
+    expect(kinds.map((kind) => decorationOffers(kind, context).length)).toEqual([14, 17, 19, 23, 6]);
     expect(kinds.flatMap((kind) => decorationOffers(kind, context).map((offer) => offer.type))).toEqual(
       buildOffers(BuildCategory.DECORATIONS, context).map((offer) => offer.type),
     );

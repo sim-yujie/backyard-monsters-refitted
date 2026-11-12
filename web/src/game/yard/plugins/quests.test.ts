@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { QuestsActions, QuestsReport, QuestsView } from "@/api/quests";
+import { setQuietLogin } from "@/game/quietLogin";
 import type { YardActionResult } from "@/game/yard/YardStore";
 import { YardDock } from "@/ui/yard/YardDock";
 import type { YardMounts } from "../yardPlugins";
@@ -184,6 +185,22 @@ describe("QuestsDoor", () => {
     other.remove();
     vi.advanceTimersByTime(POPUP_RETRY_MS * 2);
     expect(document.querySelector(".quests-login-popup")).not.toBeNull();
+  });
+
+  it("a test server's quiet login: no pop-up and nothing remembered, but the card still opens by hand", async () => {
+    vi.useFakeTimers();
+    setQuietLogin(true);
+    try {
+      const { door } = doorOf();
+      await door.load();
+      vi.advanceTimersByTime(POPUP_FIRST_DELAY_MS * 3 + POPUP_RETRY_MS * 5);
+      expect(document.querySelector(".quests-login-popup")).toBeNull();
+      expect(window.localStorage.getItem("bymr.quests.loginPopup.1234")).toBeNull();
+      door.showPopup();
+      expect(document.querySelector(".quests-login-popup")).not.toBeNull();
+    } finally {
+      setQuietLogin(false);
+    }
   });
 
   it("does not pop up when today's day is already claimed", async () => {

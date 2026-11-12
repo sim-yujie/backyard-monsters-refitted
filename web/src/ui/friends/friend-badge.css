@@ -1,0 +1,38 @@
+/* The friend marker (beta 7, `friendBadge.ts`): the painted friends picture in
+ * a round frame. A pinned friend's frame is gold and a little brighter.
+ * Modern (steel skin) frames it dark; Classic (`data-skin="flash"`) frames it
+ * in Flash's cream and brown. */
+
+.friend-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  padding: 1px;
+  border-radius: 50%;
+  background: rgb(12 16 22 / 78%);
+  box-shadow: 0 0 0 1.5px #7be08a;
+  line-height: 0;
+  vertical-align: middle;
+}
+
+.friend-badge .game-icon {
+  display: block;
+}
+
+.friend-badge--pinned {
+  box-shadow:
+    0 0 0 2px #f2c230,
+    0 0 6px 1px rgb(242 194 48 / 55%);
+}
+
+:root[data-skin="flash"] .friend-badge {
+  background: #fff6dc;
+  box-shadow: 0 0 0 1.5px #5b8f2a;
+}
+
+:root[data-skin="flash"] .friend-badge--pinned {
+  box-shadow:
+    0 0 0 2px #c98a12,
+    0 0 5px 1px rgb(201 138 18 / 50%);
+}

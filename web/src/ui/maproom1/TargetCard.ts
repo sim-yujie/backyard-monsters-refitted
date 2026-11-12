@@ -9,6 +9,7 @@ import {
   presenceText,
   ReasonKey,
   respawnIn,
+  type Mr1BattleCount,
   type Mr1Gate,
   type Mr1Neighbour,
   type Mr1Own,
@@ -22,6 +23,8 @@ import { VICTORY_THRESHOLD } from "@/game/combat/rules";
 import { monsterPortrait, showPortrait } from "@/game/portraits";
 import { monsterName } from "@/ui/attack/ArmyPanel";
 import { gameIcon } from "@/ui/gameIcon";
+import { friendMarkOf } from "@/game/friends/friendMarks";
+import { friendBadge } from "@/ui/friends/friendBadge";
 import { onlineDot } from "@/ui/onlineDot";
 import { button, el, icon, type IconName } from "./icons";
 
@@ -109,8 +112,19 @@ export const avatar = (target: Mr1Target, size: "sm" | "md" | "lg"): HTMLElement
 /**
  * A shield and a count for "Attacked you 2 times", a sword and a count for
  * "You attacked them 1 time", each with those words on hover and for screen
- * readers. Null when they never fought.
+ * readers. Null when they never fought. Revenge also carries its word
+ * ("Revenge ×2"): the target icon alone was unclear (owner, 11 Nov 2026).
  */
+const BATTLE_ICONS: Readonly<Record<Mr1BattleCount["kind"], IconName>> = {
+  attackedYou: "shield",
+  youAttacked: "attack",
+  vengeance: "target",
+};
+
+const BATTLE_WORDS: Partial<Record<Mr1BattleCount["kind"], string>> = {
+  vengeance: "Revenge",
+};
+
 export const battleIcons = (neighbour: Mr1Neighbour): HTMLElement | null => {
   const counts = battleCounts(neighbour);
   if (!counts.length) return null;
@@ -120,7 +134,8 @@ export const battleIcons = (neighbour: Mr1Neighbour): HTMLElement | null => {
     badge.title = label;
     badge.setAttribute("role", "img");
     badge.setAttribute("aria-label", label);
-    badge.append(icon(kind === "attackedYou" ? "shield" : "attack", 13), String(count));
+    const word = BATTLE_WORDS[kind];
+    badge.append(icon(BATTLE_ICONS[kind], 13), word ? `${word} ×${count}` : String(count));
     group.append(badge);
   }
   return group;
@@ -153,6 +168,7 @@ const REASON_ICONS: Readonly<Record<string, IconName>> = {
   [ReasonKey.UNDER_ATTACK]: "attack",
   [ReasonKey.TRUCE]: "truce",
   [ReasonKey.WRECKED]: "clock",
+  [ReasonKey.LEVEL_GAP]: "lock",
 };
 
 const ACTION_LABELS: Readonly<Record<CardAction, string>> = {
@@ -242,6 +258,15 @@ export const targetCard = (
   const head = el("div", "mr1-card__head");
   const titles = el("div", "mr1-card__titles");
   const titleRow = el("div", "mr1-card__title-row");
+  if (target.kind === "player") {
+    // The friend marker before the name (beta 7), gold-framed for a pinned friend.
+    const friend = friendBadge(
+      friendMarkOf(target.userid, { friend: target.friend === true, pinned: target.pinned === true }),
+      24,
+      "mr1-card__friend",
+    );
+    if (friend) titleRow.append(friend);
+  }
   titleRow.append(el("h2", "mr1-card__title u-display", target.name));
   if (target.kind !== "tribe" && isPlayingNow(target, state.now)) titleRow.append(onlineDot());
   titleRow.append(el("span", "chip", `Level ${target.level}`));
@@ -279,6 +304,16 @@ export const targetCard = (
     note.append(icon("shield", 18, "mr1-icon mr1-warning__icon"));
     const words = el("span");
     words.append(el("strong", undefined, gate.warning.strong), " ", gate.warning.rest);
+    note.append(words);
+    card.append(note);
+  }
+
+  if (gate.levelWarning) {
+    const note = el("div", "mr1-warning mr1-warning--level");
+    note.setAttribute("role", "note");
+    note.append(icon("alert", 18, "mr1-icon mr1-warning__icon"));
+    const words = el("span");
+    words.append(el("strong", undefined, gate.levelWarning.strong), " ", gate.levelWarning.rest);
     note.append(words);
     card.append(note);
   }

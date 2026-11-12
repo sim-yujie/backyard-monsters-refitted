@@ -78,17 +78,14 @@
   top: calc(var(--hud-height) + var(--space-3));
   left: 50%;
   z-index: var(--z-hud);
-  width: min(480px, calc(100vw - 2 * var(--space-4)));
+  /* 520px: room for a reward's piles and its amount (tester, 9 Nov). */
+  width: min(520px, calc(100vw - 2 * var(--space-4)));
   max-height: calc(100vh - var(--hud-height) - 160px);
   min-width: 0;
   transform: translateX(-50%);
 }
 
-/* A claim's notice ("Quest claimed +1.4M") shows over the open window, not
-   hidden under it. */
-.overlay__layer:has(> .quests-panel:not([hidden])) > .yard-notices {
-  z-index: calc(var(--z-hud) + 1);
-}
+/* A claim's notice shows over the open window: yard-hud.css `.yard-notices`. */
 
 .quests-panel .panel__body {
   display: flex;
@@ -422,7 +419,8 @@
 
 .quest {
   --quest-art: 48px;
-  --quest-reward: 66px;
+  /* Two piles and "10K" side by side ("1...." in 66px; tester, 9 Nov). */
+  --quest-reward: 92px;
   --quest-action: 88px;
 
   display: grid;
@@ -573,7 +571,9 @@
 
 .quest__rewards .events-reward {
   flex-direction: row;
-  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 4px;
   max-width: 100%;
 }
 

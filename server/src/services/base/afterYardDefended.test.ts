@@ -225,7 +225,7 @@ describe("a bot defender", () => {
     expect(due).toBeLessThan((NOW + 4 * 3600) * 1000);
   });
 
-  test("attacked by a real player books both its repair and a revenge, when the roll allows it", async () => {
+  test("bots retired (owner, 12 Nov 2026): no revenge even with BOTS_REVENGE=on and the roll allowing it", async () => {
     const before = process.env.BOTS_REVENGE;
     const roll = spyOn(Math, "random").mockReturnValue(0);
     try {
@@ -237,12 +237,8 @@ describe("a bot defender", () => {
       else process.env.BOTS_REVENGE = before;
     }
     expect(messages).toEqual([]);
-    expect(jobs).toEqual([
-      expect.objectContaining({ params: [BOT, expect.any(Date)] }),
-      expect.objectContaining({ params: [BOT, OTHER_PLAYER, expect.any(Date), expect.any(Date)] }),
-    ]);
+    expect(jobs).toEqual([expect.objectContaining({ params: [BOT, expect.any(Date)] })]);
     expect(String(jobs[0]!.sql)).toContain("'repair'");
-    expect(String(jobs[1]!.sql)).toContain("'revenge'");
   });
 
   test("attacked by another bot books nothing", async () => {

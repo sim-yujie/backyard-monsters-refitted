@@ -6,9 +6,11 @@ import { Alliance } from "../../database/models/alliance.model.js";
 import { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { CreateAllianceSchema } from "../../schemas/AllianceSchemas.js";
-import { addAllianceMember } from "../../services/alliance/membership.js";
+import { addAllianceMember, lockMembership } from "../../services/alliance/membership.js";
 import { getWorldMapVersion } from "../../services/maproom/knownWorlds.js";
+import { assertMayJoin, assertRejoinAllowed, GATE_SAVE_FIELDS, lockGateSave } from "../../services/alliance/joinGate.js";
 import { assertDescriptionAllowed, assertNameAllowed } from "../../services/alliance/textFilter.js";
+import { adOf } from "../../services/alliance/allianceAd.js";
 import {
   allianceNameTakenErr,
   allianceNoWorldErr,
@@ -26,13 +28,17 @@ import type { KoaController } from "../../utils/KoaController.js";
  */
 export const createAlliance: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  await postgres.em.populate(user, ["save"], { fields: ["save.worldid"] });
+  await postgres.em.populate(user, ["save"], { fields: GATE_SAVE_FIELDS.map((field) => `save.${field}` as const) });
 
   if (user.alliance_id) throw alreadyInAllianceErr();
 
-  const { worldid } = user.save!;
+  const worldid = user.save?.worldid;
 
   if (!worldid) throw allianceNoWorldErr();
+
+  // Map Room 2 and a finished Observatory (owner, 10 Nov 2026).
+  assertMayJoin(user.save);
+  assertRejoinAllowed(user.alliance_left_at, new Date());
 
   const data = CreateAllianceSchema.parse(ctx.request.body);
 
@@ -51,9 +57,21 @@ export const createAlliance: KoaController = async (ctx) => {
     leader_name: user.username,
     world_id: worldid,
     map_version: mapVersion,
+    type: data.alliance_type,
+    // The marketplace ad (design v5 §7a); each left out keeps the column's default.
+    ...(data.join_mode !== undefined ? { join_mode: data.join_mode } : {}),
+    ...(data.language !== undefined ? { language: data.language } : {}),
+    ...(data.time_zone !== undefined ? { time_zone: data.time_zone } : {}),
+    ...(data.min_level !== undefined ? { min_level: data.min_level } : {}),
   };
 
   const alliance = await postgres.em.transactional(async (em) => {
+      // The gate again, on the player's row and main save locked until the
+      // alliance exists: leaving the world takes the same locks first, so a
+      // founder can never end up leading an alliance in a world they just left.
+      await lockMembership(em, user.userid);
+      assertMayJoin(await lockGateSave(em, user.userid), { allianceWorld: worldid });
+
       const newAlliance = em.create(Alliance, allianceData);
 
       em.persist(newAlliance);
@@ -77,6 +95,8 @@ export const createAlliance: KoaController = async (ctx) => {
       description: alliance.description,
       leader: user.username,
       world_id: alliance.world_id,
+      type: alliance.type,
+      ...adOf(alliance),
     },
   };
 };

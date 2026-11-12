@@ -1,5 +1,6 @@
 import { YardLabMonsterSchema, YardLabSchema } from "../../schemas/YardSchemas.js";
 import { planLabCancel, planLabFinish, planLabInstant, planLabStart } from "../../services/yard/lab.js";
+import { weekendBoost, weekendBoostUsed } from "../../services/events/weekendBoosts.js";
 import { defineYardAction } from "./yardAction.js";
 
 /**
@@ -9,10 +10,19 @@ import { defineYardAction } from "./yardAction.js";
  * clock is the catch-up's (`services/yard/catchUpTraining.ts`).
  */
 
-/** `POST /bm/yard/lab/start` — research `monster`'s next rank, the full putty price up front. */
+/**
+ * `POST /bm/yard/lab/start` — research `monster`'s next rank, the full putty
+ * price up front; a Study Weekend shortens it (`services/events/weekendBoosts.ts`).
+ */
 export const yardLabStartAction = defineYardAction({
   schema: YardLabMonsterSchema,
-  run: ({ save, body, now }) => planLabStart(save, body.monster, now),
+  run: async ({ save, body, now, user, em }) => {
+    const off = weekendBoost("study", now);
+    const plan = planLabStart(save, body.monster, now, off);
+    // The weekend's Glimmers, in this transaction (`weekendCoins.ts`).
+    if (off > 0) await weekendBoostUsed(em, user.userid, "study", now);
+    return plan;
+  },
 });
 
 /** `POST /bm/yard/lab/cancel` — stop the running research, the full putty price back (capped). */

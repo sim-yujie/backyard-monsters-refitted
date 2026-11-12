@@ -15,6 +15,8 @@ import {
 } from "../../services/base/attackCheckpoint.js";
 import { readCheckpoint, storeCheckpoint } from "../../services/base/attackCheckpointStore.js";
 import { BaseType } from "../../enums/Base.js";
+import { combatConfig } from "../../config/CombatConfig.js";
+import { requireFlingsInRoom } from "../../services/base/combat/recordFlingRoom.js";
 import { infernoConfig } from "../../config/InfernoConfig.js";
 import {
   discardRowlessCheckpoint,
@@ -97,6 +99,22 @@ export const attackCheckpoint: KoaController = async (ctx) => {
   const refusal = checkpointExtends(stored?.attackid === session.attackid ? stored : null, input);
   if (refusal) throw attackCheckpointRefusedErr(refusal);
 
+  // An over-full fling (`recordFlingRoom.ts`) is never kept, so the finaliser
+  // can only land the attack as it stood before it. An Inferno attack cuts
+  // its flings to its own Flinger instead (`descentFightableLog`).
+  if (!inferno) {
+    await requireFlingsInRoom(
+      ctx,
+      user,
+      baseSave,
+      input.flinglog,
+      session.attackerAcademy,
+      combatConfig.mode,
+      session.attackid,
+      "checkpoint"
+    );
+  }
+
   const checkpoint = newCheckpoint(session, baseSave.saveuserid, input, now);
   if (inferno) await storeInfernoPlayerCheckpoint(basesaveid, checkpoint);
   else await storeCheckpoint(basesaveid, checkpoint);
@@ -138,6 +156,19 @@ const rowlessCheckpoint = async (
     ctx.status = Status.OK;
     ctx.body = { error: 0, stored: false };
     return;
+  }
+
+  if (kind === "mr1") {
+    await requireFlingsInRoom(
+      ctx,
+      user,
+      { baseid, rowless: "mr1-tribe" },
+      input.flinglog,
+      session.attackerAcademy,
+      combatConfig.mode,
+      session.attackid,
+      "checkpoint"
+    );
   }
 
   const stored = await readRowlessCheckpoint(ref);

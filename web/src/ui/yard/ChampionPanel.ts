@@ -11,7 +11,8 @@ import { monsterEntry } from "@/game/monsters/monsterCatalogue";
 import { championPortrait, showPortrait, type Portrait } from "@/game/portraits";
 import { buttonUrl, silhouetteUrl } from "@/game/yard/buildButtonArt";
 import type { YardKind } from "@/game/yard/buildingCosts";
-import { brainSummary, learnedFromText, tendenciesText } from "@/game/yard/championBrain";
+import type { ChampionStance } from "@/game/combat/rules";
+import { brainSummary, championNature, learnedFromText, STANCE_NAMES, tendenciesText } from "@/game/yard/championBrain";
 import type { ChampionEntry } from "@/game/yard/championCatalogue";
 import {
   CHAMPION_CHAMBER_TYPE,
@@ -35,13 +36,15 @@ import { gameIcon, type GameIconName } from "@/ui/gameIcon";
 import { monsterPicture } from "@/ui/monsters/LockerTab";
 import { resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/champion.css";
+import { modesBlock, modesShape, savedStance, showsModes } from "./championModes";
 import { ShinyButton } from "./ShinyButton";
 
 /**
- * The Champion Cage's controls, inside its building panel
- * (`docs/design/yard-buildings.md` §7.2, decisions D11 and D17; issue #124).
+ * The Champion Cage's controls, in the Monsters screen's Champion tab
+ * (`ChampionTab.ts`; owner, 12 Nov 2026; `docs/design/yard-buildings.md`
+ * §7.2, decisions D11 and D17; issue #124).
  *
- * Opened by the panel's **Open cage**. With no champion in the cage: one card
+ * Opened by the cage's **Open Champion Cage**. With no champion in the cage: one card
  * each for Gorgo, Drull and Fomor (Korath and Krallen are not offered), each
  * with **Raise** (free), or a note when that one is frozen in the Chamber.
  * Raising puts the champion in the cage straight away, as in the original
@@ -106,6 +109,8 @@ export class ChampionPanel {
   private nameDraft = "";
   /** Set once a starving champion asked the server for its state, so it asks once. */
   private refreshedStarving = false;
+  /** The Mode tab shown, and for which champion type: kept over redraws. */
+  private modeTab: { readonly t: number; readonly stance: ChampionStance } | null = null;
 
   constructor(options: ChampionPanelOptions) {
     this.store = options.store;
@@ -310,7 +315,34 @@ export class ChampionPanel {
     this.live = { health, healthFill, healthBar, hunger };
     this.drawHealth(view, now);
     this.drawHunger(view, now);
-    return [this.header(view), this.growthBlock(view), this.feedBlock(view), brainBlock(view)];
+    return [this.header(view), this.growthBlock(view), this.feedBlock(view), this.fightsBlock(view)];
+  }
+
+  /**
+   * How it fights: its Modes, instincts and habits (champion modes round 2);
+   * the old tendencies for a champion without habits (Krallen).
+   */
+  private fightsBlock(view: ChampionView): HTMLElement {
+    const entry = view.champion;
+    if (!showsModes(entry)) return brainBlock(view);
+    if (this.modeTab?.t !== entry.t) this.modeTab = { t: entry.t, stance: savedStance(entry) };
+    const draw = (): HTMLElement =>
+      modesBlock({
+        entry,
+        stance: this.modeTab?.stance ?? savedStance(entry),
+        onTab: (stance) => {
+          this.modeTab = { t: entry.t, stance };
+          // Only the block: the rest of the cage keeps its focus and armed buttons.
+          const fresh = draw();
+          block.replaceWith(fresh);
+          block = fresh;
+          fresh.querySelector<HTMLElement>(`[data-stance="${stance}"][role="tab"]`)?.focus();
+        },
+        onForget: (stance) => void this.runForget(entry.t, stance),
+        forgetting: (stance) => this.store.isRunning(ChampionKey.forget(stance)),
+      });
+    let block = draw();
+    return block;
   }
 
   private header(view: ChampionView): HTMLElement {
@@ -348,12 +380,20 @@ export class ChampionPanel {
       `${view.entry.name !== view.name ? `${view.entry.name} · ` : ""}` +
       `Level ${view.level} of ${view.entry.levels}` +
       (view.entry.role ? ` · ${view.entry.role}` : "");
+    words.append(level);
+    if (showsModes(view.champion)) {
+      // What it is, fixed whatever it learns (champion modes round 2).
+      const nature = document.createElement("p");
+      nature.className = "champion__nature";
+      nature.textContent = championNature(view.entry.id, view.level);
+      words.append(nature);
+    }
     const live = this.live;
     const health = document.createElement("div");
     health.className = "champion__health";
     if (live) health.append(live.health, live.healthBar);
     health.append(this.heal.element);
-    words.append(level, health);
+    words.append(health);
 
     // The next level's picture on the feeds bar says what the arrows mean: the words for screen readers only.
     const stats = statsBlock(view);
@@ -748,6 +788,14 @@ export class ChampionPanel {
     this.show();
   }
 
+  private async runForget(type: number, stance: ChampionStance): Promise<void> {
+    const result = await this.actions.forget(type, stance);
+    this.setStatus(
+      result.ok ? { tone: "good", content: [`${STANCE_NAMES[stance]} habits forgotten.`] } : bad(result.refusal),
+    );
+    this.show();
+  }
+
   private async runFreeze(view: ChampionView): Promise<void> {
     const result = await this.actions.freeze();
     this.setStatus(
@@ -890,6 +938,7 @@ const shapeOf = (view: CageView): string => {
     champion.health >= champion.maxHealth,
     tendenciesText(brainSummary(champion.champion)),
     brainSummary(champion.champion).attacks,
+    modesShape(champion.champion),
   ].join(":");
 };
 
@@ -1057,7 +1106,11 @@ export const actTile = (options: ActTileOptions): HTMLButtonElement => {
   tile.className = `champion-act champion-act--${options.act}`;
   tile.classList.toggle("champion-act--locked", options.locked);
   tile.title = options.sentence;
-  if (options.locked) tile.setAttribute("aria-disabled", "true");
+  if (options.locked) {
+    tile.setAttribute("aria-disabled", "true");
+    // Flash's refusal (`uiSounds.ts`) as the tap writes why it is locked.
+    tile.dataset["uiSound"] = "error";
+  }
   const art = document.createElement("img");
   art.className = "champion-act__art";
   art.src = (options.missing ? silhouetteUrl(options.type, options.kind) : null) ?? buttonUrl(options.type, options.kind);

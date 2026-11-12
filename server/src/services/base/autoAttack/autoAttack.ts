@@ -10,7 +10,6 @@ import { generateBaseId } from "../../../utils/generateBaseId.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { logger } from "../../../utils/logger.js";
 import { baseModeAttack } from "../../../controllers/base/load/modes/baseModeAttack.js";
-import { isDeclareWarRunning, runningPowerups } from "../../alliance/powerups.js";
 import { playerMapVersion } from "../../maproom/playerMapVersion.js";
 import { calculateTribeLevel } from "../../maproom/v2/calculateTribeLevel.js";
 import { cellCoordsFromBaseId, outpostsNearCell, type CellCoords } from "../../maproom/v2/rangeCheck.js";
@@ -325,9 +324,7 @@ export const runAutoAttack = async (user: User, baseid: string): Promise<AutoAtt
       resources: session.defenderResources ?? save.resources,
       attackerlevel: session.attackerlevel,
       defenderforces: defenderForces,
-      attpowerups: await runningPowerups(user.alliance_id),
     };
-    const declareWar = await isDeclareWarRunning(user.alliance_id);
 
     let landed;
     try {
@@ -350,7 +347,6 @@ export const runAutoAttack = async (user: User, baseid: string): Promise<AutoAtt
       tick: landed.landed.tick,
       levels: academyLevels(userSave.academy),
       ranks: academyRanks(userSave.academy),
-      declareWar,
     });
 
     const result: AutoAttackResult = {
@@ -410,7 +406,11 @@ export interface AutoAttackReplay {
   readonly levels: Readonly<Record<string, number>>;
   /** The attacker's Monster Lab ranks (issue #352); absent on a replay kept before them. */
   readonly ranks?: Readonly<Record<string, number>>;
-  readonly declareWar: boolean;
+  /**
+   * Whether Declare War ran (its longer countdown); only on a replay kept
+   * before the alliance power-ups were removed. Nothing writes it now.
+   */
+  readonly declareWar?: boolean;
 }
 
 /** Keeps the battle for Watch; never fails the attack that has landed. */

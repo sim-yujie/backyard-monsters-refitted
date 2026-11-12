@@ -85,6 +85,18 @@ describe("someone else's yard, only looked at", () => {
     expect(sent["7"]!.cB).toBe(120);
   });
 
+  test("an Inferno yard's Bone Cruncher carries its own 3D tier, from levels 3 and 7", () => {
+    // The same type as the Twig Snapper, whose picture changes at 6: in the Inferno, level 8 shows 7's.
+    const sent = asViewer(yardOf(BaseType.INFERNO)).buildingdata as Wire;
+    expect(sent["4"]!.l).toBe(7);
+    expect(artLevelOf(TWIG_SNAPPER, 6, true, "inferno")).toBe(3);
+    expect(artLevelOf(TWIG_SNAPPER, 2, true, "inferno")).toBe(1);
+    expect(artLevelOf(TWIG_SNAPPER, 10, true, "inferno")).toBe(7);
+    // The main yard's Twig Snapper, and the Flash steps alone, are as they were.
+    expect(artLevelOf(TWIG_SNAPPER, 8, true, "main")).toBe(6);
+    expect(artLevelOf(TWIG_SNAPPER, 8, false, "inferno")).toBe(6);
+  });
+
   test("the painted towers read their tier, never their level", () => {
     const TESLA = 25;
     const BUNKER = 22;

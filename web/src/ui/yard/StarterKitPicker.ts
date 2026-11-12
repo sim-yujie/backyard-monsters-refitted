@@ -7,25 +7,43 @@ import {
   type StarterKitReport,
 } from "@/api/yardStarterKit";
 import type { YardActionResult, YardUiBinding } from "@/game/yard/YardStore";
+import { getEvents } from "@/api/events";
 import { typeName } from "@/game/yard/planner/summary";
 import {
   kitOffer,
   kitReplacesBuildings,
-  STARTER_KIT_SUMMARIES,
+  kitsAtPrice,
+  kitSummary,
   type KitOffer,
   type StarterKitSummary,
 } from "@/game/yard/starterKits";
+import { currentAllianceBonuses } from "@/game/alliance/allianceBonuses";
+import { showKitPicture } from "@/game/yard/kitPictures";
+import { gameIcon } from "@/ui/gameIcon";
 import { formatAmount, formatCompact } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
 import { costAmounts, resourceAmount, RESOURCE_NAMES } from "@/ui/resourceIcon";
 import "@/ui/styles/starter-kits.css";
 
+/** The alliance's price change on a kit's card: its shield and "-10%" (cheaper) or "+5%" (dearer). */
+const allianceKitTag = (percent: number): HTMLElement => {
+  const tag = document.createElement("span");
+  const cheaper = percent < 0;
+  tag.className = `kit-card__alliance-tag kit-card__alliance-tag--${cheaper ? "cheaper" : "dearer"}`;
+  const amount = Number(Math.abs(percent).toFixed(1));
+  const text = `${cheaper ? "\u2212" : "+"}${amount}%`;
+  tag.title = `Your alliance: Starter Kits cost ${amount}% ${cheaper ? "less" : "more"} in resources.`;
+  tag.append(gameIcon("alliance", { size: 16, decorative: true }), text);
+  return tag;
+};
+
 /**
  * The outpost Starter Kit picker (outposts WP9, issue #188): Flash's
  * `popup_prefab` (`client/scripts/popup_prefab.as`) in the revamp's style.
  *
- * Three cards, Regular, Mega and Ultra, each with its thumbnail
- * (`ui/prefab-2..4.v5.jpg`, `:23`), what it builds, its price in twigs,
+ * Three cards, Regular, Mega and Ultra, each with a picture of its layout in
+ * the player's look (`kitPictures.ts`; Flash's `ui/prefab-2..4.v5.jpg`, `:23`,
+ * if that is missing), what it builds, its price in twigs,
  * pebbles and putty, **Use Resources** and **Use N Shiny** (`:26-32`).
  *
  * A press never spends at once: it opens one confirmation under the cards,
@@ -40,6 +58,11 @@ import "@/ui/styles/starter-kits.css";
  * The request goes through the store's queue (`starterKitActions`), whose
  * answer redraws the yard; the picker closes on success and reports through
  * `onBought`.
+ *
+ * "Frontier Pass": while the player's free Regular kit for today is ready (the
+ * Events answer's `mr2Welcome.kit`), the Regular card says Free and offers one
+ * Free button; the server charges nothing and builds it as the resource path
+ * does (prefabs, no worker).
  */
 
 export interface StarterKitPickerOptions {
@@ -51,7 +74,21 @@ export interface StarterKitPickerOptions {
   readonly onClose?: () => void;
   /** Stand-in calls, under test. */
   readonly actions?: StarterKitActions;
+  /** Whether the "Frontier Pass" free Regular kit is ready; the Events answer by default. */
+  readonly freeKit?: () => Promise<boolean>;
 }
+
+/** The kit "Frontier Pass" gives free (Regular). */
+export const FREE_KIT_ID = 1;
+
+/** The Regular card's small label while it is free. */
+export const FREE_KIT_LABEL = "Frontier Pass";
+
+const freeKitFromEvents = (): Promise<boolean> =>
+  Promise.resolve()
+    .then(() => getEvents())
+    .then((body) => body.mr2Welcome?.kit === true)
+    .catch(() => false);
 
 /** Flash's help line for the kits (`newmap_sk_hlp`). */
 export const KITS_HELP =
@@ -89,6 +126,8 @@ export const shortfallText = (shortfall: KitOffer["shortfall"]): string => {
 interface Pending {
   readonly kit: StarterKitSummary;
   readonly pay: KitPayment;
+  /** The free Regular kit. */
+  readonly free: boolean;
 }
 
 export class StarterKitPicker {
@@ -103,6 +142,8 @@ export class StarterKitPicker {
   private pending: Pending | null = null;
   private sending = false;
   private closed = false;
+  /** The free Regular kit is ready (known once the Events answer is in). */
+  private freeKit = false;
 
   constructor(options: StarterKitPickerOptions) {
     this.options = options;
@@ -136,6 +177,16 @@ export class StarterKitPicker {
     this.popup.setContent(help, this.cards, this.confirm, this.status);
     this.unsubscribe = this.binding.store.subscribe(() => this.render());
     this.render();
+    void (options.freeKit ?? freeKitFromEvents)().then((ready) => {
+      if (!ready || this.closed) return;
+      this.freeKit = true;
+      this.render();
+    });
+  }
+
+  /** Whether the Regular card shows Free, for the tests. */
+  get showsFreeKit(): boolean {
+    return this.freeKit;
   }
 
   get isOpen(): boolean {
@@ -153,9 +204,9 @@ export class StarterKitPicker {
 
   /** Opens the confirmation for a kit and a payment, as a card's button does. */
   choose(kitId: number, pay: KitPayment): void {
-    const kit = STARTER_KIT_SUMMARIES.find((one) => one.id === kitId);
+    const kit = kitsAtPrice().find((one) => one.id === kitId);
     if (!kit || this.sending) return;
-    this.pending = { kit, pay };
+    this.pending = { kit, pay, free: this.isFree(kit) };
     this.status.textContent = "";
     this.render();
     this.confirm.querySelector<HTMLButtonElement>(".kit-picker__go:not([disabled])")?.focus();
@@ -168,6 +219,10 @@ export class StarterKitPicker {
     this.options.onClose?.();
   }
 
+  private isFree(kit: StarterKitSummary): boolean {
+    return this.freeKit && kit.id === FREE_KIT_ID;
+  }
+
   private offer(kit: StarterKitSummary): KitOffer {
     const store = this.binding.store;
     return kitOffer(kit, { resources: store.resources, credits: store.credits });
@@ -175,7 +230,7 @@ export class StarterKitPicker {
 
   private render(): void {
     if (this.closed) return;
-    this.cards.replaceChildren(...STARTER_KIT_SUMMARIES.map((kit) => this.card(kit)));
+    this.cards.replaceChildren(...kitsAtPrice().map((kit) => this.card(kit)));
     this.renderConfirm();
   }
 
@@ -190,7 +245,7 @@ export class StarterKitPicker {
 
     const picture = document.createElement("img");
     picture.className = "kit-card__picture";
-    picture.src = kit.thumbnail;
+    showKitPicture(picture, kit);
     picture.alt = `${kit.name}: the outpost it builds`;
     picture.decoding = "async";
 
@@ -213,7 +268,34 @@ export class StarterKitPicker {
     const price = document.createElement("div");
     price.className = "kit-card__price";
     const amounts = costAmounts(kit.resources, formatCompact);
-    if (amounts) price.append(amounts);
+    const free = this.isFree(kit);
+    if (free) {
+      card.classList.add("kit-card--free");
+      const tag = document.createElement("span");
+      tag.className = "kit-card__free-tag";
+      tag.textContent = "Free";
+      const label = document.createElement("span");
+      label.className = "kit-card__free-label";
+      label.textContent = FREE_KIT_LABEL;
+      const usual = document.createElement("s");
+      usual.className = "kit-card__usual";
+      if (amounts) usual.append(amounts);
+      price.append(tag, label, usual);
+    } else if (amounts) {
+      price.append(amounts);
+      // The alliance's Starter Kit price (beta 7): its shield and the change, the usual price struck through.
+      const percent = currentAllianceBonuses().kitCost;
+      const usualKit = kitSummary(kit.id);
+      const usualAmounts = percent && usualKit ? costAmounts(usualKit.resources, formatCompact) : null;
+      if (percent && usualAmounts) {
+        card.classList.add("kit-card--alliance");
+        price.prepend(allianceKitTag(percent));
+        const usual = document.createElement("s");
+        usual.className = "kit-card__usual";
+        usual.append(usualAmounts);
+        price.append(usual);
+      }
+    }
 
     const useResources = document.createElement("button");
     useResources.type = "button";
@@ -239,7 +321,18 @@ export class StarterKitPicker {
 
     const buttons = document.createElement("div");
     buttons.className = "kit-card__buttons";
-    buttons.append(useResources, useShiny);
+    if (free) {
+      const take = document.createElement("button");
+      take.type = "button";
+      take.className = "btn btn--primary kit-card__free";
+      take.textContent = "Free";
+      take.title = "Free with the Frontier Pass. The buildings build up over time without your worker.";
+      take.disabled = busy;
+      take.addEventListener("click", () => this.choose(kit.id, "resources"));
+      buttons.append(take);
+    } else {
+      buttons.append(useResources, useShiny);
+    }
 
     card.append(picture, name, count, list, price, buttons);
     return card;
@@ -253,7 +346,7 @@ export class StarterKitPicker {
       this.confirm.replaceChildren();
       return;
     }
-    const { kit, pay } = pending;
+    const { kit, pay, free } = pending;
     const offer = this.offer(kit);
     const lines: HTMLElement[] = [];
     const line = (text: string | Node, className = ""): void => {
@@ -265,14 +358,20 @@ export class StarterKitPicker {
 
     const heading = document.createElement("h3");
     heading.className = "kit-picker__confirm-title";
-    heading.textContent = `${kit.name}, paid with ${pay === "shiny" ? "Shiny" : "resources"}`;
+    heading.textContent = free
+      ? `${kit.name}, free`
+      : `${kit.name}, paid with ${pay === "shiny" ? "Shiny" : "resources"}`;
 
     if (kitReplacesBuildings(this.binding.store.yard)) line(KIT_WARNING, "kit-picker__warning");
 
     let label: string;
     let blocked: string | null = null;
     let topUp: number | undefined;
-    if (pay === "shiny") {
+    if (free) {
+      line(`Free: ${FREE_KIT_LABEL}.`, "kit-picker__free");
+      line(`The ${kit.buildingCount} buildings build up over time, without your worker.`);
+      label = "Build it free";
+    } else if (pay === "shiny") {
       line(`${formatAmount(kit.shiny)} Shiny. All ${kit.buildingCount} buildings are finished at once.`);
       label = `Use ${formatAmount(kit.shiny)} Shiny`;
       if (!offer.shinyAffordable) {
@@ -302,7 +401,7 @@ export class StarterKitPicker {
     go.className = "btn btn--primary kit-picker__go";
     go.textContent = this.sending ? "Building…" : label;
     go.disabled = this.sending || blocked !== null;
-    go.addEventListener("click", () => void this.buy(kit, pay, topUp));
+    go.addEventListener("click", () => void this.buy(kit, pay, topUp, free));
 
     const back = document.createElement("button");
     back.type = "button";
@@ -320,16 +419,23 @@ export class StarterKitPicker {
     this.confirm.replaceChildren(heading, ...lines, actions);
   }
 
-  private async buy(kit: StarterKitSummary, pay: KitPayment, topUp: number | undefined): Promise<void> {
+  private async buy(kit: StarterKitSummary, pay: KitPayment, topUp: number | undefined, free = false): Promise<void> {
     if (this.sending) return;
     this.sending = true;
     this.status.textContent = `Placing the ${kit.name}…`;
     this.status.classList.remove("kit-picker__status--error");
     this.render();
-    const result: YardActionResult<StarterKitReport> = await this.actions.buy(kit.id, pay, topUp);
+    const result: YardActionResult<StarterKitReport> = free
+      ? await this.actions.buy(kit.id, pay, undefined, true)
+      : await this.actions.buy(kit.id, pay, topUp);
     this.sending = false;
     if (this.closed) return;
     if (!result.ok) {
+      // No longer free (today's used elsewhere, all 7 used, or the 10 days ended): show the prices again.
+      if (free && result.refusal.reason === "welcomeUsed") {
+        this.freeKit = false;
+        this.pending = null;
+      }
       this.status.textContent = result.refusal.message;
       this.status.classList.add("kit-picker__status--error");
       this.render();

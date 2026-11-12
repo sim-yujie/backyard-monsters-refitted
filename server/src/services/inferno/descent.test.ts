@@ -75,14 +75,10 @@ describe("which Descent yard is open", () => {
 describe("the Flinger in the Descent", () => {
   test("the main table's payload at the attacker's own Flinger level (YARD_PROPS.as:709)", () => {
     expect(DESCENT_FLINGER_CAPACITY).toEqual([250, 850, 1500, 2500, 3500, 3500, 3500]);
-    expect(descentFlingerCapacity(0, false)).toBe(0);
-    expect(descentFlingerCapacity(1, false)).toBe(250);
-    expect(descentFlingerCapacity(4, false)).toBe(2500);
-    expect(descentFlingerCapacity(5, false)).toBe(3500);
-  });
-
-  test("Declare War adds a quarter (ATTACK.as:592-594)", () => {
-    expect(descentFlingerCapacity(4, true)).toBe(3125);
+    expect(descentFlingerCapacity(0)).toBe(0);
+    expect(descentFlingerCapacity(1)).toBe(250);
+    expect(descentFlingerCapacity(4)).toBe(2500);
+    expect(descentFlingerCapacity(5)).toBe(3500);
   });
 
   test("the level is the built Flinger's; one still being built does not count", () => {

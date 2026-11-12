@@ -2,7 +2,7 @@
 
 A design document for the friends update (issue #367). The owner settled the scope on
 2026-10-19: a friends list with friend requests, visiting a friend's yard, helping in it (repairs
-and speed-ups), free daily gifts, ways to find people, a friends bar like the original game's, and
+and speed-ups), daily gifts, ways to find people, a friends bar like the original game's, and
 privacy controls. The release is held until this is done, so the work is split into packages that
 up to three helpers can build at once.
 
@@ -41,7 +41,7 @@ Settled on 2026-10-19. This document does not re-open them.
    **Repair help counts toward the same daily cap**, and a friend can repair a given building once
    per damage.
 5. **The helper earns a small resource reward** for each help within the cap.
-6. **Gifts:** a free resource gift scaled to the sender's level; **each friend can get at most one
+6. **Gifts:** a resource gift, taken from the sender's storage (owner, 7 Nov 2026), scaled to the sender's level; **each friend can get at most one
    gift a day from you.** Gifts must not be farmable with fake accounts.
 7. **Finding friends:** search by username; "Add friend" in the Map Room yard popup, in the alliance
    member list and on attack messages.
@@ -117,6 +117,17 @@ yet**, so decision 7's alliance entry point has nowhere to live (see section 10,
 
 ### 3.2 The friends bar
 
+> **Replaced (owner, 9 Nov 2026, option A).** The strip is gone on every screen size. One round
+> **Friends** disc beside Map (`ui/friends/FriendsButton.ts`) wears a badge (friends who can use
+> your help, else a gift while one is due) and opens the **Friends window**
+> (`ui/friends/FriendsWindow.ts`), a centred game window: friend and online counts, Add (Find), the
+> list grouped can help / online / everyone else with Visit, Message and Send gift under a pressed
+> row, and All friends plus the requests waiting at the foot. A long list (90 can help, 20 online,
+> 150 in all) shows each group's first five and **Show all N**, which lists that group whole with a
+> **‹ N** way back in the window's head; one request (`GET /bm/friends`) fills it at any size. A dev
+> build opened with `?bigfriends` (or `?bigfriends=H,O,T`) shows a made-up list of that size
+> (`game/friends/friendsDev.ts`). The text below is the original bar.
+
 A strip of portraits along the bottom middle of the player's own yard, between the left and right
 buttons, like Flash's. Each portrait is the friend's critter avatar with name and level, a green dot
 when online (unless they hide it), and small badges:
@@ -151,12 +162,15 @@ fine. A visit to someone who stopped being your friend meanwhile is refused at t
 
 ### 3.4 Gifts
 
-**Send gift** (on the bar card or the list) asks which resource: Twigs, Pebbles, Putty or Goo. It is
-free for the sender. One gift per friend per day. The friend sees a notification and a count on
+**Send gift** (on the bar card or the list) asks which resource: Twigs, Pebbles, Putty or Goo. The
+amount is taken from the sender's main yard; with too little of it the gift is refused (`notEnough`),
+and a gift that lapses uncollected is not given back. One gift per friend per day. The friend sees a notification and a count on
 Friends; their **Gifts** tab lists waiting gifts with **Collect** (and **Collect all**) and **Send
 one back**. Collecting adds the resource to the main yard up to its storage cap; if there is not
 room for all of it, the button warns first. A gift waits 7 days, then lapses. A player can collect
-at most 5 gifts a day; the rest wait.
+at most 10 gifts a day (owner, 9 Nov 2026: was 5); the rest wait. Each waiting gift has a delete
+button (and **Delete all** with 2 or more waiting), each with a short confirm: a deleted gift gives
+nothing, uses none of the day's collects, and still counts as the sender's gift for that day.
 
 ### 3.5 Attacking a friend
 
@@ -271,6 +285,7 @@ add lines to that file only. Answers use `{ error: 0, ... }` like the rest.
 | `POST /bm/friends/gift` | `{ userid, resource }` | `{ gift }` |
 | `GET /bm/friends/gifts` | — | `gifts: Gift[]`, `collectsLeft: n` |
 | `POST /bm/friends/gifts/collect` | `{ giftid }` or `{ all: true }` | `{ collected, resources }` |
+| `POST /bm/friends/gifts/delete` | `{ giftid }` or `{ all: true }` | `{ deleted, collectsLeft, giftsWaiting }` |
 | `POST /bm/friends/help` | `{ userid, buildingId, kind }` | `{ secondsSaved?, healed?, reward, helpsLeft, building }` |
 | `POST /base/load` with `type: "help"` | `baseid` of the friend's main yard | the yard as `view` serves it, plus `help: { helpsLeft, buildings: { [id]: { speedup?, repair? } } }`, each `true` or a reason |
 | `POST /player/settings` (existing) | adds `hideOnline?`, `friendRequests?` (every field optional) | `settings` adds both |
@@ -382,7 +397,7 @@ buildings can be helped. Until WP6 lands, `help.buildings` is empty.
 3. **Lower-cap scaling:** gift and reward amounts use the lower of the two storage caps, so small
    fake yards give and earn little.
 4. **Hard caps:** 100 friends; 30 open outgoing requests; 30 new requests a day; 20 helps a day; 5
-   helps per job; one gift per friend per day; 5 gifts collected a day where not set
+   helps per job; one gift per friend per day; 10 gifts collected a day where not set
    by the owner.
 5. **Per-pair keys:** `gift_day` and `hl` stop repeats even across remove and re-add.
 6. **Server decides everything:** time saved, health, amounts and caps are worked out on the server
@@ -404,8 +419,8 @@ New code lives in `web/src/ui/friends/` and `web/src/game/friends/` so packages 
   counts for badges), refreshed on open, on a `friend` notification and every few minutes (WP3).
 - `ui/friends/FriendsScreen.ts` — a `Panel` with tabs **Friends**, **Requests**, **Gifts**,
   **Find**; each tab its own file so WP8 adds Gifts without touching the others (WP3).
-- `ui/friends/FriendsBar.ts` and `FriendCard.ts` — the bar and the portrait card (WP4), mounted by
-  the yard scene.
+- `ui/friends/FriendsButton.ts` and `FriendsWindow.ts` — the Friends disc beside Map and its centred
+  window (WP4; the bar and its card until 9 Nov 2026), mounted by the yard scene.
 - Visit: a `friend` kind of `ViewTarget`, loaded with `type: "help"`; Home on the dock; the
   "Helping {name}" line (WP5). Help markers and the help panel (WP7).
 - `ui/friends/FriendAttackConfirm.ts`, called before the three `setAttackTarget` calls (WP10).

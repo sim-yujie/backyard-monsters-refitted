@@ -38,6 +38,12 @@ export interface YardInputOptions {
    */
   pickMushroom?: (worldX: number, worldY: number) => YardMushroom | null;
   onMushroom?: (mushroom: YardMushroom) => void;
+  /**
+   * Whether a find under the pointer wins over the building there: true for
+   * the Thanksgiving turkeys, which stand in front of the buildings (never on
+   * ground a building's art covers) and are what the player is aiming at.
+   */
+  findsOnTop?: () => boolean;
   /** Keyboard `+` and `-`; the argument is +1 or -1. */
   onZoomStep: (direction: number) => void;
   /** Keyboard `0`. */
@@ -110,10 +116,11 @@ export class YardInput {
 
     // A click on bare ground clears the selection, which is how the panel is
     // dismissed without reaching for its close button. A mushroom counts only
-    // where no building is: buildings are drawn over it.
+    // where no building is: buildings are drawn over it. A turkey counts
+    // first: it is drawn over the building (`findsOnTop`).
     const building = this.buildingAt(event);
-    const { pickMushroom, onMushroom } = this.options;
-    if (!building && pickMushroom && onMushroom) {
+    const { pickMushroom, onMushroom, findsOnTop } = this.options;
+    if ((!building || findsOnTop?.()) && pickMushroom && onMushroom) {
       const world = this.worldAt(event);
       const mushroom = pickMushroom(world.x, world.y);
       if (mushroom) {

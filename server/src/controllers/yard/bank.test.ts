@@ -5,6 +5,7 @@ import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { readOnboarding } from "../../services/onboarding/state.js";
 import { yardBankAction } from "./bank.js";
 import { runYardAction, type YardAnswer } from "./yardAction.js";
+import { pendingAllianceEvents } from "../../services/alliance/allianceProgress.js";
 
 /**
  * `POST /bm/yard/bank` through the real wrapper, the database replaced by one
@@ -92,6 +93,30 @@ describe("POST /bm/yard/bank", () => {
     expect(row.points).toBe(String(100 + 250 + 15 + 360));
     // Goals BK1-BK4 (#227): the most one tap banked, all resources together.
     expect(readOnboarding({ onboarding: db.row!.onboarding }).counters.bestBank).toBe(1250);
+  });
+
+  test("Midas's harvest goal counts a bank that commits, and not one whose write fails (rolled back)", async () => {
+    const harvested = () => pendingAllianceEvents(user.userid)?.harvest ?? 0;
+    const start = harvested();
+    const failing = {
+      async transactional<T>(cb: (fork: unknown) => Promise<T>): Promise<T> {
+        const fork = {
+          findOne: async () => db.row && structuredClone(db.row),
+          flush: async () => {
+            throw new Error("write failed");
+          },
+        };
+        return cb(fork);
+      },
+    };
+    const before = structuredClone(db.row);
+    await runYardAction(failing as unknown as EntityManager, user, yardBankAction, { all: "1" }).catch(() => null);
+    expect(db.row).toEqual(before);
+    expect(harvested()).toBe(start);
+
+    const answer = await bank({ all: "1" });
+    expect(answer.status).toBe(200);
+    expect(harvested()).toBe(start + 1250);
   });
 
   test("ids banks only the named harvester, sent as a JSON string", async () => {

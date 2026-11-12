@@ -2,7 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, Resources } from "@/api/types";
 import type { StarterKitActions, StarterKitReport } from "@/api/yardStarterKit";
-import { kitTopUpShiny } from "@/game/yard/starterKits";
+import { kitSummary, kitTopUpShiny } from "@/game/yard/starterKits";
+import { setClassicLook } from "@/game/classicLook";
+import { setCurrentAllianceBonuses } from "@/game/alliance/allianceBonuses";
 import { readYard } from "@/game/yard/yardModel";
 import type { YardListener, YardStore, YardUiBinding } from "@/game/yard/YardStore";
 import { Notices } from "@/ui/maproom/Notices";
@@ -75,8 +77,8 @@ describe("StarterKitPicker", () => {
     picker = null;
   });
 
-  const open = (binding: YardUiBinding, onBought = vi.fn()) => {
-    picker = new StarterKitPicker({ binding, actions, onBought }).mount(document.body);
+  const open = (binding: YardUiBinding, onBought = vi.fn(), freeKit = async () => false) => {
+    picker = new StarterKitPicker({ binding, actions, onBought, freeKit }).mount(document.body);
     return onBought;
   };
   const cards = () => [...document.querySelectorAll<HTMLElement>(".kit-card")];
@@ -92,13 +94,65 @@ describe("StarterKitPicker", () => {
       "Ultra Kit",
     ]);
     expect(cards().map((one) => one.querySelector("img")!.getAttribute("src"))).toEqual([
-      "/assets/ui/prefab-2.v5.jpg",
-      "/assets/ui/prefab-3.v5.jpg",
-      "/assets/ui/prefab-4.v5.jpg",
+      "/assets/ui/kits/kit-regular-modern.webp?v=1",
+      "/assets/ui/kits/kit-mega-modern.webp?v=1",
+      "/assets/ui/kits/kit-ultra-modern.webp?v=1",
     ]);
     expect(card(1).textContent).toContain("3× Sniper Tower L5");
     expect(card(1).querySelector(".kit-card__shiny")!.getAttribute("aria-label")).toBe("Use 420 Shiny");
     expect(confirm().hidden).toBe(true);
+  });
+
+  it("shows the Classic pictures in Classic, and Flash's thumbnail when a picture is missing", () => {
+    setClassicLook(true);
+    try {
+      open(bindingWith(RICH, 5_000));
+      const pictures = cards().map((one) => one.querySelector("img")!);
+      expect(pictures.map((img) => img.getAttribute("src"))).toEqual([
+        "/assets/ui/kits/kit-regular-classic.webp?v=1",
+        "/assets/ui/kits/kit-mega-classic.webp?v=1",
+        "/assets/ui/kits/kit-ultra-classic.webp?v=1",
+      ]);
+      pictures[2]!.dispatchEvent(new Event("error"));
+      expect(pictures[2]!.getAttribute("src")).toBe("/assets/ui/prefab-4.v5.jpg");
+      expect(pictures[0]!.getAttribute("src")).toBe("/assets/ui/kits/kit-regular-classic.webp?v=1");
+    } finally {
+      setClassicLook(false);
+    }
+  });
+
+  describe("the alliance's Starter Kit price (beta 7)", () => {
+    afterEach(() => setCurrentAllianceBonuses(null));
+
+    it("no alliance, or 0%: no tag and no struck-through price", () => {
+      open(bindingWith(RICH, 5_000));
+      expect(document.querySelector(".kit-card__alliance-tag")).toBeNull();
+      expect(document.querySelector(".kit-card__usual")).toBeNull();
+    });
+
+    it("a discount: the shield and -10% on every card, the usual price struck through", () => {
+      setCurrentAllianceBonuses({ bonuses: { kitCost: -10 } });
+      open(bindingWith(RICH, 5_000));
+      const tags = cards().map((one) => one.querySelector(".kit-card__alliance-tag"));
+      expect(tags.every((tag) => tag?.textContent === "−10%")).toBe(true);
+      expect(tags[0]!.classList.contains("kit-card__alliance-tag--cheaper")).toBe(true);
+      expect(tags[0]!.querySelector("img.game-icon--alliance")).not.toBeNull();
+      const usual = card(1).querySelector(".kit-card__usual")!;
+      expect(usual.textContent).not.toBe("");
+      // The card's own price is the alliance's, below the usual one.
+      const regular = kitSummary(1)!;
+      expect(card(1).querySelector(".kit-card__price")!.textContent).not.toBe(usual.textContent);
+      expect(regular.resources.r1).toBeGreaterThan(0);
+    });
+
+    it("a dearer kit says so: +5%", () => {
+      setCurrentAllianceBonuses({ bonuses: { kitCost: 5 } });
+      open(bindingWith(RICH, 5_000));
+      const tag = card(2).querySelector(".kit-card__alliance-tag")!;
+      expect(tag.textContent).toBe("+5%");
+      expect(tag.classList.contains("kit-card__alliance-tag--dearer")).toBe(true);
+      expect(tag.getAttribute("title")).toBe("Your alliance: Starter Kits cost 5% more in resources.");
+    });
   });
 
   it("spends nothing on a card's press: a confirmation says what happens first", async () => {
@@ -138,6 +192,55 @@ describe("StarterKitPicker", () => {
     picker!.choose(3, "shiny");
     expect(go().disabled).toBe(true);
     expect(confirm().textContent).toContain("You need 1,400 more Shiny.");
+  });
+
+  describe("New to Map Room 2: the free Regular kit", () => {
+    const openFree = async (resources: Resources = RICH) => {
+      const onBought = open(bindingWith(resources, 0), vi.fn(), async () => true);
+      await vi.waitFor(() => expect(picker!.showsFreeKit).toBe(true));
+      return onBought;
+    };
+
+    it("the Regular card says Free with the small label and one Free button; the others are priced", async () => {
+      await openFree();
+      expect(card(1).classList.contains("kit-card--free")).toBe(true);
+      expect(card(1).querySelector(".kit-card__free-tag")!.textContent).toBe("Free");
+      expect(card(1).querySelector(".kit-card__free-label")!.textContent).toBe("Frontier Pass");
+      expect(card(1).querySelector(".kit-card__free")!.textContent).toBe("Free");
+      expect(card(1).querySelector(".kit-card__shiny")).toBeNull();
+      expect(card(2).querySelector(".kit-card__free")).toBeNull();
+      expect(card(2).querySelector(".kit-card__shiny")).not.toBeNull();
+    });
+
+    it("free even with an empty pool and no Shiny: the confirmation builds it free", async () => {
+      const onBought = await openFree({ r1: 0, r2: 0, r3: 0, r4: 0 });
+      card(1).querySelector<HTMLButtonElement>(".kit-card__free")!.click();
+      expect(confirm().textContent).toContain("Free: Frontier Pass.");
+      expect(confirm().textContent).toContain("without your worker");
+      expect(go().textContent).toBe("Build it free");
+      expect(go().disabled).toBe(false);
+      go().click();
+      await vi.waitFor(() => expect(onBought).toHaveBeenCalled());
+      expect(buy).toHaveBeenCalledWith(1, "resources", undefined, true);
+    });
+
+    it("refused as no longer free: the prices come back", async () => {
+      buy.mockResolvedValueOnce({
+        ok: false,
+        refusal: { reason: "welcomeUsed", message: "The free Regular Starter Kit is no longer available.", detail: {} },
+      });
+      await openFree();
+      picker!.choose(1, "resources");
+      go().click();
+      await vi.waitFor(() => expect(picker!.showsFreeKit).toBe(false));
+      expect(card(1).querySelector(".kit-card__free")).toBeNull();
+      expect(card(1).querySelector(".kit-card__shiny")).not.toBeNull();
+    });
+
+    it("not shown when the free kit is not ready", () => {
+      open(bindingWith(RICH, 5_000));
+      expect(document.querySelector(".kit-card--free")).toBeNull();
+    });
   });
 
   it("stays open with the server's reason when the kit is refused", async () => {

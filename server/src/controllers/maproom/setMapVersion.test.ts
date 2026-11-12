@@ -108,6 +108,37 @@ describe("setMapVersion from Map Room 2", () => {
     expect(result.ok).toBe(true);
     expect(save.mapversion).toBe(2);
   });
+
+  test("asking for version 2 again keeps the world and home cell (upstream 7e200bb81)", async () => {
+    const cell = { x: 40, y: 12, uid: ME };
+    save.cell = cell;
+    save.homebase = ["40", "12"];
+
+    const result = await run(2);
+
+    expect(result.ok).toBe(true);
+    expect(moves).toEqual([]);
+    expect(save).toMatchObject({ mapversion: 2, worldid: "world-a", homebase: ["40", "12"] });
+    expect(save.cell).toBe(cell);
+    expect(removed).toEqual([]);
+  });
+
+  test("an alliance member asking for version 2 again is not told to leave their alliance", async () => {
+    const result = await run(2, 42);
+
+    expect(result.ok).toBe(true);
+    expect(moves).toEqual([]);
+    expect(save.worldid).toBe("world-a");
+  });
+
+  test("a Map Room 2 save with no world still gets one", async () => {
+    save.worldid = null;
+
+    const result = await run(2);
+
+    expect(result.ok).toBe(true);
+    expect(moves).toEqual(["join"]);
+  });
 });
 
 describe("setMapVersion from Map Room 1", () => {
@@ -133,6 +164,15 @@ describe("setMapVersion from Map Room 1", () => {
     expect(moves).toEqual([]);
   });
 
+  test("a Town Hall saved without a level counts as level 1 and is refused (upstream c2803f8ee)", async () => {
+    save.buildingdata = { b1: { t: 14, id: 1, x: 0, y: 0 } };
+    const result = await run(2);
+    expect(result).toMatchObject({ ok: false, status: 403 });
+    expect(save).toMatchObject({ mapversion: 1, mr2upgraded: false, worldid: null });
+    expect(moves).toEqual([]);
+    expect(flushed).toBe(0);
+  });
+
   test("version 1 stays allowed", async () => {
     const result = await run(1);
     expect(result.ok).toBe(true);
@@ -146,11 +186,11 @@ describe("setMapVersion from Map Room 1", () => {
     expect(delCalls).toEqual([`sight:${ME}`]);
   });
 
-  test("a member of an alliance is refused first, and nothing invalidates", async () => {
+  test("a member of an alliance may leave: leaveWorld takes them out of it first (owner, 10 Nov 2026)", async () => {
     const result = await run(0, 42);
-    expect(result).toMatchObject({ ok: false, status: 409 });
-    expect(moves).toEqual([]);
-    expect(delCalls).toEqual([]);
+    expect(result.ok).toBe(true);
+    expect(moves).toEqual(["leave"]);
+    expect(delCalls).toEqual([`sight:${ME}`]);
   });
 });
 

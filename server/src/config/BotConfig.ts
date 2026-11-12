@@ -1,6 +1,17 @@
 import { Env } from "../enums/Env.js";
 
 /**
+ * **Bots are retired** (owner, 12 Nov 2026: "bots can be decommissioned from
+ * game. we have a sufficiently big population now."). {@link BOTS_RETIRED}
+ * holds {@link botConfig} to: no bot fills a neighbour list (`fill` false
+ * whatever `BOTS_FILL` says), no revenge (`revenge` false whatever
+ * `BOTS_REVENGE` says), and the sweep (`brain`) never on production; outside
+ * production `BOTS_BRAIN=on` still runs it, for the seeded Map Room 2 dev
+ * players alone (`retired`: it makes, grows and rebalances no bot). The
+ * one-time move of every active bot off Map Room 1 is the migration
+ * `20261117_RetireBots.ts`. The switches and numbers below are kept only for
+ * the tests of the old machinery, which pass their own config.
+ *
  * The switches for Map Room 1 bot neighbours (issue #235,
  * `docs/design/bot-neighbours.md` §10). All three are off unless set to `on`,
  * so a server that has never heard of bots behaves exactly as before.
@@ -188,6 +199,13 @@ export interface BotConfig {
   readonly levelSlack: number;
   /** Seeded Map Room 2 dev players are repaired and grown too; absent reads as false. */
   readonly seeded?: boolean;
+  /**
+   * Map Room 1 bots are retired ({@link BOTS_RETIRED}): the sweep books no
+   * grow for an active bot, drops any job it finds for one, and runs no
+   * rebalance, so no bot is made, grown or retired by it; seeded dev players
+   * are still tended. Absent reads as false.
+   */
+  readonly retired?: boolean;
 }
 
 /** Whether seeded Map Room 2 dev yards may be given or tended with these variables: never on production. */
@@ -227,11 +245,19 @@ export const wholeNumber = (raw: string | undefined, fallback: number): number =
 export const scaledPace = (scale: number): readonly number[] =>
   scale === 1 ? DAYS_ON_LEVEL : DAYS_ON_LEVEL.map((days) => days * scale);
 
-/** The bot switches as the environment sets them now. */
+/**
+ * Map Room 1 bots are retired for good (owner, 12 Nov 2026; the file
+ * comment). While true, {@link botConfig} ignores `BOTS_FILL` and
+ * `BOTS_REVENGE`, and `BOTS_BRAIN` only outside production.
+ */
+export const BOTS_RETIRED = true;
+
+/** The bot switches as the environment sets them now, held off while {@link BOTS_RETIRED}. */
 export const botConfig = (): BotConfig => ({
-  fill: isSwitchOn(process.env.BOTS_FILL),
-  brain: isSwitchOn(process.env.BOTS_BRAIN),
-  revenge: isSwitchOn(process.env.BOTS_REVENGE),
+  fill: !BOTS_RETIRED && isSwitchOn(process.env.BOTS_FILL),
+  brain: isSwitchOn(process.env.BOTS_BRAIN) && (!BOTS_RETIRED || seededYardsOn(process.env)),
+  revenge: !BOTS_RETIRED && isSwitchOn(process.env.BOTS_REVENGE),
+  retired: BOTS_RETIRED,
   total: Math.floor(positiveNumber(process.env.BOTS_TOTAL, defaultBotsTotal())) || defaultBotsTotal(),
   pace: scaledPace(positiveNumber(process.env.BOTS_PACE_SCALE, 1)),
   quietRate: zeroToOne(process.env.BOTS_QUIET_RATE, DEFAULT_BOTS_QUIET_RATE),

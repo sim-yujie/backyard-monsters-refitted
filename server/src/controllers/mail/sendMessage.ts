@@ -171,7 +171,13 @@ export const sendMessage: KoaController = async (ctx) => {
         break;
 
       case MessageType.MIGRATE_REQUEST: {
-        const outcome = await handleInviteRequest(userid, messageTargetId, message.baseid, getCurrentDateTime());
+        const outcome = await handleInviteRequest(
+          userid,
+          messageTargetId,
+          message.baseid,
+          getCurrentDateTime(),
+          message.hostpayment ?? "resources"
+        );
         if ("refusal" in outcome) {
           ctx.status = Status.OK;
           ctx.body = outcome.refusal;

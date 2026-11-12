@@ -45,8 +45,14 @@ describe("awayBatches", () => {
   });
 });
 
-/** An entity manager that records every call and answers `count` with `unread`. */
-const fakeEm = (options: { unread?: number; fail?: boolean; rows?: unknown[] } = {}) => {
+/**
+ * An entity manager that records every call and answers `count` with
+ * `unread`; the player's muted categories with `muted`, and the prune's row
+ * scan with `scan`.
+ */
+const fakeEm = (
+  options: { unread?: number; fail?: boolean; rows?: unknown[]; muted?: string[]; scan?: unknown[] } = {},
+) => {
   const calls: { method: string; args: unknown[] }[] = [];
   const record =
     (method: string, answer: (...args: unknown[]) => unknown = () => undefined) =>
@@ -61,7 +67,14 @@ const fakeEm = (options: { unread?: number; fail?: boolean; rows?: unknown[] } =
     nativeUpdate: record("nativeUpdate"),
     count: record("count", () => options.unread ?? 0),
     find: record("find", () => options.rows ?? []),
-    getConnection: () => ({ execute: record("execute") }),
+    getConnection: () => ({
+      execute: record("execute", (sql) => {
+        const text = String(sql);
+        if (text.includes(`"notifications_off"`)) return [{ notifications_off: options.muted ?? [] }];
+        if (text.startsWith("SELECT")) return options.scan ?? [];
+        return undefined;
+      }),
+    }),
   };
   return { em: em as unknown as EntityManager, calls };
 };
@@ -86,7 +99,11 @@ describe("notifyAndCount", () => {
     const cutoff = (where(dropOld)["created_at"] as { $lt: Date }).$lt;
     const now = (rows[0]!["created_at"] as Date).getTime();
     expect(now - cutoff.getTime()).toBe(NOTIFICATION_MAX_AGE_MS);
-    const keepNewest = calls.find((call) => call.method === "execute")!;
+    // The player's muted categories are read first, for their own row only.
+    const muted = calls.find((call) => call.method === "execute")!;
+    expect(String(muted.args[0])).toContain(`"notifications_off"`);
+    expect(muted.args[1]).toEqual([2505]);
+    const keepNewest = calls.find((call) => call.method === "execute" && String(call.args[0]).includes("DELETE"))!;
     expect(keepNewest.args[1]).toEqual([2505, 2505, NOTIFICATION_LIMIT]);
     expect(where(calls.find((call) => call.method === "count")!)).toMatchObject({ userid: 2505, read_at: null });
   });
@@ -99,10 +116,10 @@ describe("notifyAndCount", () => {
     expect(rows[0]).toMatchObject({ baseid: "3511", kind: "away", jobs: [job("upgrade", 1), job("hatch", "C1")] });
   });
 
-  test("nothing finished: no write, only the count", async () => {
+  test("nothing finished: no write, only the muted categories and the count", async () => {
     const { em, calls } = fakeEm({ unread: 2 });
     expect(await notifyAndCount(em, 2505, null, "jobs", [job("hatch", "C1")])).toBe(2);
-    expect(calls.map((call) => call.method)).toEqual(["count"]);
+    expect(calls.map((call) => call.method)).toEqual(["execute", "count"]);
   });
 
   test("a missing table never throws: the count is left out", async () => {

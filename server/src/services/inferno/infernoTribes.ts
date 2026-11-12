@@ -10,7 +10,6 @@ import type { BuildingDataMap } from "../../types/BuildingData.js";
 import type { SaveData } from "../../types/EntityData.js";
 import type { JsonObject } from "../../types/JsonObject.js";
 import type { TribeData } from "../../types/TribeData.js";
-import { DECLARE_WAR_PAYLOAD } from "./descent.js";
 
 /**
  * The Moloch tribes of the Inferno map (`docs/design/inferno.md` §2.7, WP
@@ -111,21 +110,20 @@ export const respawnInfernoTribe = (tribe: TribeData): void => {
 /**
  * What one fling may carry from the Inferno yard (owner decision R11, §2.5
  * "Map"): what a Housing Bunker of the yard's best finished level holds
- * (200/300/520/780/1,140/1,820), a quarter more under Declare War
- * (`ATTACK.as:592-594`). Flash read the Flinger table at the Housing Bunker's
+ * (200/300/520/780/1,140/1,820). (Flash added a quarter under the alliance
+ * power-up Declare War, `ATTACK.as:592-594`; the power-ups are gone.) Flash read the Flinger table at the Housing Bunker's
  * level (`GLOBAL.as:836-838`, `ATTACK.as:588`), whose level 4 is 640: R11
  * takes the bunker's own 780. Flash took the level of whichever finished
  * bunker loaded last (`HOUSING.AddHouse`); we take the best. 0 with no
  * finished bunker.
  */
-export const infernoTribeFlingCapacity = (buildingdata: BuildingDataMap | null | undefined, declareWar: boolean): number => {
+export const infernoTribeFlingCapacity = (buildingdata: BuildingDataMap | null | undefined): number => {
   let level = 0;
   for (const building of Object.values(buildingdata ?? {})) {
     if (Number(building?.t) !== HOUSING_BUNKER_BUILDING_TYPE) continue;
     level = Math.max(level, levelOf(building));
   }
-  const base = level >= 1 ? HOUSING_BUNKER_CAPACITY[Math.min(level, HOUSING_BUNKER_CAPACITY.length) - 1]! : 0;
-  return declareWar ? base + Math.floor(base * DECLARE_WAR_PAYLOAD) : base;
+  return level >= 1 ? HOUSING_BUNKER_CAPACITY[Math.min(level, HOUSING_BUNKER_CAPACITY.length) - 1]! : 0;
 };
 
 /**

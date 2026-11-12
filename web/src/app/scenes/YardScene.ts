@@ -1,4 +1,6 @@
 import { getSession, logout } from "@/api/auth";
+import { setCurrentAllianceBonuses } from "@/game/alliance/allianceBonuses";
+import { setAllianceTradeFrom } from "@/game/alliance/tradeSwitch";
 import { chatApi, chatConfigFrom } from "@/api/chat";
 import { loadAttackOn, loadOwnBase, loadOwnYard, takeAwayJobs, viewBase } from "@/api/base";
 import {
@@ -22,6 +24,7 @@ import { buildActions } from "@/api/yardBuild";
 import { decorActions } from "@/api/yardDecor";
 import { consumeViewTarget, setAttackTarget, setViewTarget, type ViewTarget } from "@/game/attack/attackTarget";
 import { attackWithFriendWarning } from "@/game/friends/attackWarning";
+import { confirmAttackWindow, showsAttackWindow } from "@/ui/attack/AttackWindow";
 import { setPlayerPool } from "@/game/friends/friendsView";
 import { currentSeason } from "@/game/season";
 import {
@@ -75,7 +78,10 @@ import {
   plannerAccess,
   plannerEntryTooltip,
 } from "@/game/yard/planner/access";
-import { buildOffer, buildsAtOnce, categoryOf } from "@/game/yard/buildCatalogue";
+import { BuildCategory, buildOffer, buildsAtOnce, categoryOf } from "@/game/yard/buildCatalogue";
+import { topUpPrice } from "@/game/yard/resourcePacks";
+import { WALL_TYPES } from "@/game/yard/buildingCosts";
+import { lineBudgetOf, readLineModePreference, writeLineModePreference } from "@/game/yard/wallLine";
 import { BuildPlacement } from "@/game/yard/BuildPlacement";
 import { fixedWorkSource } from "@/game/yard/buildingWork";
 import { startBank, type AnswerBank } from "@/game/yard/bankShow";
@@ -132,10 +138,14 @@ import { ShopScreen } from "@/ui/yard/ShopScreen";
 import { MailDoor } from "@/ui/mail/MailDoor";
 import { NotificationDoor } from "@/ui/notifications/NotificationDoor";
 import { DefencesDoor } from "@/ui/defences/DefencesDoor";
+import { AllianceDoor } from "@/ui/alliance/AllianceDoor";
+import { ReportsDoor } from "@/ui/moderation/ReportsDoor";
 import { setWatchRun } from "@/game/autoAttack/watchRun";
 import { WorldChatBox } from "@/ui/chat/WorldChatBox";
+import { centredLayout, closeCentreWindow, onCentreWindowOpen } from "@/ui/centreWindow";
 import { openCountryPrompt } from "@/ui/chat/CountryPrompt";
 import { supportReminder } from "@/game/support/supportReminder";
+import { quietLogin, setQuietLoginFrom } from "@/game/quietLogin";
 import { reportLook } from "@/app/lookReport";
 import {
   MONSTERS_TAB_ORDER,
@@ -153,7 +163,7 @@ import { MAP_ROOM_TYPE } from "@/ui/yard/buildingActions";
 import { BuildMenu, PlacementBar, spotSentence } from "@/ui/yard/BuildMenu";
 import { bankFloat, showBankResult } from "@/ui/yard/CollectAll";
 import { showGoldenMushroom } from "@/ui/yard/MushroomReward";
-import { FriendsBar } from "@/ui/friends/FriendsBar";
+import { FriendsButton } from "@/ui/friends/FriendsButton";
 import { HelpPanel } from "@/ui/friends/HelpPanel";
 import { YardDock, type YardDockOptions } from "@/ui/yard/YardDock";
 import { StarterKitPicker } from "@/ui/yard/StarterKitPicker";
@@ -177,9 +187,17 @@ import { replayOf } from "@/game/baiter/testHistory";
 import { guideBus, GuideScreen } from "@/game/guide/guideBus";
 import { registerCanvasTarget, tutTarget, TutTarget, type TargetRect } from "@/game/guide/targets";
 import { footprintBox } from "@/game/yard/YardGrid";
+import { OBSERVATORY_TYPE } from "@/game/yard/recycle";
 import { mountYardPlugins, type YardSceneControls } from "@/game/yard/yardPlugins";
 import "@/game/yard/plugins";
 import { devStats } from "../devDetails";
+import { GOLDEN_POP_SECONDS } from "@/game/yard/YardTurkeys";
+
+/**
+ * How long the golden-turkey popup waits: the turkey's whole golden hop plays
+ * on the yard first, so the popup's dimmer does not cover it.
+ */
+const GOLDEN_TURKEY_DELAY_MS = GOLDEN_POP_SECONDS * 1000 + 100;
 
 /**
  * A yard: the player's own, or — handed a {@link ViewTarget} by the map —
@@ -404,6 +422,8 @@ export class YardScene implements Scene {
   private input: YardInput | null = null;
   private panel: BuildingPanel | null = null;
   private panelDock: HTMLElement | null = null;
+  /** Stops hearing middle windows open (`ui/centreWindow.ts`). */
+  private stopCentreWatch: (() => void) | null = null;
   /** The own yard's Monsters screen (§4.1), built the first time it opens. */
   private monsters: MonstersScreen | null = null;
   /** The Chaos Lab and Chaos Factory screen (Inferno WP 6.4), made on first open. */
@@ -416,6 +436,10 @@ export class YardScene implements Scene {
   private bell: NotificationDoor | null = null;
   /** The Defences button and screen (#363): the own yard of a Map Room 2 player. */
   private defences: DefencesDoor | null = null;
+  /** The Alliance button in the More fan and its window (beta 7): the own yard of a Map Room 2 player. */
+  private alliance: AllianceDoor | null = null;
+  /** Moderators only (owner, 12 Nov 2026): chat reports in the game. */
+  private reports: ReportsDoor | null = null;
   /**
    * World chat's box (#282), on every yard while the player's "World chat"
    * switch is on; the connection is `worldChat`'s and outlives it.
@@ -454,7 +478,7 @@ export class YardScene implements Scene {
    */
   private dock: YardDock | null = null;
   /** The friends bar (#371): own yard only; null on a visit. */
-  private friendsBar: FriendsBar | null = null;
+  private friendsButton: FriendsButton | null = null;
   /** Takes back the pool the Gifts tab reads and refreshes after a collect (#375). */
   private clearPlayerPool: (() => void) | null = null;
   /**
@@ -631,6 +655,11 @@ export class YardScene implements Scene {
       api: chatApi,
       container: context.overlay.content,
       onViewYard: (userId) => this.viewChatPlayer(userId),
+      // An Alliance room under-attack alert's Map button (beta 7): the map, opened on that yard.
+      onShowOnMap: (cell) => {
+        setMapFocus({ cell: { col: cell.x, row: cell.y }, open: true });
+        context.goTo(sceneForMap(MapRoomChoice.MAP_ROOM_2));
+      },
     });
 
     this.notices.mount(context.overlay.content);
@@ -675,7 +704,9 @@ export class YardScene implements Scene {
       this.dock.setAttack({ disabled: true, title: `Attack ${target.name}'s yard` });
     }
     if (!target && !this.tribe) {
-      this.friendsBar = new FriendsBar({
+      // The Friends button beside Map; its window opens in the middle (owner, 9 Nov 2026).
+      this.friendsButton = new FriendsButton({
+        modal: context.overlay.modal,
         onVisit: (friend) => this.visitFriendYard(friend),
         onMessage: (friend) => void this.mail?.openCompose({ userid: friend.userid, name: friend.username }),
       }).mount(context.overlay.content);
@@ -691,7 +722,7 @@ export class YardScene implements Scene {
         live: { chat: worldChat },
         onOpen: () => this.makeRoomForMail(),
         onShowOnMap: (cell) => {
-          setMapFocus({ cell });
+          setMapFocus({ cell, open: true });
           context.goTo(sceneForMap(MapRoomChoice.MAP_ROOM_2));
         },
         // An invitation to move accepted here (#205): its price left the pool, which the server now holds.
@@ -702,6 +733,8 @@ export class YardScene implements Scene {
           this.mail?.close();
           void this.defences?.open();
         },
+        // An alliance invite accepted in the mail (beta 7): the yard's load carries the alliance.
+        onAllianceJoined: () => void this.store?.refresh(),
       });
       this.dock.placeBesideMonsters(tutTarget(this.mail.button.element, TutTarget.DOCK_MAIL));
       this.bell = new NotificationDoor({
@@ -727,12 +760,42 @@ export class YardScene implements Scene {
         },
       });
       this.mail.button.element.after(this.defences.button.element);
+      // Alliances (beta 7): in the More fan beside Defences, shown on Map Room 2; the Observatory's panel opens it too.
+      this.alliance = new AllianceDoor({
+        container: context.overlay.modal,
+        onOpen: () => {
+          this.mail?.close();
+          this.bell?.close();
+          this.defences?.close();
+        },
+        onBuildObservatory: () => this.openBuildMenu(OBSERVATORY_TYPE),
+        onOpenMap: () => this.openMap(),
+        onChanged: () => void this.store?.refresh(),
+      });
+      this.defences.button.element.after(this.alliance.button);
+      // Reports (owner, 12 Nov 2026): last in the More fan, shown only to moderators (the server says who).
+      this.reports = new ReportsDoor({
+        container: context.overlay.modal,
+        onOpen: () => {
+          this.mail?.close();
+          this.bell?.close();
+          this.defences?.close();
+          this.alliance?.close();
+        },
+      });
+      this.alliance.button.after(this.reports.button);
     }
     context.overlay.content.append(this.status);
     this.inset = { top: this.hud.element.getBoundingClientRect().bottom, bottom: 0 };
 
     window.addEventListener("keydown", this.onKeyDown);
     document.addEventListener("visibilitychange", this.onVisibilityChange);
+    // A window opening in the middle closes the building panel (owner, 9 Nov
+    // 2026, option A), as the Build menu always did.
+    // On a phone the panel waits under the sheet, as before.
+    this.stopCentreWatch = onCentreWindowOpen(() => {
+      if (centredLayout()) this.select(null);
+    });
 
     this.panelDock = document.createElement("div");
     this.panelDock.className = "map-dock map-dock--right";
@@ -761,6 +824,8 @@ export class YardScene implements Scene {
     this.attackGuard = null;
     window.removeEventListener("keydown", this.onKeyDown);
     document.removeEventListener("visibilitychange", this.onVisibilityChange);
+    this.stopCentreWatch?.();
+    this.stopCentreWatch = null;
     this.dropStore();
     this.endCompare();
     this.planner?.destroy();
@@ -771,10 +836,14 @@ export class YardScene implements Scene {
     this.bell = null;
     this.defences?.destroy();
     this.defences = null;
+    this.alliance?.destroy();
+    this.alliance = null;
+    this.reports?.destroy();
+    this.reports = null;
     this.chat?.destroy();
     this.chat = null;
-    this.friendsBar?.destroy();
-    this.friendsBar = null;
+    this.friendsButton?.destroy();
+    this.friendsButton = null;
     this.clearPlayerPool?.();
     this.clearPlayerPool = null;
     this.stopHelpedWatch?.();
@@ -953,16 +1022,26 @@ export class YardScene implements Scene {
       // Flash client drew it outside BUILD mode. The own yard keeps its edge,
       // and is held by a store from here on.
       const store = target ? null : this.startStore(response, context);
+      // A local test server's `QUIET_LOGIN` (`game/quietLogin.ts`): the own yard's load says so.
+      if (store && !tribe) setQuietLoginFrom(response);
       const yard = store ? store.yard : readYard(response, { foreign: true });
       this.yard = yard;
       this.save = response;
       this.notices.clear("yard-load");
       // The owner's load carries world chat's token and room (#282).
       const chat = target || tribe ? null : chatConfigFrom(response, getSession()?.userId ?? 0, location.protocol === "https:");
-      if (chat) worldChat.configure(chat);
+      // Only the main yard's load says which alliance the player is in; an
+      // outpost's or the Inferno's leaves the Alliance room as it was.
+      if (chat) worldChat.configure(store?.kind === "main" ? chat : { ...chat, alliance: undefined });
+      // The alliance's strengths and weaknesses, for prices outside the yard store (Starter Kits, outpost hatching).
+      if (!target && !tribe && store?.kind === "main") {
+        setCurrentAllianceBonuses(response.alliancedata);
+        // Alliance trading's switch, for chat's Send and Trade buttons (off in beta 7).
+        setAllianceTradeFrom(response.alliancedata);
+      }
       // Once, after login: where the player is from, for a country chat room
       // (owner 3 Nov 2026). The server sends `countryask` until it is answered or put off.
-      if (store?.kind === "main" && response.countryask) {
+      if (store?.kind === "main" && response.countryask && !quietLogin()) {
         openCountryPrompt({
           container: context.overlay.modal,
           onSaved: (settings) => worldChat.setCountryRoom(settings.countryChannel, settings.country),
@@ -973,7 +1052,7 @@ export class YardScene implements Scene {
       // (`game/support/supportReminder.ts` keeps the rest of the rule).
       this.stopSupportOffer?.();
       this.stopSupportOffer = null;
-      if (store?.kind === "main" && !tribe) {
+      if (store?.kind === "main" && !tribe && !quietLogin()) {
         this.stopSupportOffer = supportReminder.offer(() => {
           if (this.context !== context || this.store !== store) return null;
           const guide = store.save.onboarding?.guide.state;
@@ -1133,9 +1212,14 @@ export class YardScene implements Scene {
     this.attacking = true;
     this.dock?.setAttack({ disabled: true, title });
     let confirmed = false;
-    await attackWithFriendWarning(attack, context.overlay.modal, () => {
-      confirmed = true;
-    });
+    // The map's attack window first (`ui/attack/AttackWindow.ts`): what the
+    // player can bring, then Attack or Cancel, as from the map itself.
+    const go = !showsAttackWindow(attack) || (await confirmAttackWindow(context.overlay.modal, attack));
+    if (go && this.context === context) {
+      await attackWithFriendWarning(attack, context.overlay.modal, () => {
+        confirmed = true;
+      });
+    }
     if (!confirmed) {
       if (this.context !== context) return;
       this.attacking = false;
@@ -1220,6 +1304,7 @@ export class YardScene implements Scene {
         this.select(null);
         void this.mushroomPicker?.pick(mushroom);
       },
+      findsOnTop: () => this.renderer.findsOnTop,
       onZoomStep: (direction) => this.zoomBy(Math.pow(ZOOM_STEP, direction)),
       onZoomReset: () => this.fitYard(),
       onCancel: () => this.select(null),
@@ -1495,15 +1580,16 @@ export class YardScene implements Scene {
       const open = this.panel !== null;
       this.panel?.close();
       this.panel = null;
-      this.monsters?.besidePanel(false);
-      this.siege?.besidePanel(false);
-      this.shop?.besidePanel(false);
       if (open) guideBus.emit("panel", { building: null });
       return;
     }
 
-    // The panel docks where the build menu does.
-    this.buildMenu?.close();
+    // The panel and a middle window (the Build menu, the Monsters screen, the
+    // Shop, ...) make way for each other on a computer (owner, 9 Nov 2026,
+    // option A): the window in the middle shuts as a building's panel opens
+    // on the right. A phone keeps its old way: only the Build menu shuts.
+    if (centredLayout()) closeCentreWindow();
+    else this.buildMenu?.close();
 
     if (!this.panel) {
       const dock = this.panelDock;
@@ -1516,9 +1602,6 @@ export class YardScene implements Scene {
           this.panel = null;
           this.selected = null;
           this.renderer.setSelected(null);
-          this.monsters?.besidePanel(false);
-          this.siege?.besidePanel(false);
-          this.shop?.besidePanel(false);
           guideBus.emit("panel", { building: null });
         },
         // Clicking the Yard Planner should open the yard planner. The offer is
@@ -1536,20 +1619,24 @@ export class YardScene implements Scene {
       }).mount(dock);
     }
     this.panel.show(building);
-    this.monsters?.besidePanel(true);
-    this.siege?.besidePanel(true);
-    this.shop?.besidePanel(true);
     guideBus.emit("panel", { building: { id: building.id, type: building.type } });
 
-    // A monster building opens its tab of the Monsters screen (D4), beside
-    // the panel, which keeps the building's own upgrade. A Housing's panel is
-    // the Housing panel itself (#170), which has the tab's army in it, so the
-    // screen steps aside for it. Still on its first build (level 0), the
-    // building has no working window yet: the panel's construction info is
-    // all a click should open (#281).
+    // On a computer a monster building's click opens its panel only, as
+    // every building's does: the panel keeps its upgrade, and its Open button
+    // brings the Monsters screen to the middle, which closes the panel
+    // (owner, 9 Nov 2026, option A; it opened beside the panel before, D4).
+    // A phone keeps its old way: the click opens the building's tab as a
+    // sheet over the panel, which waits under it (the Champion Cage and
+    // Chamber their Champion tab, the Juicer and Monster Bunker the Housing
+    // tab, since 12 Nov 2026). A Housing's panel is the Housing panel itself
+    // (#170), with the tab's army in it, so the screen steps aside for it.
+    // Still on its first build (level 0), the building has no working window
+    // yet: the panel's construction info is all a click should open (#281).
+    if (centredLayout()) return;
     const tab = monstersTabFor(building.type);
-    if (tab === MonstersTabId.HOUSING) this.monsters?.close();
-    else if (tab && this.binding && building.level > 0) {
+    if (building.type === MonsterBuilding.HOUSING || building.type === MonsterBuilding.HOUSING_BUNKER) {
+      this.monsters?.close();
+    } else if (tab && this.binding && building.level > 0) {
       this.openMonsters(tab, { buildingId: building.id });
     }
   }
@@ -1576,7 +1663,6 @@ export class YardScene implements Scene {
     this.hud?.achievements?.close();
     this.siege?.close();
     this.monsters ??= new MonstersScreen({ binding, tabs }).mount(context.overlay.content);
-    this.monsters.besidePanel(this.panel !== null);
     this.monsters.open(shown, focus);
     // The player is looking: the Monsters button's cyan count starts again (#192).
     finishedMonstersJobs.clear();
@@ -1600,7 +1686,6 @@ export class YardScene implements Scene {
     this.hud?.achievements?.close();
     this.monsters?.close();
     this.siege ??= new SiegeScreen({ binding, openMap: () => this.openMap() }).mount(context.overlay.content);
-    this.siege.besidePanel(this.panel !== null);
     this.siege.open(site);
   }
 
@@ -1659,7 +1744,6 @@ export class YardScene implements Scene {
     this.defences?.close();
     this.hud?.achievements?.close();
     this.shop ??= new ShopScreen({ binding }).mount(context.overlay.content);
-    this.shop.besidePanel(this.panel !== null);
     this.shop.open();
   }
 
@@ -1679,6 +1763,12 @@ export class YardScene implements Scene {
       return;
     }
     this.openBuildMenu();
+  }
+
+  /** Opens the Build window on its Decorations tab (the HUD's event coin counter). */
+  private openDecorations(): void {
+    this.openBuildMenu();
+    this.buildMenu?.open(BuildCategory.DECORATIONS);
   }
 
   /**
@@ -1702,7 +1792,7 @@ export class YardScene implements Scene {
     this.hud?.achievements?.close();
     this.buildMenu ??= new BuildMenu({
       binding,
-      onPick: (picked, instant) => this.startPlacement(picked, instant),
+      onPick: (picked, instant, topUp) => this.startPlacement(picked, instant, topUp),
       onTownHall: () => this.showTownHall(),
       onClose: () => {
         this.refreshBuildButton();
@@ -1748,6 +1838,7 @@ export class YardScene implements Scene {
     }
     this.visitLine.dataset["name"] = name;
     this.showHelpBlock();
+    this.refreshStatus();
   }
 
   /** Puts the help block on screen: the line, the wrenches and the open panel. */
@@ -1935,6 +2026,7 @@ export class YardScene implements Scene {
     }
     // An outpost is a Map Room 2 cell: its map is that world, opened on it.
     if (store.kind === "outpost") {
+      // Centred on the outpost just left, its card shut: the player asked for the map, not the card (owner, 12 Nov 2026).
       if (store.target.cell) setMapFocus({ cell: store.target.cell });
       context.goTo(sceneForMap(MapRoomChoice.MAP_ROOM_2));
       return;
@@ -1952,6 +2044,8 @@ export class YardScene implements Scene {
   /** The Defences button: only Map Room 2 keeps defence replays (until #246); an outpost is a Map Room 2 cell. */
   private showDefences(store: YardStore): void {
     this.defences?.setAvailable(store.kind === "outpost" || mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2);
+    // Alliances are the player's, so Map Room 2's main yard and outposts show the button; the Inferno does not.
+    this.alliance?.setAvailable(store.kind === "outpost" || (store.kind !== "inferno" && mapRoomOf(store.save) === MapRoomChoice.MAP_ROOM_2));
   }
 
   /** Carries out what another screen asked the own yard to open (`yardIntent.ts`). */
@@ -2004,9 +2098,10 @@ export class YardScene implements Scene {
    * stays in hand after each block; anything else is done after one, and its
    * panel opens on the new building. A decoration from the Decorations tab
    * comes out of storage (`decor/place`, §8.3): free and finished; one sold
-   * for Shiny is bought as it goes down (`decor/buy`, owner 2026-11-04).
+   * for event coins is bought as it goes down (`decor/buy`, owner 2026-11-04).
    */
-  private startPlacement(type: number, instant: boolean): void {
+  /** `topUp`: the Shiny the player agreed to pay for the resources it is short (issue #393). */
+  private startPlacement(type: number, instant: boolean, topUp?: number): void {
     const store = this.store;
     const camera = this.camera;
     const context = this.context;
@@ -2021,10 +2116,26 @@ export class YardScene implements Scene {
     const actions = buildActions(store);
     const storage = offer.stored !== null ? decorActions(store) : null;
     const buying = offer.price !== undefined;
-    const repeat = buildsAtOnce(type, store.kind) && !instant && !storage;
+    const repeat = buildsAtOnce(type, store.kind) && !instant && !storage && topUp === undefined;
+    // A wall Block can be drawn as a line or L (walls Option B, owner 8 Nov 2026).
+    const lineable = repeat && WALL_TYPES.includes(type);
+    const lineOn = lineable && readLineModePreference();
     let placed: number | null = null;
 
     const bar = new PlacementBar({
+      ...(lineable && {
+        line: {
+          on: lineOn,
+          onToggle: (on: boolean) => {
+            writeLineModePreference(on);
+            bar.setMessage(null);
+            placement.setLineMode(on);
+          },
+          onConfirm: () => void placement.confirmLine(),
+          onClear: () => placement.clearLine(),
+          onUndo: () => placement.undoAnchor(),
+        },
+      }),
       type,
       kind: store.kind,
       instant,
@@ -2064,12 +2175,25 @@ export class YardScene implements Scene {
           }
         }
         // A one-off building is down; the bar says so until the answer (#277).
+        // A top-up is paid at today's shortfall, never above the price agreed:
+        // the server refuses any price but its own.
+        let paid: number | undefined;
+        if (topUp !== undefined && !storage && !instant) {
+          const gate = buildOffer(type, store)?.gate;
+          if (gate?.reason === "shortfall" && !gate.overCap) {
+            paid = topUpPrice(gate.shortfall);
+            if (paid > topUp) {
+              bar.setMessage("The top-up costs more now. Try again.", "bad");
+              return "refused";
+            }
+          }
+        }
         if (!repeat) bar.setBuilding(true);
         const result = storage
           ? await (buying ? storage.buy(type, x, y) : storage.place(type, x, y))
           : instant
             ? await actions.instant(type, x, y)
-            : await actions.build(type, x, y);
+            : await actions.build(type, x, y, paid);
         if (this.placement !== placement) return result.ok ? "placed" : "refused";
         if (!result.ok) {
           bar.setBuilding(false);
@@ -2088,6 +2212,30 @@ export class YardScene implements Scene {
         // The new building's panel: its countdown, Finish now and Cancel build.
         if (placed !== null) this.showPlaced(placed);
       },
+      ...(lineable && {
+        line: {
+          on: lineOn,
+          budget: () => lineBudgetOf(buildOffer(type, store), store.resources),
+          unitCost: offer.cost,
+          onPlan: (plan, stage) => bar.setLine(plan, stage),
+          onBuild: async (cells) => {
+            const result = await actions.walls(type, cells);
+            if (this.placement !== placement) return result.ok ? "placed" : "refused";
+            if (!result.ok) {
+              bar.setMessage(result.refusal.message, "bad");
+              return "refused";
+            }
+            const { built, refused } = result.report;
+            for (const one of built) guideBus.emit("placed", { type, id: one.id });
+            const skipped = refused.length;
+            bar.setMessage(
+              skipped > 0 ? `Built ${built.length}. ${skipped} left out.` : `Built ${built.length}.`,
+              "good",
+            );
+            return "placed";
+          },
+        },
+      }),
     });
     this.placement = placement;
 
@@ -2198,6 +2346,8 @@ export class YardScene implements Scene {
         this.refreshStatus();
       },
       onExit: () => this.closePlanner(),
+      // The yard picture's caption (owner, 2026-11-11): who, and how far along.
+      snapshotCaption: () => ({ name: getSession()?.username ?? null, level: this.store?.playerLevel ?? null }),
       // Compare (#9): the main yard's layouts beside the plan.
       ...(this.store && this.store.kind === "main"
         ? {
@@ -2570,6 +2720,8 @@ export class YardScene implements Scene {
           }).mount(modal);
         },
         openShop: () => this.openShop(),
+        openAlliance: () => this.alliance?.open(),
+        openDecorations: () => this.openDecorations(),
         startBank: (predicted) => this.startBank(predicted),
         markHatcheries: (marks) => this.markHatcheries(marks),
       },
@@ -2626,7 +2778,8 @@ export class YardScene implements Scene {
       },
       focusBuilding: (id, champion) => {
         this.focusBuilding(id);
-        if (champion && this.selected?.id === id) this.panel?.openChampion();
+        // The champions' controls live in the Monsters screen's Champion tab (owner, 12 Nov 2026).
+        if (champion && this.selected?.id === id) this.openMonsters(MonstersTabId.CHAMPION, { buildingId: id });
       },
       closePanel: () => this.select(null),
       selectedBuilding: () => this.selected?.id ?? null,
@@ -2884,7 +3037,14 @@ export class YardScene implements Scene {
     return {
       shake: (spot) => this.renderer.shakeMushroom(spot, true),
       stop: (spot) => this.renderer.shakeMushroom(spot, false),
-      golden: (shiny) => void showGoldenMushroom(context.overlay.modal, shiny, currentSeason()),
+      picked: (spot, golden) => this.renderer.pickedMushroom(spot, golden),
+      // At Thanksgiving the popup waits for the golden turkey's hop on the yard.
+      golden: (shiny) => {
+        const season = currentSeason();
+        const show = () => void showGoldenMushroom(context.overlay.modal, shiny, season);
+        if (season === "thanksgiving") setTimeout(show, GOLDEN_TURKEY_DELAY_MS);
+        else show();
+      },
       ordinary: (quip) => this.notices.show("mushroom", quip, { level: "info", timeoutMs: 4000 }),
       refused: (message) =>
         this.notices.show("mushroom", message, { level: "error", timeoutMs: 5000 }),
@@ -3069,7 +3229,9 @@ export class YardScene implements Scene {
     // #56); the counts, the plot, the frame time and the selected id are a
     // developer's (#150), behind their own opt-in switch (`devStats`, beta 6).
     const parts = [
-      ...(this.target ? [`${this.whose()}, read-only`] : []),
+      // A friend's yard in help mode says "Helping …" at the top; "read-only"
+      // under it would contradict it (tester, 9 Nov), so it just names the yard.
+      ...(this.target ? [this.helpBlock ? this.whose() : `${this.whose()}, read-only`] : []),
       ...(this.hint ? [this.hint] : []),
       ...(devStats()
         ? [

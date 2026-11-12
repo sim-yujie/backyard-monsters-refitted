@@ -59,6 +59,50 @@ import { writeAmount, type AmountChange } from "./amountChange";
  * find, a stone wall with the level up arrow for upgrade walls, and a set bear
  * trap inside a yellow reload arrow for re-arm traps (`rearm2` is a spiked
  * mine in the same arrow).
+ *
+ * The profile window's stats (`ui/profile/ProfileDialog.ts`,
+ * `art-samples/profile-icons`, painted 7 Nov in place of line icons): the
+ * domed Town Hall with its horn antenna (`townhall`), a gold crown for empire
+ * points (`empire`), two smiling monster heads for friends (`friends`) and the
+ * crimson alliance shield with its gold stripe (`alliance`).
+ *
+ * Pinning a friend to the top of the list (beta 7, `ui/friends/FriendsTab.ts`):
+ * `pin`, a glossy red push-pin with a steel needle (painted by Codex, 9 Nov:
+ * the stand-in copy of the gold crown read as a crown, tester 9 Nov).
+ *
+ * World chat's player strip (`ui/chat/ChatBox.ts`, owner 8 Nov: icons rather than
+ * words): `addfriend` is the two monster heads (`friends`) with a green plus disc on
+ * their corner (9 Nov, `tools/game-icons/friends_icons.py`, so Add no longer looks
+ * like the friend count). `mute` and `report` are STAND-INS until they are painted:
+ * `mute` the blue Protection shield (wants a speaker with a cross) and `report` the
+ * white flag of Retreat (wants a red warning flag). Replace their `*.webp` files to
+ * change them.
+ *
+ * Event coins (beta 7, `game/eventCoins.ts`, `art-samples/event-coin`,
+ * repainted by Codex 8 Nov to look nothing like Shiny's gold coins): the
+ * purple and teal gem, the owner's pick of three (option B, 8 Nov).
+ *
+ * The Events page (`ui/events/EventsPanel.ts`, `art-samples/events-icons`, painted
+ * 8 Nov in place of line icons): a gold stopwatch with speed streaks for a speed-up
+ * (`speedup`), a flaming cog with a lightning bolt for Production Overdrive
+ * (`overdrive`), a crossed wrench and hammer for another store boost such as
+ * Sharper Tools (`tools`), and the festive calendar with a gold star and rosette on
+ * the Events button (`event`), which suits every event, not just Halloween.
+ *
+ * The Friends window's "no gift sent today" mark and the Friends button's gift
+ * badge (`ui/friends/FriendsWindow.ts`, owner 9 Nov: painted icons, no emoji):
+ * `gift` is Flash's own red gift box with its yellow ribbon (`icon_gifts`,
+ * `client/images/612.png`), its round brown frame taken off, made by
+ * `tools/game-icons/friends_icons.py` (9 Nov); it stands in until a painted one
+ * at the size of the others is made; replace its `*.webp` files to change it.
+ * The Friends window's friend requests: `mail`, a cream envelope with a red
+ * wax seal (painted by Codex, 9 Nov: Flash's gold `icon_mail` read as a gem at
+ * 22 px, tester 9 Nov).
+ *
+ * The Yard Planner's "Yard picture" button (owner 12 Nov: a photo icon,
+ * `art-samples/camera-icon`, painted by Codex): `camera`, a chunky red camera
+ * with a big blue lens and a yellow flash bulb; `camera2`, the other option, a
+ * teal instant camera with a photo of a yard coming out of its top.
  */
 export const GAME_ICONS = {
   health: "Health",
@@ -101,6 +145,23 @@ export const GAME_ICONS = {
   wallupgrade: "Upgrade walls",
   rearm: "Re-arm traps",
   rearm2: "Re-arm traps",
+  townhall: "Town Hall",
+  empire: "Empire points",
+  friends: "Friends",
+  alliance: "Alliance",
+  pin: "Pin to top",
+  addfriend: "Add friend",
+  mute: "Mute",
+  report: "Report",
+  eventcoin: "Glimmers",
+  speedup: "Speed-up",
+  overdrive: "Production Overdrive",
+  tools: "Store boost",
+  event: "Events",
+  gift: "Gift",
+  mail: "Friend requests",
+  camera: "Yard picture",
+  camera2: "Yard picture",
 } as const satisfies Record<string, string>;
 
 export type GameIconName = keyof typeof GAME_ICONS;

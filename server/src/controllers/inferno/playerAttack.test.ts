@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Context } from "koa";
 
 /**
@@ -73,18 +73,6 @@ mock.module("../../server.js", () => ({
     srem: async () => 1,
     smembers: async () => [],
   },
-}));
-
-const REAL_POWERUPS = "../../services/alliance/powerups.ts?real";
-const realPowerups = (await import(REAL_POWERUPS)) as typeof import("../../services/alliance/powerups.js");
-let standIn = true;
-afterAll(() => {
-  standIn = false;
-});
-mock.module("../../services/alliance/powerups.js", () => ({
-  ...realPowerups,
-  isDeclareWarRunning: async (allianceId: number | null) => (standIn ? false : realPowerups.isDeclareWarRunning(allianceId)),
-  runningPowerups: async (allianceId: number | null) => (standIn ? [] : realPowerups.runningPowerups(allianceId)),
 }));
 
 const { infernoAttackStart } = await import("./descentAttack.js");

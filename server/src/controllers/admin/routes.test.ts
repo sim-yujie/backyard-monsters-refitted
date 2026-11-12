@@ -57,6 +57,10 @@ describe("the dashboard routes (controllers/admin/routes.ts)", () => {
     expect(routes.map((r) => r.route)).toEqual(expect.arrayContaining(["GET /modmail", "GET /modmail/:threadid"]));
   });
 
+  test("include the Flagged list routes: every flagged player, and one player's entries", () => {
+    expect(routes.map((r) => r.route)).toEqual(expect.arrayContaining(["GET /flagged", "GET /flagged/:id"]));
+  });
+
   test("all go through the owner-only check", () => {
     expect(routes.length).toBeGreaterThan(5);
     for (const { route, rest } of routes) expect(`${route}: ${rest}`).toContain("apiVersion, adminOnly,");

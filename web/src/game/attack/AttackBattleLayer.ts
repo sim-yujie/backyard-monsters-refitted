@@ -9,6 +9,7 @@ import {
 } from "pixi.js";
 import {
   BOMBS,
+  SPLIT_COPY_SCALE,
   TICKS_PER_SECOND,
   battleDefence,
   isSpurtzCannon,
@@ -1938,8 +1939,10 @@ export class AttackBattleLayer {
           view.cellKey = layout.key;
           body.texture = cell;
         }
-        const scaleX = squash.x * flat.x;
-        const scaleY = squash.y * flat.y;
+        // A Slimeattikus's Lab "Split" copy is drawn smaller, about its feet.
+        const shrink = creep.splitCopy ? SPLIT_COPY_SCALE : 1;
+        const scaleX = squash.x * flat.x * shrink;
+        const scaleY = squash.y * flat.y * shrink;
         body.scale.set(scaleX, scaleY);
         view.baseTint = 0xffffff;
         // Whole pixels, as Flash drew them (`MonsterBase.as:613-616`): a cell
@@ -1949,7 +1952,7 @@ export class AttackBattleLayer {
           Math.round(layout.groundX + (layout.x - layout.groundX) * scaleX + lunge * view.lungeX + knock * view.struckX),
           Math.round(layout.groundY + (layout.y - layout.groundY) * scaleY + lunge * view.lungeY + knock * view.struckY - hop),
         );
-        top = layout.y - hop;
+        top = layout.groundY + (layout.y - layout.groundY) * shrink - hop;
       } else {
         view.baseTint = this.placeMarker(body, ground, creep);
         top = body.y;

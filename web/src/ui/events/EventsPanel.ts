@@ -1,4 +1,4 @@
-import type { EventReward, EventView, LadderView } from "@/api/events";
+import type { EventReward, EventView, LadderView, Mr2WelcomeStatus } from "@/api/events";
 import {
   calendarDays,
   claimableTiers,
@@ -14,9 +14,12 @@ import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import { typeName } from "@/game/yard/planner/summary";
 import { AMOUNT_CHANGE_SIGNS } from "@/ui/amountChange";
 import { formatAmount, formatCountdown } from "@/ui/format";
+import { gameIcon, type GameIconName } from "@/ui/gameIcon";
+import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { resourceIcon, RESOURCE_KEYS } from "@/ui/resourceIcon";
 import { eventsArt } from "./eventsArt";
+import { mr2WelcomeCard, paintWelcomeReward, paintWelcomeTimeline, welcomeDaysText } from "./mr2WelcomeCard";
 import "./events.css";
 
 /**
@@ -59,6 +62,8 @@ export type EventsPanelView =
       readonly claiming: string | null;
       /** A refusal to show under its claim. */
       readonly refusal: { readonly key: string; readonly message: string } | null;
+      /** The player's "New to Map Room 2" card (`ui/events/mr2WelcomeCard.ts`), first on the page; null for none. */
+      readonly mr2Welcome?: Mr2WelcomeStatus | null;
     };
 
 export interface EventsPanelOptions {
@@ -66,6 +71,8 @@ export interface EventsPanelOptions {
   onClaimTier(event: EventView, tier: number): void;
   onRetry(): void;
   onClose(): void;
+  /** The "New to Map Room 2" card's Go to Map Room 2. */
+  onGoToMapRoom2?(): void;
 }
 
 const el = <K extends keyof HTMLElementTagNameMap>(
@@ -81,6 +88,26 @@ const el = <K extends keyof HTMLElementTagNameMap>(
 
 /** A decoration's name, as the yard names it. */
 const decorationName = (type: number): string => typeName(type);
+
+/** A store buff's length on its badge: "7d" for Sharper Tools, "12h" for Production Overdrive. */
+const SHOP_ITEM_SHORT: Readonly<Record<string, string>> = { BST: "7d", POD: "12h", EXH: "24h" };
+
+/**
+ * A store buff's painted icon (`ui/gameIcon.ts`, art-samples/events-icons):
+ * Production Overdrive the flaming cog, any other the wrench and hammer.
+ */
+const SHOP_ITEM_ICON: Readonly<Record<string, GameIconName>> = { POD: "overdrive" };
+
+/** A reward's painted icon, 24 px, its word left to the badge's own words. */
+const rewardIcon = (name: GameIconName): HTMLImageElement =>
+  gameIcon(name, { size: 24, decorative: true, className: "events-reward__icon" });
+
+/**
+ * A decoration's picture taller than this times its width (the Scarecrow,
+ * 48 x 72) is drawn taller, so it reads as big as a squat one (the D.A.V.E.
+ * Pumpkin, 48 x 64) rather than as a thin sliver.
+ */
+const TALL_ART = 1.3;
 
 /** The words for a list of rewards: "10,000 Twigs, 10,000 Pebbles + 25 Shiny". */
 export const rewardsText = (rewards: readonly EventReward[]): string =>
@@ -137,6 +164,9 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
         return amount > 0 ? [[key, amount] as const] : [];
       });
       for (const [key] of amounts) pictures.append(resourceIcon(key, { decorative: true }));
+      // Three or four piles side by side spill out of a phone's day tile: a 2 x 2 block instead.
+      if (amounts.length > 2) pictures.classList.add("events-reward__pictures--block");
+      if (amounts.length === 2) pictures.classList.add("events-reward__pictures--pair");
       const values = [...new Set(amounts.map(([, amount]) => amount))];
       figure = values.map((amount) => shortAmount(amount)).join("/");
       break;
@@ -146,15 +176,30 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
       figure = shortAmount(reward.amount);
       break;
     case "speedup":
-      pictures.append(eventsArt("clock", 20));
+      pictures.append(rewardIcon("speedup"));
       figure = `${reward.item === "SP3" ? "-2h" : "-1h"}${reward.count > 1 ? ` x${reward.count}` : ""}`;
       break;
     case "shopItem":
-      pictures.append(eventsArt("tools", 20));
-      figure = reward.item === "BST" ? "7d" : "";
+      pictures.append(rewardIcon(SHOP_ITEM_ICON[reward.item] ?? "tools"));
+      figure = SHOP_ITEM_SHORT[reward.item] ?? "";
       break;
     case "krallen":
       pictures.append(krallenPicture(1, "icon", "events-reward__image"));
+      break;
+    case "korath": {
+      // Flash's own Monster Madness prize pictures (upstream `events/wotc/wotc_reward<n>.png`).
+      const power = Math.min(Math.max(Math.floor(reward.power), 1), KORATH_POWER_SHORT.length);
+      const image = el("img", "events-reward__image events-reward__image--korath");
+      image.src = `/events/korath-power-${power}.png`;
+      image.alt = "";
+      image.decoding = "async";
+      pictures.append(image);
+      figure = KORATH_POWER_SHORT[power - 1]!;
+      break;
+    }
+    case "eventCoins":
+      pictures.append(rewardIcon("eventcoin"));
+      figure = shortAmount(reward.amount);
       break;
     case "decoration": {
       const art = resolveArt(reward.type, 1, ArtState.DEFAULT);
@@ -163,22 +208,67 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
         image.src = art.top.url;
         image.alt = "";
         image.decoding = "async";
+        image.addEventListener(
+          "load",
+          () => image.classList.toggle("events-reward__image--tall", image.naturalHeight > image.naturalWidth * TALL_ART),
+          { once: true },
+        );
         pictures.append(image);
       } else {
         pictures.append(eventsArt("gift", 20));
       }
-      figure = reward.count > 1 ? `x${reward.count}` : "";
+      // Its name, like every other tile's figure ("Acorn"); the count too when there are more.
+      figure = reward.count > 1 ? `${decorationName(reward.type)} x${reward.count}` : decorationName(reward.type);
       break;
     }
   }
   badge.append(pictures);
-  const amount = reward.kind === "resources" || reward.kind === "shiny";
+  const amount = reward.kind === "resources" || reward.kind === "shiny" || reward.kind === "eventCoins";
   if (gained && amount && figure) {
     badge.classList.add("events-reward--gain");
     figure = `${AMOUNT_CHANGE_SIGNS.gain}${figure}`;
   }
   if (figure) badge.append(el("span", "events-reward__figure", figure));
   return badge;
+};
+
+/** Korath's powers' short names for a reward tile, 1 Burn to 3 Fists of Doom. */
+const KORATH_POWER_SHORT = ["Burn", "Fire", "Fists"] as const;
+
+/** Ladders drawn with one bar across every goal (Monster Madness: points in the millions, three far-apart goals). */
+const GOAL_BAR_KINDS: ReadonlySet<string> = new Set(["monster-madness"]);
+
+/**
+ * One bar from 0 to the top goal, filled to the player's points, with a tick
+ * at each goal (green once reached) and its figure under it.
+ */
+export const goalsBar = (ladder: LadderView): HTMLElement => {
+  const top = Math.max(1, ...ladder.tiers.map((tier) => tier.need));
+  const reached = Math.min(ladder.counter, top);
+  const share = (value: number): string => `${Math.round((value / top) * 1000) / 10}%`;
+  const wrap = el("div", "events-goals");
+  const bar = el("div", "events-goals__bar");
+  bar.setAttribute("role", "progressbar");
+  bar.setAttribute("aria-label", ladder.label);
+  bar.setAttribute("aria-valuemin", "0");
+  bar.setAttribute("aria-valuemax", String(top));
+  bar.setAttribute("aria-valuenow", String(reached));
+  bar.setAttribute("aria-valuetext", `${formatAmount(ladder.counter)} of ${formatAmount(top)}`);
+  const fill = el("span", "events-goals__fill");
+  fill.style.width = share(reached);
+  bar.append(fill);
+  const marks = el("div", "events-goals__marks");
+  for (const tier of ladder.tiers) {
+    const done = ladder.counter >= tier.need;
+    const tick = el("span", `events-goals__tick${done ? " events-goals__tick--done" : ""}`);
+    tick.style.left = share(tier.need);
+    bar.append(tick);
+    const label = el("span", `events-goals__mark${done ? " events-goals__mark--done" : ""}`, shortAmount(tier.need));
+    label.style.left = share(tier.need);
+    marks.append(label);
+  }
+  wrap.append(bar, marks);
+  return wrap;
 };
 
 /** Krallen's portrait at a level. */
@@ -218,20 +308,28 @@ export class EventsPanel {
   private readonly panel: Panel;
   private readonly options: EventsPanelOptions;
 
+  /** Its place in the middle of the screen, one window at a time (`ui/centreWindow.ts`). */
+  private readonly centre: CentreWindow;
+
   constructor(options: EventsPanelOptions) {
     this.options = options;
     this.panel = new Panel({
       title: "Events",
       className: "events-panel",
       closeOnEscape: true,
-      onClose: () => options.onClose(),
+      onClose: () => {
+        this.centre.closed();
+        options.onClose();
+      },
     });
     this.element = this.panel.element;
+    this.centre = centreWindow(this.element, () => this.close());
     this.render({ kind: "loading" });
   }
 
   mount(container: HTMLElement): this {
     this.panel.mount(container);
+    this.centre.opened();
     return this;
   }
 
@@ -256,6 +354,12 @@ export class EventsPanel {
     for (const line of this.element.querySelectorAll<HTMLElement>("[data-next-at]")) {
       line.textContent = nextText(Number(line.dataset["nextAt"]) - now);
     }
+    for (const line of this.element.querySelectorAll<HTMLElement>("[data-welcome-ends]")) {
+      line.textContent = welcomeDaysText(Number(line.dataset["welcomeEnds"]), now);
+    }
+    for (const line of this.element.querySelectorAll<HTMLElement>("[data-welcome-start]")) paintWelcomeTimeline(line, now);
+    // A Frontier Pass reward used today is back at the daily reset.
+    for (const row of this.element.querySelectorAll<HTMLElement>(".events-welcome__reward[data-back-at]")) paintWelcomeReward(row, now);
   }
 
   /**
@@ -285,10 +389,18 @@ export class EventsPanel {
       return;
     }
 
+    // On a computer the page is wide (owner, 9 Nov: windows open in the
+    // middle now, events.css): the Frontier Pass across the top, the events
+    // on now in the wide main column, Coming up in a column at the side. On a
+    // phone, or a narrow window, one under the other in that order.
     const { active, upcoming } = sortEvents(view.events);
-    const sections: HTMLElement[] = [];
-    for (const event of active) sections.push(this.activeCard(event, view));
-    if (active.length === 0) sections.push(el("p", "events-status", "No event is on right now."));
+    const page = el("div", "events-page");
+    const welcome = view.mr2Welcome ?? null;
+    if (welcome) page.append(mr2WelcomeCard(welcome, view.now, () => this.options.onGoToMapRoom2?.()));
+    const main = el("div", "events-page__main");
+    for (const event of active) main.append(this.activeCard(event, view));
+    if (active.length === 0 && !welcome) main.append(el("p", "events-status", "No event is on right now."));
+    if (main.childElementCount > 0) page.append(main);
     if (upcoming.length > 0) {
       const section = el("section", "events-upcoming");
       const list = el("ul", "events-upcoming__list");
@@ -303,11 +415,13 @@ export class EventsPanel {
         list.append(item);
       }
       section.append(el("h3", "events-section__title", "Coming up"), list);
-      sections.push(section);
+      page.append(section);
+      // The side column only beside events that are on.
+      if (main.childElementCount > 0) page.classList.add("events-page--side");
     }
     // Keep the scroll where it was: a claim re-renders the whole page.
     const scroll = this.panel.body.scrollTop;
-    this.panel.setContent(...sections);
+    this.panel.setContent(page);
     this.panel.body.scrollTop = scroll;
   }
 
@@ -350,10 +464,15 @@ export class EventsPanel {
       const button = el("button", "btn btn--primary events-claim");
       button.type = "button";
       button.dataset["claim"] = key;
-      button.append(
-        el("span", "events-claim__label", `Claim day ${today.day}`),
-        el("span", "events-claim__what", rewardsText(today.rewards)),
-      );
+      // The rewards as pictures and figures, "[twig][pebble] 10K [glimmer] 15", not
+      // words, so a phone's button keeps to two lines (tester, 9 Nov); the words
+      // on hover and for a screen reader.
+      const what = el("span", "events-claim__what");
+      what.append(...today.rewards.map((reward) => rewardBadge(reward)));
+      const words = `Claim day ${today.day}: ${rewardsText(today.rewards)}`;
+      button.setAttribute("aria-label", words);
+      button.title = words;
+      button.append(el("span", "events-claim__label", `Claim day ${today.day}`), what);
       button.disabled = view.claiming !== null;
       if (view.claiming === key) button.classList.add("events-claim--busy");
       button.addEventListener("click", () => this.options.onClaimCalendar(event));
@@ -394,7 +513,8 @@ export class EventsPanel {
   }
 
   private ladder(event: EventView, ladder: LadderView, view: Extract<EventsPanelView, { kind: "list" }>): HTMLElement {
-    const section = el("section", "events-ladder");
+    const goalBar = GOAL_BAR_KINDS.has(event.kind);
+    const section = el("section", `events-ladder${goalBar ? ` events-ladder--goals events-ladder--${event.kind}` : ""}`);
     const head = el("div", "events-calendar__head");
     head.append(
       el("h4", "events-section__title", ladder.label),
@@ -408,25 +528,34 @@ export class EventsPanel {
       row.dataset["tier"] = String(index);
       const need = el("span", "events-tier__need", `${shortAmount(Math.min(ladder.counter, tier.need))} / ${shortAmount(tier.need)}`);
       const rewards = el("span", "events-tier__rewards");
-      for (const reward of tier.rewards) rewards.append(rewardBadge(reward));
+      // Glimmers in a column of their own at the row's right, the same place on
+      // every tier however wide the rewards before them (tester, 9 Nov).
+      const coins = el("span", "events-tier__coins");
+      for (const reward of tier.rewards) (reward.kind === "eventCoins" ? coins : rewards).append(rewardBadge(reward));
       rewards.title = rewardsText(tier.rewards);
       row.append(need, rewards);
+      if (coins.childElementCount > 0) row.append(coins);
+      // The tick, lock or Claim in one fixed-width slot, so the Glimmers column does not shift with it.
+      const end = el("span", "events-tier__end");
       if (tier.claimed) {
-        row.append(eventsArt("tick", 18, "events-tier__mark"));
+        end.append(eventsArt("tick", 18, "events-tier__mark"));
       } else if (ready.has(index)) {
         const button = el("button", "btn btn--primary events-tier__claim", "Claim");
         button.type = "button";
         button.dataset["claim"] = key;
         button.disabled = view.claiming !== null;
         button.addEventListener("click", () => this.options.onClaimTier(event, index));
-        row.append(button);
+        end.append(button);
       } else {
-        row.append(eventsArt("lock", 18, "events-tier__mark"));
+        end.append(eventsArt("lock", 18, "events-tier__mark"));
       }
+      row.append(end);
       list.append(row);
       if (view.refusal?.key === key) list.append(refusalNote(view.refusal.message));
     });
-    section.append(head, list);
+    section.append(head);
+    if (goalBar) section.append(goalsBar(ladder));
+    section.append(list);
     return section;
   }
 

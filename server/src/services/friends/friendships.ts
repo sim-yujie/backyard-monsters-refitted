@@ -7,6 +7,7 @@ import { dropWaitingGifts } from "./gifts.js";
 import { askAgainAt, blockedIdsOf, FRIEND_LIMITS, lapseCutoff, secondsOf, utcDayStart } from "./friendRules.js";
 import { friendView, requestView, type FriendView, type RequestView } from "./friendViews.js";
 import { recordNewFriendship } from "../quests/record.js";
+import { recordFriendsHeld } from "../achievements/daily.js";
 
 /**
  * Friendship itself (`docs/design/friends.md` §3.1, §3.6 and §6.2, issue
@@ -221,7 +222,11 @@ export const sendFriendRequest = async (
 
   await sendNotices(em, notices);
   // Quests: a new friend who counts (`services/quests/friends.ts`), each side.
-  if (accepted) await recordNewFriendship(em, me, other, now);
+  if (accepted) {
+    await recordNewFriendship(em, me, other, now);
+    // Achievements: each side's friends held now (Popular, #392).
+    await recordFriendsHeld(em, [me, other], now);
+  }
   const request = (await requestView(em, requestid, me))!;
   if (!accepted) return { request };
   const friend = await friendView(em, me, other, now);
@@ -277,7 +282,11 @@ export const answerFriendRequest = async (
 
   await sendNotices(em, notices);
   // Quests: only when this answer made the two friends (notices are sent then).
-  if (notices.length > 0) await recordNewFriendship(em, me, other, now);
+  if (notices.length > 0) {
+    await recordNewFriendship(em, me, other, now);
+    // Achievements: each side's friends held now (Popular, #392).
+    await recordFriendsHeld(em, [me, other], now);
+  }
   if (!accept) return {};
   const friend = await friendView(em, me, other, now);
   return friend ? { friend } : {};

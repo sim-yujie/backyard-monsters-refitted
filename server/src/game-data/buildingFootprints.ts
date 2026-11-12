@@ -1,4 +1,5 @@
 import type { YardKind } from "./buildingCosts.js";
+import { REVAMP_DECORATIONS } from "./revampDecorations.js";
 
 /**
  * Building footprints, in yard units, one entry per building type id.
@@ -36,7 +37,7 @@ export interface Footprint {
   w: number;
   /** Extent along +Y from the building's origin, in yard units. */
   h: number;
-  /** Props `type == "decoration"`: ids 28-50, 55-111, 120, 121, 131 and 135. */
+  /** Props `type == "decoration"`: ids 28-50, 55-111, 120, 121, 131 and 135, and this project's own from 201. */
   decoration: boolean;
 }
 
@@ -176,6 +177,11 @@ export const FOOTPRINTS: Record<number, Footprint> = {
   138: { w: 130, h: 130, decoration: false }, // b_stronghold (tower)
   139: { w: 130, h: 130, decoration: false }, // b_resourceop (cage)
   140: { w: 130, h: 130, decoration: false }, // b_opdefender (special)
+  150: { w: 100, h: 100, decoration: false }, // Observatory (special): this project's alliance pass, HCC-sized
+  // 201 and up: this project's own decorations (`revampDecorations.ts`).
+  ...Object.fromEntries(
+    REVAMP_DECORATIONS.map((one): [number, Footprint] => [one.type, { w: one.size, h: one.size, decoration: true }]),
+  ),
 };
 
 /**

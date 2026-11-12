@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import fixture from "../../../test/fixtures/baseload-sandbox-yard.json";
 import manifest from "../../../test/fixtures/building-art-files.json";
 import { BUILDING_ART_ROWS } from "./buildingArtData";
+import { REVAMP_BUILDING_ROWS } from "./revampBuildings";
+import { isRevampDecoration, REVAMP_DECORATION_ROWS } from "./revampDecorations";
 import {
   artFolder,
   artTypes,
@@ -10,12 +12,14 @@ import {
   hasArt,
   maxHealth,
   prettifyArtKey,
+  propsSize,
   resolveArt,
   restingLayers,
   stripCrop,
 } from "./buildingArt";
 import { stripCells } from "./yardAnim";
 import { setClassicLook } from "@/game/classicLook";
+import { BUILDING_HP, PROPS_SIZE } from "@/game/combat/rules/combatStatsData";
 
 // These tests read the Flash art table, its strips and its files, so they run on the old building art
 // (the new Town Hall is the default; buildingArtTiers.test.ts covers it).
@@ -47,9 +51,11 @@ const fixtureTypes = [
 const fileOf = (url: string): string => url.slice(url.lastIndexOf("/") + 1);
 
 describe("the art table", () => {
-  it("covers 132 building types with no duplicates", () => {
+  it("covers 132 building types with no duplicates, and this project's own decorations", () => {
     expect(BUILDING_ART_ROWS.length).toBe(132);
-    expect(artTypes().length).toBe(BUILDING_ART_ROWS.length);
+    expect(artTypes().length).toBe(
+      BUILDING_ART_ROWS.length + REVAMP_BUILDING_ROWS.length + REVAMP_DECORATION_ROWS.length,
+    );
   });
 
   it("draws the outpost core from the outpost props table", () => {
@@ -62,7 +68,11 @@ describe("the art table", () => {
   });
 
   it("names a folder that exists for every type", () => {
-    const missing = artTypes().filter((type) => folders[artFolder(type) ?? ""]?.exists !== true);
+    // This project's own decorations and buildings are checked on disk by revampDecorations.test.ts
+    // and revampBuildings.test.ts.
+    const missing = artTypes()
+      .filter((type) => !isRevampDecoration(type) && !REVAMP_BUILDING_ROWS.some((row) => row[0] === type))
+      .filter((type) => folders[artFolder(type) ?? ""]?.exists !== true);
     expect(missing).toEqual([]);
   });
 
@@ -118,12 +128,15 @@ describe("the Inferno art", () => {
     expect(buildingName(14, "inferno")).toBe("Under Hall");
   });
 
-  it("keeps the Under Hall's own picture when the new tower and Town Hall art is on", () => {
+  it("draws the Under Hall in its own paint with the Modern look, never as the Town Hall", () => {
     const classic = resolveArt(14, 3, ArtState.DEFAULT, "inferno")?.top.url;
+    expect(classic).toBe("/assets/buildings/itownhall/top.3.v2.png");
     setClassicLook(false);
     try {
-      expect(resolveArt(14, 3, ArtState.DEFAULT, "inferno")?.top.url).toBe(classic);
-      expect(resolveArt(14, 3, ArtState.DEFAULT)?.top.url).not.toBe(classic);
+      expect(resolveArt(14, 3, ArtState.DEFAULT, "inferno")?.top.url).toBe(
+        "/assets/buildings/itownhall/top.c3@2x.webp",
+      );
+      expect(resolveArt(14, 3, ArtState.DEFAULT)?.top.url).not.toContain("itownhall");
     } finally {
       setClassicLook(true);
     }
@@ -389,6 +402,13 @@ describe("names and health", () => {
 
   it("has no ladder for a type it does not know", () => {
     expect(maxHealth(9999, 1)).toBeNull();
+  });
+
+  it("gives the Observatory the health and size the battle uses", () => {
+    // The yard's damaged and destroyed art must switch at the battle's health.
+    expect(maxHealth(150, 1)).toBe(BUILDING_HP[150]?.[0]);
+    expect(maxHealth(150, 0)).toBe(10_000);
+    expect(propsSize(150)).toBe(PROPS_SIZE[150]);
   });
 });
 

@@ -1,3 +1,4 @@
+import { noteCoins } from "@/game/eventCoins";
 import type {
   AchievementUnlock,
   BaseLoadResponse,
@@ -31,6 +32,7 @@ import { MAIN_YARD, outpostBaseid, type OwnYardTarget } from "./ownYards";
 import { freeWorkers, holdsWorker } from "./workers";
 import { readYard, type Yard, type YardBuilding, type YardWorkers } from "./yardModel";
 import { isTribeEditing } from "@/game/tribeEditor/tribeEditSession";
+import { costLessBy, weekendPercent } from "@/game/weekend";
 
 /**
  * One of the player's own yards, the main yard or an outpost, as one source
@@ -199,6 +201,8 @@ export interface YardStoreReader {
   readonly yard: Yard;
   readonly resources: Resources;
   readonly credits: number;
+  /** Event coins (beta 7), the decorations shop's purse; 0 when the load did not carry them. */
+  readonly eventCoins: number;
   /** The storage caps, once a yard route has answered; null before. */
   readonly caps: ResourceCaps | null;
   /** Workers as the yard stands now, predictions included. */
@@ -217,11 +221,13 @@ export interface YardStoreReader {
 
 /** The action side, for the panel and the Monsters screen. */
 export interface YardStoreActions {
-  upgrade(id: number): Promise<YardActionResult<UpgradeStartReport>>;
+  /** `topUp`: pay a shortfall with this much Shiny (Flash's `BRTOPUP`). */
+  upgrade(id: number, topUp?: number): Promise<YardActionResult<UpgradeStartReport>>;
   cancelUpgrade(id: number): Promise<YardActionResult<UpgradeCancelReport>>;
   instantUpgrade(id: number): Promise<YardActionResult<UpgradeInstantReport>>;
   speedUp(id: number, item: SpeedupItem): Promise<YardActionResult<SpeedupReport>>;
-  buy(item: string): Promise<YardActionResult<ShopBuyReport>>;
+  /** `price`: for a resource pack, the Shiny the player agreed to; never charged more. */
+  buy(item: string, price?: number): Promise<YardActionResult<ShopBuyReport>>;
   run<Report>(action: YardStoreAction<Report>): Promise<YardActionResult<Report>>;
   refresh(): Promise<YardActionResult<null>>;
 }
@@ -251,6 +257,16 @@ export interface YardSceneHooks {
    * Shiny counter use it. Absent where there is no screen.
    */
   openShop?(): void;
+  /**
+   * Opens the alliance window (beta 7): the Observatory's Alliance button.
+   * Absent where there is no window (another player's yard).
+   */
+  openAlliance?(): void;
+  /**
+   * Opens the Build window on its Decorations tab: the HUD's event coin
+   * counter uses it. Absent where there is no Build window.
+   */
+  openDecorations?(): void;
   /**
    * Plays a bank on the press (#208, `bankShow.ts`): each harvester in
    * `predicted` (`predictBank`) throws its resource balls at the Town Hall
@@ -462,6 +478,11 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     return this.current.credits ?? 0;
   }
 
+  /** Event coins (beta 7): the decorations shop's purse; 0 when the load did not carry it. */
+  get eventCoins(): number {
+    return this.current.eventcoins ?? 0;
+  }
+
   get caps(): ResourceCaps | null {
     return this.current.caps ?? null;
   }
@@ -654,11 +675,15 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     return promise;
   }
 
-  upgrade(id: number): Promise<YardActionResult<UpgradeStartReport>> {
+  upgrade(id: number, topUp?: number): Promise<YardActionResult<UpgradeStartReport>> {
     return this.run({
       key: actionKey("upgrade", id),
-      check: (store) => upgradeRefusal(store, id),
-      send: (api, ...yard) => api.upgrade(id, ...yard),
+      check: (store) => {
+        const refusal = upgradeRefusal(store, id);
+        // A topped-up upgrade pays its shortfall in Shiny: the server prices and checks it.
+        return topUp !== undefined && refusal?.reason === "shortfall" ? null : refusal;
+      },
+      send: (api, ...yard) => (topUp === undefined ? api.upgrade(id, ...yard) : api.upgrade(id, yard[0], { topUp })),
     });
   }
 
@@ -704,10 +729,10 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     });
   }
 
-  buy(item: string): Promise<YardActionResult<ShopBuyReport>> {
+  buy(item: string, price?: number): Promise<YardActionResult<ShopBuyReport>> {
     return this.run({
       key: actionKey("buy", item),
-      send: (api, ...yard) => api.shopBuy(item, ...yard),
+      send: (api, ...yard) => (price === undefined ? api.shopBuy(item, ...yard) : api.shopBuy(item, yard[0], { price })),
     });
   }
 
@@ -797,6 +822,11 @@ export class YardStore implements YardStoreReader, YardStoreActions {
     if (typeof response.playerpoints === "number") slices.playerpoints = response.playerpoints;
     if (typeof response.notifications === "number") slices.notifications = response.notifications;
     if (typeof response.questsClaimable === "number") slices.questsClaimable = response.questsClaimable;
+    // Event coins: only when the action changed them (`game/eventCoins.ts` shows the "+15").
+    if (typeof response.eventcoins === "number") {
+      slices.eventcoins = response.eventcoins;
+      noteCoins(response.eventcoins, response.coinsGained);
+    }
     // Nor are the siege weapons and the Inferno purse: they ride `completed` and the siege routes' reports.
     Object.assign(slices, siegeSlices(this.current, response.completed, response.report));
     this.applied = Math.max(this.applied, number);
@@ -939,7 +969,8 @@ const upgradeRefusal = (
   const step = costOf(building.type, building.level, kind);
   if (!step) return refuse("maxLevel", "That building is at its highest level.");
   const [r1, r2, r3, r4] = step;
-  const cost = { r1, r2, r3, r4 };
+  // Less a Builder's Weekend's percentage, as the server charges (`planOneUpgrade`).
+  const cost = costLessBy({ r1, r2, r3, r4 }, weekendPercent("builders", store.now()));
   // A main-yard Inferno building is paid from the Inferno purse (WP 6.1).
   const inferno = isSurfaceInferno(building.type, kind);
   const held = inferno ? purseFunds(store.save).resources : store.resources;

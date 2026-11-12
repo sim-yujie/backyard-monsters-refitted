@@ -9,6 +9,7 @@ import { YardStore, type YardActionResult } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { HOLD_DELAY_MS } from "@/ui/QuantityStepper";
 import { spokenText } from "@/ui/resourceIcon";
+import { resetWeekend, setWeekend } from "@/game/weekend";
 import { HatchTab, plural } from "./HatchTab";
 
 /**
@@ -149,6 +150,10 @@ const monster = (root: HTMLElement, id: string) =>
 const box = (root: HTMLElement) => root.querySelector<HTMLInputElement>(".hatch-add__count")!;
 const maxButton = (root: HTMLElement) => root.querySelector<HTMLButtonElement>(".hatch-add__fill")!;
 const addButton = (root: HTMLElement) => root.querySelector<HTMLButtonElement>(".hatch-add__add")!;
+/** `+` once, as a keyboard press: the count starts at 0 (owner, 12 Nov). */
+const more = (root: HTMLElement, times = 1) => {
+  for (let i = 0; i < times; i++) root.querySelector<HTMLButtonElement>(".hatch-add__step--plus")!.click();
+};
 const type = (input: HTMLInputElement, value: string) => {
   input.focus();
   input.value = value;
@@ -165,6 +170,7 @@ describe("HatchTab: each hatchery's line", () => {
   it("draws hatching now, a slot per stack, empty slots up to the level's limit and the next locked one", () => {
     const { element } = setup(twoHatcheries(), { monster: "C3" });
     // Level 3 takes four stacks; the tab opens on hatchery 10, and one Bolt would open a new stack.
+    more(element);
     const first = line(element, 10);
     expect(tab(element, 10).getAttribute("aria-selected")).toBe("true");
     // The chosen line, before → after for the one Bolt chosen.
@@ -260,6 +266,7 @@ describe("HatchTab: each hatchery's line", () => {
   it("switches the target with a tab, and the upgrade button opens that hatchery", () => {
     const { element, selectBuilding, markHatcheries } = setup(twoHatcheries(), { monster: "C1" });
     // One Pokey would top up the ×5 stack.
+    more(element);
     expect(slotKinds(element)).toEqual(["Pokey ×20", "Pokey ×5+1", "empty", "empty"]);
     tab(element, 11).click();
     expect(tab(element, 11).getAttribute("aria-selected")).toBe("true");
@@ -314,6 +321,7 @@ describe("HatchTab: each hatchery's line", () => {
   it("numbers a lone hatchery too, with no tabs", () => {
     const save = loadOf({}, [building(10, 13, 3)]);
     const { element } = setup(save, { monster: "C1" });
+    more(element);
     expect(element.querySelector(".hatch-tabs")).toBeNull();
     expect(element.querySelector<HTMLElement>(".hatch__tabs-row")!.hidden).toBe(true);
     expect(line(element, 10).className).toBe("hatch-line");
@@ -348,18 +356,46 @@ describe("HatchTab: each hatchery's line", () => {
     expect(tab(element, 10).getAttribute("aria-selected")).toBe("true");
   });
 
-  it("asks before cancelling the monster hatching now, and cancels it for its goo", async () => {
+  it("cancels the monster hatching now on a tap, with no question first (owner, 12 Nov)", async () => {
     const { element, actions } = setup();
+    expect(nowCard(element, 10).title).toBe("Cancel Bolt (hold for more)");
     nowCard(element, 10).click();
-    expect(text(element, ".hatch-now--confirm")).toBe("Cancel this Bolt? Goo 350 back Cancel it Keep");
-    buttonNamed(element, "Keep")!.click();
     expect(element.querySelector(".hatch-now--confirm")).toBeNull();
-    expect(actions.remove).not.toHaveBeenCalled();
-    nowCard(element, 10).click();
-    buttonNamed(element, "Cancel it")!.click();
     await flush();
+    expect(actions.remove).toHaveBeenCalledOnce();
     expect(actions.remove).toHaveBeenCalledWith(10, 0, 1);
     expect(text(element, ".monsters-status")).toBe("Cancelled 1 Bolt: Goo 350 back.");
+  });
+
+  it("cancels on the release of a pointer tap, never on the press, and not at all for a scroll", async () => {
+    vi.useFakeTimers();
+    const { element, actions } = setup();
+    const card = nowCard(element, 10);
+    card.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1 }));
+    expect(actions.remove).not.toHaveBeenCalled();
+    // The browser took the touch for a scroll of the row: nothing is cancelled.
+    card.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true, pointerId: 1 }));
+    vi.advanceTimersByTime(HOLD_DELAY_MS * 3);
+    expect(actions.remove).not.toHaveBeenCalled();
+    card.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 2 }));
+    card.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, pointerId: 2 }));
+    expect(actions.remove).toHaveBeenCalledOnce();
+    expect(actions.remove).toHaveBeenCalledWith(10, 0, 1);
+  });
+
+  it("keeps cancelling while the monster hatching now is held, and stops on release", () => {
+    vi.useFakeTimers();
+    const { element, actions } = setup();
+    const card = nowCard(element, 10);
+    card.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1 }));
+    vi.advanceTimersByTime(HOLD_DELAY_MS + 1000);
+    const held = actions.remove.mock.calls.length;
+    expect(held).toBeGreaterThan(3);
+    expect(actions.remove.mock.calls.every((call) => call[0] === 10 && call[1] === 0 && call[2] === 1)).toBe(true);
+    // The release is heard on the window, even when a redraw replaced the card.
+    window.dispatchEvent(new PointerEvent("pointerup", { button: 0, pointerId: 1 }));
+    vi.advanceTimersByTime(2000);
+    expect(actions.remove).toHaveBeenCalledTimes(held);
   });
 
   it("asks before Clear all, then empties the waiting stacks in one request for their goo", async () => {
@@ -390,11 +426,59 @@ describe("HatchTab: each hatchery's line", () => {
     const { element, actions } = setup();
     const stack = line(element, 10).querySelector<HTMLButtonElement>('.hatch-slot[data-slot="2"]')!;
     expect(stack.getAttribute("aria-label")).toBe("Pokey, 5 waiting. Take one out and get its goo back");
+    expect(stack.title).toBe("Take Pokeys out (hold for more)");
     stack.click();
     await flush();
     expect(actions.remove).toHaveBeenCalledOnce();
     expect(actions.remove).toHaveBeenCalledWith(10, 2, 1);
     expect(text(element, ".monsters-status")).toBe("Took out 1 Pokey: Goo 250 back.");
+  });
+
+  it("counts a held stack down, faster the longer it is held, and takes them all out in one request on release", async () => {
+    vi.useFakeTimers();
+    const { element, actions } = setup();
+    const stack = line(element, 10).querySelector<HTMLButtonElement>('.hatch-slot[data-slot="1"]')!;
+    const badge = () => text(line(element, 10), '.hatch-slot[data-slot="1"] .hatch-slot__count');
+    stack.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1 }));
+    // One out on the press, shown at once, nothing sent yet.
+    expect(badge()).toBe("×19");
+    expect(stack.classList.contains("hatch-slot--taking")).toBe(true);
+    expect(actions.remove).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(HOLD_DELAY_MS + 500);
+    const shown = Number(badge().slice(1));
+    expect(shown).toBeLessThan(17);
+    expect(shown).toBeGreaterThan(0);
+    stack.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, pointerId: 1 }));
+    await flush();
+    expect(actions.remove).toHaveBeenCalledOnce();
+    expect(actions.remove).toHaveBeenCalledWith(10, 1, 20 - shown);
+  });
+
+  it("stops a held stack at none left and sends no more than it holds", async () => {
+    vi.useFakeTimers();
+    const { element, actions } = setup();
+    const stack = line(element, 10).querySelector<HTMLButtonElement>('.hatch-slot[data-slot="2"]')!;
+    stack.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1 }));
+    vi.advanceTimersByTime(HOLD_DELAY_MS + 5000);
+    expect(text(line(element, 10), '.hatch-slot[data-slot="2"] .hatch-slot__count')).toBe("×0");
+    window.dispatchEvent(new PointerEvent("pointerup", { button: 0, pointerId: 1 }));
+    await flush();
+    expect(actions.remove).toHaveBeenCalledOnce();
+    expect(actions.remove).toHaveBeenCalledWith(10, 2, 5);
+  });
+
+  it("takes nothing out when the browser takes the touch for a scroll before any repeat", async () => {
+    vi.useFakeTimers();
+    const { element, actions } = setup();
+    const stack = line(element, 10).querySelector<HTMLButtonElement>('.hatch-slot[data-slot="2"]')!;
+    stack.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1 }));
+    stack.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true, pointerId: 1 }));
+    await flush();
+    vi.advanceTimersByTime(HOLD_DELAY_MS * 3);
+    expect(actions.remove).not.toHaveBeenCalled();
+    // The slot is drawn whole again.
+    expect(text(line(element, 10), '.hatch-slot[data-slot="2"] .hatch-slot__count')).toBe("×5");
+    expect(line(element, 10).querySelector(".hatch-slot--taking")).toBeNull();
   });
 
   it("names a stalled, damaged or unbuilt hatchery's state", () => {
@@ -424,11 +508,13 @@ describe("HatchTab: each hatchery's line", () => {
 });
 
 describe("HatchTab: the message and the housing bar", () => {
-  it("says what is hatching and what the line and the batch do to housing", () => {
+  it("shows what the line and the batch do to housing, with no everyday hint line (owner, 12 Nov)", () => {
     const { element } = setup(twoHatcheries(), { monster: "C1" });
-    expect(text(element, ".hatch-message__title")).toBe(
-      "Hatching Bolts. Choose a monster and how many, then press Add.",
-    );
+    more(element);
+    // No "Hatching Bolts. Choose a monster and how many, then press Add." and no goo icon.
+    expect(element.querySelector(".hatch-message__title")).toBeNull();
+    expect(element.querySelector(".hatch-message .res-icon, .hatch-message__icon")).toBeNull();
+    expect(element.querySelector(".hatch-message")!.textContent).not.toMatch(/press Add/);
     // 15 (the Bolt) + 250 (25 Pokeys) on the way, 10 more for the one Pokey chosen.
     expect(text(element, ".hatch-housing__label")).toBe("Housing after this add");
     expect(text(element, ".hatch-housing__value")).toBe("275 / 1,080");
@@ -450,6 +536,73 @@ describe("HatchTab: the message and the housing bar", () => {
 });
 
 describe("HatchTab: the grid", () => {
+  it("keeps the list where it is when a monster lower down is chosen (owner, 9 Nov)", () => {
+    const { element } = setup(twoHatcheries(), { buildingId: 10, monster: "C1" });
+    const scroll = element.querySelector<HTMLElement>(".hatch__scroll")!;
+    // As a browser does: focusing an element scrolls the box to it unless told
+    // not to. The focused slot is up in the line, so that is the top.
+    const realFocus = HTMLElement.prototype.focus;
+    const focus = vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (
+      this: HTMLElement,
+      options?: FocusOptions,
+    ) {
+      realFocus.call(this, options);
+      if (!options?.preventScroll && scroll.contains(this)) scroll.scrollTop = 0;
+    });
+    try {
+      // A tap on a waiting stack leaves the focus there; an iPhone's tap on a
+      // monster does not move it (jsdom's click does not either).
+      slots(element)[0]!.focus({ preventScroll: true });
+      scroll.scrollTop = 400;
+      monster(element, "C3").click();
+      expect(monster(element, "C3").getAttribute("aria-pressed")).toBe("true");
+      expect(scroll.scrollTop).toBe(400);
+      // The redrawn slot has the focus back, without a scroll.
+      expect(document.activeElement).toBe(slots(element)[0]);
+      expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    } finally {
+      focus.mockRestore();
+    }
+  });
+
+  it("keeps the list still when a shorter info panel would pull a box scrolled to the bottom up (tester, 9 Nov)", () => {
+    const { element } = setup(twoHatcheries(), { buildingId: 10, monster: "C1" });
+    const scroll = element.querySelector<HTMLElement>(".hatch__scroll")!;
+    const info = element.querySelector<HTMLElement>(".hatch-info")!;
+    // A browser's box, which jsdom lacks: C3's info panel is 22 px shorter
+    // than C1's, the panel never smaller than its held height, and the scroll
+    // never past the bottom (shortening the box pulls it up).
+    const chosenC3 = (): boolean => element.querySelector('[data-monster="C3"]')?.getAttribute("aria-pressed") === "true";
+    const panel = (): number => Math.max(chosenC3() ? 178 : 200, Number.parseFloat(info.style.minHeight) || 0);
+    let top = 0;
+    Object.defineProperty(info, "offsetHeight", { configurable: true, get: panel });
+    Object.defineProperty(scroll, "scrollHeight", { configurable: true, get: () => 800 + panel() });
+    Object.defineProperty(scroll, "clientHeight", { configurable: true, get: () => 400 });
+    Object.defineProperty(scroll, "scrollTop", {
+      configurable: true,
+      get: () => Math.min(top, scroll.scrollHeight - scroll.clientHeight),
+      set: (value: number) => {
+        top = value;
+      },
+    });
+    scroll.scrollTop = 600; // the bottom
+    monster(element, "C3").click();
+    expect(monster(element, "C3").getAttribute("aria-pressed")).toBe("true");
+    expect(scroll.scrollTop).toBe(600);
+    expect(info.style.minHeight).toBe("200px");
+  });
+
+  it("prices a tile short, with the full figure on hover and in the stats (owner, 9 Nov)", () => {
+    const lockerdata = { C1: { t: 2 }, C3: { t: 2 }, C7: { t: 2 }, C12: { t: 2 } };
+    const { element } = setup(twoHatcheries({ lockerdata } as Partial<BaseLoadResponse>), { monster: "C12" });
+    const price = (id: string): string => spokenText(monster(element, id).querySelector(".hatch-monster__note")!);
+    expect(price("C1")).toBe("Goo 250");
+    expect(price("C7")).toBe("Goo 2.5K");
+    expect(price("C12")).toBe("Goo 150K");
+    expect(monster(element, "C12").title).toBe("Choose D.A.V.E. · 150,000 each");
+    expect(spokenText(element.querySelector(".hatch-info__each")!)).toContain("Goo 150,000");
+  });
+
   it("only chooses a monster on a tap, and adds nothing (#268, E)", async () => {
     const { element, actions } = setup(twoHatcheries(), { buildingId: 11 });
     expect(text(element, ".hatch-pick__hint")).toBe("Tap a monster to choose it");
@@ -458,7 +611,17 @@ describe("HatchTab: the grid", () => {
     await flush();
     expect(actions.add).not.toHaveBeenCalled();
     expect(monster(element, "C3").getAttribute("aria-pressed")).toBe("true");
+    // The count starts at 0 (owner, 12 Nov): Add is off until + or Max.
+    expect(box(element).value).toBe("0");
+    expect(text(element, ".hatch-add__words")).toBe("Add");
+    expect(addButton(element).disabled).toBe(true);
+    expect(element.querySelector<HTMLButtonElement>(".hatch-add__step--minus")!.disabled).toBe(true);
+    addButton(element).click();
+    await flush();
+    expect(actions.add).not.toHaveBeenCalled();
+    more(element);
     expect(text(element, ".hatch-add__words")).toBe("Add 1 Bolt to Hatchery 2");
+    expect(addButton(element).disabled).toBe(false);
     addButton(element).click();
     await flush();
     expect(actions.add).toHaveBeenCalledOnce();
@@ -505,7 +668,45 @@ describe("HatchTab: the info panel and the batch add", () => {
     expect(spokenText(element.querySelector(".hatch-info__each")!)).toBe("Goo 350 · Time each 23s · Housing each 15");
   });
 
-  it("offers Max, explains it, previews the batch dashed and adds it in one request", async () => {
+  it("puts Hatch Rush's chip on its own line under the time, inside the tile", () => {
+    const now = 1_794_614_400 + 3_600;
+    setWeekend(
+      {
+        active: {
+          id: "hatch",
+          title: "Hatch Rush",
+          line: "Monsters hatch 30% faster",
+          percent: 30,
+          key: "2026-11-14",
+          startsAt: now - 3_600,
+          endsAt: now - 3_600 + 172_800,
+          announceAt: now - 3_600 - 86_400,
+          forced: false,
+        },
+        next: null,
+      },
+      now,
+    );
+    try {
+      const { element } = setup(twoHatcheries(), { monster: "C3" });
+      const time = [...element.querySelectorAll<HTMLElement>(".hatch-info__stat")].at(-1)!;
+      const values = [...time.querySelectorAll("dd")];
+      // The time alone in the first <dd>; the chip in a second one, which the
+      // tile wraps onto its own line (hatch.css), not squeezed beside "23s".
+      // (23s shortened by the rush.)
+      expect(values.map((dd) => dd.textContent)).toEqual(["17s", "−30%"]);
+      expect(values[1]!.className).toBe("hatch-info__stat-extra");
+      expect(values[1]!.querySelector(".weekend-chip")).not.toBeNull();
+      // The other five tiles keep one value each.
+      for (const stat of [...element.querySelectorAll(".hatch-info__stat")].slice(0, -1)) {
+        expect(stat.querySelectorAll("dd")).toHaveLength(1);
+      }
+    } finally {
+      resetWeekend();
+    }
+  });
+
+  it("offers Max, previews the batch dashed and adds it in one request", async () => {
     // Four Housing L6 = 2,160; 1,500 housed, 65 on the way: room for 59 Pokeys,
     // but Max is the queue's 61: housing is no limit (#169), only a warning.
     const { element, actions } = setup(
@@ -530,11 +731,12 @@ describe("HatchTab: the info panel and the batch add", () => {
     maxButton(element).click();
     expect(box(element).value).toBe("61");
     expect(maxButton(element).getAttribute("aria-pressed")).toBe("true");
-    expect(text(element, ".hatch-add__note")).toBe("Max is 61: the queue has room for 61 more Pokeys.");
+    // No "Max is 61: …" or "This batch: …" lines (owner, 12 Nov: not necessary); + stops at Max.
+    expect(element.querySelector(".hatch-add__note")).toBeNull();
+    expect(element.querySelector(".hatch-add__sum")).toBeNull();
+    expect(element.querySelector<HTMLButtonElement>(".hatch-add__step--plus")!.disabled).toBe(true);
     expect(text(element, ".hatch-add__to")).toBe("Adding to Hatchery 2 (Level 2)");
     expect(text(element, ".hatch-add__add")).toBe("Add 61 Pokeys to Hatchery 2");
-    // What the batch costs and takes: 61 × 15 s, 61 × 10 housing.
-    expect(text(element, ".hatch-add__sum")).toBe("This batch: Goo 15,250 · 15m 15s · 610 housing");
     // One starts at once in the idle hatchery, 60 fill three new stacks: 60 wait.
     expect(spokenText(nowCard(element, 11))).toBe("Hatching now Starts now");
     expect(slotKinds(line(element, 11))).toEqual(["new +20", "new +20", "new +20", "locked"]);
@@ -583,8 +785,9 @@ describe("HatchTab: the info panel and the batch add", () => {
     vi.useFakeTimers();
     const { element } = setup(twoHatcheries(), { buildingId: 11, monster: "C1" });
     const plus = element.querySelector<HTMLButtonElement>(".hatch-add__step--plus")!;
+    expect(box(element).value).toBe("0");
     plus.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1 }));
-    expect(box(element).value).toBe("2");
+    expect(box(element).value).toBe("1");
     vi.advanceTimersByTime(HOLD_DELAY_MS + 3000);
     const held = Number(box(element).value);
     expect(held).toBeGreaterThan(20);
@@ -597,10 +800,10 @@ describe("HatchTab: the info panel and the batch add", () => {
     const jumps = [...element.querySelectorAll<HTMLButtonElement>(".hatch-add__jump")];
     expect(jumps.map((jump) => jump.textContent)).toEqual(["+5", "+10"]);
     jumps[0]!.click();
-    expect(box(element).value).toBe("6");
+    expect(box(element).value).toBe("5");
     jumps[1]!.click();
-    expect(box(element).value).toBe("16");
-    expect(text(element, ".hatch-add__words")).toBe("Add 16 Pokeys to Hatchery 2");
+    expect(box(element).value).toBe("15");
+    expect(text(element, ".hatch-add__words")).toBe("Add 15 Pokeys to Hatchery 2");
     maxButton(element).click();
     expect(jumps.every((jump) => jump.disabled)).toBe(true);
   });
@@ -696,12 +899,17 @@ describe("HatchTab: with a Hatchery Control Centre", () => {
 
   it("shows each hatchery's monster and the shared queue's seven slots, and adds to the shared queue", async () => {
     const { element, actions } = setup(hccYard(), { buildingId: 10, monster: "C3" });
+    more(element);
     const hcc = element.querySelector<HTMLElement>(".hatch-line--hcc")!;
     expect(text(hcc, ".hatch-line__title")).toBe("Hatchery Control Centre");
     expect(text(hcc, ".hatch-line__waiting")).toBe("4 waiting of 140");
     expect(spokenText(nowCard(element, 10))).toBe("Hatchery 1 Pokey 9s");
     // The idle hatchery would take the Bolt chosen at once.
     expect(spokenText(nowCard(element, 11))).toBe("Hatchery 2 Starts now");
+    // Word and number apart, so a phone can show "#2" where "Hatch…" was cut (6 Nov UI check).
+    const label = nowCard(element, 11).querySelector(".hatch-now__label")!;
+    expect(label.querySelector(".hatch-now__label-word")?.textContent).toBe("Hatchery");
+    expect(label.querySelector(".hatch-now__label-number")?.textContent).toBe("2");
     // The HCC merges into its last stack (Bolt ×4 → 5), and hatchery 2 takes a Bolt off it at once.
     expect(slotKinds(hcc)).toEqual(["Bolt ×4", "empty", "empty", "empty", "empty", "empty", "empty"]);
     expect(text(hcc, ".hatch-line__done")).toBe("55s");
@@ -710,8 +918,8 @@ describe("HatchTab: with a Hatchery Control Centre", () => {
     await flush();
     expect(actions.remove).toHaveBeenLastCalledWith("hcc", 1, 1);
 
+    // No question first (owner, 12 Nov).
     nowCard(element, 10).click();
-    buttonNamed(element, "Cancel it")!.click();
     await flush();
     expect(actions.remove).toHaveBeenLastCalledWith(10, 0, 1);
 

@@ -30,6 +30,8 @@ export interface StarterKitReport {
   shiny: number;
   /** Unix seconds when the last building is done; now when paid with Shiny. */
   doneBy: number;
+  /** The "New to Map Room 2" free Regular kit: nothing was charged. */
+  free?: true;
 }
 
 /**
@@ -49,6 +51,17 @@ export const buyStarterKit = (
     yardBody({ kit, pay, ...(topUp !== undefined && topUp > 0 ? { topUp } : {}) }, baseid),
   );
 
+/**
+ * The "New to Map Room 2" free Regular kit: nothing charged, built as the
+ * resource path builds. Refused 409 `welcomeUsed` if it is no longer free,
+ * rather than charged.
+ */
+export const buyFreeStarterKit = (kit: number, baseid?: string): Promise<YardResponse<StarterKitReport>> =>
+  post<YardResponse<StarterKitReport>>(
+    "/api/:apiVersion/bm/yard/starterkit",
+    yardBody({ kit, pay: "resources", free: true }, baseid),
+  );
+
 /** The queue key, for `store.isRunning`. */
 export const STARTER_KIT_KEY = actionKey("starterkit", "buy");
 
@@ -60,19 +73,23 @@ const refuse = (reason: string, message: string): YardRefusal => ({
 });
 
 export interface StarterKitActions {
-  /** Buys kit `kit`; `topUp` is the Shiny the player agreed to for a short pool. */
-  buy(kit: number, pay: KitPayment, topUp?: number): Promise<YardActionResult<StarterKitReport>>;
+  /**
+   * Buys kit `kit`; `topUp` is the Shiny the player agreed to for a short pool.
+   * `free`: the "New to Map Room 2" free Regular kit (pay and topUp unused).
+   */
+  buy(kit: number, pay: KitPayment, topUp?: number, free?: boolean): Promise<YardActionResult<StarterKitReport>>;
 }
 
 export const starterKitActions = (
   store: YardStore,
   send: typeof buyStarterKit = buyStarterKit,
+  sendFree: typeof buyFreeStarterKit = buyFreeStarterKit,
 ): StarterKitActions => ({
-  buy: (kit, pay, topUp) =>
+  buy: (kit, pay, topUp, free) =>
     store.run({
       key: STARTER_KIT_KEY,
       check: (reader) =>
         reader.kind === "outpost" ? null : refuse("notOutpost", "Starter Kits are for outposts."),
-      send: (_api, ...yard) => send(kit, pay, topUp, ...yard),
+      send: (_api, ...yard) => (free ? sendFree(kit, ...yard) : send(kit, pay, topUp, ...yard)),
     }),
 });

@@ -164,7 +164,7 @@ describe("the end panel's takeover offer", () => {
     expect(calls.decline.mock.calls[0]![1]).toMatchObject({});
     expect(calls.decline.mock.calls[0]![1].keepalive).toBeUndefined();
     expect(goToMap).toHaveBeenCalledTimes(1);
-    expect(consumeMapFocus()).toEqual({ cell: { col: 240, row: 208 } });
+    expect(consumeMapFocus()).toEqual({ cell: { col: 240, row: 208 }, open: true });
   });
 
   it("a closing page declines with a keepalive request, once", async () => {
@@ -258,7 +258,7 @@ describe("the end panel's takeover offer", () => {
     expect($<HTMLButtonElement>(".end-takeover__take")!.disabled).toBe(false);
     $(".attack-end__return")!.click();
     expect(calls.decline).not.toHaveBeenCalled();
-    expect(consumeMapFocus()).toEqual({ cell: { col: 241, row: 208 } });
+    expect(consumeMapFocus()).toEqual({ cell: { col: 241, row: 208 }, open: true });
   });
 });
 

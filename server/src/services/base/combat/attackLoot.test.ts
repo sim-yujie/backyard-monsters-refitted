@@ -160,11 +160,13 @@ const honestClient = (one: Fixture, end: number, playerLevel?: number, height = 
 /**
  * The loot rule as `baseSave.ts` runs it: with the server's own battle as
  * `fought`, the save's replay (`battle.ts`), here to the longest end with
- * Declare War's countdown, the most any client could have seen.
+ * Declare War's countdown, the most any client could have seen. Declare War is
+ * gone, but a session stored while it ran still carries it, so the replay
+ * still honours it: the test borrows that to run long.
  */
 const lootOf = (args: Omit<Parameters<typeof attackLootOf>[0], "fought">) => {
   const input = args.session?.entryHoused
-    ? battleReplayInput({ ...args, tick: battleTick(undefined), declareWar: true })
+    ? battleReplayInput({ ...args, session: { ...args.session, declareWar: true }, tick: battleTick(undefined) })
     : null;
   return attackLootOf({ ...args, fought: input ? foughtLoot(replayAbandonedAttack(input)) : null });
 };

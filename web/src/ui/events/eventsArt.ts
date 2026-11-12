@@ -3,9 +3,10 @@ const NS = "http://www.w3.org/2000/svg";
 /**
  * Line icons for the Events page, in the dock's style (`ui/icons.ts`,
  * `ui/goals/goalsArt.ts`): stroked paths in the colour of their parent.
+ * Rewards and the Events button are painted instead (`ui/gameIcon.ts`).
  */
 const ART = {
-  /** A pumpkin with its stalk: the Events button. */
+  /** A pumpkin with its stalk: the pumpkin hunt's count in its notice. */
   pumpkin: [
     "M12 7c-5 0-8 3-8 7s3 6.5 8 6.5 8-2.5 8-6.5-3-7-8-7z",
     "M12 7c-2 0-3.5 3-3.5 6.8S10 20.5 12 20.5s3.5-3 3.5-6.7S14 7 12 7z",
@@ -13,8 +14,6 @@ const ART = {
   ],
   /** A clock: a speed-up. */
   clock: ["M12 3.5a8.5 8.5 0 1 1 0 17 8.5 8.5 0 0 1 0-17z", "M12 7.5V12l3 2"],
-  /** A wrench: a store buff such as Sharper Tools. */
-  tools: ["M14.5 4.5a4.5 4.5 0 0 0 4.9 6l-8.9 8.9a2 2 0 0 1-2.9-2.9l8.9-8.9a4.5 4.5 0 0 0-2-3.1z"],
   /** A tick: a claimed day. */
   tick: ["M5 12.5l4.5 4.5L19 7.5"],
   /** A padlock: a day not open yet. */

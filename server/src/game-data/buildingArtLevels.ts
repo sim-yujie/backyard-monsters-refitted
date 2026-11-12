@@ -55,16 +55,34 @@ export const TOWER_TIER_ART_LEVELS: Readonly<Record<number, readonly number[]>> 
 };
 
 /**
+ * The Inferno's own 3D buildings whose tiers split where the main yard's art
+ * does not (`INFERNO_BUILDING_3D_ART` in `web/src/game/yard/buildingArtTiers.ts`):
+ * the Bone Cruncher's tiers from levels 3 and 7, where the main yard's Twig
+ * Snapper (the same type) changes at 3, 6 and 10. They take in the Inferno's
+ * Flash steps (1 and 3), so the Classic look draws right from them too.
+ */
+export const INFERNO_ART_LEVELS: Readonly<Record<number, readonly number[]>> = {
+  1: [1, 3, 7],
+};
+
+/**
  * The level whose picture a building at `level` shows: the highest art level
  * at or below it, and 1 for a type with one picture. A level of 0 or less (a
  * foundation still being built) is kept as it is; it says nothing.
- * `towerTiers` adds the tower tiers (`TOWER_TIER_ART_LEVELS`), on unless a
- * caller asks for the Flash steps alone.
+ * `towerTiers` adds the tower tiers (`TOWER_TIER_ART_LEVELS`) and, in an
+ * Inferno yard (`kind`), the Inferno's own 3D tiers (`INFERNO_ART_LEVELS`), on
+ * unless a caller asks for the Flash steps alone.
  */
-export const artLevelOf = (type: number, level: number, towerTiers: boolean = true): number => {
+export const artLevelOf = (
+  type: number,
+  level: number,
+  towerTiers: boolean = true,
+  kind: string = "main"
+): number => {
   if (!(level > 0)) return level;
   let chosen = 1;
-  const steps = (towerTiers ? TOWER_TIER_ART_LEVELS[type] : undefined) ?? BUILDING_ART_LEVELS[type] ?? [];
+  const inferno = towerTiers && kind === "inferno" ? INFERNO_ART_LEVELS[type] : undefined;
+  const steps = inferno ?? (towerTiers ? TOWER_TIER_ART_LEVELS[type] : undefined) ?? BUILDING_ART_LEVELS[type] ?? [];
   for (const step of steps) {
     if (step > level) break;
     chosen = step;

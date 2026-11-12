@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import { Save } from "../../../../database/models/save.model.js";
 import { User } from "../../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../../database/models/worldmapcell.model.js";
@@ -250,6 +250,11 @@ describe("the attack load serves the defence and keeps it in the session (#195)"
 });
 
 describe("the attack load freezes both sides' shop boosts (beta.4)", () => {
+  // The clock stands still on a whole second, so "seconds left" can't tick from
+  // 3,600 to 3,599 between setting a boost and the load reading it (CI 11 Nov).
+  beforeEach(() => setSystemTime(new Date(Math.floor(Date.now() / 1000) * 1000 + 100)));
+  afterEach(() => setSystemTime());
+
   const running = () => ({ q: 1, s: now() - 60, e: now() + 3_600 });
   const over = () => ({ q: 1, s: now() - 90_000, e: now() - 60 });
 

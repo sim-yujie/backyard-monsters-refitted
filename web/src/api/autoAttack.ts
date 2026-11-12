@@ -82,7 +82,8 @@ export interface AutoAttackReplay {
   readonly levels: Readonly<Record<string, number>>;
   /** The attacker's Monster Lab ranks (issue #352); absent on a replay kept before them. */
   readonly ranks?: Readonly<Record<string, number>>;
-  readonly declareWar: boolean;
+  /** Declare War's longer countdown; only on a replay of an attack fought while the old alliance power-up ran. */
+  readonly declareWar?: boolean;
 }
 
 export interface AutoAttackReplayResponse extends ApiEnvelope {

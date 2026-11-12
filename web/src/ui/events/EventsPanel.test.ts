@@ -1,7 +1,21 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { EventView } from "@/api/events";
-import { claimedLine, EVENT_EXTRAS, EventsPanel, nextText, type EventsPanelView } from "./EventsPanel";
+import {
+  claimedLine,
+  EVENT_EXTRAS,
+  EventsPanel,
+  goalsBar,
+  nextText,
+  rewardBadge,
+  type EventsPanelView,
+} from "./EventsPanel";
+
+/** The page's own CSS, read as text: jsdom lays nothing out. */
+const eventsCss = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "events.css"), "utf8");
 
 const DAYS: EventView["calendar"] = {
   days: [
@@ -75,7 +89,11 @@ describe("EventsPanel", () => {
     const { panel, options } = mounted();
     panel.render(list([event()]));
     const button = panel.element.querySelector<HTMLButtonElement>(".events-claim")!;
-    expect(button.textContent).toBe("Claim day 210 Shiny");
+    // The reward as its picture and figure, not words, so a phone's button keeps to two lines; the words are its name.
+    expect(button.querySelector(".events-claim__label")!.textContent).toBe("Claim day 2");
+    expect(button.querySelector(".events-claim__what .events-reward .res-icon")).not.toBeNull();
+    expect(button.querySelector(".events-claim__what .events-reward__figure")!.textContent).toBe("10");
+    expect(button.getAttribute("aria-label")).toBe("Claim day 2: 10 Shiny");
     button.click();
     expect(options.onClaimCalendar).toHaveBeenCalledWith(expect.objectContaining({ id: "halloween-2026" }));
     panel.close();
@@ -239,6 +257,19 @@ describe("EventsPanel: the Krallen Hunt", () => {
   });
 });
 
+describe("rewardBadge: event coins (beta 7)", () => {
+  it("the coin and the amount; claimed, a green +N", () => {
+    const offer = rewardBadge({ kind: "eventCoins", amount: 15 });
+    expect(offer.querySelector("[data-icon='eventcoin'], img")).not.toBeNull();
+    // Drawn like the other painted reward icons (speed-up, Overdrive), so a Thanksgiving day tile lines up.
+    expect(offer.querySelector("img.events-reward__icon")).not.toBeNull();
+    expect(offer.querySelector(".events-reward__figure")!.textContent).toBe("15");
+    const gained = rewardBadge({ kind: "eventCoins", amount: 15 }, true);
+    expect(gained.querySelector(".events-reward__figure")!.textContent).toBe("+15");
+    expect(gained.classList.contains("events-reward--gain")).toBe(true);
+  });
+});
+
 describe("claimedLine: a claim's notice", () => {
   it("shows the rewards as badges, the full words on hover and for a screen reader", () => {
     const line = claimedLine("Day 1 claimed", DAYS!.days[0]!);
@@ -259,5 +290,302 @@ describe("claimedLine: a claim's notice", () => {
     expect(figures.every((figure) => !figure?.startsWith("+"))).toBe(true);
     expect(panel.element.querySelector(".events-reward--gain")).toBeNull();
     panel.close();
+  });
+});
+
+describe("A day's reward tile (Thanksgiving tester faults, 8 Nov)", () => {
+  it("puts Day 5's four piles in a 2 x 2 block, and two piles in a tighter pair", () => {
+    const four = rewardBadge({ kind: "resources", amounts: { r1: 20_000, r2: 20_000, r3: 20_000, r4: 20_000 } });
+    const block = four.querySelector(".events-reward__pictures");
+    expect(block?.classList.contains("events-reward__pictures--block")).toBe(true);
+    expect(block?.querySelectorAll(".res-icon")).toHaveLength(4);
+    const two = rewardBadge({ kind: "resources", amounts: { r1: 30_000, r2: 30_000 } });
+    expect(two.querySelector(".events-reward__pictures--pair")).not.toBeNull();
+    expect(two.querySelector(".events-reward__pictures--block")).toBeNull();
+  });
+
+  it("keeps a small gap between two piles, never overlapping (Days 1 and 8, 9 Nov)", () => {
+    const rule = /\.events-reward__pictures--pair > \.res-icon \+ \.res-icon \{([^}]*)\}/.exec(eventsCss)?.[1] ?? "";
+    const gap = /margin-left:\s*(-?\d+)px/.exec(rule)?.[1];
+    expect(Number(gap)).toBeGreaterThan(0);
+  });
+
+  it("draws speed-ups and Production Overdrive as painted icons, not line icons", () => {
+    const speedup = rewardBadge({ kind: "speedup", item: "SP2", count: 2 });
+    expect(speedup.querySelector("img.game-icon")?.getAttribute("data-icon")).toBe("speedup");
+    expect(speedup.querySelector("svg")).toBeNull();
+    const overdrive = rewardBadge({ kind: "shopItem", item: "POD" });
+    expect(overdrive.querySelector("img.game-icon")?.getAttribute("data-icon")).toBe("overdrive");
+    expect(overdrive.querySelector(".events-reward__figure")?.textContent).toBe("12h");
+    const tools = rewardBadge({ kind: "shopItem", item: "BST" });
+    expect(tools.querySelector("img.game-icon")?.getAttribute("data-icon")).toBe("tools");
+  });
+
+  it("names a decoration under its picture: Day 7's Acorn", () => {
+    const acorn = rewardBadge({ kind: "decoration", type: 55, count: 1 });
+    expect(acorn.querySelector(".events-reward__figure")?.textContent).toBe("Acorn");
+    const two = rewardBadge({ kind: "decoration", type: 55, count: 2 });
+    expect(two.querySelector(".events-reward__figure")?.textContent).toBe("Acorn x2");
+  });
+});
+
+describe("Layout faults (picture tester, 9 Nov)", () => {
+  const rule = (selector: string): string => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(?:^|\\n)${escaped} \\{([^}]*)\\}`).exec(eventsCss.replace(/\r\n/g, "\n"))?.[1] ?? "";
+  };
+
+  it("pins each day's Glimmers to the tile's foot, so a row's badges line up", () => {
+    expect(rule(".events-day__rewards")).toMatch(/flex: 1;/);
+    expect(rule(".events-day__rewards > .events-reward--eventCoins")).toMatch(/margin-top: auto;/);
+  });
+
+  it("puts a tier's Glimmers in a fixed-width column before a fixed-width end slot", () => {
+    const { panel } = mounted();
+    const ladder = {
+      label: "Turkeys caught",
+      counter: 30,
+      tiers: [
+        { need: 10, rewards: [{ kind: "eventCoins" as const, amount: 20 }], claimed: true },
+        { need: 25, rewards: [{ kind: "resources" as const, amounts: { r1: 25_000, r2: 25_000, r3: 25_000, r4: 25_000 } }, { kind: "eventCoins" as const, amount: 35 }], claimed: false },
+        { need: 50, rewards: [{ kind: "decoration" as const, type: 55, count: 1 }, { kind: "eventCoins" as const, amount: 55 }], claimed: false },
+      ],
+    };
+    panel.render(list([event({ ladder })]));
+    const rows = [...panel.element.querySelectorAll(".events-tier")];
+    for (const row of rows) {
+      expect(row.querySelector(".events-tier__rewards .events-reward--eventCoins")).toBeNull();
+      expect(row.querySelector(".events-tier__coins > .events-reward--eventCoins")).not.toBeNull();
+      expect(row.lastElementChild!.classList.contains("events-tier__end")).toBe(true);
+    }
+    expect(rows[1]!.querySelector(".events-tier__end .events-tier__claim")).not.toBeNull();
+    expect(rows[2]!.querySelector(".events-tier__end .events-tier__mark")).not.toBeNull();
+    expect(rule(".events-tier__coins")).toMatch(/flex: none;[\s\S]*width: \d+px;/);
+    expect(rule(".events-tier__end")).toMatch(/flex: none;[\s\S]*width: \d+px;/);
+    panel.close();
+  });
+
+  it("keeps every ladder row's lock, tick and Claim inside a 320 px phone", () => {
+    // A long name wraps inside the rewards rather than pushing the end slot out.
+    expect(rule(".events-tier__rewards")).toMatch(/min-width: 0;/);
+    expect(rule(".events-tier__rewards > .events-reward")).toMatch(/min-width: 0;/);
+    expect(rule(".events-tier__rewards .events-reward__figure")).toMatch(/white-space: normal;/);
+    // The skinned Claim plate's ends and words fit the desktop slot: 2 x cap + 4 + "Claim" (39 px at 13 px).
+    const plate = rule(":root[data-skin] .panel .events-tier__end > .events-tier__claim");
+    const cap = Number(/--skin-button-cap: (\d+)px;/.exec(plate)?.[1]);
+    const slot = Number(/width: (\d+)px;/.exec(rule(".events-tier__end"))?.[1]);
+    expect(plate).toMatch(/font-size: var\(--text-sm\);/);
+    expect(2 * cap + 4 + 39).toBeLessThanOrEqual(slot);
+    // The phone block: what the fixed columns leave for the rewards in a 320 px row (about 246 px inside).
+    const css = eventsCss.replace(/\r\n/g, "\n");
+    const phone = css.slice(css.indexOf("A phone, down to 320 px"));
+    const px = (selector: string, prop: string): number => {
+      const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const body = new RegExp(`\\n  ${escaped} \\{([^}]*)\\}`).exec(phone)?.[1] ?? "";
+      return Number(new RegExp(`${prop}: (\\d+)px;`).exec(body)?.[1]);
+    };
+    const phoneSlot = px(".events-tier__end", "width");
+    const left = 246 - 3 * 8 - px(".events-tier__need", "min-width") - px(".events-tier__coins", "width") - phoneSlot;
+    expect(left).toBeGreaterThanOrEqual(71); // "Scarecrow" at 12 px
+    // "Claim" at 12 px is 36 px.
+    expect(2 * cap + 4 + 36).toBeLessThanOrEqual(phoneSlot);
+  });
+
+  it("sets every figure in a row of badges on the same line (the claim notice's +10K and +15)", () => {
+    expect(rule(".events-claimed")).toMatch(/align-items: stretch;/);
+    expect(rule(".events-claimed__title")).toMatch(/align-self: center;/);
+    expect(rule(".events-reward")).toMatch(/justify-content: flex-end;/);
+    expect(rule(".events-reward__pictures")).toMatch(/flex: 1 0 auto;/);
+    expect(rule(".events-tier")).toMatch(/align-items: stretch;/);
+  });
+
+  it("lays the Claim button's rewards in one row of pictures and figures", () => {
+    expect(rule(".events-claim__what")).toMatch(/display: flex;/);
+    expect(rule(".events-claim__what .events-reward")).toMatch(/flex-direction: row;/);
+  });
+
+  it("gives Classic's cream a dark orange for countdowns, not the light one", () => {
+    expect(rule(".events-card__countdown")).toMatch(/color: var\(--events-hot-text\);/);
+    const classic = /--events-hot-text: #([0-9a-f]{6});/.exec(rule(':root[data-skin="flash"] .events-panel'))?.[1];
+    expect(classic).toBeDefined();
+    // Relative luminance well under the cream's, at least 4.5:1 against #f3e3c3.
+    const lin = (c: number): number => (c / 255 <= 0.03928 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+    const lum = (hex: string): number => {
+      const [r, g, b] = [0, 2, 4].map((i) => lin(parseInt(hex.slice(i, i + 2), 16)));
+      return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+    };
+    expect((lum("f3e3c3") + 0.05) / (lum(classic!) + 0.05)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe("EventsPanel: the New to Map Room 2 card", () => {
+  // Day 1: the kit used today, the takeover ready.
+  const welcome = {
+    startsAt: 0,
+    endsAt: 10 * 86_400,
+    daysLeft: 10,
+    sets: 7,
+    takeover: true,
+    kit: false,
+    takeoverLeft: 7,
+    kitLeft: 6,
+    takeoverToday: false,
+    kitToday: true,
+    nextDayAt: 86_400,
+    takeoverUses: [],
+    kitUses: [60],
+  };
+
+  it("puts the card first, before the events, while the days run", () => {
+    const { panel } = mounted();
+    panel.render(list([event()], { mr2Welcome: welcome }));
+    const cards = [...panel.element.querySelectorAll<HTMLElement>(".events-card")];
+    expect(cards[0]?.dataset["event"]).toBe("mr2-welcome");
+    expect(cards[1]?.querySelector(".events-card__title")?.textContent).toBe("Halloween");
+    expect(cards[0]?.querySelector("[data-welcome-ends]")?.textContent).toBe("10 days left");
+    expect(cards[0]?.querySelector('[data-reward="takeover"] .events-welcome__state')?.textContent).toBe("Ready today");
+    expect(cards[0]?.querySelector('[data-reward="kit"] .events-welcome__state')?.textContent).toBe("Used today, back tomorrow");
+    expect(cards[0]?.querySelector(".events-welcome__help-button")?.textContent).toBe("?");
+    panel.close();
+  });
+
+  it("draws no card when the server sends none, or null", () => {
+    const { panel } = mounted();
+    panel.render(list([event()]));
+    expect(panel.element.querySelector(".events-card--mr2-welcome")).toBeNull();
+    panel.render(list([event()], { mr2Welcome: null }));
+    expect(panel.element.querySelector(".events-card--mr2-welcome")).toBeNull();
+    panel.close();
+  });
+
+  it("keeps the card with all 7 of both used", () => {
+    const { panel } = mounted();
+    panel.render(list([event()], { mr2Welcome: { ...welcome, takeover: false, kit: false, takeoverLeft: 0, kitLeft: 0 } }));
+    const card = panel.element.querySelector(".events-card--mr2-welcome");
+    expect(card).not.toBeNull();
+    expect(card?.querySelectorAll(".events-welcome__state--done")).toHaveLength(2);
+    expect(card?.querySelectorAll(".events-welcome__mark")).toHaveLength(10);
+    panel.close();
+  });
+
+  it("on a computer: the Frontier Pass on top, events in the main column, Coming up at the side", () => {
+    const { panel } = mounted();
+    const soon = event({ id: "soon", title: "Soon", status: "upcoming", startsAt: 2 * 86_400 });
+    panel.render(list([event(), soon], { mr2Welcome: welcome }));
+    const page = panel.element.querySelector(".events-page");
+    expect([...(page?.children ?? [])].map((child) => child.className.split(" ")[0])).toEqual([
+      "events-card",
+      "events-page__main",
+      "events-upcoming",
+    ]);
+    expect(page?.classList.contains("events-page--side")).toBe(true);
+    expect(page?.querySelector(".events-page__main .events-card__title")?.textContent).toBe("Halloween");
+    // Nothing on now: no side column, Coming up under the card.
+    panel.render(list([soon], { mr2Welcome: welcome }));
+    expect(panel.element.querySelector(".events-page")?.classList.contains("events-page--side")).toBe(false);
+    expect(panel.element.querySelector(".events-page__main")).toBeNull();
+    const css = eventsCss.replace(/\r\n/g, "\n");
+    const desktop = css.slice(css.indexOf("@media (width > 620px) and (height > 500px)"));
+    expect(desktop).toMatch(/\.events-panel \{\s*width: min\(1000px/);
+    const wide = css.slice(css.indexOf("@media (width >= 1100px) and (height > 500px)"));
+    expect(wide).toMatch(/\.events-page > \.events-card--mr2-welcome \{\s*grid-column: 1 \/ -1;/);
+    panel.close();
+  });
+
+  it("shows only the card, with no 'No event' line, when no event is on", () => {
+    const { panel } = mounted();
+    panel.render(list([], { mr2Welcome: welcome }));
+    expect(panel.element.querySelector(".events-card--mr2-welcome")).not.toBeNull();
+    expect(panel.element.querySelector(".events-status")).toBeNull();
+    panel.close();
+  });
+
+  it("counts the days down on the tick", () => {
+    const { panel } = mounted();
+    panel.render(list([], { mr2Welcome: welcome }));
+    panel.tick(8 * 86_400 + 30);
+    expect(panel.element.querySelector("[data-welcome-ends]")?.textContent).toBe("2 days left");
+    // The kit used on day 1 is back after the daily reset.
+    expect(panel.element.querySelector('[data-reward="kit"] .events-welcome__state')?.textContent).toBe("Ready today");
+    expect(panel.element.querySelector('[data-day="9"]')?.classList.contains("events-welcome__mark--today")).toBe(true);
+    expect(panel.element.querySelector('[data-day="1"]')?.classList.contains("events-welcome__mark--gone")).toBe(true);
+    panel.close();
+  });
+
+  it("goes to Map Room 2 from the card's button", () => {
+    const onGoToMapRoom2 = vi.fn();
+    const panel = new EventsPanel({ onClaimCalendar: vi.fn(), onClaimTier: vi.fn(), onRetry: vi.fn(), onClose: vi.fn(), onGoToMapRoom2 }).mount(document.body);
+    panel.render(list([], { mr2Welcome: welcome }));
+    const go = panel.element.querySelector<HTMLButtonElement>(".events-welcome__go");
+    expect(go?.textContent).toBe("Go to Map Room 2");
+    go?.click();
+    expect(onGoToMapRoom2).toHaveBeenCalledOnce();
+    panel.close();
+  });
+
+  it("hides the closed note and drops the days under the title on a phone", () => {
+    const css = eventsCss.replace(/\r\n/g, "\n");
+    expect(css).toMatch(/\.events-welcome__help\[hidden\] \{\s*display: none;/);
+    const phone = css.slice(css.lastIndexOf("@media (width <= 620px)"));
+    expect(phone).toMatch(/\.events-welcome__days \{\s*grid-row: 2;/);
+    expect(css).toMatch(/:root\[data-skin="flash"\] \.events-card--mr2-welcome \{/);
+  });
+});
+
+describe("rewardBadge: Korath's powers (Monster Madness)", () => {
+  it("shows Flash's power portrait and its short name", () => {
+    const badge = rewardBadge({ kind: "korath", power: 2 });
+    expect(badge.classList).toContain("events-reward--korath");
+    expect(badge.querySelector<HTMLImageElement>(".events-reward__image--korath")!.getAttribute("src")).toBe(
+      "/events/korath-power-2.png",
+    );
+    expect(badge.querySelector(".events-reward__figure")?.textContent).toBe("Fire");
+    expect(rewardBadge({ kind: "korath", power: 3 }).querySelector(".events-reward__figure")?.textContent).toBe("Fists");
+  });
+
+  it("is never signed as a gain", () => {
+    const gained = rewardBadge({ kind: "korath", power: 1 }, true);
+    expect(gained.classList).not.toContain("events-reward--gain");
+    expect(gained.querySelector(".events-reward__figure")?.textContent).toBe("Burn");
+  });
+});
+
+describe("EventsPanel: Monster Madness goals", () => {
+  const madness = (counter: number): EventView =>
+    event({
+      id: "monster-madness-1",
+      title: "Monster Madness",
+      kind: "monster-madness",
+      calendar: null,
+      ladder: {
+        label: "Takeover points",
+        counter,
+        tiers: [
+          { need: 42_000_000, rewards: [{ kind: "korath", power: 1 }], claimed: false },
+          { need: 94_500_000, rewards: [{ kind: "korath", power: 2 }], claimed: false },
+          { need: 160_125_000, rewards: [{ kind: "korath", power: 3 }], claimed: false },
+        ],
+      },
+    });
+
+  it("draws one bar to the top goal, with a tick at each goal", () => {
+    const bar = goalsBar(madness(50_000_000).ladder!);
+    expect(bar.querySelector<HTMLElement>(".events-goals__fill")!.style.width).toBe("31.2%");
+    const ticks = [...bar.querySelectorAll<HTMLElement>(".events-goals__tick")];
+    expect(ticks.map((tick) => tick.style.left)).toEqual(["26.2%", "59%", "100%"]);
+    expect(ticks.map((tick) => tick.classList.contains("events-goals__tick--done"))).toEqual([true, false, false]);
+    expect([...bar.querySelectorAll(".events-goals__mark")].map((mark) => mark.textContent)).toEqual([
+      "42M",
+      "94.5M",
+      "160.1M",
+    ]);
+    expect(bar.querySelector(".events-goals__bar")!.getAttribute("aria-valuenow")).toBe("50000000");
+  });
+
+  it("is on the Monster Madness card only", () => {
+    const { panel } = mounted();
+    panel.render(list([madness(50_000_000)]));
+    expect(panel.element.querySelector(".events-ladder--goals .events-goals__bar")).not.toBeNull();
+    expect(panel.element.querySelectorAll(".events-tier__claim")).toHaveLength(1);
   });
 });

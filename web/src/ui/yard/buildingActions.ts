@@ -1,4 +1,5 @@
 import type { BaseLoadResponse, ResourceCaps, Resources, SpeedupItem, StoreData, UpgradeCost } from "@/api/types";
+import { currentAllianceBonuses } from "@/game/alliance/allianceBonuses";
 import type { CostRequirement, YardKind } from "@/game/yard/buildingCostData";
 import {
   costOf,
@@ -15,23 +16,22 @@ import {
 import { YARD_PLANNER_TYPE } from "@/game/yard/planner/access";
 import type { PlanNode } from "@/game/yard/planner/placement";
 import { ACADEMY_TYPE, LAB_TYPE, countdownProgress } from "@/game/yard/jobs";
-import { recycleOffer, type RecycleOffer } from "@/game/yard/recycle";
+import { OBSERVATORY_TYPE, recycleOffer, type RecycleOffer } from "@/game/yard/recycle";
 import { ladderFor } from "@/game/yard/planner/upgrades";
 import { overCap as overCapOf } from "@/game/yard/storage";
 import { freeWorkers, holdsWorker, sharperToolsMultiplier } from "@/game/yard/workers";
 import type { Yard, YardBuilding, YardWorkers } from "@/game/yard/yardModel";
 import { BAITER_TYPE } from "@/game/baiter/baiterSession";
 import { GENERAL_STORE_TYPE } from "@/game/yard/shop";
-import { BUNKER_TYPE } from "@/game/monsters/bunker";
 import { researchOn } from "@/game/monsters/lab";
 import { siteOfType } from "@/game/siege/siege";
+import { costLessBy, weekendPercent } from "@/game/weekend";
 import {
   isSurfaceInferno,
   purseFunds,
   surfaceInfernoStanding,
   UNDER_HALL_REQUIREMENT,
 } from "@/game/yard/surfaceInferno";
-import { CHAMPION_CAGE_TYPE, CHAMPION_CHAMBER_TYPE } from "@/game/yard/championModel";
 import { monstersTabFor, type MonstersTabId } from "@/ui/monsters/monstersTab";
 import { availableAgainText, outpostCountOf, randomMoveWait } from "@/game/maproom/randomMove";
 
@@ -156,6 +156,12 @@ export interface UpgradeOffer {
   readonly instantGate: UpgradeGate | null;
   /** A main-yard Inferno building: `cost` is from the Inferno purse, in Bone, Coal, Sulfur and Magma. */
   readonly inferno: boolean;
+  /**
+   * A Builder's Weekend's percentage taken off `cost` (`game/weekend.ts`), 0
+   * when none runs; `fullCost` is then the price without it.
+   */
+  readonly weekendOff?: number;
+  readonly fullCost?: UpgradeCost;
 }
 
 /** One Shiny speed-up on a running job. */
@@ -191,6 +197,13 @@ export interface FortifyOffer {
   readonly seconds: number;
   readonly gate: UpgradeGate | null;
   readonly maxed: boolean;
+  /**
+   * A Builder's Weekend's percentage taken off `cost` (owner, 7 Nov:
+   * `planFortify`), absent when none runs; `fullCost` is then the price
+   * without it.
+   */
+  readonly weekendOff?: number;
+  readonly fullCost?: UpgradeCost;
 }
 
 /** A running build or upgrade countdown and what can be done about it. */
@@ -226,18 +239,18 @@ export interface CancelOffer {
 
 /**
  * Which door a building opens: the world map, the layout planner, the
- * Monsters screen, a bunker's controls, the Champion Cage's or Chamber's, the
- * Baiter's, the Shop (the General Store, §8.2), or the Siege screen.
+ * Monsters screen (the monster buildings, and since 12 Nov 2026 the Juicer,
+ * the Monster Bunker and the Champion Cage and Chamber too), the Baiter's
+ * test window, the Shop (the General Store, §8.2), or the Siege screen.
  */
 export type OpenTarget =
   | "map"
   | "planner"
   | "monsters"
-  | "bunker"
-  | "cage"
-  | "chamber"
   | "baiter"
   | "shop"
+  /** The alliance window: a built Observatory (beta 7). */
+  | "alliance"
   /** The Siege screen: a Siege Lab's Chaos Lab tab, a Siege Factory's Chaos Factory tab (Inferno WP 6.4). */
   | "siege";
 
@@ -251,8 +264,9 @@ export interface PanelModel {
   readonly open: OpenTarget | null;
   /**
    * With `open: "monsters"`, the tab the building opens (§4.1, D4): Monster
-   * Locker → Unlock, Hatchery and HCC → Hatch, Housing → Housing, Academy →
-   * Train, Lab → Lab. Null otherwise.
+   * Locker → Unlock, Hatchery and HCC → Hatch, Housing, Juicer and Monster
+   * Bunker → Housing, Academy → Train, Lab → Lab, Champion Cage and Chamber →
+   * Champion. Null otherwise.
    */
   readonly monstersTab: MonstersTabId | null;
   /** Why an Open button cannot be pressed (the Map Room below Town Hall 6). */
@@ -392,7 +406,10 @@ export const upgradeOffer = (
   const seconds = Math.floor(
     step.cost.time * sharperToolsMultiplier(context.save.storedata, context.now()),
   );
-  const cost: UpgradeCost = { r1: step.cost.r1, r2: step.cost.r2, r3: step.cost.r3, r4: step.cost.r4 };
+  const fullCost: UpgradeCost = { r1: step.cost.r1, r2: step.cost.r2, r3: step.cost.r3, r4: step.cost.r4 };
+  // Builder's Weekend: the server charges this much less (`planOneUpgrade`).
+  const weekendOff = weekendPercent("builders", context.now());
+  const cost: UpgradeCost = costLessBy(fullCost, weekendOff);
 
   // The gates both buttons share, in the server's order.
   const hall = townHallLevel(context.yard);
@@ -447,6 +464,7 @@ export const upgradeOffer = (
     gate,
     instantGate,
     inferno,
+    ...(weekendOff > 0 && { weekendOff, fullCost }),
   };
 };
 
@@ -495,9 +513,13 @@ export const cancelOffer = (building: YardBuilding, context: PanelContext): Canc
     building.countdown?.kind === "fortify"
       ? fortifyStepsOf(building.type, context.yard.kind)[building.fortification]
       : costOf(building.type, building.level, context.yard.kind);
-  const cost: UpgradeCost = step
+  const fullCost: UpgradeCost = step
     ? { r1: step[0], r2: step[1], r3: step[2], r4: step[3] }
     : { ...ZERO };
+  // An upgrade or fortify bought in a Builder's Weekend gives back what was
+  // paid (`wd`, `planCancelUpgrade` / `planCancelFortify`), whenever it is cancelled.
+  const paidOff = Number(building.raw["wd"]) || 0;
+  const cost = costLessBy(fullCost, paidOff);
   // A main-yard Inferno building's refund goes to the Inferno purse, up to its caps.
   const funds = fundsFor(building.type, context);
   const refund = { ...ZERO };
@@ -568,19 +590,15 @@ export const panelModel = (building: YardBuilding, context: PanelContext): Panel
         ? "planner"
         : monstersTab && building.level > 0
           ? "monsters"
-          : building.type === BUNKER_TYPE && building.level > 0
-            ? "bunker"
-            : building.type === CHAMPION_CAGE_TYPE && building.level > 0
-              ? "cage"
-              : building.type === CHAMPION_CHAMBER_TYPE && building.level > 0
-                ? "chamber"
-                : building.type === BAITER_TYPE && building.level > 0 && context.yard.kind !== "outpost"
-                  ? "baiter"
-                  : building.type === GENERAL_STORE_TYPE && building.level > 0
-                    ? "shop"
-                    : siteOfType(building.type) && building.level > 0 && context.yard.kind !== "outpost"
-                      ? "siege"
-                      : null;
+          : building.type === BAITER_TYPE && building.level > 0 && context.yard.kind !== "outpost"
+            ? "baiter"
+            : building.type === GENERAL_STORE_TYPE && building.level > 0
+              ? "shop"
+              : siteOfType(building.type) && building.level > 0 && context.yard.kind !== "outpost"
+                ? "siege"
+                : building.type === OBSERVATORY_TYPE && building.level > 0
+                  ? "alliance"
+                  : null;
   return {
     upgrade: upgrade && upgrade.gate?.reason !== "maxLevel" ? upgrade : null,
     maxed: upgrade?.gate?.reason === "maxLevel",
@@ -636,7 +654,12 @@ export const fortifyOffer = (building: YardBuilding, context: PanelContext): For
     return { from, to: from, max: ladder.length, cost: ZERO, seconds: 0, gate: null, maxed: true };
   }
 
-  const cost: UpgradeCost = { r1: step[0], r2: step[1], r3: step[2], r4: step[3] };
+  const fullCost: UpgradeCost = { r1: step[0], r2: step[1], r3: step[2], r4: step[3] };
+  // Builder's Weekend: the server charges this much less (`planFortify`),
+  // and a Fortress Legion's cheaper Fortify on top, never in the Inferno.
+  const weekendOff = weekendPercent("builders", context.now());
+  const allianceOff = context.yard.kind === "inferno" ? 0 : Math.max(0, -currentAllianceBonuses().fortifyCost);
+  const cost: UpgradeCost = costLessBy(fullCost, Math.min(90, weekendOff + allianceOff));
   const seconds = Math.floor(step[4] * sharperToolsMultiplier(context.save.storedata, context.now()));
   const hall = townHallLevel(context.yard);
 
@@ -667,7 +690,16 @@ export const fortifyOffer = (building: YardBuilding, context: PanelContext): For
     }
   }
 
-  return { from, to: from + 1, max: ladder.length, cost, seconds, gate, maxed: false };
+  return {
+    from,
+    to: from + 1,
+    max: ladder.length,
+    cost,
+    seconds,
+    gate,
+    maxed: false,
+    ...(weekendOff > 0 && { weekendOff, fullCost }),
+  };
 };
 
 /**

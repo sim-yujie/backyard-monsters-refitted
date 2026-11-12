@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
@@ -21,6 +24,12 @@ const chat = vi.hoisted(() => ({ worldChat: { setCountryRoom: vi.fn(), unmute: v
 vi.mock("@/game/chat/chatSession", () => chat);
 const lookReport = vi.hoisted(() => ({ reportLook: vi.fn() }));
 vi.mock("@/app/lookReport", () => lookReport);
+import type * as notificationSettingsApi from "@/api/notificationSettings";
+const notifApi = vi.hoisted(() => ({ setNotificationCategory: vi.fn() }));
+vi.mock("@/api/notificationSettings", async (original) => ({
+  ...(await original<typeof notificationSettingsApi>()),
+  ...notifApi,
+}));
 
 import { reduceEffects } from "@/game/attack/juice";
 import { resetShinyLockForTests, shinyLocked } from "@/game/shinyLock";
@@ -38,6 +47,7 @@ const open = async (account: Record<string, unknown>) => {
     shinyLocked: false,
     privacy: { hideOnline: false, friendRequests: true },
     country: { country: null, countryAsked: false, countryChannel: null },
+    notificationsOff: [],
     ...account,
   });
   const popup = openAccountSettings({ container: document.body });
@@ -66,10 +76,41 @@ describe("AccountSettings", () => {
     expect(strip.parentElement).toBe(scroll.parentElement);
     expect(scroll.contains(strip)).toBe(false);
     expect(strip.nextElementSibling).toBe(scroll);
-    // All three panes scroll inside it.
+    // All four panes scroll inside it.
     const panes = [...document.querySelectorAll<HTMLElement>("[role='tabpanel']")];
-    expect(panes).toHaveLength(3);
+    expect(panes).toHaveLength(4);
     for (const pane of panes) expect(pane.parentElement).toBe(scroll);
+  });
+
+  it("fits its four tabs: wider on a computer, short words on a phone (owner, 12 Nov)", async () => {
+    await open({});
+    const tab = (id: string) => document.querySelector<HTMLButtonElement>(`#account-settings-tab-${id}`)!;
+    // The two long tabs hold both words; the plain ones just their word.
+    expect(tab("look").querySelector(".account-settings__tab-long")!.textContent).toBe(SETTINGS_TEXT.tabLook);
+    expect(tab("look").querySelector(".account-settings__tab-short")!.textContent).toBe(SETTINGS_TEXT.tabLookShort);
+    expect(tab("notifications").querySelector(".account-settings__tab-long")!.textContent).toBe(
+      SETTINGS_TEXT.tabNotifications,
+    );
+    expect(tab("notifications").querySelector(".account-settings__tab-short")!.textContent).toBe(
+      SETTINGS_TEXT.tabNotificationsShort,
+    );
+    expect(tab("account").textContent).toBe(SETTINGS_TEXT.tabAccount);
+    const here = dirname(fileURLToPath(import.meta.url));
+    const ui = readFileSync(resolve(here, "styles/ui.css"), "utf8").replace(/\r\n/g, "\n");
+    // Modern's 22px tab ends need the room: at 560px "Notifications" ran under the frame.
+    // Its own max-width too, later in the file than `.panel`'s 560px cap, which
+    // otherwise kept the window at 560px (lead, 1280x800 Modern, 12 Nov 2026).
+    expect(ui).toMatch(
+      /\.account-settings-popup \{\s*width: min\(600px, [^;]+;\s*max-width: min\(92vw, 600px\);/,
+    );
+    expect(ui.indexOf("max-width: min(92vw, 560px)")).toBeGreaterThan(-1);
+    expect(ui.indexOf(".account-settings-popup {")).toBeGreaterThan(
+      ui.indexOf("max-width: min(92vw, 560px)"),
+    );
+    expect(ui).toMatch(/\.account-settings__tab-short \{\s*display: none;/);
+    expect(ui).toMatch(
+      /@media \(width <= 500px\) \{\s*\.account-settings__tab-long \{\s*display: none;\s*\}\s*\.account-settings__tab-short \{\s*display: inline;/,
+    );
   });
 
   it("switches tabs by click and arrow keys, and a new tab opens at its top", async () => {
@@ -84,10 +125,32 @@ describe("AccountSettings", () => {
     expect(tab("social").getAttribute("aria-selected")).toBe("true");
     tab("social").focus();
     tab("social").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(pane("notifications").hidden).toBe(false);
+    tab("notifications").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     expect(pane("account").hidden).toBe(false);
     expect(document.activeElement).toBe(tab("account"));
     expect(tab("account").tabIndex).toBe(0);
     expect(tab("social").tabIndex).toBe(-1);
+  });
+
+  it("shows the Notifications tab with each category as the account has it", async () => {
+    await open({ notificationsOff: ["friends"] });
+    const pane = document.querySelector<HTMLElement>("#account-settings-pane-notifications")!;
+    const state = (id: string) =>
+      pane.querySelector(`[data-category='${id}'] [role='switch']`)!.getAttribute("aria-checked");
+    expect(state("attacks")).toBe("true");
+    expect(state("friends")).toBe("false");
+    // The game's own notices have no switch.
+    expect(pane.querySelector("[data-category='game'] [role='switch']")).toBeNull();
+  });
+
+  it("says the notification settings could not load when the account does not", async () => {
+    api.fetchAccount.mockRejectedValue(new Error("down"));
+    openAccountSettings({ container: document.body });
+    await settle();
+    const pane = document.querySelector<HTMLElement>("#account-settings-pane-notifications")!;
+    expect(pane.textContent).toContain("Could not load your notification settings");
+    expect(pane.querySelector("[role='switch']")).toBeNull();
   });
 
   it("renames through the server and then locks the field for the cooldown", async () => {
@@ -414,6 +477,20 @@ describe("AccountSettings", () => {
     expect(document.querySelector("#settings-classic-art")).toBeNull();
   });
 
+  it("shows the yard ground swatches of the Style picked above (owner, 12 Nov 2026)", async () => {
+    localStorage.clear();
+    await open({});
+    const grounds = () =>
+      [...document.querySelectorAll<HTMLElement>(".ground-picker__swatch")].map((swatch) => swatch.dataset["ground"]);
+    expect(grounds()).toHaveLength(6);
+    expect(grounds()[0]).toBe("meadow");
+    const look = document.querySelector<HTMLSelectElement>("#settings-look")!;
+    look.value = "classic";
+    look.dispatchEvent(new Event("change"));
+    expect(grounds()).toEqual(["original", "rock", "sand", "crater"]);
+    localStorage.clear();
+  });
+
   it("offers the music on its own, following the Style by default, kept in this browser for the next load", async () => {
     localStorage.clear();
     await open({});
@@ -570,9 +647,9 @@ describe("AccountSettings tabs", () => {
   it("moves between tabs with the arrow keys, wrapping round", async () => {
     await open({});
     tab("account").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
-    expect(tab("social").getAttribute("aria-selected")).toBe("true");
-    expect(document.activeElement).toBe(tab("social"));
-    tab("social").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(tab("notifications").getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(tab("notifications"));
+    tab("notifications").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     expect(pane("account").hidden).toBe(false);
   });
 

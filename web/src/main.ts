@@ -24,6 +24,7 @@ import { UpdateCheck, fetchLivePage, runningBundleName } from "@/app/updateCheck
 import { UpdatePrompt } from "@/ui/UpdatePrompt";
 import { applySkin } from "@/ui/skin";
 import { applyFontChoice } from "@/ui/fontChoice";
+import { installGameUiSounds } from "@/game/sound/sound";
 
 // The bug report's list of recent errors, from the very start, and the
 // owner's dashboard's copy of uncaught errors (the Privacy Policy says so).
@@ -34,6 +35,8 @@ installErrorReporter();
 applySkin();
 // The player's Font choice (Account Settings): the game font, Clear or Extra readable.
 applyFontChoice();
+// Flash's click on every button and tab, and its close on close buttons.
+installGameUiSounds();
 
 const host = document.querySelector<HTMLElement>("#game-root");
 

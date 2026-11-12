@@ -1,0 +1,31 @@
+STYLE NOTE: the MODERN look of Backyard Monsters Revamped (yard buildings, towers, traps)
+(measured on the game's own Modern art in server/public/assets/buildings/*/top.3d1@2x.webp and
+top.t1@2x.webp, compared at full size beside the Flash decorations; see refs/ref-modern-*.png)
+
+1. Clean, modern, stylised 3D RENDERS (Blender), not paintings and not the gritty 2009 pre-render of
+   the Flash art. Smooth, slightly bevelled shapes with crisp clean silhouettes; simple clean
+   materials: light even wood grain on honey/tan planks with dark grain lines between boards,
+   smooth painted or polished metal, neat stone blocks, glossy goo. Little surface noise.
+   No cel shading, no painterly brush strokes, no flat colour fills.
+2. Camera: the same as the buildings: seen from the front, about 35-40 degrees above, so tops show
+   clearly; boxy things turned about 45 degrees so two side faces show almost equally (the Block
+   crate, the Twig Snapper). Round things are seen as ellipses from above (Putty pot, Academy dome).
+3. Outline: none. Edges are crisp and anti-aliased; small bevels on edges catch the light as thin
+   bright lines, which is what makes the shapes read at small size.
+4. Light: a warm key light from the upper left / front: tops and left faces bright, right faces in
+   MEDIUM shade (darkest areas about 10-20% brightness, but most of a shaded face stays readable,
+   not near-black like Flash); clear bright specular highlights on metal and glossy parts; soft
+   ambient occlusion in creases and under overhangs.
+5. Colour: clean and rich, a little brighter and more saturated than the Flash decorations
+   (average brightness of a Modern building 30-55%, saturation 20-60%; the Flash-style autumn
+   decorations are 21-35% bright). Honey and mid-brown wood, glossy golden orange, purple, signal red,
+   steel grey with blue-white highlights, fresh slime/leaf greens. Accents strong but not neon, no glow.
+6. Shape: chunky, a little toy-like, few big readable parts with clean forms (every part must read at
+   40-80 px tall). Foliage and piles are built from fewer, bigger, smoother clumps/leaves with clear
+   light and shade per clump (like the Goo Factory's goo), not thousands of tiny noisy leaves.
+7. No ground, no grass, no base plate and no cast shadow painted under the object (the game adds its
+   own shadow).
+
+How Modern differs from Flash (Classic): Flash = soft, grainy, dusty late-2000s render, muted and dark,
+near-black shadow sides, many tiny noisy details. Modern = crisp, clean, smooth modern 3D with bevel
+highlights, richer and slightly brighter colour, readable medium shadows, specular sheen on hard parts.

@@ -229,8 +229,8 @@ export interface EndPluginDeps {
  * The refusal reasons a retry cannot fix: the attack-binding ones
  * (`docs/server-api.md` "Attack session binding"), a bomb the attacker could
  * not have fired (`bombSpend`, issue #90) and a result the server's replay does
- * not bear out (`replayMismatch`, issue #23), which the same payload would hit
- * again.
+ * not bear out (`replayMismatch`, issue #23) and a fling fuller than the
+ * Flinger holds (`flingOverRoom`), which the same payload would hit again.
  */
 const FINAL_REASONS = new Set([
   "expired",
@@ -239,6 +239,8 @@ const FINAL_REASONS = new Set([
   "stale-attack",
   "bombSpend",
   "replayMismatch",
+  // A fling fuller than the Flinger holds (`attackFlingOverRoomErr`): only an edited game sends one.
+  "flingOverRoom",
   "finalising",
 ]);
 
@@ -472,7 +474,7 @@ export const createEndPlugin = (deps: EndPluginDeps = {}): AttackPlugin => {
         goToOutpost(MAIN_YARD);
         return;
       }
-      if (target.cell && (target.mapversion ?? 2) === 2) setMapFocus({ cell: target.cell });
+      if (target.cell && (target.mapversion ?? 2) === 2) setMapFocus({ cell: target.cell, open: true });
       goToMap();
     };
 

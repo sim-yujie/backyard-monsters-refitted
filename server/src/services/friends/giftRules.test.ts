@@ -15,10 +15,11 @@ describe("the gift rules (issue #375)", () => {
     expect(giftExpiresAt(1_000)).toBe(1_000 + 7 * 24 * 60 * 60);
   });
 
-  test("5 collects a day", () => {
-    expect(collectsLeftOf(0)).toBe(5);
-    expect(collectsLeftOf(4)).toBe(1);
-    expect(collectsLeftOf(5)).toBe(0);
-    expect(collectsLeftOf(9)).toBe(0);
+  test("10 collects a day (owner, 9 Nov 2026: was 5)", () => {
+    expect(collectsLeftOf(0)).toBe(10);
+    expect(collectsLeftOf(4)).toBe(6);
+    expect(collectsLeftOf(9)).toBe(1);
+    expect(collectsLeftOf(10)).toBe(0);
+    expect(collectsLeftOf(14)).toBe(0);
   });
 });

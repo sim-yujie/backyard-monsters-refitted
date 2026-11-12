@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { resetWeekend, setWeekend, type WeekendRun } from "@/game/weekend";
 import type { BaseLoadResponse, BuildingData, ResourceCaps, Resources } from "@/api/types";
 import { costOf } from "@/game/yard/buildingCosts";
 import { readYard, type YardBuilding } from "@/game/yard/yardModel";
@@ -390,26 +391,19 @@ describe("panelModel: which blocks each building gets", () => {
     }
   });
 
-  it("a built Monster Bunker opens its own controls; one still being built does not", () => {
-    const context = contextOf({
-      buildings: [HALL(6), building(2, 22, 1), building(3, 22, 0, { cB: 600 })],
-    });
-    expect(panelModel(pick(context, 2), context)).toMatchObject({ open: "bunker", monstersTab: null });
-    expect(panelModel(pick(context, 3), context).open).toBeNull();
-  });
-
-  it("a built Champion Cage opens its own controls; one still being built does not (#124)", () => {
-    const context = contextOf({
-      buildings: [HALL(6), building(2, 114, 1), building(3, 114, 0, { cB: 600 })],
-    });
-    expect(panelModel(pick(context, 2), context)).toMatchObject({ open: "cage", monstersTab: null });
-    expect(panelModel(pick(context, 3), context).open).toBeNull();
-  });
-
-  it("a built Champion Chamber opens its own controls (#125)", () => {
-    const context = contextOf({ buildings: [HALL(6), building(2, 119, 1), building(3, 119, 0, { cB: 600 })] });
-    expect(panelModel(pick(context, 2), context).open).toBe("chamber");
-    expect(panelModel(pick(context, 3), context).open).toBeNull();
+  it("a built Juicer, Bunker, Champion Cage or Chamber opens its Monsters tab; one still being built does not (owner, 12 Nov 2026)", () => {
+    for (const [type, tab] of [
+      [9, "housing"],
+      [22, "housing"],
+      [114, "champion"],
+      [119, "champion"],
+    ] as const) {
+      const context = contextOf({
+        buildings: [HALL(6), building(2, type, 1), building(3, type, 0, { cB: 600 })],
+      });
+      expect(panelModel(pick(context, 2), context)).toMatchObject({ open: "monsters", monstersTab: tab });
+      expect(panelModel(pick(context, 3), context).open).toBeNull();
+    }
   });
 
   it("no other building names a Monsters tab", () => {
@@ -592,6 +586,85 @@ describe("cancelOffer: the refund", () => {
   });
 });
 
+describe("Builder's Weekend (game/weekend.ts)", () => {
+  const BUILDERS: WeekendRun = {
+    id: "builders",
+    title: "Builder's Weekend",
+    line: "Upgrades cost 30% less",
+    percent: 30,
+    key: "2026-11-14",
+    startsAt: T0 - 60,
+    endsAt: T0 + 3_600,
+    announceAt: T0 - 86_460,
+    forced: false,
+  };
+  afterEach(() => resetWeekend());
+
+  it("the upgrade costs 30% less, rounded up, with the full price kept", () => {
+    setWeekend({ active: BUILDERS, next: null });
+    const context = contextOf({ buildings: [HALL(5), building(2, 20, 4)] });
+    const offer = upgradeOffer(pick(context, 2), context);
+    expect(offer).toMatchObject({
+      cost: { r1: 875_000, r2: 656_250, r3: 218_750, r4: 0 },
+      weekendOff: 30,
+      fullCost: { r1: 1_250_000, r2: 937_500, r3: 312_500, r4: 0 },
+    });
+  });
+
+  it("the shortfall is against the lower price", () => {
+    setWeekend({ active: BUILDERS, next: null });
+    const context = contextOf({
+      buildings: [HALL(5), building(2, 20, 4)],
+      resources: { r1: 875_000, r2: 656_250, r3: 218_750, r4: 0 },
+    });
+    expect(upgradeOffer(pick(context, 2), context)?.gate).toBeNull();
+  });
+
+  it("not running (ended, or another event): the full price, no weekendOff", () => {
+    setWeekend({ active: { ...BUILDERS, endsAt: T0 }, next: null });
+    const context = contextOf({ buildings: [HALL(5), building(2, 20, 4)] });
+    const offer = upgradeOffer(pick(context, 2), context);
+    expect(offer?.cost).toEqual({ r1: 1_250_000, r2: 937_500, r3: 312_500, r4: 0 });
+    expect(offer).not.toHaveProperty("weekendOff");
+
+    setWeekend({ active: { ...BUILDERS, id: "study" }, next: null });
+    expect(upgradeOffer(pick(context, 2), context)).not.toHaveProperty("weekendOff");
+  });
+
+  it("cancel gives back what was paid (wd), even after the weekend", () => {
+    const context = contextOf({ buildings: [HALL(5), building(2, 20, 4, { cU: 5_400, wd: 30 })] });
+    expect(cancelOffer(pick(context, 2), context).refund).toEqual({ r1: 875_000, r2: 656_250, r3: 218_750, r4: 0 });
+  });
+
+  it("Fortify costs 30% less too, and its shortfall is against the lower price (owner, 7 Nov)", () => {
+    setWeekend({ active: BUILDERS, next: null });
+    const context = contextOf({
+      buildings: [HALL(5), building(2, 20, 4)],
+      resources: { r1: 35_000, r2: 26_250, r3: 8_750, r4: 0 },
+    });
+    expect(fortifyOffer(pick(context, 2), context)).toMatchObject({
+      cost: { r1: 35_000, r2: 26_250, r3: 8_750, r4: 0 },
+      weekendOff: 30,
+      fullCost: { r1: 50_000, r2: 37_500, r3: 12_500, r4: 0 },
+      gate: null,
+    });
+  });
+
+  it("Fortify outside the weekend: the full price, no weekendOff", () => {
+    const context = contextOf({ buildings: [HALL(5), building(2, 20, 4)] });
+    const offer = fortifyOffer(pick(context, 2), context);
+    expect(offer?.cost).toEqual({ r1: 50_000, r2: 37_500, r3: 12_500, r4: 0 });
+    expect(offer).not.toHaveProperty("weekendOff");
+  });
+
+  it("a weekend fortify's cancel gives back what was paid (wd)", () => {
+    const paid = contextOf({ buildings: [HALL(5), building(2, 20, 4, { cF: 5_400, wd: 30 })] });
+    expect(cancelOffer(pick(paid, 2), paid).refund).toEqual({ r1: 35_000, r2: 26_250, r3: 8_750, r4: 0 });
+    const full = contextOf({ buildings: [HALL(5), building(2, 20, 4, { cF: 5_400 })] });
+    expect(cancelOffer(pick(full, 2), full).refund).toEqual({ r1: 50_000, r2: 37_500, r3: 12_500, r4: 0 });
+  });
+});
+
 describe("on an outpost (outposts WP5)", () => {
   const CORE = building(1, 112, 1);
 
@@ -729,6 +802,18 @@ describe("panelModel: the General Store (§8.2)", () => {
 
   it("is not offered for a foundation", () => {
     const context = contextOf({ buildings: [HALL(5), building(2, 12, 0, { cB: 600 })] });
+    expect(panelModel(pick(context, 2), context).open).toBeNull();
+  });
+});
+
+describe("panelModel: the Observatory (alliances, beta 7)", () => {
+  it("opens the alliance window once built", () => {
+    const context = contextOf({ buildings: [HALL(5), building(2, 150, 1)] });
+    expect(panelModel(pick(context, 2), context).open).toBe("alliance");
+  });
+
+  it("is not offered for a foundation", () => {
+    const context = contextOf({ buildings: [HALL(5), building(2, 150, 0, { cB: 600 })] });
     expect(panelModel(pick(context, 2), context).open).toBeNull();
   });
 });

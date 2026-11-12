@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BaseLoadResponse, BuildingData, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
 import { setDevDetails } from "@/app/devDetails";
 import { YardStore, type YardUiBinding } from "@/game/yard/YardStore";
+import { resetWeekend, setWeekend, type WeekendRun } from "@/game/weekend";
+import { topUpPrice } from "@/game/yard/resourcePacks";
+import { panelModel } from "./buildingActions";
 import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
 import { BuildingPanel, recycledMessage, unusedText, type BuildingPanelOptions } from "./BuildingPanel";
@@ -100,9 +103,6 @@ const buttons = (root: HTMLElement): HTMLButtonElement[] => [
 ];
 const buttonNamed = (root: HTMLElement, text: string): HTMLButtonElement | undefined =>
   buttons(root).find((one) => one.textContent?.startsWith(text));
-/** One of the Champion Cage's two tabs. */
-const tabNamed = (root: HTMLElement, tab: "champion" | "building"): HTMLButtonElement =>
-  root.querySelector<HTMLButtonElement>(`[role="tab"][data-tab="${tab}"]`)!;
 
 const HALL = building(1, 14, 5);
 
@@ -191,6 +191,34 @@ describe("BuildingPanel: a tower at rest", () => {
     expect(spokenText(gate)).toMatch(/^Need Twigs [\d.,K]+ more\.$/);
   });
 
+  it("a shortfall that fits in storage offers Top up: tap twice to buy it and start (issue #393)", () => {
+    const { element, api, store } = setup([HALL, building(2, 20, 4)], 2, {
+      load: { resources: { r1: 1_000_000, r2: 1e8, r3: 1e8, r4: 1e8 } },
+    });
+    const gate = panelModel(store.building(2)!, store).upgrade?.gate;
+    if (gate?.reason !== "shortfall") throw new Error("expected a shortfall");
+    const price = topUpPrice(gate.shortfall);
+    const topUp = buttonNamed(element, "Top up")!;
+    expect(topUp.disabled).toBe(false);
+    expect(spokenText(topUp.querySelector(".shiny-button__price")!)).toContain(String(price));
+    topUp.click();
+    expect(api.upgrade).not.toHaveBeenCalled();
+    topUp.click();
+    expect(api.upgrade).toHaveBeenCalledWith(2, undefined, { topUp: price });
+  });
+
+  it("offers no Top up when a cost is over the storage cap, or with too little Shiny to pay it", () => {
+    const over = setup([HALL, building(2, 20, 4)], 2, {
+      load: { resources: { r1: 0, r2: 1e8, r3: 1e8, r4: 1e8 }, caps: { r1: 10, r2: 5e8, r3: 5e8, r4: 5e8 } },
+    }).element;
+    expect(buttonNamed(over, "Top up")).toBeUndefined();
+    document.body.replaceChildren();
+    const poor = setup([HALL, building(2, 20, 4)], 2, {
+      load: { resources: { r1: 0, r2: 1e8, r3: 1e8, r4: 1e8 }, credits: 0 },
+    }).element;
+    expect(buttonNamed(poor, "Top up")?.disabled).toBe(true);
+  });
+
   it("a Town Hall gate reads as one sentence", () => {
     const { element } = setup([building(1, 14, 4), building(2, 21, 4)], 2);
     expect(element.querySelector(".building-panel__gate")?.textContent).toBe("Needs Town Hall 5.");
@@ -212,11 +240,67 @@ describe("BuildingPanel: a tower at rest", () => {
       for (const field of ["Type id", "Footprint", "Position", "Building id", "Art", "save omits"]) {
         expect(text).not.toContain(field);
       }
-      expect(text).toContain("Level4");
-      expect(text).toContain("Health");
+      expect(text).toContain("FortificationNone");
     } finally {
       setDevDetails(null);
     }
+  });
+});
+
+/**
+ * Details hold only what the panel does not already show (owner, 10 Nov: an
+ * upgrading Flinger's Details repeated "Level 2" from the title, "Health
+ * 8,000 / 8,000" from the heart row and "Upgrading 7h 10m" from the job box).
+ */
+describe("BuildingPanel: Details repeat nothing shown above them", () => {
+  const detailTerms = (root: HTMLElement): string[] =>
+    [...root.querySelectorAll(".building-panel__details dt")].map((term) => term.textContent ?? "");
+  const asPlayer = <T,>(run: () => T): T => {
+    setDevDetails(false);
+    try {
+      return run();
+    } finally {
+      setDevDetails(null);
+    }
+  };
+
+  it("an upgrading building: no Level, Health or Upgrading row, only Fortification", () => {
+    asPlayer(() => {
+      const { element } = setup([HALL, building(2, 20, 4, { cU: 5_400 })], 2);
+      expect(element.querySelector(".panel__title")?.textContent).toMatch(/Level 4$/);
+      expect(infoLines(element).some((line) => line.startsWith("Health"))).toBe(true);
+      expect(element.querySelector(".building-job .building-panel__heading")?.textContent).toMatch(/^Upgrading/);
+      expect(detailTerms(element)).toEqual(["Fortification"]);
+      expect(element.querySelector<HTMLElement>(".building-panel__details")!.hidden).toBe(false);
+    });
+  });
+
+  it("a building under construction: no 'Still being built' or Building row", () => {
+    asPlayer(() => {
+      const { element } = setup([HALL, building(2, 20, 0, { cB: 20 })], 2);
+      expect(element.textContent).toContain("Under construction");
+      const terms = detailTerms(element);
+      expect(terms).not.toContain("Level");
+      expect(terms).not.toContain("Building");
+    });
+  });
+
+  it("a building being repaired: no Repairing or Health row", () => {
+    asPlayer(() => {
+      const { element } = setup([HALL, building(2, 20, 4, { hp: 8_820, rE: 1 })], 2);
+      expect(element.querySelector(".building-repair .building-panel__heading")?.textContent).toBe("Repairing");
+      const terms = detailTerms(element);
+      expect(terms).not.toContain("Repairing");
+      expect(terms).not.toContain("Health");
+    });
+  });
+
+  it("a foreign yard's building still says its level is hidden (its title has no level)", () => {
+    asPlayer(() => {
+      const { element } = setup([building(1, 14, 5)], 1, { own: false });
+      expect(element.querySelector(".panel__title")?.textContent).toBe("Town Hall");
+      expect(detailTerms(element)).toContain("Level");
+    });
   });
 });
 
@@ -422,6 +506,20 @@ describe("BuildingPanel: the General Store (§8.2)", () => {
   });
 });
 
+describe("BuildingPanel: the Observatory (alliances, beta 7)", () => {
+  it("opens the alliance window from its Alliance button", () => {
+    const openAlliance = vi.fn();
+    const { element } = setup([HALL, building(2, 150, 1)], 2, { scene: { openAlliance } });
+    buttonNamed(element, "Alliance")!.click();
+    expect(openAlliance).toHaveBeenCalledOnce();
+  });
+
+  it("offers no Alliance button where the scene has no window", () => {
+    const { element } = setup([HALL, building(2, 150, 1)], 2);
+    expect(buttonNamed(element, "Alliance")).toBeUndefined();
+  });
+});
+
 describe("BuildingPanel: the monster buildings", () => {
   it("opens the Monster Locker's Unlock tab from Open, with the building named", () => {
     const openMonsters = vi.fn();
@@ -442,29 +540,6 @@ describe("BuildingPanel: the monster buildings", () => {
   it("offers no Open where the scene has no Monsters screen", () => {
     const { element } = setup([HALL, building(2, 8, 2)], 2);
     expect(buttonNamed(element, "Open")).toBeUndefined();
-  });
-});
-
-describe("BuildingPanel: the Monster Bunker (§7.1)", () => {
-  it("Open bunker shows the bunker's controls under the actions, and Close bunker hides them", () => {
-    const { element } = setup([HALL, building(2, 22, 1, { m: { C1: 3 } })], 2, {
-      load: { monsters: { housed: { C2: 4 } } } as Partial<BaseLoadResponse>,
-    });
-    expect(element.querySelector(".bunker")).toBeNull();
-    buttonNamed(element, "Open bunker")!.click();
-    const bunker = element.querySelector(".bunker")!;
-    expect(bunker.querySelector(".bunker__figures")!.textContent).toBe("30 / 380 space used");
-    expect(buttonNamed(element, "Close bunker")!.getAttribute("aria-expanded")).toBe("true");
-    buttonNamed(element, "Close bunker")!.click();
-    expect(element.querySelector(".bunker")).toBeNull();
-    expect(buttonNamed(element, "Open bunker")).toBeDefined();
-  });
-
-  it("closes the bunker's controls when another building is shown", () => {
-    const { element, panel, store } = setup([HALL, building(2, 22, 1)], 2);
-    buttonNamed(element, "Open bunker")!.click();
-    panel.show(store.building(1)!);
-    expect(element.querySelector(".bunker")).toBeNull();
   });
 });
 
@@ -515,86 +590,29 @@ describe("BuildingPanel: the Wild Monster Baiter (#126, #22, #308)", () => {
   });
 });
 
-describe("BuildingPanel: the Champion Cage (§7.2)", () => {
-  it("opens straight on the champion, in the wider panel, with no Open cage (owner, 28 Oct)", () => {
-    const { element, panel, store } = setup([HALL, building(2, 114, 1)], 2);
-    expect(element.classList.contains("building-panel--cage")).toBe(true);
-    expect(element.querySelector(".champion .champion-card")).not.toBeNull();
-    expect(buttonNamed(element, "Open cage")).toBeUndefined();
-    const tabs = [...element.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-    expect(tabs.map((tab) => [tab.textContent, tab.getAttribute("aria-selected")])).toEqual([
-      ["Champion", "true"],
-      ["Building", "false"],
-    ]);
-    expect(element.dataset["cageTab"]).toBe("champion");
-    expect(element.querySelector<HTMLElement>(".building-panel__champion")!.hidden).toBe(false);
-    expect(element.querySelector<HTMLElement>(".building-panel__actions")!.hidden).toBe(true);
-    panel.show(store.building(1)!);
-    expect(element.querySelector(".champion")).toBeNull();
-    expect(element.classList.contains("building-panel--cage")).toBe(false);
-    expect(element.querySelector<HTMLElement>(".building-panel__tabs")!.hidden).toBe(true);
-  });
-
-  it("keeps the building's card a tab away, and the champion's window open behind it", () => {
-    const { element } = setup([HALL, building(2, 114, 1)], 2);
-    const champion = element.querySelector(".champion");
-    tabNamed(element, "building").click();
-    expect(element.dataset["cageTab"]).toBe("building");
-    expect(element.querySelector<HTMLElement>(".building-panel__champion")!.hidden).toBe(true);
+describe("BuildingPanel: the buildings whose controls live in the Monsters screen (owner, 12 Nov 2026)", () => {
+  it.each([
+    [114, "Open Champion Cage", "champion"],
+    [119, "Open Champion Chamber", "champion"],
+    [9, "Open Monster Juicer", "housing"],
+    [22, "Open Monster Bunker", "housing"],
+  ] as const)("type %i shows its plain card with %s, which opens the %s tab on it", (type, label, tab) => {
+    const openMonsters = vi.fn();
+    const { element } = setup([HALL, building(2, type, 1)], 2, { scene: { openMonsters } });
+    // The building's own card, not its controls: no champion, bunker or tabs in the panel.
+    expect(element.querySelector(".champion, .chamber, .bunker")).toBeNull();
+    expect(element.querySelector('[role="tablist"]')).toBeNull();
     expect(element.querySelector<HTMLElement>(".building-panel__actions")!.hidden).toBe(false);
-    expect(element.querySelector(".building-panel__actions")!.childElementCount).toBeGreaterThan(0);
-    tabNamed(element, "champion").click();
-    expect(element.dataset["cageTab"]).toBe("champion");
-    expect(element.querySelector(".champion")).toBe(champion);
+    const open = buttonNamed(element, label)!;
+    expect(open.textContent).toBe(label);
+    open.click();
+    expect(openMonsters).toHaveBeenCalledWith(tab, { buildingId: 2 });
   });
 
-  it("opens the Champion Chamber straight on its champions too, with Building a tab away (#125; owner, 28 Oct)", () => {
-    const { element } = setup([HALL, building(2, 119, 1)], 2);
-    expect(element.classList.contains("building-panel--cage")).toBe(true);
-    expect(element.querySelector(".chamber")).not.toBeNull();
-    expect(buttonNamed(element, "Open chamber")).toBeUndefined();
-    const tabs = [...element.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-    expect(tabs.map((tab) => [tab.textContent, tab.getAttribute("aria-selected")])).toEqual([
-      ["Champions", "true"],
-      ["Building", "false"],
-    ]);
-    expect(element.querySelector('[role="tablist"]')!.getAttribute("aria-label")).toBe("Champion Chamber");
-    tabNamed(element, "building").click();
-    expect(element.querySelector<HTMLElement>(".building-panel__champion")!.hidden).toBe(true);
-    expect(element.querySelector<HTMLElement>(".building-panel__actions")!.hidden).toBe(false);
-  });
-
-  it("keeps the cage's and chamber's tabs over the body, which alone scrolls; a new tab opens at its top (owner, 6 Nov 2026)", () => {
-    for (const type of [114, 119]) {
-      const { element } = setup([HALL, building(2, type, 1)], 2);
-      const tablist = element.querySelector<HTMLElement>('[role="tablist"]')!;
-      const body = element.querySelector<HTMLElement>(":scope > .panel__body")!;
-      expect(tablist.parentElement!.classList.contains("panel__head")).toBe(true);
-      expect(tablist.parentElement!.nextElementSibling).toBe(body);
-      expect(body.contains(tablist)).toBe(false);
-      body.scrollTop = 200;
-      expect(body.scrollTop).toBe(200);
-      tabNamed(element, "building").click();
-      expect(body.scrollTop).toBe(0);
-      document.body.replaceChildren();
-    }
-  });
-
-  it("puts a red dot on a damaged chamber's Building tab", () => {
-    const { element } = setup([HALL, { ...building(2, 119, 1), hp: 100 }], 2);
-    expect(tabNamed(element, "building").classList.contains("building-panel__tab--alert")).toBe(true);
-  });
-
-  it("openChampion brings back the champion tab once, and does nothing on another building (Inferno WP 5.2)", () => {
-    const { element, panel, store } = setup([HALL, building(2, 114, 1)], 2);
-    tabNamed(element, "building").click();
-    panel.openChampion();
-    panel.openChampion();
-    expect(element.querySelectorAll(".champion")).toHaveLength(1);
-    expect(element.dataset["cageTab"]).toBe("champion");
-    panel.show(store.building(1)!);
-    panel.openChampion();
-    expect(element.querySelector(".champion")).toBeNull();
+  it("offers no Open on one still on its first build", () => {
+    const openMonsters = vi.fn();
+    const { element } = setup([HALL, building(2, 114, 0, { cB: 20 })], 2, { scene: { openMonsters } });
+    expect(buttonNamed(element, "Open Champion Cage")).toBeUndefined();
   });
 });
 
@@ -1013,5 +1031,58 @@ describe("BuildingPanel: Move to a random spot on the Map Room (#366)", () => {
       "Available again in 7 days.",
     );
     modal.remove();
+  });
+});
+
+/**
+ * Builder's Weekend discounts Fortify too (owner, 7 Nov): the home-yard
+ * Fortify block shows the lowered price with the −30% chip, and the
+ * resources check is against that price. Cannon Tower F0 → F1 is
+ * 50,000 / 37,500 / 12,500 in full, 35,000 / 26,250 / 8,750 at 30% off.
+ */
+describe("BuildingPanel: fortifying in a Builder's Weekend", () => {
+  const BUILDERS: WeekendRun = {
+    id: "builders",
+    title: "Builder's Weekend",
+    line: "Upgrades cost 30% less",
+    percent: 30,
+    key: "2026-11-14",
+    startsAt: T0 - 60,
+    endsAt: T0 + 3_600,
+    announceAt: T0 - 86_460,
+    forced: false,
+  };
+  afterEach(() => {
+    resetWeekend();
+    document.body.replaceChildren();
+  });
+
+  const fortifyBlock = (resources?: Record<string, number>) => {
+    const { element } = setup([HALL, building(2, 20, 4)], 2, resources ? { load: { resources } as Partial<BaseLoadResponse> } : {});
+    return element.querySelector<HTMLElement>(".building-fortify")!;
+  };
+
+  it("shows the lowered price and the −30% chip", () => {
+    setWeekend({ active: BUILDERS, next: null }, T0);
+    const block = fortifyBlock();
+    expect(block.querySelector(".building-panel__head .weekend-chip")?.textContent).toBe("−30%");
+    const cost = spokenText(block.querySelector(".building-panel__cost")!);
+    expect(cost).toContain("35,000");
+    expect(cost).toContain("26,250");
+    expect(cost).toContain("8,750");
+    expect(cost).not.toContain("50,000");
+  });
+
+  it("is not short with just the lowered price in storage", () => {
+    setWeekend({ active: BUILDERS, next: null }, T0);
+    const block = fortifyBlock({ r1: 35_000, r2: 26_250, r3: 8_750, r4: 0 });
+    expect(block.querySelectorAll(".build-info__fact--ok")).toHaveLength(block.querySelectorAll(".build-info__fact").length);
+    expect(block.querySelector<HTMLButtonElement>(".building-panel__buttons button")?.disabled).toBe(false);
+  });
+
+  it("no weekend: the full price and no chip", () => {
+    const block = fortifyBlock();
+    expect(block.querySelector(".weekend-chip")).toBeNull();
+    expect(spokenText(block.querySelector(".building-panel__cost")!)).toContain("50,000");
   });
 });

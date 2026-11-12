@@ -25,12 +25,14 @@ import {
   INVITE_DECLINED,
   INVITE_PRICE,
   InviteState,
+  type HostPayment,
   findInviteOutpost,
   findThreadInvite,
   inviteAcceptRefusal,
   inviteNoticeText,
   inviteRefusal,
   inviteState,
+  invitedPrice,
 } from "../../../services/mail/inviteRules.js";
 
 /**
@@ -67,11 +69,13 @@ const invitationTo = async (userid: number, threadid: number) => {
  * - The invitation still waits (`inviteState`): not answered, withdrawn,
  *   lapsed or void, the outpost still its inviter's. Otherwise 409
  *   `inviteClosedErr`.
- * - The caller is on Map Room 2 in the outpost's world, in no alliance, not in
- *   their relocation cooldown, has a home cell, neither yard is under attack,
- *   and they can pay `INVITE_PRICE`. Otherwise a soft refusal,
- *   `{ error: 1, message, reason, retryat? }`, with nothing written: the
- *   invitation stays open.
+ * - The caller is on Map Room 2 in the outpost's world, not in their
+ *   relocation cooldown, has a home cell, neither yard is under attack, and
+ *   they can pay their share (`invitedPrice`). The inviter can pay theirs,
+ *   `INVITE_PRICE` the way they chose when sending (`hostpayment`; none on an
+ *   invitation sent before both paid). Otherwise a soft refusal,
+ *   `{ error: 1, message, reason, retryat? }`, with nothing written or
+ *   charged: the invitation stays open. Alliances no longer matter.
  *
  * On success the invitation is accepted, the caller's cooldown starts, and the
  * inviter is told by the game (`inviteaccepted`). Answers `{ error: 0, coords }`.
@@ -125,7 +129,6 @@ export const migrateToFriend: KoaController = async (ctx) => {
     const refusal = inviteAcceptRefusal({
       invited: {
         userid: user.userid,
-        allianceId: user.alliance_id,
         mapVersion: invitedMain.mapversion,
         worldid: invitedMain.worldid,
       },
@@ -141,10 +144,24 @@ export const migrateToFriend: KoaController = async (ctx) => {
     const charge = chargeRelocation(
       { credits: invitedMain.credits, resources: invitedMain.resources },
       payment,
-      INVITE_PRICE
+      invitedPrice(current)
     );
 
     if (!charge.ok) return { refusal: inviteRefusal(charge.reason, "invitee") };
+
+    // The inviter's share, as they chose when sending (design v5 §12).
+    const hostPayment = current.hostpayment as HostPayment | null;
+    if (hostPayment) {
+      const host =
+        hostPayment === "shiny" ? await em.findOne(User, { userid: current.userid }, { fields: ["shiny_locked"] }) : null;
+      const hostLocked = hostPayment === "shiny" && (!host || isShinyLocked(host as User));
+      const share = hostLocked
+        ? null
+        : chargeRelocation({ credits: inviterMain.credits, resources: inviterMain.resources }, hostPayment, INVITE_PRICE);
+      if (!share?.ok) return { refusal: inviteRefusal("hostCantPay", "invitee") };
+      inviterMain.credits = share.credits;
+      inviterMain.resources = share.resources;
+    }
 
     invitedMain.credits = charge.credits;
     invitedMain.resources = charge.resources;

@@ -7,6 +7,7 @@ import { getCurrentDateTime } from "../../../../utils/getCurrentDateTime.js";
 import { MapRoomCell } from "../../../../enums/MapRoom.js";
 import { isAttackActive } from "../../../../services/base/isAttackActive.js";
 import { TAKEOVER_DAMAGE } from "../../../../services/maproom/v2/takeoverRules.js";
+import { isHostile } from "../../../../services/maproom/v2/hostiles.js";
 import { loadArmyOwner, monstersForMap, type ArmyOwner } from "../../../../services/yard/armies.js";
 
 export type UserCellFields =
@@ -27,6 +28,12 @@ export type UserCellFields =
 
 export type UserCellOwner = Loaded<User, "save", "userid" | "username" | "pic_square" | "alliance_id" | "save.points" | "save.basevalue">;
 
+/** `wf`: when the own outpost's busy worker is free again, when that is known. */
+const workerFinish = (busy: unknown, saveId: number): { wf: number } | undefined => {
+  const finishAt = busy instanceof Map ? busy.get(saveId) : undefined;
+  return typeof finishAt === "number" ? { wf: finishAt } : undefined;
+};
+
 type Cell = Loaded<WorldMapCell, "save", UserCellFields>;
 
 /**
@@ -42,7 +49,8 @@ type Cell = Loaded<WorldMapCell, "save", UserCellFields>;
  */
 export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number, UserCellOwner>) => {
   const currentUser: User = ctx.authUser;
-  const { online: onlineNow, truces, pendingInvites, idleWorkers, busyWorkers, attackers, friends } = ctx.state;
+  const { online: onlineNow, truces, pendingInvites, idleWorkers, busyWorkers, attackers, friends, pinnedFriends, attacked } =
+    ctx.state;
 
   const mine = currentUser.userid === cell.uid;
   const cellOwner = mine ? currentUser : cellOwners.get(cell.uid);
@@ -92,7 +100,10 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     // `mcWorker`). Absent elsewhere: nobody else sees whether a worker is busy.
     ...(mine && outpostCell && (idleWorkers as Set<number> | undefined)?.has(cellSave.basesaveid) && { wi: 1 }),
     // ... or with it building, upgrading or fortifying (Modern's construction badge).
-    ...(mine && outpostCell && (busyWorkers as Set<number> | undefined)?.has(cellSave.basesaveid) && { wb: 1 }),
+    ...(mine && outpostCell && (busyWorkers as Map<number, number | null> | undefined)?.has(cellSave.basesaveid) && { wb: 1 }),
+    // ... and when that job ends (Unix seconds), so the map takes the badge down then
+    // without the yard being opened (owner, 12 Nov 2026). Absent while it is paused.
+    ...(mine && outpostCell && workerFinish(busyWorkers, cellSave.basesaveid)),
     bid: cell.baseid,
     aid: cellOwner.alliance_id,
     i: cell.terrainHeight,
@@ -107,6 +118,14 @@ export const userCell = async (ctx: Context, cell: Cell, cellOwners: Map<number,
     ...(!mine && (attackers as Set<number> | undefined)?.has(cellOwner.userid) && { ak: 1 }),
     n: cellOwner.username,
     fr: !mine && (friends as Set<number> | undefined)?.has(cellOwner.userid) ? 1 : 0,
+    // 1 on a friend the viewer pinned to the top of their list (beta 7): the stronger friend marker.
+    ...(!mine && (pinnedFriends as Set<number> | undefined)?.has(cellOwner.userid) && { fp: 1 }),
+    // 1 on a HOSTILE player's yard or outpost (owner, 8 Nov 2026): an attack between them and the
+    // viewer, either way, ever, and no truce running (`hostiles.ts`). The map's red border.
+    ...(!mine &&
+      isHostile(!!(attacked as Set<number> | undefined)?.has(cellOwner.userid), truces.get(cellOwner.userid), currentTime) && {
+        ho: 1,
+      }),
     p: isProtected ? 1 : 0,
     // When damage protection ends, unix seconds (#187): Flash sent only `p`,
     // and the map could only say "protected" with no end. Sent while it runs.

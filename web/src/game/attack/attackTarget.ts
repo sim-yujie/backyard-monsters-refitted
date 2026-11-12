@@ -35,6 +35,13 @@ export type AttackTargetKind = "wild" | "main" | "outpost";
  */
 export type ViewTargetKind = AttackTargetKind | "friend";
 
+/** A wild cell's name as the map's cell panel shows it: "Kozu camp". */
+export const campTitle = (tribe: string): string => `${tribe} camp`;
+
+/** A target's name as the map shows it: the tribe's camp, or the player's yard name. */
+export const targetTitle = (name: string, kind: AttackTargetKind): string =>
+  kind === "wild" ? campTitle(name) : name;
+
 /**
  * One own cell's housing, as the map cell carries it in `m`
  * (`docs/specs/maproom2.md:286-290`: `hcc`, `h`, `hstage`, `hid`, `housed`,
@@ -143,6 +150,11 @@ export interface AttackTarget {
   readonly name: string;
   /** The defender's user id when a player owns it (not a wild camp); the friend warning reads it. */
   readonly owner?: number;
+  /**
+   * The player's own alliance, when the defender is in it too (beta 7): the
+   * "X is in your alliance, attack anyway?" confirm reads it. Absent otherwise.
+   */
+  readonly ally?: { readonly name: string; readonly image: number };
   readonly roster: AttackRoster;
   /**
    * The Map Room the attack load names, when it is not the client's default

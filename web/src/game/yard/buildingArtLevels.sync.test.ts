@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   artLevelOf,
   BUILDING_ART_LEVELS,
+  INFERNO_ART_LEVELS,
   TOWER_TIER_ART_LEVELS,
 } from "../../../../server/src/game-data/buildingArtLevels";
 import { BUILDING_ART_ROWS } from "./buildingArtData";
 import { ArtState, resolveArt } from "./buildingArt";
 import { setClassicLook } from "@/game/classicLook";
 import {
+  INFERNO_BUILDING_3D_ART,
   INFERNO_TOWER_TIER_ART,
   MODERN_TOWERS,
   TOWER_TIER_ART,
@@ -69,6 +71,29 @@ describe("the server's art levels match the web art table", () => {
   it("splits an Inferno tower that shares a type as its namesake up top does", () => {
     for (const [type, inferno] of Object.entries(INFERNO_TOWER_TIER_ART)) {
       expect(inferno.map((tier) => tier.from)).toEqual(TOWER_TIER_ART_LEVELS[Number(type)]);
+    }
+  });
+
+  it("names the Inferno's own 3D tiers that split where the main yard's art does not", () => {
+    for (const [type, steps] of Object.entries(INFERNO_ART_LEVELS)) {
+      expect(INFERNO_BUILDING_3D_ART[Number(type)]?.map((tier) => tier.from)).toEqual(steps);
+    }
+  });
+
+  it("picks the picture the client draws for the Inferno's own 3D buildings, in an Inferno yard, either look", () => {
+    for (const classic of [false, true]) {
+      setClassicLook(classic);
+      try {
+        for (const type of Object.keys(INFERNO_BUILDING_3D_ART).map(Number)) {
+          for (let level = 1; level <= 20; level++) {
+            const drawn = resolveArt(type, level, ArtState.DEFAULT, "inferno")?.top.url;
+            const masked = artLevelOf(type, level, true, "inferno");
+            expect(resolveArt(type, masked, ArtState.DEFAULT, "inferno")?.top.url, `${type}@${level}`).toBe(drawn);
+          }
+        }
+      } finally {
+        setClassicLook(false);
+      }
     }
   });
 

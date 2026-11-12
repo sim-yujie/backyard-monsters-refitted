@@ -366,6 +366,65 @@ describe("upgrade/cancel", () => {
 });
 
 /**
+ * Builder's Weekend (`services/events/weekendBoosts.ts`): the step costs 30%
+ * less, rounded up per resource. Cannon Tower 2 → 3 at 30% off is
+ * 35,000 / 26,250 / 8,750; Housing 2 → 3 is 24,192 / 24,192.
+ */
+describe("upgrade during a Builder's Weekend", () => {
+  const OFF = 30;
+  const CANNON_OFF = { r1: 35000, r2: 26250, r3: 8750, r4: 0 };
+
+  test("charges and reports the lower price, writes wd on the building", () => {
+    const outcome = planUpgradeAction(yard(), 1, NOW, OFF);
+
+    expect(outcome.debit).toEqual(CANNON_OFF);
+    expect(outcome.report).toEqual({ id: 1, from: 2, to: 3, seconds: 2700, cost: CANNON_OFF, weekendOff: OFF });
+    expect(outcome.slices.buildingdata["1"]).toMatchObject({ cU: 2700, cL: 2700, wd: OFF });
+  });
+
+  test("no weekend: no wd and no weekendOff", () => {
+    const outcome = planUpgradeAction(yard(), 1, NOW, 0);
+    expect(outcome.slices.buildingdata["1"]).not.toHaveProperty("wd");
+    expect(outcome.report).not.toHaveProperty("weekendOff");
+  });
+
+  test("the shortfall check uses the lower price", () => {
+    const buildings: BuildingDataMap = {
+      "0": { id: 0, t: HALL, x: 0, y: 0, l: 4 },
+      "5": { id: 5, t: HOUSING, x: 0, y: 0, l: 2 },
+      "7": { id: 7, t: LOCKER, x: 0, y: 0, l: 1 },
+    };
+    const poor = yard({ buildingdata: buildings, resources: { r1: 100, r2: 100, r3: 0, r4: 0 } });
+    expect(refusal(() => planUpgradeAction(poor, 5, NOW, OFF)).data).toEqual({
+      reason: "shortfall",
+      shortfall: { r1: 24092, r2: 24092, r3: 0, r4: 0 },
+    });
+
+    // Enough for the weekend price but not the full one: the upgrade starts.
+    const enough = yard({ buildingdata: buildings, resources: { r1: 24192, r2: 24192, r3: 0, r4: 0 } });
+    expect(() => planUpgradeAction(enough, 5, NOW, 0)).toThrow();
+    expect(planUpgradeAction(enough, 5, NOW, OFF).debit).toEqual({ r1: 24192, r2: 24192, r3: 0, r4: 0 });
+  });
+
+  test("cancelling gives back what was paid and drops wd, even after the weekend", () => {
+    const started = planUpgradeAction(yard(), 1, NOW, OFF);
+    const save = yard({ buildingdata: started.slices.buildingdata, resources: { r1: 0, r2: 0, r3: 0, r4: 0 } });
+
+    const cancelled = planCancelUpgrade(save, 1);
+
+    expect(cancelled.credit).toEqual(CANNON_OFF);
+    expect(cancelled.report.refund).toEqual(CANNON_OFF);
+    expect(cancelled.slices.buildingdata["1"]).toEqual({ id: 1, t: CANNON, x: 0, y: 0, l: 2 });
+  });
+
+  test("an upgrade started at full price but cancelled in the weekend refunds the full price", () => {
+    const started = planUpgradeAction(yard(), 1, NOW, 0);
+    const save = yard({ buildingdata: started.slices.buildingdata, resources: { r1: 0, r2: 0, r3: 0, r4: 0 } });
+    expect(planCancelUpgrade(save, 1).credit).toEqual({ r1: 50000, r2: 37500, r3: 12500, r4: 0 });
+  });
+});
+
+/**
  * A main-yard Quake Tower (Inferno WP 6.1): its upgrade reads the Under Hall
  * entry and is paid from the Inferno purse. Level 1 to 2 costs
  * 1,250,000 / 750,000 / 500,000 Inferno.

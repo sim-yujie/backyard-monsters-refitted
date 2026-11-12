@@ -152,6 +152,10 @@ export const deriveStats = (view: AchievementView): Partial<AchievementStats> =>
     // Flash's `QUESTS.amountCompleted`: Inferno quests met, claimed or not
     // (`QUESTS.as:33-40`, `:1651`), from the server's own sticky `done`.
     infernoquests: Object.values(onboarding.infernoGoals).filter((record) => record.done !== undefined).length,
+    // Landlord (#392): the outposts held now, from the main row's list, which
+    // only the server writes (a takeover adds one, losing one takes it off;
+    // owner saves are refused, `config/OwnerSaveConfig.ts`).
+    outposts: Array.isArray(view.outposts) ? view.outposts.length : 0,
   };
   for (const [stat, type] of CHAMPION_STATS) {
     stats[stat] = championLevel(view.champion, type) >= CHAMPION_TOP_LEVEL ? 1 : 0;
@@ -182,7 +186,16 @@ const SNAPSHOT_STATS = Object.keys(backfillStats({})) as AchievementStat[];
  * (`BUILDING14.Constructed`, WP 4.3), which `ACHIEVEMENTS.Check` sets, never
  * adds to. They raise.
  */
-const LEVEL_STATS: readonly AchievementStat[] = ["descent", "underhall"];
+const LEVEL_STATS: readonly AchievementStat[] = [
+  "descent",
+  "underhall",
+  // The hidden achievements' levels (#392, `daily.ts`): today's visits, the
+  // login run, the friends and the outposts held, each as it stands now.
+  "neighbourly",
+  "loginstreak",
+  "friends",
+  "outposts",
+];
 
 /** Raises each stat to `stats`' value where that is higher. */
 const raise = (into: AchievementStats, stats: Partial<AchievementStats>): void => {

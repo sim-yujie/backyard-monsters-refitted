@@ -29,13 +29,14 @@ import {
   enrageMultiplier,
   fomorBuff,
   hasFireball,
+  hasFlame,
   hasLootAura,
   hasQuake,
   krallenAuraRadius,
   linearAreaDamage,
   lootAuraBonus,
 } from "./champions.js";
-import { BRAIN_KEYS, brainBase } from "./brain.js";
+import { brainBase } from "./brain.js";
 import {
   DECOY_BUILDING_REACH,
   DECOY_FRAME_TICKS,
@@ -67,8 +68,16 @@ import {
 } from "./vacuum.js";
 import type { VacuumPlan } from "./vacuum.js";
 import type { BrainKey, BrainWeights, ChampionLesson } from "./brain.js";
+import { CURIOUS_EVERY, habitMind, hasHabits } from "./habits.js";
 import { buildPathGrid, cellOf, pointTarget } from "./grid.js";
 import {
+  FOMOR_CROWD_CAP,
+  FOMOR_CROWD_RANGE,
+  GUN_TOWERS_MIN,
+  HABIT_FEATURE_KEYS,
+  MONSTER_HABIT_KEYS,
+  NEAR_RANGE,
+  QUAKE_CROWD_CAP,
   cannotBeat,
   exposure,
   focusFeature,
@@ -77,7 +86,13 @@ import {
   threatFeature,
   towerPerTick,
 } from "./stance.js";
-import type { ChampionStance, StanceWeights, TargetFeatures } from "./stance.js";
+import type {
+  ChampionStance,
+  HabitFeatureKey,
+  HabitKey,
+  StanceWeights,
+  TargetFeatures,
+} from "./stance.js";
 import { mulberry32 } from "./rng.js";
 import { REZGHUL_ID, SPLIT_CHILD_ID } from "./potential.js";
 import {
@@ -198,6 +213,7 @@ import {
   TARGETS_FLYING,
   TARGETS_GROUND,
   TARGETS_INVISIBLE,
+  CREEP_CELL_SIZE,
   createCreepIndex,
   defenseFlags,
   findBuildingTarget,
@@ -257,6 +273,8 @@ import {
   OCTO_ID,
   POKEY_ID,
   PROJECT_X_ID,
+  SLIMEATTIKUS_ID,
+  SPLIT_COPY_DAMAGE_SHARE,
   PROJECT_X_RADIUS,
   SWARM_SIZE,
   TERATORN_ID,
@@ -276,6 +294,8 @@ import {
   finkExtraTargets,
   projectXMultiplier,
   rankOf,
+  splitCopyCount,
+  splitCopyHealthShare,
   swarmSpeedShare,
   thornsShare,
   venomShare,
@@ -702,6 +722,12 @@ export interface DefenceBonus {
    * makes every tower reach `int(range * 90 / 100)`, after the cell's height.
    */
   readonly range?: number;
+  /**
+   * Trap damage, from the defender's alliance constellations (beta 7,
+   * `allianceDefenceBonus` in `defence.ts`): 0.1 makes every trap blast 1.1
+   * times as hard. Absent or 0, traps hit exactly as they always did.
+   */
+  readonly trap?: number;
 }
 
 /**
@@ -943,6 +969,10 @@ export interface CreepSnapshot {
   readonly swarming?: boolean;
   /** Oozed by an Octo-ooze it killed: dealing less damage for a while (Lab "Weakening Ooze"). */
   readonly weakened?: boolean;
+  /** A copy a ranked Slimeattikus left as it died (Lab "Split"): drawn small, split-marked. */
+  readonly splitCopy?: boolean;
+  /** Raised by a Rezghul (`Zombiefy.as:26-34`): drawn grey, with green sparks. */
+  readonly zombie?: boolean;
 }
 
 /**
@@ -1134,6 +1164,34 @@ export type BattleVisualEvent =
       readonly toIy: number;
       /** Health the jump took off, after fortification. */
       readonly amount: number;
+    }
+  | {
+      /**
+       * A Rezghul threw its raise (`ResurrectProjectile.as`): it flies from
+       * the `from` yard point to the `to` one, 2 screen px a loop, and lands
+       * on `landTick`. Both points are the orb's corner, as Flash moves it;
+       * its 20 px sprite is drawn from there. Drawing only.
+       */
+      readonly kind: "raiseOrb";
+      readonly tick: number;
+      readonly creepId: number;
+      readonly fromIx: number;
+      readonly fromIy: number;
+      readonly toIx: number;
+      readonly toIy: number;
+      readonly landTick: number;
+    }
+  | {
+      /**
+       * A Rezghul's raise brought `creepId` back where it fell
+       * (`RezghulResurrectAttack.resurrect`, `:71-89`): a `Dig` and dirt below
+       * it, and it rises 20 px out of the ground over 0.8 s. Drawing only.
+       */
+      readonly kind: "rise";
+      readonly tick: number;
+      readonly creepId: number;
+      readonly ix: number;
+      readonly iy: number;
     }
   | {
       /** Korath's quake landed (issue #222): a ring on the ground, `radius` screen px. */
@@ -1354,8 +1412,13 @@ interface Creep {
    * Such a Spurtz fights as Flash's does rather than by the bunker rules.
    */
   hatchedBy: number;
-  /** Rezghul: the tick its raise is ready again (`RangedAttack.as:45-51`). */
+  /**
+   * Rezghul: the battle second its raise is ready again
+   * (`RangedAttack.as:45-51`, `GLOBAL.Timestamp()`, whole seconds).
+   */
   rechargeAt: number;
+  /** Raised by a Rezghul (`Zombiefy`): drawn grey, with green sparks. */
+  zombie: boolean;
   /** The flags of the creeps it can fight: its foes' side, and whether it reaches the air. */
   hitFlags: number;
   /**
@@ -1459,6 +1522,17 @@ interface Creep {
    */
   weights: StanceWeights | null;
   /**
+   * A champion flung with habits (champion modes round 2, `habits.ts`): its
+   * Mode's instincts alone, which every {@link CURIOUS_EVERY}th look picks
+   * by. Null for every other creep, and for a champion with no habit, whose
+   * looks are all alike.
+   */
+  instinctWeights: StanceWeights | null;
+  /** Whether {@link instinctWeights} is in use: a champion flung with habits. */
+  habitsOn: boolean;
+  /** Looks a champion with habits has taken, which times its curious looks. */
+  looks: number;
+  /**
    * `k_sBHVR_HUNT` (`CreepBase.as:398-402`): an attacker whose target group
    * was 6, Balthazar. It keeps the behaviour after its group falls through
    * to 1, so its blows at a creep stay triple (`:884-886`).
@@ -1477,14 +1551,36 @@ interface Creep {
   weakUntil: number;
   /** The share of its damage the ooze takes off while it lasts. */
   weakShare: number;
+  /** A copy a ranked Slimeattikus left as it died (Lab "Split"); it never splits again. */
+  splitCopy: boolean;
 }
+
+/** What a lesson credits: the old brain's features and the habits' own. */
+type LearnKey = BrainKey | HabitKey;
+
+/** The {@link LearnKey}s a building's features give, in one fixed order, each once. */
+const LEARN_KEYS: readonly (BrainKey | HabitFeatureKey)[] = [
+  "tower",
+  "loot",
+  "finish",
+  "focus",
+  "threat",
+  ...HABIT_FEATURE_KEYS,
+];
+
+const zeroCredit = (): Record<LearnKey, number> => {
+  const out = {} as Record<LearnKey, number>;
+  for (const key of LEARN_KEYS) out[key] = 0;
+  for (const key of MONSTER_HABIT_KEYS) out[key] = 0;
+  return out;
+};
 
 /** A {@link ChampionLesson} as the battle builds it (issue #219). */
 interface LessonRecord {
   readonly t: number;
   readonly monsterId: string;
   picks: number;
-  readonly credit: Record<BrainKey, number>;
+  readonly credit: Record<LearnKey, number>;
   dealt: number;
   /** Its damage per tick at full swing, as flung. */
   readonly perTick: number;
@@ -1541,12 +1637,16 @@ const NO_ABILITIES = {
   looking: false,
   surfaceChase: false,
   weights: null,
+  instinctWeights: null,
+  habitsOn: false,
+  looks: 0,
   hunts: false,
   huntPen: -1,
   hopStart: -1,
   swarming: false,
   weakUntil: 0,
   weakShare: 0,
+  splitCopy: false,
 } as const;
 
 interface DefenderHome {
@@ -1867,17 +1967,81 @@ interface Corpse {
   readonly friendly: boolean;
   /** The flags it was hit by while it lived: its side and whether it flew. */
   readonly flags: number;
+  /**
+   * `isTargetable` when it fell (`Targeting.as:294`): a Bolt that died
+   * mid-blink, untargetable, lies where no raise finds it.
+   */
+  readonly targetable: boolean;
   readonly ix: number;
   readonly iy: number;
   readonly x: number;
   readonly y: number;
 }
 
-/** How far Rezghul throws its raise, and how wide it lands (`creeps/Rezghul.as:52`). */
+/**
+ * A raise in the air: Rezghul's `ResurrectProjectile` (`ResurrectProjectile.as`),
+ * a `Projectilev2` at 2 px a loop that homes on the point it was thrown at
+ * (`Projectilev2.as:107-135`). The corpse it was thrown at never moves, so its
+ * whole flight is known when it is thrown: `landTick` and the screen point it
+ * lands at.
+ */
+interface RaiseOrb {
+  readonly raiser: Creep;
+  readonly landTick: number;
+  /** `m_x`, `m_y` when it lands: a screen point. */
+  readonly landX: number;
+  readonly landY: number;
+}
+
+/** How far Rezghul throws its raise, and how wide it lands (`creeps/Rezghul.as:49`). */
 const RAISE_RANGE = 300;
 const RAISE_AREA = 50;
+/** The raise's speed, a loop, whatever it is set up with (`ResurrectProjectile.as:20`, `:35`). */
+const RAISE_ORB_SPEED = 2;
+/**
+ * Half the raise's 20 x 20 sprite (`SPRITES.as:95`): it starts with its
+ * corner, not its middle, on the Rezghul (`Projectilev2.as:67-68`).
+ */
+const RAISE_ORB_HALF = 10;
+/**
+ * The spread of the point a raise aims at round its corpse: a quarter of the
+ * corpse's 52 x 50 graphic either way (`Projectilev2.as:75-77`,
+ * `GameObject.as:66-73`, `CreepBase.as:132`).
+ */
+const RAISE_AIM_SPREAD_X = 52 * 0.25;
+const RAISE_AIM_SPREAD_Y = 50 * 0.25;
 
-/** Nobody raises these (`RezghulResurrectAttack.as:13`). */
+/**
+ * Where a raise flies, loop by loop, as `Projectilev2.tick` moves it
+ * (`Projectilev2.as:107-135`): the distance first, then a 2 px step towards
+ * the aim (the unit vector, note 2; `atan2(0, 0)` is 0, a step along x), and
+ * it lands on the loop that distance less the step is 0 or under, where the
+ * step took it. `loops` counts the loops after the first; the first is the
+ * loop it is thrown on, since `GLOBAL.TickFast` ticks it after the creeps
+ * (`GLOBAL.as:1266-1271`).
+ */
+export const raiseOrbFlight = (
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+): { readonly loops: number; readonly x: number; readonly y: number } => {
+  let x = fromX;
+  let y = fromY;
+  for (let loops = 0; ; loops += 1) {
+    const dx = toX - x;
+    const dy = toY - y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    x += distance > 0 ? (dx / distance) * RAISE_ORB_SPEED : RAISE_ORB_SPEED;
+    y += distance > 0 ? (dy / distance) * RAISE_ORB_SPEED : 0;
+    if (distance - RAISE_ORB_SPEED <= 0) return { loops, x, y };
+  }
+};
+
+/**
+ * Nobody raises these (`RezghulResurrectAttack.as:12`): Zafreeti, Vorg,
+ * Slimeattikus Mini and Rezghul.
+ */
 const UNRAISABLE: ReadonlySet<string> = new Set(["C16", "C15", "C19", "C18"]);
 
 /** Its own side, on the ground: `getFriendlyFlag | k_TARGETS_GROUND` (`Rezghul.as:52`). */
@@ -2010,12 +2174,21 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const traps: Trap[] = [];
   const bunkers: Bunker[] = [];
   const bunkerLosses: BunkerLossTally = new Map();
-  /** Dead Slimeattikus whose Minis are born at the end of the step (issue #129). */
-  const pendingSplits: Array<{ readonly parent: Creep; readonly count: number }> = [];
+  /**
+   * Dead Slimeattikus whose Minis (issue #129) and, for a ranked one, copies
+   * (Lab "Split") are born at the end of the step.
+   */
+  const pendingSplits: Array<{
+    readonly parent: Creep;
+    readonly count: number;
+    readonly copies: number;
+  }> = [];
   /** Where the dead lie, for Rezghul to raise (`Targeting._deadCreepCells`). */
   const corpses: Corpse[] = [];
   /** Corpses Rezghul raised this step, back on their feet at its end. */
   const pendingZombies: Array<{ readonly corpse: Corpse; readonly raiser: Creep }> = [];
+  /** Rezghul's raises in the air, in the order thrown (`GLOBAL.fastTickables`). */
+  const raiseOrbs: RaiseOrb[] = [];
   /** Spurtz Cannon shells in the air, in the order fired (issue #313, `FIREBALLS`). */
   const spurtzShells: SpurtzShell[] = [];
   /** The other towers' shells in the air, in the order fired (fidelity note 1). */
@@ -2063,6 +2236,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
   const bonusToughness = 1 + bonusShare(options.defenceBonus?.hp);
   /** The land feature's tower range change, whole percent (`landFeatures.ts`). */
   const bonusRangePct = Math.round(100 * bonusShare(options.defenceBonus?.range));
+  /** The alliance's trap damage (beta 7): 1 without one, every blast exactly as it was. */
+  const bonusTrap = 1 + bonusShare(options.defenceBonus?.trap);
+  const trapBlast = (raw: number): number => (bonusTrap === 1 ? raw : raw * bonusTrap);
   /** What a building takes from `raw`: fortification, then the neighbour bonus. */
   const buildingTakes = (raw: number, fortification: number): number => {
     const dealt = fortifiedDamage(raw, fortification, 0);
@@ -2625,8 +2801,10 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
 
   /**
    * What a creep's death sets off. A Slimeattikus splits into Slimeattikus
-   * Minis (issue #129, {@link splitOnDeath}); they are born when the step is
-   * done, so none of them acts on the tick its parent fell.
+   * Minis (issue #129, {@link splitOnDeath}), and a ranked one into copies of
+   * itself as well (Lab "Split", {@link copyOnDeath}); they are born when the
+   * step is done, so none of them acts on the tick its parent fell. A copy
+   * splits into nothing.
    */
   const onDeath = (creep: Creep): void => {
     // `dieFinish` files every dead creep but a champion or a disposable one as
@@ -2637,15 +2815,20 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         monsterId: creep.monsterId,
         friendly: creep.friendly,
         flags: creep.flags,
+        targetable: creep.targetable,
         ix: creep.ix,
         iy: creep.iy,
         x: creep.x,
         y: creep.y,
       });
     }
-    const splits = monsterStat(creep.monsterId, "splits", creep.level);
-    if (splits > 0 && !creep.champion) {
-      pendingSplits.push({ parent: creep, count: Math.floor(splits) });
+    const splits = creep.splitCopy
+      ? 0
+      : Math.floor(monsterStat(creep.monsterId, "splits", creep.level));
+    const copies =
+      creep.monsterId === SLIMEATTIKUS_ID && !creep.splitCopy ? splitCopyCount(creep.rank) : 0;
+    if ((splits > 0 || copies > 0) && !creep.champion) {
+      pendingSplits.push({ parent: creep, count: splits, copies });
     }
     if (creep.rank > 0 && creep.monsterId === PROJECT_X_ID) projectXBlast(creep);
   };
@@ -2679,10 +2862,44 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
   };
 
-  /** Splits waiting for the end of the step (issue #129). */
+  /**
+   * Lab "Split" (owner, beta 7 grill item 31, 6 Nov 2026): a ranked
+   * Slimeattikus leaves {@link splitCopyCount} copies of itself, each placed
+   * as a Mini is, at its level, with {@link splitCopyHealthShare} of its full
+   * health and {@link SPLIT_COPY_DAMAGE_SHARE} of its damage. A copy is
+   * rank 0 and marked, so it leaves neither copies nor Minis; like a Mini it is
+   * spawned, not flung, and disposable. An attacker's attack, a defender's
+   * defend.
+   */
+  const copyOnDeath = (parent: Creep, count: number): void => {
+    const health = splitCopyHealthShare(parent.rank);
+    for (let child = 0; child < count; child += 1) {
+      const screenX = rng.float() * 120 - 60;
+      const screenY = rng.float() * 120 - 60;
+      const at = { x: parent.ix + screenY + screenX / 2, y: parent.iy + screenY - screenX / 2 };
+      const copy = spawnCreep(
+        parent.monsterId,
+        parent.level,
+        at,
+        parent.friendly,
+        parent.friendly ? "defend" : "attack",
+      );
+      copy.maxHp = Math.max(1, Math.round(copy.maxHp * health));
+      copy.hp = copy.maxHp;
+      copy.damage = Math.trunc(copy.damage * SPLIT_COPY_DAMAGE_SHARE);
+      copy.splitCopy = true;
+      copy.disposable = true;
+      joinRow(copy, false);
+    }
+  };
+
+  /** Splits waiting for the end of the step (issue #129, Lab "Split"). */
   const bornAtStepEnd = (): void => {
     const waiting = pendingSplits.splice(0);
-    for (const { parent, count } of waiting) splitOnDeath(parent, count);
+    for (const { parent, count, copies } of waiting) {
+      splitOnDeath(parent, count);
+      copyOnDeath(parent, copies);
+    }
     const risen = pendingZombies.splice(0);
     for (const { corpse, raiser } of risen) raise(corpse, raiser);
     const hatching = pendingSpurtz.splice(0);
@@ -2712,52 +2929,132 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     lookForSpurtzFoe(spurtz);
   };
 
+  /** A battle second of `GLOBAL.Timestamp()`, which counts whole seconds. */
+  const clockSecond = (): number => Math.trunc(tick / TICKS_PER_SECOND);
+
   /**
-   * `RezghulResurrectAttack` (`creeps/Rezghul.as:48-53`,
-   * `components/abilities/RezghulResurrectAttack.as`): while it fights, a
-   * Rezghul whose raise is ready throws it at the nearest corpse of its own
-   * side within 300 that lay on the ground, and every such corpse within 50 of
-   * where it lands gets up (`:29-44`, `:58-71`). Healers, Minis and Rezghul
-   * never do (`:13`). The raise is then `resurrectCooldown` seconds away
-   * (`RangedAttack.as:45-51`), counted in ticks here rather than whole
-   * seconds of the clock. The throw lands at once (fidelity note 1), and the
-   * corpses rise when the step is done.
+   * Whether a Rezghul's raise works now: `inBattleState` (`MonsterBase.as:
+   * 349-351`), which `getValidTargetsInRange` asks first
+   * (`RezghulResurrectAttack.as:25-27`). An attacker attacking, healing,
+   * hunting or bouncing in and a defender defending or making for its bunker
+   * are; one decoyed or retreating is not.
    */
-  const tickRaise = (creep: Creep): void => {
-    if (tick < creep.rechargeAt) return;
-    const reach = (from: { x: number; y: number }, radius: number): Corpse[] =>
-      corpses
-        .filter(
-          (corpse) =>
-            !UNRAISABLE.has(corpse.monsterId) &&
-            canHit(raiseTargets(creep), corpse.flags) &&
-            Math.trunc(distanceSquared(from.x, from.y, corpse.x, corpse.y)) < radius * radius,
-        )
-        .sort(
-          (one, other) =>
-            distanceSquared(from.x, from.y, one.x, one.y) -
-              distanceSquared(from.x, from.y, other.x, other.y) || one.creepId - other.creepId,
-        );
-    const aim = reach(creep, RAISE_RANGE)[0];
-    if (!aim) return;
-    for (const corpse of reach(aim, RAISE_AREA)) {
-      corpses.splice(corpses.indexOf(corpse), 1);
-      pendingZombies.push({ corpse, raiser: creep });
-    }
-    creep.rechargeAt = tick + ticks(monsterStat(creep.monsterId, "resurrectCooldown", creep.level));
+  const raisesNow = (creep: Creep): boolean =>
+    creep.hp > 0 && !creep.gone && creep.behaviour !== "decoy" && creep.behaviour !== "retreat";
+
+  /**
+   * `Targeting.getDeadCreeps` filtered as `getValidTargetsInRange` does
+   * (`Targeting.as:258-320`, `RezghulResurrectAttack.as:24-42`): the corpses
+   * within `radius` of a point, in yard units, that this Rezghul may raise:
+   * targetable when they fell, of its own side and on the ground, every hit
+   * flag of theirs in its `getFriendlyFlag | k_TARGETS_GROUND`
+   * (`Rezghul.as:49`, `canHitCreep`), so never a flyer or a cloaked Brain or a
+   * Wormzer that died underground; and not one of {@link UNRAISABLE}. In the
+   * order the scan finds them: cell column by cell column, west to east, and
+   * down each column (`:280-285`), the cells being `GRID.FromISO`'s rounded-up
+   * point over 100 (`Targeting.as:41-52`); within one cell, the order they
+   * died in (Flash's is the `for in` order of the cell's keys).
+   */
+  const raisableNear = (creep: Creep, x: number, y: number, radius: number): Corpse[] => {
+    const flags = raiseTargets(creep);
+    const limit = radius * radius;
+    const cell = (value: number): number => Math.trunc(Math.ceil(value) / CREEP_CELL_SIZE);
+    return corpses
+      .filter(
+        (corpse) =>
+          corpse.targetable &&
+          !UNRAISABLE.has(corpse.monsterId) &&
+          canHit(flags, corpse.flags) &&
+          Math.trunc(distanceSquared(x, y, corpse.x, corpse.y)) < limit,
+      )
+      .sort(
+        (one, other) =>
+          cell(one.ix) - cell(other.ix) ||
+          cell(one.iy) - cell(other.iy) ||
+          one.creepId - other.creepId,
+      );
   };
 
   /**
-   * `resurrect` and `Zombiefy` (`RezghulResurrectAttack.as:73-89`,
-   * `Zombiefy.as:22-40`): the dead creep again, where it fell, at the
-   * attacker's level for it, as a zombie: slower by the Rezghul's speed
-   * multiplier, which also stretches its swing; harder and stronger by its
-   * health and damage multipliers; on full health (`MaxHealthProperty.as:
-   * 19-29` scales a fresh spawn's full health to the new maximum); and
-   * disposable, so it does not rise twice.
+   * `RezghulResurrectAttack` through `RangedAttack.tick` (`creeps/Rezghul.as:
+   * 47-50`, `RangedAttack.as:43-52`), every loop, before the creep's own
+   * behaviour (`MonsterBase.as:525-536`), so also while it fights a defender:
+   * once the clock's whole second has reached its recharge, a Rezghul in
+   * battle throws its raise at the first corpse {@link raisableNear} finds
+   * within 300 of it, and its raise is then `resurrectCooldown` seconds of the
+   * clock away. The raise flies ({@link raiseOrbFlight}) to a point jittered
+   * about the corpse and raises where it lands ({@link landRaiseOrbs}).
+   */
+  const tickRaise = (creep: Creep): void => {
+    if (!raisesNow(creep) || clockSecond() < creep.rechargeAt) return;
+    const aim = raisableNear(creep, creep.x, creep.y, RAISE_RANGE)[0];
+    if (!aim) return;
+    const from = screenPointOf(creep.ix, creep.iy);
+    const at = screenPointOf(aim.ix, aim.iy);
+    const fromX = from.x - RAISE_ORB_HALF;
+    const fromY = from.y - RAISE_ORB_HALF;
+    // `getRandomPointOnGraphic`: x first, then y.
+    const toX = at.x + rng.float() * (RAISE_AIM_SPREAD_X * 2) - RAISE_AIM_SPREAD_X;
+    const toY = at.y + rng.float() * (RAISE_AIM_SPREAD_Y * 2) - RAISE_AIM_SPREAD_Y;
+    const flight = raiseOrbFlight(fromX, fromY, toX, toY);
+    raiseOrbs.push({
+      raiser: creep,
+      landTick: tick + flight.loops,
+      landX: flight.x,
+      landY: flight.y,
+    });
+    visual.push({
+      kind: "raiseOrb",
+      tick,
+      creepId: creep.id,
+      fromIx: fromX * 0.5 + fromY,
+      fromIy: fromY - fromX * 0.5,
+      toIx: flight.x * 0.5 + flight.y,
+      toIy: flight.y - flight.x * 0.5,
+      landTick: tick + flight.loops,
+    });
+    creep.rechargeAt =
+      clockSecond() + monsterStat(creep.monsterId, "resurrectCooldown", creep.level);
+  };
+
+  /**
+   * The raises that land this loop, newest first as `GLOBAL.TickFast` ticks
+   * its fast tickables (`GLOBAL.as:1268-1271`), after every creep. Each
+   * raises every corpse {@link raisableNear} finds within 50 of where it
+   * landed (`RezghulResurrectAttack.as:56-69`), and that corpse is gone
+   * (`corpseDeath`). It asks the Rezghul again: one that has died since it
+   * threw, or left the fight, raises nothing (its component is gone, or
+   * `inBattleState` is false).
+   */
+  const landRaiseOrbs = (): void => {
+    if (raiseOrbs.length === 0) return;
+    for (let at = raiseOrbs.length - 1; at >= 0; at -= 1) {
+      const orb = raiseOrbs[at] as RaiseOrb;
+      if (orb.landTick > tick) continue;
+      raiseOrbs.splice(at, 1);
+      if (!raisesNow(orb.raiser)) continue;
+      const centre = fromIso(orb.landX, orb.landY);
+      for (const corpse of raisableNear(orb.raiser, centre.x, centre.y, RAISE_AREA)) {
+        corpses.splice(corpses.indexOf(corpse), 1);
+        pendingZombies.push({ corpse, raiser: orb.raiser });
+      }
+    }
+  };
+
+  /**
+   * `resurrect` and `Zombiefy` (`RezghulResurrectAttack.as:71-89`,
+   * `Zombiefy.as:18-35`): the dead creep again, where it fell, at its side's
+   * level for it, as a zombie: slower by the Rezghul's speed multiplier, which
+   * also stretches its swing; harder and stronger by its health and damage
+   * multipliers; on full health (`MaxHealthProperty.as:19-29` scales a fresh
+   * spawn's full health to the new maximum); and disposable, so it does not
+   * rise twice. A defender's comes back with no bunker of its own
+   * (`CreepBase.as:80`).
    */
   const raise = (corpse: Corpse, raiser: Creep): void => {
-    const levels = corpse.friendly ? options.defenderLevels ?? options.levels : options.levels;
+    const levels = corpse.friendly
+      ? (options.defenderLevels ?? options.levels)
+      : options.levels;
     const level = clampLevel(levels, corpse.monsterId);
     const zombie = spawnCreep(
       corpse.monsterId,
@@ -2778,6 +3075,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     zombie.maxHp *= health;
     zombie.hp = zombie.maxHp;
     zombie.disposable = true;
+    zombie.zombie = true;
+    visual.push({ kind: "rise", tick, creepId: zombie.id, ix: zombie.ix, iy: zombie.iy });
     joinRow(zombie, false);
   };
 
@@ -2878,6 +3177,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       disposable: false,
       hatchedBy: -1,
       rechargeAt: 0,
+      zombie: false,
       // A bunker's defender chases anything attacking, air or ground (`HOUSINGBUNKER.as:269-300`).
       hitFlags: friendly
         ? oldStyleTargets(1)
@@ -2936,6 +3236,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     stance?: ChampionStance,
     brain?: Partial<BrainWeights>,
     startHealth?: number,
+    habits?: { readonly hv?: number; readonly h?: unknown },
   ): Creep | null => {
     const id = championByType(type);
     if (!id) return null;
@@ -2996,6 +3297,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       disposable: false,
       hatchedBy: -1,
       rechargeAt: 0,
+      zombie: false,
       hitFlags: fightFlags(false, flying, championStatWithFood(id, "range", level, foodBonus) || 1),
       home: null,
       provokedBy: -1,
@@ -3006,14 +3308,23 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     byCreepId.set(creep.id, creep);
     boostDamage(creep);
     equipChampion(creep, power, at);
-    // Its Mode's tilt on its learned brain, as the log froze it (issues #220, #219).
-    creep.weights = stanceWeights(stance, brainBase(brain));
+    if (habits?.hv !== undefined && hasHabits(id)) {
+      // Its Mode's instincts plus that Mode's habits, as the log froze them
+      // (champion modes round 2, `habits.ts`); the old brain is not read.
+      const mind = habitMind(id, stance, habits.h);
+      creep.weights = mind.weights;
+      creep.instinctWeights = mind.instinct;
+      creep.habitsOn = mind.habits;
+    } else {
+      // Its Mode's tilt on its learned brain, as the log froze it (issues #220, #219).
+      creep.weights = stanceWeights(stance, brainBase(brain));
+    }
     if (options.learn) {
       lessons.set(creep.id, {
         t: type,
         monsterId: id,
         picks: 0,
-        credit: { tower: 0, loot: 0, finish: 0, focus: 0, threat: 0 },
+        credit: zeroCredit(),
         dealt: 0,
         perTick: creep.damage / Math.max(1, swingDelay(creep)),
         flungAt: tick,
@@ -3086,6 +3397,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       disposable: false,
       hatchedBy: -1,
       rechargeAt: 0,
+      zombie: false,
       hitFlags: fightFlags(true, flying, range),
       home: null,
       provokedBy: -1,
@@ -3178,6 +3490,9 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         event.champion.s,
         event.champion.b,
         event.champion.hp,
+        event.champion.hv === undefined
+          ? undefined
+          : { hv: event.champion.hv, h: event.champion.h },
       );
     }
   };
@@ -3887,8 +4202,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     let chosen: EngineBuilding | null;
     if (creep.champion) {
       // A champion's own lists (`ChampionBase.findTarget`, `Krallen.findTarget`, issue #222).
-      // Scored by its Mode when it has one (issue #220).
-      const scoring = creep.weights ? stanceScoring(creep, creep.weights) : undefined;
+      // Scored by its Mode when it has one (issue #220). A champion with
+      // habits takes every CURIOUS_EVERYth look by its instincts alone
+      // (`habits.ts`), counted, never drawn.
+      let weights = creep.weights;
+      if (creep.habitsOn) {
+        creep.looks += 1;
+        if (creep.looks % CURIOUS_EVERY === 0) weights = creep.instinctWeights;
+      }
+      const scoring = weights ? stanceScoring(creep, weights) : undefined;
       const lesson = lessons.size > 0 ? lessons.get(creep.id) : undefined;
       chosen = lesson
         ? findAndLearn(creep, lesson, scoring)
@@ -3982,16 +4304,20 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * them.
    */
   const stanceScoring = (champion: Creep, weights: StanceWeights): ChampionScoring => {
-    const readsFire = weights.threat !== 0 || weights.margin > 0;
+    const readsFire = weights.threat !== 0 || weights.margin > 0 || weights.careful !== 0;
     const field = fieldFor(champion, weights.focus !== 0, readsFire);
     return {
-      bonus: (building) => stanceBonus(weights, field.features(building, weights.threat !== 0)),
+      bonus: (building) =>
+        stanceBonus(weights, field.features(building, weights.threat !== 0, weights)),
       skip: (building) =>
         weights.margin > 0 &&
         field.liveTower(building) &&
         cannotBeat(field.shareAt(building), weights.margin),
     };
   };
+
+  /** The Town Hall and the outpost core: the "Town Hall first" habit's buildings. */
+  const HALL_TYPES: readonly number[] = [14, 112];
 
   /** A champion with no Mode weights picks as Flash's: nothing added, nothing left out. */
   const FLASH_SCORING: ChampionScoring = { bonus: () => 0, skip: () => false };
@@ -4010,7 +4336,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     scoring: ChampionScoring | undefined,
   ): EngineBuilding | null => {
     const field = fieldFor(creep, true, true);
-    const sums: Record<BrainKey, number> = { tower: 0, loot: 0, finish: 0, focus: 0, threat: 0 };
+    const sums = zeroCredit();
     let count = 0;
     const base = scoring ?? FLASH_SCORING;
     const chosen = findChampionTarget(
@@ -4023,15 +4349,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         bonus: base.bonus,
         skip: base.skip,
         seen: (building) => {
-          const features = field.features(building, true);
-          for (const key of BRAIN_KEYS) sums[key] += features[key];
+          const features = field.features(building, true, null);
+          for (const key of LEARN_KEYS) sums[key] += features[key];
           count += 1;
         },
       },
     );
     if (chosen && count >= 2) {
-      const features = field.features(chosen, true);
-      for (const key of BRAIN_KEYS) lesson.credit[key] += features[key] - sums[key] / count;
+      const features = field.features(chosen, true, null);
+      for (const key of LEARN_KEYS) lesson.credit[key] += features[key] - sums[key] / count;
       lesson.picks += 1;
     }
     return chosen;
@@ -4095,14 +4421,142 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         buildingTakes(champion.damage, building.fortification) / delay,
         champion.hp,
       );
-    /** A candidate's features; its threat only when asked, being the costly one. */
-    const features = (building: EngineBuilding, withThreat: boolean): TargetFeatures => ({
+    /*
+     * The habits' features (champion modes round 2, `habits.ts`), each worked
+     * out only when a weight reads it, and once per look where it is shared.
+     */
+    let fliersOut: boolean | null = null;
+    /** Whether any of the attacker's monsters that fly is out on the field. */
+    const fliers = (): boolean => {
+      if (fliersOut === null) {
+        fliersOut = false;
+        for (const other of creeps) {
+          if (other === champion || other.friendly || other.gone || other.hp <= 0) continue;
+          if (other.flying) {
+            fliersOut = true;
+            break;
+          }
+        }
+      }
+      return fliersOut;
+    };
+    let towerOf: Map<number, Tower> | null = null;
+    const towerAt = (building: EngineBuilding): Tower | undefined => {
+      if (towerOf === null) {
+        towerOf = new Map();
+        for (const tower of towers) towerOf.set(tower.building.id, tower);
+      }
+      return towerOf.get(building.id);
+    };
+    /** 1 for a live tower aimed at one of the attacker's monsters (not the champion itself). */
+    const guarding = (building: EngineBuilding): number => {
+      if (!liveTower(building)) return 0;
+      const tower = towerAt(building);
+      if (!tower) return 0;
+      for (const id of tower.targets) {
+        const target = byCreepId.get(id);
+        if (target && target !== champion && !target.friendly && !target.gone && target.hp > 0) {
+          return 1;
+        }
+      }
+      return 0;
+    };
+    const gunPower = (building: EngineBuilding): number => {
+      const stats = towerStats(building.type, building.level, yard.kind);
+      return towerPerTick(
+        building.type,
+        building.level,
+        stats?.damage ?? 0,
+        stats?.rate ?? 0,
+        TOWER_REARM_MULTIPLIER,
+        building.hp,
+        building.maxHp,
+      );
+    };
+    let strongest: number | null = null;
+    /** A live tower's damage per tick over the strongest's; 0 under {@link GUN_TOWERS_MIN} up. */
+    const gunShare = (building: EngineBuilding): number => {
+      if (!liveTower(building)) return 0;
+      if (strongest === null) {
+        let up = 0;
+        let most = 0;
+        for (const tower of towers) {
+          if (!liveTower(tower.building)) continue;
+          up += 1;
+          most = Math.max(most, gunPower(tower.building));
+        }
+        strongest = up >= GUN_TOWERS_MIN ? most : 0;
+      }
+      return strongest > 0 ? gunPower(building) / strongest : 0;
+    };
+    /** 0 to 1: how far inside {@link NEAR_RANGE} the building is, measured as the pick measures. */
+    const nearness = (building: EngineBuilding): number => {
+      const away = Math.trunc(
+        Math.sqrt(
+          distanceSquared(
+            champion.x,
+            champion.y,
+            building.cx + building.middle,
+            building.cy + building.middle,
+          ),
+        ) - building.middle,
+      );
+      return away >= NEAR_RANGE ? 0 : 1 - Math.max(0, away) / NEAR_RANGE;
+    };
+    const aerialUp = (building: EngineBuilding): number =>
+      building.type === AERIAL_DEFENSE_TYPE && liveTower(building) && (champion.flying || fliers())
+        ? 1
+        : 0;
+    const hallUp = (building: EngineBuilding): number =>
+      building.hp > 0 && HALL_TYPES.includes(building.type) ? 1 : 0;
+    /** 1 for a building no tower that can hit it covers, while it is under half health. */
+    const uncovered = (building: EngineBuilding): number =>
+      champion.hp * 2 < champion.maxHp && fireAt(building) === 0 ? 1 : 0;
+    const quakes = hasQuake(champion.monsterId, champion.level, champion.power);
+    const quakeReach = champion.range * QUAKE_RADIUS_RANGES;
+    /**
+     * Korath's crowd (wave 2): the other buildings his quake would reach from
+     * this one, up to {@link QUAKE_CROWD_CAP}, over the cap, in id order; 0
+     * until he has his quake.
+     */
+    const crowded = (building: EngineBuilding): number => {
+      if (!quakes) return 0;
+      const x = building.cx + building.middle;
+      const y = building.cy + building.middle;
+      let count = 0;
+      for (const other of yard.buildings) {
+        if (other === building || other.hp <= 0) continue;
+        if (UNTARGETABLE_TYPES.includes(other.type)) continue;
+        const squared = distanceSquared(x, y, other.cx + other.middle, other.cy + other.middle);
+        if (squared >= quakeReach * quakeReach) continue;
+        count += 1;
+        if (count >= QUAKE_CROWD_CAP) break;
+      }
+      return count / QUAKE_CROWD_CAP;
+    };
+    /**
+     * A candidate's features; its threat only when asked, being the costly
+     * one, and each habit's only when `weights` reads it (null: every one,
+     * for a lesson).
+     */
+    const features = (
+      building: EngineBuilding,
+      withThreat: boolean,
+      weights: StanceWeights | null,
+    ): TargetFeatures => ({
       tower: liveTower(building) ? 1 : 0,
       loot: unlootedForKrallen(building) ? 1 : 0,
       finish: building.maxHp > 0 ? 1 - building.hp / building.maxHp : 0,
       focus: focusFeature(allies.get(building.id) ?? 0),
       threat: withThreat ? threatFeature(shareAt(building)) : 0,
       stay: building.id === champion.targetBuilding ? 1 : 0,
+      guard: weights === null || weights.guard !== 0 ? guarding(building) : 0,
+      aerial: weights === null || weights.aerial !== 0 ? aerialUp(building) : 0,
+      gun: weights === null || weights.gun !== 0 ? gunShare(building) : 0,
+      hall: weights === null || weights.hall !== 0 ? hallUp(building) : 0,
+      near: weights === null || weights.near !== 0 ? nearness(building) : 0,
+      careful: weights === null || weights.careful !== 0 ? uncovered(building) : 0,
+      quake: weights === null || weights.quake !== 0 ? crowded(building) : 0,
     });
     return { features, liveTower, shareAt };
   };
@@ -4354,7 +4808,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
    * One blow at another creep. Korath's at a flyer is his fireball, a quarter
    * of his damage (`Korath.as:72-75`, `:110-115`); his others are blows that
    * count towards his quake (`:78`); both leave his flame on what they hit
-   * (`:87`, `:155-160`). `by` is who the blow turns, for issue #195.
+   * (`:87`, `:155-160`) once he has the Burn power ({@link hasFlame}). `by`
+   * is who the blow turns, for issue #195.
    */
   const strikeCreep = (creep: Creep, foe: Creep, by: Creep | null): number => {
     if (!(creep.champion && creep.monsterId === KORATH_ID)) {
@@ -4374,8 +4829,12 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     return dealt;
   };
 
-  /** `addFlameDOT`: a flame of a tenth of Korath's damage, unless one burns already. */
+  /**
+   * `addFlameDOT`: a flame of a tenth of Korath's damage, unless one burns
+   * already. Only a Korath with the Burn power lights one (owner, 11 Nov 2026).
+   */
   const burn = (foe: Creep, korath: Creep): void => {
+    if (!hasFlame(korath.monsterId, korath.power)) return;
     if (foe.hp <= 0 || foe.burnDps > 0) return;
     foe.burnDps = korath.damage * FLAME_SHARE;
     foe.burnTick = 0;
@@ -5481,7 +5940,15 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (!other.gone && other.behaviour !== "heal" && other.hp !== other.maxHp) break;
       first += 1;
     }
-    const ally = hits[first]?.creep;
+    let ally = hits[first]?.creep;
+    // Its habits' choice of monster (champion modes wave 2), only when one is
+    // not 0; a lesson watches every choice. Otherwise Flash's nearest.
+    const weights = creep.weights;
+    const scored = weights !== null && (weights.big !== 0 || weights.crowd !== 0);
+    const lesson = lessons.size > 0 ? lessons.get(creep.id) : undefined;
+    if (ally && (scored || lesson)) {
+      ally = backedAlly(creep, hits, first, scored ? weights : null, lesson);
+    }
     const helper = creep.helpCreep >= 0 ? byCreepId.get(creep.helpCreep) : undefined;
     if (ally) {
       creep.helpCreep = ally.id;
@@ -5494,6 +5961,70 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     }
     creep.support = true;
     creep.hasHelpTarget = true;
+  };
+
+  /**
+   * Which wounded monster Fomor backs by its habits (champion modes wave 2,
+   * `habits.ts`): each wounded non-healer `findBuffTargets` sees, nearest
+   * first, scored as a building is, its distance less `big` per share of the
+   * biggest one's health and `crowd` per share of {@link FOMOR_CROWD_CAP}
+   * monsters round it; ties go to the nearer. With no weights (a lesson only
+   * watching) the nearest is kept. A lesson is credited as `findAndLearn`
+   * credits a building: the chosen one's features less their mean.
+   */
+  const backedAlly = (
+    creep: Creep,
+    hits: readonly CreepHit<Creep>[],
+    from: number,
+    weights: StanceWeights | null,
+    lesson: LessonRecord | undefined,
+  ): Creep => {
+    const candidates: { readonly creep: Creep; readonly dist: number }[] = [];
+    for (let i = from; i < hits.length; i += 1) {
+      const hit = hits[i] as CreepHit<Creep>;
+      const other = hit.creep;
+      if (other.gone || other.behaviour === "heal" || other.hp === other.maxHp) continue;
+      candidates.push({ creep: other, dist: hit.dist });
+    }
+    let most = 0;
+    for (const one of candidates) most = Math.max(most, one.creep.maxHp);
+    const crowdAt = (ally: Creep): number => {
+      let count = 0;
+      const near = index.inRange(FOMOR_CROWD_RANGE, ally.x, ally.y, oldStyleTargets(1), ally.id);
+      for (const hit of near) {
+        if (hit.creep === creep || hit.creep.gone) continue;
+        count += 1;
+        if (count >= FOMOR_CROWD_CAP) break;
+      }
+      return count / FOMOR_CROWD_CAP;
+    };
+    const bigOf = (ally: Creep): number => (most > 0 ? ally.maxHp / most : 0);
+    let best = candidates[0];
+    if (weights && best) {
+      let bestScore = 0;
+      for (let i = 0; i < candidates.length; i += 1) {
+        const one = candidates[i] as (typeof candidates)[number];
+        const crowd = weights.crowd !== 0 ? weights.crowd * crowdAt(one.creep) : 0;
+        const bonus = weights.big * bigOf(one.creep) + crowd;
+        const score = Math.trunc(one.dist) - Math.trunc(bonus);
+        if (i === 0 || score < bestScore) {
+          best = one;
+          bestScore = score;
+        }
+      }
+    }
+    if (lesson && best && candidates.length >= 2) {
+      let big = 0;
+      let crowd = 0;
+      for (const one of candidates) {
+        big += bigOf(one.creep);
+        crowd += crowdAt(one.creep);
+      }
+      lesson.credit.big += bigOf(best.creep) - big / candidates.length;
+      lesson.credit.crowd += crowdAt(best.creep) - crowd / candidates.length;
+      lesson.picks += 1;
+    }
+    return best ? best.creep : (hits[from] as CreepHit<Creep>).creep;
   };
 
   /**
@@ -5887,6 +6418,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         return;
       }
     }
+    if (creep.monsterId === REZGHUL_ID) tickRaise(creep);
     if (creep.friendly) {
       if (creep.behaviour === "decoy") tickDecoyed(creep);
       else if (creep.champion) tickCageChampion(creep);
@@ -5906,7 +6438,6 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       supportThink(creep);
       return;
     }
-    if (creep.monsterId === REZGHUL_ID) tickRaise(creep);
 
     const target = creep.targetBuilding >= 0 ? buildingOf(creep.targetBuilding) : null;
     const stale =
@@ -6835,7 +7366,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
     for (const hit of index.inRange(spec.size, building.cx, building.cy, TRAP_TARGETS)) {
       if (hit.creep.hp <= 0) continue;
       touched += 1;
-      dealt += damageCreep(hit.creep, trapDamageAt(building.type, hit.dist));
+      dealt += damageCreep(hit.creep, trapBlast(trapDamageAt(building.type, hit.dist)));
       if (hit.creep.hp <= 0) kills += 1;
     }
     // A Heavy Trap's second pass, over the flyers at half (`BHEAVYTRAP.as:68-82`, issue #259).
@@ -6843,7 +7374,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       for (const hit of index.inRange(spec.size, building.cx, building.cy, oldStyleTargets(2))) {
         if (hit.creep.hp <= 0) continue;
         touched += 1;
-        dealt += damageCreep(hit.creep, heavyTrapFlyerDamageAt(hit.dist));
+        dealt += damageCreep(hit.creep, trapBlast(heavyTrapFlyerDamageAt(hit.dist)));
         if (hit.creep.hp <= 0) kills += 1;
       }
     }
@@ -7298,6 +7829,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       if (creep.burrows) tickBurrow(creep);
     }
     tickLeaving();
+    landRaiseOrbs();
     tickTowerShells();
 
     if (creeps.length > 0) {
@@ -7417,6 +7949,8 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
         : {}),
       ...(creep.swarming ? { swarming: true } : {}),
       ...(creep.weakUntil > tick ? { weakened: true } : {}),
+      ...(creep.splitCopy ? { splitCopy: true } : {}),
+      ...(creep.zombie ? { zombie: true } : {}),
     }));
 
   const weakenedTowers = (): number[] =>
@@ -7496,6 +8030,7 @@ export const createBattle = (yard: EngineYard, options: BattleOptions): Battle =
       t: lesson.t,
       picks: lesson.picks,
       credit: { ...lesson.credit },
+      k: yard.kind,
       dealt: lesson.dealt,
       potential: lesson.perTick * Math.max(0, (lesson.leftAt ?? tick) - lesson.flungAt),
       startHp: lesson.startHp,

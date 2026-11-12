@@ -15,10 +15,11 @@ import { yardBody, type YardRefusal } from "./yard";
  * no worker, inside the plot. Refusals: `notDecoration`, `notInStorage`,
  * `placement`, and `notInOutpost` (storage is the main yard's).
  *
- * `buy` (owner decision 2026-11-04) buys one Flash sold for Shiny at the
- * server's price and puts it down the same way; the Shiny is taken only when
- * the spot is good. Refusals: `notForSale`, `credits`, `shinyLocked`, and
- * `place`'s. One already in storage is placed from there for free.
+ * `buy` (owner decisions 2026-11-04 and 6 Nov) buys one Flash sold for
+ * event coins (Flash's Shiny price, as coins) at the server's price and puts
+ * it down the same way; the coins are taken only when the spot is good.
+ * Refusals: `notForSale`, `coins`, and `place`'s. One already in storage is
+ * placed from there for free.
  */
 
 const DECOR_PATH = "/api/:apiVersion/bm/yard/decor";
@@ -33,8 +34,8 @@ export interface PlaceDecorationReport {
   level: number;
   /** How many of the type are left in storage. */
   left: number;
-  /** `buy` only: the Shiny charged (0 when one came out of storage). */
-  credits?: number;
+  /** `buy` only: the event coins charged (0 when one came out of storage). */
+  coins?: number;
 }
 
 /** Puts a stored decoration of `type` with its footprint at `(x, y)`. */
@@ -45,7 +46,7 @@ export const placeDecoration = (
 ): Promise<YardResponse<PlaceDecorationReport>> =>
   post<YardResponse<PlaceDecorationReport>>(`${DECOR_PATH}/place`, yardBody({ type, x, y }));
 
-/** Buys a decoration of `type` for Shiny and puts it with its footprint at `(x, y)`. */
+/** Buys a decoration of `type` for event coins and puts it with its footprint at `(x, y)`. */
 export const buyDecoration = (
   type: number,
   x: number,
@@ -75,7 +76,7 @@ const refuse = (reason: string, message: string): YardRefusal => ({
 export interface DecorActions {
   /** Places a decoration from storage. Refused locally when none is stored or in an outpost. */
   place(type: number, x: number, y: number): Promise<YardActionResult<PlaceDecorationReport>>;
-  /** Buys one for Shiny and places it. Refused locally when not sold, short of Shiny or in an outpost. */
+  /** Buys one for event coins and places it. Refused locally when not sold, short of coins or in an outpost. */
   buy(type: number, x: number, y: number): Promise<YardActionResult<PlaceDecorationReport>>;
 }
 
@@ -99,7 +100,7 @@ export const decorActions = (store: YardStore, api: DecorApi = decorApi): DecorA
         if (reader.kind === "outpost") return refuse("notInOutpost", "Decorations go in your main yard.");
         const price = decorationPrice(type);
         if (price === null) return refuse("notForSale", "That decoration is not for sale.");
-        return reader.credits < price ? refuse("credits", "You do not have enough Shiny for that.") : null;
+        return reader.eventCoins < price ? refuse("coins", "You do not have enough Glimmers for that.") : null;
       },
       send: () => api.buy(type, x, y),
     }),

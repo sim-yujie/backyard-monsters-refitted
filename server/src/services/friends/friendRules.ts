@@ -7,6 +7,8 @@
 export const FRIEND_LIMITS = {
   /** Friends a player can have (owner decision 2). */
   maxFriends: 100,
+  /** Friends a player can pin to the top of their list (owner, beta 7). */
+  maxPinned: 10,
   /** Requests a player can have waiting for an answer at once (Q9). */
   maxOpenRequests: 30,
   /** New requests a player can send in a UTC day (Q9). */

@@ -38,7 +38,7 @@ describe("monsterCatalogue", () => {
     expect(LISTED_MONSTERS.length).toBe(18);
     expect(isListed("C18")).toBe(false);
     for (const id of ["C16", "C17", "C19"]) expect(isListed(id)).toBe(true);
-    expect(LAB_ABILITIES.length).toBe(14);
+    expect(LAB_ABILITIES.length).toBe(15);
   });
 
   test("agrees with monsterStats on every economy number", () => {

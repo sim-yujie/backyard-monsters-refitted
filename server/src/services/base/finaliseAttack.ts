@@ -9,7 +9,6 @@ import { getCurrentDateTime } from "../../utils/getCurrentDateTime.js";
 import { logger } from "../../utils/logger.js";
 import { buildingDataHandler } from "../../controllers/base/save/handlers/buildingDataHandler.js";
 import { defenderLootHandler } from "../../controllers/base/save/handlers/defenderLootHandler.js";
-import { isDeclareWarRunning } from "../alliance/powerups.js";
 import { protectAfterAttack } from "../maproom/v2/damageProtection.js";
 import { noticeOutpostAttack } from "../maproom/v2/outpostNotices.js";
 import { afterYardDefended } from "./afterYardDefended.js";
@@ -17,6 +16,8 @@ import { discardDefenceReplayLoad } from "../defences/defenceReplayLoad.js";
 import { recordDefenceReplay } from "../defences/recordDefenceReplay.js";
 import { isMR3Structure } from "../maproom/v3/utils/isMR3Structure.js";
 import { advanceBuildingTimers } from "./advanceBuildingTimers.js";
+import { invalidateSightAfterLanding } from "../maproom/sight/sightService.js";
+import { syncAttackedYardLevels } from "../yard/derivedLevels.js";
 import { beginAttackLanding, commitAttackLanding, rollbackAttackLanding } from "./attackLanding.js";
 import { checkpointExpired, checkpointSession, type AttackCheckpoint } from "./attackCheckpoint.js";
 import {
@@ -50,8 +51,11 @@ import type { AbandonedOutcome } from "./combat/abandonedAttack.js";
 import { recordAttackPlan } from "./autoAttack/attackPlanStore.js";
 import { recordAttackAchievements } from "../achievements/events.js";
 import { countAttackLoot } from "../events/lootEvents.js";
+import { plunderPercent, weekendBoostUsed, withPlunderBonus } from "../events/weekendBoosts.js";
+import { attackLootPercent, mapByPercent } from "../alliance/allianceBonuses.js";
 import { attackQuestEvents, defenceQuestEvents } from "../quests/hooks.js";
 import { recordQuestEvents, recordUserQuestEvents } from "../quests/record.js";
+import { isPlayerYard, noteOutpostDefended } from "../alliance/allianceProgress.js";
 
 /**
  * Finishes an attack its attacker left without saving (issue #138).
@@ -225,7 +229,6 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
     },
     attacker: userSave,
     tick: checkpoint.tick,
-    declareWar: await isDeclareWarRunning(attacker.alliance_id),
     left: options.left ?? true,
   });
   if (!input) {
@@ -315,11 +318,18 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   });
   // Bombs, then loot up to the attacker's storage cap, as `baseSave.ts` lands them (issue #166).
   if (bombs.charges.length > 0) userSave.resources = chargeBombSpend(bombs.spend, userSave.resources);
+  // Tribe Plunder and the wild-tribe Goo bonus, as `baseSave.ts` lands them.
+  const fromTribe = defender.type === BaseType.TRIBE;
+  const plunder = plunderPercent(fromTribe, now);
+  const alliancePercent = await attackLootPercent(postgres.em, attacker.userid, defender.saveuserid);
   const banked = bankAttackLoot(
     userSave,
-    withCampLootBonus(
-      withTribeGooBonus(loot.credit, defender.type === BaseType.TRIBE),
-      isMR2Camp(defender.type, userSave.mapversion)
+    withPlunderBonus(
+      withCampLootBonus(
+        withTribeGooBonus(mapByPercent(loot.credit, alliancePercent), fromTribe),
+        isMR2Camp(defender.type, userSave.mapversion)
+      ),
+      plunder
     ),
     loot.krallenBuff
   );
@@ -378,8 +388,11 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   const landedDamage = defender.damage ?? 0;
 
   defender.attackid = 0;
+  const flingerBefore = defender.flinger;
   if (defender.buildingdata) {
     defender.buildingdata = advanceBuildingTimers(defender.buildingdata, storedHealthData, now - defender.savetime);
+    // An upgrade the catch-up just finished counts for the cached levels too.
+    syncAttackedYardLevels(defender);
   }
   defender.id = defender.savetime;
   defender.savetime = now;
@@ -387,11 +400,14 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   await postgres.em.flush();
   // The loot on both sides and `attackid = 0` together.
   await commitAttackLanding();
+  await invalidateSightAfterLanding(defender, flingerBefore);
 
   // Event loot (the monthly Krallen Hunt), before the cap, once: still under
   // the final lock, and after the commit, so a counter that fails to write
   // (logged and lost) cannot take the landing down with it.
   await countAttackLoot(postgres.em, attacker.userid, userSave, loot.credit, now);
+  // Tribe Plunder's weekend Glimmers, after the commit too: logged, not thrown.
+  if (plunder > 0) await weekendBoostUsed(postgres.em, attacker.userid, "plunder", now, true);
 
   // Quests, as the hand-landed save counts them (`controllers/base/save/baseSave.ts`).
   await recordQuestEvents(
@@ -405,11 +421,22 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
       after: outcome.buildinghealthdata,
       log: input.log,
       loot: loot.credit,
+      playerYard: await isPlayerYard(postgres.em, defender, attacker.userid),
     }),
     now
   );
   if (defender.type !== BaseType.TRIBE && defender.saveuserid && defender.saveuserid !== attacker.userid) {
     await recordUserQuestEvents(postgres.em, defender.saveuserid, defenceQuestEvents(landedDamage), now);
+    // Fortress's "Outposts attacked but not taken" goal (design v5 §16).
+    if (defender.type === BaseType.OUTPOST) {
+      await noteOutpostDefended(
+        postgres.em,
+        { userid: defender.saveuserid, outpost: Number(defender.basesaveid) },
+        attacker.userid,
+        landedDamage,
+        now
+      );
+    }
   }
 
   await endAttackSession(basesaveid);
@@ -463,6 +490,7 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
     before: storedHealthData,
     after: outcome.buildinghealthdata,
     bombs: bombs.charges,
+    damage: outcome.damage,
   });
 
   logger.info("Finalised {username}'s abandoned attack on base {baseid} at tick {tick}", {

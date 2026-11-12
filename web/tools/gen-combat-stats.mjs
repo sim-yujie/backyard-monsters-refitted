@@ -111,6 +111,57 @@ if (entries.length !== 140) {
   throw new Error(`YARD_PROPS.as holds ${entries.length} entries, not the 140 this table expects`);
 }
 
+/* ── This project's own buildings ─────────────────────────────────────────── */
+
+/**
+ * Buildings Flash never had, from type 150 (`gen-building-costs.mjs`, "This
+ * project's own buildings"). No props file holds them, so each is written here
+ * in the props entry's own spelling and read by the same code as the rest.
+ *
+ * 150, the Observatory (beta 7 alliances; owner 10 Nov 2026: a normal building
+ * in a battle, like the Map Room). A `special`, so a creep chooses it like any
+ * other building, it counts towards the damage percentage, and it holds no
+ * loot (it is not a harvester or a storage type). One level. Its health is the
+ * Map Room's at level 2, the level it needs, 10,000 (`YARD_PROPS.as:1110`), a
+ * placeholder the owner tunes later. Its props `size` is 120 and its pathing
+ * rectangles those of the other 100 x 100 specials, the Monster Locker's
+ * (`BUILDING8`), Yard Planner's and Hatchery's: a cost-10 outline with a
+ * cost-200 middle, which a creep routes around. The yard's art row
+ * (`web/src/game/yard/revampBuildings.ts`) carries the same health and size.
+ */
+const PROJECT_BUILDINGS = [
+  {
+    id: 150,
+    name: "Observatory",
+    kind: "special",
+    size: 120,
+    hp: [10000],
+    gridCost: [
+      [0, 0, 100, 100, 10],
+      [10, 10, 80, 80, 200],
+    ],
+    gridLike: "BUILDING8",
+  },
+];
+for (const building of PROJECT_BUILDINGS) {
+  if (entries.some((one) => one.id === building.id)) {
+    throw new Error(`YARD_PROPS.as already has a type ${building.id}`);
+  }
+  const text = `"id": ${building.id}, "type": "${building.kind}", "hp": [${building.hp.join(", ")}]`;
+  entries.push({
+    id: building.id,
+    start: 0,
+    text,
+    line: 0,
+    lineOf: () => 0,
+    name: building.name,
+    kind: building.kind,
+    cls: null,
+    size: building.size,
+    project: building,
+  });
+}
+
 const byId = new Map(entries.map((one) => [one.id, one]));
 
 /* ── Inferno-only entries ─────────────────────────────────────────────────── */
@@ -522,6 +573,10 @@ const gridCostOf = (entry) => {
 
 const gridCosts = [];
 for (const entry of entries) {
+  if (entry.project) {
+    gridCosts.push({ entry, rects: entry.project.gridCost, cls: `${entry.project.gridLike}'s shape` });
+    continue;
+  }
   const { rects, chain, ternary } = gridCostOf(entry);
   if (rects) gridCosts.push({ entry, rects, cls: chain[chain.length - 1], ternary });
 }
@@ -682,7 +737,8 @@ const object = (fields) =>
 
 const comment = (entry, extra = "") =>
   `  // ${entry.id} ${entry.name}${entry.kind ? ` (${entry.kind})` : ""} ` +
-  `— YARD_PROPS.as:${entry.line}${extra}`;
+  `— ${entry.project ? "this project's own (gen-combat-stats.mjs)" : `YARD_PROPS.as:${entry.line}`}` +
+  extra;
 
 const towerRows = towers
   .map(
@@ -926,7 +982,10 @@ ${towerRows}
  *
  * ${hp.length} of the ${entries.length} entries have one; the rest are
  * placeholders and decorations that never take damage. The Housing Bunker's is
- * \`INFERNOYARDPROPS.as\`'s, as its range is.
+ * \`INFERNOYARDPROPS.as\`'s, as its range is. The Observatory, 150, is this
+ * project's own building, with no props entry: its one level is the Map Room's
+ * level 2 health, a placeholder (\`gen-combat-stats.mjs\`, "This project's own
+ * buildings").
  */
 export const BUILDING_HP: Readonly<Record<number, readonly number[]>> = {
 ${hpRows}
@@ -1005,8 +1064,9 @@ ${outpostCapacityRows}
  *
  * \`GLOBAL.SetBuildingProps\` reads \`INFERNOYARDPROPS.as\` for an Inferno yard
  * (\`client/scripts/GLOBAL.as:718-719\`), a player's or a Moloch tribe's on the
- * Inferno map. The Descent is fought on the main table. A type with no row
- * reads the main ladder.
+ * Inferno map. A Descent yard is fought as an Inferno yard too, so it reads
+ * this table (\`docs/design/inferno.md\` §2.4). A type with no row reads the
+ * main ladder.
  */
 export const INFERNO_BUILDING_HP: Readonly<Record<number, readonly number[]>> = {
 ${infernoHpRows}

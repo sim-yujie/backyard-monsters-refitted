@@ -1,0 +1,135 @@
+{
+  "name": "lab-split",
+  "description": "Ranked Slimeattikus into the sandbox yard, against a bunker holding Slimeattikus at the defender's rank: each one that dies leaves its Minis and its Lab Split copies (beta 7).",
+  "yard": "sandbox",
+  "kind": "main",
+  "levels": {
+    "C17": 3,
+    "C10": 4
+  },
+  "playerLevel": 20,
+  "tailTicks": 9000,
+  "defence": {
+    "bunkers": {
+      "85": {
+        "C17": 2
+      }
+    },
+    "defenderLevels": {
+      "C17": 3
+    },
+    "defenderRanks": {
+      "C17": 2
+    }
+  },
+  "ranks": {
+    "C17": 3
+  },
+  "log": {
+    "v": 1,
+    "seed": 20261106,
+    "events": [
+      {
+        "kind": "fling",
+        "t": 200,
+        "x": 420,
+        "y": -560,
+        "r": 120,
+        "monsters": {
+          "C17": 4
+        }
+      },
+      {
+        "kind": "fling",
+        "t": 260,
+        "x": 380,
+        "y": -520,
+        "r": 120,
+        "monsters": {
+          "C10": 3,
+          "C17": 2
+        }
+      }
+    ]
+  },
+  "expected": {
+    "ticks": 9260,
+    "damage": 1.6134172183254805,
+    "destroyed": null,
+    "attackloot": {
+      "r1": 0,
+      "r2": 0,
+      "r3": 0,
+      "r4": 0
+    },
+    "defenderLoss": {
+      "r1": 0,
+      "r2": 0,
+      "r3": 0,
+      "r4": 0
+    },
+    "firedTraps": 0,
+    "destroyedBuildings": 7,
+    "creepsFlung": 9,
+    "creepsKilled": 45,
+    "championHp": null,
+    "damagedBuildings": 10,
+    "rngDraws": 3269,
+    "checkpoints": [
+      {
+        "tick": 800,
+        "digest": "99c46c481aa25726"
+      },
+      {
+        "tick": 1600,
+        "digest": "2d7d6a413d3361d3"
+      },
+      {
+        "tick": 2400,
+        "digest": "1ed6ac0e71ca8a34"
+      },
+      {
+        "tick": 3200,
+        "digest": "74ddf041ad701eff"
+      },
+      {
+        "tick": 4000,
+        "digest": "00da257b8127c6e9"
+      },
+      {
+        "tick": 4800,
+        "digest": "b43a8bde20511904"
+      },
+      {
+        "tick": 5600,
+        "digest": "97bad26db3ab84a3"
+      },
+      {
+        "tick": 6400,
+        "digest": "49611c11d77c22cf"
+      },
+      {
+        "tick": 7200,
+        "digest": "8e6cec1cade9cdc2"
+      },
+      {
+        "tick": 8000,
+        "digest": "b864228b015660b9"
+      },
+      {
+        "tick": 8800,
+        "digest": "251aadf9e2d4b237"
+      }
+    ],
+    "digest": "b5eda6f428b9952a",
+    "bunkerLosses": {
+      "85": {
+        "C17": 2
+      }
+    },
+    "bunkerGarrisons": {
+      "85": {}
+    },
+    "defenderChampionsHp": []
+  }
+}

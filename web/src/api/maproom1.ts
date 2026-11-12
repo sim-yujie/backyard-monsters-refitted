@@ -83,6 +83,14 @@ export interface MapRoom1NeighbourWire {
   protectedUntil?: number;
   /** 1 when they are the caller's friend (friends §6.2), read fresh on every answer. */
   friend?: number;
+  /** 1 when the caller pinned this friend to the top of their list (beta 7). */
+  friendpinned?: number;
+  /**
+   * Hits back the caller still has on them across the level gap
+   * (`server/src/services/maproom/v1/mr1AttackRules.ts`): earned when they
+   * attacked the caller from more than 7 levels below, gone 14 days after.
+   */
+  vengeance?: number;
   [key: string]: unknown;
 }
 

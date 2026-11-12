@@ -1,0 +1,28 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+The attached images:
+- ref-modern-close.png and ref-modern-all.png: the REAL "Modern look" yard buildings of our game (Backyard Monsters Revamped), clean stylised 3D renders: Twig Snapper, Catapult, wooden crate Block, Goo Factory, Putty Squisher, Pebble Shiner, Flinger, Yard Planner, Academy, towers and more.
+- ref-modern-autumn.png: six yard decorations we already redrew in the Modern look and like (turkey topiary, wheelbarrow, maple tree, leaf pile, apple barrel, pie on a stump). Match their finish.
+- ref-classic-p1.png: six OLD yard decorations from the 2009 Flash game (Classic look), numbered 1-6.
+
+Job: redraw EACH of the six decorations in ref-classic-p1.png in the MODERN look, so they sit naturally beside the Modern buildings and look made by the same 3D artist with the same software. Each must be clearly the SAME object as its Classic version: same parts, same overall shape and proportions, same colours of each part, same facing (same side to the front) - only the rendering style changes.
+
+The Modern look (follow every point):
+1. Clean, modern, stylised 3D renders like the attached buildings, not the soft, grainy, dusty old look of the Classic versions. Smooth, slightly bevelled shapes with crisp clean silhouettes; clean simple materials: honey/tan wood planks with light even grain, smooth metal and polished gold with bright specular highlights, smooth stone, glossy where it should be. Little surface noise. No cel shading, no brush strokes, no flat colour fills.
+2. Camera exactly like the buildings: seen from the front, about 35-40 degrees above, so the tops show clearly; boxy things turned so two sides show.
+3. No outline at all. Crisp anti-aliased edges; small bevels catch the light as thin bright lines.
+4. LIGHTING IS THE KEY POINT: render it like a Blender Cycles scene with ONE warm sun lamp from the upper left and only a dim cool fill light. Tops and left sides bright; the right side and underside of every object clearly in deep shade (about 25-35% as bright as the lit side, still readable, like the right faces of the crate Block, the Twig Snapper's shed and the Goo Factory's tank); strong ambient occlusion where parts meet and under rims. Strong 3D form. Not evenly front-lit, not a bright cheerful product shot.
+5. Colour: the buildings' rich but slightly DEEP tones, not candy-bright. Foliage in deep natural greens (never lime); cleaner and a little brighter than the dusty Classic versions, but the overall brightness close to the buildings. No neon, no glow.
+6. Chunky, a little toy-like, few big readable parts. Foliage made of fewer, bigger, smoother clumps with clear light and shade per clump, not thousands of tiny noisy leaves.
+7. No ground, grass, base plate or cast shadow under any object (except where the object itself has one, like the grave's earth mound).
+
+The six, in the same grid positions as ref-classic-p1.png:
+- Row 1, column 1: RED FLOWERS: a small round blue-grey metal bucket-pot (ribbed sides) holding a dense bush of green leaves with about ten red five-petal flowers on top.
+- Row 1, column 2: BONSAI TREE: a twisted, curving brown bonsai trunk rising from the left, leaning, with three flat rounded clumps of dark green foliage (one top, one left, one right); a small exposed root base, no pot.
+- Row 1, column 3: TOMBSTONE: a rounded-top light grey headstone with "RIP" engraved, standing at the back of a low rectangular mound of dark brown earth that runs toward the front left.
+- Row 2, column 1: OUTHOUSE: a narrow wooden outhouse of vertical tan planks with a crescent moon cut in the door, a slanted blue-grey corrugated metal roof; turned so the door faces front left and the right side shows.
+- Row 2, column 2: D.A.V.E. PUMPKIN: a big carved orange pumpkin with its top cut off; the cut-off lid with its stem sits like a hat on the head of a small grey robot (D.A.V.E.) peeking out of the pumpkin: boxy grey metal robot head with two big round white googly eyes, a grille mouth, a coiled spring neck. Keep the robot's eyes (it is a character).
+- Row 2, column 3: SOCCER TROPHY: a big polished gold soccer ball (pentagon panels) on a short gold stem and round gold base.
+
+Canvas 1536x1024 split into 3 columns x 2 rows of equal cells (512x512 each). One object centred in each cell, about 70% of the cell height (the tombstone and flowers can be lower), generous margins, nothing touching a cell edge. The whole sheet on a flat solid magenta (#FF00FF) background, no grid lines, no text other than the RIP on the stone, no labels, no frame, no drop shadows.
+Save the final PNG as pilot-p1.png in the current working directory.

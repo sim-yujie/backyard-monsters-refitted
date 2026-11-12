@@ -1,6 +1,7 @@
 import { Status } from "../../enums/StatusCodes.js";
 import { User } from "../../database/models/user.model.js";
-import { requireAllianceLeader } from "../../services/alliance/allianceAccess.js";
+import { requireAlliancePermission } from "../../services/alliance/allianceAccess.js";
+import { AllianceAction } from "../../services/alliance/permissions.js";
 import { getSuggestedMembers } from "../../services/alliance/suggestedMembers.js";
 import type { KoaController } from "../../utils/KoaController.js";
 
@@ -14,7 +15,7 @@ import type { KoaController } from "../../utils/KoaController.js";
  */
 export const suggestedMembers: KoaController = async (ctx) => {
   const user: User = ctx.authUser;
-  const alliance = await requireAllianceLeader(user);
+  const alliance = await requireAlliancePermission(user, AllianceAction.SUGGESTED_MEMBERS);
 
   const members = await getSuggestedMembers(alliance);
 

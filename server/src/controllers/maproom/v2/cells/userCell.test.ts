@@ -149,8 +149,18 @@ describe("userCell idle worker (#338)", () => {
     expect(await userCell(withIdle([9]), other, owners)).not.toHaveProperty("wi");
   });
 
-  const withBusy = (ids: number[]) =>
-    ({ authUser: { userid: 2505, save: {} }, state: { online: new Set(), truces: new Map(), idleWorkers: new Set(), busyWorkers: new Set(ids) } }) as unknown as Context;
+  const withBusy = (ids: number[], finishAt: number | null = null) =>
+    ({
+      authUser: { userid: 2505, save: {} },
+      state: { online: new Set(), truces: new Map(), idleWorkers: new Set(), busyWorkers: new Map(ids.map((id) => [id, finishAt])) },
+    }) as unknown as Context;
+
+  test("a busy worker's finish time rides along as wf, so the map can drop the badge then", async () => {
+    expect(await userCell(withBusy([9], 1_800_000_000), own(3, 9), ownerFor)).toMatchObject({ wb: 1, wf: 1_800_000_000 });
+    // Paused on a damaged building: no end to wait for.
+    expect(await userCell(withBusy([9], null), own(3, 9), ownerFor)).not.toHaveProperty("wf");
+    expect(await userCell(withIdle([9]), own(3, 9), ownerFor)).not.toHaveProperty("wf");
+  });
 
   test("an own outpost with its worker busy says wb, not wi", async () => {
     const payload = await userCell(withBusy([9]), own(3, 9), ownerFor);
@@ -211,6 +221,39 @@ describe("userCell friend flag (friends WP2, #369)", () => {
     expect(await userCell(withFriends(new Set([OWNER])), outpostWith(0, 0), owners)).toMatchObject({ fr: 1 });
     expect(await userCell(withFriends(new Set([5])), outpostWith(0, 0), owners)).toMatchObject({ fr: 0 });
     expect(await userCell(withFriends(), outpostWith(0, 0), owners)).toMatchObject({ fr: 0 });
+  });
+
+  test("fp is 1 only on a friend the viewer pinned (beta 7), and absent otherwise", async () => {
+    const withPins = (friends: Set<number>, pinnedFriends?: Set<number>) =>
+      ({ authUser: { userid: 2505 }, state: { online: new Set(), truces: new Map(), friends, pinnedFriends } }) as unknown as Context;
+    expect(await userCell(withPins(new Set([OWNER]), new Set([OWNER])), outpostWith(0, 0), owners)).toMatchObject({ fr: 1, fp: 1 });
+    expect(await userCell(withPins(new Set([OWNER]), new Set([5])), outpostWith(0, 0), owners)).not.toHaveProperty("fp");
+    expect(await userCell(withPins(new Set([OWNER])), outpostWith(0, 0), owners)).not.toHaveProperty("fp");
+  });
+});
+
+describe("userCell hostile flag (owner, 8 Nov 2026)", () => {
+  const withAttacks = (attacked?: Set<number>, truces = new Map(), friends = new Set<number>()) =>
+    ({ authUser: { userid: 2505 }, state: { online: new Set(), truces, attacked, friends } }) as unknown as Context;
+
+  test("ho is 1 on a player with an attack between them and the viewer, absent otherwise", async () => {
+    expect(await userCell(withAttacks(new Set([OWNER])), outpostWith(0, 0), owners)).toMatchObject({ ho: 1 });
+    expect(await userCell(withAttacks(new Set([5])), outpostWith(0, 0), owners)).not.toHaveProperty("ho");
+    expect(await userCell(withAttacks(), outpostWith(0, 0), owners)).not.toHaveProperty("ho");
+  });
+
+  test("a running truce switches it off; a waiting request or an ended truce does not", async () => {
+    const running = new Map([[OWNER, { trucestate: "accepted", expires_at: now() + 3600 }]]);
+    const ended = new Map([[OWNER, { trucestate: "accepted", expires_at: now() - 60 }]]);
+    const waiting = new Map([[OWNER, { trucestate: "requested" }]]);
+    expect(await userCell(withAttacks(new Set([OWNER]), running), outpostWith(0, 0), owners)).not.toHaveProperty("ho");
+    expect(await userCell(withAttacks(new Set([OWNER]), ended), outpostWith(0, 0), owners)).toMatchObject({ ho: 1 });
+    expect(await userCell(withAttacks(new Set([OWNER]), waiting), outpostWith(0, 0), owners)).toMatchObject({ ho: 1 });
+  });
+
+  test("the server sends ho on a friend too: the client decides that friend wins", async () => {
+    const both = withAttacks(new Set([OWNER]), new Map(), new Set([OWNER]));
+    expect(await userCell(both, outpostWith(0, 0), owners)).toMatchObject({ fr: 1, ho: 1 });
   });
 });
 

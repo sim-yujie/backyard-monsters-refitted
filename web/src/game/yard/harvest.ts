@@ -3,6 +3,7 @@ import { maxHealth } from "./buildingArt";
 import type { YardKind } from "./buildingCostData";
 import { rowOf } from "./buildingCosts";
 import { savedAtOf } from "./jobs";
+import { productionFactorOf } from "@/game/alliance/allianceBonuses";
 
 /**
  * What the player's harvesters hold right now, predicted between server answers
@@ -164,7 +165,7 @@ const overdriveEnd = (save: Pick<BaseLoadResponse, "storedata">): number | undef
  */
 export const harvesterPerHour = (
   building: BuildingData,
-  save: Pick<BaseLoadResponse, "buildinghealthdata" | "storedata">,
+  save: Pick<BaseLoadResponse, "buildinghealthdata" | "storedata" | "alliancedata">,
   now: number,
   kind: YardKind = "main",
 ): { readonly resource: HarvestKey; readonly perHour: number } | null => {
@@ -173,7 +174,7 @@ export const harvesterPerHour = (
   const resource = `r${setup.type}` as HarvestKey;
   if (!setup.runs) return { resource, perHour: 0 };
   const podEnd = overdriveEnd(save);
-  const power = podEnd !== undefined && now < podEnd ? OVERDRIVE_POWER : 1;
+  const power = (podEnd !== undefined && now < podEnd ? OVERDRIVE_POWER : 1) * productionFactorOf(save.alliancedata);
   return { resource, perHour: (setup.rates.produce * power * 3600) / setup.rates.cycle };
 };
 
@@ -186,7 +187,7 @@ export const harvesterPerHour = (
  */
 export const harvesterNow = (
   building: BuildingData,
-  save: Pick<BaseLoadResponse, "savetime" | "currenttime" | "buildinghealthdata" | "storedata">,
+  save: Pick<BaseLoadResponse, "savetime" | "currenttime" | "buildinghealthdata" | "storedata" | "alliancedata">,
   now: number,
 ): HarvesterNow | null => {
   const setup = setupOf(building, save);
@@ -206,8 +207,10 @@ export const harvesterNow = (
     const elapsed = Math.max(0, now - from);
     const podEnd = overdriveEnd(save);
     const overdriven = podEnd === undefined ? 0 : Math.min(elapsed, Math.max(0, podEnd - from));
-    if (overdriven > 0) buffer = runBuffer(buffer, rates, overdriven, OVERDRIVE_POWER);
-    buffer = runBuffer(buffer, rates, elapsed - overdriven);
+    // The alliance production bonus, as the server's catch-up runs it (main yard only: only its load carries `alliancedata`).
+    const factor = productionFactorOf(save.alliancedata);
+    if (overdriven > 0) buffer = runBuffer(buffer, rates, overdriven, OVERDRIVE_POWER * factor);
+    buffer = runBuffer(buffer, rates, elapsed - overdriven, factor);
   }
 
   const stored = Math.floor(buffer.stored);
@@ -229,7 +232,7 @@ export const harvesterNow = (
 export const harvestWaiting = (
   save: Pick<
     BaseLoadResponse,
-    "savetime" | "currenttime" | "buildingdata" | "buildinghealthdata" | "storedata"
+    "savetime" | "currenttime" | "buildingdata" | "buildinghealthdata" | "storedata" | "alliancedata"
   >,
   now: number,
 ): HarvestWaiting => {
@@ -260,7 +263,7 @@ export type BankedByBuilding = Record<string, { resource: HarvestKey; amount: nu
 export const predictBank = (
   save: Pick<
     BaseLoadResponse,
-    "savetime" | "currenttime" | "buildingdata" | "buildinghealthdata" | "storedata"
+    "savetime" | "currenttime" | "buildingdata" | "buildinghealthdata" | "storedata" | "alliancedata"
   >,
   now: number,
   ids: readonly number[] | "all",

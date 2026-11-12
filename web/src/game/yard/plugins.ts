@@ -10,6 +10,7 @@
  */
 import "./plugins/achievements";
 import "./plugins/announcements";
+import "./plugins/eventCoins";
 import "./plugins/events";
 import "./plugins/goals";
 import "./plugins/guidedStart";
@@ -21,3 +22,4 @@ import "./plugins/raid";
 import "./plugins/slowInternet";
 import "./plugins/teamNotice";
 import "./plugins/tips";
+import "./plugins/weekend";

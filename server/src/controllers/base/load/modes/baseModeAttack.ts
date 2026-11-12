@@ -1,6 +1,6 @@
 import { BaseMode, BaseType } from "../../../../enums/Base.js";
 import { recordQuestEvents } from "../../../../services/quests/record.js";
-import { MapRoomCell, MapRoomVersion } from "../../../../enums/MapRoom.js";
+import { AttackPermission, MapRoomCell, MapRoomVersion } from "../../../../enums/MapRoom.js";
 import { World } from "../../../../database/models/world.model.js";
 import { WorldMapCell } from "../../../../database/models/worldmapcell.model.js";
 import { postgres } from "../../../../server.js";
@@ -23,6 +23,7 @@ import { ATTACK_ONLINE_SECONDS, isPlayerOnline } from "../../../../services/user
 import { isTruceActive } from "../../../../services/mail/isTruceActive.js";
 import { MR1_TRIBE_IDS } from "../../../../game-data/tribes/v1/index.js";
 import { registerAttacker } from "../../../../services/maproom/v1/registerAttacker.js";
+import { requireMr1Attack } from "../../../../services/maproom/v1/mr1AttackCheck.js";
 import { requireAttackableMR1Tribe } from "../../../../services/maproom/v1/mr1TribeAttack.js";
 import { startMR1TribeSession } from "../../../../services/maproom/v1/mr1TribeSession.js";
 import { servedDefenderForces } from "../../../../services/base/combat/defenderForces.js";
@@ -34,10 +35,12 @@ import { poolAmounts } from "../../../../services/base/combat/attackLoot.js";
 import { autobankOwner } from "../../../../services/maproom/v2/autobank.js";
 import { academyLevels } from "../../../../services/base/combat/abandonedAttack.js";
 import { academyRanks } from "../../../../game-rules/combat/index.js";
-import { isDeclareWarRunning } from "../../../../services/alliance/powerups.js";
 import { mr2NeighbourBonusMode } from "../../../../config/MapRoom2Config.js";
 import { loadFriendlyNeighbourCount } from "../../../../services/maproom/v2/neighbourDefence.js";
 import { activeLandFeature } from "../../../../services/maproom/v2/landFeature.js";
+import { underAttackShout } from "../../../../services/alliance/underAttack.js";
+import { allianceDefenceApplies, allianceDefenceOfOwner } from "../../../../services/alliance/allianceBonuses.js";
+import { announceShout } from "../../../../services/alliance/allianceMessages.js";
 import {
   generateNoise,
   getTerrainHeight,
@@ -51,11 +54,6 @@ export interface AttackDetails {
   count: number;
   starttime: number;
   seen: boolean;
-  /**
-   * Declare War ran for the attacker when the attack started: its window is
-   * the longer one (`attackWindow.ts`). Absent otherwise.
-   */
-  declarewar?: boolean;
 }
 
 interface BaseModeAttack {
@@ -67,13 +65,23 @@ interface BaseModeAttack {
    * as `attackerlevel`; kept in the attack session for the loot replay.
    */
   attackerLevel?: number;
+  /**
+   * Whether Map Room 1's neighbour and level rules (`mr1AttackRules.ts`)
+   * apply. They are for a player picking a target from their own Map Room 1
+   * list, so on by default; false only for an attack the server starts
+   * itself, a bot's revenge (`services/bots/revengeRun.ts`, issue #244): the
+   * bot answers a player who attacked it, whatever its own list holds. Such
+   * an attack moves no vengeance counters.
+   */
+  mr1Rules?: boolean;
 }
 
 /**
  * Processes an attack from a user against a specific base.
  *
- * Every refusal — protection, an attack already running, the defender being
- * online, a truce, and now range — is decided before anything is written, so a
+ * Every refusal — protection, an attack already running, Map Room 1's
+ * neighbour and level rules, the defender being online, a truce, and range —
+ * is decided before anything is written, so a
  * refused attack leaves the defender exactly as it found them.
  *
  * @param {BaseModeAttack} options - Attack options
@@ -82,7 +90,7 @@ interface BaseModeAttack {
  *   and their health,
  *   and the attacker's academy levels it is fought at (issue #201)
  */
-export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }: BaseModeAttack) => {
+export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel, mr1Rules = true }: BaseModeAttack) => {
   // Map Room 3 is closed (security audit 2026-10-29, C1): it took the attack's
   // cost and result from the client. The load refuses it first; this is the
   // same rule for any other caller.
@@ -124,6 +132,8 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
     isWildMonsterExpired(save, getCurrentDateTime());
   if (regrown && (await isCampInPlay(save!.basesaveid))) throw baseUnderAttackErr();
   const readSavetime = save?.savetime ?? 0;
+  // What Map Room 1's level rule allowed, for the vengeance counters.
+  let mr1Permission = AttackPermission.ATTACKABLE;
 
   if (save && save.type !== BaseType.TRIBE) {
     if (save.protected > getCurrentDateTime()) throw baseProtectedErr();
@@ -131,6 +141,14 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
     if (isAttackActive(save)) throw baseUnderAttackErr();
     // A wild monster raid being fought locks the yard as an attack does (#226, `raidLock.ts`).
     if (raidFighting(save, getCurrentDateTime())) throw baseUnderAttackErr();
+
+    // Map Room 1 attacks only neighbours, within the level gap or with
+    // vengeance (owner, 11 Nov 2026, `services/maproom/v1/mr1AttackRules.ts`).
+    // Only player main yards get here on Map Room 1. Not for a bot's revenge
+    // (`mr1Rules: false`), which the server starts, not a player's list.
+    if (mr1Rules && mapversion === MapRoomVersion.V1 && save.type === BaseType.MAIN) {
+      mr1Permission = await requireMr1Attack(user.userid, userSave, save.saveuserid, save, getCurrentDateTime());
+    }
 
     // Online means a game open (a presence mark from the last minute) AND
     // real play in the last ten minutes: a ping alone protects nobody (#271).
@@ -200,11 +218,6 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
   // Past this point the attack is committed: everything below writes.
   if (save.attacks.length > 3) save.attacks = save.attacks.slice(-2);
 
-  // Whether Declare War runs for the attacker: frozen into the session for the
-  // battle (issue #201, below), and onto the row, where it sets how long the
-  // attack locks the yard (`attackWindow.ts`).
-  const declareWar = await isDeclareWarRunning(user.alliance_id);
-
   // Track the details of the attack
   const attackDetails: AttackDetails = {
     fbid: "",
@@ -214,7 +227,6 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
     count: 1,
     starttime: getCurrentDateTime(),
     seen: false,
-    ...(declareWar && { declarewar: true }),
   };
 
   if (save.type != BaseType.TRIBE) save.attacks.push(attackDetails);
@@ -284,10 +296,18 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
     mapversion === MapRoomVersion.V2 && save.cell && userSave.worldid && save.type !== BaseType.MAIN
       ? activeLandFeature(userSave.worldid, save.cell.x, save.cell.y, save.cell.terrainHeight)
       : 0;
+  // The owner's alliance battle stars (beta 7): a player's main yard or
+  // outpost only (`allianceDefenceApplies`), frozen with the rest, so every
+  // replay fights with the same. None, or every part 0, serves the defence
+  // exactly as before.
+  const alliance = allianceDefenceApplies(save)
+    ? await allianceDefenceOfOwner(postgres.em, save.saveuserid, save.type === BaseType.OUTPOST)
+    : undefined;
   const defenderForces = {
     ...served,
     ...(neighbours > 0 && { neighbours }),
     ...(land !== 0 && { land }),
+    ...(alliance && { alliance }),
   };
   // The attacker's champions' brains as they stand now, after the load has
   // landed any attack they left (issue #219): frozen into the session, served
@@ -317,7 +337,6 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
         defenderForces,
         championBrains,
         attackerAcademy,
-        declareWar,
         attackerRanks,
         championHealth
       )
@@ -340,7 +359,6 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
         defenderForces,
         championBrains,
         attackerAcademy,
-        declareWar,
         attackerRanks,
         championHealth
       )
@@ -361,8 +379,19 @@ export const baseModeAttack = async ({ user, baseid, mapversion, attackerLevel }
 
     if (!defender) throw new Error("Defender user not found.");
 
-    if (mapversion === MapRoomVersion.V1) await registerAttacker(user, defender);
+    if (mapversion === MapRoomVersion.V1) await registerAttacker(user, defender, mr1Permission);
     await createAttackLog(user, defender, save)
+
+    // The defender's alliance hears of it: "Ana_B's outpost (12, 40) is under
+    // attack by Bob!" with Show on map (beta 7 design v5 §12). Never stops the attack.
+    const alert = underAttackShout({
+      defender,
+      attacker: user,
+      baseType: save.type,
+      mapversion,
+      cell: save.cell ? { x: save.cell.x, y: save.cell.y } : cellCoords,
+    });
+    if (alert) await announceShout(alert);
   }
 
   return { save, defenderForces, championBrains, championHealth, attackerAcademy, attackerRanks };

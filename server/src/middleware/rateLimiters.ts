@@ -141,22 +141,6 @@ export const attackLogsLimiter = RateLimit.middleware({
 });
 
 /**
- * Rate limit for buying alliance power-up hours with Shiny - 20 per minute per
- * user (security audit 2026-10-29, M1). A purchase is a click in the alliance
- * window, so this is far above normal play.
- */
-export const purchasePowerupLimiter = RateLimit.middleware({
-  interval: { min: 1 },
-  max: 20,
-  prefixKey: "purchasepowerup",
-  keyGenerator: byUser("purchasepowerup"),
-  handler: async (ctx: Context) => {
-    ctx.status = Status.TOO_MANY_REQUESTS;
-    ctx.body = { error: "Too many power-up purchases. Please slow down." };
-  },
-});
-
-/**
  * Rate limit for the MR2 takeover quote - 60 requests per minute per user.
  *
  * The map asks once per camp or outpost the player selects, and again when
@@ -635,6 +619,88 @@ export const announcementImageLimiter = RateLimit.middleware({
   },
 });
 
+/** Outpost renames, pins and label reads (`controllers/outposts/labelRoutes.ts`): 60 a minute per user. */
+export const outpostLabelLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 60,
+  prefixKey: "outpost-label",
+  keyGenerator: byUser("outpost-label"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many changes. Please slow down.", reason: "rateLimited" };
+  },
+});
+
+/** A player's answer when a profile limiter is full (`controllers/profile/routes.ts`). */
+const profileRefusal = (error: string) => async (ctx: Context) => {
+  ctx.status = Status.TOO_MANY_REQUESTS;
+  ctx.body = { error, reason: "rateLimited" };
+};
+
+/** Profiles opened: 60 a minute per user. */
+export const profileReadLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 60,
+  prefixKey: "profile-read",
+  keyGenerator: byUser("profile-read"),
+  handler: profileRefusal("Too many requests. Please slow down."),
+});
+
+/** Bio saves and photo removals: 20 every 15 minutes per user. */
+export const profileWriteLimiter = RateLimit.middleware({
+  interval: { min: 15 },
+  max: 20,
+  prefixKey: "profile-write",
+  keyGenerator: byUser("profile-write"),
+  handler: profileRefusal("You have changed your profile a lot. Please wait a few minutes."),
+});
+
+/**
+ * Photo uploads: 10 an hour per user. Only one a day is stored; this caps
+ * how often a refused or broken upload makes the server decode a picture.
+ */
+export const photoUploadLimiter = RateLimit.middleware({
+  interval: { min: 60 },
+  max: 10,
+  prefixKey: "photo-upload",
+  keyGenerator: byUser("photo-upload"),
+  handler: profileRefusal("Too many uploads. Please wait a while."),
+});
+
+/** "Report inappropriate image": 10 every 15 minutes per user, like chat reports. */
+export const photoReportLimiter = RateLimit.middleware({
+  interval: { min: 15 },
+  max: 10,
+  prefixKey: "photo-report",
+  keyGenerator: byUser("photo-report"),
+  handler: profileRefusal("You have sent a lot of reports. Please wait a few minutes."),
+});
+
+/** Profile photos, which need no sign-in: 240 a minute per IP. Browsers keep them a day. */
+export const profilePhotoLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 240,
+  prefixKey: "profile-photos",
+  handler: profileRefusal("Too many requests. Please try again shortly."),
+});
+
+/**
+ * Rate limit for drawing a line of wall Blocks (`POST /bm/yard/build/walls`) -
+ * 30 lines per minute per user. Each line is one request however long it is,
+ * and drawing one takes a press, a drag and the tick, so this is far above
+ * normal play; it stops a script hammering the save lock.
+ */
+export const wallLineLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 30,
+  prefixKey: "wallline",
+  keyGenerator: byUser("wallline"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many wall lines at once. Please slow down.", reason: "rateLimited" };
+  },
+});
+
 /**
  * The live mail check (`/player/mailstatus`, owner, beta 7): asked on a chat
  * nudge or every 45 s or so without chat, so 20 a minute is far above use.
@@ -644,6 +710,22 @@ export const mailStatusLimiter = RateLimit.middleware({
   max: 20,
   prefixKey: "mail-status",
   keyGenerator: byUser("mail-status"),
+  handler: async (ctx: Context) => {
+    ctx.status = Status.TOO_MANY_REQUESTS;
+    ctx.body = { error: "Too many requests. Please slow down.", reason: "rateLimited" };
+  },
+});
+
+/**
+ * The game's Reports window for moderators (`/mod/...`, owner 12 Nov 2026):
+ * the button's count every couple of minutes, the list, a player, the chat
+ * around a line and the steps. 60 a minute is far above a moderator's use.
+ */
+export const modReportsLimiter = RateLimit.middleware({
+  interval: { min: 1 },
+  max: 60,
+  prefixKey: "mod-reports",
+  keyGenerator: byUser("mod-reports"),
   handler: async (ctx: Context) => {
     ctx.status = Status.TOO_MANY_REQUESTS;
     ctx.body = { error: "Too many requests. Please slow down.", reason: "rateLimited" };

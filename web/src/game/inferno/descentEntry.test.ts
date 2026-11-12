@@ -39,7 +39,6 @@ const startOf = (yard: number): DescentAttackStart => ({
   base: { baseid: String(200 + yard), type: "iwm", buildingdata: {} } as Partial<BaseLoadResponse>,
   defenderforces: { bunkers: [] },
   attackeracademy: {},
-  attpowerups: [],
   flingercapacity: 120,
 });
 

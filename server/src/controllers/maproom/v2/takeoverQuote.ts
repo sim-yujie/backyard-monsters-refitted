@@ -1,17 +1,16 @@
 import z from "zod";
+import { takeoverPercent } from "../../../services/alliance/allianceBonuses.js";
 import type { KoaController } from "../../../utils/KoaController.js";
 import type { User } from "../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
 import { postgres } from "../../../server.js";
 import { Status } from "../../../enums/StatusCodes.js";
 import { MapRoomCell, MapRoomVersion, Terrain } from "../../../enums/MapRoom.js";
-import { AlliancePowerupType } from "../../../enums/Alliance.js";
 import { getCurrentDateTime } from "../../../utils/getCurrentDateTime.js";
 import { generateBaseId } from "../../../utils/generateBaseId.js";
 import { RESOURCE_KEYS } from "../../../services/base/updateResources.js";
 import { isAttackActive } from "../../../services/base/isAttackActive.js";
 import { readAttackSession } from "../../../services/base/attackSessionStore.js";
-import { runningPowerups } from "../../../services/alliance/powerups.js";
 import { isShinyLocked } from "../../../services/user/shinyLock.js";
 import { generateNoise, getTerrainHeight } from "../../../services/maproom/v2/generateMap.js";
 import { cellCoordsFromBaseId, type CellCoords } from "../../../services/maproom/v2/rangeCheck.js";
@@ -20,6 +19,7 @@ import { quoteTakeover, type TakeoverQuote } from "../../../services/maproom/v2/
 import { takeoverRefusal, type TakeoverRefusal } from "../../../services/maproom/v2/takeoverRules.js";
 import { holdsTakeoverGrant } from "../../../services/maproom/v2/takeoverGrant.js";
 import { readTakeoverGrant } from "../../../services/maproom/v2/takeoverGrantStore.js";
+import { onMapRoom2, readWelcome, welcomeReady } from "../../../services/events/mr2Welcome.js";
 
 const TakeoverQuoteSchema = z.object({
   /** The cell's base id, as the map carries it (`bid`). */
@@ -111,16 +111,24 @@ export const takeoverQuote: KoaController = async (ctx) => {
     return;
   }
 
-  const powerups = await runningPowerups(currentUser.alliance_id);
-
   const save = quoted.row?.save ?? null;
+
+  // "New to Map Room 2": a wild camp is cheap while today's takeover is ready (7 in the 10 days).
+  const welcome =
+    quoted.isWildMonster &&
+    welcomeReady(await readWelcome(postgres.em, currentUser.userid, onMapRoom2(userSave), now), "takeover", now);
 
   const price = quoteTakeover({
     cell: quoted,
     isWildMonster: quoted.isWildMonster,
-    empireValue: save?.empirevalue ?? 0,
+    buildingdata: save?.buildingdata,
     takerHomebase: userSave.homebase,
-    conquestActive: powerups.some(({ id }) => id === AlliancePowerupType.CONQUEST),
+    welcome,
+    alliancePercent: await takeoverPercent(
+      postgres.em,
+      currentUser.userid,
+      quoted.isWildMonster ? null : save?.saveuserid
+    ),
   });
 
   let reason: TakeoverQuoteReason | null;

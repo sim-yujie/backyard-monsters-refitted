@@ -43,6 +43,23 @@ export interface UnlockRecord {
 /** Every stat, each a whole number that only ever goes up. */
 export type AchievementStats = Record<AchievementStat, number>;
 
+/**
+ * The day-by-day trackers behind two hidden achievements (#392,
+ * `daily.ts`): the login run (Regular) and today's visited yards
+ * (Neighbourly). Days are UTC day numbers (unix seconds / 86,400), the same
+ * day the friends' gift limit uses.
+ */
+export interface DailyTracks {
+  /** The last UTC day with a load of the player's own main yard. */
+  login?: number;
+  /** Days in a row ending on `login`. */
+  streak?: number;
+  /** The UTC day `visits` belongs to. */
+  visitDay?: number;
+  /** Other players' yards visited on `visitDay`, by `baseid`, each once. */
+  visits?: string[];
+}
+
 /** The whole column, version 1. */
 export interface Achievements {
   v: 1;
@@ -51,6 +68,8 @@ export interface Achievements {
   c: Record<string, UnlockRecord>;
   /** Unix seconds the backfill ran; absent until it has (§8). */
   backfilledAt?: number;
+  /** The daily trackers (#392); absent until the first one runs. */
+  d?: DailyTracks;
 }
 
 /** The slice of a save the achievements helpers read. */
@@ -103,6 +122,21 @@ const readCompleted = (raw: unknown): Record<string, UnlockRecord> => {
   return out;
 };
 
+/** The daily trackers, anything unreadable dropped; undefined when none is left. */
+const readDaily = (raw: unknown): DailyTracks | undefined => {
+  if (!isRecord(raw)) return undefined;
+  const daily: DailyTracks = {};
+  const login = num(raw.login);
+  if (login !== undefined) daily.login = Math.floor(login);
+  if (count(raw.streak) > 0) daily.streak = count(raw.streak);
+  const visitDay = num(raw.visitDay);
+  if (visitDay !== undefined) daily.visitDay = Math.floor(visitDay);
+  if (Array.isArray(raw.visits)) {
+    daily.visits = [...new Set(raw.visits.filter((id): id is string => typeof id === "string" && id !== ""))];
+  }
+  return Object.keys(daily).length > 0 ? daily : undefined;
+};
+
 /**
  * Reads `save.achievements` into the full shape, every stat present, so
  * callers never null-check. `NULL` (or anything unreadable) reads as an empty
@@ -116,6 +150,8 @@ export const readAchievements = (save: AchievementsSave): Achievements => {
   const record: Achievements = { v: 1, s: readStats(raw.s), c: readCompleted(raw.c) };
   const backfilledAt = num(raw.backfilledAt);
   if (backfilledAt !== undefined) record.backfilledAt = backfilledAt;
+  const daily = readDaily(raw.d);
+  if (daily) record.d = daily;
   return record;
 };
 

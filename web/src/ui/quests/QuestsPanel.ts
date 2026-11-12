@@ -15,6 +15,7 @@ import {
 import { eventsArt } from "@/ui/events/eventsArt";
 import { rewardBadge } from "@/ui/events/EventsPanel";
 import { formatCountdown } from "@/ui/format";
+import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { resourceIcon } from "@/ui/resourceIcon";
 import { el, refusalNote } from "./dom";
@@ -119,6 +120,9 @@ export class QuestsPanel {
   private active: QuestsTab;
   private last: QuestsPanelView = { kind: "loading" };
 
+  /** Its place in the middle of the screen, one window at a time (`ui/centreWindow.ts`). */
+  private readonly centre: CentreWindow;
+
   constructor(options: QuestsPanelOptions) {
     this.options = options;
     this.active = options.tab ?? "today";
@@ -126,9 +130,13 @@ export class QuestsPanel {
       title: "Quests",
       className: "quests-panel",
       closeOnEscape: true,
-      onClose: () => options.onClose(),
+      onClose: () => {
+        this.centre.closed();
+        options.onClose();
+      },
     });
     this.element = this.panel.element;
+    this.centre = centreWindow(this.element, () => this.close());
 
     const strip = el("div", "tabs tab-row quests-tabs");
     strip.setAttribute("role", "tablist");
@@ -170,6 +178,7 @@ export class QuestsPanel {
 
   mount(container: HTMLElement): this {
     this.panel.mount(container);
+    this.centre.opened();
     return this;
   }
 

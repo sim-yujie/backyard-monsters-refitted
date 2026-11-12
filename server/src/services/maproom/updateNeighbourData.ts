@@ -10,8 +10,9 @@ import { getTruces } from "./getTruces.js";
 import { isAttackActive } from "../base/isAttackActive.js";
 import { calculateBaseLevel } from "../base/calculateBaseLevel.js";
 import type { NeighbourData } from "../../types/NeighbourData.js";
-import { friendFlag, friendsAmong } from "../friends/friendFlags.js";
+import { friendFlag, friendMarksAmong } from "../friends/friendFlags.js";
 import { BaseType } from "../../enums/Base.js";
+import { mr1LevelPermission, vengeanceOwed } from "./v1/mr1AttackRules.js";
 
 
 type Base = BaseType.MAIN | BaseType.INFERNO;
@@ -52,7 +53,13 @@ export const updateNeighbourData = async (
   baseType: Base,
   currentUserId?: number,
   /** Whose friends are flagged; the Inferno list has no truces, so it names the viewer here alone. */
-  friendViewerId: number | undefined = currentUserId
+  friendViewerId: number | undefined = currentUserId,
+  /**
+   * The viewer's own level, on their Map Room 1 list: each neighbour's code
+   * then carries the level rule and vengeance (`v1/mr1AttackRules.ts`).
+   * Absent, levels decide nothing, as before.
+   */
+  viewerLevel?: number
 ): Promise<NeighbourData[]> => {
   if (!cachedNeighbours.length) return cachedNeighbours;
 
@@ -61,7 +68,7 @@ export const updateNeighbourData = async (
 
   const currentTime = getCurrentDateTime();
 
-  const [neighbourUsers, neighbourSaves, lastSeens, truces, online, friends] = await Promise.all([
+  const [neighbourUsers, neighbourSaves, lastSeens, truces, online, friendMarks] = await Promise.all([
     postgres.em.find(
       User,
       { userid: { $in: userIds } },
@@ -83,8 +90,9 @@ export const updateNeighbourData = async (
     // `services/inferno/infernoNeighbours.ts`, not this.)
     baseType === BaseType.MAIN ? onlinePlayers(userIds, currentTime) : null,
 
-    // The friend flag, read fresh: the cached list outlives friendships (friends WP2, #369).
-    friendsAmong(postgres.em, friendViewerId, userIds),
+    // The friend flag, read fresh: the cached list outlives friendships (friends WP2, #369);
+    // with it, which of them the viewer pinned (beta 7).
+    friendMarksAmong(postgres.em, friendViewerId, userIds),
   ]);
 
   const saves = new Map(neighbourSaves.map((save) => [save.userid, save]));
@@ -119,10 +127,11 @@ export const updateNeighbourData = async (
     const sevenDayExpiry = neighbourSave.createtime + sevenDays;
     const specialProtection = isProtected && neighbourSave.protected === sevenDayExpiry;
 
-    // TODO:
-    // 1. Add AttackPermission.LEVEL_RESTRICTION if the neighbour is more than 5 levels below the attacker.
-    // 2. Add AttackPermission.HIGHER_LEVEL if the neighbour is more than 5 levels above the attacker
-    // 3. Add AttackPermission.VENGEANCE_MODE for breaking the level restriction if a low level attacked a high level.
+    const level = calculateBaseLevel(neighbourSave.points, neighbourSave.basevalue);
+    const vengeance = vengeanceOwed(neighbour, currentTime);
+
+    // Map Room 1's level rule and vengeance (owner, 11 Nov 2026), after
+    // protection and an attack running, as the attack load checks them.
     if (specialProtection) {
       neighbour.attackpermitted = AttackPermission.SPECIAL_PROTECTION;
     } else if (isProtected) {
@@ -130,14 +139,19 @@ export const updateNeighbourData = async (
     } else if (isUnderAttack && lastAttack) {
       neighbour.attackpermitted = AttackPermission.UNDER_ATTACK;
       neighbour.attacker = lastAttack.name;
+    } else if (viewerLevel !== undefined) {
+      neighbour.attackpermitted = mr1LevelPermission({ attackerLevel: viewerLevel, defenderLevel: level, vengeance });
     } else {
       neighbour.attackpermitted = AttackPermission.ATTACKABLE;
     }
 
-    neighbour.friend = friendFlag(friends, neighbour.userid);
+    if (viewerLevel !== undefined) neighbour.vengeance = vengeance;
+
+    neighbour.friend = friendFlag(friendMarks.friends, neighbour.userid);
+    neighbour.friendpinned = friendFlag(friendMarks.pinned, neighbour.userid);
     neighbour.protectedUntil = isProtected ? neighbourSave.protected : 0;
     neighbour.baseid = neighbourSave.baseid;
-    neighbour.level = calculateBaseLevel(neighbourSave.points, neighbourSave.basevalue);
+    neighbour.level = level;
     neighbour.saved = lastSeens.get(neighbour.userid) ?? 0;
     neighbour.online = (
       online ? online.has(neighbour.userid) : neighbour.saved >= currentTime - ATTACK_ONLINE_SECONDS

@@ -7,7 +7,6 @@ import {
   cellDistance,
   cellReach,
   hasAnythingToSend,
-  hasDeclareWar,
   mainYardRoster,
   outpostsToLoad,
   ownCellsIn,
@@ -59,27 +58,12 @@ const champion = (hp: number, status = 0) => ({ t: 5, hp, l: 5, ft: 0, fd: 0, fb
 
 describe("cellReach", () => {
   it("follows the shared ladders: a yard by its flinger, an outpost by its own", () => {
-    expect([0, 1, 2, 3, 4, 5].map((f) => cellReach(playerCell({ f }), false))).toEqual([
+    expect([0, 1, 2, 3, 4, 5].map((f) => cellReach(playerCell({ f })))).toEqual([
       0, 4, 6, 8, 10, 10,
     ]);
-    expect([0, 1, 2, 3, 4, 5].map((f) => cellReach(playerCell({ b: 3, f }), false))).toEqual([
+    expect([0, 1, 2, 3, 4, 5].map((f) => cellReach(playerCell({ b: 3, f })))).toEqual([
       0, 1, 2, 3, 4, 4,
     ]);
-  });
-
-  it("adds Declare War's two cells to a non-zero reach only while it runs (#190)", () => {
-    expect(cellReach(playerCell({ f: 1 }), false)).toBe(4);
-    expect(cellReach(playerCell({ f: 1 }), true)).toBe(6);
-    expect(cellReach(playerCell({ b: 3, f: 1 }), true)).toBe(3);
-    expect(cellReach(playerCell({ f: 0 }), true)).toBe(0);
-  });
-});
-
-describe("hasDeclareWar", () => {
-  it("reads Declare War off a running-powerups list", () => {
-    expect(hasDeclareWar(undefined)).toBe(false);
-    expect(hasDeclareWar([{ id: "ap_armament" }])).toBe(false);
-    expect(hasDeclareWar([{ id: "ap_declarewar", endtime: 9 }])).toBe(true);
   });
 });
 
@@ -143,16 +127,6 @@ describe("rosterInRange", () => {
     const roster = rosterInRange({ col: 100, row: 100 }, [ownCell(107, 100, { f: 1 })], null);
     expect(roster.monsters).toEqual({});
     expect(roster.flingerLevel).toBe(0);
-  });
-
-  it("reaches two cells further only while Declare War runs (#190)", () => {
-    // Level 1 reaches 4; this one is 6 steps straight down the column.
-    const cells = [ownCell(100, 106, { f: 1 })];
-    expect(rosterInRange({ col: 100, row: 100 }, cells, {}).flingerLevel).toBe(0);
-    expect(
-      rosterInRange({ col: 100, row: 100 }, cells, { powerups: [{ id: "ap_declarewar" }] })
-        .flingerLevel,
-    ).toBe(1);
   });
 
   it("ignores a zero-level flinger even next door", () => {

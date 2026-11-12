@@ -197,6 +197,45 @@ describe("the owner's first look", () => {
     expect(select.value).toBe("auto");
   });
 
+  it("shows beta 7's Photo reports as a Moderation tab and Weekend events as an Announcements tab", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (new URL(url, "http://localhost").pathname.endsWith("/admin/photoreports")) {
+          return Response.json({ ok: true, cases: [], open: 2, nextOffset: null, hideAt: 3 });
+        }
+        const body = answer(url);
+        return body === null ? notFoundResponse() : Response.json(body);
+      }),
+    );
+    await boot();
+    await settle();
+    const tabs = (view: string) =>
+      [...document.querySelectorAll(`#view-${view} .subnav a .nav-state`)].map((s) => s.previousElementSibling?.textContent);
+    expect(tabs("photos")).toEqual(["Review", "Photo reports", "Find a player", "Attack log", "Flagged", "Moderators", "Moderator mail"]);
+    expect(tabs("events")).toEqual(["Announcements", "Events"]);
+    // The tab and the heading count the players with open photo reports.
+    expect(document.querySelector("#view-moderation .subnav a[href='#photos'] .count")?.textContent).toContain("2");
+    expect(document.querySelector("#view-photos h1")?.textContent).toContain("2 photo reports");
+    // Moderation's menu link counts them with the 3 players in the list.
+    expect(document.querySelector(".nav a[data-page='moderation'] .count")?.textContent).toContain("5");
+    expect(document.getElementById("home-needs")?.textContent).toContain("Also 2 reported profile photos");
+    const shown = () => [...document.querySelectorAll<HTMLElement>(".page > .view")].filter((v) => !v.hidden).map((v) => v.dataset.view);
+    const current = () => document.querySelector(".nav a[aria-current]")?.getAttribute("data-page");
+    location.hash = "#photos";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    expect(shown()).toEqual(["photos"]);
+    expect(current()).toBe("moderation");
+    expect(document.getElementById("view-photos")?.querySelector(".photos")).not.toBeNull();
+    // `#weekend` was the Weekend events view's address before it became a tab.
+    location.hash = "#weekend";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    expect(shown()).toEqual(["events"]);
+    expect(current()).toBe("announcements");
+    expect(document.getElementById("view-events")?.querySelector(".weekend-admin")).not.toBeNull();
+    location.hash = "";
+  });
+
   it("gives no element an id the address can name, so a direct link opens at the top", async () => {
     await boot();
     await settle();

@@ -113,9 +113,25 @@ body {
  */
 
 .btn {
+  /* Words at 0 px off the vertical centre (owner rule, 7 Nov 2026). Chrome
+     rounds the font's ascent and descent to whole pixels and floors the space
+     above the words, so a fractional leading (15 px text at line-height 1.45:
+     3.75 px) lifted them up to 0.9 px. Here the line is the rounded text
+     height plus an even whole number of pixels, the one nearest to the old
+     1.45, so the space above and below is equal and the line (and so any
+     button sized by its words) moves by under a pixel. A plate in the
+     display font swaps in that font's metrics (skin.css). Browsers without
+     CSS round() drop the line and keep the inherited one, as before. */
+  --btn-ascent: var(--font-body-ascent);
+  --btn-descent: var(--font-body-descent);
+  --btn-text: calc(round(nearest, var(--btn-ascent), 1px) + round(nearest, var(--btn-descent), 1px));
+  /* A button that wants tighter lines sets this, not line-height. */
+  --btn-leading: var(--leading-normal);
+
   min-height: var(--control-height-compact);
   font: inherit;
   font-weight: 700;
+  line-height: calc(var(--btn-text) + 2 * round(nearest, (var(--btn-leading) * 1em - var(--btn-text)) / 2, 1px));
   padding: var(--space-2) var(--space-4);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
@@ -244,9 +260,20 @@ body {
   color: var(--colour-text-strong);
 }
 
+/* The focus ring is drawn INSIDE the box: an outside ring was cut off when the
+   field sits at the edge of a scrolling panel (Friends > Find, owner 10 Nov). */
 .field__input:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring);
+  border-color: var(--colour-accent);
+  box-shadow: inset 0 0 0 1px var(--colour-accent);
+}
+
+/* Dropdown lists: the open list takes the select's see-through background,
+   which the browser shows as near-white behind light writing (champion Mode,
+   owner 10 Nov). Give every option a solid panel colour instead. */
+select option {
+  background-color: var(--colour-surface-base);
+  color: var(--colour-text-strong);
 }
 
 /* Takes no room until there is something to say, so an empty one leaves no
@@ -417,6 +444,61 @@ body {
   box-shadow: var(--shadow-popup);
 }
 
+/* ── Middle windows (owner, 9 Nov 2026, option A) ───────────────────────────
+ * On a computer the game's windows open in the true middle of the screen, as
+ * the pop-ups above do and as Flash did: the Monsters screen and its tabs,
+ * Chaos Weapons, the Shop, Mail, Friends, Achievements, Defences, Alerts,
+ * Goals, Events, Quests and Build. `ui/centreWindow.ts` adds the class (and
+ * keeps one open at a time). Each is centred on both axes in the band between
+ * the HUD and the dock row, keeps its own width, takes its own height from
+ * `--centre-height` (else fits its content) and is never taller than the
+ * band, its body scrolling. Each window's own rule still places it on a
+ * phone, upright or on its side, where these do not apply. Only the building
+ * panel, the planner's tools, world chat and the attack screen stay at the
+ * side.
+ *
+ * The band starts under the HUD with room for what sticks up above the
+ * window's frame (the painted name plate and close X, `--centre-overhang`),
+ * and stops above the dock row (tester, 9 Nov): in the yard
+ * `centreWindow.ts` measures the HUD's bottom, the plate and the top of the
+ * dock buttons under the window (their words and badges too, in either
+ * look), sets `--centre-top` and `--centre-bottom` on it, and narrows a
+ * window that would reach the Events column under the HUD. A window with a
+ * minimum size (`--centre-min-width`, `--centre-min-height`: the Monsters
+ * screen, Build) is never made smaller than it: on a short or narrow screen
+ * it covers the Events column or the dock buttons instead, drawn above them
+ * (one step over the HUD's layer, under the notices). 112px is only the
+ * start, and the place outside the yard. While a middle window is open the
+ * yard's notices hang under its title bar (`--centre-notice-top`, measured
+ * too), so a claim's notice never hides the window's name or close X, and
+ * the window does not move for it.
+ */
+@media (width > 620px) and (height > 500px) {
+  .overlay__layer > .panel.panel--centre {
+    --centre-top: calc(var(--hud-height) + var(--centre-overhang, 0px) + var(--space-2));
+    /* The dock row (More, Monsters, Build, Collect all; Main yard and Map). */
+    --centre-bottom: 112px;
+
+    position: absolute;
+    inset: var(--centre-top) 0 var(--centre-bottom);
+    z-index: calc(var(--z-hud) + 1);
+    margin: auto;
+    height: var(--centre-height, max-content);
+    max-height: calc(100% - var(--centre-top) - var(--centre-bottom));
+    transform: none;
+  }
+
+  /* The painted name plate rides up over the frame's top edge, and the close
+     disc 12px (skin.css): the band's top leaves room for the higher. */
+  :root[data-skin] .overlay__layer > .panel.panel--centre {
+    --centre-overhang: max(12px, var(--skin-title-lift) - var(--skin-edge));
+  }
+
+  .overlay__layer:has(> .panel--centre:not([hidden])) > .yard-notices {
+    top: var(--centre-notice-top, calc(var(--notice-top-inset) + var(--space-3)));
+  }
+}
+
 /* ── Resource icons (#93) ──────────────────────────────────────────────────
  * `resourceIcon.ts` sets the art, its crop and the aspect ratio inline; the
  * size follows the text around it, so one icon works in a HUD readout, a
@@ -572,6 +654,50 @@ body {
   background: var(--colour-warning);
   color: var(--colour-warning-text);
   font-weight: 700;
+}
+
+/* ── Scroll fades ───────────────────────────────────────────────────────────
+ * A scrolling box's edge fades out where more is hidden (`ui/scrollFade.ts`):
+ * the row cut at the bottom reads as "more below", the one going under the
+ * top as "more above", instead of a hard cut. The fade is long and ends fully
+ * clear (tester, 9 Nov: the first 28px fade was barely seen), so about half a
+ * row dissolves into the panel. A box sets `--scroll-fade-below` /
+ * `--scroll-fade-above` to change its length.
+ */
+.scroll-fade {
+  --scroll-fade-below: 64px;
+  --scroll-fade-above: 36px;
+}
+
+.scroll-fade.scroll-fade--more-below {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--scroll-fade-below)), rgb(0 0 0 / 40%) calc(100% - var(--scroll-fade-below) / 2), transparent calc(100% - 6px));
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--scroll-fade-below)), rgb(0 0 0 / 40%) calc(100% - var(--scroll-fade-below) / 2), transparent calc(100% - 6px));
+}
+
+.scroll-fade.scroll-fade--more-above {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 4px, rgb(0 0 0 / 40%) calc(var(--scroll-fade-above) / 2), #000 var(--scroll-fade-above));
+  mask-image: linear-gradient(to bottom, transparent 4px, rgb(0 0 0 / 40%) calc(var(--scroll-fade-above) / 2), #000 var(--scroll-fade-above));
+}
+
+.scroll-fade.scroll-fade--more-above.scroll-fade--more-below {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 4px,
+    rgb(0 0 0 / 40%) calc(var(--scroll-fade-above) / 2),
+    #000 var(--scroll-fade-above),
+    #000 calc(100% - var(--scroll-fade-below)),
+    rgb(0 0 0 / 40%) calc(100% - var(--scroll-fade-below) / 2),
+    transparent calc(100% - 6px)
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 4px,
+    rgb(0 0 0 / 40%) calc(var(--scroll-fade-above) / 2),
+    #000 var(--scroll-fade-above),
+    #000 calc(100% - var(--scroll-fade-below)),
+    rgb(0 0 0 / 40%) calc(100% - var(--scroll-fade-below) / 2),
+    transparent calc(100% - 6px)
+  );
 }
 
 /* ── Online dot ─────────────────────────────────────────────────────────────
@@ -1064,7 +1190,8 @@ body {
   min-width: 0;
   min-height: 40px;
   font-size: var(--text-sm);
-  line-height: 1.15;
+  /* 1.15, rounded so the words sit at 0 px off centre (`.btn`). */
+  --btn-leading: 1.15;
   /* The other two fonts run wider: a long item wraps rather than hits its neighbour. */
   white-space: normal;
 }
@@ -2063,9 +2190,15 @@ body {
   width: 100%;
 }
 
-/* One size for the three tabs, so the window does not jump between them. */
+/* One size for the four tabs, so the window does not jump between them.
+   600px wide so the four tab words fit between Modern's wide painted tab ends
+   on a computer: at 560px "Notifications" ran under the frame (owner, 12 Nov
+   2026). Its own max-width too: `.panel`'s min(92vw, 560px) capped it at
+   560px and "Notifications" still ran under the frame. 92vw keeps phones
+   exactly as wide as before. */
 .account-settings-popup {
-  width: min(560px, calc(100vw - 16px));
+  width: min(600px, calc(100vw - 16px));
+  max-width: min(92vw, 600px);
   height: min(calc(100dvh - 32px), 640px);
 }
 
@@ -2089,6 +2222,24 @@ body {
 .account-settings__tabs {
   flex: none;
   margin: var(--space-4) var(--space-4) 0;
+}
+
+/* "Look and sound" and "Notifications" cannot fit four across a phone in
+   Titan One, so there they read "Look" and "Alerts" (owner, 12 Nov 2026:
+   all four tabs in sight). The hidden word is display: none, out of the
+   tab's name too. */
+.account-settings__tab-short {
+  display: none;
+}
+
+@media (width <= 500px) {
+  .account-settings__tab-long {
+    display: none;
+  }
+
+  .account-settings__tab-short {
+    display: inline;
+  }
 }
 
 /* The scroll box is the shared `.tab-scroll` (above); only its padding here. */
@@ -2238,4 +2389,42 @@ body {
 
 .block-button__question {
   font-size: var(--text-sm);
+}
+
+/* A tapped resource's three Shiny offers (+10%, +50%, Fill) under its
+   amount (issue #393, Flash's "+" beside each resource): narrow columns of
+   label, price and the amount it brings, centred. */
+.hud__offers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  max-width: 280px;
+}
+
+.hud__offer {
+  flex: 1 1 0;
+  min-width: 72px;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 0;
+  padding-inline: var(--space-1);
+  text-align: center;
+}
+
+.hud__offer .shiny-button__label {
+  white-space: normal;
+}
+
+.hud__offer .shiny-button__note {
+  flex-basis: auto;
+  font-size: var(--text-xs);
+}
+
+.hud__offers-note {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: center;
+  color: var(--colour-warning);
 }

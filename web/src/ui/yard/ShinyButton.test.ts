@@ -131,6 +131,16 @@ describe("ShinyButton", () => {
     expect(button.element.textContent).toContain("57");
   });
 
+  it("a held free one reads 'Free (n left)' and is marked free, which the panel's row lays out whole (10 Nov)", () => {
+    const { button } = make();
+    expect(button.element.classList.contains("shiny-button--free")).toBe(false);
+    button.setFree(5);
+    expect(button.element.textContent).toContain("Free (5 left)");
+    expect(button.element.classList.contains("shiny-button--free")).toBe(true);
+    button.setFree(0);
+    expect(button.element.classList.contains("shiny-button--free")).toBe(false);
+  });
+
   it("names what it buys when a label is shared (the Shop's Buy)", () => {
     const button = new ShinyButton({ label: "Buy", what: "More Yardage", spell: String, onSpend: vi.fn() });
     button.setPrice(300);

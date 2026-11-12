@@ -256,6 +256,15 @@ describe("QuestsPanel", () => {
 });
 
 describe("resetText", () => {
+  it("shows no pace on the weekly tab: no Harder / Easier line, no note (owner, 12 Nov: invisible to the player)", () => {
+    const { panel } = panelOf("weekly");
+    panel.render(list());
+    expect(all(".quests-set--weekly .quest")).not.toHaveLength(0);
+    expect(all(".quest__pace")).toHaveLength(0);
+    expect(q(".quests-set__pace-note")).toBeNull();
+    expect(q(".quests-set--weekly")?.textContent).not.toMatch(/Harder|Easier|pace/i);
+  });
+
   it("counts down, and says to reopen once the time is up", () => {
     expect(resetText(3 * 86_400 + 5 * 3600)).toBe("Resets in 3d 5h");
     expect(resetText(0)).toBe("New quests: reopen Quests");

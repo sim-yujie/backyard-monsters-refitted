@@ -1,5 +1,6 @@
 import { friendsApi, type FriendsApi } from "@/api/friends";
 import { friendsStore as sharedStore, type FriendsStore } from "@/game/friends/friendsStore";
+import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { FindTab } from "./FindTab";
 import { FriendsTab, type FriendActions } from "./FriendsTab";
@@ -54,6 +55,9 @@ export class FriendsScreen {
   private opened = false;
   private destroyed = false;
 
+  /** Its place in the middle of the screen, one window at a time (`ui/centreWindow.ts`). */
+  private readonly centre: CentreWindow;
+
   constructor(options: FriendsScreenOptions = {}) {
     this.options = options;
     const api = options.api ?? friendsApi;
@@ -63,6 +67,7 @@ export class FriendsScreen {
     // opens and closes many times over one scene.
     const panel = new Panel({ title: "Friends", className: "friends-screen", closable: false });
     this.element = panel.element;
+    this.centre = centreWindow(this.element, () => this.close());
     this.element.hidden = true;
     this.element.setAttribute("role", "region");
     this.element.addEventListener("keydown", (event) => {
@@ -153,6 +158,7 @@ export class FriendsScreen {
     const wasOpen = this.opened;
     this.opened = true;
     this.element.hidden = false;
+    this.centre.opened();
     this.active = tab;
     this.element.dataset["tab"] = tab;
     for (const [id, button] of this.tabButtons) {
@@ -172,6 +178,7 @@ export class FriendsScreen {
     const hadFocus = this.element.contains(document.activeElement);
     this.opened = false;
     this.element.hidden = true;
+    this.centre.closed();
     this.options.onClose?.(hadFocus);
   }
 

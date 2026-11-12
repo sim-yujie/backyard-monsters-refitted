@@ -11,6 +11,8 @@ import type { JsonObject } from "../../types/JsonObject.js";
 import { addAmounts, noAmounts, RESOURCE_KEYS } from "../base/economy/resourceBudget.js";
 import { fitCredit, type CreditSave } from "../yard/credit.js";
 import type { ResourceAmounts } from "../yardplanner/costs.js";
+import { KORATH_MAX_POWER } from "../../game-data/events/monsterMadness.js";
+import { grantKorathPower } from "./korathPower.js";
 import { raiseKrallen } from "./krallenReward.js";
 
 /**
@@ -22,7 +24,8 @@ import { raiseKrallen } from "./krallenReward.js";
  * wrapper clamps to the storage cap as every credit is; Shiny as
  * `grantShiny`; store buffs and free speed-ups as a new `storedata`;
  * decorations as a new `researchdata`; Krallen as a new `champion` list
- * (`krallenReward.ts`). So a grant always runs inside a yard
+ * (`krallenReward.ts`); a Korath power as new `rewards` and, when he is in
+ * the yard, a new `champion` list (`korathPower.ts`). So a grant always runs inside a yard
  * action, under the main yard's row lock, and lands or rolls back with the
  * claim that paid it (`controllers/yard/events.ts`).
  */
@@ -32,6 +35,7 @@ export interface GrantSave extends CreditSave {
   storedata?: JsonObject | null;
   researchdata?: JsonObject | null;
   champion?: unknown;
+  rewards?: JsonObject | null;
 }
 
 /** What one reward came to, for the answer. */
@@ -42,13 +46,22 @@ export type GrantedReward =
   | { kind: "speedup"; item: string; count: number; held: number }
   | { kind: "decoration"; type: number; count: number; stored: number }
   /** Krallen's level now; `raised` false when she was at the top already. */
-  | { kind: "krallen"; level: number; raised: boolean };
+  | { kind: "krallen"; level: number; raised: boolean }
+  /**
+   * Korath's power now; `raised` false when it was that high already;
+   * `hasKorath` false when it waits for him to be raised.
+   */
+  | { kind: "korath"; power: number; raised: boolean; hasKorath: boolean }
+  /** Event coins paid (`eventCoins.ts`); the yard answer carries the new balance. */
+  | { kind: "eventCoins"; amount: number };
 
 /** What a yard action returns for a grant: spread into its outcome. */
 export interface GrantPlan {
   credit: ResourceAmounts;
   grantShiny: number;
-  slices: { storedata?: JsonObject; researchdata?: JsonObject; champion?: ChampionData[] };
+  /** Event coins to pay: the wrapper adds them to `bym.event_coins` in the same transaction. */
+  grantCoins: number;
+  slices: { storedata?: JsonObject; researchdata?: JsonObject; champion?: ChampionData[]; rewards?: JsonObject };
   granted: GrantedReward[];
 }
 
@@ -83,6 +96,12 @@ export const rewardProblem = (reward: EventReward): string | null => {
       return whole(reward.count) > 0 ? null : "no count";
     case "krallen":
       return null;
+    case "korath":
+      return Number.isInteger(reward.power) && reward.power >= 1 && reward.power <= KORATH_MAX_POWER
+        ? null
+        : "not a Korath power";
+    case "eventCoins":
+      return whole(reward.amount) > 0 ? null : "no amount";
     default:
       return "unknown kind";
   }
@@ -100,15 +119,19 @@ export const rewardProblem = (reward: EventReward): string | null => {
  *   decorations drawer places from.
  * - Krallen joins the `champion` list at level 1, or goes up one level, at
  *   most to the top (`krallenReward.ts`).
+ * - A Korath power lifts the one kept in `rewards` and every Korath in the
+ *   yard to it, never lower (`korathPower.ts`).
  *
  * @throws Error on a reward {@link rewardProblem} refuses: a config mistake.
  */
 export const planGrant = (save: GrantSave, rewards: readonly EventReward[], now: number): GrantPlan => {
   const credit = noAmounts();
   let grantShiny = 0;
+  let grantCoins = 0;
   let storedata: JsonObject | undefined;
   let researchdata: JsonObject | undefined;
   let champion: ChampionData[] | undefined;
+  let rewardsSlice: JsonObject | undefined;
   const granted: GrantedReward[] = [];
   const resourceRows: Extract<GrantedReward, { kind: "resources" }>[] = [];
 
@@ -161,10 +184,23 @@ export const planGrant = (save: GrantSave, rewards: readonly EventReward[], now:
         granted.push({ kind: "decoration", type: reward.type, count, stored });
         break;
       }
+      case "eventCoins": {
+        const amount = whole(reward.amount);
+        grantCoins += amount;
+        granted.push({ kind: "eventCoins", amount });
+        break;
+      }
       case "krallen": {
         const raised = raiseKrallen(champion ?? save.champion, now);
         champion = raised.champions;
         granted.push({ kind: "krallen", level: raised.level, raised: raised.raised });
+        break;
+      }
+      case "korath": {
+        const won = grantKorathPower({ rewards: rewardsSlice ?? save.rewards }, reward.power, champion ?? save.champion);
+        rewardsSlice = won.rewards;
+        if (won.champions) champion = won.champions;
+        granted.push({ kind: "korath", power: won.power, raised: won.raised, hasKorath: won.hasKorath });
         break;
       }
     }
@@ -185,10 +221,12 @@ export const planGrant = (save: GrantSave, rewards: readonly EventReward[], now:
   return {
     credit,
     grantShiny,
+    grantCoins,
     slices: {
       ...(storedata && { storedata }),
       ...(researchdata && { researchdata }),
       ...(champion && { champion }),
+      ...(rewardsSlice && { rewards: rewardsSlice }),
     },
     granted,
   };

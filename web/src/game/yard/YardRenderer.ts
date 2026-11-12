@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite, type Renderer, type Texture } from "pixi.js";
+import { Container, Graphics, Rectangle, Sprite, type Renderer, type Texture } from "pixi.js";
 import { YardBuildings } from "./YardBuildings";
 import { NO_WORK, readWork, type WorkSource } from "./buildingWork";
 import { flightEnds, flightTotals, planFlights, TOWN_HALL_TYPE, type BankSource } from "./collectFx";
@@ -20,15 +20,29 @@ import { routeBetween } from "@/game/guide/MonsterWalkIn";
 import { yardArtAtlas, type YardArtAtlas } from "./yardAtlas";
 import { loadSheet, MonsterSheetTextures, prefersReducedMotion } from "@/game/attack/AttackBattleLayer";
 import { currentSeason, onSeasonChange, type Season } from "@/game/season";
+import { onGroundChange } from "./groundChoice";
+import { classicLook } from "@/game/classicLook";
+import { thanksgivingSkin } from "./thanksgivingSkin";
+import { YardTurkeys } from "./YardTurkeys";
+import { YardDressUp } from "./YardDressUp";
 import { BlueprintLayer } from "./planner/BlueprintLayer";
 import { blueprintToYard, blueprintToWorld } from "./planner/blueprint";
 import { PlannerOverlay, type PlannerVisuals } from "./planner/PlannerOverlay";
 import { diamondCorners, type Corners, type Diamond } from "./planner/marquee";
 import { fromIso, toIso, yardFitRect, yardToWorld, type Point, type Rect } from "./YardGrid";
+import { loadMushroomArt, mushroomAnchor, mushroomArtIndex, mushroomPictureFor } from "./mushroomArt";
 import { mushroomAt, mushroomKey, mushroomZIndex } from "./mushroomPick";
 import { MUSHROOM_POP_SECONDS, mushroomPopScale, newMushroomKeys } from "./mushroomPop";
 import type { Yard, YardBuilding, YardMushroom } from "./yardModel";
 import { rangeRadii } from "./planner/RangeLayer";
+import {
+  SNAPSHOT_BACKGROUND,
+  SNAPSHOT_SIZE,
+  snapshotFrame,
+  snapshotHiddenIds,
+  unionRect,
+  type SnapshotSize,
+} from "./yardSnapshot";
 import {
   hoverRange,
   RANGE_COLOUR,
@@ -79,6 +93,10 @@ export class YardRenderer {
 
   private readonly ground = new YardGround();
   private readonly buildings = new YardBuildings();
+  /** Thanksgiving: turkeys roam in place of the mushrooms (`YardTurkeys.ts`). */
+  private readonly turkeys = new YardTurkeys(this.buildings);
+  /** Thanksgiving: the props round the plot (`YardDressUp.ts`). */
+  private readonly dressUp = new YardDressUp(this.buildings);
   /** Each mushroom's sprite by `mushroomKey`, rebuilt with every `show`. */
   private readonly mushroomSprites = new Map<string, Sprite>();
   /** Mushrooms shaking for a pick, by `mushroomKey` (`BMUSHROOM.as:76-81`). */
@@ -160,15 +178,27 @@ export class YardRenderer {
   readonly flatDecals: Container = this.blueprint.decals;
 
   private atlas: YardArtAtlas | null = null;
+  /** The game's renderer, from `attach`: the yard picture is drawn with it. */
+  private pixi: Renderer | null = null;
+  /** The world rectangle the last frame drew, for putting the culling back after a picture. */
+  private lastVisible: Rect | null = null;
   /** The season the yard is dressed for (`game/season.ts`); see `setSeason`. */
   private season: Season = "normal";
   /** The Halloween pumpkin that stands in for a mushroom, once it has loaded. */
   private pumpkin: Texture | null = null;
   /** Whether the pumpkin is being asked for, so a second Halloween does not ask twice. */
   private pumpkinLoading = false;
+  /**
+   * The painted mushrooms of this page's look, one per art variant
+   * (`mushroomArt.ts`), once they have loaded; a missing one is null and its
+   * mushrooms keep the drawn glyph.
+   */
+  private mushroomArt: readonly (Texture | null)[] | null = null;
   /** Whether `destroy` has run: a pumpkin still being retried then gives up. */
   private destroyed = false;
   private unwatchSeason: (() => void) | null = null;
+  /** Follows the ground the player picks in Settings (`groundChoice.ts`). */
+  private unwatchGround: (() => void) | null = null;
   private yard: Yard | null = null;
   /** Which buildings are working and the clock to read it on (#255); see `setWork`. */
   private work: WorkSource | null = null;
@@ -226,12 +256,16 @@ export class YardRenderer {
   /** Bakes the vector glyphs. Call once, before the first `show`. */
   attach(renderer: Renderer): void {
     this.atlas ??= yardArtAtlas(renderer);
+    this.pixi = renderer;
     this.life.useRenderer(renderer);
+    if (!this.mushroomArt) this.loadMushroomArt();
     // The yard follows the season from here on (`game/season.ts`).
     if (!this.unwatchSeason) {
       this.setSeason(currentSeason());
       this.unwatchSeason = onSeasonChange((season) => this.setSeason(season));
     }
+    // And the ground the player picks, at once (owner, 12 Nov 2026).
+    this.unwatchGround ??= onGroundChange((ground) => this.ground.setGround(ground));
   }
 
   /**
@@ -261,7 +295,50 @@ export class YardRenderer {
           this.pumpkinLoading = false;
         });
     }
+    if (season === "thanksgiving") {
+      // The mushrooms stay until the turkeys arrive, and for good if they never do.
+      void this.turkeys.load().then((ready) => {
+        if (ready && !this.destroyed && this.season === "thanksgiving") this.replaceFinds();
+      });
+    } else if (this.turkeys.count > 0) {
+      this.turkeys.clear();
+      this.replaceFinds();
+    }
+    this.dressYard();
     this.redrawMushrooms();
+  }
+
+  /**
+   * Asks for the painted mushrooms once. The yard opens on the drawn glyph and
+   * swaps the pictures in where the mushrooms stand when they arrive.
+   */
+  private loadMushroomArt(): void {
+    this.mushroomArt = [];
+    void loadMushroomArt(() => this.destroyed).then((textures) => {
+      if (this.destroyed) return;
+      this.mushroomArt = textures;
+      this.redrawMushrooms();
+    });
+  }
+
+  /** Whether turkeys stand in for the mushrooms now: Thanksgiving, once their pictures are in. */
+  private get turkeysOn(): boolean {
+    return this.season === "thanksgiving" && this.turkeys.ready;
+  }
+
+  /** Puts the yard's finds back for the season: mushrooms (or pumpkins), or turkeys. */
+  private replaceFinds(): void {
+    const yard = this.yard;
+    if (!yard) return;
+    this.clearMushrooms();
+    this.placeFinds(yard, []);
+  }
+
+  /** Lays (or takes away) the Thanksgiving props round the plot, for the yard on screen. */
+  private dressYard(): void {
+    const yard = this.yard;
+    const on = this.season === "thanksgiving" && yard !== null && yard.kind !== "inferno";
+    void this.dressUp.layout(on ? yard.bounds : null, yard?.savedAt || 1, on ? thanksgivingSkin() : null, classicLook());
   }
 
   /** Buildings still waiting on, or missing, their picture. */
@@ -317,15 +394,28 @@ export class YardRenderer {
     this.blueprint.setActive(this.currentView === YardView.BLUEPRINT);
 
     const fresh = popNew ? newMushroomKeys(shownBefore, yard.mushrooms) : [];
+    this.placeFinds(yard, fresh);
+    this.dressYard();
+  }
+
+  /**
+   * Stands the yard's finds: a turkey per mushroom at Thanksgiving (once the
+   * turkeys are in), else a sprite per mushroom (a pumpkin at Halloween).
+   * `fresh` keys pop up out of the ground (#263).
+   */
+  private placeFinds(yard: Yard, fresh: readonly string[]): void {
+    const atlas = this.atlas;
+    if (!atlas) return;
+    if (this.turkeysOn) {
+      this.turkeys.sync(yard, new Set(fresh));
+      this.popping.clear();
+      return;
+    }
     const keys = new Set<string>();
-    const pumpkin = this.season === "halloween" ? this.pumpkin : null;
     for (const mushroom of yard.mushrooms) {
       const key = mushroomKey(mushroom);
-      const sprite = new Sprite(pumpkin ?? atlas.mushroom);
-      // Both stand on their base: the glyph's stalk foot, the pumpkin's bottom.
-      if (pumpkin) sprite.anchor.set(0.5, PUMPKIN_BASE);
-      else sprite.anchor.set(0.5, 0.85);
-      sprite.scale.set(this.mushroomSize());
+      const sprite = new Sprite();
+      this.dressMushroom(sprite, mushroom.variant, atlas);
       sprite.position.set(mushroom.worldX, mushroom.worldY);
       // Among the buildings, by depth: a wall behind it no longer covers it.
       sprite.eventMode = "none";
@@ -345,6 +435,7 @@ export class YardRenderer {
    * animations run on.
    */
   draw(visible: Rect, deltaSeconds = 0): void {
+    this.lastVisible = visible;
     // Balls fly on in the blueprint, hidden, so the bar still counts up.
     this.collect.update(deltaSeconds);
     // The blueprint has no culling and no animation, so a hidden isometric
@@ -359,6 +450,7 @@ export class YardRenderer {
       if (this.helpMarks.active) this.helpMarks.reposition();
       this.shakeMushrooms();
       this.popMushrooms(deltaSeconds);
+      if (this.turkeysOn) this.turkeys.update(deltaSeconds);
     }
 
     if (this.chromeDirty) {
@@ -396,10 +488,12 @@ export class YardRenderer {
     if (!target || range === null) return;
 
     const { rx, ry } = rangeRadii(range, YardView.ISO);
+    // White, as Flash drew it, unless the ground would swallow white (Snow).
+    const colour = this.ground.rangeInk() ?? RANGE_COLOUR;
     this.rangeOval
       .ellipse(0, 0, rx, ry)
-      .fill({ color: RANGE_COLOUR, alpha: RANGE_FILL_ALPHA })
-      .stroke({ color: RANGE_COLOUR, alpha: RANGE_EDGE_ALPHA, width: 1, pixelLine: true });
+      .fill({ color: colour, alpha: RANGE_FILL_ALPHA })
+      .stroke({ color: colour, alpha: RANGE_EDGE_ALPHA, width: 1, pixelLine: true });
     const offset = this.buildings.offsetOf(target.id);
     this.rangeOval.position.set(target.centreX + offset.x, target.centreY + offset.y);
   }
@@ -1054,14 +1148,30 @@ export class YardRenderer {
     return helped ?? this.buildings.pick(worldX, worldY);
   }
 
+  /** Whether a find under the pointer wins over the building there: the turkeys, drawn in front. */
+  get findsOnTop(): boolean {
+    return this.turkeysOn;
+  }
+
   /** The mushroom under a world point in the isometric yard, or null. */
   pickMushroom(worldX: number, worldY: number): YardMushroom | null {
     if (this.currentView !== YardView.ISO || !this.yard) return null;
+    if (this.turkeysOn) return this.turkeys.at(worldX, worldY);
     return mushroomAt(this.yard.mushrooms, worldX, worldY);
+  }
+
+  /** A pick landed: at Thanksgiving its turkey hops up and fades, gold if it was golden. */
+  pickedMushroom(spot: Pick<YardMushroom, "x" | "y">, golden: boolean): void {
+    if (this.turkeysOn) this.turkeys.pop(spot, golden);
   }
 
   /** Starts or stops a mushroom's pick shake. Stopping puts it back where it stood. */
   shakeMushroom(spot: Pick<YardMushroom, "x" | "y">, on: boolean): void {
+    // A turkey being picked stops and flaps instead.
+    if (this.turkeysOn) {
+      this.turkeys.hold(spot, on);
+      return;
+    }
     const key = mushroomKey(spot);
     if (on) {
       this.shaking.add(key);
@@ -1084,6 +1194,8 @@ export class YardRenderer {
     this.openSheets();
     this.unwatchSeason?.();
     this.unwatchSeason = null;
+    this.unwatchGround?.();
+    this.unwatchGround = null;
     this.collect.destroy();
     this.giblets.destroy();
     this.blends.clear();
@@ -1091,6 +1203,8 @@ export class YardRenderer {
     this.life.destroy();
     this.clearMushrooms();
     this.popping.clear();
+    this.turkeys.destroy();
+    this.dressUp.destroy();
     this.planner.destroy();
     this.jobBars.destroy();
     this.hatchMarks.destroy();
@@ -1172,13 +1286,34 @@ export class YardRenderer {
   /** Swaps every mushroom sprite's picture for the season's, where they stand. */
   private redrawMushrooms(): void {
     const atlas = this.atlas;
-    if (!atlas) return;
-    const pumpkin = this.season === "halloween" ? this.pumpkin : null;
-    for (const sprite of this.mushroomSprites.values()) {
-      sprite.texture = pumpkin ?? atlas.mushroom;
-      sprite.anchor.set(0.5, pumpkin ? PUMPKIN_BASE : 0.85);
-      sprite.scale.set(this.mushroomSize());
+    if (!atlas || !this.yard) return;
+    for (const mushroom of this.yard.mushrooms) {
+      const sprite = this.mushroomSprites.get(mushroomKey(mushroom));
+      if (sprite) this.dressMushroom(sprite, mushroom.variant, atlas);
     }
+  }
+
+  /**
+   * Gives a mushroom's sprite its picture, standing on its spot: the Halloween
+   * pumpkin in season, else its painted mushroom (`mushroomArt.ts`), else,
+   * until that arrives or if it never does, the drawn glyph.
+   */
+  private dressMushroom(sprite: Sprite, variant: number, atlas: YardArtAtlas): void {
+    const pumpkin = this.season === "halloween" ? this.pumpkin : null;
+    const painted = this.mushroomArt?.[mushroomArtIndex(variant)] ?? null;
+    if (pumpkin) {
+      sprite.texture = pumpkin;
+      sprite.anchor.set(0.5, PUMPKIN_BASE);
+    } else if (painted) {
+      sprite.texture = painted;
+      const anchor = mushroomAnchor(mushroomPictureFor(variant), painted.width, painted.height);
+      sprite.anchor.set(anchor.x, anchor.y);
+    } else {
+      // The glyph's stalk foot.
+      sprite.texture = atlas.mushroom;
+      sprite.anchor.set(0.5, 0.85);
+    }
+    sprite.scale.set(this.mushroomSize());
   }
 
   /** How big a mushroom sprite stands at rest: the Halloween pumpkin a bit bigger. */
@@ -1223,6 +1358,57 @@ export class YardRenderer {
     }
   }
 
+  /* ── The yard picture (owner, 2026-11-11) ───────────────────────────── */
+
+  /**
+   * Draws the whole isometric yard into a picture to share, whichever view is
+   * showing: every building in frame and centred (`snapshotFrame`), and no
+   * trap in any form. The traps are concealed the way an enemy's are, so no
+   * sprite, shadow, strip or tile of one is drawn, and they are left out of
+   * the framing; only the ground, the shadows and the buildings are drawn, so
+   * no range disc, footprint, outline, badge, bar or planner mark is either.
+   * Everything is put back before this returns, so the screen never shows it.
+   *
+   * Returns the picture at about `size` (the caption and the exact size are
+   * `snapshotPicture.ts`'s), or null before the yard is drawn or if the
+   * graphics card would not give it.
+   */
+  snapshot(size: SnapshotSize = SNAPSHOT_SIZE): HTMLCanvasElement | null {
+    const pixi = this.pixi;
+    const yard = this.yard;
+    if (!pixi || !yard) return null;
+    const traps = snapshotHiddenIds(yard.buildings).filter((id) => !this.concealed.has(id));
+    const shown = this.root.children.map((child) => [child, child.visible] as const);
+    const wasGroup = this.root.isRenderGroup;
+    try {
+      for (const id of traps) this.setConcealed(id, true);
+      // Every building drawn, not only those on screen.
+      this.buildings.draw(EVERYWHERE, 0, this.work?.now() ?? 0);
+      const keep = new Set<Container>([this.ground.root, this.buildings.shadows, this.buildings.tops]);
+      for (const child of this.root.children) child.visible = keep.has(child);
+      const { frame, scale } = snapshotFrame(unionRect(this.buildings.drawnBoxes()), yardFitRect(yard.bounds), size);
+      const picture = pixi.extract.canvas({
+        target: this.root,
+        frame: new Rectangle(frame.x, frame.y, frame.width, frame.height),
+        resolution: scale,
+        clearColor: SNAPSHOT_BACKGROUND,
+      });
+      return picture instanceof HTMLCanvasElement && picture.width > 0 && picture.height > 0 ? picture : null;
+    } catch (caught) {
+      console.warn("The yard picture could not be drawn.", caught);
+      return null;
+    } finally {
+      for (const [child, visible] of shown) child.visible = visible;
+      for (const id of traps) this.setConcealed(id, false);
+      // Drawing a container on its own makes it a render group; the yard was not one.
+      if (!wasGroup && this.root.isRenderGroup) this.root.disableRenderGroup();
+      // The next frame culls to the screen again; until then, the screen as it was.
+      if (this.currentView === YardView.ISO && this.lastVisible) {
+        this.buildings.draw(this.lastVisible, 0, this.work?.now() ?? 0);
+      }
+    }
+  }
+
   /* ── A live battle: hit flash (#63) ─────────────────────────────────── */
 
   /** Lights a building up for the frames after a monster strikes it; see `YardBuildings.setFlash`. */
@@ -1246,6 +1432,9 @@ export class YardRenderer {
  * mushroom glyph (owner's call, 20 Oct 2026). `PUMPKIN_BASE` is where its
  * bottom sits, as a fraction of its height; scaling keeps it on the ground.
  */
+/** A world rectangle every building is inside: the yard picture culls nothing. */
+const EVERYWHERE: Rect = { x: -1e7, y: -1e7, width: 2e7, height: 2e7 };
+
 const PUMPKIN_ART = "/assets/buildings/decorations/pumpkins/top.png";
 const PUMPKIN_BASE = 0.9;
 const PUMPKIN_SCALE = 1.3;

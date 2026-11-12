@@ -140,6 +140,9 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
         giftSentToday: false,
         canGiftFrom: null,
         help: null,
+        wishes: [],
+        pinnedAt: null,
+        otherWorld: null,
       },
     ]);
     expect((await list_(B)).friends.map((f: any) => f.userid)).toEqual([A]);
@@ -422,12 +425,12 @@ describe.skipIf(!dbName)("the friends core on a real database (issue #368)", () 
     const user = await (postgres.em as ReturnType<typeof em>).findOneOrFail(User, { userid: B });
     const ctx = { authUser: user, request: { body: { friendRequests: false, hideOnline: true } } } as unknown as Context;
     await updateSettings(ctx);
-    expect(ctx.body).toEqual({ error: 0, settings: { shinyLocked: false, hideOnline: true, friendRequests: false, mapTiltAllowed: false, tiltedMap: true, mapHexShape: "flat", country: null, countryAsked: false, countryChannel: null } });
+    expect(ctx.body).toEqual({ error: 0, settings: { shinyLocked: false, hideOnline: true, friendRequests: false, mapTiltAllowed: false, tiltedMap: true, mapHexShape: "flat", country: null, countryAsked: false, countryChannel: null, notificationsOff: [] } });
     expect(await reasonOf(ask(A, B))).toBe("requestsOff");
 
     const back = { authUser: user, request: { body: { friendRequests: true } } } as unknown as Context;
     await updateSettings(back);
-    expect(back.body).toEqual({ error: 0, settings: { shinyLocked: false, hideOnline: true, friendRequests: true, mapTiltAllowed: false, tiltedMap: true, mapHexShape: "flat", country: null, countryAsked: false, countryChannel: null } });
+    expect(back.body).toEqual({ error: 0, settings: { shinyLocked: false, hideOnline: true, friendRequests: true, mapTiltAllowed: false, tiltedMap: true, mapHexShape: "flat", country: null, countryAsked: false, countryChannel: null, notificationsOff: [] } });
     expect(((await ask(A, B)) as any).request.status).toBe("pending");
   });
 });

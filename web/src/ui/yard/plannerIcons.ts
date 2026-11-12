@@ -12,7 +12,7 @@ import { gameIcon, type GameIconName } from "@/ui/gameIcon";
  */
 
 /** The icon buttons, by the name their painted icon will have. */
-export type PlannerIcon = "undo" | "redo" | "select" | "box" | "find" | "wallupgrade" | "rearm";
+export type PlannerIcon = "undo" | "redo" | "select" | "box" | "find" | "wallupgrade" | "rearm" | "snapshot";
 
 interface Words {
   /** The button's name: its face until it is painted, and its label always. */
@@ -29,6 +29,8 @@ export const PLANNER_ICON_WORDS: Readonly<Record<PlannerIcon, Words>> = {
   find: { words: "Find" },
   wallupgrade: { words: "Upgrade walls" },
   rearm: { words: "Re-arm traps" },
+  // The yard picture (owner, 2026-11-11), a painted camera since 12 Nov.
+  snapshot: { words: "Yard picture", short: "Picture" },
 };
 
 /** A painted icon at the bar's size; the button's own label says the word. */
@@ -50,6 +52,8 @@ const PAINTED: Partial<Record<PlannerIcon, () => HTMLElement>> = {
   find: painted("find"),
   wallupgrade: painted("wallupgrade"),
   rearm: painted("rearm2"),
+  // Owner 12 Nov: "change 'yard picture' function in planner to a photo icon".
+  snapshot: painted("camera"),
 };
 
 /** Whether a button shows its painted icon rather than its words. */

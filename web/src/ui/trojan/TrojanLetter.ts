@@ -1,4 +1,4 @@
-import { ACCEPT_TRUCE, SEND_BACK, TROJAN_HEADLINE, trojanLetterText } from "@/game/trojan/trojanText";
+import { ACCEPT_TRUCE, SEND_BACK, TROJAN_HEADLINE, TROJAN_TITLE, trojanLetterText } from "@/game/trojan/trojanText";
 import { Popup } from "@/ui/Popup";
 import "./trojanLetter.css";
 
@@ -35,8 +35,9 @@ export class TrojanLetter {
   private readonly acceptTruce: HTMLButtonElement;
 
   constructor(playerName: string, actions: TrojanLetterActions) {
-    this.popup = new Popup({ title: TROJAN_HEADLINE, className: "trojan-letter", dismissable: false });
+    this.popup = new Popup({ title: TROJAN_TITLE, className: "trojan-letter", dismissable: false });
 
+    const headline = element("p", "trojan-letter__headline", TROJAN_HEADLINE);
     const letter = element("p", "trojan-letter__body", trojanLetterText(playerName || "Monster Tamer"));
 
     const answer = (): void => {
@@ -56,7 +57,7 @@ export class TrojanLetter {
     const actionsRow = element("div", "trojan-letter__actions");
     actionsRow.append(this.sendBack, this.acceptTruce);
 
-    this.popup.setContent(letter, actionsRow);
+    this.popup.setContent(headline, letter, actionsRow);
   }
 
   mount(host: HTMLElement): this {

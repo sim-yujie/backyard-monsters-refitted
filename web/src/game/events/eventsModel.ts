@@ -152,6 +152,10 @@ export const rewardText = (reward: EventReward, decorationName: (type: number) =
     }
     case "krallen":
       return "Krallen";
+    case "korath":
+      return `Korath's ${korathPowerName(reward.power)}`;
+    case "eventCoins":
+      return `${formatAmount(reward.amount)} ${reward.amount === 1 ? "Glimmer" : "Glimmers"}`;
   }
 };
 
@@ -172,6 +176,26 @@ export const grantedKrallenText = (granted: readonly GrantedReward[]): string | 
   if (!krallen || krallen.kind !== "krallen") return null;
   if (!krallen.raised) return `Your Krallen is already level ${krallen.level}, the highest.`;
   return krallen.level === 1 ? "Krallen joined your yard!" : `Krallen is now level ${krallen.level}!`;
+};
+
+/** Korath's powers by level (Flash `KorathReward.as`): 1 Burn, 2 Breath of Fire, 3 Fists of Doom. */
+const KORATH_POWER_NAMES = ["Burn", "Breath of Fire", "Fists of Doom"] as const;
+
+/** A Korath power's name: "Breath of Fire". */
+export const korathPowerName = (power: number): string =>
+  KORATH_POWER_NAMES[Math.min(Math.max(Math.floor(power), 1), KORATH_POWER_NAMES.length) - 1]!;
+
+/**
+ * What a paid claim gave Korath, for the notice: "Korath learned Breath of
+ * Fire!", "Breath of Fire waits for your Korath." when the player has none yet,
+ * or "Korath already knows Fists of Doom." when the power held was that high.
+ */
+export const grantedKorathText = (granted: readonly GrantedReward[]): string | null => {
+  const korath = granted.find((one) => one.kind === "korath");
+  if (!korath || korath.kind !== "korath") return null;
+  const name = korathPowerName(korath.power);
+  if (!korath.raised) return `Korath already knows ${name}.`;
+  return korath.hasKorath ? `Korath learned ${name}!` : `${name} waits for your Korath.`;
 };
 
 /**

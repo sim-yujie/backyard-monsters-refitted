@@ -300,7 +300,6 @@ describe.skipIf(!enabled)("a bot's revenge fought for real (issue #244)", () => 
         },
         attacker: botNow,
         tick: stored.tick,
-        declareWar: false,
       })!;
       const expected = replayAbandonedAttack(input);
 

@@ -113,7 +113,7 @@ export const defenceReplayPayload = (load: JsonObject, input: AbandonedInput, re
   ranks: academyRanks(input.attacker.academy),
   champion: championsOf(input.attacker.champion),
   siege: input.attacker.siege ?? null,
-  declareWar: input.declareWar,
+  ...(input.declareWar && { declareWar: true }),
   report,
 });
 
@@ -145,7 +145,7 @@ export const defenceReplayInput = (payload: DefenceReplayPayload): AbandonedInpu
     },
     log: { v: 1, seed: payload.seed, events: payload.events },
     tick: payload.tick,
-    declareWar: payload.declareWar,
+    declareWar: payload.declareWar ?? false,
     ...(typeof load.attackerlevel === "number" && { playerLevel: load.attackerlevel }),
     ...(load.defenderforces && { defence: load.defenderforces as DefenderForces }),
   };

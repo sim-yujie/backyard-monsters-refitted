@@ -10,6 +10,7 @@ import {
   planHatcheryFinish,
   planHatcheryRemove,
 } from "../../services/yard/hatchery.js";
+import { weekendBoost, weekendBoostUsed } from "../../services/events/weekendBoosts.js";
 import { housedQuestEvents } from "../../services/quests/hooks.js";
 import { defineYardAction } from "./yardAction.js";
 
@@ -23,10 +24,18 @@ import { defineYardAction } from "./yardAction.js";
  * (`docs/design/inferno.md` WP 2.3; overdrives `HODI|HOD2I|HOD3I`).
  */
 
-/** `POST /bm/yard/hatchery/add` — queue up to `count` of `monster` in one request. */
+/**
+ * `POST /bm/yard/hatchery/add` — queue up to `count` of `monster` in one
+ * request. In a Hatch Rush the queue hatches faster (the catch-up applies
+ * it), and queueing pays the weekend's Glimmers (`services/events/weekendCoins.ts`).
+ */
 export const yardHatcheryAddAction = defineYardAction({
   schema: YardHatcheryAddSchema,
-  run: ({ save, body, now }) => planHatcheryAdd(save, body.hatchery, body.monster, body.count, now),
+  run: async ({ save, body, now, bonuses, user, em }) => {
+    const plan = planHatcheryAdd(save, body.hatchery, body.monster, body.count, now, bonuses?.outpostHatchCost ?? 0);
+    if (weekendBoost("hatch", now) > 0) await weekendBoostUsed(em, user.userid, "hatch", now);
+    return plan;
+  },
   outposts: "allow",
   inferno: "allow",
 });

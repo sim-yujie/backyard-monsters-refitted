@@ -5,6 +5,8 @@ mock.module("../../server.js", () => ({ postgres: { em: {} }, redis: {} }));
 const {
   INVITE_LIFETIME,
   INVITE_PRICE,
+  LEGACY_INVITE_PRICE,
+  invitedPrice,
   InviteState,
   inviteAcceptRefusal,
   inviteRefusal,
@@ -52,7 +54,7 @@ describe("where an invitation stands", () => {
 });
 
 describe("who may be invited", () => {
-  const invited = { userid: 77, allianceId: null, mapVersion: 2, worldid: WORLD };
+  const invited = { userid: 77, mapVersion: 2, worldid: WORLD };
   const send = (over: Record<string, unknown> = {}, player: Record<string, unknown> = {}) =>
     inviteSendRefusal({
       inviterId: ALICE,
@@ -62,24 +64,23 @@ describe("who may be invited", () => {
       ...over,
     });
 
-  test("another Map Room 2 player in the outpost's world, in no alliance", () => {
+  test("another Map Room 2 player in the outpost's world, in an alliance or not", () => {
     expect(send()).toBeNull();
   });
 
-  test("refused, in this order: not the inviter's outpost, oneself, not Map Room 2, another world, an alliance", () => {
+  test("refused, in this order: not the inviter's outpost, oneself, not Map Room 2, another world", () => {
     expect(send({ ownsOutpost: false }, { userid: ALICE })).toBe("notYourOutpost");
     expect(send({}, { userid: ALICE })).toBe("self");
     expect(send({}, { mapVersion: 1 })).toBe("notMapRoom2");
     expect(send({}, { worldid: "world-b" })).toBe("otherWorld");
     expect(send({ outpostWorld: null })).toBe("otherWorld");
-    expect(send({}, { allianceId: 12 })).toBe("inAlliance");
   });
 });
 
 describe("whether the invited player may move now", () => {
   const accept = (over: Record<string, unknown> = {}, player: Record<string, unknown> = {}) =>
     inviteAcceptRefusal({
-      invited: { userid: 77, allianceId: null, mapVersion: 2, worldid: WORLD, ...player },
+      invited: { userid: 77, mapVersion: 2, worldid: WORLD, ...player },
       outpostWorld: WORLD,
       cantMoveTill: 0,
       underAttack: false,
@@ -96,7 +97,6 @@ describe("whether the invited player may move now", () => {
   test("each check, again at accept", () => {
     expect(accept({}, { mapVersion: 3 })).toBe("notMapRoom2");
     expect(accept({}, { worldid: "world-b" })).toBe("otherWorld");
-    expect(accept({}, { allianceId: 4 })).toBe("inAlliance");
     expect(accept({ cantMoveTill: NOW + 1 })).toBe("coolingDown");
     expect(accept({ hasHomeCell: false })).toBe("noHomeCell");
     expect(accept({ underAttack: true })).toBe("underAttack");
@@ -105,13 +105,14 @@ describe("whether the invited player may move now", () => {
 
 describe("the refusals' words", () => {
   test("each side reads its own", () => {
-    expect(inviteRefusal("inAlliance", "inviter")).toEqual({
+    expect(inviteRefusal("notEnoughShiny", "inviter")).toEqual({
       error: 1,
-      message: "They are in an alliance. They must leave it before they can move to your outpost.",
-      reason: "inAlliance",
+      message: "You need 750 Shiny for your share of the move.",
+      reason: "notEnoughShiny",
     });
-    expect(inviteRefusal("inAlliance", "invitee").message).toBe(
-      "You must first leave your Alliance to accept this invitation."
+    expect(inviteRefusal("notEnoughShiny", "invitee").message).toBe("You do not have enough Shiny.");
+    expect(inviteRefusal("hostCantPay", "invitee").message).toBe(
+      "They can't pay their share right now, so nothing was charged. Try again later."
     );
   });
 
@@ -126,15 +127,21 @@ describe("the refusals' words", () => {
 });
 
 describe("the price", () => {
-  const purse = { credits: 1_500, resources: { r1: 12_000_000, r2: 12_000_000, r3: 12_000_000, r4: 12_000_000 } };
+  const purse = { credits: 1_500, resources: { r1: 17_000_000, r2: 17_000_000, r3: 17_000_000, r4: 17_000_000 } };
 
-  test("10,000,000 of each resource, or 1,200 Shiny (`MapRoom.as:271-272`)", () => {
+  test("each player's share: 15,000,000 of each resource, or 750 Shiny (design v5 §12)", () => {
     expect(chargeRelocation(purse, "resources", INVITE_PRICE)).toEqual({
       ok: true,
       credits: 1_500,
       resources: { r1: 2_000_000, r2: 2_000_000, r3: 2_000_000, r4: 2_000_000 },
     });
-    expect(chargeRelocation(purse, "shiny", INVITE_PRICE)).toMatchObject({ ok: true, credits: 300 });
+    expect(chargeRelocation(purse, "shiny", INVITE_PRICE)).toMatchObject({ ok: true, credits: 750 });
+  });
+
+  test("an invitation without the inviter's choice keeps Flash's deal: the invited player alone, 10M or 1,200", () => {
+    expect(invitedPrice({ hostpayment: null })).toEqual(LEGACY_INVITE_PRICE);
+    expect(LEGACY_INVITE_PRICE).toEqual({ shiny: 1_200, resources: 10_000_000 });
+    expect(invitedPrice({ hostpayment: "shiny" })).toEqual(INVITE_PRICE);
   });
 
   test("the relocation's own price is unchanged when none is given", () => {

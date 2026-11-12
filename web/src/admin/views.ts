@@ -19,10 +19,8 @@ import type { IconName } from "./icons";
  * one is still there on coming back; the scroll position is kept per view
  * ({@link ScrollMemory}).
  *
- * Slots kept for beta 7's two extra views: Photo reports (player profile
- * photos) goes under Moderation, after the list; Weekend events goes under
- * Announcements. Add the view to {@link VIEWS} with that page and it shows as
- * a tab there.
+ * Beta 7's two extra views: Photo reports (player profile photos) is a tab
+ * of Moderation, after the list; Events (Monster Madness, weekend events) is a tab of Announcements.
  */
 
 export const PAGES = [
@@ -40,14 +38,17 @@ export type PageId = (typeof PAGES)[number][0];
 export const VIEWS = [
   ["home", "Home", "home"],
   ["moderation", "Review", "moderation"],
+  ["photos", "Photo reports", "moderation"],
   ["find", "Find a player", "moderation"],
   ["attacks", "Attack log", "moderation"],
+  ["flagged", "Flagged", "moderation"],
   ["moderators", "Moderators", "moderation"],
   ["modmail", "Moderator mail", "moderation"],
   ["bugs", "Bug reports", "support"],
   ["shiny", "Give Shiny", "support"],
   ["chat", "Game chat", "support"],
   ["announcements", "Announcements", "announcements"],
+  ["events", "Events", "announcements"],
   ["players", "Players", "activity"],
   ["activity", "Gameplay", "activity"],
   ["health", "Server health", "server"],
@@ -65,6 +66,9 @@ const ALIASES: Readonly<Record<string, ViewId>> = {
   // addresses (Telegram alerts, the problems box) land on it.
   errors: "health",
   backups: "health",
+  // Beta 7's Weekend events view was `#weekend` before it became a tab of
+  // Announcements (merge of v2.0.0-beta.6.12).
+  weekend: "events",
 };
 
 /**

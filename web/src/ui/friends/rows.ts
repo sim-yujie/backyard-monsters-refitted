@@ -1,6 +1,8 @@
 import { avatarOf, avatarUrl } from "@/game/avatars";
 import { levelLabel } from "@/game/friends/friendText";
+import { modalLayer } from "@/ui/events/WhatsNewDialog";
 import { onlineDot } from "@/ui/onlineDot";
+import { openProfile } from "@/ui/profile/ProfileDialog";
 import { spokenText } from "@/ui/resourceIcon";
 
 /**
@@ -62,6 +64,8 @@ export const playerRow = (
     readonly noteClass?: string;
     readonly actions?: readonly HTMLElement[];
     readonly badges?: readonly RowBadge[];
+    /** Small marks on the level line, after the level (a friend's other world). */
+    readonly marks?: readonly HTMLElement[];
   } = {},
 ): HTMLLIElement => {
   const row = make("li", "friends-row");
@@ -72,7 +76,12 @@ export const playerRow = (
   face.alt = "";
   face.decoding = "async";
   face.loading = "lazy";
-  const faceBox = make("span", "friends-row__face-box");
+  // Tapping the face opens their profile (beta 7).
+  const faceBox = make("button", "friends-row__face-box friends-row__face-button");
+  faceBox.type = "button";
+  faceBox.title = "Profile";
+  faceBox.setAttribute("aria-label", `${player.username}: profile`);
+  faceBox.addEventListener("click", () => void openProfile({ container: modalLayer(), userid: player.userid }));
   faceBox.append(face);
   for (const kind of options.badges ?? []) {
     const { icon, title } = BADGE_TEXT[kind];
@@ -90,6 +99,7 @@ export const playerRow = (
   const level = levelLabel(player.level);
   const meta = make("span", "friends-row__meta");
   if (level) meta.append(make("span", "friends-row__level", level));
+  meta.append(...(options.marks ?? []));
   if (options.note) meta.append(make("span", `friends-row__note ${options.noteClass ?? ""}`.trim(), options.note));
   if (meta.childElementCount > 0) words.append(meta);
 

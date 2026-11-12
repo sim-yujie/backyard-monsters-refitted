@@ -42,8 +42,11 @@ describe("the build menu's Modern pictures", () => {
       modern: true,
     });
     expect(buildPicture(1, "main", true)).toEqual({ url: buttonUrl(1), modern: false });
-    // A building with no new look (type 8): Flash's button either way.
-    expect(buildPicture(8, "main", false)).toEqual({ url: buttonUrl(8), modern: false });
+    // A building with no new look (type 133): Flash's button either way.
+    expect(buildPicture(133, "main", false)).toEqual({ url: buttonUrl(133), modern: false });
+    // The Monster Locker (8) has its 3D look's picture (10 Nov 2026).
+    expect(buildPicture(8, "main", false).url).toMatch(/\/modern\/8\.main\.[0-9a-f]{8}\.webp$/);
+    expect(buildPicture(8, "main", true)).toEqual({ url: buttonUrl(8), modern: false });
   });
 
   it("the Inferno's Incubator Control Centre shows its own 3D look, not the Hatchery Control Center's", () => {
@@ -55,9 +58,17 @@ describe("the build menu's Modern pictures", () => {
   });
 
   it("an Inferno building with no Inferno look of its own keeps its Inferno button", () => {
-    // The main yard's 3D Academy and Twig Snapper are not the Inferno's.
+    // The main yard's 3D Academy and Pebble Shiner are not the Inferno's.
     expect(buildPicture(26, "inferno", false)).toEqual({ url: buttonUrl(26, "inferno"), modern: false });
-    expect(buildPicture(1, "inferno", false)).toEqual({ url: buttonUrl(1, "inferno"), modern: false });
+    expect(buildPicture(2, "inferno", false)).toEqual({ url: buttonUrl(2, "inferno"), modern: false });
+  });
+
+  it("the Inferno's 3D Bone Cruncher has a Modern picture of its own, not the Twig Snapper's", () => {
+    const picture = buildPicture(1, "inferno", false);
+    expect(picture.modern).toBe(true);
+    expect(picture.url).toMatch(/\/modern\/1\.inferno\.[0-9a-f]{8}\.webp$/);
+    expect(picture.url).not.toBe(buildPicture(1, "main", false).url);
+    expect(buildPicture(1, "inferno", true)).toEqual({ url: buttonUrl(1, "inferno"), modern: false });
   });
 
   it("an outpost draws the main yard's pictures", () => {

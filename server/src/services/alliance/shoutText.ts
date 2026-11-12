@@ -1,5 +1,5 @@
-import { POWERUP_LABEL, SHOUT_TEXT, STANCE_LABEL } from "../../config/AllianceConfig.js";
-import { AllianceMessageType, type AllianceStance, type AlliancePowerupType } from "../../enums/Alliance.js";
+import { ALLIANCE_TYPES, CONSTELLATIONS, GOAL_MENU, SHOUT_TEXT, STANCE_LABEL } from "../../config/AllianceConfig.js";
+import { AllianceMessageType, type AllianceStance, type AllianceType } from "../../enums/Alliance.js";
 import type { Alliance } from "../../database/models/alliance.model.js";
 
 
@@ -37,53 +37,108 @@ const createRelationshipShoutText = (allianceName: string, relationship: Allianc
   return `"${allianceName}" ${verb} been flagged as ${STANCE_LABEL[relationship]}`;
 };
 
+/** What an under-attack line stores in `body`: the yard's cell, whether it is an outpost, and the attacker. */
+export interface UnderAttackFacts {
+  x: number;
+  y: number;
+  outpost: boolean;
+  by: string;
+}
+
 /**
- * Builds the shout for a leader starting a power-up.
+ * The stored `body` of an under-attack line (beta 7 design v5 §12).
  *
- * @param {string} username - The leader who activated it.
- * @param {string} body - The stored power-up type.
- * @returns {string} The finished sentence, or empty if the type is unknown.
+ * @param {UnderAttackFacts} facts - The attacked yard and who attacked it.
+ * @returns {string} JSON, read back by {@link readUnderAttack}.
  */
-const createPowerupActivatedText = (username: string, body: string) => {
-  const label = POWERUP_LABEL[body as AlliancePowerupType];
+export const underAttackBody = (facts: UnderAttackFacts): string => JSON.stringify(facts);
 
-  if (!label) return "";
+/**
+ * Reads an under-attack line's stored body; null for anything that is not one.
+ *
+ * @param {string} body - The stored body.
+ * @returns {UnderAttackFacts | null} The facts, or null when the body is not a valid one.
+ */
+export const readUnderAttack = (body: string): UnderAttackFacts | null => {
+  try {
+    const facts = JSON.parse(body) as Partial<UnderAttackFacts> | null;
 
-  return `${username} activated the ${label} Power-Up!`;
+    if (!facts || !Number.isInteger(facts.x) || !Number.isInteger(facts.y) || typeof facts.by !== "string") return null;
+
+    return { x: facts.x!, y: facts.y!, outpost: facts.outpost === true, by: facts.by };
+  } catch {
+    return null;
+  }
 };
 
 /**
- * Builds the shout for a member spending Shiny on a power-up's charge.
+ * The map cell an automatic line is about, for the chat box's Show on map:
+ * an under-attack line's yard; nothing for any other line.
  *
- * @param {string} username - The member who paid.
- * @param {string} body - JSON: the power-up type and hours bought.
- * @returns {string} The finished sentence, or empty if the payload is unusable.
+ * @param {AllianceMessageType} type - The line's type.
+ * @param {string} body - Its stored body.
+ * @returns {{ x: number; y: number } | undefined} The cell, or undefined.
  */
-const createPowerupPurchaseText = (username: string, body: string) => {
-  let payload: { powerup?: string; hours?: number };
+type TradeKey = "r1" | "r2" | "r3" | "r4";
 
-  try {
-    payload = JSON.parse(body);
-  } catch {
-    return "";
-  }
+/** What a request line stores: the request, and the swap ("I give 1K Twigs, I want 1K Goo"). */
+export interface TradeAskFacts {
+  request: number;
+  give: TradeKey;
+  want: TradeKey;
+  amount: number;
+}
 
-  const label = POWERUP_LABEL[payload.powerup as AlliancePowerupType];
-  const hours = Number(payload.hours);
+/**
+ * What a trade-done line stores. A Send: who got it and what arrived. A
+ * swap: who it was `with`, what the accepter `gave` and `got` (as arrived).
+ */
+export type TradeDoneFacts =
+  | { to: string; arrived: Partial<Record<TradeKey, number>> }
+  | { with: string; gave: Partial<Record<TradeKey, number>>; got: Partial<Record<TradeKey, number>> };
 
-  if (!label || !hours) return "";
+const RESOURCE_WORDS: Record<string, string> = { r1: "Twigs", r2: "Pebbles", r3: "Putty", r4: "Goo" };
 
-  return `${username} has reduced the ${label} Power-Up by ${hours} ${hours === 1 ? "hour" : "hours"}.`;
+/** "2.0M Goo, 500K Twigs" */
+export const amountsText = (amounts: Partial<Record<string, number>>): string =>
+  Object.entries(amounts)
+    .filter(([key, value]) => RESOURCE_WORDS[key] && Number(value) > 0)
+    .map(([key, value]) => `${shortAmount(Number(value))} ${RESOURCE_WORDS[key]}`)
+    .join(", ");
+
+/** 2,000,000 as "2.0M", 500,000 as "500K", 950 as "950". */
+export const shortAmount = (value: number): string => {
+  if (value >= 1_000_000) return `${(Math.floor(value / 100_000) / 10).toFixed(1)}M`;
+  if (value >= 1_000) return `${Math.floor(value / 1_000)}K`;
+  return String(Math.floor(value));
+};
+
+/**
+ * The trade request an automatic line is about, for the chat box's Give;
+ * nothing for any other line.
+ */
+export const shoutTradeRequest = (type: AllianceMessageType, body: string): number | undefined => {
+  if (type !== AllianceMessageType.TRADE_ASK) return undefined;
+  const facts = readJson<Partial<TradeAskFacts>>(body);
+  return Number.isInteger(facts?.request) ? facts!.request : undefined;
+};
+
+export const shoutCell = (type: AllianceMessageType, body: string): { x: number; y: number } | undefined => {
+  if (type !== AllianceMessageType.UNDER_ATTACK) return undefined;
+
+  const facts = readUnderAttack(body);
+
+  return facts ? { x: facts.x, y: facts.y } : undefined;
 };
 
 /**
  * Picks the right builder for a stored row.
  *
  * The membership shouts are the default: their whole sentence is the author's
- * name plus a fixed suffix. The three cases above it each need something the
+ * name plus a fixed suffix. The cases above it each need something the
  * author does not carry, which is what `body` is for - a relationship shout
- * stores its flag value, an activation the power-up started, a purchase the
- * power-up and the hours bought.
+ * stores its flag value, a type change the new type, a rename the new name.
+ * Rows of a kind no longer built (the old power-up shouts) fall to the default.
  *
  * @param {AllianceMessageType} type - Which shout this is.
  * @param {string} username - The author, subject of every membership shout.
@@ -91,13 +146,90 @@ const createPowerupPurchaseText = (username: string, body: string) => {
  * @param {ShoutTarget} targetAlliance - The flagged alliance, present only on a relationship shout.
  * @returns {string} The finished sentence, or empty if it cannot be built.
  */
+/** A JSON body, or null. */
+const readJson = <T>(body: string): T | null => {
+  try {
+    return JSON.parse(body) as T;
+  } catch {
+    return null;
+  }
+};
+
+/** A constellation's name from its id, whatever the type. */
+const constellationName = (id: string | undefined): string | null =>
+  (id && Object.values(CONSTELLATIONS).flat().find((c) => c.id === id)?.name) || null;
+
 export const composeShout = (type: AllianceMessageType, username: string, body: string, targetAlliance?: ShoutTarget) => {
   switch (type) {
-    case AllianceMessageType.POWERUP_ACTIVATED:
-      return createPowerupActivatedText(username, body);
+    case AllianceMessageType.TYPE_CHANGED: {
+      const label = ALLIANCE_TYPES[body as AllianceType]?.label;
 
-    case AllianceMessageType.POWERUP_PURCHASE:
-      return createPowerupPurchaseText(username, body);
+      return label ? `${username} made the alliance a ${label}.` : "";
+    }
+
+    case AllianceMessageType.RENAMED:
+      return body ? `${username} renamed the alliance to ${body}.` : "";
+
+    case AllianceMessageType.UNDER_ATTACK: {
+      const facts = readUnderAttack(body);
+
+      if (!facts) return "";
+
+      // "Ana_B's outpost (12, 40) is under attack by Bob!" (design v5 §12).
+      return `${username}'s ${facts.outpost ? "outpost" : "yard"} (${facts.x}, ${facts.y}) is under attack by ${facts.by}!`;
+    }
+
+    case AllianceMessageType.STAR_LIT:
+    case AllianceMessageType.STAR_SUGGESTED: {
+      const facts = readJson<{ id?: string; step?: number }>(body);
+      const name = constellationName(facts?.id);
+      const step = Number(facts?.step);
+      if (!name || !(step >= 1)) return "";
+      const stars = `${name} ★${step}`;
+
+      // "Mira lit Pokey ★3." / "Hexa suggests Brain ★3." (one star a step, owner 12 Nov)
+      return type === AllianceMessageType.STAR_LIT ? `${username} lit ${stars}.` : `${username} suggests ${stars}.`;
+    }
+
+    case AllianceMessageType.GOAL_SET:
+    case AllianceMessageType.GOAL_DONE: {
+      const facts = readJson<{ kind?: string; tier?: string; points?: number }>(body);
+      const goal = GOAL_MENU.find((g) => g.kind === facts?.kind)?.name;
+      if (!goal || !facts?.tier) return "";
+      const tier = facts.tier.charAt(0).toUpperCase() + facts.tier.slice(1);
+
+      return type === AllianceMessageType.GOAL_SET
+        ? `${username} set a goal: ${goal} (${tier}).`
+        : `Goal reached: ${goal} (${tier}), +${Number(facts.points) || 0} points!`;
+    }
+
+    case AllianceMessageType.TRADE_ASK: {
+      const facts = readJson<Partial<TradeAskFacts>>(body);
+      const amount = Number(facts?.amount);
+      const give = amountsText({ [String(facts?.give)]: amount });
+      const want = amountsText({ [String(facts?.want)]: amount });
+      if (!give || !want) return "";
+
+      // "PebbleKing gives 1K Twigs for 1K Goo." (owner, 11 Nov 2026: a 1:1 swap)
+      return `${username} gives ${give} for ${want}.`;
+    }
+
+    case AllianceMessageType.TRADE_DONE: {
+      const facts = readJson<Record<string, unknown>>(body);
+      if (typeof facts?.["with"] === "string") {
+        const gave = amountsText((facts["gave"] ?? {}) as Record<string, number>);
+        const got = amountsText((facts["got"] ?? {}) as Record<string, number>);
+        if (!gave || !got) return "";
+
+        // "Mira and Thornback traded: 900 Goo for 900 Twigs." (what each got)
+        return `${username} and ${facts["with"]} traded: ${gave} for ${got}.`;
+      }
+      const what = amountsText((facts?.["arrived"] ?? {}) as Record<string, number>);
+      if (!what || typeof facts?.["to"] !== "string") return "";
+
+      // "Mira gave Thornback 800K Goo." (design v5 §12b)
+      return `${username} gave ${facts["to"]} ${what}.`;
+    }
 
     case AllianceMessageType.RELATIONSHIP:
       if (!targetAlliance) return "";

@@ -43,6 +43,16 @@ export interface ChatLineWire {
   gm?: boolean;
   /** Said by a chat moderator: the server sets it, only for accounts on the dashboard's Moderators list (never with `gm`). */
   mod?: boolean;
+  /**
+   * An Alliance room line's kind: `message` for one a member said, anything
+   * else for an automatic line (joins, leaves, an under-attack alert). Absent
+   * in the other rooms.
+   */
+  messageType?: string;
+  /** The map cell an automatic line is about (an under-attack alert): Show on map. */
+  cell?: { x: number; y: number };
+  /** A trade request line's request, for the chat box's Give (alliance trading). */
+  tradeRequest?: number;
 }
 
 /** The error codes the chat server answers with. */
@@ -68,13 +78,16 @@ export type ChatServerMessage =
   /** A player's level changed (#232): their name for the lines still to come. */
   | { type: "name_update"; channel: string; userId: number; displayName: string }
   | { type: "ignore_list"; list: { target: string; displayname: string }[] }
-  | { type: "error"; code: ChatErrorCode; until?: number }
+  /** `channel`: on a refused join, the room asked for. */
+  | { type: "error"; code: ChatErrorCode; until?: number; channel?: string }
   /** Banned by the game team: the server closes the socket after it. */
   | { type: "kicked"; reason: "banned"; until: number | null; text: string; banReason?: string }
   /** The game team left a warning or mute to show (`api/moderation.ts`). */
   | { type: "notice" }
   /** New mail for this player: the game asks `/player/mailstatus` what came (owner, beta 7). */
-  | { type: "mail" };
+  | { type: "mail" }
+  /** Taken out of a room: left or was kicked from the alliance (beta 7). */
+  | { type: "left"; channel: string };
 
 /** Everything needed to reach world chat, from the owner's yard load. */
 export interface ChatConfig {
@@ -88,7 +101,25 @@ export interface ChatConfig {
   readonly countryChannel?: string | null;
   /** That room's country, ISO 3166-1 alpha-2, for its tab. */
   readonly country?: string | null;
+  /** The player's alliance, for the Alliance room between Global and the country room (beta 7); null when in none. */
+  readonly alliance?: ChatAlliance | null | undefined;
 }
+
+/** The player's alliance as the chat box shows it: its id, name and shield (1 to 41). */
+export interface ChatAlliance {
+  readonly id: number;
+  readonly name: string;
+  readonly image: number;
+}
+
+/** The alliance on an own-yard load (`alliancedata`), or null for none or a malformed one. */
+export const chatAllianceOf = (data: unknown): ChatAlliance | null => {
+  if (!data || typeof data !== "object") return null;
+  const row = data as { alliance_id?: unknown; name?: unknown; image?: unknown };
+  const id = Number(row.alliance_id);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  return { id, name: String(row.name ?? ""), image: Number(row.image) || 1 };
+};
 
 /**
  * The socket's address for a `chatservers` entry. The server names it as
@@ -109,6 +140,7 @@ export const chatConfigFrom = (
     chatchannel?: string;
     chatcountrychannel?: string;
     chatcountry?: string;
+    alliancedata?: unknown;
   },
   userId: number,
   secure: boolean,
@@ -123,6 +155,7 @@ export const chatConfigFrom = (
     channel: load.chatchannel,
     countryChannel: country ? (load.chatcountrychannel ?? null) : null,
     country,
+    alliance: chatAllianceOf(load.alliancedata),
   };
 };
 

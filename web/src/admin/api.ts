@@ -448,6 +448,69 @@ export const fetchAttackLog = (userid: number, query: AttackLogQuery): Promise<E
     beforeId: query.before?.id,
   });
 
+// ---- Flagged players (server: services/admin/flaggedPlayers.ts) ----
+
+/** fight: the attack save disagreed with the server's replay; economy: a yard save broke a rule; attack: a tampered attack load. */
+export type CheatKind = "fight" | "economy" | "attack" | "other";
+/** refused: the server did not take the save; flagged: taken and only recorded. */
+export type CheatOutcome = "refused" | "flagged";
+
+/**
+ * What a yard is: one with a save row ("yard"), one with none (an Inferno
+ * Descent yard, a Moloch tribe, a Map Room 1 tribe), or "unknown" for an old
+ * fight entry that did not say.
+ */
+export type CheatYardKind = "yard" | "descent" | "inferno-tribe" | "mr1-tribe" | "unknown";
+
+export interface CheatYard {
+  /** Tells yards apart: "save:1200", "descent:201", "base:201"... */
+  key: string;
+  kind: CheatYardKind;
+  /** The base id; "" for a save no row has any more. */
+  baseid: string;
+  /** The yard's owner now; null when no yard has that base id any more. */
+  owner: { userid: number; username: string; bot: boolean } | null;
+  type: string | null;
+}
+
+export interface CheatEntry {
+  time: string;
+  kind: CheatKind;
+  outcome: CheatOutcome | null;
+  /** The fight's fields or the economy's rules that did not match. */
+  fields: string[];
+  baseid: string | null;
+  message: string;
+  yard: CheatYard | null;
+}
+
+export interface CheatPlayer {
+  userid: number;
+  username: string;
+  banned: boolean;
+  gone: boolean;
+  violations: number;
+  attackViolations: number;
+  counts: {
+    fight: Record<CheatOutcome, number>;
+    economy: Record<CheatOutcome, number>;
+    attack: number;
+    other: number;
+  };
+  fields: { name: string; count: number }[];
+  yards: (CheatYard & { count: number })[];
+  first: string | null;
+  last: string | null;
+  entries: number;
+  banReason: { message: string; time: string | null } | null;
+}
+
+export const fetchCheatPlayers = (): Promise<Envelope<{ players: CheatPlayer[] }>> => adminGet(`${ADMIN}/flagged`);
+
+export const fetchCheatPlayer = (
+  userid: number,
+): Promise<Envelope<{ player: CheatPlayer; history: CheatEntry[] }>> => adminGet(`${ADMIN}/flagged/${userid}`);
+
 export const fetchShinyAwards = (
   before?: number,
 ): Promise<
@@ -601,6 +664,8 @@ export interface PlayerModeration {
   /** A game team account: cannot be warned, paused or banned. */
   gameTeam: boolean;
   reportsAgainst: number;
+  /** Their weekly quests' pace: Fighting and Resources multipliers (1 = normal); null before they had one. */
+  questPace?: { fighting: number; resources: number } | null;
   log: ModerationEntry[];
 }
 
@@ -974,6 +1039,160 @@ export const awardCaseReporters = (
     failed: { userid: number; reason: AwardFailure }[];
   }>
 > => adminPost(`${ADMIN}/chatcases/${id}/award`, { awards });
+
+/** Profile photo reports (server `services/admin/photoReports.ts`): one case per player. */
+export interface PhotoReporterView {
+  userid: number;
+  username: string | null;
+  at: string;
+  /** Which upload they reported: older than the photo shown means it was replaced since. */
+  version: number;
+}
+
+export type PhotoAction = "keep" | "remove" | "block" | "unblock";
+export type PhotoOutcome = "kept" | "removed" | "blocked" | "replaced";
+
+export interface PhotoCaseView {
+  userid: number;
+  username: string | null;
+  banned: boolean;
+  /** The photo now, as a data URL, hidden or not; null when there is none. */
+  photo: string | null;
+  photoVersion: number;
+  hidden: boolean;
+  blocked: boolean;
+  /** The owner kept this upload before. */
+  kept: boolean;
+  reporters: PhotoReporterView[];
+  firstReportAt: string | null;
+  lastReportAt: string | null;
+  closed: { outcome: PhotoOutcome; at: string; by: number | null; byName: string | null } | null;
+}
+
+export interface PhotoCaseList {
+  cases: PhotoCaseView[];
+  /** Players with open reports, in all. */
+  open: number;
+  nextOffset: number | null;
+  /** Reports from this many players hide a photo. */
+  hideAt: number;
+}
+
+export const fetchPhotoCases = (status: "open" | "closed", offset?: number): Promise<Envelope<PhotoCaseList>> =>
+  adminGet(`${ADMIN}/photoreports`, { status, offset, limit: 30 });
+
+export const actOnPhoto = (userid: number, action: PhotoAction): Promise<Envelope<{ case: PhotoCaseView }>> =>
+  adminPost(`${ADMIN}/photoreports/${userid}/act`, { action });
+
+/* ── Weekend events (`server/src/controllers/admin/weekend.ts`) ─────────── */
+
+export type WeekendEventId = "builders" | "plunder" | "study" | "hatch";
+
+export interface WeekendSettingsView {
+  enabled: boolean;
+  rotation: WeekendEventId[];
+  percent: Record<WeekendEventId, number>;
+  /** `YYYY-MM-DD`, a Saturday. */
+  firstWeekend: string;
+  utcOffsetMinutes: number;
+  lengthHours: number;
+  announceHours: number;
+  overrides: Record<string, WeekendEventId | "skip">;
+  forced: { id: WeekendEventId; since: number; until: number } | null;
+}
+
+export interface WeekendRunView {
+  id: WeekendEventId;
+  title: string;
+  line: string;
+  percent: number;
+  key: string;
+  startsAt: number;
+  endsAt: number;
+  announceAt: number;
+  forced: boolean;
+}
+
+export interface WeekendPlanRowView {
+  key: string;
+  startsAt: number;
+  rotation: WeekendEventId | null;
+  override: WeekendEventId | "skip" | null;
+  runs: WeekendEventId | null;
+}
+
+export interface WeekendPanelView {
+  now: number;
+  settings: WeekendSettingsView;
+  updatedAt: number | null;
+  updatedBy: number | null;
+  state: { active: WeekendRunView | null; next: WeekendRunView | null };
+  plan: WeekendPlanRowView[];
+  /** A local `WEEKEND_FORCE` the server was started with (never in production). */
+  envForced: WeekendEventId | null;
+  events: { id: WeekendEventId; title: string; line: string }[];
+  limits: {
+    minPercent: number;
+    maxPercent: number;
+    minOffsetMinutes: number;
+    maxOffsetMinutes: number;
+    minLengthHours: number;
+    maxLengthHours: number;
+    maxAnnounceHours: number;
+    maxForceHours: number;
+  };
+}
+
+/** One change from the dashboard; the server checks every value again. */
+export type WeekendChange =
+  | {
+      action: "settings";
+      enabled?: boolean;
+      rotation?: WeekendEventId[];
+      percent?: Partial<Record<WeekendEventId, number>>;
+      firstWeekend?: string;
+      utcOffsetMinutes?: number;
+      lengthHours?: number;
+      announceHours?: number;
+    }
+  | { action: "weekend"; weekend: string; event: WeekendEventId | "skip" | null }
+  | { action: "force"; event: WeekendEventId; hours: number }
+  | { action: "stopForce" }
+  | { action: "reset" };
+
+export const fetchWeekend = (): Promise<Envelope<WeekendPanelView>> => adminGet(`${ADMIN}/weekend`);
+
+export const changeWeekend = (change: WeekendChange): Promise<Envelope<WeekendPanelView>> =>
+  adminPost(`${ADMIN}/weekend`, change as unknown as JsonBody);
+
+/* ── Monster Madness (`server/src/controllers/admin/monsterMadness.ts`) ── */
+
+/** One run, unix seconds; a stopped run ends when it was stopped. */
+export interface MonsterMadnessRunView {
+  startsAt: number;
+  endsAt: number;
+}
+
+export interface MonsterMadnessPanelView {
+  now: number;
+  /** The run on now, or null: the event is off. */
+  running: MonsterMadnessRunView | null;
+  /** The latest run, on or over. */
+  last: MonsterMadnessRunView | null;
+  /** How long a started run lasts. */
+  days: number;
+  /** The three goals, in points; each pays one of Korath's powers. */
+  goals: number[];
+  updatedAt: string | null;
+  updatedBy: number | null;
+}
+
+export const fetchMonsterMadness = (): Promise<Envelope<MonsterMadnessPanelView>> =>
+  adminGet(`${ADMIN}/monster-madness`);
+
+/** Starts a run from now, or stops the one on now. 409 `alreadyRunning` / `notRunning`. */
+export const changeMonsterMadness = (action: "start" | "stop"): Promise<Envelope<MonsterMadnessPanelView>> =>
+  adminPost(`${ADMIN}/monster-madness`, { action });
 
 /**
  * Chat moderators (server `services/admin/chatModerators.ts`): players whose

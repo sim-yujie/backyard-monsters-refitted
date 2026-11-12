@@ -1,10 +1,11 @@
-import { friendRefusal, type FriendsApi, type Gift, type GiftResource, type ResourceAmounts } from "@/api/friends";
+import { friendRefusal, GIFT_WISH_MAX, type FriendsApi, type Gift, type GiftResource, type ResourceAmounts } from "@/api/friends";
 import type { FriendsStore } from "@/game/friends/friendsStore";
 import { playerPool, type PlayerPool } from "@/game/friends/friendsView";
 import { formatAmount } from "@/ui/format";
-import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount } from "@/ui/resourceIcon";
+import { RESOURCE_KEYS, resourceAmount, resourceIcon, resourceName } from "@/ui/resourceIcon";
 import { openGiftPicker, type GiftTarget } from "./GiftPicker";
 import { button, make, playerRow, section, StatusLine, type FriendsTabView } from "./rows";
+import { wishesSummary, wishMark } from "./wishMark";
 
 /**
  * The Friends screen's **Gifts** tab (`docs/design/friends.md` §3.4, issue
@@ -12,8 +13,22 @@ import { button, make, playerRow, section, StatusLine, type FriendsTabView } fro
  * **Collect** and **Send one back**, and **Collect all** above them.
  * Collecting adds the resource to the main yard up to its storage cap; when
  * there is not room for all of it, the first press warns and a second one
- * collects anyway. At most 5 a day; the rest wait, and a gift lapses after 7
- * days. Fetched fresh each time the tab comes forward.
+ * collects anyway. At most 10 a day (owner, 9 Nov 2026: was 5); the rest
+ * wait, and a gift lapses after 7 days. Fetched fresh each time the tab comes
+ * forward.
+ *
+ * Deleting (owner, 9 Nov 2026): each gift has the look's painted close disc;
+ * pressing it turns the row into "Delete?" with **Delete** and **Cancel**.
+ * With 2 or more waiting, **Delete all** sits beside Collect all and asks the
+ * same way. A deleted gift gives nothing and uses none of the day's collects.
+ *
+ * Above the gifts, **My wishes** (#391; ranked since the owner's 7 Nov
+ * note): four resource tiles; tapping one adds it as the next wish (1, 2, 3,
+ * shown by the painted wish marker on its corner), tapping it again takes it
+ * out and the ones after move up. One wish alone means "that one only", and
+ * the line beside the title says so ("Goo only"); two or three read "Goo >
+ * Twigs". Friends see them in that order when they send a gift. Saved at
+ * once; a failed save puts the last saved wishes back.
  */
 
 export interface GiftsTabOptions {
@@ -40,7 +55,7 @@ export const lapseText = (expiresAt: number, now: number): string => {
 /** "300 Twigs and 1,200 Goo". */
 const amountsText = (amounts: ResourceAmounts): string => {
   const parts = RESOURCE_KEYS.filter((key) => (amounts[key] ?? 0) > 0).map(
-    (key) => `${formatAmount(amounts[key] ?? 0)} ${RESOURCE_NAMES[key]}`,
+    (key) => `${formatAmount(amounts[key] ?? 0)} ${resourceName(key, "surface")}`,
   );
   if (parts.length <= 1) return parts[0] ?? "nothing";
   return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
@@ -78,13 +93,21 @@ export const GIFTS_TEXT = {
   collectAllAnyway: "Collect all anyway",
   sendBack: "Send one back",
   sentBack: "Gift sent today",
-  left: (count: number): string =>
-    count > 0 ? `You can collect ${count} more ${count === 1 ? "gift" : "gifts"} today.` : "You have collected all you can today. The rest will wait.",
+  /** The daily counter: short, the number first (owner: numbers over words). */
+  left: (count: number): string => (count > 0 ? `${count} left today` : "None left today. The rest wait."),
+  delete: "Delete",
+  /** The painted disc's name, for a screen reader and a mouse hover. */
+  deleteTitle: "Delete gift",
+  deleteAsk: "Delete? You get nothing.",
+  deleteAll: "Delete all",
+  deleteAllAsk: (count: number): string => `Delete all ${count}?`,
+  cancel: "Cancel",
+  deleted: (count: number): string => (count === 1 ? "Gift deleted." : `${count} gifts deleted.`),
   /** "Collected · [twig] +1,000 [goo] +500", green with a plus as gains (owner, 28 Oct). */
   collected: (amounts: ResourceAmounts): HTMLElement => {
     const line = document.createElement("span");
     const gained = RESOURCE_KEYS.filter((key) => (amounts[key] ?? 0) >= 1).map((key) =>
-      resourceAmount(key, amounts[key] ?? 0, { change: "gain" }),
+      resourceAmount(key, amounts[key] ?? 0, { change: "gain", realm: "surface" }),
     );
     if (gained.length === 0) {
       line.append("Collected · nothing");
@@ -100,6 +123,10 @@ export const GIFTS_TEXT = {
   short: (lost: ResourceAmounts): string =>
     `Your storage is too full: ${amountsText(lost)} would be lost. Press again to collect anyway.`,
   underAttack: "Your yard is under attack right now. Collect when the attack is over.",
+  wishes: "My wishes",
+  /** The line beside the title with no wishes yet. */
+  wishesHint: `Tap up to ${GIFT_WISH_MAX}, best first`,
+  wishesFailed: "Your wishes could not be saved. Try again.",
 } as const;
 
 export class GiftsTab implements FriendsTabView {
@@ -110,12 +137,20 @@ export class GiftsTab implements FriendsTabView {
   private readonly summary: HTMLElement;
   private readonly status = new StatusLine();
   private readonly body: HTMLElement;
+  private readonly wishBar: HTMLElement;
   private gifts: Gift[] = [];
+  /** The wishes shown (saved or being saved), and the last the server confirmed. */
+  private wishes: GiftResource[] = [];
+  private savedWishes: GiftResource[] = [];
+  /** Bumped by every wish save, so only the latest answer counts. */
+  private wishSave = 0;
   private collectsLeft = 0;
   private loaded = false;
   private busy = false;
   /** The gift id (or "all") whose short-storage warning is showing: the next press collects. */
   private warned: number | "all" | null = null;
+  /** The gift id (or "all") whose "Delete?" question is showing. */
+  private asking: number | "all" | null = null;
   /** Bumped by every fetch, so a late answer is dropped. */
   private generation = 0;
   private destroyed = false;
@@ -126,7 +161,8 @@ export class GiftsTab implements FriendsTabView {
     this.element = make("div", "friends-tab friends-tab--gifts");
     this.summary = make("div", "friends-summary gifts-summary");
     this.body = make("div", "friends-tab__body");
-    this.element.append(this.summary, this.status.element, this.body);
+    this.wishBar = make("div", "gift-wishes");
+    this.element.append(this.summary, this.wishBar, this.status.element, this.body);
   }
 
   get statusText(): string {
@@ -136,11 +172,17 @@ export class GiftsTab implements FriendsTabView {
   async show(): Promise<void> {
     const generation = ++this.generation;
     this.warned = null;
+    this.asking = null;
     if (!this.loaded) this.status.set(GIFTS_TEXT.loading);
     try {
-      const { gifts, collectsLeft } = await this.options.api.gifts();
+      const { gifts, collectsLeft, wishes } = await this.options.api.gifts();
       if (this.destroyed || generation !== this.generation) return;
       this.gifts = [...gifts];
+      // Not while a wish change is still being saved.
+      if (this.sameWishes(this.wishes, this.savedWishes)) {
+        this.wishes = [...wishes];
+        this.savedWishes = [...wishes];
+      }
       this.collectsLeft = collectsLeft;
       this.loaded = true;
       if (this.status.text === GIFTS_TEXT.loading) this.status.set(null);
@@ -161,17 +203,13 @@ export class GiftsTab implements FriendsTabView {
   private render(): void {
     if (!this.loaded) return;
     const now = this.now();
-    const all = button(
-      this.warned === "all" ? GIFTS_TEXT.collectAllAnyway : GIFTS_TEXT.collectAll,
-      () => void this.collect("all"),
-      "primary",
-    );
-    all.classList.add("gifts-summary__all");
-    all.disabled = this.busy || this.gifts.length === 0 || this.collectsLeft === 0;
-    const line = make("p", "gifts-summary__left", GIFTS_TEXT.left(this.collectsLeft));
-    this.summary.replaceChildren(line, all);
+    if (this.asking === "all" && this.gifts.length < 2) this.asking = null;
+    if (typeof this.asking === "number" && !this.gifts.some((gift) => gift.id === this.asking)) this.asking = null;
+    this.renderSummary();
+    this.renderWishes();
 
     const rows = this.gifts.map((gift) => {
+      if (this.asking === gift.id) return this.askRow(gift);
       const collect = button(
         this.warned === gift.id ? GIFTS_TEXT.collectAnyway : GIFTS_TEXT.collect,
         () => void this.collect(gift),
@@ -182,13 +220,165 @@ export class GiftsTab implements FriendsTabView {
       back.disabled = this.busy || !gift.canSendBack;
       const row = playerRow(gift, {
         ...(gift.expiresAt !== null && { note: lapseText(gift.expiresAt, now) }),
-        actions: [collect, back],
+        actions: [collect, back, this.deleteButton(gift)],
       });
       row.dataset["giftid"] = String(gift.id);
-      row.querySelector(".friends-row__text")?.append(resourceAmount(gift.resource, gift.amount, { change: "gain", className: "gift-amount" }));
+      row.querySelector(".friends-row__text")?.append(resourceAmount(gift.resource, gift.amount, { change: "gain", className: "gift-amount", realm: "surface" }));
       return row;
     });
     this.body.replaceChildren(section(GIFTS_TEXT.waiting, rows, GIFTS_TEXT.none));
+  }
+
+  /** The line above the list: "10 left today", Delete all (2 or more waiting), Collect all; or the Delete all question. */
+  private renderSummary(): void {
+    const buttons = make("div", "gifts-summary__buttons");
+    this.summary.classList.toggle("gifts-summary--confirm", this.asking === "all");
+    if (this.asking === "all") {
+      const yes = button(GIFTS_TEXT.deleteAll, () => void this.remove("all"), "danger");
+      yes.disabled = this.busy;
+      buttons.append(yes, button(GIFTS_TEXT.cancel, () => this.ask(null)));
+      this.summary.replaceChildren(make("p", "gifts-summary__left gifts-summary__ask", GIFTS_TEXT.deleteAllAsk(this.gifts.length)), buttons);
+      return;
+    }
+    if (this.gifts.length >= 2) {
+      // Red in both looks: it throws gifts away, unlike the friendly plates beside it.
+      const dropAll = button(GIFTS_TEXT.deleteAll, () => this.ask("all"), "danger");
+      dropAll.classList.add("gifts-summary__delete-all");
+      dropAll.disabled = this.busy;
+      buttons.append(dropAll);
+    }
+    const all = button(
+      this.warned === "all" ? GIFTS_TEXT.collectAllAnyway : GIFTS_TEXT.collectAll,
+      () => void this.collect("all"),
+      "primary",
+    );
+    all.classList.add("gifts-summary__all");
+    all.disabled = this.busy || this.gifts.length === 0 || this.collectsLeft === 0;
+    buttons.append(all);
+    this.summary.replaceChildren(make("p", "gifts-summary__left", GIFTS_TEXT.left(this.collectsLeft)), buttons);
+  }
+
+  /** The look's painted close disc; its words only for a screen reader and a hover. */
+  private deleteButton(gift: Gift): HTMLButtonElement {
+    const node = make("button", "btn btn--ghost btn--icon friends-row__action gift-delete");
+    node.type = "button";
+    node.title = GIFTS_TEXT.deleteTitle;
+    node.setAttribute("aria-label", `${GIFTS_TEXT.deleteTitle}: ${gift.username}`);
+    node.disabled = this.busy;
+    node.append(make("span", "gift-delete__disc"));
+    node.addEventListener("click", () => this.ask(gift.id));
+    return node;
+  }
+
+  /** A gift's row asking "Delete?": the amount stays in view, so the player sees what goes. */
+  private askRow(gift: Gift): HTMLLIElement {
+    const yes = button(GIFTS_TEXT.delete, () => void this.remove(gift), "danger");
+    yes.disabled = this.busy;
+    const no = button(GIFTS_TEXT.cancel, () => this.ask(null));
+    const row = playerRow(gift, { note: GIFTS_TEXT.deleteAsk, actions: [yes, no] });
+    row.classList.add("friends-row--confirm");
+    row.dataset["giftid"] = String(gift.id);
+    row.querySelector(".friends-row__text")?.append(resourceAmount(gift.resource, gift.amount, { className: "gift-amount", realm: "surface" }));
+    return row;
+  }
+
+  /** Shows (or with null, closes) the "Delete?" question for one gift or for all. */
+  private ask(which: number | "all" | null): void {
+    if (this.busy) return;
+    this.asking = which;
+    this.warned = null;
+    this.render();
+  }
+
+  /** Deletes one gift or every one waiting; nothing is given and no collect is used. */
+  private async remove(which: Gift | "all"): Promise<void> {
+    if (this.busy) return;
+    this.asking = null;
+    this.busy = true;
+    this.render();
+    try {
+      const answer = await this.options.api.deleteGifts(which === "all" ? "all" : which.id);
+      this.gifts = which === "all" ? [] : this.gifts.filter((gift) => gift.id !== which.id);
+      this.collectsLeft = answer.collectsLeft;
+      this.options.store.setGiftsWaiting(answer.giftsWaiting);
+      this.status.set(GIFTS_TEXT.deleted(Math.max(1, answer.deleted)));
+      // The list as the server has it (a gift may have come in meanwhile).
+      if (answer.giftsWaiting !== this.gifts.length) void this.show();
+    } catch (caught) {
+      const refusal = friendRefusal(caught);
+      this.status.set(refusal.message, "error");
+      if (refusal.reason === "noSuchGift" && which !== "all") {
+        this.gifts = this.gifts.filter((gift) => gift.id !== which.id);
+        this.options.store.setGiftsWaiting(this.gifts.length);
+      }
+    } finally {
+      this.busy = false;
+      if (!this.destroyed) this.render();
+    }
+  }
+
+  /** The "My wishes" strip: one toggle per resource, ranked by the marker, the others off once 3 are on. */
+  private renderWishes(): void {
+    const full = this.wishes.length >= GIFT_WISH_MAX;
+    const toggles = make("div", "gift-wishes__toggles");
+    for (const key of RESOURCE_KEYS) {
+      const rank = this.wishes.indexOf(key) + 1;
+      const on = rank > 0;
+      const toggle = make("button", on ? "gift-wish gift-wish--on" : "gift-wish");
+      toggle.type = "button";
+      toggle.dataset["resource"] = key;
+      toggle.setAttribute("aria-pressed", String(on));
+      toggle.setAttribute("aria-label", on ? `${resourceName(key, "surface")} (wish ${rank})` : resourceName(key, "surface"));
+      toggle.title = resourceName(key, "surface");
+      toggle.disabled = !on && full;
+      toggle.append(resourceIcon(key, { decorative: true, realm: "surface" }));
+      if (on) {
+        toggle.dataset["rank"] = String(rank);
+        toggle.append(wishMark(rank, "gift-wish__mark"));
+      }
+      toggle.addEventListener("click", () => void this.toggleWish(key));
+      toggles.append(toggle);
+    }
+    toggles.setAttribute("role", "group");
+    toggles.setAttribute("aria-label", "My gift wishes");
+    const head = make("div", "gift-wishes__head");
+    // The painted marker, then "My wishes"; under it "Goo only", "Goo > Twigs" or how to start.
+    const title = make("span", "gift-wishes__title");
+    title.append(wishMark(null, "gift-wishes__mark"), GIFTS_TEXT.wishes);
+    const hint = make("span", "gift-wishes__hint", wishesSummary(this.wishes) || GIFTS_TEXT.wishesHint);
+    if (this.wishes.length === 1) hint.classList.add("gift-wishes__hint--only");
+    head.append(title, hint);
+    this.wishBar.replaceChildren(head, toggles);
+  }
+
+  /** The same wishes in the same order (the order is the rank). */
+  private sameWishes(a: readonly GiftResource[], b: readonly GiftResource[]): boolean {
+    return a.length === b.length && a.every((key, index) => b[index] === key);
+  }
+
+  /**
+   * Adds `key` as the last wish or takes it out (the later ones move up), and
+   * saves at once; a refusal puts the last saved wishes back.
+   */
+  private async toggleWish(key: GiftResource): Promise<void> {
+    const on = this.wishes.includes(key);
+    if (!on && this.wishes.length >= GIFT_WISH_MAX) return;
+    const next = on ? this.wishes.filter((one) => one !== key) : [...this.wishes, key];
+    this.wishes = next;
+    this.renderWishes();
+    const save = ++this.wishSave;
+    try {
+      const stored = await this.options.api.setWishes(next);
+      if (this.destroyed || save !== this.wishSave) return;
+      this.wishes = [...stored];
+      this.savedWishes = [...stored];
+      if (this.status.text === GIFTS_TEXT.wishesFailed) this.status.set(null);
+    } catch {
+      if (this.destroyed || save !== this.wishSave) return;
+      this.wishes = [...this.savedWishes];
+      this.status.set(GIFTS_TEXT.wishesFailed, "error");
+    }
+    this.renderWishes();
   }
 
   /** Collects one gift or all it can; warns first, once, when storage is short. */
@@ -205,6 +395,7 @@ export class GiftsTab implements FriendsTabView {
       return;
     }
     this.warned = null;
+    this.asking = null;
     this.busy = true;
     this.render();
     try {

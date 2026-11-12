@@ -56,10 +56,20 @@ describe("the menu", () => {
   it("puts every view on one page, and opens a page at its first view", () => {
     expect(PAGES.flatMap(([id]) => pageViews(id))).toEqual(VIEWS.map(([id]) => id));
     expect(pageHome("moderation")).toBe("moderation");
-    expect(pageViews("moderation")).toEqual(["moderation", "find", "attacks", "moderators", "modmail"]);
+    expect(pageViews("moderation")).toEqual(["moderation", "photos", "find", "attacks", "flagged", "moderators", "modmail"]);
     expect(pageViews("support")).toEqual(["bugs", "shiny", "chat"]);
+    expect(pageViews("announcements")).toEqual(["announcements", "events"]);
     expect(pageViews("server")).toEqual(["health"]);
     expect(pageOf("health")).toBe("server");
+  });
+
+  it("puts beta 7's Photo reports under Moderation and Weekend events under Announcements", () => {
+    expect(pageOf("photos")).toBe("moderation");
+    expect(pageOf("events")).toBe("announcements");
+    expect(readRoute("", "#photos").view).toBe("photos");
+    expect(readRoute("", "#events").view).toBe("events");
+    // The Weekend events view's address before it became a tab.
+    expect(readRoute("", "#weekend").view).toBe("events");
   });
 });
 

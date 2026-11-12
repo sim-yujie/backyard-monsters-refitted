@@ -1,9 +1,9 @@
 /*
- * The Champion Cage's controls inside its building panel
- * (`web/src/ui/yard/ChampionPanel.ts`, design `docs/design/yard-buildings.md` §7.2).
+ * The Champion Cage's controls (`web/src/ui/yard/ChampionPanel.ts`, design
+ * `docs/design/yard-buildings.md` §7.2), in the Monsters screen's Champion tab
+ * since 12 Nov 2026 (it sat in the building's panel before).
  *
- * The panel sits in the 300px right dock (a bottom sheet on a phone), so
- * everything stacks: picture beside the name, then one part per concern.
+ * Everything stacks: picture beside the name, then one part per concern.
  * Every value comes from tokens.css; the bars are the shared `monsters-bar`.
  */
 
@@ -91,6 +91,174 @@
 .champion__tendency--learning {
   font-weight: 400;
   color: var(--colour-text-muted);
+}
+
+/*
+ * How a champion with habits fights (champion modes round 2): Mode tabs, the
+ * Mode's instincts ("always") beside its habits (0-3 pips), Forget under them.
+ * Only tokens, so the Modern and Classic looks both draw it.
+ */
+.champion__nature {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--colour-accent-text);
+}
+
+.champion__modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+
+.champion__mode-tab {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: 32px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: var(--colour-surface-control);
+  color: var(--colour-text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.champion__mode-tab:hover {
+  background: var(--colour-surface-control-hover);
+}
+
+.champion__mode-tab[aria-selected="true"] {
+  background: var(--colour-surface-selected);
+  color: var(--colour-text-strong);
+  box-shadow: inset 0 3px 0 var(--colour-accent);
+}
+
+.champion__mode-tab:focus-visible {
+  outline: 2px solid var(--colour-accent);
+  outline-offset: 1px;
+}
+
+.champion__mode-count {
+  font-size: var(--text-xs);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.champion__mode {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-3);
+  margin-top: calc(-1 * var(--space-2));
+  padding: var(--space-2);
+  border: 1px solid var(--colour-border);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  background: var(--colour-surface-base);
+}
+
+.champion__trait-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.champion__trait-tag {
+  margin: 0;
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--colour-text-muted);
+}
+
+.champion__traits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.champion__trait {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 30px;
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.champion__trait--fresh .champion__trait-name {
+  font-weight: 400;
+  color: var(--colour-text-muted);
+}
+
+/* PLACEHOLDER until painted icons: a line shape in a sunken square. */
+.champion__trait-icon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text);
+}
+
+.champion__trait-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.champion__trait-always {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--colour-accent-line);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--colour-accent-text);
+}
+
+.champion__pips {
+  display: flex;
+  gap: 3px;
+}
+
+.champion__pip {
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--colour-border-strong);
+  border-radius: 50%;
+  background: var(--colour-surface-sunken);
+}
+
+.champion__pip--on {
+  border-color: var(--colour-accent-line);
+  background: var(--colour-medal-gold);
+}
+
+.champion__mode-foot {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.champion__forget--armed {
+  color: var(--colour-danger);
+  border-color: var(--colour-danger);
 }
 
 .champion__line {
@@ -776,6 +944,11 @@
     height: 44px;
   }
 
+  /* Instincts over habits: two columns are too narrow. */
+  .champion__mode {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   /* Two chamber cards a row. */
   .chamber__cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -789,4 +962,36 @@
     width: 96px;
     height: 96px;
   }
+}
+
+/* ── The Monsters screen's Champion tab (`ChampionTab.ts`, owner 12 Nov 2026) ──
+ * The cage's controls, then the chamber's, each under its heading like the
+ * Housing tab's sections; only the tab's body scrolls, under the strip. */
+
+.champion-tab {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.champion-tab__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.champion-tab__section[hidden] {
+  display: none;
+}
+
+/* The tab is the frame: no second frame inside it. */
+.champion-tab .champion {
+  padding: 0;
+  border: 0;
+  background: transparent;
 }

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/api/http";
+import { takeoverScores } from "@/game/events/takeoverScores";
 import { TakeoverDialog, showTakenOver, type TakeoverDialogOptions } from "./TakeoverDialog";
 
 /**
@@ -165,6 +166,89 @@ describe("TakeoverDialog", () => {
     }
   });
 
+  it("a New to Map Room 2 price: the small label, -90%, each tile the usual price struck then the cut one, no half-price line", () => {
+    const { $ } = open({
+      price: {
+        resources: 350_000,
+        usualResources: 1_750_000,
+        welcome: true,
+        shiny: 924,
+        adjacent: true,
+        affordable: { resources: true, shiny: true },
+      },
+    });
+    const label = $(".takeover-dialog__welcome");
+    expect(label.hidden).toBe(false);
+    expect($(".takeover-dialog__welcome-tag").textContent).toBe("Frontier Pass");
+    expect($(".takeover-dialog__welcome-off").textContent).toBe("-90%");
+    // The label line no longer carries a struck total: each tile has its own.
+    expect(label.querySelector("s")).toBeNull();
+    expect($(".takeover-dialog__adjacent").hidden).toBe(true);
+    const tiles = [...modal.querySelectorAll(".takeover-dialog__cost li")];
+    expect(tiles).toHaveLength(4);
+    for (const tile of tiles) {
+      expect(tile.querySelector(".res-icon")).not.toBeNull();
+      const struck = tile.querySelectorAll("s");
+      expect(struck).toHaveLength(1);
+      expect(struck[0]!.textContent).toBe("1,750,000");
+      expect(tile.querySelector(".takeover-dialog__cut")!.textContent).toBe("350,000");
+      // Icon, then the struck usual price, then the cut price.
+      const order = [...tile.querySelectorAll(".res-icon, s, .takeover-dialog__cut")];
+      expect(order.map((el) => el.className.split(" ")[0])).toEqual(["res-icon", "takeover-dialog__usual", "takeover-dialog__cut"]);
+    }
+    expect([...new Set(tiles.map((tile) => (tile.firstElementChild as HTMLElement).dataset["resource"]))]).toEqual([
+      "r1",
+      "r2",
+      "r3",
+      "r4",
+    ]);
+  });
+
+  it("a Frontier Pass price: only the resource payment says it uses today's pass; Shiny says it does not", () => {
+    const { $ } = open({
+      price: {
+        resources: 350_000,
+        usualResources: 3_500_000,
+        welcome: true,
+        shiny: 924,
+        affordable: { resources: true, shiny: true },
+      },
+    });
+    const notes = [...modal.querySelectorAll(".takeover-dialog__note")].map((one) => one.textContent);
+    expect(notes).toEqual(["350,000 of each resource. Uses today's Frontier Pass.", "Usual price. Does not use your Frontier Pass."]);
+    $(".takeover-dialog__shiny").click();
+    expect($(".takeover-dialog__confirm-text").textContent).toBe("Take this yard over for 924 Shiny? Usual price. Does not use your Frontier Pass.");
+    $(".takeover-dialog__back").click();
+    $(".takeover-dialog__resources").click();
+    expect($(".takeover-dialog__confirm-text").textContent).toBe(
+      "Take this yard over for 350,000 of each resource? Uses today's Frontier Pass.",
+    );
+  });
+
+  it("a usual price says nothing about the Frontier Pass", () => {
+    const { $ } = open({ price: { resources: 3_500_000, shiny: 924, affordable: { resources: true, shiny: true } } });
+    expect(modal.querySelector(".takeover-dialog__choice")!.textContent).not.toContain("Frontier Pass");
+    $(".takeover-dialog__shiny").click();
+    expect($(".takeover-dialog__confirm-text").textContent).toBe("Take this yard over for 924 Shiny?");
+  });
+
+  it("no label and nothing struck on a usual price", () => {
+    const { $ } = open();
+    expect($(".takeover-dialog__welcome").hidden).toBe(true);
+    expect($(".takeover-dialog__adjacent").hidden).toBe(false);
+    const tiles = [...modal.querySelectorAll(".takeover-dialog__cost li")];
+    expect(tiles).toHaveLength(4);
+    for (const tile of tiles) {
+      expect(tile.querySelector("s")).toBeNull();
+      expect(tile.textContent).toContain("3,500,000");
+    }
+  });
+
+  it("nothing struck when the quote carries a usual price but no welcome discount", () => {
+    open({ price: { resources: 3_500_000, usualResources: 3_500_000, shiny: 924 } });
+    expect(modal.querySelectorAll(".takeover-dialog__cost s")).toHaveLength(0);
+  });
+
   it("Back returns to the choice without calling the server", () => {
     const { dialog, takeOver, $ } = open();
     $(".takeover-dialog__resources").click();
@@ -199,5 +283,28 @@ describe("showTakenOver", () => {
     expect(modal.querySelector(".panel__title")!.textContent).toBe("Veni, Vidi, Vici!");
     expect(modal.textContent).toContain("You destroyed a Kozu base. Take over their yard and expand your empire.");
     expect(modal.querySelector("img")!.getAttribute("src")).toBe("/assets/popups/building-outpost.png");
+    expect(modal.querySelector(".takeover-first-open__score")).toBeNull();
+  });
+
+  it("shows a Monster Madness takeover's points: the logo, +points and the total", () => {
+    const modal = document.createElement("div");
+    showTakenOver(modal, "camp", "Kozu", [{ event: "monster-madness-1762819200", points: 2_100_000, total: 45_000_000 }]);
+    const row = modal.querySelector<HTMLElement>(".takeover-first-open__score")!;
+    expect(row.querySelector("img")!.getAttribute("src")).toBe("/events/monster-madness-logo.png");
+    expect(row.querySelector(".takeover-first-open__score-points")!.textContent).toBe("+2.1M");
+    expect(row.querySelector(".takeover-first-open__score-total")!.textContent).toBe("Total 45M");
+    expect(row.getAttribute("aria-label")).toBe("+2.1M Monster Madness points, 45M in all");
+    // Above the OK button.
+    expect(row.nextElementSibling?.textContent).toBe("OK");
+  });
+
+  it("takes the last takeover's waiting points by itself, once", () => {
+    takeoverScores.set([{ event: "monster-madness-1", points: 3_000_000, total: 3_000_000 }]);
+    const first = document.createElement("div");
+    showTakenOver(first, "camp", "Kozu");
+    expect(first.querySelector(".takeover-first-open__score-points")!.textContent).toBe("+3M");
+    const again = document.createElement("div");
+    showTakenOver(again, "camp", "Kozu");
+    expect(again.querySelector(".takeover-first-open__score")).toBeNull();
   });
 });

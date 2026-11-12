@@ -37,8 +37,29 @@
 }
 
 /* The confirm dialog. */
+/* 500px, so "Use Resources" and "Use 1,234 Shiny" each keep to one line
+   side by side, and the title sign holds "Take over this Wild Monster Yard". */
 .takeover-dialog {
-  width: min(92vw, 420px);
+  width: min(92vw, 500px);
+}
+
+/* A smaller title on the sign than a plain window's 21-22px: the camp title
+   is 32 letters (it was cut to "Take over this Wild Mons..."). The Classic
+   ribbon's tails are shortened as on the map's docks to leave the words room. */
+:root[data-skin] .takeover-dialog.panel .panel__title {
+  font-size: 18px;
+}
+
+:root[data-skin="flash"] .takeover-dialog.panel {
+  --skin-title-height: 50px;
+  --skin-title-cap: 40px;
+  --skin-title-lift: 40px;
+  --skin-title-pad: 6px;
+}
+
+:root[data-skin="flash"] .takeover-dialog.panel .panel__title {
+  padding-inline: 8px;
+  font-size: 16px;
 }
 
 .takeover-dialog .panel__body {
@@ -72,6 +93,78 @@
   background: var(--colour-surface-sunken);
 }
 
+/* "New to Map Room 2": a small label over the cheap price. */
+.takeover-dialog__welcome:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.takeover-dialog__welcome-tag {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--colour-accent-soft);
+  color: var(--colour-accent-text);
+  font-weight: 700;
+}
+
+/* Classic's accent words are white (for a solid orange button); on the light
+   tint over cream they all but vanish, so the label takes a dark orange. */
+:root[data-skin="flash"] .takeover-dialog__welcome-tag {
+  color: #8a3a00;
+}
+
+.takeover-dialog__welcome-off {
+  color: var(--colour-gain);
+  font-weight: 700;
+}
+
+/* Each resource's tile on a "New to Map Room 2" price: the icon, the usual
+   price struck through (muted, smaller), then the cut price. The prices wrap
+   one over the other where the tile is narrow (a phone), both after the icon. */
+.takeover-dialog__welcome-price {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  min-width: 0;
+}
+
+.takeover-dialog__welcome-price > .res-icon {
+  flex: none;
+}
+
+.takeover-dialog__prices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-2);
+  min-width: 0;
+  line-height: var(--leading-tight);
+}
+
+/* The usual price stays legible: a touch larger, no Modern text shadow
+   (it blurred the zeros), and a thin red strike so the line does not fill
+   the middle of each digit. The cut price stays bold, bright and bigger. */
+.takeover-dialog__usual {
+  color: var(--colour-text-muted);
+  font-size: calc(var(--text-sm) + 1px);
+  letter-spacing: 0.02em;
+  text-shadow: none;
+  text-decoration-line: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--colour-danger) 80%, transparent);
+  white-space: nowrap;
+}
+
+.takeover-dialog__cut {
+  color: var(--colour-text);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .takeover-dialog__ground,
 .takeover-dialog__adjacent,
 .takeover-dialog__countdown {
@@ -93,6 +186,14 @@
   display: grid;
   align-content: start;
   gap: var(--space-1);
+}
+
+/* Both choices one line and one height: the big plate and the small one
+   (Use Resources wrapped to two lines and stood taller than the Shiny one). */
+.takeover-dialog__option > .btn {
+  min-width: 0;
+  min-height: 46px;
+  white-space: nowrap;
 }
 
 .takeover-dialog__note {
@@ -153,6 +254,32 @@
   margin: 0;
 }
 
+/* Monster Madness: the takeover's points, logo then "+2.1M" then the total. */
+.takeover-first-open__score {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+}
+
+.takeover-first-open__score-logo {
+  width: 150px;
+  height: auto;
+}
+
+.takeover-first-open__score-points {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--colour-success);
+}
+
+.takeover-first-open__score-total {
+  font-size: var(--text-sm);
+  opacity: 0.85;
+}
+
 /* The offer on the end-of-attack panel. */
 .end-takeover {
   display: grid;
@@ -188,3 +315,18 @@
   }
 }
 /* end take over */
+
+/* Before attacking an alliance mate (beta 7): the alliance's shield and name over the question. */
+.attack-mate-dialog__alliance {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.attack-mate-dialog__shield {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}

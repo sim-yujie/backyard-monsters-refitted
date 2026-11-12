@@ -6,6 +6,7 @@ import { devDetails } from "@/app/devDetails";
 import type { YardRefusal } from "@/api/yard";
 import { buildActions } from "@/api/yardBuild";
 import { fortifyActions, FortifyKey } from "@/api/yardFortify";
+import { topUpPrice } from "@/game/yard/resourcePacks";
 import { recycleAction, recycleKey, type RecycleReport } from "@/api/yardRecycle";
 import { repairActions } from "@/api/yardRepair";
 import type { BaiterRun } from "@/game/baiter/baiterSession";
@@ -35,7 +36,7 @@ import { formatAmount, formatCountdown } from "@/ui/format";
 import { icon } from "@/ui/icons";
 import { HousingJuice } from "@/ui/monsters/HousingJuice";
 import { HousingView } from "@/ui/monsters/HousingView";
-import { MonstersTabId } from "@/ui/monsters/monstersTab";
+import { MonsterBuilding, MonstersTabId } from "@/ui/monsters/monstersTab";
 import { gameIcon, iconAmount, type GameIconName } from "@/ui/gameIcon";
 import {
   costAmounts,
@@ -61,10 +62,7 @@ import {
 import { buildingHealthLabel, buildingInfo, unlockText, type InfoRow, type InfoValue } from "./buildingInfo";
 import { buttonUrl } from "@/game/yard/buildButtonArt";
 import { BaiterPanel } from "./BaiterPanel";
-import { BunkerPanel } from "./BunkerPanel";
-import { ChamberPanel } from "./ChamberPanel";
-import { ChampionPanel } from "./ChampionPanel";
-import { CHAMPION_CAGE_TYPE, CHAMPION_CHAMBER_TYPE, withChampionsHealed } from "@/game/yard/championModel";
+import { withChampionsHealed } from "@/game/yard/championModel";
 import { RepairBlock } from "./RepairBlock";
 import { ShinyButton } from "./ShinyButton";
 import { describeSeconds } from "./upgradeText";
@@ -72,6 +70,7 @@ import { moveToRandomSpot, type RandomMoveResponse } from "@/api/maproom";
 import { forgetMapView } from "@/game/maproom/mapFocus";
 import { RANDOM_MOVE_TEXT } from "@/game/maproom/randomMove";
 import { RandomMoveDialog } from "@/ui/maproom/RandomMoveDialog";
+import { weekendChip } from "@/ui/events/weekendUi";
 
 /** What an outpost harvester's panel says in place of its stored amount. */
 export const AUTO_BANKING = "Auto-banking: what it makes goes straight to your main yard's storage";
@@ -85,7 +84,9 @@ export const AUTO_BANKING = "Auto-banking: what it makes goes straight to your m
  * the running job with its countdown, speed-ups and Cancel, or the next
  * upgrade with its cost, time and the one reason it cannot start — then an
  * Open button for the buildings that are doors (Map Room, Yard Planner, the
- * monster buildings' tabs of the Monsters screen), and
+ * monster buildings' tabs of the Monsters screen: since 12 Nov 2026 the
+ * Champion Cage and Chamber, Monster Juicer and Monster Bunker too, whose
+ * controls live in that screen now), and
  * finally Details: every field the save sends, collapsed.
  *
  * What is offered and what it costs is decided in `buildingActions.ts`; this
@@ -176,19 +177,17 @@ const SPEEDUP_LABEL: Readonly<Record<SpeedupItem, string>> = {
 
 type Status = { readonly tone: "good" | "bad"; readonly content: (Node | string)[] };
 
-/** The Champion Cage's and Chamber's two tabs: its champion(s), then the building's own card. */
-type CageTab = "champion" | "building";
 
-const CAGE_TABS: ReadonlyArray<readonly [CageTab, string]> = [
-  ["champion", "Champion"],
-  ["building", "Building"],
-];
-
-/** A building that opens on its champions: the cage on its one, the chamber on all it holds. */
-type ChampionHome = "cage" | "chamber";
-
-/** The first tab's word: the cage holds one champion, the chamber several. */
-const CHAMPION_TAB: Readonly<Record<ChampionHome, string>> = { cage: "Champion", chamber: "Champions" };
+/**
+ * The monster buildings whose Open button names them ("Open Champion Cage"):
+ * the four whose own controls moved into the Monsters screen on 12 Nov 2026.
+ */
+const NAMED_OPEN: ReadonlySet<number> = new Set([
+  MonsterBuilding.CHAMPION_CAGE,
+  MonsterBuilding.CHAMPION_CHAMBER,
+  MonsterBuilding.JUICER,
+  MonsterBuilding.BUNKER,
+]);
 
 /** The live parts of the job block, refreshed every second without a redraw. */
 interface JobRefs {
@@ -210,23 +209,11 @@ export class BuildingPanel {
   private readonly unlocks: HTMLElement;
   /** The info rows the next level changes, drawn beside Upgrade; none when there is no upgrade to offer. */
   private gains: readonly InfoRow[] = [];
+  /** Whether the info rows carry the health row (the heart), so Details need not. */
+  private infoHasHealth = false;
   private readonly actions: HTMLElement;
-  /** Holds a Monster Bunker's controls while they are open (`BunkerPanel.ts`). */
-  private readonly bunkerSlot: HTMLElement;
-  private bunker: BunkerPanel | null = null;
   /** The Baiter's practice-attack window while it is open (#126, #308). */
   private baiter: BaiterPanel | null = null;
-  /** Holds the Champion Cage's or Chamber's controls while they are open (`ChampionPanel.ts`, `ChamberPanel.ts`). */
-  private readonly championSlot: HTMLElement;
-  private champion: ChampionPanel | ChamberPanel | null = null;
-  /**
-   * A built Champion Cage on the own yard opens straight on its champion
-   * (owner, 28 Oct: no second click), in a wider panel; the building's own
-   * card (upgrade, repair, details) is the second tab. The Champion Chamber
-   * does the same with its frozen champions (owner, 28 Oct: "the same treatment").
-   */
-  private readonly cageTabs: HTMLElement;
-  private cageTab: CageTab = "champion";
   private readonly status: HTMLElement;
   /** A Housing's level chip beside the title ("Level 6 · max"). */
   private readonly chip: HTMLElement;
@@ -264,6 +251,8 @@ export class BuildingPanel {
   private readonly shiny = new Map<string, ShinyButton>();
   /** Buttons whose request key disables them while it runs. */
   private pendingButtons: { key: string; button: HTMLButtonElement | ShinyButton }[] = [];
+  /** Each Top up button's price as last drawn, by its key: what the second tap sends. */
+  private readonly topUpPrices = new Map<string, number>();
   /** The building whose Cancel confirmation is open. */
   private confirmingCancel: number | null = null;
   /** The building whose Recycle confirmation is open. */
@@ -300,35 +289,6 @@ export class BuildingPanel {
     this.actions = document.createElement("div");
     this.actions.className = "building-panel__actions";
 
-    this.bunkerSlot = document.createElement("div");
-    this.bunkerSlot.className = "building-panel__bunker";
-    this.bunkerSlot.hidden = true;
-
-    this.championSlot = document.createElement("div");
-    this.championSlot.className = "building-panel__champion";
-    this.championSlot.hidden = true;
-
-    this.cageTabs = document.createElement("div");
-    this.cageTabs.className = "tabs tab-row building-panel__tabs";
-    this.cageTabs.setAttribute("role", "tablist");
-    this.cageTabs.setAttribute("aria-label", "Champion Cage");
-    this.cageTabs.hidden = true;
-    for (const [tab, label] of CAGE_TABS) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "tabs__tab building-panel__tab";
-      button.dataset["tab"] = tab;
-      button.setAttribute("role", "tab");
-      button.textContent = label;
-      button.addEventListener("click", () => this.showCageTab(tab));
-      this.cageTabs.append(button);
-    }
-    // Two tabs: either arrow moves to the other one.
-    this.cageTabs.addEventListener("keydown", (event) => {
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-      event.preventDefault();
-      this.showCageTab(this.cageTab === "champion" ? "building" : "champion");
-    });
 
     this.status = document.createElement("p");
     this.status.className = "building-panel__status";
@@ -389,8 +349,6 @@ export class BuildingPanel {
     this.facts.className = "cell-facts";
     this.details.append(summary, this.facts);
 
-    // The cage's and chamber's tabs sit over the body, which scrolls alone.
-    this.panel.setHead(this.cageTabs);
     this.panel.setContent(
       this.blurb,
       this.kind,
@@ -399,8 +357,6 @@ export class BuildingPanel {
       this.housingSlot,
       this.juiceSheet,
       this.actions,
-      this.bunkerSlot,
-      this.championSlot,
       this.footer,
       this.status,
       this.details,
@@ -427,13 +383,10 @@ export class BuildingPanel {
       // A different building's Shiny buttons are no use and may be armed.
       for (const button of this.shiny.values()) button.destroy();
       this.shiny.clear();
-      this.closeBunker();
       this.closeBaiter();
-      this.closeChampion();
       this.closeJuice();
       this.toggleMore(false);
       this.detailsShown = false;
-      this.cageTab = "champion";
     }
     this.building = building;
     if (this.isHousing(building)) {
@@ -452,9 +405,6 @@ export class BuildingPanel {
       if (this.repairView) {
         guideBus.emit("screen", { id: GuideScreen.REPAIR, root: this.element, header: this.panel.titlebar });
       }
-      if (this.champion instanceof ChampionPanel) {
-        guideBus.emit("screen", { id: GuideScreen.CHAMPION, root: this.champion.element, header: null });
-      }
     }
   }
 
@@ -464,7 +414,6 @@ export class BuildingPanel {
     for (const entry of this.countdowns) {
       entry.node.textContent = formatCountdown(entry.endsAt - now);
     }
-    this.champion?.tick();
     this.housing?.tick();
     const building = this.building;
     if (building && this.yard && this.repairView) {
@@ -502,73 +451,7 @@ export class BuildingPanel {
     this.renderInfo(building);
     this.renderHousing(building);
     this.renderActions(building);
-    this.renderCage(building);
-    this.bunker?.show();
-    this.champion?.show();
     this.renderDetails(building);
-  }
-
-  /** A built cage or chamber on the own yard: always on its champions, with the building a tab away. */
-  private championHome(building: YardBuilding): ChampionHome | null {
-    if (this.yard === undefined || building.level <= 0) return null;
-    if (building.type === CHAMPION_CAGE_TYPE) return "cage";
-    if (building.type === CHAMPION_CHAMBER_TYPE) return "chamber";
-    return null;
-  }
-
-  /**
-   * The cage's or chamber's tabs and which half shows: the champions, or the
-   * plain card's kind line, numbers, actions and Details. The champions'
-   * window is made here, so clicking the building is all it takes.
-   */
-  private renderCage(building: YardBuilding): void {
-    const store = this.yard?.store;
-    const home = store ? this.championHome(building) : null;
-    const on = home !== null && store !== undefined;
-    this.element.classList.toggle("building-panel--cage", on);
-    this.cageTabs.hidden = !on;
-    if (!on) {
-      delete this.element.dataset["cageTab"];
-      return;
-    }
-    if (!this.champion) {
-      this.champion = home === "cage" ? new ChampionPanel({ store }) : new ChamberPanel({ store });
-      this.championSlot.append(this.champion.element);
-    }
-    this.cageTabs.setAttribute("aria-label", home === "cage" ? "Champion Cage" : "Champion Chamber");
-    const first = this.cageTabs.querySelector<HTMLElement>('[data-tab="champion"]');
-    if (first) first.textContent = CHAMPION_TAB[home];
-    const tab = this.cageTab;
-    this.element.dataset["cageTab"] = tab;
-    for (const button of this.cageTabs.querySelectorAll<HTMLButtonElement>(".building-panel__tab")) {
-      const selected = button.dataset["tab"] === tab;
-      button.setAttribute("aria-selected", String(selected));
-      button.tabIndex = selected ? 0 : -1;
-    }
-    // A cage or chamber that needs repair says so on its Building tab.
-    const repair = repairOffer(building.id, store.save, store.credits, store.now()) !== null;
-    this.cageTabs.querySelector<HTMLElement>('[data-tab="building"]')?.classList.toggle("building-panel__tab--alert", repair);
-    const onChampion = tab === "champion";
-    this.championSlot.hidden = !onChampion;
-    this.kind.hidden = onChampion;
-    if (onChampion) {
-      this.info.hidden = true;
-      this.unlocks.hidden = true;
-      this.actions.hidden = true;
-    }
-    this.details.hidden = onChampion;
-  }
-
-  private showCageTab(tab: CageTab): void {
-    if (this.cageTab === tab) return;
-    this.cageTab = tab;
-    // The other tab opens at its top.
-    this.panel.body.scrollTop = 0;
-    this.render();
-    if (tab === "champion" && this.champion instanceof ChampionPanel) {
-      guideBus.emit("screen", { id: GuideScreen.CHAMPION, root: this.champion.element, header: null });
-    }
-    this.cageTabs.querySelector<HTMLElement>(`[data-tab="${tab}"]`)?.focus();
   }
 
   /**
@@ -741,6 +624,8 @@ export class BuildingPanel {
     // button instead (`upgradeGains`); these rows then read as they are now.
     this.gains = this.yard && panelModel(building, this.yard.store).upgrade ? rows.filter((row) => row.next) : [];
     const withNext = this.gains.length === 0;
+    const healthLabel = buildingHealthLabel(building.type);
+    this.infoHasHealth = rows.some((row) => row.label === healthLabel);
     this.info.replaceChildren();
     for (const row of rows) {
       const term = document.createElement("dt");
@@ -814,7 +699,7 @@ export class BuildingPanel {
       if (repair) blocks.push(this.repairBlock(building, repair, used));
       if (model.job) blocks.push(this.jobBlock(building, model.job, used));
       if (model.upgrade) blocks.push(this.upgradeBlock(building, model.upgrade, used, yard.store.resources));
-      if (model.fortify) blocks.push(this.fortifyBlock(building, model.fortify, yard.store.resources));
+      if (model.fortify) blocks.push(this.fortifyBlock(building, model.fortify, used, yard.store.resources));
       const housing = this.isHousing(building);
       // A one-level building (Yard Planner, General Store) has no ladder to
       // top out; a Housing says "max" in its chip.
@@ -905,20 +790,21 @@ export class BuildingPanel {
       }
       return button;
     }
-    if (model?.open === "bunker" && this.yard) {
-      const open = this.bunker !== null;
-      const button = actionButton(open ? "Close bunker" : "Open bunker", () => this.toggleBunker(), "btn--primary");
-      button.classList.add("building-panel__planner");
-      button.setAttribute("aria-expanded", String(open));
-      return button;
-    }
-    // The cage and chamber need no Open: they open on their champions, this card a tab away.
     const scene = this.yard?.scene;
     if (model?.open === "shop" && scene?.openShop) {
       const openShop = scene.openShop.bind(scene);
       const button = actionButton("Open Shop", () => openShop(), "btn--primary");
       button.classList.add("building-panel__planner");
       button.title = "Spend Shiny on workers, boosts and more";
+      return button;
+    }
+    // A button, not open-on-tap, so repair and speed-up stay on this card (lead, 10 Nov).
+    if (model?.open === "alliance" && scene?.openAlliance) {
+      const openAlliance = scene.openAlliance.bind(scene);
+      const button = actionButton("Alliance", () => openAlliance(), "btn--primary");
+      button.classList.add("building-panel__planner");
+      button.setAttribute("aria-haspopup", "dialog");
+      button.title = "Join or found an alliance, and lead it";
       return button;
     }
     const site = model?.open === "siege" ? siteOfType(building.type) : null;
@@ -931,8 +817,11 @@ export class BuildingPanel {
     }
     if (model?.open === "monsters" && model.monstersTab && scene?.openMonsters) {
       const tab = model.monstersTab;
+      // The buildings whose controls moved into the screen say whose they open
+      // (owner, 12 Nov 2026: "an 'Open Champion Cage' button").
+      const named = NAMED_OPEN.has(building.type);
       const button = actionButton(
-        "Open",
+        named ? `Open ${building.name}` : "Open",
         () => scene.openMonsters?.(tab, { buildingId: building.id }),
         "btn--primary",
       );
@@ -1053,6 +942,9 @@ export class BuildingPanel {
     title.textContent = `Lv ${offer.from} → ${offer.to}`;
     title.title = `Upgrade to level ${offer.to}`;
     head.append(title, stepTime(offer.seconds, "Upgrade time · 1 worker"));
+    // Builder's Weekend: the cost below is already the lower one.
+    const off = offer.weekendOff ? weekendChip("builders") : null;
+    if (off) head.append(off);
     block.append(head);
 
     // A main-yard Inferno building is paid from the Inferno purse (WP 6.1).
@@ -1078,6 +970,13 @@ export class BuildingPanel {
     if (offer.gate) upgrade.setAttribute("aria-describedby", this.gateId(building));
     row.append(upgrade);
     this.pendingButtons.push({ key: actionKey("upgrade", building.id), button: upgrade });
+    const topUp = this.topUpButton(`${building.id}:topup`, offer.gate, used, (price) =>
+      void this.runUpgrade(building.id, price),
+    );
+    if (topUp) {
+      row.append(topUp.element);
+      this.pendingButtons.push({ key: actionKey("upgrade", building.id), button: topUp });
+    }
 
     // The Map Room is never bought with Shiny (D16): Upgrade alone.
     if (offer.instant) {
@@ -1105,7 +1004,12 @@ export class BuildingPanel {
    * (`msg_inactivefortify`, `BFOUNDATION.as:2207-2210`). Fully fortified
    * says so (`bdg_fullyfortified`).
    */
-  private fortifyBlock(building: YardBuilding, offer: FortifyOffer, resources: Resources): HTMLElement {
+  private fortifyBlock(
+    building: YardBuilding,
+    offer: FortifyOffer,
+    used: Set<string>,
+    resources: Resources,
+  ): HTMLElement {
     if (offer.maxed) return note(`Fully fortified: F${offer.max} of ${offer.max}.`);
 
     const block = document.createElement("section");
@@ -1119,6 +1023,9 @@ export class BuildingPanel {
     title.textContent = `Fortify to F${offer.to}`;
     title.title = `Fortified F${offer.from} of ${offer.max}.`;
     head.append(title, stepTime(offer.seconds, "Fortify time · 1 worker"));
+    // Builder's Weekend: the cost below is already the lower one.
+    const off = offer.weekendOff ? weekendChip("builders") : null;
+    if (off) head.append(off);
     block.append(head);
 
     block.append(this.costFactsLine(offer.cost, resources));
@@ -1143,6 +1050,13 @@ export class BuildingPanel {
     if (offer.gate) fortify.setAttribute("aria-describedby", gateId);
     row.append(fortify);
     this.pendingButtons.push({ key: FortifyKey.start(building.id), button: fortify });
+    const topUp = this.topUpButton(`${building.id}:fortify-topup`, offer.gate, used, (price) =>
+      void this.runFortify(building.id, price),
+    );
+    if (topUp) {
+      row.append(topUp.element);
+      this.pendingButtons.push({ key: FortifyKey.start(building.id), button: topUp });
+    }
     block.append(row);
     return block;
   }
@@ -1415,6 +1329,35 @@ export class BuildingPanel {
     refs.bar.classList.toggle("building-job__bar--paused", job.paused);
   }
 
+  /**
+   * Flash's top-up (`BRTOPUP`, `BUILDINGOPTIONSPOPUP.as:642-760`, issue
+   * #393): when the only thing short is resources that fit in storage, buy
+   * the shortfall with Shiny and start the job, tap then tap again. The price
+   * on the button is sent along; the server works out its own and refuses
+   * rather than charge another.
+   */
+  private topUpButton(
+    key: string,
+    gate: { readonly reason: string } | null,
+    used: Set<string>,
+    start: (price: number) => void,
+  ): ShinyButton | null {
+    if (!isTopUpGate(gate)) return null;
+    const price = topUpPrice(gate.shortfall);
+    if (price <= 0) return null;
+    used.add(key);
+    const button = this.shinyButton(key, "Top up", () => {
+      // The price at the second tap, which a tick of income may have lowered.
+      const current = this.topUpPrices.get(key);
+      if (current !== undefined) start(current);
+    });
+    this.topUpPrices.set(key, price);
+    button.setPrice(price);
+    const credits = this.yard?.store.credits ?? 0;
+    button.setBlocked(price > credits ? "Not enough Shiny." : null);
+    return button;
+  }
+
   private shinyButton(key: string, label: string, onSpend: () => void): ShinyButton {
     let button = this.shiny.get(key);
     if (!button) {
@@ -1432,8 +1375,6 @@ export class BuildingPanel {
   private syncPending(): void {
     const store = this.yard?.store;
     if (!store) return;
-    this.bunker?.syncPending();
-    this.champion?.syncPending();
     this.housing?.syncPending();
     this.juice?.syncPending();
     for (const { key, button } of this.pendingButtons) {
@@ -1453,10 +1394,10 @@ export class BuildingPanel {
 
   /* ── Actions ────────────────────────────────────────────────────────── */
 
-  private async runUpgrade(id: number): Promise<void> {
+  private async runUpgrade(id: number, topUp?: number): Promise<void> {
     const store = this.yard?.store;
     if (!store) return;
-    const result = await store.upgrade(id);
+    const result = await store.upgrade(id, topUp);
     this.report(id, result, (report) => [`Upgrade to ${report.to} started.`]);
   }
 
@@ -1491,10 +1432,10 @@ export class BuildingPanel {
     );
   }
 
-  private async runFortify(id: number): Promise<void> {
+  private async runFortify(id: number, topUp?: number): Promise<void> {
     const store = this.yard?.store;
     if (!store) return;
-    const result = await fortifyActions(store).start(id);
+    const result = await fortifyActions(store).start(id, topUp);
     this.report(id, result, (report) => [`Fortifying to F${report.to}.`]);
   }
 
@@ -1608,21 +1549,6 @@ export class BuildingPanel {
     this.status.replaceChildren(...status.content);
   }
 
-  /** Opens or closes the bunker's controls under the actions. */
-  private toggleBunker(): void {
-    const building = this.building;
-    const store = this.yard?.store;
-    if (this.bunker || !building || !store) {
-      this.closeBunker();
-    } else {
-      this.bunker = new BunkerPanel({ store, bunkerId: building.id });
-      this.bunkerSlot.append(this.bunker.element);
-      this.bunkerSlot.hidden = false;
-    }
-    this.render();
-    if (this.bunker) this.bunker.element.querySelector<HTMLElement>("[role=radio][aria-checked=true]")?.focus();
-  }
-
   /**
    * Opens the Baiter's practice-attack window over the yard (#126, #308): a
    * large window on the overlay's modal layer, the yard dimmed behind it.
@@ -1666,30 +1592,8 @@ export class BuildingPanel {
     this.baiter = null;
   }
 
-  private closeBunker(): void {
-    this.bunker?.destroy();
-    this.bunker = null;
-    this.bunkerSlot.hidden = true;
-  }
-
-  /** Opens the Champion Cage's or Chamber's controls when this panel is on one (the "Korath unlocked" popup). */
-  openChampion(): void {
-    const building = this.building;
-    const store = this.yard?.store;
-    if (!building || !store) return;
-    if (this.championHome(building)) this.showCageTab("champion");
-  }
-
-  private closeChampion(): void {
-    this.champion?.destroy();
-    this.champion = null;
-    this.championSlot.hidden = true;
-  }
-
   private dispose(): void {
-    this.closeBunker();
     this.closeBaiter();
-    this.closeChampion();
     this.closeJuice();
     this.toggleMore(false);
     this.housing?.destroy();
@@ -1711,19 +1615,25 @@ export class BuildingPanel {
     const dev = devDetails();
     // Someone else's yard keeps its level, and what would tell it, to itself.
     const foreign = this.yard === undefined;
+    // Details hold only what the panel does not already show above them
+    // (owner, 10 Nov: an upgrading Flinger's Details repeated its level, its
+    // health and its countdown). Read after the rest of the panel is drawn.
+    const shown = this.shownAbove(building);
     if (dev) this.add("Type id", String(building.type));
-    this.add(
-      "Level",
-      building.level === 0
-        ? dev
-          ? "0 — foundation, still building"
-          : "Still being built"
-        : foreign
-          ? "Hidden"
-          : dev && building.raw.l === undefined
-            ? "1 (the save omits the level at 1)"
-            : String(building.level),
-    );
+    if (!shown.level) {
+      this.add(
+        "Level",
+        building.level === 0
+          ? dev
+            ? "0 — foundation, still building"
+            : "Still being built"
+          : foreign
+            ? "Hidden"
+            : dev && building.raw.l === undefined
+              ? "1 (the save omits the level at 1)"
+              : String(building.level),
+      );
+    }
 
     if (dev) {
       const [width, height] = building.footprint;
@@ -1738,11 +1648,39 @@ export class BuildingPanel {
         building.fortification === 0 ? "None" : `Level ${building.fortification}`,
         building.fortification > 0 ? "is-info" : undefined,
       );
-      this.addHealth(building);
-      this.addCountdown(building);
+      if (!shown.health) this.addHealth(building);
+      if (!shown.countdown) this.addCountdown(building);
     }
-    this.addProduction(building);
+    this.addProduction(building, shown.repairing);
     if (dev) this.addArt(building);
+    // Nothing left to tell: no fold. (A Housing hides it too.)
+    if (this.facts.childElementCount === 0) this.details.hidden = true;
+  }
+
+  /**
+   * Which of Details' facts the panel already shows above them: the level
+   * in the title ("Flinger · Level 2"), a Housing's chip or the kind line
+   * ("Under construction"); health on the heart row; the countdown in the
+   * job block ("Upgrading to 3 · 7h 11m"); a repair in the repair block.
+   */
+  private shownAbove(building: YardBuilding): {
+    level: boolean;
+    health: boolean;
+    countdown: boolean;
+    repairing: boolean;
+  } {
+    const own = this.yard !== undefined;
+    const housing = this.isHousing(building);
+    const levelInTitle = own && building.level > 0 && !housing;
+    const underConstruction =
+      own && building.level === 0 && !this.kind.hidden && this.kindLabel.textContent === "Under construction";
+    const actions = !this.actions.hidden;
+    return {
+      level: levelInTitle || (housing && !this.chip.hidden) || underConstruction,
+      health: this.infoHasHealth && !this.info.hidden,
+      countdown: actions && this.jobRefs !== null,
+      repairing: actions && this.repairView !== null,
+    };
   }
 
   private addHealth(building: YardBuilding): void {
@@ -1798,11 +1736,13 @@ export class BuildingPanel {
    * disabled "Auto-Banking" there (`client/scripts/BUILDINGINFO.as:130-131`,
    * `:384-385`), and the server pays them into the main pool as they produce.
    */
-  private addProduction(building: YardBuilding): void {
+  private addProduction(building: YardBuilding, repairShown: boolean): void {
     const store = this.yard?.store;
+    const repairing = building.raw.rE === 1 && !repairShown;
     if (store?.kind === "outpost") {
-      this.add("Banking", AUTO_BANKING, "is-info");
-      if (building.raw.rE === 1) this.add("Repairing", "Yes", "is-info");
+      // An own outpost's harvester says Auto-banking in a note above (and
+      // nothing else on an outpost banks), so Details does not repeat it.
+      if (repairing) this.add("Repairing", "Yes", "is-info");
       return;
     }
     const now = store ? harvesterNow(building.raw, store.save, store.now()) : null;
@@ -1811,7 +1751,7 @@ export class BuildingPanel {
     } else if (typeof building.raw.st === "number") {
       this.add("Stored", formatAmount(building.raw.st));
     }
-    if (building.raw.rE === 1) this.add("Repairing", "Yes", "is-info");
+    if (repairing) this.add("Repairing", "Yes", "is-info");
   }
 
   /** Which picture this building is showing, which is the first thing to check
@@ -2105,3 +2045,9 @@ const refusalText = (refusal: YardRefusal): string =>
   refusal.reason === "network"
     ? "Could not reach the server. Try again."
     : refusal.message || "That did not work.";
+
+/** A gate a top-up clears: resources short, none of them over its storage cap. */
+const isTopUpGate = (
+  gate: { readonly reason: string } | null,
+): gate is { readonly reason: "shortfall"; readonly shortfall: Partial<Record<"r1" | "r2" | "r3" | "r4", number>>; readonly overCap: boolean } =>
+  gate !== null && gate.reason === "shortfall" && !(gate as { overCap?: boolean }).overCap;

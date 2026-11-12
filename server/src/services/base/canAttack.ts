@@ -13,7 +13,6 @@ import type { Save } from "../../database/models/save.model.js";
  * @returns {boolean} Whether the attack is permitted.
  */
 export const canAttack = (attackerSave: Save, defenderSave: Save, mapversion?: MapRoomVersion): boolean => {
-  // const isOwner = defenderSave.type !== BaseType.INFERNO && attackerSave.saveuserid === defenderSave.saveuserid;
   const attackerLevel = calculateBaseLevel(attackerSave.points, attackerSave.basevalue);
 
   /**
@@ -27,18 +26,9 @@ export const canAttack = (attackerSave: Save, defenderSave: Save, mapversion?: M
     defenderSave.level <= 20
   ) return false;
 
-  /**
-   * PvP level restriction: attackers cannot attack player main yards more than
-   * 12 levels below them. Both players in the level 40–80 safe zone
-   * can always attack each other. Although the max level is 56, we use 80 as a client-safe upper bound.
-   *
-   * TODO: re-enable this when vengenance mode is implemented.
-   */
-  // if (defenderSave.type === BaseType.MAIN && !isOwner) {
-  //   const defenderLevel = calculateBaseLevel(defenderSave.points, defenderSave.basevalue);
-  //   const inSafeZone = attackerLevel >= 40 && attackerLevel <= 80 && defenderLevel >= 40 && defenderLevel <= 80;
-  //   if (attackerLevel - defenderLevel >= 12 && !inSafeZone) return false;
-  // }
+  // The PvP level rule, with vengeance, is Map Room 1's alone (owner,
+  // 11 Nov 2026): `services/maproom/v1/mr1AttackRules.ts`, applied with the
+  // neighbour rule by the attack load and by `baseLoad`'s `canattack`.
 
   return true;
 };

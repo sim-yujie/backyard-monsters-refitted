@@ -82,6 +82,13 @@ const effects = {
   // The Monster Juicer blending (`BUILDING9.as:79-81`) and a giblet landing (`GIBLET.as:58`).
   juice: { url: `${OTHER}sound_juice.mp3`, volume: 0.8 },
   splat5: { url: `${ATTACK}sound_splat5.mp3`, volume: 0.8 },
+  // The UI's three (`game/sound/uiSounds.ts`), all at Flash's default 0.8: a
+  // button's click (`SOUNDS.as:48`, 118 calls; Flash embedded it in the game
+  // file, so the copy on the server comes from `client/sounds/`), a window
+  // closing (51 `Hide` functions) and a refusal (`HATCHERYPOPUP.as:273`).
+  click1: { url: `${UI}sound_click1.mp3`, volume: 0.8 },
+  close: { url: `${UI}sound_close.mp3`, volume: 0.8 },
+  error1: { url: `${UI}sound_error1.mp3`, volume: 0.8 },
 
   // ── An attack's sounds; `attackSounds.ts` says which Flash call plays each ──
   // A trap going off (`BTRAP.as:147`); the Modern look layers a building's fall over a Heavy Trap's, louder.

@@ -22,14 +22,14 @@ const redis = memoryRedis();
 const postgres = { em: null as unknown };
 mock.module("../../server.js", () => ({ postgres, redis }));
 
-const { sendGiftAnswer, giftsAnswer, collectGiftsAnswer } = await import("../../controllers/friends/gift.js");
+const { sendGiftAnswer, giftsAnswer, collectGiftsAnswer, deleteGiftsAnswer, wishesAnswer } = await import("../../controllers/friends/gift.js");
 const { friendsAnswer } = await import("../../controllers/friends/friends.js");
 const { blockPlayer } = await import("./friendships.js");
 
 const A = 994_001;
 const B = 994_002;
 /** Five more friends of B's, so B has six gifts to collect. */
-const OTHERS = [994_003, 994_004, 994_005, 994_006, 994_007];
+const OTHERS = [994_003, 994_004, 994_005, 994_006, 994_007, 994_012, 994_013, 994_014, 994_015, 994_016];
 const STRANGER = 994_010;
 /** An account that cannot be friended (§6.2). */
 const HIDDEN = 994_011;
@@ -46,6 +46,9 @@ const BASE_CAP = 10_000;
 /** One outpost adds 2,000,000 to the cap. */
 const BIG_CAP = BASE_CAP + 2_000_000;
 const HALL = { id: 0, t: 14, x: -70, y: 0, l: 1 };
+/** What every sender holds of each resource at the start of a test: a gift (300) comes out of it. B starts empty. */
+const STOCK = 5_000;
+const STOCKED = { r1: STOCK, r2: STOCK, r3: STOCK, r4: STOCK };
 
 describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
   let orm: MikroORM;
@@ -57,6 +60,7 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
     sendGiftAnswer(em() as never, as(from), { userid: to, resource }, now) as Promise<any>;
   const list = (userid: number, now = T0) => giftsAnswer(em() as never, as(userid), now) as Promise<any>;
   const collect = (userid: number, body: unknown, now = T0) => collectGiftsAnswer(em() as never, as(userid), body, now) as Promise<any>;
+  const drop = (userid: number, body: unknown, now = T0) => deleteGiftsAnswer(em() as never, as(userid), body, now) as Promise<any>;
 
   /** `reason` (and `from`) of a 409, or what else happened. */
   const refusalOf = async (call: Promise<unknown>): Promise<any> => {
@@ -99,13 +103,14 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
     await sql(`DELETE FROM bym.friend_gift WHERE from_userid IN (${LIST}) OR to_userid IN (${LIST})`);
     await sql(`DELETE FROM bym.friend WHERE userid IN (${LIST}) OR friend_userid IN (${LIST})`);
     await sql(`DELETE FROM bym.notification WHERE userid IN (${LIST})`);
-    await sql(`UPDATE bym."user" SET blocked_users = '[]', banned = false WHERE userid IN (${LIST})`);
+    await sql(`UPDATE bym."user" SET blocked_users = '[]', banned = false, gift_wishes = NULL WHERE userid IN (${LIST})`);
     await sql(
       `UPDATE bym.save SET buildingdata = ?, buildinghealthdata = '{}', resources = '{"r1":0,"r2":0,"r3":0,"r4":0}', outposts = '[]',
               savetime = ?, createtime = ?, points = ?, basevalue = '0', type = 'main', attackid = 0, attacks = '[]', damage = 0
         WHERE userid IN (${LIST})`,
       [JSON.stringify({ "0": HALL }), T0, T0 - 30 * DAY, LEVEL_5_POINTS]
     );
+    await sql(`UPDATE bym.save SET resources = ? WHERE userid IN (${LIST}) AND userid <> ?`, [JSON.stringify(STOCKED), B]);
     await befriend(A, B);
     for (const other of OTHERS) await befriend(other, B);
     await befriend(A, HIDDEN);
@@ -152,10 +157,12 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
     await orm.close(true);
   });
 
-  test("a gift is free, worth 3% of the cap, waits 7 days and leaves the receiver a notice", async () => {
+  test("a gift is taken from the sender, worth 3% of the cap, waits 7 days and leaves the receiver a notice", async () => {
     const answer = await send(A, B, "r3");
     expect(answer).toMatchObject({ error: 0, gift: { resource: "r3", amount: 300, userid: B, username: `zz_fg_${B}`, createdAt: T0, expiresAt: T0 + 7 * DAY } });
-    expect(await resourcesOf(A)).toMatchObject({ r1: 0, r2: 0, r3: 0, r4: 0 });
+    // Owner, 7 Nov 2026: the gift comes out of the sender's main yard, and the answer says what is left.
+    expect(answer.resources).toEqual({ ...STOCKED, r3: STOCK - 300 });
+    expect(await resourcesOf(A)).toMatchObject({ ...STOCKED, r3: STOCK - 300 });
 
     const [row] = await giftRows(A);
     expect(row).toMatchObject({ to_userid: B, resource: "r3", amount: 300, collected_at: null });
@@ -164,7 +171,7 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
     expect(notice!.jobs[0]).toEqual({ event: "gift", userid: A, username: `zz_fg_${A}`, giftid: answer.gift.giftid, resource: "r3", amount: 300 });
 
     const waiting = await list(B);
-    expect(waiting).toMatchObject({ error: 0, collectsLeft: 5 });
+    expect(waiting).toMatchObject({ error: 0, collectsLeft: 10 });
     expect(waiting.gifts).toEqual([
       {
         giftid: answer.gift.giftid,
@@ -190,8 +197,22 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
     expect((theirs.friends as any[]).find((friend) => friend.userid === A)).toMatchObject({ giftSentToday: false });
     expect((await list(B)).gifts[0].canSendBack).toBe(true);
 
+    await setSave(B, { resources: STOCKED });
     await send(B, A);
     expect((await list(B)).gifts[0].canSendBack).toBe(false);
+  });
+
+  test("gift wishes (#391): the player's own in the gifts list, each friend's in the friends list", async () => {
+    expect((await list(B)).wishes).toEqual([]);
+    expect(await wishesAnswer(em() as never, as(B), { wishes: ["r3", "r1"] })).toEqual({ error: 0, wishes: ["r3", "r1"] });
+    expect((await list(B)).wishes).toEqual(["r3", "r1"]);
+    const mine = await friendsAnswer(em() as never, as(A), T0);
+    expect((mine.friends as any[]).find((friend) => friend.userid === B)).toMatchObject({ wishes: ["r3", "r1"] });
+    expect((mine.friends as any[]).find((friend) => friend.userid === HIDDEN)).toMatchObject({ wishes: [] });
+    // Wishes only sort the picker: an unwished gift still goes.
+    expect((await send(A, B, "r4")).gift).toMatchObject({ resource: "r4" });
+    expect(await wishesAnswer(em() as never, as(B), { wishes: [] })).toEqual({ error: 0, wishes: [] });
+    await expect(wishesAnswer(em() as never, as(B), { wishes: ["r1", "r2", "r3", "r4"] })).rejects.toThrow();
   });
 
   test("a second gift to the same friend the same UTC day is refused; the next day is fine", async () => {
@@ -207,6 +228,34 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
     expect(answers.filter((answer) => answer === "not refused")).toHaveLength(1);
     expect(answers.filter((answer) => answer?.reason === "giftSentToday")).toHaveLength(1);
     expect(await giftRows(A)).toHaveLength(1);
+    // Only the gift that went was paid for.
+    const held = await resourcesOf(A);
+    expect(held.r1 + held.r2).toBe(2 * STOCK - 300);
+  });
+
+  test("a sender without enough of the resource is refused, and nothing is taken or sent", async () => {
+    await setSave(A, { resources: { ...STOCKED, r2: 299 } });
+    expect(await refusalOf(send(A, B, "r2"))).toEqual({ reason: "notEnough", need: 300, have: 299 });
+    expect(await resourcesOf(A)).toMatchObject({ ...STOCKED, r2: 299 });
+    expect(await giftRows(A)).toHaveLength(0);
+    expect(await sql(`SELECT 1 FROM bym.notification WHERE userid = ?`, [B])).toHaveLength(0);
+    // Exactly enough is fine, and leaves none.
+    await setSave(A, { resources: { ...STOCKED, r2: 300 } });
+    expect((await send(A, B, "r2")).resources).toMatchObject({ r2: 0 });
+  });
+
+  test("a second gift the same day costs nothing more", async () => {
+    await send(A, B, "r1");
+    expect(await reasonOf(send(A, B, "r1", T0 + 60))).toBe("giftSentToday");
+    expect(await resourcesOf(A)).toMatchObject({ r1: STOCK - 300 });
+  });
+
+  test("sending is refused while the sender's yard is under attack", async () => {
+    // The attack check reads the real clock.
+    await setSave(A, { attackid: 1, attacks: [{ starttime: Math.floor(Date.now() / 1000) }] });
+    expect(await reasonOf(send(A, B))).toBe("underAttack");
+    expect(await resourcesOf(A)).toMatchObject(STOCKED);
+    expect(await giftRows(A)).toHaveLength(0);
   });
 
   test("removing and re-adding a friend the same day does not give a second gift", async () => {
@@ -221,7 +270,7 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
   test("the amount uses the lower of the two caps, and is fixed when sent", async () => {
     await setSave(A, { outposts: [[1, 1]] });
     expect((await send(A, B)).gift.amount).toBe(Math.floor(BASE_CAP * 0.03));
-    await setSave(B, { outposts: [[1, 1]] });
+    await setSave(B, { outposts: [[1, 1]], resources: { ...STOCKED, r1: 100_000 } });
     expect((await send(B, A)).gift.amount).toBe(Math.floor(BIG_CAP * 0.03));
     await setSave(A, { outposts: [] });
     expect((await list(A)).gifts[0].amount).toBe(Math.floor(BIG_CAP * 0.03));
@@ -230,7 +279,7 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
   test("collecting credits the main yard and marks the gift collected", async () => {
     const { gift } = await send(A, B, "r2");
     const answer = await collect(B, { giftid: gift.giftid }, T0 + 60);
-    expect(answer).toEqual({ error: 0, collected: 1, resources: { r1: 0, r2: 300, r3: 0, r4: 0 }, collectsLeft: 4, giftsWaiting: 0 });
+    expect(answer).toEqual({ error: 0, collected: 1, resources: { r1: 0, r2: 300, r3: 0, r4: 0 }, collectsLeft: 9, giftsWaiting: 0 });
     expect(await resourcesOf(B)).toMatchObject({ r2: 300 });
     const [row] = await giftRows(A);
     expect(row!.collected_at).not.toBeNull();
@@ -244,12 +293,12 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
     expect((await list(B)).gifts).toHaveLength(1);
   });
 
-  test("at most 5 gifts are collected a day; the rest wait for tomorrow", async () => {
+  test("at most 10 gifts are collected a day; the rest wait for tomorrow", async () => {
     for (const from of [A, ...OTHERS]) await send(from, B, "r4");
     const first = await collect(B, { all: true }, T0 + 60);
-    expect(first).toMatchObject({ collected: 5, resources: { r4: 1500 }, collectsLeft: 0, giftsWaiting: 1 });
+    expect(first).toMatchObject({ collected: 10, resources: { r4: 3000 }, collectsLeft: 0, giftsWaiting: 1 });
     // The oldest first: the last one sent is the one left.
-    expect((await list(B, T0 + 60)).gifts.map((gift: any) => gift.userid)).toEqual([OTHERS[4]]);
+    expect((await list(B, T0 + 60)).gifts.map((gift: any) => gift.userid)).toEqual([OTHERS[9]]);
 
     expect(await reasonOf(collect(B, { all: true }, T0 + 120))).toBe("collectLimit");
     const [left] = (await list(B, T0 + 120)).gifts;
@@ -257,12 +306,53 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
     expect((await list(B, T0 + 120)).collectsLeft).toBe(0);
 
     const tomorrow = T0 + 12 * 60 * 60;
-    expect(await collect(B, { all: true }, tomorrow)).toMatchObject({ collected: 1, collectsLeft: 4, giftsWaiting: 0 });
-    expect(await resourcesOf(B)).toMatchObject({ r4: 1800 });
+    expect(await collect(B, { all: true }, tomorrow)).toMatchObject({ collected: 1, collectsLeft: 9, giftsWaiting: 0 });
+    expect(await resourcesOf(B)).toMatchObject({ r4: 3300 });
+  });
+
+  test("deleting one gift gives nothing, uses no collect, and the sender still cannot send again today", async () => {
+    const { gift } = await send(A, B, "r2");
+    await send(OTHERS[0]!, B, "r3");
+    expect(await drop(B, { giftid: gift.giftid }, T0 + 60)).toEqual({ error: 0, deleted: 1, collectsLeft: 10, giftsWaiting: 1 });
+    expect(await resourcesOf(B)).toMatchObject({ r1: 0, r2: 0, r3: 0, r4: 0 });
+    const after = await list(B, T0 + 60);
+    expect(after.gifts.map((one: any) => one.userid)).toEqual([OTHERS[0]]);
+    expect(after.collectsLeft).toBe(10);
+    // The row stays (one-a-day key, audit), and is no longer collectable or deletable.
+    expect(await giftRows(A)).toHaveLength(1);
+    expect(await reasonOf(collect(B, { giftid: gift.giftid }, T0 + 120))).toBe("noSuchGift");
+    expect(await reasonOf(drop(B, { giftid: gift.giftid }, T0 + 120))).toBe("noSuchGift");
+    expect(await reasonOf(send(A, B, "r1", T0 + 180))).toBe("giftSentToday");
+    // Tomorrow the sender may send again.
+    expect((await send(A, B, "r1", T0 + 12 * 60 * 60)).gift).toBeTruthy();
+  });
+
+  test("delete all throws every waiting gift away; collects already used today stay used", async () => {
+    for (const from of [A, ...OTHERS.slice(0, 3)]) await send(from, B, "r4");
+    expect(await collect(B, { giftid: (await list(B)).gifts[0].giftid }, T0 + 30)).toMatchObject({ collected: 1, collectsLeft: 9 });
+    expect(await drop(B, { all: true }, T0 + 60)).toEqual({ error: 0, deleted: 3, collectsLeft: 9, giftsWaiting: 0 });
+    expect((await list(B, T0 + 60)).gifts).toEqual([]);
+    expect(await friendsAnswer(em() as never, as(B), T0 + 60)).toMatchObject({ giftsWaiting: 0 });
+    expect(await resourcesOf(B)).toMatchObject({ r4: 300 });
+    // The collected one stays collected; nothing waiting deletes nothing.
+    expect((await giftRows(A))[0]!.collected_at).not.toBeNull();
+    expect(await drop(B, { all: true }, T0 + 90)).toEqual({ error: 0, deleted: 0, collectsLeft: 9, giftsWaiting: 0 });
+  });
+
+  test("only the receiver can delete a gift; bad bodies are refused", async () => {
+    const { gift } = await send(A, B);
+    expect(await reasonOf(drop(A, { giftid: gift.giftid }))).toBe("noSuchGift");
+    expect(await reasonOf(drop(STRANGER, { giftid: gift.giftid }))).toBe("noSuchGift");
+    expect(await drop(A, { all: true })).toMatchObject({ deleted: 0 });
+    expect((await list(B)).gifts).toHaveLength(1);
+    for (const body of [{}, { giftid: 0 }, { giftid: "x" }, { all: false }, { all: true, giftid: gift.giftid }]) {
+      await expect(drop(B, body)).rejects.toBeInstanceOf(ZodError);
+    }
+    expect((await list(B)).gifts).toHaveLength(1);
   });
 
   test("collecting with nothing waiting collects nothing", async () => {
-    expect(await collect(B, { all: true })).toEqual({ error: 0, collected: 0, resources: { r1: 0, r2: 0, r3: 0, r4: 0 }, collectsLeft: 5, giftsWaiting: 0 });
+    expect(await collect(B, { all: true })).toEqual({ error: 0, collected: 0, resources: { r1: 0, r2: 0, r3: 0, r4: 0 }, collectsLeft: 10, giftsWaiting: 0 });
   });
 
   test("a gift lapses after 7 days", async () => {
@@ -326,6 +416,7 @@ describe.skipIf(!dbName)("daily gifts on a real database (issue #375)", () => {
 
   test("blocking drops the blocked player's waiting gifts to you, and only those", async () => {
     await send(A, B);
+    await setSave(B, { resources: STOCKED });
     await send(B, A);
     await blockPlayer(em() as never, B, A, T0 + 60);
     expect((await list(B, T0 + 120)).gifts).toEqual([]);

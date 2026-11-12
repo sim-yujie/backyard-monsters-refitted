@@ -1,6 +1,7 @@
 import { tutTarget, TutTarget } from "@/game/guide/targets";
 import {
   battleCounts,
+  isFarAbove,
   isPlayingNow,
   LIST_SORT_DIRECTIONS,
   LIST_SORT_LABELS,
@@ -14,6 +15,8 @@ import {
 } from "@/game/maproom1/mr1Model";
 import { tribeInfo } from "@/game/maproom1/tribes";
 import { avatar, battleIcons, countdown } from "./TargetCard";
+import { friendMarkOf } from "@/game/friends/friendMarks";
+import { FRIEND_MARK_TEXT, friendBadge } from "@/ui/friends/friendBadge";
 import { onlineDot } from "@/ui/onlineDot";
 import { loadSortPref, saveSortPref } from "@/ui/sortPrefs";
 import { button, el, icon } from "./icons";
@@ -220,10 +223,12 @@ export class Mr1ListView {
           const line = rowLine(neighbour, now);
           const online = isPlayingNow(neighbour, now);
           const battles = battleCounts(neighbour).map((count) => count.label);
+          const mark = friendMarkOf(neighbour.userid, { friend: neighbour.friend === true, pinned: neighbour.pinned === true });
           row.setAttribute(
             "aria-label",
             [
               neighbour.name,
+              mark ? FRIEND_MARK_TEXT[mark].toLowerCase() : "",
               `level ${neighbour.level}`,
               online ? "online" : "",
               line,
@@ -234,6 +239,11 @@ export class Mr1ListView {
           );
           const words = el("span", "mr1-row__words");
           const top = el("span", "mr1-row__top");
+          const friend = friendBadge(mark, 16, "mr1-row__friend");
+          if (friend) {
+            top.append(friend);
+            row.classList.add(`mr1-row--${mark}`);
+          }
           top.append(el("span", "mr1-row__name", neighbour.name));
           if (online) top.append(onlineDot());
           top.append(el("span", "chip mr1-chip--small", `Lv ${neighbour.level}`));
@@ -241,6 +251,11 @@ export class Mr1ListView {
           const icons = battleIcons(neighbour);
           if (line || icons) {
             const second = el("span", "mr1-row__line", line);
+            // More than the level gap above: allowed, but they can hit back once.
+            if (isFarAbove(neighbour, now)) {
+              second.classList.add("mr1-row__line--warn");
+              second.prepend(icon("alert", 13, "mr1-icon"));
+            }
             if (icons) second.append(icons);
             words.append(second);
           }

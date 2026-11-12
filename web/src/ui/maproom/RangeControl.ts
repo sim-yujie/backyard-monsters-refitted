@@ -1,5 +1,4 @@
 import { cellsText, type RangeSource } from "@/game/maproom/attackRange";
-import { DECLARE_WAR_RANGE } from "@/game/maproom/rules/range";
 import { button, el, icon } from "@/ui/maproom1/icons";
 
 /**
@@ -66,8 +65,8 @@ export class RangeControl {
     this.render();
   }
 
-  /** The flingers the range is drawn from, and whether Declare War adds to them. */
-  setSources(sources: readonly RangeSource[], declareWar: boolean): void {
+  /** The flingers the range is drawn from. */
+  setSources(sources: readonly RangeSource[]): void {
     this.sources.replaceChildren(
       ...sources.map((source) => {
         const row = el("div", "mr2-range-legend__source");
@@ -86,10 +85,7 @@ export class RangeControl {
     this.note.textContent =
       sources.length === 0
         ? "None of your yards has a Flinger that reaches anything yet."
-        : (declareWar
-            ? `Declare War is on: each includes ${DECLARE_WAR_RANGE} bonus cells. `
-            : "") +
-          "A higher Flinger reaches further: 4, 6, 8, 10 cells for a yard; 1 to 4 for an outpost.";
+        : "A higher Flinger reaches further: 4, 6, 8, 10 cells for a yard; 1 to 4 for an outpost.";
   }
 
   private set(on: boolean): void {

@@ -255,29 +255,36 @@ describe("joinMapRoom2", () => {
 
   const recorder = () => {
     const calls: Save[] = [];
+    const welcomed: number[] = [];
     const join: WorldJoin = async (_em, save) => {
       calls.push(save);
       save.worldid = "world-1";
     };
-    return { calls, join };
+    const welcome = async (_em: EntityManager, userid: number) => {
+      welcomed.push(userid);
+    };
+    return { calls, join, welcome, welcomed };
   };
 
   test("joins a world, then sets mr2upgraded and mapversion 2", async () => {
     const save = saveOf([building(1, MAP_ROOM, { l: 2 })]) as unknown as Save;
-    const { calls, join } = recorder();
+    save.userid = 2503;
+    const { calls, join, welcome, welcomed } = recorder();
 
-    expect(await joinMapRoom2(em, save, null, join)).toBe(true);
+    expect(await joinMapRoom2(em, save, null, join, welcome)).toBe(true);
 
     expect(calls).toEqual([save]);
     expect(save).toMatchObject({ mr2upgraded: true, mapversion: 2, worldid: "world-1" });
+    // The "New to Map Room 2" days start on joining.
+    expect(welcomed).toEqual([2503]);
   });
 
   test("a save that already has a world only gets its flags: no second home cell", async () => {
     const save = saveOf([building(1, MAP_ROOM, { l: 2 })], {}) as unknown as Save;
     save.worldid = "old-world";
-    const { calls, join } = recorder();
+    const { calls, join, welcome } = recorder();
 
-    expect(await joinMapRoom2(em, save, null, join)).toBe(true);
+    expect(await joinMapRoom2(em, save, null, join, welcome)).toBe(true);
 
     expect(calls).toEqual([]);
     expect(save).toMatchObject({ mr2upgraded: true, mapversion: 2, worldid: "old-world" });
@@ -285,10 +292,11 @@ describe("joinMapRoom2", () => {
 
   test("nothing happens when the yard does not need it", async () => {
     const save = saveOf([building(1, MAP_ROOM, { l: 1 })]) as unknown as Save;
-    const { calls, join } = recorder();
+    const { calls, join, welcome, welcomed } = recorder();
 
-    expect(await joinMapRoom2(em, save, null, join)).toBe(false);
+    expect(await joinMapRoom2(em, save, null, join, welcome)).toBe(false);
     expect(calls).toEqual([]);
+    expect(welcomed).toEqual([]);
     expect(save.mr2upgraded).toBe(false);
   });
 });

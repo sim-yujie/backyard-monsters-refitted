@@ -74,6 +74,17 @@ describe("TransferDialog", () => {
     expect([...select("Move monsters to").options].map((option) => option.value)).toEqual([MAIN, OTHER]);
   });
 
+  it("opens on the target it was given (the yard card's Bring monsters here)", async () => {
+    const { options } = await open({ from: MAIN, to: OTHER });
+    expect(select("Move monsters to").value).toBe(OTHER);
+    expect(options.load).toHaveBeenCalledWith(OTHER);
+  });
+
+  it("ignores a target that cannot take from the source", async () => {
+    await open({ from: OUTPOST, to: OUTPOST });
+    expect(select("Move monsters to").value).toBe(MAIN);
+  });
+
   it("lists the source's monsters and the target's room", async () => {
     await open();
     expect(host.querySelectorAll(".transfer-row")).toHaveLength(2);

@@ -1,0 +1,6 @@
+  107: modernLook(["skull.modern@2x.webp", -7, -38], ["skull.modern-shadow.jpg", -1, -3]),
+  74: modernLook(["pokey.modern@2x.webp", -7, -28], ["pokey.modern-shadow.jpg", -5, 2]),
+  75: modernLook(["octo.modern@2x.webp", -4, -23], ["octo.modern-shadow.jpg", -3, 3]),
+  76: modernLook(["bolt.modern@2x.webp", -9, -23], ["bolt.modern-shadow.jpg", -7, 5]),
+  77: modernLook(["bandito.modern@2x.webp", -6, -26], ["bandito.modern-shadow.jpg", -5, 3]),
+  78: modernLook(["brain.modern@2x.webp", -8, -28], ["brain.modern-shadow.jpg", -6, 2]),

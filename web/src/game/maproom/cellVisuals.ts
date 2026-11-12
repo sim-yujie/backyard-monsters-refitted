@@ -2,6 +2,10 @@ import { CELL_HEIGHT, CELL_WIDTH, WATER_MAX_HEIGHT } from "@/config";
 import { CellType, isFogCell, isPlayerCell, isWaterCell, type MapCell, type PlayerCell } from "@/api/types";
 import { HexGrid, mapRoomGrid } from "@/game/HexGrid";
 import { classicLook } from "@/game/classicLook";
+import { RELATION_LOOK, type PlayerRelation } from "./relationLook";
+import type { MapAlliance } from "./mapAlliances";
+
+export type { PlayerRelation } from "./relationLook";
 
 /**
  * What a cell looks like, as data.
@@ -93,7 +97,28 @@ export interface CellAppearance {
    * redraws the tile without its bar.
    */
   campHealth: number | null;
+  /**
+   * The owner is the viewer's friend (beta 7): `"friend"` draws the painted
+   * friend marker beside the building, `"pinned"` a bigger gold-ringed one for
+   * a friend pinned to the top of the Friends list. `"none"` off a player
+   * cell, on the viewer's own cells and on everyone else's.
+   */
+  friend: CellFriend;
+  /**
+   * How a player cell's owner relates to the viewer (owner, 8 Nov 2026): picks the cell's border
+   * colour and line (`relationLook.ts`). Null off a player cell.
+   */
+  relation: PlayerRelation | null;
+  /**
+   * The owner's alliance shield (beta 7, design v5 §12): Flash's shield 1 to 41
+   * drawn at the left end of the name plate, 0 for none (no alliance, or its
+   * alliance not in the map's roster yet).
+   */
+  shield: number;
 }
+
+/** {@link CellAppearance.friend}. */
+export type CellFriend = "none" | "friend" | "pinned";
 
 /**
  * The health bar's value for a camp cell's `dm` and `d`, or null for no bar.
@@ -135,9 +160,6 @@ export const KitFilter = {
 } as const;
 export type KitFilter = (typeof KitFilter)[keyof typeof KitFilter];
 
-/** How a player cell relates to the viewer (#334), driving the plate's colour and icon. */
-export type PlayerRelation = "you" | "alliance" | "attacker" | "other";
-
 /**
  * What `appearanceOf` needs of the viewer's fog of war sight (#331) to draw
  * the sight-edge feather: just the one question, so this file does not have
@@ -161,6 +183,19 @@ export interface MapViewerContext {
    * treating every fog cell as an edge.
    */
   sight?: SightLookup;
+  /**
+   * Whether a player cell's owner is the viewer's friend (beta 7). The map
+   * passes one that prefers the shared friends list (`friendMarkOf`), fresher
+   * after a pin or a removal than the cell's own `fr` / `fp` flags. Absent,
+   * the flags alone decide.
+   */
+  friendMark?: (cell: PlayerCell) => CellFriend;
+  /**
+   * The alliance a player cell's `aid` names, from the map's roster
+   * (`GetAreaResponse.alliancedata`, beta 7): its name and shield. Absent, no
+   * shields are drawn.
+   */
+  allianceOf?: (allianceId: number) => MapAlliance | undefined;
 }
 export const DEFAULT_VIEWER_CONTEXT: MapViewerContext = { myAlliance: null, kitFilter: KitFilter.ALL };
 
@@ -262,23 +297,40 @@ export const KIT_TINT: Record<OutpostKit, number> = {
 /** Alpha applied to a cell the active kit filter dims (#334). */
 export const DIMMED_ALPHA = 0.35;
 
+/**
+ * The name plate by relation. A friend's plate stays the plain one: the border already says
+ * "friend", and the owner asked for no more icons on the cell (8 Nov 2026).
+ */
 const RELATION_STYLE: Record<PlayerRelation, { colour: number; icon: CellAppearance["relationIcon"] }> = {
   you: { colour: RELATION_YOU_COLOUR, icon: "house" },
   alliance: { colour: RELATION_ALLIANCE_COLOUR, icon: "shield" },
-  attacker: { colour: RELATION_ATTACKER_COLOUR, icon: "swords" },
+  pinned: { colour: RELATION_OTHER_COLOUR, icon: "none" },
+  friend: { colour: RELATION_OTHER_COLOUR, icon: "none" },
+  hostile: { colour: RELATION_ATTACKER_COLOUR, icon: "swords" },
   other: { colour: RELATION_OTHER_COLOUR, icon: "none" },
 };
 
+/** A friend mark from the cell's own `fr` / `fp` flags. */
+const friendFromFlags = (cell: PlayerCell): CellFriend => (cell.fp === 1 ? "pinned" : cell.fr === 1 ? "friend" : "none");
+
 /**
- * How a player cell relates to the viewer (#334).
+ * How a player cell relates to the viewer (#334; owner, 8 Nov 2026), the first that applies:
+ * yours, your alliance, a pinned friend, a friend, hostile, else neutral (`"other"`).
  *
- * `"attacker"` is a base whose owner has ever attacked the viewer: the server
- * tags it `ak` (`services/maproom/v2/attackers.ts`), with no time limit.
+ * Hostile is the server's `ho` (`services/maproom/v2/hostiles.ts`): an attack between you, either
+ * way, ever, and no truce running. A friend who is also hostile shows as the friend. `friend`
+ * defaults to the cell's own flags; the map passes the shared friends list's fresher answer.
  */
-export const relationOf = (cell: PlayerCell, myAlliance: number | null): PlayerRelation => {
+export const relationOf = (
+  cell: PlayerCell,
+  myAlliance: number | null,
+  friend: CellFriend = friendFromFlags(cell),
+): PlayerRelation => {
   if (cell.mine === 1) return "you";
-  if (myAlliance !== null && cell.aid !== null && cell.aid === myAlliance) return "alliance";
-  if (cell.ak === 1) return "attacker";
+  if (myAlliance !== null && cell.aid != null && cell.aid === myAlliance) return "alliance";
+  if (friend === "pinned") return "pinned";
+  if (friend === "friend") return "friend";
+  if (cell.ho === 1) return "hostile";
   return "other";
 };
 
@@ -335,6 +387,9 @@ export const loadingAppearance = (): CellAppearance => ({
   hallLevel: 0,
   dimmed: false,
   campHealth: null,
+  friend: "none",
+  relation: null,
+  shield: 0,
 });
 
 /**
@@ -424,8 +479,15 @@ export const fogAppearance = (coord?: { x: number; y: number }, sight?: SightLoo
     hallLevel: 0,
     dimmed: false,
     campHealth: null,
+    friend: "none",
+    relation: null,
+    shield: 0,
   };
 };
+
+/** {@link CellAppearance.friend} for someone else's player cell. */
+export const friendOfCell = (cell: PlayerCell, context: MapViewerContext): CellFriend =>
+  cell.mine === 1 ? "none" : context.friendMark ? context.friendMark(cell) : friendFromFlags(cell);
 
 /**
  * Reads one cell payload into the shapes and text that represent it.
@@ -475,6 +537,9 @@ export const appearanceOf = (
     hallLevel: 0,
     dimmed: false,
     campHealth: null,
+    friend: "none" as CellFriend,
+    relation: null as PlayerRelation | null,
+    shield: 0,
   };
 
   if (isWaterCell(cell)) {
@@ -485,7 +550,8 @@ export const appearanceOf = (
     const truceActive = cell.t !== undefined && cell.t > nowSeconds;
     const outpost = cell.b === CellType.OUTPOST;
     const own = cell.mine === 1;
-    const relation = relationOf(cell, context.myAlliance);
+    const friend = friendOfCell(cell, context);
+    const relation = relationOf(cell, context.myAlliance, friend);
     const style = RELATION_STYLE[relation];
     return {
       ...base,
@@ -508,6 +574,9 @@ export const appearanceOf = (
       kit: outpost ? kitOf(cell.kit) : null,
       hallLevel: outpost ? 0 : Number(cell.th) || 0,
       dimmed: !matchesKitFilter(cell, context.kitFilter),
+      friend,
+      relation,
+      shield: cell.aid != null ? (context.allianceOf?.(cell.aid)?.image ?? 0) : 0,
     };
   }
 
@@ -535,6 +604,10 @@ export const rasterColour = (cell: MapCell | undefined): number => {
   if (isWaterCell(cell)) return terrainColour(cell.i);
   if (isPlayerCell(cell)) {
     if (cell.mine === 1) return OWN_COLOUR;
+    // Friends and hostile players stand out on the world view too, in their border colours
+    // (`relationLook.ts`), from the cell's own flags. Neutral players stay the calm grey.
+    const relation = relationOf(cell, null);
+    if (relation === "pinned" || relation === "friend" || relation === "hostile") return RELATION_LOOK[relation].colour;
     return cell.b === CellType.OUTPOST ? OUTPOST_COLOUR : PLAYER_COLOUR;
   }
   // Camps are the common case and would swamp the view in tribe colours, so

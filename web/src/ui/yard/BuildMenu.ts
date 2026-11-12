@@ -15,19 +15,25 @@ import {
   type BuildNeed,
   type BuildOffer,
 } from "@/game/yard/buildCatalogue";
-import type { SpotCheck } from "@/game/yard/BuildPlacement";
+import { topUpPrice } from "@/game/yard/resourcePacks";
+import type { LineStage, SpotCheck } from "@/game/yard/BuildPlacement";
+import type { LinePlan } from "@/game/yard/wallLine";
 import { DECOR_KINDS, DecorKind } from "@/game/yard/decorShop";
 import { townHallLevel, type YardKind } from "@/game/yard/buildingCosts";
 import { NEED_MORE_PODS, NEED_MORE_SILOS } from "@/game/yard/storage";
 import { typeName } from "@/game/yard/planner/summary";
+import { nameFitEm } from "@/ui/yard/tileNameFit";
 import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown } from "@/ui/format";
+import { gameIcon } from "@/ui/gameIcon";
+import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { costAmounts, resourceAmount, type ResourceRealm } from "@/ui/resourceIcon";
 import { INFERNO_LOCKED_MESSAGE, purseFunds } from "@/game/yard/surfaceInferno";
 import { BUILD_BLURBS, INFERNO_BUILD_BLURBS } from "./buildBlurbs";
 import { costFactChips } from "./costFactChips";
 import { ShinyButton } from "./ShinyButton";
+import { coinAmount, coinWords } from "@/ui/events/coinUi";
 import "@/ui/styles/build-menu.css";
 
 /**
@@ -66,8 +72,12 @@ import "@/ui/styles/build-menu.css";
 export interface BuildMenuOptions {
   /** The own yard. The window exists only there. */
   readonly binding: YardUiBinding;
-  /** Build was pressed: carry this type, finished for Shiny when `instant`. */
-  readonly onPick: (type: number, instant: boolean) => void;
+  /**
+   * Build was pressed: carry this type, finished for Shiny when `instant`;
+   * with `topUp`, the Shiny price the player agreed to for the resources it
+   * is short (Flash's `BRTOPUP`, issue #393).
+   */
+  readonly onPick: (type: number, instant: boolean, topUp?: number) => void;
   /** "Upgrade Town Hall": show the Town Hall. Left out, the link is not drawn. */
   readonly onTownHall?: () => void;
   /** After the player closes it. */
@@ -130,7 +140,7 @@ const offerRealm = (offer: Pick<BuildOffer, "inferno">): ResourceRealm | undefin
 
 /** "2 of 3 built" and the like: what a tile says under its name. */
 export const tileLine = (offer: BuildOffer, kind: YardKind = "main"): string => {
-  if (offer.price !== undefined) return `${formatAmount(offer.price)} Shiny`;
+  if (offer.price !== undefined) return coinWords(offer.price);
   if (offer.stored !== null) return `${offer.stored} in storage`;
   const hall = offerHall(offer, kind);
   switch (offer.status) {
@@ -193,6 +203,8 @@ export class BuildMenu {
   private readonly unsubscribe: () => void;
   /** One Build instantly button per type, kept across redraws so an armed one survives them. */
   private readonly shiny = new Map<number, ShinyButton>();
+  /** One Top up button per type, kept across redraws like Build instantly. */
+  private readonly topUps = new Map<number, ShinyButton>();
 
   private active: BuildCategory = BuildCategory.RESOURCES;
   private page = 0;
@@ -203,6 +215,9 @@ export class BuildMenu {
   private opened = false;
   private destroyed = false;
 
+  /** Its place in the middle of the screen, one window at a time (`ui/centreWindow.ts`). */
+  private readonly centre: CentreWindow;
+
   constructor(options: BuildMenuOptions) {
     this.binding = options.binding;
     this.onPick = options.onPick;
@@ -211,6 +226,7 @@ export class BuildMenu {
 
     const panel = new Panel({ title: "Build", className: "build-menu", closable: false });
     this.element = panel.element;
+    this.centre = centreWindow(this.element, () => this.close());
     this.element.hidden = true;
     this.element.setAttribute("role", "region");
     this.element.addEventListener("keydown", (event) => {
@@ -346,6 +362,7 @@ export class BuildMenu {
     const wasOpen = this.opened;
     this.opened = true;
     this.element.hidden = false;
+    this.centre.opened();
     const switching = category !== this.active;
     if (switching) {
       this.active = category;
@@ -370,6 +387,7 @@ export class BuildMenu {
     if (!this.opened) return;
     this.opened = false;
     this.element.hidden = true;
+    this.centre.closed();
     this.disarm();
     // A phone reopens on the tiles, not on an info it was showing.
     if (isStacked()) this.picked = null;
@@ -383,6 +401,8 @@ export class BuildMenu {
     this.disarm();
     for (const button of this.shiny.values()) button.destroy();
     this.shiny.clear();
+    for (const button of this.topUps.values()) button.destroy();
+    this.topUps.clear();
     this.element.remove();
   }
 
@@ -471,6 +491,11 @@ export class BuildMenu {
       button.destroy();
       this.shiny.delete(type);
     }
+    for (const [type, button] of this.topUps) {
+      if (!button.armed) continue;
+      button.destroy();
+      this.topUps.delete(type);
+    }
   }
 
   private sorted(): BuildOffer[] {
@@ -515,11 +540,20 @@ export class BuildMenu {
     const hall = townHallLevel(store.yard);
     const hallName = hallWord(store.kind);
     const free = workers.total - workers.busy;
-    this.meta.replaceChildren(
-      glyph(WORKER, "build-menu__meta-icon"),
-      `${free} of ${workers.total} ${workers.total === 1 ? "worker" : "workers"} free`,
-      outpost ? " · Outpost limits" : hall > 0 ? ` · ${hallName} level ${hall}` : ` · No ${hallName}`,
-    );
+    if (this.active === BuildCategory.DECORATIONS && store.kind === "main") {
+      // Decorations need no worker but cost event coins: the purse goes in
+      // the title bar, which a short window or a phone never scrolls away
+      // (tester, 8 Nov: under the tiles it was cut off at 1280x800).
+      const purse = coinAmount(store.eventCoins, { className: "build-menu__coins", size: 24 });
+      purse.setAttribute("aria-label", coinWords(store.eventCoins));
+      this.meta.replaceChildren("You have ", purse);
+    } else {
+      this.meta.replaceChildren(
+        glyph(WORKER, "build-menu__meta-icon"),
+        `${free} of ${workers.total} ${workers.total === 1 ? "worker" : "workers"} free`,
+        outpost ? " · Outpost limits" : hall > 0 ? ` · ${hallName} level ${hall}` : ` · No ${hallName}`,
+      );
+    }
 
     this.drawKinds();
     const offers = this.sorted();
@@ -577,13 +611,14 @@ export class BuildMenu {
       item.append(text);
       return item;
     };
-    // Decorations come from storage or for Shiny: nothing is locked and
+    // Decorations come from storage or for event coins: nothing is locked and
     // nothing runs out, so the build keys would only mislead.
     if (storage) {
       // Not a key: a narrow window hides those, and this is the tab's one line.
+      // The purse itself is in the title bar (`draw`), always in view.
       const note = document.createElement("span");
       note.className = "build-menu__note";
-      note.textContent = "Stored ones first, free to place. The rest cost Shiny.";
+      note.textContent = "Stored: free. Big events pay Glimmers.";
       this.legend.replaceChildren(note);
       return;
     }
@@ -622,14 +657,16 @@ export class BuildMenu {
     const title = document.createElement("span");
     title.className = "build-tile__name";
     title.textContent = name;
+    // Its widest word, so the CSS can shrink it to fit rather than break it (`tileNameFit.ts`).
+    title.style.setProperty("--name-fit-em", String(nameFitEm(name)));
     const count = document.createElement("span");
     count.className = "build-tile__count";
     count.textContent = tileLine(offer, kind);
-    // A decoration sold for Shiny: the Shop's Shiny icon and the price, red while short.
+    // A decoration sold for event coins: the coin icon and the price, red while short.
     if (offer.price !== undefined) {
-      count.replaceChildren(resourceAmount("shiny", formatAmount(offer.price)));
+      count.replaceChildren(coinAmount(offer.price));
       count.classList.add("build-tile__count--price");
-      count.classList.toggle("build-tile__count--short", offer.gate?.reason === "credits");
+      count.classList.toggle("build-tile__count--short", offer.gate?.reason === "coins");
       button.setAttribute("aria-label", `${name}, ${tileLine(offer, kind)}`);
     }
     if (offer.status === "locked" && offer.gate?.reason === "requirements") {
@@ -687,7 +724,7 @@ export class BuildMenu {
           ? "A decoration from your storage. It goes anywhere inside your yard."
           : "");
     if (offer.price !== undefined) {
-      count.replaceChildren(resourceAmount("shiny", formatAmount(offer.price)));
+      count.replaceChildren(coinAmount(offer.price));
       this.info.replaceChildren(back, picture(offer, "build-info__picture", kind), head, blurb, this.buyActions(offer, name));
       return;
     }
@@ -759,13 +796,25 @@ export class BuildMenu {
     build.addEventListener("click", () => this.onPick(offer.type, false));
     actions.append(build);
 
+    // Short of resources that fit in storage: buy what is missing and build
+    // (Flash's top-up, issue #393). Tap, then tap again, then pick a spot.
+    const store = this.binding.store;
+    const guidePaid = guidePays(offer.type, store.save.onboarding, store.kind);
+    if (!guidePaid && gate?.reason === "shortfall" && !gate.overCap) {
+      const price = topUpPrice(gate.shortfall);
+      if (price > 0) {
+        const topUp = this.topUpButton(offer.type);
+        topUp.setPrice(price);
+        topUp.setBlocked(price > store.credits ? "Not enough Shiny." : null);
+        actions.append(topUp.element);
+      }
+    }
+
     // Build instantly is offered once the hall and prerequisites allow the
     // building; what it lacks after that is Shiny, which the button itself says.
     // Not while the guided start pays for this one ("This one's on me: tap
     // Build"): there is nothing to spend Shiny on, and Bob's cover over the
     // panel swallowed the tap, so the button did nothing.
-    const store = this.binding.store;
-    const guidePaid = guidePays(offer.type, store.save.onboarding, store.kind);
     if (!guidePaid && (!offer.instantGate || offer.instantGate.reason === "credits")) {
       const instant = this.instantButton(offer.type);
       instant.setPrice(offer.instantPrice);
@@ -809,10 +858,11 @@ export class BuildMenu {
   }
 
   /**
-   * A decoration sold for Shiny (owner decision 2026-11-04): its price, at
-   * once, no worker, and Buy, a {@link ShinyButton} (tap, then tap again)
-   * that starts the placement; `decor/buy` charges the price when it goes
-   * down. Short of Shiny, Buy is blocked and a line says how much more.
+   * A decoration sold for event coins (owner decisions 2026-11-04 and 29):
+   * its price, at once, no worker, and Buy, a {@link ShinyButton} in coins
+   * (tap, then tap again) that starts the placement; `decor/buy` charges the
+   * price when it goes down. Short of coins, Buy is blocked and a line says
+   * how many more.
    */
   private buyActions(offer: BuildOffer, name: string): HTMLElement {
     const price = offer.price ?? 0;
@@ -822,7 +872,7 @@ export class BuildMenu {
     facts.setAttribute("aria-label", "Cost");
     const cost = document.createElement("li");
     cost.className = "build-info__fact";
-    cost.append(resourceAmount("shiny", formatAmount(price)));
+    cost.append(coinAmount(price));
     facts.append(cost);
     for (const [icon, text] of [
       [CLOCK, "At once"],
@@ -840,7 +890,7 @@ export class BuildMenu {
     actions.className = "build-info__actions";
     const buy = this.buyButton(offer.type, name);
     buy.setPrice(price);
-    buy.setBlocked(offer.gate ? "Not enough Shiny." : null);
+    buy.setBlocked(offer.gate ? "Not enough Glimmers." : null);
     actions.append(buy.element);
     wrap.append(actions);
     return wrap;
@@ -855,6 +905,7 @@ export class BuildMenu {
         label: "Buy",
         what: name,
         spell: formatAmount,
+        currency: "eventcoin",
         className: "btn--primary build-info__build build-info__buy",
         onSpend: () => {
           // Re-checked against the yard as it is now, not as the panel was drawn.
@@ -864,6 +915,26 @@ export class BuildMenu {
       });
       button.element.dataset["focus"] = "build";
       this.shiny.set(key, button);
+    }
+    return button;
+  }
+
+  private topUpButton(type: number): ShinyButton {
+    let button = this.topUps.get(type);
+    if (!button) {
+      button = new ShinyButton({
+        label: "Top up",
+        spell: formatAmount,
+        className: "btn--primary build-info__topup",
+        onSpend: () => {
+          // The price now, not as the panel was drawn: income may have lowered it.
+          const gate = buildOffer(type, this.binding.store)?.gate;
+          if (gate?.reason === "shortfall" && !gate.overCap) this.onPick(type, false, topUpPrice(gate.shortfall));
+          else if (gate === null) this.onPick(type, false);
+        },
+      });
+      button.element.dataset["focus"] = "topup";
+      this.topUps.set(type, button);
     }
     return button;
   }
@@ -948,6 +1019,8 @@ export const gateSentence = (gate: BuildGate, kind: YardKind = "main", inferno =
       return gate.total === 1 ? "Your worker is busy." : `All ${gate.total} workers are busy.`;
     case "credits":
       return "Not enough Shiny.";
+    case "coins":
+      return "Not enough Glimmers.";
   }
 };
 
@@ -959,6 +1032,8 @@ export const gateLine = (gate: BuildGate, kind: YardKind = "main", inferno = fal
     line.append("Need ", costAmounts(gate.shortfall, undefined, inferno ? { realm: "inferno" } : {}) ?? "", " more.");
   } else if (gate.reason === "credits") {
     line.append("Need ", resourceAmount("shiny", formatAmount(gate.need)), " more.");
+  } else if (gate.reason === "coins") {
+    line.append("Need ", coinAmount(gate.need), " more.");
   } else {
     line.textContent = gateSentence(gate, kind, inferno);
   }
@@ -985,7 +1060,7 @@ export interface PlacementBarOptions {
   readonly kind?: YardKind;
   /** Placing finished for Shiny rather than for resources. */
   readonly instant: boolean;
-  /** A decoration bought for Shiny: its price, shown in place of the cost. */
+  /** A decoration bought for event coins: its price, shown in place of the cost. */
   readonly price?: number;
   readonly instantPrice: number;
   readonly cost: BuildOffer["cost"];
@@ -996,7 +1071,37 @@ export interface PlacementBarOptions {
   readonly onCancel: () => void;
   /** Build here: put it down where it is showing. Left out, the button is not drawn. */
   readonly onBuildHere?: () => void;
+  /** A wall's line mode (walls Option B): the toggle, ✓ and ✗. Left out, none is drawn. */
+  readonly line?: PlacementLineOptions;
 }
+
+/** The bar's side of a wall's line mode. */
+export interface PlacementLineOptions {
+  /** On when the bar opens. */
+  readonly on: boolean;
+  /** The Line toggle was pressed. */
+  readonly onToggle: (on: boolean) => void;
+  /** ✓: build the green Blocks. */
+  readonly onConfirm: () => void;
+  /** ✗: let the line go, keep the Block in hand. */
+  readonly onClear: () => void;
+  /** ↶: take the last corner away. */
+  readonly onUndo?: () => void;
+}
+
+/** The tip over the bar in line mode: what to do next, or why nothing builds. */
+export const lineHint = (phone: boolean, stage: LineStage | null, plan: LinePlan | null): string => {
+  if (stage?.busy) return "Building…";
+  if (plan && plan.build.length === 0) return "Nothing here can be built.";
+  if (!stage || stage.empty) return phone ? "Tap to place corners. ✓ builds." : "Click to place corners. ✓ builds.";
+  return phone ? "Tap for more corners. ✓ builds." : "Click for more corners. ✓ builds.";
+};
+
+/** How long the first tip stays before it fades, in milliseconds. */
+const LINE_TIP_MS = 6000;
+
+/** How long "Built 12." stays over the bar in line mode, in milliseconds. */
+const LINE_MESSAGE_MS = 5000;
 
 /** What to do next, before the spot has anything to say. */
 const placeHint = (phone: boolean): string =>
@@ -1013,8 +1118,30 @@ export class PlacementBar {
   /** What the spot last said, for when Building… gives the line back. */
   private spotText: string | null = null;
   private building = false;
+  /* Line mode. */
+  private readonly lineOptions: PlacementLineOptions | null;
+  private lineOn = false;
+  private lineToggle: HTMLButtonElement | null = null;
+  private lineSummary: HTMLElement | null = null;
+  private lineConfirm: HTMLButtonElement | null = null;
+  private lineClear: HTMLButtonElement | null = null;
+  private lineUndo: HTMLButtonElement | null = null;
+  private lineStage: LineStage | null = null;
+  /** Fades the first tip after a few seconds. */
+  private tipTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The first tip has had its few seconds. */
+  private tipSeen = false;
+  /** Clears a good word over the bar in line mode. */
+  private messageTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly cancel: HTMLButtonElement;
+  private readonly unitCost: BuildOffer["cost"];
+  private linePlan: LinePlan | null = null;
+  private readonly realm: ResourceRealm | undefined;
 
   constructor(options: PlacementBarOptions) {
+    this.lineOptions = options.line ?? null;
+    this.unitCost = options.cost;
+    this.realm = options.realm;
     this.element = document.createElement("div");
     this.element.className = "build-placing";
     this.element.setAttribute("role", "region");
@@ -1036,7 +1163,7 @@ export class PlacementBar {
     if (options.instant) {
       price.append("Finished at once for ", resourceAmount("shiny", formatAmount(options.instantPrice)));
     } else if (options.price !== undefined) {
-      price.append(resourceAmount("shiny", formatAmount(options.price)));
+      price.append(coinAmount(options.price));
       if (options.time) {
         const time = document.createElement("span");
         time.className = "build-placing__time";
@@ -1074,6 +1201,7 @@ export class PlacementBar {
     cancel.textContent = "Cancel";
     cancel.addEventListener("click", () => options.onCancel());
     buttons.append(cancel);
+    this.cancel = cancel;
     if (options.onBuildHere) {
       const here = document.createElement("button");
       here.type = "button";
@@ -1086,7 +1214,199 @@ export class PlacementBar {
       this.here = here;
     }
 
-    this.element.append(what, this.hint, this.message, buttons);
+    const line = options.line;
+    if (line) {
+      // The Line switch: three Block pictures in a row, the word and an on/off
+      // track. On reads by the track's fill and the knob's side, not a tick
+      // (owner, 8 Nov: the old tick looked like the build ✓).
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "btn build-placing__line-toggle";
+      toggle.title = "Draw walls corner to corner";
+      const icon = document.createElement("span");
+      icon.className = "build-placing__line-icon";
+      icon.setAttribute("aria-hidden", "true");
+      for (let i = 0; i < 3; i++) {
+        const block = document.createElement("img");
+        block.src = buildPictureUrl(options.type, options.kind);
+        block.alt = "";
+        icon.append(block);
+      }
+      const label = document.createElement("span");
+      label.className = "build-placing__line-label";
+      label.textContent = "Line";
+      const track = document.createElement("span");
+      track.className = "build-placing__switch";
+      track.setAttribute("aria-hidden", "true");
+      toggle.append(icon, label, track);
+      toggle.addEventListener("click", () => {
+        const on = !this.lineOn;
+        this.setLineMode(on);
+        line.onToggle(on);
+      });
+      buttons.prepend(toggle);
+      this.lineToggle = toggle;
+
+      // ↶ takes the last corner away: the Yard Planner's painted undo arrow.
+      const undo = document.createElement("button");
+      undo.type = "button";
+      undo.className = "btn build-placing__line-undo";
+      undo.title = this.phone ? "Undo last corner" : "Undo last corner (Backspace)";
+      undo.setAttribute("aria-label", "Undo last corner");
+      undo.append(gameIcon("undo", { size: 24, decorative: true }));
+      const onUndo = line.onUndo;
+      undo.addEventListener("click", () => onUndo?.());
+      const clear = document.createElement("button");
+      clear.type = "button";
+      clear.className = "btn build-placing__line-clear";
+      clear.textContent = "✗";
+      clear.title = "Clear the line";
+      clear.setAttribute("aria-label", "Clear the line");
+      clear.addEventListener("click", () => line.onClear());
+      const confirm = document.createElement("button");
+      confirm.type = "button";
+      confirm.className = "btn btn--primary build-placing__line-confirm";
+      confirm.textContent = "✓ Build";
+      confirm.title = "Build the green Blocks";
+      confirm.addEventListener("click", () => line.onConfirm());
+      buttons.append(undo, clear, confirm);
+      this.lineUndo = undo;
+      this.lineClear = clear;
+      this.lineConfirm = confirm;
+
+      const summary = document.createElement("div");
+      summary.className = "build-placing__line";
+      summary.setAttribute("aria-live", "polite");
+      this.lineSummary = summary;
+    }
+
+    // The tip and the last build's message: inside the bar for one building,
+    // a line above it in line mode (build-menu.css), out of the bar's middle.
+    const notes = document.createElement("div");
+    notes.className = "build-placing__notes";
+    notes.append(this.hint, this.message);
+    this.element.append(what, notes);
+    if (this.lineSummary) this.element.append(this.lineSummary);
+    this.element.append(buttons);
+    if (line) this.setLineMode(line.on);
+  }
+
+  /** Whether the bar shows line mode. */
+  get lineMode(): boolean {
+    return this.lineOn;
+  }
+
+  /** Shows or hides line mode's parts: ✓ and ✗ in place of Build here, the count and cost. */
+  setLineMode(on: boolean): void {
+    if (!this.lineOptions) return;
+    this.lineOn = on;
+    this.element.classList.toggle("build-placing--line", on);
+    this.lineToggle?.setAttribute("aria-pressed", String(on));
+    if (this.here) this.here.hidden = on;
+    if (this.lineConfirm) this.lineConfirm.hidden = !on;
+    if (this.lineClear) this.lineClear.hidden = !on;
+    if (this.lineUndo) this.lineUndo.hidden = !on;
+    if (this.lineSummary) this.lineSummary.hidden = !on;
+    // In line mode Cancel is the small × in the bar's corner, away from ✗ (build-menu.css).
+    this.cancel.setAttribute("aria-label", on ? "Put the Block away" : "Cancel");
+    this.cancel.title = on ? "Put the Block away" : "";
+    this.lineStage = null;
+    this.linePlan = null;
+    this.hint.classList.remove("build-placing__hint--faded");
+    this.renderLine();
+    if (!on) this.setSpot(this.spotText);
+  }
+
+  /** The line's preview changed: the count, the cost and what is left out. */
+  setLine(plan: LinePlan | null, stage: LineStage): void {
+    this.linePlan = plan;
+    this.lineStage = stage;
+    if (stage.busy) this.setMessage(null);
+    this.renderLine();
+  }
+
+  private renderLine(): void {
+    if (!this.lineOn || !this.lineSummary) return;
+    const plan = this.linePlan;
+    const stage = this.lineStage;
+    const busy = stage?.busy === true;
+    this.element.classList.remove("build-placing--blocked");
+    this.renderTip(lineHint(this.phone, stage, plan), stage, plan);
+    const count = plan?.build.length ?? 0;
+    if (this.lineConfirm) {
+      this.lineConfirm.disabled = count === 0 || busy;
+      this.lineConfirm.textContent = count > 0 ? `✓ Build ${count}` : "✓ Build";
+      this.lineConfirm.setAttribute("aria-label", count > 0 ? `Build ${count} Blocks` : "Build");
+    }
+    if (this.lineClear) this.lineClear.disabled = !plan || busy;
+    if (this.lineUndo) this.lineUndo.disabled = (stage?.anchors ?? 0) === 0 || busy;
+    if (this.lineToggle) this.lineToggle.disabled = busy;
+
+    // One summary, icons and numbers: ×count and what it costs, then what is
+    // left out, each only when there is some. Before the first corner, one
+    // Block's price.
+    const summary = this.lineSummary;
+    summary.replaceChildren();
+    const realm = this.realm ? { realm: this.realm } : {};
+    if (!plan) {
+      const each = costAmounts(this.unitCost, undefined, realm);
+      if (each) {
+        each.classList.add("build-placing__line-cost");
+        const unit = document.createElement("span");
+        unit.className = "build-placing__line-each";
+        unit.textContent = "each";
+        summary.append(each, unit);
+      }
+      return;
+    }
+    const built = document.createElement("strong");
+    built.className = "build-placing__line-count";
+    built.title = `${count} to build`;
+    built.textContent = `×${count}`;
+    summary.append(built);
+    if (count > 0) {
+      const cost = costAmounts(plan.cost, undefined, realm);
+      if (cost) {
+        cost.classList.add("build-placing__line-cost");
+        summary.append(cost);
+      }
+    }
+    if (plan.blocked > 0) {
+      const blocked = document.createElement("span");
+      blocked.className = "build-placing__line-skip";
+      blocked.title = `${plan.blocked} blocked: skipped`;
+      blocked.textContent = `✕${plan.blocked}`;
+      summary.append(blocked);
+    }
+    if (plan.short > 0) {
+      const short = document.createElement("span");
+      short.className = "build-placing__line-short";
+      short.textContent = plan.shortReason === "limit" ? `${plan.short} over limit` : `${plan.short} can't afford`;
+      short.title =
+        plan.shortReason === "limit" ? "Past the Town Hall's Block limit" : "Past what your resources pay for";
+      summary.append(short);
+    }
+  }
+
+  /**
+   * The tip over the bar: shown before the first corner and faded a few
+   * seconds later or once a corner is down; back while building or when
+   * nothing on the line can be built.
+   */
+  private renderTip(text: string, stage: LineStage | null, plan: LinePlan | null): void {
+    this.hint.textContent = text;
+    const urgent = stage?.busy === true || (plan !== null && plan.build.length === 0);
+    const started = (stage?.anchors ?? 0) > 0;
+    if (started) this.tipSeen = true;
+    const show = urgent || (!started && !this.tipSeen);
+    this.hint.classList.toggle("build-placing__hint--faded", !show);
+    if (show && !urgent && this.tipTimer === null) {
+      this.tipTimer = setTimeout(() => {
+        this.tipTimer = null;
+        this.tipSeen = true;
+        if (this.lineOn) this.renderTip(lineHint(this.phone, this.lineStage, this.linePlan), this.lineStage, this.linePlan);
+      }, LINE_TIP_MS);
+    }
   }
 
   mount(container: HTMLElement): this {
@@ -1097,7 +1417,8 @@ export class PlacementBar {
   /** What the spot says: nothing when it is fine, why when it is not. */
   setSpot(text: string | null): void {
     this.spotText = text;
-    if (this.building) return;
+    // In line mode each Block shows what it comes to; the bar keeps the line's own words.
+    if (this.building || this.lineOn) return;
     this.element.classList.toggle("build-placing--blocked", Boolean(text));
     this.hint.textContent = text ? `Can't build here: ${text}` : placeHint(this.phone);
     if (this.here) this.here.disabled = Boolean(text);
@@ -1125,6 +1446,15 @@ export class PlacementBar {
   setMessage(text: string | null, tone: "good" | "bad" = "good"): void {
     this.message.textContent = text ?? "";
     this.message.dataset["tone"] = tone;
+    if (this.messageTimer !== null) clearTimeout(this.messageTimer);
+    this.messageTimer = null;
+    // In line mode a good word ("Built 12.") floats over the bar for a moment, then goes.
+    if (text && tone === "good" && this.lineOn) {
+      this.messageTimer = setTimeout(() => {
+        this.messageTimer = null;
+        if (this.message.textContent === text) this.setMessage(null);
+      }, LINE_MESSAGE_MS);
+    }
   }
 
   /** A wall or trap went down and another is in hand: say how to place the next. */
@@ -1133,6 +1463,10 @@ export class PlacementBar {
   }
 
   destroy(): void {
+    if (this.tipTimer !== null) clearTimeout(this.tipTimer);
+    if (this.messageTimer !== null) clearTimeout(this.messageTimer);
+    this.tipTimer = null;
+    this.messageTimer = null;
     this.element.remove();
   }
 }

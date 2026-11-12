@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { AlliancePowerupType } from "../../../enums/Alliance.js";
 import { BaseType } from "../../../enums/Base.js";
 import { AttackLogs } from "../../../database/models/attacklogs.model.js";
 import { Save } from "../../../database/models/save.model.js";
 import { User } from "../../../database/models/user.model.js";
 import { WorldMapCell } from "../../../database/models/worldmapcell.model.js";
+import { AllianceType } from "../../../enums/Alliance.js";
 import { matchesWhere } from "../../../testing/matchesWhere.js";
 import { memoryRedis } from "../../../testing/memoryRedis.js";
 
@@ -19,8 +19,9 @@ import { memoryRedis } from "../../../testing/memoryRedis.js";
 type Row = Record<string, unknown>;
 
 let tables: Map<unknown, Row[]>;
-let runningPowerups: { id: AlliancePowerupType; endtime: number }[];
 let findCalls: { entity: unknown; where: Row }[];
+/** What `allianceBonusesOfUser`'s one SQL query answers (type and lit stars). */
+let allianceRows: Row[];
 
 const strings = new Map<string, string>();
 const redis = memoryRedis(strings);
@@ -35,17 +36,10 @@ const em = {
     (tables.get(entity) ?? []).find((row) => matchesWhere(row, where)) ?? null,
   // The fixtures below always attach `save` directly, so there is nothing to load.
   populate: async () => {},
+  execute: async () => allianceRows,
 };
 
 mock.module("../../../server.js", () => ({ postgres: { em }, redis }));
-// Spread the real module: bun's mock.module leaks into later test files, which import
-// other exports (`isDeclareWarRunning`) from the same module.
-const REAL_POWERUPS = "../../alliance/powerups.ts?real";
-const realPowerups = (await import(REAL_POWERUPS)) as typeof import("../../alliance/powerups.js");
-mock.module("../../alliance/powerups.js", () => ({
-  ...realPowerups,
-  runningPowerups: async (allianceId: number | null) => (allianceId ? runningPowerups : []),
-}));
 
 const {
   SIGHT_CACHE_TTL_SECONDS,
@@ -86,8 +80,8 @@ const user = (userid: number, over: Partial<Row> = {}): User =>
 beforeEach(() => {
   strings.clear();
   tables = new Map();
-  runningPowerups = [];
   findCalls = [];
+  allianceRows = [];
 });
 
 afterEach(() => {
@@ -150,14 +144,60 @@ describe("getPlayerSight: own circles and cells", () => {
       { x: 300, y: 300 },
     ]);
   });
+});
 
-  test("Declare War adds its two cells to every circle while the player's alliance has it running", async () => {
-    const p = user(1, { flinger: 2, alliance_id: 9 }); // mainYardRange(2) = 6
-    runningPowerups = [{ id: AlliancePowerupType.DECLARE_WAR, endtime: 9_999_999_999 }];
+describe("getPlayerSight: a Flinger upgrade's countdown", () => {
+  const nowSeconds = () => Math.floor(Date.now() / 1000);
+  /** A level 2 Flinger upgrading to 3, saved `ago` seconds back with `left` seconds to go then. */
+  const upgradingYard = (baseid: string, ago: number, left: number, over: Partial<Row> = {}): Row => ({
+    baseid,
+    flinger: 2,
+    savetime: nowSeconds() - ago,
+    buildingdata: { "9": { id: 9, t: 5, l: 2, X: 0, Y: 0, cU: left, cL: 32_400 } },
+    buildinghealthdata: {},
+    ...over,
+  });
+
+  test("the main yard keeps its old reach while the upgrade is still counting down", async () => {
+    const p = user(1, { baseid: "home-1", flinger: 2 });
+    tables.set(Save, [upgradingYard("home-1", 100, 3_600)]);
 
     const sight = await getPlayerSight(p);
 
-    expect(sight.sources).toEqual([{ x: 101, y: 101, reach: 8, kind: "own" }]);
+    expect(sight.sources).toEqual([{ x: 101, y: 101, reach: 6, kind: "own" }]);
+  });
+
+  test("the main yard reaches further as soon as the upgrade is done, before the yard is opened again", async () => {
+    // Saved 100 s ago with 90 s left: done 10 s ago, but `flinger` still says 2.
+    const p = user(1, { baseid: "home-1", flinger: 2 });
+    tables.set(Save, [upgradingYard("home-1", 100, 90)]);
+
+    const sight = await getPlayerSight(p);
+
+    expect(sight.sources).toEqual([{ x: 101, y: 101, reach: 8, kind: "own" }]); // mainYardRange(3)
+  });
+
+  test("an outpost's finished upgrade counts without the outpost being opened", async () => {
+    const p = user(1, { baseid: "home-1", flinger: 1, outposts: [[200, 200, "out-a"]] });
+    tables.set(Save, [
+      upgradingYard("out-a", 100, 90), // outpostRange(3) = 3
+    ]);
+
+    const sight = await getPlayerSight(p);
+
+    expect(sight.sources).toEqual([
+      { x: 101, y: 101, reach: 4, kind: "own" },
+      { x: 200, y: 200, reach: 3, kind: "own" },
+    ]);
+  });
+
+  test("a damaged Flinger's countdown is paused, so it keeps its old reach", async () => {
+    const p = user(1, { baseid: "home-1", flinger: 2 });
+    tables.set(Save, [upgradingYard("home-1", 100, 90, { buildinghealthdata: { "9": 100 } })]);
+
+    const sight = await getPlayerSight(p);
+
+    expect(sight.sources).toEqual([{ x: 101, y: 101, reach: 6, kind: "own" }]);
   });
 });
 
@@ -301,23 +341,12 @@ describe("the Redis cache", () => {
     expect(await redis.get(allianceSightKey(9))).not.toBeNull();
   });
 
-  test("the cache lives for the normal TTL with no Declare War running", async () => {
+  test("the cache lives for the normal TTL", async () => {
     const p = user(1);
 
     await getPlayerSight(p);
 
     expect(await redis.ttl(playerSightKey(1))).toBe(SIGHT_CACHE_TTL_SECONDS);
-  });
-
-  test("a running Declare War caps the TTL at however long is left of it", async () => {
-    const p = user(1, { alliance_id: 9 });
-    runningPowerups = [{ id: AlliancePowerupType.DECLARE_WAR, endtime: Math.floor(Date.now() / 1000) + 10 }];
-
-    await getPlayerSight(p);
-
-    const ttl = await redis.ttl(playerSightKey(1));
-    expect(ttl).toBeLessThanOrEqual(10);
-    expect(ttl).toBeGreaterThan(0);
   });
 
   test("invalidatePlayerSight drops only the player's own cache", async () => {
@@ -445,5 +474,36 @@ describe("invalidateSightIfFlingerChanged", () => {
 
     expect(await redis.get(playerSightKey(1))).toBeNull();
     expect(await redis.get(allianceSightKey(9))).toBeNull();
+  });
+});
+
+describe("getPlayerSight: alliance extra reach (Conquest's full Teratorn)", () => {
+  test("widens the player's and every mate's circle by one cell, and changes sv", async () => {
+    const p = user(1, { alliance_id: 9 });
+    tables.set(User, [
+      { userid: 1, alliance_id: 9 },
+      { userid: 2, alliance_id: 9 },
+    ]);
+    tables.set(Save, [mainSaveRow(2, { flinger: 3 })]); // mainYardRange(3) = 8
+    const plain = await getPlayerSight(p);
+
+    allianceRows = [{ type: AllianceType.CONQUEST, stars: { teratorn: 10 } }];
+    const wide = await getPlayerSight(p);
+
+    expect(wide.sources).toContainEqual({ x: 101, y: 101, reach: 7, kind: "own" }); // mainYardRange(2) = 6
+    expect(wide.sources).toContainEqual({ x: 102, y: 102, reach: 9, kind: "ally" });
+    expect(wide.sv).not.toBe(plain.sv);
+  });
+
+  test("nine lit stars give no extra reach; a flinger 0 circle stays at 0", async () => {
+    const p = user(1, { alliance_id: 9, flinger: 0 });
+    tables.set(User, [{ userid: 1, alliance_id: 9 }]);
+    allianceRows = [{ type: AllianceType.CONQUEST, stars: { teratorn: 10 } }];
+    expect((await getPlayerSight(p)).sources).toContainEqual({ x: 101, y: 101, reach: 0, kind: "own" });
+
+    strings.clear();
+    const q = user(1, { alliance_id: 9 });
+    allianceRows = [{ type: AllianceType.CONQUEST, stars: { teratorn: 9 } }];
+    expect((await getPlayerSight(q)).sources).toContainEqual({ x: 101, y: 101, reach: 6, kind: "own" });
   });
 });

@@ -106,7 +106,8 @@ describe("the building class table", () => {
 describe("footprints", () => {
   it("matches the server's table for every non-decoration type", () => {
     const server = serverFootprints();
-    expect(server.size).toBe(51);
+    // The 51 Flash types and this project's Observatory, 150.
+    expect(server.size).toBe(52);
     const disagreements: string[] = [];
     for (const [type, size] of server) {
       const held = footprintOf(type);

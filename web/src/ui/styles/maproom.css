@@ -177,6 +177,35 @@
   font-size: var(--text-sm);
 }
 
+/* The Find panel's own-outpost buttons (beta 7): two to a row, one line each
+   like the yard list, so every button is the same height; a long name is cut
+   with "…" (the button's hover title has it in full). */
+.map-outposts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.map-outposts[hidden] {
+  display: none;
+}
+
+.map-outposts > .map-outpost {
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.map-outpost__label {
+  display: block;
+  /* Room for Classic's 2px outline on the words, which the cut would clip. */
+  margin: -2px;
+  padding: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .map-coord-input {
   width: 100%;
   min-width: 0;
@@ -421,6 +450,86 @@
 
 .mr2-tool.mr2-tilt-toggle[hidden] {
   display: none;
+}
+
+/* The border colours' key (owner, 8 Nov 2026, `MapLegend.ts`): a tool button
+   with three small bordered hexes, opening a card of swatches above the row. */
+.mr2-key__icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.mr2-key__icon .mr2-key__swatch + .mr2-key__swatch {
+  margin-left: -3px;
+}
+
+.mr2-key__toggle[aria-expanded="true"] {
+  border: 2px solid var(--colour-accent);
+  padding: 0 calc(var(--space-4) - 1px);
+  color: var(--colour-accent);
+}
+
+.mr2-tools-dock .mr2-key {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-2));
+  z-index: 2;
+  width: max-content;
+  min-width: 13rem;
+  max-width: calc(100vw - 24px);
+  padding: var(--space-3) var(--space-4);
+}
+
+.mr2-key[hidden] {
+  display: none;
+}
+
+.mr2-key__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+
+.mr2-key__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mr2-key__row {
+  display: grid;
+  grid-template-columns: 28px 24px 1fr;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mr2-key__swatch {
+  display: block;
+  flex: none;
+}
+
+.mr2-key__picture {
+  display: flex;
+  width: 24px;
+  height: 24px;
+}
+
+.mr2-key__words {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.mr2-key__label {
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.mr2-key__hint {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
 }
 
 /* The kit filter (#334): a compact row of pill buttons, smaller than .mr2-tool. */
@@ -828,6 +937,18 @@
 
 .mr2-chip--info {
   --tone: var(--colour-info);
+}
+
+/* The owner's alliance (beta 7): its shield and name; a mate's in the map's alliance border blue (relationLook.ts). */
+.mr2-chip--alliance.mr2-chip--accent {
+  --tone: #2f5bff;
+}
+
+.mr2-chip__shield {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
 }
 
 /* Tower range and income on an outpost's ground: two painted icons and numbers. */
@@ -1289,7 +1410,12 @@
      icon buttons (My range went in beta 6). The kit row folds into Filter and opens as a list
      under it, so nothing is pushed off the screen's edge. */
   .mr2-find-dock {
-    right: calc(12px + 2 * var(--control-height) + 2 * var(--space-2));
+    right: calc(12px + 3 * var(--control-height) + 3 * var(--space-2));
+  }
+
+  /* Mail, Filter and Key, plus the "Tilted map" button where the map tilts. */
+  .overlay__layer:has(.mr2-tilt-toggle:not([hidden])):not(:has(.mr2-find--open)) > .mr2-find-dock {
+    right: calc(12px + 4 * var(--control-height) + 4 * var(--space-2));
   }
 
   /* The open Find sheet takes the whole width; the tool row steps aside. */
@@ -1333,6 +1459,16 @@
   /* The kit list hangs under the row. */
   .mr2-tools-dock .mr2-kit-filter {
     top: calc(100% + var(--space-2));
+  }
+
+  /* So does the key, and its lit border keeps the square button's size. */
+  .mr2-tools-dock .mr2-key {
+    top: calc(100% + var(--space-2));
+    bottom: auto;
+  }
+
+  .mr2-tools-dock .mr2-key__toggle[aria-expanded="true"] {
+    padding: 0;
   }
 }
 
@@ -1382,4 +1518,206 @@
 /* Map Room 2's neighbour defence bonus: the painted shield and "+11%" (`neighbourBonusChip.ts`). */
 .mr2-chip--neighbours {
   gap: var(--space-2);
+}
+
+/* ── "Preparing map" loading screen (owner chose design A, 8 Nov 2026) ─────
+   ui/maproom/PreparingMap.ts. Covers the map area (and the strip above the
+   top bar) on a first open while the painted look compiles; the top bar
+   stays above it. The card is a `.panel`, so it wears the window's frame:
+   Modern steel, Classic parchment (skin.css). Modern fills orange, Classic
+   gold. While it shows it takes every pointer, so nothing behind it can be
+   clicked; once it starts to fade the map is live again. */
+
+.mr2-prepare {
+  --prepare-fill: var(--colour-accent);
+  --prepare-track: rgb(0 0 0 / 50%);
+  --prepare-backdrop: radial-gradient(ellipse at 50% 42%, #2e3d4b 0%, #141b22 70%, #0b0f13 100%);
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: calc(var(--hud-height) + var(--space-4)) var(--space-4) var(--space-4);
+  background: var(--prepare-backdrop);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+  touch-action: none;
+  /* The fade into the finished map; the screen leaves the page when it ends. */
+  transition:
+    opacity 700ms ease,
+    visibility 0s linear 700ms;
+}
+
+/* Beats the overlay's "every child takes the pointer" rule while it fades. */
+.mr2-prepare:not(.mr2-prepare--shown) {
+  pointer-events: none;
+}
+
+.mr2-prepare--shown {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 150ms ease;
+}
+
+:root[data-skin="scrap"] .mr2-prepare {
+  --prepare-fill: #ff8a2a;
+}
+
+:root[data-skin="flash"] .mr2-prepare {
+  --prepare-fill: linear-gradient(#ffe48a, #e0a521 60%, #b97c10);
+  --prepare-track: rgb(74 44 14 / 35%);
+  --prepare-backdrop: radial-gradient(ellipse at 50% 42%, #7a5530 0%, #3d2410 70%, #24150a 100%);
+}
+
+.mr2-prepare__card {
+  width: min(560px, 100%);
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: var(--space-5);
+  gap: var(--space-4);
+  align-items: stretch;
+  transition: transform 700ms ease;
+}
+
+/* Fading out, the card eases forward a touch as the map comes through. */
+.mr2-prepare:not(.mr2-prepare--shown) .mr2-prepare__card {
+  transform: scale(1.03);
+}
+
+.mr2-prepare__art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  box-shadow: 0 3px 10px rgb(0 0 0 / 55%);
+}
+
+:root[data-skin="flash"] .mr2-prepare__art {
+  filter: sepia(0.3) saturate(0.92);
+  box-shadow:
+    0 0 0 3px #8a5626,
+    0 3px 8px rgb(60 30 0 / 45%);
+}
+
+.mr2-prepare__title {
+  text-align: center;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.mr2-prepare__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.mr2-prepare__track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  background: var(--prepare-track);
+  box-shadow:
+    inset 0 1px 3px rgb(0 0 0 / 60%),
+    0 1px 0 rgb(255 255 255 / 12%);
+  overflow: hidden;
+}
+
+.mr2-prepare__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(rgb(255 255 255 / 45%), rgb(255 255 255 / 0%) 55%),
+    var(--prepare-fill);
+  transition: width 300ms linear;
+}
+
+.mr2-prepare__number {
+  min-width: 4ch;
+  text-align: right;
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mr2-prepare,
+  .mr2-prepare--shown,
+  .mr2-prepare__card,
+  .mr2-prepare__fill {
+    transition: none;
+  }
+
+  .mr2-prepare:not(.mr2-prepare--shown) .mr2-prepare__card {
+    transform: none;
+  }
+}
+
+/* Phone: one compact column filling the width, the picture a little
+   squarer, the words and number a size down. */
+@media (width <= 620px) {
+  .mr2-prepare {
+    padding: calc(var(--hud-height) + var(--space-3)) var(--space-3) var(--space-3);
+  }
+
+  .mr2-prepare__card {
+    padding: var(--space-4);
+    gap: var(--space-3);
+  }
+
+  .mr2-prepare__art {
+    aspect-ratio: 4 / 3;
+  }
+
+  .mr2-prepare__title {
+    font-size: 20px;
+  }
+
+  .mr2-prepare__track {
+    height: 16px;
+  }
+
+  .mr2-prepare__number {
+    font-size: 17px;
+  }
+}
+
+/* A short, wide screen (a phone on its side): the picture goes, the words
+   and bar stay. */
+@media (height <= 500px) {
+  .mr2-prepare__art {
+    display: none;
+  }
+}
+
+/*
+ * A narrow phone (375 px): the "Find a place" bar would be squeezed to under 100 px and its label
+ * wrap to three lines, so Find shrinks to an icon-only square (its label stays for screen readers
+ * through the aria-label). Opening it still gives the full-width sheet. Last in the file so it wins
+ * over the tool-row offsets above.
+ */
+@media (width <= 440px) {
+  .overlay__layer:not(:has(.mr2-find--open)) > .mr2-find-dock {
+    right: auto !important;
+  }
+
+  .mr2-find-dock .mr2-find__button {
+    width: var(--control-height);
+    padding: 0;
+    justify-content: center;
+  }
+
+  .mr2-find-dock .mr2-find__phone-label {
+    display: none;
+  }
 }

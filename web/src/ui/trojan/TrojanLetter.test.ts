@@ -25,6 +25,19 @@ describe("TrojanLetter", () => {
     letter.close();
   });
 
+  it("keeps the title short enough for the one-line title sign; the headline leads the letter", () => {
+    const letter = new TrojanLetter("Bob", { onAnswer: vi.fn() }).mount(document.body);
+    const node = letter.popup.element;
+    const title = node.querySelector(".panel__title")!.textContent ?? "";
+    expect(title).toBe("Wild Monsters' note");
+    expect(title.length).toBeLessThanOrEqual(20);
+    const body = node.querySelector(".panel__body")!;
+    expect(body.firstElementChild?.textContent).toBe(
+      "Wild Monsters left you a note pinned to a large wooden structure.",
+    );
+    letter.close();
+  });
+
   it("either button springs the trap, once", () => {
     const onAnswer = vi.fn();
     const node = new TrojanLetter("Bob", { onAnswer }).mount(document.body).popup.element;

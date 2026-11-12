@@ -1308,6 +1308,18 @@ the lead, and the plot question by the owner (option A):
      one stores it, as any recycled decoration.
    - **Pictures:** Flash's build-menu buttons and yard art, in both looks; every sold type has
      both, so none is held back for a missing picture.
+   - **This project's own decorations** (owner, 10 Nov 2026): six autumn ones Flash never had,
+     types 201 to 206 (`server/src/game-data/revampDecorations.ts`,
+     `web/src/game/yard/revampDecorations.ts`): Leaf Pile and Rake 25 coins, Apple Barrel 30, Pie on a
+     Tree Stump 35, Harvest Barrow 50, Turkey Topiary 60, Autumn Maple Tree 75. They behave as
+     Flash's: a free, uncapped `decoration` cost row (added by `web/tools/gen-building-costs.mjs`),
+     a square footprint, stored when recycled, never a battle target. No `BUILDING<t>` store row, so
+     only `decor/buy` sells them. They lead the Plants (201, 205, 206) and Good (202, 203, 204)
+     sub-tabs. Two looks each (owner, 10 Nov 2026), switched by the Classic/Modern setting like the
+     3D buildings: Classic is painted in Flash's decoration style with a Flash-style shadow and
+     button; Modern is the same object redrawn as a clean 3D render like the Modern buildings
+     (`*.modern@2x.webp`, `REVAMP_DECORATION_MODERN_ART`, read by `tierArtFor`), standing on the
+     same spot, with a Modern build-menu picture from `web/tools/build-pictures/make.py`.
 
 | WP | Scope | Owns | Depends on | Size |
 | --- | --- | --- | --- | --- |

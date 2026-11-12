@@ -1,4 +1,5 @@
-import { FRIEND_MAX, friendsApi, type Friend, type FriendsApi, type FriendsList } from "@/api/friends";
+import { FRIEND_MAX, PIN_MAX, friendsApi, type Friend, type FriendsApi, type FriendsList } from "@/api/friends";
+import { devBigFriends, withBigList } from "./friendsDev";
 
 /**
  * The player's friends, cached for the tab (`docs/design/friends.md` §8,
@@ -23,6 +24,7 @@ export const NUDGE_GAP_MS = 5_000;
 export interface FriendsSnapshot {
   readonly friends: readonly Friend[];
   readonly max: number;
+  readonly maxPinned: number;
   readonly requestsIn: number;
   readonly giftsWaiting: number;
   readonly helpsLeft: number;
@@ -39,7 +41,7 @@ export interface FriendsStoreOptions {
   readonly clearInterval?: (handle: unknown) => void;
 }
 
-const EMPTY: FriendsSnapshot = { friends: [], max: FRIEND_MAX, requestsIn: 0, giftsWaiting: 0, helpsLeft: 0, loaded: false };
+const EMPTY: FriendsSnapshot = { friends: [], max: FRIEND_MAX, maxPinned: PIN_MAX, requestsIn: 0, giftsWaiting: 0, helpsLeft: 0, loaded: false };
 
 export class FriendsStore {
   private readonly api: FriendsApi;
@@ -48,6 +50,7 @@ export class FriendsStore {
   private readonly clearTimer: (handle: unknown) => void;
   private state: FriendsSnapshot = EMPTY;
   private ids = new Set<number>();
+  private pinnedIds = new Set<number>();
   private readonly listeners = new Set<(snapshot: FriendsSnapshot) => void>();
   private inFlight: Promise<void> | null = null;
   private lastRefresh = -Infinity;
@@ -80,6 +83,16 @@ export class FriendsStore {
   /** Whether a player is on the list as last fetched. */
   isFriend(userid: number): boolean {
     return this.ids.has(userid);
+  }
+
+  /** Whether a friend is pinned to the top of the list, as last fetched or pinned here. */
+  isPinned(userid: number): boolean {
+    return this.pinnedIds.has(userid);
+  }
+
+  /** How many friends are pinned. */
+  get pinnedCount(): number {
+    return this.pinnedIds.size;
   }
 
   /** Hears every change, and is told the current state at once. Returns the unsubscribe. */
@@ -139,6 +152,19 @@ export class FriendsStore {
     this.set({ ...this.state, friends: [...friends, friend] });
   }
 
+  /**
+   * Pins or unpins a friend at once, ahead of the next refresh (the player
+   * pressed the pin, or the server said how it stands). `at` is when, unix
+   * seconds; a friend already pinned keeps their first time.
+   */
+  setPinned(userid: number, pinned: boolean, at: number = Math.floor(this.now() / 1000)): void {
+    if (!this.ids.has(userid) || this.pinnedIds.has(userid) === pinned) return;
+    const friends = this.state.friends.map((friend) =>
+      friend.userid === userid ? { ...friend, pinnedAt: pinned ? at : null } : friend,
+    );
+    this.set({ ...this.state, friends });
+  }
+
   /** Sets the waiting-requests count, as the Requests tab last saw it. */
   setRequestsIn(requestsIn: number): void {
     const next = Math.max(0, Math.floor(requestsIn));
@@ -188,9 +214,13 @@ export class FriendsStore {
   private set(next: FriendsSnapshot): void {
     this.state = next;
     this.ids = new Set(next.friends.map((friend) => friend.userid));
+    this.pinnedIds = new Set(next.friends.filter((friend) => friend.pinnedAt !== null).map((friend) => friend.userid));
     for (const listener of [...this.listeners]) listener(next);
   }
 }
 
+/** A dev build opened with `?bigfriends` shows a made-up long list (`friendsDev.ts`). */
+const devCounts = import.meta.env.DEV && typeof window !== "undefined" ? devBigFriends(window.location.search) : null;
+
 /** The tab's one store. */
-export const friendsStore = new FriendsStore();
+export const friendsStore = new FriendsStore(devCounts ? { api: withBigList(friendsApi, devCounts) } : {});

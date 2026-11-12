@@ -92,7 +92,7 @@ const tabButton = (root: HTMLElement, label: string) =>
   )!;
 
 describe("MonstersScreen: the frame", () => {
-  it("starts closed and opens on the tab asked for, the five tabs in order", () => {
+  it("starts closed and opens on the tab asked for, the six tabs in order", () => {
     const { screen, element } = setup([HALL, LOCKER]);
     expect(element.hidden).toBe(true);
     screen.open("unlock");
@@ -103,6 +103,7 @@ describe("MonstersScreen: the frame", () => {
       "Housing",
       "Train",
       "Lab",
+      "Champion",
     ]);
     expect(tabButton(element, "Unlock").getAttribute("aria-selected")).toBe("true");
     expect(element.querySelector(".locker")).not.toBeNull();
@@ -160,12 +161,31 @@ describe("MonstersScreen: the frame", () => {
     expect(screen.isOpen).toBe(false);
   });
 
-  it("stands beside the building panel when told", () => {
-    const { screen, element } = setup([HALL, LOCKER]);
-    screen.besidePanel(true);
-    expect(element.classList.contains("monsters-screen--beside-panel")).toBe(true);
-    screen.besidePanel(false);
+  it("is a middle window: centred on a computer, never beside the building panel", () => {
+    const { element } = setup([HALL, LOCKER]);
+    expect(element.classList.contains("panel--centre")).toBe(true);
     expect(element.classList.contains("monsters-screen--beside-panel")).toBe(false);
+  });
+
+  it("is measured as the middle window with the tab it opens on (Hatch's wider frame, 9 Nov)", () => {
+    const { screen, element } = setup([HALL, LOCKER]);
+    const layer = document.createElement("div");
+    layer.getBoundingClientRect = () => new DOMRect(0, 0, 900, 1000);
+    const dock = document.createElement("div");
+    dock.className = "yard-dock";
+    layer.append(dock, element);
+    document.body.append(layer);
+    const seen: (string | undefined)[] = [];
+    Object.defineProperty(element, "offsetWidth", {
+      get: () => {
+        seen.push(element.dataset["tab"]);
+        return 760;
+      },
+    });
+    screen.open("unlock");
+    screen.open("hatch");
+    expect(seen.at(0)).toBe("unlock");
+    expect(seen.at(-1)).toBe("hatch");
   });
 });
 

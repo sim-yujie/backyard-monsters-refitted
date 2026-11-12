@@ -37,7 +37,7 @@ export const BUBBLE_MENU_KEY = "bymr.bubbleMenu";
  * first (Quests, the owner's beta 6 priority). A new one only needs its name
  * here, and its button put in the dock.
  */
-export const BUBBLE_ITEMS: readonly string[] = ["quests", "layout", "goals", "bell", "defences", "mail"];
+export const BUBBLE_ITEMS: readonly string[] = ["quests", "layout", "goals", "bell", "defences", "mail", "alliance", "reports"];
 
 /** Where the fan lays its bubbles out in rows: a phone on its side, too short for one column. */
 export const GRID_QUERY = "(width > 620px) and (height <= 500px)";

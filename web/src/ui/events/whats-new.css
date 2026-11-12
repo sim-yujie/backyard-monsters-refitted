@@ -88,6 +88,24 @@
   margin-top: var(--space-2);
 }
 
+/* The release's "Full details on Patreon": an outside link that looks like a second-choice button. */
+.whats-new__more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  min-width: min(260px, 100%);
+  min-height: var(--control-height);
+  text-align: center;
+  text-decoration: none;
+}
+
+.whats-new__older .whats-new__more {
+  display: flex;
+  width: fit-content;
+  margin: var(--space-2) auto 0;
+}
+
 .whats-new__done {
   align-self: center;
   min-width: 160px;
@@ -99,7 +117,8 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .whats-new__done {
+  .whats-new__done,
+  .whats-new__more {
     align-self: stretch;
     min-height: 48px;
   }

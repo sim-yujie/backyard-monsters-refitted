@@ -73,6 +73,7 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "build",
   "build/cancel",
   "build/instant",
+  "build/walls",
   "academy/train",
   "academy/cancel",
   "academy/finish",
@@ -94,6 +95,7 @@ export const REAL_ACTION_YARD_PATHS: readonly string[] = [
   "champion/heal",
   "champion/rename",
   "champion/stance",
+  "champion/forget",
   "champion/juice",
   "champion/freeze",
   "champion/thaw",
@@ -189,6 +191,12 @@ export const REAL_ACTION_ROUTES: readonly RealActionRoute[] = [
   { method: "POST", path: "/api/:apiVersion/bm/friends/help" },
   { method: "POST", path: "/api/:apiVersion/bm/friends/gift" },
   { method: "POST", path: "/api/:apiVersion/bm/friends/gifts/collect" },
+  // Alliance trades move resources between yards (beta 7, design v5 §12a).
+  // A request takes what it offers from the yard; cancel gives it back; accept swaps.
+  { method: "POST", path: "/alliance/trade/post" },
+  { method: "POST", path: "/alliance/trade/cancel" },
+  { method: "POST", path: "/alliance/trade/accept" },
+  { method: "POST", path: "/alliance/trade/send" },
   // The "Stay protected?" prompt's tap (#275): the player said they are there.
   { method: "POST", path: "/api/:apiVersion/bm/presence/stay" },
   // A wild monster raid on the player's yard (#226): every answer to it, so watching one keeps them online.
@@ -243,18 +251,33 @@ export const NOT_REAL_ACTION_ROUTES: readonly string[] = [
   "POST /api/:apiVersion/bm/friends/request/answer",
   "POST /api/:apiVersion/bm/friends/request/cancel",
   "POST /api/:apiVersion/bm/friends/remove",
+  // The player's gift wish list (beta 7): a setting, changes no game state.
+  "POST /api/:apiVersion/bm/friends/wishes",
+  // Deleting received gifts (owner, 9 Nov 2026) gives nothing and changes no yard.
+  "POST /api/:apiVersion/bm/friends/gifts/delete",
+  // Pinning a friend to the top of the list (beta 7) only sorts it.
+  "POST /api/:apiVersion/bm/friends/pin",
   "POST /alliance/createalliance",
   "POST /alliance/editalliance",
   "POST /alliance/leavealliance",
   "POST /alliance/requestjoin",
   "POST /alliance/inviteuser",
-  "POST /alliance/activatepowerup",
-  "POST /alliance/purchasepowerup",
   "POST /alliance/changeinvitestatus",
   "POST /alliance/kickmember",
   "POST /alliance/promotemember",
   "POST /alliance/changerelationship",
   "POST /alliance/deletemessages",
+  // Alliances phase 0 (10 Nov 2026): type switch, ranks, takeover, rename, report.
+  "POST /alliance/changetype",
+  "POST /alliance/setrank",
+  "POST /alliance/takeover",
+  "POST /alliance/rename",
+  "POST /alliance/report",
+  // Alliances phase 2: stars and weekly goals (alliance work, not yard play).
+  "POST /alliance/lightstar",
+  "POST /alliance/suggeststar",
+  "POST /alliance/setgoal",
+  "POST /alliance/removegoal",
   // Reads, looks and polls a client sends while the player sits still.
   "POST /base/updatesaved",
   "POST /base/checkpoint",

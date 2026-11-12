@@ -205,7 +205,6 @@ export const playerReplayInput = (
     // The Inferno yard has no champion, catapult or siege.
     attacker: { champion: [], catapult: 0, siege: null },
     tick,
-    declareWar: attack.session.declareWar ?? false,
     left,
   });
 
@@ -476,7 +475,7 @@ const playerBattle = async (
   const input = playerReplayInput(attack, yard, log, battleTick(saveData.tick), saveData.left);
   if (!input) return null;
 
-  const base = { baseid: String(saveData.baseid) };
+  const base = { baseid: String(saveData.baseid), basesaveid: yard.basesaveid };
   const battle = await replayBattleForSave(ctx, user, base, input, "the attack is closed from its last checkpoint");
 
   await recordBattleMismatches(

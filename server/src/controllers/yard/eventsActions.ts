@@ -1,8 +1,9 @@
 import z from "zod";
 
-import { EVENTS, eventById, tierNeed, type EventDefinition } from "../../game-data/events/events.js";
+import { eventById, tierNeed, type EventDefinition } from "../../game-data/events/events.js";
 import { planGrant, type GrantedReward } from "../../services/events/grant.js";
 import { krallenLevelOf } from "../../services/events/krallenReward.js";
+import { liveEvents } from "../../services/events/liveEvents.js";
 import type { EventProgressStore } from "../../services/events/progressStore.js";
 import {
   claimsUntil,
@@ -87,12 +88,19 @@ const activeEvent = (
   return event;
 };
 
-/** The two claim actions over `store` (and, for tests, a different event list). */
-export const eventsActions = (store: EventProgressStore, events: readonly EventDefinition[] = EVENTS) => ({
+/** The fixed list a test passes, or every event now. */
+const eventsNow = (fixed: readonly EventDefinition[] | undefined): readonly EventDefinition[] => fixed ?? liveEvents();
+
+/**
+ * The two claim actions over `store` (and, for tests, a different event list).
+ * Without one, each claim reads {@link liveEvents} then, so a Monster Madness
+ * run the owner starts is claimable at once.
+ */
+export const eventsActions = (store: EventProgressStore, fixed?: readonly EventDefinition[]) => ({
   calendarClaim: defineYardAction({
     schema: CalendarClaimSchema,
     run: async ({ save, user, body, now, em }) => {
-      const event = activeEvent(body.event, now, events);
+      const event = activeEvent(body.event, now, eventsNow(fixed));
       const calendar = event.calendar ?? [];
       if (calendar.length === 0) {
         throw yardBadRequestErr("That event has no calendar.", { event: event.id }, "unknownEvent");
@@ -118,14 +126,20 @@ export const eventsActions = (store: EventProgressStore, events: readonly EventD
         granted: plan.granted,
         nextAt: day < calendar.length ? nextDayAt(now) : null,
       };
-      return { report, credit: plan.credit, grantShiny: plan.grantShiny, slices: plan.slices };
+      return {
+        report,
+        credit: plan.credit,
+        grantShiny: plan.grantShiny,
+        grantCoins: { amount: plan.grantCoins, reason: "calendar" },
+        slices: plan.slices,
+      };
     },
   }),
 
   ladderClaim: defineYardAction({
     schema: LadderClaimSchema,
     run: async ({ save, user, body, now, em }) => {
-      const event = activeEvent(body.event, now, events, true);
+      const event = activeEvent(body.event, now, eventsNow(fixed), true);
       const tier = event.ladder?.tiers[body.tier];
       if (!tier) throw yardBadRequestErr("There is no such tier.", { event: event.id, tier: body.tier }, "unknownTier");
 
@@ -146,7 +160,13 @@ export const eventsActions = (store: EventProgressStore, events: readonly EventD
 
       const plan = planGrant(save, tier.rewards, now);
       const report: LadderClaimReport = { event: event.id, tier: body.tier, granted: plan.granted };
-      return { report, credit: plan.credit, grantShiny: plan.grantShiny, slices: plan.slices };
+      return {
+        report,
+        credit: plan.credit,
+        grantShiny: plan.grantShiny,
+        grantCoins: { amount: plan.grantCoins, reason: "ladder" },
+        slices: plan.slices,
+      };
     },
   }),
 });

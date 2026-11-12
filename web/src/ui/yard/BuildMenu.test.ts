@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { topUpPrice } from "@/game/yard/resourcePacks";
 import type { BaseLoadResponse, BuildingData, YardResponse } from "@/api/types";
 import type { YardApi } from "@/api/yard";
 import { setClassicLook } from "@/game/classicLook";
@@ -12,7 +13,9 @@ import { DecorKind } from "@/game/yard/decorShop";
 import { YardStore, type YardUiBinding } from "@/game/yard/YardStore";
 import type { Notices } from "@/ui/maproom/Notices";
 import { spokenText } from "@/ui/resourceIcon";
-import { BuildMenu, PlacementBar, spotSentence } from "./BuildMenu";
+import type { LinePlan } from "@/game/yard/wallLine";
+import { BuildMenu, lineHint, PlacementBar, spotSentence } from "./BuildMenu";
+import { nameFitEm } from "./tileNameFit";
 
 /**
  * The build menu as a player meets it: the tabs, each tile's cost, count and
@@ -115,6 +118,13 @@ describe("BuildMenu", () => {
     expect(cannon.querySelector(".build-tile__count")?.textContent).toBe("1 of 4 built");
   });
 
+  it("a tile's name carries its widest word's width, so the CSS shrinks it rather than breaking it", () => {
+    const { menu } = setup([HALL, building(2, 20)]);
+    menu.open(BuildCategory.DEFENSIVE);
+    const name = tile(menu, 20).querySelector<HTMLElement>(".build-tile__name");
+    expect(name?.style.getPropertyValue("--name-fit-em")).toBe(String(nameFitEm("Cannon Tower")));
+  });
+
   it("a locked tile: the silhouette, a lock, and the hall that unlocks it", () => {
     setClassicLook(true);
     const { menu } = setup([HALL]);
@@ -156,9 +166,9 @@ describe("BuildMenu", () => {
     expect(cannon.querySelector(".build-tile__picture--modern")).not.toBeNull();
 
     menu.open(BuildCategory.BUILDINGS);
-    // The Monster Locker has no new look yet: Flash's button, as before.
-    expect(tile(menu, 8).querySelector("img")?.getAttribute("src")).toBe("/assets/buildingbuttons/8.jpg");
-    expect(tile(menu, 8).querySelector(".build-tile__picture--modern")).toBeNull();
+    // The Monster Locker shows its 3D look (10 Nov 2026).
+    expect(tile(menu, 8).querySelector("img")?.getAttribute("src")).toBe(buildPicture(8, "main", false).url);
+    expect(tile(menu, 8).querySelector(".build-tile__picture--modern")).not.toBeNull();
     menu.turn(1);
     const lab = tile(menu, 116);
     expect(lab.classList.contains("build-tile--locked")).toBe(true);
@@ -190,7 +200,7 @@ describe("BuildMenu", () => {
     expect(menu.element.querySelector(".build-menu__page")?.textContent).toBe("Page 2 of 2");
     expect(next.disabled).toBe(true);
     const second = tileTypes(menu);
-    expect(first.length + second.length).toBe(15);
+    expect(first.length + second.length).toBe(16);
     const ranks = [...firstRanks, ...tileRanks(menu)];
     expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
     // The General Store leads; the Monster Locker, all built, comes last.
@@ -247,6 +257,26 @@ describe("BuildMenu", () => {
     expect(panel.querySelector(".build-info__build")?.getAttribute("aria-describedby")).toBe(
       "build-gate-20",
     );
+  });
+
+  it("short of resources: Top up buys the 1,500 Twigs on the second tap, then picks the building up (issue #393)", () => {
+    const { menu, onPick } = setup([HALL], { resources: { r1: 500, r2: 1500, r3: 500, r4: 0 } });
+    menu.open(BuildCategory.DEFENSIVE);
+    tile(menu, 20).click();
+    const topUp = info(menu).querySelector<HTMLButtonElement>(".build-info__topup")!;
+    expect(topUp.querySelector(".shiny-button__label")!.textContent).toBe("Top up");
+    expect(topUp.disabled).toBe(false);
+    topUp.click();
+    expect(onPick).not.toHaveBeenCalled();
+    topUp.click();
+    expect(onPick).toHaveBeenCalledWith(20, false, topUpPrice({ r1: 1_500 }));
+  });
+
+  it("offers no Top up when a cost is over the storage cap", () => {
+    const { menu } = setup([HALL], { resources: { r1: 0, r2: 1e6, r3: 1e6, r4: 1e6 }, caps: { r1: 100, r2: 5e8, r3: 5e8, r4: 5e8 } } as Partial<BaseLoadResponse>);
+    menu.open(BuildCategory.DEFENSIVE);
+    tile(menu, 20).click();
+    expect(info(menu).querySelector(".build-info__topup")).toBeNull();
   });
 
   it("every worker busy: Build still picks the building up, and the box waits for the spot (#345)", () => {
@@ -310,8 +340,8 @@ describe("BuildMenu", () => {
     expect(onTownHall).toHaveBeenCalledTimes(1);
   });
 
-  it("with nothing stored, the Decorations tab sells Flash's 73 for Shiny under its five sub-tabs", () => {
-    const { menu } = setup([HALL]);
+  it("with nothing stored, the Decorations tab sells Flash's 73 for event coins under its five sub-tabs", () => {
+    const { menu } = setup([HALL], { eventcoins: 300 });
     menu.open(BuildCategory.DECORATIONS);
     expect(menu.element.querySelector(".build-menu__empty")).toBeNull();
     const kinds = menu.element.querySelector<HTMLElement>(".build-menu__kinds")!;
@@ -335,9 +365,14 @@ describe("BuildMenu", () => {
     }
     expect(pages).toEqual(["Page 1 of 2", "Page 1 of 2", "Page 1 of 2", "Page 1 of 3", "Page 1 of 1"]);
     expect(tileTypes(menu)).toEqual(["96", "97", "98", "99", "100", "101"]);
-    expect(menu.element.querySelector(".build-menu__legend")?.textContent).toBe(
-      "Stored ones first, free to place. The rest cost Shiny.",
-    );
+    // The purse in the title bar, always in view (tester, 8 Nov: under the
+    // tiles it was cut off at 1280x800 and below the fold on a phone).
+    const meta = menu.element.querySelector(".build-menu__meta")!;
+    expect(spokenText(meta)).toBe("You have Glimmers 300");
+    expect(meta.querySelector(".build-menu__coins")?.getAttribute("aria-label")).toBe("300 Glimmers");
+    const legend = menu.element.querySelector(".build-menu__legend")!;
+    expect(legend.textContent).toBe("Stored: free. Big events pay Glimmers.");
+    expect(legend.querySelector(".build-menu__coins")).toBeNull();
   });
 
   it("an outpost's Decorations tab says they go in the main yard", () => {
@@ -365,28 +400,32 @@ describe("BuildMenu", () => {
     expect(menu.element.querySelector<HTMLElement>(".build-menu__kinds")!.hidden).toBe(true);
   });
 
-  it("a decoration for sale: the Shiny icon and price, and Buy picks it up on the second tap", () => {
-    const { menu, onPick } = setup([HALL], { credits: 1_000 });
+  it("a decoration for sale: the coin icon and price, and Buy picks it up on the second tap", () => {
+    // Shiny does not buy decorations any more (owner decision 29): none here.
+    const { menu, onPick } = setup([HALL], { credits: 0, eventcoins: 1_000 });
     menu.open(BuildCategory.DECORATIONS);
 
     const skull = tile(menu, 107);
-    expect(skull.querySelector(".build-tile__count .res-amount")?.getAttribute("data-resource")).toBe("shiny");
-    expect(spokenText(skull.querySelector(".build-tile__count")!)).toBe("Shiny 20");
-    expect(skull.getAttribute("aria-label")).toMatch(/, 20 Shiny$/);
+    expect(skull.querySelector(".build-tile__count .icon-amount")?.getAttribute("data-icon")).toBe("eventcoin");
+    expect(spokenText(skull.querySelector(".build-tile__count")!)).toBe("Glimmers 20");
+    expect(skull.getAttribute("aria-label")).toMatch(/, 20 Glimmers$/);
 
     skull.click();
-    expect(facts(menu)).toEqual(["Shiny 20", "At once", "No worker"]);
+    expect(facts(menu)).toEqual(["Glimmers 20", "At once", "No worker"]);
     expect(info(menu).querySelector(".build-info__gate")).toBeNull();
     const buy = info(menu).querySelector<HTMLButtonElement>(".build-info__buy")!;
     expect(buy.disabled).toBe(false);
+    expect(buy.getAttribute("aria-label")).toBe("Buy Monster Skull, 20 Glimmers");
+    expect(buy.querySelector("[data-icon='eventcoin']")).not.toBeNull();
     buy.click();
     expect(onPick).not.toHaveBeenCalled();
     buy.click();
     expect(onPick).toHaveBeenCalledWith(107, false);
   });
 
-  it("short of Shiny: the price is marked, Buy is blocked and the line says how much more", () => {
-    const { menu, onPick } = setup([HALL], { credits: 100 });
+  it("short of event coins: the price is marked, Buy is blocked and the line says how many more", () => {
+    // Plenty of Shiny does not help: decorations cost coins.
+    const { menu, onPick } = setup([HALL], { credits: 10_000, eventcoins: 100 });
     menu.open(BuildCategory.DECORATIONS);
     menu.openKind(DecorKind.FLAGS);
     menu.turn(2);
@@ -394,8 +433,10 @@ describe("BuildMenu", () => {
     tile(menu, 32).click();
 
     expect(tile(menu, 32).querySelector(".build-tile__count--short")).not.toBeNull();
-    expect(spokenText(info(menu).querySelector(".build-info__gate")!)).toBe("Need Shiny 50 more.");
+    expect(spokenText(info(menu).querySelector(".build-info__gate")!)).toBe("Need Glimmers 50 more.");
     const buy = info(menu).querySelector<HTMLButtonElement>(".build-info__buy")!;
+    expect(buy.disabled).toBe(true);
+    expect(buy.title).toBe("Not enough Glimmers.");
     buy.click();
     buy.click();
     expect(onPick).not.toHaveBeenCalled();
@@ -517,7 +558,7 @@ describe("BuildMenu", () => {
 });
 
 describe("PlacementBar", () => {
-  it("a decoration bought for Shiny shows its price", () => {
+  it("a decoration bought for event coins shows its price", () => {
     const bar = new PlacementBar({
       type: 28,
       instant: false,
@@ -527,7 +568,7 @@ describe("PlacementBar", () => {
       time: "At once",
       onCancel: vi.fn(),
     }).mount(document.body);
-    expect(spokenText(bar.element.querySelector(".build-placing__price")!)).toBe("Shiny 150 · At once");
+    expect(spokenText(bar.element.querySelector(".build-placing__price")!)).toBe("Glimmers 150 · At once");
   });
 
   it("says what is in hand and why a spot is refused, and cancels", () => {
@@ -631,6 +672,203 @@ describe("PlacementBar", () => {
     expect(spokenText(bar.element.querySelector(".build-placing__price")!)).toBe(
       "Finished at once for Shiny 17",
     );
+  });
+
+  describe("line mode (walls Option B)", () => {
+    const blockCost = { r1: 1000, r2: 0, r3: 0, r4: 0 };
+    const plan = (build: number, blocked: number, short: number, shortReason: "limit" | "resources" | null): LinePlan => ({
+      cells: [],
+      build: Array.from({ length: build }, (_, i) => ({ x: i * 20, y: 0 })),
+      blocked,
+      short,
+      shortReason,
+      cost: { r1: build * 1000, r2: 0, r3: 0, r4: 0 },
+    });
+    const lineBar = (on = true) => {
+      const line = { on, onToggle: vi.fn(), onConfirm: vi.fn(), onClear: vi.fn(), onUndo: vi.fn() };
+      const bar = new PlacementBar({
+        type: 17,
+        instant: false,
+        instantPrice: 0,
+        cost: blockCost,
+        onCancel: vi.fn(),
+        onBuildHere: vi.fn(),
+        line,
+      }).mount(document.body);
+      const q = <T extends HTMLElement>(selector: string) => bar.element.querySelector<T>(selector)!;
+      return { bar, line, q };
+    };
+
+    it("draws the Line switch, pressed when on, with ↶, ✗ and ✓ Build in place of Build here", () => {
+      const { bar, line, q } = lineBar();
+      const toggle = q<HTMLButtonElement>(".build-placing__line-toggle");
+      expect(toggle.getAttribute("aria-pressed")).toBe("true");
+      // On/off is the switch's track, never a tick that reads like the build ✓.
+      expect(toggle.textContent).toBe("Line");
+      expect(toggle.querySelector(".build-placing__switch")).not.toBeNull();
+      expect(bar.lineMode).toBe(true);
+      expect(q<HTMLButtonElement>(".build-placing__here").hidden).toBe(true);
+      expect(q<HTMLButtonElement>(".build-placing__line-confirm").hidden).toBe(false);
+      expect(q<HTMLButtonElement>(".build-placing__line-clear").hidden).toBe(false);
+      expect(q<HTMLButtonElement>(".build-placing__line-undo").hidden).toBe(false);
+      // Cancel is the corner's ×, said as putting the Block away.
+      expect(q(".build-placing__cancel").getAttribute("aria-label")).toBe("Put the Block away");
+
+      toggle.click();
+      expect(line.onToggle).toHaveBeenCalledWith(false);
+      expect(toggle.getAttribute("aria-pressed")).toBe("false");
+      expect(q<HTMLButtonElement>(".build-placing__here").hidden).toBe(false);
+      expect(q<HTMLButtonElement>(".build-placing__line-confirm").hidden).toBe(true);
+      expect(q<HTMLButtonElement>(".build-placing__line-undo").hidden).toBe(true);
+      expect(q<HTMLElement>(".build-placing__line").hidden).toBe(true);
+      expect(q(".build-placing__cancel").getAttribute("aria-label")).toBe("Cancel");
+    });
+
+    it("↶ is the painted undo arrow: off with no corner, on with one, and it calls back", () => {
+      const { bar, line, q } = lineBar();
+      const undo = q<HTMLButtonElement>(".build-placing__line-undo");
+      expect(undo.querySelector("img.game-icon--undo")).not.toBeNull();
+      expect(undo.getAttribute("aria-label")).toBe("Undo last corner");
+      expect(undo.disabled).toBe(true);
+      bar.setLine(plan(1, 0, 0, null), { empty: false, anchors: 1, busy: false });
+      expect(undo.disabled).toBe(false);
+      undo.click();
+      expect(line.onUndo).toHaveBeenCalledTimes(1);
+      bar.setLine(plan(1, 0, 0, null), { empty: false, anchors: 1, busy: true });
+      expect(undo.disabled).toBe(true);
+    });
+
+    it("✓ is labelled with the count: ✓ Build 12, plain ✓ Build when there is nothing to build", () => {
+      const { bar, q } = lineBar();
+      const confirm = q<HTMLButtonElement>(".build-placing__line-confirm");
+      expect(confirm.textContent).toBe("✓ Build");
+      bar.setLine(plan(12, 0, 0, null), { empty: false, anchors: 2, busy: false });
+      expect(confirm.textContent).toBe("✓ Build 12");
+      expect(confirm.getAttribute("aria-label")).toBe("Build 12 Blocks");
+    });
+
+    it("the tip shows before the first corner, fades once one is down, and comes back when nothing builds", () => {
+      const { bar, q } = lineBar();
+      const hint = q(".build-placing__hint");
+      expect(hint.classList.contains("build-placing__hint--faded")).toBe(false);
+      bar.setLine(plan(3, 0, 0, null), { empty: false, anchors: 1, busy: false });
+      expect(hint.classList.contains("build-placing__hint--faded")).toBe(true);
+      bar.setLine(plan(0, 2, 0, null), { empty: false, anchors: 2, busy: false });
+      expect(hint.textContent).toBe("Nothing here can be built.");
+      expect(hint.classList.contains("build-placing__hint--faded")).toBe(false);
+      // Cleared again: the first tip has had its turn.
+      bar.setLine(null, { empty: true, anchors: 0, busy: false });
+      expect(hint.classList.contains("build-placing__hint--faded")).toBe(true);
+    });
+
+    it("the first tip fades by itself after a few seconds", () => {
+      vi.useFakeTimers();
+      try {
+        const { q } = lineBar();
+        const hint = q(".build-placing__hint");
+        expect(hint.classList.contains("build-placing__hint--faded")).toBe(false);
+        vi.advanceTimersByTime(6500);
+        expect(hint.classList.contains("build-placing__hint--faded")).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("in line mode \"Built 12.\" goes after a few seconds; a refusal stays", () => {
+      vi.useFakeTimers();
+      try {
+        const { bar, q } = lineBar();
+        bar.setMessage("Built 12.", "good");
+        vi.advanceTimersByTime(5500);
+        expect(q(".build-placing__message").textContent).toBe("");
+        bar.setMessage("Not enough Twigs.", "bad");
+        vi.advanceTimersByTime(10000);
+        expect(q(".build-placing__message").textContent).toBe("Not enough Twigs.");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("before the first corner the summary is one Block's price, said once", () => {
+      const { bar, q } = lineBar();
+      expect(spokenText(q(".build-placing__line-cost"))).toBe("Twigs 1,000");
+      expect(q(".build-placing__line-each").textContent).toBe("each");
+      expect(bar.element.querySelector(".build-placing__line-count")).toBeNull();
+    });
+
+    it("starts off when asked, and a bar without line options has no toggle", () => {
+      const { q } = lineBar(false);
+      expect(q<HTMLButtonElement>(".build-placing__line-toggle").getAttribute("aria-pressed")).toBe("false");
+      const plain = new PlacementBar({
+        type: 17,
+        instant: false,
+        instantPrice: 0,
+        cost: blockCost,
+        onCancel: vi.fn(),
+      });
+      expect(plain.element.querySelector(".build-placing__line-toggle")).toBeNull();
+    });
+
+    it("✓ is off with nothing green, on with greens, and off while building", () => {
+      const { bar, line, q } = lineBar();
+      const confirm = q<HTMLButtonElement>(".build-placing__line-confirm");
+      const clear = q<HTMLButtonElement>(".build-placing__line-clear");
+      expect(confirm.disabled).toBe(true);
+      expect(clear.disabled).toBe(true);
+
+      bar.setLine(plan(0, 2, 0, null), { empty: false, anchors: 2, busy: false });
+      expect(confirm.disabled).toBe(true);
+      expect(clear.disabled).toBe(false);
+
+      bar.setLine(plan(3, 0, 0, null), { empty: false, anchors: 2, busy: false });
+      expect(confirm.disabled).toBe(false);
+      confirm.click();
+      expect(line.onConfirm).toHaveBeenCalledTimes(1);
+      clear.click();
+      expect(line.onClear).toHaveBeenCalledTimes(1);
+
+      bar.setLine(plan(3, 0, 0, null), { empty: false, anchors: 2, busy: true });
+      expect(confirm.disabled).toBe(true);
+      expect(clear.disabled).toBe(true);
+      expect(q<HTMLButtonElement>(".build-placing__line-toggle").disabled).toBe(true);
+      expect(q(".build-placing__hint").textContent).toBe("Building…");
+    });
+
+    it("the summary: ×count, the cost, blocked and what is short, each only when there is some", () => {
+      const { bar, q } = lineBar();
+      bar.setLine(plan(4, 2, 3, "resources"), { empty: false, anchors: 2, busy: false });
+      expect(q(".build-placing__line-count").textContent).toBe("×4");
+      expect(spokenText(q(".build-placing__line-cost"))).toBe("Twigs 4,000");
+      expect(q(".build-placing__line-skip").textContent).toBe("✕2");
+      expect(q(".build-placing__line-short").textContent).toBe("3 can't afford");
+
+      bar.setLine(plan(1, 0, 5, "limit"), { empty: false, anchors: 2, busy: false });
+      expect(q(".build-placing__line-short").textContent).toBe("5 over limit");
+      expect(bar.element.querySelector(".build-placing__line-skip")).toBeNull();
+
+      bar.setLine(plan(0, 1, 0, null), { empty: false, anchors: 2, busy: false });
+      expect(q(".build-placing__line-count").textContent).toBe("×0");
+      expect(bar.element.querySelector(".build-placing__line-cost")).toBeNull();
+    });
+
+    it("a refused spot does not take the line's words", () => {
+      const { bar, q } = lineBar();
+      const hint = q(".build-placing__hint").textContent;
+      bar.setSpot("Outside your yard.");
+      expect(q(".build-placing__hint").textContent).toBe(hint);
+      expect(bar.element.classList.contains("build-placing--blocked")).toBe(false);
+    });
+
+    it("lineHint says what to do next on a desktop and a phone", () => {
+      const fresh = { empty: true, anchors: 0, busy: false };
+      const started = { empty: false, anchors: 2, busy: false };
+      expect(lineHint(false, null, null)).toBe("Click to place corners. ✓ builds.");
+      expect(lineHint(true, fresh, null)).toBe("Tap to place corners. ✓ builds.");
+      expect(lineHint(false, started, plan(2, 0, 0, null))).toBe("Click for more corners. ✓ builds.");
+      expect(lineHint(true, started, plan(2, 0, 0, null))).toBe("Tap for more corners. ✓ builds.");
+      expect(lineHint(false, started, plan(0, 3, 0, null))).toBe("Nothing here can be built.");
+      expect(lineHint(false, { ...started, busy: true }, plan(2, 0, 0, null))).toBe("Building…");
+    });
   });
 
   it("spotSentence names what is in the way", () => {

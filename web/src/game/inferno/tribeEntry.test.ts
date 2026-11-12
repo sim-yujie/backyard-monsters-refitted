@@ -43,7 +43,6 @@ const startOf = (baseid: string): TribeAttackStart => ({
   army: { IC1: 6, IC2: 0 },
   attackeracademy: { IC1: 2 },
   attackerlevel: 30,
-  attpowerups: [],
   flingercapacity: 780,
 });
 

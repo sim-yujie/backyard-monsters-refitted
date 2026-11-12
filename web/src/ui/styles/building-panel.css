@@ -118,8 +118,10 @@
   background: var(--colour-surface-sunken);
 }
 
+/* Wraps (the clock under the heading) only in a dock too narrow for both. */
 .building-panel__head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-2);
@@ -229,6 +231,9 @@
 .shiny-button__note {
   flex-basis: 100%;
   font-size: var(--text-sm);
+  /* Its own leading: the button's line-height is a whole-pixel length for
+     15 px words (ui.css `.btn`), too tall for these 13 px lines. */
+  line-height: var(--leading-normal);
   font-weight: normal;
   white-space: normal;
   opacity: 0.9;
@@ -265,20 +270,36 @@
 
 /* ── The running job ────────────────────────────────────────────────────── */
 
-/* Finish now leads on its own row; the two fixed-price steps share the next. */
+/* Finish now leads on its own row; the two fixed-price steps share the next.
+   minmax(0, 1fr), not 1fr: a plain 1fr column never gets narrower than its
+   button's words, so "-1 h Free (5 left)" beside "-2 h Free (3 left)" pushed
+   the row, Finish now and the whole block past the panel's right edge and
+   gave the panel a sideways scrollbar (owner's phone, 10 Nov). */
 .building-job .building-panel__buttons {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .building-job .building-panel__buttons > :first-child {
   grid-column: 1 / -1;
 }
 
-/* A speed-up with lines under it takes the whole row, so they fit a phone;
-   its partner then does too, so neither sits beside an empty cell. */
-.building-job .building-panel__buttons:has(> .shiny-button--noted) > * {
+/* A speed-up with lines under it, or a free one ("Free (5 left)", too long
+   for half a 300px dock), takes the whole row, so it fits a phone; its
+   partner then does too, so neither sits beside an empty cell. */
+.building-job .building-panel__buttons:has(> :is(.shiny-button--noted, .shiny-button--free)) > * {
   grid-column: 1 / -1;
+}
+
+/* The last resort at the narrowest docks: a Shiny button's words in the
+   panel's button rows (job, repair, upgrade, fortify) wrap at their spaces,
+   the price under the label, rather than run past the panel. A button that
+   fits, as every one does on a desktop dock, stays on one line. */
+.building-panel__buttons > .shiny-button {
+  flex-wrap: wrap;
+  row-gap: 0;
+  max-width: 100%;
+  white-space: normal;
 }
 
 .building-job__countdown {
@@ -561,19 +582,6 @@
   font-weight: 800;
 }
 
-/* The Monsters screen beside the wider panel, not over it. */
-.overlay__layer:has(> .map-dock--right > .building-panel--housing) > .monsters-screen--beside-panel {
-  right: calc(468px + 2 * var(--space-4));
-  width: min(760px, calc(100vw - 468px - 4 * var(--space-4)));
-}
-
-@media (width <= 1080px) {
-  .overlay__layer:has(> .map-dock--right > .building-panel--housing) > .monsters-screen--beside-panel {
-    right: var(--space-4);
-    width: min(760px, calc(100vw - 2 * var(--space-4)));
-  }
-}
-
 /* A phone (R-Housing-phone): a sheet from the bottom with a handle, no
    line of purpose, and the rest a size smaller. */
 @media (width <= 620px) {
@@ -622,78 +630,4 @@
   align-items: center;
   gap: 0.3em;
   font-variant-numeric: tabular-nums;
-}
-
-/* ── The Champion Cage (owner, 28 Oct: one click, a bigger window) ─────────
- * A built cage on the own yard opens on its champion (champion.css) in a
- * wider panel, as Flash's cage popup did; the building's own card is the
- * second tab. The plain card's parts step aside while the champion shows
- * (their own classes set a display the hidden attribute alone does not beat). */
-
-.map-dock--right:has(> .building-panel--cage) {
-  width: min(560px, calc(100vw - 2 * var(--space-4)));
-}
-
-.building-panel--cage {
-  max-height: calc(100vh - var(--hud-height) - var(--space-6));
-}
-
-.building-panel__tabs[hidden] {
-  display: none;
-}
-
-.building-panel__tab {
-  flex: 1;
-}
-
-/* The cage needs repair: a dot on its Building tab. */
-.building-panel__tab--alert::after {
-  content: "";
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-left: var(--space-2);
-  border-radius: 50%;
-  background: var(--colour-danger);
-  vertical-align: middle;
-}
-
-.building-panel--cage[data-cage-tab="champion"] :is(.cell-kind, .building-panel__info, .building-panel__unlocks, .building-panel__actions, .building-panel__details) {
-  display: none;
-}
-
-.building-panel--cage[data-cage-tab="building"] .building-panel__champion {
-  display: none;
-}
-
-/* The champion fills the panel: no second frame inside the first. */
-.building-panel--cage .champion {
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-/* The Monsters screen beside the wider panel, not over it. */
-.overlay__layer:has(> .map-dock--right > .building-panel--cage) > .monsters-screen--beside-panel {
-  right: calc(560px + 2 * var(--space-4));
-  width: min(760px, calc(100vw - 560px - 4 * var(--space-4)));
-}
-
-@media (width <= 1080px) {
-  .overlay__layer:has(> .map-dock--right > .building-panel--cage) > .monsters-screen--beside-panel {
-    right: var(--space-4);
-    width: min(760px, calc(100vw - 2 * var(--space-4)));
-  }
-}
-
-/* A phone: the sheet may rise higher than other buildings' for the champion. */
-@media (width <= 620px) {
-  .map-dock--right:has(> .building-panel--cage) {
-    width: auto;
-    max-height: calc(100vh - 160px);
-  }
-
-  .building-panel--cage {
-    max-height: none;
-  }
 }

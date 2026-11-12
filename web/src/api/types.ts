@@ -124,6 +124,8 @@ export interface AccountResponse extends ApiEnvelope {
     countryAsked?: boolean;
     /** The country's chat room, when it has one. */
     countryChannel?: string | null;
+    /** The bell's notification categories turned off (`api/notificationSettings.ts`). */
+    notificationsOff?: string[];
   };
 }
 
@@ -245,6 +247,10 @@ export interface ChampionSaveEntry {
   b?: unknown;
   /** What its brain has learned from: `n` attacks, and each Mode's usual score. */
   bs?: unknown;
+  /** Its habits per Mode (champion modes round 2, `habits.ts`); the server's alone to write. */
+  h?: unknown;
+  /** What its habits learned from: `n` attacks, and each Mode's count and usual scores. */
+  hs?: unknown;
   [key: string]: unknown;
 }
 
@@ -484,6 +490,10 @@ export interface TakeoverQuoteResponse extends ApiEnvelope {
   shiny?: number;
   /** Next to the caller's main yard, which halves the price. */
   adjacent?: boolean;
+  /** "New to Map Room 2": `resources` is the cheap price (10% of the full base). */
+  welcome?: true;
+  /** The resource price without that discount; only with `welcome`. */
+  usualResources?: number;
   /** Server seconds when the caller's chance at this player outpost ends; only while it runs. */
   grantExpiresAt?: number;
   /** Whether the caller can pay each way right now. */
@@ -645,6 +655,19 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * is (`server/src/services/yard/season.ts`). The yard dresses for them.
    */
   activeevents?: string[];
+  /**
+   * The weekend event on now and the next one (`{ active, next }`,
+   * `server/src/services/events/weekendSchedule.ts`), read by `game/weekend.ts`.
+   */
+  weekend?: unknown;
+  /**
+   * The player's event coins (`server/src/services/events/eventCoins.ts`):
+   * on the owner's main-yard build load, and merged from every yard answer
+   * that changed them. Absent elsewhere (a visit, an attack, an outpost).
+   */
+  eventcoins?: number;
+  /** What this load paid (a weekend event's "played" Glimmers), with `eventcoins`. */
+  coinsgained?: CoinGain[];
   /** When the yard was last saved, in unix seconds. 0 on a yard never saved. */
   savetime?: number;
   resources?: Resources;
@@ -658,6 +681,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * the yard switcher can list them from whichever yard is open.
    */
   outposts?: OutpostEntry[] | null;
+  /**
+   * The player's outpost names and pins, `{ names, pins }`
+   * (`server/src/services/outposts/outpostLabels.ts`), on the owner's
+   * build-mode loads; absent when there are none. Read by `outpostLabels.ts`.
+   */
+  outpostlabels?: unknown;
   /**
    * When "Move to a random spot" last moved the main yard, unix seconds; null
    * or absent when it never has (issue #366). The next move opens 7 days later.
@@ -696,6 +725,12 @@ export interface BaseLoadResponse extends ApiEnvelope {
   firedtraps?: FiredTrap[];
   /** `main`, `outpost` or `tribe` (`server/src/enums/Base.ts`, BaseType). */
   type?: string;
+  /**
+   * The player's alliance, on an own main-yard load only (server
+   * `allianceData.ts`): read through `game/alliance/allianceBonuses.ts`
+   * and `api/chat.ts`.
+   */
+  alliancedata?: unknown;
   /** Owner username; the tribe name on a wild monster camp. */
   name?: string;
   /** Housing and hatchery state. On the own-yard load, the roster to fling. */
@@ -726,8 +761,6 @@ export interface BaseLoadResponse extends ApiEnvelope {
   attackid?: number;
   /** `canAttack()`'s verdict on the caller against this base. */
   canattack?: boolean;
-  /** Attack modes only: the attacker's running alliance powerups. */
-  attpowerups?: unknown[];
   /**
    * Attack modes only: the attacker's player level from their stored save,
    * which the engine's low-level loot bonus reads (`ATTACK.as:678-680`). The
@@ -793,6 +826,8 @@ export interface BaseLoadResponse extends ApiEnvelope {
   chatcountry?: string;
   /** The owner's loads, until answered or put off: ask once where the player is from. */
   countryask?: number;
+  /** The owner's build-mode loads on a local test server started with `QUIET_LOGIN=1` (`game/quietLogin.ts`). */
+  quietlogin?: number;
   /**
    * Map Room 2 attack loads only: the target cell's height, `i`, which
    * stretches an outpost's tower range (`BTOWER.as:80-85`). The server's loot
@@ -813,8 +848,6 @@ export interface BaseLoadResponse extends ApiEnvelope {
    * `parseDefenderForces`.
    */
   defenderforces?: unknown;
-  /** The base owner's running alliance powerups. */
-  powerups?: unknown[];
   /**
    * Only on the owner's build-mode load of their own main yard or outpost: what the
    * load's catch-up finished while the player was away, oldest first, in the
@@ -961,8 +994,13 @@ export interface PlayerCell {
   pe?: number;
   /** Truce expiry, unix seconds. Absent on the caller's own cell. */
   t?: number;
-  /** 1 when this base's owner has ever attacked the caller (the map's red plate). */
+  /** 1 when this base's owner has ever attacked the caller. */
   ak?: 1;
+  /**
+   * 1 when the owner is HOSTILE to the caller (owner, 8 Nov 2026): at least one attack between
+   * them, either way, ever, and no truce running. Map Room 2's red dashed border and red plate.
+   */
+  ho?: 1;
   /** 1 when the cell belongs to the caller. */
   mine: 0 | 1;
   pic_square: string | null;
@@ -971,12 +1009,16 @@ export interface PlayerCell {
    * still waiting for its answer (#205; Flash's `_invitePendingID`), else 0.
    */
   pi: number;
-  /** Always 0. */
+  /** 1 when the owner is the caller's friend (beta 7), else 0. */
   fr: number;
+  /** 1 when that friend is pinned to the top of the caller's Friends list (beta 7); absent otherwise. */
+  fp?: 1;
   /** 1 on the caller's own outpost whose worker is free (#338); absent otherwise. */
   wi?: 1;
   /** 1 on the caller's own outpost whose worker is building, upgrading or fortifying; absent otherwise. */
   wb?: 1;
+  /** With `wb`: when that job ends, Unix seconds on the server's clock (owner, 12 Nov 2026); absent while it is paused. */
+  wf?: number;
   /** Own cells only: the owner's live resources. */
   r?: Resources;
   /** Own cells only: hatchery and garrison state. */
@@ -1428,7 +1470,18 @@ export type YardResponse<Report> = ApiEnvelope &
      * Quests button's red number). Absent before the player's quest record exists.
      */
     questsClaimable?: number;
+    /** The event coin purse after this action, when it changed (a buy, a claim). */
+    eventcoins?: number;
+    /** What this action paid in event coins, for the "+15" moment. */
+    coinsGained?: CoinGain[];
   };
+
+/** One event coin payment (`server/src/services/events/eventCoins.ts`). */
+export interface CoinGain {
+  amount: number;
+  /** `calendar` or `ladder` (a big event's claims). */
+  reason: string;
+}
 
 /**
  * An achievement earned and paid but not yet shown: what the yard answers,
@@ -1462,7 +1515,9 @@ export interface UpgradeStartReport {
   to: number;
   /** The countdown written, Sharper Tools applied. */
   seconds: number;
+  /** What was charged: less a Builder's Weekend's `weekendOff`%, when one ran. */
   cost: UpgradeCost;
+  weekendOff?: number;
 }
 
 /** `POST /bm/yard/upgrade/cancel`: the step's full cost, back, clamped to the cap. */
@@ -1521,6 +1576,8 @@ export interface MushroomPickReport {
   shiny: number;
   /** During the Halloween pumpkin hunt: the player's pumpkin count, this one included. */
   pumpkins?: number;
+  /** The same during the Thanksgiving turkey hunt: the player's turkey count. */
+  turkeys?: number;
 }
 
 /** `POST /bm/yard/shop/buy`. */
@@ -1536,5 +1593,10 @@ export interface ShopBuyReport {
   /** Wall upgrades (`BLK2`..`BLK5`) only: the tier, how many Blocks it raised, the points they earned. */
   tier?: number;
   blocks?: number;
+  /** Wall upgrades and resource packs: the empire points earned. */
   points?: number;
+  /** Resource packs (`BR11`..`BR43I`, issue #393) only: which resource, how much landed, and whether into the Inferno purse. */
+  resource?: "r1" | "r2" | "r3" | "r4";
+  amount?: number;
+  inferno?: boolean;
 }

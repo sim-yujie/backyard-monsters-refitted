@@ -86,6 +86,12 @@ def compose(job: dict) -> Image.Image:
     if job["shadow"]:
         layers.append((shadow_layer(job["shadow"]["url"]), job["shadow"]["x"] * SCALE, job["shadow"]["y"] * SCALE))
     layers.append((top, job["top"]["x"] * SCALE, job["top"]["y"] * SCALE))
+    own_layer = len(layers) - 1
+    # A Modern decoration that keeps Flash's moving part (a flag's cloth, a torch's flame): its first cell on top.
+    for cell in job.get("over", []):
+        k = 2 if "@2x" in cell["url"] else 1
+        still = load(cell["url"]).crop((0, 0, cell["width"] * k, cell["height"] * k))
+        layers.append((at_scale(still, cell["url"]), cell["x"] * SCALE, cell["y"] * SCALE))
     left = min(x for _, x, _ in layers)
     up = min(y for _, _, y in layers)
     right = max(x + image.width for image, x, _ in layers)
@@ -98,7 +104,7 @@ def compose(job: dict) -> Image.Image:
     # Centred on the building alone, not building and shadow: the shadow reaches out to one side and would
     # push the building off the tile's middle (owner, 2 Nov 2026). The crop is widened to be even either side.
     own = solid(top)
-    middle = layers[-1][1] - left + (own[0] + own[2]) / 2
+    middle = layers[own_layer][1] - left + (own[0] + own[2]) / 2
     half = max(middle - box[0], box[2] - middle)
     box = (round(middle - half), box[1], round(middle + half), box[3])
     building = Image.new("RGBA", (box[2] - box[0], box[3] - box[1]), (0, 0, 0, 0))

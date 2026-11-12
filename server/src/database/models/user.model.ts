@@ -101,6 +101,15 @@ export class User {
   country_asked: Opt<boolean> = false;
 
   /**
+   * The bell's notification categories the player turned off (owner 11 Nov
+   * 2026), as ids from `services/notifications/notificationCategories.ts`;
+   * empty, everything on, by default. Set in Settings (`/player/settings`).
+   * Muted entries are still stored, never shown (`notifications.ts`).
+   */
+  @Property({ type: "json", columnType: "jsonb", defaultRaw: "'[]'" })
+  notifications_off: Opt<string[]> = [];
+
+  /**
    * The player's Look and sound choices as the web client last sent them
    * (`POST /player/look`, owner 4 Nov 2026: how players split between Modern
    * and Classic). Null until the first load that sends them. Only the owner's
@@ -121,6 +130,14 @@ export class User {
   /** When the client last sent the look choices. */
   @Property({ type: "Date", nullable: true })
   look_seen_at?: Date | null;
+
+  /**
+   * Gift wishes (#391): up to 3 of `r1`-`r4`, comma separated, best first, or null for
+   * none. Set through `POST /bm/friends/wishes`; friends read them in
+   * `GET /bm/friends` (`services/friends/giftWishes.ts`).
+   */
+  @Property({ type: "string", length: 16, nullable: true })
+  gift_wishes?: string | null;
 
   @Property({ type: "string", unique: true })
   @FrontendKey
@@ -194,4 +211,12 @@ export class User {
 
   @Property({ type: "string", nullable: true })
   alliance_role?: AllianceRole | null;
+
+  /** When they joined their current alliance; the absent-leader takeover picks the longest-serving. */
+  @Property({ type: Date, nullable: true })
+  alliance_joined_at?: Date | null = null;
+
+  /** When they last left or were kicked: no alliance for `REJOIN_COOLDOWN_HOURS` after. */
+  @Property({ type: Date, nullable: true })
+  alliance_left_at?: Date | null = null;
 }

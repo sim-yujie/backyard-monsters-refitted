@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { learnFromLesson, type ChampionLesson, type FlingLog } from "../../../game-rules/combat/index.js";
+import { learnHabits, type ChampionLesson, type FlingLog } from "../../../game-rules/combat/index.js";
 import { ChampionListSchema } from "../../../schemas/ChampionSchema.js";
 import type { ChampionData } from "../../../schemas/ChampionSchema.js";
 import { championsAfterAttack } from "./attackerRow.js";
@@ -49,32 +49,52 @@ const logFlinging = (...champions: { t: number; s?: "offensive" | "hybrid" | "de
 
 describe("championsAfterLessons", () => {
   test("each champion that fought learns by the Mode the log flung it in", () => {
-    const stored = [champion(1, { bs: { n: 2, off: 0.45 } }), champion(5, { bs: { n: 2, def: 0.9 } })];
-    const after = championsAfterLessons(stored, [lesson(1), lesson(5)], logFlinging({ t: 1, s: "offensive" }, { t: 5, s: "defensive" }))!;
+    const stored = [
+      champion(1, { hs: { n: 2, off: { n: 1, u: { main: 0.45 } } } }),
+      champion(5, { bs: { n: 2, def: 0.9 } }),
+    ];
+    const lessons = [lesson(1, { credit: { ...lesson(1).credit, guard: 2, gun: -1 } }), lesson(5)];
+    const after = championsAfterLessons(stored, lessons, logFlinging({ t: 1, s: "offensive" }, { t: 5, s: "defensive" }))!;
+    // Gorgo learns its Offensive habits (champion modes round 2).
     expect(after[0]).toMatchObject(
       (() => {
-        const learned = learnFromLesson(undefined, { n: 2, off: 0.45 }, lesson(1), "offensive");
-        return { b: learned.brain, bs: learned.stats };
+        const learned = learnHabits(undefined, stored[0]!.hs, lessons[0]!, "offensive");
+        return { h: learned.book, hs: learned.stats };
       })()
     );
-    // Offensive did better than usual: it leans to towers. Defensive did worse: away.
-    expect(after[0]!.b!.tower).toBeGreaterThan(0);
+    // Offensive did better than usual: it leans to guarding, and to the smaller gun.
+    expect(after[0]!.h!.off!.guard).toBeGreaterThan(0);
+    expect(after[0]!.h!.off!.gun).toBeLessThan(0);
+    expect(after[0]!.hs).toMatchObject({ n: 3, off: { n: 2 } });
+    // Krallen keeps today's brain (owner, 10 Nov): Defensive did worse, away from towers.
     expect(after[1]!.b!.tower).toBeLessThan(0);
     expect(after[1]!.bs).toMatchObject({ n: 3 });
+    expect(after[1]).not.toHaveProperty("h");
   });
 
   test("a champion flung with no Mode learns as Hybrid", () => {
-    const after = championsAfterLessons([champion(1, { bs: { n: 1, hyb: 0.1 } })], [lesson(1)], logFlinging({ t: 1 }))!;
-    expect(after[0]!.bs).toMatchObject({ n: 2 });
-    expect(after[0]!.bs!.hyb).toBeGreaterThan(0.1);
+    const stored = [champion(1, { hs: { n: 1, hyb: { n: 1, u: { main: 0.1 } } } })];
+    const after = championsAfterLessons(stored, [lesson(1)], logFlinging({ t: 1 }))!;
+    expect(after[0]!.hs).toMatchObject({ n: 2, hyb: { n: 2 } });
+    expect(after[0]!.hs!.hyb!.u.main).toBeGreaterThan(0.1);
+  });
+
+  test("a champion with an old brain starts its habits fresh and keeps its attack count", () => {
+    const stored = [champion(2, { b: { tower: 200, loot: 0, finish: 0, focus: -200, threat: 0 }, bs: { n: 30, off: 0.2 } })];
+    const after = championsAfterLessons(stored, [lesson(2)], logFlinging({ t: 2, s: "offensive" }))!;
+    expect(after[0]).not.toHaveProperty("b");
+    expect(after[0]).not.toHaveProperty("bs");
+    expect(after[0]!.h).toEqual({});
+    expect(after[0]!.hs).toEqual({ n: 31, off: { n: 1, u: { main: 0.5 } } });
   });
 
   test("a champion that did not fight, and every other field, is left as it was", () => {
-    const stored = [champion(1, { nm: "Bruno", s: "offensive", hp: 400 }), champion(3, { b: { tower: 9, loot: 0, finish: 0, focus: 0, threat: 0 } })];
-    const after = championsAfterLessons(stored, [lesson(1)], logFlinging({ t: 1 }))!;
+    const stored = [champion(1, { nm: "Bruno", s: "offensive", hp: 400 }), champion(3, { h: { hyb: { aerial: 9 } } })];
+    const after = championsAfterLessons(stored, [lesson(1, { k: "outpost" })], logFlinging({ t: 1 }))!;
     expect(after[1]).toBe(stored[1]!);
     expect(after[0]).toMatchObject({ nm: "Bruno", s: "offensive", hp: 400, l: 4 });
-    expect(after[0]!.bs).toEqual({ n: 1, hyb: 0.5 });
+    // Its usual score is kept per kind of yard.
+    expect(after[0]!.hs).toEqual({ n: 1, hyb: { n: 1, u: { outpost: 0.5 } } });
   });
 
   test("no lessons, no change: a defence never teaches the attacker's champions anything", () => {
@@ -84,10 +104,15 @@ describe("championsAfterLessons", () => {
     expect(championsAfterLessons(null, [lesson(2)], logFlinging({ t: 2 }))).toBeNull();
   });
 
-  test("a stored brain past its bounds is made safe before it learns", () => {
-    const stored = [champion(1, { b: { tower: 1e9, loot: Number.NaN } as never, bs: "junk" as never })];
-    const after = championsAfterLessons(stored, [lesson(1)], logFlinging({ t: 1 }))!;
+  test("a stored brain or book past its bounds is made safe before it learns", () => {
+    const stored = [
+      champion(5, { b: { tower: 1e9, loot: Number.NaN } as never, bs: "junk" as never }),
+      champion(1, { h: { hyb: { tower: 1e9, quake: 50, near: -40 } } as never, hs: "junk" as never }),
+    ];
+    const after = championsAfterLessons(stored, [lesson(5), lesson(1)], logFlinging({ t: 5 }, { t: 1 }))!;
     expect(after[0]!.b).toEqual({ tower: 200, loot: 0, finish: 0, focus: 0, threat: 0 });
+    // Faded once (150 to 135); no quake on Gorgo, and "Stays close" cannot go below 0.
+    expect(after[1]!.h).toEqual({ hyb: { tower: 135 } });
   });
 });
 

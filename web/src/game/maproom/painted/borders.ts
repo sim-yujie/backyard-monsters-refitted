@@ -1,8 +1,9 @@
 import { BufferImageSource } from "pixi.js";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "@/config";
-import { isPlayerCell, type MapCell } from "@/api/types";
+import { isPlayerCell, type MapCell, type PlayerCell } from "@/api/types";
 import { HexGrid } from "@/game/HexGrid";
-import { relationOf, type PlayerRelation } from "../cellVisuals";
+import { relationOf, type CellFriend, type PlayerRelation } from "../cellVisuals";
+import { RELATION_LOOK } from "../relationLook";
 import type { ZoneRecord } from "../ZoneStore";
 import type { CellRange } from "../zones";
 import { cellCentre, locateCell, type CellShape, type CellShapeKind } from "./cellShape";
@@ -12,8 +13,9 @@ import { cellCentre, locateCell, type CellShape, type CellShapeKind } from "./ce
  *
  * Each player's cells (main yard and outposts) get one outline round the whole group: a side of a
  * player's cell is a border when the cell across it is not that player's. Tribe camps, water, fog
- * and cells not loaded yet have no owner. The colour says how the owner relates to the viewer:
- * yours cyan, your alliance green, anyone who attacked you red, everyone else blue.
+ * and cells not loaded yet have no owner. The colour and line say how the owner relates to the
+ * viewer (`relationLook.ts`, owner 8 Nov 2026): yours, alliance, pinned friend, friend, hostile,
+ * neutral.
  *
  * This file keeps the facts the border shader (`borderShader.ts`) reads, one texel per cell:
  *   R  relation code (`BorderRelation`), 0 = no border at all
@@ -27,7 +29,9 @@ export const BorderRelation = {
   YOU: 1,
   ALLIANCE: 2,
   OTHER: 3,
-  ATTACKER: 4,
+  HOSTILE: 4,
+  FRIEND: 5,
+  PINNED: 6,
 } as const;
 export type BorderRelation = (typeof BorderRelation)[keyof typeof BorderRelation];
 
@@ -35,29 +39,39 @@ const RELATION_CODE: Record<PlayerRelation, BorderRelation> = {
   you: BorderRelation.YOU,
   alliance: BorderRelation.ALLIANCE,
   other: BorderRelation.OTHER,
-  attacker: BorderRelation.ATTACKER,
+  hostile: BorderRelation.HOSTILE,
+  friend: BorderRelation.FRIEND,
+  pinned: BorderRelation.PINNED,
 };
 
-/**
- * The border colours, by relation code (owner, 3 Nov 2026: yours cyan, alliance green, others blue,
- * attackers red), as 0xRRGGBB. Bright and a little cool, like mock-up B's glow.
- */
+/** The border colours, by relation code, as 0xRRGGBB: `relationLook.ts`'s palette. */
 export const BORDER_COLOURS: Record<Exclude<BorderRelation, 0>, number> = {
-  [BorderRelation.YOU]: 0x3cf2ff,
-  [BorderRelation.ALLIANCE]: 0x54f06e,
-  [BorderRelation.OTHER]: 0x4a9bff,
-  [BorderRelation.ATTACKER]: 0xff4a3d,
+  [BorderRelation.YOU]: RELATION_LOOK.you.colour,
+  [BorderRelation.ALLIANCE]: RELATION_LOOK.alliance.colour,
+  [BorderRelation.OTHER]: RELATION_LOOK.other.colour,
+  [BorderRelation.HOSTILE]: RELATION_LOOK.hostile.colour,
+  [BorderRelation.FRIEND]: RELATION_LOOK.friend.colour,
+  [BorderRelation.PINNED]: RELATION_LOOK.pinned.colour,
 };
+
+/** What the borders need to know about the viewer: their alliance, and who their friends are. */
+export interface BorderViewer {
+  myAlliance: number | null;
+  /** The shared friends list's answer for a cell (fresher than its flags); absent, the flags decide. */
+  friendMark?: ((cell: PlayerCell) => CellFriend) | undefined;
+}
 
 /** A cell's owner for the borders: the player's user id, or 0 for no player. */
 export const ownerOf = (cell: MapCell | undefined): number =>
   cell !== undefined && isPlayerCell(cell) && cell.uid > 0 ? cell.uid : 0;
 
 /** The border relation of a cell (0 when no player owns it). */
-export const borderRelationOf = (cell: MapCell | undefined, myAlliance: number | null): BorderRelation =>
-  cell !== undefined && ownerOf(cell) > 0 && isPlayerCell(cell)
-    ? RELATION_CODE[relationOf(cell, myAlliance)]
-    : BorderRelation.NONE;
+export const borderRelationOf = (cell: MapCell | undefined, viewer: BorderViewer | number | null): BorderRelation => {
+  if (cell === undefined || ownerOf(cell) === 0 || !isPlayerCell(cell)) return BorderRelation.NONE;
+  const { myAlliance, friendMark } = typeof viewer === "object" && viewer !== null ? viewer : { myAlliance: viewer, friendMark: undefined };
+  const friend = cell.mine === 1 ? "none" : friendMark?.(cell);
+  return RELATION_CODE[relationOf(cell, myAlliance, friend)];
+};
 
 /**
  * Which sides of a cell are borders: bit k is set when the cell across side k (the k-th of
@@ -128,7 +142,7 @@ export class BorderData {
   }
 
   /** Writes one area response, then refreshes the sides of its cells and the ring round them. */
-  applyZone(zone: ZoneRecord, myAlliance: number | null): void {
+  applyZone(zone: ZoneRecord, viewer: BorderViewer | number | null): void {
     const touched: number[] = [];
     for (const [xKey, column] of Object.entries(zone.data)) {
       const x = Number(xKey);
@@ -138,7 +152,7 @@ export class BorderData {
         if (!(y >= 0 && y < this.height)) continue;
         const index = y * this.width + x;
         const owner = ownerOf(cell);
-        const relation = owner > 0 ? borderRelationOf(cell, myAlliance) : BorderRelation.NONE;
+        const relation = owner > 0 ? borderRelationOf(cell, viewer) : BorderRelation.NONE;
         const was = this.owners[index]!;
         this.owners[index] = owner;
         this.bytes[index * 4] = relation;

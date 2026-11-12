@@ -41,7 +41,9 @@ import { cellLift, isFlatGround, paintOrder } from "./ground";
 import { tagStyle, type TagStyle } from "./painted/markerStyle";
 import { GROUND_ANCHOR_X, groundAnchorY, type GroundArt } from "./groundArt";
 import type { MapPicture } from "./mapPicture";
+import type { MapShields } from "./mapAlliances";
 import { MarkerPins } from "./markerPins";
+import { BORDER_RIM_COLOUR, PINNED_CENTRE_COLOUR, RELATION_LOOK, TILE_RIM_ALPHA } from "./relationLook";
 
 /**
  * One 10 x 10 block of the map, built once as sprites.
@@ -248,6 +250,8 @@ export class MapChunk {
     private readonly groundArt: GroundArt,
     private readonly constructionBadge: MapPicture,
     private readonly idleHelper: MapPicture,
+    /** The alliance shields drawn on name plates (beta 7); none until each picture lands. */
+    private readonly shields: MapShields | null = null,
   ) {
     this.labels = new LabelLayer(pool);
     this.container.interactiveChildren = false;
@@ -324,6 +328,24 @@ export class MapChunk {
         outline.alpha = GRID_ALPHA;
         this.outlineSprites.push(outline);
         this.addGround(outline, order + 0.25);
+
+        // A player's cell wears its relation border (owner, 8 Nov 2026) on a dark rim. Only seen
+        // on the tile map: the painted look hides this ground and draws its own (`BorderLayer`).
+        if (appearance.relation !== null) {
+          const look = RELATION_LOOK[appearance.relation];
+          const alpha = appearance.dimmed ? DIMMED_ALPHA : 1;
+          const rim = place(new Sprite(this.atlas.relationRims[look.style]), centre.x, centre.y, BORDER_RIM_COLOUR);
+          rim.alpha = TILE_RIM_ALPHA * alpha;
+          this.addGround(rim, order + 0.3);
+          const border = place(new Sprite(this.atlas.relationBorders[look.style]), centre.x, centre.y, look.colour);
+          border.alpha = alpha;
+          this.addGround(border, order + 0.35);
+          if (look.style === "triple") {
+            const centre2 = place(new Sprite(this.atlas.pinnedCentre), centre.x, centre.y, PINNED_CENTRE_COLOUR);
+            centre2.alpha = alpha;
+            this.addGround(centre2, order + 0.36);
+          }
+        }
 
         if (appearance.marker === CellMarker.YARD || appearance.marker === CellMarker.OUTPOST) {
           this.addPlayer(appearance, centre.x, centre.y);
@@ -717,8 +739,27 @@ export class MapChunk {
     plate.alpha = (style.plateAlpha ?? (appearance.own ? 1 : PLATE_ALPHA)) * alpha;
     this.plates.addChild(plate);
     this.pins.add(foot, plate, "text");
+
+    // The owner's alliance shield hanging off the plate's left end (beta 7, design v5 §12),
+    // a little taller than the plate so it reads as a badge, not a letter.
+    const shieldTexture = appearance.shield > 0 ? (this.shields?.texture(appearance.shield) ?? null) : null;
+    if (shieldTexture) {
+      const shield = new Sprite(shieldTexture);
+      shield.anchor.set(0.5);
+      const size = height * SHIELD_PLATE_SCALE;
+      const scale = size / Math.max(shieldTexture.width, shieldTexture.height);
+      shield.setSize(shieldTexture.width * scale, shieldTexture.height * scale);
+      // Just left of the words: it overlaps only the plate's own padding.
+      shield.position.set(x - total / 2 - shield.width / 2 + LABEL_PADDING * style.scale, y);
+      shield.alpha = alpha;
+      this.plates.addChild(shield);
+      this.pins.add(foot, shield, "text");
+    }
   }
 }
+
+/** An alliance shield's height over its name plate's. */
+export const SHIELD_PLATE_SCALE = 1.7;
 
 /**
  * How big the protection dome's baked picture is drawn so the glass encloses

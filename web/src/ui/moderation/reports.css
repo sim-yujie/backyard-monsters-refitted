@@ -1,0 +1,878 @@
+/*
+ * The moderators' Reports window (owner, 12 Nov 2026, desk card
+ * "mod-reports-b"; `ReportsWindow.ts`): a Popup, so the frame, title sign,
+ * close disc and `.btn` plates come from `skin.css` in both looks. Inside is
+ * the admin Moderation page's layout, ported from the approved mock-up
+ * (design/mod-panel-mock): the list on the left (search, four filters, one
+ * row per player), the opened player on the right (their lines, the chat
+ * around each, their earlier warnings and mutes) and Close / Warn / Mute at
+ * its foot. Colours are tokens, so Modern's steel and Classic's parchment
+ * both read. On a phone (620 px and under) it is one column: the list, or
+ * the player with "‹ Back".
+ */
+
+/* ── The window ───────────────────────────────────────────────────────── */
+
+/* As wide as the mock-up's computer window (two columns: the list at 300 px,
+   the player beside it), never wider than the screen. `.panel` caps every
+   window at 560 px (ui.css), so this lifts that cap for this one. */
+.panel.mod-reports-window {
+  width: min(100%, 1040px);
+  max-width: min(1040px, calc(100vw - 2 * var(--space-4)));
+  --mod-reports-overhang: max(var(--skin-title-lift, 0px), calc(var(--skin-edge, 0px) + 12px));
+  --mod-reports-room: calc(100dvh - var(--hud-height, 0px) - var(--space-2) - var(--space-4) - var(--mod-reports-overhang));
+  height: min(640px, var(--mod-reports-room));
+  margin-top: var(--mod-reports-overhang);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  --mod-reports-quote: rgb(0 0 0 / 22%);
+}
+
+:root[data-skin="flash"] .mod-reports-window {
+  --mod-reports-quote: rgb(255 250 235 / 70%);
+}
+
+.popup-backdrop:has(> .mod-reports-window) {
+  padding-top: calc(var(--hud-height, 0px) + var(--space-2));
+}
+
+:root[data-skin="flash"] .mod-reports-window .panel__title {
+  padding-top: 3px;
+}
+
+.mod-reports-window > .panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  display: flex;
+  padding: 2px var(--space-2) var(--space-2);
+  overflow: hidden;
+  /* The layout follows the room the window really has, not the screen:
+     two columns from 720 px, one below (`REPORTS_TWO_COLUMNS`). */
+  container: mod-reports / inline-size;
+}
+
+.mod-reports__workspace {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 12px;
+}
+
+/* The mock-up's smaller plates (38 px), so three fit under a player. */
+:root[data-skin] .mod-reports-window .btn.mod-reports__btn {
+  min-height: 38px;
+  font-size: var(--text-sm);
+  --skin-button-cap: 18px;
+  --skin-button2-cap: 16px;
+}
+
+/* ── Painted icons inside ─────────────────────────────────────────────── */
+
+.mod-reports-window .game-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  vertical-align: -4px;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 35%));
+}
+
+.mod-reports-window .mod-reports__gi16 {
+  width: 16px;
+  height: 16px;
+  vertical-align: -3px;
+}
+
+/* ── Left: search, the four filters, the list ─────────────────────────── */
+
+.mod-reports__queue-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mod-reports__search {
+  position: relative;
+  display: block;
+  flex: none;
+}
+
+.mod-reports__search .game-icon {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  pointer-events: none;
+}
+
+.mod-reports__input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px 0 36px;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-input);
+  color: var(--colour-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  outline: none;
+}
+
+.mod-reports__input::placeholder {
+  color: var(--colour-text-muted);
+  opacity: 0.85;
+}
+
+.mod-reports__input:focus-visible {
+  border-color: var(--colour-accent);
+}
+
+.mod-reports__filters {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+/* A chip toggle: icon + word + count on one line, centred. The chosen one
+   wears the game's chosen-chip look: selected fill, accent border and an
+   accent underline. The border is always there so every chip is one size. */
+.mod-reports__seg {
+  min-width: 0;
+  min-height: 40px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  text-align: center;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--colour-text-secondary);
+  font: inherit;
+  font-size: var(--text-xs);
+  text-shadow: inherit;
+}
+
+.mod-reports__seg:hover {
+  background: var(--colour-surface-control);
+}
+
+.mod-reports__seg[aria-pressed="true"] {
+  background: var(--colour-surface-selected);
+  border-color: var(--colour-accent);
+  box-shadow: inset 0 -2px 0 var(--colour-accent);
+  color: var(--colour-text-strong);
+}
+
+.mod-reports-window .mod-reports__seg .game-icon {
+  width: 18px;
+  height: 18px;
+  vertical-align: 0;
+}
+
+.mod-reports__seg-count {
+  min-width: 18px;
+  padding: 2px 4px;
+  border-radius: 9px;
+  background: var(--colour-surface-control);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.mod-reports__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.mod-reports__row {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  border: 0;
+  border-bottom: 1px solid var(--colour-border-subtle);
+  border-left: 3px solid transparent;
+  background: none;
+  color: var(--colour-text);
+  font: inherit;
+  text-shadow: inherit;
+}
+
+.mod-reports__row:last-child {
+  border-bottom: 0;
+}
+
+.mod-reports__row:hover {
+  background: var(--colour-surface-control);
+}
+
+.mod-reports__row[aria-current="true"] {
+  border-left-color: var(--colour-accent);
+  background: var(--colour-surface-selected);
+}
+
+.mod-reports__row-top,
+.mod-reports__hspread {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.mod-reports__row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+  font-size: var(--text-md);
+  color: var(--colour-text-strong);
+}
+
+.mod-reports__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+
+.mod-reports__small {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.mod-reports__preview {
+  overflow: hidden;
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--colour-text-secondary);
+}
+
+.mod-reports__more {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  border: 0;
+  background: none;
+  color: var(--colour-accent);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+/* Badges: the admin page's blue / amber / red / green, in the game's inks. */
+.mod-reports__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--colour-surface-control);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.mod-reports-window .mod-reports__badge .game-icon {
+  width: 15px;
+  height: 15px;
+  vertical-align: 0;
+}
+
+.mod-reports__badge--blue { background: rgb(80 140 255 / 22%); border-color: rgb(120 170 255 / 55%); }
+.mod-reports__badge--amber { background: rgb(255 190 60 / 24%); border-color: rgb(255 200 80 / 60%); }
+.mod-reports__badge--red { background: rgb(230 60 50 / 26%); border-color: rgb(255 110 100 / 60%); }
+.mod-reports__badge--green { background: rgb(60 180 80 / 24%); border-color: rgb(100 210 120 / 60%); }
+:root[data-skin="flash"] .mod-reports__badge--blue { background: rgb(42 85 196 / 12%); border-color: rgb(42 85 196 / 40%); color: #1c3d8f; }
+:root[data-skin="flash"] .mod-reports__badge--amber { background: rgb(200 120 10 / 14%); border-color: rgb(160 90 0 / 45%); color: #6e3e00; }
+:root[data-skin="flash"] .mod-reports__badge--red { background: rgb(180 35 35 / 12%); border-color: rgb(180 35 35 / 45%); color: #8f1c1c; }
+:root[data-skin="flash"] .mod-reports__badge--green { background: rgb(31 122 58 / 12%); border-color: rgb(31 122 58 / 45%); color: #165a2a; }
+
+/* Empty and waiting states: "Nothing needs you", "Pick a player". */
+.mod-reports__empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 180px;
+  margin: 0;
+  padding: 30px 18px;
+  text-align: center;
+}
+
+.mod-reports__empty strong {
+  font-weight: 400;
+  font-size: var(--text-lg);
+  color: var(--colour-text-strong);
+}
+
+.mod-reports__empty p {
+  margin: 0;
+  max-width: 340px;
+  color: var(--colour-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.mod-reports-window .mod-reports__empty > .game-icon {
+  width: 48px;
+  height: 48px;
+}
+
+.mod-reports__empty--small {
+  flex: none;
+  min-height: 120px;
+  padding: 16px;
+}
+
+/* The game's "done" tick: a green disc with a white tick (quests.css). */
+.mod-reports__tick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 2px solid #14501b;
+  border-radius: 50%;
+  background: #3db54a;
+  color: #fff;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 35%);
+}
+
+.mod-reports__tick svg {
+  width: 26px;
+  height: 26px;
+}
+
+/* ── Right: the opened player ─────────────────────────────────────────── */
+
+.mod-reports__detail {
+  /* The player's own room decides how the chat around and the plates sit. */
+  container: mod-reports-detail / inline-size;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.mod-reports__head {
+  flex: none;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--colour-border-subtle);
+}
+
+.mod-reports__back {
+  display: none;
+  margin-bottom: 6px;
+}
+
+.mod-reports__head h2 {
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+  font-size: 20px;
+  color: var(--colour-text-strong);
+  overflow-wrap: break-word;
+}
+
+.mod-reports__account {
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  white-space: nowrap;
+}
+
+.mod-reports__summary {
+  margin: 4px 0 0;
+  font-size: var(--text-xs);
+  color: var(--colour-text-secondary);
+}
+
+.mod-reports__review {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+}
+
+.mod-reports__evidence {
+  order: 1;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mod-reports__notice {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--colour-warning);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--colour-text-secondary);
+}
+
+.mod-reports__result {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid rgb(100 210 120 / 55%);
+  border-radius: var(--radius-sm);
+  background: rgb(60 180 80 / 22%);
+  font-size: var(--text-sm);
+}
+
+:root[data-skin="flash"] .mod-reports__result {
+  background: rgb(31 122 58 / 12%);
+  border-color: rgb(31 122 58 / 45%);
+}
+
+.mod-reports__result--problem {
+  border-color: var(--colour-danger);
+  background: rgb(230 60 50 / 18%);
+}
+
+:root[data-skin="flash"] .mod-reports__result--problem {
+  border-color: rgb(180 35 35 / 45%);
+  background: rgb(180 35 35 / 10%);
+}
+
+.mod-reports__line {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--colour-border-subtle);
+}
+
+.mod-reports__line blockquote {
+  margin: 6px 0;
+  font-size: var(--text-md);
+  line-height: 1.45;
+  color: var(--colour-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.mod-reports__line mark {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: rgb(255 190 60 / 45%);
+  color: inherit;
+}
+
+.mod-reports__line .mod-reports__small {
+  margin: 0;
+}
+
+.mod-reports__reporters {
+  margin: 3px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-sm);
+}
+
+/* The chat around a line (admin.css .snap): time, who, words; the player's
+   own name in red on each of their lines; the reported line lit red with a
+   bar on its left and the flag before its words. */
+.mod-reports__context {
+  margin-top: 8px;
+}
+
+.mod-reports__context:empty {
+  display: none;
+}
+
+.mod-reports__snap {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--mod-reports-quote);
+  font-size: var(--text-sm);
+}
+
+.mod-reports__snap-line {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, auto) minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 10px;
+}
+
+.mod-reports__snap-time {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.mod-reports__snap-who {
+  max-width: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+  color: var(--colour-text);
+}
+
+.mod-reports__snap-text {
+  overflow-wrap: anywhere;
+  color: var(--colour-text-secondary);
+}
+
+.mod-reports__snap-line.is-them .mod-reports__snap-who {
+  color: var(--colour-danger);
+}
+
+.mod-reports__snap-line.is-reported {
+  background: rgb(230 60 50 / 24%);
+  box-shadow: inset 3px 0 0 var(--colour-danger);
+}
+
+:root[data-skin="flash"] .mod-reports__snap-line.is-reported {
+  background: rgb(180 35 35 / 12%);
+}
+
+.mod-reports__snap-line.is-reported .mod-reports__snap-text {
+  color: var(--colour-text-strong);
+}
+
+.mod-reports__snap-mark {
+  display: inline-flex;
+  margin-right: 4px;
+  vertical-align: -3px;
+}
+
+.mod-reports__snap-text .mod-reports__badge {
+  height: 18px;
+  margin-right: 4px;
+  font-size: 10px;
+  vertical-align: 1px;
+}
+
+.mod-reports__note {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+}
+
+.mod-reports__link {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--colour-accent);
+  font: inherit;
+  font-size: var(--text-xs);
+  text-decoration: underline;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+:root[data-skin="scrap"] .mod-reports__link,
+:root[data-skin="scrap"] .mod-reports__more {
+  color: #ffb36b;
+}
+
+.mod-reports__history h3 {
+  margin: 0 0 6px;
+  font-weight: 400;
+  font-size: var(--text-md);
+  color: var(--colour-text-strong);
+}
+
+.mod-reports__history > p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+.mod-reports__log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.mod-reports__entry {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: var(--text-sm);
+}
+
+.mod-reports__entry-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mod-reports__history details {
+  margin-top: 8px;
+  font-size: var(--text-sm);
+}
+
+.mod-reports__history summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  cursor: pointer;
+  color: var(--colour-text-secondary);
+}
+
+.mod-reports__timeline {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--colour-border-subtle);
+}
+
+.mod-reports__timeline:last-child {
+  border-bottom: 0;
+}
+
+.mod-reports__timeline strong {
+  font-weight: 400;
+  color: var(--colour-text-strong);
+}
+
+.mod-reports__timeline p {
+  margin: 2px 0 0;
+  font-size: var(--text-xs);
+  color: var(--colour-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* The confirm step: its questions above the lines; its Cancel / Confirm take
+   the action bar's place at the foot, so they never scroll away. */
+.mod-reports__confirm {
+  order: 0;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--colour-border-subtle);
+  background: var(--colour-surface-control);
+}
+
+.mod-reports__confirm h3 {
+  margin: 0 0 4px;
+  font-weight: 400;
+  font-size: var(--text-lg);
+  color: var(--colour-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.mod-reports__confirm > p {
+  margin: 0 0 10px;
+  font-size: var(--text-sm);
+  color: var(--colour-text-secondary);
+}
+
+.mod-reports__field {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 10px;
+  font-size: var(--text-sm);
+}
+
+.mod-reports__field small {
+  color: var(--colour-text-muted);
+  font-size: var(--text-xs);
+}
+
+.mod-reports__lengths {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface-sunken);
+}
+
+.mod-reports__lengths .mod-reports__seg {
+  min-width: 84px;
+  font-size: var(--text-sm);
+}
+
+.mod-reports__confirm textarea {
+  width: 100%;
+  min-height: 64px;
+  padding: 8px 10px;
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+  background: var(--colour-surface-input);
+  color: var(--colour-text);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.mod-reports__problem {
+  margin: 0 0 6px;
+  color: var(--colour-danger);
+  font-size: var(--text-sm);
+}
+
+.mod-reports__problem[hidden] {
+  display: none;
+}
+
+/* The action bar at the foot of the player. */
+.mod-reports__actions {
+  flex: none;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--colour-border-subtle);
+}
+
+.mod-reports__scope {
+  margin: 0 0 6px;
+  font-size: var(--text-xs);
+  color: var(--colour-text-secondary);
+}
+
+.mod-reports__action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.mod-reports__action-buttons {
+  flex: 1 1 260px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.mod-reports__confirm-buttons {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: 8px;
+}
+
+.mod-reports__action-buttons .btn,
+.mod-reports__confirm-buttons .btn {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+/* A plate's word sits at the plate's exact middle (owner rule: 0 px off
+   centre); its picture hangs to the left of the word, never on top of it. */
+.mod-reports__btn-word {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.mod-reports-window .mod-reports__btn-word > .game-icon {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 6px);
+  transform: translateY(-50%);
+  vertical-align: 0;
+}
+
+.mod-reports__ban-note {
+  flex: none;
+  margin: 0 0 0 auto;
+  font-size: var(--text-xs);
+  color: var(--colour-text-muted);
+  white-space: nowrap;
+}
+
+/* ── Narrow: one column, the list or the player ───────────────────────── */
+
+@media (width <= 620px) {
+  .panel.mod-reports-window {
+    height: var(--mod-reports-room);
+  }
+}
+
+@container mod-reports (width < 720px) {
+  .mod-reports__workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mod-reports__workspace:not(.has-player) .mod-reports__detail,
+  .mod-reports__workspace.has-player .mod-reports__queue-pane {
+    display: none;
+  }
+
+  /* inline-block like the other plates: a button centres its word on both
+     axes itself; inline-flex sat the word at the top of the plate. */
+  .mod-reports__back {
+    display: inline-block;
+  }
+}
+
+/* A narrow player pane (a phone): the chat around on two lines each, the
+   mute lengths 2x2, and the three plates share the width without pictures
+   so each word keeps the plate's middle. */
+@container mod-reports-detail (width < 480px) {
+  .mod-reports__snap-line {
+    grid-template-columns: 2.6rem minmax(0, 1fr);
+    gap: 0 8px;
+  }
+
+  .mod-reports__snap-text {
+    grid-column: 2;
+  }
+
+  .mod-reports__lengths {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .mod-reports__actions {
+    padding-inline: 10px;
+  }
+
+  .mod-reports__action-buttons {
+    flex-basis: 100%;
+    gap: 4px;
+  }
+
+  :root[data-skin] .mod-reports-window .mod-reports__action-buttons .btn.mod-reports__btn {
+    padding: 0;
+    --skin-button-cap: 14px;
+    --skin-button2-cap: 14px;
+  }
+
+  .mod-reports-window .mod-reports__action-buttons .mod-reports__btn-word > .game-icon {
+    display: none;
+  }
+}

@@ -310,6 +310,10 @@ const em = {
         return table.filter((row) => matches(row, where)).map((row) => structuredClone(row));
       },
       async flush() {},
+      // The alliance lookups (`productionHistory.ts`): nobody here is in one.
+      async execute() {
+        return [];
+      },
     };
     try {
       const result = await cb(fork);
@@ -556,5 +560,34 @@ describe("timers that ran out on an outpost nobody opened", () => {
     expect(main.resources).toMatchObject({ r1: 720 * 1 + 1440 * 2 });
     // The row in hand is read, not changed: its own catch-up moves it.
     expect((inHand!.buildingdata as Record<string, BuildingData>)["1"]!.cB).toBe(2 * HOUR);
+  });
+});
+
+/**
+ * The outpost income is paid at the alliance factor that held when each tick
+ * ran (`services/alliance/productionHistory.ts`, security review of
+ * 78c9156be): a bonus gained or lost while away does not reach back.
+ */
+describe("paying it: a production factor that changed while away", () => {
+  const rates = { "900": { r1: 224, r2: 0, r3: 0, r4: 0 } };
+  const paid = (factor: Parameters<typeof payAutobank>[5]) => payAutobank(mainYard(0), rates, T0, [], [], factor).paid.r1;
+
+  test("joined at the load: the hour away is paid at no bonus", () => {
+    expect(paid({ past: [{ until: T0, factor: 1 }], current: 1.5 })).toBe(80_640);
+  });
+
+  test("a star lit half-way: half the ticks at each factor", () => {
+    expect(paid({ past: [{ until: T0 - HOUR / 2, factor: 1.1 }], current: 1.5 })).toBe(
+      Math.floor(80_640 * ((1.1 + 1.5) / 2))
+    );
+  });
+
+  test("leaving half-way keeps the bonus earned before it", () => {
+    expect(paid({ past: [{ until: T0 - HOUR / 2, factor: 1.5 }], current: 1 })).toBe(Math.floor(80_640 * 1.25));
+  });
+
+  test("a flat factor is the same as before", () => {
+    expect(paid(1.5)).toBe(Math.floor(80_640 * 1.5));
+    expect(paid({ past: [{ until: T0 - 2 * HOUR, factor: 3 }], current: 1.5 })).toBe(Math.floor(80_640 * 1.5));
   });
 });

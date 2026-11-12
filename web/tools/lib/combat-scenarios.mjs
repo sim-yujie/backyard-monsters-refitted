@@ -172,7 +172,8 @@ export const SCENARIOS = [
     description:
       "A player outpost on a cell of height 250: the core, six-level outpost towers with the " +
       "Railgun, the Tesla and the Laser all but wrecked, so they deal half (issues #261, " +
-      "#266, #267), four harvesters (two damaged), one wave that levels it (issue #179).",
+      "#266, #267), four harvesters (two damaged), one wave that levels it (issue #179), " +
+      "thrown as three flings in a row, each within the Flinger's 2,250.",
     yard: OUTPOST_YARD,
     health: { 1: 1000, 2: 1000, 3: 1000, 6: 40000, 8: 3000 },
     height: 250,
@@ -185,7 +186,9 @@ export const SCENARIOS = [
       v: 1,
       seed: 179,
       events: [
-        { kind: "fling", t: 80, x: 600, y: 0, r: 300, monsters: { C3: 150, C6: 80, C8: 40 } },
+        { kind: "fling", t: 80, x: 600, y: 0, r: 300, monsters: { C3: 50, C6: 40, C8: 20 } },
+        { kind: "fling", t: 81, x: 600, y: 0, r: 300, monsters: { C3: 50, C6: 40, C8: 20 } },
+        { kind: "fling", t: 82, x: 600, y: 0, r: 300, monsters: { C3: 50, C6: 40, C8: 20 } },
       ],
     },
   },
@@ -278,6 +281,36 @@ export const SCENARIOS = [
       ],
     },
   },
+  // Slimeattikus's Lab "Split" on both sides (owner, beta 7 grill item 31,
+  // 6 Nov 2026): ranked attackers and a bunker's ranked Slimeattikus leave
+  // smaller copies of themselves on top of Flash's Minis.
+  {
+    name: "lab-split",
+    description:
+      "Ranked Slimeattikus into the sandbox yard, against a bunker holding Slimeattikus at the " +
+      "defender's rank: each one that dies leaves its Minis and its Lab Split copies (beta 7).",
+    yard: "sandbox",
+    kind: "main",
+    levels: { C17: 3, C10: 4 },
+    playerLevel: 20,
+    tailTicks: 9000,
+    ranks: { C17: 3 },
+    defence: {
+      bunkers: {
+        85: { C17: 2 },
+      },
+      defenderLevels: { C17: 3 },
+      defenderRanks: { C17: 2 },
+    },
+    log: {
+      v: 1,
+      seed: 20261106,
+      events: [
+        { kind: "fling", t: 200, x: 420, y: -560, r: 120, monsters: { C17: 4 } },
+        { kind: "fling", t: 260, x: 380, y: -520, r: 120, monsters: { C10: 3, C17: 2 } },
+      ],
+    },
+  },
   {
     name: "caged-champion",
     description:
@@ -330,8 +363,11 @@ export const SCENARIOS = [
           x: 300,
           y: -300,
           r: 300,
-          monsters: { C1: 90, C15: 6, C19: 4 },
+          monsters: { C1: 90, C15: 6 },
         },
+        // The Rezghul in a second fling on the same spot: with the first it is
+        // over the Flinger's 2,250.
+        { kind: "fling", t: 201, x: 300, y: -300, r: 300, monsters: { C19: 4 } },
         { kind: "fling", t: 3600, x: 480, y: -420, r: 300, monsters: { C8: 30, C3: 20 } },
       ],
     },

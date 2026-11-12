@@ -29,6 +29,7 @@ import {
  * them, mail with bots or with players already deleted, and threads the other
  * player had blocked), truces, alliance chat and invites, notifications,
  * the replays of attacks on them, attack plans, neighbour lists, their
+ * profile (bio and photo) and the reports of their photo, their
  * friendships, friend requests and friend helps both ways (their friends' `friendcount`
  * drops by one), the anti-cheat report and every Redis key of theirs, including login sessions,
  * so they are logged out. Their lines are taken out of world chat history, the
@@ -201,12 +202,17 @@ const deleteSteps = (u: number): DeleteStep[] => [
   { label: "friend helps (given and received)", table: "friend_help", where: `helper_userid = ? OR owner_userid = ?`, params: [u, u] },
   { label: "friend gifts (sent and received)", table: "friend_gift", where: `from_userid = ? OR to_userid = ?`, params: [u, u] },
   { label: "event progress (calendars, collections)", table: "event_progress", where: `userid = ?`, params: [u] },
+  { label: "event coins (balance)", table: "event_coins", where: `userid = ?`, params: [u] },
+  { label: "event coins (history)", table: "event_coin_log", where: `userid = ?`, params: [u] },
   { label: "Inferno progress", table: "inferno_progress", where: `userid = ?`, params: [u] },
   { label: "Shiny the game team gave them", table: "shiny_award", where: `userid = ?`, params: [u] },
   { label: "bug reports they sent", table: "bug_report", where: `userid = ?`, params: [u] },
   { label: "the dashboard's error senders (name and address)", table: "app_error_reporter", where: `userid = ?`, params: [u] },
   { label: "announcements they pressed \"Got it\" on", table: "announcement_dismissal", where: `userid = ?`, params: [u] },
   { label: "announcement gifts they claimed", table: "announcement_claim", where: `userid = ?`, params: [u] },
+  { label: "profile (bio and photo)", table: "player_profile", where: `userid = ?`, params: [u] },
+  { label: "outpost names and pins", table: "outpost_label", where: `userid = ?`, params: [u] },
+  { label: "reports of their profile photo", table: "photo_report", where: `reported_id = ?`, params: [u] },
   { label: "map cells (home and outposts)", table: "world_map_cell", where: `uid = ?`, params: [u] },
   { label: "account (login and email)", table: `"user"`, where: `userid = ?`, params: [u] },
   { label: "saves (yards, outposts, inferno)", table: "save", where: `userid = ?`, params: [u] },
@@ -358,11 +364,15 @@ const capturedDefenders = async (tx: EntityManager, u: number, worldid: string |
 const allianceOutcome = async (sql: Sql, account: AccountRow) => {
   if (account.alliance_id === null) return { text: null, disband: false, successor: null as { userid: number; username: string } | null };
 
-  const [alliance] = await sql<{ name: string }>(`SELECT name FROM bym.alliance WHERE id = ?`, [account.alliance_id]);
+  // Locked like every other membership change (`services/alliance/membership.ts`), so a member
+  // leaving or being promoted at the same moment cannot make the successor chosen here stale.
+  const [alliance] = await sql<{ name: string }>(`SELECT name FROM bym.alliance WHERE id = ? FOR UPDATE`, [account.alliance_id]);
   const name = alliance?.name ?? `#${account.alliance_id}`;
   const [next] = await sql<{ userid: number; username: string }>(
-    `SELECT userid, username FROM bym."user" WHERE alliance_id = ? AND userid <> ? ORDER BY userid LIMIT 1`,
-    [account.alliance_id, account.userid]
+    // An Officer takes over before a Member (design v5 §6).
+    `SELECT userid, username FROM bym."user" WHERE alliance_id = ? AND userid <> ?
+      ORDER BY (alliance_role = ?) DESC, alliance_joined_at ASC NULLS LAST, userid LIMIT 1`,
+    [account.alliance_id, account.userid, AllianceRole.OFFICER]
   );
 
   if (!next) return { text: `alliance "${name}" is disbanded (no other members)`, disband: true, successor: null };

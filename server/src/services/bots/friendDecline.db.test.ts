@@ -117,6 +117,19 @@ describe.skipIf(!dbName)("a friend request under the §6.2 rule is declined thro
     expect(reason).toBe("declinedRecently");
   });
 
+  test("a retired bot (all of them since 12 Nov 2026) books no answer: the request waits and lapses as any other", async () => {
+    const [bot] = await createBots(orm.em.fork(), [15], { rng: mulberry32(369), now: NOW, pace: T });
+    await sql(`UPDATE bym.bot SET state = 'retired', retired_at = now() WHERE userid = ?`, [bot!.userid]);
+    const em = orm.em.fork();
+    const player = em.create(User, { username: PLAYER, email: `${PLAYER}@test.com`, password: "x" });
+    await em.flush();
+    await Save.createMainSave(em, player);
+
+    const outcome = await sendFriendRequest(orm.em.fork(), player.userid, { userid: bot!.userid }, NOW);
+    expect(outcome.request).toMatchObject({ userid: bot!.userid, status: "pending" });
+    expect(await sql(`SELECT * FROM bym.bot_job WHERE bot_userid = ?`, [bot!.userid])).toEqual([]);
+  });
+
   test("a request cancelled before the job is due: the job only goes away", async () => {
     const { requestid } = await ask();
     await sql(`UPDATE bym.friend_request SET status = 'cancelled', answered_at = now() WHERE id = ?`, [requestid]);

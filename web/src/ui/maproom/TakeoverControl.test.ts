@@ -115,7 +115,7 @@ describe("TakeoverControl", () => {
     control.setCell(KOZU, camp(1));
     await flush();
     expect(control.button.disabled).toBe(false);
-    expect(control.detail.textContent).toBe("Take over: 3,500,000 of each resource or 924 Shiny");
+    expect(control.detail.textContent).toBe("Take over · 3,500,000 of each resource or 924 Shiny");
     control.button.click();
     expect(modal.querySelector(".takeover-dialog .panel__title")!.textContent).toBe(
       "Take over this Wild Monster Yard",

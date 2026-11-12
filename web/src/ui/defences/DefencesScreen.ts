@@ -2,6 +2,7 @@ import type { Defence } from "@/api/defences";
 import { avatarOf, avatarUrl } from "@/game/avatars";
 import { DEFENCE_REFUSAL_TEXT, defenceRefusal, lootTakenOf } from "@/game/defences/defenceWatch";
 import { agoText } from "@/ui/attack/autoAttackText";
+import { centreWindow, type CentreWindow } from "@/ui/centreWindow";
 import { Panel } from "@/ui/Panel";
 import { RESOURCE_KEYS, resourceAmount } from "@/ui/resourceIcon";
 import "@/ui/styles/defences.css";
@@ -73,6 +74,9 @@ export class DefencesScreen {
   /** A replay that could not be opened after all, by id: the words shown in place of Watch. */
   private readonly refused = new Map<number, string>();
 
+  /** Its place in the middle of the screen, one window at a time (`ui/centreWindow.ts`). */
+  private readonly centre: CentreWindow;
+
   constructor(options: DefencesScreenOptions) {
     this.options = options;
     this.now = options.now ?? (() => Math.floor(Date.now() / 1000));
@@ -81,6 +85,7 @@ export class DefencesScreen {
     // opens and closes many times over one scene.
     const panel = new Panel({ title: "Defences", className: "defences-screen", closable: false });
     this.element = panel.element;
+    this.centre = centreWindow(this.element, () => this.close());
     this.element.hidden = true;
     this.element.setAttribute("role", "region");
     this.element.addEventListener("keydown", (event) => {
@@ -124,6 +129,7 @@ export class DefencesScreen {
     if (this.opened) return;
     this.opened = true;
     this.element.hidden = false;
+    this.centre.opened();
     this.element.querySelector<HTMLElement>(".defences-screen__close")?.focus();
   }
 
@@ -132,6 +138,7 @@ export class DefencesScreen {
     const hadFocus = this.element.contains(document.activeElement);
     this.opened = false;
     this.element.hidden = true;
+    this.centre.closed();
     this.options.onClose?.(hadFocus);
   }
 

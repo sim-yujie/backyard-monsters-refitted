@@ -1,6 +1,6 @@
 /*
  * The phone's Menu (#381, `YardMenu.ts`): on a phone the own yard's bottom
- * row is Menu, Friends (`friends-bar.css`), Collect all and Build; the other
+ * row is Menu, Friends (`friends-button.css`), Collect all and Build; the other
  * round buttons sit in a grid on a sheet that slides up from the bottom. The
  * dock wears `is-folded` while they are in there. A desktop never folds, so
  * nothing here changes it.

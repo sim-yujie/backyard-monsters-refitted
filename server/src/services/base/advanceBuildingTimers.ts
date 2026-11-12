@@ -57,6 +57,7 @@ export const advanceBuildingTimers = (buildingData: BuildingDataMap, healthData:
         delete building.cU;
         delete building.cL;
         delete building.hl;
+        delete building.wd;
         building.l = (building.l || 1) + 1;
       }
     } else if (building.cB) {
@@ -75,6 +76,7 @@ export const advanceBuildingTimers = (buildingData: BuildingDataMap, healthData:
       if (building.cF <= 0) {
         delete building.cF;
         delete building.hl;
+        delete building.wd;
         building.fort = (building.fort ?? 0) + 1;
       }
     }
@@ -92,5 +94,5 @@ export const advanceBuildingTimers = (buildingData: BuildingDataMap, healthData:
  * @param {BuildingHealthData | null | undefined} healthData - Stored buildinghealthdata, as of the same save
  * @returns {boolean} True if the building was damaged or repairing
  */
-const isCountdownPaused = (building: BuildingData, healthData: HealthData) =>
+export const isCountdownPaused = (building: BuildingData, healthData: HealthData) =>
   Boolean(building.rE) || building.hp != null || (healthData != null && String(building.id) in healthData);

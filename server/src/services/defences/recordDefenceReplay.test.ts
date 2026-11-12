@@ -239,9 +239,10 @@ describe("recordDefenceReplay", () => {
       levels: { C1: 3 },
       ranks: { C1: 2 },
       siege: null,
-      declareWar: false,
       report: "yardtester attacked",
     });
+    // Declare War is gone: a battle without it writes no flag (an old replay's is still read).
+    expect(payload).not.toHaveProperty("declareWar");
     // The champion as fought, without its learned brain.
     expect(payload.champion).toEqual([{ t: 5, l: 5, hp: 62000, pl: 0, fb: 0, status: 0 }]);
   });

@@ -3,9 +3,9 @@
  * `docs/design/tutorial.md` §6.3, issue #227).
  *
  * Same rule as ui.css: every value comes from tokens.css. The frame is the
- * shared `.panel`, docked on the left under the HUD so the yard and its Town
- * Hall stay in view while a claim's balls fly; on a phone it is a bottom
- * sheet, as the Shop is. Amounts are `.res-amount` (ui.css).
+ * shared `.panel`, in the middle on a computer like every window (ui.css
+ * `.panel--centre`, owner 9 Nov 2026); on a phone it is a bottom sheet, as
+ * the Shop is. Amounts are `.res-amount` (ui.css).
  */
 
 .goals-panel {

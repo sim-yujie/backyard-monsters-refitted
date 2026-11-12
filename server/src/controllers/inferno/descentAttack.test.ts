@@ -19,7 +19,6 @@ let row: Partial<InfernoProgress> | null = null;
 let userSave: Record<string, unknown>;
 const calls: string[] = [];
 const store = new Map<string, string>();
-let declareWar = false;
 
 mock.module("../../server.js", () => ({
   postgres: {
@@ -63,14 +62,6 @@ mock.module("../../services/yard/armies.js", () => ({
   },
 }));
 
-const REAL_POWERUPS = "../../services/alliance/powerups.ts?real";
-const realPowerups = (await import(REAL_POWERUPS)) as typeof import("../../services/alliance/powerups.js");
-mock.module("../../services/alliance/powerups.js", () => ({
-  ...realPowerups,
-  isDeclareWarRunning: async (allianceId: number | null) =>
-    standIn ? declareWar : realPowerups.isDeclareWarRunning(allianceId),
-  runningPowerups: async (allianceId: number | null) => (standIn ? [] : realPowerups.runningPowerups(allianceId)),
-}));
 
 const { infernoAttackStart } = await import("./descentAttack.js");
 const { descentSessionKey, parseDescentSession } = await import("../../services/inferno/descentSession.js");
@@ -116,7 +107,6 @@ beforeEach(() => {
   calls.length = 0;
   armies.length = 0;
   store.clear();
-  declareWar = false;
 });
 
 afterEach(() => {
@@ -195,12 +185,6 @@ describe("starting a Descent attack", () => {
     expect(ctx.body.base.baseid).toBe("203");
     expect(Object.keys(ctx.body.base.buildingdata)).toEqual(Object.keys(descentYardOf(2).buildingdata as object));
     expect(ctx.body.defenderforces).toEqual(descent!.session.defenderForces);
-  });
-
-  test("Declare War widens the payload by a quarter", async () => {
-    declareWar = true;
-    await infernoAttackStart(contextFor({ kind: "descent", baseid: "201" }), async () => {});
-    expect(parseDescentSession(store.get(descentSessionKey(ATTACKER)))!.flingerCapacity).toBe(3125);
   });
 
   test("from yard 206 its housed monsters defend from its Housing Bunker", async () => {

@@ -8,7 +8,8 @@ import { avatarOf, pickedAvatar, type AvatarId } from "@/game/avatars";
 import { loadShinyLock, onShinyLock, shinyLocked, SHINY_LOCK_TEXT } from "@/game/shinyLock";
 import { incomePerHour } from "@/game/yard/incomeRate";
 import { nextWorkerJob } from "@/game/yard/jobs";
-import { YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
+import { actionKey, YardChangeReason, type YardChange, type YardUiBinding } from "@/game/yard/YardStore";
+import { PACK_LABELS, packGroupFor, PACK_RESOURCES, type PackGroup, type PackResource } from "@/game/yard/resourcePacks";
 import { levelProgress } from "@/game/yard/experience";
 import { AccountMenu } from "./AccountMenu";
 import { AchievementsDoor } from "./achievements/AchievementsDoor";
@@ -19,13 +20,17 @@ import { dismissAnnouncement, fetchAnnouncements } from "@/api/announcements";
 import { openNews } from "./announcements/AnnouncementDialog";
 import { markShownOnThisPage } from "@/game/announcements/announcementQueue";
 import { openLeaderboard } from "./leaderboard/LeaderboardDialog";
+import { openProfile } from "./profile/ProfileDialog";
 import { openBugReport } from "./bugReport/BugReportDialog";
 import { AMOUNT_CHANGE_SIGNS } from "./amountChange";
 import { formatAmount, formatCompact } from "./format";
 import { gameIcon } from "./gameIcon";
+import { coinBalance, onCoinBalance } from "@/game/eventCoins";
+import { coinAmount, coinWords } from "./events/coinUi";
 import { lockArt } from "./lockArt";
-import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, restyleIcon, type ResourceKey } from "./resourceIcon";
+import { RESOURCE_KEYS, RESOURCE_NAMES, resourceAmount, resourceName, restyleIcon, type ResourceKey } from "./resourceIcon";
 import { DamageBanner } from "./yard/DamageBanner";
+import { ShinyButton } from "./yard/ShinyButton";
 
 /**
  * The persistent top bar: resource readouts on the left, a scene switcher on
@@ -65,7 +70,13 @@ import { DamageBanner } from "./yard/DamageBanner";
  * and critter, and their level under the name while an own yard is bound
  * (#192). On a phone the name and critter lead the top row with Workers
  * and Shiny at its end, and the four resources share the row under it in
- * short amounts. The yard's buttons (Build, Collect all, Monsters, Layout,
+ * short amounts.
+ *
+ * Event coins (beta 7, tester 8 Nov 2026) sit right after Shiny, so a player
+ * sees the balance while shopping for decorations: shown once the server has
+ * sent a balance (`game/eventCoins.ts`), and on the own yard a tap opens the
+ * Build window's Decorations tab. On a phone they take the top row's last
+ * place and the name gives way to the critter alone (`yard-hud.css`). The yard's buttons (Build, Collect all, Monsters, Layout,
  * Map, the yard switcher) are the yard's own round buttons (`YardDock`).
  */
 
@@ -171,6 +182,20 @@ export interface HudOptions {
 /** At or under this width the corner layout is the phone's (`yard-hud.css`). */
 const PHONE_QUERY = "(width <= 620px)";
 
+/**
+ * A tapped resource's three Shiny offers in its bubble (Flash's "+" beside
+ * each resource, `UI_TOP.as:526-536`, issue #393): the buttons survive every
+ * refill, so an armed one stays armed while the amounts tick.
+ */
+interface BubbleOffers {
+  /** The offers' items joined ("BR11,BR12,BR13"): another realm's are other buttons. */
+  readonly items: string;
+  readonly row: HTMLElement;
+  readonly buttons: Map<string, ShinyButton>;
+  /** A refusal's words, under the buttons. */
+  readonly note: HTMLElement;
+}
+
 /** How long a tapped readout's exact-amount bubble stays up on its own. */
 const EXACT_LIFETIME_MS = 5000;
 
@@ -264,6 +289,7 @@ export class Hud {
   private bubble: HTMLElement | null = null;
   private bubbleFor: ResourceKey | null = null;
   private bubbleTimer: number | undefined;
+  private offers: BubbleOffers | null = null;
   private readonly floats = new Set<HTMLElement>();
   private yardBinding: YardUiBinding | null = null;
   /** What a full readout says: {@link INFERNO_FULL_NOTE} while the Inferno yard is bound. */
@@ -290,6 +316,9 @@ export class Hud {
   /** Shiny Lock is on: the Shiny counter shows a padlock, not the 0 the server sends (`game/shinyLock.ts`). */
   private locked = shinyLocked();
   private readonly unwatchLock: () => void;
+  /** The event coin readout after Shiny, hidden until a balance is known. */
+  private readonly coins: { readonly item: HTMLElement; readonly button: HTMLButtonElement };
+  private readonly unwatchCoins: () => void;
 
   constructor(options: HudOptions) {
     this.corner = options.layout === "corner";
@@ -381,6 +410,10 @@ export class Hud {
       this.readouts.set(key, readout);
       this.label(readout);
     }
+    this.coins = this.coinReadout();
+    resources.append(this.coins.item);
+    this.unwatchCoins = onCoinBalance(() => this.renderCoins());
+    this.renderCoins();
     this.unwatchLock = onShinyLock((on) => this.applyShinyLock(on));
     const shinyReadout = this.readouts.get("shiny");
     if (shinyReadout) this.render(shinyReadout);
@@ -463,6 +496,9 @@ export class Hud {
       });
       this.friendsDoor = friends;
       this.accountMenu = new AccountMenu({
+        ...(session && {
+          onProfile: () => void openProfile({ container: modalLayer(), userid: session.userId }),
+        }),
         onAchievements: () => void door.open(),
         onFriends: () => void friends.open(),
         onLeaderboard: () => void openLeaderboard({ container: modalLayer(), userId: session?.userId ?? null }),
@@ -674,6 +710,7 @@ export class Hud {
     this.frame = 0;
     window.removeEventListener("resize", this.onResize);
     this.unwatchLock();
+    this.unwatchCoins();
     this.hideExact();
     this.accountMenu?.destroy();
     this.accountMenu = null;
@@ -798,6 +835,10 @@ export class Hud {
     if (change.reason === YardChangeReason.AWAY) return;
     this.damageBanner?.refresh();
     if (change.reason !== YardChangeReason.PENDING) this.syncYard();
+    else if (this.offers && this.bubbleFor) {
+      const readout = this.readouts.get(this.bubbleFor);
+      if (readout) this.fillExact(readout);
+    }
   }
 
   /** Reads the caps and the workers from the bound store, or clears them. */
@@ -884,6 +925,39 @@ export class Hud {
     readout.button.setAttribute("aria-label", notes.length ? [`${text}.`, ...notes].join(" ") : text);
   }
 
+  /** The event coin readout: a chip like Shiny's, the coin and the balance. */
+  private coinReadout(): { item: HTMLElement; button: HTMLButtonElement } {
+    const item = document.createElement("li");
+    item.className = "hud__resource hud__resource--coins";
+    item.hidden = true;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "hud__resource-button hud__coins-button";
+    button.addEventListener("click", () => {
+      this.hideExact();
+      this.yardBinding?.scene.openDecorations?.();
+    });
+    item.append(button);
+    return { item, button };
+  }
+
+  /** Draws the coin balance, or hides the readout while none is known. */
+  private renderCoins(): void {
+    const balance = coinBalance();
+    const { item, button } = this.coins;
+    const wasHidden = item.hidden;
+    item.hidden = balance === null;
+    if (balance !== null) {
+      const amount = coinAmount(balance, { size: 24, decorative: true });
+      amount.querySelector(".icon-amount__value")?.classList.add("hud__resource-value");
+      button.replaceChildren(amount);
+      const words = `Glimmers: ${formatAmount(balance)}. Earned in big events, spent on decorations.`;
+      button.title = words;
+      button.setAttribute("aria-label", `${coinWords(balance)}. Earned in big events, spent on decorations.`);
+    }
+    if (wasHidden !== item.hidden && this.element.isConnected) this.fit();
+  }
+
   /** The own yard's Shop door, or null where there is no Shop (the map, an attack, a visit). */
   private shopOpener(): (() => void) | null {
     const scene = this.yardBinding?.scene;
@@ -925,6 +999,8 @@ export class Hud {
   private applyShinyLock(on: boolean): void {
     const was = this.locked;
     this.locked = on;
+    // Shiny Lock hides a tapped resource's offers too.
+    if (on && this.offers) this.hideExact();
     const readout = this.readouts.get("shiny");
     if (!readout) return;
     if (was && !on) {
@@ -961,7 +1037,8 @@ export class Hud {
     this.placeExact(readout, bubble);
     document.addEventListener("pointerdown", this.onDocumentDown, true);
     document.addEventListener("keydown", this.onKey, true);
-    this.bubbleTimer = window.setTimeout(() => this.hideExact(), EXACT_LIFETIME_MS);
+    // A bubble with offers to buy stays until the player closes it.
+    if (!this.offers) this.bubbleTimer = window.setTimeout(() => this.hideExact(), EXACT_LIFETIME_MS);
   }
 
   private fillExact(readout: Readout): void {
@@ -970,6 +1047,7 @@ export class Hud {
       const note = document.createElement("p");
       note.className = "hud__exact-note hud__exact-lock";
       note.append(lockArt(18, "hud__lock-mark"), SHINY_LOCK_TEXT);
+      this.dropOffers();
       this.bubble.replaceChildren(note);
       return;
     }
@@ -980,19 +1058,108 @@ export class Hud {
         : cap === undefined
           ? formatExact(amount)
           : `${formatExact(amount)} / ${formatExact(cap)}`;
-    this.bubble.replaceChildren(resourceAmount(readout.key, text, { className: "hud__exact-amount" }));
+    const info: HTMLElement[] = [resourceAmount(readout.key, text, { className: "hud__exact-amount" })];
     if (readout.perHour !== undefined) {
       const note = document.createElement("p");
       note.className = "hud__exact-note hud__exact-rate";
       note.textContent = rateNote(readout.perHour);
-      this.bubble.append(note);
+      info.push(note);
     }
     if (capState(amount, cap)?.full) {
       const note = document.createElement("p");
       note.className = "hud__exact-note";
       note.textContent = this.fullNote;
-      this.bubble.append(note);
+      info.push(note);
     }
+    // The offers' row stays in place (never detached), so an armed button keeps its focus.
+    const row = this.offers?.row ?? null;
+    for (const child of [...this.bubble.children]) if (child !== row) child.remove();
+    this.bubble.prepend(...info);
+    this.fillOffers(readout.key);
+  }
+
+  /** The own yard's offers for `key`, or null: another resource, a foreign yard, Shiny Lock. */
+  private offerGroup(key: ResourceKey): PackGroup | null {
+    const store = this.yardBinding?.store;
+    // `resources` is missing only from a test's stand-in store.
+    if (!store?.resources || this.locked || !(PACK_RESOURCES as readonly string[]).includes(key)) return null;
+    return packGroupFor(store, key as PackResource);
+  }
+
+  /** Draws, updates or drops the bubble's three offers for `key`. */
+  private fillOffers(key: ResourceKey): void {
+    const bubble = this.bubble;
+    const group = this.offerGroup(key);
+    const store = this.yardBinding?.store;
+    if (!bubble || !group || !store) {
+      this.dropOffers();
+      return;
+    }
+    const items = group.offers.map((offer) => offer.item).join(",");
+    if (this.offers && this.offers.items !== items) this.dropOffers();
+    if (!this.offers) {
+      const row = document.createElement("div");
+      row.className = "hud__offers";
+      const buttons = new Map<string, ShinyButton>();
+      const name = resourceName(key, group.inferno ? "inferno" : "surface");
+      for (const offer of group.offers) {
+        const button = new ShinyButton({
+          label: PACK_LABELS[offer.size],
+          what: name,
+          spell: formatAmount,
+          onSpend: () => void this.buyOffer(key, offer.item),
+          className: "hud__offer",
+        });
+        button.element.dataset["item"] = offer.item;
+        buttons.set(offer.item, button);
+        row.append(button.element);
+      }
+      const note = document.createElement("p");
+      note.className = "hud__exact-note hud__offers-note";
+      note.hidden = true;
+      row.append(note);
+      this.offers = { items, row, buttons, note };
+      bubble.append(row);
+      bubble.setAttribute("role", "group");
+      bubble.setAttribute("aria-label", name);
+      // A bubble the player can buy from stays until they close it.
+      window.clearTimeout(this.bubbleTimer);
+      this.bubbleTimer = undefined;
+    }
+    for (const offer of group.offers) {
+      const button = this.offers.buttons.get(offer.item);
+      if (!button) continue;
+      button.setPrice(offer.price);
+      button.setNote(offer.amount > 0 ? [`+${formatCompact(offer.amount)}`] : null);
+      button.setBlocked(offer.blocked);
+      button.setBusy(store.isRunning(actionKey("buy", offer.item)));
+    }
+  }
+
+  private dropOffers(): void {
+    if (!this.offers) return;
+    for (const button of this.offers.buttons.values()) button.destroy();
+    this.offers.row.remove();
+    this.offers = null;
+    this.bubble?.setAttribute("role", "status");
+    this.bubble?.removeAttribute("aria-label");
+  }
+
+  /** Buys one offer at the price on its button; the server refuses rather than charge more. */
+  private async buyOffer(key: ResourceKey, item: string): Promise<void> {
+    const store = this.yardBinding?.store;
+    const offer = this.offerGroup(key)?.offers.find((one) => one.item === item);
+    if (!store || !offer) return;
+    if (this.offers) this.offers.note.hidden = true;
+    const result = await store.buy(item, offer.price);
+    if (!this.offers || this.bubbleFor !== key) return;
+    const note = this.offers.note;
+    note.hidden = result.ok;
+    note.textContent = result.ok
+      ? ""
+      : result.refusal.reason === "network"
+        ? "Could not reach the server. Try again."
+        : result.refusal.message || "That did not work.";
   }
 
   private placeExact(readout: Readout, bubble: HTMLElement): void {
@@ -1007,6 +1174,7 @@ export class Hud {
   private hideExact(): void {
     window.clearTimeout(this.bubbleTimer);
     this.bubbleTimer = undefined;
+    this.dropOffers();
     this.bubble?.remove();
     this.bubble = null;
     if (this.bubbleFor) this.readouts.get(this.bubbleFor)?.button.removeAttribute("aria-expanded");
@@ -1019,6 +1187,8 @@ export class Hud {
     // A press on a readout is that readout's click to handle: closing here
     // first would make the click reopen the bubble it meant to close.
     if (event.target instanceof Node && this.list.contains(event.target)) return;
+    // A press on one of the bubble's own offers.
+    if (event.target instanceof Node && this.bubble?.contains(event.target)) return;
     this.hideExact();
   };
 

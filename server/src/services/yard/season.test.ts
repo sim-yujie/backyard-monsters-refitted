@@ -1,4 +1,4 @@
-import { beforeAll, afterAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { catchUpMushrooms } from "./catchUpMushrooms.js";
 import {
   MUSHROOM_RESPAWN_SECONDS,
@@ -8,7 +8,7 @@ import {
   type MushroomYardSave,
 } from "./mushrooms.js";
 import { EVENTS } from "../../game-data/events/events.js";
-import { activeEventKinds, PUMPKIN_HUNT_EVENT, pumpkinHuntOn } from "./season.js";
+import { activeEventKinds, PUMPKIN_HUNT_EVENT, pumpkinHuntOn, TURKEY_HUNT_EVENT, yardHuntAt, yardHuntOn } from "./season.js";
 
 /**
  * The Halloween season (`season.ts`): on from 2026-10-28 to 2026-11-11 UTC,
@@ -109,5 +109,75 @@ describe("pumpkin hunt growth", () => {
     catchUpMushrooms(save, last + 24 * 3_600, Math.random, mushroomRespawnSeconds(true));
 
     expect(countOf(save)).toBe(10);
+  });
+});
+
+describe("Thanksgiving turkey hunt", () => {
+  test("on from 19 November up to, not including, 3 December 2026", () => {
+    expect(yardHuntOn(at("2026-11-18T23:59:59Z"), EVENTS, NONE)).toBe(false);
+    expect(yardHuntAt(at("2026-11-19T00:00:00Z"), EVENTS, NONE)).toEqual({ event: TURKEY_HUNT_EVENT, field: "turkeys" });
+    expect(yardHuntAt(at("2026-12-02T23:59:59Z"), EVENTS, NONE)?.event).toBe(TURKEY_HUNT_EVENT);
+    expect(yardHuntOn(at("2026-12-03T00:00:00Z"), EVENTS, NONE)).toBe(false);
+  });
+
+  test("never during Halloween, and the pumpkin hunt is off while turkeys roam", () => {
+    const halloween = EVENTS.find((event) => event.id === PUMPKIN_HUNT_EVENT)!;
+    const thanksgiving = EVENTS.find((event) => event.id === TURKEY_HUNT_EVENT)!;
+    expect(Date.parse(halloween.endsAt)).toBeLessThanOrEqual(Date.parse(thanksgiving.startsAt));
+    expect(pumpkinHuntOn(at("2026-11-26T12:00:00Z"), EVENTS, NONE)).toBe(false);
+  });
+
+  test("the base load says thanksgiving while on (beside the Krallen Hunt)", () => {
+    expect(activeEventKinds(at("2026-11-26T12:00:00Z"), EVENTS, NONE)).toContain("thanksgiving");
+    expect(activeEventKinds(at("2026-11-26T12:00:00Z"), EVENTS, NONE)).not.toContain("halloween");
+  });
+
+  test("forced on (EVENTS_FORCE_ON=thanksgiving-2026), turkeys roam from today", () => {
+    const today = at("2026-10-20T15:00:00Z");
+    const forced = new Set([TURKEY_HUNT_EVENT]);
+    expect(yardHuntAt(today, EVENTS, forced)?.field).toBe("turkeys");
+    expect(activeEventKinds(today, EVENTS, forced)).toContain("thanksgiving");
+  });
+
+  test("turkeys grow hourly like pumpkins, and count toward 'Turkeys caught'", () => {
+    const inside = at("2026-11-26T09:00:00Z");
+    const save: MushroomYardSave = {
+      buildingdata: { "0": { id: 0, t: 14, x: 0, y: 0, X: 0, Y: 0, l: 3 } },
+      storedata: {},
+      mushrooms: { l: [], s: inside },
+    };
+    catchUpMushrooms(save, inside + 2 * 3_600, Math.random);
+    expect(readMushrooms(save.mushrooms).l.length).toBe(2);
+    expect(EVENTS.find((event) => event.id === TURKEY_HUNT_EVENT)?.ladder?.label).toBe("Turkeys caught");
+  });
+});
+
+describe("a forced event comes first", () => {
+  test("EVENTS_FORCE_ON=thanksgiving-2026 during the real Halloween: turkeys, not pumpkins", () => {
+    const halloweenDay = at("2026-11-08T12:00:00Z");
+    const forced = new Set([TURKEY_HUNT_EVENT]);
+    expect(yardHuntAt(halloweenDay, EVENTS, NONE)?.event).toBe(PUMPKIN_HUNT_EVENT);
+    expect(yardHuntAt(halloweenDay, EVENTS, forced)?.event).toBe(TURKEY_HUNT_EVENT);
+    expect(activeEventKinds(halloweenDay, EVENTS, forced)[0]).toBe("thanksgiving");
+    expect(pumpkinHuntOn(halloweenDay, EVENTS, forced)).toBe(false);
+  });
+});
+
+describe("an event switched off (EVENTS_FORCE_OFF)", () => {
+  const saved = process.env.EVENTS_FORCE_OFF;
+  afterEach(() => {
+    if (saved === undefined) delete process.env.EVENTS_FORCE_OFF;
+    else process.env.EVENTS_FORCE_OFF = saved;
+  });
+
+  test("EVENTS_FORCE_OFF=halloween-2026 with thanksgiving forced on: turkeys only, no Halloween look", () => {
+    const halloweenDay = at("2026-11-08T12:00:00Z");
+    const forced = new Set([TURKEY_HUNT_EVENT]);
+    process.env.EVENTS_FORCE_OFF = PUMPKIN_HUNT_EVENT;
+    expect(yardHuntAt(halloweenDay, EVENTS, forced)?.event).toBe(TURKEY_HUNT_EVENT);
+    expect(activeEventKinds(halloweenDay, EVENTS, forced)).not.toContain("halloween");
+    expect(activeEventKinds(halloweenDay, EVENTS, forced)).toContain("thanksgiving");
+    expect(yardHuntAt(halloweenDay, EVENTS, NONE)).toBeNull();
+    expect(pumpkinHuntOn(halloweenDay, EVENTS, NONE)).toBe(false);
   });
 });

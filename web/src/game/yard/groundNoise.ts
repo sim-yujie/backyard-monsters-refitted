@@ -71,6 +71,10 @@ const octave = (
  * `cellWidth` and `cellHeight` are the feature size, matching `perlinNoise`'s
  * first two arguments. Two octaves, the second at half the size and half the
  * weight, as `perlinNoise(..., 2, ...)` does.
+ *
+ * `ramp` turns the soft field into patches: below `low` nothing shows, above
+ * `high` the overlay shows fully, with a smooth edge between (a painted
+ * ground's fallen leaves in drifts rather than evenly mixed in).
  */
 export const noiseMask = (
   width: number,
@@ -78,6 +82,7 @@ export const noiseMask = (
   cellWidth: number,
   cellHeight: number,
   seed: number,
+  ramp: readonly [low: number, high: number] | null = null,
 ): HTMLCanvasElement => {
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -94,7 +99,8 @@ export const noiseMask = (
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      const value = coarse(x, y) * (2 / 3) + fine(x, y) * (1 / 3);
+      let value = coarse(x, y) * (2 / 3) + fine(x, y) * (1 / 3);
+      if (ramp) value = ease(Math.min(Math.max((value - ramp[0]) / (ramp[1] - ramp[0]), 0), 1));
       const offset = (y * width + x) * 4;
       // The colour channels are never read; only alpha carries the mask.
       pixels[offset + 3] = Math.round(Math.min(Math.max(value, 0), 1) * 255);

@@ -20,7 +20,8 @@ const OUTPOST = "2000241208";
 const SECOND_OUTPOST = "2000242208";
 const BOB_OUTPOST = "2000246210";
 const CAMP = "2000240208";
-const PRICE = 10_000_000;
+/** Each player's share of the move (design v5 §12). */
+const PRICE = 15_000_000;
 
 type Row = Record<string, unknown>;
 type Entity = { name: string; new (): object };
@@ -150,8 +151,8 @@ const send = (from: number, body: Row) =>
   });
 
 /** Alice invites a player to her outpost, in a new thread. */
-const invite = (to = BOB, baseid = OUTPOST, from = ALICE) =>
-  send(from, { type: "migraterequest", targetid: String(to), baseid });
+const invite = (to = BOB, baseid = OUTPOST, from = ALICE, hostpayment?: "shiny" | "resources") =>
+  send(from, { type: "migraterequest", targetid: String(to), baseid, ...(hostpayment && { hostpayment }) });
 
 const revoke = (from: number, threadid: number) =>
   send(from, { type: "migraterevoke", threadid: String(threadid), message: "Never mind." });
@@ -277,9 +278,34 @@ describe("sending an invitation", () => {
         worldid: WORLD,
         coords: [241, 208],
         migratestate: "requested",
+        hostpayment: "resources",
       },
     ]);
     expect(mainOf(BOB).unreadmessages).toBe(1);
+    // Nothing is charged until it is accepted.
+    expect((mainOf(ALICE).resources as Row).r1).toBe(25_000_000);
+  });
+
+  test("alliance mates may invite each other: the leave-alliance rule is gone", async () => {
+    user(ALICE).alliance_id = 3;
+    user(BOB).alliance_id = 3;
+    const threadid = (await invite()).threadid as number;
+
+    expect(await accept(BOB, threadid)).toMatchObject({ error: 0 });
+  });
+
+  test("refused softly, nothing written, when the inviter cannot pay their share the way they chose", async () => {
+    (mainOf(ALICE).resources as Row).r2 = PRICE - 1;
+    expect(await invite()).toMatchObject({ error: 1, reason: "notEnoughResources" });
+
+    mainOf(ALICE).credits = 749;
+    expect(await invite(BOB, OUTPOST, ALICE, "shiny")).toMatchObject({ error: 1, reason: "notEnoughShiny" });
+
+    mainOf(ALICE).credits = 2_000;
+    user(ALICE).shiny_locked = true;
+    expect(await invite(BOB, OUTPOST, ALICE, "shiny")).toMatchObject({ error: 1, reason: "hostShinyLocked" });
+
+    expect(invites()).toEqual([]);
   });
 
   test("into a thread the pair already has", async () => {
@@ -289,7 +315,7 @@ describe("sending an invitation", () => {
     expect(invites()).toMatchObject([{ threadid, targetid: BOB }]);
   });
 
-  test("refused softly, and nothing written, for an outpost not hers, herself, another world, Map Room 1, an alliance", async () => {
+  test("refused softly, and nothing written, for an outpost not hers, herself, another world, Map Room 1", async () => {
     const refusals = [
       [await invite(BOB, BOB_OUTPOST), "notYourOutpost"],
       [await invite(BOB, CAMP), "notYourOutpost"],
@@ -298,8 +324,6 @@ describe("sending an invitation", () => {
       [await invite(CAROL), "otherWorld"],
       [await invite(DAVE), "notMapRoom2"],
     ];
-    user(BOB).alliance_id = 3;
-    refusals.push([await invite(BOB), "inAlliance"]);
 
     for (const [body, reason] of refusals) expect(body).toMatchObject({ error: 1, reason });
     expect(invites()).toEqual([]);
@@ -352,14 +376,17 @@ describe("withdrawing an invitation", () => {
 });
 
 describe("accepting an invitation", () => {
-  test("paid in resources: the main yard moves onto the outpost, which is gone, and Alice is told", async () => {
+  test("paid in resources by both: the main yard moves onto the outpost, which is gone, and Alice is told", async () => {
     const threadid = (await invite()).threadid as number;
     const home = cellOf(mainOf(BOB).baseid as string)!;
 
     expect(await accept(BOB, threadid)).toEqual({ error: 0, coords: [241, 208] });
 
-    expect(mainOf(BOB).resources).toEqual({ r1: 15_000_000, r2: 15_000_000, r3: 15_000_000, r4: 15_000_000 });
+    expect(mainOf(BOB).resources).toEqual({ r1: 10_000_000, r2: 10_000_000, r3: 10_000_000, r4: 10_000_000 });
     expect(mainOf(BOB).credits).toBe(2_000);
+    // Alice pays her share too.
+    expect(mainOf(ALICE).resources).toEqual({ r1: 10_000_000, r2: 10_000_000, r3: 10_000_000, r4: 10_000_000 });
+    expect(mainOf(ALICE).credits).toBe(2_000);
     expect(home).toMatchObject({ x: 241, y: 208, terrainHeight: 341 });
     expect(mainOf(BOB).homebase).toEqual(["241", "208"]);
     expect(mainOf(BOB).cantmovetill as number).toBeGreaterThan(now());
@@ -377,12 +404,50 @@ describe("accepting an invitation", () => {
     ]);
   });
 
-  test("paid in Shiny: 1,200, whatever was posted", async () => {
-    const threadid = (await invite()).threadid as number;
+  test("paid in Shiny: 750 each, whatever was posted, each choosing their own way", async () => {
+    const threadid = (await invite(BOB, OUTPOST, ALICE, "shiny")).threadid as number;
 
     expect(await accept(BOB, threadid, "5")).toMatchObject({ error: 0 });
-    expect(mainOf(BOB).credits).toBe(800);
+    expect(mainOf(BOB).credits).toBe(1_250);
     expect((mainOf(BOB).resources as Row).r1).toBe(25_000_000);
+    expect(mainOf(ALICE).credits).toBe(1_250);
+    expect((mainOf(ALICE).resources as Row).r1).toBe(25_000_000);
+  });
+
+  test("Bob pays in Shiny while Alice pays in resources", async () => {
+    const threadid = (await invite()).threadid as number;
+
+    expect(await accept(BOB, threadid, "1")).toMatchObject({ error: 0 });
+    expect(mainOf(BOB).credits).toBe(1_250);
+    expect((mainOf(ALICE).resources as Row).r3).toBe(10_000_000);
+    expect(mainOf(ALICE).credits).toBe(2_000);
+  });
+
+  test("an invitation sent before both paid keeps the old deal: Bob alone, 10M or 1,200 Shiny", async () => {
+    const threadid = (await invite()).threadid as number;
+    invites()[0]!.hostpayment = null;
+
+    expect(await accept(BOB, threadid)).toMatchObject({ error: 0 });
+    expect((mainOf(BOB).resources as Row).r1).toBe(15_000_000);
+    expect((mainOf(ALICE).resources as Row).r1).toBe(25_000_000);
+  });
+
+  test("refused softly when Alice can no longer pay her share: nothing charged, still open", async () => {
+    const threadid = (await invite(BOB, OUTPOST, ALICE, "shiny")).threadid as number;
+    mainOf(ALICE).credits = 100;
+
+    expect(await accept(BOB, threadid)).toMatchObject({ error: 1, reason: "hostCantPay" });
+    expect((mainOf(BOB).resources as Row).r1).toBe(25_000_000);
+    expect(mainOf(ALICE).credits).toBe(100);
+    expect(invites()[0]).toMatchObject({ migratestate: "requested" });
+
+    mainOf(ALICE).credits = 2_000;
+    user(ALICE).shiny_locked = true;
+    expect(await accept(BOB, threadid)).toMatchObject({ error: 1, reason: "hostCantPay" });
+    user(ALICE).shiny_locked = false;
+
+    expect(await accept(BOB, threadid)).toMatchObject({ error: 0 });
+    expect(mainOf(ALICE).credits).toBe(1_250);
   });
 
   test("refused softly, with nothing charged or moved and the invitation still open", async () => {
@@ -395,10 +460,6 @@ describe("accepting an invitation", () => {
       expect(cellOf(OUTPOST)).toBeDefined();
     };
 
-    user(BOB).alliance_id = 5;
-    expect(await accept(BOB, threadid)).toMatchObject({ error: 1, reason: "inAlliance" });
-    user(BOB).alliance_id = null;
-
     mainOf(BOB).cantmovetill = now() + 3_600;
     expect(await accept(BOB, threadid)).toMatchObject({ error: 1, reason: "coolingDown", retryat: now() + 3_600 });
     mainOf(BOB).cantmovetill = 0;
@@ -410,7 +471,7 @@ describe("accepting an invitation", () => {
     expect(await accept(BOB, threadid)).toMatchObject({ error: 1, reason: "underAttack" });
     sessions.clear();
 
-    mainOf(BOB).credits = 1_199;
+    mainOf(BOB).credits = 749;
     expect(await accept(BOB, threadid, "1")).toMatchObject({ error: 1, reason: "notEnoughShiny" });
     mainOf(BOB).credits = 2_000;
 
@@ -433,6 +494,8 @@ describe("accepting an invitation", () => {
   });
 
   test("closed once accepted, declined, withdrawn, lapsed or void", async () => {
+    // Alice invites five times; she can pay each share when sending.
+    mainOf(ALICE).resources = { r1: 99_000_000, r2: 99_000_000, r3: 99_000_000, r4: 99_000_000 };
     const accepted = (await invite()).threadid as number;
     await accept(BOB, accepted);
     await expect(accept(BOB, accepted)).rejects.toMatchObject({ status: 409 });

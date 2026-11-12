@@ -21,7 +21,7 @@ import {
   type PlayerModeration,
 } from "./api";
 import { h, replace, type Child } from "./dom";
-import { ago, dateTime, lookName, plural } from "./format";
+import { ago, dateTime, lookName, plural, questPaceText } from "./format";
 import { icon } from "./icons";
 import { errorWords } from "./shiny";
 
@@ -982,6 +982,7 @@ export class ModerationView {
               { class: "row-meta" },
               player.lastSeenAt ? `Last played ${ago(player.lastSeenAt)}` : "Never played",
               lookName(player.look) ? ` · ${lookName(player.look)}` : "",
+              questPaceText(player.questPace) ? ` · ${questPaceText(player.questPace)}` : "",
               chatReportId ? ` · from chat report #${chatReportId}` : "",
               flag ? " · caught by the word filter" : "",
             ),
