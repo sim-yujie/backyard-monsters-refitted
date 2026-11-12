@@ -1,0 +1,18 @@
+Generate an image using your image generation tool (one image only, do not make variations or extra files).
+
+The attached image ref-icons.png shows REAL painted UI icons from our game (Backyard Monsters Revamped): a gem, an up arrow with sparkles, a gift, a shield with a gold star, a heart, an hourglass, and one monster card picture. They are glossy, chunky, hand-painted game icons: bold readable shapes, strong light from the upper left, a bright specular highlight, rich saturated colour, soft shading, and a thin light rim around the edge. Study them: the new art must look made by the same artist.
+
+Job: painted STAR icons for the game's night-sky "Constellation" screen, where 10 stars trace a monster's outline on a dark blue sky. They will be shown small (about 16 to 24 pixels), so the shapes must be bold and simple and read instantly as stars.
+
+Make a SHEET: canvas 1536x1024 split into 3 columns x 3 rows of equal cells (512x341 each). One star centred in each cell, about 65% of the cell height, generous margins, nothing touching a cell edge. Each ROW is one design; the three columns are its three states:
+- Column 1, LIT: the star shining, brightest version.
+- Column 2, UNLIT: exactly the same shape and size, but unlit: dim, cool, desaturated blue-grey/slate, still clearly a star with visible painted shading and a faint cool rim so it shows on a dark navy sky. Not black.
+- Column 3, NEXT: the UNLIT star of column 2, unchanged, but with a thin bright warm-gold edge rim all the way round its outline, like it is about to light up. No glow, no rays beyond the outline.
+
+Row 1, design A: a classic five-point star, faceted and bevelled like a gold medal star (each point split into a lit facet and a shaded facet along a centre ridge, like the gold star on the shield icon). LIT = polished gold, pale yellow-white near the centre, warm orange-gold in the shaded facets.
+Row 2, design B: a four-point "twinkle" sparkle star, as a magical star in the night sky: long thin points up, down, left and right (the vertical pair a bit longer), with four much shorter points on the diagonals, a round bright core. LIT = white-hot core fading to pale gold then warm gold at the tips.
+Row 3, design C: a plump, rounded five-point cartoon star with soft rounded tips, glossy like a candy, with a big curved white highlight on the upper-left. LIT = sunny golden yellow with orange-amber shading on the lower right.
+
+Front view, flat on (not tilted). No faces or eyes on the stars. No glow halos, no sparkles around them, no background shapes.
+The whole sheet on a flat solid magenta (#FF00FF) background, no grid lines, no text, no labels, no frame, no drop shadows.
+Save the final PNG as sheet.png in the current working directory.

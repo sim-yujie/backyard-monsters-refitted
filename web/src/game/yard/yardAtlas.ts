@@ -3,12 +3,10 @@ import { Graphics, Rectangle, type Renderer, type Texture } from "pixi.js";
 /**
  * The yard's vector glyphs, baked once into textures.
  *
- * Three things on the yard screen have no bitmap on the game server: the
+ * Three things on the yard screen are drawn rather than fetched: the
  * placeholder a building shows while its picture is in flight, the badge over
- * anything mid-build, and the mushrooms. Mushrooms in particular were an
- * embedded Flash `MovieClip` — `doodad_mushroom_mc`
- * (`client/scripts/BMUSHROOM.as:24-44`) — so there is no file to fetch and a
- * drawn stand-in is the only option short of re-exporting the SWF.
+ * anything mid-build, and a mushroom's stand-in while its painted picture
+ * (`mushroomArt.ts`) is in flight, or for good if it never arrives.
  *
  * Baking rather than re-stroking is the same bargain `maproom/mapAtlas.ts`
  * strikes: a `Graphics` re-tesselates whenever it is rebuilt, while a `Sprite`
@@ -23,9 +21,10 @@ export interface YardArtAtlas {
   /** A unit diamond, stretched to a footprint. */
   readonly placeholder: Texture;
   /**
-   * A yard mushroom. One glyph for all of them: whether a mushroom is golden
-   * is rolled by the server when it is picked, and the original drew no
-   * difference either (`docs/design/yard-buildings.md` §5.6).
+   * A yard mushroom's stand-in until its picture loads (`mushroomArt.ts`).
+   * One glyph for all of them: whether a mushroom is golden is rolled by the
+   * server when it is picked, and the original drew no difference either
+   * (`docs/design/yard-buildings.md` §5.6).
    */
   readonly mushroom: Texture;
   /** The badge over a building with a countdown running. */
