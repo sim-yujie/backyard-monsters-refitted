@@ -651,6 +651,38 @@ describe("AllianceWindow: my alliance", () => {
     expect(document.querySelector(".alliance__tab[aria-selected='true']")!.getAttribute("aria-label")).toBe("Overview");
   });
 
+  it("the goal picker says once, per tier, who it is sized for and what it pays; buttons show short targets", async () => {
+    const tiers = [
+      { tier: "easy", target: 450_000_000, points: 15, players: 3 },
+      { tier: "medium", target: 1_200_000_000, points: 37, players: 8 },
+      { tier: "hard", target: 2_250_000_000, points: 70, players: 15 },
+    ] as const;
+    const api = fakeApi({
+      mine: vi.fn(() =>
+        ok({
+          alliance: mine({
+            goals: [],
+            goals_per_week: 5,
+            goal_menu: [
+              { kind: "loot", name: "Loot resources", only: null, tiers },
+              { kind: "upgrade", name: "Upgrade buildings", only: null, tiers: tiers.map((t) => ({ ...t, target: 90 })) },
+            ],
+          }),
+          rejoinAt: null,
+        }),
+      ),
+    });
+    await open(api, { progressApi: fakeProgress() });
+    buttonNamed("Add goal")!.click();
+    const cols = [...document.querySelectorAll(".alliance-goal-menu__col")].map((c) => c.textContent);
+    expect(cols).toEqual(["Easy~3★ 15", "Medium~8★ 37", "Hard~15★ 70"]);
+    expect(document.querySelectorAll(".alliance-goal-menu__head").length).toBe(1);
+    const picks = [...document.querySelectorAll<HTMLButtonElement>(".alliance-goal-menu__tier")];
+    expect(picks.slice(0, 3).map((b) => b.textContent)).toEqual(["450M", "1.2B", "2.25B"]);
+    expect(picks[0]!.title).toBe("Easy: 450,000,000 · ★ 15, sized for about 3 players");
+    expect(picks[0]!.getAttribute("aria-label")).toBe("Loot resources, Easy 450,000,000");
+  });
+
   it("Territory loads its board and switches type; Constellation draws the sky", async () => {
     const progress = fakeProgress({
       territory: vi.fn(() => ok({ rows: [{ rank: 1, alliance_id: 1, name: "Goo Farmers", image: 3, month: 12, all_time: 40, badge: null }] })),

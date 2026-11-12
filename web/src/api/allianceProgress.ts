@@ -41,7 +41,13 @@ export interface GoalMenuItem {
   readonly kind: string;
   readonly name: string;
   readonly only: AllianceType | null;
-  readonly tiers: readonly { readonly tier: GoalView["tier"]; readonly target: number; readonly points: number }[];
+  readonly tiers: readonly {
+    readonly tier: GoalView["tier"];
+    readonly target: number;
+    readonly points: number;
+    /** How many hardcore players the tier is sized for (no scaling by member count); an older server sends none. */
+    readonly players?: number;
+  }[];
 }
 
 /** What `myalliance` adds in phase 2 (all optional: an older server sends none). */
@@ -59,6 +65,7 @@ export interface AllianceProgressFields {
   readonly today?: {
     readonly contributed: number;
     readonly members: number;
+    /** Points the alliance's goals paid today (goals are the only source of points). */
     readonly points_today: number;
     readonly helped_ids: readonly number[];
   };

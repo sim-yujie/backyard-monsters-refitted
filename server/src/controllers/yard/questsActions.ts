@@ -117,7 +117,7 @@ export const questsActions = (hasFriend: HasFriend = sqlHasFriend) => ({
     run: async ({ save, user, body, now, em }) => {
       const result = claimQuest(current(save, now), body.period, body.slot);
       if (!result.ok) return refuse(result.reason, { period: body.period, slot: body.slot });
-      // A daily quest earns the player's alliance a point (design v5 §8).
+      // A daily quest counts towards "Finish daily quests" (no points: owner, 12 Nov 2026).
       if (body.period === "daily") await creditDailyQuest(em, user.userid, now);
       const plan = planGrant(save, result.value.rewards, now);
       const report: QuestsReport = { quests: questsView(result.record, now), granted: plan.granted };

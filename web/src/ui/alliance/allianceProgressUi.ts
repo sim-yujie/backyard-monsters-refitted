@@ -114,6 +114,46 @@ export const todayCard = (alliance: MyAlliance): HTMLElement | null => {
 
 const tierWord = (tier: GoalView["tier"]): string => tier.charAt(0).toUpperCase() + tier.slice(1);
 
+type MenuTier = NonNullable<MyAlliance["goal_menu"]>[number]["tiers"][number];
+
+/**
+ * A goal target short enough for a tier button, never rounded: "450M",
+ * "2.25B", "18K", "90" (up to two decimals, trailing zeros dropped).
+ */
+export const shortTarget = (value: number): string => {
+  const units: [number, string][] = [
+    [1_000_000_000, "B"],
+    [1_000_000, "M"],
+    [1_000, "K"],
+  ];
+  for (const [unit, word] of units) {
+    if (value >= unit && Number.isInteger((value * 100) / unit)) return `${(value / unit).toFixed(2).replace(/\.?0+$/, "")}${word}`;
+  }
+  return formatAmount(value);
+};
+
+/**
+ * The goal picker's head: one column a tier, with who it is sized for (an
+ * icon and "~3") and what it pays ("★ 15"). The same for every goal, so said
+ * once (owner, 12 Nov 2026: targets never scale with the member count).
+ */
+const goalMenuHead = (tiers: readonly MenuTier[]): HTMLElement => {
+  const head = make("div", "alliance-goal-menu__head");
+  for (const tier of tiers) {
+    const col = make("div", `alliance-goal-menu__col alliance-goal-menu__col--${tier.tier}`);
+    col.append(make("span", "alliance-goal-menu__col-tier", tierWord(tier.tier)));
+    if (tier.players !== undefined) {
+      const players = make("span", "alliance-goal-menu__players");
+      players.title = `Sized for about ${tier.players} active players`;
+      players.append(gameIcon("friends", { size: 16, decorative: true }), make("span", "", `~${tier.players}`));
+      col.append(players);
+    }
+    col.append(make("span", "alliance-goal-menu__pays", `★ ${formatAmount(tier.points)}`));
+    head.append(col);
+  }
+  return head;
+};
+
 /** The week's goals, with Add and Remove for the Leader and Officers. */
 export const goalsCard = (
   alliance: MyAlliance,
@@ -153,17 +193,21 @@ export const goalsCard = (
     if (adding.open) {
       const taken = new Set(goals.map((g) => g.kind));
       const menu = make("div", "alliance-goal-menu");
+      const firstTiers = alliance.goal_menu?.[0]?.tiers;
+      if (firstTiers) menu.append(goalMenuHead(firstTiers));
       for (const item of alliance.goal_menu ?? []) {
         if (taken.has(item.kind)) continue;
         const line = make("div", "alliance-goal-menu__row");
         line.append(make("span", `alliance-goal-menu__name${item.only ? " alliance-goal-menu__name--only" : ""}`, item.name));
         for (const tier of item.tiers) {
+          const sized = tier.players !== undefined ? `, sized for about ${tier.players} players` : "";
           const pick = button(
-            `${tierWord(tier.tier)} ${formatAmount(tier.target)}`,
+            shortTarget(tier.target),
             `btn--outline btn--small alliance-goal-menu__tier alliance-goal-menu__tier--${tier.tier}`,
             () => host.run(() => api.setGoal(item.kind, tier.tier)),
-            `★ ${tier.points}`,
+            `${tierWord(tier.tier)}: ${formatAmount(tier.target)} · ★ ${formatAmount(tier.points)}${sized}`,
           );
+          pick.setAttribute("aria-label", `${item.name}, ${tierWord(tier.tier)} ${formatAmount(tier.target)}`);
           line.append(pick);
         }
         menu.append(line);

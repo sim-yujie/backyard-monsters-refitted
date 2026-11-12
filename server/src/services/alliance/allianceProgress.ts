@@ -3,9 +3,9 @@ import type { EntityManager } from "@mikro-orm/core";
 import type { EntityManager as SqlEntityManager } from "@mikro-orm/postgresql";
 
 import {
-  DAILY_QUEST_POINTS_CAP,
   GOAL_MENU,
   GOAL_POINTS,
+  GOAL_TIER_PLAYERS,
   GOAL_TIERS,
   GOALS_PER_WEEK,
   TERRITORY_BADGE_TOP,
@@ -15,9 +15,12 @@ import {
   type GoalTier,
 } from "../../config/AllianceConfig.js";
 import { AllianceMessageType, AllianceRole, type AllianceType } from "../../enums/Alliance.js";
+import { BaseType } from "../../enums/Base.js";
+import { housingSpace } from "../../game-data/monsterCatalogue.js";
 import { Status } from "../../enums/StatusCodes.js";
 import { ClientSafeError } from "../../middleware/clientSafeError.js";
 import { logger } from "../../utils/logger.js";
+import { isBot } from "../bots/isBot.js";
 import { defenceQuestEvents } from "../quests/hooks.js";
 import {
   constellationOf,
@@ -33,8 +36,8 @@ import { allianceFactor, noteFactorChange } from "./productionHistory.js";
  * Alliance points, weekly goals, the constellations' Light and Suggest, and
  * the territory boards (beta 7 alliances phase 2, design v5 §8, §9, §11, §16).
  *
- * Points come only from members' daily quests (1 each, up to
- * `DAILY_QUEST_POINTS_CAP` a member a UTC day) and from weekly goals reached.
+ * Points come only from weekly goals reached (owner, 12 Nov 2026: daily
+ * quests no longer pay; one still counts 1 towards "Finish daily quests").
  * Goal progress arrives as quest events (`noteAllianceEvents`), buffered and
  * written every few seconds, so a yard action never waits on it; a goal pays
  * once, by the UPDATE that crosses its target. Territory is a daily tally of
@@ -68,23 +71,53 @@ export const goalTarget = (type: AllianceType, rules: GoalRules, tier: GoalTier)
 /** What a goal pays for a type and tier. */
 export const goalPoints = (type: AllianceType, tier: GoalTier): number => GOAL_POINTS[tier] * (TYPE_SCALE[type] ?? 1);
 
+/** How many hardcore players a type's tier is sized for (the goal picker's label). */
+export const goalPlayers = (type: AllianceType, tier: GoalTier): number =>
+  GOAL_TIER_PLAYERS[tier] * (TYPE_SCALE[type] ?? 1);
+
+/** Housing space of one hatched monster when its id is unknown: a Pokey's. */
+const DEFAULT_HATCH_SPACE = 10;
+
+/** The housing space of `count` monsters of `id` (at academy level 1). */
+const hatchSpace = (id: string, count: number): number => count * (housingSpace(id, 1) ?? DEFAULT_HATCH_SPACE);
+
 /**
- * Goal progress in a batch of quest events: the plain keys only (not
- * `hatch:C1`), loot as all four resources together, upgrades of harvesters
- * and towers together. Undone counts (negative) are ignored.
+ * Goal progress in a batch of quest events:
+ * - loot as all four resources together;
+ * - upgrades of harvesters and towers together; a cancelled upgrade (-1)
+ *   takes its count back (owner, 12 Nov 2026);
+ * - "Win attacks on players" from `attackWin:player` only, so tribe camps
+ *   and bots do not count (`attackQuestEvents`);
+ * - "Hatch" as housing space, from `hatch:<monster>`; heads with no monster
+ *   named count as a Pokey's space each.
+ * Other variant keys are skipped; other undone counts (negative) are ignored.
  */
 export const goalAmounts = (events: Readonly<Record<string, number>> | null | undefined): Record<string, number> => {
   const out: Record<string, number> = {};
-  const add = (kind: string, value: unknown) => {
+  const add = (kind: string, value: unknown, allowNegative = false) => {
     const n = Number(value);
-    if (Number.isFinite(n) && n > 0) out[kind] = (out[kind] ?? 0) + n;
+    if (Number.isFinite(n) && (n > 0 || (allowNegative && n < 0))) out[kind] = (out[kind] ?? 0) + n;
   };
-  for (const [key, value] of Object.entries(events ?? {})) {
-    if (key.includes(":")) continue;
-    if (/^lootR[1-4]$/.test(key)) add("loot", value);
-    else if (key === "upgradeResource" || key === "upgradeDefence") add("upgrade", value);
+  let heads = 0;
+  let namedHeads = 0;
+  let space = 0;
+  for (const [key, raw] of Object.entries(events ?? {})) {
+    const value = Number(raw);
+    const positive = Number.isFinite(value) && value > 0;
+    if (key === "hatch") heads += positive ? value : 0;
+    else if (key.startsWith("hatch:")) {
+      if (positive) {
+        namedHeads += value;
+        space += hatchSpace(key.slice("hatch:".length), value);
+      }
+    } else if (key === "attackWin:player") add("attackWin", value);
+    else if (key.includes(":") || key === "attackWin") continue;
+    else if (/^lootR[1-4]$/.test(key)) add("loot", value);
+    else if (key === "upgradeResource" || key === "upgradeDefence") add("upgrade", value, true);
     else if (GOAL_MENU.some((g) => g.kind === key)) add(key, value);
   }
+  add("hatch", space + Math.max(0, heads - namedHeads) * DEFAULT_HATCH_SPACE);
+  if (out.upgrade === 0) delete out.upgrade;
   return out;
 };
 
@@ -132,7 +165,10 @@ export const addGoalProgress = async (
   amounts: Readonly<Record<string, number>>,
   now: number
 ): Promise<void> => {
-  const kinds = Object.entries(amounts).filter(([kind, n]) => n > 0 && kind !== "hold");
+  // Only "upgrade" can go back (a cancelled upgrade), never below 0.
+  const kinds = Object.entries(amounts).filter(
+    ([kind, n]) => (n > 0 || (n < 0 && kind === "upgrade")) && kind !== "hold"
+  );
   if (kinds.length === 0) return;
   const [member] = await sql(em).execute<{ alliance_id: number | null }[]>(
     `SELECT alliance_id FROM bym."user" WHERE userid = ?`,
@@ -148,7 +184,7 @@ export const addGoalProgress = async (
       { alliance_id: number; kind: string; tier: string; points: number; target: number; added: number; done: boolean }[]
     >(
       `UPDATE bym.alliance_goal g
-          SET progress = LEAST(g.target, g.progress + ?),
+          SET progress = GREATEST(0, LEAST(g.target, g.progress + ?)),
               done_at = CASE WHEN g.progress + ? >= g.target THEN now() ELSE NULL END
         WHERE g.alliance_id = ? AND g.week = ?::date AND g.kind = ? AND g.done_at IS NULL
         RETURNING g.alliance_id, g.kind, g.tier, g.points, g.target,
@@ -156,40 +192,39 @@ export const addGoalProgress = async (
       [amount, amount, allianceId, week, kind]
     );
     for (const row of rows) {
-      helps += Math.round((Math.min(amount, Number(row.target)) * 1000) / Math.max(1, Number(row.target)));
+      // A take-back (negative) takes the member's share back off their tally too.
+      const share = Math.round((Math.min(Math.abs(amount), Number(row.target)) * 1000) / Math.max(1, Number(row.target)));
+      helps += amount < 0 ? -share : share;
       if (row.done) done.push(row);
     }
   }
-  if (helps > 0) {
+  if (helps !== 0) {
     await sql(em).execute(
-      `INSERT INTO bym.alliance_contribution (alliance_id, userid, day, goal_helps) VALUES (?, ?, ?::date, ?)
-       ON CONFLICT (alliance_id, userid, day) DO UPDATE SET goal_helps = alliance_contribution.goal_helps + EXCLUDED.goal_helps`,
-      [allianceId, userid, utcDay(now), helps]
+      `INSERT INTO bym.alliance_contribution (alliance_id, userid, day, goal_helps) VALUES (?, ?, ?::date, GREATEST(0, ?))
+       ON CONFLICT (alliance_id, userid, day) DO UPDATE SET goal_helps = GREATEST(0, alliance_contribution.goal_helps + ?)`,
+      [allianceId, userid, utcDay(now), helps, helps]
     );
   }
   await payGoals(em, userid, done);
 };
 
 /**
- * A member claimed a daily quest: 1 point for the alliance while they are
- * under today's cap, and 1 towards a "Finish daily quests" goal either way.
- * Call it inside the claim's transaction. Returns whether a point was paid.
+ * A member claimed a daily quest: 1 towards a "Finish daily quests" goal, and
+ * 1 on their day's tally (`alliance_contribution.quest_points`, which now
+ * counts quests done, for "helped today" and Top helpers). No points: goals
+ * are the only source (owner, 12 Nov 2026). Call it inside the claim's
+ * transaction.
  */
-export const creditDailyQuest = async (em: EntityManager, userid: number, now: number): Promise<boolean> => {
-  // A unit-test fake without SQL (`allianceQuery`): no alliance, nothing to pay.
-  if (typeof (em as unknown as Partial<Sql>).execute !== "function") return false;
-  const rows = await sql(em).execute<{ alliance_id: number }[]>(
+export const creditDailyQuest = async (em: EntityManager, userid: number, now: number): Promise<void> => {
+  // A unit-test fake without SQL (`allianceQuery`): no alliance, nothing to count.
+  if (typeof (em as unknown as Partial<Sql>).execute !== "function") return;
+  await sql(em).execute(
     `INSERT INTO bym.alliance_contribution (alliance_id, userid, day, quest_points)
      SELECT alliance_id, userid, ?::date, 1 FROM bym."user" WHERE userid = ? AND alliance_id IS NOT NULL
-     ON CONFLICT (alliance_id, userid, day) DO UPDATE SET quest_points = alliance_contribution.quest_points + 1
-       WHERE alliance_contribution.quest_points < ?
-     RETURNING alliance_id`,
-    [utcDay(now), userid, DAILY_QUEST_POINTS_CAP]
+     ON CONFLICT (alliance_id, userid, day) DO UPDATE SET quest_points = alliance_contribution.quest_points + 1`,
+    [utcDay(now), userid]
   );
-  const paid = rows.length > 0;
-  if (paid) await sql(em).execute(`UPDATE bym.alliance SET points = points + 1 WHERE id = ?`, [rows[0]!.alliance_id]);
   await addGoalProgress(em, userid, { dailyQuests: 1 }, now);
-  return paid;
 };
 
 // ---------------------------------------------------------------------------
@@ -274,6 +309,27 @@ export const noteOutpostDefended = async (
     return true;
   } catch (err) {
     logger.error(`Alliance outpost defence for user ${defender.userid} failed: ${err}`);
+    return false;
+  }
+};
+
+/**
+ * Whether an attacked yard is a real player's, for "Win attacks on players"
+ * (`attackQuestEvents`' `playerYard`): not a tribe camp, not empty, not the
+ * attacker's own and not a bot's. A failed bot lookup reads as not a player.
+ */
+export const isPlayerYard = async (
+  em: EntityManager,
+  yard: { type?: string | null; saveuserid?: number | null },
+  attackerUserid: number
+): Promise<boolean> => {
+  const owner = Number(yard.saveuserid) || 0;
+  if (yard.type === BaseType.TRIBE || yard.type === BaseType.INFERNO_TRIBE) return false;
+  if (owner <= 0 || owner === attackerUserid) return false;
+  try {
+    return !(await isBot(owner, em as unknown as Sql));
+  } catch (err) {
+    logger.error(`Alliance player-yard check for user ${owner} failed: ${err}`);
     return false;
   }
 };
@@ -570,8 +626,8 @@ export const progressView = async (em: EntityManager, allianceId: number, type: 
     `SELECT (SELECT count(*)::int FROM bym.alliance_contribution c
               WHERE c.alliance_id = ? AND c.day = ?::date AND (c.quest_points > 0 OR c.goal_helps > 0)) AS contributed,
             (SELECT count(*)::int FROM bym."user" u WHERE u.alliance_id = ?) AS members,
-            (SELECT COALESCE(SUM(quest_points), 0)::int FROM bym.alliance_contribution c
-              WHERE c.alliance_id = ? AND c.day = ?::date) AS points_today`,
+            (SELECT COALESCE(SUM(g.points), 0)::int FROM bym.alliance_goal g
+              WHERE g.alliance_id = ? AND (g.done_at AT TIME ZONE 'UTC')::date = ?::date) AS points_today`,
     [allianceId, day, allianceId, allianceId, day]
   );
   const goals = await sql(em).execute<
@@ -629,7 +685,12 @@ export const progressView = async (em: EntityManager, allianceId: number, type: 
       kind: g.kind,
       name: g.name,
       only: g.only ?? null,
-      tiers: GOAL_TIERS.map((tier) => ({ tier, target: goalTarget(type, g, tier), points: goalPoints(type, tier) })),
+      tiers: GOAL_TIERS.map((tier) => ({
+        tier,
+        target: goalTarget(type, g, tier),
+        points: goalPoints(type, tier),
+        players: goalPlayers(type, tier),
+      })),
     })),
     goals_per_week: GOALS_PER_WEEK,
     top_helpers: helpers.map((h) => ({

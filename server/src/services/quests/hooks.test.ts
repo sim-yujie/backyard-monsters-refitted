@@ -55,6 +55,14 @@ describe("attacks", () => {
     expect(attackQuestEvents({ defender: player, damageBefore: 80, damageAfter: 80 })).toEqual({});
   });
 
+  test("a win on a player's yard also counts attackWin:player (the alliance goal); the quests read attackWin either way", () => {
+    const player = { type: BaseType.MAIN, buildingdata: {} };
+    const won = { defender: player, damageBefore: 10, damageAfter: FIGHT_RULES.winDamage };
+    expect(attackQuestEvents({ ...won, playerYard: true })).toEqual({ attackWin: 1, "attackWin:player": 1 });
+    expect(attackQuestEvents({ ...won, playerYard: false })).toEqual({ attackWin: 1 });
+    expect(attackQuestEvents({ ...won, damageAfter: 49, playerYard: true })).toEqual({});
+  });
+
   test("the attack's loot is counted with it, won or not", () => {
     const player = { type: BaseType.MAIN, buildingdata: {} };
     expect(attackQuestEvents({ defender: player, damageBefore: 0, damageAfter: 5, loot: { r2: 900 } })).toEqual({ lootR2: 900 });

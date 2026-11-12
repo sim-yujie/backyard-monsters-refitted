@@ -82,27 +82,57 @@ describe.skipIf(!enabled)("alliance progress", () => {
     await orm?.close();
   });
 
-  test("daily quests: 1 point each, 3 a member a day", async () => {
-    const paid = [];
-    for (let i = 0; i < 4; i++) paid.push(await progress.creditDailyQuest(em(), MEMBER, NOW));
-    expect(paid).toEqual([true, true, true, false]);
-    expect(Number((await alliance()).points)).toBe(3);
+  test("daily quests pay no points; each counts 1 towards Finish daily quests and marks the member as helping", async () => {
+    await progress.setGoal(em(), LEADER, "dailyQuests", "easy", NOW);
+    for (let i = 0; i < 4; i++) await progress.creditDailyQuest(em(), MEMBER, NOW);
+    expect(Number((await alliance()).points)).toBe(0);
     const view = await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW);
-    expect(view.today).toMatchObject({ contributed: 1, members: 2, points_today: 3 });
+    expect(view.today).toMatchObject({ contributed: 1, members: 2, points_today: 0 });
+    expect(view.goals[0]).toMatchObject({ kind: "dailyQuests", progress: 4, target: 100, points: 15 });
+    expect(view.top_helpers[0]).toMatchObject({ userid: MEMBER, quests: 4 });
   });
 
-  test("a goal pays once when reached; members cannot set goals", async () => {
+  test("a goal pays once when reached; members cannot set goals; the menu says who each tier is sized for", async () => {
     await expect(progress.setGoal(em(), MEMBER, "hatch", "easy", NOW)).rejects.toThrow("Leader and Officers");
     await progress.setGoal(em(), LEADER, "hatch", "easy", NOW);
     await expect(progress.setGoal(em(), LEADER, "hatch", "hard", NOW)).rejects.toThrow("already set");
-    await progress.addGoalProgress(em(), MEMBER, { hatch: 100 }, NOW);
+    await progress.addGoalProgress(em(), MEMBER, { hatch: 10_000 }, NOW);
     expect(Number((await alliance()).points)).toBe(0);
-    await progress.addGoalProgress(em(), MEMBER, { hatch: 60 }, NOW);
-    await progress.addGoalProgress(em(), MEMBER, { hatch: 60 }, NOW);
-    expect(Number((await alliance()).points)).toBe(10);
+    await progress.addGoalProgress(em(), MEMBER, { hatch: 6_000 }, NOW);
+    await progress.addGoalProgress(em(), MEMBER, { hatch: 6_000 }, NOW);
+    expect(Number((await alliance()).points)).toBe(15);
     const view = await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW);
-    expect(view.goals[0]).toMatchObject({ kind: "hatch", progress: 150, done: true, removable: false });
+    expect(view.goals[0]).toMatchObject({ kind: "hatch", progress: 18_000, done: true, removable: false });
     expect(view.top_helpers[0]).toMatchObject({ userid: MEMBER });
+    // Paid today by the clock (`done_at` is the database's now()).
+    const today = await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, Math.floor(Date.now() / 1000));
+    expect(today.today.points_today).toBe(15);
+    const hatch = view.goal_menu.find((g) => g.kind === "hatch")!;
+    expect(hatch.tiers.map((t) => [t.target, t.points, t.players])).toEqual([
+      [18_000, 15, 3],
+      [48_000, 37, 8],
+      [90_000, 70, 15],
+    ]);
+  });
+
+  test("a cancelled upgrade takes its count back, never below 0, and never off a goal already done", async () => {
+    await progress.setGoal(em(), LEADER, "upgrade", "easy", NOW);
+    const goal = async () => (await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW)).goals[0]!;
+    await progress.addGoalProgress(em(), MEMBER, { upgrade: 2 }, NOW);
+    await progress.addGoalProgress(em(), MEMBER, { upgrade: -1 }, NOW);
+    expect((await goal()).progress).toBe(1);
+    await progress.addGoalProgress(em(), MEMBER, { upgrade: -5 }, NOW);
+    expect((await goal()).progress).toBe(0);
+    // Only upgrades go back.
+    await progress.setGoal(em(), LEADER, "catapultHit", "easy", NOW);
+    await progress.addGoalProgress(em(), MEMBER, { catapultHit: 3 }, NOW);
+    await progress.addGoalProgress(em(), MEMBER, { catapultHit: -3 }, NOW);
+    const hits = (await progress.progressView(em(), ALLIANCE, AllianceType.MIDAS, NOW)).goals[1]!;
+    expect(hits.progress).toBe(3);
+    await progress.addGoalProgress(em(), MEMBER, { upgrade: 90 }, NOW);
+    await progress.addGoalProgress(em(), MEMBER, { upgrade: -1 }, NOW);
+    expect(await goal()).toMatchObject({ progress: 90, done: true });
+    expect(Number((await alliance()).points)).toBe(15);
   });
 
   test("lighting a star spends points and records the members' old factor", async () => {
@@ -173,6 +203,7 @@ describe.skipIf(!enabled)("alliance progress", () => {
         progress.noteAllianceEvents(MEMBER, { hatch: 5 });
       })
     );
-    expect(hatches()).toBe(start + 5);
+    // Hatching counts housing space: 5 heads with no monster named, a Pokey's 10 each.
+    expect(hatches()).toBe(start + 50);
   });
 });
