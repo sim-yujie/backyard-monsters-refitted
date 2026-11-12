@@ -736,7 +736,7 @@ export const INFERNO_BUILDING_3D_ART: Readonly<Record<number, readonly TierArt[]
   // 47 cells (levels 1-2) and 45. No damaged or destroyed look of its own: the damaged one is the whole look tinted,
   // the destroyed Flash's.
   2: [
-    { from: 1, top: ["top.3d1@2x.webp", -40, -45], shadow: ["shadow.3d1.jpg", -38, 8], lift: 0,
+    { from: 1, top: ["top.3d1@2x.webp", -40, -45], shadow: ["shadow.3d1.jpg", -39, 8], lift: 0,
       anim: { strip: ["anim.3d1@2x.webp", -38, -46, 60, 94, 47], columns: 34, body: ["body.3d1@2x.webp", -40, -41] } },
     { from: 3, top: ["top.3d3@2x.webp", -43, -50], shadow: ["shadow.3d3.jpg", -41, 9], lift: 0,
       anim: { strip: ["anim.3d3@2x.webp", -38, -51, 66, 86, 45], columns: 31, body: ["body.3d3@2x.webp", -43, -42] } },

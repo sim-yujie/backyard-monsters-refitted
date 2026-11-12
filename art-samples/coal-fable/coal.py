@@ -152,9 +152,9 @@ SHINE = {1: 0.0, 2: 0.55, 3: 1.0}[T]
 
 
 def m_body():
-    return mat("body", lerp((212, 120, 58), (128, 62, 22), SHINE), rough=0.7 - 0.38 * SHINE, metal=0.15 + 0.65 * SHINE,
-               wear=lerp((236, 156, 108), (236, 142, 58), SHINE), rust=lerp((62, 36, 24), (50, 26, 12), SHINE),
-               rust_at=0.5 + 0.08 * SHINE, scale=6.5 - 2.5 * SHINE, wear_amt=0.8 - 0.1 * SHINE, streak=lerp((70, 44, 30), (80, 40, 16), SHINE),
+    return mat("body", lerp((158, 90, 50), (128, 62, 22), SHINE), rough=0.7 - 0.38 * SHINE, metal=0.15 + 0.65 * SHINE,
+               wear=lerp((236, 156, 108), (236, 142, 58), SHINE), rust=lerp((54, 32, 22), (50, 26, 12), SHINE),
+               rust_at=0.44 + 0.14 * SHINE, scale=6.5 - 2.5 * SHINE, wear_amt=0.8 - 0.1 * SHINE, streak=lerp((70, 44, 30), (80, 40, 16), SHINE),
                top=lerp((98, 62, 44), (122, 60, 22), SHINE), mottle=0.5)
 
 
@@ -164,7 +164,7 @@ def m_trim():
 
 
 def m_yellow():
-    return mat("yellow", (224, 146, 30), rough=0.42, metal=0.35, wear=(250, 198, 80), rust=(150, 80, 20), rust_at=0.58,
+    return mat("yellow", (212, 134, 26), rough=0.42, metal=0.35, wear=(250, 198, 80), rust=(150, 80, 20), rust_at=0.58,
                scale=3.0, streak=(130, 64, 16), dirt=0.6)
 
 
@@ -229,7 +229,7 @@ def m_coal():
     if T == 1:
         return mat("coal", (150, 146, 138), rough=0.8, wear=(232, 230, 222), rust=(58, 54, 52), rust_at=0.5, scale=9.0,
                    speck=0.3, dirt=0.0, ao_min=0.2)
-    return mat("coal", (34, 30, 30), rough=0.45, wear=(88, 84, 86), rust=(12, 10, 10), scale=9.0, speck=0.3, dirt=0.0,
+    return mat("coal", (30, 26, 26), rough=0.75, wear=(64, 60, 62), rust=(10, 8, 8), scale=9.0, speck=0.3, dirt=0.0,
                ao_min=0.2)
 
 
@@ -687,7 +687,7 @@ def intake():
     for i in range(1, 13):                          # the head, rounding in at the top
         u = i / 12
         zs.append(zh + 2.49 * u)
-        rs.append(S / 2 * (1 + 0.07 * math.sin(math.pi * min(u, 0.9) / 0.9)) * math.sqrt(max(0.1, 1 - (max(0.0, u - 0.68) / 0.32) ** 2 * 0.62)))
+        rs.append(S / 2 * (1 + 0.07 * math.sin(math.pi * min(u, 0.9) / 0.9)) * math.sqrt(max(0.1, 1 - (max(0.0, u - 0.74) / 0.26) ** 2 * 0.5)))
     mv = mover("stack")
     bb = B()
     rings = freeze(bb, bb.tube([c + UP * z for z in zs], rs, sides=4, twist=-7))
@@ -741,7 +741,7 @@ def cabinet():
     for i in range(64 if T < 3 else 26):
         x = rr.uniform(tx0 + 0.22, tx1 - 0.22)
         y = rr.uniform(ty0 + 0.1, by0 - 0.22)
-        lump("coal-%d" % i, Vector((x, y, zbed + 0.14 + rr.uniform(0, 0.3 if T < 3 else 0.5) * (1.0 if y > -1.5 else 0.4))), rr.uniform(0.07, 0.115) if T < 3 else rr.uniform(0.2, 0.32), mv, rr, amp)
+        lump("coal-%d" % i, Vector((x, y, zbed + 0.14 + rr.uniform(0, 0.3 if T < 3 else 0.5) * (1.0 if y > -1.5 else 0.4))), rr.uniform(0.07, 0.115) if T < 3 else rr.uniform(0.16, 0.25), mv, rr, amp)
     if T == 3:
         # the coal runs on down a dark chute between the stack and the drum
         one("chute", [m_soot()], lambda b: b.box((tx1 - tx0 + 0.1, 0.5, rz - 0.2), Matrix.Translation((tm, ry - 0.1, (rz + 0.2) / 2))), smooth=False)
