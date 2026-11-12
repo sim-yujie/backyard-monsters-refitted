@@ -23,7 +23,8 @@ export const yardUpgradeAction = defineYardAction({
     const standing = await withInfernoStanding(em, user.userid, save, type);
     // A short pool topped up with Shiny, Flash's `BRTOPUP` (`services/yard/topUp.ts`, issue #393).
     const plan = await withTopUp(standing, body.topUp, (seen) => planUpgradeAction(seen, body.id, now, off));
-    if (off > 0) weekendBoostUsed(user.userid, "builders", now);
+    // The weekend's Glimmers, in this transaction (`weekendCoins.ts`).
+    if (off > 0) await weekendBoostUsed(em, user.userid, "builders", now);
     // Daily quests: an upgrade started on a harvester or a tower.
     return { ...plan, questEvents: upgradeQuestEvents(type) };
   },

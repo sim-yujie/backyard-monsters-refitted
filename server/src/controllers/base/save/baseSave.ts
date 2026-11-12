@@ -574,6 +574,8 @@ const saveBase = async (
   let takeoverGrant: TakeoverOffer | null = null;
   /** What the attacker's pool took of the loot (issue #166), for the response. */
   let banked: ResourceAmounts | null = null;
+  /** Tribe Plunder raised this landing's loot: the weekend's Glimmers are paid after the commit. */
+  let plunderUsed = false;
   /** The defence replay and the yard owner's notice, written once the landing has committed. */
   let afterLanding: (() => Promise<void>) | null = null;
 
@@ -625,7 +627,7 @@ const saveBase = async (
         ),
         loot.krallenBuff
       ).credited;
-      if (plunder > 0) weekendBoostUsed(user.userid, "plunder", now);
+      plunderUsed = plunder > 0;
     }
 
     // Each champion that fought learns from the server's battle, once: this
@@ -802,6 +804,9 @@ const saveBase = async (
     // After the commit: a counter it fails to write is logged and lost, and
     // must not take the landing's transaction down with it.
     if (loot) await countAttackLoot(postgres.em, user.userid, userSave, loot.credit, now);
+    // Tribe Plunder's weekend Glimmers, after the commit too: logged, not thrown
+    // (`services/events/weekendCoins.ts`).
+    if (plunderUsed) await weekendBoostUsed(postgres.em, user.userid, "plunder", now, true);
 
     // Quests (`services/quests/hooks.ts`), each on its player's main row
     // under its own lock, after the commit: a won attack, a tribe camp

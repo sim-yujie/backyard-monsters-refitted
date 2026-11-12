@@ -6,8 +6,9 @@ import { YARD_PLUGINS, type YardPlugin } from "../yardPlugins";
  * Own-yard plugin for event coins (beta 7, `game/eventCoins.ts`): hands the
  * yard load's purse to the coin module, and shows a short "[coin] +25"
  * notice each time coins arrive that no claim notice already shows. Coins
- * come only from big events' calendar days and ladder tiers (owner, 8 Nov
- * 2026; weekend events pay none).
+ * come from big events' calendar days and ladder tiers (owner, 8 Nov 2026)
+ * and from weekend events: 25 on the first yard load of the weekend (this
+ * load's `coinsgained`), 75 for the first boost used (owner, 12 Nov 2026).
  */
 
 export const COINS_NOTICE = "event-coins";
@@ -17,6 +18,8 @@ const NOTICE_MS = 6_000;
 const REASON_WORDS: Readonly<Record<string, string>> = {
   calendar: "Daily",
   ladder: "Event",
+  "weekend-played": "Weekend",
+  "weekend-boost": "Boost",
 };
 
 /** "Daily", "Daily + Event", or "" for an unnamed gain. */
@@ -63,7 +66,7 @@ export const eventCoinsPlugin: YardPlugin = ({ store, notices }) => {
   });
   // The main yard's load carries the purse.
   const save = store.save;
-  if (typeof save.eventcoins === "number") noteCoins(save.eventcoins);
+  if (typeof save.eventcoins === "number") noteCoins(save.eventcoins, save.coinsgained);
   return () => {
     stop();
     notices.clear(COINS_NOTICE);

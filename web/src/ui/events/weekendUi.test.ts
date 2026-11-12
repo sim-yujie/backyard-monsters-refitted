@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
 import { resetWeekend, setWeekend, type WeekendRun } from "@/game/weekend";
-import { openWeekendPopup, studySeconds, WeekendBanner, weekendAmount, weekendChip } from "./weekendUi";
+import {
+  openWeekendPopup,
+  studySeconds,
+  WEEKEND_GLIMMERS_LINE,
+  WeekendBanner,
+  weekendAmount,
+  weekendChip,
+} from "./weekendUi";
 
 const NOW = 1_794_614_400 + 3_600;
 const STUDY: WeekendRun = {
@@ -68,5 +75,11 @@ describe("openWeekendPopup", () => {
 
     openWeekendPopup({ container: document.body, run: STUDY, now: NOW });
     expect(document.querySelector(".weekend-popup__when")?.textContent).toBe("Ends in 1d 23h");
+  });
+
+  it("says what the weekend pays in Glimmers: 25 for playing, 75 for the boost", () => {
+    openWeekendPopup({ container: document.body, run: STUDY, now: NOW });
+    expect(WEEKEND_GLIMMERS_LINE).toBe("Play this weekend for 25 Glimmers, use the boost for 75 more.");
+    expect(document.querySelector(".weekend-popup__coins")?.textContent).toBe(WEEKEND_GLIMMERS_LINE);
   });
 });

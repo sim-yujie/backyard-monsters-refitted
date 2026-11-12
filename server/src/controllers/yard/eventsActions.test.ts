@@ -7,8 +7,12 @@ import { KRALLEN_HUNT_GOALS, krallenHunt, withEventCoins, type EventDefinition }
 import { monsterMadnessRun } from "../../game-data/events/monsterMadness.js";
 import { memoryProgressStore } from "../../services/events/progressStore.js";
 import { memoryCoinStore, useCoinStore, type EventCoinStore } from "../../services/events/eventCoins.js";
+import { DEFAULT_WEEKEND_SETTINGS, type WeekendSettings } from "../../game-data/events/weekendEvents.js";
+import { forgetWeekendCoinCache } from "../../services/events/weekendCoins.js";
+import { setWeekendSettings, weekendSettings } from "../../services/events/weekendSettings.js";
 import { eventsActions } from "./eventsActions.js";
 import { yardSpeedupAction } from "./speedup.js";
+import { yardUpgradeAction } from "./upgrade.js";
 import { runYardAction, type YardAction, type YardAnswer } from "./yardAction.js";
 
 /**
@@ -508,5 +512,68 @@ describe("Monster Madness: Korath's powers by ladder claim", () => {
     expect(await claimGoal(0)).toMatchObject({ status: 409, body: { reason: "eventNotActive" } });
     at(START + 4 * DAY + 6 * DAY);
     expect((await claimGoal(0)).status).toBe(200);
+  });
+});
+
+describe("weekend Glimmers through a yard action (owner, 12 Nov 2026)", () => {
+  // Saturday 14 Nov 2026 is a Builder's Weekend in the default rotation.
+  const SATURDAY = Date.parse("2026-11-14T10:00:00Z") / 1000;
+  const FRIDAY = Date.parse("2026-11-13T10:00:00Z") / 1000;
+  let coins: EventCoinStore & { balances: Map<number, number> };
+  let previous: EventCoinStore;
+  let previousSettings: WeekendSettings;
+
+  const yardWith = (): Row =>
+    rowOf({
+      resources: { r1: 1_000_000, r2: 1_000_000, r3: 1_000_000, r4: 1_000_000 },
+      buildingdata: {
+        "0": { id: 0, t: 14, X: 0, Y: 0, l: 3 },
+        "2": { id: 2, t: 1, X: 200, Y: 200, l: 1 },
+        "3": { id: 3, t: 1, X: 300, Y: 300, l: 1 },
+      },
+    });
+  const upgrade = (id: number) => call(yardUpgradeAction, { id });
+
+  beforeEach(() => {
+    coins = memoryCoinStore();
+    previous = useCoinStore(coins);
+    previousSettings = weekendSettings({});
+    setWeekendSettings(DEFAULT_WEEKEND_SETTINGS);
+    forgetWeekendCoinCache();
+  });
+
+  afterEach(() => {
+    useCoinStore(previous);
+    setWeekendSettings(previousSettings);
+    forgetWeekendCoinCache();
+  });
+
+  test("the first upgrade at the Builder's Weekend price pays 75 + 25 once, and the answer says so", async () => {
+    at(SATURDAY);
+    db.row = yardWith();
+    const first = await upgrade(2);
+    expect(first.status).toBe(200);
+    expect(first.body.eventcoins).toBe(100);
+    expect(first.body.coinsGained).toEqual([
+      { amount: 25, reason: "weekend-played" },
+      { amount: 75, reason: "weekend-boost" },
+    ]);
+
+    // Another upgrade later the same weekend (the one builder free again) pays nothing more.
+    at(SATURDAY + 3_600);
+    db.row = yardWith();
+    const second = await upgrade(3);
+    expect(second.status).toBe(200);
+    expect(second.body.coinsGained).toBeUndefined();
+    expect(coins.balances.get(2)).toBe(100);
+  });
+
+  test("an upgrade outside a weekend pays nothing", async () => {
+    at(FRIDAY);
+    db.row = yardWith();
+    const answer = await upgrade(2);
+    expect(answer.status).toBe(200);
+    expect(answer.body.coinsGained).toBeUndefined();
+    expect(coins.balances.get(2)).toBeUndefined();
   });
 });

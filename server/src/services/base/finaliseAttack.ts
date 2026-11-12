@@ -333,7 +333,6 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
     ),
     loot.krallenBuff
   );
-  if (plunder > 0) weekendBoostUsed(attacker.userid, "plunder", now);
   postgres.em.persist(userSave);
 
   // The defender.
@@ -407,6 +406,8 @@ const finaliseLocked = async (basesaveid: number, trigger: string, options: Land
   // the final lock, and after the commit, so a counter that fails to write
   // (logged and lost) cannot take the landing down with it.
   await countAttackLoot(postgres.em, attacker.userid, userSave, loot.credit, now);
+  // Tribe Plunder's weekend Glimmers, after the commit too: logged, not thrown.
+  if (plunder > 0) await weekendBoostUsed(postgres.em, attacker.userid, "plunder", now, true);
 
   // Quests, as the hand-landed save counts them (`controllers/base/save/baseSave.ts`).
   await recordQuestEvents(

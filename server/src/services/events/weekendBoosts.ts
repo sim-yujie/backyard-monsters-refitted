@@ -1,4 +1,7 @@
+import type { EntityManager } from "@mikro-orm/core";
+
 import type { WeekendEventId } from "../../game-data/events/weekendEvents.js";
+import { awardWeekendCoins, awardWeekendCoinsSafely } from "./weekendCoins.js";
 import { boostAt } from "./weekendSchedule.js";
 import { weekendSettings } from "./weekendSettings.js";
 
@@ -51,20 +54,25 @@ export const plunderPercent = (fromTribe: boolean, t: number): number =>
   fromTribe ? weekendBoost("plunder", t) : 0;
 
 /**
- * EVENT COINS HOOK (beta 7 grill item 29, a separate later task).
+ * EVENT COINS (owner, 12 Nov 2026: "builder's weekend pay glimmer";
+ * `weekendCoins.ts`): called each time a player uses a weekend boost: an
+ * upgrade bought at the Builder's Weekend price, a training or research
+ * started in a Study Weekend, monsters queued in a Hatch Rush, loot banked
+ * from a tribe in Tribe Plunder. Pays the weekend's "boost" Glimmers (and
+ * "played", if still unpaid) once per player per run; any later call pays
+ * nothing.
  *
- * Called once each time a player uses a weekend boost: an upgrade bought at
- * the Builder's Weekend price, a training or research started in a Study
- * Weekend, loot banked from a tribe in Tribe Plunder. Hatch Rush is applied
- * inside the hatchery catch-up, which has no player at hand; the coins task
- * can count it from `POST /bm/yard/hatchery/add` instead.
- *
- * TODO(event-coins): grant the weekend's coins here (owner's proposal: about
- * 100 per weekend, 25 for playing that weekend and 75 for using the boost),
- * once per player per weekend run (`WeekendRun.key`), through the events
- * progress store (`services/events/progressStore.ts`). Nothing is granted
- * yet.
+ * Inside a yard action pass the action's transaction: the coins land or roll
+ * back with it, and errors roll it back. After an attack has been committed,
+ * pass `safe` so a failure is logged instead of thrown.
  */
-export const weekendBoostUsed = (_userid: number, _id: WeekendEventId, _now: number): void => {
-  // Deliberately empty until event coins are built.
-};
+export const weekendBoostUsed = async (
+  em: EntityManager,
+  userid: number,
+  _id: WeekendEventId,
+  now: number,
+  safe = false
+): Promise<number> =>
+  safe
+    ? awardWeekendCoinsSafely(em, userid, ["played", "boost"], now)
+    : awardWeekendCoins(em, userid, ["played", "boost"], now);
