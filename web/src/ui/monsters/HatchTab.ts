@@ -7,7 +7,6 @@ import type { YardRefusal } from "@/api/yard";
 import { monsterStat } from "@/game/combat/rules";
 import {
   activeOverdrive,
-  batchSeconds,
   fillLimits,
   HATCHERY_TYPE,
   HCC_STACKS,
@@ -44,6 +43,7 @@ import { maxLevel, quantityOf, townHallLevel, type YardKind } from "@/game/yard/
 import { NEED_MORE_SILOS, overCap } from "@/game/yard/storage";
 import { YardChangeReason, type YardActionResult, type YardChange } from "@/game/yard/YardStore";
 import { formatAmount, formatCountdown, formatShortPrice } from "@/ui/format";
+import { holdPress } from "@/ui/holdPress";
 import { QuantityStepper } from "@/ui/QuantityStepper";
 import { gameIcon, iconAmount } from "@/ui/gameIcon";
 import { resourceAmount, resourceIcon } from "@/ui/resourceIcon";
@@ -88,8 +88,10 @@ const hatchRushChip = (): (Node | string)[] => {
  *   a tap or an arrow key chooses one, and the choice is remembered per
  *   yard (`hatcheryTabs.ts`).
  * - **The line** of the chosen hatchery: the monster hatching now (picture, time
- *   left, progress; a tap cancels it for its goo, after a confirm), then one
- *   slot per waiting stack with its ×N (a tap takes one out), as many slots
+ *   left, progress; a tap cancels it for its goo at once, and holding it
+ *   keeps cancelling the next one, one request at a time), then one
+ *   slot per waiting stack with its ×N (a tap takes one out; holding counts
+ *   more out and sends them in one request on release), as many slots
  *   as the hatchery's level allows (`1 + level`), and the next locked slot
  *   saying the upgrade that opens it. With an HCC, one row of each
  *   hatchery's monster in production and the shared queue's seven slots
@@ -108,8 +110,8 @@ const hatchRushChip = (): (Node | string)[] => {
  *   why.
  * - **The info panel**: the chosen monster's portrait, level, blurb and six
  *   numbers, and the one way to add: "Adding to Hatchery 2 (Level 3)", the
- *   shared `QuantityStepper` with `+5`, `+10` and "Max (12)", what the batch
- *   costs and takes, and "Add 5 Pokeys to Hatchery 2". Before it is sent the
+ *   shared `QuantityStepper` (from 0, owner 12 Nov) with `+5`, `+10` and
+ *   "Max (12)", and "Add 5 Pokeys to Hatchery 2". Before it is sent the
  *   slots show the batch dashed ("+5"), the line's waiting count reads
  *   before → after and the housing bar shows it in its own colour. On a
  *   phone the panel is a bar fixed to the bottom of the sheet.
@@ -137,8 +139,11 @@ interface Clock {
   readonly suffix?: string;
 }
 
-/** The first count offered when a monster is picked. */
-const DEFAULT_COUNT = 1;
+/**
+ * The first count offered when a monster is picked: none, so nothing is added
+ * by accident (owner, 12 Nov 2026). Add stays off until `+` or Max is used.
+ */
+const DEFAULT_COUNT = 0;
 
 /** The bigger steps beside `+` (#268, option E). */
 const JUMPS = [5, 10] as const;
@@ -175,6 +180,18 @@ const finishText = (block: FinishBlock, words: MonsterWords): string =>
     housingFull: `${words.housing} full`,
   })[block];
 
+/** A held `−` on a waiting stack: the stack, by its 1-based slot and monster, and how many are counted out. */
+interface Taking {
+  readonly target: HatchTarget;
+  readonly slot: number;
+  readonly monster: string;
+  readonly count: number;
+}
+
+/** The waiting stacks of a hatchery, or the HCC's shared queue. */
+const queueOf = (yard: HatchYard, target: HatchTarget): readonly QueueStack[] =>
+  target === "hcc" ? yard.shared : (yard.hatcheries.find((one) => one.id === target)?.queue ?? []);
+
 /** Where the chosen batch would land, as the slots draw it. */
 interface SlotPreview {
   readonly monster: string;
@@ -210,12 +227,9 @@ export class HatchTab implements MonstersTab {
   /** "Adding to Hatchery 2 (Level 3)". */
   private readonly toLine: HTMLElement;
   private readonly stepper: QuantityStepper;
-  /** What the batch costs and takes. */
-  private readonly sumLine: HTMLElement;
   private readonly addButton: HTMLButtonElement;
   /** The button's words, kept from draw to draw: see `drawAddLabel`. */
   private readonly addWords: HTMLElement;
-  private readonly noteLine: HTMLElement;
   private readonly warningLine: HTMLElement;
   private readonly gateLine: HTMLElement;
 
@@ -223,8 +237,11 @@ export class HatchTab implements MonstersTab {
   private target: HatchTarget | null = null;
   private selected: string | null = null;
   private count = DEFAULT_COUNT;
-  /** The hatchery whose monster in production is waiting on "Cancel it?". */
-  private confirming: number | null = null;
+  /**
+   * A held `−` on a waiting stack: how many it has counted out so far. The
+   * slot shows them gone at once; one request takes them out on release.
+   */
+  private taking: Taking | null = null;
   /** The queue (a hatchery, or `hcc`) waiting on "Clear 44?". */
   private clearing: HatchTarget | null = null;
   /** Finish now and the Overdrive, opened by the small link. */
@@ -331,8 +348,6 @@ export class HatchTab implements MonstersTab {
       fill: () => this.fill(),
       commit: () => this.renderCount(true),
     });
-    this.sumLine = document.createElement("p");
-    this.sumLine.className = "hatch-add__sum";
     this.addButton = document.createElement("button");
     this.addButton.type = "button";
     this.addButton.className = "btn btn--primary hatch-add__add";
@@ -340,9 +355,6 @@ export class HatchTab implements MonstersTab {
     this.addWords = document.createElement("span");
     this.addWords.className = "hatch-add__words";
     this.addButton.append(this.addWords);
-    this.noteLine = document.createElement("p");
-    this.noteLine.className = "hatch-add__note";
-    this.noteLine.setAttribute("aria-live", "polite");
     this.warningLine = document.createElement("p");
     this.warningLine.className = "hatch-add__warning";
     this.gateLine = document.createElement("p");
@@ -350,11 +362,9 @@ export class HatchTab implements MonstersTab {
     this.addBlock.append(
       this.toLine,
       this.stepper.element,
-      this.sumLine,
       this.addButton,
       this.gateLine,
       this.warningLine,
-      this.noteLine,
     );
 
     this.info.append(this.infoHead, this.infoEach, this.detailsButton, this.stats, this.addBlock);
@@ -435,6 +445,7 @@ export class HatchTab implements MonstersTab {
   }
 
   destroy(): void {
+    this.taking = null;
     this.markYard(null);
     this.stepper.destroy();
     for (const button of this.shiny.values()) button.destroy();
@@ -459,10 +470,6 @@ export class HatchTab implements MonstersTab {
     this.yard = yard;
     this.numbers = hatcheryNumbers(yard);
     this.target = pickTarget(yard, this.target);
-    if (this.confirming !== null) {
-      const still = yard.hatcheries.find((one) => one.id === this.confirming);
-      if (!still?.monster) this.confirming = null;
-    }
     if (this.clearing !== null) {
       const queue =
         this.clearing === "hcc"
@@ -553,15 +560,11 @@ export class HatchTab implements MonstersTab {
       yard && row && ready && target !== null && this.count > 0
         ? previewAdd(yard, target, row.monster.id, this.count)
         : null;
-    this.drawSum(yard, row, preview);
 
     const warning =
       yard && row && ready && this.count > 0 ? housingWarning(yard, row.monster.id, this.count) : null;
     this.warningLine.textContent = warning ?? "";
     this.warningLine.hidden = warning === null;
-    const note = limits && row ? maxNote(limits, row, target, this.words) : null;
-    this.noteLine.textContent = note ?? "";
-    this.noteLine.hidden = note === null || !ready;
 
     if (yard) {
       this.renderLines(yard, preview && row ? slotPreview(row.monster.id, preview) : null, preview);
@@ -603,28 +606,6 @@ export class HatchTab implements MonstersTab {
       strong(this.hatcheryName(hatchery.id)),
       ` (Level ${hatchery.level})`,
     );
-  }
-
-  /** What the batch costs and takes, before it is sent (#268, G). */
-  private drawSum(yard: HatchYard | null, row: HatchMonster | null, preview: AddPreview | null): void {
-    if (!yard || !row || !preview || preview.added < 1) {
-      this.sumLine.hidden = true;
-      this.sumLine.replaceChildren();
-      return;
-    }
-    this.sumLine.hidden = false;
-    const parts: (Node | string)[] = [
-      `${preview.added === this.count ? "This batch" : `The ${formatAmount(preview.added)} that fit`}: `,
-      resourceAmount("r4", preview.cost),
-    ];
-    // With an HCC several hatcheries share a batch, so it has no one time.
-    if (this.target !== "hcc") {
-      const store = this.store;
-      const seconds = batchSeconds(yard, row.monster.id, preview.added, store.save.storedata, store.now());
-      parts.push(` · ${duration(seconds)}`);
-    }
-    parts.push(` · ${formatAmount(preview.added * row.space)} ${this.realm === "inferno" ? "space" : "housing"}`);
-    this.sumLine.replaceChildren(...parts);
   }
 
   /* ── The line ───────────────────────────────────────────────────────── */
@@ -870,9 +851,11 @@ export class HatchTab implements MonstersTab {
   }
 
   /**
-   * The monster hatching now: a tap asks "Cancel it?" and the answer takes
-   * it out for its goo (`HATCHERYPOPUP.as:320-323`). Idle, it shows the
-   * batch that would start at once, dashed.
+   * The monster hatching now: a tap cancels it for its goo
+   * (`HATCHERYPOPUP.as:320-323`), with no question first (owner, 12 Nov
+   * 2026: "remove the prompt"), and holding it keeps cancelling whichever
+   * monster starts next. Idle, it shows the batch that would start at once,
+   * dashed.
    */
   private nowCard(
     yard: HatchYard,
@@ -883,42 +866,6 @@ export class HatchTab implements MonstersTab {
     const where = compact ? this.hatcheryName(hatchery.id) : "";
     const monster = hatchery.monster;
     const state = hatchery.state;
-
-    if (monster && this.confirming === hatchery.id) {
-      const card = document.createElement("div");
-      card.className = `hatch-now hatch-now--confirm${compact ? " hatch-now--compact" : ""}`;
-      card.dataset["hatchery"] = String(hatchery.id);
-      const question = document.createElement("span");
-      question.className = "hatch-now__question";
-      question.textContent = `Cancel this ${nameOf(monster)}?`;
-      const back = document.createElement("span");
-      back.className = "hatch-now__refund";
-      back.append(resourceAmount("r4", priceOf(monster, hatchery.paidLevel)), " back");
-      const yes = document.createElement("button");
-      yes.type = "button";
-      yes.className = "btn btn--danger hatch-now__yes";
-      yes.textContent = "Cancel it";
-      yes.dataset["focusKey"] = `cancel-yes-${hatchery.id}`;
-      yes.addEventListener("click", () => {
-        this.confirming = null;
-        void this.runRemove(hatchery.id, 0, 1);
-      });
-      this.plainButtons.push(yes);
-      const no = document.createElement("button");
-      no.type = "button";
-      no.className = "btn btn--ghost hatch-now__no";
-      no.textContent = "Keep";
-      no.dataset["focusKey"] = `cancel-no-${hatchery.id}`;
-      no.addEventListener("click", () => {
-        this.confirming = null;
-        this.render();
-      });
-      const buttons = document.createElement("span");
-      buttons.className = "hatch-now__buttons";
-      buttons.append(yes, " ", no);
-      card.append(question, " ", back, " ", buttons);
-      return card;
-    }
 
     const card = document.createElement(monster ? "button" : "div");
     card.className = `hatch-now hatch-now--${state}${compact ? " hatch-now--compact" : ""}`;
@@ -968,11 +915,14 @@ export class HatchTab implements MonstersTab {
       "aria-label",
       `${compact ? `${where}: ` : ""}${nameOf(monster)} hatching now. Cancel it and get the ${this.words.goo} back`,
     );
-    button.addEventListener("click", () => {
-      this.confirming = hatchery.id;
-      this.render();
-      this.element.querySelector<HTMLElement>(`[data-focus-key="cancel-no-${hatchery.id}"]`)?.focus();
-    });
+    button.title = `Cancel ${nameOf(monster)} (hold for more)`;
+    // Nothing on the press itself: a cancel reaches the server at once, and a
+    // finger that only meant to scroll the row must not cost a monster.
+    holdPress(
+      button,
+      { step: () => this.cancelStep(hatchery.id), end: () => undefined },
+      { stepOnPress: false },
+    );
     this.plainButtons.push(button);
 
     const entry = monsterEntry(monster);
@@ -1080,23 +1030,35 @@ export class HatchTab implements MonstersTab {
     return button;
   }
 
-  /** A waiting stack: ×N, the monster, and a tap takes one out (`HATCHERYPOPUP.as:300-319`). */
+  /**
+   * A waiting stack: ×N, the monster, and a tap takes one out
+   * (`HATCHERYPOPUP.as:300-319`); holding it counts more out, faster the
+   * longer it is held, and the release sends them in one request (owner,
+   * 12 Nov 2026).
+   */
   private stackSlot(
     target: HatchTarget,
     stack: QueueStack,
     slot: number,
     preview: SlotPreview | null,
   ): HTMLElement {
-    const [id, count] = stack;
+    const [id, waiting] = stack;
+    const taking = this.taking;
+    const taken =
+      taking && taking.target === target && taking.slot === slot && taking.monster === id ? taking.count : 0;
+    const count = Math.max(0, waiting - taken);
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "hatch-slot";
+    button.className = `hatch-slot${taken > 0 ? " hatch-slot--taking" : ""}`;
     button.dataset["slot"] = String(slot);
     button.dataset["focusKey"] = `slot-${String(target)}-${slot}`;
     const name = nameOf(id);
     button.setAttribute("aria-label", `${name}, ${count} waiting. Take one out and get its ${this.words.goo} back`);
-    button.title = `Take one ${name} out`;
-    button.addEventListener("click", () => void this.runRemove(target, slot, 1));
+    button.title = `Take ${plural(name, 2)} out (hold for more)`;
+    holdPress(button, {
+      step: () => this.takeStep(target, slot, id),
+      end: (cancelled) => void this.takeEnd(cancelled),
+    });
     this.plainButtons.push(button);
 
     const badge = document.createElement("span");
@@ -1635,6 +1597,69 @@ export class HatchTab implements MonstersTab {
     ]);
   }
 
+  /**
+   * One step of a held (or tapped) waiting stack: one more counted out, drawn
+   * on the slot in place so the held button stays under the finger. False
+   * when the stack has no more to give, or the slot no longer holds it.
+   */
+  private takeStep(target: HatchTarget, slot: number, monster: string): boolean {
+    const taking = this.taking;
+    if (taking && (taking.target !== target || taking.slot !== slot)) return false;
+    const stack = this.yard ? queueOf(this.yard, target)[slot - 1] : undefined;
+    if (!stack || stack[0] !== monster) return false;
+    const count = (taking?.count ?? 0) + 1;
+    if (count > stack[1]) return false;
+    this.taking = { target, slot, monster, count };
+    const button = this.element.querySelector<HTMLElement>(`[data-focus-key="slot-${String(target)}-${slot}"]`);
+    if (button) {
+      button.classList.add("hatch-slot--taking");
+      const badge = button.querySelector(".hatch-slot__count");
+      if (badge) badge.textContent = `×${stack[1] - count}`;
+    }
+    return count < stack[1];
+  }
+
+  /**
+   * The press is over: what was counted out goes in one request, or, when
+   * the browser took the touch for a scroll, nothing does. The queue is read
+   * again first: if the stack at the front went into a hatchery meanwhile,
+   * every slot after it moved up one.
+   */
+  private async takeEnd(cancelled: boolean): Promise<void> {
+    const taking = this.taking;
+    if (!taking) return;
+    this.taking = null;
+    if (cancelled) {
+      this.render();
+      return;
+    }
+    const queue = queueOf(readHatchYard(this.store.save, this.store.now()), taking.target);
+    let slot = taking.slot;
+    if (queue[slot - 1]?.[0] !== taking.monster && queue[slot - 2]?.[0] === taking.monster) slot -= 1;
+    const stack = queue[slot - 1];
+    if (!stack || stack[0] !== taking.monster) {
+      this.render();
+      return;
+    }
+    // The slot keeps showing them gone until the answer redraws it.
+    await this.runRemove(taking.target, slot, Math.min(taking.count, stack[1]));
+  }
+
+  /**
+   * One step of a held (or tapped) monster hatching now: cancels it. While
+   * the last cancel is still with the server the hold waits; each answer
+   * starts the next monster, which the next step cancels.
+   */
+  private cancelStep(hatcheryId: number): boolean {
+    if (this.hatcheryBusy()) return true;
+    const hatchery = readHatchYard(this.store.save, this.store.now()).hatcheries.find(
+      (one) => one.id === hatcheryId,
+    );
+    if (!hatchery?.monster) return false;
+    void this.runRemove(hatcheryId, 0, 1);
+    return true;
+  }
+
   private async runClear(target: HatchTarget): Promise<void> {
     const result = await this.actions.clear(target);
     this.report(result, (report) => {
@@ -1799,24 +1824,6 @@ const chevron = (): HTMLElement => {
   arrow.setAttribute("aria-hidden", "true");
   arrow.textContent = "‹";
   return arrow;
-};
-
-/**
- * The line under Max: why it stops where it does, in the words of the
- * limit that stopped it.
- */
-const maxNote = (
-  limits: FillLimits,
-  row: HatchMonster,
-  target: HatchTarget | null,
-  words: MonsterWords,
-): string | null => {
-  const fill = limits.fill;
-  if (fill === 0) return null;
-  const many = `${formatAmount(fill)} more ${plural(row.monster.name, fill)}`;
-  return limits.limitedBy === "goo"
-    ? `Max is ${formatAmount(fill)}: your ${words.goo} pays for ${many}.`
-    : `Max is ${formatAmount(fill)}: ${target === "hcc" ? "the shared queue" : "the queue"} has room for ${many}.`;
 };
 
 /**
