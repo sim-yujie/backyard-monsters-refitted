@@ -22,6 +22,8 @@ export interface CountryPickerOptions {
   readonly onPick: (code: string | null) => void;
   /** Offer "Not set" at the top. Defaults to true. */
   readonly notSet?: boolean;
+  /** The words on the "Not set" row (the alliance ad says "Any language"). */
+  readonly notSetLabel?: string;
 }
 
 export class CountryPicker {
@@ -88,7 +90,7 @@ export class CountryPicker {
     const query = this.search.value;
     const items: HTMLLIElement[] = [];
     if ((this.options.notSet ?? true) && !query.trim()) {
-      items.push(this.item("", PICKER_TEXT.notSet));
+      items.push(this.item("", this.options.notSetLabel ?? PICKER_TEXT.notSet));
     }
     for (const country of searchCountries(query)) items.push(this.item(country.code, country.name));
     if (items.length === 0) {

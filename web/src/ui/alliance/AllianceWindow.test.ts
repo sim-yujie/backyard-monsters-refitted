@@ -122,6 +122,9 @@ const open = async (api: AllianceApi, options: AllianceWindowOptions = {}): Prom
 const buttonNamed = (words: string): HTMLButtonElement | undefined =>
   [...document.querySelectorAll<HTMLButtonElement>("button")].find((node) => node.textContent?.trim() === words);
 
+/** The Language, Time zone and Min level dropdown boxes, in order. */
+const picks = (): HTMLButtonElement[] => [...document.querySelectorAll<HTMLButtonElement>(".alliance__sets .alliance__pick")];
+
 afterEach(() => {
   setClassicLook(false);
   document.body.replaceChildren();
@@ -442,29 +445,98 @@ describe("AllianceWindow: create", () => {
     modes[2]!.click();
     expect(modes[2]!.getAttribute("aria-pressed")).toBe("true");
     expect(modes[0]!.getAttribute("aria-pressed")).toBe("false");
-    const [zone, level] = [...document.querySelectorAll(".alliance__stepper")];
-    const zoneText = zone!.querySelector(".alliance__stepper-value")!.textContent!;
-    expect(zoneText).toMatch(/^GMT/);
-    expect(level!.querySelector(".alliance__stepper-value")!.textContent).toBe(ALLIANCE_TEXT.anyLevel);
-    const levelUp = level!.querySelectorAll<HTMLButtonElement>("button")[1]!;
-    levelUp.click();
-    levelUp.click();
-    expect(level!.querySelector(".alliance__stepper-value")!.textContent).toBe("40+");
+    const [, zone, level] = picks();
+    expect(zone!.textContent).toMatch(/^GMT/);
+    expect(level!.textContent).toBe(ALLIANCE_TEXT.anyLevel);
+    level!.click();
+    expect(level!.getAttribute("aria-expanded")).toBe("true");
+    const rows = [...document.querySelectorAll<HTMLButtonElement>(".alliance__pop .alliance__option")];
+    expect(rows.map((row) => row.textContent)).toEqual(["Any level\u2713", "Level 35+", "Level 40+", "Level 45+", "Level 50+", "Level 55+", "Level 60+"]);
+    rows[2]!.click();
+    expect(document.querySelector(".alliance__pop")).toBeNull();
+    expect(level!.getAttribute("aria-expanded")).toBe("false");
+    expect(level!.textContent).toBe("40+");
     document.querySelector<HTMLButtonElement>(".alliance__submit")!.click();
     await flush();
     expect(api.create).toHaveBeenCalledWith(expect.objectContaining({ join_mode: "invite", min_level: 40 }));
   });
 
-  it("the language button opens the country list; a pick shows its flag", async () => {
+  it("the language dropdown opens the country list; a pick shows its flag", async () => {
     await open(fakeApi());
     document.querySelector<HTMLButtonElement>(".alliance__create")!.click();
-    const pick = document.querySelector<HTMLButtonElement>(".alliance__lang-pick")!;
-    expect(pick.textContent).toBe(ALLIANCE_TEXT.anyLanguage);
-    pick.click();
-    const option = document.querySelector<HTMLButtonElement>(".alliance__lang-list button[data-code='PH']")!;
+    const [pick] = picks();
+    expect(pick!.textContent).toBe(ALLIANCE_TEXT.anyLanguage);
+    pick!.click();
+    const anyRow = document.querySelector<HTMLButtonElement>(".alliance__pop button[data-code='']")!;
+    expect(anyRow.textContent).toContain(ALLIANCE_TEXT.anyLanguageRow);
+    const option = document.querySelector<HTMLButtonElement>(".alliance__pop button[data-code='PH']")!;
     option.click();
-    expect(document.querySelector(".alliance__lang-list")).toBeNull();
-    expect(pick.querySelector(".country-flag, img")).not.toBeNull();
+    expect(document.querySelector(".alliance__pop")).toBeNull();
+    expect(pick!.querySelector(".country-flag, img")).not.toBeNull();
+  });
+
+  it("the three settings sit in one row of dropdowns, each named by its label", async () => {
+    await open(fakeApi());
+    document.querySelector<HTMLButtonElement>(".alliance__create")!.click();
+    const row = document.querySelector(".alliance__sets")!;
+    const labels = [...row.querySelectorAll(".alliance__label")].map((label) => label.textContent);
+    expect(labels).toEqual([ALLIANCE_TEXT.language, ALLIANCE_TEXT.timeZone, ALLIANCE_TEXT.minLevel]);
+    for (const pick of picks()) {
+      expect(pick.getAttribute("aria-haspopup")).toBe("listbox");
+      const [labelId] = pick.getAttribute("aria-labelledby")!.split(" ");
+      expect(document.getElementById(labelId!)!.textContent).toBeTruthy();
+    }
+    // No ‹ › steppers any more.
+    expect(document.querySelector(".alliance__stepper")).toBeNull();
+  });
+
+  it("the time zone list runs GMT-12 to GMT+14 and marks the player's own zone", async () => {
+    await open(fakeApi());
+    document.querySelector<HTMLButtonElement>(".alliance__create")!.click();
+    const [, zone] = picks();
+    zone!.click();
+    const rows = [...document.querySelectorAll<HTMLButtonElement>(".alliance__pop .alliance__option")];
+    expect(rows).toHaveLength(27);
+    expect(rows[0]!.textContent).toBe("GMT-12");
+    expect(rows[26]!.textContent).toBe("GMT+14");
+    expect(document.querySelectorAll(".alliance__pop .alliance__you")).toHaveLength(1);
+    expect(document.querySelectorAll('.alliance__pop [aria-selected="true"]')).toHaveLength(1);
+  });
+
+  it("a dropdown closes on a press outside it or on Escape, and opening another closes the first", async () => {
+    await open(fakeApi());
+    document.querySelector<HTMLButtonElement>(".alliance__create")!.click();
+    const [, zone, level] = picks();
+    zone!.click();
+    expect(document.querySelectorAll(".alliance__pop")).toHaveLength(1);
+    level!.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    level!.click();
+    expect(document.querySelectorAll(".alliance__pop")).toHaveLength(1);
+    expect(zone!.getAttribute("aria-expanded")).toBe("false");
+    expect(level!.getAttribute("aria-expanded")).toBe("true");
+    level!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(document.querySelector(".alliance__pop")).toBeNull();
+    zone!.click();
+    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    expect(document.querySelector(".alliance__pop")).toBeNull();
+  });
+
+  it("About counts its letters up to 120 and stops there", async () => {
+    await open(fakeApi());
+    document.querySelector<HTMLButtonElement>(".alliance__create")!.click();
+    const about = document.querySelector<HTMLTextAreaElement>(".alliance__about textarea")!;
+    const count = document.querySelector<HTMLElement>(".alliance__count")!;
+    expect(about.maxLength).toBe(120);
+    expect(count.textContent).toBe("0/120");
+    about.value = "x".repeat(37);
+    about.dispatchEvent(new Event("input"));
+    expect(count.textContent).toBe("37/120");
+    expect(count.dataset["state"]).toBe("");
+    about.value = "x".repeat(120);
+    about.dispatchEvent(new Event("input"));
+    expect(count.textContent).toBe("120/120");
+    expect(count.dataset["state"]).toBe("full");
+    expect(about.getAttribute("aria-describedby")).toBe(count.id);
   });
 
   it("does not send a name that is too short", async () => {
@@ -501,11 +573,14 @@ describe("AllianceWindow: my alliance", () => {
     buttonNamed(ALLIANCE_TEXT.edit)!.click();
     const modes = [...document.querySelectorAll<HTMLButtonElement>(".alliance__mode")];
     expect(modes[1]!.getAttribute("aria-pressed")).toBe("true");
-    const [zone, level] = [...document.querySelectorAll(".alliance__stepper")];
-    expect(zone!.querySelector(".alliance__stepper-value")!.textContent).toBe("GMT-5");
-    expect(level!.querySelector(".alliance__stepper-value")!.textContent).toBe("45+");
+    const [language, zone, level] = picks();
+    expect(language!.textContent).toBe("Germany");
+    expect(zone!.textContent).toBe("GMT-5");
+    expect(level!.textContent).toBe("45+");
     modes[0]!.click();
-    zone!.querySelectorAll<HTMLButtonElement>("button")[1]!.click();
+    zone!.click();
+    [...document.querySelectorAll<HTMLButtonElement>(".alliance__pop .alliance__option")].find((row) => row.textContent === "GMT-4")!.click();
+    expect(zone!.textContent).toBe("GMT-4");
     buttonNamed(ALLIANCE_TEXT.save)!.click();
     await flush();
     expect(api.edit).toHaveBeenCalledWith({
@@ -516,6 +591,33 @@ describe("AllianceWindow: my alliance", () => {
       time_zone: -4,
       min_level: 45,
     });
+  });
+
+  it("Edit keeps an older About over 120 whole, shows it over and asks for a shorter one before saving", async () => {
+    const long = "We farm goo every day. ".repeat(8).trim();
+    expect(long.length).toBeGreaterThan(120);
+    const api = fakeApi({ mine: vi.fn(() => ok({ alliance: mine({ description: long }), rejoinAt: null })) });
+    await open(api);
+    expect(document.querySelector(".alliance__description")!.textContent).toBe(long);
+    buttonNamed(ALLIANCE_TEXT.edit)!.click();
+    const about = document.querySelector<HTMLTextAreaElement>(".alliance__about textarea")!;
+    const count = document.querySelector<HTMLElement>(".alliance__count")!;
+    expect(about.value).toBe(long);
+    expect(count.textContent).toBe(`${long.length}/120`);
+    expect(count.dataset["state"]).toBe("over");
+    expect(about.getAttribute("aria-invalid")).toBe("true");
+    buttonNamed(ALLIANCE_TEXT.save)!.click();
+    await flush();
+    expect(api.edit).not.toHaveBeenCalled();
+    expect(document.querySelector(".alliance__status")!.textContent).toContain("At most 120 letters.");
+    expect(document.activeElement).toBe(about);
+    about.value = long.slice(0, 120);
+    about.dispatchEvent(new Event("input"));
+    expect(count.dataset["state"]).toBe("full");
+    expect(about.getAttribute("aria-invalid")).toBe("false");
+    buttonNamed(ALLIANCE_TEXT.save)!.click();
+    await flush();
+    expect(api.edit).toHaveBeenCalledWith(expect.objectContaining({ description: long.slice(0, 120).trim() }));
   });
 
   it("shows phase 2's Overview cards, and a goal set from the menu reloads on the same tab", async () => {

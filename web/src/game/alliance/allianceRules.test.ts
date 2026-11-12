@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { AllianceListing, AllianceMember, MyAlliance, TypeOption } from "@/api/alliance";
 import {
   browserTimeZone,
+  aboutCount,
+  ALLIANCE_DESC_MAX,
   descriptionProblem,
   gateStep,
   gmtLabel,
@@ -86,7 +88,20 @@ describe("name and description checks", () => {
   it("wants a line about the alliance, not a long one", () => {
     expect(descriptionProblem("  ")).not.toBeNull();
     expect(descriptionProblem("We farm goo.")).toBeNull();
-    expect(descriptionProblem("x".repeat(256))).not.toBeNull();
+    expect(descriptionProblem("x".repeat(120))).toBeNull();
+    expect(descriptionProblem(`  ${"x".repeat(120)}  `)).toBeNull();
+    expect(descriptionProblem("x".repeat(121))).toBe("At most 120 letters.");
+  });
+});
+
+describe("aboutCount", () => {
+  it("counts up to 120 and marks the last 20, the full line and an older, longer About", () => {
+    expect(ALLIANCE_DESC_MAX).toBe(120);
+    expect(aboutCount("")).toEqual({ words: "0/120", state: "" });
+    expect(aboutCount("x".repeat(37))).toEqual({ words: "37/120", state: "" });
+    expect(aboutCount("x".repeat(100))).toEqual({ words: "100/120", state: "near" });
+    expect(aboutCount("x".repeat(120))).toEqual({ words: "120/120", state: "full" });
+    expect(aboutCount("x".repeat(180))).toEqual({ words: "180/120", state: "over" });
   });
 });
 

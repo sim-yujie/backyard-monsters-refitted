@@ -17,6 +17,7 @@ import {
 import { friendsApi, SEARCH_MIN_LENGTH, type FriendsApi, type PlayerResult } from "@/api/friends";
 import { avatarOf, avatarUrl } from "@/game/avatars";
 import {
+  aboutCount,
   ALLIANCE_DESC_MAX,
   ALLIANCE_NAME_MAX,
   browserTimeZone,
@@ -26,6 +27,7 @@ import {
   gateStep,
   gmtLabel,
   joinModeOf,
+  MIN_LEVEL,
   memberActions,
   membersLine,
   nameProblem,
@@ -38,9 +40,8 @@ import {
   ROLE_WORD,
   SHIELD_COUNT,
   shieldUrl,
+  TIME_ZONE,
   shownMinLevel,
-  stepMinLevel,
-  stepTimeZone,
   switchSummary,
   TYPE_INFO,
   type MemberAction,
@@ -137,6 +138,11 @@ export const ALLIANCE_TEXT = {
   timeZone: "Time zone",
   minLevel: "Min level",
   minLevelTitle: (level: number): string => `Players from level ${level}`,
+  /** The dropdowns' lists (owner chose A, 12 Nov 2026). */
+  anyLanguageRow: "Any language",
+  levelRow: (level: number): string => (level <= MIN_LEVEL.min ? "Any level" : `Level ${level}+`),
+  myZone: "you",
+  aboutCount: "Letters used",
   anyLevel: "Any",
   filters: "Filters",
   openOnly: "Open",
@@ -1057,13 +1063,7 @@ export class AllianceWindow {
     form.append(this.field(ALLIANCE_TEXT.name, name));
     form.append(this.field(ALLIANCE_TEXT.shield, this.shieldPicker(this.draft.image, (image) => (this.draft.image = image))));
 
-    const about = make("textarea", "alliance__input alliance__textarea");
-    about.maxLength = ALLIANCE_DESC_MAX;
-    about.rows = 2;
-    about.placeholder = ALLIANCE_TEXT.descriptionPlaceholder;
-    about.value = this.draft.description;
-    about.addEventListener("input", () => (this.draft.description = about.value));
-    form.append(this.field(ALLIANCE_TEXT.description, about));
+    form.append(this.aboutField(this.draft.description, (text) => (this.draft.description = text)).field);
 
     form.append(make("p", "alliance__note", ALLIANCE_TEXT.typeIntro), this.typeCards(this.draft.type, (type) => (this.draft.type = type)));
     form.append(make("p", "alliance__note alliance__note--soft", ALLIANCE_TEXT.typeLater));
@@ -1122,27 +1122,155 @@ export class AllianceWindow {
     return wrap;
   }
 
-  /** ‹ value ›: one step each press, the value redrawn in place so the rest of the form keeps what was typed. */
-  private stepper(icon: GameIconName, read: () => string, step: (direction: 1 | -1) => void, ends: () => [boolean, boolean]): HTMLElement {
-    const box = make("div", "alliance__stepper");
-    box.setAttribute("role", "group");
-    const value = make("span", "alliance__stepper-value");
-    const less = button("‹", "btn--outline alliance__stepper-go", () => press(-1), "Less");
-    const more = button("›", "btn--outline alliance__stepper-go", () => press(1), "More");
+  /**
+   * The About box with its live counter, "37/120" in the corner (owner, 12 Nov
+   * 2026). An older About longer than 120 loads whole; the counter turns red
+   * and the box can only get shorter.
+   */
+  private aboutField(text: string, changed?: (text: string) => void): { field: HTMLElement; input: HTMLTextAreaElement } {
+    const input = make("textarea", "alliance__input alliance__textarea");
+    input.maxLength = ALLIANCE_DESC_MAX;
+    input.rows = 2;
+    input.placeholder = ALLIANCE_TEXT.descriptionPlaceholder;
+    input.value = text;
+    const count = make("span", "alliance__count");
+    count.id = `alliance-about-count-${++AllianceWindow.ids}`;
+    count.title = ALLIANCE_TEXT.aboutCount;
+    input.setAttribute("aria-describedby", count.id);
     const draw = (): void => {
-      value.replaceChildren(gameIcon(icon, { size: 16, decorative: true }), make("span", "", read()));
-      const [atMin, atMax] = ends();
-      less.disabled = atMin;
-      more.disabled = atMax;
+      const { words, state } = aboutCount(input.value);
+      count.textContent = words;
+      count.dataset["state"] = state;
+      input.setAttribute("aria-invalid", String(state === "over"));
     };
-    const press = (direction: 1 | -1): void => {
-      step(direction);
+    input.addEventListener("input", () => {
       draw();
-    };
+      changed?.(input.value);
+    });
     draw();
-    box.append(less, value, more);
-    return box;
+    const box = make("span", "alliance__about");
+    box.append(input, count);
+    return { field: this.field(ALLIANCE_TEXT.description, box), input };
   }
+
+  /** Brings the About box into view after a refusal about it, so its red counter is seen. */
+  private showAbout(): void {
+    this.popup.body.querySelector<HTMLTextAreaElement>(".alliance__about textarea")?.focus();
+  }
+
+  /**
+   * One ad setting as a dropdown (owner chose A, 12 Nov 2026): icon or flag,
+   * the value and a small chevron in one box; a press opens a short list under
+   * it, a pick or a press anywhere else closes it. `cut` lets a long value end
+   * in "…" (a country name); a time zone or level never shortens.
+   */
+  private dropdown(labelId: string, value: () => Node[], fill: (pop: HTMLElement, done: () => void) => void, cut = false): HTMLElement {
+    const wrap = make("div", "alliance__drop");
+    const pick = make("button", `alliance__pick${cut ? " alliance__pick--cut" : ""}`);
+    pick.type = "button";
+    pick.id = `${labelId}-pick`;
+    pick.setAttribute("aria-haspopup", "listbox");
+    pick.setAttribute("aria-expanded", "false");
+    pick.setAttribute("aria-labelledby", `${labelId} ${pick.id}`);
+    const draw = (): void => {
+      const words = make("span", "alliance__pick-value");
+      words.append(...value());
+      const chevron = make("span", "alliance__chevron");
+      chevron.setAttribute("aria-hidden", "true");
+      pick.replaceChildren(words, chevron);
+    };
+    let pop: HTMLElement | null = null;
+    const outside = (event: Event): void => {
+      if (!(event.target instanceof Node) || !wrap.contains(event.target)) close();
+    };
+    const close = (): void => {
+      pop?.remove();
+      pop = null;
+      pick.setAttribute("aria-expanded", "false");
+      document.removeEventListener("pointerdown", outside, true);
+    };
+    const done = (): void => {
+      draw();
+      close();
+      pick.focus();
+    };
+    pick.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (pop) {
+        close();
+        return;
+      }
+      pop = make("div", "alliance__pop");
+      fill(pop, done);
+      wrap.append(pop);
+      pick.setAttribute("aria-expanded", "true");
+      document.addEventListener("pointerdown", outside, true);
+      pop.scrollIntoView?.({ block: "nearest" });
+    });
+    wrap.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || !pop) return;
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+      pick.focus();
+    });
+    draw();
+    wrap.append(pick);
+    return wrap;
+  }
+
+  /** A dropdown's short list: one row per choice, the chosen one ticked and in view; arrow keys move along it. */
+  private choiceList<T>(pop: HTMLElement, choices: readonly { value: T; nodes: Node[] }[], chosen: T, pick: (value: T) => void): void {
+    const list = make("ul", "alliance__options");
+    list.setAttribute("role", "listbox");
+    let lit: HTMLButtonElement | null = null;
+    for (const choice of choices) {
+      const row = make("li", "");
+      const option = make("button", "alliance__option");
+      option.type = "button";
+      option.setAttribute("role", "option");
+      const on = choice.value === chosen;
+      option.setAttribute("aria-selected", String(on));
+      option.append(...choice.nodes);
+      if (on) {
+        const tick = make("span", "alliance__tick", "\u2713");
+        tick.setAttribute("aria-hidden", "true");
+        option.append(tick);
+        lit = option;
+      }
+      option.addEventListener("click", (event) => {
+        event.preventDefault();
+        pick(choice.value);
+      });
+      row.append(option);
+      list.append(row);
+    }
+    list.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      event.preventDefault();
+      const options = [...list.querySelectorAll<HTMLButtonElement>(".alliance__option")];
+      const at = options.indexOf(document.activeElement as HTMLButtonElement);
+      options[Math.min(options.length - 1, Math.max(0, at + (event.key === "ArrowDown" ? 1 : -1)))]?.focus();
+    });
+    pop.append(list);
+    const first = lit ?? list.querySelector<HTMLButtonElement>(".alliance__option");
+    queueMicrotask(() => {
+      first?.scrollIntoView?.({ block: "nearest" });
+      first?.focus({ preventScroll: true });
+    });
+  }
+
+  /** A labelled setting whose words name its dropdown. */
+  private setting(label: string, control: (labelId: string) => HTMLElement): HTMLElement {
+    const wrap = make("div", "alliance__field alliance__setting");
+    const words = make("span", "alliance__label", label);
+    words.id = `alliance-${label.toLowerCase().replace(/\W+/g, "-")}-${++AllianceWindow.ids}`;
+    wrap.append(words, control(words.id));
+    return wrap;
+  }
+
+  /** Numbers for element ids, so two forms on one page never share one. */
+  private static ids = 0;
 
   /**
    * The ad's settings (design v5 §7a): joining mode, language, time zone,
@@ -1168,59 +1296,69 @@ export class AllianceWindow {
     }
     box.append(this.group(ALLIANCE_TEXT.joining, modes));
 
-    // Language: the chat country list, opened under the button; "Not set" is any language.
-    const language = make("div", "alliance__lang");
-    const pick = make("button", "btn btn--outline alliance__lang-pick");
-    pick.type = "button";
-    pick.setAttribute("aria-expanded", "false");
-    const drawPick = (): void => {
-      pick.replaceChildren(
-        ...(ad.language ? [countryFlagImage(ad.language), make("span", "", countryName(ad.language))] : [make("span", "", ALLIANCE_TEXT.anyLanguage)]),
-      );
-    };
-    let picker: CountryPicker | null = null;
-    pick.addEventListener("click", (event) => {
-      event.preventDefault();
-      if (picker) {
-        picker.element.remove();
-        picker = null;
-        pick.setAttribute("aria-expanded", "false");
-        return;
-      }
-      picker = new CountryPicker({
-        selected: ad.language,
-        onPick: (code) => {
-          ad.language = code;
-          drawPick();
-          picker?.element.remove();
-          picker = null;
-          pick.setAttribute("aria-expanded", "false");
+    // Language, time zone and minimum level: three dropdowns in one row (owner chose A, 12 Nov 2026).
+    const language = this.setting(ALLIANCE_TEXT.language, (labelId) =>
+      this.dropdown(
+        labelId,
+        () =>
+          ad.language
+            ? [countryFlagImage(ad.language), make("span", "alliance__pick-words", countryName(ad.language))]
+            : [make("span", "alliance__pick-words", ALLIANCE_TEXT.anyLanguage)],
+        (pop, done) => {
+          pop.classList.add("alliance__pop--lang");
+          const picker = new CountryPicker({
+            selected: ad.language,
+            notSetLabel: ALLIANCE_TEXT.anyLanguageRow,
+            onPick: (code) => {
+              ad.language = code;
+              done();
+            },
+          });
+          picker.element.classList.add("alliance__lang-list");
+          pop.append(picker.element);
+          queueMicrotask(() => picker.revealSelected());
         },
-      });
-      picker.element.classList.add("alliance__lang-list");
-      language.append(picker.element);
-      pick.setAttribute("aria-expanded", "true");
-      picker.revealSelected();
-    });
-    drawPick();
-    language.append(pick);
-    box.append(this.group(ALLIANCE_TEXT.language, language));
-
-    const zone = this.stepper(
-      "time",
-      () => (ad.time_zone === null ? "—" : gmtLabel(ad.time_zone)),
-      (direction) => (ad.time_zone = ad.time_zone === null ? browserTimeZone() : stepTimeZone(ad.time_zone, direction)),
-      () => (ad.time_zone === null ? [false, false] : [ad.time_zone <= -12, ad.time_zone >= 14]),
+        true,
+      ),
     );
-    const level = this.stepper(
-      "levelup",
-      () => (shownMinLevel(ad) === null ? ALLIANCE_TEXT.anyLevel : `${ad.min_level}+`),
-      (direction) => (ad.min_level = stepMinLevel(ad.min_level, direction)),
-      () => [ad.min_level <= 30, ad.min_level >= 60],
+    const mine = browserTimeZone();
+    const zones: { value: number; nodes: Node[] }[] = [];
+    for (let zone = TIME_ZONE.min; zone <= TIME_ZONE.max; zone++) {
+      zones.push({ value: zone, nodes: [make("span", "", gmtLabel(zone)), ...(zone === mine ? [make("span", "alliance__you", ALLIANCE_TEXT.myZone)] : [])] });
+    }
+    const zone = this.setting(ALLIANCE_TEXT.timeZone, (labelId) =>
+      this.dropdown(
+        labelId,
+        () => [gameIcon("time", { size: 16, decorative: true }), make("span", "alliance__pick-words", ad.time_zone === null ? "\u2014" : gmtLabel(ad.time_zone))],
+        (pop, done) =>
+          this.choiceList(pop, zones, ad.time_zone ?? mine, (value) => {
+            ad.time_zone = value;
+            done();
+          }),
+      ),
     );
-    const numbers = make("div", "alliance__ad-numbers");
-    numbers.append(this.group(ALLIANCE_TEXT.timeZone, zone), this.group(ALLIANCE_TEXT.minLevel, level));
-    box.append(numbers);
+    const levels: { value: number; nodes: Node[] }[] = [];
+    for (let level = MIN_LEVEL.min; level <= MIN_LEVEL.max; level += MIN_LEVEL.step) {
+      levels.push({ value: level, nodes: [gameIcon("levelup", { size: 16, decorative: true }), make("span", "", ALLIANCE_TEXT.levelRow(level))] });
+    }
+    const level = this.setting(ALLIANCE_TEXT.minLevel, (labelId) =>
+      this.dropdown(
+        labelId,
+        () => [
+          gameIcon("levelup", { size: 16, decorative: true }),
+          make("span", "alliance__pick-words", shownMinLevel(ad) === null ? ALLIANCE_TEXT.anyLevel : `${ad.min_level}+`),
+        ],
+        (pop, done) =>
+          this.choiceList(pop, levels, ad.min_level, (value) => {
+            ad.min_level = value;
+            done();
+          }),
+      ),
+    );
+    level.classList.add("alliance__setting--end");
+    const sets = make("div", "alliance__sets");
+    sets.append(language, zone, level);
+    box.append(sets);
     return box;
   }
 
@@ -1254,9 +1392,11 @@ export class AllianceWindow {
   }
 
   private async create(): Promise<void> {
-    const problem = nameProblem(this.draft.name) ?? descriptionProblem(this.draft.description);
+    const badName = nameProblem(this.draft.name);
+    const problem = badName ?? descriptionProblem(this.draft.description);
     if (problem) {
       this.say(problem, "bad");
+      if (!badName) this.showAbout();
       return;
     }
     const answer = await this.api.create({
@@ -1484,10 +1624,8 @@ export class AllianceWindow {
   private advertForm(alliance: MyAlliance): HTMLElement {
     let image = alliance.image;
     const form = make("div", "alliance__form alliance__form--inline");
-    const about = make("textarea", "alliance__input alliance__textarea");
-    about.maxLength = ALLIANCE_DESC_MAX;
-    about.rows = 2;
-    about.value = alliance.description;
+    // An older About may be longer than 120: it loads whole, the counter shows it over, and Save asks for a shorter one.
+    const about = this.aboutField(alliance.description);
     this.advertAd ??= {
       join_mode: joinModeOf(alliance),
       language: alliance.language ?? null,
@@ -1497,12 +1635,12 @@ export class AllianceWindow {
     const ad = this.advertAd;
     form.append(
       this.field(ALLIANCE_TEXT.shield, this.shieldPicker(image, (chosen) => (image = chosen))),
-      this.field(ALLIANCE_TEXT.description, about),
+      about.field,
       this.adFields(ad),
     );
     const actions = make("div", "alliance__actions");
     actions.append(
-      button(ALLIANCE_TEXT.save, "btn--primary", () => void this.saveAdvert(image, about.value, ad)),
+      button(ALLIANCE_TEXT.save, "btn--primary", () => void this.saveAdvert(image, about.input.value, ad)),
       button(ALLIANCE_TEXT.cancel, "btn--outline", () => this.edit("advert")),
     );
     form.append(actions);
@@ -1513,6 +1651,7 @@ export class AllianceWindow {
     const problem = descriptionProblem(description);
     if (problem) {
       this.say(problem, "bad");
+      this.showAbout();
       return;
     }
     const answer = await this.api.edit({ image, description: description.trim(), ...ad });
