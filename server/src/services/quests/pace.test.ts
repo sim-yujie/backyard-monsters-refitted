@@ -53,7 +53,6 @@ const FINISH = { attackWin: 1_000, lootR1: 1e9, lootR2: 1e9, lootR3: 1e9, lootR4
 
 const fights = (record: QuestRecord): QuestEntry => record.weekly!.quests.find((one) => one.kind === "weeklyFights")!;
 const loot = (record: QuestRecord): QuestEntry => record.weekly!.quests.find((one) => one.kind.startsWith("weeklyLoot"))!;
-const social = (record: QuestRecord): QuestEntry => record.weekly!.quests.find((one) => one.slot === 0)!;
 const payOf = (quest: QuestEntry): number => {
   const reward = quest.rewards.find((one) => one.kind === "resources") as { amounts: Record<string, number> };
   return Object.values(reward.amounts)[0]!;
@@ -108,7 +107,6 @@ describe("the pace step at the weekly rollover", () => {
     expect(record.pace).toEqual({ fighting: 1, resources: 1 });
     expect(fights(record).need).toBe(10);
     expect(loot(record).need).toBe(CAP);
-    expect(fights(record).was).toBeUndefined();
   });
 
   test("a player away last week: each paced group counts as not finished, once", () => {
@@ -159,14 +157,13 @@ describe("finish time (doneAt)", () => {
     expect(done.daily!.quests.every((one) => one.doneAt === undefined)).toBe(true);
   });
 
-  test("pace, doneAt and was survive the save column; bad pace reads as 1 or clamped", () => {
+  test("pace and doneAt survive the save column; bad pace reads as 1 or clamped", () => {
     let record = rollOver({ ...emptyQuests(), weekly: lastWeek(utcWeek(weekAt(0)), 1) }, playerOf(), dayAt(1, 1));
     record = countQuests(record, FINISH, dayAt(1, 3)).record;
     const back = readQuests(questsJson(record));
     expect(back.pace).toEqual(record.pace);
     expect(fights(back)).toEqual(fights(record));
     expect(fights(back).doneAt).toBe(dayAt(1, 3));
-    expect(fights(back).was).toBe(10);
     expect(readQuests({}).pace).toEqual({ fighting: 1, resources: 1 });
     expect(readQuests({ pace: { fighting: "x", resources: 99 } }).pace).toEqual({ fighting: 1, resources: 3 });
   });
@@ -214,31 +211,33 @@ describe("paced needs and rewards", () => {
   });
 });
 
-describe("the Harder / Easier line (was)", () => {
+describe("the pace is the server's alone (owner, 12 Nov)", () => {
   const prev = utcWeek(weekAt(0));
   const next = (day: number | null, pace: QuestPace = startPace()) =>
     rollOver({ ...emptyQuests(), pace, weekly: lastWeek(prev, day) }, playerOf(), dayAt(1, 1));
 
-  test("up: the new need and last week's", () => {
+  test("a faster or slower week moves the need, and the player's view shows only need, have and rewards", () => {
+    expect(fights(next(1)).need).toBe(13);
+    expect(fights(next(7)).need).toBe(9);
+    for (const record of [next(1), next(7), next(null)]) {
+      const view = questsView(record, dayAt(1, 1));
+      const text = JSON.stringify(view);
+      expect(text).not.toContain("pace");
+      expect(text).not.toContain("was");
+      expect(text).not.toContain("doneAt");
+      for (const quest of view.weekly.quests) {
+        expect(Object.keys(quest).sort()).toEqual(
+          ["claimed", "have", "kind", "need", "ready", "rewards", "slot", ...(quest.variant !== undefined ? ["variant"] : [])].sort()
+        );
+      }
+    }
+  });
+
+  test("an old record's stored was is dropped on read", () => {
     const record = next(1);
-    expect(fights(record)).toMatchObject({ need: 13, was: 10 });
-    expect(loot(record)).toMatchObject({ need: 24_300_000, was: CAP });
-    expect(social(record).was).toBeUndefined();
-    const view = questsView(record, dayAt(1, 1)).weekly.quests;
-    expect(view.find((one) => one.kind === "weeklyFights")).toMatchObject({ need: 13, was: 10 });
-  });
-
-  test("down", () => {
-    expect(fights(next(7))).toMatchObject({ need: 9, was: 10 });
-    expect(fights(next(null))).toMatchObject({ need: 7, was: 10 });
-  });
-
-  test("none when the pace did not move, or a clamp kept the need", () => {
-    expect(fights(next(4)).was).toBeUndefined();
-    expect(loot(next(4)).was).toBeUndefined();
-    // Already at 3x: finishing fast again changes nothing.
-    expect(fights(next(1, { fighting: 3, resources: 3 })).was).toBeUndefined();
-    expect(questsView(next(4), dayAt(1, 1)).weekly.quests.every((one) => one.was === undefined)).toBe(true);
+    const json = questsJson(record) as { weekly: { quests: Record<string, unknown>[] } };
+    json.weekly.quests[2]!["was"] = 10;
+    expect(readQuests(json).weekly!.quests.every((one) => !("was" in one))).toBe(true);
   });
 });
 

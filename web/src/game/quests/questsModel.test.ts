@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { QuestsView } from "@/api/quests";
 import {
-  paceHint,
   canSwap,
   grantedRewards,
   loginDays,
@@ -165,20 +164,5 @@ describe("tabClaimable and utcDayOf", () => {
   it("reads the UTC day", () => {
     expect(utcDayOf(Date.UTC(2026, 10, 2, 23, 59) / 1000)).toBe("2026-11-02");
     expect(utcDayOf(Date.UTC(2026, 10, 3, 0, 0) / 1000)).toBe("2026-11-03");
-  });
-});
-
-describe("paceHint (weekly quests adapt to the player's pace)", () => {
-  it("says Harder or Easier with last week's need, the reason as a tooltip", () => {
-    expect(paceHint({ need: 13, was: 10 })).toEqual({ up: true, text: "▲ Harder (was 10)", why: "Last week's was done in 2 days or less" });
-    expect(paceHint({ need: 9, was: 10 })).toEqual({ up: false, text: "▼ Easier (was 10)", why: "Last week's took 6+ days or was not done" });
-    expect(paceHint({ need: 24_300_000, was: 19_400_000 })?.text).toBe("▲ Harder (was 19.4M)");
-    expect(paceHint({ need: 16_500_000, was: 19_400_000 })?.text).toBe("▼ Easier (was 19.4M)");
-  });
-
-  it("says nothing when the need did not move", () => {
-    expect(paceHint({ need: 10 })).toBeNull();
-    expect(paceHint({ need: 10, was: 10 })).toBeNull();
-    expect(paceHint({ need: 5 })).toBeNull();
   });
 });

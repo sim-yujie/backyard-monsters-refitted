@@ -7,7 +7,6 @@ import {
   pictureFillsTile,
   progressShare,
   progressText,
-  paceHint,
   questHint,
   questPicture,
   questTitle,
@@ -306,9 +305,6 @@ export class QuestsPanel {
     if (period === "daily" && swapsLeft > 0 && set.quests.some((quest) => canSwap(quest, swapsLeft))) {
       section.append(el("p", "quests-set__swap-note", "1 free swap a day: tap Swap on a quest you don't like."));
     }
-    if (period === "weekly") {
-      section.append(el("p", "quests-set__swap-note quests-set__pace-note", "Weekly quests follow your pace."));
-    }
     return section;
   }
 
@@ -326,12 +322,6 @@ export class QuestsPanel {
 
     const main = el("div", "quest__main");
     main.append(el("span", "quest__title", title));
-    const pace = paceHint(quest);
-    if (pace) {
-      const line = el("span", `quest__pace quest__pace--${pace.up ? "up" : "down"}`, pace.text);
-      line.title = pace.why;
-      main.append(line);
-    }
     const hint = questHint(quest);
     if (hint) main.append(el("span", "quest__hint", hint));
     main.append(progressBar(title, quest.have, quest.need, progressShare(quest), progressText(quest)));

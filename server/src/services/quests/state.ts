@@ -53,8 +53,6 @@ export interface QuestEntry {
    * Claim, so claiming late changes nothing). The next week's pace reads it.
    */
   doneAt?: number;
-  /** Weekly Fighting / Resources: last week's need, when the pace moved it (the card's "Harder" / "Easier" line). */
-  was?: number;
 }
 
 /** A day's or a week's quests. */
@@ -165,7 +163,6 @@ const entryOf = (raw: unknown): QuestEntry | null => {
     claimed: one.claimed === true,
     rewards: Array.isArray(one.rewards) ? (one.rewards as EventReward[]) : [],
     ...(Number(one.doneAt) > 0 && { doneAt: whole(one.doneAt) }),
-    ...(Number(one.was) >= 1 && { was: whole(one.was, 1) }),
   };
 };
 
@@ -382,38 +379,20 @@ export const pickDaily = (player: QuestPlayer, day: string): QuestSet => {
   return { period: day, quests: picked.map((kind, slot) => entry(slot, kind, player, seed)), bonus: false, swaps: 0 };
 };
 
-/** Last week's pace and quests: what a new week's "Harder" / "Easier" line compares with. */
-export interface WeeklyHistory {
-  pace: QuestPace;
-  last: QuestSet | null;
-}
-
 /**
  * A week's quests: one unlocked kind from each weekly group, the Fighting and
- * Resources needs (and the Resources pay) scaled by `pace`. A paced quest
- * whose need the pace moved (up when the pace went up, down when it went
- * down) carries last week's need as `was`.
+ * Resources needs (and the Resources pay) scaled by `pace`. The pace is the
+ * server's alone (owner, 12 Nov: "invisible to player and determined server
+ * side"): the player only ever sees the need and the reward.
  */
-export const pickWeekly = (
-  player: QuestPlayer,
-  week: string,
-  pace: QuestPace = startPace(),
-  history?: WeeklyHistory
-): QuestSet => {
+export const pickWeekly = (player: QuestPlayer, week: string, pace: QuestPace = startPace()): QuestSet => {
   const quests: QuestEntry[] = [];
   WEEKLY_GROUPS.forEach((group, slot) => {
     const open = WEEKLY_QUESTS[group].filter((kind) => canPick(kind, player));
     const seed = `${player.userid}|w|${week}|${group}`;
     const kind = shuffled(open, seed)[0];
     if (!kind) return;
-    const quest = entry(slot, kind, player, seed, WEEKLY_QUEST_SHINY, pace);
-    const paced = pacedGroupOf(kind.id);
-    const before = paced ? history?.last?.quests.find((one) => pacedGroupOf(one.kind) === paced) : undefined;
-    if (paced && before && history) {
-      const moved = Math.sign(pace[paced] - history.pace[paced]);
-      if (moved !== 0 && Math.sign(quest.need - before.need) === moved) quest.was = before.need;
-    }
-    quests.push(quest);
+    quests.push(entry(slot, kind, player, seed, WEEKLY_QUEST_SHINY, pace));
   });
   return { period: week, quests, bonus: false, swaps: 0 };
 };
@@ -470,7 +449,7 @@ export const rollOver = (record: QuestRecord, player: QuestPlayer, now: number):
   if (record.weekly?.period === week) return daily === record.daily ? record : { ...record, daily };
   // The old week is read for the pace before it is replaced.
   const pace = nextPace(record.pace, record.weekly, week);
-  const weekly = pickWeekly(player, week, pace, { pace: record.pace, last: record.weekly });
+  const weekly = pickWeekly(player, week, pace);
   return { ...record, daily, weekly, pace };
 };
 

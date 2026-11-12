@@ -34,8 +34,6 @@ export interface QuestView {
   /** Finished and not claimed: the Claim button shows. */
   ready: boolean;
   rewards: EventReward[];
-  /** Weekly Fighting / Resources: last week's need when the player's pace moved it (the "Harder" / "Easier" line). */
-  was?: number;
 }
 
 export interface QuestBonusView {

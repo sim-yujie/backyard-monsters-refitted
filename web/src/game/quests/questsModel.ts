@@ -117,25 +117,6 @@ export const questHint = (quest: Pick<QuestView, "kind">): string | null => {
   }
 };
 
-/**
- * The short line under a weekly Fighting or Resources quest whose need moved
- * with the player's pace (owner, 9 Nov: weekly quests adapt to how fast they
- * are finished; 12 Nov rule: icons and numbers over words). The title already
- * shows the new need, so the line is the arrow, the word and last week's need:
- * "▲ Harder (was 10)", "▼ Easier (was 19.4M)". `why` is its tooltip. Null when
- * the need did not move.
- */
-export const paceHint = (quest: Pick<QuestView, "need" | "was">): { up: boolean; text: string; why: string } | null => {
-  const { need, was } = quest;
-  if (was === undefined || was === need) return null;
-  const up = need > was;
-  return {
-    up,
-    text: `${up ? "▲ Harder" : "▼ Easier"} (was ${shortAmount(was)})`,
-    why: up ? "Last week's was done in 2 days or less" : "Last week's took 6+ days or was not done",
-  };
-};
-
 /** The resource a weekly loot quest names, or null. */
 export const lootResource = (kind: string): keyof typeof RESOURCE_WORDS | null => LOOT_KINDS[kind] ?? null;
 

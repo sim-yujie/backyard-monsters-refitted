@@ -517,22 +517,6 @@
   color: var(--colour-text-muted);
 }
 
-/* "▲ Harder: 13 fights (was 10)": the weekly need moved with the player's pace. */
-.quest__pace {
-  font-size: var(--text-xs);
-  font-weight: 800;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
-}
-
-.quest__pace--up {
-  color: var(--quests-hot);
-}
-
-.quest__pace--down {
-  color: var(--quests-tick);
-}
-
 /* The bar carries its own figures, so nothing sits beside it. */
 .quest__bar {
   position: relative;

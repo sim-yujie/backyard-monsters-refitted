@@ -256,26 +256,13 @@ describe("QuestsPanel", () => {
 });
 
 describe("resetText", () => {
-  it("shows a Harder / Easier line on a weekly quest whose need moved, and the adapt note", () => {
-    const { panel } = panelOf("weekly");
-    const view = questsView();
-    const [social, loot, fights] = view.weekly.quests;
-    const weekly = { ...view.weekly, quests: [social!, { ...loot!, need: 900_000, was: 1_200_000 }, { ...fights!, need: 13, was: 10 }] };
-    panel.render(list({ quests: { ...view, weekly } }));
-    const rows = all(".quests-set--weekly .quest");
-    expect(rows[0]!.querySelector(".quest__pace")).toBeNull();
-    expect(rows[1]!.querySelector(".quest__pace--down")?.textContent).toBe("▼ Easier (was 1.2M)");
-    expect(rows[2]!.querySelector(".quest__pace--up")?.textContent).toBe("▲ Harder (was 10)");
-    expect(rows[2]!.querySelector<HTMLElement>(".quest__pace")?.title).toBe("Last week's was done in 2 days or less");
-    // Under the title, above the "what counts" line.
-    expect(rows[2]!.querySelector(".quest__title")?.nextElementSibling?.classList.contains("quest__pace")).toBe(true);
-    expect(q(".quests-set__pace-note")?.textContent).toBe("Weekly quests follow your pace.");
-  });
-
-  it("shows no Harder / Easier line when no need moved", () => {
+  it("shows no pace on the weekly tab: no Harder / Easier line, no note (owner, 12 Nov: invisible to the player)", () => {
     const { panel } = panelOf("weekly");
     panel.render(list());
+    expect(all(".quests-set--weekly .quest")).not.toHaveLength(0);
     expect(all(".quest__pace")).toHaveLength(0);
+    expect(q(".quests-set__pace-note")).toBeNull();
+    expect(q(".quests-set--weekly")?.textContent).not.toMatch(/Harder|Easier|pace/i);
   });
 
   it("counts down, and says to reopen once the time is up", () => {
