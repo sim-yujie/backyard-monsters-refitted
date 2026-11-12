@@ -2590,74 +2590,282 @@
   gap: var(--space-1);
 }
 
-.alliance__lang {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
+/*
+ * Language, time zone and minimum level as three dropdowns in one row (owner
+ * chose A, 12 Nov 2026): icon or flag, the value and a small chevron in one
+ * box, painted in the window's own colours (steel in Modern, cream in
+ * Classic), never a browser's grey select. A time zone or level is never cut
+ * short; only a long country name ends in "…".
+ */
+.alliance__sets {
+  --alliance-control: 36px;
+  --alliance-pop-bg: #2e3a46;
+  --alliance-pop-line: rgb(0 0 0 / 60%);
+  --alliance-pop-shadow: 0 10px 24px rgb(0 0 0 / 55%), inset 0 1px 0 rgb(255 255 255 / 8%);
+  --alliance-arrow: #ffb066;
 
-.alliance__lang-pick {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(min-content, 1fr) minmax(min-content, 1fr);
   gap: var(--space-2);
-  font: inherit;
-  font-weight: 700;
 }
 
-.alliance__lang-pick .country-flag {
+:root[data-skin="flash"] .alliance__sets {
+  --alliance-pop-bg: #fff6e4;
+  --alliance-pop-line: #b98a55;
+  --alliance-pop-shadow: 0 8px 18px rgb(90 42 10 / 35%), inset 0 1px 0 #fff;
+  --alliance-arrow: #c8640a;
+}
+
+@media (width <= 480px) {
+  /* Phone: the language on its own line, time zone and level side by side; boxes big enough for a thumb. */
+  .alliance__sets {
+    --alliance-control: 44px;
+
+    grid-template-columns: repeat(2, minmax(min-content, 1fr));
+  }
+
+  .alliance__sets > .alliance__setting:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+.alliance__setting {
+  position: relative;
+  min-width: 0;
+}
+
+.alliance__drop {
+  position: relative;
+}
+
+.alliance__pick {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: var(--alliance-control);
+  padding: 0 10px;
+  border: 1px solid var(--colour-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--colour-surface-input);
+  color: var(--colour-text-strong);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.alliance__pick:hover {
+  border-color: var(--colour-accent-line);
+}
+
+.alliance__pick:focus-visible {
+  outline: 2px solid var(--colour-accent);
+  outline-offset: 1px;
+}
+
+.alliance__pick[aria-expanded="true"] {
+  border-color: var(--colour-accent);
+  box-shadow: 0 0 0 1px var(--colour-accent);
+}
+
+.alliance__pick-value {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.alliance__pick-words {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.alliance__pick--cut .alliance__pick-words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.alliance__pick .country-flag,
+.alliance__pop .country-flag {
   display: block;
+  flex: none;
   width: 20px;
   height: 15px;
+  margin: 0;
   border-radius: 2px;
 }
 
-/* The country list sits on the window's own dark well, never a white box. */
-.alliance__lang-list {
-  padding: var(--space-1);
-  border: 1px solid var(--colour-border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--colour-surface-sunken);
+.alliance__chevron {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  background: var(--alliance-arrow);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  transition: transform 120ms;
 }
 
-.alliance__lang-list .country-picker__list {
-  max-height: 160px;
+.alliance__pick[aria-expanded="true"] .alliance__chevron {
+  transform: rotate(180deg);
 }
 
-.alliance__ad-numbers {
+/* The open list: a small solid card under the box, over the rest of the form. */
+.alliance__pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 100%;
+  width: max-content;
+  max-width: min(260px, calc(100vw - 32px));
+  padding: 4px;
+  border: 1px solid var(--alliance-pop-line);
+  border-radius: 8px;
+  background: var(--alliance-pop-bg);
+  box-shadow: var(--alliance-pop-shadow);
+}
+
+.alliance__setting--end .alliance__pop {
+  right: 0;
+  left: auto;
+}
+
+.alliance__options {
+  max-height: 212px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  scrollbar-width: thin;
+}
+
+.alliance__option {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
-}
-
-/* ‹ value ›: a fixed-width middle, so the arrows never move as the value changes. */
-.alliance__stepper {
-  display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-}
-
-.alliance__stepper-go {
-  min-width: 32px;
-  min-height: var(--control-height-compact);
-  padding: 0 var(--space-2);
-  font: inherit;
-  font-weight: 700;
-}
-
-.alliance__stepper-value {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-width: 6.5em;
-  min-height: var(--control-height-compact);
-  padding: 0 var(--space-2);
-  border: 1px solid var(--colour-border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--colour-surface-sunken);
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
   color: var(--colour-text-strong);
-  font-weight: 700;
+  font: inherit;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (width <= 480px) {
+  .alliance__option {
+    min-height: 40px;
+  }
+}
+
+.alliance__option:hover,
+.alliance__option:focus-visible {
+  outline: none;
+  background: var(--colour-surface-control-hover);
+}
+
+.alliance__option[aria-selected="true"] {
+  background: var(--colour-accent-soft);
+  font-weight: 700;
+}
+
+.alliance__tick {
+  margin-left: auto;
+  padding-left: 10px;
+  color: var(--colour-accent);
+}
+
+.alliance__you {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+/* Language: the searchable country list inside the card. */
+.alliance__pop--lang {
+  width: 260px;
+}
+
+.alliance__pop--lang .country-picker {
+  gap: 4px;
+}
+
+.alliance__pop--lang .country-picker__list {
+  max-height: 200px;
+  border: 0;
+  scrollbar-width: thin;
+}
+
+.alliance__pop--lang .country-picker__option {
+  min-height: 32px;
+  border-radius: 5px;
+  font-size: var(--text-sm);
+}
+
+.alliance__pop--lang .country-picker__option[aria-selected="true"] {
+  background: var(--colour-accent-soft);
+}
+
+/* About: one short line with a live "37/120" in its corner (owner, 12 Nov 2026). */
+.alliance__about {
+  position: relative;
+  display: block;
+}
+
+.alliance__about .alliance__textarea {
+  display: block;
+  min-height: 64px;
+  padding-bottom: 20px;
+  resize: none;
+  line-height: 1.35;
+}
+
+.alliance__about .alliance__textarea[aria-invalid="true"] {
+  border-color: var(--colour-danger);
+  box-shadow: 0 0 0 1px var(--colour-danger);
+}
+
+.alliance__count {
+  position: absolute;
+  right: 8px;
+  bottom: 5px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--colour-surface-sunken);
+  color: var(--colour-text-muted);
+  font-size: 11px;
+  line-height: 15px;
+  font-variant-numeric: tabular-nums;
+  text-shadow: none;
+  pointer-events: none;
+}
+
+.alliance__count[data-state="near"] {
+  color: var(--colour-warning);
+}
+
+.alliance__count[data-state="full"] {
+  background: var(--colour-accent);
+  color: #fff;
+}
+
+.alliance__count[data-state="over"] {
+  /* A deep red in both looks, so the white numbers stay readable on steel too. */
+  background: #c22a24;
+  color: #fff;
+  font-weight: 700;
 }
