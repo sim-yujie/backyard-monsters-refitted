@@ -99,6 +99,13 @@ export const LOOK_WORDS = {
 export const lookName = (look: string | null | undefined): string | null =>
   look === "modern" || look === "classic" ? `${LOOK_WORDS.style[look]} look` : null;
 
+/** "Weekly pace: fights ×1.25, loot ×0.85"; null when the player has none yet. */
+export const questPaceText = (pace: { fighting: number; resources: number } | null | undefined): string | null => {
+  if (!pace) return null;
+  const x = (value: number) => `×${Number(value.toFixed(2))}`;
+  return `Weekly pace: fights ${x(pace.fighting)}, loot ${x(pace.resources)}`;
+};
+
 /** "12 ms"; a dash when unknown. */
 export const ms = (value: number | null | undefined): string =>
   value === null || value === undefined ? "–" : `${Math.round(value)} ms`;

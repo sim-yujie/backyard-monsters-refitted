@@ -3,6 +3,7 @@ import type { EntityManager } from "@mikro-orm/postgresql";
 import { isAdminUser } from "../../config/AdminConfig.js";
 import { logger } from "../../utils/logger.js";
 import { TEAM_NOTICE, writeTeamMessage } from "./supportMail.js";
+import { readPace, type QuestPace } from "../quests/state.js";
 
 /**
  * The owner's moderation tools on the dashboard: chat reports, warnings,
@@ -262,6 +263,8 @@ export interface PlayerModeration {
   gameTeam: boolean;
   /** How many chat reports name them. */
   reportsAgainst: number;
+  /** Their weekly quests' pace (owner, 9 Nov): Fighting and Resources multipliers; null before they had one. */
+  questPace: QuestPace | null;
   log: ModerationEntry[];
 }
 
@@ -293,10 +296,12 @@ export const playerModeration = async (
       look_style: string | null;
       ban_reason: string | null;
       reports: string | number;
+      quest_pace: unknown;
     })[]
   >(
     `SELECT u.userid, u.email, u.username, u.banned, u.ban_until, u.ban_reason, u.mute_until, u.last_seen_at, u.look_style,
-            (SELECT count(*) FROM bym.chat_report r WHERE r.reported_id = u.userid) AS reports
+            (SELECT count(*) FROM bym.chat_report r WHERE r.reported_id = u.userid) AS reports,
+            (SELECT s.dailyquests->'pace' FROM bym.save s WHERE s.basesaveid = u.save_basesaveid) AS quest_pace
        FROM bym."user" u WHERE u.userid = ?`,
     [userid],
   );
@@ -319,6 +324,7 @@ export const playerModeration = async (
     muteUntil: muteUntil && muteUntil > now ? muteUntil.toISOString() : null,
     gameTeam: isAdminUser(Number(player.userid)),
     reportsAgainst: Number(player.reports),
+    questPace: player.quest_pace !== null && typeof player.quest_pace === "object" ? readPace(player.quest_pace) : null,
     log: rows.map((row) => ({
       id: Number(row.id),
       action: row.action,
