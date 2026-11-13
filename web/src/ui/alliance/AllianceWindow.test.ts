@@ -939,3 +939,82 @@ describe("AllianceWindow: trading's switch (owner 11 Nov: greyed out for beta 7)
     expect(trade.view).toHaveBeenCalled();
   });
 });
+
+describe("AllianceWindow: players' uploaded photos (owner, 13 Nov 2026)", () => {
+  /** The face beside the row that names `name`, inside `scope`. */
+  const faceOf = (scope: string, name: string): HTMLImageElement => {
+    const row = [...document.querySelectorAll(`${scope}`)].find((node) => node.textContent?.includes(name))!;
+    return row.querySelector<HTMLImageElement>(".alliance__face")!;
+  };
+  const isPhoto = (img: HTMLImageElement, userid: number, version: number): void => {
+    expect(img.classList.contains("is-photo")).toBe(true);
+    expect(img.getAttribute("src")).toContain(`/profile/photos/${userid}?v=${version}`);
+  };
+  const isCritter = (img: HTMLImageElement): void => {
+    expect(img.classList.contains("is-photo")).toBe(false);
+    expect(img.getAttribute("src")).not.toContain("/profile/photos/");
+  };
+
+  it("members, join requests and suggestions show a visible photo, and the critter when there is none", async () => {
+    const api = fakeApi({
+      mine: vi.fn(() => ok({ alliance: mine(), rejoinAt: null })),
+      members: vi.fn(() => ok({ members: [member(1, "leader"), member(2, "officer", { photo: 3 }), member(3, "member", { photo: null })] })),
+      messages: vi.fn(() =>
+        ok({
+          messages: [
+            invite(50, { type: "request", user_id: 8, user_name: "Asker Photo", user_photo: 2 }),
+            invite(51, { type: "request", user_id: 9, user_name: "Asker Critter", user_photo: null }),
+          ],
+        }),
+      ),
+      suggested: vi.fn(() =>
+        ok({ members: [member(20, "member", { display_name: "Sugg Photo", photo: 1 }), member(21, "member", { display_name: "Sugg Critter" })] }),
+      ),
+    });
+    const view = await open(api);
+    view.showTab("members");
+    await flush();
+
+    isPhoto(faceOf(".alliance__member, [data-userid]", "Player 2"), 2, 3);
+    isCritter(faceOf(".alliance__member, [data-userid]", "Player 3"));
+    isPhoto(faceOf(".alliance__invite--answer", "Asker Photo"), 8, 2);
+    isCritter(faceOf(".alliance__invite--answer", "Asker Critter"));
+    isPhoto(faceOf(".alliance__invite-box .alliance__invite", "Sugg Photo"), 20, 1);
+    isCritter(faceOf(".alliance__invite-box .alliance__invite", "Sugg Critter"));
+  });
+
+  it("the invite search shows a found player's photo", async () => {
+    const search = vi.fn(() =>
+      Promise.resolve([
+        { userid: 30, username: "Found Photo", pic: null, photo: 4, level: 12, relation: "none" as const },
+        { userid: 31, username: "Found Critter", pic: null, level: 12, relation: "none" as const },
+      ]),
+    );
+    const view = await open(fakeApi({ mine: vi.fn(() => ok({ alliance: mine(), rejoinAt: null })) }), { players: { search } });
+    view.showTab("members");
+    await flush();
+    const input = document.querySelector<HTMLInputElement>(".alliance__invite-box .alliance__input")!;
+    input.value = "Found";
+    input.form!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await flush();
+
+    expect(search).toHaveBeenCalledWith("Found");
+    isPhoto(faceOf(".alliance__invite-box .alliance__invite", "Found Photo"), 30, 4);
+    isCritter(faceOf(".alliance__invite-box .alliance__invite", "Found Critter"));
+  });
+
+  it("a photo that will not load falls back to the critter", async () => {
+    await open(
+      fakeApi({
+        mine: vi.fn(() => ok({ alliance: mine(), rejoinAt: null })),
+        members: vi.fn(() => ok({ members: [member(1, "leader"), member(2, "member", { photo: 5 })] })),
+      }),
+      { tab: "members" },
+    );
+    await flush();
+    const img = faceOf(".alliance__member, [data-userid]", "Player 2");
+    isPhoto(img, 2, 5);
+    img.dispatchEvent(new Event("error"));
+    isCritter(img);
+  });
+});

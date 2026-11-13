@@ -6,7 +6,7 @@ import type { EntityManager } from "@mikro-orm/postgresql";
  *
  * The one rule, used by the Profile window, the photo's own address and every
  * list that shows a player's picture (map, leaderboard, friends, alliance,
- * attack log...): a photo shows when there is one, it is not hidden by
+ * Map Room 1, Inferno): a photo shows when there is one, it is not hidden by
  * reports or waiting for the owner's review, and the player is not banned.
  * A photo the owner removed or blocked is gone (`photo` is NULL), so it fails
  * the first test. Anything else shows the player's critter (`pic_square`).

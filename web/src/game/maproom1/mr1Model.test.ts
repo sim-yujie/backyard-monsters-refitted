@@ -405,3 +405,18 @@ describe("a neighbour's friend flag (friends WP11, #378)", () => {
     expect(world.neighbours.find((one) => one.userid === second!.userid)?.pinned).toBe(false);
   });
 });
+
+describe("a neighbour's uploaded photo (owner, 13 Nov 2026)", () => {
+  it("reads the route's photo number, and anything else as the critter", () => {
+    const wire = mapRoom1Fixture(NOW);
+    const [first, second, third] = wire.neighbours!;
+    const world = readMapRoom1(
+      { ...wire, neighbours: [{ ...first!, photo: 2 }, { ...second!, photo: null }, { ...third!, photo: "7" as never }] },
+      NOW,
+    );
+    const photoOf = (userid: number) => world.neighbours.find((one) => one.userid === userid)?.photo;
+    expect(photoOf(first!.userid)).toBe(2);
+    expect(photoOf(second!.userid)).toBeUndefined();
+    expect(photoOf(third!.userid)).toBeUndefined();
+  });
+});
