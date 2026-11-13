@@ -13,6 +13,7 @@ import {
   grantedKorathText,
   grantedKrallenText,
   isOver,
+  offBarRewards,
   serverClock,
   type ServerClock,
 } from "@/game/events/eventsModel";
@@ -393,11 +394,15 @@ export class EventsDoor {
     if (this.destroyed) return;
     this.claiming = null;
     if (result.ok) {
-      const day = event.calendar?.days[result.report.day - 1] ?? [];
-      this.mounts.notices.show(EVENTS_NOTICE, claimedLine(`Day ${result.report.day} claimed`, day), {
-        level: "info",
-        timeoutMs: 5_000,
-      });
+      // The card flips to claimed and the bar floats what landed: only a
+      // reward the bar cannot show still raises a notice (owner, 13 Nov 2026).
+      const day = offBarRewards(event.calendar?.days[result.report.day - 1] ?? []);
+      if (day.length > 0) {
+        this.mounts.notices.show(EVENTS_NOTICE, claimedLine(`Day ${result.report.day} claimed`, day), {
+          level: "info",
+          timeoutMs: 5_000,
+        });
+      }
     } else {
       this.refusal = { key: calendarKey(event.id), message: result.refusal.message };
     }
@@ -415,15 +420,19 @@ export class EventsDoor {
     if (this.destroyed) return;
     this.claiming = null;
     if (result.ok) {
-      const rewards = event.ladder?.tiers[tier]?.rewards ?? [];
+      // Champions' news stays; resources and Glimmers float on the bar, and
+      // the tier flips to claimed (owner, 13 Nov 2026).
+      const rewards = offBarRewards(event.ladder?.tiers[tier]?.rewards ?? []);
       const words =
         grantedKrallenText(result.report.granted) ??
         grantedKorathText(result.report.granted) ??
-        claimedLine("Claimed", rewards);
-      this.mounts.notices.show(EVENTS_NOTICE, words, {
-        level: "info",
-        timeoutMs: 5_000,
-      });
+        (rewards.length > 0 ? claimedLine("Claimed", rewards) : null);
+      if (words !== null) {
+        this.mounts.notices.show(EVENTS_NOTICE, words, {
+          level: "info",
+          timeoutMs: 5_000,
+        });
+      }
     } else {
       this.refusal = { key, message: result.refusal.message };
     }

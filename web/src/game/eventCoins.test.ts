@@ -1,55 +1,22 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  coinBalance,
-  forgetCoinBalance,
-  noteCoins,
-  onCoinBalance,
-  onCoinsGained,
-  resetCoins,
-  type CoinsGained,
-} from "./eventCoins";
+import { coinBalance, forgetCoinBalance, noteCoins, onCoinBalance, resetCoins } from "./eventCoins";
 
 afterEach(() => resetCoins());
 
 describe("event coins", () => {
-  it("the first balance of a session shows nothing; a later rise shows the difference", () => {
-    const seen: CoinsGained[] = [];
-    onCoinsGained((gained) => seen.push(gained));
+  it("tells balance listeners each change with the balance before it; the first has none", () => {
+    const seen: [number, number | null][] = [];
+    onCoinBalance((balance, before) => seen.push([balance, before]));
     noteCoins(100);
-    expect(seen).toEqual([]);
     expect(coinBalance()).toBe(100);
     noteCoins(130);
-    expect(seen).toEqual([{ amount: 30, balance: 130, reasons: [] }]);
-    // Spending is not a gain.
+    // Spending is a change too: the bar floats "-120".
     noteCoins(10);
-    expect(seen).toHaveLength(1);
-  });
-
-  it("what the server said it paid wins over the difference", () => {
-    const seen: CoinsGained[] = [];
-    onCoinsGained((gained) => seen.push(gained));
-    noteCoins(25, [{ amount: 25, reason: "calendar" }]);
-    noteCoins(100, [
-      { amount: 75, reason: "ladder" },
-      { amount: 0, reason: "nothing" },
-    ]);
     expect(seen).toEqual([
-      { amount: 25, balance: 25, reasons: ["calendar"] },
-      { amount: 75, balance: 100, reasons: ["ladder"] },
+      [100, null],
+      [130, 100],
+      [10, 130],
     ]);
-  });
-
-  it("a gain before anyone listens waits for the first listener, added up", () => {
-    noteCoins(0);
-    noteCoins(25, [{ amount: 25, reason: "calendar" }]);
-    noteCoins(40);
-    const listener = vi.fn();
-    onCoinsGained(listener);
-    expect(listener).toHaveBeenCalledWith({
-      amount: 40,
-      balance: 40,
-      reasons: ["calendar"],
-    });
   });
 
   it("ignores nonsense and tells balance listeners only of changes", () => {
@@ -63,13 +30,13 @@ describe("event coins", () => {
     expect(balances).toEqual([50, 60]);
   });
 
-  it("sign-out forgets the balance, so the next account's first one shows nothing", () => {
+  it("sign-out forgets the balance, so the next account's first one has no balance before it", () => {
     const listener = vi.fn();
-    onCoinsGained(listener);
+    onCoinBalance(listener);
     noteCoins(10);
     forgetCoinBalance();
     expect(coinBalance()).toBeNull();
     noteCoins(500);
-    expect(listener).not.toHaveBeenCalled();
+    expect(listener).toHaveBeenLastCalledWith(500, null);
   });
 });

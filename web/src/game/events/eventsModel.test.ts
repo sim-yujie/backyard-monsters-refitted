@@ -5,8 +5,8 @@ import {
   krallenPenaltyNotice,
   krallenPenaltyText,
   grantedAuraText,
+  offBarRewards,
   payingClaimableTiers,
-  shortDate,
   calendarDays,
   claimableCount,
   claimableTiers,
@@ -227,9 +227,8 @@ describe("the Krallen Hunt", () => {
     it("names the reward and says what its claim gave", () => {
       const words = (type: number) => `Decoration ${type}`;
       expect(rewardText({ kind: "krallenAura", until: UNTIL }, words)).toBe("Krallen's loot aura");
-      expect(grantedKrallenText([{ kind: "krallenAura", until: UNTIL, level: 4, hasKrallen: true }])).toBe(
-        `Krallen's loot aura is on until ${shortDate(UNTIL)}!`,
-      );
+      // An aura that is on raises no notice: the hunt card says "On until" (owner, 13 Nov 2026).
+      expect(grantedKrallenText([{ kind: "krallenAura", until: UNTIL, level: 4, hasKrallen: true }])).toBeNull();
       expect(grantedAuraText([{ kind: "krallenAura", until: UNTIL, level: 2, hasKrallen: true }])).toBe(
         "Loot aura won! Krallen uses it from level 3.",
       );
@@ -237,6 +236,25 @@ describe("the Krallen Hunt", () => {
         "Win Krallen first: her loot aura needs her.",
       );
       expect(grantedAuraText([{ kind: "shiny", amount: 5 }])).toBeNull();
+    });
+
+    it("a claim's notice keeps only what the bar or the hunt card cannot show (owner, 13 Nov 2026)", () => {
+      expect(
+        offBarRewards([
+          { kind: "resources", amounts: { r1: 10 } },
+          { kind: "shiny", amount: 5 },
+          { kind: "eventCoins", amount: 25 },
+          { kind: "krallenAura", until: UNTIL },
+        ]),
+      ).toEqual([]);
+      const kept = [
+        { kind: "krallen" },
+        { kind: "korath", power: 2 },
+        { kind: "decoration", type: 41, count: 1 },
+        { kind: "speedup", item: "SP1", count: 2 },
+        { kind: "shopItem", item: "PRO1" },
+      ] as const;
+      expect(offBarRewards([{ kind: "eventCoins", amount: 25 }, ...kept])).toEqual(kept);
     });
   });
 });

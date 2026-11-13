@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Announcement } from "@/api/announcements";
-import { coinBalance, onCoinsGained, resetCoins } from "@/game/eventCoins";
+import { coinBalance, noteCoins, onCoinBalance, resetCoins } from "@/game/eventCoins";
 import { isPopupOver } from "@/ui/Popup";
 import { announcementText, linkPieces, paragraphsOf, safeHref } from "./announcementContent";
 import { onGiftClaimed } from "./announcementGift";
@@ -174,8 +174,10 @@ describe("a Glimmers gift", () => {
 
   it("shows the Glimmer and the amount, and the claim's purse moves the top bar with a +100", async () => {
     resetCoins();
+    // The yard's load gave the purse first; the top bar floats each change.
+    noteCoins(40);
     const gains: number[] = [];
-    onCoinsGained((gained) => gains.push(gained.amount));
+    onCoinBalance((balance, before) => gains.push(balance - (before ?? balance)));
     const claim = vi.fn(() =>
       Promise.resolve({
         error: 0,
