@@ -93,6 +93,8 @@ export interface BucketChampion {
   readonly available: boolean;
   /** Why the session would refuse it, or null (`AttackSession.championBlock`). */
   readonly blocked: ChampionBlockReason | null;
+  /** Krallen fights with her Krallen Hunt loot aura (`AttackSession.hasLootAura`). */
+  readonly lootAura?: boolean;
 }
 
 export interface BucketOptions {
@@ -325,6 +327,7 @@ export class Bucket {
         status: entry.status,
         available: blocked === null,
         blocked,
+        lootAura: this.session.hasLootAura(entry.t),
       };
     });
   }

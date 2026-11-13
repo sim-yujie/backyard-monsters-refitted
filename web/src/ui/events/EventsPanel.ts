@@ -3,14 +3,17 @@ import {
   calendarDays,
   claimableTiers,
   countdownText,
+  krallenPenaltyText,
   krallenPrizeText,
   rewardText,
   shortAmount,
+  shortDate,
   sortEvents,
   type CalendarDayView,
   type CountdownTimes,
 } from "@/game/events/eventsModel";
 import { championPortrait, showPortrait } from "@/game/portraits";
+import { KRALLEN_AURA_LEVEL, krallenAuraTimes } from "@/game/yard/krallenAura";
 import { ArtState, resolveArt } from "@/game/yard/buildingArt";
 import { typeName } from "@/game/yard/planner/summary";
 import type { WeekendCheckin, WeekendRun } from "@/game/weekend";
@@ -210,6 +213,11 @@ export const rewardBadge = (reward: EventReward, gained = false): HTMLElement =>
     case "krallen":
       pictures.append(krallenPicture(1, "icon", "events-reward__image"));
       break;
+    case "krallenAura":
+      // Flash's green glow round a looting monster (`LootingMultiplier.as:29`).
+      pictures.append(krallenPicture(KRALLEN_AURA_LEVEL, "icon", "events-reward__image events-reward__image--aura"));
+      figure = "Aura";
+      break;
     case "korath": {
       // Flash's own Monster Madness prize pictures (upstream `events/wotc/wotc_reward<n>.png`).
       const power = Math.min(Math.max(Math.floor(reward.power), 1), KORATH_POWER_SHORT.length);
@@ -264,9 +272,11 @@ const GOAL_BAR_KINDS: ReadonlySet<string> = new Set(["monster-madness"]);
 
 /**
  * One bar from 0 to the top goal, filled to the player's points, with a tick
- * at each goal (green once reached) and its figure under it.
+ * at each goal (green once reached) and its figure under it. `minimum`, when
+ * above 0, adds the Krallen Hunt's half-goal mark (red until reached,
+ * owner 13 Nov 2026): below it at the end, she loses a level.
  */
-export const goalsBar = (ladder: LadderView): HTMLElement => {
+export const goalsBar = (ladder: LadderView, minimum = 0): HTMLElement => {
   const top = Math.max(1, ...ladder.tiers.map((tier) => tier.need));
   const reached = Math.min(ladder.counter, top);
   const share = (value: number): string => `${Math.round((value / top) * 1000) / 10}%`;
@@ -282,6 +292,16 @@ export const goalsBar = (ladder: LadderView): HTMLElement => {
   fill.style.width = share(reached);
   bar.append(fill);
   const marks = el("div", "events-goals__marks");
+  if (minimum > 0 && minimum < top) {
+    // First among the figures, so the top goal stays the last one.
+    const safe = ladder.counter >= minimum;
+    const tick = el("span", `events-goals__tick events-goals__tick--min${safe ? " events-goals__tick--done" : ""}`);
+    tick.style.left = share(minimum);
+    bar.append(tick);
+    const label = el("span", `events-goals__mark events-goals__mark--min${safe ? " events-goals__mark--done" : ""}`, shortAmount(minimum));
+    label.style.left = share(minimum);
+    marks.append(label);
+  }
   for (const tier of ladder.tiers) {
     const done = ladder.counter >= tier.need;
     const tick = el("span", `events-goals__tick${done ? " events-goals__tick--done" : ""}`);
@@ -293,6 +313,36 @@ export const goalsBar = (ladder: LadderView): HTMLElement => {
   }
   wrap.append(bar, marks);
   return wrap;
+};
+
+/**
+ * The Krallen Hunt's minimum on its card (owner, 13 Nov 2026): while the hunt
+ * runs and the loot is below it, what the end will cost ("Below 75M: −1
+ * level", or at level 1 "Below 45M: Krallen leaves"); once a hunt's end took
+ * a level, what it took ("Krallen lost a level: 3 → 2", "Krallen left").
+ * Nothing otherwise, and never for a player without her at the hunt's start.
+ */
+export const krallenMinimumLine = (
+  event: Pick<EventView, "status">,
+  counter: number,
+  krallen: NonNullable<EventView["krallen"]>,
+): HTMLElement | null => {
+  const penalty = krallen.penalty ?? null;
+  const minimum = krallen.minimum ?? 0;
+  let words: string;
+  if (penalty) words = krallenPenaltyText(penalty);
+  else if (event.status === "active" && minimum > 0 && counter < minimum) {
+    const loses = (krallen.startLevel ?? krallen.level) <= 1 ? "Krallen leaves" : `${AMOUNT_CHANGE_SIGNS.loss}1 level`;
+    words = `Below ${shortAmount(minimum)}: ${loses}`;
+  } else return null;
+  const line = el("p", `events-krallen__minimum${penalty ? " events-krallen__minimum--taken" : ""}`);
+  line.setAttribute("role", "status");
+  line.append(
+    krallenPicture(Math.max(1, penalty ? penalty.from : krallen.level), "icon", "events-krallen__minimum-icon"),
+    el("span", "events-krallen__minimum-arrow", "▼"),
+    el("span", "", words),
+  );
+  return line;
 };
 
 /** Krallen's portrait at a level. */
@@ -709,31 +759,45 @@ export class EventsPanel {
     }
     if (!tier) return section;
 
+    const auraIndex = ladder.tiers.findIndex((one) => one.rewards.some((reward) => reward.kind === "krallenAura"));
+    const auraTier = auraIndex >= 0 ? ladder.tiers[auraIndex] : undefined;
     const progress = el("div", "events-krallen__progress");
     const head = el("div", "events-calendar__head");
-    const reached = Math.min(ladder.counter, tier.need);
+    // Toward the next mark not yet reached; past the last, the last.
+    const target = ladder.tiers.map((one) => one.need).find((need) => ladder.counter < need) ?? Math.max(...ladder.tiers.map((one) => one.need));
     head.append(
       el("h4", "events-section__title", ladder.label),
-      el("span", "events-calendar__count", `${shortAmount(reached)} / ${shortAmount(tier.need)}`),
+      el("span", "events-calendar__count", `${shortAmount(Math.min(ladder.counter, target))} / ${shortAmount(target)}`),
     );
-    const share = tier.need > 0 ? reached / tier.need : 1;
-    const bar = el("div", "events-krallen__bar");
-    bar.setAttribute("role", "progressbar");
-    bar.setAttribute("aria-label", ladder.label);
-    bar.setAttribute("aria-valuemin", "0");
-    bar.setAttribute("aria-valuemax", String(tier.need));
-    bar.setAttribute("aria-valuenow", String(reached));
-    bar.setAttribute("aria-valuetext", `${formatAmount(ladder.counter)} of ${formatAmount(tier.need)}`);
-    const fill = el("span", "events-krallen__fill");
-    fill.style.width = `${Math.round(share * 1000) / 10}%`;
-    bar.append(fill);
-    progress.append(head, bar);
+    progress.append(head);
+    if (auraTier) {
+      // Both marks on one bar: the goal, and 3x it for her loot aura.
+      progress.append(goalsBar(ladder, krallen.minimum ?? 0));
+    } else {
+      const reached = Math.min(ladder.counter, tier.need);
+      const share = tier.need > 0 ? reached / tier.need : 1;
+      const bar = el("div", "events-krallen__bar");
+      bar.setAttribute("role", "progressbar");
+      bar.setAttribute("aria-label", ladder.label);
+      bar.setAttribute("aria-valuemin", "0");
+      bar.setAttribute("aria-valuemax", String(tier.need));
+      bar.setAttribute("aria-valuenow", String(reached));
+      bar.setAttribute("aria-valuetext", `${formatAmount(ladder.counter)} of ${formatAmount(tier.need)}`);
+      const fill = el("span", "events-krallen__fill");
+      fill.style.width = `${Math.round(share * 1000) / 10}%`;
+      bar.append(fill);
+      progress.append(bar);
+    }
     section.append(progress);
+    const minimumLine = krallenMinimumLine(event, ladder.counter, krallen);
+    if (minimumLine) section.append(minimumLine);
 
     const key = tierKey(event.id, 0);
     if (tier.claimed) {
       const done = el("p", "events-krallen__done");
-      done.append(eventsArt("tick", 18, "events-krallen__tick"), el("span", "", "Prize claimed. The next hunt starts on the 15th."));
+      // While the 3x mark is still open this hunt, the next hunt's date waits.
+      const doneText = auraTier && !auraTier.claimed ? "Prize claimed." : "Prize claimed. The next hunt starts on the 15th.";
+      done.append(eventsArt("tick", 18, "events-krallen__tick"), el("span", "", doneText));
       section.append(done);
     } else if (ladder.counter >= tier.need && !maxed) {
       const button = el("button", "btn btn--primary events-claim events-krallen__claim");
@@ -749,7 +813,66 @@ export class EventsPanel {
       section.append(button);
     }
     if (view.refusal?.key === key) section.append(refusalNote(view.refusal.message));
+    if (auraTier) section.append(this.krallenAura(event, ladder, auraIndex, krallen, view));
     return section;
+  }
+
+  /**
+   * The hunt's 3x mark (owner, 13 Nov 2026): Krallen's loot aura, how much
+   * more her neighbours loot, and its claim; that it needs her level 3 when
+   * she will still be below it; and, while it runs, until when.
+   */
+  private krallenAura(
+    event: EventView,
+    ladder: LadderView,
+    index: number,
+    krallen: NonNullable<EventView["krallen"]>,
+    view: Extract<EventsPanelView, { kind: "list" }>,
+  ): HTMLElement {
+    const tier = ladder.tiers[index]!;
+    const first = ladder.tiers[0];
+    // Her level once this hunt's first mark has raised her.
+    const after = first && !first.claimed ? Math.min(krallen.level + 1, krallen.maxLevel) : krallen.level;
+    const shown = Math.max(after, KRALLEN_AURA_LEVEL);
+    const until = krallen.auraUntil ?? 0;
+    const running = until > view.now;
+    const row = el("div", `events-krallen__aura${running && krallen.level >= KRALLEN_AURA_LEVEL ? " events-krallen__aura--on" : ""}`);
+
+    const picture = krallenPicture(shown, "icon", "events-krallen__aura-picture");
+    const words = el("div", "events-krallen__aura-words");
+    words.append(
+      el("span", "events-krallen__aura-need", shortAmount(tier.need)),
+      el("span", "events-krallen__aura-what", `Loot aura: nearby monsters loot up to x${krallenAuraTimes(shown)}`),
+    );
+    if (after < KRALLEN_AURA_LEVEL) {
+      words.append(el("span", "events-krallen__aura-note", `Needs Krallen level ${KRALLEN_AURA_LEVEL}`));
+    }
+    if (running) {
+      words.append(el("span", "events-krallen__aura-note events-krallen__aura-note--on", `On until ${shortDate(until)}`));
+    }
+    row.append(picture, words);
+
+    const key = tierKey(event.id, index);
+    const end = el("div", "events-tier__end");
+    if (tier.claimed) {
+      end.append(eventsArt("tick", 18, "events-tier__mark"));
+    } else if (ladder.counter >= tier.need && event.locked === null && krallen.level > 0) {
+      const button = el("button", "btn btn--primary events-tier__claim", "Claim");
+      button.type = "button";
+      button.dataset["claim"] = key;
+      button.disabled = view.claiming !== null;
+      if (view.claiming === key) button.classList.add("events-claim--busy");
+      button.addEventListener("click", () => this.options.onClaimTier(event, index));
+      end.append(button);
+    } else {
+      end.append(eventsArt("lock", 18, "events-tier__mark"));
+    }
+    row.append(end);
+
+    const wrap = el("div", "events-krallen__aura-wrap");
+    wrap.append(row);
+    if (view.refusal?.key === key) wrap.append(refusalNote(view.refusal.message));
+    return wrap;
   }
 }
 

@@ -3,6 +3,9 @@ import type { Save } from "../../database/models/save.model.js";
 import type { User } from "../../database/models/user.model.js";
 import { postgres } from "../../server.js";
 import { invalidateSightIfFlingerChanged } from "../../services/maproom/sight/sightService.js";
+import { isAttackActive } from "../../services/base/isAttackActive.js";
+import { settleKrallenHunts } from "../../services/events/krallenPenalty.js";
+import { sqlProgressStore, type KrallenPenaltyNotice } from "../../services/events/progressStore.js";
 import { notifyAndCount } from "../../services/notifications/notifications.js";
 import { countRaidSession } from "../../services/raids/raidSchedule.js";
 import { placeTrojanHorse } from "../../services/raids/trojanHorse.js";
@@ -59,7 +62,7 @@ export const yardRoute =
  */
 export const catchUpOwnerYard = async (
   save: Save
-): Promise<{ save: Save; completed: CompletedJob[]; trojanPlaced: boolean }> => {
+): Promise<{ save: Save; completed: CompletedJob[]; trojanPlaced: boolean; krallenPenalties: KrallenPenaltyNotice[] }> => {
   // An alliance trade request that ran out, or whose alliance the player
   // left, gives back what it holds first, so the yard loads with it (one
   // indexed look when there is none; never throws). Loaded lazily: the load
@@ -67,10 +70,16 @@ export const catchUpOwnerYard = async (
   const { refundStaleRequests } = await import("../../services/alliance/trade.js");
   await refundStaleRequests(postgres.em, save.userid, getCurrentDateTime());
   let trojanPlaced = false;
-  return catchUpLockedYard(postgres.em, save, (locked, now) => {
+  let krallenPenalties: KrallenPenaltyNotice[] = [];
+  return catchUpLockedYard(postgres.em, save, async (locked, now, tx) => {
     countRaidSession(locked, now);
     trojanPlaced = placeTrojanHorse(locked, now);
-  }).then((result) => ({ ...result, trojanPlaced }));
+    // The Krallen Hunt's penalty for hunts over since the last load, and the
+    // one-time notice of any not yet told (`krallenPenalty.ts`).
+    krallenPenalties = await settleKrallenHunts(tx, sqlProgressStore, locked, now, {
+      underAttack: isAttackActive(locked),
+    });
+  }).then((result) => ({ ...result, trojanPlaced, krallenPenalties }));
 };
 
 /**

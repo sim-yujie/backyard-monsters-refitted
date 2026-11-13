@@ -10,6 +10,7 @@ import {
   type ChampionStance,
 } from "@/game/combat/rules";
 import { championPortrait, monsterPortrait, showPortrait, type Portrait } from "@/game/portraits";
+import { krallenAuraTimes, krallenAuraTimesLooter } from "@/game/yard/krallenAura";
 import { formatAmount } from "@/ui/format";
 import { Panel } from "@/ui/Panel";
 import { QuantityStepper } from "@/ui/QuantityStepper";
@@ -252,7 +253,7 @@ export class ArmyPanel {
     legend.textContent = "Champion";
     champions.append(legend);
     for (const champion of bucket.champions()) {
-      const row = this.buildChampion(champion.t, champion.l, champion.hp);
+      const row = this.buildChampion(champion.t, champion.l, champion.hp, champion.lootAura === true);
       this.champions.push(row);
       champions.append(row.element);
     }
@@ -369,7 +370,7 @@ export class ArmyPanel {
     return { id, element: item, stepper, input: stepper.input, note, count };
   }
 
-  private buildChampion(t: number, l: number, hp: number): ChampionRow {
+  private buildChampion(t: number, l: number, hp: number, lootAura = false): ChampionRow {
     const item = document.createElement("label");
     item.className = "attack-army__champion";
     item.dataset["t"] = String(t);
@@ -408,6 +409,17 @@ export class ArmyPanel {
     health.className = "attack-army__housed u-muted";
     health.textContent = `${formatAmount(hp)} hp`;
     label.append(name, level, health);
+    if (lootAura) {
+      // Krallen's Krallen Hunt loot aura (owner, 13 Nov 2026): Flash's green
+      // looting glow on her picture, and how much more her neighbours loot.
+      icon.classList.add("attack-army__icon--aura");
+      const aura = document.createElement("span");
+      aura.className = "attack-army__aura";
+      aura.textContent = `up to x${krallenAuraTimes(l)}`;
+      aura.title = `Loot aura: monsters near Krallen loot up to x${krallenAuraTimes(l)}; resource hunters x${krallenAuraTimesLooter(l)}`;
+      aura.setAttribute("aria-label", aura.title);
+      label.append(aura);
+    }
 
     const note = document.createElement("span");
     note.className = "attack-army__note";

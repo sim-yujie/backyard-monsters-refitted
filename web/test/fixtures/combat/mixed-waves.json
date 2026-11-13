@@ -34,7 +34,8 @@
         "champion": {
           "t": 5,
           "l": 5,
-          "pl": 2
+          "pl": 2,
+          "aura": true
         }
       },
       {
