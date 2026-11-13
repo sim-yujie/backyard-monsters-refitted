@@ -130,6 +130,7 @@ export const questsActions = (hasFriend: HasFriend = sqlHasFriend) => ({
         report,
         credit: plan.credit,
         grantShiny: plan.grantShiny,
+        grantCoins: { amount: plan.grantCoins, reason: "quest" },
         slices: { ...plan.slices, dailyquests: questsJson(result.record) },
       };
     },
