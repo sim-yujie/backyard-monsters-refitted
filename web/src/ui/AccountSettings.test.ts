@@ -667,6 +667,71 @@ describe("AccountSettings tabs", () => {
     expect(pane("account").textContent).toContain(SETTINGS_TEXT.loadFailed);
   });
 
+  it("opens Account with the player's own profile, then username and Shiny Lock (owner, 13 Nov 2026)", async () => {
+    api.fetchAccount.mockResolvedValue({
+      username: "Agent",
+      canChangeUsername: true,
+      nextChangeAt: null,
+      shinyLocked: false,
+      privacy: { hideOnline: false, friendRequests: true },
+      country: { country: null, countryAsked: false, countryChannel: null },
+      notificationsOff: [],
+    });
+    const fetchProfile = vi.fn(() =>
+      Promise.resolve({
+        userid: 2503,
+        username: "Agent",
+        pic: null,
+        bio: "Hi",
+        photoVersion: null,
+        stats: {
+          level: 12,
+          townHall: 5,
+          empirePoints: 100,
+          achievements: null,
+          friends: 0,
+          joined: null,
+          alliance: null,
+        },
+        own: true,
+        reported: false,
+        photoState: { hidden: false, blocked: false, canUpload: true, reason: null, nextAt: null, minLevel: 10 },
+      }),
+    );
+    const profileApi = {
+      fetchProfile,
+      saveBio: vi.fn(),
+      uploadPhoto: vi.fn(),
+      removePhoto: vi.fn(),
+      reportPhoto: vi.fn(),
+    };
+    // What the other tabs hold without the profile, to compare.
+    openAccountSettings({ container: document.body });
+    await settle();
+    const before = (["look", "social", "notifications"] as const).map((id) => pane(id).children.length);
+    const accountBefore = [...pane("account").children].map((child) => child.className);
+    document.body.replaceChildren();
+
+    openAccountSettings({
+      container: document.body,
+      avatarPicker: new AvatarPicker({ current: "owl", picked: true, onPick: () => Promise.resolve() }),
+      profile: { userid: 2503, api: profileApi },
+    });
+    await settle();
+    expect(fetchProfile).toHaveBeenCalledWith(2503);
+    const parts = [...pane("account").children].map((child) => child.className);
+    expect(parts[0]).toContain("own-profile");
+    // Username and Shiny Lock follow, as before.
+    expect(parts.slice(1)).toEqual(accountBefore);
+    const section = pane("account").querySelector<HTMLElement>(".own-profile")!;
+    expect(section.querySelector(".profile__new-photo")).not.toBeNull();
+    expect(section.querySelectorAll(".avatar-picker__tile")).toHaveLength(12);
+    expect(section.querySelector<HTMLTextAreaElement>(".profile__bio-input")?.value).toBe("Hi");
+    expect(section.querySelector(".own-profile__preview")).not.toBeNull();
+    // The other tabs are untouched.
+    expect((["look", "social", "notifications"] as const).map((id) => pane(id).children.length)).toEqual(before);
+  });
+
   it("keeps Reduce effects with the game effects, in this browser", async () => {
     localStorage.clear();
     await open({});

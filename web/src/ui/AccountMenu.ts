@@ -12,7 +12,9 @@
  * out was picked, and a press elsewhere or Escape closes it.
  *
  * With an `avatar` (issue #175) the button wears the player's critter, and
- * Settings holds the picker (`ui/AvatarPicker.ts`).
+ * Settings holds the picker (`ui/AvatarPicker.ts`). With a `userid`, Settings'
+ * Account tab also holds the player's own profile (photo, bio, "Preview"):
+ * the menu's "Profile" item moved there (owner, 13 Nov 2026).
  *
  * The yard's HUD (#171) shows it as a `pill`: the player's name beside their
  * critter in a ring, rather than the word "Account", and under the name the
@@ -74,8 +76,8 @@ export interface AccountMenuOptions {
    * "pill": the name and the face in a ring, the yard HUD's corner (#171).
    */
   readonly variant?: "button" | "pill";
-  /** The "Profile" item's action (the player's own profile); without it there is no such item. */
-  readonly onProfile?: () => void;
+  /** The signed-in player's id: Settings > Account then edits their profile (photo, bio). */
+  readonly userid?: number;
   /** The "Achievements" item's action; without it there is no such item. */
   readonly onAchievements?: () => void;
   /** The "Friends" item's action; without it there is no such item. */
@@ -268,20 +270,6 @@ export class AccountMenu {
       this.toggle(false);
       startGuideTour();
     });
-    if (options.onProfile) {
-      const onProfile = options.onProfile;
-      // Not `account-menu__item` either, for the same reason as Help's.
-      const profile = document.createElement("button");
-      profile.type = "button";
-      profile.className = "btn btn--ghost account-menu__help account-menu__profile";
-      profile.setAttribute("role", "menuitem");
-      profile.textContent = "Profile";
-      profile.addEventListener("click", () => {
-        this.toggle(false);
-        onProfile();
-      });
-      play.append(profile);
-    }
     if (options.onFriends) {
       const onFriends = options.onFriends;
       // Not `account-menu__item` either, for the same reason as Help's.
@@ -405,7 +393,8 @@ export class AccountMenu {
     discord.textContent = "Join the Discord";
     discord.addEventListener("click", () => this.toggle(false));
     community.append(discord);
-    // Settings (username, Shiny Lock) and Fullscreen, the original's top-bar button.
+    // Settings (profile, username, Shiny Lock) and Fullscreen, the original's top-bar button.
+    const userid = options.userid;
     const settings = document.createElement("button");
     settings.type = "button";
     settings.className = "btn btn--ghost account-menu__help account-menu__settings";
@@ -415,7 +404,11 @@ export class AccountMenu {
       this.toggle(false);
       const container = document.querySelector<HTMLElement>(".overlay__layer--modal") ?? document.body;
       this.picker?.clearStatus();
-      openAccountSettings({ container, ...(this.picker && { avatarPicker: this.picker }) });
+      openAccountSettings({
+        container,
+        ...(this.picker && { avatarPicker: this.picker }),
+        ...(userid !== undefined && { profile: { userid } }),
+      });
     });
     this.fullscreen = document.createElement("button");
     this.fullscreen.type = "button";

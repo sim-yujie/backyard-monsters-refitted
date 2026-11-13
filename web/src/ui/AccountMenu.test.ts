@@ -332,25 +332,67 @@ describe("AccountMenu", () => {
       expect(menu.open).toBe(false);
     });
   });
-  describe("the Profile item", () => {
-    it("is there only when asked for, the first of the first group, and opens the profile", () => {
-      const { button } = build();
-      button.click();
-      expect(menu!.element.querySelector(".account-menu__profile")).toBeNull();
-      menu!.destroy();
-
-      const onProfile = vi.fn();
-      menu = new AccountMenu({ name: "Agent Tester", onSignOut: vi.fn(), onProfile, onFriends: vi.fn() });
+  describe("the player's own profile (owner, 13 Nov 2026: moved into Settings > Account)", () => {
+    const full = (userid?: number) => {
+      menu = new AccountMenu({
+        name: "Agent Tester",
+        onSignOut: vi.fn(),
+        ...(userid !== undefined && { userid }),
+        avatar: { current: "frog", picked: true, onPick: () => Promise.resolve() },
+        onFriends: vi.fn(),
+        onAchievements: vi.fn(),
+        onLeaderboard: vi.fn(),
+        onWhatsNew: vi.fn(),
+        onNews: vi.fn(),
+        onReportBug: vi.fn(),
+      });
       document.body.append(menu.element);
       menu.element.querySelector<HTMLButtonElement>(".account-menu__button")!.click();
-      const item = menu.element.querySelector<HTMLButtonElement>(".account-menu__profile")!;
-      expect(item.getAttribute("role")).toBe("menuitem");
-      expect(item.textContent).toBe("Profile");
-      expect(item.previousElementSibling).toBeNull();
-      expect(item.nextElementSibling?.classList.contains("account-menu__friends")).toBe(true);
-      item.click();
-      expect(onProfile).toHaveBeenCalledOnce();
-      expect(menu.open).toBe(false);
+      return menu;
+    };
+
+    afterEach(() => document.querySelector(".account-settings-popup")?.closest(".popup-backdrop")?.remove());
+
+    it("has no Profile item: Friends leads the first group, every other item stays", () => {
+      const created = full(2503);
+      expect(created.element.querySelector(".account-menu__profile")).toBeNull();
+      const groups = [...created.element.querySelectorAll(".account-menu__items")].map((group) =>
+        [...group.children].map((item) => item.className.match(/account-menu__(?!help)([\w-]+)/)?.[1]),
+      );
+      expect(groups).toEqual([
+        ["friends", "achievements", "leaderboard"],
+        ["whats-new", "news", "support", "discord"],
+        ["settings", "fullscreen", "report-bug", "replay"],
+      ]);
+      expect([...created.element.querySelectorAll("[role=menuitem]")].map((item) => item.textContent)).not.toContain(
+        "Profile",
+      );
+    });
+
+    it("lays the first group's odd item across both columns, leaving no hole", () => {
+      const css = readFileSync(`${process.cwd()}/src/ui/styles/ui.css`, "utf8");
+      expect(css).toContain(".account-menu__items > :nth-child(odd):is(:last-child, :has(+ [hidden]))");
+      expect(css).toMatch(/:nth-child\(odd\):is\(:last-child, :has\(\+ \[hidden\]\)\) \{\s*grid-column: 1 \/ -1;/);
+    });
+
+    it("puts the photo, the no-photo icon and the bio in Settings > Account, with the userid", () => {
+      const created = full(2503);
+      created.element.querySelector<HTMLButtonElement>(".account-menu__settings")!.click();
+      const pane = document.querySelector<HTMLElement>("#account-settings-pane-account")!;
+      const section = pane.querySelector<HTMLElement>(".own-profile")!;
+      expect(section).not.toBeNull();
+      expect(pane.firstElementChild).toBe(section);
+      // The critter picker sits inside the profile part, after the photo.
+      expect(section.querySelector(".avatar-picker")).not.toBeNull();
+      expect(section.querySelector(".own-profile__preview")).not.toBeNull();
+    });
+
+    it("keeps only the picker in Settings without a userid", () => {
+      const created = full();
+      created.element.querySelector<HTMLButtonElement>(".account-menu__settings")!.click();
+      const pane = document.querySelector<HTMLElement>("#account-settings-pane-account")!;
+      expect(pane.querySelector(".own-profile")).toBeNull();
+      expect(pane.querySelector(".avatar-picker")).not.toBeNull();
     });
   });
   describe("the Leaderboard item", () => {
