@@ -104,7 +104,7 @@ describe("the event list", () => {
         },
       ],
     });
-    expect(KRALLEN_HUNT_GOALS).toEqual([60_000_000, 100_000_000, 150_000_000, 225_000_000, 300_000_000]);
+    expect(KRALLEN_HUNT_GOALS).toEqual([60_000_000, 90_000_000, 150_000_000, 250_000_000, 300_000_000]);
     expect(krallenHunt(2026, 12)).toMatchObject({ id: "krallen-2026-12", startsAt: "2026-12-15T00:00:00Z", endsAt: "2027-01-01T00:00:00Z" });
     expect(KRALLEN_HUNTS[1]!.id).toBe("krallen-2026-12");
     expect(KRALLEN_HUNTS[2]!.id).toBe("krallen-2027-01");
@@ -120,10 +120,10 @@ describe("the event list", () => {
     }
   });
 
-  test("Krallen Hunt goal by her level: 60M to win her, then 100M, 150M, 225M, 300M; level 5 keeps the last", () => {
+  test("Krallen Hunt goal by her level: 60M to win her, then 90M, 150M, 250M, 300M; level 5 keeps the last", () => {
     const tier = KRALLEN_HUNTS[0]!.ladder!.tiers[0]!;
     expect([0, 1, 2, 3, 4, 5, 9].map((level) => tierNeed(tier, level))).toEqual([
-      60_000_000, 100_000_000, 150_000_000, 225_000_000, 300_000_000, 300_000_000, 300_000_000,
+      60_000_000, 90_000_000, 150_000_000, 250_000_000, 300_000_000, 300_000_000, 300_000_000,
     ]);
     expect(tierNeed(tier, -1)).toBe(60_000_000);
     expect(tierNeed({ need: 25, rewards: [] }, 3)).toBe(25);
@@ -132,7 +132,7 @@ describe("the event list", () => {
   test("Krallen's loot aura: 3x the goal (180M to 900M), until the end of the next month's hunt", () => {
     const tier = KRALLEN_HUNTS[0]!.ladder!.tiers[1]!;
     expect([0, 1, 2, 3, 4, 5].map((level) => tierNeed(tier, level))).toEqual([
-      180_000_000, 300_000_000, 450_000_000, 675_000_000, 900_000_000, 900_000_000,
+      180_000_000, 270_000_000, 450_000_000, 750_000_000, 900_000_000, 900_000_000,
     ]);
     expect(KRALLEN_AURA_GOALS).toEqual(KRALLEN_HUNT_GOALS.map((goal) => goal * 3));
     // November's runs to 1 January (the end of December's hunt), December's to 1 February.

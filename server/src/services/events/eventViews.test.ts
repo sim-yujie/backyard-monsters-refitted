@@ -91,10 +91,10 @@ describe("the Krallen Hunt's view", () => {
   test("shows each player their own goal, in the bar and in the words", () => {
     const goalOf = (level: number) => eventView(scheduled, NO_PROGRESS, huntWindow.startsAt, player(6, true, level));
     expect([0, 1, 2, 3, 4, 5].map((level) => goalOf(level).ladder!.tiers[0]!.need)).toEqual([
-      60_000_000, 100_000_000, 150_000_000, 225_000_000, 300_000_000, 300_000_000,
+      60_000_000, 90_000_000, 150_000_000, 250_000_000, 300_000_000, 300_000_000,
     ]);
     expect(goalOf(0).text).toStartWith("Take 60 million loot in attacks");
-    expect(goalOf(3).text).toStartWith("Take 225 million loot in attacks");
+    expect(goalOf(3).text).toStartWith("Take 250 million loot in attacks");
     expect(goalOf(3).text).not.toContain("{goal}");
   });
 
@@ -109,14 +109,14 @@ describe("the Krallen Hunt's view", () => {
     const auraOf = (level: number, claimedTiers: number[] = []) =>
       eventView(scheduled, { ...NO_PROGRESS, claimedTiers }, huntWindow.startsAt, player(6, true, level)).ladder!.tiers[1]!;
     expect([0, 1, 2, 3, 4, 5].map((level) => auraOf(level).need)).toEqual([
-      180_000_000, 300_000_000, 450_000_000, 675_000_000, 900_000_000, 900_000_000,
+      180_000_000, 270_000_000, 450_000_000, 750_000_000, 900_000_000, 900_000_000,
     ]);
     // The first mark raised her from 2 to 3: the 3x mark stays 450 million, not 675.
     expect(auraOf(3, [0]).need).toBe(450_000_000);
     // Raised from 4 to the top: still 900 million.
     expect(auraOf(5, [0]).need).toBe(900_000_000);
     // Only the 3x mark claimed: it raised nothing, so her level now is her level at the start.
-    expect(auraOf(3, [1]).need).toBe(675_000_000);
+    expect(auraOf(3, [1]).need).toBe(750_000_000);
     expect(auraOf(3, [1]).rewards).toEqual([{ kind: "krallenAura", until: Date.UTC(2030, 2, 1) / 1000 }]);
   });
 

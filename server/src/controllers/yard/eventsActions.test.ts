@@ -432,10 +432,10 @@ describe("the Krallen Hunt's 3x mark through the ladder claim", () => {
 
   test("needs 3x her goal: a level 3 Krallen's 675 million, then her aura until the end of next month's hunt", async () => {
     db.row = rowOf({ champion: [krallenAt(3)] });
-    await loot(675_000_000 - 1);
+    await loot(750_000_000 - 1);
     expect(await claimTier(1)).toMatchObject({
       status: 409,
-      body: { reason: "tierLocked", have: 675_000_000 - 1, need: 675_000_000 },
+      body: { reason: "tierLocked", have: 750_000_000 - 1, need: 750_000_000 },
     });
     expect(krallenOf()!.la).toBeUndefined();
 

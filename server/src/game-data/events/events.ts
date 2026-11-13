@@ -326,13 +326,13 @@ export const THANKSGIVING_2026_COINS: EventCoins = {
  * more each later month, at most 5 (`services/events/grant.ts`).
  *
  * The goal follows the player's Krallen level (owner, 2026-10-23): 60
- * million to win her, then 100, 150, 225 and 300 million to raise her to
+ * million to win her, then 90, 150, 250 and 300 million to raise her to
  * levels 2, 3, 4 and 5. A level 5 Krallen keeps the last goal on the page,
  * though the hunt has nothing more to give her.
  * ═══════════════════════════════════════════════════════════════════════
  */
 export const KRALLEN_HUNT_GOALS: readonly number[] = [
-  60_000_000, 100_000_000, 150_000_000, 225_000_000, 300_000_000,
+  60_000_000, 90_000_000, 150_000_000, 250_000_000, 300_000_000,
 ];
 
 /**
