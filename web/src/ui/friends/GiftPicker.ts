@@ -4,7 +4,7 @@ import { playerPool } from "@/game/friends/friendsView";
 import { formatAmount } from "@/ui/format";
 import { Popup } from "@/ui/Popup";
 import { RESOURCE_KEYS, resourceAmount, resourceIcon, resourceName } from "@/ui/resourceIcon";
-import { make, StatusLine } from "./rows";
+import { ignoreHeldEnter, make, StatusLine } from "./rows";
 import { wishMark } from "./wishMark";
 import "./friends.css";
 
@@ -131,6 +131,9 @@ export class GiftPicker {
         settle(this.sent);
       },
     });
+
+    // The first choice has the focus: a held Enter (the press that opened this) must not send it.
+    ignoreHeldEnter(this.popup.backdrop);
 
     const lead = make("p", "takeover-dialog__lead", GIFT_TEXT.lead(target.username));
     const wishes = target.wishes ?? this.store.friends.find((friend) => friend.userid === target.userid)?.wishes ?? [];

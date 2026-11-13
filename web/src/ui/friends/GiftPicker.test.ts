@@ -248,6 +248,20 @@ describe("what the player cannot afford (owner, 13 Nov 2026)", () => {
     expect((document.querySelector(".gift-picker__size") as HTMLElement).hidden).toBe(true);
   });
 
+  it("a held Enter (the press that opened the picker) does not send the focused choice", async () => {
+    const { api } = fixtureApi();
+    const picker = new GiftPicker({ userid: 7, username: "Ann" }, { api, store: new FriendsStore({ api }) }).mount(document.body);
+    const focused = document.activeElement as HTMLElement;
+    expect(focused.classList.contains("gift-picker__choice")).toBe(true);
+    const held = new KeyboardEvent("keydown", { key: "Enter", repeat: true, bubbles: true, cancelable: true });
+    focused.dispatchEvent(held);
+    expect(held.defaultPrevented).toBe(true);
+    const fresh = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    focused.dispatchEvent(fresh);
+    expect(fresh.defaultPrevented).toBe(false);
+    picker.popup.close();
+  });
+
   it("closes itself a moment after the gift went", async () => {
     vi.useFakeTimers();
     try {

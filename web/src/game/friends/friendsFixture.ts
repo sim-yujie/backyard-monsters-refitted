@@ -111,6 +111,7 @@ export const fixtureGift = (id: number, userid: number, extra: Partial<Gift> = {
 /** A Gift all that sends nothing. */
 export const NO_GIFT_ALL: GiftAllResult = {
   fallback: "r1",
+  noWish: 0,
   gifts: [],
   skipped: [],
   cost: { r1: 0, r2: 0, r3: 0, r4: 0 },

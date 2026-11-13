@@ -5,7 +5,7 @@ import { formatAmount } from "@/ui/format";
 import { gameIcon } from "@/ui/gameIcon";
 import { Popup } from "@/ui/Popup";
 import { RESOURCE_KEYS, resourceAmount, resourceIcon, resourceName } from "@/ui/resourceIcon";
-import { make, StatusLine } from "./rows";
+import { ignoreHeldEnter, make, StatusLine } from "./rows";
 import { wishMark } from "./wishMark";
 import "./friends.css";
 
@@ -15,8 +15,8 @@ import "./friends.css";
  * player today, from the Friends window or the Friends tab.
  *
  * - Each friend gets their first wish; a friend with no wish gets the
- *   resource picked in "No wish?", which starts on the one the player holds
- *   most of.
+ *   resource picked beside "3 with no wish get:", which starts on the one
+ *   the player holds most of. The row shows only when a friend has no wish.
  * - It opens on the plan (`giftAllPlan`): how many friends, each friend and
  *   what they get, the total per resource, and who is left out because the
  *   store runs short (they fall back to their next wish first). Nothing goes
@@ -24,13 +24,20 @@ import "./friends.css";
  * - The send (`giftAll`) goes to the friends the player saw and no one else;
  *   the server plans it again under the yard's lock, so the answer is what
  *   really went. Each sent friend's "Send gift" turns to "Sent".
+ * - The pick, the count and the cost stay at the top and Cancel and Send at
+ *   the bottom; only the friends between them scroll, however many there are.
+ * - Nothing is focused on Send when it opens, and a held Enter presses
+ *   nothing, so a stray Enter cannot send gifts unseen.
  */
 
 export const GIFT_ALL_TEXT = {
   title: "Gift all",
   button: "Gift all",
   buttonTitle: "Send a gift to every friend who can take one today",
-  fallback: "No wish?",
+  buttonDoneTitle: "Every friend has a gift from you today",
+  /** Over the pick: how many friends it is for. */
+  fallback: (count: number): string => (count === 1 ? "1 with no wish gets:" : `${formatAmount(count)} with no wish get:`),
+  fallbackGroup: "For friends with no wish",
   fallbackTitle: (resource: GiftResource): string => `Friends with no wish get ${resourceName(resource, "surface")}`,
   loading: "Working it out…",
   friends: (count: number): string => (count === 1 ? "1 friend" : `${formatAmount(count)} friends`),
@@ -38,6 +45,8 @@ export const GIFT_ALL_TEXT = {
   notSent: "Not sent",
   notEnough: "not enough",
   alreadySent: "already sent today",
+  cannotSend: "can't take a gift now",
+  noneSent: "No gifts sent",
   send: (count: number): string => `Send to ${formatAmount(count)}`,
   sending: "Sending…",
   sent: (count: number): string => (count === 1 ? "Sent to 1 friend" : `Sent to ${formatAmount(count)} friends`),
@@ -62,9 +71,12 @@ export class GiftAll {
   private readonly options: GiftAllOptions;
   private readonly picks = new Map<GiftResource, HTMLButtonElement>();
   private readonly fallbackRow = make("div", "gift-all__fallback");
+  private readonly fallbackLabel = make("span", "gift-all__fallback-label");
   private readonly summary = make("div", "gift-all__summary");
   private readonly list = make("ul", "gift-all__list");
   private readonly skipped = make("div", "gift-all__skipped");
+  /** The friends and who is left out: the one part that scrolls. */
+  private readonly scroll = make("div", "gift-all__scroll");
   private readonly status = new StatusLine();
   private readonly cancel: HTMLButtonElement;
   private readonly sendButton: HTMLButtonElement;
@@ -88,11 +100,13 @@ export class GiftAll {
       onClose: () => settle(this.sent),
     });
 
-    // "No wish? [twigs] [pebbles] [putty] [goo]": the resource for friends with no wish.
-    const label = make("span", "gift-all__fallback-label", GIFT_ALL_TEXT.fallback);
+    // A held Enter (the press that opened this) presses nothing here.
+    ignoreHeldEnter(this.popup.backdrop);
+
+    // "3 with no wish get: [twigs] [pebbles] [putty] [goo]": the resource for friends with no wish.
     const tiles = make("div", "gift-all__fallback-tiles");
     tiles.setAttribute("role", "group");
-    tiles.setAttribute("aria-label", GIFT_ALL_TEXT.fallback);
+    tiles.setAttribute("aria-label", GIFT_ALL_TEXT.fallbackGroup);
     for (const key of RESOURCE_KEYS) {
       const tile = make("button", "gift-wish gift-all__pick");
       tile.type = "button";
@@ -105,7 +119,12 @@ export class GiftAll {
       this.picks.set(key, tile);
       tiles.append(tile);
     }
-    this.fallbackRow.append(label, tiles);
+    this.fallbackRow.append(this.fallbackLabel, tiles);
+    this.fallbackRow.hidden = true;
+    this.scroll.append(this.list, this.skipped);
+    this.scroll.hidden = true;
+    // Reachable by keyboard when it scrolls.
+    this.scroll.tabIndex = 0;
 
     this.cancel = make("button", "btn btn--ghost", GIFT_ALL_TEXT.cancel);
     this.cancel.type = "button";
@@ -116,7 +135,7 @@ export class GiftAll {
     this.sendButton.addEventListener("click", () => void this.send());
     const actions = make("div", "takeover-dialog__actions");
     actions.append(this.cancel, this.sendButton);
-    this.popup.setContent(this.fallbackRow, this.summary, this.list, this.skipped, this.status.element, actions);
+    this.popup.setContent(this.fallbackRow, this.summary, this.scroll, this.status.element, actions);
   }
 
   get statusText(): string {
@@ -143,6 +162,11 @@ export class GiftAll {
     } catch (caught) {
       if (ask !== this.asked) return;
       this.status.set(friendRefusal(caught).message, "error");
+      // The plan on screen is still the last one that arrived: its pick stays lit and it can still be sent.
+      if (this.plan) {
+        this.markPick(this.plan.fallback);
+        this.sendButton.disabled = this.plan.gifts.length === 0;
+      }
     }
   }
 
@@ -166,7 +190,11 @@ export class GiftAll {
     } else {
       head.append(
         gameIcon("gift", { size: 24, decorative: true }),
-        make("span", "gift-all__count-words", sent ? GIFT_ALL_TEXT.sent(count) : GIFT_ALL_TEXT.friends(count)),
+        make(
+          "span",
+          "gift-all__count-words",
+          !sent ? GIFT_ALL_TEXT.friends(count) : count === 0 ? GIFT_ALL_TEXT.noneSent : GIFT_ALL_TEXT.sent(count),
+        ),
       );
     }
     const cost = make("p", "gift-all__cost");
@@ -200,6 +228,8 @@ export class GiftAll {
         line.append(make("span", "gift-all__name", skip.username), " · ");
         if (skip.reason === "giftSentToday") {
           line.append(GIFT_ALL_TEXT.alreadySent);
+        } else if (skip.reason === "cannotSend") {
+          line.append(GIFT_ALL_TEXT.cannotSend);
         } else {
           line.append(`${GIFT_ALL_TEXT.notEnough} `);
           for (const key of skip.lacking) {
@@ -216,7 +246,12 @@ export class GiftAll {
     this.sendButton.textContent = GIFT_ALL_TEXT.send(count);
     this.sendButton.disabled = sent || count === 0;
     this.sendButton.hidden = sent;
-    this.fallbackRow.hidden = sent;
+    this.skipped.hidden = result.skipped.length === 0;
+    this.scroll.hidden = result.gifts.length === 0 && result.skipped.length === 0;
+    this.scroll.scrollTop = 0;
+    // The pick matters only when a friend has no wish.
+    this.fallbackLabel.textContent = GIFT_ALL_TEXT.fallback(result.noWish);
+    this.fallbackRow.hidden = sent || result.noWish === 0;
   }
 
   /** Sends the plan the player saw, to those friends only. */
@@ -236,8 +271,11 @@ export class GiftAll {
       // Gifted today: their "Send gift" buttons turn to "Sent" everywhere.
       for (const gift of result.gifts) this.store.markGifted(gift.userid);
       for (const skip of result.skipped) if (skip.reason === "giftSentToday") this.store.markGifted(skip.userid);
+      // A friend who dropped out since comes back without a name when no longer a friend: the plan had it.
+      const names = new Map(plan.gifts.map((gift) => [gift.userid, gift.username]));
+      const dropped = result.skipped.map((skip) => ({ ...skip, username: names.get(skip.userid) ?? skip.username }));
       // The plan's own skips stay listed with the send's.
-      const skipped = [...result.skipped, ...plan.skipped.filter((skip) => !result.skipped.some((s) => s.userid === skip.userid))];
+      const skipped = [...dropped, ...plan.skipped.filter((skip) => !dropped.some((s) => s.userid === skip.userid))];
       this.show({ ...result, skipped }, true);
       this.cancel.textContent = GIFT_ALL_TEXT.done;
       this.cancel.focus();
@@ -268,4 +306,13 @@ export const giftAllButton = (onPress: () => void, className = ""): HTMLButtonEl
   button.append(gameIcon("gift", { size: 24, decorative: true }), make("span", "gift-all-button__word", GIFT_ALL_TEXT.button));
   button.addEventListener("click", onPress);
   return button;
+};
+
+/** Switches a Gift all button off once every friend has a gift from the player today, and says so. */
+export const setGiftAllDone = (button: HTMLButtonElement, friends: readonly { readonly giftSentToday: boolean }[]): void => {
+  const done = !friends.some((friend) => !friend.giftSentToday);
+  const title = done && friends.length > 0 ? GIFT_ALL_TEXT.buttonDoneTitle : GIFT_ALL_TEXT.buttonTitle;
+  button.disabled = done;
+  button.title = title;
+  button.setAttribute("aria-label", title);
 };

@@ -1078,17 +1078,54 @@
   font-weight: 700;
 }
 
-/* Each friend and their gift; only this list scrolls when it is long. */
+/* The window is never taller than the screen (9 friends or 100, a phone on
+   its side): the pick, the count and the cost stay at the top, Cancel and
+   Send at the bottom, and only the friends between them scroll. The body
+   itself scrolls only if even that cannot fit. */
+.popup-backdrop > .panel.gift-all {
+  /* Centred, with the title sign hanging over the top edge: twice its overhang keeps the sign on screen. */
+  max-height: calc(100dvh - 2 * var(--space-4) - 2 * var(--skin-title-lift, 0px));
+}
+
+.takeover-dialog.gift-all > .panel__body {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+}
+
+.takeover-dialog.gift-all > .panel__body > * {
+  flex: none;
+}
+
+.takeover-dialog.gift-all > .panel__body > .gift-all__scroll {
+  flex: 0 1 auto;
+}
+
+/* Each friend and their gift, then who is left out. */
+.gift-all__scroll {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-height: 68px;
+  padding: var(--space-1) var(--space-2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--colour-border-subtle);
+  border-radius: var(--radius-md, 8px);
+}
+
+.gift-all__scroll:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 .gift-all__list {
   display: grid;
   gap: 2px;
-  max-height: min(40dvh, 260px);
   margin: 0;
-  padding: var(--space-1) var(--space-2);
-  overflow-y: auto;
+  padding: 0;
   list-style: none;
-  border: 1px solid var(--colour-border-subtle);
-  border-radius: var(--radius-md, 8px);
 }
 
 .gift-all__list[hidden] {
@@ -1114,7 +1151,9 @@
   --wish-mark-size: 22px;
 }
 
+/* Always the last column, so the amounts line up with or without a wish marker. */
 .gift-all__amount {
+  grid-column: 3;
   justify-self: end;
   font-variant-numeric: tabular-nums;
 }
@@ -1153,4 +1192,38 @@
 
 .gift-all__send[hidden] {
   display: none;
+}
+
+/* A phone on its side (844x390): the count and the cost share one line and
+   the gaps tighten, so three friends show between the top and the buttons. */
+@media (height <= 500px) {
+  .takeover-dialog.gift-all > .panel__body {
+    gap: var(--space-2);
+    padding-block: var(--space-2);
+  }
+
+  .gift-all__summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1) var(--space-4);
+  }
+
+  .gift-all__count {
+    font-size: var(--text-md, 1rem);
+  }
+
+  .gift-all__pick {
+    width: 38px;
+    height: 38px;
+  }
+
+  .gift-all__pick > .res-icon {
+    width: 28px;
+  }
+
+  .gift-all__scroll {
+    min-height: 60px;
+  }
 }

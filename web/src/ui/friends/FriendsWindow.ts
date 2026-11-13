@@ -8,7 +8,7 @@ import { gameIcon } from "@/ui/gameIcon";
 import { onlineDot } from "@/ui/onlineDot";
 import { Popup } from "@/ui/Popup";
 import { scrollFade } from "@/ui/scrollFade";
-import { giftAllButton, openGiftAll } from "./GiftAll";
+import { giftAllButton, openGiftAll, setGiftAllDone } from "./GiftAll";
 import { openGiftPicker } from "./GiftPicker";
 import { make } from "./rows";
 import "./friends-button.css";
@@ -245,7 +245,7 @@ export class FriendsWindow {
   private render(): void {
     const friends = this.store.friends;
     // Off once every friend has had a gift from the player today.
-    this.giftAll.disabled = !friends.some((friend) => !friend.giftSentToday);
+    setGiftAllDone(this.giftAll, friends);
     const online = friends.filter((friend) => friend.online === "online").length;
     const groups = groupFriends(friends);
     const sections = friendsSections(groups, this.focus);

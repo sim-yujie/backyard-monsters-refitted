@@ -125,6 +125,18 @@ export const section = (title: string, rows: readonly HTMLElement[], empty: stri
   return wrapper;
 };
 
+/**
+ * Makes a held Enter press nothing inside `element`. A window opened with
+ * Enter gets the key's repeats while it is still down, and a repeat presses
+ * whichever button the new window focused: a gift could go before the player
+ * has seen the choice. A fresh press still works.
+ */
+export const ignoreHeldEnter = (element: HTMLElement): void => {
+  element.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && event.repeat) event.preventDefault();
+  });
+};
+
 /** A tab's status line: loading, a refusal, a thank-you. Hidden while empty. */
 export class StatusLine {
   readonly element: HTMLElement;

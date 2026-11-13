@@ -38,8 +38,12 @@ export interface PlannedGift {
   readonly wish: number;
 }
 
-/** Why a friend is left out: the store ran short, or (sending) a gift to them already went today. */
-export type GiftAllSkipReason = "notEnough" | "giftSentToday";
+/**
+ * Why a friend is left out: the store ran short, or (sending, a friend the
+ * player confirmed) a gift to them already went today, or they cannot take
+ * one any more (no longer a friend, blocked, banned).
+ */
+export type GiftAllSkipReason = "notEnough" | "giftSentToday" | "cannotSend";
 
 /** A friend the batch leaves out. */
 export interface SkippedGift {

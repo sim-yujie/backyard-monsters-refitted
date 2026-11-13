@@ -234,11 +234,14 @@ export interface GiftAllGift {
   readonly wish: number;
 }
 
-/** A friend Gift all leaves out: the store ran short, or a gift to them already went today. */
+/**
+ * A friend Gift all leaves out: the store ran short, or (sending) a gift to
+ * them already went today, or they cannot take one any more.
+ */
 export interface GiftAllSkip {
   readonly userid: number;
   readonly username: string;
-  readonly reason: "notEnough" | "giftSentToday";
+  readonly reason: "notEnough" | "giftSentToday" | "cannotSend";
   /** What they would have taken, best first; none of it affordable. */
   readonly lacking: readonly GiftResource[];
   readonly amount: number;
@@ -248,6 +251,8 @@ export interface GiftAllSkip {
 export interface GiftAllResult {
   /** The resource for friends with no wish. */
   readonly fallback: GiftResource;
+  /** How many of the friends who can take a gift have no wish. */
+  readonly noWish: number;
   readonly gifts: readonly GiftAllGift[];
   readonly skipped: readonly GiftAllSkip[];
   /** What the gifts take, per resource. */
@@ -518,6 +523,7 @@ const giftResourceOf = (value: unknown): GiftResource | null =>
 /** A Gift all answer; an entry with no known resource is dropped. */
 export const giftAllOf = (raw: Record<string, unknown>): GiftAllResult => ({
   fallback: giftResourceOf(raw["fallback"]) ?? "r1",
+  noWish: count(raw["noWish"]),
   gifts: list(raw["gifts"]).flatMap((gift) => {
     const resource = giftResourceOf(gift["resource"]);
     if (!resource) return [];
@@ -534,7 +540,8 @@ export const giftAllOf = (raw: Record<string, unknown>): GiftAllResult => ({
   skipped: list(raw["skipped"]).map((skip) => ({
     userid: id(skip["userid"]),
     username: text(skip["username"], `Player ${id(skip["userid"])}`),
-    reason: skip["reason"] === "giftSentToday" ? "giftSentToday" : "notEnough",
+    // A reason this client does not know reads as the plain "cannot take a gift now".
+    reason: skip["reason"] === "giftSentToday" || skip["reason"] === "notEnough" ? skip["reason"] : "cannotSend",
     lacking: wishesOf(skip["lacking"]),
     amount: count(skip["amount"]),
   })),

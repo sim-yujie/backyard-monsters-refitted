@@ -154,6 +154,7 @@ describe.skipIf(!dbName)("Gift all on a real database (owner, 13 Nov 2026)", () 
       skipped: [],
       cost: { r1: 0, r2: 2 * AMOUNT, r3: AMOUNT, r4: AMOUNT },
       resources: { r1: 1000, r2: 5000, r3: 1000, r4: 1000 },
+      noWish: 2,
     });
     // NEW (an hour's friendship), LOW (level), BOT and BLOCKER are left out by the single gift's gate.
     expect(await giftRows()).toEqual([]);
@@ -274,6 +275,77 @@ describe.skipIf(!dbName)("Gift all on a real database (owner, 13 Nov 2026)", () 
     );
     expect(reason).toBe("underAttack");
     expect(await giftRows()).toEqual([]);
+  });
+
+  test("the plan is refused under attack too", async () => {
+    await setHeld({ r1: 5000, r2: 5000, r3: 5000, r4: 5000 });
+    await sql(`UPDATE bym.save SET attackid = 1, attacks = ? WHERE userid = ?`, [
+      JSON.stringify([{ starttime: Math.floor(Date.now() / 1000) }]),
+      S,
+    ]);
+    const reason = await plan().then(
+      () => "not refused",
+      (err: any) => err.data?.reason ?? String(err)
+    );
+    expect(reason).toBe("underAttack");
+  });
+
+  test("the plan only reads: hours after the last save it leaves the yard row untouched, and never waits for its lock", async () => {
+    await setHeld({ r1: 5000, r2: 5000, r3: 5000, r4: 5000 });
+    const row = () => sql(`SELECT xmin::text AS version, savetime FROM bym.save WHERE userid = ? AND type = 'main'`, [S]);
+    const before = await row();
+    // Another request holds the yard's lock (a save, a gift): the plan still answers.
+    const answer = await orm.em.fork().transactional(async (holder) => {
+      await holder.execute(`SELECT basesaveid FROM bym.save WHERE userid = ? AND type = 'main' FOR UPDATE`, [S]);
+      return plan({}, T0 + 6 * 3600);
+    });
+    expect(answer.gifts).toHaveLength(4);
+    expect(await row()).toEqual(before);
+    expect(await giftRows()).toEqual([]);
+    expect(await sql(`SELECT 1 FROM bym.notification WHERE userid IN (${LIST})`)).toEqual([]);
+  });
+
+  test("a confirmed friend who cannot take a gift any more is said, not silently dropped", async () => {
+    await setHeld({ r1: 5000, r2: 5000, r3: 5000, r4: 5000 });
+    const shown = await plan({ fallback: "r1" });
+    expect(shown.gifts.map((gift: any) => gift.userid)).toEqual(OPEN);
+    // Since the plan: F2 blocked the sender, F3 unfriended them.
+    await sql(`UPDATE bym."user" SET blocked_users = ? WHERE userid = ?`, [JSON.stringify([S]), F2]);
+    await sql(`DELETE FROM bym.friend WHERE (userid = ? AND friend_userid = ?) OR (userid = ? AND friend_userid = ?)`, [S, F3, F3, S]);
+    const answer = await sendAll({ fallback: "r1", userids: OPEN }, T0 + 5);
+    expect(answer.gifts.map((gift: any) => gift.userid)).toEqual([F1, F4]);
+    expect(answer.skipped).toEqual([
+      { userid: F2, username: "zz_ga_2", reason: "cannotSend", lacking: [], amount: 0 },
+      { userid: F3, username: "", reason: "cannotSend", lacking: [], amount: 0 },
+    ]);
+    expect(await held()).toMatchObject({ r1: 5000 - 2 * AMOUNT });
+    expect((await giftRows()).map((row) => row.to_userid)).toEqual([F1, F4]);
+  });
+
+  test("each gift is the single gift's: the same amount, and a second send the same day adds nothing", async () => {
+    await setHeld({ r1: 5000, r2: 5000, r3: 5000, r4: 5000 });
+    const single = (await sendGiftAnswer(em() as never, as(S), { userid: F1, resource: "r2" }, T0)) as any;
+    const answer = await sendAll({ fallback: "r1" }, T0 + 5);
+    expect(answer.gifts.map((gift: any) => gift.amount)).toEqual([single.gift.amount, single.gift.amount, single.gift.amount]);
+    const again = await sendAll({ fallback: "r1", userids: OPEN }, T0 + 9);
+    expect(again.gifts).toEqual([]);
+    expect(again.cost).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0 });
+    expect(again.skipped.map((skip: any) => [skip.userid, skip.reason])).toEqual(OPEN.map((userid) => [userid, "giftSentToday"]));
+    expect(await giftRows()).toHaveLength(4);
+    expect(await held()).toMatchObject({ r1: 5000 - 3 * AMOUNT, r2: 5000 - AMOUNT });
+  });
+
+  test("only the resources a gift was taken from are written", async () => {
+    // A yard row with no Putty or Goo entry at all: the send must not invent them.
+    await setHeld({ r1: 5000, r2: 40 });
+    const answer = await sendAll({ fallback: "r1" });
+    expect(answer.gifts).toHaveLength(4);
+    expect(answer.resources).toEqual({ r1: 5000 - 4 * AMOUNT, r2: 40, r3: 0, r4: 0 });
+    const stored = await held();
+    expect(stored.r1).toBe(5000 - 4 * AMOUNT);
+    expect(stored.r2).toBe(40);
+    expect("r3" in stored).toBe(false);
+    expect("r4" in stored).toBe(false);
   });
 
   test("the cost of one gift and what the sender holds", async () => {

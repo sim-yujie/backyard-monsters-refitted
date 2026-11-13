@@ -3,7 +3,7 @@ import { canHelp, friendCountText, onlineText } from "@/game/friends/friendText"
 import type { FriendsSnapshot, FriendsStore } from "@/game/friends/friendsStore";
 import { gameIcon, iconAmount } from "@/ui/gameIcon";
 import { blockButton } from "./BlockButton";
-import { giftAllButton } from "./GiftAll";
+import { giftAllButton, setGiftAllDone } from "./GiftAll";
 import { button, make, playerRow, section, StatusLine, type FriendsTabView, type RowBadge } from "./rows";
 
 /**
@@ -232,7 +232,7 @@ export class FriendsTab implements FriendsTabView {
     this.summary.replaceChildren(friendCountText(snapshot.friends.length, snapshot.max));
     if (this.giftAll) {
       this.giftAll.hidden = snapshot.friends.length === 0;
-      this.giftAll.disabled = !snapshot.friends.some((friend) => !friend.giftSentToday);
+      setGiftAllDone(this.giftAll, snapshot.friends);
     }
     const pinnedCount = snapshot.friends.filter((friend) => friend.pinnedAt !== null).length;
     if (pinnedCount > 0) {
